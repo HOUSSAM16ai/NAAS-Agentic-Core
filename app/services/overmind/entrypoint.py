@@ -6,13 +6,13 @@ Ensures Single Control Plane and Source of Truth.
 
 import asyncio
 import logging
-from typing import Any
 
 import redis.asyncio as redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.domain.mission import Mission, MissionEventType, MissionStatus
+from app.services.overmind.domain.types import MissionContext
 from app.services.overmind.factory import create_overmind
 from app.services.overmind.state import MissionStateManager
 
@@ -23,7 +23,7 @@ async def start_mission(
     session: AsyncSession,
     objective: str,
     initiator_id: int,
-    context: dict[str, Any] | None = None,
+    context: MissionContext | None = None,
     force_research: bool = False,
     idempotency_key: str | None = None,
 ) -> Mission:

@@ -6,9 +6,14 @@ Ensures that critical providers are available before starting a mission.
 import asyncio
 import logging
 import os
-from typing import Any
 
 import httpx
+
+from app.services.overmind.domain.types import (
+    EgressCheckDetails,
+    MissionReadinessStatus,
+    ProviderReadinessDetails,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +24,7 @@ class ProviderReadinessGate:
     """
 
     @staticmethod
-    async def check_search_providers() -> dict[str, Any]:
+    async def check_search_providers() -> ProviderReadinessDetails:
         """
         Checks availability of search providers.
         Returns a status dict: {"status": "ready" | "degraded" | "failed", "details": ...}
@@ -68,7 +73,7 @@ class ProviderReadinessGate:
         }
 
     @staticmethod
-    async def _check_egress_detailed() -> dict[str, Any]:
+    async def _check_egress_detailed() -> EgressCheckDetails:
         """
         Robust check for network connectivity using multiple endpoints.
         Handles proxies, redirects, and intermittent failures.
@@ -125,7 +130,7 @@ class ProviderReadinessGate:
             return False, name, str(e)
 
 
-async def check_mission_readiness() -> dict[str, Any]:
+async def check_mission_readiness() -> MissionReadinessStatus:
     """
     Master readiness check called before mission start.
     """
@@ -133,14 +138,16 @@ async def check_mission_readiness() -> dict[str, Any]:
 
     if search_status["status"] == "failed":
         logger.error(f"Mission Readiness Failed: {search_status}")
+        # 'reason' and 'details' are NotRequired, but logic guarantees them if failed.
+        # We use .get() for safety or direct access if we trust logic.
         return {
             "ready": False,
-            "error": search_status["reason"],
+            "error": search_status.get("reason", "Unknown Error"),
             "details": search_status.get("details"),
         }
 
     if search_status["status"] == "degraded":
-        logger.warning(f"Mission starting in Degraded Mode: {search_status['details']}")
+        logger.warning(f"Mission starting in Degraded Mode: {search_status.get('details')}")
 
     return {
         "ready": True,

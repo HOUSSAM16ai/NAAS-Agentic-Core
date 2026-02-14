@@ -25,6 +25,7 @@ from app.core.domain.mission import (
 )
 from app.core.event_bus import get_event_bus
 from app.core.protocols import EventBusProtocol
+from app.services.overmind.domain.types import JsonValue, MissionContext
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class MissionStateManager:
         self,
         objective: str,
         initiator_id: int,
-        context: dict[str, object] | None = None,
+        context: MissionContext | None = None,
         idempotency_key: str | None = None,
     ) -> Mission:
         # Check for existing mission with idempotency_key
@@ -147,7 +148,7 @@ class MissionStateManager:
         self,
         mission_id: int,
         result_summary: str | None = None,
-        result_json: dict[str, object] | None = None,
+        result_json: dict[str, JsonValue] | None = None,
         status: MissionStatus = MissionStatus.SUCCESS,
     ) -> None:
         """
@@ -174,7 +175,7 @@ class MissionStateManager:
             await self.session.commit()
 
     async def log_event(
-        self, mission_id: int, event_type: MissionEventType, payload: dict[str, object]
+        self, mission_id: int, event_type: MissionEventType, payload: dict[str, JsonValue]
     ) -> None:
         # 1. Log Event (Source of Truth)
         event = MissionEvent(
@@ -301,7 +302,7 @@ class MissionStateManager:
         await self.session.commit()
 
     async def mark_task_complete(
-        self, task_id: int, result_text: str, meta: dict[str, object] | None = None
+        self, task_id: int, result_text: str, meta: dict[str, JsonValue] | None = None
     ) -> None:
         if meta is None:
             meta = {}

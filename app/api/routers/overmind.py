@@ -7,6 +7,7 @@ Refactored to remove Split-Brain Orchestration.
 
 import logging
 import uuid
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.routers.ws_auth import extract_websocket_auth
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.domain.mission import Mission
 from app.core.event_bus import get_event_bus
 from app.services.auth.token_decoder import decode_user_id
 from app.services.overmind.domain.api_schemas import (
@@ -37,6 +39,38 @@ router = APIRouter(
     prefix="/api/v1/overmind",
     tags=["Overmind (Super Agent)"],
 )
+
+
+def _get_mission_status_payload(status: str) -> dict[str, str | None]:
+    """
+    Helper to map internal domain status to API status/outcome.
+    Handles 'partial_success' by returning success status with partial_success outcome.
+    """
+    if status == "partial_success":
+        return {"status": "success", "outcome": "partial_success"}
+    return {"status": status, "outcome": None}
+
+
+def _serialize_mission(mission: Mission) -> MissionResponse:
+    """
+    Helper to serialize Mission domain model to MissionResponse API schema.
+    Applies the status mapping logic.
+    """
+    status_payload = _get_mission_status_payload(mission.status.value)
+
+    # Safely get result summary or json result if available
+    # Assuming result_summary is the main result field for now
+
+    return MissionResponse(
+        id=mission.id,
+        objective=mission.objective,
+        status=status_payload["status"],
+        outcome=status_payload["outcome"],
+        created_at=mission.created_at,
+        updated_at=mission.updated_at,
+        result={"summary": mission.result_summary} if mission.result_summary else None,
+        steps=[] # Assuming tasks are mapped separately or not needed for basic response
+    )
 
 
 @router.post("/missions", response_model=MissionResponse, summary="Launch Mission")
@@ -66,14 +100,9 @@ async def create_mission_endpoint(
             idempotency_key=correlation_id,
         )
 
-        # Map domain model to API response
-        return MissionResponse(
-            id=mission.id,
-            objective=mission.objective,
-            status=mission.status.value,
-            created_at=mission.created_at,
-            result=mission.result_summary,
-        )
+        # Map domain model to API response using helper
+        return _serialize_mission(mission)
+
     except Exception as e:
         logger.error(f"Failed to create mission: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -92,14 +121,8 @@ async def get_mission_endpoint(
     if not mission:
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    return MissionResponse(
-        id=mission.id,
-        objective=mission.objective,
-        status=mission.status.value,
-        created_at=mission.created_at,
-        result=mission.result_summary,
-        # We could add output/json if schema supports it
-    )
+    # Use helper
+    return _serialize_mission(mission)
 
 
 @router.websocket("/missions/{mission_id}/ws")
@@ -146,10 +169,7 @@ async def stream_mission_ws(
                 await websocket.close(code=4004)  # Not Found
                 return
 
-            status_payload = {"status": mission.status.value, "outcome": None}
-            if mission.status.value == "partial_success":
-                status_payload = {"status": "success", "outcome": "partial_success"}
-
+            status_payload = _get_mission_status_payload(mission.status.value)
             await websocket.send_json({"type": "mission_status", "payload": status_payload})
 
             # Fetch Historical Events (Gap-Free Catchup)
@@ -210,7 +230,7 @@ async def stream_mission_ws(
                     sm = MissionStateManager(final_session)
                     m = await sm.get_mission(mission_id)
                     if m:
-                        status_p = {"status": m.status.value, "outcome": None}
+                        status_p = _get_mission_status_payload(m.status.value)
                         await websocket.send_json({"type": "mission_status", "payload": status_p})
                 await websocket.close()
                 return

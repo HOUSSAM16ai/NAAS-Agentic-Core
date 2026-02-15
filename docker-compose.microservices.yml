@@ -6,7 +6,7 @@ services:
   # ==========================================
   api-gateway:
     build:
-      context: .
+      context: ./microservices/api_gateway
       dockerfile: Dockerfile
     container_name: cogniforge-gateway
     ports:
@@ -19,7 +19,7 @@ services:
       - MEMORY_AGENT_URL=http://memory-agent:8002
       - USER_SERVICE_URL=http://user-service:8003
       - OBSERVABILITY_SERVICE_URL=http://observability-service:8005
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn microservices.api_gateway.main:app --host 0.0.0.0 --port 8000
     depends_on:
       - planning-agent
       - memory-agent

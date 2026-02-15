@@ -1,7 +1,8 @@
+import logging
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI, Request
-from contextlib import asynccontextmanager
-import logging
 
 # Local imports
 from microservices.api_gateway.config import settings

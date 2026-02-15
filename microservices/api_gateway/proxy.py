@@ -1,6 +1,7 @@
+import logging
+
 import httpx
 from fastapi import HTTPException, Request, Response, status
-import logging
 
 logger = logging.getLogger("api_gateway")
 
@@ -59,11 +60,11 @@ class GatewayProxy:
             logger.error(f"Proxy error to {url}: {exc}")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Error communicating with upstream service: {str(exc)}"
-            )
+                detail=f"Error communicating with upstream service: {exc!s}"
+            ) from exc
         except Exception as exc:
             logger.error(f"Unexpected error proxying to {url}: {exc}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Internal Gateway Error"
-            )
+            ) from exc

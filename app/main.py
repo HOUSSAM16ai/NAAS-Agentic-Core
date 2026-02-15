@@ -9,10 +9,15 @@
 - Singleton Pattern: يتم الحصول على النواة عبر الكائن النهائي.
 """
 
+import asyncio
+
 from fastapi import FastAPI
 
 from app.core.config import AppSettings, get_settings
+from app.core.database import async_session_factory
+from app.core.outbox import run_outbox_worker
 from app.kernel import RealityKernel
+from app.middleware.idempotency import IdempotencyMiddleware
 from app.middleware.static_files_middleware import StaticFilesConfig, setup_static_files_middleware
 
 # 1. تهيئة الإعدادات
@@ -24,6 +29,28 @@ _kernel = RealityKernel(settings=settings, enable_static_files=settings.ENABLE_S
 # 3. تصدير كائن التطبيق (ASGI Interface)
 app = _kernel.get_app()
 
+# 4. تسجيل الميدل وير (Idempotency)
+app.add_middleware(IdempotencyMiddleware)
+
+# 5. تشغيل العامل في الخلفية (Outbox Worker)
+_worker_task = None
+
+@app.on_event("startup")
+async def start_background_workers():
+    """Start background workers for the application."""
+    global _worker_task
+    _worker_task = asyncio.create_task(run_outbox_worker(session_factory=async_session_factory))
+
+@app.on_event("shutdown")
+async def stop_background_workers():
+    """Stop background workers gracefully."""
+    global _worker_task
+    if _worker_task:
+        _worker_task.cancel()
+        try:
+            await _worker_task
+        except asyncio.CancelledError:
+            pass
 
 def create_app(
     *,
@@ -48,6 +75,9 @@ def create_app(
     delegate_static = resolved_static and static_dir is None
     kernel = RealityKernel(settings=effective_settings, enable_static_files=delegate_static)
     application = kernel.get_app()
+
+    # Register Middleware
+    application.add_middleware(IdempotencyMiddleware)
 
     if resolved_static and not delegate_static:
         static_config = StaticFilesConfig(static_dir=static_dir)

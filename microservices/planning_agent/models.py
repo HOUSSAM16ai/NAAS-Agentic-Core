@@ -2,6 +2,9 @@ from uuid import UUID, uuid4
 
 from sqlmodel import JSON, Field, SQLModel
 
+# Import shared models so Alembic detects them for this service
+from app.domain.models.outbox import MissionOutbox
+
 
 class Plan(SQLModel, table=True):
     """

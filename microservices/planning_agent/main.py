@@ -16,7 +16,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from microservices.planning_agent.database import get_session, init_db
+from app.core.outbox import run_outbox_worker
+from app.middleware.idempotency import IdempotencyMiddleware
+from microservices.planning_agent.database import (
+    async_session_factory,
+    get_session,
+    init_db,
+)
 from microservices.planning_agent.errors import setup_exception_handlers
 from microservices.planning_agent.graph import graph
 from microservices.planning_agent.health import HealthResponse, build_health_payload
@@ -241,7 +247,19 @@ async def lifespan(app: FastAPI):
 
     logger.info("Planning Agent Started")
     await init_db()
+
+    # Start Outbox Worker
+    worker_task = asyncio.create_task(run_outbox_worker(session_factory=async_session_factory))
+
     yield
+
+    # Graceful Shutdown
+    worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
+
     logger.info("Planning Agent Stopped")
 
 
@@ -257,6 +275,10 @@ def create_app(settings: PlanningAgentSettings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     setup_exception_handlers(app)
+
+    # Register Idempotency Middleware
+    app.add_middleware(IdempotencyMiddleware)
+
     app.include_router(_build_router())
 
     return app

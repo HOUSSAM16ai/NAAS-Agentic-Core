@@ -13,9 +13,11 @@ gateway = APIGateway(config=DEFAULT_GATEWAY_CONFIG)
 # Note: The gateway router should handle routing logic based on config
 app.include_router(gateway.router)
 
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "api-gateway"}
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

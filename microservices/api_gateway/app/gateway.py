@@ -102,6 +102,7 @@ class APIGateway:
         """
         Adds a route handler for a specific rule.
         """
+
         # Define the handler function
         async def route_handler(request: Request, path: str = "") -> Response:
             return await self._proxy_request(route, path, request)
@@ -117,7 +118,7 @@ class APIGateway:
                 "/{path:path}",
                 route_handler,
                 methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-                include_in_schema=False, # Hide catch-all from root schema to avoid clutter
+                include_in_schema=False,  # Hide catch-all from root schema to avoid clutter
             )
         else:
             # Specific prefix
@@ -127,7 +128,7 @@ class APIGateway:
                 route_handler,
                 methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
                 include_in_schema=True,
-                tags=[route.service_name]
+                tags=[route.service_name],
             )
 
             # 2. Match /prefix (exact match)
@@ -142,7 +143,7 @@ class APIGateway:
                 route_handler_root,
                 methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
                 include_in_schema=True,
-                tags=[route.service_name]
+                tags=[route.service_name],
             )
 
     async def _proxy_request(

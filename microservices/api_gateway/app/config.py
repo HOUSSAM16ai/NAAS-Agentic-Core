@@ -128,7 +128,7 @@ DEFAULT_GATEWAY_CONFIG: Final[GatewayConfig] = GatewayConfig(
         RouteRule(
             path_prefix="/",
             service_name="core-kernel",
-            strip_prefix=False, # Do not strip root prefix
+            strip_prefix=False,  # Do not strip root prefix
         ),
     ),
     enable_cors=True,

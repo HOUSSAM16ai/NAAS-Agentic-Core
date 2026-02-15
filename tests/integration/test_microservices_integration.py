@@ -5,7 +5,6 @@
 - Planning Agent
 - Memory Agent
 - User Service
-- Orchestrator Service
 - API Gateway
 - Event Bus
 """

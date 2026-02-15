@@ -57,6 +57,9 @@ class BaseServiceSettings(BaseSettings):
     # Database
     DATABASE_URL: str | None = Field(None, description="Database connection URL")
 
+    # Redis (Added for Idempotency/Outbox)
+    REDIS_URL: str | None = Field(None, description="Redis connection URL")
+
     # Security
     SECRET_KEY: str = Field(
         default_factory=_get_or_create_dev_secret_key,
@@ -125,7 +128,6 @@ class AppSettings(BaseServiceSettings):
     ALLOWED_HOSTS: list[str] = Field(default=["*"])
 
     # Infra
-    REDIS_URL: str | None = None
     DB_POOL_SIZE: int = Field(40, description="DB Pool Size")
     DB_MAX_OVERFLOW: int = Field(60, description="DB Max Overflow")
 

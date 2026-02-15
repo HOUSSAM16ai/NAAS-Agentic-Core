@@ -36,11 +36,13 @@ app.add_middleware(IdempotencyMiddleware)
 # 5. تشغيل العامل في الخلفية (Outbox Worker)
 _worker_task = None
 
+
 @app.on_event("startup")
 async def start_background_workers():
     """Start background workers for the application."""
     global _worker_task
     _worker_task = asyncio.create_task(run_outbox_worker(session_factory=async_session_factory))
+
 
 @app.on_event("shutdown")
 async def stop_background_workers():
@@ -52,6 +54,7 @@ async def stop_background_workers():
         _worker_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await _worker_task
+
 
 def create_app(
     *,

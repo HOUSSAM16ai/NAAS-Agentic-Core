@@ -39,9 +39,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         else:
             logger.warning("REDIS_URL not set. Idempotency middleware disabled.")
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # 1. Bypass if Redis is not configured
         if not self.redis:
             return await call_next(request)
@@ -87,9 +85,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                             "headers": dict(response.headers),
                         }
                         # Overwrite "PROCESSING" with result
-                        await self.redis.set(
-                            cache_key, json.dumps(cache_data), ex=86400
-                        )
+                        await self.redis.set(cache_key, json.dumps(cache_data), ex=86400)
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         # Not a JSON response, release lock but don't cache
                         await self.redis.delete(cache_key)

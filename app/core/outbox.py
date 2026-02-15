@@ -6,15 +6,18 @@ This ensures that database changes and event publishing happen atomically.
 """
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from datetime import datetime
 from typing import Any
 
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings.base import get_settings
 from app.domain.models.outbox import MissionOutbox
 
 logger = logging.getLogger(__name__)
@@ -41,6 +44,15 @@ async def process_outbox(session: AsyncSession, batch_size: int = 10):
     Worker function to process pending outbox events.
     In a real production setup, this would run in a separate worker process.
     """
+    settings = get_settings()
+    redis_client: Redis | None = None
+
+    if settings.REDIS_URL:
+        try:
+            redis_client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        except Exception as e:
+            logger.error(f"Failed to connect to Redis for Outbox: {e}")
+
     stmt = (
         select(MissionOutbox)
         .where(MissionOutbox.status == "PENDING")
@@ -54,9 +66,20 @@ async def process_outbox(session: AsyncSession, batch_size: int = 10):
 
     for event in events:
         try:
-            # TODO: Integrate with EventBus / Redis Stream here
-            # await event_bus.publish(event.event_type, event.payload)
-            logger.info(f"Processing outbox event: {event.event_type}")
+            if redis_client:
+                # Publish to Redis Stream
+                stream_key = "cogniforge:events"
+                # Redis Streams keys/values must be strings/bytes
+                event_data = {
+                    "event_type": event.event_type,
+                    "payload": json.dumps(event.payload),
+                    "event_id": str(event.id),
+                    "timestamp": event.created_at.isoformat(),
+                }
+                await redis_client.xadd(stream_key, event_data)
+                logger.info(f"Published event {event.id} ({event.event_type}) to {stream_key}")
+            else:
+                logger.warning(f"Redis not configured. Simulating publish for {event.event_type}")
 
             event.status = "PROCESSED"
             event.processed_at = datetime.utcnow()
@@ -67,6 +90,9 @@ async def process_outbox(session: AsyncSession, batch_size: int = 10):
             event.retry_count += 1
 
     await session.commit()
+
+    if redis_client:
+        await redis_client.close()
 
 
 async def run_outbox_worker(

@@ -158,7 +158,7 @@ def run_guardrails(root_dir: Path) -> list[str]:
                 for part in [".venv", "venv", ".git", "__pycache__", "node_modules"]
             ):
                 continue
-            if "migrations" in filepath.parts:
+            if "migrations" in filepath.parts or "migrations_archive" in filepath.parts:
                 continue
             violations.extend(check_file(filepath))
 

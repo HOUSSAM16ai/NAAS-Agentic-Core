@@ -1,6 +1,7 @@
 # ADR-001: Architectural Dependency Rules
 
 **Status:** Accepted
+**See Also:** [ADR-002: Unified Control Plane](04_adr_002_unified_orchestration.md) (Clarifies Orchestration Authority)
 **Date:** 2024-05-22
 **Context:** The codebase currently suffers from circular dependencies and "God Objects" that mix HTTP, Database, and Business logic.
 **Decision:** We are adopting strict Dependency Injection and Layered Architecture rules.

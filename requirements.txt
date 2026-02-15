@@ -95,3 +95,4 @@ duckduckgo-search>=6.0.0
 tavily-python
 firecrawl-py
 redis>=5.0.0
+langgraph-sdk==0.1.39

@@ -65,3 +65,4 @@ llama-index-core==0.14.13
 llama-index-readers-file
 llama-index-vector-stores-supabase
 llama-index-embeddings-huggingface
+langgraph-sdk==0.1.39

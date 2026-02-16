@@ -1,20 +1,22 @@
-# Grant Alignment Mapping
+# Grant Alignment & Value Proposition
 
-> **How this repository fulfills the OpenAI EMEA Youth & Wellbeing Grant Requirements.**
+**Purpose:** Maps project objectives to budget, methods, and deliverables to demonstrate R&D value.
+**Program:** OpenAI EMEA Youth & Wellbeing Grant.
 
-| Questionnaire Section | Repository Location | Status | Notes |
+## 1. Strategic Mapping Matrix
+| Objective | Method | Deliverable (Output) | Stakeholder Value |
 | :--- | :--- | :--- | :--- |
-| **1. Organisation & Eligibility** | `README.md` (Legal Host Block) | 🟢 Ready | Confirm registration number (TODO). |
-| **2. Project Snapshot** | `README.md` (Executive Summary) | 🟢 Ready | < 30 words summary. |
-| **3. Impact & Scalability** | `docs/IMPACT_MEASUREMENT_PLAN.md` | 🟢 Ready | Includes 8 Core KPIs. |
-| **4. Core Proposal** | `README.md` (Deliverables/Methods)<br>`application/CORE_PROPOSAL_500_WORDS.md` | 🟢 Ready | Objectives, Methods, Deliverables. |
-| **5. Methods, Ethics & Safeguards** | `SAFEGUARDING.md`<br>`DATA_PROTECTION.md`<br>`docs/EVALUATION_PROTOCOL.md` | 🟢 Ready | Comprehensive operational policies. |
-| **6. Team & Capacity** | `README.md` (Legal Host & Team) | 🟡 TODO | Add specific team bios if required. |
-| **7. Independence & Transparency** | `README.md` (Independence Statement)<br>`LICENSE` | 🟢 Ready | MIT License ensures open access. |
-| **8. Budget & Timeline** | `docs/DELIVERABLES_ROADMAP.md` | 🟢 Ready | 3 timeline options provided. |
+| **Reduce Safety Failures** | Agentic Verification Layer | Open-Source Safety Code | **Product Teams:** Reusable architecture for regional safety. |
+| **Evidence Generation** | Deep Pilot (N=15-20) & Telemetry | Evidence Report on Code-Switching | **Policymakers:** Data on specific regional risks (Darija). |
+| **Capacity Building** | Workshops (N=100+) | Safeguarding Playbooks | **NGOs/Educators:** Practical tools to adopt AI safely. |
 
-## Key Remaining Actions (TODOs)
+## 2. Budget Alignment
+The budget (€42,500) supports the production of **shareable outputs**:
+* **R&D (Personnel):** Funds the engineering of the Open-Source Toolkit and the analysis for the Evidence Report.
+* **Pilot (Operations):** Funds the *validation* mechanism (participants/mentors) to ensure the toolkit is battle-tested.
+* **Infrastructure:** Funds the compute (LLM APIs) required for automated red-teaming and evaluation cycles.
 
-- [ ] Fill in Registration Number in `README.md`.
-- [ ] Confirm Team Members in `README.md` and `application/` drafts.
-- [ ] Set specific quantitative targets in `docs/IMPACT_MEASUREMENT_PLAN.md` based on partner capacity.
+## 3. What Success Looks Like
+* **Measurable:** >90% interception of unsafe prompts in the pilot.
+* **Feasible:** Delivered within 6-12 months using existing open-source stacks.
+* **Shareable:** A GitHub repository containing the Test Suite, Metrics, and Playbooks, cited by at least 3 regional NGOs.

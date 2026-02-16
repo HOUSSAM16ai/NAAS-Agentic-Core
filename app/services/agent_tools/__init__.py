@@ -17,6 +17,8 @@ from .cognitive_tools import (
     refine_text,
     summarize_text,
 )
+from .reasoning_tools import reason_deeply
+
 from .core import (
     canonicalize_tool_name,
     get_tool,
@@ -141,6 +143,9 @@ def summarize_text_tool(**kwargs) -> None:
 def refine_text_tool(**kwargs) -> None:
     return refine_text(**kwargs)
 
+def reason_deeply_tool(**kwargs) -> None:
+    return reason_deeply(**kwargs)
+
 
 def write_file_tool(**kwargs) -> None:
     return write_file(**kwargs)
@@ -256,6 +261,7 @@ __all__ = [
     "read_bulk_files_tool",
     "read_file_tool",
     "refine_text_tool",
+    "reason_deeply_tool",
     "reload_deep_struct_map_tool",
     "resolve_tool_name",
     "summarize_text_tool",

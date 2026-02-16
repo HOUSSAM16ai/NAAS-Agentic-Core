@@ -6,18 +6,21 @@
 """
 
 from contextlib import asynccontextmanager
+import time
 
 from fastapi import APIRouter, FastAPI
 from pydantic import BaseModel, Field
 
-# سيتم استخدام هذه الواردات لاحقاً عند ربط المنطق الفعلي
-# from microservices.reasoning_agent.src.service import ReasoningService
+# Integration with internal logic
+from microservices.reasoning_agent.src.ai_client import SimpleAIClient
+from microservices.reasoning_agent.src.workflow import SuperReasoningWorkflow
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """يدير دورة حياة وكيل الاستدلال."""
     print("🚀 Reasoning Agent Started")
+    # Warmup or checks could go here
     yield
     print("🛑 Reasoning Agent Stopped")
 
@@ -65,23 +68,39 @@ def _build_router() -> APIRouter:
         """
         نقطة الدخول الموحدة لتنفيذ الأوامر (Unified Execution Endpoint).
         """
+        start_time = time.time()
         try:
             # Dispatch Logic
             if request.action in {"reason", "solve_deeply"}:
                 # Extract parameters
                 query = request.payload.get("query", "")
+                if not query:
+                     return AgentResponse(
+                        status="error", error="Query is required for reasoning."
+                    )
 
-                # TODO: Integrate with microservices.reasoning_agent.src.workflow
-                # result = await logic.solve(query, context)
+                # Initialize Components
+                ai_client = SimpleAIClient()
+                # We can inject specific strategies here if payload requests them
+                workflow = SuperReasoningWorkflow(client=ai_client, timeout=300)
 
-                # Mock Result for Simplification/Stub
+                # Execute Workflow
+                result = await workflow.run(query=query)
+
+                duration = (time.time() - start_time) * 1000
+
+                # Result is usually a string (content) from StopEvent
+                # But workflow.run returns the result of the last step.
+                # In SuperReasoningWorkflow: return StopEvent(result=content)
+                # So result should be content string.
+
                 result_data = {
-                    "answer": f"Analysis of '{query}' completed.",
-                    "logic_trace": ["Step 1: Analyze", "Step 2: Synthesize"],
+                    "answer": str(result),
+                    "logic_trace": ["Executed R-MCTS Workflow"], # Full trace requires capturing events
                 }
 
                 return AgentResponse(
-                    status="success", data=result_data, metrics={"duration_ms": 150}
+                    status="success", data=result_data, metrics={"duration_ms": duration}
                 )
 
             return AgentResponse(

@@ -7,6 +7,7 @@
 import importlib
 import importlib.util
 from types import SimpleNamespace
+import json
 
 
 def _dspy_dependencies_available() -> bool:
@@ -67,45 +68,49 @@ else:
 
 
 class GeneratePlan(dspy.Signature):
-    """يولد خطة تعليمية منظمة بناءً على الهدف والسياق.
-    يجب أن يكون المخرج قائمة متوافقة مع JSON من السلاسل النصية."""
+    """Generates a structured strategic plan based on an objective and context.
+    The output must include a strategy name, reasoning, and a list of actionable steps.
+    Each step must have a 'name', 'description', and an optional 'tool_hint' (e.g., search_content, reason_deeply, read_file)."""
 
-    goal = dspy.InputField(desc="الهدف التعليمي الرئيسي (مثلاً: 'تعلم الفيزياء الكمية')")
-    context = dspy.InputField(desc="معلومات خلفية ذات صلة أو سياق مسترجع")
-    plan_steps = dspy.OutputField(desc="قائمة مفصلة بالخطوات القابلة للتنفيذ (كقائمة من النصوص)")
+    goal = dspy.InputField(desc="The main objective or mission goal.")
+    context = dspy.InputField(desc="Relevant context, constraints, and available resources.")
+
+    strategy_name = dspy.OutputField(desc="A creative and descriptive name for the strategy.")
+    reasoning = dspy.OutputField(desc="Explanation of why this strategy was chosen.")
+    plan_steps = dspy.OutputField(desc="A list of steps, where each step is a dictionary with keys: 'name', 'description', 'tool_hint'.")
 
 
 class CritiquePlan(dspy.Signature):
-    """يقيم الخطة التعليمية من حيث الوضوح، القابلية للتنفيذ، والاكتمال.
-    يعيد درجة من 10 وملاحظات بناءة."""
+    """Evaluates a strategic plan for feasibility, completeness, and clarity.
+    Returns a score out of 10 and constructive feedback."""
 
     goal = dspy.InputField()
     plan_steps = dspy.InputField()
-    score = dspy.OutputField(desc="درجة عشرية بين 0.0 و 10.0")
-    feedback = dspy.OutputField(desc="نصيحة محددة حول كيفية تحسين الخطة")
+    score = dspy.OutputField(desc="Float score between 0.0 and 10.0")
+    feedback = dspy.OutputField(desc="Specific advice on how to improve the plan.")
 
 
 class PlanGenerator(dspy.Module):
-    """يبني نموذج توليد خطة تعليمية اعتماداً على سياق وهدف محددين."""
+    """Builds a strategic planning model."""
 
     def __init__(self):
         super().__init__()
         self.generate = dspy.ChainOfThought(GeneratePlan)
 
-    def forward(self, goal: str, context: list[str]):
-        """ينفذ عملية توليد الخطة مع تنسيق السياق كسلسلة نصية."""
-        context_str = "\n".join(context) if context else "لا يوجد سياق إضافي."
+    def forward(self, goal: str, context: dict | list):
+        """Executes the planning process."""
+        context_str = json.dumps(context, default=str) if context else "No additional context."
         return self.generate(goal=goal, context=context_str)
 
 
 class PlanCritic(dspy.Module):
-    """يبني نموذج نقد الخطة لتقييم الجودة وتقديم الملاحظات."""
+    """Builds a plan critique model."""
 
     def __init__(self):
         super().__init__()
         self.critique = dspy.ChainOfThought(CritiquePlan)
 
-    def forward(self, goal: str, plan_steps: list[str]):
-        """ينفذ عملية النقد مع تحويل الخطوات إلى تمثيل نصي."""
-        plan_str = "\n".join(str(s) for s in plan_steps)
+    def forward(self, goal: str, plan_steps: list):
+        """Executes the critique process."""
+        plan_str = json.dumps(plan_steps, default=str)
         return self.critique(goal=goal, plan_steps=plan_str)

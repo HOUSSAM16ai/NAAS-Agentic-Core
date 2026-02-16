@@ -1,18 +1,18 @@
 """
 Planning Agent Client.
-Provides a typed interface to the Planning Agent Service.
+Provides a typed interface to the Planning Agent Microservice.
+Decouples the Monolith from the Planning Logic.
 """
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Final, Any
 
 import httpx
 
 from app.core.http_client_factory import HTTPClientConfig, get_http_client
 from app.core.logging import get_logger
 from app.core.settings.base import get_settings
-from app.domain.models.planning import PlanRequest, PlanResult
 
 logger = get_logger("planning-client")
 
@@ -22,13 +22,11 @@ DEFAULT_PLANNING_AGENT_URL: Final[str] = "http://planning-agent:8000"
 class PlanningClient:
     """
     Client for interacting with the Planning Agent microservice.
-    Uses the "Contract-First" approach (Three-Plane Architecture).
     """
 
     def __init__(self, base_url: str | None = None) -> None:
         settings = get_settings()
-        # Ensure we prioritize the specific setting, then fallback to argument or default
-        resolved_url = settings.PLANNING_AGENT_URL or base_url or DEFAULT_PLANNING_AGENT_URL
+        resolved_url = base_url or settings.PLANNING_AGENT_URL or DEFAULT_PLANNING_AGENT_URL
         self.base_url = resolved_url.rstrip("/")
         self.config = HTTPClientConfig(
             name="planning-agent-client",
@@ -39,35 +37,37 @@ class PlanningClient:
     async def _get_client(self) -> httpx.AsyncClient:
         return get_http_client(self.config)
 
-    async def generate_plan(self, goal: str, context: list[str]) -> PlanResult:
+    async def create_plan(
+        self, objective: str, context: dict[str, Any] | list[str]
+    ) -> dict[str, Any]:
         """
-        Execute plan generation via the agent's REST API.
+        Request a strategic plan from the Planning Agent.
         """
         url = f"{self.base_url}/plans"
-        payload = PlanRequest(goal=goal, context=context).model_dump()
+
+        # Ensure context is JSON serializable
+        # If context is a list of strings, pass it as is (API supports both but prefers dict for future)
+        # If context is CollaborationContext.shared_memory (dict), pass it.
+
+        payload = {
+            "objective": objective,
+            "context": context
+        }
 
         client = await self._get_client()
         try:
+            logger.info(f"Requesting plan for objective: {objective[:50]}...")
             response = await client.post(url, json=payload)
             response.raise_for_status()
 
-            # The API returns PlanResponse (id, goal, steps)
-            # We map it to our local PlanResult
-            return PlanResult(**response.json())
+            data = response.json()
+            # PlanResponse structure: {plan_id, goal, strategy_name, reasoning, steps: [...]}
+            return data
 
         except Exception as e:
-            logger.error(f"Plan generation failed: {e}", exc_info=True)
+            logger.error(f"Planning failed: {e}", exc_info=True)
+            # Fallback or re-raise
             raise
-
-    async def check_health(self) -> bool:
-        """Check if the service is healthy."""
-        url = f"{self.base_url}/health"
-        client = await self._get_client()
-        try:
-            response = await client.get(url)
-            return response.status_code == 200
-        except Exception:
-            return False
 
 
 # Singleton

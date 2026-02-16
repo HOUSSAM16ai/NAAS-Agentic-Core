@@ -5,8 +5,9 @@
 """
 
 import ast
+import json
 import logging
-from typing import TypedDict
+from typing import TypedDict, Any
 
 from langgraph.graph import END, StateGraph
 
@@ -20,8 +21,10 @@ class PlanningState(TypedDict):
     """تعريف الحالة للرسم البياني للتخطيط."""
 
     goal: str
-    context: list[str]
-    plan: list[str]
+    context: dict | list
+    plan: list[dict]
+    strategy_name: str
+    reasoning: str
     score: float
     feedback: str
     iterations: int
@@ -30,9 +33,13 @@ class PlanningState(TypedDict):
 def retrieve_node(state: PlanningState) -> dict:
     """يحسن السياق باستخدام LlamaIndex/Reranking."""
     logger.info("جاري استرجاع/إعادة ترتيب السياق...")
-    # إعادة الترتيب فقط إذا لم يتم ذلك أو لضمان الجودة
-    refined_ctx = rerank_context(state["goal"], state.get("context", []))
-    return {"context": refined_ctx}
+    # For now, pass context as is or enhance if needed.
+    # Reranking usually expects list of strings. If context is dict, we might skip or flatten.
+    ctx = state.get("context", [])
+    if isinstance(ctx, list):
+        refined_ctx = rerank_context(state["goal"], ctx)
+        return {"context": refined_ctx}
+    return {"context": ctx}
 
 
 def generate_node(state: PlanningState) -> dict:
@@ -42,54 +49,61 @@ def generate_node(state: PlanningState) -> dict:
     generator = PlanGenerator()
 
     # إذا كان هناك ملاحظات من تكرار سابق، أضفها للسياق
-    current_context = state.get("context", [])[:]
-    if state.get("feedback"):
-        current_context.append(f"ملاحظات الناقد: {state['feedback']}")
+    current_context = state.get("context", [])
+    feedback = state.get("feedback")
+
+    # Prepare context for generator
+    gen_context = current_context
+    if feedback:
+        if isinstance(gen_context, list):
+            gen_context = gen_context[:] + [f"Critique Feedback: {feedback}"]
+        elif isinstance(gen_context, dict):
+            gen_context = {**gen_context, "critique_feedback": feedback}
 
     try:
-        pred = generator(goal=state["goal"], context=current_context)
-        raw_steps = pred.plan_steps
+        pred = generator(goal=state["goal"], context=gen_context)
 
-        # تحليل قوي (Robust parsing)
+        raw_steps = pred.plan_steps
+        strategy_name = getattr(pred, "strategy_name", "Generated Strategy")
+        reasoning = getattr(pred, "reasoning", "No reasoning provided.")
+
+        # Parsing logic for structured steps
+        steps = []
         if isinstance(raw_steps, list):
             steps = raw_steps
         elif isinstance(raw_steps, str):
             try:
-                # محاولة تنظيف النص من علامات Markdown واستخلاص JSON أو القائمة
                 clean = raw_steps.strip()
                 if "```" in clean:
                     clean = clean.split("```")[1]
                     if clean.startswith("json"):
                         clean = clean[4:]
-                    elif clean.startswith("python"):
-                        clean = clean[6:]
+                    clean = clean.strip()
 
-                clean = clean.strip()
-
-                # استخدام ast.literal_eval بأمان مع fallback
+                steps = json.loads(clean)
+            except json.JSONDecodeError:
                 try:
                     steps = ast.literal_eval(clean)
-                except (ValueError, SyntaxError):
-                    # محاولة استخراج عناصر القائمة باستخدام Regex إذا فشل التحليل المباشر
-                    import re
+                except Exception:
+                    # Fallback to simple string parsing if JSON fails
+                    steps = [{"name": "Step", "description": line, "tool_hint": None}
+                             for line in clean.split("\n") if line.strip()]
 
-                    # البحث عن أنماط مثل "1. الخطوة" أو "- الخطوة"
-                    matches = re.findall(r"(?:^\d+\.|-|\*)\s+(.+)$", clean, re.MULTILINE)
-                    # Use ternary operator as preferred by ruff SIM108
-                    steps = matches or [line.strip() for line in clean.split("\n") if line.strip()]
-
-                if not isinstance(steps, list):
-                    steps = [str(steps)]
-            except Exception:
-                steps = [line.strip() for line in raw_steps.split("\n") if line.strip()]
-        else:
-            steps = [str(raw_steps)]
+        if not isinstance(steps, list):
+            steps = [{"name": "Plan Execution", "description": str(steps), "tool_hint": None}]
 
     except Exception as e:
         logger.error(f"فشل التوليد: {e}")
-        steps = ["خطأ في توليد الخطة", "يرجى المحاولة مرة أخرى"]
+        steps = [{"name": "Error", "description": "Failed to generate plan.", "tool_hint": None}]
+        strategy_name = "Error"
+        reasoning = str(e)
 
-    return {"plan": steps, "iterations": state.get("iterations", 0) + 1}
+    return {
+        "plan": steps,
+        "strategy_name": strategy_name,
+        "reasoning": reasoning,
+        "iterations": state.get("iterations", 0) + 1
+    }
 
 
 def critique_node(state: PlanningState) -> dict:
@@ -98,7 +112,9 @@ def critique_node(state: PlanningState) -> dict:
 
     critic = PlanCritic()
     try:
-        pred = critic(goal=state["goal"], plan_steps=state["plan"])
+        # Convert plan dicts to string for critic
+        plan_str = json.dumps(state["plan"], indent=2)
+        pred = critic(goal=state["goal"], plan_steps=plan_str)
 
         # تحليل الدرجة
         try:

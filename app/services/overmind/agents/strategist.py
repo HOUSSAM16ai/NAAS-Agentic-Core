@@ -5,6 +5,8 @@
 يقوم هذا الوكيل بتحليل الأهداف المعقدة وتفكيكها باستخدام خوارزميات التفكير
 الشجري (Tree of Thoughts) والتحليل العودي (Recursive Decomposition).
 
+تم تحويله لاستخدام Microservice (planning-agent) بدلاً من التنفيذ المحلي.
+
 المعايير:
 - CS50 2025 Strict Mode.
 - توثيق "Legendary" باللغة العربية.
@@ -17,6 +19,7 @@ import re
 from app.core.ai_gateway import AIClient
 from app.core.di import get_logger
 from app.core.protocols import AgentPlanner, CollaborationContext
+from app.infrastructure.clients.planning_client import planning_client
 from app.services.overmind.dec_pomdp_proof import (
     build_dec_pomdp_consultation_payload,
     is_dec_pomdp_proof_question,
@@ -42,177 +45,25 @@ class StrategistAgent(AgentPlanner):
         """
         إنشاء خطة استراتيجية محكمة.
 
-        يستخدم نموذج LLM المتطور لتوليد خطة بصيغة JSON صارمة.
+        يستخدم خدمة Planning Agent لتوليد الخطة.
         """
-        logger.info("Strategist is devising a plan for: %s", objective)
+        logger.info("Strategist is requesting a plan for: %s", objective)
 
         try:
-            # إنشاء الخطة باستخدام الذكاء الاصطناعي
-            plan_data = await self._generate_plan_with_ai(objective, context)
+            # استخدام خدمة التخطيط المستقلة (Decoupled Microservice Call)
+            plan_data = await planning_client.create_plan(
+                objective=objective,
+                context=context.shared_memory
+            )
 
             # تحديث الذاكرة المشتركة
             self._record_plan_in_context(context, plan_data)
-            logger.info("Strategist: Plan created with %s steps", _count_steps(plan_data))
+            logger.info("Strategist: Plan received with %s steps", _count_steps(plan_data))
 
             return plan_data
 
-        except json.JSONDecodeError as e:
-            return self._handle_json_decode_error(e, locals().get("response_text"))
         except Exception as e:
             return self._handle_general_error(e)
-
-    async def _generate_plan_with_ai(
-        self, objective: str, context: CollaborationContext
-    ) -> dict[str, object]:
-        """
-        توليد الخطة باستخدام الذكاء الاصطناعي.
-
-        Generate plan using AI.
-
-        Args:
-            objective: الهدف المطلوب
-            context: سياق التعاون
-
-        Returns:
-            بيانات الخطة
-        """
-        system_prompt = self._build_system_prompt()
-        user_content = self._build_user_content(objective, context)
-
-        logger.info("Strategist: Calling AI for plan generation...")
-        response_text = await self.ai.send_message(
-            system_prompt=system_prompt,
-            user_message=user_content,
-            temperature=0.2,  # دقة عالية، إبداع منخفض
-        )
-        logger.info(f"Strategist: Received AI response ({len(response_text)} chars)")
-
-        # تنظيف وتحليل الرد
-        plan_data = self._parse_json_response(response_text)
-
-        # التحقق من الصحة
-        self._validate_plan(plan_data)
-
-        return plan_data
-
-    def _build_system_prompt(self) -> str:
-        """
-        بناء نص التعليمات للنظام.
-
-        Build system prompt.
-
-        Returns:
-            نص التعليمات
-        """
-        return """
-        أنت "الاستراتيجي" (The Strategist)، عقل تخطيطي خارق الذكاء ضمن منظومة Overmind.
-
-        مهمتك:
-        تحويل الهدف المبهم للمستخدم إلى خطة تنفيذية دقيقة (Action Plan).
-
-        القواعد:
-        1. فكر بعمق (Think Step-by-Step).
-        2. قسم المشكلة إلى خطوات صغيرة جداً (Atomic Steps).
-        3. كل خطوة يجب أن تكون قابلة للتنفيذ باستخدام أدوات برمجية (CLI, FileSystem, Git).
-        4. المخرجات يجب أن تكون JSON صالح فقط وبدون أي مقدمات.
-        5. تنبيه هام: عند الحاجة للبحث عن معلومات أو محتوى تعليمي، استخدم التلميح "search_content" حصراً.
-
-        صيغة JSON المطلوبة:
-        {
-            "strategy_name": "اسم استراتيجي جذاب",
-            "reasoning": "شرح منطقي للخطة",
-            "steps": [
-                {
-                    "name": "اسم الخطوة",
-                    "description": "وصف دقيق لما سيتم فعله",
-                    "tool_hint": "تلميح للأداة المناسبة (مثلاً: shell, read_file, search_content)"
-                }
-            ]
-        }
-        """
-
-    def _build_user_content(self, objective: str, context: CollaborationContext) -> str:
-        """
-        بناء محتوى رسالة المستخدم.
-
-        Build user message content.
-
-        Args:
-            objective: الهدف
-            context: السياق
-
-        Returns:
-            محتوى الرسالة
-        """
-        shared_data = context.shared_memory
-        return f"Objective: {objective}\nContext: {json.dumps(shared_data, default=str)}"
-
-    def _parse_json_response(self, response_text: str) -> dict[str, object]:
-        """
-        تحليل رد الذكاء الاصطناعي كـ JSON منظم.
-
-        Args:
-            response_text: نص الرد
-
-        Returns:
-            بيانات الخطة
-        """
-        cleaned_response = self._clean_json_block(response_text)
-        parsed = json.loads(cleaned_response)
-        if not isinstance(parsed, dict):
-            raise ValueError("AI response did not contain a JSON object")
-        return parsed
-
-    def _validate_plan(self, plan_data: dict[str, object]) -> None:
-        """
-        التحقق من صحة بيانات الخطة.
-
-        Validate plan data.
-
-        Args:
-            plan_data: بيانات الخطة
-
-        Raises:
-            ValueError: إذا كانت البيانات غير صحيحة
-        """
-        if "steps" not in plan_data:
-            raise ValueError("Missing 'steps' in AI plan")
-
-    def _handle_json_decode_error(
-        self, error: json.JSONDecodeError, response_text: str | None
-    ) -> dict[str, object]:
-        """
-        معالجة خطأ تحليل JSON.
-
-        Handle JSON decode error.
-
-        Args:
-            error: خطأ التحليل
-            response_text: نص الرد (إن وجد)
-
-        Returns:
-            خطة طوارئ
-        """
-        logger.error(f"Strategist JSON parsing error: {error}")
-        logger.error(f"Raw response: {response_text[:500] if response_text else 'N/A'}")
-
-        # التحقق من رسالة Safety Net
-        if response_text and "Unable to reach external intelligence" in response_text:
-            logger.error("AI service unavailable - Safety Net activated")
-            return self._create_ai_unavailable_plan()
-
-        # خطة طوارئ (Fallback Plan)
-        return {
-            "strategy_name": "Emergency Fallback - JSON Error",
-            "reasoning": f"Failed to parse AI response: {error}",
-            "steps": [
-                {
-                    "name": "Report JSON Error",
-                    "description": f"AI response was not valid JSON. Error: {error}",
-                    "tool_hint": "log",
-                }
-            ],
-        }
 
     def _handle_general_error(self, error: Exception) -> dict[str, object]:
         """
@@ -238,47 +89,6 @@ class StrategistAgent(AgentPlanner):
                 }
             ],
         }
-
-    def _create_ai_unavailable_plan(self) -> dict[str, object]:
-        """
-        إنشاء خطة لحالة عدم توفر خدمة AI.
-
-        Create plan for AI service unavailable.
-
-        Returns:
-            خطة طوارئ
-        """
-        return {
-            "strategy_name": "AI Service Unavailable",
-            "reasoning": "Cannot proceed without AI service. Please configure OPENROUTER_API_KEY.",
-            "steps": [
-                {
-                    "name": "Configuration Required",
-                    "description": "OPENROUTER_API_KEY is not configured. Please set it in .env file.",
-                    "tool_hint": "config",
-                }
-            ],
-        }
-
-    def _clean_json_block(self, text: str) -> str:
-        """استخراج JSON من نص قد يحتوي على Markdown code blocks."""
-        text = text.strip()
-
-        # 1. محاولة استخراج JSON من كتل الكود (Markdown)
-        json_code_block_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
-        match = re.search(json_code_block_pattern, text, re.DOTALL)
-        if match:
-            return match.group(1).strip()
-
-        # 2. محاولة استخراج JSON من بين الأقواس (Outermost Braces)
-        start = text.find("{")
-        end = text.rfind("}")
-
-        if start != -1 and end != -1 and end > start:
-            return text[start : end + 1].strip()
-
-        # 3. في حال عدم العثور على أي هيكل JSON، نعيد كائن فارغ نصي لتجنب الانهيار
-        return "{}"
 
     async def consult(self, situation: str, analysis: dict[str, object]) -> dict[str, object]:
         """
@@ -359,6 +169,29 @@ class StrategistAgent(AgentPlanner):
             "recommendation": "Adopt a cautious strategic approach (AI consultation failed).",
             "confidence": 50.0,
         }
+
+    def _parse_json_response(self, response_text: str) -> dict[str, object]:
+        """
+        تحليل رد الذكاء الاصطناعي كـ JSON منظم.
+        """
+        cleaned_response = self._clean_json_block(response_text)
+        parsed = json.loads(cleaned_response)
+        if not isinstance(parsed, dict):
+            raise ValueError("AI response did not contain a JSON object")
+        return parsed
+
+    def _clean_json_block(self, text: str) -> str:
+        """استخراج JSON من نص قد يحتوي على Markdown code blocks."""
+        text = text.strip()
+        json_code_block_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
+        match = re.search(json_code_block_pattern, text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return text[start : end + 1].strip()
+        return "{}"
 
 
 def _count_steps(plan_data: dict[str, object]) -> int:

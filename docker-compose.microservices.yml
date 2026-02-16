@@ -2,6 +2,45 @@ version: '3.8'
 
 services:
   # ==========================================
+  # Infrastructure Services
+  # ==========================================
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: cogniforge-postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - cogniforge-network
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  db-init:
+    image: python:3.11-slim
+    container_name: cogniforge-db-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cogniforge-network
+    volumes:
+      - ./scripts:/scripts
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_PORT: 5432
+    command: >
+      bash -c "pip install psycopg2-binary && python /scripts/init_databases.py"
+
+  # ==========================================
   # API Gateway - نقطة الدخول المركزية
   # ==========================================
   api-gateway:
@@ -13,7 +52,7 @@ services:
       - "8000:8000"
     environment:
       - ENVIRONMENT=production
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/core_db
       - SECRET_KEY=${SECRET_KEY:-super_secret_key_change_in_production}
       - PLANNING_AGENT_URL=http://planning-agent:8001
       - MEMORY_AGENT_URL=http://memory-agent:8002
@@ -25,6 +64,7 @@ services:
       - memory-agent
       - user-service
       - observability-service
+      - db-init
     networks:
       - cogniforge-network
     healthcheck:
@@ -47,11 +87,14 @@ services:
     environment:
       - SERVICE_NAME=planning-agent
       - SERVICE_VERSION=1.0.0
-      - PLANNING_DATABASE_URL=${DATABASE_URL}?options=-c%20search_path%3Dplanning
-      - DATABASE_URL=${DATABASE_URL}?options=-c%20search_path%3Dplanning
+      - PLANNING_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/planning_db?options=-c%20search_path%3Dplanning
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/planning_db?options=-c%20search_path%3Dplanning
     command: uvicorn microservices.planning_agent.main:app --host 0.0.0.0 --port 8001
     networks:
       - cogniforge-network
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
@@ -71,11 +114,14 @@ services:
     environment:
       - SERVICE_NAME=memory-agent
       - SERVICE_VERSION=1.0.0
-      - MEMORY_DATABASE_URL=${DATABASE_URL}?options=-c%20search_path%3Dmemory
-      - DATABASE_URL=${DATABASE_URL}?options=-c%20search_path%3Dmemory
+      - MEMORY_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/memory_db?options=-c%20search_path%3Dmemory
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/memory_db?options=-c%20search_path%3Dmemory
     command: uvicorn microservices.memory_agent.main:app --host 0.0.0.0 --port 8002
     networks:
       - cogniforge-network
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s
@@ -95,11 +141,14 @@ services:
     environment:
       - SERVICE_NAME=user-service
       - SERVICE_VERSION=1.0.0
-      - USER_DATABASE_URL=${DATABASE_URL}?options=-c%20search_path%3Duser_service
-      - DATABASE_URL=${DATABASE_URL}?options=-c%20search_path%3Duser_service
+      - USER_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/user_db?options=-c%20search_path%3Duser_service
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/user_db?options=-c%20search_path%3Duser_service
     command: uvicorn microservices.user_service.main:app --host 0.0.0.0 --port 8003
     networks:
       - cogniforge-network
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
@@ -119,10 +168,13 @@ services:
     environment:
       - SERVICE_NAME=observability-service
       - SERVICE_VERSION=1.0.0
-      - DATABASE_URL=${DATABASE_URL}?options=-c%20search_path%3Dobservability
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/observability_db?options=-c%20search_path%3Dobservability
     command: uvicorn microservices.observability_service.main:app --host 0.0.0.0 --port 8005
     networks:
       - cogniforge-network
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
       interval: 30s

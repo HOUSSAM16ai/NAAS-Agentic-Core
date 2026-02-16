@@ -81,6 +81,8 @@ llama-index-instrumentation==0.4.2
 llama-index-readers-file
 llama-index-vector-stores-supabase
 llama-index-embeddings-huggingface
+llama-index-embeddings-openai
+llama-index-llms-openai
 zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
 PyYAML
 passlib

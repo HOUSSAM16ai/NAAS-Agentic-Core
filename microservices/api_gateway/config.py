@@ -21,6 +21,20 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "CogniForge API Gateway"
     SECRET_KEY: str = "super_secret_key_change_in_production"
 
+    # Resiliency Settings
+    CONNECT_TIMEOUT: float = 5.0  # Seconds
+    READ_TIMEOUT: float = 60.0  # Seconds
+    WRITE_TIMEOUT: float = 60.0  # Seconds
+    POOL_LIMIT: int = 100  # Max connections in pool
+
+    # Circuit Breaker Settings
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 5  # Number of failures before opening
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT: float = 30.0  # Seconds to stay open
+
+    # Retry Settings
+    MAX_RETRIES: int = 3
+    RETRY_BACKOFF_FACTOR: float = 0.5  # Base backoff in seconds
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
     )

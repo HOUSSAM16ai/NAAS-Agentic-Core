@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import jwt
 from fastapi import HTTPException, Request, Security
@@ -24,14 +24,13 @@ async def verify_gateway_request(
         raise HTTPException(status_code=401, detail="Missing authentication credentials")
 
     try:
-        payload = jwt.decode(
+        return jwt.decode(
             credentials.credentials, settings.SECRET_KEY, algorithms=["HS256"]
         )
-        return payload
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
+        raise HTTPException(status_code=401, detail="Token has expired") from None
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token") from None
 
 
 def create_service_token() -> str:
@@ -41,7 +40,7 @@ def create_service_token() -> str:
     """
     payload = {
         "sub": "api-gateway",
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(datetime.UTC) + timedelta(minutes=5),
+        "iat": datetime.now(datetime.UTC),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")

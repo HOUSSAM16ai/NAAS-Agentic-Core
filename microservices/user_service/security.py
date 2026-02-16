@@ -23,6 +23,6 @@ def verify_service_token(x_service_token: str | None = Header(None, alias="X-Ser
             raise HTTPException(status_code=403, detail="Invalid token subject")
         return payload
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Service token has expired")
+        raise HTTPException(status_code=401, detail="Service token has expired") from None
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid service token")
+        raise HTTPException(status_code=401, detail="Invalid service token") from None

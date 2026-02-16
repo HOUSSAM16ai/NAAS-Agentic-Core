@@ -22,6 +22,7 @@ from microservices.user_service.errors import ConflictError, setup_exception_han
 from microservices.user_service.health import HealthResponse, build_health_payload
 from microservices.user_service.logging import get_logger, setup_logging
 from microservices.user_service.models import User
+from microservices.user_service.security import verify_service_token
 from microservices.user_service.settings import UserServiceSettings, get_settings
 
 logger = get_logger("user-service")
@@ -159,7 +160,12 @@ def create_app(settings: UserServiceSettings | None = None) -> FastAPI:
     )
 
     setup_exception_handlers(app)
-    app.include_router(_build_router(effective_settings))
+
+    # تطبيق Zero Trust: التحقق من الهوية عند البوابة
+    app.include_router(
+        _build_router(effective_settings),
+        dependencies=[Depends(verify_service_token)]
+    )
 
     return app
 

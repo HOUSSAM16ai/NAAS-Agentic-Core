@@ -22,6 +22,7 @@ from microservices.planning_agent.graph import graph
 from microservices.planning_agent.health import HealthResponse, build_health_payload
 from microservices.planning_agent.logging import get_logger, setup_logging
 from microservices.planning_agent.models import Plan
+from microservices.planning_agent.security import verify_service_token
 from microservices.planning_agent.settings import PlanningAgentSettings, get_settings
 
 logger = get_logger("planning-agent")
@@ -257,7 +258,9 @@ def create_app(settings: PlanningAgentSettings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     setup_exception_handlers(app)
-    app.include_router(_build_router())
+
+    # تطبيق Zero Trust: التحقق من الهوية عند البوابة
+    app.include_router(_build_router(), dependencies=[Depends(verify_service_token)])
 
     return app
 

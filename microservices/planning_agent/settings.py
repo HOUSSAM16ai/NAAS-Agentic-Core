@@ -32,6 +32,13 @@ class PlanningAgentSettings(BaseSettings):
         description="رابط قاعدة البيانات الخاصة بالوكيل",
     )
 
+    # Security
+    SECRET_KEY: str = Field(
+        "super_secret_key_change_in_production",
+        validation_alias="SECRET_KEY",
+        description="مفتاح التشفير المشترك",
+    )
+
     # AI Settings
     OPENROUTER_API_KEY: SecretStr | None = Field(None, description="مفتاح API لخدمة OpenRouter")
     AI_MODEL: str = Field(

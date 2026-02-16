@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # Gateway Configuration
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "CogniForge API Gateway"
+    SECRET_KEY: str = "super_secret_key_change_in_production"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"

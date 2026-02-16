@@ -19,6 +19,7 @@ from microservices.memory_agent.database import get_session, init_db
 from microservices.memory_agent.errors import setup_exception_handlers
 from microservices.memory_agent.health import HealthResponse, build_health_payload
 from microservices.memory_agent.logging import get_logger, setup_logging
+from microservices.memory_agent.security import verify_service_token
 from microservices.memory_agent.settings import MemoryAgentSettings, get_settings
 
 # استيراد الطبقات الجديدة (SOLID Refactoring)
@@ -124,7 +125,9 @@ def create_app(settings: MemoryAgentSettings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     setup_exception_handlers(app)
-    app.include_router(_build_router(effective_settings))
+
+    # تطبيق Zero Trust: التحقق من الهوية عند البوابة
+    app.include_router(_build_router(effective_settings), dependencies=[Depends(verify_service_token)])
 
     return app
 

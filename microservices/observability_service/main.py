@@ -7,7 +7,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from pydantic import BaseModel, Field
 
 from microservices.observability_service.errors import (
@@ -19,6 +19,7 @@ from microservices.observability_service.health import HealthResponse, build_hea
 from microservices.observability_service.logging import get_logger, setup_logging
 from microservices.observability_service.logic import serialize_capacity_plan
 from microservices.observability_service.models import MetricType, TelemetryData
+from microservices.observability_service.security import verify_service_token
 from microservices.observability_service.service import get_aiops_service
 from microservices.observability_service.settings import ObservabilitySettings, get_settings
 
@@ -118,6 +119,7 @@ def _register_routes(app: FastAPI, settings: ObservabilitySettings) -> None:
         response_model=TelemetryResponse,
         tags=["Telemetry"],
         summary="استقبال قياس جديد",
+        dependencies=[Depends(verify_service_token)],
     )
     async def collect_telemetry(request: TelemetryRequest) -> TelemetryResponse:
         """تجميع قياسات واردة من الخدمات الأخرى."""
@@ -144,6 +146,7 @@ def _register_routes(app: FastAPI, settings: ObservabilitySettings) -> None:
         response_model=MetricsResponse,
         tags=["Telemetry"],
         summary="عرض مؤشرات الخدمة",
+        dependencies=[Depends(verify_service_token)],
     )
     async def get_metrics() -> MetricsResponse:
         """إرجاع مؤشرات المراقبة الإجمالية."""
@@ -156,6 +159,7 @@ def _register_routes(app: FastAPI, settings: ObservabilitySettings) -> None:
         response_model=dict[str, object],
         tags=["Telemetry"],
         summary="فحص صحة خدمة محددة",
+        dependencies=[Depends(verify_service_token)],
     )
     async def get_service_health(service_name: str) -> dict[str, object]:
         """قياس صحة خدمة محددة."""
@@ -168,6 +172,7 @@ def _register_routes(app: FastAPI, settings: ObservabilitySettings) -> None:
         response_model=ForecastResponse,
         tags=["Forecast"],
         summary="توليد توقعات الحمل",
+        dependencies=[Depends(verify_service_token)],
     )
     async def forecast_load(request: ForecastRequest) -> ForecastResponse:
         """توليد توقع للحمل المستقبلي."""
@@ -190,6 +195,7 @@ def _register_routes(app: FastAPI, settings: ObservabilitySettings) -> None:
         response_model=CapacityPlanResponse,
         tags=["Forecast"],
         summary="توليد خطة السعة",
+        dependencies=[Depends(verify_service_token)],
     )
     async def generate_capacity_plan(request: CapacityPlanRequest) -> CapacityPlanResponse:
         """إنشاء خطة سعة بناءً على التوقعات."""
@@ -208,6 +214,7 @@ def _register_routes(app: FastAPI, settings: ObservabilitySettings) -> None:
         response_model=dict[str, object],
         tags=["Anomalies"],
         summary="تحليل السبب الجذري للشذوذ",
+        dependencies=[Depends(verify_service_token)],
     )
     async def analyze_root_cause(anomaly_id: str) -> dict[str, object]:
         """تحليل السبب الجذري لشذوذ محدد."""

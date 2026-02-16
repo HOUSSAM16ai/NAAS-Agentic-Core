@@ -2,11 +2,12 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 
 # Local imports
 from microservices.api_gateway.config import settings
 from microservices.api_gateway.proxy import GatewayProxy
+from microservices.api_gateway.security import create_service_token, verify_gateway_request
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,49 +43,70 @@ async def health_check():
 @app.api_route(
     "/api/v1/planning/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
 )
 async def planning_proxy(path: str, request: Request):
-    return await proxy_handler.forward(request, settings.PLANNING_AGENT_URL, path)
+    return await proxy_handler.forward(
+        request, settings.PLANNING_AGENT_URL, path, service_token=create_service_token()
+    )
 
 
 @app.api_route(
     "/api/v1/memory/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
 )
 async def memory_proxy(path: str, request: Request):
-    return await proxy_handler.forward(request, settings.MEMORY_AGENT_URL, path)
+    return await proxy_handler.forward(
+        request, settings.MEMORY_AGENT_URL, path, service_token=create_service_token()
+    )
 
 
 @app.api_route(
     "/api/v1/users/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
 )
 async def user_proxy(path: str, request: Request):
-    return await proxy_handler.forward(request, settings.USER_SERVICE_URL, path)
+    return await proxy_handler.forward(
+        request, settings.USER_SERVICE_URL, path, service_token=create_service_token()
+    )
 
 
 @app.api_route(
     "/api/v1/observability/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
 )
 async def observability_proxy(path: str, request: Request):
-    return await proxy_handler.forward(request, settings.OBSERVABILITY_SERVICE_URL, path)
+    return await proxy_handler.forward(
+        request,
+        settings.OBSERVABILITY_SERVICE_URL,
+        path,
+        service_token=create_service_token(),
+    )
 
 
 @app.api_route(
     "/api/v1/research/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
 )
 async def research_proxy(path: str, request: Request):
-    return await proxy_handler.forward(request, settings.RESEARCH_AGENT_URL, path)
+    return await proxy_handler.forward(
+        request, settings.RESEARCH_AGENT_URL, path, service_token=create_service_token()
+    )
 
 
 @app.api_route(
     "/api/v1/reasoning/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
 )
 async def reasoning_proxy(path: str, request: Request):
-    return await proxy_handler.forward(request, settings.REASONING_AGENT_URL, path)
+    return await proxy_handler.forward(
+        request, settings.REASONING_AGENT_URL, path, service_token=create_service_token()
+    )
 
 
 # Catch-all for Core Kernel (Legacy Monolith)

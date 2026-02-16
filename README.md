@@ -1,72 +1,52 @@
-# North Africa AI Safety Lab (NAAS Lab) — Project: EL-NUKHBA
+# NAAS Lab: EL-NUKHBA (Agentic AI Safety for Education)
 
-> **Grant Application: EMEA Youth & Wellbeing 2026 (Submitted)**
+**Project:** Agentic Verification Layer for Code-Switching Contexts (Arabic/French/Darija).
+**Region:** North Africa (Algeria).
+**Status:** Grant Proposal / Pilot Phase.
+**Governance Framework:** Aligned with NIST AI RMF (Map, Measure, Manage).
 
-## Executive Summary
-EL-NUKHBA (The Elite) equips North African youth with open-source tools to audit AI models for cultural bias and safety risks, generating independent evidence for safer regional AI deployment.
+## 1. Overview
+**The Problem:** Current Large Language Models (LLMs) often exhibit degraded safety performance when users switch between languages or use low-resource dialects (code-switching). This creates safety gaps—such as hallucinations or jailbreaks—in educational settings for North African youth.
 
-## Deliverables
-1.  **The Toolkit**: A technical suite for youth-led AI safety audits (bias detection, safety probing).
-2.  **The Evidence**: Verifiable, data-driven reports on AI safety gaps specific to the EMEA region.
-3.  **Policy Briefs**: Actionable recommendations for regulators and educators based on youth findings.
+**The Solution:** EL-NUKHBA builds a reusable **"verify-then-reply" agentic layer** designed for North African youth education. This layer intercepts student prompts, screens for context-specific risks (hallucinations, cultural toxicity, jailbreaks), and verifies responses before delivery.
 
-## Methods
-Our "Cycle of Safety" approach ensures rigorous, youth-centric evaluation:
-1.  **Design**: Develop culturally relevant audit scenarios and safety curriculums.
-2.  **Pilot**: Conduct controlled testing sessions with youth auditors under strict supervision.
-3.  **Measure**: Quantify harms, success rates of safeguards, and literacy improvements.
-4.  **Iterate**: Refine tools and protocols based on pilot feedback.
-5.  **Publish**: Release open-access evidence and policy briefs to stakeholders.
+## 2. What We Will Ship (Deliverables)
+We are committed to producing reusable, open-source artifacts for the global AI safety community:
+* **Agentic Safety Layer:** Open-source architecture for the verification pipeline.
+* **Code-Switching Test Suite:** A curated dataset of red-teaming prompts in mixed Arabic/French/Darija.
+* **Evaluation Protocol:** TEVV-aligned methodology for measuring safety in mixed-language contexts.
+* **Safeguarding Playbooks:** Operational guides for educators and NGOs handling AI in youth contexts.
+* **Evidence Report:** Aggregated analysis of failure modes and mitigation strategies.
+* **Stakeholder Briefs:** Concise policy memos for regulators and product teams.
 
-## Impact Measurement
-We track success through 8 core metrics (baselines established in Pilot Phase 1):
-1.  **Youth Auditors Trained**: Number of participants completing safety evaluation training (Target: TODO).
-2.  **Models Audited**: Number of unique AI models tested for safety risks (Target: TODO).
-3.  **Vulnerabilities Identified**: Distinct safety flaws found and reported (Target: TODO).
-4.  **Policy Briefs Published**: Number of technical reports released (Target: TODO).
-5.  **Toolkit Adoption**: Number of partner NGOs using the toolkit (Target: TODO).
-6.  **Literacy Improvement**: Percentage increase in pre/post-workshop scores (Target: TODO%).
-7.  **Harm Reduction**: Decrease in exposure to harmful content in controlled tests (Target: TODO%).
-8.  **Stakeholder Engagement**: Number of meetings with policymakers or product teams (Target: TODO).
+## 3. Repository Structure
+```text
+├── README.md                   # Project overview & reproduction steps
+├── SAFEGUARDING.md             # Youth safety protocols, escalation matrix & RACI
+├── DATA_PROTECTION.md          # Privacy-by-design, minimization & retention rules
+└── docs/
+    ├── GRANT_ALIGNMENT.md      # Logic mapping: Objectives -> Budget -> Deliverables
+    ├── EVALUATION_PROTOCOL.md  # NIST-aligned metrics & test scenarios (TEVV)
+    ├── IMPACT_MEASUREMENT.md   # Wellbeing indicators (SWEMWBS) & reach metrics
+    ├── DELIVERABLES_ROADMAP.md # Timeline, milestones & acceptance criteria
+    └── RISK_REGISTER.md        # Operational & technical risk management
+```
 
-## Safeguarding & Data Protection
-We operate under strict ethical guidelines to protect our youth participants.
--   **Safeguarding**: See [`SAFEGUARDING.md`](SAFEGUARDING.md) for our Two-Adult Rule, risk assessments, and incident response protocols.
--   **Data Protection**: See [`DATA_PROTECTION.md`](DATA_PROTECTION.md) for our privacy-by-design approach and GDPR-aligned practices.
+## 4. Reproducibility (High-Level)
+To reproduce our evaluation benchmarks (once published):
+1. **Clone:** `git clone https://github.com/naas-lab/el-nukhba.git`
+2. **Install:** `pip install -r requirements.txt` (Environment setup)
+3. **Config:** Set API keys in `.env` (OpenAI/Anthropic).
+4. **Run Test:** `python run_eval.py --dataset code_switch_v1 --mode strict`
+5. **View Results:** Metrics generated in `data/telemetry/report_latest.json`.
 
-## Independence & Transparency
-NAAS Lab is an independent research initiative. We are not funded by AI product companies for this specific audit work, ensuring unbiased evaluation. All tools, methodologies, and findings are published open-source to foster trust and reproducibility.
+## 5. Open-Source Policy
+We adhere to a strict "Open Artifacts, Private Data" policy:
+* **Public:** Codebase, Test Suites (sanitized), Aggregated Metrics, Playbooks.
+* **Restricted:** Raw student chat logs, PII, Mentor notes (Never published).
 
-## Repository Map
--   `app/`: Core application logic for the audit toolkit.
--   `docs/`: Methodologies, evaluation protocols, and impact plans.
-    -   `docs/IMPACT_MEASUREMENT_PLAN.md`: Detailed KPIs and measurement tools.
-    -   `docs/EVALUATION_PROTOCOL.md`: Scientific approach to safety audits.
-    -   `docs/STAKEHOLDER_OUTPUTS.md`: Templates for reports and briefs.
--   `toolkit/`: Audit scripts and risk screening checklists.
--   `briefs/`: Templates for policy and stakeholder communication.
--   `research/`: (TODO) Published reports and findings.
-
-## Quick Start
-To run the toolkit locally for testing or development:
-
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/HOUSSAM16ai/NAAS-Agentic-Core.git
-    cd NAAS-Agentic-Core
-    ```
-2.  **Review Protocols**:
-    Read [`SAFEGUARDING.md`](SAFEGUARDING.md) and [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) before running any sessions.
-3.  **Setup Environment**:
-    (See `CONTRIBUTING.md` for detailed instructions)
-    ```bash
-    cp .env.example .env
-    # Install dependencies (refer to specific setup guides in docs/)
-    ```
-
-## Legal Host & Team
--   **Legal Host**: TODO: [Full Legal Name of Incubator/Host Org] (Incubated at Algeria Venture)
--   **Project Team**: NAAS Lab (Independent Research Group)
--   **Principal Investigator**: Houssam Benmerah
--   **Contact**: TODO: [Contact Email]
--   **Status**: This project operates under the legal framework of its host but maintains research independence.
+## 6. Reviewer Confidence Checklist
+* ✅ **Governance:** Aligned with NIST AI RMF functions.
+* ✅ **Privacy:** Data minimization & pseudonymization by design.
+* ✅ **Safety:** Non-clinical safeguarding with clear escalation paths.
+* ✅ **Transparency:** Commitment to publish negative results (failure modes).

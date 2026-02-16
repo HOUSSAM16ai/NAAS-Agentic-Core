@@ -1,44 +1,30 @@
 # Impact Measurement Plan
 
-## 1. Beneficiary Definitions
+**Purpose:** To measure the project's effectiveness on safety (primary) and youth wellbeing (secondary).
+**Scope:** Pilot cohort and workshop participants.
 
-| Type | Definition | Measurement |
-| :--- | :--- | :--- |
-| **Direct Beneficiaries** | Youth (13-18) who participate in safety audit workshops. | Number of participants completing the training module. |
-| **Indirect Beneficiaries** | Users of AI products improved by our findings. | Estimated user base of audited models (cautious estimate). |
-| **Partner Organizations** | NGOs/Schools adopting the toolkit. | Number of verified downloads/installations + active pilots. |
+## 1. Reach & Beneficiaries
+* **Deep Pilot:** 15–20 learners (High retention, longitudinal data).
+* **Broader Engagement:** Up to 100–150 students (Workshops, Beta testing).
+* **Educators/Mentors:** 5–10 facilitators (Training & observation).
 
-## 2. Key Performance Indicators (KPIs)
+## 2. Measurement Methods
+### A. Technical Impact (Safety)
+* **Telemetry Logs:** Automated counters for blocks, flags, and interventions.
+* **Repository Analytics:** Clones, forks, and stars of the open-source toolkit (measure of *reusability*).
+* **Reuse:** Number of documented Issues/PRs from the community.
 
-*Baselines to be established in Pilot Phase 1.*
+### B. Wellbeing Indicators (Non-Clinical)
+We use lightweight, validated scales appropriate for adolescents.
+* **SWEMWBS (Short Warwick-Edinburgh Mental Well-being Scale):** Administered Pre- and Post-pilot. Aggregated to track general trends in confidence.
+* **Perceived Anxiety Check-in:** Single-question Likert scale: *"How confident do you feel about using AI for exam prep?"*
 
-1.  **Youth Auditors Trained**: Number of participants completing safety evaluation training (Target: TODO).
-2.  **Models Audited**: Number of unique AI models tested for safety risks (Target: TODO).
-3.  **Vulnerabilities Identified**: Distinct safety flaws found and reported (Target: TODO).
-4.  **Policy Briefs Published**: Number of technical reports released (Target: TODO).
-5.  **Toolkit Adoption**: Number of partner NGOs using the toolkit (Target: TODO).
-6.  **Literacy Improvement**: Percentage increase in pre/post-workshop scores (Target: TODO%).
-7.  **Harm Reduction**: Decrease in exposure to harmful content in controlled tests (Target: TODO%).
-8.  **Stakeholder Engagement**: Number of meetings with policymakers or product teams (Target: TODO).
+## 3. Ethics & Consent
+* **Opt-In:** All wellbeing measurement is optional.
+* **Aggregation:** Scores are never analyzed at the individual level, only as a cohort average.
+* **Referral:** If a student self-discloses severe distress in comments, the Safeguarding Protocol (Escalation) is triggered. We do not diagnose.
 
-## 3. Measurement Instruments
-
-1.  **Pre/Post Survey**: Assesses knowledge of AI mechanisms, privacy risks, and critical thinking (10 questions).
-2.  **Scenario Tasks**: Practical test where youth identify flaws in AI outputs (Pass/Fail).
-3.  **Incident Logs**: Count of harmful outputs successfully flagged during "Red Teaming" exercises.
-4.  **Partner Feedback Form**: NGO staff rating on toolkit usability and relevance (1-5 scale).
-
-## 4. Data Collection Schedule
-
--   **T-0 (Registration)**: Baseline demographic data (anonymized) + Pre-survey.
--   **T+1 (Workshop)**: Real-time logging of audit findings (automated by toolkit).
--   **T+2 (Post-Workshop)**: Post-survey + Debrief feedback.
--   **T+30 Days**: Follow-up survey (retention of knowledge).
-
-## 5. Validity Risks & Mitigations
-
-| Risk | Mitigation |
-| :--- | :--- |
-| **Self-Report Bias** | Triangulate survey data with practical scenario task scores. |
-| **Sample Selection** | Ensure diverse recruitment across socio-economic backgrounds (not just tech-savvy youth). |
-| **Short-Term Focus** | Include 30-day follow-up to measure lasting impact. |
+## 4. Reviewer Checklist
+* ✅ **Validated Scales:** Uses SWEMWBS (appropriate for 11+).
+* ✅ **Privacy:** No PII in impact reports.
+* ✅ **Ethics:** Clear opt-out mechanisms.

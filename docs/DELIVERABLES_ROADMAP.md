@@ -1,48 +1,29 @@
-# Deliverables Roadmap
+# Deliverables Roadmap & Timeline
 
-> **Three options for project scaling: Rapid Pilot (6mo), Expanded Rollout (12mo), Systemic Change (24mo).**
+**Purpose:** Timeline of activities and definition of "Done" for each milestone.
+**Duration:** 6–12 Months.
 
-## Option A: Rapid Pilot (Months 1-6)
+## 1. Timeline Overview
+* **Months 1–2 (Setup):** Infrastructure, Protocol Finalization, Recruitment.
+* **Months 3–5 (Deep Pilot):** Iterative development with Core Cohort (N=15-20).
+* **Months 6–9 (Expansion):** Workshops, Beta-testing, Data Collection (N=100+).
+* **Months 10–12 (Synthesis):** Analysis, Reporting, Open-Source Release.
 
-**Focus**: Proof of Concept & Initial Evidence.
+## 2. Detailed Deliverables
+| Month | Deliverable | Acceptance Criteria (Definition of Done) |
+| :--- | :--- | :--- |
+| **M2** | **Safeguarding Pack** | Published `SAFEGUARDING.md` and Consent Forms approved. |
+| **M4** | **Agentic Prototype** | Verification layer deployed; Telemetry logging active. |
+| **M5** | **Test Suite v1** | 500+ Code-switching scenarios curated and versioned. |
+| **M9** | **Workshop Logs** | Session records for 100+ students; Pre/Post surveys collected. |
+| **M11** | **Evidence Report** | Draft analysis of failure modes completed. |
+| **M12** | **Public Toolkit** | GitHub repo finalized; Readme updated; Policy Briefs released. |
 
-| Month | Activity | Deliverable | Acceptance Criteria | Owner |
-| :--- | :--- | :--- | :--- | :--- |
-| **1** | Toolkit Setup | Functional GitHub Repo | Passes `REPO_READINESS_CHECKLIST.md`. | Tech Lead |
-| **2** | Partner Recruitment | 2 Partner NGOs Onboarded | Signed MOUs + Safeguarding Checks. | Project Lead |
-| **3** | Pilot Workshops | 50 Youth Audits Conducted | Completed Pre/Post Surveys + Audit Logs. | Facilitators |
-| **4** | Data Analysis | Draft Impact Report | N=50 Valid Responses analyzed. | Research Lead |
-| **5** | Refinement | Toolkit v1.1 Released | User feedback implemented. | Tech Lead |
-| **6** | Dissemination | Public Pilot Report | Published on website/GitHub. | Comms Lead |
+## 3. Publication Cadence
+* **Internal:** Weekly sprint reviews.
+* **Grantor:** Quarterly progress reports (metrics + learnings).
+* **Public:** Final release of artifacts at Month 12.
 
-## Option B: Expanded Rollout (Months 7-12)
-
-**Focus**: Scaling & Policy Influence.
-
-| Month | Activity | Deliverable | Acceptance Criteria | Owner |
-| :--- | :--- | :--- | :--- | :--- |
-| **7-8** | Train-the-Trainer | Training Manual + Webinars | 10 NGO Staff Certified. | Education Lead |
-| **9** | Multi-Site Pilots | 200 Youth Audits | N=200 Data Points across 3 regions. | Partners |
-| **10** | Policy Engagement | Draft Policy Brief | Based on N=200 dataset. | Policy Lead |
-| **11** | Review | External Peer Review | Feedback from academic advisor. | Research Lead |
-| **12** | Summit | Regional Youth Safety Summit | 50 Attendees + Final Report Launch. | Project Lead |
-
-## Option C: Systemic Change (Months 13-24)
-
-**Focus**: Long-term Impact & Curriculum Integration.
-
-| Month | Activity | Deliverable | Acceptance Criteria | Owner |
-| :--- | :--- | :--- | :--- | :--- |
-| **13-16**| Longitudinal Study | Follow-up Study | Retention data at 6 months. | Research Lead |
-| **17-20**| Curriculum Int. | School Safety Module | Adopted by 5 schools. | Education Lead |
-| **21-23**| Internationalization | Translated Toolkit (FR/AR) | Functional in 3 languages. | Tech Lead |
-| **24** | Global Launch | International Toolkit v2.0 | Press release + Open Source Community. | All |
-
-## Dependencies & Risks
-
--   **Dependency**: Partner NGOs must have internet access and devices.
-    -   *Mitigation*: Budget for tablet rental.
--   **Risk**: Low youth engagement.
-    -   *Mitigation*: Gamify the audit process (badges/certificates).
--   **Risk**: Safeguarding incident.
-    -   *Mitigation*: Strict adherence to `SAFEGUARDING.md` protocols.
+## 4. Dependencies & Gates
+* **Gate 1 (M2):** Safeguarding approval? If NO → Stop Pilot.
+* **Gate 2 (M5):** Prototype safety metric >90%? If NO → Delay Workshops.

@@ -5,14 +5,14 @@
 وفق مبدأ "خدمة واحدة، وظيفة واحدة".
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
+
 import jwt
 from fastapi.testclient import TestClient
 
 from microservices.memory_agent.main import create_app as create_memory_app
 from microservices.planning_agent.main import create_app as create_planning_app
 from microservices.user_service.main import create_app as create_user_app
-
 
 # نستخدم نفس المفتاح الافتراضي المحدد في الإعدادات للاختبار
 TEST_SECRET_KEY = "super_secret_key_change_in_production"
@@ -22,8 +22,8 @@ def get_auth_headers() -> dict[str, str]:
     """توليد ترويسة مصادقة صالحة للخدمات."""
     payload = {
         "sub": "api-gateway",
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(minutes=5),
+        "iat": datetime.now(UTC),
     }
     token = jwt.encode(payload, TEST_SECRET_KEY, algorithm="HS256")
     return {"X-Service-Token": token}

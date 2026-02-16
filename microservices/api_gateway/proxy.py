@@ -18,7 +18,13 @@ class GatewayProxy:
     async def close(self):
         await self.client.aclose()
 
-    async def forward(self, request: Request, target_url: str, path: str) -> Response:
+    async def forward(
+        self,
+        request: Request,
+        target_url: str,
+        path: str,
+        service_token: str | None = None,
+    ) -> Response:
         """
         Forward the incoming request to the target service.
 
@@ -26,6 +32,7 @@ class GatewayProxy:
             request: The original FastAPI Request.
             target_url: The base URL of the target service (e.g., http://planning-agent:8000).
             path: The path to append to the target URL.
+            service_token: Optional service token to inject for mTLS-like trust.
 
         Returns:
             The response from the target service.
@@ -37,6 +44,10 @@ class GatewayProxy:
         # Remove headers that will be set by the new request
         headers.pop("host", None)
         headers.pop("content-length", None)
+
+        # Inject Service Token if provided (Zero Trust Enforcement)
+        if service_token:
+            headers["X-Service-Token"] = service_token
 
         try:
             # Read body

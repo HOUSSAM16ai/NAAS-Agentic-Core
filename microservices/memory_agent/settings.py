@@ -32,6 +32,13 @@ class MemoryAgentSettings(BaseSettings):
         description="رابط قاعدة البيانات الخاصة بالوكيل",
     )
 
+    # Security
+    SECRET_KEY: str = Field(
+        "super_secret_key_change_in_production",
+        validation_alias="SECRET_KEY",
+        description="مفتاح التشفير المشترك",
+    )
+
     model_config = SettingsConfigDict(env_prefix="MEMORY_", env_file=".env", extra="ignore")
 
 

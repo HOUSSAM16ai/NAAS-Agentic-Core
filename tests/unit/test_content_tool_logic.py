@@ -57,7 +57,9 @@ async def test_search_content_error_handling(mock_research_client):
 async def test_search_content_soft_failure(mock_research_client):
     """Verify search_content detects JSON error strings (Soft Failures)."""
     # Simulate a "soft failure" where the tool returns an error as a JSON string
-    mock_research_client.deep_research.return_value = '{"type": "error", "content": "Soft failure occurred"}'
+    mock_research_client.deep_research.return_value = (
+        '{"type": "error", "content": "Soft failure occurred"}'
+    )
 
     # Expect ValueError due to strict validation
     with pytest.raises(ValueError, match="Research Tool Error: Soft failure occurred"):

@@ -73,7 +73,6 @@ pyyaml==6.0.1
 # Note: Do not use [inference] extra as it is missing in 1.x versions and causes backtracking
 huggingface-hub>=0.23.0
 sentence-transformers
-dspy-ai
 openai
 # llama-index meta-package removed to reduce bloat/conflicts
 llama-index-core==0.14.13

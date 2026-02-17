@@ -7,10 +7,12 @@ from datetime import UTC, datetime, timedelta
 import jwt
 from fastapi.testclient import TestClient
 
+# Explicitly override the secret key for testing to ensure consistency
+TEST_SECRET_KEY = "test-secret-key-for-ci-pipeline"
+os.environ["SECRET_KEY"] = TEST_SECRET_KEY
+
 from microservices.observability_service import main as observability_main
 from microservices.observability_service.models import CapacityPlan, MetricType
-
-TEST_SECRET_KEY = os.environ.get("SECRET_KEY", "super_secret_key_change_in_production")
 
 
 def get_auth_headers() -> dict[str, str]:

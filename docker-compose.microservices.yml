@@ -5,6 +5,20 @@ services:
   # Infrastructure Services
   # ==========================================
 
+  # Redis - Required by Orchestrator
+  redis:
+    image: redis:alpine
+    container_name: cogniforge-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - cogniforge-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   # Postgres Core - For Monolith/Core Kernel
   postgres-core:
     image: postgres:15-alpine
@@ -83,6 +97,46 @@ services:
       timeout: 5s
       retries: 5
 
+  # Postgres Research - Dedicated
+  postgres-research:
+    image: postgres:15-alpine
+    container_name: cogniforge-postgres-research
+    ports:
+      - "5438:5432"
+    networks:
+      - cogniforge-network
+    volumes:
+      - ./infra/postgres/init-research-db.sh:/docker-entrypoint-initdb.d/init.sh
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: research_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d research_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Postgres Reasoning - Dedicated
+  postgres-reasoning:
+    image: postgres:15-alpine
+    container_name: cogniforge-postgres-reasoning
+    ports:
+      - "5439:5432"
+    networks:
+      - cogniforge-network
+    volumes:
+      - ./infra/postgres/init-reasoning-db.sh:/docker-entrypoint-initdb.d/init.sh
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: reasoning_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d reasoning_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # Postgres Observability - Dedicated
   postgres-observability:
     image: postgres:15-alpine
@@ -99,6 +153,26 @@ services:
       POSTGRES_DB: observability_db
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d observability_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Postgres Orchestrator - Dedicated
+  postgres-orchestrator:
+    image: postgres:15-alpine
+    container_name: cogniforge-postgres-orchestrator
+    ports:
+      - "5441:5432"
+    networks:
+      - cogniforge-network
+    volumes:
+      - ./infra/postgres/init-orchestrator-db.sh:/docker-entrypoint-initdb.d/init.sh
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: orchestrator_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d orchestrator_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -121,12 +195,18 @@ services:
       - MEMORY_AGENT_URL=http://memory-agent:8002
       - USER_SERVICE_URL=http://user-service:8003
       - OBSERVABILITY_SERVICE_URL=http://observability-service:8005
+      - RESEARCH_AGENT_URL=http://research-agent:8007
+      - REASONING_AGENT_URL=http://reasoning-agent:8008
+      - ORCHESTRATOR_SERVICE_URL=http://orchestrator-service:8006
     command: uvicorn microservices.api_gateway.main:app --host 0.0.0.0 --port 8000
     depends_on:
       - planning-agent
       - memory-agent
       - user-service
       - observability-service
+      - research-agent
+      - reasoning-agent
+      - orchestrator-service
       - postgres-core
     networks:
       - cogniforge-network
@@ -244,6 +324,90 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================
+  # Orchestrator Service - المايسترو
+  # ==========================================
+  orchestrator-service:
+    build:
+      context: ./microservices/orchestrator_service
+      dockerfile: Dockerfile
+    container_name: cogniforge-orchestrator
+    ports:
+      - "8006:8006"
+    environment:
+      - SERVICE_NAME=orchestrator-service
+      - SECRET_KEY=${SECRET_KEY:-super_secret_key_change_in_production}
+      - ORCHESTRATOR_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-orchestrator:5432/orchestrator_db
+      - REDIS_URL=redis://redis:6379
+      - PLANNING_AGENT_URL=http://planning-agent:8001
+      - MEMORY_AGENT_URL=http://memory-agent:8002
+      - RESEARCH_AGENT_URL=http://research-agent:8007
+      - REASONING_AGENT_URL=http://reasoning-agent:8008
+      - USER_SERVICE_URL=http://user-service:8003
+    command: uvicorn microservices.orchestrator_service.main:app --host 0.0.0.0 --port 8006
+    networks:
+      - cogniforge-network
+    depends_on:
+      postgres-orchestrator:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================
+  # Research Agent - وكيل البحث
+  # ==========================================
+  research-agent:
+    build:
+      context: ./microservices/research_agent
+      dockerfile: Dockerfile
+    container_name: cogniforge-research-agent
+    ports:
+      - "8007:8007"
+    environment:
+      - SERVICE_NAME=research-agent
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-research:5432/research_db
+    command: uvicorn microservices.research_agent.main:app --host 0.0.0.0 --port 8007
+    networks:
+      - cogniforge-network
+    depends_on:
+      postgres-research:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================
+  # Reasoning Agent - وكيل الاستدلال
+  # ==========================================
+  reasoning-agent:
+    build:
+      context: ./microservices/reasoning_agent
+      dockerfile: Dockerfile
+    container_name: cogniforge-reasoning-agent
+    ports:
+      - "8008:8008"
+    environment:
+      - SERVICE_NAME=reasoning-agent
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-reasoning:5432/reasoning_db
+    command: uvicorn microservices.reasoning_agent.main:app --host 0.0.0.0 --port 8008
+    networks:
+      - cogniforge-network
+    depends_on:
+      postgres-reasoning:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
       interval: 30s
       timeout: 10s
       retries: 3

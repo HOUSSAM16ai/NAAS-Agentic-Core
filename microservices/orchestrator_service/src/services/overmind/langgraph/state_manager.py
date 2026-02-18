@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
-from app.core.protocols import MissionStateManagerProtocol
+from microservices.orchestrator_service.src.core.protocols import MissionStateManagerProtocol
 from microservices.orchestrator_service.src.models.mission import (
     Mission,
     MissionEvent,

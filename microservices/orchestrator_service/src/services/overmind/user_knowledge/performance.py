@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.di import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.models.mission import Mission
 from microservices.orchestrator_service.src.services.overmind.user_knowledge.statistics import (
     get_user_statistics,

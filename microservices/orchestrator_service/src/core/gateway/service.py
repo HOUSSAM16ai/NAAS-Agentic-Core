@@ -21,7 +21,7 @@ from functools import wraps
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.core.types import JSON, JSONDict
+from microservices.orchestrator_service.src.core.types import JSON, JSONDict
 
 from .cache import CacheFactory, generate_cache_key
 from .models import GatewayRoute, PolicyRule, ProtocolType, UpstreamService

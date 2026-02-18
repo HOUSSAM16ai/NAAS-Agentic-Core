@@ -7,7 +7,7 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.di import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.services.overmind.database_tools.operations_logger import (
     OperationsLogger,
 )

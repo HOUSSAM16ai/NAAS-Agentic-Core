@@ -7,7 +7,7 @@ from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
 
-from app.core.protocols import AgentArchitect, AgentExecutor, AgentPlanner, AgentReflector
+from microservices.orchestrator_service.src.core.protocols import AgentArchitect, AgentExecutor, AgentPlanner, AgentReflector
 from microservices.orchestrator_service.src.services.overmind.domain.context import (
     InMemoryCollaborationContext,
 )

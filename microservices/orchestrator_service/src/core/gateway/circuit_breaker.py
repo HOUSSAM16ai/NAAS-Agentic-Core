@@ -1,7 +1,7 @@
 """طبقة توافق لقاطع الدائرة وفق واجهة البوابة القديمة."""
 
-from app.core.resilience.circuit_breaker import CircuitBreaker as CoreCircuitBreaker
-from app.core.resilience.circuit_breaker import CircuitBreakerConfig
+from microservices.orchestrator_service.src.core.resilience.circuit_breaker import CircuitBreaker as CoreCircuitBreaker
+from microservices.orchestrator_service.src.core.resilience.circuit_breaker import CircuitBreakerConfig
 
 
 class CircuitBreaker(CoreCircuitBreaker):

@@ -10,7 +10,7 @@ import subprocess
 from collections.abc import Callable
 from typing import TypeVar
 
-from app.core.di import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.services.overmind.github_integration.models import (
     RepoInfo,
 )

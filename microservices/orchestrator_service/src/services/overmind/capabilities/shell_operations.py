@@ -9,7 +9,7 @@
 - Logging: تسجيل جميع الأوامر
 """
 
-# from app.core.di import get_logger -> Need to fix DI import too?
+# from microservices.orchestrator_service.src.core.logging import get_logger -> Need to fix DI import too?
 import logging
 import shlex
 import subprocess

@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from app.core.di import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.core.ai_gateway import get_ai_client
 from microservices.orchestrator_service.src.services.overmind.agents.strategist import (
     StrategistAgent,

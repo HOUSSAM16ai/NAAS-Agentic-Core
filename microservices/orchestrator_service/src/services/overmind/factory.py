@@ -14,10 +14,10 @@ import os
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.protocols import MissionStateManagerProtocol
+from microservices.orchestrator_service.src.core.protocols import MissionStateManagerProtocol
 
 # استيراد الأدوات (يجب ضمان وجود هذا المسار أو استخدام واجهة بديلة)
-from app.services.agent_tools import get_registry
+from microservices.orchestrator_service.src.services.tools.registry import get_registry
 from microservices.orchestrator_service.src.core.ai_gateway import get_ai_client
 from microservices.orchestrator_service.src.infrastructure.clients.auditor_client import (
     AuditorClient,
@@ -61,8 +61,8 @@ def _build_engine_with_components(
     registry = get_registry()
 
     # Register Content tools dynamically to avoid circular dependency
-    from app.services.chat.tools.content import register_content_tools
-    from app.services.chat.tools.retrieval import search_educational_content
+    from microservices.orchestrator_service.src.services.tools.content import register_content_tools
+    from microservices.orchestrator_service.src.services.tools.retrieval import search_educational_content
 
     register_content_tools(registry)
     registry["search_educational_content"] = search_educational_content

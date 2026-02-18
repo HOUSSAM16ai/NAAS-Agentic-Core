@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 
-from app.core.logging import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.services.overmind.code_intelligence.models import (
     ProjectAnalysis,
 )

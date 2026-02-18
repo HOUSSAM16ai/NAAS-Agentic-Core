@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 
-from app.core.protocols import CollaborationContext
+from microservices.orchestrator_service.src.core.protocols import CollaborationContext
 from microservices.orchestrator_service.src.services.overmind.collaboration import CollaborationHub
 
 

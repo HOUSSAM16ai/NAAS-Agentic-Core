@@ -10,9 +10,9 @@ from __future__ import annotations
 import time
 from collections.abc import AsyncGenerator
 
-from app.core.ai_config import get_ai_config
-from app.core.interfaces.llm import LLMClient as AIClient
-from app.core.types import JSONDict
+from microservices.orchestrator_service.src.core.ai_config import get_ai_config
+from microservices.orchestrator_service.src.core.interfaces.llm import LLMClient as AIClient
+from microservices.orchestrator_service.src.core.types import JSONDict
 from microservices.orchestrator_service.src.core.gateway.circuit_breaker import CircuitBreaker
 from microservices.orchestrator_service.src.core.gateway.exceptions import (
     AIAllModelsExhaustedError,

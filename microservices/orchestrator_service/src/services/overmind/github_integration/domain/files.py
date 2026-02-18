@@ -1,4 +1,4 @@
-from app.core.di import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.services.overmind.github_integration.client import (
     GitHubClient,
 )

@@ -17,8 +17,8 @@ import os
 
 import httpx
 
-from app.core.di import get_logger
-from app.core.protocols import AgentMemory, CollaborationContext
+from microservices.orchestrator_service.src.core.logging import get_logger
+from microservices.orchestrator_service.src.core.protocols import AgentMemory, CollaborationContext
 
 logger = get_logger(__name__)
 

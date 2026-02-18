@@ -61,7 +61,7 @@
 
 from typing import NamedTuple
 
-from app.core.protocols import (
+from microservices.orchestrator_service.src.core.protocols import (
     AgentArchitect,
     AgentExecutor,
     AgentPlanner,

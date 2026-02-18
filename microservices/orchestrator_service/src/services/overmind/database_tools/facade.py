@@ -11,7 +11,7 @@
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.di import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.core.config import get_settings
 from microservices.orchestrator_service.src.core.database import get_db
 from microservices.orchestrator_service.src.services.overmind.database_tools.column_manager import (

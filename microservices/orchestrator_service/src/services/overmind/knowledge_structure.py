@@ -11,7 +11,7 @@ import ast
 import os
 from pathlib import Path
 
-from app.core.logging import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 
 logger = get_logger(__name__)
 

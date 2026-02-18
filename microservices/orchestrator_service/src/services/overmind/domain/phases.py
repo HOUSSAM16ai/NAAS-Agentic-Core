@@ -8,7 +8,7 @@ Each phase encapsulates the specific logic for a step in the Council of Wisdom l
 import logging
 from abc import ABC, abstractmethod
 
-from app.core.protocols import (
+from microservices.orchestrator_service.src.core.protocols import (
     AgentArchitect,
     AgentExecutor,
     AgentPlanner,

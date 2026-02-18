@@ -10,7 +10,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
-from app.core.protocols import AgentMemory
+from microservices.orchestrator_service.src.core.protocols import AgentMemory
 from microservices.orchestrator_service.src.services.overmind.domain.context import (
     InMemoryCollaborationContext,
 )

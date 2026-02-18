@@ -194,7 +194,7 @@ class MissionComplexHandler(IntentHandler):
         """
         # Defer imports to prevent circular dependency
         from app.core.event_bus import get_event_bus
-        from app.services.overmind.entrypoint import start_mission
+        from app.infrastructure.clients.orchestrator_client import orchestrator_client
 
         # Global try-except to prevent stream crash
         try:
@@ -225,29 +225,24 @@ class MissionComplexHandler(IntentHandler):
             ):
                 force_research = True
 
-            # 1. Initialize Mission via Unified Entrypoint (Command Pattern)
+            # 1. Initialize Mission via Orchestrator Microservice (Client Pattern)
             mission_id = 0
             task = None
 
             try:
-                async with context.session_factory() as session:
-                    # Self-healing: Ensure schema exists
-                    await self._ensure_mission_schema(session)
+                # Use Microservice Client (Decoupled from Monolith Logic)
+                mission_data = await orchestrator_client.create_mission(
+                    objective=context.question,
+                    initiator_id=context.user_id or 1,
+                    context={"chat_context": True},
+                    force_research=force_research,
+                )
+                mission_id = mission_data.get("id")
 
-                    # Use Unified Entrypoint (Handles DB Creation, Locking, Execution Trigger)
-                    mission = await start_mission(
-                        session=session,
-                        objective=context.question,
-                        initiator_id=context.user_id or 1,
-                        context={"chat_context": True},
-                        force_research=force_research,
-                    )
-                    mission_id = mission.id
-
-                    yield {
-                        "type": "assistant_delta",
-                        "payload": {"content": f"🆔 رقم المهمة: `{mission.id}`\n⏳ البدء..."},
-                    }
+                yield {
+                    "type": "assistant_delta",
+                    "payload": {"content": f"🆔 رقم المهمة: `{mission_id}`\n⏳ البدء..."},
+                }
             except Exception as e:
                 logger.error(f"Failed to dispatch mission: {e}", exc_info=True)
                 yield {
@@ -420,44 +415,6 @@ class MissionComplexHandler(IntentHandler):
             )
 
         return None
-
-    async def _ensure_mission_schema(self, session) -> None:
-        """
-        Checks and attempts to self-heal missing mission tables.
-        Now uses SQLModel metadata to ensure cross-database compatibility (SQLite/Postgres).
-        """
-        try:
-            # Explicitly define tables to verify/create
-            # This avoids creating incompatible tables (e.g. vector type on SQLite)
-            target_tables = [
-                Mission.__table__,
-                MissionPlan.__table__,
-                Task.__table__,
-                MissionEvent.__table__,
-            ]
-
-            bind = session.bind
-            if not bind:
-                logger.warning("No bind found for session in schema check.")
-                return
-
-            # Check if bind is AsyncConnection (has run_sync) or AsyncEngine (needs connect)
-            if hasattr(bind, "run_sync"):
-                await bind.run_sync(
-                    SQLModel.metadata.create_all, tables=target_tables, checkfirst=True
-                )
-            else:
-                # Assume AsyncEngine
-                async with bind.begin() as conn:
-                    await conn.run_sync(
-                        SQLModel.metadata.create_all, tables=target_tables, checkfirst=True
-                    )
-
-            logger.info("Schema self-healing: Verified mission tables.")
-
-        except Exception as e:
-            # Log error but attempt to continue, assuming tables might exist or partial failure
-            logger.error(f"Schema self-healing failed: {e}")
 
     def _create_structured_event(
         self, event: MissionEvent, sequence_id: int, current_iteration: int

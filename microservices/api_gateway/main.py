@@ -52,6 +52,7 @@ async def health_check():
         "observability_service": settings.OBSERVABILITY_SERVICE_URL,
         "research_agent": settings.RESEARCH_AGENT_URL,
         "reasoning_agent": settings.REASONING_AGENT_URL,
+        "orchestrator_service": settings.ORCHESTRATOR_SERVICE_URL,
     }
 
     async def check_service(name: str, url: str):
@@ -148,6 +149,17 @@ async def research_proxy(path: str, request: Request) -> StreamingResponse:
 async def reasoning_proxy(path: str, request: Request) -> StreamingResponse:
     return await proxy_handler.forward(
         request, settings.REASONING_AGENT_URL, path, service_token=create_service_token()
+    )
+
+
+@app.api_route(
+    "/api/v1/overmind/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
+)
+async def orchestrator_proxy(path: str, request: Request) -> StreamingResponse:
+    return await proxy_handler.forward(
+        request, settings.ORCHESTRATOR_SERVICE_URL, path, service_token=create_service_token()
     )
 
 

@@ -232,7 +232,8 @@ class OvermindOrchestrator:
 
         if has_task_failures:
             logger.warning(f"Mission {mission_id} outcome arbitration: Found failed tasks.")
-            return MissionStatus.PARTIAL_SUCCESS
+            # Critical Fix: Return FAILED instead of PARTIAL_SUCCESS to prevent "Success Masking"
+            return MissionStatus.FAILED
 
         # Check for empty search results
         has_empty_search = False
@@ -269,6 +270,10 @@ class OvermindOrchestrator:
                         if is_failure:
                             has_empty_search = True
                             break
+
+        if has_empty_search:
+            logger.warning(f"Mission {mission_id} outcome arbitration: Found empty/failed search.")
+            return MissionStatus.FAILED
 
         # Construct Context
         context = MissionContext(

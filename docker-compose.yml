@@ -113,6 +113,37 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
+
+  # Orchestrator Service - Unified Control Plane
+  orchestrator-service:
+    build:
+      context: ./microservices/orchestrator_service
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
+    container_name: cogniforge-orchestrator-service
+    restart: unless-stopped
+    ports:
+      - "8009:8000"
+    networks:
+      - appnet
+    environment:
+      ORCHESTRATOR_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/orchestrator_db?options=-c%20search_path%3Dorchestrator
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres}:5432/orchestrator_db?options=-c%20search_path%3Dorchestrator
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY:-super_secret_key_change_in_production}
+
+    healthcheck:
+      test: ["CMD", "bash", "-c", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:

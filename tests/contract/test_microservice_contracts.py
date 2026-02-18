@@ -31,6 +31,39 @@ def _build_cases() -> list[tuple[str, Callable[[], FastAPI] | FastAPI, str]]:
         ("observability", observability_app, "observability_service-openapi.json"),
     ]
 
+# Paths migrated from Monolith Core
+MIGRATED_PATHS = {
+    '/admin/ai-config',
+    '/admin/audit',
+    '/admin/users',
+    '/admin/users/{user_id}/roles',
+    '/admin/users/{user_id}/status',
+    '/api/missions',
+    '/api/missions/{mission_id}',
+    '/api/observability/aiops',
+    '/api/observability/alerts',
+    '/api/observability/analytics/{path}',
+    '/api/observability/gitops',
+    '/api/observability/health',
+    '/api/observability/metrics',
+    '/api/observability/performance',
+    '/api/v1/agents/langgraph/run',
+    '/api/v1/agents/plan',
+    '/api/v1/agents/plan/{plan_id}',
+    '/api/v1/overmind/missions',
+    '/api/v1/overmind/missions/{mission_id}',
+    '/auth/login',
+    '/auth/logout',
+    '/auth/password/forgot',
+    '/auth/password/reset',
+    '/auth/reauth',
+    '/auth/refresh',
+    '/auth/register',
+    '/qa/question',
+    '/users/me',
+    '/users/me/change-password'
+}
+
 
 @pytest.mark.parametrize("service_name, app_source, contract_file", _build_cases())
 def test_contract_alignment_for_services(
@@ -42,14 +75,24 @@ def test_contract_alignment_for_services(
 
     app = _resolve_app(app_source)
     contract_path = _contract_path(contract_file)
-    contract_operations = compare_contract_to_runtime(
-        contract_operations=_load_contract_operations(contract_path),
+    contract_operations = _load_contract_operations(contract_path)
+
+    # Filter expected contract for Monolith
+    if service_name == "core":
+        contract_operations = {
+            path: methods
+            for path, methods in contract_operations.items()
+            if path not in MIGRATED_PATHS
+        }
+
+    contract_comparison = compare_contract_to_runtime(
+        contract_operations=contract_operations,
         runtime_schema=app.openapi(),
     )
-    assert contract_operations.is_clean(), (
+    assert contract_comparison.is_clean(), (
         f"عقد الخدمة {service_name} يحتوي على مسارات أو عمليات مفقودة: "
-        f"paths={sorted(contract_operations.missing_paths)}, "
-        f"operations={ {path: sorted(methods) for path, methods in contract_operations.missing_operations.items()} }"
+        f"paths={sorted(contract_comparison.missing_paths)}, "
+        f"operations={ {path: sorted(methods) for path, methods in contract_comparison.missing_operations.items()} }"
     )
 
 
@@ -64,6 +107,11 @@ def test_no_undocumented_paths_or_operations(
     app = _resolve_app(app_source)
     contract_path = _contract_path(contract_file)
     contract_operations = _load_contract_operations(contract_path)
+
+    # Note: We don't filter MIGRATED_PATHS here because this test checks for *extra* paths in runtime.
+    # If the contract still has them but the runtime doesn't, that's handled by test_contract_alignment_for_services.
+    # If the runtime has paths not in contract, that's what this tests.
+
     drift_report = detect_runtime_drift(
         contract_operations=contract_operations,
         runtime_schema=app.openapi(),

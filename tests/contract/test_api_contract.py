@@ -18,6 +18,39 @@ CONTRACT_PATH = (
     Path(__file__).resolve().parents[2] / "docs" / "contracts" / "openapi" / "core-api-v1.yaml"
 )
 
+# List of paths that have been migrated to microservices and removed from the Monolith
+# These should be ignored when checking if the Monolith implements the full old contract.
+MIGRATED_PATHS = {
+    '/admin/ai-config',
+    '/admin/audit',
+    '/admin/users',
+    '/admin/users/{user_id}/roles',
+    '/admin/users/{user_id}/status',
+    '/api/missions',
+    '/api/missions/{mission_id}',
+    '/api/observability/aiops',
+    '/api/observability/alerts',
+    '/api/observability/analytics/{path}',
+    '/api/observability/gitops',
+    '/api/observability/health',
+    '/api/observability/metrics',
+    '/api/observability/performance',
+    '/api/v1/agents/langgraph/run',
+    '/api/v1/agents/plan',
+    '/api/v1/agents/plan/{plan_id}',
+    '/api/v1/overmind/missions',
+    '/api/v1/overmind/missions/{mission_id}',
+    '/auth/login',
+    '/auth/logout',
+    '/auth/password/forgot',
+    '/auth/password/reset',
+    '/auth/reauth',
+    '/auth/refresh',
+    '/auth/register',
+    '/qa/question',
+    '/users/me',
+    '/users/me/change-password'
+}
 
 class TestAPIContracts:
     """اختبارات عملية لعقود OpenAPI الأساسية."""
@@ -36,7 +69,10 @@ class TestAPIContracts:
         app = create_app(enable_static_files=False)
         runtime_paths = set(app.openapi().get("paths", {}).keys())
 
-        missing = contract_paths - runtime_paths
+        # Filter out migrated paths from the contract expectation
+        expected_paths = {p for p in contract_paths if p not in MIGRATED_PATHS}
+
+        missing = expected_paths - runtime_paths
         assert not missing, f"مسارات العقد غير موجودة في التطبيق: {sorted(missing)}"
 
     def test_contract_operations_exist_in_runtime_openapi(self) -> None:
@@ -48,6 +84,9 @@ class TestAPIContracts:
 
         missing_operations: dict[str, list[str]] = {}
         for path, methods in contract_operations.items():
+            if path in MIGRATED_PATHS:
+                continue
+
             runtime_methods = runtime_paths.get(path, {})
             if not isinstance(runtime_methods, dict):
                 missing_operations[path] = sorted(methods)

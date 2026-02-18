@@ -13,6 +13,7 @@ os.environ["SECRET_KEY"] = TEST_SECRET_KEY
 
 from microservices.observability_service import main as observability_main
 from microservices.observability_service.models import CapacityPlan, MetricType
+from microservices.observability_service.settings import get_settings
 
 
 def get_auth_headers() -> dict[str, str]:
@@ -68,6 +69,7 @@ class _AIOpsServiceStub:
 
 
 def _client_with_stubbed_service() -> TestClient:
+    get_settings.cache_clear()
     stub = _AIOpsServiceStub()
     observability_main.get_aiops_service = lambda: stub
     return TestClient(observability_main.app)

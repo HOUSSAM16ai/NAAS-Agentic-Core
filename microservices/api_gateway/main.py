@@ -163,5 +163,57 @@ async def orchestrator_proxy(path: str, request: Request) -> StreamingResponse:
     )
 
 
+# --- Monolith Proxies (Core Kernel) ---
+
+
+@app.api_route(
+    "/api/security/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+)
+async def security_proxy(path: str, request: Request) -> StreamingResponse:
+    return await proxy_handler.forward(
+        request, settings.CORE_KERNEL_URL, f"api/security/{path}"
+    )
+
+
+@app.api_route(
+    "/api/chat/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+)
+async def chat_proxy(path: str, request: Request) -> StreamingResponse:
+    return await proxy_handler.forward(request, settings.CORE_KERNEL_URL, f"api/chat/{path}")
+
+
+@app.api_route(
+    "/admin/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+)
+async def admin_proxy(path: str, request: Request) -> StreamingResponse:
+    return await proxy_handler.forward(request, settings.CORE_KERNEL_URL, f"admin/{path}")
+
+
+@app.api_route(
+    "/v1/content/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+)
+async def content_proxy(path: str, request: Request) -> StreamingResponse:
+    return await proxy_handler.forward(request, settings.CORE_KERNEL_URL, f"v1/content/{path}")
+
+
+@app.api_route(
+    "/api/v1/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
+)
+async def core_v1_proxy(path: str, request: Request) -> StreamingResponse:
+    """
+    Catch-all for remaining V1 endpoints in the Monolith (e.g. data-mesh, crud).
+    Must be defined AFTER specific microservice routes.
+    """
+    return await proxy_handler.forward(
+        request, settings.CORE_KERNEL_URL, f"api/v1/{path}"
+    )
+
+
 if __name__ == "__main__":
     uvicorn.run("microservices.api_gateway.main:app", host="0.0.0.0", port=8000, reload=True)

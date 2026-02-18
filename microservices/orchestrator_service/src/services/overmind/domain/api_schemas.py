@@ -17,7 +17,7 @@ from enum import StrEnum
 
 from pydantic import AliasChoices, Field
 
-from app.core.schemas import RobustBaseModel
+from microservices.orchestrator_service.src.core.schemas import RobustBaseModel
 
 
 class MissionStatusEnum(StrEnum):

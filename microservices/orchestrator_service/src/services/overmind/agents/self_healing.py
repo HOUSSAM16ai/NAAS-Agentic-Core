@@ -21,11 +21,9 @@ from typing import ClassVar, TypeVar
 
 from pydantic import BaseModel, Field
 
-# استبدال الاستدعاء المباشر بتكاملات المشروع
-try:
-    from app.services.mcp.integrations import MCPIntegrations
-except ImportError:
-    MCPIntegrations = None  # Mock or fallback
+# MCPIntegrations removed to decouple from monolithic app
+# Future TODO: Implement direct clients for Kagent/DSPy here
+MCPIntegrations = None
 
 logger = logging.getLogger(__name__)
 

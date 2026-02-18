@@ -14,8 +14,8 @@
 import json
 import re
 
-from app.core.di import get_logger
-from app.core.protocols import AgentArchitect, CollaborationContext
+from microservices.orchestrator_service.src.core.logging import get_logger
+from microservices.orchestrator_service.src.core.protocols import AgentArchitect, CollaborationContext
 from microservices.orchestrator_service.src.core.ai_gateway import AIClient
 from microservices.orchestrator_service.src.services.overmind.dec_pomdp_proof import (
     build_dec_pomdp_consultation_payload,

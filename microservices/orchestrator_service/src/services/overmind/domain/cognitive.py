@@ -17,7 +17,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 
-from app.core.protocols import (
+from microservices.orchestrator_service.src.core.protocols import (
     AgentArchitect,
     AgentExecutor,
     AgentMemory,
@@ -254,7 +254,7 @@ class SuperBrain:
             return
 
         try:
-            from app.services.chat.tools.retrieval import search_educational_content
+            from microservices.orchestrator_service.src.services.tools.retrieval import search_educational_content
 
             content = await search_educational_content(**extracted)
         except Exception as exc:

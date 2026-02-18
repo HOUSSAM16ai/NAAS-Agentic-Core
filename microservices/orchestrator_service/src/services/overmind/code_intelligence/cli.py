@@ -2,7 +2,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from app.core.logging import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 
 from .core import StructuralCodeIntelligence
 from .reporters.csv_reporter import save_csv_report

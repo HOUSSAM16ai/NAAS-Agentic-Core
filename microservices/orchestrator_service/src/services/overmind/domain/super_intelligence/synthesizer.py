@@ -4,7 +4,7 @@
 مسؤول عن تجميع الآراء وتركيب القرار النهائي.
 """
 
-from app.core.di import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.services.overmind.domain.super_intelligence.models import (
     Decision,
     DecisionCategory,

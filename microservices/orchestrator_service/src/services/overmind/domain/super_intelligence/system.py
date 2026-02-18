@@ -7,7 +7,7 @@
 import inspect
 from datetime import datetime
 
-from app.core.di import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.services.overmind.agents import AgentCouncil
 from microservices.orchestrator_service.src.services.overmind.collaboration import CollaborationHub
 from microservices.orchestrator_service.src.services.overmind.domain.super_intelligence.analyzer import (

@@ -17,7 +17,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TypedDict
 
-from app.core.types import JSONDict, Metadata
+from microservices.orchestrator_service.src.core.types import JSONDict, Metadata
 
 
 class ProtocolType(Enum):

@@ -19,7 +19,7 @@ from collections import deque
 from datetime import UTC, datetime
 from typing import TypedDict
 
-from app.core.types import Metadata
+from microservices.orchestrator_service.src.core.types import Metadata
 
 from .models import (
     LoadBalancerState,

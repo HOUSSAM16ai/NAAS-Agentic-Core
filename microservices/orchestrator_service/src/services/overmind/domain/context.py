@@ -10,7 +10,7 @@
 - توثيق "Legendary" باللغة العربية.
 """
 
-from app.core.protocols import CollaborationContext
+from microservices.orchestrator_service.src.core.protocols import CollaborationContext
 
 
 class InMemoryCollaborationContext(CollaborationContext):

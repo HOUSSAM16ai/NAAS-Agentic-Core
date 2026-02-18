@@ -11,7 +11,7 @@ Facade Pattern يوفر واجهة موحدة لجميع قدرات Overmind.
 
 from pathlib import Path
 
-from app.core.di import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.services.overmind.capabilities.file_operations import (
     FileOperations,
 )

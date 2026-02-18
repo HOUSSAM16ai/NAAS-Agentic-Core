@@ -9,9 +9,9 @@ from typing import Final
 
 import httpx
 
-from app.core.http_client_factory import HTTPClientConfig, get_http_client
-from app.core.logging import get_logger
-from app.core.settings.base import get_settings
+from ...core.http_client_factory import HTTPClientConfig, get_http_client
+from ...core.logging import get_logger
+from ...core.settings import get_settings
 
 logger = get_logger("research-client")
 
@@ -43,7 +43,7 @@ class ResearchClient:
         """
         url = f"{self.base_url}/execute"
         payload = {
-            "caller_id": "app-backend",
+            "caller_id": "orchestrator-backend",
             "action": "deep_research",
             "payload": {"query": query},
         }
@@ -108,7 +108,7 @@ class ResearchClient:
         """
         url = f"{self.base_url}/execute"
         payload = {
-            "caller_id": "app-backend",
+            "caller_id": "orchestrator-backend",
             "action": "search",
             "payload": {
                 "query": query,
@@ -139,7 +139,7 @@ class ResearchClient:
         """
         url = f"{self.base_url}/execute"
         payload = {
-            "caller_id": "app-backend",
+            "caller_id": "orchestrator-backend",
             "action": "refine",
             "payload": {"query": query, "api_key": api_key},
         }
@@ -167,7 +167,7 @@ class ResearchClient:
         """
         url = f"{self.base_url}/execute"
         payload = {
-            "caller_id": "app-backend",
+            "caller_id": "orchestrator-backend",
             "action": "rerank",
             "payload": {
                 "query": query,

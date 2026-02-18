@@ -11,8 +11,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.di import get_logger
-from app.core.domain.user import User
+from microservices.orchestrator_service.src.core.logging import get_logger
+from microservices.orchestrator_service.src.core.domain.user import User
 
 logger = get_logger(__name__)
 

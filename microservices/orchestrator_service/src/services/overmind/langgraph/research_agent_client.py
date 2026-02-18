@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from app.core.logging import get_logger
+from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.services.overmind.langgraph.context_contracts import (
     RefineResult,
     Snippet,

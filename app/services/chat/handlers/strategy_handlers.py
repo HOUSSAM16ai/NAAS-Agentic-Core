@@ -11,7 +11,6 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
 from sqlalchemy import select
-from sqlmodel import SQLModel
 
 # Import chat domain to ensure AdminConversation is registered, preventing mapping errors
 import app.core.domain.chat  # noqa: F401
@@ -23,9 +22,7 @@ from app.core.domain.mission import (
     Mission,
     MissionEvent,
     MissionEventType,
-    MissionPlan,
     MissionStatus,
-    Task,
 )
 from app.core.patterns.strategy import Strategy
 from app.core.settings.base import get_settings

@@ -64,13 +64,21 @@ class UserCountResponse(BaseModel):
 # -----------------------------------------------------------------------------
 
 
-def _build_router(settings: UserServiceSettings) -> APIRouter:
+def _build_public_router(settings: UserServiceSettings) -> APIRouter:
+    """ينشئ موجهات الخدمة العامة."""
     router = APIRouter()
 
     @router.get("/health", response_model=HealthResponse, tags=["System"])
     def health_check() -> HealthResponse:
         """نقطة فحص الصحة لبيئات التشغيل والحاويات."""
         return build_health_payload(settings)
+
+    return router
+
+
+def _build_protected_router() -> APIRouter:
+    """ينشئ موجهات الخدمة المحمية."""
+    router = APIRouter()
 
     @router.post(
         "/users",
@@ -162,8 +170,9 @@ def create_app(settings: UserServiceSettings | None = None) -> FastAPI:
     setup_exception_handlers(app)
 
     # تطبيق Zero Trust: التحقق من الهوية عند البوابة
+    app.include_router(_build_public_router(effective_settings))
     app.include_router(
-        _build_router(effective_settings), dependencies=[Depends(verify_service_token)]
+        _build_protected_router(), dependencies=[Depends(verify_service_token)]
     )
 
     return app

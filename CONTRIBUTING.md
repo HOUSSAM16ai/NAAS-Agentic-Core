@@ -1,30 +1,51 @@
-# Contributing to Youth AI Safety Toolkit
+# Contributing
 
-Thank you for your interest in contributing to the Youth AI Safety Toolkit! We welcome contributions from developers, researchers, and youth safety advocates.
+We welcome contributions to this open-source project! Please follow these guidelines to ensure a smooth collaboration.
 
 ## Getting Started
 
-1.  **Fork the Repository**: Create your own copy of the project.
-2.  **Clone the Repo**: `git clone https://github.com/HOUSSAM16ai/NAAS-Agentic-Core.git`
-3.  **Create a Branch**: `git checkout -b feature/your-feature-name`
+1. **Fork the Repository** and clone it locally.
+2. **Install Dependencies:** `pip install -r requirements.txt`.
+3. **Verify Installation:** Run `pytest tests/` to ensure everything is working.
 
-## Pull Request Process
+## Style & Linting
 
-1.  **Scope**: Ensure your contribution aligns with our mission (Youth Safety, AI Auditing).
-2.  **Tests**: All code changes must include tests. Run `pytest` before submitting.
-3.  **Documentation**: Update `README.md` or `docs/` if you change functionality.
-4.  **Review**: Submit a Pull Request (PR) to the `main` branch. A maintainer will review it.
+We enforce strict Python formatting. Please run:
+```bash
+ruff check .
+ruff format .
+```
+before submitting your changes.
 
-## Quality Standards
+## Testing
 
--   **Code Style**: We follow PEP 8 for Python.
--   **Commit Messages**: Use semantic commit messages (e.g., `feat: add new audit module`, `fix: resolve safeguarding bug`).
--   **Safeguarding Check**: **CRITICAL**: Do not commit any real user data or PII. Use dummy data for testing.
+New features must include unit tests. Run the full test suite with:
+```bash
+pytest tests/
+```
 
-## Developer Certificate of Origin (DCO)
+## Adding Evaluation Suites
 
-By contributing, you certify that you wrote the code or have the right to submit it under the project's license.
+We encourage community contributions of new red-teaming datasets or evaluation protocols.
 
-## Community
+To add a new suite:
+1. **Define the Suite:** Create a new folder under `evaluation/suites/`.
+2. **Scoring Rules:** Include a `scoring.py` file implementing the evaluation logic.
+3. **Example Report:** Provide a `report_example.json` demonstrating the expected output format.
 
-Join our discussions in the [GitHub Issues](https://github.com/HOUSSAM16ai/NAAS-Agentic-Core/issues) tab.
+Example Structure:
+```text
+evaluation/suites/
+  └── my_new_suite/
+      ├── dataset.jsonl       # Red-teaming prompts
+      ├── scoring.py          # Logic for bypass/interception
+      └── report_example.json # Example metrics
+```
+
+## Pull Request Checklist
+
+- [ ] Documentation updated (if applicable).
+- [ ] Tests passed locally.
+- [ ] Formatting checks passed.
+- [ ] Evaluation suites include example reports.
+- [ ] No PII or sensitive data included.

@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: "Benmerah"
+    given-names: "Houssam"
+  - family-names: "Seddiki"
+    given-names: "Abdessamed"
+title: "NAAS-Agentic-Core: Youth-Facing GenAI Safety Evaluation in Code-Switching Contexts"
+version: 0.1.0
+date-released: 2026-02-19
+url: "https://github.com/HOUSSAM16ai/NAAS-Agentic-Core"
+repository-code: "https://github.com/HOUSSAM16ai/NAAS-Agentic-Core"
+keywords:
+  - "AI safety"
+  - "agentic evaluation"
+  - "youth wellbeing"
+  - "code-switching"
+  - "Arabic"
+  - "French"
+  - "Darija"
+abstract: >-
+  An open-source agentic evaluation framework designed to assess the safety and reliability of Large Language Models (LLMs) in youth-facing educational contexts, specifically targeting Arabic-French-Darija code-switching scenarios.
+license: MIT

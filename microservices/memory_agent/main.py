@@ -36,9 +36,8 @@ from microservices.memory_agent.src.services.memory_service import MemoryService
 logger = get_logger("memory-agent")
 
 
-def _build_router(settings: MemoryAgentSettings) -> APIRouter:
-    """ينشئ موجهات الوكيل."""
-
+def _build_public_router(settings: MemoryAgentSettings) -> APIRouter:
+    """ينشئ موجهات الوكيل العامة."""
     router = APIRouter()
 
     @router.get("/health", response_model=HealthResponse, tags=["System"])
@@ -46,6 +45,13 @@ def _build_router(settings: MemoryAgentSettings) -> APIRouter:
         """يفحص جاهزية الوكيل دون اعتماد خارجي."""
 
         return build_health_payload(settings)
+
+    return router
+
+
+def _build_protected_router() -> APIRouter:
+    """ينشئ موجهات الوكيل المحمية."""
+    router = APIRouter()
 
     @router.post(
         "/memories",
@@ -127,8 +133,9 @@ def create_app(settings: MemoryAgentSettings | None = None) -> FastAPI:
     setup_exception_handlers(app)
 
     # تطبيق Zero Trust: التحقق من الهوية عند البوابة
+    app.include_router(_build_public_router(effective_settings))
     app.include_router(
-        _build_router(effective_settings), dependencies=[Depends(verify_service_token)]
+        _build_protected_router(), dependencies=[Depends(verify_service_token)]
     )
 
     return app

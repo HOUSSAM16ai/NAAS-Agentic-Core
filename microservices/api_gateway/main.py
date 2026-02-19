@@ -165,6 +165,7 @@ async def orchestrator_proxy(path: str, request: Request) -> StreamingResponse:
 
 # --- Legacy Monolith Proxies (Explicit Whitelist) ---
 
+
 @app.api_route(
     "/admin/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
@@ -189,7 +190,9 @@ async def legacy_security_proxy(path: str, request: Request) -> StreamingRespons
     include_in_schema=False,
 )
 async def legacy_data_mesh_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(request, settings.CORE_KERNEL_URL, f"api/v1/data-mesh/{path}")
+    return await proxy_handler.forward(
+        request, settings.CORE_KERNEL_URL, f"api/v1/data-mesh/{path}"
+    )
 
 
 @app.api_route(
@@ -198,7 +201,9 @@ async def legacy_data_mesh_proxy(path: str, request: Request) -> StreamingRespon
     include_in_schema=False,
 )
 async def legacy_crud_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(request, settings.CORE_KERNEL_URL, f"api/v1/resources/{path}")
+    return await proxy_handler.forward(
+        request, settings.CORE_KERNEL_URL, f"api/v1/resources/{path}"
+    )
 
 
 @app.api_route(
@@ -229,6 +234,7 @@ async def legacy_system_proxy(path: str, request: Request) -> StreamingResponse:
 
 
 # --- Fallback / 404 Handler ---
+
 
 @app.api_route(
     "/{path:path}",

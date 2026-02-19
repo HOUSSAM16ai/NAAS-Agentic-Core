@@ -44,21 +44,39 @@ def test_planning_route_proxies_correctly(mock_forward):
 
 
 @patch.object(proxy_handler, "forward", new_callable=AsyncMock)
-def test_unknown_route_proxies_to_monolith(mock_forward):
+def test_unknown_route_returns_404(mock_forward):
     """
-    Verify that requests to unknown routes are forwarded to the Core Kernel (Monolith).
+    Verify that requests to unknown routes return 404 and are NOT forwarded.
     """
-    # Mock the return value from the Monolith
-    mock_forward.return_value = JSONResponse(content={"status": "monolith_response"})
-
     response = client.get("/unknown/route")
 
     # Verify response
-    assert response.status_code == 200
-    assert response.json() == {"status": "monolith_response"}
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Route not found in API Gateway. Please verify the URL or check if the service is registered.",
+        "path": "/unknown/route",
+    }
 
-    # Verify forward was called with CORE_KERNEL_URL
+    # Verify forward was NOT called
+    assert not mock_forward.called
+
+
+@patch.object(proxy_handler, "forward", new_callable=AsyncMock)
+def test_legacy_route_proxies_to_monolith(mock_forward):
+    """
+    Verify that whitelisted legacy routes (e.g. /admin) are forwarded to the Core Kernel.
+    """
+    mock_forward.return_value = JSONResponse(content={"status": "legacy_ok"})
+
+    response = client.get("/admin/users")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "legacy_ok"}
+
     assert mock_forward.called
     args, _ = mock_forward.call_args
-    assert settings.CORE_KERNEL_URL in args  # target_url should be the kernel
-    assert "unknown/route" in args  # path
+    assert settings.CORE_KERNEL_URL in args
+    # Route is /admin/{path}, so path should be appended
+    # The current implementation calls forward with f"admin/{path}"
+    # So if path is "users", it sends "admin/users"
+    assert "admin/users" in args

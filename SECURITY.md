@@ -1,20 +1,21 @@
 # Security Policy
 
+We take the security of this open-source project seriously. If you discover a security vulnerability, we appreciate your help in disclosing it to us responsibly.
+
 ## Reporting a Vulnerability
 
-We take security seriously, especially given our focus on youth safety. If you discover a vulnerability in our code or infrastructure, please do not disclose it publicly.
+Please do not report security vulnerabilities through public GitHub issues.
 
-1.  **Email**: Send details to **TODO: Add Security Email**.
-2.  **Encryption**: Please encrypt sensitive details using our PGP key if possible.
-3.  **Process**: We will acknowledge your report within 48 hours and provide a timeline for a fix.
+Instead, please report them directly to our security team via email: `security@example.org`.
 
-## Supported Versions
+We will acknowledge your report within **48 hours** and provide an estimated timeline for resolution.
 
-| Version | Supported |
-| :--- | :--- |
-| 1.x.x | ✅ Yes |
-| < 1.0 | ❌ No |
+## Disclosure Policy
 
-## Safeguarding Issues
+We ask that you wait until we have had an opportunity to address the vulnerability before publicly disclosing it.
 
-If you identify a risk related to user data (PII) or harmful content generation, please label your report **URGENT: SAFEGUARDING**.
+* **Initial Response:** 48 hours.
+* **Assessment:** 1 week.
+* **Resolution:** 30 days (typical target).
+
+We will coordinate with you on public disclosure, including crediting you for your finding (if desired).

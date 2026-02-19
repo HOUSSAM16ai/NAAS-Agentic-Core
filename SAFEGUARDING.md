@@ -1,47 +1,32 @@
-# Safeguarding & Youth Safety Protocol
+# Safeguarding Policy
 
-**Purpose:** Defines the duty of care, safety boundaries, and incident response workflows.
-**Scope:** All interactions involving minors (~15–20 core pilot, ~100 workshop participants).
-**Owner:** Project Lead / Safeguarding Officer.
+This project strictly adheres to safety protocols for youth participation in AI research and evaluation. Our primary duty is to the safety and wellbeing of all participants.
 
-## 1. Duty of Care & Principles
-* **Non-Clinical Role:** We act as technical educators, not mental health professionals. We measure *indicators* of confidence, not clinical diagnoses.
-* **Human-in-the-Loop:** A human mentor is strictly required during all live beta-testing sessions with minors.
-* **Zero Tolerance:** Immediate suspension of testing if high-severity harm is detected.
-* **Consent:** Opt-in required for all participants; Guardian consent required for minors under 18 (per local regulations).
+## Consent & Assent
 
-## 2. Prohibited Content
-During Red-Teaming workshops, the following inputs are **strictly prohibited**:
-* Sexual content or Nudity.
-* Self-harm or Suicide instructions.
-* Real-world violence planning or promotion of terrorism.
-* Personally Identifiable Information (PII) of self or others.
+For all participants under 18:
+* **Guardian Consent:** Written permission must be obtained from a legal guardian or parent.
+* **Participant Assent:** The minor must also provide clear, understandable assent.
+* **Right to Withdraw:** Participants may withdraw at any time without penalty or explanation.
 
-## 3. Incident Taxonomy
-| Category | Definition | Severity |
-| :--- | :--- | :--- |
-| **Hallucination Harm** | AI presents false facts as truth in an educational context (e.g., historical errors). | Low |
-| **Code-Switch Jailbreak** | AI bypasses safety filters using mixed Arabic/French/Darija logic. | Med |
-| **Toxicity/Bias** | AI generates culturally offensive, sexist, or regionally biased output. | Med |
-| **Privacy Leak** | AI requests PII or reveals training data PII. | High |
-| **Critical Harm** | AI encourages self-harm, violence, or illegal acts. | Critical |
+## Supervision Model
 
-## 4. Escalation Matrix
-| Severity | Action Required | Notification | Timeline |
+* **Trained Mentors:** All data collection sessions are monitored by trained, safeguarding-vetted mentors.
+* **Designated Safeguarding Lead (DSL):** A single point of contact responsible for overseeing safety incidents and escalations.
+
+**Policy Statement:** **No unsupervised data collection from minors.** All AI interactions are supervised or conducted within a controlled environment.
+
+## Escalation Matrix
+
+In the event of a safety concern, the following escalation paths apply:
+
+| Severity Level | Description | Immediate Actions | Escalation Path |
 | :--- | :--- | :--- | :--- |
-| **Low** | Log in telemetry; Flag for fine-tuning. Session continues. | Mentor | End of Day |
-| **Med** | Pause session for user; Review log; Update system prompt. | Lead Engineer | < 2 Hours |
-| **High** | **STOP SESSION.** Remove user. Root cause analysis. | Project Lead | Immediate |
-| **Critical** | **STOP ALL TESTING.** Notify Platforms/Parents. Legal consultation. | PI / Ethics Lead | Immediate |
+| **Low** | Minor distress or confusion; inappropriate language (non-harmful). | Mentor pauses session; clarifies intent; logs incident. | Report to DSL within 24 hours. |
+| **Medium** | Persistent distress; disclosures of bullying or anxiety; ambiguous references to harm. | Mentor terminates session immediately; separates participant; logs detailed report. | Contact DSL immediately; notify guardian if appropriate. |
+| **High** | Immediate risk of harm (self or others); disclosure of abuse; severe distress. | Mentor ensures immediate physical safety; contacts emergency services if imminent danger. | Contact DSL immediately; notify authorities/guardian as per local laws. |
 
-## 5. Safeguarding Evidence (Artifacts)
-We maintain the following non-PII logs to prove compliance:
-* **Attendance Logs:** Dates/times of sessions (Anonymized User IDs).
-* **Session Briefing Checklist:** Signed confirmation that safety rules were read.
-* **Incident Log:** Registry of all Med/High flags and resolution time.
+## Related Documents
 
-## 6. Mentor Checklist
-* ✅ **DO:** Intervene if a student seems distressed.
-* ✅ **DO:** Remind students this is an AI, not a human.
-* ❌ **DON'T:** Leave the room during a live session.
-* ❌ **DON'T:** Attempt to diagnose or treat anxiety.
+* [DATA_POLICY.md](./DATA_POLICY.md): Data handling and privacy rules.
+* [GOVERNANCE.md](./GOVERNANCE.md): Project governance and ethics.

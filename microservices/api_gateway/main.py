@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse, StreamingResponse
 
 # Local imports
@@ -11,6 +11,7 @@ from microservices.api_gateway.config import settings
 from microservices.api_gateway.middleware import RequestIdMiddleware, StructuredLoggingMiddleware
 from microservices.api_gateway.proxy import GatewayProxy
 from microservices.api_gateway.security import create_service_token, verify_gateway_request
+from microservices.api_gateway.websocket import forward_websocket
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -78,6 +79,38 @@ async def health_check():
         "service": "api-gateway",
         "dependencies": dependencies,
     }
+
+
+# --- WebSocket Proxies ---
+
+
+def get_ws_url(base_url: str) -> str:
+    """Converts HTTP/HTTPS URL to WS/WSS URL."""
+    if base_url.startswith("https://"):
+        return base_url.replace("https://", "wss://", 1)
+    if base_url.startswith("http://"):
+        return base_url.replace("http://", "ws://", 1)
+    return base_url
+
+
+@app.websocket("/api/chat/ws")
+async def chat_ws_proxy(websocket: WebSocket):
+    target_url = f"{get_ws_url(settings.CORE_KERNEL_URL)}/api/chat/ws"
+    await forward_websocket(websocket, target_url)
+
+
+@app.websocket("/admin/api/chat/ws")
+async def admin_chat_ws_proxy(websocket: WebSocket):
+    target_url = f"{get_ws_url(settings.CORE_KERNEL_URL)}/admin/api/chat/ws"
+    await forward_websocket(websocket, target_url)
+
+
+@app.websocket("/api/v1/overmind/missions/{mission_id}/ws")
+async def mission_ws_proxy(websocket: WebSocket, mission_id: str):
+    target_url = (
+        f"{get_ws_url(settings.ORCHESTRATOR_SERVICE_URL)}/missions/{mission_id}/ws"
+    )
+    await forward_websocket(websocket, target_url)
 
 
 # --- Smart Routing ---

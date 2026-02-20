@@ -67,7 +67,6 @@ LEGACY_EXEMPTIONS = {
     "app/core/event_bus_impl.py": ["print"],
     "app/tooling/repository_map.py": ["print"],
     "app/api/routers/security.py": ["db_import"],
-    "app/api/routers/crud.py": ["db_import", ANY_TOKEN],
     "app/api/routers/overmind.py": ["db_import"],
     "app/api/routers/customer_chat.py": ["db_import"],
     "app/api/routers/admin.py": ["db_import"],

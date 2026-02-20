@@ -146,7 +146,8 @@ class Mission(SQLModel, table=True):
     mission_plans: list[MissionPlan] = Relationship(
         sa_relationship=relationship(
             "MissionPlan",
-            back_populates="mission",  # foreign_keys="[MissionPlan.mission_id]"
+            back_populates="mission",
+            foreign_keys="[MissionPlan.mission_id]",
         )
     )
     events: list[MissionEvent] = Relationship(
@@ -177,7 +178,8 @@ class MissionPlan(SQLModel, table=True):
     mission: Mission = Relationship(
         sa_relationship=relationship(
             "Mission",
-            back_populates="mission_plans",  # foreign_keys="[MissionPlan.mission_id]"
+            back_populates="mission_plans",
+            foreign_keys="[MissionPlan.mission_id]",
         )
     )
     tasks: list[Task] = Relationship(sa_relationship=relationship("Task", back_populates="plan"))

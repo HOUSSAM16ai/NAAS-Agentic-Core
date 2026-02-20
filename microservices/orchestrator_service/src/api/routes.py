@@ -81,6 +81,15 @@ async def create_mission_endpoint(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.get("/missions", response_model=list[MissionResponse], summary="List Missions")
+async def list_missions_endpoint(
+    limit: int = 10, offset: int = 0, db: AsyncSession = Depends(get_db)
+) -> list[MissionResponse]:
+    state_manager = MissionStateManager(db)
+    missions = await state_manager.list_missions(limit=limit, offset=offset)
+    return [_serialize_mission(m) for m in missions]
+
+
 @router.get("/missions/{mission_id}", response_model=MissionResponse, summary="Get Mission")
 async def get_mission_endpoint(
     mission_id: int, req: Request, db: AsyncSession = Depends(get_db)

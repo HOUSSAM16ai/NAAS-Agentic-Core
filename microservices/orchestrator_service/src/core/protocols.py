@@ -19,7 +19,13 @@ import asyncio
 from collections.abc import AsyncGenerator
 from typing import Protocol, runtime_checkable
 
-from .domain.mission import Mission, MissionEvent, MissionEventType, MissionStatus, Task
+from microservices.orchestrator_service.src.models.mission import (
+    Mission,
+    MissionEvent,
+    MissionEventType,
+    MissionStatus,
+    Task,
+)
 
 
 @runtime_checkable

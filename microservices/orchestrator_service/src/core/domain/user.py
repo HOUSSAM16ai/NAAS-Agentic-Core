@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     # Forward references as strings are sufficient for SQLModel/SQLAlchemy
     # when models are in the same registry/metadata.
     from .chat import AdminConversation, CustomerConversation
-    from .mission import Mission
+    # from .mission import Mission
 
 
 class UserStatus(CaseInsensitiveEnum):
@@ -64,9 +64,9 @@ class User(SQLModel, table=True):
     customer_conversations: list[CustomerConversation] = Relationship(
         sa_relationship=relationship("CustomerConversation", back_populates="user")
     )
-    missions: list[Mission] = Relationship(
-        sa_relationship=relationship("Mission", back_populates="initiator")
-    )
+    # missions: list[Mission] = Relationship(
+    #     sa_relationship=relationship("Mission", back_populates="initiator")
+    # )
 
     # Removed: roles, refresh_tokens, password_reset_tokens, audit_logs
 

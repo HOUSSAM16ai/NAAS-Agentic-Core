@@ -89,6 +89,22 @@ def test_chat_route_proxies_to_monolith(mock_forward):
 
 
 @patch.object(proxy_handler, "forward", new_callable=AsyncMock)
+def test_missions_route_proxies_to_orchestrator(mock_forward):
+    """
+    Verify that requests to /api/v1/missions/* are forwarded to the Orchestrator Service.
+    """
+    mock_forward.return_value = JSONResponse(content={"status": "ok"})
+
+    response = client.get("/api/v1/missions/123")
+
+    assert response.status_code == 200
+    assert mock_forward.called
+    args, _ = mock_forward.call_args
+    assert settings.ORCHESTRATOR_SERVICE_URL in args
+    assert "missions/123" in args
+
+
+@patch.object(proxy_handler, "forward", new_callable=AsyncMock)
 def test_legacy_v1_fallback(mock_forward):
     """
     Verify that unmatched /api/v1/* requests fall back to the Monolith (e.g. CRUD).

@@ -164,6 +164,34 @@ async def orchestrator_proxy(path: str, request: Request) -> StreamingResponse:
     )
 
 
+@app.api_route(
+    "/api/v1/missions",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
+)
+async def missions_root_proxy(request: Request) -> StreamingResponse:
+    return await proxy_handler.forward(
+        request,
+        settings.ORCHESTRATOR_SERVICE_URL,
+        "missions",
+        service_token=create_service_token(),
+    )
+
+
+@app.api_route(
+    "/api/v1/missions/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    dependencies=[Depends(verify_gateway_request)],
+)
+async def missions_proxy(path: str, request: Request) -> StreamingResponse:
+    return await proxy_handler.forward(
+        request,
+        settings.ORCHESTRATOR_SERVICE_URL,
+        f"missions/{path}",
+        service_token=create_service_token(),
+    )
+
+
 # --- Explicit Legacy Routes ---
 
 

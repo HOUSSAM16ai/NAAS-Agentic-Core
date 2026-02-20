@@ -91,6 +91,20 @@ class MissionStateManager:
         # to prevent duplicate Mission objects due to the Cartesian product.
         return result.unique().scalar_one_or_none()
 
+    async def list_missions(self, limit: int = 10, offset: int = 0) -> list[Mission]:
+        stmt = (
+            select(Mission)
+            .options(
+                joinedload(Mission.mission_plans),
+                joinedload(Mission.tasks),
+            )
+            .order_by(Mission.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.unique().scalars().all())
+
     async def update_mission_status(
         self, mission_id: int, status: MissionStatus, note: str | None = None
     ) -> None:

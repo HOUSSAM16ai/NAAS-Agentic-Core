@@ -10,7 +10,7 @@
 
 ---
 
-## Executive summary (≤30 words)
+## Executive summary 
 A safeguarding-first agentic tutoring toolkit and evaluation framework that helps youth-serving organisations and educators reduce AI-related educational harm and improve wellbeing and AI literacy outcomes in North Africa.
 
 ---

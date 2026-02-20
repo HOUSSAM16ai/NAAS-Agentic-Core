@@ -7,11 +7,11 @@ from fastapi import APIRouter
 from app.api.routers import (
     admin,
     content,
-    crud,
     customer_chat,
     data_mesh,
     security,
     system,
+    ums,
 )
 
 type RouterSpec = tuple[APIRouter, str]
@@ -27,7 +27,7 @@ def base_router_registry() -> list[RouterSpec]:
         (admin.router, ""),
         (security.router, "/api/security"),
         (data_mesh.router, "/api/v1/data-mesh"),
-        (crud.router, "/api/v1"),
+        (ums.router, "/api/v1"),
         (customer_chat.router, ""),
         (content.router, ""),
     ]

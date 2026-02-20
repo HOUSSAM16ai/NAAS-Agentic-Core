@@ -233,17 +233,6 @@ async def datamesh_proxy(path: str, request: Request) -> StreamingResponse:
 
 
 @app.api_route(
-    "/api/v1/resources/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-)
-async def resources_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(
-        request, settings.CORE_KERNEL_URL, f"api/v1/resources/{path}"
-    )
-
-
-@app.api_route(
     "/system/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     include_in_schema=False,

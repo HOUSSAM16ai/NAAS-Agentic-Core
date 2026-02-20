@@ -11,8 +11,8 @@ from pydantic import Field
 
 from microservices.orchestrator_service.src.core.governance.contracts import GovernanceModel
 from microservices.orchestrator_service.src.core.governance.decision import DecisionRecord, Policy
-from microservices.orchestrator_service.src.models.mission import MissionStatus
 from microservices.orchestrator_service.src.core.governance.errors import FailureClass
+from microservices.orchestrator_service.src.models.mission import MissionStatus
 
 logger = logging.getLogger(__name__)
 

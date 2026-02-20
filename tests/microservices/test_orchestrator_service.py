@@ -1,7 +1,8 @@
 import os
 import sys
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 # Mock heavy dependencies before importing app
 sys.modules["redis"] = MagicMock()
@@ -25,14 +26,14 @@ os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["ORCHESTRATOR_DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
 from fastapi.testclient import TestClient
-from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel
 
 from microservices.orchestrator_service.main import app
 from microservices.orchestrator_service.src.core.database import get_db
-from microservices.orchestrator_service.src.models.mission import Mission, MissionStatus
 from microservices.orchestrator_service.src.core.event_bus import event_bus
+from microservices.orchestrator_service.src.models.mission import Mission, MissionStatus
 
 # Patch event_bus.redis.close to be awaitable
 event_bus.redis.close = AsyncMock()

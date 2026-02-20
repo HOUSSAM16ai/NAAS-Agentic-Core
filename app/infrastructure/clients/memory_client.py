@@ -8,8 +8,8 @@
 import httpx
 from pydantic import BaseModel
 
-from app.core.settings.base import get_settings
 from app.core.logging import get_logger
+from app.core.settings.base import get_settings
 
 logger = get_logger(__name__)
 

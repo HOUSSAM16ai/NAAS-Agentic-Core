@@ -76,10 +76,6 @@ class RedisEventBridge:
                     # The internal bus expects `EventPayload` which is `object`.
                     # But the websocket handler expects `MissionEvent` OR similar structure.
 
-                    # Let's check `app/api/routers/overmind.py`.
-                    # It iterates over `events`.
-                    # `websocket.send_json({"type": "mission_event", "payload": ...})`
-
                     # The `EventBus` puts items into a queue.
                     # The `stream_mission_ws` reads from queue: `event = await queue.get()`.
                     # Then it does: `if event.id <= last_event_id: continue` (This assumes `event` has ID).

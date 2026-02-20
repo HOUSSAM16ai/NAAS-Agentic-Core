@@ -13,11 +13,14 @@ from microservices.api_gateway.security import verify_gateway_request
 
 client = TestClient(app)
 
+
 # Override security dependency for testing
 async def override_verify_gateway_request():
     return {"sub": "test-user"}
 
+
 app.dependency_overrides[verify_gateway_request] = override_verify_gateway_request
+
 
 @patch.object(proxy_handler, "forward", new_callable=AsyncMock)
 def test_mission_route_proxies_to_orchestrator(mock_forward):

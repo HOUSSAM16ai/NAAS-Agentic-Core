@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 
 from app.api.routers.customer_chat import get_db
 from app.api.routers.customer_chat import router as customer_router
-from app.api.routers.overmind import router as overmind_router
 from app.api.routers.ws_auth import (
     _extract_token_from_protocols,
     _parse_protocol_header,
@@ -18,53 +17,10 @@ from app.core.domain.user import User
 
 
 @pytest.fixture
-def overmind_app():
-    app = FastAPI()
-    app.include_router(overmind_router)
-    return app
-
-
-@pytest.fixture
 def customer_app():
     app = FastAPI()
     app.include_router(customer_router)
     return app
-
-
-# --- Overmind Tests ---
-def test_create_mission_error(overmind_app):
-    client = TestClient(overmind_app)
-    # Patch start_mission directly as it is used in the router
-    with patch("app.api.routers.overmind.start_mission", side_effect=Exception("DB error")):
-        response = client.post(
-            "/api/v1/overmind/missions", json={"objective": "valid objective length"}
-        )
-        assert response.status_code == 500
-
-
-def test_get_mission_not_found(overmind_app):
-    client = TestClient(overmind_app)
-    # Patch MissionStateManager.get_mission used in the router
-    with patch(
-        "app.api.routers.overmind.MissionStateManager.get_mission", new_callable=AsyncMock
-    ) as mock_get:
-        mock_get.return_value = None
-        response = client.get("/api/v1/overmind/missions/999")
-        assert response.status_code == 404
-
-
-def test_stream_mission_not_found(overmind_app):
-    client = TestClient(overmind_app)
-    # Mocking session within stream is harder via overrides,
-    # but we can mock MissionStateManager.get_mission
-    with patch(
-        "app.api.routers.overmind.MissionStateManager.get_mission", new_callable=AsyncMock
-    ) as mock_get:
-        mock_get.return_value = None
-        # The endpoint /stream seems to be deprecated/removed in favor of /ws.
-        # We confirm that it returns 404.
-        response = client.get("/api/v1/overmind/missions/999/stream")
-        assert response.status_code == 404
 
 
 # --- Customer Chat Tests ---

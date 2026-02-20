@@ -12,7 +12,6 @@ Module Structure:
 - admin_chat_boundary_service: Admin chat operations facade
 - auth_boundary_service: Authentication operations facade
 - customer_chat_boundary_service: Customer chat operations facade
-- crud_boundary_service: CRUD operations facade
 - observability_boundary_service: Observability operations facade
 
 Standards Applied:
@@ -23,14 +22,12 @@ Standards Applied:
 
 from app.services.boundaries.admin_chat_boundary_service import AdminChatBoundaryService
 from app.services.boundaries.auth_boundary_service import AuthBoundaryService
-from app.services.boundaries.crud_boundary_service import CrudBoundaryService
 from app.services.boundaries.customer_chat_boundary_service import CustomerChatBoundaryService
 from app.services.boundaries.observability_boundary_service import ObservabilityBoundaryService
 
 __all__ = [
     "AdminChatBoundaryService",
     "AuthBoundaryService",
-    "CrudBoundaryService",
     "CustomerChatBoundaryService",
     "ObservabilityBoundaryService",
 ]

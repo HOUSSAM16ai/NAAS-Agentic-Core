@@ -2,7 +2,6 @@
 
 from . import (
     admin,
-    crud,
     customer_chat,
     data_mesh,
     observability,
@@ -12,7 +11,6 @@ from . import (
 
 __all__ = [
     "admin",
-    "crud",
     "customer_chat",
     "data_mesh",
     "observability",

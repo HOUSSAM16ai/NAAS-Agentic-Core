@@ -21,6 +21,7 @@ from microservices.memory_agent.health import HealthResponse, build_health_paylo
 from microservices.memory_agent.logging import get_logger, setup_logging
 from microservices.memory_agent.security import verify_service_token
 from microservices.memory_agent.settings import MemoryAgentSettings, get_settings
+from microservices.memory_agent.src.api.knowledge import router as knowledge_router
 
 # استيراد الطبقات الجديدة (SOLID Refactoring)
 from microservices.memory_agent.src.repositories.memory_repository import (
@@ -32,7 +33,6 @@ from microservices.memory_agent.src.schemas.memory_schemas import (
     MemorySearchRequest,
 )
 from microservices.memory_agent.src.services.memory_service import MemoryService
-from microservices.memory_agent.src.api.knowledge import router as knowledge_router
 
 logger = get_logger("memory-agent")
 

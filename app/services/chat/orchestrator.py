@@ -235,7 +235,7 @@ class ChatOrchestrator:
                     user_id=user_id,
                     conversation_id=conversation_id,
                     history_messages=history_messages,
-                    context=context
+                    context=context,
                 ):
                     full_response_buffer.append(chunk)
                     yield chunk

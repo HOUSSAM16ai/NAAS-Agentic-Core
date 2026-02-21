@@ -86,11 +86,13 @@ async def chat_with_agent_endpoint(
 
     # Prepare context
     context = request.context.copy()
-    context.update({
-        "user_id": request.user_id,
-        "conversation_id": request.conversation_id,
-        "history_messages": request.history_messages,
-    })
+    context.update(
+        {
+            "user_id": request.user_id,
+            "conversation_id": request.conversation_id,
+            "history_messages": request.history_messages,
+        }
+    )
 
     async def _stream_generator():
         try:

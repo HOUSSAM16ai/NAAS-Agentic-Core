@@ -166,8 +166,8 @@ class OrchestratorAgent:
             elif intent == ChatIntent.MISSION_COMPLEX:
                 # Ensure user_id is present for mission creation security
                 if "user_id" not in context:
-                     yield self._make_json_event("❌ خطأ أمني: معرف المستخدم مفقود.")
-                     return
+                    yield self._make_json_event("❌ خطأ أمني: معرف المستخدم مفقود.")
+                    return
                 user_id = int(context["user_id"])
                 async for chunk in handle_mission_complex_stream(normalized, context, user_id):
                     yield chunk
@@ -209,7 +209,9 @@ class OrchestratorAgent:
     def _make_json_event(self, text: str) -> str:
         return json.dumps({"type": "assistant_delta", "payload": {"content": text}}) + "\n"
 
-    async def _as_json_event(self, generator: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
+    async def _as_json_event(
+        self, generator: AsyncGenerator[str, None]
+    ) -> AsyncGenerator[str, None]:
         async for chunk in generator:
             yield self._make_json_event(chunk)
 

@@ -72,16 +72,18 @@ async def handle_mission_complex_stream(
         run0_id = f"{mission_id}:{current_iteration}"
         now = datetime.now(UTC).isoformat()
 
-        yield _json_event({
-            "type": "RUN_STARTED",
-            "payload": {
-                "run_id": run0_id,
-                "seq": sequence_id,
-                "timestamp": now,
-                "iteration": current_iteration,
-                "mode": "standard",
-            },
-        })
+        yield _json_event(
+            {
+                "type": "RUN_STARTED",
+                "payload": {
+                    "run_id": run0_id,
+                    "seq": sequence_id,
+                    "timestamp": now,
+                    "iteration": current_iteration,
+                    "mode": "standard",
+                },
+            }
+        )
 
         # Subscribe to Events
         event_bus = get_event_bus()
@@ -122,26 +124,30 @@ async def handle_mission_complex_stream(
             evt_type = evt_data.get("event_type")
             if evt_type == "mission_completed":
                 if not processed_final:
-                     # Check result summary
+                    # Check result summary
                     result = payload.get("result", {})
                     # If format_event_to_message didn't handle it (e.g. strict type match failed), force final
                     if not message or message.get("type") != "assistant_final":
                         # Attempt to get text result
-                         result_text = _extract_result_text(result)
-                         yield _json_event({
-                            "type": "assistant_final",
-                            "payload": {"content": result_text or "✅ تمت المهمة بنجاح."},
-                        })
-                break # Stop subscription
+                        result_text = _extract_result_text(result)
+                        yield _json_event(
+                            {
+                                "type": "assistant_final",
+                                "payload": {"content": result_text or "✅ تمت المهمة بنجاح."},
+                            }
+                        )
+                break  # Stop subscription
 
             elif evt_type == "mission_failed":
                 if not processed_final:
-                     yield _json_event({
-                        "type": "assistant_error",
-                        "payload": {
-                            "content": f"❌ فشلت المهمة: {payload.get('error') or 'Unknown error'}"
-                        },
-                    })
+                    yield _json_event(
+                        {
+                            "type": "assistant_error",
+                            "payload": {
+                                "content": f"❌ فشلت المهمة: {payload.get('error') or 'Unknown error'}"
+                            },
+                        }
+                    )
                 break
 
     except Exception as e:
@@ -149,9 +155,7 @@ async def handle_mission_complex_stream(
         yield _json_event(
             {
                 "type": "assistant_error",
-                "payload": {
-                    "content": "\n🛑 **حدث خطأ حرج أثناء تنفيذ المهمة.**\n"
-                },
+                "payload": {"content": "\n🛑 **حدث خطأ حرج أثناء تنفيذ المهمة.**\n"},
             }
         )
 
@@ -165,6 +169,7 @@ def _extract_result_text(result: dict | str) -> str:
     if isinstance(result, dict):
         return result.get("output") or result.get("answer") or result.get("summary") or ""
     return str(result)
+
 
 def _create_structured_event(
     event_data: dict, sequence_id: int, current_iteration: int
@@ -245,9 +250,11 @@ def _format_event_to_message(event_data: dict) -> dict | None:
 
             if isinstance(result, dict):
                 if result.get("output") or result.get("answer") or result.get("summary"):
-                    result_text = result.get("output") or result.get("answer") or result.get("summary")
+                    result_text = (
+                        result.get("output") or result.get("answer") or result.get("summary")
+                    )
                 elif "results" in result and isinstance(result["results"], list):
-                     return {
+                    return {
                         "type": "tool_result_summary",
                         "payload": {
                             "summary": "تم تنفيذ المهام بنجاح.",

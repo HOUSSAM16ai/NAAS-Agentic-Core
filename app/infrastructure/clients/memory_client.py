@@ -27,6 +27,16 @@ class Concept(BaseModel):
     tags: list[str]
 
 
+class ReadinessResult(BaseModel):
+    concept_id: str
+    concept_name: str
+    is_ready: bool
+    readiness_score: float
+    missing_prerequisites: list[str]
+    weak_prerequisites: list[str]
+    recommendation: str
+
+
 class MemoryClient:
     """عميل للتواصل مع وكيل الذاكرة."""
 
@@ -121,6 +131,14 @@ class MemoryClient:
         payload = {"from_concept": from_concept, "to_concept": to_concept}
         data = await self._post("/knowledge/paths", payload=payload)
         return [Concept(**item) for item in data] if data else []
+
+    async def check_readiness(
+        self, concept_id: str, mastery_levels: dict[str, float]
+    ) -> ReadinessResult | None:
+        """فحص الجاهزية."""
+        payload = {"concept_id": concept_id, "mastery_levels": mastery_levels}
+        data = await self._post("/knowledge/readiness", payload)
+        return ReadinessResult(**data) if data else None
 
 
 # Singleton

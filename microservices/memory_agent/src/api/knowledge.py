@@ -7,6 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from microservices.memory_agent.src.domain.concept_graph import Concept
+from microservices.memory_agent.src.schemas.knowledge_schemas import (
+    ReadinessRequest,
+    ReadinessResponse,
+)
 from microservices.memory_agent.src.services.knowledge_service import KnowledgeService
 
 router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
@@ -80,3 +84,12 @@ async def get_learning_path(
 ):
     """يجد مسار تعلم."""
     return await service.get_learning_path(payload.from_concept, payload.to_concept)
+
+
+@router.post("/readiness", response_model=ReadinessResponse)
+async def check_readiness(
+    payload: ReadinessRequest,
+    service: KnowledgeService = Depends(get_service),
+):
+    """يتحقق من جاهزية الطالب لمفهوم معين."""
+    return await service.check_readiness(payload)

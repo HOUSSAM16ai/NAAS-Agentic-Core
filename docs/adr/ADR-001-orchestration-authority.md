@@ -1,42 +1,40 @@
 # ADR-001: Orchestration Authority
 
 ## Status
-Accepted
+Superseded (by Microservice Migration) -> **Active**
 
 ## Date
-2026-02-10
+2026-02-10 (Updated: 2026-10-27)
 
 ## Decision
-`orchestrator_service` (specifically the backend Overmind logic) is the **sole coordinator** of the system.
+The **`microservices/orchestrator_service`** is the **sole coordinator and authority** for mission execution and state management.
+
+The legacy Monolith orchestration logic (formerly in `app/services/overmind/orchestrator.py` and related modules) is **deprecated and removed**.
 
 ## Context
-The system was suffering from complex state management issues where the frontend attempted to infer the state of the mission or agent execution. This led to "hysterical" reconnects, conflicting UI states (connected + disconnected), and brittle UX.
+The system suffered from a "Split-Brain" architecture where both the Monolith and the Microservice attempted to manage mission state, leading to data inconsistencies and operational confusion.
 
-## Constraints
-1. **No Orchestration Logic in Frontend**: The frontend must not attempt to guess the next step or manage the state of the mission. It is a "dumb" terminal that renders events.
-2. **No Orchestration Logic in `app/services/chat`**: The chat service acts as a gateway/interface. It should not contain complex orchestration logic. It delegates to the `Overmind` or `orchestrator_service`.
+To resolve this, we strictly enforce the following:
+1.  **Single Source of Truth**: The `orchestrator_db` (managed by `orchestrator-service`) is the authoritative store for active mission execution state. The Monolith's `core_db` may store historical records or be synced eventually, but it does NOT drive execution.
+2.  **No Local Execution**: The Monolith (`core-kernel`) MUST NOT execute missions locally. All mission requests must be routed to the `orchestrator-service` via `OrchestratorClient` or direct API calls.
+3.  **Client-Only Role**: The `app/services/overmind` module in the Monolith is reduced to a **Client Proxy** and Type Definition library. It provides the interface for the rest of the Monolith to request work from the Orchestrator.
 
 ## Implementation
 
 ### Frontend Authority
 The frontend operates on a strict **Command -> Event** pattern:
-- **Command**: User sends a message or action (e.g., "Start Mission").
-- **Event**: The frontend listens for `agent:event` (via WebSocket).
+- **Command**: User sends a message or action (e.g., "Start Mission") -> API Gateway -> Orchestrator Service.
+- **Event**: The frontend listens for `agent:event` (via WebSocket from Orchestrator or Gateway Proxy).
 - The frontend **never** predicts the next state. It only renders what the backend reports.
 
-### Connection Management
-- The WebSocket connection is purely a transport layer for events.
-- UI state (e.g., input disabling) MUST NOT be coupled to the connection state in a blocking way.
-- Reconnection logic uses exponential backoff and does not trigger UI "flashing".
-
 ### Backend Authority
-- The `MissionComplexHandler` (or equivalent orchestrator) is the single source of truth.
-- It emits specific events (`phase_start`, `phase_completed`, `loop_start`) that the frontend consumes directly.
+- The `orchestrator-service` (Microservice) is the single source of truth.
+- It emits specific events (`phase_start`, `phase_completed`, `loop_start`) that consumers (Monolith, Frontend) subscribe to.
 
 ## Consequences
 - **Positive**:
-    - "Brain" logic is centralized.
-    - Frontend becomes significantly simpler and more robust.
-    - Adding new agents or phases does not require frontend code changes (if using generic event rendering).
+    - **Eliminated Split-Brain**: Only one service decides what happens next.
+    - **Decoupling**: The Monolith is no longer burdened with complex agent orchestration logic.
+    - **Scalability**: The Orchestrator can be scaled independently of the Monolith.
 - **Negative**:
-    - Network latency might cause a slight delay in state updates (acceptable for this use case).
+    - **Network Dependency**: The Monolith now depends on the Orchestrator Service availability to start missions.

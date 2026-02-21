@@ -10,10 +10,6 @@ from fastapi import FastAPI
 
 from app.core.openapi_contracts import compare_contract_to_runtime, detect_runtime_drift
 from app.main import create_app as create_core_app
-from microservices.memory_agent.main import create_app as create_memory_app
-from microservices.observability_service.main import app as observability_app
-from microservices.planning_agent.main import create_app as create_planning_app
-from microservices.user_service.main import create_app as create_user_app
 
 CONTRACTS_DIR = Path(__file__).resolve().parents[2] / "docs" / "contracts" / "openapi"
 
@@ -22,13 +18,37 @@ def _contract_path(filename: str) -> Path:
     return CONTRACTS_DIR / filename
 
 
+def _get_planning_app() -> FastAPI:
+    from microservices.planning_agent.main import create_app
+
+    return create_app()
+
+
+def _get_memory_app() -> FastAPI:
+    from microservices.memory_agent.main import create_app
+
+    return create_app()
+
+
+def _get_user_app() -> FastAPI:
+    from microservices.user_service.main import create_app
+
+    return create_app()
+
+
+def _get_observability_app() -> FastAPI:
+    from microservices.observability_service.main import app
+
+    return app
+
+
 def _build_cases() -> list[tuple[str, Callable[[], FastAPI] | FastAPI, str]]:
     return [
         ("core", lambda: create_core_app(enable_static_files=False), "core-api-v1.yaml"),
-        ("planning", create_planning_app, "planning_agent-openapi.json"),
-        ("memory", create_memory_app, "memory_agent-openapi.json"),
-        ("user", create_user_app, "user_service-openapi.json"),
-        ("observability", observability_app, "observability_service-openapi.json"),
+        ("planning", _get_planning_app, "planning_agent-openapi.json"),
+        ("memory", _get_memory_app, "memory_agent-openapi.json"),
+        ("user", _get_user_app, "user_service-openapi.json"),
+        ("observability", _get_observability_app, "observability_service-openapi.json"),
     ]
 
 

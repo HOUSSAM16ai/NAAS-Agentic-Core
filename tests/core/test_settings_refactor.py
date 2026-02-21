@@ -1,7 +1,6 @@
 from typing import ClassVar
 
 from app.core.settings.base import BaseServiceSettings
-from microservices.user_service.settings import UserServiceSettings
 
 
 def test_base_service_settings_defaults(monkeypatch):
@@ -26,6 +25,8 @@ def test_base_service_settings_defaults(monkeypatch):
 
 def test_user_service_settings_inheritance(monkeypatch):
     """Test that UserServiceSettings correctly inherits and sets defaults."""
+    from microservices.user_service.settings import UserServiceSettings
+
     # Ensure isolation from CI environment or conftest.py overrides
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("USER_DATABASE_URL", raising=False)
@@ -39,6 +40,8 @@ def test_user_service_settings_inheritance(monkeypatch):
 
 def test_user_service_settings_env_override(monkeypatch):
     """Test that env vars override defaults."""
+    from microservices.user_service.settings import UserServiceSettings
+
     monkeypatch.setenv("USER_DEBUG", "True")
     monkeypatch.setenv("USER_LOG_LEVEL", "DEBUG")
     monkeypatch.setenv("USER_DATABASE_URL", "sqlite:///env.db")

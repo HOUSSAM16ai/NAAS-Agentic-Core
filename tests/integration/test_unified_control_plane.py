@@ -1,17 +1,10 @@
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.core.domain.mission import MissionStatus
 from app.infrastructure.clients.orchestrator_client import MissionResponse
 from app.services.overmind.entrypoint import start_mission
-
-# Mock heavy dependencies BEFORE importing modules that use them
-sys.modules["app.services.overmind.factory"] = MagicMock()
-sys.modules["llama_index"] = MagicMock()
-sys.modules["llama_index.core"] = MagicMock()
-sys.modules["llama_index.core.schema"] = MagicMock()
 
 
 @pytest.mark.asyncio

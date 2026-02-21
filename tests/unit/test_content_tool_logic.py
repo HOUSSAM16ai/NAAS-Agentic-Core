@@ -1,16 +1,6 @@
 """Unit tests for content tool logic - aligned with ResearchClient decoupling."""
 
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch
-
-# Mock external modules BEFORE importing app modules
-sys.modules["dspy"] = MagicMock()
-sys.modules["llama_index"] = MagicMock()
-sys.modules["llama_index.core"] = MagicMock()
-sys.modules["llama_index.core.schema"] = MagicMock()
-sys.modules["llama_index.core.vector_stores"] = MagicMock()
-sys.modules["llama_index.embeddings.huggingface"] = MagicMock()
-sys.modules["llama_index.vector_stores.supabase"] = MagicMock()
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

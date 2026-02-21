@@ -3,18 +3,15 @@ Mission Complex Handler (Microservice).
 Handles the 'MISSION_COMPLEX' intent by starting a mission and streaming events.
 """
 
-import asyncio
 import json
 import logging
-import re
 from collections.abc import AsyncGenerator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from microservices.orchestrator_service.src.core.database import async_session_factory
 from microservices.orchestrator_service.src.core.event_bus import get_event_bus
 from microservices.orchestrator_service.src.models.mission import (
     MissionEventType,
-    MissionStatus,
 )
 from microservices.orchestrator_service.src.services.overmind.entrypoint import start_mission
 
@@ -73,7 +70,7 @@ async def handle_mission_complex_stream(
         current_iteration = 0
         sequence_id += 1
         run0_id = f"{mission_id}:{current_iteration}"
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         yield _json_event({
             "type": "RUN_STARTED",
@@ -178,7 +175,7 @@ def _create_structured_event(
     try:
         payload = event_data.get("payload_json", {}) or event_data.get("data", {})
         mission_id = event_data.get("mission_id")
-        timestamp = event_data.get("created_at") or datetime.now(timezone.utc).isoformat()
+        timestamp = event_data.get("created_at") or datetime.now(UTC).isoformat()
         if isinstance(timestamp, datetime):
             timestamp = timestamp.isoformat()
 

@@ -32,9 +32,6 @@ class PrerequisiteChecker:
     يتحقق من جاهزية الطالب لتعلم مفهوم جديد.
     """
 
-    MINIMUM_MASTERY = 0.5  # الحد الأدنى للإتقان
-    GOOD_MASTERY = 0.7  # الإتقان الجيد
-
     def __init__(self, memory_client: MemoryClient | None = None) -> None:
         self.client = memory_client or get_memory_client()
 
@@ -46,90 +43,38 @@ class PrerequisiteChecker:
         """
         يتحقق من جاهزية الطالب لمفهوم معين.
         """
-        # البحث عن المفهوم
-        concept = await self.client.get_concept(concept_id)
+        # بناء خريطة الإتقان
+        mastery_levels = {
+            topic_id: entry.mastery_score
+            for topic_id, entry in profile.topic_mastery.items()
+        }
 
-        if not concept:
-            # محاولة البحث بالموضوع
-            concept = await self.client.find_concept_by_topic(concept_id)
-            if concept:
-                concept_id = concept.concept_id
-            else:
-                return ReadinessReport(
-                    concept_id=concept_id,
-                    concept_name=concept_id,
-                    is_ready=True,  # مفهوم غير معروف، نسمح بالمتابعة
-                    readiness_score=0.5,
-                    missing_prerequisites=[],
-                    weak_prerequisites=[],
-                    recommendation="هذا المفهوم غير موجود في قاعدة البيانات.",
-                )
+        # استدعاء الخدمة المصغرة
+        result = await self.client.check_readiness(concept_id, mastery_levels)
 
-        prerequisites = await self.client.get_prerequisites(concept_id)
+        if not result:
+            # حالة الفشل أو عدم القدرة على الاتصال
+            logger.error(f"Failed to check readiness for {concept_id}")
+            return ReadinessReport(
+                concept_id=concept_id,
+                concept_name=concept_id,
+                is_ready=False,
+                readiness_score=0.0,
+                missing_prerequisites=[],
+                weak_prerequisites=[],
+                recommendation="تعذر التحقق من الجاهزية حالياً.",
+            )
 
-        missing = []
-        weak = []
-        total_score = 0.0
-
-        for prereq in prerequisites:
-            if prereq.concept_id in profile.topic_mastery:
-                mastery = profile.topic_mastery[prereq.concept_id].mastery_score
-                total_score += mastery
-
-                if mastery < self.MINIMUM_MASTERY:
-                    weak.append(prereq.name_ar)
-            else:
-                missing.append(prereq.name_ar)
-                total_score += 0  # لم يُدرس بعد
-
-        # حساب الجاهزية
-        readiness_score = (
-            total_score / len(prerequisites) if prerequisites else 1.0
-        )  # لا توجد متطلبات
-
-        is_ready = len(missing) == 0 and readiness_score >= self.MINIMUM_MASTERY
-
-        # بناء التوصية
-        recommendation = self._build_recommendation(concept.name_ar, missing, weak, readiness_score)
-
-        logger.info(
-            f"Readiness check for {concept_id}: ready={is_ready}, score={readiness_score:.0%}"
-        )
-
+        # تحويل النتيجة إلى التقرير المحلي
         return ReadinessReport(
-            concept_id=concept_id,
-            concept_name=concept.name_ar,
-            is_ready=is_ready,
-            readiness_score=readiness_score,
-            missing_prerequisites=missing,
-            weak_prerequisites=weak,
-            recommendation=recommendation,
+            concept_id=result.concept_id,
+            concept_name=result.concept_name,
+            is_ready=result.is_ready,
+            readiness_score=result.readiness_score,
+            missing_prerequisites=result.missing_prerequisites,
+            weak_prerequisites=result.weak_prerequisites,
+            recommendation=result.recommendation,
         )
-
-    def _build_recommendation(
-        self,
-        concept_name: str,
-        missing: list[str],
-        weak: list[str],
-        score: float,
-    ) -> str:
-        """يبني توصية للطالب."""
-
-        if not missing and not weak:
-            return f"🚀 أنت جاهز لتعلم {concept_name}! ابدأ الآن."
-
-        if missing:
-            topics = "، ".join(missing[:3])
-            return f"📚 قبل البدء بـ {concept_name}، تحتاج دراسة: {topics}"
-
-        if weak:
-            topics = "، ".join(weak[:3])
-            return f"📖 يُفضل مراجعة {topics} قبل البدء بـ {concept_name}"
-
-        if score < 0.5:
-            return f"⚠️ تحتاج تعزيز الأساسيات قبل {concept_name}"
-
-        return f"✅ يمكنك البدء بـ {concept_name} مع بعض المراجعة"
 
     async def get_learning_order(
         self,

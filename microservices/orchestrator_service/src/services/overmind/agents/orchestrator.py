@@ -2,6 +2,7 @@
 Orchestrator Agent (Ported).
 """
 
+import contextlib
 import json
 import re
 from collections.abc import AsyncGenerator
@@ -42,11 +43,11 @@ from microservices.orchestrator_service.src.services.overmind.utils.intent_detec
     ChatIntent,
     IntentDetector,
 )
-from microservices.orchestrator_service.src.services.overmind.utils.regex_intent_detector import (
-    RegexIntentDetector,
-)
 from microservices.orchestrator_service.src.services.overmind.utils.mission_complex import (
     handle_mission_complex_stream,
+)
+from microservices.orchestrator_service.src.services.overmind.utils.regex_intent_detector import (
+    RegexIntentDetector,
 )
 from microservices.orchestrator_service.src.services.overmind.utils.tools import ToolRegistry
 
@@ -146,10 +147,8 @@ class OrchestratorAgent:
             if isinstance(val, ChatIntent):
                 intent = val
             elif isinstance(val, str):
-                try:
+                with contextlib.suppress(ValueError):
                     intent = ChatIntent(val)
-                except ValueError:
-                    pass
 
         if not intent:
             intent_result = await self.intent_detector.detect(normalized)

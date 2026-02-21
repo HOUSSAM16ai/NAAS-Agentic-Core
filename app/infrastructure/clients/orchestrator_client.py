@@ -7,6 +7,7 @@ Decouples the Monolith from the Overmind Orchestration Logic.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from typing import Any, Final
 
 import httpx
@@ -117,6 +118,36 @@ class OrchestratorClient:
         except Exception as e:
             logger.error(f"Failed to get mission events {mission_id}: {e}")
             return []
+
+    async def chat_with_agent(
+        self,
+        question: str,
+        user_id: int,
+        conversation_id: int | None = None,
+        history_messages: list[dict[str, str]] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Chat with the Orchestrator Agent (Microservice).
+        """
+        url = f"{self.base_url}/agent/chat"
+        payload = {
+            "question": question,
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+            "history_messages": history_messages or [],
+            "context": context or {},
+        }
+
+        client = await self._get_client()
+        try:
+            async with client.stream("POST", url, json=payload) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_text():
+                    yield chunk
+        except Exception as e:
+            logger.error(f"Failed to chat with agent: {e}", exc_info=True)
+            yield f"Error connecting to agent: {e}"
 
 
 # Singleton

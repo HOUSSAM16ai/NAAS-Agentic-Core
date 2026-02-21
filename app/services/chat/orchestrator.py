@@ -24,7 +24,7 @@ from app.core.agents.system_principles import (
 )
 from app.core.ai_gateway import AIClient
 from app.core.patterns.strategy import Strategy, StrategyRegistry
-from app.services.chat.agents.orchestrator import OrchestratorAgent
+from app.infrastructure.clients.orchestrator_client import orchestrator_client
 from app.services.chat.context import ChatContext
 from app.services.chat.context_service import get_context_service
 from app.services.chat.handlers.strategy_handlers import (
@@ -212,31 +212,42 @@ class ChatOrchestrator:
 
         if is_agent_intent:
             logger.info(
-                f"Delegating intent {intent_result.intent} to OrchestratorAgent",
+                f"Delegating intent {intent_result.intent} to OrchestratorAgent (Microservice)",
                 extra={"user_id": user_id},
             )
 
             # بناء السياق المشترك
             system_context = self._build_overmind_system_context()
-            agent = OrchestratorAgent(ai_client, self.tool_registry)
 
+            # DELEGATION: Call Microservice
             context = {
-                "user_id": user_id,
-                "conversation_id": conversation_id,
                 "intent": intent_result.intent,
                 "system_context": system_context,
-                "history_messages": history_messages,
+                # We can pass more context if needed
             }
 
             full_response_buffer = []
-            async for chunk in agent.run(question, context=context):
-                full_response_buffer.append(chunk)
-                yield chunk
 
-            # تخزين في الكاش
-            full_response = "".join(full_response_buffer)
-            if full_response:
-                await self._semantic_cache.set(question, full_response)
+            try:
+                # Use the new chat_with_agent method
+                async for chunk in orchestrator_client.chat_with_agent(
+                    question=question,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    history_messages=history_messages,
+                    context=context
+                ):
+                    full_response_buffer.append(chunk)
+                    yield chunk
+
+                # تخزين في الكاش
+                full_response = "".join(full_response_buffer)
+                if full_response:
+                    await self._semantic_cache.set(question, full_response)
+
+            except Exception as e:
+                logger.error(f"Failed to delegate to microservice agent: {e}", exc_info=True)
+                yield "عذرًا، حدث خطأ أثناء الاتصال بالوكيل الذكي."
 
             return
 

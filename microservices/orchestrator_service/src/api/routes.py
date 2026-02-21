@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -10,6 +11,8 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from microservices.orchestrator_service.src.core.config import get_settings
@@ -20,6 +23,10 @@ from microservices.orchestrator_service.src.core.security import (
     extract_websocket_auth,
 )
 from microservices.orchestrator_service.src.models.mission import Mission
+from microservices.orchestrator_service.src.services.llm.client import get_ai_client
+from microservices.orchestrator_service.src.services.overmind.agents.orchestrator import (
+    OrchestratorAgent,
+)
 from microservices.orchestrator_service.src.services.overmind.domain.api_schemas import (
     MissionCreate,
     MissionEventResponse,
@@ -27,12 +34,21 @@ from microservices.orchestrator_service.src.services.overmind.domain.api_schemas
 )
 from microservices.orchestrator_service.src.services.overmind.entrypoint import start_mission
 from microservices.orchestrator_service.src.services.overmind.state import MissionStateManager
+from microservices.orchestrator_service.src.services.overmind.utils.tools import tool_registry
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     tags=["Overmind (Super Agent)"],
 )
+
+
+class ChatRequest(BaseModel):
+    question: str
+    user_id: int
+    conversation_id: int | None = None
+    history_messages: list[dict[str, str]] = []
+    context: dict[str, Any] = {}
 
 
 def _get_mission_status_payload(status: str) -> dict[str, str | None]:
@@ -53,6 +69,39 @@ def _serialize_mission(mission: Mission) -> MissionResponse:
         result={"summary": mission.result_summary} if mission.result_summary else None,
         steps=[],
     )
+
+
+@router.post("/agent/chat", summary="Chat with Orchestrator Agent")
+async def chat_with_agent_endpoint(
+    request: ChatRequest,
+) -> StreamingResponse:
+    """
+    Direct chat endpoint for the Orchestrator Agent (Microservice).
+    Streams the response chunk by chunk.
+    """
+    logger.info(f"Agent Chat Request: {request.question[:50]}... User: {request.user_id}")
+
+    ai_client = get_ai_client()
+    agent = OrchestratorAgent(ai_client, tool_registry)
+
+    # Prepare context
+    context = request.context.copy()
+    context.update({
+        "user_id": request.user_id,
+        "conversation_id": request.conversation_id,
+        "history_messages": request.history_messages,
+    })
+
+    async def _stream_generator():
+        try:
+            run_result = agent.run(request.question, context=context)
+            async for chunk in run_result:
+                yield chunk
+        except Exception as e:
+            logger.error(f"Agent Chat Error: {e}", exc_info=True)
+            yield f"Error: {e}"
+
+    return StreamingResponse(_stream_generator(), media_type="text/plain")
 
 
 @router.post("/missions", response_model=MissionResponse, summary="Launch Mission")

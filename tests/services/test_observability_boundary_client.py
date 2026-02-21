@@ -1,6 +1,9 @@
 from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
+
 from app.services.boundaries.observability_client import ObservabilityServiceClient
+
 
 @pytest.mark.asyncio
 async def test_get_aiops_metrics_transformation():

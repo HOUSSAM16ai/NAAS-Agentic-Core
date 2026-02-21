@@ -18,9 +18,6 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.core.event_bus_impl import Event, EventBus
-from microservices.memory_agent.main import create_app as create_memory_app
-from microservices.planning_agent.main import create_app as create_planning_app
-from microservices.user_service.main import create_app as create_user_app
 
 TEST_SECRET_KEY = os.environ.get("SECRET_KEY", "super_secret_key_change_in_production")
 
@@ -45,18 +42,24 @@ def event_bus() -> EventBus:
 @pytest.fixture
 def planning_app() -> FastAPI:
     """ينشئ تطبيق Planning Agent للاختبار."""
+    from microservices.planning_agent.main import create_app as create_planning_app
+
     return create_planning_app()
 
 
 @pytest.fixture
 def memory_app() -> FastAPI:
     """ينشئ تطبيق Memory Agent للاختبار."""
+    from microservices.memory_agent.main import create_app as create_memory_app
+
     return create_memory_app()
 
 
 @pytest.fixture
 def user_app() -> FastAPI:
     """ينشئ تطبيق User Service للاختبار."""
+    from microservices.user_service.main import create_app as create_user_app
+
     return create_user_app()
 
 

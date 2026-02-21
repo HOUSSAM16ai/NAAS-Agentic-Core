@@ -2,11 +2,11 @@
 Tests for User Service Authentication.
 """
 import os
-import pytest
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
+
 import jwt
+import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock
 
 # Set environment variables for testing
 os.environ["USER_DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
@@ -16,7 +16,7 @@ os.environ["USER_SECRET_KEY"] = TEST_SECRET
 os.environ["USER_ENVIRONMENT"] = "testing"
 
 from microservices.user_service.main import create_app
-from microservices.user_service.database import init_db
+
 
 @pytest.fixture(scope="module")
 def service_token():

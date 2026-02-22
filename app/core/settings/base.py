@@ -136,6 +136,7 @@ class AppSettings(BaseServiceSettings):
 
     # Service URLs
     USER_SERVICE_URL: str | None = Field(None, description="User service base URL")
+    ORCHESTRATOR_SERVICE_URL: str | None = Field(None, description="Orchestrator Service URL")
     RESEARCH_AGENT_URL: str | None = Field(None, description="Research Agent URL")
     PLANNING_AGENT_URL: str | None = Field(None, description="Planning Agent URL")
     REASONING_AGENT_URL: str | None = Field(None, description="Reasoning Agent URL")
@@ -172,6 +173,7 @@ class AppSettings(BaseServiceSettings):
 
     @field_validator(
         "USER_SERVICE_URL",
+        "ORCHESTRATOR_SERVICE_URL",
         "RESEARCH_AGENT_URL",
         "PLANNING_AGENT_URL",
         "REASONING_AGENT_URL",
@@ -200,6 +202,7 @@ class AppSettings(BaseServiceSettings):
         # Map field names to (localhost_port, docker_host, docker_port)
         service_map = {
             "USER_SERVICE_URL": ("8003", "user-service", "8000"),
+            "ORCHESTRATOR_SERVICE_URL": ("8006", "orchestrator-service", "8000"),
             "RESEARCH_AGENT_URL": ("8006", "research-agent", "8000"),
             "PLANNING_AGENT_URL": ("8001", "planning-agent", "8000"),
             "REASONING_AGENT_URL": ("8007", "reasoning-agent", "8000"),

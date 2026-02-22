@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import json
 import logging
+import socket
 from collections.abc import AsyncGenerator
 from typing import Any, Final
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel
@@ -45,13 +47,44 @@ class OrchestratorClient:
         # The Monolith (Core Kernel) might not have it set in its env if not updated.
         # But we assume it should be reachable.
         env_url = getattr(settings, "ORCHESTRATOR_SERVICE_URL", None)
-        resolved_url = base_url or env_url or DEFAULT_ORCHESTRATOR_URL
-        self.base_url = resolved_url.rstrip("/")
+        initial_url = base_url or env_url or DEFAULT_ORCHESTRATOR_URL
+
+        # Robustly resolve the URL to handle environment mismatches (e.g. host vs docker)
+        self.base_url = self._resolve_url(initial_url).rstrip("/")
+
         self.config = HTTPClientConfig(
             name="orchestrator-client",
             timeout=60.0,
             max_connections=50,
         )
+
+    def _resolve_url(self, url: str) -> str:
+        """
+        Attempts to resolve the hostname in the URL.
+        If resolution fails (e.g. [Errno -2] Name or service not known),
+        falls back to 'localhost' while preserving the port.
+        """
+        try:
+            parsed = urlparse(url)
+            hostname = parsed.hostname
+            if not hostname:
+                return url
+
+            # Try to resolve the hostname
+            socket.gethostbyname(hostname)
+            return url
+        except socket.gaierror:
+            logger.warning(
+                f"Could not resolve hostname '{hostname}' in '{url}'. "
+                "Falling back to localhost (Dev/Host Environment detected)."
+            )
+            # Reconstruct with localhost
+            port = parsed.port
+            new_netloc = f"localhost:{port}" if port else "localhost"
+            return parsed._replace(netloc=new_netloc).geturl()
+        except Exception as e:
+            logger.warning(f"Error checking URL resolution for {url}: {e}")
+            return url
 
     async def _get_client(self) -> httpx.AsyncClient:
         return get_http_client(self.config)

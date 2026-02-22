@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routers.ws_auth import extract_websocket_auth
 from app.api.schemas.admin import ConversationDetailsResponse, ConversationSummaryResponse
-from app.core.ai_gateway import AIClient, get_ai_client
 from app.core.config import get_settings
 from app.core.database import async_session_factory, get_db
 from app.core.di import get_logger

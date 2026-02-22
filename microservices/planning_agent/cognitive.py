@@ -15,6 +15,7 @@ def _dspy_dependencies_available() -> bool:
 
     required_specs = (
         "dspy",
+        "json_repair",
         "litellm",
         "openai",
         "openai.types.beta.threads.message_content",

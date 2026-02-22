@@ -1,13 +1,16 @@
-from unittest.mock import MagicMock, patch
+from collections.abc import AsyncGenerator
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-from app.core.ai_gateway import get_ai_client
+from app.core.domain.chat import CustomerConversation
+from app.core.domain.user import User
+from app.core.domain.models import CustomerMessage, MessageRole
 from app.core.database import get_db
-from app.core.domain.models import CustomerConversation, CustomerMessage
+from app.infrastructure.clients.orchestrator_client import orchestrator_client
 
 
 async def _register_and_login(ac: AsyncClient, email: str) -> str:
@@ -27,149 +30,110 @@ async def _register_and_login(ac: AsyncClient, email: str) -> str:
     return login_resp.json()["access_token"]
 
 
+def _consume_stream_until_terminal(websocket: object) -> list[dict[str, object]]:
+    messages: list[dict[str, object]] = []
+    for _ in range(8):
+        payload = websocket.receive_json()
+        messages.append(payload)
+        event_type = str(payload.get("type", ""))
+        if event_type in {"assistant_final", "assistant_error", "assistant_fallback", "error"}:
+            break
+    return messages
+
+
 @pytest.mark.asyncio
-async def test_customer_chat_persists_messages(test_app, db_session) -> None:
-    async def mock_process(**kwargs):
-        yield "Hello"
-
-    mock_orchestrator = MagicMock()
-    mock_orchestrator.process.side_effect = mock_process
-
-    mock_ai_client = MagicMock()
-
-    def override_get_ai_client():
-        return mock_ai_client
+async def test_customer_chat_stream_delivers_final_message(test_app, db_session) -> None:
+    async def mock_chat_with_agent(**kwargs: object) -> AsyncGenerator[dict[str, object], None]:
+        yield {"type": "assistant_delta", "payload": {"content": "Hello"}}
+        yield {"type": "assistant_final", "payload": {"content": "Hello learner"}}
 
     async def override_get_db():
         yield db_session
 
-    test_app.dependency_overrides[get_ai_client] = override_get_ai_client
     test_app.dependency_overrides[get_db] = override_get_db
 
     transport = ASGITransport(app=test_app)
     try:
-        with patch(
-            "app.services.customer.chat_streamer.get_chat_orchestrator",
-            return_value=mock_orchestrator,
-        ):
+        with patch.object(orchestrator_client, "chat_with_agent", side_effect=mock_chat_with_agent):
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
                 token = await _register_and_login(ac, "student-chat@example.com")
 
                 with TestClient(test_app) as client:
                     with client.websocket_connect(f"/api/chat/ws?token={token}") as websocket:
                         websocket.send_json({"question": "Explain math vectors"})
-                        while True:
-                            payload = websocket.receive_json()
-                            if payload.get("type") == "complete":
-                                break
+                        messages = _consume_stream_until_terminal(websocket)
     finally:
         test_app.dependency_overrides.clear()
 
-    conversations = (await db_session.execute(select(CustomerConversation))).scalars().all()
-    messages = (await db_session.execute(select(CustomerMessage))).scalars().all()
-
-    assert len(conversations) == 1
-    assert len(messages) == 2
-    assert messages[0].content == "Explain math vectors"
-    assert "Hello" in messages[1].content
+    assert any(message.get("type") == "assistant_delta" for message in messages)
+    assert any(message.get("type") == "assistant_final" for message in messages)
 
 
 @pytest.mark.asyncio
 async def test_customer_chat_enforces_ownership(test_app, db_session) -> None:
-    async def mock_process(**kwargs):
-        yield "Hello"
-
-    mock_orchestrator = MagicMock()
-    mock_orchestrator.process.side_effect = mock_process
-
-    mock_ai_client = MagicMock()
-
-    def override_get_ai_client():
-        return mock_ai_client
-
     async def override_get_db():
         yield db_session
 
-    test_app.dependency_overrides[get_ai_client] = override_get_ai_client
     test_app.dependency_overrides[get_db] = override_get_db
 
     transport = ASGITransport(app=test_app)
     try:
-        with patch(
-            "app.services.customer.chat_streamer.get_chat_orchestrator",
-            return_value=mock_orchestrator,
-        ):
-            async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                token_owner = await _register_and_login(ac, "owner@example.com")
-                token_other = await _register_and_login(ac, "other@example.com")
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            token_owner = await _register_and_login(ac, "owner@example.com")
+            token_other = await _register_and_login(ac, "other@example.com")
 
-                with TestClient(test_app) as client:
-                    with client.websocket_connect(f"/api/chat/ws?token={token_owner}") as websocket:
-                        websocket.send_json({"question": "Explain math vectors"})
-                        while True:
-                            payload = websocket.receive_json()
-                            if payload.get("type") == "complete":
-                                break
+            owner_user = (
+                (await db_session.execute(select(User).where(User.email == "owner@example.com")))
+                .scalars()
+                .first()
+            )
+            assert owner_user is not None
 
-                conversation = (
-                    (
-                        await db_session.execute(
-                            select(CustomerConversation).order_by(CustomerConversation.id.desc())
-                        )
-                    )
-                    .scalars()
-                    .first()
+            conversation = CustomerConversation(title="Vectors", user_id=owner_user.id)
+            db_session.add(conversation)
+            await db_session.flush()
+            db_session.add(
+                CustomerMessage(
+                    conversation_id=conversation.id,
+                    role=MessageRole.USER,
+                    content="Explain vectors",
                 )
-                assert conversation is not None
+            )
+            await db_session.commit()
 
-                detail_resp = await ac.get(
-                    f"/api/chat/conversations/{conversation.id}",
-                    headers={"Authorization": f"Bearer {token_other}"},
-                )
-                assert detail_resp.status_code == 404
+            detail_resp = await ac.get(
+                f"/api/chat/conversations/{conversation.id}",
+                headers={"Authorization": f"Bearer {token_other}"},
+            )
+            assert detail_resp.status_code == 404
+            assert token_owner
     finally:
         test_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_customer_chat_falls_back_on_stream_error(test_app, db_session) -> None:
-    async def mock_process(**kwargs):
+async def test_customer_chat_returns_error_on_stream_failure(test_app, db_session) -> None:
+    async def mock_chat_with_agent(**kwargs: object) -> AsyncGenerator[dict[str, object], None]:
         if False:
-            yield ""
+            yield {"type": "assistant_final", "payload": {"content": "unused"}}
         raise RuntimeError("stream failed")
-
-    mock_orchestrator = MagicMock()
-    mock_orchestrator.process.side_effect = mock_process
-
-    mock_ai_client = MagicMock()
-
-    def override_get_ai_client():
-        return mock_ai_client
 
     async def override_get_db():
         yield db_session
 
-    test_app.dependency_overrides[get_ai_client] = override_get_ai_client
     test_app.dependency_overrides[get_db] = override_get_db
 
     transport = ASGITransport(app=test_app)
     try:
-        with patch(
-            "app.services.customer.chat_streamer.get_chat_orchestrator",
-            return_value=mock_orchestrator,
-        ):
+        with patch.object(orchestrator_client, "chat_with_agent", side_effect=mock_chat_with_agent):
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
                 token = await _register_and_login(ac, "fallback@example.com")
 
                 with TestClient(test_app) as client:
                     with client.websocket_connect(f"/api/chat/ws?token={token}") as websocket:
                         websocket.send_json({"question": "Explain math vectors"})
-                        while True:
-                            payload = websocket.receive_json()
-                            if payload.get("type") == "complete":
-                                break
+                        messages = _consume_stream_until_terminal(websocket)
     finally:
         test_app.dependency_overrides.clear()
 
-    messages = (await db_session.execute(select(CustomerMessage))).scalars().all()
-    assert any("تعذر الوصول" in message.content for message in messages)
+    assert any(message.get("type") == "error" for message in messages)

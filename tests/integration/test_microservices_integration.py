@@ -20,10 +20,12 @@ from httpx import ASGITransport, AsyncClient
 from app.core.event_bus_impl import Event, EventBus
 
 
+SERVICE_TEST_SECRET_KEY = "test-secret-key-for-ci-pipeline"
+
+
 def get_auth_headers() -> dict[str, str]:
     """توليد ترويسة مصادقة صالحة للخدمات."""
-    # Fetch SECRET_KEY dynamically to ensure it picks up the value set by conftest.py
-    secret_key = os.environ.get("SECRET_KEY", "super_secret_key_change_in_production")
+    secret_key = SERVICE_TEST_SECRET_KEY
     payload = {
         "sub": "api-gateway",
         "exp": datetime.now(UTC) + timedelta(minutes=5),
@@ -43,7 +45,10 @@ def event_bus() -> EventBus:
 def planning_app() -> FastAPI:
     """ينشئ تطبيق Planning Agent للاختبار."""
     from microservices.planning_agent.main import create_app as create_planning_app
+    from microservices.planning_agent.settings import get_settings as get_planning_settings
 
+    os.environ["SECRET_KEY"] = SERVICE_TEST_SECRET_KEY
+    get_planning_settings.cache_clear()
     return create_planning_app()
 
 
@@ -51,7 +56,10 @@ def planning_app() -> FastAPI:
 def memory_app() -> FastAPI:
     """ينشئ تطبيق Memory Agent للاختبار."""
     from microservices.memory_agent.main import create_app as create_memory_app
+    from microservices.memory_agent.settings import get_settings as get_memory_settings
 
+    os.environ["SECRET_KEY"] = SERVICE_TEST_SECRET_KEY
+    get_memory_settings.cache_clear()
     return create_memory_app()
 
 
@@ -59,7 +67,10 @@ def memory_app() -> FastAPI:
 def user_app() -> FastAPI:
     """ينشئ تطبيق User Service للاختبار."""
     from microservices.user_service.main import create_app as create_user_app
+    from microservices.user_service.settings import get_settings as get_user_settings
 
+    os.environ["SECRET_KEY"] = SERVICE_TEST_SECRET_KEY
+    get_user_settings.cache_clear()
     return create_user_app()
 
 

@@ -51,13 +51,13 @@ async def get_current_user(
         if e.response.status_code == 401:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token or expired session"
-            )
+            ) from e
         raise e
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Auth service unavailable: {e}",
-        )
+        ) from e
 
     if not user_resp.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive")

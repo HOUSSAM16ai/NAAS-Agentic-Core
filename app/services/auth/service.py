@@ -65,7 +65,7 @@ class AuthService:
             if e.response.status_code in {409, 400}:
                 raise HTTPException(
                     status_code=400, detail="Registration failed (Email likely exists)"
-                )
+                ) from e
             raise e
 
     async def authenticate(
@@ -87,9 +87,9 @@ class AuthService:
             return user
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                raise HTTPException(status_code=401, detail="Invalid credentials")
+                raise HTTPException(status_code=401, detail="Invalid credentials") from e
             if e.response.status_code == 403:
-                raise HTTPException(status_code=403, detail="Account disabled")
+                raise HTTPException(status_code=403, detail="Account disabled") from e
             raise e
 
     async def issue_tokens(
@@ -122,7 +122,7 @@ class AuthService:
             }
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                raise HTTPException(status_code=401, detail="Invalid refresh token")
+                raise HTTPException(status_code=401, detail="Invalid refresh token") from e
             raise e
 
     async def logout(
@@ -172,8 +172,8 @@ class AuthService:
             await self.client.login(user.email, password)
             # If success, issue local reauth token
             return self.crypto.encode_reauth_token(user)
-        except Exception:
-            raise HTTPException(status_code=401, detail="Re-authentication required")
+        except Exception as e:
+            raise HTTPException(status_code=401, detail="Re-authentication required") from e
 
     async def verify_reauth_proof(self, token: str, user: User, **kwargs) -> None:
         # Local verification

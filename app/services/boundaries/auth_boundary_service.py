@@ -62,11 +62,11 @@ class AuthBoundaryService:
                 # Check detail
                 detail = e.response.json().get("detail", "")
                 if "already registered" in str(detail) or "exists" in str(detail):
-                    raise HTTPException(status_code=400, detail="Email already registered")
+                    raise HTTPException(status_code=400, detail="Email already registered") from e
             raise e
         except Exception as e:
             logger.error(f"Registration failed: {e}")
-            raise HTTPException(status_code=500, detail="Registration service unavailable")
+            raise HTTPException(status_code=500, detail="Registration service unavailable") from e
 
     async def authenticate_user(
         self, email: str, password: str, request: Request
@@ -103,7 +103,7 @@ class AuthBoundaryService:
             # التحقق الشبحي (محاكاة التأخير المحلي إذا لزم الأمر، لكن الشبكة تضيف تأخيراً أصلاً)
             # chrono_shield.phantom_verify(password)
             logger.warning(f"Failed login attempt for {email}: {e}")
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+            raise HTTPException(status_code=401, detail="Invalid email or password") from e
 
     async def get_current_user(self, token: str) -> dict[str, object]:
         """
@@ -114,13 +114,13 @@ class AuthBoundaryService:
             return resp.model_dump()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                raise HTTPException(status_code=401, detail="Invalid token")
+                raise HTTPException(status_code=401, detail="Invalid token") from e
             if e.response.status_code == 404:
-                raise HTTPException(status_code=404, detail="User not found")
+                raise HTTPException(status_code=404, detail="User not found") from e
             raise e
         except Exception as e:
             logger.error(f"Get user failed: {e}")
-            raise HTTPException(status_code=401, detail="Invalid token or service error")
+            raise HTTPException(status_code=401, detail="Invalid token or service error") from e
 
     @staticmethod
     def extract_token_from_request(request: Request) -> str:

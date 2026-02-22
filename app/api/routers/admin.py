@@ -27,12 +27,10 @@ from app.core.database import async_session_factory, get_db
 from app.core.di import get_logger
 from app.core.domain.user import User
 from app.deps.auth import CurrentUser, get_current_user, require_roles
+from app.infrastructure.clients.orchestrator_client import orchestrator_client
 from app.infrastructure.clients.user_client import user_client
 from app.services.auth.token_decoder import decode_user_id
 from app.services.boundaries.admin_chat_boundary_service import AdminChatBoundaryService
-from app.services.chat.contracts import ChatDispatchRequest
-from app.services.chat.dispatcher import ChatRoleDispatcher, build_chat_dispatcher
-from app.services.chat.orchestrator import ChatOrchestrator
 from app.services.rbac import ADMIN_ROLE
 
 logger = get_logger(__name__)
@@ -132,11 +130,6 @@ def get_admin_service(db: AsyncSession = Depends(get_db)) -> AdminChatBoundarySe
     return AdminChatBoundaryService(db)
 
 
-def get_chat_dispatcher(db: AsyncSession = Depends(get_db)) -> ChatRoleDispatcher:
-    """تبعية للحصول على موزّع الدردشة حسب الدور."""
-    return build_chat_dispatcher(db)
-
-
 # -----------------------------------------------------------------------------
 # Endpoints
 # -----------------------------------------------------------------------------
@@ -164,9 +157,6 @@ async def get_admin_user_count() -> AdminUserCountResponse:
 @router.websocket("/api/chat/ws")
 async def chat_stream_ws(
     websocket: WebSocket,
-    ai_client: AIClient = Depends(get_ai_client),
-    dispatcher: ChatRoleDispatcher = Depends(get_chat_dispatcher),
-    session_factory: Callable[[], AsyncSession] = Depends(get_session_factory),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """
@@ -214,39 +204,65 @@ async def chat_stream_ws(
                 continue
 
             mission_type = payload.get("mission_type")
-            metadata = {}
+            context = {}
             if mission_type:
-                metadata["mission_type"] = mission_type
+                context["intent"] = mission_type
 
-            dispatch_request = ChatDispatchRequest(
-                question=question,
-                conversation_id=payload.get("conversation_id"),
-                ai_client=ai_client,
-                session_factory=session_factory,
-                metadata=metadata,
-            )
+            # Additional context for Admin
+            context["role"] = "admin"
+
+            content_delivered = False
 
             try:
-                dispatch_result = await ChatOrchestrator.dispatch(
-                    user=actor,
-                    request=dispatch_request,
-                    dispatcher=dispatcher,
-                )
-            except HTTPException as exc:
+                # Use OrchestratorClient (Microservice)
+                # This replaces the legacy ChatOrchestrator.dispatch logic
+                async for event in orchestrator_client.chat_with_agent(
+                    question=question,
+                    user_id=actor.id,
+                    conversation_id=payload.get("conversation_id"),
+                    history_messages=[],  # Managed by Microservice
+                    context=context,
+                ):
+                    if isinstance(event, dict):
+                        evt_type = str(event.get("type", ""))
+                        if evt_type in (
+                            "assistant_delta",
+                            "assistant_final",
+                            "assistant_error",
+                            "tool_result_summary",
+                        ):
+                            content_delivered = True
+                        await websocket.send_json(event)
+                    else:
+                        content_delivered = True
+                        await websocket.send_json(
+                            {"type": "assistant_delta", "payload": {"content": str(event)}}
+                        )
+
+            except Exception as exc:
+                logger.error(f"Error in admin chat stream: {exc}", exc_info=True)
                 await websocket.send_json(
                     {
                         "type": "error",
-                        "payload": {"details": exc.detail, "status_code": exc.status_code},
+                        "payload": {"details": str(exc), "status_code": 500},
                     }
                 )
                 continue
 
-            await websocket.send_json(
-                {"type": "status", "payload": {"status_code": dispatch_result.status_code}}
-            )
-
-            async for event in dispatch_result.stream:
-                await websocket.send_json(event)
+            # Output Contract: Ensure something always appears
+            if not content_delivered:
+                logger.warning(
+                    "Output Guard triggered: Admin Stream ended without content.",
+                    extra={"user_id": actor.id},
+                )
+                await websocket.send_json(
+                    {
+                        "type": "assistant_fallback",
+                        "payload": {
+                            "content": "عذراً، لم أتمكن من استخراج نتيجة نهائية. يرجى مراجعة سجلات النظام."
+                        },
+                    }
+                )
 
     except WebSocketDisconnect:
         logger.info("Admin WebSocket disconnected")

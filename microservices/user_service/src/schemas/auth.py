@@ -51,6 +51,10 @@ class UserResponse(RobustBaseModel):
     )
     email: str
     is_admin: bool = False
+    is_active: bool = True
+    status: str = "active"
+    permissions: list[str] = Field(default_factory=list)
+    roles: list[str] = Field(default_factory=list)
 
     @field_validator("full_name", mode="after")
     @classmethod
@@ -67,6 +71,7 @@ class UserResponse(RobustBaseModel):
 
 class AuthResponse(RobustBaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "Bearer"
     user: UserResponse
     status: str = "success"

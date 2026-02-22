@@ -26,8 +26,8 @@ from app.api.schemas.ums import (
     TokenPair,
     UserOut,
 )
+from app.core.database import get_db
 from app.core.domain.audit import AuditLog
-from app.core.domain.user import Role, User, UserRole, UserStatus
 from app.deps.auth import CurrentUser, get_auth_service, get_current_user, require_permissions
 from app.middleware.rate_limiter_middleware import rate_limit
 from app.services.audit import AuditService
@@ -54,6 +54,13 @@ def _audit_context(request: Request) -> tuple[str | None, str | None]:
     return client_ip, user_agent
 
 
+def _get_token(request: Request) -> str:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    return auth_header.split(" ")[1]
+
+
 async def _enforce_recent_auth(
     *,
     request: Request,
@@ -77,8 +84,15 @@ async def _enforce_recent_auth(
         )
         return
 
-    if password and current.user.check_password(password):
-        return
+    # For password check, we need to verify against microservice via login
+    # But current.user doesn't have password.
+    # We must use client.login with provided password.
+    if password:
+        try:
+            await auth_service.client.login(current.user.email, password)
+            return
+        except Exception:
+            pass
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Re-authentication required"
@@ -110,15 +124,13 @@ async def get_me(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> UserOut:
     """إرجاع بيانات الحساب الحالية بما في ذلك الأدوار."""
-
-    roles = await auth_service.rbac.user_roles(current.user.id)
     return UserOut(
         id=current.user.id,
         email=current.user.email,
         full_name=current.user.full_name,
         is_active=current.user.is_active,
-        status=current.user.status,
-        roles=roles,
+        status=current.user.status,  # Assuming status matches UserStatus enum value or string
+        roles=current.roles,
     )
 
 
@@ -130,23 +142,23 @@ async def update_me(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> UserOut:
     """تحديث الاسم الكامل أو البريد الإلكتروني للمستخدم الحالي مع تدقيق التغيير."""
+    token = _get_token(request)
+    _client_ip, _user_agent = _audit_context(request)
 
-    client_ip, user_agent = _audit_context(request)
-    updated = await auth_service.update_profile(
-        user=current.user,
-        full_name=payload.full_name,
-        email=payload.email,
-        ip=client_ip,
-        user_agent=user_agent,
+    # Use client directly via auth_service
+    updated_out = await auth_service.client.update_me(
+        token=token, full_name=payload.full_name, email=payload.email
     )
-    roles = await auth_service.rbac.user_roles(updated.id)
+
+    # Return UserOut directly from client response
+    # Client UserOut matches schema UserOut mostly
     return UserOut(
-        id=updated.id,
-        email=updated.email,
-        full_name=updated.full_name,
-        is_active=updated.is_active,
-        status=updated.status,
-        roles=roles,
+        id=updated_out.id,
+        email=updated_out.email,
+        full_name=updated_out.full_name,
+        is_active=updated_out.is_active,
+        status=updated_out.status,
+        roles=updated_out.roles,
     )
 
 
@@ -158,14 +170,11 @@ async def change_password(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
     """تغيير كلمة المرور وإبطال رموز التحديث القديمة."""
+    token = _get_token(request)
+    _client_ip, _user_agent = _audit_context(request)
 
-    client_ip, user_agent = _audit_context(request)
-    await auth_service.change_password(
-        user=current.user,
-        current_password=payload.current_password,
-        new_password=payload.new_password,
-        ip=client_ip,
-        user_agent=user_agent,
+    await auth_service.client.change_password(
+        token=token, current_pass=payload.current_password, new_pass=payload.new_password
     )
     return {"status": "password_changed"}
 
@@ -240,10 +249,8 @@ async def request_password_reset(
 ) -> PasswordResetResponse:
     """طلب إعادة تعيين كلمة المرور دون كشف وجود الحساب."""
 
-    client_ip, user_agent = _audit_context(request)
-    token, expires_in = await auth_service.request_password_reset(
-        email=payload.email, ip=client_ip, user_agent=user_agent
-    )
+    _client_ip, _user_agent = _audit_context(request)
+    token, expires_in = await auth_service.client.request_password_reset(email=payload.email)
     return PasswordResetResponse(reset_token=token, expires_in=expires_in)
 
 
@@ -256,52 +263,32 @@ async def reset_password(
 ) -> dict[str, str]:
     """تطبيق إعادة تعيين كلمة المرور وإبطال جلسات التحديث القديمة."""
 
-    client_ip, user_agent = _audit_context(request)
-    await auth_service.reset_password(
-        token=payload.token,
-        new_password=payload.new_password,
-        ip=client_ip,
-        user_agent=user_agent,
-    )
+    _client_ip, _user_agent = _audit_context(request)
+    await auth_service.client.reset_password(token=payload.token, new_password=payload.new_password)
     return {"status": "password_reset"}
 
 
 @router.get("/admin/users", response_model=list[UserOut])
 async def list_users(
+    request: Request,
     _: CurrentUser = Depends(require_permissions(USERS_READ)),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> list[UserOut]:
-    result = await auth_service.session.execute(
-        select(User, Role.name)
-        .select_from(User)
-        .join(UserRole, UserRole.user_id == User.id, isouter=True)
-        .join(Role, Role.id == UserRole.role_id, isouter=True)
-    )
-    rows = result.all()
-    users: dict[int, User] = {}
-    roles_map: dict[int, list[str]] = {}
-    for user, role_name in rows:
-        if user.id is None:
-            continue
-        users[user.id] = user
-        if role_name:
-            roles_map.setdefault(user.id, []).append(role_name)
-        else:
-            roles_map.setdefault(user.id, [])
+    token = _get_token(request)
+    users_out = await auth_service.client.list_users(token)
 
-    output: list[UserOut] = []
-    for user_id, user in users.items():
-        output.append(
-            UserOut(
-                id=user.id,
-                email=user.email,
-                full_name=user.full_name,
-                is_active=user.is_active,
-                status=user.status,
-                roles=sorted(set(roles_map.get(user_id, []))),
-            )
+    # Map Client UserOut to Schema UserOut (should match)
+    return [
+        UserOut(
+            id=u.id,
+            email=u.email,
+            full_name=u.full_name,
+            is_active=u.is_active,
+            status=u.status,
+            roles=u.roles,
         )
-    return output
+        for u in users_out
+    ]
 
 
 @router.post("/admin/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -310,8 +297,11 @@ async def create_user_admin(
     payload: AdminCreateUserRequest,
     current: CurrentUser = Depends(require_permissions(USERS_WRITE, ROLES_WRITE)),
     auth_service: AuthService = Depends(get_auth_service),
+    db=Depends(get_db),  # Inject DB for AuditService
 ) -> UserOut:
+    token = _get_token(request)
     client_ip, user_agent = _audit_context(request)
+
     if payload.is_admin:
         await _enforce_recent_auth(
             request=request,
@@ -321,31 +311,33 @@ async def create_user_admin(
             provided_password=None,
         )
 
-    user = await auth_service.register_user(
+    # Use Client's create_user_admin
+    new_user_out = await auth_service.client.create_user_admin(
+        token=token,
         full_name=payload.full_name,
         email=payload.email,
         password=payload.password,
+        is_admin=payload.is_admin,
     )
-    if payload.is_admin:
-        await auth_service.promote_to_admin(user=user)
-    roles = await auth_service.rbac.user_roles(user.id)
-    audit = AuditService(auth_service.session)
+
+    audit = AuditService(db)
     await audit.record(
         actor_user_id=current.user.id,
         action="USER_CREATED",
         target_type="user",
-        target_id=str(user.id),
+        target_id=str(new_user_out.id),
         metadata={"is_admin": payload.is_admin},
         ip=client_ip,
         user_agent=user_agent,
     )
+
     return UserOut(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        status=user.status,
-        roles=roles,
+        id=new_user_out.id,
+        email=new_user_out.email,
+        full_name=new_user_out.full_name,
+        is_active=new_user_out.is_active,
+        status=new_user_out.status,
+        roles=new_user_out.roles,
     )
 
 
@@ -356,32 +348,32 @@ async def update_user_status(
     payload: StatusUpdateRequest,
     current: CurrentUser = Depends(require_permissions(USERS_WRITE)),
     auth_service: AuthService = Depends(get_auth_service),
+    db=Depends(get_db),
 ) -> UserOut:
-    user = await auth_service.session.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    user.status = payload.status
-    user.is_active = payload.status == UserStatus.ACTIVE
-    await auth_service.session.commit()
-    roles = await auth_service.rbac.user_roles(user.id)
+    token = _get_token(request)
+
+    updated_out = await auth_service.client.update_user_status(
+        token=token, user_id=user_id, status=payload.status.value
+    )
+
     client_ip, user_agent = _audit_context(request)
-    audit = AuditService(auth_service.session)
+    audit = AuditService(db)
     await audit.record(
         actor_user_id=current.user.id,
         action="USER_STATUS_UPDATED",
         target_type="user",
-        target_id=str(user.id),
+        target_id=str(user_id),
         metadata={"status": payload.status.value},
         ip=client_ip,
         user_agent=user_agent,
     )
     return UserOut(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        status=user.status,
-        roles=roles,
+        id=updated_out.id,
+        email=updated_out.email,
+        full_name=updated_out.full_name,
+        is_active=updated_out.is_active,
+        status=updated_out.status,
+        roles=updated_out.roles,
     )
 
 
@@ -392,10 +384,9 @@ async def assign_role(
     payload: RoleAssignmentRequest,
     current: CurrentUser = Depends(require_permissions(USERS_WRITE, ROLES_WRITE)),
     auth_service: AuthService = Depends(get_auth_service),
+    db=Depends(get_db),
 ) -> UserOut:
-    target = await auth_service.session.get(User, user_id)
-    if target is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    token = _get_token(request)
 
     if payload.role_name == ADMIN_ROLE:
         await _enforce_recent_auth(
@@ -410,36 +401,42 @@ async def assign_role(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Justification required for admin assignment",
             )
-        await auth_service.promote_to_admin(user=target)
-    else:
-        await auth_service.rbac.assign_role(target, payload.role_name)
 
-    roles = await auth_service.rbac.user_roles(target.id)
+    # Use client assign_role (handles admin promotion if role is ADMIN internally? No, explicit role)
+    # But promoting to ADMIN in client assigns ADMIN role.
+
+    updated_out = await auth_service.client.assign_role(
+        token=token,
+        user_id=user_id,
+        role_name=payload.role_name,
+        justification=payload.justification,
+    )
+
     client_ip, user_agent = _audit_context(request)
-    audit = AuditService(auth_service.session)
+    audit = AuditService(db)
     await audit.record(
         actor_user_id=current.user.id,
         action="USER_ROLE_ASSIGNED",
         target_type="user",
-        target_id=str(target.id),
+        target_id=str(user_id),
         metadata={"role": payload.role_name, "justification": payload.justification},
         ip=client_ip,
         user_agent=user_agent,
     )
     return UserOut(
-        id=target.id,
-        email=target.email,
-        full_name=target.full_name,
-        is_active=target.is_active,
-        status=target.status,
-        roles=roles,
+        id=updated_out.id,
+        email=updated_out.email,
+        full_name=updated_out.full_name,
+        is_active=updated_out.is_active,
+        status=updated_out.status,
+        roles=updated_out.roles,
     )
 
 
 @router.get("/admin/audit", response_model=list[dict])
 async def list_audit(
     _: CurrentUser = Depends(require_permissions(AUDIT_READ)),
-    auth_service: AuthService = Depends(get_auth_service),
+    db=Depends(get_db),  # Direct DB for Audit
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict]:
@@ -447,7 +444,9 @@ async def list_audit(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="limit out of range")
     if offset < 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="offset out of range")
-    result = await auth_service.session.execute(
+
+    # AuditLog is still in Monolith DB (local)
+    result = await db.execute(
         select(AuditLog).order_by(desc(AuditLog.created_at)).limit(limit).offset(offset)
     )
     rows = result.scalars().all()
@@ -474,6 +473,7 @@ async def ask_question(
     payload: QuestionRequest,
     current: CurrentUser = Depends(require_permissions(QA_SUBMIT)),
     auth_service: AuthService = Depends(get_auth_service),
+    db=Depends(get_db),
 ) -> dict[str, str]:
     policy = PolicyService()
     primary_role = ADMIN_ROLE if ADMIN_ROLE in current.roles else "STANDARD_USER"
@@ -481,7 +481,7 @@ async def ask_question(
     client_ip, user_agent = _audit_context(request)
 
     if not decision.allowed:
-        audit = AuditService(auth_service.session)
+        audit = AuditService(db)
         await audit.record(
             actor_user_id=current.user.id,
             action="POLICY_BLOCK",

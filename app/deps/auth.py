@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import httpx
 from fastapi import Depends, HTTPException, Request, status
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.domain.user import User
+from app.core.domain.user import User, UserStatus
+from app.infrastructure.clients.user_client import user_service_client
 from app.services.auth import AuthService
-from app.services.rbac import ADMIN_ROLE, STANDARD_ROLE, RBACService
 
 
 @dataclass
@@ -42,33 +43,45 @@ def _extract_bearer_token(request: Request) -> str:
 
 async def get_current_user(
     request: Request,
-    service: AuthService = Depends(get_auth_service),
 ) -> CurrentUser:
     token = _extract_bearer_token(request)
-    payload = service.verify_access_token(token)
-    user_id = payload.get("sub")
-    if user_id is None:
+    try:
+        user_resp = await user_service_client.get_me(token)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token or expired session"
+            )
+        raise e
+    except httpx.RequestError as e:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Auth service unavailable: {e}",
         )
 
-    user = await service.session.get(User, int(user_id))
-    if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive"
-        )
+    if not user_resp.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive")
 
-    rbac = RBACService(service.session)
-    await rbac.ensure_seed()
-    roles = await rbac.user_roles(user.id)
+    # Convert status str to Enum safely
+    try:
+        status_enum = UserStatus(user_resp.status)
+    except ValueError:
+        status_enum = UserStatus.ACTIVE
 
-    if not roles:
-        desired_role = ADMIN_ROLE if user.is_admin else STANDARD_ROLE
-        await rbac.assign_role(user, desired_role)
-        roles = await rbac.user_roles(user.id)
+    user = User(
+        id=user_resp.id,
+        email=user_resp.email,
+        full_name=user_resp.full_name or user_resp.name or "",
+        is_admin=user_resp.is_admin,
+        is_active=user_resp.is_active,
+        status=status_enum,
+    )
 
-    permissions = await rbac.user_permissions(user.id)
-    return CurrentUser(user=user, roles=roles, permissions=permissions)
+    return CurrentUser(
+        user=user,
+        roles=user_resp.roles,
+        permissions=set(user_resp.permissions),
+    )
 
 
 def require_roles(*roles: str):

@@ -14,6 +14,7 @@ from microservices.user_service.src.schemas.auth import (
     TokenVerifyResponse,
     UserResponse,
 )
+from microservices.user_service.src.schemas.ums import LogoutRequest, RefreshRequest, TokenPair
 from microservices.user_service.src.services.auth.service import AuthService
 
 router = APIRouter(tags=["Auth"])
@@ -31,6 +32,15 @@ async def register(
     )
     # Convert User model to UserResponse schema
     user_response = UserResponse.model_validate(user)
+
+    # Populate permissions
+    permissions = await service.rbac.user_permissions(user.id)
+    user_response.permissions = sorted(permissions)
+
+    # Populate roles
+    roles = await service.rbac.user_roles(user.id)
+    user_response.roles = sorted(roles)
+
     return RegisterResponse(user=user_response, message="User registered successfully")
 
 
@@ -52,8 +62,18 @@ async def login(
         user_agent=request.headers.get("User-Agent"),
     )
     user_response = UserResponse.model_validate(user)
+
+    # Populate permissions
+    permissions = await service.rbac.user_permissions(user.id)
+    user_response.permissions = sorted(permissions)
+
+    # Populate roles
+    roles = await service.rbac.user_roles(user.id)
+    user_response.roles = sorted(roles)
+
     return AuthResponse(
         access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
         user=user_response,
         status="success",
     )
@@ -62,8 +82,19 @@ async def login(
 @router.get("/user/me", response_model=UserResponse)
 async def get_me(
     user=Depends(get_current_user),
+    service: AuthService = Depends(get_auth_service),
 ) -> UserResponse:
-    return UserResponse.model_validate(user)
+    user_response = UserResponse.model_validate(user)
+
+    # Populate permissions
+    permissions = await service.rbac.user_permissions(user.id)
+    user_response.permissions = sorted(permissions)
+
+    # Populate roles
+    roles = await service.rbac.user_roles(user.id)
+    user_response.roles = sorted(roles)
+
+    return user_response
 
 
 @router.post("/token/verify", response_model=TokenVerifyResponse)
@@ -78,3 +109,31 @@ async def verify_token(
         return TokenVerifyResponse(status="success", data={"valid": True})
     except Exception as e:
         return TokenVerifyResponse(status="error", data={"valid": False, "error": str(e)})
+
+
+@router.post("/refresh", response_model=TokenPair)
+async def refresh_token(
+    payload: RefreshRequest,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+) -> TokenPair:
+    tokens = await service.refresh_session(
+        refresh_token=payload.refresh_token,
+        ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("User-Agent"),
+    )
+    return TokenPair(**tokens)
+
+
+@router.post("/logout")
+async def logout(
+    payload: LogoutRequest,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+) -> dict[str, str]:
+    await service.logout(
+        refresh_token=payload.refresh_token,
+        ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("User-Agent"),
+    )
+    return {"status": "logged_out"}

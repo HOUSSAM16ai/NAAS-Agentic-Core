@@ -261,17 +261,17 @@ class UserServiceClient:
         resp.raise_for_status()
         return UserOut(**resp.json())
 
-
     async def get_user_count(self) -> int:
         # Legacy support / Fallback
         url = f"{self.base_url}/users/count"
         client = await self._get_client()
         resp = await client.get(url, headers=self._get_headers())
         if resp.status_code == 404:
-             return 0
+            return 0
         resp.raise_for_status()
         data = resp.json()
         return data.get("count", 0) if isinstance(data, dict) else 0
+
 
 # Singleton
 user_service_client = UserServiceClient()

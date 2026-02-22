@@ -92,8 +92,8 @@ class AuthBoundaryService:
             # إذا رفضت الخدمة الطلب (مثلاً البريد موجود)، نرفع الخطأ كما هو
             logger.warning(f"User Service rejected registration: {e}")
             if e.response.status_code == 400:
-                raise HTTPException(status_code=400, detail="Email already registered")
-            raise HTTPException(status_code=e.response.status_code, detail=str(e))
+                raise HTTPException(status_code=400, detail="Email already registered") from e
+            raise HTTPException(status_code=e.response.status_code, detail=str(e)) from e
         except (httpx.RequestError, httpx.TimeoutException, Exception) as e:
             # في حال فشل الاتصال، نستخدم الخطة البديلة (Local Fallback)
             logger.error(f"User Service unreachable for registration ({e}), using local fallback.")

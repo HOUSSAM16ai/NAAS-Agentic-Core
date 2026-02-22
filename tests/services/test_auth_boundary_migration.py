@@ -3,7 +3,6 @@ Tests for Auth Boundary Service Migration (Shadow Mode).
 Verifies that the service correctly delegates to User Service and falls back to Local Persistence.
 """
 
-import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -77,8 +76,8 @@ async def test_register_user_failure_network_fallback(service):
         service.persistence.create_user = AsyncMock(return_value=mock_user)
 
         # Mock RBAC
-        with patch("app.services.boundaries.auth_boundary_service.RBACService") as MockRBAC:
-            mock_rbac = MockRBAC.return_value
+        with patch("app.services.boundaries.auth_boundary_service.RBACService") as mock_rbac_class:
+            mock_rbac = mock_rbac_class.return_value
             mock_rbac.ensure_seed = AsyncMock()
             mock_rbac.assign_role = AsyncMock()
 

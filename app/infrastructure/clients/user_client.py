@@ -7,12 +7,11 @@ Decouples the Monolith from the Identity Provider.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Final
 
 import httpx
 import jwt
-from pydantic import BaseModel
 
 from app.core.http_client_factory import HTTPClientConfig, get_http_client
 from app.core.settings.base import get_settings
@@ -49,7 +48,7 @@ class UserServiceClient:
             "sub": "service-account",
             "role": "ADMIN",  # Service account has admin privileges
             "type": "service",
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+            "exp": datetime.now(datetime.UTC) + timedelta(minutes=5),
         }
         return jwt.encode(payload, self.secret_key, algorithm="HS256")
 

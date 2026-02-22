@@ -97,6 +97,11 @@ class AuthBoundaryService:
                 "landing_path": resp.landing_path,
             }
 
+        except httpx.HTTPStatusError as e:
+            # Catch specific HTTP errors from microservice to log detailed response
+            chrono_shield.record_failure(request, email)
+            logger.warning(f"Failed login attempt for {email} (HTTP {e.response.status_code}): {e.response.text}")
+            raise HTTPException(status_code=401, detail="Invalid email or password") from e
         except Exception as e:
             # تسجيل الأثر الحركي للفشل
             chrono_shield.record_failure(request, email)
@@ -114,9 +119,12 @@ class AuthBoundaryService:
             return resp.model_dump()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
+                logger.warning(f"Get user failed (401): {e.response.text}")
                 raise HTTPException(status_code=401, detail="Invalid token") from e
             if e.response.status_code == 404:
+                logger.warning(f"Get user failed (404): {e.response.text}")
                 raise HTTPException(status_code=404, detail="User not found") from e
+            logger.error(f"Get user failed (HTTP {e.response.status_code}): {e.response.text}")
             raise e
         except Exception as e:
             logger.error(f"Get user failed: {e}")

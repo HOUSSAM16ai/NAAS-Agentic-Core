@@ -5,6 +5,7 @@
 """
 
 import functools
+import os
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -53,13 +54,13 @@ class UserServiceSettings(BaseServiceSettings):
     SERVICE_NAME: str = Field("user-service", description="اسم الخدمة")
     SERVICE_VERSION: str = Field("1.0.0", description="إصدار الخدمة")
     DATABASE_URL: str = Field(
-        "sqlite+aiosqlite:///./user_service.db",
+        default_factory=lambda: os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./user_service.db"),
         description="رابط قاعدة بيانات خدمة المستخدمين",
     )
 
     # Security Override (Ensure global SECRET_KEY is used)
     SECRET_KEY: str = Field(
-        "super_secret_key_change_in_production",
+        default_factory=lambda: os.getenv("SECRET_KEY", "super_secret_key_change_in_production"),
         validation_alias="SECRET_KEY",
         description="مفتاح التشفير المشترك",
     )

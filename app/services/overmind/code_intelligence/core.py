@@ -278,20 +278,23 @@ class StructuralCodeIntelligence:
         return all_metrics
 
     def _iter_source_files(self, target_path: Path) -> list[Path]:
-        """
-        Return list of source files (py, js, ts, etc.) in target path.
+        """يجمع ملفات المصدر مع استبعاد الأدلة الضخمة مبكراً لتحسين الأداء."""
 
-        Args:
-            target_path: Target path
+        allowed_suffixes = {".py", ".js", ".jsx", ".ts", ".tsx"}
+        excluded_directories = {
+            pattern for pattern in self.exclude_patterns if "." not in pattern and "_" not in pattern
+        }
 
-        Returns:
-            List of files
-        """
-        extensions = ["*.py", "*.js", "*.jsx", "*.ts", "*.tsx"]
-        files = []
-        for ext in extensions:
-            files.extend(target_path.rglob(ext))
-        return files
+        source_files: list[Path] = []
+        for root, dirs, files in target_path.walk(top_down=True):
+            dirs[:] = [d for d in dirs if d not in excluded_directories]
+            root_path = Path(root)
+            for file_name in files:
+                file_path = root_path / file_name
+                if file_path.suffix in allowed_suffixes:
+                    source_files.append(file_path)
+
+        return source_files
 
     def _analyze_target_path(self, target_path: Path, all_metrics: list[FileMetrics]) -> None:
         """

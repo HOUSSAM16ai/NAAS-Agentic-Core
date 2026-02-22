@@ -25,6 +25,9 @@ class TestHistoryServiceComprehensive:
                 await conn.run_sync(SQLModel.metadata.create_all)
 
             # Cleanup potential conflicts from previous tests (IntegrityError fix)
+            await db_session.execute(text("DELETE FROM admin_messages"))
+            await db_session.execute(text("DELETE FROM admin_conversations"))
+            await db_session.execute(text("DELETE FROM missions"))
             await db_session.execute(text("DELETE FROM users"))
             await db_session.commit()
 
@@ -91,9 +94,6 @@ class TestHistoryServiceComprehensive:
 
         # But wait, tests/conftest.py overrides get_db, but async_session_factory is imported from app.core.database
         # Let's see if we can patch app.services.users.history_service.async_session_factory
-
-        # Creating a mock context manager for the session
-        AsyncMock()
 
         # Mocking execute result
         # expected_conversations are SQLModel objects.

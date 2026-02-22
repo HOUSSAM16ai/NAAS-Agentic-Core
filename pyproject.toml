@@ -35,19 +35,3 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["app", "microservices"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-addopts = "-v --cov=app --cov-report=term-missing --cov-report=xml:reports/omega/coverage.xml"
-filterwarnings = [
-    "ignore:.*datetime.utcnow.*:DeprecationWarning",
-    "ignore:.*The 'app' shortcut.*:DeprecationWarning"
-]
-env = [
-    "DATABASE_URL=sqlite+aiosqlite:///:memory:",
-    "SECRET_KEY=test_secret_key_super_secure",
-    "ENVIRONMENT=testing",
-    "LLM_MOCK_MODE=1"
-]

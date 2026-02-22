@@ -7,8 +7,8 @@ from fastapi import FastAPI, WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from app.api.routers.admin import router
-from app.deps.auth import ADMIN_ROLE
 from app.infrastructure.clients.user_client import user_client
+from app.services.rbac import ADMIN_ROLE
 
 
 @pytest.fixture

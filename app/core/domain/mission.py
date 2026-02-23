@@ -77,7 +77,7 @@ class Mission(SQLModel, table=True):
     initiator_id: int = Field(foreign_key="users.id", index=True)
     active_plan_id: int | None = Field(
         default=None,
-        sa_column=Column(Integer, ForeignKey("mission_plans.id", use_alter=True)),
+        sa_column=Column(Integer, index=True, nullable=True),
     )
 
     # Idempotency

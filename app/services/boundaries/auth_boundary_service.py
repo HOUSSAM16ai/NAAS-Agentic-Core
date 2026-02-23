@@ -90,10 +90,17 @@ class AuthBoundaryService:
             }
         except httpx.HTTPStatusError as e:
             # إذا رفضت الخدمة الطلب (مثلاً البريد موجود)، نرفع الخطأ كما هو
+            # باستثناء الحالات التي تدل غالباً على عدم جاهزية الخدمة أو رفض على مستوى البوابة
+            # (مثل 401/403/5xx) حيث ننتقل إلى الخطة المحلية البديلة.
             logger.warning(f"User Service rejected registration: {e}")
             if e.response.status_code == 400:
                 raise HTTPException(status_code=400, detail="Email already registered") from e
-            raise HTTPException(status_code=e.response.status_code, detail=str(e)) from e
+            if e.response.status_code not in {401, 403, 404, 429} and e.response.status_code < 500:
+                raise HTTPException(status_code=e.response.status_code, detail=str(e)) from e
+            logger.error(
+                "User Service registration endpoint unavailable (%s), using local fallback.",
+                e.response.status_code,
+            )
         except (httpx.RequestError, httpx.TimeoutException, Exception) as e:
             # في حال فشل الاتصال، نستخدم الخطة البديلة (Local Fallback)
             logger.error(f"User Service unreachable for registration ({e}), using local fallback.")

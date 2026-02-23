@@ -4,7 +4,6 @@ Implements advanced risk scoring algorithms
 """
 
 from datetime import datetime
-import warnings
 
 from ..domain.models import SecurityFinding
 from ..domain.ports import RiskCalculatorPort
@@ -14,15 +13,9 @@ class AdvancedRiskCalculator(RiskCalculatorPort):
     """
     Advanced risk calculator using FAANG-style algorithms
     Inspired by: Google's Risk Score, Meta's Security Score
-    DEPRECATED: Use ObservabilityServiceClient instead.
     """
 
     def __init__(self):
-        warnings.warn(
-            "AdvancedRiskCalculator is deprecated. Use ObservabilityServiceClient.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         self.severity_weights = {
             "CRITICAL": 10.0,
             "HIGH": 7.5,

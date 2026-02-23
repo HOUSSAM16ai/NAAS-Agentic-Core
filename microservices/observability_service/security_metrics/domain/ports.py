@@ -56,3 +56,31 @@ class AnomalyDetectorPort(ABC):
     ) -> list[dict]:
         """Detect anomalies in security metrics"""
         pass
+
+
+class FindingsRepositoryPort(Protocol):
+    """Port for findings persistence"""
+
+    def save_finding(self, finding: SecurityFinding) -> None:
+        """Save a security finding"""
+        ...
+
+    def get_findings(self, filters: dict | None = None) -> list[SecurityFinding]:
+        """Get findings with optional filters"""
+        ...
+
+    def update_finding(self, finding_id: str, updates: dict) -> None:
+        """Update a finding"""
+        ...
+
+
+class MetricsRepositoryPort(Protocol):
+    """Port for metrics persistence"""
+
+    def save_metrics(self, metrics: SecurityMetrics) -> None:
+        """Save security metrics"""
+        ...
+
+    def get_historical_metrics(self, days: int = 30) -> list[SecurityMetrics]:
+        """Get historical metrics"""
+        ...

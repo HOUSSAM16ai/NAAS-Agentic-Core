@@ -4,7 +4,6 @@ Calculates comprehensive security metrics
 """
 
 from datetime import datetime, timedelta
-import warnings
 
 from ..domain.models import (
     SecurityFinding,
@@ -16,17 +15,7 @@ from ..domain.ports import MetricsCalculatorPort
 
 
 class ComprehensiveMetricsCalculator(MetricsCalculatorPort):
-    """
-    Calculate comprehensive security metrics.
-    DEPRECATED: Use ObservabilityServiceClient instead.
-    """
-
-    def __init__(self):
-        warnings.warn(
-            "ComprehensiveMetricsCalculator is deprecated. Use ObservabilityServiceClient.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+    """Calculate comprehensive security metrics"""
 
     def calculate_metrics(
         self, findings: list[SecurityFinding], code_metrics: dict | None = None

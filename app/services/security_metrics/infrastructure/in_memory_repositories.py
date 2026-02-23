@@ -5,7 +5,7 @@ Simple in-memory implementations for testing and development
 
 from datetime import datetime, timedelta
 
-from app.services.security_metrics.domain.models import SecurityFinding, SecurityMetrics
+from ..domain.models import SecurityFinding, SecurityMetrics
 
 
 class InMemoryFindingsRepository:

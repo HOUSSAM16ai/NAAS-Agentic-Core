@@ -1,6 +1,8 @@
-from app.services.security_metrics.domain.ports import (
+from microservices.observability_service.security_metrics.domain.ports import (
     MetricsCalculatorPort,
     RiskCalculatorPort,
+)
+from microservices.observability_service.security_metrics.domain.models import (
     SecurityFinding,
     SecurityMetrics,
 )

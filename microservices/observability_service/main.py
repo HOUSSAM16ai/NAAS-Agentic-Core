@@ -20,6 +20,7 @@ from microservices.observability_service.logging import get_logger, setup_loggin
 from microservices.observability_service.logic import serialize_capacity_plan
 from microservices.observability_service.models import MetricType, TelemetryData
 from microservices.observability_service.security import verify_service_token
+from microservices.observability_service.security_routes import security_router
 from microservices.observability_service.service import get_aiops_service
 from microservices.observability_service.settings import ObservabilitySettings, get_settings
 
@@ -101,6 +102,8 @@ class CapacityPlanResponse(BaseModel):
 
 def _register_routes(app: FastAPI, settings: ObservabilitySettings) -> None:
     """تسجيل موجهات خدمة المراقبة بالاعتماد على الإعدادات."""
+
+    app.include_router(security_router, dependencies=[Depends(verify_service_token)])
 
     @app.get("/health", response_model=HealthResponse, tags=["System"])
     async def health_check() -> HealthResponse:

@@ -18,32 +18,18 @@ def test_create_mission_endpoint():
     # Force SQLite for testing to avoid asyncpg dependency and connection attempts
     os.environ["ORCHESTRATOR_DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
-    # Import modules to ensure they are loaded before patching
-
     # Clear metadata to allow re-definition of tables for the microservice context
     SQLModel.metadata.clear()
 
-    # Setup DB override using the shared test session factory (SQLite in-memory)
-    # We DO NOT call _ensure_schema() because it loads Monolith models!
-    # Instead we manually create the schema for the models we just loaded/cleared.
-    # We need to make sure the engine is bound to the metadata?
-    # SQLModel.metadata.create_all(engine) should work if engine is configured.
-    # We need to make sure we use the same engine as the session factory?
-    # _get_session_factory creates an engine.
-    # Let's verify if we need to reload models?
-    # If they were loaded by previous tests, they are in sys.modules.
-    # clearing metadata removes them from metadata.
-    # We need to re-register them?
-    # Only way is to reload the module.
     import importlib
 
     import microservices.orchestrator_service.src.core.database
     import microservices.orchestrator_service.src.models.mission
     from microservices.orchestrator_service.main import app
     from microservices.orchestrator_service.src.core.database import engine, get_db
-    importlib.reload(microservices.orchestrator_service.src.models.mission)
 
-    # Now Mission is in metadata.
+    # Reload model to ensure it registers with the cleared metadata
+    importlib.reload(microservices.orchestrator_service.src.models.mission)
 
     # We need an event loop for async engine
     try:
@@ -53,26 +39,23 @@ def test_create_mission_endpoint():
         asyncio.set_event_loop(loop)
 
     async def init_tables():
-        # Use the engine from core.database which is used by the app
         async with engine.begin() as conn:
+            # Drop all to ensure clean slate in case of reused engine/DB
+            await conn.run_sync(SQLModel.metadata.drop_all)
             await conn.run_sync(SQLModel.metadata.create_all)
 
     loop.run_until_complete(init_tables())
 
-    # Reuse session factory from conftest but bind to our engine?
-    # Actually core.database.engine is what we want.
-    # But get_db uses session_factory from conftest?
-    # app.dependency_overrides[get_db] needs to yield a session.
-
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import sessionmaker
 
-    TestSession = sessionmaker(
+    # Fix N806: Use lowercase variable name
+    test_session_maker = sessionmaker(
         engine, class_=AsyncSession, expire_on_commit=False
     )
 
     async def override_get_db():
-        async with TestSession() as session:
+        async with test_session_maker() as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
@@ -80,7 +63,7 @@ def test_create_mission_endpoint():
     # Mock EventBus to avoid Redis connection attempts
     mock_event_bus = AsyncMock()
     mock_event_bus.publish = AsyncMock()
-    # Mock subscribe to return an empty async iterator or similar if needed
+    # Mock subscribe to return an empty async iterator
     mock_event_bus.subscribe.return_value = AsyncMock()
 
     # Patch init_db and event_bus

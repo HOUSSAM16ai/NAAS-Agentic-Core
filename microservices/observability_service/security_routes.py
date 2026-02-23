@@ -4,10 +4,9 @@ Exposes endpoints for security metrics calculation and risk analysis
 """
 
 from datetime import datetime
-from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter
+from pydantic import BaseModel
 
 from microservices.observability_service.security_metrics.application.metrics_calculator import (
     ComprehensiveMetricsCalculator,
@@ -41,21 +40,21 @@ class SecurityFindingSchema(BaseModel):
     file_path: str
     line_number: int
     message: str
-    cwe_id: Optional[str] = None
-    owasp_category: Optional[str] = None
-    first_seen: Optional[datetime] = None
-    last_seen: Optional[datetime] = None
+    cwe_id: str | None = None
+    owasp_category: str | None = None
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
     false_positive: bool = False
     fixed: bool = False
-    fix_time_hours: Optional[float] = None
-    developer_id: Optional[str] = None
+    fix_time_hours: float | None = None
+    developer_id: str | None = None
 
 
 class CalculateMetricsRequest(BaseModel):
     """Request to calculate security metrics"""
 
-    findings: List[SecurityFindingSchema]
-    code_metrics: Optional[dict] = None
+    findings: list[SecurityFindingSchema]
+    code_metrics: dict | None = None
 
 
 class SecurityMetricsResponse(BaseModel):
@@ -83,7 +82,7 @@ class SecurityMetricsResponse(BaseModel):
 class RiskPredictionRequest(BaseModel):
     """Request to predict future risk"""
 
-    historical_metrics: List[SecurityMetricsResponse]
+    historical_metrics: list[SecurityMetricsResponse]
     days_ahead: int = 30
 
 
@@ -100,8 +99,8 @@ class RiskPredictionResponse(BaseModel):
 class CalculateRiskRequest(BaseModel):
     """Request to calculate risk score"""
 
-    findings: List[SecurityFindingSchema]
-    code_metrics: Optional[dict] = None
+    findings: list[SecurityFindingSchema]
+    code_metrics: dict | None = None
 
 
 class CalculateRiskResponse(BaseModel):

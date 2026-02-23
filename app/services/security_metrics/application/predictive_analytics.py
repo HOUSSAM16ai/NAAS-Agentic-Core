@@ -6,12 +6,12 @@ ML-based risk prediction and trend analysis
 import statistics
 import warnings
 
-from ..domain.models import (
+from app.services.security_metrics.domain.models import (
     RiskPrediction,
     SecurityMetrics,
     TrendDirection,
 )
-from ..domain.ports import PredictiveAnalyticsPort
+from app.services.security_metrics.domain.ports import PredictiveAnalyticsPort
 
 
 class LinearRegressionPredictor(PredictiveAnalyticsPort):

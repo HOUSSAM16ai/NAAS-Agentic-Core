@@ -5,12 +5,14 @@ ML-based risk prediction and trend analysis
 
 import statistics
 
-from ..domain.models import (
+from microservices.observability_service.security_metrics.domain.models import (
     RiskPrediction,
     SecurityMetrics,
     TrendDirection,
 )
-from ..domain.ports import PredictiveAnalyticsPort
+from microservices.observability_service.security_metrics.domain.ports import (
+    PredictiveAnalyticsPort,
+)
 
 
 class LinearRegressionPredictor(PredictiveAnalyticsPort):

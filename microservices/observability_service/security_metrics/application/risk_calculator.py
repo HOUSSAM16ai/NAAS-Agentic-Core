@@ -5,8 +5,12 @@ Implements advanced risk scoring algorithms
 
 from datetime import datetime
 
-from ..domain.models import SecurityFinding
-from ..domain.ports import RiskCalculatorPort
+from microservices.observability_service.security_metrics.domain.models import (
+    SecurityFinding,
+)
+from microservices.observability_service.security_metrics.domain.ports import (
+    RiskCalculatorPort,
+)
 
 
 class AdvancedRiskCalculator(RiskCalculatorPort):

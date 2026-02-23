@@ -64,5 +64,29 @@ class ObservabilityServiceClient:
         response = await self.client.post("/telemetry", json=payload)
         response.raise_for_status()
 
+    async def calculate_security_metrics(
+        self, findings: list[dict], code_metrics: dict | None = None
+    ) -> dict:
+        payload = {"findings": findings, "code_metrics": code_metrics}
+        response = await self.client.post("/security/metrics/calculate", json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    async def predict_security_risk(
+        self, historical_metrics: list[dict], days_ahead: int = 30
+    ) -> dict:
+        payload = {"historical_metrics": historical_metrics, "days_ahead": days_ahead}
+        response = await self.client.post("/security/risk/predict", json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    async def calculate_risk_score(
+        self, findings: list[dict], code_metrics: dict | None = None
+    ) -> float:
+        payload = {"findings": findings, "code_metrics": code_metrics}
+        response = await self.client.post("/security/risk/score", json=payload)
+        response.raise_for_status()
+        return response.json()["risk_score"]
+
     async def close(self):
         await self.client.aclose()

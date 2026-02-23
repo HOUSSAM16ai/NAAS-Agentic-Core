@@ -4,7 +4,6 @@ ML-based risk prediction and trend analysis
 """
 
 import statistics
-import warnings
 
 from ..domain.models import (
     RiskPrediction,
@@ -18,15 +17,7 @@ class LinearRegressionPredictor(PredictiveAnalyticsPort):
     """
     Predictive analytics using linear regression
     Inspired by: Google's Predictive Security, AWS GuardDuty ML
-    DEPRECATED: Use ObservabilityServiceClient instead.
     """
-
-    def __init__(self):
-        warnings.warn(
-            "LinearRegressionPredictor is deprecated. Use ObservabilityServiceClient.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
 
     def predict_future_risk(
         self, historical_metrics: list[SecurityMetrics], days_ahead: int = 30

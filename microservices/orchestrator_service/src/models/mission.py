@@ -157,6 +157,7 @@ class Mission(SQLModel, table=True):
 
 class MissionPlan(SQLModel, table=True):
     __tablename__ = "mission_plans"
+    __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
     mission_id: int = Field(foreign_key="missions.id", index=True)
     version: int = Field(default=1)
@@ -186,6 +187,7 @@ class MissionPlan(SQLModel, table=True):
 
 class Task(SQLModel, table=True):
     __tablename__ = "tasks"
+    __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
     mission_id: int = Field(foreign_key="missions.id", index=True)
     plan_id: int | None = Field(default=None, foreign_key="mission_plans.id", index=True)
@@ -235,6 +237,7 @@ class Task(SQLModel, table=True):
 
 class MissionEvent(SQLModel, table=True):
     __tablename__ = "mission_events"
+    __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
     mission_id: int = Field(foreign_key="missions.id", index=True)
     event_type: MissionEventType = Field()
@@ -258,6 +261,7 @@ class MissionOutbox(SQLModel, table=True):
     """
 
     __tablename__ = "mission_outbox"
+    __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
     mission_id: int = Field(index=True)
     event_type: str = Field(index=True)

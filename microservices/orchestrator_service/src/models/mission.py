@@ -111,7 +111,7 @@ class MicroMission(SQLModel, table=True):
     )
     initiator_id: int = Field(index=True)
 
-    active_plan_id: int | None = Field(default=None, foreign_key="mission_plans.id", nullable=True)
+    active_plan_id: int | None = Field(default=None, nullable=True, index=True)
 
     # Idempotency
     idempotency_key: str | None = Field(default=None, unique=True, index=True, max_length=128)

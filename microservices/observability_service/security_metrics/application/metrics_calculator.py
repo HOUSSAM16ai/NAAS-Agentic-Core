@@ -5,13 +5,15 @@ Calculates comprehensive security metrics
 
 from datetime import datetime, timedelta
 
-from ..domain.models import (
+from microservices.observability_service.security_metrics.domain.models import (
     SecurityFinding,
     SecurityMetrics,
     Severity,
     TrendDirection,
 )
-from ..domain.ports import MetricsCalculatorPort
+from microservices.observability_service.security_metrics.domain.ports import (
+    MetricsCalculatorPort,
+)
 
 
 class ComprehensiveMetricsCalculator(MetricsCalculatorPort):

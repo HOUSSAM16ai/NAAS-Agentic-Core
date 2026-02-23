@@ -4,7 +4,6 @@ Interfaces for security metrics operations
 """
 
 from abc import ABC, abstractmethod
-from typing import Protocol
 
 from .models import RiskPrediction, SecurityFinding, SecurityMetrics
 

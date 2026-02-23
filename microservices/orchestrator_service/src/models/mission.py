@@ -101,21 +101,16 @@ class MissionEventType(CaseInsensitiveEnum):
     FINALIZED = "mission_finalized"
 
 
-class Mission(SQLModel, table=True):
+class MicroMission(SQLModel, table=True):
     __tablename__ = "missions"
     __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
     objective: str = Field(sa_column=Column(Text))
     status: MissionStatus = Field(
         default=MissionStatus.PENDING,
-        # Simplify enum handling for microservice
     )
     initiator_id: int = Field(index=True)
-    # active_plan_id: int | None = Field(
-    #     default=None,
-    #     sa_column=Column(Integer, ForeignKey("mission_plans.id", use_alter=True)),
-    # )
-    # Solving circular dependency by defining FK later or using string
+
     active_plan_id: int | None = Field(default=None, foreign_key="mission_plans.id", nullable=True)
 
     # Idempotency
@@ -136,26 +131,28 @@ class Mission(SQLModel, table=True):
     )
 
     # Relationships
-    # Removed User relationship
-    tasks: list[Task] = Relationship(
+    tasks: list[MicroTask] = Relationship(
         sa_relationship=relationship(
-            "Task",
+            "MicroTask",
             back_populates="mission",
-            # foreign_keys=lambda: [Task.mission_id],
         )
     )
-    mission_plans: list[MissionPlan] = Relationship(
+    mission_plans: list[MicroMissionPlan] = Relationship(
         sa_relationship=relationship(
-            "MissionPlan",
-            back_populates="mission",  # foreign_keys="[MissionPlan.mission_id]"
+            "MicroMissionPlan",
+            back_populates="mission",
+            foreign_keys="[MicroMissionPlan.mission_id]"
         )
     )
-    events: list[MissionEvent] = Relationship(
-        sa_relationship=relationship("MissionEvent", back_populates="mission")
+    events: list[MicroMissionEvent] = Relationship(
+        sa_relationship=relationship(
+            "MicroMissionEvent",
+            back_populates="mission"
+        )
     )
 
 
-class MissionPlan(SQLModel, table=True):
+class MicroMissionPlan(SQLModel, table=True):
     __tablename__ = "mission_plans"
     __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
@@ -176,22 +173,28 @@ class MissionPlan(SQLModel, table=True):
     )
 
     # Relationships
-    mission: Mission = Relationship(
+    mission: MicroMission = Relationship(
         sa_relationship=relationship(
-            "Mission",
-            back_populates="mission_plans",  # foreign_keys="[MissionPlan.mission_id]"
+            "MicroMission",
+            back_populates="mission_plans",
+            foreign_keys="[MicroMissionPlan.mission_id]"
         )
     )
-    tasks: list[Task] = Relationship(sa_relationship=relationship("Task", back_populates="plan"))
+    tasks: list[MicroTask] = Relationship(
+        sa_relationship=relationship(
+            "MicroTask",
+            back_populates="plan"
+        )
+    )
 
 
-class Task(SQLModel, table=True):
+class MicroTask(SQLModel, table=True):
     __tablename__ = "tasks"
     __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
     mission_id: int = Field(foreign_key="missions.id", index=True)
     plan_id: int | None = Field(default=None, foreign_key="mission_plans.id", index=True)
-    task_key: str = Field(max_length=50)
+    task_key: str = Field(max_length=5)
     description: str | None = Field(sa_column=Column(Text))
     tool_name: str | None = Field(max_length=100)
     tool_args_json: dict | None = Field(default=None, sa_column=Column(JSONText))
@@ -221,21 +224,21 @@ class Task(SQLModel, table=True):
     )
 
     # Relationships
-    mission: Mission = Relationship(
+    mission: MicroMission = Relationship(
         sa_relationship=relationship(
-            "Mission",
-            back_populates="tasks",  # foreign_keys=lambda: [Task.mission_id]
+            "MicroMission",
+            back_populates="tasks",
         )
     )
-    plan: MissionPlan = Relationship(
+    plan: MicroMissionPlan = Relationship(
         sa_relationship=relationship(
-            "MissionPlan",
-            back_populates="tasks",  # foreign_keys=lambda: [Task.plan_id]
+            "MicroMissionPlan",
+            back_populates="tasks",
         )
     )
 
 
-class MissionEvent(SQLModel, table=True):
+class MicroMissionEvent(SQLModel, table=True):
     __tablename__ = "mission_events"
     __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
@@ -249,12 +252,15 @@ class MissionEvent(SQLModel, table=True):
     )
 
     # Relationships
-    mission: Mission = Relationship(
-        sa_relationship=relationship("Mission", back_populates="events")
+    mission: MicroMission = Relationship(
+        sa_relationship=relationship(
+            "MicroMission",
+            back_populates="events"
+        )
     )
 
 
-class MissionOutbox(SQLModel, table=True):
+class MicroMissionOutbox(SQLModel, table=True):
     """
     Transactional Outbox for Mission Events.
     Ensures that events are published to the Event Bus (Redis) reliably.
@@ -273,6 +279,14 @@ class MissionOutbox(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
     )
     published_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+
+
+# Aliases
+Mission = MicroMission
+MissionPlan = MicroMissionPlan
+Task = MicroTask
+MissionEvent = MicroMissionEvent
+MissionOutbox = MicroMissionOutbox
 
 
 # Helpers

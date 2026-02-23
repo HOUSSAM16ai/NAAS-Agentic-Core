@@ -140,6 +140,11 @@ class AppSettings(BaseServiceSettings):
     PLANNING_AGENT_URL: str | None = Field(None, description="Planning Agent URL")
     REASONING_AGENT_URL: str | None = Field(None, description="Reasoning Agent URL")
 
+    AUTH_MICROSERVICE_ONLY: bool = Field(
+        True,
+        description="Enable strict auth through User Service without monolith fallback",
+    )
+
     # AI (Missing fields restored)
     OPENAI_API_KEY: str | None = Field(None, description="OpenAI API Key")
     OPENROUTER_API_KEY: str | None = Field(None, description="OpenRouter API Key")

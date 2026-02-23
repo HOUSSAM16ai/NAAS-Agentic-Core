@@ -14,7 +14,9 @@
 from __future__ import annotations
 
 import datetime
+from datetime import timezone
 import logging
+import os
 
 import httpx
 import jwt
@@ -54,6 +56,57 @@ class AuthBoundaryService:
         self.persistence = AuthPersistence(db)
         self.settings = get_settings()
 
+    def _strict_microservice_auth_enabled(self) -> bool:
+        """تحديد وضع المصادقة الصارم عبر الخدمات المصغّرة فقط."""
+        configured = bool(getattr(self.settings, "AUTH_MICROSERVICE_ONLY", True))
+        environment = str(getattr(self.settings, "ENVIRONMENT", "development"))
+        explicit_env_override = os.getenv("AUTH_MICROSERVICE_ONLY")
+        if environment == "testing" and explicit_env_override is None:
+            return False
+        return configured
+
+
+    @staticmethod
+    def _as_dict(payload: object) -> dict[str, object]:
+        """تحويل الحمولة الواردة إلى قاموس بشكل آمن."""
+        if isinstance(payload, dict):
+            return payload
+        return {}
+
+    @staticmethod
+    def _pick_user_name(user_data: dict[str, object]) -> str | None:
+        """استخراج اسم المستخدم بشكل متوافق مع صيغ الاستجابة المختلفة."""
+        raw_name = user_data.get("full_name") or user_data.get("name")
+        if isinstance(raw_name, str):
+            normalized = raw_name.strip()
+            return normalized or None
+        return None
+
+    def _normalize_user_payload(
+        self,
+        user_data: dict[str, object],
+        fallback_email: str | None = None,
+        fallback_name: str | None = None,
+    ) -> dict[str, object]:
+        """توحيد بنية المستخدم بين المونوليث والخدمة المصغّرة دون كسر التوافق."""
+        email_value = user_data.get("email")
+        remote_email = email_value if isinstance(email_value, str) else ""
+        email = remote_email or (fallback_email or "")
+
+        resolved_name = self._pick_user_name(user_data)
+        if not resolved_name and fallback_name:
+            fallback_name_clean = fallback_name.strip()
+            resolved_name = fallback_name_clean or None
+        if not resolved_name:
+            resolved_name = email.split("@", maxsplit=1)[0] if "@" in email else "Unknown User"
+
+        return {
+            "id": user_data.get("id"),
+            "name": resolved_name,
+            "email": email,
+            "is_admin": bool(user_data.get("is_admin", False)),
+        }
+
     async def register_user(self, full_name: str, email: str, password: str) -> dict[str, object]:
         """
         تسجيل مستخدم جديد في النظام.
@@ -77,15 +130,20 @@ class AuthBoundaryService:
             response = await user_service_client.register_user(full_name, email, password)
             # تحويل استجابة الخدمة إلى التنسيق المتوقع محلياً
             # response format: {"user": {...}, "message": "..."}
-            user_data = response.get("user", {})
+            user_data = self._as_dict(response.get("user", {}))
+            normalized_user = self._normalize_user_payload(
+                user_data,
+                fallback_email=email,
+                fallback_name=full_name,
+            )
             return {
                 "status": "success",
                 "message": response.get("message", "User registered successfully"),
                 "user": {
-                    "id": user_data.get("id"),
-                    "full_name": user_data.get("full_name"),
-                    "email": user_data.get("email"),
-                    "is_admin": user_data.get("is_admin", False),
+                    "id": normalized_user["id"],
+                    "full_name": normalized_user["name"],
+                    "email": normalized_user["email"],
+                    "is_admin": normalized_user["is_admin"],
                 },
             }
         except httpx.HTTPStatusError as e:
@@ -97,11 +155,15 @@ class AuthBoundaryService:
                 raise HTTPException(status_code=400, detail="Email already registered") from e
             if e.response.status_code not in {401, 403, 404, 429} and e.response.status_code < 500:
                 raise HTTPException(status_code=e.response.status_code, detail=str(e)) from e
+            if self._strict_microservice_auth_enabled():
+                raise HTTPException(status_code=503, detail="Authentication service unavailable") from e
             logger.error(
                 "User Service registration endpoint unavailable (%s), using local fallback.",
                 e.response.status_code,
             )
         except (httpx.RequestError, httpx.TimeoutException, Exception) as e:
+            if self._strict_microservice_auth_enabled():
+                raise HTTPException(status_code=503, detail="Authentication service unavailable") from e
             # في حال فشل الاتصال، نستخدم الخطة البديلة (Local Fallback)
             logger.error(f"User Service unreachable for registration ({e}), using local fallback.")
 
@@ -157,30 +219,30 @@ class AuthBoundaryService:
                 email=email, password=password, ip=ip, user_agent=user_agent
             )
             # response format: {"access_token": "...", "user": {...}, "status": "..."}
-            user_data = response.get("user", {})
-            is_admin = user_data.get("is_admin", False)
+            user_data = self._as_dict(response.get("user", {}))
+            normalized_user = self._normalize_user_payload(user_data, fallback_email=email)
+            is_admin = bool(normalized_user["is_admin"])
             landing_path = "/admin" if is_admin else "/app/chat"
 
             return {
                 "access_token": response.get("access_token"),
                 "token_type": "Bearer",
-                "user": {
-                    "id": user_data.get("id"),
-                    "name": user_data.get("full_name"),
-                    "email": user_data.get("email"),
-                    "is_admin": is_admin,
-                },
+                "user": normalized_user,
                 "status": "success",
                 "landing_path": landing_path,
             }
         except httpx.HTTPStatusError as e:
-            # إذا رفضت الخدمة (كلمة مرور خطأ)، نرفع الخطأ
-            # لكن مهلاً! ماذا لو كان المستخدم موجوداً محلياً فقط (لم يتم ترحيله)؟
-            # إذا قالت الخدمة 401، قد يكون المستخدم غير موجود هناك أصلاً.
-            # لذا يجب أن نتحقق محلياً أيضاً إذا قالت الخدمة "Invalid credentials" أو "User not found".
             logger.warning(f"User Service rejected login: {e}")
-            pass  # ننتقل للخطة البديلة للتأكد
+            if self._strict_microservice_auth_enabled():
+                detail = "Authentication failed"
+                if e.response.status_code >= 500:
+                    detail = "Authentication service unavailable"
+                raise HTTPException(status_code=e.response.status_code, detail=detail) from e
+            # إذا قالت الخدمة 401 قد يكون المستخدم غير موجود هناك أصلاً في طور الترحيل.
+            pass
         except (httpx.RequestError, httpx.TimeoutException, Exception) as e:
+            if self._strict_microservice_auth_enabled():
+                raise HTTPException(status_code=503, detail="Authentication service unavailable") from e
             logger.error(f"User Service unreachable for login ({e}), using local fallback.")
 
         # ==============================================================================
@@ -218,7 +280,7 @@ class AuthBoundaryService:
             "email": user.email,
             "role": role,
             "is_admin": user.is_admin,
-            "exp": datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=24),
+            "exp": datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=24),
         }
 
         token = jwt.encode(payload, self.settings.SECRET_KEY, algorithm="HS256")
@@ -251,17 +313,16 @@ class AuthBoundaryService:
         """
         # محاولة التحقق عبر الخدمة المصغرة
         try:
-            user_data = await user_service_client.get_me(token)
-            return {
-                "id": user_data.get("id"),
-                "name": user_data.get("full_name"),
-                "email": user_data.get("email"),
-                "is_admin": user_data.get("is_admin", False),
-            }
-        except httpx.HTTPStatusError:
+            user_data = self._as_dict(await user_service_client.get_me(token))
+            return self._normalize_user_payload(user_data)
+        except httpx.HTTPStatusError as e:
+            if self._strict_microservice_auth_enabled():
+                raise HTTPException(status_code=e.response.status_code, detail="Invalid token") from e
             # الرمز غير صالح بالنسبة للخدمة، أو المستخدم غير موجود هناك
             pass
         except (httpx.RequestError, httpx.TimeoutException, Exception) as e:
+            if self._strict_microservice_auth_enabled():
+                raise HTTPException(status_code=503, detail="Authentication service unavailable") from e
             logger.error(f"User Service unreachable for get_me ({e}), using local fallback.")
 
         # ==============================================================================

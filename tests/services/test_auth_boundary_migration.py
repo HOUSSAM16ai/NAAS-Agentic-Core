@@ -60,6 +60,31 @@ async def test_register_user_success_remote(service):
         service.persistence.create_user.assert_not_called()
 
 
+
+
+@pytest.mark.asyncio
+async def test_register_user_remote_missing_name_uses_input_full_name(service):
+    """
+    عند غياب الاسم من استجابة التسجيل البعيدة يجب الحفاظ على الاسم المُدخل محلياً.
+    """
+    with patch("app.services.boundaries.auth_boundary_service.user_service_client") as mock_client:
+        mock_client.register_user = AsyncMock(
+            return_value={
+                "user": {
+                    "id": 777,
+                    "email": "remote-no-name@test.com",
+                    "is_admin": False,
+                },
+                "message": "Remote success",
+            }
+        )
+
+        result = await service.register_user("Provided Name", "remote-no-name@test.com", "password")
+
+        assert result["status"] == "success"
+        assert result["user"]["full_name"] == "Provided Name"
+        assert result["user"]["email"] == "remote-no-name@test.com"
+
 @pytest.mark.asyncio
 async def test_register_user_failure_network_fallback(service):
     """
@@ -70,8 +95,11 @@ async def test_register_user_failure_network_fallback(service):
         # Simulate Network Error
         mock_client.register_user.side_effect = httpx.RequestError("Connection failed")
 
+        service.settings.AUTH_MICROSERVICE_ONLY = False
+
         # Mock Local Persistence (SHOULD be called)
         service.persistence.user_exists = AsyncMock(return_value=False)
+
         mock_user = MagicMock()
         mock_user.id = 1
         mock_user.full_name = "Local User"
@@ -111,6 +139,8 @@ async def test_register_user_failure_logical_400(service):
         )
 
         # Mock Local Persistence (should NOT be called)
+        service.settings.AUTH_MICROSERVICE_ONLY = True
+        service.settings.ENVIRONMENT = "development"
         service.persistence.user_exists = AsyncMock()
 
         with pytest.raises(HTTPException) as exc:
@@ -168,6 +198,8 @@ async def test_authenticate_user_fallback_on_401(service):
             "401 Unauthorized", request=None, response=response
         )
 
+        service.settings.AUTH_MICROSERVICE_ONLY = False
+
         # Mock Local Persistence (SHOULD be called for fallback)
         mock_user = MagicMock()
         mock_user.id = 2
@@ -189,6 +221,8 @@ async def test_authenticate_user_fallback_on_401(service):
                 # Mock Settings
                 service.settings = MagicMock()
                 service.settings.SECRET_KEY = "secret"
+                service.settings.AUTH_MICROSERVICE_ONLY = False
+                service.settings.ENVIRONMENT = "testing"
 
                 mock_request = MagicMock()
 
@@ -227,3 +261,166 @@ async def test_get_current_user_success_remote(service):
 
         mock_client.get_me.assert_called_once_with("valid_remote_token")
         service.persistence.get_user_by_id.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_authenticate_user_remote_accepts_name_field(service):
+    """
+    عند استجابة الخدمة المصغّرة بحقل name فقط يجب الحفاظ على نجاح تسجيل الدخول.
+    """
+    with patch("app.services.boundaries.auth_boundary_service.user_service_client") as mock_client:
+        mock_client.login_user = AsyncMock(
+            return_value={
+                "access_token": "remote_token",
+                "user": {
+                    "id": 201,
+                    "name": "Remote Name",
+                    "email": "name@test.com",
+                    "is_admin": False,
+                },
+            }
+        )
+
+        mock_request = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+        mock_request.headers.get.return_value = "TestAgent"
+
+        result = await service.authenticate_user("name@test.com", "password", mock_request)
+
+        assert result["access_token"] == "remote_token"
+        assert result["user"]["name"] == "Remote Name"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_remote_accepts_name_field(service):
+    """
+    عند استجابة /user/me بحقل name فقط يجب إعادة الاسم بدون كسر التوافق.
+    """
+    with patch("app.services.boundaries.auth_boundary_service.user_service_client") as mock_client:
+        mock_client.get_me = AsyncMock(
+            return_value={
+                "id": 301,
+                "name": "Remote Me Name",
+                "email": "me-name@test.com",
+                "is_admin": True,
+            }
+        )
+
+        result = await service.get_current_user("valid_remote_token")
+
+        assert result["id"] == 301
+        assert result["name"] == "Remote Me Name"
+        assert result["email"] == "me-name@test.com"
+
+
+@pytest.mark.asyncio
+async def test_authenticate_user_remote_missing_name_uses_email_prefix(service):
+    """
+    عند غياب حقول الاسم من استجابة الخدمة المصغّرة يجب تعيين اسم افتراضي مستقر من البريد.
+    """
+    with patch("app.services.boundaries.auth_boundary_service.user_service_client") as mock_client:
+        mock_client.login_user = AsyncMock(
+            return_value={
+                "access_token": "remote_token",
+                "user": {
+                    "id": 202,
+                    "email": "fallback-name@test.com",
+                    "is_admin": False,
+                },
+            }
+        )
+
+        mock_request = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+        mock_request.headers.get.return_value = "TestAgent"
+
+        result = await service.authenticate_user("fallback-name@test.com", "password", mock_request)
+
+        assert result["access_token"] == "remote_token"
+        assert result["user"]["name"] == "fallback-name"
+
+
+@pytest.mark.asyncio
+async def test_authenticate_user_local_fallback_uses_timezone_utc(service):
+    """
+    يجب أن يبقى المسار المحلي لتوليد JWT صالحاً ويعيد رمزاً دون أخطاء زمنية.
+    """
+    with patch("app.services.boundaries.auth_boundary_service.user_service_client") as mock_client:
+        response = httpx.Response(401, json={"detail": "Invalid credentials"})
+        mock_client.login_user.side_effect = httpx.HTTPStatusError(
+            "401 Unauthorized", request=None, response=response
+        )
+
+        mock_user = MagicMock()
+        mock_user.id = 11
+        mock_user.email = "local@test.com"
+        mock_user.full_name = "Local Name"
+        mock_user.is_admin = False
+        mock_user.verify_password.return_value = True
+        service.persistence.get_user_by_email = AsyncMock(return_value=mock_user)
+
+        with patch("app.services.boundaries.auth_boundary_service.chrono_shield") as mock_shield:
+            mock_shield.check_allowance = AsyncMock()
+            mock_shield.reset_target = MagicMock()
+
+            service.settings = MagicMock()
+            service.settings.SECRET_KEY = "secret"
+            service.settings.AUTH_MICROSERVICE_ONLY = False
+
+            mock_request = MagicMock()
+            mock_request.client.host = "127.0.0.1"
+            mock_request.headers.get.return_value = "TestAgent"
+
+            result = await service.authenticate_user("local@test.com", "password", mock_request)
+
+            assert isinstance(result["access_token"], str)
+            assert result["status"] == "success"
+            assert result["user"]["id"] == 11
+
+
+@pytest.mark.asyncio
+async def test_authenticate_user_strict_mode_does_not_fallback_on_401(service):
+    """
+    في الوضع الصارم للخدمات المصغّرة لا يتم الرجوع للمونوليث عند رفض الخدمة البعيدة.
+    """
+    with patch("app.services.boundaries.auth_boundary_service.user_service_client") as mock_client:
+        response = httpx.Response(401, json={"detail": "Invalid credentials"})
+        mock_client.login_user.side_effect = httpx.HTTPStatusError(
+            "401 Unauthorized", request=None, response=response
+        )
+
+        service.settings.AUTH_MICROSERVICE_ONLY = True
+        service.settings.ENVIRONMENT = "development"
+        service.persistence.get_user_by_email = AsyncMock()
+
+        mock_request = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+        mock_request.headers.get.return_value = "TestAgent"
+
+        with pytest.raises(HTTPException) as exc:
+            await service.authenticate_user("strict@test.com", "password", mock_request)
+
+        assert exc.value.status_code == 401
+        service.persistence.get_user_by_email.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_register_user_strict_mode_no_local_fallback_on_unavailable(service):
+    """
+    في الوضع الصارم لا يتم إنشاء مستخدم محلي عند تعطل خدمة المستخدمين.
+    """
+    with patch("app.services.boundaries.auth_boundary_service.user_service_client") as mock_client:
+        response = httpx.Response(503, json={"detail": "Service unavailable"})
+        mock_client.register_user.side_effect = httpx.HTTPStatusError(
+            "503 Service Unavailable", request=None, response=response
+        )
+
+        service.settings.AUTH_MICROSERVICE_ONLY = True
+        service.settings.ENVIRONMENT = "development"
+        service.persistence.user_exists = AsyncMock()
+
+        with pytest.raises(HTTPException) as exc:
+            await service.register_user("Strict User", "strict-user@test.com", "password")
+
+        assert exc.value.status_code == 503
+        service.persistence.user_exists.assert_not_called()

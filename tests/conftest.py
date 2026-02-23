@@ -29,6 +29,14 @@ warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
 import pytest
 
+# Pre-load Monolith domain models to ensure they claim the Table definitions first.
+# This prevents "Table already defined" errors when Microservice models (with extend_existing=True)
+# are loaded later in the same process.
+try:
+    from app.core.domain import audit, chat, mission, user  # noqa: F401
+except ImportError:
+    pass
+
 if TYPE_CHECKING:
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -114,18 +122,6 @@ async def _ensure_schema() -> None:
     from sqlmodel import SQLModel
 
     from app.core.db_schema import validate_and_fix_schema
-
-    # Conditionally import models to ensure registration, avoiding conflicts
-    # with microservices tests where tables might already be defined by other models.
-
-    # Check if 'missions' table exists (proxy for microservices env)
-    if "missions" not in SQLModel.metadata.tables:
-        from app.core.domain import audit, chat, mission, user  # noqa: F401
-    else:
-        # If missions table exists, we assume we are in a microservices test context
-        # where we shouldn't load the monolithic models that might conflict or define relationships
-        # to the now-different 'Mission' model.
-        pass
 
     engine = _get_engine()
     async with engine.begin() as connection:
@@ -232,16 +228,6 @@ def db_lifecycle(event_loop: asyncio.AbstractEventLoop, request: pytest.FixtureR
                 # Import microservice models explicitly to ensure schema is correct
                 # This ensures that even if Monolith models aren't loaded, these are.
                 import microservices.user_service.models  # noqa: F401
-        else:
-            # Monolith models
-            # Conditionally import user/audit/chat to avoid conflict with microservices tests
-            if "users" not in SQLModel.metadata.tables:
-                from app.core.domain import audit, chat, user  # noqa: F401
-
-            # Conditionally import mission to avoid conflict with microservices tests
-            if "missions" not in SQLModel.metadata.tables and "users" in SQLModel.metadata.tables:
-                # Only import mission (monolith) if users table exists (monolith dependency)
-                from app.core.domain import mission  # noqa: F401
 
         # Deduplicate indexes to handle potential accumulation from multiple test runs
         # or conflicts between Monolith and Microservice models extending the same table

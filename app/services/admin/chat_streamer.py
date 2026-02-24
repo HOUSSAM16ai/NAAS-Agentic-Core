@@ -20,10 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.ai_gateway import AIClient
 from app.core.domain.chat import AdminConversation, MessageRole
+from app.infrastructure.clients.orchestrator_client import orchestrator_client
 from app.services.admin.chat_persistence import AdminChatPersistence
-from app.services.chat import get_chat_orchestrator
 from app.services.chat.contracts import ChatStreamEvent
-from app.services.chat.orchestrator import ChatOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -56,67 +55,60 @@ class AdminChatStreamer:
         metadata: dict[str, object] | None = None,
     ) -> AsyncGenerator[ChatStreamEvent, None]:
         """
-        تنفيذ عملية البث الحي للاستجابة.
+        تنفيذ عملية البث الحي للاستجابة عبر OrchestratorClient.
 
         Yields:
             ChatStreamEvent: أحداث WebSocket منظمة على شكل قاموس.
         """
-        # 1. إعداد السياق والتاريخ
-        self._inject_system_context_if_missing(history)
-        self._update_history_with_question(history, question)
-
-        # 2. إرسال حدث التهيئة
+        # 1. إرسال حدث التهيئة
         yield self._create_init_event(conversation)
 
-        # 3. تنفيذ البث مع الحفظ
+        # 2. تنفيذ البث مع الحفظ
         try:
-            orchestrator = get_chat_orchestrator()
             full_response: list[str] = []
 
-            async for chunk in self._stream_with_safety_checks(
-                orchestrator,
-                question,
-                user_id,
-                conversation.id,
-                ai_client,
-                history,
-                session_factory_func,
-                full_response,
-                metadata,
-            ):
-                yield chunk
+            # Prepare clean history (remove duplicate current question if exists)
+            clean_history = [
+                {k: str(v) for k, v in m.items()}
+                for m in history
+                if not (m.get("role") == "user" and m.get("content") == question)
+            ]
 
-            # 4. حفظ وإنهاء
+            async for event in orchestrator_client.chat_with_agent(
+                question=question,
+                user_id=user_id,
+                conversation_id=conversation.id,
+                history_messages=clean_history,
+                context=metadata,
+            ):
+                if isinstance(event, dict):
+                    # Extract content for persistence
+                    evt_type = str(event.get("type", ""))
+                    if evt_type in ("assistant_delta", "delta"):
+                        content = str(event.get("payload", {}).get("content", ""))
+                        if content:
+                            full_response.append(content)
+                            if self._exceeds_safety_limit(full_response):
+                                yield self._create_size_limit_error()
+                                break
+
+                    yield event
+                else:
+                    # String fallback
+                    content = str(event)
+                    full_response.append(content)
+                    if self._exceeds_safety_limit(full_response):
+                        yield self._create_size_limit_error()
+                        break
+                    yield self._create_chunk_event(content)
+
+            # 3. حفظ وإنهاء
             await self._persist_response(conversation.id, full_response, session_factory_func)
             yield {"type": "complete", "payload": {"status": "done"}}
 
         except Exception as e:
-            logger.error(f"🔥 Streaming error: {e}")
+            logger.error(f"🔥 Streaming error: {e}", exc_info=True)
             yield self._create_error_event(str(e))
-
-    def _inject_system_context_if_missing(self, history: list[dict[str, object]]) -> None:
-        """
-        حقن سياق النظام إذا كان مفقوداً.
-        """
-        has_system = any(msg.get("role") == "system" for msg in history)
-        if not has_system:
-            try:
-                from app.services.chat.context_service import get_context_service
-
-                ctx_service = get_context_service()
-                system_prompt = ctx_service.get_admin_system_prompt()
-                history.insert(0, {"role": "system", "content": system_prompt})
-            except Exception as e:
-                logger.error(f"⚠️ Failed to inject Overmind context: {e}")
-
-    def _update_history_with_question(
-        self, history: list[dict[str, object]], question: str
-    ) -> None:
-        """
-        تحديث التاريخ بالسؤال الجديد.
-        """
-        if not history or history[-1].get("content") != question:
-            history.append({"role": "user", "content": question})
 
     def _create_init_event(self, conversation: AdminConversation) -> ChatStreamEvent:
         """
@@ -127,49 +119,6 @@ class AdminChatStreamer:
             "title": conversation.title,
         }
         return {"type": "conversation_init", "payload": init_payload}
-
-    async def _stream_with_safety_checks(
-        self,
-        orchestrator: ChatOrchestrator,
-        question: str,
-        user_id: int,
-        conversation_id: int,
-        ai_client: AIClient,
-        history: list[dict[str, object]],
-        session_factory_func: Callable[[], AsyncSession],
-        full_response: list[str],
-        metadata: dict[str, object] | None = None,
-    ) -> AsyncGenerator[ChatStreamEvent, None]:
-        """
-        بث مع فحوصات السلامة (الحد الأقصى للحجم).
-        """
-        # Note: We need to cast history to list[dict[str, str]] because ChatOrchestrator expects strict strings,
-        # but here we deal with generic objects (usually strings).
-        # In a perfect world, we'd validate, but for now we cast to satisfy type checker.
-        history_casted = [{k: str(v) for k, v in x.items()} for x in history]
-
-        async for content_part in orchestrator.process(
-            question=question,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            ai_client=ai_client,
-            history_messages=history_casted,
-            session_factory=session_factory_func,
-            metadata=metadata,
-        ):
-            if not content_part:
-                continue
-
-            if isinstance(content_part, dict):
-                yield content_part
-            else:
-                full_response.append(content_part)
-
-                if self._exceeds_safety_limit(full_response):
-                    yield self._create_size_limit_error()
-                    break
-
-                yield self._create_chunk_event(content_part)
 
     def _exceeds_safety_limit(self, response_parts: list[str]) -> bool:
         """
@@ -209,8 +158,10 @@ class AdminChatStreamer:
         حفظ الاستجابة في قاعدة البيانات.
         """
         assistant_content = "".join(response_parts)
-        if not assistant_content:
-            assistant_content = "Error: No response received from AI service."
+        if not assistant_content and not response_parts:
+            # Just to ensure we don't save empty string if it was tool calls only
+            # But persist history if needed.
+            return
 
         try:
             async with session_factory_func() as session:

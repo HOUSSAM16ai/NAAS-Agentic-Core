@@ -54,6 +54,7 @@ async def login(
     user_response = UserResponse.model_validate(user)
     return AuthResponse(
         access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
         user=user_response,
         status="success",
     )

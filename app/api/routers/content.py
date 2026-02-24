@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.services.content_service import ContentService
 
 router = APIRouter(prefix="/v1/content", tags=["content"])
 
@@ -22,48 +22,32 @@ class ContentSearchResponse(BaseModel):
     items: list[ContentItemResponse]
 
 
+def get_content_service(db: AsyncSession = Depends(get_db)) -> ContentService:
+    return ContentService(db)
+
+
 @router.get("/search", response_model=ContentSearchResponse)
 async def search_content(
     q: str | None = Query(None, description="Search query"),
     level: str | None = None,
     subject: str | None = None,
-    db: AsyncSession = Depends(get_db),
+    service: ContentService = Depends(get_content_service),
 ):
     """
     Search content items.
     """
-    query_str = "SELECT id, type, title, level, subject, year, lang FROM content_items WHERE 1=1"
-    params = {}
-
-    if level:
-        query_str += " AND level = :level"
-        params["level"] = level
-
-    if subject:
-        query_str += " AND subject = :subject"
-        params["subject"] = subject
-
-    if q:
-        # Simple LIKE search for now (works on both sqlite and postgres)
-        query_str += " AND (title LIKE :q OR md_content LIKE :q)"
-        params["q"] = f"%{q}%"
-
-    query_str += " LIMIT 50"
-
-    result = await db.execute(text(query_str), params)
-    rows = result.fetchall()
-
+    rows = await service.search_content(q, level, subject)
     items = []
     for row in rows:
         items.append(
             ContentItemResponse(
-                id=row[0],
-                type=row[1],
-                title=row[2],
-                level=row[3],
-                subject=row[4],
-                year=row[5],
-                lang=row[6],
+                id=row["id"],
+                type=row["type"],
+                title=row["title"],
+                level=row["level"],
+                subject=row["subject"],
+                year=row["year"],
+                lang=row["lang"],
             )
         )
 
@@ -71,65 +55,25 @@ async def search_content(
 
 
 @router.get("/{id}")
-async def get_content(id: str, db: AsyncSession = Depends(get_db)):
+async def get_content(id: str, service: ContentService = Depends(get_content_service)):
     """
     Get content metadata and raw content.
     """
-    result = await db.execute(
-        text(
-            "SELECT id, type, title, level, subject, year, lang, md_content FROM content_items WHERE id = :id"
-        ),
-        {"id": id},
-    )
-    row = result.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Content not found")
-
-    return {
-        "id": row[0],
-        "type": row[1],
-        "title": row[2],
-        "level": row[3],
-        "subject": row[4],
-        "year": row[5],
-        "lang": row[6],
-        "md_content": row[7],
-    }
+    return await service.get_content(id)
 
 
 @router.get("/{id}/raw")
-async def get_content_raw(id: str, db: AsyncSession = Depends(get_db)):
+async def get_content_raw(id: str, service: ContentService = Depends(get_content_service)):
     """
     Get raw markdown content.
     """
-    result = await db.execute(
-        text("SELECT md_content FROM content_items WHERE id = :id"), {"id": id}
-    )
-    row = result.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Content not found")
-
-    return {"content": row[0]}
+    content = await service.get_content_raw(id)
+    return {"content": content}
 
 
 @router.get("/{id}/solution")
-async def get_content_solution(id: str, db: AsyncSession = Depends(get_db)):
+async def get_content_solution(id: str, service: ContentService = Depends(get_content_service)):
     """
     Get official solution.
     """
-    result = await db.execute(
-        text(
-            "SELECT solution_md, steps_json, final_answer FROM content_solutions WHERE content_id = :id"
-        ),
-        {"id": id},
-    )
-    row = result.fetchone()
-
-    # If no solution found, return 404 or empty structure?
-    # User said: "If solution_md is missing... say you don't have a verified solution"
-    # The API should simply return 404 or nulls.
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Solution not found")
-
-    return {"solution_md": row[0], "steps_json": row[1], "final_answer": row[2]}
+    return await service.get_content_solution(id)

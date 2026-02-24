@@ -163,6 +163,7 @@ class AuthBoundaryService:
 
             return {
                 "access_token": response.get("access_token"),
+                "refresh_token": response.get("refresh_token"),
                 "token_type": "Bearer",
                 "user": {
                     "id": user_data.get("id"),
@@ -301,3 +302,150 @@ class AuthBoundaryService:
         if len(parts) != 2 or parts[0].lower() != "bearer":
             raise HTTPException(status_code=401, detail="Invalid Authorization header format")
         return parts[1]
+
+    async def update_profile(
+        self, token: str, full_name: str | None = None, email: str | None = None
+    ) -> dict[str, object]:
+        """Update profile via User Service."""
+        try:
+            return await user_service_client.update_profile(token, full_name, email)
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+        except Exception as e:
+            logger.error(f"Failed to update profile via service: {e}")
+            raise HTTPException(status_code=503, detail="Service unavailable") from e
+
+    async def change_password(
+        self, token: str, current_password: str, new_password: str
+    ) -> dict[str, object]:
+        """Change password via User Service."""
+        try:
+            return await user_service_client.change_password(token, current_password, new_password)
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+        except Exception as e:
+            logger.error(f"Failed to change password via service: {e}")
+            raise HTTPException(status_code=503, detail="Service unavailable") from e
+
+    async def forgot_password(self, email: str) -> dict[str, object]:
+        """Request password reset via User Service."""
+        try:
+            return await user_service_client.forgot_password(email)
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+        except Exception as e:
+            logger.error(f"Failed to request password reset via service: {e}")
+            raise HTTPException(status_code=503, detail="Service unavailable") from e
+
+    async def reset_password(self, token: str, new_password: str) -> dict[str, object]:
+        """Reset password via User Service."""
+        try:
+            return await user_service_client.reset_password(token, new_password)
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+        except Exception as e:
+            logger.error(f"Failed to reset password via service: {e}")
+            raise HTTPException(status_code=503, detail="Service unavailable") from e
+
+    async def create_user_admin(
+        self, token: str, full_name: str, email: str, password: str, is_admin: bool = False
+    ) -> dict[str, object]:
+        """Admin create user via User Service."""
+        try:
+            return await user_service_client.create_user_admin(
+                token, full_name, email, password, is_admin
+            )
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+        except Exception as e:
+            logger.error(f"Failed to create user (admin) via service: {e}")
+            raise HTTPException(status_code=503, detail="Service unavailable") from e
+
+    async def update_user_status(self, token: str, user_id: int, status: str) -> dict[str, object]:
+        """Admin update status via User Service."""
+        try:
+            return await user_service_client.update_user_status(token, user_id, status)
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+        except Exception as e:
+            logger.error(f"Failed to update status via service: {e}")
+            raise HTTPException(status_code=503, detail="Service unavailable") from e
+
+    async def assign_role(self, token: str, user_id: int, role_name: str) -> dict[str, object]:
+        """Admin assign role via User Service."""
+        try:
+            return await user_service_client.assign_role(token, user_id, role_name)
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+        except Exception as e:
+            logger.error(f"Failed to assign role via service: {e}")
+            raise HTTPException(status_code=503, detail="Service unavailable") from e
+
+    async def list_users(self) -> list[dict[str, object]]:
+        """List all users via User Service (Admin)."""
+        try:
+            return await user_service_client.get_users()
+        except Exception as e:
+            logger.error(f"Failed to list users via service: {e}")
+            raise HTTPException(status_code=503, detail="Service unavailable") from e
+
+    async def issue_reauth_proof(
+        self, user_id: int, password: str, ip: str | None = None, user_agent: str | None = None
+    ) -> tuple[str, int]:
+        """Issue re-auth proof locally (Fallback)."""
+        # We use local persistence to verify password for re-auth
+        # This assumes shared DB.
+        user = await self.persistence.get_user_by_id(user_id)
+        if not user or not user.verify_password(password):
+            raise HTTPException(status_code=401, detail="Re-authentication required")
+
+        payload = {
+            "sub": str(user.id),
+            "purpose": "reauth",
+            "exp": datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=5),
+        }
+        token = jwt.encode(payload, self.settings.SECRET_KEY, algorithm="HS256")
+        return token, 300
+
+    def verify_reauth_proof(self, token: str, user_id: int) -> None:
+        """Verify re-auth proof locally."""
+        try:
+            payload = jwt.decode(token, self.settings.SECRET_KEY, algorithms=["HS256"])
+            if payload.get("purpose") != "reauth" or payload.get("sub") != str(user_id):
+                raise HTTPException(status_code=401, detail="Re-authentication required")
+        except jwt.PyJWTError as e:
+            raise HTTPException(status_code=401, detail="Re-authentication required") from e
+
+    async def refresh_session(
+        self, refresh_token: str, ip: str | None = None, user_agent: str | None = None
+    ) -> dict[str, str]:
+        """Refresh session locally (Fallback)."""
+        # Since Microservice doesn't expose refresh endpoint yet, we use local logic.
+        # This works if they share DB and Secret.
+        try:
+            from app.services.auth.service import AuthService
+
+            # Create a temporary AuthService to handle complex token logic
+            # This is a bit hacky but preserves logic without duplicating 100 lines of token code
+            local_service = AuthService(self.db, self.settings)
+            result = await local_service.refresh_session(
+                refresh_token=refresh_token, ip=ip, user_agent=user_agent
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Local refresh failed: {e}")
+            raise HTTPException(status_code=401, detail="Invalid refresh token") from e
+
+    async def logout(
+        self, refresh_token: str, ip: str | None = None, user_agent: str | None = None
+    ) -> None:
+        """Logout locally."""
+        try:
+            from app.services.auth.service import AuthService
+
+            local_service = AuthService(self.db, self.settings)
+            await local_service.logout(
+                refresh_token=refresh_token, ip=ip, user_agent=user_agent
+            )
+        except Exception:
+            pass

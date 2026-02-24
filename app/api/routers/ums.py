@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.ums import (
     AdminCreateUserRequest,
@@ -26,12 +27,13 @@ from app.api.schemas.ums import (
     TokenPair,
     UserOut,
 )
+from app.core.database import get_db
 from app.core.domain.audit import AuditLog
-from app.core.domain.user import Role, User, UserRole, UserStatus
-from app.deps.auth import CurrentUser, get_auth_service, get_current_user, require_permissions
+from app.core.domain.user import UserStatus
+from app.deps.auth import CurrentUser, get_current_user, require_permissions
 from app.middleware.rate_limiter_middleware import rate_limit
 from app.services.audit import AuditService
-from app.services.auth import AuthService
+from app.services.boundaries.auth_boundary_service import AuthBoundaryService
 from app.services.policy import PolicyService
 from app.services.rbac import (
     ACCOUNT_SELF,
@@ -48,6 +50,10 @@ from app.services.rbac import (
 router = APIRouter(tags=["User Management"])
 
 
+def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthBoundaryService:
+    return AuthBoundaryService(db)
+
+
 def _audit_context(request: Request) -> tuple[str | None, str | None]:
     client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("User-Agent")
@@ -57,24 +63,17 @@ def _audit_context(request: Request) -> tuple[str | None, str | None]:
 async def _enforce_recent_auth(
     *,
     request: Request,
-    auth_service: AuthService,
+    auth_service: AuthBoundaryService,
     current: CurrentUser,
     provided_token: str | None,
     provided_password: str | None,
 ) -> None:
-    """يتحقق من وجود دليل مصادقة حديث قبل تنفيذ عمليات حساسة."""
-
-    client_ip, user_agent = _audit_context(request)
+    """Check for recent authentication proof."""
     token = provided_token or request.headers.get("X-Reauth-Token")
     password = provided_password or request.headers.get("X-Reauth-Password")
 
     if token:
-        await auth_service.verify_reauth_proof(
-            token,
-            user=current.user,
-            ip=client_ip,
-            user_agent=user_agent,
-        )
+        auth_service.verify_reauth_proof(token, current.user.id)
         return
 
     if password and current.user.check_password(password):
@@ -90,28 +89,50 @@ async def _enforce_recent_auth(
 async def register_user(
     request: Request,
     payload: RegisterRequest,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> TokenPair:
     client_ip, user_agent = _audit_context(request)
-    user = await auth_service.register_user(
+
+    # 1. Register via Microservice
+    await auth_service.register_user(
         full_name=payload.full_name,
         email=payload.email,
         password=payload.password,
-        ip=client_ip,
-        user_agent=user_agent,
     )
-    tokens = await auth_service.issue_tokens(user, ip=client_ip, user_agent=user_agent)
-    return TokenPair(**tokens)
+
+    # 2. Login immediately via Microservice
+    auth_result = await auth_service.authenticate_user(
+        email=payload.email,
+        password=payload.password,
+        request=request,
+    )
+
+    return TokenPair(
+        access_token=str(auth_result.get("access_token")),
+        refresh_token=str(auth_result.get("refresh_token") or ""),
+        token_type=str(auth_result.get("token_type", "Bearer")),
+    )
 
 
 @router.get("/users/me", response_model=UserOut)
 async def get_me(
+    request: Request,
     current: CurrentUser = Depends(require_permissions(ACCOUNT_SELF)),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> UserOut:
-    """إرجاع بيانات الحساب الحالية بما في ذلك الأدوار."""
+    """Return current user profile using local context (synced via shared DB)."""
+    # Since we share the DB, current.user is fresh enough for basic profile.
+    # Roles are fetched via RBAC locally.
+    # To use microservice fully, we would call auth_service.get_current_user(token).
+    # But current.user is already injected.
 
-    roles = await auth_service.rbac.user_roles(current.user.id)
+    # Re-fetch roles locally to match schema
+    # AuthBoundaryService doesn't expose rbac directly, but initialized AuthPersistence with session.
+    # We can access auth_service.db
+    from app.services.rbac import RBACService
+    rbac = RBACService(auth_service.db)
+    roles = await rbac.user_roles(current.user.id)
+
     return UserOut(
         id=current.user.id,
         email=current.user.email,
@@ -127,25 +148,33 @@ async def update_me(
     request: Request,
     payload: ProfileUpdateRequest,
     current: CurrentUser = Depends(require_permissions(ACCOUNT_SELF)),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> UserOut:
-    """تحديث الاسم الكامل أو البريد الإلكتروني للمستخدم الحالي مع تدقيق التغيير."""
+    """Update profile via Microservice."""
+    _, _ = _audit_context(request)
+    token = AuthBoundaryService.extract_token_from_request(request)
 
-    client_ip, user_agent = _audit_context(request)
-    updated = await auth_service.update_profile(
-        user=current.user,
+    result = await auth_service.update_profile(
+        token=token,
         full_name=payload.full_name,
-        email=payload.email,
-        ip=client_ip,
-        user_agent=user_agent,
+        email=payload.email
     )
-    roles = await auth_service.rbac.user_roles(updated.id)
+
+    # Construct UserOut from result dict
+    # Microservice result has 'roles' in it.
+    roles = result.get("roles", [])
+    if not roles:
+         # Fallback fetch if missing
+        from app.services.rbac import RBACService
+        rbac = RBACService(auth_service.db)
+        roles = await rbac.user_roles(current.user.id)
+
     return UserOut(
-        id=updated.id,
-        email=updated.email,
-        full_name=updated.full_name,
-        is_active=updated.is_active,
-        status=updated.status,
+        id=int(result["id"]), # type: ignore
+        email=str(result["email"]),
+        full_name=str(result.get("full_name") or result.get("name")),
+        is_active=bool(result.get("is_active", True)),
+        status=UserStatus(result.get("status", "active")),
         roles=roles,
     )
 
@@ -155,17 +184,14 @@ async def change_password(
     request: Request,
     payload: ChangePasswordRequest,
     current: CurrentUser = Depends(require_permissions(ACCOUNT_SELF)),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> dict[str, str]:
-    """تغيير كلمة المرور وإبطال رموز التحديث القديمة."""
-
-    client_ip, user_agent = _audit_context(request)
+    """Change password via Microservice."""
+    token = AuthBoundaryService.extract_token_from_request(request)
     await auth_service.change_password(
-        user=current.user,
+        token=token,
         current_password=payload.current_password,
-        new_password=payload.new_password,
-        ip=client_ip,
-        user_agent=user_agent,
+        new_password=payload.new_password
     )
     return {"status": "password_changed"}
 
@@ -175,17 +201,18 @@ async def change_password(
 async def login(
     request: Request,
     payload: LoginRequest,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> TokenPair:
-    client_ip, user_agent = _audit_context(request)
-    user = await auth_service.authenticate(
+    auth_result = await auth_service.authenticate_user(
         email=payload.email,
         password=payload.password,
-        ip=client_ip,
-        user_agent=user_agent,
+        request=request,
     )
-    tokens = await auth_service.issue_tokens(user, ip=client_ip, user_agent=user_agent)
-    return TokenPair(**tokens)
+    return TokenPair(
+        access_token=str(auth_result.get("access_token")),
+        refresh_token=str(auth_result.get("refresh_token") or ""),
+        token_type=str(auth_result.get("token_type", "Bearer")),
+    )
 
 
 @router.post("/auth/reauth", response_model=ReauthResponse)
@@ -193,11 +220,14 @@ async def reauth(
     request: Request,
     payload: ReauthRequest,
     current: CurrentUser = Depends(get_current_user),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> ReauthResponse:
     client_ip, user_agent = _audit_context(request)
     token, expires_in = await auth_service.issue_reauth_proof(
-        user=current.user, password=payload.password, ip=client_ip, user_agent=user_agent
+        user_id=current.user.id,
+        password=payload.password,
+        ip=client_ip,
+        user_agent=user_agent
     )
     return ReauthResponse(reauth_token=token, expires_in=expires_in)
 
@@ -207,22 +237,26 @@ async def reauth(
 async def refresh_token(
     request: Request,
     payload: RefreshRequest,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> TokenPair:
     client_ip, user_agent = _audit_context(request)
-    tokens = await auth_service.refresh_session(
+    result = await auth_service.refresh_session(
         refresh_token=payload.refresh_token,
         ip=client_ip,
         user_agent=user_agent,
     )
-    return TokenPair(**tokens)
+    return TokenPair(
+        access_token=str(result["access_token"]),
+        refresh_token=str(result["refresh_token"]),
+        token_type=str(result["token_type"]),
+    )
 
 
 @router.post("/auth/logout")
 async def logout(
     request: Request,
     payload: LogoutRequest,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> dict[str, str]:
     client_ip, user_agent = _audit_context(request)
     await auth_service.logout(
@@ -236,15 +270,15 @@ async def logout(
 async def request_password_reset(
     request: Request,
     payload: PasswordResetRequest,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> PasswordResetResponse:
-    """طلب إعادة تعيين كلمة المرور دون كشف وجود الحساب."""
-
-    client_ip, user_agent = _audit_context(request)
-    token, expires_in = await auth_service.request_password_reset(
-        email=payload.email, ip=client_ip, user_agent=user_agent
+    # Microservice response is dict
+    result = await auth_service.forgot_password(email=payload.email)
+    # result keys might be reset_token, expires_in
+    return PasswordResetResponse(
+        reset_token=str(result.get("reset_token")) if result.get("reset_token") else None,
+        expires_in=int(result.get("expires_in")) if result.get("expires_in") else None
     )
-    return PasswordResetResponse(reset_token=token, expires_in=expires_in)
 
 
 @router.post("/auth/password/reset")
@@ -252,16 +286,16 @@ async def request_password_reset(
 async def reset_password(
     request: Request,
     payload: PasswordResetConfirmRequest,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> dict[str, str]:
-    """تطبيق إعادة تعيين كلمة المرور وإبطال جلسات التحديث القديمة."""
-
-    client_ip, user_agent = _audit_context(request)
+    # Wait, password reset usually uses a specific reset token, not auth token.
+    # Microservice 'reset_password' takes 'token' and 'new_password'.
+    # This 'token' is the reset token from email.
+    # The client/schema names it 'token'.
+    # auth_service.reset_password(token, new_pw).
     await auth_service.reset_password(
         token=payload.token,
         new_password=payload.new_password,
-        ip=client_ip,
-        user_agent=user_agent,
     )
     return {"status": "password_reset"}
 
@@ -269,38 +303,22 @@ async def reset_password(
 @router.get("/admin/users", response_model=list[UserOut])
 async def list_users(
     _: CurrentUser = Depends(require_permissions(USERS_READ)),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> list[UserOut]:
-    result = await auth_service.session.execute(
-        select(User, Role.name)
-        .select_from(User)
-        .join(UserRole, UserRole.user_id == User.id, isouter=True)
-        .join(Role, Role.id == UserRole.role_id, isouter=True)
-    )
-    rows = result.all()
-    users: dict[int, User] = {}
-    roles_map: dict[int, list[str]] = {}
-    for user, role_name in rows:
-        if user.id is None:
-            continue
-        users[user.id] = user
-        if role_name:
-            roles_map.setdefault(user.id, []).append(role_name)
-        else:
-            roles_map.setdefault(user.id, [])
+    # Use Microservice via Boundary
+    users_data = await auth_service.list_users()
 
-    output: list[UserOut] = []
-    for user_id, user in users.items():
-        output.append(
-            UserOut(
-                id=user.id,
-                email=user.email,
-                full_name=user.full_name,
-                is_active=user.is_active,
-                status=user.status,
-                roles=sorted(set(roles_map.get(user_id, []))),
-            )
-        )
+    output = []
+    for u_dict in users_data:
+        # Microservice returns UserOut structure with roles
+        output.append(UserOut(
+            id=int(u_dict["id"]), # type: ignore
+            email=str(u_dict["email"]),
+            full_name=str(u_dict.get("full_name") or u_dict.get("name")),
+            is_active=bool(u_dict.get("is_active", True)),
+            status=UserStatus(u_dict.get("status", "active")),
+            roles=u_dict.get("roles", []) # type: ignore
+        ))
     return output
 
 
@@ -309,9 +327,10 @@ async def create_user_admin(
     request: Request,
     payload: AdminCreateUserRequest,
     current: CurrentUser = Depends(require_permissions(USERS_WRITE, ROLES_WRITE)),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> UserOut:
-    client_ip, user_agent = _audit_context(request)
+    token = AuthBoundaryService.extract_token_from_request(request)
+
     if payload.is_admin:
         await _enforce_recent_auth(
             request=request,
@@ -321,31 +340,21 @@ async def create_user_admin(
             provided_password=None,
         )
 
-    user = await auth_service.register_user(
+    result = await auth_service.create_user_admin(
+        token=token,
         full_name=payload.full_name,
         email=payload.email,
         password=payload.password,
+        is_admin=payload.is_admin
     )
-    if payload.is_admin:
-        await auth_service.promote_to_admin(user=user)
-    roles = await auth_service.rbac.user_roles(user.id)
-    audit = AuditService(auth_service.session)
-    await audit.record(
-        actor_user_id=current.user.id,
-        action="USER_CREATED",
-        target_type="user",
-        target_id=str(user.id),
-        metadata={"is_admin": payload.is_admin},
-        ip=client_ip,
-        user_agent=user_agent,
-    )
+
     return UserOut(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        status=user.status,
-        roles=roles,
+        id=int(result["id"]), # type: ignore
+        email=str(result["email"]),
+        full_name=str(result.get("full_name") or result.get("name")),
+        is_active=bool(result.get("is_active", True)),
+        status=UserStatus(result.get("status", "active")),
+        roles=result.get("roles", []), # type: ignore
     )
 
 
@@ -355,33 +364,23 @@ async def update_user_status(
     user_id: int,
     payload: StatusUpdateRequest,
     current: CurrentUser = Depends(require_permissions(USERS_WRITE)),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> UserOut:
-    user = await auth_service.session.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    user.status = payload.status
-    user.is_active = payload.status == UserStatus.ACTIVE
-    await auth_service.session.commit()
-    roles = await auth_service.rbac.user_roles(user.id)
-    client_ip, user_agent = _audit_context(request)
-    audit = AuditService(auth_service.session)
-    await audit.record(
-        actor_user_id=current.user.id,
-        action="USER_STATUS_UPDATED",
-        target_type="user",
-        target_id=str(user.id),
-        metadata={"status": payload.status.value},
-        ip=client_ip,
-        user_agent=user_agent,
+    token = AuthBoundaryService.extract_token_from_request(request)
+
+    result = await auth_service.update_user_status(
+        token=token,
+        user_id=user_id,
+        status=payload.status.value
     )
+
     return UserOut(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        status=user.status,
-        roles=roles,
+        id=int(result["id"]), # type: ignore
+        email=str(result["email"]),
+        full_name=str(result.get("full_name") or result.get("name")),
+        is_active=bool(result.get("is_active", True)),
+        status=UserStatus(result.get("status", "active")),
+        roles=result.get("roles", []), # type: ignore
     )
 
 
@@ -391,11 +390,9 @@ async def assign_role(
     user_id: int,
     payload: RoleAssignmentRequest,
     current: CurrentUser = Depends(require_permissions(USERS_WRITE, ROLES_WRITE)),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> UserOut:
-    target = await auth_service.session.get(User, user_id)
-    if target is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    token = AuthBoundaryService.extract_token_from_request(request)
 
     if payload.role_name == ADMIN_ROLE:
         await _enforce_recent_auth(
@@ -410,44 +407,37 @@ async def assign_role(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Justification required for admin assignment",
             )
-        await auth_service.promote_to_admin(user=target)
-    else:
-        await auth_service.rbac.assign_role(target, payload.role_name)
 
-    roles = await auth_service.rbac.user_roles(target.id)
-    client_ip, user_agent = _audit_context(request)
-    audit = AuditService(auth_service.session)
-    await audit.record(
-        actor_user_id=current.user.id,
-        action="USER_ROLE_ASSIGNED",
-        target_type="user",
-        target_id=str(target.id),
-        metadata={"role": payload.role_name, "justification": payload.justification},
-        ip=client_ip,
-        user_agent=user_agent,
+    result = await auth_service.assign_role(
+        token=token,
+        user_id=user_id,
+        role_name=payload.role_name
     )
+
     return UserOut(
-        id=target.id,
-        email=target.email,
-        full_name=target.full_name,
-        is_active=target.is_active,
-        status=target.status,
-        roles=roles,
+        id=int(result["id"]), # type: ignore
+        email=str(result["email"]),
+        full_name=str(result.get("full_name") or result.get("name")),
+        is_active=bool(result.get("is_active", True)),
+        status=UserStatus(result.get("status", "active")),
+        roles=result.get("roles", []), # type: ignore
     )
 
 
 @router.get("/admin/audit", response_model=list[dict])
 async def list_audit(
     _: CurrentUser = Depends(require_permissions(AUDIT_READ)),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict]:
+    # Keeping local audit log read for now as Auditor Service client is not ready
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="limit out of range")
     if offset < 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="offset out of range")
-    result = await auth_service.session.execute(
+
+    result = await auth_service.db.execute(
         select(AuditLog).order_by(desc(AuditLog.created_at)).limit(limit).offset(offset)
     )
     rows = result.scalars().all()
@@ -473,7 +463,7 @@ async def ask_question(
     request: Request,
     payload: QuestionRequest,
     current: CurrentUser = Depends(require_permissions(QA_SUBMIT)),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthBoundaryService = Depends(get_auth_service),
 ) -> dict[str, str]:
     policy = PolicyService()
     primary_role = ADMIN_ROLE if ADMIN_ROLE in current.roles else "STANDARD_USER"
@@ -481,7 +471,7 @@ async def ask_question(
     client_ip, user_agent = _audit_context(request)
 
     if not decision.allowed:
-        audit = AuditService(auth_service.session)
+        audit = AuditService(auth_service.db)
         await audit.record(
             actor_user_id=current.user.id,
             action="POLICY_BLOCK",

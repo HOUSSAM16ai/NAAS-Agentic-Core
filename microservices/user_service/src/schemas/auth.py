@@ -67,6 +67,7 @@ class UserResponse(RobustBaseModel):
 
 class AuthResponse(RobustBaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "Bearer"
     user: UserResponse
     status: str = "success"

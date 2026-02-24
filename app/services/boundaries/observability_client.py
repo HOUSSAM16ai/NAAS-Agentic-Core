@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 import httpx
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.services.boundaries.schemas import (
     TelemetryData,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ObservabilityClientSettings(BaseSettings):
@@ -46,6 +50,18 @@ class ObservabilityServiceClient:
             },
         }
 
+    async def get_metrics(self) -> dict:
+        """Get raw metrics from the microservice."""
+        response = await self.client.get("/metrics")
+        response.raise_for_status()
+        return response.json().get("metrics", {})
+
+    async def get_active_alerts(self) -> list[dict]:
+        """Get active alerts from the microservice."""
+        response = await self.client.get("/alerts")
+        response.raise_for_status()
+        return response.json().get("alerts", [])
+
     async def get_service_health(self, service_name: str) -> dict:
         response = await self.client.get(f"/health/{service_name}")
         response.raise_for_status()
@@ -61,8 +77,12 @@ class ObservabilityServiceClient:
             "labels": data.labels,
             "unit": data.unit,
         }
-        response = await self.client.post("/telemetry", json=payload)
-        response.raise_for_status()
+        try:
+            response = await self.client.post("/telemetry", json=payload)
+            response.raise_for_status()
+        except Exception as e:
+            # Log and suppress error to avoid breaking the caller (background task)
+            logger.warning(f"Failed to send telemetry: {e}")
 
     async def calculate_security_metrics(
         self, findings: list[dict], code_metrics: dict | None = None

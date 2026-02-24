@@ -303,6 +303,29 @@ class AIOpsService:
             "services_monitored": len({a.service_name for a in all_anomalies.values()}),
         }
 
+    def get_active_alerts(self) -> list[dict[str, JsonValue]]:
+        """الحصول على قائمة التنبيهات النشطة (الشذوذ غير المحلول)."""
+        all_anomalies = self.anomaly_repo.get_all()
+        # Sort by timestamp descending
+        active = sorted(
+            [a for a in all_anomalies.values() if not a.resolved],
+            key=lambda x: x.detected_at,
+            reverse=True,
+        )
+
+        return [
+            {
+                "id": a.anomaly_id,
+                "severity": a.severity.value,
+                "message": f"[{a.anomaly_type.value}] {a.description} (Value: {a.metric_value:.2f}, Expected: {a.expected_value:.2f})",
+                "timestamp": a.detected_at.isoformat(),
+                "status": "active",
+                "service_name": a.service_name,
+                "metrics": {"value": a.metric_value, "expected": a.expected_value},
+            }
+            for a in active
+        ]
+
     def get_service_health(self, service_name: str) -> dict[str, JsonValue]:
         """الحصول على ملخص صحة الخدمة مع آخر التوقعات وخطط السعة."""
         all_anomalies = self.anomaly_repo.get_all()

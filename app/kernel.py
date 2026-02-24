@@ -55,6 +55,7 @@ from app.core.redis_bus import get_redis_bridge
 from app.middleware.fastapi_error_handlers import add_error_handlers
 from app.middleware.static_files_middleware import StaticFilesConfig, setup_static_files_middleware
 from app.services.bootstrap import bootstrap_admin_account
+from app.telemetry.unified_observability import get_unified_observability
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +209,13 @@ class RealityKernel:
         except Exception as exc:
             logger.error(f"❌ Failed to bootstrap admin account: {exc}")
 
+        # Start Observability Sync (Metric Stream to Microservice)
+        try:
+            await get_unified_observability().start_background_sync()
+            logger.info("✅ Unified Observability Sync Started")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to start observability sync: {e}")
+
         # Start Redis Event Bridge (Streaming BFF)
         redis_bridge = get_redis_bridge()
         await redis_bridge.start()
@@ -217,6 +225,14 @@ class RealityKernel:
 
         # Shutdown Redis Event Bridge
         await redis_bridge.stop()
+
+        # Stop Observability Sync
+        try:
+            await get_unified_observability().stop_background_sync()
+            logger.info("✅ Unified Observability Sync Stopped")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to stop observability sync: {e}")
+
         logger.info("👋 CogniForge System Shutting Down...")
 
 

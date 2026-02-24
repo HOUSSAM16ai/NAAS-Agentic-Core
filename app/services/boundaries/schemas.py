@@ -54,6 +54,8 @@ class MetricType(Enum):
     MEMORY_USAGE = "memory_usage"
     DISK_USAGE = "disk_usage"
     NETWORK_IO = "network_io"
+    COUNTER = "counter"
+    GAUGE = "gauge"
 
 
 # ======================================================================================

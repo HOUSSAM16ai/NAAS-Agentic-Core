@@ -73,6 +73,7 @@ class CaseInsensitiveEnum(StrEnum):
 
 class UserStatus(CaseInsensitiveEnum):
     """User Lifecycle Status."""
+
     ACTIVE = "active"
     SUSPENDED = "suspended"
     PENDING = "pending"
@@ -110,9 +111,7 @@ class MicroUser(SQLModel, table=True):
     roles: list[MicroRole] = Relationship(
         back_populates="users",
         link_model="MicroUserRole",
-        sa_relationship=relationship(
-            "MicroRole", secondary="user_roles", back_populates="users"
-        ),
+        sa_relationship=relationship("MicroRole", secondary="user_roles", back_populates="users"),
     )
     refresh_tokens: list[MicroRefreshToken] = Relationship(
         sa_relationship=relationship("MicroRefreshToken", back_populates="user"),
@@ -126,6 +125,7 @@ class MicroUser(SQLModel, table=True):
 
     def set_password(self, password: str) -> None:
         from passlib.context import CryptContext
+
         pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
         self.password_hash = pwd_context.hash(password)
 
@@ -133,6 +133,7 @@ class MicroUser(SQLModel, table=True):
         if not self.password_hash:
             return False
         from passlib.context import CryptContext
+
         pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
         return pwd_context.verify(password, self.password_hash)
 
@@ -162,9 +163,7 @@ class MicroRole(SQLModel, table=True):
     users: list[MicroUser] = Relationship(
         back_populates="roles",
         link_model="MicroUserRole",
-        sa_relationship=relationship(
-            "MicroUser", secondary="user_roles", back_populates="roles"
-        ),
+        sa_relationship=relationship("MicroUser", secondary="user_roles", back_populates="roles"),
     )
     permissions: list[MicroPermission] = Relationship(
         back_populates="roles",
@@ -296,9 +295,7 @@ class MicroPasswordResetToken(SQLModel, table=True):
     )
 
     user: MicroUser = Relationship(
-        sa_relationship=relationship(
-            "MicroUser", back_populates="password_reset_tokens"
-        )
+        sa_relationship=relationship("MicroUser", back_populates="password_reset_tokens")
     )
 
     def is_active(self, *, now: datetime | None = None) -> bool:

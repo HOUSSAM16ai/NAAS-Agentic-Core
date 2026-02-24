@@ -1,10 +1,11 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, UTC
-from app.telemetry.unified_observability import get_unified_observability, UnifiedObservabilityService
-from app.telemetry.models import MetricType
+
 from app.services.boundaries.observability_boundary_service import ObservabilityBoundaryService
 from app.services.boundaries.schemas import TelemetryData
+from app.telemetry.unified_observability import get_unified_observability
+
 
 @pytest.mark.asyncio
 async def test_observability_migration_flush_metrics():
@@ -68,14 +69,14 @@ async def test_observability_migration_boundary_fallback():
 
     mock_telemetry = MagicMock()
     # Mock anomaly_alerts as a list or deque of objects
-    MockAlert = MagicMock()
-    MockAlert.alert_id = "local_alert"
-    MockAlert.severity = "high"
-    MockAlert.description = "Local alert"
-    MockAlert.timestamp = 1234567890.0
-    MockAlert.resolved = False
+    mock_alert_obj = MagicMock()
+    mock_alert_obj.alert_id = "local_alert"
+    mock_alert_obj.severity = "high"
+    mock_alert_obj.description = "Local alert"
+    mock_alert_obj.timestamp = 1234567890.0
+    mock_alert_obj.resolved = False
 
-    mock_telemetry.anomaly_alerts = [MockAlert]
+    mock_telemetry.anomaly_alerts = [mock_alert_obj]
     boundary.telemetry = mock_telemetry
 
     # Call method

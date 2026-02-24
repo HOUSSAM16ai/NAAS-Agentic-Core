@@ -2,406 +2,10 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Observability Service",
-    "description": "\u062e\u062f\u0645\u0629 \u0645\u0633\u062a\u0642\u0644\u0629 \u0644\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u0642\u064a\u0627\u0633\u0627\u062a",
+    "description": "خدمة مستقلة لتحليل القياسات",
     "version": "1.0.0"
   },
   "paths": {
-    "/health": {
-      "get": {
-        "tags": [
-          "System"
-        ],
-        "summary": "Health Check",
-        "description": "\u064a\u0641\u062d\u0635 \u062c\u0627\u0647\u0632\u064a\u0629 \u062e\u062f\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629.",
-        "operationId": "health_check_health_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/": {
-      "get": {
-        "tags": [
-          "System"
-        ],
-        "summary": "Root",
-        "description": "\u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u062c\u0630\u0631 \u0644\u062e\u062f\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629.",
-        "operationId": "root__get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RootResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/telemetry": {
-      "post": {
-        "tags": [
-          "Telemetry"
-        ],
-        "summary": "\u0627\u0633\u062a\u0642\u0628\u0627\u0644 \u0642\u064a\u0627\u0633 \u062c\u062f\u064a\u062f",
-        "description": "\u062a\u062c\u0645\u064a\u0639 \u0642\u064a\u0627\u0633\u0627\u062a \u0648\u0627\u0631\u062f\u0629 \u0645\u0646 \u0627\u0644\u062e\u062f\u0645\u0627\u062a \u0627\u0644\u0623\u062e\u0631\u0649.",
-        "operationId": "collect_telemetry_telemetry_post",
-        "parameters": [
-          {
-            "name": "X-Service-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Service-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TelemetryRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TelemetryResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/metrics": {
-      "get": {
-        "tags": [
-          "Telemetry"
-        ],
-        "summary": "\u0639\u0631\u0636 \u0645\u0624\u0634\u0631\u0627\u062a \u0627\u0644\u062e\u062f\u0645\u0629",
-        "description": "\u0625\u0631\u062c\u0627\u0639 \u0645\u0624\u0634\u0631\u0627\u062a \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a\u0629.",
-        "operationId": "get_metrics_metrics_get",
-        "parameters": [
-          {
-            "name": "X-Service-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Service-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MetricsResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/health/{service_name}": {
-      "get": {
-        "tags": [
-          "Telemetry"
-        ],
-        "summary": "\u0641\u062d\u0635 \u0635\u062d\u0629 \u062e\u062f\u0645\u0629 \u0645\u062d\u062f\u062f\u0629",
-        "description": "\u0642\u064a\u0627\u0633 \u0635\u062d\u0629 \u062e\u062f\u0645\u0629 \u0645\u062d\u062f\u062f\u0629.",
-        "operationId": "get_service_health_health__service_name__get",
-        "parameters": [
-          {
-            "name": "service_name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Service Name"
-            }
-          },
-          {
-            "name": "X-Service-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Service-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Get Service Health Health  Service Name  Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/forecast": {
-      "post": {
-        "tags": [
-          "Forecast"
-        ],
-        "summary": "\u062a\u0648\u0644\u064a\u062f \u062a\u0648\u0642\u0639\u0627\u062a \u0627\u0644\u062d\u0645\u0644",
-        "description": "\u062a\u0648\u0644\u064a\u062f \u062a\u0648\u0642\u0639 \u0644\u0644\u062d\u0645\u0644 \u0627\u0644\u0645\u0633\u062a\u0642\u0628\u0644\u064a.",
-        "operationId": "forecast_load_forecast_post",
-        "parameters": [
-          {
-            "name": "X-Service-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Service-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ForecastRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForecastResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/capacity": {
-      "post": {
-        "tags": [
-          "Forecast"
-        ],
-        "summary": "\u062a\u0648\u0644\u064a\u062f \u062e\u0637\u0629 \u0627\u0644\u0633\u0639\u0629",
-        "description": "\u0625\u0646\u0634\u0627\u0621 \u062e\u0637\u0629 \u0633\u0639\u0629 \u0628\u0646\u0627\u0621\u064b \u0639\u0644\u0649 \u0627\u0644\u062a\u0648\u0642\u0639\u0627\u062a.",
-        "operationId": "generate_capacity_plan_capacity_post",
-        "parameters": [
-          {
-            "name": "X-Service-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Service-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CapacityPlanRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CapacityPlanResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/anomalies/{anomaly_id}/root_cause": {
-      "get": {
-        "tags": [
-          "Anomalies"
-        ],
-        "summary": "\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u0633\u0628\u0628 \u0627\u0644\u062c\u0630\u0631\u064a \u0644\u0644\u0634\u0630\u0648\u0630",
-        "description": "\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u0633\u0628\u0628 \u0627\u0644\u062c\u0630\u0631\u064a \u0644\u0634\u0630\u0648\u0630 \u0645\u062d\u062f\u062f.",
-        "operationId": "analyze_root_cause_anomalies__anomaly_id__root_cause_get",
-        "parameters": [
-          {
-            "name": "anomaly_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Anomaly Id"
-            }
-          },
-          {
-            "name": "X-Service-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Service-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Analyze Root Cause Anomalies  Anomaly Id  Root Cause Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/security/metrics/calculate": {
       "post": {
         "tags": [
@@ -581,10 +185,520 @@
           }
         }
       }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "description": "يفحص جاهزية خدمة المراقبة.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Root",
+        "description": "رسالة الجذر لخدمة المراقبة.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RootResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/telemetry": {
+      "post": {
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "استقبال قياس جديد",
+        "description": "تجميع قياسات واردة من الخدمات الأخرى.",
+        "operationId": "collect_telemetry_telemetry_post",
+        "parameters": [
+          {
+            "name": "X-Service-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "عرض مؤشرات الخدمة",
+        "description": "إرجاع مؤشرات المراقبة الإجمالية.",
+        "operationId": "get_metrics_metrics_get",
+        "parameters": [
+          {
+            "name": "X-Service-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts": {
+      "get": {
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "عرض التنبيهات النشطة",
+        "description": "إرجاع قائمة التنبيهات النشطة (الشذوذ).",
+        "operationId": "get_alerts_alerts_get",
+        "parameters": [
+          {
+            "name": "X-Service-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/{service_name}": {
+      "get": {
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "فحص صحة خدمة محددة",
+        "description": "قياس صحة خدمة محددة.",
+        "operationId": "get_service_health_health__service_name__get",
+        "parameters": [
+          {
+            "name": "service_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Service Name"
+            }
+          },
+          {
+            "name": "X-Service-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Service Health Health  Service Name  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forecast": {
+      "post": {
+        "tags": [
+          "Forecast"
+        ],
+        "summary": "توليد توقعات الحمل",
+        "description": "توليد توقع للحمل المستقبلي.",
+        "operationId": "forecast_load_forecast_post",
+        "parameters": [
+          {
+            "name": "X-Service-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/capacity": {
+      "post": {
+        "tags": [
+          "Forecast"
+        ],
+        "summary": "توليد خطة السعة",
+        "description": "إنشاء خطة سعة بناءً على التوقعات.",
+        "operationId": "generate_capacity_plan_capacity_post",
+        "parameters": [
+          {
+            "name": "X-Service-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapacityPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityPlanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/anomalies/{anomaly_id}/root_cause": {
+      "get": {
+        "tags": [
+          "Anomalies"
+        ],
+        "summary": "تحليل السبب الجذري للشذوذ",
+        "description": "تحليل السبب الجذري لشذوذ محدد.",
+        "operationId": "analyze_root_cause_anomalies__anomaly_id__root_cause_get",
+        "parameters": [
+          {
+            "name": "anomaly_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anomaly Id"
+            }
+          },
+          {
+            "name": "X-Service-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Analyze Root Cause Anomalies  Anomaly Id  Root Cause Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AlertItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "metrics": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Metrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "message",
+          "timestamp",
+          "status",
+          "service_name",
+          "metrics"
+        ],
+        "title": "AlertItem",
+        "description": "عنصر تنبيه واحد."
+      },
+      "AlertsResponse": {
+        "properties": {
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/AlertItem"
+            },
+            "type": "array",
+            "title": "Alerts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "alerts"
+        ],
+        "title": "AlertsResponse",
+        "description": "استجابة قائمة التنبيهات."
+      },
       "CalculateMetricsRequest": {
         "properties": {
           "findings": {
@@ -597,6 +711,7 @@
           "code_metrics": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -625,6 +740,7 @@
           "code_metrics": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -702,7 +818,7 @@
           "created_at"
         ],
         "title": "CapacityPlanPayload",
-        "description": "\u062a\u0641\u0627\u0635\u064a\u0644 \u062e\u0637\u0629 \u0627\u0644\u0633\u0639\u0629 \u0627\u0644\u0646\u0627\u062a\u062c\u0629 \u0639\u0646 \u0627\u0644\u062a\u062d\u0644\u064a\u0644."
+        "description": "تفاصيل خطة السعة الناتجة عن التحليل."
       },
       "CapacityPlanRequest": {
         "properties": {
@@ -721,7 +837,7 @@
           "service_name"
         ],
         "title": "CapacityPlanRequest",
-        "description": "\u0637\u0644\u0628 \u0625\u0646\u0634\u0627\u0621 \u062e\u0637\u0629 \u0633\u0639\u0629 \u0645\u0633\u062a\u0642\u0628\u0644\u064a\u0629."
+        "description": "طلب إنشاء خطة سعة مستقبلية."
       },
       "CapacityPlanResponse": {
         "properties": {
@@ -734,7 +850,7 @@
           "plan"
         ],
         "title": "CapacityPlanResponse",
-        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u062e\u0637\u0629 \u0627\u0644\u0633\u0639\u0629 \u0628\u0639\u062f \u0627\u0644\u062a\u0648\u0644\u064a\u062f."
+        "description": "استجابة خطة السعة بعد التوليد."
       },
       "ForecastRequest": {
         "properties": {
@@ -757,7 +873,7 @@
           "metric_type"
         ],
         "title": "ForecastRequest",
-        "description": "\u0637\u0644\u0628 \u062a\u0648\u0642\u0639 \u0627\u0644\u062d\u0645\u0644 \u0627\u0644\u0645\u0633\u062a\u0642\u0628\u0644\u064a."
+        "description": "طلب توقع الحمل المستقبلي."
       },
       "ForecastResponse": {
         "properties": {
@@ -791,7 +907,7 @@
           "confidence_interval"
         ],
         "title": "ForecastResponse",
-        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u062a\u0648\u0642\u0639 \u0627\u0644\u062d\u0645\u0644 \u0645\u0639 \u0641\u0627\u0635\u0644 \u0627\u0644\u062b\u0642\u0629."
+        "description": "استجابة توقع الحمل مع فاصل الثقة."
       },
       "HTTPValidationError": {
         "properties": {
@@ -834,7 +950,7 @@
           "status"
         ],
         "title": "HealthResponse",
-        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0635\u062d\u0629 \u0642\u064a\u0627\u0633\u064a\u0629 \u0644\u062e\u062f\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629."
+        "description": "استجابة صحة قياسية لخدمة المراقبة."
       },
       "MetricType": {
         "type": "string",
@@ -848,7 +964,7 @@
           "network_io"
         ],
         "title": "MetricType",
-        "description": "\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0645\u0642\u0627\u064a\u064a\u0633 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u0629 \u0641\u064a \u0646\u0642\u0627\u0637 \u0627\u0644\u0642\u064a\u0627\u0633 \u0627\u0644\u062a\u0634\u063a\u064a\u0644\u064a\u0629."
+        "description": "أنواع المقاييس المستخدمة في نقاط القياس التشغيلية."
       },
       "MetricsResponse": {
         "properties": {
@@ -872,7 +988,7 @@
           "metrics"
         ],
         "title": "MetricsResponse",
-        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0627\u0644\u0645\u0642\u0627\u064a\u064a\u0633 \u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a\u0629."
+        "description": "استجابة المقاييس الإجمالية."
       },
       "RiskPredictionRequest": {
         "properties": {
@@ -942,7 +1058,7 @@
           "message"
         ],
         "title": "RootResponse",
-        "description": "\u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u062c\u0630\u0631 \u0644\u062e\u062f\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629."
+        "description": "رسالة الجذر لخدمة المراقبة."
       },
       "SecurityFindingSchema": {
         "properties": {
@@ -951,8 +1067,7 @@
             "title": "Id"
           },
           "severity": {
-            "type": "string",
-            "title": "Severity"
+            "$ref": "#/components/schemas/Severity"
           },
           "rule_id": {
             "type": "string",
@@ -1162,6 +1277,18 @@
         "title": "SecurityMetricsResponse",
         "description": "Response containing calculated security metrics"
       },
+      "Severity": {
+        "type": "string",
+        "enum": [
+          "CRITICAL",
+          "HIGH",
+          "MEDIUM",
+          "LOW",
+          "INFO"
+        ],
+        "title": "Severity",
+        "description": "Security finding severity levels"
+      },
       "TelemetryRequest": {
         "properties": {
           "metric_id": {
@@ -1205,7 +1332,7 @@
           "value"
         ],
         "title": "TelemetryRequest",
-        "description": "\u062d\u0645\u0648\u0644\u0629 \u0642\u064a\u0627\u0633 \u0642\u0627\u062f\u0645\u0629 \u0645\u0646 \u062e\u062f\u0645\u0629 \u0645\u0631\u0627\u0642\u0628\u0629."
+        "description": "حمولة قياس قادمة من خدمة مراقبة."
       },
       "TelemetryResponse": {
         "properties": {
@@ -1224,7 +1351,7 @@
           "metric_id"
         ],
         "title": "TelemetryResponse",
-        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0627\u0633\u062a\u0642\u0628\u0627\u0644 \u0627\u0644\u0642\u064a\u0627\u0633."
+        "description": "استجابة استقبال القياس."
       },
       "ValidationError": {
         "properties": {

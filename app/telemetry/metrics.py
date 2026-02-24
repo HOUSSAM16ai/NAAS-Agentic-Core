@@ -6,7 +6,7 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 
-from app.telemetry.models import MetricSample
+from app.telemetry.models import MetricSample, MetricType
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ class MetricRecord:
     labels: dict[str, str] = field(default_factory=dict)
     trace_id: str | None = None
     span_id: str | None = None
+    metric_type: MetricType = MetricType.LATENCY
 
     def metric_key(self) -> str:
         """يبني مفتاحاً متناسقاً للمقاييس يعتمد على الاسم والوسوم المرفقة."""
@@ -56,10 +57,14 @@ class MetricsManager:
             labels=record.labels,
             exemplar_trace_id=record.trace_id,
             exemplar_span_id=record.span_id,
+            name=record.name,
+            metric_type=record.metric_type,
         )
         with self.lock:
             self.metrics_buffer.append(sample)
             self.stats["metrics_recorded"] += 1
+            # Only add to histograms if it's a latency or generic value, not explicit counter/gauge updates
+            # (unless we want distribution of counter increments, which is rare)
             self.histograms[record.name].append(record.value)
             if record.trace_id:
                 self.trace_metrics[record.trace_id].append(sample)
@@ -90,11 +95,31 @@ class MetricsManager:
         key = self._metric_key(name, labels)
         with self.lock:
             self.counters[key] += amount
+            # Add to buffer for export
+            self.metrics_buffer.append(
+                MetricSample(
+                    value=amount,
+                    timestamp=time.time(),
+                    labels=labels or {},
+                    name=name,
+                    metric_type=MetricType.COUNTER,
+                )
+            )
 
     def set_gauge(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         key = self._metric_key(name, labels)
         with self.lock:
             self.gauges[key] = value
+            # Add to buffer for export
+            self.metrics_buffer.append(
+                MetricSample(
+                    value=value,
+                    timestamp=time.time(),
+                    labels=labels or {},
+                    name=name,
+                    metric_type=MetricType.GAUGE,
+                )
+            )
 
     def get_percentiles(self, metric_name: str) -> dict[str, float]:
         with self.lock:

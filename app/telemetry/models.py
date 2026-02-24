@@ -15,6 +15,20 @@ class AlertSeverity(Enum):
     CRITICAL = "critical"
 
 
+class MetricType(Enum):
+    """أنواع المقاييس المدعومة."""
+
+    LATENCY = "latency"
+    ERROR_RATE = "error_rate"
+    REQUEST_RATE = "request_rate"
+    CPU_USAGE = "cpu_usage"
+    MEMORY_USAGE = "memory_usage"
+    DISK_USAGE = "disk_usage"
+    NETWORK_IO = "network_io"
+    COUNTER = "counter"
+    GAUGE = "gauge"
+
+
 @dataclass
 class TraceContext:
     trace_id: str
@@ -114,6 +128,8 @@ class MetricSample:
     labels: dict[str, str] = field(default_factory=dict)
     exemplar_trace_id: str | None = None
     exemplar_span_id: str | None = None
+    name: str | None = None
+    metric_type: str | MetricType | None = None
 
 
 @dataclass

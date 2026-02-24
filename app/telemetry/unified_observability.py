@@ -1,20 +1,33 @@
+import asyncio
+import contextlib
+import logging
 import threading
 from collections import deque
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from fastapi import Request
 
+from app.services.boundaries.schemas import MetricType as SchemaMetricType
+from app.services.boundaries.schemas import TelemetryData
 from app.telemetry.aggregator import TelemetryAggregator
+
+if TYPE_CHECKING:
+    pass
 from app.telemetry.analyzer import TelemetryAnalyzer
 from app.telemetry.metrics import MetricRecord, MetricsManager
 from app.telemetry.models import (
     CorrelatedLog,
     MetricSample,
+    MetricType,
     TraceContext,
     UnifiedSpan,
     UnifiedTrace,
 )
 from app.telemetry.structured_logging import LoggingManager, LogRecord
 from app.telemetry.tracing import TracingManager
+
+logger = logging.getLogger(__name__)
 
 
 class UnifiedObservabilityService:
@@ -49,6 +62,80 @@ class UnifiedObservabilityService:
 
         # قفل للتوافق مع الواجهة القديمة
         self.lock = threading.RLock()
+
+        # Microservice Sync
+        self._sync_task: asyncio.Task | None = None
+        self._stop_event = asyncio.Event()
+
+        from app.services.boundaries.observability_client import ObservabilityServiceClient
+        self.client = ObservabilityServiceClient()
+
+    async def start_background_sync(self) -> None:
+        """Start the background metrics synchronization task."""
+        if self._sync_task is None or self._sync_task.done():
+            self._stop_event.clear()
+            self._sync_task = asyncio.create_task(self._background_sync_loop())
+            logger.info("Unified Observability background sync started.")
+
+    async def stop_background_sync(self) -> None:
+        """Stop the background metrics synchronization task."""
+        if self._sync_task:
+            self._stop_event.set()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._sync_task
+            self._sync_task = None
+            await self.client.close()
+            logger.info("Unified Observability background sync stopped.")
+
+    async def _background_sync_loop(self) -> None:
+        """Periodic loop to flush metrics to the microservice."""
+        while not self._stop_event.is_set():
+            try:
+                await self._flush_metrics_to_microservice()
+            except Exception as e:
+                logger.error(f"Error in background sync loop: {e}")
+
+            # Sleep with check for stop event
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=5.0)
+            except TimeoutError:
+                continue
+
+    async def _flush_metrics_to_microservice(self) -> None:
+        """Drain the metrics buffer and send to microservice."""
+        # Drain buffer under lock (copy and clear)
+        samples_to_send = []
+        with self.metrics.lock:
+            while self.metrics.metrics_buffer:
+                samples_to_send.append(self.metrics.metrics_buffer.popleft())
+
+        if not samples_to_send:
+            return
+
+        for sample in samples_to_send:
+            # Skip if critical fields are missing
+            if not sample.name:
+                continue
+
+            # Map MetricType (Monolith) to SchemaMetricType (Boundary/Microservice)
+            metric_type_val = SchemaMetricType.LATENCY
+            if isinstance(sample.metric_type, MetricType):
+                with contextlib.suppress(ValueError):
+                    metric_type_val = SchemaMetricType(sample.metric_type.value)
+            elif isinstance(sample.metric_type, str):
+                with contextlib.suppress(ValueError):
+                    metric_type_val = SchemaMetricType(sample.metric_type)
+
+            data = TelemetryData(
+                metric_id=sample.name,
+                service_name=self.service_name,
+                metric_type=metric_type_val,
+                value=sample.value,
+                timestamp=datetime.fromtimestamp(sample.timestamp, UTC),
+                labels=sample.labels,
+                unit="",  # Optional
+            )
+            await self.client.collect_telemetry(data)
 
     # --- Tracing Delegates ---
 

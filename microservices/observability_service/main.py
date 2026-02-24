@@ -67,6 +67,24 @@ class RootResponse(BaseModel):
     message: str
 
 
+class AlertItem(BaseModel):
+    """عنصر تنبيه واحد."""
+
+    id: str
+    severity: str
+    message: str
+    timestamp: str
+    status: str
+    service_name: str
+    metrics: dict[str, float]
+
+
+class AlertsResponse(BaseModel):
+    """استجابة قائمة التنبيهات."""
+
+    alerts: list[AlertItem]
+
+
 class MetricsResponse(BaseModel):
     """استجابة المقاييس الإجمالية."""
 
@@ -156,6 +174,21 @@ def _register_routes(app: FastAPI, settings: ObservabilitySettings) -> None:
 
         service = get_aiops_service()
         return MetricsResponse(metrics=service.get_aiops_metrics())
+
+    @app.get(
+        "/alerts",
+        response_model=AlertsResponse,
+        tags=["Telemetry"],
+        summary="عرض التنبيهات النشطة",
+        dependencies=[Depends(verify_service_token)],
+    )
+    async def get_alerts() -> AlertsResponse:
+        """إرجاع قائمة التنبيهات النشطة (الشذوذ)."""
+
+        service = get_aiops_service()
+        alerts = service.get_active_alerts()
+        # alerts are already dicts matching the structure
+        return AlertsResponse(alerts=alerts)
 
     @app.get(
         "/health/{service_name}",

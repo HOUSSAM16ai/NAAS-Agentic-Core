@@ -30,10 +30,12 @@ async def test_admin_blocked_from_customer_chat(test_app, db_session: AsyncSessi
             token = login_resp.json()["access_token"]
 
             with TestClient(test_app) as client:
-                with client.websocket_connect(f"/api/chat/ws?token={token}") as websocket:
-                    websocket.send_json({"question": "اشرح التكامل"})
-                    payload = websocket.receive_json()
-                    assert payload.get("type") == "error"
-                    assert payload.get("payload", {}).get("status_code") == 403
+                from starlette.websockets import WebSocketDisconnect
+
+                with pytest.raises(WebSocketDisconnect) as exc:
+                    with client.websocket_connect(f"/api/chat/ws?token={token}") as websocket:
+                        websocket.send_json({"question": "اشرح التكامل"})
+                        websocket.receive_json()
+                assert exc.value.code == 4403
     finally:
         test_app.dependency_overrides.clear()

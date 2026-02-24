@@ -24,8 +24,10 @@ async def test_process_passes_session_factory():
     # Let's mock IntentDetector to return MISSION_COMPLEX
 
     orchestrator._intent_detector = AsyncMock()
+    # Use a non-delegated intent (e.g. HELP or FILE_READ) to ensure it hits local handlers
+    # MISSION_COMPLEX is now delegated to Microservice and skips local _handlers.execute
     orchestrator._intent_detector.detect.return_value = MagicMock(
-        intent="MISSION_COMPLEX", confidence=1.0, params={}
+        intent="HELP", confidence=1.0, params={}
     )
 
     # Mock the handler execution to just return the context for verification
@@ -36,11 +38,16 @@ async def test_process_passes_session_factory():
     orchestrator._handlers.execute = AsyncMock()
     orchestrator._handlers.execute.return_value = None  # Don't yield anything
 
-    # Run process
-    async for _ in orchestrator.process("test", 1, 1, mock_ai, [], session_factory=mock_factory):
-        pass
+    # Mock orchestrator_client to raise an exception, forcing fallback to local handlers
+    # This is necessary because almost all intents are now delegated by default.
+    from unittest.mock import patch
+    with patch("app.services.chat.orchestrator.orchestrator_client.chat_with_agent", side_effect=Exception("Microservice Down")):
+        # Run process
+        async for _ in orchestrator.process("test", 1, 1, mock_ai, [], session_factory=mock_factory):
+            pass
 
     # Verify execute was called with a context containing session_factory
+    # This confirms that fallback mechanism works AND passes context correctly
     call_args = orchestrator._handlers.execute.call_args
     assert call_args is not None
     context = call_args[0][0]

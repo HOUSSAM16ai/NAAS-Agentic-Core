@@ -42,7 +42,9 @@ class CircuitBreaker:
         self.failures = 0
         self.last_failure_time = 0.0
 
-    async def execute(self, func: Callable[P, Awaitable[R]], *args: P.args, **kwargs: P.kwargs) -> R:
+    async def execute(
+        self, func: Callable[P, Awaitable[R]], *args: P.args, **kwargs: P.kwargs
+    ) -> R:
         """
         Executes the given async function with circuit breaker logic.
         """

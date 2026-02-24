@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI, HTTPException, WebSocketDisconnect
 from fastapi.testclient import TestClient
 
-from app.api.routers.customer_chat import get_customer_service, get_db
+from app.api.routers.customer_chat import get_customer_service
 from app.api.routers.customer_chat import router as customer_router
 from app.core.domain.user import User
 from app.services.auth.ws_auth import (
@@ -29,7 +29,9 @@ def test_customer_ws_auth_fail(customer_app):
     client = TestClient(customer_app)
     mock_service = AsyncMock(spec=CustomerChatBoundaryService)
     # Simulate auth failure
-    mock_service.validate_ws_auth.side_effect = HTTPException(status_code=401, detail="Missing auth")
+    mock_service.validate_ws_auth.side_effect = HTTPException(
+        status_code=401, detail="Missing auth"
+    )
     customer_app.dependency_overrides[get_customer_service] = lambda: mock_service
 
     # Expect disconnection with 4401 (or 4403 based on code)
@@ -44,7 +46,9 @@ def test_customer_ws_decode_fail(customer_app):
     # Same as auth fail, just different detail, but handled same by mock
     client = TestClient(customer_app)
     mock_service = AsyncMock(spec=CustomerChatBoundaryService)
-    mock_service.validate_ws_auth.side_effect = HTTPException(status_code=401, detail="Invalid token")
+    mock_service.validate_ws_auth.side_effect = HTTPException(
+        status_code=401, detail="Invalid token"
+    )
     customer_app.dependency_overrides[get_customer_service] = lambda: mock_service
 
     with pytest.raises(WebSocketDisconnect) as exc:
@@ -58,7 +62,9 @@ def test_customer_ws_admin(customer_app):
     client = TestClient(customer_app)
     mock_service = AsyncMock(spec=CustomerChatBoundaryService)
     # validate_ws_auth raises 403 for admin
-    mock_service.validate_ws_auth.side_effect = HTTPException(status_code=403, detail="Admin not allowed")
+    mock_service.validate_ws_auth.side_effect = HTTPException(
+        status_code=403, detail="Admin not allowed"
+    )
     customer_app.dependency_overrides[get_customer_service] = lambda: mock_service
 
     with pytest.raises(WebSocketDisconnect) as exc:

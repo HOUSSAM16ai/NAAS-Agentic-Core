@@ -15,12 +15,12 @@ from fastapi import HTTPException, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.ai_gateway import AIClient
-from app.services.auth.ws_auth import extract_websocket_auth
 from app.core.config import get_settings
 from app.core.domain.chat import CustomerConversation, MessageRole
 from app.core.domain.user import User
 from app.services.audit import AuditService
 from app.services.auth.token_decoder import decode_user_id
+from app.services.auth.ws_auth import extract_websocket_auth
 from app.services.chat.contracts import ChatDispatchResult, ChatStreamEvent
 from app.services.chat.education_policy_gate import EducationPolicyDecision, EducationPolicyGate
 from app.services.chat.intent_detector import ChatIntent, IntentDetector

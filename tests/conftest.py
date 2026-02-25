@@ -61,9 +61,17 @@ def _db_dependencies_available() -> bool:
     )
 
 
-def _should_skip_db_fixtures() -> bool:
-    """يتحقق من تعطيل تجهيز قاعدة البيانات للاختبارات المعزولة."""
-    return os.environ.get("SKIP_DB_FIXTURES") == "1"
+def _should_skip_db_fixtures(request: pytest.FixtureRequest) -> bool:
+    """يتحقق من تعطيل تجهيز قاعدة البيانات فقط لنطاقات الاختبارات المعزولة."""
+    if os.environ.get("SKIP_DB_FIXTURES") != "1":
+        return False
+
+    isolated_paths = (
+        "tests/unit/overmind/knowledge_graph/",
+        "tests/unit/overmind/langgraph/",
+    )
+    request_path = str(request.path).replace("\\", "/")
+    return any(path in request_path for path in isolated_paths)
 
 
 def _get_engine() -> AsyncEngine:
@@ -160,6 +168,22 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "asyncio: تشغيل اختبارات غير متزامنة")
 
 
+
+
+def pytest_collection_modifyitems(
+    session: pytest.Session,
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
+    """يعيد ترتيب الاختبارات لضمان تشغيل اختبارات الخدمات المصغرة في نهاية الجلسة."""
+
+    def _priority(item: pytest.Item) -> tuple[int, str]:
+        path_text = str(item.fspath)
+        is_microservice_test = "/microservices/" in path_text
+        return (1 if is_microservice_test else 0, path_text)
+
+    items.sort(key=_priority)
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """يفرض نجاحًا كاملًا عبر فشل الجلسة عند وجود تخطٍ أو تحذيرات اختبارية."""
     terminal_reporter = session.config.pluginmanager.get_plugin("terminalreporter")
@@ -226,7 +250,7 @@ def static_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.fixture(autouse=True)
 def db_lifecycle(event_loop: asyncio.AbstractEventLoop, request: pytest.FixtureRequest) -> None:
     """إدارة دورة حياة قاعدة البيانات (تنظيف + تهيئة) قبل كل اختبار."""
-    if _should_skip_db_fixtures():
+    if _should_skip_db_fixtures(request):
         yield
         return
     if not _db_dependencies_available():
@@ -255,13 +279,18 @@ def db_lifecycle(event_loop: asyncio.AbstractEventLoop, request: pytest.FixtureR
         # Deduplicate indexes to handle potential accumulation from multiple test runs
         # or conflicts between Monolith and Microservice models extending the same table
         for table in SQLModel.metadata.tables.values():
-            unique_indexes = {}
-            # Ensure indexes is a set/list we can iterate safely
-            if hasattr(table, "indexes"):
-                for index in table.indexes:
-                    if index.name not in unique_indexes:
-                        unique_indexes[index.name] = index
-                table.indexes = set(unique_indexes.values())
+            if not hasattr(table, "indexes"):
+                continue
+            unique_indexes: dict[str | None, object] = {}
+            duplicate_indexes = []
+            for index in list(table.indexes):
+                index_name = getattr(index, "name", None)
+                if index_name in unique_indexes:
+                    duplicate_indexes.append(index)
+                else:
+                    unique_indexes[index_name] = index
+            for duplicate_index in duplicate_indexes:
+                table.indexes.remove(duplicate_index)
 
         engine = _get_engine()
 

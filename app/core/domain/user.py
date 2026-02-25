@@ -58,13 +58,25 @@ class User(SQLModel, table=True):
 
     # Relationships
     admin_conversations: list[AdminConversation] = Relationship(
-        sa_relationship=relationship("AdminConversation", back_populates="user")
+        sa_relationship=relationship(
+            "AdminConversation",
+            back_populates="user",
+            viewonly=True,
+        )
     )
     customer_conversations: list[CustomerConversation] = Relationship(
-        sa_relationship=relationship("CustomerConversation", back_populates="user")
+        sa_relationship=relationship(
+            "CustomerConversation",
+            back_populates="user",
+            viewonly=True,
+        )
     )
     missions: list[Mission] = Relationship(
-        sa_relationship=relationship("Mission", back_populates="initiator")
+        sa_relationship=relationship(
+            "Mission",
+            back_populates="initiator",
+            viewonly=True,
+        )
     )
     roles: list[Role] = Relationship(
         back_populates="users",
@@ -74,13 +86,25 @@ class User(SQLModel, table=True):
         ),
     )
     refresh_tokens: list[RefreshToken] = Relationship(
-        sa_relationship=relationship("RefreshToken", back_populates="user"),
+        sa_relationship=relationship(
+            "RefreshToken",
+            back_populates="user",
+            viewonly=True,
+        ),
     )
     password_reset_tokens: list[PasswordResetToken] = Relationship(
-        sa_relationship=relationship("PasswordResetToken", back_populates="user"),
+        sa_relationship=relationship(
+            "PasswordResetToken",
+            back_populates="user",
+            viewonly=True,
+        ),
     )
     audit_logs: list[AuditLog] = Relationship(
-        sa_relationship=relationship("AuditLog", back_populates="actor"),
+        sa_relationship=relationship(
+            "AuditLog",
+            back_populates="actor",
+            viewonly=True,
+        ),
     )
 
     def set_password(self, password: str) -> None:

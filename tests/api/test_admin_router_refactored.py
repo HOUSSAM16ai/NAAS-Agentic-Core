@@ -1,7 +1,9 @@
 import uuid
+from dataclasses import dataclass
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.domain.models import AdminConversation, AdminMessage, User
@@ -15,14 +17,44 @@ from app.core.domain.models import AdminConversation, AdminMessage, User
 def local_admin_user(db_session: AsyncSession, event_loop):
     """إنشاء مستخدم إداري محلي للاختبارات التكاملية."""
 
-    async def _create_user() -> User:
+    @dataclass(slots=True)
+    class LocalAdminIdentity:
+        """يمثل هوية مسؤول محلية خفيفة لاختبارات المسارات الإدارية."""
+
+        id: int
+
+    async def _create_user() -> LocalAdminIdentity:
         unique_email = f"refactor_admin_{uuid.uuid4().hex}@test.com"
         user = User(email=unique_email, full_name="Refactor Admin", is_admin=True)
         user.set_password("password")
-        db_session.add(user)
+        insert_statement = text(
+            """
+            INSERT INTO users (
+                external_id,
+                full_name,
+                email,
+                password_hash,
+                is_admin,
+                is_active,
+                status
+            )
+            VALUES (:external_id, :full_name, :email, :password_hash, :is_admin, :is_active, :status)
+            """
+        )
+        result = await db_session.execute(
+            insert_statement,
+            {
+                "external_id": str(uuid.uuid4()),
+                "full_name": user.full_name,
+                "email": unique_email,
+                "password_hash": user.password_hash,
+                "is_admin": True,
+                "is_active": True,
+                "status": "active",
+            },
+        )
         await db_session.commit()
-        await db_session.refresh(user)
-        return user
+        return LocalAdminIdentity(id=int(result.lastrowid))
 
     return event_loop.run_until_complete(_create_user())
 

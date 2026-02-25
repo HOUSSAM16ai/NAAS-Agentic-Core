@@ -1,36 +1,59 @@
 from collections.abc import AsyncGenerator
 from unittest.mock import patch
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.domain.chat import CustomerConversation
 from app.core.domain.models import CustomerMessage, MessageRole
 from app.core.domain.user import User
+from app.core.settings.base import get_settings
 from app.infrastructure.clients.orchestrator_client import orchestrator_client
 
 
-async def _register_and_login(ac: AsyncClient, email: str) -> str:
-    register_payload = {
-        "full_name": "Student User",
-        "email": email,
-        "password": "Secret123!",
-    }
-    register_resp = await ac.post("/api/security/register", json=register_payload)
-    assert register_resp.status_code == 200
+async def _create_user_and_token(db_session: AsyncSession, email: str) -> str:
+    """ينشئ مستخدم اختبار مباشرةً ويعيد رمز JWT صالحًا دون الاعتماد على خدمات خارجية."""
 
-    login_resp = await ac.post(
-        "/api/security/login",
-        json={"email": email, "password": "Secret123!"},
+    insert_statement = text(
+        """
+        INSERT INTO users (
+            external_id,
+            full_name,
+            email,
+            password_hash,
+            is_admin,
+            is_active,
+            status
+        )
+        VALUES (:external_id, :full_name, :email, :password_hash, :is_admin, :is_active, :status)
+        """
     )
-    assert login_resp.status_code == 200
-    return login_resp.json()["access_token"]
+    result = await db_session.execute(
+        insert_statement,
+        {
+            "external_id": f"test-{email}",
+            "full_name": "Student User",
+            "email": email,
+            "password_hash": "not-used-in-this-test",
+            "is_admin": False,
+            "is_active": True,
+            "status": "active",
+        },
+    )
+    await db_session.commit()
+
+    user_id = int(result.lastrowid)
+    return jwt.encode({"sub": str(user_id)}, get_settings().SECRET_KEY, algorithm="HS256")
 
 
 def _consume_stream_until_terminal(websocket: object) -> list[dict[str, object]]:
+    """يجمع أحداث البث حتى ظهور حدث نهائي أو رسالة خطأ."""
+
     messages: list[dict[str, object]] = []
     for _ in range(8):
         payload = websocket.receive_json()
@@ -42,26 +65,25 @@ def _consume_stream_until_terminal(websocket: object) -> list[dict[str, object]]
 
 
 @pytest.mark.asyncio
-async def test_customer_chat_stream_delivers_final_message(test_app, db_session) -> None:
+async def test_customer_chat_stream_delivers_final_message(test_app, db_session: AsyncSession) -> None:
     async def mock_chat_with_agent(**kwargs: object) -> AsyncGenerator[dict[str, object], None]:
         yield {"type": "assistant_delta", "payload": {"content": "Hello"}}
         yield {"type": "assistant_final", "payload": {"content": "Hello learner"}}
 
-    async def override_get_db():
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
     test_app.dependency_overrides[get_db] = override_get_db
 
-    transport = ASGITransport(app=test_app)
     try:
         with patch.object(orchestrator_client, "chat_with_agent", side_effect=mock_chat_with_agent):
-            async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                token = await _register_and_login(ac, "student-chat@example.com")
+            async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test"):
+                token = await _create_user_and_token(db_session, "student-chat@example.com")
 
-                with TestClient(test_app) as client:
-                    with client.websocket_connect(f"/api/chat/ws?token={token}") as websocket:
-                        websocket.send_json({"question": "Explain math vectors"})
-                        messages = _consume_stream_until_terminal(websocket)
+            with TestClient(test_app) as client:
+                with client.websocket_connect(f"/api/chat/ws?token={token}") as websocket:
+                    websocket.send_json({"question": "Explain math vectors"})
+                    messages = _consume_stream_until_terminal(websocket)
     finally:
         test_app.dependency_overrides.clear()
 
@@ -70,17 +92,16 @@ async def test_customer_chat_stream_delivers_final_message(test_app, db_session)
 
 
 @pytest.mark.asyncio
-async def test_customer_chat_enforces_ownership(test_app, db_session) -> None:
-    async def override_get_db():
+async def test_customer_chat_enforces_ownership(test_app, db_session: AsyncSession) -> None:
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
     test_app.dependency_overrides[get_db] = override_get_db
 
-    transport = ASGITransport(app=test_app)
     try:
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            token_owner = await _register_and_login(ac, "owner@example.com")
-            token_other = await _register_and_login(ac, "other@example.com")
+        async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test") as ac:
+            token_owner = await _create_user_and_token(db_session, "owner@example.com")
+            token_other = await _create_user_and_token(db_session, "other@example.com")
 
             owner_user = (
                 (await db_session.execute(select(User).where(User.email == "owner@example.com")))
@@ -112,27 +133,29 @@ async def test_customer_chat_enforces_ownership(test_app, db_session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_customer_chat_returns_error_on_stream_failure(test_app, db_session) -> None:
+async def test_customer_chat_returns_error_on_stream_failure(
+    test_app,
+    db_session: AsyncSession,
+) -> None:
     async def mock_chat_with_agent(**kwargs: object) -> AsyncGenerator[dict[str, object], None]:
         if False:
             yield {"type": "assistant_final", "payload": {"content": "unused"}}
         raise RuntimeError("stream failed")
 
-    async def override_get_db():
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
     test_app.dependency_overrides[get_db] = override_get_db
 
-    transport = ASGITransport(app=test_app)
     try:
         with patch.object(orchestrator_client, "chat_with_agent", side_effect=mock_chat_with_agent):
-            async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                token = await _register_and_login(ac, "fallback@example.com")
+            async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test"):
+                token = await _create_user_and_token(db_session, "fallback@example.com")
 
-                with TestClient(test_app) as client:
-                    with client.websocket_connect(f"/api/chat/ws?token={token}") as websocket:
-                        websocket.send_json({"question": "Explain math vectors"})
-                        messages = _consume_stream_until_terminal(websocket)
+            with TestClient(test_app) as client:
+                with client.websocket_connect(f"/api/chat/ws?token={token}") as websocket:
+                    websocket.send_json({"question": "Explain math vectors"})
+                    messages = _consume_stream_until_terminal(websocket)
     finally:
         test_app.dependency_overrides.clear()
 

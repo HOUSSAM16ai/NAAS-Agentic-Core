@@ -1,6 +1,7 @@
 import ast
 import os
 import sys
+
 import pytest
 
 # Add repo root to path to ensure imports work if needed (though we use AST)
@@ -20,10 +21,12 @@ LEGACY_ALLOWLIST = {
     "system_proxy",
 }
 
+
 @pytest.fixture(autouse=True)
 def db_lifecycle():
     """Override global fixture to avoid DB connection for this static analysis test."""
     yield
+
 
 def test_gateway_route_freeze():
     """
@@ -35,7 +38,7 @@ def test_gateway_route_freeze():
     """
     assert os.path.exists(GATEWAY_FILE), f"Gateway file not found: {GATEWAY_FILE}"
 
-    with open(GATEWAY_FILE, "r") as f:
+    with open(GATEWAY_FILE) as f:
         tree = ast.parse(f.read())
 
     violations = []
@@ -49,14 +52,12 @@ def test_gateway_route_freeze():
             # This is a heuristic: looking for usage of the constant name.
             references_core = False
             for child in ast.walk(node):
-                if isinstance(child, ast.Attribute):
-                    if child.attr == "CORE_KERNEL_URL":
-                        references_core = True
-                        break
+                if isinstance(child, ast.Attribute) and child.attr == "CORE_KERNEL_URL":
+                    references_core = True
+                    break
 
-            if references_core:
-                if func_name not in LEGACY_ALLOWLIST:
-                    violations.append(func_name)
+            if references_core and func_name not in LEGACY_ALLOWLIST:
+                violations.append(func_name)
 
     if violations:
         error_msg = (
@@ -64,6 +65,6 @@ def test_gateway_route_freeze():
             f"{violations}\n\n"
             f"STOP! Do not add new routes to the Monolith. Create a Microservice instead.\n"
             f"Rule: The API Gateway must not expand its dependency on the Core Kernel.\n"
-            f"Allowed Legacy Handlers: {sorted(list(LEGACY_ALLOWLIST))}\n"
+            f"Allowed Legacy Handlers: {sorted(LEGACY_ALLOWLIST)}\n"
         )
         raise AssertionError(error_msg)

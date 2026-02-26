@@ -71,27 +71,19 @@ def test_admin_route_proxies_to_user_service(mock_forward):
 
 
 @patch.object(proxy_handler, "forward", new_callable=AsyncMock)
-def test_chat_route_proxies_to_monolith(mock_forward):
+def test_chat_route_proxies_to_modern_service(mock_forward):
     """
-    Verify that requests to /api/chat/* are forwarded to the Core Kernel.
+    Verify that requests to /api/chat/* are forwarded to orchestrator/conversation (never monolith).
     """
     mock_forward.return_value = JSONResponse(content={"status": "ok"})
 
-    # Temporarily enable legacy routing for this test
-    original_setting = settings.ROUTE_CHAT_USE_LEGACY
-    settings.ROUTE_CHAT_USE_LEGACY = True
+    response = client.get("/api/chat/history", headers=get_auth_headers())
 
-    try:
-        response = client.get("/api/chat/history", headers=get_auth_headers())
-
-        assert response.status_code == 200
-        assert mock_forward.called
-        args, _ = mock_forward.call_args
-        # Should route to Monolith (Core Kernel)
-        assert settings.CORE_KERNEL_URL in args
-        assert "api/chat/history" in args
-    finally:
-        settings.ROUTE_CHAT_USE_LEGACY = original_setting
+    assert response.status_code == 200
+    assert mock_forward.called
+    args, _ = mock_forward.call_args
+    assert settings.ORCHESTRATOR_SERVICE_URL in args or settings.CONVERSATION_SERVICE_URL in args
+    assert "api/chat/history" in args
 
 
 @patch.object(proxy_handler, "forward", new_callable=AsyncMock)

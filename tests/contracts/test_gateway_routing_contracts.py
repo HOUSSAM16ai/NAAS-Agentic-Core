@@ -19,7 +19,6 @@ def test_chat_route_defaults_to_orchestrator_when_legacy_flag_disabled(monkeypat
         return PlainTextResponse("ok")
 
     monkeypatch.setattr(main.proxy_handler, "forward", fake_forward)
-    monkeypatch.setattr(settings, "ROUTE_CHAT_USE_LEGACY", False)
     main.app.dependency_overrides[verify_gateway_request] = lambda: True
 
     response = TestClient(main.app).get("/api/chat/messages")

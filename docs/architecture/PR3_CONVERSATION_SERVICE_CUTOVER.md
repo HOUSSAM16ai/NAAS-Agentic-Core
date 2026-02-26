@@ -11,7 +11,7 @@
 - نسب rollout المقترحة: `0 -> 5 -> 25 -> 100`.
 
 ## سياسة القرار
-- عند `ROUTE_CHAT_USE_LEGACY=true` أو `ROUTE_CHAT_WS_USE_LEGACY=true`: يذهب الطلب إلى legacy وفق TTL.
+- تم إغلاق مسار legacy في runtime الافتراضي؛ التوجيه الآن بين orchestrator وconversation وفق canary.
 - عند تعطيل legacy:
   - إن كانت نسبة rollout محققة للحالة: Conversation Service.
   - غير ذلك: Orchestrator كمسار آمن افتراضي.

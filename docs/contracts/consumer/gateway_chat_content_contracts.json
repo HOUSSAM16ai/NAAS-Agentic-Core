@@ -19,7 +19,6 @@
         "HEAD"
       ],
       "provider_default": "orchestrator-service",
-      "legacy_toggle": "ROUTE_CHAT_USE_LEGACY",
       "request_content_types": [
         "application/json"
       ],
@@ -52,8 +51,6 @@
     {
       "route": "/api/chat/ws",
       "provider_default": "conversation-service",
-      "legacy_toggle": "ROUTE_CHAT_WS_USE_LEGACY",
-      "ttl_toggle": "ROUTE_CHAT_WS_LEGACY_TTL",
       "versioning": {
         "subprotocol": "jwt",
         "query_fallback": "token",
@@ -72,8 +69,6 @@
     {
       "route": "/admin/api/chat/ws",
       "provider_default": "conversation-service",
-      "legacy_toggle": "ROUTE_ADMIN_CHAT_WS_USE_LEGACY",
-      "ttl_toggle": "ROUTE_ADMIN_CHAT_WS_LEGACY_TTL",
       "versioning": {
         "subprotocol": "jwt",
         "query_fallback": "token",

@@ -2,7 +2,6 @@ import asyncio
 import hashlib
 import logging
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 
 import uvicorn
 from fastapi import Depends, FastAPI, Request, WebSocket
@@ -10,7 +9,6 @@ from fastapi.responses import StreamingResponse
 
 # Local imports
 from microservices.api_gateway.config import settings
-from microservices.api_gateway.legacy_acl import LegacyACL
 from microservices.api_gateway.middleware import (
     RequestIdMiddleware,
     StructuredLoggingMiddleware,
@@ -26,29 +24,16 @@ logger = logging.getLogger("api_gateway")
 
 # Initialize the proxy handler
 proxy_handler = GatewayProxy()
-legacy_acl = LegacyACL(proxy_handler)
-legacy_ws_sessions_total: dict[tuple[str, bool], int] = {}
+legacy_ws_sessions_total: dict[str, int] = {}
 
 
-def _enforce_legacy_ttl(flag_name: str, ttl_value: str) -> None:
-    """يفرض صلاحية زمنية إلزامية لأي مسار fallback نحو legacy لتسهيل الإغلاق التدريجي."""
-    expiry = datetime.fromisoformat(ttl_value)
-    if expiry.tzinfo is None:
-        expiry = expiry.replace(tzinfo=UTC)
-
-    if datetime.now(tz=UTC) > expiry:
-        raise RuntimeError(f"Legacy fallback flag expired: {flag_name} ttl={ttl_value}")
-
-
-def _record_ws_legacy_metric(route_id: str, legacy_flag: bool) -> None:
-    """يسجل عداد جلسات WS بصيغة legacy_ws_sessions_total مع وسوم route_id و legacy_flag."""
-    key = (route_id, legacy_flag)
-    legacy_ws_sessions_total[key] = legacy_ws_sessions_total.get(key, 0) + 1
+def _record_ws_session_metric(route_id: str) -> None:
+    """يسجل عداد جلسات WS الحديثة مع وسم route_id وlegacy_flag=false."""
+    legacy_ws_sessions_total[route_id] = legacy_ws_sessions_total.get(route_id, 0) + 1
     logger.info(
-        "legacy_ws_sessions_total=%s route_id=%s legacy_flag=%s",
-        legacy_ws_sessions_total[key],
+        "legacy_ws_sessions_total=%s route_id=%s legacy_flag=false",
+        legacy_ws_sessions_total[route_id],
         route_id,
-        str(legacy_flag).lower(),
     )
 
 
@@ -68,12 +53,8 @@ def _should_route_to_conversation(identity: str, rollout_percent: int) -> bool:
     return _rollout_bucket(identity) < normalized
 
 
-def _resolve_chat_ws_target(route_id: str, upstream_path: str, use_legacy: bool, ttl: str) -> str:
-    """يحدد هدف WS مع حارس علم التوجيه وTTL إلزامي وضبط canary تدريجي."""
-    if use_legacy:
-        _enforce_legacy_ttl(route_id, ttl)
-        return legacy_acl.websocket_target(upstream_path, route_id)
-
+def _resolve_chat_ws_target(route_id: str, upstream_path: str) -> str:
+    """يحدد هدف WS الحديث بين orchestrator وconversation وفق canary تدريجي."""
     identity = f"{route_id}:{upstream_path}"
     use_conversation = _should_route_to_conversation(
         identity, settings.ROUTE_CHAT_WS_CONVERSATION_ROLLOUT_PERCENT
@@ -297,10 +278,7 @@ async def missions_path_proxy(path: str, request: Request) -> StreamingResponse:
     )
 
 
-# --- LEGACY MONOLITH ROUTES (STRANGLER PATTERN) ---
-# These routes are explicitly mapped to the Core Kernel (Monolith).
-# They are marked as deprecated and logged for future extraction.
-# Governance: New routes MUST NOT be added here without exception approval.
+# --- COMPATIBILITY ROUTES (MICROSERVICES TARGETS) ---
 
 
 @app.api_route(
@@ -369,14 +347,10 @@ async def security_proxy(path: str, request: Request) -> StreamingResponse:
 )
 async def chat_http_proxy(path: str, request: Request) -> StreamingResponse:
     """
-    [LEGACY] HTTP Chat Proxy.
+    HTTP Chat Proxy (Modern Target).
     TARGET: Orchestrator Service / Conversation Service
     """
-    logger.warning("Legacy route accessed: /api/chat/%s", path)
-    if settings.ROUTE_CHAT_USE_LEGACY:
-        return await legacy_acl.forward_http(
-            request, legacy_acl.chat_upstream_path(path), "chat_http"
-        )
+    logger.info("Route accessed: /api/chat/%s (modern routing)", path)
     identity = request.headers.get("x-request-id", request.url.path)
     target_url = settings.ORCHESTRATOR_SERVICE_URL
     if _should_route_to_conversation(identity, settings.ROUTE_CHAT_HTTP_CONVERSATION_ROLLOUT_PERCENT):
@@ -393,38 +367,26 @@ async def chat_http_proxy(path: str, request: Request) -> StreamingResponse:
 @app.websocket("/api/chat/ws")
 async def chat_ws_proxy(websocket: WebSocket):
     """
-    [LEGACY] Customer Chat WebSocket.
+    Customer Chat WebSocket (Modern Target).
     TARGET: Orchestrator Service / Conversation Service
     """
     route_id = "chat_ws_customer"
-    use_legacy = settings.ROUTE_CHAT_WS_USE_LEGACY
-    logger.warning("Chat WebSocket route_id=%s legacy_flag=%s", route_id, str(use_legacy).lower())
-    _record_ws_legacy_metric(route_id, use_legacy)
-    target_url = _resolve_chat_ws_target(
-        route_id,
-        "api/chat/ws",
-        use_legacy,
-        settings.ROUTE_CHAT_WS_LEGACY_TTL,
-    )
+    logger.info("Chat WebSocket route_id=%s legacy_flag=false", route_id)
+    _record_ws_session_metric(route_id)
+    target_url = _resolve_chat_ws_target(route_id, "api/chat/ws")
     await websocket_proxy(websocket, target_url)
 
 
 @app.websocket("/admin/api/chat/ws")
 async def admin_chat_ws_proxy(websocket: WebSocket):
     """
-    [LEGACY] Admin Chat WebSocket.
+    Admin Chat WebSocket (Modern Target).
     TARGET: Orchestrator Service / Conversation Service
     """
     route_id = "chat_ws_admin"
-    use_legacy = settings.ROUTE_ADMIN_CHAT_WS_USE_LEGACY
-    logger.warning("Chat WebSocket route_id=%s legacy_flag=%s", route_id, str(use_legacy).lower())
-    _record_ws_legacy_metric(route_id, use_legacy)
-    target_url = _resolve_chat_ws_target(
-        route_id,
-        "admin/api/chat/ws",
-        use_legacy,
-        settings.ROUTE_ADMIN_CHAT_WS_LEGACY_TTL,
-    )
+    logger.info("Chat WebSocket route_id=%s legacy_flag=false", route_id)
+    _record_ws_session_metric(route_id)
+    target_url = _resolve_chat_ws_target(route_id, "admin/api/chat/ws")
     await websocket_proxy(websocket, target_url)
 
 

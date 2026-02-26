@@ -4,9 +4,9 @@
 
 | route_id | route_pattern | owner | legacy_flag | sunset_date | target_service |
 |---|---|---|---|---|---|
-| chat_ws_customer | `/api/chat/ws` | conversation-platform | `ROUTE_CHAT_WS_USE_LEGACY` | 2026-06-30 | conversation-service (candidate in PR#1) |
-| chat_ws_admin | `/admin/api/chat/ws` | conversation-platform | `ROUTE_ADMIN_CHAT_WS_USE_LEGACY` | 2026-06-30 | conversation-service (candidate in PR#1) |
-| chat_http | `/api/chat/{path}` | conversation-platform | `ROUTE_CHAT_USE_LEGACY` | 2026-06-30 | orchestrator-service |
+| chat_ws_customer | `/api/chat/ws` | conversation-platform | `none` | 2026-06-30 | conversation-service |
+| chat_ws_admin | `/admin/api/chat/ws` | conversation-platform | `none` | 2026-06-30 | conversation-service |
+| chat_http | `/api/chat/{path}` | conversation-platform | `none` | 2026-06-30 | orchestrator-service |
 | admin_ai_config | `/admin/ai-config` | identity-platform | `none` | 2026-06-30 | user-service |
 | content | `/v1/content/{path}` | research-platform | `none` | 2026-06-30 | research-agent |
 | data_mesh | `/api/v1/data-mesh/{path}` | data-platform | `none` | 2026-06-30 | observability-service |

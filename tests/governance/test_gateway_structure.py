@@ -11,11 +11,7 @@ GATEWAY_FILE = "microservices/api_gateway/main.py"
 
 # These functions are allowed to point to the Monolith (for now).
 # Any NEW function added to this list violates the "Stop the Bleeding" rule.
-LEGACY_ALLOWLIST = {
-    "chat_http_proxy",
-    "chat_ws_proxy",
-    "admin_chat_ws_proxy",
-}
+LEGACY_ALLOWLIST: set[str] = set()
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +57,6 @@ def test_gateway_route_freeze():
             f"{violations}\n\n"
             f"STOP! Do not add new routes to the Monolith. Create a Microservice instead.\n"
             f"Rule: The API Gateway must not expand its dependency on the Core Kernel.\n"
-            f"Allowed Legacy Handlers: {sorted(LEGACY_ALLOWLIST)}\n"
+            f"Allowed Legacy Handlers: []\n"
         )
         raise AssertionError(error_msg)

@@ -19,10 +19,7 @@
    export LEGACY_EXPIRES_AT=2026-02-27T12:00:00Z
    export CORE_KERNEL_URL=http://core-kernel:8000
    ```
-3. فعّل flags المطلوبة لحالات chat فقط عند الضرورة:
-   - `ROUTE_CHAT_USE_LEGACY=true`
-   - `ROUTE_CHAT_WS_USE_LEGACY=true`
-   - `ROUTE_ADMIN_CHAT_WS_USE_LEGACY=true`
+3. نفّذ rollback تشغيلي عبر إعادة نشر إصدار gateway سابق يحتوي fallback (إجراء استثنائي موثق).
 4. راقب أحجام الطلبات legacy ومعرّفات `route_id`.
 
 ## الإغلاق الإجباري

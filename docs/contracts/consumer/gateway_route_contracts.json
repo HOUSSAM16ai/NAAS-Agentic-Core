@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "consumer": "api-gateway",
+  "contracts": [
+    {
+      "route": "/api/chat/{path:path}",
+      "default_provider": "orchestrator-service",
+      "legacy_fallback": "core-kernel-via-legacy-acl",
+      "toggle": "ROUTE_CHAT_USE_LEGACY"
+    },
+    {
+      "route": "/v1/content/{path:path}",
+      "default_provider": "research-agent",
+      "legacy_fallback": "core-kernel-via-legacy-acl",
+      "toggle": "ROUTE_CONTENT_USE_LEGACY"
+    },
+    {
+      "route": "/api/v1/data-mesh/{path:path}",
+      "default_provider": "observability-service",
+      "legacy_fallback": "core-kernel-via-legacy-acl",
+      "toggle": "ROUTE_DATAMESH_USE_LEGACY"
+    },
+    {
+      "route": "/system/{path:path}",
+      "default_provider": "orchestrator-service",
+      "legacy_fallback": "core-kernel-via-legacy-acl",
+      "toggle": "ROUTE_SYSTEM_USE_LEGACY"
+    }
+  ]
+}

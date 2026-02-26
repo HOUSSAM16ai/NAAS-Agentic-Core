@@ -165,6 +165,25 @@ jobs:
       - name: 🛡️ Run Guardrails
         run: python scripts/ci_guardrails.py
 
+      - name: 🧭 Fitness #1 - CORE_KERNEL ACL isolation
+        run: python scripts/fitness/check_core_kernel_acl.py
+
+      - name: 📉 Fitness #2 - Legacy routes monotonic
+        run: python scripts/fitness/check_legacy_routes_monotonic.py
+
+      - name: 🔌 Fitness #3 - Port consistency
+        run: python scripts/fitness/check_ports_consistency.py
+
+      - name: 📜 Fitness #5 - Contract baseline present
+        run: python scripts/fitness/check_contracts_verified.py
+
+      - name: 🚫 Fitness #6 - No cross-service imports
+        run: python scripts/fitness/check_no_cross_service_imports.py
+
+      - name: 🧯 Fitness #7 - Legacy env/profile enforcement
+        run: python scripts/fitness/check_core_kernel_env_profile.py
+
+
   # ===========================================================================
   # 🧪 مرحلة الاختبارات
   # ===========================================================================

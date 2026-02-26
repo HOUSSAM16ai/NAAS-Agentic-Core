@@ -65,10 +65,6 @@ class GatewayConfig:
 DEFAULT_GATEWAY_CONFIG: Final[GatewayConfig] = GatewayConfig(
     services=(
         ServiceEndpoint(
-            name="core-kernel",
-            base_url=os.getenv("CORE_KERNEL_URL", "http://core-kernel:8000"),
-        ),
-        ServiceEndpoint(
             name="planning-agent",
             base_url=os.getenv("PLANNING_AGENT_URL", "http://planning-agent:8000"),
         ),
@@ -123,12 +119,6 @@ DEFAULT_GATEWAY_CONFIG: Final[GatewayConfig] = GatewayConfig(
             path_prefix="/api/v1/reasoning",
             service_name="reasoning-agent",
             strip_prefix=True,
-        ),
-        # Catch-all for Core Kernel (Monolith)
-        RouteRule(
-            path_prefix="/",
-            service_name="core-kernel",
-            strip_prefix=False,  # Do not strip root prefix
         ),
     ),
     enable_cors=True,

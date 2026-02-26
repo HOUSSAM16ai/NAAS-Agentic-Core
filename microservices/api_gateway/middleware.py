@@ -9,6 +9,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 logger = logging.getLogger("api_gateway")
 
 
+def _build_traceparent() -> str:
+    trace_id = uuid.uuid4().hex + uuid.uuid4().hex[:16]
+    parent_id = uuid.uuid4().hex[:16]
+    return f"00-{trace_id}-{parent_id}-01"
+
+
 class RequestIdMiddleware(BaseHTTPMiddleware):
     """
     Middleware to ensure every request has a unique ID.
@@ -70,3 +76,14 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
                 f"error={e!s}"
             )
             raise e
+
+
+class TraceContextMiddleware(BaseHTTPMiddleware):
+    """يضمن تمرير سياق W3C traceparent عبر البوابة إلى الخدمات الخلفية."""
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        traceparent = request.headers.get("traceparent") or _build_traceparent()
+        request.state.traceparent = traceparent
+        response = await call_next(request)
+        response.headers["traceparent"] = traceparent
+        return response

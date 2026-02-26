@@ -77,6 +77,10 @@ def test_create_mission_endpoint():
                 new_callable=AsyncMock,
             ) as _,
             patch(
+                "microservices.orchestrator_service.main.init_db",
+                new_callable=AsyncMock,
+            ) as _,
+            patch(
                 "microservices.orchestrator_service.src.core.event_bus.event_bus",
                 mock_event_bus,
             ),

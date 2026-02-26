@@ -1,6 +1,7 @@
 import os
-import jwt
 from unittest.mock import AsyncMock, patch
+
+import jwt
 
 # Set required environment variable before importing settings
 os.environ["SECRET_KEY"] = "test_secret_key"
@@ -10,13 +11,14 @@ from fastapi.testclient import TestClient
 
 from microservices.api_gateway.config import settings
 from microservices.api_gateway.main import app, proxy_handler
-from microservices.api_gateway.security import verify_gateway_request
 
 client = TestClient(app)
+
 
 # Helper to generate token
 def get_valid_token():
     return jwt.encode({"sub": "test-user"}, settings.SECRET_KEY, algorithm="HS256")
+
 
 def get_auth_headers():
     return {"Authorization": f"Bearer {get_valid_token()}"}

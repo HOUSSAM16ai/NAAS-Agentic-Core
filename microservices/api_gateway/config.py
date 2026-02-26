@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     ORCHESTRATOR_SERVICE_URL: str = "http://orchestrator-service:8006"
     CORE_KERNEL_URL: str = "http://core-kernel:8000"
 
+    # Per-route cutover flags (Phase 0 defaults keep behavior unchanged)
+    ROUTE_ADMIN_AI_CONFIG_USE_LEGACY: bool = True
+    ROUTE_CHAT_USE_LEGACY: bool = False
+    ROUTE_CONTENT_USE_LEGACY: bool = False
+    ROUTE_DATAMESH_USE_LEGACY: bool = False
+    ROUTE_SYSTEM_USE_LEGACY: bool = False
+
     # Gateway Configuration
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "CogniForge API Gateway"

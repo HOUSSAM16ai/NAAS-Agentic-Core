@@ -124,6 +124,7 @@ class GatewayProxy:
         target_url: str,
         path: str,
         service_token: str | None = None,
+        extra_headers: dict[str, str] | None = None,
     ) -> StreamingResponse:
         """
         Forward the incoming request to the target service using Circuit Breaker and Streaming.
@@ -140,6 +141,8 @@ class GatewayProxy:
 
             if service_token:
                 headers["X-Service-Token"] = service_token
+            if extra_headers:
+                headers.update(extra_headers)
 
             # Retry Logic
             retries = settings.MAX_RETRIES

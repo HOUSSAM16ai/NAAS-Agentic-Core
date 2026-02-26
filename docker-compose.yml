@@ -196,6 +196,7 @@ services:
   # Core Kernel - The Monolith Core (Legacy Backend)
   # ==========================================
   core-kernel:
+    profiles: ["legacy"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -249,7 +250,6 @@ services:
       - "8000:8000"  # Takes over the primary port
     environment:
       - ENVIRONMENT=production
-      - CORE_KERNEL_URL=http://core-kernel:8000
       - SECRET_KEY=${SECRET_KEY:-super_secret_key_change_in_production}
       - PLANNING_AGENT_URL=http://planning-agent:8001
       - MEMORY_AGENT_URL=http://memory-agent:8002

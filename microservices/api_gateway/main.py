@@ -8,7 +8,12 @@ from fastapi.responses import StreamingResponse
 
 # Local imports
 from microservices.api_gateway.config import settings
-from microservices.api_gateway.middleware import RequestIdMiddleware, StructuredLoggingMiddleware
+from microservices.api_gateway.legacy_acl import LegacyACL
+from microservices.api_gateway.middleware import (
+    RequestIdMiddleware,
+    StructuredLoggingMiddleware,
+    TraceContextMiddleware,
+)
 from microservices.api_gateway.proxy import GatewayProxy
 from microservices.api_gateway.security import create_service_token, verify_gateway_request
 from microservices.api_gateway.websockets import websocket_proxy
@@ -19,6 +24,7 @@ logger = logging.getLogger("api_gateway")
 
 # Initialize the proxy handler
 proxy_handler = GatewayProxy()
+legacy_acl = LegacyACL(proxy_handler)
 
 
 @asynccontextmanager
@@ -38,6 +44,7 @@ app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 # Add Middleware
 app.add_middleware(StructuredLoggingMiddleware)
 app.add_middleware(RequestIdMiddleware)
+app.add_middleware(TraceContextMiddleware)
 
 
 @app.get("/health")
@@ -247,7 +254,14 @@ async def admin_ai_config_proxy(request: Request) -> StreamingResponse:
     TARGET: User Service (Pending Migration)
     """
     logger.warning("Legacy route accessed: /admin/ai-config")
-    return await proxy_handler.forward(request, settings.CORE_KERNEL_URL, "api/v1/admin/ai-config")
+    if settings.ROUTE_ADMIN_AI_CONFIG_USE_LEGACY:
+        return await legacy_acl.forward_http(request, "api/v1/admin/ai-config", "admin_ai_config")
+    return await proxy_handler.forward(
+        request,
+        settings.USER_SERVICE_URL,
+        "api/v1/admin/ai-config",
+        service_token=create_service_token(),
+    )
 
 
 @app.api_route(
@@ -300,7 +314,14 @@ async def chat_http_proxy(path: str, request: Request) -> StreamingResponse:
     TARGET: Orchestrator Service / Conversation Service
     """
     logger.warning("Legacy route accessed: /api/chat/%s", path)
-    return await proxy_handler.forward(request, settings.CORE_KERNEL_URL, f"api/chat/{path}")
+    if settings.ROUTE_CHAT_USE_LEGACY:
+        return await legacy_acl.forward_http(request, legacy_acl.chat_upstream_path(path), "chat_http")
+    return await proxy_handler.forward(
+        request,
+        settings.ORCHESTRATOR_SERVICE_URL,
+        f"api/chat/{path}",
+        service_token=create_service_token(),
+    )
 
 
 @app.websocket("/api/chat/ws")
@@ -310,7 +331,7 @@ async def chat_ws_proxy(websocket: WebSocket):
     TARGET: Orchestrator Service / Conversation Service
     """
     logger.warning("Legacy WebSocket accessed: /api/chat/ws")
-    target_url = settings.CORE_KERNEL_URL.replace("http", "ws") + "/api/chat/ws"
+    target_url = legacy_acl.websocket_target("api/chat/ws", "chat_ws_customer")
     await websocket_proxy(websocket, target_url)
 
 
@@ -321,7 +342,7 @@ async def admin_chat_ws_proxy(websocket: WebSocket):
     TARGET: Orchestrator Service / Conversation Service
     """
     logger.warning("Legacy WebSocket accessed: /admin/api/chat/ws")
-    target_url = settings.CORE_KERNEL_URL.replace("http", "ws") + "/admin/api/chat/ws"
+    target_url = legacy_acl.websocket_target("admin/api/chat/ws", "chat_ws_admin")
     await websocket_proxy(websocket, target_url)
 
 
@@ -337,7 +358,14 @@ async def content_proxy(path: str, request: Request) -> StreamingResponse:
     TARGET: Content Service (To Be Extracted)
     """
     logger.warning("Legacy route accessed: /v1/content/%s", path)
-    return await proxy_handler.forward(request, settings.CORE_KERNEL_URL, f"v1/content/{path}")
+    if settings.ROUTE_CONTENT_USE_LEGACY:
+        return await legacy_acl.forward_http(request, legacy_acl.content_upstream_path(path), "content")
+    return await proxy_handler.forward(
+        request,
+        settings.RESEARCH_AGENT_URL,
+        f"v1/content/{path}",
+        service_token=create_service_token(),
+    )
 
 
 @app.api_route(
@@ -352,8 +380,13 @@ async def datamesh_proxy(path: str, request: Request) -> StreamingResponse:
     TARGET: Data Mesh Service
     """
     logger.warning("Legacy route accessed: /api/v1/data-mesh/%s", path)
+    if settings.ROUTE_DATAMESH_USE_LEGACY:
+        return await legacy_acl.forward_http(request, f"api/v1/data-mesh/{path}", "data_mesh")
     return await proxy_handler.forward(
-        request, settings.CORE_KERNEL_URL, f"api/v1/data-mesh/{path}"
+        request,
+        settings.OBSERVABILITY_SERVICE_URL,
+        f"api/v1/data-mesh/{path}",
+        service_token=create_service_token(),
     )
 
 
@@ -369,7 +402,14 @@ async def system_proxy(path: str, request: Request) -> StreamingResponse:
     TARGET: System Service
     """
     logger.warning("Legacy route accessed: /system/%s", path)
-    return await proxy_handler.forward(request, settings.CORE_KERNEL_URL, f"system/{path}")
+    if settings.ROUTE_SYSTEM_USE_LEGACY:
+        return await legacy_acl.forward_http(request, f"system/{path}", "system")
+    return await proxy_handler.forward(
+        request,
+        settings.ORCHESTRATOR_SERVICE_URL,
+        f"system/{path}",
+        service_token=create_service_token(),
+    )
 
 
 if __name__ == "__main__":

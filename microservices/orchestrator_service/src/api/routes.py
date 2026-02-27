@@ -34,7 +34,9 @@ from microservices.orchestrator_service.src.services.overmind.domain.api_schemas
     MissionResponse,
 )
 from microservices.orchestrator_service.src.services.overmind.entrypoint import start_mission
-from microservices.orchestrator_service.src.services.overmind.factory import create_langgraph_service
+from microservices.orchestrator_service.src.services.overmind.factory import (
+    create_langgraph_service,
+)
 from microservices.orchestrator_service.src.services.overmind.state import MissionStateManager
 from microservices.orchestrator_service.src.services.overmind.utils.tools import tool_registry
 
@@ -51,8 +53,6 @@ class ChatRequest(BaseModel):
     conversation_id: int | None = None
     history_messages: list[dict[str, str]] = []
     context: dict[str, Any] = {}
-
-
 
 
 def _extract_chat_objective(payload: dict[str, object]) -> str | None:
@@ -126,7 +126,9 @@ async def chat_ws_stategraph(websocket: WebSocket) -> None:
                 continue
             objective = _extract_chat_objective(incoming)
             if objective is None:
-                await websocket.send_json({"status": "error", "message": "question/objective required"})
+                await websocket.send_json(
+                    {"status": "error", "message": "question/objective required"}
+                )
                 continue
 
             result = await _run_chat_langgraph(objective, {})
@@ -148,7 +150,9 @@ async def admin_chat_ws_stategraph(websocket: WebSocket) -> None:
                 continue
             objective = _extract_chat_objective(incoming)
             if objective is None:
-                await websocket.send_json({"status": "error", "message": "question/objective required"})
+                await websocket.send_json(
+                    {"status": "error", "message": "question/objective required"}
+                )
                 continue
 
             result = await _run_chat_langgraph(objective, {})
@@ -156,6 +160,7 @@ async def admin_chat_ws_stategraph(websocket: WebSocket) -> None:
             await websocket.send_json(result)
     except WebSocketDisconnect:
         logger.info("Admin chat websocket disconnected")
+
 
 def _get_mission_status_payload(status: str) -> dict[str, str | None]:
     if status == "partial_success":

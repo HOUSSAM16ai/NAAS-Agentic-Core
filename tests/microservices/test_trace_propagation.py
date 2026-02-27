@@ -4,6 +4,7 @@ from microservices.api_gateway.main import app
 
 client = TestClient(app)
 
+
 def test_trace_propagation_existing_header():
     """
     Verify that if a 'traceparent' header is provided in the request,
@@ -17,6 +18,7 @@ def test_trace_propagation_existing_header():
     assert response.status_code == 200
     assert "traceparent" in response.headers
     assert response.headers["traceparent"] == trace_id
+
 
 def test_trace_propagation_generates_header():
     """

@@ -20,6 +20,7 @@ from pathlib import Path
 MONOLITH_PATH = Path("app/services/overmind")
 MICROSERVICE_PATH = Path("microservices/orchestrator_service/src")
 
+
 def get_file_map(root_path: Path) -> dict[str, Path]:
     """Recursively find all files and map filename -> full path."""
     file_map = {}
@@ -35,9 +36,11 @@ def get_file_map(root_path: Path) -> dict[str, Path]:
                 file_map[str(rel_path)] = Path(root) / file
     return file_map
 
+
 def calculate_file_hash(filepath: Path) -> str:
     """Calculate MD5 hash of file content."""
     return hashlib.md5(filepath.read_bytes()).hexdigest()
+
 
 def main():
     print(f"🔍 Measuring Copy-Coupling between:\n  A: {MONOLITH_PATH}\n  B: {MICROSERVICE_PATH}\n")
@@ -81,7 +84,10 @@ def main():
 
     # Check if we are below a certain threshold (soft check for now)
     if identical_content_count > 0:
-        print("\n⚠️  WARNING: Identical files detected. This indicates direct copy-paste without decoupling.")
+        print(
+            "\n⚠️  WARNING: Identical files detected. This indicates direct copy-paste without decoupling."
+        )
+
 
 if __name__ == "__main__":
     main()

@@ -51,11 +51,18 @@ def test_chat_http_messages_uses_stategraph(monkeypatch) -> None:
     assert payload["graph_mode"] == "stategraph"
 
 
+import jwt
+from microservices.orchestrator_service.src.core.config import get_settings
+
+def get_auth_headers():
+    return [("Authorization".encode("utf-8"), f"Bearer {jwt.encode({'sub': 'test-user', 'user_id': 1}, get_settings().SECRET_KEY, algorithm='HS256')}".encode("utf-8"))]
+
 def test_chat_ws_customer_uses_stategraph(monkeypatch) -> None:
     """يتأكد أن WS العميل يمر عبر نفس مسار StateGraph ويرجع route_id الصحيح."""
     monkeypatch.setattr(routes, "create_langgraph_service", _FakeLangGraphService)
 
-    with TestClient(app).websocket_connect("/api/chat/ws") as ws:
+    token = jwt.encode({"sub": "1", "user_id": 1}, get_settings().SECRET_KEY, algorithm="HS256")
+    with TestClient(app).websocket_connect(f"/api/chat/ws?token={token}") as ws:
         ws.send_json({"question": "hello"})
         payload = ws.receive_json()
 
@@ -68,7 +75,8 @@ def test_chat_ws_admin_uses_stategraph(monkeypatch) -> None:
     """يتأكد أن WS الإداري يستخدم StateGraph ويرجع route_id الإداري."""
     monkeypatch.setattr(routes, "create_langgraph_service", _FakeLangGraphService)
 
-    with TestClient(app).websocket_connect("/admin/api/chat/ws") as ws:
+    token = jwt.encode({"sub": "1", "user_id": 1}, get_settings().SECRET_KEY, algorithm="HS256")
+    with TestClient(app).websocket_connect(f"/admin/api/chat/ws?token={token}") as ws:
         ws.send_json({"question": "hello"})
         payload = ws.receive_json()
 

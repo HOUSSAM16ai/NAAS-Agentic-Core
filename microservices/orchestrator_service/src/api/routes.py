@@ -33,6 +33,7 @@ from microservices.orchestrator_service.src.services.overmind.domain.api_schemas
     MissionEventResponse,
     MissionResponse,
 )
+from microservices.orchestrator_service.src.services.overmind.utils.mission_complex import handle_mission_complex_stream
 from microservices.orchestrator_service.src.services.overmind.entrypoint import start_mission
 from microservices.orchestrator_service.src.services.overmind.factory import (
     create_langgraph_service,
@@ -117,7 +118,18 @@ async def chat_messages_endpoint(payload: dict[str, object]) -> dict[str, object
 @router.websocket("/api/chat/ws")
 async def chat_ws_stategraph(websocket: WebSocket) -> None:
     """يشغّل WebSocket chat فوق LangGraph لضمان توحيد مسار التنفيذ مع mission."""
-    await websocket.accept()
+    token, selected_protocol = extract_websocket_auth(websocket)
+    if not token:
+        await websocket.close(code=4401)
+        return
+
+    try:
+        user_id = decode_user_id(token, get_settings().SECRET_KEY)
+    except HTTPException:
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept(subprotocol=selected_protocol)
     try:
         while True:
             incoming = await websocket.receive_json()
@@ -129,6 +141,14 @@ async def chat_ws_stategraph(websocket: WebSocket) -> None:
                 await websocket.send_json(
                     {"status": "error", "message": "question/objective required"}
                 )
+                continue
+
+            # Route mission_complex
+            metadata = incoming.get("metadata", {})
+            if isinstance(metadata, dict) and metadata.get("mission_type") == "mission_complex":
+                async for chunk in handle_mission_complex_stream(objective, {}, user_id=user_id):
+                    # handle_mission_complex_stream yields JSON string chunks
+                    await websocket.send_text(chunk)
                 continue
 
             result = await _run_chat_langgraph(objective, {})
@@ -141,7 +161,18 @@ async def chat_ws_stategraph(websocket: WebSocket) -> None:
 @router.websocket("/admin/api/chat/ws")
 async def admin_chat_ws_stategraph(websocket: WebSocket) -> None:
     """يشغّل WebSocket الإداري عبر LangGraph بنفس السلطة الموحدة للـ control-plane."""
-    await websocket.accept()
+    token, selected_protocol = extract_websocket_auth(websocket)
+    if not token:
+        await websocket.close(code=4401)
+        return
+
+    try:
+        user_id = decode_user_id(token, get_settings().SECRET_KEY)
+    except HTTPException:
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept(subprotocol=selected_protocol)
     try:
         while True:
             incoming = await websocket.receive_json()
@@ -153,6 +184,14 @@ async def admin_chat_ws_stategraph(websocket: WebSocket) -> None:
                 await websocket.send_json(
                     {"status": "error", "message": "question/objective required"}
                 )
+                continue
+
+            # Route mission_complex
+            metadata = incoming.get("metadata", {})
+            if isinstance(metadata, dict) and metadata.get("mission_type") == "mission_complex":
+                async for chunk in handle_mission_complex_stream(objective, {}, user_id=user_id):
+                    # handle_mission_complex_stream yields JSON string chunks
+                    await websocket.send_text(chunk)
                 continue
 
             result = await _run_chat_langgraph(objective, {})

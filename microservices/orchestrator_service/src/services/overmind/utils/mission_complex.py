@@ -3,6 +3,7 @@ Mission Complex Handler (Microservice).
 Handles the 'MISSION_COMPLEX' intent by starting a mission and streaming events.
 """
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -16,6 +17,9 @@ from microservices.orchestrator_service.src.models.mission import (
 from microservices.orchestrator_service.src.services.overmind.entrypoint import start_mission
 
 logger = logging.getLogger(__name__)
+
+MISSION_EVENT_WAIT_TIMEOUT_SECONDS = 5.0
+MISSION_EVENT_MAX_IDLE_CYCLES = 3
 
 
 async def handle_mission_complex_stream(
@@ -90,10 +94,32 @@ async def handle_mission_complex_stream(
         # Subscribe to Events
         event_bus = get_event_bus()
         subscription = event_bus.subscribe(f"mission:{mission_id}")
+        event_iterator = subscription.__aiter__()
 
         processed_final = False
+        idle_cycles = 0
 
-        async for event in subscription:
+        while True:
+            try:
+                event = await asyncio.wait_for(
+                    event_iterator.__anext__(),
+                    timeout=MISSION_EVENT_WAIT_TIMEOUT_SECONDS,
+                )
+                idle_cycles = 0
+            except TimeoutError:
+                idle_cycles += 1
+                if idle_cycles < MISSION_EVENT_MAX_IDLE_CYCLES:
+                    continue
+                yield {
+                    "type": "assistant_error",
+                    "payload": {
+                        "content": "❌ فشل تنفيذ المهمة: انتهت مهلة انتظار أحداث التنفيذ من نظام المهام."
+                    },
+                }
+                break
+            except StopAsyncIteration:
+                break
+
             # Event comes as a dict from Redis/EventBus
             # Structure: {"event_type": ..., "payload_json": ..., ...}
             # Or if it's a raw dict from log_event
@@ -154,6 +180,10 @@ async def handle_mission_complex_stream(
             "type": "assistant_error",
             "payload": {"content": "\n🛑 **حدث خطأ حرج أثناء تنفيذ المهمة.**\n"},
         }
+    finally:
+        subscription_instance = locals().get("subscription")
+        if subscription_instance is not None and hasattr(subscription_instance, "aclose"):
+            await subscription_instance.aclose()
 
 
 def _extract_result_text(result: dict | str) -> str:

@@ -8,7 +8,9 @@ import subprocess
 from pathlib import Path
 
 from app.services.agent_tools.tool_model import Tool, ToolConfig
-from microservices.orchestrator_service.src.services.overmind.planning.deep_indexer import build_index
+from microservices.orchestrator_service.src.services.overmind.planning.deep_indexer import (
+    build_index,
+)
 
 
 def get_project_root() -> Path:

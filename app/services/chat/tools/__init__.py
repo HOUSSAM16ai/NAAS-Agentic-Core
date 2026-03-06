@@ -94,61 +94,81 @@ class ToolRegistry:
     # --- Tool Implementations ---
 
     async def _get_user_count(self) -> int:
-        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import UserKnowledge
+        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import (
+            UserKnowledge,
+        )
 
         async with UserKnowledge() as user_knowledge:
             return await user_knowledge.count_users()
 
     async def _list_users(self, limit: int = 20, offset: int = 0) -> list[dict[str, object]]:
-        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import UserKnowledge
+        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import (
+            UserKnowledge,
+        )
 
         async with UserKnowledge() as user_knowledge:
             return await user_knowledge.list_all_users(limit=limit, offset=offset)
 
     async def _get_user_profile(self, user_id: int) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import UserKnowledge
+        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import (
+            UserKnowledge,
+        )
 
         async with UserKnowledge() as user_knowledge:
             return await user_knowledge.get_user_complete_profile(user_id=user_id)
 
     async def _get_user_statistics(self, user_id: int) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import UserKnowledge
+        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import (
+            UserKnowledge,
+        )
 
         async with UserKnowledge() as user_knowledge:
             return await user_knowledge.get_user_statistics(user_id=user_id)
 
     async def _get_project_overview(self) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import ProjectKnowledge
+        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+            ProjectKnowledge,
+        )
 
         knowledge = ProjectKnowledge()
         return await knowledge.get_complete_knowledge()
 
     async def _get_microservices_overview(self) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import ProjectKnowledge
+        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+            ProjectKnowledge,
+        )
 
         knowledge = ProjectKnowledge()
         return knowledge.get_microservices_info()
 
     async def _get_database_tables(self) -> list[str]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import DatabaseKnowledge
+        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+            DatabaseKnowledge,
+        )
 
         async with DatabaseKnowledge() as db_knowledge:
             return await db_knowledge.get_all_tables()
 
     async def _get_table_schema(self, table_name: str) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import DatabaseKnowledge
+        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+            DatabaseKnowledge,
+        )
 
         async with DatabaseKnowledge() as db_knowledge:
             return await db_knowledge.get_table_schema(table_name=table_name)
 
     async def _get_table_count(self, table_name: str) -> int:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import DatabaseKnowledge
+        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+            DatabaseKnowledge,
+        )
 
         async with DatabaseKnowledge() as db_knowledge:
             return await db_knowledge.get_table_count(table_name=table_name)
 
     async def _get_database_map(self) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import DatabaseKnowledge
+        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+            DatabaseKnowledge,
+        )
 
         async with DatabaseKnowledge() as db_knowledge:
             return await db_knowledge.get_full_database_map()

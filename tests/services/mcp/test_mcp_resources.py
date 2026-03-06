@@ -215,7 +215,9 @@ class TestResourceFetchers:
 
         assert fetcher.uri == "project://structure"
 
-        with patch("microservices.orchestrator_service.src.services.overmind.knowledge_structure.build_project_structure") as mock:
+        with patch(
+            "microservices.orchestrator_service.src.services.overmind.knowledge_structure.build_project_structure"
+        ) as mock:
             mock.return_value = {"python_files": 5}
             result = await fetcher.fetch(project_root)
             assert result == {"python_files": 5}
@@ -228,7 +230,9 @@ class TestResourceFetchers:
 
         assert fetcher.uri == "project://microservices"
 
-        with patch("microservices.orchestrator_service.src.services.overmind.knowledge_structure.build_microservices_summary") as mock:
+        with patch(
+            "microservices.orchestrator_service.src.services.overmind.knowledge_structure.build_microservices_summary"
+        ) as mock:
             mock.return_value = {"total_services": 3}
             result = await fetcher.fetch(project_root)
             assert result == {"total_services": 3}

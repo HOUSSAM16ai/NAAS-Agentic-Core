@@ -2,8 +2,13 @@ import pytest
 
 from app.core.domain.models import Mission
 from microservices.orchestrator_service.src.services.overmind.agents.auditor import AuditorAgent
-from microservices.orchestrator_service.src.services.overmind.domain.cognitive import CognitiveState, SuperBrain
-from microservices.orchestrator_service.src.services.overmind.domain.exceptions import StalemateError
+from microservices.orchestrator_service.src.services.overmind.domain.cognitive import (
+    CognitiveState,
+    SuperBrain,
+)
+from microservices.orchestrator_service.src.services.overmind.domain.exceptions import (
+    StalemateError,
+)
 from tests.unit.services.overmind.test_super_brain import (
     StubArchitect,
     StubAuditor,

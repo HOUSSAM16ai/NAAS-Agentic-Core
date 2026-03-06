@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 import pytest
 
-from microservices.orchestrator_service.src.services.overmind.planning.deep_indexer import build_index
+from microservices.orchestrator_service.src.services.overmind.planning.deep_indexer import (
+    build_index,
+)
 
 
 def test_frontend_files_are_indexed() -> None:

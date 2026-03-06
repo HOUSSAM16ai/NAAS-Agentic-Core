@@ -105,6 +105,7 @@ def get_context_service() -> ChatContextService:
         _service_instance = ChatContextService()
     return _service_instance
 
+
 def format_system_principles(
     header: str = "المبادئ الصارمة للنظام (تُطبّق على الشيفرة بالكامل):",
     bullet: str = "-",

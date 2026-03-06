@@ -15,7 +15,9 @@ async def test_start_mission_success(db_session):
     session = db_session
 
     # Mock Orchestrator Client
-    with patch("microservices.orchestrator_service.src.services.overmind.entrypoint.orchestrator_client") as mock_client:
+    with patch(
+        "microservices.orchestrator_service.src.services.overmind.entrypoint.orchestrator_client"
+    ) as mock_client:
         mock_response = MissionResponse(
             id=123,
             objective="Test Unified Control Plane",
@@ -53,7 +55,9 @@ async def test_start_mission_idempotency(db_session):
     session = db_session
     key = "idempotent-key-999"
 
-    with patch("microservices.orchestrator_service.src.services.overmind.entrypoint.orchestrator_client") as mock_client:
+    with patch(
+        "microservices.orchestrator_service.src.services.overmind.entrypoint.orchestrator_client"
+    ) as mock_client:
         mock_response = MissionResponse(
             id=999,
             objective="Obj",

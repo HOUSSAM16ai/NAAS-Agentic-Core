@@ -1,5 +1,9 @@
-from microservices.orchestrator_service.src.services.overmind.code_intelligence.analyzers.hotspot import HotspotAnalyzer
-from microservices.orchestrator_service.src.services.overmind.code_intelligence.models import FileMetrics
+from microservices.orchestrator_service.src.services.overmind.code_intelligence.analyzers.hotspot import (
+    HotspotAnalyzer,
+)
+from microservices.orchestrator_service.src.services.overmind.code_intelligence.models import (
+    FileMetrics,
+)
 
 
 class TestHotspotAnalyzer:

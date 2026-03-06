@@ -7,8 +7,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.core.domain.models import Mission
-from microservices.orchestrator_service.src.services.overmind.domain.cognitive import SuperBrain, _extract_exercise_request
-from microservices.orchestrator_service.src.services.overmind.domain.context import InMemoryCollaborationContext
+from microservices.orchestrator_service.src.services.overmind.domain.cognitive import (
+    SuperBrain,
+    _extract_exercise_request,
+)
+from microservices.orchestrator_service.src.services.overmind.domain.context import (
+    InMemoryCollaborationContext,
+)
 from microservices.orchestrator_service.src.services.overmind.domain.enums import CognitivePhase
 
 AUDITOR_EXPECTED_REVIEWS = 2

@@ -23,12 +23,6 @@ from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.services.overmind.agents.principles import (
     get_agent_principles,
 )
-from microservices.orchestrator_service.src.services.overmind.utils.context_service import (
-    format_architecture_system_principles,
-    format_system_principles,
-    format_architecture_system_principles,
-    format_system_principles,
-)
 from microservices.orchestrator_service.src.services.overmind.dec_pomdp_proof import (
     build_dec_pomdp_proof_summary,
     format_dec_pomdp_proof_summary,
@@ -37,6 +31,10 @@ from microservices.orchestrator_service.src.services.overmind.dec_pomdp_proof im
 from microservices.orchestrator_service.src.services.overmind.domain.identity_models import (
     AgentPrinciple,
     IdentitySchema,
+)
+from microservices.orchestrator_service.src.services.overmind.utils.context_service import (
+    format_architecture_system_principles,
+    format_system_principles,
 )
 
 logger = get_logger(__name__)
@@ -115,7 +113,8 @@ class OvermindIdentity:
             AgentPrinciple(number=p.number, statement=p.statement) for p in get_agent_principles()
         ]
         schema.system_principles = [
-            AgentPrinciple(number=p.number, statement=p.statement) for p in format_system_principles()
+            AgentPrinciple(number=p.number, statement=p.statement)
+            for p in format_system_principles()
         ]
         schema.architecture_system_principles = [
             AgentPrinciple(number=p.number, statement=p.statement)

@@ -8,13 +8,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from microservices.orchestrator_service.src.services.overmind.database_tools.column_manager import ColumnManager
-from microservices.orchestrator_service.src.services.overmind.database_tools.data_manager import DataManager
-from microservices.orchestrator_service.src.services.overmind.database_tools.facade import SuperDatabaseTools
-from microservices.orchestrator_service.src.services.overmind.database_tools.index_manager import IndexManager
-from microservices.orchestrator_service.src.services.overmind.database_tools.operations_logger import OperationsLogger
-from microservices.orchestrator_service.src.services.overmind.database_tools.query_executor import QueryExecutor
-from microservices.orchestrator_service.src.services.overmind.database_tools.table_manager import TableManager
+from microservices.orchestrator_service.src.services.overmind.database_tools.column_manager import (
+    ColumnManager,
+)
+from microservices.orchestrator_service.src.services.overmind.database_tools.data_manager import (
+    DataManager,
+)
+from microservices.orchestrator_service.src.services.overmind.database_tools.facade import (
+    SuperDatabaseTools,
+)
+from microservices.orchestrator_service.src.services.overmind.database_tools.index_manager import (
+    IndexManager,
+)
+from microservices.orchestrator_service.src.services.overmind.database_tools.operations_logger import (
+    OperationsLogger,
+)
+from microservices.orchestrator_service.src.services.overmind.database_tools.query_executor import (
+    QueryExecutor,
+)
+from microservices.orchestrator_service.src.services.overmind.database_tools.table_manager import (
+    TableManager,
+)
 
 
 class TestOperationsLogger:
@@ -259,7 +273,9 @@ class TestSuperDatabaseToolsFacade:
     @pytest.mark.asyncio
     async def test_facade_context_manager(self):
         """اختبار استخدام الواجهة كـ Context Manager."""
-        with patch("microservices.orchestrator_service.src.services.overmind.database_tools.facade.get_db") as mock_get_db:
+        with patch(
+            "microservices.orchestrator_service.src.services.overmind.database_tools.facade.get_db"
+        ) as mock_get_db:
             mock_session = AsyncMock()
 
             async def mock_db_generator():

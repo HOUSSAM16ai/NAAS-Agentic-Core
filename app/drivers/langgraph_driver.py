@@ -18,8 +18,12 @@ class LangGraphDriver(WorkflowEngine):
         """
         try:
             # Lazy import to avoid circular dependencies and ensure isolation
-            from microservices.orchestrator_service.src.services.overmind.domain.api_schemas import LangGraphRunRequest
-            from microservices.orchestrator_service.src.services.overmind.langgraph.service import create_langgraph_service
+            from microservices.orchestrator_service.src.services.overmind.domain.api_schemas import (
+                LangGraphRunRequest,
+            )
+            from microservices.orchestrator_service.src.services.overmind.langgraph.service import (
+                create_langgraph_service,
+            )
 
             service = create_langgraph_service()
             request = LangGraphRunRequest(
@@ -44,7 +48,9 @@ class LangGraphDriver(WorkflowEngine):
         Returns the health status of the LangGraph engine.
         """
         try:
-            from microservices.orchestrator_service.src.services.overmind.langgraph import LangGraphAgentService  # noqa: F401
+            from microservices.orchestrator_service.src.services.overmind.langgraph import (
+                LangGraphAgentService,  # noqa: F401
+            )
 
             return {
                 "status": "active",

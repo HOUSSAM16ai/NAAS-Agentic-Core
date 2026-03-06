@@ -20,7 +20,9 @@ from app.services.chat.graph.domain import WriterIntent
 from app.services.chat.intent_detector import ChatIntent, IntentDetector
 from app.services.chat.tools import ToolRegistry
 from microservices.orchestrator_service.src.services.overmind.agents.memory import MemoryAgent
-from microservices.orchestrator_service.src.services.overmind.domain.context import InMemoryCollaborationContext
+from microservices.orchestrator_service.src.services.overmind.domain.context import (
+    InMemoryCollaborationContext,
+)
 
 logger = logging.getLogger("orchestrator-agent")
 

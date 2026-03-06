@@ -6,7 +6,9 @@ from app.core.domain.models import Mission
 from microservices.orchestrator_service.src.services.overmind.agents.architect import ArchitectAgent
 from microservices.orchestrator_service.src.services.overmind.agents.auditor import AuditorAgent
 from microservices.orchestrator_service.src.services.overmind.agents.operator import OperatorAgent
-from microservices.orchestrator_service.src.services.overmind.agents.strategist import StrategistAgent
+from microservices.orchestrator_service.src.services.overmind.agents.strategist import (
+    StrategistAgent,
+)
 from microservices.orchestrator_service.src.services.overmind.domain.cognitive import SuperBrain
 
 

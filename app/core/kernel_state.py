@@ -11,8 +11,12 @@ from fastapi import FastAPI
 
 from app.core.event_bus_impl import get_event_bus
 from app.core.protocols import EventBusProtocol
-from microservices.orchestrator_service.src.services.overmind.langgraph.service import LangGraphAgentService
-from microservices.orchestrator_service.src.services.overmind.factory import create_langgraph_service
+from microservices.orchestrator_service.src.services.overmind.factory import (
+    create_langgraph_service,
+)
+from microservices.orchestrator_service.src.services.overmind.langgraph.service import (
+    LangGraphAgentService,
+)
 from microservices.orchestrator_service.src.services.overmind.plan_registry import AgentPlanRegistry
 from microservices.orchestrator_service.src.services.overmind.plan_service import AgentPlanService
 

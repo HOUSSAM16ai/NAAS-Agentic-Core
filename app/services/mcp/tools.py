@@ -326,7 +326,9 @@ class MCPToolRegistry:
 
     async def _list_functions(self, path: str = "app") -> dict[str, object]:
         """قائمة الدوال في مسار معين."""
-        from microservices.orchestrator_service.src.services.overmind.knowledge_structure import _analyze_directory
+        from microservices.orchestrator_service.src.services.overmind.knowledge_structure import (
+            _analyze_directory,
+        )
 
         target_path = self.project_root / path
         if not target_path.exists():

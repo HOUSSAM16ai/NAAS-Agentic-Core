@@ -10,8 +10,8 @@ from pathlib import Path
 from app.core.logging import get_logger
 
 # Avoid importing specific tools at module level to prevent circular imports
-# with app.services.chat.handlers.strategy_handlers -> microservices.orchestrator_service.src.services.overmind.entrypoint
-# -> microservices.orchestrator_service.src.services.overmind.factory -> app.services.chat.tools
+# with app.services.chat.handlers.strategy_handlers -> app.services.overmind.entrypoint
+# -> app.services.overmind.factory -> app.services.chat.tools
 
 logger = get_logger("tool-registry")
 
@@ -94,7 +94,7 @@ class ToolRegistry:
     # --- Tool Implementations ---
 
     async def _get_user_count(self) -> int:
-        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import (
+        from app.services.overmind.user_knowledge.service import (
             UserKnowledge,
         )
 
@@ -102,7 +102,7 @@ class ToolRegistry:
             return await user_knowledge.count_users()
 
     async def _list_users(self, limit: int = 20, offset: int = 0) -> list[dict[str, object]]:
-        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import (
+        from app.services.overmind.user_knowledge.service import (
             UserKnowledge,
         )
 
@@ -110,7 +110,7 @@ class ToolRegistry:
             return await user_knowledge.list_all_users(limit=limit, offset=offset)
 
     async def _get_user_profile(self, user_id: int) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import (
+        from app.services.overmind.user_knowledge.service import (
             UserKnowledge,
         )
 
@@ -118,7 +118,7 @@ class ToolRegistry:
             return await user_knowledge.get_user_complete_profile(user_id=user_id)
 
     async def _get_user_statistics(self, user_id: int) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.user_knowledge.service import (
+        from app.services.overmind.user_knowledge.service import (
             UserKnowledge,
         )
 
@@ -126,7 +126,7 @@ class ToolRegistry:
             return await user_knowledge.get_user_statistics(user_id=user_id)
 
     async def _get_project_overview(self) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+        from app.services.overmind.knowledge import (
             ProjectKnowledge,
         )
 
@@ -134,7 +134,7 @@ class ToolRegistry:
         return await knowledge.get_complete_knowledge()
 
     async def _get_microservices_overview(self) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+        from app.services.overmind.knowledge import (
             ProjectKnowledge,
         )
 
@@ -142,7 +142,7 @@ class ToolRegistry:
         return knowledge.get_microservices_info()
 
     async def _get_database_tables(self) -> list[str]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+        from app.services.overmind.knowledge import (
             DatabaseKnowledge,
         )
 
@@ -150,7 +150,7 @@ class ToolRegistry:
             return await db_knowledge.get_all_tables()
 
     async def _get_table_schema(self, table_name: str) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+        from app.services.overmind.knowledge import (
             DatabaseKnowledge,
         )
 
@@ -158,7 +158,7 @@ class ToolRegistry:
             return await db_knowledge.get_table_schema(table_name=table_name)
 
     async def _get_table_count(self, table_name: str) -> int:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+        from app.services.overmind.knowledge import (
             DatabaseKnowledge,
         )
 
@@ -166,7 +166,7 @@ class ToolRegistry:
             return await db_knowledge.get_table_count(table_name=table_name)
 
     async def _get_database_map(self) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge import (
+        from app.services.overmind.knowledge import (
             DatabaseKnowledge,
         )
 

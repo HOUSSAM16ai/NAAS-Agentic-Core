@@ -82,7 +82,7 @@ class StructureFetcher:
     uri = "project://structure"
 
     async def fetch(self, project_root: Path) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge_structure import (
+        from app.services.overmind.knowledge_structure import (
             build_project_structure,
         )
 
@@ -95,7 +95,7 @@ class MicroservicesFetcher:
     uri = "project://microservices"
 
     async def fetch(self, project_root: Path) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge_structure import (
+        from app.services.overmind.knowledge_structure import (
             build_microservices_summary,
         )
 
@@ -114,7 +114,7 @@ class DatabaseFetcher:
         try:
             if self._knowledge:
                 return await self._knowledge.get_database_info()
-            from microservices.orchestrator_service.src.services.overmind.knowledge import (
+            from app.services.overmind.knowledge import (
                 ProjectKnowledge,
             )
 
@@ -136,7 +136,7 @@ class EnvironmentFetcher:
         try:
             if self._knowledge:
                 return self._knowledge.get_environment_info()
-            from microservices.orchestrator_service.src.services.overmind.knowledge import (
+            from app.services.overmind.knowledge import (
                 ProjectKnowledge,
             )
 
@@ -250,7 +250,7 @@ class StatsFetcher:
     uri = "project://stats"
 
     async def fetch(self, project_root: Path) -> dict[str, object]:
-        from microservices.orchestrator_service.src.services.overmind.knowledge_structure import (
+        from app.services.overmind.knowledge_structure import (
             build_microservices_summary,
             build_project_structure,
         )

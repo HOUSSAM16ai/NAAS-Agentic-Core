@@ -21,6 +21,15 @@ CONTRACT_PATH = (
 # List of paths that have been migrated to microservices and removed from the Monolith
 # These should be ignored when checking if the Monolith implements the full old contract.
 MIGRATED_PATHS = {
+        "/admin/api/chat/ws",
+    "/admin/api/chat/latest",
+    "/admin/api/conversations",
+    "/admin/api/conversations/{conversation_id}",
+    "/admin/users/count",
+    "/api/chat/ws",
+    "/api/chat/conversations",
+    "/api/chat/conversations/{conversation_id}",
+    "/api/chat/latest",
     "/admin/ai-config",
     "/admin/audit",
     "/admin/users",

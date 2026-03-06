@@ -54,6 +54,15 @@ def _build_cases() -> list[tuple[str, Callable[[], FastAPI] | FastAPI, str]]:
 
 # Paths migrated from Monolith Core
 MIGRATED_PATHS = {
+        "/admin/api/chat/ws",
+    "/admin/api/chat/latest",
+    "/admin/api/conversations",
+    "/admin/api/conversations/{conversation_id}",
+    "/admin/users/count",
+    "/api/chat/ws",
+    "/api/chat/conversations",
+    "/api/chat/conversations/{conversation_id}",
+    "/api/chat/latest",
     "/admin/ai-config",
     "/admin/audit",
     "/admin/users",

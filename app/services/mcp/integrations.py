@@ -214,7 +214,7 @@ class MCPIntegrations:
         """
         # جلب إحصائيات الإصلاح الحقيقية
         try:
-            from microservices.orchestrator_service.src.services.overmind.agents.self_healing import (
+            from app.services.overmind.agents.self_healing import (
                 get_self_healing_agent,
             )
 

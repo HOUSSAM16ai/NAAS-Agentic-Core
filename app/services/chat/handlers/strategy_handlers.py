@@ -192,7 +192,7 @@ class MissionComplexHandler(IntentHandler):
         """
         # Defer imports to prevent circular dependency
         from app.infrastructure.clients.orchestrator_client import orchestrator_client
-        from microservices.orchestrator_service.src.services.overmind.entrypoint import (
+        from app.services.overmind.entrypoint import (
             start_mission,
         )
 
@@ -727,7 +727,7 @@ class DefaultChatHandler(IntentHandler):
         super().__init__("DEFAULT", priority=-1)
         # Deferred imports to avoid circular dependency
         from app.services.chat.context_service import get_context_service
-        from microservices.orchestrator_service.src.services.overmind.identity import (
+        from app.services.overmind.identity import (
             OvermindIdentity,
         )
 

@@ -101,7 +101,7 @@ class AuditorClient(AgentReflector):
             current_hash = hashlib.sha256(encoded).hexdigest()
 
             if history_hashes.count(current_hash) >= 2:
-                from microservices.orchestrator_service.src.services.overmind.domain.exceptions import (
+                from app.services.overmind.domain.exceptions import (
                     StalemateError,
                 )
 

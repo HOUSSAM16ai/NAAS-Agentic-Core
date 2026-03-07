@@ -88,6 +88,7 @@ class IntentDetector:
             r"(database|schema|tables|db map|database map|قاعدة بيانات|قاعدة البيانات|جداول|مخطط|بنية البيانات|خريطة قاعدة البيانات|العلاقات)",
             r"(route|endpoint|api path|مسار api|نقطة نهاية|services|microservices|خدمات|مصغرة)",
             r"(structure|project info|هيكل المشروع|معلومات المشروع|بنية النظام)",
+            r"(count files|حساب الملفات|ملفات|ملف|ملفات بايثون|python files|ملف بايثون|count python files)",
         ]
         analytics_keywords = (
             r"(مستواي|أدائي|نقاط ضعفي|نقاط الضعف|تقييم|level|performance|weakness|report"

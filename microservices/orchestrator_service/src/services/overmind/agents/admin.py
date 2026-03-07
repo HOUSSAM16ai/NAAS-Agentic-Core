@@ -87,6 +87,14 @@ class AdminAgent:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "count_python_files",
+                    "description": "Get the total number of Python (.py) files in the project workspace.",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
         ]
 
         try:
@@ -152,6 +160,20 @@ class AdminAgent:
                                     yield f"✅ عدد الصفوف في {tool_args.get('table_name')}: {count}"
                         except Exception as e:
                             yield f"❌ فشل تنفيذ أداة قواعد البيانات: {e}"
+                    elif tool_name == "count_python_files":
+                        try:
+                            import asyncio
+
+                            proc = await asyncio.create_subprocess_shell(
+                                "find . -name '*.py' | wc -l",
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE,
+                            )
+                            stdout, _ = await proc.communicate()
+                            count = stdout.decode().strip()
+                            yield f"✅ عدد ملفات بايثون في المشروع: {count} ملف."
+                        except Exception as e:
+                            yield f"❌ فشل حساب ملفات بايثون: {e}"
                     else:
                         yield f"⚠️ الأداة {tool_name} غير مدعومة حالياً في هذه النسخة المصغرة."
 

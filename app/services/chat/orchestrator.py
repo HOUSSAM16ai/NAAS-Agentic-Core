@@ -241,7 +241,14 @@ class ChatOrchestrator:
                     history_messages=history_messages,
                     context=context,
                 ):
-                    full_response_buffer.append(chunk)
+                    if isinstance(chunk, dict):
+                        payload = chunk.get("payload", {})
+                        if isinstance(payload, dict):
+                            content = payload.get("content", "")
+                            if content and isinstance(content, str):
+                                full_response_buffer.append(content)
+                    elif isinstance(chunk, str):
+                        full_response_buffer.append(chunk)
                     yield chunk
 
                 # تخزين في الكاش

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     OBSERVABILITY_SERVICE_URL: str = "http://observability-service:8005"
     RESEARCH_AGENT_URL: str = "http://research-agent:8007"
     REASONING_AGENT_URL: str = "http://reasoning-agent:8008"
-    ORCHESTRATOR_SERVICE_URL: str = "http://orchestrator-service:8006"
+    ORCHESTRATOR_SERVICE_URL: str = "http://localhost:8006"
     CONVERSATION_SERVICE_URL: str = "http://conversation-service:8010"
     CORE_KERNEL_URL: str | None = None
 

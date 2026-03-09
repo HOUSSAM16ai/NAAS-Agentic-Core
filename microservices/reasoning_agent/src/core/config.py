@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # External Services
     RESEARCH_AGENT_URL: str = "http://research-agent:8007"
-    ORCHESTRATOR_URL: str = "http://orchestrator-service:8006"
+    ORCHESTRATOR_URL: str = "http://localhost:8006"
 
     # Reasoning Config
     DEFAULT_MODEL: str = "gpt-4o"

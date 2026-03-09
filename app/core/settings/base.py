@@ -205,7 +205,7 @@ class AppSettings(BaseServiceSettings):
             "RESEARCH_AGENT_URL": ("8006", "research-agent", "8000"),
             "PLANNING_AGENT_URL": ("8001", "planning-agent", "8000"),
             "REASONING_AGENT_URL": ("8007", "reasoning-agent", "8000"),
-            "ORCHESTRATOR_SERVICE_URL": ("8006", "orchestrator-service", "8006"),
+            "ORCHESTRATOR_SERVICE_URL": ("8006", "localhost", "8006"),
         }
 
         if field_name not in service_map:

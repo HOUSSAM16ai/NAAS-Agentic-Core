@@ -233,6 +233,7 @@ class ChatOrchestrator:
             full_response_buffer = []
 
             import json
+
             try:
                 # Use the new chat_with_agent method
                 async for chunk in orchestrator_client.chat_with_agent(

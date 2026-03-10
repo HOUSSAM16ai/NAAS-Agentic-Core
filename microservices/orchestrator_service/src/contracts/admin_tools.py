@@ -51,11 +51,9 @@ async def count_python_files() -> str:
     cmd = f'find {project_root} -type f -name "*.py" -not -path "*/.venv/*" -not -path "*/__pycache__/*" -not -path "*/site-packages/*" -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l'
 
     process = await asyncio.create_subprocess_shell(
-        cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+        cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
-    stdout, stderr = await process.communicate()
+    stdout, _stderr = await process.communicate()
 
     count = int(stdout.decode().strip() or 0)
     return f"عدد ملفات بايثون: {count} ملف"

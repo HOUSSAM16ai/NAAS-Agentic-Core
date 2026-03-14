@@ -118,3 +118,47 @@ def test_create_mission_endpoint():
     finally:
         fastapi_app.dependency_overrides.pop(get_db, None)
         loop.run_until_complete(test_engine.dispose())
+
+
+
+def test_canonicalize_mission_event_accepts_legacy_shapes() -> None:
+    from microservices.orchestrator_service.src.api.routes import _canonicalize_mission_event
+
+    payload_shape = _canonicalize_mission_event({"event_type": "mission_started", "payload_json": {"a": 1}})
+    data_shape = _canonicalize_mission_event({"event_type": "mission_started", "data": {"b": 2}})
+
+    assert payload_shape == {"event_type": "mission_started", "data": {"a": 1}}
+    assert data_shape == {"event_type": "mission_started", "data": {"b": 2}}
+
+
+def test_create_mission_endpoint_sanitizes_internal_errors() -> None:
+    """يتأكد أن فشل إنشاء المهمة لا يسرّب تفاصيل داخلية للعميل."""
+
+    from fastapi import FastAPI
+
+    from microservices.orchestrator_service.src.api import routes
+    from microservices.orchestrator_service.src.core.database import get_db
+
+    async def _broken_start_mission(**_kwargs):
+        raise RuntimeError("sensitive-db-trace")
+
+    app = FastAPI()
+    app.include_router(routes.router)
+
+    def _fake_get_db():
+        return object()
+
+    app.dependency_overrides[get_db] = _fake_get_db
+
+    with patch("microservices.orchestrator_service.src.api.routes.start_mission", _broken_start_mission):
+        client = TestClient(app)
+        response = client.post(
+            "/missions",
+            json={"objective": "will fail", "context": {}, "priority": 1},
+            headers={"X-Correlation-ID": "cid-1"},
+        )
+
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert "sensitive-db-trace" not in detail
+    assert "request_id=" in detail

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -190,3 +191,95 @@ def test_outbox_status_returns_operational_snapshot(monkeypatch) -> None:
         "oldest_pending_age_seconds": 42,
         "generated_at": "2026-01-01T00:00:00+00:00",
     }
+
+
+
+
+def test_admin_graph_access_node_is_fail_closed() -> None:
+    """يتأكد أن عقدة الوصول الإدارية لم تعد تعمل بمنطق السماح العام."""
+
+    module_text = Path(
+        "microservices/orchestrator_service/src/services/overmind/graph/admin.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ADMIN_ACCESS_DENIED" in module_text
+    assert "Allow all for now" not in module_text
+
+
+def test_admin_tool_invoke_count_python_files_success(monkeypatch) -> None:
+    """يتأكد أن أداة عد ملفات بايثون تعمل end-to-end عبر endpoint الإداري."""
+
+    class _Registry:
+        def get(self, name: str):
+            if name != "admin.count_python_files":
+                return None
+
+            async def _tool(**_kwargs):
+                return 321
+
+            return _tool
+
+    monkeypatch.setattr(
+        routes,
+        "get_settings",
+        lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
+    )
+    monkeypatch.setattr(routes, "get_registry", lambda: _Registry())
+
+    app = _build_test_app()
+
+    def mock_get_db_tool():
+        return object()
+
+    app.dependency_overrides[get_db] = mock_get_db_tool
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/tools/admin.count_python_files/invoke",
+        headers={"x-internal-admin-key": "internal-key-1234567890"},
+        json={},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "result": 321}
+
+
+def test_admin_tool_invoke_sanitizes_tool_errors(monkeypatch) -> None:
+    """يتأكد أن أخطاء أدوات الإدارة تُعاد برسالة آمنة دون تسريب الاستثناء الخام."""
+
+    class _Registry:
+        def get(self, name: str):
+            if name != "admin.count_python_files":
+                return None
+
+            async def _tool(**_kwargs):
+                raise RuntimeError("sensitive-tool-trace")
+
+            return _tool
+
+    monkeypatch.setattr(
+        routes,
+        "get_settings",
+        lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
+    )
+    monkeypatch.setattr(routes, "get_registry", lambda: _Registry())
+
+    app = _build_test_app()
+
+    def mock_get_db_tool_error():
+        return object()
+
+    app.dependency_overrides[get_db] = mock_get_db_tool_error
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/tools/admin.count_python_files/invoke",
+        headers={"x-internal-admin-key": "internal-key-1234567890"},
+        json={},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "error"
+    assert "sensitive-tool-trace" not in payload["message"]
+    assert "request_id=" in payload["message"]

@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Any
+from typing import TypedDict
 
 import jwt
 from fastapi import (
@@ -46,6 +46,40 @@ from microservices.orchestrator_service.src.services.tools.registry import get_r
 
 logger = logging.getLogger(__name__)
 
+type JsonObject = dict[str, object]
+
+class ChatRunContext(TypedDict, total=False):
+    """غلاف سياقي محدود لمسار تشغيل الدردشة لتجنّب القواميس المفتوحة في الحدود الحرجة."""
+
+    mission_type: str
+
+
+class MissionEventEnvelope(TypedDict):
+    """العقد الداخلي القياسي لبث أحداث المهمات عبر WebSocket."""
+
+    event_type: str
+    data: dict[str, object]
+
+
+def _canonicalize_mission_event(event: object) -> MissionEventEnvelope | None:
+    """يوحّد أشكال الحدث التاريخية إلى غلاف داخلي ثابت مع توافق رجعي عند الحافة."""
+
+    if not isinstance(event, dict):
+        return None
+
+    raw_event_type = event.get("event_type")
+    if not isinstance(raw_event_type, str) or not raw_event_type.strip():
+        return None
+
+    payload_candidate = event.get("payload_json")
+    if not isinstance(payload_candidate, dict):
+        payload_candidate = event.get("data")
+    if not isinstance(payload_candidate, dict):
+        payload_candidate = {}
+
+    return {"event_type": raw_event_type, "data": payload_candidate}
+
+
 router = APIRouter(
     tags=["Overmind (Super Agent)"],
 )
@@ -79,6 +113,28 @@ def _is_admin_payload(payload: dict[str, object]) -> bool:
     has_admin_flag = payload.get("is_admin") is True
     has_admin_scope = "admin" in scope_text and "tool" in scope_text
     return has_admin_role or has_admin_flag or has_admin_scope
+
+
+def _coerce_admin_state(payload: dict[str, object] | None = None) -> dict[str, object]:
+    """يبني حالة إدارة ضيقة ومتوافقة لعقدة التحكم دون توسيع الواجهة العامة."""
+
+    safe_payload = payload or {}
+    role = str(safe_payload.get("role", "")).strip().lower()
+    scope = str(safe_payload.get("scope", "")).strip().lower()
+    is_admin = _is_admin_payload(safe_payload)
+    return {
+        "is_admin": is_admin,
+        "user_role": role,
+        "scope": scope,
+    }
+
+
+def _merge_admin_inputs(base_inputs: dict[str, object], admin_payload: dict[str, object] | None) -> dict[str, object]:
+    """يحقن غلاف الإدارة الموحد فقط عند الحاجة، مع إبقاء المسارات الأخرى دون تغيير."""
+
+    if admin_payload is None:
+        return base_inputs
+    return {**base_inputs, **_coerce_admin_state(admin_payload)}
 
 
 async def require_internal_admin_access(
@@ -165,8 +221,8 @@ for tool_name in ADMIN_TOOL_CONTRACT:
         dependencies=[Depends(require_internal_admin_access)],
     )
     async def invoke_admin_tool(
-        payload: dict[str, Any] | None = None, name=tool_name
-    ) -> dict[str, Any]:
+        payload: JsonObject | None = None, name=tool_name
+    ) -> JsonObject:
         if payload is None:
             payload = {}
         tool_fn = get_registry().get(name)
@@ -188,15 +244,24 @@ for tool_name in ADMIN_TOOL_CONTRACT:
                 result = tool_fn(**payload)
 
             return {"status": "success", "result": result}
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
+        except Exception:
+            request_id = str(uuid.uuid4())
+            logger.error(
+                "Admin tool invocation failed",
+                exc_info=True,
+                extra={"request_id": request_id, "tool_name": name},
+            )
+            return {
+                "status": "error",
+                "message": f"Tool execution failed. request_id={request_id}",
+            }
 
     @router.get(
         f"/api/v1/tools/{tool_name}/schema",
         tags=["Admin MCP Tools"],
         dependencies=[Depends(require_internal_admin_access)],
     )
-    async def get_admin_tool_schema(name=tool_name) -> dict[str, Any]:
+    async def get_admin_tool_schema(name=tool_name) -> JsonObject:
         return {"name": name, "description": ADMIN_TOOL_CONTRACT.get(name), "parameters": {}}
 
     @router.get(
@@ -204,7 +269,7 @@ for tool_name in ADMIN_TOOL_CONTRACT:
         tags=["Admin MCP Tools"],
         dependencies=[Depends(require_internal_admin_access)],
     )
-    async def get_admin_tool_health(name=tool_name) -> dict[str, Any]:
+    async def get_admin_tool_health(name=tool_name) -> JsonObject:
         tool_fn = get_registry().get(name)
         return {"name": name, "status": "healthy" if tool_fn else "unavailable"}
 
@@ -346,13 +411,14 @@ import asyncio
 async def _stream_chat_langgraph(
     websocket: WebSocket,
     objective: str,
-    context: dict[str, Any],
+    context: ChatRunContext,
     chat_scope: str,
     conversation_id: int,
-    app_graph: Any = None,
+    app_graph: object = None,
+    admin_payload: dict[str, object] | None = None,
 ) -> None:
     """يشغّل LangGraph الموحد لمسارات البحث والإدارة ويبث الأحداث."""
-    queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+    queue: asyncio.Queue[dict[str, object]] = asyncio.Queue(maxsize=64)
 
     async def _runner():
         try:
@@ -360,12 +426,17 @@ async def _stream_chat_langgraph(
             if not app_graph:
                 app_graph = create_unified_graph()
             config = {"configurable": {"thread_id": str(conversation_id)}}
-            inputs = {"query": objective, "messages": [HumanMessage(content=objective)]}
+            inputs: dict[str, object] = {"query": objective, "messages": [HumanMessage(content=objective)]}
+            inputs = _merge_admin_inputs(inputs, admin_payload if chat_scope == "admin" else None)
 
             res = await app_graph.ainvoke(inputs, config=config)
 
+            if queue.full():
+                await queue.get()
             await queue.put({"type": "__DONE__", "result": res})
         except Exception as e:
+            if queue.full():
+                await queue.get()
             await queue.put({"type": "__ERROR__", "error": str(e)})
 
     task = asyncio.create_task(_runner())
@@ -420,7 +491,13 @@ async def _stream_chat_langgraph(
             )
             break
         if evt["type"] == "__ERROR__":
-            final_content = f"❌ خطأ أثناء التنفيذ: {evt['error']}"
+            request_id = str(uuid.uuid4())
+            logger.error(
+                "LangGraph streaming failure",
+                exc_info=True,
+                extra={"request_id": request_id, "chat_scope": chat_scope},
+            )
+            final_content = _safe_assistant_error(request_id)
             await websocket.send_json(
                 {"type": "assistant_error", "payload": {"content": final_content}}
             )
@@ -498,14 +575,16 @@ async def _stream_chat_langgraph(
 
 async def _run_chat_langgraph(
     objective: str,
-    context: dict[str, Any],
-    app_graph: Any = None,
+    context: ChatRunContext,
+    app_graph: object = None,
+    admin_payload: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """يشغّل LangGraph كعمود فقري لرحلة chat ويعيد حمولة موحدة قابلة للبث (HTTP legacy fallback)."""
     if not app_graph:
         app_graph = create_unified_graph()
     config = {"configurable": {"thread_id": "http_run"}}
-    inputs = {"query": objective, "messages": [HumanMessage(content=objective)]}
+    inputs: dict[str, object] = {"query": objective, "messages": [HumanMessage(content=objective)]}
+    inputs = _merge_admin_inputs(inputs, admin_payload)
 
     res = await app_graph.ainvoke(inputs, config=config)
     final_resp = res.get("final_response")
@@ -544,7 +623,7 @@ async def chat_messages_endpoint(payload: dict[str, object], request: Request) -
         raise HTTPException(status_code=422, detail="question/objective is required")
 
     context_payload = payload.get("context")
-    context: dict[str, Any] = {}
+    context: ChatRunContext = {}
     if isinstance(context_payload, dict):
         for key, value in context_payload.items():
             if not isinstance(key, str):
@@ -613,7 +692,7 @@ async def chat_ws_stategraph(websocket: WebSocket) -> None:
             )
 
             context_payload = incoming.get("context")
-            context: dict[str, Any] = {}
+            context: ChatRunContext = {}
             if isinstance(context_payload, dict):
                 for key, value in context_payload.items():
                     if not isinstance(key, str):
@@ -651,9 +730,14 @@ async def admin_chat_ws_stategraph(websocket: WebSocket) -> None:
         return
 
     try:
+        auth_payload = jwt.decode(token, get_settings().SECRET_KEY, algorithms=["HS256"])
         user_id = decode_user_id(token, get_settings().SECRET_KEY)
-    except HTTPException:
+    except (HTTPException, jwt.PyJWTError):
         await websocket.close(code=4401)
+        return
+
+    if not _is_admin_payload(auth_payload):
+        await websocket.close(code=4403)
         return
 
     await websocket.accept(subprotocol=selected_protocol)
@@ -696,7 +780,7 @@ async def admin_chat_ws_stategraph(websocket: WebSocket) -> None:
             )
 
             context_payload = incoming.get("context")
-            context: dict[str, Any] = {}
+            context: ChatRunContext = {}
             if isinstance(context_payload, dict):
                 for key, value in context_payload.items():
                     if not isinstance(key, str):
@@ -719,6 +803,7 @@ async def admin_chat_ws_stategraph(websocket: WebSocket) -> None:
                 chat_scope="admin",
                 conversation_id=conversation_id,
                 app_graph=getattr(websocket.app.state, "app_graph", None),
+                admin_payload=auth_payload,
             )
 
     except WebSocketDisconnect:
@@ -775,7 +860,9 @@ async def chat_with_agent_endpoint(request: ChatRequest, fastapi_req: Request) -
         async def _admin_stream():
             try:
                 admin_app = getattr(fastapi_req.app.state, "admin_app", None)
-                res = await admin_app.ainvoke({"query": request.question, "is_admin_user": True})
+                admin_payload = request.context if isinstance(request.context, dict) else {}
+                admin_inputs = _merge_admin_inputs({"query": request.question}, admin_payload)
+                res = await admin_app.ainvoke(admin_inputs)
                 final_resp = res.get("final_response")
                 if isinstance(final_resp, dict):
                     response_text = json.dumps(final_resp, ensure_ascii=False)
@@ -837,9 +924,17 @@ async def create_mission_endpoint(
 
         return _serialize_mission(mission)
 
-    except Exception as e:
-        logger.error(f"Failed to create mission: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception:
+        request_id = str(uuid.uuid4())
+        logger.error(
+            "Failed to create mission",
+            exc_info=True,
+            extra={"request_id": request_id},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Mission creation failed. request_id={request_id}",
+        )
 
 
 @router.get("/missions/{mission_id}", response_model=MissionResponse, summary="Get Mission")
@@ -936,22 +1031,15 @@ async def stream_mission_ws(
 
     try:
         async for event in subscription:
-            payload = {}
-            evt_type = ""
-
-            if isinstance(event, dict):
-                # Check structure from Redis (published by log_event or entrypoint)
-                # entrypoint might publish raw dicts?
-                # MissionStateManager.log_event publishes to Redis.
-                # Let's assume it matches what we expect
-                payload = event.get("payload_json", {}) or event.get("data", {})
-                evt_type = event.get("event_type", "")
+            canonical_event = _canonicalize_mission_event(event)
+            if canonical_event is None:
+                continue
 
             await websocket.send_json(
-                {"type": "mission_event", "payload": {"event_type": evt_type, "data": payload}}
+                {"type": "mission_event", "payload": canonical_event}
             )
 
-            if evt_type in ("mission_completed", "mission_failed"):
+            if canonical_event["event_type"] in ("mission_completed", "mission_failed"):
                 # Fetch final status
                 async with async_session_factory() as final_session:
                     sm = MissionStateManager(final_session)

@@ -1,5 +1,6 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-04 | Format: [SEVERITY] ID · Title
+> Last updated: 2026-05-04 (runtime verification session)
+> Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED]
 
 ---
 
@@ -7,104 +8,124 @@
 
 ### ISS-001 · SECRET_KEY Ephemeral — All Users Logged Out on Restart
 - **Status**: OPEN
-- **Severity**: Critical / Auth broken
-- **Symptom**: Every Replit restart invalidates all JWT tokens — all users forced to re-login
-- **Root cause**: `SECRET_KEY` generated dynamically at startup if not set as a Replit secret
-- **File**: `app/core/settings/base.py` — `SECRET_KEY: str = Field(default_factory=lambda: secrets.token_hex(32))`
-- **Fix**: Add `SECRET_KEY` as a permanent Replit secret (not just env var)
-- **Validation**: After fix, restart backend → existing JWT should still authenticate
+- **Evidence**: INFERRED (not tested live — requires Replit restart)
+- **Root cause**: `SECRET_KEY: str = Field(default_factory=lambda: secrets.token_hex(32))` in `app/core/settings/base.py`
+- **Fix**: Add `SECRET_KEY` as a permanent Replit secret
 
 ---
 
 ### ISS-002 · 162 GitHub Security Vulnerabilities (15 Critical)
 - **Status**: OPEN
-- **Severity**: Critical / Security
-- **Symptom**: `pip audit` and `npm audit` report 162 known CVEs
+- **Evidence**: GitHub Dependabot alert shown on every `git push` to this branch
+- **Message**: "GitHub found 181 vulnerabilities on HOUSSAM16AI/NAAS-Agentic-Core's default branch (15 critical, 100 high, 63 moderate, 3 low)"
 - **Files**: `requirements-prod.txt`, `frontend/package.json`
-- **Fix approach**: Pin affected packages to safe versions, update in groups by dependency
-- **Commands**:
-  ```bash
-  .venv/bin/pip-audit
-  cd frontend && npm audit
-  ```
 
 ---
 
-### ISS-003 · `full_name` Returns `null` in Login Response
-- **Status**: OPEN
-- **Severity**: Critical / UX broken
-- **Symptom**: After login, the frontend receives `full_name: null` — user name never shown
-- **Root cause**: Schema mismatch between DB column name and Pydantic response model field
+### ISS-003 · `full_name` Returns `null` in Login Response ✅ CONFIRMED LIVE
+- **Status**: OPEN — CONFIRMED at runtime 2026-05-04
+- **Evidence**:
+  ```json
+  POST /api/security/register → { "full_name": "Runtime Tester" }  ← OK
+  POST /api/security/login    → { "full_name": null }              ← BUG
+  ```
+- **Root cause**: Login fetches user from DB but does not populate `full_name` into JWT claims or response schema
 - **Files**: `app/services/security/auth_persistence.py`, auth response schema
-- **Fix**: Align DB fetch with Pydantic field name, or add alias
 
 ---
 
 ### ISS-004 · Hardcoded Admin Credentials in bootstrap.py
 - **Status**: OPEN
-- **Severity**: Critical / Security
-- **Symptom**: If `ADMIN_EMAIL`/`ADMIN_PASSWORD` env vars not set, default credentials are used silently
-- **File**: `app/services/bootstrap.py`
+- **Evidence**: INFERRED
 - **Fix**: Validate at startup — refuse to boot in production if env vars missing
-- **Guard**:
-  ```python
-  if settings.ENVIRONMENT == "production":
-      if not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD:
-          raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be set in production")
+
+---
+
+### ISS-013 · All Free OpenRouter Models Return 403 ✅ CONFIRMED LIVE
+- **Status**: OPEN — CONFIRMED at runtime 2026-05-04
+- **Severity**: Critical — CHAT IS BROKEN in current environment
+- **Evidence** (from server log):
   ```
+  Model nvidia/nemotron-3-super-120b-a12b:free failed: Status 403. Trying next...
+  Model google/gemini-2.0-flash-exp:free failed: Status 403. Trying next...
+  Model qwen/qwen3-coder:free failed: Status 403. Trying next...
+  Model kwaipilot/kat-coder-pro:free failed: Status 403. Trying next...
+  Model microsoft/phi-3-mini-128k-instruct:free failed: Status 403. Trying next...
+  All models exhausted. Engaging Safety Net.
+  ```
+- **Effect**: Entire chat pipeline fails → WS sends `assistant_error` + `error` events
+- **Root cause**: OPENROUTER_API_KEY exists but the account has no access to these free models
+- **Fix**: Use paid OpenRouter models, or add a valid OPENAI_API_KEY as backup
 
 ---
 
 ## 🟡 Medium
 
-### ISS-005 · WebSocket Events Not Traced
-- **Status**: OPEN
-- **Severity**: Medium / Observability gap
-- **Symptom**: HTTP requests get W3C trace spans; WebSocket messages do NOT
-- **File**: `app/api/routers/customer_chat.py` (WS handler)
+### ISS-005 · WebSocket Events Not Traced ✅ CONFIRMED LIVE
+- **Status**: OPEN — CONFIRMED at runtime 2026-05-04
+- **Evidence**: Live WS session generated events [conversation_init, assistant_error, error] but ZERO WS spans appeared in `/api/v1/observability/traces`
+- **Effect**: Can see orchestrator + LangGraph spans but blind to WS-layer timing (auth, message parse, event dispatch)
 - **Fix**: Extract `traceparent` from WS query params or first message payload, create root WS span
-- **Note**: WS doesn't have HTTP headers after upgrade — must use query param or first message JSON
 
 ---
 
-### ISS-006 · OpenAPI Contract Warnings on Startup
-- **Status**: OPEN
-- **Severity**: Medium / DX / Noise
-- **Symptom**: Multiple `UserWarning: Route X not found in contract` on startup
-- **File**: `app/core/openapi_contracts.py` + contract YAML/JSON
-- **Fix**: Add missing routes to contract file, or relax validation to INFO-level
+### ISS-006 · OpenAPI Contract Mismatch — 13 Missing Paths ✅ CONFIRMED LIVE
+- **Status**: OPEN — CONFIRMED at startup 2026-05-04
+- **Evidence**: Server prints on startup:
+  ```
+  ❌ مسارات العقد غير موجودة في التشغيل: ['/api/missions', '/api/observability/aiops', ...]
+  ```
+- **Root cause**: Contract file expects prefix `/api/observability/*` but actual routes are at `/api/v1/observability/*` (prefix mismatch)
+- **Missing paths** (13):
+  `/api/missions`, `/api/missions/{id}`, `/api/observability/aiops`, `/api/observability/alerts`,
+  `/api/observability/analytics/{path}`, `/api/observability/gitops`, `/api/observability/health`,
+  `/api/observability/metrics`, `/api/observability/performance`, `/api/v1/agents/langgraph/run`,
+  `/api/v1/agents/plan`, `/api/v1/overmind/missions`, `/api/v1/overmind/missions/{id}`
+- **Fix**: Update contract YAML to use `/api/v1/observability/*` prefix
 
 ---
 
 ### ISS-007 · Database Writes Not Instrumented in Tracing
 - **Status**: OPEN
-- **Severity**: Medium / Observability
-- **Symptom**: Trace spans show HTTP + LangGraph + orchestrator activity but ZERO DB write spans
-- **File**: `app/core/database.py`
+- **Evidence**: INFERRED — confirmed no DB spans in collected traces
 - **Fix**: SQLAlchemy async event listeners on `before_cursor_execute` / `after_cursor_execute`
-  ```python
-  @event.listens_for(engine.sync_engine, "before_cursor_execute")
-  def before_execute(conn, cursor, statement, ...):
-      conn.info["query_start_time"] = time.perf_counter()
+
+---
+
+### ISS-008 · OTLP / Jaeger Export Not Activated ✅ CONFIRMED LIVE
+- **Status**: OPEN — CONFIRMED at runtime 2026-05-04
+- **Evidence**: Server log repeatedly:
   ```
+  Failed to send telemetry: [Errno -2] Name or service not known
+  ```
+- **Root cause**: `TelemetryBridge` is trying to connect to an external telemetry host that doesn't resolve in this environment
+- **Fix**: Gate telemetry export behind env var check: `OTEL_EXPORTER_OTLP_ENDPOINT`
 
 ---
 
-### ISS-008 · OTLP / Jaeger Export Stubs Not Activated
-- **Status**: OPEN
-- **Severity**: Medium / Observability
-- **Symptom**: `TelemetryBridge` has export stubs; nothing actually ships spans to Jaeger/Zipkin
-- **File**: `app/middleware/observability/telemetry_bridge.py`
-- **Fix**: Read `OTEL_EXPORTER_OTLP_ENDPOINT` env var → enable gRPC or HTTP export
+### ISS-009 · Dormant Microservices Pinged on Login/Register ✅ CONFIRMED LIVE
+- **Status**: OPEN — CONFIRMED at runtime 2026-05-04
+- **Evidence**:
+  ```
+  User Service unreachable for registration ([Errno -2] Name or service not known), using local fallback.
+  User Service unreachable for login ([Errno -2] Name or service not known), using local fallback.
+  ```
+- **Effect**: Every auth request has extra DNS lookup latency before falling back to local DB
+- **Fix**: Disable external service calls entirely in non-Docker environments
 
 ---
 
-### ISS-009 · Dormant Microservices Health Check Still Pings Dead Services
-- **Status**: OPEN
-- **Severity**: Low / UX
-- **Symptom**: Health endpoint tries to contact all 8 dormant Docker services → all timeout
-- **File**: `app/api/routers/system/`
-- **Fix**: Mark dormant services as `INACTIVE` / `DORMANT` in health response, skip ping
+### ISS-012 · `/api/v1/observability/performance` Crashes — Pydantic Schema Mismatch ✅ CONFIRMED LIVE
+- **Status**: OPEN — CONFIRMED at runtime 2026-05-04
+- **Evidence**:
+  ```
+  pydantic_core.ValidationError: 3 validation errors for PerformanceSnapshotResponse
+  cpu_usage: Field required [type=missing]
+  memory_usage: Field required [type=missing]
+  active_requests: Field required [type=missing]
+  ```
+- **Root cause**: `PerformanceSnapshotResponse` schema requires `cpu_usage`, `memory_usage`, `active_requests` but the underlying `TelemetryAnalyzer` returns a dict without these fields
+- **File**: `app/api/routers/observability.py` + `app/api/schemas/observability.py`
 
 ---
 
@@ -112,16 +133,10 @@
 
 ### ISS-010 · Prometheus Metrics Endpoint Not Exposed
 - **Status**: OPEN — blocked by ISS-008
-- **Severity**: Minor
-- **Note**: `obs.export_prometheus_metrics()` exists but `GET /api/v1/observability/metrics` not registered
-- **File**: `app/api/routers/observability.py`
+- **Note**: `GET /api/v1/observability/metrics` returns JSON golden signals (latency/traffic/errors/saturation), not Prometheus text format
 
----
-
-### ISS-011 · Memory System Not Auto-Updating (No PostToolUse Hook Yet)
+### ISS-011 · Memory System PostToolUse Hook — Pending
 - **Status**: OPEN — in progress
-- **Severity**: Minor / DX
-- **Note**: `.memory/` files are updated manually; SessionStart hook pending
 
 ---
 
@@ -135,3 +150,20 @@
 | ISS-R004 | No trace API endpoints `/traces`, `/traces/{id}` | commit `e320e45` |
 | ISS-R005 | `git commit*` in deny list — blocked CI | `.claude/settings.json` fix |
 | ISS-R006 | Python 3.11 system pytest can't parse 3.12 syntax | `.venv/` with Python 3.12 |
+
+---
+
+## 📊 Runtime Metrics (Measured 2026-05-04)
+
+| Metric | Value | Source |
+|--------|-------|--------|
+| WS connect time | 26ms | measured |
+| Auth register | 125ms | trace `8b1f0f95` |
+| Auth login | 75ms | trace `0af1ec03` |
+| LangGraph full run | 757ms | trace `80c2b5d7` |
+| Orchestrator (all fail) | 1506ms | trace `bd4d2974` |
+| Latency p50 | 3.5ms | `/observability/metrics` |
+| Latency p95 | 1057ms | `/observability/metrics` |
+| Latency p99 | 1416ms | `/observability/metrics` |
+| Error rate | 7.69% | `/observability/metrics` |
+| Total requests | 13 | `/observability/metrics` |

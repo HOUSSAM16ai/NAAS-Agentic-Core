@@ -1,5 +1,5 @@
 # CogniForge — Project Context
-> Last updated: 2026-05-04 | Branch: claude/add-distributed-tracing-T9Q8z
+> Last updated: 2026-05-04 (after runtime truth session) | Branch: claude/add-distributed-tracing-T9Q8z
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)
@@ -22,7 +22,7 @@
 ## Start Commands
 ```bash
 # Backend
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Frontend
 cd frontend && npm run dev
@@ -36,19 +36,30 @@ ENVIRONMENT="testing" LLM_MOCK_MODE="1" SUPABASE_URL="https://dummy.supabase.co"
 ruff check . && isort --check-only .
 ```
 
-## Request Flow (The Reality)
+## Request Flow (MEASURED — not assumed)
 ```
 Student browser
   └─ Next.js :5000
         └─ /api/* → rewrites → FastAPI :8000
-              └─ ObservabilityMiddleware  ← traces every request (W3C Trace Context)
+              └─ ObservabilityMiddleware  ← traces every HTTP request (W3C Trace Context)
                     └─ /api/chat/ws  (WebSocket)
+                          │  WS connect: 26ms (measured)
+                          │  Auth: ?token= query param in dev mode
+                          │  ⚠️ WS layer NOT traced (ISS-005)
+                          │
                           └─ OrchestratorClient.chat_with_agent()
-                                ├─ [1] File intelligence (local shell)
-                                ├─ [2] Exercise retrieval (local BAC DB)
+                                span: orchestrator.chat_with_agent (1506ms measured when all fail)
+                                │
+                                ├─ [1] File intelligence (0.1ms → SKIP if no files)
+                                ├─ [2] Exercise retrieval (0.0ms → SKIP if no BAC match)
                                 ├─ [3] HTTP → orchestrator:8006 → ConnectError (DORMANT)
                                 └─ [4] LangGraph local_graph.py  ← PRIMARY HANDLER
-                                          supervisor_node (intent) → chat_node (LLM) → END
+                                          span: langgraph.run (757ms measured)
+                                          │
+                                          ├─ supervisor_node  (0.0ms, intent=educational)
+                                          └─ chat_node (747ms)
+                                                └─ OpenRouter free models → 403 ❌ BROKEN
+                                                   "All models exhausted. Engaging Safety Net."
 ```
 
 ## 18 Database Tables
@@ -60,19 +71,41 @@ Missions: missions, mission_plans, tasks, mission_events
 AI:       prompt_templates, generated_prompts, knowledge_nodes, knowledge_edges
 ```
 
-## Environment Variables (Critical)
+## Environment Variables (Real Status)
 | Variable | Status | Notes |
 |----------|--------|-------|
 | APP_DATABASE_URL | ✅ Replit secret | Supabase PostgreSQL |
 | SECRET_KEY | ⚠️ Ephemeral | Restart = all users logged out |
-| OPENROUTER_API_KEY | ✅ Set | Primary LLM |
-| OPENAI_API_KEY | ✅ Set | Secondary |
+| OPENROUTER_API_KEY | ⚠️ Exists but 403 | All free models returning 403 — chat BROKEN |
+| OPENAI_API_KEY | ❌ Not set | Fallback unavailable |
 | ENVIRONMENT | ✅ development | |
 | ORCHESTRATOR_SERVICE_URL | ❌ Not set | Always ConnectError in Replit |
 | REDIS_URL | ❌ Not set | Falls back to in-memory |
+| OTEL_EXPORTER_OTLP_ENDPOINT | ❌ Not set | Telemetry bridge tries DNS → fails every request |
 
 ## Python Environment
 - Python 3.12 (`.python-version`)
 - Virtual env: `.venv/` (created with `uv venv`)
 - Test runner: `.venv/bin/pytest` (NOT the system pytest which is 3.11)
+- Backend runner: `.venv/bin/uvicorn` (NOT system uvicorn)
 - 1658 tests collected total
+
+## Measured Performance (2026-05-04 live test)
+| Operation | Time | Status |
+|-----------|------|--------|
+| Server health check | 7ms | ✅ |
+| WS connect | 26ms | ✅ |
+| User register | 125ms | ✅ |
+| User login | 75ms | ✅ (but full_name=null) |
+| LangGraph full run | 757ms | ✅ (but LLM fails inside) |
+| Orchestrator (all paths fail) | 1506ms | ❌ |
+| p50 response time | 3.5ms | ✅ |
+| p95 response time | 1057ms | ⚠️ |
+| Error rate | 7.69% | ⚠️ |
+
+## Known Broken in Current Environment
+1. **Chat**: All OpenRouter free models return 403 — NO chat response reaches the user
+2. **Telemetry export**: TelemetryBridge DNS failures on every request (logged noise)
+3. **Auth microservices**: DNS failures on every login/register (adds latency)
+4. **/performance endpoint**: Pydantic schema mismatch → 500 error
+5. **full_name**: Always null in login response

@@ -3,6 +3,37 @@ from pydantic import ConfigDict, Field
 from app.core.schemas import RobustBaseModel
 
 
+class TraceSpanResponse(RobustBaseModel):
+    """بيانات span واحد ضمن trace موزع."""
+
+    span_id: str = Field(..., description="معرف الـ span")
+    parent_span_id: str | None = Field(None, description="معرف الـ span الأصل")
+    operation_name: str = Field(..., description="اسم العملية")
+    service_name: str = Field(..., description="اسم الخدمة")
+    start_time: float = Field(..., description="وقت البداية (Unix timestamp)")
+    end_time: float | None = Field(None, description="وقت النهاية")
+    duration_ms: float | None = Field(None, description="المدة بالميلي ثانية")
+    status: str = Field(..., description="الحالة: OK / ERROR / SKIP")
+    tags: dict[str, object] = Field(default_factory=dict, description="وسوم البيانات الوصفية")
+    metrics: dict[str, float] = Field(default_factory=dict, description="مقاييس الـ span")
+    error_message: str | None = Field(None, description="رسالة الخطأ إن وجدت")
+
+
+class TraceResponse(RobustBaseModel):
+    """trace موزع كامل مع كل spans وسجلاته المرتبطة."""
+
+    trace_id: str = Field(..., description="معرف التتبع الموزع")
+    start_time: float = Field(..., description="وقت بداية التتبع")
+    end_time: float | None = Field(None, description="وقت نهاية التتبع")
+    total_duration_ms: float | None = Field(None, description="المدة الكلية")
+    error_count: int = Field(0, description="عدد الأخطاء المسجلة")
+    critical_path_ms: float | None = Field(None, description="المسار الحرج")
+    spans: list[TraceSpanResponse] = Field(default_factory=list, description="قائمة الـ spans")
+    correlated_logs: list[dict[str, object]] = Field(
+        default_factory=list, description="السجلات المرتبطة بهذا التتبع"
+    )
+
+
 class HealthComponent(RobustBaseModel):
     """مكون صحة فرعي يوضح حالة نظام محدد."""
 

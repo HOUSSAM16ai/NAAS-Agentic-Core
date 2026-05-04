@@ -16,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.routers.registry import RouterSpec, base_router_registry
 from app.core.config import AppSettings
+from app.middleware.observability.observability_middleware import ObservabilityMiddleware
 from app.middleware.remove_blocking_headers import RemoveBlockingHeadersMiddleware
 from app.middleware.security.rate_limit_middleware import RateLimitMiddleware
 from app.middleware.security.security_headers import SecurityHeadersMiddleware
@@ -166,13 +167,14 @@ def build_middleware_stack(settings: AppSettings) -> list[MiddlewareSpec]:
     stack: list[MiddlewareSpec] = [
         (TrustedHostMiddleware, {"allowed_hosts": settings.ALLOWED_HOSTS}),
         (CORSMiddleware, cors_options),
+        (ObservabilityMiddleware, {}),
         (SecurityHeadersMiddleware, {}),
         (RemoveBlockingHeadersMiddleware, {}),
         (GZipMiddleware, {"minimum_size": 1000}),
     ]
 
     if settings.ENVIRONMENT != "testing":
-        stack.insert(3, (RateLimitMiddleware, {}))
+        stack.insert(4, (RateLimitMiddleware, {}))
 
     return stack
 

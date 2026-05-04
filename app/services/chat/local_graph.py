@@ -12,14 +12,21 @@ thread_id = conversation_id  →  كل محادثة لها ذاكرة مستقل
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import re
+import time
 from typing import TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 logger = logging.getLogger("cogniforge.local_graph")
+
+# Carries the parent trace context across async LangGraph node calls
+_graph_trace_context: contextvars.ContextVar = contextvars.ContextVar(
+    "graph_trace_context", default=None
+)
 
 # ─── Intent patterns ──────────────────────────────────────────────────────────
 
@@ -94,12 +101,32 @@ def _format_history(history_messages: list[dict], max_turns: int = 20) -> str:
 
 
 async def _supervisor_node(state: LocalChatState) -> dict:
+    t0 = time.perf_counter()
     intent = _classify_intent(state["question"])
     logger.info(
         "local_graph.supervisor intent=%s question=%.60s",
         intent,
         state["question"],
     )
+
+    try:
+        from app.telemetry.unified_observability import get_unified_observability
+
+        obs = get_unified_observability()
+        parent = _graph_trace_context.get()
+        ctx = obs.start_trace(
+            "langgraph.supervisor",
+            parent_context=parent,
+            tags={"intent": intent, "node": "supervisor"},
+        )
+        obs.end_span(
+            ctx.span_id,
+            status="OK",
+            metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
+        )
+    except Exception:
+        pass
+
     return {"intent": intent}
 
 
@@ -119,6 +146,21 @@ async def _chat_node(state: LocalChatState) -> dict:
     else:
         user_message = question
 
+    t0 = time.perf_counter()
+    span_ctx = None
+    try:
+        from app.telemetry.unified_observability import get_unified_observability
+
+        obs = get_unified_observability()
+        parent = _graph_trace_context.get()
+        span_ctx = obs.start_trace(
+            "langgraph.chat_node",
+            parent_context=parent,
+            tags={"intent": intent, "node": "chat", "history_turns": len(history)},
+        )
+    except Exception:
+        pass
+
     try:
         response = await ai_client.send_message(system_prompt, user_message)
         clean = response.replace("\x00", "").strip()
@@ -127,9 +169,30 @@ async def _chat_node(state: LocalChatState) -> dict:
             intent,
             len(clean),
         )
+        if span_ctx:
+            try:
+                obs.end_span(
+                    span_ctx.span_id,
+                    status="OK",
+                    metrics={
+                        "duration_ms": (time.perf_counter() - t0) * 1000,
+                        "response_chars": float(len(clean)),
+                    },
+                )
+            except Exception:
+                pass
         return {"final_response": clean}
     except Exception:
         logger.warning("local_graph.chat_node_failed", exc_info=True)
+        if span_ctx:
+            try:
+                obs.end_span(
+                    span_ctx.span_id,
+                    status="ERROR",
+                    metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
+                )
+            except Exception:
+                pass
         return {"final_response": ""}
 
 
@@ -165,6 +228,7 @@ async def run_local_graph(
     question: str,
     conversation_id: int | None,
     history_messages: list[dict] | None = None,
+    trace_context=None,
 ) -> str | None:
     """
     تشغيل الرسم البياني المحلي وإعادة الرد النهائي كنص، أو None عند الفشل.
@@ -181,6 +245,23 @@ async def run_local_graph(
         "final_response": "",
     }
 
+    # Create root span and expose it to child nodes via ContextVar
+    root_span_ctx = None
+    token = None
+    t0 = time.perf_counter()
+    try:
+        from app.telemetry.unified_observability import get_unified_observability
+
+        obs = get_unified_observability()
+        root_span_ctx = obs.start_trace(
+            "langgraph.run",
+            parent_context=trace_context,
+            tags={"thread_id": thread_id, "question_len": len(question)},
+        )
+        token = _graph_trace_context.set(root_span_ctx)
+    except Exception:
+        pass
+
     try:
         result = await graph.ainvoke(initial_state, config=config)
         response = (result.get("final_response") or "").strip()
@@ -190,9 +271,38 @@ async def run_local_graph(
                 thread_id,
                 len(response),
             )
+            if root_span_ctx:
+                try:
+                    obs.end_span(
+                        root_span_ctx.span_id,
+                        status="OK",
+                        metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
+                    )
+                except Exception:
+                    pass
             return response
         logger.warning("local_graph.run_empty_response thread_id=%s", thread_id)
+        if root_span_ctx:
+            try:
+                obs.end_span(
+                    root_span_ctx.span_id,
+                    status="OK",
+                    metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
+                )
+            except Exception:
+                pass
     except Exception:
         logger.warning("local_graph.run_failed thread_id=%s", thread_id, exc_info=True)
+        if root_span_ctx:
+            try:
+                obs.end_span(root_span_ctx.span_id, status="ERROR")
+            except Exception:
+                pass
+    finally:
+        if token is not None:
+            try:
+                _graph_trace_context.reset(token)
+            except Exception:
+                pass
 
     return None

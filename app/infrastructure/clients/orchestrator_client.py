@@ -374,6 +374,25 @@ class OrchestratorClient:
         Expects NDJSON stream from the service.
         Yields either structured event dictionaries or fallback strings.
         """
+        import time
+
+        from app.telemetry.unified_observability import get_unified_observability
+
+        obs = get_unified_observability()
+        _t0 = time.perf_counter()
+        _root_ctx = None
+        try:
+            _root_ctx = obs.start_trace(
+                "orchestrator.chat_with_agent",
+                tags={
+                    "user_id": str(user_id),
+                    "conversation_id": str(conversation_id),
+                    "question_len": len(question),
+                },
+            )
+        except Exception:
+            pass
+
         payload = {
             "question": question,
             "user_id": user_id,
@@ -454,8 +473,39 @@ class OrchestratorClient:
         )
 
         if fallback_enabled:
+            _fb_t0 = time.perf_counter()
+            _fb_ctx = None
+            try:
+                _fb_ctx = obs.start_trace(
+                    "orchestrator.fallback.file_intelligence",
+                    parent_context=_root_ctx,
+                    tags={"fallback_step": "file_intelligence"},
+                )
+            except Exception:
+                pass
             local_file_count_response = await self._build_local_file_count_response(question)
+            try:
+                if _fb_ctx:
+                    obs.end_span(
+                        _fb_ctx.span_id,
+                        status="OK" if local_file_count_response else "SKIP",
+                        metrics={"duration_ms": (time.perf_counter() - _fb_t0) * 1000},
+                    )
+            except Exception:
+                pass
             if local_file_count_response:
+                if _root_ctx:
+                    try:
+                        obs.end_span(
+                            _root_ctx.span_id,
+                            status="OK",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                "fallback_path": 1.0,
+                            },
+                        )
+                    except Exception:
+                        pass
                 yield self._normalize_stream_event(
                     {"type": "assistant_delta", "payload": {"content": local_file_count_response}}
                 )
@@ -464,8 +514,39 @@ class OrchestratorClient:
                 )
                 return
 
+            _ret_t0 = time.perf_counter()
+            _ret_ctx = None
+            try:
+                _ret_ctx = obs.start_trace(
+                    "orchestrator.fallback.exercise_retrieval",
+                    parent_context=_root_ctx,
+                    tags={"fallback_step": "exercise_retrieval"},
+                )
+            except Exception:
+                pass
             local_retrieval_response = await self._build_local_retrieval_response(question)
+            try:
+                if _ret_ctx:
+                    obs.end_span(
+                        _ret_ctx.span_id,
+                        status="OK" if local_retrieval_response else "SKIP",
+                        metrics={"duration_ms": (time.perf_counter() - _ret_t0) * 1000},
+                    )
+            except Exception:
+                pass
             if local_retrieval_response:
+                if _root_ctx:
+                    try:
+                        obs.end_span(
+                            _root_ctx.span_id,
+                            status="OK",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                "fallback_path": 2.0,
+                            },
+                        )
+                    except Exception:
+                        pass
                 yield self._normalize_stream_event(
                     {"type": "assistant_delta", "payload": {"content": local_retrieval_response}}
                 )
@@ -475,12 +556,43 @@ class OrchestratorClient:
                 return
 
             # ── LangGraph local engine (replaces raw general-chat fallback) ──
+            _lg_t0 = time.perf_counter()
+            _lg_ctx = None
+            try:
+                _lg_ctx = obs.start_trace(
+                    "orchestrator.fallback.langgraph",
+                    parent_context=_root_ctx,
+                    tags={"fallback_step": "langgraph", "conversation_id": str(conversation_id)},
+                )
+            except Exception:
+                pass
             graph_response = await self._build_local_graph_response(
                 question=question,
                 conversation_id=conversation_id,
                 history_messages=history_messages,
             )
+            try:
+                if _lg_ctx:
+                    obs.end_span(
+                        _lg_ctx.span_id,
+                        status="OK" if graph_response else "SKIP",
+                        metrics={"duration_ms": (time.perf_counter() - _lg_t0) * 1000},
+                    )
+            except Exception:
+                pass
             if graph_response and not str(graph_response).startswith("⚠️ System Alert"):
+                if _root_ctx:
+                    try:
+                        obs.end_span(
+                            _root_ctx.span_id,
+                            status="OK",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                "fallback_path": 3.0,
+                            },
+                        )
+                    except Exception:
+                        pass
                 yield self._normalize_stream_event(
                     {"type": "assistant_delta", "payload": {"content": graph_response}}
                 )
@@ -493,11 +605,42 @@ class OrchestratorClient:
             is_file_intelligence = self._file_intelligence_decision(question)[0]
             is_exercise_retrieval = self._exercise_retrieval_decision(question)
             if not is_file_intelligence and not is_exercise_retrieval:
+                _gc_t0 = time.perf_counter()
+                _gc_ctx = None
+                try:
+                    _gc_ctx = obs.start_trace(
+                        "orchestrator.fallback.general_chat",
+                        parent_context=_root_ctx,
+                        tags={"fallback_step": "general_chat"},
+                    )
+                except Exception:
+                    pass
                 local_general_chat_response = await self._build_local_general_chat_response(
                     question,
                     history_messages=history_messages,
                 )
+                try:
+                    if _gc_ctx:
+                        obs.end_span(
+                            _gc_ctx.span_id,
+                            status="OK" if local_general_chat_response else "SKIP",
+                            metrics={"duration_ms": (time.perf_counter() - _gc_t0) * 1000},
+                        )
+                except Exception:
+                    pass
                 if local_general_chat_response and not str(local_general_chat_response).startswith("⚠️ System Alert"):
+                    if _root_ctx:
+                        try:
+                            obs.end_span(
+                                _root_ctx.span_id,
+                                status="OK",
+                                metrics={
+                                    "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                    "fallback_path": 4.0,
+                                },
+                            )
+                        except Exception:
+                            pass
                     yield self._normalize_stream_event(
                         {"type": "assistant_delta", "payload": {"content": local_general_chat_response}}
                     )
@@ -506,7 +649,17 @@ class OrchestratorClient:
                     )
                     return
 
-        # All paths exhausted — yield a proper error event (NOT raw JSON)
+        # All paths exhausted — record error span and yield error event
+        if _root_ctx:
+            try:
+                obs.end_span(
+                    _root_ctx.span_id,
+                    status="ERROR",
+                    error_message="all_fallback_paths_exhausted",
+                    metrics={"duration_ms": (time.perf_counter() - _t0) * 1000},
+                )
+            except Exception:
+                pass
         try:
             yield self._normalize_stream_event(
                 self._sanitize_error_for_user(request_id=request_id)

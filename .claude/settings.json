@@ -18,6 +18,15 @@
       "Bash(mkdir:*)",
       "Bash(chmod:*)",
       "Bash(bash scripts/*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git add*)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git fetch*)",
+      "Bash(git checkout*)",
+      "Bash(git branch*)",
       "Read(**)",
       "Write(app/**)",
       "Write(frontend/**)",
@@ -25,11 +34,10 @@
       "Write(scripts/**)",
       "Write(docs/**)",
       "Write(.claude/**)",
+      "Write(.memory/**)",
       "Write(CLAUDE.md)"
     ],
     "deny": [
-      "Bash(git commit*)",
-      "Bash(git push*)",
       "Bash(git reset*)",
       "Bash(git rebase*)",
       "Bash(rm -rf*)",
@@ -51,5 +59,29 @@
   "env": {
     "PYTHONPATH": "/home/runner/workspace",
     "ENVIRONMENT": "development"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\": \"📚 Loading project memory...\n\"}' && printf '\\n=== CONTEXT ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/context.md 2>/dev/null && printf '\\n=== PROGRESS ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/progress.md 2>/dev/null && printf '\\n=== TASKS ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/tasks.md 2>/dev/null && printf '\\n=== DECISIONS ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/decisions.md 2>/dev/null && printf '\\n=== ISSUES ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/issues.md 2>/dev/null",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/user/NAAS-Agentic-Core && git diff --name-only HEAD 2>/dev/null | head -20 | { mapfile -t changed; if [ ${#changed[@]} -gt 0 ]; then echo '{\"systemMessage\": \"⚠️  Uncommitted changes detected. Remember to update .memory/progress.md, .memory/tasks.md, and .memory/issues.md before ending the session.\"}'; else echo '{\"systemMessage\": \"✅ No uncommitted changes.\"}'; fi; }",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }

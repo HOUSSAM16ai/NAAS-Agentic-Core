@@ -1,303 +1,101 @@
 # CogniForge — Claude Code Context
 
-> **AI tutor for Algerian students** | FastAPI 8000 + Next.js (Replit:5000 / Codespaces:3000) + LangGraph 1.1.10
-> Arabic / French / Darija | BAC preparation platform
+> منصة تعليمية ذكية (AI Tutor) لطلاب البكالوريا في الجزائر.
+> بنية تشغيلية هجينة: Reality Kernel في `app/` + شبكة خدمات مصغّرة في `microservices/`.
 
 ---
 
-## 1. What This Project Does
+## 1) التشريح المعماري الكامل (Code-Verified)
 
-CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences.
+### A. طبقة الدخول (Ingress)
+- **الويب/العميل**: واجهات ثابتة وواجهات React/Next حسب بيئة التشغيل.
+- **API Gateway/Kernel**:
+  - `app/main.py` نقطة تشغيل التطبيق.
+  - `app/kernel.py` يُنشئ التطبيق عبر خط أنابيب تركيبي (تهيئة + Middleware + Routers + فحوصات التوافق).
+  - `app/api/routers/registry.py` سجل مركزي للـ routers.
 
-**Code-Proven Runtime Reality (Hybrid):**
-- `app/` is still the primary API composition shell (Reality Kernel + router registry + middleware pipeline).
-- `app/` delegates selected domains to microservices via network clients (`httpx.AsyncClient`) such as Orchestrator, Planning, and Memory.
-- The architecture is therefore **hybrid transitional** (modular monolith shell + external microservices), not a pure monolith and not a fully decomposed microservice mesh.
+### B. نواة التركيب (Reality Kernel as Evaluator)
+- النمط المعتمد: **Functional Core, Imperative Shell**.
+- تمثيل الـ middleware والـ routes كبيانات declarative في `app/core/app_blueprint.py` ثم تطبيقها عبر دوال تركيب.
+- النتيجة: تبديل/إضافة Middleware أو Router بدون كسر الطبقات الأعلى.
+
+### C. طبقة الـ API داخل `app/`
+- الملفات تحت `app/api/routers/` تعمل كطبقة توجيه فقط (HTTP boundary).
+- منطق الأعمال يجب أن يبقى في الخدمات (`app/services/`) أو طبقات المجال، وليس داخل handlers مباشرة.
+- العقود (schemas) تحت `app/api/schemas/`.
+
+### D. طبقة الخدمات والنواة المشتركة
+- `app/core/` يحتوي البنية التحتية العرضية: أخطاء، بروتوكولات، resilience patterns، db wiring، event contracts.
+- `app/services/` يحتوي منطق التنفيذ الخاص بالمجالات داخل الـ shell.
+- `app/infrastructure/clients/` يفرض حدود الاتصال عبر HTTP مع الخدمات المستقلة.
+
+### E. طبقة الخدمات المصغرة (Microservices Mesh)
+المجلد `microservices/` يحتوي خدمات مستقلة تشغيليًا، أهمها:
+- `api_gateway`
+- `user_service`
+- `observability_service`
+- `reasoning_agent`
+- `research_agent`
+- (وفي البيئات/الفروع الداعمة: orchestrator/planning/memory بحسب التفعيل)
+
+لكل خدمة: نقطة دخول، إعدادات، طبقة API، طبقة domain/service، واعتمادات تشغيل (Dockerfile/requirements).
+
+### F. تدفقات التكامل بين الطبقات
+- الاتصال بين الخدمات يتم عبر HTTP clients (مبدأ API-First).
+- ممنوع الوصول المباشر لقاعدة بيانات خدمة أخرى.
+- `X-Correlation-ID` مطلوب لضمان التتبع الموزع.
 
 ---
 
-## 2. Start Commands
+## 2) خريطة التنفيذ (Execution Topology)
+
+```text
+Client/UI
+  -> FastAPI Kernel (app/main.py -> app/kernel.py)
+    -> Router Registry (app/api/routers/registry.py)
+      -> Local service/domain execution (app/services + app/core)
+      -> Remote delegation (app/infrastructure/clients/*)
+         -> microservices/<service>/...
+```
+
+---
+
+## 3) مناطق المسؤولية (Boundaries)
+
+1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).
+2. `microservices/*` = وحدات أعمال مستقلة (Execution Plane).
+3. `docs/architecture/*` = الدستور المعماري وقرارات التصميم.
+4. `.memory/*` = ذاكرة تشغيلية مختصرة يجب أن تعكس الواقع التنفيذي الفعلي.
+
+---
+
+## 4) مخاطر معمارية حالية
+
+1. **Drift بين الوثائق والكود** عند تطور الخدمات بسرعة.
+2. **Coupling خفي** إذا تم تمرير نماذج داخلية بين خدمات بدل عقود API صريحة.
+3. **اختلاط أدوار app shell** إذا زاد منطق الأعمال داخل route handlers.
+4. **تباين جاهزية الخدمات** بين local/dev/prod بدون health contracts موحدة.
+
+---
+
+## 5) قواعد تشغيلية إلزامية عند التعديل
+
+- قبل أي تعديل معماري: راجع `docs/architecture/MICROSERVICES_CONSTITUTION.md`.
+- أي تغيير في طوبولوجيا النظام يستلزم تحديثًا متزامنًا لـ:
+  1) `CLAUDE.md`
+  2) `.memory/architecture.md`
+  3) `.memory/decisions.md`
+  4) `.memory/context.md`
+- لا توثّق فرضيات بيئية غير مثبتة بالكود.
+- أي claim معماري يجب أن يُربط بملف/مسار تنفيذي واضح.
+
+---
+
+## 6) أوامر التحقق السريع
 
 ```bash
-# Backend (port 8000)
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Frontend (Replit:5000, Codespaces:3000 via FRONTEND_PORT)
-cd frontend && npm run dev
-
-# Health check
-curl -s http://localhost:8000/health | python -m json.tool
+ruff check .
+mypy app/ microservices/
+pytest
 ```
 
----
-
-
-## Port Policy (Platform-Aware)
-
-- **Backend API**: `8000` in local/dev tooling unless overridden by `PORT`.
-- **Frontend in Replit**: `5000` (workflow + `.replit` webview mapping).
-- **Frontend in Codespaces**: `3000` (`FRONTEND_PORT` default in `.devcontainer/supervisor.sh`).
-- Operational rule: keep CORS/forwarded ports aligned with the active platform to avoid false "app down" signals.
-
----
-
-## 3. Architecture at a Glance (Evidence-Based)
-
-```
-Browser
-  └── Next.js (platform-dependent: 5000 on Replit, 3000 on Codespaces)
-        └── /api/* → FastAPI kernel in app/
-              └── RealityKernel (composition pipeline)
-                    ├── Mount routers from registry
-                    ├── Apply middleware stack declaratively
-                    ├── Execute local domain services (DB-backed)
-                    └── Delegate selected capabilities over HTTP:
-                          ├── Orchestrator service (missions + streamed chat events)
-                          ├── Planning agent (/plans)
-                          └── Memory agent (/knowledge/*)
-```
-
-**LangGraph flow:**
-```
-supervisor_node → chat_node → END
-     ↓
-Intent: "educational" | "general" | "chat"
-Memory: MemorySaver(thread_id=conversation_id)
-LLM: OpenRouter (OPENROUTER_API_KEY)
-```
-
----
-
-## 4. Critical Files — Never Break These
-
-| File | Why Critical |
-|---|---|
-| `app/core/settings/base.py` | All config lives here — break it = backend won't start |
-| `app/kernel.py` | Full bootstrap: middleware + routers + lifespan |
-| `app/core/database.py` | PostgreSQL async engine factory |
-| `app/core/db_schema.py` | Auto-creates 18 tables on startup |
-| `app/core/db_schema_config.py` | 18 table definitions — change requires manual migration |
-| `app/infrastructure/clients/orchestrator_client.py` | Fallback chain — break it = chat goes silent |
-| `app/services/chat/local_graph.py` | LangGraph engine — tested and verified working |
-| `app/services/security/auth_persistence.py` | PostgreSQL `RETURNING id` fix — do NOT revert |
-| `app/api/routers/registry.py` | Source of truth for all routes |
-| `frontend/next.config.js` | `/api/*` rewrites — break it = 404 on all API calls |
-| `frontend/app/components/CogniForgeApp.jsx` | Entire frontend auth + chat in one component |
-
----
-
-## 5. Safe Areas to Modify
-
-```
-app/services/chat/local_graph.py    — add LangGraph nodes/edges
-app/api/routers/content.py          — content endpoints
-app/core/prompts.py                 — system prompts
-app/services/system/                — system utilities
-frontend/app/components/ChatInterface.jsx
-frontend/app/components/AgentTimeline.jsx
-tests/                              — add tests freely
-scripts/                            — helper scripts
-docs/                               — documentation
-```
-
----
-
-## 6. Common Pitfalls
-
-### NEVER use `os.environ` directly in app code
-```python
-# ❌ Wrong
-import os
-db_url = os.environ["DATABASE_URL"]
-
-# ✅ Correct
-from app.core.config import get_settings
-db_url = get_settings().DATABASE_URL
-```
-
-### NEVER use synchronous SQLAlchemy
-```python
-# ❌ Wrong — blocks the event loop
-user = db.query(User).filter_by(email=email).first()
-
-# ✅ Correct
-from sqlalchemy import select
-result = await db.execute(select(User).where(User.email == email))
-user = result.scalar_one_or_none()
-```
-
-### NEVER assume microservices are always reachable
-```python
-# Runtime may vary by environment:
-# - in local/dev without docker-compose, service DNS may fail
-# - in composed environments, these services are reachable
-#
-# Keep graceful degradation, but do not document microservices as "always dormant".
-```
-
-### NEVER change the auth_persistence.py RETURNING pattern
-```python
-# ❌ Wrong — lastrowid doesn't work reliably with asyncpg/PostgreSQL
-cursor = await conn.execute(insert_query)
-user_id = cursor.lastrowid
-
-# ✅ Correct — what's already there
-result = await conn.execute(
-    text("INSERT INTO users (...) VALUES (...) RETURNING id")
-)
-user_id = result.scalar()
-```
-
-### Port quirk
-```python
-# settings auto-converts PgBouncer port 6543 → 5432
-# Don't override this behavior in database.py
-```
-
----
-
-## 7. Testing
-
-```bash
-# Run all tests
-pytest tests/
-
-# Specific suites
-pytest tests/api/ -v
-pytest tests/architecture/ -v
-pytest -m security
-pytest -m architecture
-
-# With coverage
-pytest --cov=app --cov-report=term-missing
-
-# REQUIRED environment for tests (SQLite in-memory, mock LLM)
-export DATABASE_URL="sqlite+aiosqlite:///:memory:"
-export SECRET_KEY="test-secret-key-for-ci-pipeline-secure-length"
-export ENVIRONMENT="testing"
-export LLM_MOCK_MODE="1"
-export SUPABASE_URL="https://dummy.supabase.co"
-export SUPABASE_ROLE_KEY="dummy"
-```
-
-**Framework:** pytest + pytest-asyncio (`asyncio_mode = auto` in `pytest.ini`)
-**DB in tests:** SQLite in-memory — no PostgreSQL needed
-**LLM in tests:** `LLM_MOCK_MODE=1` blocks all real API calls
-
----
-
-## 8. Linting
-
-```bash
-ruff check .          # check (line-length=100, config in pyproject.toml)
-ruff check . --fix    # auto-fix
-isort --check-only .  # check import order
-isort .               # fix import order
-```
-
----
-
-## 9. Database Schema (18 Tables)
-
-```
-Authentication:  users, roles, permissions, user_roles, role_permissions, refresh_tokens
-Audit:           audit_log
-Chat:            customer_conversations, customer_messages, admin_conversations
-Missions:        missions, mission_plans, tasks, mission_events
-AI/Learning:     prompt_templates, generated_prompts, knowledge_nodes, knowledge_edges
-```
-
-- All tables **auto-created on startup** by `app/core/db_schema.py`
-- Adding a new table: edit `app/core/db_schema_config.py` + `_ALLOWED_TABLES` frozenset
-- `knowledge_nodes.embedding` requires `pgvector` — index is **skipped silently** if extension missing
-
----
-
-## 10. Environment Variables
-
-| Variable | Status | Description |
-|---|---|---|
-| `APP_DATABASE_URL` | ✅ Set (Replit secret) | Supabase PostgreSQL — takes priority |
-| `DATABASE_URL` | ✅ Auto-set | Re-derived from APP_DATABASE_URL |
-| `SECRET_KEY` | ⚠️ In-memory | **Ephemeral — restart = all users logged out** |
-| `OPENROUTER_API_KEY` | ✅ Set | Primary LLM provider |
-| `OPENAI_API_KEY` | ✅ Set | Secondary LLM provider |
-| `ENVIRONMENT` | ✅ `development` | Controls dev behavior |
-| `ORCHESTRATOR_SERVICE_URL` | ❌ Not set | Defaults to Docker DNS — always fails in Replit |
-| `REDIS_URL` | ❌ Not set | Redis unavailable in Replit — cache falls back to memory |
-
----
-
-## 11. Code Conventions
-
-- **Language:** Python code in English, comments/docstrings in Arabic
-- **Formatting:** `ruff` at line-length=100, `isort` for imports
-- **Types:** Pydantic v2 strict, `TypedDict` for LangGraph state
-- **Imports:** Always absolute (`from app.core...` — never relative)
-- **Async:** Everything async/await — zero synchronous DB calls
-- **Logging:** `logging.getLogger("cogniforge.module_name")`
-- **Settings:** Always `get_settings()` — never `os.environ` in app code
-- **Naming:** `PascalCase` classes, `snake_case` functions/variables
-
----
-
-## 12. LangGraph Extension Guide
-
-To add a new node to `app/services/chat/local_graph.py`:
-
-```python
-# 1. Add to state
-class LocalChatState(TypedDict):
-    question: str
-    intent: str
-    history_messages: list[dict]
-    final_response: str
-    # new_field: str  ← add here
-
-# 2. Define node function
-async def my_new_node(state: LocalChatState) -> dict:
-    # process state
-    return {"final_response": "..."}
-
-# 3. Add to graph
-graph.add_node("my_new_node", my_new_node)
-graph.add_edge("supervisor", "my_new_node")
-graph.add_edge("my_new_node", END)
-
-# 4. Update routing in supervisor_node if needed
-```
-
----
-
-## 13. Known Issues (Priority Order)
-
-| Issue | Priority | Fix |
-|---|---|---|
-| `SECRET_KEY` ephemeral → logout on restart | 🔴 High | Add `SECRET_KEY` as permanent Replit secret |
-| 157 GitHub vulnerabilities (15 critical) | 🔴 High | `pip audit` + `npm audit` + update packages |
-| `full_name` returns null in login response | 🟡 Medium | Schema mismatch in auth response |
-| OpenAPI contract warnings on startup | 🟡 Medium | Missing route definitions |
-| Admin credentials using hardcoded defaults | 🟡 Medium | Set ADMIN_EMAIL/ADMIN_PASSWORD env vars |
-
----
-
-## 14. Microservices (All Dormant in Replit)
-
-These exist in `microservices/` but **never start** in Replit — they need Docker:
-
-| Service | Port | Status |
-|---|---|---|
-| orchestrator-service | 8006 | DORMANT — ConnectError expected |
-| planning-agent | 8001 | DORMANT |
-| memory-agent | 8002 | DORMANT |
-| user-service | 8003 | DORMANT |
-| research-agent | 8007 | DORMANT |
-| reasoning-agent | 8008 | DORMANT |
-| auditor-service | 8009 | DORMANT |
-| conversation-service | 8010 | DORMANT |
-
-To run all microservices locally: `docker-compose up -d`
-
----
-
-*Last updated: May 2026 — based on forensic analysis v4.1-root*

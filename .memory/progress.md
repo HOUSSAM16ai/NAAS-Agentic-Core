@@ -1,18 +1,7 @@
-# Progress Log
+# Progress
 > Last updated: 2026-05-05
 
-## Completed in this session
-1. Reconciled `.memory` with current code-verified architecture.
-2. Removed stale assumptions that microservices are universally dormant.
-3. Recorded hybrid topology explicitly:
-   - composition shell in `app/`
-   - remote delegation via orchestrator/planning/memory clients
-4. Updated memory-agent knowledge in `.memory` to align with service structure and route protection.
-
-## Current State
-- `.memory` now reflects the same architectural truth documented in updated project docs.
-- Focus moved from environment-specific claims to code-backed invariants.
-
-
-## Additional update
-5. Validated port topology across environments and recorded policy: Replit frontend=5000, Codespaces frontend=3000, backend default=8000.
+## Completed
+- Delivered a full architectural dissection summary in `CLAUDE.md`.
+- Synchronized `.memory` architecture/context/decisions/issues to match the updated narrative.
+- Preserved hybrid control-plane/execution-plane interpretation.

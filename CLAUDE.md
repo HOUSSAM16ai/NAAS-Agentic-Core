@@ -1,6 +1,6 @@
 # CogniForge — Claude Code Context
 
-> **AI tutor for Algerian students** | FastAPI 8000 + Next.js 5000 + LangGraph 1.1.10
+> **AI tutor for Algerian students** | FastAPI 8000 + Next.js 3000 + LangGraph 1.1.10
 > Arabic / French / Darija | BAC preparation platform
 
 ---
@@ -19,8 +19,9 @@ CogniForge is an educational AI platform for Algerian high-school students prepa
 # Backend (port 8000)
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Frontend (port 5000)
-cd frontend && npm run dev
+# Frontend (port 3000 in Codespaces — supervisor.sh forces FRONTEND_PORT=3000;
+# the `--port 5000` in frontend/package.json is legacy Replit and is overridden)
+cd frontend && npm run dev -- --port 3000
 
 # Health check
 curl -s http://localhost:8000/health | python -m json.tool
@@ -32,7 +33,7 @@ curl -s http://localhost:8000/health | python -m json.tool
 
 ```
 Browser
-  └── Next.js (port 5000)
+  └── Next.js (port 3000 — Codespaces; legacy 5000 was for Replit)
         └── next.config.js rewrites /api/* → localhost:8000
               └── FastAPI (port 8000)
                     ├── /api/security/login, /register

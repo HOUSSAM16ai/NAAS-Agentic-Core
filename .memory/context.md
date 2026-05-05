@@ -13,7 +13,7 @@
 ## Stack
 | Layer | Tech | Port |
 |-------|------|------|
-| Frontend | Next.js 15 | 5000 |
+| Frontend | Next.js 15 | 3000 (Codespaces — supervisor.sh sets `FRONTEND_PORT=3000`; legacy 5000 was Replit-only) |
 | Backend | FastAPI (Python 3.12) | 8000 |
 | AI Graph | LangGraph 1.1.10 | in-process |
 | DB | PostgreSQL (Supabase) + aiosqlite (tests) | 5432 |
@@ -41,7 +41,7 @@ ruff check . && isort --check-only .
 ## Request Flow (MEASURED — not assumed)
 ```
 Student browser
-  └─ Next.js :5000
+  └─ Next.js :3000  (Codespaces; 5000 was Replit-only)
         └─ /api/* → rewrites → FastAPI :8000
               └─ ObservabilityMiddleware  ← traces every HTTP request (W3C Trace Context)
                     └─ /api/chat/ws  (WebSocket)

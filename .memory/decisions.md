@@ -20,3 +20,9 @@
 ## D-005 Environment-Conditional Reachability
 **Decision**: Document microservice reachability as environment-dependent.
 **Reason**: Compose/dev/prod topologies differ.
+
+
+## D-006 Platform-Specific Frontend Port
+**Decision**: Treat frontend port as platform-specific (`5000` Replit, `3000` Codespaces) instead of a single global invariant.
+**Reason**: Devcontainer supervisor and Replit workflow encode different operational defaults.
+**Constraint**: Keep CORS and docs in sync with both to prevent runtime confusion.

@@ -28,3 +28,9 @@
 ## Guardrails
 - Avoid claims tied to one hosting platform only.
 - Document architecture from executable code paths, not environment assumptions.
+
+
+## Platform Port Truth
+- Replit frontend runtime is expected on **5000**.
+- GitHub Codespaces frontend runtime is expected on **3000** (via `FRONTEND_PORT`).
+- Backend API remains **8000** in local/dev startup scripts unless `PORT` overrides it.

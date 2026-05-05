@@ -12,3 +12,7 @@
 ## Current State
 - `.memory` now reflects the same architectural truth documented in updated project docs.
 - Focus moved from environment-specific claims to code-backed invariants.
+
+
+## Additional update
+5. Validated port topology across environments and recorded policy: Replit frontend=5000, Codespaces frontend=3000, backend default=8000.

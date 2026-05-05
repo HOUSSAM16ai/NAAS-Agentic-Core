@@ -48,9 +48,10 @@
   Model nvidia/nemotron-3-super-120b-a12b:free failed: Status 403. Trying next...
   All models exhausted. Engaging Safety Net.
   ```
-- **Codespaces status**: OPENROUTER_API_KEY confirmed working — nvidia/nemotron-3-super-120b-a12b:free responds correctly
-- **Root cause**: Replit's OPENROUTER_API_KEY secret may be expired, rate-limited, or wrong
-- **Fix**: Sync the working Codespaces key to Replit secrets
+- **Codespaces status**: OPENROUTER_API_KEY works — nvidia/nemotron-3-super-120b-a12b:free responds correctly
+- **Root cause**: `HTTP 403: Host not in allowlist` — the key has an Allowed Hosts restriction configured in OpenRouter dashboard. Only the Codespaces host is whitelisted; `localhost` and Replit are not.
+- **Confirmed**: Direct API call returns exactly `{"error": "Host not in allowlist"}` — not a credentials issue
+- **Fix**: Go to openrouter.ai/settings/keys → edit the key → add `http://localhost:8000` and the Replit domain to Allowed Hosts (or set `*` for dev)
 
 ---
 

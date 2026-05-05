@@ -3,6 +3,44 @@
 
 ---
 
+## Session: 2026-05-05 · Environment Documentation Correction
+
+**Branch**: `claude/fix-duplicate-messages-nTEBj`
+**Goal**: Verify dual-write fix status and correct environment documentation
+
+### Trigger
+User asked (in Arabic) whether the dual-write problem (messages written twice — once by Monolith and once by Orchestrator into `customer_messages` / `admin_messages`) is still present.
+
+### Investigation
+Read the dual-write defense layers:
+- `app/services/customer/chat_persistence.py:81-112` — Duplicate Guard (10s window, content match) suppresses redundant writes
+- `app/api/routers/customer_chat.py:276` — Monolith writes user message, sends `compatibility_facade=True`
+- `app/api/routers/customer_chat.py:387-461` — Detects orchestrator `persisted: True` signal → skips local write; Fail-Safe writes if signal absent
+- `app/infrastructure/clients/orchestrator_client.py:281-282` — Preserves `persisted` flag through normalization
+- `microservices/orchestrator_service/src/api/routes.py:1314-1325, 2680, 2696` — Skips user INSERT under `compatibility_facade`; emits `persisted: True` after assistant write
+
+### Conclusion on Dual-Write
+**Resolved with three-layer protection**:
+1. `compatibility_facade` handshake → orchestrator skips user write
+2. `persisted` signal → Monolith skips assistant write
+3. Duplicate Guard at persistence layer (10s window) → catches anything that slips through
+
+In default Codespaces devcontainer the orchestrator microservice is dormant, so **only the Monolith writes** — dual-write physically impossible.
+
+### Environment Correction
+User clarified they run on **GitHub Codespaces**, not Replit. Verified by inspecting `.devcontainer/`:
+- `devcontainer.json` uses `docker-compose.host.yml` (not full `docker-compose.yml`)
+- Only `web` container starts; `supervisor.sh` runs `uvicorn app.main:app`
+- Microservices remain dormant exactly as previously described for Replit
+
+### Files Updated
+- `CLAUDE.md` (sections 1, 6, 10, 13, 14)
+- `.memory/context.md`, `architecture.md`, `decisions.md`, `issues.md`, `tasks.md`, `progress.md`, `logs.md`
+
+All "Replit" references corrected to "Codespaces (devcontainer)" with concrete paths to `.devcontainer/devcontainer.json` and `.devcontainer/docker-compose.host.yml`.
+
+---
+
 ## Session: 2026-05-04 · Runtime Truth Extraction (Live Testing)
 
 **Branch**: `claude/add-distributed-tracing-T9Q8z`

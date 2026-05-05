@@ -1,5 +1,5 @@
 # Architecture Deep-Dive
-> Last updated: 2026-05-04
+> Last updated: 2026-05-05 (environment: GitHub Codespaces devcontainer)
 
 ---
 
@@ -88,7 +88,8 @@ FastAPI :8000
         │
         ├── [Fallback 3] HTTP → orchestrator:8006
         │     span: orchestrator.fallback.langgraph (confusingly named)
-        │     Always fails: ConnectError (Docker service DORMANT in Replit)
+        │     Always fails: ConnectError (microservice DORMANT — Codespaces devcontainer
+        │     only starts the `web` container; full stack at docker-compose.yml is not run)
         │     status: ERROR → continues to fallback 4
         │
         └── [Fallback 4] LangGraph run_local_graph()  ← PRIMARY PATH

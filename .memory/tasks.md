@@ -1,5 +1,5 @@
 # Tasks — What Comes Next
-> Last updated: 2026-05-04 (after runtime truth session) | Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+> Last updated: 2026-05-05 (environment: Codespaces) | Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
 
 ---
 
@@ -17,7 +17,7 @@
 
 ### 2. Fix SECRET_KEY ephemeral issue
 - **Status**: INFERRED (ISS-001)
-- **Fix**: Add `SECRET_KEY` as a permanent Replit secret
+- **Fix**: Add `SECRET_KEY` as a permanent Codespaces secret (already forwarded via `.devcontainer/devcontainer.json` → `remoteEnv.SECRET_KEY: ${localEnv:SECRET_KEY}`)
 
 ### 3. Fix `full_name` null in login response ✅ CONFIRMED LIVE
 - **Status**: CONFIRMED (ISS-003)
@@ -49,11 +49,11 @@
 - **File**: `app/middleware/observability/telemetry_bridge.py`
 - **Fix**: Skip telemetry export if `OTEL_EXPORTER_OTLP_ENDPOINT` is not set
 
-### 8. Disable User/Auth microservice calls in non-Docker environments ✅ CONFIRMED LIVE
+### 8. Disable User/Auth microservice calls when stack not running ✅ CONFIRMED LIVE
 - **Status**: CONFIRMED (ISS-009)
-- **Problem**: Every auth request triggers DNS lookup for dead microservices → timeout → local fallback
+- **Problem**: Every auth request triggers DNS lookup for dormant microservices → timeout → local fallback. In Codespaces default devcontainer the microservices are not started, so this fails on every request.
 - **Effect**: Adds latency to every login/register
-- **Fix**: Check if microservice URL is configured before attempting connection
+- **Fix**: Check if microservice URL is configured before attempting connection (or skip when `ORCHESTRATOR_SERVICE_URL` is unset)
 
 ### 9. Fix OpenAPI contract prefix mismatch ✅ CONFIRMED LIVE
 - **Status**: CONFIRMED (ISS-006)

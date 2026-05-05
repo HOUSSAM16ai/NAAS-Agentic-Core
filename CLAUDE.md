@@ -7,7 +7,9 @@
 
 ## 1. What This Project Does
 
-CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith. All microservices visible in `microservices/` are **fully dormant in Replit** — they require Docker and never start here.
+CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.
+
+**Runtime environment**: GitHub Codespaces (devcontainer at `.devcontainer/devcontainer.json` → `docker-compose.host.yml`). The devcontainer launches a single `web` container running `uvicorn app.main:app` via `.devcontainer/supervisor.sh`. All microservices visible in `microservices/` are **fully dormant in Codespaces** — the devcontainer compose file does not start them, so they are unreachable unless you explicitly run the full `docker-compose.yml` stack.
 
 ---
 
@@ -116,12 +118,14 @@ user = result.scalar_one_or_none()
 
 ### NEVER assume microservices are reachable
 ```python
-# In Replit, ALL of these fail with ConnectError:
+# In Codespaces (default devcontainer), ALL of these fail with ConnectError:
 # http://orchestrator-service:8006  → Docker DNS — not running
 # http://user-service:8000          → not running
 # http://research-agent:8007        → not running
 
-# LangGraph (local_graph.py) is the REAL handler — always falls through to it
+# Only the `web` container runs by default (see .devcontainer/docker-compose.host.yml).
+# LangGraph (local_graph.py) is the REAL handler — always falls through to it.
+# To wake the microservices: `docker compose -f docker-compose.yml up -d` (separate stack).
 ```
 
 ### NEVER change the auth_persistence.py RETURNING pattern
@@ -204,16 +208,19 @@ AI/Learning:     prompt_templates, generated_prompts, knowledge_nodes, knowledge
 
 ## 10. Environment Variables
 
+Sourced from Codespaces secrets and forwarded via `.devcontainer/devcontainer.json` → `remoteEnv` (`${localEnv:VAR}`).
+
 | Variable | Status | Description |
 |---|---|---|
-| `APP_DATABASE_URL` | ✅ Set (Replit secret) | Supabase PostgreSQL — takes priority |
+| `APP_DATABASE_URL` | ✅ Set (Codespaces secret) | Supabase PostgreSQL — takes priority |
 | `DATABASE_URL` | ✅ Auto-set | Re-derived from APP_DATABASE_URL |
-| `SECRET_KEY` | ⚠️ In-memory | **Ephemeral — restart = all users logged out** |
-| `OPENROUTER_API_KEY` | ✅ Set | Primary LLM provider |
+| `SECRET_KEY` | ⚠️ In-memory unless set | **Ephemeral if unset — restart = all users logged out** |
+| `OPENROUTER_API_KEY` | ✅ Set (Codespaces secret) | Primary LLM provider |
 | `OPENAI_API_KEY` | ✅ Set | Secondary LLM provider |
 | `ENVIRONMENT` | ✅ `development` | Controls dev behavior |
-| `ORCHESTRATOR_SERVICE_URL` | ❌ Not set | Defaults to Docker DNS — always fails in Replit |
-| `REDIS_URL` | ❌ Not set | Redis unavailable in Replit — cache falls back to memory |
+| `ORCHESTRATOR_SERVICE_URL` | ❌ Not set | Defaults to Docker DNS — always fails in Codespaces default setup |
+| `REDIS_URL` | ❌ Not set | Redis not started by devcontainer — cache falls back to memory |
+| `OPENROUTER_SITE_URL` | ⚠️ Optional | Set this to your Codespaces URL if OpenRouter rejects with `Host not in allowlist` |
 
 ---
 
@@ -262,7 +269,7 @@ graph.add_edge("my_new_node", END)
 
 | Issue | Priority | Fix |
 |---|---|---|
-| `SECRET_KEY` ephemeral → logout on restart | 🔴 High | Add `SECRET_KEY` as permanent Replit secret |
+| `SECRET_KEY` ephemeral → logout on restart | 🔴 High | Add `SECRET_KEY` as a permanent Codespaces secret |
 | 157 GitHub vulnerabilities (15 critical) | 🔴 High | `pip audit` + `npm audit` + update packages |
 | `full_name` returns null in login response | 🟡 Medium | Schema mismatch in auth response |
 | OpenAPI contract warnings on startup | 🟡 Medium | Missing route definitions |
@@ -270,9 +277,9 @@ graph.add_edge("my_new_node", END)
 
 ---
 
-## 14. Microservices (All Dormant in Replit)
+## 14. Microservices (All Dormant in Codespaces by Default)
 
-These exist in `microservices/` but **never start** in Replit — they need Docker:
+These exist in `microservices/` but **do not start** in the default Codespaces devcontainer (which only spins up the `web` container via `.devcontainer/docker-compose.host.yml`):
 
 | Service | Port | Status |
 |---|---|---|
@@ -285,8 +292,8 @@ These exist in `microservices/` but **never start** in Replit — they need Dock
 | auditor-service | 8009 | DORMANT |
 | conversation-service | 8010 | DORMANT |
 
-To run all microservices locally: `docker-compose up -d`
+To wake the full microservices stack (separate from the devcontainer): `docker compose -f docker-compose.yml up -d`
 
 ---
 
-*Last updated: May 2026 — based on forensic analysis v4.1-root*
+*Last updated: 2026-05-05 — environment corrected from Replit to GitHub Codespaces*

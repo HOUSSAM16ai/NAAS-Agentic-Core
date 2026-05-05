@@ -1,12 +1,14 @@
 # CogniForge — Project Context
-> Last updated: 2026-05-04 (after runtime truth session) | Branch: claude/add-distributed-tracing-T9Q8z
+> Last updated: 2026-05-05 (environment correction: Codespaces, not Replit) | Branch: claude/fix-duplicate-messages-nTEBj
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)
 - **Purpose**: AI tutor for Algerian high-school students preparing for the Baccalaureate exam
 - **Languages**: Arabic (MSA) / French / Darija — all three simultaneously
 - **Subjects**: Math, Physics, Chemistry, History, Geography, Languages
-- **Environment**: Replit (single-process) — Docker/microservices are DORMANT
+- **Environment**: GitHub Codespaces (devcontainer, single `web` container) — orchestrator + 7 other microservices are DORMANT
+- **Devcontainer**: `.devcontainer/devcontainer.json` → `docker-compose.host.yml` (web only)
+- **Process supervisor**: `.devcontainer/supervisor.sh` launches `uvicorn app.main:app` (no microservices)
 
 ## Stack
 | Layer | Tech | Port |
@@ -52,7 +54,7 @@ Student browser
                                 │
                                 ├─ [1] File intelligence (0.1ms → SKIP if no files)
                                 ├─ [2] Exercise retrieval (0.0ms → SKIP if no BAC match)
-                                ├─ [3] HTTP → orchestrator:8006 → ConnectError (DORMANT)
+                                ├─ [3] HTTP → orchestrator:8006 → ConnectError (DORMANT in Codespaces)
                                 └─ [4] LangGraph local_graph.py  ← PRIMARY HANDLER
                                           span: langgraph.run (757ms measured)
                                           │
@@ -72,16 +74,19 @@ AI:       prompt_templates, generated_prompts, knowledge_nodes, knowledge_edges
 ```
 
 ## Environment Variables (Real Status)
+Sourced from Codespaces secrets, forwarded via `.devcontainer/devcontainer.json` → `remoteEnv`.
+
 | Variable | Status | Notes |
 |----------|--------|-------|
-| APP_DATABASE_URL | ✅ Replit secret | Supabase PostgreSQL |
-| SECRET_KEY | ⚠️ Ephemeral | Restart = all users logged out |
-| OPENROUTER_API_KEY | ✅ Set (Replit/Codespaces secret) | Works in Codespaces — nvidia/nemotron-3-super-120b-a12b:free confirmed working |
+| APP_DATABASE_URL | ✅ Codespaces secret | Supabase PostgreSQL |
+| SECRET_KEY | ⚠️ Ephemeral if unset | Restart = all users logged out |
+| OPENROUTER_API_KEY | ✅ Codespaces secret | Works — nvidia/nemotron-3-super-120b-a12b:free confirmed |
 | OPENAI_API_KEY | ❌ Not set | Fallback unavailable |
-| ENVIRONMENT | ✅ development | |
-| ORCHESTRATOR_SERVICE_URL | ❌ Not set | Always ConnectError in Replit |
+| ENVIRONMENT | ✅ development | Set via devcontainer.json |
+| ORCHESTRATOR_SERVICE_URL | ❌ Not set | Always ConnectError in default devcontainer (microservices not started) |
 | REDIS_URL | ❌ Not set | Falls back to in-memory |
 | OTEL_EXPORTER_OTLP_ENDPOINT | ❌ Not set | Telemetry bridge tries DNS → fails every request |
+| OPENROUTER_SITE_URL | ⚠️ Optional | Set to Codespaces public URL if OpenRouter rejects with `Host not in allowlist` |
 
 ## Python Environment
 - Python 3.12 (`.python-version`)

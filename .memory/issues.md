@@ -1,5 +1,5 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-04 (runtime verification session)
+> Last updated: 2026-05-05 (environment correction: Codespaces, not Replit)
 > Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED]
 
 ---
@@ -8,9 +8,9 @@
 
 ### ISS-001 · SECRET_KEY Ephemeral — All Users Logged Out on Restart
 - **Status**: OPEN
-- **Evidence**: INFERRED (not tested live — requires Replit restart)
+- **Evidence**: INFERRED (not tested live — requires container/codespace restart)
 - **Root cause**: `SECRET_KEY: str = Field(default_factory=lambda: secrets.token_hex(32))` in `app/core/settings/base.py`
-- **Fix**: Add `SECRET_KEY` as a permanent Replit secret
+- **Fix**: Add `SECRET_KEY` as a permanent Codespaces secret (forwarded via `.devcontainer/devcontainer.json` → `remoteEnv.SECRET_KEY: ${localEnv:SECRET_KEY}`)
 
 ---
 
@@ -42,16 +42,16 @@
 ---
 
 ### ISS-013 · OpenRouter "Host not in allowlist" — Fixed in Code, Needs Env Var ✅ CODE FIXED
-- **Status**: ENV-DEPENDENT — works in Codespaces, fails in Replit
-- **Evidence** (Replit server log):
+- **Status**: ENV-DEPENDENT — works in current Codespaces (with allowlist URL match)
+- **Historical evidence** (legacy Replit server log):
   ```
   Model nvidia/nemotron-3-super-120b-a12b:free failed: Status 403. Trying next...
   All models exhausted. Engaging Safety Net.
   ```
-- **Codespaces status**: OPENROUTER_API_KEY works — nvidia/nemotron-3-super-120b-a12b:free responds correctly
-- **Root cause**: `HTTP 403: Host not in allowlist` — `HTTP-Referer` was hardcoded as `https://cogniforge.local` in `app/core/gateway/simple_client.py:57`. OpenRouter's allowlist only contained the Codespaces URL.
+- **Codespaces status**: OPENROUTER_API_KEY works when site URL is whitelisted — nvidia/nemotron-3-super-120b-a12b:free responds correctly
+- **Root cause**: `HTTP 403: Host not in allowlist` — `HTTP-Referer` was hardcoded as `https://cogniforge.local` in `app/core/gateway/simple_client.py:57`, but OpenRouter's allowlist contained different URLs depending on the deployment.
 - **Code fix (done)**: `simple_client.py` now reads `get_openrouter_site_url()` from `app/core/ai_config.py`, which reads `OPENROUTER_SITE_URL` env var (fallback: `https://cogniforge.local`).
-- **To activate**: Set `OPENROUTER_SITE_URL=<your-whitelisted-url>` in Replit secrets OR go to openrouter.ai/settings/keys → remove host restriction (set `*`)
+- **To activate** in a new Codespace whose URL isn't whitelisted: set `OPENROUTER_SITE_URL=<your-codespaces-public-url>` as a Codespaces secret, OR go to openrouter.ai/settings/keys → remove host restriction (set `*`)
 
 ---
 

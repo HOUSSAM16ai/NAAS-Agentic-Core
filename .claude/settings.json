@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /home/user/NAAS-Agentic-Core && git diff --name-only HEAD 2>/dev/null | head -20 | { mapfile -t changed; if [ ${#changed[@]} -gt 0 ]; then echo '{\"systemMessage\": \"⚠️  Uncommitted changes detected. Remember to update .memory/progress.md, .memory/tasks.md, and .memory/issues.md before ending the session.\"}'; else echo '{\"systemMessage\": \"✅ No uncommitted changes.\"}'; fi; }",
+            "command": "CHANGED=$(cd /home/user/NAAS-Agentic-Core && git diff --name-only HEAD 2>/dev/null | head -20); if [ -n \"$CHANGED\" ]; then echo '{\"systemMessage\": \"⚠️  Uncommitted changes detected. Remember to update .memory/progress.md, .memory/tasks.md, and .memory/issues.md before ending the session.\"}'; else echo '{\"systemMessage\": \"✅ No uncommitted changes.\"}'; fi",
             "timeout": 10
           }
         ]

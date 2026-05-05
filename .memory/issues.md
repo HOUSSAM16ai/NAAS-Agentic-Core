@@ -41,21 +41,16 @@
 
 ---
 
-### ISS-013 · All Free OpenRouter Models Return 403 ✅ CONFIRMED LIVE
-- **Status**: OPEN — CONFIRMED at runtime 2026-05-04
-- **Severity**: Critical — CHAT IS BROKEN in current environment
-- **Evidence** (from server log):
+### ISS-013 · Free OpenRouter Models Return 403 in Replit (NOT in Codespaces) ✅ PARTIALLY RESOLVED
+- **Status**: ENV-DEPENDENT — works in Codespaces, fails in Replit
+- **Evidence** (Replit server log):
   ```
   Model nvidia/nemotron-3-super-120b-a12b:free failed: Status 403. Trying next...
-  Model google/gemini-2.0-flash-exp:free failed: Status 403. Trying next...
-  Model qwen/qwen3-coder:free failed: Status 403. Trying next...
-  Model kwaipilot/kat-coder-pro:free failed: Status 403. Trying next...
-  Model microsoft/phi-3-mini-128k-instruct:free failed: Status 403. Trying next...
   All models exhausted. Engaging Safety Net.
   ```
-- **Effect**: Entire chat pipeline fails → WS sends `assistant_error` + `error` events
-- **Root cause**: OPENROUTER_API_KEY exists but the account has no access to these free models
-- **Fix**: Use paid OpenRouter models, or add a valid OPENAI_API_KEY as backup
+- **Codespaces status**: OPENROUTER_API_KEY confirmed working — nvidia/nemotron-3-super-120b-a12b:free responds correctly
+- **Root cause**: Replit's OPENROUTER_API_KEY secret may be expired, rate-limited, or wrong
+- **Fix**: Sync the working Codespaces key to Replit secrets
 
 ---
 

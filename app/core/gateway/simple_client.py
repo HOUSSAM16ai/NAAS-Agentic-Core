@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from app.core.ai_config import get_ai_config
+from app.core.ai_config import get_ai_config, get_openrouter_site_url
 from app.core.cognitive_cache import CognitiveResonanceEngine, get_cognitive_engine
 from app.core.gateway.connection import BASE_TIMEOUT, ConnectionManager
 from app.core.interfaces.llm import LLMClient
@@ -54,7 +54,7 @@ class OpenRouterClient(LLMClient):
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://cogniforge.local",
+            "HTTP-Referer": get_openrouter_site_url(),
             "X-Title": "CogniForge Simple Gateway",
         }
 

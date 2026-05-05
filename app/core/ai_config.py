@@ -48,6 +48,11 @@ def _resolve_primary_model(default_model: str) -> str:
     return default_model
 
 
+def get_openrouter_site_url() -> str:
+    """يقرأ OPENROUTER_SITE_URL من البيئة — يُستخدم كـ HTTP-Referer في طلبات OpenRouter."""
+    return os.getenv("OPENROUTER_SITE_URL", "https://cogniforge.local").strip()
+
+
 class AvailableModels:
     """
     📚 All Available AI Models | جميع النماذج المتاحة

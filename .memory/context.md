@@ -1,5 +1,5 @@
 # CogniForge — Project Context
-> Last updated: 2026-05-05 (environment correction: Codespaces, not Replit) | Branch: claude/fix-duplicate-messages-nTEBj
+> Last updated: 2026-05-05 | Branch: claude/document-project-issues-CKlup
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)
@@ -111,7 +111,22 @@ Sourced from Codespaces secrets, forwarded via `.devcontainer/devcontainer.json`
 
 ## Known Broken in Current Environment
 1. **Chat**: All OpenRouter free models return 403 — NO chat response reaches the user
-2. **Telemetry export**: TelemetryBridge DNS failures on every request (logged noise)
-3. **Auth microservices**: DNS failures on every login/register (adds latency)
-4. **/performance endpoint**: Pydantic schema mismatch → 500 error
-5. **full_name**: Always null in login response
+2. **Dual-write**: Monolith + Orchestrator both write same message to DB (ISS-014)
+3. **Context identity**: conversation_id / thread_id can diverge across fallback paths (ISS-019)
+4. **Terminal signal**: `complete` WS event may be corrupted by normalizer → UI hangs (ISS-017)
+5. **Streaming**: Graph uses `ainvoke` → blocks instead of token-by-token (ISS-023)
+6. **Telemetry export**: TelemetryBridge DNS failures on every request (ISS-008)
+7. **Auth microservices**: DNS failures on every login/register (ISS-009)
+8. **/performance endpoint**: Pydantic schema mismatch → 500 error (ISS-012)
+9. **full_name**: Always null in login response (ISS-003)
+
+## Architectural Debt Summary (Session 2026-05-05)
+Seven core architectural issues documented in `.memory/issues.md` (ISS-014–ISS-020):
+- ISS-014: Dual-write (CRITICAL — fix first)
+- ISS-015: Non-unified save authority
+- ISS-016: Unsafe fallback path
+- ISS-017: Terminal signal corruption
+- ISS-018: Architectural split-brain (Monolith/Microservice hybrid unresolved)
+- ISS-019: Context identity fragmentation
+- ISS-020: Fragile MemorySaver checkpointer
+Three quality issues: ISS-021 (zombies), ISS-022 (pipeline split), ISS-023 (streaming blocks)

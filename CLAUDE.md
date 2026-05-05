@@ -1,6 +1,6 @@
 # CogniForge — Claude Code Context
 
-> **AI tutor for Algerian students** | FastAPI 8000 + Next.js 5000 + LangGraph 1.1.10
+> **AI tutor for Algerian students** | FastAPI 8000 + Next.js (Replit:5000 / Codespaces:3000) + LangGraph 1.1.10
 > Arabic / French / Darija | BAC preparation platform
 
 ---
@@ -22,7 +22,7 @@ CogniForge is an educational AI platform for Algerian high-school students prepa
 # Backend (port 8000)
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Frontend (port 5000)
+# Frontend (Replit:5000, Codespaces:3000 via FRONTEND_PORT)
 cd frontend && npm run dev
 
 # Health check
@@ -31,11 +31,21 @@ curl -s http://localhost:8000/health | python -m json.tool
 
 ---
 
+
+## Port Policy (Platform-Aware)
+
+- **Backend API**: `8000` in local/dev tooling unless overridden by `PORT`.
+- **Frontend in Replit**: `5000` (workflow + `.replit` webview mapping).
+- **Frontend in Codespaces**: `3000` (`FRONTEND_PORT` default in `.devcontainer/supervisor.sh`).
+- Operational rule: keep CORS/forwarded ports aligned with the active platform to avoid false "app down" signals.
+
+---
+
 ## 3. Architecture at a Glance (Evidence-Based)
 
 ```
 Browser
-  └── Next.js (port 5000)
+  └── Next.js (platform-dependent: 5000 on Replit, 3000 on Codespaces)
         └── /api/* → FastAPI kernel in app/
               └── RealityKernel (composition pipeline)
                     ├── Mount routers from registry

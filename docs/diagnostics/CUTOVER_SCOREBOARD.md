@@ -12,10 +12,10 @@
 | single_brain_architecture | true |
 | app_import_count_in_microservices | 0 |
 | active_copy_coupling_overlap_metric | 0 |
-| stategraph_is_runtime_backbone | true |
+| stategraph_is_runtime_backbone | false |
 | docs_runtime_parity | true |
-| contract_gate | true |
-| tracing_gate | true |
+| contract_gate | false |
+| tracing_gate | false |
 
 ## Phase 0 forensic baseline inventory
 

@@ -20,11 +20,7 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 ---
 
-## 2. Start Commands
-
-```bash
-# Backend (port 8000)
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+## 2) خريطة التنفيذ (Execution Topology)
 
 # Frontend
 # - Codespaces: supervisor.sh launches `npm run dev -- --port 3000` automatically
@@ -57,32 +53,19 @@ Browser
                     └── /api/v1/data-mesh/*
 ```
 
-**LangGraph flow:**
-```
-supervisor_node → chat_node → END
-     ↓
-Intent: "educational" | "general" | "chat"
-Memory: MemorySaver(thread_id=conversation_id)
-LLM: OpenRouter (OPENROUTER_API_KEY)
-```
+1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).
+2. `microservices/*` = وحدات أعمال مستقلة (Execution Plane).
+3. `docs/architecture/*` = الدستور المعماري وقرارات التصميم.
+4. `.memory/*` = ذاكرة تشغيلية مختصرة يجب أن تعكس الواقع التنفيذي الفعلي.
 
 ---
 
-## 4. Critical Files — Never Break These
+## 4) مخاطر معمارية حالية
 
-| File | Why Critical |
-|---|---|
-| `app/core/settings/base.py` | All config lives here — break it = backend won't start |
-| `app/kernel.py` | Full bootstrap: middleware + routers + lifespan |
-| `app/core/database.py` | PostgreSQL async engine factory |
-| `app/core/db_schema.py` | Auto-creates 18 tables on startup |
-| `app/core/db_schema_config.py` | 18 table definitions — change requires manual migration |
-| `app/infrastructure/clients/orchestrator_client.py` | Fallback chain — break it = chat goes silent |
-| `app/services/chat/local_graph.py` | LangGraph engine — tested and verified working |
-| `app/services/security/auth_persistence.py` | PostgreSQL `RETURNING id` fix — do NOT revert |
-| `app/api/routers/registry.py` | Source of truth for all routes |
-| `frontend/next.config.js` | `/api/*` rewrites — break it = 404 on all API calls |
-| `frontend/app/components/CogniForgeApp.jsx` | Entire frontend auth + chat in one component |
+1. **Drift بين الوثائق والكود** عند تطور الخدمات بسرعة.
+2. **Coupling خفي** إذا تم تمرير نماذج داخلية بين خدمات بدل عقود API صريحة.
+3. **اختلاط أدوار app shell** إذا زاد منطق الأعمال داخل route handlers.
+4. **تباين جاهزية الخدمات** بين local/dev/prod بدون health contracts موحدة.
 
 ---
 
@@ -183,31 +166,23 @@ export SUPABASE_URL="https://dummy.supabase.co"
 export SUPABASE_ROLE_KEY="dummy"
 ```
 
-**Framework:** pytest + pytest-asyncio (`asyncio_mode = auto` in `pytest.ini`)
-**DB in tests:** SQLite in-memory — no PostgreSQL needed
-**LLM in tests:** `LLM_MOCK_MODE=1` blocks all real API calls
+- قبل أي تعديل معماري: راجع `docs/architecture/MICROSERVICES_CONSTITUTION.md`.
+- أي تغيير في طوبولوجيا النظام يستلزم تحديثًا متزامنًا لـ:
+  1) `CLAUDE.md`
+  2) `.memory/architecture.md`
+  3) `.memory/decisions.md`
+  4) `.memory/context.md`
+- لا توثّق فرضيات بيئية غير مثبتة بالكود.
+- أي claim معماري يجب أن يُربط بملف/مسار تنفيذي واضح.
 
 ---
 
-## 8. Linting
+## 6) أوامر التحقق السريع
 
 ```bash
-ruff check .          # check (line-length=100, config in pyproject.toml)
-ruff check . --fix    # auto-fix
-isort --check-only .  # check import order
-isort .               # fix import order
-```
-
----
-
-## 9. Database Schema (18 Tables)
-
-```
-Authentication:  users, roles, permissions, user_roles, role_permissions, refresh_tokens
-Audit:           audit_log
-Chat:            customer_conversations, customer_messages, admin_conversations
-Missions:        missions, mission_plans, tasks, mission_events
-AI/Learning:     prompt_templates, generated_prompts, knowledge_nodes, knowledge_edges
+ruff check .
+mypy app/ microservices/
+pytest
 ```
 
 - All tables **auto-created on startup** by `app/core/db_schema.py`

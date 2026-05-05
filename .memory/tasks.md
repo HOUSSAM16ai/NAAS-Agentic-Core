@@ -1,11 +1,78 @@
 # Tasks — What Comes Next
-> Last updated: 2026-05-05 (environment: Codespaces) | Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+> Last updated: 2026-05-05 | Branch: claude/document-project-issues-CKlup
+> Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## 🔴 Critical — Architectural Debt (NEW — must fix before any feature work)
+
+### A1. Eliminate Dual-Write — Declare Single Persistence Owner (ISS-014 + ISS-015)
+- **Why first**: Every other chat fix is pointless if messages are written twice.
+  Corrupted history corrupts all LLM context downstream.
+- **Steps**:
+  1. Audit `app/api/routers/customer_chat.py` and `microservices/orchestrator-service/`
+     to find ALL `INSERT` calls to `customer_messages` / `admin_messages`.
+  2. Decide: Monolith owns persistence, Orchestrator does NOT write (recommended for
+     current Codespaces-only setup where Orchestrator is DORMANT).
+  3. Add `write-guard` flag OR remove write call from Orchestrator entirely.
+  4. Add an architecture test: assert that `customer_messages` INSERT only happens in
+     one code path.
+- **Files**: `app/api/routers/customer_chat.py`, `app/services/chat/local_graph.py`,
+  `microservices/orchestrator-service/` (persistence layer)
+
+---
+
+### A2. Harden Fallback Chain — No Silent Failures, No JSON Pollution (ISS-016)
+- **Steps**:
+  1. Wrap every fallback branch in explicit try/except with guaranteed finally block
+     that emits a `complete` terminal event over WS.
+  2. Add a content sanitizer before streaming: strip `{`, `}`, `"` that look like
+     raw JSON fragments (not part of natural language).
+  3. Log + counter every fallback transition for observability.
+- **Files**: `app/services/chat/orchestrator_client.py`
+
+---
+
+### A3. Fix Terminal Signal Corruption — `complete` Event Always Delivered (ISS-017)
+- **Steps**:
+  1. Find the event normalizer in `app/api/routers/customer_chat.py`.
+  2. Add explicit guard: `if event_type in ("complete", "stream_end", "error"): yield as-is`.
+  3. Add frontend check: if no `complete` received within 30s, auto-close loading state.
+- **Files**: `app/api/routers/customer_chat.py`, `frontend/app/components/ChatInterface.jsx`
+
+---
+
+### A4. Fix Context Identity — Unify conversation_id = thread_id (ISS-019)
+- **Steps**:
+  1. In `orchestrator_client.py` entry point, set `thread_id = str(conversation_id)`.
+  2. Pass `thread_id` explicitly into `run_local_graph()`.
+  3. Remove any re-derivation of `thread_id` inside the graph itself.
+  4. Add a test: same conversation_id across two turns hits the same MemorySaver checkpoint.
+- **Files**: `app/services/chat/orchestrator_client.py`, `app/services/chat/local_graph.py`
+
+---
+
+### A5. Add Postgres-backed Checkpointer Option (ISS-020)
+- **Steps**:
+  1. Add `langgraph-checkpoint-postgres` to `requirements.txt`.
+  2. In `local_graph.py`, check `get_settings().LANGGRAPH_CHECKPOINTER`:
+     - `"postgres"` → `AsyncPostgresSaver(conn_string=APP_DATABASE_URL)`
+     - default → `MemorySaver()` (current behavior)
+  3. Add `LANGGRAPH_CHECKPOINTER` to `.devcontainer/devcontainer.json` env vars (optional).
+- **Files**: `app/services/chat/local_graph.py`, `app/core/settings/base.py`
+
+---
+
+### A6. Switch Graph Invocation to astream_events — Real Streaming (ISS-023)
+- **Steps**:
+  1. Replace `graph.ainvoke(state, config)` with `graph.astream_events(state, config, version="v2")`.
+  2. In the event loop, filter `on_chat_model_stream` events → emit `stream_token` WS event.
+  3. Keep `complete` terminal event at end of stream.
+- **Files**: `app/services/chat/local_graph.py`
 
 ---
 
 ## 🔴 Critical (Broken in Production)
-
-### 1. Fix OpenRouter 403 — Chat Is Completely Broken
 - **Status**: CONFIRMED at runtime (ISS-013)
 - **Problem**: All 5 free OpenRouter models return 403 — no LLM response ever succeeds
 - **Confirmed models failing**: nvidia/nemotron, google/gemini-2.0-flash-exp, qwen/qwen3-coder, kwaipilot/kat-coder-pro, microsoft/phi-3-mini-128k-instruct
@@ -71,6 +138,22 @@
 - **Status**: INFERRED (ISS-007)
 - **Approach**: SQLAlchemy async event listeners on `before_cursor_execute` / `after_cursor_execute`
 - **File**: `app/core/database.py`
+
+### B1. Audit and Mark Zombie Components (ISS-021)
+- **Status**: OPEN — investigation needed
+- **Steps**:
+  1. `grep -rn "ConversationService\|supervisor\.py" app/ microservices/ --include="*.py"`
+  2. For each zombie: add `# DORMANT` comment or delete after confirming no callers.
+  3. Update `.memory/architecture.md` to reflect only live components.
+- **File**: Multiple — requires audit first
+
+### B2. Audit Educational vs General Pipeline Capability (ISS-022)
+- **Status**: OPEN — requires LangGraph node comparison
+- **Steps**:
+  1. Compare `supervisor_node` routing for `educational` vs `general` intents.
+  2. Verify both paths use same LLM quality, same context window, same retrieval.
+  3. If not: unify or document intentional differences.
+- **File**: `app/services/chat/local_graph.py`
 
 ### 12. Fix health endpoint `/observability/health` returning null components
 - **Status**: CONFIRMED LIVE

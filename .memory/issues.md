@@ -1,6 +1,106 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-05 (environment correction: Codespaces, not Replit)
-> Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED]
+> Last updated: 2026-05-05 | Branch: claude/document-project-issues-CKlup
+> Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED / RUNTIME-ONLY / HISTORICAL]
+
+---
+
+## 🔴 Critical — Core Architectural Flaws (NEW — Session 2026-05-05)
+
+### ISS-014 · Dual-Write — Both Monolith and Orchestrator Write to Same DB Tables
+- **Status**: CONFIRMED — core architectural bug
+- **Root cause**: In the production path, every message is written twice:
+  once by the Monolith (`app/api/routers/customer_chat.py`) and once by the
+  Orchestrator (`microservices/orchestrator-service/`), both targeting the same
+  `conversation_id` in `customer_messages` / `admin_messages`.
+- **Effect**: Inflated message log, duplicated history fed into next LLM turn,
+  context pollution accumulates over the conversation lifetime.
+- **Files**: `app/api/routers/customer_chat.py`, `app/services/chat/local_graph.py`,
+  `microservices/orchestrator-service/` (persistence layer)
+- **Fix strategy**: Designate a single authority (see ISS-015). Add a `write-guard`
+  flag (`persisted: true`) so the second writer skips silently.
+
+---
+
+### ISS-015 · Non-Unified Save Authority — No Single Owner of Message Persistence
+- **Status**: CONFIRMED — partially mitigated (write-guard added) but root not fixed
+- **Root cause**: The system has no declared "single writer". Monolith and Orchestrator
+  both believe they own persistence. The `persisted: true` flag is a band-aid; the
+  architectural contract is missing.
+- **Effect**: Any path change risks re-enabling dual-write or silently dropping writes
+  depending on which side is modified.
+- **Fix strategy**: Declare in an ADR that the Monolith (or the Orchestrator) is the
+  sole persistence owner. Remove write logic from the other side entirely.
+
+---
+
+### ISS-016 · Unsafe Fallback Path — Silent Failures, JSON Pollution, Missing Terminal Events
+- **Status**: CONFIRMED
+- **Root cause**: The `OrchestratorClient` fallback chain has three failure modes that
+  are not fully guarded:
+  1. Silent failure: message written locally but DB write error not surfaced to caller
+  2. Raw JSON pollution: intermediate JSON fragments streamed as chat tokens
+  3. Missing `terminal event`: WS connection left open / no `complete` signal in some paths
+- **Effect**: User sees response, but it's not saved; OR user sees garbled JSON;
+  OR UI hangs in loading state.
+- **Files**: `app/services/chat/orchestrator_client.py`, fallback handlers
+- **Fix strategy**: Wrap each fallback in explicit try/except with guaranteed terminal
+  event emission; strip raw JSON before streaming.
+
+---
+
+### ISS-017 · Terminal Signal Corruption — `complete` Event Distorted During Normalization
+- **Status**: CONFIRMED
+- **Root cause**: The event normalizer in the WebSocket message pipeline mutates or
+  drops the `complete` / `stream_end` event type during normalization, so the UI
+  never receives a clean end-of-stream signal.
+- **Effect**: Frontend stays in "loading" state; no clean message boundary for
+  subsequent turns.
+- **Files**: `app/api/routers/customer_chat.py` (event normalization logic),
+  `frontend/app/components/ChatInterface.jsx`
+- **Fix strategy**: Add explicit pass-through for terminal event types before any
+  content normalization runs.
+
+---
+
+### ISS-018 · Architectural Split-Brain — Hybrid Monolith/Microservice Competing on State
+- **Status**: CONFIRMED — design-level issue
+- **Root cause**: The system is neither a clean Monolith nor clean Microservices.
+  It's an unfinished migration. Monolith and Orchestrator share state (same DB tables,
+  same `conversation_id`) but have no explicit ownership boundary. Each new feature
+  risks landing in the wrong side.
+- **Effect**: Behavior changes per code path, not per business rule. Debugging requires
+  tracing two separate execution trees.
+- **Fix strategy**: Freeze the migration state. Document which tables/operations belong
+  to Monolith vs Orchestrator. Enforce via architecture tests.
+
+---
+
+### ISS-019 · Context Identity Fragmentation — conversation_id / thread_id Misaligned
+- **Status**: CONFIRMED / LIKELY
+- **Root cause**: `conversation_id` (DB row) and `thread_id` (LangGraph MemorySaver key)
+  are not always the same value. In fallback paths the thread_id may be derived
+  differently, causing LangGraph to start a fresh memory thread for a continuing conversation.
+- **Effect**: Conversation history is lost mid-session when the system switches between
+  Orchestrator and LangGraph paths.
+- **Files**: `app/services/chat/local_graph.py` (`run_local_graph` caller),
+  `app/services/chat/orchestrator_client.py`
+- **Fix strategy**: Always derive `thread_id = str(conversation_id)` at the entry point
+  and pass it through explicitly; never re-derive it inside the graph.
+
+---
+
+### ISS-020 · Fragile Checkpointer — MemorySaver Volatile, Loses State on Restart
+- **Status**: CONFIRMED
+- **Root cause**: `MemorySaver` is in-process. Any uvicorn restart (crash, redeploy,
+  Codespaces wake-up) clears all conversation checkpoints. The system has no
+  Postgres-backed checkpointer active (D-002 chose MemorySaver intentionally,
+  but the trade-off is undocumented as a risk).
+- **Effect**: Every restart = all active users lose their conversation thread.
+  Multi-turn tutor sessions break silently.
+- **Files**: `app/services/chat/local_graph.py` (checkpointer init)
+- **Fix strategy**: Add `langgraph-checkpoint-postgres` with `APP_DATABASE_URL` as
+  opt-in via env var `LANGGRAPH_CHECKPOINTER=postgres`. Fall back to MemorySaver
+  if not configured.
 
 ---
 
@@ -52,6 +152,50 @@
 - **Root cause**: `HTTP 403: Host not in allowlist` — `HTTP-Referer` was hardcoded as `https://cogniforge.local` in `app/core/gateway/simple_client.py:57`, but OpenRouter's allowlist contained different URLs depending on the deployment.
 - **Code fix (done)**: `simple_client.py` now reads `get_openrouter_site_url()` from `app/core/ai_config.py`, which reads `OPENROUTER_SITE_URL` env var (fallback: `https://cogniforge.local`).
 - **To activate** in a new Codespace whose URL isn't whitelisted: set `OPENROUTER_SITE_URL=<your-codespaces-public-url>` as a Codespaces secret, OR go to openrouter.ai/settings/keys → remove host restriction (set `*`)
+
+---
+
+## 🟡 Medium — Structural / Quality Issues (NEW — Session 2026-05-05)
+
+### ISS-021 · Zombie / Dormant Components — Dead Code Confusing Execution Topology
+- **Status**: CONFIRMED / LIKELY DORMANT
+- **Root cause**: Several components appear in the codebase but are not on any live
+  execution path:
+  - `Conversation Service` (microservices) — stub, never called
+  - `supervisor.py` (standalone, not the LangGraph supervisor) — seemingly unused
+  - Some graph factories / pipelines that may be dead code
+- **Effect**: Developer confusion about what is "real". Maintenance burden on code
+  that has no runtime effect. Risk of accidentally activating a zombie path.
+- **Fix strategy**: Audit with `grep -r "import"` to find callers. Mark dead files
+  with `# DORMANT — not on any live path` or delete after confirmation.
+
+---
+
+### ISS-022 · Educational / General Pipeline Split — Uneven AI Capability by Path
+- **Status**: CONFIRMED — design issue
+- **Root cause**: The LangGraph supervisor routes to `chat_node` differently based on
+  intent (`educational` | `general` | `chat`). The nodes behind these intents may have
+  different context windows, different prompts, or different retrieval strategies,
+  making the system appear "less intelligent" for some question types.
+- **Effect**: BAC exam questions may hit a weaker path than general questions, which
+  is the opposite of the product's goal.
+- **Files**: `app/services/chat/local_graph.py` (supervisor_node routing logic)
+- **Fix strategy**: Audit the node capability matrix. Ensure `educational` path has
+  access to at least the same LLM quality and context as `general`.
+
+---
+
+### ISS-023 · Streaming Token Delivery Inconsistent — Blocks Instead of Token-by-Token
+- **Status**: RUNTIME-ONLY / LIKELY
+- **Root cause**: LangGraph `ainvoke()` vs `astream()` usage. If the graph uses
+  `ainvoke()`, the full response is buffered before emission. Even if the WS handler
+  streams chunks, the source is not streaming — so the user sees a long pause then
+  a full block.
+- **Effect**: The "AI is thinking" UX impression. Breaks the real-time tutoring feel.
+- **Files**: `app/services/chat/local_graph.py` (graph invocation method),
+  `app/api/routers/customer_chat.py` (WS event emission)
+- **Fix strategy**: Switch graph invocation to `astream_events()` and pipe each
+  token as a `stream_token` WS event.
 
 ---
 

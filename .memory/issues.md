@@ -41,7 +41,7 @@
 
 ---
 
-### ISS-013 · Free OpenRouter Models Return 403 in Replit (NOT in Codespaces) ✅ PARTIALLY RESOLVED
+### ISS-013 · OpenRouter "Host not in allowlist" — Fixed in Code, Needs Env Var ✅ CODE FIXED
 - **Status**: ENV-DEPENDENT — works in Codespaces, fails in Replit
 - **Evidence** (Replit server log):
   ```
@@ -49,9 +49,9 @@
   All models exhausted. Engaging Safety Net.
   ```
 - **Codespaces status**: OPENROUTER_API_KEY works — nvidia/nemotron-3-super-120b-a12b:free responds correctly
-- **Root cause**: `HTTP 403: Host not in allowlist` — the key has an Allowed Hosts restriction configured in OpenRouter dashboard. Only the Codespaces host is whitelisted; `localhost` and Replit are not.
-- **Confirmed**: Direct API call returns exactly `{"error": "Host not in allowlist"}` — not a credentials issue
-- **Fix**: Go to openrouter.ai/settings/keys → edit the key → add `http://localhost:8000` and the Replit domain to Allowed Hosts (or set `*` for dev)
+- **Root cause**: `HTTP 403: Host not in allowlist` — `HTTP-Referer` was hardcoded as `https://cogniforge.local` in `app/core/gateway/simple_client.py:57`. OpenRouter's allowlist only contained the Codespaces URL.
+- **Code fix (done)**: `simple_client.py` now reads `get_openrouter_site_url()` from `app/core/ai_config.py`, which reads `OPENROUTER_SITE_URL` env var (fallback: `https://cogniforge.local`).
+- **To activate**: Set `OPENROUTER_SITE_URL=<your-whitelisted-url>` in Replit secrets OR go to openrouter.ai/settings/keys → remove host restriction (set `*`)
 
 ---
 

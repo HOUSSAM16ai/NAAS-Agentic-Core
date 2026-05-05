@@ -1,20 +1,7 @@
-# Open Issues / Risks
+# Architecture Risks
 > Last updated: 2026-05-05
 
-## High Priority
-1. **Memory docs drift risk**
-   - Risk: `.memory` files become stale after architecture changes.
-   - Mitigation: update `.memory` in same PR when topology docs change.
-
-2. **Hybrid boundary confusion**
-   - Risk: contributors assume pure monolith or pure microservices and introduce coupling.
-   - Mitigation: enforce client-boundary guidance in context/architecture docs.
-
-## Medium Priority
-3. **Evidence traceability gaps**
-   - Risk: narrative claims without file anchors.
-   - Mitigation: include direct file references in memory notes and PR descriptions.
-
-4. **Endpoint documentation divergence (memory agent)**
-   - Risk: service README and runtime routes drift apart.
-   - Mitigation: refresh endpoint lists when route files change.
+1. Documentation drift between `.memory`, `CLAUDE.md`, and executable code.
+2. Hidden coupling via shared implicit models across services.
+3. Router-level business logic creep in `app/api/routers/*`.
+4. Inconsistent resilience policies for remote calls across services.

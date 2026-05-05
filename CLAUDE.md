@@ -1,66 +1,57 @@
 # CogniForge — Claude Code Context
 
-> منصة تعليمية ذكية (AI Tutor) لطلاب البكالوريا في الجزائر.
-> بنية تشغيلية هجينة: Reality Kernel في `app/` + شبكة خدمات مصغّرة في `microservices/`.
+> **AI tutor for Algerian students** | FastAPI 8000 + Next.js 3000/5000 + LangGraph 1.1.10
+> Arabic / French / Darija | BAC preparation platform
 
 ---
 
-## 1) التشريح المعماري الكامل (Code-Verified)
+## 1. What This Project Does
 
-### A. طبقة الدخول (Ingress)
-- **الويب/العميل**: واجهات ثابتة وواجهات React/Next حسب بيئة التشغيل.
-- **API Gateway/Kernel**:
-  - `app/main.py` نقطة تشغيل التطبيق.
-  - `app/kernel.py` يُنشئ التطبيق عبر خط أنابيب تركيبي (تهيئة + Middleware + Routers + فحوصات التوافق).
-  - `app/api/routers/registry.py` سجل مركزي للـ routers.
+CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.
 
-### B. نواة التركيب (Reality Kernel as Evaluator)
-- النمط المعتمد: **Functional Core, Imperative Shell**.
-- تمثيل الـ middleware والـ routes كبيانات declarative في `app/core/app_blueprint.py` ثم تطبيقها عبر دوال تركيب.
-- النتيجة: تبديل/إضافة Middleware أو Router بدون كسر الطبقات الأعلى.
+**Supported runtime environments**: the project is environment-agnostic and runs on both:
 
-### C. طبقة الـ API داخل `app/`
-- الملفات تحت `app/api/routers/` تعمل كطبقة توجيه فقط (HTTP boundary).
-- منطق الأعمال يجب أن يبقى في الخدمات (`app/services/`) أو طبقات المجال، وليس داخل handlers مباشرة.
-- العقود (schemas) تحت `app/api/schemas/`.
+| Environment | Frontend port | How it picks the port |
+|---|---|---|
+| **GitHub Codespaces** (primary) | **3000** | `.devcontainer/supervisor.sh` exports `FRONTEND_PORT=3000` and passes `--port 3000` to `next dev`, overriding `package.json` |
+| **Replit** | **5000** | `frontend/package.json` script `"dev": "next dev --port 5000"` is used directly |
 
-### D. طبقة الخدمات والنواة المشتركة
-- `app/core/` يحتوي البنية التحتية العرضية: أخطاء، بروتوكولات، resilience patterns، db wiring، event contracts.
-- `app/services/` يحتوي منطق التنفيذ الخاص بالمجالات داخل الـ shell.
-- `app/infrastructure/clients/` يفرض حدود الاتصال عبر HTTP مع الخدمات المستقلة.
-
-### E. طبقة الخدمات المصغرة (Microservices Mesh)
-المجلد `microservices/` يحتوي خدمات مستقلة تشغيليًا، أهمها:
-- `api_gateway`
-- `user_service`
-- `observability_service`
-- `reasoning_agent`
-- `research_agent`
-- (وفي البيئات/الفروع الداعمة: orchestrator/planning/memory بحسب التفعيل)
-
-لكل خدمة: نقطة دخول، إعدادات، طبقة API، طبقة domain/service، واعتمادات تشغيل (Dockerfile/requirements).
-
-### F. تدفقات التكامل بين الطبقات
-- الاتصال بين الخدمات يتم عبر HTTP clients (مبدأ API-First).
-- ممنوع الوصول المباشر لقاعدة بيانات خدمة أخرى.
-- `X-Correlation-ID` مطلوب لضمان التتبع الموزع.
+In both environments the backend is on **8000** and microservices in `microservices/` are **dormant by default** — neither environment starts them. The Codespaces devcontainer (`.devcontainer/docker-compose.host.yml`) launches a single `web` container; the full microservices stack only comes up when you explicitly run `docker compose -f docker-compose.yml up -d`.
 
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
 
-```text
-Client/UI
-  -> FastAPI Kernel (app/main.py -> app/kernel.py)
-    -> Router Registry (app/api/routers/registry.py)
-      -> Local service/domain execution (app/services + app/core)
-      -> Remote delegation (app/infrastructure/clients/*)
-         -> microservices/<service>/...
+# Frontend
+# - Codespaces: supervisor.sh launches `npm run dev -- --port 3000` automatically
+# - Replit:     `cd frontend && npm run dev`  (uses port 5000 from package.json)
+# - Manual:     `cd frontend && npm run dev -- --port <PORT>`
+cd frontend && npm run dev
+
+# Health check
+curl -s http://localhost:8000/health | python -m json.tool
 ```
 
 ---
 
-## 3) مناطق المسؤولية (Boundaries)
+## 3. Architecture at a Glance
+
+```
+Browser
+  └── Next.js (3000 in Codespaces / 5000 in Replit)
+        └── next.config.js rewrites /api/* → localhost:8000
+              └── FastAPI (port 8000)
+                    ├── /api/security/login, /register
+                    ├── /api/chat/ws  (WebSocket)
+                    │     └── OrchestratorClient (fallback chain)
+                    │           ├── [1] File count detection
+                    │           ├── [2] Exercise retrieval (BAC)
+                    │           ├── [3] HTTP → orchestrator:8006 → ConnectError (DORMANT)
+                    │           └── [4] LangGraph local_graph.py ← PRIMARY HANDLER
+                    ├── /api/v1/auth/*, /api/v1/users/*
+                    ├── /v1/content/*
+                    └── /api/v1/data-mesh/*
+```
 
 1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).
 2. `microservices/*` = وحدات أعمال مستقلة (Execution Plane).
@@ -78,7 +69,102 @@ Client/UI
 
 ---
 
-## 5) قواعد تشغيلية إلزامية عند التعديل
+## 5. Safe Areas to Modify
+
+```
+app/services/chat/local_graph.py    — add LangGraph nodes/edges
+app/api/routers/content.py          — content endpoints
+app/core/prompts.py                 — system prompts
+app/services/system/                — system utilities
+frontend/app/components/ChatInterface.jsx
+frontend/app/components/AgentTimeline.jsx
+tests/                              — add tests freely
+scripts/                            — helper scripts
+docs/                               — documentation
+```
+
+---
+
+## 6. Common Pitfalls
+
+### NEVER use `os.environ` directly in app code
+```python
+# ❌ Wrong
+import os
+db_url = os.environ["DATABASE_URL"]
+
+# ✅ Correct
+from app.core.config import get_settings
+db_url = get_settings().DATABASE_URL
+```
+
+### NEVER use synchronous SQLAlchemy
+```python
+# ❌ Wrong — blocks the event loop
+user = db.query(User).filter_by(email=email).first()
+
+# ✅ Correct
+from sqlalchemy import select
+result = await db.execute(select(User).where(User.email == email))
+user = result.scalar_one_or_none()
+```
+
+### NEVER assume microservices are reachable
+```python
+# In Codespaces (default devcontainer), ALL of these fail with ConnectError:
+# http://orchestrator-service:8006  → Docker DNS — not running
+# http://user-service:8000          → not running
+# http://research-agent:8007        → not running
+
+# Only the `web` container runs by default (see .devcontainer/docker-compose.host.yml).
+# LangGraph (local_graph.py) is the REAL handler — always falls through to it.
+# To wake the microservices: `docker compose -f docker-compose.yml up -d` (separate stack).
+```
+
+### NEVER change the auth_persistence.py RETURNING pattern
+```python
+# ❌ Wrong — lastrowid doesn't work reliably with asyncpg/PostgreSQL
+cursor = await conn.execute(insert_query)
+user_id = cursor.lastrowid
+
+# ✅ Correct — what's already there
+result = await conn.execute(
+    text("INSERT INTO users (...) VALUES (...) RETURNING id")
+)
+user_id = result.scalar()
+```
+
+### Port quirk
+```python
+# settings auto-converts PgBouncer port 6543 → 5432
+# Don't override this behavior in database.py
+```
+
+---
+
+## 7. Testing
+
+```bash
+# Run all tests
+pytest tests/
+
+# Specific suites
+pytest tests/api/ -v
+pytest tests/architecture/ -v
+pytest -m security
+pytest -m architecture
+
+# With coverage
+pytest --cov=app --cov-report=term-missing
+
+# REQUIRED environment for tests (SQLite in-memory, mock LLM)
+export DATABASE_URL="sqlite+aiosqlite:///:memory:"
+export SECRET_KEY="test-secret-key-for-ci-pipeline-secure-length"
+export ENVIRONMENT="testing"
+export LLM_MOCK_MODE="1"
+export SUPABASE_URL="https://dummy.supabase.co"
+export SUPABASE_ROLE_KEY="dummy"
+```
 
 - قبل أي تعديل معماري: راجع `docs/architecture/MICROSERVICES_CONSTITUTION.md`.
 - أي تغيير في طوبولوجيا النظام يستلزم تحديثًا متزامنًا لـ:
@@ -99,3 +185,100 @@ mypy app/ microservices/
 pytest
 ```
 
+- All tables **auto-created on startup** by `app/core/db_schema.py`
+- Adding a new table: edit `app/core/db_schema_config.py` + `_ALLOWED_TABLES` frozenset
+- `knowledge_nodes.embedding` requires `pgvector` — index is **skipped silently** if extension missing
+
+---
+
+## 10. Environment Variables
+
+Sourced from Codespaces secrets and forwarded via `.devcontainer/devcontainer.json` → `remoteEnv` (`${localEnv:VAR}`).
+
+| Variable | Status | Description |
+|---|---|---|
+| `APP_DATABASE_URL` | ✅ Set (Codespaces secret) | Supabase PostgreSQL — takes priority |
+| `DATABASE_URL` | ✅ Auto-set | Re-derived from APP_DATABASE_URL |
+| `SECRET_KEY` | ⚠️ In-memory unless set | **Ephemeral if unset — restart = all users logged out** |
+| `OPENROUTER_API_KEY` | ✅ Set (Codespaces secret) | Primary LLM provider |
+| `OPENAI_API_KEY` | ✅ Set | Secondary LLM provider |
+| `ENVIRONMENT` | ✅ `development` | Controls dev behavior |
+| `ORCHESTRATOR_SERVICE_URL` | ❌ Not set | Defaults to Docker DNS — always fails in Codespaces default setup |
+| `REDIS_URL` | ❌ Not set | Redis not started by devcontainer — cache falls back to memory |
+| `OPENROUTER_SITE_URL` | ⚠️ Optional | Set this to your Codespaces URL if OpenRouter rejects with `Host not in allowlist` |
+
+---
+
+## 11. Code Conventions
+
+- **Language:** Python code in English, comments/docstrings in Arabic
+- **Formatting:** `ruff` at line-length=100, `isort` for imports
+- **Types:** Pydantic v2 strict, `TypedDict` for LangGraph state
+- **Imports:** Always absolute (`from app.core...` — never relative)
+- **Async:** Everything async/await — zero synchronous DB calls
+- **Logging:** `logging.getLogger("cogniforge.module_name")`
+- **Settings:** Always `get_settings()` — never `os.environ` in app code
+- **Naming:** `PascalCase` classes, `snake_case` functions/variables
+
+---
+
+## 12. LangGraph Extension Guide
+
+To add a new node to `app/services/chat/local_graph.py`:
+
+```python
+# 1. Add to state
+class LocalChatState(TypedDict):
+    question: str
+    intent: str
+    history_messages: list[dict]
+    final_response: str
+    # new_field: str  ← add here
+
+# 2. Define node function
+async def my_new_node(state: LocalChatState) -> dict:
+    # process state
+    return {"final_response": "..."}
+
+# 3. Add to graph
+graph.add_node("my_new_node", my_new_node)
+graph.add_edge("supervisor", "my_new_node")
+graph.add_edge("my_new_node", END)
+
+# 4. Update routing in supervisor_node if needed
+```
+
+---
+
+## 13. Known Issues (Priority Order)
+
+| Issue | Priority | Fix |
+|---|---|---|
+| `SECRET_KEY` ephemeral → logout on restart | 🔴 High | Add `SECRET_KEY` as a permanent Codespaces secret |
+| 157 GitHub vulnerabilities (15 critical) | 🔴 High | `pip audit` + `npm audit` + update packages |
+| `full_name` returns null in login response | 🟡 Medium | Schema mismatch in auth response |
+| OpenAPI contract warnings on startup | 🟡 Medium | Missing route definitions |
+| Admin credentials using hardcoded defaults | 🟡 Medium | Set ADMIN_EMAIL/ADMIN_PASSWORD env vars |
+
+---
+
+## 14. Microservices (All Dormant in Codespaces by Default)
+
+These exist in `microservices/` but **do not start** in the default Codespaces devcontainer (which only spins up the `web` container via `.devcontainer/docker-compose.host.yml`):
+
+| Service | Port | Status |
+|---|---|---|
+| orchestrator-service | 8006 | DORMANT — ConnectError expected |
+| planning-agent | 8001 | DORMANT |
+| memory-agent | 8002 | DORMANT |
+| user-service | 8003 | DORMANT |
+| research-agent | 8007 | DORMANT |
+| reasoning-agent | 8008 | DORMANT |
+| auditor-service | 8009 | DORMANT |
+| conversation-service | 8010 | DORMANT |
+
+To wake the full microservices stack (separate from the devcontainer): `docker compose -f docker-compose.yml up -d`
+
+---
+
+*Last updated: 2026-05-05 — environment corrected from Replit to GitHub Codespaces*

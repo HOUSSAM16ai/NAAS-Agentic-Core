@@ -1,6 +1,6 @@
 # CogniForge — Claude Code Context
 
-> **AI tutor for Algerian students** | FastAPI 8000 + Next.js 3000 + LangGraph 1.1.10
+> **AI tutor for Algerian students** | FastAPI 8000 + Next.js 3000/5000 + LangGraph 1.1.10
 > Arabic / French / Darija | BAC preparation platform
 
 ---
@@ -9,7 +9,14 @@
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.
 
-**Runtime environment**: GitHub Codespaces (devcontainer at `.devcontainer/devcontainer.json` → `docker-compose.host.yml`). The devcontainer launches a single `web` container running `uvicorn app.main:app` via `.devcontainer/supervisor.sh`. All microservices visible in `microservices/` are **fully dormant in Codespaces** — the devcontainer compose file does not start them, so they are unreachable unless you explicitly run the full `docker-compose.yml` stack.
+**Supported runtime environments**: the project is environment-agnostic and runs on both:
+
+| Environment | Frontend port | How it picks the port |
+|---|---|---|
+| **GitHub Codespaces** (primary) | **3000** | `.devcontainer/supervisor.sh` exports `FRONTEND_PORT=3000` and passes `--port 3000` to `next dev`, overriding `package.json` |
+| **Replit** | **5000** | `frontend/package.json` script `"dev": "next dev --port 5000"` is used directly |
+
+In both environments the backend is on **8000** and microservices in `microservices/` are **dormant by default** — neither environment starts them. The Codespaces devcontainer (`.devcontainer/docker-compose.host.yml`) launches a single `web` container; the full microservices stack only comes up when you explicitly run `docker compose -f docker-compose.yml up -d`.
 
 ---
 
@@ -19,9 +26,11 @@ CogniForge is an educational AI platform for Algerian high-school students prepa
 # Backend (port 8000)
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Frontend (port 3000 in Codespaces — supervisor.sh forces FRONTEND_PORT=3000;
-# the `--port 5000` in frontend/package.json is legacy Replit and is overridden)
-cd frontend && npm run dev -- --port 3000
+# Frontend
+# - Codespaces: supervisor.sh launches `npm run dev -- --port 3000` automatically
+# - Replit:     `cd frontend && npm run dev`  (uses port 5000 from package.json)
+# - Manual:     `cd frontend && npm run dev -- --port <PORT>`
+cd frontend && npm run dev
 
 # Health check
 curl -s http://localhost:8000/health | python -m json.tool
@@ -33,7 +42,7 @@ curl -s http://localhost:8000/health | python -m json.tool
 
 ```
 Browser
-  └── Next.js (port 3000 — Codespaces; legacy 5000 was for Replit)
+  └── Next.js (3000 in Codespaces / 5000 in Replit)
         └── next.config.js rewrites /api/* → localhost:8000
               └── FastAPI (port 8000)
                     ├── /api/security/login, /register

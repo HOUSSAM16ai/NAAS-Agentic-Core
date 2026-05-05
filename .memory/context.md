@@ -6,14 +6,15 @@
 - **Purpose**: AI tutor for Algerian high-school students preparing for the Baccalaureate exam
 - **Languages**: Arabic (MSA) / French / Darija — all three simultaneously
 - **Subjects**: Math, Physics, Chemistry, History, Geography, Languages
-- **Environment**: GitHub Codespaces (devcontainer, single `web` container) — orchestrator + 7 other microservices are DORMANT
-- **Devcontainer**: `.devcontainer/devcontainer.json` → `docker-compose.host.yml` (web only)
-- **Process supervisor**: `.devcontainer/supervisor.sh` launches `uvicorn app.main:app` (no microservices)
+- **Supported environments**: GitHub Codespaces (primary dev) **and** Replit — the app is environment-agnostic. In both, microservices are DORMANT by default.
+- **Codespaces**: `.devcontainer/devcontainer.json` → `docker-compose.host.yml` (web container only) → `supervisor.sh` launches `uvicorn app.main:app` + Next.js on port **3000**
+- **Replit**: `package.json` script runs Next.js on port **5000**; backend started manually with uvicorn on 8000
+- **Microservices wake-up** (either environment): `docker compose -f docker-compose.yml up -d`
 
 ## Stack
 | Layer | Tech | Port |
 |-------|------|------|
-| Frontend | Next.js 15 | 3000 (Codespaces — supervisor.sh sets `FRONTEND_PORT=3000`; legacy 5000 was Replit-only) |
+| Frontend | Next.js 15 | **3000** (Codespaces) / **5000** (Replit) |
 | Backend | FastAPI (Python 3.12) | 8000 |
 | AI Graph | LangGraph 1.1.10 | in-process |
 | DB | PostgreSQL (Supabase) + aiosqlite (tests) | 5432 |
@@ -41,7 +42,7 @@ ruff check . && isort --check-only .
 ## Request Flow (MEASURED — not assumed)
 ```
 Student browser
-  └─ Next.js :3000  (Codespaces; 5000 was Replit-only)
+  └─ Next.js  (:3000 Codespaces / :5000 Replit)
         └─ /api/* → rewrites → FastAPI :8000
               └─ ObservabilityMiddleware  ← traces every HTTP request (W3C Trace Context)
                     └─ /api/chat/ws  (WebSocket)

@@ -57,7 +57,7 @@ Incoming Request
 ## 2. Request → Chat Flow (Complete)
 
 ```
-Browser (Next.js :3000 — Codespaces; legacy :5000 was Replit-only)
+Browser (Next.js :3000 Codespaces / :5000 Replit)
   │
   │  /api/* → rewrites to http://localhost:8000
   │

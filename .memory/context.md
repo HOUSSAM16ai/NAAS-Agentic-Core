@@ -76,7 +76,7 @@ AI:       prompt_templates, generated_prompts, knowledge_nodes, knowledge_edges
 |----------|--------|-------|
 | APP_DATABASE_URL | ✅ Replit secret | Supabase PostgreSQL |
 | SECRET_KEY | ⚠️ Ephemeral | Restart = all users logged out |
-| OPENROUTER_API_KEY | ⚠️ Exists but 403 | All free models returning 403 — chat BROKEN |
+| OPENROUTER_API_KEY | ✅ Set (Replit/Codespaces secret) | Works in Codespaces — nvidia/nemotron-3-super-120b-a12b:free confirmed working |
 | OPENAI_API_KEY | ❌ Not set | Fallback unavailable |
 | ENVIRONMENT | ✅ development | |
 | ORCHESTRATOR_SERVICE_URL | ❌ Not set | Always ConnectError in Replit |

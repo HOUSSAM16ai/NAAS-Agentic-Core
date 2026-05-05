@@ -7,7 +7,12 @@
 
 ## 1. What This Project Does
 
-CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith. All microservices visible in `microservices/` are **fully dormant in Replit** — they require Docker and never start here.
+CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences.
+
+**Code-Proven Runtime Reality (Hybrid):**
+- `app/` is still the primary API composition shell (Reality Kernel + router registry + middleware pipeline).
+- `app/` delegates selected domains to microservices via network clients (`httpx.AsyncClient`) such as Orchestrator, Planning, and Memory.
+- The architecture is therefore **hybrid transitional** (modular monolith shell + external microservices), not a pure monolith and not a fully decomposed microservice mesh.
 
 ---
 
@@ -26,23 +31,20 @@ curl -s http://localhost:8000/health | python -m json.tool
 
 ---
 
-## 3. Architecture at a Glance
+## 3. Architecture at a Glance (Evidence-Based)
 
 ```
 Browser
   └── Next.js (port 5000)
-        └── next.config.js rewrites /api/* → localhost:8000
-              └── FastAPI (port 8000)
-                    ├── /api/security/login, /register
-                    ├── /api/chat/ws  (WebSocket)
-                    │     └── OrchestratorClient (fallback chain)
-                    │           ├── [1] File count detection
-                    │           ├── [2] Exercise retrieval (BAC)
-                    │           ├── [3] HTTP → orchestrator:8006 → ConnectError (DORMANT)
-                    │           └── [4] LangGraph local_graph.py ← PRIMARY HANDLER
-                    ├── /api/v1/auth/*, /api/v1/users/*
-                    ├── /v1/content/*
-                    └── /api/v1/data-mesh/*
+        └── /api/* → FastAPI kernel in app/
+              └── RealityKernel (composition pipeline)
+                    ├── Mount routers from registry
+                    ├── Apply middleware stack declaratively
+                    ├── Execute local domain services (DB-backed)
+                    └── Delegate selected capabilities over HTTP:
+                          ├── Orchestrator service (missions + streamed chat events)
+                          ├── Planning agent (/plans)
+                          └── Memory agent (/knowledge/*)
 ```
 
 **LangGraph flow:**
@@ -114,14 +116,13 @@ result = await db.execute(select(User).where(User.email == email))
 user = result.scalar_one_or_none()
 ```
 
-### NEVER assume microservices are reachable
+### NEVER assume microservices are always reachable
 ```python
-# In Replit, ALL of these fail with ConnectError:
-# http://orchestrator-service:8006  → Docker DNS — not running
-# http://user-service:8000          → not running
-# http://research-agent:8007        → not running
-
-# LangGraph (local_graph.py) is the REAL handler — always falls through to it
+# Runtime may vary by environment:
+# - in local/dev without docker-compose, service DNS may fail
+# - in composed environments, these services are reachable
+#
+# Keep graceful degradation, but do not document microservices as "always dormant".
 ```
 
 ### NEVER change the auth_persistence.py RETURNING pattern

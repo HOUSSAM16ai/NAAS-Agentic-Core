@@ -1,111 +1,30 @@
-# CogniForge — Project Context
-> Last updated: 2026-05-04 (after runtime truth session) | Branch: claude/add-distributed-tracing-T9Q8z
+# Project Context (Code-Verified)
+> Last updated: 2026-05-05
 
 ## Identity
-- **Name**: NAAS-Agentic-Core (CogniForge)
-- **Purpose**: AI tutor for Algerian high-school students preparing for the Baccalaureate exam
-- **Languages**: Arabic (MSA) / French / Darija — all three simultaneously
-- **Subjects**: Math, Physics, Chemistry, History, Geography, Languages
-- **Environment**: Replit (single-process) — Docker/microservices are DORMANT
+- Repo: `NAAS-Agentic-Core`
+- Product: CogniForge educational AI platform
+- Architecture reality: **Hybrid transitional runtime**
+  - API composition shell in `app/`
+  - Selected capabilities delegated over HTTP to microservices clients
 
-## Stack
-| Layer | Tech | Port |
-|-------|------|------|
-| Frontend | Next.js 15 | 5000 |
-| Backend | FastAPI (Python 3.12) | 8000 |
-| AI Graph | LangGraph 1.1.10 | in-process |
-| DB | PostgreSQL (Supabase) + aiosqlite (tests) | 5432 |
-| LLM | OpenRouter (primary) → OpenAI (fallback) | cloud |
-| Cache | Redis (optional, falls back to memory) | 6379 |
-| Tracing | UnifiedObservabilityService (in-process) | — |
+## Runtime Topology (from code)
+1. `app/kernel.py` builds FastAPI through a pipeline (middleware + routers + optional static).  
+2. `app/core/app_blueprint.py` declares middleware stack and router registry as data.  
+3. Routers call service/infrastructure layers; cross-service calls use HTTP clients.  
+4. Examples of remote delegation from monolith shell:
+   - Orchestrator: `app/infrastructure/clients/orchestrator_client.py`
+   - Planning: `app/infrastructure/clients/planning_client.py`
+   - Memory: `app/infrastructure/clients/memory_client.py`
 
-## Start Commands
-```bash
-# Backend
-.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+## Memory Service Context
+- Service app: `microservices/memory_agent/main.py`
+- Protected routes enforce token verification using `verify_service_token`.
+- Layering:
+  - API: `microservices/memory_agent/src/api/knowledge.py`
+  - Service: `microservices/memory_agent/src/services/memory_service.py`
+  - Repository: `microservices/memory_agent/src/repositories/memory_repository.py`
 
-# Frontend
-cd frontend && npm run dev
-
-# Tests
-DATABASE_URL="sqlite+aiosqlite:///:memory:" SECRET_KEY="test-secret-key-for-ci-pipeline-secure-length" \
-ENVIRONMENT="testing" LLM_MOCK_MODE="1" SUPABASE_URL="https://dummy.supabase.co" SUPABASE_ROLE_KEY="dummy" \
-.venv/bin/pytest tests/ -v
-
-# Lint
-ruff check . && isort --check-only .
-```
-
-## Request Flow (MEASURED — not assumed)
-```
-Student browser
-  └─ Next.js :5000
-        └─ /api/* → rewrites → FastAPI :8000
-              └─ ObservabilityMiddleware  ← traces every HTTP request (W3C Trace Context)
-                    └─ /api/chat/ws  (WebSocket)
-                          │  WS connect: 26ms (measured)
-                          │  Auth: ?token= query param in dev mode
-                          │  ⚠️ WS layer NOT traced (ISS-005)
-                          │
-                          └─ OrchestratorClient.chat_with_agent()
-                                span: orchestrator.chat_with_agent (1506ms measured when all fail)
-                                │
-                                ├─ [1] File intelligence (0.1ms → SKIP if no files)
-                                ├─ [2] Exercise retrieval (0.0ms → SKIP if no BAC match)
-                                ├─ [3] HTTP → orchestrator:8006 → ConnectError (DORMANT)
-                                └─ [4] LangGraph local_graph.py  ← PRIMARY HANDLER
-                                          span: langgraph.run (757ms measured)
-                                          │
-                                          ├─ supervisor_node  (0.0ms, intent=educational)
-                                          └─ chat_node (747ms)
-                                                └─ OpenRouter free models → 403 ❌ BROKEN
-                                                   "All models exhausted. Engaging Safety Net."
-```
-
-## 18 Database Tables
-```
-Auth:     users, roles, permissions, user_roles, role_permissions, refresh_tokens
-Audit:    audit_log
-Chat:     customer_conversations, customer_messages, admin_conversations
-Missions: missions, mission_plans, tasks, mission_events
-AI:       prompt_templates, generated_prompts, knowledge_nodes, knowledge_edges
-```
-
-## Environment Variables (Real Status)
-| Variable | Status | Notes |
-|----------|--------|-------|
-| APP_DATABASE_URL | ✅ Replit secret | Supabase PostgreSQL |
-| SECRET_KEY | ⚠️ Ephemeral | Restart = all users logged out |
-| OPENROUTER_API_KEY | ✅ Set (Replit/Codespaces secret) | Works in Codespaces — nvidia/nemotron-3-super-120b-a12b:free confirmed working |
-| OPENAI_API_KEY | ❌ Not set | Fallback unavailable |
-| ENVIRONMENT | ✅ development | |
-| ORCHESTRATOR_SERVICE_URL | ❌ Not set | Always ConnectError in Replit |
-| REDIS_URL | ❌ Not set | Falls back to in-memory |
-| OTEL_EXPORTER_OTLP_ENDPOINT | ❌ Not set | Telemetry bridge tries DNS → fails every request |
-
-## Python Environment
-- Python 3.12 (`.python-version`)
-- Virtual env: `.venv/` (created with `uv venv`)
-- Test runner: `.venv/bin/pytest` (NOT the system pytest which is 3.11)
-- Backend runner: `.venv/bin/uvicorn` (NOT system uvicorn)
-- 1658 tests collected total
-
-## Measured Performance (2026-05-04 live test)
-| Operation | Time | Status |
-|-----------|------|--------|
-| Server health check | 7ms | ✅ |
-| WS connect | 26ms | ✅ |
-| User register | 125ms | ✅ |
-| User login | 75ms | ✅ (but full_name=null) |
-| LangGraph full run | 757ms | ✅ (but LLM fails inside) |
-| Orchestrator (all paths fail) | 1506ms | ❌ |
-| p50 response time | 3.5ms | ✅ |
-| p95 response time | 1057ms | ⚠️ |
-| Error rate | 7.69% | ⚠️ |
-
-## Known Broken in Current Environment
-1. **Chat**: All OpenRouter free models return 403 — NO chat response reaches the user
-2. **Telemetry export**: TelemetryBridge DNS failures on every request (logged noise)
-3. **Auth microservices**: DNS failures on every login/register (adds latency)
-4. **/performance endpoint**: Pydantic schema mismatch → 500 error
-5. **full_name**: Always null in login response
+## Guardrails
+- Avoid claims tied to one hosting platform only.
+- Document architecture from executable code paths, not environment assumptions.

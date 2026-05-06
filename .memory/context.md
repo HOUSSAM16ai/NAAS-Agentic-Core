@@ -1,6 +1,7 @@
 # CogniForge — Project Context
-> Last updated: 2026-05-06 | Branch: claude/runtime-truth-audit-65iVU
+> Last updated: 2026-05-06 | Re-verified on branch: `claude/diagnostic-system-architecture-aRSuW`
 > **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative).
+> **Diagnostic snapshot:** see `.memory/diagnostic_2026_05_06.md` (architectural verdict + transformation gap).
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)

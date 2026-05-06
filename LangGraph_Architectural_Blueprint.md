@@ -1,4 +1,15 @@
-# LangGraph Architectural Blueprint
+# LangGraph Architectural Blueprint — TARGET STATE (DORMANT)
+
+> ⚠️ **DORMANT — describes the orchestrator-service multi-agent graph that does NOT run by default.**
+> This blueprint documents `microservices/orchestrator_service/src/services/overmind/graph/*`,
+> which is gated behind the orchestrator microservice. In default Codespaces
+> (`.devcontainer/docker-compose.host.yml` runs only the `web` container) this
+> graph never executes. The live chat handler is `app/services/chat/local_graph.py`
+> (2 nodes only — supervisor + chat). See `.memory/runtime_truth.md` and
+> CLAUDE.md §6.6 for the authoritative capability table.
+>
+> To wake the stack described here: `docker compose -f docker-compose.yml up -d`.
+> Until then, every component below is DORMANT.
 
 ## 1. Graph State (CRITICAL BACKBONE)
 

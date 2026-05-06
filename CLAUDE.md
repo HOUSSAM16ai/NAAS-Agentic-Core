@@ -183,6 +183,66 @@ user_id = result.scalar()
 
 ---
 
+## 6.6 Architecture Truth and Runtime Rules (Truth Table)
+
+> **The golden rule:** code presence ≠ runtime usage. A capability is real ONLY when proven by **import + call chain + runtime evidence**. Anything missing one of those three is treated as DORMANT or ZOMBIE until proven otherwise.
+
+### Status legend
+- **ACTIVE** — imported, on a live call chain reachable from `app/main.py` / `app/api/routers/`, AND observed at runtime.
+- **PARTIAL** — on a live call chain but only via fallback, conditional, or non-default branch.
+- **DORMANT** — code is real and imported, but the call chain only fires when an external service (e.g., a microservice that is not started by default) is up.
+- **ZOMBIE** — defined and possibly imported, but no live call chain leads to it from a production entrypoint.
+- **UNKNOWN** — insufficient evidence; do not claim ACTIVE.
+
+### Truth table — verified 2026-05-06 (branch `claude/runtime-truth-audit-65iVU`)
+
+| Component | Status | Proof |
+|---|---|---|
+| **`app/services/chat/local_graph.py`** (`run_local_graph`, `supervisor_node`, `chat_node`, `MemorySaver`) | **PARTIAL** | Imported `app/kernel.py:239` (pre-warm) and `app/infrastructure/clients/orchestrator_client.py:170` (fallback tier 3). In default Codespaces it IS the de-facto handler because orchestrator URL is unset → ConnectError → fallback runs every turn. Uses `ainvoke` only (not `astream_events`) → ISS-023. |
+| **`app/services/chat/graph/workflow.py`** (`create_multi_agent_graph`) | **ZOMBIE** | Only importer is `tests/verify_graph_manual.py:8`. No reference from `app/main.py`, `app/kernel.py`, `app/api/`, or `orchestrator_client.py`. |
+| **Multi-agent nodes** — `super_reasoner.py`, `planner.py`, `researcher.py`, `writer.py`, `procedural_auditor.py`, `reviewer.py` | **ZOMBIE** | Only consumed by `workflow.py` (itself ZOMBIE). No production call chain. |
+| **`app/services/chat/memory_engine.py`** (LlamaIndex VectorStoreIndex) | **ZOMBIE** | Only invoked from `reviewer.py` inside the dead `workflow.py`. Zero references from routers, kernel, or `local_graph.py`. |
+| **`app/drivers/llamaindex_driver.py`** | **ZOMBIE** | No `from app.drivers` import in `app/api/`, `app/main.py`, `app/kernel.py`, `local_graph.py`, or `orchestrator_client.py`. |
+| **`app/drivers/reranker_driver.py`** | **ZOMBIE** | Same as above — drivers package has zero importers in the live chain. |
+| **`app/drivers/kagent_driver.py`** | **ZOMBIE** | Same — only registered conditionally inside `MCPIntegrations`, which itself is dormant. |
+| **`app/core/integration_kernel/runtime.py`** (`RealityKernel` micro-kernel) | **ZOMBIE** | Singleton designed but never instantiated from `app/main.py` or `app/kernel.py`. |
+| **DSPy** (`microservices/research_agent/src/search_engine/query_refiner.py`, `microservices/orchestrator_service/.../graph/{main,search,supervisor}.py`) | **DORMANT** | Real implementation, but ALL call chains live inside microservices that the default devcontainer does not start. Reachable only when `docker compose -f docker-compose.yml up -d`. |
+| **Reranker microservice** (`microservices/research_agent/src/search_engine/{reranker,strategies,hybrid,llama_retriever}.py`) | **DORMANT** | Same — gated behind dormant `research-agent:8007`. |
+| **`app/services/kagent/`** (KagentMesh, ServiceRegistry, RemoteAgentAdapter) | **ZOMBIE** | Registered as DI singleton at `app/core/di.py:145`, but `get_kagent_mesh()` is only consumed inside the dead `workflow.py` graph nodes. No live consumer. |
+| **`app/services/mcp/`** (MCPServer, MCPIntegrations, MCPToolRegistry, MCPResourceProvider) | **DORMANT** | Zero references from `app/main.py`, `app/kernel.py`, or `app/api/`. Only lazy-imported in `app/services/chat/agents/{admin.py,socratic_tutor.py}`, `app/services/collaboration/session.py`, and `app/core/prompts.py` — none of which are on the live `/api/chat/ws` path. The `socratic_tutor` and `admin` agent modules are themselves not invoked by the live chat router. |
+| **`app/telemetry/unified_observability.py`** (`UnifiedObservabilityService`) | **ACTIVE** | Wired through `app/kernel.py:58,208` at startup. Every HTTP request passes through `app/middleware/fastapi_observability.py` and `app/middleware/observability/observability_middleware.py`. WebSocket frames are NOT traced (ISS-005). |
+| **Orchestrator microservice fallback chain** in `OrchestratorClient` (file-intelligence, exercise-retrieval, LangGraph, general-chat) | **PARTIAL/ACTIVE** | `chat_with_agent` is the ONLY service called by `customer_chat.py:422` and `admin.py:490`. The HTTP attempt to `$ORCHESTRATOR_SERVICE_URL` always raises `ConnectError` in default Codespaces; the four local fallbacks then run in order. None of them set `persisted: true`. |
+| **`OrchestratorClient` HTTP path** to orchestrator-service | **DORMANT** | Requires `ORCHESTRATOR_SERVICE_URL` set AND microservice stack up. Default devcontainer satisfies neither. |
+| **All `microservices/*`** (orchestrator, planning, memory, user, research, reasoning, auditor, conversation, api_gateway, observability) | **DORMANT** | Not started by `.devcontainer/docker-compose.host.yml`. Only wake via `docker compose -f docker-compose.yml up -d`. |
+
+### What this means for daily work
+
+1. **The "agentic" stack the codebase advertises is mostly ZOMBIE/DORMANT in default Codespaces.** Only `local_graph.py` (2 nodes: supervisor + chat) and `UnifiedObservabilityService` actually run on every request.
+2. **Do NOT add a feature that depends on KAgent, MCP, LlamaIndex, DSPy, the integration kernel, or the multi-agent workflow without first wiring it into a live entrypoint** (`app/api/routers/`, `app/kernel.py`, or `local_graph.py`). Otherwise the feature joins the zombie pile.
+3. **`docs/` / blueprints describe the target architecture, not runtime.** When a doc claims "the orchestrator is the control plane" or "the multi-agent graph runs on chat", treat it as aspirational unless this truth table backs it.
+
+### First-check protocol before any change to the chat / agent stack
+
+1. Open this truth table.
+2. Ask: is the component I'm touching ACTIVE, PARTIAL, DORMANT, or ZOMBIE?
+3. If **DORMANT/ZOMBIE** → I am editing dead code unless I also wire it into a live path. Stop and decide explicitly.
+4. If **ACTIVE/PARTIAL** → confirm the call chain still holds after my change (grep importers, run the WS chat test).
+5. Updates to capability status MUST be accompanied by a fresh import + call-chain + runtime evidence triple in this table.
+
+### What MUST NOT change without runtime proof
+- Promoting any ZOMBIE/DORMANT component to ACTIVE in this table without the three-part proof.
+- Removing the `local_graph.py` pre-warm in `app/kernel.py:239` (it's how we catch import breakage at startup).
+- Removing `ObservabilityMiddleware` from the middleware stack — it's the ONLY production-path tracing today.
+- Renaming or deleting `_emit_terminal_frames` (single emitter rule, see §6.5).
+
+### Pre-merge checklist for the chat / agent stack
+1. Did I touch a ZOMBIE? → either delete it or wire it. Don't leave it half-alive.
+2. Did I add a new dependency on a microservice? → mark the new code DORMANT in this table until the stack is awake.
+3. Did I add streaming logic? → confirm `ainvoke` vs `astream_events` decision; today only `ainvoke` is used (ISS-023).
+4. Did I change the fallback chain order in `orchestrator_client.py`? → update §3 of this file and `.memory/architecture.md` in the same PR.
+
+---
+
 ## 7. Testing
 
 ```bash
@@ -348,4 +408,8 @@ To wake the full microservices stack (separate from the devcontainer): `docker c
 
 ---
 
-*Last updated: 2026-05-05 — environment corrected from Replit to GitHub Codespaces*
+*Last updated: 2026-05-06 — runtime truth audit (claude/runtime-truth-audit-65iVU) added §6.6 Truth Table.*
+
+---
+
+> **Closing rule:** *If you read this and cannot find live evidence (import + call chain + runtime) for a capability, classify it DORMANT or ZOMBIE until the contrary is proven.*

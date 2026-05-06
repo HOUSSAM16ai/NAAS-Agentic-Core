@@ -1,4 +1,14 @@
-# Architecture: Single Control Plane (Orchestrator Service)
+# Architecture: Single Control Plane (Orchestrator Service) — TARGET STATE
+
+> ⚠️ **TARGET STATE — NOT CURRENT RUNTIME.**
+> This document describes the *intended* architecture, not what executes today.
+> In default Codespaces deployment, the orchestrator-service is **DORMANT**
+> (not started by `.devcontainer/docker-compose.host.yml`). The Monolith is the
+> de-facto handler — see decisions D-001 / D-006 and the authoritative
+> capability table in `.memory/runtime_truth.md` (mirrored as CLAUDE.md §6.6).
+> Any contradiction between this file and `.memory/runtime_truth.md` is resolved
+> in favor of the truth table. Update this header before promoting any of the
+> below from target → live.
 
 ## Core Principle
 نقطة التحكم الواحدة للتشغيل (Control Plane) هي خدمة **`microservices/orchestrator_service`** عبر بوابة API Gateway فقط.

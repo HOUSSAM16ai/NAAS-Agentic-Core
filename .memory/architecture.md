@@ -1,5 +1,8 @@
 # Architecture Deep-Dive
-> Last updated: 2026-05-05 (environment: GitHub Codespaces devcontainer)
+> Last updated: 2026-05-06 (environment: GitHub Codespaces devcontainer)
+> **Authoritative runtime status of every capability lives in `.memory/runtime_truth.md`.**
+> This file describes the live request flow and middleware stack only.
+> Anything documented here must be backed by import + call chain + runtime evidence (see CLAUDE.md §6.6).
 
 ---
 
@@ -92,7 +95,7 @@ FastAPI :8000
         │     only starts the `web` container; full stack at docker-compose.yml is not run)
         │     status: ERROR → continues to fallback 4
         │
-        └── [Fallback 4] LangGraph run_local_graph()  ← PRIMARY PATH
+        └── [Fallback 4] LangGraph run_local_graph()  ← DE-FACTO HANDLER (PARTIAL — fallback only)
               span: langgraph.run
               │
               ├── supervisor_node()
@@ -276,3 +279,14 @@ Test env:
 Runner: .venv/bin/pytest (Python 3.12 — NOT system pytest which is 3.11)
 Count: 1658 tests collected total
 ```
+
+---
+
+## 9. Capability Reality (one-line summary — full table in `.memory/runtime_truth.md`)
+
+- ACTIVE: FastAPI app, ObservabilityMiddleware + UnifiedObservabilityService, customer_chat / admin routers, OrchestratorClient.chat_with_agent (entrypoint), persistence layer, auth.
+- PARTIAL: `local_graph.py` (runs on every turn in default Codespaces, but only because orchestrator HTTP fails — formally a fallback).
+- DORMANT: orchestrator-service + all microservices, MCP server, DSPy, reranker microservice.
+- ZOMBIE: `app/services/chat/graph/workflow.py` and all its nodes (super_reasoner, planner, researcher, writer, procedural_auditor, reviewer), `app/services/chat/memory_engine.py`, all `app/drivers/*`, `app/core/integration_kernel/runtime.py`, `KagentMesh` consumers.
+
+If a doc here ever says a ZOMBIE/DORMANT component is "the primary handler", that doc has drifted — re-verify against `.memory/runtime_truth.md`.

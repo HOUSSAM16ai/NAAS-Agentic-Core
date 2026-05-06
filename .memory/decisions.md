@@ -73,3 +73,25 @@ restart) is acceptable in Codespaces but documented explicitly as ISS-020.
 **Consequence**: Production deployment MUST set `LANGGRAPH_CHECKPOINTER=postgres`
 to preserve conversation continuity across restarts.
 **Status**: DECIDED — implementation pending (ISS-020 open)
+
+## D-010 · Runtime Truth Lock — Code Presence ≠ Runtime Usage
+**Decision**: A capability is treated as ACTIVE only when proven by the triple
+**import + call chain + runtime evidence**. Anything missing one is DORMANT,
+ZOMBIE, or UNKNOWN. The authoritative table lives in `.memory/runtime_truth.md`
+and is mirrored as CLAUDE.md §6.6.
+**Reason**: The codebase advertises a multi-agent stack (LangGraph workflow,
+KAgent mesh, MCP server, LlamaIndex, DSPy, reranker, integration kernel) that
+in default Codespaces is overwhelmingly ZOMBIE/DORMANT. Aspirational docs
+(ARCHITECTURE.md, LangGraph_Architectural_Blueprint.md) describe a target
+state that the runtime does not implement. Treating those docs as truth led to
+repeated drift and false claims.
+**Consequence**:
+1. No PR may promote a component to ACTIVE without the three-part proof.
+2. Any change to the chat / agent stack must update `.memory/runtime_truth.md`
+   in the same PR if it changes a component's runtime status.
+3. Aspirational docs (`docs/architecture/*`, root blueprints) may continue to
+   describe target architecture, but they are not authoritative for runtime —
+   `.memory/runtime_truth.md` is.
+4. ZOMBIE components are not deleted on sight. They are flagged. Removal
+   requires an ADR.
+**Status**: DECIDED 2026-05-06 — see branch `claude/runtime-truth-audit-65iVU`.

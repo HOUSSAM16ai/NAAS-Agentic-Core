@@ -69,6 +69,12 @@ def normalize_streaming_event(event: object) -> dict[str, object]:
             content=str(payload.get("content", "")),
         )
 
+    # Terminal/control signals must pass through unchanged so the WS
+    # router can recognize them. Mangling them into ASSISTANT_DELTA
+    # caused UI hangs (ISS-017) when the unified envelope flag was on.
+    if raw_type in {"complete", "persisted", "conversation_init"}:
+        return event
+
     content = str(payload.get("content", "")) if payload else str(event)
     return build_chat_event_envelope(
         event_type=ChatEventType.ASSISTANT_DELTA,

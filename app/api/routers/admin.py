@@ -156,6 +156,70 @@ def _merge_history_with_client_context(
     return merged_history[-80:]
 
 
+async def _emit_terminal_frames(
+    *,
+    websocket: WebSocket,
+    pending_terminal_event: dict[str, object] | None,
+    assistant_message_persisted: bool,
+    complete_ai_response: str,
+    stream_error: HTTPException | Exception | None,
+    local_conversation_id: int | None,
+    stream_request_id: str,
+) -> None:
+    """
+    يضمن إرسال إطار نهائي واحد فقط لكل دور (assistant_final أو error)
+    وإطار 'persisted' فقط بعد حفظ فعلي. لا يُسمح بالفشل الصامت
+    الذي يبقي واجهة المستخدم في حالة تحميل أبدية (ISS-016/ISS-017).
+    """
+    if assistant_message_persisted:
+        if pending_terminal_event is not None:
+            await websocket.send_json(pending_terminal_event)
+        else:
+            await websocket.send_json(
+                _bind_stream_metadata(
+                    normalize_streaming_event(
+                        {"type": "assistant_final", "payload": {"content": ""}}
+                    ),
+                    local_conversation_id,
+                    stream_request_id,
+                )
+            )
+        await websocket.send_json(
+            _bind_stream_metadata(
+                normalize_streaming_event({"type": "persisted"}),
+                local_conversation_id,
+                stream_request_id,
+            )
+        )
+        return
+
+    if isinstance(stream_error, HTTPException):
+        details = str(stream_error.detail)
+        status_code = stream_error.status_code
+    elif complete_ai_response or pending_terminal_event is not None:
+        details = "Failed to confirm assistant persistence before completion."
+        status_code = 500
+    elif stream_error is not None:
+        details = "Stream interrupted before assistant response completed."
+        status_code = 500
+    else:
+        details = "Assistant produced no response."
+        status_code = 500
+
+    await websocket.send_json(
+        _bind_stream_metadata(
+            normalize_streaming_event(
+                {
+                    "type": "error",
+                    "payload": {"details": details, "status_code": status_code},
+                }
+            ),
+            local_conversation_id,
+            stream_request_id,
+        )
+    )
+
+
 def get_chat_actor(
     current: CurrentUser = Depends(get_current_user),
 ) -> CurrentUser:
@@ -491,82 +555,69 @@ async def chat_stream_ws(
                         await stream_task
                     except asyncio.CancelledError:
                         logger.info("Cancelled admin stream task after disconnect/finalization")
+                # ── Persistence decision (single-writer coordination) ──
+                # Monolith owns the message. If Orchestrator already persisted
+                # (signaled via persisted=True on terminal event), skip local write;
+                # otherwise fail-safe write. Absence of signal is treated as failure.
                 if (
                     not assistant_message_persisted
-                    and not orchestrator_persisted
                     and complete_ai_response
                     and local_conversation_id is not None
                 ):
-                    # Orchestrator did NOT persist — Monolith must handle it
-                    for _attempt in range(2):
-                        try:
-                            async with async_session_factory() as db:
-                                persistence_service = AdminChatBoundaryService(db)
-                                await persistence_service.save_message(
-                                    conversation_id=local_conversation_id,
-                                    role=MessageRole.ASSISTANT,
-                                    content=complete_ai_response.replace("\x00", ""),
+                    if orchestrator_persisted:
+                        logger.info(
+                            "[WRITE_DECISION] conversation_id=%s role=assistant "
+                            "orchestrator_persisted=True action=SKIP",
+                            local_conversation_id,
+                        )
+                        assistant_message_persisted = True
+                    else:
+                        logger.warning(
+                            "[WRITE_DECISION] conversation_id=%s role=assistant "
+                            "orchestrator_persisted=False action=WRITE (Fail-Safe) "
+                            "- Absence of signal treated as failure.",
+                            local_conversation_id,
+                        )
+                        for _attempt in range(2):
+                            try:
+                                async with async_session_factory() as db:
+                                    persistence_service = AdminChatBoundaryService(db)
+                                    await persistence_service.save_message(
+                                        conversation_id=local_conversation_id,
+                                        role=MessageRole.ASSISTANT,
+                                        content=complete_ai_response.replace("\x00", ""),
+                                    )
+                                    assistant_message_persisted = True
+                                    logger.info("[DATA_LOSS_PREVENTED] Fallback persistence succeeded.")
+                                break
+                            except Exception as persistence_exc:
+                                logger.error(
+                                    (
+                                        "Failed to persist admin assistant message locally "
+                                        f"for conversation {local_conversation_id} "
+                                        f"(attempt {_attempt + 1}/2): {persistence_exc}"
+                                    ),
+                                    exc_info=True,
                                 )
-                                assistant_message_persisted = True
-                            break
-                        except Exception as persistence_exc:
+
+                        if not assistant_message_persisted:
                             logger.error(
-                                (
-                                    "Failed to persist admin assistant message locally "
-                                    f"for conversation {local_conversation_id} "
-                                    f"(attempt {_attempt + 1}/2): {persistence_exc}"
-                                ),
-                                exc_info=True,
+                                "[CRITICAL_DATA_LOSS] Fallback persistence completely failed for "
+                                f"conversation {local_conversation_id}."
                             )
-                elif orchestrator_persisted:
-                    # Orchestrator confirmed persistence — skip local write
-                    assistant_message_persisted = True
-                if assistant_message_persisted:
-                    if pending_terminal_event is not None:
-                        await websocket.send_json(pending_terminal_event)
-                    await websocket.send_json(
-                        _bind_stream_metadata(
-                            normalize_streaming_event({"type": "persisted"}),
-                            local_conversation_id,
-                            stream_request_id,
-                        )
-                    )
-                elif pending_terminal_event is not None and stream_error is None:
-                    await websocket.send_json(
-                        _bind_stream_metadata(
-                            normalize_streaming_event(
-                                {
-                                    "type": "error",
-                                    "payload": {
-                                        "details": (
-                                            "Failed to confirm assistant persistence before completion."
-                                        ),
-                                        "status_code": 500,
-                                    },
-                                }
-                            ),
-                            local_conversation_id,
-                            stream_request_id,
-                        )
-                    )
-                if isinstance(stream_error, HTTPException):
-                    await websocket.send_json(
-                        _bind_stream_metadata(
-                            normalize_streaming_event(
-                                {
-                                    "type": "error",
-                                    "payload": {
-                                        "details": str(stream_error.detail),
-                                        "status_code": stream_error.status_code,
-                                    },
-                                }
-                            ),
-                            local_conversation_id,
-                            stream_request_id,
-                        )
-                    )
-                    # Cannot 'continue' inside finally, but stream_error is handled.
-                    # Loop naturally repeats on the next client payload message.
+
+                # ── Guaranteed terminal frame ──
+                # Exactly one terminal event (assistant_final or error) per turn,
+                # so the UI never hangs. `persisted` is emitted only after a real save.
+                await _emit_terminal_frames(
+                    websocket=websocket,
+                    pending_terminal_event=pending_terminal_event,
+                    assistant_message_persisted=assistant_message_persisted,
+                    complete_ai_response=complete_ai_response,
+                    stream_error=stream_error,
+                    local_conversation_id=local_conversation_id,
+                    stream_request_id=stream_request_id,
+                )
 
     except WebSocketDisconnect:
         logger.info("Admin WebSocket disconnected")

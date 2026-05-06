@@ -1,6 +1,7 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-05 | Branch: claude/document-project-issues-CKlup
+> Last updated: 2026-05-06 | Branch: claude/runtime-truth-audit-65iVU
 > Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED / RUNTIME-ONLY / HISTORICAL]
+> **Capability runtime status (ACTIVE/PARTIAL/DORMANT/ZOMBIE) lives in `.memory/runtime_truth.md`.**
 
 ---
 
@@ -156,16 +157,20 @@
 ## 🟡 Medium — Structural / Quality Issues (NEW — Session 2026-05-05)
 
 ### ISS-021 · Zombie / Dormant Components — Dead Code Confusing Execution Topology
-- **Status**: CONFIRMED / LIKELY DORMANT
-- **Root cause**: Several components appear in the codebase but are not on any live
-  execution path:
-  - `Conversation Service` (microservices) — stub, never called
-  - `supervisor.py` (standalone, not the LangGraph supervisor) — seemingly unused
-  - Some graph factories / pipelines that may be dead code
-- **Effect**: Developer confusion about what is "real". Maintenance burden on code
-  that has no runtime effect. Risk of accidentally activating a zombie path.
-- **Fix strategy**: Audit with `grep -r "import"` to find callers. Mark dead files
-  with `# DORMANT — not on any live path` or delete after confirmation.
+- **Status**: CONFIRMED 2026-05-06 (audit branch `claude/runtime-truth-audit-65iVU`)
+- **Authoritative inventory**: `.memory/runtime_truth.md` truth table.
+- **Confirmed ZOMBIE** (no live call chain from any production entrypoint):
+  - `app/services/chat/graph/workflow.py` — only `tests/verify_graph_manual.py` imports it.
+  - `app/services/chat/graph/nodes/{super_reasoner,planner,researcher,writer,procedural_auditor,reviewer}.py` — only used by the dead workflow.
+  - `app/services/chat/memory_engine.py` (LlamaIndex VectorStoreIndex) — only invoked by dead `reviewer.py`.
+  - `app/drivers/llamaindex_driver.py`, `app/drivers/reranker_driver.py`, `app/drivers/kagent_driver.py` — `app/drivers` package has zero importers in the live path.
+  - `app/core/integration_kernel/runtime.py` (`RealityKernel`) — singleton designed but never instantiated from startup.
+  - `app/services/kagent/*` (KagentMesh, ServiceRegistry, RemoteAgentAdapter) — DI-registered (`app/core/di.py:145`) but the only consumer is the dead workflow.
+- **Confirmed DORMANT** (real code, gated behind dormant external service):
+  - `app/services/mcp/*` — only lazy-imported by side-path agents (`socratic_tutor`, `admin` agent, `collaboration/session`, `core/prompts`); none are on `/api/chat/ws`.
+  - All `microservices/*` — not started by `.devcontainer/docker-compose.host.yml`.
+- **Effect**: Developer confusion about what is "real". The codebase looks like a sophisticated multi-agent system; in default Codespaces it runs a 2-node LangGraph + 4 fallback functions.
+- **Fix strategy**: Each ZOMBIE either (a) gets wired into the live path with an ADR, or (b) gets deleted after an ADR. Do not touch silently.
 
 ---
 
@@ -194,6 +199,34 @@
   `app/api/routers/customer_chat.py` (WS event emission)
 - **Fix strategy**: Switch graph invocation to `astream_events()` and pipe each
   token as a `stream_token` WS event.
+
+---
+
+### ISS-024 · Capability Utilization Gap — ~90% of Advertised Stack is ZOMBIE/DORMANT
+- **Status**: CONFIRMED 2026-05-06 (audit `claude/runtime-truth-audit-65iVU`)
+- **Authoritative source**: `.memory/runtime_truth.md` truth table.
+- **Root cause**: The codebase advertises a sophisticated multi-agent system
+  (LangGraph multi-agent workflow, KAgent mesh, MCP server, LlamaIndex memory,
+  DSPy refinement, reranker pipeline, integration micro-kernel, full microservice
+  fleet). In default Codespaces ONLY the following actually run on chat traffic:
+  - `app/services/chat/local_graph.py` (2 nodes: supervisor + chat) — PARTIAL.
+  - `app/infrastructure/clients/orchestrator_client.py` fallback chain
+    (file-intel → exercise-retrieval → LangGraph → general-chat) — ACTIVE.
+  - `app/telemetry/unified_observability.py` via middleware — ACTIVE on every HTTP
+    request (WS frames not traced — ISS-005).
+- **Effect**:
+  - Aspirational documents (e.g. `ARCHITECTURE.md`, `LangGraph_Architectural_Blueprint.md`)
+    describe a target state that is NOT live. New contributors mistake them for runtime.
+  - Refactors keep "polishing" zombie modules (e.g. `super_reasoner.py`, `memory_engine.py`)
+    that have no production callers.
+  - Bug reports get filed against components (MCP, KAgent, reranker) that never executed.
+- **Fix strategy**:
+  1. Treat `.memory/runtime_truth.md` as the single source of truth for capability status.
+  2. Each ZOMBIE either gets wired into the live path (with ADR + status promotion) or
+     deleted (with ADR justifying removal). No silent half-life.
+  3. Each PR touching the chat/agent stack must update the truth table if status changes.
+  4. Aspirational docs must carry a "TARGET STATE — see `.memory/runtime_truth.md` for live status"
+     header to prevent drift.
 
 ---
 

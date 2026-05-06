@@ -1,5 +1,6 @@
 # CogniForge — Project Context
-> Last updated: 2026-05-05 | Branch: claude/document-project-issues-CKlup
+> Last updated: 2026-05-06 | Branch: claude/runtime-truth-audit-65iVU
+> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative).
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)
@@ -56,7 +57,7 @@ Student browser
                                 ├─ [1] File intelligence (0.1ms → SKIP if no files)
                                 ├─ [2] Exercise retrieval (0.0ms → SKIP if no BAC match)
                                 ├─ [3] HTTP → orchestrator:8006 → ConnectError (DORMANT in Codespaces)
-                                └─ [4] LangGraph local_graph.py  ← PRIMARY HANDLER
+                                └─ [4] LangGraph local_graph.py  ← DE-FACTO HANDLER (PARTIAL — fallback only; runs every turn because [3] always ConnectErrors in default Codespaces)
                                           span: langgraph.run (757ms measured)
                                           │
                                           ├─ supervisor_node  (0.0ms, intent=educational)

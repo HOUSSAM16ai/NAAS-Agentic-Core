@@ -527,3 +527,15 @@ To wake the full microservices stack (separate from the devcontainer): `docker c
 
 ### مبدأ التفعيل الواقعي
 وجود الكود لا يعني أنه يعمل فعليًا. الاعتماد النهائي يكون على: **import + call-chain + runtime evidence** كما هو موثق في `.memory/runtime_truth.md`.
+
+## Architecture Reality and System Rules
+The NAAS-Agentic-Core system is in a transitional "strangler fig" phase, meaning there is significant fragmentation between the legacy monolith (`app/`) and the aspirational microservices stack (`microservices/`).
+* **ACTIVE**: The legacy monolith (`app/api/routers/customer_chat.py`), Next.js frontend (tightly coupled to legacy REST routes), and rudimentary fallback graphs (`local_graph.py`).
+* **PARTIAL**: `api-gateway` defines route proxies but relies on dormant microservices.
+* **DORMANT**: The entire microservices stack (orchestrator, reasoning, etc.), along with MCP, DSPy, and LlamaIndex capabilities gated behind them, are dormant by default. They require `docker-compose.yml` to be fully active.
+* **ZOMBIE**: Kagent mesh (`app/services/kagent`) and advanced graph workflows (`app/services/chat/graph/workflow.py`) are registered but have zero live consumers.
+
+**Strict Architecture Rules:**
+* "Any component that lacks an import, a clear call chain, and runtime evidence is treated as DORMANT or ZOMBIE until proven otherwise."
+* **First-check protocol before any change:** You must first verify if a component is ACTIVE, PARTIAL, DORMANT, or ZOMBIE. Do not edit dead code unless you are explicitly wiring it into a live execution path (e.g., `app/api/routers/`, `app/kernel.py`, or `local_graph.py`).
+* Do not trust documentation or blueprint assertions about "Agentic" capabilities (like multi-agent coordination) without verifying their status in the truth table. Currently, most advanced capabilities are aspirational or dormant.

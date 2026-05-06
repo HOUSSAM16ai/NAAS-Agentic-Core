@@ -1,0 +1,156 @@
+name: doc-integrity
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: doc-integrity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  doc-integrity:
+    name: doc-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: CLAUDE.md exists and is non-empty
+        run: |
+          test -f CLAUDE.md || { echo "::error::CLAUDE.md is missing"; exit 1; }
+          test -s CLAUDE.md || { echo "::error::CLAUDE.md is empty"; exit 1; }
+          # Minimum sanity: must contain the truth-table sections + closing rule.
+          required_anchors=(
+            "## 6.5 Architecture Truth and Persistence Rules"
+            "## 6.6 Architecture Truth and Runtime Rules"
+            "import.*call chain.*runtime evidence"
+          )
+          for anchor in "${required_anchors[@]}"; do
+            if ! grep -Eq "$anchor" CLAUDE.md; then
+              echo "::error::CLAUDE.md missing required anchor: $anchor"
+              exit 1
+            fi
+          done
+
+      - name: .memory/ files exist and are non-empty
+        run: |
+          required_files=(
+            ".memory/runtime_truth.md"
+            ".memory/architecture.md"
+            ".memory/decisions.md"
+            ".memory/issues.md"
+            ".memory/context.md"
+            ".memory/tasks.md"
+          )
+          missing=0
+          for f in "${required_files[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::$f is missing"
+              missing=1
+            elif [ ! -s "$f" ]; then
+              echo "::error::$f is empty"
+              missing=1
+            fi
+          done
+          [ $missing -eq 0 ] || exit 1
+
+      - name: No scratch artifacts in repo root
+        run: |
+          # These patterns are diagnostic dumps that should never be committed.
+          patterns=(
+            "*_errors.txt"
+            "*_coverage*.txt"
+            "proof_output.txt"
+            "app_imports.txt"
+            "commit_message.txt"
+            "telemetry_evidence.txt"
+            "patch_*.diff"
+            "ruff_output*.txt"
+            "ruff_check_verify.txt"
+            "ruff_format_verify.txt"
+            "err_*.txt"
+            "Screenshot_*.png"
+            "verification_*.png"
+            "collection_errors.txt"
+            "core_errors.txt"
+            "services_errors*.txt"
+          )
+          # Only check repo root (maxdepth 1).
+          fail=0
+          for pat in "${patterns[@]}"; do
+            matches=$(find . -maxdepth 1 -type f -name "$pat" 2>/dev/null || true)
+            if [ -n "$matches" ]; then
+              echo "::warning::Scratch artifact(s) in repo root match pattern '$pat':"
+              echo "$matches"
+              fail=1
+            fi
+          done
+          # Currently warn-only on first push. Flip to `exit $fail` once cleanup PR lands.
+          exit 0
+
+      - name: No dated diagnostic dumps outside docs/archive
+        run: |
+          # Phase reports, dated forensics, and ULTRA_* files belong in docs/archive,
+          # not in docs/ root or docs/diagnostics/. Warn for now (advisory).
+          patterns=(
+            "PHASE_[0-9]*_*.md"
+            "ULTRA_FORENSIC_*.md"
+            "ULTRA_SURGICAL_*.md"
+            "*_DIAGNOSIS_2026-*.md"
+            "FORENSIC_BASELINE_*.md"
+          )
+          fail=0
+          for pat in "${patterns[@]}"; do
+            matches=$(find docs -path docs/archive -prune -o -type f -name "$pat" -print 2>/dev/null || true)
+            if [ -n "$matches" ]; then
+              echo "::warning::Dated diagnostic outside docs/archive match '$pat':"
+              echo "$matches"
+              fail=1
+            fi
+          done
+          # Advisory only — does not block merge until consolidation PR lands.
+          exit 0
+
+      - name: Truth-table coherence (no orphan rows)
+        run: |
+          # Quick sanity: runtime_truth.md must reference the live entrypoints.
+          required_refs=(
+            "app/api/routers/customer_chat.py"
+            "app/api/routers/admin.py"
+            "app/services/chat/local_graph.py"
+            "app/infrastructure/clients/orchestrator_client.py"
+            "app/kernel.py"
+            "_emit_terminal_frames"
+          )
+          missing=0
+          for ref in "${required_refs[@]}"; do
+            if ! grep -q "$ref" .memory/runtime_truth.md; then
+              echo "::error::.memory/runtime_truth.md missing required reference: $ref"
+              missing=1
+            fi
+          done
+          [ $missing -eq 0 ] || exit 1
+
+      - name: Closing-rule preserved verbatim
+        run: |
+          # The three-part proof rule must remain in CLAUDE.md (do not weaken it).
+          required_phrases=(
+            "import"
+            "call chain"
+            "runtime evidence"
+            "DORMANT"
+            "ZOMBIE"
+          )
+          for phrase in "${required_phrases[@]}"; do
+            if ! grep -qi "$phrase" CLAUDE.md; then
+              echo "::error::CLAUDE.md no longer contains '$phrase' — closing rule may have been weakened"
+              exit 1
+            fi
+          done

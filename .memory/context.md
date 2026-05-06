@@ -1,7 +1,10 @@
 # CogniForge — Project Context
-> Last updated: 2026-05-06 | Re-verified on branch: `claude/diagnostic-system-architecture-aRSuW`
-> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative).
-> **Diagnostic snapshot:** see `.memory/diagnostic_2026_05_06.md` (architectural verdict + transformation gap).
+> Last updated: 2026-05-06 | Re-verified on branch: `claude/architecture-rescue-diagnostic-wUfbE` (third audit).
+> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — corrections in rows 12, 21; new rows 26, 27).
+> **Diagnostic snapshots:**
+>   - `.memory/diagnostic_2026_05_06.md` — second audit (`claude/diagnostic-system-architecture-aRSuW`).
+>   - `.memory/diagnostic_2026_05_06_rescue.md` — third audit (this branch); architectural rescue diagnostic + CI gap (ISS-025) + loaded-not-invoked classification (ISS-026) + markdown debt inventory.
+> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + new `doc-integrity` workflow. Open gaps tracked in ISS-025.
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)

@@ -1,7 +1,7 @@
 # Runtime Truth Lock
-> Last updated: 2026-05-06 | Re-verified on branch: `claude/diagnostic-system-architecture-aRSuW`
+> Last updated: 2026-05-06 | Re-verified on branch: `claude/architecture-rescue-diagnostic-wUfbE` (third independent audit).
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
-> **Re-verification (2026-05-06): all 16 prior rows CONFIRMED. 9 NEW ZOMBIE/DORMANT components catalogued (rows 17–25 below). No promotion of any DORMANT/ZOMBIE to ACTIVE.**
+> **Re-verification (2026-05-06, branch `claude/architecture-rescue-diagnostic-wUfbE`): 23 of 25 prior rows CONFIRMED verbatim, 2 corrections applied (rows 12 + 21), 1 PARTIAL promotion ("loaded-not-invoked" tier added — rows 21, 26, 27). No DORMANT/ZOMBIE promoted to ACTIVE. CI gap newly tracked as ISS-025.**
 
 ## Golden rule
 A capability counts as real ONLY when proven by **all three** of:
@@ -14,6 +14,7 @@ Missing any of the three → DORMANT, ZOMBIE, or UNKNOWN. Not ACTIVE.
 ## Status legend
 - `ACTIVE` — all three present.
 - `PARTIAL` — on a live chain but only via fallback / conditional / non-default branch.
+- `PARTIAL (loaded-not-invoked)` — module imported and class instantiated on the live path, but the methods that perform actual work are never called for a real user turn. Stronger than ZOMBIE (it executes `__init__`) but weaker than ACTIVE (it produces no observable behavior).
 - `DORMANT` — code real, gated behind an external service that does not start by default.
 - `ZOMBIE` — exists with no live call chain from a production entrypoint.
 - `UNKNOWN` — insufficient evidence.
@@ -35,7 +36,7 @@ Missing any of the three → DORMANT, ZOMBIE, or UNKNOWN. Not ACTIVE.
 | 9 | KAgent mesh | `app/services/kagent/{interface,registry,adapters}.py` | ZOMBIE | DI-registered at `app/core/di.py:145` but the only consumer (`workflow.py`) is itself ZOMBIE. |
 | 10 | KAgent driver | `app/drivers/kagent_driver.py` | ZOMBIE | not imported by any live entrypoint. |
 | 11 | MCP server / integrations | `app/services/mcp/{server,integrations,tools,resources,protocols}.py` | DORMANT | zero imports in `app/main.py`, `app/kernel.py`, `app/api/`. Lazy-imported only by side-path agents (`socratic_tutor`, `admin` agent module, `collaboration/session`, `core/prompts`) which the live chat router does not touch. |
-| 12 | Integration micro-kernel | `app/core/integration_kernel/runtime.py` | ZOMBIE | singleton designed but never instantiated from live startup. |
+| 12 | Integration micro-kernel (`IntegrationKernel`, NOT `RealityKernel`) | `app/core/integration_kernel/runtime.py:13` | ZOMBIE | actual class is `IntegrationKernel`. Only instantiated at `app/services/mcp/integrations.py:49` (`self.kernel = IntegrationKernel()`); MCPIntegrations has zero live consumers. **Naming clarification (2026-05-06)**: `RealityKernel` is a different class at `app/kernel.py:103`, instantiated at `app/main.py:22` (`_kernel = RealityKernel(...)`) and `app/main.py:49` — that one IS ACTIVE and is implicitly covered by the live FastAPI bootstrap (do not conflate). |
 | 13 | Unified Observability | `app/telemetry/unified_observability.py` | ACTIVE | `app/kernel.py:58,208` startup; `app/middleware/fastapi_observability.py` + `app/middleware/observability/observability_middleware.py` on every HTTP request. WS frames NOT traced (ISS-005). |
 | 14 | Orchestrator HTTP client | `app/infrastructure/clients/orchestrator_client.py:chat_with_agent` | ACTIVE | sole entrypoint called by `customer_chat.py:422` and `admin.py:490`. Wraps the entire fallback chain. Does not require URL to function — falls through to local engines on `ConnectError`. |
 | 15 | Orchestrator microservice (HTTP target) | `microservices/orchestrator_service` | DORMANT | requires `$ORCHESTRATOR_SERVICE_URL` set AND `docker compose -f docker-compose.yml up -d`. Default devcontainer satisfies neither. |
@@ -44,11 +45,13 @@ Missing any of the three → DORMANT, ZOMBIE, or UNKNOWN. Not ACTIVE.
 | 18 | EducationCouncil | `app/services/chat/agents/education_council.py:96` | ZOMBIE | only consumer is row 17 (also ZOMBIE). |
 | 19 | Graph components subdir | `app/services/chat/graph/components/{context_composer,intent_detector,prompt_strategist}.py` | ZOMBIE | only referenced from `graph/workflow.py` (already ZOMBIE — row 2). |
 | 20 | Graph nodes/supervisor | `app/services/chat/graph/nodes/supervisor.py` | ZOMBIE | sibling of dead nodes in row 2; not reachable. |
-| 21 | Top-level chat orchestration helpers | `app/services/chat/{dispatcher,intent_detector,intent_registry,tool_router,tool_access,education_policy_gate,orchestration_rollout}.py` | ZOMBIE/UNKNOWN | zero importers in `app/api/`, `app/main.py`, `app/kernel.py`. Live path goes router → `OrchestratorClient` → `local_graph` and never touches these. |
+| 21 | Top-level chat orchestration helpers | `app/services/chat/{dispatcher,intent_detector,intent_registry,tool_router,tool_access,education_policy_gate,orchestration_rollout}.py` | PARTIAL (loaded-not-invoked) | **Correction 2026-05-06 (third audit)**: `customer_chat_boundary_service.py:22-23` imports `IntentDetector` + `ToolRouter`; lines 40-41 instantiate them at `__init__`. The boundary service IS instantiated by the live router (`customer_chat.py:329, 522`). However, `intent_detector.detect()` (line 131) and `tool_router.authorize_intent()` (line 150) only execute inside `orchestrate_chat_stream` / `stream_chat`, which are **never called** by `app/api/` (grep returns zero hits). So: code-loaded + class-instantiated on live path, but functionally never invoked for an actual WS turn. Not pure ZOMBIE; not ACTIVE either. |
 | 22 | Side-path chat agents | `app/services/chat/agents/{admin,curriculum,socratic_tutor,testing_agent,refactor,analytics,...}.py` | ZOMBIE | not invoked by live customer/admin chat WS routers. |
 | 23 | Frontend WS client | `frontend/app/hooks/useRealtimeConnection.js:56` (consumer: `useAgentSocket.js:180`) | ACTIVE | sole `new WebSocket(...)` factory; uses subprotocol `["jwt", token]`. Connects to `/api/chat/ws` and `/admin/api/chat/ws` proxied via `frontend/next.config.js`. |
 | 24 | Orchestrator microservice DB writers | `microservices/orchestrator_service/src/api/routes.py:1211,1216,1361,1366` | DORMANT | real INSERTs into `customer_messages` / `admin_messages` exist; the microservice just doesn't run by default. When awoken, D-006 (`compatibility_facade=True` + `persisted: true` echo) is the only thing preventing dual-write — load-bearing. |
-| 25 | Dual Redis design | `docker-compose.yml` services `redis:6379` and `redis-orchestrator:6380` | DORMANT | only `redis-orchestrator` is wired to the orchestrator microservice; in default devcontainer neither runs and `app/caching/factory.py` falls back to in-memory. |
+| 25 | Dual Redis design | `docker-compose.yml` services `redis:6379` and `redis-orchestrator:6380` | DORMANT | only `redis-orchestrator` is wired to the orchestrator microservice; in default devcontainer neither runs and `app/caching/factory.py:71` falls back to `InMemoryCache(...)`. |
+| 26 | `CustomerChatBoundaryService` / `AdminChatBoundaryService` | `app/services/boundaries/customer_chat_boundary_service.py:30`, `admin_chat_boundary_service.py:21` | PARTIAL (split) | Persistence methods (`get_or_create_conversation`, `save_message`, `get_chat_history`, `list_user_conversations`, `get_latest_conversation_details`, `get_conversation_details`) are **ACTIVE** — called by live router (`customer_chat.py:330, 340, 345, 523, 573, 588, 604`). Streaming methods (`stream_chat:95-110`, `orchestrate_chat_stream:112-260`) are **never invoked** from `app/api/` — they instantiate `intent_detector`, `tool_router`, `streamer` but the actual streaming path goes via `OrchestratorClient.chat_with_agent` (`customer_chat.py:422`, `admin.py:490`) instead. |
+| 27 | `ChatOrchestrator` + chat streamers | `app/services/chat/orchestrator.py`, `app/services/customer/chat_streamer.py`, `app/services/admin/chat_streamer.py` | PARTIAL (loaded-not-invoked) | `CustomerChatStreamer` instantiated at `customer_chat_boundary_service.py:38`; `AdminChatStreamer` at `admin_chat_boundary_service.py:49`. `streamer.stream_response(...)` is called only from inside `orchestrate_chat_stream` (boundary service line 106 / 132) — and that method has zero callers in `app/api/`. So the streamer modules load and instantiate, but never reach `stream_response`. `ChatOrchestrator` is consumed only by these two streamer modules, transitively unreachable. |
 
 ---
 
@@ -114,3 +117,26 @@ To move from "transitional/zombie" to "production-grade multi-service":
 3. **Per ZOMBIE/DORMANT layer, decide explicitly**: promote (with proof), archive (mark DORMANT and gate behind env), or delete with ADR. No "leave it half-alive."
 4. **Close ISS-005 (WS tracing) and ISS-023 (token streaming)** before claiming the chat path is production-grade. Both are blockers for honest observability and UX.
 5. **Architecture tests** must enforce truth-table classifications; a CI step should fail if a ZOMBIE acquires an importer in `app/api/` or `app/kernel.py` without a matching truth-table update.
+
+---
+
+## Branch ledger (audits performed)
+| Audit date | Branch | Outcome |
+|---|---|---|
+| 2026-05-05 | `claude/runtime-truth-audit-65iVU` | First truth-table publication (16 rows). |
+| 2026-05-06 | `claude/diagnostic-system-architecture-aRSuW` | Re-verification + 9 new ZOMBIE rows (17–25). No promotions. |
+| 2026-05-06 | `claude/architecture-rescue-diagnostic-wUfbE` | Third audit. 23/25 rows confirmed. 2 corrections (rows 12 + 21). New `PARTIAL (loaded-not-invoked)` tier introduced (rows 21, 26, 27). CI doc-integrity gap → ISS-025. No promotions. |
+
+## What did NOT change in the third audit
+- §6.5 persistence rules (D-006) — intact.
+- `_emit_terminal_frames` single-emitter rule — intact.
+- `local_graph.py` is still the de-facto handler in default devcontainer.
+- All 10 microservices still DORMANT in default devcontainer.
+- ISS-005 (no WS tracing), ISS-023 (`ainvoke` instead of `astream_events`), ISS-020 (in-memory checkpointer) — all still open.
+
+## What is new in the third audit
+- §6.6 row 12 class name corrected (`IntegrationKernel`, not `RealityKernel`).
+- `PARTIAL (loaded-not-invoked)` tier for boundary-service-resident helpers.
+- `.github/workflows/doc_integrity.yml` (new) gates: CLAUDE.md / `.memory/*` non-empty, no scratch artifacts in repo root, no resurrected dated diagnostics in `docs/` outside `docs/archive/`.
+- ISS-025: persistence + terminal-frame + truth-table-sync + frontend-build CI gates remain TODO.
+- Markdown-debt inventory captured in `.memory/diagnostic_2026_05_06_rescue.md`. Deletion deferred to an explicit follow-up PR.

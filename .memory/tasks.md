@@ -1,6 +1,47 @@
 # Tasks — What Comes Next
-> Last updated: 2026-05-05 | Branch: claude/document-project-issues-CKlup
+> Last updated: 2026-05-06 | Branch: `claude/architecture-rescue-diagnostic-wUfbE` (third audit).
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## 🟢 Nice-to-have — Follow-ups from third audit (READ-ONLY this branch)
+
+> These are NOT executed in `claude/architecture-rescue-diagnostic-wUfbE`. They are
+> recorded so a future PR can pick them up.
+
+### F1 — CI quality-gate hardening (ISS-025)
+1. Add `tests/architecture/test_terminal_frame_integrity.py` — assert `_emit_terminal_frames`
+   is the only emitter of `assistant_final` / `error` / `persisted`; assert exactly-one
+   frame per turn for both success and error paths.
+2. Add a truth-table-sync test: parse `.memory/runtime_truth.md` for `app/...` paths,
+   fail if any path classified ZOMBIE/DORMANT is imported by `app/api/`, `app/main.py`,
+   `app/kernel.py`, or `local_graph.py` without a status update in the same PR.
+3. Add a `frontend-build` job to `.github/workflows/ci.yml` (`cd frontend && npm ci && npm run build`).
+4. Promote `doc-integrity` workflow to a required status check in branch protection for `main`.
+5. Flip `doc_integrity.yml` scratch-artifact step from advisory (`exit 0`) to blocking
+   (`exit $fail`) once the cleanup PR lands.
+
+### F2 — Markdown consolidation (separate PR, user must approve)
+1. Delete repo-root scratch files: `*_errors.txt`, `*_coverage*.txt`, `proof_output.txt`,
+   `app_imports.txt`, `commit_message.txt`, `telemetry_evidence.txt`, `patch_*.diff`,
+   `ruff_*.txt`, `err_*.txt`, `Screenshot_*.png`, `verification_*.png`, `services_errors*.txt`.
+   ~24 files.
+2. Decide on `ARCHITECTURE.md` (root) — merge as callout in CLAUDE.md or delete.
+3. Decide on `LangGraph_Architectural_Blueprint.md` (root) — move to `docs/archive/` or delete.
+4. Decide on `AGENTS-IMPROVEMENT-SPEC.md` — apply audit findings to `AGENTS.md`, then delete the spec.
+5. Create `docs/archive/` and move dated diagnostics from `docs/diagnostics/` and `docs/PHASE_*.md`.
+6. Add `.gitignore` rules for `Screenshot_*.png`, `verification_*.png`, `*_errors.txt`,
+   `*_coverage*.txt`, `proof_output.txt`, `patch_*.diff`, `ruff_output*.txt` to prevent
+   re-introduction.
+
+### F3 — Loaded-not-invoked decisions (ISS-026, separate PRs)
+> Per file in `app/services/chat/{intent_detector,intent_registry,tool_router,tool_access,
+> dispatcher,education_policy_gate,orchestration_rollout}.py`, plus `chat/orchestrator.py`
+> and the two `chat_streamer.py` modules: choose **one** of three explicit outcomes:
+> 1. Promote — wire into the live router; add runtime evidence to `runtime_truth.md`.
+> 2. Stop instantiating — delete the `__init__` construction in the boundary service; mark file ZOMBIE.
+> 3. Document and isolate — header comment "PARTIAL (loaded-not-invoked) — see CLAUDE.md §6.9".
+> Do NOT leave half-alive.
 
 ---
 

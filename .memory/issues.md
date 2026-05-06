@@ -230,6 +230,68 @@
 
 ---
 
+### ISS-025 · CI Quality-Gate Gaps — Persistence, Terminal-Frame, Truth-Table Sync, Frontend Build (NEW 2026-05-06, branch `claude/architecture-rescue-diagnostic-wUfbE`)
+- **Status**: OPEN — diagnostic-only, no remediation in this branch beyond `doc_integrity.yml`.
+- **Authoritative source**: CLAUDE.md §6.9 + `.memory/diagnostic_2026_05_06_rescue.md` §5.
+- **Existing HARD gates**: `required-ci` aggregator in `.github/workflows/ci.yml`
+  (`lint, contracts, guardrails, test`), `validate-structure` in
+  `.github/workflows/structure-validation.yml`, and the new `doc-integrity` workflow.
+- **Open gaps** (none of these block merge today):
+  1. **D-006 round-trip integration** — `compatibility_facade=True` + `persisted=true`
+     echo, exactly-once row write under load. Static contract test exists; no live
+     round-trip. Cannot run without the microservice stack up.
+  2. **Terminal-frame integrity contract** — exactly one `assistant_final` OR `error`
+     per turn + exactly one `persisted` event. `_emit_terminal_frames` is the single
+     emitter, but no test pins the contract.
+  3. **Truth-table sync gate** — should fail when a ZOMBIE acquires a new importer in
+     `app/api/`, `app/main.py`, `app/kernel.py`, or `local_graph.py` without a matching
+     update to `.memory/runtime_truth.md`. Today nothing flags this drift.
+  4. **Frontend build / type check** — Next.js never compiles in CI; UI regressions
+     only surface at runtime. No `next build` step in any workflow.
+  5. **Microservices smoke test** — no `docker compose -f docker-compose.yml up -d`
+     + health-curl in CI.
+- **Mitigation in this branch**: `.github/workflows/doc_integrity.yml` enforces:
+  - `CLAUDE.md` non-empty + required anchors (§6.5, §6.6, three-part proof rule).
+  - All `.memory/*.md` files non-empty.
+  - `.memory/runtime_truth.md` references the live entrypoints.
+  - Closing-rule phrases (`import` + `call chain` + `runtime evidence` + `DORMANT` + `ZOMBIE`)
+    not weakened.
+  - Warning (advisory) for repo-root scratch artifacts and dated diagnostics outside `docs/archive/`.
+- **Required follow-up** (separate PR, not in this branch):
+  1. Add `tests/architecture/test_terminal_frame_integrity.py` — assert single-emitter
+     and exactly-one-frame guarantee per turn (mock orchestrator client; drive both
+     success and error paths through `_emit_terminal_frames`).
+  2. Promote `doc-integrity` to a required status check in branch protection for `main`.
+  3. Flip the scratch-artifact step from advisory to blocking once the cleanup PR lands
+     (current behavior: warn; target: `exit $fail`).
+  4. Add a `frontend-build` job (`cd frontend && npm ci && npm run build`) to `ci.yml`.
+  5. Add a truth-table-sync test that parses `.memory/runtime_truth.md` for `app/...`
+     paths and fails CI when a path appears as ZOMBIE/DORMANT but `app/api/`,
+     `app/main.py`, `app/kernel.py` import it.
+
+### ISS-026 · Loaded-Not-Invoked Helpers Distort Capability Picture (NEW 2026-05-06)
+- **Status**: OPEN — diagnostic-only.
+- **Authoritative source**: CLAUDE.md §6.9 (correction C2) + `.memory/runtime_truth.md`
+  rows 21, 26, 27.
+- **Symptom**: `IntentDetector`, `ToolRouter`, `ChatOrchestrator`, `CustomerChatStreamer`,
+  `AdminChatStreamer`, `dispatcher.py`, `tool_access.py`, `intent_registry.py`,
+  `education_policy_gate.py`, `orchestration_rollout.py` — all imported and instantiated
+  on the live WS path (via `CustomerChatBoundaryService` / `AdminChatBoundaryService`
+  constructors) but their core methods are **never invoked** for a real user turn.
+- **Why it matters**: From the outside they look "ACTIVE" (showing up in import scans
+  and DI). Reality is `__init__` runs once per WS connection and produces no observable
+  behavior. New contributors waste effort polishing these because they appear live.
+- **Decision required (separate PR)**: per file, choose one of
+  1. **Promote** — wire the method into the live router and add runtime evidence to the
+     truth table.
+  2. **Stop instantiating** — delete the construction in the boundary service and mark
+     the file ZOMBIE explicitly.
+  3. **Document and isolate** — add a header comment in each file: `# PARTIAL (loaded-not-invoked).
+     Constructed by boundary service but never reached on live WS path. See CLAUDE.md §6.9.`
+- **Do NOT in this branch**: this is a read-only diagnostic. No application code changes here.
+
+---
+
 ## 🟡 Medium
 
 ### ISS-005 · WebSocket Events Not Traced ✅ CONFIRMED LIVE

@@ -413,3 +413,9 @@ To wake the full microservices stack (separate from the devcontainer): `docker c
 ---
 
 > **Closing rule:** *If you read this and cannot find live evidence (import + call chain + runtime) for a capability, classify it DORMANT or ZOMBIE until the contrary is proven.*
+
+
+## 6.7 Chat Hardening Update (2026-05-06)
+- Admin stream errors are now sanitized before returning to clients.
+- Internal exception details stay in server logs only.
+- Error payload uses stable code: STREAM_RUNTIME_ERROR.

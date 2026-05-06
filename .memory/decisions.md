@@ -95,3 +95,10 @@ repeated drift and false claims.
 4. ZOMBIE components are not deleted on sight. They are flagged. Removal
    requires an ADR.
 **Status**: DECIDED 2026-05-06 — see branch `claude/runtime-truth-audit-65iVU`.
+
+
+## D-011 · Sanitize Admin Stream Errors
+**Decision**: Never expose raw Python exception text to chat clients on admin stream failures.
+**Reason**: Prevent internal detail leakage and keep stable error contract.
+**Implementation**: `app/services/boundaries/admin_chat_boundary_service.py` now emits generic message + code `STREAM_RUNTIME_ERROR` while retaining full error logs server-side.
+**Status**: IMPLEMENTED 2026-05-06.

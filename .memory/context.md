@@ -131,3 +131,7 @@ Seven core architectural issues documented in `.memory/issues.md` (ISS-014–ISS
 - ISS-019: Context identity fragmentation
 - ISS-020: Fragile MemorySaver checkpointer
 Three quality issues: ISS-021 (zombies), ISS-022 (pipeline split), ISS-023 (streaming blocks)
+
+
+## Session Note 2026-05-06
+- Hardened admin chat stream error payloads to avoid leaking internal exception strings to clients.

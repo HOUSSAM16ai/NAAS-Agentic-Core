@@ -157,7 +157,10 @@ class AdminChatBoundaryService:
             logger.error(f"Stream interrupted: {e}", exc_info=True)
             yield {
                 "type": "error",
-                "payload": {"details": f"Service Error: {e}"},
+                "payload": {
+                    "details": "Service temporarily unavailable. Please retry.",
+                    "code": "STREAM_RUNTIME_ERROR",
+                },
             }
 
     async def orchestrate_chat_stream(

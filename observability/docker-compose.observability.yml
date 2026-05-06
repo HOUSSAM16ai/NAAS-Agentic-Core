@@ -1,0 +1,184 @@
+# =============================================================================
+# CogniForge — Observability Stack (Grafana + Prometheus + Loki + Tempo + OTel)
+# =============================================================================
+#
+# Self-hosted, runs in GitHub Codespaces and locally. Wakes via:
+#   docker compose -f observability/docker-compose.observability.yml up -d
+#
+# Resource footprint (defaults below): ~1.0–1.5 GB RAM under light load.
+# All retention windows are intentionally SHORT (24h–7d) so the stack stays
+# Codespace-friendly. Increase for production deployments.
+#
+# Network: a dedicated bridge `cogniforge-obs` so the stack talks to itself
+# without colliding with the app's compose network. The OTel collector
+# listens on 4317 (gRPC) / 4318 (HTTP) and is reachable from the host as
+# `localhost:4317` / `localhost:4318`.
+#
+# Confidence on this file: CONFIRMED — image tags and config structure are
+# the standard documented setups for each project. Runtime evidence pending
+# first `up -d` execution in a real Codespace.
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # OpenTelemetry Collector — single ingress for traces + metrics + logs
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    container_name: cogniforge-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./otel-collector/otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Collector self-metrics (Prometheus scrape)
+      - "8889:8889"   # Prometheus exporter (collector → app metrics)
+    networks:
+      - cogniforge-obs
+    depends_on:
+      - tempo
+      - loki
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Tempo — distributed traces backend
+  # ---------------------------------------------------------------------------
+  tempo:
+    image: grafana/tempo:2.6.0
+    container_name: cogniforge-tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yml"]
+    user: "0"                       # write to /var/tempo as root inside container
+    volumes:
+      - ./tempo/tempo-config.yml:/etc/tempo.yml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo HTTP API (Grafana datasource)
+    networks:
+      - cogniforge-obs
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3200/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Loki — logs backend
+  # ---------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:3.2.0
+    container_name: cogniforge-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    user: "0"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"   # Loki HTTP API (Grafana datasource + push)
+    networks:
+      - cogniforge-obs
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Prometheus — metrics backend
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: cogniforge-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+      - "--storage.tsdb.retention.size=512MB"
+      - "--web.enable-lifecycle"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - cogniforge-obs
+    extra_hosts:
+      # Allows Prometheus inside the bridge to scrape the FastAPI app on the
+      # Codespace host. `host.docker.internal` works on Docker Desktop and
+      # on recent Codespaces images; fall back to `host-gateway`.
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Grafana — UI + dashboards
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: cogniforge-grafana
+    restart: unless-stopped
+    environment:
+      # Anonymous read-only access so a Codespace user can open the dashboard
+      # immediately without provisioning a password. Set GRAFANA_ADMIN_PASSWORD
+      # to override the admin user.
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_FEATURE_TOGGLES_ENABLE: "traceqlEditor"
+      GF_LOG_LEVEL: "warn"
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"   # 3001 on host so it doesn't collide with Next.js (3000)
+    networks:
+      - cogniforge-obs
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+# =============================================================================
+# Volumes (persistent across container restart, ephemeral across Codespace
+# rebuild — Codespace lifecycle erases /var/lib/docker volumes).
+# =============================================================================
+volumes:
+  tempo-data:
+  loki-data:
+  prometheus-data:
+  grafana-data:
+
+# =============================================================================
+# Network
+# =============================================================================
+networks:
+  cogniforge-obs:
+    name: cogniforge-obs
+    driver: bridge

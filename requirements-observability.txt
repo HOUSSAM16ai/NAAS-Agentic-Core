@@ -1,0 +1,27 @@
+# =============================================================================
+# Optional observability dependencies — install only when wiring the FastAPI
+# app to the Grafana stack (observability/docker-compose.observability.yml).
+# =============================================================================
+# Pinned to OTel SDK ≥ 1.27 (matches `opentelemetry-collector-contrib:0.110.0`
+# protocol versions). Each instrumentation library is independent — if one
+# fails to import in `app/telemetry/otel_setup.py`, that single integration
+# is skipped without impacting others.
+#
+# Install:
+#   pip install -r requirements-observability.txt
+#
+# (kept out of `requirements.txt` so default CI / Codespaces stay lean)
+# =============================================================================
+
+opentelemetry-api>=1.27.0,<2.0.0
+opentelemetry-sdk>=1.27.0,<2.0.0
+opentelemetry-exporter-otlp-proto-grpc>=1.27.0,<2.0.0
+opentelemetry-exporter-otlp-proto-http>=1.27.0,<2.0.0
+
+# Auto-instrumentations
+opentelemetry-instrumentation-fastapi>=0.48b0
+opentelemetry-instrumentation-httpx>=0.48b0
+opentelemetry-instrumentation-sqlalchemy>=0.48b0
+opentelemetry-instrumentation-asyncpg>=0.48b0
+opentelemetry-instrumentation-redis>=0.48b0
+opentelemetry-instrumentation-logging>=0.48b0

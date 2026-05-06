@@ -1,0 +1,75 @@
+{
+  "description": "Per-path deep dive — educational vs general_chat vs fallback vs admin. Use this to find regressions in a single path while others stay healthy.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [{ "asDropdown": false, "icon": "external link", "includeVars": true, "keepTime": true, "tags": ["cogniforge"], "targetBlank": false, "title": "All CogniForge Dashboards", "type": "dashboards", "url": "" }],
+  "liveNow": true,
+  "panels": [
+    {
+      "type": "text", "title": "", "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 }, "id": 1,
+      "options": { "mode": "html", "code": { "language": "html" }, "content": "<div style='background:linear-gradient(135deg,#1a3a5c 0%,#2c4f7c 100%);padding:14px 24px;border-radius:8px;color:#fff;font-family:Inter,system-ui,sans-serif;'><div style='font-size:20px;font-weight:700;'>🛤️ Path Deep Dive</div><div style='font-size:12px;opacity:0.85;margin-top:4px;'>Per-path turn rate, latency distribution, terminal outcomes, and fallback share. Use the path_type variable (top of page) to focus on one path.</div></div>" }
+    },
+    {
+      "type": "stat", "title": "Turns / 5m · {{path_type}}", "gridPos": { "h": 5, "w": 6, "x": 0, "y": 3 }, "id": 10,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (path_type) (increase(cogniforge_ws_chat_turn_duration_seconds_count{path_type=~\"$path_type\"}[5m]))", "refId": "A", "legendFormat": "{{path_type}}" }],
+      "fieldConfig": { "defaults": { "decimals": 0, "unit": "short", "color": { "mode": "palette-classic" } } },
+      "options": { "colorMode": "value", "graphMode": "area", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value_and_name" }
+    },
+    {
+      "type": "timeseries", "title": "Latency p50 / p95 / p99 — {{path_type}}", "gridPos": { "h": 9, "w": 18, "x": 6, "y": 3 }, "id": 11,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(cogniforge_ws_chat_turn_duration_seconds_bucket{path_type=~\"$path_type\"}[2m])) by (path_type, le))", "refId": "A", "legendFormat": "p50 · {{path_type}}" },
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_ws_chat_turn_duration_seconds_bucket{path_type=~\"$path_type\"}[2m])) by (path_type, le))", "refId": "B", "legendFormat": "p95 · {{path_type}}" },
+        { "expr": "histogram_quantile(0.99, sum(rate(cogniforge_ws_chat_turn_duration_seconds_bucket{path_type=~\"$path_type\"}[2m])) by (path_type, le))", "refId": "C", "legendFormat": "p99 · {{path_type}}" }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 12, "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never" }, "decimals": 2, "unit": "s" } },
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "barchart", "title": "Terminal Outcome — {{path_type}}", "gridPos": { "h": 9, "w": 12, "x": 0, "y": 12 }, "id": 20,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (path_type, terminal) (increase(cogniforge_ws_chat_terminal_events_total{path_type=~\"$path_type\"}[15m]))", "refId": "A", "legendFormat": "{{path_type}} · {{terminal}}" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 70 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "stacking": "normal", "tooltip": { "mode": "multi", "sort": "desc" }, "orientation": "auto", "xTickLabelRotation": 0, "xTickLabelSpacing": 0, "showValue": "auto" }
+    },
+    {
+      "type": "timeseries", "title": "Fallback Activations / s — {{path_type}}", "gridPos": { "h": 9, "w": 12, "x": 12, "y": 12 }, "id": 21,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (path_type) (rate(cogniforge_ws_chat_fallback_total{path_type=~\"$path_type\"}[2m]))", "refId": "A", "legendFormat": "fallback · {{path_type}}" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 25, "lineInterpolation": "smooth", "lineWidth": 2 }, "unit": "ops" } },
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "logs", "title": "Logs — filtered by path_type", "gridPos": { "h": 11, "w": 24, "x": 0, "y": 21 }, "id": 30,
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "expr": "{job=\"cogniforge\"} | json | path_type=~\"$path_type\"", "refId": "A", "queryType": "range" }],
+      "options": { "dedupStrategy": "exact", "enableLogDetails": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["cogniforge", "paths"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(cogniforge_ws_chat_turn_duration_seconds_count, path_type)",
+        "hide": 0, "includeAll": true, "label": "Path Type",
+        "multi": true, "name": "path_type", "options": [],
+        "query": { "qryType": 1, "query": "label_values(cogniforge_ws_chat_turn_duration_seconds_count, path_type)", "refId": "PrometheusVariableQueryEditor-VariableQuery" },
+        "refresh": 1, "regex": "", "skipUrlSync": false, "sort": 1, "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "🛤️ Path Deep Dive",
+  "uid": "cogniforge-paths-deep",
+  "version": 1
+}

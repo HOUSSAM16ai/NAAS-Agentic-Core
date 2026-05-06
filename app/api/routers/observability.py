@@ -6,7 +6,7 @@
 طبقة العرض وفق مبادئ البنية النظيفة.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.api.schemas.observability import (
     AIOpsMetricsResponse,
@@ -22,6 +22,30 @@ from app.api.schemas.observability import (
 from app.services.boundaries.observability_boundary_service import ObservabilityBoundaryService
 
 router = APIRouter(tags=["Observability"])
+
+
+@router.get(
+    "/prometheus",
+    summary="Prometheus exposition endpoint",
+    response_class=Response,
+    include_in_schema=False,
+)
+async def prometheus_scrape() -> Response:
+    """Return process metrics in Prometheus text exposition format.
+
+    Scraped by the observability stack (`observability/prometheus/prometheus.yml`)
+    every 15s. The body is the union of:
+      * counters / gauges / histograms recorded via `UnifiedObservabilityService`
+      * (when enabled) anything the OTel SDK exposes via prometheus_client
+
+    Stays available even when OTel is OFF — uses the in-memory facade as a
+    minimal fallback so dashboards never go fully dark.
+    """
+    from app.telemetry.unified_observability import get_unified_observability
+
+    obs = get_unified_observability()
+    body = obs.export_prometheus_metrics() or "# no metrics\n"
+    return Response(content=body, media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 def get_observability_service() -> ObservabilityBoundaryService:

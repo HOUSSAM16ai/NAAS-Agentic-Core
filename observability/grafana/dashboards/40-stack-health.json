@@ -1,0 +1,73 @@
+{
+  "description": "Observability stack self-monitoring — Tempo / Loki / Prometheus / OTel Collector / Grafana health.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [{ "asDropdown": false, "icon": "external link", "includeVars": true, "keepTime": true, "tags": ["cogniforge"], "targetBlank": false, "title": "All CogniForge Dashboards", "type": "dashboards", "url": "" }],
+  "liveNow": true,
+  "panels": [
+    {
+      "type": "text", "title": "", "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 }, "id": 1,
+      "options": { "mode": "html", "code": { "language": "html" }, "content": "<div style='background:linear-gradient(135deg,#3a3a3a 0%,#5c5c5c 100%);padding:14px 24px;border-radius:8px;color:#fff;font-family:Inter,system-ui,sans-serif;'><div style='font-size:20px;font-weight:700;'>🛡️ Observability Stack Self-Monitoring</div><div style='font-size:12px;opacity:0.85;margin-top:4px;'>If a panel here goes red, the rest of the dashboards become untrustworthy. Treat as Tier-0.</div></div>" }
+    },
+    {
+      "type": "stat", "title": "Targets UP", "gridPos": { "h": 5, "w": 6, "x": 0, "y": 3 }, "id": 10,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "count(up == 1)", "refId": "A" }],
+      "fieldConfig": { "defaults": { "decimals": 0, "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red" }, { "color": "yellow", "value": 3 }, { "color": "green", "value": 5 }] } } },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value_and_name" }
+    },
+    {
+      "type": "table", "title": "Scrape Targets", "gridPos": { "h": 9, "w": 18, "x": 6, "y": 3 }, "id": 11,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "up", "refId": "A", "format": "table", "instant": true }],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": true, "cellOptions": { "type": "color-text" } } },
+        "overrides": [{ "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "mappings", "value": [{ "type": "value", "options": { "0": { "color": "red", "text": "DOWN" }, "1": { "color": "green", "text": "UP" } } }] }] }]
+      },
+      "options": { "showHeader": true }
+    },
+    {
+      "type": "timeseries", "title": "OTel Collector — Spans Received / s", "gridPos": { "h": 9, "w": 12, "x": 0, "y": 12 }, "id": 20,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(otelcol_receiver_accepted_spans_total[2m])", "refId": "A", "legendFormat": "{{receiver}}" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 25, "lineInterpolation": "smooth" }, "unit": "ops" } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "OTel Collector — Refused / Failed", "gridPos": { "h": 9, "w": 12, "x": 12, "y": 12 }, "id": 21,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "rate(otelcol_receiver_refused_spans_total[2m])", "refId": "A", "legendFormat": "refused · {{receiver}}" },
+        { "expr": "rate(otelcol_exporter_send_failed_spans_total[2m])", "refId": "B", "legendFormat": "send_failed · {{exporter}}" }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 25, "lineInterpolation": "smooth" }, "unit": "ops" } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Loki Ingestion (bytes/s)", "gridPos": { "h": 9, "w": 12, "x": 0, "y": 21 }, "id": 30,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(loki_distributor_bytes_received_total[2m])", "refId": "A", "legendFormat": "ingested" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 25, "lineInterpolation": "smooth" }, "unit": "Bps" } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single" } }
+    },
+    {
+      "type": "timeseries", "title": "Tempo Ingestion (spans/s)", "gridPos": { "h": 9, "w": 12, "x": 12, "y": 21 }, "id": 31,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(tempo_distributor_spans_received_total[2m])", "refId": "A", "legendFormat": "{{receiver}}" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 25, "lineInterpolation": "smooth" }, "unit": "ops" } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single" } }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["cogniforge", "stack"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "🛡️ Stack Self-Monitoring",
+  "uid": "cogniforge-stack-health",
+  "version": 1
+}

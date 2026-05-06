@@ -1,0 +1,23 @@
+# =============================================================================
+# Grafana — dashboard auto-provisioning
+# =============================================================================
+# Dashboards live in /var/lib/grafana/dashboards (mounted from
+# observability/grafana/dashboards). Grafana watches this directory and
+# reloads on change. Filename prefixes (00-, 10-, 20-, ...) keep the
+# left-nav order stable.
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: cogniforge
+    orgId: 1
+    folder: "CogniForge"
+    folderUid: cogniforge
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 15
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

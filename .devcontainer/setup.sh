@@ -33,6 +33,20 @@ else
     warn "requirements.txt not found — skipping"
 fi
 
+# ── 1a. Install observability instrumentation libs (optional) ──
+# These are kept in a separate file so the default lock stays lean. We try
+# them best-effort: if any fail (offline / version conflicts) the FastAPI
+# app falls back to the in-memory observability surface and the OTel SDK
+# becomes a no-op (per app/telemetry/otel_setup.py).
+if [ -f "requirements-observability.txt" ]; then
+    log "Installing observability instrumentation (best-effort)..."
+    if pip install --quiet -r requirements-observability.txt; then
+        ok "OpenTelemetry SDK + instrumentation libs installed"
+    else
+        warn "OpenTelemetry libs install failed — OTel SDK will be no-op"
+    fi
+fi
+
 # ── 2. Install frontend dependencies ────────────────────────
 log "Installing frontend dependencies..."
 if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then

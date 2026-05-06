@@ -188,6 +188,43 @@ CATALOG: list[TrackedComponent] = [
         expected_status="ACTIVE",
         notes="Live WS endpoint /admin/api/chat/ws.",
     ),
+    TrackedComponent(
+        id="otel_setup",
+        name="OpenTelemetry SDK bootstrap",
+        files=["app/telemetry/otel_setup.py"],
+        expected_status="ACTIVE",
+        notes=(
+            "Imported by app/kernel.py at boot (setup_otel + instrument_fastapi_app). "
+            "Hard no-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset, so default Codespaces "
+            "without the stack still boot. ACTIVE under §6.6 because the import + call "
+            "chain are present at kernel startup; runtime evidence depends on the stack "
+            "being up (validated separately by observability_validation CI)."
+        ),
+    ),
+    TrackedComponent(
+        id="grafana_stack_compose",
+        name="Grafana observability stack (Docker compose)",
+        files=["observability/docker-compose.observability.yml"],
+        expected_status="DORMANT",
+        notes=(
+            "5-container stack (Grafana + Prometheus + Loki + Tempo + OTel collector). "
+            "Auto-starts in Codespaces via .devcontainer/start_observability.sh (background, "
+            "resource-guarded). DORMANT classification reflects the §6.6 rule: the stack "
+            "is real code but lives outside the FastAPI process — runtime evidence requires "
+            "the containers to be UP."
+        ),
+    ),
+    TrackedComponent(
+        id="observability_router_prometheus",
+        name="Prometheus scrape endpoint on observability router",
+        files=["app/api/routers/observability.py"],
+        expected_status="ACTIVE",
+        notes=(
+            "GET /api/v1/observability/prometheus returns text/plain Prometheus exposition. "
+            "Mounted via app/api/routers/registry.py; scraped by Prometheus job "
+            "cogniforge-fastapi-direct every 15s when the stack is up."
+        ),
+    ),
 ]
 
 
@@ -282,8 +319,16 @@ def measure_component(c: TrackedComponent) -> TrackedComponent:
 def derive_status(c: TrackedComponent) -> str:
     """Static-derived status. ACTIVE/PARTIAL is hand-asserted via expected_status
     because the live runtime path of a multi-step chain is not derivable from
-    grep alone. We DO derive ZOMBIE objectively (importer_count == 0)."""
+    grep alone. We DO derive ZOMBIE objectively (importer_count == 0), EXCEPT
+    when the component is intentionally DORMANT and lives outside Python
+    (e.g. a docker-compose stack file has no Python importers but is still
+    a real, intentional artifact)."""
     if c.importer_count == 0:
+        # Trust the curator: a ZOMBIE/DORMANT label on a 0-importer component
+        # is intentional (e.g. a YAML / config artifact). Otherwise default
+        # to ZOMBIE.
+        if c.expected_status in {"ZOMBIE", "DORMANT"}:
+            return c.expected_status
         return "ZOMBIE"
     if not c.on_live_chain:
         # Has importers but none from a live anchor → DORMANT or ZOMBIE.

@@ -135,3 +135,9 @@ Three quality issues: ISS-021 (zombies), ISS-022 (pipeline split), ISS-023 (stre
 
 ## Session Note 2026-05-06
 - Hardened admin chat stream error payloads to avoid leaking internal exception strings to clients.
+
+## Documentation Source of Truth
+- التشغيل اليومي: `.memory/`
+- الملخص التنفيذي/السياسات: `CLAUDE.md`
+- تم حذف الأرشيفات القديمة في `docs/archive/` لتجنب تضارب المعرفة.
+

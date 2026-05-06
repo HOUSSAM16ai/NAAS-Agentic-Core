@@ -65,3 +65,10 @@ LangGraph blueprint, replit.md, README_MIGRATIONS, scientific applications).
 - Delivered a full architectural dissection summary in `CLAUDE.md`.
 - Synchronized `.memory` architecture/context/decisions/issues to match the updated narrative.
 - Preserved hybrid control-plane/execution-plane interpretation.
+
+## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
+
+- حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.
+- تم ترحيل السياسة المهمة إلى `CLAUDE.md` (قسم توحيد الوثائق).
+- تم الإبقاء على `.memory/` بالكامل بدون حذف أي ملف، مع استمرار اعتباره ذاكرة التشغيل الأساسية.
+

@@ -23,15 +23,38 @@ Cross-boundary communication is API-first only; direct DB coupling is forbidden.
 Architecture documentation must be code-evidenced and updated in the same PR.
 
 ## D-006 · Single Persistence Owner — Monolith Owns Message Writes
-**Decision**: The Monolith (`app/api/routers/customer_chat.py`) is the sole owner of
-writes to `customer_messages` and `admin_messages`. The Orchestrator microservice MUST
-NOT write to these tables.
+**Decision**: The Monolith (`app/api/routers/customer_chat.py` and `app/api/routers/admin.py`) is the sole owner of writes to `customer_messages` and `admin_messages`.
+The Orchestrator microservice may only persist when the Monolith delegates explicitly via
+`compatibility_facade=True` AND signals success back via `persisted: true` on the terminal
+event. Absence of the `persisted` flag is treated as failure.
 **Reason**: Dual-write (ISS-014) corrupts conversation history and inflates LLM context.
-The Orchestrator is DORMANT in the default Codespaces setup, making Monolith ownership
-the only live path anyway.
-**Consequence**: Any re-activation of the Orchestrator microservice requires an
-explicit write-guard check (`if not already_persisted: skip`) before any DB INSERT.
-**Status**: DECIDED — implementation pending (ISS-015 open)
+**Implementation** (this branch):
+1. User message: always written by Monolith at WS entry (`save_message(USER)`).
+2. Assistant message: Monolith reads `event.get("persisted") is True` on the trapped
+   terminal event. If True → SKIP local write; if False/absent → fail-safe write with
+   2 retries; on retry exhaustion → `[CRITICAL_DATA_LOSS]` log + terminal `error` frame.
+3. The `persisted` flag is preserved through `_normalize_stream_event` in
+   `OrchestratorClient` (lines 280–283) so the router can read it post-normalization.
+4. None of the local fallback paths (file-intel / exercise-retrieval / LangGraph /
+   general-chat) ever set `persisted: true` — they don't write to DB.
+**Status**: IMPLEMENTED — see `claude/fix-persistence-consolidate-8X8LT`.
+
+## D-009 · Single Terminal Frame per Turn — No Silent Failure
+**Decision**: Every WS chat turn emits exactly one terminal frame (`assistant_final`
+on success, `error` on failure). The helper `_emit_terminal_frames()` in both routers
+is the only code that emits these frames. `persisted` is emitted ONLY after a
+confirmed save.
+**Reason**: ISS-016 (silent failures) and ISS-017 (terminal-event corruption by the
+unified envelope normalizer) both manifested as UI hangs. The previous finally block
+had paths where no terminal event was sent (no content + no error + no pending_terminal_event).
+**Implementation**:
+1. `app/api/routers/customer_chat.py:_emit_terminal_frames` and
+   `app/api/routers/admin.py:_emit_terminal_frames` synthesize a frame when
+   the upstream did not provide one.
+2. `shared/chat_protocol/event_protocol.py:normalize_streaming_event` now passes
+   `complete`, `persisted`, and `conversation_init` through unchanged when the
+   unified envelope flag is on (previously they were mangled to `assistant_delta`).
+**Status**: IMPLEMENTED — see `claude/fix-persistence-consolidate-8X8LT`.
 
 ## D-007 · thread_id Must Equal conversation_id — No Re-derivation
 **Decision**: LangGraph `thread_id` (MemorySaver key) is always derived as

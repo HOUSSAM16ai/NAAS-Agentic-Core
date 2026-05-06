@@ -4,41 +4,19 @@
 
 ---
 
-## 🔴 Critical — Architectural Debt (NEW — must fix before any feature work)
+## ✅ Resolved — `claude/fix-persistence-consolidate-8X8LT`
 
-### A1. Eliminate Dual-Write — Declare Single Persistence Owner (ISS-014 + ISS-015)
-- **Why first**: Every other chat fix is pointless if messages are written twice.
-  Corrupted history corrupts all LLM context downstream.
-- **Steps**:
-  1. Audit `app/api/routers/customer_chat.py` and `microservices/orchestrator-service/`
-     to find ALL `INSERT` calls to `customer_messages` / `admin_messages`.
-  2. Decide: Monolith owns persistence, Orchestrator does NOT write (recommended for
-     current Codespaces-only setup where Orchestrator is DORMANT).
-  3. Add `write-guard` flag OR remove write call from Orchestrator entirely.
-  4. Add an architecture test: assert that `customer_messages` INSERT only happens in
-     one code path.
-- **Files**: `app/api/routers/customer_chat.py`, `app/services/chat/local_graph.py`,
-  `microservices/orchestrator-service/` (persistence layer)
+- **A1 / ISS-014 / ISS-015** — Single persistence owner enforced (D-006).
+  Architecture test `tests/architecture/test_persistence_authority.py` prevents
+  regression. Monolith owns user + assistant writes; Orchestrator participates
+  only when delegated and signals `persisted: true`.
+- **A2 / ISS-016** — `_emit_terminal_frames()` helper in both routers guarantees
+  exactly one terminal frame per turn; `[CRITICAL_DATA_LOSS]` logging on retry
+  exhaustion. Silent failure path eliminated.
+- **A3 / ISS-017** — `normalize_streaming_event` passes `complete`, `persisted`,
+  and `conversation_init` through unchanged when the unified envelope flag is on.
 
----
-
-### A2. Harden Fallback Chain — No Silent Failures, No JSON Pollution (ISS-016)
-- **Steps**:
-  1. Wrap every fallback branch in explicit try/except with guaranteed finally block
-     that emits a `complete` terminal event over WS.
-  2. Add a content sanitizer before streaming: strip `{`, `}`, `"` that look like
-     raw JSON fragments (not part of natural language).
-  3. Log + counter every fallback transition for observability.
-- **Files**: `app/services/chat/orchestrator_client.py`
-
----
-
-### A3. Fix Terminal Signal Corruption — `complete` Event Always Delivered (ISS-017)
-- **Steps**:
-  1. Find the event normalizer in `app/api/routers/customer_chat.py`.
-  2. Add explicit guard: `if event_type in ("complete", "stream_end", "error"): yield as-is`.
-  3. Add frontend check: if no `complete` received within 30s, auto-close loading state.
-- **Files**: `app/api/routers/customer_chat.py`, `frontend/app/components/ChatInterface.jsx`
+## 🔴 Critical — Remaining Architectural Debt
 
 ---
 

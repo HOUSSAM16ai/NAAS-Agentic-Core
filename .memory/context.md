@@ -141,3 +141,10 @@ Three quality issues: ISS-021 (zombies), ISS-022 (pipeline split), ISS-023 (stre
 - الملخص التنفيذي/السياسات: `CLAUDE.md`
 - تم حذف الأرشيفات القديمة في `docs/archive/` لتجنب تضارب المعرفة.
 
+
+
+## Educational vs General Chat (Operational Contract)
+- **Educational Path**: objective-driven tutoring flow (diagnose -> explain -> verify -> next-step), should prefer retrieval + evaluation signals and explicit learner-state updates.
+- **General Chat Path**: open conversation flow, optimized for latency and usability; retrieval is optional.
+- **Routing Principle**: the supervisor/router should classify intent early and choose state schema + tool budget accordingly.
+- **API-first impact**: each capability (auth, retrieval, orchestration, analytics) should remain independently deployable behind explicit HTTP/gRPC/event contracts.

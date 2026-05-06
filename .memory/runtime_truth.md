@@ -88,3 +88,8 @@ The live 10%: FastAPI app + ObservabilityMiddleware + auth + customer/admin chat
 3. If you change the fallback order in `orchestrator_client.py` or pre-warm in `kernel.py`, update this file in the same PR.
 4. Do not delete a ZOMBIE on sight — first decide whether it's planned scaffolding (keep + mark DORMANT) or genuinely abandoned (delete with ADR).
 5. Truth-table updates require: file:line evidence + a 1–3 line snippet + import path + call-chain trace.
+
+
+## Strategic note — learning path vs general chat
+- Current runtime can classify intent in the local graph supervisor, but the advanced educational stack (multi-agent + deep retrieval/reranking orchestration) remains mostly ZOMBIE/DORMANT by default environment.
+- Therefore, educational-path quality currently depends heavily on the fallback local graph and available external model quality, not on the full intended microservice mesh.

@@ -431,3 +431,42 @@ To wake the full microservices stack (separate from the devcontainer): `docker c
   - `README.md` و `CHANGELOG.md` و `SECURITY.md`
 - قبل إضافة أي ملف Markdown جديد: إذا كانت المعلومة تشغيلية قصيرة، توضع في `.memory/*.md` بدل إنشاء تقرير طويل جديد.
 
+
+
+## 15) المسار التعليمي vs الدردشة العامة + خريطة التكنولوجيا
+
+### التعريف التشغيلي
+- **المسار التعليمي**: مسار موجّه لتحقيق هدف تعلمي (نواتج تعلم + تقييم + تتبع تقدم + استرجاع سياق أكاديمي).
+- **الدردشة العامة**: مسار محادثة حرّة (أسئلة عامة، نقاش مفتوح، بدون التزام بناتج تعليمي أو Rubric تقييم).
+
+### الفرق المعماري (Monolith + Microservices + Agent Graph)
+1. **التحكم (Control Plane)**
+   - المسار التعليمي يحتاج Policy/Guardrails أقوى + Rubric + ذاكرة متخصصة.
+   - الدردشة العامة تعتمد سياسة أخف، وتكفيها استجابة سريعة مع سياق جلسة محدود.
+2. **البيانات (State + Memory)**
+   - التعليمي: `StateGraph` يمرر حالة صريحة (intent, grade, mastery, misconceptions, evidence).
+   - العام: حالة أخف (history, tone, user prefs).
+3. **الاسترجاع (RAG/Reranking)**
+   - التعليمي: Retriever + Reranker إلزامي تقريبًا لتحسين الدقة وتقليل الهلوسة.
+   - العام: يمكن الاستغناء عن RAG في كثير من الحالات.
+4. **الزمن الحقيقي (Streaming/WebSocket)**
+   - كلاهما يستفيد من WS/streaming؛ التعليمي يحتاج كذلك progressive hints وخطوات حل تدريجية.
+
+### علاقة المفاهيم المطلوبة ببعضها (Concept Map)
+- **Monolith**: نقطة دخول واحدة سريعة لبناء MVP.
+- **Microservices (API-first)**: فصل قدرات مستقلة (auth, orchestrator, retrieval, analytics) مع عقود API.
+- **StateGraph / LangGraph**: تنظيم منطق الوكلاء كعُقد وحواف وحالة مشتركة.
+- **Reasoning / Multi-agent**: تقسيم التفكير إلى أدوار (planner/researcher/reviewer...) بدل prompt واحد ضخم.
+- **LlamaIndex**: طبقة ingestion + indexing + retrieval فوق بياناتك.
+- **DSPy**: تحسين منهجي للبرامج اللغوية (prompts/strategies) بمقاييس.
+- **Reranker**: إعادة ترتيب نتائج الاسترجاع لرفع precision@k قبل التوليد.
+- **KAgent**: شبكة/طبقة تنسيق وكلاء عبر حدود الخدمة.
+- **MCP**: بروتوكول موحّد لربط النموذج بالأدوات/الموارد (JSON-RPC session).
+- **TLM**: طبقة إدارة نموذج/توجيه مهام (Model routing/governance) حسب الكلفة/الجودة/الزمن.
+- **FastAPI + Python**: Backend API + WS.
+- **Next.js**: واجهة المستخدم + streaming UI + app routing.
+- **Supabase/PostgreSQL**: المصدر الدائم للبيانات (auth + relational core).
+- **Redis cache**: تقليل زمن الوصول (sessions, hot keys, rate-limits, short-lived context).
+
+### مبدأ التفعيل الواقعي
+وجود الكود لا يعني أنه يعمل فعليًا. الاعتماد النهائي يكون على: **import + call-chain + runtime evidence** كما هو موثق في `.memory/runtime_truth.md`.

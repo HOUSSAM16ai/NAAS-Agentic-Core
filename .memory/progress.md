@@ -1,6 +1,42 @@
 # Progress — What Has Been Done
 > Last updated: 2026-05-05
 
+## ✅ Session: 2026-05-05 — Persistence Consolidation + Terminal-Event Guarantee + Markdown Cleanup
+
+**Branch**: `claude/fix-persistence-consolidate-8X8LT`
+
+### What Was Fixed
+1. **ISS-014/015 (Dual-write & save authority)** — D-006 implemented as a hard
+   contract in CLAUDE.md §6.5 + architecture test
+   `tests/architecture/test_persistence_authority.py`. Monolith is sole writer;
+   Orchestrator only persists when delegated and signals back via `persisted: true`.
+2. **ISS-016 (Silent fallback failures)** — New `_emit_terminal_frames()` helper in
+   both `customer_chat.py` and `admin.py` finally blocks. Exactly one terminal
+   frame (assistant_final/error) per turn. `[CRITICAL_DATA_LOSS]` logging surfaces
+   when fail-safe writes fail.
+3. **ISS-017 (Terminal-event corruption)** — `normalize_streaming_event` now passes
+   `complete`, `persisted`, `conversation_init` through unchanged when the unified
+   envelope flag is on. Previously they were coerced to `assistant_delta` and the
+   router's terminal-event detection silently broke.
+
+### Files Touched
+- `shared/chat_protocol/event_protocol.py` — pass-through for control events.
+- `app/api/routers/customer_chat.py` — `_emit_terminal_frames` helper + finally restructure.
+- `app/api/routers/admin.py` — `_emit_terminal_frames` helper + WRITE_DECISION logs + retry parity.
+- `tests/architecture/test_persistence_authority.py` — new regression guard.
+- `CLAUDE.md` — added §6.5 "Architecture Truth and Persistence Rules".
+- `.memory/decisions.md` — D-006 marked IMPLEMENTED, D-009 added.
+- `.memory/issues.md` — ISS-014/015/016/017 marked RESOLVED.
+
+### Markdown Consolidation
+Deleted ~38 legacy diagnosis/forensic markdown files at repo root. Their conclusions
+already lived in `.memory/issues.md` and CLAUDE.md; the standalone files were
+point-in-time snapshots that drift from reality. Kept canonical operational docs
+(README, CHANGELOG, LICENSE, SECURITY, governance, ARCHITECTURE, AGENTS, ROADMAP,
+LangGraph blueprint, replit.md, README_MIGRATIONS, scientific applications).
+
+---
+
 ## ✅ Session: 2026-05-05 — Environment Documentation Correction
 
 **Branch**: `claude/fix-duplicate-messages-nTEBj`

@@ -7,58 +7,56 @@
 ## 🔴 Critical — Core Architectural Flaws (NEW — Session 2026-05-05)
 
 ### ISS-014 · Dual-Write — Both Monolith and Orchestrator Write to Same DB Tables
-- **Status**: CONFIRMED — core architectural bug
-- **Root cause**: In the production path, every message is written twice:
-  once by the Monolith (`app/api/routers/customer_chat.py`) and once by the
-  Orchestrator (`microservices/orchestrator-service/`), both targeting the same
-  `conversation_id` in `customer_messages` / `admin_messages`.
-- **Effect**: Inflated message log, duplicated history fed into next LLM turn,
-  context pollution accumulates over the conversation lifetime.
-- **Files**: `app/api/routers/customer_chat.py`, `app/services/chat/local_graph.py`,
-  `microservices/orchestrator-service/` (persistence layer)
-- **Fix strategy**: Designate a single authority (see ISS-015). Add a `write-guard`
-  flag (`persisted: true`) so the second writer skips silently.
+- **Status**: RESOLVED in `claude/fix-persistence-consolidate-8X8LT`.
+- **Resolution layers**:
+  1. Monolith sends `compatibility_facade=True` → Orchestrator skips user write
+     (`microservices/orchestrator_service/src/api/routes.py:1314-1325`).
+  2. Orchestrator emits `persisted: true` on terminal event after a confirmed
+     `INSERT … COMMIT` (lines 2580, 2696). Monolith reads this flag and skips local
+     assistant write (`customer_chat.py` / `admin.py` finally blocks).
+  3. Duplicate Guard at the persistence layer suppresses any straggler within a
+     10-second window (`app/services/customer/chat_persistence.py:81-112`).
+- **Live status**: In default Codespaces devcontainer, Orchestrator is dormant →
+  Monolith is the only writer. Dual-write physically impossible.
 
 ---
 
 ### ISS-015 · Non-Unified Save Authority — No Single Owner of Message Persistence
-- **Status**: CONFIRMED — partially mitigated (write-guard added) but root not fixed
-- **Root cause**: The system has no declared "single writer". Monolith and Orchestrator
-  both believe they own persistence. The `persisted: true` flag is a band-aid; the
-  architectural contract is missing.
-- **Effect**: Any path change risks re-enabling dual-write or silently dropping writes
-  depending on which side is modified.
-- **Fix strategy**: Declare in an ADR that the Monolith (or the Orchestrator) is the
-  sole persistence owner. Remove write logic from the other side entirely.
+- **Status**: RESOLVED in `claude/fix-persistence-consolidate-8X8LT`.
+- **Resolution**: D-006 declares the Monolith as sole owner of `customer_messages` /
+  `admin_messages`. CLAUDE.md §6.5 codifies the rule. Architecture test
+  `tests/architecture/test_persistence_authority.py` enforces it at CI time.
+- **Coordination contract**: `compatibility_facade=True` (Monolith → Orchestrator)
+  + `persisted: true` (Orchestrator → Monolith) form the handshake. Absence of the
+  persisted signal is treated as failure → fail-safe write fires.
 
 ---
 
-### ISS-016 · Unsafe Fallback Path — Silent Failures, JSON Pollution, Missing Terminal Events
-- **Status**: CONFIRMED
-- **Root cause**: The `OrchestratorClient` fallback chain has three failure modes that
-  are not fully guarded:
-  1. Silent failure: message written locally but DB write error not surfaced to caller
-  2. Raw JSON pollution: intermediate JSON fragments streamed as chat tokens
-  3. Missing `terminal event`: WS connection left open / no `complete` signal in some paths
-- **Effect**: User sees response, but it's not saved; OR user sees garbled JSON;
-  OR UI hangs in loading state.
-- **Files**: `app/services/chat/orchestrator_client.py`, fallback handlers
-- **Fix strategy**: Wrap each fallback in explicit try/except with guaranteed terminal
-  event emission; strip raw JSON before streaming.
+### ISS-016 · Unsafe Fallback Path — Silent Failures, Missing Terminal Events
+- **Status**: RESOLVED in `claude/fix-persistence-consolidate-8X8LT`.
+- **Resolution**: New `_emit_terminal_frames()` helper in both
+  `app/api/routers/customer_chat.py` and `app/api/routers/admin.py` guarantees
+  exactly one terminal frame per turn. Failure paths (DB error, empty content,
+  stream interruption, retry exhaustion) all converge on a single `error` frame
+  rather than leaving the WS in a hung state.
+- **Logging**: `[CRITICAL_DATA_LOSS]` is logged when fail-safe writes fail after retries.
+  The user is notified via the terminal `error` frame — failures are no longer silent.
+- **Raw JSON pollution**: still mitigated by `OrchestratorClient._recover_structured_event`
+  and `_sanitize_text_for_user`; not changed in this fix.
 
 ---
 
 ### ISS-017 · Terminal Signal Corruption — `complete` Event Distorted During Normalization
-- **Status**: CONFIRMED
-- **Root cause**: The event normalizer in the WebSocket message pipeline mutates or
-  drops the `complete` / `stream_end` event type during normalization, so the UI
-  never receives a clean end-of-stream signal.
-- **Effect**: Frontend stays in "loading" state; no clean message boundary for
-  subsequent turns.
-- **Files**: `app/api/routers/customer_chat.py` (event normalization logic),
-  `frontend/app/components/ChatInterface.jsx`
-- **Fix strategy**: Add explicit pass-through for terminal event types before any
-  content normalization runs.
+- **Status**: RESOLVED in `claude/fix-persistence-consolidate-8X8LT`.
+- **Root cause confirmed**: When `CHAT_USE_UNIFIED_EVENT_ENVELOPE=1` is set,
+  `shared/chat_protocol/event_protocol.py:normalize_streaming_event` was coercing any
+  unrecognized event type (including `complete`, `persisted`, `conversation_init`)
+  into `assistant_delta`. The Monolith's terminal-event detection (`if event_type
+  in {"complete", "assistant_final"}`) then never fired → no `pending_terminal_event`
+  → UI hang.
+- **Fix**: Pass-through guard added for `{"complete", "persisted", "conversation_init"}`
+  before the fall-through to `ASSISTANT_DELTA`. Default-mode (flag off) was already
+  pass-through and is unchanged.
 
 ---
 

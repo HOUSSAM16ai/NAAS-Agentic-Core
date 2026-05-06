@@ -111,9 +111,9 @@ Sourced from Codespaces secrets, forwarded via `.devcontainer/devcontainer.json`
 
 ## Known Broken in Current Environment
 1. **Chat**: All OpenRouter free models return 403 — NO chat response reaches the user
-2. **Dual-write**: Monolith + Orchestrator both write same message to DB (ISS-014)
+2. ~~**Dual-write**~~: RESOLVED in `claude/fix-persistence-consolidate-8X8LT` — Monolith is sole writer (D-006); Orchestrator persists only via `compatibility_facade=True` + `persisted: true` handshake
 3. **Context identity**: conversation_id / thread_id can diverge across fallback paths (ISS-019)
-4. **Terminal signal**: `complete` WS event may be corrupted by normalizer → UI hangs (ISS-017)
+4. ~~**Terminal signal**~~: RESOLVED — `_emit_terminal_frames()` guarantees one terminal frame per turn; `normalize_streaming_event` passes control events through
 5. **Streaming**: Graph uses `ainvoke` → blocks instead of token-by-token (ISS-023)
 6. **Telemetry export**: TelemetryBridge DNS failures on every request (ISS-008)
 7. **Auth microservices**: DNS failures on every login/register (ISS-009)

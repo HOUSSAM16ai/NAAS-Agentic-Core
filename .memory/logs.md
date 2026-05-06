@@ -3,6 +3,45 @@
 
 ---
 
+## Session: 2026-05-05 · Persistence Consolidation + Terminal-Event Guarantee
+
+**Branch**: `claude/fix-persistence-consolidate-8X8LT`
+**Goal**: Surgical fix for dual-write + silent fallback + terminal-event corruption,
+plus consolidation of legacy markdown into CLAUDE.md / .memory/.
+
+### Investigation
+- Mapped persistence paths (Explore agent + direct reads):
+  - `app/api/routers/customer_chat.py:276` (Monolith user write, always)
+  - `app/api/routers/customer_chat.py:387-461` (orchestrator_persisted detection + fail-safe)
+  - `app/api/routers/admin.py:494-520` (same pattern, weaker logging, single retry)
+  - `app/infrastructure/clients/orchestrator_client.py:281-282` (preserve `persisted`)
+  - `microservices/orchestrator_service/src/api/routes.py:1314-1325, 2580, 2696`
+    (skip user write under facade; signal `persisted` after assistant write)
+  - `shared/chat_protocol/event_protocol.py:34-76` (unified envelope normalizer)
+
+### Root causes confirmed
+- ISS-014/015 already mitigated; needed codification + regression test.
+- ISS-016: finally block had paths emitting NO terminal event (no content, no error,
+  no pending_terminal_event) → UI hang.
+- ISS-017: when `CHAT_USE_UNIFIED_EVENT_ENVELOPE=1`, `complete`/`persisted`/
+  `conversation_init` were coerced to `assistant_delta` → terminal detection broke.
+
+### Surgical fixes
+1. `_emit_terminal_frames()` helper (customer_chat.py + admin.py) — single emitter
+   for terminal frames + `persisted`. Synthesizes a frame when upstream omitted one.
+2. `normalize_streaming_event` — pass-through for control event types.
+3. Admin router brought to parity with customer router (WRITE_DECISION logs,
+   `[CRITICAL_DATA_LOSS]` log on retry exhaustion).
+4. New architecture test enforcing single-writer rule.
+
+### Markdown consolidation
+- Deleted ~38 legacy diagnosis/forensic root-level Markdown files. Their content was
+  already captured in `.memory/issues.md` and `.memory/architecture.md`; standalone
+  files drift from reality and confuse Claude in future sessions.
+- Kept all governance/operational/canonical docs.
+
+---
+
 ## Session: 2026-05-05 · Environment Documentation Correction
 
 **Branch**: `claude/fix-duplicate-messages-nTEBj`

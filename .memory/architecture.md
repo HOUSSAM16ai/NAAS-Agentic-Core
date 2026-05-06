@@ -290,3 +290,7 @@ Count: 1658 tests collected total
 - ZOMBIE: `app/services/chat/graph/workflow.py` and all its nodes (super_reasoner, planner, researcher, writer, procedural_auditor, reviewer), `app/services/chat/memory_engine.py`, all `app/drivers/*`, `app/core/integration_kernel/runtime.py`, `KagentMesh` consumers.
 
 If a doc here ever says a ZOMBIE/DORMANT component is "the primary handler", that doc has drifted — re-verify against `.memory/runtime_truth.md`.
+
+
+## Update 2026-05-06 — Chat Stream Safety
+- Admin boundary now returns sanitized stream error payloads (no raw exception echo to client).

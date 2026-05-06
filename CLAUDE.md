@@ -554,6 +554,54 @@ To wake the full microservices stack (separate from the devcontainer): `docker c
 - Internal exception details stay in server logs only.
 - Error payload uses stable code: STREAM_RUNTIME_ERROR.
 
+## 6.10 Autonomous Runtime Observability OS (2026-05-06 — branch `claude/autonomous-runtime-observability-pjzY9`)
+
+> Purpose: make the project self-observing, self-measuring and CI-enforced
+> WITHOUT creating new ZOMBIE layers. Every addition below is wired into a
+> live anchor (router / kernel / CI / devcontainer) and verifiable today.
+
+### Live additions (proven on this branch)
+
+| Component | File:line | Live anchor | Status |
+|---|---|---|---|
+| `WsTurnSpan` + `open_ws_turn` / `close_ws_turn` / `mark_fallback_used` | `app/telemetry/path_observer.py:1` | imported by `app/api/routers/customer_chat.py:31` and `app/api/routers/admin.py:39`; both call `open_ws_turn` per WS turn and `close_ws_turn` from the per-turn `finally:` (next to `_emit_terminal_frames`) | **ACTIVE** |
+| `mark_fallback_used("local_graph"/"local_general_chat")` | `app/infrastructure/clients/orchestrator_client.py:170,196` | called inside the live fallback chain executed on every default-Codespaces turn | **ACTIVE** |
+| `scripts/runtime_truth.py` (catalog + diff + lock) | `scripts/runtime_truth.py:1` | invoked by `.devcontainer/snapshot_runtime.sh` (attach-time) and `.github/workflows/runtime_truth.yml` (CI) | **ACTIVE** |
+| `.devcontainer/snapshot_runtime.sh` | regenerates `.runtime/*` + diffs the lock | wired into `.devcontainer/on-attach.sh` (informational, non-blocking, 30s cap) | **ACTIVE** |
+| `.github/workflows/runtime_truth.yml` | `runtime-truth-drift-check` job | new CI job; required before merge once branch protection is updated | **ACTIVE** |
+| `.runtime/truth_table.lock.json` | committed baseline | enforced by the CI job above | **ACTIVE** |
+
+### Path taxonomy (single source of truth)
+The router classifies the WS turn at entry and tags the span. Allowed
+values: `educational | general_chat | fallback | admin | unknown`. Deeper
+layers can promote the path to `fallback` via `mark_fallback_used()`.
+Metric names:
+- `ws.chat.turn.duration_seconds` (histogram, labels: `path_type`, `terminal`, `is_admin`)
+- `ws.chat.terminal_events.total` (counter, labels as above; `terminal ∈ {assistant_final, error, unknown}`)
+- `ws.chat.fallback.total` (counter)
+
+### Runtime invariants (must remain true on `main`)
+1. Every WS chat turn opens exactly one `WsTurnSpan` and closes it exactly once. The close lives next to `_emit_terminal_frames` in the per-turn `finally:` — do not move it.
+2. The `path_type` tag uses ONLY the five values listed above. New values require updating `_VALID_PATHS` in `path_observer.py` AND the metric label set in CI dashboards.
+3. `path_observer` NEVER raises out of the live path. Every call to `UnifiedObservabilityService` is wrapped — observability must not fail a chat turn.
+4. The `.runtime/truth_table.lock.json` file IS the institutional memory of which capabilities are ACTIVE / PARTIAL / DORMANT / ZOMBIE. Drift between the regenerated truth table and the lock file fails CI (`runtime-truth-drift-check`).
+5. Adding or removing a tracked capability requires updating `CATALOG` in `scripts/runtime_truth.py` AND running `python scripts/runtime_truth.py --update` in the same PR.
+6. `.runtime/snapshot.txt`, `.runtime/truth_table.json`, `.runtime/path_map.json` are regenerated artifacts (gitignored). The lock file is the only committed `.runtime/*` artifact.
+
+### Devcontainer integration
+- `.devcontainer/devcontainer.json` already wires `postCreateCommand` → `postStartCommand` → `postAttachCommand`. This branch hooks `snapshot_runtime.sh` into the existing attach hook so every Codespace prints the runtime truth state on attach.
+- The hook is read-only and non-blocking: it does NOT start microservices, does NOT call the network, and is hard-capped at 30s.
+
+### Closing rule (third independent confirmation, locked here)
+> **Any component that does not leave a measurable, traceable, runtime-verifiable footprint cannot be considered a live part of the system.**
+>
+> Equivalently — and as a hard pre-merge gate: a capability counts as real ONLY when proven by all three of:
+> 1. **import** (reachable from a live anchor: `app/main.py`, `app/kernel.py`, `app/api/routers/*`, `app/middleware/*`),
+> 2. **call chain** (a router/middleware/startup hook actually invokes its public surface), and
+> 3. **runtime evidence** (logs / spans / metrics / DB writes attributable to a real request).
+>
+> Missing any one of the three → the component is `PARTIAL`, `DORMANT`, `ZOMBIE`, or `UNKNOWN`. **Never `ACTIVE`.** This rule is enforced statically by `scripts/runtime_truth.py --check` on every PR.
+
 ## 15. Documentation Consolidation Policy (2026-05-06)
 
 - تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.

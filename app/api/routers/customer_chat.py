@@ -28,6 +28,7 @@ from app.services.boundaries.customer_chat_boundary_service import (
     CustomerChatBoundaryService,
 )
 from app.services.rbac import QA_SUBMIT
+from app.telemetry.path_observer import close_ws_turn, open_ws_turn
 from shared.chat_protocol.event_protocol import normalize_streaming_event
 
 logger = get_logger(__name__)
@@ -324,6 +325,14 @@ async def chat_stream_ws(
             local_conversation_id: int | None = None
             history_messages: list[dict[str, str]] = []
 
+            turn_span = open_ws_turn(
+                user_id=actor.id,
+                conversation_id=None,
+                is_admin=False,
+                question=question,
+                request_id=stream_request_id,
+            )
+
             try:
                 async with async_session_factory() as db:
                     persistence_service = CustomerChatBoundaryService(db)
@@ -333,6 +342,7 @@ async def chat_stream_ws(
                         original_conversation_id,
                     )
                     local_conversation_id = local_conversation.id
+                    turn_span.set_conversation_id(local_conversation_id)
                     logger.info(
                         "[WRITE_DECISION] conversation_id=%s role=user action=WRITE",
                         local_conversation_id,
@@ -377,6 +387,8 @@ async def chat_stream_ws(
                         stream_request_id,
                     )
                 )
+                turn_span.set_terminal("error")
+                close_ws_turn(turn_span, status="ERROR")
                 continue
             except Exception as exc:
                 logger.error(
@@ -398,6 +410,8 @@ async def chat_stream_ws(
                         stream_request_id,
                     )
                 )
+                turn_span.set_terminal("error")
+                close_ws_turn(turn_span, status="ERROR")
                 continue
 
             complete_ai_response = ""
@@ -556,6 +570,15 @@ async def chat_stream_ws(
                     local_conversation_id=local_conversation_id,
                     stream_request_id=stream_request_id,
                 )
+
+                # Close path-aware span exactly once per turn — final event type
+                # mirrors what `_emit_terminal_frames` actually sent.
+                if assistant_message_persisted:
+                    turn_span.set_terminal("assistant_final")
+                    close_ws_turn(turn_span, status="OK")
+                else:
+                    turn_span.set_terminal("error")
+                    close_ws_turn(turn_span, status="ERROR")
 
     except WebSocketDisconnect:
         logger.info("Customer WebSocket disconnected")

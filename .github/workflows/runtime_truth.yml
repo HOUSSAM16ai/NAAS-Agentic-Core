@@ -1,0 +1,57 @@
+name: runtime-truth
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-truth-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  runtime-truth:
+    name: runtime-truth-drift-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify lock file exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f .runtime/truth_table.lock.json ]; then
+            echo "::error::Missing .runtime/truth_table.lock.json"
+            echo "Generate it with: python scripts/runtime_truth.py --update"
+            exit 1
+          fi
+
+      - name: Run drift check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/runtime_truth.py --check
+
+      - name: Upload artifacts on drift
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-truth-drift
+          path: |
+            .runtime/truth_table.json
+            .runtime/path_map.json
+            .runtime/snapshot.txt
+          retention-days: 14

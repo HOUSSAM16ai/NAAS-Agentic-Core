@@ -1,6 +1,7 @@
 # Runtime Truth Lock
-> Last updated: 2026-05-06 | Branch: claude/runtime-truth-audit-65iVU
+> Last updated: 2026-05-06 | Re-verified on branch: `claude/diagnostic-system-architecture-aRSuW`
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
+> **Re-verification (2026-05-06): all 16 prior rows CONFIRMED. 9 NEW ZOMBIE/DORMANT components catalogued (rows 17–25 below). No promotion of any DORMANT/ZOMBIE to ACTIVE.**
 
 ## Golden rule
 A capability counts as real ONLY when proven by **all three** of:
@@ -39,6 +40,15 @@ Missing any of the three → DORMANT, ZOMBIE, or UNKNOWN. Not ACTIVE.
 | 14 | Orchestrator HTTP client | `app/infrastructure/clients/orchestrator_client.py:chat_with_agent` | ACTIVE | sole entrypoint called by `customer_chat.py:422` and `admin.py:490`. Wraps the entire fallback chain. Does not require URL to function — falls through to local engines on `ConnectError`. |
 | 15 | Orchestrator microservice (HTTP target) | `microservices/orchestrator_service` | DORMANT | requires `$ORCHESTRATOR_SERVICE_URL` set AND `docker compose -f docker-compose.yml up -d`. Default devcontainer satisfies neither. |
 | 16 | All other microservices | `microservices/{planning,memory,user,research,reasoning,auditor,conversation,api_gateway,observability}_*` | DORMANT | not started by `.devcontainer/docker-compose.host.yml`. |
+| 17 | Chat agents orchestrator (parallel "MultiAgent" path) | `app/services/chat/agents/orchestrator.py:11,83,647` | ZOMBIE | imports `EducationCouncil`; nothing imports `agents.orchestrator` from `app/api/`, `app/main.py`, `app/kernel.py`, `local_graph.py`, or `orchestrator_client.py`. Sits parallel to the live chat path. |
+| 18 | EducationCouncil | `app/services/chat/agents/education_council.py:96` | ZOMBIE | only consumer is row 17 (also ZOMBIE). |
+| 19 | Graph components subdir | `app/services/chat/graph/components/{context_composer,intent_detector,prompt_strategist}.py` | ZOMBIE | only referenced from `graph/workflow.py` (already ZOMBIE — row 2). |
+| 20 | Graph nodes/supervisor | `app/services/chat/graph/nodes/supervisor.py` | ZOMBIE | sibling of dead nodes in row 2; not reachable. |
+| 21 | Top-level chat orchestration helpers | `app/services/chat/{dispatcher,intent_detector,intent_registry,tool_router,tool_access,education_policy_gate,orchestration_rollout}.py` | ZOMBIE/UNKNOWN | zero importers in `app/api/`, `app/main.py`, `app/kernel.py`. Live path goes router → `OrchestratorClient` → `local_graph` and never touches these. |
+| 22 | Side-path chat agents | `app/services/chat/agents/{admin,curriculum,socratic_tutor,testing_agent,refactor,analytics,...}.py` | ZOMBIE | not invoked by live customer/admin chat WS routers. |
+| 23 | Frontend WS client | `frontend/app/hooks/useRealtimeConnection.js:56` (consumer: `useAgentSocket.js:180`) | ACTIVE | sole `new WebSocket(...)` factory; uses subprotocol `["jwt", token]`. Connects to `/api/chat/ws` and `/admin/api/chat/ws` proxied via `frontend/next.config.js`. |
+| 24 | Orchestrator microservice DB writers | `microservices/orchestrator_service/src/api/routes.py:1211,1216,1361,1366` | DORMANT | real INSERTs into `customer_messages` / `admin_messages` exist; the microservice just doesn't run by default. When awoken, D-006 (`compatibility_facade=True` + `persisted: true` echo) is the only thing preventing dual-write — load-bearing. |
+| 25 | Dual Redis design | `docker-compose.yml` services `redis:6379` and `redis-orchestrator:6380` | DORMANT | only `redis-orchestrator` is wired to the orchestrator microservice; in default devcontainer neither runs and `app/caching/factory.py` falls back to in-memory. |
 
 ---
 
@@ -93,3 +103,14 @@ The live 10%: FastAPI app + ObservabilityMiddleware + auth + customer/admin chat
 ## Strategic note — learning path vs general chat
 - Current runtime can classify intent in the local graph supervisor, but the advanced educational stack (multi-agent + deep retrieval/reranking orchestration) remains mostly ZOMBIE/DORMANT by default environment.
 - Therefore, educational-path quality currently depends heavily on the fallback local graph and available external model quality, not on the full intended microservice mesh.
+
+---
+
+## Transformation gap (diagnostic only — no execution in this audit)
+
+To move from "transitional/zombie" to "production-grade multi-service":
+1. **Wake the mesh** — `docker compose -f docker-compose.yml up -d` + set `ORCHESTRATOR_SERVICE_URL`. Prove `compatibility_facade=True` round-trip writes exactly one row per turn under load. **No code change required for this step** — only infra + env.
+2. **Promote ONE agentic layer to ACTIVE** — pick exactly one of (multi-agent workflow, MCP, KAgent, LlamaIndex retriever, reranker, DSPy refiner) and wire it into the live router or into a `local_graph` node. Add a runtime trace assertion. Update this table with the three-part proof. Do NOT promote two layers in one PR.
+3. **Per ZOMBIE/DORMANT layer, decide explicitly**: promote (with proof), archive (mark DORMANT and gate behind env), or delete with ADR. No "leave it half-alive."
+4. **Close ISS-005 (WS tracing) and ISS-023 (token streaming)** before claiming the chat path is production-grade. Both are blockers for honest observability and UX.
+5. **Architecture tests** must enforce truth-table classifications; a CI step should fail if a ZOMBIE acquires an importer in `app/api/` or `app/kernel.py` without a matching truth-table update.

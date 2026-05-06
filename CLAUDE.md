@@ -419,3 +419,15 @@ To wake the full microservices stack (separate from the devcontainer): `docker c
 - Admin stream errors are now sanitized before returning to clients.
 - Internal exception details stay in server logs only.
 - Error payload uses stable code: STREAM_RUNTIME_ERROR.
+
+## 15. Documentation Consolidation Policy (2026-05-06)
+
+- تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.
+- أي تقارير قديمة/أرشيفية تم حذفها من `docs/archive/` لتقليل الضجيج ومنع تضارب الحقائق.
+- الوثائق التي تبقى مرجعية:
+  - `AGENTS.md` (قواعد التطوير)
+  - `docs/architecture/MICROSERVICES_CONSTITUTION.md` (الدستور المعماري)
+  - `docs/ARCH_MICROSERVICES_CONSTITUTION.md` (ملخص إنجليزي)
+  - `README.md` و `CHANGELOG.md` و `SECURITY.md`
+- قبل إضافة أي ملف Markdown جديد: إذا كانت المعلومة تشغيلية قصيرة، توضع في `.memory/*.md` بدل إنشاء تقرير طويل جديد.
+

@@ -15,3 +15,9 @@ Cross-boundary communication is API-first only; direct DB coupling is forbidden.
 
 ## D-005
 Architecture documentation must be code-evidenced and updated in the same PR.
+
+## D-006
+Chat WebSocket streaming ownership target is API Gateway as the single ingress point; monolith WS endpoints are compatibility-only during transition.
+
+## D-007
+Monolith-vs-microservices status is tracked as "Hybrid Transitional" until compatibility WebSocket facades are fully retired.

@@ -47,7 +47,66 @@
 
 ---
 
-## 2) خريطة التنفيذ (Execution Topology)
+## 2) تشريح WebSocket Streaming (الحالة التشغيلية الحالية)
+
+### A. نقاط الدخول المعتمدة للدردشة اللحظية
+1. **المسار الحديث (Modern Entry Point):**
+   - `microservices/api_gateway/main.py` عبر:
+     - `/api/chat/ws`
+     - `/admin/api/chat/ws`
+   - البوابة تنفّذ:
+     - تحديد identity للجلسة (`route_id + upstream_path + session scope`) لأغراض stickiness.
+     - تمرير الاتصال إلى `websocket_proxy` داخل `microservices/api_gateway/websockets.py`.
+2. **المسار التوافقي (Compatibility Facade):**
+   - مسارات WebSocket داخل `app/api/routers/customer_chat.py` و`app/api/routers/admin.py` ما تزال موجودة كصمام توافق/rollback في بعض السيناريوهات.
+
+### B. خط الأنابيب الفعلي للـ streaming
+```text
+Client
+  -> API Gateway WS Route (/api/chat/ws | /admin/api/chat/ws)
+    -> Target resolution (_resolve_chat_ws_target)
+      -> websocket_proxy (bidirectional relay)
+        -> Upstream chat engine (orchestrator/conversation بحسب التوجيه)
+          -> event normalization contract
+            -> Client render loop
+```
+
+### C. المخاطر البنيوية في WebSocket Streaming
+- **Split-Brain ownership:** وجود مسار حديث في البوابة + مسارات توافقية بالمونوليث يخلق ازدواجية قرار التوجيه.
+- **Contract Drift:** اختلاف envelope بين بعض المنتجين (`delta` مقابل `assistant_delta` تاريخيًا) يسبب أخطاء parsing صامتة.
+- **Session Affinity Fragility:** أي تعديل في خوارزمية routing identity قد يزعزع ثبات تموضع الجلسات أثناء reconnect.
+
+### D. الحواجز التشغيلية المطلوبة (Guardrails)
+- البوابة هي **نقطة الدخول الوحيدة** للإنتاج متى ما اكتمل purge.
+- كل حدث stream يجب أن يمر بعقد موحّد قبل العميل.
+- أي rollback يجب أن يكون عبر feature flags ونافذة زمنية مضبوطة، لا عبر bypass عشوائي.
+
+---
+
+## 3) حالة Monolith vs Microservices (2026-05-05)
+
+### A. الواقع الحالي
+- المنظومة **ليست monolith خالصًا** وليست **microservices pure** بالكامل.
+- الحالة الصحيحة: **Hybrid Transitional Architecture**:
+  - `app/` ما يزال يملك وظائف تكامل وتوافق تاريخي.
+  - `microservices/` يملك مسارات تنفيذ حديثة مستقلة لعدة قدرات.
+
+### B. أين ما زال المونوليث حاضرًا؟
+- في بعض واجهات الدردشة/التوافق ومسارات orchestration التاريخية.
+- في طبقة composition العامة (Reality Kernel) التي ما تزال تدير جزءًا من control-plane.
+
+### C. أين أصبحت microservices ناضجة؟
+- وجود `api_gateway` كنقطة edge routing مستقلة.
+- وجود خدمات domain مخصصة (user/observability/reasoning/research...) بحدود نشر وتشغيل مستقلة.
+
+### D. التقييم التنفيذي المختصر
+- **Target State:** API-First Microservices بنسبة تشغيلية كاملة.
+- **Current State:** Hybrid with controlled strangler pattern.
+- **Gap:** إزالة آخر facades التوافقية للمحادثة وتثبيت ownership أحادي لمسار WS + عقود events موحّدة.
+
+---
+
+## 4) خريطة التنفيذ (Execution Topology)
 
 ```text
 Client/UI
@@ -60,7 +119,7 @@ Client/UI
 
 ---
 
-## 3) مناطق المسؤولية (Boundaries)
+## 5) مناطق المسؤولية (Boundaries)
 
 1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).
 2. `microservices/*` = وحدات أعمال مستقلة (Execution Plane).
@@ -69,16 +128,7 @@ Client/UI
 
 ---
 
-## 4) مخاطر معمارية حالية
-
-1. **Drift بين الوثائق والكود** عند تطور الخدمات بسرعة.
-2. **Coupling خفي** إذا تم تمرير نماذج داخلية بين خدمات بدل عقود API صريحة.
-3. **اختلاط أدوار app shell** إذا زاد منطق الأعمال داخل route handlers.
-4. **تباين جاهزية الخدمات** بين local/dev/prod بدون health contracts موحدة.
-
----
-
-## 5) قواعد تشغيلية إلزامية عند التعديل
+## 6) قواعد تشغيلية إلزامية عند التعديل
 
 - قبل أي تعديل معماري: راجع `docs/architecture/MICROSERVICES_CONSTITUTION.md`.
 - أي تغيير في طوبولوجيا النظام يستلزم تحديثًا متزامنًا لـ:
@@ -91,7 +141,7 @@ Client/UI
 
 ---
 
-## 6) أوامر التحقق السريع
+## 7) أوامر التحقق السريع
 
 ```bash
 ruff check .
@@ -99,3 +149,4 @@ mypy app/ microservices/
 pytest
 ```
 
+---

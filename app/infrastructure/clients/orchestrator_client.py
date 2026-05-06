@@ -168,7 +168,9 @@ class OrchestratorClient:
         """
         try:
             from app.services.chat.local_graph import run_local_graph
+            from app.telemetry.path_observer import mark_fallback_used
 
+            mark_fallback_used("local_graph")
             return await run_local_graph(
                 question=question,
                 conversation_id=conversation_id,
@@ -194,6 +196,13 @@ class OrchestratorClient:
         sanitized_question = question.replace("\x00", "").strip()
         if not sanitized_question:
             return None
+
+        try:
+            from app.telemetry.path_observer import mark_fallback_used
+
+            mark_fallback_used("local_general_chat")
+        except Exception:  # pragma: no cover — observability never blocks chat
+            pass
 
         local_system_prompt = (
             "أنت مساعد ذكي واسع المعرفة. "

@@ -1,7 +1,8 @@
 # Runtime Truth Lock
-> Last updated: 2026-05-06 | Re-verified on branch: `claude/architecture-rescue-diagnostic-wUfbE` (third independent audit).
+> Last updated: 2026-05-06 | Re-verified on branch: `claude/autonomous-runtime-observability-pjzY9` (fourth pass — wires runtime observability OS).
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
 > **Re-verification (2026-05-06, branch `claude/architecture-rescue-diagnostic-wUfbE`): 23 of 25 prior rows CONFIRMED verbatim, 2 corrections applied (rows 12 + 21), 1 PARTIAL promotion ("loaded-not-invoked" tier added — rows 21, 26, 27). No DORMANT/ZOMBIE promoted to ACTIVE. CI gap newly tracked as ISS-025.**
+> **Update (2026-05-06, branch `claude/autonomous-runtime-observability-pjzY9`): two new rows — 28 (WS path observer, ACTIVE) and 29 (runtime truth generator, ACTIVE & CI-enforced). New CI gate `runtime-truth-drift-check` blocks any future ZOMBIE-to-live-anchor importer drift. Static enforcement of the closing rule.**
 
 ## Golden rule
 A capability counts as real ONLY when proven by **all three** of:
@@ -52,6 +53,8 @@ Missing any of the three → DORMANT, ZOMBIE, or UNKNOWN. Not ACTIVE.
 | 25 | Dual Redis design | `docker-compose.yml` services `redis:6379` and `redis-orchestrator:6380` | DORMANT | only `redis-orchestrator` is wired to the orchestrator microservice; in default devcontainer neither runs and `app/caching/factory.py:71` falls back to `InMemoryCache(...)`. |
 | 26 | `CustomerChatBoundaryService` / `AdminChatBoundaryService` | `app/services/boundaries/customer_chat_boundary_service.py:30`, `admin_chat_boundary_service.py:21` | PARTIAL (split) | Persistence methods (`get_or_create_conversation`, `save_message`, `get_chat_history`, `list_user_conversations`, `get_latest_conversation_details`, `get_conversation_details`) are **ACTIVE** — called by live router (`customer_chat.py:330, 340, 345, 523, 573, 588, 604`). Streaming methods (`stream_chat:95-110`, `orchestrate_chat_stream:112-260`) are **never invoked** from `app/api/` — they instantiate `intent_detector`, `tool_router`, `streamer` but the actual streaming path goes via `OrchestratorClient.chat_with_agent` (`customer_chat.py:422`, `admin.py:490`) instead. |
 | 27 | `ChatOrchestrator` + chat streamers | `app/services/chat/orchestrator.py`, `app/services/customer/chat_streamer.py`, `app/services/admin/chat_streamer.py` | PARTIAL (loaded-not-invoked) | `CustomerChatStreamer` instantiated at `customer_chat_boundary_service.py:38`; `AdminChatStreamer` at `admin_chat_boundary_service.py:49`. `streamer.stream_response(...)` is called only from inside `orchestrate_chat_stream` (boundary service line 106 / 132) — and that method has zero callers in `app/api/`. So the streamer modules load and instantiate, but never reach `stream_response`. `ChatOrchestrator` is consumed only by these two streamer modules, transitively unreachable. |
+| 28 | **WS path observer** (`WsTurnSpan`, `open_ws_turn`, `close_ws_turn`, `mark_fallback_used`) | `app/telemetry/path_observer.py` | **ACTIVE** | Imported by `app/api/routers/customer_chat.py:31` and `app/api/routers/admin.py:39`. `open_ws_turn(...)` is called once per WS turn (`customer_chat.py` after question validation; `admin.py` likewise). `close_ws_turn(...)` is called once per turn from the per-turn `finally:` next to `_emit_terminal_frames`. `mark_fallback_used(...)` is invoked from `orchestrator_client.py:170, 196` whenever the local fallback chain runs. Emits `ws.chat.turn.duration_seconds`, `ws.chat.terminal_events.total`, `ws.chat.fallback.total`. Closes the per-turn slice of ISS-005 (the WS chat turn now has a top-level span); per-frame WS spans remain TODO. |
+| 29 | **Runtime truth generator** | `scripts/runtime_truth.py` | **ACTIVE** (CI-enforced) | Invoked by `.devcontainer/snapshot_runtime.sh` at every Codespace attach (informational, non-blocking) AND by `.github/workflows/runtime_truth.yml:runtime-truth-drift-check` (blocking on PR/main push). Compares regenerated `.runtime/truth_table.json` against committed `.runtime/truth_table.lock.json`. New importer of any tracked ZOMBIE/DORMANT module from a live anchor → CI fails until lock is updated AND review accepts the promotion. |
 
 ---
 
@@ -60,22 +63,24 @@ Missing any of the three → DORMANT, ZOMBIE, or UNKNOWN. Not ACTIVE.
 ### Customer chat — `/api/chat/ws`
 1. `app/api/routers/customer_chat.py:244` — WS endpoint
 2. `customer_chat.py:340` — Monolith writes USER message (`save_message`)
-3. `customer_chat.py:422` — `OrchestratorClient.chat_with_agent()`
-4. `orchestrator_client.py:422` — HTTP attempt → ConnectError (default)
-5. fallback chain (in order, each may short-circuit and yield):
+3. `customer_chat.py` — `open_ws_turn(...)` opens `WsTurnSpan` and tags `path_type` (`educational | general_chat | unknown` — `admin` is reserved for the admin endpoint)
+4. `customer_chat.py:422` — `OrchestratorClient.chat_with_agent()`
+5. `orchestrator_client.py:422` — HTTP attempt → ConnectError (default)
+6. fallback chain (in order, each may short-circuit and yield; each calls `mark_fallback_used` so the span's `path_type` is promoted to `fallback`):
    - file-intelligence (`orchestrator_client.py:486`)
    - exercise-retrieval (`orchestrator_client.py:527`)
    - **LangGraph `run_local_graph`** (`orchestrator_client.py:569` → `local_graph.py:227`)
    - general-chat (`orchestrator_client.py:605`)
-6. `customer_chat.py:496-546` — assistant write decision (`persisted=True`? skip : fail-safe write)
-7. `customer_chat.py:_emit_terminal_frames()` — single terminal frame guarantee
+7. `customer_chat.py:496-546` — assistant write decision (`persisted=True`? skip : fail-safe write)
+8. `customer_chat.py:_emit_terminal_frames()` — single terminal frame guarantee
+9. `close_ws_turn(...)` — closes the span and emits per-turn metrics
 
 ### Admin chat — `/admin/api/chat/ws`
-- Identical structure in `app/api/routers/admin.py` (different table: `admin_messages`).
+- Identical structure in `app/api/routers/admin.py` (different table: `admin_messages`). `path_type` is always `admin`.
 
 ### Everything else
 - All HTTP requests pass through ObservabilityMiddleware → traces are recorded.
-- WebSocket frames are NOT traced (ISS-005 — known gap).
+- WebSocket frames are NOT traced PER FRAME (ISS-005 — partially closed: per-turn `WsTurnSpan` now exists; per-frame remains TODO).
 
 ---
 

@@ -93,4 +93,15 @@ echo "💡 Tip: Wait for 'Application is healthy' message before accessing"
 echo "═══════════════════════════════════════════════════════════════════"
 echo ""
 
+# ── Runtime observability snapshot (non-blocking, informational) ──
+# Refresh `.runtime/*` artifacts so the truth table reflects the tree at
+# attach time. Drift is reported but does not fail the attach hook.
+# Hard cap of 30s (kill -9 if it ever stalls — shouldn't, since the
+# script does only static analysis).
+if [ -x "$SCRIPT_DIR/snapshot_runtime.sh" ]; then
+    echo "📊 Runtime Snapshot:"
+    timeout 30s bash "$SCRIPT_DIR/snapshot_runtime.sh" 2>&1 | sed 's/^/   /' || true
+    echo ""
+fi
+
 exit 0

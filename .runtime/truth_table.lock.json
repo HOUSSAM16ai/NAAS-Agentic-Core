@@ -1,0 +1,271 @@
+{
+  "branch": "claude/autonomous-runtime-observability-pjzY9",
+  "components": [
+    {
+      "agreed": true,
+      "derived_status": "PARTIAL",
+      "expected_status": "PARTIAL",
+      "files": [
+        "app/services/chat/local_graph.py"
+      ],
+      "id": "local_graph",
+      "importer_count": 3,
+      "importers_sample": [
+        "app/infrastructure/clients/orchestrator_client.py",
+        "app/kernel.py",
+        "tests/telemetry/test_distributed_tracing.py"
+      ],
+      "name": "LangGraph local engine",
+      "notes": "Pre-warmed at app/kernel.py; invoked by orchestrator_client fallback tier 3. Runs every turn in default Codespaces.",
+      "on_live_chain": true
+    },
+    {
+      "agreed": true,
+      "derived_status": "ACTIVE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/telemetry/path_observer.py"
+      ],
+      "id": "path_observer",
+      "importer_count": 3,
+      "importers_sample": [
+        "app/api/routers/admin.py",
+        "app/api/routers/customer_chat.py",
+        "app/infrastructure/clients/orchestrator_client.py"
+      ],
+      "name": "WS chat path observer",
+      "notes": "Imported by customer_chat.py + admin.py at WS turn entry.",
+      "on_live_chain": true
+    },
+    {
+      "agreed": true,
+      "derived_status": "ACTIVE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/telemetry/unified_observability.py"
+      ],
+      "id": "unified_observability",
+      "importer_count": 9,
+      "importers_sample": [
+        "app/api/routers/observability.py",
+        "app/infrastructure/clients/orchestrator_client.py",
+        "app/kernel.py",
+        "app/middleware/fastapi_observability.py",
+        "app/middleware/observability/observability_middleware.py",
+        "app/services/boundaries/observability_boundary_service.py",
+        "app/services/chat/local_graph.py",
+        "app/telemetry/__init__.py"
+      ],
+      "name": "Unified Observability service",
+      "notes": "Wired into kernel startup; consumed by every HTTP request.",
+      "on_live_chain": true
+    },
+    {
+      "agreed": true,
+      "derived_status": "ACTIVE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/infrastructure/clients/orchestrator_client.py"
+      ],
+      "id": "orchestrator_client",
+      "importer_count": 6,
+      "importers_sample": [
+        "app/api/routers/admin.py",
+        "app/api/routers/customer_chat.py",
+        "app/services/chat/orchestrator.py",
+        "tests/microservices/test_exercise_visibility_regression.py",
+        "tests/microservices/test_orchestrator_client_resilience.py",
+        "tests/test_admin_chat_history.py"
+      ],
+      "name": "Orchestrator HTTP client + fallback chain",
+      "notes": "Sole entrypoint to chat from customer_chat.py and admin.py.",
+      "on_live_chain": true
+    },
+    {
+      "agreed": true,
+      "derived_status": "ZOMBIE",
+      "expected_status": "ZOMBIE",
+      "files": [
+        "app/services/chat/graph/workflow.py"
+      ],
+      "id": "multi_agent_workflow",
+      "importer_count": 1,
+      "importers_sample": [
+        "tests/verify_graph_manual.py"
+      ],
+      "name": "LangGraph multi-agent workflow",
+      "notes": "Only importer is tests/verify_graph_manual.py.",
+      "on_live_chain": false
+    },
+    {
+      "agreed": true,
+      "derived_status": "ZOMBIE",
+      "expected_status": "ZOMBIE",
+      "files": [
+        "app/services/kagent/registry.py"
+      ],
+      "id": "kagent_mesh",
+      "importer_count": 1,
+      "importers_sample": [
+        "app/services/kagent/interface.py"
+      ],
+      "name": "KAgent mesh",
+      "notes": "DI-registered; only consumer is the dead workflow.",
+      "on_live_chain": false
+    },
+    {
+      "agreed": true,
+      "derived_status": "DORMANT",
+      "expected_status": "DORMANT",
+      "files": [
+        "app/services/mcp/integrations.py"
+      ],
+      "id": "mcp_integrations",
+      "importer_count": 8,
+      "importers_sample": [
+        "app/services/chat/agents/admin.py",
+        "app/services/chat/agents/socratic_tutor.py",
+        "app/services/collaboration/session.py",
+        "app/services/mcp/__init__.py",
+        "app/services/mcp/protocols.py",
+        "tests/services/chat/agents/test_socratic_tutor_comprehensive.py",
+        "tests/services/mcp/test_mcp_integrations.py",
+        "tests/unit/test_mcp_refactor.py"
+      ],
+      "name": "MCP integrations",
+      "notes": "Lazy-imported only by side-path agents not on the live chat router.",
+      "on_live_chain": false
+    },
+    {
+      "agreed": true,
+      "derived_status": "ZOMBIE",
+      "expected_status": "ZOMBIE",
+      "files": [
+        "app/drivers/llamaindex_driver.py"
+      ],
+      "id": "llamaindex_driver",
+      "importer_count": 1,
+      "importers_sample": [
+        "app/drivers/__init__.py"
+      ],
+      "name": "LlamaIndex driver",
+      "notes": "No live importer.",
+      "on_live_chain": false
+    },
+    {
+      "agreed": true,
+      "derived_status": "ZOMBIE",
+      "expected_status": "ZOMBIE",
+      "files": [
+        "app/drivers/reranker_driver.py"
+      ],
+      "id": "reranker_driver",
+      "importer_count": 1,
+      "importers_sample": [
+        "app/drivers/__init__.py"
+      ],
+      "name": "Reranker driver (monolith)",
+      "notes": "Driver registered only via dormant MCPIntegrations.",
+      "on_live_chain": false
+    },
+    {
+      "agreed": true,
+      "derived_status": "ZOMBIE",
+      "expected_status": "ZOMBIE",
+      "files": [
+        "app/services/chat/agents/education_council.py"
+      ],
+      "id": "education_council",
+      "importer_count": 1,
+      "importers_sample": [
+        "app/services/chat/agents/orchestrator.py"
+      ],
+      "name": "EducationCouncil",
+      "notes": "Only consumer is agents/orchestrator.py (also ZOMBIE).",
+      "on_live_chain": false
+    },
+    {
+      "agreed": true,
+      "derived_status": "PARTIAL",
+      "expected_status": "PARTIAL",
+      "files": [
+        "app/services/boundaries/customer_chat_boundary_service.py"
+      ],
+      "id": "boundary_customer",
+      "importer_count": 3,
+      "importers_sample": [
+        "app/api/routers/customer_chat.py",
+        "app/services/boundaries/__init__.py",
+        "app/services/chat/dispatcher.py"
+      ],
+      "name": "CustomerChatBoundaryService",
+      "notes": "Persistence methods ACTIVE; orchestrate_chat_stream/stream_chat never invoked from live router (loaded-not-invoked tier).",
+      "on_live_chain": true
+    },
+    {
+      "agreed": true,
+      "derived_status": "PARTIAL",
+      "expected_status": "PARTIAL",
+      "files": [
+        "app/services/boundaries/admin_chat_boundary_service.py"
+      ],
+      "id": "boundary_admin",
+      "importer_count": 8,
+      "importers_sample": [
+        "app/api/routers/admin.py",
+        "app/services/boundaries/__init__.py",
+        "app/services/chat/dispatcher.py",
+        "tests/integration/test_chat_e2e.py",
+        "tests/services/admin/test_admin_chat_refactor.py",
+        "tests/services/test_admin_chat_boundary_service_comprehensive.py",
+        "tests/services/test_admin_chat_boundary_service_final.py",
+        "tests/test_admin_auth_config_fix.py"
+      ],
+      "name": "AdminChatBoundaryService",
+      "notes": "Same shape as customer boundary.",
+      "on_live_chain": true
+    },
+    {
+      "agreed": true,
+      "derived_status": "ACTIVE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/api/routers/customer_chat.py"
+      ],
+      "id": "customer_chat_router",
+      "importer_count": 6,
+      "importers_sample": [
+        "microservices/orchestrator_service/src/api/context_utils.py",
+        "microservices/orchestrator_service/src/api/context_utils.py.orig",
+        "tests/api/test_chat_event_protocol_error_contract_integration.py",
+        "tests/api/test_chat_event_protocol_flag_integration.py",
+        "tests/api/test_final_router_gaps.py",
+        "tests/unit/test_context_fragmentation.py"
+      ],
+      "name": "Customer chat WS router",
+      "notes": "Live WS endpoint /api/chat/ws.",
+      "on_live_chain": true
+    },
+    {
+      "agreed": true,
+      "derived_status": "ACTIVE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/api/routers/admin.py"
+      ],
+      "id": "admin_chat_router",
+      "importer_count": 4,
+      "importers_sample": [
+        "tests/api/test_admin_router_comprehensive.py",
+        "tests/api/test_admin_router_extra.py",
+        "tests/api/test_chat_event_protocol_error_contract_integration.py",
+        "tests/api/test_chat_event_protocol_flag_integration.py"
+      ],
+      "name": "Admin chat WS router",
+      "notes": "Live WS endpoint /admin/api/chat/ws.",
+      "on_live_chain": true
+    }
+  ],
+  "generated_at_utc": "2026-05-06T21:03:56.300389+00:00",
+  "schema_version": 1
+}

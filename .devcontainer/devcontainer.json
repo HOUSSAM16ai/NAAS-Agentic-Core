@@ -14,7 +14,11 @@
     "DATABASE_URL": "${localEnv:DATABASE_URL}",
     "OPENROUTER_API_KEY": "${localEnv:OPENROUTER_API_KEY}",
     "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
-    "SECRET_KEY": "${localEnv:SECRET_KEY}"
+    "SECRET_KEY": "${localEnv:SECRET_KEY}",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "${localEnv:OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}",
+    "OTEL_EXPORTER_OTLP_INSECURE": "true",
+    "OTEL_SERVICE_NAME": "cogniforge-monolith",
+    "OBSERVABILITY_AUTOSTART": "${localEnv:OBSERVABILITY_AUTOSTART:1}"
   },
 
   "overrideCommand": true,
@@ -24,10 +28,16 @@
   "postStartCommand": "bash .devcontainer/on-start.sh",
   "postAttachCommand": "bash .devcontainer/on-attach.sh",
 
-  "forwardPorts": [8000, 5000, 3000, 5432],
+  "forwardPorts": [3001, 8000, 5000, 3000, 9090, 3200, 3100, 4317, 4318, 5432],
   "appPort": ["8000", "5000"],
 
   "portsAttributes": {
+    "3001": {
+      "label": "🛰️ Mission Control (Grafana)",
+      "onAutoForward": "openBrowser",
+      "visibility": "public",
+      "protocol": "http"
+    },
     "8000": {
       "label": "Backend API (FastAPI)",
       "onAutoForward": "notify",
@@ -36,13 +46,42 @@
     },
     "5000": {
       "label": "Frontend (Next.js)",
-      "onAutoForward": "openBrowser",
+      "onAutoForward": "notify",
       "visibility": "public",
       "protocol": "http"
     },
     "3000": {
       "label": "Next.js Alt",
       "onAutoForward": "silent"
+    },
+    "9090": {
+      "label": "Prometheus (Raw Queries)",
+      "onAutoForward": "silent",
+      "visibility": "public",
+      "protocol": "http"
+    },
+    "3200": {
+      "label": "Tempo (Trace Backend)",
+      "onAutoForward": "silent",
+      "visibility": "private",
+      "protocol": "http"
+    },
+    "3100": {
+      "label": "Loki (Log Backend)",
+      "onAutoForward": "silent",
+      "visibility": "private",
+      "protocol": "http"
+    },
+    "4317": {
+      "label": "OTel Collector (gRPC)",
+      "onAutoForward": "silent",
+      "visibility": "private"
+    },
+    "4318": {
+      "label": "OTel Collector (HTTP)",
+      "onAutoForward": "silent",
+      "visibility": "private",
+      "protocol": "http"
     },
     "5432": {
       "label": "PostgreSQL (Internal)",

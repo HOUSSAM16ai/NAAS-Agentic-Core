@@ -147,7 +147,19 @@ class RealityKernel:
         2. الحصول على المواصفات (Data Acquisition)
         3. تحويل الحالة (Transformations) - API Core فقط
         4. إعداد الواجهة الأمامية (Optional - منفصل عن API)
+        5. OpenTelemetry SDK bootstrap (no-op when stack absent)
         """
+        # 0. OpenTelemetry SDK — must be set up BEFORE FastAPI is wrapped so
+        # the FastAPIInstrumentor sees the app at construction. The function
+        # is a hard no-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset, so
+        # nothing changes for default Codespaces.
+        try:
+            from app.telemetry.otel_setup import setup_otel
+
+            setup_otel(service_name=self.settings_obj.PROJECT_NAME or "cogniforge-monolith")
+        except Exception:
+            logger.debug("otel_setup invocation failed at kernel boot", exc_info=True)
+
         # 1. Base State
         app = self._create_base_app_instance()
 
@@ -165,6 +177,15 @@ class RealityKernel:
         # يتم الإعداد أخيراً لضمان عدم تداخل المسارات مع API
         app = _configure_static_files(app, kernel_spec.static_files_spec)
         _validate_contract_alignment(app)
+
+        # 5. Per-app OTel instrumentation — wraps every route/middleware so
+        # spans land in Tempo. No-op when OTel was not initialized in step 0.
+        try:
+            from app.telemetry.otel_setup import instrument_fastapi_app
+
+            instrument_fastapi_app(app)
+        except Exception:
+            logger.debug("instrument_fastapi_app invocation failed", exc_info=True)
 
         return app
 

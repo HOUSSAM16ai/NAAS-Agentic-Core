@@ -602,6 +602,102 @@ Metric names:
 >
 > Missing any one of the three → the component is `PARTIAL`, `DORMANT`, `ZOMBIE`, or `UNKNOWN`. **Never `ACTIVE`.** This rule is enforced statically by `scripts/runtime_truth.py --check` on every PR.
 
+## 6.11 Grafana Observability Stack (2026-05-06 — same branch, depth pass)
+
+> Purpose: turn the per-turn instrumentation from §6.10 into a **persistent,
+> visible, queryable** observability platform. One forwarded port (3001 ·
+> Grafana · "🛰️ Mission Control") opens the entire system at a glance.
+
+### What is in the stack (committed under `observability/`)
+
+| Container | Image | Port | Role |
+|---|---|---|---|
+| `cogniforge-grafana` | `grafana/grafana:11.3.0` | **3001** (host) | UI + dashboards |
+| `cogniforge-prometheus` | `prom/prometheus:v2.55.0` | 9090 | Metrics backend |
+| `cogniforge-tempo` | `grafana/tempo:2.6.0` | 3200 | Trace backend |
+| `cogniforge-loki` | `grafana/loki:3.2.0` | 3100 | Logs backend |
+| `cogniforge-otel-collector` | `otel/opentelemetry-collector-contrib:0.110.0` | 4317 / 4318 / 8888 / 8889 | Single ingress fanning to Tempo + Prometheus + Loki |
+
+All five run inside the dedicated `cogniforge-obs` bridge network. Persistent
+volumes for each backend keep data across container restarts (but not across
+Codespace rebuild — Codespaces wipe Docker volumes).
+
+### Live wiring (proven by import + call chain)
+
+| Component | File:line | Live anchor | Status |
+|---|---|---|---|
+| `app/telemetry/otel_setup.py` (`setup_otel`, `instrument_fastapi_app`) | `app/telemetry/otel_setup.py:1` | imported by `app/kernel.py:_construct_app` (called once at FastAPI boot, before AND after route mounting) | **ACTIVE** when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; **PARTIAL (no-op)** otherwise |
+| `path_observer._emit_to_otel(handle)` | `app/telemetry/path_observer.py` (close_ws_turn tail) | called once per WS turn alongside in-memory metric emission | **ACTIVE** when OTel initialized |
+| `/api/v1/observability/prometheus` Prometheus scrape endpoint | `app/api/routers/observability.py` | mounted via `app/api/routers/registry.py`; scraped every 15s by Prometheus job `cogniforge-fastapi-direct` | **ACTIVE** (text/plain Prometheus exposition) |
+| `.devcontainer/start_observability.sh` (background nohup launch) | `.devcontainer/start_observability.sh:1` | invoked from `.devcontainer/on-start.sh` after the supervisor PID is set | **ACTIVE** in Codespaces (default `OBSERVABILITY_AUTOSTART=1`); **DORMANT** elsewhere |
+| `.github/workflows/observability_validation.yml` | `static-validation` job | runs on every PR touching `observability/**`, `app/telemetry/**`, `app/kernel.py`, `app/api/routers/observability.py` | **ACTIVE** (CI-enforced) |
+
+### What ships out-of-the-box
+
+* **Mission Control** dashboard (`00-mission-control.json`) — set as Grafana's
+  default home (`grafana.ini:home_page`). 13 panels, 5s auto-refresh:
+  6 KPI stats (turns/min, errors, fallback %, p95, http req/s, stack health),
+  WS latency-by-path timeseries, path distribution donut, terminal-event
+  bars, HTTP status codes, live Loki log stream, recent Tempo traces.
+* **Path Deep Dive** (`10-paths-deep.json`) — per-`path_type` filtering with
+  Grafana variable; latency p50/p95/p99 per path, fallback rate, log filter.
+* **LangGraph Runtime** (`20-langgraph.json`) — node latency, intent
+  distribution, MemorySaver writes, recent graph traces.
+* **HTTP API Surface** (`30-http-api.json`) — top endpoints, error rate,
+  latency heatmap, 5xx-by-endpoint timeseries.
+* **Stack Self-Monitoring** (`40-stack-health.json`) — `up{}` table for every
+  scrape target, OTel collector receive/refuse/fail rates, Loki/Tempo
+  ingestion bytes & spans.
+
+Trace ↔ logs ↔ metrics correlation is wired end-to-end via Grafana's
+`tracesToLogsV2` / `tracesToMetrics` / `derivedFields`.
+
+### What you click in Codespaces
+
+`devcontainer.json` forwards 10 ports. The **Mission Control (Grafana, 3001)**
+port is set with `onAutoForward: openBrowser` and a labeled emoji so the
+**ports tab in VS Code** highlights it. One click → full dashboard.
+
+### Runtime invariants (must remain true on `main`)
+
+1. `setup_otel()` is called exactly once per process, BEFORE FastAPI is
+   wrapped. Idempotent on second call.
+2. `setup_otel()` is a hard no-op when `OTEL_EXPORTER_OTLP_ENDPOINT` is
+   unset. Default Codespaces without the stack must continue to boot.
+3. The OTel mirror in `path_observer._emit_to_otel` runs in addition to
+   the in-memory facade — both must succeed independently. Failure in
+   either is logged at debug level only; the chat turn is unaffected.
+4. The Prometheus scrape endpoint at `/api/v1/observability/prometheus`
+   stays mounted and content-type `text/plain; version=0.0.4` regardless
+   of OTel init state.
+5. Adding a new dashboard MUST live under `observability/grafana/dashboards/`
+   with a numeric prefix (`00-`, `10-`, ...). The CI workflow JSON-parses
+   every file in this directory.
+6. Adding a new instrumented library: add the OTel package to
+   `requirements-observability.txt` AND a `_try_instrument_*()` helper in
+   `otel_setup.py` (best-effort, must not raise on import failure).
+
+### Confidence levels (per the closing rule)
+
+| Claim | Confidence |
+|---|---|
+| Stack files are syntactically valid (compose / yaml / json) | CONFIRMED — CI parses all of them |
+| Python wiring is import-clean | CONFIRMED — ruff + py_compile in CI |
+| OTel SDK reaches Tempo/Prometheus/Loki when stack is up | LIKELY — standard OTLP wiring; **no Codespace runtime evidence yet** |
+| Dashboards render with data | UNKNOWN — requires the stack to be up + the app to receive real traffic |
+| Auto-start in Codespaces actually launches the stack | LIKELY — script runs from on-start.sh; Codespace boot can be verified by tailing `.observability/boot.log` |
+| Resource fit on a 4 GB Codespace | LIKELY — guard refuses under 1.5 GB free; standard images are well under 1 GB combined idle |
+
+### Closing rule (carried from §6.10, sharpened here)
+
+> **Any capability that does not produce traces, metrics, or correlated logs
+> in this stack is treated as operationally untrusted.**
+>
+> A green test is not enough. A successful `pytest run` is not enough.
+> If a feature ships and you cannot pull up its trace + metric + log
+> trio in Mission Control with a real request, it is **not** ACTIVE. It
+> may be PARTIAL or it may be ZOMBIE. Decide explicitly before merge.
+
 ## 15. Documentation Consolidation Policy (2026-05-06)
 
 - تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.

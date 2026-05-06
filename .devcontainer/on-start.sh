@@ -111,5 +111,21 @@ lifecycle_info "🔍 Monitor Progress:"
 lifecycle_info "   tail -f $LOG_FILE"
 lifecycle_info "═══════════════════════════════════════════════════════"
 
+# ==============================================================================
+# Observability Stack — auto-start in background (Codespaces only by default)
+# ==============================================================================
+# Wakes Grafana + Prometheus + Loki + Tempo + OTel Collector.
+# Resource-guarded (refuses under 1.5 GB free RAM). Non-blocking, logs to
+# .observability/boot.log. Disable explicitly:
+#   export OBSERVABILITY_AUTOSTART=0
+if [ -x "$(dirname "${BASH_SOURCE[0]}")/start_observability.sh" ]; then
+    nohup bash "$(dirname "${BASH_SOURCE[0]}")/start_observability.sh" \
+        >/dev/null 2>&1 < /dev/null &
+    lifecycle_info ""
+    lifecycle_info "📊 Observability stack starting in background..."
+    lifecycle_info "   Mission Control: http://localhost:3001/  (Grafana — port 3001)"
+    lifecycle_info "   Logs:           tail -f .observability/boot.log"
+fi
+
 # Exit immediately to unblock IDE
 exit 0

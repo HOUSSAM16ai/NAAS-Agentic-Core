@@ -1,0 +1,66 @@
+{
+  "description": "LangGraph node-level observability — supervisor + chat node latency, MemorySaver checkpointer activity, intent distribution.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [{ "asDropdown": false, "icon": "external link", "includeVars": true, "keepTime": true, "tags": ["cogniforge"], "targetBlank": false, "title": "All CogniForge Dashboards", "type": "dashboards", "url": "" }],
+  "liveNow": true,
+  "panels": [
+    {
+      "type": "text", "title": "", "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 }, "id": 1,
+      "options": { "mode": "html", "code": { "language": "html" }, "content": "<div style='background:linear-gradient(135deg,#3a1a5c 0%,#5a2c8a 100%);padding:14px 24px;border-radius:8px;color:#fff;font-family:Inter,system-ui,sans-serif;'><div style='font-size:20px;font-weight:700;'>🧠 LangGraph Runtime</div><div style='font-size:12px;opacity:0.85;margin-top:4px;'>Live view of the only graph that runs in production today: <code>local_graph.py</code> (supervisor → chat → END). Multi-agent workflow remains ZOMBIE; this dashboard ignores it.</div></div>" }
+    },
+    {
+      "type": "stat", "title": "Graph Invocations / min",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 3 }, "id": 10,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum(rate(cogniforge_langgraph_node_count_total[1m])) * 60", "refId": "A" }],
+      "fieldConfig": { "defaults": { "decimals": 1, "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue" }, { "color": "green", "value": 1 }] } } },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" }
+    },
+    {
+      "type": "timeseries", "title": "Node Latency (p95)",
+      "gridPos": { "h": 9, "w": 18, "x": 6, "y": 3 }, "id": 11,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_langgraph_node_duration_seconds_bucket[2m])) by (node, le))", "refId": "A", "legendFormat": "p95 · {{node}}" }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 12, "lineInterpolation": "smooth", "lineWidth": 2 }, "unit": "s", "decimals": 3 } },
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "barchart", "title": "Intent Distribution (15m)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 12 }, "id": 20,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (intent) (increase(cogniforge_langgraph_intent_total[15m]))", "refId": "A", "legendFormat": "{{intent}}" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 70 }, "unit": "short" } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "stacking": "none", "tooltip": { "mode": "multi" }, "orientation": "auto", "showValue": "auto", "xTickLabelRotation": 0, "xTickLabelSpacing": 0 }
+    },
+    {
+      "type": "timeseries", "title": "MemorySaver Checkpointer Writes / s",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 12 }, "id": 21,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(cogniforge_langgraph_checkpointer_writes_total[2m])", "refId": "A", "legendFormat": "writes/s" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 25, "lineInterpolation": "smooth" }, "unit": "ops" } },
+      "options": { "legend": { "calcs": ["mean"], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single" } }
+    },
+    {
+      "type": "table", "title": "Recent LangGraph Traces",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 21 }, "id": 30,
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [{ "queryType": "traceql", "refId": "A", "query": "{ name =~ \"langgraph\\\\..+\" }", "limit": 25, "tableType": "traces" }],
+      "options": { "showHeader": true }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["cogniforge", "langgraph"],
+  "templating": { "list": [] },
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "🧠 LangGraph Runtime",
+  "uid": "cogniforge-langgraph",
+  "version": 1
+}

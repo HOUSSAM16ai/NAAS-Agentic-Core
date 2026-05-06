@@ -297,6 +297,49 @@ def close_ws_turn(handle: WsTurnSpan, *, status: str = "OK") -> None:
                     },
                 )
 
+    # Mirror to OpenTelemetry SDK if the observability stack is configured.
+    # No-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset — see otel_setup.py.
+    _emit_to_otel(handle)
+
+
+def _emit_to_otel(handle: WsTurnSpan) -> None:
+    """Mirror per-turn metrics into the OpenTelemetry SDK so they flow to
+    Tempo + Prometheus via the OTel collector. Pure no-op when OTel
+    is not initialized."""
+    try:
+        from app.telemetry import otel_setup as _otel
+    except Exception:  # pragma: no cover
+        return
+    if not _otel.is_initialized():
+        return
+    instruments = _otel.get_metrics()
+    attrs = {
+        "path_type": handle.path_type if handle.path_type in _VALID_PATHS else "unknown",
+        "terminal": handle.terminal_event_type
+        if handle.terminal_event_type in {"assistant_final", "error", "unknown"}
+        else "unknown",
+        "is_admin": "true" if handle.is_admin else "false",
+    }
+    histogram = instruments.get("ws_chat_turn_duration_seconds")
+    counter_terminal = instruments.get("ws_chat_terminal_events_total")
+    counter_fallback = instruments.get("ws_chat_fallback_total")
+    with contextlib.suppress(Exception):  # pragma: no cover
+        if histogram is not None:
+            histogram.record(handle.latency_ms / 1000.0, attributes=attrs)
+    with contextlib.suppress(Exception):  # pragma: no cover
+        if counter_terminal is not None:
+            counter_terminal.add(1, attributes=attrs)
+    if handle.fallback_used:
+        with contextlib.suppress(Exception):  # pragma: no cover
+            if counter_fallback is not None:
+                counter_fallback.add(
+                    1,
+                    attributes={
+                        "path_type": handle.path_type,
+                        "is_admin": "true" if handle.is_admin else "false",
+                    },
+                )
+
 
 @asynccontextmanager
 async def ws_chat_turn(

@@ -264,8 +264,54 @@
       "name": "Admin chat WS router",
       "notes": "Live WS endpoint /admin/api/chat/ws.",
       "on_live_chain": true
+    },
+    {
+      "agreed": true,
+      "derived_status": "ACTIVE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/telemetry/otel_setup.py"
+      ],
+      "id": "otel_setup",
+      "importer_count": 1,
+      "importers_sample": [
+        "app/kernel.py"
+      ],
+      "name": "OpenTelemetry SDK bootstrap",
+      "notes": "Imported by app/kernel.py at boot (setup_otel + instrument_fastapi_app). Hard no-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset, so default Codespaces without the stack still boot. ACTIVE under §6.6 because the import + call chain are present at kernel startup; runtime evidence depends on the stack being up (validated separately by observability_validation CI).",
+      "on_live_chain": true
+    },
+    {
+      "agreed": true,
+      "derived_status": "DORMANT",
+      "expected_status": "DORMANT",
+      "files": [
+        "observability/docker-compose.observability.yml"
+      ],
+      "id": "grafana_stack_compose",
+      "importer_count": 0,
+      "importers_sample": [],
+      "name": "Grafana observability stack (Docker compose)",
+      "notes": "5-container stack (Grafana + Prometheus + Loki + Tempo + OTel collector). Auto-starts in Codespaces via .devcontainer/start_observability.sh (background, resource-guarded). DORMANT classification reflects the §6.6 rule: the stack is real code but lives outside the FastAPI process — runtime evidence requires the containers to be UP.",
+      "on_live_chain": false
+    },
+    {
+      "agreed": true,
+      "derived_status": "ACTIVE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/api/routers/observability.py"
+      ],
+      "id": "observability_router_prometheus",
+      "importer_count": 1,
+      "importers_sample": [
+        "tests/telemetry/test_distributed_tracing.py"
+      ],
+      "name": "Prometheus scrape endpoint on observability router",
+      "notes": "GET /api/v1/observability/prometheus returns text/plain Prometheus exposition. Mounted via app/api/routers/registry.py; scraped by Prometheus job cogniforge-fastapi-direct every 15s when the stack is up.",
+      "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-05-06T21:03:56.300389+00:00",
+  "generated_at_utc": "2026-05-06T21:58:06.335323+00:00",
   "schema_version": 1
 }

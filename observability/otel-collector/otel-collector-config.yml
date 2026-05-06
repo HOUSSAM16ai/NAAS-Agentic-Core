@@ -1,0 +1,94 @@
+# =============================================================================
+# OpenTelemetry Collector — CogniForge ingress for traces/metrics/logs
+# =============================================================================
+# Receives OTLP from the FastAPI app (gRPC 4317 / HTTP 4318) and fans out:
+#   * traces  → Tempo (OTLP gRPC)
+#   * metrics → Prometheus (scraped from :8889)
+#   * logs    → Loki (HTTP push API)
+# Self-metrics on :8888 — Prometheus scrapes the collector itself too.
+# =============================================================================
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch is required for OTLP exporters — sends in efficient chunks.
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+
+  # Bound memory at ~256 MB so a misbehaving emitter cannot OOM the collector.
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+  # Add a constant `service.namespace` so every signal is grouped under
+  # `cogniforge.*` in Grafana queries.
+  resource:
+    attributes:
+      - key: service.namespace
+        value: cogniforge
+        action: upsert
+      - key: deployment.environment
+        from_attribute: ENVIRONMENT
+        action: insert
+
+exporters:
+  # Tempo — OTLP gRPC.
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Prometheus — collector exposes a /metrics endpoint Prometheus scrapes.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: cogniforge
+    const_labels:
+      collector: cogniforge-otel
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Loki — push API for logs.
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    default_labels_enabled:
+      exporter: false
+      job: true
+
+  # Debug exporter — set verbosity to "detailed" only when troubleshooting.
+  debug:
+    verbosity: basic
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
+    logs:
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [loki]

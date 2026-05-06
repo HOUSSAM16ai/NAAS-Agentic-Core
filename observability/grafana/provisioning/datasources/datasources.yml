@@ -1,0 +1,81 @@
+# =============================================================================
+# Grafana — datasources auto-provisioned at startup
+# =============================================================================
+# Three datasources, all wired to siblings in the same compose network.
+# Trace-to-logs and trace-to-metrics correlation is enabled so a single
+# trace_id pulls logs from Loki AND metrics from Prometheus on hover.
+# =============================================================================
+
+apiVersion: 1
+
+datasources:
+
+  # ---- Prometheus -------------------------------------------------------
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+          urlDisplayLabel: "View trace"
+
+  # ---- Loki -------------------------------------------------------------
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: tempo
+          matcherRegex: 'trace_id=([a-fA-F0-9]+)'
+          name: TraceID
+          url: '$${__value.raw}'
+
+  # ---- Tempo ------------------------------------------------------------
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -1h
+        spanEndTimeShift: 1h
+        tags: [{ key: 'service.name', value: 'service' }]
+        filterByTraceID: true
+        filterBySpanID: false
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags: [{ key: 'service.name', value: 'service' }]
+        queries:
+          - name: "Request rate"
+            query: 'sum(rate(cogniforge_ws_chat_turn_duration_seconds_count{$$__tags}[5m]))'
+          - name: "p95 latency"
+            query: 'histogram_quantile(0.95, sum(rate(cogniforge_ws_chat_turn_duration_seconds_bucket{$$__tags}[5m])) by (le))'
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: loki
+      traceQuery:
+        timeShiftEnabled: true
+        spanStartTimeShift: -1h
+        spanEndTimeShift: 1h
+      spanBar:
+        type: Tag
+        tag: http.path

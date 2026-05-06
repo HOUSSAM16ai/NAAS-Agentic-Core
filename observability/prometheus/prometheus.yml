@@ -1,0 +1,78 @@
+# =============================================================================
+# Prometheus — CogniForge metrics scrape config
+# =============================================================================
+# Targets:
+#   1. The OTel collector's exporter   (cogniforge.* application metrics)
+#   2. The OTel collector's self-metrics (collector health)
+#   3. Tempo / Loki / Grafana          (stack health)
+#   4. The FastAPI app                  (direct /metrics endpoint, optional)
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: cogniforge-codespace
+    namespace: cogniforge
+
+scrape_configs:
+
+  # ---- Application metrics (from OTel collector) -------------------------
+  - job_name: cogniforge-app
+    static_configs:
+      - targets: ["otel-collector:8889"]
+        labels:
+          source: otel-collector
+          tier: app
+
+  # ---- OTel collector self-metrics ---------------------------------------
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888"]
+        labels:
+          tier: stack
+
+  # ---- Tempo self-metrics ------------------------------------------------
+  - job_name: tempo
+    static_configs:
+      - targets: ["tempo:3200"]
+        labels:
+          tier: stack
+
+  # ---- Loki self-metrics -------------------------------------------------
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+        labels:
+          tier: stack
+
+  # ---- Grafana self-metrics ----------------------------------------------
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]
+        labels:
+          tier: stack
+
+  # ---- Direct FastAPI /metrics (the app) --------------------------------
+  # The app is on the Codespace host, not inside this compose network.
+  # `host.docker.internal` is wired in compose `extra_hosts` to host-gateway
+  # so this scrape works in Codespaces and on Docker Desktop.
+  - job_name: cogniforge-fastapi-direct
+    metrics_path: /api/v1/observability/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+        labels:
+          tier: app
+          source: fastapi-direct
+    # Tolerate scrape failures: when the FastAPI app is restarting, this
+    # target goes DOWN briefly; that's a transient state, not an alertable
+    # condition by itself. The OTel pipeline (cogniforge-app job) carries
+    # the same metrics with higher reliability.
+    honor_labels: true
+
+  # ---- Prometheus self-metrics ------------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          tier: stack

@@ -1,0 +1,533 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "CogniForge — single-pane mission control. Auto-refreshes every 5 seconds. Click any panel to drill into the dedicated dashboard.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["cogniforge"],
+      "targetBlank": false,
+      "title": "All CogniForge Dashboards",
+      "tooltip": "",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "liveNow": true,
+  "panels": [
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "mode": "html",
+        "code": { "language": "html", "showLineNumbers": false, "showMiniMap": false },
+        "content": "<div style='background:linear-gradient(135deg,#0b1d3a 0%,#162b5e 50%,#1e2c66 100%);padding:18px 28px;border-radius:8px;color:#fff;font-family:Inter,system-ui,sans-serif;'><div style='display:flex;justify-content:space-between;align-items:center;'><div><div style='font-size:24px;font-weight:700;letter-spacing:0.4px;'>🛰️ CogniForge — Mission Control</div><div style='font-size:13px;opacity:0.85;margin-top:4px;'>Real-time runtime telemetry · paths · fallback chain · persistence · stack health</div></div><div style='text-align:right;font-size:12px;opacity:0.85;'><div><strong>Auto-refresh:</strong> 5s</div><div><strong>Time range:</strong> last 15m (top-right)</div><div><strong>Drill-downs:</strong> ↗ icons in panel headers</div></div></div></div>"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "WS Turns / min",
+      "description": "Total WebSocket chat turns (customer + admin) over the selected window. The pulse of the system.",
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 4 },
+      "id": 10,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(cogniforge_ws_chat_turn_duration_seconds_count[1m])) * 60",
+          "refId": "A",
+          "legendFormat": "turns/min"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 1,
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "green", "value": 1 },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 500 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Errors (5m)",
+      "description": "WebSocket terminal frames with type=error, last 5 minutes. Should be zero.",
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 4 },
+      "id": 11,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(cogniforge_ws_chat_terminal_events_total{terminal=\"error\"}[5m]))",
+          "refId": "A",
+          "legendFormat": "errors"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Fallback Rate",
+      "description": "Percentage of turns that hit the local fallback chain (orchestrator microservice unavailable).",
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 4 },
+      "id": 12,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "100 * sum(rate(cogniforge_ws_chat_fallback_total[5m])) / clamp_min(sum(rate(cogniforge_ws_chat_turn_duration_seconds_count[5m])), 1)",
+          "refId": "A",
+          "legendFormat": "fallback %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "orange", "value": 90 },
+              { "color": "red", "value": 99 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "p95 Turn Latency",
+      "description": "95th percentile of full WS turn duration. SLO: under 8s on educational, under 3s on general.",
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 4 },
+      "id": 13,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(cogniforge_ws_chat_turn_duration_seconds_bucket[5m])) by (le))",
+          "refId": "A",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 2,
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "orange", "value": 8 },
+              { "color": "red", "value": 15 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "HTTP Req/s",
+      "description": "All non-WS HTTP requests handled by FastAPI middleware.",
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 4 },
+      "id": 14,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(cogniforge_http_request_duration_seconds_count[1m]))",
+          "refId": "A",
+          "legendFormat": "req/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 1,
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "green", "value": 0.5 },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Stack Health",
+      "description": "Number of stack components Prometheus has scraped successfully in the last minute (target: 5+).",
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 4 },
+      "id": 15,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "count(up == 1)",
+          "refId": "A",
+          "legendFormat": "up"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "green", "value": 5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "WS Turn Latency by Path Type",
+      "description": "p50 / p95 / p99 of full turn latency, broken down by path_type (educational / general_chat / fallback / admin).",
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 9 },
+      "id": 20,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(cogniforge_ws_chat_turn_duration_seconds_bucket[2m])) by (path_type, le))",
+          "refId": "A",
+          "legendFormat": "p50 · {{path_type}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(cogniforge_ws_chat_turn_duration_seconds_bucket[2m])) by (path_type, le))",
+          "refId": "B",
+          "legendFormat": "p95 · {{path_type}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(cogniforge_ws_chat_turn_duration_seconds_bucket[2m])) by (path_type, le))",
+          "refId": "C",
+          "legendFormat": "p99 · {{path_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "seconds",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "decimals": 2,
+          "unit": "s"
+        }
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Path Type Distribution",
+      "description": "Share of WS turns by path_type. educational + general_chat = customer; fallback = orchestrator was unreachable.",
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 9 },
+      "id": 21,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (path_type) (rate(cogniforge_ws_chat_turn_duration_seconds_count[15m]))",
+          "refId": "A",
+          "legendFormat": "{{path_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "fallback" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "educational" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "general_chat" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "admin" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "unknown" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          }
+        ]
+      },
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "values": ["value"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "tooltip": { "mode": "single", "sort": "desc" }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Terminal Events — assistant_final vs error vs unknown",
+      "description": "Count per second of WS turn terminal frames. Error spikes deserve immediate triage.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "id": 30,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (terminal) (rate(cogniforge_ws_chat_terminal_events_total[2m]))",
+          "refId": "A",
+          "legendFormat": "{{terminal}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "gradientMode": "hue",
+            "lineWidth": 1,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "error" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "assistant_final" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "unknown" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Status Codes",
+      "description": "All non-WS HTTP responses by status code group.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "id": 31,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(cogniforge_http_requests_total[2m]))",
+          "refId": "A",
+          "legendFormat": "HTTP {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Live Log Stream — CogniForge Monolith",
+      "description": "Tail of structured logs from the FastAPI app. Filter by trace_id to follow a single turn end-to-end.",
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 26 },
+      "id": 40,
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "{job=\"cogniforge\"} | json | line_format \"{{.level}} · {{.logger_name}} · {{.message}}\"",
+          "refId": "A",
+          "legendFormat": "",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "type": "table",
+      "title": "Recent Traces (Tempo)",
+      "description": "Last 20 chat turn traces. Click trace_id to open the full waterfall in Tempo.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 37 },
+      "id": 50,
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "queryType": "traceql",
+          "refId": "A",
+          "query": "{ name = \"ws.chat.turn\" }",
+          "limit": 20,
+          "tableType": "traces"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "filterable": true
+          }
+        }
+      },
+      "options": {
+        "showHeader": true,
+        "footer": { "show": false, "reducer": ["sum"], "fields": "" }
+      }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["cogniforge", "mission-control", "home"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"]
+  },
+  "timezone": "browser",
+  "title": "🛰️ CogniForge — Mission Control",
+  "uid": "cogniforge-mission-control",
+  "version": 1,
+  "weekStart": ""
+}

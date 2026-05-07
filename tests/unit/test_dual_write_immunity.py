@@ -1,21 +1,22 @@
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from app.core.domain.chat import CustomerConversation, CustomerMessage, MessageRole
 from app.core.domain.user import User
 from app.services.customer.chat_persistence import CustomerChatPersistence
 
+
 @pytest.fixture
 async def async_db_session():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
-    
+
     SessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine)
     async with SessionLocal() as session:
         yield session
-        
+
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
     await engine.dispose()
@@ -37,7 +38,7 @@ async def setup_test_user(async_db_session):
 async def test_duplicate_guard_prevents_dual_write(async_db_session, setup_test_user):
     user = await setup_test_user
     persistence = CustomerChatPersistence(async_db_session)
-    
+
     conv = CustomerConversation(title="Immunity Test", user_id=user.id)
     async_db_session.add(conv)
     await async_db_session.commit()
@@ -45,16 +46,16 @@ async def test_duplicate_guard_prevents_dual_write(async_db_session, setup_test_
 
     # First write (simulating orchestrator fail-safe or primary write)
     msg1 = await persistence.save_message(
-        conv.id, 
-        MessageRole.ASSISTANT, 
+        conv.id,
+        MessageRole.ASSISTANT,
         "This is an immune system test response."
     )
     assert msg1.id is not None
 
     # Second write within window (simulating dual-write bug regression)
     msg2 = await persistence.save_message(
-        conv.id, 
-        MessageRole.ASSISTANT, 
+        conv.id,
+        MessageRole.ASSISTANT,
         "This is an immune system test response."
     )
 

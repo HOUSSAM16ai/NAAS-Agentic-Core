@@ -5,8 +5,9 @@ Part of the System Immunity Mode against dual-write regressions.
 """
 
 import asyncio
-import sys
 import logging
+import sys
+
 from sqlalchemy import text
 
 # Import the database factory from the monolithic app
@@ -26,7 +27,7 @@ async def main() -> None:
         try:
             result = await db.execute(query)
             duplicates = result.fetchall()
-            
+
             if duplicates:
                 logger.critical("[CRITICAL FAILURE] Duplicate messages detected in the database!")
                 for row in duplicates:

@@ -135,6 +135,7 @@ services:
     container_name: cogniforge-grafana
     restart: unless-stopped
     environment:
+      # ---- Auth & basic UX -------------------------------------------------
       # Anonymous read-only access so a Codespace user can open the dashboard
       # immediately without provisioning a password. Set GRAFANA_ADMIN_PASSWORD
       # to override the admin user.
@@ -145,6 +146,31 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_FEATURE_TOGGLES_ENABLE: "traceqlEditor"
       GF_LOG_LEVEL: "warn"
+
+      # ---- Cross-origin proxy support (Codespaces) -------------------------
+      # In GitHub Codespaces the browser hits Grafana through
+      # https://<NAME>-3001.preview.app.github.dev/ which is cross-origin to
+      # the container. The defaults from grafana.ini (localhost / lax / not
+      # secure) make the browser refuse the auth cookie → blank panels.
+      #
+      # `.devcontainer/start_observability.sh` detects Codespaces at boot and
+      # exports the matching `GF_*` env vars before `docker compose up`. The
+      # `${VAR:-}` syntax keeps the local-dev path working: if the script did
+      # not set them (local Linux), Grafana keeps the grafana.ini defaults.
+      #
+      # SECURITY NOTE: cookie_secure=true requires HTTPS, which the Codespaces
+      # proxy provides automatically; SameSite=None is mandatory for the
+      # cross-origin cookie to round-trip.
+      GF_SERVER_ROOT_URL: "${GF_SERVER_ROOT_URL:-}"
+      GF_SERVER_DOMAIN: "${GF_SERVER_DOMAIN:-}"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "${GF_SERVER_SERVE_FROM_SUB_PATH:-false}"
+      GF_SECURITY_COOKIE_SAMESITE: "${GF_SECURITY_COOKIE_SAMESITE:-lax}"
+      GF_SECURITY_COOKIE_SECURE: "${GF_SECURITY_COOKIE_SECURE:-false}"
+      GF_SECURITY_CSRF_ALWAYS_CHECK: "${GF_SECURITY_CSRF_ALWAYS_CHECK:-false}"
+      # Allow the Codespaces preview host to embed Grafana panels (iframes /
+      # Live tab WebSocket). Empty default = grafana.ini's allow_embedding=true
+      # path — leave allowed_origins permissive for the cross-origin proxy.
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
     volumes:
       - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

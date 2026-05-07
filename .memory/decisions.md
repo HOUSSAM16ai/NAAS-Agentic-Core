@@ -102,3 +102,23 @@ repeated drift and false claims.
 **Reason**: Prevent internal detail leakage and keep stable error contract.
 **Implementation**: `app/services/boundaries/admin_chat_boundary_service.py` now emits generic message + code `STREAM_RUNTIME_ERROR` while retaining full error logs server-side.
 **Status**: IMPLEMENTED 2026-05-06.
+
+## D-012 · Grafana Cross-Origin Proxy Wiring is Done at Boot, Not in `grafana.ini`
+**Decision**: `grafana.ini` holds LOCAL-only defaults. The Codespaces-correct
+values (`root_url`, `domain`, `cookie_samesite=none`, `cookie_secure=true`,
+`csrf_always_check=false`) are computed at container-boot time by
+`.devcontainer/start_observability.sh` and exported as `GF_*` env vars before
+`docker compose up -d`.
+**Reason**: `${CODESPACE_NAME}` is unique per Codespace and changes per
+recreate. Hard-coding the URL in `grafana.ini` would break every other user.
+Grafana's documented behavior is "env vars override grafana.ini at process
+start" — this is the right hook.
+**Consequence**:
+1. Local Linux dev → `start_observability.sh` `unset`s the env vars, Grafana keeps `localhost` defaults. Local dev path unchanged.
+2. Codespaces → script detects `${CODESPACE_NAME}` and exports the proxy-correct URL + cookie settings. Grafana boots already-aware-of-the-proxy.
+3. Any future cloud dev environment (Gitpod, Coder, etc.) can be supported by adding a single `elif` branch in `detect_grafana_public_url()` — no config-file rewrites needed.
+**What MUST NOT change**:
+- The detection function in `start_observability.sh` is the SINGLE source of truth for "what URL is Grafana served from".
+- `docker-compose.observability.yml` Grafana env block uses `${VAR:-default}` for every `GF_*` var so missing vars never break the local boot.
+- Never set `cookie_secure=true` unconditionally — it breaks plain `http://localhost:3001/`.
+**Status**: IMPLEMENTED 2026-05-07 — see branch `claude/fix-monitoring-port-hQ7JL` and CLAUDE.md §6.12.

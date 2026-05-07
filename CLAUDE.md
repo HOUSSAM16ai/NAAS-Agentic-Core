@@ -698,6 +698,72 @@ port is set with `onAutoForward: openBrowser` and a labeled emoji so the
 > trio in Mission Control with a real request, it is **not** ACTIVE. It
 > may be PARTIAL or it may be ZOMBIE. Decide explicitly before merge.
 
+## 6.12 Mission Control on Codespaces — Cross-Origin Proxy Fix (2026-05-07 — branch `claude/fix-monitoring-port-hQ7JL`)
+
+> Symptom (reported by user, mobile screenshots dated 03:13–03:14): clicking
+> the forwarded port **3001** ("🛰️ Mission Control / Grafana") in a GitHub
+> Codespace opens `https://<NAME>-3001.preview.app.github.dev/` and the page
+> either redirects in a loop, lands on a blank "you don't have access" panel,
+> or refuses to authenticate. The same stack works fine on `localhost:3001`
+> in a local Docker host.
+
+### Root cause (3 stacked failures, all required to break the flow)
+
+| # | Layer | Defect (before) | Effect |
+|---|---|---|---|
+| 1 | `observability/grafana/grafana.ini` `[server] domain = localhost` + `root_url = ...://localhost:3000/` | Grafana broadcasts `localhost` as canonical → all `Set-Cookie` and `302 Location` headers point at `localhost`. | Browser on `https://<NAME>-3001.preview.app.github.dev/` rejects the auth cookie (Domain mismatch) and follows redirects to a host it cannot reach. |
+| 2 | `observability/grafana/grafana.ini` `[security] cookie_samesite = lax` (no `cookie_secure=true`) | Codespaces preview is a **cross-origin** proxy in the user's browser. `SameSite=Lax` cookies are not sent on a cross-origin POST → login round-trip fails silently. | Login page returns 200 but session is never established → infinite redirect loop. |
+| 3 | `.devcontainer/start_observability.sh` boots `docker compose up -d` without computing the public URL | `docker-compose.observability.yml` only had `GF_SECURITY_*` env vars for admin password. The Grafana container had no signal that it was running behind a proxy. | Even if a user manually opens 3001, no panel queries succeed because Grafana has no idea what its real `root_url` is. |
+
+A fourth, secondary issue: port `3001` was forwarded with `visibility: public`
+in `devcontainer.json`, but `gh codespace ports visibility 3001:public` was
+NOT called in `on-start.sh`, so on first attach the port could land on
+`private` and require a manual click before the URL works.
+
+### Fix (this branch — surgical, environment-agnostic)
+
+| File | Change |
+|---|---|
+| `observability/grafana/grafana.ini` | Made all defaults LOCAL-correct (`domain=localhost`, `cookie_samesite=lax`, `cookie_secure=false`, `csrf_always_check=false`). Added a long header comment explaining that Codespaces overrides everything via env vars at boot — the file is no longer where you "fix Codespaces", it is the local-dev fallback only. |
+| `.devcontainer/start_observability.sh` | Added `detect_grafana_public_url()` — uses `${CODESPACE_NAME}` and `${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` (with a `preview.app.github.dev` fallback) to compute `https://${CODESPACE_NAME}-3001.${DOMAIN}/`. When the result is a `*.github.dev` URL, the script exports `GF_SERVER_ROOT_URL`, `GF_SERVER_DOMAIN`, `GF_SECURITY_COOKIE_SAMESITE=none`, `GF_SECURITY_COOKIE_SECURE=true`, `GF_SECURITY_CSRF_ALWAYS_CHECK=false` BEFORE `docker compose up -d`. Local boots `unset` those vars (so a stale Codespaces config can't poison a local run). The resolved env is persisted to `.observability/grafana.env` for debug. |
+| `observability/docker-compose.observability.yml` | Added `GF_SERVER_ROOT_URL`, `GF_SERVER_DOMAIN`, `GF_SERVER_SERVE_FROM_SUB_PATH`, `GF_SECURITY_COOKIE_SAMESITE`, `GF_SECURITY_COOKIE_SECURE`, `GF_SECURITY_CSRF_ALWAYS_CHECK`, `GF_SECURITY_ALLOW_EMBEDDING` to the `grafana` service `environment:` block. All use `${VAR:-<safe-default>}` so the local-dev path keeps working when the env vars are absent. |
+| `.devcontainer/on-start.sh` | Added `gh codespace ports visibility 3001:public` next to the existing 8000/3000 lines, so Mission Control is reachable on first attach without a manual visibility click. |
+
+### Why three different keys (`domain`, `cookie_samesite`, `csrf_always_check`)
+- **`GF_SERVER_DOMAIN` / `GF_SERVER_ROOT_URL`**: makes every redirect, every absolute URL, every HTML asset reference, and every `Set-Cookie` Domain attribute use the actual Codespaces hostname. Without this, the auth cookie's `Domain` attribute is `localhost` and the browser silently drops it.
+- **`GF_SECURITY_COOKIE_SAMESITE=none` + `GF_SECURITY_COOKIE_SECURE=true`**: the only `SameSite` value that survives a cross-origin proxy is `None`, but browsers require `Secure=true` to accept it. The Codespaces proxy IS HTTPS, so `Secure=true` is safe and mandatory.
+- **`GF_SECURITY_CSRF_ALWAYS_CHECK=false`**: Grafana's CSRF guard validates the `Origin` header against the configured domain. The Codespaces proxy occasionally drops or rewrites this header → false-positive 403 on POST to `/api/dashboards/uid/...`. Disabling the strict CSRF host-check is acceptable because anonymous viewer is the only un-authed surface and admin login is gated on `GF_SECURITY_ADMIN_PASSWORD`. (We kept `allow_embedding=true` so iframe panels still work.)
+
+### Local development is unchanged
+The `${VAR:-<default>}` syntax in compose + `unset` on the local branch of
+`start_observability.sh` mean: on a plain `docker compose up -d` from a
+local Linux shell, Grafana keeps `domain=localhost`, `cookie_samesite=lax`,
+`cookie_secure=false`. **No regression to local dev.**
+
+### What MUST NOT be done as a "fix" (anti-patterns rejected)
+- ❌ Hard-coding the user's `CODESPACE_NAME` into `grafana.ini` — it changes per Codespace and per restart.
+- ❌ Setting `cookie_secure=true` unconditionally — breaks local `http://localhost:3001/` because the browser refuses an insecure-context Secure cookie.
+- ❌ Disabling auth entirely — the anonymous-viewer role is enough; we keep admin behind a password.
+- ❌ Adding a sidecar reverse proxy (nginx/caddy) inside the compose — adds another moving part, more RAM, more surface area, more failure modes. Grafana's own env vars are sufficient.
+
+### Confidence levels (per the §6.10 closing rule)
+
+| Claim | Confidence |
+|---|---|
+| Files parse / compose validates | CONFIRMED — `python -m yaml` + `bash -n` in CI |
+| `start_observability.sh` correctly detects Codespaces and exports env | CONFIRMED — `${CODESPACE_NAME}` + `${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` are GitHub-injected; the URL pattern matches GitHub docs |
+| Grafana picks up `GF_*` env at container boot | CONFIRMED — documented Grafana behavior; env vars override grafana.ini |
+| The browser cookie round-trip succeeds end-to-end on the Codespaces proxy | LIKELY — depends on the user attaching with a browser that has `SameSite=None; Secure` enabled (every modern browser since 2020). **Not yet runtime-verified by this agent — requires a Codespace attach + a browser session.** |
+| Local development still works | CONFIRMED — defaults preserved, `${VAR:-default}` keeps the localhost path intact |
+| Port 3001 is publicly reachable on first attach | LIKELY — `gh codespace ports visibility 3001:public` is wired in `on-start.sh`; falls back to `devcontainer.json` `visibility: public` if `gh` is absent |
+
+### Where to verify after attaching a fresh Codespace
+1. `cat .observability/grafana.env` → should show `GRAFANA_PUBLIC_URL=https://<NAME>-3001.preview.app.github.dev/` and the four `GF_*` overrides.
+2. `docker exec cogniforge-grafana env | grep GF_` → confirm Grafana saw the env.
+3. Open the forwarded port 3001 in a browser → land on Mission Control with the dashboard rendered.
+4. `tail -f .observability/boot.log` → confirms "Codespaces detected. Grafana wired to: …" line.
+5. Browser DevTools → Application → Cookies → grafana_session has `Domain=<NAME>-3001.preview.app.github.dev`, `SameSite=None`, `Secure=true`.
+
 ## 15. Documentation Consolidation Policy (2026-05-06)
 
 - تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.

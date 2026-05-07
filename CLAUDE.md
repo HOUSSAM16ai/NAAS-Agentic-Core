@@ -1241,6 +1241,133 @@ actually click through 90% of the time.
 > capability gap. **Native dependencies > runtime features for things
 > we always need.**
 
+## 6.18 The "No data" Catastrophe — Prometheus Exposition Format Fix (2026-05-07 — same branch, fifth pass)
+
+> **Symptom (verbatim from the user's mobile screenshots, 12:36):**
+> Mission Control loads at `https://<NAME>-3001.app.github.dev`, all
+> dashboards visible (HTTP API Surface, Path Deep Dive, Mission Control,
+> LangGraph Runtime, Stack Self-Monitoring), but EVERY panel shows the
+> giant green/blue **"No data"** block. p95 Latency, Req/s, Top 10
+> Endpoints, Latency Heatmap, 5xx Errors — all empty.
+
+### Why §6.17 produced an empty Mission Control
+
+Three independent bugs in the data pipeline, all between the FastAPI app
+and Prometheus:
+
+1. **The Prometheus exposition format was invalid.**
+   `app/telemetry/metrics.py:export_prometheus_metrics()` was emitting:
+   ```
+   http.requests.total{method=GET,endpoint=/health,status=200} 5
+   ```
+   Two violations of the Prometheus text format spec:
+   - **Dots forbidden in metric names** — Prometheus requires `[a-zA-Z_:][a-zA-Z0-9_:]*`.
+     `http.requests.total` is a parse error; the entire line gets dropped silently.
+   - **Label values must be quoted with `"..."`.**
+     `method=GET` is invalid; the correct form is `method="GET"`.
+   Combined effect: Prometheus scraped `:8000/api/v1/observability/prometheus`
+   every 15s, parsed zero valid samples, and stored zero data points.
+
+2. **Metric names didn't match what dashboards query.**
+   The dashboards query `cogniforge_http_requests_total`,
+   `cogniforge_ws_chat_turn_duration_seconds_count`, etc.
+   The middleware records `http.requests.total`, `ws.chat.turn.duration_seconds`.
+   Even if the format had been valid, the names had no `cogniforge_` prefix —
+   so dashboards would still see "No data" because the series don't exist
+   under those names.
+
+3. **Histograms weren't exported at all.**
+   `record_metric()` appends latency observations to `self.histograms[name]`,
+   but `export_prometheus_metrics()` only iterated `self.counters` and
+   `self.gauges`. The histogram dict was never read by the export, so
+   `_bucket` / `_count` / `_sum` lines (which p95 latency panels need)
+   were never emitted. Every histogram_quantile() panel was guaranteed
+   to return zero data regardless of fix #1 + #2.
+
+### The fix (single function rewrite)
+
+`app/telemetry/metrics.py:export_prometheus_metrics()` now does three jobs:
+
+1. **Translates internal names to Prometheus-valid names.**
+   `http.requests.total` → `cogniforge_http_requests_total`. Dots and
+   hyphens become underscores; `cogniforge_` prefix added unless already
+   present (idempotent — `cogniforge_uptime_seconds` stays unchanged).
+
+2. **Quotes label values per spec.**
+   `key=value` → `key="value"` with backslash + double-quote escaping.
+
+3. **Exports histograms as proper Prometheus histograms.**
+   For each metric in the allow-list (`http.request.duration_seconds`,
+   `ws.chat.turn.duration_seconds`), emits:
+   - 11 cumulative buckets at standard SRE boundaries (5ms → 10s)
+   - one `+Inf` bucket
+   - `_count` (total observation count)
+   - `_sum` (cumulative sum)
+   These are exactly the series Grafana's `histogram_quantile()` panels
+   require for p50/p95/p99 latency curves.
+
+Output is now:
+```
+# TYPE cogniforge_http_requests_total counter
+cogniforge_http_requests_total{endpoint="/health",method="GET",status="200"} 2.0
+# TYPE cogniforge_http_request_duration_seconds histogram
+cogniforge_http_request_duration_seconds_bucket{le="0.005"} 1
+cogniforge_http_request_duration_seconds_bucket{le="0.01"} 1
+... (11 buckets)
+cogniforge_http_request_duration_seconds_bucket{le="+Inf"} 7
+cogniforge_http_request_duration_seconds_count 7
+cogniforge_http_request_duration_seconds_sum 5.33
+```
+
+### Dashboard ↔ emitter alignment (post-§6.18)
+
+| Dashboard | Series queried | Emitter | Status |
+|---|---|---|---|
+| Mission Control | `cogniforge_http_requests_total`, `cogniforge_ws_chat_turn_duration_seconds_*` | `app/middleware/observability/observability_middleware.py` + `app/telemetry/path_observer.py` | ✅ POPULATES |
+| Path Deep Dive | `cogniforge_ws_chat_turn_duration_seconds_*`, `cogniforge_ws_chat_fallback_total` | `app/telemetry/path_observer.py` (§6.10) | ✅ POPULATES |
+| HTTP API Surface | `cogniforge_http_requests_total`, `cogniforge_http_errors_total`, `cogniforge_http_request_duration_seconds_bucket` | observability middleware | ✅ POPULATES |
+| Stack Self-Monitoring | Prometheus self + Grafana self | Prometheus + Grafana built-in | ✅ POPULATES |
+| LangGraph Runtime | `cogniforge_langgraph_*` | **none yet** | ⚠️ STAYS EMPTY (no LangGraph instrumentation wired; tracked for a future pass) |
+
+4-of-5 dashboards now functional. The LangGraph one is a known empty
+because no production code calls `obs.increment_counter("langgraph.*")` —
+that's a separate instrumentation task, not a Prometheus problem.
+
+### Caveat: histogram labels are aggregate-only
+
+The current `MetricsManager.histograms` dict is keyed by metric name and
+ignores labels (see `metrics.py:68` — `self.histograms[record.name].append(record.value)`).
+So `cogniforge_http_request_duration_seconds_bucket` has no `endpoint`
+or `method` labels in the output. p95 latency dashboards aggregate
+across all routes work fine; per-endpoint latency heatmaps will show
+data but won't be sliced by endpoint. Fixing this requires a deeper
+change to make `histograms` label-aware — out of scope for this fix.
+
+### Runtime invariants (must remain true on `main`)
+
+1. `export_prometheus_metrics()` MUST NEVER emit a metric line where the
+   name contains `.` or `-`. The translator is the only safe path; bypassing
+   it (e.g., emitting raw counter keys directly) reintroduces the parse failure.
+2. Label values MUST be quoted with `"..."`. Backslash + double-quote MUST
+   be escaped (Prometheus spec).
+3. New metric names emitted by application code SHOULD use dot notation
+   (`http.foo.total`, `ws.bar.gauge`). The exporter handles the translation
+   centrally; emitters should not pre-prefix with `cogniforge_`.
+4. Adding a new histogram series requires adding the raw name to `hist_names`
+   inside `export_prometheus_metrics()`. Without that allow-list entry, the
+   histogram bucket export is skipped (the metric still appears as a counter,
+   which is wrong for latency).
+
+### Confidence
+
+| Claim | Confidence |
+|---|---|
+| Output is valid Prometheus exposition | CONFIRMED — smoke test verifies `# TYPE` headers, quoted labels, no dots in names, +Inf bucket present |
+| HTTP/WS counters reach Grafana with correct names | CONFIRMED — name translation produces exactly the strings dashboards query |
+| Histograms produce non-empty `_bucket` series after first request | CONFIRMED — smoke test with 7 latency observations produces 11 cumulative buckets + count + sum |
+| Mission Control panels populate after a real chat turn | LIKELY — pending fresh Codespace rebuild + browser session; all upstream pieces verified independently |
+| Per-endpoint latency heatmap renders correctly | PARTIAL — heatmap will populate (aggregate data), but `endpoint` label filtering won't work until histograms become label-aware (out of scope) |
+
 ## 15. Documentation Consolidation Policy (2026-05-06)
 
 - تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.

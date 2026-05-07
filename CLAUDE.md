@@ -926,6 +926,61 @@ This polish layer assumes §6.13 has shipped. Until the user runs
 is not installed and all the polish is moot. After that single rebuild,
 the experience matches 3000/8000 forever.
 
+## 6.15 Surfacing the Rebuild Action — Four Click-Paths (2026-05-07 — same branch)
+
+> User asked (verbatim): "هل يمكن أن تجعل زر rebuild يظهر لي بشكل آلي
+> احترافي و أنا اضغط عليه مباشرة" — i.e., make the "Rebuild Container"
+> button appear automatically so the user can click it directly without
+> hunting through the Command Palette.
+>
+> **Hard truth**: VS Code Codespaces does not expose a public API for a
+> third-party config to inject a custom notification toast with a
+> "Rebuild" button. The closest things we can do are: (1) rely on VS
+> Code's own auto-detection of `devcontainer.json` changes, which
+> already shows a built-in toast, and (2) surface the rebuild action
+> through every other path that already exists in the IDE (Tasks,
+> Command Palette, terminal one-liner, large banner).
+
+### The four click-paths added on this branch
+
+| # | Where the user clicks | File / mechanic |
+|---|---|---|
+| **1** | **Built-in VS Code auto-prompt** when `devcontainer.json` changes are detected → toast "The Dev Container configuration has changed. [Rebuild Container]" | This is VS Code's native behavior. We did not add it — we just made sure it fires by being on a branch with a real `devcontainer.json` diff. Sometimes a `Developer: Reload Window` is needed to surface it (file watcher misses the change). |
+| **2** | **Terminal one-liner** → `bash .devcontainer/codespace_rebuild.sh` | New script (`.devcontainer/codespace_rebuild.sh`) — interactive wrapper around `gh codespace rebuild --codespace $CODESPACE_NAME`. Detects environment, prints why a rebuild is needed, asks for confirmation, runs the rebuild. |
+| **3** | **VS Code Task Picker** → Ctrl+Shift+P → 'Tasks: Run Task' → '🔨 Rebuild Codespace (apply Docker/observability fix)' | New `.vscode/tasks.json` — three labeled tasks: rebuild, restart-obs, tail-boot-log. The rebuild task invokes the same wrapper script in path #2. Shows up as a clickable item in the picker. |
+| **4** | **Big terminal banner** in `on-attach.sh` when Docker is detected as missing → 16-line ASCII box listing all four click-paths inline, impossible to miss | Updated `on-attach.sh`. Gated on `command -v docker >/dev/null 2>&1` returning non-zero AND `${CODESPACE_NAME}` set — so it ONLY fires when a Codespace user is in the broken state. Local dev paths and post-rebuild Codespaces never see it. |
+
+### Why we cannot add a "real button"
+
+A real button (status bar, sidebar item, walkthrough) would require a VS
+Code extension. Codespaces lets you ship `customizations.vscode.extensions`
+in `devcontainer.json` to install extensions, but writing a one-purpose
+extension just to display a rebuild button is operationally wasteful:
+1. It requires publishing or vendoring an extension.
+2. It runs in every Codespace, even ones already rebuilt.
+3. It adds a maintenance burden disproportionate to the value (the user
+   only clicks rebuild once per `devcontainer.json` change).
+
+The four click-paths above cover every reasonable user flow without
+adding code that runs forever to solve a one-time problem.
+
+### Confidence
+
+| Claim | Confidence |
+|---|---|
+| `gh codespace rebuild --codespace $CODESPACE_NAME` triggers a rebuild | CONFIRMED — official `gh` command, documented at https://cli.github.com/manual/gh_codespace_rebuild |
+| `.vscode/tasks.json` tasks appear in the Run Task picker | CONFIRMED — VS Code spec |
+| Banner in on-attach.sh fires only in the broken state | CONFIRMED — gated on `command -v docker` AND `$CODESPACE_NAME` |
+| VS Code's built-in auto-prompt fires on devcontainer.json change | LIKELY — well-documented but sometimes missed by file watcher; reload-window restores it |
+| The wrapper script preserves the user's files | CONFIRMED — `gh codespace rebuild` does NOT delete /workspaces; it rebuilds the container, not the codespace |
+
+### What MUST NOT change without explicit decision
+
+1. The banner in `on-attach.sh` MUST stay gated on `command -v docker` returning non-zero. Showing it after a successful rebuild would be noise.
+2. The wrapper `codespace_rebuild.sh` MUST keep its interactive confirmation. A non-interactive auto-rebuild would be hostile UX.
+3. `.vscode/tasks.json` task labels MUST keep the leading emoji and the `(...)` detail string — VS Code's task picker truncates labels but always shows `detail`.
+4. Never silently call `gh codespace rebuild` from `postAttachCommand` or `postStartCommand` — that would create an infinite rebuild loop.
+
 ## 15. Documentation Consolidation Policy (2026-05-06)
 
 - تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.

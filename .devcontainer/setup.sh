@@ -107,6 +107,37 @@ check_env "OPENAI_API_KEY" "optional"
 check_env "SECRET_KEY" "optional"
 check_env "ENVIRONMENT" "optional"
 
+# ── 6.5. Pre-pull observability Docker images (background, best-effort) ──
+# Why: docker-in-docker is the only way Mission Control (port 3001) can run
+# inside the devcontainer. Pulling images takes 30-90s the first time. We
+# do it HERE — at postCreateCommand — so by the time the user attaches,
+# `docker compose up -d` finishes in seconds and the openBrowser hook
+# triggers as fast as 3000/8000.
+#
+# Best-effort: if Docker isn't ready yet (DinD daemon still booting at
+# postCreate time) we silently skip. start_observability.sh will pull on
+# demand at attach time.
+if command -v docker >/dev/null 2>&1; then
+    log "Pre-warming observability Docker images (one-time, background)..."
+    if docker info >/dev/null 2>&1; then
+        OBS_COMPOSE="/app/observability/docker-compose.observability.yml"
+        if [ -f "${OBS_COMPOSE}" ]; then
+            (
+                docker compose -f "${OBS_COMPOSE}" --project-name cogniforge-obs \
+                    pull --quiet >/dev/null 2>&1 \
+                    && echo "[setup] ✓ observability images cached" \
+                    || echo "[setup] ! observability image pre-pull skipped (will retry at attach)"
+            ) &
+            ok "Observability image pre-pull launched in background (PID: $!)"
+        fi
+    else
+        warn "Docker daemon not yet ready at postCreate — start_observability.sh will pull on first attach"
+    fi
+else
+    warn "Docker CLI not present — observability stack will not run"
+    warn "(this is normal on Replit; on Codespaces requires docker-in-docker feature)"
+fi
+
 # ── 7. Quick backend smoke test ──────────────────────────────
 echo ""
 log "Running quick import check..."

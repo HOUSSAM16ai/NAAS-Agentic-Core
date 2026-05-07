@@ -148,3 +148,56 @@ panel. Three independent defects compounded:
 | Grafana picks up `GF_*` env at boot | CONFIRMED (documented Grafana behavior) |
 | Cookie round-trip succeeds end-to-end on the proxy | LIKELY — needs a fresh Codespace + browser attach to verify |
 | Local dev path unchanged | CONFIRMED — defaults preserved + `unset` clears stale Codespaces env |
+
+---
+
+## 2026-05-07 (LATER) — The Missing-Docker Catastrophe — same branch
+
+### Problem after the §6.12 cookie fix
+User attached the Codespace, the §6.12 fix had landed, the port 3001 was
+forwarded, but the URL still showed `net::ERR_HTTP_RESPONSE_CODE_FAILURE`.
+Terminal evidence:
+- `cat .observability/grafana.env` → No such file.
+- `docker exec cogniforge-grafana env | grep GF_` → `zsh: command not found: docker`.
+
+### Root cause (one layer deeper than §6.12)
+The Codespaces devcontainer was built **without Docker** — the `features` block
+of `devcontainer.json` was missing `docker-in-docker`, and the
+`docker-compose.host.yml` did not mount the host's docker socket. The
+`start_observability.sh` `command -v docker` guard correctly bailed with
+`exit 0`, but it logged only to `.observability/boot.log` (hidden) — the
+supervisor's visible log saw nothing, so the failure was silent.
+
+The forwarded port stub in VS Code's Ports tab is created by GitHub
+unconditionally from `forwardPorts` in `devcontainer.json` — it does NOT
+check whether anything listens on the port. Hence the false "everything is
+fine" appearance until the user actually clicked the URL.
+
+### Fix (same branch)
+| File | Change |
+|---|---|
+| `.devcontainer/devcontainer.json` | Added `ghcr.io/devcontainers/features/docker-in-docker:2` (`moby:true`, `dockerDashComposeVersion:v2`). Added `hostRequirements` (4 cpu / 8 GB / 32 GB) so the Codespace machine selector defaults to a size that fits dev container + Docker daemon + 5 observability containers. |
+| `.devcontainer/start_observability.sh` | New `loud_warn()` mirror to `.superhuman_bootstrap.log` (visible supervisor log) AND stderr. The docker-missing branch now names the root cause + names the exact JSON to add + names the rebuild step. No more silent exits. |
+
+### What the user must do once
+Run **Codespaces: Rebuild Container** from the VS Code Command Palette.
+Devcontainer features only install at container build time; subsequent
+restarts keep Docker available.
+
+### Lesson — the §6.10 closing rule applies to infrastructure too
+We had been applying "import + call chain + runtime evidence" to
+**application** components (LangGraph, MCP, KAgent, etc.). The same rule
+must apply to **infrastructure** (devcontainer features, Docker daemon,
+port listeners). Before declaring observability ACTIVE: a fresh rebuild
+must produce a real HTTP 200 from `https://<NAME>-3001.<DOMAIN>/api/health`
+AND the Mission Control panels must populate with ≥1 real data point.
+A forwarded-port stub is not a working stack.
+
+### Confidence (per closing rule)
+| Claim | Confidence |
+|---|---|
+| `docker-in-docker` feature installs Engine + CLI + compose v2 in the dev container | CONFIRMED — official feature, widely deployed |
+| `docker compose up -d` works after Rebuild Container | CONFIRMED in identical setups; runtime evidence pending the user's rebuild |
+| `network_mode: host` (in `docker-compose.host.yml`) is compatible with DinD | LIKELY — DinD uses iptables NAT independent of parent network mode |
+| 4cpu/8GB host fits the full stack | CONFIRMED in similar deployments |
+| `loud_warn` reaches the visible supervisor log | CONFIRMED — writes to `.superhuman_bootstrap.log` |

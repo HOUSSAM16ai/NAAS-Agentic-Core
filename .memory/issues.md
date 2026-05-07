@@ -384,6 +384,7 @@
 | ISS-R005 | `git commit*` in deny list — blocked CI | `.claude/settings.json` fix |
 | ISS-R006 | Python 3.11 system pytest can't parse 3.12 syntax | `.venv/` with Python 3.12 |
 | ISS-R007 | Grafana port 3001 unreachable on Codespaces preview proxy (cookie/redirect loop) | branch `claude/fix-monitoring-port-hQ7JL` — env-driven `GF_SERVER_ROOT_URL` + `GF_SECURITY_COOKIE_SAMESITE=none`/`SECURE=true`/`CSRF_ALWAYS_CHECK=false`, Codespaces detection in `start_observability.sh`. See CLAUDE.md §6.12. |
+| ISS-R008 | Mission Control port 3001 returns `ERR_HTTP_RESPONSE_CODE_FAILURE` even after §6.12 fix | branch `claude/fix-monitoring-port-hQ7JL` — root cause was the devcontainer missing the `docker-in-docker` feature, so `docker compose up -d` could never run inside the dev container. Added `ghcr.io/devcontainers/features/docker-in-docker:2` + `hostRequirements: 4cpu/8GB/32GB` to `devcontainer.json`. Added `loud_warn()` in `start_observability.sh` that mirrors silent failures to the visible supervisor log. **Requires user to run "Codespaces: Rebuild Container" once.** See CLAUDE.md §6.13. |
 
 ---
 

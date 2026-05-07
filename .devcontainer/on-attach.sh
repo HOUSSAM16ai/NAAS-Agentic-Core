@@ -122,19 +122,18 @@ elif [ -f "$APP_ROOT/.observability/boot.log" ]; then
         echo "   🔧 Re-run: bash .devcontainer/start_observability.sh"
         echo "   📝 Tail  : tail -f $APP_ROOT/.observability/boot.log"
     fi
-elif ! command -v docker >/dev/null 2>&1; then
-    # Docker is intentionally absent in default Codespaces (see §6.16).
-    # The observability stack is DORMANT — but the in-process telemetry
-    # endpoint on :8000 stays usable for basic scraping. No rebuild fixes
-    # this; the underlying compose mount problem requires a path-
-    # consistency refactor (workspaceFolder = /workspaces/<repo>).
-    echo "   ⏸️  Status: PARKED — Docker integration not active in default Codespaces"
+elif [ -x /opt/grafana/bin/grafana-server ]; then
+    # Native-binary mode (§6.17). Grafana is starting / has just started in
+    # the background via supervisor.sh. Tell the user it's coming.
+    echo "   ⏳ Status: STARTING (native binary, ~30-60s after supervisor launch)"
+    echo "   🌐 URL   : ${GRAFANA_URL_PUBLIC}  (auto-opens when ready)"
+    echo "   📝 Tail  : tail -f $APP_ROOT/.observability/grafana.log"
+else
+    # Pre-§6.17 image (or non-Codespaces local dev w/o native binaries).
+    echo "   ⏸️  Status: PARKED — native binaries not in image"
     echo "   ℹ️  In-process metrics still scrapeable at:"
     echo "       http://localhost:8000/api/v1/observability/prometheus"
-    echo "   📝 Detail: CLAUDE.md §6.16 (rationale + future fix path)"
-else
-    echo "   ❌ Status: OFFLINE"
-    echo "   🔧 Run   : bash .devcontainer/start_observability.sh"
+    echo "   🔧 To enable: rebuild the container (Dockerfile bakes Grafana + Prometheus)"
 fi
 echo ""
 

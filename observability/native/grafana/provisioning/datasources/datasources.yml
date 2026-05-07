@@ -1,0 +1,31 @@
+# =============================================================================
+# Grafana — NATIVE-mode datasources (no Docker)
+# =============================================================================
+# Only Prometheus is reachable in native-binary mode. Loki and Tempo are NOT
+# started (they have no upstream native-binary that's both single-file AND
+# trivially configurable). Their datasource entries from the docker-compose
+# variant are intentionally absent here — providing them would create three
+# permanently-red datasources in Grafana's "Data sources" page and trigger
+# noisy "datasource unreachable" panels in dashboards that query Loki/Tempo.
+#
+# Result for the user:
+#   ✅ Mission Control's metric panels work (latency, throughput, errors).
+#   ❌ "Recent traces" + "Live log stream" panels are empty (no Tempo/Loki).
+#   ❌ Trace ↔ logs ↔ metrics correlation is unavailable.
+#
+# This is a deliberate trade-off — see CLAUDE.md §6.17.
+# =============================================================================
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://localhost:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s

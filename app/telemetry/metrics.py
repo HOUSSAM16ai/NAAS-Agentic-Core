@@ -154,10 +154,121 @@ class MetricsManager:
         return sorted_data[lower]
 
     def export_prometheus_metrics(self) -> str:
+        """تصدير المقاييس بصيغة Prometheus exposition صالحة.
+
+        المهمات الثلاث المنجزة هنا:
+          1) ترجمة الاسم: ``http.requests.total`` → ``cogniforge_http_requests_total``
+             (Prometheus يرفض النقاط في الأسماء؛ يضاف بادئة ``cogniforge_``).
+          2) تنسيق الـ labels بعلامات اقتباس مزدوجة كما يتطلب Prometheus
+             (الصيغة الداخلية ``key=value`` غير صالحة عند الـ scrape).
+          3) إصدار histograms كاملة (``_bucket`` + ``_count`` + ``_sum``)
+             لكي تعمل لوحات p95/p99 latency في Grafana.
+
+        تطابق Mission Control الذي يفترض ``cogniforge_http_*`` و
+        ``cogniforge_ws_chat_*`` (راجع ``observability/grafana/dashboards/``).
+        """
+
+        # Standard SRE histogram buckets (seconds). Covers from sub-millisecond
+        # to 10s — the realistic range for HTTP + WS turn latency in this app.
+        hist_buckets: list[float] = [
+            0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0
+        ]
+        # Metric names whose histogram data we want exposed as Prometheus
+        # histograms (rather than just counters/gauges). These are the
+        # "_seconds" latency series that the dashboards rely on.
+        hist_names: set[str] = {
+            "http.request.duration_seconds",
+            "ws.chat.turn.duration_seconds",
+        }
+
+        def _translate_name(raw: str) -> str:
+            """``http.requests.total`` → ``cogniforge_http_requests_total``."""
+            sanitized = raw.replace(".", "_").replace("-", "_")
+            if sanitized.startswith("cogniforge_"):
+                return sanitized
+            return f"cogniforge_{sanitized}"
+
+        def _quote_labels(label_blob: str) -> str:
+            """Internal ``k=v,k=v`` → Prometheus ``{k="v",k="v"}``.
+
+            Returns ``""`` when there are no labels — Prometheus accepts an
+            unlabeled metric line like ``cogniforge_metric 5``.
+            """
+            if not label_blob:
+                return ""
+            parts = []
+            for kv in label_blob.split(","):
+                k, _, v = kv.partition("=")
+                # Escape backslash + double-quote per Prometheus spec.
+                v_escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+                parts.append(f'{k}="{v_escaped}"')
+            return "{" + ",".join(parts) + "}"
+
+        def _split_key(key: str) -> tuple[str, str]:
+            """Returns (raw_name, raw_label_blob)."""
+            if "{" in key and key.endswith("}"):
+                idx = key.index("{")
+                return key[:idx], key[idx + 1 : -1]
+            return key, ""
+
         lines: list[str] = []
+        emitted_types: set[str] = set()
+
         with self.lock:
-            for key, value in self.counters.items():
-                lines.append(f"{key} {value}")
-            for key, value in self.gauges.items():
-                lines.append(f"{key} {value}")
-        return "\n".join(lines)
+            counters_snapshot = dict(self.counters)
+            gauges_snapshot = dict(self.gauges)
+            histograms_snapshot = {
+                name: list(values) for name, values in self.histograms.items()
+            }
+
+        # ---- Counters -------------------------------------------------------
+        # Group counter keys by translated name so we can emit ``# TYPE`` once.
+        counter_by_name: dict[str, list[tuple[str, float]]] = defaultdict(list)
+        for raw_key, value in counters_snapshot.items():
+            raw_name, raw_labels = _split_key(raw_key)
+            prom_name = _translate_name(raw_name)
+            counter_by_name[prom_name].append((raw_labels, value))
+
+        for prom_name, samples in sorted(counter_by_name.items()):
+            if prom_name not in emitted_types:
+                lines.append(f"# TYPE {prom_name} counter")
+                emitted_types.add(prom_name)
+            for raw_labels, value in samples:
+                lines.append(f"{prom_name}{_quote_labels(raw_labels)} {value}")
+
+        # ---- Gauges ---------------------------------------------------------
+        gauge_by_name: dict[str, list[tuple[str, float]]] = defaultdict(list)
+        for raw_key, value in gauges_snapshot.items():
+            raw_name, raw_labels = _split_key(raw_key)
+            prom_name = _translate_name(raw_name)
+            gauge_by_name[prom_name].append((raw_labels, value))
+
+        for prom_name, samples in sorted(gauge_by_name.items()):
+            if prom_name not in emitted_types:
+                lines.append(f"# TYPE {prom_name} gauge")
+                emitted_types.add(prom_name)
+            for raw_labels, value in samples:
+                lines.append(f"{prom_name}{_quote_labels(raw_labels)} {value}")
+
+        # ---- Histograms -----------------------------------------------------
+        # Latency series go through ``record_metric`` which appends to
+        # ``self.histograms[name]`` — UNLABELED (the current impl doesn't
+        # carry labels into histograms, see metrics.py:68). MVP: emit one
+        # aggregate histogram per series so Grafana p95/p99 panels work.
+        for raw_name in sorted(hist_names & set(histograms_snapshot.keys())):
+            values = histograms_snapshot[raw_name]
+            prom_name = _translate_name(raw_name)
+            if prom_name not in emitted_types:
+                lines.append(f"# TYPE {prom_name} histogram")
+                emitted_types.add(prom_name)
+            # Per-bucket cumulative counts.
+            for bound in hist_buckets:
+                count = sum(1 for v in values if v <= bound)
+                lines.append(f'{prom_name}_bucket{{le="{bound}"}} {count}')
+            # +Inf bucket equals total count (Prometheus convention).
+            lines.append(f'{prom_name}_bucket{{le="+Inf"}} {len(values)}')
+            lines.append(f"{prom_name}_count {len(values)}")
+            lines.append(f"{prom_name}_sum {sum(values)}")
+
+        # Trailing newline keeps Prometheus's text parser happy.
+        return "\n".join(lines) + "\n"

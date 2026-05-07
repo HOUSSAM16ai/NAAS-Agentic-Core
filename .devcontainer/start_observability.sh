@@ -57,13 +57,19 @@ if [ "${autostart}" != "1" ]; then
 fi
 
 # ---- Guard: docker available? ---------------------------------------------
-# CRITICAL — if the devcontainer was built WITHOUT the `docker-in-docker`
-# feature, the `docker` binary won't exist inside the container and the
-# observability stack physically cannot start. We log loudly to BOTH
-# .observability/boot.log AND the visible supervisor bootstrap log so the
-# user actually sees the problem instead of an empty Mission Control panel.
+# In default Codespaces the `docker` CLI is INTENTIONALLY ABSENT. The
+# `docker-in-docker` feature failed to build on `python:3.12-slim` +
+# `network_mode: host` (Codespaces error 1302) and `docker-outside-of-docker`
+# would build but the observability compose uses relative bind mounts that
+# don't translate across the dev container ↔ VM filesystem boundary. Until
+# we re-engineer the integration with workspace-path consistency, the
+# observability STACK is DORMANT in default Codespaces — consistent with
+# every other dormant capability per CLAUDE.md §6.6 / §6.16.
+#
+# The FastAPI app still exposes /api/v1/observability/prometheus on :8000
+# so basic in-process telemetry is still scrapeable. Mission Control auto-
+# start is parked until the integration is fixed.
 loud_warn() {
-    # Print to our own log + the supervisor's visible log + stderr.
     local msg="$1"
     echo "${msg}"
     echo "${msg}" >&2
@@ -74,14 +80,17 @@ loud_warn() {
 }
 
 if ! command -v docker >/dev/null 2>&1; then
-    loud_warn "❌ docker CLI not found inside the devcontainer."
-    loud_warn "   ROOT CAUSE: the devcontainer is missing the 'docker-in-docker' feature."
-    loud_warn "   FIX        : in .devcontainer/devcontainer.json the 'features' block must include"
-    loud_warn "                'ghcr.io/devcontainers/features/docker-in-docker:2'."
-    loud_warn "                Then run 'Codespaces: Rebuild Container' from the Command Palette."
-    loud_warn "   RESULT NOW : Mission Control (port 3001) will show ERR_HTTP_RESPONSE_CODE_FAILURE"
-    loud_warn "                because nothing is listening on that port. The forwarded port stub"
-    loud_warn "                in VS Code is created by GitHub regardless of whether a server runs."
+    echo "ℹ️  docker CLI is not available in this devcontainer."
+    echo "   This is INTENTIONAL in the default Codespaces config (see CLAUDE.md §6.16)."
+    echo "   The Grafana/Prometheus/Loki/Tempo stack is parked until Docker"
+    echo "   integration is re-engineered with path-consistent compose mounts."
+    echo ""
+    echo "   In-process telemetry remains AVAILABLE at:"
+    echo "     http://localhost:8000/api/v1/observability/prometheus  (Prometheus exposition)"
+    echo "     http://localhost:8000/health                           (FastAPI health)"
+    echo ""
+    echo "   To wake the full observability stack manually (when running locally"
+    echo "   with Docker installed): docker compose -f observability/docker-compose.observability.yml up -d"
     exit 0
 fi
 

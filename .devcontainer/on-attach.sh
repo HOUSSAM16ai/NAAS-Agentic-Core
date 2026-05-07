@@ -122,39 +122,16 @@ elif [ -f "$APP_ROOT/.observability/boot.log" ]; then
         echo "   🔧 Re-run: bash .devcontainer/start_observability.sh"
         echo "   📝 Tail  : tail -f $APP_ROOT/.observability/boot.log"
     fi
-elif ! command -v docker >/dev/null 2>&1 && [ -n "${CODESPACE_NAME:-}" ]; then
-    # ⚠️  CRITICAL — devcontainer was built without docker-in-docker feature.
-    # Show a LARGE, IMPOSSIBLE-TO-MISS banner with ALL three rebuild paths.
-    echo "   ❌ Status: OFFLINE — Docker is not installed in this devcontainer"
-    echo ""
-    echo "   ╔══════════════════════════════════════════════════════════════════╗"
-    echo "   ║                                                                  ║"
-    echo "   ║   🔨  REBUILD REQUIRED to enable Mission Control                ║"
-    echo "   ║                                                                  ║"
-    echo "   ║   The devcontainer was built before the docker-in-docker        ║"
-    echo "   ║   feature was added. A one-time rebuild fixes it forever.       ║"
-    echo "   ║                                                                  ║"
-    echo "   ║   ────────────────────────────────────────────────────────────  ║"
-    echo "   ║   PICK ONE (any of these works):                                 ║"
-    echo "   ║                                                                  ║"
-    echo "   ║   1️⃣   ONE COMMAND in this terminal:                             ║"
-    echo "   ║       bash .devcontainer/codespace_rebuild.sh                    ║"
-    echo "   ║                                                                  ║"
-    echo "   ║   2️⃣   FROM VS CODE TASK PICKER:                                  ║"
-    echo "   ║       Ctrl+Shift+P → 'Tasks: Run Task' →                         ║"
-    echo "   ║       '🔨 Rebuild Codespace (apply Docker/observability fix)'    ║"
-    echo "   ║                                                                  ║"
-    echo "   ║   3️⃣   FROM VS CODE COMMAND PALETTE:                              ║"
-    echo "   ║       Ctrl+Shift+P → 'Codespaces: Rebuild Container'             ║"
-    echo "   ║                                                                  ║"
-    echo "   ║   4️⃣   RELOAD WINDOW first (often surfaces an auto-prompt):      ║"
-    echo "   ║       Ctrl+Shift+P → 'Developer: Reload Window'                  ║"
-    echo "   ║                                                                  ║"
-    echo "   ║   ────────────────────────────────────────────────────────────  ║"
-    echo "   ║   Takes ~5-8 minutes. VS Code reconnects automatically.          ║"
-    echo "   ║   See CLAUDE.md §6.13 / §6.14 / §6.15 for the full rationale.    ║"
-    echo "   ║                                                                  ║"
-    echo "   ╚══════════════════════════════════════════════════════════════════╝"
+elif ! command -v docker >/dev/null 2>&1; then
+    # Docker is intentionally absent in default Codespaces (see §6.16).
+    # The observability stack is DORMANT — but the in-process telemetry
+    # endpoint on :8000 stays usable for basic scraping. No rebuild fixes
+    # this; the underlying compose mount problem requires a path-
+    # consistency refactor (workspaceFolder = /workspaces/<repo>).
+    echo "   ⏸️  Status: PARKED — Docker integration not active in default Codespaces"
+    echo "   ℹ️  In-process metrics still scrapeable at:"
+    echo "       http://localhost:8000/api/v1/observability/prometheus"
+    echo "   📝 Detail: CLAUDE.md §6.16 (rationale + future fix path)"
 else
     echo "   ❌ Status: OFFLINE"
     echo "   🔧 Run   : bash .devcontainer/start_observability.sh"

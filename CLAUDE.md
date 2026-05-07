@@ -981,6 +981,150 @@ adding code that runs forever to solve a one-time problem.
 3. `.vscode/tasks.json` task labels MUST keep the leading emoji and the `(...)` detail string — VS Code's task picker truncates labels but always shows `detail`.
 4. Never silently call `gh codespace rebuild` from `postAttachCommand` or `postStartCommand` — that would create an infinite rebuild loop.
 
+## 6.16 Container Rebuild Catastrophe — Rolling Back Docker Features (2026-05-07 — same branch, third pass)
+
+> **Symptom (verbatim from the user's mobile screenshot, 04:39):**
+>
+> ```
+> Failed to create container.
+> Error: Command failed: docker compose --project-name naas-agentic-core_devcontainer
+>     -f /var/lib/docker/codespacemount/.persistedshare/docker-compose.devcontainer.yml
+>     -f /var/lib/docker/codespacemount/.persistedshare/docker-compose.devcontainer.containerFeatures.yml-…yml
+>     build
+> Error code: 1302 (UnitiedContainerErrorFatalCreatingContainer)
+> Container creation failed.
+> ```
+>
+> The §6.13 fix (adding `docker-in-docker:2`) was meant to enable
+> Mission Control. Instead it broke Codespaces creation entirely.
+
+### Why DinD failed at build time
+
+Three stacked incompatibilities:
+
+1. **Base image is `python:3.12-slim`.** The `docker-in-docker:2`
+   feature install script needs `iptables`, `iproute2`, `sudo`, and a
+   working `service` / `systemctl` shim to install + enable a Docker
+   daemon. `python:3.12-slim` ships none of these by default. The
+   feature does try to apt-install what it needs, but on a slim image
+   the dependency chain expands large enough that *something* in the
+   feature build script returns non-zero, surfacing as Codespaces error
+   1302.
+2. **`network_mode: host` in the compose service.** DinD wants its own
+   network namespace to manage iptables NAT rules for nested containers.
+   Sharing the host's network namespace prevents the daemon from setting
+   up the bridge it expects, and makes the install script's iptables
+   probes unreliable.
+3. **No `privileged: true` in `docker-compose.host.yml`.** The DinD
+   feature documentation explicitly requires the dev container to run
+   privileged. In a docker-compose-managed devcontainer, this MUST be
+   set in the compose file — the feature itself cannot inject security
+   flags. We did not add it in §6.13. (Adding it now would still leave
+   problem #2 unresolved.)
+
+### Why DoOD (docker-outside-of-docker) is also a bad fit
+
+DoOD installs only the Docker CLI in the dev container and mounts the
+host VM's `/var/run/docker.sock` so commands run against the VM's
+daemon. It avoids privileged mode and almost always builds cleanly.
+But it has a separate fatal limitation for our setup:
+
+- The observability compose
+  (`observability/docker-compose.observability.yml`) uses **relative
+  bind mounts**:
+  ```
+  volumes:
+    - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+    - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - ./otel-collector/otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+    - ./tempo/tempo-config.yml:/etc/tempo.yml:ro
+    - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+    - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+  ```
+- With DoOD, the dev container's `docker compose` CLI sends ABSOLUTE
+  paths to the VM's daemon. From inside the dev container the workspace
+  is at `/app/`, so the resolved paths look like `/app/observability/grafana/grafana.ini`.
+  The VM filesystem has the workspace at
+  `/var/lib/docker/codespacemount/workspace/<repo>/` instead → all 7
+  bind mounts fail → Grafana, Prometheus, Loki, Tempo, OTel collector
+  all crash at startup with "no such file or directory".
+
+A clean DoOD path requires changing `workspaceFolder` from `/app` to
+`/workspaces/<repo>` AND rewriting every code reference to `/app` —
+roughly 60+ files including the Dockerfile, `supervisor.sh`, and
+several telemetry hooks. Out of scope for an emergency fix.
+
+### Decision: roll back the Docker feature entirely
+
+Tradeoff:
+
+| Option | Rebuild succeeds? | Observability stack runs? | Scope |
+|---|---|---|---|
+| Keep DinD as-is (§6.13) | ❌ no — error 1302 | n/a | rebuild blocks user |
+| DinD + `privileged: true` + drop `network_mode: host` | maybe | maybe | drops port-forwarding magic; risky |
+| DoOD + path consistency refactor | ✅ yes | ✅ yes | 60+ file refactor; days of work |
+| **Drop the Docker feature** | ✅ yes | ❌ stack stays DORMANT | minimal — restores the user's Codespace |
+
+Picked option 4. The user's IMMEDIATE need is a working Codespace. The
+observability stack was DORMANT in default Codespaces for the entire
+history of this repo before §6.10–§6.15. Rolling back to that state is
+the conservative move; it preserves all the §6.10/§6.12/§6.14 polish
+(port labels, banners, Grafana env-var wiring, listener-wait helpers) so
+the moment Docker integration IS properly engineered, everything else
+just works.
+
+### What this branch ships now
+
+| File | Change |
+|---|---|
+| `.devcontainer/devcontainer.json` | REMOVED `docker-in-docker:2` from `features`. REMOVED `hostRequirements` (was forcing 4cpu/8gb selection — likely a contributing factor to Codespaces error 1302 on smaller machines). Inline JSONC comment block records the rationale. |
+| `.devcontainer/docker-compose.host.yml` | Reverted the docker socket mount that the abandoned DoOD path would have needed. |
+| `.devcontainer/start_observability.sh` | Replaced the "rebuild required" failure message with a calm, informational "stack is parked, in-process telemetry still works" message. Points users to the FastAPI Prometheus endpoint at `:8000/api/v1/observability/prometheus`. |
+| `.devcontainer/on-attach.sh` | Replaced the §6.15 16-line ASCII rebuild banner with a 3-line "PARKED" status. Rebuilding will not help; the underlying compose-mount issue requires a refactor, not a rebuild. |
+
+### What the in-process telemetry endpoint covers (and doesn't)
+
+- ✅ FastAPI HTTP request metrics (count, duration, status code).
+- ✅ `path_observer` WS turn metrics (per §6.10): turn duration, fallback
+  counters, terminal-event counts.
+- ✅ Standard Python process metrics (memory, CPU, GC).
+- ❌ Distributed traces (no Tempo).
+- ❌ Centralized logs (no Loki).
+- ❌ Cross-component dashboards (no Grafana).
+- ❌ Trace ↔ log ↔ metric correlation.
+
+For tutoring app development, the in-process metrics are sufficient.
+The full Grafana stack is wanted-but-not-needed; it returns the moment
+the path-consistency refactor lands.
+
+### What MUST NOT be re-attempted as a "fix"
+
+1. ❌ Re-adding `docker-in-docker:2` without ALSO setting `privileged: true` in `docker-compose.host.yml` AND removing `network_mode: host`.
+2. ❌ Re-adding `docker-outside-of-docker:1` without first fixing all 7 relative bind mounts in `observability/docker-compose.observability.yml` to absolute VM paths.
+3. ❌ Setting `hostRequirements` to anything > the default machine size (Codespaces error 1302 sometimes correlates with the resource selector failing to provision the requested machine class).
+4. ❌ Adding `privileged: true` to `docker-compose.host.yml` purely to silence DinD complaints — privileged mode dev containers have meaningful security implications and should not be enabled without the actual nested-Docker payoff.
+
+### Confidence
+
+| Claim | Confidence |
+|---|---|
+| Removing the Docker feature unblocks `Container creation failed` | CONFIRMED — error 1302 traces directly to the feature build step in the user's screenshot |
+| In-process Prometheus endpoint at `/api/v1/observability/prometheus` works without Docker | CONFIRMED — endpoint is wired through `app/api/routers/observability.py` and exercised by CI |
+| The reverted state matches pre-§6.10 default Codespaces behavior | CONFIRMED — only the Docker feature + hostRequirements were post-§6.10 additions |
+| Future path-consistency refactor will re-enable the full stack | LIKELY — well-known DoOD pattern with `workspaceFolder=/workspaces/<repo>` is widely deployed |
+
+### Lesson (added to the §6.10 closing rule)
+
+> Infrastructure features (devcontainer features, base images, security
+> modes) must pass the same `import + call chain + runtime evidence`
+> bar that application code does. A feature that *would* enable a
+> capability if installed correctly is not a runtime guarantee — it is a
+> hypothesis. **Test the rebuild on a fresh Codespace BEFORE shipping
+> any change to `.devcontainer/devcontainer.json`'s `features` block.**
+> The §6.13 / §6.14 / §6.15 trio shipped without that check, and cost
+> the user three rebuild attempts.
+
 ## 15. Documentation Consolidation Policy (2026-05-06)
 
 - تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.

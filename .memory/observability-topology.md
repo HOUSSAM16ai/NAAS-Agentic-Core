@@ -291,3 +291,67 @@ like a "real button" requires shipping a VS Code extension.
 | Banner only shows in the broken state | CONFIRMED — gated correctly |
 | User files are preserved across rebuild | CONFIRMED — rebuild touches the container only, not `/workspaces/` |
 | VS Code's built-in toast surfaces on first encounter | LIKELY — sometimes file watcher misses the change; Reload Window fixes |
+
+---
+
+## 2026-05-07 (REBUILD CATASTROPHE) — Rolling back the Docker feature — same branch
+
+### What happened
+The §6.13 fix added `docker-in-docker:2` to the devcontainer's `features`
+block. On the user's first rebuild attempt (mobile screenshot 04:39),
+Codespaces reported:
+```
+Failed to create container.
+Error: docker compose ... build
+Error code: 1302 (UnitiedContainerErrorFatalCreatingContainer)
+```
+The feature install script failed during the `docker compose build` step,
+blocking the entire Codespace creation flow.
+
+### Root cause stack
+1. `python:3.12-slim` base image lacks the `iptables`, `iproute2`, `sudo`,
+   and systemd shims that the DinD feature install script expects.
+2. `network_mode: host` in `docker-compose.host.yml` prevents DinD from
+   managing its own network namespace.
+3. No `privileged: true` in the compose service — DinD requires it.
+4. Possible secondary effect of `hostRequirements: 4cpu/8gb/32gb`
+   forcing Codespaces to provision a machine class that may not be
+   available on the user's plan.
+
+### Why DoOD is also a non-starter
+`docker-outside-of-docker:1` would build cleanly (no privileged mode, no
+nested daemon). But the observability compose
+(`observability/docker-compose.observability.yml`) has 7 relative bind
+mounts (grafana.ini, prometheus.yml, otel-collector-config.yml,
+tempo-config.yml, loki-config.yml, grafana/provisioning,
+grafana/dashboards). Inside the dev container the workspace is at
+`/app/`; on the VM it's at `/var/lib/docker/codespacemount/workspace/...`.
+Mounts resolve to dev-container paths and fail on the VM daemon.
+
+A clean DoOD path requires renaming `workspaceFolder` from `/app` to
+`/workspaces/<repo>` and updating ~60 files referencing `/app`. Out of
+scope for an emergency unblock.
+
+### Decision
+Removed the Docker feature entirely. Removed `hostRequirements`. Removed
+the docker socket mount in compose. Rewrote `start_observability.sh`
+guard to print a calm "PARKED" message instead of "rebuild required".
+Rewrote `on-attach.sh` banner from the 16-line "rebuild me" ASCII art
+to a 3-line "PARKED" status. The full stack is DORMANT — same as
+pre-§6.10. In-process Prometheus endpoint at
+`/api/v1/observability/prometheus` (port 8000) keeps basic telemetry
+scrapeable.
+
+### What's preserved (still useful)
+- §6.10 `path_observer` WS turn instrumentation (active in-process).
+- §6.12 Grafana env-var wiring (no-op when Docker is absent).
+- §6.14 listener-wait helpers (no-op when Docker is absent).
+- §6.15 click-paths (`codespace_rebuild.sh`, `tasks.json`) — kept as
+  utilities; no longer load-bearing.
+
+### Lesson
+Infrastructure features (devcontainer features, base images, security
+modes) must pass the same import-chain + runtime evidence bar as app
+code. A change to `features` MUST be runtime-validated on a fresh
+Codespace rebuild BEFORE merging. §6.13/§6.14/§6.15 shipped without
+that check and cost the user three rebuild attempts.

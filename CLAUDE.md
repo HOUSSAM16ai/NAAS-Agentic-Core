@@ -1430,3 +1430,25 @@ The NAAS-Agentic-Core system is in a transitional "strangler fig" phase, meaning
 * "Any component that lacks an import, a clear call chain, and runtime evidence is treated as DORMANT or ZOMBIE until proven otherwise."
 * **First-check protocol before any change:** You must first verify if a component is ACTIVE, PARTIAL, DORMANT, or ZOMBIE. Do not edit dead code unless you are explicitly wiring it into a live execution path (e.g., `app/api/routers/`, `app/kernel.py`, or `local_graph.py`).
 * Do not trust documentation or blueprint assertions about "Agentic" capabilities (like multi-agent coordination) without verifying their status in the truth table. Currently, most advanced capabilities are aspirational or dormant.
+
+## Observability Truth and Runtime Rules
+
+**System Reality:**
+*   **OpenTelemetry:** DORMANT by default in Codespaces. The `otel_setup.py` module bypasses instantiation if `OTEL_EXPORTER_OTLP_ENDPOINT` is absent. `app/kernel.py` loads it as a no-op.
+*   **LangGraph Tracing:** DORMANT. Calls to `emit_telemetry` rely on an active OpenTelemetry scope, falling back to an internal `_NoOpSpan` implementation otherwise. They log to `logger.info` but do not generate trace IDs for centralized logging unless explicitly configured.
+*   **Telemetry Evidence:** ACTIVE. Certain monolith and orchestrator paths manually write barebones state diagnostics to `telemetry_evidence.txt` (via `_append_telemetry_line`) out of band.
+*   **UnifiedObservabilityService:** PARTIAL. Collects traces, logs, and metrics in memory. Its background task attempts to flush them to the microservices boundary (`observability_service`).
+*   **Observability Service (AIOps):** PARTIAL. Running and accessible (`/telemetry`), relies on purely in-memory repositories (e.g., `InMemoryTelemetryRepository`) so all state resets on container restart.
+*   **GitHub Actions / CI Guardrails:** ACTIVE. Scripts like `scripts/ci_guardrails.py` and `scripts/fitness/check_tracing_gate.py` actively enforce code structural boundaries (import logic, structural checks), but they only check for the *presence* of hooks, not functional runtime observability.
+
+**Rules for AI:**
+*   **Do NOT assume observability metrics are captured.** Without `OTEL_EXPORTER_OTLP_ENDPOINT`, metrics disappear into NoOps.
+*   **Treat "telemetry" as local logging.** In the live codespaces environment, rely entirely on `telemetry_evidence.txt` and raw stdout logs for proof, not a Tempo/Prometheus dashboard.
+*   **Do not remove structural hooks.** CI checks (like `check_tracing_gate.py`) enforce the presence of tokens like `TraceContextMiddleware` or `traceparent`. Deleting dormant observability code will break the build.
+*   **If a change requires measuring latency or errors:** You must either manually log them via `logger.info` or ensure OpenTelemetry is fully booted in the environment.
+
+### Deep Diagnostic Realities (Enterprise Grade)
+*   **Trace Split-Brain:** There is a total break in trace continuity at the system boundary. The API Gateway explicitly injects `traceparent` headers via `opentelemetry.propagate`, but the downstream Orchestrator Service and LangGraph nodes never extract them. Traces generated downstream are orphaned.
+*   **Concurrency & Memory Safety:** The monolithic `UnifiedObservabilityService` utilizes `threading.RLock` protecting `deque` structures with explicit `maxlen` (10000-100000). Memory leakage is capped. Root spans, however, are manually `del`eted from dicts on completion.
+*   **AIOps Volatility:** The `observability_service` performs mathematically rigorous Anomaly Detection (Z-scores) and Load Forecasting (linear regression trend lines). However, this operates on an `InMemoryTelemetryRepository`. All "AIOps" data is ephemeral and resets upon container restart.
+*   **Resiliency Degradation:** If the `observability-service` dies, the `UnifiedObservabilityService` background sync loop (`_background_sync_loop`) will silently fail, catch the exception, and spam `logger.error` without crashing the main application. It lacks a formal circuit breaker but is strictly thread-isolated.

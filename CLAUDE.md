@@ -1430,3 +1430,23 @@ The NAAS-Agentic-Core system is in a transitional "strangler fig" phase, meaning
 * "Any component that lacks an import, a clear call chain, and runtime evidence is treated as DORMANT or ZOMBIE until proven otherwise."
 * **First-check protocol before any change:** You must first verify if a component is ACTIVE, PARTIAL, DORMANT, or ZOMBIE. Do not edit dead code unless you are explicitly wiring it into a live execution path (e.g., `app/api/routers/`, `app/kernel.py`, or `local_graph.py`).
 * Do not trust documentation or blueprint assertions about "Agentic" capabilities (like multi-agent coordination) without verifying their status in the truth table. Currently, most advanced capabilities are aspirational or dormant.
+
+
+## Observability Truth and Runtime Rules
+
+- Canonical evidence rule: do **not** treat any observability capability as real unless all three exist: (1) import anchor, (2) live call-chain from `app/kernel.py`/routers, (3) runtime signal (trace/metric/log/export/CI artifact). Missing one => `UNKNOWN`.
+- Live signal sources (CONFIRMED):
+  - HTTP middleware path: `ObservabilityMiddleware` starts/ends traces and records `http.request.duration_seconds`, `http.requests.total`, `http.errors.total`.
+  - WS turn path: routers call `open_ws_turn(...)` + `close_ws_turn(...)`; fallback promotion is via `mark_fallback_used(...)` in orchestrator client fallback chain.
+  - Prometheus scrape path: `/api/v1/observability/prometheus` exports in-process metrics text even when OTel is disabled.
+- Runtime gating (LIKELY unless runtime-verified): OTel export is conditional on `OTEL_EXPORTER_OTLP_ENDPOINT`; without it, `setup_otel()` is a no-op and OTLP/Tempo/Loki/Prometheus correlation is not guaranteed.
+- What is measured now (CONFIRMED static wiring): HTTP duration/count/errors, WS turn duration, WS terminal-event count, WS fallback count, correlated in-memory traces/logs through unified observability, plus CI drift/static checks.
+- What is not proven live in this audit: collector reachability, dashboard population, alert firing, required GitHub branch-protection settings (UNKNOWN without repository settings API/runtime).
+- Zombie/partial handling rule:
+  - `ACTIVE`: import + call-chain + runtime proof.
+  - `PARTIAL`: import + call-chain exist but conditional branch/env dependent.
+  - `DORMANT/ZOMBIE`: code/docs exist with no live runtime path.
+- Priority paths to monitor first: customer WS chat, admin WS chat, orchestrator fallback chain, persistence terminal frames, and `/api/v1/observability/prometheus` scrape continuity.
+- Pre-merge observability checks (minimum): `runtime_truth.yml`, `observability_validation.yml`, `ci.yml` guardrails, and explicit proof that changed telemetry fields still emit measurable signals.
+- GitHub Actions policy: treat CI as an observability guard layer for structure/wiring/drift only; CI green does **not** prove runtime dashboards/collectors are healthy.
+- Claude decision rule: if runtime evidence is missing, state `UNKNOWN` explicitly and avoid capability claims.

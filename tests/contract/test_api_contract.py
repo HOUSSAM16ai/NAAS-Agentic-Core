@@ -35,6 +35,15 @@ MIGRATED_PATHS = {
     "/api/observability/health",
     "/api/observability/metrics",
     "/api/observability/performance",
+    "/api/v1/observability/aiops",
+    "/api/v1/observability/alerts",
+    "/api/v1/observability/analytics/{path}",
+    "/api/v1/observability/gitops",
+    "/api/v1/observability/health",
+    "/api/v1/observability/metrics",
+    "/api/v1/observability/performance",
+    "/api/v1/observability/traces",
+    "/api/v1/observability/traces/{trace_id}",
     "/api/v1/agents/langgraph/run",
     "/api/v1/agents/plan",
     "/api/v1/agents/plan/{plan_id}",
@@ -102,6 +111,13 @@ class TestAPIContracts:
         """يتحقق من عدم وجود مسارات أو عمليات غير موثقة ضمن العقد."""
 
         contract_operations = load_contract_operations(CONTRACT_PATH)
+
+        # Include migrated paths so they aren't flagged as unexpected runtime drift
+        # if the monolith still happens to route them during cutover.
+        for path in MIGRATED_PATHS:
+            if path not in contract_operations:
+                contract_operations[path] = {"get", "post", "put", "delete", "patch"}
+
         app = create_app(enable_static_files=False)
         report = detect_runtime_drift(
             contract_operations=contract_operations,

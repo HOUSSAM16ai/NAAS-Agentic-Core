@@ -31,5 +31,5 @@ def base_router_registry() -> list[RouterSpec]:
         (ums.router, "/api/v1"),
         (customer_chat.router, ""),
         (content.router, ""),
-        (observability.router, "/api/observability"),
+        (observability.router, "/api/v1/observability"),
     ]

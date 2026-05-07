@@ -1433,22 +1433,22 @@ The NAAS-Agentic-Core system is in a transitional "strangler fig" phase, meaning
 
 ## Observability Truth and Runtime Rules
 
-**System Reality:**
-*   **OpenTelemetry:** DORMANT by default in Codespaces. The `otel_setup.py` module bypasses instantiation if `OTEL_EXPORTER_OTLP_ENDPOINT` is absent. `app/kernel.py` loads it as a no-op.
-*   **LangGraph Tracing:** DORMANT. Calls to `emit_telemetry` rely on an active OpenTelemetry scope, falling back to an internal `_NoOpSpan` implementation otherwise. They log to `logger.info` but do not generate trace IDs for centralized logging unless explicitly configured.
-*   **Telemetry Evidence:** ACTIVE. Certain monolith and orchestrator paths manually write barebones state diagnostics to `telemetry_evidence.txt` (via `_append_telemetry_line`) out of band.
-*   **UnifiedObservabilityService:** PARTIAL. Collects traces, logs, and metrics in memory. Its background task attempts to flush them to the microservices boundary (`observability_service`).
-*   **Observability Service (AIOps):** PARTIAL. Running and accessible (`/telemetry`), relies on purely in-memory repositories (e.g., `InMemoryTelemetryRepository`) so all state resets on container restart.
-*   **GitHub Actions / CI Guardrails:** ACTIVE. Scripts like `scripts/ci_guardrails.py` and `scripts/fitness/check_tracing_gate.py` actively enforce code structural boundaries (import logic, structural checks), but they only check for the *presence* of hooks, not functional runtime observability.
+**1. How the Observability System Actually Works**
+*   **In-Process Metrics via Native Binaries:** ACTIVE. Prometheus scrapes `/api/v1/observability/prometheus` running in-process (FastAPI). Native Grafana binaries in the devcontainer (`supervisor.sh`) render these. This is the **ONLY** fully live observability path by default.
+*   **OpenTelemetry Traces & Logs:** DORMANT. `otel_setup.py` bypasses execution without `OTEL_EXPORTER_OTLP_ENDPOINT`. OTel Collector, Tempo, and Loki are missing from default execution.
+*   **UnifiedObservabilityService:** PARTIAL. Collects traces/logs/metrics in memory, attempting to sync to `observability_service`. Fails silently in the background if the service is unreachable.
+*   **AIOps (observability_service):** PARTIAL. Structurally complete but operationally volatile; relies entirely on `InMemoryTelemetryRepository` which resets on container restart.
+*   **WebSocket Tracing:** PARTIAL. `WsTurnSpan` exists for whole turns, but per-frame tracing (ISS-005) is missing.
+*   **LangGraph Tracing:** DORMANT. Depends entirely on the inactive OpenTelemetry scope, falling back to `logger.info` via `_NoOpSpan`.
 
-**Rules for AI:**
-*   **Do NOT assume observability metrics are captured.** Without `OTEL_EXPORTER_OTLP_ENDPOINT`, metrics disappear into NoOps.
-*   **Treat "telemetry" as local logging.** In the live codespaces environment, rely entirely on `telemetry_evidence.txt` and raw stdout logs for proof, not a Tempo/Prometheus dashboard.
-*   **Do not remove structural hooks.** CI checks (like `check_tracing_gate.py`) enforce the presence of tokens like `TraceContextMiddleware` or `traceparent`. Deleting dormant observability code will break the build.
-*   **If a change requires measuring latency or errors:** You must either manually log them via `logger.info` or ensure OpenTelemetry is fully booted in the environment.
+**2. Deep Diagnostic Realities (Enterprise Grade)**
+*   **Trace Split-Brain:** There is a total break in trace continuity at the system boundary. The API Gateway injects `traceparent` headers via `opentelemetry.propagate`, but the downstream Orchestrator Service ignores them, severing trace context.
+*   **Telemetry Evidence:** ACTIVE. Ad-hoc paths write diagnostic lines directly to `telemetry_evidence.txt` because formalized tracing fails.
+*   **GitHub Actions CI (`observability_validation.yml`):** ACTIVE but narrow. It validates structural wiring (imports, YAML syntax) and existence of checks, but it **DOES NOT** prove runtime telemetry flow.
 
-### Deep Diagnostic Realities (Enterprise Grade)
-*   **Trace Split-Brain:** There is a total break in trace continuity at the system boundary. The API Gateway explicitly injects `traceparent` headers via `opentelemetry.propagate`, but the downstream Orchestrator Service and LangGraph nodes never extract them. Traces generated downstream are orphaned.
-*   **Concurrency & Memory Safety:** The monolithic `UnifiedObservabilityService` utilizes `threading.RLock` protecting `deque` structures with explicit `maxlen` (10000-100000). Memory leakage is capped. Root spans, however, are manually `del`eted from dicts on completion.
-*   **AIOps Volatility:** The `observability_service` performs mathematically rigorous Anomaly Detection (Z-scores) and Load Forecasting (linear regression trend lines). However, this operates on an `InMemoryTelemetryRepository`. All "AIOps" data is ephemeral and resets upon container restart.
-*   **Resiliency Degradation:** If the `observability-service` dies, the `UnifiedObservabilityService` background sync loop (`_background_sync_loop`) will silently fail, catch the exception, and spam `logger.error` without crashing the main application. It lacks a formal circuit breaker but is strictly thread-isolated.
+**3. Rules for AI (What you must do before assuming observability)**
+*   **Do NOT assume traces or correlated logs exist.** Unless you manually boot the Docker Compose observability stack, Tempo/Loki are dead.
+*   **Use Native Metrics.** If you need evidence, use Prometheus metrics surfaced via native Grafana on port 3001, or manual stdout logs.
+*   **Do not remove structural hooks.** CI checks (like `check_tracing_gate.py`) enforce the *presence* of hooks like `open_ws_turn` or `TraceContextMiddleware`. Deleting dormant observability code will break the CI gate.
+*   **If you need a signal:** If there is no runtime evidence (logs, Prometheus counters, DB writes) for an observability capability, **treat it as ZOMBIE/DORMANT.** Do not hallucinate capabilities.
+*   **Always check GitHub Actions status:** Red X means a strict contract (like duplicate writes, fallback safety, or doc integrity) failed. Do not bypass the gate.

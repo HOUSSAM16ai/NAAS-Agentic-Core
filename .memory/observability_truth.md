@@ -1,33 +1,27 @@
-# Observability Truth Table and Architectural Summary
+# Observability Truth Table and Runtime Realities
 
-## Architectural Summary
-The system possesses a sophisticated observability surface designed around OpenTelemetry, Unified Observability (Monolith Facade), and a dedicated Observability Microservice. However, in default developer environments (Codespaces), most of this system acts as a hollow shell (NoOp) due to missing environment variables and infrastructure.
-
-## Truth Table
+## System Reality
+The following component status represents strictly what is proven by import + call chain + runtime evidence. Do not hallucinate capabilities beyond what is listed as `ACTIVE` or `PARTIAL`.
 
 | Component | Status | Proof |
-| :--- | :--- | :--- |
-| **OpenTelemetry Bootstrap** (`app/telemetry/otel_setup.py`) | DORMANT (Default) | Called by `kernel.py`, but `is_enabled()` returns false without `OTEL_EXPORTER_OTLP_ENDPOINT`. |
-| **LangGraph Telemetry** (`microservices/.../telemetry.py`) | ZOMBIE / DORMANT | Imports `opentelemetry.trace`, falls back to `_NoOpSpan` when missing/inactive. |
-| **API Gateway Telemetry** (`microservices/api_gateway/main.py`) | PARTIAL / DORMANT | Uses `_NoOpTracer` if `opentelemetry` missing. `log_telemetry` just writes to console logs. |
-| **UnifiedObservabilityService** (`app/telemetry/unified_observability.py`) | PARTIAL | Actively buffers metrics in-memory (`_flush_metrics_to_microservice`), but lacks actual backing storage or downstream dashboard in Codespaces. |
-| **Telemetry Evidence Log** (`telemetry_evidence.txt`) | ACTIVE | Hardcoded `_append_telemetry_line` used in `routes.py` for raw runtime signal captures. |
-| **Observability Service** (`microservices/observability_service`) | ACTIVE (Runtime) / VOLATILE | Service boots up, accepts payloads via HTTP, but uses `InMemoryTelemetryRepository` losing data on restart. |
-| **CI Guardrails** (`scripts/ci_guardrails.py`, `check_tracing_gate.py`) | ACTIVE | Actively blocks PRs if expected tokens (`TraceContextMiddleware`) are missing, but doesn't guarantee functional trace flow. |
-| **Database Telemetry** | UNKNOWN / MISSING | `core/database.py` establishes asyncpg connection pools but lacks explicit query latency spans. |
+|---|---|---|
+| In-Process Metrics (Prometheus) | ACTIVE | Exposes `/api/v1/observability/prometheus`. Read by native Prometheus binary. |
+| Native Grafana Dashboards | ACTIVE | Runs on port 3001 via `supervisor.sh` in devcontainer. |
+| Telemetry Evidence Log | ACTIVE | Path functions append raw state to `telemetry_evidence.txt`. |
+| GitHub Actions validation | ACTIVE | `observability_validation.yml` asserts imports and YAML validity. |
+| `WsTurnSpan` & `path_observer` | PARTIAL | Captures turn metrics. Lacks per-frame tracing (ISS-005). |
+| UnifiedObservabilityService | PARTIAL | Memory queues hold traces/metrics. Drops metrics silently if AIOps microservice is down. |
+| AIOps (observability_service) | PARTIAL | Accessible but ephemeral (`InMemoryTelemetryRepository`). Resets completely on reboot. |
+| OpenTelemetry Traces & Logs | DORMANT | `otel_setup.py` bypasses load without `OTEL_EXPORTER_OTLP_ENDPOINT`. |
+| Docker-based Grafana/Tempo/Loki | DORMANT | Unused unless `docker compose -f docker-compose.yml up -d` is run. |
+| LangGraph Tracing | DORMANT | Falls back to internal `_NoOpSpan` without active OTel setup. |
 
-## Signal Origins and Destinations
-*   **Customer Chat / WS:** Signals originate in `path_observer.py` (`open_ws_turn`, `close_ws_turn`), handed to `UnifiedObservabilityService`.
-*   **LangGraph Nodes:** Emit telemetry via `emit_telemetry` in `telemetry.py`, landing in stdout logs and `_NoOpSpan`.
-*   **Fallback Paths:** Monitored via explicit `mark_fallback_used()` calls, aggregating into in-memory counters.
+## Deep Diagnostic Realities
+1. **Trace Split-Brain**: The API Gateway passes W3C `traceparent` headers to Orchestrator Service, but Orchestrator and downstream LangGraph nodes ignore them. Distributed tracing is structurally broken at this boundary.
+2. **Volatile Data**: All complex logic in `observability_service` (Z-scores, trend lines) is purely in-memory and therefore volatile.
 
-## Rules & Facts
-*   Never assume metrics reach a dashboard in local dev.
-*   Do not delete dormant code; CI structural checks will fail.
-*   For live troubleshooting, read raw logs or `telemetry_evidence.txt`.
-
-## Deep Systemic Vulnerabilities & Truths
-*   **Trace Split-Brain:** API Gateway injects W3C `traceparent`, but `orchestrator_service` completely ignores it. Traces are severed at the HTTP boundary.
-*   **AIOps Reality:** The math is real (Z-scores, trend forecasting), but the data store is an in-memory mock. It is structurally sound but operationally volatile.
-*   **Async Context Safety:** `path_observer.py` uses `contextvars.ContextVar` securely. `asyncio` tasks (like WS connections) do not bleed state.
-*   **Background Degradation:** The Monolith's background telemetry sync catches all errors. A dead observability microservice won't crash the monolith, but will silently drop metrics while logging errors.
+## Rules for AI Sessions
+* **Do NOT assume traces or correlated logs exist.** Unless you manually boot the Docker Compose observability stack, Tempo/Loki are dead.
+* **Use Native Metrics.** If you need evidence, use Prometheus metrics surfaced via native Grafana on port 3001, or manual stdout logs.
+* **Do not remove structural hooks.** CI checks enforce the *presence* of hooks like `open_ws_turn` or `TraceContextMiddleware`. Deleting dormant observability code will break the CI gate.
+* **Require Runtime Evidence:** If there is no runtime evidence (logs, Prometheus counters, DB writes) for an observability capability, treat it as ZOMBIE/DORMANT. Do not hallucinate capabilities.

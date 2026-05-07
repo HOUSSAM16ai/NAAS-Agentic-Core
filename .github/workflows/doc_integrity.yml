@@ -48,6 +48,7 @@ jobs:
             ".memory/issues.md"
             ".memory/context.md"
             ".memory/tasks.md"
+            ".memory/observability_truth.md"
           )
           missing=0
           for f in "${required_files[@]}"; do
@@ -92,8 +93,8 @@ jobs:
               fail=1
             fi
           done
-          # Currently warn-only on first push. Flip to `exit $fail` once cleanup PR lands.
-          exit 0
+          # Cleanup PR has landed. Fail if any match.
+          exit $fail
 
       - name: No dated diagnostic dumps outside docs/archive
         run: |

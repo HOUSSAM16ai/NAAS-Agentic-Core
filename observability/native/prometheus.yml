@@ -1,0 +1,50 @@
+# =============================================================================
+# Prometheus — NATIVE-BINARY config (no Docker)
+# =============================================================================
+# Used when Prometheus runs as a process inside the dev container alongside
+# uvicorn/Next.js, started by .devcontainer/supervisor.sh. The Docker-compose
+# variant lives at observability/prometheus/prometheus.yml and is the source
+# of truth for the full multi-service stack — DO NOT delete it; it's the
+# target for the future path-consistency refactor (see CLAUDE.md §6.16).
+#
+# In the native mode there is no OTel collector, no Loki, no Tempo, and no
+# Grafana sibling network. Prometheus, Grafana, and the FastAPI app all share
+# one Linux network namespace (the dev container's), so we scrape over
+# localhost.
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: cogniforge-codespace
+    namespace: cogniforge
+    mode: native
+
+scrape_configs:
+
+  # ---- The FastAPI app's in-process Prometheus exposition --------------
+  # Exported by app/api/routers/observability.py + app/telemetry/metrics.py.
+  # Carries cogniforge_ws_chat_turn_* + standard FastAPI HTTP metrics.
+  - job_name: cogniforge-fastapi
+    metrics_path: /api/v1/observability/prometheus
+    static_configs:
+      - targets: ["localhost:8000"]
+        labels:
+          tier: app
+          source: fastapi-direct
+
+  # ---- Prometheus self-metrics ----------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          tier: stack
+
+  # ---- Grafana self-metrics (its own /metrics endpoint) ---------------
+  - job_name: grafana
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["localhost:3001"]
+        labels:
+          tier: stack

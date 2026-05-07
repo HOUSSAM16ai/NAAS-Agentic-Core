@@ -4,9 +4,9 @@
 #
 # Why this exists
 # ---------------
-# After pulling a branch that changes `.devcontainer/devcontainer.json` (e.g.
-# adding the `docker-in-docker` feature), the Codespace must be REBUILT for
-# the change to take effect. Three ways to trigger a rebuild:
+# After pulling a branch that changes the Dockerfile or .devcontainer/, the
+# Codespace must be REBUILT for the change to take effect. Three ways to
+# trigger a rebuild:
 #
 #   1. VS Code shows an automatic notification when it detects the change
 #      (sometimes only after a window reload). Click "Rebuild Container".
@@ -16,13 +16,14 @@
 # Use this script when (1) and (2) didn't surface the prompt, or you simply
 # prefer one terminal command. It is interactive: confirms before rebuilding.
 #
-# After rebuild
-# -------------
-# * `docker-in-docker` feature is installed → `docker` CLI works inside the
-#   devcontainer.
-# * `setup.sh` re-runs (postCreateCommand), pre-pulls the observability images.
-# * `on-start.sh` re-runs, launching the supervisor + the obs stack.
-# * Mission Control (port 3001) opens automatically — same UX as 3000/8000.
+# After rebuild (post-§6.17)
+# --------------------------
+# * Dockerfile bakes Grafana + Prometheus binaries into /opt/grafana and
+#   /opt/prometheus. ~5-8 min for the first build, mostly image download.
+# * supervisor.sh starts uvicorn + Next.js + Prometheus + Grafana as
+#   background processes. Mission Control listens on port 3001.
+# * Port 3001 auto-opens in the browser as soon as Grafana's /api/health
+#   returns 200 — same UX as 3000/8000.
 ###############################################################################
 
 set -uo pipefail
@@ -64,8 +65,8 @@ echo ""
 
 # ---- Detect why rebuild is needed -----------------------------------------
 needs_rebuild_reasons=()
-if ! command -v docker >/dev/null 2>&1; then
-    needs_rebuild_reasons+=("Docker CLI is missing — devcontainer was built without 'docker-in-docker' feature.")
+if [ ! -x /opt/grafana/bin/grafana-server ] || [ ! -x /opt/prometheus/prometheus ]; then
+    needs_rebuild_reasons+=("Grafana / Prometheus native binaries missing — image was built before §6.17.")
 fi
 
 if [ ${#needs_rebuild_reasons[@]} -gt 0 ]; then
@@ -78,9 +79,9 @@ fi
 
 # ---- What rebuild does ----------------------------------------------------
 echo -e "${BOLD}What rebuild does:${NC}"
-echo -e "  ${GREEN}✓${NC} Reinstalls all devcontainer features (docker-in-docker, node, github-cli, ...)"
-echo -e "  ${GREEN}✓${NC} Re-runs setup.sh (postCreateCommand) — pre-pulls observability images"
-echo -e "  ${GREEN}✓${NC} Re-runs on-start.sh — launches supervisor + observability stack"
+echo -e "  ${GREEN}✓${NC} Bakes Grafana OSS + Prometheus binaries into /opt/grafana and /opt/prometheus"
+echo -e "  ${GREEN}✓${NC} Re-runs setup.sh (postCreateCommand)"
+echo -e "  ${GREEN}✓${NC} Re-runs on-start.sh → supervisor.sh launches uvicorn + Next.js + Mission Control"
 echo -e "  ${GREEN}✓${NC} Mission Control (port 3001) opens automatically — same UX as 3000/8000"
 echo ""
 
@@ -88,8 +89,7 @@ echo ""
 echo -e "${YELLOW}${BOLD}This will:${NC}"
 echo -e "  ${YELLOW}•${NC} Disconnect your current VS Code session for ~5–8 minutes"
 echo -e "  ${YELLOW}•${NC} ${BOLD}PRESERVE${NC} all files in /workspaces/ (your code is safe)"
-echo -e "  ${YELLOW}•${NC} ${BOLD}WIPE${NC} Docker volumes inside the devcontainer (none today, since Docker is missing)"
-echo -e "  ${YELLOW}•${NC} Use ~50–100 MB of bandwidth for the new feature install"
+echo -e "  ${YELLOW}•${NC} Add ~350 MB to the image (Grafana ~270 MB + Prometheus ~80 MB)"
 echo ""
 
 # ---- Confirmation ---------------------------------------------------------

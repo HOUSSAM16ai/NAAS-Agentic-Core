@@ -1,0 +1,22 @@
+# =============================================================================
+# Grafana — NATIVE-mode dashboard provisioning (no Docker)
+# =============================================================================
+# Re-uses the same JSON dashboards as the Docker-compose variant — they live
+# at observability/grafana/dashboards/ and are mounted at the path below
+# (which is /app/observability/grafana/dashboards inside the dev container,
+# resolved by supervisor.sh because /app is the workspaceFolder).
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: 'CogniForge Mission Control'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: true
+    editable: false
+    updateIntervalSeconds: 30
+    options:
+      path: /app/observability/grafana/dashboards
+      foldersFromFilesStructure: false

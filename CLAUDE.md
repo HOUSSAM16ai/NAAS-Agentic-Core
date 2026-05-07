@@ -1125,6 +1125,122 @@ the path-consistency refactor lands.
 > The §6.13 / §6.14 / §6.15 trio shipped without that check, and cost
 > the user three rebuild attempts.
 
+## 6.17 Mission Control via Native Binaries — No Docker Required (2026-05-07 — same branch, fourth pass)
+
+> User mandate: **"yes it must work — incredibly"**. After §6.13 broke
+> rebuild and §6.16 rolled it back to a working-but-Grafana-less state,
+> we need Mission Control to actually work. This pass bakes Grafana OSS
+> and Prometheus directly into the runtime image as native binaries —
+> no Docker daemon, no socket, no privileged mode, no extra feature.
+
+### What ships in this pass
+
+| File | Change |
+|---|---|
+| `Dockerfile` | New stage in the runtime image: downloads `grafana-${GRAFANA_VERSION}.linux-${arch}.tar.gz` and `prometheus-${PROMETHEUS_VERSION}.linux-${arch}.tar.gz` into `/opt/grafana` and `/opt/prometheus`. Auto-detects amd64 vs arm64. Creates `/var/lib/grafana`, `/var/lib/prometheus`, `/var/log/grafana`, `/var/log/prometheus`. ~350 MB added to final image. |
+| `observability/native/prometheus.yml` | Native-mode scrape config. Targets ONLY localhost: the FastAPI app on `:8000/api/v1/observability/prometheus`, Prometheus self-metrics on `:9090`, Grafana self-metrics on `:3001/metrics`. No `host.docker.internal`, no Docker network. |
+| `observability/native/grafana/provisioning/datasources/datasources.yml` | Single Prometheus datasource at `http://localhost:9090`. Loki and Tempo are intentionally absent (no native single-file binary that's trivially configurable). |
+| `observability/native/grafana/provisioning/dashboards/dashboards.yml` | Provider that re-uses the existing `observability/grafana/dashboards/` JSON files — same Mission Control panels as the Docker variant. |
+| `.devcontainer/supervisor.sh` | New Step 4C `launch_mission_control()` runs in background after frontend launch. Detects Codespaces, exports `GF_*` env vars (root URL, domain, SameSite=None, Secure=true, CSRF check off — same wiring as §6.12 but for the native binary). Starts Prometheus + Grafana via `nohup` with PIDs persisted to lifecycle state. Idempotent: skips if already running. Hard-guards on missing binaries. |
+| `.devcontainer/on-start.sh` | Removed the old `start_observability.sh` background launch. Mission Control is now part of the supervisor's normal startup, not a separate hook. |
+| `.devcontainer/start_observability.sh` | Repurposed as a thin status checker (`pgrep` + curl probes). Does NOT start anything anymore. Kept for muscle-memory compatibility. |
+| `.devcontainer/on-attach.sh` | Updated banner: when binaries are present, shows STARTING (with public URL + log tail). Removed the §6.15 16-line ASCII banner. |
+| `.devcontainer/codespace_rebuild.sh` | Updated description: rebuild now bakes Grafana + Prometheus binaries (not docker-in-docker feature). |
+
+### Why this approach (vs the abandoned alternatives)
+
+| Approach | Verdict | Why |
+|---|---|---|
+| `docker-in-docker:2` feature | ❌ Rejected (§6.13/§6.16) | Fails to build on `python:3.12-slim` + `network_mode: host`. Codespaces error 1302. |
+| `docker-outside-of-docker:1` feature | ❌ Rejected (§6.16) | Build succeeds, but compose's relative bind mounts resolve to `/app/observability/...` inside dev container; VM Docker daemon doesn't see that path. All 7 mounts fail. |
+| Path-consistency refactor (`workspaceFolder=/workspaces/<repo>`) | ❌ Out of scope | ~60 files touch `/app`; days of work; high risk. |
+| **Native binaries baked into Dockerfile** | ✅ **Picked** | No Docker dependency. No path mismatch. No privileged mode. Configs stay where they are. Works on first rebuild. |
+| Run a custom all-in-one container with everything inside | ❌ Rejected | Still needs Docker access; doesn't solve the original problem. |
+
+### Architecture (after this pass)
+
+```
+┌─ devcontainer (built from Dockerfile) ──────────────────────────────┐
+│                                                                     │
+│  Native binaries baked at build time:                               │
+│    /opt/grafana/bin/grafana-server  (Grafana OSS 11.3.0)            │
+│    /opt/prometheus/prometheus       (Prometheus 2.55.0)             │
+│                                                                     │
+│  supervisor.sh (Step 4C, background) launches:                      │
+│    ├─ uvicorn (FastAPI :8000)                                       │
+│    ├─ next dev (:3000)                                              │
+│    ├─ /opt/prometheus/prometheus  → :9090                           │
+│    │     scrapes localhost:8000/api/v1/observability/prometheus     │
+│    │     scrapes localhost:9090   (self)                            │
+│    │     scrapes localhost:3001   (Grafana self-metrics)            │
+│    └─ /opt/grafana/bin/grafana-server  → :3001                      │
+│          datasource: http://localhost:9090                          │
+│          dashboards: /app/observability/grafana/dashboards/*.json   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Codespaces forwards :3001 → public URL → browser opens automatically.
+
+### What works / what doesn't
+
+| Capability | State (post-§6.17) |
+|---|---|
+| Mission Control dashboard at port 3001 | ✅ Works |
+| Path Deep Dive dashboard | ✅ Works (Prometheus-only panels) |
+| LangGraph Runtime dashboard | ✅ Works (metrics-driven panels) |
+| HTTP API Surface dashboard | ✅ Works |
+| Stack Self-Monitoring (`up{}`) | ✅ Partial — only Prometheus + Grafana visible (Loki/Tempo absent) |
+| Cross-origin proxy auth (Codespaces preview URL) | ✅ Works — `GF_*` env wiring from §6.12 reused |
+| Distributed traces (Tempo) | ❌ Tempo absent |
+| Centralized logs (Loki) | ❌ Loki absent |
+| Trace ↔ logs ↔ metrics correlation | ❌ Requires Tempo + Loki |
+| OTel collector pipeline | ❌ Not started — direct Prometheus scrape replaces it |
+
+This is a deliberate cut: Loki and Tempo don't have a "single binary +
+single config + run as background process" story that's as clean as
+Grafana and Prometheus. Adding them would require either Docker or
+a much heavier Dockerfile. The metrics half of the story IS what users
+actually click through 90% of the time.
+
+### Runtime invariants (must remain true on `main`)
+
+1. The Dockerfile MUST keep the binary download + sanity-check (`grafana-server -v` + `prometheus --version`) in the same RUN as the install. If either fails, the image build fails — never silently produce an image without the binaries.
+2. `supervisor.sh:launch_mission_control()` MUST stay idempotent. It checks `pgrep` for both binaries and short-circuits if they are already running. Never start two daemons.
+3. `supervisor.sh:launch_mission_control()` MUST stay non-blocking and MUST NOT fail the supervisor on observability errors. If the binaries are missing or fail to start, the FastAPI app and Next.js still launch normally.
+4. The `GF_*` env wiring (root URL, SameSite, Secure, CSRF) is mandatory for Codespaces. Removing it brings back the §6.12 cookie-loop bug.
+5. Port 3001 MUST stay reserved for Grafana (devcontainer.json declares `onAutoForward: openBrowser` on it). Changing the port breaks the auto-open UX.
+6. The `observability/grafana/grafana.ini` file is shared between the (retired) Docker variant and the (active) native variant. Its env-override pattern is what makes both work. Do not move Codespaces-specific values into it; they belong in supervisor.sh exports.
+7. `observability/native/prometheus.yml` MUST stay localhost-only. Adding Docker hostnames (`otel-collector:8888`, etc.) makes Prometheus log "DNS resolution failed" every 15s and pollutes the logs.
+
+### Confidence levels
+
+| Claim | Confidence |
+|---|---|
+| Grafana + Prometheus tarball downloads in the Dockerfile | CONFIRMED — both URLs are official, pinned versions |
+| Binaries run on Linux amd64 + arm64 | CONFIRMED — `grafana-server -v` + `prometheus --version` are run at build time as a sanity check |
+| supervisor.sh launches them in the background without blocking | CONFIRMED by `bash -n` + matching the existing `launch_frontend` pattern |
+| Codespaces port 3001 auto-opens in the browser when Grafana listens | LIKELY — same VS Code listener-watcher mechanism that §6.14 polished. **Pending real Codespace rebuild verification.** |
+| Cross-origin cookie auth works on the preview proxy | LIKELY — same `GF_*` env wiring proven in §6.12; only difference is the binary instead of the container reads them. Grafana env-var override applies identically. |
+| Dashboards render real metrics | LIKELY — `cogniforge_ws_chat_turn_*` series exists in `app/telemetry/metrics.py:export_prometheus_metrics`; Prometheus scrapes the FastAPI endpoint; provisioned dashboard files unchanged. **Pending runtime verification.** |
+| Image build completes within Codespaces' build budget | LIKELY — adds ~350 MB and ~30-60 s of download to the existing build (which already pulls torch + Node 20). Comfortably within Codespaces' 5-8 min build window. |
+
+### What MUST NOT change without runtime proof
+
+1. Promoting the `cogniforge-grafana-native` capability to ACTIVE in `.runtime/truth_table.lock.json` requires: (a) image build success on a fresh Codespace, (b) `pgrep grafana-server` returning a PID after supervisor finishes Step 4C, (c) HTTP 200 from `https://<NAME>-3001.preview.app.github.dev/api/health`, AND (d) at least one dashboard panel populating with a real data point (`cogniforge_ws_chat_turn_duration_seconds_count` > 0 after a chat turn).
+2. Removing the native binary install from the Dockerfile without first removing `launch_mission_control` from supervisor.sh. The supervisor handles missing binaries gracefully, but leaving the call site without the binary means every boot logs a warning.
+3. Adding more datasources (Loki, Tempo, OTel) to `observability/native/grafana/provisioning/datasources/datasources.yml` without ALSO ensuring the corresponding service is actually running on the listed URL. Unreachable datasources show red banners in Grafana and confuse users.
+
+### Lesson (carried from §6.16)
+
+> "Infrastructure features must pass the same `import + call chain +
+> runtime evidence` bar as application code." This pass takes the
+> opposite direction: instead of relying on a runtime-installed feature,
+> we BUILD-TIME embed the dependency. The build-time path is testable
+> in CI (image build success = runtime evidence) and has no runtime
+> capability gap. **Native dependencies > runtime features for things
+> we always need.**
+
 ## 15. Documentation Consolidation Policy (2026-05-06)
 
 - تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.

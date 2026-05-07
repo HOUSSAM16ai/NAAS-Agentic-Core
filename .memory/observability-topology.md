@@ -201,3 +201,55 @@ A forwarded-port stub is not a working stack.
 | `network_mode: host` (in `docker-compose.host.yml`) is compatible with DinD | LIKELY — DinD uses iptables NAT independent of parent network mode |
 | 4cpu/8GB host fits the full stack | CONFIRMED in similar deployments |
 | `loud_warn` reaches the visible supervisor log | CONFIRMED — writes to `.superhuman_bootstrap.log` |
+
+---
+
+## 2026-05-07 (FINAL POLISH) — Auto-Open Parity with 3000/8000 — same branch
+
+### User goal
+Make port 3001 (Grafana) auto-open in the Codespaces browser with the
+**exact same UX quality** as port 3000 (Next.js) and 8000 (FastAPI) —
+which "just work" because they are native processes inside the devcontainer.
+
+### Why 3000/8000 already feel instant
+They are native processes (`uvicorn`, `next dev`). Python and Node are
+installed at build time via devcontainer features. They bind to the port
+in 5–15s. VS Code's port watcher fires `onAutoForward` as soon as a
+listener appears.
+
+### Why 3001 lagged (even after §6.13's docker-in-docker)
+First attach paid 30–90s for image pull + container boot. VS Code's
+`openBrowser` was configured but the listener was absent at attach time
+and the browser hook had no transition to fire on.
+
+### Three-layer polish landed on this branch
+
+| Layer | File | Mechanic |
+|---|---|---|
+| **Pre-warm** | `.devcontainer/setup.sh` | Best-effort background `docker compose pull` during postCreate. Trades zero attach-time latency for build-time parallelism — saves 30–90s of bandwidth on first attach. |
+| **Daemon wait** | `.devcontainer/start_observability.sh` (`wait_for_daemon`) | Polls `docker info` up to 60s. Handles DinD startup race condition. |
+| **Listener wait** | `.devcontainer/start_observability.sh` (`wait_for_grafana`) | Polls `http://localhost:3001/api/health` up to 120s. **This is the key**: VS Code only fires `openBrowser` when a port transitions absent→present, so the script must exit only after Grafana truly listens. |
+| **Status banner** | `.devcontainer/on-attach.sh` | Probes Grafana on attach and prints HEALTHY / STARTING / OFFLINE — mirrors the FastAPI 8000 health banner that already exists. |
+
+### End-to-end UX after this branch + §6.13
+| Phase | UX | Time |
+|---|---|---|
+| First create | Build runs; observability images pulled in background | 5–8 min total |
+| First attach | Banner prints STARTING; Docker is booting | <2s |
+| ~30s into first attach | Grafana listener appears, VS Code fires openBrowser | 0s — identical to 3000/8000 |
+| Subsequent attaches | Banner prints HEALTHY; tab already open | <2s |
+
+### Invariants
+1. `wait_for_grafana` interval=3s, timeout=120s. Don't shorten or lengthen without measurement.
+2. Pre-warm in setup.sh MUST stay non-blocking (`|| true` + background subshell). Never block postCreate on Docker.
+3. on-attach banner MUST stay non-blocking (curl --max-time 2). Soft "<1s" contract.
+4. Every script must exit 0 in all failure modes — broken observability never blocks app boot.
+
+### Confidence
+| Claim | Confidence |
+|---|---|
+| Pre-warm pull saves 30–90s | CONFIRMED — matches image sizes |
+| wait_for_daemon removes DinD race | CONFIRMED — DinD feature docs |
+| Listener wait → openBrowser fires | LIKELY — pending real Codespace rebuild |
+| Banner reflects real state | CONFIRMED — three states map to three observable conditions |
+| Local dev unchanged | CONFIRMED — every new path gated on Codespaces env or `command -v docker` |

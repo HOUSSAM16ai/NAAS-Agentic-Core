@@ -84,11 +84,30 @@ if ! command -v docker >/dev/null 2>&1; then
     loud_warn "                in VS Code is created by GitHub regardless of whether a server runs."
     exit 0
 fi
-if ! docker info >/dev/null 2>&1; then
-    loud_warn "❌ docker daemon unreachable from inside the devcontainer."
-    loud_warn "   The 'docker' CLI is present but the daemon is not running yet."
-    loud_warn "   With the docker-in-docker feature, the daemon usually takes 10-30s after attach."
-    loud_warn "   Re-run this script in 30s:  bash .devcontainer/start_observability.sh"
+
+# ---- Wait for the Docker daemon to actually be ready ---------------------
+# With docker-in-docker, the daemon takes 5–30s to come online after the
+# container starts. We poll up to 60s. This is what makes the UX feel like
+# 3000/8000 — by the time start_observability.sh proceeds, Docker IS ready.
+wait_for_daemon() {
+    local timeout=60
+    local elapsed=0
+    local interval=2
+    while ! docker info >/dev/null 2>&1; do
+        if [ "${elapsed}" -ge "${timeout}" ]; then
+            loud_warn "❌ Docker daemon did not start within ${timeout}s."
+            loud_warn "   Check: ps aux | grep dockerd  (the DinD feature should run it)"
+            loud_warn "   Try : sudo service docker start"
+            return 1
+        fi
+        sleep "${interval}"
+        elapsed=$((elapsed + interval))
+    done
+    echo "✅ Docker daemon ready (waited ${elapsed}s)."
+    return 0
+}
+
+if ! wait_for_daemon; then
     exit 0
 fi
 
@@ -195,6 +214,47 @@ fi
 
 echo "→ services:"
 docker compose -f "${OBS_COMPOSE}" --project-name cogniforge-obs ps --format "  {{.Name}}\t{{.Status}}" || true
+
+# ---- Wait for Grafana to actually serve HTTP on :3001 --------------------
+# VS Code's `onAutoForward: openBrowser` triggers when port 3001 transitions
+# from not-listening to listening. We block here until Grafana's `/api/health`
+# returns 200, so the moment this script exits, the browser auto-opens —
+# exactly the same UX as port 3000 (Next.js) or 8000 (uvicorn).
+wait_for_grafana() {
+    local timeout=120
+    local elapsed=0
+    local interval=3
+    echo "→ Waiting for Grafana on http://localhost:3001/api/health ..."
+    while true; do
+        if command -v curl >/dev/null 2>&1; then
+            if curl -fsS -o /dev/null --max-time 2 "http://localhost:3001/api/health" 2>/dev/null; then
+                echo "✅ Grafana healthy on :3001 (waited ${elapsed}s)."
+                return 0
+            fi
+        elif command -v wget >/dev/null 2>&1; then
+            if wget -q -O /dev/null --timeout=2 "http://localhost:3001/api/health" 2>/dev/null; then
+                echo "✅ Grafana healthy on :3001 (waited ${elapsed}s)."
+                return 0
+            fi
+        else
+            # No HTTP client — fall back to TCP probe.
+            if (echo > /dev/tcp/127.0.0.1/3001) >/dev/null 2>&1; then
+                echo "✅ Grafana listening on :3001 (TCP probe, waited ${elapsed}s)."
+                return 0
+            fi
+        fi
+        if [ "${elapsed}" -ge "${timeout}" ]; then
+            loud_warn "⚠️ Grafana did not become healthy within ${timeout}s."
+            loud_warn "   Stack is still booting in background. Check:"
+            loud_warn "     docker compose -f ${OBS_COMPOSE} --project-name cogniforge-obs ps"
+            loud_warn "     docker logs cogniforge-grafana --tail=50"
+            return 1
+        fi
+        sleep "${interval}"
+        elapsed=$((elapsed + interval))
+    done
+}
+wait_for_grafana || true
 
 # ---- Friendly status snapshot --------------------------------------------
 echo ""

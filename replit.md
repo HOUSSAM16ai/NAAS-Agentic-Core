@@ -66,6 +66,8 @@ Two stacked failures, fixed in one branch:
 
 **§6.13 — the missing-Docker catastrophe (deeper root cause).** Even after §6.12, the URL still returned `ERR_HTTP_RESPONSE_CODE_FAILURE`. Diagnosis: the devcontainer had **no Docker access at all** — `features` was missing `docker-in-docker`, and `docker-compose.host.yml` did not mount the host's docker socket. `start_observability.sh` was bailing silently on `command -v docker`. Fix: added `ghcr.io/devcontainers/features/docker-in-docker:2` to `devcontainer.json`, added `hostRequirements: 4cpu/8GB/32GB`, and added a `loud_warn()` helper that mirrors silent failures to the visible supervisor log. **Codespaces users must run "Codespaces: Rebuild Container" once after pulling this branch.**
 
+**§6.14 — auto-open parity with 3000/8000.** The user wanted port 3001 to open automatically as fast and seamlessly as 3000/8000. Three-layer polish: (1) `setup.sh` pre-warms Docker images at postCreate so first attach is fast; (2) `start_observability.sh` adds `wait_for_daemon()` (60s) and `wait_for_grafana()` (120s) so the script returns ONLY when port 3001 truly serves HTTP — this is what makes VS Code's `onAutoForward: openBrowser` fire automatically; (3) `on-attach.sh` adds a Mission Control health banner (HEALTHY/STARTING/OFFLINE) mirroring the FastAPI banner. After §6.13's one-time rebuild, port 3001 opens with identical UX to 3000/8000.
+
 **Replit users**: neither fix affects Replit (no Docker, no Codespaces env vars). Replit boots the FastAPI app and Next.js as usual; observability falls back to the in-process endpoints listed above.
 
 See `CLAUDE.md` §6.12 + §6.13 and `.memory/observability-topology.md` for the full forensic trail.

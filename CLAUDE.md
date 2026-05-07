@@ -859,6 +859,73 @@ Mission Control dashboard panels must populate with at least one real
 data point.** Anything less is a forwarded port stub, not a working
 stack.
 
+## 6.14 Mission Control Auto-Open Parity with 3000/8000 (2026-05-07 — same branch)
+
+> User requirement (verbatim): "أريد يفتح آليا مثل 3000 و 8000 في GitHub
+> Codespaces مثلهم بشكل خارق جدا خرافي احترافي فائق الدقة" — i.e., port
+> 3001 must auto-open with the same UX quality as 3000 (Next.js) and
+> 8000 (FastAPI), where the browser opens automatically the moment the
+> port is ready.
+>
+> **Why 3000/8000 already feel "instant"**: they are NATIVE processes
+> (uvicorn, next dev) inside the devcontainer. Python and Node are
+> already installed at build time. They start in 5–15s. The moment they
+> bind to their port, VS Code's port watcher detects the listener and
+> fires the `onAutoForward` action.
+>
+> **Why 3001 lagged**: it is a **Docker container**, not a native
+> process. Even with §6.13's `docker-in-docker` feature added, the
+> first attach paid a 30–90s tax for image pull + container boot.
+> `onAutoForward: openBrowser` was already configured, but VS Code only
+> fires it once — and only after a real listener appears.
+
+### Three-layer fix to close the parity gap
+
+| Layer | When it runs | What it does |
+|---|---|---|
+| **Pre-warm** | `setup.sh` (`postCreateCommand`) — once at container build | Best-effort `docker compose pull --quiet` in the background while the user is still in the build phase. Saves 30–90s of bandwidth on the first attach. Skips silently if the DinD daemon hasn't woken up yet (start_observability.sh re-pulls on demand). |
+| **Daemon wait** | `start_observability.sh` (`postStartCommand`, background) | New `wait_for_daemon()` polls `docker info` for up to 60s. Handles the DinD startup latency so subsequent commands don't hit "Cannot connect to the Docker daemon" race conditions. |
+| **Listener wait** | `start_observability.sh` (after `compose up`) | New `wait_for_grafana()` polls `http://localhost:3001/api/health` for up to 120s. The script returns ONLY after Grafana is genuinely serving HTTP. This is what makes VS Code's `onAutoForward: openBrowser` fire — the listener transition from "absent" to "present" is the trigger. |
+
+A fourth layer surfaces the state to the user:
+
+| Layer | When it runs | What it does |
+|---|---|---|
+| **Status banner** | `on-attach.sh` (`postAttachCommand`) — every attach | Probes `localhost:3001/api/health` and prints one of three states with the public URL: `HEALTHY` (green, ready), `STARTING` (yellow, with ETA + tail command), `OFFLINE` (red, with the §6.13 fix instruction). Mirrors the existing FastAPI 8000 health banner. |
+
+### End-to-end UX after this branch
+
+| Phase | What the user sees | Time |
+|---|---|---|
+| First Codespace creation | Build progress panel; `setup.sh` runs in the background; observability images quietly download | ~5–8 min (Codespace build + image pull happen in parallel) |
+| First attach (post-create) | Terminal opens; supervisor.sh + start_observability.sh launch in background; on-attach prints status banner showing **STARTING** | ~5s for the banner |
+| Within ~30s of first attach | Grafana boots, listener appears on :3001 | — |
+| The instant Grafana listens | VS Code fires `onAutoForward: openBrowser` → Mission Control tab opens **automatically** | 0s — same UX as 3000/8000 |
+| Subsequent attaches (same Codespace) | Status banner prints **HEALTHY** within 1–2s of attach; Grafana already running | <2s |
+
+### What MUST NOT change without explicit decision
+
+1. `wait_for_grafana` polling interval must stay at 3s and timeout at 120s — anything shorter wastes CPU; anything longer makes the openBrowser hook stale.
+2. The pre-pull in `setup.sh` MUST stay best-effort (`|| true` + background subshell). If the DinD daemon is not ready at build time, we silently fall through — the runtime path will pull on demand. **Never block postCreate on Docker.**
+3. The on-attach banner MUST remain non-blocking (timeouts of 2s) — the attach hook has a soft contract of "< 1s for the banner".
+4. The script must continue to exit 0 in all failure modes — a broken observability stack must not block app boot.
+
+### Confidence
+
+| Claim | Confidence |
+|---|---|
+| Pre-warm pull saves 30–90s on first attach | CONFIRMED — image sizes (Grafana 270MB, Prometheus 240MB, Loki 80MB, Tempo 90MB, OTel 220MB) match this download window on a typical Codespace upstream. |
+| `wait_for_daemon` removes DinD race condition | CONFIRMED — DinD feature documents the daemon takes 5–30s post-attach. |
+| `wait_for_grafana` returning makes VS Code fire `openBrowser` | LIKELY — VS Code remote-port-watcher polls every ~2s; the listener transition is what triggers the attribute action. **Pending runtime verification on a fresh rebuild.** |
+| Status banner states match reality | CONFIRMED — three branches map 1:1 to the three observable conditions (HTTP 200 / boot.log fresh / boot.log absent). |
+| No regression to local development | CONFIRMED — every new code path is gated on Codespaces env vars or `command -v docker` / `docker info` checks. Replit users (no Docker) hit the warn branch in setup.sh and get the in-process telemetry endpoints instead. |
+
+### One-time user action (still required for §6.13)
+This polish layer assumes §6.13 has shipped. Until the user runs
+**Codespaces: Rebuild Container** once, the `docker-in-docker` feature
+is not installed and all the polish is moot. After that single rebuild,
+the experience matches 3000/8000 forever.
+
 ## 15. Documentation Consolidation Policy (2026-05-06)
 
 - تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.

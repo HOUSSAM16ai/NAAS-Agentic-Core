@@ -93,6 +93,43 @@ echo "💡 Tip: Wait for 'Application is healthy' message before accessing"
 echo "═══════════════════════════════════════════════════════════════════"
 echo ""
 
+# ── Mission Control (Grafana :3001) status banner ────────────────────
+# Mirrors the 8000/3000 health-check experience for the observability stack.
+# Three states: HEALTHY (HTTP 200), STARTING (boot.log fresh, no answer yet),
+# OFFLINE (no boot.log → start_observability.sh did not run, likely missing
+# docker-in-docker feature).
+echo "🛰️  Mission Control (Grafana — port 3001):"
+GRAFANA_URL_LOCAL="http://localhost:3001/api/health"
+if [ -n "${CODESPACE_NAME:-}" ] && [ -n "${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-}" ]; then
+    GRAFANA_URL_PUBLIC="https://${CODESPACE_NAME}-3001.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}/"
+elif [ -n "${CODESPACE_NAME:-}" ]; then
+    GRAFANA_URL_PUBLIC="https://${CODESPACE_NAME}-3001.app.github.dev/"
+else
+    GRAFANA_URL_PUBLIC="http://localhost:3001/"
+fi
+
+if curl -fsS -o /dev/null --max-time 2 "${GRAFANA_URL_LOCAL}" 2>/dev/null; then
+    echo "   ✅ Status: HEALTHY"
+    echo "   🌐 URL   : ${GRAFANA_URL_PUBLIC}"
+elif [ -f "$APP_ROOT/.observability/boot.log" ]; then
+    last_log_age=$(($(date +%s) - $(stat -c %Y "$APP_ROOT/.observability/boot.log" 2>/dev/null || echo 0)))
+    if [ "${last_log_age}" -lt 180 ]; then
+        echo "   ⏳ Status: STARTING (Docker is booting + pulling images)"
+        echo "   🌐 URL   : ${GRAFANA_URL_PUBLIC}  (will auto-open within ~30-90s)"
+        echo "   📝 Tail  : tail -f $APP_ROOT/.observability/boot.log"
+    else
+        echo "   ⚠️  Status: STALE — last boot attempt was $((last_log_age / 60))m ago"
+        echo "   🔧 Re-run: bash .devcontainer/start_observability.sh"
+        echo "   📝 Tail  : tail -f $APP_ROOT/.observability/boot.log"
+    fi
+else
+    echo "   ❌ Status: OFFLINE (Docker likely not installed)"
+    echo "   🔧 Fix   : devcontainer.json must include feature 'docker-in-docker:2'."
+    echo "             Then run 'Codespaces: Rebuild Container'."
+    echo "   📝 Detail: see CLAUDE.md §6.13 + .superhuman_bootstrap.log"
+fi
+echo ""
+
 # ── Runtime observability snapshot (non-blocking, informational) ──
 # Refresh `.runtime/*` artifacts so the truth table reflects the tree at
 # attach time. Drift is reported but does not fail the attach hook.

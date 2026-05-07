@@ -50,3 +50,22 @@ All 18 tables are auto-created/validated by `app/core/db_schema.py` on startup. 
 - The `hnsw` vector index on `knowledge_nodes.embedding` requires the `pgvector` PostgreSQL extension. This index is skipped on startup but the rest of the schema is fully operational.
 - The app uses pydantic-settings so list env vars (like `BACKEND_CORS_ORIGINS`) must be set as JSON arrays: `["value1","value2"]`
 - Microservices in `microservices/` are not started by default — the monolith at `app/` handles all primary functionality.
+
+## Observability (Mission Control / Grafana)
+
+The full observability stack (Grafana on port 3001, Prometheus 9090, Loki 3100, Tempo 3200, OTel collector 4317/4318) is committed under `observability/` and is wired to autostart in **GitHub Codespaces** via `.devcontainer/start_observability.sh`. **It does NOT autostart on Replit** — Replit's container model doesn't expose a Docker daemon, so docker-compose is not available.
+
+To experiment with the stack on Replit:
+- Either run a local Docker host externally and point `OTEL_EXPORTER_OTLP_ENDPOINT` to it, or
+- Skip the full stack and rely on the FastAPI app's in-process telemetry: `/api/v1/observability/metrics`, `/api/v1/observability/prometheus` (text/plain Prometheus exposition).
+
+### Codespaces-only fix landed 2026-05-07 (branch `claude/fix-monitoring-port-hQ7JL`)
+Clicking forwarded port 3001 in a Codespace previously hit a redirect loop / blank panel because Grafana's defaults (`domain=localhost`, `cookie_samesite=lax`, `cookie_secure=false`) collided with the cross-origin `https://<NAME>-3001.preview.app.github.dev/` proxy. The fix:
+1. `.devcontainer/start_observability.sh` now detects `${CODESPACE_NAME}` + `${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` and exports `GF_SERVER_ROOT_URL`, `GF_SECURITY_COOKIE_SAMESITE=none`, `GF_SECURITY_COOKIE_SECURE=true`, `GF_SECURITY_CSRF_ALWAYS_CHECK=false` before `docker compose up -d`.
+2. `observability/docker-compose.observability.yml` passes those vars through with `${VAR:-default}` syntax — local boots get sane defaults, Codespaces gets the proxy-correct config.
+3. `observability/grafana/grafana.ini` defaults stay LOCAL-correct; the file's header now explains that Codespaces is overridden via env.
+4. `.devcontainer/on-start.sh` runs `gh codespace ports visibility 3001:public` so the URL works on first attach.
+
+**Replit users**: this fix has no effect on Replit (no Docker, no Codespaces env vars). Replit boots the FastAPI app and Next.js as usual; observability falls back to the in-process endpoints listed above.
+
+See `CLAUDE.md` §6.12 and `.memory/observability-topology.md` for the full forensic trail.

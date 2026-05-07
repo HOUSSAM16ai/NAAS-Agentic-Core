@@ -383,6 +383,7 @@
 | ISS-R004 | No trace API endpoints `/traces`, `/traces/{id}` | commit `e320e45` |
 | ISS-R005 | `git commit*` in deny list — blocked CI | `.claude/settings.json` fix |
 | ISS-R006 | Python 3.11 system pytest can't parse 3.12 syntax | `.venv/` with Python 3.12 |
+| ISS-R007 | Grafana port 3001 unreachable on Codespaces preview proxy (cookie/redirect loop) | branch `claude/fix-monitoring-port-hQ7JL` — env-driven `GF_SERVER_ROOT_URL` + `GF_SECURITY_COOKIE_SAMESITE=none`/`SECURE=true`/`CSRF_ALWAYS_CHECK=false`, Codespaces detection in `start_observability.sh`. See CLAUDE.md §6.12. |
 
 ---
 

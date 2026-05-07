@@ -1,11 +1,10 @@
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel
 
 from app.core.domain.chat import CustomerConversation, CustomerMessage, MessageRole
 from app.core.domain.user import User
 from app.services.customer.chat_persistence import CustomerChatPersistence
-
 
 @pytest.fixture
 async def async_db_session():

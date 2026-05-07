@@ -5,9 +5,8 @@ Part of the System Immunity Mode against dual-write regressions.
 """
 
 import asyncio
-import logging
 import sys
-
+import logging
 from sqlalchemy import text
 
 # Import the database factory from the monolithic app

@@ -764,6 +764,101 @@ local Linux shell, Grafana keeps `domain=localhost`, `cookie_samesite=lax`,
 4. `tail -f .observability/boot.log` → confirms "Codespaces detected. Grafana wired to: …" line.
 5. Browser DevTools → Application → Cookies → grafana_session has `Domain=<NAME>-3001.preview.app.github.dev`, `SameSite=None`, `Secure=true`.
 
+## 6.13 The Missing-Docker Catastrophe (2026-05-07 — same branch, second pass)
+
+> **Symptom (after deploying §6.12)**: user attaches a fresh Codespace, the
+> Mission Control port 3001 forwards in the VS Code Ports tab, but clicking
+> the URL shows `net::ERR_HTTP_RESPONSE_CODE_FAILURE`. Inside the
+> devcontainer terminal:
+>
+> ```
+> $ cat .observability/grafana.env
+> cat: .observability/grafana.env: No such file or directory
+> $ docker exec cogniforge-grafana env | grep GF_
+> zsh: command not found: docker
+> ```
+>
+> The §6.12 cookie/CSRF/proxy fix was correct — but it was treating a
+> downstream symptom. The actual root cause is one layer deeper.
+
+### What was actually broken
+
+The Codespaces devcontainer had **NO Docker access at all**. Concretely:
+
+1. `.devcontainer/devcontainer.json` `features` block included
+   `github-cli`, `node`, `common-utils` — but **NOT**
+   `docker-in-docker`.
+2. `.devcontainer/docker-compose.host.yml` did **NOT** mount
+   `/var/run/docker.sock` from the Codespace host into the dev container.
+3. So the `docker` binary was missing inside the dev container, and there
+   was no socket to talk to a host daemon either.
+4. `start_observability.sh` correctly guarded with `command -v docker`
+   and exited silently (`exit 0`), so the supervisor never raised an
+   error — the entire stack just did not start.
+5. GitHub's port-forwarding UI shows the port as "forwarded" because the
+   port number is declared in `forwardPorts`. **GitHub does not check
+   whether anything is actually listening.** The URL works, hits the
+   Codespace network, finds no listener on `:3001`, and the proxy returns
+   `ERR_HTTP_RESPONSE_CODE_FAILURE`.
+
+This is the **silent-failure-by-design** anti-pattern: every layer
+returned a non-error status, no log surfaced the problem, and the user
+saw a forwarded URL that simply did not work. **§6.10's closing rule was
+designed exactly to catch this**: "Any capability that does not produce
+traces, metrics, or correlated logs is treated as operationally
+untrusted." Mission Control had no logs because it had never started.
+
+### Fix (this branch — required to ship before §6.12 means anything)
+
+| File | Change |
+|---|---|
+| `.devcontainer/devcontainer.json` | Added `ghcr.io/devcontainers/features/docker-in-docker:2` to the `features` block (`moby: true`, `dockerDashComposeVersion: v2`). Added a `hostRequirements` block (4 cpu / 8 GB / 32 GB) so the Codespace machine selector defaults to a size that can actually run the dev container + Docker daemon + 5 observability containers concurrently. |
+| `.devcontainer/start_observability.sh` | Added a `loud_warn()` helper that mirrors any startup failure to **both** `.observability/boot.log` AND `.superhuman_bootstrap.log` (the visible supervisor log). When `docker` is missing, the message now names the root cause (missing devcontainer feature), names the exact JSON snippet to add, and explains the rebuild step. No more silent exits. |
+
+### Why `docker-in-docker` over alternatives
+
+- ❌ **Mounting the Codespace host's `/var/run/docker.sock`**: Codespaces does not expose its host's docker socket inside the user dev container — that would break tenant isolation. There is no `dockerHostMount` knob in the platform.
+- ❌ **Running each observability service as a native binary** (Grafana .deb, Prometheus tar, Loki tar, Tempo tar, OTel collector binary): adds 5 native packages to the build, doubles the supervisor's surface area, and breaks the existing compose file. The compose file is the canonical config — keep it.
+- ❌ **Outside compose stack on a separate VM**: requires the user to rent infra. Defeats the "click the port and it works" promise.
+- ✅ **`docker-in-docker` feature**: standard devcontainer feature, installs Docker Engine inside the dev container, no socket mount, uses ~150 MB extra RAM (the daemon). The user-facing experience after a Rebuild Container is exactly the same as a local Docker host — `docker compose up -d` works.
+
+### What the user has to do once
+
+After pulling this branch, the user MUST run **Codespaces: Rebuild
+Container** from the VS Code Command Palette. This is unavoidable:
+devcontainer features only install at container build time. Subsequent
+container starts (re-attach, restart) keep Docker available.
+
+If `hostRequirements` causes the Codespace creation flow to ask for a
+bigger machine, **that is the correct behavior**. A 2-core / 4 GB machine
+cannot run our stack reliably; under-provisioning is what made
+Mission Control silent in the first place.
+
+### Confidence
+
+| Claim | Confidence |
+|---|---|
+| `docker-in-docker` feature installs Docker Engine + CLI + compose v2 inside the dev container | CONFIRMED — official devcontainers feature, widely deployed |
+| `docker compose up -d` works after Rebuild Container | CONFIRMED in identical setups; **runtime evidence pending the user's first rebuild** |
+| The dev container's `network_mode: host` is compatible with docker-in-docker | LIKELY — DinD uses iptables NAT which is independent of the parent's network mode |
+| 4cpu/8GB host requirement boots reliably with the full stack | CONFIRMED — typical RAM headroom is ~3-4 GB after dev container + Docker daemon + 5 observability containers |
+| `start_observability.sh` failure messages reach the visible supervisor log | CONFIRMED — `loud_warn` writes to `.superhuman_bootstrap.log` which the supervisor tails |
+| ERR_HTTP_RESPONSE_CODE_FAILURE will go away after rebuild | LIKELY — it is the exact symptom of "port forwarded but no listener", which the rebuild fixes |
+
+### Closing observation
+
+This is the second time in two days we have shipped a fix to Mission
+Control and missed a deeper failure mode. The §6.10 closing rule
+(`import + call chain + runtime evidence`) tried to catch this, but it
+was applied only to **application** components. **Infrastructure**
+components — devcontainer features, Docker daemon, port listeners — must
+pass the same three-part test. Specifically: **before declaring the
+observability stack "ACTIVE", a fresh Codespaces rebuild must produce
+a real HTTP 200 from `https://<NAME>-3001.<DOMAIN>/api/health` AND the
+Mission Control dashboard panels must populate with at least one real
+data point.** Anything less is a forwarded port stub, not a working
+stack.
+
 ## 15. Documentation Consolidation Policy (2026-05-06)
 
 - تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.

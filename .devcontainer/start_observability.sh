@@ -57,12 +57,38 @@ if [ "${autostart}" != "1" ]; then
 fi
 
 # ---- Guard: docker available? ---------------------------------------------
+# CRITICAL — if the devcontainer was built WITHOUT the `docker-in-docker`
+# feature, the `docker` binary won't exist inside the container and the
+# observability stack physically cannot start. We log loudly to BOTH
+# .observability/boot.log AND the visible supervisor bootstrap log so the
+# user actually sees the problem instead of an empty Mission Control panel.
+loud_warn() {
+    # Print to our own log + the supervisor's visible log + stderr.
+    local msg="$1"
+    echo "${msg}"
+    echo "${msg}" >&2
+    if [ -w "${REPO_ROOT}/.superhuman_bootstrap.log" ]; then
+        printf "[start_observability.sh] %s\n" "${msg}" \
+            >> "${REPO_ROOT}/.superhuman_bootstrap.log" 2>/dev/null || true
+    fi
+}
+
 if ! command -v docker >/dev/null 2>&1; then
-    echo "❌ docker not found — observability stack cannot start."
+    loud_warn "❌ docker CLI not found inside the devcontainer."
+    loud_warn "   ROOT CAUSE: the devcontainer is missing the 'docker-in-docker' feature."
+    loud_warn "   FIX        : in .devcontainer/devcontainer.json the 'features' block must include"
+    loud_warn "                'ghcr.io/devcontainers/features/docker-in-docker:2'."
+    loud_warn "                Then run 'Codespaces: Rebuild Container' from the Command Palette."
+    loud_warn "   RESULT NOW : Mission Control (port 3001) will show ERR_HTTP_RESPONSE_CODE_FAILURE"
+    loud_warn "                because nothing is listening on that port. The forwarded port stub"
+    loud_warn "                in VS Code is created by GitHub regardless of whether a server runs."
     exit 0
 fi
 if ! docker info >/dev/null 2>&1; then
-    echo "❌ docker daemon unreachable — observability stack cannot start."
+    loud_warn "❌ docker daemon unreachable from inside the devcontainer."
+    loud_warn "   The 'docker' CLI is present but the daemon is not running yet."
+    loud_warn "   With the docker-in-docker feature, the daemon usually takes 10-30s after attach."
+    loud_warn "   Re-run this script in 30s:  bash .devcontainer/start_observability.sh"
     exit 0
 fi
 

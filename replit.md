@@ -59,13 +59,13 @@ To experiment with the stack on Replit:
 - Either run a local Docker host externally and point `OTEL_EXPORTER_OTLP_ENDPOINT` to it, or
 - Skip the full stack and rely on the FastAPI app's in-process telemetry: `/api/v1/observability/metrics`, `/api/v1/observability/prometheus` (text/plain Prometheus exposition).
 
-### Codespaces-only fix landed 2026-05-07 (branch `claude/fix-monitoring-port-hQ7JL`)
-Clicking forwarded port 3001 in a Codespace previously hit a redirect loop / blank panel because Grafana's defaults (`domain=localhost`, `cookie_samesite=lax`, `cookie_secure=false`) collided with the cross-origin `https://<NAME>-3001.preview.app.github.dev/` proxy. The fix:
-1. `.devcontainer/start_observability.sh` now detects `${CODESPACE_NAME}` + `${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` and exports `GF_SERVER_ROOT_URL`, `GF_SECURITY_COOKIE_SAMESITE=none`, `GF_SECURITY_COOKIE_SECURE=true`, `GF_SECURITY_CSRF_ALWAYS_CHECK=false` before `docker compose up -d`.
-2. `observability/docker-compose.observability.yml` passes those vars through with `${VAR:-default}` syntax — local boots get sane defaults, Codespaces gets the proxy-correct config.
-3. `observability/grafana/grafana.ini` defaults stay LOCAL-correct; the file's header now explains that Codespaces is overridden via env.
-4. `.devcontainer/on-start.sh` runs `gh codespace ports visibility 3001:public` so the URL works on first attach.
+### Codespaces-only fixes landed 2026-05-07 (branch `claude/fix-monitoring-port-hQ7JL`)
+Two stacked failures, fixed in one branch:
 
-**Replit users**: this fix has no effect on Replit (no Docker, no Codespaces env vars). Replit boots the FastAPI app and Next.js as usual; observability falls back to the in-process endpoints listed above.
+**§6.12 — cross-origin proxy auth.** Clicking forwarded port 3001 hit a redirect loop because Grafana's defaults (`domain=localhost`, `cookie_samesite=lax`, `cookie_secure=false`) collided with the cross-origin `https://<NAME>-3001.<DOMAIN>/` proxy. Fix: `start_observability.sh` detects `${CODESPACE_NAME}` + `${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` and exports `GF_SERVER_ROOT_URL`, `GF_SECURITY_COOKIE_SAMESITE=none`, `GF_SECURITY_COOKIE_SECURE=true`, `GF_SECURITY_CSRF_ALWAYS_CHECK=false` before `docker compose up -d`. Local boots `unset` those — no regression.
 
-See `CLAUDE.md` §6.12 and `.memory/observability-topology.md` for the full forensic trail.
+**§6.13 — the missing-Docker catastrophe (deeper root cause).** Even after §6.12, the URL still returned `ERR_HTTP_RESPONSE_CODE_FAILURE`. Diagnosis: the devcontainer had **no Docker access at all** — `features` was missing `docker-in-docker`, and `docker-compose.host.yml` did not mount the host's docker socket. `start_observability.sh` was bailing silently on `command -v docker`. Fix: added `ghcr.io/devcontainers/features/docker-in-docker:2` to `devcontainer.json`, added `hostRequirements: 4cpu/8GB/32GB`, and added a `loud_warn()` helper that mirrors silent failures to the visible supervisor log. **Codespaces users must run "Codespaces: Rebuild Container" once after pulling this branch.**
+
+**Replit users**: neither fix affects Replit (no Docker, no Codespaces env vars). Replit boots the FastAPI app and Next.js as usual; observability falls back to the in-process endpoints listed above.
+
+See `CLAUDE.md` §6.12 + §6.13 and `.memory/observability-topology.md` for the full forensic trail.

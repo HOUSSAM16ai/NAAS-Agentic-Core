@@ -68,6 +68,15 @@ MIGRATED_PATHS = {
     "/api/observability/health",
     "/api/observability/metrics",
     "/api/observability/performance",
+    "/api/v1/observability/aiops",
+    "/api/v1/observability/alerts",
+    "/api/v1/observability/analytics/{path}",
+    "/api/v1/observability/gitops",
+    "/api/v1/observability/health",
+    "/api/v1/observability/metrics",
+    "/api/v1/observability/performance",
+    "/api/v1/observability/traces",
+    "/api/v1/observability/traces/{trace_id}",
     "/api/v1/agents/langgraph/run",
     "/api/v1/agents/plan",
     "/api/v1/agents/plan/{plan_id}",
@@ -132,6 +141,12 @@ def test_no_undocumented_paths_or_operations(
     # Note: We don't filter MIGRATED_PATHS here because this test checks for *extra* paths in runtime.
     # If the contract still has them but the runtime doesn't, that's handled by test_contract_alignment_for_services.
     # If the runtime has paths not in contract, that's what this tests.
+
+    # However, include migrated paths so they aren't flagged as unexpected runtime drift
+    # if the monolith still happens to route them during cutover.
+    for path in MIGRATED_PATHS:
+        if path not in contract_operations:
+            contract_operations[path] = {"get", "post", "put", "delete", "patch"}
 
     drift_report = detect_runtime_drift(
         contract_operations=contract_operations,

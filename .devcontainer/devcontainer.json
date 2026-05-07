@@ -98,18 +98,26 @@
       "installZsh": true,
       "configureZshAsDefaultShell": true,
       "username": "root"
-    },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "version": "latest",
-      "moby": true,
-      "dockerDashComposeVersion": "v2"
     }
-  },
-
-  "hostRequirements": {
-    "cpus": 4,
-    "memory": "8gb",
-    "storage": "32gb"
+    // INTENTIONALLY NO `docker-in-docker` / `docker-outside-of-docker`.
+    // - `docker-in-docker:2` fails to build on `python:3.12-slim` +
+    //   `network_mode: host` (Codespaces error 1302 — UnitiedContainerError-
+    //   FatalCreatingContainer). Adding `privileged: true` would help DinD
+    //   but conflicts with `network_mode: host` iptables management.
+    // - `docker-outside-of-docker` would build, but the observability
+    //   compose uses RELATIVE bind mounts (`./observability/grafana/...`)
+    //   which are interpreted on the VM Docker daemon. Inside the dev
+    //   container the workspace is at `/app/`; on the VM it lives under
+    //   `/var/lib/docker/codespacemount/workspace/...`. Path mismatch →
+    //   bind mounts fail.
+    //
+    // Until the Docker integration is re-engineered with path consistency
+    // (workspaceFolder = `/workspaces/<repo>` matching the VM mount),
+    // observability stack auto-start stays DORMANT in default Codespaces
+    // — consistent with every other dormant capability in CLAUDE.md §6.6.
+    // The `start_observability.sh` script detects the missing docker CLI
+    // and exits cleanly with a clear message instead of failing the boot.
+    // See CLAUDE.md §6.16 for the full rationale.
   },
 
   "customizations": {

@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "🔨 Rebuild Codespace (apply Docker/observability fix)",
+      "detail": "Runs `gh codespace rebuild`. Required after pulling a branch that changes .devcontainer/devcontainer.json. Takes ~5-8 min; VS Code reconnects automatically.",
+      "type": "shell",
+      "command": "bash",
+      "args": ["${workspaceFolder}/.devcontainer/codespace_rebuild.sh"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🛰️ Restart Observability Stack (Grafana/Prometheus/Loki/Tempo/OTel)",
+      "detail": "Re-runs start_observability.sh. Useful if Mission Control panels stopped responding. Does NOT require a rebuild.",
+      "type": "shell",
+      "command": "bash",
+      "args": ["${workspaceFolder}/.devcontainer/start_observability.sh"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "📊 Tail Observability Boot Log",
+      "detail": "Watch .observability/boot.log live to see what start_observability.sh did.",
+      "type": "shell",
+      "command": "tail",
+      "args": ["-f", "${workspaceFolder}/.observability/boot.log"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    }
+  ]
+}

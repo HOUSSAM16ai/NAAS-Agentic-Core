@@ -58,8 +58,12 @@ MANIFEST
 
 # 4. IDE / Editor Specific Files
 # User-specific settings for code editors.
-.vscode/
+# `.vscode/*` (not `.vscode/`) so the negations below actually work for
+# new files. Git's parent-directory exclusion swallows negations inside a
+# fully-excluded directory; star-glob keeps the directory itself unmatched.
+.vscode/*
 !.vscode/mcp-settings.json
+!.vscode/tasks.json
 .cursor/
 !.cursor/mcp.json
 .idea/

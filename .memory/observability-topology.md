@@ -253,3 +253,41 @@ and the browser hook had no transition to fire on.
 | Listener wait → openBrowser fires | LIKELY — pending real Codespace rebuild |
 | Banner reflects real state | CONFIRMED — three states map to three observable conditions |
 | Local dev unchanged | CONFIRMED — every new path gated on Codespaces env or `command -v docker` |
+
+---
+
+## 2026-05-07 (REBUILD UX) — Four click-paths to trigger the one-time rebuild — same branch
+
+### User goal
+The §6.13 fix requires a one-time rebuild to install `docker-in-docker`.
+The user wants the "Rebuild" button surfaced **automatically and
+clickably** instead of having to remember the Command Palette path.
+
+### Hard constraint
+VS Code Codespaces does not expose a public API for third-party config
+to inject a custom toast with a "Rebuild" action. Anything that looks
+like a "real button" requires shipping a VS Code extension.
+
+### Four click-paths added on this branch
+
+| # | UX | Mechanic |
+|---|---|---|
+| 1 | VS Code's native auto-toast when `devcontainer.json` changes | Built-in. We just rely on it. `Developer: Reload Window` resurfaces it if missed. |
+| 2 | One terminal command: `bash .devcontainer/codespace_rebuild.sh` | New `.devcontainer/codespace_rebuild.sh` — interactive wrapper around `gh codespace rebuild --codespace $CODESPACE_NAME`. |
+| 3 | VS Code Task Picker (Ctrl+Shift+P → "Tasks: Run Task") | New `.vscode/tasks.json` with three labeled tasks: rebuild, restart-obs, tail-boot-log. |
+| 4 | Large ASCII banner in `on-attach.sh` (only when Docker is missing AND user is in a Codespace) | Updated `on-attach.sh`. Gated tightly: never shows after a successful rebuild, never shows on local dev. |
+
+### Invariants
+1. Banner gated on `command -v docker` returning non-zero AND `${CODESPACE_NAME}` set — never noisy after rebuild.
+2. `codespace_rebuild.sh` keeps its interactive confirmation — never silent auto-rebuild.
+3. Never call `gh codespace rebuild` from `postAttachCommand` or `postStartCommand` — would loop forever.
+4. `tasks.json` labels keep the leading emoji + the `detail` string for the task picker.
+
+### Confidence
+| Claim | Confidence |
+|---|---|
+| `gh codespace rebuild --codespace $CODESPACE_NAME` queues a rebuild | CONFIRMED — official `gh` command |
+| Tasks in `.vscode/tasks.json` appear in the Run Task picker | CONFIRMED — VS Code spec |
+| Banner only shows in the broken state | CONFIRMED — gated correctly |
+| User files are preserved across rebuild | CONFIRMED — rebuild touches the container only, not `/workspaces/` |
+| VS Code's built-in toast surfaces on first encounter | LIKELY — sometimes file watcher misses the change; Reload Window fixes |

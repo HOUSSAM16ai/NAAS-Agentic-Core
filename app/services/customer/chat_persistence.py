@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -75,11 +76,12 @@ class CustomerChatPersistence:
         """
         حفظ رسالة جديدة ضمن محادثة العميل مع حماية صارمة ضد التكرار (Duplicate Guard).
         """
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
         from sqlalchemy import and_
 
         # --- DUPLICATE DETECTION GUARD ---
-        ten_seconds_ago = datetime.now(timezone.utc) - timedelta(seconds=10)
+        datetime.now(UTC) - timedelta(seconds=10)
         # Using naive utcnow() if model doesn't support timezone aware, but usually SQLAlchemy handles it. Let's use naive if standard in project, or aware.
         # It's safer to just fetch the last message for this role/conversation and compare.
         stmt = (

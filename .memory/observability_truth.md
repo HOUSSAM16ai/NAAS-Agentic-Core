@@ -21,11 +21,14 @@ The following component status represents strictly what is proven by import + ca
 2. **Volatile Data**: All complex logic in `observability_service` (Z-scores, trend lines) is purely in-memory and therefore volatile.
 
 ## Observability Principles
-* **Diagnosis over Decoration:** Observability is for diagnosis, not decoration.
-* **Metric Evidence:** Metrics require runtime evidence to be trusted.
-* **Separation of Concerns:** Traces and metrics are separate disciplines.
-* **Cardinality Constraints:** High-cardinality labels are dangerous and strictly forbidden.
-* **Semantic Contracts:** Semantic meaning must exist before a metric is accepted.
+* **Runtime Truth over Synthetic Dashboards:** Always prioritize actual runtime evidence over what a synthetic or aspirational dashboard claims.
+* **Instrumentation First, Visualization Second:** Never build dashboards that outpace actual code instrumentation. The underlying data source must be solid first.
+* **Diagnosis over Decoration:** Observability is for debugging and investigation, not just for show. Every dashboard must support active debugging.
+* **Unknown is Better than Fake Certainty:** Do not present dormant systems as healthy. If a system is not actively emitting data, it should be marked as unknown or dormant.
+* **Metric Evidence:** Metrics require real runtime evidence to be trusted. Do not hallucinate or mock metric data in production.
+* **Separation of Concerns:** Traces and metrics are different disciplines. Treat them independently when instrumenting and debugging.
+* **Cardinality Constraints:** High-cardinality labels are dangerous and strictly forbidden as they can crash the metrics backend.
+* **Semantic Contracts:** Semantic meaning must exist before a metric is accepted. You must know what a metric means before emitting it.
 
 ## Rules for AI Sessions
 * **Do NOT assume traces or correlated logs exist.** Unless you manually boot the Docker Compose observability stack, Tempo/Loki are dead.

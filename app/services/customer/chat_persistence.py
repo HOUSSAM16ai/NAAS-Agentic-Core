@@ -81,7 +81,6 @@ class CustomerChatPersistence:
         from sqlalchemy import and_
 
         # --- DUPLICATE DETECTION GUARD ---
-        datetime.now(UTC) - timedelta(seconds=10)
         # Using naive utcnow() if model doesn't support timezone aware, but usually SQLAlchemy handles it. Let's use naive if standard in project, or aware.
         # It's safer to just fetch the last message for this role/conversation and compare.
         stmt = (

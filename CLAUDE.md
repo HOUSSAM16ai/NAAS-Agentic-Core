@@ -1447,6 +1447,13 @@ The NAAS-Agentic-Core system is in a transitional "strangler fig" phase, meaning
 *   **GitHub Actions CI (`observability_validation.yml`):** ACTIVE but narrow. It validates structural wiring (imports, YAML syntax) and existence of checks, but it **DOES NOT** prove runtime telemetry flow.
 
 **3. Rules for AI (What you must do before assuming observability)**
+
+*   **Permanent Observability Doctrine:**
+    *   **Runtime truth over synthetic certainty.** If it isn't executing and measured, it isn't real.
+    *   **Instrumentation before visualization.** Dashboards must never outpace instrumentation.
+    *   **Unknown is better than fake certainty.** Do not present dormant systems as healthy.
+    *   **Every metric must have a semantic contract,** and must reflect real runtime evidence.
+    *   **Repository memory must remain coherent, curated, and durable.** Every future agent must inherit these rules automatically.
 *   **Do NOT assume traces or correlated logs exist.** Unless you manually boot the Docker Compose observability stack, Tempo/Loki are dead.
 *   **Use Native Metrics.** If you need evidence, use Prometheus metrics surfaced via native Grafana on port 3001, or manual stdout logs.
 *   **Do not remove structural hooks.** CI checks (like `check_tracing_gate.py`) enforce the *presence* of hooks like `open_ws_turn` or `TraceContextMiddleware`. Deleting dormant observability code will break the CI gate.

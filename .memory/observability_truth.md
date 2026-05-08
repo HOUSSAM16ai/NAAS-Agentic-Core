@@ -20,6 +20,13 @@ The following component status represents strictly what is proven by import + ca
 1. **Trace Split-Brain**: The API Gateway passes W3C `traceparent` headers to Orchestrator Service, but Orchestrator and downstream LangGraph nodes ignore them. Distributed tracing is structurally broken at this boundary.
 2. **Volatile Data**: All complex logic in `observability_service` (Z-scores, trend lines) is purely in-memory and therefore volatile.
 
+## Observability Principles
+* **Diagnosis over Decoration:** Observability is for diagnosis, not decoration.
+* **Metric Evidence:** Metrics require runtime evidence to be trusted.
+* **Separation of Concerns:** Traces and metrics are separate disciplines.
+* **Cardinality Constraints:** High-cardinality labels are dangerous and strictly forbidden.
+* **Semantic Contracts:** Semantic meaning must exist before a metric is accepted.
+
 ## Rules for AI Sessions
 * **Do NOT assume traces or correlated logs exist.** Unless you manually boot the Docker Compose observability stack, Tempo/Loki are dead.
 * **Use Native Metrics.** If you need evidence, use Prometheus metrics surfaced via native Grafana on port 3001, or manual stdout logs.

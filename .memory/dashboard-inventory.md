@@ -36,6 +36,8 @@ the left-nav order. The `00-` dashboard is set as Grafana's default home.
 
 ## Required dashboard hygiene
 
+* **Instrumentation first, visualization second:** Dashboards must never outpace instrumentation.
+* **Debugging support:** Every visualization must support debugging and investigation.
 * Title MUST be human-readable; emoji prefix is encouraged for the home row.
 * Description (panel-level) MUST explain the metric's source AND interpretation.
 * `tags` MUST include `cogniforge` so the folder grouping works.

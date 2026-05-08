@@ -5,6 +5,24 @@
 
 ---
 
+## 0. Core System Doctrine
+
+**Single writer. Single terminal frame. No silent failure.** These are operational laws, not aspirations.
+
+The system must preserve the following principles permanently. Every future agent must inherit and obey these rules automatically:
+
+- **Runtime truth over synthetic certainty**: Code presence ≠ runtime usage. A capability is real ONLY when proven by import + call chain + runtime evidence. Anything missing one of those three is treated as DORMANT or ZOMBIE until proven otherwise.
+- **Instrumentation before visualization**: Dashboards must never outpace instrumentation.
+- **Observability is for diagnosis, not decoration**: Every visualization must support debugging.
+- **Unknown is better than fake certainty**: Dormant systems must not be presented as healthy.
+- **Metrics require runtime evidence**: Every metric must have a semantic contract.
+- **Traces and metrics are separate disciplines**: Treat them as such in architecture and implementation.
+- **Forbidden anti-patterns**: High-cardinality labels are dangerous and strictly forbidden. Dual-writes to the database are forbidden.
+- **CI truth-gate philosophy**: The project enforces architectural capability truths via static analysis in CI (`scripts/runtime_truth.py --check`), which strictly validates the codebase against `.runtime/truth_table.lock.json`. Do not bypass or break this gate.
+- **Repository memory coherence**: Repository memory (`.memory/` and `CLAUDE.md`) must remain coherent, curated, and durable over time. It must reflect the actual runtime reality, not aspirational architecture.
+
+---
+
 ## 1. What This Project Does
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.

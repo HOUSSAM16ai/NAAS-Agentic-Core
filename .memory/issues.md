@@ -453,6 +453,24 @@
 | ISS-R007 | Grafana port 3001 unreachable on Codespaces preview proxy (cookie/redirect loop) | branch `claude/fix-monitoring-port-hQ7JL` — env-driven `GF_SERVER_ROOT_URL` + `GF_SECURITY_COOKIE_SAMESITE=none`/`SECURE=true`/`CSRF_ALWAYS_CHECK=false`, Codespaces detection in `start_observability.sh`. See CLAUDE.md §6.12. |
 | ISS-R008 | Mission Control port 3001 returns `ERR_HTTP_RESPONSE_CODE_FAILURE` even after §6.12 fix | branch `claude/fix-monitoring-port-hQ7JL` — root cause was the devcontainer missing the `docker-in-docker` feature, so `docker compose up -d` could never run inside the dev container. Added `ghcr.io/devcontainers/features/docker-in-docker:2` + `hostRequirements: 4cpu/8GB/32GB` to `devcontainer.json`. Added `loud_warn()` in `start_observability.sh` that mirrors silent failures to the visible supervisor log. **Requires user to run "Codespaces: Rebuild Container" once.** See CLAUDE.md §6.13. |
 
+### ISS-032 · Truth Table Lock Drift — `customer_chat_router` importer_count 6→5
+- **Status**: CONFIRMED — documentation fix required, no code change needed
+- **Discovered**: 2026-05-09 live audit
+- **Evidence**: `python scripts/runtime_truth.py --check` exits 1 with: `customer_chat_router: importer_count 6 → 5`
+- **Root cause**: `.runtime/truth_table.lock.json` was generated on branch `jules-5513332666705839536-7e7df21b` (2026-05-08T09:54:43Z) when `microservices/orchestrator_service/src/api/context_utils.py.orig` was counted as an importer. The `.orig` file still exists but `scripts/runtime_truth.py` only greps `.py` files — the old lock generation run used a different grep path that included `.orig`.
+- **Component status unchanged**: `customer_chat_router` is still ACTIVE. Only the importer count drifted by 1.
+- **Fix**: `python scripts/runtime_truth.py --update && git add .runtime/truth_table.lock.json && git commit -m "runtime-truth: resync lock after .orig file grep path fix"`
+- **Severity**: LOW — CI drift gate fails on PRs until fixed, but no runtime impact.
+
+### ISS-033 · Scratch Artifact — `context_utils.py.orig` in Microservice Directory
+- **Status**: CONFIRMED — cleanup required
+- **Discovered**: 2026-05-09 live audit
+- **File**: `microservices/orchestrator_service/src/api/context_utils.py.orig`
+- **Content**: Backup of `context_utils.py` from a prior edit session. Differs by one line (context truncation logic: `return client_context[-12:]` vs `return []`).
+- **Impact**: Causes ISS-032 (truth table lock drift). Not imported by any live code. Not a `.py` file so not executed.
+- **Fix**: `git rm microservices/orchestrator_service/src/api/context_utils.py.orig` in a cleanup PR.
+- **Severity**: LOW — no runtime impact, but contributes to CI noise.
+
 ---
 
 ## 📊 Runtime Metrics (Measured 2026-05-04)

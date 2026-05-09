@@ -146,6 +146,31 @@ Three quality issues: ISS-021 (zombies), ISS-022 (pipeline split), ISS-023 (stre
 - أنماط الهشاشة المعمارية والدروس المستفادة: `.memory/fragility-patterns.md`
 - تم حذف الأرشيفات القديمة في `docs/archive/` لتجنب تضارب المعرفة.
 
+## Session Note 2026-05-09 (second pass) — Live Architecture Audit + Memory Update
+
+**Mode**: READ-ONLY investigation + documentation update only. No application code changed.
+**Environment**: Ona/Gitpod devcontainer, no `DATABASE_URL` injected.
+
+### Key findings confirmed by live inspection
+1. **FastAPI not running** — uvicorn spawns but crashes at `AppSettings()` validation: `DATABASE_URL is missing`. Port 8000 not listening. A running uvicorn PID is not proof of a healthy server.
+2. **Grafana + Prometheus native binaries confirmed running** — `/opt/grafana/bin/grafana-server` (port 3001) and `/opt/prometheus/prometheus` (port 9090) both healthy. Prometheus shows `cogniforge-fastapi=0` (FastAPI down).
+3. **Truth table lock drift** — `scripts/runtime_truth.py --check` exits 1: `customer_chat_router: importer_count 6→5`. Root cause: `.orig` file counted in old lock, not in new scan. Component status unchanged. Fix: `--update` the lock (ISS-032).
+4. **`context_utils.py.orig` scratch artifact** — `microservices/orchestrator_service/src/api/context_utils.py.orig` exists, causes ISS-032 (ISS-033).
+5. **`otel_setup.py` ACTIVE (no-op)** — new taxonomy tier formalised: import + call chain present, runtime effect absent without `OTEL_EXPORTER_OTLP_ENDPOINT`.
+
+### What was updated
+- `CLAUDE.md`: §0 (3 new doctrine rules), §6.6 truth table (rows for otel_setup, Grafana/Prometheus native, FastAPI conditional), §6.22 (lock staleness finding), §6.23 (new — full audit findings)
+- `.memory/runtime_truth.md`: rows 30–32 added, status legend extended, branch ledger updated
+- `.memory/observability_truth.md`: Grafana/Prometheus native rows updated, otel_setup row corrected
+- `.memory/issues.md`: ISS-032 + ISS-033 added
+- `.memory/context.md`: this session note
+- `.memory/progress.md`: session entry
+
+### What was NOT changed
+- No application source code (`app/`, `microservices/`, `frontend/`)
+- No test files, no CI workflows, no runtime behavior
+- All 29 prior truth table rows remain valid — no status promotions or demotions
+
 ## Session Note 2026-05-09 — Architectural Intelligence Enrichment
 - Discovered and documented 4 systemic fragility patterns (ISS-027–031):
   1. **Intent routing semantic hijacking** — lexical classifier misroutes non-academic queries containing educational keywords (`تمرين`, `حل`, `شرح`, etc.)

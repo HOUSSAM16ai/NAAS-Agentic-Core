@@ -112,6 +112,33 @@ Four systemic fragility patterns were discovered through deep code inspection an
 - No CI workflows
 - No runtime behavior
 
+## ✅ Session: 2026-05-09 (second pass) — Live Architecture Audit + Memory Update
+
+**Branch**: `docs/architecture-memory-audit-2026-05-09`
+**Mode**: READ-ONLY investigation + documentation update. No application code changed.
+
+### What Was Investigated
+Live inspection of the running environment (no DATABASE_URL, no secrets):
+1. FastAPI startup failure confirmed — uvicorn spawns then crashes at `AppSettings()` validation. Port 8000 not listening.
+2. Grafana + Prometheus native binaries confirmed running (ports 3001 + 9090). Health checks pass. Prometheus shows `cogniforge-fastapi=0`.
+3. Truth table lock drift confirmed — `scripts/runtime_truth.py --check` exits 1: `customer_chat_router: importer_count 6→5`. Root cause: `.orig` file counted in old lock. Component status unchanged.
+4. `context_utils.py.orig` scratch artifact confirmed in `microservices/orchestrator_service/src/api/`.
+5. `otel_setup.py` ACTIVE (no-op) tier formalised — import + call chain present, runtime effect absent without `OTEL_EXPORTER_OTLP_ENDPOINT`.
+
+### What Was Updated
+- `CLAUDE.md` — §0 (3 new doctrine rules), §6.6 truth table (otel_setup + Grafana/Prometheus native + FastAPI conditional rows), §6.22 (lock staleness), §6.23 (new audit section)
+- `.memory/runtime_truth.md` — rows 30–32, extended status legend, branch ledger
+- `.memory/observability_truth.md` — Grafana/Prometheus native rows, otel_setup correction
+- `.memory/issues.md` — ISS-032 (truth table drift), ISS-033 (context_utils.py.orig)
+- `.memory/context.md` — session note
+- `.memory/progress.md` — this entry
+
+### What Was NOT Changed
+- No application source code, no tests, no CI workflows, no runtime behavior
+- All 29 prior truth table rows remain valid — no status promotions or demotions
+
+---
+
 ## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
 
 - حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.

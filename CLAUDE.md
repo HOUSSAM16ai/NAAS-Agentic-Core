@@ -20,6 +20,9 @@ The system must preserve the following principles permanently. Every future agen
 - **Forbidden anti-patterns**: High-cardinality labels are dangerous and strictly forbidden. Dual-writes to the database are forbidden.
 - **CI truth-gate philosophy**: The project enforces architectural capability truths via static analysis in CI (`scripts/runtime_truth.py --check`), which strictly validates the codebase against `.runtime/truth_table.lock.json`. Do not bypass or break this gate.
 - **Repository memory coherence**: Repository memory (`.memory/` and `CLAUDE.md`) must remain coherent, curated, and durable over time. It must reflect the actual runtime reality, not aspirational architecture.
+- **ACTIVE (no-op) is not ACTIVE**: A component that is imported and called but produces no observable output due to missing configuration (e.g., `otel_setup.py` without `OTEL_EXPORTER_OTLP_ENDPOINT`) is not truly ACTIVE at runtime. Mark it `ACTIVE (no-op without ENV_VAR)` in the truth table.
+- **No DATABASE_URL = no FastAPI**: The application cannot start without `DATABASE_URL` or `APP_DATABASE_URL`. A running uvicorn process is not proof of a healthy server — check `/health` response, not just the process list.
+- **Lock file staleness is a finding**: `.runtime/truth_table.lock.json` records the branch and timestamp it was generated on. Always check `generated_at_utc` before trusting it. A stale lock file means the CI drift gate may pass on false grounds.
 
 ---
 
@@ -212,7 +215,7 @@ user_id = result.scalar()
 - **ZOMBIE** — defined and possibly imported, but no live call chain leads to it from a production entrypoint.
 - **UNKNOWN** — insufficient evidence; do not claim ACTIVE.
 
-### Truth table — verified 2026-05-06 (branch `claude/runtime-truth-audit-65iVU`)
+### Truth table — last verified 2026-05-09 (live investigation, no DATABASE_URL in env)
 
 | Component | Status | Proof |
 |---|---|---|
@@ -229,9 +232,12 @@ user_id = result.scalar()
 | **`app/services/kagent/`** (KagentMesh, ServiceRegistry, RemoteAgentAdapter) | **ZOMBIE** | Registered as DI singleton at `app/core/di.py:145`, but `get_kagent_mesh()` is only consumed inside the dead `workflow.py` graph nodes. No live consumer. |
 | **`app/services/mcp/`** (MCPServer, MCPIntegrations, MCPToolRegistry, MCPResourceProvider) | **DORMANT** | Zero references from `app/main.py`, `app/kernel.py`, or `app/api/`. Only lazy-imported in `app/services/chat/agents/{admin.py,socratic_tutor.py}`, `app/services/collaboration/session.py`, and `app/core/prompts.py` — none of which are on the live `/api/chat/ws` path. The `socratic_tutor` and `admin` agent modules are themselves not invoked by the live chat router. |
 | **`app/telemetry/unified_observability.py`** (`UnifiedObservabilityService`) | **ACTIVE** | Wired through `app/kernel.py:58,208` at startup. Every HTTP request passes through `app/middleware/fastapi_observability.py` and `app/middleware/observability/observability_middleware.py`. WebSocket frames are NOT traced (ISS-005). |
+| **`app/telemetry/otel_setup.py`** (`setup_otel`, `instrument_fastapi_app`) | **ACTIVE (no-op without `OTEL_EXPORTER_OTLP_ENDPOINT`)** | Imported and called by `app/kernel.py:157,184` at boot. When `OTEL_EXPORTER_OTLP_ENDPOINT` is unset (default Codespaces), both functions execute but produce no observable output — no spans exported, no traces collected. This is a fourth status tier: import + call chain present, runtime effect absent. Do not treat as fully ACTIVE. |
+| **Grafana + Prometheus (native binaries)** | **ACTIVE (infrastructure, not FastAPI)** | `/opt/grafana/bin/grafana-server` and `/opt/prometheus/prometheus` launched by `supervisor.sh:launch_mission_control()` as background processes. Confirmed running (2026-05-09: `pgrep` + health checks pass). Prometheus scrapes FastAPI at `:8000/api/v1/observability/prometheus` — shows `cogniforge-fastapi=0` when FastAPI is down. |
 | **Orchestrator microservice fallback chain** in `OrchestratorClient` (file-intelligence, exercise-retrieval, LangGraph, general-chat) | **PARTIAL/ACTIVE** | `chat_with_agent` is the ONLY service called by `customer_chat.py:422` and `admin.py:490`. The HTTP attempt to `$ORCHESTRATOR_SERVICE_URL` always raises `ConnectError` in default Codespaces; the four local fallbacks then run in order. None of them set `persisted: true`. |
 | **`OrchestratorClient` HTTP path** to orchestrator-service | **DORMANT** | Requires `ORCHESTRATOR_SERVICE_URL` set AND microservice stack up. Default devcontainer satisfies neither. |
 | **All `microservices/*`** (orchestrator, planning, memory, user, research, reasoning, auditor, conversation, api_gateway, observability) | **DORMANT** | Not started by `.devcontainer/docker-compose.host.yml`. Only wake via `docker compose -f docker-compose.yml up -d`. |
+| **FastAPI app itself** | **CONDITIONAL** | Requires `DATABASE_URL` or `APP_DATABASE_URL` to start. Without it, uvicorn spawns but the app crashes immediately at `AppSettings()` validation. A running uvicorn process is NOT proof of a healthy server. Always verify with `curl http://localhost:8000/health`. |
 
 ### What this means for daily work
 
@@ -1510,8 +1516,8 @@ change to make `histograms` label-aware — out of scope for this fix.
 1. **Zombie metrics** — a component can be ACTIVE (imported + called) but emit no metrics. The truth table cannot detect this.
 2. **Dashboard-metric contract** — no CI step verifies that dashboard queries match application emitters.
 3. **Behavioral dead code** — code that runs but whose output is discarded (e.g., `obs.record_metric` for a metric no dashboard queries).
-4. **Configuration-gated dormancy** — `otel_setup.py` is ACTIVE (imported + called) but is a no-op when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset. This is a fourth status tier: **ACTIVE (no-op)** — not currently in the taxonomy.
-5. **Lock file staleness** — `.runtime/truth_table.lock.json` records `"branch": "jules-5513332666705839536-7e7df21b"`. Check `generated_at_utc` before trusting the lock.
+4. **Configuration-gated dormancy** — `otel_setup.py` is ACTIVE (imported + called) but is a no-op when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset. This is a fourth status tier: **ACTIVE (no-op)** — now formally added to the taxonomy (see §6.23 and §0 doctrine).
+5. **Lock file staleness** — `.runtime/truth_table.lock.json` records `"branch": "jules-5513332666705839536-7e7df21b"`, generated 2026-05-08T09:54:43Z. **This lock is stale** — it was generated in a different branch context and the CI drift check currently fails (`customer_chat_router: importer_count 6→5`). Root cause documented in §6.23. Fix: `python scripts/runtime_truth.py --update`.
 
 **The ACTIVE (no-op) tier:** When a component is imported, called, but produces no observable output due to missing configuration, it is neither ACTIVE nor DORMANT in the current taxonomy. It is ACTIVE in the static sense but DORMANT in the runtime sense. Future truth table entries for configuration-gated components should note: "ACTIVE (no-op without `ENV_VAR`)".
 
@@ -1522,6 +1528,53 @@ change to make `histograms` label-aware — out of scope for this fix.
 - Do not add a dashboard panel without first running the metric contract check
 
 **Full analysis:** `.memory/fragility-patterns.md` Patterns 3 and 4 · **Issues:** ISS-031 · **Decisions:** D-016, D-017
+
+---
+
+## 6.23 Live Architecture Audit (2026-05-09)
+
+> Mode: READ-ONLY investigation. No application code changed.
+> Environment: Ona/Gitpod devcontainer, no `DATABASE_URL` set, no secrets injected.
+
+### What was confirmed by live inspection
+
+**FastAPI startup failure (confirmed):**
+- `uvicorn app.main:app` spawns successfully but crashes immediately at `AppSettings()` validation.
+- Root cause: `DATABASE_URL` and `APP_DATABASE_URL` both absent → `pydantic_core.ValidationError: DATABASE_URL is missing`.
+- Evidence: `.superhuman_bootstrap.log` tail + `ss -tlnp | grep 8000` returns nothing.
+- **Lesson**: A running uvicorn PID is not proof of a healthy server. Always verify with `curl /health`.
+
+**Grafana + Prometheus native binaries (confirmed running):**
+- `/opt/grafana/bin/grafana-server` and `/opt/prometheus/prometheus` are present in the image and running.
+- Launched by `supervisor.sh:launch_mission_control()` — Step 4C, background, non-blocking.
+- Grafana health: `GET /api/health → {"database":"ok"}`. Prometheus health: `Prometheus Server is Healthy.`
+- Prometheus job `cogniforge-fastapi` shows `up=0` because FastAPI is down in this environment.
+- **Lesson**: Observability infrastructure can be healthy while the application it monitors is not.
+
+**Truth table drift (confirmed):**
+- `python scripts/runtime_truth.py --check` exits 1: `customer_chat_router: importer_count 6 → 5`.
+- Root cause: `.runtime/truth_table.lock.json` was generated on branch `jules-5513332666705839536-7e7df21b` (2026-05-08T09:54:43Z) when `microservices/orchestrator_service/src/api/context_utils.py.orig` existed and was counted as an importer. That `.orig` file still exists but `scripts/runtime_truth.py` only greps `.py` files — the `.orig` extension was counted by the old lock generation run via a different grep path.
+- **The component status has NOT changed** — `customer_chat_router` is still ACTIVE. Only the importer count drifted by 1.
+- **Action required**: `python scripts/runtime_truth.py --update` to regenerate the lock, then commit. This is a documentation fix, not a code fix.
+
+**`context_utils.py.orig` scratch artifact (confirmed):**
+- `microservices/orchestrator_service/src/api/context_utils.py.orig` exists — a backup left from a prior edit session.
+- It differs from the live file by one line (context truncation logic).
+- Should be deleted in a cleanup PR (see markdown debt inventory in `.memory/diagnostic_2026_05_06_rescue.md §6`).
+
+**`otel_setup.py` status clarification (confirmed):**
+- `app/telemetry/otel_setup.py` is imported and called at `app/kernel.py:157,184`.
+- Without `OTEL_EXPORTER_OTLP_ENDPOINT`, both `setup_otel()` and `instrument_fastapi_app()` execute but are no-ops.
+- This is a fourth status tier not previously in the taxonomy: **ACTIVE (no-op)** — import + call chain present, runtime effect absent due to missing configuration.
+- Added to truth table above and to §0 doctrine.
+
+### What did NOT change
+- All 29 rows of `.memory/runtime_truth.md` capability table remain valid.
+- `local_graph.py` is still PARTIAL (de-facto handler when FastAPI runs with valid DB).
+- All microservices still DORMANT.
+- All ZOMBIE components unchanged.
+- D-006 persistence rules unchanged.
+- `_emit_terminal_frames` single-emitter rule unchanged.
 
 ---
 

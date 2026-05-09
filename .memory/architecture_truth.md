@@ -1,5 +1,5 @@
 # Architectural Diagnostic: NAAS-Agentic-Core
-> Last updated: **2026-05-09** | Live audit (Ona agent — third pass: advanced LangGraph + Tavily deep investigation).
+> Last updated: **2026-05-09** | Branch: `fix/lifespan-orchestration-env-injection` (fifth pass — live fixes applied).
 
 ## Executive Summary
 The system is in a "strangler fig" migration phase from monolith to microservices. In the default Codespaces environment (without explicitly launching `docker-compose.yml`), the system relies entirely on the FastAPI monolith and a 2-node local LangGraph fallback. The advertised "Agentic" capabilities (KAgent, MCP, DSPy, Reranker, LlamaIndex, Multi-agent workflows) are either DORMANT (gated behind microservices that aren't running) or ZOMBIE (code exists but has no live consumers).
@@ -39,9 +39,11 @@ The system is in a "strangler fig" migration phase from monolith to microservice
 1. **Drift between docs and code** — docs describe the target architecture, not runtime. Always check `.memory/runtime_truth.md`.
 2. **Hidden coupling** — if internal models are passed between services instead of explicit API contracts.
 3. **Role confusion in app shell** — business logic creeping into route handlers.
-4. **Service readiness variance** — no unified health contracts across local/dev/prod.
-5. **OTEL misconfiguration** — `OTEL_EXPORTER_OTLP_ENDPOINT=http` is set but invalid. Traces are silently dropped.
-6. **Cache inconsistency** — `REDIS_URL` not set means InMemoryCache is used. State is not shared across workers/restarts.
+4. **Service readiness variance** — partially resolved: orchestrator `/health` now exposes `startup_state`. Other microservices still return bare `{"status":"ok"}`.
+5. **OTEL misconfiguration** — `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` set in `.env` but no collector running → no-op. Traces silently dropped.
+6. **Cache inconsistency** — `REDIS_URL` set in `.env` but app reads it from process env. InMemoryCache still used until env is exported.
+7. **Process env vs .env gap** — `app/core/settings/base.py:23` reads `os.environ` at module import time. Secrets must be in process env, not just `.env`. Fixed in supervisor.sh but devcontainer.json still relies on `${localEnv:*}` which may be empty in Ona/Gitpod.
+8. **Zombie metrics** — `cogniforge_langgraph_checkpointer_writes_total` has no emitter. Dashboard panel permanently empty until Postgres checkpointer activated (ISS-020).
 
 ## Transformation Gap
 To move from "transitional/zombie" to "production-grade multi-service":

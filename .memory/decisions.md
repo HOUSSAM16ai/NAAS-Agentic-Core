@@ -1,5 +1,35 @@
 # Architectural Decisions
-> Last updated: 2026-05-09 (environment: GitHub Codespaces — third pass: advanced LangGraph + Tavily investigation)
+> Last updated: 2026-05-09 | Branch: `fix/lifespan-orchestration-env-injection`
+
+## D-024 · Process Env Wins Over .env at Module Import Time
+**Decision**: Secrets (DATABASE_URL, OPENROUTER_API_KEY, SECRET_KEY) must be present in the **process environment** before uvicorn starts, not just in `.env`. The `.env` file is read by pydantic-settings after module-level code runs.
+**Reason**: `app/core/settings/base.py:23` calls `os.environ.get("APP_DATABASE_URL")` at import time. If the process env is empty, the validator raises `ValueError` and uvicorn crashes before pydantic-settings ever reads `.env`.
+**Implementation**: `supervisor.sh:_export_env_file()` exports all `.env` keys into the shell process before `python -m uvicorn`. `_inject_env_secrets()` writes real secrets from process env into `.env` first.
+**Status**: IMPLEMENTED 2026-05-09 — see `fix/lifespan-orchestration-env-injection`.
+
+## D-025 · Lifespan Warmup Must Be Timeout-Guarded
+**Decision**: Any `ainvoke()` or async LLM call inside an ASGI `lifespan()` context manager must be wrapped in `asyncio.wait_for(..., timeout=N)`. Default timeout: 30 seconds.
+**Reason**: An unbounded `await` in lifespan blocks ASGI startup indefinitely. Uvicorn accepts connections but the app is not ready. The service appears alive (PID, port open) but is actually in a partial startup state — the exact "misleading startup observability" problem described in ISS-035.
+**Consequence**: If warmup times out, the service starts in DEGRADED mode (not dead). `/health` exposes `startup_state: "degraded"` and `startup_errors`. Operators can diagnose without restarting.
+**Status**: IMPLEMENTED 2026-05-09 — see `microservices/orchestrator_service/main.py`.
+
+## D-026 · /health Must Expose startup_state, Not Just "ok"
+**Decision**: Every microservice `/health` endpoint must return `startup_state` (`"ready"` / `"degraded"`) and `startup_errors` (list) in addition to `{"status": "ok"}`.
+**Reason**: A service that passes `/health` but has a failed graph warmup is DEGRADED, not healthy. Returning `{"status":"ok"}` unconditionally hides the real state from operators and load balancers.
+**Implementation**: `app.state.startup_state` set during lifespan. `/health` reads it and includes it in the response.
+**Status**: IMPLEMENTED 2026-05-09 — see `microservices/orchestrator_service/main.py`.
+
+## D-027 · Supervisor Must Re-Verify Health on Every Boot
+**Decision**: `supervisor.sh` must always re-probe the live `/health` endpoint on every boot cycle. It must never trust stale `.devcontainer/state/app_healthy` from a previous run.
+**Reason**: The state file persists across container restarts. If uvicorn crashed on the previous boot, the state file still shows `app_healthy` from the run before that. The supervisor then skips the health check and reports the system as ready — while port 8000 is not listening.
+**Implementation**: `_uvicorn_healthy()` checks both `kill -0 $PID` AND `curl -sf $HEALTH_ENDPOINT`. Health check step always runs regardless of state file.
+**Status**: IMPLEMENTED 2026-05-09 — see `.devcontainer/supervisor.sh`.
+
+## D-028 · LangGraph Local Graph Must Emit Prometheus Metrics Per Turn
+**Decision**: `_supervisor_node` and `_chat_node` in `app/services/chat/local_graph.py` must emit `langgraph.intent.total`, `langgraph.node.count.total`, and `langgraph.node.duration_seconds` via `UnifiedObservabilityService` on every invocation.
+**Reason**: The Grafana LangGraph dashboard (`20-langgraph.json`) references `cogniforge_langgraph_intent_total`, `cogniforge_langgraph_node_count_total`, `cogniforge_langgraph_node_duration_seconds_bucket`. Without emitters, these panels are permanently empty — zombie metrics (ISS-029, D-016).
+**Consequence**: After this change, the LangGraph dashboard shows real data after the first WS chat turn. `cogniforge_langgraph_checkpointer_writes_total` remains a zombie metric until Postgres checkpointer is activated (ISS-020).
+**Status**: IMPLEMENTED 2026-05-09 — see `app/services/chat/local_graph.py` + `app/telemetry/metrics.py`.
 
 ## D-001 · LangGraph as Primary Chat Handler
 **Decision**: `app/services/chat/local_graph.py` is the real handler. The orchestrator microservice is DORMANT in the default development environment.

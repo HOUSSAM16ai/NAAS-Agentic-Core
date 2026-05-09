@@ -109,7 +109,9 @@ async def _supervisor_node(state: LocalChatState) -> dict:
         state["question"],
     )
 
-    try:
+    import contextlib
+
+    with contextlib.suppress(Exception):
         from app.telemetry.unified_observability import get_unified_observability
 
         obs = get_unified_observability()
@@ -119,13 +121,29 @@ async def _supervisor_node(state: LocalChatState) -> dict:
             parent_context=parent,
             tags={"intent": intent, "node": "supervisor"},
         )
+        duration_s = time.perf_counter() - t0
         obs.end_span(
             ctx.span_id,
             status="OK",
-            metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
+            metrics={"duration_ms": duration_s * 1000},
         )
-    except Exception:
-        pass
+        # ── LangGraph Prometheus metrics (feeds 20-langgraph.json dashboard) ──
+        # cogniforge_langgraph_intent_total — intent distribution panel
+        obs.increment_counter(
+            "langgraph.intent.total",
+            labels={"intent": intent, "graph": "local"},
+        )
+        # cogniforge_langgraph_node_count_total — node throughput panel
+        obs.increment_counter(
+            "langgraph.node.count.total",
+            labels={"node": "supervisor", "graph": "local"},
+        )
+        # cogniforge_langgraph_node_duration_seconds — p95 latency panel
+        obs.record_metric(
+            "langgraph.node.duration_seconds",
+            value=duration_s,
+            labels={"node": "supervisor", "graph": "local"},
+        )
 
     return {"intent": intent}
 
@@ -146,9 +164,12 @@ async def _chat_node(state: LocalChatState) -> dict:
     else:
         user_message = question
 
+    import contextlib
+
     t0 = time.perf_counter()
+    obs = None
     span_ctx = None
-    try:
+    with contextlib.suppress(Exception):
         from app.telemetry.unified_observability import get_unified_observability
 
         obs = get_unified_observability()
@@ -158,8 +179,6 @@ async def _chat_node(state: LocalChatState) -> dict:
             parent_context=parent,
             tags={"intent": intent, "node": "chat", "history_turns": len(history)},
         )
-    except Exception:
-        pass
 
     try:
         response = await ai_client.send_message(system_prompt, user_message)
@@ -169,30 +188,41 @@ async def _chat_node(state: LocalChatState) -> dict:
             intent,
             len(clean),
         )
-        if span_ctx:
-            try:
+        duration_s = time.perf_counter() - t0
+        if obs is not None and span_ctx is not None:
+            with contextlib.suppress(Exception):
                 obs.end_span(
                     span_ctx.span_id,
                     status="OK",
                     metrics={
-                        "duration_ms": (time.perf_counter() - t0) * 1000,
+                        "duration_ms": duration_s * 1000,
                         "response_chars": float(len(clean)),
                     },
                 )
-            except Exception:
-                pass
+                # ── LangGraph Prometheus metrics (feeds 20-langgraph.json) ──
+                obs.increment_counter(
+                    "langgraph.node.count.total",
+                    labels={"node": "chat", "graph": "local"},
+                )
+                obs.record_metric(
+                    "langgraph.node.duration_seconds",
+                    value=duration_s,
+                    labels={"node": "chat", "graph": "local"},
+                )
         return {"final_response": clean}
     except Exception:
         logger.warning("local_graph.chat_node_failed", exc_info=True)
-        if span_ctx:
-            try:
+        if obs is not None and span_ctx is not None:
+            with contextlib.suppress(Exception):
                 obs.end_span(
                     span_ctx.span_id,
                     status="ERROR",
                     metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
                 )
-            except Exception:
-                pass
+                obs.increment_counter(
+                    "langgraph.node.count.total",
+                    labels={"node": "chat", "graph": "local", "status": "error"},
+                )
         return {"final_response": ""}
 
 

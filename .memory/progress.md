@@ -1,5 +1,82 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-09
+> Last updated: 2026-05-09 | Branch: `fix/lifespan-orchestration-env-injection`
+
+---
+
+## ✅ Session: 2026-05-09 (fifth pass) — Lifespan Orchestration Fix + Live Metrics
+
+**Branch**: `fix/lifespan-orchestration-env-injection`
+**Mode**: Live runtime diagnosis + application code fixes + documentation update.
+
+### Root Cause Diagnosed (Live — Surgical Precision)
+
+**ISS-034**: Uvicorn PID alive, port 8000 not listening, state file shows `app_healthy` from previous run.
+- `devcontainer.json` maps `DATABASE_URL` from `${localEnv:DATABASE_URL}` — Ona/Gitpod does NOT inject secrets as process env vars.
+- `supervisor.sh` created `.env` with `DATABASE_URL=sqlite+aiosqlite:///./dev.db` placeholder.
+- `app/core/settings/base.py:23` reads `os.environ.get("APP_DATABASE_URL")` at **module import time** — before pydantic-settings reads `.env`. Finds empty string.
+- `_ensure_database_url()` raises `ValueError` in `development` environment → uvicorn worker crashes on import → port 8000 never opens.
+- Stale `app_healthy` state file → supervisor reports healthy. **Misleading observability confirmed live.**
+
+**ISS-035**: Orchestrator lifespan warmup blocks ASGI startup indefinitely.
+- `ainvoke()` with no timeout → could block forever on slow LLM/network.
+- `RuntimeError` from warmup propagated up → crashed ASGI startup.
+- `/health` returned `{"status":"ok"}` regardless of graph state.
+
+### Fixes Applied
+
+1. **`.devcontainer/supervisor.sh`**:
+   - `_inject_env_secrets()` — reads real secrets from process env, writes to `.env` with priority logic.
+   - `_export_env_file()` — exports `.env` keys into shell process before `python -m uvicorn`.
+   - `_uvicorn_healthy()` — checks PID alive AND port responding; kills stale zombie before restart.
+   - Health check step — always re-probes live endpoint; never trusts stale state files.
+   - Degraded mode — no DATABASE_URL no longer crashes supervisor; Grafana + Prometheus stay up.
+   - Completion message — shows actual `app_ready` state, not hardcoded "Verified".
+
+2. **`microservices/orchestrator_service/main.py`**:
+   - Warmup wrapped in `asyncio.wait_for(..., timeout=30.0)`.
+   - All non-DB exceptions caught → logged as DEGRADED, not fatal.
+   - `app.state.startup_state` tracks `"ready"` / `"degraded"`.
+   - `/health` endpoint exposes `startup_state` and `startup_errors`.
+   - 5-phase lifespan with clear Arabic docstring explaining criticality of each phase.
+
+3. **`app/services/chat/local_graph.py`**:
+   - `_supervisor_node`: emits `langgraph.intent.total`, `langgraph.node.count.total`, `langgraph.node.duration_seconds`.
+   - `_chat_node`: emits `langgraph.node.count.total`, `langgraph.node.duration_seconds` on success and error.
+
+4. **`app/telemetry/metrics.py`**:
+   - `hist_names` extended with `langgraph.node.duration_seconds` → `cogniforge_langgraph_node_duration_seconds_bucket` now exported.
+
+### Live Verification Results
+
+| Check | Result |
+|-------|--------|
+| FastAPI `:8000/health` | `{"application":"ok","database":"ok"}` ✅ |
+| Grafana `:3001/api/health` | `{"database":"ok"}` ✅ |
+| Prometheus `/-/healthy` | `Prometheus Server is Healthy.` ✅ |
+| Prometheus target `cogniforge-fastapi` | **UP** ✅ |
+| Prometheus target `grafana` | **UP** ✅ |
+| Prometheus target `prometheus` | **UP** ✅ |
+| Next.js `:3000` | HTML confirmed ✅ |
+| LangGraph metrics | `cogniforge_langgraph_intent_total{graph="local",intent="general"} 1.0` ✅ |
+
+### Files Changed
+- `.devcontainer/supervisor.sh` — env injection + zombie detection + degraded mode
+- `microservices/orchestrator_service/main.py` — lifespan timeout + startup_state + /health
+- `app/services/chat/local_graph.py` — LangGraph metric emission
+- `app/telemetry/metrics.py` — histogram extension for langgraph metrics
+- `.memory/runtime_truth.md` — full rewrite (fifth pass)
+- `.memory/issues.md` — ISS-034, ISS-035 added
+- `.memory/decisions.md` — D-024 through D-028 added
+- `.memory/progress.md` — this entry
+- `.memory/context.md` — updated
+- `.memory/architecture_truth.md` — updated
+- `CLAUDE.md` — §6.6 truth table + §6.8 new doctrine section
+
+### What Was NOT Changed
+- No test files
+- No CI workflows
+- No frontend code
+- No database schema
 
 ---
 

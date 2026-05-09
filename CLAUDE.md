@@ -22,6 +22,11 @@ The system must preserve the following principles permanently. Every future agen
 - **Repository memory coherence**: Repository memory (`.memory/` and `CLAUDE.md`) must remain coherent, curated, and durable over time. It must reflect the actual runtime reality, not aspirational architecture.
 - **ACTIVE (no-op) is not ACTIVE**: A component that is imported and called but produces no observable output due to missing configuration (e.g., `otel_setup.py` without `OTEL_EXPORTER_OTLP_ENDPOINT`) is not truly ACTIVE at runtime. Mark it `ACTIVE (no-op without ENV_VAR)` in the truth table.
 - **No DATABASE_URL = no FastAPI**: The application cannot start without `DATABASE_URL` or `APP_DATABASE_URL`. A running uvicorn process is not proof of a healthy server — check `/health` response, not just the process list.
+- **Process env wins over `.env` at module import time**: `app/core/settings/base.py:23` reads `os.environ.get("APP_DATABASE_URL")` before pydantic-settings reads `.env`. Secrets must be exported into the process environment before uvicorn starts, not just written to `.env`.
+- **Stale state files are a finding**: `.devcontainer/state/app_healthy` from a previous run does NOT mean the current uvicorn is healthy. Always re-probe the live `/health` endpoint — never trust a state file timestamp.
+- **Lifespan warmup must be timeout-guarded**: Any `ainvoke()` in an ASGI `lifespan()` context must use `asyncio.wait_for(..., timeout=30.0)`. Unbounded awaits block ASGI startup indefinitely, creating a "process alive, service dead" partial state.
+- **Degraded ≠ Dead**: A microservice that passes `/health` but has a failed graph warmup is DEGRADED, not healthy. The `/health` endpoint must expose `startup_state` so operators can diagnose without restarting.
+- **Zombie metrics are worse than no metrics**: A dashboard panel that always shows zero is indistinguishable from "system not running". Every dashboard metric must have a verified emitter in the application source (D-016).
 - **Lock file staleness is a finding**: `.runtime/truth_table.lock.json` records the branch and timestamp it was generated on. Always check `generated_at_utc` before trusting it. A stale lock file means the CI drift gate may pass on false grounds.
 
 ---
@@ -220,26 +225,27 @@ user_id = result.scalar()
 ## 6.6 Architecture Truth and Runtime Rules (Truth Table)
 
 > **The golden rule:** code presence ≠ runtime usage. A capability is real ONLY when proven by **import + call chain + runtime evidence**. Anything missing one of those three is treated as DORMANT or ZOMBIE until proven otherwise.
-> **Last verified: 2026-05-09 — full live runtime investigation (second pass): DB, OpenRouter, WebSocket streaming, LangGraph, DSPy, LlamaIndex, Reranker, KAgent, MCP, multi-agent graph, microservices StateGraph all tested live.**
+> **Last verified: 2026-05-09 — fifth pass. Live fixes applied: env injection, lifespan timeout, LangGraph metrics. See `.memory/runtime_truth.md` for the authoritative table.**
 
 ### Status legend
 - **ACTIVE** — import + call chain + runtime evidence all present.
+- **ACTIVE (no-op without ENV_VAR)** — import + call chain present; runtime effect absent without a specific env var.
 - **PARTIAL** — on a live chain but only via fallback, conditional, or non-default branch.
 - **DORMANT** — code real, gated behind an external service not started by default.
 - **ZOMBIE** — no live call chain from any production entrypoint.
 - **UNKNOWN** — insufficient evidence.
 
-### Infrastructure truth (verified live 2026-05-09)
+### Infrastructure truth (verified live 2026-05-09 — fifth pass)
 
 | Service | Port | Status | Evidence |
 |---|---|---|---|
-| **Next.js** | **3000** | **ACTIVE** | `supervisor.sh:256` passes `--port 3000` overriding `package.json --port 5000`. HTML confirmed. |
-| **FastAPI** | **8000** | **ACTIVE** | `GET /health → {"application":"ok","database":"ok","version":"v4.1-root"}`. 62 routes. Requires `DATABASE_URL`. |
-| **Grafana** | **3001** | **ACTIVE** | `grafana.ini` says `http_port=3000` but provisioning CLI overrides to 3001. `GET /api/health → {"database":"ok"}`. |
-| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → "Prometheus Server is Healthy."` |
-| **Redis** | **6379** | **ACTIVE (process only)** | `ping() → True`. `REDIS_URL` not set → app uses `InMemoryCache`. |
-| **PostgreSQL** | **6543** | **ACTIVE** | PostgreSQL 17.6 Supabase. Read latency ~2ms. INSERT+DELETE confirmed. |
-| **OpenRouter** | external | **ACTIVE** | 367 models. Primary: `nvidia/nemotron-3-super-120b-a12b:free`. Live WS response confirmed. |
+| **Next.js** | **3000** | **ACTIVE** | `supervisor.sh` passes `--port 3000` overriding `package.json --port 5000`. HTML confirmed. |
+| **FastAPI** | **8000** | **ACTIVE** | `GET /health → {"application":"ok","database":"ok","version":"v4.1-root"}`. 62 routes. Requires `DATABASE_URL` in **process env** (not just `.env` — see §6.8). |
+| **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 5 dashboards. Prometheus datasource UP. All 3 targets scraping. |
+| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → "Prometheus Server is Healthy."` Targets: fastapi UP, grafana UP, prometheus UP. |
+| **Redis** | **6379** | **ACTIVE (process only)** | `ping() → True`. `REDIS_URL` not set in process env → app uses `InMemoryCache`. |
+| **PostgreSQL** | **6543** | **ACTIVE** | PostgreSQL 17.6 Supabase PgBouncer. `database:ok` confirmed. |
+| **OpenRouter** | external | **ACTIVE** | Primary: `nvidia/nemotron-3-super-120b-a12b:free`. Live graph call confirmed. |
 
 ### WebSocket protocol (confirmed live 2026-05-09)
 
@@ -1853,3 +1859,99 @@ The NAAS-Agentic-Core system is in a transitional "strangler fig" phase, meaning
 *   **Do not remove structural hooks.** CI checks (like `check_tracing_gate.py`) enforce the *presence* of hooks like `open_ws_turn` or `TraceContextMiddleware`. Deleting dormant observability code will break the CI gate.
 *   **If you need a signal:** If there is no runtime evidence (logs, Prometheus counters, DB writes) for an observability capability, **treat it as ZOMBIE/DORMANT.** Do not hallucinate capabilities.
 *   **Always check GitHub Actions status:** Red X means a strict contract (like duplicate writes, fallback safety, or doc integrity) failed. Do not bypass the gate.
+
+---
+
+## 6.8 Lifespan Orchestration & Env Injection Doctrine (2026-05-09 — branch `fix/lifespan-orchestration-env-injection`)
+
+> **Root cause of the "Partial/Degraded Runtime" problem — diagnosed and fixed live.**
+
+### The Exact Failure Mode
+
+The system entered a misleading partial-startup state because of a chain of three independent failures:
+
+1. **Process env gap**: `devcontainer.json` maps `DATABASE_URL` from `${localEnv:DATABASE_URL}`. In Ona/Gitpod, secrets are NOT injected as process env vars into the container. The process env is empty.
+
+2. **Module-import-time read**: `app/core/settings/base.py:23` calls `os.environ.get("APP_DATABASE_URL")` at **module import time** — before pydantic-settings reads `.env`. Finds empty string. `_ensure_database_url()` raises `ValueError`. Uvicorn worker crashes on import. Port 8000 never opens.
+
+3. **Stale state file**: `supervisor.sh` health check read `.devcontainer/state/app_healthy` from a previous successful run → reported healthy. **Uvicorn PID alive, port 8000 dead, state file says healthy. Misleading observability.**
+
+### The Orchestrator Lifespan Problem
+
+The orchestrator microservice had a separate but related problem: `lifespan()` warmup `ainvoke()` had no timeout. On slow LLM/network, it blocked ASGI startup indefinitely. `RuntimeError` from warmup propagated up and crashed ASGI startup. The service appeared alive (PID, port open, `/health` 200) but was actually in a partial startup state — graph nodes not initialized.
+
+### Rules (permanent doctrine)
+
+```
+# NEVER start uvicorn without exporting .env into the process environment first
+# ❌ Wrong — .env is read by pydantic AFTER module-level os.environ.get() runs
+python -m uvicorn app.main:app
+
+# ✅ Correct — export .env keys into process env before uvicorn starts
+source <(grep -v '^#' .env | sed 's/^/export /')
+python -m uvicorn app.main:app
+```
+
+```python
+# NEVER use unbounded ainvoke() in a lifespan context
+# ❌ Wrong — blocks ASGI startup indefinitely on slow LLM/network
+result = await app.state.admin_app.ainvoke(warmup_state, config=config)
+
+# ✅ Correct — always timeout-guard warmup probes
+result = await asyncio.wait_for(
+    app.state.admin_app.ainvoke(warmup_state, config=config),
+    timeout=30.0,
+)
+```
+
+```python
+# NEVER return {"status": "ok"} unconditionally from /health
+# ❌ Wrong — hides degraded graph state from operators
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "orchestrator-service"}
+
+# ✅ Correct — expose startup_state so operators can diagnose without restarting
+@app.get("/health")
+async def health_check():
+    startup_state = getattr(app.state, "startup_state", "starting")
+    errors = getattr(app.state, "startup_errors", [])
+    return {
+        "status": "ok" if startup_state == "ready" else startup_state,
+        "service": "orchestrator-service",
+        "startup_state": startup_state,
+        **({"startup_errors": errors} if errors else {}),
+    }
+```
+
+### Lifespan phase criticality contract
+
+Every microservice lifespan must follow this phase model:
+
+| Phase | Criticality | On failure |
+|-------|-------------|-----------|
+| DB init | **CRITICAL** | Raise — service cannot start without DB |
+| Tool/plugin registry | **CRITICAL** | Raise — service cannot function without tools |
+| Graph compile | **NON-CRITICAL** | Log DEGRADED, continue |
+| Warmup probe | **NON-CRITICAL, timeout=30s** | Log DEGRADED, continue |
+| Background tasks | **NON-CRITICAL** | Log warning, continue |
+
+### LangGraph metrics now live
+
+`app/services/chat/local_graph.py` now emits per-turn Prometheus metrics:
+
+| Metric | Labels | Dashboard panel |
+|--------|--------|----------------|
+| `cogniforge_langgraph_intent_total` | `intent`, `graph` | Intent distribution (20-langgraph.json) |
+| `cogniforge_langgraph_node_count_total` | `node`, `graph` | Node throughput (20-langgraph.json) |
+| `cogniforge_langgraph_node_duration_seconds` | `node`, `graph` | p95 latency (20-langgraph.json) |
+
+These metrics appear in Prometheus after the first WS chat turn. `cogniforge_langgraph_checkpointer_writes_total` remains a zombie metric until Postgres checkpointer is activated (ISS-020).
+
+### Prometheus scrape targets (all UP after fix)
+
+```
+cogniforge-fastapi  http://localhost:8000/api/v1/observability/prometheus  → UP
+grafana             http://localhost:3001/metrics                           → UP
+prometheus          http://localhost:9090/metrics                           → UP
+```

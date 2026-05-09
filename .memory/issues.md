@@ -487,3 +487,33 @@
 | Latency p99 | 1416ms | `/observability/metrics` |
 | Error rate | 7.69% | `/observability/metrics` |
 | Total requests | 13 | `/observability/metrics` |
+
+---
+
+## Confirmed Live 2026-05-09 (Second Pass)
+
+### [MEDIUM] ISS-NEW-001 · Intent classification misclassifies Arabic greetings · CONFIRMED LIVE
+- **Input**: `'مرحبا كيف حالك'` → got `'general'`, expected `'chat'`
+- **Input**: `'hello'` → got `'chat'`, expected `'general'`
+- **File**: `app/services/chat/local_graph.py:_classify_intent()`
+- **Impact**: Arabic greetings routed to general handler instead of chat handler. Minor UX issue.
+
+### [HIGH] ISS-NEW-002 · KAgent security blocks multi-agent graph · CONFIRMED LIVE
+- **Evidence**: `create_multi_agent_graph(ai_client, []).ainvoke(state)` → `"⛔ Security Alert: Invalid token from planner_node"`
+- **Impact**: The entire 8-node multi-agent graph (planner, researcher, writer, super_reasoner, procedural_auditor, reviewer, supervisor) cannot execute. All nodes call KAgent which rejects without a valid internal token.
+- **Root cause**: `KagentMesh.execute_action()` validates caller token. No valid token is provided by graph nodes.
+
+### [LOW] ISS-NEW-003 · Reranker driver export mismatch · CONFIRMED LIVE
+- **Evidence**: `from app.drivers.reranker_driver import RerankDriver` → `ImportError`
+- **File**: `app/drivers/reranker_driver.py` — class name differs from expected export
+- **Impact**: Any code trying to import `RerankDriver` fails. Driver is ZOMBIE anyway.
+
+### [LOW] ISS-NEW-004 · LlamaIndex requires OPENAI_API_KEY for default embeddings · CONFIRMED LIVE
+- **Evidence**: `VectorStoreIndex.from_documents(docs)` → `ValueError: No API key found for OpenAI`
+- **Fix**: Must explicitly set `Settings.embed_model = HuggingFaceEmbedding(...)` before use
+- **Impact**: LlamaIndex unusable without explicit embed model configuration.
+
+### [INFO] ISS-NEW-005 · TLM not installed · CONFIRMED
+- **Evidence**: `cleanlab` not installed. Zero references in `app/`. Not part of this codebase.
+- **Action**: Remove TLM from any documentation that claims it is used.
+

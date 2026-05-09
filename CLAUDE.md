@@ -34,10 +34,15 @@ CogniForge is an educational AI platform for Algerian high-school students prepa
 
 | Environment | Frontend port | How it picks the port |
 |---|---|---|
-| **GitHub Codespaces** (primary) | **3000** | `.devcontainer/supervisor.sh` exports `FRONTEND_PORT=3000` and passes `--port 3000` to `next dev`, overriding `package.json` |
-| **Replit** | **5000** | `frontend/package.json` script `"dev": "next dev --port 5000"` is used directly |
+| **GitHub Codespaces** (primary) | **3000** | `.devcontainer/supervisor.sh:256` passes `--port $FRONTEND_PORT` (default 3000) to `next dev`, overriding `package.json` `--port 5000`. Process confirmed: `node next dev --port 5000 --port 3000` — last flag wins. |
+| **Replit** | **5000** | `frontend/package.json` script `"dev": "next dev --hostname 0.0.0.0 --port 5000"` is used directly |
 
 In both environments the backend is on **8000** and microservices in `microservices/` are **dormant by default** — neither environment starts them. The Codespaces devcontainer (`.devcontainer/docker-compose.host.yml`) launches a single `web` container; the full microservices stack only comes up when you explicitly run `docker compose -f docker-compose.yml up -d`.
+
+**Additional infrastructure (Codespaces only, verified 2026-05-09):**
+- Grafana: port **3001** (`grafana.ini` says 3000 but provisioning CLI overrides — `GET /api/health → {"database":"ok"}`)
+- Prometheus: port **9090** (`GET /-/healthy → "Prometheus Server is Healthy."`)
+- Redis: port **6379** (process running but app uses `InMemoryCache` — `REDIS_URL` not set)
 
 ---
 
@@ -59,9 +64,9 @@ curl -s http://localhost:8000/health | python -m json.tool
 
 ```
 Browser
-  └── Next.js (3000 in Codespaces / 5000 in Replit)
+  └── Next.js (port 3000 — supervisor.sh overrides package.json port 5000)
         └── next.config.js rewrites /api/* → localhost:8000
-              └── FastAPI (port 8000)
+              └── FastAPI (port 8000) — 62 routes, requires DATABASE_URL
                     ├── /api/security/login, /register
                     ├── /api/chat/ws  (WebSocket)
                     │     └── OrchestratorClient (fallback chain)
@@ -69,9 +74,17 @@ Browser
                     │           ├── [2] Exercise retrieval (BAC)
                     │           ├── [3] HTTP → orchestrator:8006 → ConnectError (DORMANT)
                     │           └── [4] LangGraph local_graph.py ← PRIMARY HANDLER
+                    │                   supervisor_node (intent: educational/chat/general)
+                    │                   └── chat_node → OpenRouter (nvidia/nemotron-3-super-120b-a12b:free)
                     ├── /api/v1/auth/*, /api/v1/users/*
                     ├── /v1/content/*
                     └── /api/v1/data-mesh/*
+
+Infrastructure (verified live 2026-05-09):
+  Grafana    → port 3001  (grafana.ini says 3000 but provisioning CLI overrides)
+  Prometheus → port 9090
+  Redis      → port 6379  (process running but app uses InMemoryCache — REDIS_URL not set)
+  PostgreSQL → Supabase PgBouncer :6543 (19 users, 2098 customer_messages, 3038 admin_messages)
 ```
 
 1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).
@@ -207,199 +220,103 @@ user_id = result.scalar()
 ## 6.6 Architecture Truth and Runtime Rules (Truth Table)
 
 > **The golden rule:** code presence ≠ runtime usage. A capability is real ONLY when proven by **import + call chain + runtime evidence**. Anything missing one of those three is treated as DORMANT or ZOMBIE until proven otherwise.
+> **Last verified: 2026-05-09 — full live runtime investigation (second pass): DB, OpenRouter, WebSocket streaming, LangGraph, DSPy, LlamaIndex, Reranker, KAgent, MCP, multi-agent graph, microservices StateGraph all tested live.**
 
 ### Status legend
-- **ACTIVE** — imported, on a live call chain reachable from `app/main.py` / `app/api/routers/`, AND observed at runtime.
-- **PARTIAL** — on a live call chain but only via fallback, conditional, or non-default branch.
-- **DORMANT** — code is real and imported, but the call chain only fires when an external service (e.g., a microservice that is not started by default) is up.
-- **ZOMBIE** — defined and possibly imported, but no live call chain leads to it from a production entrypoint.
-- **UNKNOWN** — insufficient evidence; do not claim ACTIVE.
+- **ACTIVE** — import + call chain + runtime evidence all present.
+- **PARTIAL** — on a live chain but only via fallback, conditional, or non-default branch.
+- **DORMANT** — code real, gated behind an external service not started by default.
+- **ZOMBIE** — no live call chain from any production entrypoint.
+- **UNKNOWN** — insufficient evidence.
 
-### Truth table — last verified 2026-05-09 (live investigation, no DATABASE_URL in env)
+### Infrastructure truth (verified live 2026-05-09)
 
-| Component | Status | Proof |
+| Service | Port | Status | Evidence |
+|---|---|---|---|
+| **Next.js** | **3000** | **ACTIVE** | `supervisor.sh:256` passes `--port 3000` overriding `package.json --port 5000`. HTML confirmed. |
+| **FastAPI** | **8000** | **ACTIVE** | `GET /health → {"application":"ok","database":"ok","version":"v4.1-root"}`. 62 routes. Requires `DATABASE_URL`. |
+| **Grafana** | **3001** | **ACTIVE** | `grafana.ini` says `http_port=3000` but provisioning CLI overrides to 3001. `GET /api/health → {"database":"ok"}`. |
+| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → "Prometheus Server is Healthy."` |
+| **Redis** | **6379** | **ACTIVE (process only)** | `ping() → True`. `REDIS_URL` not set → app uses `InMemoryCache`. |
+| **PostgreSQL** | **6543** | **ACTIVE** | PostgreSQL 17.6 Supabase. Read latency ~2ms. INSERT+DELETE confirmed. |
+| **OpenRouter** | external | **ACTIVE** | 367 models. Primary: `nvidia/nemotron-3-super-120b-a12b:free`. Live WS response confirmed. |
+
+### WebSocket protocol (confirmed live 2026-05-09)
+
+```
+# Auth
+subprotocols=['jwt', TOKEN]  →  server selects 'jwt'
+
+# Client → Server
+{"question": "..."}          ← key is 'question', NOT 'content' or 'message'
+
+# Server → Client stream
+{"type": "conversation_init", "payload": {"conversation_id": 394, "request_id": "..."}}
+{"type": "assistant_delta",   "payload": {"content": "...", "conversation_id": 394}}
+{"type": "assistant_final",   "payload": {"content": "", "conversation_id": 394}}
+```
+Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orchestrator microservice active.
+
+### Fallback chain timing (confirmed live 2026-05-09)
+
+| Tier | Method | Result | Latency |
+|---|---|---|---|
+| 1 | `_build_local_file_count_response` | Returns file count string | ~499ms |
+| 2 | `_build_local_retrieval_response` | Returns `None` (no BAC content match) | ~0ms |
+| 3 | `_build_local_graph_response` | **PRIMARY** — full LangGraph response | ~10s |
+| 4 | `_build_local_general_chat_response` | Fallback general response | ~10s |
+
+### Truth table — last verified 2026-05-09 (second pass — all components live-tested)
+
+| Component | Status | Live Evidence |
 |---|---|---|
-| **`app/services/chat/local_graph.py`** (`run_local_graph`, `supervisor_node`, `chat_node`, `MemorySaver`) | **PARTIAL** | Imported `app/kernel.py:239` (pre-warm) and `app/infrastructure/clients/orchestrator_client.py:170` (fallback tier 3). In default Codespaces it IS the de-facto handler because orchestrator URL is unset → ConnectError → fallback runs every turn. Uses `ainvoke` only (not `astream_events`) → ISS-023. |
-| **`app/services/chat/graph/workflow.py`** (`create_multi_agent_graph`) | **ZOMBIE** | Only importer is `tests/verify_graph_manual.py:8`. No reference from `app/main.py`, `app/kernel.py`, `app/api/`, or `orchestrator_client.py`. |
-| **Multi-agent nodes** — `super_reasoner.py`, `planner.py`, `researcher.py`, `writer.py`, `procedural_auditor.py`, `reviewer.py` | **ZOMBIE** | Only consumed by `workflow.py` (itself ZOMBIE). No production call chain. |
-| **`app/services/chat/memory_engine.py`** (LlamaIndex VectorStoreIndex) | **ZOMBIE** | Only invoked from `reviewer.py` inside the dead `workflow.py`. Zero references from routers, kernel, or `local_graph.py`. |
-| **`app/drivers/llamaindex_driver.py`** | **ZOMBIE** | No `from app.drivers` import in `app/api/`, `app/main.py`, `app/kernel.py`, `local_graph.py`, or `orchestrator_client.py`. |
-| **`app/drivers/reranker_driver.py`** | **ZOMBIE** | Same as above — drivers package has zero importers in the live chain. |
-| **`app/drivers/kagent_driver.py`** | **ZOMBIE** | Same — only registered conditionally inside `MCPIntegrations`, which itself is dormant. |
-| **`app/core/integration_kernel/runtime.py`** (`RealityKernel` micro-kernel) | **ZOMBIE** | Singleton designed but never instantiated from `app/main.py` or `app/kernel.py`. |
-| **DSPy** (`microservices/research_agent/src/search_engine/query_refiner.py`, `microservices/orchestrator_service/.../graph/{main,search,supervisor}.py`) | **DORMANT** | Real implementation, but ALL call chains live inside microservices that the default devcontainer does not start. Reachable only when `docker compose -f docker-compose.yml up -d`. |
-| **Reranker microservice** (`microservices/research_agent/src/search_engine/{reranker,strategies,hybrid,llama_retriever}.py`) | **DORMANT** | Same — gated behind dormant `research-agent:8007`. |
-| **`app/services/kagent/`** (KagentMesh, ServiceRegistry, RemoteAgentAdapter) | **ZOMBIE** | Registered as DI singleton at `app/core/di.py:145`, but `get_kagent_mesh()` is only consumed inside the dead `workflow.py` graph nodes. No live consumer. |
-| **`app/services/mcp/`** (MCPServer, MCPIntegrations, MCPToolRegistry, MCPResourceProvider) | **DORMANT** | Zero references from `app/main.py`, `app/kernel.py`, or `app/api/`. Only lazy-imported in `app/services/chat/agents/{admin.py,socratic_tutor.py}`, `app/services/collaboration/session.py`, and `app/core/prompts.py` — none of which are on the live `/api/chat/ws` path. The `socratic_tutor` and `admin` agent modules are themselves not invoked by the live chat router. |
-| **`app/telemetry/unified_observability.py`** (`UnifiedObservabilityService`) | **ACTIVE** | Wired through `app/kernel.py:58,208` at startup. Every HTTP request passes through `app/middleware/fastapi_observability.py` and `app/middleware/observability/observability_middleware.py`. WebSocket frames are NOT traced (ISS-005). |
-| **`app/telemetry/otel_setup.py`** (`setup_otel`, `instrument_fastapi_app`) | **ACTIVE (no-op without `OTEL_EXPORTER_OTLP_ENDPOINT`)** | Imported and called by `app/kernel.py:157,184` at boot. When `OTEL_EXPORTER_OTLP_ENDPOINT` is unset (default Codespaces), both functions execute but produce no observable output — no spans exported, no traces collected. This is a fourth status tier: import + call chain present, runtime effect absent. Do not treat as fully ACTIVE. |
-| **Grafana + Prometheus (native binaries)** | **ACTIVE (infrastructure, not FastAPI)** | `/opt/grafana/bin/grafana-server` and `/opt/prometheus/prometheus` launched by `supervisor.sh:launch_mission_control()` as background processes. Confirmed running (2026-05-09: `pgrep` + health checks pass). Prometheus scrapes FastAPI at `:8000/api/v1/observability/prometheus` — shows `cogniforge-fastapi=0` when FastAPI is down. |
-| **Orchestrator microservice fallback chain** in `OrchestratorClient` (file-intelligence, exercise-retrieval, LangGraph, general-chat) | **PARTIAL/ACTIVE** | `chat_with_agent` is the ONLY service called by `customer_chat.py:422` and `admin.py:490`. The HTTP attempt to `$ORCHESTRATOR_SERVICE_URL` always raises `ConnectError` in default Codespaces; the four local fallbacks then run in order. None of them set `persisted: true`. |
-| **`OrchestratorClient` HTTP path** to orchestrator-service | **DORMANT** | Requires `ORCHESTRATOR_SERVICE_URL` set AND microservice stack up. Default devcontainer satisfies neither. |
-| **All `microservices/*`** (orchestrator, planning, memory, user, research, reasoning, auditor, conversation, api_gateway, observability) | **DORMANT** | Not started by `.devcontainer/docker-compose.host.yml`. Only wake via `docker compose -f docker-compose.yml up -d`. |
-| **FastAPI app itself** | **CONDITIONAL** | Requires `DATABASE_URL` or `APP_DATABASE_URL` to start. Without it, uvicorn spawns but the app crashes immediately at `AppSettings()` validation. A running uvicorn process is NOT proof of a healthy server. Always verify with `curl http://localhost:8000/health`. |
+| **WebSocket customer chat** `/api/chat/ws` | **ACTIVE** | `conversation_init` → `assistant_delta` (391 chars) → `assistant_final`. Time: 6.79s. Conv_id=394 written to DB. |
+| **WebSocket admin chat** `/admin/api/chat/ws` | **ACTIVE** | Admin token → `conversation_init` (conv_id=391) → streaming confirmed. |
+| **LangGraph local engine** `local_graph.py` | **PARTIAL** | Fallback tier 3. `run_local_graph('ما هو تكامل x^2')` → LaTeX response 10.13s. Nodes: `['__start__', 'supervisor', 'chat']`. Intent bug: 'مرحبا' → 'general' (should be 'chat'). |
+| **OrchestratorClient fallback chain** | **ACTIVE** | `ORCHESTRATOR_SERVICE_URL=http://orchestrator-service:8006` → ConnectError → 4 local fallbacks. |
+| **FastAPI + RealityKernel** | **ACTIVE** | `GET /health → {"application":"ok","database":"ok","version":"v4.1-root"}`. |
+| **DB via SQLAlchemy** | **ACTIVE** | `SELECT 1` → 1. Read ~2ms. INSERT+DELETE confirmed. |
+| **AI Gateway (SimpleAIClient)** | **ACTIVE** | Primary: `nvidia/nemotron-3-super-120b-a12b:free`. 5 fallbacks. Live call confirmed. |
+| **Cache (InMemoryCache)** | **ACTIVE (InMemoryCache only)** | `REDIS_URL` not set → `InMemoryCache`. SET/GET/DELETE confirmed. |
+| **DSPy 3.2.1** | **ACTIVE (package) / DORMANT (in app)** | `dspy.LM` + `dspy.Predict` work. Only used in dormant microservices. No live call chain from `app/`. |
+| **LlamaIndex 0.14.13** | **ACTIVE (package) / ZOMBIE (in app)** | `VectorStoreIndex` works with HuggingFace embeddings (score 0.8152). Requires explicit embed model — fails with default (needs `OPENAI_API_KEY`). `app/drivers/llamaindex_driver.py` exports `LlamaIndexDriver` — no live consumer. |
+| **Reranker (CrossEncoder BAAI/bge-reranker-base)** | **ACTIVE (package) / DORMANT (in app)** | Model cached. Reranking works. Only in `microservices/research_agent` (DORMANT). `app/drivers/reranker_driver.py` has no `RerankDriver` export. |
+| **KAgent mesh** | **ZOMBIE (security-blocked)** | `KagentMesh()` instantiates. `execute_action()` → `"⛔ Security Alert: Invalid token"`. No live consumer from `app/api/`. |
+| **MCP server (8 tools)** | **DORMANT (instantiable, not wired)** | `MCPServer().initialize()` → OK. `get_tools_for_llm()` → 8 tools. `call_tool('get_project_metrics')` → works. Zero imports from live path. |
+| **TLM (Trustworthy LM)** | **NOT INSTALLED** | `cleanlab` not installed. Zero references in `app/`. Not part of this codebase. |
+| **Multi-agent workflow** (8 nodes) | **ZOMBIE (KAgent-blocked)** | `create_multi_agent_graph(ai_client, tools=[])` compiles. Nodes: `planner, researcher, writer, super_reasoner, procedural_auditor, reviewer, supervisor`. Invocation → `"⛔ Security Alert: Invalid token from planner_node"`. Only consumer: `tests/verify_graph_manual.py`. |
+| **Orchestrator microservice StateGraph** | **DORMANT** | `SupervisorNode`, `AgentState`, `IntentClassifier`, `ChatFallbackNode`, `QueryRewriterNode`, `ToolExecutorNode`, `ValidatorNode` importable. `AgentState` fields: `messages, query, intent, filters, retrieved_docs, reranked_docs, used_web, final_response`. Not running. |
+| **DSPy in orchestrator** | **DORMANT** | `QueryRewriterSignature`, `ChatFallbackSignature` use DSPy. Importable. Not running. |
+| **Research agent reranker** | **DORMANT** | `microservices/research_agent/src/search_engine/reranker.py` importable. Uses cached `BAAI/bge-reranker-base`. Not running. |
+| **UnifiedObservabilityService** | **ACTIVE** | Every HTTP request traced. WS frames NOT traced per-frame (ISS-005). |
+| **OTEL SDK** | **ACTIVE (no-op)** | `OTEL_EXPORTER_OTLP_ENDPOINT=http` (invalid URL) → no spans exported. |
+| **Grafana + Prometheus** | **ACTIVE (infrastructure)** | Grafana port 3001. Prometheus port 9090. Both healthy. |
+| **All other microservices** | **DORMANT** | Not started by `.devcontainer/docker-compose.host.yml`. |
 
 ### What this means for daily work
 
-1. **The "agentic" stack the codebase advertises is mostly ZOMBIE/DORMANT in default Codespaces.** Only `local_graph.py` (2 nodes: supervisor + chat) and `UnifiedObservabilityService` actually run on every request.
-2. **Do NOT add a feature that depends on KAgent, MCP, LlamaIndex, DSPy, the integration kernel, or the multi-agent workflow without first wiring it into a live entrypoint** (`app/api/routers/`, `app/kernel.py`, or `local_graph.py`). Otherwise the feature joins the zombie pile.
-3. **`docs/` / blueprints describe the target architecture, not runtime.** When a doc claims "the orchestrator is the control plane" or "the multi-agent graph runs on chat", treat it as aspirational unless this truth table backs it.
+1. **The live stack is**: FastAPI + WS router + OrchestratorClient fallback → `local_graph.py` (2 nodes) → OpenRouter + PostgreSQL persistence.
+2. **DSPy, LlamaIndex, Reranker are installed and work** — but none are wired to the live chat path. Adding them requires a wiring change in `local_graph.py` or `orchestrator_client.py`.
+3. **KAgent security blocks the multi-agent graph** — all 8 nodes fail with "Invalid token". The graph compiles but cannot run without a valid internal KAgent token.
+4. **MCP has 8 working tools** — but zero imports from live path. Easiest to activate: add `MCPServer` to `local_graph.py` chat node.
+5. **TLM is not part of this codebase** — do not reference it.
+6. **WS payload key is `question`** — not `content`, not `message`. Wrong key → `"Question is required."` error.
+7. **Intent classification has bugs**: Arabic greetings ('مرحبا') → 'general' (should be 'chat'). English 'hello' → 'chat' (should be 'general').
 
 ### First-check protocol before any change to the chat / agent stack
 
-1. Open this truth table.
+1. Open `.memory/runtime_truth.md` (authoritative — 34 rows, verified 2026-05-09 second pass).
 2. Ask: is the component I'm touching ACTIVE, PARTIAL, DORMANT, or ZOMBIE?
-3. If **DORMANT/ZOMBIE** → I am editing dead code unless I also wire it into a live path. Stop and decide explicitly.
-4. If **ACTIVE/PARTIAL** → confirm the call chain still holds after my change (grep importers, run the WS chat test).
-5. Updates to capability status MUST be accompanied by a fresh import + call-chain + runtime evidence triple in this table.
-
-### What MUST NOT change without runtime proof
-- Promoting any ZOMBIE/DORMANT component to ACTIVE in this table without the three-part proof.
-- Removing the `local_graph.py` pre-warm in `app/kernel.py:239` (it's how we catch import breakage at startup).
-- Removing `ObservabilityMiddleware` from the middleware stack — it's the ONLY production-path tracing today.
-- Renaming or deleting `_emit_terminal_frames` (single emitter rule, see §6.5).
-
-### Pre-merge checklist for the chat / agent stack
-1. Did I touch a ZOMBIE? → either delete it or wire it. Don't leave it half-alive.
-2. Did I add a new dependency on a microservice? → mark the new code DORMANT in this table until the stack is awake.
-3. Did I add streaming logic? → confirm `ainvoke` vs `astream_events` decision; today only `ainvoke` is used (ISS-023).
-4. Did I change the fallback chain order in `orchestrator_client.py`? → update §3 of this file and `.memory/architecture.md` in the same PR.
+3. If **DORMANT/ZOMBIE** → editing dead code unless also wiring it into a live path.
+4. If **ACTIVE/PARTIAL** → confirm call chain still holds after change.
+5. Status updates require: file:line evidence + import path + call-chain trace.
 
 ---
 
-## 6.8 Architecture Reality Audit (2026-05-06 — branch `claude/diagnostic-system-architecture-aRSuW`)
-
-> Re-verification of §6.6 Truth Table on the current branch. **All ten capability claims from `.memory/runtime_truth.md` were CONFIRMED by direct grep of importers and call chains.** No material drift. Below: only the deltas, plus the architectural verdict.
-
-### Confirmed evidence (file:line) on this branch
-- **Live chat WS endpoints**:
-  - `app/api/routers/customer_chat.py:244` → `@router.websocket("/ws")` exposed at `/api/chat/ws`.
-  - `app/api/routers/admin.py:316` → `@router.websocket("/api/chat/ws")` exposed at `/admin/api/chat/ws`.
-- **Single chat entrypoint into the agent stack**: both routers call `OrchestratorClient.chat_with_agent` exactly once — `customer_chat.py:422`, `admin.py:490`. That call IS the entire "agentic boundary" of the live system.
-- **Single terminal-frame emitter** (D-006 / §6.5): `_emit_terminal_frames` defined at `customer_chat.py:180` and `admin.py:159`; called once per turn at `customer_chat.py:550` and `admin.py:612`.
-- **Persistence-skip handshake intact**: `orchestrator_persisted` read from normalized event at `customer_chat.py:451-452` / `admin.py:519-520`; fail-safe assistant write at `customer_chat.py:523-527` / `admin.py:585-589`.
-- **Pre-warm of the only live graph**: `app/kernel.py:239-241` imports `get_local_graph` at startup.
-- **Live router registry**: 9 routers mounted via `app/api/routers/registry.py:21-35` (system×2, admin, security, data_mesh, ums, customer_chat, content, observability). Mounted by `app/kernel.py:162`.
-- **Middleware order** (declared `app/core/app_blueprint.py:167-177`): TrustedHost → CORS → **Observability** → SecurityHeaders → RemoveBlockingHeaders → RateLimit (non-test) → GZip. `ObservabilityMiddleware` is the only WS-aware tracer and even it does **not** trace WS frames (ISS-005).
-
-### New findings on this branch (not in §6.6)
-| # | Component | File | Status | Proof |
-|---|---|---|---|---|
-| N1 | `app/services/chat/agents/orchestrator.py` (uses `EducationCouncil`, `MultiAgentOrchestrator`-style) | `app/services/chat/agents/orchestrator.py:11,83,647` | **ZOMBIE** | No importer in `app/api/`, `app/main.py`, `app/kernel.py`, `local_graph.py`, or `orchestrator_client.py`. Lives parallel to the live chat path and is never called. |
-| N2 | `app/services/chat/agents/education_council.py` (`class EducationCouncil`) | `agents/education_council.py:96` | **ZOMBIE** | Only consumer is `agents/orchestrator.py` (itself ZOMBIE — see N1). |
-| N3 | `app/services/chat/graph/components/` (`context_composer`, `intent_detector`, `prompt_strategist`) | `app/services/chat/graph/components/*.py` | **ZOMBIE** | Only referenced from inside `graph/workflow.py` (already classified ZOMBIE in §6.6). |
-| N4 | `app/services/chat/graph/nodes/supervisor.py` | inside `graph/nodes/` | **ZOMBIE** | Sibling of the dead `super_reasoner/planner/researcher/...` set; same fate. |
-| N5 | `app/services/chat/dispatcher.py`, `intent_detector.py`, `intent_registry.py`, `tool_router.py`, `tool_access.py`, `education_policy_gate.py`, `orchestration_rollout.py` | top of `services/chat/` | **ZOMBIE/UNKNOWN** | Zero importers in `app/api/`, `app/main.py`, `app/kernel.py`. The live path goes router → `OrchestratorClient` → `local_graph` and never touches these. |
-| N6 | Frontend WS connector | `frontend/app/hooks/useRealtimeConnection.js:56` | **ACTIVE** | `new WebSocket(wsUrlObj.toString(), ["jwt", token])` is the single browser-side WS factory; consumed by `useAgentSocket.js:180`. |
-| N7 | Frontend → Backend HTTP proxy | `frontend/next.config.js` | **ACTIVE** | `rewrites` send `/api/:path*`, `/health`, `/admin/api/:path*` → `${API_URL}` (default `http://127.0.0.1:8000`). |
-| N8 | Orchestrator microservice DB writers | `microservices/orchestrator_service/src/api/routes.py:1211, 1216, 1361, 1366` | **DORMANT** | Real INSERTs into `customer_messages` / `admin_messages` exist — but the microservice is not started by the default devcontainer, so they never fire. When awoken, D-006 contract (`compatibility_facade=True` + `persisted: true` echo) is the only thing preventing dual-write. |
-| N9 | Dual Redis design | `docker-compose.yml` (services `redis:6379`, `redis-orchestrator:6380`) | **DORMANT** | Only `redis-orchestrator` is wired into the orchestrator microservice. In default devcontainer, neither runs; cache falls through to in-memory (`app/caching/factory.py`). |
-
-### Architectural diagnosis (verdict)
-1. **API-first?** Half-true. The Monolith exposes a clean REST + WS surface (9 routers, 2 WS endpoints) with consistent prefixes. But the *cross-service* contracts (microservice ↔ microservice) only exist on paper — there is no live gateway, no service registry being consulted, no contract test running between live processes in the default environment.
-2. **Microservices?** Hybrid / transitional. 10 microservices have real code (planning_agent and orchestrator_service have substantial logic; others are minimal). None are started by the default devcontainer. The "control plane" diagram in `ARCHITECTURE.md` describes the *target*, not the runtime.
-3. **StateGraph / multi-agent reasoning?** Almost entirely zombie. `local_graph.py` is a 2-node graph (supervisor + chat). The 6-node multi-agent workflow (`graph/workflow.py` + `graph/nodes/*`), the `EducationCouncil`, and the chat agents `orchestrator.py` all sit off the live path. **No multi-agent coordination runs in production today.**
-4. **Streaming?** Token streaming is degraded by ISS-023 — `local_graph.py:266` uses `ainvoke`, not `astream_events`, so the UI receives blocks rather than tokens. Terminal-frame guarantee (§6.5) holds.
-5. **Persistence split-brain?** Resolved on paper (D-006), enforced by architecture test (`tests/architecture/test_persistence_authority.py`). Physically impossible in default devcontainer because the orchestrator is dormant. Becomes load-bearing the moment the full stack is woken.
-6. **Capability fragmentation?** Severe. Six "agentic" technology layers (LangGraph multi-agent, LlamaIndex, DSPy, Reranker, KAgent, MCP) are present in the repo as imports + DI registrations + tests — but **none are reachable from a production WS request**. The codebase advertises a stack that the runtime does not run.
-
-### Net statement (for any future session)
-- **The system is in a transitional state**: a Monolith with a well-tested chat boundary, plus a parallel (but dormant) microservice mesh, plus a parallel (but zombie) multi-agent layer.
-- **In default Codespaces, ~10% of the agentic surface is live** — the rest is scaffolding.
-- **Moving from "fragmented/transitional" to "production-grade multi-service" requires three serial migrations**, all out of scope for this audit:
-  1. Wake the microservices (compose up + env wiring) and prove `compatibility_facade=True` + `persisted=true` round-trip works end-to-end under load.
-  2. Wire ONE multi-agent path into the live router (replace or augment the LangGraph fallback in `OrchestratorClient`) with a real call chain and runtime trace — this turns the first ZOMBIE into ACTIVE.
-  3. Decide explicitly per ZOMBIE/DORMANT layer (LlamaIndex, DSPy, Reranker, KAgent, MCP): **promote, archive, or delete with ADR**. No half-alive code.
-
-### Rules Claude MUST follow before any change to this stack
-1. Open §6.6 and §6.8. If the touched component is **ZOMBIE/DORMANT**, declare it explicitly and decide: wire it (with a runtime trace requirement) or leave it untouched.
-2. Never add a feature whose call chain depends on a ZOMBIE/DORMANT layer without first wiring that layer into a live entrypoint and demonstrating runtime evidence.
-3. Never assume the microservice mesh is up. The default execution path is router → `OrchestratorClient` → ConnectError → fallback chain → `local_graph`. Any code that assumes otherwise must be feature-flagged on `ORCHESTRATOR_SERVICE_URL` set.
-4. Never duplicate `_emit_terminal_frames`, never silence the `persisted` flag, never re-introduce dual-write — these are §6.5 invariants.
-5. Truth-table updates require: `file:line` + 1–3 line snippet + import path + call-chain trace. No exceptions.
+*Closing rule:* **Any component without all three of `import` + `call chain` + `runtime evidence` from `app/main.py` is DORMANT or ZOMBIE. "Loaded but never invoked" is PARTIAL, not ACTIVE.**
 
 ---
 
-## 6.9 Architecture Rescue Diagnostic (2026-05-06 — branch `claude/architecture-rescue-diagnostic-wUfbE`)
-
-> Third independent re-verification of §6.6 / §6.8 on this branch. **All 25 prior rows of the truth table CONFIRMED in spirit.** Two material corrections to the prior table, one new PARTIAL classification, and one CI gap newly elevated to a known issue.
-
-### Corrections to the prior truth table (must override §6.6)
-
-**C1 — Row 12 mislabels the class.** §6.6 row 12 says:
-> `app/core/integration_kernel/runtime.py` (`RealityKernel` micro-kernel) — ZOMBIE — singleton designed but never instantiated…
-
-The actual class in that file is `IntegrationKernel` (`app/core/integration_kernel/runtime.py:13: class IntegrationKernel:`), **not** `RealityKernel`. The verdict (ZOMBIE) still holds — `IntegrationKernel` is instantiated only at `app/services/mcp/integrations.py:49` (`self.kernel = IntegrationKernel()`), and `MCPIntegrations` itself has zero live consumers. But the parenthetical name in the table is wrong and conflates two different classes:
-- `app/kernel.py:103: class RealityKernel:` → **ACTIVE** — instantiated at `app/main.py:22` (`_kernel = RealityKernel(...)`) and `app/main.py:49` (`kernel = RealityKernel(...)`). This is the live FastAPI bootstrap.
-- `app/core/integration_kernel/runtime.py:13: class IntegrationKernel:` → **ZOMBIE** — only path to it goes through dormant MCP.
-
-Treat the row 12 entry as covering `IntegrationKernel`. `RealityKernel` (live) is implicitly covered by the kernel.py importers in row 13.
-
-**C2 — Top-level chat helpers are loaded-not-invoked, not pure ZOMBIE.** §6.6 row N5 (and §6.6 entry for `dispatcher.py / intent_detector.py / tool_router.py / …`) says these are ZOMBIE/UNKNOWN. Re-verification on this branch shows a more nuanced reality:
-
-- `app/api/routers/customer_chat.py:27-28` imports `CustomerChatBoundaryService`.
-- `customer_chat_boundary_service.py:22-23` imports `IntentDetector` and `ToolRouter` and instantiates both at construction (`__init__` lines 40-41).
-- The boundary service is instantiated by the live router on every connection (`customer_chat.py:329, 522`).
-- **However**, the live router calls only the persistence methods on it (`get_or_create_conversation`, `save_message`, `get_chat_history`, `list_user_conversations`, `get_latest_conversation_details`, `get_conversation_details`).
-- The streaming methods (`stream_chat`, `orchestrate_chat_stream`, lines 95-110, 112-260) — which are the only paths that ever call `intent_detector.detect()` or `tool_router.authorize_intent()` — are **never invoked** by `app/api/`. Grep for `orchestrate_chat_stream` and `stream_chat` outside the boundary service returns zero hits in `app/api/`.
-
-**Net status of `intent_detector.py` / `tool_router.py` / `tool_access.py` / `dispatcher.py` / `intent_registry.py` / `education_policy_gate.py` / `orchestration_rollout.py`**: code-loaded and class-instantiated on the live path, but **functionally never invoked** for a real WS turn. We classify these as **PARTIAL (loaded-not-invoked)** — slightly stronger than ZOMBIE because they execute `__init__` once per WS connection, but they do not influence chat output.
-
-The same applies to `app/services/chat/orchestrator.py:ChatOrchestrator` and `app/services/customer/chat_streamer.py:CustomerChatStreamer` / `app/services/admin/chat_streamer.py:AdminChatStreamer`: they are instantiated at boundary-service construction (`customer_chat_boundary_service.py:38`, `admin_chat_boundary_service.py:49`) but their `stream_response` method is never reached because the live router uses `OrchestratorClient.chat_with_agent` directly (`customer_chat.py:422`, `admin.py:490`). **PARTIAL (loaded-not-invoked)**.
-
-### New finding — CI is a partial gate, not a complete one (ISS-025)
-
-`.github/workflows/ci.yml` has a strong aggregator (`required-ci`) running ruff + contracts + guardrails + pytest, plus `.github/workflows/structure-validation.yml` blocking on `validate_structure.py`. **What it covers:** lint, AST guardrails (no print, no DB factory outside `app/core/database.py`, no `app.*` imports inside microservices), route-registry parity, tracing gate, pytest, structural shape.
-
-**What CI does NOT cover (newly tracked as ISS-025):**
-1. **Persistence authority (D-006) integration test** — the architecture test `tests/architecture/test_persistence_authority.py` is referenced but a pytest run in default Codespaces cannot exercise the orchestrator round-trip (microservice dormant). The contract is enforced statically only.
-2. **Terminal-frame integrity contract** — no test asserts that every WS turn emits exactly one `assistant_final` OR one `error` frame, plus exactly one `persisted` event. The `_emit_terminal_frames` helper is the single emitter, but no CI test pins this.
-3. **Truth-table sync** — nothing fails CI when a ZOMBIE acquires a new importer in `app/api/`, `app/main.py`, or `app/kernel.py` without a matching `.memory/runtime_truth.md` update.
-4. **Doc integrity** — nothing fails CI if `CLAUDE.md` or any `.memory/*.md` file is deleted, emptied, or replaced with stale content. PR template asks reviewers; nothing automates it.
-5. **Stale-markdown detection** — no check for resurrected `docs/archive/`, dated diagnostic dumps in `docs/diagnostics/`, or scratch `*.txt` / `Screenshot_*.png` artifacts in repo root.
-6. **Frontend build/type check** — Next.js never compiles in CI; UI regressions only surface at runtime.
-
-A new workflow `.github/workflows/doc_integrity.yml` (added in this branch) plugs items 4 and 5: it fails on missing/empty `CLAUDE.md` or `.memory/*` files, on root-level scratch artifacts, and on dated diagnostic patterns recurring outside `docs/archive/`. Items 1, 2, 3, 6 remain TODO (tracked in §13 ISS-025).
-
-### Markdown debt — §15 policy is documented but not enforced
-
-CLAUDE.md §15 (2026-05-06) declares that old reports/diagnostics were removed from `docs/archive/`. Ground truth on this branch:
-
-- `docs/archive/` does not exist as a directory.
-- `docs/diagnostics/` still contains 14+ dated forensic dumps (`MULTI_AGENT_CATASTROPHIC_DIAGNOSIS_2026-02-11.md`, `architectural_deep_diagnosis_2026-02-24.md`, `FORENSIC_BASELINE_2026-02-27.md`, `ULTRA_FORENSIC_*.md`, `ULTRA_SURGICAL_DIAGNOSTIC_REPORT_V7.md`, etc.).
-- `docs/` root contains 7+ phase-report files (`PHASE_18_*.md`, `PHASE_19_*.md`).
-- Repo root contains 17 leftover scratch artifacts (`api_coverage*.txt`, `services_errors*.txt`, `core_errors.txt`, `collection_errors.txt`, `proof_output.txt`, `app_imports.txt`, `commit_message.txt`, `telemetry_evidence.txt`, `patch_*.diff`, `ruff_output*.txt`, `err_*.txt`) and 4 unreferenced screenshots.
-- `LangGraph_Architectural_Blueprint.md` and `ARCHITECTURE.md` (root) describe target/dormant architecture and duplicate the canonical content in `docs/architecture/MICROSERVICES_CONSTITUTION.md`. Both should be archived or merged.
-- `AGENTS-IMPROVEMENT-SPEC.md` is an unapplied audit of `AGENTS.md` (dated 2026-04-28).
-
-**Action policy on this branch (read-only diagnostic):** the consolidation list is captured in `.memory/diagnostic_2026_05_06_rescue.md` (Markdown Debt section); nothing has been deleted yet. Deletion is reserved for an explicit follow-up PR (the user must approve specific files). The new `doc_integrity.yml` workflow flags the most obvious offenders so they cannot multiply silently.
-
-### Net architectural verdict (third independent confirmation)
-
-Re-confirms `.memory/runtime_truth.md` and §6.8:
-
-1. **API-first?** Half. Monolith REST + WS surface is clean (9 routers). Cross-service contracts (microservice ↔ microservice) live only on paper.
-2. **Microservices?** Hybrid / transitional. Real code in 10 directories; **none** start by default. `compatibility_facade=True` + `persisted: true` echo handshake is documented and statically tested but cannot be runtime-tested in default Codespaces.
-3. **Multi-agent reasoning?** Almost entirely zombie. `local_graph.py` is 2 nodes (supervisor + chat). `workflow.py`, `EducationCouncil`, `agents/orchestrator.py`, `agents/admin.py`, `agents/curriculum.py`, `agents/analytics.py` all sit off the live path.
-4. **Streaming?** Degraded by ISS-023 — `local_graph.py:266` uses `await graph.ainvoke(...)` not `astream_events`. Terminal-frame guarantee holds.
-5. **Persistence split-brain?** Resolved on paper (D-006). Physically impossible in default devcontainer because the orchestrator is dormant. Becomes load-bearing the moment the full stack is woken.
-6. **Capability fragmentation?** Severe and unchanged. LangGraph multi-agent / LlamaIndex / DSPy / Reranker / KAgent / MCP — all six advertised "agentic" layers remain unreachable from a production WS request on default infra.
-
-**The system uses ~10% of its advertised agentic surface in default deployment.** This number has not moved across three independent audits. It will only move when an explicit wiring PR makes one of the dormant layers ACTIVE per the §6.6 three-part proof requirement.
-
-### What Claude must do before any future change touching this stack
-1. Open §6.5, §6.6, §6.8, §6.9, plus `.memory/runtime_truth.md`.
-2. Classify the touched component using the truth table. If the component is missing → it is UNKNOWN until a fresh import + call-chain + runtime trace is produced.
-3. If the change adds a new importer of a ZOMBIE/DORMANT module from `app/api/`, `app/main.py`, or `app/kernel.py`, the same PR MUST update `.memory/runtime_truth.md` row for that module with the new evidence — otherwise the doc-integrity workflow will flag the drift.
-4. Never duplicate `_emit_terminal_frames`. Never silence the `persisted` flag. Never re-introduce dual-write paths. Never move the user-message write away from the WS entrypoint.
-5. Never assume the microservice stack is up. If the change requires it, gate the new code on `ORCHESTRATOR_SERVICE_URL` being set AND mark the new code DORMANT in the truth table until proven by runtime evidence on a stack-up environment.
-6. Do not delete a ZOMBIE/DORMANT file on sight. Decide explicitly: promote (with proof), archive (mark + gate), or delete with ADR. No half-alive code.
-
----
-
-*Closing rule (re-affirmed for the third time):* **Any component that does not have all three of `import` + `call chain` + `runtime evidence` reaching from `app/main.py` is treated as DORMANT or ZOMBIE until the contrary is proven. "Loaded but never invoked" is PARTIAL, not ACTIVE.**
-
----
 
 ## 7. Testing
 

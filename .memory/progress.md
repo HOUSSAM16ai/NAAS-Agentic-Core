@@ -1,6 +1,32 @@
 # Progress — What Has Been Done
 > Last updated: 2026-05-05
 
+---
+
+## ✅ Session: 2026-05-09 — Full Live Runtime Investigation (Ona Agent)
+
+**Branch**: `docs/live-runtime-audit-2026-05-09`
+
+### What Was Investigated (Live Runtime — No Code Changes)
+Full live runtime investigation with real DATABASE_URL and OpenRouter API key:
+
+1. **DB connection verified**: PostgreSQL 17.6 Supabase, 19 users, 2098 customer_messages, 3038 admin_messages, 79 missions
+2. **OpenRouter API verified**: 367 models, primary `nvidia/nemotron-3-super-120b-a12b:free`
+3. **local_graph live call**: `run_local_graph('مرحبا', 9999)` → `'مرحبا! كيف يمكنني مساعدتك اليوم؟'`
+4. **FastAPI startup verified**: 62 routes with real DB
+5. **Port map corrected**: Next.js=3000 (supervisor.sh override), Grafana=3001 (provisioning CLI override), Prometheus=9090
+6. **OTEL confirmed no-op**: `OTEL_EXPORTER_OTLP_ENDPOINT=http` is invalid URL
+7. **Redis confirmed unused**: process running but `REDIS_URL` not set → InMemoryCache
+8. **ZOMBIE/DORMANT re-verified**: KagentMesh, multi-agent workflow, MCP, LlamaIndex all confirmed dead
+
+### Files Updated
+- `.memory/runtime_truth.md` — 34 rows, full rewrite with live evidence
+- `.memory/context.md` — stack table with live status, DB state, AI gateway details
+- `.memory/architecture_truth.md` — port map, component inventory
+- `.memory/logs.md` — session record
+- `CLAUDE.md` — §6.6 truth table (34 rows), §3 architecture diagram, §1 port table
+
+
 ## ✅ Session: 2026-05-05 — Persistence Consolidation + Terminal-Event Guarantee + Markdown Cleanup
 
 **Branch**: `claude/fix-persistence-consolidate-8X8LT`

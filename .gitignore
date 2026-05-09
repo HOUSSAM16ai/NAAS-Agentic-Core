@@ -5,6 +5,7 @@
 # 1. Environment & Secrets
 # Never commit secrets, keys, passwords, or local environment settings!
 .env
+.devcontainer/secrets.env
 .venv
 venv/
 ENV/

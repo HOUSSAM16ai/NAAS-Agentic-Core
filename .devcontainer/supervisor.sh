@@ -79,17 +79,37 @@ fi
 # ── ENV INJECTION ─────────────────────────────────────────────────────────────
 # Priority order (highest → lowest):
 #   1. Process environment (injected by devcontainer.json remoteEnv / Gitpod secrets)
-#   2. Existing .env file values (preserved if already set)
-#   3. Safe development defaults (sqlite only in TESTING=1 mode)
+#   2. .devcontainer/secrets.env  ← local fallback, git-ignored, never committed
+#   3. Existing .env file values (preserved if already set)
+#   4. Safe development defaults (sqlite only in TESTING=1 mode)
 #
 # CRITICAL: DATABASE_URL=sqlite in ENVIRONMENT=development causes AppSettings to
 # raise a ValidationError and crash uvicorn on import. We must inject the real
 # DATABASE_URL from the process environment before uvicorn starts.
+#
+# HOW TO USE secrets.env (Codespaces without Secrets configured):
+#   cp .devcontainer/secrets.env.example .devcontainer/secrets.env
+#   # fill in real values — this file is git-ignored
 # ──────────────────────────────────────────────────────────────────────────────
 
 _inject_env_secrets() {
     local env_file=".env"
     local changed=0
+
+    # ── Load .devcontainer/secrets.env as fallback when Codespaces Secrets absent ──
+    # This file is git-ignored. It lets developers run without configuring
+    # Codespaces Secrets — just copy secrets.env.example and fill in values.
+    local secrets_file="$SCRIPT_DIR/secrets.env"
+    if [ -f "$secrets_file" ]; then
+        lifecycle_info "Loading fallback secrets from .devcontainer/secrets.env..."
+        while IFS='=' read -r key val; do
+            [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+            if [ -z "${!key:-}" ]; then
+                export "$key=$val"
+                lifecycle_info "  secrets.env -> $key injected"
+            fi
+        done < "$secrets_file"
+    fi
 
     # Resolve the real DATABASE_URL: prefer APP_DATABASE_URL, then DATABASE_URL
     local real_db_url="${APP_DATABASE_URL:-${DATABASE_URL:-}}"
@@ -333,7 +353,6 @@ if _uvicorn_healthy; then
     lifecycle_release_lock "uvicorn_launch"
 else
     # Kill any stale uvicorn process that is alive but not serving
-    local stale_pid
     stale_pid=$(lifecycle_get_state "uvicorn_pid" 2>/dev/null || true)
     if [ -n "$stale_pid" ] && kill -0 "$stale_pid" 2>/dev/null; then
         lifecycle_warn "Killing stale uvicorn (PID $stale_pid — alive but not serving)"

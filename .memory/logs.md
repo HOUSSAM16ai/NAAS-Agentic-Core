@@ -1,5 +1,46 @@
 # Session Logs
-> Last updated: 2026-05-05
+> Last updated: 2026-05-09
+
+---
+
+## Session: 2026-05-09 · Architectural Intelligence Enrichment
+
+**Branch**: (memory-only — no application code changed)
+**Mode**: Diagnosis + memory evolution. Strict task boundary: no runtime code changes.
+
+### Investigation performed
+- Full audit of `.memory/` structure (18 files, ~150KB of institutional memory)
+- Deep read of `app/services/chat/local_graph.py` — intent classifier patterns
+- Runtime test of `_classify_intent()` against 12 non-academic Arabic/English questions
+- Confirmed: 10/10 misclassified as `educational` due to keyword overlap
+- Discovered zombie `IntentDetector` (13-intent taxonomy) incompatible with live 3-intent taxonomy
+- Confirmed intentional duplication between `local_graph.py` and `path_observer.py`
+- CSS inspection of `frontend/app/globals.css` — both sidebars use `transform: translateX(±100%)`
+- Confirmed no `aria-hidden`, `inert`, or `tabindex="-1"` on closed sidebars
+- Confirmed `AgentTimeline` renders agent state into DOM regardless of sidebar visibility
+- Parsed `observability/grafana/dashboards/20-langgraph.json` — extracted 4 Prometheus queries
+- Grepped entire codebase for all 4 metric names — zero emitters found
+- Confirmed `local_graph.py` uses UnifiedObs spans (in-process), not OTel/Prometheus metrics
+- Identified dual-emission risk: `path_observer.py` emits WS turn metrics through both OTel SDK and UnifiedObs
+- Analyzed `scripts/runtime_truth.py` — confirmed static-only analysis, leg 3 never verified in CI
+- Confirmed lock file branch is stale (`jules-5513332666705839536-7e7df21b`)
+
+### Memory files created/updated
+- **NEW**: `.memory/fragility-patterns.md` — 4 deep root-cause analyses (~5KB)
+- **UPDATED**: `.memory/issues.md` — ISS-027 through ISS-031 added
+- **UPDATED**: `.memory/decisions.md` — D-013 through D-017 added
+- **UPDATED**: `.memory/observability-topology.md` — zombie metric inventory + dual-emission risk
+- **UPDATED**: `.memory/context.md` — session note + documentation pointer
+- **UPDATED**: `.memory/progress.md` — session record
+- **UPDATED**: `.memory/tasks.md` — G1–G5 follow-up tasks
+- **UPDATED**: `.memory/logs.md` — this entry
+- **UPDATED**: `CLAUDE.md` — §6.14–§6.17 governance doctrine
+
+### What was NOT changed
+- No application source code
+- No test files
+- No CI workflows
+- No runtime behavior
 
 ---
 

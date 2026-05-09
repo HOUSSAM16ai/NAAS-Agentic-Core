@@ -103,6 +103,37 @@ repeated drift and false claims.
 **Implementation**: `app/services/boundaries/admin_chat_boundary_service.py` now emits generic message + code `STREAM_RUNTIME_ERROR` while retaining full error logs server-side.
 **Status**: IMPLEMENTED 2026-05-06.
 
+## D-013 · Intent Classifier Patterns Must Be Updated in Two Files Simultaneously
+**Decision**: `_EDUCATIONAL_PATTERNS` and `_GREETING_PATTERNS` are intentionally duplicated between `app/services/chat/local_graph.py` and `app/telemetry/path_observer.py`. The duplication is load-bearing: `path_observer.py` must classify intent before the graph runs, without importing from `local_graph.py`'s private API.
+**Consequence**: Any change to intent patterns MUST be applied to both files in the same PR. A PR that updates only one file creates a classification split-brain between the graph's routing and the observability path labels.
+**Anti-pattern to avoid**: Adding more keywords to `_EDUCATIONAL_PATTERNS` to fix false negatives. This worsens false positives (ISS-027). The correct fix is semantic context guards or embedding-based classification.
+**Status**: DECIDED 2026-05-09 — see `.memory/fragility-patterns.md` Pattern 1.
+
+## D-014 · Zombie IntentDetector Must Not Be Wired Without Taxonomy Resolution
+**Decision**: `app/services/chat/intent_detector.py:IntentDetector` (13-intent taxonomy: FILE_READ, CONTENT_RETRIEVAL, ADMIN_QUERY, etc.) must NOT be wired into the live WS chat path without first resolving the taxonomy incompatibility with the live classifier's 3-intent taxonomy (educational/general/chat).
+**Reason**: The two systems are semantically incompatible. `IntentDetector` routes to tool-based handlers (file operations, code search). The live classifier routes to LLM prompt variants. Wiring `IntentDetector` into the live path without a translation layer would produce undefined routing behavior.
+**Consequence**: `IntentDetector` remains PARTIAL (loaded-not-invoked) until an explicit ADR resolves the taxonomy conflict and defines the routing contract.
+**Status**: DECIDED 2026-05-09.
+
+## D-015 · Sidebar Rendering Must Use DOM Exclusion, Not Visual Hiding
+**Decision**: Any new sidebar or modal component that contains sensitive or contextually inappropriate content must use DOM exclusion (`display: none`, conditional rendering, or `inert` attribute) rather than CSS transform/opacity hiding when in the closed state.
+**Reason**: CSS `transform: translateX(±100%)` keeps elements in the DOM, making them accessible to screen readers, keyboard navigation, browser find-in-page, and programmatic text selection (ISS-028). As the agent stack becomes more capable, `AgentTimeline` will expose real-time agent execution state to screen readers regardless of sidebar visibility.
+**Exception**: The existing `.sidebar` and `.agent-sidebar` may retain their CSS transform for animation quality, but MUST add `inert={!isOpen || undefined}` (or `aria-hidden={!isOpen}` + tabindex management) to prevent accessibility leakage.
+**Status**: DECIDED 2026-05-09 — see `.memory/fragility-patterns.md` Pattern 2.
+
+## D-016 · Dashboard Metric Names Must Have Verified Emitters Before Merge
+**Decision**: No Grafana dashboard panel may be merged if the Prometheus query expression references a metric name that has no corresponding emitter in the application source code.
+**Verification method**: Before adding a dashboard panel, grep the application source for the metric name in emit calls (`record_metric`, `create_histogram`, `create_counter`, `increment_counter`). If no emitter exists, either add the emitter first or do not add the panel.
+**Reason**: Zombie metrics (ISS-029) create permanently empty panels that operators cannot distinguish from "system not running". This is worse than no dashboard — it creates false confidence.
+**Consequence**: The LangGraph dashboard (`20-langgraph.json`) has 4 zombie metric panels that must either gain emitters or be removed.
+**Status**: DECIDED 2026-05-09 — see `.memory/fragility-patterns.md` Pattern 4.
+
+## D-017 · WS Turn Metrics Must Have a Single Emission Owner
+**Decision**: `ws.chat.turn.duration_seconds`, `ws.chat.terminal_events.total`, and `ws.chat.fallback.total` must be emitted through exactly one path. The designated owner is the OTel SDK path (`path_observer._emit_to_otel`). The redundant `obs.record_metric(...)` calls for the same metric names in `path_observer.py` must be removed to prevent double-counting (ISS-030).
+**Reason**: Dual-write at the metrics layer is the observability equivalent of the dual-write persistence bug (ISS-014). When the full stack is up, Prometheus scrapes both the OTel collector and `/api/v1/observability/prometheus`, producing 2x counts.
+**Exception**: `UnifiedObservabilityService` may retain its own internal metric store for the `/api/v1/observability/metrics` endpoint (golden signals). The prohibition is on emitting the same Prometheus-exported metric through two paths simultaneously.
+**Status**: DECIDED 2026-05-09.
+
 ## D-012 · Grafana Cross-Origin Proxy Wiring is Done at Boot, Not in `grafana.ini`
 **Decision**: `grafana.ini` holds LOCAL-only defaults. The Codespaces-correct
 values (`root_url`, `domain`, `cookie_samesite=none`, `cookie_secure=true`,

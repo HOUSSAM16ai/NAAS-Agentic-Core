@@ -1,6 +1,59 @@
 # Tasks — What Comes Next
-> Last updated: 2026-05-06 | Branch: `claude/architecture-rescue-diagnostic-wUfbE` (third audit).
+> Last updated: 2026-05-09 | Branch: `claude/architecture-rescue-diagnostic-wUfbE` (third audit) + enrichment session 2026-05-09.
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## 🟡 Medium — Fragility Pattern Fixes (NEW — Session 2026-05-09)
+
+### G1 — Fix Intent Routing Semantic Hijacking (ISS-027)
+**Minimum viable fix** (no architecture change):
+1. Add semantic context guards to `_EDUCATIONAL_PATTERNS`: require a subject name near `تمرين` (e.g., `رياضيات|فيزياء|كيمياء` within 3 words) before classifying as educational.
+2. Fix greeting anchor brittleness: change `^(السلام|...)[\s\W]*$` to `^(السلام عليكم?|السلام|مرحبا|...)[\s\W]*$` to catch common Islamic greeting variants.
+3. Apply the same changes to `app/telemetry/path_observer.py:_EDUCATIONAL_PATTERNS` and `_GREETING_PATTERNS` in the same PR (D-013).
+4. Add a test: `test_intent_classifier_non_academic_keywords.py` — assert that yoga exercise, conflict resolution, and social network questions are NOT classified `educational`.
+
+**Proper fix** (requires ADR):
+- Replace lexical classifier with embedding-based or LLM-based classification.
+- Write ADR in `docs/architecture/adr/` before implementation.
+
+### G2 — Fix Hidden DOM Leakage (ISS-028)
+1. Add `inert={!isSidebarOpen || undefined}` to the `.sidebar` div in `CogniForgeApp.jsx`.
+2. Add `inert={!isAgentSidebarOpen || undefined}` to the `.agent-sidebar` div.
+3. Verify: screen reader no longer announces sidebar content when closed.
+4. Verify: Tab key no longer cycles into off-screen sidebar elements.
+5. Note: `inert` is supported in all modern browsers (Chrome 102+, Firefox 112+, Safari 15.5+). Add a polyfill comment if IE11 support is needed (it is not, for this project).
+
+### G3 — Fix Zombie Metrics in LangGraph Dashboard (ISS-029)
+**Option A — Add emitters** (preferred):
+1. In `app/services/chat/local_graph.py:_supervisor_node`, after intent classification, emit:
+   - `cogniforge_langgraph_intent_total` counter with label `intent=<value>`
+   - `cogniforge_langgraph_node_count_total` counter with label `node=supervisor`
+2. In `app/services/chat/local_graph.py:_chat_node`, after LLM call, emit:
+   - `cogniforge_langgraph_node_count_total` counter with label `node=chat`
+   - `cogniforge_langgraph_node_duration_seconds` histogram
+3. After `MemorySaver` checkpoint write, emit `cogniforge_langgraph_checkpointer_writes_total`.
+4. Use the OTel SDK path (`_emit_to_otel` pattern from `path_observer.py`) for consistency.
+
+**Option B — Remove zombie panels** (faster):
+1. Delete the 4 zombie panels from `20-langgraph.json`.
+2. Replace with panels querying `/api/v1/observability/traces` for LangGraph span data.
+
+### G4 — Add Dashboard-Metric Contract CI Gate (ISS-031)
+1. Create `scripts/check_dashboard_metric_contracts.py`:
+   - Parse all `observability/grafana/dashboards/*.json`
+   - Extract Prometheus query expressions (all `"expr"` fields)
+   - Extract metric names from expressions (strip functions, labels, operators)
+   - Grep application source for each metric name in emit calls
+   - Exit 1 if any dashboard metric has no emitter
+2. Add to `.github/workflows/ci.yml` as a new `guardrails` step.
+3. This is a static check — no runtime required.
+
+### G5 — Fix Dual-Emission of WS Turn Metrics (ISS-030)
+1. In `app/telemetry/path_observer.py:close_ws_turn`, remove the redundant `obs.record_metric(...)` calls for `ws.chat.turn.duration_seconds`, `ws.chat.terminal_events.total`, `ws.chat.fallback.total`.
+2. Keep `_emit_to_otel(handle)` as the single emission path.
+3. Keep `obs.record_metric(...)` only for metrics that are NOT emitted via OTel (golden signals, internal diagnostics).
+4. Verify: Prometheus scrape shows each metric once, not twice.
 
 ---
 

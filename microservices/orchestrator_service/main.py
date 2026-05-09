@@ -64,11 +64,27 @@ async def _outbox_relay_loop(stop_event: asyncio.Event) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """يدير دورة حياة الخدمة مع ضمان الإقلاع حتى عند غياب تبعيات اختيارية."""
+    """يدير دورة حياة الخدمة مع ضمان الإقلاع حتى عند غياب تبعيات اختيارية.
+
+    مراحل الإقلاع (لا تُوقف الخدمة إلا عند فشل قاعدة البيانات):
+      PHASE 1 — DB init          : حرج — يوقف الخدمة عند الفشل
+      PHASE 2 — Tools registry   : حرج — يوقف الخدمة عند الفشل
+      PHASE 3 — Graph compile    : غير حرج — يُسجَّل كـ DEGRADED ولا يوقف الخدمة
+      PHASE 4 — Warmup probe     : غير حرج — timeout 30s، يُسجَّل كـ DEGRADED
+      PHASE 5 — Outbox relay     : غير حرج — يُطلق في الخلفية
+
+    حالة الجاهزية (app.state.startup_state):
+      "ready"    — كل المراحل نجحت
+      "degraded" — الخدمة تعمل لكن Graph أو Warmup فشلا
+      "db_error" — لا يُصل إليها (الخدمة لا تبدأ)
+    """
     logger.info("Orchestrator Service Starting...")
+
+    # ═══ PHASE 1: DB INIT — CRITICAL ═══════════════════════════
+    # فشل قاعدة البيانات يوقف الخدمة — لا يمكن العمل بدونها
     await init_db()
 
-    # ═══ PHASE 1: TOOLS FIRST ══════════════════════════════════
+    # ═══ PHASE 2: TOOLS REGISTRY — CRITICAL ════════════════════
     from microservices.orchestrator_service.src.services.tools.registry import get_registry
 
     register_all_tools()
@@ -85,12 +101,16 @@ async def lifespan(app: FastAPI):
     if missing:
         raise RuntimeError(f"STARTUP BLOCKED — missing tools: {missing}")
 
+    # تهيئة حالة التطبيق — يُعدَّل في المراحل اللاحقة
     app.state.admin_app = None
     app.state.app_graph = None
+    app.state.startup_state = "degraded"  # يُرفع إلى "ready" عند نجاح الـ warmup
+    app.state.startup_errors: list[str] = []
     app.state.outbox_relay_stop_event = asyncio.Event()
     app.state.outbox_relay_task = None
 
-    # ═══ PHASE 2: GRAPHS AFTER TOOLS ═══════════════════════════
+    # ═══ PHASE 3: GRAPH COMPILE — NON-CRITICAL ═════════════════
+    # فشل التجميع لا يوقف الخدمة — /health يُبلِّغ عن DEGRADED
     try:
         from microservices.orchestrator_service.src.services.overmind.graph.admin import admin_graph
         from microservices.orchestrator_service.src.services.overmind.graph.main import (
@@ -106,24 +126,57 @@ async def lifespan(app: FastAPI):
         app.state.app_graph = create_unified_graph(
             admin_app=app.state.admin_app, checkpointer=active_checkpointer
         )
+        logger.info("✅ Graph compiled successfully")
 
-        # ═══ PHASE 3: WARMUP — PROVE IT WORKS ══════════════════════
-        result = await app.state.admin_app.ainvoke(
-            {"query": "كم عدد ملفات بايثون", "is_admin_user": True},
-            config={"configurable": {"thread_id": "warmup"}},
-        )
-
-        final_res = result.get("final_response", {})
-        if not final_res.get("tool_name"):
-            raise RuntimeError(
-                "WARMUP FAILED — tools registered but graph not invoking them. "
-                "Check ExecuteToolNode → tool_registry.get() call."
-            )
-
-        logger.info(f"✅ SYSTEM READY | warmup tool={final_res['tool_name']}")
     except ModuleNotFoundError as error:
-        logger.warning("Graph bootstrap skipped بسبب تبعية غير متاحة: %s", error)
+        msg = f"Graph bootstrap skipped — missing dependency: {error}"
+        logger.warning(msg)
+        app.state.startup_errors.append(msg)
+    except Exception as error:  # pragma: no cover — دفاعي تشغيلي
+        msg = f"Graph compile failed (non-fatal): {error}"
+        logger.error(msg)
+        app.state.startup_errors.append(msg)
 
+    # ═══ PHASE 4: WARMUP PROBE — NON-CRITICAL, TIMEOUT-GUARDED ═
+    # الـ warmup يثبت أن الـ graph يستدعي الأدوات فعلاً.
+    # timeout=30s يمنع الإقلاع من الانتظار إلى الأبد عند بطء الشبكة أو LLM.
+    if app.state.admin_app is not None:
+        try:
+            result = await asyncio.wait_for(
+                app.state.admin_app.ainvoke(
+                    {"query": "كم عدد ملفات بايثون", "is_admin_user": True},
+                    config={"configurable": {"thread_id": "warmup"}},
+                ),
+                timeout=30.0,
+            )
+            final_res = result.get("final_response", {})
+            if final_res.get("tool_name"):
+                app.state.startup_state = "ready"
+                logger.info("✅ SYSTEM READY | warmup tool=%s", final_res["tool_name"])
+            else:
+                msg = "Warmup completed but graph did not invoke a tool — check ExecuteToolNode"
+                logger.warning(msg)
+                app.state.startup_errors.append(msg)
+        except TimeoutError:
+            msg = "Warmup timed out after 30s — graph is DEGRADED (LLM/network slow?)"
+            logger.warning(msg)
+            app.state.startup_errors.append(msg)
+        except Exception as error:  # pragma: no cover — دفاعي تشغيلي
+            msg = f"Warmup probe failed (non-fatal): {error}"
+            logger.error(msg)
+            app.state.startup_errors.append(msg)
+    else:
+        app.state.startup_errors.append("Warmup skipped — graph not compiled")
+
+    if app.state.startup_state == "degraded":
+        logger.warning(
+            "⚠️  Orchestrator started in DEGRADED mode. Errors: %s",
+            app.state.startup_errors,
+        )
+    else:
+        logger.info("✅ Orchestrator fully operational")
+
+    # ═══ PHASE 5: OUTBOX RELAY — NON-CRITICAL BACKGROUND TASK ══
     if settings.OUTBOX_RELAY_ENABLED:
         app.state.outbox_relay_task = asyncio.create_task(
             _outbox_relay_loop(app.state.outbox_relay_stop_event)
@@ -167,7 +220,24 @@ app.include_router(routes.router)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "orchestrator-service"}
+    """فحص صحة الخدمة مع الكشف عن حالة الإقلاع الفعلية.
+
+    يُميِّز بين ثلاث حالات:
+      ok       — الخدمة جاهزة بالكامل (graph + warmup نجحا)
+      degraded — الخدمة تعمل لكن graph أو warmup فشلا
+      starting — الخدمة لا تزال في مرحلة الإقلاع
+    """
+    startup_state = getattr(app.state, "startup_state", "starting")
+    errors = getattr(app.state, "startup_errors", [])
+    graph_ready = getattr(app.state, "app_graph", None) is not None
+
+    return {
+        "status": "ok" if startup_state == "ready" else startup_state,
+        "service": "orchestrator-service",
+        "graph_ready": graph_ready,
+        "startup_state": startup_state,
+        **({"startup_errors": errors} if errors else {}),
+    }
 
 
 if __name__ == "__main__":

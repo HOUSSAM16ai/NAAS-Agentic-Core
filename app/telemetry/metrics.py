@@ -179,6 +179,9 @@ class MetricsManager:
         hist_names: set[str] = {
             "http.request.duration_seconds",
             "ws.chat.turn.duration_seconds",
+            # LangGraph per-node latency — feeds cogniforge_langgraph_node_duration_seconds
+            # panels in observability/grafana/dashboards/20-langgraph.json
+            "langgraph.node.duration_seconds",
         }
 
         def _translate_name(raw: str) -> str:

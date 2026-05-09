@@ -119,10 +119,28 @@ async def _supervisor_node(state: LocalChatState) -> dict:
             parent_context=parent,
             tags={"intent": intent, "node": "supervisor"},
         )
+        duration_s = time.perf_counter() - t0
         obs.end_span(
             ctx.span_id,
             status="OK",
-            metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
+            metrics={"duration_ms": duration_s * 1000},
+        )
+        # ── LangGraph Prometheus metrics (feeds 20-langgraph.json dashboard) ──
+        # cogniforge_langgraph_intent_total — intent distribution panel
+        obs.increment_counter(
+            "langgraph.intent.total",
+            labels={"intent": intent, "graph": "local"},
+        )
+        # cogniforge_langgraph_node_count_total — node throughput panel
+        obs.increment_counter(
+            "langgraph.node.count.total",
+            labels={"node": "supervisor", "graph": "local"},
+        )
+        # cogniforge_langgraph_node_duration_seconds — p95 latency panel
+        obs.record_metric(
+            "langgraph.node.duration_seconds",
+            value=duration_s,
+            labels={"node": "supervisor", "graph": "local"},
         )
     except Exception:
         pass
@@ -181,6 +199,29 @@ async def _chat_node(state: LocalChatState) -> dict:
                 )
             except Exception:
                 pass
+        duration_s = time.perf_counter() - t0
+        if span_ctx:
+            try:
+                obs.end_span(
+                    span_ctx.span_id,
+                    status="OK",
+                    metrics={
+                        "duration_ms": duration_s * 1000,
+                        "response_chars": float(len(clean)),
+                    },
+                )
+                # ── LangGraph Prometheus metrics (feeds 20-langgraph.json) ──
+                obs.increment_counter(
+                    "langgraph.node.count.total",
+                    labels={"node": "chat", "graph": "local"},
+                )
+                obs.record_metric(
+                    "langgraph.node.duration_seconds",
+                    value=duration_s,
+                    labels={"node": "chat", "graph": "local"},
+                )
+            except Exception:
+                pass
         return {"final_response": clean}
     except Exception:
         logger.warning("local_graph.chat_node_failed", exc_info=True)
@@ -190,6 +231,10 @@ async def _chat_node(state: LocalChatState) -> dict:
                     span_ctx.span_id,
                     status="ERROR",
                     metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
+                )
+                obs.increment_counter(
+                    "langgraph.node.count.total",
+                    labels={"node": "chat", "graph": "local", "status": "error"},
                 )
             except Exception:
                 pass

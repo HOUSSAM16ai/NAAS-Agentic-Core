@@ -1,6 +1,6 @@
 # CogniForge — Project Context
-> Last updated: **2026-05-09** | Live audit on branch: `main` (Ona agent — full live runtime investigation).
-> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — 34 rows, verified live 2026-05-09).
+> Last updated: **2026-05-09** | Branch: `fix/lifespan-orchestration-env-injection` (fifth pass — live fixes applied).
+> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-09).
 > **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check`.
 
 ## Identity

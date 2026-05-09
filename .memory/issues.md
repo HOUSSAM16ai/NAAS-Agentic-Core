@@ -1,12 +1,28 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-09 | Branch: claude/runtime-truth-audit-65iVU
+> Last updated: 2026-05-09 | Branch: `fix/lifespan-orchestration-env-injection`
 > Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED / RUNTIME-ONLY / HISTORICAL]
 > **Capability runtime status (ACTIVE/PARTIAL/DORMANT/ZOMBIE) lives in `.memory/runtime_truth.md`.**
 > **Architectural fragility patterns (root causes, lessons) live in `.memory/fragility-patterns.md`.**
 
 ---
 
-## 🔴 Critical — Core Architectural Flaws (NEW — Session 2026-05-05)
+## 🔴 Critical — Resolved in this branch (2026-05-09)
+
+### ISS-034 · Misleading Startup Observability — Uvicorn Alive but Port Dead [CONFIRMED LIVE]
+- **Status**: RESOLVED in `fix/lifespan-orchestration-env-injection`
+- **Root cause**: `devcontainer.json` maps `DATABASE_URL` from `${localEnv:DATABASE_URL}` — in Ona/Gitpod, secrets are NOT injected as process env vars. `supervisor.sh` created `.env` with `DATABASE_URL=sqlite+aiosqlite:///./dev.db`. `app/core/settings/base.py:23` reads `os.environ.get("APP_DATABASE_URL")` at module import time (before pydantic-settings reads `.env`) → finds empty string → `_ensure_database_url()` raises `ValueError` → uvicorn worker crashes on import → port 8000 never opens. State file `app_healthy` from previous run → supervisor reports healthy. **Misleading observability.**
+- **Fix**: `supervisor.sh:_inject_env_secrets()` + `_export_env_file()` + `_uvicorn_healthy()` + health check always re-probes live endpoint.
+- **Files**: `.devcontainer/supervisor.sh`
+
+### ISS-035 · Orchestrator Lifespan Partial Startup — Warmup Blocks ASGI [CONFIRMED LIVE]
+- **Status**: RESOLVED in `fix/lifespan-orchestration-env-injection`
+- **Root cause**: `lifespan()` warmup `ainvoke()` had no timeout → could block indefinitely. `RuntimeError` from warmup propagated up → crashed ASGI startup. Only `ModuleNotFoundError` was caught. `/health` returned `{"status":"ok"}` regardless of graph state.
+- **Fix**: `asyncio.wait_for(..., timeout=30.0)` on warmup. All non-DB exceptions → DEGRADED, not fatal. `app.state.startup_state` + `/health` exposes real state.
+- **Files**: `microservices/orchestrator_service/main.py`
+
+---
+
+## 🔴 Critical — Core Architectural Flaws (Session 2026-05-05)
 
 ### ISS-014 · Dual-Write — Both Monolith and Orchestrator Write to Same DB Tables
 - **Status**: RESOLVED in `claude/fix-persistence-consolidate-8X8LT`.

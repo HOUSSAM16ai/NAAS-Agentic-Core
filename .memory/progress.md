@@ -66,6 +66,52 @@ LangGraph blueprint, replit.md, README_MIGRATIONS, scientific applications).
 - Synchronized `.memory` architecture/context/decisions/issues to match the updated narrative.
 - Preserved hybrid control-plane/execution-plane interpretation.
 
+## ✅ Session: 2026-05-09 — Architectural Intelligence Enrichment
+
+**Branch**: (memory-only — no application code changed)
+**Mode**: Diagnosis + memory evolution only. No runtime code changes.
+
+### What Was Analyzed
+Four systemic fragility patterns were discovered through deep code inspection and runtime testing:
+
+1. **Intent routing semantic hijacking** (`app/services/chat/local_graph.py:_classify_intent`)
+   - Runtime test confirmed: 10/10 non-academic questions containing educational keywords are misclassified as `educational`
+   - Root cause: pure lexical regex, no semantic context, no conversation history
+   - Hidden split-brain: zombie `IntentDetector` (13-intent taxonomy) vs live classifier (3-intent taxonomy) — incompatible if ever wired together
+   - Intentional duplication between `local_graph.py` and `path_observer.py` — must be updated in sync
+
+2. **Hidden DOM leakage** (`frontend/app/globals.css`, `CogniForgeApp.jsx`)
+   - Both sidebars use `transform: translateX(±100%)` — visual hiding, not DOM exclusion
+   - No `aria-hidden`, no `inert`, no `tabindex="-1"` on closed sidebars
+   - `AgentTimeline` renders agent state into DOM regardless of sidebar visibility
+   - Severity escalates as agent stack becomes more capable
+
+3. **Runtime truth governance gap** (`scripts/runtime_truth.py`, `.github/workflows/runtime_truth.yml`)
+   - CI enforces import + call chain (legs 1 and 2 of the triple)
+   - Leg 3 (runtime evidence) is never verified in CI
+   - No CI gate checks dashboard-metric contract (dashboard queries vs application emitters)
+   - Lock file branch is stale (`jules-5513332666705839536-7e7df21b`)
+
+4. **Zombie metrics + observability integrity** (`observability/grafana/dashboards/20-langgraph.json`)
+   - 4 LangGraph dashboard metrics have zero emitters in the entire codebase
+   - `local_graph.py` uses UnifiedObs spans (in-process), not OTel/Prometheus metrics
+   - Dual-emission risk: WS turn metrics emitted through both OTel SDK and UnifiedObs simultaneously → double-counting when full stack is up
+   - OTel setup is ACTIVE (imported + called) but is a no-op in default Codespaces — a fourth status tier not in the current taxonomy
+
+### What Was Created / Updated
+- **NEW**: `.memory/fragility-patterns.md` — 4 deep root-cause analyses with institutional lessons, anti-patterns, and fix strategies
+- **UPDATED**: `.memory/issues.md` — added ISS-027 through ISS-031
+- **UPDATED**: `.memory/decisions.md` — added D-013 through D-017
+- **UPDATED**: `.memory/observability-topology.md` — zombie metric inventory + dual-emission risk section
+- **UPDATED**: `.memory/context.md` — session note + documentation source of truth pointer
+- **UPDATED**: `CLAUDE.md` — §6.14–§6.17 governance doctrine for all 4 patterns
+
+### What Was NOT Changed
+- No application source code (`app/`, `microservices/`, `frontend/`)
+- No test files
+- No CI workflows
+- No runtime behavior
+
 ## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
 
 - حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.

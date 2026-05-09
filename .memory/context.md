@@ -143,7 +143,20 @@ Three quality issues: ISS-021 (zombies), ISS-022 (pipeline split), ISS-023 (stre
 ## Documentation Source of Truth
 - التشغيل اليومي: `.memory/`
 - الملخص التنفيذي/السياسات: `CLAUDE.md`
+- أنماط الهشاشة المعمارية والدروس المستفادة: `.memory/fragility-patterns.md`
 - تم حذف الأرشيفات القديمة في `docs/archive/` لتجنب تضارب المعرفة.
+
+## Session Note 2026-05-09 — Architectural Intelligence Enrichment
+- Discovered and documented 4 systemic fragility patterns (ISS-027–031):
+  1. **Intent routing semantic hijacking** — lexical classifier misroutes non-academic queries containing educational keywords (`تمرين`, `حل`, `شرح`, etc.)
+  2. **Hidden DOM leakage** — sidebars use CSS transform (visual hiding) not DOM exclusion; screen readers, keyboard, and find-in-page access off-screen content
+  3. **Runtime truth governance gap** — CI enforces static import topology but cannot detect zombie metrics, dashboard-metric contract violations, or behavioral dead code
+  4. **Zombie metrics** — LangGraph dashboard (`20-langgraph.json`) queries 4 metrics that are never emitted; panels permanently empty
+- Created `.memory/fragility-patterns.md` — deep root-cause analysis and institutional lessons for all 4 patterns
+- Added ISS-027–031 to `.memory/issues.md`
+- Added D-013–D-017 to `.memory/decisions.md`
+- Added zombie metric inventory and dual-emission risk to `.memory/observability-topology.md`
+- Added governance doctrine sections to `CLAUDE.md` (§6.14–§6.17)
 
 
 

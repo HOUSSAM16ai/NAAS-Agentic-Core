@@ -1437,6 +1437,94 @@ change to make `histograms` label-aware — out of scope for this fix.
 ### مبدأ التفعيل الواقعي
 وجود الكود لا يعني أنه يعمل فعليًا. الاعتماد النهائي يكون على: **import + call-chain + runtime evidence** كما هو موثق في `.memory/runtime_truth.md`.
 
+## 6.19 Intent Routing Doctrine (2026-05-09)
+
+**The live intent classifier is `_classify_intent()` in `app/services/chat/local_graph.py`.** It is the sole routing decision for every WS chat turn in default Codespaces. It uses pure lexical regex matching and has three known structural failure modes:
+
+1. **Keyword dictatorship**: Words like `تمرين` (exercise), `حل` (solution/solve), `شرح` (explain), `درس` (lesson), `مادة` (material/subject), `history`, `solve` appear in both academic and non-academic contexts. The classifier cannot distinguish them. A student asking about yoga, conflict resolution, or social networks is routed to the educational prompt.
+
+2. **Greeting anchor brittleness**: Greeting patterns use `^...$` anchors. `"السلام عليكم"` (standard Islamic greeting) is NOT caught — it falls through to educational patterns. Any greeting with trailing words fails the anchor.
+
+3. **Context amnesia**: The classifier receives only the current question string. It has no access to conversation history, user profile, or semantic field.
+
+**The intentional duplication rule (D-013):** `_EDUCATIONAL_PATTERNS` and `_GREETING_PATTERNS` are duplicated between `local_graph.py` and `app/telemetry/path_observer.py`. This is intentional — `path_observer.py` must classify before the graph runs without importing from `local_graph.py`'s private API. **Any change to intent patterns MUST be applied to both files in the same PR.**
+
+**The zombie taxonomy rule (D-014):** `app/services/chat/intent_detector.py:IntentDetector` has a 13-intent taxonomy (FILE_READ, CONTENT_RETRIEVAL, ADMIN_QUERY, etc.) incompatible with the live 3-intent taxonomy. It must NOT be wired into the live WS path without an ADR resolving the taxonomy conflict.
+
+**Anti-pattern:** Do NOT add more keywords to `_EDUCATIONAL_PATTERNS` to fix false negatives. This worsens false positives. The correct fix is semantic context guards or embedding-based classification.
+
+**Full analysis:** `.memory/fragility-patterns.md` Pattern 1 · **Issues:** ISS-027 · **Decisions:** D-013, D-014
+
+---
+
+## 6.20 Rendering Integrity Doctrine (2026-05-09)
+
+**Visual hiding ≠ DOM exclusion.** Any UI element hidden via CSS `transform`, `opacity`, or `visibility` (but not `display: none`) remains a live DOM citizen: accessible to screen readers, keyboard Tab, browser find-in-page, and programmatic text selection.
+
+**Current state:** Both sidebars in `CogniForgeApp.jsx` use `transform: translateX(±100%)` to hide. Neither sets `aria-hidden`, `inert`, or `tabindex="-1"` when closed. The `AgentTimeline` component renders agent phase state into the DOM regardless of sidebar visibility.
+
+**The severity escalation rule:** As the agent stack becomes more capable (DORMANT → ACTIVE), `AgentTimeline` will expose real-time agent execution state to screen readers regardless of sidebar visibility. The information leakage surface grows with capability. This must be fixed before any agent capability is promoted to ACTIVE.
+
+**The correct pattern for animated sidebars:**
+```jsx
+// Add inert attribute — prevents all interaction when closed
+<div className={`sidebar ${isOpen ? 'open' : ''}`} inert={!isOpen || undefined}>
+```
+
+**What must never be done:**
+- Do not assume `transform: translateX(100%)` hides content from screen readers
+- Do not add sensitive agent data to sidebar components without `inert` or `aria-hidden` management
+- Do not render user-specific data (conversation titles, agent state) in always-present DOM nodes without access control
+
+**Full analysis:** `.memory/fragility-patterns.md` Pattern 2 · **Issues:** ISS-028 · **Decisions:** D-015
+
+---
+
+## 6.21 Dashboard-Metric Contract Doctrine (2026-05-09)
+
+**A Grafana dashboard panel that queries a non-existent metric is a zombie metric.** It is worse than no panel — it creates false confidence that the system is being monitored when it is not.
+
+**Current zombie metrics (confirmed 2026-05-09):** The LangGraph dashboard (`observability/grafana/dashboards/20-langgraph.json`) queries four metrics with zero emitters in the entire codebase:
+- `cogniforge_langgraph_node_count_total`
+- `cogniforge_langgraph_node_duration_seconds`
+- `cogniforge_langgraph_intent_total`
+- `cogniforge_langgraph_checkpointer_writes_total`
+
+`local_graph.py` uses `UnifiedObservabilityService.start_trace()` / `end_span()` — in-process span store, not Prometheus. The dashboard expects OTel/Prometheus metrics. The two systems are not connected.
+
+**The dual-emission rule (D-017):** WS turn metrics (`ws.chat.turn.duration_seconds`, `ws.chat.terminal_events.total`, `ws.chat.fallback.total`) must be emitted through exactly one path. The OTel SDK path (`path_observer._emit_to_otel`) is the designated owner. The redundant `obs.record_metric(...)` calls for the same metric names must be removed to prevent double-counting when the full stack is up.
+
+**The verification rule (D-016):** Before adding any Grafana dashboard panel, grep the application source for the metric name in emit calls. If no emitter exists, add the emitter first or do not add the panel.
+
+**The missing CI gate (ISS-031):** No CI step currently verifies that dashboard metric names have corresponding emitters. This gate should be added as `scripts/check_dashboard_metric_contracts.py` — a static check, no runtime required.
+
+**Full analysis:** `.memory/fragility-patterns.md` Patterns 3 and 4 · **Issues:** ISS-029, ISS-030, ISS-031 · **Decisions:** D-016, D-017
+
+---
+
+## 6.22 Runtime Truth Governance Completeness (2026-05-09)
+
+**The three-leg proof has a structural CI gap.** CI enforces legs 1 (import) and 2 (call chain) via `scripts/runtime_truth.py`. Leg 3 (runtime evidence) is never verified in CI. This means a component can be classified ACTIVE while producing zero observable runtime effects.
+
+**Known governance gaps:**
+1. **Zombie metrics** — a component can be ACTIVE (imported + called) but emit no metrics. The truth table cannot detect this.
+2. **Dashboard-metric contract** — no CI step verifies that dashboard queries match application emitters.
+3. **Behavioral dead code** — code that runs but whose output is discarded (e.g., `obs.record_metric` for a metric no dashboard queries).
+4. **Configuration-gated dormancy** — `otel_setup.py` is ACTIVE (imported + called) but is a no-op when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset. This is a fourth status tier: **ACTIVE (no-op)** — not currently in the taxonomy.
+5. **Lock file staleness** — `.runtime/truth_table.lock.json` records `"branch": "jules-5513332666705839536-7e7df21b"`. Check `generated_at_utc` before trusting the lock.
+
+**The ACTIVE (no-op) tier:** When a component is imported, called, but produces no observable output due to missing configuration, it is neither ACTIVE nor DORMANT in the current taxonomy. It is ACTIVE in the static sense but DORMANT in the runtime sense. Future truth table entries for configuration-gated components should note: "ACTIVE (no-op without `ENV_VAR`)".
+
+**What must never be done:**
+- Do not classify a component ACTIVE based only on import + call chain without documenting what runtime evidence would look like
+- Do not assume the lock file is current — check `generated_at_utc`
+- Do not use span names as metric names — they are different namespaces (UnifiedObs spans vs OTel/Prometheus metrics)
+- Do not add a dashboard panel without first running the metric contract check
+
+**Full analysis:** `.memory/fragility-patterns.md` Patterns 3 and 4 · **Issues:** ISS-031 · **Decisions:** D-016, D-017
+
+---
+
 ## Architecture Reality and System Rules
 The NAAS-Agentic-Core system is in a transitional "strangler fig" phase, meaning there is significant fragmentation between the legacy monolith (`app/`) and the aspirational microservices stack (`microservices/`).
 * **ACTIVE**: The legacy monolith (`app/api/routers/customer_chat.py`), Next.js frontend (tightly coupled to legacy REST routes), and rudimentary fallback graphs (`local_graph.py`).

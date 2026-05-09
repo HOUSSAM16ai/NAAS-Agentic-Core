@@ -97,6 +97,29 @@ export OBSERVABILITY_AUTOSTART=0
 | Application log lines | Python logging + LoggingInstrumentor | OTel logs → Loki | Mission Control (live tail) |
 | LangGraph node span | `local_graph._supervisor_node / _chat_node` (existing) | OTel → Tempo (when SDK is on) | LangGraph Runtime |
 
+## Zombie Metrics — Dashboard-Metric Contract Violations (2026-05-09)
+
+The following Grafana panels query metrics that have **no emitter** in the application source. These panels will always be empty regardless of traffic volume. This is not a configuration issue — the metrics are simply never emitted.
+
+| Dashboard | Panel | Metric queried | Emitter exists? |
+|---|---|---|---|
+| `20-langgraph.json` | Invocations/min | `cogniforge_langgraph_node_count_total` | ❌ No |
+| `20-langgraph.json` | p95 node latency | `cogniforge_langgraph_node_duration_seconds_bucket` | ❌ No |
+| `20-langgraph.json` | Intent distribution | `cogniforge_langgraph_intent_total` | ❌ No |
+| `20-langgraph.json` | MemorySaver writes | `cogniforge_langgraph_checkpointer_writes_total` | ❌ No |
+
+**Why:** `local_graph.py` uses `UnifiedObservabilityService.start_trace()` / `end_span()` — which writes to an in-process span store accessible via `/api/v1/observability/traces`. It does NOT emit OTel/Prometheus metrics. The dashboard expects OTel metrics. The two systems are not connected.
+
+**Resolution path:** Either (a) add OTel metric emission to `local_graph.py` nodes, or (b) replace the Prometheus panels with API-sourced panels querying `/api/v1/observability/traces`. See ISS-029 and D-016.
+
+## Dual-Emission Risk — WS Turn Metrics (2026-05-09)
+
+`path_observer.py` emits WS turn metrics through two paths simultaneously:
+1. `_emit_to_otel(handle)` → OTel SDK → Prometheus (when stack up)
+2. `obs.record_metric("ws.chat.turn.duration_seconds", ...)` → UnifiedObs → `/api/v1/observability/prometheus`
+
+When the full observability stack is running, Prometheus scrapes both endpoints. The Mission Control "Turns/min" panel will show 2x the actual turn rate. See ISS-030 and D-017.
+
 ## Confidence (CONFIRMED / LIKELY / SUSPECTED / UNKNOWN)
 
 | Item | Confidence | Reason |

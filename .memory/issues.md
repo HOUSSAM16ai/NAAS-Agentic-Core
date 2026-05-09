@@ -1,7 +1,8 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-06 | Branch: claude/runtime-truth-audit-65iVU
+> Last updated: 2026-05-09 | Branch: claude/runtime-truth-audit-65iVU
 > Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED / RUNTIME-ONLY / HISTORICAL]
 > **Capability runtime status (ACTIVE/PARTIAL/DORMANT/ZOMBIE) lives in `.memory/runtime_truth.md`.**
+> **Architectural fragility patterns (root causes, lessons) live in `.memory/fragility-patterns.md`.**
 
 ---
 
@@ -359,6 +360,72 @@
   ```
 - **Root cause**: `PerformanceSnapshotResponse` schema requires `cpu_usage`, `memory_usage`, `active_requests` but the underlying `TelemetryAnalyzer` returns a dict without these fields
 - **File**: `app/api/routers/observability.py` + `app/api/schemas/observability.py`
+
+---
+
+---
+
+## 🟡 Medium — Fragility Patterns (NEW — Session 2026-05-09)
+
+### ISS-027 · Intent Routing Semantic Hijacking — Lexical Classifier Misroutes Non-Academic Queries
+- **Status**: CONFIRMED — structural design flaw in live classifier
+- **Evidence**: Runtime test — 10/10 non-academic Arabic/English questions containing educational keywords (`تمرين`, `حل`, `شرح`, `درس`, `مادة`, `history`, `solve`) are classified `educational` by `_classify_intent()` in `local_graph.py`
+- **Root cause**: Pure lexical regex matching with no semantic context. The word `تمرين` (exercise) matches both "math exercise" and "yoga exercise". The classifier has no access to conversation history, user profile, or semantic field.
+- **Affected file**: `app/services/chat/local_graph.py:_classify_intent` + `_EDUCATIONAL_PATTERNS` + `_GREETING_PATTERNS`
+- **Secondary affected**: `app/telemetry/path_observer.py:classify_path` (intentional duplicate — must be updated in sync)
+- **Effect**: Students asking casual questions containing educational keywords receive structured BAC-style academic responses. Students asking about physical exercise, conflict resolution, or social networks are routed to the educational prompt.
+- **Greeting anchor brittleness**: `"السلام عليكم"` (standard Islamic greeting) is NOT caught by the greeting pattern because the anchor `^...$` fails on the suffix `عليكم`. It falls through to educational patterns and is classified `educational` if it contains any keyword.
+- **Taxonomy split-brain**: Two incompatible intent systems exist — live `_classify_intent` (3 intents) and zombie `IntentDetector` (13 intents). If the zombie is ever wired in, its `CONTENT_RETRIEVAL` pattern also matches `تمرين`, creating a third classification for the same word.
+- **Fix strategy**: See `.memory/fragility-patterns.md` Pattern 1. Do NOT add more keywords — this worsens false positives. Minimum fix: add semantic context guards (subject name must appear near `تمرين` for educational classification). Proper fix: embedding-based or LLM-based classification.
+- **What must NOT change**: Do not wire `IntentDetector` into the live path without resolving the taxonomy incompatibility. Do not update `local_graph.py` patterns without updating `path_observer.py` in the same PR.
+
+---
+
+### ISS-028 · Hidden DOM Leakage — Sidebars Visually Hidden but DOM-Present
+- **Status**: CONFIRMED — structural rendering strategy flaw
+- **Evidence**: CSS inspection — both `.sidebar` and `.agent-sidebar` use `transform: translateX(±100%)` to hide. No `aria-hidden`, no `inert`, no `tabindex="-1"` applied when closed.
+- **Root cause**: CSS transform chosen for animation quality. Visual hiding ≠ DOM exclusion.
+- **Leakage surfaces**:
+  1. Screen readers announce sidebar content when sidebar is visually closed
+  2. Keyboard Tab cycles through off-screen interactive elements
+  3. Browser Ctrl+F finds text in off-screen sidebars
+  4. `AgentTimeline` renders agent phase state into DOM regardless of sidebar visibility
+  5. Copy buttons in `ChatInterface` are always in DOM (clipboard contamination risk)
+- **Affected files**: `frontend/app/globals.css` (`.sidebar`, `.agent-sidebar` rules), `frontend/app/components/CogniForgeApp.jsx`
+- **Severity escalation**: As the agent stack becomes more capable (DORMANT → ACTIVE), `AgentTimeline` will expose real-time agent execution state to screen readers regardless of sidebar visibility. The information leakage surface grows with capability.
+- **Fix strategy**: Add `inert={!isOpen || undefined}` to sidebar JSX (modern browsers), or `aria-hidden={!isOpen}` + tabindex management. See `.memory/fragility-patterns.md` Pattern 2.
+
+---
+
+### ISS-029 · Zombie Metrics — LangGraph Dashboard Queries Non-Existent Metrics
+- **Status**: CONFIRMED — dashboard-metric contract violation
+- **Evidence**: `observability/grafana/dashboards/20-langgraph.json` queries 4 metrics; grep of entire codebase finds zero emitters for any of them:
+  - `cogniforge_langgraph_node_count_total` — no emitter
+  - `cogniforge_langgraph_node_duration_seconds` — no emitter
+  - `cogniforge_langgraph_intent_total` — no emitter
+  - `cogniforge_langgraph_checkpointer_writes_total` — no emitter
+- **Root cause**: `local_graph.py` uses `UnifiedObservabilityService.start_trace()` / `end_span()` (in-process span store). Dashboard expects OTel/Prometheus metrics. The two systems are not connected.
+- **Effect**: LangGraph dashboard panels are permanently empty. Operators cannot distinguish "LangGraph not running" from "LangGraph running but metrics not emitted".
+- **No CI gate**: No CI step verifies that dashboard metric names have corresponding emitters in application code.
+- **Fix strategy**: Either (a) add OTel metric emission to `local_graph.py` nodes matching the dashboard metric names, or (b) update the dashboard to query the UnifiedObs API (`/api/v1/observability/traces`) instead of Prometheus. Option (a) is preferred for consistency with the observability stack.
+
+---
+
+### ISS-030 · Dual-Write Metrics — WS Turn Metrics Emitted Through Two Paths Simultaneously
+- **Status**: INFERRED — structural dual-emission risk
+- **Evidence**: `path_observer.py` calls both `_emit_to_otel(handle)` (OTel SDK) and `obs.record_metric("ws.chat.turn.duration_seconds", ...)` (UnifiedObs). When the OTel stack is up, Prometheus scrapes both the OTel collector and `/api/v1/observability/prometheus`. Both emit `cogniforge_ws_chat_turn_duration_seconds`.
+- **Root cause**: Two independent metric emission paths for the same logical metric. Analogous to the dual-write persistence bug (ISS-014) but at the metrics layer.
+- **Effect**: When the full observability stack is running, Mission Control "Turns/min" panel shows 2x the actual turn rate.
+- **Fix strategy**: Designate a single owner for WS turn metrics. Recommended: OTel SDK owns them (path_observer already calls `_emit_to_otel`); remove the redundant `obs.record_metric` call for the same metric names.
+
+---
+
+### ISS-031 · Runtime Truth Governance Gap — Static CI Cannot Detect Metric Emission Failures
+- **Status**: CONFIRMED — structural governance gap
+- **Evidence**: `scripts/runtime_truth.py` performs static analysis only (import + call chain). It cannot detect: zombie metrics, dashboard-metric contract violations, behavioral dead code, configuration-gated dormancy.
+- **Root cause**: The three-leg proof (import + call chain + runtime evidence) has only legs 1 and 2 enforced in CI. Leg 3 (runtime evidence) is never verified.
+- **Missing gate**: No CI step parses Grafana dashboard JSON files and verifies that queried metric names have corresponding emitters in application source.
+- **Fix strategy**: Add a static metric contract test: parse `observability/grafana/dashboards/*.json`, extract Prometheus query expressions, extract metric names, grep application source for emit calls, fail CI if mismatch. This is a static check — no runtime required.
 
 ---
 

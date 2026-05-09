@@ -98,31 +98,34 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 
 ## Full capability truth table (2026-05-09 — fifth pass)
 
-| # | Component | Status | Evidence |
-|---|-----------|--------|---------|
-| 1 | Monolith API | **ACTIVE** | 62 routes, WS entrypoint live |
-| 2 | Frontend Next.js | **ACTIVE** | Port 3000, HTML confirmed |
-| 3 | LangGraph local engine (2 nodes) | **PARTIAL** | Fallback tier 3. Live confirmed. |
-| 4 | LangGraph metrics emission | **ACTIVE** | cogniforge_langgraph_* emitted per turn (NEW this branch) |
-| 5 | LangGraph multi-agent workflow | **ZOMBIE** | Only test file imports it |
-| 6 | KAgent Mesh | **ZOMBIE** | DI-registered, only consumer is dead workflow |
-| 7 | MCP | **DORMANT** | Lazy-imported by side-path agents not on WS path |
-| 8 | Reranker / LlamaIndex / DSPy | **DORMANT** | Blocked by dormant microservices |
-| 9 | Tavily | **DORMANT** | Key in .env, orchestrator not running |
-| 10 | Advanced orchestrator StateGraph (13 nodes) | **DORMANT** | Compiles in isolation. Not on live call chain. |
-| 11 | Database | **ACTIVE** | PostgreSQL 17.6 Supabase. database:ok confirmed. |
-| 12 | Cache | **ACTIVE (InMemoryCache)** | REDIS_URL not set → InMemoryCache |
-| 13 | AI Gateway | **ACTIVE** | nvidia/nemotron-3-super-120b-a12b:free. Live call confirmed. |
-| 14 | Microservices stack | **DORMANT** | Not started by devcontainer |
-| 15 | Grafana | **ACTIVE** | Port 3001. 5 dashboards. Datasource connected. |
-| 16 | Prometheus | **ACTIVE** | Port 9090. 3 targets UP. |
-| 17 | OTEL export | **ACTIVE (no-op)** | Endpoint set to localhost:4317 but no collector running |
-| 18 | UnifiedObservabilityService | **ACTIVE** | In-process. Every HTTP request traced. |
-| 19 | IntentDetector / ChatOrchestrator | **PARTIAL (loaded-not-invoked)** | Constructed by boundary service, never called on WS path |
-| 20 | OrchestratorClient fallback chain | **ACTIVE** | 4-tier fallback. Tier 3 (LangGraph) is primary handler. |
-| 21 | Outbox relay | **DORMANT** | OUTBOX_RELAY_ENABLED=False by default |
-| 22 | Postgres checkpointer | **DORMANT** | AsyncPostgresSaver importable, not configured |
-| 23 | cogniforge_langgraph_checkpointer_writes_total | **ZOMBIE metric** | No emitter. Requires Postgres checkpointer. |
+| # | Component | File | Status | Evidence |
+|---|-----------|------|--------|---------|
+| 1 | Monolith API — customer WS | `app/api/routers/customer_chat.py` | **ACTIVE** | `chat_stream_ws` is the live entrypoint. 62 routes registered. |
+| 2 | Monolith API — admin WS | `app/api/routers/admin.py` | **ACTIVE** | Admin WS entrypoint. `_emit_terminal_frames` guarantees exactly one terminal frame per turn. |
+| 3 | Terminal frame guarantee | `_emit_terminal_frames` in `customer_chat.py` + `admin.py` | **ACTIVE** | Single emitter for `assistant_final`/`error`. Exactly one frame per turn. |
+| 4 | RealityKernel / app composition | `app/kernel.py` | **ACTIVE** | Composition root. Loaded at startup via `app/main.py`. |
+| 5 | Frontend Next.js | `frontend/` | **ACTIVE** | Port 3000, HTML confirmed |
+| 6 | LangGraph local engine (2 nodes) | `app/services/chat/local_graph.py` | **PARTIAL** | Fallback tier 3. Live confirmed. |
+| 7 | LangGraph metrics emission | `app/services/chat/local_graph.py` → `unified_observability` | **ACTIVE** | `cogniforge_langgraph_*` emitted per turn (NEW this branch) |
+| 8 | OrchestratorClient fallback chain | `app/infrastructure/clients/orchestrator_client.py` | **ACTIVE** | 4-tier fallback. Tier 3 (LangGraph) is primary handler. |
+| 9 | LangGraph multi-agent workflow | `app/services/chat/graph/workflow.py` | **ZOMBIE** | Only test file imports it |
+| 10 | KAgent Mesh | `app/services/kagent/` | **ZOMBIE** | DI-registered, only consumer is dead workflow |
+| 11 | MCP | `app/services/mcp/` | **DORMANT** | Lazy-imported by side-path agents not on WS path |
+| 12 | Reranker / LlamaIndex / DSPy | `microservices/research_agent`, `orchestrator_service` | **DORMANT** | Blocked by dormant microservices |
+| 13 | Tavily | `orchestrator_service/src/services/overmind/graph/search.py` | **DORMANT** | Key in .env, orchestrator not running |
+| 14 | Advanced orchestrator StateGraph (13 nodes) | `orchestrator_service/src/services/overmind/graph/main.py` | **DORMANT** | Compiles in isolation. Not on live call chain. |
+| 15 | Database | `app/core/database.py` | **ACTIVE** | PostgreSQL 17.6 Supabase. database:ok confirmed. |
+| 16 | Cache | `app/caching/factory.py` | **ACTIVE (InMemoryCache)** | REDIS_URL not set → InMemoryCache |
+| 17 | AI Gateway | `app/core/gateway/simple_client.py` | **ACTIVE** | nvidia/nemotron-3-super-120b-a12b:free. Live call confirmed. |
+| 18 | Microservices stack | `microservices/*/` | **DORMANT** | Not started by devcontainer |
+| 19 | Grafana | native binary `/opt/grafana` | **ACTIVE** | Port 3001. 5 dashboards. Datasource connected. |
+| 20 | Prometheus | native binary `/opt/prometheus` | **ACTIVE** | Port 9090. 3 targets UP. |
+| 21 | OTEL export | `app/telemetry/otel_setup.py` | **ACTIVE (no-op)** | Endpoint set to localhost:4317 but no collector running |
+| 22 | UnifiedObservabilityService | `app/telemetry/unified_observability.py` | **ACTIVE** | In-process. Every HTTP request traced. |
+| 23 | IntentDetector / ChatOrchestrator | `app/services/chat/intent_detector.py` | **PARTIAL (loaded-not-invoked)** | Constructed by boundary service, never called on WS path |
+| 24 | Outbox relay | `orchestrator_service/main.py` | **DORMANT** | OUTBOX_RELAY_ENABLED=False by default |
+| 25 | Postgres checkpointer | `orchestrator_service/src/core/database.py` | **DORMANT** | AsyncPostgresSaver importable, not configured |
+| 26 | cogniforge_langgraph_checkpointer_writes_total | `observability/grafana/dashboards/20-langgraph.json` | **ZOMBIE metric** | No emitter. Requires Postgres checkpointer. |
 
 ---
 

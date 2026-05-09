@@ -109,7 +109,9 @@ async def _supervisor_node(state: LocalChatState) -> dict:
         state["question"],
     )
 
-    try:
+    import contextlib
+
+    with contextlib.suppress(Exception):
         from app.telemetry.unified_observability import get_unified_observability
 
         obs = get_unified_observability()
@@ -142,8 +144,6 @@ async def _supervisor_node(state: LocalChatState) -> dict:
             value=duration_s,
             labels={"node": "supervisor", "graph": "local"},
         )
-    except Exception:
-        pass
 
     return {"intent": intent}
 
@@ -164,9 +164,12 @@ async def _chat_node(state: LocalChatState) -> dict:
     else:
         user_message = question
 
+    import contextlib
+
     t0 = time.perf_counter()
+    obs = None
     span_ctx = None
-    try:
+    with contextlib.suppress(Exception):
         from app.telemetry.unified_observability import get_unified_observability
 
         obs = get_unified_observability()
@@ -176,8 +179,6 @@ async def _chat_node(state: LocalChatState) -> dict:
             parent_context=parent,
             tags={"intent": intent, "node": "chat", "history_turns": len(history)},
         )
-    except Exception:
-        pass
 
     try:
         response = await ai_client.send_message(system_prompt, user_message)
@@ -187,21 +188,9 @@ async def _chat_node(state: LocalChatState) -> dict:
             intent,
             len(clean),
         )
-        if span_ctx:
-            try:
-                obs.end_span(
-                    span_ctx.span_id,
-                    status="OK",
-                    metrics={
-                        "duration_ms": (time.perf_counter() - t0) * 1000,
-                        "response_chars": float(len(clean)),
-                    },
-                )
-            except Exception:
-                pass
         duration_s = time.perf_counter() - t0
-        if span_ctx:
-            try:
+        if obs is not None and span_ctx is not None:
+            with contextlib.suppress(Exception):
                 obs.end_span(
                     span_ctx.span_id,
                     status="OK",
@@ -220,13 +209,11 @@ async def _chat_node(state: LocalChatState) -> dict:
                     value=duration_s,
                     labels={"node": "chat", "graph": "local"},
                 )
-            except Exception:
-                pass
         return {"final_response": clean}
     except Exception:
         logger.warning("local_graph.chat_node_failed", exc_info=True)
-        if span_ctx:
-            try:
+        if obs is not None and span_ctx is not None:
+            with contextlib.suppress(Exception):
                 obs.end_span(
                     span_ctx.span_id,
                     status="ERROR",
@@ -236,8 +223,6 @@ async def _chat_node(state: LocalChatState) -> dict:
                     "langgraph.node.count.total",
                     labels={"node": "chat", "graph": "local", "status": "error"},
                 )
-            except Exception:
-                pass
         return {"final_response": ""}
 
 

@@ -1,5 +1,59 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-05
+> Last updated: 2026-05-09
+
+---
+
+## ✅ Session: 2026-05-09 (third pass) — Advanced LangGraph + Tavily Deep Investigation
+
+**Branch**: `docs/advanced-langgraph-tavily-audit-2026-05-09`
+**Mode**: Live runtime investigation + documentation update. No application code changed.
+
+### What Was Investigated (Live Runtime — No Code Changes)
+
+1. **Advanced orchestrator StateGraph (13 nodes)**:
+   - `create_unified_graph()` compiles without error → `CompiledStateGraph` with 13 nodes
+   - `graph.ainvoke(state)` with `OPENROUTER_API_KEY` → valid Arabic response in ~10s (confirmed live)
+   - NOT on live call chain — `ORCHESTRATOR_SERVICE_URL=http://orchestrator-service:8006` → Docker DNS → ConnectError
+   - `cognitive_engine.memorize` bug confirmed: `AttributeError: 'NoneType' object has no attribute 'memorize'` on primary model (non-blocking, fallback models handle)
+   - `FlagEmbeddingReranker` not installed → `RerankerNode` falls back to simple score sort
+   - Postgres checkpointer absent → graph compiled without checkpointer
+   - 4-intent taxonomy: `educational`, `general_knowledge`, `admin`, `chat` (different from local graph's 3-intent)
+   - DSPy usage confirmed: `IntentClassifier`, `QueryRewriterSignature`, `AnalyzeQuery`, `EducationalSynthesizer`
+
+2. **Tavily integration**:
+   - `tavily-python==0.7.24` installed, `TavilyClient` importable
+   - Live search confirmed: `TavilyClient(api_key='tvly-dev-...').search('بكالوريا جزائر رياضيات')` → 2 results in <3s
+   - Key format validation: must start with `tvly-`. MCP URL format auto-sanitized in `readiness.py` and `super_search.py`
+   - `TAVILY_API_KEY` absent from `docker-compose.yml` (both `orchestrator-service` and `research-agent`)
+   - Silent skip confirmed: `WebSearchFallbackNode` returns `{"used_web": False, "reranked_docs": []}` with no exception when key absent
+   - Monolith does NOT use Tavily — `strategy_handlers.py:208` only checks for key as a warning, and `strategy_handlers.py` is on the PARTIAL (loaded-not-invoked) path
+
+3. **DuckDuckGo fallback broken**:
+   - `ddgs` package NOT installed → `ImportError` when `SuperSearchOrchestrator` initializes without Tavily
+   - `DuckDuckGoSearchAPIWrapper` from `langchain_community` requires `ddgs`
+
+4. **`WebSearchFallbackNode` call chain**:
+   - Calls `research_client.deep_research()` → HTTP to `research-agent:8007` → ConnectError (DORMANT)
+   - `research_client` base URL: `http://research-agent:8007` — Docker DNS, not running by default
+
+5. **`TAVILY_API_KEY` in docker-compose.yml**:
+   - Absent from `docker-compose.yml` (current version)
+   - Only present in `docker-compose.legacy.yml:61` as `TAVILY_API_KEY: ${TAVILY_API_KEY:-}`
+   - Must be added to both `orchestrator-service` and `research-agent` environment sections
+
+### Files Updated
+- `CLAUDE.md` — added §6.7 (Advanced LangGraph + Tavily doctrine), updated §6.6 truth table (rows 24, 24a, 24b), updated §10 env vars table
+- `.memory/runtime_truth.md` — rows 24, 24a, 24b added/updated, architectural verdict updated, rules 11–15 added
+- `.memory/architecture_truth.md` — component inventory updated, Transformation Gap updated, revival checklist added
+- `.memory/decisions.md` — D-018, D-019, D-020 added
+- `.memory/tasks.md` — H1–H4 tasks added (revival roadmap)
+- `.memory/progress.md` — this entry
+
+### What Was NOT Changed
+- No application source code (`app/`, `microservices/`, `frontend/`)
+- No test files
+- No CI workflows
+- No runtime behavior
 
 ---
 

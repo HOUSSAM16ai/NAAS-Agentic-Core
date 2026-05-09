@@ -1,5 +1,5 @@
 # Architectural Diagnostic: NAAS-Agentic-Core
-> Last updated: **2026-05-09** | Live audit (Ona agent — full runtime investigation).
+> Last updated: **2026-05-09** | Live audit (Ona agent — third pass: advanced LangGraph + Tavily deep investigation).
 
 ## Executive Summary
 The system is in a "strangler fig" migration phase from monolith to microservices. In the default Codespaces environment (without explicitly launching `docker-compose.yml`), the system relies entirely on the FastAPI monolith and a 2-node local LangGraph fallback. The advertised "Agentic" capabilities (KAgent, MCP, DSPy, Reranker, LlamaIndex, Multi-agent workflows) are either DORMANT (gated behind microservices that aren't running) or ZOMBIE (code exists but has no live consumers).
@@ -15,6 +15,8 @@ The system is in a "strangler fig" migration phase from monolith to microservice
 | **KAgent Mesh** (`app/services/kagent/`) | **ZOMBIE** | DI-registered in `app/core/di.py:145` but only consumed by dead `workflow.py` graph nodes. No live consumer. |
 | **MCP** (`app/services/mcp/`) | **DORMANT** | Not referenced by live APIs or kernel. Lazy-imported only in dormant agents. |
 | **Reranker / LlamaIndex / DSPy** | **DORMANT** | Implemented in `microservices/research_agent` and `orchestrator_service`. Blocked by microservice boundaries that are inactive by default. |
+| **Tavily (WebSearchFallbackNode)** | **DORMANT** | `tavily-python==0.7.24` installed. `TavilyClient` importable. Live search confirmed. Only called from `orchestrator_service/graph/search.py:WebSearchFallbackNode` — DORMANT. `TAVILY_API_KEY` absent from `docker-compose.yml`. Silent skip when key missing. |
+| **Advanced orchestrator StateGraph** | **DORMANT** | 13-node graph compiles and runs in isolation with `OPENROUTER_API_KEY`. NOT on live call chain. Requires full Docker Compose stack. `cognitive_engine.memorize` bug (non-blocking). `FlagEmbeddingReranker` not installed. |
 | **Database** (`app/core/database.py`) | **ACTIVE** | Monolith directly accesses DB via `async_session_factory`. PostgreSQL 17.6 Supabase. PgBouncer transaction mode. |
 | **Cache** (`app/caching/factory.py`) | **ACTIVE (InMemoryCache)** | `REDIS_URL` not set → `get_cache()` returns `InMemoryCache`. Redis process runs on 6379 but unused. |
 | **AI Gateway** (`app/core/gateway/simple_client.py`) | **ACTIVE** | `SimpleAIClient` with OpenRouter. Primary: `nvidia/nemotron-3-super-120b-a12b:free`. 5 fallback models. |
@@ -44,6 +46,17 @@ The system is in a "strangler fig" migration phase from monolith to microservice
 ## Transformation Gap
 To move from "transitional/zombie" to "production-grade multi-service":
 1. **Wake the mesh** — `docker compose -f docker-compose.yml up -d` + set `ORCHESTRATOR_SERVICE_URL`. Prove `compatibility_facade=True` round-trip writes exactly one row per turn. No code change required.
-2. **Fix OTEL** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to a valid collector URL.
-3. **Activate Redis** — set `REDIS_URL=redis://localhost:6379/0`.
-4. **Promote ONE agentic layer** — pick exactly one of (multi-agent workflow, MCP, KAgent, LlamaIndex, reranker, DSPy) and wire it into the live router or a `local_graph` node. Add runtime trace assertion. Update `.memory/runtime_truth.md`.
+2. **Add `TAVILY_API_KEY` to `docker-compose.yml`** — add under `orchestrator-service.environment` and `research-agent.environment`. Key must start with `tvly-`. Currently absent from all env templates.
+3. **Fix OTEL** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to a valid collector URL.
+4. **Activate Redis** — set `REDIS_URL=redis://localhost:6379/0`.
+5. **Fix DuckDuckGo fallback** — install `ddgs` package (`pip install ddgs`) if Tavily-less degraded mode is needed.
+6. **Promote ONE agentic layer** — pick exactly one of (multi-agent workflow, MCP, KAgent, LlamaIndex, reranker, DSPy) and wire it into the live router or a `local_graph` node. Add runtime trace assertion. Update `.memory/runtime_truth.md`.
+
+## Advanced LangGraph + Tavily Revival Checklist (verified 2026-05-09)
+- [ ] Add `TAVILY_API_KEY=${TAVILY_API_KEY:-}` to `docker-compose.yml` (orchestrator-service + research-agent)
+- [ ] `docker compose -f docker-compose.yml up -d orchestrator-service research-agent postgres-orchestrator redis-orchestrator`
+- [ ] Verify `curl http://localhost:8006/health` returns healthy
+- [ ] Verify orchestrator warmup passes (admin tool invocation in lifespan)
+- [ ] Set `ORCHESTRATOR_SERVICE_URL=http://localhost:8006` in monolith env
+- [ ] Send educational query → verify `retrieval_source="web"` in telemetry (not `"web_skipped_missing_tavily"`)
+- [ ] Update `.memory/runtime_truth.md` rows 24, 24a, 24b to ACTIVE

@@ -1641,6 +1641,178 @@ change to make `histograms` label-aware — out of scope for this fix.
 
 ---
 
+## 6.24 Advanced LangGraph Forensic Audit — Thread/Session/Node Truth (2026-05-09)
+
+> **Mode**: live forensic investigation. No application code changed.
+> **Scope**: advanced LangGraph inside the orchestrator microservice — stategraph, thread_id/session_id propagation, node execution, multi-agent workflow, revival roadmap.
+> **Authority**: this section supersedes any aspirational description in `docs/`, blueprints, or README about the advanced agent stack.
+
+### The two LangGraph stacks — do not conflate them
+
+| Stack | Location | Status | Nodes | thread_id format |
+|---|---|---|---|---|
+| **Local fallback graph** | `app/services/chat/local_graph.py` | **PARTIAL** (de-facto handler) | 2: `supervisor`, `chat` | `str(conversation_id)` e.g. `"394"` |
+| **Advanced orchestrator StateGraph** | `microservices/orchestrator_service/src/services/overmind/graph/main.py` | **DORMANT** | 13: see topology below | `u{user_id}:c{conversation_id}` e.g. `"u7:c394"` |
+| **App-level multi-agent workflow** | `app/services/chat/graph/workflow.py` | **ZOMBIE** | 7: planner, researcher, writer, super_reasoner, procedural_auditor, reviewer, supervisor | N/A — KAgent-blocked |
+
+These three graphs are completely independent. They share no state, no checkpointer, and no thread namespace.
+
+### thread_id propagation — verified call chain
+
+**Local fallback graph (PARTIAL — runs every turn in default Codespaces):**
+```
+customer_chat.py:chat_stream_ws
+  → OrchestratorClient.chat_with_agent(conversation_id=lc_id)
+    → [ConnectError] → _build_local_graph_response(conversation_id=conversation_id)
+      → run_local_graph(conversation_id=conversation_id)
+        → thread_id = str(conversation_id)   # e.g. "394"
+        → config = {"configurable": {"thread_id": thread_id}}
+        → graph.ainvoke(initial_state, config=config)
+```
+- `thread_id` is `str(conversation_id)` — simple, not user-scoped.
+- Checkpointer: `MemorySaver` (module-level singleton in `local_graph.py`).
+- State lost on process restart.
+
+**Advanced orchestrator StateGraph (DORMANT — only when microservices stack is running):**
+```
+customer_chat.py:chat_stream_ws
+  → OrchestratorClient.chat_with_agent(question, user_id, conversation_id, context={...})
+    → HTTP POST http://orchestrator-service:8006/agent/chat
+      → chat_with_agent_endpoint(ChatRequest)
+        → context["thread_id"] = _build_conversation_thread_id(user_id, conversation_id)
+          # = f"u{user_id}:c{conversation_id}"  e.g. "u7:c394"
+        → OrchestratorAgent.run(question, context)   ← NOT the StateGraph
+          → intent-based dispatch (13-intent taxonomy)
+          → sub-agents: AdminAgent, AnalyticsAgent, CurriculumAgent, etc.
+```
+
+**Critical finding**: The monolith's `/agent/chat` HTTP endpoint routes to `OrchestratorAgent.run()` — an intent-based dispatch system — **NOT** the 13-node `StateGraph`. The StateGraph (`create_unified_graph()`) is only invoked by:
+1. `/api/chat/messages` (HTTP) → `_run_chat_langgraph()` → `app_graph.astream_events()`
+2. `/api/chat/ws` (WS) → `_stream_chat_langgraph()` → `app_graph.astream_events()`
+3. `/admin/api/chat/ws` (WS) → `admin_app.astream_events()`
+
+The monolith calls `/agent/chat` (via `ChatRoutingPolicy.candidate_urls()`). Therefore, **even when the orchestrator microservice is running, the 13-node StateGraph is NOT invoked by the monolith's chat path**. The monolith hits `OrchestratorAgent` instead.
+
+### session_id propagation — verified
+
+- The monolith sends `context={"chat_scope":"customer","metadata":...,"compatibility_facade":True}` — **no `thread_id`, no `session_id`**.
+- The orchestrator's `/agent/chat` endpoint builds `thread_id` internally from `user_id + conversation_id` via `_build_conversation_thread_id()`.
+- `session_id` is extracted from the incoming payload's `context` dict by `_resolve_session_id_from_incoming()`. Since the monolith does not send it, `session_id` is always `None` on the HTTP path.
+- On the orchestrator's own WS endpoints (`/api/chat/ws`, `/admin/api/chat/ws`), `sticky_thread_id = _build_conversation_thread_id(user_id, conversation_id)` is set per-turn and injected into `context["thread_id"]`.
+
+### thread_id format mismatch between stacks
+
+| Stack | thread_id format | Checkpointer | Continuity |
+|---|---|---|---|
+| Local fallback graph | `"394"` (bare conversation_id) | `MemorySaver` (in-process) | Lost on restart |
+| Orchestrator StateGraph (when active) | `"u7:c394"` (user-scoped) | `AsyncPostgresSaver` (if DB available) or `MemorySaver` singleton | Persistent (Postgres) or lost on restart (MemorySaver) |
+| OrchestratorAgent (HTTP path) | `"u7:c394"` (built internally) | Not used — OrchestratorAgent does not use LangGraph checkpointing | N/A |
+
+**These thread_id namespaces are incompatible.** A conversation that starts on the local fallback graph (`thread_id="394"`) and later routes to the orchestrator StateGraph (`thread_id="u7:c394"`) will have no shared checkpoint state. This is ISS-019 (context identity fragmentation).
+
+### AdminAgentNode thread_id — stateless by design
+
+Inside the 13-node StateGraph, `AdminAgentNode.__call__()` invokes the admin sub-graph with:
+```python
+config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+```
+A fresh UUID is generated per invocation. This means the admin sub-graph is **stateless** — no checkpoint continuity even when the parent graph has a Postgres checkpointer. This is intentional (admin queries are stateless by nature) but undocumented.
+
+### Node execution topology — 13-node StateGraph
+
+```
+supervisor → [route_intent]
+  "educational"      → query_rewriter → query_analyzer → retriever → reranker
+                         → [check_results]
+                           "found"           → synthesizer
+                           "web_fallback"    → web_fallback → synthesizer
+                           "general_knowledge" → general_knowledge
+  "admin"            → admin_agent → validator
+  "tool"             → tool_executor → validator
+  "chat"             → chat_fallback → validator
+  "general_knowledge" → general_knowledge → validator
+validator → [check_quality]
+  "pass" → END
+  "fail" → supervisor  (retry loop, max retries via retry_count in AgentState)
+```
+
+**DSPy usage per node:**
+- `SupervisorNode`: `dspy.ChainOfThought(IntentClassifier)` — 4-intent: `educational`, `general_knowledge`, `admin`, `chat`
+- `QueryRewriterNode`: `dspy.ChainOfThought(QueryRewriterSignature)` — pronoun resolution
+- `QueryAnalyzerNode`: `dspy.Predict(AnalyzeQuery)` — BAC filter extraction (year, subject, branch, exercise_num)
+- `SynthesizerNode`: `dspy.Predict(EducationalSynthesizer)` — Arabic response synthesis
+- `ChatFallbackNode`: `dspy.Predict(ChatFallbackSignature)` — conversational response
+
+**4-intent taxonomy vs 3-intent taxonomy:**
+- Orchestrator StateGraph: `educational`, `general_knowledge`, `admin`, `chat`
+- Local fallback graph: `educational`, `general`, `chat`
+- These are semantically different. `general_knowledge` routes to a dedicated `GeneralKnowledgeNode`. `general` in the local graph routes to the same `chat_node`. Do not conflate.
+
+### Postgres checkpointer — conditional availability
+
+```python
+# microservices/orchestrator_service/src/core/database.py
+try:
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+except ImportError:
+    AsyncPostgresSaver = None  # → graph compiled without checkpointer
+
+# init_db() sets postgres_checkpointer only when:
+# 1. AsyncPostgresSaver is importable
+# 2. ORCHESTRATOR_DATABASE_URL is set and reachable
+# 3. AsyncConnectionPool opens successfully
+# 4. postgres_checkpointer.setup() succeeds
+
+# Fallback: module-level MemorySaver singleton in main.py
+_memory_saver: _MemorySaver | None = _MemorySaver()
+active_checkpointer = get_checkpointer() or _memory_saver
+```
+
+In the default Codespaces environment: `ORCHESTRATOR_DATABASE_URL` is not set → `get_checkpointer()` returns `None` → graph compiled with `_memory_saver` (MemorySaver singleton). State is in-process only.
+
+### WebSearchFallbackNode — Tavily call chain
+
+```
+WebSearchFallbackNode.__call__(state)
+  → tavily_key = os.environ.get("TAVILY_API_KEY", "").strip()
+  → if not tavily_key:
+      return {"reranked_docs": [], "used_web": False}  # silent skip
+  → research_client.deep_research(query_str)  # HTTP to research-agent:8007
+    → research-agent: SuperSearchOrchestrator
+      → TavilyClient(api_key=tavily_key).search(query, search_depth="basic", max_results=3)
+```
+
+**`TAVILY_API_KEY` is absent from `docker-compose.yml`** — neither `orchestrator-service` nor `research-agent` environment sections include it. Must be added as `- TAVILY_API_KEY=${TAVILY_API_KEY:-}` before the full stack can use web search.
+
+**DuckDuckGo fallback is broken**: `SuperSearchOrchestrator` falls back to `DuckDuckGoSearchAPIWrapper` when Tavily key is absent, but `ddgs` package is NOT installed → `ImportError` on initialization.
+
+### Truth table lock staleness
+
+`.runtime/truth_table.lock.json` was generated on branch `jules-5513332666705839536-7e7df21b` at `2026-05-08T09:54:43Z`. It is stale by at least 1 day and was generated in a different branch context. It does NOT include entries for:
+- Orchestrator microservice StateGraph (13 nodes)
+- Tavily / WebSearchFallbackNode
+- DSPy in orchestrator
+- Research agent / SuperSearchOrchestrator
+- OrchestratorAgent (intent-based dispatch)
+
+**Action required**: `python scripts/runtime_truth.py --update` to regenerate, then commit in the same PR as any capability status change.
+
+### Revival roadmap — advanced LangGraph + Tavily (documentation only)
+
+To bring the advanced orchestrator StateGraph to ACTIVE status on the live call chain:
+
+1. **Add `TAVILY_API_KEY` to `docker-compose.yml`** under both `orchestrator-service` and `research-agent` environment sections: `- TAVILY_API_KEY=${TAVILY_API_KEY:-}`
+2. **Start the microservices stack**: `docker compose -f docker-compose.yml up -d orchestrator-service research-agent postgres-orchestrator redis-orchestrator`
+3. **Verify orchestrator health**: `curl http://localhost:8006/health` — warmup check in `main.py` lifespan must pass (admin tool invocation returns `tool_name` in `final_response`)
+4. **Set `ORCHESTRATOR_SERVICE_URL`** in the monolith to `http://localhost:8006` (or `http://orchestrator-service:8006` on the Docker network)
+5. **Verify the StateGraph is invoked**: the monolith calls `/agent/chat` → `OrchestratorAgent.run()` (NOT the StateGraph). To route through the StateGraph, the monolith must call `/api/chat/messages` instead. This requires a routing policy change in `ChatRoutingPolicy.candidate_urls()`.
+6. **Fix `ddgs` package**: `pip install ddgs` in the research-agent container if DuckDuckGo fallback is needed
+7. **Update `.memory/runtime_truth.md`**: add rows for orchestrator StateGraph (ACTIVE), Tavily (ACTIVE), WebSearchFallbackNode (ACTIVE)
+
+**Architectural boundary that must be respected**: the monolith must never import from `microservices/`. All communication is HTTP only. The `persisted: true` flag protocol (D-006) applies when the orchestrator is active.
+
+---
+
 ## Architecture Reality and System Rules
 The NAAS-Agentic-Core system is in a transitional "strangler fig" phase, meaning there is significant fragmentation between the legacy monolith (`app/`) and the aspirational microservices stack (`microservices/`).
 * **ACTIVE**: The legacy monolith (`app/api/routers/customer_chat.py`), Next.js frontend (tightly coupled to legacy REST routes), and rudimentary fallback graphs (`local_graph.py`).

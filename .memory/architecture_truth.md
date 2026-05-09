@@ -58,5 +58,20 @@ To move from "transitional/zombie" to "production-grade multi-service":
 - [ ] Verify `curl http://localhost:8006/health` returns healthy
 - [ ] Verify orchestrator warmup passes (admin tool invocation in lifespan)
 - [ ] Set `ORCHESTRATOR_SERVICE_URL=http://localhost:8006` in monolith env
+- [ ] **Change `ChatRoutingPolicy.candidate_urls()` to return `/api/chat/messages` instead of `/agent/chat`** — required to route through the 13-node StateGraph instead of `OrchestratorAgent`
 - [ ] Send educational query → verify `retrieval_source="web"` in telemetry (not `"web_skipped_missing_tavily"`)
 - [ ] Update `.memory/runtime_truth.md` rows 24, 24a, 24b to ACTIVE
+
+## Critical Finding Added 2026-05-09 (fourth pass forensic audit)
+
+**The monolith's `/agent/chat` call does NOT invoke the 13-node StateGraph.**
+
+`ChatRoutingPolicy.candidate_urls()` returns `[f"{base}/agent/chat"]`. The `/agent/chat` endpoint routes to `OrchestratorAgent.run()` — an intent-based dispatch system with its own 13-intent taxonomy. The 13-node StateGraph (`create_unified_graph()`) is only invoked by `/api/chat/messages` (HTTP) and `/api/chat/ws` (WS) on the orchestrator service.
+
+**Implication**: Even when the orchestrator microservice is running, the advanced StateGraph is NOT on the monolith's chat path. To route through the StateGraph, `ChatRoutingPolicy.candidate_urls()` must return `/api/chat/messages` instead of `/agent/chat`.
+
+**thread_id format mismatch**: Local fallback graph uses `str(conversation_id)` (e.g. `"394"`). Orchestrator StateGraph uses `f"u{user_id}:c{conversation_id}"` (e.g. `"u7:c394"`). These namespaces are incompatible — no shared checkpoint state between the two stacks (ISS-019).
+
+**AdminAgentNode stateless**: Inside the 13-node StateGraph, `AdminAgentNode` invokes the admin sub-graph with `thread_id=str(uuid.uuid4())` — a fresh UUID per invocation. Stateless by design.
+
+**Full forensic details**: `.memory/langgraph_advanced_forensics.md`

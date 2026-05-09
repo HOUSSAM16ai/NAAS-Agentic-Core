@@ -43,3 +43,42 @@ Live anchor: `app/api/routers/admin.py:316`. Identical structure; different tabl
 - `ChatOrchestrator` + `CustomerChatStreamer` / `AdminChatStreamer` — PARTIAL (loaded-not-invoked).
 - KAgent mesh, MCP integrations, LlamaIndex driver, Reranker driver — ZOMBIE / DORMANT.
 - The microservice mesh (`microservices/*`) — DORMANT in default Codespaces.
+
+---
+
+## Orchestrator Microservice Paths (DORMANT — requires `docker compose -f docker-compose.yml up -d`)
+
+### `/agent/chat` — OrchestratorAgent (intent-based dispatch)
+This is what the monolith calls via `ChatRoutingPolicy.candidate_urls()`.
+```
+POST /agent/chat → chat_with_agent_endpoint(ChatRequest)
+  → OrchestratorAgent.run(question, context)
+    → IntentDetector.detect() → 13-intent taxonomy
+    → dispatch: AdminAgent | AnalyticsAgent | CurriculumAgent | chat_fallback | ...
+    → NOT the 13-node StateGraph
+```
+
+### `/api/chat/messages` — 13-node StateGraph (HTTP)
+NOT called by the monolith. Only reachable directly or via orchestrator's own clients.
+```
+POST /api/chat/messages → chat_messages_endpoint(payload)
+  → context["thread_id"] = f"u{user_id}:c{conversation_id}"
+  → _run_chat_langgraph() → app_graph.astream_events(inputs, config, version="v2")
+    → 13-node StateGraph: supervisor → [routing] → ... → validator → END
+```
+
+### `/api/chat/ws` — 13-node StateGraph (WebSocket)
+NOT called by the monolith. Direct WebSocket connection to orchestrator.
+```
+WS /api/chat/ws → chat_ws_stategraph(websocket)
+  → sticky_thread_id = f"u{user_id}:c{conversation_id}"
+  → _stream_chat_langgraph() → app_graph.astream_events(inputs, config, version="v2")
+    → emits: phase_start, phase_completed, assistant_delta, assistant_final
+```
+
+### thread_id formats (do not mix)
+| Path | thread_id | Checkpointer |
+|---|---|---|
+| Monolith → local_graph.py | `str(conversation_id)` e.g. `"394"` | MemorySaver (in-process) |
+| Orchestrator → StateGraph | `f"u{user_id}:c{conversation_id}"` e.g. `"u7:c394"` | AsyncPostgresSaver or MemorySaver singleton |
+| AdminAgentNode (inside StateGraph) | `str(uuid.uuid4())` | None — stateless |

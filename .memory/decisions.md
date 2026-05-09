@@ -141,6 +141,24 @@ repeated drift and false claims.
 **Consequence**: Any future work that wires the orchestrator graph into the live path must account for this taxonomy difference. The local graph's intent classification bugs (Arabic greetings → 'general') are separate from the orchestrator's DSPy-based classification.
 **Status**: DECIDED 2026-05-09 — see CLAUDE.md §6.7.
 
+## D-021 · Monolith Routes to OrchestratorAgent, Not StateGraph — Routing Policy Gap
+**Decision**: `ChatRoutingPolicy.candidate_urls()` returns `[f"{base}/agent/chat"]`. The `/agent/chat` endpoint routes to `OrchestratorAgent.run()` (intent-based dispatch, 13-intent taxonomy), NOT the 13-node `StateGraph`. The StateGraph is only invoked by `/api/chat/messages` and `/api/chat/ws` on the orchestrator service itself.
+**Reason**: The routing policy was set to `/agent/chat` as the primary endpoint. The StateGraph endpoints (`/api/chat/messages`, `/api/chat/ws`) were added later as the orchestrator evolved. The routing policy was never updated to point to the StateGraph path.
+**Consequence**: Even when the orchestrator microservice is running, the 13-node StateGraph (with DSPy, Tavily, reranker, synthesizer) is NOT invoked by the monolith's chat path. The monolith hits `OrchestratorAgent` instead. To route through the StateGraph, `ChatRoutingPolicy.candidate_urls()` must return `/api/chat/messages` instead of `/agent/chat`. This is a deliberate future migration step, not a bug to fix immediately.
+**Status**: DOCUMENTED 2026-05-09 — see `.memory/langgraph_advanced_forensics.md`.
+
+## D-022 · thread_id Namespaces Are Incompatible Between Stacks — Do Not Mix
+**Decision**: The local fallback graph uses `str(conversation_id)` as `thread_id` (e.g. `"394"`). The orchestrator StateGraph uses `f"u{user_id}:c{conversation_id}"` (e.g. `"u7:c394"`). These are different namespaces in different `MemorySaver` instances. They must never be mixed.
+**Reason**: The local graph was designed for simplicity (bare conversation_id). The orchestrator graph added user-scoping to prevent cross-user state contamination. The two stacks evolved independently.
+**Consequence**: A conversation that starts on the local fallback graph and later routes to the orchestrator StateGraph will have no shared checkpoint state (ISS-019). This is the context identity fragmentation issue. Resolution requires either: (a) standardizing both stacks to the same format, or (b) accepting that state is not shared between stacks.
+**Status**: DOCUMENTED 2026-05-09 — see `.memory/langgraph_advanced_forensics.md`.
+
+## D-023 · AdminAgentNode Uses uuid4() thread_id — Stateless by Design
+**Decision**: Inside the 13-node StateGraph, `AdminAgentNode.__call__()` invokes the admin sub-graph with `config = {"configurable": {"thread_id": str(uuid.uuid4())}}`. A fresh UUID per invocation.
+**Reason**: Admin queries are stateless by nature — each admin tool invocation is independent. Using a fresh UUID prevents stale admin state from contaminating subsequent admin queries.
+**Consequence**: The admin sub-graph has no checkpoint continuity even when the parent graph has a Postgres checkpointer. Admin tool results are not persisted across invocations. This is intentional but was undocumented.
+**Status**: DOCUMENTED 2026-05-09 — see `.memory/langgraph_advanced_forensics.md`.
+
 ## D-020 · WebSearchFallbackNode Silent Skip Is a Known Degradation — Not a Bug
 **Decision**: `WebSearchFallbackNode` silently returns `{"used_web": False, "reranked_docs": []}` when `TAVILY_API_KEY` is absent. This is intentional degraded-mode behavior, not a bug.
 **Reason**: The node must not block the graph when web search is unavailable. The `SynthesizerNode` handles empty docs by returning `"لا توجد تفاصيل متاحة."`.

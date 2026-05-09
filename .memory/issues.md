@@ -517,3 +517,40 @@
 - **Evidence**: `cleanlab` not installed. Zero references in `app/`. Not part of this codebase.
 - **Action**: Remove TLM from any documentation that claims it is used.
 
+
+---
+
+## Issues Added 2026-05-09 (fourth pass — advanced LangGraph forensic audit)
+
+### [HIGH] ISS-NEW-006 · Monolith routes to OrchestratorAgent, not StateGraph · CONFIRMED LIVE
+- **Evidence**: `ChatRoutingPolicy.candidate_urls()` returns `[f"{base}/agent/chat"]`. The `/agent/chat` endpoint routes to `OrchestratorAgent.run()` (intent-based dispatch), NOT the 13-node StateGraph.
+- **Impact**: Even when the orchestrator microservice is running, the advanced StateGraph (DSPy, Tavily, reranker, synthesizer) is NOT invoked by the monolith's chat path. The 13-node StateGraph is only reachable via `/api/chat/messages` or `/api/chat/ws` on the orchestrator service itself.
+- **Fix**: Change `ChatRoutingPolicy.candidate_urls()` to return `/api/chat/messages` instead of `/agent/chat`. Requires ADR.
+- **Decision**: D-021
+
+### [HIGH] ISS-NEW-007 · thread_id namespace mismatch between stacks · CONFIRMED
+- **Evidence**: Local fallback graph uses `str(conversation_id)` (e.g. `"394"`). Orchestrator StateGraph uses `f"u{user_id}:c{conversation_id}"` (e.g. `"u7:c394"`). Different MemorySaver instances.
+- **Impact**: A conversation that starts on the local fallback graph and later routes to the orchestrator StateGraph has no shared checkpoint state (ISS-019 root cause).
+- **Fix**: Standardize both stacks to the same thread_id format, or accept that state is not shared between stacks.
+- **Decision**: D-022
+
+### [MEDIUM] ISS-NEW-008 · AdminAgentNode stateless thread_id undocumented · CONFIRMED
+- **Evidence**: `AdminAgentNode.__call__()` uses `config = {"configurable": {"thread_id": str(uuid.uuid4())}}` — fresh UUID per invocation.
+- **Impact**: Admin sub-graph has no checkpoint continuity even when parent graph has Postgres checkpointer. Admin tool results not persisted across invocations.
+- **Status**: Intentional by design, but undocumented. Now documented in D-023 and `.memory/langgraph_advanced_forensics.md`.
+
+### [HIGH] ISS-NEW-009 · Truth table lock stale and missing advanced stack entries · CONFIRMED
+- **Evidence**: `.runtime/truth_table.lock.json` generated 2026-05-08T09:54:43Z on branch `jules-5513332666705839536-7e7df21b`. Missing: orchestrator StateGraph, Tavily, DSPy, research_agent, OrchestratorAgent. CI drift check fails: `customer_chat_router: importer_count 6→5`.
+- **Impact**: CI drift gate may pass on false grounds. Missing entries mean the truth table does not reflect the full advanced stack.
+- **Fix**: `python scripts/runtime_truth.py --update` then commit. Add missing entries for orchestrator StateGraph, Tavily, OrchestratorAgent.
+
+### [MEDIUM] ISS-NEW-010 · TAVILY_API_KEY absent from docker-compose.yml · CONFIRMED
+- **Evidence**: Neither `orchestrator-service` nor `research-agent` environment sections in `docker-compose.yml` include `TAVILY_API_KEY`. Absent from all env templates.
+- **Impact**: Even when the full stack is running, `WebSearchFallbackNode` silently skips web search. `SynthesizerNode` receives empty docs → `"لا توجد تفاصيل متاحة."`.
+- **Fix**: Add `- TAVILY_API_KEY=${TAVILY_API_KEY:-}` to both service environment sections in `docker-compose.yml`.
+- **Decision**: D-018
+
+### [MEDIUM] ISS-NEW-011 · DuckDuckGo fallback broken in research-agent · CONFIRMED
+- **Evidence**: `ddgs` package NOT installed. `SuperSearchOrchestrator` falls back to `DuckDuckGoSearchAPIWrapper` when Tavily absent → `ImportError` on initialization.
+- **Impact**: If Tavily key is absent and orchestrator is running, `SuperSearchOrchestrator` raises `ImportError` on init. No graceful degradation.
+- **Fix**: `pip install ddgs` in the research-agent container, or add `ddgs` to `microservices/research_agent/requirements.txt`.

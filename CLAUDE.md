@@ -49,6 +49,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 - Prometheus: port **9090** (`GET /-/healthy → "Prometheus Server is Healthy."`)
 - Redis: port **6379** (process running but app uses `InMemoryCache` — `REDIS_URL` not set)
 
+**Known fix applied 2026-05-09 (ISS-036):** `frontend/next.config.js` `allowedDevOrigins` was missing `*.app.github.dev` — Next.js 15+ rejects Codespaces proxy requests with `ERR_HTTP_RESPONSE_CODE_FAILURE` without it. Fixed by adding `*.app.github.dev` and `*.preview.app.github.dev` to the list.
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
@@ -146,6 +148,19 @@ user = db.query(User).filter_by(email=email).first()
 from sqlalchemy import select
 result = await db.execute(select(User).where(User.email == email))
 user = result.scalar_one_or_none()
+```
+
+### NEVER omit Codespaces origins from `allowedDevOrigins`
+```javascript
+// ❌ Wrong — Next.js 15+ blocks Codespaces proxy with ERR_HTTP_RESPONSE_CODE_FAILURE
+allowedDevOrigins: ['*.replit.dev']
+
+// ✅ Correct — include all hosting environments
+allowedDevOrigins: [
+    '*.replit.dev', '*.replit.app',
+    '*.app.github.dev', '*.preview.app.github.dev',  // GitHub Codespaces
+    '*.gitpod.io',                                    // Gitpod / Ona
+]
 ```
 
 ### NEVER assume microservices are reachable

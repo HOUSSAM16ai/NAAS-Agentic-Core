@@ -1,5 +1,5 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-09** | Branch: `fix/lifespan-orchestration-env-injection`
+> Last updated: **2026-05-09** | Branch: `fix/codespaces-port-3000-allowed-origins`
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
 
 ## Golden rule
@@ -22,11 +22,11 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 
 ---
 
-## Infrastructure truth (verified live 2026-05-09 — fifth pass)
+## Infrastructure truth (verified live 2026-05-09 — sixth pass)
 
 | Service | Port | Status | Evidence |
 |---------|------|--------|---------|
-| **Next.js** | **3000** | **ACTIVE** | supervisor.sh `--port 3000` overrides package.json `--port 5000`. HTML confirmed. |
+| **Next.js** | **3000** | **ACTIVE** | supervisor.sh `--port 3000` overrides package.json `--port 5000`. HTML 200 confirmed. `allowedDevOrigins` now includes `*.app.github.dev` — Codespaces proxy returns 200 (was ERR_HTTP_RESPONSE_CODE_FAILURE before ISS-036 fix). |
 | **FastAPI** | **8000** | **ACTIVE** | `GET /health → {"application":"ok","database":"ok"}`. Requires DATABASE_URL in **process env** (not just .env). |
 | **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 5 dashboards. Prometheus datasource UP. |
 | **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → Healthy`. 3 targets UP: fastapi, grafana, prometheus. |
@@ -96,7 +96,24 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 
 ---
 
-## Full capability truth table (2026-05-09 — fifth pass)
+## Codespaces Next.js proxy fix (ISS-036 — RESOLVED 2026-05-09)
+
+**Symptom**: Port 3000 in GitHub Codespaces returns `ERR_HTTP_RESPONSE_CODE_FAILURE` even when Next.js is running and responding 200 on localhost.
+
+**Root cause**: `frontend/next.config.js` `allowedDevOrigins` listed only Replit domains. Next.js 15+ enforces origin validation on the dev server — requests proxied through `*.app.github.dev` (Codespaces tunnel) were rejected at the framework level before reaching any route handler.
+
+**Fix applied** (`frontend/next.config.js`):
+- Added `*.app.github.dev` and `*.preview.app.github.dev` to `allowedDevOrigins`.
+- Added `*.gitpod.io` and `*.ws-eu*.gitpod.io` for Gitpod/Ona environments.
+
+**Verified live**:
+- `curl -s http://localhost:3000/ → HTTP 200`
+- `curl -H "Origin: https://didactic-giggle-7vwwj76p66vfrjg4-3000.app.github.dev" http://localhost:3000/ → HTTP 200`
+- FastAPI: `GET /health → {"application":"ok","database":"ok","version":"v4.1-root"}`
+
+---
+
+## Full capability truth table (2026-05-09 — sixth pass)
 
 | # | Component | File | Status | Evidence |
 |---|-----------|------|--------|---------|
@@ -145,3 +162,4 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 12. **thread_id namespaces incompatible.** Local graph: `str(conversation_id)`. Orchestrator: `f"u{user_id}:c{conversation_id}"`. Never mix.
 13. **LangGraph metrics now ACTIVE for local graph.** `cogniforge_langgraph_intent_total`, `cogniforge_langgraph_node_count_total`, `cogniforge_langgraph_node_duration_seconds_bucket` emitted per WS turn.
 14. **Lock file staleness is a finding.** Always check `generated_at_utc` in `.runtime/truth_table.lock.json` before trusting it.
+15. **`allowedDevOrigins` must include all hosting environments.** Next.js 15+ rejects dev-server requests from unlisted origins. Always include `*.app.github.dev` (Codespaces), `*.replit.dev` (Replit), and `*.gitpod.io` (Gitpod/Ona) in `frontend/next.config.js`.

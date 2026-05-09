@@ -285,8 +285,10 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 | **MCP server (8 tools)** | **DORMANT (instantiable, not wired)** | `MCPServer().initialize()` → OK. `get_tools_for_llm()` → 8 tools. `call_tool('get_project_metrics')` → works. Zero imports from live path. |
 | **TLM (Trustworthy LM)** | **NOT INSTALLED** | `cleanlab` not installed. Zero references in `app/`. Not part of this codebase. |
 | **Multi-agent workflow** (8 nodes) | **ZOMBIE (KAgent-blocked)** | `create_multi_agent_graph(ai_client, tools=[])` compiles. Nodes: `planner, researcher, writer, super_reasoner, procedural_auditor, reviewer, supervisor`. Invocation → `"⛔ Security Alert: Invalid token from planner_node"`. Only consumer: `tests/verify_graph_manual.py`. |
-| **Orchestrator microservice StateGraph** | **DORMANT** | `SupervisorNode`, `AgentState`, `IntentClassifier`, `ChatFallbackNode`, `QueryRewriterNode`, `ToolExecutorNode`, `ValidatorNode` importable. `AgentState` fields: `messages, query, intent, filters, retrieved_docs, reranked_docs, used_web, final_response`. Not running. |
-| **DSPy in orchestrator** | **DORMANT** | `QueryRewriterSignature`, `ChatFallbackSignature` use DSPy. Importable. Not running. |
+| **Orchestrator microservice StateGraph** | **DORMANT** | 13-node graph: `supervisor, query_rewriter, query_analyzer, retriever, reranker, web_fallback, admin_agent, tool_executor, chat_fallback, general_knowledge, synthesizer, validator`. Compiles and runs in isolation with `OPENROUTER_API_KEY`. NOT on live call chain — requires `docker compose -f docker-compose.yml up -d`. `cognitive_engine.memorize` bug on primary model (non-blocking, fallback models handle). |
+| **Tavily (WebSearchFallbackNode)** | **DORMANT** | `tavily-python==0.7.24` installed. `TavilyClient` importable. Live search confirmed (2 results for BAC query). Only called from `orchestrator_service/src/services/overmind/graph/search.py:WebSearchFallbackNode` — which is DORMANT. `TAVILY_API_KEY` absent from `docker-compose.yml`. Silent skip when key missing. |
+| **DSPy in orchestrator** | **DORMANT** | `QueryRewriterSignature`, `ChatFallbackSignature`, `IntentClassifier`, `AnalyzeQuery`, `EducationalSynthesizer` use DSPy. Importable. Not running. |
+| **Research agent / SuperSearchOrchestrator** | **DORMANT** | `super_search.py` uses `TavilyClient` when key present, `DuckDuckGoSearchAPIWrapper` otherwise. `ddgs` package NOT installed — DuckDuckGo fallback broken. Not running. |
 | **Research agent reranker** | **DORMANT** | `microservices/research_agent/src/search_engine/reranker.py` importable. Uses cached `BAAI/bge-reranker-base`. Not running. |
 | **UnifiedObservabilityService** | **ACTIVE** | Every HTTP request traced. WS frames NOT traced per-frame (ISS-005). |
 | **OTEL SDK** | **ACTIVE (no-op)** | `OTEL_EXPORTER_OTLP_ENDPOINT=http` (invalid URL) → no spans exported. |
@@ -302,6 +304,9 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 5. **TLM is not part of this codebase** — do not reference it.
 6. **WS payload key is `question`** — not `content`, not `message`. Wrong key → `"Question is required."` error.
 7. **Intent classification has bugs**: Arabic greetings ('مرحبا') → 'general' (should be 'chat'). English 'hello' → 'chat' (should be 'general').
+8. **The advanced orchestrator graph (13 nodes) is DORMANT** — it compiles and runs in isolation but requires the full Docker Compose stack. See §6.7 for the complete revival roadmap.
+9. **Tavily is installed and works** — but is only called from the DORMANT `WebSearchFallbackNode` inside the orchestrator microservice. The monolith fallback chain has no web search step. `TAVILY_API_KEY` is absent from `docker-compose.yml` and must be added before the full stack can use it.
+10. **DuckDuckGo fallback is broken** — `ddgs` package not installed. If Tavily key is absent and the orchestrator is running, `SuperSearchOrchestrator` will raise `ImportError` on initialization.
 
 ### First-check protocol before any change to the chat / agent stack
 
@@ -317,6 +322,146 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 
 ---
 
+## 6.7 Advanced LangGraph (Microservices) and Tavily — Verified Runtime Doctrine
+
+> **Last verified: 2026-05-09 — live runtime investigation (third pass).**
+> Authority: this section overrides any aspirational description in `docs/`, `LangGraph_Architectural_Blueprint.md`, or `ARCHITECTURE.md`.
+
+### Advanced LangGraph (Orchestrator Microservice StateGraph)
+
+**Status: DORMANT** — code is real, compilable, and partially runnable in isolation, but NOT on the live call chain in the default Codespaces environment.
+
+**What was verified live (2026-05-09):**
+
+| Fact | Evidence |
+|---|---|
+| Graph compiles without error | `create_unified_graph()` → `CompiledStateGraph` with 13 nodes |
+| Graph runs in isolation | `graph.ainvoke(state)` with `OPENROUTER_API_KEY` set → valid Arabic response in ~10s |
+| Graph is NOT on the live call chain | `ORCHESTRATOR_SERVICE_URL=http://orchestrator-service:8006` → Docker DNS → ConnectError. Monolith falls through to `local_graph.py` (2-node fallback). |
+| Orchestrator service is NOT started by default | `.devcontainer/docker-compose.host.yml` starts only the `web` container. Full stack requires `docker compose -f docker-compose.yml up -d`. |
+| `cognitive_engine.memorize` bug | `orchestrator_service/src/core/gateway/simple_client.py:116` raises `AttributeError: 'NoneType' object has no attribute 'memorize'` on primary model. Fallback models handle the turn. Non-blocking. |
+| FlagEmbeddingReranker not installed | `RerankerNode` falls back to simple score sort. `cross-encoder/ms-marco-MiniLM-L-6-v2` not cached. |
+| Postgres checkpointer absent | `get_checkpointer()` returns `None` → graph compiled without checkpointer. State continuity relies on injected history. |
+
+**13-node graph topology (orchestrator microservice):**
+```
+supervisor → [intent routing]
+  educational → query_rewriter → query_analyzer → retriever → reranker
+                  → [check_results] → synthesizer | web_fallback → synthesizer
+  admin       → admin_agent → validator
+  chat        → chat_fallback → validator
+  general_knowledge → general_knowledge → validator
+  tool        → tool_executor → validator
+validator → [check_quality] → END | supervisor (retry)
+```
+
+**DSPy usage inside the advanced graph:**
+- `SupervisorNode` uses `dspy.ChainOfThought(IntentClassifier)` — 4-intent taxonomy: `educational`, `general_knowledge`, `admin`, `chat`
+- `QueryRewriterNode` uses `dspy.ChainOfThought(QueryRewriterSignature)` — pronoun resolution
+- `QueryAnalyzerNode` uses `dspy.Predict(AnalyzeQuery)` — BAC filter extraction
+- `SynthesizerNode` uses `dspy.Predict(EducationalSynthesizer)` — response synthesis
+- All DSPy calls require `OPENROUTER_API_KEY` and are configured via `_configure_dspy()` at graph startup
+
+**`WebSearchFallbackNode` behavior (search.py):**
+- Triggered only when `reranked_docs` is empty AND intent is `educational`
+- Reads `TAVILY_API_KEY` from environment at call time (not at import time)
+- If key absent → **silent skip**: `used_web=False`, `reranked_docs=[]`, no exception raised
+- If key present → calls `research_client.deep_research()` → HTTP to `research-agent:8007` → ConnectError (DORMANT)
+- The `research_client` base URL is `http://research-agent:8007` — Docker DNS, not running by default
+
+**Revival prerequisites for the advanced LangGraph:**
+1. `docker compose -f docker-compose.yml up -d` — starts orchestrator-service (port 8006), research-agent (port 8007), postgres-orchestrator, redis-orchestrator
+2. `OPENROUTER_API_KEY` must be set in the orchestrator container environment
+3. `ORCHESTRATOR_DATABASE_URL` must point to `postgres-orchestrator:5432/orchestrator_db`
+4. `TAVILY_API_KEY` must be added to `docker-compose.yml` under `orchestrator-service` and `research-agent` environment sections (currently absent)
+5. `ORCHESTRATOR_SERVICE_URL` in the monolith must resolve to the running container (already set to `http://orchestrator-service:8006` — works when Docker network is up)
+6. Warmup check in `main.py` lifespan must pass: `admin_graph.ainvoke({"query": "كم عدد ملفات بايثون"})` must return `tool_name` in `final_response`
+
+---
+
+### Tavily Integration
+
+**Status: DORMANT** — package installed, key validated live, but NOT on the live call chain in the default environment.
+
+**What was verified live (2026-05-09):**
+
+| Fact | Evidence |
+|---|---|
+| `tavily-python==0.7.24` installed | `pip show tavily-python` confirmed |
+| `TavilyClient` importable | `from tavily import TavilyClient` → OK |
+| Live search works with provided key | `TavilyClient(api_key='tvly-dev-...').search(query='بكالوريا جزائر رياضيات')` → 2 results in <3s |
+| Key format validation | Must start with `tvly-`. MCP URL format (`https://mcp.tavily.com/mcp/?tavilyApiKey=...`) is auto-sanitized in `readiness.py` and `super_search.py` |
+| `TAVILY_API_KEY` NOT in `docker-compose.yml` | Neither `orchestrator-service` nor `research-agent` environment sections include it. Must be added manually. |
+| `TAVILY_API_KEY` NOT in `.env.docker` or `.env.security.example` | Absent from all env templates. Only referenced in `docker-compose.legacy.yml`. |
+| Monolith does NOT use Tavily | `app/` has one reference: `strategy_handlers.py:208` checks for the key as a warning only. `strategy_handlers.py` is on the `ChatOrchestrator` path which is PARTIAL (loaded-not-invoked). |
+| Silent skip when key absent | `WebSearchFallbackNode.__call__` returns `{"used_web": False, "reranked_docs": []}` with no exception when `TAVILY_API_KEY` is empty |
+| DuckDuckGo fallback broken | `SuperSearchOrchestrator` falls back to `DuckDuckGoSearchAPIWrapper` when Tavily absent, but `ddgs` package not installed → `ImportError` |
+
+**Tavily call chain (when microservices are running):**
+```
+orchestrator-service: WebSearchFallbackNode (search.py:300)
+  → os.environ.get("TAVILY_API_KEY")
+  → research_client.deep_research(query)  [HTTP to research-agent:8007]
+    → research-agent: SuperSearchOrchestrator (super_search.py)
+      → TavilyClient(api_key=key).search(query, search_depth="basic", max_results=3)
+      → parallel scraping → synthesis via LLM
+```
+
+**Tavily is NOT used in the monolith fallback chain.** The 4-tier fallback in `OrchestratorClient` (`local_graph.py`) has no web search step. Web search only exists in the orchestrator microservice's `WebSearchFallbackNode`.
+
+**Revival prerequisites for Tavily:**
+1. Advanced LangGraph (orchestrator microservice) must be running — see above
+2. `TAVILY_API_KEY=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` (or production key) must be added to `docker-compose.yml` under both `orchestrator-service` and `research-agent`
+3. `research-agent` service must be running (port 8007) — it is the actual Tavily caller
+4. `ddgs` package must be installed if DuckDuckGo fallback is needed: `pip install ddgs`
+5. `FIRECRAWL_API_KEY` is optional — `SimpleWebScraper` (httpx + BeautifulSoup) is the fallback scraper
+
+**Degradation behavior (no Tavily key):**
+- `WebSearchFallbackNode` → silent skip → `SynthesizerNode` receives empty docs → response: `"لا توجد تفاصيل متاحة."` (schema-locked JSON)
+- No exception, no log at ERROR level — only a telemetry event with `retrieval_source="web_skipped_missing_tavily"`
+- This is a **silent degradation** — operators cannot distinguish "no BAC content found" from "web search skipped" without checking telemetry
+
+---
+
+### Revival Roadmap (Documentation Only — Do Not Implement)
+
+To bring the advanced LangGraph + Tavily stack to ACTIVE status:
+
+**Step 1 — Add `TAVILY_API_KEY` to `docker-compose.yml`**
+Add under `orchestrator-service.environment` and `research-agent.environment`:
+```yaml
+- TAVILY_API_KEY=${TAVILY_API_KEY:-}
+```
+
+**Step 2 — Start the full microservices stack**
+```bash
+export OPENROUTER_API_KEY=<key>
+export TAVILY_API_KEY=<key>
+docker compose -f docker-compose.yml up -d orchestrator-service research-agent postgres-orchestrator redis-orchestrator
+```
+
+**Step 3 — Verify orchestrator health**
+```bash
+curl http://localhost:8006/health
+# Expected: {"status": "ok", "graph": "ready", "tools": [...]}
+```
+
+**Step 4 — Verify the monolith routes to orchestrator**
+Set `ORCHESTRATOR_SERVICE_URL=http://localhost:8006` in the monolith environment (or `http://orchestrator-service:8006` if on the same Docker network). The fallback chain will then reach the orchestrator before falling through to `local_graph.py`.
+
+**Step 5 — Verify Tavily is active**
+Send an educational query that has no BAC content match. Check telemetry for `retrieval_source="web"` (not `"web_skipped_missing_tavily"`).
+
+**Step 6 — Update `.memory/runtime_truth.md`**
+Add rows for `orchestrator-service StateGraph` (ACTIVE), `Tavily` (ACTIVE), `WebSearchFallbackNode` (ACTIVE). Update the architectural verdict.
+
+**Architectural boundaries that must be respected:**
+- The monolith (`app/`) must never import from `microservices/` — communication is HTTP only
+- `research_client` in the orchestrator calls `research-agent:8007` via HTTP — never direct DB access
+- `TAVILY_API_KEY` must be injected via environment, never hardcoded
+- The `persisted: true` flag protocol (D-006) applies when the orchestrator is active — the monolith must still own the persistence decision
+
+---
 
 ## 7. Testing
 
@@ -381,6 +526,7 @@ Sourced from Codespaces secrets and forwarded via `.devcontainer/devcontainer.js
 | `ENVIRONMENT` | ✅ `development` | Controls dev behavior |
 | `ORCHESTRATOR_SERVICE_URL` | ❌ Not set | Defaults to Docker DNS — always fails in Codespaces default setup |
 | `REDIS_URL` | ❌ Not set | Redis not started by devcontainer — cache falls back to memory |
+| `TAVILY_API_KEY` | ❌ Not set (monolith) | Required by `WebSearchFallbackNode` in orchestrator microservice. Absent from `docker-compose.yml`. Silent skip when missing. Key must start with `tvly-`. |
 | `OPENROUTER_SITE_URL` | ⚠️ Optional | Set this to your Codespaces URL if OpenRouter rejects with `Host not in allowlist` |
 
 ---

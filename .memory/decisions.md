@@ -1,5 +1,5 @@
 # Architectural Decisions
-> Last updated: 2026-05-05 (environment: GitHub Codespaces)
+> Last updated: 2026-05-09 (environment: GitHub Codespaces — third pass: advanced LangGraph + Tavily investigation)
 
 ## D-001 · LangGraph as Primary Chat Handler
 **Decision**: `app/services/chat/local_graph.py` is the real handler. The orchestrator microservice is DORMANT in the default development environment.
@@ -127,6 +127,26 @@ repeated drift and false claims.
 **Reason**: Zombie metrics (ISS-029) create permanently empty panels that operators cannot distinguish from "system not running". This is worse than no dashboard — it creates false confidence.
 **Consequence**: The LangGraph dashboard (`20-langgraph.json`) has 4 zombie metric panels that must either gain emitters or be removed.
 **Status**: DECIDED 2026-05-09 — see `.memory/fragility-patterns.md` Pattern 4.
+
+## D-018 · Tavily Key Must Be Injected via Environment — Never Hardcoded
+**Decision**: `TAVILY_API_KEY` must be injected at runtime via environment variable. It must never be hardcoded in source files, committed to `.env` files, or embedded in `docker-compose.yml` as a literal value.
+**Reason**: The key is a secret. `docker-compose.yml` uses `${TAVILY_API_KEY:-}` pattern (empty default) so the service starts in degraded mode when the key is absent rather than failing.
+**Key format**: Must start with `tvly-`. MCP URL format (`https://mcp.tavily.com/mcp/?tavilyApiKey=...`) is auto-sanitized by `readiness.py` and `super_search.py` — but the raw key form is preferred.
+**Current state**: `TAVILY_API_KEY` is absent from `docker-compose.yml` (both `orchestrator-service` and `research-agent` environment sections). Must be added before the full stack can use web search.
+**Status**: DECIDED 2026-05-09 — see CLAUDE.md §6.7.
+
+## D-019 · Advanced Orchestrator Graph Uses 4-Intent Taxonomy — Do Not Conflate with Local Graph
+**Decision**: The orchestrator microservice's `SupervisorNode` uses a 4-intent taxonomy: `educational`, `general_knowledge`, `admin`, `chat`. The local `local_graph.py` uses a 3-intent taxonomy: `educational`, `general`, `chat`. These are semantically different and must not be conflated.
+**Reason**: The orchestrator's `general_knowledge` intent routes to `GeneralKnowledgeNode` (a dedicated LLM handler). The local graph's `general` intent routes to the same `chat_node` as `chat`. Merging the taxonomies without a translation layer would break routing in both graphs.
+**Consequence**: Any future work that wires the orchestrator graph into the live path must account for this taxonomy difference. The local graph's intent classification bugs (Arabic greetings → 'general') are separate from the orchestrator's DSPy-based classification.
+**Status**: DECIDED 2026-05-09 — see CLAUDE.md §6.7.
+
+## D-020 · WebSearchFallbackNode Silent Skip Is a Known Degradation — Not a Bug
+**Decision**: `WebSearchFallbackNode` silently returns `{"used_web": False, "reranked_docs": []}` when `TAVILY_API_KEY` is absent. This is intentional degraded-mode behavior, not a bug.
+**Reason**: The node must not block the graph when web search is unavailable. The `SynthesizerNode` handles empty docs by returning `"لا توجد تفاصيل متاحة."`.
+**Risk**: Silent degradation is invisible to operators without telemetry. The telemetry event `retrieval_source="web_skipped_missing_tavily"` is the only signal. Operators must monitor this event to detect key absence.
+**Consequence**: Any dashboard that shows "web search active" must verify against this telemetry event, not just the presence of the `TAVILY_API_KEY` env var.
+**Status**: DECIDED 2026-05-09 — see CLAUDE.md §6.7.
 
 ## D-017 · WS Turn Metrics Must Have a Single Emission Owner
 **Decision**: `ws.chat.turn.duration_seconds`, `ws.chat.terminal_events.total`, and `ws.chat.fallback.total` must be emitted through exactly one path. The designated owner is the OTel SDK path (`path_observer._emit_to_otel`). The redundant `obs.record_metric(...)` calls for the same metric names in `path_observer.py` must be removed to prevent double-counting (ISS-030).

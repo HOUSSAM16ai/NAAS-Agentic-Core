@@ -1,6 +1,42 @@
 # Tasks — What Comes Next
-> Last updated: 2026-05-09 | Branch: `claude/architecture-rescue-diagnostic-wUfbE` (third audit) + enrichment session 2026-05-09.
+> Last updated: 2026-05-09 | Branch: `docs/advanced-langgraph-tavily-audit-2026-05-09` (fourth pass: advanced LangGraph + Tavily deep investigation).
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## 🟡 Medium — Advanced LangGraph + Tavily Revival (NEW — Session 2026-05-09 third pass)
+
+### H1 — Add `TAVILY_API_KEY` to `docker-compose.yml` (ISS-032)
+**Scope**: `docker-compose.yml` only — no application code changes.
+1. Add `- TAVILY_API_KEY=${TAVILY_API_KEY:-}` under `orchestrator-service.environment`.
+2. Add `- TAVILY_API_KEY=${TAVILY_API_KEY:-}` under `research-agent.environment`.
+3. Add `TAVILY_API_KEY=` (empty) to `.env.security.example` with a comment explaining the format (`tvly-*`).
+4. Verify: `docker compose config` shows the variable in both services.
+**Why**: `TAVILY_API_KEY` is currently absent from `docker-compose.yml`. `WebSearchFallbackNode` silently skips web search when the key is missing. This is the minimum change to enable Tavily when the full stack is running.
+**ADR needed**: No — this is a configuration addition, not an architectural decision.
+
+### H2 — Fix DuckDuckGo Fallback (ISS-033)
+**Scope**: `requirements.txt` for `research-agent` microservice.
+1. Add `ddgs>=6.0` to `microservices/research_agent/requirements.txt`.
+2. Verify: `SuperSearchOrchestrator()` initializes without `ImportError` when `TAVILY_API_KEY` is absent.
+3. Add a test: `test_super_search_no_tavily.py` — assert `search_tool` is `DuckDuckGoSearchAPIWrapper` when key absent.
+**Why**: `ddgs` package not installed → `ImportError` when `SuperSearchOrchestrator` initializes without Tavily. This breaks the degraded-mode fallback.
+
+### H3 — Fix `cognitive_engine.memorize` Bug in Orchestrator Gateway (ISS-034)
+**Scope**: `microservices/orchestrator_service/src/core/gateway/simple_client.py:116`.
+**Bug**: `self.cognitive_engine.memorize(...)` raises `AttributeError: 'NoneType' object has no attribute 'memorize'` when `cognitive_engine` is `None`.
+**Fix**: Guard with `if self.cognitive_engine is not None:` before the call.
+**Impact**: Non-blocking (fallback models handle the turn), but generates noisy tracebacks in logs.
+**ADR needed**: No — defensive null check.
+
+### H4 — Verify Orchestrator Warmup After Stack Activation (ISS-035)
+**Scope**: Integration test only — no code changes.
+After running `docker compose -f docker-compose.yml up -d`:
+1. `curl http://localhost:8006/health` → must return `{"status": "ok"}`.
+2. Send WS message to monolith → verify `persisted: true` event reaches client (orchestrator persisted, monolith skipped fail-safe write).
+3. Check DB: exactly one row in `customer_messages` for the turn (no dual-write).
+4. Check telemetry: `retrieval_source` is `"internal_exact"` or `"web"` (not `"web_skipped_missing_tavily"`).
+**Why**: Validates the full revival path end-to-end before updating `.memory/runtime_truth.md` to ACTIVE.
 
 ---
 

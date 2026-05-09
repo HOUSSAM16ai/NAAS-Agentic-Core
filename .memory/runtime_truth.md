@@ -66,8 +66,10 @@ Missing any of the three → DORMANT, ZOMBIE, or UNKNOWN. Not ACTIVE.
 | 21 | **TLM (Trustworthy LM)** | — | **NOT INSTALLED** | `cleanlab` not installed. No `tlm` package. Zero references to TLM in `app/`. Not part of this codebase. |
 | 22 | **Multi-agent workflow** | `app/services/chat/graph/workflow.py` | **ZOMBIE (compilable, KAgent-blocked)** | `create_multi_agent_graph(ai_client, tools=[])` → `CompiledStateGraph`. Nodes: `['__start__', 'planner', 'researcher', 'writer', 'super_reasoner', 'procedural_auditor', 'reviewer', 'supervisor']`. Invocation → `"⛔ Security Alert: Invalid token from planner_node"` → KAgent security blocks all nodes. Only consumer: `tests/verify_graph_manual.py`. |
 | 23 | **Multi-agent nodes** | `app/services/chat/graph/nodes/` | **ZOMBIE** | `ReviewerNode` importable. `SuperReasonerNode`, `PlannerNode`, `ResearcherNode`, `WriterNode` — class names differ from expected (import fails with wrong name). All blocked by KAgent security in practice. |
-| 24 | **Orchestrator microservice StateGraph** | `microservices/orchestrator_service/src/services/overmind/graph/main.py` | **DORMANT** | `SupervisorNode`, `AgentState`, `IntentClassifier`, `ChatFallbackNode`, `QueryRewriterNode`, `ToolExecutorNode`, `ValidatorNode` all importable. `AgentState` fields: `messages, query, intent, filters, retrieved_docs, reranked_docs, used_web, final_response`. `DecentralizedGraphOrchestrator` in `orchestrator.py`. Not running by default. |
-| 25 | **DSPy in orchestrator** | `microservices/orchestrator_service/src/services/overmind/graph/` | **DORMANT** | `QueryRewriterSignature`, `ChatFallbackSignature` use DSPy. Importable. Not running. |
+| 24 | **Orchestrator microservice StateGraph** | `microservices/orchestrator_service/src/services/overmind/graph/main.py` | **DORMANT** | 13-node graph: `supervisor, query_rewriter, query_analyzer, retriever, reranker, web_fallback, admin_agent, tool_executor, chat_fallback, general_knowledge, synthesizer, validator`. `create_unified_graph()` compiles without error. `graph.ainvoke(state)` with `OPENROUTER_API_KEY` → valid Arabic response in ~10s. NOT on live call chain. Requires `docker compose -f docker-compose.yml up -d`. `cognitive_engine.memorize` bug on primary model (non-blocking). `FlagEmbeddingReranker` not installed → simple sort fallback. Postgres checkpointer absent → compiled without checkpointer. |
+| 24a | **Tavily (WebSearchFallbackNode)** | `microservices/orchestrator_service/src/services/overmind/graph/search.py:WebSearchFallbackNode` | **DORMANT** | `tavily-python==0.7.24` installed. `TavilyClient` importable. Live search confirmed: `TavilyClient(api_key='tvly-dev-...').search('بكالوريا جزائر رياضيات')` → 2 results. Key must start with `tvly-`. MCP URL format auto-sanitized. `TAVILY_API_KEY` absent from `docker-compose.yml`. Silent skip when key missing (`used_web=False`, no exception). Calls `research_client.deep_research()` → HTTP to `research-agent:8007` → ConnectError (DORMANT). |
+| 24b | **SuperSearchOrchestrator** | `microservices/research_agent/src/search_engine/super_search.py` | **DORMANT** | Uses `TavilyClient` when `TAVILY_API_KEY` present (key format `tvly-*`). Falls back to `DuckDuckGoSearchAPIWrapper` when absent — but `ddgs` package NOT installed → `ImportError` on init. `SimpleWebScraper` (httpx + BeautifulSoup) is scraper fallback. Not running. |
+| 25 | **DSPy in orchestrator** | `microservices/orchestrator_service/src/services/overmind/graph/` | **DORMANT** | `IntentClassifier` (4-intent: educational/general_knowledge/admin/chat), `QueryRewriterSignature`, `ChatFallbackSignature`, `AnalyzeQuery`, `EducationalSynthesizer` all use DSPy. Configured via `_configure_dspy()` using `OPENROUTER_API_KEY`. Importable. Not running. |
 | 26 | **Research agent reranker** | `microservices/research_agent/src/search_engine/reranker.py` | **DORMANT** | Importable (without sys.path conflict). Uses `BAAI/bge-reranker-base` (cached). Not running. |
 | 27 | **LlamaIndex driver (app)** | `app/drivers/llamaindex_driver.py` | **ZOMBIE** | Exports `LlamaIndexDriver(RetrievalEngine)`. No `LlamaIndexRetrievalEngine` (wrong import name). No live consumer. |
 | 28 | **Reranker driver (app)** | `app/drivers/reranker_driver.py` | **ZOMBIE** | No `RerankDriver` export (import fails). No live consumer. |
@@ -111,7 +113,7 @@ Server → Client: {"type": "assistant_final",   "payload": {"content": "", "con
 | `'ما هو الذكاء الاصطناعي'` | general | general | ✓ |
 | `'حل لي هذه المسألة في الرياضيات'` | educational | educational | ✓ |
 
-## Architectural verdict (2026-05-09 — second pass)
+## Architectural verdict (2026-05-09 — third pass)
 
 **Live stack (what actually runs on every chat turn):**
 1. FastAPI `customer_chat.py` WS endpoint
@@ -123,15 +125,25 @@ Server → Client: {"type": "assistant_final",   "payload": {"content": "", "con
 7. `save_message(ASSISTANT)` → PostgreSQL (fail-safe write, `persisted=False`)
 
 **What is installed but NOT wired to live path:**
-- DSPy 3.2.1 ✓ installed, ✗ not on live path
+- DSPy 3.2.1 ✓ installed, ✗ not on live path (only in dormant orchestrator microservice)
 - LlamaIndex 0.14.13 ✓ installed, ✗ requires OpenAI key for default embeddings, ✗ not on live path
 - CrossEncoder BAAI/bge-reranker-base ✓ cached, ✗ not on live path
 - KAgent ✓ instantiable, ✗ security-blocked (invalid token), ✗ not on live path
 - MCP ✓ 8 tools callable, ✗ not on live path
-- Multi-agent graph ✓ compiles (8 nodes), ✗ KAgent security blocks all nodes, ✗ not on live path
+- Multi-agent workflow ✓ compiles (8 nodes), ✗ KAgent security blocks all nodes, ✗ not on live path
 - TLM ✗ NOT INSTALLED, ✗ not referenced in codebase
+- **Tavily** ✓ `tavily-python==0.7.24` installed, ✓ live search confirmed, ✗ only called from DORMANT `WebSearchFallbackNode`, ✗ `TAVILY_API_KEY` absent from `docker-compose.yml`
+- **Advanced orchestrator graph (13 nodes)** ✓ compiles, ✓ runs in isolation, ✗ NOT on live call chain, ✗ requires full Docker Compose stack
+- **DuckDuckGo fallback** ✗ `ddgs` package NOT installed → `ImportError` if Tavily absent and orchestrator running
 
 **Project = ~15% live, ~85% scaffolding in default Codespaces.**
+
+**Advanced stack revival requires (in order):**
+1. Add `TAVILY_API_KEY` to `docker-compose.yml` (orchestrator-service + research-agent)
+2. `docker compose -f docker-compose.yml up -d` (orchestrator-service, research-agent, postgres-orchestrator, redis-orchestrator)
+3. Set `ORCHESTRATOR_SERVICE_URL=http://localhost:8006` in monolith (or use Docker network)
+4. Verify orchestrator warmup passes (admin tool invocation in lifespan)
+5. Update this file: promote orchestrator StateGraph and Tavily to ACTIVE
 
 ---
 
@@ -140,9 +152,14 @@ Server → Client: {"type": "assistant_final",   "payload": {"content": "", "con
 2. WS auth: `subprotocols=['jwt', TOKEN]`.
 3. `OTEL_EXPORTER_OTLP_ENDPOINT=http` is invalid — OTEL is a no-op.
 4. `REDIS_URL` not set — cache is InMemoryCache.
-5. `ORCHESTRATOR_SERVICE_URL=http://orchestrator-service:8006` — Docker DNS, always ConnectError.
+5. `ORCHESTRATOR_SERVICE_URL=http://orchestrator-service:8006` — Docker DNS, always ConnectError in default Codespaces.
 6. KAgent security blocks all calls without a valid internal token — multi-agent graph cannot run.
 7. LlamaIndex requires `OPENAI_API_KEY` for default embeddings — use HuggingFace explicitly.
 8. TLM is NOT part of this codebase.
 9. Grafana is on port 3001 (not 3000).
 10. FastAPI version: `v4.1-root`.
+11. **Tavily**: `tavily-python==0.7.24` installed, `TavilyClient` importable, live search confirmed. Key must start with `tvly-`. NOT on live call chain — only in DORMANT `WebSearchFallbackNode`. `TAVILY_API_KEY` absent from `docker-compose.yml`.
+12. **Advanced orchestrator graph**: 13 nodes, compiles and runs in isolation with `OPENROUTER_API_KEY`. NOT on live call chain. `cognitive_engine.memorize` bug on primary model (non-blocking). `FlagEmbeddingReranker` not installed. Postgres checkpointer absent.
+13. **DuckDuckGo fallback broken**: `ddgs` package not installed. If Tavily absent and orchestrator running, `SuperSearchOrchestrator` raises `ImportError`.
+14. **`TAVILY_API_KEY` absent from `docker-compose.yml`**: must be added to both `orchestrator-service` and `research-agent` environment sections before the full stack can use web search.
+15. The advanced orchestrator graph uses a **4-intent taxonomy** (educational/general_knowledge/admin/chat) — different from the local `local_graph.py` 3-intent taxonomy (educational/general/chat). Do not conflate them.

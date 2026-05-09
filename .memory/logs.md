@@ -3,6 +3,50 @@
 
 ---
 
+## Session: 2026-05-09 · Full Live Runtime Investigation (Ona Agent)
+
+**Branch**: `main` → `docs/live-runtime-audit-2026-05-09` (PR created)
+**Mode**: Deep live runtime diagnosis + memory/CLAUDE.md update. No application code changed.
+
+### Live runtime evidence collected
+- **DB**: Connected to PostgreSQL 17.6 Supabase PgBouncer `:6543`. 19 users, 2098 customer_messages, 3038 admin_messages, 79 missions. alembic_version: `f2b3c4d5e6f7`.
+- **OpenRouter**: 367 models available. Primary: `nvidia/nemotron-3-super-120b-a12b:free`. API key valid.
+- **local_graph**: Live invocation confirmed — `run_local_graph('مرحبا', 9999)` → `'مرحبا! كيف يمكنني مساعدتك اليوم؟'`
+- **FastAPI**: 62 routes registered with real DATABASE_URL. Crashes without it.
+- **Next.js**: Port **3000** confirmed (supervisor.sh `--port 3000` overrides package.json `--port 5000`).
+- **Grafana**: Port **3001** confirmed (`grafana.ini` says 3000 but provisioning CLI overrides). `GET /api/health → {"database":"ok"}`.
+- **Prometheus**: Port **9090** confirmed. `GET /-/healthy → "Prometheus Server is Healthy."`.
+- **Redis**: Process running on 6379, `ping()` responds. BUT `REDIS_URL` not set → app uses `InMemoryCache`.
+- **OTEL**: `OTEL_EXPORTER_OTLP_ENDPOINT=http` is an invalid URL → no spans exported (confirmed no-op).
+- **ZOMBIE verification**: `create_multi_agent_graph` only importer is `tests/verify_graph_manual.py`. KagentMesh: 7 importers, none on live chain from kernel/main.
+- **AI Gateway**: `SimpleAIClient` with 5 fallback models. Live call confirmed.
+- **Cache**: `get_cache()` returns `InMemoryCache` (no `REDIS_URL`).
+
+### New findings vs previous audit (2026-05-06)
+1. **Grafana port corrected**: was documented as 3000, actually 3001 (provisioning CLI override).
+2. **Next.js port mechanism clarified**: supervisor.sh passes `--port 3000` as extra arg, overriding package.json. Process shows both flags; last wins.
+3. **OTEL endpoint clarified**: `OTEL_EXPORTER_OTLP_ENDPOINT=http` (bare string) is invalid — previously noted as "unset", now confirmed as "set but invalid".
+4. **Redis confirmed running but unused**: process active, but `REDIS_URL` not set → InMemoryCache.
+5. **AI Gateway model confirmed**: `nvidia/nemotron-3-super-120b-a12b:free` as primary (not previously documented).
+6. **local_graph live call confirmed**: actual OpenRouter response received in this session.
+7. **DB row counts updated**: 2098 customer_messages, 3038 admin_messages, 79 missions, 19 users.
+
+### Memory files updated
+- **UPDATED**: `.memory/runtime_truth.md` — 34 rows, full rewrite with live evidence
+- **UPDATED**: `.memory/context.md` — stack table with live status, DB state, AI gateway details
+- **UPDATED**: `.memory/architecture_truth.md` — port map, component inventory, transformation gap
+- **UPDATED**: `.memory/observability_truth.md` — Grafana port corrected to 3001
+- **UPDATED**: `.memory/logs.md` — this entry
+- **UPDATED**: `CLAUDE.md` — §6.6 truth table rewritten (34 rows), §3 architecture diagram updated, §1 port table clarified
+
+### What was NOT changed
+- No application source code
+- No test files
+- No microservice code
+
+
+---
+
 ## Session: 2026-05-09 · Architectural Intelligence Enrichment
 
 **Branch**: (memory-only — no application code changed)
@@ -251,3 +295,51 @@ WS: assistant_error → error → "Failed to confirm assistant persistence befor
 | ~2026-04 | `7599b7a` | Legendary Claude Code setup (8 files) |
 | ~2026-04 | `76b67cc` | Forensic analysis report |
 | ~2026-04 | `9a307c3` | LangGraph initialization during system startup |
+
+---
+
+## Session: 2026-05-09 · Full Live Component Testing (Ona Agent — Second Pass)
+
+**Branch**: `docs/live-runtime-audit-2026-05-09`
+**Mode**: Live invocation of every advertised component. No application code changed.
+
+### Components tested live
+
+| Component | Test | Result |
+|---|---|---|
+| FastAPI | `GET /health` | `{"application":"ok","database":"ok","version":"v4.1-root"}` |
+| WebSocket customer | `subprotocols=['jwt',TOKEN]` + `{"question":"..."}` | `conversation_init` → `assistant_delta` (391 chars) → `assistant_final` in 6.79s |
+| WebSocket admin | Admin token + question | `conversation_init` (conv_id=391) confirmed |
+| LangGraph local | `run_local_graph('ما هو تكامل x^2')` | LaTeX response in 10.13s |
+| OrchestratorClient | `_build_local_file_count_response` | "22064 ملف" in 499ms |
+| OrchestratorClient | `_build_local_retrieval_response` | None (no BAC match) |
+| PostgreSQL | INSERT+DELETE test user | OK, ~2ms latency |
+| Redis | `ping()` + SET/GET | OK (but app uses InMemoryCache) |
+| InMemoryCache | SET/GET/DELETE | OK |
+| DSPy 3.2.1 | `dspy.LM` + `dspy.Predict` | Importable + configurable |
+| LlamaIndex 0.14.13 | `VectorStoreIndex` + HuggingFace embed | Score 0.8152 |
+| CrossEncoder BAAI/bge-reranker-base | `model.predict(pairs)` | Cached, loads <1s |
+| KAgent | `KagentMesh().execute_action(AgentRequest(...))` | `"⛔ Security Alert: Invalid token"` |
+| MCP | `MCPServer().initialize()` + `get_tools_for_llm()` | 8 tools returned |
+| Multi-agent graph | `create_multi_agent_graph(ai_client, [])` | Compiles (8 nodes), KAgent blocks invocation |
+| Orchestrator microservice StateGraph | Import `SupervisorNode`, `AgentState` | Importable, not running |
+| TLM | Package check | NOT INSTALLED, not referenced |
+| DSPy live call | `dspy.Predict(ArabicQA)(question='...')` | Response received (truncated by free tier) |
+
+### New findings vs first pass (2026-05-09 morning)
+1. **WS payload key confirmed**: `question` (not `content`). Wrong key → `"Question is required."`.
+2. **WS event format confirmed**: `{"type":"...", "payload":{"content":"...", "conversation_id":...}}`.
+3. **KAgent security blocks multi-agent graph**: all 8 nodes fail with "Invalid token from planner_node".
+4. **MCP has 8 working tools**: callable but not wired to live path.
+5. **TLM confirmed NOT INSTALLED**: not part of this codebase.
+6. **Intent classification bugs confirmed**: 'مرحبا' → 'general' (should be 'chat'), 'hello' → 'chat' (should be 'general').
+7. **FastAPI version**: `v4.1-root`.
+8. **Reranker driver export bug**: `app/drivers/reranker_driver.py` has no `RerankDriver` class (import fails).
+9. **LlamaIndex driver export bug**: `app/drivers/llamaindex_driver.py` exports `LlamaIndexDriver` not `LlamaIndexRetrievalEngine`.
+10. **Orchestrator StateGraph fields**: `messages, query, intent, filters, retrieved_docs, reranked_docs, used_web, final_response`.
+11. **DSPy live call works**: `dspy.Predict(ArabicQA)` returns answer (truncated by free tier token limit).
+
+### Memory files updated
+- **UPDATED**: `.memory/runtime_truth.md` — 34 rows, full rewrite with second-pass live evidence
+- **UPDATED**: `.memory/logs.md` — this entry
+- **UPDATED**: `CLAUDE.md` — §6.6 truth table rewritten with WS protocol, fallback timing, all components

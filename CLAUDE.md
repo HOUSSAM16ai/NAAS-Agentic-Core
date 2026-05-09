@@ -51,6 +51,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Known fix applied 2026-05-09 (ISS-036):** `frontend/next.config.js` `allowedDevOrigins` was missing `*.app.github.dev` — Next.js 15+ rejects Codespaces proxy requests with `ERR_HTTP_RESPONSE_CODE_FAILURE` without it. Fixed by adding `*.app.github.dev` and `*.preview.app.github.dev` to the list.
 
+**Known fix applied 2026-05-09 (ISS-037):** commit `3fd78247` introduced `local stale_pid` at top-level scope in `supervisor.sh` (outside any function). bash rejects `local` outside functions → supervisor crashes at Step 4 with `local: can only be used in a function` → uvicorn never starts → all ports dead. Fixed by removing the `local` keyword (`stale_pid=...` instead of `local stale_pid`). Also added `.devcontainer/secrets.env` fallback so supervisor injects DB credentials even when Codespaces Secrets are not configured.
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)

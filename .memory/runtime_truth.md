@@ -96,6 +96,29 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 
 ---
 
+## Supervisor crash — `local` outside function (ISS-037 — RESOLVED 2026-05-09)
+
+**Symptom**: After merging commit `3fd78247`, ALL ports dead (3000, 8000, 3001, 9090). Supervisor log shows:
+```
+/app/.devcontainer/supervisor.sh: line 336: local: can only be used in a function
+[ERROR] Supervisor failed at line 336
+```
+
+**Root cause**: commit `3fd78247` added `local stale_pid` at top-level scope in `supervisor.sh` (inside an `if/else` block but outside any `function`). bash rejects `local` outside functions → supervisor exits at Step 4 → uvicorn never starts → all ports dead.
+
+**Fix applied** (`.devcontainer/supervisor.sh`):
+- `local stale_pid` → `stale_pid` (removed `local` keyword — variable is already in a subshell context)
+
+**Additional fix**: Added `.devcontainer/secrets.env` fallback read at the top of `_inject_env_secrets()`. When Codespaces Secrets are not configured, supervisor now reads credentials from this git-ignored file instead of falling back to SQLite. Template at `.devcontainer/secrets.env.example`.
+
+**Verified live** (2026-05-09):
+- Supervisor runs to completion: `✅ Backend is healthy and ready!`
+- `GET /health → {"application":"ok","database":"ok","version":"v4.1-root"}`
+- `GET http://localhost:3000/ → HTTP 200`
+- No `local: can only be used in a function` error
+
+---
+
 ## Codespaces Next.js proxy fix (ISS-036 — RESOLVED 2026-05-09)
 
 **Symptom**: Port 3000 in GitHub Codespaces returns `ERR_HTTP_RESPONSE_CODE_FAILURE` even when Next.js is running and responding 200 on localhost.
@@ -163,3 +186,5 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 13. **LangGraph metrics now ACTIVE for local graph.** `cogniforge_langgraph_intent_total`, `cogniforge_langgraph_node_count_total`, `cogniforge_langgraph_node_duration_seconds_bucket` emitted per WS turn.
 14. **Lock file staleness is a finding.** Always check `generated_at_utc` in `.runtime/truth_table.lock.json` before trusting it.
 15. **`allowedDevOrigins` must include all hosting environments.** Next.js 15+ rejects dev-server requests from unlisted origins. Always include `*.app.github.dev` (Codespaces), `*.replit.dev` (Replit), and `*.gitpod.io` (Gitpod/Ona) in `frontend/next.config.js`.
+16. **`local` is illegal outside bash functions.** Using `local var` in top-level script scope (even inside `if/else`) causes bash to abort with `local: can only be used in a function`. In `supervisor.sh`, any variable at top-level must use plain assignment (`var=value`). This was the root cause of ISS-037 (commit `3fd78247`) — all ports dead after merge.
+17. **`.devcontainer/secrets.env` is the Codespaces fallback.** When Codespaces Secrets are not configured, `supervisor.sh` reads `.devcontainer/secrets.env` (git-ignored) before falling back to SQLite. Copy `.devcontainer/secrets.env.example` and fill in real values. Never commit `secrets.env`.

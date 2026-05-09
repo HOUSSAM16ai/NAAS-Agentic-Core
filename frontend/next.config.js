@@ -23,7 +23,21 @@ const nextConfig = {
         }
       ]
     },
-    allowedDevOrigins: ['*.replit.dev', '*.janeway.replit.dev', '*.replit.app'],
+    // Allow dev-mode requests from all supported hosting environments.
+    // GitHub Codespaces proxies the dev server through *.app.github.dev —
+    // without this, Next.js 15+ rejects those requests with ERR_HTTP_RESPONSE_CODE_FAILURE.
+    allowedDevOrigins: [
+        // Replit
+        '*.replit.dev',
+        '*.janeway.replit.dev',
+        '*.replit.app',
+        // GitHub Codespaces
+        '*.app.github.dev',
+        '*.preview.app.github.dev',
+        // Gitpod / Ona
+        '*.gitpod.io',
+        '*.ws-eu*.gitpod.io',
+    ],
 };
 
 module.exports = nextConfig;

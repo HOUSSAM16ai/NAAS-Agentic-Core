@@ -1,6 +1,26 @@
 # Tasks — What Comes Next
-> Last updated: 2026-05-09 | Branch: `docs/advanced-langgraph-tavily-audit-2026-05-09` (fourth pass: advanced LangGraph + Tavily deep investigation).
+> Last updated: 2026-05-10 | Branch: `feat/microservices-step3-live-activation`
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## ✅ Resolved — Microservices Step 3: Live Activation (2026-05-10, branch: feat/microservices-step3-live-activation)
+
+### Step 3 — Activate orchestrator-service as Ona service ✅ DONE
+- `docker-compose.step3.yml` — 3-service compose (postgres-orchestrator:5441 + redis-orchestrator:6380 + orchestrator-service:8006)
+- `.ona/automations.yaml` — service `orchestrator-stack` + tasks `health-probe`, `verify-stack`, `run-step3-tests`
+- `observability/grafana/dashboards/60-microservices-step3-live.json` — 20-panel dashboard (UID: cogniforge-ms-step3-live)
+- `.github/workflows/microservices-step3-live.yml` — 7-job CI gate with PR comment
+
+### Step 4 — Next (OPEN — الخطوة التالية)
+**Scope**: End-to-end persistence verification + outbox relay activation.
+1. Run `gitpod automations service start orchestrator-stack` → verify `/health` returns `startup_state: ready`.
+2. Send WS message to monolith → verify `persisted: true` event reaches client (orchestrator persisted, monolith skipped fail-safe write).
+3. Check DB: exactly one row in `customer_messages` for the turn (no dual-write — D-006).
+4. Enable `OUTBOX_RELAY_ENABLED=true` in `docker-compose.step3.yml` after persistence verified.
+5. Check telemetry: `retrieval_source` is `"internal_exact"` or `"web"` (not `"web_skipped_missing_tavily"`).
+6. Update `.memory/runtime_truth.md` entry #36 from `DORMANT→ACTIVE (on demand)` to `ACTIVE`.
+**Why**: Validates the full revival path end-to-end before declaring Step 3 complete in production.
 
 ---
 

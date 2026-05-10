@@ -59,6 +59,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Microservices Step 2 applied 2026-05-10 (D-025 — StateGraph Routing):** `ChatRoutingPolicy` default changed from `/agent/chat` (OrchestratorAgent) to `/api/chat/messages` (StateGraph 13 nodes). Controlled by `ORCHESTRATOR_CHAT_ENDPOINT` env var (`"state_graph"` default | `"agent"` rollback). Routing metrics added: `cogniforge_routing_mode_state_graph` gauge + `cogniforge_routing_target_total{target=...}` counter emitted per request. New Grafana dashboard `50-microservices-transition.json` (15 panels, UID `cogniforge-ms-transition-step2`) visible at :3001. Prometheus scrape targets added for orchestrator-service:8006, research-agent:8007, user-service:8001, planning-agent:8002 (all DOWN until `docker compose up`). CI gate `.github/workflows/microservices-transition.yml` (5 jobs) enforces default mode on every PR. 16 regression tests in `tests/infrastructure/test_routing_policy.py`.
 
+**Microservices Step 3 applied 2026-05-10 (D-029/D-030/D-031 — Live Activation):** `orchestrator-service` activated as Ona automation service. Three new artefacts: (1) `docker-compose.step3.yml` — isolated 3-service compose (postgres-orchestrator:5441 + redis-orchestrator:6380 + orchestrator-service:8006) with independent volumes; (2) `.ona/automations.yaml` — service `orchestrator-stack` (start/ready/stop) + tasks `health-probe`, `verify-stack`, `run-step3-tests`; (3) `observability/grafana/dashboards/60-microservices-step3-live.json` — 20-panel live dashboard (UID `cogniforge-ms-step3-live`, 10s refresh) at Grafana :3001. CI gate `.github/workflows/microservices-step3-live.yml` (7 jobs) validates compose + StateGraph + dashboard + Prometheus + automations on every PR. `OUTBOX_RELAY_ENABLED=false` in Step 3 — enabled in Step 4 after persistence verification. Trigger: `gitpod automations service start orchestrator-stack`.
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
@@ -95,11 +97,16 @@ Browser
                     ├── /v1/content/*
                     └── /api/v1/data-mesh/*
 
-Infrastructure (verified live 2026-05-09):
-  Grafana    → port 3001  (grafana.ini says 3000 but provisioning CLI overrides)
+Infrastructure (verified live 2026-05-09, Step 3 added 2026-05-10):
+  Grafana    → port 3001  (grafana.ini says 3000 but provisioning CLI overrides) — 7 dashboards
   Prometheus → port 9090
   Redis      → port 6379  (process running but app uses InMemoryCache — REDIS_URL not set)
   PostgreSQL → Supabase PgBouncer :6543 (19 users, 2098 customer_messages, 3038 admin_messages)
+
+Step 3 Stack (on demand — `gitpod automations service start orchestrator-stack`):
+  orchestrator-service  → port 8006  (13-node StateGraph, DORMANT→ACTIVE on demand)
+  postgres-orchestrator → port 5441  (isolated DB for orchestrator)
+  redis-orchestrator    → port 6380  (isolated Redis for orchestrator)
 ```
 
 1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).
@@ -230,6 +237,41 @@ environment:
 ```
 
 **Affected services**: `orchestrator-service` (port 8006) and `research-agent` (port 8007). Key format must start with `tvly-`. MCP URL format (`https://mcp.tavily.com/mcp/?tavilyApiKey=tvly-...`) is auto-sanitized in `readiness.py` and `super_search.py`.
+
+### NEVER add `dependsOn` to Ona automation services
+
+```yaml
+# ❌ Wrong — schema rejects it: additionalProperties: false
+services:
+  orchestrator-stack:
+    dependsOn:
+      - some-other-service  # FORBIDDEN in services
+
+# ✅ Correct — use `ready` command to gate startup
+services:
+  orchestrator-stack:
+    commands:
+      ready: curl -sf http://localhost:8006/health
+```
+
+**Rule**: Only `tasks` support `dependsOn`. Services use the `ready` command as a readiness gate. A service stays in "Starting" phase until `ready` passes — this naturally gates any dependent workflow.
+
+### NEVER run docker-compose.step3.yml and docker-compose.yml simultaneously without checking port conflicts
+
+```bash
+# ❌ Wrong — port 6380 conflict if redis-orchestrator already running from main compose
+docker compose up -d
+docker compose -f docker-compose.step3.yml up -d
+
+# ✅ Correct — Step 3 compose uses isolated ports (5441, 6380, 8006)
+# These do NOT conflict with the devcontainer default stack (8000, 3000, 3001, 9090)
+# But DO conflict with the full docker-compose.yml stack if it's running
+docker compose -f docker-compose.step3.yml up -d  # safe in default devcontainer
+```
+
+**Ports used by docker-compose.step3.yml**: 5441 (postgres), 6380 (redis), 8006 (orchestrator).
+**Safe to run alongside**: devcontainer default stack (8000, 3000, 3001, 9090, 6379).
+**Conflicts with**: full `docker-compose.yml` stack (also uses 6380 for redis-orchestrator).
 
 ### NEVER use flat keyword matching for exercise retrieval intent detection
 

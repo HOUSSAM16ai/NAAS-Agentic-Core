@@ -221,3 +221,29 @@ start" — this is the right hook.
 - `docker-compose.observability.yml` Grafana env block uses `${VAR:-default}` for every `GF_*` var so missing vars never break the local boot.
 - Never set `cookie_secure=true` unconditionally — it breaks plain `http://localhost:3001/`.
 **Status**: IMPLEMENTED 2026-05-07 — see branch `claude/fix-monitoring-port-hQ7JL` and CLAUDE.md §6.12.
+
+
+## D-018 · Exercise Retrieval Uses Two-Phase Intent Classifier, Not Keyword List (ISS-038)
+**Decision**: `detect_exercise_retrieval()` in `app/services/capabilities/exercise_retrieval.py`
+uses a two-phase intent classifier instead of a flat keyword list.
+**Reason**: A flat keyword list on `"تمرين"` / `"احتمالات"` / `"درس"` causes context blindness.
+Since `knowledge_base/` contains exactly one file, any false-positive trigger returns the
+probability BAC exercise unconditionally — regardless of what the student asked. A student
+asking "اشرح الجزء أ من هذا التمرين" received a probability exercise instead of an explanation.
+**The two phases**:
+1. **Explanation-intent guard** (highest priority): patterns like `"اشرح"`, `"كيف"`, `"هذا التمرين"`,
+   `"ساعدني"`, `"explain"`, `"help me"`, `"الجزء أ"` cancel retrieval even when "تمرين" is present.
+2. **Explicit retrieval trigger**: patterns like `"تمرين بكالوريا"`, `"التمرين الأول"`, `"exercise 1"`,
+   `"الموضوع الأول"`, year+exercise combos trigger retrieval.
+3. **Default**: no retrieval → fall through to LangGraph.
+**New field**: `ExerciseRetrievalDecision.reason` (optional str, default `""`) — audit trail for
+debugging misclassifications. Backward-compatible: callers only read `.recognized`.
+**Consequence**:
+- Explanation/help questions now fall through to LangGraph, which handles them correctly.
+- Explicit BAC retrieval requests still work as before.
+- Adding new trigger keywords requires a corresponding negation pattern — enforced by 25 regression tests.
+**What MUST NOT change**:
+- The explanation-intent list must always take priority over the retrieval list.
+- The `reason` field must not be removed — it is the only audit trail for misclassification debugging.
+- New keywords must not be added to the retrieval list without a corresponding explanation-intent guard.
+**Status**: IMPLEMENTED 2026-05-10 — branch `fix/exercise-retrieval-context-blindness`.

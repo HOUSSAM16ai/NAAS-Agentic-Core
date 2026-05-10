@@ -1,8 +1,28 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-09 | Branch: `fix/lifespan-orchestration-env-injection`
+> Last updated: 2026-05-10 | Branch: `fix/exercise-retrieval-context-blindness`
 > Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED / RUNTIME-ONLY / HISTORICAL]
 > **Capability runtime status (ACTIVE/PARTIAL/DORMANT/ZOMBIE) lives in `.memory/runtime_truth.md`.**
 > **Architectural fragility patterns (root causes, lessons) live in `.memory/fragility-patterns.md`.**
+
+---
+
+## 🔴 Critical — Resolved in this branch (2026-05-10)
+
+### ISS-038 · Exercise Retrieval Context Blindness — "تمرين" Always Returns Probability Exercise [CONFIRMED LIVE]
+- **Status**: RESOLVED in `fix/exercise-retrieval-context-blindness`
+- **Root cause**: `detect_exercise_retrieval()` in `app/services/capabilities/exercise_retrieval.py` used a flat keyword list (`"تمرين"`, `"تمارين"`, `"درس"`, `"احتمالات"`, `"بكالوريا"`, `"exercise"`, `"lesson"`, `"probability"`). Any question containing these words triggered `_build_local_retrieval_response()`, which searched `knowledge_base/` — a directory containing exactly one file: `bac2024_math_experimental_subject1_ex1_ex2.md` (the probability exercise). Result: every question with "تمرين" in any context returned the probability BAC exercise, regardless of what the student actually asked.
+- **Confirmed examples**:
+  - "اشرح الجزء أ من هذا التمرين" → returned probability exercise ❌
+  - "ما هو مفهوم التمرين في الرياضيات" → returned probability exercise ❌
+  - "ساعدني في حل هذا التمرين" → returned probability exercise ❌
+  - "ما هي الاحتمالات" → returned probability exercise ❌
+- **Fix**: Replaced flat keyword list with a two-phase intent classifier:
+  1. **Explanation-intent patterns** (highest priority): `"اشرح"`, `"شرح"`, `"وضح"`, `"كيف"`, `"ما هو"`, `"هذا التمرين"`, `"الجزء أ"`, `"ساعدني"`, `"help me"`, `"explain"`, … → cancel retrieval even if "تمرين" is present.
+  2. **Explicit retrieval patterns**: `"تمرين بكالوريا"`, `"التمرين الأول"`, `"exercise 1"`, `"الموضوع الأول"`, `"بكالوريا"`, year+exercise combos → trigger retrieval.
+  3. **Default**: no retrieval → fall through to LangGraph.
+- **New field**: `ExerciseRetrievalDecision.reason` (optional str) — explains the decision: `"explanation_intent_detected"` | `"retrieval_intent_detected"` | `"no_clear_retrieval_intent"`. Backward-compatible (default `""`).
+- **Tests**: 25 tests in `tests/contracts/test_exercise_retrieval_contracts.py` — 13 regression cases (explanation context must NOT trigger) + 8 positive cases (explicit retrieval must trigger) + 4 existing contract tests.
+- **Files**: `app/services/capabilities/exercise_retrieval.py`, `tests/contracts/test_exercise_retrieval_contracts.py`
 
 ---
 

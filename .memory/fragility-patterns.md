@@ -317,9 +317,30 @@ Emitting the same logical metric through two different paths (UnifiedObs + OTel)
 
 ---
 
+## Pattern 5 — Retrieval Context Blindness (ISS-038, RESOLVED 2026-05-10)
+
+**What happened:** `detect_exercise_retrieval()` used a flat keyword list. Any question containing `"تمرين"`, `"احتمالات"`, `"درس"`, or `"بكالوريا"` triggered `_build_local_retrieval_response()`. Since `knowledge_base/` contained exactly one file (the probability BAC exercise), every triggered retrieval returned that file — regardless of what the student actually asked. A student asking "اشرح الجزء أ من هذا التمرين" received a probability exercise instead of an explanation.
+
+**Root cause:** Keyword presence was treated as intent. The system had no model of *why* the user mentioned the keyword — explanation context, conceptual question, and explicit retrieval request all looked identical to the classifier.
+
+**The fix:** Two-phase intent classifier:
+1. Explanation-intent patterns (`"اشرح"`, `"كيف"`, `"هذا التمرين"`, `"ساعدني"`, …) cancel retrieval at highest priority.
+2. Explicit retrieval patterns (`"تمرين بكالوريا"`, `"التمرين الأول"`, `"exercise 1"`, year+exercise combos) trigger retrieval.
+3. Default: no retrieval → LangGraph.
+
+**The structural risk that remains:** `knowledge_base/` is a single-file directory. Any retrieval trigger — even a correct one — returns the same file. As the knowledge base grows, the retrieval system needs semantic ranking, not just file enumeration. Until then, the two-phase classifier is the only guard against context blindness.
+
+**What must never be done:**
+- Do not add new keywords to `detect_exercise_retrieval()` without also adding corresponding explanation-intent negation patterns.
+- Do not assume keyword presence = retrieval intent. Always model the *why*.
+- Do not expand `knowledge_base/` without also updating the retrieval ranking logic in `local_store.py` — a larger knowledge base with a flat retrieval strategy will return arbitrary results.
+- Do not remove the `reason` field from `ExerciseRetrievalDecision` — it is the audit trail for debugging misclassifications.
+
+---
+
 ## Cross-Pattern Synthesis
 
-These four patterns share a common root: **the gap between what the system claims to do and what it actually does**.
+These five patterns share a common root: **the gap between what the system claims to do and what it actually does**.
 
 | Pattern | Claim | Reality |
 |---|---|---|
@@ -327,11 +348,13 @@ These four patterns share a common root: **the gap between what the system claim
 | DOM leakage | "Sidebar is hidden when closed" | Sidebar is visually off-screen but fully present in DOM, accessible to screen readers, keyboard, and find-in-page |
 | Runtime truth | "CI enforces architectural truth" | CI enforces static import topology; runtime behavior, metric emission, and dashboard contracts are unverified |
 | Observability | "LangGraph dashboard shows node metrics" | LangGraph dashboard queries metrics that are never emitted; panels are permanently empty |
+| Retrieval context blindness | "Retrieves relevant exercise content" | Returns the same single file for any question containing "تمرين" — keyword presence ≠ retrieval intent |
 
 **The systemic failure mode:** Each layer of the system (routing, rendering, governance, observability) has a local definition of "working" that does not align with the user-visible definition of "working". The system passes its own checks while failing the user's expectations.
 
 **The institutional memory imperative:** These patterns must be remembered because they will recur. Every time a new feature is added:
 - A new keyword will be added to `_EDUCATIONAL_PATTERNS` instead of fixing the semantic classifier
+- A new keyword will be added to `detect_exercise_retrieval()` without a negation guard, re-introducing context blindness
 - A new sidebar will use `transform: translateX` without `aria-hidden`
 - A new dashboard panel will be added without verifying the metric emitter
 - A new component will be classified ACTIVE based on import presence alone

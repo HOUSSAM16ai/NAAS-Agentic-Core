@@ -55,6 +55,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Known fix applied 2026-05-10 (ISS-038):** `detect_exercise_retrieval` in `app/services/capabilities/exercise_retrieval.py` used a flat keyword list (`"تمرين"`, `"احتمالات"`, `"درس"`, …) with no context awareness. Any question containing these words — regardless of intent — triggered `_build_local_retrieval_response`, which always returned the single file in `knowledge_base/` (the probability BAC exercise). A student asking "اشرح الجزء أ من هذا التمرين" received a probability exercise instead of an explanation. Fixed by replacing the flat keyword list with a two-phase intent classifier: (1) explanation/help intent patterns cancel retrieval even when "تمرين" is present; (2) only explicit retrieval patterns (BAC, numbered exercises, year+exercise combos) trigger retrieval. 25 regression tests added to `tests/contracts/test_exercise_retrieval_contracts.py`.
 
+**Known fix applied 2026-05-10 (Orchestrator Revival Step 1 — H1/H2/H3):** Three technical blockers preventing `orchestrator_service` from running were removed. H1: `TAVILY_API_KEY` added to `docker-compose.yml` for both `orchestrator-service` and `research-agent` — `WebSearchFallbackNode` was silently skipping web search. H2: `ddgs>=6.0` added to `microservices/research_agent/requirements.txt` — `SuperSearchOrchestrator` raised `ImportError` without it. H3: null guard added before `cognitive_engine.memorize()` in `simple_client.py:116` — `get_cognitive_engine()` returns `None` by default, causing `AttributeError` on every successful LLM response. The 13-node StateGraph compiles and runs with real `OPENROUTER_API_KEY` (verified live). 9 regression tests added to `tests/microservices/orchestrator_service/test_orchestrator_revival.py`.
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
@@ -197,6 +199,35 @@ user_id = result.scalar()
 # settings auto-converts PgBouncer port 6543 → 5432
 # Don't override this behavior in database.py
 ```
+
+### NEVER call `cognitive_engine.memorize()` without a None guard
+
+```python
+# ❌ Wrong — ISS-H3: get_cognitive_engine() returns None by default.
+# Raises AttributeError on every successful LLM response.
+self.cognitive_engine.memorize(prompt, context_hash, chunks)
+
+# ✅ Correct — null guard required (simple_client.py:116)
+if last_message.get("role") == "user" and self.cognitive_engine is not None:
+    self.cognitive_engine.memorize(prompt, context_hash, chunks)
+```
+
+**Rule**: `CognitiveResonanceEngine` is a stub (`cognitive_cache.py` returns `None`). Until a real implementation is wired, every call site must guard against `None`. Do not remove the guard when implementing the real engine — make `get_cognitive_engine()` return a real instance instead.
+
+### NEVER omit `TAVILY_API_KEY` from `docker-compose.yml` services that use web search
+
+```yaml
+# ❌ Wrong — WebSearchFallbackNode silently skips search; SuperSearchOrchestrator raises ImportError
+environment:
+  - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+
+# ✅ Correct — safe default (empty string) prevents docker compose failure when key absent
+environment:
+  - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+  - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+```
+
+**Affected services**: `orchestrator-service` (port 8006) and `research-agent` (port 8007). Key format must start with `tvly-`. MCP URL format (`https://mcp.tavily.com/mcp/?tavilyApiKey=tvly-...`) is auto-sanitized in `readiness.py` and `super_search.py`.
 
 ### NEVER use flat keyword matching for exercise retrieval intent detection
 
@@ -1697,7 +1728,7 @@ change to make `histograms` label-aware — out of scope for this fix.
 | Stack | Location | Status | Nodes | thread_id format |
 |---|---|---|---|---|
 | **Local fallback graph** | `app/services/chat/local_graph.py` | **PARTIAL** (de-facto handler) | 2: `supervisor`, `chat` | `str(conversation_id)` e.g. `"394"` |
-| **Advanced orchestrator StateGraph** | `microservices/orchestrator_service/src/services/overmind/graph/main.py` | **DORMANT** | 13: see topology below | `u{user_id}:c{conversation_id}` e.g. `"u7:c394"` |
+| **Advanced orchestrator StateGraph** | `microservices/orchestrator_service/src/services/overmind/graph/main.py` | **DORMANT→PARTIAL** | 13: see topology below | `u{user_id}:c{conversation_id}` e.g. `"u7:c394"` |
 | **App-level multi-agent workflow** | `app/services/chat/graph/workflow.py` | **ZOMBIE** | 7: planner, researcher, writer, super_reasoner, procedural_auditor, reviewer, supervisor | N/A — KAgent-blocked |
 
 These three graphs are completely independent. They share no state, no checkpointer, and no thread namespace.
@@ -1718,7 +1749,7 @@ customer_chat.py:chat_stream_ws
 - Checkpointer: `MemorySaver` (module-level singleton in `local_graph.py`).
 - State lost on process restart.
 
-**Advanced orchestrator StateGraph (DORMANT — only when microservices stack is running):**
+**Advanced orchestrator StateGraph (DORMANT→PARTIAL — 3 blockers removed 2026-05-10, needs `docker compose up orchestrator-service`):**
 ```
 customer_chat.py:chat_stream_ws
   → OrchestratorClient.chat_with_agent(question, user_id, conversation_id, context={...})

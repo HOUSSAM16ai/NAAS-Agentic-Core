@@ -1,5 +1,51 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-09 | Branch: `fix/lifespan-orchestration-env-injection`
+> Last updated: 2026-05-10 | Branch: `feat/orchestrator-revival-step1`
+
+---
+
+## ✅ Session: 2026-05-10 — Orchestrator Revival Step 1 (خطوة انتقالية واحدة مؤكدة)
+
+**Branch**: `feat/orchestrator-revival-step1`
+**Mode**: Live runtime fixes — application code + configuration + tests.
+**Verified live**: DB ✅ (2107 customer_messages, 19 users) | OpenRouter ✅ (200 OK) | Tavily ✅ (2 BAC results)
+
+### الخطوة الانتقالية المختارة
+إزالة ثلاثة حواجز تقنية تمنع تشغيل `orchestrator_service` (الخدمة المصغرة الأساسية):
+
+### H1 — إضافة `TAVILY_API_KEY` لـ `docker-compose.yml` ✅
+- `- TAVILY_API_KEY=${TAVILY_API_KEY:-}` في `orchestrator-service.environment`
+- `- TAVILY_API_KEY=${TAVILY_API_KEY:-}` في `research-agent.environment`
+- `TAVILY_API_KEY=` مع تعليق في `.env.docker`
+- **التأثير**: `WebSearchFallbackNode` تستخدم Tavily بدلاً من التجاهل الصامت
+
+### H2 — إصلاح DuckDuckGo Fallback ✅
+- `ddgs>=6.0` أُضيف إلى `microservices/research_agent/requirements.txt`
+- **التأثير**: لا `ImportError` عند غياب `TAVILY_API_KEY`
+
+### H3 — إصلاح `cognitive_engine.memorize` NullPointerError ✅
+- **الملف**: `microservices/orchestrator_service/src/core/gateway/simple_client.py:116`
+- **السبب**: `get_cognitive_engine()` يُرجع `None` دائماً
+- **الإصلاح**: `and self.cognitive_engine is not None` قبل `memorize`
+- **التأثير**: لا `AttributeError` في كل استدعاء ناجح للنموذج
+
+### اختبارات التحقق: 9/9 PASSED ✅
+- `tests/microservices/orchestrator_service/test_orchestrator_revival.py`
+
+### تحقق حي من الـ graph
+```
+Graph compiled: CompiledStateGraph — 13 nodes
+['supervisor', 'query_rewriter', 'query_analyzer', 'retriever',
+ 'reranker', 'web_fallback', 'admin_agent', 'tool_executor',
+ 'chat_fallback', 'general_knowledge', 'synthesizer', 'validator']
+```
+
+### الملفات المعدّلة
+- `docker-compose.yml`
+- `microservices/research_agent/requirements.txt`
+- `microservices/orchestrator_service/src/core/gateway/simple_client.py`
+- `.env.docker`
+- `tests/microservices/orchestrator_service/test_orchestrator_revival.py` (جديد)
+- `.memory/*`, `CLAUDE.md`
 
 ---
 

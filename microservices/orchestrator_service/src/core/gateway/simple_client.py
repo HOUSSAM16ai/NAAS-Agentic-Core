@@ -111,8 +111,8 @@ class OpenRouterClient(LLMClient):
                     yield chunk
 
                 success = True
-                # Memorize success
-                if last_message.get("role") == "user":
+                # Memorize success — cognitive_engine قد يكون None عند غياب التهيئة (H3)
+                if last_message.get("role") == "user" and self.cognitive_engine is not None:
                     self.cognitive_engine.memorize(prompt, context_hash, full_response_chunks)
                 return
 

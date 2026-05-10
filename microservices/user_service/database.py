@@ -2,11 +2,15 @@
 وحدة قاعدة البيانات لخدمة المستخدمين.
 
 تُبقي هذه الوحدة التهيئة محلية لخدمة المستخدمين دون اعتماد مشترك.
+
+ملاحظة SSL: asyncpg لا يقبل sslmode في query string — يجب تحويله إلى
+ssl context في connect_args (نفس نمط app/core/database.py في المونوليث).
 """
 
 import asyncio
 import logging
 import os
+import ssl
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.engine.url import make_url
@@ -16,6 +20,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from microservices.user_service.models import SQLModel
 from microservices.user_service.settings import get_settings
@@ -35,7 +40,11 @@ def create_db_engine(
     echo: bool,
     service_name: str,
 ) -> AsyncEngine:
-    """إنشاء محرك قاعدة البيانات بشكل صريح ومبسّط."""
+    """إنشاء محرك قاعدة البيانات بشكل صريح ومبسّط.
+
+    يُعالج sslmode في query string بتحويله إلى ssl context في connect_args
+    لأن asyncpg لا يقبل sslmode كـ query parameter مباشرة.
+    """
 
     if not database_url:
         raise ValueError("DATABASE_URL غير مُعدّ لخدمة المستخدمين.")
@@ -49,16 +58,57 @@ def create_db_engine(
     url_obj = make_url(database_url)
     if "sqlite" in url_obj.drivername:
         engine_args["connect_args"] = {"check_same_thread": False}
-        logger.info("🔌 Database (SQLite): %s", service_name)
+        logger.info("Database (SQLite): %s", service_name)
     elif "postgresql" in url_obj.drivername:
-        if url_obj.drivername == "postgresql":
+        # ── تحويل driver إلى asyncpg ──────────────────────────────────────
+        if url_obj.drivername in ("postgresql", "postgres"):
             url_obj = url_obj.set(drivername="postgresql+asyncpg")
-            database_url = url_obj.render_as_string(hide_password=False)
+
+        # ── استخراج sslmode من query string ──────────────────────────────
+        # asyncpg يرفض sslmode كـ query param — يجب تمريره عبر connect_args
+        qs = dict(url_obj.query)
+        ssl_mode = qs.pop("sslmode", None) or qs.pop("ssl", None)
+
+        # ── Supabase PgBouncer: port 6543 → 5432 ─────────────────────────
+        # PgBouncer على 6543 يعمل بـ transaction mode — يُسبب
+        # DuplicatePreparedStatementError حتى مع statement_cache_size=0.
+        # المنفذ 5432 يتصل بـ session pool مباشرة ويدعم prepared statements.
+        is_supabase = "supabase.com" in (url_obj.host or "")
+        if is_supabase and url_obj.port == 6543:
+            url_obj = url_obj.set(port=5432)
+            logger.info("Supabase: rewrote port 6543 → 5432 (session mode)")
+
+        url_obj = url_obj.set(query=qs)
+        database_url = url_obj.render_as_string(hide_password=False)
+
+        connect_args: dict[str, object] = {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+        }
+
+        if ssl_mode in ("require", "verify-ca", "verify-full"):
+            ctx = ssl.create_default_context()
+            if ssl_mode == "require":
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+            connect_args["ssl"] = ctx
+            logger.info("SSL enabled (mode: %s) for %s", ssl_mode, service_name)
+
+        logger.info("Database (Postgres/Supabase): %s", service_name)
+
+        if is_supabase:
+            # NullPool: لا connection pooling — Supabase يدير الـ pool
+            return create_async_engine(
+                database_url,
+                echo=echo,
+                poolclass=NullPool,
+                connect_args=connect_args,
+            )
 
         is_dev = environment in ("development", "testing")
+        engine_args["connect_args"] = connect_args
         engine_args["pool_size"] = 5 if is_dev else 40
         engine_args["max_overflow"] = 10 if is_dev else 60
-        logger.info("🔌 Database (Postgres): %s", service_name)
 
     return create_async_engine(database_url, **engine_args)
 

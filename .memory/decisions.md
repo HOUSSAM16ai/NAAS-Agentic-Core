@@ -254,6 +254,20 @@ start" — this is the right hook.
 **Status**: IMPLEMENTED 2026-05-07 — see branch `claude/fix-monitoring-port-hQ7JL` and CLAUDE.md §6.12.
 
 
+## D-034 · User Service Activated as uvicorn Process on :8001 — Step 5 (2026-05-10)
+**Decision**: `user-service` is activated as a uvicorn process on `:8001` in Codespaces (no Docker). It is the second microservice to go ACTIVE alongside `orchestrator-service` (:8006). Starts automatically via `supervisor.sh:launch_user_service()` (STEP 4E) when `DATABASE_URL` is set.
+**Reason**: Step 4 proved the uvicorn-process pattern for microservice activation in Codespaces (no Docker-in-Docker). `user-service` is the natural next candidate: it has a complete FastAPI app, its own DB schema, auth routes, and UMS routes. Adding `/metrics` (prometheus_client) makes it fully observable.
+**Port**: `:8001` — matches the existing `docker-compose.yml` port assignment for `user-service`.
+**DB**: `USER_DATABASE_URL` (defaults to `DATABASE_URL` — Supabase shared). Separate schema from orchestrator.
+**Metrics**: 11 `cogniforge_user_*` metrics in independent `CollectorRegistry`. `/metrics` endpoint at `localhost:8001/metrics`. Prometheus scrape target added with `step="5"` label.
+**Grafana**: Dashboard `80-microservices-step5-user-service.json` (UID `cogniforge-ms-step5-user-service`, 17 panels, 10s refresh).
+**CI gate**: `.github/workflows/microservices-step5-user-service.yml` (6 jobs).
+**What MUST NOT change without an ADR**:
+- The port `:8001` for user-service (matches docker-compose.yml).
+- The `CollectorRegistry` isolation pattern — never use the default REGISTRY.
+- The `step="5"` label in `cogniforge_user_startup_info` — used by CI gate and Grafana.
+**Status**: IMPLEMENTED 2026-05-10 — branch `feat/microservices-step5-user-service`.
+
 ## D-025 · ChatRoutingPolicy Default Changed to state_graph — Step 2 Transition (2026-05-10)
 **Decision**: `ChatRoutingPolicy.from_environment()` now defaults to `endpoint_mode="state_graph"`, routing to `/api/chat/messages` (StateGraph 13 nodes) instead of `/agent/chat` (OrchestratorAgent). Controlled by `ORCHESTRATOR_CHAT_ENDPOINT` env var.
 **Reason**: D-021 identified that even when the orchestrator microservice is running, the 13-node StateGraph was never invoked because `ChatRoutingPolicy.candidate_urls()` always returned `/agent/chat`. The StateGraph (with DSPy, Tavily, reranker, synthesizer) is the intended production handler. The routing policy was the only blocker.

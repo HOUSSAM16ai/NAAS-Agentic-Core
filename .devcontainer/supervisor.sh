@@ -592,6 +592,65 @@ launch_orchestrator_service >> "$APP_ROOT/.observability/orchestrator.log" 2>&1 
 lifecycle_info "✅ Orchestrator Service initialization offloaded to background"
 
 # ==============================================================================
+# STEP 4E: User Service Launch (uvicorn process — no Docker required)
+# ==============================================================================
+# يُشغِّل user-service كـ uvicorn process مستقل على المنفذ 8001.
+# Step 5: /metrics endpoint حقيقي بصيغة Prometheus (cogniforge_user_*).
+# يستخدم Supabase (DATABASE_URL الموجودة) عبر USER_DATABASE_URL.
+# الفشل لا يوقف الـ supervisor — الخدمة تبدأ في وضع DEGRADED إذا فشل الـ DB.
+
+launch_user_service() {
+    local USER_LOG_DIR="$APP_ROOT/.observability"
+    local USER_PORT="8001"
+    local USER_HEALTH="http://localhost:${USER_PORT}/health"
+
+    mkdir -p "$USER_LOG_DIR"
+
+    # ── التحقق من وجود DATABASE_URL ──────────────────────────────────────────
+    local user_db_url="${USER_DATABASE_URL:-${DATABASE_URL:-}}"
+    if [ -z "$user_db_url" ]; then
+        lifecycle_warn "UserService: no DATABASE_URL available — skipping launch."
+        echo "[$(date -u +%FT%TZ)] DATABASE_URL missing — user-service parked" \
+            >> "$USER_LOG_DIR/user_service.log"
+        return 0
+    fi
+
+    # ── idempotent: هل الخدمة تعمل بالفعل؟ ──────────────────────────────────
+    if pgrep -f "uvicorn microservices.user_service" > /dev/null 2>&1 \
+       && curl -sf --connect-timeout 2 "$USER_HEALTH" > /dev/null 2>&1; then
+        lifecycle_info "UserService: already running and healthy on :${USER_PORT}"
+        return 0
+    fi
+
+    # ── إيقاف أي نسخة قديمة ──────────────────────────────────────────────────
+    pkill -f "uvicorn microservices.user_service" 2>/dev/null || true
+    sleep 1
+
+    lifecycle_info "UserService: starting on :${USER_PORT} (Step 5 — /metrics active)..."
+
+    # ── تشغيل uvicorn في الخلفية ──────────────────────────────────────────────
+    USER_DATABASE_URL="$user_db_url" \
+    SECRET_KEY="${SECRET_KEY:-cogniforge-user-service-dev-key}" \
+    ENVIRONMENT="${ENVIRONMENT:-development}" \
+    USER_SERVICE_NAME="user-service" \
+    USER_SERVICE_VERSION="1.0.0" \
+    nohup python -m uvicorn microservices.user_service.main:app \
+        --host 0.0.0.0 \
+        --port "$USER_PORT" \
+        --workers 1 \
+        --log-level info \
+        >> "$USER_LOG_DIR/user_service.log" 2>&1 &
+
+    local user_pid=$!
+    lifecycle_info "UserService: launched (PID=$user_pid) — health at $USER_HEALTH"
+    lifecycle_info "            Logs: $USER_LOG_DIR/user_service.log"
+}
+
+# تشغيل في الخلفية — لا يحجب الـ supervisor
+launch_user_service >> "$APP_ROOT/.observability/user_service.log" 2>&1 &
+lifecycle_info "✅ User Service initialization offloaded to background"
+
+# ==============================================================================
 # STEP 5: Health Check & Readiness (فحص الصحة والجاهزية)
 # ==============================================================================
 
@@ -659,6 +718,7 @@ lifecycle_info "   • Database: Migrated"
 lifecycle_info "   • Admin User: Seeded"
 lifecycle_info "   • Backend Server: port $APP_PORT (ready=$_app_ready)"
 lifecycle_info "   • Orchestrator Service: port 8006 (background — check .observability/orchestrator.log)"
+lifecycle_info "   • User Service:         port 8001 (background — check .observability/user_service.log)"
 lifecycle_info "   • Grafana: port 3001 (Mission Control)"
 lifecycle_info "   • Prometheus: port 9090"
 lifecycle_info ""

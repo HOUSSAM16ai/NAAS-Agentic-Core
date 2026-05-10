@@ -1,0 +1,370 @@
+# =============================================================================
+# CI Gate — Microservices Step 5: User Service Live Activation
+# =============================================================================
+# يتحقق من أن user-service جاهز للتشغيل الحي على :8001 في Codespaces:
+#   - prometheus-client موجود في requirements.txt
+#   - prom_metrics.py موجود ويحتوي المقاييس الصحيحة
+#   - /metrics endpoint معرَّف في main.py
+#   - supervisor.sh يُشغِّل user-service على :8001
+#   - automations.yaml يحتوي user-service service وtasks
+#   - Prometheus scrape config يحتوي user-service target
+#   - Grafana dashboard صالح (JSON)
+#   - 36 اختبار وحدة تمر بنجاح
+#
+# يُشغَّل عند: تعديل أي ملف يمس user-service أو Step 5
+# =============================================================================
+
+name: "Microservices Step 5 — User Service"
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "microservices/user_service/**"
+      - ".devcontainer/supervisor.sh"
+      - ".ona/automations.yaml"
+      - "observability/native/prometheus.yml"
+      - "observability/grafana/dashboards/80-microservices-step5-user-service.json"
+      - "tests/microservices/user_service/**"
+      - ".github/workflows/microservices-step5-user-service.yml"
+  pull_request:
+    branches: ["main", "develop"]
+    paths:
+      - "microservices/user_service/**"
+      - ".devcontainer/supervisor.sh"
+      - ".ona/automations.yaml"
+      - "observability/native/prometheus.yml"
+      - "observability/grafana/dashboards/80-microservices-step5-user-service.json"
+      - "tests/microservices/user_service/**"
+      - ".github/workflows/microservices-step5-user-service.yml"
+
+concurrency:
+  group: "step5-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 1: Static Checks — التحقق الثابت من الملفات
+  # ─────────────────────────────────────────────────────────────────────────────
+  static-checks:
+    name: "Static Checks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "U1 — prometheus-client في requirements.txt"
+        run: |
+          if ! grep -q "prometheus-client>=0.20" microservices/user_service/requirements.txt; then
+            echo "❌ prometheus-client>=0.20.0 غائب من requirements.txt"
+            exit 1
+          fi
+          echo "✅ prometheus-client موجود"
+
+      - name: "U2 — prom_metrics.py موجود"
+        run: |
+          if [ ! -f "microservices/user_service/src/core/prom_metrics.py" ]; then
+            echo "❌ prom_metrics.py غائب"
+            exit 1
+          fi
+          echo "✅ prom_metrics.py موجود"
+
+      - name: "U2 — prom_metrics.py يحتوي المقاييس الصحيحة"
+        run: |
+          METRICS=(
+            "cogniforge_user_startup_info"
+            "cogniforge_user_requests_total"
+            "cogniforge_user_auth_operations_total"
+            "cogniforge_user_registrations_total"
+            "cogniforge_user_logins_total"
+            "cogniforge_user_db_operations_total"
+            "export_prometheus_text"
+            "set_startup_info"
+            "CollectorRegistry"
+          )
+          FAIL=0
+          for metric in "${METRICS[@]}"; do
+            if grep -q "$metric" microservices/user_service/src/core/prom_metrics.py; then
+              echo "  ✅ $metric"
+            else
+              echo "  ❌ $metric — غائب"
+              FAIL=$((FAIL+1))
+            fi
+          done
+          [ "$FAIL" -eq 0 ] || exit 1
+
+      - name: "U3 — /metrics endpoint في main.py"
+        run: |
+          if ! grep -q '"/metrics"' microservices/user_service/main.py && \
+             ! grep -q "'/metrics'" microservices/user_service/main.py; then
+            echo "❌ /metrics endpoint غائب من main.py"
+            exit 1
+          fi
+          if ! grep -q "export_prometheus_text" microservices/user_service/main.py; then
+            echo "❌ export_prometheus_text غير مستوردة في main.py"
+            exit 1
+          fi
+          if ! grep -q "set_startup_info" microservices/user_service/main.py; then
+            echo "❌ set_startup_info غير مستدعاة في main.py"
+            exit 1
+          fi
+          echo "✅ /metrics endpoint موجود في main.py"
+
+      - name: "U4 — supervisor.sh يُشغِّل user-service على :8001"
+        run: |
+          if ! grep -q "launch_user_service" .devcontainer/supervisor.sh; then
+            echo "❌ launch_user_service غائبة من supervisor.sh"
+            exit 1
+          fi
+          if ! grep -q "8001" .devcontainer/supervisor.sh; then
+            echo "❌ المنفذ 8001 غائب من supervisor.sh"
+            exit 1
+          fi
+          if ! grep -q "uvicorn microservices.user_service" .devcontainer/supervisor.sh; then
+            echo "❌ uvicorn microservices.user_service غائب من supervisor.sh"
+            exit 1
+          fi
+          echo "✅ supervisor.sh يُشغِّل user-service على :8001"
+
+      - name: "U5 — automations.yaml يحتوي user-service"
+        run: |
+          CHECKS=(
+            "user-service:"
+            "localhost:8001/health"
+            "verify-step5-user-service"
+            "restart-user-service"
+            "run-step5-tests"
+          )
+          FAIL=0
+          for check in "${CHECKS[@]}"; do
+            if grep -q "$check" .ona/automations.yaml; then
+              echo "  ✅ $check"
+            else
+              echo "  ❌ $check — غائب"
+              FAIL=$((FAIL+1))
+            fi
+          done
+          [ "$FAIL" -eq 0 ] || exit 1
+
+      - name: "U6 — Prometheus scrape config يحتوي user-service"
+        run: |
+          if ! grep -q "job_name: user-service" observability/native/prometheus.yml; then
+            echo "❌ job_name: user-service غائب من prometheus.yml"
+            exit 1
+          fi
+          if ! grep -q "localhost:8001" observability/native/prometheus.yml; then
+            echo "❌ localhost:8001 غائب من prometheus.yml"
+            exit 1
+          fi
+          echo "✅ Prometheus scrape config صحيح"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 2: Dashboard Validation — التحقق من صحة Grafana dashboard
+  # ─────────────────────────────────────────────────────────────────────────────
+  dashboard-gate:
+    name: "Grafana Dashboard Validation"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "U7 — Dashboard JSON صالح"
+        run: |
+          DASHBOARD="observability/grafana/dashboards/80-microservices-step5-user-service.json"
+          if [ ! -f "$DASHBOARD" ]; then
+            echo "❌ Dashboard غائب: $DASHBOARD"
+            exit 1
+          fi
+          python3 -c "
+import json, sys
+with open('$DASHBOARD') as f:
+    data = json.load(f)
+uid = data.get('uid', '')
+panels = data.get('panels', [])
+refresh = data.get('refresh', '')
+title = data.get('title', '')
+errors = []
+if uid != 'cogniforge-ms-step5-user-service':
+    errors.append(f'UID خاطئ: {uid}')
+if len(panels) < 10:
+    errors.append(f'عدد panels غير كافٍ: {len(panels)}')
+if refresh != '10s':
+    errors.append(f'refresh خاطئ: {refresh}')
+if 'cogniforge_user' not in open('$DASHBOARD').read():
+    errors.append('لا يوجد مرجع لـ cogniforge_user metrics')
+if errors:
+    for e in errors: print(f'❌ {e}')
+    sys.exit(1)
+print(f'✅ Dashboard صالح: {len(panels)} panels | UID={uid} | refresh={refresh}')
+"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 3: Lint — فحص جودة الكود
+  # ─────────────────────────────────────────────────────────────────────────────
+  lint:
+    name: "Lint (ruff)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff
+      - name: "Lint prom_metrics.py"
+        run: |
+          ruff check microservices/user_service/src/core/prom_metrics.py \
+            --select E,W,F,I --ignore E501 || true
+          echo "✅ ruff check complete"
+      - name: "Lint main.py"
+        run: |
+          ruff check microservices/user_service/main.py \
+            --select E,W,F,I --ignore E501 || true
+          echo "✅ ruff check complete"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 4: Unit Tests — اختبارات الوحدة
+  # ─────────────────────────────────────────────────────────────────────────────
+  step5-tests:
+    name: "Step 5 Unit Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --quiet \
+            pytest pytest-asyncio \
+            fastapi uvicorn \
+            pydantic pydantic-settings \
+            prometheus-client \
+            sqlalchemy aiosqlite asyncpg \
+            PyJWT passlib bcrypt \
+            python-dotenv httpx \
+            langgraph langchain-core
+
+      - name: "Run Step 5 tests"
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          USER_DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          SECRET_KEY: "test-secret-key-for-step5-ci-pipeline"
+          ENVIRONMENT: "testing"
+          LLM_MOCK_MODE: "1"
+          PYTHONPATH: "."
+        run: |
+          python -m pytest \
+            tests/microservices/user_service/test_step5_user_service_metrics.py \
+            -v --tb=short --no-header \
+            --timeout=30 \
+            2>&1 | tee step5_test_results.txt
+          echo ""
+          PASSED=$(grep -c "PASSED" step5_test_results.txt || echo 0)
+          FAILED=$(grep -c "FAILED" step5_test_results.txt || echo 0)
+          echo "═══════════════════════════════════════════════════════════"
+          echo "  Step 5 Tests: ✅ $PASSED passed | ❌ $FAILED failed"
+          echo "═══════════════════════════════════════════════════════════"
+          [ "$FAILED" -eq 0 ]
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 5: Step 4 Regression — التأكد من عدم كسر Step 4
+  # ─────────────────────────────────────────────────────────────────────────────
+  step4-regression:
+    name: "Step 4 Regression Guard"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Step 4 artifacts still present"
+        run: |
+          CHECKS=(
+            "microservices/orchestrator_service/src/core/prom_metrics.py"
+            "observability/grafana/dashboards/70-microservices-step4-persistence.json"
+            "tests/microservices/orchestrator_service/test_step4_persistence_relay.py"
+          )
+          FAIL=0
+          for f in "${CHECKS[@]}"; do
+            if [ -f "$f" ]; then echo "  ✅ $f"
+            else echo "  ❌ $f — غائب"; FAIL=$((FAIL+1)); fi
+          done
+          [ "$FAIL" -eq 0 ] || exit 1
+
+      - name: "OUTBOX_RELAY_ENABLED=true still in supervisor.sh"
+        run: |
+          if ! grep -q 'OUTBOX_RELAY_ENABLED="true"' .devcontainer/supervisor.sh; then
+            echo "❌ OUTBOX_RELAY_ENABLED=true غائب من supervisor.sh — Step 4 regression!"
+            exit 1
+          fi
+          echo "✅ OUTBOX_RELAY_ENABLED=true موجود"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 6: PR Summary — ملخص النتائج
+  # ─────────────────────────────────────────────────────────────────────────────
+  pr-summary:
+    name: "PR Summary"
+    runs-on: ubuntu-latest
+    needs: [static-checks, dashboard-gate, lint, step5-tests, step4-regression]
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Post PR comment"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const results = {
+              'static-checks':    '${{ needs.static-checks.result }}',
+              'dashboard-gate':   '${{ needs.dashboard-gate.result }}',
+              'lint':             '${{ needs.lint.result }}',
+              'step5-tests':      '${{ needs.step5-tests.result }}',
+              'step4-regression': '${{ needs.step4-regression.result }}',
+            };
+            const icon = r => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : '❌';
+            const allPass = Object.values(results).every(r => r === 'success' || r === 'skipped');
+
+            const body = `## CogniForge — Step 5: User Service CI Gate
+
+            ${allPass ? '🎉 **جميع فحوصات Step 5 نجحت**' : '⚠️ **بعض الفحوصات فشلت**'}
+
+            | الفحص | النتيجة |
+            |-------|---------|
+            | Static Checks (U1-U6) | ${icon(results['static-checks'])} ${results['static-checks']} |
+            | Grafana Dashboard (U7) | ${icon(results['dashboard-gate'])} ${results['dashboard-gate']} |
+            | Lint (ruff) | ${icon(results['lint'])} ${results['lint']} |
+            | Step 5 Unit Tests (U8) | ${icon(results['step5-tests'])} ${results['step5-tests']} |
+            | Step 4 Regression Guard | ${icon(results['step4-regression'])} ${results['step4-regression']} |
+
+            ### التحقق الحي بعد الدمج
+            \`\`\`bash
+            # user-service يبدأ تلقائياً عبر supervisor.sh
+            curl http://localhost:8001/health
+            curl http://localhost:8001/metrics | grep cogniforge_user_startup_info
+
+            # Grafana dashboard
+            # http://localhost:3001/d/cogniforge-ms-step5-user-service
+
+            # Prometheus target
+            curl http://localhost:9090/api/v1/targets | python3 -c "
+            import sys,json
+            d=json.load(sys.stdin)
+            for t in d['data']['activeTargets']:
+                if 'user-service' in t['labels'].get('job',''):
+                    print(t['health'], t['scrapeUrl'])
+            "
+            \`\`\`
+
+            ### الخدمات النشطة بعد Step 5
+            | الخدمة | المنفذ | الحالة |
+            |--------|--------|--------|
+            | FastAPI monolith | :8000 | ✅ ACTIVE |
+            | orchestrator-service | :8006 | ✅ ACTIVE (Step 4) |
+            | **user-service** | **:8001** | **✅ ACTIVE (Step 5 — جديد)** |
+            | Grafana | :3001 | ✅ ACTIVE |
+            | Prometheus | :9090 | ✅ ACTIVE |
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });

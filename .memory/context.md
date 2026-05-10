@@ -1,7 +1,7 @@
 # CogniForge — Project Context
-> Last updated: **2026-05-10** | Branch: `feat/microservices-step2-stategraph-routing`.
+> Last updated: **2026-05-10** | Branch: `feat/microservices-step5-user-service`.
 > **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-10).
-> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` (NEW).
+> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` + `microservices-step3-live` + `microservices-step4` + `microservices-step5-user-service` (NEW).
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)
@@ -24,8 +24,8 @@
 | Cache | InMemoryCache (Redis process runs but unused — no `REDIS_URL`) | 6379 | ACTIVE (in-memory only) |
 | Tracing | UnifiedObservabilityService (in-process) | — | ACTIVE |
 | OTEL export | otel_setup.py | — | NO-OP — `OTEL_EXPORTER_OTLP_ENDPOINT=http` is invalid |
-| Grafana | native binary | **3001** | ACTIVE — 6 dashboards (NEW: 50-microservices-transition.json) |
-| Prometheus | native binary | **9090** | ACTIVE — 11 scrape jobs (NEW: orchestrator-service, research-agent, user-service, planning-agent) |
+| Grafana | native binary | **3001** | ACTIVE — 8 dashboards (Steps 2–5: 50/60/70/80-microservices-*.json) |
+| Prometheus | native binary | **9090** | ACTIVE — 5 scrape targets (fastapi, grafana, prometheus, orchestrator-service:8006, user-service:8001) |
 | Routing Policy | ChatRoutingPolicy | — | ACTIVE — default: state_graph → /api/chat/messages (Step 2) |
 
 ## Database state (live 2026-05-09)

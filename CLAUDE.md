@@ -53,6 +53,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Known fix applied 2026-05-09 (ISS-037):** commit `3fd78247` introduced `local stale_pid` at top-level scope in `supervisor.sh` (outside any function). bash rejects `local` outside functions → supervisor crashes at Step 4 with `local: can only be used in a function` → uvicorn never starts → all ports dead. Fixed by removing the `local` keyword (`stale_pid=...` instead of `local stale_pid`). Also added `.devcontainer/secrets.env` fallback so supervisor injects DB credentials even when Codespaces Secrets are not configured.
 
+**Known fix applied 2026-05-10 (ISS-038):** `detect_exercise_retrieval` in `app/services/capabilities/exercise_retrieval.py` used a flat keyword list (`"تمرين"`, `"احتمالات"`, `"درس"`, …) with no context awareness. Any question containing these words — regardless of intent — triggered `_build_local_retrieval_response`, which always returned the single file in `knowledge_base/` (the probability BAC exercise). A student asking "اشرح الجزء أ من هذا التمرين" received a probability exercise instead of an explanation. Fixed by replacing the flat keyword list with a two-phase intent classifier: (1) explanation/help intent patterns cancel retrieval even when "تمرين" is present; (2) only explicit retrieval patterns (BAC, numbered exercises, year+exercise combos) trigger retrieval. 25 regression tests added to `tests/contracts/test_exercise_retrieval_contracts.py`.
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
@@ -195,6 +197,26 @@ user_id = result.scalar()
 # settings auto-converts PgBouncer port 6543 → 5432
 # Don't override this behavior in database.py
 ```
+
+### NEVER use flat keyword matching for exercise retrieval intent detection
+
+```python
+# ❌ Wrong — ISS-038: triggers retrieval for ANY question containing "تمرين"
+# regardless of context. "اشرح الجزء أ من هذا التمرين" → returns probability exercise.
+retrieval_hints = ("تمرين", "تمارين", "درس", "احتمالات", "بكالوريا", ...)
+recognized = any(hint in normalized for hint in retrieval_hints)
+
+# ✅ Correct — two-phase intent classifier in exercise_retrieval.py:
+# Phase 1: explanation/help intent → cancel retrieval (highest priority)
+# Phase 2: explicit retrieval patterns (BAC, numbered, year+exercise) → trigger
+# Default: no retrieval → fall through to LangGraph
+from app.services.capabilities.exercise_retrieval import detect_exercise_retrieval, ExerciseRetrievalRequest
+decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+# decision.recognized is True ONLY for explicit retrieval requests
+# decision.reason explains why: "explanation_intent_detected" | "retrieval_intent_detected" | "no_clear_retrieval_intent"
+```
+
+**Rule**: When adding new retrieval trigger keywords, always add corresponding explanation-intent negation patterns. The explanation-intent list takes priority. When in doubt, do NOT trigger retrieval — LangGraph handles ambiguous questions better than a static knowledge base lookup.
 
 ---
 

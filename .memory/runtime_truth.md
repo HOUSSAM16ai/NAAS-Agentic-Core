@@ -1,5 +1,5 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-09** | Branch: `fix/codespaces-port-3000-allowed-origins`
+> Last updated: **2026-05-10** | Branch: `fix/exercise-retrieval-context-blindness`
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
 
 ## Golden rule
@@ -188,3 +188,4 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 15. **`allowedDevOrigins` must include all hosting environments.** Next.js 15+ rejects dev-server requests from unlisted origins. Always include `*.app.github.dev` (Codespaces), `*.replit.dev` (Replit), and `*.gitpod.io` (Gitpod/Ona) in `frontend/next.config.js`.
 16. **`local` is illegal outside bash functions.** Using `local var` in top-level script scope (even inside `if/else`) causes bash to abort with `local: can only be used in a function`. In `supervisor.sh`, any variable at top-level must use plain assignment (`var=value`). This was the root cause of ISS-037 (commit `3fd78247`) — all ports dead after merge.
 17. **`.devcontainer/secrets.env` is the Codespaces fallback.** When Codespaces Secrets are not configured, `supervisor.sh` reads `.devcontainer/secrets.env` (git-ignored) before falling back to SQLite. Copy `.devcontainer/secrets.env.example` and fill in real values. Never commit `secrets.env`.
+18. **Exercise retrieval requires intent classification, not keyword matching (ISS-038).** `detect_exercise_retrieval()` must use a two-phase classifier: (1) explanation-intent patterns cancel retrieval at highest priority; (2) only explicit retrieval patterns trigger it. A flat keyword list on "تمرين"/"احتمالات" causes context blindness — every explanation request returns the same static knowledge-base file. When in doubt, do NOT trigger retrieval; LangGraph handles ambiguous questions better. The `knowledge_base/` directory currently contains exactly one file — any retrieval trigger without explicit context returns that file unconditionally.

@@ -1,5 +1,5 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-10** | Branch: `feat/microservices-step6-planning-agent`
+> Last updated: **2026-05-10** | Branch: `feat/microservices-step7-research-agent`
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
 
 ## Golden rule
@@ -31,8 +31,9 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 | **orchestrator-service** | **8006** | **ACTIVE (degraded startup — non-fatal)** | Step 4. uvicorn process. `OUTBOX_RELAY_ENABLED=true`. `/metrics` → 11 `cogniforge_outbox_*`+`cogniforge_stategraph_*` metrics. `graph_ready:true` confirmed live. `startup_state:degraded` due to PgBouncer prepared statement conflict — non-fatal. Requires `postgresql+asyncpg://` URL (ISS-038-B). |
 | **user-service** | **8001** | **ACTIVE** | Step 5. uvicorn process. `/metrics` → 11 `cogniforge_user_*` metrics. Auto-starts via supervisor.sh when `DATABASE_URL` set. |
 | **planning-agent** | **8002** | **ACTIVE** | Step 6. uvicorn process. `/metrics` → 11 `cogniforge_planning_*` metrics. DSPy+LangGraph (fallback when no OPENROUTER_API_KEY). Requires `postgresql+asyncpg://` URL (ISS-038-B). Auto-starts via supervisor.sh when `DATABASE_URL` set. |
-| **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 9 dashboards (Steps 2–6). Prometheus datasource UP. |
-| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → Healthy`. 6 scrape targets: fastapi, grafana, prometheus, orchestrator-service(:8006), user-service(:8001), planning-agent(:8002). |
+| **research-agent** | **8007** | **ACTIVE** | Step 7. uvicorn process. `/metrics` → 11 `cogniforge_research_*` metrics. Tavily web search ACTIVE when `TAVILY_API_KEY` set. ISS-039: lazy `_get_super_search()` singleton prevents import-time credential errors. Auto-starts via supervisor.sh when `DATABASE_URL` set. Live verified: `/health → {"step":"7","tavily_available":"true"}`. |
+| **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 10 dashboards (Steps 2–7). Prometheus datasource UP. |
+| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → Healthy`. 7 scrape targets: fastapi, grafana, prometheus, orchestrator-service(:8006), user-service(:8001), planning-agent(:8002), research-agent(:8007). |
 | **Redis** | **6379** | **ACTIVE (process only)** | ping OK. REDIS_URL not set → app uses InMemoryCache. |
 | **PostgreSQL** | **6543** | **ACTIVE** | PostgreSQL 17.6 Supabase PgBouncer. database:ok confirmed. |
 | **OpenRouter** | external | **ACTIVE** | Primary: nvidia/nemotron-3-super-120b-a12b:free. Live graph call confirmed. |

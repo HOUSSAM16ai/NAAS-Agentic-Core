@@ -1,5 +1,112 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-10 | Branch: `feat/microservices-step6-planning-agent`
+> Last updated: 2026-05-10 | Branch: `feat/microservices-step7-research-agent`
+
+---
+
+## ✅ Session: 2026-05-10 — Microservices Step 7: Research Agent Live Activation (الخطوة الانتقالية السابعة)
+
+**Branch**: `feat/microservices-step7-research-agent`
+**Mode**: Live code changes — Codespaces native (no Docker). uvicorn processes only.
+**Verified**: 68 tests pass | ruff clean | JSON valid | YAML valid | Live health ✅ | Live metrics ✅
+
+### الخطوة الانتقالية المختارة (D-036 — تنفيذ)
+تفعيل `research-agent` كـ uvicorn process مستقل على `:8007` مع `/metrics` endpoint حقيقي بصيغة Prometheus. Tavily web search حي عند توفر `TAVILY_API_KEY`. هذا يُحوِّل الخدمة الرابعة من DORMANT إلى ACTIVE في Codespaces، ويُضيف 11 مقياساً جديداً قابلاً للقياس الحي في Grafana.
+
+### إصلاح مكتشف حياً (ISS-039 — SuperSearchOrchestrator lazy singleton)
+`SuperSearchOrchestrator()` كان يُنشأ عند import وقت التحميل → `OpenAIError: Missing credentials` عند الإقلاع بدون `OPENAI_API_KEY`. الإصلاح: تحويل إلى lazy singleton (`_get_super_search()`) — يُنشأ فقط عند أول استدعاء `deep_research`.
+
+### التغييرات المُنجزة
+
+#### 1. `microservices/research_agent/requirements.txt`
+- أضيف `prometheus-client>=0.20.0`
+- أضيف `tavily-python>=0.3.0`
+
+#### 2. `microservices/research_agent/prom_metrics.py` — وحدة جديدة
+- `CollectorRegistry` مستقل (لا يشارك REGISTRY الافتراضي)
+- 11 مقياساً: `cogniforge_research_requests_total`, `cogniforge_research_request_duration_seconds`, `cogniforge_research_active_connections`, `cogniforge_research_searches_total`, `cogniforge_research_search_duration_seconds`, `cogniforge_research_tavily_calls_total`, `cogniforge_research_tavily_errors_total`, `cogniforge_research_deep_research_total`, `cogniforge_research_db_operations_total`, `cogniforge_research_db_duration_seconds`, `cogniforge_research_startup_info{step="7",tavily_available=...}`
+- استيراد دفاعي (try/except ImportError) — stub classes عند غياب prometheus_client
+- دوال عامة: `export_prometheus_text()`, `set_startup_info()`, `record_search()`, `record_tavily_call()`, `record_tavily_error()`, `record_deep_research()`, `record_http_request()`, `record_db_operation()`, `set_active_connections()`, `get_request_timer()`, `elapsed_since()`
+
+#### 3. `microservices/research_agent/main.py`
+- استيراد `prom_metrics`
+- `/metrics` endpoint جديد → `export_prometheus_text()` → Prometheus text format
+- `set_startup_info(version, environment, db_backend, tavily_available)` في lifespan
+- `_TAVILY_READY` flag — يكتشف توفر TAVILY_API_KEY + tavily package
+- lazy singleton `_get_super_search()` — يحل ISS-039
+- `record_search()` + `record_deep_research()` + `record_tavily_call/error()` في `/execute`
+
+#### 4. `.devcontainer/supervisor.sh`
+- `launch_research_agent()` — STEP 4G جديد
+- يُشغِّل uvicorn على `:8007` تلقائياً عند توفر `DATABASE_URL`
+- `TAVILY_API_KEY` محقون — Tavily يعمل عند توفر المفتاح
+- asyncpg URL conversion (ISS-038-B pattern)
+- idempotent: يتحقق من الـ process قبل الإطلاق
+
+#### 5. `.ona/automations.yaml`
+- service `research-agent`: uvicorn start/ready/stop على :8007
+- `ready` command يتحقق من `/health` و `/metrics | grep cogniforge_research_startup`
+- task `verify-step7-research-agent`: تقرير شامل (health + metrics + Tavily + Prometheus + Grafana)
+- task `restart-research-agent`: إعادة تشغيل يدوي
+- task `run-step7-tests`: يُشغِّل 68 اختبار Step 7
+- تحديث header التعليق ليعكس Step 7
+
+#### 6. `observability/native/prometheus.yml`
+- scrape target جديد: `job_name: research-agent` → `localhost:8007/metrics`
+- label `step: "7"` + `service: research-agent` + `tier: microservice`
+
+#### 7. `observability/grafana/dashboards/100-microservices-step7-research-agent.json` — Dashboard جديد
+- 20+ panels | UID: `cogniforge-ms-step7-research-agent` | refresh: 10s
+- Row 1: Startup Info + Tavily Status + HTTP Rate + P95 Latency + Total Searches + Active Connections
+- Row 2: HTTP Requests by Endpoint + HTTP Latency P50/P95/P99
+- Row 3: Search Rate by Type + Search Duration P50/P95
+- Row 4: Tavily API Calls (Success vs Error) + Tavily Errors by Type + Deep Research
+- Row 5: DB Operations Rate + DB Duration P50/P95
+- Row 6: Microservices Health Matrix (all steps 4-7) + Prometheus Scrape Duration
+- Row 7: Step 7 Activation Guide (markdown)
+
+#### 8. `.github/workflows/microservices-step7-research-agent.yml` — CI gate جديد
+- 7 jobs: `static-checks` / `dashboard-gate` / `lint` / `step7-tests` / `step6-regression` / `yaml-gate` / `pr-summary`
+- يتحقق من: prometheus-client + tavily-python في requirements، prom_metrics.py موجود، /metrics في main.py، supervisor.sh، automations.yaml، prometheus.yml، dashboard صالح
+- PR comment تلخيصي مع جدول النتائج وأوامر التحقق الحي
+
+#### 9. `tests/microservices/research_agent/test_step7_research_agent_metrics.py` — 68 اختبار
+- R1: prometheus-client + tavily-python في requirements.txt (3 اختبارات)
+- R2: prom_metrics.py موجود ويحتوي المقاييس الصحيحة (19 اختبارات)
+- R3: /metrics endpoint في main.py (6 اختبارات)
+- R4: supervisor.sh يُشغِّل research-agent (5 اختبارات)
+- R5: automations.yaml يحتوي research-agent (7 اختبارات)
+- R6: Prometheus scrape config صحيح (4 اختبارات)
+- R7: Grafana dashboard صالح (10 اختبارات)
+- R8: unit tests للـ prom_metrics functions (14 اختبارات)
+
+### التحقق الحي (مُنجَز)
+```bash
+curl http://localhost:8007/health
+# → {"status":"healthy","service":"research-agent","step":"7","tavily_available":"true"}
+
+curl http://localhost:8007/metrics | grep cogniforge_research_startup
+# → cogniforge_research_startup_info{db_backend="sqlite",environment="development",step="7",tavily_available="true",version="1.0.0"} 1.0
+
+# Grafana dashboard:
+# http://localhost:3001/d/cogniforge-ms-step7-research-agent
+```
+
+### الخدمات النشطة بعد Step 7
+| الخدمة | المنفذ | الحالة |
+|--------|--------|--------|
+| FastAPI monolith | :8000 | ✅ ACTIVE |
+| orchestrator-service | :8006 | ✅ ACTIVE (Step 4) |
+| user-service | :8001 | ✅ ACTIVE (Step 5) |
+| planning-agent | :8002 | ✅ ACTIVE (Step 6) |
+| **research-agent** | **:8007** | **✅ ACTIVE (Step 7 — جديد)** |
+| Grafana | :3001 | ✅ ACTIVE (10 dashboards) |
+| Prometheus | :9090 | ✅ ACTIVE (7 scrape targets) |
+
+### الخطوة التالية (Step 8)
+- تفعيل `reasoning-agent` على `:8008` (uvicorn process)
+- أو: ترقية LangGraph checkpointer من MemorySaver إلى PostgresCheckpointer (ISS-020)
+- أو: تفعيل Redis الحقيقي (`CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0`)
+- أو: ربط research-agent بـ orchestrator-service عبر HTTP (cross-service call)
 
 ---
 

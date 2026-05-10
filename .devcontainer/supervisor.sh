@@ -727,6 +727,64 @@ launch_planning_agent >> "$APP_ROOT/.observability/planning_agent.log" 2>&1 &
 lifecycle_info "✅ Planning Agent initialization offloaded to background"
 
 # ==============================================================================
+# STEP 4G: Research Agent Launch (uvicorn process — no Docker required)
+# ==============================================================================
+# يُشغِّل research-agent كـ uvicorn process مستقل على المنفذ 8007.
+# Step 7: /metrics endpoint حقيقي + Tavily web search حي عند توفر TAVILY_API_KEY.
+# يبدأ تلقائياً عند توفر DATABASE_URL. Tavily اختياري — الخدمة تعمل بدونه.
+# ==============================================================================
+
+launch_research_agent() {
+    local RESEARCH_PORT="8007"
+    local RESEARCH_HEALTH="http://localhost:${RESEARCH_PORT}/health"
+    local RESEARCH_LOG_DIR="$APP_ROOT/.observability"
+    local RESEARCH_LOG="$RESEARCH_LOG_DIR/research_agent.log"
+
+    mkdir -p "$RESEARCH_LOG_DIR"
+
+    # ── التحقق من توفر DATABASE_URL ──────────────────────────────────────────
+    if [ -z "${DATABASE_URL:-}" ]; then
+        lifecycle_warn "Research Agent: DATABASE_URL not set — skipping launch"
+        return 0
+    fi
+
+    # ── idempotent: تجنب إطلاق نسخة ثانية ───────────────────────────────────
+    if pgrep -f "research_agent.main:app.*${RESEARCH_PORT}" > /dev/null 2>&1; then
+        lifecycle_info "Research Agent: already running on :${RESEARCH_PORT} — skipping"
+        return 0
+    fi
+
+    # ── تحويل DATABASE_URL إلى asyncpg (ISS-038-B) ───────────────────────────
+    local _raw_db="${RESEARCH_DATABASE_URL:-${DATABASE_URL:-}}"
+    local _async_db="${_raw_db/postgresql:\/\//postgresql+asyncpg://}"
+    _async_db=$(echo "$_async_db" | sed 's/[?&]sslmode=[^&]*//')
+
+    lifecycle_info "Research Agent: launching uvicorn on :${RESEARCH_PORT}..."
+
+    RESEARCH_DATABASE_URL="$_async_db" \
+    RESEARCH_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
+    ENVIRONMENT="${ENVIRONMENT:-development}" \
+    SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}" \
+    PYTHONPATH="$APP_ROOT" \
+    uvicorn microservices.research_agent.main:app \
+        --host 0.0.0.0 \
+        --port "$RESEARCH_PORT" \
+        --log-level info \
+        --no-access-log \
+        >> "$RESEARCH_LOG" 2>&1 &
+
+    local research_pid=$!
+    lifecycle_info "Research Agent: launched (PID=$research_pid) — health at $RESEARCH_HEALTH"
+    lifecycle_info "             Logs: $RESEARCH_LOG"
+    lifecycle_info "             Tavily: ${TAVILY_API_KEY:+✅ KEY SET}${TAVILY_API_KEY:-❌ no key — web search disabled}"
+}
+
+# تشغيل في الخلفية — لا يحجب الـ supervisor
+launch_research_agent >> "$APP_ROOT/.observability/research_agent.log" 2>&1 &
+lifecycle_info "✅ Research Agent initialization offloaded to background"
+
+# ==============================================================================
 # STEP 5: Health Check & Readiness (فحص الصحة والجاهزية)
 # ==============================================================================
 
@@ -795,6 +853,8 @@ lifecycle_info "   • Admin User: Seeded"
 lifecycle_info "   • Backend Server: port $APP_PORT (ready=$_app_ready)"
 lifecycle_info "   • Orchestrator Service: port 8006 (background — check .observability/orchestrator.log)"
 lifecycle_info "   • User Service:         port 8001 (background — check .observability/user_service.log)"
+lifecycle_info "   • Planning Agent:       port 8002 (background — check .observability/planning_agent.log)"
+lifecycle_info "   • Research Agent:       port 8007 (background — check .observability/research_agent.log)"
 lifecycle_info "   • Grafana: port 3001 (Mission Control)"
 lifecycle_info "   • Prometheus: port 9090"
 lifecycle_info ""

@@ -1,18 +1,19 @@
 # .ona/automations.yaml
 # ─────────────────────────────────────────────────────────────────────────────
-# CogniForge — Ona Automations (Step 6: Planning Agent + Docker Compose Stack)
+# CogniForge — Ona Automations (Step 7: Research Agent + Tavily Web Search)
 #
 # الواقع: Codespaces لا يدعم Docker-in-Docker في هذا الـ devcontainer.
 # الحل: الخدمات تعمل كـ uvicorn processes مباشرة (مثل Grafana/Prometheus).
 #
-# الجديد في Step 6:
-#   - planning-agent على :8002 — DSPy + LangGraph + /metrics (cogniforge_planning_*)
-#   - docker-compose-stack task — يُشغِّل docker-compose.step6.yml في بيئات Docker
-#   - verify-step6-planning-agent — تحقق حي شامل من planning-agent
-#   - run-step6-tests — 30+ اختبار للخطوة 6
+# الجديد في Step 7:
+#   - research-agent على :8007 — Tavily web search حي + /metrics (cogniforge_research_*)
+#   - verify-step7-research-agent — تحقق حي شامل من research-agent
+#   - restart-research-agent — إعادة تشغيل يدوي
+#   - run-step7-tests — 50+ اختبار للخطوة 7
 #
 # الخدمات النشطة (Codespaces — uvicorn processes):
-#   :8000 FastAPI monolith | :8001 user-service | :8002 planning-agent | :8006 orchestrator-service
+#   :8000 FastAPI monolith | :8001 user-service | :8002 planning-agent
+#   :8006 orchestrator-service | :8007 research-agent
 #   :3001 Grafana | :9090 Prometheus
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -122,6 +123,55 @@ services:
       stop: |
         pkill -f "uvicorn microservices.planning_agent" 2>/dev/null || true
         echo "✅ planning-agent stopped."
+
+  research-agent:
+    name: "Research Agent (Step 7 — Tavily Web Search + /metrics)"
+    description: |
+      يُشغِّل research-agent كـ uvicorn process مباشر على :8007.
+      Step 7: /metrics endpoint حقيقي (cogniforge_research_*). Tavily web search حي.
+      لا يتطلب Docker. يبدأ تلقائياً عبر supervisor.sh.
+      التحقق: curl http://localhost:8007/health
+               curl http://localhost:8007/metrics | grep cogniforge_research_startup
+    commands:
+      start: |
+        set -euo pipefail
+        RESEARCH_PORT="8007"
+        LOG_FILE="/app/.observability/research_agent.log"
+
+        pkill -f "uvicorn microservices.research_agent" 2>/dev/null || true
+        sleep 1
+        mkdir -p /app/.observability
+
+        echo "🚀 Starting research-agent (Step 7) on :${RESEARCH_PORT}..."
+        echo "   Tavily: ${TAVILY_API_KEY:+✅ KEY SET — web search ACTIVE}${TAVILY_API_KEY:-❌ no key — web search disabled}"
+        echo "   /metrics → Prometheus | cogniforge_research_*"
+
+        # تحويل URL إلى asyncpg — SQLAlchemy async يرفض psycopg2 المتزامن (ISS-038-B)
+        _raw_db="${RESEARCH_DATABASE_URL:-${DATABASE_URL:-}}"
+        _async_db="${_raw_db/postgresql:\/\//postgresql+asyncpg://}"
+        _async_db="${_async_db/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+        _async_db=$(echo "$_async_db" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
+
+        RESEARCH_DATABASE_URL="$_async_db" \
+        RESEARCH_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+        TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
+        ENVIRONMENT="${ENVIRONMENT:-development}" \
+        SECRET_KEY="${SECRET_KEY:-cogniforge-research-agent-dev-key}" \
+        PYTHONPATH="/app" \
+        python -m uvicorn microservices.research_agent.main:app \
+          --host 0.0.0.0 \
+          --port "$RESEARCH_PORT" \
+          --workers 1 \
+          --log-level info \
+          2>&1 | tee -a "$LOG_FILE"
+
+      ready: |
+        curl -sf http://localhost:8007/health &&
+        curl -sf http://localhost:8007/metrics | grep -q "cogniforge_research_startup"
+
+      stop: |
+        pkill -f "uvicorn microservices.research_agent" 2>/dev/null || true
+        echo "✅ research-agent stopped."
 
   user-service:
     name: "User Service (Step 5 — Prometheus /metrics)"
@@ -706,5 +756,144 @@ tasks:
         tests/microservices/planning_agent/test_step6_planning_agent_metrics.py \
         -v --tb=short --no-header -q 2>&1 | tail -60
       echo "✅ Step 6 tests complete."
+    triggeredBy:
+      - manual
+
+  # ── Step 7: Research Agent ────────────────────────────────────────────────
+
+  verify-step7-research-agent:
+    name: "Verify Step 7 — Research Agent Live Metrics"
+    description: |
+      يتحقق من أن research-agent يعمل على :8007 ويُصدِّر مقاييس Prometheus حقيقية.
+      يفحص: /health + /metrics + Tavily status + Prometheus scrape target + Grafana dashboard.
+    command: |
+      set -euo pipefail
+      echo "═══════════════════════════════════════════════════════════"
+      echo "  CogniForge — Step 7: Research Agent Live Verification"
+      echo "═══════════════════════════════════════════════════════════"
+      echo ""
+      PASS=0; FAIL=0
+
+      check() {
+        local label="$1"; local cmd="$2"
+        if eval "$cmd" >/dev/null 2>&1; then
+          echo "  ✅ $label"; PASS=$((PASS+1))
+        else
+          echo "  ❌ $label"; FAIL=$((FAIL+1))
+        fi
+      }
+
+      echo "▶ Health endpoint"
+      check "GET /health → 200" "curl -sf http://localhost:8007/health"
+      HEALTH=$(curl -sf http://localhost:8007/health 2>/dev/null || echo '{}')
+      echo "  Response: $HEALTH"
+      TAVILY_STATUS=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tavily_available','?'))" 2>/dev/null || echo "?")
+      echo "  Tavily available: $TAVILY_STATUS"
+      echo ""
+
+      echo "▶ Prometheus /metrics endpoint"
+      check "GET /metrics → 200" "curl -sf http://localhost:8007/metrics"
+      check "cogniforge_research_startup_info present" \
+        "curl -sf http://localhost:8007/metrics | grep -q cogniforge_research_startup"
+      check "cogniforge_research_requests_total present" \
+        "curl -sf http://localhost:8007/metrics | grep -q cogniforge_research_requests_total"
+      check "cogniforge_research_tavily_calls_total present" \
+        "curl -sf http://localhost:8007/metrics | grep -q cogniforge_research_tavily_calls_total"
+      check "cogniforge_research_searches_total present" \
+        "curl -sf http://localhost:8007/metrics | grep -q cogniforge_research_searches_total"
+      echo ""
+
+      echo "▶ Prometheus scrape target"
+      check "research-agent target UP in Prometheus" \
+        "curl -sf 'http://localhost:9090/api/v1/targets' | python3 -c \"import sys,json; d=json.load(sys.stdin); targets=[t for t in d.get('data',{}).get('activeTargets',[]) if 'research-agent' in t.get('labels',{}).get('job','')]; exit(0 if any(t.get('health')=='up' for t in targets) else 1)\""
+      echo ""
+
+      echo "▶ Grafana dashboard"
+      check "Dashboard cogniforge-ms-step7-research-agent accessible" \
+        "curl -sf 'http://localhost:3001/api/dashboards/uid/cogniforge-ms-step7-research-agent' -u admin:admin"
+      echo ""
+
+      echo "▶ Process check"
+      PID=$(pgrep -f "uvicorn microservices.research_agent" 2>/dev/null || echo "")
+      if [ -n "$PID" ]; then
+        echo "  ✅ research-agent process running (PID=$PID)"; PASS=$((PASS+1))
+      else
+        echo "  ❌ research-agent process NOT found"; FAIL=$((FAIL+1))
+      fi
+      echo ""
+
+      echo "▶ Metrics sample"
+      curl -sf http://localhost:8007/metrics 2>/dev/null | grep "^cogniforge_research" | head -15 || echo "  (metrics not available)"
+      echo ""
+
+      echo "═══════════════════════════════════════════════════════════"
+      STATUS=$( [ "$FAIL" -eq 0 ] && echo "✅ ALL PASS" || echo "⚠️  $FAIL FAILED" )
+      echo "  Results: ✅ $PASS passed | ❌ $FAIL failed | Status: $STATUS"
+      [ "$FAIL" -eq 0 ] && echo "  🎉 Step 7 RESEARCH-AGENT ACTIVE" || echo "  ⚠️  بعض المقاييس غائبة"
+      echo ""
+      echo "  Grafana: http://localhost:3001/d/cogniforge-ms-step7-research-agent"
+      echo "  Logs:    cat /app/.observability/research_agent.log"
+      echo "═══════════════════════════════════════════════════════════"
+      [ "$FAIL" -eq 0 ]
+    triggeredBy:
+      - manual
+
+  restart-research-agent:
+    name: "Restart Research Agent"
+    description: يوقف research-agent ويُعيد تشغيله يدوياً على :8007.
+    command: |
+      set -euo pipefail
+      echo "🔄 Restarting research-agent on :8007..."
+      pkill -f "uvicorn microservices.research_agent" 2>/dev/null || true
+      sleep 2
+
+      _raw_db="${RESEARCH_DATABASE_URL:-${DATABASE_URL:-}}"
+      _async_db="${_raw_db/postgresql:\/\//postgresql+asyncpg://}"
+      _async_db="${_async_db/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+      _async_db=$(echo "$_async_db" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
+
+      mkdir -p /app/.observability
+      RESEARCH_DATABASE_URL="$_async_db" \
+      TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
+      OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+      ENVIRONMENT="${ENVIRONMENT:-development}" \
+      SECRET_KEY="${SECRET_KEY:-cogniforge-research-agent-dev-key}" \
+      PYTHONPATH="/app" \
+      nohup python -m uvicorn microservices.research_agent.main:app \
+        --host 0.0.0.0 --port 8007 --workers 1 --log-level info \
+        >> /app/.observability/research_agent.log 2>&1 &
+
+      echo "⏳ Waiting for research-agent to be ready..."
+      for i in $(seq 1 20); do
+        if curl -sf http://localhost:8007/health >/dev/null 2>&1; then
+          echo "✅ research-agent is UP on :8007"
+          curl -sf http://localhost:8007/health
+          exit 0
+        fi
+        sleep 2
+      done
+      echo "❌ research-agent did not start within 40s — check logs:"
+      echo "   tail -50 /app/.observability/research_agent.log"
+      exit 1
+    triggeredBy:
+      - manual
+
+  run-step7-tests:
+    name: "Run Step 7 Research Agent Tests"
+    description: اختبارات الخطوة 7 — research-agent Prometheus metrics + Tavily + /metrics endpoint.
+    command: |
+      set -euo pipefail
+      export DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export RESEARCH_DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export TAVILY_API_KEY="${TAVILY_API_KEY:-dummy-tavily-key-for-tests}"
+      export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-dummy-key-for-tests}"
+      export SECRET_KEY="test-secret-key-for-step7-tests"
+      export ENVIRONMENT="testing"
+      export LLM_MOCK_MODE="1"
+      echo "🧪 Running Step 7 research-agent tests..."
+      python -m pytest \
+        tests/microservices/research_agent/test_step7_research_agent_metrics.py \
+        -v --tb=short --no-header -q 2>&1 | tail -80
+      echo "✅ Step 7 tests complete."
     triggeredBy:
       - manual

@@ -103,3 +103,24 @@ scrape_configs:
           service: planning-agent
           step: "6"
     honor_labels: true
+
+  # ── Step 7: research-agent (uvicorn process on :8007) ────────────────────
+  # Step 7: /metrics يُصدِّر prometheus_client text format حقيقي.
+  # المقاييس: cogniforge_research_requests_total + cogniforge_research_searches_total +
+  #           cogniforge_research_tavily_calls_total + cogniforge_research_tavily_errors_total +
+  #           cogniforge_research_deep_research_total + cogniforge_research_db_* +
+  #           cogniforge_research_startup_info{step="7",tavily_available=...}
+  # يبدأ تلقائياً عبر supervisor.sh عند توفر DATABASE_URL.
+  # Tavily web search حي عند توفر TAVILY_API_KEY — اختياري، الخدمة تعمل بدونه.
+  # DOWN حتى يُقلع الـ process — ليس خطأ في الـ devcontainer الافتراضي.
+  - job_name: research-agent
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ["localhost:8007"]
+        labels:
+          tier: microservice
+          service: research-agent
+          step: "7"
+    honor_labels: true

@@ -1,5 +1,5 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-10 | Branch: `feat/microservices-step4-persistence-relay`
+> Last updated: 2026-05-10 | Branch: `feat/microservices-step7-research-agent`
 > Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED / RUNTIME-ONLY / HISTORICAL]
 > **Capability runtime status (ACTIVE/PARTIAL/DORMANT/ZOMBIE) lives in `.memory/runtime_truth.md`.**
 > **Architectural fragility patterns (root causes, lessons) live in `.memory/fragility-patterns.md`.**
@@ -7,6 +7,13 @@
 ---
 
 ## 🔴 Critical — Resolved in this branch (2026-05-10)
+
+### ISS-039 · SuperSearchOrchestrator Import-Time Credential Error [CONFIRMED LIVE — RESOLVED]
+- **Status**: RESOLVED in `feat/microservices-step7-research-agent`
+- **Root cause**: `microservices/research_agent/main.py` instantiated `SuperSearchOrchestrator()` at module level (line 23). `SuperSearchOrchestrator.__init__` calls `ChatOpenAI(...)` which validates `OPENAI_API_KEY` at construction time. Without the key, `openai.OpenAIError: Missing credentials` was raised at import → uvicorn worker crashed → port 8007 never opened.
+- **Fix**: Converted to lazy singleton pattern. `_super_search_orchestrator: SuperSearchOrchestrator | None = None` at module level. `_get_super_search()` function initialises on first call. `/execute` endpoint calls `_get_super_search().execute(query)` instead of the module-level instance.
+- **Pattern**: Same as `global` singleton pattern used in `app/` (documented in coding rules §D). `# noqa: PLW0603` applied.
+- **Files**: `microservices/research_agent/main.py`
 
 ### ISS-038 · Exercise Retrieval Context Blindness — "تمرين" Always Returns Probability Exercise [CONFIRMED LIVE]
 - **Status**: RESOLVED in `fix/exercise-retrieval-context-blindness`

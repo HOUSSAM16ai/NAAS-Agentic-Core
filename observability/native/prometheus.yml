@@ -65,3 +65,21 @@ scrape_configs:
           service: orchestrator-service
           step: "4"
     honor_labels: true
+
+  # ── Step 5: user-service (uvicorn process on :8001) ──────────────────────
+  # Step 5: /metrics يُصدِّر prometheus_client text format حقيقي.
+  # المقاييس: cogniforge_user_requests_total + cogniforge_user_auth_* +
+  #           cogniforge_user_db_* + cogniforge_user_startup_info
+  # يبدأ تلقائياً عبر supervisor.sh عند توفر DATABASE_URL.
+  # DOWN حتى يُقلع الـ process — ليس خطأ في الـ devcontainer الافتراضي.
+  - job_name: user-service
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ["localhost:8001"]
+        labels:
+          tier: microservice
+          service: user-service
+          step: "5"
+    honor_labels: true

@@ -1,5 +1,108 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-10 | Branch: `feat/microservices-step4-persistence-relay`
+> Last updated: 2026-05-10 | Branch: `feat/microservices-step5-user-service`
+
+---
+
+## ✅ Session: 2026-05-10 — Microservices Step 5: User Service Live Activation (الخطوة الانتقالية الخامسة)
+
+**Branch**: `feat/microservices-step5-user-service`
+**Mode**: Live code changes — Codespaces native (no Docker). uvicorn processes only.
+**Verified**: 36 tests pass | ruff clean | JSON valid | YAML valid
+
+### الخطوة الانتقالية المختارة (D-034 — تنفيذ)
+تفعيل `user-service` كـ uvicorn process مستقل على `:8001` مع `/metrics` endpoint حقيقي بصيغة Prometheus. هذا يُحوِّل الخدمة الثانية من DORMANT إلى ACTIVE في Codespaces، ويُضيف 11 مقياساً جديداً قابلاً للقياس الحي في Grafana.
+
+### التغييرات المُنجزة
+
+#### 1. `microservices/user_service/requirements.txt`
+- أضيف `prometheus-client>=0.20.0`
+
+#### 2. `microservices/user_service/src/core/prom_metrics.py` — وحدة جديدة
+- `CollectorRegistry` مستقل (لا يشارك REGISTRY الافتراضي)
+- 11 مقياساً: `cogniforge_user_requests_total`, `cogniforge_user_request_duration_seconds`, `cogniforge_user_active_connections`, `cogniforge_user_auth_operations_total`, `cogniforge_user_auth_duration_seconds`, `cogniforge_user_registrations_total`, `cogniforge_user_logins_total`, `cogniforge_user_token_verifications_total`, `cogniforge_user_db_operations_total`, `cogniforge_user_db_duration_seconds`, `cogniforge_user_startup_info{step="5"}`
+- استيراد دفاعي (try/except ImportError) — stub classes عند غياب prometheus_client
+- دوال عامة: `export_prometheus_text()`, `record_http_request()`, `record_auth_operation()`, `record_db_operation()`, `set_startup_info()`, `set_active_connections()`, `get_request_timer()`, `elapsed_since()`
+
+#### 3. `microservices/user_service/main.py`
+- استيراد `prom_metrics` functions
+- `/metrics` endpoint جديد → `export_prometheus_text()` → Prometheus text format
+- `set_startup_info(version, environment, db_backend)` في lifespan Phase 3
+- `fastapi.responses.Response` لإرجاع Prometheus text مباشرة
+
+#### 4. `.devcontainer/supervisor.sh`
+- `launch_user_service()` — STEP 4E جديد
+- يُشغِّل uvicorn على `:8001` تلقائياً عند توفر `DATABASE_URL`
+- `USER_DATABASE_URL="${USER_DATABASE_URL:-${DATABASE_URL:-}}"` — يستخدم Supabase المشترك
+- idempotent: يتحقق من الـ process قبل الإطلاق
+- يُضيف سطراً في lifecycle_info النهائي
+
+#### 5. `.ona/automations.yaml`
+- service `user-service`: uvicorn start/ready/stop
+- `ready` command يتحقق من `/health` و `/metrics | grep cogniforge_user_startup_info`
+- task `verify-step5-user-service`: تقرير شامل (health + metrics + Prometheus + Grafana)
+- task `restart-user-service`: إعادة تشغيل يدوي
+- task `run-step5-tests`: يُشغِّل 36 اختبار Step 5
+
+#### 6. `observability/native/prometheus.yml`
+- scrape target جديد: `job_name: user-service` → `localhost:8001/metrics`
+- label `step: "5"` + `service: user-service` + `tier: microservice`
+
+#### 7. `observability/grafana/dashboards/80-microservices-step5-user-service.json` — Dashboard جديد
+- 17 panels | UID: `cogniforge-ms-step5-user-service` | refresh: 10s
+- Row 1: Startup Info + HTTP Rate + P95 Latency + Active Connections + Total Registrations
+- Row 2: HTTP Requests by Endpoint + HTTP Latency P50/P95/P99
+- Row 3: Auth Operations Rate + Auth Results + Auth Duration + Registrations/Logins Rate
+- Row 4: DB Operations Rate + DB Duration P50/P95
+- Row 5: Microservices Health Matrix + Prometheus Scrape Duration
+- Row 6: Step 5 Activation Guide (markdown)
+
+#### 8. `.github/workflows/microservices-step5-user-service.yml` — CI gate جديد
+- 6 jobs: `static-checks` / `dashboard-gate` / `lint` / `step5-tests` / `step4-regression` / `pr-summary`
+- يتحقق من: prometheus-client في requirements، prom_metrics.py موجود، /metrics في main.py، supervisor.sh، automations.yaml، prometheus.yml، dashboard صالح
+- PR comment تلخيصي مع جدول النتائج وأوامر التحقق الحي
+
+#### 9. `tests/microservices/user_service/test_step5_user_service_metrics.py` — 36 اختبار
+- U1: prometheus-client في requirements.txt (2 اختبارات)
+- U2: prom_metrics.py موجود ويحتوي المقاييس الصحيحة (11 اختبارات)
+- U3: /metrics endpoint في main.py (5 اختبارات)
+- U4: supervisor.sh يُشغِّل user-service (4 اختبارات)
+- U5: automations.yaml يحتوي user-service (5 اختبارات)
+- U6: Prometheus scrape config صحيح (3 اختبارات)
+- U7: Grafana dashboard صالح (7 اختبارات)
+- U8: unit tests للـ prom_metrics functions (9 اختبارات)
+
+### التحقق الحي
+```bash
+# بعد تشغيل user-service (تلقائي عبر supervisor.sh):
+curl http://localhost:8001/health
+# → {"service":"user-service","status":"ok","environment":"development"}
+
+curl http://localhost:8001/metrics | grep cogniforge_user
+# → cogniforge_user_startup_info{version="1.0.0",environment="development",db_backend="postgresql",step="5"} 1.0
+
+# Grafana dashboard:
+# http://localhost:3001/d/cogniforge-ms-step5-user-service
+```
+
+### الخدمات النشطة بعد Step 5
+| الخدمة | المنفذ | الحالة |
+|--------|--------|--------|
+| FastAPI monolith | :8000 | ✅ ACTIVE |
+| orchestrator-service | :8006 | ✅ ACTIVE (Step 4) |
+| **user-service** | **:8001** | **✅ ACTIVE (Step 5 — جديد)** |
+| Grafana | :3001 | ✅ ACTIVE |
+| Prometheus | :9090 | ✅ ACTIVE |
+
+### الخطوة التالية (Step 6)
+- تفعيل `planning-agent` على `:8002` (uvicorn process)
+- أو: تفعيل `research-agent` على `:8007`
+- أو: ترقية LangGraph checkpointer من MemorySaver إلى PostgresCheckpointer (ISS-020)
+
+---
+
+## ✅ Session: 2026-05-10 — Microservices Step 4: Persistence Relay + Prometheus Metrics (الخطوة الانتقالية الرابعة)
+
+**Branch**: `feat/microservices-step4-persistence-relay`
 
 ---
 

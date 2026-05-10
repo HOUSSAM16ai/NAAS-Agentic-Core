@@ -62,6 +62,52 @@ services:
         pkill -f "uvicorn microservices.orchestrator_service" 2>/dev/null || true
         echo "✅ orchestrator-service stopped."
 
+  user-service:
+    name: "User Service (Step 5 — Prometheus /metrics)"
+    description: |
+      يُشغِّل user-service كـ uvicorn process مباشر على :8001.
+      Step 5: /metrics endpoint حقيقي (cogniforge_user_*).
+      لا يتطلب Docker. يبدأ تلقائياً عبر supervisor.sh.
+      التحقق: curl http://localhost:8001/health
+               curl http://localhost:8001/metrics | grep cogniforge_user
+    commands:
+      start: |
+        set -euo pipefail
+        USER_PORT="8001"
+        LOG_FILE="/app/.observability/user_service.log"
+
+        if [ -z "${DATABASE_URL:-}" ] && [ -z "${USER_DATABASE_URL:-}" ]; then
+          echo "❌ DATABASE_URL غير مضبوط — أضفه في Gitpod Secrets"
+          exit 1
+        fi
+
+        pkill -f "uvicorn microservices.user_service" 2>/dev/null || true
+        sleep 1
+        mkdir -p /app/.observability
+
+        echo "🚀 Starting user-service (Step 5) on :${USER_PORT}..."
+        echo "   /metrics → Prometheus | cogniforge_user_*"
+
+        USER_DATABASE_URL="${USER_DATABASE_URL:-${DATABASE_URL:-}}" \
+        SECRET_KEY="${SECRET_KEY:-cogniforge-user-service-dev-key}" \
+        ENVIRONMENT="${ENVIRONMENT:-development}" \
+        USER_SERVICE_NAME="user-service" \
+        USER_SERVICE_VERSION="1.0.0" \
+        python -m uvicorn microservices.user_service.main:app \
+          --host 0.0.0.0 \
+          --port "$USER_PORT" \
+          --workers 1 \
+          --log-level info \
+          2>&1 | tee -a "$LOG_FILE"
+
+      ready: |
+        curl -sf http://localhost:8001/health && \
+        curl -sf http://localhost:8001/metrics | grep -q "cogniforge_user_startup_info"
+
+      stop: |
+        pkill -f "uvicorn microservices.user_service" 2>/dev/null || true
+        echo "✅ user-service stopped."
+
 tasks:
 
   health-probe:
@@ -89,14 +135,7 @@ tasks:
       echo "  PID: $(pgrep -f 'uvicorn microservices.orchestrator_service' 2>/dev/null || echo 'not found')"
       echo ""
       echo "▶ Prometheus targets"
-      curl -sf "http://localhost:9090/api/v1/targets" 2>/dev/null | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-for t in d.get('data',{}).get('activeTargets',[]):
-    job=t.get('labels',{}).get('job','?')
-    h=t.get('health','?')
-    print(f'  {\"✅\" if h==\"up\" else \"❌\"} [{job}] {h}')
-" 2>/dev/null || echo "  (Prometheus غير متاح)"
+      curl -sf "http://localhost:9090/api/v1/targets" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); [print('  UP ' + t.get('labels',{}).get('job','?') if t.get('health')=='up' else '  DOWN ' + t.get('labels',{}).get('job','?')) for t in d.get('data',{}).get('activeTargets',[])]" 2>/dev/null || echo "  (Prometheus غير متاح)"
       echo ""
       echo "═══════════════════════════════════════════════════════════"
       [ "$STATUS" = "ok" ] || [ "$STATUS" = "degraded" ] && echo "  ✅ Step 3 ACTIVE" || echo "  ⚠️  Status: $STATUS"
@@ -236,25 +275,12 @@ for t in d.get('data',{}).get('activeTargets',[]):
 
       echo ""
       echo "▶ OUTBOX_RELAY status:"
-      RELAY=$(echo "$HEALTH" | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-print('startup_state:', d.get('startup_state','?'))
-print('graph_ready:', d.get('graph_ready',False))
-" 2>/dev/null || echo "parse error")
+      RELAY=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); print('startup_state:', d.get('startup_state','?')); print('graph_ready:', d.get('graph_ready',False))" 2>/dev/null || echo "parse error")
       echo "  $RELAY"
 
       echo ""
       echo "▶ Prometheus scrape targets:"
-      curl -sf "http://localhost:9090/api/v1/targets" 2>/dev/null | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-for t in d.get('data',{}).get('activeTargets',[]):
-    job=t.get('labels',{}).get('job','?')
-    h=t.get('health','?')
-    url=t.get('scrapeUrl','?')
-    print(f'  {\"✅\" if h==\"up\" else \"❌\"} [{job}] {h} — {url}')
-" 2>/dev/null || echo "  (Prometheus غير متاح)"
+      curl -sf "http://localhost:9090/api/v1/targets" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); [print(('  UP ' if t.get('health')=='up' else '  DOWN ') + t.get('labels',{}).get('job','?') + ' — ' + t.get('scrapeUrl','?')) for t in d.get('data',{}).get('activeTargets',[])]" 2>/dev/null || echo "  (Prometheus غير متاح)"
 
       echo ""
       echo "▶ Grafana dashboard:"
@@ -287,5 +313,115 @@ for t in d.get('data',{}).get('activeTargets',[]):
         tests/microservices/orchestrator_service/test_outbox_relay_control_plane.py \
         -v --tb=short --no-header -q 2>&1 | tail -50
       echo "✅ Step 4 tests complete."
+    triggeredBy:
+      - manual
+
+  verify-step5-user-service:
+    name: "Verify Step 5 — User Service Live Metrics"
+    description: |
+      يتحقق من أن user-service يعمل على :8001 ويُصدِّر مقاييس Prometheus حقيقية.
+      يفحص: /health + /metrics + Prometheus scrape target + Grafana dashboard.
+    command: |
+      set -euo pipefail
+      URL="http://localhost:8001"
+      echo "═══════════════════════════════════════════════════════════"
+      echo "  CogniForge — Step 5: User Service Verification"
+      echo "═══════════════════════════════════════════════════════════"
+      echo ""
+
+      echo "▶ GET ${URL}/health"
+      HEALTH=$(curl -sf "${URL}/health" 2>/dev/null) || {
+        echo "❌ user-service غير متاح على :8001"
+        echo "   راجع: cat /app/.observability/user_service.log"
+        echo "   أو شغّل: gitpod automations service start user-service"
+        exit 1
+      }
+      echo "$HEALTH" | python3 -m json.tool
+      STATUS=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','?'))")
+      echo ""
+
+      echo "▶ GET ${URL}/metrics (Prometheus text format)"
+      METRICS=$(curl -sf "${URL}/metrics" 2>/dev/null) || {
+        echo "❌ /metrics endpoint غير متاح"
+        exit 1
+      }
+
+      PASS=0; FAIL=0
+      check_metric() {
+        if echo "$METRICS" | grep -q "$1"; then
+          echo "  ✅ $1"; PASS=$((PASS+1))
+        else
+          echo "  ❌ $1 — غائب"; FAIL=$((FAIL+1))
+        fi
+      }
+
+      echo ""
+      echo "▶ Required metrics:"
+      check_metric "cogniforge_user_startup_info"
+      check_metric "cogniforge_user_requests_total"
+      check_metric "cogniforge_user_request_duration_seconds"
+      check_metric "cogniforge_user_auth_operations_total"
+      check_metric "cogniforge_user_registrations_total"
+      check_metric "cogniforge_user_logins_total"
+
+      echo ""
+      echo "▶ Prometheus scrape targets:"
+      curl -sf "http://localhost:9090/api/v1/targets" 2>/dev/null | \
+        python3 -c "import sys,json; [print(f'  {chr(9989) if t["health"]=="up" else chr(10060)} [{t["labels"].get("job","?")}] {t["health"]}') for t in json.load(sys.stdin)["data"]["activeTargets"]]" \
+        2>/dev/null || echo "  (Prometheus غير متاح)"
+
+      echo ""
+      echo "▶ Grafana dashboard:"
+      echo "  http://localhost:3001/d/cogniforge-ms-step5-user-service"
+      echo ""
+      echo "▶ Process check:"
+      PID=$(pgrep -f 'uvicorn microservices.user_service' 2>/dev/null || echo 'not found')
+      echo "  user-service PID: $PID"
+      echo ""
+      echo "═══════════════════════════════════════════════════════════"
+      echo "  Results: ✅ $PASS passed | ❌ $FAIL failed | Status: $STATUS"
+      [ "$FAIL" -eq 0 ] && echo "  🎉 Step 5 USER-SERVICE ACTIVE" || echo "  ⚠️  بعض المقاييس غائبة"
+      echo "═══════════════════════════════════════════════════════════"
+      [ "$FAIL" -eq 0 ]
+    triggeredBy:
+      - manual
+
+  restart-user-service:
+    name: "Restart User Service"
+    description: يوقف user-service ويُعيد تشغيله يدوياً.
+    command: |
+      set -euo pipefail
+      echo "🔄 Restarting user-service..."
+      pkill -f "uvicorn microservices.user_service" 2>/dev/null || true
+      sleep 2
+      USER_DATABASE_URL="${USER_DATABASE_URL:-${DATABASE_URL:-}}" \
+      SECRET_KEY="${SECRET_KEY:-cogniforge-user-service-dev-key}" \
+      ENVIRONMENT="${ENVIRONMENT:-development}" \
+      USER_SERVICE_NAME="user-service" \
+      USER_SERVICE_VERSION="1.0.0" \
+      nohup python -m uvicorn microservices.user_service.main:app \
+        --host 0.0.0.0 --port 8001 --workers 1 --log-level info \
+        >> /app/.observability/user_service.log 2>&1 &
+      echo "✅ user-service restarted (PID=$!)"
+      echo "   curl http://localhost:8001/health"
+      echo "   curl http://localhost:8001/metrics | grep cogniforge_user"
+    triggeredBy:
+      - manual
+
+  run-step5-tests:
+    name: "Run Step 5 User Service Tests"
+    description: اختبارات الخطوة 5 — user-service Prometheus metrics.
+    command: |
+      set -euo pipefail
+      export DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export USER_DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export SECRET_KEY="test-secret-key-for-step5-tests"
+      export ENVIRONMENT="testing"
+      export LLM_MOCK_MODE="1"
+      echo "🧪 Running Step 5 user-service tests..."
+      python -m pytest \
+        tests/microservices/user_service/test_step5_user_service_metrics.py \
+        -v --tb=short --no-header -q 2>&1 | tail -50
+      echo "✅ Step 5 tests complete."
     triggeredBy:
       - manual

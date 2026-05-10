@@ -87,5 +87,6 @@ argon2-cffi
 vecs==0.4.5
 flupy==1.2.3
 litellm==1.50.0
+prometheus-client>=0.20.0
 dspy==2.5.7
 llama-index-workflows==2.14.0

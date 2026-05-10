@@ -1,5 +1,5 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-10** | Branch: `feat/microservices-step3-live-activation`
+> Last updated: **2026-05-10** | Branch: `feat/microservices-step5-user-service`
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
 
 ## Golden rule
@@ -22,14 +22,16 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 
 ---
 
-## Infrastructure truth (verified live 2026-05-09 — sixth pass)
+## Infrastructure truth (updated 2026-05-10 — Step 5 pass)
 
 | Service | Port | Status | Evidence |
-|---------|------|--------|---------|
-| **Next.js** | **3000** | **ACTIVE** | supervisor.sh `--port 3000` overrides package.json `--port 5000`. HTML 200 confirmed. `allowedDevOrigins` now includes `*.app.github.dev` — Codespaces proxy returns 200 (was ERR_HTTP_RESPONSE_CODE_FAILURE before ISS-036 fix). |
-| **FastAPI** | **8000** | **ACTIVE** | `GET /health → {"application":"ok","database":"ok"}`. Requires DATABASE_URL in **process env** (not just .env). |
-| **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 5 dashboards. Prometheus datasource UP. |
-| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → Healthy`. 3 targets UP: fastapi, grafana, prometheus. |
+|---------|------|--------|----------|
+| **Next.js** | **3000** | **ACTIVE** | supervisor.sh `--port 3000` overrides package.json `--port 5000`. HTML 200 confirmed. `allowedDevOrigins` includes `*.app.github.dev`. |
+| **FastAPI** | **8000** | **ACTIVE** | `GET /health → {"application":"ok","database":"ok"}`. Requires DATABASE_URL in **process env**. |
+| **orchestrator-service** | **8006** | **ACTIVE** | Step 4. uvicorn process. `OUTBOX_RELAY_ENABLED=true`. `/metrics` → 11 `cogniforge_outbox_*`+`cogniforge_stategraph_*` metrics. Auto-starts via supervisor.sh when `OPENROUTER_API_KEY` set. |
+| **user-service** | **8001** | **ACTIVE** | Step 5. uvicorn process. `/metrics` → 11 `cogniforge_user_*` metrics. Auto-starts via supervisor.sh when `DATABASE_URL` set. |
+| **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 8 dashboards (Steps 2–5). Prometheus datasource UP. |
+| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → Healthy`. 5 scrape targets: fastapi, grafana, prometheus, orchestrator-service(:8006), user-service(:8001). |
 | **Redis** | **6379** | **ACTIVE (process only)** | ping OK. REDIS_URL not set → app uses InMemoryCache. |
 | **PostgreSQL** | **6543** | **ACTIVE** | PostgreSQL 17.6 Supabase PgBouncer. database:ok confirmed. |
 | **OpenRouter** | external | **ACTIVE** | Primary: nvidia/nemotron-3-super-120b-a12b:free. Live graph call confirmed. |

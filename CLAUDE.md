@@ -63,6 +63,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Microservices Step 4 applied 2026-05-10 (D-032/D-033 — Persistence Relay + Prometheus Metrics):** `OUTBOX_RELAY_ENABLED=true` activated in both `supervisor.sh` and `.ona/automations.yaml` (D-031 fulfilled). `prometheus_client>=0.20.0` added to `microservices/orchestrator_service/requirements.txt`. New module `microservices/orchestrator_service/src/core/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_outbox_relay_cycles_total`, `cogniforge_outbox_relay_processed_total`, `cogniforge_outbox_relay_failed_total`, `cogniforge_outbox_relay_skipped_total`, `cogniforge_outbox_pending_gauge`, `cogniforge_stategraph_invocations_total`, `cogniforge_stategraph_duration_seconds`, `cogniforge_stategraph_errors_total`, `cogniforge_orchestrator_requests_total`, `cogniforge_orchestrator_request_duration_seconds`, `cogniforge_orchestrator_startup_info`. `/metrics` endpoint added to `main.py` — Prometheus scrapes it at `localhost:8006/metrics`. Prometheus scrape label updated to `step="4"`. Grafana dashboard `70-microservices-step4-persistence.json` (24 panels, UID `cogniforge-ms-step4-persistence`, 10s refresh) at :3001. CI gate `.github/workflows/microservices-step4.yml` (5 jobs). 44 regression tests in `tests/microservices/orchestrator_service/test_step4_persistence_relay.py`.
 
+**Microservices Step 5 applied 2026-05-10 (D-034 — User Service Live Activation):** `user-service` activated as a **uvicorn process** on `:8001` (no Docker — Codespaces constraint). Second microservice to go ACTIVE alongside `orchestrator-service`. Five artefacts: (1) `microservices/user_service/src/core/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_user_requests_total`, `cogniforge_user_request_duration_seconds`, `cogniforge_user_active_connections`, `cogniforge_user_auth_operations_total`, `cogniforge_user_auth_duration_seconds`, `cogniforge_user_registrations_total`, `cogniforge_user_logins_total`, `cogniforge_user_token_verifications_total`, `cogniforge_user_db_operations_total`, `cogniforge_user_db_duration_seconds`, `cogniforge_user_startup_info{step="5"}`; (2) `microservices/user_service/main.py` — `/metrics` endpoint + `set_startup_info()` in lifespan; (3) `supervisor.sh:launch_user_service()` — STEP 4E, starts uvicorn on `:8001` at Codespace boot when `DATABASE_URL` is set; (4) `.ona/automations.yaml` — service `user-service` + tasks `verify-step5-user-service`, `restart-user-service`, `run-step5-tests`; (5) `observability/native/prometheus.yml` — `user-service` scrape target at `localhost:8001` with `step="5"` label. Grafana dashboard `80-microservices-step5-user-service.json` (17 panels, UID `cogniforge-ms-step5-user-service`, 10s refresh) at :3001. CI gate `.github/workflows/microservices-step5-user-service.yml` (6 jobs). 36 regression tests in `tests/microservices/user_service/test_step5_user_service_metrics.py`.
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
@@ -105,10 +107,15 @@ Infrastructure (verified live 2026-05-09, Step 3 added 2026-05-10):
   Redis      → port 6379  (process running but app uses InMemoryCache — REDIS_URL not set)
   PostgreSQL → Supabase PgBouncer :6543 (19 users, 2098 customer_messages, 3038 admin_messages)
 
-Step 3 (uvicorn process — auto-starts via supervisor.sh when OPENROUTER_API_KEY set):
-  orchestrator-service  → port 8006  (uvicorn process, same as monolith pattern)
+Step 3/4 (uvicorn process — auto-starts via supervisor.sh when OPENROUTER_API_KEY set):
+  orchestrator-service  → port 8006  (uvicorn process, OUTBOX_RELAY_ENABLED=true)
   DB: Supabase shared (ORCHESTRATOR_DATABASE_URL = DATABASE_URL)
-  Prometheus scrape: localhost:8006/metrics (native/prometheus.yml)
+  Prometheus scrape: localhost:8006/metrics (native/prometheus.yml, step="4")
+
+Step 5 (uvicorn process — auto-starts via supervisor.sh when DATABASE_URL set):
+  user-service          → port 8001  (uvicorn process, /metrics active)
+  DB: Supabase shared (USER_DATABASE_URL = DATABASE_URL)
+  Prometheus scrape: localhost:8001/metrics (native/prometheus.yml, step="5")
 ```
 
 1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).
@@ -239,6 +246,21 @@ environment:
 ```
 
 **Affected services**: `orchestrator-service` (port 8006) and `research-agent` (port 8007). Key format must start with `tvly-`. MCP URL format (`https://mcp.tavily.com/mcp/?tavilyApiKey=tvly-...`) is auto-sanitized in `readiness.py` and `super_search.py`.
+
+### NEVER share a CollectorRegistry between microservices
+
+```python
+# ❌ Wrong — يُسبب تعارضاً إذا عملت الخدمتان في نفس الـ process (اختبارات)
+from prometheus_client import Counter
+requests = Counter("cogniforge_user_requests_total", "...")  # يستخدم REGISTRY الافتراضي
+
+# ✅ Correct — registry مستقل لكل خدمة (نمط prom_metrics.py)
+from prometheus_client import CollectorRegistry, Counter
+_REGISTRY = CollectorRegistry()
+requests = Counter("cogniforge_user_requests_total", "...", registry=_REGISTRY)
+```
+
+**Rule**: كل microservice يجب أن يستخدم `CollectorRegistry()` مستقلاً. استخدام `REGISTRY` الافتراضي يُسبب `ValueError: Duplicated timeseries` عند تشغيل اختبارات متعددة في نفس الـ process.
 
 ### NEVER add `dependsOn` to Ona automation services
 

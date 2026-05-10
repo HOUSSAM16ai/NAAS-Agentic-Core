@@ -14,6 +14,9 @@ the left-nav order. The `00-` dashboard is set as Grafana's default home.
 | `20-langgraph.json` | `cogniforge-langgraph` | LangGraph node runtime: invocations/min, p95 per node, intent distribution, MemorySaver writes, recent traces. | 10s | LLM/graph engineers |
 | `30-http-api.json` | `cogniforge-http-api` | FastAPI HTTP surface: req/s, error %, p95, top endpoints, latency heatmap, 5xx-by-endpoint. | 10s | API engineers |
 | `40-stack-health.json` | `cogniforge-stack-health` | Stack self-monitoring: `up{}` table, OTel collector receive/refuse/fail, Loki/Tempo ingestion. | 30s | Platform ops |
+| `50-microservices-transition.json` | `cogniforge-ms-transition-step2` | Step 2: routing mode (state_graph vs agent), StateGraph metrics, Tavily status, microservices health matrix, fallback chain progress. | 10s | Migration engineers |
+| `60-microservices-step3-live.json` | `cogniforge-ms-step3-live` | Step 3: orchestrator-service live activation — health, routing distribution, LangGraph nodes, intent classification, fallback chain, memory/CPU. 20 panels. | 10s | Migration engineers |
+| `70-microservices-step4-persistence.json` | `cogniforge-ms-step4-persistence` | **Step 4 (current):** OUTBOX_RELAY + /metrics — startup_info, relay cycles/rates, StateGraph heatmap, HTTP P50/P95/P99, active connections, scrape health. 24 panels. | 10s | Migration engineers · SRE |
 
 ## Drill-down navigation
 

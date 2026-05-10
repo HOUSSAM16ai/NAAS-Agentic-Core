@@ -45,10 +45,22 @@
 **Schema constraint**: Services لا تدعم `dependsOn` (schema rejects it). الترتيب يُدار عبر `ready` command فقط.
 **Status**: IMPLEMENTED 2026-05-10 — see `.ona/automations.yaml`.
 
-## D-031 · OUTBOX_RELAY_ENABLED=false in Step 3
-**Decision**: يُعطَّل outbox relay في `docker-compose.step3.yml` (Step 3). يُفعَّل في Step 4 بعد التحقق من مسار الـ persistence الكامل.
+## D-031 · OUTBOX_RELAY_ENABLED=true in Step 4 (D-031 fulfilled)
+**Decision**: يُعطَّل outbox relay في Step 3 (`OUTBOX_RELAY_ENABLED=false`). يُفعَّل في Step 4 بعد التحقق من مسار الـ persistence الكامل.
 **Reason**: تفعيل outbox relay قبل التحقق من D-006 (single persistence owner) يخاطر بـ dual-write. Step 3 يُثبت أن الخدمة تعمل وتُجيب على `/health`. Step 4 يُثبت أن الـ persistence صحيح.
-**Status**: DECIDED 2026-05-10 — implementation pending (Step 4).
+**Status**: IMPLEMENTED 2026-05-10 — `supervisor.sh` و `.ona/automations.yaml` يُشغِّلان orchestrator مع `OUTBOX_RELAY_ENABLED=true`. انظر `feat/microservices-step4-persistence-relay`.
+
+## D-032 · Independent prometheus_client Registry per Microservice
+**Decision**: كل microservice يُصدِّر `/metrics` يجب أن يستخدم `CollectorRegistry()` مستقل — لا يشارك الـ default REGISTRY مع المونوليث أو أي خدمة أخرى.
+**Reason**: في بيئات الاختبار والـ CI، قد يعمل المونوليث والـ orchestrator في نفس الـ process. استخدام الـ default REGISTRY يُسبب `ValueError: Duplicated timeseries` عند تسجيل نفس اسم المقياس مرتين.
+**Implementation**: `microservices/orchestrator_service/src/core/prom_metrics.py` — `_REGISTRY = CollectorRegistry()` مع lazy init. كل counter/gauge/histogram يمرر `registry=_REGISTRY`.
+**Status**: IMPLEMENTED 2026-05-10 — انظر `feat/microservices-step4-persistence-relay`.
+
+## D-033 · /metrics Endpoint as Prometheus Scrape Target (Step 4)
+**Decision**: `orchestrator-service` يجب أن يُصدِّر `/metrics` بصيغة Prometheus text format حقيقية (ليس JSON golden signals).
+**Reason**: Prometheus يتوقع text format من `prometheus_client.generate_latest()`. الـ `/metrics` endpoint الموجود في `routes.py` يُعيد JSON (golden signals) — غير متوافق مع Prometheus scrape. Step 4 يضيف endpoint منفصل في `main.py` يستخدم `export_prometheus_text()` من `prom_metrics.py`.
+**Metrics exposed**: `cogniforge_outbox_relay_cycles_total`, `cogniforge_outbox_relay_processed_total`, `cogniforge_outbox_relay_failed_total`, `cogniforge_outbox_relay_skipped_total`, `cogniforge_outbox_pending_gauge`, `cogniforge_stategraph_invocations_total`, `cogniforge_stategraph_duration_seconds`, `cogniforge_stategraph_errors_total`, `cogniforge_orchestrator_requests_total`, `cogniforge_orchestrator_request_duration_seconds`, `cogniforge_orchestrator_startup_info`.
+**Status**: IMPLEMENTED 2026-05-10 — انظر `feat/microservices-step4-persistence-relay`.
 
 ## D-001 · LangGraph as Primary Chat Handler
 **Decision**: `app/services/chat/local_graph.py` is the real handler. The orchestrator microservice is DORMANT in the default development environment.

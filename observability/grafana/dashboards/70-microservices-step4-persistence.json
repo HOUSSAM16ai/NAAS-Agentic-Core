@@ -1,0 +1,617 @@
+{
+  "uid": "cogniforge-ms-step4-persistence",
+  "title": "⚙️ Microservices Step 4 — Persistence Relay & Prometheus Metrics",
+  "description": "الخطوة الانتقالية الرابعة: OUTBOX_RELAY_ENABLED=true + /metrics حقيقي من orchestrator-service. يُظهر هذا الـ dashboard حالة relay الدورية، مقاييس StateGraph، وصحة الخدمة في الوقت الفعلي.",
+  "tags": ["cogniforge", "microservices", "step4", "outbox", "relay", "prometheus"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "row",
+      "title": "🔴 Step 4 Status — Orchestrator Service",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
+    },
+
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Orchestrator — Startup State",
+      "description": "حالة إقلاع orchestrator-service. ok=جاهز | degraded=يعمل مع أخطاء | starting=لا يزال يُقلع",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "cogniforge_orchestrator_startup_info{job=\"orchestrator-service\"}",
+          "legendFormat": "{{environment}} v{{version}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } },
+            { "type": "special", "options": { "match": "null", "result": { "text": "DOWN", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "OUTBOX_RELAY — Enabled",
+      "description": "هل OUTBOX_RELAY_ENABLED=true في orchestrator-service؟ Step 4 يُفعِّله.",
+      "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "cogniforge_orchestrator_startup_info{outbox_relay_enabled=\"true\",job=\"orchestrator-service\"}",
+          "legendFormat": "relay={{outbox_relay_enabled}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "✅ ENABLED", "color": "green" } } },
+            { "type": "special", "options": { "match": "null", "result": { "text": "❌ DISABLED", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "StateGraph — Ready",
+      "description": "هل الـ 13-node StateGraph مُجمَّع وجاهز؟",
+      "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "cogniforge_orchestrator_startup_info{graph_ready=\"true\",job=\"orchestrator-service\"}",
+          "legendFormat": "graph_ready={{graph_ready}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "✅ READY", "color": "green" } } },
+            { "type": "special", "options": { "match": "null", "result": { "text": "⚠️ NOT READY", "color": "orange" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Relay Cycles — Total",
+      "description": "إجمالي دورات outbox relay منذ بدء الخدمة (كل 15 ثانية دورة واحدة).",
+      "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(cogniforge_outbox_relay_cycles_total{job=\"orchestrator-service\"}) or vector(0)",
+          "legendFormat": "total cycles"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Relay Processed — Total",
+      "description": "إجمالي سجلات outbox التي جرى relay لها بنجاح.",
+      "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "cogniforge_outbox_relay_processed_total{job=\"orchestrator-service\"} or vector(0)",
+          "legendFormat": "processed"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Relay Failed — Total",
+      "description": "إجمالي سجلات outbox التي فشل relay لها (تجاوزت max_failed_attempts=3).",
+      "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "cogniforge_outbox_relay_failed_total{job=\"orchestrator-service\"} or vector(0)",
+          "legendFormat": "failed"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 8,
+      "type": "row",
+      "title": "📊 Outbox Relay — Rate & Trends",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }
+    },
+
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Relay Cycles Rate (per minute)",
+      "description": "معدل دورات relay في الدقيقة. يجب أن يكون ~4/min (كل 15 ثانية دورة).",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_outbox_relay_cycles_total{job=\"orchestrator-service\",result=\"success\"}[2m]) * 60",
+          "legendFormat": "success/min"
+        },
+        {
+          "expr": "rate(cogniforge_outbox_relay_cycles_total{job=\"orchestrator-service\",result=\"error\"}[2m]) * 60",
+          "legendFormat": "error/min"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "error/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "success/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Relay Records — Processed vs Failed vs Skipped",
+      "description": "مقارنة بين السجلات المُعالَجة والفاشلة والمتجاوزة في كل دورة relay.",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_outbox_relay_processed_total{job=\"orchestrator-service\"}[2m]) * 60",
+          "legendFormat": "processed/min"
+        },
+        {
+          "expr": "rate(cogniforge_outbox_relay_failed_total{job=\"orchestrator-service\"}[2m]) * 60",
+          "legendFormat": "failed/min"
+        },
+        {
+          "expr": "rate(cogniforge_outbox_relay_skipped_total{job=\"orchestrator-service\"}[2m]) * 60",
+          "legendFormat": "skipped/min ({{reason}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "processed/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "failed/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 11,
+      "type": "row",
+      "title": "🧠 StateGraph — 13-Node Invocations",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 }
+    },
+
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "StateGraph Invocations Rate",
+      "description": "معدل استدعاءات StateGraph (13-node) في الدقيقة مصنَّفة حسب entry_point والنتيجة.",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_stategraph_invocations_total{job=\"orchestrator-service\",result=\"success\"}[2m]) * 60",
+          "legendFormat": "{{entry_point}} — success"
+        },
+        {
+          "expr": "rate(cogniforge_stategraph_invocations_total{job=\"orchestrator-service\",result=\"error\"}[2m]) * 60",
+          "legendFormat": "{{entry_point}} — error"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 13,
+      "type": "heatmap",
+      "title": "StateGraph Duration Heatmap (seconds)",
+      "description": "توزيع زمن تنفيذ StateGraph. الألوان الداكنة = تركّز الطلبات في نطاق زمني معين.",
+      "gridPos": { "x": 12, "y": 15, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(cogniforge_stategraph_duration_seconds_bucket{job=\"orchestrator-service\"}[5m])) by (le)",
+          "legendFormat": "{{le}}",
+          "format": "heatmap"
+        }
+      ],
+      "options": {
+        "calculate": false,
+        "yAxis": { "unit": "s" },
+        "color": { "scheme": "Oranges", "mode": "scheme" }
+      }
+    },
+
+    {
+      "id": 14,
+      "type": "row",
+      "title": "🌐 HTTP — Orchestrator Request Metrics",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 }
+    },
+
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "HTTP Requests Rate (per minute)",
+      "description": "معدل طلبات HTTP الواردة إلى orchestrator-service مصنَّفة حسب endpoint والـ status code.",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (endpoint, status_code) (rate(cogniforge_orchestrator_requests_total{job=\"orchestrator-service\"}[2m])) * 60",
+          "legendFormat": "{{endpoint}} [{{status_code}}]"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "HTTP Request Duration P50/P95/P99",
+      "description": "زمن استجابة orchestrator-service عند النسب المئوية 50/95/99.",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(cogniforge_orchestrator_request_duration_seconds_bucket{job=\"orchestrator-service\"}[5m])))",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(cogniforge_orchestrator_request_duration_seconds_bucket{job=\"orchestrator-service\"}[5m])))",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(cogniforge_orchestrator_request_duration_seconds_bucket{job=\"orchestrator-service\"}[5m])))",
+          "legendFormat": "P99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "P99" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "P95" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "P50" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 17,
+      "type": "row",
+      "title": "🔗 Active Connections & Errors",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 1 }
+    },
+
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Active WebSocket Connections",
+      "description": "عدد اتصالات WebSocket النشطة حالياً (customer + admin).",
+      "gridPos": { "x": 0, "y": 33, "w": 8, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "cogniforge_orchestrator_active_connections{job=\"orchestrator-service\"}",
+          "legendFormat": "{{connection_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 20 }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "StateGraph Errors by Type",
+      "description": "أخطاء StateGraph مصنَّفة: timeout | llm_error | db_error | unknown.",
+      "gridPos": { "x": 8, "y": 33, "w": 8, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_stategraph_errors_total{job=\"orchestrator-service\"}[5m]) * 60",
+          "legendFormat": "{{error_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "Outbox Pending (gauge)",
+      "description": "عدد سجلات outbox في حالة pending أو processing حالياً. يجب أن يقترب من 0 بعد كل دورة relay.",
+      "gridPos": { "x": 16, "y": 33, "w": 8, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "cogniforge_outbox_pending_gauge{job=\"orchestrator-service\"} or vector(0)",
+          "legendFormat": "pending"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 21,
+      "type": "row",
+      "title": "🏗️ Prometheus Scrape Health",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 39, "w": 24, "h": 1 }
+    },
+
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Scrape Duration — orchestrator-service",
+      "description": "زمن scrape Prometheus لـ orchestrator-service. ارتفاع مستمر يشير إلى بطء /metrics.",
+      "gridPos": { "x": 0, "y": 40, "w": 12, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "scrape_duration_seconds{job=\"orchestrator-service\"}",
+          "legendFormat": "scrape duration"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 1, "fillOpacity": 5 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" } }
+    },
+
+    {
+      "id": 23,
+      "type": "stat",
+      "title": "Scrape Success — orchestrator-service",
+      "description": "هل Prometheus يستطيع scrape /metrics من orchestrator-service؟ 1=نعم | 0=لا.",
+      "gridPos": { "x": 12, "y": 40, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "up{job=\"orchestrator-service\"}",
+          "legendFormat": "up"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "UP ✅", "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "DOWN ❌", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 24,
+      "type": "stat",
+      "title": "Monolith FastAPI — UP",
+      "description": "حالة المونوليث على :8000.",
+      "gridPos": { "x": 18, "y": 40, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "up{job=\"cogniforge-fastapi\"}",
+          "legendFormat": "monolith :8000"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "UP ✅", "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "DOWN ❌", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    }
+
+  ]
+}

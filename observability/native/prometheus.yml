@@ -49,7 +49,9 @@ scrape_configs:
         labels:
           tier: stack
 
-  # ── Step 3: orchestrator-service (uvicorn process on :8006) ──────────────
+  # ── Step 4: orchestrator-service (uvicorn process on :8006) ─────────────
+  # Step 4: /metrics يُصدِّر prometheus_client text format حقيقي.
+  # المقاييس: cogniforge_outbox_relay_* + cogniforge_stategraph_* + startup_info
   # يبدأ تلقائياً عبر supervisor.sh عند توفر OPENROUTER_API_KEY.
   # DOWN حتى يُقلع الـ process — ليس خطأ في الـ devcontainer الافتراضي.
   - job_name: orchestrator-service
@@ -61,5 +63,5 @@ scrape_configs:
         labels:
           tier: microservice
           service: orchestrator-service
-          step: "3"
+          step: "4"
     honor_labels: true

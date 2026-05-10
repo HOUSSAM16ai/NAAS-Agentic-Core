@@ -418,6 +418,24 @@ class OrchestratorClient:
         contract_version = routing_policy.contract_version
         fallback_enabled = routing_policy.fallback_enabled
 
+        # تسجيل وضع التوجيه كـ gauge قابل للقياس في Grafana :3001
+        # cogniforge_routing_mode_state_graph: 1 = StateGraph, 0 = Agent
+        # cogniforge_routing_target_total{target=...}: عداد تراكمي لكل هدف
+        try:
+            _obs_routing = obs
+            _obs_routing.record_metric(
+                "routing.mode.state_graph",
+                1.0 if routing_policy.targets_state_graph else 0.0,
+                labels={"endpoint_mode": routing_policy.endpoint_mode},
+            )
+            _obs_routing.record_metric(
+                "routing.target.total",
+                1.0,
+                labels={"target": routing_policy.endpoint_mode},
+            )
+        except Exception:
+            pass
+
         logger.info(
             "chat_contract_route_start",
             extra={
@@ -425,6 +443,8 @@ class OrchestratorClient:
                 "contract_version": contract_version,
                 "candidate_count": len(candidate_urls),
                 "fallback_enabled": fallback_enabled,
+                "endpoint_mode": routing_policy.endpoint_mode,
+                "targets_state_graph": routing_policy.targets_state_graph,
             },
         )
 
@@ -482,6 +502,16 @@ class OrchestratorClient:
         )
 
         if fallback_enabled:
+            # تسجيل الـ fallback المحلي كـ metric — يُظهر في Grafana أن الخدمة المصغرة غير متاحة
+            try:
+                obs.record_metric(
+                    "routing.target.total",
+                    1.0,
+                    labels={"target": "local_fallback"},
+                )
+            except Exception:
+                pass
+
             _fb_t0 = time.perf_counter()
             _fb_ctx = None
             try:

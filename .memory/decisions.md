@@ -223,6 +223,18 @@ start" — this is the right hook.
 **Status**: IMPLEMENTED 2026-05-07 — see branch `claude/fix-monitoring-port-hQ7JL` and CLAUDE.md §6.12.
 
 
+## D-025 · ChatRoutingPolicy Default Changed to state_graph — Step 2 Transition (2026-05-10)
+**Decision**: `ChatRoutingPolicy.from_environment()` now defaults to `endpoint_mode="state_graph"`, routing to `/api/chat/messages` (StateGraph 13 nodes) instead of `/agent/chat` (OrchestratorAgent). Controlled by `ORCHESTRATOR_CHAT_ENDPOINT` env var.
+**Reason**: D-021 identified that even when the orchestrator microservice is running, the 13-node StateGraph was never invoked because `ChatRoutingPolicy.candidate_urls()` always returned `/agent/chat`. The StateGraph (with DSPy, Tavily, reranker, synthesizer) is the intended production handler. The routing policy was the only blocker.
+**Rollback**: Set `ORCHESTRATOR_CHAT_ENDPOINT=agent` in the monolith's environment. Takes effect immediately without restart (read per-request from env). No code change required.
+**Observability**: `cogniforge_routing_mode_state_graph` gauge (1=StateGraph, 0=Agent) and `cogniforge_routing_target_total{target=...}` counter emitted per request. Visible in Grafana :3001 → "Microservices Transition — Step 2" dashboard.
+**CI gate**: `.github/workflows/microservices-transition.yml` — `routing-policy-gate` job asserts default mode is `state_graph` on every PR touching `routing_policy.py`.
+**What MUST NOT change without an ADR**:
+- The default value of `ORCHESTRATOR_CHAT_ENDPOINT` (currently `"state_graph"`).
+- The `_ENDPOINT_MAP` keys — adding a new mode requires an ADR.
+- The `targets_state_graph` property — it is used by the CI gate and monitoring.
+**Status**: IMPLEMENTED 2026-05-10 — branch `feat/microservices-step2-stategraph-routing`.
+
 ## D-018 · Exercise Retrieval Uses Two-Phase Intent Classifier, Not Keyword List (ISS-038)
 **Decision**: `detect_exercise_retrieval()` in `app/services/capabilities/exercise_retrieval.py`
 uses a two-phase intent classifier instead of a flat keyword list.

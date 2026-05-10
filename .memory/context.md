@@ -1,7 +1,7 @@
 # CogniForge — Project Context
-> Last updated: **2026-05-09** | Branch: `fix/lifespan-orchestration-env-injection` (fifth pass — live fixes applied).
-> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-09).
-> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check`.
+> Last updated: **2026-05-10** | Branch: `feat/microservices-step2-stategraph-routing`.
+> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-10).
+> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` (NEW).
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)
@@ -13,7 +13,7 @@
 - **Replit**: `package.json` script runs Next.js on port **5000**; backend started manually with uvicorn on 8000
 - **Microservices wake-up** (either environment): `docker compose -f docker-compose.yml up -d`
 
-## Stack (verified live 2026-05-09)
+## Stack (verified live 2026-05-10)
 | Layer | Tech | Port | Status |
 |-------|------|------|--------|
 | Frontend | Next.js 15 | **3000** | ACTIVE — supervisor.sh passes `--port 3000` overriding package.json `--port 5000` |
@@ -24,8 +24,9 @@
 | Cache | InMemoryCache (Redis process runs but unused — no `REDIS_URL`) | 6379 | ACTIVE (in-memory only) |
 | Tracing | UnifiedObservabilityService (in-process) | — | ACTIVE |
 | OTEL export | otel_setup.py | — | NO-OP — `OTEL_EXPORTER_OTLP_ENDPOINT=http` is invalid |
-| Grafana | native binary | **3001** | ACTIVE — config says 3000 but provisioning CLI overrides to 3001 |
-| Prometheus | native binary | **9090** | ACTIVE |
+| Grafana | native binary | **3001** | ACTIVE — 6 dashboards (NEW: 50-microservices-transition.json) |
+| Prometheus | native binary | **9090** | ACTIVE — 11 scrape jobs (NEW: orchestrator-service, research-agent, user-service, planning-agent) |
+| Routing Policy | ChatRoutingPolicy | — | ACTIVE — default: state_graph → /api/chat/messages (Step 2) |
 
 ## Database state (live 2026-05-09)
 - **Users**: 19 total (admin: `benmerahhoussam16@gmail.com`, user: `houssamannaba963@gmail.com`)

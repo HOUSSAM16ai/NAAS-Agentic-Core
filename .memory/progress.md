@@ -1,5 +1,101 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-10 | Branch: `feat/orchestrator-revival-step1`
+> Last updated: 2026-05-10 | Branch: `feat/microservices-step2-stategraph-routing`
+
+---
+
+## ✅ Session: 2026-05-10 — Microservices Step 2: StateGraph Routing (الخطوة الانتقالية الثانية)
+
+**Branch**: `feat/microservices-step2-stategraph-routing`
+**Mode**: Live code changes — routing policy + observability + CI gate.
+**Verified**: 16/16 tests PASSED | ruff clean | dashboard JSON valid | prometheus config valid
+
+### الخطوة الانتقالية المختارة (D-021 — تنفيذ)
+تعديل `ChatRoutingPolicy` لتوجيه المونوليث نحو `/api/chat/messages` (StateGraph 13 عقدة) بدلاً من `/agent/chat` (OrchestratorAgent). هذا يُفعّل المسار الكامل للـ StateGraph عند تشغيل `docker compose up orchestrator-service`.
+
+### التغييرات المُنجزة
+
+#### 1. `app/infrastructure/clients/routing_policy.py` — تعديل جوهري
+- إضافة `endpoint_mode: str` كحقل جديد في `ChatRoutingPolicy`
+- `_ENDPOINT_MAP`: قاموس صريح يربط الوضع بنقطة النهاية
+  - `"state_graph"` → `/api/chat/messages` (الافتراضي الجديد)
+  - `"agent"` → `/agent/chat` (للتراجع فقط)
+- `ORCHESTRATOR_CHAT_ENDPOINT` env var يتحكم في الوضع
+- `targets_state_graph` property للاستعلام السريع
+- تحقق صارم: قيمة غير معروفة → تحذير + fallback إلى `state_graph`
+
+#### 2. `app/infrastructure/clients/orchestrator_client.py` — إضافة metrics
+- `routing.mode.state_graph` gauge: 1 = StateGraph, 0 = Agent
+- `routing.target.total{target=...}` counter: يُحصي كل هدف (state_graph / agent / local_fallback)
+- log يشمل `endpoint_mode` و `targets_state_graph` لكل طلب
+
+#### 3. `app/telemetry/metrics.py` — توسيع hist_names
+- إضافة `"orchestrator.node.duration_seconds"` → `cogniforge_orchestrator_node_duration_seconds_bucket`
+- يُغذّي لوحة latency في dashboard الخدمات المصغرة
+
+#### 4. `observability/grafana/dashboards/50-microservices-transition.json` — dashboard جديد
+- **15 panels** على Grafana :3001
+- Row 1: Routing Mode gauge + Chat Requests by Target (timeseries) + Orchestrator Health
+- Row 2: StateGraph Node Execution Rate + Node Latency (p50/p95/p99)
+- Row 3: Tavily Search Outcomes + Research Agent Health + Orchestrator Startup State
+- Row 4: Microservices Health Matrix (table — جميع الخدمات)
+- Row 5: Fallback Chain Transition Progress (cumulative — يُظهر تقدم الانتقال)
+- UID: `cogniforge-ms-transition-step2`
+
+#### 5. `observability/prometheus/prometheus.yml` — scrape targets جديدة
+- `orchestrator-service` → `host.docker.internal:8006/metrics`
+- `research-agent` → `host.docker.internal:8007/metrics`
+- `user-service` → `host.docker.internal:8001/metrics`
+- `planning-agent` → `host.docker.internal:8002/metrics`
+- جميعها `honor_labels: true` — تظهر DOWN حتى يُشغَّل `docker compose up`
+
+#### 6. `tests/infrastructure/test_routing_policy.py` — 16 اختبار جديد
+- `TestDefaultMode`: الوضع الافتراضي = state_graph
+- `TestRollbackMode`: وضع التراجع = agent
+- `TestUnknownMode`: قيم غير معروفة → state_graph
+- `TestBreakglassMode`: وضع الطوارئ متعدد العناوين
+- `TestEndpointMap`: التحقق من _ENDPOINT_MAP
+- `TestFallbackAndContractVersion`: fallback وإصدار العقد
+
+#### 7. `.github/workflows/microservices-transition.yml` — CI gate جديد
+- 5 وظائف: routing-policy-gate / stategraph-compile-gate / dashboard-schema-gate / prometheus-config-gate / transition-gate
+- يُشغَّل عند تعديل أي ملف يمس الخدمات المصغرة أو سياسة التوجيه
+- يتحقق من: الوضع الافتراضي state_graph، StateGraph يُترجَم، dashboard JSON صالح، prometheus config صالح
+- يُنشر ملخص في PR summary
+
+### كيفية تفعيل الانتقال الكامل
+```bash
+# 1. تشغيل orchestrator-service
+OPENROUTER_API_KEY="sk-or-v1-..." TAVILY_API_KEY="tvly-dev-..." \
+docker compose -f docker-compose.yml up -d orchestrator-service postgres-orchestrator redis-orchestrator
+
+# 2. ضبط ORCHESTRATOR_SERVICE_URL في بيئة المونوليث
+export ORCHESTRATOR_SERVICE_URL=http://localhost:8006
+# ORCHESTRATOR_CHAT_ENDPOINT=state_graph (افتراضي — لا حاجة لضبطه)
+
+# 3. إعادة تشغيل المونوليث
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 4. التحقق من Grafana :3001 → dashboard "Microservices Transition — Step 2"
+# Routing Mode يجب أن يظهر "STATE_GRAPH (active)"
+# Orchestrator Service Health يجب أن يظهر "UP"
+
+# 5. التراجع الفوري إذا لزم
+export ORCHESTRATOR_CHAT_ENDPOINT=agent
+```
+
+### الملفات المعدّلة (5 ملفات — حد Jules)
+- `app/infrastructure/clients/routing_policy.py`
+- `app/infrastructure/clients/orchestrator_client.py`
+- `app/telemetry/metrics.py`
+- `observability/prometheus/prometheus.yml`
+- `.memory/*`, `CLAUDE.md`
+
+### الملفات الجديدة (2 ملفات)
+- `observability/grafana/dashboards/50-microservices-transition.json`
+- `tests/infrastructure/test_routing_policy.py`
+- `.github/workflows/microservices-transition.yml`
+
+---
 
 ---
 

@@ -1,0 +1,617 @@
+{
+  "uid": "cogniforge-ms-step3-live",
+  "title": "🔥 Microservices Step 3 — Live Activation",
+  "description": "مراقبة حية لـ orchestrator-service بعد تفعيل الخطوة الانتقالية الثالثة",
+  "tags": ["cogniforge", "microservices", "step3", "orchestrator", "live"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Orchestrator Service Status",
+      "description": "حالة orchestrator-service الحية — ok / degraded / down",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "LIVE ✅", "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "DOWN ❌", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"orchestrator-service\"}",
+          "legendFormat": "orchestrator",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Routing Mode",
+      "description": "1 = StateGraph (Step 3 active) | 0 = Agent (fallback)",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "StateGraph ✅", "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "Agent Mode", "color": "yellow" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "yellow", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "cogniforge_routing_mode_state_graph",
+          "legendFormat": "routing_mode",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Orchestrator Requests (5m)",
+      "description": "عدد الطلبات الواصلة لـ orchestrator-service في آخر 5 دقائق",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_routing_target_total{target=\"/api/chat/messages\"}[5m])",
+          "legendFormat": "→ StateGraph",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Graph Ready",
+      "description": "هل StateGraph (13 عقدة) مُجمَّع وجاهز؟",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "Ready ✅", "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "Not Ready ❌", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"orchestrator-service\"}",
+          "legendFormat": "graph_ready",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Postgres Orchestrator",
+      "description": "حالة قاعدة بيانات orchestrator المستقلة (port 5441)",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "UP ✅", "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "DOWN ❌", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"orchestrator-service\"}",
+          "legendFormat": "postgres-orchestrator",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Step 3 Activation",
+      "description": "تاريخ تفعيل الخطوة الانتقالية الثالثة",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "purple", "value": null }]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "process_start_time_seconds{job=\"orchestrator-service\"} * 1000",
+          "legendFormat": "Started",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Routing Target Distribution",
+      "description": "توزيع الطلبات بين StateGraph و Agent fallback عبر الزمن",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_routing_target_total{target=\"/api/chat/messages\"}[2m])",
+          "legendFormat": "→ StateGraph (/api/chat/messages)",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(cogniforge_routing_target_total{target=\"/agent/chat\"}[2m])",
+          "legendFormat": "→ Agent (/agent/chat)",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "LangGraph Node Execution Rate",
+      "description": "معدل تنفيذ عقد StateGraph (supervisor + chat) عبر الزمن",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_langgraph_node_count_total{node=\"supervisor\"}[2m])",
+          "legendFormat": "supervisor_node",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(cogniforge_langgraph_node_count_total{node=\"chat\"}[2m])",
+          "legendFormat": "chat_node",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Orchestrator HTTP Request Rate",
+      "description": "معدل طلبات HTTP لـ orchestrator-service مصنفة حسب الحالة",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"orchestrator-service\",status=~\"2..\"}[2m])",
+          "legendFormat": "2xx Success",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(http_requests_total{job=\"orchestrator-service\",status=~\"5..\"}[2m])",
+          "legendFormat": "5xx Error",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(http_requests_total{job=\"orchestrator-service\",status=~\"4..\"}[2m])",
+          "legendFormat": "4xx Client Error",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "LangGraph Node Duration (p50/p95/p99)",
+      "description": "زمن تنفيذ عقد StateGraph — percentiles",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(cogniforge_langgraph_node_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(cogniforge_langgraph_node_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(cogniforge_langgraph_node_duration_seconds_bucket[5m]))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Intent Classification Distribution",
+      "description": "توزيع نوايا المستخدمين (educational / chat / general) عبر الزمن",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 20 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_langgraph_intent_total{intent=\"educational\"}[5m])",
+          "legendFormat": "educational",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(cogniforge_langgraph_intent_total{intent=\"chat\"}[5m])",
+          "legendFormat": "chat",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(cogniforge_langgraph_intent_total{intent=\"general\"}[5m])",
+          "legendFormat": "general",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Fallback Chain Progress",
+      "description": "تتبع تقدم سلسلة الـ fallback — كلما انخفض fallback كلما نجح الـ orchestrator",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_routing_target_total{target=\"/api/chat/messages\"}[5m])",
+          "legendFormat": "Tier 0: Orchestrator (target)",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(cogniforge_langgraph_node_count_total[5m])",
+          "legendFormat": "Tier 3: LangGraph local (fallback)",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Microservices Health Matrix",
+      "description": "حالة جميع الخدمات المصغرة — UP / DOWN",
+      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "Service", "desc": false }]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "left" },
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "UP ✅", "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "DOWN ❌", "color": "red" } } }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "up{tier=\"microservice\"}",
+          "legendFormat": "{{service}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        { "id": "labelsToFields", "options": { "mode": "rows" } }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Orchestrator Memory Usage",
+      "description": "استهلاك الذاكرة لـ orchestrator-service عبر الزمن",
+      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{job=\"orchestrator-service\"}",
+          "legendFormat": "RSS Memory",
+          "refId": "A"
+        },
+        {
+          "expr": "process_virtual_memory_bytes{job=\"orchestrator-service\"}",
+          "legendFormat": "Virtual Memory",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Total Chat Turns Routed to Orchestrator",
+      "description": "إجمالي المحادثات الموجَّهة لـ orchestrator-service منذ الإقلاع",
+      "gridPos": { "x": 0, "y": 36, "w": 6, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "cogniforge_routing_target_total{target=\"/api/chat/messages\"}",
+          "legendFormat": "Routed to Orchestrator",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Tavily Search Calls",
+      "description": "عدد استدعاءات Tavily web search من orchestrator-service",
+      "gridPos": { "x": 6, "y": 36, "w": 6, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "yellow", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "cogniforge_tavily_search_total",
+          "legendFormat": "Tavily Calls",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "stat",
+      "title": "Orchestrator Uptime",
+      "description": "مدة تشغيل orchestrator-service منذ الإقلاع",
+      "gridPos": { "x": 12, "y": 36, "w": 6, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "time() - process_start_time_seconds{job=\"orchestrator-service\"}",
+          "legendFormat": "Uptime",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "Orchestrator CPU Usage",
+      "description": "استهلاك CPU لـ orchestrator-service",
+      "gridPos": { "x": 18, "y": 36, "w": 6, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "red", "value": 0.8 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"orchestrator-service\"}[2m])",
+          "legendFormat": "CPU",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "logs",
+      "title": "Orchestrator Service Logs",
+      "description": "سجلات orchestrator-service الحية (يتطلب Loki)",
+      "gridPos": { "x": 0, "y": 40, "w": 24, "h": 8 },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"orchestrator-service\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" }
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "text",
+      "title": "Step 3 — Activation Guide",
+      "description": "دليل تفعيل الخطوة الانتقالية الثالثة",
+      "gridPos": { "x": 0, "y": 48, "w": 24, "h": 6 },
+      "options": {
+        "mode": "markdown",
+        "content": "## 🚀 الخطوة الانتقالية الثالثة — Live Activation\n\n### تشغيل الـ Stack\n```bash\n# عبر Ona automations\ngitpod automations service start orchestrator-stack\n\n# أو مباشرة\ndocker compose -f docker-compose.step3.yml up -d\n```\n\n### التحقق الحي\n```bash\n# Health check\ncurl http://localhost:8006/health | python3 -m json.tool\n\n# Metrics\ncurl http://localhost:8006/metrics | grep cogniforge_\n\n# Ona task\ngitpod automations task start health-probe\n```\n\n### الخدمات المُفعَّلة\n| الخدمة | المنفذ | الحالة |\n|--------|--------|--------|\n| orchestrator-service | 8006 | 🟢 ACTIVE (Step 3) |\n| postgres-orchestrator | 5441 | 🟢 ACTIVE |\n| redis-orchestrator | 6380 | 🟢 ACTIVE |\n| FastAPI monolith | 8000 | 🟢 ACTIVE (always) |\n| Grafana | 3001 | 🟢 ACTIVE (always) |\n| Prometheus | 9090 | 🟢 ACTIVE (always) |"
+      }
+    }
+  ]
+}

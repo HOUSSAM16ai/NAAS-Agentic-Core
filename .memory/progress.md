@@ -1,5 +1,42 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-10 | Branch: `feat/microservices-step2-stategraph-routing`
+> Last updated: 2026-05-10 | Branch: `feat/microservices-step3-live-activation`
+
+---
+
+## ✅ Session: 2026-05-10 — Microservices Step 3: Live Activation (الخطوة الانتقالية الثالثة)
+
+**Branch**: `feat/microservices-step3-live-activation`
+**Mode**: Live code changes — docker-compose.step3.yml + Ona automations + Grafana dashboard + GitHub Actions CI gate.
+**Verified**: JSON valid | YAML valid | workflow syntax valid | ruff clean
+
+### الخطوة الانتقالية المختارة (D-029 — تنفيذ)
+تفعيل `orchestrator-service` كـ Ona automation service حي مع قاعدة بياناته المستقلة (`postgres-orchestrator`) وRedis المستقل. هذا يُحوِّل الخدمة من DORMANT إلى ACTIVE عند تشغيل `gitpod automations service start orchestrator-stack`.
+
+### التغييرات المُنجزة
+
+#### 1. `docker-compose.step3.yml` — ملف compose مخصص للخطوة 3
+- 3 خدمات فقط: `postgres-orchestrator` (5441) + `redis-orchestrator` (6380) + `orchestrator-service` (8006)
+- healthcheck لكل خدمة مع `start_period` مناسب
+- `OPENROUTER_API_KEY` و`TAVILY_API_KEY` مُحقَنان
+- `OUTBOX_RELAY_ENABLED=false` (يُفعَّل في Step 4)
+- volumes مستقلة لا تتعارض مع `docker-compose.yml` الرئيسي
+
+#### 2. `.ona/automations.yaml` — Ona automations
+- **service** `orchestrator-stack`: يُشغِّل الـ stack مع health probe حي، `ready` command يتحقق من `:8006/health`
+- **task** `health-probe`: تقرير مفصل عن `/health` + `/metrics` + Prometheus targets
+- **task** `verify-stack`: تحقق شامل من 6 مكونات (postgres + redis + orchestrator + monolith + grafana + prometheus)
+- **task** `run-step3-tests`: يُشغِّل اختبارات الانتقال بمتغيرات CI آمنة
+
+#### 3. `observability/grafana/dashboards/60-microservices-step3-live.json` — Dashboard جديد
+- UID: `cogniforge-ms-step3-live`
+- 20 panel: status stats + timeseries + table + logs + text guide
+- Metrics: `up{job="orchestrator-service"}`, `cogniforge_routing_*`, `cogniforge_langgraph_*`, `process_*`
+- Refresh: 10s (مراقبة حية)
+
+#### 4. `.github/workflows/microservices-step3-live.yml` — CI gate
+- 7 jobs: compose-validation + stategraph-compile-gate + dashboard-gate + prometheus-config-gate + transition-tests + automations-validation + step3-gate
+- تعليق تلقائي على PR بنتائج الـ gate
+- يُشغَّل عند تغيير أي ملف من ملفات الخطوة 3
 
 ---
 

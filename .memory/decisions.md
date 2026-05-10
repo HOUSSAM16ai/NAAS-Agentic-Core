@@ -31,6 +31,25 @@
 **Consequence**: After this change, the LangGraph dashboard shows real data after the first WS chat turn. `cogniforge_langgraph_checkpointer_writes_total` remains a zombie metric until Postgres checkpointer is activated (ISS-020).
 **Status**: IMPLEMENTED 2026-05-09 — see `app/services/chat/local_graph.py` + `app/telemetry/metrics.py`.
 
+## D-029 · docker-compose.step3.yml as Isolated Step 3 Activation File
+**Decision**: الخطوة الانتقالية الثالثة تستخدم `docker-compose.step3.yml` منفصلاً عن `docker-compose.yml` الرئيسي.
+**Reason**: `docker-compose.yml` الرئيسي يُشغِّل الـ stack الكامل (20+ خدمة) وهو ثقيل جداً للتطوير. `docker-compose.step3.yml` يُشغِّل 3 خدمات فقط (postgres-orchestrator + redis-orchestrator + orchestrator-service) مع volumes مستقلة لا تتعارض مع الـ stack الرئيسي.
+**Consequence**: يمكن تشغيل Step 3 بجانب الـ devcontainer الافتراضي بدون تعارض. المنافذ 5441/6380/8006 لا تتعارض مع أي خدمة في الـ devcontainer.
+**Rollback**: `docker compose -f docker-compose.step3.yml down` يوقف الـ stack بالكامل. المونوليث يعود تلقائياً إلى LangGraph local fallback.
+**Status**: IMPLEMENTED 2026-05-10 — see `feat/microservices-step3-live-activation`.
+
+## D-030 · Ona automations.yaml as Step 3 Canonical Trigger
+**Decision**: `.ona/automations.yaml` هو المُشغِّل الرسمي للخطوة 3 في بيئة Ona/Gitpod.
+**Reason**: يوفر تجربة موحدة: `gitpod automations service start orchestrator-stack` يُشغِّل الـ stack + يتحقق من الصحة + يُبلِّغ عن الحالة. لا يتطلب معرفة بـ docker compose مباشرة.
+**Services vs Tasks**: `orchestrator-stack` هو service (يعمل باستمرار، له `ready` command). `health-probe`, `verify-stack`, `run-step3-tests` هي tasks (تُشغَّل يدوياً عند الطلب).
+**Schema constraint**: Services لا تدعم `dependsOn` (schema rejects it). الترتيب يُدار عبر `ready` command فقط.
+**Status**: IMPLEMENTED 2026-05-10 — see `.ona/automations.yaml`.
+
+## D-031 · OUTBOX_RELAY_ENABLED=false in Step 3
+**Decision**: يُعطَّل outbox relay في `docker-compose.step3.yml` (Step 3). يُفعَّل في Step 4 بعد التحقق من مسار الـ persistence الكامل.
+**Reason**: تفعيل outbox relay قبل التحقق من D-006 (single persistence owner) يخاطر بـ dual-write. Step 3 يُثبت أن الخدمة تعمل وتُجيب على `/health`. Step 4 يُثبت أن الـ persistence صحيح.
+**Status**: DECIDED 2026-05-10 — implementation pending (Step 4).
+
 ## D-001 · LangGraph as Primary Chat Handler
 **Decision**: `app/services/chat/local_graph.py` is the real handler. The orchestrator microservice is DORMANT in the default development environment.
 **Reason**: GitHub Codespaces devcontainer (`.devcontainer/docker-compose.host.yml`) only spins up the `web` container; it does NOT start the microservices stack from `docker-compose.yml`. The orchestrator at `orchestrator:8006` always fails with ConnectError.

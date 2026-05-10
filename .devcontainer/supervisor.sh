@@ -563,10 +563,14 @@ launch_orchestrator_service() {
 
     # ── تحويل URL إلى asyncpg (مطلوب لـ SQLAlchemy async) ────────────────────
     # SQLAlchemy create_async_engine يرفض psycopg2 المتزامن — يجب postgresql+asyncpg://
-    # نُزيل sslmode من الـ query string لأن asyncpg يتعامل مع SSL عبر connect_args.
+    # ISS-040: Supabase PgBouncer (port 6543) يرفض prepared statements حتى مع
+    # statement_cache_size=0 في connect_args. الحل: استخدام port 5432 (direct
+    # PostgreSQL connection) الذي يدعم prepared statements بشكل كامل.
     orch_db_url="${orch_db_url/postgresql:\/\//postgresql+asyncpg://}"
     orch_db_url="${orch_db_url/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
-    # إزالة sslmode من URL — asyncpg لا يقبله في query string
+    # تحويل port 6543 (PgBouncer) إلى 5432 (direct PostgreSQL) للـ orchestrator
+    orch_db_url=$(echo "$orch_db_url" | sed 's/:6543\//:5432\//')
+    # إزالة sslmode من URL — asyncpg يتعامل مع SSL عبر connect_args في database.py
     orch_db_url=$(echo "$orch_db_url" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
 
     lifecycle_info "Orchestrator: starting on :${ORCH_PORT} ..."

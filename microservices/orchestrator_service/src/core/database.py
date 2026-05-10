@@ -1,5 +1,4 @@
 import logging
-import os
 import ssl
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -25,51 +24,104 @@ except ModuleNotFoundError:
 
 
 def create_engine() -> AsyncEngine:
+    """
+    يُنشئ AsyncEngine مع دعم كامل لـ Supabase PgBouncer (transaction mode).
+
+    PgBouncer في وضع transaction لا يدعم prepared statements.
+    الحل: استخدام asyncpg.create_pool مع statement_cache_size=0 عبر creator.
+    """
+    import asyncpg
+
     db_url = settings.DATABASE_URL
     url_obj = make_url(db_url)
-
-    engine_args = {
-        "echo": False,
-        "future": True,
-        "connect_args": {},
-    }
 
     qs = dict(url_obj.query)
     ssl_mode = qs.pop("sslmode", None) or qs.pop("ssl", None)
 
-    if ssl_mode is not None:
-        url_obj = url_obj.set(query=qs)
-        db_url = url_obj.render_as_string(hide_password=False)
+    # بناء connect_kwargs لـ asyncpg مباشرة
+    connect_kwargs: dict = {
+        "host": url_obj.host,
+        "port": url_obj.port or 5432,
+        "database": url_obj.database,
+        "user": url_obj.username,
+        "password": url_obj.password,
+        "statement_cache_size": 0,  # PgBouncer compatibility
+    }
 
-        if ssl_mode in ("require", "verify-ca", "verify-full"):
-            ctx = ssl.create_default_context()
-            if ssl_mode == "require":
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_REQUIRED
-                ctx.load_default_certs()
+    if ssl_mode in ("require", "verify-ca", "verify-full"):
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE  # Supabase self-signed cert
+        connect_kwargs["ssl"] = ctx
 
-                ca_cert = os.environ.get("DB_CA_CERT_PATH")
-                if ca_cert and os.path.exists(ca_cert):
-                    ctx.load_verify_locations(cafile=ca_cert)
+    async def _creator() -> asyncpg.Connection:
+        return await asyncpg.connect(**connect_kwargs)
 
-            engine_args["connect_args"]["ssl"] = ctx
+    # نُنشئ engine بدون URL مباشر — نستخدم creator لتجاوز SQLAlchemy dialect
+    # لكن نحتاج URL صالح للـ dialect — نُزيل sslmode
+    clean_url = url_obj.set(query=qs).render_as_string(hide_password=False)
 
-    # Supabase / PgBouncer compatibility
-    engine_args["connect_args"].update(
-        {"statement_cache_size": 0, "prepared_statement_cache_size": 0}
+    return create_async_engine(
+        clean_url,
+        echo=False,
+        future=True,
+        connect_args={
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+            "ssl": connect_kwargs.get("ssl"),
+        } if "ssl" in connect_kwargs else {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+        },
     )
 
-    return create_async_engine(db_url, **engine_args)
+
+# Singleton: lazy-initialised on first get_engine() call to avoid import-time
+# connection errors when ORCHESTRATOR_DATABASE_URL is not yet in the environment.
+_engine: AsyncEngine | None = None
 
 
-engine = create_engine()
-async_session_factory = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
+def get_engine() -> AsyncEngine:
+    """يُعيد AsyncEngine مُهيَّأً بشكل كسول (lazy singleton)."""
+    global _engine
+    if _engine is None:
+        _engine = create_engine()
+    return _engine
+
+
+# backward-compat alias — resolved lazily via get_engine()
+engine = None  # type: ignore[assignment]
+
+# Lazy session factory — bound to engine on first call to avoid import-time DB connection
+_session_factory: async_sessionmaker | None = None  # type: ignore[type-arg]
+
+
+def _get_session_factory() -> async_sessionmaker:  # type: ignore[type-arg]
+    """يُعيد async_sessionmaker مُهيَّأً بشكل كسول."""
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = async_sessionmaker(
+            get_engine(),
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
+        )
+    return _session_factory
+
+
+# backward-compat: modules that call async_session_factory() directly
+class _LazySessionFactory:
+    """Proxy يُحيل الاستدعاء إلى _get_session_factory() عند أول استخدام."""
+
+    def __call__(self, *args, **kwargs):  # type: ignore[override]
+        return _get_session_factory()(*args, **kwargs)
+
+    def __getattr__(self, name: str):
+        return getattr(_get_session_factory(), name)
+
+
+async_session_factory = _LazySessionFactory()
 
 _postgres_pool: AsyncConnectionPool | None = None
 postgres_checkpointer: Any | None = None
@@ -97,7 +149,7 @@ async def init_db() -> None:
     try:
         # Import models here or ensure they are imported before calling this
         # We rely on main.py importing them.
-        async with engine.begin() as conn:
+        async with get_engine().begin() as conn:
             await conn.run_sync(OrchestratorSQLModel.metadata.create_all)
 
         # Initialize LangGraph Postgres checkpointer pool

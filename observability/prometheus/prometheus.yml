@@ -76,3 +76,44 @@ scrape_configs:
       - targets: ["localhost:9090"]
         labels:
           tier: stack
+
+  # ---- Microservices health scrape (Step 2 — StateGraph routing) --------
+  # These targets are DORMANT by default. They appear as DOWN until
+  # `docker compose -f docker-compose.yml up -d` is run.
+  # The 50-microservices-transition.json dashboard uses up{job=...} to
+  # show which services are alive — DOWN is the expected state in dev.
+  - job_name: orchestrator-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8006"]
+        labels:
+          tier: microservice
+          service: orchestrator-service
+    honor_labels: true
+
+  - job_name: research-agent
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8007"]
+        labels:
+          tier: microservice
+          service: research-agent
+    honor_labels: true
+
+  - job_name: user-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8001"]
+        labels:
+          tier: microservice
+          service: user-service
+    honor_labels: true
+
+  - job_name: planning-agent
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8002"]
+        labels:
+          tier: microservice
+          service: planning-agent
+    honor_labels: true

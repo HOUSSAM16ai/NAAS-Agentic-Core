@@ -1,5 +1,5 @@
 # Architectural Diagnostic: NAAS-Agentic-Core
-> Last updated: **2026-05-09** | Branch: `fix/lifespan-orchestration-env-injection` (fifth pass — live fixes applied).
+> Last updated: **2026-05-10** | Branch: `feat/microservices-step2-stategraph-routing` (sixth pass — StateGraph routing activated).
 
 ## Executive Summary
 The system is in a "strangler fig" migration phase from monolith to microservices. In the default Codespaces environment (without explicitly launching `docker-compose.yml`), the system relies entirely on the FastAPI monolith and a 2-node local LangGraph fallback. The advertised "Agentic" capabilities (KAgent, MCP, DSPy, Reranker, LlamaIndex, Multi-agent workflows) are either DORMANT (gated behind microservices that aren't running) or ZOMBIE (code exists but has no live consumers).
@@ -47,12 +47,12 @@ The system is in a "strangler fig" migration phase from monolith to microservice
 
 ## Transformation Gap
 To move from "transitional/zombie" to "production-grade multi-service":
-1. **Wake the mesh** — `docker compose -f docker-compose.yml up -d` + set `ORCHESTRATOR_SERVICE_URL`. Prove `compatibility_facade=True` round-trip writes exactly one row per turn. No code change required.
-2. **Add `TAVILY_API_KEY` to `docker-compose.yml`** — add under `orchestrator-service.environment` and `research-agent.environment`. Key must start with `tvly-`. Currently absent from all env templates.
-3. **Fix OTEL** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to a valid collector URL.
-4. **Activate Redis** — set `REDIS_URL=redis://localhost:6379/0`.
-5. **Fix DuckDuckGo fallback** — install `ddgs` package (`pip install ddgs`) if Tavily-less degraded mode is needed.
-6. **Promote ONE agentic layer** — pick exactly one of (multi-agent workflow, MCP, KAgent, LlamaIndex, reranker, DSPy) and wire it into the live router or a `local_graph` node. Add runtime trace assertion. Update `.memory/runtime_truth.md`.
+1. ✅ **DONE (Step 1 — 2026-05-10)** — Remove H1/H2/H3 blockers: TAVILY_API_KEY in docker-compose.yml, ddgs in research_agent/requirements.txt, cognitive_engine None guard.
+2. ✅ **DONE (Step 2 — 2026-05-10)** — Change `ChatRoutingPolicy` default to `state_graph` → `/api/chat/messages`. Routing metrics + Grafana dashboard + CI gate added.
+3. **NEXT: Wake the mesh** — `docker compose -f docker-compose.yml up -d orchestrator-service postgres-orchestrator redis-orchestrator` + set `ORCHESTRATOR_SERVICE_URL=http://localhost:8006`. Prove `compatibility_facade=True` round-trip writes exactly one row per turn. No code change required — routing policy already points to StateGraph.
+4. **Fix OTEL** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to a valid collector URL (currently `http` = invalid).
+5. **Activate Redis** — set `REDIS_URL=redis://localhost:6379/0`.
+6. **Promote ONE agentic layer** — pick exactly one of (MCP, LlamaIndex, reranker, DSPy) and wire it into the live StateGraph path. Add runtime trace assertion. Update `.memory/runtime_truth.md`.
 
 ## Advanced LangGraph + Tavily Revival Checklist (verified 2026-05-09)
 - [ ] Add `TAVILY_API_KEY=${TAVILY_API_KEY:-}` to `docker-compose.yml` (orchestrator-service + research-agent)

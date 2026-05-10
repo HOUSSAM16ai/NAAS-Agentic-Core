@@ -1,6 +1,5 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-10** | Branch: `feat/orchestrator-revival-step1`
-> Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
+> Last updated: **2026-05-10** | Branch: `feat/microservices-step2-stategraph-routing`
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
 
 ## Golden rule
@@ -155,6 +154,11 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 | 12 | Reranker / LlamaIndex / DSPy | `microservices/research_agent`, `orchestrator_service` | **DORMANT** | Blocked by dormant microservices |
 | 13 | Tavily | `orchestrator_service/src/services/overmind/graph/search.py` | **DORMANT** | Key in .env, orchestrator not running |
 | 14 | Advanced orchestrator StateGraph (13 nodes) | `orchestrator_service/src/services/overmind/graph/main.py` | **DORMANT→PARTIAL** | Compiles in isolation (verified live 2026-05-10 with real OPENROUTER_API_KEY). 3 blockers removed (H1/H2/H3). Needs `docker compose up orchestrator-service` to reach ACTIVE. |
+| 27 | ChatRoutingPolicy — endpoint_mode | `app/infrastructure/clients/routing_policy.py` | **ACTIVE** | Default: `state_graph` → `/api/chat/messages`. Rollback: `ORCHESTRATOR_CHAT_ENDPOINT=agent` → `/agent/chat`. D-021 implemented 2026-05-10. |
+| 28 | Routing metrics | `app/infrastructure/clients/orchestrator_client.py` | **ACTIVE** | `cogniforge_routing_mode_state_graph` gauge + `cogniforge_routing_target_total{target=...}` counter emitted per chat request. |
+| 29 | Microservices Transition Dashboard | `observability/grafana/dashboards/50-microservices-transition.json` | **ACTIVE** | 15 panels on Grafana :3001. UID: cogniforge-ms-transition-step2. Shows routing mode, StateGraph metrics, Tavily, microservices health matrix, fallback chain progress. |
+| 30 | Microservices Prometheus scrape | `observability/prometheus/prometheus.yml` | **ACTIVE (targets DOWN)** | orchestrator-service:8006, research-agent:8007, user-service:8001, planning-agent:8002 added. All DOWN until `docker compose up`. |
+| 31 | Microservices Transition CI gate | `.github/workflows/microservices-transition.yml` | **ACTIVE** | 5-job workflow: routing-policy-gate / stategraph-compile-gate / dashboard-schema-gate / prometheus-config-gate / transition-gate. Triggers on routing_policy.py changes. |
 | 15 | Database | `app/core/database.py` | **ACTIVE** | PostgreSQL 17.6 Supabase. database:ok confirmed. |
 | 16 | Cache | `app/caching/factory.py` | **ACTIVE (InMemoryCache)** | REDIS_URL not set → InMemoryCache |
 | 17 | AI Gateway | `app/core/gateway/simple_client.py` | **ACTIVE** | nvidia/nemotron-3-super-120b-a12b:free. Live call confirmed. |
@@ -193,3 +197,7 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 20. **`TAVILY_API_KEY` يجب أن يكون في `docker-compose.yml` لكلا الخدمتين (H1 — 2026-05-10).** `WebSearchFallbackNode` في `orchestrator_service` و`SuperSearchOrchestrator` في `research_agent` تتجاهلان البحث صامتتين عند غياب المفتاح. القيمة الآمنة: `${TAVILY_API_KEY:-}`.
 21. **`ddgs>=6.0` مطلوب في `research_agent/requirements.txt` (H2 — 2026-05-10).** بدونه، `SuperSearchOrchestrator` ترفع `ImportError` عند غياب `TAVILY_API_KEY` — وهو الوضع الافتراضي في بيئة التطوير.
 18. **Exercise retrieval requires intent classification, not keyword matching (ISS-038).** `detect_exercise_retrieval()` must use a two-phase classifier: (1) explanation-intent patterns cancel retrieval at highest priority; (2) only explicit retrieval patterns trigger it. A flat keyword list on "تمرين"/"احتمالات" causes context blindness — every explanation request returns the same static knowledge-base file. When in doubt, do NOT trigger retrieval; LangGraph handles ambiguous questions better. The `knowledge_base/` directory currently contains exactly one file — any retrieval trigger without explicit context returns that file unconditionally.
+22. **`ORCHESTRATOR_CHAT_ENDPOINT` controls routing target (Step 2 — 2026-05-10).** Default: `"state_graph"` → `/api/chat/messages` (StateGraph 13 nodes). Rollback: `"agent"` → `/agent/chat` (OrchestratorAgent). Unknown values fall back to `"state_graph"` with a warning. Do NOT change the default without an ADR (D-021).
+23. **Routing metrics are emitted per chat request.** `cogniforge_routing_mode_state_graph` (gauge: 1=StateGraph, 0=Agent) and `cogniforge_routing_target_total{target=...}` (counter) are emitted by `orchestrator_client.py` on every `chat_with_agent` call. These feed the `50-microservices-transition.json` dashboard on Grafana :3001.
+24. **Microservices Prometheus targets are DOWN by default.** `orchestrator-service`, `research-agent`, `user-service`, `planning-agent` scrape targets added to `prometheus.yml`. They show as DOWN until `docker compose -f docker-compose.yml up -d` is run. DOWN is the expected state in the default devcontainer — it is not an error.
+25. **Grafana :3001 has 6 dashboards after Step 2.** `50-microservices-transition.json` (UID: `cogniforge-ms-transition-step2`) added. 15 panels covering routing mode, StateGraph execution, Tavily, microservices health matrix, and fallback chain transition progress.

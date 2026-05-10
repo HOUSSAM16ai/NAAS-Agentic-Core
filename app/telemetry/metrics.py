@@ -182,6 +182,9 @@ class MetricsManager:
             # LangGraph per-node latency — feeds cogniforge_langgraph_node_duration_seconds
             # panels in observability/grafana/dashboards/20-langgraph.json
             "langgraph.node.duration_seconds",
+            # Orchestrator StateGraph node latency — feeds 50-microservices-transition.json
+            # graph="orchestrator" label distinguishes from local graph="local"
+            "orchestrator.node.duration_seconds",
         }
 
         def _translate_name(raw: str) -> str:

@@ -57,6 +57,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Known fix applied 2026-05-10 (Orchestrator Revival Step 1 — H1/H2/H3):** Three technical blockers preventing `orchestrator_service` from running were removed. H1: `TAVILY_API_KEY` added to `docker-compose.yml` for both `orchestrator-service` and `research-agent` — `WebSearchFallbackNode` was silently skipping web search. H2: `ddgs>=6.0` added to `microservices/research_agent/requirements.txt` — `SuperSearchOrchestrator` raised `ImportError` without it. H3: null guard added before `cognitive_engine.memorize()` in `simple_client.py:116` — `get_cognitive_engine()` returns `None` by default, causing `AttributeError` on every successful LLM response. The 13-node StateGraph compiles and runs with real `OPENROUTER_API_KEY` (verified live). 9 regression tests added to `tests/microservices/orchestrator_service/test_orchestrator_revival.py`.
 
+**Microservices Step 2 applied 2026-05-10 (D-025 — StateGraph Routing):** `ChatRoutingPolicy` default changed from `/agent/chat` (OrchestratorAgent) to `/api/chat/messages` (StateGraph 13 nodes). Controlled by `ORCHESTRATOR_CHAT_ENDPOINT` env var (`"state_graph"` default | `"agent"` rollback). Routing metrics added: `cogniforge_routing_mode_state_graph` gauge + `cogniforge_routing_target_total{target=...}` counter emitted per request. New Grafana dashboard `50-microservices-transition.json` (15 panels, UID `cogniforge-ms-transition-step2`) visible at :3001. Prometheus scrape targets added for orchestrator-service:8006, research-agent:8007, user-service:8001, planning-agent:8002 (all DOWN until `docker compose up`). CI gate `.github/workflows/microservices-transition.yml` (5 jobs) enforces default mode on every PR. 16 regression tests in `tests/infrastructure/test_routing_policy.py`.
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
@@ -536,6 +538,90 @@ Add rows for `orchestrator-service StateGraph` (ACTIVE), `Tavily` (ACTIVE), `Web
 - `research_client` in the orchestrator calls `research-agent:8007` via HTTP — never direct DB access
 - `TAVILY_API_KEY` must be injected via environment, never hardcoded
 - The `persisted: true` flag protocol (D-006) applies when the orchestrator is active — the monolith must still own the persistence decision
+
+---
+
+## 6.9 Microservices Step 2 — StateGraph Routing Doctrine (2026-05-10)
+
+### What Changed
+`ChatRoutingPolicy.candidate_urls()` now returns `/api/chat/messages` (StateGraph 13 nodes) by default instead of `/agent/chat` (OrchestratorAgent). This is the **second confirmed transition step** toward the full microservices architecture.
+
+### Routing Control
+```python
+# ORCHESTRATOR_CHAT_ENDPOINT controls the routing target (read per-request from env)
+# "state_graph" (default) → /api/chat/messages  — StateGraph 13 nodes (DSPy, Tavily, reranker)
+# "agent"                 → /agent/chat          — OrchestratorAgent (rollback)
+
+# Rollback (no restart required):
+export ORCHESTRATOR_CHAT_ENDPOINT=agent
+
+# Verify current mode via Grafana :3001 → "Microservices Transition — Step 2"
+# Panel "Routing Mode" shows STATE_GRAPH (green) or AGENT (orange)
+```
+
+### Observability Contract
+Every `chat_with_agent` call emits two metrics:
+- `cogniforge_routing_mode_state_graph` — gauge: 1 = StateGraph active, 0 = Agent (rollback)
+- `cogniforge_routing_target_total{target="state_graph"|"agent"|"local_fallback"}` — counter
+
+These feed the `50-microservices-transition.json` dashboard (UID: `cogniforge-ms-transition-step2`) on Grafana :3001. The dashboard has 15 panels covering:
+1. Routing mode + chat requests by target
+2. StateGraph node execution rate + latency (p50/p95/p99)
+3. Tavily search outcomes + research agent health + orchestrator startup state
+4. Microservices health matrix (all services — DOWN = expected in default devcontainer)
+5. Fallback chain transition progress (cumulative — state_graph should rise, local_fallback should drop)
+
+### Prometheus Scrape Targets (Step 2)
+Added to `observability/prometheus/prometheus.yml`:
+- `orchestrator-service` → `host.docker.internal:8006/metrics`
+- `research-agent` → `host.docker.internal:8007/metrics`
+- `user-service` → `host.docker.internal:8001/metrics`
+- `planning-agent` → `host.docker.internal:8002/metrics`
+
+All show as **DOWN** until `docker compose -f docker-compose.yml up -d` is run. DOWN is the expected state in the default devcontainer — it is not an error condition.
+
+### CI Gate
+`.github/workflows/microservices-transition.yml` — 5 jobs:
+1. `routing-policy-gate` — asserts default mode is `state_graph`, rollback mode is `agent`
+2. `stategraph-compile-gate` — verifies StateGraph imports and compiles without error
+3. `dashboard-schema-gate` — validates all Grafana dashboard JSON files
+4. `prometheus-config-gate` — validates prometheus.yml has required microservice jobs
+5. `transition-gate` — aggregates all gates, posts PR summary
+
+Triggers on: `routing_policy.py`, `orchestrator_client.py`, `microservices/orchestrator_service/**`, `docker-compose.yml`, dashboard files.
+
+### Activation Sequence (when ready to go live)
+```bash
+# 1. Start orchestrator-service
+OPENROUTER_API_KEY="sk-or-v1-..." TAVILY_API_KEY="tvly-dev-..." \
+docker compose -f docker-compose.yml up -d \
+  orchestrator-service postgres-orchestrator redis-orchestrator
+
+# 2. Verify orchestrator health
+curl http://localhost:8006/health
+# Expected: {"status":"ok","startup_state":"ready",...}
+
+# 3. Set ORCHESTRATOR_SERVICE_URL in monolith env
+export ORCHESTRATOR_SERVICE_URL=http://localhost:8006
+# ORCHESTRATOR_CHAT_ENDPOINT=state_graph is already the default
+
+# 4. Restart monolith
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 5. Verify routing in Grafana :3001
+# "Routing Mode" panel → STATE_GRAPH (green)
+# "Orchestrator Service Health" panel → UP (green)
+# "Chat Requests by Routing Target" → state_graph line rising
+
+# 6. Rollback if needed (no restart)
+export ORCHESTRATOR_CHAT_ENDPOINT=agent
+```
+
+### What MUST NOT Change Without an ADR
+- The default value of `ORCHESTRATOR_CHAT_ENDPOINT` (currently `"state_graph"`)
+- The `_ENDPOINT_MAP` keys in `routing_policy.py` — adding a new mode requires an ADR
+- The `targets_state_graph` property — used by CI gate and monitoring
+- The routing metrics names — dashboards depend on exact metric names
 
 ---
 

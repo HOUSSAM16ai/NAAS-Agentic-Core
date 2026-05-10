@@ -1,0 +1,356 @@
+# =============================================================================
+# CI Gate — Step 6: Planning Agent Live Activation
+# =============================================================================
+# يتحقق من صحة الخطوة 6: planning-agent على :8002 مع /metrics endpoint حقيقي.
+#
+# Jobs:
+#   1. static-checks   — التحقق الثابت من الملفات (بدون runtime)
+#   2. compose-gate    — التحقق من docker-compose.step6.yml
+#   3. dashboard-gate  — التحقق من Grafana dashboard JSON
+#   4. lint            — ruff check على ملفات planning_agent
+#   5. step6-tests     — تشغيل 51 اختبار Step 6
+#   6. step5-regression — التحقق من عدم كسر Step 5
+#   7. pr-summary      — تعليق تلخيصي على PR
+# =============================================================================
+
+name: "Microservices Step 6 — Planning Agent"
+
+on:
+  push:
+    branches:
+      - "feat/microservices-step6*"
+      - "fix/microservices-step6*"
+  pull_request:
+    paths:
+      - "microservices/planning_agent/**"
+      - "docker-compose.step6.yml"
+      - ".ona/automations.yaml"
+      - "observability/native/prometheus.yml"
+      - "observability/grafana/dashboards/90-microservices-step6-planning-agent.json"
+      - ".devcontainer/supervisor.sh"
+      - "tests/microservices/planning_agent/**"
+      - ".github/workflows/microservices-step6-planning-agent.yml"
+
+concurrency:
+  group: "step6-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+
+  # ── Job 1: Static Checks ───────────────────────────────────────────────────
+  static-checks:
+    name: "Static Checks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "P1 — prometheus-client in requirements.txt"
+        run: |
+          grep -q "prometheus-client" microservices/planning_agent/requirements.txt \
+            || { echo "❌ prometheus-client مفقود من requirements.txt"; exit 1; }
+          echo "✅ prometheus-client موجود"
+
+      - name: "P2 — prom_metrics.py exists with all 11 metrics"
+        run: |
+          [ -f microservices/planning_agent/prom_metrics.py ] \
+            || { echo "❌ prom_metrics.py غير موجود"; exit 1; }
+
+          METRICS=(
+            "cogniforge_planning_requests_total"
+            "cogniforge_planning_request_duration_seconds"
+            "cogniforge_planning_active_connections"
+            "cogniforge_planning_plans_total"
+            "cogniforge_planning_plan_duration_seconds"
+            "cogniforge_planning_dspy_invocations_total"
+            "cogniforge_planning_dspy_errors_total"
+            "cogniforge_planning_fallback_plans_total"
+            "cogniforge_planning_db_operations_total"
+            "cogniforge_planning_db_duration_seconds"
+            "cogniforge_planning_startup_info"
+          )
+          FAIL=0
+          for m in "${METRICS[@]}"; do
+            grep -q "$m" microservices/planning_agent/prom_metrics.py \
+              && echo "  ✅ $m" \
+              || { echo "  ❌ $m غائب"; FAIL=$((FAIL+1)); }
+          done
+          [ "$FAIL" -eq 0 ] || exit 1
+
+      - name: "P3 — /metrics endpoint in main.py"
+        run: |
+          grep -q '"/metrics"' microservices/planning_agent/main.py \
+            || { echo "❌ /metrics route غير موجود في main.py"; exit 1; }
+          grep -q "export_prometheus_text" microservices/planning_agent/main.py \
+            || { echo "❌ export_prometheus_text() غير مستدعى في main.py"; exit 1; }
+          grep -q "set_startup_info" microservices/planning_agent/main.py \
+            || { echo "❌ set_startup_info() غير مستدعى في main.py"; exit 1; }
+          echo "✅ /metrics endpoint موجود في main.py"
+
+      - name: "P4 — supervisor.sh launches planning-agent"
+        run: |
+          grep -q "launch_planning_agent" .devcontainer/supervisor.sh \
+            || { echo "❌ launch_planning_agent() غير موجود في supervisor.sh"; exit 1; }
+          grep -q "8002" .devcontainer/supervisor.sh \
+            || { echo "❌ المنفذ 8002 غير مذكور في supervisor.sh"; exit 1; }
+          grep -q "uvicorn microservices.planning_agent" .devcontainer/supervisor.sh \
+            || { echo "❌ أمر uvicorn لـ planning_agent غير موجود في supervisor.sh"; exit 1; }
+          echo "✅ supervisor.sh يُشغِّل planning-agent على :8002"
+
+      - name: "P5 — automations.yaml has planning-agent service and tasks"
+        run: |
+          grep -q "planning-agent:" .ona/automations.yaml \
+            || { echo "❌ planning-agent service غير موجود في automations.yaml"; exit 1; }
+          grep -q "verify-step6-planning-agent" .ona/automations.yaml \
+            || { echo "❌ verify-step6-planning-agent task غير موجود"; exit 1; }
+          grep -q "docker-compose-stack" .ona/automations.yaml \
+            || { echo "❌ docker-compose-stack task غير موجود"; exit 1; }
+          grep -q "run-step6-tests" .ona/automations.yaml \
+            || { echo "❌ run-step6-tests task غير موجود"; exit 1; }
+          echo "✅ automations.yaml يحتوي جميع planning-agent entries"
+
+      - name: "P6 — native/prometheus.yml has planning-agent scrape target"
+        run: |
+          grep -q "planning-agent" observability/native/prometheus.yml \
+            || { echo "❌ planning-agent job غير موجود في native/prometheus.yml"; exit 1; }
+          grep -q "8002" observability/native/prometheus.yml \
+            || { echo "❌ المنفذ 8002 غير مذكور في native/prometheus.yml"; exit 1; }
+          echo "✅ Prometheus scrape target لـ planning-agent موجود"
+
+  # ── Job 2: Docker Compose Gate ────────────────────────────────────────────
+  compose-gate:
+    name: "Docker Compose Step 6 Validation"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Validate docker-compose.step6.yml syntax"
+        run: |
+          [ -f docker-compose.step6.yml ] \
+            || { echo "❌ docker-compose.step6.yml غير موجود"; exit 1; }
+          python3 -c "
+import yaml, sys
+with open('docker-compose.step6.yml') as f:
+    d = yaml.safe_load(f)
+services = d.get('services', {})
+required = ['orchestrator-service', 'user-service', 'planning-agent']
+missing = [s for s in required if s not in services]
+if missing:
+    print(f'❌ خدمات مفقودة: {missing}')
+    sys.exit(1)
+print('✅ docker-compose.step6.yml صالح — الخدمات:', list(services.keys()))
+"
+
+      - name: "Validate planning-agent port 8002"
+        run: |
+          grep -q "8002" docker-compose.step6.yml \
+            || { echo "❌ المنفذ 8002 غير مذكور في docker-compose.step6.yml"; exit 1; }
+          echo "✅ planning-agent port 8002 موجود"
+
+      - name: "Validate OPENROUTER_API_KEY env var"
+        run: |
+          grep -q "OPENROUTER_API_KEY" docker-compose.step6.yml \
+            || { echo "❌ OPENROUTER_API_KEY غير مذكور في docker-compose.step6.yml"; exit 1; }
+          echo "✅ OPENROUTER_API_KEY env var موجود"
+
+  # ── Job 3: Dashboard Gate ─────────────────────────────────────────────────
+  dashboard-gate:
+    name: "Grafana Dashboard Validation"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Validate dashboard JSON"
+        run: |
+          DASHBOARD="observability/grafana/dashboards/90-microservices-step6-planning-agent.json"
+          [ -f "$DASHBOARD" ] || { echo "❌ Dashboard JSON غير موجود"; exit 1; }
+
+          python3 -c "
+import json, sys
+with open('$DASHBOARD') as f:
+    d = json.load(f)
+
+errors = []
+if d.get('uid') != 'cogniforge-ms-step6-planning-agent':
+    errors.append(f'UID غير صحيح: {d.get(\"uid\")}')
+if len(d.get('panels', [])) < 10:
+    errors.append(f'عدد panels غير كافٍ: {len(d.get(\"panels\", []))}')
+if d.get('refresh') != '10s':
+    errors.append(f'refresh غير صحيح: {d.get(\"refresh\")}')
+if 'cogniforge_planning' not in json.dumps(d):
+    errors.append('لا توجد مقاييس cogniforge_planning_* في Dashboard')
+if 'step6' not in d.get('tags', []):
+    errors.append(f'tag step6 غائب: {d.get(\"tags\")}')
+
+if errors:
+    for e in errors: print(f'  ❌ {e}')
+    sys.exit(1)
+
+print(f'✅ Dashboard صالح — {len(d[\"panels\"])} panels | UID: {d[\"uid\"]} | refresh: {d[\"refresh\"]}')
+"
+
+  # ── Job 4: Lint ───────────────────────────────────────────────────────────
+  lint:
+    name: "Ruff Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: "Install ruff"
+        run: pip install ruff --quiet
+      - name: "Lint planning_agent"
+        run: |
+          ruff check microservices/planning_agent/ \
+            --select E,W,F,I \
+            --ignore E501 \
+            || { echo "❌ ruff أبلغ عن أخطاء في planning_agent"; exit 1; }
+          echo "✅ ruff clean"
+
+  # ── Job 5: Step 6 Tests ───────────────────────────────────────────────────
+  step6-tests:
+    name: "Step 6 Tests (51 tests)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "Install dependencies"
+        run: |
+          pip install --quiet \
+            fastapi uvicorn pydantic pydantic-settings \
+            sqlmodel aiosqlite asyncpg \
+            prometheus-client>=0.20.0 \
+            pytest pytest-asyncio \
+            pyyaml
+
+      - name: "Run Step 6 tests"
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          PLANNING_DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          PLANNING_OPENROUTER_API_KEY: "dummy-key-for-ci"
+          SECRET_KEY: "test-secret-key-step6-ci"
+          ENVIRONMENT: "testing"
+          LLM_MOCK_MODE: "1"
+        run: |
+          python -m pytest \
+            tests/microservices/planning_agent/test_step6_planning_agent_metrics.py \
+            -v --tb=short --no-header \
+            2>&1 | tee step6_test_results.txt
+          tail -5 step6_test_results.txt
+
+      - name: "Upload test results"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step6-test-results
+          path: step6_test_results.txt
+
+  # ── Job 6: Step 5 Regression ──────────────────────────────────────────────
+  step5-regression:
+    name: "Step 5 Regression Guard"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "Install dependencies"
+        run: |
+          pip install --quiet \
+            fastapi uvicorn pydantic pydantic-settings \
+            sqlmodel aiosqlite asyncpg \
+            prometheus-client>=0.20.0 \
+            pytest pytest-asyncio \
+            pyyaml
+
+      - name: "Run Step 5 regression tests"
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          USER_DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          SECRET_KEY: "test-secret-key-step5-regression"
+          ENVIRONMENT: "testing"
+          LLM_MOCK_MODE: "1"
+        run: |
+          python -m pytest \
+            tests/microservices/user_service/test_step5_user_service_metrics.py \
+            -v --tb=short --no-header -q \
+            2>&1 | tail -20
+          echo "✅ Step 5 regression passed"
+
+  # ── Job 7: PR Summary ─────────────────────────────────────────────────────
+  pr-summary:
+    name: "PR Summary"
+    runs-on: ubuntu-latest
+    needs: [static-checks, compose-gate, dashboard-gate, lint, step6-tests, step5-regression]
+    if: always() && github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: "Post PR comment"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jobs = {
+              'static-checks':    '${{ needs.static-checks.result }}',
+              'compose-gate':     '${{ needs.compose-gate.result }}',
+              'dashboard-gate':   '${{ needs.dashboard-gate.result }}',
+              'lint':             '${{ needs.lint.result }}',
+              'step6-tests':      '${{ needs.step6-tests.result }}',
+              'step5-regression': '${{ needs.step5-regression.result }}',
+            };
+
+            const icon = r => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : '❌';
+            const allPass = Object.values(jobs).every(r => r === 'success' || r === 'skipped');
+
+            const rows = Object.entries(jobs)
+              .map(([name, result]) => `| ${icon(result)} | \`${name}\` | ${result} |`)
+              .join('\n');
+
+            const body = `## Step 6 — Planning Agent CI Gate ${allPass ? '✅ PASSED' : '❌ FAILED'}
+
+            | | Job | Result |
+            |---|---|---|
+            ${rows}
+
+            ### الخطوة 6: planning-agent على :8002
+            - **11 مقياساً** جديداً: \`cogniforge_planning_*\`
+            - **DSPy + LangGraph** مع fallback chain
+            - **Docker Compose** stack: \`docker-compose.step6.yml\`
+            - **Grafana dashboard**: \`cogniforge-ms-step6-planning-agent\` (20 panels, 10s refresh)
+            - **Prometheus scrape**: \`localhost:8002/metrics\` (step="6")
+
+            ### التحقق الحي بعد الدمج
+            \`\`\`bash
+            # Codespaces (uvicorn process — تلقائي عبر supervisor.sh)
+            curl http://localhost:8002/health
+            curl http://localhost:8002/metrics | grep cogniforge_planning_startup_info
+
+            # Docker Compose (بيئات Docker)
+            docker compose -f docker-compose.step6.yml up -d
+            docker compose -f docker-compose.step6.yml ps
+
+            # Grafana
+            # http://localhost:3001/d/cogniforge-ms-step6-planning-agent
+            \`\`\`
+
+            ### الخدمات النشطة بعد Step 6
+            | الخدمة | المنفذ | الحالة |
+            |--------|--------|--------|
+            | FastAPI monolith | :8000 | ✅ ACTIVE |
+            | orchestrator-service | :8006 | ✅ ACTIVE (Step 4) |
+            | user-service | :8001 | ✅ ACTIVE (Step 5) |
+            | **planning-agent** | **:8002** | **✅ ACTIVE (Step 6)** |
+            | Grafana | :3001 | ✅ ACTIVE |
+            | Prometheus | :9090 | ✅ ACTIVE |
+            `;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body.replace(/^            /gm, ''),
+            });

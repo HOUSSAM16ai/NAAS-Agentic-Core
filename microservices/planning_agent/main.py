@@ -11,10 +11,12 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI
+from fastapi.responses import Response
 from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from microservices.planning_agent import prom_metrics
 from microservices.planning_agent.database import get_session, init_db
 from microservices.planning_agent.errors import setup_exception_handlers
 from microservices.planning_agent.graph import graph
@@ -164,8 +166,18 @@ def _build_public_router() -> APIRouter:
     @router.get("/health", response_model=HealthResponse, tags=["System"])
     def health_check(settings: PlanningAgentSettings = Depends(get_settings)) -> HealthResponse:
         """يفحص جاهزية الوكيل بشكل مستقل."""
-
         return build_health_payload(settings)
+
+    @router.get("/metrics", tags=["Observability"], include_in_schema=False)
+    def prometheus_metrics() -> Response:
+        """
+        يُصدِّر مقاييس Prometheus لـ planning-agent.
+
+        يُستخدم من قِبَل Prometheus scraper على :8002/metrics.
+        السجل مستقل تماماً — لا يتداخل مع المونوليث أو الخدمات الأخرى.
+        """
+        body, content_type = prom_metrics.export_prometheus_text()
+        return Response(content=body, media_type=content_type)
 
     return router
 
@@ -310,6 +322,18 @@ async def lifespan(app: FastAPI):
 
     logger.info("Planning Agent Started")
     await init_db()
+
+    # Step 6: سجِّل معلومات الإقلاع في Prometheus
+    dspy_available = _dspy_dependencies_available()
+    db_backend = "postgresql" if "postgresql" in settings.DATABASE_URL else "sqlite"
+    prom_metrics.set_startup_info(
+        version=settings.SERVICE_VERSION,
+        environment=settings.ENVIRONMENT,
+        db_backend=db_backend,
+        dspy_available=dspy_available,
+    )
+    logger.info("Planning Agent metrics initialised", extra={"step": "6", "port": 8002})
+
     yield
     logger.info("Planning Agent Stopped")
 

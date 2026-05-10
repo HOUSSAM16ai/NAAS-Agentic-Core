@@ -651,6 +651,67 @@ launch_user_service >> "$APP_ROOT/.observability/user_service.log" 2>&1 &
 lifecycle_info "✅ User Service initialization offloaded to background"
 
 # ==============================================================================
+# STEP 4F: Planning Agent Launch (uvicorn process — no Docker required)
+# ==============================================================================
+# يُشغِّل planning-agent كـ uvicorn process مستقل على المنفذ 8002.
+# Step 6: /metrics endpoint حقيقي بصيغة Prometheus (cogniforge_planning_*).
+# يستخدم Supabase (DATABASE_URL الموجودة) عبر PLANNING_DATABASE_URL.
+# يتطلب OPENROUTER_API_KEY لتفعيل DSPy/LangGraph — يعمل بخطة احتياطية بدونه.
+# الفشل لا يوقف الـ supervisor — الخدمة تبدأ في وضع DEGRADED إذا فشل الـ DB.
+
+launch_planning_agent() {
+    local PLANNING_LOG_DIR="$APP_ROOT/.observability"
+    local PLANNING_PORT="8002"
+    local PLANNING_HEALTH="http://localhost:${PLANNING_PORT}/health"
+
+    mkdir -p "$PLANNING_LOG_DIR"
+
+    # ── التحقق من وجود DATABASE_URL ──────────────────────────────────────────
+    local planning_db_url="${PLANNING_DATABASE_URL:-${DATABASE_URL:-}}"
+    if [ -z "$planning_db_url" ]; then
+        lifecycle_warn "PlanningAgent: no DATABASE_URL available — skipping launch."
+        echo "[$(date -u +%FT%TZ)] DATABASE_URL missing — planning-agent parked" \
+            >> "$PLANNING_LOG_DIR/planning_agent.log"
+        return 0
+    fi
+
+    # ── idempotent: هل الخدمة تعمل بالفعل؟ ──────────────────────────────────
+    if pgrep -f "uvicorn microservices.planning_agent" > /dev/null 2>&1 \
+       && curl -sf --connect-timeout 2 "$PLANNING_HEALTH" > /dev/null 2>&1; then
+        lifecycle_info "PlanningAgent: already running and healthy on :${PLANNING_PORT}"
+        return 0
+    fi
+
+    # ── إيقاف أي نسخة قديمة ──────────────────────────────────────────────────
+    pkill -f "uvicorn microservices.planning_agent" 2>/dev/null || true
+    sleep 1
+
+    lifecycle_info "PlanningAgent: starting on :${PLANNING_PORT} (Step 6 — /metrics active)..."
+
+    # ── تشغيل uvicorn في الخلفية ──────────────────────────────────────────────
+    PLANNING_DATABASE_URL="$planning_db_url" \
+    PLANNING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    PLANNING_SECRET_KEY="${SECRET_KEY:-cogniforge-planning-agent-dev-key}" \
+    PLANNING_ENVIRONMENT="${ENVIRONMENT:-development}" \
+    PLANNING_SERVICE_NAME="planning-agent" \
+    PLANNING_SERVICE_VERSION="1.0.0" \
+    nohup python -m uvicorn microservices.planning_agent.main:app \
+        --host 0.0.0.0 \
+        --port "$PLANNING_PORT" \
+        --workers 1 \
+        --log-level info \
+        >> "$PLANNING_LOG_DIR/planning_agent.log" 2>&1 &
+
+    local planning_pid=$!
+    lifecycle_info "PlanningAgent: launched (PID=$planning_pid) — health at $PLANNING_HEALTH"
+    lifecycle_info "             Logs: $PLANNING_LOG_DIR/planning_agent.log"
+}
+
+# تشغيل في الخلفية — لا يحجب الـ supervisor
+launch_planning_agent >> "$APP_ROOT/.observability/planning_agent.log" 2>&1 &
+lifecycle_info "✅ Planning Agent initialization offloaded to background"
+
+# ==============================================================================
 # STEP 5: Health Check & Readiness (فحص الصحة والجاهزية)
 # ==============================================================================
 

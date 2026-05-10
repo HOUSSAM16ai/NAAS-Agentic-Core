@@ -1,5 +1,120 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-10 | Branch: `feat/microservices-step5-user-service`
+> Last updated: 2026-05-10 | Branch: `feat/microservices-step6-planning-agent`
+
+---
+
+## ✅ Session: 2026-05-10 — Microservices Step 6: Planning Agent Live Activation (الخطوة الانتقالية السادسة)
+
+**Branch**: `feat/microservices-step6-planning-agent`
+**Mode**: Live code changes — Codespaces native (no Docker). uvicorn processes only.
+**Verified**: 61 tests pass | ruff clean | JSON valid | YAML valid
+
+### الخطوة الانتقالية المختارة (D-035 — تنفيذ)
+تفعيل `planning-agent` كـ uvicorn process مستقل على `:8002` مع `/metrics` endpoint حقيقي بصيغة Prometheus. DSPy + LangGraph مع fallback chain عند غياب `OPENROUTER_API_KEY`. هذا يُحوِّل الخدمة الثالثة من DORMANT إلى ACTIVE في Codespaces، ويُضيف 11 مقياساً جديداً قابلاً للقياس الحي في Grafana. كما يُضيف `docker-compose.step6.yml` لتشغيل الـ stack الكامل في بيئات Docker.
+
+### التغييرات المُنجزة
+
+#### 1. `microservices/planning_agent/requirements.txt`
+- أضيف `prometheus-client>=0.20.0`
+
+#### 2. `microservices/planning_agent/prom_metrics.py` — وحدة جديدة
+- `CollectorRegistry` مستقل (لا يشارك REGISTRY الافتراضي)
+- 11 مقياساً: `cogniforge_planning_requests_total`, `cogniforge_planning_request_duration_seconds`, `cogniforge_planning_active_connections`, `cogniforge_planning_plans_total`, `cogniforge_planning_plan_duration_seconds`, `cogniforge_planning_dspy_invocations_total`, `cogniforge_planning_dspy_errors_total`, `cogniforge_planning_fallback_plans_total`, `cogniforge_planning_db_operations_total`, `cogniforge_planning_db_duration_seconds`, `cogniforge_planning_startup_info{step="6",dspy_available=...}`
+- استيراد دفاعي (try/except ImportError) — stub classes عند غياب prometheus_client
+- دوال عامة: `export_prometheus_text()`, `record_plan_created()`, `record_dspy_invocation()`, `record_http_request()`, `record_db_operation()`, `set_startup_info()`, `set_active_connections()`, `get_request_timer()`, `elapsed_since()`
+
+#### 3. `microservices/planning_agent/main.py`
+- استيراد `prom_metrics`
+- `/metrics` endpoint جديد → `export_prometheus_text()` → Prometheus text format
+- `set_startup_info(version, environment, db_backend, dspy_available)` في lifespan
+- `fastapi.responses.Response` لإرجاع Prometheus text مباشرة
+
+#### 4. `.devcontainer/supervisor.sh`
+- `launch_planning_agent()` — STEP 4F جديد
+- يُشغِّل uvicorn على `:8002` تلقائياً عند توفر `DATABASE_URL`
+- `PLANNING_DATABASE_URL="${PLANNING_DATABASE_URL:-${DATABASE_URL:-}}"` — يستخدم Supabase المشترك
+- `PLANNING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}"` — DSPy يعمل عند توفر المفتاح، fallback بدونه
+- idempotent: يتحقق من الـ process قبل الإطلاق
+
+#### 5. `.ona/automations.yaml`
+- service `planning-agent`: uvicorn start/ready/stop
+- `ready` command يتحقق من `/health` و `/metrics | grep cogniforge_planning_startup_info`
+- task `verify-step6-planning-agent`: تقرير شامل (health + metrics + Prometheus + Grafana + plan creation test)
+- task `restart-planning-agent`: إعادة تشغيل يدوي
+- task `run-step6-tests`: يُشغِّل 61 اختبار Step 6
+- task `docker-compose-stack`: يُشغِّل docker-compose.step6.yml في بيئات Docker (مع graceful fallback في Codespaces)
+- تحديث header التعليق ليعكس Step 6
+
+#### 6. `observability/native/prometheus.yml`
+- scrape target جديد: `job_name: planning-agent` → `localhost:8002/metrics`
+- label `step: "6"` + `service: planning-agent` + `tier: microservice`
+
+#### 7. `docker-compose.step6.yml` — ملف جديد
+- Docker Compose stack كامل: orchestrator-service + user-service + planning-agent
+- مخصص لبيئات Docker (ليس Codespaces — supervisor.sh هو المسار هناك)
+- `redis-step6` على :6381 (لا يتعارض مع redis الرئيسي)
+- `OPENROUTER_API_KEY` + `DATABASE_URL` مُحقَنان من البيئة
+- healthcheck لكل خدمة
+
+#### 8. `observability/grafana/dashboards/90-microservices-step6-planning-agent.json` — Dashboard جديد
+- 20 panels | UID: `cogniforge-ms-step6-planning-agent` | refresh: 10s
+- Row 1: Health + Startup Info + HTTP Rate + P95 Latency + Total Plans + Active Connections
+- Row 2: HTTP Requests by Endpoint + HTTP Latency P50/P95/P99
+- Row 3: Plans Rate (Success vs Fallback) + Plan Duration P50/P95 + DSPy Invocations
+- Row 4: DB Operations Rate + DB Duration P50/P95
+- Row 5: Microservices Health Matrix (all steps) + Prometheus Scrape Duration
+- Row 6: Step 6 Activation Guide (markdown)
+- Row 7: Fallback Plans Rate by Reason + DSPy Errors by Type
+
+#### 9. `.github/workflows/microservices-step6-planning-agent.yml` — CI gate جديد
+- 7 jobs: `static-checks` / `compose-gate` / `dashboard-gate` / `lint` / `step6-tests` / `step5-regression` / `pr-summary`
+- يتحقق من: prometheus-client في requirements، prom_metrics.py موجود، /metrics في main.py، supervisor.sh، automations.yaml، prometheus.yml، dashboard صالح، docker-compose.step6.yml صالح
+- PR comment تلخيصي مع جدول النتائج وأوامر التحقق الحي
+
+#### 10. `tests/microservices/planning_agent/test_step6_planning_agent_metrics.py` — 61 اختبار
+- P1: prometheus-client في requirements.txt (3 اختبارات)
+- P2: prom_metrics.py موجود ويحتوي المقاييس الصحيحة (11 اختبارات)
+- P3: /metrics endpoint في main.py (6 اختبارات)
+- P4: supervisor.sh يُشغِّل planning-agent (5 اختبارات)
+- P5: automations.yaml يحتوي planning-agent (7 اختبارات)
+- P6: Prometheus scrape config صحيح (4 اختبارات)
+- P7: Grafana dashboard صالح (8 اختبارات)
+- P8: docker-compose.step6.yml صالح (6 اختبارات)
+- P9: unit tests للـ prom_metrics functions (11 اختبارات)
+
+### التحقق الحي
+```bash
+# بعد تشغيل planning-agent (تلقائي عبر supervisor.sh):
+curl http://localhost:8002/health
+# → {"service":"planning-agent","status":"ok"}
+
+curl http://localhost:8002/metrics | grep cogniforge_planning
+# → cogniforge_planning_startup_info{version="1.0.0",environment="development",db_backend="postgresql",dspy_available="true",step="6"} 1.0
+
+# Grafana dashboard:
+# http://localhost:3001/d/cogniforge-ms-step6-planning-agent
+
+# Docker Compose (بيئات Docker):
+# docker compose -f docker-compose.step6.yml up -d
+```
+
+### الخدمات النشطة بعد Step 6
+| الخدمة | المنفذ | الحالة |
+|--------|--------|--------|
+| FastAPI monolith | :8000 | ✅ ACTIVE |
+| orchestrator-service | :8006 | ✅ ACTIVE (Step 4) |
+| user-service | :8001 | ✅ ACTIVE (Step 5) |
+| **planning-agent** | **:8002** | **✅ ACTIVE (Step 6 — جديد)** |
+| Grafana | :3001 | ✅ ACTIVE (9 dashboards) |
+| Prometheus | :9090 | ✅ ACTIVE (6 scrape targets) |
+
+### الخطوة التالية (Step 7)
+- تفعيل `research-agent` على `:8007` (uvicorn process) — Tavily web search حي
+- أو: تفعيل `reasoning-agent` على `:8008`
+- أو: ترقية LangGraph checkpointer من MemorySaver إلى PostgresCheckpointer (ISS-020)
+- أو: تفعيل Redis الحقيقي (`CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0`)
+
+---
 
 ---
 

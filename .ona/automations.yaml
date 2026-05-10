@@ -45,10 +45,12 @@ services:
         echo "🚀 Starting orchestrator-service (Step 4) on :${ORCH_PORT}..."
         echo "   OUTBOX_RELAY_ENABLED=true | /metrics → Prometheus"
 
-        # تحويل URL إلى asyncpg — SQLAlchemy async يرفض psycopg2 المتزامن (ISS-038-B)
+        # تحويل URL إلى asyncpg (ISS-038-B) + port 5432 بدلاً من 6543 (ISS-040)
+        # PgBouncer (6543) يرفض prepared statements — direct PostgreSQL (5432) مطلوب
         _raw_orch_db="${ORCHESTRATOR_DATABASE_URL:-${DATABASE_URL:-}}"
         _async_orch_db="${_raw_orch_db/postgresql:\/\//postgresql+asyncpg://}"
         _async_orch_db="${_async_orch_db/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+        _async_orch_db=$(echo "$_async_orch_db" | sed 's/:6543\//:5432\//')
         _async_orch_db=$(echo "$_async_orch_db" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
 
         ORCHESTRATOR_DATABASE_URL="$_async_orch_db" \
@@ -302,10 +304,11 @@ tasks:
       pkill -f "uvicorn microservices.orchestrator_service" 2>/dev/null || true
       sleep 2
       [ -z "${OPENROUTER_API_KEY:-}" ] && { echo "❌ OPENROUTER_API_KEY غير مضبوط"; exit 1; }
-      # تحويل URL إلى asyncpg — SQLAlchemy async يرفض psycopg2 المتزامن (ISS-038-B)
+      # ISS-038-B: asyncpg URL + ISS-040: port 5432 (direct PG, not PgBouncer 6543)
       _raw_orch="${ORCHESTRATOR_DATABASE_URL:-${DATABASE_URL:-}}"
       _async_orch="${_raw_orch/postgresql:\/\//postgresql+asyncpg://}"
       _async_orch="${_async_orch/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+      _async_orch=$(echo "$_async_orch" | sed 's/:6543\//:5432\//')
       _async_orch=$(echo "$_async_orch" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
       ORCHESTRATOR_DATABASE_URL="$_async_orch" \
       OPENROUTER_API_KEY="${OPENROUTER_API_KEY}" \

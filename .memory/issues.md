@@ -8,6 +8,13 @@
 
 ## 🔴 Critical — Resolved in this branch (2026-05-10)
 
+### ISS-040 · Orchestrator PgBouncer DuplicatePreparedStatement on Port 6543 [CONFIRMED LIVE — RESOLVED]
+- **Status**: RESOLVED in `feat/microservices-step7-research-agent` (live verification commit)
+- **Root cause**: Supabase PgBouncer on port **6543** (transaction pool mode) intercepts prepared statements at the PostgreSQL wire protocol level. Even with `statement_cache_size=0` in SQLAlchemy `connect_args`, the asyncpg dialect internally issues `select pg_catalog.version()` as a prepared statement during connection setup → `DuplicatePreparedStatementError`. Port **5432** is a direct PostgreSQL connection that supports prepared statements fully.
+- **Fix**: `supervisor.sh:launch_orchestrator_service()` and `automations.yaml` orchestrator start/restart commands now apply `sed 's/:6543\//:5432\//'` to `ORCHESTRATOR_DATABASE_URL` before passing it to uvicorn. Other microservices (user-service, planning-agent, research-agent) use SQLite in-memory for unit tests and Supabase via PgBouncer for runtime — they do not use `create_async_engine` with prepared statements, so they are unaffected.
+- **database.py refactor**: `create_engine()` → lazy singleton via `get_engine()`. `async_session_factory` → `_LazySessionFactory` proxy. `init_db()` → calls `get_engine()` instead of module-level `engine`. Prevents import-time DB connection errors.
+- **Files**: `microservices/orchestrator_service/src/core/database.py`, `.devcontainer/supervisor.sh`, `.ona/automations.yaml`
+
 ### ISS-039 · SuperSearchOrchestrator Import-Time Credential Error [CONFIRMED LIVE — RESOLVED]
 - **Status**: RESOLVED in `feat/microservices-step7-research-agent`
 - **Root cause**: `microservices/research_agent/main.py` instantiated `SuperSearchOrchestrator()` at module level (line 23). `SuperSearchOrchestrator.__init__` calls `ChatOpenAI(...)` which validates `OPENAI_API_KEY` at construction time. Without the key, `openai.OpenAIError: Missing credentials` was raised at import → uvicorn worker crashed → port 8007 never opened.

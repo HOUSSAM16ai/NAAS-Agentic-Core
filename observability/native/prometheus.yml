@@ -48,3 +48,18 @@ scrape_configs:
       - targets: ["localhost:3001"]
         labels:
           tier: stack
+
+  # ── Step 3: orchestrator-service (uvicorn process on :8006) ──────────────
+  # يبدأ تلقائياً عبر supervisor.sh عند توفر OPENROUTER_API_KEY.
+  # DOWN حتى يُقلع الـ process — ليس خطأ في الـ devcontainer الافتراضي.
+  - job_name: orchestrator-service
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ["localhost:8006"]
+        labels:
+          tier: microservice
+          service: orchestrator-service
+          step: "3"
+    honor_labels: true

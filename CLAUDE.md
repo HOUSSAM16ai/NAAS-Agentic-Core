@@ -61,6 +61,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Microservices Step 3 applied 2026-05-10 (D-029/D-030/D-031 — Live Activation in Codespaces):** `orchestrator-service` activated as a **uvicorn process** (no Docker — Codespaces constraint). Runs on :8006 alongside the monolith, exactly like Grafana/Prometheus. Four artefacts: (1) `supervisor.sh:launch_orchestrator_service()` — STEP 4D, starts uvicorn automatically at Codespace boot when `OPENROUTER_API_KEY` is set, uses Supabase (`DATABASE_URL`) as `ORCHESTRATOR_DATABASE_URL`; (2) `.ona/automations.yaml` — service `orchestrator-service` (uvicorn start/ready/stop) + tasks `health-probe`, `verify-stack`, `restart-orchestrator`, `run-step3-tests`; (3) `observability/native/prometheus.yml` — `orchestrator-service` scrape target added at `localhost:8006` (DOWN until process starts); (4) `observability/grafana/dashboards/60-microservices-step3-live.json` — 20-panel live dashboard (UID `cogniforge-ms-step3-live`, 10s refresh) at Grafana :3001. CI gate `.github/workflows/microservices-step3-live.yml` (7 jobs). `OUTBOX_RELAY_ENABLED=false` — enabled in Step 4 after persistence verification.
 
+**Microservices Step 4 applied 2026-05-10 (D-032/D-033 — Persistence Relay + Prometheus Metrics):** `OUTBOX_RELAY_ENABLED=true` activated in both `supervisor.sh` and `.ona/automations.yaml` (D-031 fulfilled). `prometheus_client>=0.20.0` added to `microservices/orchestrator_service/requirements.txt`. New module `microservices/orchestrator_service/src/core/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_outbox_relay_cycles_total`, `cogniforge_outbox_relay_processed_total`, `cogniforge_outbox_relay_failed_total`, `cogniforge_outbox_relay_skipped_total`, `cogniforge_outbox_pending_gauge`, `cogniforge_stategraph_invocations_total`, `cogniforge_stategraph_duration_seconds`, `cogniforge_stategraph_errors_total`, `cogniforge_orchestrator_requests_total`, `cogniforge_orchestrator_request_duration_seconds`, `cogniforge_orchestrator_startup_info`. `/metrics` endpoint added to `main.py` — Prometheus scrapes it at `localhost:8006/metrics`. Prometheus scrape label updated to `step="4"`. Grafana dashboard `70-microservices-step4-persistence.json` (24 panels, UID `cogniforge-ms-step4-persistence`, 10s refresh) at :3001. CI gate `.github/workflows/microservices-step4.yml` (5 jobs). 44 regression tests in `tests/microservices/orchestrator_service/test_step4_persistence_relay.py`.
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
@@ -272,6 +274,38 @@ gitpod automations task start restart-orchestrator
 ```
 
 **Why no Docker**: `devcontainer.json` intentionally omits `docker-in-docker` — it fails on `python:3.12-slim` + `network_mode: host` (Codespaces error 1302). The `docker-compose.step3.yml` file exists for future environments that support Docker (local dev, CI with DinD). In Codespaces, `supervisor.sh:launch_orchestrator_service()` is the canonical activation path.
+
+### NEVER use a shared prometheus_client REGISTRY across monolith and orchestrator
+
+```python
+# ❌ Wrong — Step 4 lesson: using the default REGISTRY causes metric name collisions
+# when both monolith and orchestrator run in the same process (tests, CI).
+from prometheus_client import Counter
+REQUESTS = Counter("cogniforge_requests_total", "...")  # registers in default REGISTRY
+
+# ✅ Correct — use an independent CollectorRegistry per service
+from prometheus_client import Counter, CollectorRegistry
+_REGISTRY = CollectorRegistry()
+REQUESTS = Counter("cogniforge_orchestrator_requests_total", "...", registry=_REGISTRY)
+```
+
+**Rule**: Every microservice that exposes `/metrics` must use its own `CollectorRegistry()`. Never import from `prometheus_client` without passing `registry=`. The monolith uses its own registry in `app/telemetry/`. The orchestrator uses `prom_metrics._REGISTRY`. They must never share.
+
+### NEVER set OUTBOX_RELAY_ENABLED=false in production supervisor.sh after Step 4
+
+```bash
+# ❌ Wrong — Step 3 default, now obsolete after D-031 fulfilled in Step 4
+OUTBOX_RELAY_ENABLED="false" \
+nohup python -m uvicorn microservices.orchestrator_service.main:app ...
+
+# ✅ Correct — Step 4 default (supervisor.sh and .ona/automations.yaml)
+OUTBOX_RELAY_ENABLED="true" \
+OUTBOX_RELAY_INTERVAL_SECONDS="15" \
+OUTBOX_RELAY_BATCH_SIZE="50" \
+nohup python -m uvicorn microservices.orchestrator_service.main:app ...
+```
+
+**Rule**: `OUTBOX_RELAY_ENABLED=false` was a Step 3 safety guard (D-031). Step 4 verified the persistence path — relay is now the default. Reverting to `false` silently disables event propagation without any error.
 
 ### NEVER use flat keyword matching for exercise retrieval intent detection
 

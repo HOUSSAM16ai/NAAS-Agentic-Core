@@ -1,0 +1,296 @@
+name: "Microservices Step 4 — Persistence Relay Gate"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# يتحقق من صحة الخطوة الانتقالية الرابعة:
+#   1. prometheus_client مُدرج في requirements.txt
+#   2. prom_metrics.py موجود ويُصدِّر الـ counters الصحيحة
+#   3. /metrics endpoint مُعرَّف في main.py
+#   4. OUTBOX_RELAY_ENABLED=true في supervisor.sh و automations.yaml
+#   5. Grafana dashboard 70-microservices-step4-persistence.json صالح
+#   6. Prometheus scrape config يستهدف orchestrator-service بـ step=4
+#   7. اختبارات Step 4 تمر (44 اختبار)
+#   8. رسالة تلخيصية على PR
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches:
+      - "feat/microservices-step4-persistence-relay"
+      - "main"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "microservices/orchestrator_service/**"
+      - ".devcontainer/supervisor.sh"
+      - ".ona/automations.yaml"
+      - "observability/native/prometheus.yml"
+      - "observability/grafana/dashboards/70-microservices-step4-persistence.json"
+      - "tests/microservices/orchestrator_service/test_step4_persistence_relay.py"
+      - ".github/workflows/microservices-step4.yml"
+
+concurrency:
+  group: "step4-${{ github.ref }}"
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 1: التحقق من الملفات الأساسية
+  # ─────────────────────────────────────────────────────────────────────────
+  static-checks:
+    name: "Static Checks — Files & Config"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "prometheus-client in requirements.txt"
+        run: |
+          grep -q "prometheus-client" microservices/orchestrator_service/requirements.txt || {
+            echo "❌ prometheus-client غائب من requirements.txt"
+            exit 1
+          }
+          echo "✅ prometheus-client موجود"
+
+      - name: "prom_metrics.py exists"
+        run: |
+          test -f microservices/orchestrator_service/src/core/prom_metrics.py || {
+            echo "❌ prom_metrics.py غير موجود"
+            exit 1
+          }
+          echo "✅ prom_metrics.py موجود"
+
+      - name: "/metrics endpoint in main.py"
+        run: |
+          grep -q '"/metrics"' microservices/orchestrator_service/main.py || {
+            echo "❌ /metrics endpoint غائب من main.py"
+            exit 1
+          }
+          echo "✅ /metrics endpoint موجود"
+
+      - name: "OUTBOX_RELAY_ENABLED=true in supervisor.sh"
+        run: |
+          grep -q 'OUTBOX_RELAY_ENABLED="true"' .devcontainer/supervisor.sh || {
+            echo "❌ OUTBOX_RELAY_ENABLED=true غائب من supervisor.sh"
+            exit 1
+          }
+          echo "✅ OUTBOX_RELAY_ENABLED=true في supervisor.sh"
+
+      - name: "OUTBOX_RELAY_ENABLED=true in automations.yaml"
+        run: |
+          grep -q 'OUTBOX_RELAY_ENABLED="true"' .ona/automations.yaml || \
+          grep -q 'OUTBOX_RELAY_ENABLED=true' .ona/automations.yaml || {
+            echo "❌ OUTBOX_RELAY_ENABLED=true غائب من automations.yaml"
+            exit 1
+          }
+          echo "✅ OUTBOX_RELAY_ENABLED=true في automations.yaml"
+
+      - name: "Grafana dashboard exists and valid JSON"
+        run: |
+          test -f observability/grafana/dashboards/70-microservices-step4-persistence.json || {
+            echo "❌ 70-microservices-step4-persistence.json غير موجود"
+            exit 1
+          }
+          python3 -c "
+import json, sys
+with open('observability/grafana/dashboards/70-microservices-step4-persistence.json') as f:
+    d = json.load(f)
+assert d.get('uid') == 'cogniforge-ms-step4-persistence', f'uid خاطئ: {d.get(\"uid\")}'
+panels = d.get('panels', [])
+assert len(panels) >= 10, f'panels قليلة: {len(panels)}'
+text = json.dumps(d)
+for metric in ['cogniforge_outbox_relay_cycles_total', 'cogniforge_orchestrator_startup_info', 'cogniforge_stategraph_invocations_total']:
+    assert metric in text, f'{metric} غائب من الـ dashboard'
+print(f'✅ Dashboard صالح — {len(panels)} panels')
+"
+
+      - name: "Prometheus config targets orchestrator with step=4"
+        run: |
+          grep -q 'step: "4"' observability/native/prometheus.yml || {
+            echo "❌ step: \"4\" غائب من prometheus.yml"
+            exit 1
+          }
+          echo "✅ Prometheus config صحيح"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2: Ruff lint
+  # ─────────────────────────────────────────────────────────────────────────
+  lint:
+    name: "Ruff Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: "Install ruff"
+        run: pip install ruff --quiet
+      - name: "Lint prom_metrics.py"
+        run: ruff check microservices/orchestrator_service/src/core/prom_metrics.py --output-format=github
+      - name: "Lint main.py"
+        run: ruff check microservices/orchestrator_service/main.py --output-format=github
+      - name: "Lint test_step4_persistence_relay.py"
+        run: ruff check tests/microservices/orchestrator_service/test_step4_persistence_relay.py --output-format=github
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 3: اختبارات Step 4
+  # ─────────────────────────────────────────────────────────────────────────
+  step4-tests:
+    name: "Step 4 Tests (44 tests)"
+    runs-on: ubuntu-latest
+    needs: [static-checks, lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: "Install dependencies"
+        run: |
+          pip install --quiet \
+            pytest pytest-asyncio \
+            prometheus-client>=0.20.0 \
+            pydantic>=2.8.0 pydantic-settings \
+            fastapi uvicorn httpx \
+            sqlmodel asyncpg aiosqlite \
+            langgraph \
+            python-jose[cryptography] passlib[bcrypt] \
+            openai tenacity
+
+      - name: "Run Step 4 tests"
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          ORCHESTRATOR_DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          SECRET_KEY: "test-secret-key-step4-ci"
+          ENVIRONMENT: "testing"
+          OPENROUTER_API_KEY: "dummy-key-for-tests"
+          TAVILY_API_KEY: ""
+          LLM_MOCK_MODE: "1"
+          PYTHONPATH: "."
+        run: |
+          python -m pytest \
+            tests/microservices/orchestrator_service/test_step4_persistence_relay.py \
+            -v --tb=short --no-header \
+            --junit-xml=test-results/step4.xml \
+            2>&1 | tee step4-test-output.txt
+          tail -5 step4-test-output.txt
+
+      - name: "Upload test results"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step4-test-results
+          path: test-results/
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 4: التحقق من عدم تراجع اختبارات Step 3
+  # ─────────────────────────────────────────────────────────────────────────
+  step3-regression:
+    name: "Step 3 Regression Guard"
+    runs-on: ubuntu-latest
+    needs: [static-checks]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: "Install dependencies"
+        run: |
+          pip install --quiet \
+            pytest pytest-asyncio \
+            prometheus-client>=0.20.0 \
+            pydantic>=2.8.0 pydantic-settings \
+            fastapi uvicorn httpx \
+            sqlmodel asyncpg aiosqlite \
+            langgraph \
+            python-jose[cryptography] passlib[bcrypt] \
+            openai tenacity
+
+      - name: "Run Step 3 regression tests"
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          ORCHESTRATOR_DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          SECRET_KEY: "test-secret-key-step3-regression"
+          ENVIRONMENT: "testing"
+          OPENROUTER_API_KEY: "dummy-key-for-tests"
+          TAVILY_API_KEY: ""
+          LLM_MOCK_MODE: "1"
+          PYTHONPATH: "."
+        run: |
+          python -m pytest \
+            tests/microservices/orchestrator_service/test_orchestrator_revival.py \
+            tests/infrastructure/test_routing_policy.py \
+            -v --tb=short --no-header -q 2>&1 | tail -20
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 5: تعليق تلخيصي على PR
+  # ─────────────────────────────────────────────────────────────────────────
+  pr-summary:
+    name: "PR Summary Comment"
+    runs-on: ubuntu-latest
+    needs: [static-checks, lint, step4-tests, step3-regression]
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: "Post summary comment"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const passed =
+              '${{ needs.static-checks.result }}' === 'success' &&
+              '${{ needs.lint.result }}' === 'success' &&
+              '${{ needs.step4-tests.result }}' === 'success' &&
+              '${{ needs.step3-regression.result }}' === 'success';
+
+            const icon = passed ? '✅' : '❌';
+            const body = `## ${icon} Microservices Step 4 — Persistence Relay Gate
+
+| Check | Result |
+|-------|--------|
+| Static Checks (files & config) | ${{ needs.static-checks.result == 'success' && '✅' || '❌' }} \`${{ needs.static-checks.result }}\` |
+| Ruff Lint | ${{ needs.lint.result == 'success' && '✅' || '❌' }} \`${{ needs.lint.result }}\` |
+| Step 4 Tests (44 tests) | ${{ needs.step4-tests.result == 'success' && '✅' || '❌' }} \`${{ needs.step4-tests.result }}\` |
+| Step 3 Regression Guard | ${{ needs.step3-regression.result == 'success' && '✅' || '❌' }} \`${{ needs.step3-regression.result }}\` |
+
+### ما الذي تتحقق منه هذه الخطوة؟
+
+- **OUTBOX_RELAY_ENABLED=true** في \`supervisor.sh\` و \`.ona/automations.yaml\`
+- **\`/metrics\` endpoint** حقيقي بصيغة Prometheus في \`orchestrator-service:8006/metrics\`
+- **\`prometheus_client\`** مُدرج في \`requirements.txt\`
+- **Grafana dashboard** \`70-microservices-step4-persistence.json\` (24 panels) على \`:3001\`
+- **Prometheus scrape** يستهدف \`orchestrator-service\` بـ \`step="4"\`
+
+### التحقق الحي في Codespaces
+
+\`\`\`bash
+# تشغيل orchestrator-service
+gitpod automations service start orchestrator-service
+
+# التحقق من /metrics
+curl http://localhost:8006/metrics | grep cogniforge_outbox
+
+# التحقق من OUTBOX_RELAY
+curl http://localhost:8006/health | python3 -m json.tool
+
+# Grafana dashboard
+# http://localhost:3001/d/cogniforge-ms-step4-persistence
+\`\`\`
+
+${passed ? '🎉 الخطوة 4 جاهزة للدمج!' : '⚠️ يجب إصلاح الأخطاء قبل الدمج.'}
+`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });

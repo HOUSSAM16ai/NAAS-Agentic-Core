@@ -17,3 +17,4 @@ llama-index-core==0.14.13
 python-json-logger>=4.0.0
 opentelemetry-api
 opentelemetry-sdk
+prometheus-client>=0.20.0

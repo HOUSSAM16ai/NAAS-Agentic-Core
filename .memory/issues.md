@@ -1,5 +1,5 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-10 | Branch: `fix/exercise-retrieval-context-blindness`
+> Last updated: 2026-05-10 | Branch: `feat/microservices-step4-persistence-relay`
 > Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED / RUNTIME-ONLY / HISTORICAL]
 > **Capability runtime status (ACTIVE/PARTIAL/DORMANT/ZOMBIE) lives in `.memory/runtime_truth.md`.**
 > **Architectural fragility patterns (root causes, lessons) live in `.memory/fragility-patterns.md`.**

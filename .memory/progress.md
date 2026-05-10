@@ -1,5 +1,87 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-10 | Branch: `feat/microservices-step3-live-activation`
+> Last updated: 2026-05-10 | Branch: `feat/microservices-step4-persistence-relay`
+
+---
+
+## ✅ Session: 2026-05-10 — Microservices Step 4: Persistence Relay + Prometheus Metrics (الخطوة الانتقالية الرابعة)
+
+**Branch**: `feat/microservices-step4-persistence-relay`
+**Mode**: Live code changes — Codespaces native (no Docker). uvicorn processes only.
+**Verified**: 44/44 tests pass | ruff clean | JSON valid | YAML valid
+
+### الخطوة الانتقالية المختارة (D-031/D-032/D-033 — تنفيذ)
+تفعيل `OUTBOX_RELAY_ENABLED=true` + إضافة `/metrics` endpoint حقيقي بصيغة Prometheus في `orchestrator-service`. هذا يُحوِّل الخدمة من "تعمل بدون مراقبة" إلى "قابلة للقياس الحي في Grafana".
+
+### التغييرات المُنجزة
+
+#### 1. `microservices/orchestrator_service/requirements.txt`
+- أضيف `prometheus-client>=0.20.0`
+
+#### 2. `microservices/orchestrator_service/src/core/prom_metrics.py` — وحدة جديدة
+- `CollectorRegistry` مستقل (لا يشارك الـ default REGISTRY مع المونوليث)
+- 11 مقياساً: `cogniforge_outbox_relay_cycles_total`, `cogniforge_outbox_relay_processed_total`, `cogniforge_outbox_relay_failed_total`, `cogniforge_outbox_relay_skipped_total`, `cogniforge_outbox_pending_gauge`, `cogniforge_stategraph_invocations_total`, `cogniforge_stategraph_duration_seconds`, `cogniforge_stategraph_errors_total`, `cogniforge_orchestrator_requests_total`, `cogniforge_orchestrator_request_duration_seconds`, `cogniforge_orchestrator_startup_info`
+- استيراد دفاعي (try/except ImportError) — stub classes عند غياب prometheus_client
+- دوال عامة: `export_prometheus_text()`, `record_outbox_relay_cycle()`, `record_outbox_relay_error()`, `set_startup_info()`
+
+#### 3. `microservices/orchestrator_service/main.py`
+- استيراد `prom_metrics` functions
+- `/metrics` endpoint جديد → `export_prometheus_text()` → Prometheus text format
+- `record_outbox_relay_cycle(summary)` مُدمج في `_outbox_relay_loop` بعد كل دورة ناجحة
+- `record_outbox_relay_error()` عند فشل الـ relay
+- `set_startup_info(...)` في lifespan Phase 6 بعد الإقلاع
+
+#### 4. `.devcontainer/supervisor.sh`
+- `OUTBOX_RELAY_ENABLED="true"` (كان `"false"` في Step 3)
+- `OUTBOX_RELAY_INTERVAL_SECONDS="15"` و `OUTBOX_RELAY_BATCH_SIZE="50"` مضبوطان صراحةً
+
+#### 5. `.ona/automations.yaml`
+- service `orchestrator-service`: `OUTBOX_RELAY_ENABLED="true"` + `ready` command يتحقق من `/metrics`
+- task جديد `verify-step4-metrics`: يتحقق من 6 مقاييس في `/metrics` + Prometheus targets + Grafana URL
+- task جديد `run-step4-tests`: يُشغِّل 44 اختبار Step 4
+
+#### 6. `observability/native/prometheus.yml`
+- label `step: "4"` (كان `"3"`)
+- تعليق محدَّث يوضح أن `/metrics` يُصدِّر prometheus_client text format حقيقي
+
+#### 7. `observability/grafana/dashboards/70-microservices-step4-persistence.json` — Dashboard جديد
+- 24 panels | UID: `cogniforge-ms-step4-persistence` | refresh: 10s
+- Row 1: Startup Info + OUTBOX_RELAY status + StateGraph ready + relay cycles/processed/failed
+- Row 2: Relay cycles rate (success vs error) + relay records (processed/failed/skipped)
+- Row 3: StateGraph invocations rate + duration heatmap
+- Row 4: HTTP requests rate + P50/P95/P99 latency
+- Row 5: Active WebSocket connections + StateGraph errors by type + outbox pending gauge
+- Row 6: Prometheus scrape duration + scrape UP/DOWN + monolith UP/DOWN
+
+#### 8. `.github/workflows/microservices-step4.yml` — CI gate جديد
+- 5 jobs: `static-checks` / `lint` / `step4-tests` / `step3-regression` / `pr-summary`
+- يتحقق من: prometheus-client في requirements، prom_metrics.py موجود، /metrics في main.py، OUTBOX_RELAY_ENABLED=true في supervisor+automations، dashboard صالح، prometheus config صحيح
+- PR comment تلخيصي مع جدول النتائج وأوامر التحقق الحي
+
+#### 9. `tests/microservices/orchestrator_service/test_step4_persistence_relay.py` — 44 اختبار
+- P1: prometheus-client في requirements.txt
+- P2: prom_metrics.py موجود ويحتوي الـ counters الصحيحة (9 اختبارات)
+- P3: /metrics endpoint في main.py (6 اختبارات)
+- P4: OUTBOX_RELAY_ENABLED=true في supervisor.sh
+- P5: OUTBOX_RELAY_ENABLED=true في automations.yaml (4 اختبارات)
+- P6: Grafana dashboard صالح (8 اختبارات)
+- P7: Prometheus scrape config صحيح (3 اختبارات)
+- P8/P9/P10: unit tests للـ prom_metrics functions (8 اختبارات)
+
+### التحقق الحي
+```bash
+# بعد تشغيل orchestrator-service:
+curl http://localhost:8006/metrics | grep cogniforge_outbox
+# → cogniforge_outbox_relay_cycles_total{result="success"} N
+# → cogniforge_orchestrator_startup_info{outbox_relay_enabled="true",...} 1
+
+# Grafana dashboard:
+# http://localhost:3001/d/cogniforge-ms-step4-persistence
+```
+
+### الخطوة التالية (Step 5)
+- تفعيل Redis الحقيقي (`CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0`) — يتطلب تثبيت redis-server في devcontainer
+- أو: ترقية LangGraph checkpointer من MemorySaver إلى PostgresCheckpointer (ISS-020)
+- أو: تفعيل Tavily web search في المسار الحي (StateGraph → WebSearchFallbackNode)
 
 ---
 

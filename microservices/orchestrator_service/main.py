@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 # Ensure models are registered with SQLModel
 import microservices.orchestrator_service.src.models.mission  # noqa: F401
@@ -16,6 +17,12 @@ from microservices.orchestrator_service.src.core.database import (
     init_db,
 )
 from microservices.orchestrator_service.src.core.event_bus import event_bus
+from microservices.orchestrator_service.src.core.prom_metrics import (
+    export_prometheus_text,
+    record_outbox_relay_cycle,
+    record_outbox_relay_error,
+    set_startup_info,
+)
 from microservices.orchestrator_service.src.services.overmind.state import MissionStateManager
 from microservices.orchestrator_service.src.services.tools.registry import register_all_tools
 
@@ -51,10 +58,13 @@ async def _outbox_relay_loop(stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         try:
             summary = await _run_outbox_relay_once()
-            if summary["processed"] > 0:
+            # تسجيل المقاييس في Prometheus بعد كل دورة ناجحة
+            record_outbox_relay_cycle(summary)
+            if summary.get("processed", 0) > 0:
                 logger.info("outbox_relay_cycle summary=%s", summary)
         except Exception as exc:  # pragma: no cover - دفاعي تشغيلي
             logger.error("outbox_relay_cycle_failed: %s", exc)
+            record_outbox_relay_error()
 
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
@@ -183,6 +193,20 @@ async def lifespan(app: FastAPI):
         )
         logger.info("✅ Outbox relay loop started")
 
+    # ═══ PHASE 6: PROMETHEUS STARTUP INFO ═══════════════════════
+    # يُسجِّل معلومات الإقلاع كـ gauge — تظهر فوراً في Grafana
+    set_startup_info(
+        version=settings.SERVICE_VERSION,
+        environment=settings.ENVIRONMENT,
+        outbox_relay_enabled=settings.OUTBOX_RELAY_ENABLED,
+        graph_ready=getattr(app.state, "app_graph", None) is not None,
+    )
+    logger.info(
+        "✅ Prometheus metrics registered — outbox_relay=%s graph_ready=%s",
+        settings.OUTBOX_RELAY_ENABLED,
+        getattr(app.state, "app_graph", None) is not None,
+    )
+
     yield
 
     # ═══ SHUTDOWN ═══════════════════════════════════════════════
@@ -216,6 +240,18 @@ app.add_middleware(
 )
 
 app.include_router(routes.router)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics() -> Response:
+    """
+    يُصدِّر مقاييس Prometheus الخاصة بـ orchestrator-service.
+
+    يُستخدم من Prometheus scrape job: job_name=orchestrator-service
+    المنفذ: localhost:8006/metrics
+    """
+    body, content_type = export_prometheus_text()
+    return Response(content=body, media_type=content_type)
 
 
 @app.get("/health")

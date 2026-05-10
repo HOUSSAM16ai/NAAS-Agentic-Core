@@ -520,6 +520,75 @@ launch_mission_control >> "$APP_ROOT/.observability/launch.log" 2>&1 &
 lifecycle_info "✅ Mission Control initialization offloaded to background"
 
 # ==============================================================================
+# STEP 4D: Orchestrator Service Launch (uvicorn process — no Docker required)
+# ==============================================================================
+# يُشغِّل orchestrator-service كـ uvicorn process مستقل على المنفذ 8006.
+# يستخدم Supabase (DATABASE_URL الموجودة) عبر ORCHESTRATOR_DATABASE_URL.
+# لا يتطلب Docker — يعمل مباشرة في Codespaces مثل Grafana و Prometheus.
+# الفشل لا يوقف الـ supervisor — الخدمة تبدأ في وضع DEGRADED إذا فشل الـ DB.
+
+launch_orchestrator_service() {
+    local ORCH_LOG_DIR="$APP_ROOT/.observability"
+    local ORCH_PORT="8006"
+    local ORCH_HEALTH="http://localhost:${ORCH_PORT}/health"
+    local ORCH_PID_FILE
+    ORCH_PID_FILE=$(lifecycle_get_state "orchestrator_pid" 2>/dev/null || true)
+
+    mkdir -p "$ORCH_LOG_DIR"
+
+    # ── التحقق من وجود OPENROUTER_API_KEY ────────────────────────────────────
+    if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+        lifecycle_warn "Orchestrator: OPENROUTER_API_KEY not set — skipping launch."
+        lifecycle_warn "             Set it in Gitpod Secrets or .devcontainer/secrets.env"
+        echo "[$(date -u +%FT%TZ)] OPENROUTER_API_KEY missing — orchestrator parked" \
+            >> "$ORCH_LOG_DIR/orchestrator.log"
+        return 0
+    fi
+
+    # ── idempotent: هل الخدمة تعمل بالفعل؟ ──────────────────────────────────
+    if [ -n "$ORCH_PID_FILE" ] && kill -0 "$ORCH_PID_FILE" 2>/dev/null \
+       && curl -sf --connect-timeout 2 "$ORCH_HEALTH" > /dev/null 2>&1; then
+        lifecycle_info "Orchestrator: already running and healthy (PID $ORCH_PID_FILE)"
+        return 0
+    fi
+
+    # ── إعداد ORCHESTRATOR_DATABASE_URL ──────────────────────────────────────
+    # يستخدم Supabase (نفس DATABASE_URL للمونوليث) مع schema منفصل.
+    # يمكن تجاوزه بـ ORCHESTRATOR_DATABASE_URL في secrets.env.
+    local orch_db_url="${ORCHESTRATOR_DATABASE_URL:-${DATABASE_URL:-}}"
+    if [ -z "$orch_db_url" ]; then
+        lifecycle_warn "Orchestrator: no DATABASE_URL available — skipping launch."
+        return 0
+    fi
+
+    lifecycle_info "Orchestrator: starting on :${ORCH_PORT} ..."
+
+    # ── تشغيل uvicorn في الخلفية ──────────────────────────────────────────────
+    ORCHESTRATOR_DATABASE_URL="$orch_db_url" \
+    OPENROUTER_API_KEY="${OPENROUTER_API_KEY}" \
+    TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
+    SECRET_KEY="${SECRET_KEY:-cogniforge-orchestrator-dev-key}" \
+    REDIS_URL="${REDIS_URL:-redis://localhost:6379}" \
+    ENVIRONMENT="${ENVIRONMENT:-development}" \
+    OUTBOX_RELAY_ENABLED="false" \
+    nohup python -m uvicorn microservices.orchestrator_service.main:app \
+        --host 0.0.0.0 \
+        --port "$ORCH_PORT" \
+        --workers 1 \
+        --log-level info \
+        >> "$ORCH_LOG_DIR/orchestrator.log" 2>&1 &
+
+    local orch_pid=$!
+    lifecycle_set_state "orchestrator_pid" "$orch_pid"
+    lifecycle_info "Orchestrator: launched (PID=$orch_pid) — health at $ORCH_HEALTH"
+    lifecycle_info "             Logs: $ORCH_LOG_DIR/orchestrator.log"
+}
+
+# تشغيل في الخلفية — لا يحجب الـ supervisor
+launch_orchestrator_service >> "$APP_ROOT/.observability/orchestrator.log" 2>&1 &
+lifecycle_info "✅ Orchestrator Service initialization offloaded to background"
+
+# ==============================================================================
 # STEP 5: Health Check & Readiness (فحص الصحة والجاهزية)
 # ==============================================================================
 
@@ -586,6 +655,7 @@ lifecycle_info "   • Dependencies: Installed"
 lifecycle_info "   • Database: Migrated"
 lifecycle_info "   • Admin User: Seeded"
 lifecycle_info "   • Backend Server: port $APP_PORT (ready=$_app_ready)"
+lifecycle_info "   • Orchestrator Service: port 8006 (background — check .observability/orchestrator.log)"
 lifecycle_info "   • Grafana: port 3001 (Mission Control)"
 lifecycle_info "   • Prometheus: port 9090"
 lifecycle_info ""

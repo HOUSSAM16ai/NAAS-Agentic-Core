@@ -59,7 +59,7 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Microservices Step 2 applied 2026-05-10 (D-025 — StateGraph Routing):** `ChatRoutingPolicy` default changed from `/agent/chat` (OrchestratorAgent) to `/api/chat/messages` (StateGraph 13 nodes). Controlled by `ORCHESTRATOR_CHAT_ENDPOINT` env var (`"state_graph"` default | `"agent"` rollback). Routing metrics added: `cogniforge_routing_mode_state_graph` gauge + `cogniforge_routing_target_total{target=...}` counter emitted per request. New Grafana dashboard `50-microservices-transition.json` (15 panels, UID `cogniforge-ms-transition-step2`) visible at :3001. Prometheus scrape targets added for orchestrator-service:8006, research-agent:8007, user-service:8001, planning-agent:8002 (all DOWN until `docker compose up`). CI gate `.github/workflows/microservices-transition.yml` (5 jobs) enforces default mode on every PR. 16 regression tests in `tests/infrastructure/test_routing_policy.py`.
 
-**Microservices Step 3 applied 2026-05-10 (D-029/D-030/D-031 — Live Activation):** `orchestrator-service` activated as Ona automation service. Three new artefacts: (1) `docker-compose.step3.yml` — isolated 3-service compose (postgres-orchestrator:5441 + redis-orchestrator:6380 + orchestrator-service:8006) with independent volumes; (2) `.ona/automations.yaml` — service `orchestrator-stack` (start/ready/stop) + tasks `health-probe`, `verify-stack`, `run-step3-tests`; (3) `observability/grafana/dashboards/60-microservices-step3-live.json` — 20-panel live dashboard (UID `cogniforge-ms-step3-live`, 10s refresh) at Grafana :3001. CI gate `.github/workflows/microservices-step3-live.yml` (7 jobs) validates compose + StateGraph + dashboard + Prometheus + automations on every PR. `OUTBOX_RELAY_ENABLED=false` in Step 3 — enabled in Step 4 after persistence verification. Trigger: `gitpod automations service start orchestrator-stack`.
+**Microservices Step 3 applied 2026-05-10 (D-029/D-030/D-031 — Live Activation in Codespaces):** `orchestrator-service` activated as a **uvicorn process** (no Docker — Codespaces constraint). Runs on :8006 alongside the monolith, exactly like Grafana/Prometheus. Four artefacts: (1) `supervisor.sh:launch_orchestrator_service()` — STEP 4D, starts uvicorn automatically at Codespace boot when `OPENROUTER_API_KEY` is set, uses Supabase (`DATABASE_URL`) as `ORCHESTRATOR_DATABASE_URL`; (2) `.ona/automations.yaml` — service `orchestrator-service` (uvicorn start/ready/stop) + tasks `health-probe`, `verify-stack`, `restart-orchestrator`, `run-step3-tests`; (3) `observability/native/prometheus.yml` — `orchestrator-service` scrape target added at `localhost:8006` (DOWN until process starts); (4) `observability/grafana/dashboards/60-microservices-step3-live.json` — 20-panel live dashboard (UID `cogniforge-ms-step3-live`, 10s refresh) at Grafana :3001. CI gate `.github/workflows/microservices-step3-live.yml` (7 jobs). `OUTBOX_RELAY_ENABLED=false` — enabled in Step 4 after persistence verification.
 
 ---
 
@@ -103,10 +103,10 @@ Infrastructure (verified live 2026-05-09, Step 3 added 2026-05-10):
   Redis      → port 6379  (process running but app uses InMemoryCache — REDIS_URL not set)
   PostgreSQL → Supabase PgBouncer :6543 (19 users, 2098 customer_messages, 3038 admin_messages)
 
-Step 3 Stack (on demand — `gitpod automations service start orchestrator-stack`):
-  orchestrator-service  → port 8006  (13-node StateGraph, DORMANT→ACTIVE on demand)
-  postgres-orchestrator → port 5441  (isolated DB for orchestrator)
-  redis-orchestrator    → port 6380  (isolated Redis for orchestrator)
+Step 3 (uvicorn process — auto-starts via supervisor.sh when OPENROUTER_API_KEY set):
+  orchestrator-service  → port 8006  (uvicorn process, same as monolith pattern)
+  DB: Supabase shared (ORCHESTRATOR_DATABASE_URL = DATABASE_URL)
+  Prometheus scrape: localhost:8006/metrics (native/prometheus.yml)
 ```
 
 1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).
@@ -256,22 +256,22 @@ services:
 
 **Rule**: Only `tasks` support `dependsOn`. Services use the `ready` command as a readiness gate. A service stays in "Starting" phase until `ready` passes — this naturally gates any dependent workflow.
 
-### NEVER run docker-compose.step3.yml and docker-compose.yml simultaneously without checking port conflicts
+### NEVER try to use Docker in the default Codespaces devcontainer
 
 ```bash
-# ❌ Wrong — port 6380 conflict if redis-orchestrator already running from main compose
-docker compose up -d
+# ❌ Wrong — Docker CLI not available in this devcontainer
 docker compose -f docker-compose.step3.yml up -d
+# Error: docker: not found
 
-# ✅ Correct — Step 3 compose uses isolated ports (5441, 6380, 8006)
-# These do NOT conflict with the devcontainer default stack (8000, 3000, 3001, 9090)
-# But DO conflict with the full docker-compose.yml stack if it's running
-docker compose -f docker-compose.step3.yml up -d  # safe in default devcontainer
+# ✅ Correct — orchestrator-service runs as a uvicorn process (Step 3)
+# supervisor.sh starts it automatically at boot when OPENROUTER_API_KEY is set
+# Manual restart:
+gitpod automations service start orchestrator-service
+# Or:
+gitpod automations task start restart-orchestrator
 ```
 
-**Ports used by docker-compose.step3.yml**: 5441 (postgres), 6380 (redis), 8006 (orchestrator).
-**Safe to run alongside**: devcontainer default stack (8000, 3000, 3001, 9090, 6379).
-**Conflicts with**: full `docker-compose.yml` stack (also uses 6380 for redis-orchestrator).
+**Why no Docker**: `devcontainer.json` intentionally omits `docker-in-docker` — it fails on `python:3.12-slim` + `network_mode: host` (Codespaces error 1302). The `docker-compose.step3.yml` file exists for future environments that support Docker (local dev, CI with DinD). In Codespaces, `supervisor.sh:launch_orchestrator_service()` is the canonical activation path.
 
 ### NEVER use flat keyword matching for exercise retrieval intent detection
 

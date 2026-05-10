@@ -65,6 +65,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Microservices Step 5 applied 2026-05-10 (D-034 — User Service Live Activation):** `user-service` activated as a **uvicorn process** on `:8001` (no Docker — Codespaces constraint). Second microservice to go ACTIVE alongside `orchestrator-service`. Five artefacts: (1) `microservices/user_service/src/core/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_user_requests_total`, `cogniforge_user_request_duration_seconds`, `cogniforge_user_active_connections`, `cogniforge_user_auth_operations_total`, `cogniforge_user_auth_duration_seconds`, `cogniforge_user_registrations_total`, `cogniforge_user_logins_total`, `cogniforge_user_token_verifications_total`, `cogniforge_user_db_operations_total`, `cogniforge_user_db_duration_seconds`, `cogniforge_user_startup_info{step="5"}`; (2) `microservices/user_service/main.py` — `/metrics` endpoint + `set_startup_info()` in lifespan; (3) `supervisor.sh:launch_user_service()` — STEP 4E, starts uvicorn on `:8001` at Codespace boot when `DATABASE_URL` is set; (4) `.ona/automations.yaml` — service `user-service` + tasks `verify-step5-user-service`, `restart-user-service`, `run-step5-tests`; (5) `observability/native/prometheus.yml` — `user-service` scrape target at `localhost:8001` with `step="5"` label. Grafana dashboard `80-microservices-step5-user-service.json` (17 panels, UID `cogniforge-ms-step5-user-service`, 10s refresh) at :3001. CI gate `.github/workflows/microservices-step5-user-service.yml` (6 jobs). 36 regression tests in `tests/microservices/user_service/test_step5_user_service_metrics.py`.
 
+**Live verification fix applied 2026-05-10 (ISS-038-B — asyncpg URL conversion):** `orchestrator-service` and `planning-agent` both failed to start with `sqlalchemy.exc.InvalidRequestError: The asyncio extension requires an async driver to be used. The loaded 'psycopg2' is not async.` Root cause: `DATABASE_URL` from Supabase uses `postgresql://` scheme which SQLAlchemy maps to psycopg2 (sync). `create_async_engine` requires `postgresql+asyncpg://`. Fix applied in `supervisor.sh` (both `launch_orchestrator_service()` and `launch_planning_agent()`) and `.ona/automations.yaml` (all start/restart commands): inline bash substitution converts the scheme and strips `sslmode` query param (asyncpg handles SSL via `connect_args`, not query string). Verified live: both services start and respond on `:8006` and `:8002`.
+
 **Microservices Step 6 applied 2026-05-10 (D-035 — Planning Agent Live Activation + Docker Compose Stack):** `planning-agent` activated as a **uvicorn process** on `:8002` (no Docker — Codespaces constraint). Third microservice to go ACTIVE. DSPy + LangGraph with fallback chain when `OPENROUTER_API_KEY` absent. Eight artefacts: (1) `microservices/planning_agent/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_planning_requests_total`, `cogniforge_planning_request_duration_seconds`, `cogniforge_planning_active_connections`, `cogniforge_planning_plans_total`, `cogniforge_planning_plan_duration_seconds`, `cogniforge_planning_dspy_invocations_total`, `cogniforge_planning_dspy_errors_total`, `cogniforge_planning_fallback_plans_total`, `cogniforge_planning_db_operations_total`, `cogniforge_planning_db_duration_seconds`, `cogniforge_planning_startup_info{step="6",dspy_available=...}`; (2) `microservices/planning_agent/main.py` — `/metrics` endpoint + `set_startup_info()` in lifespan; (3) `supervisor.sh:launch_planning_agent()` — STEP 4F, starts uvicorn on `:8002` at Codespace boot when `DATABASE_URL` is set; (4) `.ona/automations.yaml` — service `planning-agent` + tasks `verify-step6-planning-agent`, `restart-planning-agent`, `run-step6-tests`, `docker-compose-stack`; (5) `observability/native/prometheus.yml` — `planning-agent` scrape target at `localhost:8002` with `step="6"` label; (6) `docker-compose.step6.yml` — Docker Compose stack with orchestrator-service + user-service + planning-agent (for non-Codespaces Docker environments); (7) Grafana dashboard `90-microservices-step6-planning-agent.json` (20 panels, UID `cogniforge-ms-step6-planning-agent`, 10s refresh) at :3001; (8) CI gate `.github/workflows/microservices-step6-planning-agent.yml` (7 jobs). 61 regression tests in `tests/microservices/planning_agent/test_step6_planning_agent_metrics.py`.
 
 ---
@@ -239,6 +241,25 @@ if last_message.get("role") == "user" and self.cognitive_engine is not None:
 ```
 
 **Rule**: `CognitiveResonanceEngine` is a stub (`cognitive_cache.py` returns `None`). Until a real implementation is wired, every call site must guard against `None`. Do not remove the guard when implementing the real engine — make `get_cognitive_engine()` return a real instance instead.
+
+### NEVER pass `postgresql://` to `create_async_engine` — use `postgresql+asyncpg://`
+
+```python
+# ❌ Wrong — SQLAlchemy maps postgresql:// to psycopg2 (sync driver)
+# Raises: InvalidRequestError: The asyncio extension requires an async driver
+create_async_engine("postgresql://user:pass@host/db")
+
+# ✅ Correct — explicit asyncpg driver + strip sslmode (asyncpg uses connect_args for SSL)
+create_async_engine("postgresql+asyncpg://user:pass@host/db")
+```
+
+**In supervisor.sh / automations.yaml** — convert at launch time:
+```bash
+_url="${DATABASE_URL/postgresql:\/\//postgresql+asyncpg://}"
+_url=$(echo "$_url" | sed 's/[?&]sslmode=[^&]*//')
+```
+
+This affects `orchestrator-service` and `planning-agent`. The monolith uses `aiosqlite`/`asyncpg` correctly via `app/core/database.py`. The microservices receive `DATABASE_URL` from the environment which always has the bare `postgresql://` scheme from Supabase.
 
 ### NEVER omit `TAVILY_API_KEY` from `docker-compose.yml` services that use web search
 

@@ -561,6 +561,14 @@ launch_orchestrator_service() {
         return 0
     fi
 
+    # ── تحويل URL إلى asyncpg (مطلوب لـ SQLAlchemy async) ────────────────────
+    # SQLAlchemy create_async_engine يرفض psycopg2 المتزامن — يجب postgresql+asyncpg://
+    # نُزيل sslmode من الـ query string لأن asyncpg يتعامل مع SSL عبر connect_args.
+    orch_db_url="${orch_db_url/postgresql:\/\//postgresql+asyncpg://}"
+    orch_db_url="${orch_db_url/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+    # إزالة sslmode من URL — asyncpg لا يقبله في query string
+    orch_db_url=$(echo "$orch_db_url" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
+
     lifecycle_info "Orchestrator: starting on :${ORCH_PORT} ..."
 
     # ── تشغيل uvicorn في الخلفية ──────────────────────────────────────────────
@@ -674,6 +682,13 @@ launch_planning_agent() {
             >> "$PLANNING_LOG_DIR/planning_agent.log"
         return 0
     fi
+
+    # ── تحويل URL إلى asyncpg (مطلوب لـ SQLAlchemy async) ────────────────────
+    # SQLAlchemy create_async_engine يرفض psycopg2 المتزامن — يجب postgresql+asyncpg://
+    planning_db_url="${planning_db_url/postgresql:\/\//postgresql+asyncpg://}"
+    planning_db_url="${planning_db_url/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+    # إزالة sslmode من URL — asyncpg لا يقبله في query string
+    planning_db_url=$(echo "$planning_db_url" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
 
     # ── idempotent: هل الخدمة تعمل بالفعل؟ ──────────────────────────────────
     if pgrep -f "uvicorn microservices.planning_agent" > /dev/null 2>&1 \

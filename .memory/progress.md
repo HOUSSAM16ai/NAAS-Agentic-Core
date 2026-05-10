@@ -108,6 +108,20 @@ curl http://localhost:8002/metrics | grep cogniforge_planning
 | Grafana | :3001 | ✅ ACTIVE (9 dashboards) |
 | Prometheus | :9090 | ✅ ACTIVE (6 scrape targets) |
 
+### إصلاح مكتشف حياً (ISS-038-B — asyncpg URL conversion)
+أثناء التحقق الحي تبيّن أن `orchestrator-service` و`planning-agent` يفشلان في الإقلاع بسبب:
+```
+sqlalchemy.exc.InvalidRequestError: The asyncio extension requires an async driver.
+The loaded 'psycopg2' is not async.
+```
+**السبب:** `DATABASE_URL` من Supabase يستخدم `postgresql://` → SQLAlchemy يُعيّنه لـ psycopg2 المتزامن.
+**الإصلاح:** تحويل inline في `supervisor.sh` و `automations.yaml`:
+```bash
+_url="${DATABASE_URL/postgresql:\/\//postgresql+asyncpg://}"
+_url=$(echo "$_url" | sed 's/[?&]sslmode=[^&]*//')
+```
+**ملاحظة إضافية:** `orchestrator-service` يبدأ بـ `startup_state:degraded` لكن `graph_ready:true` — PgBouncer prepared statement conflict غير مميت.
+
 ### الخطوة التالية (Step 7)
 - تفعيل `research-agent` على `:8007` (uvicorn process) — Tavily web search حي
 - أو: تفعيل `reasoning-agent` على `:8008`

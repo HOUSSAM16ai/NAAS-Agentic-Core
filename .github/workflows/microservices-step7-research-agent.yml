@@ -1,0 +1,285 @@
+name: "Microservices Step 7 — Research Agent CI Gate"
+
+on:
+  push:
+    branches:
+      - "feat/microservices-step7-research-agent"
+      - "main"
+    paths:
+      - "microservices/research_agent/**"
+      - ".devcontainer/supervisor.sh"
+      - ".ona/automations.yaml"
+      - "observability/native/prometheus.yml"
+      - "observability/grafana/dashboards/100-microservices-step7-research-agent.json"
+      - "tests/microservices/research_agent/**"
+      - ".github/workflows/microservices-step7-research-agent.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "microservices/research_agent/**"
+      - ".devcontainer/supervisor.sh"
+      - ".ona/automations.yaml"
+      - "observability/native/prometheus.yml"
+      - "observability/grafana/dashboards/100-microservices-step7-research-agent.json"
+      - "tests/microservices/research_agent/**"
+
+concurrency:
+  group: "step7-research-agent-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  # ── Job 1: Static checks ─────────────────────────────────────────────────
+  static-checks:
+    name: "Static Checks — Step 7 Artefacts"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Check prometheus-client in requirements.txt"
+        run: |
+          grep -q "prometheus-client" microservices/research_agent/requirements.txt
+          echo "✅ prometheus-client present in requirements.txt"
+
+      - name: "Check tavily-python in requirements.txt"
+        run: |
+          grep -q "tavily-python" microservices/research_agent/requirements.txt
+          echo "✅ tavily-python present in requirements.txt"
+
+      - name: "Check prom_metrics.py exists"
+        run: |
+          test -f microservices/research_agent/prom_metrics.py
+          echo "✅ prom_metrics.py exists"
+
+      - name: "Check prom_metrics.py has all 11 metrics"
+        run: |
+          for metric in \
+            cogniforge_research_requests_total \
+            cogniforge_research_request_duration_seconds \
+            cogniforge_research_active_connections \
+            cogniforge_research_searches_total \
+            cogniforge_research_search_duration_seconds \
+            cogniforge_research_tavily_calls_total \
+            cogniforge_research_tavily_errors_total \
+            cogniforge_research_deep_research_total \
+            cogniforge_research_db_operations_total \
+            cogniforge_research_db_duration_seconds \
+            cogniforge_research_startup; do
+            grep -q "$metric" microservices/research_agent/prom_metrics.py || \
+              { echo "❌ Missing metric: $metric"; exit 1; }
+          done
+          echo "✅ All 11 metrics present in prom_metrics.py"
+
+      - name: "Check /metrics endpoint in main.py"
+        run: |
+          grep -q '"/metrics"' microservices/research_agent/main.py
+          grep -q "export_prometheus_text" microservices/research_agent/main.py
+          echo "✅ /metrics endpoint present in main.py"
+
+      - name: "Check prom_metrics import in main.py"
+        run: |
+          grep -q "from microservices.research_agent import prom_metrics" microservices/research_agent/main.py
+          echo "✅ prom_metrics imported in main.py"
+
+      - name: "Check set_startup_info in main.py lifespan"
+        run: |
+          grep -q "set_startup_info" microservices/research_agent/main.py
+          echo "✅ set_startup_info called in lifespan"
+
+      - name: "Check supervisor.sh has launch_research_agent"
+        run: |
+          grep -q "launch_research_agent" .devcontainer/supervisor.sh
+          grep -q "8007" .devcontainer/supervisor.sh
+          echo "✅ supervisor.sh has launch_research_agent on :8007"
+
+      - name: "Check automations.yaml has research-agent service"
+        run: |
+          grep -q "research-agent" .ona/automations.yaml
+          grep -q "8007" .ona/automations.yaml
+          grep -q "verify-step7-research-agent" .ona/automations.yaml
+          grep -q "run-step7-tests" .ona/automations.yaml
+          echo "✅ automations.yaml has research-agent service and tasks"
+
+      - name: "Check prometheus.yml has research-agent scrape target"
+        run: |
+          grep -q "research-agent" observability/native/prometheus.yml
+          grep -q "8007" observability/native/prometheus.yml
+          grep -q 'step: "7"' observability/native/prometheus.yml
+          echo "✅ prometheus.yml has research-agent scrape target on :8007"
+
+  # ── Job 2: Dashboard validation ──────────────────────────────────────────
+  dashboard-gate:
+    name: "Grafana Dashboard Validation"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Check dashboard file exists"
+        run: |
+          test -f observability/grafana/dashboards/100-microservices-step7-research-agent.json
+          echo "✅ Dashboard file exists"
+
+      - name: "Validate dashboard JSON"
+        run: |
+          python3 -c "
+          import json, sys
+          with open('observability/grafana/dashboards/100-microservices-step7-research-agent.json') as f:
+              d = json.load(f)
+          assert d['uid'] == 'cogniforge-ms-step7-research-agent', f'Wrong UID: {d[\"uid\"]}'
+          assert 'step7' in d.get('tags', []), 'Missing step7 tag'
+          assert len(d.get('panels', [])) >= 15, f'Too few panels: {len(d[\"panels\"])}'
+          print(f'✅ Dashboard valid: {len(d[\"panels\"])} panels, UID={d[\"uid\"]}')
+          "
+
+      - name: "Check dashboard has Tavily panels"
+        run: |
+          python3 -c "
+          import json
+          with open('observability/grafana/dashboards/100-microservices-step7-research-agent.json') as f:
+              d = json.load(f)
+          titles = [p.get('title','') for p in d['panels']]
+          assert any('Tavily' in t for t in titles), 'No Tavily panel found'
+          assert any('Search' in t for t in titles), 'No Search panel found'
+          assert any('Health Matrix' in t or 'UP/DOWN' in t for t in titles), 'No health matrix panel'
+          print('✅ Dashboard has Tavily, Search, and Health Matrix panels')
+          "
+
+  # ── Job 3: Lint ───────────────────────────────────────────────────────────
+  lint:
+    name: "Ruff Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff --quiet
+      - name: "Lint research_agent"
+        run: |
+          ruff check microservices/research_agent/prom_metrics.py microservices/research_agent/main.py
+          echo "✅ ruff clean"
+
+  # ── Job 4: Step 7 tests ───────────────────────────────────────────────────
+  step7-tests:
+    name: "Step 7 Tests (50+ assertions)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "Install test dependencies"
+        run: |
+          pip install pytest pytest-asyncio aiosqlite --quiet
+          pip install prometheus-client fastapi httpx pydantic pydantic-settings --quiet
+
+      - name: "Run Step 7 tests"
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          RESEARCH_DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          TAVILY_API_KEY: "dummy-tavily-key-for-ci"
+          OPENROUTER_API_KEY: "dummy-openrouter-key-for-ci"
+          SECRET_KEY: "ci-test-secret-key-step7"
+          ENVIRONMENT: "testing"
+          LLM_MOCK_MODE: "1"
+        run: |
+          python -m pytest \
+            tests/microservices/research_agent/test_step7_research_agent_metrics.py \
+            -v --tb=short --no-header 2>&1 | tail -80
+
+  # ── Job 5: Step 6 regression ─────────────────────────────────────────────
+  step6-regression:
+    name: "Step 6 Regression (planning-agent)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest pytest-asyncio aiosqlite prometheus-client fastapi httpx pydantic pydantic-settings --quiet
+      - name: "Run Step 6 regression"
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          PLANNING_DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          PLANNING_OPENROUTER_API_KEY: "dummy-key-for-ci"
+          SECRET_KEY: "ci-test-secret-key-step6"
+          ENVIRONMENT: "testing"
+          LLM_MOCK_MODE: "1"
+        run: |
+          python -m pytest \
+            tests/microservices/planning_agent/test_step6_planning_agent_metrics.py \
+            -v --tb=short --no-header -q 2>&1 | tail -30
+
+  # ── Job 6: YAML validation ────────────────────────────────────────────────
+  yaml-gate:
+    name: "YAML Validation"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pyyaml --quiet
+      - name: "Validate automations.yaml"
+        run: |
+          python3 -c "
+          import yaml
+          with open('.ona/automations.yaml') as f:
+              d = yaml.safe_load(f)
+          services = d.get('services', {})
+          tasks = d.get('tasks', {})
+          assert 'research-agent' in services, 'research-agent service missing'
+          assert 'verify-step7-research-agent' in tasks, 'verify task missing'
+          assert 'restart-research-agent' in tasks, 'restart task missing'
+          assert 'run-step7-tests' in tasks, 'run-tests task missing'
+          print(f'✅ automations.yaml valid: {len(services)} services, {len(tasks)} tasks')
+          "
+
+  # ── Job 7: PR summary ────────────────────────────────────────────────────
+  pr-summary:
+    name: "PR Summary"
+    runs-on: ubuntu-latest
+    needs: [static-checks, dashboard-gate, lint, step7-tests, step6-regression, yaml-gate]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Post PR comment"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## ✅ Step 7: Research Agent CI Gate — PASSED
+
+            ### الخدمة الجديدة
+            | الخدمة | المنفذ | الحالة |
+            |--------|--------|--------|
+            | **research-agent** | **:8007** | **✅ ACTIVE (Step 7)** |
+            | planning-agent | :8002 | ✅ ACTIVE (Step 6) |
+            | user-service | :8001 | ✅ ACTIVE (Step 5) |
+            | orchestrator-service | :8006 | ✅ ACTIVE (Step 4) |
+            | FastAPI monolith | :8000 | ✅ ACTIVE |
+
+            ### المقاييس الجديدة (11 مقياساً)
+            \`\`\`
+            cogniforge_research_requests_total
+            cogniforge_research_request_duration_seconds
+            cogniforge_research_active_connections
+            cogniforge_research_searches_total
+            cogniforge_research_search_duration_seconds
+            cogniforge_research_tavily_calls_total
+            cogniforge_research_tavily_errors_total
+            cogniforge_research_deep_research_total
+            cogniforge_research_db_operations_total
+            cogniforge_research_db_duration_seconds
+            cogniforge_research_startup_info{step="7",tavily_available=...}
+            \`\`\`
+
+            ### التحقق الحي بعد الدمج
+            \`\`\`bash
+            curl http://localhost:8007/health
+            curl http://localhost:8007/metrics | grep cogniforge_research
+            # Grafana: http://localhost:3001/d/cogniforge-ms-step7-research-agent
+            \`\`\`
+            `;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });

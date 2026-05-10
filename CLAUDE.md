@@ -69,6 +69,7 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Microservices Step 6 applied 2026-05-10 (D-035 — Planning Agent Live Activation + Docker Compose Stack):** `planning-agent` activated as a **uvicorn process** on `:8002` (no Docker — Codespaces constraint). Third microservice to go ACTIVE. DSPy + LangGraph with fallback chain when `OPENROUTER_API_KEY` absent. Eight artefacts: (1) `microservices/planning_agent/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_planning_requests_total`, `cogniforge_planning_request_duration_seconds`, `cogniforge_planning_active_connections`, `cogniforge_planning_plans_total`, `cogniforge_planning_plan_duration_seconds`, `cogniforge_planning_dspy_invocations_total`, `cogniforge_planning_dspy_errors_total`, `cogniforge_planning_fallback_plans_total`, `cogniforge_planning_db_operations_total`, `cogniforge_planning_db_duration_seconds`, `cogniforge_planning_startup_info{step="6",dspy_available=...}`; (2) `microservices/planning_agent/main.py` — `/metrics` endpoint + `set_startup_info()` in lifespan; (3) `supervisor.sh:launch_planning_agent()` — STEP 4F, starts uvicorn on `:8002` at Codespace boot when `DATABASE_URL` is set; (4) `.ona/automations.yaml` — service `planning-agent` + tasks `verify-step6-planning-agent`, `restart-planning-agent`, `run-step6-tests`, `docker-compose-stack`; (5) `observability/native/prometheus.yml` — `planning-agent` scrape target at `localhost:8002` with `step="6"` label; (6) `docker-compose.step6.yml` — Docker Compose stack with orchestrator-service + user-service + planning-agent (for non-Codespaces Docker environments); (7) Grafana dashboard `90-microservices-step6-planning-agent.json` (20 panels, UID `cogniforge-ms-step6-planning-agent`, 10s refresh) at :3001; (8) CI gate `.github/workflows/microservices-step6-planning-agent.yml` (7 jobs). 61 regression tests in `tests/microservices/planning_agent/test_step6_planning_agent_metrics.py`.
 
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
@@ -126,6 +127,13 @@ Step 6 (uvicorn process — auto-starts via supervisor.sh when DATABASE_URL set)
   DB: Supabase shared (PLANNING_DATABASE_URL = DATABASE_URL)
   Prometheus scrape: localhost:8002/metrics (native/prometheus.yml, step="6")
   Docker Compose stack: docker-compose.step6.yml (orchestrator + user-service + planning-agent)
+
+Step 7 (uvicorn process — auto-starts via supervisor.sh when DATABASE_URL set):
+  research-agent        → port 8007  (uvicorn process, /metrics active, Tavily web search)
+  DB: Supabase shared (RESEARCH_DATABASE_URL = DATABASE_URL)
+  Prometheus scrape: localhost:8007/metrics (native/prometheus.yml, step="7")
+  Tavily: ACTIVE when TAVILY_API_KEY set | DISABLED (graceful) without key
+  ISS-039: SuperSearchOrchestrator lazy singleton — no import-time credential errors
 ```
 
 1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).

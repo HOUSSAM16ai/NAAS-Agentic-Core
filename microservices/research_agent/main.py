@@ -1,8 +1,9 @@
 """
-وكيل البحث (Research Agent).
+وكيل البحث (Research Agent) — الخطوة 7.
 
 هذه الخدمة مسؤولة عن استرجاع المعلومات (Retrieval)، وإعادة الترتيب (Reranking)،
 وإدارة المحتوى (Content Management) من مصادر المعرفة المختلفة.
+تُضيف الخطوة 7: /metrics endpoint حقيقي بصيغة Prometheus + Tavily web search حي.
 """
 
 import asyncio
@@ -10,20 +11,56 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from microservices.research_agent import prom_metrics
 from microservices.research_agent.src.content.service import content_service
 from microservices.research_agent.src.search_engine.models import SearchFilters, SearchRequest
 from microservices.research_agent.src.search_engine.orchestrator import search_orchestrator
 from microservices.research_agent.src.search_engine.super_search import SuperSearchOrchestrator
 
-super_search_orchestrator = SuperSearchOrchestrator()
+# Singleton: lazy-initialised on first deep_research call to avoid import-time
+# credential errors when OPENAI_API_KEY / OPENROUTER_API_KEY is absent.
+_super_search_orchestrator: SuperSearchOrchestrator | None = None
+
+
+def _get_super_search() -> SuperSearchOrchestrator:
+    """يُعيد SuperSearchOrchestrator مُهيَّأً بشكل كسول (lazy singleton)."""
+    global _super_search_orchestrator  # noqa: PLW0603
+    if _super_search_orchestrator is None:
+        _super_search_orchestrator = SuperSearchOrchestrator()
+    return _super_search_orchestrator
+
+# ── تحديد توفر Tavily ────────────────────────────────────────────────────────
+_TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
+_TAVILY_AVAILABLE = bool(_TAVILY_API_KEY)
+
+try:
+    from tavily import TavilyClient as _TavilyCheck  # noqa: F401
+    _TAVILY_IMPORTABLE = True
+except ImportError:
+    _TAVILY_IMPORTABLE = False
+
+_TAVILY_READY = _TAVILY_AVAILABLE and _TAVILY_IMPORTABLE
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """يدير دورة حياة وكيل البحث."""
-    print("🚀 Research Agent Started")
+    """يدير دورة حياة وكيل البحث — الخطوة 7."""
+    # ── Phase 1: تسجيل معلومات الإقلاع ──────────────────────────────────────
+    db_url = os.environ.get("RESEARCH_DATABASE_URL", os.environ.get("DATABASE_URL", ""))
+    db_backend = "postgresql" if "postgresql" in db_url else "sqlite"
+    tavily_str = "true" if _TAVILY_READY else "false"
+
+    prom_metrics.set_startup_info(
+        version="1.0.0",
+        environment=os.environ.get("ENVIRONMENT", "development"),
+        db_backend=db_backend,
+        tavily_available=tavily_str,
+    )
+
+    print(f"🚀 Research Agent Started — Tavily={'✅' if _TAVILY_READY else '❌ (no key)'}")
     yield
     print("🛑 Research Agent Stopped")
 
@@ -64,7 +101,21 @@ def _build_router() -> APIRouter:
     @router.get("/health", tags=["System"])
     def health_check() -> dict[str, str]:
         """فحص الحالة."""
-        return {"status": "healthy", "service": "research-agent"}
+        return {
+            "status": "healthy",
+            "service": "research-agent",
+            "step": "7",
+            "tavily_available": "true" if _TAVILY_READY else "false",
+        }
+
+    @router.get("/metrics", tags=["Observability"], include_in_schema=False)
+    def prometheus_metrics() -> Response:
+        """
+        يُصدِّر مقاييس Prometheus بصيغة text format.
+        يُستخدَم من قِبَل Prometheus scraper على :8007/metrics.
+        """
+        body, content_type = prom_metrics.export_prometheus_text()
+        return Response(content=body, media_type=content_type)
 
     @router.get("/content/curriculum", tags=["Content"])
     async def get_curriculum(level: str | None = None) -> dict[str, object]:
@@ -114,8 +165,15 @@ def _build_router() -> APIRouter:
                 if is_deep:
                     # Use Super Search (Internet)
                     print(f"🚀 Using Deep Research for: {query}")
+                    _t = prom_metrics.get_request_timer()
                     try:
-                        report = await super_search_orchestrator.execute(query)
+                        report = await _get_super_search().execute(query)
+                        prom_metrics.record_deep_research("success")
+                        prom_metrics.record_search(
+                            "deep", "success", prom_metrics.elapsed_since(_t)
+                        )
+                        if _TAVILY_READY:
+                            prom_metrics.record_tavily_call("success")
                         # The client expects 'results' list, so we wrap the report as a single result
                         data_results = [
                             {
@@ -127,6 +185,12 @@ def _build_router() -> APIRouter:
                             }
                         ]
                     except Exception as e:
+                        prom_metrics.record_deep_research("error")
+                        prom_metrics.record_search(
+                            "deep", "error", prom_metrics.elapsed_since(_t)
+                        )
+                        if _TAVILY_READY:
+                            prom_metrics.record_tavily_error("api_error")
                         return AgentResponse(status="error", error=f"Deep research failed: {e}")
                 else:
                     # Construct SearchRequest for DB Search
@@ -138,7 +202,17 @@ def _build_router() -> APIRouter:
                     search_req = SearchRequest(q=query, filters=search_filters, limit=limit)
 
                     # Execute Search via Orchestrator
-                    results = await search_orchestrator.search(search_req)
+                    _t = prom_metrics.get_request_timer()
+                    try:
+                        results = await search_orchestrator.search(search_req)
+                        prom_metrics.record_search(
+                            "db", "success", prom_metrics.elapsed_since(_t)
+                        )
+                    except Exception as e:
+                        prom_metrics.record_search(
+                            "db", "error", prom_metrics.elapsed_since(_t)
+                        )
+                        return AgentResponse(status="error", error=f"Search failed: {e}")
 
                     # Serialize results
                     data_results = [r.model_dump() for r in results]

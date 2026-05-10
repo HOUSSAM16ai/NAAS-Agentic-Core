@@ -1,0 +1,220 @@
+{
+  "uid": "cogniforge-ms-step7-research-agent",
+  "title": "CogniForge — Step 7: Research Agent (Tavily Web Search)",
+  "description": "مراقبة research-agent الحي على :8007 — Tavily web search + Prometheus metrics",
+  "tags": ["cogniforge", "microservices", "step7", "research-agent", "tavily"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Research Agent — Startup Info",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": 1 }] } } },
+      "targets": [{ "expr": "cogniforge_research_startup_info", "legendFormat": "step={{step}} tavily={{tavily_available}} env={{environment}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Tavily Web Search",
+      "gridPos": { "x": 6, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }] }, "mappings": [{ "type": "value", "options": { "0": { "text": "DISABLED" }, "1": { "text": "ACTIVE" } } }] } },
+      "targets": [{ "expr": "cogniforge_research_startup_info{tavily_available=\"true\"}", "legendFormat": "Tavily", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "HTTP Request Rate",
+      "gridPos": { "x": 10, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } } },
+      "targets": [{ "expr": "rate(cogniforge_research_requests_total[2m])", "legendFormat": "req/s", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "P95 Latency",
+      "gridPos": { "x": 14, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] } } },
+      "targets": [{ "expr": "histogram_quantile(0.95, rate(cogniforge_research_request_duration_seconds_bucket[5m]))", "legendFormat": "P95", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Total Searches",
+      "gridPos": { "x": 18, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "targets": [{ "expr": "sum(cogniforge_research_searches_total)", "legendFormat": "searches", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Active Connections",
+      "gridPos": { "x": 21, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "targets": [{ "expr": "cogniforge_research_active_connections", "legendFormat": "connections", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "HTTP Traffic",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "HTTP Requests by Endpoint",
+      "gridPos": { "x": 0, "y": 5, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "rate(cogniforge_research_requests_total[2m])", "legendFormat": "{{method}} {{endpoint}} {{status_code}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "HTTP Latency P50 / P95 / P99",
+      "gridPos": { "x": 12, "y": 5, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(cogniforge_research_request_duration_seconds_bucket[5m]))", "legendFormat": "P50", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "histogram_quantile(0.95, rate(cogniforge_research_request_duration_seconds_bucket[5m]))", "legendFormat": "P95", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "histogram_quantile(0.99, rate(cogniforge_research_request_duration_seconds_bucket[5m]))", "legendFormat": "P99", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Search Operations",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Search Rate by Type (DB / Deep / Rerank / Refine)",
+      "gridPos": { "x": 0, "y": 13, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "rate(cogniforge_research_searches_total[2m])", "legendFormat": "{{search_type}} — {{result}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Search Duration P50 / P95",
+      "gridPos": { "x": 12, "y": 13, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(cogniforge_research_search_duration_seconds_bucket[5m]))", "legendFormat": "P50 {{search_type}}", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "histogram_quantile(0.95, rate(cogniforge_research_search_duration_seconds_bucket[5m]))", "legendFormat": "P95 {{search_type}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Tavily Web Search",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Tavily API Calls (Success vs Error)",
+      "gridPos": { "x": 0, "y": 21, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "rate(cogniforge_research_tavily_calls_total{result=\"success\"}[2m])", "legendFormat": "success", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "rate(cogniforge_research_tavily_calls_total{result=\"error\"}[2m])", "legendFormat": "error", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "rate(cogniforge_research_tavily_calls_total{result=\"unavailable\"}[2m])", "legendFormat": "unavailable", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Tavily Errors by Type",
+      "gridPos": { "x": 8, "y": 21, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "rate(cogniforge_research_tavily_errors_total[2m])", "legendFormat": "{{error_type}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Deep Research (SuperSearchOrchestrator)",
+      "gridPos": { "x": 16, "y": 21, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "rate(cogniforge_research_deep_research_total[2m])", "legendFormat": "{{result}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Database Operations",
+      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "DB Operations Rate",
+      "gridPos": { "x": 0, "y": 29, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "rate(cogniforge_research_db_operations_total[2m])", "legendFormat": "{{operation}} — {{result}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }]
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "DB Duration P50 / P95",
+      "gridPos": { "x": 12, "y": 29, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(cogniforge_research_db_duration_seconds_bucket[5m]))", "legendFormat": "P50 {{operation}}", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "histogram_quantile(0.95, rate(cogniforge_research_db_duration_seconds_bucket[5m]))", "legendFormat": "P95 {{operation}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 50,
+      "type": "row",
+      "title": "Microservices Health Matrix",
+      "gridPos": { "x": 0, "y": 36, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 51,
+      "type": "stat",
+      "title": "All Microservices UP/DOWN",
+      "gridPos": { "x": 0, "y": 37, "w": 24, "h": 5 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }] }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN" }, "1": { "text": "UP" } } }] } },
+      "targets": [
+        { "expr": "up{job=\"cogniforge-fastapi\"}", "legendFormat": "FastAPI :8000", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "up{job=\"orchestrator-service\"}", "legendFormat": "Orchestrator :8006 (Step 4)", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "up{job=\"user-service\"}", "legendFormat": "User Service :8001 (Step 5)", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "up{job=\"planning-agent\"}", "legendFormat": "Planning Agent :8002 (Step 6)", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "up{job=\"research-agent\"}", "legendFormat": "Research Agent :8007 (Step 7)", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 60,
+      "type": "row",
+      "title": "Step 7 Activation Guide",
+      "gridPos": { "x": 0, "y": 42, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 61,
+      "type": "text",
+      "title": "Step 7 — Research Agent Activation Guide",
+      "gridPos": { "x": 0, "y": 43, "w": 24, "h": 7 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Step 7: Research Agent Live Activation\n\n**Port:** `:8007` | **Metrics:** `cogniforge_research_*` | **Tavily:** حي عند توفر `TAVILY_API_KEY`\n\n### التحقق الحي\n```bash\n# Health check\ncurl http://localhost:8007/health\n# → {\"status\":\"healthy\",\"service\":\"research-agent\",\"step\":\"7\",\"tavily_available\":\"true\"}\n\n# Prometheus metrics\ncurl http://localhost:8007/metrics | grep cogniforge_research\n# → cogniforge_research_startup_info{version=\"1.0.0\",step=\"7\",tavily_available=\"true\",...} 1.0\n\n# Deep research (Tavily)\ncurl -X POST http://localhost:8007/execute \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"caller_id\":\"test\",\"action\":\"deep_research\",\"payload\":{\"query\":\"BAC math Algeria 2024\"}}'\n```\n\n### الخدمات النشطة بعد Step 7\n| الخدمة | المنفذ | الحالة |\n|--------|--------|--------|\n| FastAPI monolith | :8000 | ✅ ACTIVE |\n| orchestrator-service | :8006 | ✅ ACTIVE (Step 4) |\n| user-service | :8001 | ✅ ACTIVE (Step 5) |\n| planning-agent | :8002 | ✅ ACTIVE (Step 6) |\n| **research-agent** | **:8007** | **✅ ACTIVE (Step 7 — جديد)** |\n\n### الخطوة التالية (Step 8)\n- تفعيل `reasoning-agent` على `:8008`\n- أو: ترقية LangGraph checkpointer من MemorySaver إلى PostgresCheckpointer\n- أو: تفعيل Redis الحقيقي (`CACHE_TYPE=redis`)"
+      }
+    }
+  ]
+}

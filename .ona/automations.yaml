@@ -1,13 +1,19 @@
 # .ona/automations.yaml
 # ─────────────────────────────────────────────────────────────────────────────
-# CogniForge — Ona Automations (Step 4: Persistence Relay + Prometheus Metrics)
+# CogniForge — Ona Automations (Step 6: Planning Agent + Docker Compose Stack)
 #
 # الواقع: Codespaces لا يدعم Docker-in-Docker في هذا الـ devcontainer.
-# الحل: orchestrator-service يعمل كـ uvicorn process مباشر (مثل Grafana/Prometheus).
-# الجديد في Step 4:
-#   - OUTBOX_RELAY_ENABLED=true  — حلقة relay دورية كل 15 ثانية
-#   - /metrics endpoint حقيقي بصيغة Prometheus (prometheus_client)
-#   - cogniforge_outbox_relay_* counters مرئية في Grafana :3001
+# الحل: الخدمات تعمل كـ uvicorn processes مباشرة (مثل Grafana/Prometheus).
+#
+# الجديد في Step 6:
+#   - planning-agent على :8002 — DSPy + LangGraph + /metrics (cogniforge_planning_*)
+#   - docker-compose-stack task — يُشغِّل docker-compose.step6.yml في بيئات Docker
+#   - verify-step6-planning-agent — تحقق حي شامل من planning-agent
+#   - run-step6-tests — 30+ اختبار للخطوة 6
+#
+# الخدمات النشطة (Codespaces — uvicorn processes):
+#   :8000 FastAPI monolith | :8001 user-service | :8002 planning-agent | :8006 orchestrator-service
+#   :3001 Grafana | :9090 Prometheus
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -61,6 +67,49 @@ services:
       stop: |
         pkill -f "uvicorn microservices.orchestrator_service" 2>/dev/null || true
         echo "✅ orchestrator-service stopped."
+
+  planning-agent:
+    name: "Planning Agent (Step 6 — DSPy + LangGraph + /metrics)"
+    description: |
+      يُشغِّل planning-agent كـ uvicorn process مباشر على :8002.
+      Step 6: /metrics endpoint حقيقي (cogniforge_planning_*). DSPy + LangGraph.
+      لا يتطلب Docker. يبدأ تلقائياً عبر supervisor.sh.
+      التحقق: curl http://localhost:8002/health
+               curl http://localhost:8002/metrics | grep cogniforge_planning_startup_info
+    commands:
+      start: |
+        set -euo pipefail
+        PLANNING_PORT="8002"
+        LOG_FILE="/app/.observability/planning_agent.log"
+
+        pkill -f "uvicorn microservices.planning_agent" 2>/dev/null || true
+        sleep 1
+        mkdir -p /app/.observability
+
+        echo "🚀 Starting planning-agent (Step 6) on :${PLANNING_PORT}..."
+        echo "   DSPy: ${OPENROUTER_API_KEY:+enabled}${OPENROUTER_API_KEY:-disabled (fallback mode)}"
+        echo "   /metrics → Prometheus | cogniforge_planning_*"
+
+        PLANNING_DATABASE_URL="${PLANNING_DATABASE_URL:-${DATABASE_URL:-}}" \
+        PLANNING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+        PLANNING_SECRET_KEY="${SECRET_KEY:-cogniforge-planning-agent-dev-key}" \
+        PLANNING_ENVIRONMENT="${ENVIRONMENT:-development}" \
+        PLANNING_SERVICE_NAME="planning-agent" \
+        PLANNING_SERVICE_VERSION="1.0.0" \
+        python -m uvicorn microservices.planning_agent.main:app \
+          --host 0.0.0.0 \
+          --port "$PLANNING_PORT" \
+          --workers 1 \
+          --log-level info \
+          2>&1 | tee -a "$LOG_FILE"
+
+      ready: |
+        curl -sf http://localhost:8002/health && \
+        curl -sf http://localhost:8002/metrics | grep -q "cogniforge_planning_startup_info"
+
+      stop: |
+        pkill -f "uvicorn microservices.planning_agent" 2>/dev/null || true
+        echo "✅ planning-agent stopped."
 
   user-service:
     name: "User Service (Step 5 — Prometheus /metrics)"
@@ -423,5 +472,214 @@ tasks:
         tests/microservices/user_service/test_step5_user_service_metrics.py \
         -v --tb=short --no-header -q 2>&1 | tail -50
       echo "✅ Step 5 tests complete."
+    triggeredBy:
+      - manual
+
+  # ── Step 6: Planning Agent ─────────────────────────────────────────────────
+
+  restart-planning-agent:
+    name: "Restart Planning Agent"
+    description: يوقف planning-agent ويُعيد تشغيله يدوياً على :8002.
+    command: |
+      set -euo pipefail
+      echo "🔄 Restarting planning-agent..."
+      pkill -f "uvicorn microservices.planning_agent" 2>/dev/null || true
+      sleep 2
+      PLANNING_DATABASE_URL="${PLANNING_DATABASE_URL:-${DATABASE_URL:-}}" \
+      PLANNING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+      PLANNING_SECRET_KEY="${SECRET_KEY:-cogniforge-planning-agent-dev-key}" \
+      PLANNING_ENVIRONMENT="${ENVIRONMENT:-development}" \
+      PLANNING_SERVICE_NAME="planning-agent" \
+      PLANNING_SERVICE_VERSION="1.0.0" \
+      nohup python -m uvicorn microservices.planning_agent.main:app \
+        --host 0.0.0.0 --port 8002 --workers 1 --log-level info \
+        >> /app/.observability/planning_agent.log 2>&1 &
+      echo "✅ planning-agent restarted (PID=$!)"
+      echo "   curl http://localhost:8002/health"
+      echo "   curl http://localhost:8002/metrics | grep cogniforge_planning"
+    triggeredBy:
+      - manual
+
+  verify-step6-planning-agent:
+    name: "Verify Step 6 — Planning Agent Live Metrics"
+    description: |
+      يتحقق من أن planning-agent يعمل على :8002 ويُصدِّر مقاييس Prometheus حقيقية.
+      يفحص: /health + /metrics + Prometheus scrape target + Grafana dashboard.
+    command: |
+      set -euo pipefail
+      URL="http://localhost:8002"
+      echo "═══════════════════════════════════════════════════════════"
+      echo "  CogniForge — Step 6: Planning Agent Verification"
+      echo "═══════════════════════════════════════════════════════════"
+      echo ""
+
+      echo "▶ GET ${URL}/health"
+      HEALTH=$(curl -sf "${URL}/health" 2>/dev/null) || {
+        echo "❌ planning-agent غير متاح على :8002"
+        echo "   راجع: cat /app/.observability/planning_agent.log"
+        echo "   أو شغّل: gitpod automations task start restart-planning-agent"
+        exit 1
+      }
+      echo "$HEALTH" | python3 -m json.tool
+      STATUS=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','?'))")
+      echo ""
+
+      echo "▶ GET ${URL}/metrics (Prometheus text format)"
+      METRICS=$(curl -sf "${URL}/metrics" 2>/dev/null) || {
+        echo "❌ /metrics endpoint غير متاح"
+        exit 1
+      }
+
+      PASS=0; FAIL=0
+      check_metric() {
+        if echo "$METRICS" | grep -q "$1"; then
+          echo "  ✅ $1"; PASS=$((PASS+1))
+        else
+          echo "  ❌ $1 — غائب"; FAIL=$((FAIL+1))
+        fi
+      }
+
+      echo ""
+      echo "▶ Required metrics (cogniforge_planning_*):"
+      check_metric "cogniforge_planning_startup_info"
+      check_metric "cogniforge_planning_requests_total"
+      check_metric "cogniforge_planning_request_duration_seconds"
+      check_metric "cogniforge_planning_plans_total"
+      check_metric "cogniforge_planning_plan_duration_seconds"
+      check_metric "cogniforge_planning_dspy_invocations_total"
+      check_metric "cogniforge_planning_fallback_plans_total"
+      check_metric "cogniforge_planning_db_operations_total"
+
+      echo ""
+      echo "▶ DSPy availability:"
+      echo "$METRICS" | grep "cogniforge_planning_startup_info" | head -3 || echo "  (startup_info not yet emitted)"
+
+      echo ""
+      echo "▶ Prometheus scrape targets:"
+      curl -sf "http://localhost:9090/api/v1/targets" 2>/dev/null \
+        | python3 -c "import sys,json; [print(('  ✅ ' if t['health']=='up' else '  ❌ ')+t.get('labels',{}).get('job','?')+' '+t['health']) for t in json.load(sys.stdin)['data']['activeTargets']]" \
+        2>/dev/null || echo "  (Prometheus غير متاح)"
+
+      echo ""
+      echo "▶ Grafana dashboard:"
+      echo "  http://localhost:3001/d/cogniforge-ms-step6-planning-agent"
+      echo ""
+      echo "▶ Process check:"
+      PID=$(pgrep -f 'uvicorn microservices.planning_agent' 2>/dev/null || echo 'not found')
+      echo "  planning-agent PID: $PID"
+      echo ""
+      echo "▶ Test plan creation:"
+      PLAN_RESP=$(curl -sf -X POST "${URL}/plans" \
+        -H 'Content-Type: application/json' \
+        -H 'Authorization: Bearer cogniforge-service-token' \
+        -d '{"goal":"اختبار التحقق الحي للخطوة 6"}' 2>/dev/null) || PLAN_RESP=""
+      if [ -n "$PLAN_RESP" ]; then
+        echo "  ✅ POST /plans → plan created"
+        echo "$PLAN_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print('  plan_id='+str(d.get('plan_id','?'))+' | strategy='+str(d.get('strategy_name','?')))" 2>/dev/null || true
+        PASS=$((PASS+1))
+      else
+        echo "  ⚠️  POST /plans → no response (service token may differ)"
+      fi
+
+      echo ""
+      echo "═══════════════════════════════════════════════════════════"
+      echo "  Results: ✅ $PASS passed | ❌ $FAIL failed | Status: $STATUS"
+      [ "$FAIL" -eq 0 ] && echo "  🎉 Step 6 PLANNING-AGENT ACTIVE" || echo "  ⚠️  بعض المقاييس غائبة"
+      echo "═══════════════════════════════════════════════════════════"
+      [ "$FAIL" -eq 0 ]
+    triggeredBy:
+      - manual
+
+  docker-compose-stack:
+    name: "Docker Compose Full Stack (Step 6)"
+    description: |
+      يُشغِّل docker-compose.step6.yml — orchestrator + user-service + planning-agent.
+      مخصص لبيئات Docker (ليس Codespaces). في Codespaces: supervisor.sh هو المسار.
+      يتطلب: OPENROUTER_API_KEY + DATABASE_URL في البيئة.
+    command: |
+      set -euo pipefail
+      echo "═══════════════════════════════════════════════════════════"
+      echo "  CogniForge — Docker Compose Step 6 Stack"
+      echo "═══════════════════════════════════════════════════════════"
+      echo ""
+
+      # التحقق من Docker
+      if ! command -v docker &>/dev/null; then
+        echo "⚠️  Docker غير متاح في هذه البيئة."
+        echo "   في Codespaces: supervisor.sh يُشغِّل الخدمات كـ uvicorn processes."
+        echo "   استخدم: gitpod automations task start restart-planning-agent"
+        echo ""
+        echo "   للتشغيل في بيئة Docker محلية:"
+        echo "   export OPENROUTER_API_KEY=sk-or-v1-..."
+        echo "   export DATABASE_URL=postgresql://..."
+        echo "   docker compose -f docker-compose.step6.yml up -d"
+        exit 0
+      fi
+
+      # التحقق من المتغيرات
+      [ -z "${OPENROUTER_API_KEY:-}" ] && { echo "❌ OPENROUTER_API_KEY مطلوب"; exit 1; }
+      [ -z "${DATABASE_URL:-}" ] && { echo "❌ DATABASE_URL مطلوب"; exit 1; }
+
+      echo "▶ Building and starting Step 6 stack..."
+      docker compose -f docker-compose.step6.yml up -d --build
+
+      echo ""
+      echo "▶ Waiting for services to be healthy (60s)..."
+      sleep 10
+
+      PASS=0; FAIL=0
+      check_svc() {
+        if curl -sf --connect-timeout 5 "$2/health" >/dev/null 2>&1; then
+          echo "  ✅ $1 ($2)"; PASS=$((PASS+1))
+        else
+          echo "  ❌ $1 ($2) — not healthy yet"; FAIL=$((FAIL+1))
+        fi
+      }
+
+      check_svc "orchestrator-service" "http://localhost:8006"
+      check_svc "user-service"         "http://localhost:8001"
+      check_svc "planning-agent"       "http://localhost:8002"
+
+      echo ""
+      echo "▶ Docker Compose status:"
+      docker compose -f docker-compose.step6.yml ps
+
+      echo ""
+      echo "▶ Metrics endpoints:"
+      echo "  orchestrator: curl http://localhost:8006/metrics | grep cogniforge_outbox"
+      echo "  user-service: curl http://localhost:8001/metrics | grep cogniforge_user"
+      echo "  planning:     curl http://localhost:8002/metrics | grep cogniforge_planning"
+      echo ""
+      echo "▶ Grafana dashboards:"
+      echo "  Step 4: http://localhost:3001/d/cogniforge-ms-step4-persistence"
+      echo "  Step 5: http://localhost:3001/d/cogniforge-ms-step5-user-service"
+      echo "  Step 6: http://localhost:3001/d/cogniforge-ms-step6-planning-agent"
+      echo ""
+      echo "▶ Stop stack:"
+      echo "  docker compose -f docker-compose.step6.yml down"
+      echo ""
+      echo "═══════════════════════════════════════════════════════════"
+      echo "  Results: ✅ $PASS healthy | ❌ $FAIL not ready"
+      [ "$FAIL" -eq 0 ] && echo "  🎉 Step 6 Docker Stack RUNNING" || echo "  ⚠️  بعض الخدمات لم تصبح جاهزة بعد — انتظر 30 ثانية وأعد المحاولة"
+      echo "═══════════════════════════════════════════════════════════"
+    triggeredBy:
+      - manual
+
+  run-step6-tests:
+    name: "Run Step 6 Planning Agent Tests"
+    description: اختبارات الخطوة 6 — planning-agent Prometheus metrics + DSPy + /metrics endpoint.
+    command: |
+      set -euo pipefail
+      export DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export PLANNING_DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export PLANNING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-dummy-key-for-tests}"
+      export SECRET_KEY="test-secret-key-for-step6-tests"
+      export ENVIRONMENT="testing"
+      export LLM_MOCK_MODE="1"
+      echo "🧪 Running Step 6 planning-agent tests..."
+      python -m pytest \
+        tests/microservices/planning_agent/test_step6_planning_agent_metrics.py \
+        -v --tb=short --no-header -q 2>&1 | tail -60
+      echo "✅ Step 6 tests complete."
     triggeredBy:
       - manual

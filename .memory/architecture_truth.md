@@ -1,5 +1,5 @@
 # Architectural Diagnostic: NAAS-Agentic-Core
-> Last updated: **2026-05-10** | Branch: `feat/microservices-step4-persistence-relay` (eighth pass — OUTBOX_RELAY + /metrics activated).
+> Last updated: **2026-05-10** | Branch: `feat/microservices-step6-planning-agent` (tenth pass — planning-agent + Docker Compose stack activated).
 
 ## Executive Summary
 The system is in a "strangler fig" migration phase from monolith to microservices. In the default Codespaces environment (without explicitly launching `docker-compose.yml`), the system relies entirely on the FastAPI monolith and a 2-node local LangGraph fallback. The advertised "Agentic" capabilities (KAgent, MCP, DSPy, Reranker, LlamaIndex, Multi-agent workflows) are either DORMANT (gated behind microservices that aren't running) or ZOMBIE (code exists but has no live consumers).
@@ -51,7 +51,9 @@ To move from "transitional/zombie" to "production-grade multi-service":
 2. ✅ **DONE (Step 2 — 2026-05-10)** — Change `ChatRoutingPolicy` default to `state_graph` → `/api/chat/messages`. Routing metrics + Grafana dashboard + CI gate added.
 3. ✅ **DONE (Step 3 — 2026-05-10)** — `orchestrator-service` activated as uvicorn process on :8006 via `supervisor.sh:launch_orchestrator_service()`. Auto-starts at Codespace boot when `OPENROUTER_API_KEY` set. Grafana dashboard `60-microservices-step3-live.json` (20 panels). `OUTBOX_RELAY_ENABLED=false` (safety guard).
 4. ✅ **DONE (Step 4 — 2026-05-10)** — `OUTBOX_RELAY_ENABLED=true` activated. `prometheus_client` added. `/metrics` endpoint returns real Prometheus text format. 11 metrics: `cogniforge_outbox_relay_*`, `cogniforge_stategraph_*`, `cogniforge_orchestrator_startup_info`. Grafana dashboard `70-microservices-step4-persistence.json` (24 panels). 44 regression tests.
-5. **NEXT (Step 5)** — Pick ONE of: (a) Redis activation (`CACHE_TYPE=redis` — needs redis-server in devcontainer), (b) PostgresCheckpointer for LangGraph (ISS-020 — replaces MemorySaver, enables cross-restart conversation memory), (c) Tavily web search in live StateGraph path (WebSearchFallbackNode → ACTIVE).
+5. ✅ **DONE (Step 5 — 2026-05-10)** — `user-service` activated as uvicorn process on :8001. `/metrics` → 11 `cogniforge_user_*` metrics. Auto-starts via supervisor.sh when `DATABASE_URL` set. Grafana dashboard `80-microservices-step5-user-service.json` (17 panels). 36 regression tests.
+6. ✅ **DONE (Step 6 — 2026-05-10)** — `planning-agent` activated as uvicorn process on :8002. DSPy+LangGraph with fallback chain. `/metrics` → 11 `cogniforge_planning_*` metrics. `docker-compose.step6.yml` for Docker environments. Grafana dashboard `90-microservices-step6-planning-agent.json` (20 panels). 61 regression tests.
+7. **NEXT (Step 7)** — Pick ONE of: (a) `research-agent` on :8007 (Tavily web search live), (b) PostgresCheckpointer for LangGraph (ISS-020), (c) Redis activation (`CACHE_TYPE=redis`), (d) `reasoning-agent` on :8008.
 6. **Fix OTEL** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to a valid collector URL (currently `http` = invalid).
 7. **Promote ONE agentic layer** — pick exactly one of (MCP, LlamaIndex, reranker, DSPy) and wire it into the live StateGraph path. Add runtime trace assertion.
 

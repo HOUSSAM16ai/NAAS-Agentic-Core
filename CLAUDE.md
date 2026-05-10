@@ -65,6 +65,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Microservices Step 5 applied 2026-05-10 (D-034 — User Service Live Activation):** `user-service` activated as a **uvicorn process** on `:8001` (no Docker — Codespaces constraint). Second microservice to go ACTIVE alongside `orchestrator-service`. Five artefacts: (1) `microservices/user_service/src/core/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_user_requests_total`, `cogniforge_user_request_duration_seconds`, `cogniforge_user_active_connections`, `cogniforge_user_auth_operations_total`, `cogniforge_user_auth_duration_seconds`, `cogniforge_user_registrations_total`, `cogniforge_user_logins_total`, `cogniforge_user_token_verifications_total`, `cogniforge_user_db_operations_total`, `cogniforge_user_db_duration_seconds`, `cogniforge_user_startup_info{step="5"}`; (2) `microservices/user_service/main.py` — `/metrics` endpoint + `set_startup_info()` in lifespan; (3) `supervisor.sh:launch_user_service()` — STEP 4E, starts uvicorn on `:8001` at Codespace boot when `DATABASE_URL` is set; (4) `.ona/automations.yaml` — service `user-service` + tasks `verify-step5-user-service`, `restart-user-service`, `run-step5-tests`; (5) `observability/native/prometheus.yml` — `user-service` scrape target at `localhost:8001` with `step="5"` label. Grafana dashboard `80-microservices-step5-user-service.json` (17 panels, UID `cogniforge-ms-step5-user-service`, 10s refresh) at :3001. CI gate `.github/workflows/microservices-step5-user-service.yml` (6 jobs). 36 regression tests in `tests/microservices/user_service/test_step5_user_service_metrics.py`.
 
+**Microservices Step 6 applied 2026-05-10 (D-035 — Planning Agent Live Activation + Docker Compose Stack):** `planning-agent` activated as a **uvicorn process** on `:8002` (no Docker — Codespaces constraint). Third microservice to go ACTIVE. DSPy + LangGraph with fallback chain when `OPENROUTER_API_KEY` absent. Eight artefacts: (1) `microservices/planning_agent/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_planning_requests_total`, `cogniforge_planning_request_duration_seconds`, `cogniforge_planning_active_connections`, `cogniforge_planning_plans_total`, `cogniforge_planning_plan_duration_seconds`, `cogniforge_planning_dspy_invocations_total`, `cogniforge_planning_dspy_errors_total`, `cogniforge_planning_fallback_plans_total`, `cogniforge_planning_db_operations_total`, `cogniforge_planning_db_duration_seconds`, `cogniforge_planning_startup_info{step="6",dspy_available=...}`; (2) `microservices/planning_agent/main.py` — `/metrics` endpoint + `set_startup_info()` in lifespan; (3) `supervisor.sh:launch_planning_agent()` — STEP 4F, starts uvicorn on `:8002` at Codespace boot when `DATABASE_URL` is set; (4) `.ona/automations.yaml` — service `planning-agent` + tasks `verify-step6-planning-agent`, `restart-planning-agent`, `run-step6-tests`, `docker-compose-stack`; (5) `observability/native/prometheus.yml` — `planning-agent` scrape target at `localhost:8002` with `step="6"` label; (6) `docker-compose.step6.yml` — Docker Compose stack with orchestrator-service + user-service + planning-agent (for non-Codespaces Docker environments); (7) Grafana dashboard `90-microservices-step6-planning-agent.json` (20 panels, UID `cogniforge-ms-step6-planning-agent`, 10s refresh) at :3001; (8) CI gate `.github/workflows/microservices-step6-planning-agent.yml` (7 jobs). 61 regression tests in `tests/microservices/planning_agent/test_step6_planning_agent_metrics.py`.
+
 ---
 
 ## 2) خريطة التنفيذ (Execution Topology)
@@ -101,8 +103,8 @@ Browser
                     ├── /v1/content/*
                     └── /api/v1/data-mesh/*
 
-Infrastructure (verified live 2026-05-09, Step 3 added 2026-05-10):
-  Grafana    → port 3001  (grafana.ini says 3000 but provisioning CLI overrides) — 7 dashboards
+Infrastructure (verified live 2026-05-09, Steps 3-6 added 2026-05-10):
+  Grafana    → port 3001  (grafana.ini says 3000 but provisioning CLI overrides) — 9 dashboards
   Prometheus → port 9090
   Redis      → port 6379  (process running but app uses InMemoryCache — REDIS_URL not set)
   PostgreSQL → Supabase PgBouncer :6543 (19 users, 2098 customer_messages, 3038 admin_messages)
@@ -116,6 +118,12 @@ Step 5 (uvicorn process — auto-starts via supervisor.sh when DATABASE_URL set)
   user-service          → port 8001  (uvicorn process, /metrics active)
   DB: Supabase shared (USER_DATABASE_URL = DATABASE_URL)
   Prometheus scrape: localhost:8001/metrics (native/prometheus.yml, step="5")
+
+Step 6 (uvicorn process — auto-starts via supervisor.sh when DATABASE_URL set):
+  planning-agent        → port 8002  (uvicorn process, /metrics active, DSPy+LangGraph)
+  DB: Supabase shared (PLANNING_DATABASE_URL = DATABASE_URL)
+  Prometheus scrape: localhost:8002/metrics (native/prometheus.yml, step="6")
+  Docker Compose stack: docker-compose.step6.yml (orchestrator + user-service + planning-agent)
 ```
 
 1. `app/*` = بوابة التركيب والتنسيق العام (Control Plane).

@@ -83,3 +83,23 @@ scrape_configs:
           service: user-service
           step: "5"
     honor_labels: true
+
+  # ── Step 6: planning-agent (uvicorn process on :8002) ────────────────────
+  # Step 6: /metrics يُصدِّر prometheus_client text format حقيقي.
+  # المقاييس: cogniforge_planning_requests_total + cogniforge_planning_plans_total +
+  #           cogniforge_planning_dspy_* + cogniforge_planning_db_* +
+  #           cogniforge_planning_startup_info{step="6"}
+  # يبدأ تلقائياً عبر supervisor.sh عند توفر DATABASE_URL.
+  # يعمل بخطة احتياطية عند غياب OPENROUTER_API_KEY (DSPy disabled).
+  # DOWN حتى يُقلع الـ process — ليس خطأ في الـ devcontainer الافتراضي.
+  - job_name: planning-agent
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ["localhost:8002"]
+        labels:
+          tier: microservice
+          service: planning-agent
+          step: "6"
+    honor_labels: true

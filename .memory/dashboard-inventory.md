@@ -16,7 +16,9 @@ the left-nav order. The `00-` dashboard is set as Grafana's default home.
 | `40-stack-health.json` | `cogniforge-stack-health` | Stack self-monitoring: `up{}` table, OTel collector receive/refuse/fail, Loki/Tempo ingestion. | 30s | Platform ops |
 | `50-microservices-transition.json` | `cogniforge-ms-transition-step2` | Step 2: routing mode (state_graph vs agent), StateGraph metrics, Tavily status, microservices health matrix, fallback chain progress. | 10s | Migration engineers |
 | `60-microservices-step3-live.json` | `cogniforge-ms-step3-live` | Step 3: orchestrator-service live activation — health, routing distribution, LangGraph nodes, intent classification, fallback chain, memory/CPU. 20 panels. | 10s | Migration engineers |
-| `70-microservices-step4-persistence.json` | `cogniforge-ms-step4-persistence` | **Step 4 (current):** OUTBOX_RELAY + /metrics — startup_info, relay cycles/rates, StateGraph heatmap, HTTP P50/P95/P99, active connections, scrape health. 24 panels. | 10s | Migration engineers · SRE |
+| `70-microservices-step4-persistence.json` | `cogniforge-ms-step4-persistence` | Step 4: OUTBOX_RELAY + /metrics — startup_info, relay cycles/rates, StateGraph heatmap, HTTP P50/P95/P99, active connections, scrape health. 24 panels. | 10s | Migration engineers · SRE |
+| `80-microservices-step5-user-service.json` | `cogniforge-ms-step5-user-service` | Step 5: user-service live — startup_info, HTTP traffic, auth operations (register/login/verify), DB ops, microservices health matrix. 17 panels. | 10s | Migration engineers · SRE |
+| `90-microservices-step6-planning-agent.json` | `cogniforge-ms-step6-planning-agent` | **Step 6 (current):** planning-agent live — startup_info, HTTP traffic, plan generation (success/fallback), DSPy invocations, DB ops, Docker Compose guide, microservices health matrix. 20 panels. | 10s | Migration engineers · SRE |
 
 ## Drill-down navigation
 

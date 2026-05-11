@@ -717,6 +717,8 @@ launch_planning_agent() {
     # SQLAlchemy create_async_engine يرفض psycopg2 المتزامن — يجب postgresql+asyncpg://
     planning_db_url="${planning_db_url/postgresql:\/\//postgresql+asyncpg://}"
     planning_db_url="${planning_db_url/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+    # ISS-040: Supabase PgBouncer (port 6543) يرفض prepared statements — نستخدم 5432 مباشرة
+    planning_db_url=$(echo "$planning_db_url" | sed 's/:6543\//:5432\//')
     # إزالة sslmode من URL — asyncpg لا يقبله في query string
     planning_db_url=$(echo "$planning_db_url" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
 
@@ -790,6 +792,8 @@ launch_research_agent() {
     # ── تحويل DATABASE_URL إلى asyncpg (ISS-038-B) ───────────────────────────
     local _raw_db="${RESEARCH_DATABASE_URL:-${DATABASE_URL:-}}"
     local _async_db="${_raw_db/postgresql:\/\//postgresql+asyncpg://}"
+    # ISS-040: Supabase PgBouncer (port 6543) → direct PostgreSQL (port 5432)
+    _async_db=$(echo "$_async_db" | sed 's/:6543\//:5432\//')
     _async_db=$(echo "$_async_db" | sed 's/[?&]sslmode=[^&]*//')
 
     lifecycle_info "Research Agent: launching uvicorn on :${RESEARCH_PORT}..."
@@ -802,7 +806,7 @@ launch_research_agent() {
     ENVIRONMENT="${ENVIRONMENT:-development}" \
     SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
     PYTHONPATH="$APP_ROOT" \
-    uvicorn microservices.research_agent.main:app \
+    nohup python -m uvicorn microservices.research_agent.main:app \
         --host 0.0.0.0 \
         --port "$RESEARCH_PORT" \
         --log-level info \
@@ -853,7 +857,7 @@ launch_reasoning_agent() {
     ENVIRONMENT="${ENVIRONMENT:-development}" \
     SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
     PYTHONPATH="$APP_ROOT" \
-    uvicorn microservices.reasoning_agent.main:app \
+    nohup python -m uvicorn microservices.reasoning_agent.main:app \
         --host 0.0.0.0 \
         --port "$REASONING_PORT" \
         --log-level info \

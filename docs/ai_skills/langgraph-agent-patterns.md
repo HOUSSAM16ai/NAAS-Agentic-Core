@@ -189,6 +189,67 @@ These are documented in `LangGraph_Architectural_Blueprint.md §6` — be aware 
 
 ---
 
+## Postgres Checkpointer (Step 10 — Active)
+
+`AsyncPostgresSaver` is the active checkpointer. Key constraints:
+
+```python
+# MUST be a subclass, not a wrapper — LangGraph validates isinstance()
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+def _make_instrumented_class(base_cls):
+    """يُنشئ subclass مُزوَّد بـ Prometheus instrumentation."""
+    class _InstrumentedCheckpointer(base_cls):
+        async def aput(self, config, checkpoint, metadata, new_versions):
+            # record metrics here
+            return await super().aput(config, checkpoint, metadata, new_versions)
+    return _InstrumentedCheckpointer
+```
+
+- Use port **5432** (direct PostgreSQL), NOT 6543 (PgBouncer) — ISS-040.
+- `_build_psycopg_conninfo()` converts `postgresql+asyncpg://` → `postgresql://` for psycopg.
+- `AsyncConnectionPool(max_size=5)` — open in lifespan, close on shutdown.
+- Non-fatal fallback to `MemorySaver` if Postgres unavailable.
+
+## Conversation Service StateGraph (Step 12)
+
+Minimal 2-node graph for conversation-service:
+
+```python
+from langgraph.graph import StateGraph, END
+from typing import TypedDict
+
+class ConversationState(TypedDict):
+    question: str
+    intent: str        # "explanation" | "retrieval" | "general"
+    response: str
+    session_id: str
+
+async def intent_node(state: ConversationState) -> dict:
+    """يُصنِّف نية المستخدم — بدون LLM (deterministic)."""
+    intent = _classify_intent(state["question"])
+    return {"intent": intent}
+
+async def response_node(state: ConversationState) -> dict:
+    """يبني الإجابة بناءً على النية."""
+    response = await _build_response(state["question"], state["intent"])
+    return {"response": response}
+
+graph = StateGraph(ConversationState)
+graph.add_node("intent_node", intent_node)
+graph.add_node("response_node", response_node)
+graph.set_entry_point("intent_node")
+graph.add_edge("intent_node", "response_node")
+graph.add_edge("response_node", END)
+app = graph.compile()
+```
+
+**Lifespan warmup must be timeout-guarded:**
+```python
+async with asyncio.timeout(30.0):
+    await app.ainvoke({"question": "warmup", "intent": "", "response": "", "session_id": "warmup"})
+```
+
 ## Anti-patterns
 
 - **Do not** use `global` state inside nodes — pass everything through `AgentState`.
@@ -196,3 +257,6 @@ These are documented in `LangGraph_Architectural_Blueprint.md §6` — be aware 
 - **Do not** compile the graph per request — compile once at module/startup level, invoke per request.
 - **Do not** add LLM calls inside routing functions — routing must be deterministic.
 - **Do not** add new keys to `AgentState` without updating `LangGraph_Architectural_Blueprint.md`.
+- **Do not** wrap `AsyncPostgresSaver` — subclass it. LangGraph validates `isinstance(checkpointer, BaseCheckpointSaver)`.
+- **Do not** use port 6543 with psycopg/asyncpg — always convert to 5432 (ISS-040).
+- **Do not** call `ainvoke()` in lifespan without `asyncio.wait_for(..., timeout=30.0)` — unbounded awaits block ASGI startup.

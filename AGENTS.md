@@ -236,6 +236,7 @@ Load the corresponding skill file **before generating any code** in that domain.
 | Writing or reviewing a README | `crafting-effective-readmes.md` |
 | UI component or CSS work | `web-design-guidelines.md` |
 | Any file under `microservices/orchestrator_service/`, `microservices/planning_agent/`, or `microservices/reasoning_agent/` | `langgraph-agent-patterns.md` |
+| Any microservice health failure, pipeline_mode≠full, Prometheus target DOWN, or supervisor.sh issue | `microservices-live-verification.md` |
 
 ### Skill Index
 
@@ -243,11 +244,12 @@ Load the corresponding skill file **before generating any code** in that domain.
 |------------|--------|--------|
 | `vercel-react-best-practices.md` | Frontend (Next.js/React) | Waterfalls, bundle size, re-renders |
 | `web-design-guidelines.md` | UI/UX Design | Styling, layout, accessibility |
-| `fastapi-templates.md` | Backend (FastAPI) | Scaffolding and patterns for `app/api/` |
+| `fastapi-templates.md` | Backend (FastAPI) | Scaffolding, patterns, CogniForge Skill template |
 | `python-performance-optimization.md` | Python Core | Profiling, generators, async I/O |
 | `database-schema-designer.md` | Database | SQLModel/SQLAlchemy schemas, migrations |
 | `crafting-effective-readmes.md` | Documentation | README standards |
-| `langgraph-agent-patterns.md` | Agent Graphs (LangGraph) | `AgentState`, nodes, routing, ingress/egress |
+| `langgraph-agent-patterns.md` | Agent Graphs (LangGraph) | `AgentState`, nodes, routing, checkpointer, conversation graph |
+| `microservices-live-verification.md` | Microservices Ops | Live health checks, ISS-040/046 fixes, full restart sequence |
 
 ---
 

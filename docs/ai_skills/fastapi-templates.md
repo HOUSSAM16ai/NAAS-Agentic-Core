@@ -585,3 +585,124 @@ async def test_create_user_duplicate_email(client: AsyncClient):
 - **Business logic in routes** — always delegate to the service layer
 - **Missing `from_attributes=True`** — required in `model_config` for ORM to Pydantic conversion
 - **`datetime.utcnow()`** — deprecated; use `datetime.now(timezone.utc)`
+
+---
+
+## CogniForge Microservice Skill Template
+
+Every new microservice in this project must follow this exact pattern:
+
+```python
+# main.py — Skill template (Step N)
+from __future__ import annotations
+import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.responses import Response
+from . import prom_metrics  # independent CollectorRegistry
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """دورة حياة الـ Skill — إقلاع + إيقاف."""
+    prom_metrics.set_startup_info(
+        version="1.0.0",
+        environment=os.environ.get("ENVIRONMENT", "development"),
+        step="N",
+    )
+    yield
+    # cleanup here
+
+app = FastAPI(title="my-skill", lifespan=lifespan)
+
+@app.get("/health")
+async def health() -> dict:
+    return {"status": "healthy", "service": "my-skill", "step": "N"}
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    return Response(
+        content=prom_metrics.export_prometheus_text(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+```
+
+### Prometheus Registry Pattern (mandatory)
+
+Each microservice uses an **independent** `CollectorRegistry` to avoid conflicts:
+
+```python
+# prom_metrics.py
+from prometheus_client import CollectorRegistry, Counter, Histogram, Gauge, generate_latest
+
+_REGISTRY = CollectorRegistry()
+
+requests_total = Counter(
+    "cogniforge_myskill_requests_total",
+    "إجمالي الطلبات",
+    ["method", "status"],
+    registry=_REGISTRY,
+)
+startup_info = Gauge(
+    "cogniforge_myskill_startup_info",
+    "معلومات الإقلاع",
+    ["version", "environment", "step"],
+    registry=_REGISTRY,
+)
+
+def set_startup_info(version: str, environment: str, step: str) -> None:
+    startup_info.labels(version=version, environment=environment, step=step).set(1)
+
+def export_prometheus_text() -> str:
+    try:
+        return generate_latest(_REGISTRY).decode("utf-8")
+    except Exception:
+        return ""
+```
+
+### Database URL Normalization (mandatory for Supabase)
+
+```python
+def _normalize_db_url(url: str) -> str:
+    """يُحوِّل DATABASE_URL إلى صيغة asyncpg مع port 5432 (ISS-040 + ISS-038-B)."""
+    url = url.replace("postgresql://", "postgresql+asyncpg://")
+    url = url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+    # PgBouncer port 6543 → direct PostgreSQL port 5432
+    import re
+    url = re.sub(r":6543/", ":5432/", url)
+    # asyncpg handles SSL via connect_args, not query string
+    url = re.sub(r"[?&]sslmode=[^&]*", "", url)
+    url = re.sub(r"[?&]ssl=[^&]*", "", url)
+    return url
+```
+
+### supervisor.sh Launch Pattern
+
+```bash
+launch_myskill() {
+    local PORT="80XX"
+    local LOG="$APP_ROOT/.observability/myskill.log"
+    mkdir -p "$APP_ROOT/.observability"
+
+    # idempotent check
+    if pgrep -f "myskill.main:app" > /dev/null 2>&1; then
+        lifecycle_info "myskill: already running — skipping"
+        return 0
+    fi
+
+    local db_url="${MYSKILL_DATABASE_URL:-${DATABASE_URL:-}}"
+    db_url="${db_url/postgresql:\/\//postgresql+asyncpg://}"
+    db_url=$(echo "$db_url" | sed 's/:6543\//:5432\//')
+    db_url=$(echo "$db_url" | sed 's/[?&]sslmode=[^&]*//')
+
+    MYSKILL_DATABASE_URL="$db_url" \
+    OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
+    PYTHONPATH="$APP_ROOT" \
+    nohup python -m uvicorn microservices.myskill.main:app \
+        --host 0.0.0.0 --port "$PORT" --log-level info \
+        >> "$LOG" 2>&1 &
+}
+launch_myskill >> "$APP_ROOT/.observability/myskill.log" 2>&1 &
+```
+
+**Critical:** Always use `nohup python -m uvicorn` (not bare `uvicorn`) for reliable env inheritance (ISS-046-B).

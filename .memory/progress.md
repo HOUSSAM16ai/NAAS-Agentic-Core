@@ -1464,6 +1464,47 @@ cogniforge_orchestrator_startup_info{graph_ready="true",outbox_relay_enabled="tr
 
 ---
 
+## ✅ Session: 2026-05-11 — ISS-046 Surgical Fixes + Full Pipeline Verified
+
+### Summary
+
+Full live verification with real API keys (OPENROUTER + TAVILY + Supabase). Four surgical fixes applied to `supervisor.sh` and `secrets.env.example`. Skills Pipeline confirmed at `pipeline_mode="full"` with real LLM responses in Arabic.
+
+### Fixes Applied
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| ISS-046-A | orchestrator started without `CODESPACES=true` → Docker hostnames | Restarted with correct env; supervisor.sh already correct |
+| ISS-046-B | research/reasoning agents started without API keys | `uvicorn` → `nohup python -m uvicorn`; port 6543→5432 for research DB |
+| ISS-046-C | planning-agent used SQLite (port 6543 not converted) | Added `sed 's/:6543\//:5432\//'` to `launch_planning_agent()` |
+| ISS-046-D | `secrets.env.example` missing `TAVILY_API_KEY` | Added entry to example file |
+
+### Live Verification Results (2026-05-11)
+
+```
+POST /compose → pipeline_mode="full", skills_active=["planning","research","reasoning"]
+                composed_answer=<real Arabic LLM response>, total_ms=39590
+
+research-agent  /health → tavily_available="true"
+reasoning-agent /health → llm_backend="openrouter"
+planning-agent  /health → database="postgresql+asyncpg://..."
+
+Prometheus: 12/12 targets UP
+cogniforge metrics: 79 active
+cogniforge_pipeline_invocations_total{mode="full"} 2.0
+```
+
+### Files Changed
+
+- `.devcontainer/supervisor.sh` — 3 surgical fixes (ISS-046-B, ISS-046-C)
+- `.devcontainer/secrets.env.example` — added `TAVILY_API_KEY` (ISS-046-D)
+- `CLAUDE.md` — ISS-046 entry + updated service matrix (fallback→full)
+- `.memory/issues.md` — ISS-046-A/B/C/D documented
+- `.memory/progress.md` — this entry
+- `observability/grafana/dashboards/150-microservices-master-overview.json` — new master dashboard
+
+---
+
 ## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
 
 - حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.

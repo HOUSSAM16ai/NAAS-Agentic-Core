@@ -895,6 +895,61 @@ launch_content_retrieval_skill >> "$APP_ROOT/.observability/content_retrieval_sk
 lifecycle_info "✅ Content Retrieval Skill initialization offloaded to background"
 
 # ==============================================================================
+# STEP 4J: Conversation Service (الخطوة 12 — LangGraph StateGraph + /metrics)
+# ==============================================================================
+# يُشغِّل conversation-service كـ uvicorn process مستقل على المنفذ 8003.
+# Step 12: LangGraph StateGraph (intent_node → response_node) + Prometheus metrics.
+# يتطلب DATABASE_URL للـ DB (اختياري — fallback لـ SQLite).
+# يعمل بدون OPENROUTER_API_KEY (deterministic fallback responses).
+# ==============================================================================
+
+launch_conversation_service() {
+    local CONV_PORT="8003"
+    local CONV_HEALTH="http://localhost:${CONV_PORT}/health"
+    local CONV_LOG_DIR="$APP_ROOT/.observability"
+    local CONV_LOG="$CONV_LOG_DIR/conversation_service.log"
+
+    mkdir -p "$CONV_LOG_DIR"
+
+    # ── idempotent: تجنب إطلاق نسخة ثانية ───────────────────────────────────
+    if pgrep -f "conversation_service.main:app" > /dev/null 2>&1; then
+        lifecycle_info "Conversation Service: already running on :${CONV_PORT} — skipping"
+        return 0
+    fi
+
+    lifecycle_info "Conversation Service: launching uvicorn on :${CONV_PORT} (Step 12)..."
+
+    # تحويل DATABASE_URL إلى postgresql+asyncpg:// (ISS-038-B)
+    local CONV_DB_URL="${DATABASE_URL:-sqlite+aiosqlite:///:memory:}"
+    CONV_DB_URL="${CONV_DB_URL/postgresql:\/\//postgresql+asyncpg:\/\/}"
+    CONV_DB_URL="${CONV_DB_URL/postgres:\/\//postgresql+asyncpg:\/\/}"
+    # استخدام port 5432 (direct PG) بدلاً من 6543 (PgBouncer) — ISS-040
+    CONV_DB_URL="${CONV_DB_URL/:6543\//:5432/}"
+    # إزالة sslmode من URL (asyncpg يتعامل معه عبر connect_args)
+    CONV_DB_URL=$(echo "$CONV_DB_URL" | sed 's/?sslmode=[^&]*//;s/&sslmode=[^&]*//')
+
+    CONV_DATABASE_URL="$CONV_DB_URL" \
+    OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    ENVIRONMENT="${ENVIRONMENT:-development}" \
+    PYTHONPATH="$APP_ROOT" \
+    uvicorn microservices.conversation_service.main:app \
+        --host 0.0.0.0 \
+        --port "$CONV_PORT" \
+        --log-level info \
+        --no-access-log \
+        >> "$CONV_LOG" 2>&1 &
+
+    local conv_pid=$!
+    lifecycle_info "Conversation Service: launched (PID=$conv_pid) — health at $CONV_HEALTH"
+    lifecycle_info "             Logs: $CONV_LOG"
+    lifecycle_info "             DB: ${CONV_DB_URL:0:40}..."
+}
+
+# تشغيل في الخلفية — لا يحجب الـ supervisor
+launch_conversation_service >> "$APP_ROOT/.observability/conversation_service.log" 2>&1 &
+lifecycle_info "✅ Conversation Service initialization offloaded to background"
+
+# ==============================================================================
 # STEP 5: Health Check & Readiness (فحص الصحة والجاهزية)
 # ==============================================================================
 

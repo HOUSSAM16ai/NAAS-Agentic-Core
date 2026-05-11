@@ -224,6 +224,55 @@ services:
         pkill -f "uvicorn microservices.research_agent" 2>/dev/null || true
         echo "✅ research-agent stopped."
 
+  conversation-service:
+    name: "Conversation Service (Step 12 — LangGraph StateGraph + /metrics)"
+    description: |
+      يُشغِّل conversation-service كـ uvicorn process مباشر على :8003.
+      Step 12: LangGraph StateGraph (intent_node → response_node) + /metrics حقيقي.
+      لا يتطلب Docker. يبدأ تلقائياً عبر supervisor.sh STEP 4J.
+      التحقق: curl http://localhost:8003/health
+               curl http://localhost:8003/metrics | grep cogniforge_conversation_startup_info
+    commands:
+      start: |
+        set -euo pipefail
+        CONV_PORT="8003"
+        LOG_FILE="/app/.observability/conversation_service.log"
+
+        pkill -f "uvicorn microservices.conversation_service" 2>/dev/null || true
+        sleep 1
+        mkdir -p /app/.observability
+
+        echo "🚀 Starting conversation-service (Step 12) on :${CONV_PORT}..."
+        echo "   LangGraph: intent_node → response_node"
+        echo "   LLM: ${OPENROUTER_API_KEY:+✅ OpenRouter ACTIVE}${OPENROUTER_API_KEY:-⚠️  fallback mode (no OPENROUTER_API_KEY)}"
+        echo "   /metrics → Prometheus | cogniforge_conversation_*"
+
+        # تحويل URL إلى asyncpg (ISS-038-B) + port 5432 بدلاً من 6543 (ISS-040)
+        _raw_db="${CONV_DATABASE_URL:-${DATABASE_URL:-sqlite+aiosqlite:///:memory:}}"
+        _async_db="${_raw_db/postgresql:\/\//postgresql+asyncpg://}"
+        _async_db="${_async_db/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+        _async_db=$(echo "$_async_db" | sed 's/:6543\//:5432\//')
+        _async_db=$(echo "$_async_db" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
+
+        CONV_DATABASE_URL="$_async_db" \
+        OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+        ENVIRONMENT="${ENVIRONMENT:-development}" \
+        PYTHONPATH="/app" \
+        python -m uvicorn microservices.conversation_service.main:app \
+          --host 0.0.0.0 \
+          --port "$CONV_PORT" \
+          --workers 1 \
+          --log-level info \
+          2>&1 | tee -a "$LOG_FILE"
+
+      ready: |
+        curl -sf http://localhost:8003/health &&
+        curl -sf http://localhost:8003/metrics | grep -q "cogniforge_conversation_startup_info"
+
+      stop: |
+        pkill -f "uvicorn microservices.conversation_service" 2>/dev/null || true
+        echo "✅ conversation-service stopped."
+
   user-service:
     name: "User Service (Step 5 — Prometheus /metrics)"
     description: |
@@ -1247,5 +1296,118 @@ tasks:
         tests/microservices/orchestrator_service/test_step10_postgres_checkpointer.py \
         -v --tb=short --no-header -q 2>&1 | tail -150
       echo "Step 10 tests complete."
+    triggeredBy:
+      - manual
+
+  verify-step12-conversation-service:
+    name: "Verify Step 12 — Conversation Service Live"
+    description: |
+      يتحقق من أن conversation-service يعمل على :8003 ويُصدِّر مقاييس Prometheus حقيقية.
+      يفحص: /health + /metrics + /chat/message + Prometheus scrape target + Grafana dashboard.
+    command: |
+      set -euo pipefail
+      URL="http://localhost:8003"
+      PASS=0; FAIL=0
+      check() {
+        if eval "$2" > /dev/null 2>&1; then echo "  ✅ $1"; PASS=$((PASS+1))
+        else echo "  ❌ $1"; FAIL=$((FAIL+1)); fi
+      }
+      echo "═══════════════════════════════════════════════════════════"
+      echo "  CogniForge — Step 12: Conversation Service Verification"
+      echo "═══════════════════════════════════════════════════════════"
+      echo ""
+
+      echo "1️⃣  Health check..."
+      HEALTH=$(curl -sf "${URL}/health" 2>/dev/null) || {
+        echo "  ❌ conversation-service غير متاح على :8003"
+        echo "     شغّل: gitpod automations service start conversation-service"
+        exit 1
+      }
+      echo "$HEALTH" | python3 -m json.tool
+      echo ""
+
+      echo "2️⃣  Prometheus metrics..."
+      METRICS=$(curl -sf "${URL}/metrics" 2>/dev/null) || { echo "  ❌ /metrics غير متاح"; exit 1; }
+      check_metric() {
+        if echo "$METRICS" | grep -q "$1"; then echo "  ✅ $1"; PASS=$((PASS+1))
+        else echo "  ❌ $1 — غائب"; FAIL=$((FAIL+1)); fi
+      }
+      check_metric "cogniforge_conversation_startup_info"
+      check_metric "cogniforge_conversation_requests_total"
+      check_metric "cogniforge_conversation_active_connections"
+      check_metric "cogniforge_conversation_graph_invocations_total"
+      check_metric "cogniforge_conversation_messages_total"
+      echo ""
+
+      echo "3️⃣  Chat message endpoint..."
+      CHAT=$(curl -sf -X POST "${URL}/chat/message" \
+        -H 'Content-Type: application/json' \
+        -d '{"question": "اشرح قانون نيوتن الثاني"}' 2>/dev/null) || { echo "  ❌ /chat/message فشل"; FAIL=$((FAIL+1)); }
+      if [ -n "$CHAT" ]; then
+        echo "  ✅ /chat/message → $(echo "$CHAT" | python3 -c "import sys,json; d=json.load(sys.stdin); print('intent=' + d.get('intent','?') + ' step=' + d.get('step','?'))" 2>/dev/null || echo "OK")"
+        PASS=$((PASS+1))
+      fi
+      echo ""
+
+      echo "4️⃣  Grafana dashboard..."
+      if curl -sf "http://localhost:3001/api/dashboards/uid/cogniforge-ms-step12-conversation" > /dev/null 2>&1; then
+        echo "  ✅ Dashboard cogniforge-ms-step12-conversation موجود"
+        PASS=$((PASS+1))
+      else
+        echo "  ⚠️  Dashboard غير مُحمَّل بعد (Grafana يحتاج restart)"
+        FAIL=$((FAIL+1))
+      fi
+      echo ""
+
+      echo "═══════════════════════════════════════════════════════════"
+      echo "  Results: ✅ $PASS passed | ❌ $FAIL failed"
+      [ "$FAIL" -eq 0 ] && echo "  🎉 Step 12 FULLY OPERATIONAL" || echo "  ⚠️  بعض الفحوصات فشلت"
+      echo "═══════════════════════════════════════════════════════════"
+    triggeredBy:
+      - manual
+
+  restart-conversation-service:
+    name: "Restart Conversation Service"
+    description: يوقف conversation-service ويُعيد تشغيله يدوياً على :8003.
+    command: |
+      set -euo pipefail
+      echo "🔄 Restarting conversation-service..."
+      pkill -f "uvicorn microservices.conversation_service" 2>/dev/null || true
+      sleep 2
+
+      _raw_db="${CONV_DATABASE_URL:-${DATABASE_URL:-sqlite+aiosqlite:///:memory:}}"
+      _async_db="${_raw_db/postgresql:\/\//postgresql+asyncpg://}"
+      _async_db="${_async_db/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+      _async_db=$(echo "$_async_db" | sed 's/:6543\//:5432\//')
+      _async_db=$(echo "$_async_db" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
+
+      CONV_DATABASE_URL="$_async_db" \
+      OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+      ENVIRONMENT="${ENVIRONMENT:-development}" \
+      PYTHONPATH="/app" \
+      nohup python -m uvicorn microservices.conversation_service.main:app \
+        --host 0.0.0.0 --port 8003 --workers 1 --log-level info \
+        >> /app/.observability/conversation_service.log 2>&1 &
+      echo "✅ conversation-service restarted (PID=$!)"
+      echo "   curl http://localhost:8003/health"
+      echo "   curl http://localhost:8003/metrics | grep cogniforge_conversation_startup_info"
+    triggeredBy:
+      - manual
+
+  run-step12-tests:
+    name: "Run Step 12 Conversation Service Tests"
+    description: اختبارات الخطوة 12 — conversation-service + LangGraph + Prometheus metrics.
+    command: |
+      set -euo pipefail
+      export DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export CONV_DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-dummy-key-for-tests}"
+      export SECRET_KEY="test-secret-key-for-step12-tests"
+      export ENVIRONMENT="testing"
+      echo "🧪 Running Step 12 conversation-service tests..."
+      python -m pytest \
+        tests/microservices/conversation_service/test_step12_conversation_service.py \
+        -v --tb=short --no-header -q 2>&1 | tail -150
+      echo "✅ Step 12 tests complete."
     triggeredBy:
       - manual

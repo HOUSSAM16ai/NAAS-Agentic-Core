@@ -1,0 +1,230 @@
+{
+  "uid": "cogniforge-ms-step12-conversation",
+  "title": "Step 12 — Conversation Service (LangGraph Skill)",
+  "description": "conversation-service :8003 — Skill مستقلة للمحادثات التعليمية. LangGraph StateGraph + WebSocket + Prometheus metrics.",
+  "tags": ["cogniforge", "microservices", "step12", "conversation", "langgraph", "websocket"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Startup Info (Step 12)",
+      "description": "1.0 = conversation-service نشط | graph_ready=true = LangGraph جاهز",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "targets": [{ "expr": "cogniforge_conversation_startup_info{step=\"12\"}", "legendFormat": "graph={{graph_ready}} db={{db_ready}} ws={{ws_enabled}}" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Active WS Connections",
+      "description": "عدد اتصالات WebSocket النشطة حالياً",
+      "gridPos": { "x": 6, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 50 }] }
+        }
+      },
+      "targets": [{ "expr": "cogniforge_conversation_active_connections", "legendFormat": "Active WS" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total Messages",
+      "description": "إجمالي الرسائل المُعالَجة (inbound + outbound)",
+      "gridPos": { "x": 10, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "expr": "sum(cogniforge_conversation_messages_total)", "legendFormat": "Total Messages" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Graph Invocations",
+      "description": "إجمالي استدعاءات LangGraph StateGraph",
+      "gridPos": { "x": 14, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "expr": "sum(cogniforge_conversation_graph_invocations_total)", "legendFormat": "Graph Calls" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Graph P95 Latency",
+      "description": "زمن تنفيذ LangGraph P95",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 30 }] }
+        }
+      },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(cogniforge_conversation_graph_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "HTTP Request Rate",
+      "description": "معدل طلبات HTTP لـ conversation-service",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_conversation_requests_total[2m])) by (endpoint, status_code)", "legendFormat": "{{endpoint}} {{status_code}}" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "WebSocket Sessions Rate",
+      "description": "معدل فتح/إغلاق جلسات WebSocket",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_conversation_sessions_total[2m])) by (route, status)", "legendFormat": "{{route}} {{status}}" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "LangGraph Node Invocations",
+      "description": "معدل استدعاء كل node في StateGraph",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_conversation_graph_invocations_total[2m])) by (node, status)", "legendFormat": "{{node}} [{{status}}]" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "LangGraph Duration P50/P95/P99",
+      "description": "زمن تنفيذ LangGraph nodes بالمئينيات",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(cogniforge_conversation_graph_duration_seconds_bucket[5m])) by (le, node))", "legendFormat": "P50 {{node}}" },
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_conversation_graph_duration_seconds_bucket[5m])) by (le, node))", "legendFormat": "P95 {{node}}" },
+        { "expr": "histogram_quantile(0.99, sum(rate(cogniforge_conversation_graph_duration_seconds_bucket[5m])) by (le, node))", "legendFormat": "P99 {{node}}" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Messages Rate (Inbound vs Outbound)",
+      "description": "معدل الرسائل الواردة والصادرة عبر WebSocket",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "msgps", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_conversation_messages_total[2m])) by (direction, route)", "legendFormat": "{{direction}} [{{route}}]" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Graph Errors by Type",
+      "description": "أخطاء LangGraph مُصنَّفة: timeout | llm_error | state_error | unknown",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2 },
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_conversation_graph_errors_total[2m])) by (error_type)", "legendFormat": "{{error_type}}" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Session Duration P50/P95",
+      "description": "مدة جلسات WebSocket بالمئينيات",
+      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(cogniforge_conversation_session_duration_seconds_bucket[5m])) by (le, route))", "legendFormat": "P50 {{route}}" },
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_conversation_session_duration_seconds_bucket[5m])) by (le, route))", "legendFormat": "P95 {{route}}" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "DB Operations",
+      "description": "عمليات قاعدة البيانات (success vs error)",
+      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_conversation_db_operations_total[2m])) by (operation, status)", "legendFormat": "{{operation}} [{{status}}]" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Health Matrix — Steps 4–12",
+      "description": "حالة جميع الخدمات المصغرة النشطة",
+      "gridPos": { "x": 0, "y": 36, "w": 14, "h": 6 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "1": { "text": "✅ ACTIVE", "color": "green" }, "0": { "text": "❌ DOWN", "color": "red" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "targets": [
+        { "expr": "cogniforge_orchestrator_startup_info", "legendFormat": "orchestrator :8006 (Step 4)" },
+        { "expr": "cogniforge_user_startup_info", "legendFormat": "user-service :8001 (Step 5)" },
+        { "expr": "cogniforge_planning_startup_info", "legendFormat": "planning-agent :8002 (Step 6)" },
+        { "expr": "cogniforge_research_startup_info", "legendFormat": "research-agent :8007 (Step 7)" },
+        { "expr": "cogniforge_reasoning_startup_info", "legendFormat": "reasoning-agent :8008 (Step 8)" },
+        { "expr": "cogniforge_retrieval_startup_info", "legendFormat": "content-retrieval :8009 (Step 11)" },
+        { "expr": "cogniforge_conversation_startup_info{step=\"12\"}", "legendFormat": "conversation-service :8003 (Step 12)" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 15,
+      "type": "text",
+      "title": "Step 12 — Activation Guide",
+      "gridPos": { "x": 14, "y": 36, "w": 10, "h": 6 },
+      "options": {
+        "mode": "markdown",
+        "content": "## الخطوة 12 — conversation-service\n\n**التحقق الحي:**\n```bash\ncurl http://localhost:8003/health\ncurl http://localhost:8003/metrics | grep cogniforge_conversation_startup_info\n```\n\n**اختبار المحادثة:**\n```bash\ncurl -X POST http://localhost:8003/chat/message \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"question\": \"اشرح قانون نيوتن\"}'\n```\n\n**المقاييس الجديدة:**\n- `cogniforge_conversation_startup_info{step=\"12\"}`\n- `cogniforge_conversation_active_connections`\n- `cogniforge_conversation_graph_invocations_total`\n- `cogniforge_conversation_messages_total`\n\n**الخدمة السادسة في Skills Architecture** ✅"
+      }
+    }
+  ]
+}

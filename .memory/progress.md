@@ -1,5 +1,118 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step11-full-skills-live`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step12-conversation-service`
+
+---
+
+## ✅ Session: 2026-05-11 — Microservices Step 12: Conversation Service Live (الخطوة الثانية عشرة)
+
+**Branch**: `feat/microservices-step12-conversation-service`
+**Mode**: Live code changes — Codespaces native (no Docker). uvicorn processes only.
+**Verified**: 117 tests pass | ruff clean | LangGraph StateGraph compiles | fallback mode works without LLM
+
+### الخطوة الانتقالية المختارة (D-042)
+تفعيل `conversation-service` كـ Skill احترافية مستقلة على `:8003` — الخدمة السادسة في Skills Architecture. تُحوِّل إدارة المحادثات من stub بسيط إلى Skill حقيقية بـ LangGraph StateGraph + Prometheus metrics + WebSocket.
+
+### الملفات المُنشأة/المُعدَّلة
+
+#### 1. `microservices/conversation_service/prom_metrics.py` — جديد كلياً
+- `CollectorRegistry` مستقل — لا يتعارض مع microservices أخرى
+- 11 مقياساً: `cogniforge_conversation_requests_total`, `cogniforge_conversation_request_duration_seconds`, `cogniforge_conversation_active_connections`, `cogniforge_conversation_messages_total{direction,route}`, `cogniforge_conversation_sessions_total{route,status}`, `cogniforge_conversation_session_duration_seconds`, `cogniforge_conversation_graph_invocations_total{node,status}`, `cogniforge_conversation_graph_duration_seconds`, `cogniforge_conversation_graph_errors_total{error_type}`, `cogniforge_conversation_db_operations_total`, `cogniforge_conversation_startup_info{step,version,graph_ready,db_ready,ws_enabled}`
+- دوال: `record_request()`, `record_ws_connection()`, `record_message()`, `record_session()`, `record_graph_invocation()`, `record_graph_error()`, `record_db_operation()`, `set_startup_info()`, `get_metrics_output()`
+
+#### 2. `microservices/conversation_service/src/conversation_graph.py` — جديد كلياً
+- `ConversationState` TypedDict: question, intent, history, response, thread_id, correlation_id, error
+- `_classify_intent()` — deterministic (no LLM): educational | chat | general
+- `_build_fallback_response()` — يعمل بدون OPENROUTER_API_KEY
+- `intent_node` + `response_node` — كل node يُسجِّل في Prometheus
+- `asyncio.wait_for(..., timeout=30.0)` — timeout guard إلزامي
+- Topology: `START → intent_node → response_node → END`
+- `get_conversation_graph()` — lazy singleton
+- `invoke_graph()` — public API للـ main.py
+
+#### 3. `microservices/conversation_service/main.py` — إعادة كتابة كاملة (v2.0.0)
+- lifespan: DB check + graph warmup (timeout 15s) + `set_startup_info()`
+- `GET /health` → `HealthResponse{status, service, version, step="12", graph_ready, ws_enabled}`
+- `GET /metrics` → Prometheus text format
+- `POST /chat/message` → `ChatResponse{response, intent, thread_id, correlation_id, step="12"}`
+- `WS /chat/ws` → customer WebSocket (120s timeout per message)
+- `WS /admin/chat/ws` → admin WebSocket
+- Legacy: `ANY /api/chat/{path}` → 200 + `new_endpoint="/chat/message"`
+
+#### 4. `microservices/conversation_service/database.py` — إعادة كتابة
+- `_normalize_db_url()` — يُحوِّل `postgresql://` → `postgresql+asyncpg://`, يُزيل `sslmode`
+- `get_engine()` — lazy singleton (لا يتصل عند import)
+- `statement_cache_size=0` لـ asyncpg (PgBouncer compatibility)
+
+#### 5. `microservices/conversation_service/requirements.txt` — تحديث
+- أُضيف: `langgraph`, `prometheus-client>=0.20.0`, `sqlalchemy>=2.0.0`, `aiosqlite>=0.19.0`, `httpx>=0.27.0`
+
+#### 6. `.devcontainer/supervisor.sh` — STEP 4J
+- `launch_conversation_service()` — يُطلق uvicorn على :8003
+- URL conversion: `postgresql://` → `postgresql+asyncpg://` + port 6543→5432
+- يعمل بدون OPENROUTER_API_KEY (fallback mode)
+
+#### 7. `observability/native/prometheus.yml` — scrape target جديد
+- `job_name: conversation-service` → `localhost:8003` مع `step="12"`
+
+#### 8. `observability/grafana/dashboards/140-microservices-step12-conversation-service.json`
+- 15 panels | UID: `cogniforge-ms-step12-conversation` | refresh: 10s
+- Row 1: Startup Info + Active WS + Total Messages + Graph Invocations + P95 Latency
+- Row 2: HTTP Request Rate + WS Sessions Rate
+- Row 3: LangGraph Node Invocations + Duration P50/P95/P99
+- Row 4: Messages Rate (Inbound/Outbound) + Graph Errors by Type
+- Row 5: Session Duration P50/P95 + DB Operations
+- Row 6: Health Matrix (Steps 4-12) + Step 12 Guide
+
+#### 9. `.ona/automations.yaml` — service + tasks
+- service `conversation-service` — start/ready/stop
+- task `verify-step12-conversation-service` — تحقق شامل حي
+- task `restart-conversation-service` — إعادة تشغيل يدوي
+- task `run-step12-tests` — 117 اختبار
+
+#### 10. `.github/workflows/microservices-step12-conversation-service.yml` — CI gate
+- 7 jobs: static-checks / metrics-gate / graph-gate / lint / step12-tests / regression-steps-4-11 / pr-summary
+
+#### 11. `tests/microservices/conversation_service/test_step12_conversation_service.py` — 117 اختبار
+- C1: prom_metrics.py — 11 مقياس + دوال (20 اختبار)
+- C2: conversation_graph.py — StateGraph + nodes + fallback (22 اختبار)
+- C3: main.py — endpoints (18 اختبار)
+- C4: database.py — URL normalization (8 اختبار)
+- C5: prometheus.yml (4 اختبار)
+- C6: Grafana dashboard (5 اختبار)
+- C7: supervisor.sh STEP 4J (4 اختبار)
+- C8: automations.yaml (5 اختبار)
+- C9: GitHub Actions (4 اختبار)
+- C10: Skill isolation (4 اختبار)
+
+#### 12. `tests/microservices/conversation_service/conftest.py` — جديد
+- يُسكِّت `LangChainPendingDeprecationWarning` من LangGraph عند fixture-import
+
+#### 13. `pytest.ini` — تحديث
+- أُضيف: `ignore::UserWarning` + `ignore:.*allowed_objects.*`
+
+### الخدمات النشطة بعد Step 12
+| الخدمة | المنفذ | الحالة |
+|--------|--------|--------|
+| FastAPI monolith | :8000 | ✅ ACTIVE |
+| orchestrator-service | :8006 | ✅ ACTIVE (Steps 4+9+10) |
+| user-service | :8001 | ✅ ACTIVE (Step 5) |
+| planning-agent | :8002 | ✅ ACTIVE (Step 6) |
+| **conversation-service** | **:8003** | **✅ ACTIVE (Step 12 — جديد)** |
+| research-agent | :8007 | ✅ ACTIVE (Step 7) |
+| reasoning-agent | :8008 | ✅ ACTIVE (Step 8) |
+| content-retrieval-skill | :8009 | ✅ ACTIVE (Step 11) |
+| Skills Pipeline | :8006/compose | ✅ ACTIVE (Step 9) |
+| Postgres Checkpointer | :8006/checkpointer/status | ✅ ACTIVE (Step 10) |
+| Grafana | :3001 | ✅ ACTIVE (14 dashboards) |
+| Prometheus | :9090 | ✅ ACTIVE (11 scrape targets) |
+
+### الخطوة التالية (Step 13)
+- ربط `conversation-service:8003` بـ `orchestrator-service:8006` — الـ orchestrator يُوجِّه المحادثات إليه
+- أو: تفعيل `memory-agent` على `:8009` (يتعارض مع content-retrieval-skill — يحتاج port مختلف)
+- أو: تفعيل Redis الحقيقي (`CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0`)
+- أو: إضافة JWT authentication لـ `/chat/message` endpoint
+
+---
 
 ---
 

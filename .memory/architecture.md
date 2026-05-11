@@ -1,8 +1,61 @@
 # Architecture Deep-Dive
-> Last updated: 2026-05-06 (environment: GitHub Codespaces devcontainer)
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step8-reasoning-agent`
 > **Authoritative runtime status of every capability lives in `.memory/runtime_truth.md`.**
 > This file describes the live request flow and middleware stack only.
 > Anything documented here must be backed by import + call chain + runtime evidence (see CLAUDE.md §6.6).
+> **Skills Philosophy (D-038):** كل قدرة AI = Skill مستقل. انظر CLAUDE.md §0.5 و `.memory/decisions.md#D-038`.
+
+---
+
+## 0. Skills Architecture — الرؤية المعمارية (D-038)
+
+```
+الحالة الراهنة (2026-05-11):
+═══════════════════════════════════════════════════════════════
+Browser → Next.js :3000
+    └── /api/* → FastAPI :8000 (monolith)
+          └── OrchestratorClient fallback chain
+                ├── [1] File Intelligence
+                ├── [2] Exercise Retrieval (BAC)
+                ├── [3] HTTP → orchestrator:8006 ← ACTIVE لكن غير مُوجَّه إليه
+                └── [4] LangGraph local ← DE-FACTO HANDLER (Prompt Spaghetti)
+
+الخدمات المصغرة (Skills) — حية لكن منفصلة:
+  orchestrator-service :8006  ← Composition Skill ✅ ACTIVE
+  user-service         :8001  ← Identity Skill    ✅ ACTIVE
+  planning-agent       :8002  ← Planning Skill    ✅ ACTIVE
+  research-agent       :8007  ← Retrieval Skill   ✅ ACTIVE
+  reasoning-agent      :8008  ← Reasoning Skill   ✅ ACTIVE
+
+الهدف (Skills Pipeline — Step 9+):
+═══════════════════════════════════════════════════════════════
+Browser → Next.js :3000
+    └── /api/* → FastAPI :8000
+          └── orchestrator :8006
+                └── compose([
+                      PlanningSkill  :8002 → خطة الإجابة
+                      ResearchSkill  :8007 → المعلومات المتاحة
+                      ReasoningSkill :8008 → التفكير العميق
+                    ])
+                      └── إجابة مُركَّبة من skills متخصصة
+```
+
+### الفرق الجوهري
+
+```python
+# الآن — Prompt Spaghetti (LangGraph local):
+prompt = """أنت مساعد تعليمي خبير في الرياضيات والفيزياء
+            وتتحدث العربية والفرنسية والدارجة..."""
+response = llm(prompt + question)  # كل شيء في مكان واحد
+
+# الهدف — Skills Architecture:
+plan     = await planning_skill.plan(question)        # ماذا نحتاج؟
+context  = await research_skill.retrieve(plan)        # ما المعلومات؟
+answer   = await reasoning_skill.reason(question, context)  # ما الحل؟
+response = orchestrator.compose(plan, context, answer)  # التركيب النهائي
+```
+
+---
 
 ---
 

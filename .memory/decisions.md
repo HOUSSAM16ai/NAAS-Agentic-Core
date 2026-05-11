@@ -1,5 +1,44 @@
 # Architectural Decisions
-> Last updated: 2026-05-09 | Branch: `fix/lifespan-orchestration-env-injection`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step8-reasoning-agent`
+
+## D-038 · Skills Architecture as the Canonical AI Pattern (2026-05-11)
+**Decision**: كل قدرة ذكاء اصطناعي في النظام يجب أن تُبنى كـ **Skill** — microservice مستقل بمسؤولية واحدة، مدخلات/مخرجات محددة، مقاييس Prometheus، واختبارات قابلة للتشغيل. **Prompt Spaghetti محظور** كنمط معماري.
+
+**Reason**: Prompt Spaghetti (prompt واحد كبير يحاول كل شيء) يُنتج جودة متوسطة في كل شيء، لا يمكن اختباره، لا يمكن قياسه، ويموت مع تغيير النموذج. Skills تُنتج جودة ممتازة في شيء واحد، قابلة للاختبار بـ pytest، قابلة للقياس بـ Prometheus، ومستقلة عن النموذج.
+
+**Skill Contract** (إلزامي لكل Skill جديد):
+1. `/health` endpoint — يُعيد `status`, `service`, `step`
+2. `/metrics` endpoint — `cogniforge_{skill}_startup_info{step=N} 1.0` + invocation metrics
+3. `/execute` أو endpoint وظيفي — مدخلات/مخرجات محددة بـ Pydantic
+4. `prom_metrics.py` — `CollectorRegistry` مستقل، minimum 11 مقياساً
+5. `tests/microservices/{skill}/test_step{N}_{skill}_metrics.py` — minimum 79 اختباراً
+6. Fallback mode — يعمل بدون API key أو خدمات خارجية
+
+**Skills الحالية (ACTIVE)**:
+- `orchestrator-service` :8006 — Composition Skill (يُركِّب النتائج)
+- `user-service` :8001 — Identity Skill (إدارة المستخدمين)
+- `planning-agent` :8002 — Planning Skill (التخطيط)
+- `research-agent` :8007 — Retrieval Skill (البحث والاسترجاع)
+- `reasoning-agent` :8008 — Reasoning Skill (التفكير العميق MCTS)
+
+**الهدف المستقبلي**:
+```
+Browser → FastAPI → orchestrator.compose([
+    PlanningSkill.plan(query),
+    ResearchSkill.retrieve(context),
+    ReasoningSkill.reason(problem),
+]) → إجابة مُركَّبة
+```
+
+**Anti-patterns المحظورة**:
+- prompt واحد يحاول كل شيء
+- Skill يستدعي Skill آخر مباشرة (يجب المرور عبر orchestrator)
+- Skill بدون `/metrics` endpoint
+- Skill بدون اختبارات
+
+**Status**: ADOPTED 2026-05-11 — مُدرج في CLAUDE.md §0.5 كـ North Star معماري. يُطبَّق على كل خطوة انتقالية لاحقة.
+
+
 
 ## D-024 · Process Env Wins Over .env at Module Import Time
 **Decision**: Secrets (DATABASE_URL, OPENROUTER_API_KEY, SECRET_KEY) must be present in the **process environment** before uvicorn starts, not just in `.env`. The `.env` file is read by pydantic-settings after module-level code runs.

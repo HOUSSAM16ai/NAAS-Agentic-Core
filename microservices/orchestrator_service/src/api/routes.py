@@ -41,6 +41,11 @@ from microservices.orchestrator_service.src.core.database import (
     get_db,
 )
 from microservices.orchestrator_service.src.core.event_bus import get_event_bus
+from microservices.orchestrator_service.src.core.prom_metrics import (
+    record_pipeline_error,
+    record_pipeline_invocation,
+    set_pipeline_active,
+)
 from microservices.orchestrator_service.src.core.security import (
     decode_user_id,
     extract_bearer_token,
@@ -59,13 +64,8 @@ from microservices.orchestrator_service.src.services.overmind.domain.api_schemas
 from microservices.orchestrator_service.src.services.overmind.entrypoint import start_mission
 from microservices.orchestrator_service.src.services.overmind.state import MissionStateManager
 from microservices.orchestrator_service.src.services.overmind.utils.tools import tool_registry
-from microservices.orchestrator_service.src.services.tools.registry import get_registry
-from microservices.orchestrator_service.src.core.prom_metrics import (
-    record_pipeline_error,
-    record_pipeline_invocation,
-    set_pipeline_active,
-)
 from microservices.orchestrator_service.src.services.skills_pipeline import run_skills_pipeline
+from microservices.orchestrator_service.src.services.tools.registry import get_registry
 
 logger = logging.getLogger(__name__)
 
@@ -2583,7 +2583,11 @@ async def chat_with_agent_endpoint(
                     )
                     # Signal Monolith that Orchestrator already persisted both messages
                     yield await _serialize_stream_frame(
-                        {"type": "assistant_final", "payload": {"content": response_text}, "persisted": True}
+                        {
+                            "type": "assistant_final",
+                            "payload": {"content": response_text},
+                            "persisted": True,
+                        }
                     )
                 except Exception as e:
                     error_msg = str(e)
@@ -2595,7 +2599,11 @@ async def chat_with_agent_endpoint(
                     )
                     # DB write failed — Monolith must handle persistence
                     yield await _serialize_stream_frame(
-                        {"type": "assistant_final", "payload": {"content": response_text}, "persisted": False}
+                        {
+                            "type": "assistant_final",
+                            "payload": {"content": response_text},
+                            "persisted": False,
+                        }
                     )
             except Exception:
                 request_id = str(uuid.uuid4())

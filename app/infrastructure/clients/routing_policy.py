@@ -20,7 +20,7 @@ _logger = logging.getLogger("routing-policy")
 # نقاط النهاية المدعومة — لا تُضف قيماً هنا بدون ADR.
 _ENDPOINT_MAP: dict[str, str] = {
     "state_graph": "/api/chat/messages",  # StateGraph 13 عقدة (D-021 — الهدف الانتقالي)
-    "agent": "/agent/chat",               # OrchestratorAgent (السلوك القديم — للتراجع فقط)
+    "agent": "/agent/chat",  # OrchestratorAgent (السلوك القديم — للتراجع فقط)
 }
 
 _DEFAULT_ENDPOINT_MODE = "state_graph"

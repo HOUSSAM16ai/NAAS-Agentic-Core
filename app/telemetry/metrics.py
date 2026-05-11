@@ -170,9 +170,7 @@ class MetricsManager:
 
         # Standard SRE histogram buckets (seconds). Covers from sub-millisecond
         # to 10s — the realistic range for HTTP + WS turn latency in this app.
-        hist_buckets: list[float] = [
-            0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0
-        ]
+        hist_buckets: list[float] = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
         # Metric names whose histogram data we want exposed as Prometheus
         # histograms (rather than just counters/gauges). These are the
         # "_seconds" latency series that the dashboards rely on.
@@ -223,9 +221,7 @@ class MetricsManager:
         with self.lock:
             counters_snapshot = dict(self.counters)
             gauges_snapshot = dict(self.gauges)
-            histograms_snapshot = {
-                name: list(values) for name, values in self.histograms.items()
-            }
+            histograms_snapshot = {name: list(values) for name, values in self.histograms.items()}
 
         # ---- Counters -------------------------------------------------------
         # Group counter keys by translated name so we can emit ``# TYPE`` once.

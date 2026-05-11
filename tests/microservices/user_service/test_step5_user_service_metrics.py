@@ -20,8 +20,6 @@ import json
 import re
 from pathlib import Path
 
-import pytest
-
 # ── مسارات الملفات ────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parents[3]
 USER_SVC = ROOT / "microservices" / "user_service"
@@ -32,11 +30,7 @@ SUPERVISOR = ROOT / ".devcontainer" / "supervisor.sh"
 AUTOMATIONS = ROOT / ".ona" / "automations.yaml"
 PROMETHEUS_CFG = ROOT / "observability" / "native" / "prometheus.yml"
 GRAFANA_DASHBOARD = (
-    ROOT
-    / "observability"
-    / "grafana"
-    / "dashboards"
-    / "80-microservices-step5-user-service.json"
+    ROOT / "observability" / "grafana" / "dashboards" / "80-microservices-step5-user-service.json"
 )
 
 
@@ -264,9 +258,7 @@ class TestGrafanaDashboard:
 
     def test_dashboard_file_exists(self) -> None:
         """80-microservices-step5-user-service.json يجب أن يكون موجوداً."""
-        assert GRAFANA_DASHBOARD.exists(), (
-            f"Dashboard غائب: {GRAFANA_DASHBOARD.name}"
-        )
+        assert GRAFANA_DASHBOARD.exists(), f"Dashboard غائب: {GRAFANA_DASHBOARD.name}"
 
     def test_dashboard_valid_json(self) -> None:
         """Dashboard يجب أن يكون JSON صالحاً."""

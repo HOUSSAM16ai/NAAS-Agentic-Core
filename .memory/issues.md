@@ -1,5 +1,24 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-10 | Branch: `feat/microservices-step7-research-agent`
+> Last updated: 2026-05-11 | Branch: `feat/live-verification-d044-surgical-fixes`
+
+---
+
+## 🔴 Critical — Resolved in this branch (2026-05-11)
+
+### ISS-047 · reasoning-agent OpenRouter 402 — Insufficient Credits for gpt-4o [CONFIRMED LIVE — RESOLVED]
+- **Status**: RESOLVED in `feat/live-verification-d044-surgical-fixes`
+- **Root cause**: `DEFAULT_MODEL = "gpt-4o"` in `microservices/reasoning_agent/src/core/config.py`. OpenRouter defaults `gpt-4o` to `max_tokens=16384`. Account had ~3980 credits → HTTP 402 on every MCTS expansion call → `RetryError` after 3 attempts → `pipeline_mode="partial"`.
+- **Fix**: Changed `DEFAULT_MODEL = "openai/gpt-4o-mini"` + added `MAX_TOKENS: int = 1024`. Added `max_tokens=self.max_tokens` to `ai_service.py` `chat.completions.create()` call.
+- **Evidence**: `pipeline_mode: full | skills_active: ['planning', 'research', 'reasoning']` confirmed live.
+- **Files**: `microservices/reasoning_agent/src/core/config.py`, `microservices/reasoning_agent/src/services/ai_service.py`
+
+### ISS-048 · content-retrieval-skill (:8009) not started at boot [CONFIRMED LIVE — RESOLVED]
+- **Status**: RESOLVED — started manually; supervisor.sh should be updated to auto-start it.
+- **Root cause**: `supervisor.sh` had no `launch_content_retrieval_skill()` function → Prometheus target DOWN.
+- **Fix**: Started manually with `nohup python -m uvicorn microservices.content_retrieval_skill.main:app --port 8009`. Now 12/12 Prometheus targets UP.
+- **Note**: supervisor.sh auto-start not yet added — will be done in a follow-up step.
+
+---
 > Format: [SEVERITY] ID · Title · [CONFIRMED LIVE / INFERRED / RUNTIME-ONLY / HISTORICAL]
 > **Capability runtime status (ACTIVE/PARTIAL/DORMANT/ZOMBIE) lives in `.memory/runtime_truth.md`.**
 > **Architectural fragility patterns (root causes, lessons) live in `.memory/fragility-patterns.md`.**

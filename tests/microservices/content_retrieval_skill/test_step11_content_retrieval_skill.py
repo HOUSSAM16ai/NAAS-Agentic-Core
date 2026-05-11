@@ -27,16 +27,12 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from microservices.content_retrieval_skill.src.intent_classifier import (
-    IntentResult,
     classify_intent,
 )
 from microservices.content_retrieval_skill.src.retrieval_engine import (
-    ContentItem,
     RetrievalQuery,
-    RetrievalResult,
     retrieve,
 )
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. Intent Classifier — Unit Tests

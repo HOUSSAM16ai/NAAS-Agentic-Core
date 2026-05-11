@@ -16,7 +16,6 @@ import time
 
 import pytest
 
-
 # ─── W3C Trace Context ────────────────────────────────────────────────────────
 
 
@@ -205,12 +204,10 @@ class TestLangGraphInstrumentation:
         assert _graph_trace_context.get() is None
 
     def test_contextvar_token_reset(self):
-        from app.telemetry.models import TraceContext
         from app.services.chat.local_graph import _graph_trace_context
+        from app.telemetry.models import TraceContext
 
-        fake_ctx = TraceContext(
-            trace_id="a" * 32, span_id="b" * 16, sampled=True
-        )
+        fake_ctx = TraceContext(trace_id="a" * 32, span_id="b" * 16, sampled=True)
         token = _graph_trace_context.set(fake_ctx)
         assert _graph_trace_context.get() is fake_ctx
         _graph_trace_context.reset(token)
@@ -219,8 +216,10 @@ class TestLangGraphInstrumentation:
     @pytest.mark.asyncio
     async def test_run_local_graph_creates_root_span(self, monkeypatch):
         """run_local_graph should produce a root span even when LLM is mocked."""
-        from app.telemetry.unified_observability import UnifiedObservabilityService, get_unified_observability
         import app.telemetry.unified_observability as uo_mod
+        from app.telemetry.unified_observability import (
+            UnifiedObservabilityService,
+        )
 
         fresh_obs = UnifiedObservabilityService(service_name="test", sample_rate=1.0)
         monkeypatch.setattr(uo_mod, "_unified_observability", fresh_obs)
@@ -229,16 +228,13 @@ class TestLangGraphInstrumentation:
         async def _mock_ainvoke(state, config):
             return {**state, "final_response": "مرحبا", "intent": "chat"}
 
-        from app.services.chat import local_graph as lg_mod
         import app.services.chat.local_graph as _lg
-
-        original_get = _lg.get_local_graph
 
         class FakeGraph:
             async def ainvoke(self, state, config):
                 return {**state, "final_response": "مرحبا", "intent": "chat"}
 
-        monkeypatch.setattr(_lg, "get_local_graph", lambda: FakeGraph())
+        monkeypatch.setattr(_lg, "get_local_graph", FakeGraph)
 
         result = await _lg.run_local_graph("مرحبا", conversation_id=1)
         assert result == "مرحبا"
@@ -251,9 +247,9 @@ class TestLangGraphInstrumentation:
     @pytest.mark.asyncio
     async def test_run_local_graph_propagates_parent_context(self, monkeypatch):
         """Parent trace context flows into LangGraph root span (child of parent trace)."""
-        from app.telemetry.unified_observability import UnifiedObservabilityService
-        import app.telemetry.unified_observability as uo_mod
         import app.services.chat.local_graph as lg_mod
+        import app.telemetry.unified_observability as uo_mod
+        from app.telemetry.unified_observability import UnifiedObservabilityService
 
         fresh_obs = UnifiedObservabilityService(service_name="test", sample_rate=1.0)
         monkeypatch.setattr(uo_mod, "_unified_observability", fresh_obs)
@@ -265,33 +261,37 @@ class TestLangGraphInstrumentation:
             async def ainvoke(self, state, config):
                 return {**state, "final_response": "ok", "intent": "general"}
 
-        monkeypatch.setattr(lg_mod, "get_local_graph", lambda: FakeGraph())
+        monkeypatch.setattr(lg_mod, "get_local_graph", FakeGraph)
 
         await lg_mod.run_local_graph("test", conversation_id=None, trace_context=parent_ctx)
 
         # The langgraph.run span should be in active_spans (child, not root — trace isn't done yet)
-        child_spans = [s for s in fresh_obs.active_spans.values() if s.operation_name == "langgraph.run"]
+        [s for s in fresh_obs.active_spans.values() if s.operation_name == "langgraph.run"]
         # OR it may have been completed as part of the parent trace's spans
-        all_child_spans = [
+        [
             s
             for s in fresh_obs.active_spans.values()
             if s.trace_id == parent_ctx.trace_id and s.operation_name == "langgraph.run"
         ]
         # The span was created with the parent's trace_id
-        assert any(
-            s.trace_id == parent_ctx.trace_id
-            for t in fresh_obs.active_traces.values()
-            for s in t.spans
-            if s.operation_name == "langgraph.run"
-        ) or any(
-            s.trace_id == parent_ctx.trace_id
-            for t in fresh_obs.completed_traces
-            for s in t.spans
-            if s.operation_name == "langgraph.run"
-        ) or any(
-            s.trace_id == parent_ctx.trace_id
-            for s in fresh_obs.active_spans.values()
-            if s.operation_name == "langgraph.run"
+        assert (
+            any(
+                s.trace_id == parent_ctx.trace_id
+                for t in fresh_obs.active_traces.values()
+                for s in t.spans
+                if s.operation_name == "langgraph.run"
+            )
+            or any(
+                s.trace_id == parent_ctx.trace_id
+                for t in fresh_obs.completed_traces
+                for s in t.spans
+                if s.operation_name == "langgraph.run"
+            )
+            or any(
+                s.trace_id == parent_ctx.trace_id
+                for s in fresh_obs.active_spans.values()
+                if s.operation_name == "langgraph.run"
+            )
         )
 
 
@@ -300,7 +300,8 @@ class TestLangGraphInstrumentation:
 
 class TestObservabilityMiddleware:
     def test_middleware_instantiates_without_config(self):
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
+
         from app.middleware.observability.observability_middleware import ObservabilityMiddleware
 
         fake_app = MagicMock()
@@ -309,8 +310,9 @@ class TestObservabilityMiddleware:
 
     def test_middleware_extracts_traceparent_header(self):
         from unittest.mock import MagicMock
-        from app.middleware.observability.observability_middleware import ObservabilityMiddleware
+
         from app.middleware.core.context import RequestContext
+        from app.middleware.observability.observability_middleware import ObservabilityMiddleware
 
         fake_app = MagicMock()
         mw = ObservabilityMiddleware(fake_app)
@@ -318,9 +320,7 @@ class TestObservabilityMiddleware:
         ctx = RequestContext(
             method="GET",
             path="/health",
-            headers={
-                "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
-            },
+            headers={"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
         )
         parent = mw._extract_parent_context(ctx)
         assert parent is not None
@@ -328,8 +328,9 @@ class TestObservabilityMiddleware:
 
     def test_middleware_returns_none_without_header(self):
         from unittest.mock import MagicMock
-        from app.middleware.observability.observability_middleware import ObservabilityMiddleware
+
         from app.middleware.core.context import RequestContext
+        from app.middleware.observability.observability_middleware import ObservabilityMiddleware
 
         fake_app = MagicMock()
         mw = ObservabilityMiddleware(fake_app)
@@ -346,6 +347,7 @@ class TestTraceAPIEndpoints:
         """Minimal FastAPI test client with the observability router mounted."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
         from app.api.routers.observability import router
 
         app = FastAPI()
@@ -358,8 +360,8 @@ class TestTraceAPIEndpoints:
         assert isinstance(resp.json(), list)
 
     def test_list_traces_returns_completed_traces(self, client, monkeypatch):
-        from app.telemetry.unified_observability import UnifiedObservabilityService
         import app.telemetry.unified_observability as uo_mod
+        from app.telemetry.unified_observability import UnifiedObservabilityService
 
         fresh_obs = UnifiedObservabilityService(service_name="test", sample_rate=1.0)
         ctx = fresh_obs.start_trace("test.operation", tags={"env": "ci"})
@@ -375,8 +377,8 @@ class TestTraceAPIEndpoints:
         assert len(trace_data["spans"]) >= 1
 
     def test_get_trace_by_id(self, client, monkeypatch):
-        from app.telemetry.unified_observability import UnifiedObservabilityService
         import app.telemetry.unified_observability as uo_mod
+        from app.telemetry.unified_observability import UnifiedObservabilityService
 
         fresh_obs = UnifiedObservabilityService(service_name="test", sample_rate=1.0)
         ctx = fresh_obs.start_trace("specific.operation")
@@ -389,8 +391,8 @@ class TestTraceAPIEndpoints:
         assert data["trace_id"] == ctx.trace_id
 
     def test_get_trace_not_found(self, client, monkeypatch):
-        from app.telemetry.unified_observability import UnifiedObservabilityService
         import app.telemetry.unified_observability as uo_mod
+        from app.telemetry.unified_observability import UnifiedObservabilityService
 
         fresh_obs = UnifiedObservabilityService(service_name="test", sample_rate=1.0)
         monkeypatch.setattr(uo_mod, "_unified_observability", fresh_obs)
@@ -400,8 +402,8 @@ class TestTraceAPIEndpoints:
 
     def test_active_trace_visible_via_get_endpoint(self, client, monkeypatch):
         """An in-flight (active) trace should be queryable before it completes."""
-        from app.telemetry.unified_observability import UnifiedObservabilityService
         import app.telemetry.unified_observability as uo_mod
+        from app.telemetry.unified_observability import UnifiedObservabilityService
 
         fresh_obs = UnifiedObservabilityService(service_name="test", sample_rate=1.0)
         ctx = fresh_obs.start_trace("in.flight.operation")
@@ -456,7 +458,10 @@ class TestSignalCorrelation:
                 labels={"method": "GET", "endpoint": "/health", "status": "200"},
                 trace_id=ctx.trace_id,
             )
-            obs.increment_counter("http.requests.total", labels={"method": "GET", "endpoint": "/health", "status": "200"})
+            obs.increment_counter(
+                "http.requests.total",
+                labels={"method": "GET", "endpoint": "/health", "status": "200"},
+            )
             obs.end_span(ctx.span_id, status="OK")
 
         signals = obs.get_golden_signals(time_window_seconds=3600)

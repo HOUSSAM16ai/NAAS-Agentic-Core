@@ -53,20 +53,22 @@ try:
         set_checkpointer_active_threads,
         set_checkpointer_backend_info,
     )
+
     _METRICS_AVAILABLE = True
 except ImportError:
     _METRICS_AVAILABLE = False
 
-    def record_checkpointer_write(*_: object, **__: object) -> None: ...  # noqa: E704
-    def record_checkpointer_read(*_: object, **__: object) -> None: ...  # noqa: E704
-    def record_checkpointer_error(*_: object, **__: object) -> None: ...  # noqa: E704
-    def set_checkpointer_active_threads(*_: object, **__: object) -> None: ...  # noqa: E704
-    def set_checkpointer_backend_info(*_: object, **__: object) -> None: ...  # noqa: E704
+    def record_checkpointer_write(*_: object, **__: object) -> None: ...
+    def record_checkpointer_read(*_: object, **__: object) -> None: ...
+    def record_checkpointer_error(*_: object, **__: object) -> None: ...
+    def set_checkpointer_active_threads(*_: object, **__: object) -> None: ...
+    def set_checkpointer_backend_info(*_: object, **__: object) -> None: ...
 
 
 # ── Checkpointer wrapper مع مقاييس Prometheus ────────────────────────────────
 # يرث من AsyncPostgresSaver مباشرةً لأن LangGraph يتحقق من isinstance(BaseCheckpointSaver).
 # نُنشئ الـ class بشكل مشروط لتجنب NameError عند غياب langgraph-checkpoint-postgres.
+
 
 def _make_instrumented_class(base_class: type) -> type:
     """
@@ -97,7 +99,7 @@ def _make_instrumented_class(base_class: type) -> type:
         ) -> Any:
             """يكتب checkpoint مع تسجيل Prometheus."""
             thread_id: str = config.get("configurable", {}).get("thread_id", "unknown")
-            prefix = thread_id.split(":")[0] if ":" in thread_id else thread_id[:8]
+            prefix = thread_id.split(":", maxsplit=1)[0] if ":" in thread_id else thread_id[:8]
             t0 = time.monotonic()
             try:
                 result = await super().aput(config, checkpoint, metadata, new_versions)
@@ -123,7 +125,7 @@ def _make_instrumented_class(base_class: type) -> type:
         async def aget(self, config: dict) -> Any:
             """يقرأ checkpoint مع تسجيل Prometheus."""
             thread_id: str = config.get("configurable", {}).get("thread_id", "unknown")
-            prefix = thread_id.split(":")[0] if ":" in thread_id else thread_id[:8]
+            prefix = thread_id.split(":", maxsplit=1)[0] if ":" in thread_id else thread_id[:8]
             t0 = time.monotonic()
             try:
                 result = await super().aget(config)
@@ -143,7 +145,7 @@ def _make_instrumented_class(base_class: type) -> type:
         async def aget_tuple(self, config: dict) -> Any:
             """يقرأ checkpoint tuple مع تسجيل Prometheus."""
             thread_id: str = config.get("configurable", {}).get("thread_id", "unknown")
-            prefix = thread_id.split(":")[0] if ":" in thread_id else thread_id[:8]
+            prefix = thread_id.split(":", maxsplit=1)[0] if ":" in thread_id else thread_id[:8]
             t0 = time.monotonic()
             try:
                 result = await super().aget_tuple(config)
@@ -182,6 +184,7 @@ else:
 
 
 # ── SQLAlchemy Engine ─────────────────────────────────────────────────────────
+
 
 def create_engine() -> AsyncEngine:
     """
@@ -330,9 +333,7 @@ async def init_db() -> None:
             "[CHECKPOINTER] langgraph-checkpoint-postgres not installed — "
             "falling back to MemorySaver."
         )
-        set_checkpointer_backend_info(
-            backend="none", step="10", pool_size=0, tables_ready=False
-        )
+        set_checkpointer_backend_info(backend="none", step="10", pool_size=0, tables_ready=False)
         return
 
     try:
@@ -379,8 +380,7 @@ async def init_db() -> None:
         test_config = {"configurable": {"thread_id": "step10_init_probe"}}
         checkpoint = await postgres_checkpointer.aget(test_config)
         logger.info(
-            "[CHECKPOINTER] ACTIVE — backend=postgres step=10 "
-            "tables=%d pool_size=%d probe_hit=%s",
+            "[CHECKPOINTER] ACTIVE — backend=postgres step=10 tables=%d pool_size=%d probe_hit=%s",
             tables_count,
             _POOL_SIZE,
             checkpoint is not None,
@@ -389,9 +389,7 @@ async def init_db() -> None:
     except Exception as exc:
         logger.error("[CHECKPOINTER] init failed (non-fatal): %s", exc)
         record_checkpointer_error("connection_error")
-        set_checkpointer_backend_info(
-            backend="none", step="10", pool_size=0, tables_ready=False
-        )
+        set_checkpointer_backend_info(backend="none", step="10", pool_size=0, tables_ready=False)
 
     logger.info("[DB] init_db() completed.")
 

@@ -40,13 +40,35 @@ logger = logging.getLogger(__name__)
 _NODE_TIMEOUT_SECONDS = 30.0
 _INTENT_PATTERNS: dict[str, list[str]] = {
     "educational": [
-        "اشرح", "حل", "تمرين", "مسألة", "قانون", "نظرية", "درس",
-        "رياضيات", "فيزياء", "كيمياء", "بكالوريا", "باك",
-        "expliquer", "exercice", "problème", "loi", "théorème",
+        "اشرح",
+        "حل",
+        "تمرين",
+        "مسألة",
+        "قانون",
+        "نظرية",
+        "درس",
+        "رياضيات",
+        "فيزياء",
+        "كيمياء",
+        "بكالوريا",
+        "باك",
+        "expliquer",
+        "exercice",
+        "problème",
+        "loi",
+        "théorème",
     ],
     "chat": [
-        "مرحبا", "أهلا", "كيف حالك", "شكرا", "وداعا",
-        "bonjour", "merci", "salut", "hello", "hi",
+        "مرحبا",
+        "أهلا",
+        "كيف حالك",
+        "شكرا",
+        "وداعا",
+        "bonjour",
+        "merci",
+        "salut",
+        "hello",
+        "hi",
     ],
 }
 
@@ -81,10 +103,7 @@ def _classify_intent(question: str) -> str:
 def _build_fallback_response(question: str, intent: str) -> str:
     """يبني إجابة fallback عند غياب LLM."""
     if intent == "educational":
-        return (
-            f"سؤالك التعليمي: «{question}» — "
-            "سيتم معالجته عبر Skills Pipeline عند توفر الاتصال."
-        )
+        return f"سؤالك التعليمي: «{question}» — سيتم معالجته عبر Skills Pipeline عند توفر الاتصال."
     if intent == "chat":
         return "مرحباً! كيف يمكنني مساعدتك اليوم؟"
     return f"تم استلام سؤالك: «{question}»"
@@ -180,7 +199,7 @@ async def response_node(state: ConversationState) -> ConversationState:
         duration = time.perf_counter() - t0
         record_graph_invocation("response", "success", duration)
         return {**state, "response": response}
-    except asyncio.TimeoutError:
+    except TimeoutError:
         duration = time.perf_counter() - t0
         record_graph_invocation("response", "timeout", duration)
         record_graph_error("timeout")
@@ -221,7 +240,7 @@ _conversation_graph: object | None = None
 
 def get_conversation_graph() -> object:
     """يُعيد الـ graph المُهيَّأ — lazy singleton."""
-    global _conversation_graph  # noqa: PLW0603 — singleton مُهيَّأ مرة واحدة
+    global _conversation_graph
     if _conversation_graph is None:
         _conversation_graph = build_conversation_graph()
     return _conversation_graph

@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
 from pathlib import Path
@@ -32,12 +31,19 @@ ROUTES_PY = REASONING_DIR / "src" / "api" / "routes.py"
 SUPERVISOR = ROOT / ".devcontainer" / "supervisor.sh"
 AUTOMATIONS = ROOT / ".ona" / "automations.yaml"
 PROMETHEUS_CFG = ROOT / "observability" / "native" / "prometheus.yml"
-DASHBOARD = ROOT / "observability" / "grafana" / "dashboards" / "110-microservices-step8-reasoning-agent.json"
+DASHBOARD = (
+    ROOT
+    / "observability"
+    / "grafana"
+    / "dashboards"
+    / "110-microservices-step8-reasoning-agent.json"
+)
 
 
 # ===========================================================================
 # R1: requirements.txt
 # ===========================================================================
+
 
 class TestRequirements:
     """يتحقق من وجود prometheus-client في requirements.txt."""
@@ -55,12 +61,15 @@ class TestRequirements:
         assert match, "prometheus-client يجب أن يحدد إصداراً (>= أو ==)"
         version = match.group(2)
         major, minor = int(version.split(".")[0]), int(version.split(".")[1])
-        assert (major, minor) >= (0, 20), f"prometheus-client يجب أن يكون >= 0.20.0، الموجود: {version}"
+        assert (major, minor) >= (0, 20), (
+            f"prometheus-client يجب أن يكون >= 0.20.0، الموجود: {version}"
+        )
 
 
 # ===========================================================================
 # R2: prom_metrics.py
 # ===========================================================================
+
 
 class TestPromMetricsFile:
     """يتحقق من وجود prom_metrics.py وصحة محتواه."""
@@ -73,54 +82,63 @@ class TestPromMetricsFile:
         assert "CollectorRegistry" in content, "يجب استخدام CollectorRegistry مستقل"
         assert "_REGISTRY" in content, "_REGISTRY غير معرَّف"
 
-    @pytest.mark.parametrize("metric_name", [
-        "cogniforge_reasoning_requests_total",
-        "cogniforge_reasoning_request_duration_seconds",
-        "cogniforge_reasoning_active_connections",
-        "cogniforge_reasoning_invocations_total",
-        "cogniforge_reasoning_invocation_duration_seconds",
-        "cogniforge_reasoning_mcts_expansions_total",
-        "cogniforge_reasoning_mcts_errors_total",
-        "cogniforge_reasoning_llm_calls_total",
-        "cogniforge_reasoning_llm_errors_total",
-        "cogniforge_reasoning_fallback_responses_total",
-        "cogniforge_reasoning_startup_info",
-    ])
+    @pytest.mark.parametrize(
+        "metric_name",
+        [
+            "cogniforge_reasoning_requests_total",
+            "cogniforge_reasoning_request_duration_seconds",
+            "cogniforge_reasoning_active_connections",
+            "cogniforge_reasoning_invocations_total",
+            "cogniforge_reasoning_invocation_duration_seconds",
+            "cogniforge_reasoning_mcts_expansions_total",
+            "cogniforge_reasoning_mcts_errors_total",
+            "cogniforge_reasoning_llm_calls_total",
+            "cogniforge_reasoning_llm_errors_total",
+            "cogniforge_reasoning_fallback_responses_total",
+            "cogniforge_reasoning_startup_info",
+        ],
+    )
     def test_metric_defined(self, metric_name: str):
         content = PROM_METRICS.read_text()
         assert metric_name in content, f"المقياس {metric_name} غير موجود في prom_metrics.py"
 
-    @pytest.mark.parametrize("func_name", [
-        "export_prometheus_text",
-        "set_startup_info",
-        "record_http_request",
-        "record_reasoning_invocation",
-        "record_mcts_expansion",
-        "record_mcts_error",
-        "record_llm_call",
-        "record_llm_error",
-        "record_fallback_response",
-        "set_active_connections",
-        "elapsed_since",
-    ])
+    @pytest.mark.parametrize(
+        "func_name",
+        [
+            "export_prometheus_text",
+            "set_startup_info",
+            "record_http_request",
+            "record_reasoning_invocation",
+            "record_mcts_expansion",
+            "record_mcts_error",
+            "record_llm_call",
+            "record_llm_error",
+            "record_fallback_response",
+            "set_active_connections",
+            "elapsed_since",
+        ],
+    )
     def test_public_function_defined(self, func_name: str):
         content = PROM_METRICS.read_text()
         assert f"def {func_name}" in content, f"الدالة {func_name} غير موجودة في prom_metrics.py"
 
     def test_defensive_import(self):
         content = PROM_METRICS.read_text()
-        assert "try:" in content and "ImportError" in content, \
+        assert "try:" in content and "ImportError" in content, (
             "يجب وجود استيراد دفاعي (try/except ImportError) لـ prometheus_client"
+        )
 
     def test_step8_label(self):
         content = PROM_METRICS.read_text()
-        assert 'step="8"' in content or "step.*8" in content, \
+        assert 'step="8"' in content or "step.*8" in content, (
             "يجب وجود label step=8 في set_startup_info"
+        )
 
 
 # ===========================================================================
 # R3: main.py
 # ===========================================================================
+
 
 class TestMainPy:
     """يتحقق من /metrics endpoint و /health المحسَّن في main.py."""
@@ -142,16 +160,18 @@ class TestMainPy:
 
     def test_health_endpoint_returns_step8(self):
         content = MAIN_PY.read_text()
-        assert '"step"' in content or "'step'" in content, \
+        assert '"step"' in content or "'step'" in content, (
             "health endpoint يجب أن يُعيد step في main.py"
-        assert '"8"' in content or "'8'" in content, \
-            "health endpoint يجب أن يُعيد step=8"
+        )
+        assert '"8"' in content or "'8'" in content, "health endpoint يجب أن يُعيد step=8"
 
     def test_no_import_time_ai_service(self):
         content = MAIN_PY.read_text()
         # main.py يجب ألا يستورد ai_service مباشرةً عند الإقلاع
-        assert "from microservices.reasoning_agent.src.services.ai_service import ai_service" \
-               not in content, "ISS-039-B: main.py يستورد ai_service عند الإقلاع"
+        assert (
+            "from microservices.reasoning_agent.src.services.ai_service import ai_service"
+            not in content
+        ), "ISS-039-B: main.py يستورد ai_service عند الإقلاع"
 
     def test_lifespan_calls_set_startup_info(self):
         content = MAIN_PY.read_text()
@@ -166,6 +186,7 @@ class TestMainPy:
 # R4: supervisor.sh
 # ===========================================================================
 
+
 class TestSupervisorSh:
     """يتحقق من launch_reasoning_agent() في supervisor.sh."""
 
@@ -174,8 +195,9 @@ class TestSupervisorSh:
 
     def test_launch_function_defined(self):
         content = SUPERVISOR.read_text()
-        assert "launch_reasoning_agent" in content, \
+        assert "launch_reasoning_agent" in content, (
             "launch_reasoning_agent() غير موجودة في supervisor.sh"
+        )
 
     def test_port_8008(self):
         content = SUPERVISOR.read_text()
@@ -183,24 +205,26 @@ class TestSupervisorSh:
 
     def test_step_4h_marker(self):
         content = SUPERVISOR.read_text()
-        assert "4H" in content or "STEP 4H" in content, \
-            "STEP 4H marker غير موجود في supervisor.sh"
+        assert "4H" in content or "STEP 4H" in content, "STEP 4H marker غير موجود في supervisor.sh"
 
     def test_idempotent_check(self):
         content = SUPERVISOR.read_text()
-        assert "reasoning_agent.main" in content, \
+        assert "reasoning_agent.main" in content, (
             "idempotent check لـ reasoning_agent.main غير موجود في supervisor.sh"
+        )
 
     def test_openrouter_key_injected(self):
         content = SUPERVISOR.read_text()
         # يجب أن يُحقن OPENROUTER_API_KEY في بيئة الـ process
-        assert "OPENROUTER_API_KEY" in content, \
+        assert "OPENROUTER_API_KEY" in content, (
             "OPENROUTER_API_KEY غير محقون في launch_reasoning_agent"
+        )
 
 
 # ===========================================================================
 # R5: automations.yaml
 # ===========================================================================
+
 
 class TestAutomationsYaml:
     """يتحقق من reasoning-agent service و tasks في automations.yaml."""
@@ -210,8 +234,9 @@ class TestAutomationsYaml:
 
     def test_reasoning_agent_service(self):
         content = AUTOMATIONS.read_text()
-        assert "reasoning-agent:" in content, \
+        assert "reasoning-agent:" in content, (
             "reasoning-agent service غير موجود في automations.yaml"
+        )
 
     def test_port_8008_in_service(self):
         content = AUTOMATIONS.read_text()
@@ -219,33 +244,35 @@ class TestAutomationsYaml:
 
     def test_verify_step8_task(self):
         content = AUTOMATIONS.read_text()
-        assert "verify-step8-reasoning-agent" in content, \
+        assert "verify-step8-reasoning-agent" in content, (
             "verify-step8-reasoning-agent task غير موجود"
+        )
 
     def test_restart_task(self):
         content = AUTOMATIONS.read_text()
-        assert "restart-reasoning-agent" in content, \
-            "restart-reasoning-agent task غير موجود"
+        assert "restart-reasoning-agent" in content, "restart-reasoning-agent task غير موجود"
 
     def test_run_tests_task(self):
         content = AUTOMATIONS.read_text()
-        assert "run-step8-tests" in content, \
-            "run-step8-tests task غير موجود"
+        assert "run-step8-tests" in content, "run-step8-tests task غير موجود"
 
     def test_ready_command_checks_metrics(self):
         content = AUTOMATIONS.read_text()
-        assert "cogniforge_reasoning_startup_info" in content, \
+        assert "cogniforge_reasoning_startup_info" in content, (
             "ready command يجب أن يتحقق من cogniforge_reasoning_startup_info"
+        )
 
     def test_step8_in_header_comment(self):
         content = AUTOMATIONS.read_text()
-        assert "Step 8" in content or "step8" in content, \
+        assert "Step 8" in content or "step8" in content, (
             "Step 8 غير مذكور في header automations.yaml"
+        )
 
 
 # ===========================================================================
 # R6: prometheus.yml
 # ===========================================================================
+
 
 class TestPrometheusConfig:
     """يتحقق من scrape target للـ reasoning-agent في prometheus.yml."""
@@ -255,8 +282,7 @@ class TestPrometheusConfig:
 
     def test_reasoning_agent_job(self):
         content = PROMETHEUS_CFG.read_text()
-        assert "reasoning-agent" in content, \
-            "reasoning-agent job غير موجود في prometheus.yml"
+        assert "reasoning-agent" in content, "reasoning-agent job غير موجود في prometheus.yml"
 
     def test_port_8008_target(self):
         content = PROMETHEUS_CFG.read_text()
@@ -264,24 +290,29 @@ class TestPrometheusConfig:
 
     def test_step8_label(self):
         content = PROMETHEUS_CFG.read_text()
-        assert 'step: "8"' in content or "step.*8" in content, \
+        assert 'step: "8"' in content or "step.*8" in content, (
             "step=8 label غير موجود في prometheus.yml"
+        )
 
     def test_metrics_path(self):
         content = PROMETHEUS_CFG.read_text()
-        assert "metrics_path: /metrics" in content, \
+        assert "metrics_path: /metrics" in content, (
             "metrics_path: /metrics غير موجود في prometheus.yml"
+        )
 
 
 # ===========================================================================
 # R7: Grafana dashboard
 # ===========================================================================
 
+
 class TestGrafanaDashboard:
     """يتحقق من صحة Grafana dashboard للخطوة 8."""
 
     def test_file_exists(self):
-        assert DASHBOARD.exists(), "Dashboard 110-microservices-step8-reasoning-agent.json غير موجود"
+        assert DASHBOARD.exists(), (
+            "Dashboard 110-microservices-step8-reasoning-agent.json غير موجود"
+        )
 
     def test_valid_json(self):
         content = DASHBOARD.read_text()
@@ -290,8 +321,9 @@ class TestGrafanaDashboard:
 
     def test_correct_uid(self):
         data = json.loads(DASHBOARD.read_text())
-        assert data.get("uid") == "cogniforge-ms-step8-reasoning-agent", \
+        assert data.get("uid") == "cogniforge-ms-step8-reasoning-agent", (
             f"UID خاطئ: {data.get('uid')}"
+        )
 
     def test_step8_tag(self):
         data = json.loads(DASHBOARD.read_text())
@@ -308,23 +340,27 @@ class TestGrafanaDashboard:
 
     def test_references_startup_info_metric(self):
         content = DASHBOARD.read_text()
-        assert "cogniforge_reasoning_startup_info" in content, \
+        assert "cogniforge_reasoning_startup_info" in content, (
             "cogniforge_reasoning_startup_info غير مذكور في dashboard"
+        )
 
     def test_references_invocations_metric(self):
         content = DASHBOARD.read_text()
-        assert "cogniforge_reasoning_invocations_total" in content, \
+        assert "cogniforge_reasoning_invocations_total" in content, (
             "cogniforge_reasoning_invocations_total غير مذكور في dashboard"
+        )
 
     def test_references_mcts_metric(self):
         content = DASHBOARD.read_text()
-        assert "cogniforge_reasoning_mcts_expansions_total" in content, \
+        assert "cogniforge_reasoning_mcts_expansions_total" in content, (
             "cogniforge_reasoning_mcts_expansions_total غير مذكور في dashboard"
+        )
 
     def test_health_matrix_panel(self):
         content = DASHBOARD.read_text()
-        assert "Health Matrix" in content or "health matrix" in content.lower(), \
+        assert "Health Matrix" in content or "health matrix" in content.lower(), (
             "Health Matrix panel غير موجود في dashboard"
+        )
 
 
 # ===========================================================================
@@ -337,7 +373,7 @@ import sys
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import microservices.reasoning_agent.prom_metrics as _PM  # noqa: E402
+import microservices.reasoning_agent.prom_metrics as _PM  # noqa: N812
 
 
 class TestPromMetricsFunctions:
@@ -351,8 +387,7 @@ class TestPromMetricsFunctions:
     def test_export_prometheus_text_returns_bytes(self):
         content, ctype = self.pm.export_prometheus_text()
         assert isinstance(content, bytes), "export_prometheus_text يجب أن يُعيد bytes"
-        assert "text/plain" in ctype or "text" in ctype, \
-            "content_type يجب أن يحتوي text/plain"
+        assert "text/plain" in ctype or "text" in ctype, "content_type يجب أن يحتوي text/plain"
 
     def test_set_startup_info_sets_gauge(self):
         self.pm.set_startup_info(
@@ -363,8 +398,9 @@ class TestPromMetricsFunctions:
         )
         content, _ = self.pm.export_prometheus_text()
         text = content.decode()
-        assert "cogniforge_reasoning_startup_info" in text, \
+        assert "cogniforge_reasoning_startup_info" in text, (
             "cogniforge_reasoning_startup_info غير موجود في output بعد set_startup_info"
+        )
 
     def test_set_startup_info_step8_label(self):
         self.pm.set_startup_info(version="1.0.0", environment="test")
@@ -438,5 +474,6 @@ class TestPromMetricsFunctions:
 
     def test_get_request_timer_returns_context_manager(self):
         timer = self.pm.get_request_timer(method="GET", endpoint="/health")
-        assert hasattr(timer, "__enter__") and hasattr(timer, "__exit__"), \
+        assert hasattr(timer, "__enter__") and hasattr(timer, "__exit__"), (
             "get_request_timer يجب أن يُعيد context manager"
+        )

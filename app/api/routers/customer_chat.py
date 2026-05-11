@@ -540,7 +540,9 @@ async def chat_stream_ws(
                                         content=complete_ai_response.replace("\x00", ""),
                                     )
                                     assistant_message_persisted = True
-                                    logger.info("[DATA_LOSS_PREVENTED] Fallback persistence succeeded.")
+                                    logger.info(
+                                        "[DATA_LOSS_PREVENTED] Fallback persistence succeeded."
+                                    )
                                 break
                             except Exception as persistence_exc:
                                 logger.error(

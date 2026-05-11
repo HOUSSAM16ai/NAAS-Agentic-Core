@@ -9,13 +9,10 @@
 هذه الاختبارات تعمل بدون اتصال بقاعدة بيانات حقيقية.
 """
 
-import os
 import pathlib
 
-import pytest
-
-
 # ─── H1: TAVILY_API_KEY في docker-compose.yml ───────────────────────────────
+
 
 class TestTavilyDockerCompose:
     """يتحقق من أن TAVILY_API_KEY مُعرَّف في docker-compose.yml لكلا الخدمتين."""
@@ -28,8 +25,7 @@ class TestTavilyDockerCompose:
     def test_tavily_key_present_in_compose(self):
         """يجب أن يحتوي docker-compose.yml على TAVILY_API_KEY."""
         assert "TAVILY_API_KEY" in self._compose_text(), (
-            "TAVILY_API_KEY غائب من docker-compose.yml — "
-            "WebSearchFallbackNode ستتجاهل البحث صامتةً."
+            "TAVILY_API_KEY غائب من docker-compose.yml — WebSearchFallbackNode ستتجاهل البحث صامتةً."
         )
 
     def test_tavily_key_in_orchestrator_service(self):
@@ -37,12 +33,12 @@ class TestTavilyDockerCompose:
         text = self._compose_text()
         # نتحقق من وجود السطر بعد تعريف orchestrator-service
         orchestrator_block_start = text.find("orchestrator-service:")
-        assert orchestrator_block_start != -1, "orchestrator-service غير موجود في docker-compose.yml"
+        assert orchestrator_block_start != -1, (
+            "orchestrator-service غير موجود في docker-compose.yml"
+        )
         # نبحث عن TAVILY بعد بداية الـ block
         tavily_pos = text.find("TAVILY_API_KEY", orchestrator_block_start)
-        assert tavily_pos != -1, (
-            "TAVILY_API_KEY غير موجود في بيئة orchestrator-service"
-        )
+        assert tavily_pos != -1, "TAVILY_API_KEY غير موجود في بيئة orchestrator-service"
 
     def test_tavily_key_in_research_agent(self):
         """يجب أن يكون TAVILY_API_KEY ضمن بيئة research-agent."""
@@ -50,9 +46,7 @@ class TestTavilyDockerCompose:
         research_block_start = text.find("research-agent:")
         assert research_block_start != -1, "research-agent غير موجود في docker-compose.yml"
         tavily_pos = text.find("TAVILY_API_KEY", research_block_start)
-        assert tavily_pos != -1, (
-            "TAVILY_API_KEY غير موجود في بيئة research-agent"
-        )
+        assert tavily_pos != -1, "TAVILY_API_KEY غير موجود في بيئة research-agent"
 
     def test_tavily_key_uses_safe_default(self):
         """يجب أن يستخدم TAVILY_API_KEY قيمة افتراضية آمنة (فارغة) لتجنب فشل compose."""
@@ -66,12 +60,11 @@ class TestTavilyDockerCompose:
 
 # ─── H2: ddgs في requirements.txt لـ research_agent ────────────────────────
 
+
 class TestDuckDuckGoFallback:
     """يتحقق من أن ddgs مُدرج في متطلبات research_agent."""
 
-    REQUIREMENTS_PATH = pathlib.Path(
-        "microservices/research_agent/requirements.txt"
-    )
+    REQUIREMENTS_PATH = pathlib.Path("microservices/research_agent/requirements.txt")
 
     def test_ddgs_in_requirements(self):
         """يجب أن يحتوي requirements.txt على ddgs لتفادي ImportError."""
@@ -85,7 +78,7 @@ class TestDuckDuckGoFallback:
         """يجب أن يكون ddgs بإصدار 6.0 أو أحدث."""
         text = self.REQUIREMENTS_PATH.read_text(encoding="utf-8")
         # نتحقق من وجود السطر بشكل عام — الإصدار الدقيق قد يتغير
-        lines = [l.strip() for l in text.splitlines() if l.strip().startswith("ddgs")]
+        lines = [line.strip() for line in text.splitlines() if line.strip().startswith("ddgs")]
         assert lines, "ddgs غير موجود في requirements.txt"
         # نتحقق من أن الإصدار >= 6.0
         line = lines[0]
@@ -95,6 +88,7 @@ class TestDuckDuckGoFallback:
 
 
 # ─── H3: cognitive_engine.memorize محمي من None ─────────────────────────────
+
 
 class TestCognitiveEngineNullGuard:
     """يتحقق من أن simple_client.py يحمي استدعاء memorize من None."""

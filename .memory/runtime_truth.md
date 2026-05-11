@@ -1,5 +1,31 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-11** | Branch: `feat/live-runtime-audit-d043`
+> Last updated: **2026-05-11** | Branch: `feat/live-verification-d044-surgical-fixes`
+> Previous: `feat/live-runtime-audit-d043`
+
+## D-044 Live Verification Results (2026-05-11)
+
+| Service | Port | Status | Key Fields |
+|---------|------|--------|-----------|
+| main-app | 8000 | ✅ ACTIVE | `database: ok, version: v4.1-root` |
+| user-service | 8001 | ✅ ACTIVE | `status: ok, environment: development` |
+| planning-agent | 8002 | ✅ ACTIVE | `database: postgresql+asyncpg://...` |
+| conversation-service | 8003 | ✅ ACTIVE | `graph_ready: true, step: 12` |
+| orchestrator-service | 8006 | ✅ ACTIVE | `graph_ready: true, startup_state: ready` |
+| research-agent | 8007 | ✅ ACTIVE | `tavily_available: true` |
+| reasoning-agent | 8008 | ✅ ACTIVE | `llm_backend: openrouter, mcts_enabled: true` |
+| content-retrieval | 8009 | ✅ ACTIVE | `kb_files: 2, step: 11` |
+
+**Prometheus**: 12/12 targets UP  
+**Grafana**: 17 dashboards active  
+**Skills Pipeline**: `pipeline_mode: full | skills_active: ['planning', 'research', 'reasoning']`  
+**Ruff**: 0 errors  
+
+## ISS-047 — reasoning-agent OpenRouter 402 (FIXED 2026-05-11)
+- **Root cause**: `DEFAULT_MODEL = "gpt-4o"` requests 16384 tokens; account has ~3980 credits
+- **Fix**: `DEFAULT_MODEL = "openai/gpt-4o-mini"` + `MAX_TOKENS = 1024` in `reasoning_agent/src/core/config.py`
+- **Evidence**: `pipeline_mode: full` confirmed live
+
+
 > Audit method: Direct HTTP probes + Prometheus /api/v1/targets + Grafana /api/search
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
 

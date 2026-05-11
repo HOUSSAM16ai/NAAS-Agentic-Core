@@ -19,11 +19,8 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 # ── مسارات الملفات ────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parents[3]
@@ -33,13 +30,20 @@ DATABASE_PY = ORCH_ROOT / "src" / "core" / "database.py"
 ROUTES_PY = ORCH_ROOT / "src" / "api" / "routes.py"
 MAIN_PY = ORCH_ROOT / "main.py"
 PROMETHEUS_YML = ROOT / "observability" / "native" / "prometheus.yml"
-DASHBOARD = ROOT / "observability" / "grafana" / "dashboards" / "130-microservices-step10-postgres-checkpointer.json"
+DASHBOARD = (
+    ROOT
+    / "observability"
+    / "grafana"
+    / "dashboards"
+    / "130-microservices-step10-postgres-checkpointer.json"
+)
 AUTOMATIONS = ROOT / ".ona" / "automations.yaml"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # C1: prom_metrics.py — المقاييس الجديدة
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPromMetricsCheckpointer:
     """يتحقق من وجود مقاييس checkpointer في prom_metrics.py."""
@@ -126,6 +130,7 @@ class TestPromMetricsCheckpointer:
 # ═══════════════════════════════════════════════════════════════════════════════
 # C2: database.py — _InstrumentedCheckpointer + _build_psycopg_conninfo
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestDatabaseCheckpointer:
     """يتحقق من بنية database.py لـ Step 10."""
@@ -214,6 +219,7 @@ class TestDatabaseCheckpointer:
 # C3: routes.py — /checkpointer/status endpoint
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestRoutesCheckpointerStatus:
     """يتحقق من /checkpointer/status endpoint في routes.py."""
 
@@ -225,7 +231,7 @@ class TestRoutesCheckpointerStatus:
 
     def test_checkpointer_status_is_get(self):
         src = self._src()
-        assert 'router.get' in src
+        assert "router.get" in src
         assert "/checkpointer/status" in src
 
     def test_checkpointer_status_returns_backend_field(self):
@@ -254,6 +260,7 @@ class TestRoutesCheckpointerStatus:
 # C4: main.py — checkpointer_backend في set_startup_info
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestMainCheckpointerBackend:
     """يتحقق من تمرير checkpointer_backend في main.py."""
 
@@ -278,6 +285,7 @@ class TestMainCheckpointerBackend:
 # ═══════════════════════════════════════════════════════════════════════════════
 # C5: prometheus.yml — scrape target
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPrometheusConfig:
     """يتحقق من scrape target postgres-checkpointer في prometheus.yml."""
@@ -304,6 +312,7 @@ class TestPrometheusConfig:
 # ═══════════════════════════════════════════════════════════════════════════════
 # C6: Grafana dashboard
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestGrafanaDashboard:
     """يتحقق من صحة Grafana dashboard لـ Step 10."""
@@ -366,6 +375,7 @@ class TestGrafanaDashboard:
 # C7: unit tests — _InstrumentedCheckpointer logic
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestInstrumentedCheckpointerUnit:
     """اختبارات وحدة لـ _InstrumentedCheckpointer."""
 
@@ -374,27 +384,34 @@ class TestInstrumentedCheckpointerUnit:
         import importlib.util
 
         # Mock AsyncPostgresSaver كـ class قابل للوراثة
-        mock_base = type("AsyncPostgresSaver", (), {
-            "__init__": lambda self, pool: None,
-            "aput": AsyncMock(),
-            "aget": AsyncMock(return_value=None),
-            "aget_tuple": AsyncMock(return_value=None),
-            "setup": AsyncMock(),
-            "alist": MagicMock(return_value=iter([])),
-        })
+        mock_base = type(
+            "AsyncPostgresSaver",
+            (),
+            {
+                "__init__": lambda self, pool: None,  # noqa: ARG005
+                "aput": AsyncMock(),
+                "aget": AsyncMock(return_value=None),
+                "aget_tuple": AsyncMock(return_value=None),
+                "setup": AsyncMock(),
+                "alist": MagicMock(return_value=iter([])),
+            },
+        )
 
         spec = importlib.util.spec_from_file_location("database_step10", DATABASE_PY)
         mod = importlib.util.module_from_spec(spec)
 
-        with patch.dict("sys.modules", {
-            "microservices.orchestrator_service.src.core.config": MagicMock(
-                settings=MagicMock(DATABASE_URL="postgresql+asyncpg://u:p@h:5432/db")
-            ),
-            "microservices.orchestrator_service.src.models.mission": MagicMock(),
-            "microservices.orchestrator_service.src.core.prom_metrics": MagicMock(),
-            "psycopg_pool": MagicMock(),
-            "langgraph.checkpoint.postgres.aio": MagicMock(AsyncPostgresSaver=mock_base),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "microservices.orchestrator_service.src.core.config": MagicMock(
+                    settings=MagicMock(DATABASE_URL="postgresql+asyncpg://u:p@h:5432/db")
+                ),
+                "microservices.orchestrator_service.src.models.mission": MagicMock(),
+                "microservices.orchestrator_service.src.core.prom_metrics": MagicMock(),
+                "psycopg_pool": MagicMock(),
+                "langgraph.checkpoint.postgres.aio": MagicMock(AsyncPostgresSaver=mock_base),
+            },
+        ):
             spec.loader.exec_module(mod)
         return mod
 
@@ -415,33 +432,41 @@ class TestInstrumentedCheckpointerUnit:
     def test_thread_id_prefix_extraction_with_colon(self):
         """يتحقق من استخراج prefix من thread_id بشكل صحيح."""
         thread_id = "u7:c42"
-        prefix = thread_id.split(":")[0] if ":" in thread_id else thread_id[:8]
+        prefix = thread_id.split(":", maxsplit=1)[0] if ":" in thread_id else thread_id[:8]
         assert prefix == "u7"
 
     def test_thread_id_prefix_extraction_without_colon(self):
         thread_id = "warmup_probe"
-        prefix = thread_id.split(":")[0] if ":" in thread_id else thread_id[:8]
+        prefix = thread_id.split(":", maxsplit=1)[0] if ":" in thread_id else thread_id[:8]
         assert prefix == "warmup_p"
 
     def test_thread_id_prefix_short_string(self):
         thread_id = "abc"
-        prefix = thread_id.split(":")[0] if ":" in thread_id else thread_id[:8]
+        prefix = thread_id.split(":", maxsplit=1)[0] if ":" in thread_id else thread_id[:8]
         assert prefix == "abc"
 
     def test_make_instrumented_class_returns_class(self):
         mod = self._load_module()
-        base = type("FakeBase", (), {
-            "__init__": lambda self, pool: None,
-        })
+        base = type(
+            "FakeBase",
+            (),
+            {
+                "__init__": lambda self, pool: None,  # noqa: ARG005
+            },
+        )
         cls = mod._make_instrumented_class(base)
         assert isinstance(cls, type)
         assert issubclass(cls, base)
 
     def test_make_instrumented_class_has_active_threads(self):
         mod = self._load_module()
-        base = type("FakeBase", (), {
-            "__init__": lambda self, pool: None,
-        })
+        base = type(
+            "FakeBase",
+            (),
+            {
+                "__init__": lambda self, pool: None,  # noqa: ARG005
+            },
+        )
         cls = mod._make_instrumented_class(base)
         instance = cls(pool=None)
         assert hasattr(instance, "_active_threads")
@@ -449,12 +474,16 @@ class TestInstrumentedCheckpointerUnit:
     def test_error_type_classification_connection(self):
         """يتحقق من تصنيف أنواع الأخطاء."""
         error_type = "connectionerror"
-        result = "connection_error" if "connection" in error_type or "pool" in error_type else "unknown"
+        result = (
+            "connection_error" if "connection" in error_type or "pool" in error_type else "unknown"
+        )
         assert result == "connection_error"
 
     def test_error_type_classification_serialization(self):
         error_type = "jsondecodeerror"
-        result = "serialization_error" if "serial" in error_type or "json" in error_type else "unknown"
+        result = (
+            "serialization_error" if "serial" in error_type or "json" in error_type else "unknown"
+        )
         assert result == "serialization_error"
 
     def test_error_type_classification_timeout(self):
@@ -463,7 +492,6 @@ class TestInstrumentedCheckpointerUnit:
         assert result == "timeout"
 
     def test_error_type_classification_unknown(self):
-        error_type = "valueerror"
         result = "unknown"
         assert result == "unknown"
 
@@ -472,11 +500,13 @@ class TestInstrumentedCheckpointerUnit:
 # C8: unit tests — prom_metrics checkpointer functions
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPromMetricsCheckpointerFunctions:
     """اختبارات وحدة لدوال prom_metrics الخاصة بالـ checkpointer."""
 
     def _import_metrics(self):
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_step10", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -574,22 +604,27 @@ class TestPromMetricsCheckpointerFunctions:
 # C9: unit tests — _build_psycopg_conninfo URL conversion
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestBuildPsycopgConninfo:
     """يتحقق من تحويل DATABASE_URL إلى psycopg conninfo."""
 
     def _build(self, url: str) -> str:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("db_conninfo", DATABASE_PY)
         mod = importlib.util.module_from_spec(spec)
-        with patch.dict("sys.modules", {
-            "microservices.orchestrator_service.src.core.config": MagicMock(
-                settings=MagicMock(DATABASE_URL=url)
-            ),
-            "microservices.orchestrator_service.src.models.mission": MagicMock(),
-            "microservices.orchestrator_service.src.core.prom_metrics": MagicMock(),
-            "psycopg_pool": MagicMock(),
-            "langgraph.checkpoint.postgres.aio": MagicMock(),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "microservices.orchestrator_service.src.core.config": MagicMock(
+                    settings=MagicMock(DATABASE_URL=url)
+                ),
+                "microservices.orchestrator_service.src.models.mission": MagicMock(),
+                "microservices.orchestrator_service.src.core.prom_metrics": MagicMock(),
+                "psycopg_pool": MagicMock(),
+                "langgraph.checkpoint.postgres.aio": MagicMock(),
+            },
+        ):
             spec.loader.exec_module(mod)
         return mod._build_psycopg_conninfo(url)
 
@@ -626,6 +661,7 @@ class TestBuildPsycopgConninfo:
 # ═══════════════════════════════════════════════════════════════════════════════
 # C10: automations.yaml — step10 tasks
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestAutomationsStep10:
     """يتحقق من وجود tasks Step 10 في automations.yaml."""

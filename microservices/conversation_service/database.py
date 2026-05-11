@@ -21,8 +21,7 @@ def _normalize_db_url(url: str) -> str:
     url = re.sub(r"^postgresql://", "postgresql+asyncpg://", url)
     url = re.sub(r"^postgres://", "postgresql+asyncpg://", url)
     url = re.sub(r"\?sslmode=\w+", "", url)
-    url = re.sub(r"&sslmode=\w+", "", url)
-    return url
+    return re.sub(r"&sslmode=\w+", "", url)
 
 
 # ── Lazy Engine Singleton ─────────────────────────────────────────────────────
@@ -43,7 +42,7 @@ def _get_raw_url() -> str:
 
 def get_engine():
     """يُعيد الـ engine — lazy singleton."""
-    global _engine  # noqa: PLW0603
+    global _engine
     if _engine is None:
         url = _get_raw_url()
         connect_args = {}

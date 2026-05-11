@@ -41,21 +41,40 @@ except ImportError:  # pragma: no cover
         """Stub عند غياب prometheus_client."""
 
     class Counter:  # type: ignore[no-redef]
-        def __init__(self, *a, **kw): pass
-        def labels(self, **kw): return self
-        def inc(self, n=1): pass
+        def __init__(self, *a, **kw):
+            pass
+
+        def labels(self, **kw):
+            return self
+
+        def inc(self, n=1):
+            pass
 
     class Gauge:  # type: ignore[no-redef]
-        def __init__(self, *a, **kw): pass
-        def labels(self, **kw): return self
-        def set(self, v): pass
-        def inc(self, n=1): pass
-        def dec(self, n=1): pass
+        def __init__(self, *a, **kw):
+            pass
+
+        def labels(self, **kw):
+            return self
+
+        def set(self, v):
+            pass
+
+        def inc(self, n=1):
+            pass
+
+        def dec(self, n=1):
+            pass
 
     class Histogram:  # type: ignore[no-redef]
-        def __init__(self, *a, **kw): pass
-        def labels(self, **kw): return self
-        def observe(self, v): pass
+        def __init__(self, *a, **kw):
+            pass
+
+        def labels(self, **kw):
+            return self
+
+        def observe(self, v):
+            pass
 
     CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
 

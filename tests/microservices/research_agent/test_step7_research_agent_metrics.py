@@ -15,11 +15,8 @@
 from __future__ import annotations
 
 import json
-import re
 import time
 from pathlib import Path
-
-import pytest
 
 # ── مسارات المشروع ────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent.parent.parent.parent
@@ -30,12 +27,19 @@ REQUIREMENTS = RESEARCH_DIR / "requirements.txt"
 SUPERVISOR = ROOT / ".devcontainer" / "supervisor.sh"
 AUTOMATIONS = ROOT / ".ona" / "automations.yaml"
 PROMETHEUS_YML = ROOT / "observability" / "native" / "prometheus.yml"
-DASHBOARD = ROOT / "observability" / "grafana" / "dashboards" / "100-microservices-step7-research-agent.json"
+DASHBOARD = (
+    ROOT
+    / "observability"
+    / "grafana"
+    / "dashboards"
+    / "100-microservices-step7-research-agent.json"
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # R1: requirements.txt
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestR1Requirements:
     """التحقق من وجود التبعيات المطلوبة في requirements.txt."""
@@ -56,6 +60,7 @@ class TestR1Requirements:
 # ═══════════════════════════════════════════════════════════════════════════════
 # R2: prom_metrics.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestR2PromMetrics:
     """التحقق من وجود prom_metrics.py وصحة محتواه."""
@@ -131,12 +136,13 @@ class TestR2PromMetrics:
 # R3: main.py /metrics endpoint
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestR3MainMetricsEndpoint:
     """التحقق من وجود /metrics endpoint في main.py."""
 
     def test_metrics_route_defined(self) -> None:
         content = MAIN_PY.read_text()
-        assert '"/metrics"' in content, '/metrics route مفقود من main.py'
+        assert '"/metrics"' in content, "/metrics route مفقود من main.py"
 
     def test_export_prometheus_text_called(self) -> None:
         content = MAIN_PY.read_text()
@@ -162,6 +168,7 @@ class TestR3MainMetricsEndpoint:
 # ═══════════════════════════════════════════════════════════════════════════════
 # R4: supervisor.sh
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestR4SupervisorSh:
     """التحقق من وجود launch_research_agent في supervisor.sh."""
@@ -190,6 +197,7 @@ class TestR4SupervisorSh:
 # ═══════════════════════════════════════════════════════════════════════════════
 # R5: automations.yaml
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestR5AutomationsYaml:
     """التحقق من وجود research-agent في automations.yaml."""
@@ -227,6 +235,7 @@ class TestR5AutomationsYaml:
 # R6: prometheus.yml
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestR6PrometheusYml:
     """التحقق من وجود scrape target لـ research-agent في prometheus.yml."""
 
@@ -250,6 +259,7 @@ class TestR6PrometheusYml:
 # ═══════════════════════════════════════════════════════════════════════════════
 # R7: Grafana dashboard
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestR7GrafanaDashboard:
     """التحقق من صحة Grafana dashboard."""
@@ -305,12 +315,14 @@ class TestR7GrafanaDashboard:
 # R8: unit tests للـ prom_metrics functions
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestR8PromMetricsFunctions:
     """اختبارات وحدة لدوال prom_metrics."""
 
     def test_import_prom_metrics(self) -> None:
         """يجب أن يُستورَد prom_metrics بدون أخطاء."""
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics", PROM_METRICS)
         assert spec is not None
         mod = importlib.util.module_from_spec(spec)
@@ -329,6 +341,7 @@ class TestR8PromMetricsFunctions:
 
     def test_export_returns_bytes_and_str(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8a", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -338,6 +351,7 @@ class TestR8PromMetricsFunctions:
 
     def test_set_startup_info_no_error(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8b", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -345,6 +359,7 @@ class TestR8PromMetricsFunctions:
 
     def test_record_search_no_error(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8c", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -353,6 +368,7 @@ class TestR8PromMetricsFunctions:
 
     def test_record_tavily_call_no_error(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8d", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -362,6 +378,7 @@ class TestR8PromMetricsFunctions:
 
     def test_record_tavily_error_no_error(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8e", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -371,6 +388,7 @@ class TestR8PromMetricsFunctions:
 
     def test_record_deep_research_no_error(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8f", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -379,6 +397,7 @@ class TestR8PromMetricsFunctions:
 
     def test_record_http_request_no_error(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8g", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -387,6 +406,7 @@ class TestR8PromMetricsFunctions:
 
     def test_record_db_operation_no_error(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8h", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -395,6 +415,7 @@ class TestR8PromMetricsFunctions:
 
     def test_timer_functions(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8i", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -405,6 +426,7 @@ class TestR8PromMetricsFunctions:
 
     def test_set_active_connections_no_error(self) -> None:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8j", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -414,6 +436,7 @@ class TestR8PromMetricsFunctions:
     def test_export_contains_metric_names_after_calls(self) -> None:
         """بعد استدعاء set_startup_info، يجب أن يظهر المقياس في الإخراج."""
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("prom_metrics_r8k", PROM_METRICS)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(mod)  # type: ignore[union-attr]

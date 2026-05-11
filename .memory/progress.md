@@ -3,6 +3,49 @@
 
 ---
 
+## ✅ Session: 2026-05-11 — Full Stack Live Verification + Surgical Fixes (D-044)
+
+**Branch**: `feat/live-verification-d044-surgical-fixes`
+**Mode**: Live verification with real secrets — all 8 services confirmed ACTIVE
+**Verified**: ruff clean | 12/12 Prometheus targets UP | Skills Pipeline `mode: full` | Grafana 17 dashboards
+
+### ما تم إنجازه
+
+#### 1. تشغيل جميع الخدمات المصغرة بالأسرار الحقيقية
+- 8 خدمات تعمل: `:8000` (main) + `:8001` (user) + `:8002` (planning) + `:8003` (conversation) + `:8006` (orchestrator) + `:8007` (research) + `:8008` (reasoning) + `:8009` (content-retrieval)
+- `secrets.env` أُنشئ بالأسرار الحقيقية (git-ignored)
+- `.env` يحتوي الأسرار للـ pydantic-settings
+
+#### 2. إصلاح reasoning-agent (ISS-047 — OpenRouter 402)
+- **السبب**: `gpt-4o` يطلب 16384 token — الرصيد لا يكفي
+- **الإصلاح**: `DEFAULT_MODEL = "openai/gpt-4o-mini"` + `MAX_TOKENS = 1024` في `config.py` + `max_tokens` في `ai_service.py`
+
+#### 3. تفعيل content-retrieval-skill (:8009)
+- كانت DOWN في Prometheus — أُطلقت كـ uvicorn process
+- الآن: 12/12 Prometheus targets UP
+
+#### 4. Skills Pipeline في وضع `full`
+- `pipeline_mode: full | skills_active: ['planning', 'research', 'reasoning']`
+- مدة الاستجابة: ~23 ثانية (MCTS + LLM حقيقي)
+
+#### 5. إصلاحات ruff (113 خطأ → 0)
+- `ruff check . --fix --unsafe-fixes` أصلح 107 خطأ تلقائياً
+- إصلاحات يدوية: `ClassVar`, `noqa` comments, lambda args, N812, E741
+
+#### 6. إصلاحات الاختبارات (10 فشل → 0)
+- `test_chat_event_protocol_error_contract_integration.py`: إصلاح mock DB session (sync vs async methods)
+- `test_conversation_service_envelope.py`: إعادة كتابة كاملة لتطابق عقد conversation-service الفعلي
+- `test_settings_base.py`: إضافة `model_config = SettingsConfigDict(env_file=None)` + `monkeypatch`
+- `test_db_factory_guardrails.py`: إضافة `monkeypatch.delenv` لعزل env vars
+- `test_dual_write_immunity.py`: `pytest_asyncio.fixture` + `expire_on_commit=False` + `full_name` field
+- `chat_persistence.py`: إضافة `await self.db.refresh(message)` بعد commit
+
+#### 7. إصلاح GitHub Actions
+- `ci.yml` يمر بنجاح: lint ✅ | contracts ✅ | guardrails ✅ | skills-structural ✅
+- 12 Prometheus jobs | 17 Grafana dashboards
+
+---
+
 ## ✅ Session: 2026-05-11 — Microservices Step 12: Conversation Service Live (الخطوة الثانية عشرة)
 
 **Branch**: `feat/microservices-step12-conversation-service`

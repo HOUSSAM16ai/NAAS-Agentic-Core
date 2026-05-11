@@ -35,8 +35,12 @@ class TestCoreConfig:
 
     def test_database_url_fallback(self):
         """Verify DB URL fallback logic."""
-        # Test default fallback for testing (dev requires explicit URL)
-        with patch.dict(os.environ, {}, clear=True):
+        # Clear both DATABASE_URL and APP_DATABASE_URL — base.py sets DATABASE_URL
+        # from APP_DATABASE_URL at import time, so both must be absent for fallback.
+        clean_env = {
+            k: v for k, v in os.environ.items() if k not in ("DATABASE_URL", "APP_DATABASE_URL")
+        }
+        with patch.dict(os.environ, clean_env, clear=True):
             settings = AppSettings(ENVIRONMENT="testing", DATABASE_URL=None)
             assert "sqlite" in settings.DATABASE_URL
             assert ":memory:" in settings.DATABASE_URL

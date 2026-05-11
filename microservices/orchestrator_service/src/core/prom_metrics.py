@@ -43,6 +43,7 @@ try:
         Histogram,
         generate_latest,
     )
+
     _PROMETHEUS_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _PROMETHEUS_AVAILABLE = False
@@ -53,12 +54,18 @@ except ImportError:  # pragma: no cover
 
     class _Stub:  # type: ignore[no-redef]
         def __init__(self, *a: object, **kw: object) -> None: ...
-        def labels(self, **kw: object) -> _Stub: return self
+        def labels(self, **kw: object) -> _Stub:
+            return self
+
         def inc(self, v: float = 1) -> None: ...
         def set(self, v: float) -> None: ...
         def observe(self, v: float) -> None: ...
-        def time(self) -> _Stub: return self
-        def __enter__(self) -> _Stub: return self
+        def time(self) -> _Stub:
+            return self
+
+        def __enter__(self) -> _Stub:
+            return self
+
         def __exit__(self, *a: object) -> None: ...
 
     Counter = Gauge = Histogram = _Stub  # type: ignore[misc,assignment]
@@ -292,6 +299,7 @@ STARTUP_INFO: Gauge = _make_gauge(
 # ═══════════════════════════════════════════════════════════════════════════
 # Public API
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def export_prometheus_text() -> tuple[bytes, str]:
     """

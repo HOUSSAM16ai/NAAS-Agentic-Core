@@ -20,6 +20,7 @@ class AIService:
             self.client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
 
         self.model = settings.DEFAULT_MODEL
+        self.max_tokens = settings.MAX_TOKENS
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     async def generate_text(
@@ -43,6 +44,7 @@ class AIService:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
+                max_tokens=self.max_tokens,
             )
             return response.choices[0].message.content or ""
         except Exception as e:

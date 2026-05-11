@@ -12,6 +12,7 @@ thread_id = conversation_id  →  كل محادثة لها ذاكرة مستقل
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import logging
 import re
@@ -302,37 +303,29 @@ async def run_local_graph(
                 len(response),
             )
             if root_span_ctx:
-                try:
+                with contextlib.suppress(Exception):
                     obs.end_span(
                         root_span_ctx.span_id,
                         status="OK",
                         metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
                     )
-                except Exception:
-                    pass
             return response
         logger.warning("local_graph.run_empty_response thread_id=%s", thread_id)
         if root_span_ctx:
-            try:
+            with contextlib.suppress(Exception):
                 obs.end_span(
                     root_span_ctx.span_id,
                     status="OK",
                     metrics={"duration_ms": (time.perf_counter() - t0) * 1000},
                 )
-            except Exception:
-                pass
     except Exception:
         logger.warning("local_graph.run_failed thread_id=%s", thread_id, exc_info=True)
         if root_span_ctx:
-            try:
+            with contextlib.suppress(Exception):
                 obs.end_span(root_span_ctx.span_id, status="ERROR")
-            except Exception:
-                pass
     finally:
         if token is not None:
-            try:
+            with contextlib.suppress(Exception):
                 _graph_trace_context.reset(token)
-            except Exception:
-                pass
 
     return None

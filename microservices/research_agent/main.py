@@ -27,10 +27,11 @@ _super_search_orchestrator: SuperSearchOrchestrator | None = None
 
 def _get_super_search() -> SuperSearchOrchestrator:
     """يُعيد SuperSearchOrchestrator مُهيَّأً بشكل كسول (lazy singleton)."""
-    global _super_search_orchestrator  # noqa: PLW0603
+    global _super_search_orchestrator
     if _super_search_orchestrator is None:
         _super_search_orchestrator = SuperSearchOrchestrator()
     return _super_search_orchestrator
+
 
 # ── تحديد توفر Tavily ────────────────────────────────────────────────────────
 _TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
@@ -38,6 +39,7 @@ _TAVILY_AVAILABLE = bool(_TAVILY_API_KEY)
 
 try:
     from tavily import TavilyClient as _TavilyCheck  # noqa: F401
+
     _TAVILY_IMPORTABLE = True
 except ImportError:
     _TAVILY_IMPORTABLE = False
@@ -186,9 +188,7 @@ def _build_router() -> APIRouter:
                         ]
                     except Exception as e:
                         prom_metrics.record_deep_research("error")
-                        prom_metrics.record_search(
-                            "deep", "error", prom_metrics.elapsed_since(_t)
-                        )
+                        prom_metrics.record_search("deep", "error", prom_metrics.elapsed_since(_t))
                         if _TAVILY_READY:
                             prom_metrics.record_tavily_error("api_error")
                         return AgentResponse(status="error", error=f"Deep research failed: {e}")
@@ -205,13 +205,9 @@ def _build_router() -> APIRouter:
                     _t = prom_metrics.get_request_timer()
                     try:
                         results = await search_orchestrator.search(search_req)
-                        prom_metrics.record_search(
-                            "db", "success", prom_metrics.elapsed_since(_t)
-                        )
+                        prom_metrics.record_search("db", "success", prom_metrics.elapsed_since(_t))
                     except Exception as e:
-                        prom_metrics.record_search(
-                            "db", "error", prom_metrics.elapsed_since(_t)
-                        )
+                        prom_metrics.record_search("db", "error", prom_metrics.elapsed_since(_t))
                         return AgentResponse(status="error", error=f"Search failed: {e}")
 
                     # Serialize results

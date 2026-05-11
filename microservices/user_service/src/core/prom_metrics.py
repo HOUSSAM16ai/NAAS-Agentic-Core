@@ -53,7 +53,7 @@ except ImportError:  # pragma: no cover
 
         def __init__(self, *a: object, **kw: object) -> None: ...
 
-        def labels(self, **kw: object) -> "_Stub":
+        def labels(self, **kw: object) -> _Stub:
             return self
 
         def inc(self, v: float = 1) -> None: ...
@@ -62,10 +62,10 @@ except ImportError:  # pragma: no cover
 
         def observe(self, v: float) -> None: ...
 
-        def time(self) -> "_Stub":
+        def time(self) -> _Stub:
             return self
 
-        def __enter__(self) -> "_Stub":
+        def __enter__(self) -> _Stub:
             return self
 
         def __exit__(self, *a: object) -> None: ...
@@ -85,7 +85,7 @@ _REGISTRY: CollectorRegistry | None = None
 
 def _get_registry() -> CollectorRegistry:
     """يُعيد registry مستقل — يُنشأ مرة واحدة (lazy singleton)."""
-    global _REGISTRY  # noqa: PLW0603 — Singleton: initialised once at startup
+    global _REGISTRY
     if _REGISTRY is None and _PROMETHEUS_AVAILABLE:
         _REGISTRY = CollectorRegistry()
     return _REGISTRY  # type: ignore[return-value]
@@ -97,7 +97,7 @@ _metrics: dict[str, object] = {}
 
 def _get_metrics() -> dict[str, object]:
     """يُعيد قاموس المقاييس — يُنشأ مرة واحدة."""
-    global _metrics  # noqa: PLW0603
+    global _metrics  # noqa: PLW0602
     if _metrics or not _PROMETHEUS_AVAILABLE:
         return _metrics
 

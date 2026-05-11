@@ -69,6 +69,7 @@ LIVE_ANCHORS = (
 # explicit way to evolve the truth table. Drift between this list and the
 # lock file is what the doc-integrity CI step will block.
 
+
 @dataclass
 class TrackedComponent:
     """One row of the runtime truth table."""
@@ -517,9 +518,7 @@ def diff_against_lock(truth: dict) -> tuple[bool, list[str]]:
         old = locked_by_id[rid]
         for k in ("expected_status", "derived_status", "on_live_chain"):
             if row.get(k) != old.get(k):
-                msgs.append(
-                    f"{rid}: {k} {old.get(k)!r} → {row.get(k)!r}"
-                )
+                msgs.append(f"{rid}: {k} {old.get(k)!r} → {row.get(k)!r}")
         if row.get("importer_count", 0) != old.get("importer_count", 0):
             msgs.append(
                 f"{rid}: importer_count {old.get('importer_count')} → {row.get('importer_count')}"
@@ -536,9 +535,7 @@ def diff_against_lock(truth: dict) -> tuple[bool, list[str]]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     group = parser.add_mutually_exclusive_group()
-    group.add_argument(
-        "--check", action="store_true", help="Fail on drift vs lock file (CI mode)."
-    )
+    group.add_argument("--check", action="store_true", help="Fail on drift vs lock file (CI mode).")
     group.add_argument(
         "--update", action="store_true", help="Rewrite the lock file to match the current tree."
     )

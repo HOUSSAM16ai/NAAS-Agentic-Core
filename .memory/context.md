@@ -1,7 +1,7 @@
 # CogniForge — Project Context
-> Last updated: **2026-05-10** | Branch: `feat/microservices-step5-user-service`.
-> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-10).
-> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` + `microservices-step3-live` + `microservices-step4` + `microservices-step5-user-service` (NEW).
+> Last updated: **2026-05-11** | Branch: `feat/microservices-step8-reasoning-agent`.
+> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-11).
+> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` + `microservices-step3-live` + `microservices-step4` + `microservices-step5-user-service` + `microservices-step6-planning-agent` + `microservices-step7-research-agent` + `microservices-step8-reasoning-agent` (NEW).
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)
@@ -13,7 +13,7 @@
 - **Replit**: `package.json` script runs Next.js on port **5000**; backend started manually with uvicorn on 8000
 - **Microservices wake-up** (either environment): `docker compose -f docker-compose.yml up -d`
 
-## Stack (verified live 2026-05-10)
+## Stack (verified live 2026-05-11)
 | Layer | Tech | Port | Status |
 |-------|------|------|--------|
 | Frontend | Next.js 15 | **3000** | ACTIVE — supervisor.sh passes `--port 3000` overriding package.json `--port 5000` |
@@ -24,9 +24,14 @@
 | Cache | InMemoryCache (Redis process runs but unused — no `REDIS_URL`) | 6379 | ACTIVE (in-memory only) |
 | Tracing | UnifiedObservabilityService (in-process) | — | ACTIVE |
 | OTEL export | otel_setup.py | — | NO-OP — `OTEL_EXPORTER_OTLP_ENDPOINT=http` is invalid |
-| Grafana | native binary | **3001** | ACTIVE — 8 dashboards (Steps 2–5: 50/60/70/80-microservices-*.json) |
-| Prometheus | native binary | **9090** | ACTIVE — 5 scrape targets (fastapi, grafana, prometheus, orchestrator-service:8006, user-service:8001) |
+| Grafana | native binary | **3001** | ACTIVE — 11 dashboards (Steps 2–8) |
+| Prometheus | native binary | **9090** | ACTIVE — 8 scrape targets (fastapi, grafana, prometheus, orchestrator:8006, user:8001, planning:8002, research:8007, reasoning:8008) |
 | Routing Policy | ChatRoutingPolicy | — | ACTIVE — default: state_graph → /api/chat/messages (Step 2) |
+| orchestrator-service | uvicorn | **8006** | ACTIVE — Step 4, OUTBOX_RELAY=true, /metrics |
+| user-service | uvicorn | **8001** | ACTIVE — Step 5, /metrics |
+| planning-agent | uvicorn | **8002** | ACTIVE — Step 6, DSPy+LangGraph, /metrics |
+| research-agent | uvicorn | **8007** | ACTIVE — Step 7, Tavily web search, /metrics |
+| reasoning-agent | uvicorn | **8008** | ACTIVE — Step 8, MCTS+LLM, /metrics (NEW 2026-05-11) |
 
 ## Database state (live 2026-05-09)
 - **Users**: 19 total (admin: `benmerahhoussam16@gmail.com`, user: `houssamannaba963@gmail.com`)

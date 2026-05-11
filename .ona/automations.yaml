@@ -1,19 +1,19 @@
 # .ona/automations.yaml
 # ─────────────────────────────────────────────────────────────────────────────
-# CogniForge — Ona Automations (Step 7: Research Agent + Tavily Web Search)
+# CogniForge — Ona Automations (Step 8: Reasoning Agent — MCTS + LLM + /metrics)
 #
 # الواقع: Codespaces لا يدعم Docker-in-Docker في هذا الـ devcontainer.
 # الحل: الخدمات تعمل كـ uvicorn processes مباشرة (مثل Grafana/Prometheus).
 #
-# الجديد في Step 7:
-#   - research-agent على :8007 — Tavily web search حي + /metrics (cogniforge_research_*)
-#   - verify-step7-research-agent — تحقق حي شامل من research-agent
-#   - restart-research-agent — إعادة تشغيل يدوي
-#   - run-step7-tests — 50+ اختبار للخطوة 7
+# الجديد في Step 8:
+#   - reasoning-agent على :8008 — MCTS + LLM + /metrics (cogniforge_reasoning_*)
+#   - verify-step8-reasoning-agent — تحقق حي شامل من reasoning-agent
+#   - restart-reasoning-agent — إعادة تشغيل يدوي
+#   - run-step8-tests — 80+ اختبار للخطوة 8
 #
 # الخدمات النشطة (Codespaces — uvicorn processes):
 #   :8000 FastAPI monolith | :8001 user-service | :8002 planning-agent
-#   :8006 orchestrator-service | :8007 research-agent
+#   :8006 orchestrator-service | :8007 research-agent | :8008 reasoning-agent
 #   :3001 Grafana | :9090 Prometheus
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -125,6 +125,50 @@ services:
       stop: |
         pkill -f "uvicorn microservices.planning_agent" 2>/dev/null || true
         echo "✅ planning-agent stopped."
+
+  reasoning-agent:
+    name: "Reasoning Agent (Step 8 — MCTS + LLM + /metrics)"
+    description: |
+      يُشغِّل reasoning-agent كـ uvicorn process مباشر على :8008.
+      Step 8: /metrics endpoint حقيقي (cogniforge_reasoning_*). MCTS + LLM حي.
+      لا يتطلب Docker. يبدأ تلقائياً عبر supervisor.sh.
+      التحقق: curl http://localhost:8008/health
+               curl http://localhost:8008/metrics | grep cogniforge_reasoning_startup_info
+    commands:
+      start: |
+        set -euo pipefail
+        REASONING_PORT="8008"
+        LOG_FILE="/app/.observability/reasoning_agent.log"
+
+        pkill -f "uvicorn microservices.reasoning_agent" 2>/dev/null || true
+        sleep 1
+        mkdir -p /app/.observability
+
+        echo "🚀 Starting reasoning-agent (Step 8) on :${REASONING_PORT}..."
+        echo "   LLM: ${OPENROUTER_API_KEY:+✅ OpenRouter ACTIVE}${OPENROUTER_API_KEY:-⚠️  mock mode (no OPENROUTER_API_KEY)}"
+        echo "   MCTS: ✅ ACTIVE (always enabled)"
+        echo "   /metrics → Prometheus | cogniforge_reasoning_*"
+
+        REASONING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+        OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+        OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+        ENVIRONMENT="${ENVIRONMENT:-development}" \
+        SECRET_KEY="${SECRET_KEY:-cogniforge-reasoning-agent-dev-key}" \
+        PYTHONPATH="/app" \
+        python -m uvicorn microservices.reasoning_agent.main:app \
+          --host 0.0.0.0 \
+          --port "$REASONING_PORT" \
+          --workers 1 \
+          --log-level info \
+          2>&1 | tee -a "$LOG_FILE"
+
+      ready: |
+        curl -sf http://localhost:8008/health &&
+        curl -sf http://localhost:8008/metrics | grep -q "cogniforge_reasoning_startup_info"
+
+      stop: |
+        pkill -f "uvicorn microservices.reasoning_agent" 2>/dev/null || true
+        echo "✅ reasoning-agent stopped."
 
   research-agent:
     name: "Research Agent (Step 7 — Tavily Web Search + /metrics)"
@@ -898,5 +942,166 @@ tasks:
         tests/microservices/research_agent/test_step7_research_agent_metrics.py \
         -v --tb=short --no-header -q 2>&1 | tail -80
       echo "✅ Step 7 tests complete."
+    triggeredBy:
+      - manual
+
+  verify-step8-reasoning-agent:
+    name: "Verify Step 8 — Reasoning Agent Live Metrics"
+    description: |
+      يتحقق من أن reasoning-agent يعمل على :8008 ويُصدِّر مقاييس Prometheus حقيقية.
+      يفحص: /health + /metrics + MCTS status + LLM backend + Prometheus scrape target + Grafana dashboard.
+    command: |
+      set -euo pipefail
+      PASS=0; FAIL=0
+      check() {
+        local label="$1"; shift
+        if eval "$@" > /dev/null 2>&1; then
+          echo "  ✅ $label"
+          PASS=$((PASS+1))
+        else
+          echo "  ❌ $label"
+          FAIL=$((FAIL+1))
+        fi
+      }
+
+      echo ""
+      echo "══════════════════════════════════════════════════════"
+      echo "  Step 8 — Reasoning Agent Live Verification"
+      echo "══════════════════════════════════════════════════════"
+      echo ""
+
+      echo "── 1. Health Check ──────────────────────────────────"
+      check "GET /health → 200" "curl -sf http://localhost:8008/health"
+      HEALTH=$(curl -sf http://localhost:8008/health 2>/dev/null || echo '{}')
+      echo "     Response: $HEALTH"
+      check "step=8 in health" "echo '$HEALTH' | grep -q '\"step\":\"8\"'"
+      check "mcts_enabled=true in health" "echo '$HEALTH' | grep -q 'mcts_enabled'"
+
+      echo ""
+      echo "── 2. Prometheus /metrics ───────────────────────────"
+      check "GET /metrics → 200" "curl -sf http://localhost:8008/metrics"
+      check "cogniforge_reasoning_startup_info present" \
+        "curl -sf http://localhost:8008/metrics | grep -q 'cogniforge_reasoning_startup_info'"
+      check "step=8 label in metrics" \
+        "curl -sf http://localhost:8008/metrics | grep -q 'step=\"8\"'"
+      check "cogniforge_reasoning_invocations_total present" \
+        "curl -sf http://localhost:8008/metrics | grep -q 'cogniforge_reasoning_invocations_total'"
+      check "cogniforge_reasoning_mcts_expansions_total present" \
+        "curl -sf http://localhost:8008/metrics | grep -q 'cogniforge_reasoning_mcts_expansions_total'"
+      check "cogniforge_reasoning_llm_calls_total present" \
+        "curl -sf http://localhost:8008/metrics | grep -q 'cogniforge_reasoning_llm_calls_total'"
+
+      echo ""
+      echo "── 3. LLM Backend ───────────────────────────────────"
+      LLM_BACKEND=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('llm_backend','unknown'))" 2>/dev/null || echo "unknown")
+      echo "     LLM backend: $LLM_BACKEND"
+      if [ "$LLM_BACKEND" = "openrouter" ]; then
+        echo "  ✅ OpenRouter ACTIVE (OPENROUTER_API_KEY set)"
+        PASS=$((PASS+1))
+      elif [ "$LLM_BACKEND" = "openai" ]; then
+        echo "  ✅ OpenAI ACTIVE (OPENAI_API_KEY set)"
+        PASS=$((PASS+1))
+      else
+        echo "  ⚠️  Mock mode — no API key set (fallback responses only)"
+        PASS=$((PASS+1))
+      fi
+
+      echo ""
+      echo "── 4. Prometheus Scrape Target ──────────────────────"
+      check "Prometheus /api/v1/targets accessible" \
+        "curl -sf http://localhost:9090/api/v1/targets"
+      TARGETS=$(curl -sf http://localhost:9090/api/v1/targets 2>/dev/null || echo '{}')
+      check "reasoning-agent target exists" \
+        "echo '$TARGETS' | grep -q 'reasoning-agent'"
+
+      echo ""
+      echo "── 5. Grafana Dashboard ─────────────────────────────"
+      check "Grafana /api/health → ok" \
+        "curl -sf http://localhost:3001/api/health | grep -q 'ok'"
+      check "Step 8 dashboard exists" \
+        "curl -sf 'http://admin:admin@localhost:3001/api/dashboards/uid/cogniforge-ms-step8-reasoning-agent' | grep -q 'step8'"
+
+      echo ""
+      echo "── 6. All Microservices Health Matrix ───────────────"
+      for svc_port in "orchestrator-service:8006" "user-service:8001" "planning-agent:8002" "research-agent:8007" "reasoning-agent:8008"; do
+        svc="${svc_port%%:*}"
+        port="${svc_port##*:}"
+        if curl -sf "http://localhost:${port}/health" > /dev/null 2>&1; then
+          echo "  ✅ $svc (:$port)"
+          PASS=$((PASS+1))
+        else
+          echo "  ❌ $svc (:$port) — DOWN"
+          FAIL=$((FAIL+1))
+        fi
+      done
+
+      echo ""
+      echo "══════════════════════════════════════════════════════"
+      echo "  Results: ✅ $PASS passed | ❌ $FAIL failed"
+      echo "══════════════════════════════════════════════════════"
+      echo ""
+      echo "  Grafana Step 8 dashboard:"
+      echo "  → http://localhost:3001/d/cogniforge-ms-step8-reasoning-agent"
+      echo ""
+      echo "  Live metrics:"
+      echo "  → curl http://localhost:8008/metrics | grep cogniforge_reasoning"
+      echo ""
+      [ "$FAIL" -eq 0 ] && exit 0 || exit 1
+    triggeredBy:
+      - manual
+
+  restart-reasoning-agent:
+    name: "Restart Reasoning Agent"
+    description: يوقف reasoning-agent ويُعيد تشغيله يدوياً على :8008.
+    command: |
+      set -euo pipefail
+      echo "🔄 Restarting reasoning-agent on :8008..."
+      pkill -f "uvicorn microservices.reasoning_agent" 2>/dev/null || true
+      sleep 2
+
+      REASONING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+      OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+      OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+      ENVIRONMENT="${ENVIRONMENT:-development}" \
+      SECRET_KEY="${SECRET_KEY:-cogniforge-reasoning-agent-dev-key}" \
+      PYTHONPATH="/app" \
+      nohup python -m uvicorn microservices.reasoning_agent.main:app \
+        --host 0.0.0.0 \
+        --port 8008 \
+        --workers 1 \
+        --log-level info \
+        >> /app/.observability/reasoning_agent.log 2>&1 &
+
+      echo "⏳ Waiting for reasoning-agent to be ready..."
+      for i in $(seq 1 20); do
+        if curl -sf http://localhost:8008/health > /dev/null 2>&1; then
+          echo "✅ reasoning-agent is healthy on :8008"
+          curl -s http://localhost:8008/health
+          exit 0
+        fi
+        sleep 2
+      done
+      echo "❌ reasoning-agent did not start within 40s — check logs:"
+      echo "   tail -50 /app/.observability/reasoning_agent.log"
+      exit 1
+    triggeredBy:
+      - manual
+
+  run-step8-tests:
+    name: "Run Step 8 Reasoning Agent Tests"
+    description: اختبارات الخطوة 8 — reasoning-agent Prometheus metrics + MCTS + /metrics endpoint.
+    command: |
+      set -euo pipefail
+      export DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-dummy-key-for-tests}"
+      export OPENAI_API_KEY="${OPENAI_API_KEY:-}"
+      export SECRET_KEY="test-secret-key-for-step8-tests"
+      export ENVIRONMENT="testing"
+      export LLM_MOCK_MODE="1"
+      echo "🧪 Running Step 8 reasoning-agent tests..."
+      python -m pytest \
+        tests/microservices/reasoning_agent/test_step8_reasoning_agent_metrics.py \
+        -v --tb=short --no-header -q 2>&1 | tail -100
+      echo "✅ Step 8 tests complete."
     triggeredBy:
       - manual

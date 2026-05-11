@@ -11,7 +11,10 @@
 | `ci.yml` | `required-ci` | aggregator — fails if any required job fails |
 | `structure-validation.yml` | structure-validation | `scripts/validate_structure.py` |
 | `doc_integrity.yml` | doc-integrity | `CLAUDE.md` + `.memory/*` integrity, root scratch artifacts |
-| **`runtime_truth.yml`** | **runtime-truth-drift-check** | `scripts/runtime_truth.py --check` matches `.runtime/truth_table.lock.json` (NEW — this branch) |
+| **`runtime_truth.yml`** | **runtime-truth-drift-check** | `scripts/runtime_truth.py --check` matches `.runtime/truth_table.lock.json` |
+| `microservices-step6-planning-agent.yml` | step6-gate | prometheus-client + prom_metrics.py + /metrics + supervisor.sh + automations.yaml + prometheus.yml + dashboard + 61 tests |
+| `microservices-step7-research-agent.yml` | step7-gate | prometheus-client + tavily-python + prom_metrics.py + /metrics + supervisor.sh + automations.yaml + prometheus.yml + dashboard + 68 tests |
+| **`microservices-step8-reasoning-agent.yml`** | **step8-gate** | **prometheus-client + prom_metrics.py (11 metrics) + /metrics + ISS-039-B check + supervisor.sh (STEP 4H) + automations.yaml + prometheus.yml (step=8) + dashboard (UID cogniforge-ms-step8-reasoning-agent) + 79 tests (NEW — 2026-05-11)** |
 
 ## What the runtime-truth gate catches
 - A new importer of a `ZOMBIE` / `DORMANT` module from a live anchor (`app/api/`, `app/main.py`, `app/kernel.py`, `app/middleware/`) without an accompanying lock-file update.

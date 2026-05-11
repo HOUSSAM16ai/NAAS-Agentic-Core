@@ -1,5 +1,5 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-10** | Branch: `feat/microservices-step7-research-agent`
+> Last updated: **2026-05-11** | Branch: `feat/microservices-step8-reasoning-agent`
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
 
 ## Golden rule
@@ -32,8 +32,9 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 | **user-service** | **8001** | **ACTIVE** | Step 5. uvicorn process. `/metrics` → 11 `cogniforge_user_*` metrics. Auto-starts via supervisor.sh when `DATABASE_URL` set. |
 | **planning-agent** | **8002** | **ACTIVE** | Step 6. uvicorn process. `/metrics` → 11 `cogniforge_planning_*` metrics. DSPy+LangGraph (fallback when no OPENROUTER_API_KEY). Requires `postgresql+asyncpg://` URL (ISS-038-B). Auto-starts via supervisor.sh when `DATABASE_URL` set. |
 | **research-agent** | **8007** | **ACTIVE** | Step 7. uvicorn process. `/metrics` → 11 `cogniforge_research_*` metrics. Tavily web search ACTIVE when `TAVILY_API_KEY` set. ISS-039: lazy `_get_super_search()` singleton prevents import-time credential errors. Auto-starts via supervisor.sh when `DATABASE_URL` set. Live verified: `/health → {"step":"7","tavily_available":"true"}`. |
-| **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 10 dashboards (Steps 2–7). Prometheus datasource UP. |
-| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → Healthy`. 7 scrape targets: fastapi, grafana, prometheus, orchestrator-service(:8006), user-service(:8001), planning-agent(:8002), research-agent(:8007). |
+| **reasoning-agent** | **8008** | **ACTIVE** | Step 8. uvicorn process. `/metrics` → 11 `cogniforge_reasoning_*` metrics. MCTS always enabled. LLM: openrouter when `OPENROUTER_API_KEY` set, openai when `OPENAI_API_KEY` set, mock otherwise. ISS-039-B: `main.py` does NOT import `ai_service` at module level. Auto-starts via supervisor.sh when `DATABASE_URL` set. Live verified 2026-05-11: `/health → {"status":"healthy","step":"8","llm_backend":"openrouter","mcts_enabled":"true"}` \| `/metrics → cogniforge_reasoning_startup_info{...,step="8",...} 1.0`. |
+| **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 11 dashboards (Steps 2–8). Prometheus datasource UP. |
+| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → Healthy`. 8 scrape targets: fastapi, grafana, prometheus, orchestrator-service(:8006), user-service(:8001), planning-agent(:8002), research-agent(:8007), reasoning-agent(:8008). |
 | **Redis** | **6379** | **ACTIVE (process only)** | ping OK. REDIS_URL not set → app uses InMemoryCache. |
 | **PostgreSQL** | **6543** | **ACTIVE** | PostgreSQL 17.6 Supabase PgBouncer. database:ok confirmed. |
 | **OpenRouter** | external | **ACTIVE** | Primary: nvidia/nemotron-3-super-120b-a12b:free. Live graph call confirmed. |
@@ -179,6 +180,12 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 | 45 | Step 6 CI gate | `.github/workflows/microservices-step6-planning-agent.yml` | **ACTIVE** | 7-job workflow: static-checks / compose-gate / dashboard-gate / lint / step6-tests (61) / step5-regression / pr-summary. PR comment with results. |
 | 46 | docker-compose.step6.yml | `docker-compose.step6.yml` | **REFERENCE (Docker environments only)** | Docker Compose stack: orchestrator-service + user-service + planning-agent. In Codespaces: supervisor.sh is the activation path. For local Docker: `docker compose -f docker-compose.step6.yml up -d`. |
 | 47 | Ona automation — planning-agent | `.ona/automations.yaml` | **ACTIVE** | service: `planning-agent` (uvicorn start/ready/stop). tasks: `verify-step6-planning-agent`, `restart-planning-agent`, `run-step6-tests`, `docker-compose-stack`. |
+| 48 | reasoning-agent (Step 8 — MCTS + LLM + /metrics) | `microservices/reasoning_agent/` + `supervisor.sh:launch_reasoning_agent()` | **ACTIVE (auto at boot when DATABASE_URL set)** | Step 8: MCTS always enabled. LLM via openrouter/openai/mock. /metrics endpoint returns prometheus_client text format. prom_metrics.py: 11 metrics (reasoning_requests_*, reasoning_invocations_*, reasoning_mcts_*, reasoning_llm_*, reasoning_fallback_*, startup_info{step="8",llm_backend=...,mcts_enabled="true"}). Port 8008. ISS-039-B: no import-time AIService instantiation in main.py. |
+| 49 | native/prometheus.yml — reasoning-agent scrape (Step 8) | `observability/native/prometheus.yml` | **ACTIVE (target DOWN until process starts)** | job: reasoning-agent, target: localhost:8008/metrics, step="8". Scrapes prometheus_client text format. DOWN until supervisor.sh launches the process. |
+| 50 | prom_metrics.py — reasoning-agent Prometheus registry | `microservices/reasoning_agent/prom_metrics.py` | **ACTIVE (when reasoning-agent running)** | Independent CollectorRegistry. 11 metrics. export_prometheus_text() → /metrics endpoint. record_reasoning_invocation() / record_mcts_expansion() / record_llm_call() / set_startup_info() callable from routes.py and main.py. |
+| 51 | Grafana dashboard Step 8 | `observability/grafana/dashboards/110-microservices-step8-reasoning-agent.json` | **ACTIVE** | 20+ panels. UID: cogniforge-ms-step8-reasoning-agent. Refresh: 10s. Covers: startup_info, LLM backend, HTTP traffic, invocations (success/error/fallback), MCTS expansions, LLM calls/errors, microservices health matrix (steps 4-8), Prometheus scrape health, activation guide. |
+| 52 | Step 8 CI gate | `.github/workflows/microservices-step8-reasoning-agent.yml` | **ACTIVE** | 7-job workflow: static-checks / infrastructure-gate / dashboard-gate / lint / step8-tests (79) / regression-steps-4-7 / pr-summary. PR comment with results. |
+| 53 | Ona automation — reasoning-agent | `.ona/automations.yaml` | **ACTIVE** | service: `reasoning-agent` (uvicorn start/ready/stop on :8008). tasks: `verify-step8-reasoning-agent`, `restart-reasoning-agent`, `run-step8-tests`. |
 | 15 | Database | `app/core/database.py` | **ACTIVE** | PostgreSQL 17.6 Supabase. database:ok confirmed. |
 | 16 | Cache | `app/caching/factory.py` | **ACTIVE (InMemoryCache)** | REDIS_URL not set → InMemoryCache |
 | 17 | AI Gateway | `app/core/gateway/simple_client.py` | **ACTIVE** | nvidia/nemotron-3-super-120b-a12b:free. Live call confirmed. |

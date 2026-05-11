@@ -1,6 +1,33 @@
 # Architectural Decisions
 > Last updated: 2026-05-11 | Branch: `feat/microservices-step8-reasoning-agent`
 
+## D-039 · Skills Composition Pipeline — /compose Endpoint (2026-05-11)
+**Decision**: `orchestrator-service` يُحوَّل من خدمة مستقلة إلى **Composition Engine حقيقي** يستدعي `planning-agent`, `research-agent`, و`reasoning-agent` عبر HTTP مع `X-Correlation-ID` للتتبع الموزع. `/compose` endpoint جديد يُشغِّل الـ 3 Skills بالتوازي (planning+research) ثم reasoning مع السياق المُجمَّع.
+
+**Reason**: Skills Architecture (D-038) تتطلب Composition Layer حقيقي — orchestrator يجب أن يُركِّب النتائج من Skills مستقلة، لا أن يكون مجرد proxy. هذا هو الفرق بين "microservices موجودة" و"microservices تعمل معاً".
+
+**Implementation**:
+- `microservices/orchestrator_service/src/services/skills_pipeline.py` — Composition Engine
+- `asyncio.gather(planning, research)` → parallel execution → reasoning مع السياق
+- Fallback mode تلقائي: فشل أي Skill لا يوقف الـ Pipeline
+- `X-Correlation-ID` في كل طلب HTTP للتتبع الموزع
+- 6 مقاييس Prometheus جديدة: `cogniforge_pipeline_*`
+- `cogniforge_orchestrator_startup_info{pipeline_enabled="true"}` منذ Step 9
+
+**Live verified (2026-05-11)**:
+```
+POST /compose → {"pipeline_mode":"partial","skills_active":["research","reasoning"],"total_duration_ms":41.4}
+GET /metrics → cogniforge_pipeline_invocations_total{mode="partial"} 1.0
+              cogniforge_pipeline_skill_calls_total{skill="research",status="success"} 1.0
+              cogniforge_pipeline_skill_calls_total{skill="reasoning",status="success"} 1.0
+              cogniforge_orchestrator_startup_info{pipeline_enabled="true"} 1.0
+```
+
+**Config fix**: `service_map` في `config.py` كان يُعيِّن planning-agent على port 8001 (خطأ). صُحِّح إلى 8002.
+**supervisor.sh fix**: أُضيف `CODESPACES=true` + `PLANNING_AGENT_URL/RESEARCH_AGENT_URL/REASONING_AGENT_URL` في `launch_orchestrator_service()`.
+
+**Status**: IMPLEMENTED 2026-05-11 — branch `feat/microservices-step9-skills-pipeline`.
+
 ## D-038 · Skills Architecture as the Canonical AI Pattern (2026-05-11)
 **Decision**: كل قدرة ذكاء اصطناعي في النظام يجب أن تُبنى كـ **Skill** — microservice مستقل بمسؤولية واحدة، مدخلات/مخرجات محددة، مقاييس Prometheus، واختبارات قابلة للتشغيل. **Prompt Spaghetti محظور** كنمط معماري.
 

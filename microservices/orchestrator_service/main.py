@@ -195,14 +195,16 @@ async def lifespan(app: FastAPI):
 
     # ═══ PHASE 6: PROMETHEUS STARTUP INFO ═══════════════════════
     # يُسجِّل معلومات الإقلاع كـ gauge — تظهر فوراً في Grafana
+    # pipeline_enabled=True دائماً منذ Step 9 — /compose endpoint نشط
     set_startup_info(
         version=settings.SERVICE_VERSION,
         environment=settings.ENVIRONMENT,
         outbox_relay_enabled=settings.OUTBOX_RELAY_ENABLED,
         graph_ready=getattr(app.state, "app_graph", None) is not None,
+        pipeline_enabled=True,
     )
     logger.info(
-        "✅ Prometheus metrics registered — outbox_relay=%s graph_ready=%s",
+        "✅ Prometheus metrics registered — outbox_relay=%s graph_ready=%s pipeline_enabled=true",
         settings.OUTBOX_RELAY_ENABLED,
         getattr(app.state, "app_graph", None) is not None,
     )

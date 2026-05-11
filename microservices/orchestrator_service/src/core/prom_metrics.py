@@ -185,13 +185,54 @@ STATEGRAPH_ERRORS: Counter = _make_counter(
 )
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Skills Pipeline — مقاييس الـ Composition Engine (Step 9)
+# ═══════════════════════════════════════════════════════════════════════════
+
+PIPELINE_INVOCATIONS: Counter = _make_counter(
+    "cogniforge_pipeline_invocations_total",
+    "إجمالي استدعاءات Skills Pipeline منذ بدء الخدمة",
+    ["mode"],  # full | partial | fallback
+)
+
+PIPELINE_DURATION: Histogram = _make_histogram(
+    "cogniforge_pipeline_duration_seconds",
+    "زمن تنفيذ Skills Pipeline الكامل (planning + research + reasoning)",
+    ["mode"],
+    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0],
+)
+
+PIPELINE_SKILL_CALLS: Counter = _make_counter(
+    "cogniforge_pipeline_skill_calls_total",
+    "إجمالي استدعاءات كل Skill من الـ Pipeline",
+    ["skill", "status"],  # skill: planning|research|reasoning | status: success|fallback|error
+)
+
+PIPELINE_SKILL_DURATION: Histogram = _make_histogram(
+    "cogniforge_pipeline_skill_duration_seconds",
+    "زمن استجابة كل Skill في الـ Pipeline",
+    ["skill"],
+    buckets=[0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
+)
+
+PIPELINE_ERRORS: Counter = _make_counter(
+    "cogniforge_pipeline_errors_total",
+    "إجمالي أخطاء Skills Pipeline مصنَّفة حسب النوع",
+    ["error_type"],  # skill_unreachable | skill_timeout | skill_http_error | compose_error
+)
+
+PIPELINE_ACTIVE: Gauge = _make_gauge(
+    "cogniforge_pipeline_active_gauge",
+    "عدد طلبات Skills Pipeline النشطة حالياً",
+)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Startup Info
 # ═══════════════════════════════════════════════════════════════════════════
 
 STARTUP_INFO: Gauge = _make_gauge(
     "cogniforge_orchestrator_startup_info",
     "معلومات إقلاع orchestrator-service (قيمة 1 دائماً — الـ labels تحمل البيانات)",
-    ["version", "environment", "outbox_relay_enabled", "graph_ready"],
+    ["version", "environment", "outbox_relay_enabled", "graph_ready", "pipeline_enabled"],
 )
 
 
@@ -237,11 +278,43 @@ def record_outbox_relay_error() -> None:
     OUTBOX_RELAY_CYCLES.labels(result="error").inc()
 
 
+def record_pipeline_invocation(
+    mode: str,
+    duration_seconds: float,
+    skill_results: list[tuple[str, str, float]],
+) -> None:
+    """
+    يُسجِّل نتيجة استدعاء Skills Pipeline في Prometheus.
+
+    المدخلات:
+        mode: "full" | "partial" | "fallback"
+        duration_seconds: الزمن الكلي للـ Pipeline
+        skill_results: قائمة من (skill_name, status, duration_seconds)
+    """
+    PIPELINE_INVOCATIONS.labels(mode=mode).inc()
+    PIPELINE_DURATION.labels(mode=mode).observe(duration_seconds)
+
+    for skill, status, skill_duration in skill_results:
+        PIPELINE_SKILL_CALLS.labels(skill=skill, status=status).inc()
+        PIPELINE_SKILL_DURATION.labels(skill=skill).observe(skill_duration)
+
+
+def record_pipeline_error(error_type: str) -> None:
+    """يُسجِّل خطأ في Skills Pipeline."""
+    PIPELINE_ERRORS.labels(error_type=error_type).inc()
+
+
+def set_pipeline_active(count: int) -> None:
+    """يُحدِّث عداد الطلبات النشطة في الـ Pipeline."""
+    PIPELINE_ACTIVE.set(count)
+
+
 def set_startup_info(
     version: str,
     environment: str,
     outbox_relay_enabled: bool,
     graph_ready: bool,
+    pipeline_enabled: bool = True,
 ) -> None:
     """يُسجِّل معلومات الإقلاع كـ gauge بقيمة 1."""
     STARTUP_INFO.labels(
@@ -249,4 +322,5 @@ def set_startup_info(
         environment=environment,
         outbox_relay_enabled=str(outbox_relay_enabled).lower(),
         graph_ready=str(graph_ready).lower(),
+        pipeline_enabled=str(pipeline_enabled).lower(),
     ).set(1)

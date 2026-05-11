@@ -1,5 +1,128 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step8-reasoning-agent`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step9-skills-pipeline`
+
+---
+
+## ✅ Session: 2026-05-11 — Microservices Step 9: Skills Composition Pipeline (الخطوة الانتقالية التاسعة)
+
+**Branch**: `feat/microservices-step9-skills-pipeline`
+**Mode**: Live code changes — Codespaces native (no Docker). uvicorn processes only.
+**Verified**: 87 tests pass | ruff clean | Live /compose ✅ | Live /metrics ✅ | pipeline_mode="partial" confirmed
+
+### الخطوة الانتقالية المختارة (D-039 — تنفيذ)
+تحويل `orchestrator-service` من خدمة مستقلة إلى **Composition Engine حقيقي** يستدعي `planning-agent:8002`, `research-agent:8007`, و`reasoning-agent:8008` عبر HTTP حقيقي مع `X-Correlation-ID`. هذا هو أول **cross-service call حقيقي** في النظام — Skills تعمل معاً لأول مرة.
+
+### التغييرات المُنجزة
+
+#### 1. `microservices/orchestrator_service/src/services/skills_pipeline.py` — وحدة جديدة
+- `run_skills_pipeline(query, correlation_id)` — الدالة الرئيسية
+- `asyncio.gather(planning, research)` — planning+research بالتوازي لتقليل الزمن
+- `_call_planning_skill()` → `POST planning-agent:8002/execute` action="generate_plan"
+- `_call_research_skill()` → `POST research-agent:8007/execute` action="search"
+- `_call_reasoning_skill()` → `POST reasoning-agent:8008/execute` action="reason" مع السياق المُجمَّع
+- `_compose_answer()` — يُركِّب الإجابة: reasoning أولاً → research → plan
+- `_determine_pipeline_mode()` → "full" | "partial" | "fallback"
+- Fallback تلقائي: `ConnectError` / `TimeoutException` → `SkillResult(status="fallback")`
+- `X-Correlation-ID` في كل طلب HTTP
+- `_SKILL_TIMEOUT_SECONDS = 10.0`
+
+#### 2. `microservices/orchestrator_service/src/core/prom_metrics.py` — 6 مقاييس جديدة
+- `cogniforge_pipeline_invocations_total{mode=full|partial|fallback}`
+- `cogniforge_pipeline_duration_seconds{mode=...}`
+- `cogniforge_pipeline_skill_calls_total{skill=planning|research|reasoning, status=success|fallback|error}`
+- `cogniforge_pipeline_skill_duration_seconds{skill=...}`
+- `cogniforge_pipeline_errors_total{error_type=...}`
+- `cogniforge_pipeline_active_gauge`
+- `cogniforge_orchestrator_startup_info` — أُضيف label `pipeline_enabled`
+- دوال: `record_pipeline_invocation()`, `record_pipeline_error()`, `set_pipeline_active()`
+
+#### 3. `microservices/orchestrator_service/src/api/routes.py` — `/compose` endpoint جديد
+- `ComposeRequest(query, correlation_id)` — Pydantic model
+- `ComposeResponse(correlation_id, query, composed_answer, pipeline_mode, skills_active, total_duration_ms, plan, research, reasoning)`
+- `SkillResultSchema` — schema لكل Skill result
+- يُسجِّل `record_pipeline_invocation()` + `set_pipeline_active()` بعد كل طلب
+- يُعيد `HTTPException(502)` عند فشل الـ Pipeline الكامل
+
+#### 4. `microservices/orchestrator_service/src/core/config.py` — إصلاح الـ ports
+- `planning-agent`: 8001 (خطأ) → **8002** (صحيح)
+- `user-service`: 8003 (خطأ) → **8001** (صحيح)
+- `memory-agent`: 8002 (خطأ) → **8009** (مؤقت)
+
+#### 5. `microservices/orchestrator_service/main.py`
+- `set_startup_info(..., pipeline_enabled=True)` — يُسجِّل pipeline_enabled في Prometheus
+
+#### 6. `.devcontainer/supervisor.sh`
+- `launch_orchestrator_service()` — أُضيف `CODESPACES=true` + URLs الـ 4 Skills
+
+#### 7. `.ona/automations.yaml`
+- service `orchestrator-service` — أُضيف `CODESPACES=true` + URLs الـ 4 Skills
+- task `verify-step9-skills-pipeline` — تحقق شامل حي
+- task `run-step9-tests` — 87 اختبار
+
+#### 8. `observability/native/prometheus.yml`
+- scrape target جديد: `job_name: skills-pipeline` → `localhost:8006/metrics` مع `step="9"`
+
+#### 9. `observability/grafana/dashboards/120-microservices-step9-skills-pipeline.json` — Dashboard جديد
+- 12 panels | UID: `cogniforge-ms-step9-pipeline` | refresh: 10s
+- Row 1: Startup Info + Pipeline Invocations + Full Rate + P95 Latency + Active + Errors
+- Row 2: Invocations by Mode + Duration P50/P95/P99
+- Row 3: Skill Calls Rate (Success/Fallback/Error) + Skill Duration P95 by Skill
+- Row 4: Health Matrix (Steps 4-9) + Step 9 Activation Guide
+
+#### 10. `.github/workflows/microservices-step9-skills-pipeline.yml` — CI gate جديد
+- 7 jobs: static-checks / prometheus-gate / dashboard-gate / lint / step9-tests / regression-steps-4-8 / pr-summary
+- يتحقق من: skills_pipeline.py, asyncio.gather, X-Correlation-ID, /compose, pipeline metrics, ports, dashboard
+
+#### 11. `tests/microservices/orchestrator_service/test_step9_skills_pipeline.py` — 87 اختبار
+- S1: skills_pipeline.py بنية (17 اختبارات)
+- S2: prom_metrics.py مقاييس Pipeline (11 اختبارات)
+- S3: routes.py /compose endpoint (11 اختبارات)
+- S4: config.py ports (5 اختبارات)
+- S5: Prometheus scrape config (4 اختبارات)
+- S6: Grafana dashboard (10 اختبارات)
+- S7: automations.yaml (6 اختبارات)
+- S8: unit tests skills_pipeline functions (11 اختبارات)
+- S9: unit tests prom_metrics pipeline functions (10 اختبارات)
+- S10: main.py pipeline_enabled (2 اختبارات)
+
+### التحقق الحي (مُنجَز 2026-05-11)
+```bash
+# /compose endpoint
+curl -X POST http://localhost:8006/compose \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "اشرح قانون نيوتن الثاني"}'
+# → {"pipeline_mode":"partial","skills_active":["research","reasoning"],"total_duration_ms":41.4}
+
+# Prometheus metrics
+curl http://localhost:8006/metrics | grep cogniforge_pipeline
+# → cogniforge_pipeline_invocations_total{mode="partial"} 1.0
+# → cogniforge_pipeline_skill_calls_total{skill="research",status="success"} 1.0
+# → cogniforge_pipeline_skill_calls_total{skill="reasoning",status="success"} 1.0
+# → cogniforge_orchestrator_startup_info{pipeline_enabled="true",...} 1.0
+
+# Grafana dashboard:
+# http://localhost:3001/d/cogniforge-ms-step9-pipeline
+```
+
+### الخدمات النشطة بعد Step 9
+| الخدمة | المنفذ | الحالة |
+|--------|--------|--------|
+| FastAPI monolith | :8000 | ✅ ACTIVE |
+| orchestrator-service | :8006 | ✅ ACTIVE (Step 4 + Step 9 /compose) |
+| user-service | :8001 | ✅ ACTIVE (Step 5) |
+| planning-agent | :8002 | ✅ ACTIVE (Step 6) |
+| research-agent | :8007 | ✅ ACTIVE (Step 7) |
+| reasoning-agent | :8008 | ✅ ACTIVE (Step 8) |
+| **Skills Pipeline** | **:8006/compose** | **✅ ACTIVE (Step 9 — جديد)** |
+| Grafana | :3001 | ✅ ACTIVE (12 dashboards) |
+| Prometheus | :9090 | ✅ ACTIVE (9 scrape targets) |
+
+### الخطوة التالية (Step 10)
+- تفعيل `conversation-service` على `:8003` (الخدمة السادسة)
+- أو: ترقية LangGraph checkpointer من MemorySaver إلى PostgresCheckpointer (ISS-020)
+- أو: تفعيل Redis الحقيقي (`CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0`)
+- أو: إضافة authentication للـ `/compose` endpoint (JWT token)
+- أو: تفعيل `memory-agent` على `:8009` لحفظ نتائج الـ Pipeline
 
 ---
 

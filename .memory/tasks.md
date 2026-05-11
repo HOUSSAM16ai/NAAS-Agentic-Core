@@ -1,6 +1,25 @@
 # Tasks — What Comes Next
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step8-reasoning-agent`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step9-skills-pipeline`
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## ✅ Resolved — Microservices Step 9: Skills Composition Pipeline (2026-05-11)
+
+### Step 9 — /compose endpoint + cross-service HTTP calls ✅ DONE
+- `microservices/orchestrator_service/src/services/skills_pipeline.py` — Composition Engine
+- `prom_metrics.py` — 6 new cogniforge_pipeline_* metrics + pipeline_enabled label
+- `routes.py` — /compose endpoint (ComposeRequest/ComposeResponse)
+- `config.py` — port fix: planning 8001→8002, user-service 8003→8001
+- `main.py` — pipeline_enabled=True in set_startup_info()
+- `supervisor.sh` — CODESPACES=true + Skills URLs in launch_orchestrator_service()
+- `.ona/automations.yaml` — CODESPACES=true + Skills URLs + verify-step9 + run-step9-tests tasks
+- `observability/native/prometheus.yml` — skills-pipeline scrape job, step="9"
+- `observability/grafana/dashboards/120-microservices-step9-skills-pipeline.json` — 12 panels
+- `.github/workflows/microservices-step9-skills-pipeline.yml` — 7-job CI gate
+- `tests/microservices/orchestrator_service/test_step9_skills_pipeline.py` — 87 tests pass
+- **Live verified**: POST /compose → pipeline_mode="partial", skills_active=["research","reasoning"]
+- **Live metrics**: cogniforge_pipeline_invocations_total{mode="partial"} 1.0 | startup_info{pipeline_enabled="true"} 1.0
 
 ---
 
@@ -18,7 +37,7 @@
 - `tests/microservices/reasoning_agent/test_step8_reasoning_agent_metrics.py` — 79 tests pass
 - **Live verified**: /health → step=8, llm_backend=openrouter | /metrics → startup_info 1.0
 
-### Step 9 — Skills Pipeline: ربط الـ Skills ببعضها (OPEN — الأولوية القصوى)
+### Step 9 — Skills Pipeline: ربط الـ Skills ببعضها ✅ DONE (2026-05-11)
 
 **الهدف**: تحويل الـ orchestrator من "خدمة منفصلة" إلى "Composition Engine" حقيقي يُركِّب Skills.
 
@@ -56,7 +75,7 @@ FastAPI monolith → orchestrator :8006 → compose([
 | research-agent (Retrieval) | :8007 | Step 7 | ✅ ACTIVE |
 | reasoning-agent (Reasoning) | :8008 | Step 8 | ✅ ACTIVE |
 
-### المرحلة الثانية: التوصيل (Step 9-11 — OPEN)
+### المرحلة الثانية: التوصيل (Step 10-11 — OPEN)
 
 **Step 9 — Skills Composition (الأولوية القصوى)**
 - ربط orchestrator بـ planning + research + reasoning عبر HTTP

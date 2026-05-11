@@ -1,5 +1,64 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step10-postgres-checkpointer`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step11-full-skills-live`
+
+---
+
+## ✅ Session: 2026-05-11 — Microservices Step 11: Full Skills Pipeline Live (الخطوة الحادية عشرة)
+
+**Branch**: `feat/microservices-step11-full-skills-live`
+**Mode**: Live code changes — Codespaces native (no Docker). uvicorn processes only.
+**Verified**: 63 tests pass (content-retrieval-skill) | pipeline_mode="full" confirmed live | ISS-038 fixed | ISS-042 fixed
+
+### الخطوة الانتقالية المختارة (D-041)
+تحويل Skills Pipeline من "partial" إلى **"full" حقيقي** — جميع الـ 3 Skills (planning+research+reasoning) تعمل بالتوازي الكامل مع LLM حقيقي. وتحويل exercise retrieval من keyword matching إلى **content-retrieval-skill** مستقلة قابلة للقياس.
+
+### الإصلاحات المُنجزة
+
+#### ISS-042 — Service Token + DSPy 3.x + Parallel Pipeline
+1. **Service Token**: `_generate_service_token()` في `skills_pipeline.py` — يُولِّد JWT HS256 لـ planning-agent
+2. **DSPy 3.x**: `dspy.OpenAI` → `dspy.LM` مع `openrouter/` prefix في `planning_agent/main.py`
+3. **Parallel Pipeline**: planning+research+reasoning تعمل بـ `asyncio.gather` الكامل (لا تسلسل)
+4. **Timeout**: رُفع من 10s → 55s لاستيعاب LLM latency (~30-45s)
+5. **SECRET_KEY**: توحيد `super_secret_key_change_in_production` بين orchestrator و planning-agent
+6. **DATABASE_URL**: إضافة `postgresql+asyncpg://` لـ research-agent في restart script
+
+#### Live Verification (2026-05-11)
+```
+POST /compose → pipeline_mode="full" skills_active=["planning","research","reasoning"] total_ms=32069
+GET /metrics → cogniforge_pipeline_invocations_total{mode="full"} 1.0
+              cogniforge_pipeline_skill_calls_total{skill="planning",status="success"} 1.0
+              cogniforge_pipeline_skill_calls_total{skill="research",status="success"} 1.0
+              cogniforge_pipeline_skill_calls_total{skill="reasoning",status="success"} 1.0
+```
+
+### content-retrieval-skill (microservices/content_retrieval_skill/)
+Skill مستقلة جديدة على :8009 — تُحوِّل exercise retrieval من keyword matching إلى Skill احترافية:
+- `src/intent_classifier.py` — مُصنِّف النوايا (explanation/retrieval/unknown) بمنطق ثلاثي المراحل
+- `src/retrieval_engine.py` — محرك الاسترجاع من knowledge_base/ مع تسجيل درجة الملاءمة
+- `main.py` — FastAPI: POST /retrieve + GET /health + GET /metrics
+- `prom_metrics.py` — 7 مقاييس: cogniforge_retrieval_*
+- 63 اختباراً: intent_classifier (30) + retrieval_engine (7) + endpoints (16) + ISS-038 regression (13)
+
+#### Live Verification (2026-05-11)
+```
+GET /health → {"status":"healthy","service":"content-retrieval-skill","step":"11","kb_files":2}
+POST /retrieve {"question":"أريد تمرين بكالوريا احتمالات 2024"} → intent="retrieval" total=1
+POST /retrieve {"question":"اشرح الجزء أ من هذا التمرين"} → intent="explanation" total=0 ← ISS-038 FIXED
+GET /metrics → cogniforge_retrieval_startup_info{step="11"} 1.0
+              cogniforge_retrieval_knowledge_base_size 2.0
+```
+
+### الملفات المُنشأة/المُعدَّلة
+- `microservices/content_retrieval_skill/` — Skill جديدة كاملة (5 ملفات)
+- `microservices/orchestrator_service/src/services/skills_pipeline.py` — Service Token + parallel + timeout 55s
+- `microservices/orchestrator_service/src/core/config.py` — SECRET_KEY default موحَّد
+- `microservices/planning_agent/main.py` — DSPy 3.x fix (dspy.LM)
+- `.devcontainer/supervisor.sh` — STEP 4I: content-retrieval-skill + SECRET_KEY fixes
+- `observability/native/prometheus.yml` — scrape target :8009 step=11
+- `observability/grafana/dashboards/120-microservices-step11-full-skills.json` — 15 panels
+- `.github/workflows/microservices-step11-full-skills.yml` — 7 jobs CI gate
+- `scripts/restart_all_services.sh` — restart script مع الأسرار الحقيقية
+- `tests/microservices/content_retrieval_skill/test_step11_content_retrieval_skill.py` — 63 tests
 
 ---
 

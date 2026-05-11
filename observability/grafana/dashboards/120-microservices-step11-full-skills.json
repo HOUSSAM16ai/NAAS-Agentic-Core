@@ -1,0 +1,192 @@
+{
+  "uid": "cogniforge-ms-step11-full-skills",
+  "title": "Step 11 — Full Skills Pipeline Live",
+  "description": "الخطوة 11: Skills Pipeline حي كامل — planning+research+reasoning بالتوازي + content-retrieval-skill + Postgres Checkpointer",
+  "tags": ["cogniforge", "step11", "skills", "pipeline"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Skills Pipeline — Full Mode Rate",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "rate(cogniforge_pipeline_invocations_total{mode=\"full\"}[5m])",
+        "legendFormat": "full/s"
+      }],
+      "options": { "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": 0 }] } } }
+    },
+    {
+      "id": 2,
+      "title": "Pipeline Mode Distribution",
+      "type": "piechart",
+      "gridPos": { "x": 4, "y": 0, "w": 5, "h": 4 },
+      "targets": [
+        { "expr": "cogniforge_pipeline_invocations_total{mode=\"full\"}", "legendFormat": "full" },
+        { "expr": "cogniforge_pipeline_invocations_total{mode=\"partial\"}", "legendFormat": "partial" },
+        { "expr": "cogniforge_pipeline_invocations_total{mode=\"fallback\"}", "legendFormat": "fallback" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Pipeline P95 Duration (s)",
+      "type": "stat",
+      "gridPos": { "x": 9, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(cogniforge_pipeline_duration_seconds_bucket[5m]))",
+        "legendFormat": "p95"
+      }],
+      "fieldConfig": { "defaults": { "unit": "s", "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 30 }, { "color": "red", "value": 55 }] } } }
+    },
+    {
+      "id": 4,
+      "title": "Checkpointer Backend",
+      "type": "stat",
+      "gridPos": { "x": 13, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "cogniforge_checkpointer_backend_info{backend=\"postgres\"}",
+        "legendFormat": "postgres"
+      }],
+      "options": { "colorMode": "background" },
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "1": { "text": "✅ Postgres", "color": "green" } } }] } }
+    },
+    {
+      "id": 5,
+      "title": "Skill Calls — Success Rate",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{status=\"success\",skill=\"planning\"}[5m])", "legendFormat": "planning ✅" },
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{status=\"success\",skill=\"research\"}[5m])", "legendFormat": "research ✅" },
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{status=\"success\",skill=\"reasoning\"}[5m])", "legendFormat": "reasoning ✅" },
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{status=\"error\"}[5m])", "legendFormat": "errors ❌" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 6,
+      "title": "Content Retrieval Skill — Intent Distribution",
+      "type": "piechart",
+      "gridPos": { "x": 12, "y": 4, "w": 6, "h": 6 },
+      "targets": [
+        { "expr": "cogniforge_retrieval_intent_total{intent=\"retrieval\"}", "legendFormat": "retrieval 📚" },
+        { "expr": "cogniforge_retrieval_intent_total{intent=\"explanation\"}", "legendFormat": "explanation 💬" },
+        { "expr": "cogniforge_retrieval_intent_total{intent=\"unknown\"}", "legendFormat": "unknown ❓" }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Content Retrieval — Hit vs Miss",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 10, "w": 8, "h": 5 },
+      "targets": [
+        { "expr": "rate(cogniforge_retrieval_hits_total[5m])", "legendFormat": "hits ✅" },
+        { "expr": "rate(cogniforge_retrieval_misses_total[5m])", "legendFormat": "misses ⚠️" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 8,
+      "title": "Retrieval P95 Duration (ms)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 10, "w": 4, "h": 5 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(cogniforge_retrieval_duration_seconds_bucket[5m])) * 1000",
+        "legendFormat": "p95 ms"
+      }],
+      "fieldConfig": { "defaults": { "unit": "ms", "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 200 }] } } }
+    },
+    {
+      "id": 9,
+      "title": "Knowledge Base Size",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 10, "w": 4, "h": 5 },
+      "targets": [{
+        "expr": "cogniforge_retrieval_knowledge_base_size",
+        "legendFormat": "files"
+      }],
+      "options": { "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "id": 10,
+      "title": "Checkpointer Writes/Reads",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 15, "w": 10, "h": 5 },
+      "targets": [
+        { "expr": "rate(cogniforge_checkpointer_writes_total{status=\"success\"}[5m])", "legendFormat": "writes ✅" },
+        { "expr": "rate(cogniforge_checkpointer_reads_total{status=\"hit\"}[5m])", "legendFormat": "reads hit ✅" },
+        { "expr": "rate(cogniforge_checkpointer_reads_total{status=\"miss\"}[5m])", "legendFormat": "reads miss" },
+        { "expr": "rate(cogniforge_checkpointer_errors_total[5m])", "legendFormat": "errors ❌" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 11,
+      "title": "Active Checkpoint Threads",
+      "type": "stat",
+      "gridPos": { "x": 10, "y": 15, "w": 4, "h": 5 },
+      "targets": [{
+        "expr": "cogniforge_checkpointer_active_threads",
+        "legendFormat": "threads"
+      }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 10 }] } } }
+    },
+    {
+      "id": 12,
+      "title": "Microservices Health Matrix (Steps 4–11)",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 5 },
+      "targets": [
+        { "expr": "up{job=\"orchestrator-service\"}", "legendFormat": "orchestrator :8006" },
+        { "expr": "up{job=\"user-service\"}", "legendFormat": "user-service :8001" },
+        { "expr": "up{job=\"planning-agent\"}", "legendFormat": "planning-agent :8002" },
+        { "expr": "up{job=\"research-agent\"}", "legendFormat": "research-agent :8007" },
+        { "expr": "up{job=\"reasoning-agent\"}", "legendFormat": "reasoning-agent :8008" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "✅ UP", "color": "green" }, "0": { "text": "❌ DOWN", "color": "red" } } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Orchestrator Startup Info",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 25, "w": 24, "h": 4 },
+      "targets": [{
+        "expr": "cogniforge_orchestrator_startup_info",
+        "legendFormat": "{{checkpointer_backend}} | graph={{graph_ready}} | relay={{outbox_relay_enabled}} | pipeline={{pipeline_enabled}}"
+      }]
+    },
+    {
+      "id": 14,
+      "title": "ISS-042 Fix — Service Token Auth (planning-agent calls)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 29, "w": 12, "h": 5 },
+      "targets": [
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{skill=\"planning\",status=\"success\"}[5m])", "legendFormat": "planning success (token OK)" },
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{skill=\"planning\",status=\"error\"}[5m])", "legendFormat": "planning error (token fail)" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 15,
+      "title": "DSPy Planning Duration (p50/p95)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 29, "w": 12, "h": 5 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(cogniforge_pipeline_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(cogniforge_pipeline_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    }
+  ]
+}

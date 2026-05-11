@@ -1,7 +1,7 @@
 # CogniForge — Project Context
-> Last updated: **2026-05-11** | Branch: `feat/microservices-step8-reasoning-agent`.
+> Last updated: **2026-05-11** | Branch: `feat/microservices-step11-full-skills-live`.
 > **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-11).
-> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` + `microservices-step3-live` + `microservices-step4` + `microservices-step5-user-service` + `microservices-step6-planning-agent` + `microservices-step7-research-agent` + `microservices-step8-reasoning-agent` (NEW).
+> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` + `microservices-step3-live` + `microservices-step4` + `microservices-step5-user-service` + `microservices-step6-planning-agent` + `microservices-step7-research-agent` + `microservices-step8-reasoning-agent` + `microservices-step11-full-skills` (NEW).
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)
@@ -27,7 +27,8 @@
 | Grafana | native binary | **3001** | ACTIVE — 11 dashboards (Steps 2–8) |
 | Prometheus | native binary | **9090** | ACTIVE — 8 scrape targets (fastapi, grafana, prometheus, orchestrator:8006, user:8001, planning:8002, research:8007, reasoning:8008) |
 | Routing Policy | ChatRoutingPolicy | — | ACTIVE — default: state_graph → /api/chat/messages (Step 2) |
-| orchestrator-service | uvicorn | **8006** | ACTIVE — Step 4, OUTBOX_RELAY=true, /metrics |
+| orchestrator-service | uvicorn | **8006** | ACTIVE — Step 11, pipeline_mode=full, /metrics, /compose, /checkpointer/status |
+| content-retrieval-skill | uvicorn | **8009** | ACTIVE — Step 11, intent_classifier + retrieval_engine, /metrics |
 | user-service | uvicorn | **8001** | ACTIVE — Step 5, /metrics |
 | planning-agent | uvicorn | **8002** | ACTIVE — Step 6, DSPy+LangGraph, /metrics |
 | research-agent | uvicorn | **8007** | ACTIVE — Step 7, Tavily web search, /metrics |

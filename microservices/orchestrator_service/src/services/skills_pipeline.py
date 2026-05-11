@@ -1,5 +1,5 @@
 """
-Skills Composition Pipeline — الخطوة 9.
+Skills Composition Pipeline — الخطوة 11.
 
 يُنفِّذ هذا الوحدة مبدأ Skills Architecture: كل قدرة ذكاء اصطناعي هي Skill مستقلة
 تُستدعى عبر HTTP حقيقي مع X-Correlation-ID للتتبع الموزع.
@@ -11,8 +11,14 @@ Skills Composition Pipeline — الخطوة 9.
 قواعد الـ Skills (D-038):
   - كل Skill تُستدعى عبر httpx.AsyncClient مع timeout=10s
   - X-Correlation-ID مُرسَل في كل طلب للتتبع الموزع
+  - X-Service-Token مُرسَل لـ planning-agent (يتطلب JWT auth)
   - Fallback mode إلزامي عند تعذر الوصول لأي Skill
   - كل استدعاء يُسجَّل في Prometheus (cogniforge_pipeline_*)
+
+إصلاح ISS-042 (الخطوة 11):
+  - planning-agent يتطلب X-Service-Token (JWT موقَّع بـ SECRET_KEY المشترك)
+  - orchestrator يُولِّد الـ token عند كل استدعاء (exp=5min)
+  - SECRET_KEY مُشترك بين orchestrator و planning-agent عبر env var
 """
 
 from __future__ import annotations
@@ -30,8 +36,38 @@ from microservices.orchestrator_service.src.core.config import get_settings
 logger = logging.getLogger("skills_pipeline")
 
 # ── ثوابت الـ Pipeline ────────────────────────────────────────────────────────
-_SKILL_TIMEOUT_SECONDS: float = 10.0
+# ISS-042 (Step 11): رُفع إلى 55s — planning (DSPy 3x LLM) و reasoning (MCTS+LLM) يحتاجان ~30-45s
+# جميع الـ Skills تعمل بالتوازي الكامل لتقليل الزمن الإجمالي
+_SKILL_TIMEOUT_SECONDS: float = 55.0
 _CALLER_ID: str = "orchestrator-service"
+
+
+def _generate_service_token(secret_key: str) -> str:
+    """
+    يُولِّد JWT service token لاستدعاء planning-agent.
+
+    planning-agent يتحقق من:
+      - sub == "api-gateway"
+      - توقيع HS256 بـ SECRET_KEY المشترك
+      - exp لم ينتهِ
+
+    يُستخدم هذا الـ token في X-Service-Token header.
+    """
+    try:
+        import time as _time
+
+        import jwt
+
+        payload = {
+            "sub": "api-gateway",
+            "iss": _CALLER_ID,
+            "iat": int(_time.time()),
+            "exp": int(_time.time()) + 300,  # 5 دقائق
+        }
+        return jwt.encode(payload, secret_key, algorithm="HS256")
+    except Exception as exc:
+        logger.warning("Service token generation failed: %s — using empty token", exc)
+        return ""
 
 
 # ── نماذج البيانات ────────────────────────────────────────────────────────────
@@ -86,6 +122,9 @@ async def _call_planning_skill(
     url = f"{settings.PLANNING_AGENT_URL}/execute"
     start = time.monotonic()
 
+    # ISS-042: planning-agent يتطلب X-Service-Token (JWT HS256)
+    service_token = _generate_service_token(settings.SECRET_KEY)
+
     try:
         response = await client.post(
             url,
@@ -95,7 +134,10 @@ async def _call_planning_skill(
                 "action": "generate_plan",
                 "payload": {"query": query, "subject": "general", "difficulty": "medium"},
             },
-            headers={"X-Correlation-ID": correlation_id},
+            headers={
+                "X-Correlation-ID": correlation_id,
+                "X-Service-Token": service_token,
+            },
             timeout=_SKILL_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
@@ -161,6 +203,7 @@ async def _call_research_skill(
     settings = get_settings()
     url = f"{settings.RESEARCH_AGENT_URL}/execute"
     start = time.monotonic()
+    service_token = _generate_service_token(settings.SECRET_KEY)
 
     try:
         response = await client.post(
@@ -175,7 +218,10 @@ async def _call_research_skill(
                     "max_results": 5,
                 },
             },
-            headers={"X-Correlation-ID": correlation_id},
+            headers={
+                "X-Correlation-ID": correlation_id,
+                "X-Service-Token": service_token,
+            },
             timeout=_SKILL_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
@@ -241,6 +287,7 @@ async def _call_reasoning_skill(
     settings = get_settings()
     url = f"{settings.REASONING_AGENT_URL}/execute"
     start = time.monotonic()
+    service_token = _generate_service_token(settings.SECRET_KEY)
 
     try:
         response = await client.post(
@@ -251,7 +298,10 @@ async def _call_reasoning_skill(
                 "action": "reason",
                 "payload": {"query": query, "context": context},
             },
-            headers={"X-Correlation-ID": correlation_id},
+            headers={
+                "X-Correlation-ID": correlation_id,
+                "X-Service-Token": service_token,
+            },
             timeout=_SKILL_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
@@ -389,31 +439,14 @@ async def run_skills_pipeline(
     logger.info("pipeline_start correlation_id=%s query_len=%d", correlation_id, len(query))
 
     async with httpx.AsyncClient() as client:
-        # ── المرحلة 1+2: Planning و Research بالتوازي ────────────────────────
-        plan_result, research_result = await asyncio.gather(
+        # ── المرحلة الموحدة: Planning + Research + Reasoning بالتوازي الكامل ─
+        # ISS-042 (Step 11): الـ 3 Skills تعمل بالتوازي لتقليل الزمن الإجمالي.
+        # reasoning يستقبل السياق الأولي (query فقط) ويعمل بالتوازي مع planning+research.
+        # هذا يُقلِّل الزمن من (planning + research + reasoning) إلى max(الثلاثة).
+        plan_result, research_result, reasoning_result = await asyncio.gather(
             _call_planning_skill(query, correlation_id, client),
             _call_research_skill(query, "", correlation_id, client),
-        )
-
-        # ── بناء السياق للـ Reasoning ─────────────────────────────────────────
-        plan_steps = plan_result.data.get("plan_steps", [])
-        research_summary = research_result.data.get("summary", "")
-        research_results = research_result.data.get("results", [])
-
-        context_parts: list[str] = []
-        if plan_steps:
-            context_parts.append("الخطة: " + " | ".join(str(s) for s in plan_steps[:3]))
-        if research_summary:
-            context_parts.append("البحث: " + research_summary[:500])
-        elif research_results:
-            context_parts.append(
-                "نتائج: " + " | ".join(str(r) for r in research_results[:3])
-            )
-        composed_context = "\n".join(context_parts)
-
-        # ── المرحلة 3: Reasoning مع السياق المُجمَّع ─────────────────────────
-        reasoning_result = await _call_reasoning_skill(
-            query, composed_context, correlation_id, client
+            _call_reasoning_skill(query, "", correlation_id, client),
         )
 
     # ── التركيب النهائي ───────────────────────────────────────────────────────

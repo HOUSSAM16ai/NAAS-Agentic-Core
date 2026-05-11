@@ -1,5 +1,28 @@
 # Architectural Decisions
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step8-reasoning-agent`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step11-full-skills-live`
+
+## D-041 · Full Skills Pipeline + content-retrieval-skill (2026-05-11)
+**Decision**: تحويل Skills Pipeline من "partial" إلى "full" حقيقي عبر 4 إصلاحات متزامنة:
+1. **ISS-042-A**: `_generate_service_token()` في `skills_pipeline.py` — JWT HS256 لـ planning-agent
+2. **ISS-042-B**: `dspy.LM` بدلاً من `dspy.OpenAI` (DSPy 3.x) في `planning_agent/main.py`
+3. **ISS-042-C**: `asyncio.gather` 3-way (planning+research+reasoning بالتوازي الكامل)
+4. **ISS-042-D**: timeout 55s لاستيعاب LLM latency (~30-45s)
+
+**content-retrieval-skill**: Skill مستقلة جديدة على :8009 تُحوِّل exercise retrieval من keyword matching إلى وحدة قابلة للقياس مع intent_classifier + retrieval_engine + 7 Prometheus metrics.
+
+**Reason**: pipeline_mode="partial" كان يعني أن planning-agent يفشل دائماً (HTTP 401 — missing Service Token) وأن reasoning-agent يعمل بـ mock (OPENROUTER_API_KEY لم يصل). الإصلاح يُحوِّل النظام من "microservices موجودة" إلى "microservices تعمل معاً فعلاً".
+
+**Live verified (2026-05-11)**:
+```
+POST /compose → pipeline_mode="full" skills_active=["planning","research","reasoning"] total_ms=32069
+GET /health (8009) → {"status":"healthy","step":"11","kb_files":2}
+POST /retrieve → intent="retrieval" total=1 (BAC 2024 exercise found)
+POST /retrieve (explanation) → intent="explanation" total=0 (ISS-038 FIXED)
+```
+
+**Status**: IMPLEMENTED 2026-05-11 — branch `feat/microservices-step11-full-skills-live`.
+
+
 
 ## D-039 · Skills Composition Pipeline — /compose Endpoint (2026-05-11)
 **Decision**: `orchestrator-service` يُحوَّل من خدمة مستقلة إلى **Composition Engine حقيقي** يستدعي `planning-agent`, `research-agent`, و`reasoning-agent` عبر HTTP مع `X-Correlation-ID` للتتبع الموزع. `/compose` endpoint جديد يُشغِّل الـ 3 Skills بالتوازي (planning+research) ثم reasoning مع السياق المُجمَّع.

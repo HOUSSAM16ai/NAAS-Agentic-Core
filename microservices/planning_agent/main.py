@@ -300,21 +300,27 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     setup_logging(settings.SERVICE_NAME)
 
-    # Configure DSPy
+    # Configure DSPy — ISS-042 (Step 11): dspy.OpenAI مُهمَل في DSPy 3.x، يجب dspy.LM
     if settings.OPENROUTER_API_KEY:
         dspy_module = _load_dspy()
         if dspy_module:
             try:
-                lm = dspy_module.OpenAI(
-                    model=settings.AI_MODEL,
-                    api_key=settings.OPENROUTER_API_KEY.get_secret_value(),
+                api_key = settings.OPENROUTER_API_KEY.get_secret_value()
+                # DSPy 3.x: dspy.LM مع litellm provider prefix
+                # openrouter/ prefix يُوجِّه litellm إلى OpenRouter API
+                model_name = settings.AI_MODEL
+                if not model_name.startswith("openrouter/"):
+                    model_name = f"openrouter/{model_name}"
+                lm = dspy_module.LM(
+                    model=model_name,
+                    api_key=api_key,
                     api_base=settings.AI_BASE_URL,
                     max_tokens=2000,
                 )
-                dspy_module.settings.configure(lm=lm)
-                logger.info("DSPy Configured successfully")
+                dspy_module.configure(lm=lm)
+                logger.info("DSPy configured with dspy.LM (DSPy 3.x) — model=%s", model_name)
             except Exception as e:
-                logger.error(f"Failed to configure DSPy: {e}")
+                logger.error("Failed to configure DSPy: %s", e)
         else:
             logger.warning("DSPy غير متاح، سيتم الاعتماد على الخطة الاحتياطية")
     else:

@@ -1,5 +1,40 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step12-conversation-service`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-user-routing-d045`
+
+---
+
+## ✅ Session: 2026-05-11 — D-045: End-to-End User Routing via Microservices
+
+**Goal**: توصيل الخدمات المصغرة لتجيب على المستخدمين فعلياً (وليس فقط تشغيلها).
+
+### Live Diagnosis Results
+- جميع الخدمات كانت ميتة (لا uvicorn يعمل) — بيئة جديدة بدون secrets.env
+- أُنشئ `.devcontainer/secrets.env` بالمفاتيح الحقيقية
+- شُغِّلت 8 خدمات بالتسلسل الصحيح مع المتغيرات البيئية الصحيحة
+
+### Fixes Applied
+| Issue | Fix |
+|-------|-----|
+| ISS-048 | `supervisor.sh`: `ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR=true` مضاف |
+| ISS-049 | `prometheus_client` مثبَّت + مضاف لـ `conversation_service/requirements.txt` |
+| ISS-050 | Chat routing مُثبَّت حياً: WS → Monolith → Orchestrator → Skills → LLM |
+
+### Live Evidence
+```
+POST /compose → pipeline_mode="full" | skills_active=["planning","research","reasoning"] | 28.5s
+WS /api/chat/ws → events: [conversation_init, assistant_delta×6, assistant_final]
+Answer: "قانون نيوتن الثاني ينص على أن القوة (F) = كتلة (m) × تسارع (a)..."
+Prometheus: 12/12 UP
+Grafana: 17 dashboards at :3001
+```
+
+### Files Changed
+- `.devcontainer/supervisor.sh` — `ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR=true`
+- `microservices/conversation_service/requirements.txt` — `prometheus_client>=0.20.0`
+- `.memory/issues.md` — ISS-048/049/050 documented
+- `.memory/runtime_truth.md` — D-045 results
+- `.memory/progress.md` — this entry
+- `CLAUDE.md` — D-045 entry
 
 ---
 

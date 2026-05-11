@@ -18,11 +18,83 @@
 - `tests/microservices/reasoning_agent/test_step8_reasoning_agent_metrics.py` — 79 tests pass
 - **Live verified**: /health → step=8, llm_backend=openrouter | /metrics → startup_info 1.0
 
-### Step 9 — Candidate options (OPEN)
-1. **Cross-service HTTP call**: reasoning-agent → research-agent (real inter-service communication)
-2. **Redis activation**: `CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0` (Redis process already running)
-3. **PostgresCheckpointer**: upgrade LangGraph from MemorySaver → PostgresCheckpointer (ISS-020)
-4. **conversation-service**: activate on :8003 (next dormant microservice)
+### Step 9 — Skills Pipeline: ربط الـ Skills ببعضها (OPEN — الأولوية القصوى)
+
+**الهدف**: تحويل الـ orchestrator من "خدمة منفصلة" إلى "Composition Engine" حقيقي يُركِّب Skills.
+
+**الخطوة المحددة**:
+ربط `orchestrator-service` بـ `planning-agent` + `research-agent` + `reasoning-agent` عبر HTTP حقيقي.
+عندها يصبح مسار الطلب:
+```
+FastAPI monolith → orchestrator :8006 → compose([
+    POST planning-agent:8002/plans,
+    POST research-agent:8007/execute,
+    POST reasoning-agent:8008/execute,
+]) → إجابة مُركَّبة
+```
+
+**الخيارات البديلة (أقل أولوية)**:
+- Redis activation: `CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0`
+- PostgresCheckpointer: upgrade LangGraph MemorySaver → PostgresCheckpointer (ISS-020)
+- conversation-service: activate on :8003
+
+---
+
+## 🗺️ خارطة طريق Skills Architecture (D-038)
+
+> المرجع: CLAUDE.md §0.5 + `.memory/decisions.md#D-038` + `.memory/runtime-rules.md`
+
+### المرحلة الأولى: البنية التحتية (✅ مكتملة — Steps 4-8)
+
+كل Skill له: `/health` + `/metrics` + `prom_metrics.py` + `supervisor.sh` + `automations.yaml` + Grafana dashboard + CI gate + 79+ اختبار.
+
+| Skill | المنفذ | الخطوة | الحالة |
+|-------|--------|--------|--------|
+| orchestrator (Composition) | :8006 | Step 4 | ✅ ACTIVE |
+| user-service (Identity) | :8001 | Step 5 | ✅ ACTIVE |
+| planning-agent (Planning) | :8002 | Step 6 | ✅ ACTIVE |
+| research-agent (Retrieval) | :8007 | Step 7 | ✅ ACTIVE |
+| reasoning-agent (Reasoning) | :8008 | Step 8 | ✅ ACTIVE |
+
+### المرحلة الثانية: التوصيل (Step 9-11 — OPEN)
+
+**Step 9 — Skills Composition (الأولوية القصوى)**
+- ربط orchestrator بـ planning + research + reasoning عبر HTTP
+- `orchestrator` يستدعي Skills بالتوازي أو بالتسلسل حسب الـ intent
+- مقاييس جديدة: `cogniforge_composition_skill_calls_total{skill,status}`
+- اختبار integration حقيقي: طلب واحد → 3 Skills → إجابة مُركَّبة
+
+**Step 10 — Chat Traffic Routing**
+- توجيه `OrchestratorClient` في الـ monolith إلى `orchestrator:8006` كـ primary (ليس fallback)
+- إزالة LangGraph local كـ de-facto handler
+- مقاييس: `cogniforge_routing_target_total{target="orchestrator"}` يرتفع
+
+**Step 11 — Redis Cache Skill**
+- تفعيل Redis الحقيقي (`REDIS_URL=redis://localhost:6379/0`)
+- Skills تستخدم Redis لـ caching النتائج المتكررة
+- مقياس: `cogniforge_cache_hit_total` vs `cogniforge_cache_miss_total`
+
+### المرحلة الثالثة: الإنتاج (Step 12+ — مستقبل)
+
+- **PostgresCheckpointer**: LangGraph يحفظ الـ state في Supabase (ISS-020)
+- **conversation-service** :8003: Skill مستقل لإدارة المحادثات
+- **memory-agent** :8004: Skill للذاكرة طويلة الأمد
+- **auditor-service** :8005: Skill للتدقيق والجودة
+
+### قانون كل خطوة جديدة (Skills Checklist)
+
+قبل فتح أي PR لـ Step جديد، يجب التحقق من:
+```
+[ ] Skill Contract مكتمل (health + metrics + execute + fallback)
+[ ] prom_metrics.py — CollectorRegistry مستقل — 11+ مقياساً
+[ ] supervisor.sh — launch_{skill}() — idempotent — STEP 4X
+[ ] automations.yaml — service + 3 tasks
+[ ] prometheus.yml — scrape target + step label
+[ ] Grafana dashboard — 15+ panels + UID صحيح
+[ ] CI gate — 7 jobs + 79+ اختبار
+[ ] Live verification — /health + /metrics حياً قبل الـ commit
+[ ] CLAUDE.md + .memory — محدَّثان يعكسان الواقع الجديد
+```
 
 ---
 

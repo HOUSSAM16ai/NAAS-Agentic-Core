@@ -31,6 +31,70 @@ The system must preserve the following principles permanently. Every future agen
 
 ---
 
+## 0.5. Skills Philosophy — The Architectural North Star
+
+**قانون لا يُخرق:** كل قدرة ذكاء اصطناعي في هذا النظام يجب أن تكون **Skill** — وحدة مستقلة قابلة للقياس والاختبار والاستبدال. لا يوجد "Prompt Spaghetti".
+
+### لماذا Skills وليس Prompts؟
+
+| | Prompt Spaghetti | Skill Architecture |
+|--|--|--|
+| الجودة | متوسطة في كل شيء | ممتازة في شيء واحد |
+| الاختبار | مستحيل | `pytest` عادي |
+| القياس | لا شيء | Prometheus metrics |
+| التحسين | يكسر كل شيء | مستقل تماماً |
+| التوسع | copy-paste | `compose([skill1, skill2])` |
+| عمر النظام | يموت مع النموذج | يعيش مع المنطق |
+
+### تعريف الـ Skill في هذا المشروع
+
+Skill = microservice يملك:
+1. **مسؤولية واحدة** — يفعل شيئاً واحداً فقط بشكل ممتاز
+2. **مدخلات ومخرجات محددة** — contract واضح عبر HTTP/JSON
+3. **مقاييس Prometheus** — `cogniforge_{skill}_invocations_total` + `duration_seconds`
+4. **اختبارات قابلة للتشغيل** — `pytest tests/microservices/{skill}/`
+5. **استقلالية كاملة** — لا يستورد من microservice آخر
+
+### الخدمات المصغرة كـ Skills (الحالة الراهنة)
+
+```
+orchestrator-service  :8006  ← Skill: التركيب والتوجيه (Composition)
+planning-agent        :8002  ← Skill: التخطيط (Planning)
+research-agent        :8007  ← Skill: البحث والاسترجاع (Retrieval)
+reasoning-agent       :8008  ← Skill: التفكير العميق MCTS (Reasoning)
+user-service          :8001  ← Skill: إدارة المستخدمين (Identity)
+```
+
+### مسار الطلب المستهدف (Skills Pipeline)
+
+```
+الآن (Prompt Spaghetti):
+  Browser → FastAPI monolith → LangGraph local (prompt واحد كبير)
+
+الهدف (Skills Architecture):
+  Browser → FastAPI → orchestrator → compose([
+      PlanningSkill.plan(query),        # ما الخطة؟
+      ResearchSkill.retrieve(context),  # ما المعلومات المتاحة؟
+      ReasoningSkill.reason(problem),   # ما الحل؟
+  ]) → إجابة مُركَّبة من skills متخصصة
+```
+
+### قواعد إلزامية لكل Skill جديد
+
+1. **Skill يجب أن يملك `/metrics` endpoint** — بدونه لا يُعتبر Skill حقيقياً
+2. **Skill يجب أن يملك اختبارات** — minimum: happy path + error path
+3. **Skill لا يستدعي Skill آخر مباشرة** — يمر عبر orchestrator فقط
+4. **Skill يُسجِّل كل invocation** — `record_{skill}_invocation(action, status, duration)`
+5. **Skill يعمل بدون الـ Skills الأخرى** — fallback mode إلزامي
+
+### قانون التحقق (Skill Reality Check)
+
+Skill حقيقي = **import + call chain + runtime evidence + metrics + tests**
+
+أي Skill يفتقد واحداً من هذه الخمسة → يُصنَّف DORMANT حتى يُثبت العكس.
+
+---
+
 ## 1. What This Project Does
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.

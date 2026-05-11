@@ -789,6 +789,55 @@ launch_research_agent >> "$APP_ROOT/.observability/research_agent.log" 2>&1 &
 lifecycle_info "✅ Research Agent initialization offloaded to background"
 
 # ==============================================================================
+# STEP 4H: Reasoning Agent (الخطوة 8 — MCTS + LLM + /metrics)
+# ==============================================================================
+
+launch_reasoning_agent() {
+    local REASONING_PORT="8008"
+    local REASONING_HEALTH="http://localhost:${REASONING_PORT}/health"
+    local REASONING_LOG_DIR="$APP_ROOT/.observability"
+    local REASONING_LOG="$REASONING_LOG_DIR/reasoning_agent.log"
+
+    mkdir -p "$REASONING_LOG_DIR"
+
+    # ── التحقق من توفر DATABASE_URL ──────────────────────────────────────────
+    if [ -z "${DATABASE_URL:-}" ]; then
+        lifecycle_warn "Reasoning Agent: DATABASE_URL not set — skipping launch"
+        return 0
+    fi
+
+    # ── idempotent: تجنب إطلاق نسخة ثانية ───────────────────────────────────
+    if pgrep -f "reasoning_agent.main:app.*${REASONING_PORT}" > /dev/null 2>&1; then
+        lifecycle_info "Reasoning Agent: already running on :${REASONING_PORT} — skipping"
+        return 0
+    fi
+
+    lifecycle_info "Reasoning Agent: launching uvicorn on :${REASONING_PORT}..."
+    lifecycle_info "             LLM: ${OPENROUTER_API_KEY:+✅ OpenRouter}${OPENROUTER_API_KEY:-⚠️  mock mode (no OPENROUTER_API_KEY)}"
+
+    REASONING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+    ENVIRONMENT="${ENVIRONMENT:-development}" \
+    SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}" \
+    PYTHONPATH="$APP_ROOT" \
+    uvicorn microservices.reasoning_agent.main:app \
+        --host 0.0.0.0 \
+        --port "$REASONING_PORT" \
+        --log-level info \
+        --no-access-log \
+        >> "$REASONING_LOG" 2>&1 &
+
+    local reasoning_pid=$!
+    lifecycle_info "Reasoning Agent: launched (PID=$reasoning_pid) — health at $REASONING_HEALTH"
+    lifecycle_info "             Logs: $REASONING_LOG"
+}
+
+# تشغيل في الخلفية — لا يحجب الـ supervisor
+launch_reasoning_agent >> "$APP_ROOT/.observability/reasoning_agent.log" 2>&1 &
+lifecycle_info "✅ Reasoning Agent initialization offloaded to background"
+
+# ==============================================================================
 # STEP 5: Health Check & Readiness (فحص الصحة والجاهزية)
 # ==============================================================================
 

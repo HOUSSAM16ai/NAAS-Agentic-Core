@@ -1,6 +1,30 @@
 # Tasks — What Comes Next
-> Last updated: 2026-05-10 | Branch: `feat/microservices-step3-live-activation`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step8-reasoning-agent`
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## ✅ Resolved — Microservices Step 8: Reasoning Agent Live Activation (2026-05-11)
+
+### Step 8 — reasoning-agent on :8008 ✅ DONE
+- `microservices/reasoning_agent/prom_metrics.py` — 11 Prometheus metrics, independent CollectorRegistry
+- `microservices/reasoning_agent/main.py` — /metrics + enhanced /health (step=8, llm_backend, mcts_enabled)
+- `microservices/reasoning_agent/src/api/routes.py` — prom_metrics integration in /execute
+- `supervisor.sh:launch_reasoning_agent()` — STEP 4H, auto-starts on :8008
+- `.ona/automations.yaml` — service + 3 tasks (verify/restart/test)
+- `observability/native/prometheus.yml` — scrape target :8008, step="8"
+- `observability/grafana/dashboards/110-microservices-step8-reasoning-agent.json` — 20+ panels
+- `.github/workflows/microservices-step8-reasoning-agent.yml` — 7-job CI gate
+- `tests/microservices/reasoning_agent/test_step8_reasoning_agent_metrics.py` — 79 tests pass
+- **Live verified**: /health → step=8, llm_backend=openrouter | /metrics → startup_info 1.0
+
+### Step 9 — Candidate options (OPEN)
+1. **Cross-service HTTP call**: reasoning-agent → research-agent (real inter-service communication)
+2. **Redis activation**: `CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0` (Redis process already running)
+3. **PostgresCheckpointer**: upgrade LangGraph from MemorySaver → PostgresCheckpointer (ISS-020)
+4. **conversation-service**: activate on :8003 (next dormant microservice)
+
+---
 
 ---
 

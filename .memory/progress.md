@@ -1,5 +1,118 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-10 | Branch: `feat/microservices-step7-research-agent`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step8-reasoning-agent`
+
+---
+
+## ✅ Session: 2026-05-11 — Microservices Step 8: Reasoning Agent Live Activation (الخطوة الانتقالية الثامنة)
+
+**Branch**: `feat/microservices-step8-reasoning-agent`
+**Mode**: Live code changes — Codespaces native (no Docker). uvicorn processes only.
+**Verified**: 79 tests pass | ruff clean | JSON valid | YAML valid | Live health ✅ | Live metrics ✅
+
+### الخطوة الانتقالية المختارة (D-037 — تنفيذ)
+تفعيل `reasoning-agent` كـ uvicorn process مستقل على `:8008` مع `/metrics` endpoint حقيقي بصيغة Prometheus. MCTS (Monte Carlo Tree Search) حي دائماً. LLM (OpenRouter/OpenAI) حي عند توفر المفتاح — mock mode بدونه. هذا يُحوِّل الخدمة الخامسة من DORMANT إلى ACTIVE في Codespaces، ويُضيف 11 مقياساً جديداً قابلاً للقياس الحي في Grafana.
+
+### إصلاح مُطبَّق (ISS-039-B — lazy AIService singleton)
+`AIService()` كان يُنشأ عند import وقت التحميل في `ai_service.py` → `OpenAIError: Missing credentials` عند الإقلاع بدون `OPENAI_API_KEY`. الإصلاح في `main.py`: لا يستورد `ai_service` مباشرةً — الـ routes تستخدم `reasoning_workflow` الذي يستدعي `ai_service` عند الحاجة فقط.
+
+### التغييرات المُنجزة
+
+#### 1. `microservices/reasoning_agent/requirements.txt`
+- أضيف `prometheus-client>=0.20.0`
+
+#### 2. `microservices/reasoning_agent/prom_metrics.py` — وحدة جديدة
+- `CollectorRegistry` مستقل (لا يشارك REGISTRY الافتراضي)
+- 11 مقياساً: `cogniforge_reasoning_requests_total`, `cogniforge_reasoning_request_duration_seconds`, `cogniforge_reasoning_active_connections`, `cogniforge_reasoning_invocations_total`, `cogniforge_reasoning_invocation_duration_seconds`, `cogniforge_reasoning_mcts_expansions_total`, `cogniforge_reasoning_mcts_errors_total`, `cogniforge_reasoning_llm_calls_total`, `cogniforge_reasoning_llm_errors_total`, `cogniforge_reasoning_fallback_responses_total`, `cogniforge_reasoning_startup_info{step="8",llm_backend=...,mcts_enabled="true"}`
+- استيراد دفاعي (try/except ImportError) — stub classes عند غياب prometheus_client
+- دوال عامة: `export_prometheus_text()`, `set_startup_info()`, `record_http_request()`, `record_reasoning_invocation()`, `record_mcts_expansion()`, `record_mcts_error()`, `record_llm_call()`, `record_llm_error()`, `record_fallback_response()`, `set_active_connections()`, `get_request_timer()`, `elapsed_since()`
+
+#### 3. `microservices/reasoning_agent/main.py`
+- استيراد `prom_metrics`
+- `/metrics` endpoint جديد → `export_prometheus_text()` → Prometheus text format
+- `/health` endpoint محسَّن → يُعيد `step`, `llm_backend`, `mcts_enabled`
+- `set_startup_info()` في lifespan
+- `_detect_llm_backend()` — يكتشف openrouter/openai/mock من env vars
+- لا يستورد `ai_service` مباشرةً (ISS-039-B)
+
+#### 4. `microservices/reasoning_agent/src/api/routes.py`
+- استيراد `prom_metrics`
+- `record_reasoning_invocation()` + `record_mcts_error()` + `record_fallback_response()` + `record_http_request()` في `/execute`
+- حُذف `/health` المكرر (مُعرَّف في main.py)
+
+#### 5. `.devcontainer/supervisor.sh`
+- `launch_reasoning_agent()` — STEP 4H جديد
+- يُشغِّل uvicorn على `:8008` تلقائياً عند توفر `DATABASE_URL`
+- `OPENROUTER_API_KEY` محقون — LLM يعمل عند توفر المفتاح
+- idempotent: يتحقق من الـ process قبل الإطلاق
+- لا يحتاج asyncpg URL conversion (reasoning-agent لا يستخدم DB مباشرةً)
+
+#### 6. `.ona/automations.yaml`
+- service `reasoning-agent`: uvicorn start/ready/stop على :8008
+- `ready` command يتحقق من `/health` و `/metrics | grep cogniforge_reasoning_startup_info`
+- task `verify-step8-reasoning-agent`: تقرير شامل (health + metrics + LLM + Prometheus + Grafana + health matrix)
+- task `restart-reasoning-agent`: إعادة تشغيل يدوي
+- task `run-step8-tests`: يُشغِّل 79 اختبار Step 8
+- تحديث header التعليق ليعكس Step 8
+
+#### 7. `observability/native/prometheus.yml`
+- scrape target جديد: `job_name: reasoning-agent` → `localhost:8008/metrics`
+- label `step: "8"` + `service: reasoning-agent` + `tier: microservice`
+
+#### 8. `observability/grafana/dashboards/110-microservices-step8-reasoning-agent.json` — Dashboard جديد
+- 20+ panels | UID: `cogniforge-ms-step8-reasoning-agent` | refresh: 10s
+- Row 1: Startup Info + LLM Backend + HTTP Rate + P95 Latency + Total Invocations + Active Connections
+- Row 2: HTTP Requests by Endpoint & Status + HTTP Latency P50/P95/P99
+- Row 3: Invocations Rate (Success/Error/Fallback) + Invocation Duration P50/P95 + MCTS Expansions by Depth
+- Row 4: LLM Calls Rate (Success vs Error) + LLM Errors by Type + Fallback Responses by Reason
+- Row 5: Microservices Health Matrix (all steps 4-8) + Prometheus Scrape Duration
+- Row 6: Step 8 Activation Guide (markdown)
+
+#### 9. `.github/workflows/microservices-step8-reasoning-agent.yml` — CI gate جديد
+- 7 jobs: `static-checks` / `infrastructure-gate` / `dashboard-gate` / `lint` / `step8-tests` / `regression-steps-4-7` / `pr-summary`
+- يتحقق من: prometheus-client في requirements، prom_metrics.py موجود، /metrics في main.py، ISS-039-B، supervisor.sh، automations.yaml، prometheus.yml، dashboard صالح
+- PR comment تلخيصي مع جدول النتائج وأوامر التحقق الحي
+
+#### 10. `tests/microservices/reasoning_agent/test_step8_reasoning_agent_metrics.py` — 79 اختبار
+- R1: prometheus-client في requirements.txt (3 اختبارات)
+- R2: prom_metrics.py موجود ويحتوي المقاييس الصحيحة (24 اختبارات)
+- R3: main.py — /metrics + /health + step=8 + ISS-039-B (8 اختبارات)
+- R4: supervisor.sh يُشغِّل reasoning-agent (6 اختبارات)
+- R5: automations.yaml يحتوي reasoning-agent (8 اختبارات)
+- R6: Prometheus scrape config صحيح (5 اختبارات)
+- R7: Grafana dashboard صالح (10 اختبارات)
+- R8: unit tests للـ prom_metrics functions (15 اختبارات)
+
+### التحقق الحي (مُنجَز 2026-05-11)
+```bash
+curl http://localhost:8008/health
+# → {"status":"healthy","service":"reasoning-agent","step":"8","llm_backend":"openrouter","mcts_enabled":"true"}
+
+curl http://localhost:8008/metrics | grep cogniforge_reasoning_startup_info
+# → cogniforge_reasoning_startup_info{environment="development",llm_backend="openrouter",mcts_enabled="true",step="8",version="1.0.0"} 1.0
+
+# Grafana dashboard:
+# http://localhost:3001/d/cogniforge-ms-step8-reasoning-agent
+```
+
+### الخدمات النشطة بعد Step 8
+| الخدمة | المنفذ | الحالة |
+|--------|--------|--------|
+| FastAPI monolith | :8000 | ✅ ACTIVE |
+| orchestrator-service | :8006 | ✅ ACTIVE (Step 4) |
+| user-service | :8001 | ✅ ACTIVE (Step 5) |
+| planning-agent | :8002 | ✅ ACTIVE (Step 6) |
+| research-agent | :8007 | ✅ ACTIVE (Step 7) |
+| **reasoning-agent** | **:8008** | **✅ ACTIVE (Step 8 — جديد)** |
+| Grafana | :3001 | ✅ ACTIVE (11 dashboards) |
+| Prometheus | :9090 | ✅ ACTIVE (8 scrape targets) |
+
+### الخطوة التالية (Step 9)
+- ربط reasoning-agent بـ research-agent عبر HTTP (cross-service call حقيقي)
+- أو: تفعيل Redis الحقيقي (`CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0`)
+- أو: ترقية LangGraph checkpointer من MemorySaver إلى PostgresCheckpointer (ISS-020)
+- أو: تفعيل `conversation-service` على `:8003`
+
+---
 
 ---
 

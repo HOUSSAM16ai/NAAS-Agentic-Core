@@ -69,6 +69,8 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Live verification fix applied 2026-05-10 (ISS-038-B — asyncpg URL conversion):** `orchestrator-service` and `planning-agent` both failed to start with `sqlalchemy.exc.InvalidRequestError: The asyncio extension requires an async driver to be used. The loaded 'psycopg2' is not async.` Root cause: `DATABASE_URL` from Supabase uses `postgresql://` scheme which SQLAlchemy maps to psycopg2 (sync). `create_async_engine` requires `postgresql+asyncpg://`. Fix applied in `supervisor.sh` (both `launch_orchestrator_service()` and `launch_planning_agent()`) and `.ona/automations.yaml` (all start/restart commands): inline bash substitution converts the scheme and strips `sslmode` query param (asyncpg handles SSL via `connect_args`, not query string). Verified live: both services start and respond on `:8006` and `:8002`.
 
+**Microservices Step 8 applied 2026-05-11 (D-037 — Reasoning Agent Live Activation):** `reasoning-agent` activated as a **uvicorn process** on `:8008` (no Docker — Codespaces constraint). Fifth microservice to go ACTIVE. MCTS (Monte Carlo Tree Search) always enabled; LLM (OpenRouter/OpenAI) active when key present, mock mode otherwise. ISS-039-B applied: `AIService` is NOT instantiated at import time in `main.py` — lazy singleton pattern prevents `OpenAIError` at startup without API key. Six artefacts: (1) `microservices/reasoning_agent/requirements.txt` — `prometheus-client>=0.20.0` added; (2) `microservices/reasoning_agent/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_reasoning_requests_total`, `cogniforge_reasoning_request_duration_seconds`, `cogniforge_reasoning_active_connections`, `cogniforge_reasoning_invocations_total`, `cogniforge_reasoning_invocation_duration_seconds`, `cogniforge_reasoning_mcts_expansions_total`, `cogniforge_reasoning_mcts_errors_total`, `cogniforge_reasoning_llm_calls_total`, `cogniforge_reasoning_llm_errors_total`, `cogniforge_reasoning_fallback_responses_total`, `cogniforge_reasoning_startup_info{step="8",llm_backend=...,mcts_enabled="true"}`; (3) `microservices/reasoning_agent/main.py` — `/metrics` endpoint + enhanced `/health` (returns step/llm_backend/mcts_enabled) + `set_startup_info()` in lifespan; (4) `supervisor.sh:launch_reasoning_agent()` — STEP 4H, starts uvicorn on `:8008` at Codespace boot when `DATABASE_URL` set, injects `OPENROUTER_API_KEY`; (5) `.ona/automations.yaml` — service `reasoning-agent` + tasks `verify-step8-reasoning-agent`, `restart-reasoning-agent`, `run-step8-tests`; (6) `observability/native/prometheus.yml` — `reasoning-agent` scrape target at `localhost:8008` with `step="8"` label. Grafana dashboard `110-microservices-step8-reasoning-agent.json` (20+ panels, UID `cogniforge-ms-step8-reasoning-agent`, 10s refresh) at :3001. CI gate `.github/workflows/microservices-step8-reasoning-agent.yml` (7 jobs). 79 regression tests in `tests/microservices/reasoning_agent/test_step8_reasoning_agent_metrics.py`. **Live verified:** `GET /health → {"status":"healthy","service":"reasoning-agent","step":"8","llm_backend":"openrouter","mcts_enabled":"true"}` | `GET /metrics → cogniforge_reasoning_startup_info{...,step="8",...} 1.0`.
+
 **Microservices Step 6 applied 2026-05-10 (D-035 — Planning Agent Live Activation + Docker Compose Stack):** `planning-agent` activated as a **uvicorn process** on `:8002` (no Docker — Codespaces constraint). Third microservice to go ACTIVE. DSPy + LangGraph with fallback chain when `OPENROUTER_API_KEY` absent. Eight artefacts: (1) `microservices/planning_agent/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics: `cogniforge_planning_requests_total`, `cogniforge_planning_request_duration_seconds`, `cogniforge_planning_active_connections`, `cogniforge_planning_plans_total`, `cogniforge_planning_plan_duration_seconds`, `cogniforge_planning_dspy_invocations_total`, `cogniforge_planning_dspy_errors_total`, `cogniforge_planning_fallback_plans_total`, `cogniforge_planning_db_operations_total`, `cogniforge_planning_db_duration_seconds`, `cogniforge_planning_startup_info{step="6",dspy_available=...}`; (2) `microservices/planning_agent/main.py` — `/metrics` endpoint + `set_startup_info()` in lifespan; (3) `supervisor.sh:launch_planning_agent()` — STEP 4F, starts uvicorn on `:8002` at Codespace boot when `DATABASE_URL` is set; (4) `.ona/automations.yaml` — service `planning-agent` + tasks `verify-step6-planning-agent`, `restart-planning-agent`, `run-step6-tests`, `docker-compose-stack`; (5) `observability/native/prometheus.yml` — `planning-agent` scrape target at `localhost:8002` with `step="6"` label; (6) `docker-compose.step6.yml` — Docker Compose stack with orchestrator-service + user-service + planning-agent (for non-Codespaces Docker environments); (7) Grafana dashboard `90-microservices-step6-planning-agent.json` (20 panels, UID `cogniforge-ms-step6-planning-agent`, 10s refresh) at :3001; (8) CI gate `.github/workflows/microservices-step6-planning-agent.yml` (7 jobs). 61 regression tests in `tests/microservices/planning_agent/test_step6_planning_agent_metrics.py`.
 
 
@@ -108,9 +110,9 @@ Browser
                     ├── /v1/content/*
                     └── /api/v1/data-mesh/*
 
-Infrastructure (verified live 2026-05-09, Steps 3-6 added 2026-05-10):
-  Grafana    → port 3001  (grafana.ini says 3000 but provisioning CLI overrides) — 9 dashboards
-  Prometheus → port 9090
+Infrastructure (verified live 2026-05-09, Steps 3-8 added 2026-05-10/11):
+  Grafana    → port 3001  (grafana.ini says 3000 but provisioning CLI overrides) — 11 dashboards
+  Prometheus → port 9090  (8 scrape targets: fastapi + grafana + prometheus + 5 microservices)
   Redis      → port 6379  (process running but app uses InMemoryCache — REDIS_URL not set)
   PostgreSQL → Supabase PgBouncer :6543 (19 users, 2098 customer_messages, 3038 admin_messages)
 
@@ -129,6 +131,18 @@ Step 6 (uvicorn process — auto-starts via supervisor.sh when DATABASE_URL set)
   DB: Supabase shared (PLANNING_DATABASE_URL = DATABASE_URL)
   Prometheus scrape: localhost:8002/metrics (native/prometheus.yml, step="6")
   Docker Compose stack: docker-compose.step6.yml (orchestrator + user-service + planning-agent)
+
+Step 7 (uvicorn process — auto-starts via supervisor.sh when DATABASE_URL set):
+  research-agent        → port 8007  (uvicorn process, /metrics active, Tavily web search)
+  Tavily: ACTIVE when TAVILY_API_KEY set — disabled otherwise (no crash)
+  Prometheus scrape: localhost:8007/metrics (native/prometheus.yml, step="7")
+
+Step 8 (uvicorn process — auto-starts via supervisor.sh when DATABASE_URL set):
+  reasoning-agent       → port 8008  (uvicorn process, /metrics active, MCTS+LLM)
+  LLM: openrouter when OPENROUTER_API_KEY set | openai when OPENAI_API_KEY set | mock otherwise
+  MCTS: ALWAYS enabled (no external dependency)
+  Prometheus scrape: localhost:8008/metrics (native/prometheus.yml, step="8")
+  Live verified 2026-05-11: GET /health → {"status":"healthy","step":"8","llm_backend":"openrouter","mcts_enabled":"true"}
 
 Step 7 (uvicorn process — auto-starts via supervisor.sh when DATABASE_URL set):
   research-agent        → port 8007  (uvicorn process, /metrics active, Tavily web search)

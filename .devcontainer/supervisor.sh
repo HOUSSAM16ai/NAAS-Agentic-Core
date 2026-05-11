@@ -714,9 +714,12 @@ launch_planning_agent() {
     lifecycle_info "PlanningAgent: starting on :${PLANNING_PORT} (Step 6 — /metrics active)..."
 
     # ── تشغيل uvicorn في الخلفية ──────────────────────────────────────────────
+    # ISS-042 (Step 11): SECRET_KEY يجب أن يتطابق مع orchestrator لقبول X-Service-Token
+    # planning-agent يقرأ SECRET_KEY (validation_alias) — ليس PLANNING_SECRET_KEY
     PLANNING_DATABASE_URL="$planning_db_url" \
+    OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     PLANNING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
-    PLANNING_SECRET_KEY="${SECRET_KEY:-cogniforge-planning-agent-dev-key}" \
+    SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
     PLANNING_ENVIRONMENT="${ENVIRONMENT:-development}" \
     PLANNING_SERVICE_NAME="planning-agent" \
     PLANNING_SERVICE_VERSION="1.0.0" \
@@ -771,11 +774,13 @@ launch_research_agent() {
 
     lifecycle_info "Research Agent: launching uvicorn on :${RESEARCH_PORT}..."
 
+    # ISS-042 (Step 11): TAVILY_API_KEY و OPENROUTER_API_KEY مُحقَنان صراحةً
     RESEARCH_DATABASE_URL="$_async_db" \
     RESEARCH_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
     ENVIRONMENT="${ENVIRONMENT:-development}" \
-    SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}" \
+    SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
     PYTHONPATH="$APP_ROOT" \
     uvicorn microservices.research_agent.main:app \
         --host 0.0.0.0 \
@@ -821,11 +826,12 @@ launch_reasoning_agent() {
     lifecycle_info "Reasoning Agent: launching uvicorn on :${REASONING_PORT}..."
     lifecycle_info "             LLM: ${OPENROUTER_API_KEY:+✅ OpenRouter}${OPENROUTER_API_KEY:-⚠️  mock mode (no OPENROUTER_API_KEY)}"
 
+    # ISS-042 (Step 11): OPENROUTER_API_KEY مُحقَن صراحةً لتفعيل LLM الحقيقي
     REASONING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
     ENVIRONMENT="${ENVIRONMENT:-development}" \
-    SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}" \
+    SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
     PYTHONPATH="$APP_ROOT" \
     uvicorn microservices.reasoning_agent.main:app \
         --host 0.0.0.0 \
@@ -842,6 +848,51 @@ launch_reasoning_agent() {
 # تشغيل في الخلفية — لا يحجب الـ supervisor
 launch_reasoning_agent >> "$APP_ROOT/.observability/reasoning_agent.log" 2>&1 &
 lifecycle_info "✅ Reasoning Agent initialization offloaded to background"
+
+# ==============================================================================
+# STEP 4I: Content Retrieval Skill (الخطوة 11 — Skill مستقلة + /metrics)
+# ==============================================================================
+# يُشغِّل content-retrieval-skill كـ uvicorn process مستقل على المنفذ 8009.
+# Step 11: intent_classifier + retrieval_engine + /metrics (cogniforge_retrieval_*).
+# لا يتطلب DB — يقرأ من knowledge_base/ مباشرة.
+# ISS-042: إصلاح Service Token + DSPy 3.x + parallel pipeline.
+# ==============================================================================
+
+launch_content_retrieval_skill() {
+    local RETRIEVAL_PORT="8009"
+    local RETRIEVAL_HEALTH="http://localhost:${RETRIEVAL_PORT}/health"
+    local RETRIEVAL_LOG_DIR="$APP_ROOT/.observability"
+    local RETRIEVAL_LOG="$RETRIEVAL_LOG_DIR/content_retrieval_skill.log"
+
+    mkdir -p "$RETRIEVAL_LOG_DIR"
+
+    # ── idempotent: تجنب إطلاق نسخة ثانية ───────────────────────────────────
+    if pgrep -f "content_retrieval_skill.main:app" > /dev/null 2>&1; then
+        lifecycle_info "Content Retrieval Skill: already running on :${RETRIEVAL_PORT} — skipping"
+        return 0
+    fi
+
+    lifecycle_info "Content Retrieval Skill: launching uvicorn on :${RETRIEVAL_PORT} (Step 11)..."
+
+    KB_ROOT="${APP_ROOT}/knowledge_base" \
+    ENVIRONMENT="${ENVIRONMENT:-development}" \
+    PYTHONPATH="$APP_ROOT" \
+    uvicorn microservices.content_retrieval_skill.main:app \
+        --host 0.0.0.0 \
+        --port "$RETRIEVAL_PORT" \
+        --log-level info \
+        --no-access-log \
+        >> "$RETRIEVAL_LOG" 2>&1 &
+
+    local retrieval_pid=$!
+    lifecycle_info "Content Retrieval Skill: launched (PID=$retrieval_pid) — health at $RETRIEVAL_HEALTH"
+    lifecycle_info "             Logs: $RETRIEVAL_LOG"
+    lifecycle_info "             KB: ${APP_ROOT}/knowledge_base"
+}
+
+# تشغيل في الخلفية — لا يحجب الـ supervisor
+launch_content_retrieval_skill >> "$APP_ROOT/.observability/content_retrieval_skill.log" 2>&1 &
+lifecycle_info "✅ Content Retrieval Skill initialization offloaded to background"
 
 # ==============================================================================
 # STEP 5: Health Check & Readiness (فحص الصحة والجاهزية)

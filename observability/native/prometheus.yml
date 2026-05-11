@@ -184,3 +184,22 @@ scrape_configs:
           service: postgres-checkpointer
           step: "10"
     honor_labels: false
+
+  # ── Step 11: content-retrieval-skill (:8009) ─────────────────────────────
+  # Step 11: Skill مستقلة لاسترجاع المحتوى التعليمي من knowledge_base/.
+  # ISS-042: إصلاح Service Token + DSPy 3.x + parallel pipeline.
+  # المقاييس: cogniforge_retrieval_requests_total{status,intent} +
+  #           cogniforge_retrieval_duration_seconds + cogniforge_retrieval_intent_total +
+  #           cogniforge_retrieval_hits_total + cogniforge_retrieval_misses_total +
+  #           cogniforge_retrieval_knowledge_base_size + cogniforge_retrieval_startup_info
+  - job_name: content-retrieval-skill
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    static_configs:
+      - targets: ["localhost:8009"]
+        labels:
+          tier: microservice
+          service: content-retrieval-skill
+          step: "11"
+    honor_labels: false

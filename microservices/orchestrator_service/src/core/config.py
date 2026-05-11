@@ -28,7 +28,12 @@ class Settings(BaseSettings):
     CODESPACES: bool = Field(False, description="Is running in GitHub Codespaces")
 
     # Security
-    SECRET_KEY: str = Field(default="dev_secret_key", validation_alias="SECRET_KEY")
+    # ISS-042: يجب أن يتطابق مع SECRET_KEY في planning-agent لتوليد X-Service-Token صالح.
+    # القيمة الافتراضية تتطابق مع planning-agent default ("super_secret_key_change_in_production").
+    SECRET_KEY: str = Field(
+        default="super_secret_key_change_in_production",
+        validation_alias="SECRET_KEY",
+    )
     API_V1_STR: str = "/api/v1"
     ADMIN_TOOL_API_KEY: str | None = Field(
         default=None,

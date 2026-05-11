@@ -196,17 +196,25 @@ async def lifespan(app: FastAPI):
     # ═══ PHASE 6: PROMETHEUS STARTUP INFO ═══════════════════════
     # يُسجِّل معلومات الإقلاع كـ gauge — تظهر فوراً في Grafana
     # pipeline_enabled=True دائماً منذ Step 9 — /compose endpoint نشط
+    # checkpointer_backend: postgres | memory | none  [Step 10]
+    _ckpt = get_checkpointer()
+    _ckpt_backend = "postgres" if _ckpt is not None else (
+        "memory" if _memory_saver is not None else "none"
+    )
     set_startup_info(
         version=settings.SERVICE_VERSION,
         environment=settings.ENVIRONMENT,
         outbox_relay_enabled=settings.OUTBOX_RELAY_ENABLED,
         graph_ready=getattr(app.state, "app_graph", None) is not None,
         pipeline_enabled=True,
+        checkpointer_backend=_ckpt_backend,
     )
     logger.info(
-        "✅ Prometheus metrics registered — outbox_relay=%s graph_ready=%s pipeline_enabled=true",
+        "✅ Prometheus metrics registered — outbox_relay=%s graph_ready=%s "
+        "pipeline_enabled=true checkpointer_backend=%s",
         settings.OUTBOX_RELAY_ENABLED,
         getattr(app.state, "app_graph", None) is not None,
+        _ckpt_backend,
     )
 
     yield

@@ -25,10 +25,13 @@ PROM_METRICS = ROOT / "microservices" / "orchestrator_service" / "src" / "core" 
 SUPERVISOR = ROOT / ".devcontainer" / "supervisor.sh"
 AUTOMATIONS = ROOT / ".ona" / "automations.yaml"
 PROMETHEUS_CFG = ROOT / "observability" / "native" / "prometheus.yml"
-GRAFANA_DASH = ROOT / "observability" / "grafana" / "dashboards" / "70-microservices-step4-persistence.json"
+GRAFANA_DASH = (
+    ROOT / "observability" / "grafana" / "dashboards" / "70-microservices-step4-persistence.json"
+)
 
 
 # ─── P1: prometheus_client في requirements.txt ──────────────────────────────
+
 
 class TestPrometheusClientRequirement:
     """يتحقق من أن prometheus_client مُدرج في requirements.txt للـ orchestrator."""
@@ -51,14 +54,13 @@ class TestPrometheusClientRequirement:
 
 # ─── P2: prom_metrics.py موجود ويحتوي الـ counters الصحيحة ─────────────────
 
+
 class TestPromMetricsModule:
     """يتحقق من وجود prom_metrics.py وصحة محتواه."""
 
     def test_prom_metrics_file_exists(self):
         """prom_metrics.py يجب أن يكون موجوداً."""
-        assert PROM_METRICS.exists(), (
-            f"{PROM_METRICS} غير موجود — Step 4 يتطلب هذه الوحدة."
-        )
+        assert PROM_METRICS.exists(), f"{PROM_METRICS} غير موجود — Step 4 يتطلب هذه الوحدة."
 
     def _text(self) -> str:
         return PROM_METRICS.read_text(encoding="utf-8")
@@ -110,6 +112,7 @@ class TestPromMetricsModule:
 
 # ─── P3: /metrics endpoint في main.py ───────────────────────────────────────
 
+
 class TestMetricsEndpointInMain:
     """يتحقق من أن /metrics endpoint مُعرَّف في main.py."""
 
@@ -148,6 +151,7 @@ class TestMetricsEndpointInMain:
 
 # ─── P4: OUTBOX_RELAY_ENABLED=true في supervisor.sh ─────────────────────────
 
+
 class TestSupervisorOutboxRelay:
     """يتحقق من أن supervisor.sh يُشغِّل orchestrator مع OUTBOX_RELAY_ENABLED=true."""
 
@@ -175,6 +179,7 @@ class TestSupervisorOutboxRelay:
 
 # ─── P5: OUTBOX_RELAY_ENABLED=true في automations.yaml ──────────────────────
 
+
 class TestAutomationsOutboxRelay:
     """يتحقق من أن .ona/automations.yaml يُشغِّل orchestrator مع OUTBOX_RELAY_ENABLED=true."""
 
@@ -183,11 +188,11 @@ class TestAutomationsOutboxRelay:
 
     def test_outbox_relay_enabled_true_in_automations(self):
         """OUTBOX_RELAY_ENABLED=true يجب أن يكون في automations.yaml."""
-        assert 'OUTBOX_RELAY_ENABLED="true"' in self._text() or \
-               "OUTBOX_RELAY_ENABLED: \"true\"" in self._text() or \
-               "OUTBOX_RELAY_ENABLED=true" in self._text(), (
-            "OUTBOX_RELAY_ENABLED=true غائب من .ona/automations.yaml"
-        )
+        assert (
+            'OUTBOX_RELAY_ENABLED="true"' in self._text()
+            or 'OUTBOX_RELAY_ENABLED: "true"' in self._text()
+            or "OUTBOX_RELAY_ENABLED=true" in self._text()
+        ), "OUTBOX_RELAY_ENABLED=true غائب من .ona/automations.yaml"
 
     def test_verify_step4_metrics_task_exists(self):
         """verify-step4-metrics task يجب أن يكون موجوداً في automations.yaml."""
@@ -203,6 +208,7 @@ class TestAutomationsOutboxRelay:
 
 
 # ─── P6: Grafana dashboard صالح ─────────────────────────────────────────────
+
 
 class TestGrafanaDashboardStep4:
     """يتحقق من صحة Grafana dashboard للخطوة 4."""
@@ -253,6 +259,7 @@ class TestGrafanaDashboardStep4:
 
 # ─── P7: Prometheus scrape config ───────────────────────────────────────────
 
+
 class TestPrometheusConfig:
     """يتحقق من أن prometheus.yml يستهدف orchestrator-service بـ step=4."""
 
@@ -274,12 +281,11 @@ class TestPrometheusConfig:
         text = self._text()
         orch_pos = text.find("orchestrator-service")
         metrics_pos = text.find("metrics_path: /metrics", orch_pos)
-        assert metrics_pos != -1, (
-            "metrics_path: /metrics غائب من scrape config للـ orchestrator"
-        )
+        assert metrics_pos != -1, "metrics_path: /metrics غائب من scrape config للـ orchestrator"
 
 
 # ─── P8/P9/P10: Unit tests للـ prom_metrics functions ───────────────────────
+
 
 class TestPromMetricsFunctions:
     """اختبارات وحدة لدوال prom_metrics.py."""
@@ -289,6 +295,7 @@ class TestPromMetricsFunctions:
         from microservices.orchestrator_service.src.core.prom_metrics import (
             export_prometheus_text,
         )
+
         body, _content_type = export_prometheus_text()
         assert isinstance(body, bytes), "export_prometheus_text يجب أن تُعيد bytes"
         assert len(body) > 0, "export_prometheus_text يجب أن تُعيد محتوى غير فارغ"
@@ -298,6 +305,7 @@ class TestPromMetricsFunctions:
         from microservices.orchestrator_service.src.core.prom_metrics import (
             export_prometheus_text,
         )
+
         _, content_type = export_prometheus_text()
         assert "text/plain" in content_type or "prometheus" in content_type.lower()
 
@@ -306,14 +314,18 @@ class TestPromMetricsFunctions:
         from microservices.orchestrator_service.src.core.prom_metrics import (
             record_outbox_relay_cycle,
         )
+
         # لا يجب أن يرفع استثناء
-        record_outbox_relay_cycle({"processed": 5, "failed": 1, "skipped_max_attempts": 0, "skipped_inflight": 2})
+        record_outbox_relay_cycle(
+            {"processed": 5, "failed": 1, "skipped_max_attempts": 0, "skipped_inflight": 2}
+        )
 
     def test_record_outbox_relay_cycle_empty_summary(self):
         """record_outbox_relay_cycle يجب أن تتعامل مع summary فارغ."""
         from microservices.orchestrator_service.src.core.prom_metrics import (
             record_outbox_relay_cycle,
         )
+
         record_outbox_relay_cycle({})  # لا يجب أن يرفع استثناء
 
     def test_record_outbox_relay_error(self):
@@ -321,6 +333,7 @@ class TestPromMetricsFunctions:
         from microservices.orchestrator_service.src.core.prom_metrics import (
             record_outbox_relay_error,
         )
+
         record_outbox_relay_error()
 
     def test_set_startup_info(self):
@@ -328,6 +341,7 @@ class TestPromMetricsFunctions:
         from microservices.orchestrator_service.src.core.prom_metrics import (
             set_startup_info,
         )
+
         set_startup_info(
             version="4.0.0-step4",
             environment="testing",
@@ -341,6 +355,7 @@ class TestPromMetricsFunctions:
             export_prometheus_text,
             set_startup_info,
         )
+
         set_startup_info(
             version="4.0.0-test",
             environment="testing",
@@ -359,6 +374,7 @@ class TestPromMetricsFunctions:
             export_prometheus_text,
             record_outbox_relay_cycle,
         )
+
         record_outbox_relay_cycle({"processed": 3})
         body, _ = export_prometheus_text()
         text = body.decode("utf-8")

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -75,11 +76,12 @@ class CustomerChatPersistence:
         """
         حفظ رسالة جديدة ضمن محادثة العميل مع حماية صارمة ضد التكرار (Duplicate Guard).
         """
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
         from sqlalchemy import and_
 
         # --- DUPLICATE DETECTION GUARD ---
-        ten_seconds_ago = datetime.now(timezone.utc) - timedelta(seconds=10)
+        datetime.now(UTC) - timedelta(seconds=10)
         # Using naive utcnow() if model doesn't support timezone aware, but usually SQLAlchemy handles it. Let's use naive if standard in project, or aware.
         # It's safer to just fetch the last message for this role/conversation and compare.
         stmt = (
@@ -88,7 +90,7 @@ class CustomerChatPersistence:
                 and_(
                     CustomerMessage.conversation_id == conversation_id,
                     CustomerMessage.role == role,
-                    CustomerMessage.content == content
+                    CustomerMessage.content == content,
                 )
             )
             .order_by(CustomerMessage.created_at.desc())
@@ -101,7 +103,11 @@ class CustomerChatPersistence:
             # Check if it was created very recently (within 10 seconds)
             time_diff = None
             if existing_msg.created_at:
-                now = datetime.now(existing_msg.created_at.tzinfo) if existing_msg.created_at.tzinfo else datetime.utcnow()
+                now = (
+                    datetime.now(existing_msg.created_at.tzinfo)
+                    if existing_msg.created_at.tzinfo
+                    else datetime.utcnow()
+                )
                 time_diff = (now - existing_msg.created_at).total_seconds()
 
             if time_diff is not None and time_diff <= 10:
@@ -119,6 +125,7 @@ class CustomerChatPersistence:
         )
         self.db.add(message)
         await self.db.commit()
+        await self.db.refresh(message)
         return message
 
     async def get_chat_history(self, conversation_id: int, limit: int = 20) -> list[dict[str, str]]:

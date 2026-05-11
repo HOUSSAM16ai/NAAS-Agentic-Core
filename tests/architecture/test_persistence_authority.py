@@ -39,8 +39,7 @@ def test_monolith_routers_read_persisted_signal() -> None:
 
     for source, label in ((customer, "customer_chat"), (admin, "admin")):
         assert 'normalized_event.get("persisted") is True' in source, (
-            f"{label} must check the orchestrator's persisted signal "
-            "(write-guard for ISS-014)."
+            f"{label} must check the orchestrator's persisted signal (write-guard for ISS-014)."
         )
         assert "orchestrator_persisted = True" in source, (
             f"{label} must mark orchestrator_persisted when the signal arrives."

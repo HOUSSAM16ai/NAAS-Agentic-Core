@@ -198,8 +198,8 @@ async def lifespan(app: FastAPI):
     # pipeline_enabled=True دائماً منذ Step 9 — /compose endpoint نشط
     # checkpointer_backend: postgres | memory | none  [Step 10]
     _ckpt = get_checkpointer()
-    _ckpt_backend = "postgres" if _ckpt is not None else (
-        "memory" if _memory_saver is not None else "none"
+    _ckpt_backend = (
+        "postgres" if _ckpt is not None else ("memory" if _memory_saver is not None else "none")
     )
     set_startup_info(
         version=settings.SERVICE_VERSION,

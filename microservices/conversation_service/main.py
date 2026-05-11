@@ -62,7 +62,7 @@ _GRAPH_READY = False
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """يُهيِّئ الـ graph عند الإقلاع مع timeout guard."""
-    global _GRAPH_READY  # noqa: PLW0603
+    global _GRAPH_READY
 
     db_ready = False
     graph_ready = False
@@ -248,7 +248,7 @@ async def chat_ws(websocket: WebSocket) -> None:
         while True:
             try:
                 payload = await asyncio.wait_for(websocket.receive_json(), timeout=120.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await websocket.send_json({"error": "timeout", "done": True})
                 break
 
@@ -313,7 +313,7 @@ async def admin_chat_ws(websocket: WebSocket) -> None:
         while True:
             try:
                 payload = await asyncio.wait_for(websocket.receive_json(), timeout=120.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await websocket.send_json({"error": "timeout", "done": True})
                 break
 

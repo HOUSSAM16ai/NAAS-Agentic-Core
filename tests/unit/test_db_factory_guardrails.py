@@ -2,6 +2,7 @@ import os
 from unittest.mock import patch
 
 import pytest
+from pydantic_settings import SettingsConfigDict
 
 from app.core.database import create_db_engine
 from app.core.settings.base import BaseServiceSettings
@@ -22,29 +23,35 @@ from app.core.settings.base import BaseServiceSettings
 
 class MockSettings(BaseServiceSettings):
     DATABASE_URL: str = "postgresql://user:pass%40word@host:5432/db?sslmode=require"
+    APP_DATABASE_URL: str | None = None  # prevent .env override
     SERVICE_NAME: str = "guardrail_test_service"
     ENVIRONMENT: str = "testing"
+
+    model_config = SettingsConfigDict(env_file=None, extra="ignore")  # type: ignore[assignment]
 
 
 @pytest.mark.asyncio
 @patch("app.core.database.create_async_engine")
-async def test_guardrail_db_url_password_encoding(mock_create_engine):
+async def test_guardrail_db_url_password_encoding(mock_create_engine, monkeypatch):
     """
     CRITICAL: Verifies that special characters in passwords (URL encoded) are NOT
     lost or double-decoded during the `make_url` -> `render_as_string` roundtrip.
     """
-    with patch.dict(os.environ, {}, clear=True):
-        settings = MockSettings()
-        create_db_engine(settings)
+    # Remove real DB URLs from env so MockSettings.DATABASE_URL field default is used.
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("APP_DATABASE_URL", raising=False)
 
-        args, _ = mock_create_engine.call_args
-        db_url = args[0]
+    settings = MockSettings()
+    create_db_engine(settings)
 
-        # STRICT CHECK 1: Password must retain encoding
-        assert "pass%40word" in db_url, (
-            f"❌ CATASTROPHIC FAILURE: Password encoding lost. Expected 'pass%40word' in '{db_url}'"
-        )
-        assert "***" not in db_url
+    args, _ = mock_create_engine.call_args
+    db_url = args[0]
+
+    # STRICT CHECK 1: Password must retain encoding
+    assert "pass%40word" in db_url, (
+        f"❌ CATASTROPHIC FAILURE: Password encoding lost. Expected 'pass%40word' in '{db_url}'"
+    )
+    assert "***" not in db_url
 
 
 @pytest.mark.asyncio

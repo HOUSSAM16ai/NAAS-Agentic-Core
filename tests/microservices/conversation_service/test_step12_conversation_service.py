@@ -22,10 +22,9 @@ import json
 import os
 import re
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import ClassVar
 
 import pytest
-import pytest_asyncio
 
 # تجاهل تحذيرات LangGraph الداخلية على مستوى الملف كله
 pytestmark = pytest.mark.filterwarnings(
@@ -44,7 +43,13 @@ GRAPH_FILE = CONV_DIR / "src" / "conversation_graph.py"
 MAIN_FILE = CONV_DIR / "main.py"
 DB_FILE = CONV_DIR / "database.py"
 PROMETHEUS_YML = ROOT / "observability" / "native" / "prometheus.yml"
-GRAFANA_DASH = ROOT / "observability" / "grafana" / "dashboards" / "140-microservices-step12-conversation-service.json"
+GRAFANA_DASH = (
+    ROOT
+    / "observability"
+    / "grafana"
+    / "dashboards"
+    / "140-microservices-step12-conversation-service.json"
+)
 SUPERVISOR = ROOT / ".devcontainer" / "supervisor.sh"
 AUTOMATIONS = ROOT / ".ona" / "automations.yaml"
 WORKFLOW = ROOT / ".github" / "workflows" / "microservices-step12-conversation-service.yml"
@@ -65,7 +70,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-step12")
 class TestPromMetricsStructure:
     """C1-A: التحقق من وجود المقاييس في الكود."""
 
-    REQUIRED_METRICS = [
+    REQUIRED_METRICS: ClassVar[list[str]] = [
         "cogniforge_conversation_requests_total",
         "cogniforge_conversation_request_duration_seconds",
         "cogniforge_conversation_active_connections",
@@ -105,7 +110,7 @@ class TestPromMetricsStructure:
 class TestPromMetricsFunctions:
     """C1-B: التحقق من دوال التسجيل."""
 
-    REQUIRED_FUNCTIONS = [
+    REQUIRED_FUNCTIONS: ClassVar[list[str]] = [
         "def record_request",
         "def record_ws_connection",
         "def record_message",
@@ -136,24 +141,29 @@ class TestPromMetricsRuntime:
 
     def test_import_prom_metrics(self):
         from microservices.conversation_service import prom_metrics
+
         assert hasattr(prom_metrics, "REGISTRY")
 
     def test_record_request_increments_counter(self):
+        from prometheus_client import generate_latest
+
         from microservices.conversation_service.prom_metrics import (
             REGISTRY,
             record_request,
         )
-        from prometheus_client import generate_latest
+
         record_request("GET", "/health", 200, 0.001)
         output = generate_latest(REGISTRY).decode()
         assert "cogniforge_conversation_requests_total" in output
 
     def test_set_startup_info_sets_gauge(self):
+        from prometheus_client import generate_latest
+
         from microservices.conversation_service.prom_metrics import (
             REGISTRY,
             set_startup_info,
         )
-        from prometheus_client import generate_latest
+
         set_startup_info("12", "2.0.0", True, True, True)
         output = generate_latest(REGISTRY).decode()
         assert 'step="12"' in output
@@ -161,6 +171,7 @@ class TestPromMetricsRuntime:
 
     def test_get_metrics_output_returns_bytes(self):
         from microservices.conversation_service.prom_metrics import get_metrics_output
+
         result = get_metrics_output()
         assert isinstance(result, bytes)
         assert b"cogniforge_conversation" in result
@@ -326,7 +337,9 @@ class TestMainEndpoints:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from microservices.conversation_service import main as conv_main
+
         conv_main._GRAPH_READY = True
         return TestClient(conv_main.app, raise_server_exceptions=False)
 
@@ -415,6 +428,7 @@ class TestMainEndpoints:
 
     def test_health_degraded_when_graph_not_ready(self, client):
         from microservices.conversation_service import main as conv_main
+
         original = conv_main._GRAPH_READY
         conv_main._GRAPH_READY = False
         resp = client.get("/health")
@@ -423,6 +437,7 @@ class TestMainEndpoints:
 
     def test_health_healthy_when_graph_ready(self, client):
         from microservices.conversation_service import main as conv_main
+
         conv_main._GRAPH_READY = True
         resp = client.get("/health")
         assert resp.json()["status"] == "healthy"
@@ -460,31 +475,37 @@ class TestDatabaseUrlNormalization:
 
     def test_normalize_postgresql_to_asyncpg(self):
         from microservices.conversation_service.database import _normalize_db_url
+
         result = _normalize_db_url("postgresql://user:pass@host:5432/db")
         assert result.startswith("postgresql+asyncpg://")
 
     def test_normalize_postgres_alias(self):
         from microservices.conversation_service.database import _normalize_db_url
+
         result = _normalize_db_url("postgres://user:pass@host:5432/db")
         assert result.startswith("postgresql+asyncpg://")
 
     def test_removes_sslmode(self):
         from microservices.conversation_service.database import _normalize_db_url
+
         result = _normalize_db_url("postgresql://user:pass@host:5432/db?sslmode=require")
         assert "sslmode" not in result
 
     def test_sqlite_unchanged(self):
         from microservices.conversation_service.database import _normalize_db_url
+
         url = "sqlite+aiosqlite:///:memory:"
         assert _normalize_db_url(url) == url
 
     def test_get_engine_returns_engine(self):
         from microservices.conversation_service.database import get_engine
+
         engine = get_engine()
         assert engine is not None
 
     def test_get_engine_singleton(self):
         from microservices.conversation_service import database
+
         database._engine = None
         e1 = database.get_engine()
         e2 = database.get_engine()
@@ -492,11 +513,14 @@ class TestDatabaseUrlNormalization:
 
     def test_async_session_local_exists(self):
         from microservices.conversation_service.database import AsyncSessionLocal
+
         assert AsyncSessionLocal is not None
 
     def test_get_conv_db_session_is_generator(self):
         import inspect
+
         from microservices.conversation_service.database import get_conv_db_session
+
         assert inspect.isasyncgenfunction(get_conv_db_session)
 
 
@@ -641,7 +665,7 @@ class TestGitHubActionsWorkflow:
 class TestSkillIsolation:
     """C10: conversation-service لا يستورد من microservices أخرى."""
 
-    FORBIDDEN_IMPORTS = [
+    FORBIDDEN_IMPORTS: ClassVar[list[str]] = [
         "orchestrator_service",
         "planning_agent",
         "research_agent",

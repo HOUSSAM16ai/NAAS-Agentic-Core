@@ -117,8 +117,30 @@ async def test_customer_ws_dispatch_http_exception_emits_assistant_error_when_fl
 ) -> None:
     """يتحقق من تحويل فشل dispatch في قناة العملاء إلى assistant_error موحّد."""
     mock_actor = SimpleNamespace(id=1, is_active=True, is_admin=False)
+
+    # Build a mock DB session that satisfies both the auth lookup and persistence calls.
+    # scalar_one_or_none / scalars().first() are synchronous SQLAlchemy methods — use MagicMock.
+    from unittest.mock import MagicMock
+
+    mock_execute_result = MagicMock()
+    mock_execute_result.scalar_one_or_none.return_value = None
+    mock_scalars = MagicMock()
+    mock_scalars.first.return_value = None
+    mock_execute_result.scalars.return_value = mock_scalars
+
     mock_db = AsyncMock()
     mock_db.get.return_value = mock_actor
+    mock_db.expunge = lambda _: None
+    mock_db.execute = AsyncMock(return_value=mock_execute_result)
+    mock_db.commit = AsyncMock()
+    mock_db.refresh = AsyncMock()
+    mock_db.add = MagicMock()  # db.add() is synchronous in SQLAlchemy
+
+    # WS handler uses async_session_factory() directly (not via Depends),
+    # so we patch the factory to return our mock session as an async context manager.
+    mock_session_cm = AsyncMock()
+    mock_session_cm.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_session_cm.__aexit__ = AsyncMock(return_value=False)
 
     test_app.dependency_overrides[get_customer_db] = lambda: mock_db
 
@@ -129,14 +151,26 @@ async def test_customer_ws_dispatch_http_exception_emits_assistant_error_when_fl
         ):
             with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
                 with patch(
-                    "app.api.routers.customer_chat.orchestrator_client.chat_with_agent",
-                    side_effect=HTTPException(status_code=422, detail="dispatch failed"),
+                    "app.api.routers.customer_chat.async_session_factory",
+                    return_value=mock_session_cm,
                 ):
-                    with TestClient(test_app) as client:
-                        with client.websocket_connect("/api/chat/ws") as websocket:
-                            websocket.send_json({"question": "hello"})
-                            payload = websocket.receive_json()
+                    with patch(
+                        "app.api.routers.customer_chat.orchestrator_client.chat_with_agent",
+                        side_effect=HTTPException(status_code=422, detail="dispatch failed"),
+                    ):
+                        with TestClient(test_app) as client:
+                            with client.websocket_connect("/api/chat/ws") as websocket:
+                                websocket.send_json({"question": "hello"})
+                                # Drain events until we get assistant_error (WS sends
+                                # conversation_init before the error event).
+                                payload = None
+                                for _ in range(5):
+                                    msg = websocket.receive_json()
+                                    if msg.get("type") == "assistant_error":
+                                        payload = msg
+                                        break
 
+    assert payload is not None, "No assistant_error event received"
     assert payload["type"] == "assistant_error"
     assert payload["contract_version"] == "v1"
     assert payload["payload"]["status_code"] == 422
@@ -148,10 +182,24 @@ async def test_admin_ws_dispatch_http_exception_emits_assistant_error_when_flag_
     test_app,
 ) -> None:
     """يتحقق من تحويل فشل dispatch في قناة الإدارة إلى assistant_error موحّد."""
+    from unittest.mock import MagicMock
+
     mock_actor = SimpleNamespace(id=1, is_active=True, is_admin=True)
+
+    mock_execute_result = MagicMock()
+    mock_execute_result.scalar_one_or_none.return_value = None
+    mock_scalars_admin = MagicMock()
+    mock_scalars_admin.first.return_value = None
+    mock_scalars_admin.all.return_value = []
+    mock_execute_result.scalars.return_value = mock_scalars_admin
+
     mock_db = AsyncMock()
     mock_db.get.return_value = mock_actor
     mock_db.expunge = lambda _actor: None
+    mock_db.execute = AsyncMock(return_value=mock_execute_result)
+    mock_db.commit = AsyncMock()
+    mock_db.refresh = AsyncMock()
+    mock_db.add = MagicMock()
 
     class _MockSessionContext:
         def __init__(self, db: AsyncMock) -> None:
@@ -182,8 +230,15 @@ async def test_admin_ws_dispatch_http_exception_emits_assistant_error_when_flag_
                         with TestClient(test_app) as client:
                             with client.websocket_connect("/admin/api/chat/ws") as websocket:
                                 websocket.send_json({"question": "hello"})
-                                payload = websocket.receive_json()
+                                # Drain events until assistant_error (conversation_init comes first)
+                                payload = None
+                                for _ in range(5):
+                                    msg = websocket.receive_json()
+                                    if msg.get("type") == "assistant_error":
+                                        payload = msg
+                                        break
 
+    assert payload is not None, "No assistant_error event received"
     assert payload["type"] == "assistant_error"
     assert payload["contract_version"] == "v1"
     assert payload["payload"]["status_code"] == 409

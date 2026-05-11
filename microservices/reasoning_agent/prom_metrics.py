@@ -61,6 +61,7 @@ except ImportError:  # pragma: no cover
 
         def time(self):
             import contextlib
+
             return contextlib.nullcontext()
 
     CollectorRegistry = _Stub  # type: ignore[misc]
@@ -160,6 +161,7 @@ _startup_info = Gauge(
 
 
 # ── واجهات عامة ──────────────────────────────────────────────────────────────
+
 
 def export_prometheus_text() -> tuple[bytes, str]:
     """

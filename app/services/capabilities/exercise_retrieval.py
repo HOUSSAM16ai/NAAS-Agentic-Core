@@ -98,9 +98,7 @@ _RETRIEVAL_INTENT_PATTERNS: tuple[str, ...] = (
 )
 
 # "تمرين" أو "exercise" متبوعاً برقم مباشرة
-_EXERCISE_WITH_NUMBER_RE = re.compile(
-    r"(تمرين|تمارين|exercise)\s*\d+", re.IGNORECASE
-)
+_EXERCISE_WITH_NUMBER_RE = re.compile(r"(تمرين|تمارين|exercise)\s*\d+", re.IGNORECASE)
 
 # سنة دراسية (2020–2030)
 _YEAR_RE = re.compile(r"\b20[2-3]\d\b")
@@ -138,9 +136,7 @@ def _has_retrieval_intent(normalized: str) -> bool:
     if _EXERCISE_WITH_NUMBER_RE.search(normalized):
         return True
     # "تمرين" + سنة = طلب تمرين من سنة محددة
-    if ("تمرين" in normalized or "exercise" in normalized) and _YEAR_RE.search(normalized):
-        return True
-    return False
+    return bool(("تمرين" in normalized or "exercise" in normalized) and _YEAR_RE.search(normalized))
 
 
 def detect_exercise_retrieval(request: ExerciseRetrievalRequest) -> ExerciseRetrievalDecision:

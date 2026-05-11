@@ -44,21 +44,25 @@ def test_make_result_keeps_message_when_available() -> None:
 # كلمة "تمرين" في سياق الشرح كانت تُطلق استرجاع تمرين الاحتمالات بشكل ثابت.
 # ─────────────────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("question", [
-    "اشرح الجزء أ من هذا التمرين",
-    "اشرح لي هذا التمرين",
-    "كيف أحل هذا التمرين",
-    "ساعدني في حل هذا التمرين",
-    "ما هو مفهوم التمرين في الرياضيات",
-    "ما هو الفرق بين التمرين والمسألة",
-    "وضح لي الجزء الأول",
-    "ما هي الاحتمالات",
-    "اشرح درس الاحتمالات",
-    "فسر لي هذا السؤال",
-    "help me with this exercise",
-    "explain part a",
-    "what is probability",
-])
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "اشرح الجزء أ من هذا التمرين",
+        "اشرح لي هذا التمرين",
+        "كيف أحل هذا التمرين",
+        "ساعدني في حل هذا التمرين",
+        "ما هو مفهوم التمرين في الرياضيات",
+        "ما هو الفرق بين التمرين والمسألة",
+        "وضح لي الجزء الأول",
+        "ما هي الاحتمالات",
+        "اشرح درس الاحتمالات",
+        "فسر لي هذا السؤال",
+        "help me with this exercise",
+        "explain part a",
+        "what is probability",
+    ],
+)
 def test_explanation_context_does_not_trigger_retrieval(question: str) -> None:
     """
     ISS-038 regression: سياق الشرح لا يُطلق الاسترجاع حتى لو ذُكر "تمرين".
@@ -70,16 +74,19 @@ def test_explanation_context_does_not_trigger_retrieval(question: str) -> None:
     )
 
 
-@pytest.mark.parametrize("question", [
-    "أريد تمرين بكالوريا",
-    "أعطني تمرين احتمالات",
-    "التمرين الأول من الموضوع الأول",
-    "تمرين بكالوريا 2024",
-    "الموضوع الثاني رياضيات",
-    "exercise 1",
-    "exercise 2 probability",
-    "ابحث عن تمرين احتمالات",
-])
+@pytest.mark.parametrize(
+    "question",
+    [
+        "أريد تمرين بكالوريا",
+        "أعطني تمرين احتمالات",
+        "التمرين الأول من الموضوع الأول",
+        "تمرين بكالوريا 2024",
+        "الموضوع الثاني رياضيات",
+        "exercise 1",
+        "exercise 2 probability",
+        "ابحث عن تمرين احتمالات",
+    ],
+)
 def test_explicit_retrieval_intent_triggers_retrieval(question: str) -> None:
     """طلبات الجلب الصريحة تُطلق الاسترجاع بشكل صحيح."""
     decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))

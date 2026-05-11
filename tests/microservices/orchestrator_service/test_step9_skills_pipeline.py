@@ -16,11 +16,7 @@
 from __future__ import annotations
 
 import json
-import re
-import unittest
-from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -32,7 +28,13 @@ PROM_METRICS = ORCHESTRATOR / "src" / "core" / "prom_metrics.py"
 ROUTES = ORCHESTRATOR / "src" / "api" / "routes.py"
 CONFIG = ORCHESTRATOR / "src" / "core" / "config.py"
 PROMETHEUS_YML = ROOT / "observability" / "native" / "prometheus.yml"
-GRAFANA_DASHBOARD = ROOT / "observability" / "grafana" / "dashboards" / "120-microservices-step9-skills-pipeline.json"
+GRAFANA_DASHBOARD = (
+    ROOT
+    / "observability"
+    / "grafana"
+    / "dashboards"
+    / "120-microservices-step9-skills-pipeline.json"
+)
 AUTOMATIONS = ROOT / ".ona" / "automations.yaml"
 MAIN_PY = ORCHESTRATOR / "main.py"
 
@@ -384,9 +386,10 @@ class TestSkillsPipelineUnit:
     def test_skill_result_dataclass_fields(self):
         """SkillResult يجب أن يحتوي الحقول الأساسية."""
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("skills_pipeline", SKILLS_PIPELINE)
         assert spec is not None
-        module = importlib.util.module_from_spec(spec)
+        importlib.util.module_from_spec(spec)
         # نتحقق من الكود مباشرة بدل import لتجنب تبعيات runtime
         content = SKILLS_PIPELINE.read_text()
         assert "skill: str" in content

@@ -1,0 +1,231 @@
+{
+  "uid": "cogniforge-ms-step9-pipeline",
+  "title": "Step 9 — Skills Composition Pipeline",
+  "description": "مراقبة Skills Pipeline: planning → research → reasoning → compose",
+  "tags": ["cogniforge", "microservices", "step9", "skills-pipeline"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Pipeline Startup Info",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{
+        "expr": "cogniforge_orchestrator_startup_info{pipeline_enabled=\"true\"}",
+        "legendFormat": "Pipeline ACTIVE"
+      }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } }] } }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Pipeline Invocations Total",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [{
+        "expr": "sum(cogniforge_pipeline_invocations_total)",
+        "legendFormat": "Total"
+      }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": 0, "color": "blue" }] } } }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Full Pipeline Rate",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "sum(rate(cogniforge_pipeline_invocations_total{mode=\"full\"}[5m]))",
+        "legendFormat": "Full/s"
+      }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": 0, "color": "green" }] } } }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Pipeline P95 Latency",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(cogniforge_pipeline_duration_seconds_bucket[5m])) by (le))",
+        "legendFormat": "P95"
+      }],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": 0, "color": "green" }, { "value": 5, "color": "yellow" }, { "value": 15, "color": "red" }] } } }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Active Pipeline Requests",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "cogniforge_pipeline_active_gauge",
+        "legendFormat": "Active"
+      }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": 0, "color": "green" }, { "value": 5, "color": "yellow" }, { "value": 10, "color": "red" }] } } }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Pipeline Errors",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "sum(cogniforge_pipeline_errors_total) or vector(0)",
+        "legendFormat": "Errors"
+      }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": 0, "color": "green" }, { "value": 1, "color": "red" }] } } }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Pipeline Mode Distribution",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Pipeline Invocations by Mode",
+      "gridPos": { "x": 0, "y": 5, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "rate(cogniforge_pipeline_invocations_total{mode=\"full\"}[5m])", "legendFormat": "Full (all 3 skills)" },
+        { "expr": "rate(cogniforge_pipeline_invocations_total{mode=\"partial\"}[5m])", "legendFormat": "Partial (1-2 skills)" },
+        { "expr": "rate(cogniforge_pipeline_invocations_total{mode=\"fallback\"}[5m])", "legendFormat": "Fallback (no skills)" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Pipeline Duration P50 / P95 / P99",
+      "gridPos": { "x": 12, "y": 5, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(cogniforge_pipeline_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_pipeline_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(cogniforge_pipeline_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Individual Skill Performance",
+      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Skill Calls Rate (Success vs Fallback vs Error)",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{skill=\"planning\",status=\"success\"}[5m])", "legendFormat": "planning ✅" },
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{skill=\"research\",status=\"success\"}[5m])", "legendFormat": "research ✅" },
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{skill=\"reasoning\",status=\"success\"}[5m])", "legendFormat": "reasoning ✅" },
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{status=\"fallback\"}[5m])", "legendFormat": "{{skill}} fallback" },
+        { "expr": "rate(cogniforge_pipeline_skill_calls_total{status=\"error\"}[5m])", "legendFormat": "{{skill}} error" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Skill Duration P95 by Skill",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_pipeline_skill_duration_seconds_bucket{skill=\"planning\"}[5m])) by (le))", "legendFormat": "planning P95" },
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_pipeline_skill_duration_seconds_bucket{skill=\"research\"}[5m])) by (le))", "legendFormat": "research P95" },
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_pipeline_skill_duration_seconds_bucket{skill=\"reasoning\"}[5m])) by (le))", "legendFormat": "reasoning P95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Microservices Health Matrix (Steps 4–9)",
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "orchestrator-service :8006",
+      "gridPos": { "x": 0, "y": 23, "w": 4, "h": 3 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "cogniforge_orchestrator_startup_info", "legendFormat": "Step 4" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } }], "noValue": "DOWN" } }
+    },
+    {
+      "id": 32,
+      "type": "stat",
+      "title": "user-service :8001",
+      "gridPos": { "x": 4, "y": 23, "w": 4, "h": 3 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "cogniforge_user_startup_info", "legendFormat": "Step 5" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } }], "noValue": "DOWN" } }
+    },
+    {
+      "id": 33,
+      "type": "stat",
+      "title": "planning-agent :8002",
+      "gridPos": { "x": 8, "y": 23, "w": 4, "h": 3 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "cogniforge_planning_startup_info", "legendFormat": "Step 6" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } }], "noValue": "DOWN" } }
+    },
+    {
+      "id": 34,
+      "type": "stat",
+      "title": "research-agent :8007",
+      "gridPos": { "x": 12, "y": 23, "w": 4, "h": 3 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "cogniforge_research_startup_info", "legendFormat": "Step 7" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } }], "noValue": "DOWN" } }
+    },
+    {
+      "id": 35,
+      "type": "stat",
+      "title": "reasoning-agent :8008",
+      "gridPos": { "x": 16, "y": 23, "w": 4, "h": 3 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "cogniforge_reasoning_startup_info", "legendFormat": "Step 8" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } }], "noValue": "DOWN" } }
+    },
+    {
+      "id": 36,
+      "type": "stat",
+      "title": "Skills Pipeline :8006/compose",
+      "gridPos": { "x": 20, "y": 23, "w": 4, "h": 3 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "cogniforge_orchestrator_startup_info{pipeline_enabled=\"true\"}", "legendFormat": "Step 9" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } }], "noValue": "DOWN" } }
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Step 9 Activation Guide",
+      "gridPos": { "x": 0, "y": 26, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 41,
+      "type": "text",
+      "title": "Step 9 — Skills Pipeline Activation",
+      "gridPos": { "x": 0, "y": 27, "w": 24, "h": 6 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Step 9: Skills Composition Pipeline\n\n**التحقق الحي:**\n```bash\n# اختبار /compose endpoint\ncurl -X POST http://localhost:8006/compose \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"query\": \"اشرح قانون نيوتن الثاني\"}'\n\n# التحقق من مقاييس Pipeline\ncurl http://localhost:8006/metrics | grep cogniforge_pipeline\n\n# التحقق من startup_info مع pipeline_enabled\ncurl http://localhost:8006/metrics | grep 'cogniforge_orchestrator_startup_info.*pipeline_enabled=\"true\"'\n```\n\n**مسار الطلب:**\n`/compose` → `planning-agent:8002` + `research-agent:8007` (بالتوازي) → `reasoning-agent:8008` → إجابة مُركَّبة\n\n**Fallback:** كل Skill تعمل بشكل مستقل — فشل أي Skill لا يوقف الـ Pipeline."
+      }
+    }
+  ]
+}

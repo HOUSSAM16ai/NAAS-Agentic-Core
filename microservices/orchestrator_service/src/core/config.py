@@ -97,12 +97,15 @@ class Settings(BaseSettings):
         if is_codespaces is None:
             is_codespaces = os.getenv("CODESPACES") == "true"
 
+        # local_port: منفذ Codespaces (uvicorn native)
+        # host: اسم الخدمة في Docker Compose
+        # docker_port: منفذ Docker الداخلي
         service_map = {
-            "USER_SERVICE_URL": ("8003", "user-service", "8000"),
+            "USER_SERVICE_URL": ("8001", "user-service", "8001"),
             "RESEARCH_AGENT_URL": ("8007", "research-agent", "8007"),
-            "PLANNING_AGENT_URL": ("8001", "planning-agent", "8000"),
+            "PLANNING_AGENT_URL": ("8002", "planning-agent", "8002"),
             "REASONING_AGENT_URL": ("8008", "reasoning-agent", "8008"),
-            "MEMORY_AGENT_URL": ("8002", "memory-agent", "8000"),
+            "MEMORY_AGENT_URL": ("8009", "memory-agent", "8009"),
         }
 
         if field_name not in service_map:

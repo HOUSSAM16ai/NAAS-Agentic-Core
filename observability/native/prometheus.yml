@@ -146,3 +146,24 @@ scrape_configs:
           service: reasoning-agent
           step: "8"
     honor_labels: true
+
+  # ── Step 9: Skills Pipeline metrics (via orchestrator-service :8006) ─────
+  # Step 9: /compose endpoint نشط — orchestrator يستدعي planning+research+reasoning عبر HTTP.
+  # المقاييس الجديدة: cogniforge_pipeline_invocations_total{mode=full|partial|fallback} +
+  #                   cogniforge_pipeline_duration_seconds + cogniforge_pipeline_skill_calls_total +
+  #                   cogniforge_pipeline_skill_duration_seconds + cogniforge_pipeline_errors_total +
+  #                   cogniforge_pipeline_active_gauge +
+  #                   cogniforge_orchestrator_startup_info{pipeline_enabled="true",step="9"}
+  # يُصدَر من orchestrator-service:8006/metrics (نفس الـ job الموجود).
+  # label step="9" يُضاف هنا للتمييز في Grafana.
+  - job_name: skills-pipeline
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    static_configs:
+      - targets: ["localhost:8006"]
+        labels:
+          tier: microservice
+          service: skills-pipeline
+          step: "9"
+    honor_labels: false

@@ -60,6 +60,12 @@ from microservices.orchestrator_service.src.services.overmind.entrypoint import 
 from microservices.orchestrator_service.src.services.overmind.state import MissionStateManager
 from microservices.orchestrator_service.src.services.overmind.utils.tools import tool_registry
 from microservices.orchestrator_service.src.services.tools.registry import get_registry
+from microservices.orchestrator_service.src.core.prom_metrics import (
+    record_pipeline_error,
+    record_pipeline_invocation,
+    set_pipeline_active,
+)
+from microservices.orchestrator_service.src.services.skills_pipeline import run_skills_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -2881,3 +2887,117 @@ async def stream_mission_ws(
             await subscription.aclose()
         except Exception as e:
             logger.warning("[WS_CLEANUP] subscription.aclose() failed: %s", e)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Skills Composition Pipeline — /compose (Step 9)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class ComposeRequest(BaseModel):
+    """طلب تشغيل Skills Composition Pipeline."""
+
+    query: str = Field(..., min_length=1, max_length=2000, description="سؤال الطالب أو المهمة")
+    correlation_id: str | None = Field(
+        default=None,
+        description="معرف التتبع الموزع (يُولَّد تلقائياً إذا لم يُعطَ)",
+    )
+
+
+class SkillResultSchema(BaseModel):
+    """نتيجة Skill واحدة في الـ Pipeline."""
+
+    skill: str
+    status: str
+    data: dict[str, object]
+    duration_ms: float
+    error: str | None = None
+
+
+class ComposeResponse(BaseModel):
+    """الاستجابة الكاملة من Skills Composition Pipeline."""
+
+    correlation_id: str
+    query: str
+    composed_answer: str
+    pipeline_mode: str
+    skills_active: list[str]
+    total_duration_ms: float
+    plan: SkillResultSchema
+    research: SkillResultSchema
+    reasoning: SkillResultSchema
+
+
+@router.post(
+    "/compose",
+    response_model=ComposeResponse,
+    tags=["Skills Pipeline"],
+    summary="Skills Composition Pipeline",
+    description=(
+        "يُشغِّل Skills Composition Pipeline الكامل:\n"
+        "1. PlanningSkill → خطة استراتيجية\n"
+        "2. ResearchSkill → معلومات ذات صلة (بالتوازي مع Planning)\n"
+        "3. ReasoningSkill → تفكير عميق MCTS + LLM\n"
+        "4. Compose → إجابة مُركَّبة من الـ 3 Skills\n\n"
+        "Fallback mode تلقائي عند تعذر الوصول لأي Skill."
+    ),
+)
+async def compose_skills(
+    request: ComposeRequest,
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-ID"),
+) -> ComposeResponse:
+    """
+    يُنفِّذ Skills Composition Pipeline ويُعيد الإجابة المُركَّبة.
+
+    يُسجِّل مقاييس Prometheus لكل استدعاء:
+      - cogniforge_pipeline_invocations_total{mode=...}
+      - cogniforge_pipeline_duration_seconds{mode=...}
+      - cogniforge_pipeline_skill_calls_total{skill=...,status=...}
+      - cogniforge_pipeline_skill_duration_seconds{skill=...}
+    """
+    correlation_id = request.correlation_id or x_correlation_id or str(uuid.uuid4())
+
+    set_pipeline_active(1)
+    try:
+        result = await run_skills_pipeline(
+            query=request.query,
+            correlation_id=correlation_id,
+        )
+    except Exception as exc:
+        set_pipeline_active(0)
+        record_pipeline_error("compose_error")
+        logger.error("pipeline_error correlation_id=%s error=%s", correlation_id, exc)
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "PIPELINE_ERROR",
+                "message": str(exc),
+                "trace_id": correlation_id,
+            },
+        ) from exc
+
+    set_pipeline_active(0)
+
+    # تسجيل مقاييس Prometheus
+    skill_results = [
+        (result.plan.skill, result.plan.status, result.plan.duration_ms / 1000),
+        (result.research.skill, result.research.status, result.research.duration_ms / 1000),
+        (result.reasoning.skill, result.reasoning.status, result.reasoning.duration_ms / 1000),
+    ]
+    record_pipeline_invocation(
+        mode=result.pipeline_mode,
+        duration_seconds=result.total_duration_ms / 1000,
+        skill_results=skill_results,
+    )
+
+    return ComposeResponse(
+        correlation_id=result.correlation_id,
+        query=result.query,
+        composed_answer=result.composed_answer,
+        pipeline_mode=result.pipeline_mode,
+        skills_active=result.skills_active,
+        total_duration_ms=result.total_duration_ms,
+        plan=SkillResultSchema(**result.plan.__dict__),
+        research=SkillResultSchema(**result.research.__dict__),
+        reasoning=SkillResultSchema(**result.reasoning.__dict__),
+    )

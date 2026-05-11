@@ -59,9 +59,14 @@ services:
         SECRET_KEY="${SECRET_KEY:-cogniforge-orchestrator-dev-key}" \
         REDIS_URL="${REDIS_URL:-redis://localhost:6379}" \
         ENVIRONMENT="${ENVIRONMENT:-development}" \
+        CODESPACES="true" \
         OUTBOX_RELAY_ENABLED="true" \
         OUTBOX_RELAY_INTERVAL_SECONDS="15" \
         OUTBOX_RELAY_BATCH_SIZE="50" \
+        PLANNING_AGENT_URL="http://localhost:8002" \
+        RESEARCH_AGENT_URL="http://localhost:8007" \
+        REASONING_AGENT_URL="http://localhost:8008" \
+        USER_SERVICE_URL="http://localhost:8001" \
         python -m uvicorn microservices.orchestrator_service.main:app \
           --host 0.0.0.0 \
           --port "$ORCH_PORT" \
@@ -1103,5 +1108,109 @@ tasks:
         tests/microservices/reasoning_agent/test_step8_reasoning_agent_metrics.py \
         -v --tb=short --no-header -q 2>&1 | tail -100
       echo "✅ Step 8 tests complete."
+    triggeredBy:
+      - manual
+
+  verify-step9-skills-pipeline:
+    name: "Verify Step 9 — Skills Pipeline Live"
+    description: |
+      يتحقق من أن Skills Pipeline يعمل على :8006/compose ويُصدِّر مقاييس Prometheus حقيقية.
+      يفحص: /compose endpoint + cogniforge_pipeline_* metrics + Grafana dashboard + health matrix.
+    command: |
+      set -euo pipefail
+      echo "═══════════════════════════════════════════════════"
+      echo "  Step 9 — Skills Pipeline Verification"
+      echo "═══════════════════════════════════════════════════"
+
+      # 1. orchestrator-service health
+      echo ""
+      echo "1️⃣  orchestrator-service health..."
+      if curl -sf http://localhost:8006/health > /dev/null 2>&1; then
+        echo "   ✅ orchestrator-service UP"
+        curl -s http://localhost:8006/health | python3 -m json.tool
+      else
+        echo "   ❌ orchestrator-service DOWN — start it first"
+        exit 1
+      fi
+
+      # 2. /compose endpoint test
+      echo ""
+      echo "2️⃣  Testing /compose endpoint..."
+      COMPOSE_RESULT=$(curl -s -X POST http://localhost:8006/compose \
+        -H 'Content-Type: application/json' \
+        -d '{"query": "اشرح قانون نيوتن الثاني"}' 2>/dev/null)
+      if echo "$COMPOSE_RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'composed_answer' in d and 'pipeline_mode' in d" 2>/dev/null; then
+        echo "   ✅ /compose returned valid response"
+        echo "$COMPOSE_RESULT" | python3 -m json.tool | head -20
+      else
+        echo "   ⚠️  /compose response unexpected:"
+        echo "$COMPOSE_RESULT"
+      fi
+
+      # 3. Pipeline metrics
+      echo ""
+      echo "3️⃣  Pipeline Prometheus metrics..."
+      METRICS=$(curl -s http://localhost:8006/metrics 2>/dev/null)
+      for metric in cogniforge_pipeline_invocations_total cogniforge_pipeline_duration_seconds cogniforge_pipeline_skill_calls_total cogniforge_pipeline_active_gauge cogniforge_orchestrator_startup_info; do
+        if echo "$METRICS" | grep -q "$metric"; then
+          echo "   ✅ $metric"
+        else
+          echo "   ❌ $metric MISSING"
+        fi
+      done
+
+      # 4. pipeline_enabled label
+      echo ""
+      echo "4️⃣  pipeline_enabled label in startup_info..."
+      if echo "$METRICS" | grep -q 'pipeline_enabled="true"'; then
+        echo "   ✅ pipeline_enabled=true confirmed"
+      else
+        echo "   ❌ pipeline_enabled=true NOT found"
+      fi
+
+      # 5. Skills health matrix
+      echo ""
+      echo "5️⃣  Skills health matrix..."
+      for port_service in "8001:user-service" "8002:planning-agent" "8007:research-agent" "8008:reasoning-agent"; do
+        port="${port_service%%:*}"
+        svc="${port_service##*:}"
+        if curl -sf "http://localhost:${port}/health" > /dev/null 2>&1; then
+          echo "   ✅ ${svc}:${port}"
+        else
+          echo "   ⚠️  ${svc}:${port} DOWN (pipeline uses fallback)"
+        fi
+      done
+
+      echo ""
+      echo "6️⃣  Grafana dashboard..."
+      if curl -sf http://localhost:3001/api/health > /dev/null 2>&1; then
+        echo "   ✅ Grafana UP — dashboard at: http://localhost:3001/d/cogniforge-ms-step9-pipeline"
+      else
+        echo "   ⚠️  Grafana not reachable"
+      fi
+
+      echo ""
+      echo "═══════════════════════════════════════════════════"
+      echo "  Step 9 Verification Complete"
+      echo "═══════════════════════════════════════════════════"
+    triggeredBy:
+      - manual
+
+  run-step9-tests:
+    name: "Run Step 9 Skills Pipeline Tests"
+    description: اختبارات الخطوة 9 — Skills Pipeline + /compose endpoint + Prometheus metrics.
+    command: |
+      set -euo pipefail
+      export DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export ORCHESTRATOR_DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-dummy-key-for-tests}"
+      export SECRET_KEY="test-secret-key-for-step9-tests"
+      export ENVIRONMENT="testing"
+      export CODESPACES="true"
+      echo "🧪 Running Step 9 skills-pipeline tests..."
+      python -m pytest \
+        tests/microservices/orchestrator_service/test_step9_skills_pipeline.py \
+        -v --tb=short --no-header -q 2>&1 | tail -120
+      echo "✅ Step 9 tests complete."
     triggeredBy:
       - manual

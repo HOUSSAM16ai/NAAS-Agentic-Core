@@ -577,15 +577,21 @@ launch_orchestrator_service() {
 
     # ── تشغيل uvicorn في الخلفية ──────────────────────────────────────────────
     # Step 4: OUTBOX_RELAY_ENABLED=true — تفعيل حلقة relay الدورية (D-031)
+    # Step 9: PLANNING_AGENT_URL/RESEARCH_AGENT_URL/REASONING_AGENT_URL — Skills Pipeline
     ORCHESTRATOR_DATABASE_URL="$orch_db_url" \
     OPENROUTER_API_KEY="${OPENROUTER_API_KEY}" \
     TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
     SECRET_KEY="${SECRET_KEY:-cogniforge-orchestrator-dev-key}" \
     REDIS_URL="${REDIS_URL:-redis://localhost:6379}" \
     ENVIRONMENT="${ENVIRONMENT:-development}" \
+    CODESPACES="true" \
     OUTBOX_RELAY_ENABLED="true" \
     OUTBOX_RELAY_INTERVAL_SECONDS="15" \
     OUTBOX_RELAY_BATCH_SIZE="50" \
+    PLANNING_AGENT_URL="http://localhost:8002" \
+    RESEARCH_AGENT_URL="http://localhost:8007" \
+    REASONING_AGENT_URL="http://localhost:8008" \
+    USER_SERVICE_URL="http://localhost:8001" \
     nohup python -m uvicorn microservices.orchestrator_service.main:app \
         --host 0.0.0.0 \
         --port "$ORCH_PORT" \

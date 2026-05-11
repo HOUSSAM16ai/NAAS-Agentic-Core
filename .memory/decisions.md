@@ -1,5 +1,25 @@
 # Architectural Decisions
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step11-full-skills-live`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step12-conversation-service`
+
+## D-042 · Conversation Service Live Activation — Step 12 (2026-05-11)
+**Decision**: تفعيل `conversation-service` كـ Skill احترافية مستقلة على `:8003` — الخدمة السادسة في Skills Architecture. تُحوِّل إدارة المحادثات من stub بسيط (`capability_level="stub"`) إلى Skill حقيقية بـ LangGraph StateGraph + Prometheus metrics + WebSocket.
+
+**Architecture**:
+- `ConversationState` TypedDict: question, intent, history, response, thread_id, correlation_id
+- `intent_node` → `response_node` (StateGraph topology)
+- `_classify_intent()` deterministic — لا يعتمد على LLM للتصنيف
+- `_build_fallback_response()` — يعمل بدون OPENROUTER_API_KEY (Skill isolation)
+- `asyncio.wait_for(..., timeout=30.0)` — timeout guard إلزامي في كل node
+
+**Reason**: conversation-service كان stub لا يُصدِّر مقاييس ولا يملك StateGraph حقيقي. الخطوة 12 تُحوِّله إلى Skill قابلة للقياس والاختبار والاستبدال — مطابقة لتعريف الـ Skill في D-038.
+
+**Pattern**: نفس نمط الخطوات 4-11 — uvicorn process مباشر في Codespaces، لا Docker.
+
+**ISS-043 (مُحلَّل)**: `LangChainPendingDeprecationWarning` من `langgraph.cache.base` عند import — مُسكَّت في `tests/microservices/conversation_service/conftest.py` + `pytest.ini`.
+
+**Status**: IMPLEMENTED 2026-05-11 — branch `feat/microservices-step12-conversation-service`.
+
+---
 
 ## D-041 · Full Skills Pipeline + content-retrieval-skill (2026-05-11)
 **Decision**: تحويل Skills Pipeline من "partial" إلى "full" حقيقي عبر 4 إصلاحات متزامنة:

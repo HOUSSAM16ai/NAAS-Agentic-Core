@@ -203,3 +203,33 @@ scrape_configs:
           service: content-retrieval-skill
           step: "11"
     honor_labels: false
+
+  # ── Step 12: conversation-service (:8003) ────────────────────────────────
+  # Step 12: Skill مستقلة لإدارة المحادثات التعليمية — LangGraph StateGraph.
+  # D-042: conversation-service يُفعَّل كـ uvicorn process على :8003.
+  # يُضيف الخدمة السادسة للـ Skills Architecture.
+  # المقاييس: cogniforge_conversation_requests_total +
+  #           cogniforge_conversation_request_duration_seconds +
+  #           cogniforge_conversation_active_connections +
+  #           cogniforge_conversation_messages_total{direction,route} +
+  #           cogniforge_conversation_sessions_total{route,status} +
+  #           cogniforge_conversation_session_duration_seconds +
+  #           cogniforge_conversation_graph_invocations_total{node,status} +
+  #           cogniforge_conversation_graph_duration_seconds +
+  #           cogniforge_conversation_graph_errors_total{error_type} +
+  #           cogniforge_conversation_db_operations_total +
+  #           cogniforge_conversation_startup_info{step="12",graph_ready,db_ready,ws_enabled}
+  # يبدأ تلقائياً عبر supervisor.sh STEP 4J.
+  # يعمل بدون OPENROUTER_API_KEY (deterministic fallback).
+  # DOWN حتى يُقلع الـ process — ليس خطأ في الـ devcontainer الافتراضي.
+  - job_name: conversation-service
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    static_configs:
+      - targets: ["localhost:8003"]
+        labels:
+          tier: microservice
+          service: conversation-service
+          step: "12"
+    honor_labels: false

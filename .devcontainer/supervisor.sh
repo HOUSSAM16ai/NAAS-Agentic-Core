@@ -371,6 +371,7 @@ else
     #   (StateGraph 13 عقدة) بدلاً من /agent/chat (OrchestratorAgent).
     export ORCHESTRATOR_SERVICE_URL="http://localhost:8006"
     export CODESPACES="true"
+    export ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR="true"
     export ORCHESTRATOR_CHAT_ENDPOINT="${ORCHESTRATOR_CHAT_ENDPOINT:-state_graph}"
     export PLANNING_AGENT_URL="http://localhost:8002"
     export RESEARCH_AGENT_URL="http://localhost:8007"

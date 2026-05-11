@@ -1,6 +1,40 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-11** | Branch: `feat/live-verification-d044-surgical-fixes`
-> Previous: `feat/live-runtime-audit-d043`
+> Last updated: **2026-05-11** | Branch: `feat/microservices-user-routing-d045`
+> Previous: `feat/live-verification-d044-surgical-fixes`
+
+## D-045 Live Verification Results (2026-05-11) — End-to-End User Routing
+
+| Service | Port | Status | Key Fields |
+|---------|------|--------|-----------|
+| main-app | 8000 | ✅ ACTIVE | `database: ok, version: v4.1-root` |
+| user-service | 8001 | ✅ ACTIVE | `status: ok, environment: development` |
+| planning-agent | 8002 | ✅ ACTIVE | `database: postgresql+asyncpg://...` |
+| conversation-service | 8003 | ✅ ACTIVE | `graph_ready: true, step: 12` |
+| orchestrator-service | 8006 | ✅ ACTIVE | `graph_ready: true, startup_state: ready` |
+| research-agent | 8007 | ✅ ACTIVE | `tavily_available: true` |
+| reasoning-agent | 8008 | ✅ ACTIVE | `llm_backend: openrouter, mcts_enabled: true` |
+| content-retrieval | 8009 | ✅ ACTIVE | `kb_files: 2, step: 11` |
+
+**Prometheus**: 12/12 targets UP
+**Grafana**: 17 dashboards active at :3001
+**Skills Pipeline**: `pipeline_mode: full | skills_active: ['planning', 'research', 'reasoning'] | duration: 28.5s`
+**End-to-End Chat**: VERIFIED — WS → Monolith → Orchestrator → Skills → Real LLM answer
+
+### Chat Routing Path (VERIFIED LIVE)
+```
+User WebSocket (jwt subprotocol)
+  → Monolith :8000/api/chat/ws
+  → OrchestratorClient.chat_with_agent()
+  → http://localhost:8006/api/chat/messages  (StateGraph mode)
+  → LangGraph 13-node StateGraph
+  → Planning :8002 + Research :8007 + Reasoning :8008
+  → Streaming NDJSON response to user
+```
+
+### Fixes Applied This Session (ISS-048, ISS-049, ISS-050)
+- `supervisor.sh`: added `ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR=true` (ISS-048)
+- `conversation-service`: `prometheus_client` installed + added to requirements.txt (ISS-049)
+- End-to-end WS chat verified with real user token (ISS-050)
 
 ## D-044 Live Verification Results (2026-05-11)
 

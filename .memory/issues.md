@@ -674,3 +674,21 @@
 - **Evidence**: Developers copying `secrets.env.example` would not know to add `TAVILY_API_KEY`.
 - **Fix**: Added `TAVILY_API_KEY=tvly-dev-your-key-here` to `.devcontainer/secrets.env.example`.
 - **Status**: FIXED.
+
+### [HIGH] ISS-048 · monolith rejects localhost ORCHESTRATOR_SERVICE_URL without ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR · FIXED (2026-05-11)
+- **Evidence**: `AppSettings.validate_orchestrator_service_discovery()` raises `ValueError` when `ORCHESTRATOR_SERVICE_URL=http://localhost:8006` and `CODESPACES` is not `true`. Monolith crashed on import.
+- **Root cause**: `_is_container_runtime()` detects `/proc/1/cgroup` → returns `True` → validation blocks localhost unless `CODESPACES=true` OR `ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR=true`.
+- **Fix**: Added `export ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR="true"` to `supervisor.sh` STEP 4 monolith launch block (alongside existing `CODESPACES=true`). Belt-and-suspenders: both flags now set.
+- **Status**: FIXED. Monolith starts cleanly and routes to orchestrator at localhost:8006.
+
+### [HIGH] ISS-049 · conversation-service fails to start: ModuleNotFoundError prometheus_client · FIXED (2026-05-11)
+- **Evidence**: `/tmp/conversation_service.log` → `ModuleNotFoundError: No module named 'prometheus_client'`. Service dead on :8003.
+- **Root cause**: `prometheus_client` not installed in base Python environment. Other services had it via their own `requirements.txt` installed in Docker; conversation-service runs as native uvicorn without Docker install step.
+- **Fix**: `pip install prometheus_client` in base environment. Added `prometheus_client>=0.20.0` to `microservices/conversation_service/requirements.txt` for reproducibility.
+- **Status**: FIXED. `GET /health → {"status":"healthy","graph_ready":true,"step":"12"}`.
+
+### [VERIFIED] ISS-050 · End-to-end chat routing confirmed live (2026-05-11)
+- **Evidence**: WebSocket test `ws://localhost:8000/api/chat/ws` with subprotocols `['jwt', TOKEN]` → events: `['conversation_init', 'assistant_delta'×6, 'assistant_final']`. Answer: real Arabic LLM response about Newton's second law.
+- **Path**: `User WS → Monolith:8000/api/chat/ws → OrchestratorClient.chat_with_agent() → http://localhost:8006/api/chat/messages → StateGraph 13-node → Planning:8002 + Research:8007 + Reasoning:8008 → composed answer`.
+- **Pipeline**: `POST /compose → pipeline_mode="full" | skills_active=["planning","research","reasoning"] | duration=28.5s`.
+- **Status**: VERIFIED LIVE. Microservices answer users end-to-end.

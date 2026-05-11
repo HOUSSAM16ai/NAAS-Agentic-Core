@@ -1214,3 +1214,38 @@ tasks:
       echo "✅ Step 9 tests complete."
     triggeredBy:
       - manual
+
+
+  verify-step10-postgres-checkpointer:
+    name: "Verify Step 10 — Postgres Checkpointer Live Metrics"
+    description: يتحقق من أن Postgres Checkpointer يعمل على :8006 ويُصدِّر مقاييس Prometheus حقيقية.
+    command: |
+      set -euo pipefail
+      echo "=== Step 10: Postgres Checkpointer Verification ==="
+      echo "1. Checkpointer Status:"
+      curl -sf http://localhost:8006/checkpointer/status | python3 -m json.tool || echo "  orchestrator-service not running"
+      echo "2. Prometheus Metrics (checkpointer):"
+      curl -sf http://localhost:8006/metrics | grep "cogniforge_checkpointer" || echo "  no checkpointer metrics yet"
+      echo "3. Startup Info (checkpointer_backend label):"
+      curl -sf http://localhost:8006/metrics | grep "cogniforge_orchestrator_startup_info" || echo "  no startup info"
+      echo "=== Verification complete ==="
+    triggeredBy:
+      - manual
+
+  run-step10-tests:
+    name: "Run Step 10 Postgres Checkpointer Tests"
+    description: اختبارات الخطوة 10 — Postgres Checkpointer + Prometheus metrics + /checkpointer/status.
+    command: |
+      set -euo pipefail
+      export DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export ORCHESTRATOR_DATABASE_URL="sqlite+aiosqlite:///:memory:"
+      export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-dummy-key-for-tests}"
+      export SECRET_KEY="test-secret-key-for-step10-tests"
+      export ENVIRONMENT="testing"
+      echo "Running Step 10 postgres-checkpointer tests..."
+      python -m pytest \
+        tests/microservices/orchestrator_service/test_step10_postgres_checkpointer.py \
+        -v --tb=short --no-header -q 2>&1 | tail -150
+      echo "Step 10 tests complete."
+    triggeredBy:
+      - manual

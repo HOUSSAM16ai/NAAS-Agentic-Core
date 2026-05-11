@@ -5,18 +5,24 @@
 تُنشأ مرة واحدة على مستوى الـ module (singleton) وتُستخدم من أي مكان في الخدمة.
 
 المقاييس المُعرَّفة:
-  - cogniforge_orchestrator_requests_total       — إجمالي الطلبات (counter)
+  - cogniforge_orchestrator_requests_total           — إجمالي الطلبات (counter)
   - cogniforge_orchestrator_request_duration_seconds — زمن الاستجابة (histogram)
-  - cogniforge_orchestrator_active_connections   — الاتصالات النشطة (gauge)
-  - cogniforge_outbox_relay_cycles_total         — دورات relay (counter)
-  - cogniforge_outbox_relay_processed_total      — سجلات relay مُعالَجة (counter)
-  - cogniforge_outbox_relay_failed_total         — سجلات relay فاشلة (counter)
-  - cogniforge_outbox_relay_skipped_total        — سجلات relay متجاوزة (counter)
-  - cogniforge_outbox_pending_gauge              — سجلات outbox معلقة (gauge)
-  - cogniforge_stategraph_invocations_total      — استدعاءات StateGraph (counter)
-  - cogniforge_stategraph_duration_seconds       — زمن StateGraph (histogram)
-  - cogniforge_stategraph_errors_total           — أخطاء StateGraph (counter)
-  - cogniforge_orchestrator_startup_info         — معلومات الإقلاع (gauge)
+  - cogniforge_orchestrator_active_connections       — الاتصالات النشطة (gauge)
+  - cogniforge_outbox_relay_cycles_total             — دورات relay (counter)
+  - cogniforge_outbox_relay_processed_total          — سجلات relay مُعالَجة (counter)
+  - cogniforge_outbox_relay_failed_total             — سجلات relay فاشلة (counter)
+  - cogniforge_outbox_relay_skipped_total            — سجلات relay متجاوزة (counter)
+  - cogniforge_outbox_pending_gauge                  — سجلات outbox معلقة (gauge)
+  - cogniforge_stategraph_invocations_total          — استدعاءات StateGraph (counter)
+  - cogniforge_stategraph_duration_seconds           — زمن StateGraph (histogram)
+  - cogniforge_stategraph_errors_total               — أخطاء StateGraph (counter)
+  - cogniforge_checkpointer_writes_total             — كتابات Checkpoint إلى Postgres (counter) [Step 10]
+  - cogniforge_checkpointer_reads_total              — قراءات Checkpoint من Postgres (counter) [Step 10]
+  - cogniforge_checkpointer_duration_seconds         — زمن عمليات Checkpoint (histogram) [Step 10]
+  - cogniforge_checkpointer_errors_total             — أخطاء Checkpoint (counter) [Step 10]
+  - cogniforge_checkpointer_active_threads           — threads نشطة في Postgres checkpointer (gauge) [Step 10]
+  - cogniforge_checkpointer_backend_info             — معلومات backend الـ checkpointer (gauge) [Step 10]
+  - cogniforge_orchestrator_startup_info             — معلومات الإقلاع (gauge)
 """
 
 from __future__ import annotations
@@ -226,13 +232,60 @@ PIPELINE_ACTIVE: Gauge = _make_gauge(
 )
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Postgres Checkpointer — مقاييس الذاكرة التراكمية الدائمة (Step 10)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CHECKPOINTER_WRITES: Counter = _make_counter(
+    "cogniforge_checkpointer_writes_total",
+    "إجمالي عمليات كتابة Checkpoint إلى Postgres منذ بدء الخدمة",
+    ["thread_id_prefix", "status"],  # status: success | error
+)
+
+CHECKPOINTER_READS: Counter = _make_counter(
+    "cogniforge_checkpointer_reads_total",
+    "إجمالي عمليات قراءة Checkpoint من Postgres منذ بدء الخدمة",
+    ["thread_id_prefix", "status"],  # status: hit | miss | error
+)
+
+CHECKPOINTER_DURATION: Histogram = _make_histogram(
+    "cogniforge_checkpointer_duration_seconds",
+    "زمن عمليات Checkpoint (قراءة وكتابة) في Postgres",
+    ["operation"],  # operation: write | read | setup | list
+    buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5],
+)
+
+CHECKPOINTER_ERRORS: Counter = _make_counter(
+    "cogniforge_checkpointer_errors_total",
+    "إجمالي أخطاء Postgres Checkpointer مصنَّفة حسب النوع",
+    ["error_type"],  # connection_error | serialization_error | timeout | unknown
+)
+
+CHECKPOINTER_ACTIVE_THREADS: Gauge = _make_gauge(
+    "cogniforge_checkpointer_active_threads",
+    "عدد thread_ids النشطة في Postgres checkpointer حالياً",
+)
+
+CHECKPOINTER_BACKEND_INFO: Gauge = _make_gauge(
+    "cogniforge_checkpointer_backend_info",
+    "معلومات backend الـ checkpointer (قيمة 1 دائماً — الـ labels تحمل البيانات)",
+    ["backend", "step", "pool_size", "tables_ready"],
+)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Startup Info
 # ═══════════════════════════════════════════════════════════════════════════
 
 STARTUP_INFO: Gauge = _make_gauge(
     "cogniforge_orchestrator_startup_info",
     "معلومات إقلاع orchestrator-service (قيمة 1 دائماً — الـ labels تحمل البيانات)",
-    ["version", "environment", "outbox_relay_enabled", "graph_ready", "pipeline_enabled"],
+    [
+        "version",
+        "environment",
+        "outbox_relay_enabled",
+        "graph_ready",
+        "pipeline_enabled",
+        "checkpointer_backend",  # postgres | memory | none  [Step 10]
+    ],
 )
 
 
@@ -309,12 +362,80 @@ def set_pipeline_active(count: int) -> None:
     PIPELINE_ACTIVE.set(count)
 
 
+def record_checkpointer_write(
+    thread_id_prefix: str,
+    status: str,
+    duration_seconds: float,
+) -> None:
+    """
+    يُسجِّل عملية كتابة Checkpoint في Prometheus.
+
+    المدخلات:
+        thread_id_prefix: بادئة thread_id (مثل "u7:c" أو "warmup")
+        status: "success" | "error"
+        duration_seconds: زمن العملية
+    """
+    CHECKPOINTER_WRITES.labels(thread_id_prefix=thread_id_prefix, status=status).inc()
+    CHECKPOINTER_DURATION.labels(operation="write").observe(duration_seconds)
+
+
+def record_checkpointer_read(
+    thread_id_prefix: str,
+    status: str,
+    duration_seconds: float,
+) -> None:
+    """
+    يُسجِّل عملية قراءة Checkpoint في Prometheus.
+
+    المدخلات:
+        thread_id_prefix: بادئة thread_id
+        status: "hit" | "miss" | "error"
+        duration_seconds: زمن العملية
+    """
+    CHECKPOINTER_READS.labels(thread_id_prefix=thread_id_prefix, status=status).inc()
+    CHECKPOINTER_DURATION.labels(operation="read").observe(duration_seconds)
+
+
+def record_checkpointer_error(error_type: str) -> None:
+    """يُسجِّل خطأ في Postgres Checkpointer."""
+    CHECKPOINTER_ERRORS.labels(error_type=error_type).inc()
+
+
+def set_checkpointer_active_threads(count: int) -> None:
+    """يُحدِّث عداد thread_ids النشطة في الـ checkpointer."""
+    CHECKPOINTER_ACTIVE_THREADS.set(count)
+
+
+def set_checkpointer_backend_info(
+    backend: str,
+    step: str,
+    pool_size: int,
+    tables_ready: bool,
+) -> None:
+    """
+    يُسجِّل معلومات backend الـ checkpointer كـ gauge.
+
+    المدخلات:
+        backend: "postgres" | "memory" | "none"
+        step: "10" (رقم الخطوة الانتقالية)
+        pool_size: حجم connection pool
+        tables_ready: هل جداول checkpoint موجودة؟
+    """
+    CHECKPOINTER_BACKEND_INFO.labels(
+        backend=backend,
+        step=step,
+        pool_size=str(pool_size),
+        tables_ready=str(tables_ready).lower(),
+    ).set(1)
+
+
 def set_startup_info(
     version: str,
     environment: str,
     outbox_relay_enabled: bool,
     graph_ready: bool,
     pipeline_enabled: bool = True,
+    checkpointer_backend: str = "none",
 ) -> None:
     """يُسجِّل معلومات الإقلاع كـ gauge بقيمة 1."""
     STARTUP_INFO.labels(
@@ -323,4 +444,5 @@ def set_startup_info(
         outbox_relay_enabled=str(outbox_relay_enabled).lower(),
         graph_ready=str(graph_ready).lower(),
         pipeline_enabled=str(pipeline_enabled).lower(),
+        checkpointer_backend=checkpointer_backend,
     ).set(1)

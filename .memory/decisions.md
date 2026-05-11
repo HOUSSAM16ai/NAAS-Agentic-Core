@@ -370,3 +370,17 @@ debugging misclassifications. Backward-compatible: callers only read `.recognize
 - The `reason` field must not be removed — it is the only audit trail for misclassification debugging.
 - New keywords must not be added to the retrieval list without a corresponding explanation-intent guard.
 **Status**: IMPLEMENTED 2026-05-10 — branch `fix/exercise-retrieval-context-blindness`.
+
+## D-040 · Postgres Checkpointer Activated as Instrumented Subclass — Step 10 (2026-05-11)
+**Decision**: `AsyncPostgresSaver` مُفعَّل كـ checkpointer دائم للـ StateGraph عبر `_InstrumentedCheckpointer` — subclass يرث من `AsyncPostgresSaver` مباشرةً ويُضيف مقاييس Prometheus على كل عملية.
+**Reason**: LangGraph يتحقق من `isinstance(checkpointer, BaseCheckpointSaver)` في `ensure_valid_checkpointer()`. Wrapper بسيط (composition) يفشل هذا الفحص (ISS-041). Subclass يرث كل سلوك `AsyncPostgresSaver` ويُضيف instrumentation بدون كسر الـ type contract.
+**Pattern**: `_make_instrumented_class(base_class)` — factory function تُنشئ subclass في runtime. يُمكِّن اختبار الـ class بدون pool حقيقي.
+**DB**: `AsyncConnectionPool` (psycopg, max_size=5). يستخدم port 5432 (direct PG) لا 6543 (PgBouncer). `_build_psycopg_conninfo()` يُحوِّل `postgresql+asyncpg://` إلى `postgresql://`.
+**Metrics**: 6 مقاييس جديدة: `cogniforge_checkpointer_*`. `cogniforge_orchestrator_startup_info` أُضيف إليه `checkpointer_backend` label.
+**Fallback**: إذا فشل init → يُسجِّل في Prometheus (`backend="none"`) ولا يوقف الخدمة — يعود إلى `MemorySaver`.
+**What MUST NOT change without an ADR**:
+- `_make_instrumented_class` pattern — أي تغيير لـ wrapper strategy يحتاج ADR.
+- `_POOL_SIZE = 5` — تغيير pool size يؤثر على Supabase connection limits.
+- `_build_psycopg_conninfo` — يجب أن يُزيل `+asyncpg` ويُضيف `sslmode=require`.
+- `checkpointer_backend` label في `STARTUP_INFO` — يُستخدم في CI gate و Grafana.
+**Status**: IMPLEMENTED 2026-05-11 — branch `feat/microservices-step10-postgres-checkpointer`.

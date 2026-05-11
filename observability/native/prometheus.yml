@@ -167,3 +167,20 @@ scrape_configs:
           service: skills-pipeline
           step: "9"
     honor_labels: false
+
+
+  # ── Step 10: Postgres Checkpointer metrics (via orchestrator-service :8006) ─
+  # Step 10: AsyncPostgresSaver ACTIVE — LangGraph state persisted to PostgreSQL.
+  # المقاييس: cogniforge_checkpointer_writes_total + reads + duration + errors +
+  #           cogniforge_checkpointer_active_threads + cogniforge_checkpointer_backend_info
+  - job_name: postgres-checkpointer
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    static_configs:
+      - targets: ["localhost:8006"]
+        labels:
+          tier: microservice
+          service: postgres-checkpointer
+          step: "10"
+    honor_labels: false

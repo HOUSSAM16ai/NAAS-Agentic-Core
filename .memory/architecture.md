@@ -1,5 +1,5 @@
 # Architecture Deep-Dive
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step8-reasoning-agent`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step10-postgres-checkpointer`
 > **Authoritative runtime status of every capability lives in `.memory/runtime_truth.md`.**
 > This file describes the live request flow and middleware stack only.
 > Anything documented here must be backed by import + call chain + runtime evidence (see CLAUDE.md §6.6).
@@ -20,14 +20,16 @@ Browser → Next.js :3000
                 ├── [3] HTTP → orchestrator:8006 ← ACTIVE لكن غير مُوجَّه إليه
                 └── [4] LangGraph local ← DE-FACTO HANDLER (Prompt Spaghetti)
 
-الخدمات المصغرة (Skills) — حية لكن منفصلة:
-  orchestrator-service :8006  ← Composition Skill ✅ ACTIVE
-  user-service         :8001  ← Identity Skill    ✅ ACTIVE
-  planning-agent       :8002  ← Planning Skill    ✅ ACTIVE
-  research-agent       :8007  ← Retrieval Skill   ✅ ACTIVE
-  reasoning-agent      :8008  ← Reasoning Skill   ✅ ACTIVE
+الخدمات المصغرة (Skills) — حية ومتصلة:
+  orchestrator-service :8006  ← Composition Skill ✅ ACTIVE (Steps 4+9+10)
+  user-service         :8001  ← Identity Skill    ✅ ACTIVE (Step 5)
+  planning-agent       :8002  ← Planning Skill    ✅ ACTIVE (Step 6)
+  research-agent       :8007  ← Retrieval Skill   ✅ ACTIVE (Step 7)
+  reasoning-agent      :8008  ← Reasoning Skill   ✅ ACTIVE (Step 8)
+  Skills Pipeline      :8006/compose ← Composition Engine ✅ ACTIVE (Step 9)
+  Postgres Checkpointer :8006/checkpointer/status ← Durable Memory ✅ ACTIVE (Step 10)
 
-الهدف (Skills Pipeline — Step 9+):
+الهدف (Skills Pipeline — Step 9 مُنجَز، Step 10 مُنجَز):
 ═══════════════════════════════════════════════════════════════
 Browser → Next.js :3000
     └── /api/* → FastAPI :8000

@@ -1,5 +1,115 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step9-skills-pipeline`
+> Last updated: 2026-05-11 | Branch: `feat/microservices-step10-postgres-checkpointer`
+
+---
+
+## ✅ Session: 2026-05-11 — Microservices Step 10: Postgres Checkpointer (الخطوة الانتقالية العاشرة)
+
+**Branch**: `feat/microservices-step10-postgres-checkpointer`
+**Mode**: Live code changes — Codespaces native (no Docker). uvicorn processes only.
+**Verified**: 101 tests pass | ruff clean | Live /checkpointer/status ✅ | Live /metrics ✅ | checkpointer_backend="postgres" confirmed
+
+### الخطوة الانتقالية المختارة (D-040 — تنفيذ)
+ترقية LangGraph من `MemorySaver` (in-memory، يُفقد عند restart) إلى `AsyncPostgresSaver` (Postgres دائم). هذا يُحوِّل النظام من "محادثة تبدأ من الصفر" إلى **ذاكرة تراكمية حقيقية** — كل thread_id محفوظ في Postgres ويستمر بعد restart.
+
+### ISS-041 — _InstrumentedCheckpointer يجب أن يرث من AsyncPostgresSaver
+**المشكلة**: LangGraph يتحقق من `isinstance(checkpointer, BaseCheckpointSaver)` في `ensure_valid_checkpointer()`. Wrapper بسيط (composition) يفشل هذا الفحص.
+**الحل**: `_make_instrumented_class(AsyncPostgresSaver)` ينشئ subclass حقيقي يرث من `AsyncPostgresSaver` → يقبله LangGraph تلقائياً.
+**التحقق**: `issubclass(_InstrumentedCheckpointer, BaseCheckpointSaver) == True` ✅
+
+### التغييرات المُنجزة
+
+#### 1. `microservices/orchestrator_service/src/core/prom_metrics.py` — 6 مقاييس جديدة
+- `cogniforge_checkpointer_writes_total{thread_id_prefix, status}`
+- `cogniforge_checkpointer_reads_total{thread_id_prefix, status}` — hit | miss | error
+- `cogniforge_checkpointer_duration_seconds{operation}` — write | read | setup
+- `cogniforge_checkpointer_errors_total{error_type}` — connection_error | serialization_error | timeout | unknown
+- `cogniforge_checkpointer_active_threads` — عدد thread_ids النشطة
+- `cogniforge_checkpointer_backend_info{backend, step, pool_size, tables_ready}`
+- `cogniforge_orchestrator_startup_info` — أُضيف label `checkpointer_backend`
+- دوال: `record_checkpointer_write()`, `record_checkpointer_read()`, `record_checkpointer_error()`, `set_checkpointer_active_threads()`, `set_checkpointer_backend_info()`
+
+#### 2. `microservices/orchestrator_service/src/core/database.py` — إعادة كتابة كاملة
+- `_make_instrumented_class(base_class)` — factory ينشئ subclass من AsyncPostgresSaver
+- `_InstrumentedCheckpointer` — subclass يُسجِّل كل aput/aget/aget_tuple/setup في Prometheus
+- `_build_psycopg_conninfo()` — يُحوِّل postgresql+asyncpg:// إلى postgresql:// لـ psycopg
+- `init_db()` — يُهيِّئ AsyncConnectionPool (max_size=5) + AsyncPostgresSaver + setup()
+- `get_checkpointer()` — يُعيد _InstrumentedCheckpointer أو None
+- Fallback: إذا فشل init → يُسجِّل في Prometheus ولا يوقف الخدمة
+
+#### 3. `microservices/orchestrator_service/src/api/routes.py` — endpoint جديد
+- `GET /checkpointer/status` → `{"backend":"postgres","step":"10","active":true,"tables_ready":true,"active_threads":N}`
+
+#### 4. `microservices/orchestrator_service/main.py`
+- `set_startup_info(..., checkpointer_backend="postgres"|"memory"|"none")`
+- يكتشف backend من `get_checkpointer()` بعد `init_db()`
+
+#### 5. `observability/native/prometheus.yml`
+- scrape target جديد: `job_name: postgres-checkpointer` → `localhost:8006/metrics` مع `step="10"`
+
+#### 6. `observability/grafana/dashboards/130-microservices-step10-postgres-checkpointer.json`
+- 13 panels | UID: `cogniforge-ms-step10-checkpointer` | refresh: 10s
+- Row 1: Backend Info + Active Threads + Total Writes + Total Reads (Hit) + Errors + Startup Backend
+- Row 2: Writes Rate (success vs error) + Reads Rate (hit/miss/error)
+- Row 3: Duration P50/P95/P99 + Duration P95 by Operation
+- Row 4: Errors by Type + Active Threads Over Time
+- Row 5: Health Matrix (Steps 4-10) + Step 10 Guide
+
+#### 7. `.github/workflows/microservices-step10-postgres-checkpointer.yml` — CI gate
+- 7 jobs: static-checks / routes-gate / infrastructure-gate / lint / step10-tests / regression-steps-4-9 / pr-summary
+
+#### 8. `tests/microservices/orchestrator_service/test_step10_postgres_checkpointer.py` — 101 اختبار
+- C1: prom_metrics.py — 6 مقاييس جديدة (19 اختبارات)
+- C2: database.py — _InstrumentedCheckpointer + _build_psycopg_conninfo (19 اختبارات)
+- C3: routes.py — /checkpointer/status (7 اختبارات)
+- C4: main.py — checkpointer_backend (3 اختبارات)
+- C5: prometheus.yml — scrape target (4 اختبارات)
+- C6: Grafana dashboard (13 اختبارات)
+- C7: unit tests — _InstrumentedCheckpointer logic (11 اختبارات)
+- C8: unit tests — prom_metrics functions (16 اختبارات)
+- C9: unit tests — _build_psycopg_conninfo (6 اختبارات)
+- C10: automations.yaml (2 اختبارات)
+
+#### 9. `.ona/automations.yaml`
+- task `verify-step10-postgres-checkpointer` — تحقق شامل حي
+- task `run-step10-tests` — 101 اختبار
+
+### التحقق الحي (مُنجَز 2026-05-11)
+```bash
+# /checkpointer/status
+curl http://localhost:8006/checkpointer/status
+# → {"backend":"postgres","step":"10","active":true,"tables_ready":true,"active_threads":1,"pool_size":5}
+
+# Prometheus metrics
+curl http://localhost:8006/metrics | grep cogniforge_checkpointer
+# → cogniforge_checkpointer_writes_total{status="success",thread_id_prefix="warmup"} 7.0
+# → cogniforge_checkpointer_reads_total{status="hit",thread_id_prefix="warmup"} 1.0
+# → cogniforge_checkpointer_reads_total{status="miss",thread_id_prefix="step10_i"} 2.0
+# → cogniforge_checkpointer_duration_seconds_count{operation="write"} 7.0
+# → cogniforge_checkpointer_active_threads 1.0
+# → cogniforge_checkpointer_backend_info{backend="postgres",pool_size="5",step="10",tables_ready="true"} 1.0
+# → cogniforge_orchestrator_startup_info{checkpointer_backend="postgres",graph_ready="true",...} 1.0
+```
+
+### الخدمات النشطة بعد Step 10
+| الخدمة | المنفذ | الحالة |
+|--------|--------|--------|
+| FastAPI monolith | :8000 | ✅ ACTIVE |
+| orchestrator-service | :8006 | ✅ ACTIVE (Steps 4+9+10) |
+| user-service | :8001 | ✅ ACTIVE (Step 5) |
+| planning-agent | :8002 | ✅ ACTIVE (Step 6) |
+| research-agent | :8007 | ✅ ACTIVE (Step 7) |
+| reasoning-agent | :8008 | ✅ ACTIVE (Step 8) |
+| Skills Pipeline | :8006/compose | ✅ ACTIVE (Step 9) |
+| **Postgres Checkpointer** | **:8006/checkpointer/status** | **✅ ACTIVE (Step 10 — جديد)** |
+| Grafana | :3001 | ✅ ACTIVE (13 dashboards) |
+| Prometheus | :9090 | ✅ ACTIVE (10 scrape targets) |
+
+### الخطوة التالية (Step 11)
+- تفعيل `conversation-service` على `:8003` (الخدمة السادسة)
+- أو: تفعيل Redis الحقيقي (`CACHE_TYPE=redis`, `REDIS_URL=redis://localhost:6379/0`)
+- أو: إضافة authentication للـ `/compose` endpoint (JWT token)
+- أو: تفعيل `memory-agent` على `:8009` لحفظ نتائج الـ Pipeline
 
 ---
 

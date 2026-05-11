@@ -1,0 +1,300 @@
+{
+  "__inputs": [],
+  "__requires": [
+    {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"},
+    {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}
+  ],
+  "annotations": {"list": []},
+  "description": "Step 10 — Postgres Checkpointer: LangGraph state persistence metrics",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "Checkpointer Backend — Step 10",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"options": {"0": {"color": "red", "index": 0, "text": "INACTIVE"}}, "type": "value"},
+            {"options": {"1": {"color": "green", "index": 1, "text": "ACTIVE"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "title": "Checkpointer Backend",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "cogniforge_checkpointer_backend_info{job=\"orchestrator-service\"}", "legendFormat": "{{backend}}", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 10}, {"color": "red", "value": 50}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "title": "Active Threads",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "cogniforge_checkpointer_active_threads{job=\"orchestrator-service\"}", "legendFormat": "threads", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "title": "Total Writes",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(cogniforge_checkpointer_writes_total{job=\"orchestrator-service\",status=\"success\"})", "legendFormat": "writes", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 1},
+      "id": 4,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "title": "Total Reads (Hit)",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(cogniforge_checkpointer_reads_total{job=\"orchestrator-service\",status=\"hit\"})", "legendFormat": "hits", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 1},
+      "id": 5,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "title": "Checkpointer Errors",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(cogniforge_checkpointer_errors_total{job=\"orchestrator-service\"})", "legendFormat": "errors", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "mappings": [
+            {"options": {"postgres": {"color": "green", "index": 0, "text": "postgres ✅"}},
+             "type": "value"},
+            {"options": {"memory": {"color": "yellow", "index": 1, "text": "memory ⚠️"}},
+             "type": "value"},
+            {"options": {"none": {"color": "red", "index": 2, "text": "none ❌"}},
+             "type": "value"}
+          ]
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 1},
+      "id": 6,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "title": "Startup Backend",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "cogniforge_orchestrator_startup_info{job=\"orchestrator-service\"}", "legendFormat": "{{checkpointer_backend}}", "refId": "A"}]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+      "id": 101,
+      "title": "Write / Read Operations",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "unit": "ops"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "id": 10,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Checkpoint Writes Rate (success vs error)",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(cogniforge_checkpointer_writes_total{job=\"orchestrator-service\",status=\"success\"}[2m])", "legendFormat": "writes success", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(cogniforge_checkpointer_writes_total{job=\"orchestrator-service\",status=\"error\"}[2m])", "legendFormat": "writes error", "refId": "B"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "unit": "ops"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "id": 11,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Checkpoint Reads Rate (hit / miss / error)",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(cogniforge_checkpointer_reads_total{job=\"orchestrator-service\",status=\"hit\"}[2m])", "legendFormat": "hit", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(cogniforge_checkpointer_reads_total{job=\"orchestrator-service\",status=\"miss\"}[2m])", "legendFormat": "miss", "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(cogniforge_checkpointer_reads_total{job=\"orchestrator-service\",status=\"error\"}[2m])", "legendFormat": "error", "refId": "C"}
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+      "id": 102,
+      "title": "Latency",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "unit": "s"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 15},
+      "id": 20,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Checkpoint Duration P50 / P95 / P99",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.50, rate(cogniforge_checkpointer_duration_seconds_bucket{job=\"orchestrator-service\"}[5m]))", "legendFormat": "P50", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.95, rate(cogniforge_checkpointer_duration_seconds_bucket{job=\"orchestrator-service\"}[5m]))", "legendFormat": "P95", "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.99, rate(cogniforge_checkpointer_duration_seconds_bucket{job=\"orchestrator-service\"}[5m]))", "legendFormat": "P99", "refId": "C"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "unit": "s"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
+      "id": 21,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Duration P95 by Operation (write / read / setup)",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.95, rate(cogniforge_checkpointer_duration_seconds_bucket{job=\"orchestrator-service\",operation=\"write\"}[5m]))", "legendFormat": "write P95", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.95, rate(cogniforge_checkpointer_duration_seconds_bucket{job=\"orchestrator-service\",operation=\"read\"}[5m]))", "legendFormat": "read P95", "refId": "B"}
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 23},
+      "id": 103,
+      "title": "Errors & Active Threads",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "unit": "ops"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "id": 30,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Checkpointer Errors by Type",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(cogniforge_checkpointer_errors_total{job=\"orchestrator-service\"}[5m])", "legendFormat": "{{error_type}}", "refId": "A"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "id": 31,
+      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Active Threads Over Time",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "cogniforge_checkpointer_active_threads{job=\"orchestrator-service\"}", "legendFormat": "active threads", "refId": "A"}
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 32},
+      "id": 104,
+      "title": "Microservices Health Matrix (Steps 4–10)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"options": {"0": {"color": "red", "index": 0, "text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"color": "green", "index": 1, "text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 33},
+      "id": 40,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "title": "Services Health Matrix",
+      "type": "stat",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"orchestrator-service\"}", "legendFormat": "orchestrator :8006", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"user-service\"}", "legendFormat": "user-service :8001", "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"planning-agent\"}", "legendFormat": "planning :8002", "refId": "C"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"research-agent\"}", "legendFormat": "research :8007", "refId": "D"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"reasoning-agent\"}", "legendFormat": "reasoning :8008", "refId": "E"}
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 37},
+      "id": 105,
+      "title": "Step 10 Activation Guide",
+      "type": "row"
+    },
+    {
+      "datasource": null,
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 38},
+      "id": 50,
+      "options": {
+        "content": "## Step 10 — Postgres Checkpointer\n\n**الهدف:** ترقية LangGraph من `MemorySaver` (in-memory) إلى `AsyncPostgresSaver` (Postgres دائم)\n\n**التحقق الحي:**\n```bash\ncurl http://localhost:8006/checkpointer/status\ncurl http://localhost:8006/metrics | grep cogniforge_checkpointer\n```\n\n**المقاييس الجديدة:**\n- `cogniforge_checkpointer_writes_total` — كتابات Checkpoint\n- `cogniforge_checkpointer_reads_total` — قراءات Checkpoint (hit/miss)\n- `cogniforge_checkpointer_duration_seconds` — زمن العمليات\n- `cogniforge_checkpointer_errors_total` — الأخطاء\n- `cogniforge_checkpointer_active_threads` — threads نشطة\n- `cogniforge_checkpointer_backend_info{backend=\"postgres\",step=\"10\"}` — معلومات backend\n\n**الفرق الجوهري:**\n- قبل Step 10: كل restart يُفقد كل المحادثات (MemorySaver)\n- بعد Step 10: المحادثات محفوظة في Postgres — تستمر بعد restart",
+        "mode": "markdown"
+      },
+      "title": "Step 10 Guide",
+      "type": "text"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["cogniforge", "microservices", "step10", "checkpointer", "langgraph"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "CogniForge — Step 10: Postgres Checkpointer",
+  "uid": "cogniforge-ms-step10-checkpointer",
+  "version": 1
+}

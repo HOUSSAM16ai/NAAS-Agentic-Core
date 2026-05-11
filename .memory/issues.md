@@ -628,3 +628,30 @@
 ### [LOW] ISS-043-D · Grafana dashboard count mismatch in older docs · RESOLVED
 - **Evidence**: Some docs say "11 dashboards" or "13 dashboards". Live count: 16 dashboards.
 - **Fix**: Updated in CLAUDE.md §6.25 and `.memory/runtime_truth.md`.
+
+---
+
+## Issues Added 2026-05-11 (ISS-046 — Surgical Fixes, Full Pipeline Verified)
+
+### [CRITICAL] ISS-046-A · orchestrator CODESPACES=false → Docker hostnames → all skill calls fail · FIXED
+- **Evidence**: `POST /compose → pipeline_mode="fallback"`, `error="[Errno -2] Name or service not known"`. orchestrator tried `http://planning-agent:8002`, `http://research-agent:8007`, `http://reasoning-agent:8008`.
+- **Root cause**: `CODESPACES` env var not set when orchestrator was started manually. `config.py:resolve_service_urls()` defaults to Docker hostnames when `CODESPACES != "true"`.
+- **Fix**: Restarted orchestrator with `CODESPACES=true` + explicit `PLANNING_AGENT_URL/RESEARCH_AGENT_URL/REASONING_AGENT_URL=http://localhost:...`. supervisor.sh already sets these correctly — only affected manually-started instances.
+- **Status**: FIXED. `POST /compose → pipeline_mode="full"` confirmed.
+
+### [HIGH] ISS-046-B · research-agent/reasoning-agent start without API keys → mock/fallback mode · FIXED
+- **Evidence**: `research-agent /health → tavily_available="false"`. `reasoning-agent /health → llm_backend="mock"`. supervisor.sh used bare `uvicorn` (not `nohup python -m uvicorn`) which may not inherit env properly.
+- **Root cause**: Services launched by supervisor.sh at devcontainer boot before secrets were available in process env. `uvicorn` binary vs `python -m uvicorn` env inheritance difference.
+- **Fix**: Changed `uvicorn` → `nohup python -m uvicorn` in `launch_research_agent()` and `launch_reasoning_agent()`. Added port 6543→5432 substitution for research_agent DB URL (ISS-040 parity).
+- **Status**: FIXED. `research-agent /health → tavily_available="true"`. `reasoning-agent /health → llm_backend="openrouter"`.
+
+### [HIGH] ISS-046-C · planning-agent uses SQLite (not Postgres) — port 6543 not converted · FIXED
+- **Evidence**: `GET /health → {"database":"sqlite+aiosqlite:///:memory:"}`. `PLANNING_DATABASE_URL` not set; `DATABASE_URL` with port 6543 rejected by asyncpg.
+- **Root cause**: `supervisor.sh:launch_planning_agent()` did not apply `sed 's/:6543\//:5432\//'` before passing URL to asyncpg (unlike orchestrator which had ISS-040 fix).
+- **Fix**: Added `planning_db_url=$(echo "$planning_db_url" | sed 's/:6543\//:5432\//') ` to `launch_planning_agent()`.
+- **Status**: FIXED. `GET /health → {"database":"postgresql+asyncpg://..."}`.
+
+### [LOW] ISS-046-D · secrets.env.example missing TAVILY_API_KEY · FIXED
+- **Evidence**: Developers copying `secrets.env.example` would not know to add `TAVILY_API_KEY`.
+- **Fix**: Added `TAVILY_API_KEY=tvly-dev-your-key-here` to `.devcontainer/secrets.env.example`.
+- **Status**: FIXED.

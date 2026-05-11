@@ -1,0 +1,228 @@
+{
+  "uid": "cogniforge-master-overview",
+  "title": "CogniForge — Master Overview (All Services)",
+  "description": "لوحة شاملة لجميع الخدمات المصغرة — Skills Pipeline + Prometheus 79 metrics",
+  "tags": ["cogniforge", "master", "overview", "skills", "pipeline"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Services UP",
+      "gridPos": { "x": 0, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color":"red","value":0},{"color":"yellow","value":6},{"color":"green","value":8}] }, "mappings": [] } },
+      "targets": [{ "expr": "count(up{job=~\"cogniforge.*|orchestrator.*|planning.*|research.*|reasoning.*|user.*|conversation.*|content.*\"} == 1)", "legendFormat": "UP" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Pipeline Mode",
+      "gridPos": { "x": 3, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color":"blue","value":0}] }, "mappings": [{"type":"value","options":{"0":{"text":"fallback","color":"orange"},"1":{"text":"partial","color":"yellow"},"2":{"text":"full","color":"green"}}}] } },
+      "targets": [{ "expr": "max(cogniforge_pipeline_invocations_total{mode=\"full\"} > 0) or vector(0)", "legendFormat": "mode" }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Pipeline Invocations (full)",
+      "gridPos": { "x": 6, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":0}] } } },
+      "targets": [{ "expr": "sum(cogniforge_pipeline_invocations_total{mode=\"full\"})", "legendFormat": "full" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Outbox Relay Cycles",
+      "gridPos": { "x": 9, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":0}] } } },
+      "targets": [{ "expr": "sum(cogniforge_outbox_relay_cycles_total{result=\"success\"})", "legendFormat": "cycles" }]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Checkpointer Backend",
+      "gridPos": { "x": 12, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":1}] }, "mappings": [{"type":"value","options":{"1":{"text":"postgres","color":"green"},"0":{"text":"memory","color":"orange"}}}] } },
+      "targets": [{ "expr": "max(cogniforge_checkpointer_backend_info{backend=\"postgres\",tables_ready=\"true\"})", "legendFormat": "backend" }]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Tavily Available",
+      "gridPos": { "x": 15, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color":"orange","value":0},{"color":"green","value":1}] }, "mappings": [{"type":"value","options":{"1":{"text":"✅ YES"},"0":{"text":"❌ NO"}}}] } },
+      "targets": [{ "expr": "max(cogniforge_research_startup_info{tavily_available=\"true\"})", "legendFormat": "tavily" }]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "LLM Backend",
+      "gridPos": { "x": 18, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color":"orange","value":0},{"color":"green","value":1}] }, "mappings": [{"type":"value","options":{"1":{"text":"openrouter"},"0":{"text":"mock"}}}] } },
+      "targets": [{ "expr": "max(cogniforge_reasoning_startup_info{llm_backend=\"openrouter\"})", "legendFormat": "llm" }]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Active cogniforge Metrics",
+      "gridPos": { "x": 21, "y": 0, "w": 3, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color":"red","value":0},{"color":"yellow","value":50},{"color":"green","value":70}] } } },
+      "targets": [{ "expr": "count({__name__=~\"cogniforge_.*\"})", "legendFormat": "metrics" }]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Skills Pipeline — Invocations by Mode",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_pipeline_invocations_total{mode=\"full\"}[2m]))", "legendFormat": "full" },
+        { "expr": "sum(rate(cogniforge_pipeline_invocations_total{mode=\"partial\"}[2m]))", "legendFormat": "partial" },
+        { "expr": "sum(rate(cogniforge_pipeline_invocations_total{mode=\"fallback\"}[2m]))", "legendFormat": "fallback" }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Skills Pipeline — Duration (p95)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_pipeline_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95 pipeline" },
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_reasoning_invocation_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95 reasoning" },
+        { "expr": "histogram_quantile(0.95, sum(rate(cogniforge_research_search_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95 research" }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Orchestrator — HTTP Requests/s",
+      "gridPos": { "x": 0, "y": 12, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "sum(rate(cogniforge_orchestrator_requests_total[2m])) by (method, status)", "legendFormat": "{{method}} {{status}}" }]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Planning Agent — Plans/s",
+      "gridPos": { "x": 8, "y": 12, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "sum(rate(cogniforge_planning_plans_total[2m])) by (status)", "legendFormat": "{{status}}" }]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Research Agent — Searches/s",
+      "gridPos": { "x": 16, "y": 12, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "sum(rate(cogniforge_research_searches_total[2m])) by (source)", "legendFormat": "{{source}}" }]
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "Reasoning Agent — Invocations/s",
+      "gridPos": { "x": 0, "y": 19, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "sum(rate(cogniforge_reasoning_invocations_total[2m])) by (status)", "legendFormat": "{{status}}" }]
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Conversation Service — Requests/s",
+      "gridPos": { "x": 8, "y": 19, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "sum(rate(cogniforge_conversation_requests_total[2m])) by (status)", "legendFormat": "{{status}}" }]
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Content Retrieval — Hits vs Misses",
+      "gridPos": { "x": 16, "y": 19, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_retrieval_hits_total[2m]))", "legendFormat": "hits" },
+        { "expr": "sum(rate(cogniforge_retrieval_misses_total[2m]))", "legendFormat": "misses" }
+      ]
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Outbox Relay — Processed vs Failed",
+      "gridPos": { "x": 0, "y": 26, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_outbox_relay_processed_total[2m]))", "legendFormat": "processed" },
+        { "expr": "sum(rate(cogniforge_outbox_relay_failed_total[2m]))", "legendFormat": "failed" },
+        { "expr": "cogniforge_outbox_pending_gauge", "legendFormat": "pending" }
+      ]
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Postgres Checkpointer — Writes/Reads",
+      "gridPos": { "x": 12, "y": 26, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_checkpointer_writes_total[2m])) by (status)", "legendFormat": "writes {{status}}" },
+        { "expr": "sum(rate(cogniforge_checkpointer_reads_total[2m])) by (status)", "legendFormat": "reads {{status}}" }
+      ]
+    },
+    {
+      "id": 50,
+      "type": "table",
+      "title": "Service Health Matrix",
+      "gridPos": { "x": 0, "y": 33, "w": 24, "h": 8 },
+      "options": { "sortBy": [{ "displayName": "Service", "desc": false }] },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "center" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Health" }, "properties": [{ "id": "custom.width", "value": 80 }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{"color":"red","value":0},{"color":"green","value":1}] } }, { "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "targets": [
+        { "expr": "up{job=\"orchestrator-service\"}", "legendFormat": "orchestrator-service :8006", "instant": true },
+        { "expr": "up{job=\"planning-agent\"}", "legendFormat": "planning-agent :8002", "instant": true },
+        { "expr": "up{job=\"research-agent\"}", "legendFormat": "research-agent :8007", "instant": true },
+        { "expr": "up{job=\"reasoning-agent\"}", "legendFormat": "reasoning-agent :8008", "instant": true },
+        { "expr": "up{job=\"user-service\"}", "legendFormat": "user-service :8001", "instant": true },
+        { "expr": "up{job=\"conversation-service\"}", "legendFormat": "conversation-service :8003", "instant": true },
+        { "expr": "up{job=\"content-retrieval-skill\"}", "legendFormat": "content-retrieval-skill :8009", "instant": true },
+        { "expr": "up{job=\"cogniforge-fastapi\"}", "legendFormat": "monolith :8000", "instant": true }
+      ],
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "renameByName": { "Value": "Health", "job": "Service" } } }
+      ]
+    },
+    {
+      "id": 60,
+      "type": "timeseries",
+      "title": "HTTP Request Rate — All Services",
+      "gridPos": { "x": 0, "y": 41, "w": 24, "h": 8 },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 1, "fillOpacity": 5 } } },
+      "targets": [
+        { "expr": "sum(rate(cogniforge_orchestrator_request_duration_seconds_count[2m]))", "legendFormat": "orchestrator" },
+        { "expr": "sum(rate(cogniforge_planning_request_duration_seconds_count[2m]))", "legendFormat": "planning" },
+        { "expr": "sum(rate(cogniforge_research_request_duration_seconds_count[2m]))", "legendFormat": "research" },
+        { "expr": "sum(rate(cogniforge_reasoning_request_duration_seconds_count[2m]))", "legendFormat": "reasoning" },
+        { "expr": "sum(rate(cogniforge_conversation_request_duration_seconds_count[2m]))", "legendFormat": "conversation" },
+        { "expr": "sum(rate(cogniforge_http_requests_total[2m]))", "legendFormat": "monolith" }
+      ]
+    }
+  ]
+}

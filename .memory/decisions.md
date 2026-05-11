@@ -427,3 +427,18 @@ debugging misclassifications. Backward-compatible: callers only read `.recognize
 - `_build_psycopg_conninfo` — يجب أن يُزيل `+asyncpg` ويُضيف `sslmode=require`.
 - `checkpointer_backend` label في `STARTUP_INFO` — يُستخدم في CI gate و Grafana.
 **Status**: IMPLEMENTED 2026-05-11 — branch `feat/microservices-step10-postgres-checkpointer`.
+
+## D-043 · Live Runtime Audit — Full Stack Verified (2026-05-11)
+**Decision**: تحديث جميع ملفات الذاكرة (`CLAUDE.md`, `.memory/`) بناءً على تشخيص حي مباشر لجميع الخدمات.
+**Reason**: الوثائق السابقة تحتوي على معلومات قديمة (عدد dashboards، حالة scrape targets، API contracts). التحديث يضمن أن كل agent مستقبلي يبدأ من الواقع لا من التوقعات.
+**Findings**:
+- 8 خدمات uvicorn تعمل (8000, 8001, 8002, 8003, 8006, 8007, 8008, 8009)
+- 12 Prometheus scrape target كلها UP
+- 16 Grafana dashboard نشطة
+- Skills Pipeline في وضع `fallback` (LLM keys غير موجودة في process env عند الإقلاع)
+- API contracts: `question` field (ليس `message`) مطلوب في `/agent/chat` و `/chat/message`
+- planning-agent يستخدم SQLite in-memory (ليس Supabase) — ISS-043-C
+**What MUST NOT change**:
+- API contract findings يجب أن تبقى موثقة حتى يتم إصلاحها.
+- حالة `pipeline_mode=fallback` يجب أن تُعرض كـ PARTIAL وليس ACTIVE في truth table.
+**Status**: DOCUMENTED 2026-05-11 — branch `feat/live-runtime-audit-d043`.

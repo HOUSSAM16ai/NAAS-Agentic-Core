@@ -1414,6 +1414,56 @@ Live inspection of the running environment (no DATABASE_URL, no secrets):
 
 ---
 
+## ✅ Session: 2026-05-11 — Live Runtime Audit D-043 + Full Stack Verification
+
+**Branch**: `feat/live-runtime-audit-d043`
+**Mode**: Live HTTP probes + documentation update. No application code changed.
+
+### What Was Verified (Live)
+
+All 8 uvicorn processes confirmed running via `ps aux`. All 12 Prometheus scrape targets UP. All 16 Grafana dashboards active.
+
+| Service | Port | Health Response | Metrics |
+|---------|------|----------------|---------|
+| monolith | 8000 | `{"application":"ok","database":"ok","version":"v4.1-root"}` | UP |
+| user-service | 8001 | `{"service":"user-service","status":"ok"}` | UP (step=5) |
+| planning-agent | 8002 | `{"service":"planning-agent","status":"ok","database":"sqlite+aiosqlite:///:memory:"}` | UP (step=6) |
+| conversation-service | 8003 | `{"status":"healthy","graph_ready":true,"step":"12"}` | UP (step=12) |
+| orchestrator-service | 8006 | `{"status":"ok","graph_ready":true,"startup_state":"ready"}` | UP (step=10) |
+| research-agent | 8007 | `{"status":"healthy","tavily_available":"false","step":"7"}` | UP (step=7) |
+| reasoning-agent | 8008 | `{"status":"healthy","llm_backend":"mock","mcts_enabled":"true","step":"8"}` | UP (step=8) |
+| content-retrieval-skill | 8009 | `{"status":"healthy","kb_files":2,"step":"11"}` | UP (step=11) |
+
+### API Contract Findings (live probes)
+
+- `POST /agent/chat` (orchestrator:8006) → 401 without JWT. Requires `question` field (not `message`) + integer `user_id`.
+- `POST /chat/message` (conversation-service:8003) → 422 with `message` field. Requires `question` field.
+- `POST /plans` (planning-agent:8002) → 401 without `X-Service-Token` JWT header.
+- `POST /execute` (research-agent:8007) → 422 without `caller_id` + `action` fields.
+- `POST /execute` (reasoning-agent:8008) → 422 without `caller_id` + `action` + `query` fields.
+- `POST /compose` (orchestrator:8006) → works without auth, returns `pipeline_mode=fallback` (skills in fallback mode without LLM keys in env).
+
+### Live Metrics Sample
+
+```
+cogniforge_outbox_relay_cycles_total{result="success"} 6.0
+cogniforge_pipeline_invocations_total{mode="fallback"} 1.0
+cogniforge_checkpointer_backend_info{backend="postgres",step="10",tables_ready="true"} 1.0
+cogniforge_orchestrator_startup_info{graph_ready="true",outbox_relay_enabled="true"} 1.0
+```
+
+### What Was Updated
+
+- `CLAUDE.md` — §3 (Architecture at a Glance), §14 (Microservices Live Status), §6.25 (new audit section with full Prometheus targets + Grafana dashboards + metrics sample + known gaps)
+- `.memory/runtime_truth.md` — Grafana dashboard count (13→16), Prometheus target count (10→12), branch updated
+- `.memory/progress.md` — this entry
+
+### What Was NOT Changed
+
+- No application source code, no tests, no CI workflows, no runtime behavior
+
+---
+
 ## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
 
 - حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.

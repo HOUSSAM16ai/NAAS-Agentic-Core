@@ -183,10 +183,68 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
+  # ── Microservices Skills Structural Check ─────────────────────────────────
+  skills-structural:
+    name: skills-structural
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Skills Architecture structural invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== 1. Every Skill has prom_metrics.py ==="
+          SKILLS=(orchestrator_service user_service planning_agent conversation_service research_agent reasoning_agent content_retrieval_skill)
+          FAILED=0
+          for skill in "${SKILLS[@]}"; do
+            if ! find "microservices/${skill}" -name "prom_metrics.py" -q 2>/dev/null; then
+              echo "FAIL: microservices/${skill} missing prom_metrics.py"
+              FAILED=1
+            else
+              echo "PASS: ${skill} has prom_metrics.py"
+            fi
+          done
+
+          echo "=== 2. Every Skill has /health in main.py ==="
+          for skill in "${SKILLS[@]}"; do
+            main=$(find "microservices/${skill}" -name "main.py" 2>/dev/null | head -1)
+            if [ -z "$main" ]; then
+              echo "FAIL: microservices/${skill} missing main.py"
+              FAILED=1
+            elif ! grep -q "health" "$main"; then
+              echo "FAIL: ${skill}/main.py missing /health endpoint"
+              FAILED=1
+            else
+              echo "PASS: ${skill} has /health"
+            fi
+          done
+
+          echo "=== 3. Prometheus config has ≥ 12 scrape jobs ==="
+          count=$(grep -c "job_name:" observability/native/prometheus.yml || echo 0)
+          if [ "$count" -lt 12 ]; then
+            echo "FAIL: Only ${count} Prometheus scrape jobs (need ≥ 12)"
+            FAILED=1
+          else
+            echo "PASS: ${count} Prometheus scrape jobs"
+          fi
+
+          echo "=== 4. Grafana dashboards ≥ 16 ==="
+          dash_count=$(find observability/grafana/dashboards -name "*.json" 2>/dev/null | wc -l)
+          if [ "$dash_count" -lt 16 ]; then
+            echo "FAIL: Only ${dash_count} Grafana dashboards (need ≥ 16)"
+            FAILED=1
+          else
+            echo "PASS: ${dash_count} Grafana dashboards"
+          fi
+
+          exit $FAILED
+
   required-ci:
     name: required-ci
     runs-on: ubuntu-latest
-    needs: [lint, contracts, guardrails, test]
+    needs: [lint, contracts, guardrails, test, skills-structural]
     if: always() && !cancelled()
     steps:
       - name: Evaluate required checks
@@ -197,6 +255,7 @@ jobs:
           echo "contracts=${{ needs.contracts.result }}"
           echo "guardrails=${{ needs.guardrails.result }}"
           echo "test=${{ needs.test.result }}"
+          echo "skills-structural=${{ needs.skills-structural.result }}"
 
           # Allow skipped as a valid success state alongside success
           isValid() {
@@ -206,9 +265,13 @@ jobs:
           if ! isValid "${{ needs.lint.result }}" || \
              ! isValid "${{ needs.contracts.result }}" || \
              ! isValid "${{ needs.guardrails.result }}" || \
-             ! isValid "${{ needs.test.result }}"; then
+             ! isValid "${{ needs.test.result }}" || \
+             ! isValid "${{ needs.skills-structural.result }}"; then
             echo "❌ One or more required checks failed"
             exit 1
           fi
 
           echo "✅ All required checks passed"
+          echo ""
+          echo "Skills Architecture: ✅ Verified"
+          echo "Microservices: 8 services | Prometheus: ≥12 targets | Grafana: ≥16 dashboards"

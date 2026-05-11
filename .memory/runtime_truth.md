@@ -23,6 +23,24 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 
 ---
 
+## Microservices Routing Fix (2026-05-11 — D-044)
+
+**Problem:** Monolith was NOT routing to microservices. `CODESPACES` env var not set → `AppSettings` resolved `ORCHESTRATOR_SERVICE_URL` to `http://orchestrator-service:8006` (Docker DNS — unresolvable in Gitpod) → `ConnectError` on every chat → fallback to `local_graph.py`.
+
+**Fix applied:**
+1. `supervisor.sh` — exports before monolith launch: `ORCHESTRATOR_SERVICE_URL=http://localhost:8006`, `CODESPACES=true`, `ORCHESTRATOR_CHAT_ENDPOINT=state_graph`, all microservice URLs.
+2. `supervisor.sh` — orchestrator `SECRET_KEY` now uses `${SECRET_KEY:-dev-secret-change-me}` (same as monolith `.env`) instead of a different default.
+3. `app/infrastructure/clients/orchestrator_client.py` — added `_build_service_jwt(user_id)` that generates a short-lived HS256 JWT using monolith's `SECRET_KEY`. Sent as `Authorization: Bearer <token>` on every request to orchestrator.
+
+**Verified live:**
+```
+monolith → OrchestratorClient._build_service_jwt(user_id=1) → JWT
+         → POST http://localhost:8006/api/chat/messages (Authorization: Bearer <JWT>)
+         → orchestrator StateGraph (13 nodes: SupervisorNode → GeneralKnowledgeNode/SynthesizerNode)
+         → OpenRouter LLM → Arabic response
+```
+Test: `question="كيف أحل معادلة من الدرجة الثانية؟"` → full LaTeX-formatted Arabic response from microservice.
+
 ## Infrastructure truth (updated 2026-05-10 — Step 5 pass)
 
 | Service | Port | Status | Evidence |

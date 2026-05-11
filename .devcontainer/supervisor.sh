@@ -362,6 +362,22 @@ else
 
     lifecycle_info "Starting Uvicorn server..."
 
+    # ── توجيه الـ monolith إلى الخدمات المصغرة المحلية ──────────────────────
+    # ORCHESTRATOR_SERVICE_URL: يُوجِّه OrchestratorClient إلى localhost:8006
+    #   بدلاً من http://orchestrator-service:8006 (Docker DNS — لا يُحلّ في Gitpod).
+    # CODESPACES=true: يُفعِّل apply_codespaces_local_overrides في AppSettings
+    #   لضمان استخدام localhost لجميع الخدمات المصغرة.
+    # ORCHESTRATOR_CHAT_ENDPOINT=state_graph: يُوجِّه إلى /api/chat/messages
+    #   (StateGraph 13 عقدة) بدلاً من /agent/chat (OrchestratorAgent).
+    export ORCHESTRATOR_SERVICE_URL="http://localhost:8006"
+    export CODESPACES="true"
+    export ORCHESTRATOR_CHAT_ENDPOINT="${ORCHESTRATOR_CHAT_ENDPOINT:-state_graph}"
+    export PLANNING_AGENT_URL="http://localhost:8002"
+    export RESEARCH_AGENT_URL="http://localhost:8007"
+    export REASONING_AGENT_URL="http://localhost:8008"
+    export USER_SERVICE_URL="http://localhost:8001"
+    lifecycle_info "Microservices routing: ORCHESTRATOR_SERVICE_URL=http://localhost:8006 (state_graph mode)"
+
     # Start server in background — env vars already exported above
     python -m uvicorn app.main:app \
         --host 0.0.0.0 \
@@ -578,10 +594,14 @@ launch_orchestrator_service() {
     # ── تشغيل uvicorn في الخلفية ──────────────────────────────────────────────
     # Step 4: OUTBOX_RELAY_ENABLED=true — تفعيل حلقة relay الدورية (D-031)
     # Step 9: PLANNING_AGENT_URL/RESEARCH_AGENT_URL/REASONING_AGENT_URL — Skills Pipeline
+    # SECRET_KEY يجب أن يتطابق مع SECRET_KEY في الـ monolith لأن OrchestratorClient
+    # يُولِّد JWT بـ SECRET_KEY الـ monolith ويُرسله إلى orchestrator للتحقق منه.
+    # نستخدم نفس القيمة من .env أو المتغير البيئي لضمان التطابق.
+    local shared_secret="${SECRET_KEY:-dev-secret-change-me}"
     ORCHESTRATOR_DATABASE_URL="$orch_db_url" \
     OPENROUTER_API_KEY="${OPENROUTER_API_KEY}" \
     TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
-    SECRET_KEY="${SECRET_KEY:-cogniforge-orchestrator-dev-key}" \
+    SECRET_KEY="${shared_secret}" \
     REDIS_URL="${REDIS_URL:-redis://localhost:6379}" \
     ENVIRONMENT="${ENVIRONMENT:-development}" \
     CODESPACES="true" \

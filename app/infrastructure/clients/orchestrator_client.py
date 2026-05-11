@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
 from ast import literal_eval
 from collections.abc import AsyncGenerator
 
 import httpx
+import jwt as pyjwt
 from pydantic import BaseModel
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -303,6 +305,23 @@ class OrchestratorClient:
             },
         }
 
+    def _build_service_jwt(self, user_id: int) -> str:
+        """يُولِّد JWT داخلي قصير العمر لمصادقة الـ monolith مع orchestrator-service.
+
+        يستخدم نفس SECRET_KEY المشترك بين الـ monolith والـ orchestrator.
+        صالح لمدة 5 دقائق فقط — يُجدَّد مع كل طلب.
+        """
+        settings = get_settings()
+        now = int(time.time())
+        payload = {
+            "sub": str(user_id),
+            "user_id": user_id,
+            "iat": now,
+            "exp": now + 300,  # 5 دقائق
+            "iss": "cogniforge-monolith",
+        }
+        return pyjwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
     async def _get_client(self) -> httpx.AsyncClient:
         return get_http_client(self.config)
 
@@ -448,6 +467,19 @@ class OrchestratorClient:
             },
         )
 
+        # توليد JWT داخلي لمصادقة الـ monolith مع orchestrator-service
+        # يُجدَّد مع كل طلب لضمان عدم انتهاء الصلاحية
+        try:
+            service_token = self._build_service_jwt(user_id)
+            auth_headers = {
+                "Authorization": f"Bearer {service_token}",
+                "X-Correlation-ID": request_id,
+                "X-Service-Source": "cogniforge-monolith",
+            }
+        except Exception as jwt_err:
+            logger.warning("service_jwt_generation_failed: %s", jwt_err)
+            auth_headers = {"X-Correlation-ID": request_id}
+
         for candidate_url in candidate_urls:
             try:
                 logger.info(
@@ -463,7 +495,9 @@ class OrchestratorClient:
                     reraise=True,
                 ):
                     with attempt:
-                        request = client.build_request("POST", candidate_url, json=payload)
+                        request = client.build_request(
+                            "POST", candidate_url, json=payload, headers=auth_headers
+                        )
                         response = await client.send(request, stream=True)
 
                 if response is None:

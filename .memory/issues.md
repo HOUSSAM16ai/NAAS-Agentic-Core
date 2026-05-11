@@ -604,3 +604,27 @@
 - **Evidence**: `ddgs` package NOT installed. `SuperSearchOrchestrator` falls back to `DuckDuckGoSearchAPIWrapper` when Tavily absent → `ImportError` on initialization.
 - **Impact**: If Tavily key is absent and orchestrator is running, `SuperSearchOrchestrator` raises `ImportError` on init. No graceful degradation.
 - **Fix**: `pip install ddgs` in the research-agent container, or add `ddgs` to `microservices/research_agent/requirements.txt`.
+
+---
+
+## Issues Added 2026-05-11 (D-043 — Live Runtime Audit)
+
+### [HIGH] ISS-043-A · Skills Pipeline in fallback mode — LLM keys not in process env at startup · CONFIRMED LIVE
+- **Evidence**: `POST /compose → pipeline_mode="fallback"`. `reasoning-agent /health → llm_backend="mock"`. `research-agent /health → tavily_available="false"`.
+- **Root cause**: `OPENROUTER_API_KEY` and `TAVILY_API_KEY` not exported into process env before supervisor.sh launches microservices. Services start in mock/fallback mode and do not re-read env after startup.
+- **Impact**: All skill calls return fallback responses. No real LLM reasoning. No web search.
+- **Fix**: Export keys before supervisor.sh runs: `export OPENROUTER_API_KEY="..." && export TAVILY_API_KEY="..."`. Or add to `.devcontainer/secrets.env`.
+
+### [MEDIUM] ISS-043-B · API contract mismatch — `message` vs `question` field · CONFIRMED LIVE
+- **Evidence**: `POST /agent/chat` with `{"message":"..."}` → 422. `POST /chat/message` with `{"message":"..."}` → 422. Both require `question` field.
+- **Impact**: Any client using `message` field (standard convention) gets 422. Frontend must use `question` field.
+- **Fix**: Add `message` as alias for `question` in Pydantic models, or update frontend to use `question`.
+
+### [MEDIUM] ISS-043-C · planning-agent uses in-memory SQLite (not Supabase) · CONFIRMED LIVE
+- **Evidence**: `GET /health → {"database":"sqlite+aiosqlite:///:memory:"}`. `PLANNING_DATABASE_URL` not set or not converted to asyncpg format.
+- **Impact**: Planning state not persisted across restarts. No cross-session continuity for planning.
+- **Fix**: Set `PLANNING_DATABASE_URL` to asyncpg-format Supabase URL in supervisor.sh (same pattern as orchestrator ISS-040 fix).
+
+### [LOW] ISS-043-D · Grafana dashboard count mismatch in older docs · RESOLVED
+- **Evidence**: Some docs say "11 dashboards" or "13 dashboards". Live count: 16 dashboards.
+- **Fix**: Updated in CLAUDE.md §6.25 and `.memory/runtime_truth.md`.

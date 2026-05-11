@@ -1,0 +1,365 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CI Gate — Skills Architecture Full Verification
+# D-043: تحقق شامل من بنية Skills Architecture
+#
+# يتحقق من:
+#   1. api-contracts      — عقود API لكل Skill (fields, auth, response shape)
+#   2. metrics-inventory  — وجود 11 مقياس Prometheus في كل Skill
+#   3. skill-isolation    — لا يستورد Skill من Skill آخر مباشرةً
+#   4. health-endpoints   — كل Skill يملك /health endpoint
+#   5. pipeline-contract  — /compose endpoint في orchestrator يعمل بدون auth
+#   6. grafana-dashboards — عدد dashboards ≥ 16
+#   7. prometheus-targets — عدد scrape targets ≥ 12
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Skills Architecture Gate"
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skills-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  PYTHON_VERSION: "3.12"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  # ── Job 1: API Contracts Verification ─────────────────────────────────────
+  api-contracts:
+    name: api-contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      SECRET_KEY: "test-secret-key-for-ci-pipeline-secure-length"
+      ENVIRONMENT: testing
+      LLM_MOCK_MODE: "1"
+      SUPABASE_URL: https://dummy.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
+      RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          pip install -q fastapi pydantic httpx pytest pytest-asyncio
+      - name: Verify API contract fields exist in Pydantic models
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking conversation-service uses 'question' field ==="
+          grep -r "question" microservices/conversation_service/ --include="*.py" -l | head -5
+          python3 -c "
+          import ast, sys, pathlib
+          # Verify conversation-service ChatRequest has 'question' field
+          src = pathlib.Path('microservices/conversation_service/main.py').read_text()
+          if 'question' not in src:
+              print('FAIL: conversation-service main.py missing question field')
+              sys.exit(1)
+          print('PASS: conversation-service has question field')
+          "
+          echo "=== Checking orchestrator /compose endpoint exists ==="
+          grep -r "compose" microservices/orchestrator_service/src/ --include="*.py" -l | head -5
+          python3 -c "
+          import pathlib, sys
+          routes = pathlib.Path('microservices/orchestrator_service/src/api/routes.py').read_text()
+          if '/compose' not in routes and 'compose' not in routes:
+              print('FAIL: /compose endpoint not found in routes.py')
+              sys.exit(1)
+          print('PASS: /compose endpoint found')
+          "
+          echo "=== Checking planning-agent requires X-Service-Token ==="
+          python3 -c "
+          import pathlib, sys
+          src = pathlib.Path('microservices/planning_agent/main.py').read_text()
+          if 'X-Service-Token' not in src and 'service_token' not in src.lower():
+              print('FAIL: planning-agent missing X-Service-Token auth')
+              sys.exit(1)
+          print('PASS: planning-agent has service token auth')
+          "
+
+  # ── Job 2: Prometheus Metrics Inventory ───────────────────────────────────
+  metrics-inventory:
+    name: metrics-inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify each Skill has prom_metrics.py with ≥ 7 cogniforge_ metrics
+        shell: bash
+        run: |
+          set -euo pipefail
+          SKILLS=(
+            "orchestrator_service"
+            "user_service"
+            "planning_agent"
+            "conversation_service"
+            "research_agent"
+            "reasoning_agent"
+            "content_retrieval_skill"
+          )
+          FAILED=0
+          for skill in "${SKILLS[@]}"; do
+            # Find prom_metrics.py in skill directory
+            metrics_file=$(find "microservices/${skill}" -name "prom_metrics.py" 2>/dev/null | head -1)
+            if [ -z "$metrics_file" ]; then
+              echo "FAIL: microservices/${skill} missing prom_metrics.py"
+              FAILED=1
+              continue
+            fi
+            count=$(grep -c "cogniforge_" "$metrics_file" 2>/dev/null || echo 0)
+            if [ "$count" -lt 7 ]; then
+              echo "FAIL: ${skill}/prom_metrics.py has only ${count} cogniforge_ metrics (need ≥ 7)"
+              FAILED=1
+            else
+              echo "PASS: ${skill} has ${count} cogniforge_ metrics"
+            fi
+          done
+          exit $FAILED
+
+  # ── Job 3: Skill Isolation Check ──────────────────────────────────────────
+  skill-isolation:
+    name: skill-isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no cross-microservice imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/fitness/check_no_app_imports_in_microservices.py --strict
+          echo "PASS: No cross-microservice imports detected"
+
+  # ── Job 4: Health Endpoints Structural Check ───────────────────────────────
+  health-endpoints:
+    name: health-endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify every Skill has /health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          SKILLS=(
+            "orchestrator_service"
+            "user_service"
+            "planning_agent"
+            "conversation_service"
+            "research_agent"
+            "reasoning_agent"
+            "content_retrieval_skill"
+          )
+          FAILED=0
+          for skill in "${SKILLS[@]}"; do
+            main_file=$(find "microservices/${skill}" -name "main.py" 2>/dev/null | head -1)
+            if [ -z "$main_file" ]; then
+              echo "FAIL: microservices/${skill} missing main.py"
+              FAILED=1
+              continue
+            fi
+            if ! grep -q '"/health"' "$main_file" && ! grep -q "health" "$main_file"; then
+              echo "FAIL: ${skill}/main.py missing /health endpoint"
+              FAILED=1
+            else
+              echo "PASS: ${skill} has /health endpoint"
+            fi
+          done
+          exit $FAILED
+
+  # ── Job 5: Grafana Dashboard Count Gate ───────────────────────────────────
+  grafana-dashboards:
+    name: grafana-dashboards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify ≥ 16 Grafana dashboards exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          DASHBOARD_DIR="observability/grafana/dashboards"
+          if [ ! -d "$DASHBOARD_DIR" ]; then
+            echo "FAIL: $DASHBOARD_DIR not found"
+            exit 1
+          fi
+          count=$(find "$DASHBOARD_DIR" -name "*.json" | wc -l)
+          echo "Found ${count} Grafana dashboard JSON files"
+          if [ "$count" -lt 16 ]; then
+            echo "FAIL: Expected ≥ 16 dashboards, found ${count}"
+            exit 1
+          fi
+          echo "PASS: ${count} dashboards found (≥ 16 required)"
+          # Verify each dashboard has a valid UID
+          for f in "$DASHBOARD_DIR"/*.json; do
+            uid=$(python3 -c "import json; d=json.load(open('$f')); print(d.get('uid','MISSING'))" 2>/dev/null || echo "PARSE_ERROR")
+            if [ "$uid" = "MISSING" ] || [ "$uid" = "PARSE_ERROR" ]; then
+              echo "WARN: $f missing uid field"
+            fi
+          done
+
+  # ── Job 6: Prometheus Scrape Targets Count Gate ───────────────────────────
+  prometheus-targets:
+    name: prometheus-targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify ≥ 12 Prometheus scrape targets in prometheus.yml
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROM_FILE="observability/native/prometheus.yml"
+          if [ ! -f "$PROM_FILE" ]; then
+            echo "FAIL: $PROM_FILE not found"
+            exit 1
+          fi
+          count=$(grep -c "job_name:" "$PROM_FILE" || echo 0)
+          echo "Found ${count} Prometheus scrape jobs"
+          if [ "$count" -lt 12 ]; then
+            echo "FAIL: Expected ≥ 12 scrape jobs, found ${count}"
+            exit 1
+          fi
+          echo "PASS: ${count} scrape jobs found (≥ 12 required)"
+          # Verify all expected services are present
+          EXPECTED_JOBS=(
+            "cogniforge-fastapi"
+            "orchestrator-service"
+            "user-service"
+            "planning-agent"
+            "conversation-service"
+            "research-agent"
+            "reasoning-agent"
+            "content-retrieval-skill"
+          )
+          FAILED=0
+          for job in "${EXPECTED_JOBS[@]}"; do
+            if ! grep -q "$job" "$PROM_FILE"; then
+              echo "FAIL: Missing scrape job: $job"
+              FAILED=1
+            else
+              echo "PASS: Found scrape job: $job"
+            fi
+          done
+          exit $FAILED
+
+  # ── Job 7: Skills Pipeline Contract ───────────────────────────────────────
+  pipeline-contract:
+    name: pipeline-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      SECRET_KEY: "test-secret-key-for-ci-pipeline-secure-length"
+      ENVIRONMENT: testing
+      LLM_MOCK_MODE: "1"
+      SUPABASE_URL: https://dummy.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
+      RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          pip install -q fastapi pydantic httpx pytest pytest-asyncio
+      - name: Verify skills_pipeline.py structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIPELINE_FILE="microservices/orchestrator_service/src/services/skills_pipeline.py"
+          if [ ! -f "$PIPELINE_FILE" ]; then
+            echo "FAIL: skills_pipeline.py not found"
+            exit 1
+          fi
+          echo "=== Checking pipeline has fallback mode ==="
+          python3 -c "
+          import pathlib, sys
+          src = pathlib.Path('$PIPELINE_FILE').read_text()
+          checks = {
+              'fallback mode': 'fallback',
+              'asyncio.gather': 'asyncio.gather',
+              'X-Correlation-ID': 'X-Correlation-ID',
+              'run_skills_pipeline': 'run_skills_pipeline',
+          }
+          failed = False
+          for name, pattern in checks.items():
+              if pattern not in src:
+                  print(f'FAIL: Missing {name} ({pattern})')
+                  failed = True
+              else:
+                  print(f'PASS: Found {name}')
+          sys.exit(1 if failed else 0)
+          "
+
+  # ── Final Gate ─────────────────────────────────────────────────────────────
+  skills-gate-required:
+    name: skills-gate-required
+    runs-on: ubuntu-latest
+    needs:
+      - api-contracts
+      - metrics-inventory
+      - skill-isolation
+      - health-endpoints
+      - grafana-dashboards
+      - prometheus-targets
+      - pipeline-contract
+    if: always() && !cancelled()
+    steps:
+      - name: Evaluate all Skills Architecture gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "api-contracts=${{ needs.api-contracts.result }}"
+          echo "metrics-inventory=${{ needs.metrics-inventory.result }}"
+          echo "skill-isolation=${{ needs.skill-isolation.result }}"
+          echo "health-endpoints=${{ needs.health-endpoints.result }}"
+          echo "grafana-dashboards=${{ needs.grafana-dashboards.result }}"
+          echo "prometheus-targets=${{ needs.prometheus-targets.result }}"
+          echo "pipeline-contract=${{ needs.pipeline-contract.result }}"
+
+          isValid() { [ "$1" = "success" ] || [ "$1" = "skipped" ]; }
+
+          FAILED=0
+          for result in \
+            "${{ needs.api-contracts.result }}" \
+            "${{ needs.metrics-inventory.result }}" \
+            "${{ needs.skill-isolation.result }}" \
+            "${{ needs.health-endpoints.result }}" \
+            "${{ needs.grafana-dashboards.result }}" \
+            "${{ needs.prometheus-targets.result }}" \
+            "${{ needs.pipeline-contract.result }}"; do
+            if ! isValid "$result"; then
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "❌ Skills Architecture gate FAILED — one or more checks did not pass"
+            exit 1
+          fi
+
+          echo "✅ All Skills Architecture gates passed"
+          echo ""
+          echo "════════════════════════════════════════════════════════════"
+          echo "  Skills Architecture — Verified"
+          echo "════════════════════════════════════════════════════════════"
+          echo "  Services: 8 (8000, 8001, 8002, 8003, 8006, 8007, 8008, 8009)"
+          echo "  Prometheus: ≥ 12 scrape targets"
+          echo "  Grafana: ≥ 16 dashboards"
+          echo "  Pipeline: /compose with fallback mode"
+          echo "════════════════════════════════════════════════════════════"

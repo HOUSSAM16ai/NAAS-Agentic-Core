@@ -97,7 +97,25 @@ System:   alembic_version
 
 ## Critical environment facts
 - `DATABASE_URL` or `APP_DATABASE_URL` **must** be set — app crashes without it
-- `OPENROUTER_API_KEY` **must** be set — all LLM calls fail without it
+- `OPENROUTER_API_KEY` **must** be set — all LLM calls fail without it (reasoning-agent falls back to mock)
+- `TAVILY_API_KEY` — optional; research-agent starts without it (`tavily_available=false`)
 - `OTEL_EXPORTER_OTLP_ENDPOINT=http` is currently set but is an **invalid URL** — OTEL is a no-op
 - `REDIS_URL` is **not set** — cache falls back to `InMemoryCache`
 - `ORCHESTRATOR_SERVICE_URL` is **not set** — orchestrator HTTP path always fails → fallback chain runs
+- `ORCHESTRATOR_DATABASE_URL` — must be `postgresql+asyncpg://` on port 5432 (not 6543 PgBouncer)
+- `PLANNING_DATABASE_URL` — not set → planning-agent uses `sqlite+aiosqlite:///:memory:` (ISS-043-C)
+
+## Live Service Status (verified 2026-05-11)
+All 8 microservices ACTIVE. Skills Pipeline in `fallback` mode (LLM keys not in process env at startup).
+To activate full pipeline: export `OPENROUTER_API_KEY` + `TAVILY_API_KEY` before supervisor.sh runs.
+
+## API Contract Quick Reference
+| Endpoint | Required Fields | Auth |
+|----------|----------------|------|
+| `POST /agent/chat` (8006) | `question`, integer `user_id` | `Authorization: Bearer <JWT>` |
+| `POST /chat/message` (8003) | `question` | None |
+| `POST /plans` (8002) | `query` | `X-Service-Token: <JWT>` |
+| `POST /execute` (8007) | `query`, `caller_id`, `action` | None |
+| `POST /execute` (8008) | `query`, `caller_id`, `action` | None |
+| `POST /compose` (8006) | `query` | None |
+| `POST /retrieve` (8009) | `question` | None |

@@ -1,5 +1,6 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-11** | Branch: `feat/microservices-step12-conversation-service`
+> Last updated: **2026-05-11** | Branch: `feat/live-runtime-audit-d043`
+> Audit method: Direct HTTP probes + Prometheus /api/v1/targets + Grafana /api/search
 > Authority: this file overrides any contradictory aspirational doc in `docs/` or root markdown.
 
 ## Golden rule
@@ -37,8 +38,8 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 | **Postgres Checkpointer** | **8006/checkpointer/status** | **ACTIVE** | Step 10. `AsyncPostgresSaver` (subclass `_InstrumentedCheckpointer`) — LangGraph state persisted to PostgreSQL. 6 new Prometheus metrics: `cogniforge_checkpointer_*`. Live verified 2026-05-11: `GET /checkpointer/status → {"backend":"postgres","step":"10","active":true,"tables_ready":true}` \| `cogniforge_checkpointer_writes_total{status="success",thread_id_prefix="warmup"} 7.0` \| `cogniforge_checkpointer_backend_info{backend="postgres",step="10",tables_ready="true"} 1.0` \| `cogniforge_orchestrator_startup_info{checkpointer_backend="postgres",graph_ready="true"} 1.0`. ISS-041: `_InstrumentedCheckpointer` يرث من `AsyncPostgresSaver` مباشرةً (subclass لا wrapper) لأن LangGraph يتحقق من `isinstance(BaseCheckpointSaver)`. |
 | **content-retrieval-skill** | **8009** | **ACTIVE** | Step 11. Skill مستقلة لاسترجاع المحتوى التعليمي من knowledge_base/. intent_classifier (explanation/retrieval/unknown) + retrieval_engine (score-based). 7 Prometheus metrics: `cogniforge_retrieval_*`. ISS-038 fix: explanation context blocks retrieval. Live verified 2026-05-11: `GET /health → {"status":"healthy","step":"11","kb_files":2}` \| `POST /retrieve {"question":"أريد تمرين بكالوريا"} → intent="retrieval" total=1` \| `POST /retrieve {"question":"اشرح الجزء أ"} → intent="explanation" total=0`. |
 | **conversation-service** | **8003** | **ACTIVE** | Step 12. D-042. Skill مستقلة لإدارة المحادثات التعليمية. LangGraph StateGraph: `intent_node → response_node`. `ConversationState` TypedDict. `_classify_intent()` deterministic (no LLM). Fallback mode بدون OPENROUTER_API_KEY. 11 Prometheus metrics: `cogniforge_conversation_*`. HTTP `POST /chat/message` + WS `/chat/ws` + `/admin/chat/ws`. Lazy DB singleton + asyncpg URL normalization. Auto-starts via supervisor.sh STEP 4J. 117 tests pass. |
-| **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 13 dashboards (Steps 2–10). Prometheus datasource UP. |
-| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → Healthy`. 10 scrape targets: fastapi, grafana, prometheus, orchestrator-service(:8006), user-service(:8001), planning-agent(:8002), research-agent(:8007), reasoning-agent(:8008), skills-pipeline(:8006), postgres-checkpointer(:8006). |
+| **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. **16 dashboards** (Steps 2–12). Prometheus datasource UP. |
+| **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → Healthy`. **12 scrape targets ALL UP**: fastapi, grafana, prometheus, orchestrator-service(:8006), user-service(:8001), planning-agent(:8002), conversation-service(:8003), research-agent(:8007), reasoning-agent(:8008), skills-pipeline(:8006), postgres-checkpointer(:8006), content-retrieval-skill(:8009). |
 | **Redis** | **6379** | **ACTIVE (process only)** | ping OK. REDIS_URL not set → app uses InMemoryCache. |
 | **PostgreSQL** | **6543** | **ACTIVE** | PostgreSQL 17.6 Supabase PgBouncer. database:ok confirmed. |
 | **OpenRouter** | external | **ACTIVE** | Primary: nvidia/nemotron-3-super-120b-a12b:free. Live graph call confirmed. |

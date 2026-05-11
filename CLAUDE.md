@@ -133,6 +133,19 @@ In both environments the backend is on **8000** and microservices in `microservi
 
 **Live verification fix applied 2026-05-10 (ISS-038-B — asyncpg URL conversion):** `orchestrator-service` and `planning-agent` both failed to start with `sqlalchemy.exc.InvalidRequestError: The asyncio extension requires an async driver to be used. The loaded 'psycopg2' is not async.` Root cause: `DATABASE_URL` from Supabase uses `postgresql://` scheme which SQLAlchemy maps to psycopg2 (sync). `create_async_engine` requires `postgresql+asyncpg://`. Fix applied in `supervisor.sh` (both `launch_orchestrator_service()` and `launch_planning_agent()`) and `.ona/automations.yaml` (all start/restart commands): inline bash substitution converts the scheme and strips `sslmode` query param (asyncpg handles SSL via `connect_args`, not query string). Verified live: both services start and respond on `:8006` and `:8002`.
 
+**Live Runtime Audit 2026-05-11 (D-043 — Full Stack Verified):** Complete live health probe of all 8 services confirmed. All Prometheus scrape targets UP. Skills Pipeline in `fallback` mode by default (LLM calls require `OPENROUTER_API_KEY` in process env). Key findings: (1) `/agent/chat` requires `question` field (not `message`) + integer `user_id` + JWT `Authorization` header — 401 without auth; (2) `/chat/message` on conversation-service requires `question` field (not `message`); (3) planning-agent `/plans` requires `X-Service-Token` JWT header; (4) research-agent `/execute` requires `caller_id` + `action` fields; (5) reasoning-agent `/execute` requires `caller_id` + `action` + `query` fields; (6) `/compose` on orchestrator works without auth and returns `pipeline_mode="fallback"` when skills unreachable. Grafana :3001 → 16 dashboards active. Prometheus :9090 → 12 scrape targets all UP. All 8 uvicorn processes confirmed live via `ps aux`. **Verified service matrix 2026-05-11:**
+
+| Service | Port | Health | Metrics | Pipeline Mode |
+|---------|------|--------|---------|---------------|
+| monolith (FastAPI) | 8000 | `{"application":"ok","database":"ok","version":"v4.1-root"}` | UP | N/A |
+| user-service | 8001 | `{"service":"user-service","status":"ok"}` | UP (step=5) | N/A |
+| planning-agent | 8002 | `{"service":"planning-agent","status":"ok"}` | UP (step=6) | fallback |
+| conversation-service | 8003 | `{"status":"healthy","graph_ready":true,"step":"12"}` | UP (step=12) | LangGraph |
+| orchestrator-service | 8006 | `{"status":"ok","graph_ready":true,"startup_state":"ready"}` | UP (step=10) | compose |
+| research-agent | 8007 | `{"status":"healthy","tavily_available":"false","step":"7"}` | UP (step=7) | fallback |
+| reasoning-agent | 8008 | `{"status":"healthy","llm_backend":"mock","mcts_enabled":"true","step":"8"}` | UP (step=8) | mock |
+| content-retrieval-skill | 8009 | `{"status":"healthy","kb_files":2,"step":"11"}` | UP (step=11) | active |
+
 **Microservices Step 12 applied 2026-05-11 (D-042 — Conversation Service Live Activation):** `conversation-service` activated as a **uvicorn process** on `:8003` — the sixth microservice in the Skills Architecture. Replaces the stub `main.py` (capability_level="stub") with a full Skill: LangGraph StateGraph (`intent_node → response_node`), Prometheus `/metrics` (11 metrics: `cogniforge_conversation_*`), HTTP `POST /chat/message`, WebSocket `/chat/ws` + `/admin/chat/ws`, lazy DB singleton with asyncpg URL normalization (ISS-038-B + ISS-040 fixes). Four artefacts: (1) `microservices/conversation_service/prom_metrics.py` — independent `CollectorRegistry`, 11 metrics; (2) `microservices/conversation_service/src/conversation_graph.py` — LangGraph StateGraph with `ConversationState` TypedDict, `_classify_intent()` (deterministic, no LLM), `_build_fallback_response()` (works without OPENROUTER_API_KEY), `asyncio.wait_for` timeout guard (30s); (3) `microservices/conversation_service/main.py` — FastAPI Skill v2.0.0 with lifespan warmup, `/health` + `/metrics` + `/chat/message` + `/chat/ws` + `/admin/chat/ws`; (4) `microservices/conversation_service/database.py` — lazy engine singleton, `_normalize_db_url()` converts `postgresql://` → `postgresql+asyncpg://`, strips `sslmode`. Supervisor STEP 4J launches it automatically. Prometheus scrape target at `localhost:8003` with `step="12"`. Grafana dashboard `140-microservices-step12-conversation-service.json` (15 panels, UID `cogniforge-ms-step12-conversation`, 10s refresh). CI gate `.github/workflows/microservices-step12-conversation-service.yml` (7 jobs). 117 tests in `tests/microservices/conversation_service/test_step12_conversation_service.py`. **pytest.ini** updated: added `ignore::UserWarning` + `ignore:.*allowed_objects.*` to suppress LangGraph internal deprecation warnings. `tests/microservices/conversation_service/conftest.py` added to suppress `LangChainPendingDeprecationWarning` at fixture-import level.
 
 **Microservices Step 11 applied 2026-05-11 (D-041 — Full Skills Pipeline Live):** Skills Pipeline upgraded from `pipeline_mode="partial"` to `pipeline_mode="full"` — all 3 Skills (planning+research+reasoning) now execute concurrently with real LLM. Four fixes: **(ISS-042-A)** `_generate_service_token()` added to `skills_pipeline.py` — generates JWT HS256 (`sub="api-gateway"`, exp=5min) sent as `X-Service-Token` header to planning-agent (which requires it); **(ISS-042-B)** `dspy.OpenAI` → `dspy.LM` with `openrouter/` prefix in `planning_agent/main.py` — DSPy 3.x removed `dspy.OpenAI`; **(ISS-042-C)** `asyncio.gather` 3-way parallel (planning+research+reasoning simultaneously, not sequential); **(ISS-042-D)** timeout raised 10s→55s for LLM latency (~30-45s). `SECRET_KEY` unified to `super_secret_key_change_in_production` across orchestrator+planning-agent. New microservice **content-retrieval-skill** on `:8009` — converts exercise retrieval from keyword matching to a proper Skill: `intent_classifier.py` (explanation/retrieval/unknown, 3-phase logic, ISS-038 fix), `retrieval_engine.py` (score-based retrieval from `knowledge_base/`), `main.py` (POST /retrieve + GET /health + GET /metrics), `prom_metrics.py` (7 metrics: `cogniforge_retrieval_*`). Supervisor STEP 4I launches it automatically. Prometheus scrape target at `localhost:8009` with `step="11"`. Grafana dashboard `120-microservices-step11-full-skills.json` (15 panels, UID `cogniforge-ms-step11-full-skills`, 10s refresh). CI gate `.github/workflows/microservices-step11-full-skills.yml` (7 jobs). 63 tests in `tests/microservices/content_retrieval_skill/test_step11_content_retrieval_skill.py`. **Live verified 2026-05-11:** `POST /compose → pipeline_mode="full", skills_active=["planning","research","reasoning"], total_ms=32069` | `cogniforge_pipeline_invocations_total{mode="full"} 1.0` | `GET /health (8009) → {"status":"healthy","step":"11","kb_files":2}` | `POST /retrieve (BAC) → intent="retrieval" total=1` | `POST /retrieve (explanation) → intent="explanation" total=0 (ISS-038 FIXED)`.
@@ -168,13 +181,13 @@ curl -s http://localhost:8000/health | python -m json.tool
 Browser
   └── Next.js (port 3000 — supervisor.sh overrides package.json port 5000)
         └── next.config.js rewrites /api/* → localhost:8000
-              └── FastAPI (port 8000) — 62 routes, requires DATABASE_URL
+              └── FastAPI monolith (port 8000) — requires DATABASE_URL
                     ├── /api/security/login, /register
                     ├── /api/chat/ws  (WebSocket)
                     │     └── OrchestratorClient (fallback chain)
                     │           ├── [1] File count detection
-                    │           ├── [2] Exercise retrieval (BAC)
-                    │           ├── [3] HTTP → orchestrator:8006 → ConnectError (DORMANT)
+                    │           ├── [2] content-retrieval-skill:8009 (ISS-038 fixed)
+                    │           ├── [3] HTTP → orchestrator:8006/agent/chat (requires JWT auth)
                     │           └── [4] LangGraph local_graph.py ← PRIMARY HANDLER
                     │                   supervisor_node (intent: educational/chat/general)
                     │                   └── chat_node → OpenRouter (nvidia/nemotron-3-super-120b-a12b:free)
@@ -182,11 +195,19 @@ Browser
                     ├── /v1/content/*
                     └── /api/v1/data-mesh/*
 
-Infrastructure (verified live 2026-05-09, Steps 3-8 added 2026-05-10/11):
-  Grafana    → port 3001  (grafana.ini says 3000 but provisioning CLI overrides) — 11 dashboards
-  Prometheus → port 9090  (8 scrape targets: fastapi + grafana + prometheus + 5 microservices)
+Skills Pipeline (ACTIVE — verified live 2026-05-11):
+  orchestrator:8006/compose
+    ├── planning-agent:8002/plans  (requires X-Service-Token JWT)
+    ├── research-agent:8007/execute  (requires caller_id + action fields)
+    └── reasoning-agent:8008/execute  (requires caller_id + action + query fields)
+  conversation-service:8003/chat/message  (requires "question" field, not "message")
+  content-retrieval-skill:8009/retrieve  (intent classifier — ISS-038 fixed)
+
+Infrastructure (verified live 2026-05-11):
+  Grafana    → port 3001  — 16 dashboards active, GET /api/health → {"database":"ok"}
+  Prometheus → port 9090  — 12 scrape targets ALL UP (verified via /api/v1/targets)
   Redis      → port 6379  (process running but app uses InMemoryCache — REDIS_URL not set)
-  PostgreSQL → Supabase PgBouncer :6543 (19 users, 2098 customer_messages, 3038 admin_messages)
+  PostgreSQL → Supabase PgBouncer :6543 / Direct :5432 (asyncpg uses :5432)
 
 Step 3/4 (uvicorn process — auto-starts via supervisor.sh when OPENROUTER_API_KEY set):
   orchestrator-service  → port 8006  (uvicorn process, OUTBOX_RELAY_ENABLED=true)
@@ -1008,26 +1029,107 @@ graph.add_edge("my_new_node", END)
 
 ---
 
-## 14. Microservices (All Dormant in Codespaces by Default)
+## 14. Microservices — Live Status (Verified 2026-05-11)
 
-These exist in `microservices/` but **do not start** in the default Codespaces devcontainer (which only spins up the `web` container via `.devcontainer/docker-compose.host.yml`):
+All 7 microservices start automatically via `supervisor.sh` in Codespaces. No Docker required.
 
-| Service | Port | Status |
-|---|---|---|
-| orchestrator-service | 8006 | DORMANT — ConnectError expected |
-| planning-agent | 8001 | DORMANT |
-| memory-agent | 8002 | DORMANT |
-| user-service | 8003 | DORMANT |
-| research-agent | 8007 | DORMANT |
-| reasoning-agent | 8008 | DORMANT |
-| auditor-service | 8009 | DORMANT |
-| conversation-service | 8010 | DORMANT |
+| Service | Port | Status | Prometheus | Auth Required |
+|---|---|---|---|---|
+| orchestrator-service | 8006 | **ACTIVE** — `startup_state=ready`, graph_ready=true, checkpointer=postgres | UP (step=10) | JWT on `/agent/chat` |
+| user-service | 8001 | **ACTIVE** — `{"status":"ok"}` | UP (step=5) | None on `/health` |
+| planning-agent | 8002 | **ACTIVE** — `{"status":"ok","database":"sqlite+aiosqlite:///:memory:"}` | UP (step=6) | `X-Service-Token` JWT on `/plans` |
+| conversation-service | 8003 | **ACTIVE** — `graph_ready=true`, LangGraph StateGraph | UP (step=12) | None |
+| research-agent | 8007 | **ACTIVE** — `tavily_available=false` (key not in env) | UP (step=7) | `caller_id`+`action` fields |
+| reasoning-agent | 8008 | **ACTIVE** — `llm_backend=mock`, `mcts_enabled=true` | UP (step=8) | `caller_id`+`action`+`query` fields |
+| content-retrieval-skill | 8009 | **ACTIVE** — `kb_files=2`, intent classifier active | UP (step=11) | None |
 
-To wake the full microservices stack (separate from the devcontainer): `docker compose -f docker-compose.yml up -d`
+**API Contract Notes (verified live):**
+- `POST /agent/chat` (orchestrator) → requires `question` (not `message`) + integer `user_id` + `Authorization: Bearer <JWT>`
+- `POST /chat/message` (conversation-service) → requires `question` (not `message`) field
+- `POST /plans` (planning-agent) → requires `X-Service-Token: <JWT>` header
+- `POST /execute` (research-agent) → requires `caller_id` + `action` fields
+- `POST /execute` (reasoning-agent) → requires `caller_id` + `action` + `query` fields
+- `POST /compose` (orchestrator) → no auth, returns `pipeline_mode` (fallback/partial/full)
+
+**To activate full pipeline mode:**
+```bash
+export OPENROUTER_API_KEY="..."   # enables LLM in reasoning-agent (mock→openrouter)
+export TAVILY_API_KEY="..."       # enables web search in research-agent
+# Restart services via supervisor.sh or automations
+```
+
+**Docker Compose (optional, for isolated environments):** `docker compose -f docker-compose.yml up -d`
 
 ---
 
-*Last updated: 2026-05-06 — third independent audit (`claude/architecture-rescue-diagnostic-wUfbE`) added §6.9 (Architecture Rescue Diagnostic). Two corrections applied to §6.6 truth table (row 12 class-name fix, row 21 promoted to `PARTIAL (loaded-not-invoked)`); two new rows (26, 27) describing boundary-service split-active and chat-streamer loaded-not-invoked. CI doc-integrity workflow added (`.github/workflows/doc_integrity.yml`) — gates `CLAUDE.md` + `.memory/*` integrity, the closing rule, and (advisory) repo-root scratch artifacts. New issues: ISS-025 (CI gates gap), ISS-026 (loaded-not-invoked decision required). Markdown debt inventory captured in `.memory/diagnostic_2026_05_06_rescue.md`; no deletions performed in this branch.*
+*Last updated: 2026-05-11 — Live runtime audit D-043 confirmed all 8 services ACTIVE. Skills Pipeline operational in fallback mode. 12 Prometheus scrape targets UP. 16 Grafana dashboards active. CLAUDE.md §3 and §14 updated to reflect verified live state.*
+
+---
+
+## 6.25 Live Runtime Audit — Full Stack Verified (2026-05-11, D-043)
+
+**Audit method:** Direct HTTP probes to all services + Prometheus targets API + Grafana API.
+
+### Prometheus Scrape Targets (all UP)
+
+```
+cogniforge-fastapi          → http://localhost:8000/api/v1/observability/prometheus  → UP
+content-retrieval-skill     → http://localhost:8009/metrics                          → UP
+conversation-service        → http://localhost:8003/metrics                          → UP
+grafana                     → http://localhost:3001/metrics                          → UP
+orchestrator-service        → http://localhost:8006/metrics                          → UP
+planning-agent              → http://localhost:8002/metrics                          → UP
+postgres-checkpointer       → http://localhost:8006/metrics                          → UP
+prometheus                  → http://localhost:9090/metrics                          → UP
+reasoning-agent             → http://localhost:8008/metrics                          → UP
+research-agent              → http://localhost:8007/metrics                          → UP
+skills-pipeline             → http://localhost:8006/metrics                          → UP
+user-service                → http://localhost:8001/metrics                          → UP
+```
+
+### Grafana Dashboards (16 active)
+
+| UID | Title |
+|-----|-------|
+| cogniforge-ms-step10-checkpointer | Step 10: Postgres Checkpointer |
+| cogniforge-ms-step5-user-service | Step 5: User Service Live Metrics |
+| cogniforge-ms-step6-planning-agent | Step 6: Planning Agent |
+| cogniforge-ms-step7-research-agent | Step 7: Research Agent (Tavily Web Search) |
+| cogniforge-ms-step11-full-skills | Step 11: Full Skills Pipeline Live |
+| cogniforge-ms-step12-conversation | Step 12: Conversation Service (LangGraph Skill) |
+| cogniforge-ms-step8-reasoning-agent | Step 8: Reasoning Agent (MCTS + LLM) |
+| cogniforge-ms-step9-pipeline | Step 9: Skills Composition Pipeline |
+| cogniforge-ms-step4-persistence | Step 4: Persistence Relay & Prometheus Metrics |
+| cogniforge-http-api | HTTP API Surface |
+| cogniforge-ms-step3-live | Step 3: Live Activation |
+| cogniforge-ms-transition-step2 | Step 2: StateGraph Routing |
+| cogniforge-stack-health | Stack Self-Monitoring |
+| cogniforge-paths-deep | Path Deep Dive |
+| cogniforge-mission-control | Mission Control |
+| cogniforge-langgraph | LangGraph Runtime |
+
+### Live Metrics Sample (orchestrator-service, 2026-05-11)
+
+```
+cogniforge_outbox_relay_cycles_total{result="success"} 6.0
+cogniforge_outbox_relay_processed_total 0.0
+cogniforge_outbox_pending_gauge 0.0
+cogniforge_pipeline_invocations_total{mode="fallback"} 1.0
+cogniforge_pipeline_skill_calls_total{skill="planning",status="fallback"} 1.0
+cogniforge_pipeline_skill_calls_total{skill="research",status="fallback"} 1.0
+cogniforge_pipeline_skill_calls_total{skill="reasoning",status="fallback"} 1.0
+cogniforge_checkpointer_backend_info{backend="postgres",step="10",tables_ready="true"} 1.0
+cogniforge_orchestrator_startup_info{graph_ready="true",outbox_relay_enabled="true"} 1.0
+```
+
+### Known Gaps (pipeline not yet full)
+
+| Gap | Root Cause | Fix |
+|-----|-----------|-----|
+| `pipeline_mode=fallback` | Skills return fallback (no LLM key in env at startup) | Set `OPENROUTER_API_KEY` before supervisor.sh launches services |
+| `tavily_available=false` | `TAVILY_API_KEY` not in process env at research-agent startup | Export key before launch |
+| `llm_backend=mock` | `OPENROUTER_API_KEY` not in process env at reasoning-agent startup | Export key before launch |
+| `/agent/chat` → 401 | JWT auth required — monolith must obtain token first | Use `/api/security/login` → get token → pass as `Authorization: Bearer` |
 
 ---
 

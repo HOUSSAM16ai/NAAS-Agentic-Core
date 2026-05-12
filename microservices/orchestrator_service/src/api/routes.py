@@ -44,6 +44,8 @@ from microservices.orchestrator_service.src.core.event_bus import get_event_bus
 from microservices.orchestrator_service.src.core.prom_metrics import (
     record_pipeline_error,
     record_pipeline_invocation,
+    record_streaming_chunk,
+    record_streaming_session,
     set_pipeline_active,
 )
 from microservices.orchestrator_service.src.core.security import (
@@ -1528,73 +1530,47 @@ async def _stream_chat_langgraph(
                 f"last_msg={str(payload_messages[-1])[:120] if payload_messages else 'EMPTY'}"
             )
 
+            # ISS-STREAM-002 (جراحي — WS path): astream_events لا يُطلق on_custom_event
+            # في LangGraph 1.2.0. الحل: astream(stream_mode=["custom","updates"])
             final_res = None
-            ws_streamed_chars = 0  # D-047: token-level streaming counter
-            async for event in _graph.astream_events(inputs, config=config, version="v2"):
-                _evt_type = event["event"]
-                if _evt_type == "on_chain_start":
-                    node_name = event.get("name", "")
-                    if node_name and not node_name.startswith("__") and node_name != "LangGraph":
+            ws_streamed_chars = 0
+
+            async for _stream_mode, _chunk in _graph.astream(
+                inputs,
+                config=config,
+                stream_mode=["custom", "updates"],
+            ):
+                if _stream_mode == "custom":
+                    # token-by-token من stream_writer() في nodes
+                    if isinstance(_chunk, dict) and _chunk.get("chunk_type") == "assistant_delta":
+                        _content = _chunk.get("content")
+                        if isinstance(_content, str) and _content:
+                            ws_streamed_chars += len(_content)
+                            await _safe_put(
+                                {
+                                    "type": "assistant_delta",
+                                    "payload": {"content": _content},
+                                }
+                            )
+
+                elif _stream_mode == "updates" and isinstance(_chunk, dict):
+                    # state updates — phase_start + final_response
+                    for _node_name, _node_output in _chunk.items():
+                        if _node_name.startswith("__"):
+                            continue
                         await _safe_put(
                             {
                                 "type": "phase_start",
-                                "payload": {"phase": node_name, "agent": "orchestrator"},
+                                "payload": {"phase": _node_name, "agent": "orchestrator"},
                             }
                         )
-                elif _evt_type == "on_chat_model_stream":
-                    # D-047: token-level streaming when nodes use LangChain ChatOpenAI
-                    _chunk = event.get("data", {}).get("chunk")
-                    if _chunk is not None:
-                        _content = getattr(_chunk, "content", None)
-                        if isinstance(_content, str) and _content:
-                            ws_streamed_chars += len(_content)
-                            await _safe_put(
-                                {
-                                    "type": "assistant_delta",
-                                    "payload": {"content": _content},
-                                }
-                            )
-                elif _evt_type == "on_custom_event":
-                    # D-048: token-level streaming from DSPy/raw-OpenAI nodes via stream_writer
-                    # (SynthesizerNode, ChatFallbackNode, GeneralKnowledgeNode)
-                    _data = event.get("data")
-                    if isinstance(_data, dict) and _data.get("chunk_type") == "assistant_delta":
-                        _content = _data.get("content")
-                        if isinstance(_content, str) and _content:
-                            ws_streamed_chars += len(_content)
-                            await _safe_put(
-                                {
-                                    "type": "assistant_delta",
-                                    "payload": {"content": _content},
-                                }
-                            )
-                elif _evt_type == "on_chain_end":
-                    node_name = event.get("name", "")
-                    if node_name and not node_name.startswith("__") and node_name != "LangGraph":
-                        await _safe_put(
-                            {
-                                "type": "phase_completed",
-                                "payload": {"phase": node_name, "agent": "orchestrator"},
-                            }
-                        )
-                    if not node_name or node_name == "LangGraph":
-                        final_res = event["data"].get("output", {})
-                        if (
-                            final_res
-                            and isinstance(final_res, dict)
-                            and "final_response" in final_res
-                        ):
-                            pass  # We have our final response
-                        elif (
-                            final_res
-                            and isinstance(final_res, dict)
-                            and "messages" in final_res
-                            and final_res["messages"]
-                        ):
-                            # Fallback to extract final response from last message
-                            last_msg = final_res["messages"][-1]
-                            if hasattr(last_msg, "content"):
-                                final_res = {"final_response": last_msg.content}
+                        if isinstance(_node_output, dict):
+                            if "final_response" in _node_output:
+                                final_res = {"final_response": _node_output["final_response"]}
+                            elif _node_output.get("messages"):
+                                _last = _node_output["messages"][-1]
+                                if hasattr(_last, "content") and _last.content:
+                                    final_res = {"final_response": _last.content}
 
             if checkpointer is not None:
                 _t2 = time.monotonic()
@@ -1848,72 +1824,77 @@ async def _run_chat_langgraph(
     inputs: dict[str, object] = {"messages": graph_messages, "query": prepared_objective}
     inputs = _merge_admin_inputs(inputs, admin_payload)
 
+    # ISS-STREAM-002 (جراحي): astream_events لا يُطلق on_custom_event في LangGraph 1.2.0
+    # عند استخدام stream_writer(). الحل: astream(stream_mode=["custom","updates"]) يُعيد
+    # custom chunks مباشرة + state updates لاستخراج final_response.
+    # المرجع: اختبار مباشر أثبت أن writer() يُستدعى لكن on_custom_event لا يُطلق أبداً.
+    import time as _time_mod
+    streamed_chars = 0
     final_resp = None
-    streamed_chars = 0  # D-047: token-level streaming counter
-    async for event in app_graph.astream_events(inputs, config=config, version="v2"):
-        event_type = event["event"]
-        if event_type == "on_chain_start":
-            node_name = event.get("name", "")
-            if node_name and not node_name.startswith("__") and node_name != "LangGraph":
+    _stream_start = _time_mod.perf_counter()
+    _active_node = "unknown"
+
+    # المرحلة 1: بث الـ phase_start events أولاً (لا تحتاج astream_events)
+    # نُرسل phase_start لكل node عبر updates stream
+    async for stream_mode, chunk in app_graph.astream(
+        inputs,
+        config=config,
+        stream_mode=["custom", "updates"],
+    ):
+        if (
+            stream_mode == "custom"
+            and isinstance(chunk, dict)
+            and chunk.get("chunk_type") == "assistant_delta"
+        ):
+            # custom chunks من stream_writer() — هذا هو مسار token-by-token
+            content = chunk.get("content")
+            node_name = chunk.get("node", _active_node)
+            if isinstance(content, str) and content:
+                streamed_chars += len(content)
+                # ISS-STREAM-002: تسجيل كل chunk في Prometheus
+                import contextlib
+                with contextlib.suppress(Exception):
+                    record_streaming_chunk("http", str(node_name), len(content))
+                yield await _serialize_stream_frame(
+                    {"type": "assistant_delta", "payload": {"content": content}}
+                )
+
+        elif stream_mode == "updates" and isinstance(chunk, dict):
+            # state updates — نستخرج منها phase_start وfinal_response
+            for node_name, node_output in chunk.items():
+                if node_name.startswith("__"):
+                    continue
+                _active_node = node_name
+                # phase_start لكل node
                 yield await _serialize_stream_frame(
                     {
                         "type": "phase_start",
                         "payload": {"phase": node_name, "agent": "orchestrator"},
                     }
                 )
-        elif event_type == "on_chat_model_stream":
-            # D-047 CRITICAL FIX: emit token-level deltas when nodes use LangChain ChatOpenAI.
-            # Previously this branch was a `pass` (see streaming_architecture_breakdown.md).
-            chunk = event.get("data", {}).get("chunk")
-            if chunk is not None:
-                content = getattr(chunk, "content", None)
-                if isinstance(content, str) and content:
-                    streamed_chars += len(content)
-                    yield await _serialize_stream_frame(
-                        {"type": "assistant_delta", "payload": {"content": content}}
-                    )
-        elif event_type == "on_custom_event":
-            # D-048: token-level streaming from DSPy/raw-OpenAI nodes via stream_writer
-            # (SynthesizerNode, ChatFallbackNode, GeneralKnowledgeNode emit via writer({...})).
-            data = event.get("data")
-            if isinstance(data, dict) and data.get("chunk_type") == "assistant_delta":
-                content = data.get("content")
-                if isinstance(content, str) and content:
-                    streamed_chars += len(content)
-                    yield await _serialize_stream_frame(
-                        {"type": "assistant_delta", "payload": {"content": content}}
-                    )
-        elif event_type == "on_chain_end":
-            node_name = event.get("name", "")
-            if node_name and not node_name.startswith("__") and node_name != "LangGraph":
-                yield await _serialize_stream_frame(
-                    {
-                        "type": "phase_completed",
-                        "payload": {"phase": node_name, "agent": "orchestrator"},
-                    }
-                )
-            if not node_name or node_name == "LangGraph":
-                final_res = event["data"].get("output", {})
-                if final_res and isinstance(final_res, dict) and "final_response" in final_res:
-                    final_resp = final_res["final_response"]
-                elif (
-                    final_res
-                    and isinstance(final_res, dict)
-                    and "messages" in final_res
-                    and final_res["messages"]
-                ):
-                    last_msg = final_res["messages"][-1]
-                    if hasattr(last_msg, "content"):
-                        final_resp = last_msg.content
+                # استخراج final_response من آخر node ينتجه
+                if isinstance(node_output, dict):
+                    if "final_response" in node_output:
+                        final_resp = node_output["final_response"]
+                    elif node_output.get("messages"):
+                        last_msg = node_output["messages"][-1]
+                        if hasattr(last_msg, "content") and last_msg.content:
+                            final_resp = last_msg.content
 
     if isinstance(final_resp, dict):
         response_text = await _serialize_json_async(final_resp)
     else:
         response_text = str(final_resp or "لا توجد تفاصيل متاحة.")
 
-    # D-047: إذا بُثَّت قطع كافية للمستخدم، لا نُكرِّر النص في assistant_final
-    # (تتسبب في duplicate text on screen). إذا لم تُبَث أي قطعة (مثلاً النموذج
-    # غير stream-aware)، نُرسل النص كاملاً مرة واحدة كـ fallback.
+    # ISS-STREAM-002: تسجيل الجلسة الكاملة في Prometheus
+    import contextlib
+    with contextlib.suppress(Exception):
+        _stream_duration = _time_mod.perf_counter() - _stream_start
+        _session_status = "success" if streamed_chars > 0 else "fallback"
+        record_streaming_session("http", _session_status, _stream_duration)
+
+    # إذا بُثَّت قطع كافية → assistant_final بـ content="" (الـ deltas كافية)
+    # إذا لم تُبَث أي قطعة (مثلاً النموذج لا يدعم streaming) → نُرسل النص كاملاً
     if streamed_chars == 0:
         yield await _serialize_stream_frame(
             {

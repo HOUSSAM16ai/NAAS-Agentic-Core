@@ -390,9 +390,33 @@ class SynthesizerNode:
         conversation_text = "\n".join(recent_messages) if recent_messages else query
 
         if not reranked:
-            text_val = "لا توجد تفاصيل متاحة."
-            source = "لا يوجد"
-            confidence = "0.00"
+            # ISS-STREAM-002: عند عدم وجود نتائج بحث → استخدم LLM مباشرة مع streaming
+            writer = self._get_writer()
+            text_val = ""
+            source = "معرفة عامة"
+            confidence = "0.70"
+            if writer is not None:
+                try:
+                    from microservices.orchestrator_service.src.services.llm.client import (
+                        get_ai_client as get_llm_client,
+                    )
+                    llm_client = get_llm_client()
+                    stream_messages = [
+                        {"role": "system", "content": "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار."},
+                        {"role": "user", "content": query},
+                    ]
+                    parts: list[str] = []
+                    async for chunk in llm_client.stream_chat(stream_messages):
+                        content = llm_client.extract_stream_content(chunk)
+                        if not content:
+                            continue
+                        parts.append(content)
+                        writer({"chunk_type": "assistant_delta", "content": content, "node": "synthesizer"})
+                    text_val = "".join(parts).strip()
+                except Exception as e:
+                    logger.error(f"Synthesizer no-docs streaming failed: {e}")
+            if not text_val:
+                text_val = "لا توجد تفاصيل متاحة."
         else:
             raw_doc_text = reranked[0].text
             source = reranked[0].metadata.get("source", "الإنترنت")
@@ -404,11 +428,6 @@ class SynthesizerNode:
                 # D-048: STREAMING — استدعاء raw OpenAI مع stream=True + custom events
                 # نُحاكي نفس قالب EducationalSynthesizer signature ولكن بـ streaming.
                 try:
-                    from microservices.orchestrator_service.src.core.ai_gateway import (
-                        get_ai_client,
-                    )
-
-                    ai_client = get_ai_client()
                     system_msg = (
                         "أنت مدرس بكالوريا جزائري. اعتمد على context الذي يحويه التمرين "
                         "أو الدرس من قاعدة المعرفة، وعلى محادثة الطالب. اكتب شرحاً متماسكاً "
@@ -424,15 +443,16 @@ class SynthesizerNode:
                         {"role": "system", "content": system_msg},
                         {"role": "user", "content": user_msg},
                     ]
+                    from microservices.orchestrator_service.src.services.llm.client import (
+                        get_ai_client as get_llm_client,
+                    )
+                    llm_client = get_llm_client()
                     parts: list[str] = []
-                    async for chunk in ai_client.stream_chat(stream_messages):
+                    async for chunk in llm_client.stream_chat(stream_messages):
                         try:
-                            choices = chunk.get("choices") if isinstance(chunk, dict) else None
-                            if not choices:
-                                continue
-                            delta = choices[0].get("delta", {}) or {}
-                            content = delta.get("content")
-                            if not isinstance(content, str) or not content:
+                            # ISS-STREAM-002: extract_stream_content يدعم ChatCompletionChunk و dict
+                            content = llm_client.extract_stream_content(chunk)
+                            if not content:
                                 continue
                             parts.append(content)
                             writer(

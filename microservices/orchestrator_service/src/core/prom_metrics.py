@@ -23,6 +23,10 @@
   - cogniforge_checkpointer_active_threads           — threads نشطة في Postgres checkpointer (gauge) [Step 10]
   - cogniforge_checkpointer_backend_info             — معلومات backend الـ checkpointer (gauge) [Step 10]
   - cogniforge_orchestrator_startup_info             — معلومات الإقلاع (gauge)
+  - cogniforge_streaming_chunks_total                — إجمالي chunks البث المُرسَلة (counter) [ISS-STREAM-002]
+  - cogniforge_streaming_chars_total                 — إجمالي أحرف البث المُرسَلة (counter) [ISS-STREAM-002]
+  - cogniforge_streaming_sessions_total              — إجمالي جلسات البث (counter) [ISS-STREAM-002]
+  - cogniforge_streaming_duration_seconds            — زمن جلسة البث الكاملة (histogram) [ISS-STREAM-002]
 """
 
 from __future__ import annotations
@@ -296,6 +300,33 @@ STARTUP_INFO: Gauge = _make_gauge(
 )
 
 
+# ─── ISS-STREAM-002: Streaming Metrics ────────────────────────────────────
+STREAMING_CHUNKS_TOTAL: Counter = _make_counter(
+    "cogniforge_streaming_chunks_total",
+    "إجمالي chunks البث المُرسَلة (token-by-token) منذ بدء الخدمة",
+    ["channel", "node"],  # channel: http|ws, node: general_knowledge|chat_fallback|...
+)
+
+STREAMING_CHARS_TOTAL: Counter = _make_counter(
+    "cogniforge_streaming_chars_total",
+    "إجمالي أحرف البث المُرسَلة منذ بدء الخدمة",
+    ["channel"],
+)
+
+STREAMING_SESSIONS_TOTAL: Counter = _make_counter(
+    "cogniforge_streaming_sessions_total",
+    "إجمالي جلسات البث المكتملة",
+    ["channel", "status"],  # status: success|fallback|error
+)
+
+STREAMING_DURATION: Histogram = _make_histogram(
+    "cogniforge_streaming_duration_seconds",
+    "زمن جلسة البث الكاملة من أول chunk إلى assistant_final",
+    ["channel"],
+    buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 60.0],
+)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Public API
 # ═══════════════════════════════════════════════════════════════════════════
@@ -435,6 +466,32 @@ def set_checkpointer_backend_info(
         pool_size=str(pool_size),
         tables_ready=str(tables_ready).lower(),
     ).set(1)
+
+
+def record_streaming_chunk(channel: str, node: str, chars: int) -> None:
+    """
+    يُسجِّل chunk بث واحد مع عدد أحرفه.
+
+    المدخلات:
+        channel: "http" | "ws"
+        node: اسم الـ node المُصدِر (general_knowledge, chat_fallback, ...)
+        chars: عدد الأحرف في الـ chunk
+    """
+    STREAMING_CHUNKS_TOTAL.labels(channel=channel, node=node).inc()
+    STREAMING_CHARS_TOTAL.labels(channel=channel).inc(chars)
+
+
+def record_streaming_session(channel: str, status: str, duration_seconds: float) -> None:
+    """
+    يُسجِّل اكتمال جلسة بث كاملة.
+
+    المدخلات:
+        channel: "http" | "ws"
+        status: "success" | "fallback" | "error"
+        duration_seconds: زمن الجلسة الكاملة
+    """
+    STREAMING_SESSIONS_TOTAL.labels(channel=channel, status=status).inc()
+    STREAMING_DURATION.labels(channel=channel).observe(duration_seconds)
 
 
 def set_startup_info(

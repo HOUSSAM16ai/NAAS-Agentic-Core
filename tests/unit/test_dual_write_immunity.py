@@ -14,10 +14,10 @@ async def async_db_session():
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
-    SessionLocal = async_sessionmaker(
+    session_local = async_sessionmaker(
         autocommit=False, autoflush=False, bind=engine, expire_on_commit=False
-    )  # noqa: N806
-    async with SessionLocal() as session:
+    )
+    async with session_local() as session:
         yield session
 
     async with engine.begin() as conn:

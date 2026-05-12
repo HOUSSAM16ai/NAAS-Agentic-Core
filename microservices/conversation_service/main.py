@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -156,6 +157,8 @@ class HealthResponse(BaseModel):
     step: str
     graph_ready: bool
     ws_enabled: bool
+    capability_level: str | None = None
+    parity_ready: bool | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -172,6 +175,8 @@ async def health() -> HealthResponse:
         step=_STEP,
         graph_ready=_GRAPH_READY,
         ws_enabled=True,
+        capability_level=os.getenv("CONVERSATION_CAPABILITY_LEVEL", "stub"),
+        parity_ready=(os.getenv("CONVERSATION_CAPABILITY_LEVEL", "stub") == "parity_ready")
     )
     record_request("GET", "/health", 200, time.perf_counter() - t0)
     return result

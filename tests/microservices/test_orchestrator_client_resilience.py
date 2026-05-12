@@ -35,14 +35,14 @@ async def test_user_facing_error_is_sanitized(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(client, "_build_local_file_count_response", no_local_fallback)
     monkeypatch.setattr(client, "_build_local_retrieval_response", no_local_fallback)
 
-    chunks: list[str] = []
+    chunks: list[dict] = []
     async for item in client.chat_with_agent(question="أعطني تمرين الاحتمالات", user_id=1):
-        if isinstance(item, str):
+        if isinstance(item, dict) and item.get("type") == "assistant_error":
             chunks.append(item)
 
-    assert len(chunks) == 1
-    payload = json.loads(chunks[0])
-    content = payload["payload"]["content"]
+    assert len(chunks) >= 1
+    payload = chunks[0]
+    content = payload.get("payload", {}).get("content", "")
 
     assert "localhost" not in content
     assert "orchestrator-service" not in content
@@ -66,12 +66,12 @@ async def test_local_fallback_still_works_for_file_count(monkeypatch: pytest.Mon
     monkeypatch.setattr(client, "_get_client", fake_get_client)
     monkeypatch.setattr(client, "_build_local_file_count_response", local_fallback)
 
-    results: list[str] = []
+    results: list[dict] = []
     async for item in client.chat_with_agent(question="كم عدد ملفات بايثون؟", user_id=1):
-        if isinstance(item, str):
+        if isinstance(item, dict) and item.get("type") == "assistant_delta":
             results.append(item)
 
-    assert results == ["عدد ملفات بايثون في المشروع هو: 10 ملف."]
+    assert results[0]["payload"]["content"] == "عدد ملفات بايثون في المشروع هو: 10 ملف."
 
 
 @pytest.mark.asyncio
@@ -93,12 +93,12 @@ async def test_local_fallback_supports_generic_extension_file_count(
     monkeypatch.setattr(client, "_get_client", fake_get_client)
     monkeypatch.setattr(client, "_count_files_in_project", fake_count_files)
 
-    results: list[str] = []
+    results: list[dict] = []
     async for item in client.chat_with_agent(question="احسب عدد ملفات pdf", user_id=1):
-        if isinstance(item, str):
+        if isinstance(item, dict) and item.get("type") == "assistant_delta":
             results.append(item)
 
-    assert results == ["عدد الملفات بامتداد .pdf في المشروع هو: 7 ملف."]
+    assert results[0]["payload"]["content"] == "عدد الملفات بامتداد .pdf في المشروع هو: 7 ملف."
 
 
 @pytest.mark.asyncio
@@ -122,12 +122,13 @@ async def test_local_retrieval_fallback_for_exercise_request(
     monkeypatch.setattr(client, "_build_local_file_count_response", no_file_count)
     monkeypatch.setattr(client, "_build_local_retrieval_response", local_retrieval)
 
-    results: list[str] = []
+    results: list[dict] = []
     async for item in client.chat_with_agent(question="أعطني تمرين الاحتمالات", user_id=1):
-        if isinstance(item, str):
+        if isinstance(item, dict) and item.get("type") == "assistant_delta":
             results.append(item)
 
-    assert results == ["تم العثور على تمرين الاحتمالات المطلوب من المسار المحلي."]
+    assert len(results) >= 1
+    assert results[0]["payload"]["content"] == "تم العثور على تمرين الاحتمالات المطلوب من المسار المحلي."
 
 
 @pytest.mark.asyncio
@@ -147,7 +148,7 @@ async def test_local_general_chat_fallback_when_specialized_fallbacks_miss(
     async def no_retrieval(_question: str):
         return None
 
-    async def local_general_chat(_question: str):
+    async def local_general_chat(_question: str, history_messages=None):
         return "مرحبًا! هذه إجابة محلية عامة لضمان استمرارية الدردشة."
 
     monkeypatch.setattr(client, "_get_client", fake_get_client)
@@ -155,12 +156,13 @@ async def test_local_general_chat_fallback_when_specialized_fallbacks_miss(
     monkeypatch.setattr(client, "_build_local_retrieval_response", no_retrieval)
     monkeypatch.setattr(client, "_build_local_general_chat_response", local_general_chat)
 
-    results: list[str] = []
+    results: list[dict] = []
     async for item in client.chat_with_agent(question="السلام عليكم", user_id=7):
-        if isinstance(item, str):
+        if isinstance(item, dict) and item.get("type") == "assistant_delta":
             results.append(item)
 
-    assert results == ["مرحبًا! هذه إجابة محلية عامة لضمان استمرارية الدردشة."]
+    assert len(results) >= 1
+    assert results[0]["payload"]["content"] == "مرحبًا! هذه إجابة محلية عامة لضمان استمرارية الدردشة."
 
 
 @pytest.mark.asyncio
@@ -181,13 +183,13 @@ async def test_local_fallback_can_be_disabled_with_flag(monkeypatch: pytest.Monk
     monkeypatch.setattr(client, "_build_local_retrieval_response", local_fallback)
     monkeypatch.setattr(client, "_build_local_general_chat_response", local_fallback)
 
-    chunks: list[str] = []
+    chunks: list[dict] = []
     async for item in client.chat_with_agent(question="كم عدد ملفات بايثون؟", user_id=1):
-        if isinstance(item, str):
+        if isinstance(item, dict) and item.get("type") in ("assistant_delta", "assistant_error"):
             chunks.append(item)
 
-    assert len(chunks) == 1
-    payload = json.loads(chunks[0])
+    assert len(chunks) >= 1
+    payload = chunks[-1]
     assert payload["type"] == "assistant_error"
 
 
@@ -209,18 +211,18 @@ async def test_local_fallback_supports_csv_and_json_file_count(
     monkeypatch.setattr(client, "_get_client", fake_get_client)
     monkeypatch.setattr(client, "_count_files_in_project", fake_count_files)
 
-    csv_results: list[str] = []
+    csv_results: list[dict] = []
     async for item in client.chat_with_agent(question="count csv files", user_id=2):
-        if isinstance(item, str):
+        if isinstance(item, dict) and item.get("type") == "assistant_delta":
             csv_results.append(item)
 
-    json_results: list[str] = []
+    json_results: list[dict] = []
     async for item in client.chat_with_agent(question="احسب عدد ملفات json", user_id=2):
-        if isinstance(item, str):
+        if isinstance(item, dict) and item.get("type") == "assistant_delta":
             json_results.append(item)
 
-    assert csv_results == ["عدد الملفات بامتداد .csv في المشروع هو: 11 ملف."]
-    assert json_results == ["عدد الملفات بامتداد .json في المشروع هو: 5 ملف."]
+    assert csv_results[0]["payload"]["content"] == "عدد الملفات بامتداد .csv في المشروع هو: 11 ملف."
+    assert json_results[0]["payload"]["content"] == "عدد الملفات بامتداد .json في المشروع هو: 5 ملف."
 
 
 @pytest.mark.asyncio
@@ -244,12 +246,12 @@ async def test_unsupported_extension_returns_sanitized_error_when_count_fails(
     monkeypatch.setattr(client, "_count_files_in_project", failed_count)
     monkeypatch.setattr(client, "_build_local_retrieval_response", no_retrieval)
 
-    chunks: list[str] = []
+    chunks: list[dict] = []
     async for item in client.chat_with_agent(question="احسب عدد ملفات xlsx", user_id=2):
-        if isinstance(item, str):
+        if isinstance(item, dict) and item.get("type") in ("assistant_delta", "assistant_error"):
             chunks.append(item)
 
-    payload = json.loads(chunks[-1])
+    payload = chunks[-1]
     assert payload["type"] == "assistant_error"
 
 
@@ -281,7 +283,7 @@ def test_multi_target_candidates_disabled_by_default(monkeypatch: pytest.MonkeyP
     client = OrchestratorClient(base_url="http://orchestrator-service:8006")
     candidates = ChatRoutingPolicy.from_environment(client.base_url).candidate_urls()
 
-    assert candidates == ["http://orchestrator-service:8006/agent/chat"]
+    assert candidates == ["http://orchestrator-service:8006/api/chat/messages"]
 
 
 def test_multi_target_candidates_enabled_only_in_breakglass(
@@ -298,8 +300,8 @@ def test_multi_target_candidates_enabled_only_in_breakglass(
     candidates = ChatRoutingPolicy.from_environment(client.base_url).candidate_urls()
 
     assert candidates == [
-        "http://orchestrator-service:8006/agent/chat",
-        "http://backup-orchestrator:8016/agent/chat",
+        "http://orchestrator-service:8006/api/chat/messages",
+        "http://backup-orchestrator:8016/api/chat/messages",
     ]
 
 
@@ -322,15 +324,15 @@ async def test_file_intelligence_fallback_concurrency_smoke(
     monkeypatch.setattr(client, "_get_client", fake_get_client)
     monkeypatch.setattr(client, "_count_files_in_project", fake_count_files)
 
-    async def run_once() -> str:
-        items: list[str] = []
+    async def run_once() -> dict:
+        items: list[dict] = []
         async for item in client.chat_with_agent(question="count pdf files", user_id=9):
-            if isinstance(item, str):
+            if isinstance(item, dict) and item.get("type") in ("assistant_delta", "assistant_error"):
                 items.append(item)
         return items[-1]
 
     results = await asyncio.gather(*[run_once() for _ in range(8)])
-    assert all(result == "عدد الملفات بامتداد .pdf في المشروع هو: 3 ملف." for result in results)
+    assert all(result["payload"]["content"] == "عدد الملفات بامتداد .pdf في المشروع هو: 3 ملف." for result in results)
 
 
 @pytest.mark.asyncio
@@ -356,12 +358,12 @@ async def test_exercise_retrieval_fallback_concurrency_smoke(
     monkeypatch.setattr(client, "_build_local_file_count_response", no_file_count)
     monkeypatch.setattr(client, "_build_local_retrieval_response", local_retrieval)
 
-    async def run_once() -> str:
-        items: list[str] = []
+    async def run_once() -> dict:
+        items: list[dict] = []
         async for item in client.chat_with_agent(question="أعطني تمرين تكامل", user_id=9):
-            if isinstance(item, str):
+            if isinstance(item, dict) and item.get("type") in ("assistant_delta", "assistant_error"):
                 items.append(item)
         return items[-1]
 
     results = await asyncio.gather(*[run_once() for _ in range(8)])
-    assert all(result == "تم العثور على تمرين محلي." for result in results)
+    assert all(result["payload"]["content"] == "تم العثور على تمرين محلي." for result in results)

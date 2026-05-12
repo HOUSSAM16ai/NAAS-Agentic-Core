@@ -32,3 +32,4 @@ uc-micro-py==1.0.3
 # Dependency Management
 dparse==0.6.4
 packaging==25.0
+prometheus-client

@@ -554,8 +554,7 @@ class SupervisorNode:
             pass
 
         query = str(state.get("query", "")).strip()
-        print("NODE:", "SupervisorNode")
-        print("QUERY:", query)
+        logger.debug("SupervisorNode query=%.80s", query)
         messages = state.get("messages", [])
 
         # Protect original query as SSOT backup BEFORE resolution
@@ -568,7 +567,7 @@ class SupervisorNode:
 
         # Only adopt resolved query if it successfully extracted something meaningful
         if resolved_q and resolved_q != query:
-            print("RESOLVED QUERY:", resolved_q)
+            logger.debug("SupervisorNode resolved_query=%.80s", resolved_q)
             query = resolved_q
             updates["query"] = query
 
@@ -692,17 +691,7 @@ class ChatFallbackNode:
         history = format_conversation_history(messages)
 
         if not history.strip():
-            print("🚨 FAILURE: EMPTY HISTORY")
-
-        if "ها" in query and "فرنسا" not in query:
-            print("🚨 PRONOUN LEAK DETECTED")
-
-        if "فرنسا" not in history:
-            print("🚨 ENTITY LOST IN HISTORY")
-
-        print("=== FINAL LLM INPUT ===")
-        print("HISTORY:", history)
-        print("QUERY:", query)
+            logger.debug("ChatFallbackNode: empty history for query=%.60s", query)
 
         ai_client = get_ai_client()
 
@@ -910,8 +899,7 @@ class QueryRewriterNode:
 
         start_time = time.time()
         query = str(state.get("query", "")).strip()
-        print("NODE:", "QueryRewriterNode")
-        print("QUERY:", query)
+        logger.debug("QueryRewriterNode query=%.80s", query)
         messages = state.get("messages", [])
         if not query or len(messages) <= 1:
             emit_telemetry(node_name="QueryRewriterNode", start_time=start_time, state=state)
@@ -964,8 +952,7 @@ class ToolExecutorNode:
         from .telemetry import emit_telemetry
 
         start_time = time.time()
-        print("NODE:", "ToolExecutorNode")
-        print("QUERY:", str(state.get("query", "")).strip())
+        logger.debug("ToolExecutorNode query=%.80s", str(state.get("query", "")).strip())
         messages = state.get("messages", [])
         if not messages:
             emit_telemetry(node_name="ToolExecutorNode", start_time=start_time, state=state)
@@ -1014,8 +1001,7 @@ class ValidatorNode:
         from .telemetry import emit_telemetry
 
         start_time = time.time()
-        print("NODE:", "ValidatorNode")
-        print("QUERY:", str(state.get("query", "")).strip())
+        logger.debug("ValidatorNode query=%.80s", str(state.get("query", "")).strip())
 
         updates: dict[str, object] = {"tools_executed": bool(state.get("tools_executed", False))}
 

@@ -461,8 +461,7 @@ class SynthesizerNode:
                 except Exception as e:
                     logger.error(f"Synthesizer LLM generation failed: {e}")
                     text_val = (
-                        "عذراً، تعذر صياغة الشرح المطلوب بسبب خطأ داخلي. "
-                        "يرجى إعادة صياغة السؤال."
+                        "عذراً، تعذر صياغة الشرح المطلوب بسبب خطأ داخلي. يرجى إعادة صياغة السؤال."
                     )
 
         response_json = {

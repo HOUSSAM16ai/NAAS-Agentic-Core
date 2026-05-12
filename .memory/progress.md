@@ -1583,6 +1583,39 @@ cogniforge_pipeline_invocations_total{mode="full"} 2.0
 
 ---
 
+## ✅ Session: 2026-05-12 — ISS-STREAM-001 Streaming Fix
+
+### Summary
+إصلاح جراحي شامل لمشكلة البث الكارثية — الكلمات تظهر دفعة واحدة بدل كلمة بكلمة.
+
+### Root Causes Fixed (4 new)
+1. `_normalize_stream_event` يُحوّل أحداث التحكم إلى `assistant_delta` → نصوص غريبة
+2. `_generator_with_persistence` لا يجمع الـ deltas → لا يُحفظ شيء في DB
+3. `mergeAssistantContent` منطق خاطئ → chunks تُتجاهل أو تُكرَّر
+4. `print()` debug statements في graph nodes
+
+### Files Changed
+- `app/infrastructure/clients/orchestrator_client.py` — `_PASSTHROUGH_EVENT_TYPES` + noop filter
+- `app/api/routers/customer_chat.py` — noop filter
+- `app/api/routers/admin.py` — noop filter
+- `microservices/orchestrator_service/src/api/routes.py` — `delta_parts` accumulator
+- `microservices/orchestrator_service/src/services/overmind/graph/main.py` — print → logger.debug
+- `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py` — print → logger.debug
+- `frontend/app/hooks/useAgentSocket.js` — mergeAssistantContent + assistant_final handler
+- `.runtime/truth_table.lock.json` — updated after customer_chat_router change
+
+### New Files
+- `.github/workflows/streaming-fix-gate.yml` — CI gate (4 jobs)
+- `observability/grafana/dashboards/160-streaming-metrics.json` — 11 panels
+
+### Verification
+- `ruff check . ✅ | ruff format --check . ✅`
+- `runtime_truth --check ✅`
+- `guardrails ✅ | route_registry ✅ | tracing_gate ✅`
+- 18 Grafana dashboards | 12 Prometheus targets
+
+---
+
 ## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
 
 - حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.

@@ -349,15 +349,53 @@ class OrchestratorClient:
             return "تعذر إتمام طلبك حالياً بسبب ضغط أو عطل مؤقت في خدمة المحادثة. حاول مرة أخرى بعد لحظات."
         return content
 
+    # ISS-STREAM-001: أنواع الأحداث التي تُمرَّر مباشرة بدون تحويل إلى assistant_delta.
+    # أي نوع غير مدرج هنا ولا في _TEXT_EVENT_TYPES يُتجاهل (لا يُرسل للواجهة).
+    _PASSTHROUGH_EVENT_TYPES: frozenset[str] = frozenset(
+        {
+            "conversation_init",
+            "persisted",
+            "complete",
+            "phase_start",
+            "phase_completed",
+            "RUN_STARTED",
+            "context_missing",
+        }
+    )
+    _TEXT_EVENT_TYPES: frozenset[str] = frozenset(
+        {"assistant_delta", "assistant_final", "assistant_error", "status"}
+    )
+
     def _normalize_stream_event(self, raw_event: object) -> dict[str, object]:
-        """يوحد شكل أحداث التدفق ويضمن عدم تسريب تفاصيل داخلية في مسارات الأخطاء."""
-        if isinstance(raw_event, dict):
-            raw_type = str(raw_event.get("type", ChatEventType.ASSISTANT_DELTA.value))
-            payload = raw_event.get("payload")
-            if not isinstance(payload, dict):
-                payload = {"content": str(raw_event)}
-        else:
-            raw_type = ChatEventType.ASSISTANT_DELTA.value
+        """
+        يوحد شكل أحداث التدفق ويضمن عدم تسريب تفاصيل داخلية.
+
+        ISS-STREAM-001: الإصلاح الجراحي — الأحداث غير النصية (phase_start,
+        RUN_STARTED, إلخ) تُمرَّر كما هي بدل تحويلها إلى assistant_delta
+        مما كان يُسبب ظهور نصوص غريبة في الواجهة.
+        """
+        if not isinstance(raw_event, dict):
+            # نص خام → delta
+            return {
+                "type": ChatEventType.ASSISTANT_DELTA.value,
+                "payload": {"content": self._sanitize_text_for_user(str(raw_event))},
+            }
+
+        raw_type = str(raw_event.get("type", ChatEventType.ASSISTANT_DELTA.value))
+
+        # أحداث التحكم تُمرَّر مباشرة بدون تحويل
+        if raw_type in self._PASSTHROUGH_EVENT_TYPES:
+            result = dict(raw_event)
+            if "persisted" in raw_event:
+                result["persisted"] = bool(raw_event["persisted"])
+            return result
+
+        # أحداث غير معروفة → تُتجاهل (لا تُرسل للواجهة كـ delta)
+        if raw_type not in self._TEXT_EVENT_TYPES:
+            return {"type": "noop", "payload": {}}
+
+        payload = raw_event.get("payload")
+        if not isinstance(payload, dict):
             payload = {"content": str(raw_event)}
 
         safe_payload = {
@@ -390,7 +428,7 @@ class OrchestratorClient:
         )
         result = envelope.model_dump(exclude_none=True)
         # Preserve orchestrator persistence signal for conditional-write coordination
-        if isinstance(raw_event, dict) and "persisted" in raw_event:
+        if "persisted" in raw_event:
             result["persisted"] = bool(raw_event["persisted"])
         return result
 

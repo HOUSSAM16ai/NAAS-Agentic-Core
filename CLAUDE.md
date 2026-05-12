@@ -2168,6 +2168,16 @@ Every microservice lifespan must follow this phase model:
 | Warmup probe | **NON-CRITICAL, timeout=30s** | Log DEGRADED, continue |
 | Background tasks | **NON-CRITICAL** | Log warning, continue |
 
+## Streaming Data Contracts (2026-05-10)
+
+The system enforces a strict data contract for real-time WebSocket chat streaming to guarantee the "typing effect". Both the monolith and microservices must adhere to this contract.
+
+*   **Execution Rule:** Never use `ainvoke()` for real-time user-facing LangGraph executions. It acts as a block-and-wait buffer. You must use `astream_events(..., version="v2")`.
+*   **Routing Rule:** API routing layers (FastAPI WebSocket routes, REST proxies) must capture `on_chat_model_stream` events and instantly yield them as granular `assistant_delta` JSON payloads to the client. Token buffering is strictly prohibited.
+*   **Detailed Forensic Breakdown:** Read `.memory/streaming_architecture_breakdown.md` for the complete architectural diagnosis of the event stream bottleneck across the legacy, microservice, and frontend layers.
+
+---
+
 ### LangGraph metrics now live
 
 `app/services/chat/local_graph.py` now emits per-turn Prometheus metrics:

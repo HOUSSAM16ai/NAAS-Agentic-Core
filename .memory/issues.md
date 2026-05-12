@@ -764,6 +764,22 @@
 - **Fix**: `pip install prometheus_client` in base environment. Added `prometheus_client>=0.20.0` to `microservices/conversation_service/requirements.txt` for reproducibility.
 - **Status**: FIXED. `GET /health → {"status":"healthy","graph_ready":true,"step":"12"}`.
 
+### [FIXED] ISS-STREAM-001 · Streaming catastrophic failure — words appear all at once · FIXED (2026-05-12)
+- **Evidence**: الكلمات تظهر دفعة واحدة بدل كلمة بكلمة. نصوص غريبة تظهر في الواجهة (`phase_start`, `RUN_STARTED`).
+- **Root causes (4 new, in addition to D-047)**:
+  1. `_normalize_stream_event` يُحوّل أحداث التحكم (`phase_start`, `RUN_STARTED`, إلخ) إلى `assistant_delta` → نصوص غريبة.
+  2. `_generator_with_persistence` لا يجمع الـ deltas → لا يُحفظ شيء في DB عند streaming.
+  3. `mergeAssistantContent` منطق `current.startsWith(incoming)` خاطئ → chunks قديمة تُتجاهل.
+  4. `print()` statements في graph nodes تُلوّث stdout وتُبطئ الأداء.
+- **Fix**: 
+  - `_PASSTHROUGH_EVENT_TYPES` + `_TEXT_EVENT_TYPES` + noop filter في `orchestrator_client.py`.
+  - `delta_parts` accumulator في `_generator_with_persistence`.
+  - إصلاح `mergeAssistantContent` + `assistant_final` handler في `useAgentSocket.js`.
+  - إزالة `print()` → `logger.debug()` في جميع graph nodes.
+  - CI gate: `.github/workflows/streaming-fix-gate.yml`.
+  - Grafana dashboard: `160-streaming-metrics.json` (11 panels).
+- **Status**: FIXED. ruff ✅ | runtime_truth ✅ | guardrails ✅ | 18 Grafana dashboards | 12 Prometheus targets.
+
 ### [VERIFIED] ISS-050 · End-to-end chat routing confirmed live (2026-05-11)
 - **Evidence**: WebSocket test `ws://localhost:8000/api/chat/ws` with subprotocols `['jwt', TOKEN]` → events: `['conversation_init', 'assistant_delta'×6, 'assistant_final']`. Answer: real Arabic LLM response about Newton's second law.
 - **Path**: `User WS → Monolith:8000/api/chat/ws → OrchestratorClient.chat_with_agent() → http://localhost:8006/api/chat/messages → StateGraph 13-node → Planning:8002 + Research:8007 + Reasoning:8008 → composed answer`.

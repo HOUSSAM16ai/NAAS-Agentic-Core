@@ -1683,9 +1683,7 @@ async def _stream_chat_langgraph(
                 # D-047: إذا بُثَّت قطع token-by-token خلال الـ stream،
                 # لا نُكرِّر response_text في assistant_final لتجنّب duplicate text.
                 _ws_streamed = (
-                    run_data.get("__streamed_chars", 0)
-                    if isinstance(run_data, dict)
-                    else 0
+                    run_data.get("__streamed_chars", 0) if isinstance(run_data, dict) else 0
                 )
                 _final_content = "" if _ws_streamed and _ws_streamed > 0 else response_text
                 await websocket.send_json(
@@ -2166,15 +2164,35 @@ async def chat_messages_endpoint(
             app_graph=getattr(request.app.state, "app_graph", None),
             history_messages=history_messages,
         )
+        # ISS-STREAM-001: تجميع كل الـ deltas للحفظ الصحيح.
+        # عند streaming، assistant_final يُرسل content="" لتجنب التكرار،
+        # لذا يجب تجميع كل assistant_delta chunks لبناء النص الكامل.
+        delta_parts: list[str] = []
         final_content = ""
         async for chunk in generator:
             try:
                 chunk_data = json.loads(chunk)
-                if chunk_data.get("type") == "assistant_final":
-                    final_content = chunk_data.get("payload", {}).get("content", "")
+                chunk_type = chunk_data.get("type", "")
+                payload = chunk_data.get("payload", {})
+                if chunk_type in ("assistant_delta",):
+                    delta_text = payload.get("content", "")
+                    if delta_text:
+                        delta_parts.append(delta_text)
+                elif chunk_type == "assistant_final":
+                    # إذا كان content غير فارغ (fallback بدون streaming) → استخدمه
+                    # إذا كان فارغاً (streaming mode) → استخدم الـ deltas المجمّعة
+                    fc = payload.get("content", "")
+                    if fc:
+                        final_content = fc
+                    elif delta_parts:
+                        final_content = "".join(delta_parts)
             except Exception:
                 pass
             yield chunk
+
+        # إذا لم يصل assistant_final لكن وصلت deltas → استخدمها
+        if not final_content and delta_parts:
+            final_content = "".join(delta_parts)
 
         if final_content:
             try:
@@ -2635,10 +2653,7 @@ async def chat_with_agent_endpoint(
                     elif _evt_type == "on_custom_event":
                         # D-048: token-level streaming from DSPy/raw-OpenAI nodes via stream_writer
                         _data = event.get("data")
-                        if (
-                            isinstance(_data, dict)
-                            and _data.get("chunk_type") == "assistant_delta"
-                        ):
+                        if isinstance(_data, dict) and _data.get("chunk_type") == "assistant_delta":
                             _content = _data.get("content")
                             if isinstance(_content, str) and _content:
                                 admin_streamed_chars += len(_content)

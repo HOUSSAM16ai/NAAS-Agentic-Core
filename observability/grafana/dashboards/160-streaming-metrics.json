@@ -1,0 +1,302 @@
+{
+  "uid": "cogniforge-streaming-metrics",
+  "title": "CogniForge — Streaming Metrics (ISS-STREAM-001)",
+  "description": "مقاييس البث الحقيقية: delta events، noop filtering، persistence، WebSocket health",
+  "tags": ["cogniforge", "streaming", "websocket", "iss-stream-001"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "WebSocket Delta Events / sec",
+      "description": "عدد أحداث assistant_delta المُرسلة عبر WebSocket في الثانية",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_ws_chat_delta_total[1m])",
+          "legendFormat": "delta/s — {{path}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "reqps"
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 2,
+      "title": "LangGraph Stream Chunks / sec",
+      "description": "عدد قطع البث من LangGraph (local graph + orchestrator)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_langgraph_node_count_total{node=~\"chat_stream|chat\"}[1m])",
+          "legendFormat": "node={{node}} graph={{graph}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Streaming Fallback Chain Usage",
+      "description": "استخدام مسارات الـ fallback: local_graph_stream → general_chat_stream",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_fallback_used_total[5m])",
+          "legendFormat": "fallback={{path}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Routing Mode (StateGraph vs Agent vs Fallback)",
+      "description": "وضع التوجيه الحالي: 1=StateGraph، 0=Agent، fallback=local",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "cogniforge_routing_mode_state_graph",
+          "legendFormat": "StateGraph mode (1=active)",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(cogniforge_routing_target_total[5m])",
+          "legendFormat": "target={{target}} req/s",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Orchestrator Chat Requests (Total)",
+      "description": "إجمالي طلبات الدردشة عبر orchestrator-service",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(cogniforge_orchestrator_requests_total)",
+          "legendFormat": "Total Requests",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" }
+    },
+    {
+      "id": 6,
+      "title": "Orchestrator P95 Latency",
+      "description": "زمن الاستجابة P95 لـ orchestrator-service",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(cogniforge_orchestrator_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "P95 latency",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 30 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" }
+    },
+    {
+      "id": 7,
+      "title": "StateGraph Invocations",
+      "description": "عدد استدعاءات StateGraph في orchestrator",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(cogniforge_stategraph_invocations_total)",
+          "legendFormat": "StateGraph Invocations",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "purple", "mode": "fixed" },
+          "unit": "short"
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" }
+    },
+    {
+      "id": 8,
+      "title": "StateGraph Errors",
+      "description": "أخطاء StateGraph — يجب أن تكون صفراً في الحالة الطبيعية",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(cogniforge_stategraph_errors_total)",
+          "legendFormat": "Errors",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" }
+    },
+    {
+      "id": 9,
+      "title": "LangGraph Intent Distribution",
+      "description": "توزيع نوايا المستخدمين: educational / general / chat",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (intent) (cogniforge_langgraph_intent_total)",
+          "legendFormat": "{{intent}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } }
+      },
+      "options": { "pieType": "pie", "tooltip": { "mode": "single" } }
+    },
+    {
+      "id": 10,
+      "title": "LangGraph Node Duration (P95)",
+      "description": "زمن تنفيذ كل node في LangGraph — P95",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (node, le) (rate(cogniforge_langgraph_node_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 2 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      },
+      "options": { "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 11,
+      "title": "Outbox Relay Health",
+      "description": "صحة Outbox Relay: cycles، processed، failed، pending",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_outbox_relay_cycles_total[1m])",
+          "legendFormat": "relay cycles/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(cogniforge_outbox_relay_processed_total[1m])",
+          "legendFormat": "processed/s",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(cogniforge_outbox_relay_failed_total[1m])",
+          "legendFormat": "failed/s",
+          "refId": "C"
+        },
+        {
+          "expr": "cogniforge_outbox_pending_gauge",
+          "legendFormat": "pending messages",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        }
+      }
+    }
+  ]
+}

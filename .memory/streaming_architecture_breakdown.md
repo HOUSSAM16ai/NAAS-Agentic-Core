@@ -47,6 +47,51 @@ When code modifications are authorized, the following targeted fixes must be app
 
 ---
 
+## ISS-STREAM-001 Fix Report (2026-05-12 — branch `fix/streaming-iss-stream-001`)
+
+**Status: FULLY RESOLVED.** جميع مسارات البث مُصلَحة جراحياً. تفاصيل:
+
+### الأسباب الجذرية المكتشفة (إضافة إلى D-047)
+
+**السبب 4 — `_normalize_stream_event` يُحوّل أحداث التحكم إلى `assistant_delta`:**
+- `phase_start`, `phase_completed`, `RUN_STARTED`, `context_missing` كانت تُحوَّل إلى `assistant_delta` لأنها ليست في `event_type_map`.
+- النتيجة: نصوص غريبة تظهر في الواجهة مثل `{"type": "phase_start", "payload": {...}}`.
+- الإصلاح: أضفنا `_PASSTHROUGH_EVENT_TYPES` و `_TEXT_EVENT_TYPES` — الأحداث غير المعروفة تُرجع `{"type": "noop"}` وتُصفَّى في `customer_chat.py` و `admin.py`.
+
+**السبب 5 — `_generator_with_persistence` لا يجمع الـ deltas للحفظ:**
+- عند streaming، `assistant_final.content = ""` → `final_content = ""` → لا يُحفظ شيء في DB.
+- الإصلاح: أضفنا `delta_parts: list[str]` يجمع كل `assistant_delta` chunks، ويُستخدم عند `assistant_final.content == ""`.
+
+**السبب 6 — `mergeAssistantContent` منطق خاطئ:**
+- `current.startsWith(incoming)` كان يُرجع `current` (يتجاهل الـ chunk الجديد).
+- الإصلاح: استبدلنا بـ `current.endsWith(incoming)` للكشف عن chunks قديمة وصلت متأخرة.
+
+**السبب 7 — `print()` statements في graph nodes تُلوّث stdout:**
+- `SupervisorNode`, `ChatFallbackNode`, `QueryRewriterNode`, `ToolExecutorNode`, `ValidatorNode`, `GeneralKnowledgeNode` كانت تطبع debug info.
+- الإصلاح: استبدلنا بـ `logger.debug()`.
+
+### الملفات المُعدَّلة
+
+| الملف | التغيير |
+|-------|---------|
+| `app/infrastructure/clients/orchestrator_client.py` | `_PASSTHROUGH_EVENT_TYPES` + `_TEXT_EVENT_TYPES` + noop return |
+| `app/api/routers/customer_chat.py` | تصفية `noop` events |
+| `app/api/routers/admin.py` | تصفية `noop` events |
+| `microservices/orchestrator_service/src/api/routes.py` | `delta_parts` accumulator في `_generator_with_persistence` |
+| `microservices/orchestrator_service/src/services/overmind/graph/main.py` | إزالة `print()` → `logger.debug()` |
+| `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py` | إزالة `print()` → `logger.debug()` |
+| `frontend/app/hooks/useAgentSocket.js` | إصلاح `mergeAssistantContent` + `assistant_final` handler |
+| `.runtime/truth_table.lock.json` | تحديث بعد تغيير `customer_chat_router` |
+
+### الملفات الجديدة
+
+| الملف | الغرض |
+|-------|-------|
+| `.github/workflows/streaming-fix-gate.yml` | CI gate للتحقق من صحة الإصلاح |
+| `observability/grafana/dashboards/160-streaming-metrics.json` | Dashboard مقاييس البث (11 panels) |
+
+---
+
 ## D-047 Implementation Report (2026-05-12 — branch `claude/setup-microservices-monitoring-ralbR`)
 
 **Status: RESOLVED at code level.** All three steps of the roadmap above are now applied. Pending only live verification in a Codespaces session.

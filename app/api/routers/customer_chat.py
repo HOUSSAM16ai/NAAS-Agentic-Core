@@ -446,6 +446,10 @@ async def chat_stream_ws(
                     ):
                         normalized_event = normalize_streaming_event(event)
 
+                        # ISS-STREAM-001: تصفية أحداث noop (أحداث غير معروفة من orchestrator)
+                        if normalized_event.get("type") == "noop":
+                            continue
+
                         # Prevent "Split-Brain" DB FK violation:
                         # Intercept Orchestrator's conversation_init and rewrite/strip conversation_id
                         # so the local frontend doesn't overwrite its local sequence with Orchestrator's sequence.

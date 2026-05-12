@@ -109,16 +109,16 @@ const notifyAgentError = (message) => {
     );
 };
 
-const computeOverlapLength = (existingContent, incomingContent) => {
-    const maxOverlap = Math.min(existingContent.length, incomingContent.length);
-    for (let size = maxOverlap; size > 0; size -= 1) {
-        if (existingContent.slice(-size) === incomingContent.slice(0, size)) {
-            return size;
-        }
-    }
-    return 0;
-};
-
+/**
+ * دمج محتوى المساعد بشكل صحيح:
+ * - إذا كان incoming هو delta حقيقي (قطعة صغيرة) → نُضيفه مباشرة
+ * - إذا كان incoming يبدأ بـ current (نص تراكمي من الخادم) → نُرجع incoming
+ * - نتجنب التكرار عبر كشف التداخل فقط عند الضرورة
+ *
+ * ISS-STREAM-001: الإصلاح الجراحي لمشكلة البث الكارثية.
+ * السبب الجذري: بعض مسارات الـ fallback ترسل النص التراكمي الكامل
+ * بدل delta صغير، مما يُسبب تكرار النص أو استبداله بشكل خاطئ.
+ */
 const mergeAssistantContent = (existingContent, incomingContent) => {
     const current = typeof existingContent === 'string' ? existingContent : '';
     const incoming = typeof incomingContent === 'string' ? incomingContent : '';
@@ -126,19 +126,20 @@ const mergeAssistantContent = (existingContent, incomingContent) => {
     if (!incoming) return current;
     if (!current) return incoming;
 
+    // الحالة 1: incoming هو نص تراكمي يحتوي على current كاملاً في بدايته
+    // → الخادم يُرسل النص الكامل حتى الآن، نُرجعه مباشرة
     if (incoming.startsWith(current)) {
         return incoming;
     }
 
-    if (current.startsWith(incoming)) {
+    // الحالة 2: current يحتوي على incoming كاملاً (chunk قديم وصل متأخراً)
+    // → نتجاهل الـ chunk القديم ونحتفظ بالحالي
+    if (current.endsWith(incoming)) {
         return current;
     }
 
-    const overlapLength = computeOverlapLength(current, incoming);
-    if (overlapLength > 0) {
-        return `${current}${incoming.slice(overlapLength)}`;
-    }
-
+    // الحالة 3: delta حقيقي — نُضيفه مباشرة بدون حساب overlap معقد
+    // هذا هو المسار الطبيعي لـ token-by-token streaming
     return `${current}${incoming}`;
 };
 
@@ -262,13 +263,17 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                 setMessages(prev => {
                     const last = prev[prev.length - 1];
                     if (last && last.role === 'assistant' && !last.isComplete && !last.isError) {
+                        // ISS-STREAM-001: استخدام mergeAssistantContent للتعامل مع كلا المسارين:
+                        // 1. delta حقيقي (token صغير) → يُضاف مباشرة
+                        // 2. نص تراكمي (fallback يُرسل النص الكامل) → يُستبدل بشكل صحيح
                         const updated = {
                             ...last,
                             content: mergeAssistantContent(last.content, content),
                         };
                         return [...prev.slice(0, -1), updated];
                     } else {
-                         return [...prev, { id: generateId(), role: 'assistant', content: content, isComplete: false }];
+                        // أول delta → ننشئ رسالة مساعد جديدة
+                        return [...prev, { id: generateId(), role: 'assistant', content: content, isComplete: false }];
                     }
                 });
             } else if (type === 'complete') {
@@ -290,10 +295,18 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                 setMessages(prev => {
                     const last = prev[prev.length - 1];
                     if (last && last.role === 'assistant' && !last.isComplete && !last.isError) {
-                         const newContent = mergeAssistantContent(last.content, content);
-                         return [...prev.slice(0, -1), { ...last, content: newContent, isComplete: true }];
+                        // ISS-STREAM-001: إذا كان content فارغاً (streaming mode)
+                        // → نُكمل الرسالة الحالية بدون تغيير المحتوى (الـ deltas كافية)
+                        // إذا كان content غير فارغ (fallback mode) → ندمجه بشكل صحيح
+                        const newContent = content ? mergeAssistantContent(last.content, content) : last.content;
+                        return [...prev.slice(0, -1), { ...last, content: newContent, isComplete: true }];
                     } else if (content) {
-                         return [...prev, { id: generateId(), role: 'assistant', content: content, isComplete: true }];
+                        // لا توجد رسالة مساعد جارية → ننشئ رسالة جديدة كاملة
+                        return [...prev, { id: generateId(), role: 'assistant', content: content, isComplete: true }];
+                    }
+                    // streaming mode انتهى بدون assistant_final content → نُكمل آخر رسالة
+                    if (last && last.role === 'assistant' && !last.isComplete) {
+                        return [...prev.slice(0, -1), { ...last, isComplete: true }];
                     }
                     return prev;
                 });

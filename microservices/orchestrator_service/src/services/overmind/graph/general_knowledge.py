@@ -45,17 +45,7 @@ class GeneralKnowledgeNode:
         history = format_conversation_history(prompt_messages)
 
         if not history.strip():
-            print("🚨 FAILURE: EMPTY HISTORY")
-
-        if "ها" in query and "فرنسا" not in query:
-            print("🚨 PRONOUN LEAK DETECTED")
-
-        if "فرنسا" not in history:
-            print("🚨 ENTITY LOST IN HISTORY")
-
-        print("=== FINAL LLM INPUT ===")
-        print("HISTORY:", history)
-        print("QUERY:", query)
+            logger.debug("GeneralKnowledgeNode: empty history for query=%.60s", query)
 
         ai_client = get_ai_client()
 

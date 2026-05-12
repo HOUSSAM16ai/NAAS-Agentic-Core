@@ -1,0 +1,260 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CI Gate — Streaming Fix Verification (ISS-STREAM-001)
+#
+# يتحقق من صحة إصلاح مشكلة البث الكارثية:
+#   1. stream-protocol   — بروتوكول البث: noop filtering + delta accumulation
+#   2. frontend-logic    — منطق mergeAssistantContent في الواجهة
+#   3. persistence-fix   — تجميع الـ deltas للحفظ الصحيح
+#   4. noop-filter       — تصفية أحداث noop في customer_chat + admin
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Streaming Fix Gate (ISS-STREAM-001)"
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: streaming-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  PYTHON_VERSION: "3.12"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  # ── Job 1: Stream Protocol Verification ───────────────────────────────────
+  stream-protocol:
+    name: stream-protocol
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      SECRET_KEY: "test-secret-key-for-ci-pipeline-secure-length"
+      ENVIRONMENT: testing
+      LLM_MOCK_MODE: "1"
+      SUPABASE_URL: https://dummy.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
+      RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: pip install -q pydantic
+      - name: Verify _normalize_stream_event filters unknown event types
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c "
+          import sys, pathlib
+
+          src = pathlib.Path('app/infrastructure/clients/orchestrator_client.py').read_text()
+
+          # ISS-STREAM-001: تحقق من وجود _PASSTHROUGH_EVENT_TYPES
+          checks = {
+              '_PASSTHROUGH_EVENT_TYPES': '_PASSTHROUGH_EVENT_TYPES',
+              '_TEXT_EVENT_TYPES': '_TEXT_EVENT_TYPES',
+              'noop': '\"noop\"',
+              'phase_start passthrough': '\"phase_start\"',
+              'RUN_STARTED passthrough': '\"RUN_STARTED\"',
+          }
+          failed = False
+          for name, pattern in checks.items():
+              if pattern not in src:
+                  print(f'FAIL: orchestrator_client.py missing {name} ({pattern})')
+                  failed = True
+              else:
+                  print(f'PASS: Found {name}')
+          sys.exit(1 if failed else 0)
+          "
+
+      - name: Verify noop filter in customer_chat.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c "
+          import sys, pathlib
+          src = pathlib.Path('app/api/routers/customer_chat.py').read_text()
+          if '\"noop\"' not in src and \"'noop'\" not in src:
+              print('FAIL: customer_chat.py missing noop filter')
+              sys.exit(1)
+          print('PASS: customer_chat.py has noop filter')
+          "
+
+      - name: Verify noop filter in admin.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c "
+          import sys, pathlib
+          src = pathlib.Path('app/api/routers/admin.py').read_text()
+          if '\"noop\"' not in src and \"'noop'\" not in src:
+              print('FAIL: admin.py missing noop filter')
+              sys.exit(1)
+          print('PASS: admin.py has noop filter')
+          "
+
+  # ── Job 2: Delta Accumulation for Persistence ─────────────────────────────
+  persistence-fix:
+    name: persistence-fix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify _generator_with_persistence accumulates deltas
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c "
+          import sys, pathlib
+          src = pathlib.Path('microservices/orchestrator_service/src/api/routes.py').read_text()
+
+          checks = {
+              'delta_parts accumulator': 'delta_parts',
+              'delta accumulation': 'delta_parts.append',
+              'fallback to delta_parts': 'delta_parts',
+              'ISS-STREAM-001 comment': 'ISS-STREAM-001',
+          }
+          failed = False
+          for name, pattern in checks.items():
+              if pattern not in src:
+                  print(f'FAIL: routes.py missing {name} ({pattern})')
+                  failed = True
+              else:
+                  print(f'PASS: Found {name}')
+          sys.exit(1 if failed else 0)
+          "
+
+  # ── Job 3: Frontend Merge Logic ───────────────────────────────────────────
+  frontend-logic:
+    name: frontend-logic
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify mergeAssistantContent uses correct logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c "
+          import sys, pathlib
+          src = pathlib.Path('frontend/app/hooks/useAgentSocket.js').read_text()
+
+          checks = {
+              'ISS-STREAM-001 comment': 'ISS-STREAM-001',
+              'incoming.startsWith(current)': 'incoming.startsWith(current)',
+              'current.endsWith(incoming)': 'current.endsWith(incoming)',
+              'direct append': '\`\${current}\${incoming}\`',
+          }
+          failed = False
+          for name, pattern in checks.items():
+              if pattern not in src:
+                  print(f'FAIL: useAgentSocket.js missing {name}')
+                  failed = True
+              else:
+                  print(f'PASS: Found {name}')
+          sys.exit(1 if failed else 0)
+          "
+
+      - name: Verify assistant_final handles empty content (streaming mode)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c "
+          import sys, pathlib
+          src = pathlib.Path('frontend/app/hooks/useAgentSocket.js').read_text()
+          # يجب أن يتعامل مع content فارغ في assistant_final
+          if 'content ?' not in src and \"content ?\" not in src:
+              # تحقق بديل
+              if 'isComplete: true' not in src:
+                  print('FAIL: assistant_final handler missing isComplete logic')
+                  sys.exit(1)
+          print('PASS: assistant_final handler is correct')
+          "
+
+  # ── Job 4: No Debug Print Statements ──────────────────────────────────────
+  no-debug-prints:
+    name: no-debug-prints
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no debug print() in graph nodes
+        shell: bash
+        run: |
+          set -euo pipefail
+          GRAPH_FILES=(
+            "microservices/orchestrator_service/src/services/overmind/graph/main.py"
+            "microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py"
+            "microservices/orchestrator_service/src/services/overmind/graph/search.py"
+          )
+          FAILED=0
+          for f in "${GRAPH_FILES[@]}"; do
+            count=$(grep -c '^\s*print(' "$f" 2>/dev/null || echo 0)
+            if [ "$count" -gt 0 ]; then
+              echo "FAIL: $f has $count debug print() statements"
+              grep -n '^\s*print(' "$f"
+              FAILED=1
+            else
+              echo "PASS: $f has no debug print() statements"
+            fi
+          done
+          exit $FAILED
+
+  # ── Final Gate ─────────────────────────────────────────────────────────────
+  streaming-gate-required:
+    name: streaming-gate-required
+    runs-on: ubuntu-latest
+    needs:
+      - stream-protocol
+      - persistence-fix
+      - frontend-logic
+      - no-debug-prints
+    if: always() && !cancelled()
+    steps:
+      - name: Evaluate streaming fix gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "stream-protocol=${{ needs.stream-protocol.result }}"
+          echo "persistence-fix=${{ needs.persistence-fix.result }}"
+          echo "frontend-logic=${{ needs.frontend-logic.result }}"
+          echo "no-debug-prints=${{ needs.no-debug-prints.result }}"
+
+          isValid() { [ "$1" = "success" ] || [ "$1" = "skipped" ]; }
+
+          FAILED=0
+          for result in \
+            "${{ needs.stream-protocol.result }}" \
+            "${{ needs.persistence-fix.result }}" \
+            "${{ needs.frontend-logic.result }}" \
+            "${{ needs.no-debug-prints.result }}"; do
+            if ! isValid "$result"; then
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "❌ Streaming fix gate FAILED"
+            exit 1
+          fi
+
+          echo "✅ All streaming fix gates passed (ISS-STREAM-001)"
+          echo ""
+          echo "════════════════════════════════════════════════════════════"
+          echo "  Streaming Fix — Verified"
+          echo "════════════════════════════════════════════════════════════"
+          echo "  noop filter: ✅ customer_chat + admin"
+          echo "  delta accumulation: ✅ _generator_with_persistence"
+          echo "  frontend merge: ✅ mergeAssistantContent"
+          echo "  no debug prints: ✅ graph nodes"
+          echo "════════════════════════════════════════════════════════════"

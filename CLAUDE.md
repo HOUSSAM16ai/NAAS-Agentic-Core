@@ -2600,3 +2600,114 @@ wscat -c "ws://localhost:8000/api/chat/ws?token=$JWT" -s jwt
 **قرار معماري**: `.memory/decisions.md` D-047.
 **bug log**: `.memory/issues.md` ISS-055.
 
+---
+
+## 6.28 Orchestrator Production Streaming — DSPy/raw-OpenAI via Custom Events (2026-05-12, D-048)
+
+> **مكمِّل ضروري لـ §6.27**. D-047 وحده لم يكن كافياً للمستخدم الفعلي على المسار الافتراضي.
+
+### لماذا D-047 لم يكن كافياً
+
+`§6.27` فتح القناة الانسيابية في 3 طبقات. لكن المسار الإنتاجي الحقيقي — `orchestrator-service:8006` — يستخدم في عقده الورقية (`SynthesizerNode`, `ChatFallbackNode`, `GeneralKnowledgeNode`):
+
+- **DSPy 3.x** (`dspy.Predict`, `dspy.ChainOfThought`) — يلف نموذج DSPy الخاص
+- **`OpenRouterClient.send_message`** و **`openai.AsyncOpenAI`** — استدعاء خام
+
+أي منهما لا يصدر `on_chat_model_stream` من `astream_events(version="v2")` (تلك تُولَّد فقط من نماذج LangChain `BaseChatModel`). فالـ branch الذي أضفته D-047 لـ `on_chat_model_stream` يبقى dormant على المسار الإنتاجي → المستخدم يرى رد دفعة واحدة كارثية حتى بعد D-047.
+
+### الحل (D-048)
+
+استخدام `langgraph.config.get_stream_writer()` + `astream_events`'s `on_custom_event` كقناة بديلة على مستوى البايت.
+
+**نمط hybrid في كل عقدة ورقية**:
+
+```python
+@staticmethod
+def _get_writer():
+    try:
+        from langgraph.config import get_stream_writer
+        return get_stream_writer()
+    except Exception:
+        return None
+
+async def __call__(self, state):
+    writer = self._get_writer()
+    if writer is not None:
+        # وضع streaming — raw OpenRouter SSE + custom events
+        parts = []
+        async for chunk in ai_client.stream_chat(messages):
+            delta = chunk["choices"][0]["delta"].get("content")
+            if delta:
+                parts.append(delta)
+                writer({"chunk_type": "assistant_delta", "content": delta, "node": "<name>"})
+        full = "".join(parts).strip()
+    else:
+        # وضع batch — DSPy/send_message محفوظ
+        prediction = await anyio.to_thread.run_sync(lambda: self.generator(...))
+        full = prediction.response
+    return {"final_response": full, "messages": [AIMessage(content=full)]}
+```
+
+`get_stream_writer()` يُعيد `None` في وضع `ainvoke` (اختبارات، batch) → DSPy يعمل كما هو، صفر regression.
+`get_stream_writer()` يُعيد writer في وضع `astream_events` → كل `delta.content` يُرسَل فوراً كـ `on_custom_event`.
+
+### العقد المعاد كتابتها
+
+| العقدة | الملف | DSPy signature المحفوظ |
+|---|---|---|
+| `GeneralKnowledgeNode` | `general_knowledge.py` | N/A — يستخدم `send_message` في وضع batch |
+| `ChatFallbackNode` | `main.py` | `dspy.Predict(ChatFallbackSignature)` |
+| `SynthesizerNode` | `search.py` | `dspy.Predict(EducationalSynthesizer)` |
+
+`SynthesizerNode` الأعقد — يُرجِع JSON منظماً `{"المصدر","التمرين",...}` مع المتن في حقل `"التمرين"`. مسار streaming الجديد يبني نفس مظروف JSON، لكن `"التمرين"` يُعبَأ بـ concatenation للقطع المتدفقة. كل قطعة تصل أيضاً للمستخدم كـ `assistant_delta` فور وصولها → الواجهة ترسم الشرح العربي الطويل كلمة بكلمة، بينما مظروف JSON يصل لطبقة الـ persistence سليماً.
+
+### استهلاك `on_custom_event` في `routes.py`
+
+أُضيف فرع جديد بجانب `on_chat_model_stream` (D-047) في **3 مواقع**:
+- HTTP `/api/chat/messages` streaming generator
+- Customer WS `/api/chat/ws` worker task
+- Admin WS `/admin/api/chat/ws` streaming response
+
+```python
+elif event_type == "on_custom_event":
+    data = event.get("data")
+    if isinstance(data, dict) and data.get("chunk_type") == "assistant_delta":
+        content = data.get("content")
+        if isinstance(content, str) and content:
+            streamed_chars += len(content)
+            yield {"type": "assistant_delta", "payload": {"content": content}}
+```
+
+عدّاد `streamed_chars` نفسه يُستخدم لكلا القناتين → عقد منع التكرار (D-047) يعمل تلقائياً مع D-048.
+
+### الأثر النهائي (matrix)
+
+| المسار | قبل D-047 | بعد D-047 فقط | بعد D-048 |
+|---|---|---|---|
+| Monolith local fallback | burst واحد | ✅ word-by-word | ✅ word-by-word |
+| Orchestrator (DSPy + raw OpenAI) — **الإنتاج الافتراضي** | burst واحد | ❌ لا يزال burst | ✅ word-by-word |
+| Orchestrator (هجرة مستقبلية إلى LangChain ChatOpenAI) | burst واحد | ✅ word-by-word | ✅ word-by-word |
+| Admin WS (DSPy + raw OpenAI) | burst | ❌ لا يزال burst | ✅ word-by-word |
+
+### قواعد دائمة أُضيفت
+
+1. أي عقدة ورقية في الـ orchestrator graph تُصدِر `final_response` للمستخدم **يجب** أن تجرب `get_stream_writer()` وتبث عبر custom events عند توفره. DSPy non-streaming يبقى fallback لـ batch/tests.
+2. `routes.py` **يجب** أن يستمع لكلا `on_chat_model_stream` و `on_custom_event` ليغطي العقد LangChain-native والعقد DSPy/raw-OpenAI.
+3. مظروف الـ custom event canonical: `{"chunk_type": "assistant_delta", "content": str, "node": str}` — لا تخترع variants. حقل `node` للقياس فقط؛ `routes.py` يتجاهله.
+4. `langgraph>=0.2.39` متطلب صلب — أقدم لا يدعم `get_stream_writer()`. متغير في `requirements.txt` بالفعل.
+
+### قياس النجاح حياً
+
+```bash
+# يجب أن تظهر 20-100+ سطور NDJSON على الإنتاج الافتراضي (DSPy/raw OpenAI nodes)
+curl -N -X POST http://localhost:8006/api/chat/messages \
+  -H "Authorization: Bearer $JWT" \
+  -d '{"question":"اشرح قانون أوم","user_id":7,"conversation_id":1}'
+# المتوقع: tens of small {"type":"assistant_delta","payload":{"content":"..."}} lines
+
+# عداد جديد في الـ orchestrator (sustained > 1 خلال chat نشط):
+curl http://localhost:8006/metrics | grep 'cogniforge_pipeline_invocations_total'
+```
+
+**زمن أول-كلمة المتوقع**: ~800ms (بدل 25–40s burst).
+

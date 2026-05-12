@@ -664,6 +664,16 @@ class ChatFallbackNode:
     def __init__(self) -> None:
         self.generator = dspy.Predict(ChatFallbackSignature)
 
+    @staticmethod
+    def _get_writer():
+        """D-048: stream_writer إذا توفر (وضع streaming)، None في وضع batch."""
+        try:
+            from langgraph.config import get_stream_writer
+
+            return get_stream_writer()
+        except Exception:
+            return None
+
     async def __call__(self, state: AgentState) -> dict:
         import time
 
@@ -703,12 +713,47 @@ class ChatFallbackNode:
             "وعليكم السلام! أنا هنا للمساعدة. أخبرني بما تحتاجه وسأتابع معك خطوة بخطوة."
         )
 
+        writer = self._get_writer()
         try:
-            response_content = await ai_client.send_message(
-                system_prompt=system_content, user_message=user_content, temperature=0.7
-            )
-            if response_content and isinstance(response_content, str) and response_content.strip():
-                fallback_response = response_content.strip()
+            if writer is not None:
+                # D-048: STREAMING — يبث token-by-token عبر custom event
+                stream_messages = [
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": user_content},
+                ]
+                parts: list[str] = []
+                async for chunk in ai_client.stream_chat(stream_messages):
+                    try:
+                        choices = chunk.get("choices") if isinstance(chunk, dict) else None
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta", {}) or {}
+                        content = delta.get("content")
+                        if not isinstance(content, str) or not content:
+                            continue
+                        parts.append(content)
+                        writer(
+                            {
+                                "chunk_type": "assistant_delta",
+                                "content": content,
+                                "node": "chat_fallback",
+                            }
+                        )
+                    except Exception:
+                        continue
+                streamed = "".join(parts).strip()
+                if streamed:
+                    fallback_response = streamed
+            else:
+                response_content = await ai_client.send_message(
+                    system_prompt=system_content, user_message=user_content, temperature=0.7
+                )
+                if (
+                    response_content
+                    and isinstance(response_content, str)
+                    and response_content.strip()
+                ):
+                    fallback_response = response_content.strip()
         except Exception as error:
             emit_telemetry(
                 node_name="ChatFallbackNode",

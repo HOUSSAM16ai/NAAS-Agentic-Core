@@ -348,6 +348,16 @@ class SynthesizerNode:
     def __init__(self):
         self.generator = dspy.Predict(EducationalSynthesizer)
 
+    @staticmethod
+    def _get_writer():
+        """D-048: stream_writer إذا توفر."""
+        try:
+            from langgraph.config import get_stream_writer
+
+            return get_stream_writer()
+        except Exception:
+            return None
+
     async def __call__(self, state: dict) -> dict:
         import json
 
@@ -388,16 +398,72 @@ class SynthesizerNode:
             source = reranked[0].metadata.get("source", "الإنترنت")
             confidence = str(reranked[0].metadata.get("score", 0.85))
 
-            try:
-                prediction = await anyio.to_thread.run_sync(
-                    lambda: self.generator(
-                        context=raw_doc_text, conversation=conversation_text, query=query
+            writer = self._get_writer()
+            text_val = ""
+            if writer is not None:
+                # D-048: STREAMING — استدعاء raw OpenAI مع stream=True + custom events
+                # نُحاكي نفس قالب EducationalSynthesizer signature ولكن بـ streaming.
+                try:
+                    from microservices.orchestrator_service.src.core.ai_gateway import (
+                        get_ai_client,
                     )
-                )
-                text_val = getattr(prediction, "response", raw_doc_text).strip()
-            except Exception as e:
-                logger.error(f"Synthesizer LLM generation failed: {e}")
-                text_val = "عذراً، تعذر صياغة الشرح المطلوب بسبب خطأ داخلي. يرجى إعادة صياغة السؤال."
+
+                    ai_client = get_ai_client()
+                    system_msg = (
+                        "أنت مدرس بكالوريا جزائري. اعتمد على context الذي يحويه التمرين "
+                        "أو الدرس من قاعدة المعرفة، وعلى محادثة الطالب. اكتب شرحاً متماسكاً "
+                        "بالعربية الفصحى. لا تُكرر نص المصدر حرفياً."
+                    )
+                    user_msg = (
+                        f"المصدر (context):\n{raw_doc_text}\n\n"
+                        f"محادثة الطالب:\n{conversation_text}\n\n"
+                        f"السؤال الحالي: {query}\n\n"
+                        "اكتب الشرح أو الحل."
+                    )
+                    stream_messages = [
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": user_msg},
+                    ]
+                    parts: list[str] = []
+                    async for chunk in ai_client.stream_chat(stream_messages):
+                        try:
+                            choices = chunk.get("choices") if isinstance(chunk, dict) else None
+                            if not choices:
+                                continue
+                            delta = choices[0].get("delta", {}) or {}
+                            content = delta.get("content")
+                            if not isinstance(content, str) or not content:
+                                continue
+                            parts.append(content)
+                            writer(
+                                {
+                                    "chunk_type": "assistant_delta",
+                                    "content": content,
+                                    "node": "synthesizer",
+                                }
+                            )
+                        except Exception:
+                            continue
+                    text_val = "".join(parts).strip()
+                except Exception as e:
+                    logger.error(f"Synthesizer streaming failed: {e}")
+                    text_val = ""
+
+            if not text_val:
+                # Fallback إلى DSPy (batch mode أو فشل streaming)
+                try:
+                    prediction = await anyio.to_thread.run_sync(
+                        lambda: self.generator(
+                            context=raw_doc_text, conversation=conversation_text, query=query
+                        )
+                    )
+                    text_val = getattr(prediction, "response", raw_doc_text).strip()
+                except Exception as e:
+                    logger.error(f"Synthesizer LLM generation failed: {e}")
+                    text_val = (
+                        "عذراً، تعذر صياغة الشرح المطلوب بسبب خطأ داخلي. "
+                        "يرجى إعادة صياغة السؤال."
+                    )
 
         response_json = {
             "المصدر": source,

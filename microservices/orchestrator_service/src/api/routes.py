@@ -1542,10 +1542,24 @@ async def _stream_chat_langgraph(
                             }
                         )
                 elif _evt_type == "on_chat_model_stream":
-                    # D-047: token-level streaming on WS path
+                    # D-047: token-level streaming when nodes use LangChain ChatOpenAI
                     _chunk = event.get("data", {}).get("chunk")
                     if _chunk is not None:
                         _content = getattr(_chunk, "content", None)
+                        if isinstance(_content, str) and _content:
+                            ws_streamed_chars += len(_content)
+                            await _safe_put(
+                                {
+                                    "type": "assistant_delta",
+                                    "payload": {"content": _content},
+                                }
+                            )
+                elif _evt_type == "on_custom_event":
+                    # D-048: token-level streaming from DSPy/raw-OpenAI nodes via stream_writer
+                    # (SynthesizerNode, ChatFallbackNode, GeneralKnowledgeNode)
+                    _data = event.get("data")
+                    if isinstance(_data, dict) and _data.get("chunk_type") == "assistant_delta":
+                        _content = _data.get("content")
                         if isinstance(_content, str) and _content:
                             ws_streamed_chars += len(_content)
                             await _safe_put(
@@ -1850,11 +1864,22 @@ async def _run_chat_langgraph(
                     }
                 )
         elif event_type == "on_chat_model_stream":
-            # D-047 CRITICAL FIX: emit token-level deltas to enable word-by-word typing.
+            # D-047 CRITICAL FIX: emit token-level deltas when nodes use LangChain ChatOpenAI.
             # Previously this branch was a `pass` (see streaming_architecture_breakdown.md).
             chunk = event.get("data", {}).get("chunk")
             if chunk is not None:
                 content = getattr(chunk, "content", None)
+                if isinstance(content, str) and content:
+                    streamed_chars += len(content)
+                    yield await _serialize_stream_frame(
+                        {"type": "assistant_delta", "payload": {"content": content}}
+                    )
+        elif event_type == "on_custom_event":
+            # D-048: token-level streaming from DSPy/raw-OpenAI nodes via stream_writer
+            # (SynthesizerNode, ChatFallbackNode, GeneralKnowledgeNode emit via writer({...})).
+            data = event.get("data")
+            if isinstance(data, dict) and data.get("chunk_type") == "assistant_delta":
+                content = data.get("content")
                 if isinstance(content, str) and content:
                     streamed_chars += len(content)
                     yield await _serialize_stream_frame(
@@ -2595,10 +2620,26 @@ async def chat_with_agent_endpoint(
                                 }
                             )
                     elif _evt_type == "on_chat_model_stream":
-                        # D-047: token-level streaming on admin WS path
+                        # D-047: token-level streaming when nodes use LangChain ChatOpenAI
                         _chunk = event.get("data", {}).get("chunk")
                         if _chunk is not None:
                             _content = getattr(_chunk, "content", None)
+                            if isinstance(_content, str) and _content:
+                                admin_streamed_chars += len(_content)
+                                yield await _serialize_stream_frame(
+                                    {
+                                        "type": "assistant_delta",
+                                        "payload": {"content": _content},
+                                    }
+                                )
+                    elif _evt_type == "on_custom_event":
+                        # D-048: token-level streaming from DSPy/raw-OpenAI nodes via stream_writer
+                        _data = event.get("data")
+                        if (
+                            isinstance(_data, dict)
+                            and _data.get("chunk_type") == "assistant_delta"
+                        ):
+                            _content = _data.get("content")
                             if isinstance(_content, str) and _content:
                                 admin_streamed_chars += len(_content)
                                 yield await _serialize_stream_frame(

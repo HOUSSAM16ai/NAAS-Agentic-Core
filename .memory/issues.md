@@ -1,9 +1,44 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-11 | Branch: `feat/live-verification-d044-surgical-fixes`
+> Last updated: 2026-05-12 | Branch: `claude/setup-microservices-monitoring-ralbR`
 
 ---
 
-## 🔴 Critical — Resolved in this branch (2026-05-11)
+## 🟢 Resolved in this branch (2026-05-12 — D-046)
+
+### ISS-051 · 4 zombie metric queries in Grafana dashboards [RESOLVED]
+- **Status**: RESOLVED in `claude/setup-microservices-monitoring-ralbR`
+- **Root cause**: 4 PromQL queries across 3 dashboards (`20-langgraph.json`, `60-microservices-step3-live.json`, `50-microservices-transition.json`) referenced metric names with no emitter in `app/` or `microservices/`:
+  - `cogniforge_langgraph_checkpointer_writes_total` — no emitter (Step 10 emits `cogniforge_checkpointer_writes_total` without `langgraph_` prefix)
+  - `cogniforge_tavily_search_total` — no emitter (research-agent emits `cogniforge_research_tavily_calls_total`)
+  - `cogniforge_orchestrator_startup_ready` — no emitter (orchestrator-service emits `cogniforge_orchestrator_startup_info{graph_ready=...}`)
+  - `cogniforge_tavily_search_total{result="skipped_no_key"}` — invented label dimension; never emitted
+- **Fix**: Replaced all 4 queries with the corresponding real emitters. Static contract sweep now shows 94/94 dashboard metrics have a real source.
+- **Evidence**: `grep -c cogniforge_ observability/grafana/dashboards/*.json | wc -l` → 17 dashboards; `python3 -c "..."` static contract check → 94 metrics, 0 zombies.
+- **Files**: `observability/grafana/dashboards/20-langgraph.json`, `observability/grafana/dashboards/60-microservices-step3-live.json`, `observability/grafana/dashboards/50-microservices-transition.json`
+
+### ISS-052 · 3 GitHub Actions workflows with unindented Python heredocs [RESOLVED]
+- **Status**: RESOLVED in `claude/setup-microservices-monitoring-ralbR`
+- **Root cause**: `microservices-step4.yml`, `microservices-step5-user-service.yml`, `microservices-step6-planning-agent.yml` each contained `python3 -c "..."` shell commands inside YAML `run: |` blocks where the multi-line Python code was at column 1 (zero indent) — outside the parent block scalar. `yaml.safe_load` rejected all three. GitHub Actions might have tolerated this with a more permissive parser, but the gate was structurally fragile.
+- **Fix**: Converted each `python3 -c "..."` to a bash heredoc `python3 <<'PY' ... PY` with content properly indented to the YAML block scalar level. Shell variables passed via `ENV=val python3 <<'PY' ... os.environ['ENV'] ... PY` to avoid double-escaping.
+- **Bonus fix**: `microservices-step4.yml` had a `github-script@v7` block with a multi-line JS template literal whose markdown body (lines 257–289) was unindented. Replaced with `[...].join('\n')` array.
+- **Evidence**: `python3 -c "import yaml; [yaml.safe_load(open(p)) for p in glob('.github/workflows/*.yml')]"` → 21/21 parse successfully (was 18/21).
+- **Files**: `.github/workflows/microservices-step4.yml`, `.github/workflows/microservices-step5-user-service.yml`, `.github/workflows/microservices-step6-planning-agent.yml`
+
+### ISS-053 · runtime_truth.lock.json stale (D-046 sub-finding) [RESOLVED]
+- **Status**: RESOLVED in `claude/setup-microservices-monitoring-ralbR`
+- **Root cause**: `.runtime/truth_table.lock.json` was generated 2026-05-08 on a different branch context. The drift gate (`scripts/runtime_truth.py --check`) reported `customer_chat_router: importer_count 5 → 6` — informational drift, not a status change.
+- **Fix**: `python scripts/runtime_truth.py --update` regenerated the lock on the current branch.
+- **Files**: `.runtime/truth_table.lock.json`
+
+### ISS-054 · ruff RUF100 — misplaced `# noqa: N806` directive [RESOLVED]
+- **Status**: RESOLVED in `claude/setup-microservices-monitoring-ralbR`
+- **Root cause**: `tests/unit/test_dual_write_immunity.py:19` had `# noqa: N806` on the closing `)` line of a multi-line `SessionLocal = async_sessionmaker(...)` assignment. Ruff applies noqa to the line it's on; the N806 violation fires on the assignment line (line 17), not the closing paren. RUF100 reported the noqa as "unused" because it didn't suppress anything on its own line.
+- **Fix**: Moved `# noqa: N806` to the assignment line (line 17). N806 now suppresses correctly, RUF100 stops firing.
+- **Files**: `tests/unit/test_dual_write_immunity.py`
+
+---
+
+## 🔴 Critical — Resolved in branch `feat/live-verification-d044-surgical-fixes` (2026-05-11)
 
 ### ISS-047 · reasoning-agent OpenRouter 402 — Insufficient Credits for gpt-4o [CONFIRMED LIVE — RESOLVED]
 - **Status**: RESOLVED in `feat/live-verification-d044-surgical-fixes`

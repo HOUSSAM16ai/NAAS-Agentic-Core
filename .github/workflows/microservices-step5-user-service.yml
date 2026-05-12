@@ -173,28 +173,28 @@ jobs:
             echo "❌ Dashboard غائب: $DASHBOARD"
             exit 1
           fi
-          python3 -c "
-import json, sys
-with open('$DASHBOARD') as f:
-    data = json.load(f)
-uid = data.get('uid', '')
-panels = data.get('panels', [])
-refresh = data.get('refresh', '')
-title = data.get('title', '')
-errors = []
-if uid != 'cogniforge-ms-step5-user-service':
-    errors.append(f'UID خاطئ: {uid}')
-if len(panels) < 10:
-    errors.append(f'عدد panels غير كافٍ: {len(panels)}')
-if refresh != '10s':
-    errors.append(f'refresh خاطئ: {refresh}')
-if 'cogniforge_user' not in open('$DASHBOARD').read():
-    errors.append('لا يوجد مرجع لـ cogniforge_user metrics')
-if errors:
-    for e in errors: print(f'❌ {e}')
-    sys.exit(1)
-print(f'✅ Dashboard صالح: {len(panels)} panels | UID={uid} | refresh={refresh}')
-"
+          DASHBOARD="$DASHBOARD" python3 <<'PY'
+          import json, sys, os
+          path = os.environ['DASHBOARD']
+          with open(path) as f:
+              data = json.load(f)
+          uid = data.get('uid', '')
+          panels = data.get('panels', [])
+          refresh = data.get('refresh', '')
+          errors = []
+          if uid != 'cogniforge-ms-step5-user-service':
+              errors.append(f'UID خاطئ: {uid}')
+          if len(panels) < 10:
+              errors.append(f'عدد panels غير كافٍ: {len(panels)}')
+          if refresh != '10s':
+              errors.append(f'refresh خاطئ: {refresh}')
+          if 'cogniforge_user' not in open(path).read():
+              errors.append('لا يوجد مرجع لـ cogniforge_user metrics')
+          if errors:
+              for e in errors: print(f'❌ {e}')
+              sys.exit(1)
+          print(f'✅ Dashboard صالح: {len(panels)} panels | UID={uid} | refresh={refresh}')
+          PY
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Job 3: Lint — فحص جودة الكود

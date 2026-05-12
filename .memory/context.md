@@ -1,7 +1,7 @@
 # CogniForge — Project Context
-> Last updated: **2026-05-11** | Branch: `feat/microservices-step11-full-skills-live`.
-> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-11).
-> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` + `microservices-step3-live` + `microservices-step4` + `microservices-step5-user-service` + `microservices-step6-planning-agent` + `microservices-step7-research-agent` + `microservices-step8-reasoning-agent` + `microservices-step11-full-skills` (NEW).
+> Last updated: **2026-05-12** | Branch: `claude/setup-microservices-monitoring-ralbR`.
+> **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-11; static contract sweep 2026-05-12 — see D-046).
+> **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` + `microservices-step3-live` + `microservices-step4` + `microservices-step5-user-service` + `microservices-step6-planning-agent` + `microservices-step7-research-agent` + `microservices-step8-reasoning-agent` + `microservices-step9-skills-pipeline` + `microservices-step10-postgres-checkpointer` + `microservices-step11-full-skills` + `microservices-step12-conversation-service` + `skills-architecture-gate` + `microservices-d045-user-routing`. **All 21 workflow YAMLs validated 2026-05-12 (D-046).**
 
 ## Identity
 - **Name**: NAAS-Agentic-Core (CogniForge)

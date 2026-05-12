@@ -327,19 +327,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(cogniforge_tavily_search_total{result=\"success\"}[5m])",
+          "expr": "rate(cogniforge_research_tavily_calls_total{status=\"success\"}[5m])",
           "legendFormat": "✅ Search Success",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(cogniforge_tavily_search_total{result=\"skipped_no_key\"}[5m])",
-          "legendFormat": "⚠️ Skipped (no key)",
+          "expr": "max(cogniforge_research_startup_info{tavily_available=\"false\"})",
+          "legendFormat": "⚠️ Tavily Unavailable (no key)",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(cogniforge_tavily_search_total{result=\"error\"}[5m])",
+          "expr": "rate(cogniforge_research_tavily_errors_total[5m])",
           "legendFormat": "❌ Error",
           "refId": "C"
         }
@@ -423,7 +423,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "cogniforge_orchestrator_startup_ready",
+          "expr": "max(cogniforge_orchestrator_startup_info{graph_ready=\"true\"})",
           "legendFormat": "startup_state",
           "refId": "A"
         }

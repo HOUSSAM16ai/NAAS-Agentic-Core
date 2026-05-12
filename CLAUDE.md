@@ -2467,3 +2467,63 @@ cogniforge-fastapi  http://localhost:8000/api/v1/observability/prometheus  → U
 grafana             http://localhost:3001/metrics                           → UP
 prometheus          http://localhost:9090/metrics                           → UP
 ```
+
+---
+
+## 6.26 Dashboard Zombie-Metric Sweep + CI YAML Repair (2026-05-12, branch `claude/setup-microservices-monitoring-ralbR`)
+
+> Live sandbox audit (no outbound network — Supabase / OpenRouter / Tavily reachability could not be verified from this environment; CI on GitHub will exercise them with the secrets).
+> Scope: contract-completeness sweep across all 17 Grafana dashboards + 21 GitHub Actions workflows + Skills Architecture compliance.
+
+### What was verified (static + tooling)
+
+| Gate | Tool | Result |
+|---|---|---|
+| `ruff check .` | `ruff 0.15.8` | ✅ Clean (was 2 errors — RUF100 in `tests/unit/test_dual_write_immunity.py:19` + structural drift fixed) |
+| `python3 scripts/runtime_truth.py --check` | runtime truth gate | ✅ Lock regenerated 2026-05-12 (was stale, drift in `customer_chat_router: importer_count 5→6`) |
+| `python3 scripts/validate_structure.py` | structure gate | ✅ Passes (3 informational warnings, none blocking) |
+| Skill isolation — `scripts/fitness/check_no_app_imports_in_microservices.py` (manual replay) | py3.11 fallback | ✅ Zero cross-microservice imports, zero `app.*` imports |
+| All 21 GitHub Actions workflows parse as YAML | `yaml.safe_load` | ✅ All 21 OK (was 3 BAD — `microservices-step4.yml`, `microservices-step5-user-service.yml`, `microservices-step6-planning-agent.yml`) |
+| Grafana dashboards JSON validity | json.load | ✅ All 17 valid |
+| Grafana dashboard ↔ emitter contract | grep-based static check | ✅ 94/94 unique metrics have a real emitter (was 4 zombies; see below) |
+| Skills Architecture metrics inventory (≥ 7 metrics / skill) | manual replay | ✅ 7/7 skills: orchestrator(42), user(22), planning(22), conversation(22), research(22), reasoning(22), content-retrieval(14) |
+| Health endpoint coverage | manual replay | ✅ 7/7 skills expose `/health` |
+| Prometheus scrape targets in `observability/native/prometheus.yml` | grep `job_name:` | ✅ 12 targets (meets ≥ 12 floor required by skills-architecture-gate.yml) |
+
+### Zombie metrics — surgically removed from dashboards
+
+Four dashboard panels were querying metric names that **NO emitter in the codebase produces**. They have been replaced with their real-emitter equivalents.
+
+| Dashboard | Old (zombie) query | New (real-emitter) query | Why |
+|---|---|---|---|
+| `20-langgraph.json` (LangGraph Runtime, panel 21) | `rate(cogniforge_langgraph_checkpointer_writes_total[2m])` | `sum by (status) (rate(cogniforge_checkpointer_writes_total[2m]))` | No emitter for `langgraph_checkpointer_writes`; orchestrator-service emits `cogniforge_checkpointer_writes_total{status,thread_id_prefix}` from `prom_metrics.py:246` (Step 10 — Postgres checkpointer) |
+| `60-microservices-step3-live.json` (Tavily Calls stat, panel 16) | `cogniforge_tavily_search_total` | `sum(cogniforge_research_tavily_calls_total)` | Real emitter lives in `microservices/research_agent/prom_metrics.py:115` |
+| `50-microservices-transition.json` (Tavily Search Outcomes, panel 6) | `cogniforge_tavily_search_total{result="success"\|"skipped_no_key"\|"error"}` | `cogniforge_research_tavily_calls_total{status="success"}` / `cogniforge_research_startup_info{tavily_available="false"}` / `cogniforge_research_tavily_errors_total` | The `{result="..."}` label dimension never existed; replaced with the real label sets emitted by research-agent |
+| `50-microservices-transition.json` (Orchestrator Startup State stat) | `cogniforge_orchestrator_startup_ready` | `max(cogniforge_orchestrator_startup_info{graph_ready="true"})` | Only `startup_info{graph_ready,outbox_relay_enabled,...}` is emitted (`orchestrator_service/src/core/prom_metrics.py`) |
+
+After the sweep: **94 unique metrics → 94 emitters found → 0 zombies**. This restores the §6.21 dashboard-metric contract doctrine (D-016) to a fully verifiable state. The CI gate `scripts/check_dashboard_metric_contracts.py` referenced in CLAUDE.md §6.22 is still TBD as a CI step; the manual sweep here closes the immediate drift.
+
+### CI YAML repair — three workflows had un-indented Python heredocs
+
+Three workflows embedded Python via `python3 -c "..."` with the multi-line code starting at column 1 — outside the parent YAML `|` block scalar. Standard `yaml.safe_load` rejected them; GitHub Actions' parser may have tolerated this but the gate was structurally fragile.
+
+Fixed by switching to bash heredoc (`python3 <<'PY' ... PY`) at the correct YAML indent level. In each case the script body was also dedented and (where it referenced shell variables) switched to `os.environ['DASHBOARD']` injection to avoid double-substitution surprises:
+
+| Workflow | Where | Pattern after fix |
+|---|---|---|
+| `microservices-step4.yml` | dashboard JSON validation | `python3 <<'PY' ... PY` |
+| `microservices-step5-user-service.yml` | dashboard JSON validation | `DASHBOARD="$DASHBOARD" python3 <<'PY' ... PY` |
+| `microservices-step6-planning-agent.yml` | docker-compose schema + dashboard JSON | Two heredocs, same pattern |
+
+Bonus repair: `microservices-step4.yml` PR-summary `actions/github-script@v7` block had a multi-line JS template literal whose markdown body (lines 257–289) was un-indented. Replaced with a `[...].join('\n')` array to keep YAML block-scalar indentation consistent.
+
+### What was **not** verified live
+
+The sandbox blocks outbound HTTPS. The provided secrets (`OPENROUTER_API_KEY`, `TAVILY_API_KEY` via the MCP URL form, `DATABASE_URL` to Supabase) were not exercised against the live endpoints from this run. Conclusions about pipeline mode (`full`/`partial`/`fallback`) **cannot** be re-confirmed without a live Codespaces session. The §6.25 / D-043 / D-044 / D-045 live verifications from 2026-05-11 remain the authoritative record until the next live audit.
+
+### Rules added
+
+1. **Dashboard ↔ emitter contract is a release gate**: before merging any new dashboard panel, run the static contract check (grep-based; see commit). A new CI step `dashboard-metric-contract` should wrap this — tracked as a follow-up.
+2. **YAML heredoc rule**: never embed multi-line Python via `python3 -c "..."` inside a YAML `run: |` block. Use `python3 <<'PY' ... PY` with content indented to the YAML block scalar level. Pass shell-variable values through `ENV=val python3 <<'PY' ... os.environ['ENV'] ... PY` — never via string interpolation, which mixes shell + YAML + Python escaping.
+3. **github-script multi-line strings**: never use JS template literals (`` ` ... ` ``) that span multiple lines in a YAML `script: |` block. Use an array of single-line strings + `.join('\n')` — that way YAML indentation stays correct and the markdown body remains readable.
+

@@ -168,6 +168,10 @@ class OrchestratorClient:
         يشغّل محرك LangGraph المحلي (local_graph.py) ويعيد الرد النهائي.
         يستخدم MemorySaver مع thread_id=conversation_id لاستمرارية السياق.
         يعود None عند أي فشل دون أن يُسقط الـ fallback chain.
+
+        ملاحظة (D-047): هذه نسخة non-streaming — تُستخدم للاختبارات والمسارات
+        التي لا تحتاج typing effect. للبث الانسيابي استخدم
+        ``_stream_local_graph_response`` (المسار الافتراضي في ``chat_with_agent``).
         """
         try:
             from app.services.chat.local_graph import run_local_graph
@@ -182,6 +186,39 @@ class OrchestratorClient:
         except Exception:
             logger.warning("local_graph_response_failed", exc_info=True)
             return None
+
+    async def _stream_local_graph_response(
+        self,
+        question: str,
+        conversation_id: int | None,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        نسخة انسيابية من ``_build_local_graph_response`` — تُصدِر قطع الرد كلمة بكلمة.
+
+        D-047: يكسر "Streaming Event Bottleneck" — بدل buffer-and-wait لـ ainvoke،
+        نُغذِّي قناة WS بـ assistant_delta متعدد فوراً من OpenRouter SSE.
+
+        Yields:
+            str: قطع المحتوى التتابعية (typically 1-20 chars each).
+
+        إذا أصدر المولِّد صفر قطعة → fallback chain يتقدم للخطوة التالية.
+        """
+        try:
+            from app.services.chat.local_graph import run_local_graph_stream
+            from app.telemetry.path_observer import mark_fallback_used
+
+            mark_fallback_used("local_graph_stream")
+            async for chunk in run_local_graph_stream(
+                question=question,
+                conversation_id=conversation_id,
+                history_messages=history_messages,
+            ):
+                if chunk:
+                    yield chunk
+        except Exception:
+            logger.warning("local_graph_stream_failed", exc_info=True)
+            return
 
     async def _build_local_general_chat_response(
         self,
@@ -232,6 +269,69 @@ class OrchestratorClient:
         if not clean_response:
             return None
         return clean_response
+
+    async def _stream_local_general_chat_response(
+        self,
+        question: str,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        نسخة انسيابية من ``_build_local_general_chat_response`` — تبث المحتوى
+        كلمة بكلمة عبر OpenRouter SSE بدل تجميعه ثم إرساله دفعة واحدة.
+
+        D-047: المسار الأخير في fallback chain — لا يجوز أن يكسر typing effect.
+        """
+        sanitized_question = question.replace("\x00", "").strip()
+        if not sanitized_question:
+            return
+
+        try:
+            from app.telemetry.path_observer import mark_fallback_used
+
+            mark_fallback_used("local_general_chat_stream")
+        except Exception:
+            pass
+
+        local_system_prompt = (
+            "أنت مساعد ذكي واسع المعرفة. "
+            "أجب بدقة مباشرة على سؤال المستخدم مع الاستناد إلى سياق المحادثة السابقة "
+            "عند وجود ضمائر أو إشارات مرجعية. لا تشر إلى تفاصيل داخلية."
+        )
+        ai_client = get_ai_client()
+
+        if history_messages:
+            history_text = self._format_history_for_prompt(history_messages)
+            user_message = (
+                f"سياق المحادثة السابقة:\n{history_text}\n\nالسؤال الحالي: {sanitized_question}"
+                if history_text
+                else sanitized_question
+            )
+        else:
+            user_message = sanitized_question
+
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": local_system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+        try:
+            async for raw_chunk in ai_client.stream_chat(messages):
+                try:
+                    choices = raw_chunk.get("choices") if isinstance(raw_chunk, dict) else None
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {}) or {}
+                    content = delta.get("content")
+                    if not content or not isinstance(content, str):
+                        continue
+                    clean = content.replace("\x00", "")
+                    if clean:
+                        yield clean
+                except Exception:
+                    continue
+        except Exception:
+            logger.warning("local_general_chat_stream_failed", exc_info=True)
+            return
 
     @staticmethod
     def _sanitize_text_for_user(content: str) -> str:
@@ -617,30 +717,51 @@ class OrchestratorClient:
                 )
                 return
 
-            # ── LangGraph local engine (replaces raw general-chat fallback) ──
+            # ── LangGraph local engine — STREAMING path (D-047) ──
+            # يبث الرد كلمة بكلمة عبر assistant_delta بدل dump واحد كبير.
             _lg_t0 = time.perf_counter()
             _lg_ctx = None
             with contextlib.suppress(Exception):
                 _lg_ctx = obs.start_trace(
-                    "orchestrator.fallback.langgraph",
+                    "orchestrator.fallback.langgraph.stream",
                     parent_context=_root_ctx,
-                    tags={"fallback_step": "langgraph", "conversation_id": str(conversation_id)},
+                    tags={
+                        "fallback_step": "langgraph_stream",
+                        "conversation_id": str(conversation_id),
+                    },
                 )
-            graph_response = await self._build_local_graph_response(
-                question=question,
-                conversation_id=conversation_id,
-                history_messages=history_messages,
-            )
+            streamed_any = False
+            streamed_chars = 0
+            try:
+                async for chunk in self._stream_local_graph_response(
+                    question=question,
+                    conversation_id=conversation_id,
+                    history_messages=history_messages,
+                ):
+                    if not chunk:
+                        continue
+                    streamed_any = True
+                    streamed_chars += len(chunk)
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_delta", "payload": {"content": chunk}}
+                    )
+            except Exception:
+                logger.warning("local_graph_stream_yield_failed", exc_info=True)
+
             try:
                 if _lg_ctx:
                     obs.end_span(
                         _lg_ctx.span_id,
-                        status="OK" if graph_response else "SKIP",
-                        metrics={"duration_ms": (time.perf_counter() - _lg_t0) * 1000},
+                        status="OK" if streamed_any else "SKIP",
+                        metrics={
+                            "duration_ms": (time.perf_counter() - _lg_t0) * 1000,
+                            "stream_chars": float(streamed_chars),
+                        },
                     )
             except Exception:
                 pass
-            if graph_response and not str(graph_response).startswith("⚠️ System Alert"):
+
+            if streamed_any:
                 if _root_ctx:
                     with contextlib.suppress(Exception):
                         obs.end_span(
@@ -649,17 +770,15 @@ class OrchestratorClient:
                             metrics={
                                 "duration_ms": (time.perf_counter() - _t0) * 1000,
                                 "fallback_path": 3.0,
+                                "stream_chars": float(streamed_chars),
                             },
                         )
-                yield self._normalize_stream_event(
-                    {"type": "assistant_delta", "payload": {"content": graph_response}}
-                )
                 yield self._normalize_stream_event(
                     {"type": "assistant_final", "payload": {"content": ""}}
                 )
                 return
 
-            # Ultimate safety net: raw LLM call (no graph, no state)
+            # Ultimate safety net: STREAMING raw LLM call (no graph, no state) — D-047
             is_file_intelligence = self._file_intelligence_decision(question)[0]
             is_exercise_retrieval = self._exercise_retrieval_decision(question)
             if not is_file_intelligence and not is_exercise_retrieval:
@@ -667,26 +786,41 @@ class OrchestratorClient:
                 _gc_ctx = None
                 with contextlib.suppress(Exception):
                     _gc_ctx = obs.start_trace(
-                        "orchestrator.fallback.general_chat",
+                        "orchestrator.fallback.general_chat.stream",
                         parent_context=_root_ctx,
-                        tags={"fallback_step": "general_chat"},
+                        tags={"fallback_step": "general_chat_stream"},
                     )
-                local_general_chat_response = await self._build_local_general_chat_response(
-                    question,
-                    history_messages=history_messages,
-                )
+                gc_streamed_any = False
+                gc_streamed_chars = 0
+                try:
+                    async for chunk in self._stream_local_general_chat_response(
+                        question,
+                        history_messages=history_messages,
+                    ):
+                        if not chunk:
+                            continue
+                        gc_streamed_any = True
+                        gc_streamed_chars += len(chunk)
+                        yield self._normalize_stream_event(
+                            {"type": "assistant_delta", "payload": {"content": chunk}}
+                        )
+                except Exception:
+                    logger.warning("local_general_chat_stream_yield_failed", exc_info=True)
+
                 try:
                     if _gc_ctx:
                         obs.end_span(
                             _gc_ctx.span_id,
-                            status="OK" if local_general_chat_response else "SKIP",
-                            metrics={"duration_ms": (time.perf_counter() - _gc_t0) * 1000},
+                            status="OK" if gc_streamed_any else "SKIP",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _gc_t0) * 1000,
+                                "stream_chars": float(gc_streamed_chars),
+                            },
                         )
                 except Exception:
                     pass
-                if local_general_chat_response and not str(local_general_chat_response).startswith(
-                    "⚠️ System Alert"
-                ):
+
+                if gc_streamed_any:
                     if _root_ctx:
                         with contextlib.suppress(Exception):
                             obs.end_span(
@@ -695,14 +829,9 @@ class OrchestratorClient:
                                 metrics={
                                     "duration_ms": (time.perf_counter() - _t0) * 1000,
                                     "fallback_path": 4.0,
+                                    "stream_chars": float(gc_streamed_chars),
                                 },
                             )
-                    yield self._normalize_stream_event(
-                        {
-                            "type": "assistant_delta",
-                            "payload": {"content": local_general_chat_response},
-                        }
-                    )
                     yield self._normalize_stream_event(
                         {"type": "assistant_final", "payload": {"content": ""}}
                     )

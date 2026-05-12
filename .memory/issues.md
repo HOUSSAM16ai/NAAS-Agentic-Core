@@ -3,6 +3,25 @@
 
 ---
 
+## 🟢 Resolved in this branch (2026-05-12 — D-047 streaming bottleneck)
+
+### ISS-055 · WebSocket chat responses appear in a single catastrophic burst (no typing effect) [RESOLVED]
+- **Status**: RESOLVED in `claude/setup-microservices-monitoring-ralbR`
+- **Severity**: HIGH (user-facing UX catastrophe — replies of 2000+ chars dumped at once)
+- **Root cause** (3 stacked bugs across the stack, all required to break streaming):
+  1. **Monolith** (`app/services/chat/local_graph.py:297`): `await graph.ainvoke(...)` blocks until full response → returns one string → `_build_local_graph_response` wraps it in a single `assistant_delta` event.
+  2. **Orchestrator microservice** (`microservices/orchestrator_service/src/api/routes.py`): `astream_events(..., version="v2")` IS used, but the `on_chat_model_stream` event branch was a literal `pass` — token deltas explicitly discarded. The router waited for `on_chain_end` then emitted a single `assistant_final`.
+  3. **Frontend** (`frontend/app/lib/streaming/mergeAssistantContent.ts`): correct, but received only one delta — so the typing effect was mathematically impossible.
+- **Fix** (D-047):
+  - Added `run_local_graph_stream` AsyncGenerator that bypasses LangGraph (because `OpenRouterClient` is not a LangChain `BaseChatModel`) and calls `OpenRouterClient.stream_chat` directly, yielding each `delta.content` from OpenRouter SSE.
+  - Added `_stream_local_graph_response` + `_stream_local_general_chat_response` in `OrchestratorClient`; rewired both branches of the local fallback chain in `chat_with_agent` to emit N × `assistant_delta` per turn.
+  - Patched 3 sites in `orchestrator_service/src/api/routes.py` to capture `on_chat_model_stream` events and emit them as `assistant_delta` immediately. Added `streamed_chars` counter per path + duplicate-suppression in `assistant_final` (sets `content=""` when streaming occurred).
+- **Evidence (pending live)**: a single `POST /api/chat/messages` request should now produce 20–100+ small NDJSON lines (one per token/word), and the browser typing animation should be smooth.
+- **Files**: `app/services/chat/local_graph.py`, `app/infrastructure/clients/orchestrator_client.py`, `microservices/orchestrator_service/src/api/routes.py`
+- **Doctrine**: see `.memory/streaming_architecture_breakdown.md` "D-047 Implementation Report" and `.memory/decisions.md` D-047.
+
+---
+
 ## 🟢 Resolved in this branch (2026-05-12 — D-046)
 
 ### ISS-051 · 4 zombie metric queries in Grafana dashboards [RESOLVED]

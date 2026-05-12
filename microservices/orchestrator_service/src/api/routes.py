@@ -1529,8 +1529,10 @@ async def _stream_chat_langgraph(
             )
 
             final_res = None
+            ws_streamed_chars = 0  # D-047: token-level streaming counter
             async for event in _graph.astream_events(inputs, config=config, version="v2"):
-                if event["event"] == "on_chain_start":
+                _evt_type = event["event"]
+                if _evt_type == "on_chain_start":
                     node_name = event.get("name", "")
                     if node_name and not node_name.startswith("__") and node_name != "LangGraph":
                         await _safe_put(
@@ -1539,7 +1541,20 @@ async def _stream_chat_langgraph(
                                 "payload": {"phase": node_name, "agent": "orchestrator"},
                             }
                         )
-                elif event["event"] == "on_chain_end":
+                elif _evt_type == "on_chat_model_stream":
+                    # D-047: token-level streaming on WS path
+                    _chunk = event.get("data", {}).get("chunk")
+                    if _chunk is not None:
+                        _content = getattr(_chunk, "content", None)
+                        if isinstance(_content, str) and _content:
+                            ws_streamed_chars += len(_content)
+                            await _safe_put(
+                                {
+                                    "type": "assistant_delta",
+                                    "payload": {"content": _content},
+                                }
+                            )
+                elif _evt_type == "on_chain_end":
                     node_name = event.get("name", "")
                     if node_name and not node_name.startswith("__") and node_name != "LangGraph":
                         await _safe_put(
@@ -1588,6 +1603,11 @@ async def _stream_chat_langgraph(
 
             if not final_res:
                 final_res = {"final_response": "لم يتم العثور على رد من النظام"}
+
+            # D-047: attach streamed chars so consumer can suppress duplicated payload
+            if isinstance(final_res, dict):
+                final_res = dict(final_res)
+                final_res["__streamed_chars"] = ws_streamed_chars
 
             await _safe_put({"type": "__DONE__", "result": final_res})
         except Exception as e:
@@ -1645,16 +1665,26 @@ async def _stream_chat_langgraph(
 
                 final_content = response_text
                 logger.info(f"FINAL RESPONSE → {response_text[:100]}")
+
+                # D-047: إذا بُثَّت قطع token-by-token خلال الـ stream،
+                # لا نُكرِّر response_text في assistant_final لتجنّب duplicate text.
+                _ws_streamed = (
+                    run_data.get("__streamed_chars", 0)
+                    if isinstance(run_data, dict)
+                    else 0
+                )
+                _final_content = "" if _ws_streamed and _ws_streamed > 0 else response_text
                 await websocket.send_json(
                     {
                         "type": "assistant_final",
                         "payload": {
-                            "content": response_text,
+                            "content": _final_content,
                             "status": "ok",
                             "run_id": "sync-run",
                             "timeline": [],
                             "graph_mode": "unified_stategraph",
                             "route_id": f"chat_ws_{chat_scope}",
+                            "streamed_chars": int(_ws_streamed),
                         },
                     }
                 )
@@ -1807,8 +1837,10 @@ async def _run_chat_langgraph(
     inputs = _merge_admin_inputs(inputs, admin_payload)
 
     final_resp = None
+    streamed_chars = 0  # D-047: token-level streaming counter
     async for event in app_graph.astream_events(inputs, config=config, version="v2"):
-        if event["event"] == "on_chain_start":
+        event_type = event["event"]
+        if event_type == "on_chain_start":
             node_name = event.get("name", "")
             if node_name and not node_name.startswith("__") and node_name != "LangGraph":
                 yield await _serialize_stream_frame(
@@ -1817,7 +1849,18 @@ async def _run_chat_langgraph(
                         "payload": {"phase": node_name, "agent": "orchestrator"},
                     }
                 )
-        elif event["event"] == "on_chain_end":
+        elif event_type == "on_chat_model_stream":
+            # D-047 CRITICAL FIX: emit token-level deltas to enable word-by-word typing.
+            # Previously this branch was a `pass` (see streaming_architecture_breakdown.md).
+            chunk = event.get("data", {}).get("chunk")
+            if chunk is not None:
+                content = getattr(chunk, "content", None)
+                if isinstance(content, str) and content:
+                    streamed_chars += len(content)
+                    yield await _serialize_stream_frame(
+                        {"type": "assistant_delta", "payload": {"content": content}}
+                    )
+        elif event_type == "on_chain_end":
             node_name = event.get("name", "")
             if node_name and not node_name.startswith("__") and node_name != "LangGraph":
                 yield await _serialize_stream_frame(
@@ -1845,17 +1888,34 @@ async def _run_chat_langgraph(
     else:
         response_text = str(final_resp or "لا توجد تفاصيل متاحة.")
 
-    yield await _serialize_stream_frame(
-        {
-            "type": "assistant_final",
-            "payload": {
-                "content": response_text,
-                "status": "ok",
-                "run_id": "http-run",
-                "graph_mode": "unified_stategraph",
-            },
-        }
-    )
+    # D-047: إذا بُثَّت قطع كافية للمستخدم، لا نُكرِّر النص في assistant_final
+    # (تتسبب في duplicate text on screen). إذا لم تُبَث أي قطعة (مثلاً النموذج
+    # غير stream-aware)، نُرسل النص كاملاً مرة واحدة كـ fallback.
+    if streamed_chars == 0:
+        yield await _serialize_stream_frame(
+            {
+                "type": "assistant_final",
+                "payload": {
+                    "content": response_text,
+                    "status": "ok",
+                    "run_id": "http-run",
+                    "graph_mode": "unified_stategraph",
+                },
+            }
+        )
+    else:
+        yield await _serialize_stream_frame(
+            {
+                "type": "assistant_final",
+                "payload": {
+                    "content": "",
+                    "status": "ok",
+                    "run_id": "http-run",
+                    "graph_mode": "unified_stategraph",
+                    "streamed_chars": streamed_chars,
+                },
+            }
+        )
 
 
 @router.get("/api/chat/messages", summary="Chat Health Endpoint")
@@ -2515,11 +2575,13 @@ async def chat_with_agent_endpoint(
                 )
 
                 final_resp = None
+                admin_streamed_chars = 0  # D-047
                 config = {"configurable": {"thread_id": thread_id}}
                 async for event in admin_app.astream_events(
                     admin_inputs, config=config, version="v2"
                 ):
-                    if event["event"] == "on_chain_start":
+                    _evt_type = event["event"]
+                    if _evt_type == "on_chain_start":
                         node_name = event.get("name", "")
                         if (
                             node_name
@@ -2532,7 +2594,20 @@ async def chat_with_agent_endpoint(
                                     "payload": {"phase": node_name, "agent": "admin"},
                                 }
                             )
-                    elif event["event"] == "on_chain_end":
+                    elif _evt_type == "on_chat_model_stream":
+                        # D-047: token-level streaming on admin WS path
+                        _chunk = event.get("data", {}).get("chunk")
+                        if _chunk is not None:
+                            _content = getattr(_chunk, "content", None)
+                            if isinstance(_content, str) and _content:
+                                admin_streamed_chars += len(_content)
+                                yield await _serialize_stream_frame(
+                                    {
+                                        "type": "assistant_delta",
+                                        "payload": {"content": _content},
+                                    }
+                                )
+                    elif _evt_type == "on_chain_end":
                         node_name = event.get("name", "")
                         if (
                             node_name
@@ -2581,11 +2656,14 @@ async def chat_with_agent_endpoint(
                     yield await _serialize_stream_frame(
                         {"type": "assistant_delta", "payload": {"content": "\n\n✅ [DB SAVED]"}}
                     )
+                    # D-047: لا تُكرِّر response_text إذا تم بث القطع بالفعل token-by-token،
+                    # لأن المتصفح يجمعها عبر mergeAssistantContent.
+                    _final_payload_content = "" if admin_streamed_chars > 0 else response_text
                     # Signal Monolith that Orchestrator already persisted both messages
                     yield await _serialize_stream_frame(
                         {
                             "type": "assistant_final",
-                            "payload": {"content": response_text},
+                            "payload": {"content": _final_payload_content},
                             "persisted": True,
                         }
                     )

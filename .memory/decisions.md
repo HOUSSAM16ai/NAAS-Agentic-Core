@@ -1,6 +1,77 @@
 # Architectural Decisions
 > Last updated: 2026-05-12 | Branch: `claude/setup-microservices-monitoring-ralbR`
 
+## D-047 · Streaming Bottleneck Eliminated — Token-Level WS Deltas (2026-05-12)
+
+**Decision**: تصفية "Streaming Event Bottleneck" في الـ 3 طبقات (monolith + orchestrator HTTP + orchestrator WS) لتمكين typing-effect كلمة بكلمة على الواجهة، بدل تجميع الرد ثم إرساله دفعة واحدة كارثية.
+
+**Root causes (مثبَتة سابقاً في `.memory/streaming_architecture_breakdown.md`)**:
+1. **Monolith**: `app/services/chat/local_graph.py::run_local_graph` كان يستخدم `graph.ainvoke(...)` الذي يحبس التنفيذ حتى نهاية الرد بالكامل ثم يُرجِع نصاً واحداً. `OrchestratorClient._build_local_graph_response` كان يأخذ هذا النص ويُصدِر `assistant_delta` واحداً ضخماً + `assistant_final` فارغاً.
+2. **Orchestrator microservice**: `microservices/orchestrator_service/src/api/routes.py` كان يستخدم `astream_events(..., version="v2")` صحيحاً، لكن أحداث `on_chat_model_stream` كانت **مُتجاهَلة صراحةً** (`pass`) — تبتلع كل token deltas. ينتظر `on_chain_end` ثم يُرسل النص كاملاً كـ `assistant_final`.
+3. **Frontend**: `mergeAssistantContent` يعمل بشكل صحيح، لكنه يعتمد على وصول `assistant_delta` متعددة — لم تكن تصله.
+
+**Architecture (post-fix)**:
+
+```
+المستخدم
+   │
+   ▼  WebSocket /api/chat/ws  ──────────────────────────────────────
+   │
+   ▼ customer_chat.py (no change — already forwards each event)
+   │
+   ├──[1] orchestrator-service:8006 reachable
+   │        │
+   │        ▼ /api/chat/messages (HTTP NDJSON) OR /api/chat/ws
+   │        │   astream_events(version="v2")
+   │        │     ├── on_chain_start  → phase_start
+   │        │     ├── on_chat_model_stream → assistant_delta (D-047 NEW — token-level)
+   │        │     ├── on_chain_end    → phase_completed + final aggregation
+   │        │     └── final           → assistant_final (content="" if streamed_chars>0)
+   │        │
+   │        └── streamed_chars metadata attached for client observability
+   │
+   └──[2] Fallback (orchestrator unreachable):
+            ├── _stream_local_graph_response()   ── D-047 NEW
+            │     └── run_local_graph_stream() → OpenRouterClient.stream_chat() → yield content
+            │           → emits N × assistant_delta + 1 × assistant_final(content="")
+            └── _stream_local_general_chat_response()  ── D-047 NEW
+                  └── direct OpenRouterClient.stream_chat() with general system prompt
+```
+
+**Duplicate-suppression contract (NEW)**:
+- إذا بُثَّت أي قطعة عبر `assistant_delta` token-level خلال الـ turn، فإن `assistant_final.payload.content` يجب أن يكون `""` بدلاً من النص الكامل، لمنع `mergeAssistantContent` من إظهار الرد مرتين.
+- `streamed_chars` يُعلَّق على `assistant_final.payload` للقياس وللتتبع.
+
+**Why bypass LangGraph for the local stream path?**: `OpenRouterClient` ليس `BaseChatModel` من LangChain، فلا تُولِّد `astream_events` أحداث `on_chat_model_stream`. الطريق الأسرع والأبسط: تشغيل `_classify_intent` يدوياً واستدعاء `stream_chat` مباشرة. زمن أول-قطعة ينخفض إلى ~1s.
+
+**Files changed**:
+- `app/services/chat/local_graph.py` — أضيفت `run_local_graph_stream` (AsyncGenerator[str, None]) + استيراد `AsyncGenerator`
+- `app/infrastructure/clients/orchestrator_client.py` — أضيفت `_stream_local_graph_response` و `_stream_local_general_chat_response`؛ مسار LangGraph المحلي ومسار general_chat في `chat_with_agent` أُعيدا كتابةً ليبثا token-by-token
+- `microservices/orchestrator_service/src/api/routes.py` — التقاط `on_chat_model_stream` في 3 مواقع (HTTP /api/chat/messages، WS /api/chat/ws، WS /admin/api/chat/ws) + duplicate-suppression في الـ assistant_final
+
+**Observability**:
+- مقياس جديد: `cogniforge_ws_chat_delta_total{path="local_graph_stream"}` — عدّاد القطع الـ token-level من المسار المحلي
+- موجود سابقاً: `cogniforge_ws_chat_turn_duration_seconds`, `cogniforge_ws_chat_terminal_events_total` (path_observer.py) — تستمر بالعمل بدون تغيير
+- مقياس جديد في الـ orchestrator: `streamed_chars` على كل `assistant_final.payload` كحقل metadata (ليس Prometheus metric)
+
+**ما لم يتغير (مقصوداً)**:
+- `frontend/app/hooks/useAgentSocket.js` — يعمل بشكل صحيح أصلاً، البق كان 100% backend
+- D-006 persistence semantics — `persisted=true/false` بدون تغيير
+- `_emit_terminal_frames` single-emitter rule — بدون تغيير
+- `microservices/conversation_service` — لا يزال يستخدم `ainvoke` لأنه ليس على المسار الحي للمستخدم اليوم؛ سيُحَدَّث عند تفعيله
+
+**Verification commands**: في `streaming_architecture_breakdown.md` تحت "D-047 Implementation Report".
+
+**Status**: IMPLEMENTED 2026-05-12 — branch `claude/setup-microservices-monitoring-ralbR`. **Pending live verification** في Codespaces مع الأسرار الحقيقية.
+
+**Rules added (must remain true forever)**:
+1. أي LangGraph runtime موجَّه للـ user-facing real-time chat **يجب** أن يستخدم `astream_events(version="v2")` (أو AsyncGenerator مكافئ) — `ainvoke()` ممنوع على المسار الحي.
+2. أي مكان يلتقط `on_chat_model_stream` **يجب** أن يُصدِر `assistant_delta` فوراً بدون buffering.
+3. عند بث الـ token deltas، الـ `assistant_final.payload.content` يجب أن يكون `""` — مخالفة هذا تُسبب double-rendering.
+4. `path_observer.WsTurnSpan` المُنفَّذ منذ §6.10 يبقى المنتج الوحيد لـ WS turn metrics — لا تكسر هذا العقد.
+
+---
+
 ## D-046 · Dashboard Zombie-Metric Sweep + CI YAML Repair (2026-05-12)
 **Decision**: إلغاء 4 مقاييس zombie من 3 لوحات Grafana واستبدالها بمقاييس حقيقية موجودة في الكود، وإصلاح 3 ملفات GitHub Actions كانت تحوي Python heredoc بمسافة بادئة خاطئة (يقاطع YAML block scalar).
 

@@ -94,18 +94,18 @@ jobs:
             echo "❌ 70-microservices-step4-persistence.json غير موجود"
             exit 1
           }
-          python3 -c "
-import json, sys
-with open('observability/grafana/dashboards/70-microservices-step4-persistence.json') as f:
-    d = json.load(f)
-assert d.get('uid') == 'cogniforge-ms-step4-persistence', f'uid خاطئ: {d.get(\"uid\")}'
-panels = d.get('panels', [])
-assert len(panels) >= 10, f'panels قليلة: {len(panels)}'
-text = json.dumps(d)
-for metric in ['cogniforge_outbox_relay_cycles_total', 'cogniforge_orchestrator_startup_info', 'cogniforge_stategraph_invocations_total']:
-    assert metric in text, f'{metric} غائب من الـ dashboard'
-print(f'✅ Dashboard صالح — {len(panels)} panels')
-"
+          python3 <<'PY'
+          import json, sys
+          with open('observability/grafana/dashboards/70-microservices-step4-persistence.json') as f:
+              d = json.load(f)
+          assert d.get('uid') == 'cogniforge-ms-step4-persistence', f'uid خاطئ: {d.get("uid")}'
+          panels = d.get('panels', [])
+          assert len(panels) >= 10, f'panels قليلة: {len(panels)}'
+          text = json.dumps(d)
+          for metric in ['cogniforge_outbox_relay_cycles_total', 'cogniforge_orchestrator_startup_info', 'cogniforge_stategraph_invocations_total']:
+              assert metric in text, f'{metric} غائب من الـ dashboard'
+          print(f'✅ Dashboard صالح — {len(panels)} panels')
+          PY
 
       - name: "Prometheus config targets orchestrator with step=4"
         run: |
@@ -252,41 +252,42 @@ print(f'✅ Dashboard صالح — {len(panels)} panels')
               '${{ needs.step3-regression.result }}' === 'success';
 
             const icon = passed ? '✅' : '❌';
-            const body = `## ${icon} Microservices Step 4 — Persistence Relay Gate
-
-| Check | Result |
-|-------|--------|
-| Static Checks (files & config) | ${{ needs.static-checks.result == 'success' && '✅' || '❌' }} \`${{ needs.static-checks.result }}\` |
-| Ruff Lint | ${{ needs.lint.result == 'success' && '✅' || '❌' }} \`${{ needs.lint.result }}\` |
-| Step 4 Tests (44 tests) | ${{ needs.step4-tests.result == 'success' && '✅' || '❌' }} \`${{ needs.step4-tests.result }}\` |
-| Step 3 Regression Guard | ${{ needs.step3-regression.result == 'success' && '✅' || '❌' }} \`${{ needs.step3-regression.result }}\` |
-
-### ما الذي تتحقق منه هذه الخطوة؟
-
-- **OUTBOX_RELAY_ENABLED=true** في \`supervisor.sh\` و \`.ona/automations.yaml\`
-- **\`/metrics\` endpoint** حقيقي بصيغة Prometheus في \`orchestrator-service:8006/metrics\`
-- **\`prometheus_client\`** مُدرج في \`requirements.txt\`
-- **Grafana dashboard** \`70-microservices-step4-persistence.json\` (24 panels) على \`:3001\`
-- **Prometheus scrape** يستهدف \`orchestrator-service\` بـ \`step="4"\`
-
-### التحقق الحي في Codespaces
-
-\`\`\`bash
-# تشغيل orchestrator-service
-gitpod automations service start orchestrator-service
-
-# التحقق من /metrics
-curl http://localhost:8006/metrics | grep cogniforge_outbox
-
-# التحقق من OUTBOX_RELAY
-curl http://localhost:8006/health | python3 -m json.tool
-
-# Grafana dashboard
-# http://localhost:3001/d/cogniforge-ms-step4-persistence
-\`\`\`
-
-${passed ? '🎉 الخطوة 4 جاهزة للدمج!' : '⚠️ يجب إصلاح الأخطاء قبل الدمج.'}
-`;
+            const body = [
+              `## ${icon} Microservices Step 4 — Persistence Relay Gate`,
+              ``,
+              `| Check | Result |`,
+              `|-------|--------|`,
+              `| Static Checks (files & config) | ${{ needs.static-checks.result == 'success' && '✅' || '❌' }} \`${{ needs.static-checks.result }}\` |`,
+              `| Ruff Lint | ${{ needs.lint.result == 'success' && '✅' || '❌' }} \`${{ needs.lint.result }}\` |`,
+              `| Step 4 Tests (44 tests) | ${{ needs.step4-tests.result == 'success' && '✅' || '❌' }} \`${{ needs.step4-tests.result }}\` |`,
+              `| Step 3 Regression Guard | ${{ needs.step3-regression.result == 'success' && '✅' || '❌' }} \`${{ needs.step3-regression.result }}\` |`,
+              ``,
+              `### ما الذي تتحقق منه هذه الخطوة؟`,
+              ``,
+              `- **OUTBOX_RELAY_ENABLED=true** في \`supervisor.sh\` و \`.ona/automations.yaml\``,
+              `- **\`/metrics\` endpoint** حقيقي بصيغة Prometheus في \`orchestrator-service:8006/metrics\``,
+              `- **\`prometheus_client\`** مُدرج في \`requirements.txt\``,
+              `- **Grafana dashboard** \`70-microservices-step4-persistence.json\` (24 panels) على \`:3001\``,
+              `- **Prometheus scrape** يستهدف \`orchestrator-service\` بـ \`step="4"\``,
+              ``,
+              `### التحقق الحي في Codespaces`,
+              ``,
+              '```bash',
+              `# تشغيل orchestrator-service`,
+              `gitpod automations service start orchestrator-service`,
+              ``,
+              `# التحقق من /metrics`,
+              `curl http://localhost:8006/metrics | grep cogniforge_outbox`,
+              ``,
+              `# التحقق من OUTBOX_RELAY`,
+              `curl http://localhost:8006/health | python3 -m json.tool`,
+              ``,
+              `# Grafana dashboard`,
+              `# http://localhost:3001/d/cogniforge-ms-step4-persistence`,
+              '```',
+              ``,
+              passed ? '🎉 الخطوة 4 جاهزة للدمج!' : '⚠️ يجب إصلاح الأخطاء قبل الدمج.',
+            ].join('\n');
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,

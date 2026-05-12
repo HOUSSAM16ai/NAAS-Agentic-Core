@@ -1,5 +1,34 @@
 # Architectural Decisions
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step12-conversation-service`
+> Last updated: 2026-05-12 | Branch: `claude/setup-microservices-monitoring-ralbR`
+
+## D-046 · Dashboard Zombie-Metric Sweep + CI YAML Repair (2026-05-12)
+**Decision**: إلغاء 4 مقاييس zombie من 3 لوحات Grafana واستبدالها بمقاييس حقيقية موجودة في الكود، وإصلاح 3 ملفات GitHub Actions كانت تحوي Python heredoc بمسافة بادئة خاطئة (يقاطع YAML block scalar).
+
+**Scope**:
+1. **Dashboard ↔ emitter contract** — مسح شامل عبر 17 لوحة Grafana لـ 94 مقياسًا فريدًا. 4 منها كانت تستعلم عن أسماء لا يُصدِرها أي ملف في `app/` أو `microservices/`:
+   - `cogniforge_langgraph_checkpointer_writes_total` (في `20-langgraph.json`) → استبدلت بـ `cogniforge_checkpointer_writes_total{status,thread_id_prefix}` المنبعث فعلاً من `microservices/orchestrator_service/src/core/prom_metrics.py:246` (Step 10 — Postgres checkpointer).
+   - `cogniforge_tavily_search_total` (في `60-microservices-step3-live.json` و `50-microservices-transition.json`) → استبدلت بـ `cogniforge_research_tavily_calls_total` المنبعث من `microservices/research_agent/prom_metrics.py:115`.
+   - `cogniforge_orchestrator_startup_ready` (في `50-microservices-transition.json`) → استبدلت بـ `max(cogniforge_orchestrator_startup_info{graph_ready="true"})`.
+   - بُعد `{result="skipped_no_key"}` على `cogniforge_tavily_search_total` لم يكن له وجود إطلاقاً → استبدل بـ `cogniforge_research_startup_info{tavily_available="false"}`.
+
+2. **YAML heredoc fix** — `microservices-step4.yml` و `microservices-step5-user-service.yml` و `microservices-step6-planning-agent.yml` كانت تستخدم `python3 -c "..."` بمحتوى Python بمسافة بادئة صفر داخل بلوك `run: |`. `yaml.safe_load` كان يرفضها — GitHub Actions ربما تساهَل، لكن البوابة كانت هشة بنيوياً. الحل: تحويل كل كتلة إلى `python3 <<'PY' ... PY` bash heredoc بمسافة بادئة صحيحة. عند تمرير متغيرات شِل، استُعملت `ENV=val python3 <<'PY' ... os.environ['ENV'] ... PY` بدل الاستبدال النصي.
+
+3. **github-script template literal fix** — `microservices-step4.yml` كان يحوي قالب JavaScript multi-line ضمن `actions/github-script@v7` بأسطر Markdown غير مُحاذاة. حُوِّل إلى `[...].join('\n')` array لإبقاء YAML block scalar متناسقاً.
+
+**Result**:
+- ✅ 94/94 dashboard metrics لها emitter حقيقي (كانت 90/94)
+- ✅ 21/21 GitHub Actions workflow تُحلَّل YAML بنجاح (كانت 18/21)
+- ✅ ruff: 0 errors (كانت 2)
+- ✅ runtime truth lock re-generated 2026-05-12 (كانت stale من 2026-05-08)
+- ✅ Skills Architecture replay: 7/7 skills مع ≥ 7 metrics + `/health` + 0 cross-skill imports + 12 prom targets + 17 dashboards
+
+**Status**: IMPLEMENTED 2026-05-12 — branch `claude/setup-microservices-monitoring-ralbR`.
+
+**Caveat**: السندبوكس بدون شبكة خارجية. الأسرار (`OPENROUTER_API_KEY`, `TAVILY_API_KEY`, `DATABASE_URL`) ستُمارَس من قِبَل CI على GitHub. الاستنتاجات بشأن وضع الـ pipeline (`full`/`partial`/`fallback`) في الإصدار الحي تبقى مرجعها D-043/D-044/D-045 من 2026-05-11.
+
+**Rule added**: قبل دمج أي لوحة Grafana جديدة، شغِّل فحص العقد الثابت (يطابق أسماء المقاييس بين الـ JSON والمصدر بـ grep). إضافة CI step مخصص `dashboard-metric-contract` — تتبع في PR منفصل.
+
+---
 
 ## D-042 · Conversation Service Live Activation — Step 12 (2026-05-11)
 **Decision**: تفعيل `conversation-service` كـ Skill احترافية مستقلة على `:8003` — الخدمة السادسة في Skills Architecture. تُحوِّل إدارة المحادثات من stub بسيط (`capability_level="stub"`) إلى Skill حقيقية بـ LangGraph StateGraph + Prometheus metrics + WebSocket.

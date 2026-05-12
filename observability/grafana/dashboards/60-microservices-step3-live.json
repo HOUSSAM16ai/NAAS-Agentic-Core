@@ -511,7 +511,7 @@
       },
       "targets": [
         {
-          "expr": "cogniforge_tavily_search_total",
+          "expr": "sum(cogniforge_research_tavily_calls_total)",
           "legendFormat": "Tavily Calls",
           "refId": "A"
         }

@@ -1,5 +1,5 @@
 {
-  "branch": "fix/lifespan-orchestration-env-injection",
+  "branch": "claude/setup-microservices-monitoring-ralbR",
   "components": [
     {
       "agreed": true,
@@ -233,9 +233,10 @@
         "app/api/routers/customer_chat.py"
       ],
       "id": "customer_chat_router",
-      "importer_count": 5,
+      "importer_count": 6,
       "importers_sample": [
         "microservices/orchestrator_service/src/api/context_utils.py",
+        "microservices/orchestrator_service/src/api/context_utils.py.orig",
         "tests/api/test_chat_event_protocol_error_contract_integration.py",
         "tests/api/test_chat_event_protocol_flag_integration.py",
         "tests/api/test_final_router_gaps.py",
@@ -311,6 +312,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-05-09T19:21:08.410259+00:00",
+  "generated_at_utc": "2026-05-12T16:29:16.853575+00:00",
   "schema_version": 1
 }

@@ -127,18 +127,18 @@ jobs:
         run: |
           [ -f docker-compose.step6.yml ] \
             || { echo "❌ docker-compose.step6.yml غير موجود"; exit 1; }
-          python3 -c "
-import yaml, sys
-with open('docker-compose.step6.yml') as f:
-    d = yaml.safe_load(f)
-services = d.get('services', {})
-required = ['orchestrator-service', 'user-service', 'planning-agent']
-missing = [s for s in required if s not in services]
-if missing:
-    print(f'❌ خدمات مفقودة: {missing}')
-    sys.exit(1)
-print('✅ docker-compose.step6.yml صالح — الخدمات:', list(services.keys()))
-"
+          python3 <<'PY'
+          import yaml, sys
+          with open('docker-compose.step6.yml') as f:
+              d = yaml.safe_load(f)
+          services = d.get('services', {})
+          required = ['orchestrator-service', 'user-service', 'planning-agent']
+          missing = [s for s in required if s not in services]
+          if missing:
+              print(f'❌ خدمات مفقودة: {missing}')
+              sys.exit(1)
+          print('✅ docker-compose.step6.yml صالح — الخدمات:', list(services.keys()))
+          PY
 
       - name: "Validate planning-agent port 8002"
         run: |
@@ -164,29 +164,30 @@ print('✅ docker-compose.step6.yml صالح — الخدمات:', list(services
           DASHBOARD="observability/grafana/dashboards/90-microservices-step6-planning-agent.json"
           [ -f "$DASHBOARD" ] || { echo "❌ Dashboard JSON غير موجود"; exit 1; }
 
-          python3 -c "
-import json, sys
-with open('$DASHBOARD') as f:
-    d = json.load(f)
+          DASHBOARD="$DASHBOARD" python3 <<'PY'
+          import json, sys, os
+          path = os.environ['DASHBOARD']
+          with open(path) as f:
+              d = json.load(f)
 
-errors = []
-if d.get('uid') != 'cogniforge-ms-step6-planning-agent':
-    errors.append(f'UID غير صحيح: {d.get(\"uid\")}')
-if len(d.get('panels', [])) < 10:
-    errors.append(f'عدد panels غير كافٍ: {len(d.get(\"panels\", []))}')
-if d.get('refresh') != '10s':
-    errors.append(f'refresh غير صحيح: {d.get(\"refresh\")}')
-if 'cogniforge_planning' not in json.dumps(d):
-    errors.append('لا توجد مقاييس cogniforge_planning_* في Dashboard')
-if 'step6' not in d.get('tags', []):
-    errors.append(f'tag step6 غائب: {d.get(\"tags\")}')
+          errors = []
+          if d.get('uid') != 'cogniforge-ms-step6-planning-agent':
+              errors.append(f"UID غير صحيح: {d.get('uid')}")
+          if len(d.get('panels', [])) < 10:
+              errors.append(f"عدد panels غير كافٍ: {len(d.get('panels', []))}")
+          if d.get('refresh') != '10s':
+              errors.append(f"refresh غير صحيح: {d.get('refresh')}")
+          if 'cogniforge_planning' not in json.dumps(d):
+              errors.append('لا توجد مقاييس cogniforge_planning_* في Dashboard')
+          if 'step6' not in d.get('tags', []):
+              errors.append(f"tag step6 غائب: {d.get('tags')}")
 
-if errors:
-    for e in errors: print(f'  ❌ {e}')
-    sys.exit(1)
+          if errors:
+              for e in errors: print(f'  ❌ {e}')
+              sys.exit(1)
 
-print(f'✅ Dashboard صالح — {len(d[\"panels\"])} panels | UID: {d[\"uid\"]} | refresh: {d[\"refresh\"]}')
-"
+          print(f"✅ Dashboard صالح — {len(d['panels'])} panels | UID: {d['uid']} | refresh: {d['refresh']}")
+          PY
 
   # ── Job 4: Lint ───────────────────────────────────────────────────────────
   lint:

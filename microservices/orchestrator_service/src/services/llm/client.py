@@ -4,6 +4,7 @@ Provides a simple interface to OpenAI-compatible LLMs.
 """
 
 import logging
+import os
 from collections.abc import AsyncGenerator
 
 from openai import AsyncOpenAI
@@ -43,8 +44,10 @@ class AIClient:
             api_key=api_key or "dummy-key",
             base_url=base_url,
         )
-        self.default_model = (
-            "nvidia/nemotron-3-super-120b-a12b:free"  # Default model, can be overridden
+        # ISS-STREAM-002: deepseek/deepseek-chat يدعم token-level streaming حقيقي عبر OpenRouter
+        # nvidia/nemotron-3-super-120b-a12b:free كان يُعيد chunk واحد فقط → لا typing effect
+        self.default_model = os.getenv(
+            "ORCHESTRATOR_LLM_MODEL", "deepseek/deepseek-chat"
         )
 
     async def generate(
@@ -80,7 +83,8 @@ class AIClient:
     ) -> AsyncGenerator[ChatCompletionChunk, None]:
         """
         Stream chat completion.
-        Yields chunks compatible with OpenAI structure.
+        Yields ChatCompletionChunk objects (OpenAI SDK type).
+        Use extract_stream_content() to get text from each chunk safely.
         """
         target_model = model or self.default_model
         try:
@@ -95,6 +99,39 @@ class AIClient:
         except Exception as e:
             logger.error(f"AI Stream failed: {e}")
             raise
+
+    @staticmethod
+    def extract_stream_content(chunk: object) -> str | None:
+        """
+        يستخرج محتوى النص من chunk بأمان سواء كان ChatCompletionChunk أو dict.
+
+        ISS-STREAM-002: الإصلاح الجراحي — stream_chat يُعيد ChatCompletionChunk objects
+        (OpenAI SDK) وليس dicts. الكود القديم كان يستخدم chunk.get('choices') مما يُسبب
+        AttributeError يُبتلع بـ except → لا يُصدر أي محتوى → timeout كارثي.
+        """
+        # ChatCompletionChunk (OpenAI SDK object)
+        if hasattr(chunk, "choices"):
+            choices = chunk.choices
+            if choices and len(choices) > 0:
+                delta = choices[0].delta
+                if delta is not None:
+                    content = getattr(delta, "content", None)
+                    if isinstance(content, str) and content:
+                        return content
+            return None
+
+        # dict fallback (legacy/mock)
+        if isinstance(chunk, dict):
+            choices = chunk.get("choices")
+            if choices and len(choices) > 0:
+                delta = choices[0]
+                if isinstance(delta, dict):
+                    content = delta.get("delta", {}).get("content")
+                else:
+                    content = getattr(getattr(delta, "delta", None), "content", None)
+                if isinstance(content, str) and content:
+                    return content
+        return None
 
     async def generate_text(self, prompt: str, **kwargs: object) -> str:
         """Helper for simple text generation."""

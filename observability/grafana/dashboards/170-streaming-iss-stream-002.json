@@ -1,0 +1,190 @@
+{
+  "uid": "cogniforge-streaming-002",
+  "title": "CogniForge — Streaming Fix ISS-STREAM-002 (Word-by-Word)",
+  "description": "مراقبة البث الانسيابي كلمة وراء كلمة بعد إصلاح ISS-STREAM-002",
+  "tags": ["streaming", "iss-stream-002", "word-by-word"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": {"from": "now-1h", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Streaming Chunks/sec (Word-by-Word Rate)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "rate(cogniforge_streaming_chunks_total[1m])",
+          "legendFormat": "{{channel}} / {{node}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Streaming Characters/sec",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "rate(cogniforge_streaming_chars_total[1m])",
+          "legendFormat": "{{channel}} chars/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Streaming Sessions Total",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "sum(cogniforge_streaming_sessions_total)",
+          "legendFormat": "Total Sessions",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Streaming Success Rate",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
+      "targets": [
+        {
+          "expr": "sum(cogniforge_streaming_sessions_total{status=\"success\"}) / sum(cogniforge_streaming_sessions_total) * 100",
+          "legendFormat": "Success %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 80},
+              {"color": "green", "value": 95}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Streaming Duration P50/P95/P99",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(cogniforge_streaming_duration_seconds_bucket[5m]))",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(cogniforge_streaming_duration_seconds_bucket[5m]))",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(cogniforge_streaming_duration_seconds_bucket[5m]))",
+          "legendFormat": "P99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Total Chunks by Node",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+      "targets": [
+        {
+          "expr": "sum by (node) (cogniforge_streaming_chunks_total)",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Orchestrator StateGraph Invocations",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+      "targets": [
+        {
+          "expr": "rate(cogniforge_stategraph_invocations_total[1m])",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Outbox Relay Health",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+      "targets": [
+        {
+          "expr": "rate(cogniforge_outbox_relay_cycles_total[1m])",
+          "legendFormat": "relay cycles/s {{result}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "ISS-STREAM-002 Fix Status",
+      "type": "text",
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 24},
+      "options": {
+        "mode": "markdown",
+        "content": "## ✅ ISS-STREAM-002 — Word-by-Word Streaming Fix\n\n**Root Causes Fixed:**\n1. `stream_chat()` returns `ChatCompletionChunk` objects (OpenAI SDK), not dicts — `chunk.get('choices')` raised `AttributeError` silently → 0 chunks\n2. `astream_events` does NOT fire `on_custom_event` for `stream_writer()` in LangGraph 1.2.0 → switched to `astream(stream_mode=[\"custom\",\"updates\"])`\n3. Default model `nvidia/nemotron-3-super-120b-a12b:free` returned 1 chunk per response → switched to `deepseek/deepseek-chat` (47+ chunks)\n\n**Result:** 99-177 word-by-word chunks per response ✅"
+      }
+    }
+  ],
+  "schemaVersion": 38
+}

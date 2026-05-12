@@ -780,6 +780,22 @@
   - Grafana dashboard: `160-streaming-metrics.json` (11 panels).
 - **Status**: FIXED. ruff ✅ | runtime_truth ✅ | guardrails ✅ | 18 Grafana dashboards | 12 Prometheus targets.
 
+### [FIXED] ISS-STREAM-002 · Word-by-word streaming broken — 3 root causes · FIXED (2026-05-12)
+- **Evidence**: البث يتوقف عند `phase_start` → 0 delta chunks → timeout. حتى بعد ISS-STREAM-001.
+- **Root causes (3 جذرية)**:
+  1. **`stream_chat()` يُعيد `ChatCompletionChunk` objects (OpenAI SDK) وليس dicts**: الكود في `general_knowledge.py`, `search.py`, `main.py` كان يستخدم `chunk.get('choices')` → `AttributeError` يُبتلع بـ `except Exception: continue` → 0 chunks.
+  2. **`astream_events` لا يُطلق `on_custom_event` في LangGraph 1.2.0**: `stream_writer()` يُستدعى بنجاح لكن `on_custom_event` لا يُطلق أبداً. الحل: `astream(stream_mode=["custom","updates"])`.
+  3. **النموذج الافتراضي `nvidia/nemotron-3-super-120b-a12b:free` يُعيد chunk واحد فقط**: لا يدعم token-level streaming. الحل: `deepseek/deepseek-chat` (47-177 chunks/response).
+- **Fix**:
+  - `AIClient.extract_stream_content()` static method في `llm/client.py` — يدعم `ChatCompletionChunk` و dict.
+  - `general_knowledge.py`, `search.py`, `main.py` (ChatFallbackNode) → استخدام `extract_stream_content()`.
+  - `routes.py` `_run_chat_langgraph` + `_stream_chat_langgraph` → `astream(stream_mode=["custom","updates"])` بدل `astream_events`.
+  - `SynthesizerNode` → streaming حتى عند `reranked=[]` (no search results).
+  - `app/core/ai_config.py` → `deepseek/deepseek-chat` كنموذج افتراضي.
+  - Prometheus metrics: `cogniforge_streaming_chunks_total`, `cogniforge_streaming_chars_total`, `cogniforge_streaming_sessions_total`, `cogniforge_streaming_duration_seconds`.
+  - Grafana dashboard: `170-streaming-iss-stream-002.json` (9 panels, UID `cogniforge-streaming-002`).
+- **Verified**: 122-177 word-by-word chunks per response ✅ | `cogniforge_streaming_chunks_total{node="synthesizer"} 122.0` ✅
+
 ### [VERIFIED] ISS-050 · End-to-end chat routing confirmed live (2026-05-11)
 - **Evidence**: WebSocket test `ws://localhost:8000/api/chat/ws` with subprotocols `['jwt', TOKEN]` → events: `['conversation_init', 'assistant_delta'×6, 'assistant_final']`. Answer: real Arabic LLM response about Newton's second law.
 - **Path**: `User WS → Monolith:8000/api/chat/ws → OrchestratorClient.chat_with_agent() → http://localhost:8006/api/chat/messages → StateGraph 13-node → Planning:8002 + Research:8007 + Reasoning:8008 → composed answer`.

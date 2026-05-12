@@ -1616,6 +1616,36 @@ cogniforge_pipeline_invocations_total{mode="full"} 2.0
 
 ---
 
+## ✅ Session: 2026-05-12 — ISS-STREAM-002: Word-by-Word Streaming Fix (3 Root Causes)
+
+### Problem
+البث يتوقف عند `phase_start` → 0 delta chunks → timeout كارثي. حتى بعد ISS-STREAM-001.
+
+### Root Causes Found & Fixed
+1. **`ChatCompletionChunk` vs dict**: `stream_chat()` يُعيد OpenAI SDK objects لكن الكود يستخدم `chunk.get()` → `AttributeError` صامت → 0 chunks.
+2. **LangGraph 1.2.0 `astream_events` bug**: `on_custom_event` لا يُطلق أبداً رغم أن `stream_writer()` يعمل. الحل: `astream(stream_mode=["custom","updates"])`.
+3. **نموذج لا يدعم streaming**: `nvidia/nemotron-3-super-120b-a12b:free` → 1 chunk فقط. الحل: `deepseek/deepseek-chat` → 47-177 chunks.
+
+### Files Changed
+- `microservices/orchestrator_service/src/services/llm/client.py` — `extract_stream_content()` static method
+- `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py` — استخدام `extract_stream_content()`
+- `microservices/orchestrator_service/src/services/overmind/graph/main.py` (ChatFallbackNode) — استخدام `extract_stream_content()`
+- `microservices/orchestrator_service/src/services/overmind/graph/search.py` (SynthesizerNode) — streaming عند `reranked=[]` + `extract_stream_content()`
+- `microservices/orchestrator_service/src/api/routes.py` — `astream(stream_mode=["custom","updates"])` في `_run_chat_langgraph` + `_stream_chat_langgraph`
+- `microservices/orchestrator_service/src/core/prom_metrics.py` — 4 streaming metrics جديدة
+- `app/core/ai_config.py` — `deepseek/deepseek-chat` كنموذج افتراضي
+
+### New Files
+- `observability/grafana/dashboards/170-streaming-iss-stream-002.json` — 9 panels, UID `cogniforge-streaming-002`
+
+### Verification (Live)
+- **122-177 word-by-word chunks** per response ✅
+- `cogniforge_streaming_chunks_total{channel="http",node="synthesizer"} 122.0` ✅
+- E2E WebSocket test: 177 chunks, 827 chars, 14s ✅
+- Prometheus: 10/12 targets UP (content-retrieval-skill + conversation-service DOWN — not started)
+
+---
+
 ## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
 
 - حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.

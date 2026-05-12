@@ -106,7 +106,9 @@ class ActiveModels:
     ╚═══════════════════════════════════════════════════════════════════════════════════╝
     """
 
-    PRIMARY = _resolve_primary_model(AvailableModels.NEMOTRON_3_SUPER_120B_FREE)
+    # ISS-STREAM-002: deepseek/deepseek-chat يدعم token-level streaming حقيقي (47 chunks/response)
+    # nemotron-3-super-120b-a12b:free كان يُعيد chunk واحد فقط → لا typing effect
+    PRIMARY = _resolve_primary_model("deepseek/deepseek-chat")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
     GATEWAY_FALLBACK_1 = AvailableModels.GEMINI_2_FLASH_EXP_FREE

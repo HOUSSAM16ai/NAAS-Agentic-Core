@@ -676,7 +676,9 @@ class ChatFallbackNode:
     async def __call__(self, state: AgentState) -> dict:
         import time
 
-        from microservices.orchestrator_service.src.core.ai_gateway import get_ai_client
+        from microservices.orchestrator_service.src.services.llm.client import (
+            get_ai_client as get_llm_client,
+        )
 
         from .telemetry import emit_telemetry
 
@@ -693,8 +695,6 @@ class ChatFallbackNode:
         if not history.strip():
             logger.debug("ChatFallbackNode: empty history for query=%.60s", query)
 
-        ai_client = get_ai_client()
-
         system_content = "أجب بدقة اعتماداً على سياق المحادثة. لا تتجاهل السياق أبداً."
         user_content = f"السياق:\n{history}\n\nالسؤال:\n{query}"
 
@@ -702,23 +702,21 @@ class ChatFallbackNode:
             "وعليكم السلام! أنا هنا للمساعدة. أخبرني بما تحتاجه وسأتابع معك خطوة بخطوة."
         )
 
+        llm_client = get_llm_client()
         writer = self._get_writer()
         try:
             if writer is not None:
-                # D-048: STREAMING — يبث token-by-token عبر custom event
+                # D-048 + ISS-STREAM-002: STREAMING — يبث token-by-token عبر custom event
                 stream_messages = [
                     {"role": "system", "content": system_content},
                     {"role": "user", "content": user_content},
                 ]
                 parts: list[str] = []
-                async for chunk in ai_client.stream_chat(stream_messages):
+                async for chunk in llm_client.stream_chat(stream_messages):
                     try:
-                        choices = chunk.get("choices") if isinstance(chunk, dict) else None
-                        if not choices:
-                            continue
-                        delta = choices[0].get("delta", {}) or {}
-                        content = delta.get("content")
-                        if not isinstance(content, str) or not content:
+                        # ISS-STREAM-002: extract_stream_content يدعم ChatCompletionChunk و dict
+                        content = llm_client.extract_stream_content(chunk)
+                        if not content:
                             continue
                         parts.append(content)
                         writer(
@@ -734,14 +732,16 @@ class ChatFallbackNode:
                 if streamed:
                     fallback_response = streamed
             else:
-                response_content = await ai_client.send_message(
-                    system_prompt=system_content, user_message=user_content, temperature=0.7
+                # ISS-STREAM-002: استخدام llm_client.generate() بدل ai_client.send_message()
+                resp = await llm_client.generate(
+                    messages=[
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": user_content},
+                    ],
+                    temperature=0.7,
                 )
-                if (
-                    response_content
-                    and isinstance(response_content, str)
-                    and response_content.strip()
-                ):
+                response_content = resp.choices[0].message.content or ""
+                if response_content and response_content.strip():
                     fallback_response = response_content.strip()
         except Exception as error:
             emit_telemetry(

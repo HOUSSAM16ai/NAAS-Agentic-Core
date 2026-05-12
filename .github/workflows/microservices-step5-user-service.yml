@@ -301,6 +301,9 @@ print(f'✅ Dashboard صالح: {len(panels)} panels | UID={uid} | refresh={refr
   # Job 6: PR Summary — ملخص النتائج
   # ─────────────────────────────────────────────────────────────────────────────
   pr-summary:
+    permissions:
+      pull-requests: write
+      issues: write
     name: "PR Summary"
     runs-on: ubuntu-latest
     needs: [static-checks, dashboard-gate, lint, step5-tests, step4-regression]
@@ -309,6 +312,8 @@ print(f'✅ Dashboard صالح: {len(panels)} panels | UID={uid} | refresh={refr
       - uses: actions/checkout@v4
       - name: "Post PR comment"
         uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
             const results = {

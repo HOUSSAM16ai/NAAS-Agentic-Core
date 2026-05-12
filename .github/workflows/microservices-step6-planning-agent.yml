@@ -283,6 +283,9 @@ print(f'✅ Dashboard صالح — {len(d[\"panels\"])} panels | UID: {d[\"uid\"
 
   # ── Job 7: PR Summary ─────────────────────────────────────────────────────
   pr-summary:
+    permissions:
+      pull-requests: write
+      issues: write
     name: "PR Summary"
     runs-on: ubuntu-latest
     needs: [static-checks, compose-gate, dashboard-gate, lint, step6-tests, step5-regression]
@@ -292,6 +295,8 @@ print(f'✅ Dashboard صالح — {len(d[\"panels\"])} panels | UID: {d[\"uid\"
     steps:
       - name: "Post PR comment"
         uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
             const jobs = {

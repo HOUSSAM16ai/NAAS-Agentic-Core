@@ -304,6 +304,9 @@ jobs:
 
   # ── Job 7: PR Summary ─────────────────────────────────────────────────────
   pr-summary:
+    permissions:
+      pull-requests: write
+      issues: write
     name: "PR Summary"
     runs-on: ubuntu-latest
     needs: [static-checks, infrastructure-gate, dashboard-gate, lint, step8-tests, regression-steps-4-7]
@@ -315,6 +318,8 @@ jobs:
 
       - name: "Post PR comment"
         uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
             const body = `## ✅ Step 8 — Reasoning Agent CI Gate

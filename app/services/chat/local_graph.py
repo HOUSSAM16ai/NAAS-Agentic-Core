@@ -17,6 +17,7 @@ import contextvars
 import logging
 import re
 import time
+from collections.abc import AsyncGenerator
 from typing import TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -329,3 +330,137 @@ async def run_local_graph(
                 _graph_trace_context.reset(token)
 
     return None
+
+
+# ─── Streaming variant — D-047 (word-by-word typing effect) ──────────────────
+
+
+async def run_local_graph_stream(
+    question: str,
+    conversation_id: int | None,
+    history_messages: list[dict] | None = None,
+    trace_context=None,
+) -> AsyncGenerator[str, None]:
+    """
+    نسخة انسيابية من ``run_local_graph`` — تُصدِر القطع نصياً عبر AsyncGenerator
+    لتمكين الـ assistant_delta كلمة بكلمة على WebSocket.
+
+    لماذا تتجاوز LangGraph عند البث؟
+        ``OpenRouterClient`` ليس ``BaseChatModel`` من LangChain، فلا تُولِّد
+        ``astream_events`` أحداث ``on_chat_model_stream``. لذلك نُشغِّل
+        ``_classify_intent`` يدوياً لاختيار الـ system prompt، ثم نتصل بـ
+        ``OpenRouterClient.stream_chat`` مباشرة ونُصدِر كل قطعة محتوى فوراً.
+        النتيجة: زمن أول-قطعة ~1s، تجربة typing ناعمة، صفر buffering.
+
+    Yields:
+        str: قطعة نص (token/فاصلة كلمات) — يضمها ``mergeAssistantContent`` في الواجهة.
+
+    إذا فشل أي تيار في المسار → AsyncGenerator يفرغ بصمت
+    (المسؤول الأعلى يطبّق fallback chain بعده).
+    """
+    from app.core.ai_gateway import get_ai_client
+
+    sanitized = question.replace("\x00", "").strip()
+    if not sanitized:
+        return
+
+    intent = _classify_intent(sanitized)
+    system_prompt = _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"])
+    history = history_messages or []
+    history_text = _format_history(history)
+    user_message = (
+        f"سياق المحادثة السابقة:\n{history_text}\n\nالسؤال الحالي: {sanitized}"
+        if history_text
+        else sanitized
+    )
+
+    obs = None
+    span_ctx = None
+    t0 = time.perf_counter()
+    with contextlib.suppress(Exception):
+        from app.telemetry.unified_observability import get_unified_observability
+
+        obs = get_unified_observability()
+        span_ctx = obs.start_trace(
+            "langgraph.run_stream",
+            parent_context=trace_context,
+            tags={
+                "thread_id": str(conversation_id) if conversation_id is not None else "anon",
+                "intent": intent,
+                "question_len": len(sanitized),
+            },
+        )
+        # نُسجِّل عَدّ النوايا للوحة 20-langgraph.json
+        obs.increment_counter(
+            "langgraph.intent.total",
+            labels={"intent": intent, "graph": "local"},
+        )
+
+    ai_client = get_ai_client()
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+
+    chunk_count = 0
+    total_chars = 0
+    try:
+        async for raw_chunk in ai_client.stream_chat(messages):
+            # raw_chunk: OpenRouter SSE delta — نستخرج فقط محتوى المساعد
+            try:
+                choices = raw_chunk.get("choices") if isinstance(raw_chunk, dict) else None
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {}) or {}
+                content = delta.get("content")
+                if not content or not isinstance(content, str):
+                    continue
+                clean = content.replace("\x00", "")
+                if not clean:
+                    continue
+                chunk_count += 1
+                total_chars += len(clean)
+                yield clean
+            except Exception:
+                # قطعة واحدة سيئة لا تكسر التيار
+                continue
+    except Exception:
+        logger.warning("local_graph.stream_failed intent=%s", intent, exc_info=True)
+        if obs is not None and span_ctx is not None:
+            with contextlib.suppress(Exception):
+                obs.end_span(span_ctx.span_id, status="ERROR")
+        return
+
+    duration_s = time.perf_counter() - t0
+    logger.info(
+        "local_graph.stream_ok intent=%s chunks=%d chars=%d duration_s=%.3f",
+        intent,
+        chunk_count,
+        total_chars,
+        duration_s,
+    )
+    if obs is not None and span_ctx is not None:
+        with contextlib.suppress(Exception):
+            obs.end_span(
+                span_ctx.span_id,
+                status="OK",
+                metrics={
+                    "duration_ms": duration_s * 1000,
+                    "chunks": float(chunk_count),
+                    "chars": float(total_chars),
+                },
+            )
+            # مقاييس انسيابية للوحة LangGraph
+            obs.increment_counter(
+                "langgraph.node.count.total",
+                labels={"node": "chat_stream", "graph": "local"},
+            )
+            obs.record_metric(
+                "langgraph.node.duration_seconds",
+                value=duration_s,
+                labels={"node": "chat_stream", "graph": "local"},
+            )
+            obs.increment_counter(
+                "ws.chat.delta.total",
+                labels={"path": "local_graph_stream"},
+            )

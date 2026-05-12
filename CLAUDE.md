@@ -2527,3 +2527,76 @@ The sandbox blocks outbound HTTPS. The provided secrets (`OPENROUTER_API_KEY`, `
 2. **YAML heredoc rule**: never embed multi-line Python via `python3 -c "..."` inside a YAML `run: |` block. Use `python3 <<'PY' ... PY` with content indented to the YAML block scalar level. Pass shell-variable values through `ENV=val python3 <<'PY' ... os.environ['ENV'] ... PY` — never via string interpolation, which mixes shell + YAML + Python escaping.
 3. **github-script multi-line strings**: never use JS template literals (`` ` ... ` ``) that span multiple lines in a YAML `script: |` block. Use an array of single-line strings + `.join('\n')` — that way YAML indentation stays correct and the markdown body remains readable.
 
+---
+
+## 6.27 Streaming Bottleneck Eliminated — Token-Level WS Deltas (2026-05-12, D-047)
+
+> هذا القسم يحكم بشكل دائم سلوك بث الـ chat: **لا تجميع، لا انتظار، token-by-token حتمي**.
+
+### المشكلة قبل الإصلاح
+
+الردود كانت تظهر دفعة واحدة كارثية على الواجهة. التحقيق الجنائي في `.memory/streaming_architecture_breakdown.md` (2026-05-10) كشف ثلاثة بقوع متداخلة:
+
+| الطبقة | السلوك المعطوب |
+|---|---|
+| **Monolith** (`app/services/chat/local_graph.py:297`) | `graph.ainvoke(...)` يحبس التنفيذ حتى نهاية الرد، يُرجِع نصاً واحداً |
+| **Orchestrator** (`microservices/orchestrator_service/src/api/routes.py`) | `astream_events(version="v2")` صحيح، لكن `on_chat_model_stream` كان `pass` — token deltas مُتجاهَلة صراحةً |
+| **Frontend** | `mergeAssistantContent` صحيح لكنه يستقبل deltaواحدة فقط — typing-effect مستحيل رياضياً |
+
+### الإصلاح (D-047 — مطبَّق في هذا الفرع)
+
+**المسار المحلي (Monolith fallback chain):**
+- أُضيفت `run_local_graph_stream()` في `local_graph.py`: AsyncGenerator يتجاوز LangGraph (لأن `OpenRouterClient` ليس `BaseChatModel` من LangChain فلا تُولِّد `astream_events` أحداث `on_chat_model_stream`)، يُشغِّل `_classify_intent` ثم يستدعي `OpenRouterClient.stream_chat` مباشرة ويُصدِر كل `delta.content` فوراً.
+- أُضيفت `_stream_local_graph_response()` و `_stream_local_general_chat_response()` في `OrchestratorClient`، وأُعيد كتابة الفرعين 3 و 4 من fallback chain في `chat_with_agent` لإصدار N × `assistant_delta` لكل turn (بدل واحدة كبيرة).
+
+**Orchestrator microservice (3 مواقع):**
+- HTTP `/api/chat/messages` (line ~1810): `on_chat_model_stream` → `assistant_delta`
+- WS `/api/chat/ws` worker task (line ~1532): نفس النمط عبر `_safe_put`، يُمرَّر `__streamed_chars` للـ consumer
+- WS `/admin/api/chat/ws` (line ~2562): نفس النمط
+
+### عقد منع التكرار (Duplicate-Suppression Contract)
+
+> القاعدة الذهبية: **إذا بُثَّ أي token-level delta خلال الـ turn، فإن `assistant_final.payload.content` يجب أن يكون `""`**.
+
+السبب: `mergeAssistantContent` على الواجهة يجمع جميع `assistant_delta` بشكل تتابعي. إذا ضاف `assistant_final.content` يحوي النص الكامل، يُصبح الرد مكرراً مرتين على الشاشة.
+
+```
+streamed_chars > 0  →  assistant_final.payload.content = ""
+streamed_chars == 0 →  assistant_final.payload.content = response_text   (backward-compat)
+```
+
+`streamed_chars` يُعلَّق أيضاً على `assistant_final.payload` كحقل metadata للقياس ولـ Grafana panels.
+
+### قواعد دائمة (لا تُكسر بدون ADR)
+
+1. **`ainvoke()` ممنوع على المسار الحي للمستخدم** — أي LangGraph runtime موجَّه لـ user-facing real-time chat يجب أن يستخدم `astream_events(version="v2")` أو AsyncGenerator مكافئ.
+2. **`on_chat_model_stream` يجب أن يُصدِر `assistant_delta` فوراً** — لا buffering، لا تجميع، لا انتظار لـ `on_chain_end`.
+3. **duplicate-suppression contract إلزامي** — أي إضافة لمسار streaming جديد يجب أن تطبق هذا العقد، وإلا فالمستخدم يرى الرد مكرراً.
+4. **`OpenRouterClient.stream_chat` هو القناة المتدفقة الوحيدة** للمسار المحلي — لا تستبدله بـ `send_message` (الذي يجمع داخلياً).
+5. **`path_observer.WsTurnSpan` هو المنتج الوحيد لـ WS turn metrics** (§6.10) — لا تكسر هذا العقد عند إضافة streaming counters.
+
+### قياس النجاح حياً
+
+```bash
+# يجب أن تظهر 20-100+ سطور NDJSON متتابعة، كل واحدة assistant_delta واحد
+curl -N -X POST http://localhost:8006/api/chat/messages \
+  -H "Authorization: Bearer $JWT" \
+  -d '{"question":"اشرح قانون أوم","user_id":7,"conversation_id":1}' | head -50
+
+# WS test — يجب أن تتدفق الرسائل خلال ~1s من الإرسال، ليس بعد 30s
+wscat -c "ws://localhost:8000/api/chat/ws?token=$JWT" -s jwt
+
+# في المتصفح: الرد يجب أن يظهر مرة واحدة فقط (لا duplicate بعد انتهاء streaming)
+```
+
+### ما لم يتغير (مقصوداً)
+
+- `app/api/routers/customer_chat.py` — كان يُمرِّر كل event عبر `websocket.send_json()` مباشرة بدون buffering. البق كان upstream منه.
+- `frontend/app/hooks/useAgentSocket.js` + `mergeAssistantContent.ts` — يعملان بشكل صحيح أصلاً. البق كان 100% backend.
+- `microservices/conversation_service` — لا يزال يستخدم `ainvoke` لأنه ليس على المسار الحي اليوم؛ سيُحَدَّث عند تفعيله.
+- D-006 persistence semantics و `_emit_terminal_frames` — بدون تغيير.
+
+**ملف التفاصيل الكامل**: `.memory/streaming_architecture_breakdown.md` "D-047 Implementation Report".
+**قرار معماري**: `.memory/decisions.md` D-047.
+**bug log**: `.memory/issues.md` ISS-055.
+

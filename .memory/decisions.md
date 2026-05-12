@@ -1,6 +1,95 @@
 # Architectural Decisions
 > Last updated: 2026-05-12 | Branch: `claude/setup-microservices-monitoring-ralbR`
 
+## D-048 · DSPy/raw-OpenAI Streaming via Custom Events (2026-05-12 — same branch)
+
+**Context**: D-047 plugged the streaming gap on (a) the local monolith fallback and (b) any future LangChain-`ChatOpenAI` node in the orchestrator. But the production hot path — `orchestrator-service:8006` StateGraph (13 عقدة) — uses **DSPy 3.x** (`dspy.Predict`, `dspy.ChainOfThought`) wrapped around **raw `openai.AsyncOpenAI`**. `astream_events(version="v2")` does NOT emit `on_chat_model_stream` for raw OpenAI calls or for DSPy modules, so even after D-047 the user still saw the entire reply land in a single `assistant_final` burst on the default path.
+
+**Decision**: Use LangGraph's `get_stream_writer()` + `astream_events`'s `on_custom_event` channel to expose token-level deltas from the 3 user-facing leaf nodes — surgically, without disturbing DSPy signatures or the rest of the graph.
+
+**Hybrid pattern (every refactored node)**:
+
+```python
+@staticmethod
+def _get_writer():
+    try:
+        from langgraph.config import get_stream_writer
+        return get_stream_writer()
+    except Exception:
+        return None
+
+async def __call__(self, state):
+    writer = self._get_writer()
+    if writer is not None:
+        # STREAMING path — raw OpenAI SSE + custom events
+        parts = []
+        async for chunk in ai_client.stream_chat(messages):
+            delta = chunk["choices"][0]["delta"].get("content")
+            if not delta:
+                continue
+            parts.append(delta)
+            writer({"chunk_type": "assistant_delta", "content": delta, "node": "<name>"})
+        full_text = "".join(parts).strip()
+        # ... build final state dict from full_text ...
+    else:
+        # Non-streaming path — DSPy / send_message (preserves CoT signature, batch/test mode)
+        prediction = await anyio.to_thread.run_sync(lambda: self.generator(...))
+        full_text = prediction.response.strip()
+    return {"final_response": full_text, "messages": [AIMessage(content=full_text)]}
+```
+
+`get_stream_writer()` returns `None` when the graph is invoked via `ainvoke()` (batch / tests), so DSPy still runs there — no regression in unit tests, no change to non-streaming callers.
+
+When the graph runs via `astream_events(version="v2")`, every `writer({...})` call surfaces as `on_custom_event` with the dict as `event["data"]`. `routes.py` now listens for both `on_chat_model_stream` (D-047 path) AND `on_custom_event` (D-048 path) and forwards either to `assistant_delta`.
+
+**Nodes refactored**:
+
+| Node | File | Purpose | DSPy preserved? |
+|---|---|---|---|
+| `GeneralKnowledgeNode` | `general_knowledge.py` | General-knowledge questions | N/A (uses `send_message` in non-stream) |
+| `ChatFallbackNode` | `main.py` | Greeting/chat fallback | Yes (`dspy.Predict(ChatFallbackSignature)` in non-stream) |
+| `SynthesizerNode` | `search.py` | BAC educational synthesis with `EducationalSynthesizer` signature | Yes (`dspy.Predict(EducationalSynthesizer)` in non-stream) |
+
+`SynthesizerNode` was the most intricate: it returns a structured JSON object (`{"المصدر","التمرين",...}`) with the synthesized text inside `"التمرين"`. The streaming path now constructs the same JSON envelope, but the `"التمرين"` field is filled by concatenating the streamed chunks at the end. Each chunk also flows to the user via `assistant_delta` as it arrives, so the UI renders the long-form Arabic explanation word-by-word while the JSON envelope reaches the persistence layer intact.
+
+**`routes.py` consumer side (3 sites patched)**:
+- HTTP `/api/chat/messages` streaming generator
+- Customer WS `/api/chat/ws` worker task
+- Admin WS `/admin/api/chat/ws` streaming response
+
+Each site already had the `on_chat_model_stream` branch from D-047 (kept as insurance for future LangChain-`ChatOpenAI` migrations). A sibling `on_custom_event` branch was added that reads `event["data"]["content"]` and emits the same `{"type": "assistant_delta", "payload": {"content": str}}` envelope. The existing `streamed_chars` counter and the duplicate-suppression contract (`assistant_final.payload.content = ""` when `streamed_chars > 0`) automatically cover both paths.
+
+**Net effect**:
+
+| Path | Before D-047 | After D-047 only | After D-048 |
+|---|---|---|---|
+| Monolith local fallback (`local_graph`) | one big `assistant_delta` | ✅ word-by-word | ✅ word-by-word |
+| Orchestrator (DSPy + raw OpenAI) — production default | one big `assistant_final` | ❌ still bursting | ✅ word-by-word |
+| Orchestrator (future LangChain `ChatOpenAI` migration) | one big `assistant_final` | ✅ word-by-word | ✅ word-by-word |
+| Admin WS (DSPy + raw OpenAI) | one big `assistant_delta` after `[DB SAVED]` | ❌ still bursting | ✅ word-by-word |
+
+**Files changed**:
+- `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py` — hybrid streaming path
+- `microservices/orchestrator_service/src/services/overmind/graph/main.py` — `ChatFallbackNode` hybrid streaming
+- `microservices/orchestrator_service/src/services/overmind/graph/search.py` — `SynthesizerNode` hybrid streaming (most complex due to JSON envelope)
+- `microservices/orchestrator_service/src/api/routes.py` — `on_custom_event` consumer added at 3 sites
+
+**Time-to-first-word**: expected ~800ms (limited by OpenRouter first SSE chunk) — down from 25–40s burst.
+
+**Risks and mitigations**:
+- `get_stream_writer()` is documented in LangGraph 0.2.39+ (requirements.txt pins `langgraph>=0.2.39,<2.0.0`). If a future version removes it, the `try/except` falls back to `None` and DSPy still produces the final response — no streaming, no regression.
+- `on_custom_event` requires `astream_events(version="v2")`. The orchestrator already uses v2 at all three sites — verified by grep.
+- The duplicate-suppression contract (D-047) applies unchanged: if any chunks streamed, `assistant_final.payload.content = ""`. UI sees no duplication.
+
+**Status**: IMPLEMENTED 2026-05-12 — pending live verification in Codespaces with real secrets.
+
+**Rules added**:
+1. Any orchestrator graph leaf node that emits a `final_response` to the user MUST attempt `get_stream_writer()` and stream via custom events when available. DSPy non-streaming remains the fallback for batch/test.
+2. `routes.py` MUST listen for both `on_chat_model_stream` and `on_custom_event` to cover both LangChain-native and DSPy/raw-OpenAI nodes.
+3. The `{"chunk_type": "assistant_delta", "content": str, "node": str}` envelope is the canonical custom-event shape — do not invent variants. The `node` field is for telemetry only; routes.py ignores it.
+
+---
+
 ## D-047 · Streaming Bottleneck Eliminated — Token-Level WS Deltas (2026-05-12)
 
 **Decision**: تصفية "Streaming Event Bottleneck" في الـ 3 طبقات (monolith + orchestrator HTTP + orchestrator WS) لتمكين typing-effect كلمة بكلمة على الواجهة، بدل تجميع الرد ثم إرساله دفعة واحدة كارثية.

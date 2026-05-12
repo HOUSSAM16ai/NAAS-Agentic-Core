@@ -3,6 +3,29 @@
 
 ---
 
+## 🟢 Resolved in this branch (2026-05-12 — D-048 orchestrator streaming via custom events)
+
+### ISS-056 · Orchestrator (DSPy + raw OpenAI) still bursts on the user-facing default path [RESOLVED]
+- **Status**: RESOLVED in `claude/setup-microservices-monitoring-ralbR` (D-048)
+- **Severity**: HIGH (D-047 fix didn't cover the production hot path)
+- **Root cause**: D-047 patched `on_chat_model_stream` in `routes.py`, but the orchestrator's StateGraph leaf nodes (`SynthesizerNode`, `ChatFallbackNode`, `GeneralKnowledgeNode`) call:
+  - `dspy.Predict(...)` / `dspy.ChainOfThought(...)` (DSPy 3.x — its own LM wrapper)
+  - `OpenRouterClient.send_message(...)` (which uses raw `httpx` SSE internally, not LangChain)
+  Neither emits `on_chat_model_stream` events. The patched branch in `routes.py` therefore never fired on the live default path. The user still saw the entire reply in one burst.
+- **Fix** (D-048):
+  - Added `_get_writer()` helper in each of the 3 leaf nodes — uses `langgraph.config.get_stream_writer()` (LangGraph ≥ 0.2.39).
+  - Hybrid pattern: when `writer is not None` (graph running under `astream_events`), stream via `ai_client.stream_chat(messages)` (raw OpenRouter SSE) and emit each token through `writer({"chunk_type": "assistant_delta", "content": <str>, "node": <name>})`. When `writer is None` (batch / tests), fall back to DSPy/`send_message`.
+  - Added `on_custom_event` branch in `routes.py` at all 3 streaming sites (HTTP `/api/chat/messages`, customer WS `/api/chat/ws`, admin WS `/admin/api/chat/ws`). Same envelope as D-047: `{"type": "assistant_delta", "payload": {"content": str}}`. Same duplicate-suppression contract.
+- **Evidence (pending live)**: a single `POST /api/chat/messages` request should now produce 20–100+ NDJSON lines from the production default path (orchestrator → SynthesizerNode/ChatFallbackNode/GeneralKnowledgeNode).
+- **Files**:
+  - `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py`
+  - `microservices/orchestrator_service/src/services/overmind/graph/main.py` (`ChatFallbackNode`)
+  - `microservices/orchestrator_service/src/services/overmind/graph/search.py` (`SynthesizerNode`)
+  - `microservices/orchestrator_service/src/api/routes.py` (3 `on_custom_event` consumers)
+- **Doctrine**: `.memory/decisions.md` D-048, CLAUDE.md §6.28.
+
+---
+
 ## 🟢 Resolved in this branch (2026-05-12 — D-047 streaming bottleneck)
 
 ### ISS-055 · WebSocket chat responses appear in a single catastrophic burst (no typing effect) [RESOLVED]

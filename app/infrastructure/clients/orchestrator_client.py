@@ -27,6 +27,7 @@ from app.services.capabilities.exercise_retrieval import (
     ExerciseRetrievalDecision,
     ExerciseRetrievalRequest,
     detect_exercise_retrieval,
+    detect_explanation_with_context,
     format_exercise_for_display,
     load_exercise_content,
 )
@@ -176,6 +177,49 @@ class OrchestratorClient:
         except Exception:
             logger.warning("local_retrieval_fallback_failed", exc_info=True)
             return None
+
+    async def _stream_exercise_explanation_response(
+        self,
+        question: str,
+        conversation_id: int | None,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        يشرح تمرين بكالوريا محدد بالاعتماد على محتواه الكامل من قاعدة المعرفة.
+
+        ISS-053: مسار جديد يحل هلوسة LangGraph عند طلبات "اشرح تمرين الدوال
+        العددية 2016". بدلاً من إرسال السؤال بدون سياق، نجلب النص الكامل
+        (نص التمرين + الإجابة النموذجية) ونمرره للـ LLM كـ context صريح.
+
+        يُدرَج في fallback chain بين exercise_retrieval و LangGraph:
+          file_intelligence → exercise_retrieval → exercise_explanation → LangGraph → general_chat
+        """
+        decision = detect_explanation_with_context(
+            ExerciseRetrievalRequest(question=question)
+        )
+        if not decision.recognized or not decision.full_content:
+            return
+
+        try:
+            from app.telemetry.path_observer import mark_fallback_used
+            mark_fallback_used("exercise_explanation_stream")
+        except Exception:
+            pass
+
+        try:
+            from app.services.chat.local_graph import run_local_graph_with_exercise_context
+
+            async for chunk in run_local_graph_with_exercise_context(
+                question=question,
+                exercise_full_content=decision.full_content,
+                conversation_id=conversation_id,
+                history_messages=history_messages,
+            ):
+                if chunk:
+                    yield chunk
+        except Exception:
+            logger.warning("exercise_explanation_stream_failed", exc_info=True)
+            return
 
     async def _stream_local_retrieval_response(
         self,
@@ -909,6 +953,66 @@ class OrchestratorClient:
                                 "duration_ms": (time.perf_counter() - _t0) * 1000,
                                 "fallback_path": 2.0,
                                 "stream_chars": float(ret_streamed_chars),
+                            },
+                        )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
+                return
+
+            # ── Exercise explanation with context — ISS-053 ──────────────────
+            # يشرح تمرين بكالوريا محدد بالاعتماد على محتواه الكامل (نص + إجابة نموذجية).
+            # يحل هلوسة LangGraph عند "اشرح تمرين الدوال العددية 2016".
+            # يُدرَج قبل LangGraph لأنه أدق وأكثر موثوقية للتمارين المعروفة.
+            _exp_t0 = time.perf_counter()
+            _exp_ctx = None
+            with contextlib.suppress(Exception):
+                _exp_ctx = obs.start_trace(
+                    "orchestrator.fallback.exercise_explanation.stream",
+                    parent_context=_root_ctx,
+                    tags={"fallback_step": "exercise_explanation_stream"},
+                )
+            exp_streamed_any = False
+            exp_streamed_chars = 0
+            try:
+                async for chunk in self._stream_exercise_explanation_response(
+                    question=question,
+                    conversation_id=conversation_id,
+                    history_messages=history_messages,
+                ):
+                    if not chunk:
+                        continue
+                    exp_streamed_any = True
+                    exp_streamed_chars += len(chunk)
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_delta", "payload": {"content": chunk}}
+                    )
+            except Exception:
+                logger.warning("exercise_explanation_stream_yield_failed", exc_info=True)
+
+            try:
+                if _exp_ctx:
+                    obs.end_span(
+                        _exp_ctx.span_id,
+                        status="OK" if exp_streamed_any else "SKIP",
+                        metrics={
+                            "duration_ms": (time.perf_counter() - _exp_t0) * 1000,
+                            "stream_chars": float(exp_streamed_chars),
+                        },
+                    )
+            except Exception:
+                pass
+
+            if exp_streamed_any:
+                if _root_ctx:
+                    with contextlib.suppress(Exception):
+                        obs.end_span(
+                            _root_ctx.span_id,
+                            status="OK",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                "fallback_path": 2.5,
+                                "stream_chars": float(exp_streamed_chars),
                             },
                         )
                 yield self._normalize_stream_event(

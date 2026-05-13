@@ -113,11 +113,11 @@ class ActiveModels:
     PRIMARY = _resolve_primary_model("inclusionai/ring-2.6-1t:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
-    GATEWAY_FALLBACK_1 = AvailableModels.GEMINI_2_FLASH_EXP_FREE
-    GATEWAY_FALLBACK_2 = AvailableModels.QWEN_QWEN3_CODER_FREE
-    GATEWAY_FALLBACK_3 = AvailableModels.KAT_CODER_PRO_FREE
-    GATEWAY_FALLBACK_4 = AvailableModels.PHI_3_MINI_FREE
-    GATEWAY_FALLBACK_5 = AvailableModels.LLAMA_3_2_11B_VISION_FREE
+    GATEWAY_FALLBACK_1 = "nvidia/nemotron-3-super-120b-a12b:free"
+    GATEWAY_FALLBACK_2 = "arcee-ai/trinity-large-thinking:free"
+    GATEWAY_FALLBACK_3 = "openai/gpt-oss-120b:free"
+    GATEWAY_FALLBACK_4 = "nvidia/nemotron-3-nano-30b-a3b:free"
+    GATEWAY_FALLBACK_5 = "z-ai/glm-4.5-air:free"
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY
     TIER_SMART = PRIMARY

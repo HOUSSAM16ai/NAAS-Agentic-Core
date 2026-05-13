@@ -105,15 +105,30 @@ _RETRIEVAL_INTENT_PATTERNS: tuple[str, ...] = (
     "exercise 2",
     "exercise 3",
     "exercise 4",
-    # طلب صريح للجلب
+    # طلب صريح للجلب — صيغ متعددة
     "أعطني تمرين",
     "أعطني تمارين",
+    "اعطني تمرين",
+    "اعطني تمارين",
     "أريد تمرين",
     "أريد تمارين",
+    "اريد تمرين",
+    "اريد تمارين",
+    "هات تمرين",
+    "هاتلي تمرين",
+    "أحتاج تمرين",
+    "احتاج تمرين",
+    "نص تمرين",
+    "نص التمرين",
+    "أظهر تمرين",
+    "اظهر تمرين",
+    "عرض تمرين",
     "give me exercise",
     "give me exercises",
     "fetch exercise",
     "get exercise",
+    "show exercise",
+    "display exercise",
     "ابحث عن تمرين",
     "جلب تمرين",
     # الدورة الأولى / الثانية (خاص بـ 2016)
@@ -123,6 +138,25 @@ _RETRIEVAL_INTENT_PATTERNS: tuple[str, ...] = (
     "دورة ثانية",
     "session 1",
     "session 2",
+    # أنماط دلالية — الطالب يصف ما يريد بدون كلمة "تمرين" صريحة
+    "g(x)",
+    "f(x)",
+    "h(x)",
+    "دالة g",
+    "دالة f",
+    "دالة h",
+    "الدالة g",
+    "الدالة f",
+    "الدالة h",
+    # طلب بالسنة فقط مع موضوع رياضي
+    "2016 دوال",
+    "دوال 2016",
+    "2016 احتمالات",
+    "احتمالات 2016",
+    "2024 احتمالات",
+    "احتمالات 2024",
+    "2024 أعداد مركبة",
+    "أعداد مركبة 2024",
 )
 
 # أنماط استخراج السنة والدورة والموضوع والتمرين
@@ -210,13 +244,32 @@ def _has_explanation_intent(normalized: str) -> bool:
 
 
 def _has_retrieval_intent(normalized: str) -> bool:
-    """يكشف عن نية جلب محتوى من قاعدة المعرفة بشكل صريح."""
+    """يكشف عن نية جلب محتوى من قاعدة المعرفة بشكل صريح أو دلالي."""
     if any(pattern in normalized for pattern in _RETRIEVAL_INTENT_PATTERNS):
         return True
     if _EXERCISE_WITH_NUMBER_RE.search(normalized):
         return True
     # "تمرين" + سنة = طلب تمرين من سنة محددة
-    return bool(("تمرين" in normalized or "exercise" in normalized) and _YEAR_RE.search(normalized))
+    if ("تمرين" in normalized or "exercise" in normalized) and _YEAR_RE.search(normalized):
+        return True
+    # أنماط دلالية: فعل جلب + موضوع رياضي = طلب محتوى
+    _MATH_TOPICS_DIRECT: tuple[str, ...] = (
+        "دوال عددية", "الدوال العددية",
+        "احتمالات", "الاحتمالات",
+        "أعداد مركبة", "الأعداد المركبة",
+        "تكامل", "التكامل",
+        "مشتقة", "المشتقة",
+        "متتاليات", "المتتاليات",
+    )
+    _FETCH_VERBS: tuple[str, ...] = (
+        "اعطني", "أعطني", "هات", "هاتلي",
+        "أريد", "اريد", "أحتاج", "احتاج",
+        "أظهر", "اظهر", "عرض",
+        "show", "give", "get", "fetch", "display",
+    )
+    has_fetch_verb = any(v in normalized for v in _FETCH_VERBS)
+    has_math_topic = any(t in normalized for t in _MATH_TOPICS_DIRECT)
+    return has_fetch_verb and has_math_topic
 
 
 def _extract_year(normalized: str) -> int | None:

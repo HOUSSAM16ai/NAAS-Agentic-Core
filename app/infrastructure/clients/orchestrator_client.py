@@ -204,29 +204,88 @@ class OrchestratorClient:
         except Exception:
             pass
 
-        # نُقسِّم على حدود الكلمات/الفقرات لتجنب كسر LaTeX markers (\\(, $$, ...)
-        # الاستراتيجية: نُرسل سطراً سطراً، وإذا كان السطر طويلاً نُقسِّمه إلى
-        # قطع ~80 حرفاً عند مسافات الكلمات (لا داخل tokens رياضية).
+        # ── استراتيجية البث الذكي (ISS-STREAM-002) ──────────────────────────
+        # الهدف: typing-effect سلس يحاكي LLM streaming حقيقي.
+        #
+        # القواعد:
+        # 1. الأسطر الفارغة والفواصل (---) → تُرسَل فوراً بدون تأخير
+        # 2. عناوين Markdown (# ## ###) → تُرسَل كوحدة واحدة مع تأخير متوسط
+        # 3. معادلات LaTeX ($$...$$) → تُرسَل كوحدة واحدة لا تُكسَر
+        # 4. الأسطر العادية → تُقسَّم كلمة بكلمة مع تأخير 8-15ms
+        # 5. الجداول → تُرسَل سطراً سطراً مع تأخير قصير
+        import re as _re
+
+        _LATEX_BLOCK_RE = _re.compile(r'\$\$[^$]*?\$\$', _re.DOTALL)
+        _LATEX_INLINE_RE = _re.compile(r'\$[^$\n]+?\$')
+
+        def _split_preserving_latex(line: str) -> list[str]:
+            """يُقسِّم السطر إلى tokens مع الحفاظ على وحدة رموز LaTeX."""
+            tokens: list[str] = []
+            pos = 0
+            for m in _LATEX_INLINE_RE.finditer(line):
+                before = line[pos:m.start()]
+                if before:
+                    tokens.extend(w + ' ' for w in before.split() if w)
+                tokens.append(m.group())
+                pos = m.end()
+            remainder = line[pos:]
+            if remainder:
+                tokens.extend(w + ' ' for w in remainder.split() if w)
+            return tokens
+
         lines = full_response.splitlines(keepends=True)
-        for line in lines:
-            if len(line) <= 80:
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+
+            # سطر فارغ أو فاصل → فوري
+            if not stripped or stripped == '---':
                 yield line
-                await asyncio.sleep(0.012)
+                i += 1
                 continue
-            # سطر طويل — نُقسِّمه عند الفراغات
-            buffer = ""
-            for token in line.split(" "):
-                candidate = f"{buffer}{token} " if buffer else f"{token} "
-                if len(candidate) > 60:
-                    if buffer:
-                        yield buffer
-                        await asyncio.sleep(0.010)
-                    buffer = f"{token} "
-                else:
-                    buffer = candidate
-            if buffer:
-                yield buffer
+
+            # معادلة LaTeX متعددة الأسطر $$ ... $$
+            if stripped.startswith('$$') and not stripped.endswith('$$'):
+                block = line
+                i += 1
+                while i < len(lines) and '$$' not in lines[i]:
+                    block += lines[i]
+                    i += 1
+                if i < len(lines):
+                    block += lines[i]
+                    i += 1
+                yield block
+                await asyncio.sleep(0.025)
+                continue
+
+            # عنوان Markdown
+            if stripped.startswith('#'):
+                yield line
+                await asyncio.sleep(0.018)
+                i += 1
+                continue
+
+            # سطر جدول
+            if stripped.startswith('|'):
+                yield line
                 await asyncio.sleep(0.010)
+                i += 1
+                continue
+
+            # سطر عادي — word-by-word مع الحفاظ على LaTeX
+            tokens = _split_preserving_latex(stripped)
+            for j, token in enumerate(tokens):
+                yield token
+                # تأخير أقصر للكلمات القصيرة، أطول للرموز الرياضية
+                if '$' in token:
+                    await asyncio.sleep(0.020)
+                elif len(token) <= 3:
+                    await asyncio.sleep(0.006)
+                else:
+                    await asyncio.sleep(0.011)
+            yield '\n'
+            i += 1
 
     @staticmethod
     def _format_history_for_prompt(history_messages: list[dict[str, str]]) -> str:

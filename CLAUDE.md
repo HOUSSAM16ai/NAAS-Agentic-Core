@@ -2715,3 +2715,129 @@ curl http://localhost:8006/metrics | grep 'cogniforge_pipeline_invocations_total
 
 **زمن أول-كلمة المتوقع**: ~800ms (بدل 25–40s burst).
 
+---
+
+## 6.29 Indexed Knowledge Retrieval + Exam-Card Display Doctrine (2026-05-13, ISS-051 / D-048 / D-049)
+
+> هذا القسم يحكم استرجاع التمارين التعليمية من `knowledge_base/`. أي تعديل على
+> مسار الاسترجاع يجب أن يحترم القواعد الخمس أدناه — وإلا فالكارثة تعود.
+
+### الكارثة المُشخَّصة (قبل الإصلاح)
+
+عندما يكتب الطالب: «اعطني تمرين دوال عددية شعبة علوم تجريبية الموضوع الثاني التمرين الرابع لسنة 2016 الدورة الأولى»
+
+كان يحصل على:
+
+| الأعراض | السبب الجذري |
+|---|---|
+| ملف 2016 (الدوال) + ملف 2024 (الاحتمالات) كلاهما يظهران | wide-net `local_store.search_local_knowledge_base()` يقرأ كل `.md` في `knowledge_base/` |
+| YAML metadata غريب (`---`, `metadata:`, `topics:`...) يظهر للطالب | لا يوجد frontmatter stripping |
+| عناصر الإجابة النموذجية مكشوفة قبل المحاولة | لا يوجد solution gating |
+| النص كامل يصل دفعة واحدة (~30s انتظار ثم burst) | `chat_with_agent` يُرسِل `assistant_delta { content: HUGE_STRING }` واحد |
+| LaTeX يبدو مكرراً في الواجهة | KaTeX يرسم الـ visible + accessibility span → نسخ يُعطي تكرار |
+| الرد بطيء جداً | wide-net يقرأ كل ملفات `.md` + يُمرِّر النص الكامل للـ AI |
+
+### المسار المُصحَّح (D-048)
+
+```
+المستخدم يسأل عن تمرين بكالوريا محدد
+  │
+  ▼
+detect_exercise_retrieval(question)        ← knowledge_index.py
+  │ يستخرج: year, session, subject, exercise_number, topics
+  │ يُطابق على KNOWLEDGE_INDEX
+  ▼
+ExerciseRetrievalDecision(
+    recognized=True,
+    matched_entry=ExerciseEntry(file_path="bac2016_s1_math_exp_subject2_ex4_numerical_functions.md", ...)
+)
+  │
+  ▼
+_build_local_retrieval_response()  ← الجديد
+  │ if matched_entry:
+  │     raw = load_exercise_content(entry)             ← ملف واحد فقط
+  │     formatted = format_exercise_for_display(...)   ← يحذف YAML + الحل + الوسوم
+  │     return formatted                                ← 73% noise removed
+  │ else:
+  │     legacy wide-net (نادر)
+  ▼
+_stream_local_retrieval_response()  ← الجديد
+  │ يُقسِّم على حدود الأسطر/الكلمات (≤80 char)
+  │ yield chunk + asyncio.sleep(0.012)
+  ▼
+chat_with_agent() fallback path #2
+  │ يُصدِر assistant_delta واحد لكل قطعة
+  │ ثم assistant_final { content: "" }                  ← duplicate-suppression contract
+  ▼
+useAgentSocket.mergeAssistantContent
+  │ يجمع الـ deltas
+  │ يتجاهل assistant_final.content (لأنه فارغ)
+  ▼
+الواجهة ترسم الرد كلمة بكلمة (typing-effect)
+```
+
+### القواعد الخمس الدائمة (لا تُكسر بدون ADR)
+
+**(1) Indexed-first retrieval**: `_build_local_retrieval_response()` يجب أن يُفضِّل `matched_entry` من knowledge_index قبل اللجوء إلى wide-net search. أي تعديل يبدأ بـ wide-net مباشرة يُعيد ISS-051 فوراً.
+
+**(2) Atomic file load**: عند توفر `matched_entry`، يجب تحميل ملف واحد بالضبط (`load_exercise_content(entry)`)، لا scan على `knowledge_base/`. هذا يلغي leakage من الملفات الأخرى.
+
+**(3) Display formatting**: `format_exercise_for_display()` يجب أن يحذف:
+- YAML frontmatter (`---\n...\n---`)
+- كل قسم يبدأ بـ `## عناصر الإجابة`, `## الإجابة النموذجية`, `## الحل`, `## Solution`, `## وسوم البحث`, `## Tags`, `### الجزء I`, `### الجزء II`, `### الجزء III`
+- المُخرَج النظيف: بطاقة الامتحان + نص التمرين فقط (3 أجزاء I/II/III من الأسئلة)
+
+**(4) Streaming chunk boundaries**: التقسيم يجب أن يحافظ على سلامة LaTeX markers:
+- سطر ≤80 char: emit verbatim (يحافظ على `$$...$$` و `\\(...\\)` كاملة)
+- سطر >80 char: قطع عند الفراغات فقط (لا يكسر `e^{-x}` في منتصف token)
+- `asyncio.sleep(0.012)` بين كل قطعة لإنتاج typing-effect قابل للملاحظة بصرياً
+
+**(5) Duplicate-suppression contract** (D-047): إذا بُثَّت أي `assistant_delta`، يجب أن يكون `assistant_final.payload.content = ""`. مسار الاسترجاع الجديد يحترم هذا — لا تُرسِل `assistant_final` بمحتوى مكرر.
+
+### إضافة ملف تمرين جديد إلى `knowledge_base/`
+
+عند إضافة ملف `.md` جديد:
+
+1. أضف entry في `app/services/capabilities/knowledge_index.py:KNOWLEDGE_INDEX` مع كل الحقول (year, session, subject_number, exercise_number, branch, topics, tags).
+2. تأكد أن الملف يحوي قسم `## عناصر الإجابة` أو `### الجزء I` لتفصل بين الأسئلة والحل — وإلا `_trim_at_solution()` سيُرجِع الملف كاملاً.
+3. إذا استخدمت headers أخرى للحل (مثل `## Solutions` بالإنجليزية)، أضفها إلى `_SOLUTION_SECTION_MARKERS` في `exercise_retrieval.py`.
+4. أضف keywords للموضوع في `_TOPIC_KEYWORDS` إذا لم تكن موجودة.
+
+### النموذج الأساسي (D-049)
+
+`PRIMARY = "inclusionai/ring-2.6-1t:free"` بناءً على طلب المستخدم 2026-05-13 (التحديد النهائي بعد التراجع عن `google/gemma-4-31b-it:free` التجريبي بنفس اليوم — راجع D-049 history في `.memory/decisions.md`). متطلبات الاستمرارية:
+
+- نموذج Inclusion AI Ring 2.6 = 1T params (mixture of experts) — جودة عالية للشرح التعليمي العربي والرياضيات المتقدمة.
+- إذا كان النموذج غير متاح في OpenRouter حساب المُستخدم → الـ fallback chain (Gemini 2 Flash → Qwen Coder → KAT → Phi 3 → Llama 3.2 Vision) يحمي التشغيل.
+- التبديل السريع بدون إعادة build: `export OPENROUTER_PRIMARY_MODEL=<other>`.
+- streaming كلمة بكلمة مضمون معمارياً (D-047/D-048) بغض النظر عن قدرات النموذج المحدَّد — إذا كان النموذج يُعطي chunk واحد، الـ fallback chain سينتقل لنموذج آخر يدعم streaming حقيقي.
+
+### قياس النجاح حياً
+
+```bash
+# 1. مطابقة دقيقة لملف واحد فقط — لا leakage
+python3 -c "
+from app.services.capabilities.exercise_retrieval import detect_exercise_retrieval, ExerciseRetrievalRequest
+d = detect_exercise_retrieval(ExerciseRetrievalRequest(question='تمرين 2016 الدورة الأولى الموضوع الثاني التمرين الرابع دوال عددية'))
+print('matched:', d.matched_entry.file_path)
+"
+# المتوقع: knowledge_base/bac2016_s1_math_exp_subject2_ex4_numerical_functions.md
+
+# 2. حجم المُخرَج النظيف
+python3 -c "
+from app.services.capabilities.exercise_retrieval import format_exercise_for_display, load_exercise_content, detect_exercise_retrieval, ExerciseRetrievalRequest
+d = detect_exercise_retrieval(ExerciseRetrievalRequest(question='تمرين 2016 الدورة الأولى التمرين الرابع'))
+raw = load_exercise_content(d.matched_entry)
+out = format_exercise_for_display(d.matched_entry, raw)
+print(f'raw={len(raw)} formatted={len(out)} reduction={100-len(out)*100//len(raw)}%')
+"
+# المتوقع: raw=10884 formatted=~2913 reduction=73%
+
+# 3. streaming chunks (يجب 30-50 chunks لتمرين عادي)
+curl -N -X POST http://localhost:8000/api/chat/ws \
+  -H "Authorization: Bearer $JWT" \
+  -d '{"question":"تمرين 2016 الدورة الأولى الموضوع الثاني التمرين الرابع دوال عددية"}' \
+  | grep -c assistant_delta
+# المتوقع: > 30
+```
+

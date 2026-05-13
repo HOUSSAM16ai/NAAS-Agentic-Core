@@ -801,3 +801,39 @@
 - **Path**: `User WS → Monolith:8000/api/chat/ws → OrchestratorClient.chat_with_agent() → http://localhost:8006/api/chat/messages → StateGraph 13-node → Planning:8002 + Research:8007 + Reasoning:8008 → composed answer`.
 - **Pipeline**: `POST /compose → pipeline_mode="full" | skills_active=["planning","research","reasoning"] | duration=28.5s`.
 - **Status**: VERIFIED LIVE. Microservices answer users end-to-end.
+
+### [FIXED] ISS-051 · Wide-net knowledge retrieval leaks multiple unrelated exercises + non-streaming dump · FIXED (2026-05-13)
+- **User-visible catastrophe**: عند طلب «تمرين 2016 الدورة الأولى الموضوع الثاني التمرين الرابع» يظهر:
+  1. التمرين المطلوب (الدوال العددية 2016) — صحيح.
+  2. **بالإضافة إلى** تمرين 2024 (احتمالات) — مُلوِّث، لم يُطلب.
+  3. YAML metadata غريب (`---`, `metadata:`, `render:`...) يظهر للطالب.
+  4. عناصر الإجابة النموذجية تُكشف قبل أن يحل الطالب.
+  5. النص يصل دفعة واحدة كبيرة → لا typing-effect → الطالب ينتظر طويلاً ثم يرى كل شيء فجأة.
+  6. زمن الاستجابة كبير لأن wide-net يقرأ كل ملفات `knowledge_base/`.
+- **Root causes (5 جذرية)**:
+  1. **Wasted matched_entry**: `detect_exercise_retrieval()` يُحدِّد بدقة الملف المطابق (`bac2016_s1_math_exp_subject2_ex4_numerical_functions.md`) عبر `knowledge_index.py`، لكن `_exercise_retrieval_decision()` كان يرمي `matched_entry` ويحتفظ فقط بـ `recognized: bool`.
+  2. **Wide-net fallback**: `_build_local_retrieval_response()` كان يستدعي `search_educational_content(query=question)` بدون فلاتر — يدخل في `local_store.search_local_knowledge_base()` الذي يقرأ كل ملفات `.md` ويُرجِع كل ما يحتوي على `تمرين`/`بكالوريا` → كلا ملفي 2016 و 2024 يُحقَنان.
+  3. **No YAML stripping**: المُرجَع هو المحتوى الخام للملف بما فيه `---\nmetadata:\n...---` → يظهر للطالب كرموز ميتا غير مفيدة.
+  4. **No solution gating**: «عناصر الإجابة النموذجية» تُرسَل مع نص التمرين → الطالب يرى الحل قبل أن يحاول.
+  5. **No streaming**: المسار في `chat_with_agent` كان `yield assistant_delta { content: HUGE_STRING }` ثم `assistant_final { content: "" }` — لا typing-effect مهما كان حجم النص.
+- **Fix (D-048 — Indexed Knowledge Retrieval + Streaming Display)**:
+  - `app/services/capabilities/exercise_retrieval.py`:
+    - أُضيف `_strip_frontmatter()`, `_trim_at_solution()`, `format_exercise_for_display()`.
+    - تحذف YAML frontmatter وكل قسم يبدأ بـ `## عناصر الإجابة`/`## الحل`/`## وسوم البحث`/`### الجزء I/II/III`.
+    - النتيجة: ملف 10884 char → 2913 char (~73% noise removed).
+  - `app/infrastructure/clients/orchestrator_client.py`:
+    - أُضيف `_exercise_retrieval_full_decision()` يُرجِع `ExerciseRetrievalDecision` كاملاً مع `matched_entry`.
+    - أُعيد كتابة `_build_local_retrieval_response()` ليُفضِّل المسار المُفهرَس (`load_exercise_content(matched_entry)` + `format_exercise_for_display`) — wide-net فقط كمسار بديل.
+    - أُضيف `_stream_local_retrieval_response()` يُقسِّم على حدود الأسطر/الكلمات (~80 char) مع `asyncio.sleep(0.012)` بين كل قطعة.
+    - `chat_with_agent()` المسار رقم 2 (exercise_retrieval) أصبح streaming كامل بدل dump واحد.
+  - `app/core/ai_config.py`:
+    - `PRIMARY = "inclusionai/ring-2.6-1t:free"` — Inclusion AI Ring 2.6 (1T params MoE) بطلب المستخدم. fallback chain يحمي الاستمرارية. (تم التراجع عن gemma-4-31b التجريبي بنفس اليوم — D-049 history.)
+- **Verified**:
+  - Smoke test على ملف 2016: `10884 → 2913 char` (73% noise removed) ✅
+  - YAML stripped, solution stripped, tags stripped, all 3 parts (I/II/III) intact ✅
+  - 6/6 intent classifier scenarios pass (catastrophe query, explanation, greeting, concept, probability request) ✅
+- **What MUST NOT regress**:
+  - `_exercise_retrieval_full_decision()` must always be called inside `_build_local_retrieval_response()` — bypassing it re-introduces wide-net leakage.
+  - The streaming fallback path #2 in `chat_with_agent()` must use `_stream_local_retrieval_response()` not `_build_local_retrieval_response()` directly — otherwise typing effect breaks.
+  - `_SOLUTION_SECTION_MARKERS` must include every section start that precedes solutions (`### الجزء I`, `## عناصر الإجابة`, etc.). Adding new KB files requires extending this list if their solution headers differ.
+- **Status**: FIXED 2026-05-13 — branch `claude/fix-exercise-display-eaIQC`.

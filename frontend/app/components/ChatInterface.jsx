@@ -4,27 +4,98 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
 // ─── معالجة رموز LaTeX قبل التصيير ───────────────────────────────────────────
+// ISS-057 (D-051): قاعدة المعرفة الرسمية تستخدم \\(...\\) و \\[...\\]
+//   (شرطتان مائلتان خلفيتان) لإحاطة الرياضيات المضمَّنة. هذا اصطلاح ملف
+//   knowledge_base/ التاريخي (192 موضعاً في bac2016 وحده).
+//
+//   قبل الإصلاح: `/\\\(([^]*?)\\\)/g` يطابق `\(` (واحد) فقط فيُبقي شرطة
+//   فائضة → markdown يراها `\$` = دولار مُهرَّب → KaTeX لا يرسم → نص خام
+//   مرئي للطالب (`$g$`, `$\mathbb{R}$`).
+//
+//   بعد الإصلاح: نُطبِّع أولاً `\\\\(` → `\\(`، ثم نحوِّل `\(...\)` → `$...$`.
+//   نفعل نفس الشيء لـ `\\[...\\]` → `$$...$$` (display).
+//   يدعم: \(g\) | \\(g\\) | \[...\] | \\[...\\] | $...$ | $$...$$
 const preprocessMath = (content) => {
     if (!content) return '';
     let processed = content;
+    // 1) قبل أي تحويل: استبدل كل `\\(...\\)` بـ `\(...\)` و `\\[...\\]` بـ `\[...\]`
+    //    هذا يُطبِّع الـ double-backslash إلى single قبل أن نشتغل عليها.
+    //    نستخدم regex بحذر لتجنب اللمس بـ `\\` خارج delimiters الرياضية.
+    processed = processed.replace(/\\\\\(/g, '\\(');
+    processed = processed.replace(/\\\\\)/g, '\\)');
+    processed = processed.replace(/\\\\\[/g, '\\[');
+    processed = processed.replace(/\\\\\]/g, '\\]');
+
+    // 2) حوِّل `\[...\]` → `$$...$$` (display) و `\(...\)` → `$...$` (inline)
     processed = processed.replace(/\\\[([^]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
     processed = processed.replace(/\\\(([^]*?)\\\)/g, (_, inner) => `$${inner}$`);
     return processed;
 };
 
-// ─── ISS-056 (D-049): Typewriter Smoothing Buffer ─────────────────────────────
+// ─── ISS-056/057 (D-049/D-051): LaTeX-Aware Typewriter ─────────────────────
 // المشكلة: WebSocket frames تصل في رشقات (machine-gun). حتى مع rAF batching،
 // كل frame يعرض ~16ms من الحروف دفعة واحدة → تجربة مرئية مقطعة.
 //
-// الحل: عند streaming، نحتفظ بنص "displayed" أصغر من النص الفعلي. حلقة
-// requestAnimationFrame تكشف ~3-5 حروف لكل frame (~60fps) → ~180-300 char/sec
-// = تأثير كتابة سلس خارق. عند complete=true، نكشف الباقي فوراً.
+// مشكلة إضافية (ISS-057): الكشف حرفاً بحرف قد يكشف `$g` (بدون `$` إقفال)
+// لفترة قصيرة → ReactMarkdown يعيد render مع LaTeX غير مكتمل → flicker.
 //
-// النتيجة: بغض النظر عن كم WebSocket frame وصل، الطالب يرى الحروف تتدفق
-// بإيقاع ثابت متجانس.
+// الحل المتقدم:
+// 1. عند streaming → كشف بإيقاع ~60fps (~240 char/sec)
+// 2. عند الوصول لبداية LaTeX block (`$`, `$$`, `\(`, `\[`) → كشف الـ block
+//    كاملاً ذرياً (atomic) في نفس frame → لا flicker
+// 3. عند backlog > 800 char → تسارع
+// 4. عند `isStreaming=false` → كشف فوري للباقي
 // ─────────────────────────────────────────────────────────────────────────────
-const TYPEWRITER_CHARS_PER_FRAME = 4;   // ~240 char/sec @60fps — سلس بدون بطء
-const TYPEWRITER_INSTANT_THRESHOLD = 800; // إذا كان buffer > 800 char ادفع 12/frame
+const TYPEWRITER_CHARS_PER_FRAME = 4;
+const TYPEWRITER_INSTANT_THRESHOLD = 800;
+
+/**
+ * يحدد طول الـ token الذرّي ابتداءً من index في النص.
+ *
+ * - LaTeX display `$$...$$` → يُكشف كاملاً
+ * - LaTeX inline `$...$` → يُكشف كاملاً
+ * - LaTeX delimiters `\(...\)` / `\[...\]` (و الـ double-backslash) → يُكشف كاملاً
+ * - عادي → 1 char
+ *
+ * @param {string} text  النص الكامل
+ * @param {number} start المؤشر الذي ينطلق منه
+ * @returns {number}     عدد الحروف التي يجب كشفها معاً (>=1)
+ */
+const atomicTokenLength = (text, start) => {
+    if (start >= text.length) return 0;
+    const slice = text.slice(start);
+
+    // $$...$$
+    if (slice.startsWith('$$')) {
+        const end = slice.indexOf('$$', 2);
+        if (end !== -1) return end + 2;
+    }
+    // $...$  (سطر واحد — لا newlines داخله)
+    if (slice.startsWith('$') && !slice.startsWith('$$')) {
+        const newline = slice.indexOf('\n');
+        const end = slice.indexOf('$', 1);
+        if (end !== -1 && (newline === -1 || end < newline)) return end + 1;
+    }
+    // \[...\] أو \\[...\\] (display)
+    if (slice.startsWith('\\[')) {
+        const end = slice.indexOf('\\]', 2);
+        if (end !== -1) return end + 2;
+    }
+    if (slice.startsWith('\\\\[')) {
+        const end = slice.indexOf('\\\\]', 3);
+        if (end !== -1) return end + 3;
+    }
+    // \(...\) أو \\(...\\) (inline)
+    if (slice.startsWith('\\(')) {
+        const end = slice.indexOf('\\)', 2);
+        if (end !== -1) return end + 2;
+    }
+    if (slice.startsWith('\\\\(')) {
+        const end = slice.indexOf('\\\\)', 3);
+        if (end !== -1) return end + 3;
+    }
+    return 1;
+};
 
 const useTypewriter = (fullContent, isStreaming) => {
     const [displayed, setDisplayed] = useState(fullContent || '');
@@ -33,7 +104,6 @@ const useTypewriter = (fullContent, isStreaming) => {
     useEffect(() => {
         const safeFull = fullContent || '';
 
-        // عند انتهاء streaming → اعرض كل المحتوى فوراً (لا تأخير زائف)
         if (!isStreaming) {
             if (rafIdRef.current !== null) {
                 cancelAnimationFrame(rafIdRef.current);
@@ -43,7 +113,6 @@ const useTypewriter = (fullContent, isStreaming) => {
             return;
         }
 
-        // عند streaming: ادفع الحروف بإيقاع ثابت
         const tick = () => {
             setDisplayed((prev) => {
                 if (prev.length >= safeFull.length) {
@@ -51,11 +120,31 @@ const useTypewriter = (fullContent, isStreaming) => {
                     return prev;
                 }
                 const remaining = safeFull.length - prev.length;
-                // تسارع إذا كان الـ backlog كبير لمنع التأخر عن البث الحقيقي
-                const step = remaining > TYPEWRITER_INSTANT_THRESHOLD
+                const accel = remaining > TYPEWRITER_INSTANT_THRESHOLD
                     ? Math.max(TYPEWRITER_CHARS_PER_FRAME * 3, Math.ceil(remaining / 30))
                     : TYPEWRITER_CHARS_PER_FRAME;
-                const next = prev + safeFull.slice(prev.length, prev.length + step);
+
+                // كشف ذرّي لـ LaTeX blocks بحيث لا يُعرض `$g` بدون `$` إقفال أبداً
+                let cursor = prev.length;
+                let revealed = 0;
+                while (revealed < accel && cursor < safeFull.length) {
+                    const tokenLen = atomicTokenLength(safeFull, cursor);
+                    // إذا كان LaTeX block غير مكتمل بعد في الـ buffer (مثل `$g` فقط)،
+                    // ننتظر القطعة التالية بدل كشف نصف delimiter
+                    if (tokenLen === 0) break;
+                    const nextCursor = cursor + tokenLen;
+                    // إذا الـ token الذرّي طويل وفائض عن الـ buffer الفعلي → توقَّف
+                    if (nextCursor > safeFull.length) break;
+                    cursor = nextCursor;
+                    revealed += tokenLen;
+                }
+
+                // ضمان تقدم 1 حرف على الأقل (نص عادي) لتجنب التجمد
+                if (cursor === prev.length && cursor < safeFull.length) {
+                    cursor = prev.length + 1;
+                }
+
+                const next = safeFull.slice(0, cursor);
                 if (next.length < safeFull.length) {
                     rafIdRef.current = requestAnimationFrame(tick);
                 } else {

@@ -275,10 +275,24 @@ class OrchestratorClient:
         import re as _re
 
         _LATEX_BLOCK_RE = _re.compile(r'\$\$[^$]*?\$\$', _re.DOTALL)
-        _LATEX_INLINE_RE = _re.compile(r'\$[^$\n]+?\$')
+        # ISS-057 (D-051): يحفظ أربع صيغ من LaTeX inline كـ token واحد:
+        #   $...$ | \(...\) | \\(...\\) | حتى عبر كلمات بدون فراغ
+        # تطابق بالترتيب: $$ أولاً (في حالة عابر سطر)، ثم $، ثم \\(...\\)، ثم \(...\)
+        _LATEX_INLINE_RE = _re.compile(
+            r'\$\$[^$\n]+?\$\$'         # $$inline$$ نادر لكن ممكن
+            r'|\$[^$\n]+?\$'            # $inline$
+            r'|\\\\\([^\n]+?\\\\\)'     # \\(inline\\)  — الصيغة في knowledge_base
+            r'|\\\([^\n]+?\\\)'         # \(inline\)
+        )
 
         def _split_preserving_latex(line: str) -> list[str]:
-            """يُقسِّم السطر إلى tokens مع الحفاظ على وحدة رموز LaTeX."""
+            """يُقسِّم السطر إلى tokens مع الحفاظ على وحدة رموز LaTeX.
+
+            ISS-057: يدعم كل صيغ inline math الموجودة في `knowledge_base/`:
+            `$...$`, `\\(...\\)`, و `\\\\(...\\\\)` (double-backslash التاريخية).
+            بهذا، الـ frontend يستقبل LaTeX block كـ chunk كامل ولا يُكشف نصف
+            delimiter للطالب.
+            """
             tokens: list[str] = []
             pos = 0
             for m in _LATEX_INLINE_RE.finditer(line):

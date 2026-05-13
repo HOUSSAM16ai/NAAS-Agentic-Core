@@ -24,8 +24,11 @@ from app.core.http_client_factory import HTTPClientConfig, get_http_client
 from app.core.settings.base import get_settings
 from app.infrastructure.clients.routing_policy import ChatRoutingPolicy
 from app.services.capabilities.exercise_retrieval import (
+    ExerciseRetrievalDecision,
     ExerciseRetrievalRequest,
     detect_exercise_retrieval,
+    format_exercise_for_display,
+    load_exercise_content,
 )
 from app.services.capabilities.exercise_retrieval import (
     make_result as make_exercise_result,
@@ -86,6 +89,14 @@ class OrchestratorClient:
         decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
         return decision.recognized
 
+    def _exercise_retrieval_full_decision(self, question: str) -> ExerciseRetrievalDecision:
+        """نسخة كاملة من القرار تُرجِع matched_entry لاستخدامه في الاسترجاع المُفهرَس.
+
+        ISS-051: قبل هذا الإصلاح كنا نرمي matched_entry ونستدعي wide-net search
+        الذي يقرأ كل ملفات knowledge_base/ فيُعيد أكثر من تمرين دفعة واحدة.
+        """
+        return detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+
     async def _execute_shell_tool(
         self,
         command: str,
@@ -131,10 +142,31 @@ class OrchestratorClient:
         return result.message
 
     async def _build_local_retrieval_response(self, question: str) -> str | None:
-        """ينفذ استرجاعاً محلياً للمعرفة التعليمية عند تعطل service control plane."""
-        if not self._exercise_retrieval_decision(question):
+        """
+        ينفذ استرجاعاً محلياً للمعرفة التعليمية عند تعطل service control plane.
+
+        ISS-051 (D-048 — Indexed Knowledge Retrieval):
+        المسار المُفضَّل: استخدام matched_entry من knowledge_index.py لجلب ملف
+        واحد بالضبط وتنسيقه كبطاقة امتحان نظيفة (بدون YAML، بدون حل).
+
+        المسار البديل: عند فشل المطابقة المُفهرَسة (entry غير موجود في الفهرس)،
+        نلجأ إلى wide-net search كما في النسخة القديمة — لكنه نادر الآن
+        لأن detect_exercise_retrieval يستخرج matched_entry بنفسه.
+        """
+        decision = self._exercise_retrieval_full_decision(question)
+        if not decision.recognized:
             return None
 
+        # المسار المُفضَّل — مطابقة مُفهرَسة دقيقة (ملف واحد، نص نظيف)
+        if decision.matched_entry is not None:
+            try:
+                raw_content = load_exercise_content(decision.matched_entry)
+                if raw_content:
+                    return format_exercise_for_display(decision.matched_entry, raw_content)
+            except Exception:
+                logger.warning("indexed_retrieval_failed", exc_info=True)
+
+        # المسار البديل — wide-net search (legacy)
         try:
             from app.services.chat.tools.retrieval.service import search_educational_content
 
@@ -144,6 +176,57 @@ class OrchestratorClient:
         except Exception:
             logger.warning("local_retrieval_fallback_failed", exc_info=True)
             return None
+
+    async def _stream_local_retrieval_response(
+        self,
+        question: str,
+    ) -> AsyncGenerator[str, None]:
+        """
+        نسخة انسيابية من ``_build_local_retrieval_response`` — تبث المحتوى
+        المسترجَع كلمة بكلمة لإنشاء typing-effect بدل dump واحد كبير.
+
+        D-048: المحتوى المُسترجَع ثابت (ليس LLM streaming حقيقي)، لكننا نُقسّمه
+        إلى أسطر/فقرات صغيرة ونُغذّيها واحدة تلو الأخرى مع تأخيرات صغيرة
+        ليظهر للطالب كأنه يُكتب فوراً أمام عينيه.
+
+        إذا أصدر المولِّد صفر قطعة → fallback chain يتقدم للخطوة التالية.
+        """
+        import asyncio
+
+        full_response = await self._build_local_retrieval_response(question)
+        if not full_response:
+            return
+
+        try:
+            from app.telemetry.path_observer import mark_fallback_used
+
+            mark_fallback_used("local_retrieval_stream")
+        except Exception:
+            pass
+
+        # نُقسِّم على حدود الكلمات/الفقرات لتجنب كسر LaTeX markers (\\(, $$, ...)
+        # الاستراتيجية: نُرسل سطراً سطراً، وإذا كان السطر طويلاً نُقسِّمه إلى
+        # قطع ~80 حرفاً عند مسافات الكلمات (لا داخل tokens رياضية).
+        lines = full_response.splitlines(keepends=True)
+        for line in lines:
+            if len(line) <= 80:
+                yield line
+                await asyncio.sleep(0.012)
+                continue
+            # سطر طويل — نُقسِّمه عند الفراغات
+            buffer = ""
+            for token in line.split(" "):
+                candidate = f"{buffer}{token} " if buffer else f"{token} "
+                if len(candidate) > 60:
+                    if buffer:
+                        yield buffer
+                        await asyncio.sleep(0.010)
+                    buffer = f"{token} "
+                else:
+                    buffer = candidate
+            if buffer:
+                yield buffer
+                await asyncio.sleep(0.010)
 
     @staticmethod
     def _format_history_for_prompt(history_messages: list[dict[str, str]]) -> str:
@@ -718,25 +801,46 @@ class OrchestratorClient:
                 )
                 return
 
+            # ── Exercise retrieval — STREAMING path (D-048) ──
+            # يبث محتوى التمرين المُسترجَع كلمة بكلمة بدل dump واحد كبير.
+            # ISS-051: المسار القديم كان يُرسل النص الكامل في assistant_delta
+            # واحد → لا typing-effect. الآن نُقسّم على حدود الأسطر/الكلمات.
             _ret_t0 = time.perf_counter()
             _ret_ctx = None
             with contextlib.suppress(Exception):
                 _ret_ctx = obs.start_trace(
-                    "orchestrator.fallback.exercise_retrieval",
+                    "orchestrator.fallback.exercise_retrieval.stream",
                     parent_context=_root_ctx,
-                    tags={"fallback_step": "exercise_retrieval"},
+                    tags={"fallback_step": "exercise_retrieval_stream"},
                 )
-            local_retrieval_response = await self._build_local_retrieval_response(question)
+            ret_streamed_any = False
+            ret_streamed_chars = 0
+            try:
+                async for chunk in self._stream_local_retrieval_response(question):
+                    if not chunk:
+                        continue
+                    ret_streamed_any = True
+                    ret_streamed_chars += len(chunk)
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_delta", "payload": {"content": chunk}}
+                    )
+            except Exception:
+                logger.warning("local_retrieval_stream_yield_failed", exc_info=True)
+
             try:
                 if _ret_ctx:
                     obs.end_span(
                         _ret_ctx.span_id,
-                        status="OK" if local_retrieval_response else "SKIP",
-                        metrics={"duration_ms": (time.perf_counter() - _ret_t0) * 1000},
+                        status="OK" if ret_streamed_any else "SKIP",
+                        metrics={
+                            "duration_ms": (time.perf_counter() - _ret_t0) * 1000,
+                            "stream_chars": float(ret_streamed_chars),
+                        },
                     )
             except Exception:
                 pass
-            if local_retrieval_response:
+
+            if ret_streamed_any:
                 if _root_ctx:
                     with contextlib.suppress(Exception):
                         obs.end_span(
@@ -745,11 +849,9 @@ class OrchestratorClient:
                             metrics={
                                 "duration_ms": (time.perf_counter() - _t0) * 1000,
                                 "fallback_path": 2.0,
+                                "stream_chars": float(ret_streamed_chars),
                             },
                         )
-                yield self._normalize_stream_event(
-                    {"type": "assistant_delta", "payload": {"content": local_retrieval_response}}
-                )
                 yield self._normalize_stream_event(
                     {"type": "assistant_final", "payload": {"content": ""}}
                 )

@@ -631,3 +631,66 @@ debugging misclassifications. Backward-compatible: callers only read `.recognize
 - API contract findings يجب أن تبقى موثقة حتى يتم إصلاحها.
 - حالة `pipeline_mode=fallback` يجب أن تُعرض كـ PARTIAL وليس ACTIVE في truth table.
 **Status**: DOCUMENTED 2026-05-11 — branch `feat/live-runtime-audit-d043`.
+
+## D-048 · Indexed Knowledge Retrieval + Streaming Exercise Display (2026-05-13)
+**Decision**: استرجاع التمارين التعليمية يجب أن يكون **مُفهرَساً وذرياً وبثياً**:
+1. **Indexed**: استخدام `matched_entry` من `knowledge_index.py` لجلب ملف واحد بالضبط، لا wide-net search على كل `knowledge_base/*.md`.
+2. **Atomic**: تنسيق العرض يحذف YAML frontmatter + قسم الحل + الوسوم — يبقى فقط نص التمرين (بطاقة + 3 أجزاء).
+3. **Streaming**: المحتوى يُبَث كلمة بكلمة عبر `assistant_delta` متتابعة (typing-effect) بدل dump واحد كبير.
+
+**Reason**: قبل هذا القرار، استرجاع تمرين 2016 الدوال العددية كان يُرجِع:
+- ملفي 2016 + 2024 معاً (wide-net leakage)
+- YAML metadata غريب يظهر للطالب
+- الحل النموذجي يُكشف قبل أن يحل الطالب
+- النص كله يصل دفعة واحدة (لا typing-effect)
+
+**Architecture**:
+```
+detect_exercise_retrieval(question)
+  → ExerciseRetrievalDecision(recognized, matched_entry, reason)
+  → if matched_entry:
+      load_exercise_content(entry)
+      → format_exercise_for_display(entry, raw_content)
+        → strip YAML frontmatter
+        → trim at first solution/tags marker
+        → return clean Q-only text
+  → if NOT matched_entry: legacy wide-net fallback (rare)
+  → _stream_local_retrieval_response:
+      → split on \n boundaries → preserve LaTeX markers
+      → for line > 80 chars: split on spaces
+      → yield with asyncio.sleep(0.012) for typing-effect
+```
+
+**New artifacts**:
+- `app/services/capabilities/exercise_retrieval.py`:
+  - `_strip_frontmatter(content) -> str`
+  - `_trim_at_solution(content) -> str`
+  - `format_exercise_for_display(entry, raw_content) -> str`
+  - `_SOLUTION_SECTION_MARKERS` tuple — list of section starts that end the exercise text.
+- `app/infrastructure/clients/orchestrator_client.py`:
+  - `_exercise_retrieval_full_decision(question) -> ExerciseRetrievalDecision`
+  - `_stream_local_retrieval_response(question) -> AsyncGenerator[str, None]`
+
+**What MUST NOT change without an ADR**:
+- The indexed-first path inside `_build_local_retrieval_response()` — wide-net is fallback only.
+- `_SOLUTION_SECTION_MARKERS` must cover ALL solution headers in `knowledge_base/`. New KB files require auditing this list.
+- The streaming fallback path #2 in `chat_with_agent()` must call `_stream_local_retrieval_response()` not the non-streaming variant — otherwise typing-effect contract (D-047) breaks for retrieval queries.
+- `ExerciseRetrievalDecision.matched_entry` is the single source of truth for which file to read. Re-introducing wide-net code paths without first checking `matched_entry is None` re-introduces ISS-051.
+
+**Streaming chunk size invariants**:
+- ≤80 chars: emit line verbatim (preserves `$$...$$` and `\\(...\\)` markers atomically).
+- >80 chars: split on spaces, never inside a token (no risk of breaking `e^{-x}` mid-token).
+
+**Status**: IMPLEMENTED 2026-05-13 — branch `claude/fix-exercise-display-eaIQC`.
+
+## D-049 · Primary Model Switch to google/gemma-4-31b-it:free (2026-05-13)
+**Decision**: النموذج الأساسي تحوّل من `liquid/lfm-2.5-1.2b-instruct:free` إلى `google/gemma-4-31b-it:free` بطلب المستخدم.
+**Reason**: المستخدم يعتقد أن جودة عربية أعلى مطلوبة لتمارين البكالوريا والشرح التعليمي. النموذج الأصغر (1.2B) كان يُعطي إجابات سطحية أحياناً، خاصة في الرياضيات المتقدمة.
+**Risk**: `google/gemma-4-31b-it:free` قد لا يكون متاحاً على OpenRouter حساب المستخدم (Gemma 4 31B unverified availability كما في 2026-05-13). الـ fallback chain الخمسية تحمي الاستمرارية (Gemini 2 Flash → Qwen Coder → KAT → Phi 3 → Llama 3.2 Vision).
+**Override**: المستخدم يمكنه تبديل سريع عبر `export OPENROUTER_PRIMARY_MODEL=<other>` بدون إعادة بناء.
+**Streaming guarantee**: إذا كان النموذج لا يدعم token-level streaming حقيقي، الـ fallback إلى نموذج آخر سيُعيد البث الكلمة-بالكلمة (D-047 + D-048 ضمانة معمارية، ليست خاصية نموذج معين).
+**What MUST NOT change without ADR**:
+- إذا أراد فريق العمليات تغيير الافتراضي، يجب توثيق السبب هنا (D-050+).
+- لا تَحذف `_resolve_primary_model()` — هي بوابة الـ env override.
+- لا تُعدِّل ترتيب الـ fallback chain إلا بعد تجربة كل نموذج على streaming حقيقي.
+**Status**: IMPLEMENTED 2026-05-13 — branch `claude/fix-exercise-display-eaIQC`.

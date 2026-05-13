@@ -343,6 +343,82 @@ def load_exercise_content(entry: ExerciseEntry) -> str | None:
     return file_path.read_text(encoding="utf-8")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# عرض التمرين بشكل نظيف للطالب (D-048)
+#
+# قبل ISS-051: الاسترجاع كان يُرجع كامل محتوى الملف (YAML + نص التمرين +
+# عناصر الإجابة النموذجية) مما يُسبب فوضى بصرية وكشف الحلول قبل الأوان.
+#
+# بعد ISS-051: نُخرج فقط بطاقة الامتحان + نص التمرين، ونحذف:
+#   1. YAML frontmatter
+#   2. كل ما يلي "عناصر الإجابة" أو "الحل" أو "Solution"
+#   3. وسوم البحث في نهاية الملف
+# ─────────────────────────────────────────────────────────────────────────────
+
+_FRONTMATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n", re.DOTALL)
+
+# قواطع نهاية نص التمرين — أي قسم يبدأ بأحد هذه العناوين يُحذف وما بعده
+_SOLUTION_SECTION_MARKERS: tuple[str, ...] = (
+    "## عناصر الإجابة",
+    "## الإجابة النموذجية",
+    "## الحل",
+    "## الإجابة",
+    "## شرح الحل",
+    "## Solution",
+    "## Model Answer",
+    "## Answer",
+    "## وسوم البحث",
+    "## Tags",
+    "### الجزء I",  # بداية الشرح المفصَّل
+    "### الجزء II",
+    "### الجزء III",
+)
+
+
+def _strip_frontmatter(content: str) -> str:
+    """يحذف YAML frontmatter من بداية ملف markdown."""
+    return _FRONTMATTER_RE.sub("", content, count=1).lstrip()
+
+
+def _trim_at_solution(content: str) -> str:
+    """يقطع المحتوى عند أول قسم يحوي عناصر الإجابة/الحل/الوسوم."""
+    cut_index: int | None = None
+    for marker in _SOLUTION_SECTION_MARKERS:
+        idx = content.find(marker)
+        if idx == -1:
+            continue
+        if cut_index is None or idx < cut_index:
+            cut_index = idx
+    if cut_index is None:
+        return content.rstrip()
+    return content[:cut_index].rstrip()
+
+
+def format_exercise_for_display(entry: ExerciseEntry, raw_content: str) -> str:
+    """
+    يُهيِّئ محتوى التمرين لعرض نظيف للطالب — فقط نص التمرين، بدون YAML أو حل.
+
+    يحل ISS-051:
+      - YAML frontmatter يظهر للطالب
+      - عناصر الإجابة النموذجية تُكشف قبل أن يحل الطالب
+      - وسوم البحث في الأسفل
+      - أكثر من تمرين يظهر في رد واحد (لأن الـ wide-net retrieval كان يقرأ كل
+        ملفات .md؛ الآن نقرأ ملفاً واحداً مطابقاً بالضبط)
+
+    Args:
+        entry: السجل المطابق من knowledge_index.
+        raw_content: محتوى الملف الخام (مع YAML + الحل).
+
+    Returns:
+        محتوى نظيف يحوي: عنوان + بطاقة الامتحان + نص التمرين فقط.
+    """
+    if not raw_content:
+        return ""
+    no_frontmatter = _strip_frontmatter(raw_content)
+    questions_only = _trim_at_solution(no_frontmatter)
+    return questions_only.strip()
+
+
 def make_result(raw_result: str | None, entry: ExerciseEntry | None = None) -> ExerciseRetrievalResult:
     """يحوّل النتيجة الخام إلى عقد موحد دون كسر السلوك التاريخي."""
     if raw_result is None or not raw_result.strip():

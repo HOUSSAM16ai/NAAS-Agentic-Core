@@ -62,7 +62,7 @@ class AvailableModels:
     """
 
     GPT_4O = "openai/gpt-4o"
-    GPT_4O_MINI = "openai/gpt-4o-mini"
+    GPT_4O_MINI = "z-ai/glm-4.5-air:free"
     GPT_4_TURBO = "openai/gpt-4-turbo"
     GPT_4 = "openai/gpt-4"
     GPT_35_TURBO = "openai/gpt-3.5-turbo"
@@ -80,11 +80,11 @@ class AvailableModels:
     PHI_3_MINI_FREE = "microsoft/phi-3-mini-128k-instruct:free"
     KAT_CODER_PRO_FREE = "kwaipilot/kat-coder-pro:free"
     QWEN_QWEN3_CODER_FREE = "qwen/qwen3-coder:free"
-    NEMOTRON_3_SUPER_120B_FREE = "nvidia/nemotron-3-super-120b-a12b:free"
+    NEMOTRON_3_SUPER_120B_FREE = "z-ai/glm-4.5-air:free"
     DEVSTRAL_2512 = "mistralai/devstral-2512:free"
     GLM_4_5_AIR_FREE = "z-ai/glm-4.5-air:free"
     DEEPSEEK_R1_CHIMERA_FREE = "tngtech/deepseek-r1t2-chimera:free"
-    NEMOTRON_3_NANO = "nvidia/nemotron-3-nano-30b-a3b:free"
+    NEMOTRON_3_NANO = "z-ai/glm-4.5-air:free"
 
 
 class ActiveModels:
@@ -106,9 +106,9 @@ class ActiveModels:
     ╚═══════════════════════════════════════════════════════════════════════════════════╝
     """
 
-    # ISS-STREAM-002: deepseek/deepseek-chat يدعم token-level streaming حقيقي (47 chunks/response)
+    # ISS-STREAM-002: z-ai/glm-4.5-air:free كنموذج أساسي موحَّد عبر النظام
     # nemotron-3-super-120b-a12b:free كان يُعيد chunk واحد فقط → لا typing effect
-    PRIMARY = _resolve_primary_model("deepseek/deepseek-chat")
+    PRIMARY = _resolve_primary_model("z-ai/glm-4.5-air:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
     GATEWAY_FALLBACK_1 = AvailableModels.GEMINI_2_FLASH_EXP_FREE

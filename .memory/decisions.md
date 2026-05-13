@@ -683,12 +683,16 @@ detect_exercise_retrieval(question)
 
 **Status**: IMPLEMENTED 2026-05-13 — branch `claude/fix-exercise-display-eaIQC`.
 
-## D-049 · Primary Model Switch to google/gemma-4-31b-it:free (2026-05-13)
-**Decision**: النموذج الأساسي تحوّل من `liquid/lfm-2.5-1.2b-instruct:free` إلى `google/gemma-4-31b-it:free` بطلب المستخدم.
-**Reason**: المستخدم يعتقد أن جودة عربية أعلى مطلوبة لتمارين البكالوريا والشرح التعليمي. النموذج الأصغر (1.2B) كان يُعطي إجابات سطحية أحياناً، خاصة في الرياضيات المتقدمة.
-**Risk**: `google/gemma-4-31b-it:free` قد لا يكون متاحاً على OpenRouter حساب المستخدم (Gemma 4 31B unverified availability كما في 2026-05-13). الـ fallback chain الخمسية تحمي الاستمرارية (Gemini 2 Flash → Qwen Coder → KAT → Phi 3 → Llama 3.2 Vision).
-**Override**: المستخدم يمكنه تبديل سريع عبر `export OPENROUTER_PRIMARY_MODEL=<other>` بدون إعادة بناء.
-**Streaming guarantee**: إذا كان النموذج لا يدعم token-level streaming حقيقي، الـ fallback إلى نموذج آخر سيُعيد البث الكلمة-بالكلمة (D-047 + D-048 ضمانة معمارية، ليست خاصية نموذج معين).
+## D-049 · Primary Model Switch to inclusionai/ring-2.6-1t:free (2026-05-13, superseded gemma-4-31b)
+**Decision**: النموذج الأساسي = `inclusionai/ring-2.6-1t:free` (Inclusion AI Ring 2.6, 1T params MoE).
+**History (نفس اليوم)**:
+1. كان `liquid/lfm-2.5-1.2b-instruct:free` — نموذج صغير، إجابات سطحية في الرياضيات.
+2. تجربة `google/gemma-4-31b-it:free` — تم التراجع عنها بنفس اليوم.
+3. الاختيار النهائي `inclusionai/ring-2.6-1t:free` — بطلب المستخدم.
+**Reason**: نموذج 1T params (mixture of experts) يُعطي جودة عالية للشرح التعليمي العربي والرياضيات المتقدمة، مع إتاحته مجاناً على OpenRouter.
+**Risk**: توفّر النموذج لم يُتحقَّق منه حياً من السandbox (لا اتصال خارجي). الـ fallback chain الخمسية تحمي الاستمرارية إذا 404'd: Gemini 2 Flash → Qwen Coder → KAT → Phi 3 → Llama 3.2 Vision.
+**Override**: تبديل سريع عبر `export OPENROUTER_PRIMARY_MODEL=<other>` بدون إعادة بناء.
+**Streaming guarantee**: إذا كان النموذج لا يدعم token-level streaming حقيقي، الـ fallback chain ينتقل لنموذج يدعمه (D-047 + D-048 ضمانة معمارية، ليست خاصية نموذج معين).
 **What MUST NOT change without ADR**:
 - إذا أراد فريق العمليات تغيير الافتراضي، يجب توثيق السبب هنا (D-050+).
 - لا تَحذف `_resolve_primary_model()` — هي بوابة الـ env override.

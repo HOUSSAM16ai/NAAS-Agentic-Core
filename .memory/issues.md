@@ -827,7 +827,7 @@
     - أُضيف `_stream_local_retrieval_response()` يُقسِّم على حدود الأسطر/الكلمات (~80 char) مع `asyncio.sleep(0.012)` بين كل قطعة.
     - `chat_with_agent()` المسار رقم 2 (exercise_retrieval) أصبح streaming كامل بدل dump واحد.
   - `app/core/ai_config.py`:
-    - `PRIMARY = "google/gemma-4-31b-it:free"` — جودة عربية أعلى بطلب المستخدم. fallback chain يحمي الاستمرارية.
+    - `PRIMARY = "inclusionai/ring-2.6-1t:free"` — Inclusion AI Ring 2.6 (1T params MoE) بطلب المستخدم. fallback chain يحمي الاستمرارية. (تم التراجع عن gemma-4-31b التجريبي بنفس اليوم — D-049 history.)
 - **Verified**:
   - Smoke test على ملف 2016: `10884 → 2913 char` (73% noise removed) ✅
   - YAML stripped, solution stripped, tags stripped, all 3 parts (I/II/III) intact ✅

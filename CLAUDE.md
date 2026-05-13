@@ -2805,8 +2805,9 @@ useAgentSocket.mergeAssistantContent
 
 ### النموذج الأساسي (D-049)
 
-`PRIMARY = "google/gemma-4-31b-it:free"` بناءً على طلب المستخدم 2026-05-13. متطلبات الاستمرارية:
+`PRIMARY = "inclusionai/ring-2.6-1t:free"` بناءً على طلب المستخدم 2026-05-13 (التحديد النهائي بعد التراجع عن `google/gemma-4-31b-it:free` التجريبي بنفس اليوم — راجع D-049 history في `.memory/decisions.md`). متطلبات الاستمرارية:
 
+- نموذج Inclusion AI Ring 2.6 = 1T params (mixture of experts) — جودة عالية للشرح التعليمي العربي والرياضيات المتقدمة.
 - إذا كان النموذج غير متاح في OpenRouter حساب المُستخدم → الـ fallback chain (Gemini 2 Flash → Qwen Coder → KAT → Phi 3 → Llama 3.2 Vision) يحمي التشغيل.
 - التبديل السريع بدون إعادة build: `export OPENROUTER_PRIMARY_MODEL=<other>`.
 - streaming كلمة بكلمة مضمون معمارياً (D-047/D-048) بغض النظر عن قدرات النموذج المحدَّد — إذا كان النموذج يُعطي chunk واحد، الـ fallback chain سينتقل لنموذج آخر يدعم streaming حقيقي.

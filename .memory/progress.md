@@ -1,5 +1,49 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-11 | Branch: `feat/microservices-user-routing-d045`
+> Last updated: 2026-05-13 | Branch: `feat/bac2016-numerical-functions-skill`
+
+---
+
+## ✅ Session: 2026-05-13 — BAC 2016 Numerical Functions + Knowledge Index Overhaul
+
+**Branch**: `feat/bac2016-numerical-functions-skill`
+**Goal**: إضافة تمرين الدوال العددية 2016 الدورة الأولى + إصلاح نظام استدعاء التمارين
+
+### ما تم إنجازه
+
+#### 1. ملف تمرين الدوال العددية 2016 الدورة الأولى
+- **الملف**: `knowledge_base/bac2016_s1_math_exp_subject2_ex4_numerical_functions.md`
+- **المحتوى**: نص التمرين الكامل + الإجابة النموذجية المفصلة خطوة بخطوة
+- **الإجابة النموذجية** تشمل: النهايات، جداول التغيرات، إثبات f'(x)=-g(x)، نقطتا الانعطاف، المستقيم المقارب، التكامل، حساب A(λ)
+- **ملاحظة تاريخية**: 2016 هي السنة الوحيدة بدورتين في تاريخ بكالوريا الجزائر
+
+#### 2. فهرس قاعدة المعرفة المركزي
+- **الملف الجديد**: `app/services/capabilities/knowledge_index.py`
+- **المبدأ**: Data as Code — كل تمرين له سجل بيانات تصريحي (سنة + دورة + موضوع + رقم + موضوع رياضي + وسوم)
+- **الدوال**: `search_exercises()` (بحث متعدد المعايير) + `find_best_match()` (بحث بالوسوم)
+
+#### 3. إصلاح exercise_retrieval.py
+- **إضافة**: استيراد `knowledge_index` + استخراج المعايير من النص (سنة، دورة، موضوع، رقم التمرين)
+- **إضافة**: `_find_matching_entry()` — يبحث في الفهرس بدلاً من إرجاع ملف ثابت
+- **إضافة**: `load_exercise_content()` — يحمِّل محتوى الملف المحدد
+- **إضافة**: أنماط جديدة: دوال عددية، أعداد مركبة، الدورة الأولى/الثانية، التمرين الرابع
+
+#### 4. مهارة شرح تمارين البكالوريا
+- **الملف الجديد**: `docs/ai_skills/bac-exercise-explanation.md`
+- **يغطي**: قاعدة 2016 الاستثنائية، فهرس التمارين، منهجية الشرح، قواعد LaTeX، نموذج الرد المثالي
+
+#### 5. تحديث AGENTS.md
+- **إضافة**: trigger rule جديد لـ `bac-exercise-explanation.md`
+- **إضافة**: سجل المهارة في Skill Index
+
+### Files Changed
+- `knowledge_base/bac2016_s1_math_exp_subject2_ex4_numerical_functions.md` — جديد
+- `app/services/capabilities/knowledge_index.py` — جديد
+- `app/services/capabilities/exercise_retrieval.py` — محدَّث
+- `docs/ai_skills/bac-exercise-explanation.md` — جديد
+- `AGENTS.md` — محدَّث (skill trigger + index)
+- `.memory/progress.md` — هذا الملف
+
+---
 
 ---
 

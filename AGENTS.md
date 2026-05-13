@@ -237,6 +237,7 @@ Load the corresponding skill file **before generating any code** in that domain.
 | UI component or CSS work | `web-design-guidelines.md` |
 | Any file under `microservices/orchestrator_service/`, `microservices/planning_agent/`, or `microservices/reasoning_agent/` | `langgraph-agent-patterns.md` |
 | Any microservice health failure, pipeline_mode≠full, Prometheus target DOWN, or supervisor.sh issue | `microservices-live-verification.md` |
+| Any BAC exercise explanation, knowledge_base/ file, exercise_retrieval.py, or student math question | `bac-exercise-explanation.md` |
 
 ### Skill Index
 
@@ -250,6 +251,7 @@ Load the corresponding skill file **before generating any code** in that domain.
 | `crafting-effective-readmes.md` | Documentation | README standards |
 | `langgraph-agent-patterns.md` | Agent Graphs (LangGraph) | `AgentState`, nodes, routing, checkpointer, conversation graph |
 | `microservices-live-verification.md` | Microservices Ops | Live health checks, ISS-040/046 fixes, full restart sequence |
+| `bac-exercise-explanation.md` | BAC Education | Exercise retrieval, model answer explanation, 2016 dual-session rule, LaTeX math rendering |
 
 ---
 

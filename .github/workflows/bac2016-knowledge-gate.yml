@@ -1,0 +1,307 @@
+name: BAC 2016 Knowledge Gate
+
+on:
+  push:
+    branches: ["feat/bac2016-numerical-functions-skill", "main"]
+    paths:
+      - "knowledge_base/**"
+      - "app/services/capabilities/exercise_retrieval.py"
+      - "app/services/capabilities/knowledge_index.py"
+      - "docs/ai_skills/bac-exercise-explanation.md"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "knowledge_base/**"
+      - "app/services/capabilities/exercise_retrieval.py"
+      - "app/services/capabilities/knowledge_index.py"
+      - "docs/ai_skills/bac-exercise-explanation.md"
+
+jobs:
+  # ─── Job 1: Knowledge Index Integrity ────────────────────────────────────
+  knowledge-index-integrity:
+    name: Knowledge Index Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install pydantic>=2.0
+
+      - name: Verify knowledge index loads correctly
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+
+          # Minimal stubs for CI (no full app stack needed)
+          import types
+
+          # Stub app.core.schemas
+          schemas_mod = types.ModuleType('app.core.schemas')
+          class RobustBaseModel:
+              pass
+          try:
+              from pydantic import BaseModel
+              RobustBaseModel = BaseModel
+          except ImportError:
+              pass
+          schemas_mod.RobustBaseModel = RobustBaseModel
+          sys.modules['app'] = types.ModuleType('app')
+          sys.modules['app.core'] = types.ModuleType('app.core')
+          sys.modules['app.core.schemas'] = schemas_mod
+
+          from app.services.capabilities.knowledge_index import (
+              KNOWLEDGE_INDEX, search_exercises, find_best_match
+          )
+
+          # Verify index has entries
+          assert len(KNOWLEDGE_INDEX) >= 3, f'Expected >= 3 entries, got {len(KNOWLEDGE_INDEX)}'
+          print(f'✅ Knowledge index: {len(KNOWLEDGE_INDEX)} entries')
+
+          # Verify 2016 S1 entry exists
+          results_2016 = search_exercises(year=2016, session='الأولى', exercise_number=4)
+          assert len(results_2016) >= 1, '2016 S1 Ex4 not found in index'
+          assert '2016' in results_2016[0].file_path or 'bac2016' in results_2016[0].file_path
+          print(f'✅ 2016 S1 Ex4: {results_2016[0].file_path}')
+
+          # Verify 2024 entry exists
+          results_2024 = search_exercises(year=2024, exercise_number=1)
+          assert len(results_2024) >= 1, '2024 Ex1 not found in index'
+          print(f'✅ 2024 Ex1: {results_2024[0].file_path}')
+
+          # Verify historical note for 2016
+          entry_2016 = results_2016[0]
+          assert '2016' in entry_2016.historical_note or 'دورتين' in entry_2016.historical_note
+          print(f'✅ 2016 historical note present')
+
+          print('✅ All knowledge index integrity checks passed')
+          "
+
+  # ─── Job 2: Exercise Retrieval Logic ─────────────────────────────────────
+  exercise-retrieval-logic:
+    name: Exercise Retrieval Logic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install pydantic>=2.0
+
+      - name: Test retrieval intent detection
+        run: |
+          python -c "
+          import sys, types
+          sys.path.insert(0, '.')
+
+          # Stubs
+          schemas_mod = types.ModuleType('app.core.schemas')
+          from pydantic import BaseModel
+          schemas_mod.RobustBaseModel = BaseModel
+          sys.modules['app'] = types.ModuleType('app')
+          sys.modules['app.core'] = types.ModuleType('app.core')
+          sys.modules['app.core.schemas'] = schemas_mod
+
+          from app.services.capabilities.exercise_retrieval import (
+              detect_exercise_retrieval, ExerciseRetrievalRequest
+          )
+
+          # Test 1: 2016 S1 Ex4 — must be recognized and matched
+          r = detect_exercise_retrieval(ExerciseRetrievalRequest(
+              question='أريد تمرين الدوال العددية بكالوريا 2016 الدورة الأولى الموضوع الثاني التمرين الرابع'
+          ))
+          assert r.recognized, 'Test 1 FAILED: 2016 S1 Ex4 not recognized'
+          assert r.matched_entry is not None, 'Test 1 FAILED: no matched entry'
+          assert 'bac2016' in r.matched_entry.file_path, f'Test 1 FAILED: wrong file {r.matched_entry.file_path}'
+          print('✅ Test 1: 2016 S1 Ex4 correctly matched')
+
+          # Test 2: Explanation intent — must NOT trigger retrieval
+          r2 = detect_exercise_retrieval(ExerciseRetrievalRequest(
+              question='اشرح لي الجزء أ من هذا التمرين'
+          ))
+          assert not r2.recognized, 'Test 2 FAILED: explanation intent triggered retrieval'
+          assert r2.reason == 'explanation_intent_detected'
+          print('✅ Test 2: Explanation intent correctly blocked')
+
+          # Test 3: 2024 probability — must be recognized and matched
+          r3 = detect_exercise_retrieval(ExerciseRetrievalRequest(
+              question='أريد تمرين الاحتمالات بكالوريا 2024'
+          ))
+          assert r3.recognized, 'Test 3 FAILED: 2024 probability not recognized'
+          assert r3.matched_entry is not None, 'Test 3 FAILED: no matched entry'
+          assert '2024' in r3.matched_entry.file_path
+          print('✅ Test 3: 2024 probability correctly matched')
+
+          # Test 4: Generic question — must NOT trigger retrieval
+          r4 = detect_exercise_retrieval(ExerciseRetrievalRequest(
+              question='ما هو تعريف المشتقة؟'
+          ))
+          assert not r4.recognized, 'Test 4 FAILED: generic question triggered retrieval'
+          print('✅ Test 4: Generic question correctly blocked')
+
+          # Test 5: 2016 without session — still recognized
+          r5 = detect_exercise_retrieval(ExerciseRetrievalRequest(
+              question='تمرين بكالوريا 2016 دوال عددية'
+          ))
+          assert r5.recognized, 'Test 5 FAILED: 2016 without session not recognized'
+          print('✅ Test 5: 2016 without session recognized')
+
+          # Test 6: Explanation of 2016 exercise — must NOT trigger retrieval
+          r6 = detect_exercise_retrieval(ExerciseRetrievalRequest(
+              question='كيف نحسب مشتقة f في تمرين 2016؟'
+          ))
+          assert not r6.recognized, 'Test 6 FAILED: explanation of 2016 triggered retrieval'
+          print('✅ Test 6: Explanation of 2016 correctly blocked')
+
+          print()
+          print('✅ All exercise retrieval logic tests passed')
+          "
+
+  # ─── Job 3: Knowledge Base File Validation ───────────────────────────────
+  knowledge-base-validation:
+    name: Knowledge Base File Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify BAC 2016 file exists and has required sections
+        run: |
+          FILE="knowledge_base/bac2016_s1_math_exp_subject2_ex4_numerical_functions.md"
+
+          if [ ! -f "$FILE" ]; then
+            echo "❌ BAC 2016 file not found: $FILE"
+            exit 1
+          fi
+          echo "✅ BAC 2016 file exists"
+
+          # Check required metadata fields
+          grep -q "year: 2016" "$FILE" || { echo "❌ Missing year: 2016"; exit 1; }
+          grep -q "الدورة الأولى" "$FILE" || { echo "❌ Missing session info"; exit 1; }
+          grep -q "الموضوع الثاني" "$FILE" || { echo "❌ Missing subject info"; exit 1; }
+          grep -q "التمرين الرابع" "$FILE" || { echo "❌ Missing exercise number"; exit 1; }
+          grep -q "الدوال العددية" "$FILE" || { echo "❌ Missing topic"; exit 1; }
+          echo "✅ All required metadata fields present"
+
+          # Check for model answer section
+          grep -q "الإجابة النموذجية" "$FILE" || { echo "❌ Missing model answer section"; exit 1; }
+          echo "✅ Model answer section present"
+
+          # Check for LaTeX math
+          grep -q '\\\\lim\|\\\\infty\|\\\\mathbb\|\\\\boxed\|\\\\int' "$FILE" || { echo "❌ No LaTeX math found"; exit 1; }
+          echo "✅ LaTeX math present"
+
+          # Check for historical note about 2016 dual sessions
+          grep -q "دورتين\|الوحيدة\|استثنائية" "$FILE" || { echo "❌ Missing 2016 historical note"; exit 1; }
+          echo "✅ 2016 historical note present"
+
+          # Check file size (should be substantial)
+          SIZE=$(wc -c < "$FILE")
+          if [ "$SIZE" -lt 5000 ]; then
+            echo "❌ File too small ($SIZE bytes) — model answer may be incomplete"
+            exit 1
+          fi
+          echo "✅ File size OK ($SIZE bytes)"
+
+      - name: Verify BAC 2024 file still intact
+        run: |
+          FILE="knowledge_base/bac2024_math_experimental_subject1_ex1_ex2.md"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ BAC 2024 file missing"
+            exit 1
+          fi
+          grep -q "year: 2024" "$FILE" || { echo "❌ BAC 2024 metadata corrupted"; exit 1; }
+          echo "✅ BAC 2024 file intact"
+
+  # ─── Job 4: Skill File Validation ────────────────────────────────────────
+  skill-file-validation:
+    name: Skill File Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify BAC exercise explanation skill exists
+        run: |
+          FILE="docs/ai_skills/bac-exercise-explanation.md"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ Skill file not found: $FILE"
+            exit 1
+          fi
+          echo "✅ Skill file exists"
+
+          # Check required sections
+          grep -q "2016" "$FILE" || { echo "❌ Missing 2016 rule"; exit 1; }
+          grep -q "LaTeX\|latex" "$FILE" || { echo "❌ Missing LaTeX rules"; exit 1; }
+          grep -q "الإجابة النموذجية\|model answer" "$FILE" || { echo "❌ Missing model answer section"; exit 1; }
+          echo "✅ All required skill sections present"
+
+      - name: Verify AGENTS.md has skill trigger
+        run: |
+          grep -q "bac-exercise-explanation" AGENTS.md || {
+            echo "❌ AGENTS.md missing bac-exercise-explanation trigger"
+            exit 1
+          }
+          echo "✅ AGENTS.md has skill trigger"
+
+  # ─── Job 5: Python Import Check ──────────────────────────────────────────
+  python-import-check:
+    name: Python Import Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pydantic
+        run: pip install pydantic>=2.0
+
+      - name: Verify all new modules import cleanly
+        run: |
+          python -c "
+          import sys, types
+          sys.path.insert(0, '.')
+
+          # Stubs
+          schemas_mod = types.ModuleType('app.core.schemas')
+          from pydantic import BaseModel
+          schemas_mod.RobustBaseModel = BaseModel
+          sys.modules['app'] = types.ModuleType('app')
+          sys.modules['app.core'] = types.ModuleType('app.core')
+          sys.modules['app.core.schemas'] = schemas_mod
+
+          # Import knowledge_index
+          from app.services.capabilities.knowledge_index import (
+              KNOWLEDGE_INDEX, ExerciseEntry, search_exercises, find_best_match
+          )
+          print(f'✅ knowledge_index imported — {len(KNOWLEDGE_INDEX)} entries')
+
+          # Import exercise_retrieval
+          from app.services.capabilities.exercise_retrieval import (
+              detect_exercise_retrieval, ExerciseRetrievalRequest,
+              ExerciseRetrievalDecision, ExerciseRetrievalResult,
+              load_exercise_content, make_result
+          )
+          print('✅ exercise_retrieval imported')
+
+          # Verify backward compatibility: make_result still works with just raw_result
+          result = make_result('test content')
+          assert result.success
+          assert result.message == 'test content'
+          print('✅ make_result backward compatibility OK')
+
+          print()
+          print('✅ All Python import checks passed')
+          "

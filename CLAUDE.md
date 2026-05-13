@@ -2841,3 +2841,89 @@ curl -N -X POST http://localhost:8000/api/chat/ws \
 # المتوقع: > 30
 ```
 
+---
+
+## 6.30 Live BAC Exercise Test + WebSocket Auth Fixes (2026-05-13, ISS-052)
+
+**تجريب حي كامل لاستدعاء تمرين الدوال العددية 2016 الموضوع الثاني التمرين الرابع الدورة الأولى عبر WebSocket.**
+
+### ما تم التحقق منه
+
+أربع تجارب حية متسلسلة على `conversation_id: 404/405` عبر `ws://localhost:8000/admin/api/chat/ws`:
+
+| التجربة | الطلب | النتيجة | الحجم |
+|---------|-------|---------|-------|
+| 1 | نص التمرين الكامل | استرجع I+II+III كاملاً مع بطاقة الامتحان | 2925 حرف |
+| 2 | السؤال الأول فقط بدون حل | أعطى الجزء I فقط بدون أي إجابة | 746 حرف |
+| 3 | شرح مفصل حسب المنهجية | شرح كامل خطوة بخطوة مع نظرية داربو | 6389 حرف |
+| 4 | شرح شرح (تعمق أكثر) | مبررات رياضية كاملة: لوبيتال، لاغرانج، الضغط | 14323 حرف |
+
+**التحقق من الإجابة النموذجية:** كل نتيجة عددية في الشرح تطابق الإجابة النموذجية بدقة — الشرح يُوصل الطالب إليها ولا يخرج عنها.
+
+### أخطاء WebSocket تم إصلاحها (ISS-052)
+
+**ISS-052-A — endpoint خاطئ:** المحادثة تعمل عبر WebSocket حصراً، لا HTTP. لا يوجد `POST /api/chat/messages`.
+- الـ endpoints الصحيحة: `ws://host/api/chat/ws` (customer) و `ws://host/admin/api/chat/ws` (admin).
+
+**ISS-052-B — websockets v16 API تغيّر:**
+```python
+# خاطئ (v16 يرفضه)
+from websockets.client import connect
+# صحيح
+from websockets.asyncio.client import connect
+```
+
+**ISS-052-C — طريقة المصادقة:** الـ token يجب في `subprotocols` وليس `Authorization` header (الـ header مخصص للـ Gateway فقط).
+```python
+# خاطئ
+additional_headers={"Authorization": f"Bearer {TOKEN}"}
+# صحيح — مطابق لما يفعله frontend في useRealtimeConnection.js
+subprotocols=["jwt", TOKEN]
+```
+
+**ISS-052-D — بنية الـ events:** الـ payload مُدمَج تحت مفتاح `payload` وليس flat:
+```python
+# خاطئ
+chunk = event.get("content", "")
+# صحيح
+payload_data = event.get("payload") or event
+chunk = payload_data.get("content", "")
+```
+
+**ISS-052-E — token منتهي الصلاحية:** صلاحية الـ token 30 دقيقة. الخادم يُغلق الاتصال بـ code 4401 بدون رسالة خطأ — يبدو كـ `connection open → connection closed` فوراً. يجب تجديد الـ token قبل كل جلسة اختبار.
+
+### بروتوكول اختبار WebSocket الصحيح
+
+```python
+from websockets.asyncio.client import connect
+import json, asyncio
+
+TOKEN = "<fresh_token_from_POST_/api/v1/auth/login>"
+
+async def test():
+    async with connect(
+        "ws://localhost:8000/admin/api/chat/ws",
+        subprotocols=["jwt", TOKEN],
+        ping_interval=None,
+    ) as ws:
+        await ws.send(json.dumps({"question": "سؤالك هنا"}))
+        while True:
+            event = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
+            payload = event.get("payload") or event
+            if event["type"] == "assistant_delta":
+                print(payload["content"], end="", flush=True)
+            elif event["type"] in ("assistant_final", "stream_end"):
+                break
+
+asyncio.run(test())
+```
+
+### قاعدة لا تُخرق — WebSocket Auth
+
+```
+extract_websocket_auth() priority order (ws_auth.py):
+  1. Authorization header  → Gateway only (never from direct client)
+  2. sec-websocket-protocol: ["jwt", "<token>"]  ← الطريقة الصحيحة للعميل المباشر
+  3. ?token= query param   → development env only (ENVIRONMENT != production/staging)
+```
+

@@ -735,3 +735,26 @@ detect_exercise_retrieval(question)
 - زر النسخ ينسخ `msg.content` الكامل، لا `displayedContent`.
 **Evidence**: قبل الإصلاح — JSON envelope مرئي في screenshot من المستخدم 2026-05-13. بعد الإصلاح — preemption يتطابق مع `knowledge_base/bac2016_s1_math_exp_subject2_ex4_numerical_functions.md` ويبث المحتوى النظيف.
 **Status**: IMPLEMENTED 2026-05-13 — branch `claude/fix-exercise-display-SRmNL`.
+
+## D-051 · LaTeX Rendering Fix — Double-Backslash Delimiters + Atomic Typewriter (2026-05-13, ISS-057)
+**Decision**: ثلاث طبقات لإصلاح تصيير LaTeX الذي ظهر كنص خام (`$g$`, `$\mathbb{R}$`) للطالب.
+**Problem**: D-050 (preemption) عملت بنجاح وأوصلت محتوى التمرين النظيف، لكن الطالب رأى LaTeX كنص خام بدل رياضيات مرسومة. التحقيق كشف 192 موضع `\\(...\\)` (double-backslash حرفية) في `knowledge_base/bac2016_*.md`. الـ `preprocessMath` regex القديم (`/\\\(...\\\)/`) يطابق `\(` (واحد) فيُبقي شرطة فائضة → markdown يراها `\$` (دولار مُهرَّب) → KaTeX لا يُستدعى.
+**Solution**:
+- **`frontend/app/components/ChatInterface.jsx`**: 
+  - `preprocessMath` يُطبِّع أولاً `\\(` → `\(` و `\\[` → `\[`، ثم يحوِّل `\(...\)` → `$...$` و `\[...\]` → `$$...$$`. يدعم 5 صيغ: `\(`, `\\(`, `\[`, `\\[`, `$...$`, `$$...$$`.
+  - دالة جديدة `atomicTokenLength(text, start)` تكشف عن بداية LaTeX block وتُرجع طول الـ block كاملاً. الـ typewriter يستخدمها لكشف LaTeX blocks ذرّياً (atomic). يضمن: لا flicker من LaTeX غير مكتمل لحظياً.
+- **`app/infrastructure/clients/orchestrator_client.py:_split_preserving_latex`**: الـ regex مُحدَّث لالتقاط الصيغ الأربع (`$$...$$`, `$...$`, `\\(...\\)`, `\(...\)`) كـ token واحد. يضمن: WebSocket chunks لا تكسر LaTeX block أبداً.
+- **`frontend/app/globals.css`**: ترقية CSS لبطاقة الامتحان إلى مستوى "فاخر/مشروع عملاق":
+  - خط ذهبي علوي (`exam-content::before` gradient)
+  - ظل ثلاثي الطبقات (sharp + diffuse + blue glow)
+  - `katex-display` بـ background gradient + border + hover state + `katex-fade-in` animation
+  - `h3` بـ right-border ذهبية + خلفية gradient = بصرياً يحدِّد الجزء (I/II/III)
+  - أعمدة جدول بطاقة الامتحان بخلفيات gradient مختلفة (header زرقاء، first column ذهبية)
+**Invariants**:
+- أي محتوى يحوي `\\(`, `\\[`, `\(`, `\[` يجب أن يمر عبر `preprocessMath` قبل ReactMarkdown.
+- الـ typewriter يكشف LaTeX blocks ذرياً — لا يجوز أبداً عرض `$g` بدون `$` إقفال.
+- `_split_preserving_latex` يدعم الصيغ الأربع. إضافة صيغة جديدة (`\begin{...}\end{...}`) → تحديث الـ regex.
+- knowledge_base يستخدم `\\(...\\)` (inline) و `$$...$$` (display). لا تخلط في ملف واحد.
+- `throwOnError: false` في KaTeX — لا تُغيِّره (يحمي من crash على LaTeX commands غير مدعومة).
+**Evidence**: قبل الإصلاح — LaTeX خام مرئي في screenshot 2026-05-13. اختبار حي بعد الإصلاح: 192 موضع `\\(...\\)` تحوَّلت كلها إلى `$...$`، 0 موضع متبقٍ، 384 inline pairs + 66 display pairs. atomicTokenLength اجتاز 6 سيناريوهات اختبار.
+**Status**: IMPLEMENTED 2026-05-13 — branch `claude/fix-exercise-display-SRmNL`.

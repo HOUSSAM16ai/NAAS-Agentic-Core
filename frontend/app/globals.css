@@ -751,16 +751,46 @@ body {
    بطاقة الامتحان — تصميم فاخر يحاكي ورقة الامتحان الرسمية
    ═══════════════════════════════════════════════════════════════════════════ */
 .exam-content {
-    background: var(--surface-color);
+    background:
+        linear-gradient(180deg, rgba(37,99,235,0.025) 0%, transparent 80px),
+        var(--surface-color);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 1.25rem 1.5rem;
+    border-radius: 16px;
+    padding: 1.5rem 1.75rem;
     position: relative;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    box-shadow:
+        0 1px 2px rgba(0,0,0,0.04),
+        0 4px 16px rgba(0,0,0,0.06),
+        0 12px 48px rgba(37,99,235,0.04);
+    overflow: hidden;
+}
+
+/* خط ذهبي علوي يُذكِّر بالرسمية — ورقة امتحان رسمية */
+.exam-content::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(37,99,235,0.0) 5%,
+        rgba(37,99,235,0.6) 30%,
+        rgba(245,158,11,0.85) 50%,
+        rgba(37,99,235,0.6) 70%,
+        rgba(37,99,235,0.0) 95%,
+        transparent 100%);
+    border-radius: 16px 16px 0 0;
+    pointer-events: none;
 }
 
 [data-theme='dark'] .exam-content {
-    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    background:
+        linear-gradient(180deg, rgba(96,165,250,0.04) 0%, transparent 80px),
+        var(--surface-color);
+    box-shadow:
+        0 1px 2px rgba(0,0,0,0.3),
+        0 4px 16px rgba(0,0,0,0.4),
+        0 12px 48px rgba(37,99,235,0.06);
 }
 
 .exam-badge {
@@ -782,15 +812,31 @@ body {
     font-size: 0.85rem;
 }
 
-/* ISS-056 (D-049): تنسيق متقدم لمحتوى التمارين البكالوريا
-   - فواصل بصرية بين أجزاء التمرين (I, II, III)
-   - عرض LaTeX بحجم مناسب على الشاشات الصغيرة
-   - تباين أعلى للعناوين */
+/* ISS-056/057 (D-049/D-051): تنسيق احترافي راقي لمحتوى تمارين البكالوريا
+   - فواصل بصرية فاخرة بين أجزاء التمرين (I, II, III)
+   - عناوين بظلال خفيفة وحدود متدرجة
+   - LaTeX بحجم مناسب على الشاشات الصغيرة
+   - تأثيرات ظهور سلسة (KaTeX fade-in) */
 .exam-content h1,
 .exam-content h2 {
-    border-bottom: 2px solid rgba(37, 99, 235, 0.2);
-    padding-bottom: 0.3rem;
-    margin-top: 1.5rem;
+    border-bottom: 2px solid;
+    border-image: linear-gradient(90deg, rgba(37,99,235,0.45), rgba(37,99,235,0.12) 60%, transparent) 1;
+    padding-bottom: 0.4rem;
+    margin-top: 1.75rem;
+    font-weight: 800;
+    color: var(--primary-color);
+    letter-spacing: -0.01em;
+}
+
+.exam-content h3 {
+    color: var(--primary-color);
+    font-weight: 700;
+    margin-top: 1.25rem;
+    border-right: 3px solid rgba(37,99,235,0.4);
+    padding-right: 0.6rem;
+    background: linear-gradient(90deg, rgba(37,99,235,0.04), transparent 70%);
+    padding-block: 0.35rem;
+    border-radius: 0 6px 6px 0;
 }
 
 .exam-content h1:first-child,
@@ -798,26 +844,89 @@ body {
     margin-top: 0;
 }
 
+.exam-content strong {
+    color: var(--primary-color);
+    font-weight: 800;
+}
+
 .exam-content hr.md-hr {
     border: none;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(37,99,235,0.25), transparent);
-    margin: 1.5rem 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(37,99,235,0.15) 20%,
+        rgba(245,158,11,0.35) 50%,
+        rgba(37,99,235,0.15) 80%,
+        transparent);
+    margin: 1.75rem 0;
+    border-radius: 2px;
 }
 
-/* جدول بطاقة الامتحان بحدود أوضح */
+/* جدول بطاقة الامتحان — حدود أوضح وخلفية فاخرة */
+.exam-content .math-table-wrapper {
+    border: 1px solid rgba(37,99,235,0.18);
+    box-shadow:
+        0 1px 3px rgba(0,0,0,0.05),
+        0 4px 12px rgba(37,99,235,0.06);
+}
+
+.exam-content .math-table th {
+    background: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(37,99,235,0.05));
+    font-weight: 800;
+    font-size: 0.95rem;
+}
+
 .exam-content .math-table th:first-child {
-    background: rgba(37, 99, 235, 0.12);
+    background: linear-gradient(135deg, rgba(245,158,11,0.18), rgba(245,158,11,0.05));
+    color: #b45309;
 }
 
-/* LaTeX جوّاني داخل النص — لا يكسر سطر */
-.exam-content .katex { white-space: nowrap; }
+[data-theme='dark'] .exam-content .math-table th:first-child {
+    color: #fcd34d;
+}
+
+/* KaTeX داخل بطاقة الامتحان — أنيق ومركَّز */
+.exam-content .katex {
+    white-space: nowrap;
+    font-feature-settings: "lnum", "tnum";
+}
+
+.exam-content .katex-display {
+    margin: 1.25rem 0;
+    padding: 0.85rem 1rem;
+    background: linear-gradient(135deg, rgba(37,99,235,0.05), rgba(37,99,235,0.02) 80%);
+    border: 1px solid rgba(37,99,235,0.12);
+    border-radius: 10px;
+    box-shadow: inset 0 1px 2px rgba(37,99,235,0.05);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+[data-theme='dark'] .exam-content .katex-display {
+    background: linear-gradient(135deg, rgba(96,165,250,0.06), rgba(96,165,250,0.02) 80%);
+    border-color: rgba(96,165,250,0.16);
+}
+
+.exam-content .katex-display:hover {
+    border-color: rgba(37,99,235,0.28);
+    box-shadow: inset 0 1px 2px rgba(37,99,235,0.08), 0 2px 8px rgba(37,99,235,0.06);
+}
+
+/* fade-in خفيف للمعادلات لتظهر بأناقة بدل ظهور مفاجئ */
+@keyframes katex-fade-in {
+    from { opacity: 0.4; transform: translateY(2px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.exam-content .katex-display {
+    animation: katex-fade-in 0.18s ease-out;
+}
 
 /* على الشاشات الصغيرة: قلِّص حجم KaTeX قليلاً لتجنب overflow أفقي */
 @media (max-width: 640px) {
-    .markdown-content .katex { font-size: 0.95em; }
+    .markdown-content .katex { font-size: 0.92em; }
     .markdown-content .katex-display > .katex { font-size: 1.0em; }
-    .exam-content { padding: 1rem 1rem; }
+    .exam-content { padding: 1.1rem 1rem; border-radius: 12px; }
+    .exam-content .katex-display { padding: 0.6rem 0.7rem; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

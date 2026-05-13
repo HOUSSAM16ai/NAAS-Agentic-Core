@@ -3029,3 +3029,109 @@ print('OK matched:', d.matched_entry.file_path)
 
 ---
 
+## 6.32 LaTeX Rendering — Double-Backslash Delimiters + Atomic Typewriter (2026-05-13, ISS-057 / D-051)
+
+> هذا القسم يحكم تصيير LaTeX في الـ frontend. أي تعديل على معالجة الرياضيات يجب أن يحترم القواعد الخمس أدناه — وإلا فالكارثة تعود.
+
+### الكارثة المُشخَّصة
+
+عند طلب «تمرين الدوال العددية 2016»، التمرين وصل للطالب فعلاً (preemption D-049 يعمل)، لكن **LaTeX يظهر كنص خام**:
+
+| المتوقَّع | المعروض فعلاً |
+|---------|--------------|
+| الدالة $g$ المعرَّفة على $\mathbb{R}$ | الدالة `$g$` المعرَّفة على `$\mathbb{R}$` |
+| $g(x) = 1 + (x^2+x-1)e^{-x}$ | `$g(x) = 1 + (x^2+x-1)e^{-x}$` |
+| $\lim_{x \to -\infty} g(x)$ | `$\lim_{x \to -\infty} g(x)$` |
+
+### السبب الجذري (تحقيق ثنائي الطبقات)
+
+**طبقة 1 — قاعدة المعرفة**: ملف `knowledge_base/bac2016_*.md` يحوي **192 موضع** بالصيغة `\\(...\\)` (شرطتان مائلتان خلفيتان حرفياً، 7 bytes). كان الكاتب يستخدم اصطلاح "double-backslash" التاريخي.
+
+**طبقة 2 — Frontend `preprocessMath`**: الـ regex القديم `/\\\(([^]*?)\\\)/g` يطابق `\(` (واحد). عند مواجهة `\\(g\\)` (اثنان):
+- يطابق الـ `\(` الثاني فقط، يُبقي الـ `\` الأول
+- النتيجة بعد replace: `\$g\$` ← دولار مُهرَّب في markdown
+- ReactMarkdown يرى `\$` فيعرض literal `$`
+- remark-math لا يلتقطها (الـ delimiter مكسور)
+- KaTeX لا يُستدعى → نص خام مرئي للطالب
+
+### الإصلاح (D-051 — ثلاث طبقات دفاع)
+
+**طبقة 1 — `preprocessMath` (`frontend/app/components/ChatInterface.jsx`)**:
+```javascript
+// قبل أي تحويل: استبدل الـ double-backslash بـ single
+processed = processed.replace(/\\\\\(/g, '\\(');
+processed = processed.replace(/\\\\\)/g, '\\)');
+processed = processed.replace(/\\\\\[/g, '\\[');
+processed = processed.replace(/\\\\\]/g, '\\]');
+// ثم التحويل العادي إلى $...$ و $$...$$
+processed = processed.replace(/\\\[([^]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
+processed = processed.replace(/\\\(([^]*?)\\\)/g, (_, inner) => `$${inner}$`);
+```
+يدعم كل 5 صيغ موجودة: `\(...\)` | `\\(...\\)` | `\[...\]` | `\\[...\\]` | `$...$` | `$$...$$`.
+تحقق حي: 192 موضع `\\(...\\)` تحوَّلت كلها إلى `$...$`، 0 موضع متبقٍ.
+
+**طبقة 2 — LaTeX-Aware Typewriter (`ChatInterface.jsx:useTypewriter`)**:
+دالة `atomicTokenLength(text, start)` تكشف عن بداية LaTeX block وتُرجع طول الـ block كاملاً. خلال الكشف:
+- `$...$` → كشف ذرّي
+- `$$...$$` → كشف ذرّي
+- `\(...\)` → كشف ذرّي
+- `\\(...\\)` → كشف ذرّي
+- نص عادي → 1 حرف
+يضمن: الطالب لا يرى `$g` بدون `$` إقفال لحظياً أبداً (لا flicker).
+
+**طبقة 3 — Backend `_split_preserving_latex` (`app/infrastructure/clients/orchestrator_client.py`)**:
+الـ regex مُحدَّث لالتقاط 4 صيغ كـ token واحد:
+```python
+_LATEX_INLINE_RE = re.compile(
+    r'\$\$[^$\n]+?\$\$'         # $$inline$$
+    r'|\$[^$\n]+?\$'            # $inline$
+    r'|\\\\\([^\n]+?\\\\\)'     # \\(inline\\) ← الصيغة الرئيسية في knowledge_base
+    r'|\\\([^\n]+?\\\)'         # \(inline\)
+)
+```
+يضمن: WebSocket chunks لا تكسر LaTeX block أبداً (block كامل → chunk واحد → atomic reveal).
+
+**طبقة 4 — CSS فاخر لبطاقة الامتحان (`frontend/app/globals.css`)**:
+- خط ذهبي علوي (`exam-content::before` gradient horizontal) — يُذكِّر بورقة الامتحان الرسمية.
+- ظل ثلاثي الطبقات (1px sharp + 4px diffuse + 12px blue glow).
+- `katex-display` بخلفية gradient + border + hover state + animation `katex-fade-in` (0.18s).
+- `h3` بـ right-border ذهبية تُحدِّد بصرياً الجزء (I/II/III).
+- Media query للجوال (≤640px) — تقليص KaTeX + padding.
+
+### القواعد الخمس الدائمة (لا تُكسر بدون ADR)
+
+**(1) Preprocess قبل remark-math إلزامي**: أي محتوى يحوي `\\(`, `\\[`, `\(`, `\[` يجب أن يمر عبر `preprocessMath` قبل ReactMarkdown. تخطي هذه الخطوة = LaTeX خام مرئي.
+
+**(2) Atomic LaTeX reveal**: الـ typewriter يجب أن يكشف LaTeX blocks ذرياً (atomic). الكشف حرفاً بحرف عبر `$` أو `\(` غير مكتمل = flicker بصري وتجارب مدمرة.
+
+**(3) Backend splits preserve LaTeX**: `_split_preserving_latex` في orchestrator_client يجب أن يدعم الصيغ الأربع. إضافة صيغة جديدة (مثل `\begin{equation}...\end{equation}`) → تحديث الـ regex.
+
+**(4) Single source of truth للـ delimiters**: knowledge_base files تستخدم `\\(...\\)` للـ inline و `$$...$$` للـ display. لا تخلط الصيغ في ملف واحد. عند إضافة ملف جديد، احترم الاصطلاح أو حدِّث `preprocessMath` بصيغة جديدة.
+
+**(5) KaTeX `throwOnError: false`**: لا تُغيِّره. عند خطأ LaTeX، نريد KaTeX يرسم النص الخام بدلاً من crash. هذا يحمي ضد الحالات النادرة (e.g., LaTeX commands غير مدعومة).
+
+### قياس النجاح حياً
+
+```bash
+# 1. فحص الـ preprocessMath على knowledge base كامل
+node -e "
+const fs = require('fs');
+const content = fs.readFileSync('knowledge_base/bac2016_s1_math_exp_subject2_ex4_numerical_functions.md', 'utf-8');
+const fix = (c) => c
+  .replace(/\\\\\\\\\(/g, '\\\\(').replace(/\\\\\\\\\)/g, '\\\\)')
+  .replace(/\\\\\\\\\[/g, '\\\\[').replace(/\\\\\\\\\]/g, '\\\\]')
+  .replace(/\\\\\[([^]*?)\\\\\]/g, (_, i) => '\$\$' + i + '\$\$')
+  .replace(/\\\\\(([^]*?)\\\\\)/g, (_, i) => '\$' + i + '\$');
+const r = fix(content);
+console.log('inline pairs:', (r.match(/(?<!\\\\\\\$)\\\$(?!\\\$)/g) || []).length);
+console.log('display pairs:', (r.match(/\\\$\\\$/g) || []).length);
+console.log('remaining \\\\\\\\(:', (r.match(/\\\\\\\\\(/g) || []).length);
+"
+# المتوقع: inline pairs: 384 (192 zwj), display pairs: 66, remaining \\(: 0
+
+# 2. اختبار atomic typewriter على string نموذجي
+# يجب أن يُرجع: $g$ = 3, $$...$$ = 14, \(g\) = 5, \\(g\\) = 7
+```
+
+---
+

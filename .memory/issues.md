@@ -952,3 +952,38 @@
   - typewriter لا يبطّئ TTFT
   - copy button ينسخ النص الكامل
 - **Status**: FIXED 2026-05-13 — branch `claude/fix-exercise-display-SRmNL`.
+
+---
+
+### [FIXED] ISS-057 · LaTeX rendering — raw `$g$` and `$\mathbb{R}$` visible to student · FIXED (2026-05-13)
+
+- **Severity**: 🔴 Critical — تجربة بصرية مدمرة. D-050 preemption نجحت في إيصال التمرين، لكن الطالب رأى LaTeX خام بدل رياضيات.
+- **Context**: المستخدم رفع screenshot جديد يُظهر التمرين الصحيح ظاهراً (preemption ناجح ✅) لكن كل `$g$`, `$\mathbb{R}$`, `$g(x) = 1+(x²+x-1)e^{-x}$`, `$\lim_{x \to -\infty}$` تظهر كنص خام مع علامات دولار ظاهرة.
+- **الأسباب الجذرية**:
+  1. **knowledge_base/bac2016_*.md**: 192 موضع بصيغة `\\(...\\)` (double-backslash حرفية — 7 bytes للمحاطة).
+  2. **`frontend/app/components/ChatInterface.jsx:preprocessMath`**: regex `/\\\(([^]*?)\\\)/g` يطابق `\(` فقط. على `\\(g\\)` يطابق الـ `\(` الثاني، يُبقي الأول → بعد replace: `\$g\$` ← markdown يراها دولار مُهرَّب → remark-math لا يلتقطها → KaTeX لا يُستدعى.
+  3. **typewriter character-by-character**: عند كشف `$g$`، أحياناً يعرض `$g` (بدون `$` إقفال) لحظياً → ReactMarkdown render مع LaTeX غير مكتمل → flicker بصري.
+  4. **backend `_split_preserving_latex`**: regex يدعم `$...$` فقط، لا `\\(...\\)`. يُقسِّم `\\(g\\)` على فراغ كأي كلمة → احتمال فصل delimiter عبر chunks.
+- **الإصلاحات (D-051 — ثلاث طبقات دفاع)**:
+  - **طبقة 1 (`ChatInterface.jsx:preprocessMath`)**: تطبيع `\\(` → `\(` و `\\[` → `\[` قبل التحويل، ثم `\(...\)` → `$...$` و `\[...\]` → `$$...$$`. يدعم 5 صيغ.
+  - **طبقة 2 (`ChatInterface.jsx:atomicTokenLength + useTypewriter`)**: دالة جديدة تكشف LaTeX block boundaries (`$`, `$$`, `\(`, `\\(`, `\[`, `\\[`) وتُرجع طول الـ block كاملاً. الـ typewriter يكشف الـ block ذرياً في frame واحدة.
+  - **طبقة 3 (`app/infrastructure/clients/orchestrator_client.py:_split_preserving_latex`)**: regex مُحدَّث لالتقاط 4 صيغ كـ token واحد.
+  - **طبقة 4 (`frontend/app/globals.css`)**: CSS فاخر لبطاقة الامتحان — خط ذهبي علوي، ظل ثلاثي الطبقات، katex-display مع gradient + hover + animation، h3 بـ right-border ذهبية.
+- **Files changed**:
+  - `frontend/app/components/ChatInterface.jsx` — preprocessMath enhanced + atomicTokenLength + LaTeX-aware useTypewriter
+  - `app/infrastructure/clients/orchestrator_client.py` — `_LATEX_INLINE_RE` multi-format
+  - `frontend/app/globals.css` — luxury exam-content styling
+  - `CLAUDE.md` §6.32
+  - `.memory/decisions.md` D-051, `.memory/issues.md` ISS-057
+- **Live tests**:
+  - 192 موضع `\\(...\\)` تحوَّلت كلها إلى `$...$` (0 remaining)
+  - inline pairs بعد التحويل: 384 (= 192 × 2)
+  - display pairs: 66 (محفوظة)
+  - `atomicTokenLength`: 6/6 سيناريوهات تجتاز (`$g$`=3, `$$...$$`=14, plain=1, `$g`=1, `\(g\)`=5, `\\(g\\)`=7)
+- **Invariants enforced**:
+  - preprocessMath قبل remark-math إلزامي
+  - atomic LaTeX reveal — لا flicker
+  - backend splits تحافظ على LaTeX blocks
+  - knowledge_base يحترم اصطلاح `\\(...\\)` + `$$...$$`
+  - `throwOnError: false` للـ KaTeX
+- **Status**: FIXED 2026-05-13 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

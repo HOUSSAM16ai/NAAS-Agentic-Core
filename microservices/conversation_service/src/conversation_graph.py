@@ -140,7 +140,7 @@ async def _call_llm_if_available(question: str, intent: str, history: list[dict[
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "z-ai/glm-4.5-air:free",
+                    "model": "inclusionai/ring-2.6-1t:free",
                     "messages": messages,
                     "max_tokens": 512,
                 },

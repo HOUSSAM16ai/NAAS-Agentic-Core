@@ -17,7 +17,7 @@ class SimpleAIClient:
         self.api_key = os.environ.get("OPENROUTER_API_KEY")
         self.base_url = "https://openrouter.ai/api/v1"
         # Default model matching the memory description
-        self.model = "z-ai/glm-4.5-air:free"
+        self.model = "inclusionai/ring-2.6-1t:free"
 
         if not self.api_key:
             logger.warning("OPENROUTER_API_KEY not found. AI calls will fail.")

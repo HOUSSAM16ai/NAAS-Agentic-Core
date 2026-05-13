@@ -450,7 +450,7 @@ class OrchestratorAgent:
         try:
             # Quick parsing call
             response = await self.ai_client.generate(
-                model="z-ai/glm-4.5-air:free",  # Use a fast model if available, or default
+                model="inclusionai/ring-2.6-1t:free",  # Use a fast model if available, or default
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question},

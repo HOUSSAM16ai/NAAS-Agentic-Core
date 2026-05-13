@@ -57,7 +57,7 @@ class AvailableModels:
     """
 
     GPT_4O = "openai/gpt-4o"
-    GPT_4O_MINI = "z-ai/glm-4.5-air:free"
+    GPT_4O_MINI = "inclusionai/ring-2.6-1t:free"
     GPT_4_TURBO = "openai/gpt-4-turbo"
     GPT_4 = "openai/gpt-4"
     GPT_35_TURBO = "openai/gpt-3.5-turbo"
@@ -75,11 +75,11 @@ class AvailableModels:
     PHI_3_MINI_FREE = "microsoft/phi-3-mini-128k-instruct:free"
     KAT_CODER_PRO_FREE = "kwaipilot/kat-coder-pro:free"
     QWEN_QWEN3_CODER_FREE = "qwen/qwen3-coder:free"
-    NEMOTRON_3_SUPER_120B_FREE = "z-ai/glm-4.5-air:free"
+    NEMOTRON_3_SUPER_120B_FREE = "inclusionai/ring-2.6-1t:free"
     DEVSTRAL_2512 = "mistralai/devstral-2512:free"
-    GLM_4_5_AIR_FREE = "z-ai/glm-4.5-air:free"
+    GLM_4_5_AIR_FREE = "inclusionai/ring-2.6-1t:free"
     DEEPSEEK_R1_CHIMERA_FREE = "tngtech/deepseek-r1t2-chimera:free"
-    NEMOTRON_3_NANO = "z-ai/glm-4.5-air:free"
+    NEMOTRON_3_NANO = "inclusionai/ring-2.6-1t:free"
 
 
 class ActiveModels:

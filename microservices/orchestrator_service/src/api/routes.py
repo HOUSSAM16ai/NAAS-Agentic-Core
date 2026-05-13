@@ -909,6 +909,70 @@ async def _serialize_json_async(payload: object) -> str:
     return await anyio.to_thread.run_sync(lambda p: json.dumps(p, ensure_ascii=False), payload)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ISS-056 (D-049 — JSON Envelope Anti-Leak Doctrine):
+# SynthesizerNode في graph/search.py يُرجِع `final_response` كـ dict بمظروف:
+#   {"المصدر": ..., "مستوى_الثقة": ..., "التمرين": <نص حقيقي للطالب>,
+#    "السنة": ..., "الشعبة": ..., "المادة": ..., "رقم_التمرين": ...}
+#
+# قبل الإصلاح: `_serialize_json_async(final_resp)` كان يُسلسل المظروف كاملاً كـ
+# JSON ويرسله للطالب → كارثة تظهر فيها {"المصدر":"معرفة مادة"... } مكشوفة.
+#
+# بعد الإصلاح: نستخرج الحقل البشري (`التمرين`/`الإجابة`/`response`) فقط.
+# هذه الدالة **يجب** أن تُستخدم في كل مكان يُحوَّل فيه `final_response` إلى نص
+# للمستخدم النهائي. لا تُسلسل dict خام كـ JSON إلى assistant_delta/final أبداً.
+# ─────────────────────────────────────────────────────────────────────────────
+_HUMAN_RESPONSE_FIELDS: tuple[str, ...] = (
+    "التمرين",       # SynthesizerNode envelope
+    "الإجابة",       # AdminAgentNode / RenderAnswerNode envelope
+    "response",
+    "answer",
+    "content",
+    "text",
+    "final_response",  # nested fallback
+)
+
+
+def _extract_human_readable_response(final_resp: object) -> str:
+    """يستخرج النص البشري من `final_response` بدون تسريب مظروف JSON.
+
+    يحل ISS-056 — JSON Envelope Leak Catastrophe.
+
+    قواعد دائمة:
+    - dict مع حقل بشري معروف (`التمرين`/`الإجابة`/…) → النص فقط
+    - dict مع حقل خطأ (`خطأ`) → رسالة خطأ نظيفة بالعربية
+    - dict بدون حقل بشري → "لا توجد تفاصيل متاحة." (لا dump للمظروف)
+    - str → التنظيف فقط
+    - None → الـ fallback الافتراضي
+    """
+    if isinstance(final_resp, dict):
+        # حالة الخطأ من RenderAnswerNode — رسالة نظيفة، لا dump
+        error_msg = final_resp.get("خطأ")
+        if isinstance(error_msg, str) and error_msg.strip():
+            action = str(final_resp.get("الإجراء", "")).strip()
+            tail = f"\n\n{action}" if action else ""
+            return f"حدث خطأ أثناء معالجة طلبك: {error_msg.strip()}{tail}"
+
+        for key in _HUMAN_RESPONSE_FIELDS:
+            value = final_resp.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            # حالة nested: قد يكون response_json داخل response_json
+            if isinstance(value, dict):
+                nested = _extract_human_readable_response(value)
+                if nested and nested != "لا توجد تفاصيل متاحة.":
+                    return nested
+
+        # dict بدون حقل بشري معروف — لا تكشف المظروف الداخلي للطالب
+        return "لا توجد تفاصيل متاحة."
+
+    if final_resp is None:
+        return "لا توجد تفاصيل متاحة."
+
+    text = str(final_resp).strip()
+    return text or "لا توجد تفاصيل متاحة."
+
+
 async def _serialize_stream_frame(payload: object) -> str:
     """يبني NDJSON صارمًا لضمان عدم تسريب dict خام إلى عميل البث النصي."""
     return _serialize_stream_frame_sync(payload)
@@ -1648,10 +1712,9 @@ async def _stream_chat_langgraph(
                 # Extract the final response from our custom Unified Graph output
                 final_resp = run_data.get("final_response")
 
-                if isinstance(final_resp, dict):
-                    response_text = await _serialize_json_async(final_resp)
-                else:
-                    response_text = str(final_resp or "لا توجد تفاصيل متاحة.")
+                # ISS-056: never serialize dict envelope as JSON to the user.
+                # SynthesizerNode returns {"المصدر","التمرين",...} — we want التمرين only.
+                response_text = _extract_human_readable_response(final_resp)
 
                 final_content = response_text
                 logger.info(f"FINAL RESPONSE → {response_text[:100]}")
@@ -1881,10 +1944,8 @@ async def _run_chat_langgraph(
                         if hasattr(last_msg, "content") and last_msg.content:
                             final_resp = last_msg.content
 
-    if isinstance(final_resp, dict):
-        response_text = await _serialize_json_async(final_resp)
-    else:
-        response_text = str(final_resp or "لا توجد تفاصيل متاحة.")
+    # ISS-056: never leak SynthesizerNode dict envelope as JSON to the user
+    response_text = _extract_human_readable_response(final_resp)
 
     # ISS-STREAM-002: تسجيل الجلسة الكاملة في Prometheus
     import contextlib
@@ -2667,10 +2728,8 @@ async def chat_with_agent_endpoint(
                                     if hasattr(last_msg, "content"):
                                         final_resp = last_msg.content
 
-                if isinstance(final_resp, dict):
-                    response_text = await _serialize_json_async(final_resp)
-                else:
-                    response_text = str(final_resp or "لا توجد تفاصيل متاحة.")
+                # ISS-056: extract human-readable text only — never leak JSON envelope
+                response_text = _extract_human_readable_response(final_resp)
 
                 full_user_message = request.question
                 full_ai_response = response_text

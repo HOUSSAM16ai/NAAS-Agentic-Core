@@ -782,6 +782,44 @@ body {
     font-size: 0.85rem;
 }
 
+/* ISS-056 (D-049): تنسيق متقدم لمحتوى التمارين البكالوريا
+   - فواصل بصرية بين أجزاء التمرين (I, II, III)
+   - عرض LaTeX بحجم مناسب على الشاشات الصغيرة
+   - تباين أعلى للعناوين */
+.exam-content h1,
+.exam-content h2 {
+    border-bottom: 2px solid rgba(37, 99, 235, 0.2);
+    padding-bottom: 0.3rem;
+    margin-top: 1.5rem;
+}
+
+.exam-content h1:first-child,
+.exam-content h2:first-child {
+    margin-top: 0;
+}
+
+.exam-content hr.md-hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(37,99,235,0.25), transparent);
+    margin: 1.5rem 0;
+}
+
+/* جدول بطاقة الامتحان بحدود أوضح */
+.exam-content .math-table th:first-child {
+    background: rgba(37, 99, 235, 0.12);
+}
+
+/* LaTeX جوّاني داخل النص — لا يكسر سطر */
+.exam-content .katex { white-space: nowrap; }
+
+/* على الشاشات الصغيرة: قلِّص حجم KaTeX قليلاً لتجنب overflow أفقي */
+@media (max-width: 640px) {
+    .markdown-content .katex { font-size: 0.95em; }
+    .markdown-content .katex-display > .katex { font-size: 1.0em; }
+    .exam-content { padding: 1rem 1rem; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Streaming — مؤشر الكتابة المتحرك وتأثير البث
    ═══════════════════════════════════════════════════════════════════════════ */

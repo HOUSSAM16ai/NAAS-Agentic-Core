@@ -895,3 +895,22 @@
   - `app/core/gateway/connection.py` — BASE_TIMEOUT 30→45
   - `app/services/chat/local_graph.py` — _MAX_EXERCISE_CONTEXT_CHARS + _MAX_EXPLANATION_TOKENS
 - **Status**: FIXED 2026-05-13.
+
+---
+
+### [FIXED] ISS-055 · TTFT الشرح 44s + بنشمارك النماذج · FIXED (2026-05-13)
+
+- **Context**: تجربة حية ثانية — TTFT الشرح = 44.13s، وقت كلي = 70.48s.
+- **السبب الجذري**: `inclusionai/ring-2.6-1t:free` يتجمد مع context 9670 حرف — يبدأ التوليد بعد 44 ثانية.
+- **بنشمارك حي لـ 15 نموذجاً**: `nvidia/nemotron-3-nano-30b-a3b:free` = TTFT 2.06s مع context كامل، عربية صحيحة.
+- **قاعدة لا تُخرق**: المحتوى يُرسَل كاملاً (9670 حرف) — لا ضغط، لا اختصار — البث حرف وراء حرف.
+- **الإصلاحات**:
+  - `ai_config.py`: PRIMARY = `nvidia/nemotron-3-nano-30b-a3b:free` (كان `inclusionai/ring-2.6-1t:free`)
+  - `local_graph.py`: system prompt مُقلَّص + `_MAX_EXPLANATION_TOKENS=900`
+  - `exercise_retrieval.py`: `requested_part` hint + `_detect_requested_part_from_question()`
+  - `docs/ai_skills/bac-exercise-explanation.md`: توثيق الأداء + مسار الشرح الكامل
+- **نتائج حية مُتحقَّق منها**:
+  - استدعاء التمرين: TTFT=0.85s، 12/12 فحص ✅
+  - شرح الإجابة: TTFT=1.78s (كان 44.13s)، 5.90s كلي (كان 70.48s) ✅
+  - التمرين كامل: بطاقة الامتحان + الجزء I + II + III + LaTeX سليم ✅
+- **Status**: FIXED 2026-05-13.

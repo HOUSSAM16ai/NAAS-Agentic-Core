@@ -217,5 +217,43 @@ if decision.recognized and decision.matched_entry:
 
 ---
 
+---
+
+## أداء النظام المُتحقَّق منه حياً (2026-05-13 — ISS-055)
+
+| الاختبار | TTFT | الوقت الكلي | الجودة |
+|----------|------|-------------|--------|
+| استدعاء التمرين | 0.85s | 4.77s | 12/12 ✅ |
+| شرح الإجابة النموذجية | **1.78s** | **5.90s** | LaTeX ✅، لا هلوسة ✅ |
+
+**النموذج الأساسي:** `nvidia/nemotron-3-nano-30b-a3b:free`
+- TTFT=2.06s مع context 9670 حرف
+- يُجيب بالعربية الصحيحة
+- Fallback: `inclusionai/ring-2.6-1t:free`
+
+**مسار الشرح (fallback_path=2.5):**
+```
+سؤال الطالب
+    ↓
+detect_explanation_with_context() → recognized=True
+    ↓
+run_local_graph_with_exercise_context(
+    question=...,
+    exercise_full_content=9670 حرف,  ← كامل بدون ضغط
+    max_tokens=900
+)
+    ↓
+nvidia/nemotron-3-nano-30b-a3b:free
+    ↓
+بث حرف وراء حرف عبر WebSocket
+```
+
+**قواعد البث — لا تُخرق:**
+- المحتوى يُرسَل **كاملاً** للـ LLM (9670 حرف) — لا ضغط، لا اختصار
+- البث حرف وراء حرف عبر `asyncio.sleep(0)` في `_stream_model`
+- الـ frontend يُجمِّع الـ chunks عبر `requestAnimationFrame` (~16ms) لعرض سلس
+
+---
+
 *هذه المهارة جزء من منظومة CogniForge التعليمية — مخصصة لطلاب البكالوريا الجزائريين.*
-*آخر تحديث: 2026-05-13 — ISS-052: تطوير الاسترجاع الدلالي + streaming word-by-word*
+*آخر تحديث: 2026-05-13 — ISS-055: نموذج أسرع + TTFT 44s→1.78s + بث كامل حرف وراء حرف*

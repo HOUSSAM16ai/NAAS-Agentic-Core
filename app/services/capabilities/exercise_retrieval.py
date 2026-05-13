@@ -564,6 +564,7 @@ class ExplanationWithContextDecision(RobustBaseModel):
     recognized=True يعني: المستخدم يريد شرح تمرين بكالوريا محدد موجود في قاعدة المعرفة.
     full_content يحوي نص التمرين + الإجابة النموذجية الكاملة للـ LLM.
     display_content يحوي نص التمرين فقط (بدون حل) للعرض المبدئي.
+    requested_part: الجزء المطلوب (I / II / III) إن حُدِّد — يُمكِّن التقطيع الذكي.
     """
 
     recognized: bool
@@ -571,6 +572,7 @@ class ExplanationWithContextDecision(RobustBaseModel):
     matched_entry: ExerciseEntry | None = None
     full_content: str | None = None      # نص + إجابة نموذجية → للـ LLM كـ context
     display_content: str | None = None   # نص فقط → للعرض المبدئي للطالب
+    requested_part: str | None = None    # ISS-055: hint للتقطيع الذكي (I/II/III)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -622,10 +624,37 @@ def detect_explanation_with_context(
     # display_content = نص التمرين فقط (بدون إجابة نموذجية)
     display_content = format_exercise_for_display(matched_entry, raw_content)
 
+    # ISS-055: كشف الجزء المطلوب لتمرير hint للـ local_graph
+    # يُمكِّن التقطيع الذكي في run_local_graph_with_exercise_context
+    requested_part = _detect_requested_part_from_question(request.question)
+
     return ExplanationWithContextDecision(
         recognized=True,
         reason="bac_explanation_with_context",
         matched_entry=matched_entry,
         full_content=full_content,
         display_content=display_content,
+        requested_part=requested_part,
     )
+
+
+def _detect_requested_part_from_question(question: str) -> str | None:
+    """
+    يكشف عن الجزء المطلوب من التمرين (I / II / III) من سؤال الطالب.
+
+    يُستخدم لتمرير hint للـ local_graph لتقطيع السياق ذكياً.
+    """
+    normalized = question.strip().lower()
+    _PART_HINTS: dict[str, tuple[str, ...]] = {
+        "I": ("الجزء الأول", "الجزء i", "part i", "part 1", "الجزء 1",
+              "g(x)", "الدالة g", "دالة g", "السؤال الأول", "g\\(x\\)"),
+        "II": ("الجزء الثاني", "الجزء ii", "part ii", "part 2", "الجزء 2",
+               "f(x)", "الدالة f", "دالة f", "السؤال الثاني", "f\\(x\\)"),
+        "III": ("الجزء الثالث", "الجزء iii", "part iii", "part 3", "الجزء 3",
+                "h(x)", "الدالة h", "دالة h", "التكامل", "الدالة الأصلية",
+                "السؤال الثالث", "h\\(x\\)"),
+    }
+    for part, patterns in _PART_HINTS.items():
+        if any(p in normalized for p in patterns):
+            return part
+    return None

@@ -110,13 +110,15 @@ class ActiveModels:
     # nemotron-3-super-120b-a12b:free كان يُعيد chunk واحد فقط → لا typing effect
     # ISS-STREAM-003: inclusionai/ring-2.6-1t:free — النموذج الوحيد المتاح حالياً
     # الذي يدعم streaming حقيقي (كلمة وراء كلمة) عبر OpenRouter (2026-05-13).
-    PRIMARY = _resolve_primary_model("inclusionai/ring-2.6-1t:free")
+    # ISS-055: nemotron-3-nano-30b-a3b — TTFT=2.06s مع context 9670 حرف، عربية صحيحة
+    # inclusionai/ring-2.6-1t:free — fallback سريع للاسترجاع
+    PRIMARY = _resolve_primary_model("nvidia/nemotron-3-nano-30b-a3b:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
-    GATEWAY_FALLBACK_1 = "nvidia/nemotron-3-super-120b-a12b:free"
-    GATEWAY_FALLBACK_2 = "arcee-ai/trinity-large-thinking:free"
-    GATEWAY_FALLBACK_3 = "openai/gpt-oss-120b:free"
-    GATEWAY_FALLBACK_4 = "nvidia/nemotron-3-nano-30b-a3b:free"
+    GATEWAY_FALLBACK_1 = "inclusionai/ring-2.6-1t:free"
+    GATEWAY_FALLBACK_2 = "nvidia/nemotron-3-super-120b-a12b:free"
+    GATEWAY_FALLBACK_3 = "openai/gpt-oss-20b:free"
+    GATEWAY_FALLBACK_4 = "openai/gpt-oss-120b:free"
     GATEWAY_FALLBACK_5 = "z-ai/glm-4.5-air:free"
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY

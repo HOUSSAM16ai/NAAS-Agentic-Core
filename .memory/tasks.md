@@ -417,4 +417,11 @@ After running `docker compose -f docker-compose.yml up -d`:
 - **File**: `app/api/routers/system/`
 
 ### 18. Add BAC exercise search integration test
-- **File**: `tests/integration/` (new)
+- **File**: `tests/integration/test_bac_exercise_websocket.py`
+- **Status**: ✅ DONE (2026-05-13) — 6 اختبارات تكاملية تمر كلها
+  - T1: نص التمرين الكامل (بدون YAML، بدون إجابة نموذجية)
+  - T2: السؤال الأول بدون حل
+  - T3: شرح مفصل يصل إلى نتائج الإجابة النموذجية
+  - T4: شرح شرح (مبررات رياضية)
+  - WebSocket subprotocol auth
+  - event payload structure

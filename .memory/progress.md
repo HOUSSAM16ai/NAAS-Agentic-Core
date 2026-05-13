@@ -1743,6 +1743,33 @@ cogniforge_pipeline_invocations_total{mode="full"} 2.0
 
 ---
 
+## ✅ Session: 2026-05-13 — BAC Live Test + WebSocket Auth Fixes (ISS-052)
+
+### ما تم التحقق منه
+تجريب حي كامل لتمرين الدوال العددية 2016 الموضوع الثاني التمرين الرابع الدورة الأولى عبر WebSocket بحساب الطالب العادي (`STANDARD_USER`).
+
+### نتائج التشخيص (4 تجارب على conversation_id: 448/449)
+| التجربة | النتيجة | الحجم | Chunks |
+|---------|---------|-------|--------|
+| T1 نص التمرين الكامل | ✅ I+II+III بدون YAML وبدون إجابة نموذجية | 2925 حرف | 108 |
+| T2 السؤال الأول بدون حل | ✅ نص السؤال فقط بدون أي حسابات | 767 حرف | 100 |
+| T3 شرح مفصل حسب المنهجية | ✅ يصل إلى نتائج الإجابة النموذجية | 3717-7397 حرف | streaming |
+| T4 شرح شرح (تعمق أكثر) | ✅ مبررات رياضية كاملة | 14323-14868 حرف | streaming |
+
+### أخطاء WebSocket تم توثيقها (ISS-052 — 5 root causes)
+1. **ISS-052-A**: المحادثة WebSocket فقط — لا `POST /api/chat/messages`
+2. **ISS-052-B**: websockets v16 → `from websockets.asyncio.client import connect`
+3. **ISS-052-C**: token في `subprotocols=["jwt", TOKEN]` وليس Authorization header
+4. **ISS-052-D**: payload مُدمَج تحت `event["payload"]` وليس flat
+5. **ISS-052-E**: token صلاحيته 30 دقيقة — يجب تجديده
+
+### Artefacts جديدة
+- `tests/integration/test_bac_exercise_websocket.py` — 6 اختبارات تكاملية رسمية
+- `CLAUDE.md §6.30` — بروتوكول WebSocket الصحيح موثَّق
+- `.memory/issues.md` — ISS-052 موثَّق
+
+---
+
 ## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
 
 - حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.

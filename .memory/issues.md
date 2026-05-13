@@ -837,3 +837,18 @@
   - The streaming fallback path #2 in `chat_with_agent()` must use `_stream_local_retrieval_response()` not `_build_local_retrieval_response()` directly — otherwise typing effect breaks.
   - `_SOLUTION_SECTION_MARKERS` must include every section start that precedes solutions (`### الجزء I`, `## عناصر الإجابة`, etc.). Adding new KB files requires extending this list if their solution headers differ.
 - **Status**: FIXED 2026-05-13 — branch `claude/fix-exercise-display-eaIQC`.
+
+---
+
+### [FIXED] ISS-052 · WebSocket client auth + event structure — 5 root causes · FIXED (2026-05-13)
+
+- **Context**: تجريب حي لاستدعاء تمرين الدوال العددية 2016 الموضوع الثاني التمرين الرابع الدورة الأولى عبر WebSocket.
+- **ISS-052-A — endpoint خاطئ**: المحادثة تعمل عبر WebSocket حصراً. لا يوجد `POST /api/chat/messages` — يُرجع 404.
+  - الـ endpoints الصحيحة: `ws://.../api/chat/ws` (customer) و `ws://.../admin/api/chat/ws` (admin).
+- **ISS-052-B — websockets v16 API**: `from websockets.client import connect` → `DeprecationWarning` + `TypeError: unexpected keyword argument 'additional_headers'`. الصحيح: `from websockets.asyncio.client import connect`.
+- **ISS-052-C — طريقة المصادقة**: إرسال الـ token عبر `Authorization` header → `NegotiationError: no subprotocols supported`. الصحيح: `subprotocols=["jwt", TOKEN]` — مطابق لـ `useRealtimeConnection.js:56`.
+- **ISS-052-D — بنية الـ events**: الـ payload مُدمَج تحت `event["payload"]` وليس flat. `event.get("content")` يُرجع دائماً `None`. الصحيح: `payload_data = event.get("payload") or event`.
+- **ISS-052-E — token منتهي الصلاحية**: صلاحية 30 دقيقة. الخادم يُغلق بـ code 4401 بدون رسالة → يبدو كـ `connection open → connection closed` فوراً. يجب تجديد الـ token قبل كل جلسة.
+- **Fix**: بروتوكول اختبار WebSocket الصحيح موثَّق في `CLAUDE.md §6.30`.
+- **Verified**: 4 تجارب حية ناجحة — نص التمرين + السؤال الأول + شرح مفصل + شرح شرح. كل نتيجة تطابق الإجابة النموذجية.
+- **Status**: FIXED 2026-05-13 — branch `feat/bac-live-test-websocket-fix`.

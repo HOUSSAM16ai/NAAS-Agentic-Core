@@ -23,7 +23,7 @@ class SimpleAIClient:
 
     def __init__(self) -> None:
         self.api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
-        self.model = os.getenv("OPENROUTER_MODEL", "z-ai/glm-4.5-air:free")
+        self.model = os.getenv("OPENROUTER_MODEL", "inclusionai/ring-2.6-1t:free")
         self.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
     async def generate_text(

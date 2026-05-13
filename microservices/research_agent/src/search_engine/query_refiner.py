@@ -52,7 +52,7 @@ def _build_refiner(dspy: ModuleType) -> object:
 
 
 def get_refined_query(
-    user_query: str, api_key: str, model_name: str = "z-ai/glm-4.5-air:free"
+    user_query: str, api_key: str, model_name: str = "inclusionai/ring-2.6-1t:free"
 ) -> dict[str, object]:
     """
     إعادة صياغة الاستعلام عبر DSPy مع استخراج بيانات وصفية مساعدة.

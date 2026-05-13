@@ -495,7 +495,7 @@ def _configure_dspy() -> None:
 
     try:
         dspy_model = os.getenv(
-            "OPENROUTER_DSPY_MODEL", "z-ai/glm-4.5-air:free"
+            "OPENROUTER_DSPY_MODEL", "inclusionai/ring-2.6-1t:free"
         ).strip()
         if not dspy_model.startswith("openai/"):
             dspy_model = f"openai/{dspy_model}"

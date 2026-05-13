@@ -511,7 +511,7 @@ class OrchestratorAgent:
 
         try:
             response = await self.ai_client.generate(
-                model="z-ai/glm-4.5-air:free",
+                model="inclusionai/ring-2.6-1t:free",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question},

@@ -42,7 +42,7 @@ class PlanningAgentSettings(BaseSettings):
     # AI Settings
     OPENROUTER_API_KEY: SecretStr | None = Field(None, description="مفتاح API لخدمة OpenRouter")
     AI_MODEL: str = Field(
-        "z-ai/glm-4.5-air:free",
+        "inclusionai/ring-2.6-1t:free",
         description="اسم النموذج المستخدم في التخطيط",
     )
     AI_BASE_URL: str = Field(

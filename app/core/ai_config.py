@@ -62,7 +62,7 @@ class AvailableModels:
     """
 
     GPT_4O = "openai/gpt-4o"
-    GPT_4O_MINI = "z-ai/glm-4.5-air:free"
+    GPT_4O_MINI = "inclusionai/ring-2.6-1t:free"
     GPT_4_TURBO = "openai/gpt-4-turbo"
     GPT_4 = "openai/gpt-4"
     GPT_35_TURBO = "openai/gpt-3.5-turbo"
@@ -80,11 +80,11 @@ class AvailableModels:
     PHI_3_MINI_FREE = "microsoft/phi-3-mini-128k-instruct:free"
     KAT_CODER_PRO_FREE = "kwaipilot/kat-coder-pro:free"
     QWEN_QWEN3_CODER_FREE = "qwen/qwen3-coder:free"
-    NEMOTRON_3_SUPER_120B_FREE = "z-ai/glm-4.5-air:free"
+    NEMOTRON_3_SUPER_120B_FREE = "inclusionai/ring-2.6-1t:free"
     DEVSTRAL_2512 = "mistralai/devstral-2512:free"
-    GLM_4_5_AIR_FREE = "z-ai/glm-4.5-air:free"
+    GLM_4_5_AIR_FREE = "inclusionai/ring-2.6-1t:free"
     DEEPSEEK_R1_CHIMERA_FREE = "tngtech/deepseek-r1t2-chimera:free"
-    NEMOTRON_3_NANO = "z-ai/glm-4.5-air:free"
+    NEMOTRON_3_NANO = "inclusionai/ring-2.6-1t:free"
 
 
 class ActiveModels:
@@ -106,11 +106,11 @@ class ActiveModels:
     ╚═══════════════════════════════════════════════════════════════════════════════════╝
     """
 
-    # ISS-STREAM-002: z-ai/glm-4.5-air:free كنموذج أساسي موحَّد عبر النظام
+    # ISS-STREAM-002: inclusionai/ring-2.6-1t:free كنموذج أساسي موحَّد عبر النظام
     # nemotron-3-super-120b-a12b:free كان يُعيد chunk واحد فقط → لا typing effect
-    # ISS-STREAM-003: liquid/lfm-2.5-1.2b-instruct:free — النموذج الوحيد المتاح حالياً
+    # ISS-STREAM-003: inclusionai/ring-2.6-1t:free — النموذج الوحيد المتاح حالياً
     # الذي يدعم streaming حقيقي (كلمة وراء كلمة) عبر OpenRouter (2026-05-13).
-    PRIMARY = _resolve_primary_model("liquid/lfm-2.5-1.2b-instruct:free")
+    PRIMARY = _resolve_primary_model("inclusionai/ring-2.6-1t:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
     GATEWAY_FALLBACK_1 = AvailableModels.GEMINI_2_FLASH_EXP_FREE

@@ -683,6 +683,22 @@ detect_exercise_retrieval(question)
 
 **Status**: IMPLEMENTED 2026-05-13 — branch `claude/fix-exercise-display-eaIQC`.
 
+## D-050 · Exercise Explanation with Context — Third Fallback Path (ISS-053, 2026-05-13)
+**Decision**: إضافة مسار ثالث في fallback chain بين exercise_retrieval (2.0) و LangGraph (3.0) يُسمى "شرح مع سياق" (fallback_path=2.5).
+**Problem**: طلبات "اشرح تمرين الدوال العددية 2016" كانت تُلغي الاسترجاع (explanation_intent) وتذهب إلى LangGraph بدون محتوى التمرين → هلوسة.
+**Solution**:
+- `detect_explanation_with_context()` في `exercise_retrieval.py`: تكشف عن طلبات شرح تمرين بكالوريا محدد (نمط شرح + تحديد بالسنة/الموضوع/الدالة) وتجلب `full_content` (نص + إجابة نموذجية) + `display_content` (نص فقط).
+- `run_local_graph_with_exercise_context()` في `local_graph.py`: يُمرِّر المحتوى الكامل للـ LLM كـ context صريح مع `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` (منهجية شرح الإجابة النموذجية خطوة بخطوة).
+- `_stream_exercise_explanation_response()` في `orchestrator_client.py`: مُدرَج في fallback chain.
+**Fallback chain المحدَّث**: `file_intelligence(1) → exercise_retrieval(2.0) → exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
+**Invariants**:
+- `full_content` يشمل دائماً الإجابة النموذجية (للـ LLM فقط).
+- `display_content` لا يشمل الإجابة النموذجية (للعرض المبدئي للطالب).
+- المسار يُفعَّل فقط عند وجود نمط شرح + تحديد تمرين بكالوريا معروف في الفهرس.
+- الشرح العام ("اشرح مفهوم المشتقة") يذهب للـ LangGraph كالمعتاد.
+**Evidence**: 4 اختبارات نجحت حياً. شرح g(x) 2016 يعمل بدون هلوسة.
+**Status**: IMPLEMENTED 2026-05-13.
+
 ## D-049 · Primary Model Switch to inclusionai/ring-2.6-1t:free (2026-05-13, superseded gemma-4-31b)
 **Decision**: النموذج الأساسي = `inclusionai/ring-2.6-1t:free` (Inclusion AI Ring 2.6, 1T params MoE).
 **History (نفس اليوم)**:

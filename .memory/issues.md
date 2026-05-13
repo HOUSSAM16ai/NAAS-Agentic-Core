@@ -1,5 +1,22 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-12 | Branch: `claude/setup-microservices-monitoring-ralbR`
+> Last updated: 2026-05-13 | Branch: `claude/setup-microservices-monitoring-ralbR`
+
+---
+
+## 🟢 Resolved 2026-05-13 (ISS-053 — BAC Exercise Explanation Hallucination)
+
+### ISS-053 · LLM يُهلوس عند طلب شرح تمرين الدوال العددية 2016 [RESOLVED]
+- **Status**: RESOLVED 2026-05-13
+- **Severity**: CRITICAL (الطالب يحصل على تمرين احتمالات أو رد "لا أملك التفاصيل" بدلاً من شرح الدوال العددية)
+- **Root cause**: `detect_exercise_retrieval` تُلغي الاسترجاع عند وجود "اشرح" (explanation_intent) → يذهب الطلب إلى LangGraph بدون محتوى التمرين → LLM يُهلوس. المسار القديم: `explanation_intent → LangGraph(no context) → hallucination`.
+- **Fix**: مسار ثالث جديد **"شرح مع سياق"** في fallback chain:
+  1. `exercise_retrieval.py`: دالة `detect_explanation_with_context()` + `ExplanationWithContextDecision` — تكشف عن طلبات شرح تمرين بكالوريا محدد وتجلب `full_content` (نص + إجابة نموذجية، 9670 حرف) + `display_content` (نص فقط، 2913 حرف).
+  2. `local_graph.py`: دالة `run_local_graph_with_exercise_context()` + `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` — يُمرِّر المحتوى الكامل للـ LLM كـ context صريح مع تعليمات شرح الإجابة النموذجية.
+  3. `orchestrator_client.py`: `_stream_exercise_explanation_response()` مُدرَج في fallback chain بـ `fallback_path=2.5` (بين exercise_retrieval=2.0 و LangGraph=3.0).
+  4. `ai_config.py`: تحديث 5 نماذج احتياطية بنماذج مُتحقَّق منها حياً (nvidia/nemotron-3-super-120b-a12b:free, arcee-ai/trinity-large-thinking:free, openai/gpt-oss-120b:free, nvidia/nemotron-3-nano-30b-a3b:free, z-ai/glm-4.5-air:free).
+- **Fallback chain المحدَّث**: `file_intelligence(1) → exercise_retrieval(2.0) → exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
+- **Evidence (live)**: شرح g(x) 2016 يعمل بدون هلوسة، LaTeX صحيح، الإجابة النموذجية مُدرجة في السياق. 4 اختبارات نجحت.
+- **Files**: `app/services/capabilities/exercise_retrieval.py`, `app/services/chat/local_graph.py`, `app/infrastructure/clients/orchestrator_client.py`, `app/core/ai_config.py`
 
 ---
 

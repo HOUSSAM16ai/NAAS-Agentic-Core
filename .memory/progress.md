@@ -1770,6 +1770,36 @@ cogniforge_pipeline_invocations_total{mode="full"} 2.0
 
 ---
 
+## ✅ Session: 2026-05-13 — ISS-053: BAC Exercise Explanation Hallucination Fix
+
+### المشكلة
+طلبات "اشرح تمرين الدوال العددية 2016" كانت تُهلوس — LLM يُرجع تمرين احتمالات أو يقول "لا أملك التفاصيل".
+
+### السبب الجذري
+`detect_exercise_retrieval` تُلغي الاسترجاع عند وجود "اشرح" (explanation_intent) → يذهب الطلب إلى LangGraph بدون محتوى التمرين → هلوسة.
+
+### الحل: مسار ثالث "شرح مع سياق" (fallback_path=2.5)
+
+| الملف | التعديل |
+|-------|---------|
+| `exercise_retrieval.py` | `detect_explanation_with_context()` + `ExplanationWithContextDecision` + 35 نمط |
+| `local_graph.py` | `run_local_graph_with_exercise_context()` + `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` |
+| `orchestrator_client.py` | `_stream_exercise_explanation_response()` في fallback chain |
+| `ai_config.py` | 5 نماذج احتياطية مُتحقَّق منها حياً |
+
+### Fallback chain المحدَّث
+`file_intelligence(1) → exercise_retrieval(2.0) → exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
+
+### نتائج الاختبار الحي
+| الاختبار | النتيجة |
+|---------|---------|
+| جلب نص التمرين | ✅ 2913 حرف، بدون إجابة نموذجية |
+| شرح مع سياق — full_content | ✅ 9670 حرف (نص + إجابة نموذجية) |
+| شرح حي مع LLM | ✅ يذكر g(x)، لا هلوسة احتمالات، LaTeX صحيح |
+| الشرح العام لا يُفعِّل المسار | ✅ يذهب للـ LangGraph كالمعتاد |
+
+---
+
 ## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
 
 - حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.

@@ -484,3 +484,174 @@ async def run_local_graph_stream(
                 "ws.chat.delta.total",
                 labels={"path": "local_graph_stream"},
             )
+
+
+# ─── شرح التمرين مع السياق الكامل — ISS-053 ─────────────────────────────────
+#
+# المشكلة: "اشرح تمرين الدوال العددية 2016" كان يذهب إلى LangGraph بدون محتوى
+# التمرين → LLM يُهلوس تمريناً خاطئاً أو يقول "لا أملك التفاصيل".
+#
+# الحل: نجلب المحتوى الكامل (نص + إجابة نموذجية) من قاعدة المعرفة ونُمرِّره
+# للـ LLM كـ context صريح مع تعليمات شرح الإجابة النموذجية خطوة بخطوة.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_EXERCISE_EXPLANATION_SYSTEM_PROMPT = (
+    "أنت مساعد تعليمي متخصص للطلاب الجزائريين المتقدمين لامتحان البكالوريا.\n\n"
+    "## مهمتك\n"
+    "لديك النص الكامل لتمرين بكالوريا مع إجابته النموذجية الرسمية.\n"
+    "اشرح الإجابة النموذجية للطالب خطوة بخطوة بأسلوب تعليمي واضح.\n\n"
+    "## منهجية الشرح الإلزامية\n"
+    "لكل سؤال فرعي:\n"
+    "1. **المبدأ الرياضي**: اذكر القانون أو المبدأ المستخدم\n"
+    "2. **الخطوات التفصيلية**: اشرح كيف وصلنا إلى الإجابة النموذجية خطوة بخطوة\n"
+    "3. **النتيجة النهائية**: ضعها في صندوق $$\\boxed{...}$$\n"
+    "4. **التفسير الهندسي**: أضفه عند الطلب أو عند الأهمية\n\n"
+    "## قواعد LaTeX الإلزامية\n"
+    "- المعادلات المستقلة: $$...$$\n"
+    "- الرموز المضمّنة في النص: \\(...\\)\n"
+    "- النتائج النهائية: $$\\boxed{...}$$\n\n"
+    "## قاعدة 2016 الاستثنائية\n"
+    "سنة 2016 هي السنة الوحيدة في تاريخ بكالوريا الجزائر بدورتين (الأولى والثانية).\n"
+    "هذا التمرين يخص الدورة الأولى حصراً.\n\n"
+    "## أسلوب الإجابة\n"
+    "- أجب بالعربية الفصحى الواضحة\n"
+    "- استخدم الخطوات المرقمة والشرح التفصيلي\n"
+    "- لا تختصر — الطالب يحتاج الفهم الكامل\n"
+    "- اعتمد حصراً على الإجابة النموذجية المُقدَّمة، لا تخترع إجابات"
+)
+
+
+async def run_local_graph_with_exercise_context(
+    question: str,
+    exercise_full_content: str,
+    conversation_id: int | None,
+    history_messages: list[dict] | None = None,
+    trace_context=None,
+) -> AsyncGenerator[str, None]:
+    """
+    يشرح تمرين بكالوريا محدد بالاعتماد على محتواه الكامل (نص + إجابة نموذجية).
+
+    يحل ISS-053: بدلاً من إرسال السؤال للـ LLM بدون سياق (→ هلوسة)، نُمرِّر
+    المحتوى الكامل للتمرين كـ context صريح مع تعليمات شرح الإجابة النموذجية.
+
+    Args:
+        question: سؤال الطالب (مثل "اشرح الجزء الثاني من التمرين")
+        exercise_full_content: نص التمرين + الإجابة النموذجية الكاملة
+        conversation_id: معرف المحادثة للذاكرة
+        history_messages: سياق المحادثة السابقة
+        trace_context: سياق التتبع للـ observability
+
+    Yields:
+        str: قطع النص التتابعية (streaming)
+    """
+    from app.core.ai_gateway import get_ai_client
+
+    sanitized_question = question.replace("\x00", "").strip()
+    if not sanitized_question or not exercise_full_content:
+        return
+
+    history = history_messages or []
+    history_text = _format_history(history)
+
+    # بناء رسالة المستخدم مع السياق الكامل للتمرين
+    context_block = (
+        f"## محتوى التمرين الكامل (نص + إجابة نموذجية رسمية)\n\n"
+        f"{exercise_full_content}\n\n"
+        f"---\n\n"
+    )
+
+    if history_text:
+        user_message = (
+            f"{context_block}"
+            f"## سياق المحادثة السابقة\n{history_text}\n\n"
+            f"## طلب الطالب الحالي\n{sanitized_question}"
+        )
+    else:
+        user_message = (
+            f"{context_block}"
+            f"## طلب الطالب\n{sanitized_question}"
+        )
+
+    obs = None
+    span_ctx = None
+    t0 = time.perf_counter()
+    with contextlib.suppress(Exception):
+        from app.telemetry.unified_observability import get_unified_observability
+
+        obs = get_unified_observability()
+        span_ctx = obs.start_trace(
+            "langgraph.exercise_explanation_stream",
+            parent_context=trace_context,
+            tags={
+                "thread_id": str(conversation_id) if conversation_id is not None else "anon",
+                "intent": "exercise_explanation",
+                "question_len": len(sanitized_question),
+                "context_len": len(exercise_full_content),
+            },
+        )
+        obs.increment_counter(
+            "langgraph.intent.total",
+            labels={"intent": "exercise_explanation", "graph": "local"},
+        )
+
+    ai_client = get_ai_client()
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": _EXERCISE_EXPLANATION_SYSTEM_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
+
+    chunk_count = 0
+    total_chars = 0
+    try:
+        async for raw_chunk in ai_client.stream_chat(messages):
+            try:
+                choices = raw_chunk.get("choices") if isinstance(raw_chunk, dict) else None
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {}) or {}
+                content = delta.get("content")
+                if not content or not isinstance(content, str):
+                    continue
+                clean = content.replace("\x00", "")
+                if not clean:
+                    continue
+                chunk_count += 1
+                total_chars += len(clean)
+                yield clean
+            except Exception:
+                continue
+    except Exception:
+        logger.warning("local_graph.exercise_explanation_stream_failed", exc_info=True)
+        if obs is not None and span_ctx is not None:
+            with contextlib.suppress(Exception):
+                obs.end_span(span_ctx.span_id, status="ERROR")
+        return
+
+    duration_s = time.perf_counter() - t0
+    logger.info(
+        "local_graph.exercise_explanation_ok chunks=%d chars=%d duration_s=%.3f",
+        chunk_count,
+        total_chars,
+        duration_s,
+    )
+    if obs is not None and span_ctx is not None:
+        with contextlib.suppress(Exception):
+            obs.end_span(
+                span_ctx.span_id,
+                status="OK",
+                metrics={
+                    "duration_ms": duration_s * 1000,
+                    "chunks": float(chunk_count),
+                    "chars": float(total_chars),
+                },
+            )
+            obs.increment_counter(
+                "langgraph.node.count.total",
+                labels={"node": "exercise_explanation_stream", "graph": "local"},
+            )
+            obs.record_metric(
+                "langgraph.node.duration_seconds",
+                value=duration_s,
+                labels={"node": "exercise_explanation_stream", "graph": "local"},
+            )
+

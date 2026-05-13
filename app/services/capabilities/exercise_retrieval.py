@@ -477,3 +477,155 @@ def make_result(raw_result: str | None, entry: ExerciseEntry | None = None) -> E
     if raw_result is None or not raw_result.strip():
         return ExerciseRetrievalResult(success=False)
     return ExerciseRetrievalResult(success=True, message=raw_result, entry=entry)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# مسار الشرح مع السياق (ISS-053)
+#
+# المشكلة: عند "اشرح تمرين الدوال العددية 2016"، كانت explanation_intent تُلغي
+# الاسترجاع فيذهب الطلب إلى LangGraph بدون محتوى التمرين → هلوسة.
+#
+# الحل: مسار ثالث — "شرح مع سياق" — يكشف عن طلبات الشرح التي تُحدِّد تمريناً
+# بكالوريا معروفاً، يجلب محتواه الكامل (نص + إجابة نموذجية)، ويُمرِّره للـ LLM.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# أنماط تُشير إلى طلب شرح تمرين بكالوريا محدد (وليس شرح مفهوم عام)
+_BAC_EXERCISE_EXPLANATION_PATTERNS: tuple[str, ...] = (
+    # شرح + تمرين + سنة
+    "اشرح تمرين",
+    "شرح تمرين",
+    "وضح تمرين",
+    "فسر تمرين",
+    "explain exercise",
+    "explain the exercise",
+    # شرح + إجابة نموذجية
+    "اشرح الإجابة النموذجية",
+    "شرح الإجابة النموذجية",
+    "اشرح الحل",
+    "شرح الحل",
+    "اشرح الجواب",
+    "شرح الجواب",
+    "explain the solution",
+    "explain the answer",
+    # شرح + دالة رياضية محددة من التمرين
+    "اشرح g(x)",
+    "اشرح f(x)",
+    "اشرح h(x)",
+    "شرح g(x)",
+    "شرح f(x)",
+    "شرح h(x)",
+    # شرح + جزء من التمرين مع ذكر السنة (يُكشف لاحقاً بالسنة)
+    "اشرح الجزء",
+    "شرح الجزء",
+    "اشرح السؤال",
+    "شرح السؤال",
+    "اشرح الفقرة",
+    # طلب الشرح بالدارجة
+    "شرحلي",
+    "شرح لي",
+    "فهمني",
+    "علمني",
+    "وضحلي",
+)
+
+# أنماط تُحدِّد تمريناً بكالوريا بالسنة أو الموضوع أو الدالة
+_BAC_SPECIFICITY_PATTERNS: tuple[str, ...] = (
+    "2016",
+    "2024",
+    "2023",
+    "2022",
+    "2021",
+    "2020",
+    "بكالوريا",
+    "باكالوريا",
+    "bac",
+    "الموضوع الثاني",
+    "الموضوع الأول",
+    "التمرين الرابع",
+    "التمرين الأول",
+    "التمرين الثاني",
+    "التمرين الثالث",
+    "الدورة الأولى",
+    "الدورة الثانية",
+    "دوال عددية",
+    "الدوال العددية",
+    "g(x)",
+    "f(x)",
+    "h(x)",
+    "احتمالات",
+    "أعداد مركبة",
+)
+
+
+class ExplanationWithContextDecision(RobustBaseModel):
+    """
+    قرار مسار الشرح مع السياق.
+
+    recognized=True يعني: المستخدم يريد شرح تمرين بكالوريا محدد موجود في قاعدة المعرفة.
+    full_content يحوي نص التمرين + الإجابة النموذجية الكاملة للـ LLM.
+    display_content يحوي نص التمرين فقط (بدون حل) للعرض المبدئي.
+    """
+
+    recognized: bool
+    reason: str = ""
+    matched_entry: ExerciseEntry | None = None
+    full_content: str | None = None      # نص + إجابة نموذجية → للـ LLM كـ context
+    display_content: str | None = None   # نص فقط → للعرض المبدئي للطالب
+
+    model_config = {"arbitrary_types_allowed": True}
+
+
+def detect_explanation_with_context(
+    request: ExerciseRetrievalRequest,
+) -> ExplanationWithContextDecision:
+    """
+    يكشف عن طلبات شرح تمرين بكالوريا محدد ويجلب محتواه الكامل كـ context للـ LLM.
+
+    المنطق ثنائي المرحلة:
+    1. هل يوجد نمط شرح + تحديد تمرين بكالوريا؟ → مسار الشرح مع السياق
+    2. هل يوجد تمرين مطابق في قاعدة المعرفة؟ → جلب النص الكامل + الإجابة النموذجية
+
+    يحل ISS-053: طلبات "اشرح تمرين الدوال العددية 2016" كانت تذهب إلى LangGraph
+    بدون محتوى التمرين → هلوسة. الآن يحصل LLM على النص الكامل + الإجابة النموذجية.
+    """
+    normalized = request.question.strip().lower()
+
+    # المرحلة 1: هل يوجد نمط شرح تمرين بكالوريا؟
+    has_explanation_pattern = any(p in normalized for p in _BAC_EXERCISE_EXPLANATION_PATTERNS)
+    has_specificity = any(p in normalized for p in _BAC_SPECIFICITY_PATTERNS)
+
+    if not (has_explanation_pattern and has_specificity):
+        return ExplanationWithContextDecision(
+            recognized=False,
+            reason="no_bac_explanation_pattern",
+        )
+
+    # المرحلة 2: البحث عن تمرين مطابق في قاعدة المعرفة
+    matched_entry = _find_matching_entry(normalized)
+    if matched_entry is None:
+        return ExplanationWithContextDecision(
+            recognized=False,
+            reason="no_matching_entry_in_index",
+        )
+
+    # المرحلة 3: جلب المحتوى الكامل (نص + إجابة نموذجية)
+    raw_content = load_exercise_content(matched_entry)
+    if not raw_content:
+        return ExplanationWithContextDecision(
+            recognized=False,
+            reason="content_file_not_found",
+        )
+
+    # full_content = المحتوى الكامل بعد حذف YAML فقط (يشمل الإجابة النموذجية)
+    full_content = _strip_frontmatter(raw_content).strip()
+
+    # display_content = نص التمرين فقط (بدون إجابة نموذجية)
+    display_content = format_exercise_for_display(matched_entry, raw_content)
+
+    return ExplanationWithContextDecision(
+        recognized=True,
+        reason="bac_explanation_with_context",
+        matched_entry=matched_entry,
+        full_content=full_content,
+        display_content=display_content,
+    )

@@ -12,11 +12,14 @@ Per-turn chain:
 3. `CustomerChatBoundaryService.get_or_create_conversation` + `save_message(USER)` — Monolith writes the user message (single-writer)
 4. `OrchestratorClient.chat_with_agent(...)` → `app/infrastructure/clients/orchestrator_client.py:chat_with_agent`
    - HTTP attempt to `$ORCHESTRATOR_SERVICE_URL` → ConnectError in default Codespaces
-   - **fallback chain (in order, first non-None wins):**
-     - `_build_file_count_response`        (file-intelligence)
-     - `_build_local_retrieval_response`   (exercise-retrieval)
-     - `_build_local_graph_response`       (LangGraph local — `mark_fallback_used("local_graph")`)
-     - `_build_local_general_chat_response` (general LLM — `mark_fallback_used("local_general_chat")`)
+   - **fallback chain (in order, first non-None wins) — ISS-053 updated 2026-05-13:**
+     - `_build_file_count_response`              (1.0 — file-intelligence)
+     - `_stream_local_retrieval_response`        (2.0 — exercise-retrieval: جلب نص التمرين بدون إجابة)
+     - `_stream_exercise_explanation_response`   (2.5 — ISS-053: شرح تمرين بكالوريا مع سياق كامل)
+       → `detect_explanation_with_context()` → `run_local_graph_with_exercise_context()`
+       → LLM يحصل على نص التمرين + الإجابة النموذجية كـ context → لا هلوسة
+     - `_stream_local_graph_response`            (3.0 — LangGraph local — `mark_fallback_used("local_graph")`)
+     - `_stream_local_general_chat_response`     (4.0 — general LLM — `mark_fallback_used("local_general_chat")`)
 5. Persistence decision (`persisted=True`? skip : fail-safe write with 2 retries)
 6. `_emit_terminal_frames(...)` — single terminal `assistant_final` or `error` + one `persisted` event after save
 7. `close_ws_turn(...)` — closes span + emits metrics

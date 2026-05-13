@@ -108,7 +108,9 @@ class ActiveModels:
 
     # ISS-STREAM-002: z-ai/glm-4.5-air:free كنموذج أساسي موحَّد عبر النظام
     # nemotron-3-super-120b-a12b:free كان يُعيد chunk واحد فقط → لا typing effect
-    PRIMARY = _resolve_primary_model("z-ai/glm-4.5-air:free")
+    # ISS-STREAM-003: liquid/lfm-2.5-1.2b-instruct:free — النموذج الوحيد المتاح حالياً
+    # الذي يدعم streaming حقيقي (كلمة وراء كلمة) عبر OpenRouter (2026-05-13).
+    PRIMARY = _resolve_primary_model("liquid/lfm-2.5-1.2b-instruct:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
     GATEWAY_FALLBACK_1 = AvailableModels.GEMINI_2_FLASH_EXP_FREE

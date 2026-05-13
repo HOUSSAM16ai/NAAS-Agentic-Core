@@ -869,3 +869,29 @@
 - **Fix**: بروتوكول اختبار WebSocket الصحيح موثَّق في `CLAUDE.md §6.30`.
 - **Verified**: 4 تجارب حية ناجحة — نص التمرين + السؤال الأول + شرح مفصل + شرح شرح. كل نتيجة تطابق الإجابة النموذجية.
 - **Status**: FIXED 2026-05-13 — branch `feat/bac-live-test-websocket-fix`.
+
+---
+
+### [FIXED] ISS-054 · Machine-gun streaming + شرح التمرين timeout · FIXED (2026-05-13)
+
+- **Context**: تجربة حية كاملة لطلب تمرين الدوال العددية 2016 + شرح مفصل للإجابة النموذجية.
+- **ISS-054-A — Machine-gun streaming**: طلب التمرين يُنتج 401 chunk في 4.9 ثانية بـ 122/400 burst < 10ms. الـ frontend يستقبل كل chunk كـ `dispatchEvent` منفصل → `setMessages` → React re-render → 401 re-render في 4 ثوانٍ → الحروف تظهر كمدفع رشاش بشع.
+  - **السبب الجذري**: `useRealtimeConnection.js` يُطلق `dispatchEvent` لكل `onmessage` فوراً بدون batching.
+  - **الإصلاح**: `requestAnimationFrame` batching في `useRealtimeConnection.js` — يُجمِّع كل delta chunks في frame واحدة (~16ms) ويُدمج محتواها قبل dispatch واحد. النتيجة: 401 re-render → ~60fps batches (≈ 15-20 re-render).
+- **ISS-054-B — شرح التمرين timeout (90 ثانية بدون رد)**: طلب "اشرح لي شرحاً مفصلاً..." كان يتجمد تماماً.
+  - **السبب الجذري**: context التمرين (13650 حرف) + system prompt كبير → النموذج المجاني `inclusionai/ring-2.6-1t:free` يتجمد مع هذا الحجم. `BASE_TIMEOUT=30s` يُلغي الطلب قبل أن يبدأ.
+  - **الإصلاح 1**: `_MAX_EXERCISE_CONTEXT_CHARS = 6000` في `local_graph.py` — يقطع context إلى 6000 حرف (نصف أول + نصف أخير) بدلاً من 13650.
+  - **الإصلاح 2**: `_MAX_EXPLANATION_TOKENS = 1200` — يُحدِّد max_tokens لمنع توليد ردود طويلة جداً.
+  - **الإصلاح 3**: `BASE_TIMEOUT = 45.0` في `connection.py` (كان 30.0) — يُعطي النماذج المجانية وقتاً كافياً.
+  - **الإصلاح 4**: `stream_chat(messages, max_tokens=...)` — إضافة parameter لـ `max_tokens` في `simple_client.py`.
+  - **الإصلاح 5**: `asyncio.sleep(0)` بعد كل chunk في `_stream_model` — يُعطي event loop فرصة معالجة أحداث أخرى.
+- **Verified live**:
+  - طلب التمرين: TTFT=0.88s، 401 chunks، يعمل ✅
+  - شرح التمرين: TTFT=5.27s، 221 chunks، 1612 حرف، LaTeX صحيح، لا هلوسة ✅
+  - `Contains LaTeX: True` ✅ | `Hallucination: False` ✅
+- **Files changed**:
+  - `frontend/app/hooks/useRealtimeConnection.js` — rAF delta batching
+  - `app/core/gateway/simple_client.py` — asyncio.sleep(0) + max_tokens param
+  - `app/core/gateway/connection.py` — BASE_TIMEOUT 30→45
+  - `app/services/chat/local_graph.py` — _MAX_EXERCISE_CONTEXT_CHARS + _MAX_EXPLANATION_TOKENS
+- **Status**: FIXED 2026-05-13.

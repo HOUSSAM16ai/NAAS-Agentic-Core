@@ -1,3 +1,22 @@
+# Streaming Architecture — Live Fixes Log
+
+## ISS-054 Fix Summary (2026-05-13)
+
+### Root causes identified via live testing:
+1. **Machine-gun rendering**: `useRealtimeConnection.js` dispatched one `CustomEvent` per WebSocket message → 400+ `setMessages` calls in 4s → React re-render storm.
+   - **Fix**: `requestAnimationFrame` batching — buffer all `delta`/`assistant_delta` events, merge content, dispatch once per ~16ms frame.
+2. **Explanation timeout**: exercise context (13650 chars) + large system prompt → free model freezes. `BASE_TIMEOUT=30s` killed request before first token.
+   - **Fix**: `_MAX_EXERCISE_CONTEXT_CHARS=6000`, `_MAX_EXPLANATION_TOKENS=1200`, `BASE_TIMEOUT=45s`, `max_tokens` param in `stream_chat()`.
+3. **Broken LaTeX `$ $`**: `$$g(x)=...$$` single-line blocks fell through to `_split_preserving_latex()` which split on spaces → `$ $g(x)` in output.
+   - **Fix**: Added explicit single-line `$$...$$` guard before multi-line handler in `_stream_local_retrieval_response`.
+
+### Verified live results:
+- Exercise retrieval: TTFT=0.85s, 392 chunks, 2939 chars, LaTeX intact ✅
+- Explanation: TTFT=3.81s, 306 chunks, 1860 chars, no hallucination ✅
+- Frontend: 400 re-renders → ~60fps batches via rAF ✅
+
+---
+
 # Architectural Diagnosis: Streaming Event Bottleneck (2026-05-10)
 
 ## Overview

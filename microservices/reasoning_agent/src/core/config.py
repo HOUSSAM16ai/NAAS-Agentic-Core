@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     ORCHESTRATOR_URL: str = "http://localhost:8006"
 
     # Reasoning Config
-    DEFAULT_MODEL: str = "openai/gpt-4o-mini"
+    DEFAULT_MODEL: str = "z-ai/glm-4.5-air:free"
     MAX_TOKENS: int = 1024  # حد رمزي آمن لتجنب تجاوز رصيد OpenRouter
     REASONING_TIMEOUT: int = 300
 

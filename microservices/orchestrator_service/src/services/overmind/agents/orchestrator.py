@@ -511,7 +511,7 @@ class OrchestratorAgent:
 
         try:
             response = await self.ai_client.generate(
-                model="gpt-4o-mini",
+                model="z-ai/glm-4.5-air:free",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question},

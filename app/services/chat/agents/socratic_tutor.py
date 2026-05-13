@@ -245,7 +245,7 @@ class SocraticTutor:
 
         try:
             response = await self.ai_client.generate(
-                model="gpt-4o-mini",
+                model="z-ai/glm-4.5-air:free",
                 messages=messages,
                 response_format={"type": "json_object"},
             )

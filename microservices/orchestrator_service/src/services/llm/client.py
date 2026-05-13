@@ -44,10 +44,10 @@ class AIClient:
             api_key=api_key or "dummy-key",
             base_url=base_url,
         )
-        # ISS-STREAM-002: deepseek/deepseek-chat يدعم token-level streaming حقيقي عبر OpenRouter
+        # ISS-STREAM-002: z-ai/glm-4.5-air:free يدعم token-level streaming حقيقي عبر OpenRouter
         # nvidia/nemotron-3-super-120b-a12b:free كان يُعيد chunk واحد فقط → لا typing effect
         self.default_model = os.getenv(
-            "ORCHESTRATOR_LLM_MODEL", "deepseek/deepseek-chat"
+            "ORCHESTRATOR_LLM_MODEL", "z-ai/glm-4.5-air:free"
         )
 
     async def generate(

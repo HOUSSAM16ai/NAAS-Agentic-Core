@@ -140,7 +140,7 @@ async def _call_llm_if_available(question: str, intent: str, history: list[dict[
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+                    "model": "z-ai/glm-4.5-air:free",
                     "messages": messages,
                     "max_tokens": 512,
                 },

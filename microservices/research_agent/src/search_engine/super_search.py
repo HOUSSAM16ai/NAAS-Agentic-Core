@@ -109,7 +109,7 @@ class SuperSearchOrchestrator:
         else:
             api_key = os.environ.get("OPENROUTER_API_KEY")
             base_url = "https://openrouter.ai/api/v1"
-            model_name = os.environ.get("PRIMARY_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free")
+            model_name = os.environ.get("PRIMARY_MODEL", "z-ai/glm-4.5-air:free")
             self.llm = ChatOpenAI(
                 model=model_name,
                 openai_api_key=api_key,

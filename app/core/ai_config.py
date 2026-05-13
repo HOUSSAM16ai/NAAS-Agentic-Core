@@ -110,7 +110,10 @@ class ActiveModels:
     # nemotron-3-super-120b-a12b:free كان يُعيد chunk واحد فقط → لا typing effect
     # ISS-STREAM-003: liquid/lfm-2.5-1.2b-instruct:free — النموذج الوحيد المتاح حالياً
     # الذي يدعم streaming حقيقي (كلمة وراء كلمة) عبر OpenRouter (2026-05-13).
-    PRIMARY = _resolve_primary_model("liquid/lfm-2.5-1.2b-instruct:free")
+    # ISS-051 (2026-05-13): النموذج الأساسي تم تبديله إلى google/gemma-4-31b-it:free
+    # بطلب المستخدم — جودة عربية أعلى لتمارين البكالوريا. fallback chain يحمي
+    # الاستمرارية إن لم يكن متاحاً في OpenRouter (يمكن تبديل سريع عبر env).
+    PRIMARY = _resolve_primary_model("google/gemma-4-31b-it:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
     GATEWAY_FALLBACK_1 = AvailableModels.GEMINI_2_FLASH_EXP_FREE

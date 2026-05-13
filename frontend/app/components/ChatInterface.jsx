@@ -3,152 +3,267 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
+// ─── معالجة رموز LaTeX قبل التصيير ───────────────────────────────────────────
 const preprocessMath = (content) => {
-    if (!content) return "";
-    let processed = content.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
-    processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');
+    if (!content) return '';
+    let processed = content;
+    processed = processed.replace(/\\\[([^]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
+    processed = processed.replace(/\\\(([^]*?)\\\)/g, (_, inner) => `$${inner}$`);
     return processed;
 };
 
-const Markdown = memo(({ content }) => {
-    const safeContent = (content || "");
+// ─── شارة بطاقة الامتحان ─────────────────────────────────────────────────────
+const ExamBadge = memo(() => (
+    <div className="exam-badge">
+        <i className="fas fa-scroll exam-badge-icon" />
+        <span>ورقة امتحان رسمية — بكالوريا الجزائر</span>
+    </div>
+));
+ExamBadge.displayName = 'ExamBadge';
+
+// ─── مكوّن Markdown مع KaTeX فائق الجودة ─────────────────────────────────────
+const Markdown = memo(({ content, isStreaming = false }) => {
+    const safeContent = content || '';
     const processedContent = preprocessMath(safeContent);
 
+    const isExamContent = (
+        safeContent.includes('التمرين') &&
+        safeContent.includes('بكالوريا') &&
+        (safeContent.includes('$$') || safeContent.includes('\\(') || safeContent.includes('\\['))
+    );
+
     return (
-        <div className="markdown-content">
+        <div className={`markdown-content${isExamContent ? ' exam-content' : ''}`}>
+            {isExamContent && <ExamBadge />}
             <ReactMarkdown
                 remarkPlugins={[remarkMath]}
-                rehypePlugins={[rehypeKatex]}
+                rehypePlugins={[[rehypeKatex, {
+                    throwOnError: false,
+                    strict: false,
+                    trust: true,
+                    macros: {
+                        '\\R': '\\mathbb{R}',
+                        '\\N': '\\mathbb{N}',
+                        '\\Z': '\\mathbb{Z}',
+                        '\\C': '\\mathbb{C}',
+                    },
+                }]]}
+                components={{
+                    table: ({ children }) => (
+                        <div className="math-table-wrapper">
+                            <table className="math-table">{children}</table>
+                        </div>
+                    ),
+                    blockquote: ({ children }) => (
+                        <blockquote className="md-blockquote">{children}</blockquote>
+                    ),
+                    hr: () => <hr className="md-hr" />,
+                }}
             >
                 {processedContent}
             </ReactMarkdown>
+            {isStreaming && <span className="streaming-cursor" aria-hidden="true" />}
         </div>
     );
 });
 Markdown.displayName = 'Markdown';
 
+// ─── مؤشر الكتابة المتحرك ────────────────────────────────────────────────────
+const TypingIndicator = memo(() => (
+    <div className="typing-indicator" aria-label="جاري الكتابة...">
+        <span /><span /><span />
+    </div>
+));
+TypingIndicator.displayName = 'TypingIndicator';
+
+// ─── مكوّن رسالة واحدة ───────────────────────────────────────────────────────
+const MessageBubble = memo(({ msg, idx }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = useCallback(() => {
+        navigator.clipboard.writeText(msg.content).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    }, [msg.content]);
+
+    const isStreaming = msg.role === 'assistant' && !msg.isComplete;
+    const isEmpty = !msg.content || msg.content.trim() === '';
+
+    return (
+        <div className={`message ${msg.role}`}>
+            <div
+                className={`message-bubble${isStreaming ? ' streaming' : ''}${msg.isError ? ' error' : ''}`}
+                style={{ position: 'relative', paddingBottom: msg.role === 'assistant' ? '28px' : undefined }}
+            >
+                {msg.role === 'assistant' ? (
+                    isEmpty && isStreaming
+                        ? <TypingIndicator />
+                        : <Markdown content={msg.content} isStreaming={isStreaming} />
+                ) : (
+                    <span className="user-message-text">{msg.content}</span>
+                )}
+
+                {msg.role === 'assistant' && msg.isComplete && !isEmpty && (
+                    <button
+                        className={`copy-button${copied ? ' copied' : ''}`}
+                        onClick={handleCopy}
+                        title={copied ? 'تم النسخ!' : 'نسخ النص'}
+                        aria-label={copied ? 'تم النسخ' : 'نسخ'}
+                    >
+                        <i className={copied ? 'fas fa-check' : 'far fa-copy'} />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+});
+MessageBubble.displayName = 'MessageBubble';
+
+// ─── المكوّن الرئيسي ──────────────────────────────────────────────────────────
 export const ChatInterface = ({ messages, onSendMessage, status, user }) => {
     const [input, setInput] = useState('');
-    const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
+    const messagesEndRef = useRef(null);
+    const textareaRef = useRef(null);
     const [autoScroll, setAutoScroll] = useState(true);
 
-    const scrollToBottom = useCallback(() => {
-        if (messagesEndRef.current) {
-             messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
-        }
+    useEffect(() => {
+        if (!autoScroll) return;
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+        if (isNearBottom) container.scrollTop = container.scrollHeight;
+    }, [messages, autoScroll]);
+
+    const handleScroll = useCallback(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+        setAutoScroll(isNearBottom);
     }, []);
 
     useEffect(() => {
-        if (autoScroll) {
-            const container = messagesContainerRef.current;
-            if (container) {
-                const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-                if (isNearBottom) {
-                    container.scrollTop = container.scrollHeight;
-                }
-            }
-        }
-    }, [messages, autoScroll]);
+        const ta = textareaRef.current;
+        if (!ta) return;
+        ta.style.height = 'auto';
+        ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+    }, [input]);
 
-    const handleScroll = () => {
-        const container = messagesContainerRef.current;
-        if (container) {
-            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
-            setAutoScroll(isNearBottom);
-        }
-    };
-
-    const handleSend = () => {
-        if (!input.trim()) return;
+    const handleSend = useCallback(() => {
+        const trimmed = input.trim();
+        if (!trimmed) return;
         setAutoScroll(true);
-        onSendMessage(input, {});
+        onSendMessage(trimmed, {});
         setInput('');
-    };
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    }, [input, onSendMessage]);
 
-    const handleKeyPress = (e) => {
+    const handleKeyDown = useCallback((e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
         }
-    };
+    }, [handleSend]);
+
+    const isConnected = status === 'connected';
+    const isConnecting = status === 'connecting';
+    const hasStreamingMessage = messages.some(m => m.role === 'assistant' && !m.isComplete);
+
+    const QUICK_PROMPTS = [
+        'تمرين 2016 الدورة الأولى الموضوع الثاني التمرين الرابع',
+        'اعطني تمرين الدوال العددية',
+        'اعطني تمرين الاحتمالات 2024',
+    ];
 
     return (
         <div className="chat-container">
             <div className="messages" ref={messagesContainerRef} onScroll={handleScroll}>
                 {messages.length === 0 ? (
-                    <div className="welcome-message" style={{ textAlign: 'center', marginTop: '20vh', color: 'var(--text-secondary)' }}>
-                         <i className={`fas ${user.is_admin ? 'fa-brain' : 'fa-graduation-cap'}`} style={{fontSize: '3em', color: 'var(--primary-color)', marginBottom: '20px'}}></i>
-                        <h3>{user.is_admin ? 'System Ready' : 'مرحباً بك'}</h3>
-                        <p>{user.is_admin ? 'The Overmind is listening.' : 'اسألني أي شيء يخص دراستك.'}</p>
+                    <div className="welcome-screen">
+                        <div className="welcome-icon-wrapper">
+                            <i className={`fas ${user?.is_admin ? 'fa-brain' : 'fa-graduation-cap'} welcome-icon`} />
+                        </div>
+                        <h3 className="welcome-title">
+                            {user?.is_admin ? 'System Ready' : 'مرحباً بك في CogniForge'}
+                        </h3>
+                        <p className="welcome-subtitle">
+                            {user?.is_admin
+                                ? 'The Overmind is listening.'
+                                : 'اسألني أي شيء يخص دراستك — رياضيات، فيزياء، علوم.'}
+                        </p>
+                        {!user?.is_admin && (
+                            <div className="quick-prompts">
+                                {QUICK_PROMPTS.map((prompt) => (
+                                    <button
+                                        key={prompt}
+                                        className="quick-prompt-btn"
+                                        onClick={() => {
+                                            setInput(prompt);
+                                            textareaRef.current?.focus();
+                                        }}
+                                    >
+                                        <i className="fas fa-bolt" />
+                                        {prompt}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 ) : (
                     messages.map((msg, idx) => (
-                        <div key={msg.id || idx} className={`message ${msg.role}`}>
-                            <div className="message-bubble" style={{ position: 'relative', paddingBottom: msg.role === 'assistant' ? '24px' : undefined }}>
-                                {msg.role === 'assistant' ? <Markdown content={msg.content} /> : msg.content}
-                                {msg.role === 'assistant' && (
-                                    <button
-                                        className="copy-button"
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(msg.content).then(() => {
-                                                const btn = document.getElementById(`copy-btn-${msg.id || idx}`);
-                                                if (btn) {
-                                                    const icon = btn.querySelector('i');
-                                                    icon.className = 'fas fa-check';
-                                                    setTimeout(() => {
-                                                        icon.className = 'far fa-copy';
-                                                    }, 2000);
-                                                }
-                                            });
-                                        }}
-                                        id={`copy-btn-${msg.id || idx}`}
-                                        title="نسخ النص"
-                                        style={{
-                                            position: 'absolute',
-                                            bottom: '4px',
-                                            left: '8px',
-                                            background: 'transparent',
-                                            border: 'none',
-                                            color: 'var(--text-secondary)',
-                                            cursor: 'pointer',
-                                            padding: '4px',
-                                            borderRadius: '4px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            opacity: 0.6,
-                                            transition: 'opacity 0.2s, transform 0.1s',
-                                            fontSize: '0.85rem'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
-                                        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.9)'}
-                                        onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                    >
-                                        <i className="far fa-copy"></i>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
+                        <MessageBubble key={msg.id || idx} msg={msg} idx={idx} />
                     ))
                 )}
                 <div ref={messagesEndRef} />
             </div>
 
+            {!autoScroll && (
+                <button
+                    className="scroll-to-bottom-btn"
+                    onClick={() => {
+                        setAutoScroll(true);
+                        messagesContainerRef.current?.scrollTo({
+                            top: messagesContainerRef.current.scrollHeight,
+                            behavior: 'smooth',
+                        });
+                    }}
+                    aria-label="العودة للأسفل"
+                >
+                    <i className="fas fa-chevron-down" />
+                </button>
+            )}
+
             <div className="input-area-wrapper">
-                 <div className="input-area">
+                <div className={`input-area${isConnecting ? ' connecting' : ''}`}>
                     <textarea
+                        ref={textareaRef}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder={"اكتب سؤالك أو مهمتك..."}
-                        rows="1"
+                        onKeyDown={handleKeyDown}
+                        placeholder={isConnecting ? 'جاري الاتصال...' : 'اكتب سؤالك أو اطلب تمريناً...'}
+                        rows={1}
+                        disabled={isConnecting}
+                        aria-label="حقل الإدخال"
                     />
-                    <button onClick={handleSend} disabled={!input.trim()}>
-                        <i className="fas fa-arrow-up"></i>
+                    <button
+                        onClick={handleSend}
+                        disabled={!input.trim() || isConnecting}
+                        aria-label="إرسال"
+                    >
+                        {hasStreamingMessage
+                            ? <i className="fas fa-circle-notch fa-spin" />
+                            : <i className="fas fa-arrow-up" />
+                        }
                     </button>
-                 </div>
+                </div>
+                <div className="input-footer">
+                    <span className={`connection-status ${isConnected ? 'online' : isConnecting ? 'connecting' : 'offline'}`}>
+                        <span className="status-dot" />
+                        {isConnected ? 'متصل' : isConnecting ? 'جاري الاتصال...' : 'غير متصل'}
+                    </span>
+                    <span className="input-hint">Enter للإرسال · Shift+Enter لسطر جديد</span>
+                </div>
             </div>
         </div>
     );

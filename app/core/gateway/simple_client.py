@@ -71,9 +71,18 @@ class OpenRouterClient(LLMClient):
         context_str = json.dumps(context_msgs, sort_keys=True)
         return hashlib.sha256(context_str.encode()).hexdigest()
 
-    async def stream_chat(self, messages: list[JSONDict]) -> AsyncGenerator[JSONDict, None]:
+    async def stream_chat(
+        self,
+        messages: list[JSONDict],
+        max_tokens: int | None = None,
+    ) -> AsyncGenerator[JSONDict, None]:
         """
         يبث إكمال الدردشة مع تجربة النماذج حسب الأولوية.
+
+        Args:
+            messages: قائمة رسائل المحادثة.
+            max_tokens: الحد الأقصى للرموز المُولَّدة — يُقلِّص وقت الاستجابة
+                        للطلبات ذات السياق الكبير (مثل شرح التمارين).
         """
         if not messages:
             yield self._create_error_chunk("No messages provided.")
@@ -82,12 +91,6 @@ class OpenRouterClient(LLMClient):
         last_message = messages[-1]
         prompt = str(last_message.get("content", ""))
         context_hash = self._get_context_hash(messages)
-
-        # 1. Check Cognitive Cache (injected)
-        # Note: Logic preserved from original (disabled by default in code, but structure remains)
-        # if last_message.get("role") == "user":
-        #     cached = self.cognitive_engine.recall(prompt, context_hash)
-        #     ...
 
         # 2. Prepare Model List
         models_to_try = [self.primary_model, *self.fallback_models]
@@ -100,7 +103,7 @@ class OpenRouterClient(LLMClient):
         for model_id in models_to_try:
             try:
                 logger.info(f"Attempting model: {model_id}")
-                async for chunk in self._stream_model(client, model_id, messages):
+                async for chunk in self._stream_model(client, model_id, messages, max_tokens=max_tokens):
                     full_response_chunks.append(chunk)
                     yield chunk
 
@@ -122,17 +125,36 @@ class OpenRouterClient(LLMClient):
                 yield chunk
 
     async def _stream_model(
-        self, client: httpx.AsyncClient, model_id: str, messages: list[JSONDict]
+        self,
+        client: httpx.AsyncClient,
+        model_id: str,
+        messages: list[JSONDict],
+        max_tokens: int | None = None,
     ) -> AsyncGenerator[JSONDict, None]:
         """
         مولّد داخلي للبث من نموذج محدد.
+
+        ISS-STREAM-004: يُضيف asyncio.sleep(0) بعد كل chunk لإعطاء
+        event loop فرصة معالجة أحداث أخرى — يمنع machine-gun effect
+        حيث تصل 100+ chunk في أقل من 10ms مما يُجمِّد الواجهة.
         """
+        import asyncio
+
+        payload: dict[str, object] = {
+            "model": model_id,
+            "messages": messages,
+            "stream": True,
+            "temperature": 0.7,
+        }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+
         try:
             async with client.stream(
                 "POST",
                 f"{self.base_url}/chat/completions",
                 headers=self.headers,
-                json={"model": model_id, "messages": messages, "stream": True, "temperature": 0.7},
+                json=payload,
                 timeout=httpx.Timeout(BASE_TIMEOUT, connect=10.0),
             ) as response:
                 if response.status_code != 200:
@@ -151,6 +173,9 @@ class OpenRouterClient(LLMClient):
                         try:
                             chunk = json.loads(data_str)
                             yield chunk
+                            # ISS-STREAM-004: yield control to event loop after each chunk
+                            # prevents machine-gun bursts that freeze the frontend renderer
+                            await asyncio.sleep(0)
                         except json.JSONDecodeError:
                             continue
 

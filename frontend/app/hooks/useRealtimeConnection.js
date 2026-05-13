@@ -72,6 +72,47 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
           }
         };
 
+        // ISS-STREAM-004: Delta batching via requestAnimationFrame
+        // Problem: 400+ delta chunks arrive in <4s → 400+ dispatchEvent calls →
+        //          400+ React setState calls → machine-gun re-renders that freeze UI.
+        // Fix: buffer delta chunks and flush them in a single batch per animation frame.
+        //      Non-delta events (conversation_init, persisted, error, etc.) are dispatched
+        //      immediately to preserve correct lifecycle ordering.
+        const deltaBuffer = [];
+        let rafPending = false;
+
+        const flushDeltaBuffer = () => {
+          rafPending = false;
+          if (!mountedRef.current || deltaBuffer.length === 0) return;
+
+          // Merge all buffered delta content into a single chunk
+          const merged = deltaBuffer.splice(0).reduce((acc, ev) => {
+            const content = ev.payload?.content;
+            if (typeof content === 'string') acc += content;
+            return acc;
+          }, '');
+
+          if (!merged) return;
+
+          // Use the last buffered event as the envelope, replace content with merged
+          const baseEvent = deltaBuffer[0] || {};
+          const mergedEvent = {
+            ...baseEvent,
+            type: 'assistant_delta',
+            payload: { ...(baseEvent.payload || {}), content: merged },
+          };
+
+          window.dispatchEvent(new CustomEvent('agent:event', { detail: mergedEvent }));
+          window.dispatchEvent(new CustomEvent(`agent:event:${eventNamespace}`, { detail: mergedEvent }));
+        };
+
+        const scheduleDeltaFlush = () => {
+          if (!rafPending) {
+            rafPending = true;
+            requestAnimationFrame(flushDeltaBuffer);
+          }
+        };
+
         ws.onmessage = (event) => {
           if (!mountedRef.current) return;
 
@@ -92,17 +133,30 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
               _connection_id: connectionIdRef.current,
               _event_namespace: eventNamespace,
             };
-            // Broadcast agent events
-            window.dispatchEvent(
-              new CustomEvent("agent:event", {
-                detail: enrichedData,
-              })
-            );
-            window.dispatchEvent(
-              new CustomEvent(`agent:event:${eventNamespace}`, {
-                detail: enrichedData,
-              })
-            );
+
+            const eventType = data?.type;
+            const isDelta = eventType === 'delta' || eventType === 'assistant_delta';
+
+            if (isDelta) {
+              // Buffer delta events — flush once per animation frame (~16ms)
+              deltaBuffer.push(enrichedData);
+              scheduleDeltaFlush();
+            } else {
+              // Flush any pending deltas before dispatching lifecycle events
+              // to preserve correct ordering (e.g. deltas before assistant_final)
+              if (deltaBuffer.length > 0) flushDeltaBuffer();
+
+              window.dispatchEvent(
+                new CustomEvent("agent:event", {
+                  detail: enrichedData,
+                })
+              );
+              window.dispatchEvent(
+                new CustomEvent(`agent:event:${eventNamespace}`, {
+                  detail: enrichedData,
+                })
+              );
+            }
           } catch (e) {
             console.warn("Failed to parse WebSocket message:", e);
           }

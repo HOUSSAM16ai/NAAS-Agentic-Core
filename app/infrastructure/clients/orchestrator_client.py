@@ -289,6 +289,13 @@ class OrchestratorClient:
                 i += 1
                 continue
 
+            # معادلة LaTeX أحادية السطر $$...$$ — تُرسَل كوحدة واحدة لا تُكسَر
+            if stripped.startswith('$$') and stripped.endswith('$$') and len(stripped) > 4:
+                yield line
+                await asyncio.sleep(0.025)
+                i += 1
+                continue
+
             # معادلة LaTeX متعددة الأسطر $$ ... $$
             if stripped.startswith('$$') and not stripped.endswith('$$'):
                 block = line

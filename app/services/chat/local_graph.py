@@ -521,6 +521,23 @@ _EXERCISE_EXPLANATION_SYSTEM_PROMPT = (
 )
 
 
+_MAX_EXERCISE_CONTEXT_CHARS = 6000
+"""
+الحد الأقصى لحجم context التمرين المُرسَل للـ LLM.
+
+ISS-STREAM-005: النماذج المجانية على OpenRouter تتجمد مع context > 8000 حرف.
+نقطع المحتوى عند 6000 حرف للحفاظ على استجابة سريعة مع الاحتفاظ بالإجابة النموذجية.
+"""
+
+_MAX_EXPLANATION_TOKENS = 1200
+"""
+الحد الأقصى للرموز المُولَّدة في شرح التمرين.
+
+يمنع النماذج المجانية من توليد ردود طويلة جداً تُسبِّب timeout.
+1200 token ≈ 900 كلمة عربية — كافٍ لشرح مفصل لسؤال واحد.
+"""
+
+
 async def run_local_graph_with_exercise_context(
     question: str,
     exercise_full_content: str,
@@ -533,6 +550,9 @@ async def run_local_graph_with_exercise_context(
 
     يحل ISS-053: بدلاً من إرسال السؤال للـ LLM بدون سياق (→ هلوسة)، نُمرِّر
     المحتوى الكامل للتمرين كـ context صريح مع تعليمات شرح الإجابة النموذجية.
+
+    ISS-STREAM-005: يُقلِّص context إلى _MAX_EXERCISE_CONTEXT_CHARS حرف
+    ويُحدِّد max_tokens لمنع timeout مع النماذج المجانية.
 
     Args:
         question: سؤال الطالب (مثل "اشرح الجزء الثاني من التمرين")
@@ -553,10 +573,22 @@ async def run_local_graph_with_exercise_context(
     history = history_messages or []
     history_text = _format_history(history)
 
-    # بناء رسالة المستخدم مع السياق الكامل للتمرين
+    # ISS-STREAM-005: تقليص context لمنع timeout مع النماذج المجانية
+    # نحتفظ بالجزء الأخير (الإجابة النموذجية) لأنه الأهم للشرح
+    trimmed_content = exercise_full_content
+    if len(exercise_full_content) > _MAX_EXERCISE_CONTEXT_CHARS:
+        # نحتفظ بالنصف الأول (نص التمرين) + النصف الثاني (الإجابة النموذجية)
+        half = _MAX_EXERCISE_CONTEXT_CHARS // 2
+        trimmed_content = (
+            exercise_full_content[:half]
+            + "\n\n[... محتوى مختصر للأداء ...]\n\n"
+            + exercise_full_content[-half:]
+        )
+
+    # بناء رسالة المستخدم مع السياق المُقلَّص للتمرين
     context_block = (
-        f"## محتوى التمرين الكامل (نص + إجابة نموذجية رسمية)\n\n"
-        f"{exercise_full_content}\n\n"
+        f"## محتوى التمرين (نص + إجابة نموذجية رسمية)\n\n"
+        f"{trimmed_content}\n\n"
         f"---\n\n"
     )
 
@@ -603,7 +635,8 @@ async def run_local_graph_with_exercise_context(
     chunk_count = 0
     total_chars = 0
     try:
-        async for raw_chunk in ai_client.stream_chat(messages):
+        # ISS-STREAM-005: max_tokens يمنع timeout مع النماذج المجانية
+        async for raw_chunk in ai_client.stream_chat(messages, max_tokens=_MAX_EXPLANATION_TOKENS):
             try:
                 choices = raw_chunk.get("choices") if isinstance(raw_chunk, dict) else None
                 if not choices:

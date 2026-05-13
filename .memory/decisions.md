@@ -714,3 +714,24 @@ detect_exercise_retrieval(question)
 - لا تَحذف `_resolve_primary_model()` — هي بوابة الـ env override.
 - لا تُعدِّل ترتيب الـ fallback chain إلا بعد تجربة كل نموذج على streaming حقيقي.
 **Status**: IMPLEMENTED 2026-05-13 — branch `claude/fix-exercise-display-eaIQC`.
+
+## D-050 · JSON Envelope Anti-Leak + Indexed Retrieval Preemption + Typewriter Smoothing (2026-05-13, ISS-056)
+**Decision**: ثلاث طبقات دفاع متراكبة لمنع كارثة JSON envelope leak التي شاهدها المستخدم حياً.
+**Problem**: عند طلب «اعطني تمرين دوال عددية 2016 الدورة الأولى الموضوع الثاني التمرين الرابع»، ظهر للطالب:
+1. JSON خام `{"المصدر":"معرفة مادة","مستوى_الثقة":"0.70","التمرين":"لا توجد تفاصيل متاحة"...}` بدل التمرين الحقيقي.
+2. ملف صحيح موجود في `knowledge_base/bac2016_s1_math_exp_subject2_ex4_numerical_functions.md` لكن orchestrator-service لا يقرأه (vector DB مستقل).
+3. حروف "مدفع رشاش" بسبب rAF batching بـ 16ms frames.
+**Solution**:
+- **طبقة 1 (`microservices/orchestrator_service/src/api/routes.py`)**: دالة `_extract_human_readable_response(final_resp)` تستخرج فقط `التمرين`/`الإجابة`/`response`/`answer`/`content`/`text`/`final_response` من dict. تستبدل `_serialize_json_async(final_resp)` في ثلاثة مواقع (HTTP `/api/chat/messages`, WS `/api/chat/ws`, Admin WS).
+- **طبقة 2 (`microservices/orchestrator_service/src/services/overmind/graph/search.py`)**: `SynthesizerNode.__call__` يُرجِع `AIMessage(content=text_val)` بدل `AIMessage(content=json.dumps(response_json))`. هذا يمنع أي downstream consumer من التقاط dict كنص.
+- **طبقة 3 (`app/infrastructure/clients/orchestrator_client.py`)**: دالة `_has_indexed_match(question)` + preemption في بداية `chat_with_agent`. عند تطابق `decision.matched_entry is not None`، يبث المحتوى المُفهرَس النظيف مباشرة عبر `_stream_local_retrieval_response` ويتجاوز orchestrator-service + StateGraph + fallback chain.
+- **طبقة 4 (`frontend/app/components/ChatInterface.jsx`)**: خطّاف `useTypewriter(fullContent, isStreaming)` يكشف الحروف بإيقاع 60fps (~240 char/sec) أثناء streaming. عند `isStreaming=false` → كشف فوري للباقي.
+- **تنسيق (`frontend/app/globals.css`)**: فواصل بصرية بين أجزاء التمرين، KaTeX `nowrap` داخل `.exam-content`، media query للشاشات الصغيرة.
+**Invariants**:
+- `_serialize_json_async(final_resp)` للحمولة الخام محظور إلى الأبد. كل تحويل dict→نص يمر عبر `_extract_human_readable_response`.
+- `AIMessage.content` يجب أن يكون نص بشري — ليس JSON dump.
+- preemption الفهرسي يسبق orchestrator دائماً. بدون استثناء.
+- typewriter لا يبطّئ TTFT — يُجمِّل الإيقاع البصري فقط.
+- زر النسخ ينسخ `msg.content` الكامل، لا `displayedContent`.
+**Evidence**: قبل الإصلاح — JSON envelope مرئي في screenshot من المستخدم 2026-05-13. بعد الإصلاح — preemption يتطابق مع `knowledge_base/bac2016_s1_math_exp_subject2_ex4_numerical_functions.md` ويبث المحتوى النظيف.
+**Status**: IMPLEMENTED 2026-05-13 — branch `claude/fix-exercise-display-SRmNL`.

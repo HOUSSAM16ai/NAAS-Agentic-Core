@@ -2935,3 +2935,97 @@ extract_websocket_auth() priority order (ws_auth.py):
   3. ?token= query param   → development env only (ENVIRONMENT != production/staging)
 ```
 
+---
+
+## 6.31 JSON Envelope Anti-Leak + Indexed Retrieval Preemption + Typewriter Smoothing (2026-05-13, ISS-056 / D-049)
+
+> هذا القسم يحكم سلوك ثلاث طبقات حرجة معاً. كل قاعدة فيه نتجت عن كارثة حية شاهدها المستخدم — لا تكسرها بدون ADR.
+
+### الكارثة المُشخَّصة (قبل الإصلاح)
+
+عندما كتب الطالب: «اعطني تمرين دوال عددية شعبة علوم تجريبية الموضوع الثاني التمرين الرابع لسنة 2016 الدورة الأولى»، حصلت أربع كوارث متراكبة:
+
+| # | المظهر | السبب الجذري |
+|---|--------|-------------|
+| 1 | JSON خام `{"المصدر":"معرفة مادة","مستوى_الثقة":"0.70","التمرين":"لا توجد تفاصيل متاحة"...}` يظهر للطالب | `routes.py:1652,1939,2671` كانت تستدعي `_serialize_json_async(final_resp)` على dict من SynthesizerNode → يدمب المظروف كاملاً |
+| 2 | الـ retriever في StateGraph لا يطابق ملف `knowledge_base/bac2016_*` لأن قاعدة المعرفة الخاصة بـ orchestrator ليست متصلة بمجلد `knowledge_base/` في الـ monolith | تجاوز معماري: الـ orchestrator يستدعي قاعدة معرفة مستقلة |
+| 3 | الرد المُفهرَس النظيف (D-048) لا يعمل لأن الـ orchestrator يجيب أولاً | `chat_with_agent` يحاول orchestrator قبل fallback chain |
+| 4 | الحروف تظهر "مدفع رشاش" — بفترات تجميع 16ms (rAF batching) | لا يوجد typewriter smoothing على الـ frontend |
+
+### الإصلاح (D-049 — مطبَّق في فرع `claude/fix-exercise-display-SRmNL`)
+
+**الإصلاح 1 — منع تسريب JSON envelope (`microservices/orchestrator_service/src/api/routes.py`)**:
+- دالة جديدة `_extract_human_readable_response(final_resp)` تستخرج فقط الحقل البشري من dict:
+  - `التمرين` (SynthesizerNode envelope)
+  - `الإجابة` (AdminAgentNode / RenderAnswerNode envelope)
+  - `response`, `answer`, `content`, `text`
+  - `خطأ` → رسالة خطأ نظيفة بدلاً من dump
+- يحل ثلاثة مواقع تسريب: HTTP `/api/chat/messages` (line 1939 سابقاً)، WS `/api/chat/ws` (1655 سابقاً)، Admin WS (2670 سابقاً).
+- `SynthesizerNode.__call__` المُحَدَّث في `graph/search.py`: `AIMessage(content=text_val)` بدل `AIMessage(content=json.dumps(response_json))` → لا أي مكان آخر في graph يلتقط dict كنص.
+
+**الإصلاح 2 — Indexed Retrieval Preemption (`app/infrastructure/clients/orchestrator_client.py`)**:
+- دالة جديدة `OrchestratorClient._has_indexed_match(question)` تكشف عن تطابق محدد مع `knowledge_index`.
+- في بداية `chat_with_agent`: إذا `_has_indexed_match(question)` → نتجاوز orchestrator-service و StateGraph و fallback chain، نبث المحتوى المُفهرَس النظيف مباشرة عبر `_stream_local_retrieval_response`.
+- يضمن: لا تسرَّب JSON، لا هلوسة LLM، سرعة قصوى (لا HTTP roundtrip)، محتوى رسمي محدد من الفهرس.
+
+**الإصلاح 3 — Typewriter Smoothing (`frontend/app/components/ChatInterface.jsx`)**:
+- خطّاف `useTypewriter(fullContent, isStreaming)` يكشف الحروف بإيقاع ثابت (~240 char/sec @60fps) بغض النظر عن جودة الـ WebSocket batching.
+- إذا تراكم backlog > 800 char → يتسارع لمنع التأخر عن البث.
+- عند `isStreaming=false` → يكشف الباقي فوراً (لا تأخير زائف).
+- يطبَّق على `MessageBubble` للمساعد فقط (رسالة المستخدم تظهر كاملة فوراً).
+
+**الإصلاح 4 — KaTeX + بطاقة الامتحان (`frontend/app/globals.css`)**:
+- فواصل بصرية بين أجزاء التمرين (I, II, III) عبر `border-bottom` للعناوين.
+- `hr.md-hr` بـ gradient — مظهر فاخر بدل خط رمادي مسطح.
+- `katex { white-space: nowrap }` داخل `exam-content` — يمنع كسر LaTeX على عدة أسطر.
+- Media query للشاشات الصغيرة (≤640px) — يقلل حجم KaTeX لتجنب overflow أفقي.
+
+### القواعد الخمس الدائمة (لا تُكسر بدون ADR)
+
+**(1) JSON envelope لا يصل للطالب أبداً**: أي مكان في `routes.py` يحوِّل `final_response` إلى نص للمستخدم **يجب** أن يستخدم `_extract_human_readable_response()`. استخدام `_serialize_json_async(final_resp)` للحمولة الخام محظور.
+
+**(2) AIMessage يحمل النص البشري فقط**: عقد `final_response: dict + messages: [AIMessage]` بحيث `AIMessage.content` يجب أن يكون **النص** (text_val) لا JSON dump للمظروف. هذا يحمي ضد تسرُّب من أي downstream consumer.
+
+**(3) Indexed match → preempt orchestrator**: عندما `decision.matched_entry is not None` في `detect_exercise_retrieval`، الـ monolith يجب أن يبث من `_stream_local_retrieval_response` **قبل** محاولة orchestrator. السبب: الـ orchestrator يستدعي قاعدة معرفة مستقلة (vector DB) لا تشمل `knowledge_base/*.md`.
+
+**(4) Typewriter ≠ artificial delay**: الـ typewriter في `ChatInterface.jsx` يكشف الحروف بإيقاع 60fps فقط أثناء streaming. عند `isStreaming=false` (مثلاً بعد `assistant_final`) → يكشف كل الباقي فوراً. الـ typewriter لا يبطّئ الـ "زمن إلى أول كلمة"؛ يُجمِّل فقط الإيقاع البصري بعد البداية.
+
+**(5) Frontend copy = full content**: زر النسخ (`copy-button`) ينسخ `msg.content` الكامل، **لا** `displayedContent` المعروض جزئياً. الطالب الذي ينسخ أثناء streaming يحصل على النص الكامل.
+
+### إضافة ملف تمرين جديد + تأكد من preemption يعمل
+
+عند إضافة `.md` جديد إلى `knowledge_base/`:
+
+1. أضف entry في `app/services/capabilities/knowledge_index.py:KNOWLEDGE_INDEX` (مطلوب).
+2. تأكد من اختبار `detect_exercise_retrieval` يُرجع `recognized=True` و `matched_entry is not None`.
+3. اختبر يدوياً: `python3 -c "from app.services.capabilities.exercise_retrieval import detect_exercise_retrieval, ExerciseRetrievalRequest; d = detect_exercise_retrieval(ExerciseRetrievalRequest(question='سؤالك')); print(d.recognized, d.matched_entry)"`.
+4. إذا أُرجع `(False, None)` → الـ orchestrator سيتولى → احتمال تسرُّب أو هلوسة.
+5. إذا أُرجع `(True, <entry>)` → ضمان preemption وعرض المحتوى المُفهرَس النظيف.
+
+### قياس النجاح حياً
+
+```bash
+# 1. تجربة JSON envelope leak — يجب أن يكون مستحيلاً
+curl -N -X POST http://localhost:8006/api/chat/messages \
+  -H "Authorization: Bearer $JWT" \
+  -d '{"question":"اعطني تمرين دوال عددية 2016","user_id":7,"conversation_id":1}' \
+  | grep -E '"المصدر"|"مستوى_الثقة"|"رقم_التمرين"'
+# المتوقع: صفر مطابقات (المظروف لا يصل للعميل)
+
+# 2. preemption متحقَّق
+python3 -c "
+from app.services.capabilities.exercise_retrieval import detect_exercise_retrieval, ExerciseRetrievalRequest
+d = detect_exercise_retrieval(ExerciseRetrievalRequest(
+    question='اعطني تمرين دوال عددية شعبة علوم تجريبية الموضوع الثاني التمرين الرابع لسنة 2016 الدورة الأولى'
+))
+assert d.recognized and d.matched_entry, 'preemption broken'
+print('OK matched:', d.matched_entry.file_path)
+"
+# المتوقع: OK matched: knowledge_base/bac2016_s1_math_exp_subject2_ex4_numerical_functions.md
+
+# 3. لا duplicate text بعد البث (D-047 contract)
+# يجب أن تظهر >30 chunks، assistant_final.content يجب أن يكون فارغاً
+```
+
+---
+

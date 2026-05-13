@@ -12,6 +12,74 @@ const preprocessMath = (content) => {
     return processed;
 };
 
+// ─── ISS-056 (D-049): Typewriter Smoothing Buffer ─────────────────────────────
+// المشكلة: WebSocket frames تصل في رشقات (machine-gun). حتى مع rAF batching،
+// كل frame يعرض ~16ms من الحروف دفعة واحدة → تجربة مرئية مقطعة.
+//
+// الحل: عند streaming، نحتفظ بنص "displayed" أصغر من النص الفعلي. حلقة
+// requestAnimationFrame تكشف ~3-5 حروف لكل frame (~60fps) → ~180-300 char/sec
+// = تأثير كتابة سلس خارق. عند complete=true، نكشف الباقي فوراً.
+//
+// النتيجة: بغض النظر عن كم WebSocket frame وصل، الطالب يرى الحروف تتدفق
+// بإيقاع ثابت متجانس.
+// ─────────────────────────────────────────────────────────────────────────────
+const TYPEWRITER_CHARS_PER_FRAME = 4;   // ~240 char/sec @60fps — سلس بدون بطء
+const TYPEWRITER_INSTANT_THRESHOLD = 800; // إذا كان buffer > 800 char ادفع 12/frame
+
+const useTypewriter = (fullContent, isStreaming) => {
+    const [displayed, setDisplayed] = useState(fullContent || '');
+    const rafIdRef = useRef(null);
+
+    useEffect(() => {
+        const safeFull = fullContent || '';
+
+        // عند انتهاء streaming → اعرض كل المحتوى فوراً (لا تأخير زائف)
+        if (!isStreaming) {
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+            }
+            setDisplayed(safeFull);
+            return;
+        }
+
+        // عند streaming: ادفع الحروف بإيقاع ثابت
+        const tick = () => {
+            setDisplayed((prev) => {
+                if (prev.length >= safeFull.length) {
+                    rafIdRef.current = null;
+                    return prev;
+                }
+                const remaining = safeFull.length - prev.length;
+                // تسارع إذا كان الـ backlog كبير لمنع التأخر عن البث الحقيقي
+                const step = remaining > TYPEWRITER_INSTANT_THRESHOLD
+                    ? Math.max(TYPEWRITER_CHARS_PER_FRAME * 3, Math.ceil(remaining / 30))
+                    : TYPEWRITER_CHARS_PER_FRAME;
+                const next = prev + safeFull.slice(prev.length, prev.length + step);
+                if (next.length < safeFull.length) {
+                    rafIdRef.current = requestAnimationFrame(tick);
+                } else {
+                    rafIdRef.current = null;
+                }
+                return next;
+            });
+        };
+
+        if (rafIdRef.current === null) {
+            rafIdRef.current = requestAnimationFrame(tick);
+        }
+
+        return () => {
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+            }
+        };
+    }, [fullContent, isStreaming]);
+
+    return displayed;
+};
+
 // ─── شارة بطاقة الامتحان ─────────────────────────────────────────────────────
 const ExamBadge = memo(() => (
     <div className="exam-badge">
@@ -80,15 +148,23 @@ TypingIndicator.displayName = 'TypingIndicator';
 const MessageBubble = memo(({ msg, idx }) => {
     const [copied, setCopied] = useState(false);
 
+    const isStreaming = msg.role === 'assistant' && !msg.isComplete;
+    const isEmpty = !msg.content || msg.content.trim() === '';
+
+    // ISS-056: للمساعد فقط — typewriter سلس يُجمِّل عرض الـ deltas المتقطعة.
+    // المستخدم لا يحتاج typewriter لرسالته الخاصة.
+    const displayedContent = useTypewriter(
+        msg.role === 'assistant' ? (msg.content || '') : '',
+        isStreaming
+    );
+
     const handleCopy = useCallback(() => {
+        // ننسخ النص الكامل، ليس النسخة المعروضة جزئياً
         navigator.clipboard.writeText(msg.content).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         });
     }, [msg.content]);
-
-    const isStreaming = msg.role === 'assistant' && !msg.isComplete;
-    const isEmpty = !msg.content || msg.content.trim() === '';
 
     return (
         <div className={`message ${msg.role}`}>
@@ -99,7 +175,7 @@ const MessageBubble = memo(({ msg, idx }) => {
                 {msg.role === 'assistant' ? (
                     isEmpty && isStreaming
                         ? <TypingIndicator />
-                        : <Markdown content={msg.content} isStreaming={isStreaming} />
+                        : <Markdown content={displayedContent} isStreaming={isStreaming} />
                 ) : (
                     <span className="user-message-text">{msg.content}</span>
                 )}

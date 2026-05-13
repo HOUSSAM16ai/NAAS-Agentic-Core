@@ -98,6 +98,21 @@ class OrchestratorClient:
         """
         return detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
 
+    def _has_indexed_match(self, question: str) -> bool:
+        """يكشف عن طلب استرجاع تمرين بكالوريا مع تطابق مُفهرَس مؤكد.
+
+        ISS-056 (D-049 — Indexed Retrieval Preemption Doctrine):
+        عندما يطابق سؤال الطالب ملفاً محدداً في knowledge_index، نتجاوز
+        orchestrator-service و StateGraph وكل سلسلة fallback، ونعرض الملف
+        النظيف مباشرة. يضمن:
+          1. لا تسرَّب JSON envelope من SynthesizerNode
+          2. لا هلوسة من LLM
+          3. سرعة قصوى (لا HTTP roundtrip، لا LLM call)
+          4. محتوى محدد رسمياً (الملف في knowledge_base/)
+        """
+        decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+        return decision.recognized and decision.matched_entry is not None
+
     async def _execute_shell_tool(
         self,
         command: str,
@@ -750,6 +765,51 @@ class OrchestratorClient:
                     "question_len": len(question),
                 },
             )
+
+        # ─────────────────────────────────────────────────────────────────────
+        # ISS-056 (D-049 — Indexed Retrieval Preemption):
+        # إذا طابق السؤال تمريناً محدداً في knowledge_index، نتجاوز كل
+        # شيء (orchestrator + StateGraph + fallback chain) ونبث المحتوى
+        # المُفهرَس النظيف مباشرة. هذا يحل كارثة JSON envelope leak عند المصدر.
+        # ─────────────────────────────────────────────────────────────────────
+        if self._has_indexed_match(question):
+            logger.info(
+                "indexed_retrieval_preempt",
+                extra={
+                    "request_id": str(uuid.uuid4()),
+                    "question_len": len(question),
+                    "reason": "matched_knowledge_index_entry",
+                },
+            )
+            ret_streamed_chars = 0
+            try:
+                async for chunk in self._stream_local_retrieval_response(question):
+                    if not chunk:
+                        continue
+                    ret_streamed_chars += len(chunk)
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_delta", "payload": {"content": chunk}}
+                    )
+            except Exception:
+                logger.warning("indexed_retrieval_preempt_failed", exc_info=True)
+
+            if ret_streamed_chars > 0:
+                if _root_ctx:
+                    with contextlib.suppress(Exception):
+                        obs.end_span(
+                            _root_ctx.span_id,
+                            status="OK",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                "fallback_path": 0.5,  # preempt = أعلى من file_intelligence
+                                "stream_chars": float(ret_streamed_chars),
+                            },
+                        )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
+                return
+            # إذا فشل البث (نادر جداً) → نُكمل المسار العادي
 
         payload = {
             "question": question,

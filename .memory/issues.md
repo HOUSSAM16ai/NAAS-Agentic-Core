@@ -914,3 +914,41 @@
   - شرح الإجابة: TTFT=1.78s (كان 44.13s)، 5.90s كلي (كان 70.48s) ✅
   - التمرين كامل: بطاقة الامتحان + الجزء I + II + III + LaTeX سليم ✅
 - **Status**: FIXED 2026-05-13.
+
+---
+
+### [FIXED] ISS-056 · JSON envelope leak + wrong exercise + machine-gun streaming · FIXED (2026-05-13)
+
+- **Severity**: 🔴 Critical — كارثة مرئية للمستخدم الحقيقي.
+- **Context**: المستخدم طلب «اعطني تمرين دوال عددية شعبة علوم تجريبية الموضوع الثاني التمرين الرابع لسنة 2016 الدورة الأولى». ظهرت 4 كوارث متراكبة موثقة في screenshots.
+- **الأعراض المُشاهَدة**:
+  1. JSON خام `{"المصدر":"معرفة مادة","مستوى_الثقة":"0.70","التمرين":"لا توجد تفاصيل متاحة","الشعبة":...}` يظهر للطالب بدل التمرين.
+  2. ردود مقطوعة — أحياناً ظهر العنوان فقط دون محتوى التمرين.
+  3. ظهور تمرين خاطئ — أحياناً يأتي رد عام/مهلوس بدل تمرين 2016 المُفهرَس.
+  4. الحروف تظهر بشكل "مدفع رشاش" — رشقات سريعة كل 16ms بدل تدفق سلس.
+- **الأسباب الجذرية**:
+  1. **`microservices/orchestrator_service/src/api/routes.py` lines 1652/1939/2671**: `_serialize_json_async(final_resp)` كان يدمب dict مظروف SynthesizerNode (`{"المصدر","التمرين",...}`) كاملاً كنص للمستخدم.
+  2. **`microservices/orchestrator_service/src/services/overmind/graph/search.py:507-509`**: `AIMessage(content=json.dumps(response_json, ensure_ascii=False))` يُسرِّب dict عبر messages history.
+  3. **`app/infrastructure/clients/orchestrator_client.py:chat_with_agent`**: يحاول orchestrator-service أولاً قبل fallback chain. الـ orchestrator يستدعي vector DB مستقل لا يحوي `knowledge_base/*.md` → SynthesizerNode no-docs branch → JSON envelope.
+  4. **`frontend/app/components/ChatInterface.jsx`**: لا typewriter smoothing. الـ rAF batching في `useRealtimeConnection.js` يدفع 5-20 chunks لكل 16ms frame → مظهر مدفع رشاش.
+- **الإصلاحات (D-050)**:
+  - `routes.py`: دالة `_extract_human_readable_response(final_resp)` — تستخرج فقط الحقول البشرية (`التمرين`/`الإجابة`/`response`/...) من dict، تتعامل مع `خطأ` envelope بشكل مخصص. تستبدل `_serialize_json_async` في 3 مواقع.
+  - `graph/search.py`: `AIMessage(content=text_val)` بدل `AIMessage(content=json.dumps(...))`.
+  - `orchestrator_client.py`: `_has_indexed_match()` + preemption في بداية `chat_with_agent`. عند تطابق `matched_entry`، يبث المحتوى المُفهرَس النظيف ويتجاوز orchestrator كلياً.
+  - `ChatInterface.jsx`: خطّاف `useTypewriter(fullContent, isStreaming)` — 60fps reveal بإيقاع ~240 char/sec، تسارع للـ backlog الكبير، كشف فوري عند انتهاء streaming.
+  - `globals.css`: فواصل بصرية بين أجزاء التمرين، KaTeX nowrap داخل `.exam-content`، media query للشاشات الصغيرة.
+- **Files changed**:
+  - `microservices/orchestrator_service/src/api/routes.py` — `_extract_human_readable_response` + 3 leak sites fixed
+  - `microservices/orchestrator_service/src/services/overmind/graph/search.py` — `AIMessage(content=text_val)`
+  - `app/infrastructure/clients/orchestrator_client.py` — `_has_indexed_match()` + preemption block
+  - `frontend/app/components/ChatInterface.jsx` — `useTypewriter` hook + MessageBubble wiring
+  - `frontend/app/globals.css` — exam-content polish + KaTeX media query
+  - `CLAUDE.md` §6.31 — doctrine
+  - `.memory/decisions.md` D-050, `.memory/issues.md` ISS-056
+- **Invariants enforced**:
+  - JSON envelope dump → assistant_delta/final محظور إلى الأبد
+  - AIMessage.content = نص بشري فقط
+  - indexed match → preempt orchestrator
+  - typewriter لا يبطّئ TTFT
+  - copy button ينسخ النص الكامل
+- **Status**: FIXED 2026-05-13 — branch `claude/fix-exercise-display-SRmNL`.

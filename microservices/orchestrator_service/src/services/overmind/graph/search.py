@@ -500,11 +500,14 @@ class SynthesizerNode:
             state=state,
             confidence=float(confidence),
         )
-        import json
 
         from langchain_core.messages import AIMessage
 
+        # ISS-056: AIMessage carries the human-readable text ONLY.
+        # The metadata envelope lives in final_response for internal use; if any
+        # downstream code accidentally surfaces `messages[-1].content` to the user,
+        # they get the answer, never a JSON dump.
         return {
             "final_response": response_json,
-            "messages": [AIMessage(content=json.dumps(response_json, ensure_ascii=False))],
+            "messages": [AIMessage(content=text_val or "لا توجد تفاصيل متاحة.")],
         }

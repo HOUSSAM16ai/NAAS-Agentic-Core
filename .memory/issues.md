@@ -1065,3 +1065,51 @@
   - decision caching إلزامي (احسب مرة، مرِّر)
   - telemetry tags كاملة في كل explanation span
 - **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+### [FIXED] ISS-060 · KaTeX renders `\lambda` as `l a m b d a` letters · FIXED (2026-05-14)
+
+- **Severity**: 🔴 Critical visual catastrophe — رغم إصلاح D-051 السابق، LaTeX داخل الرياضيات يُرسَم بشكل خاطئ.
+- **Context**: المستخدم رفع screenshot يُظهر النص:
+  ```
+  )=
+  displaystyle int 0 lambda h(x),dxحيث
+  l a m b d a
+  lambdaعدد حقيقي موجب تماماً
+  lim lambdato+infty A(lambda
+  ```
+  بدلاً من `A(λ) = ∫₀^λ h(x)dx, lim_{λ→+∞} A(λ)` المُتوقَّع من الصورة المرجعية للتمرين الورقي.
+- **السبب الجذري (الأعمق من D-051)**:
+  D-051 طبَّع **حدود** الرياضيات (`\\(...\\)` → `\(...\)` → `$...$`) لكنه ترك **محتوى** الرياضيات كما هو. الـ knowledge_base يستخدم `\\command` لكل LaTeX:
+  - `\\lambda` (25 موضع)
+  - `\\int` (2 موضع)
+  - `\\infty` (51 موضع)
+  - `\\to` (21 موضع)
+  - `\\displaystyle` (1 موضع)
+  - `\\mathbb` (8 موضع)
+  - `\\,` (thin space)
+  KaTeX يفسِّر `\\` كأمر `\newline`، فيقرأ `\\lambda` كـ "newline + النص lambda" → يرسم الحروف منفصلة `l a m b d a`.
+- **الإصلاح (D-054 — سطر واحد جراحي)**:
+  إضافة خطوة 2 في `preprocessMath` بين تطبيع الحدود وتحويل `$...$`:
+  ```javascript
+  processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
+  ```
+  يُطبِّع `\\command` → `\command` لكل أوامر LaTeX. لا يلمس `\\\\` (newline حقيقي).
+- **Files changed**:
+  - `frontend/app/components/ChatInterface.jsx` — preprocessMath step 2 added
+  - `CLAUDE.md` §6.35, `.memory/decisions.md` D-054
+- **Live tests passed** (على ملف bac2016 الكامل):
+  - 0 موضع `\\command` متبقٍ (كانت 192+)
+  - 0 موضع `\\(` متبقٍ
+  - 25× `\lambda` صحيح
+  - 51× `\infty` صحيح
+  - 21× `\to` صحيح
+  - 2× `\int` صحيح
+  - 8× `\mathbb` صحيح
+  - سطر الكارثة بعد الإصلاح: `$A(\lambda) = \displaystyle\int_0^{\lambda} h(x)\,dx$` → KaTeX يرسم `A(λ) = ∫₀^λ h(x)dx`
+- **Invariants enforced**:
+  - `preprocessMath` هو الحارس الوحيد لتطبيع `\\command`
+  - الخطوات الثلاث متراكبة: تطبيع الحدود → تطبيع الأوامر → تحويل لـ `$...$`
+  - أي طبقة محذوفة = كارثة فورية
+- **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

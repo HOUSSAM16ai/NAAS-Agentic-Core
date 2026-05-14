@@ -3354,3 +3354,88 @@ spec = importlib.util.spec_from_file_location('lg', 'app/services/chat/local_gra
 
 ---
 
+## 6.35 KaTeX `\\command` Catastrophe — Double-Backslash inside Math Mode (2026-05-14, ISS-060 / D-054)
+
+> **الكارثة المرئية:** رغم D-051 (إصلاح حدود `\\(...\\)`)، الطالب رأى:
+> ```
+> displaystyle int 0 lambda h(x),dx
+> l a m b d a
+> lim lambdato+infty A(lambda
+> ```
+> KaTeX يرسم `lambda` كحروف منفصلة بدل الحرف اليوناني `λ`.
+
+### السبب الجذري (الأعمق من D-051)
+
+D-051 طبَّع **حدود** الرياضيات: `\\(...\\)` → `\(...\)` → `$...$`. لكنه ترك
+**محتوى** الرياضيات كما هو — يحوي `\\lambda`, `\\int`, `\\displaystyle`, `\\to`, `\\infty`.
+
+KaTeX يفسِّر هذه بالشكل التالي:
+- `\\` → أمر `\newline` (سطر جديد في الرياضيات)
+- `lambda` → نص حر، تُرسَم حروفه واحداً واحداً كمتغيرات (`l a m b d a`)
+- `int` → نص حر `int`، لا الرمز ∫
+- النتيجة: كارثة بصرية كاملة
+
+```
+$A(\\lambda) = \\displaystyle\\int_0^{\\lambda} h(x)\\,dx$
+       ↑                      ↑       ↑
+    newline+              newline+  newline+
+    "lambda"             "displaystyle int"   "lambda"
+```
+
+### الإصلاح (D-054 — سطر واحد جراحي)
+
+في `frontend/app/components/ChatInterface.jsx:preprocessMath()`، **بعد** تطبيع
+الحدود (الخطوة 1) و**قبل** تحويل `\(...\)` إلى `$...$` (الخطوة 3)، نُضيف
+**الخطوة 2**:
+
+```javascript
+// طبِّع `\\command` → `\command` لكل أوامر LaTeX داخل الرياضيات
+processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
+```
+
+الـ regex يطابق `\\` متبوعاً بـ:
+- **أحرف لاتينية واحد أو أكثر**: `\\lambda` → `\lambda`, `\\int` → `\int`, `\\displaystyle` → `\displaystyle`, `\\mathbb` → `\mathbb`
+- **punctuation LaTeX**: `\\,` → `\,` (thin space), `\\;` → `\;` (medium space), `\\!` → `\!` (negative space), `\\{` → `\{`, `\\}` → `\}`
+
+**لا يلمس**:
+- `\\\\` (4 backslashes = `\\` في الناتج = newline حقيقي في KaTeX)
+- نص markdown عادي خارج الرياضيات (markdown لا يستخدم `\\command`)
+
+### قياس النجاح حياً (على ملف bac2016 الكامل)
+
+```
+After fix:
+  remaining \\command: 0           ← قبل: 192+ موضع
+  remaining \\(  : 0
+  remaining \\[  : 0
+
+Properly-formed LaTeX commands:
+  \lambda: 25       (ترسم λ)
+  \int: 2           (ترسم ∫)
+  \infty: 51        (ترسم ∞)
+  \to: 21           (ترسم →)
+  \displaystyle: 1
+  \mathbb: 8        (ℝ, ℕ, إلخ)
+
+Catastrophe line (بعد الإصلاح):
+  $A(\lambda) = \displaystyle\int_0^{\lambda} h(x)\,dx$  ← KaTeX يرسم بشكل مثالي
+```
+
+### القاعدة الدائمة الأهم
+
+**knowledge_base يستخدم double-backslash لكل شيء** — هذا اصطلاح تاريخي ولن يتغيَّر
+(يكلف 192+ موقع تعديل). `preprocessMath` هو **الحارس الوحيد** الذي يُطبِّع هذا
+قبل remark-math. لا تُحذف خطوة `\\command → \command` أبداً.
+
+### السلسلة الكاملة (طبقات الإصلاح المتراكبة)
+
+| الخطوة | الإصلاح | بدون → النتيجة |
+|--------|---------|----------------|
+| D-051 step 1 | `\\(` → `\(` | بدونه: `\$g\$` يظهر literal |
+| D-054 step 2 | `\\lambda` → `\lambda` | بدونه: KaTeX يرسم `l a m b d a` |
+| D-051 step 3 | `\(g\)` → `$g$` | بدونه: remark-math يتجاهل |
+
+أي طبقة من هذه إذا حُذفت → كارثة مرئية فورية للطالب.
+
+---
+

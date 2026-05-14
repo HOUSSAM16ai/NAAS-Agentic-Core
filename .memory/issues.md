@@ -1156,3 +1156,31 @@
   - Font smoothing إلزامي للعربي
   - Border-image gradients محظورة على content headings
 - **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+### [FIXED] ISS-062 · Header bottom border visible as flickering white line · FIXED (2026-05-14)
+
+- **Severity**: 🔴 Critical UX — المستخدم بلَّغ: «يوجد خيط ابيض فوق كلمة مثال و بجانب كلمة متصل يظهر و يختفي مما يفسد تجربة المستخدم بشكل خطير مدمر».
+- **Context**: بعد إصلاح ISS-061 (D-055 — luxury theme)، الخلفية أصبحت سوداء نقية `#0a0a0a`. لكن `.header` لا يزال يحوي `border-bottom: 1px solid var(--border-color)` + `box-shadow`. الحد `#1f1f1f` (المُعرَّف في الـ dark theme) أصبح **مرئياً** كخط أبيض رفيع على الخلفية السوداء النقية.
+- **السبب الجذري**: `globals.css` السطر 98 — `.header` بـ `border-bottom: 1px solid var(--border-color)`. لم يكن مرئياً على slate-blue القديم (#0f172a vs #334155)، لكنه أصبح مرئياً على pure black (#0a0a0a vs #1f1f1f).
+- **لماذا «يظهر ويختفي»**: في الواقع الخط ثابت — لكن خلال streaming، typewriter يُعيد render المحتوى أسفل الخط ~60fps فيُسبب انطباع بصري بأن الخط «يومض». هذا هو ما رآه المستخدم.
+- **الإصلاح (D-055.1 — جراحي)**:
+  ```css
+  .header {
+      height: 60px;
+      background-color: var(--bg-color);  /* بدلاً من --surface-color */
+      border-bottom: none;                  /* كان: 1px solid var(--border-color) */
+      box-shadow: none;                     /* كان: var(--shadow-sm) */
+      ...
+  }
+  ```
+  الـ header الآن يندمج بسلاسة مع الـ body — لا فاصل بصري، لا خط أبيض. يتطابق مع الـ screenshot المرجعي الذي طلبه المستخدم.
+- **Files changed**:
+  - `frontend/app/globals.css` (`.header` rule)
+  - `.memory/issues.md` ISS-062
+- **Verification**:
+  - `grep -A8 "^\.header {" globals.css` → `border-bottom: none; box-shadow: none;` ✅
+  - `grep "border-bottom\|border-top" globals.css | grep -i header` → 0 ✅
+- **Invariant added**: على الخلفية السوداء النقية، أي `border` بلون `--border-color` على عناصر full-width سيظهر كخط مرئي. الـ headers/dividers الفاصلة بين كتل full-width يجب أن تستخدم **خلفية مختلفة** أو **margin/padding** بدل border لإنشاء فصل بصري.
+- **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

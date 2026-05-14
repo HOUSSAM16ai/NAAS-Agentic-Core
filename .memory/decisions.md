@@ -911,3 +911,37 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 > - **NEVER** border-bottom على عناصر full-width على خلفية pure-black
 **Evidence**: `grep "border-bottom: none"` في `.header` → موجود. `grep "box-shadow: none"` في `.header` → موجود.
 **Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+## D-055.2 · Legacy-Style Purge — Gold-Gradient Elimination (2026-05-14, ISS-063)
+**Decision**: حذف `frontend/app/legacy-style.css` بالكامل (578 سطراً) لأنه يفرض gradient ذهبي + cream colors تطغى على نظام D-055 الفاخر.
+**Problem**: المستخدم بلَّغ: «الخلفية لم تصبح سوداء فاخرة في الوضع الليلي ولا بيضاء فاخرة في الوضع النهاري — مزالت كارثية مدمرة خطيرة». رغم D-055 (pure-black `#0a0a0a` + pure-white `#ffffff`) و D-055.1 (header seamless)، الخلفية لا تزال warm/golden.
+**Root cause**: `layout.jsx` كان يستورد `legacy-style.css` **بعد** `globals.css`، فيتجاوز كل الإعدادات الفاخرة:
+- `:root { --background-color: #050506; --primary-color: #d4af37; --text-color: #f7f3ec; --border-color: rgba(212,175,55,0.28); }`
+- `body, html { background: radial-gradient(1200px, rgba(212,175,55,0.16), transparent 60%), radial-gradient(900px, rgba(0,170,255,0.12), transparent 55%), var(--background-color); }`
+
+النتيجة: gradient ذهبي 16% opacity + gradient أزرق 12% opacity فوق `#050506` = warm-cream glow، ليس "أسود فاخر".
+**Solution (3 steps)**:
+1. حذف الـ import من `layout.jsx`:
+   ```jsx
+   import "./globals.css";
+   // import "./legacy-style.css";  // حُذف
+   import 'katex/dist/katex.min.css';
+   ```
+2. حذف ملف `legacy-style.css` نفسه عبر `git rm`. تأكدنا أن لا dependency خارجي (`grep -r "var(--background-color)"` → 0 references خارج legacy-style.css نفسه).
+3. تقوية body rule في `globals.css`:
+   ```css
+   body, html {                       /* بنفس selector specificity كما في legacy */
+       background: var(--bg-color);   /* shorthand يُلغي أي background-image gradient */
+       ...
+   }
+   ```
+**Invariant added (8th rule لـ D-055)**:
+> Single source of truth for theming. نظام الثيم يعيش في **ملف CSS واحد** (`globals.css`). أي ملف "legacy" يحوي `:root { --bg: ... }` أو `body { background: ... }` = خطر فوري. يجب:
+> - مراجعة كل `import "*.css"` في layout files على PR
+> - استخدام `background` shorthand لإلغاء أي background-image قديم
+> - حذف ملفات CSS supplemental عند انتفاء الحاجة، لا تركها dormant
+**Evidence**:
+- `[ ! -f frontend/app/legacy-style.css ]` → ملف محذوف
+- `grep -i "212.*175.*55\|gold\|d4af37" globals.css` → 0 نتائج
+- `grep -A2 "^body, html" globals.css | grep "background:"` → موجود
+**Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

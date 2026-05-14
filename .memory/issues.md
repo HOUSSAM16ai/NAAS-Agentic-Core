@@ -1184,3 +1184,47 @@
   - `grep "border-bottom\|border-top" globals.css | grep -i header` → 0 ✅
 - **Invariant added**: على الخلفية السوداء النقية، أي `border` بلون `--border-color` على عناصر full-width سيظهر كخط مرئي. الـ headers/dividers الفاصلة بين كتل full-width يجب أن تستخدم **خلفية مختلفة** أو **margin/padding** بدل border لإنشاء فصل بصري.
 - **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+### [FIXED] ISS-063 · legacy-style.css overrides luxury theme with gold gradients · FIXED (2026-05-14)
+
+- **Severity**: 🔴 Critical UX — المستخدم بلَّغ بعد D-055 و D-055.1: «الخلفية لم تصبح سوداء فاخرة في الوضع الليلي ولا بيضاء فاخرة راقية فخمة في الوضع النهاري — مزالت كارثية مدمرة خطيرة».
+- **Context**: D-055 وضع pure-black `#0a0a0a` للـ dark و pure-white `#ffffff` للـ light. D-055.1 حذف border-bottom من الـ header. لكن المستخدم لا يزال يرى ألواناً warm/cream + golden glow.
+- **السبب الجذري**: `frontend/app/layout.jsx` كان يستورد ملفَّين CSS بالترتيب:
+  ```jsx
+  import "./globals.css";        // ← نظام D-055 الفاخر
+  import "./legacy-style.css";   // ← يطغى!
+  ```
+  `legacy-style.css` (578 سطراً) كان يحوي:
+  ```css
+  :root {
+      --background-color: #050506;         /* ليس pure-black */
+      --primary-color: #d4af37;            /* ذهبي */
+      --text-color: #f7f3ec;               /* cream */
+      --border-color: rgba(212,175,55,0.28); /* حدود ذهبية */
+  }
+  body, html {
+      background:
+          radial-gradient(1200px circle at 10% 0%, rgba(212,175,55,0.16), transparent 60%),
+          radial-gradient(900px circle at 90% 15%, rgba(0,170,255,0.12), transparent 55%),
+          var(--background-color);
+  }
+  ```
+  النتيجة: gradient ذهبي 16% + gradient أزرق 12% فوق `#050506` = warm-golden glow.
+- **الإصلاح (D-055.2 — 3 خطوات)**:
+  1. حذف `import "./legacy-style.css"` من `layout.jsx`
+  2. `git rm frontend/app/legacy-style.css` (الملف بالكامل — تأكدنا أن لا dependency خارجي)
+  3. تقوية body rule في globals.css: `body, html { background: var(--bg-color); ... }` بنفس selector specificity كما كان في legacy، مع `background` shorthand لإلغاء أي gradient cached
+- **Files changed**:
+  - `frontend/app/layout.jsx` (حذف الـ import)
+  - `frontend/app/legacy-style.css` (deleted — 578 سطراً)
+  - `frontend/app/globals.css` (body → body, html + background shorthand)
+  - `CLAUDE.md` §6.38, `.memory/decisions.md` D-055.2
+- **Verification**:
+  - `[ ! -f frontend/app/legacy-style.css ]` → ملف محذوف ✅
+  - `grep -i "212.*175.*55\|d4af37" frontend/app/globals.css` → 0 نتائج ✅
+  - `grep "import.*legacy-style" frontend/app/layout.jsx | grep -v "^//"` → 0 ✅
+  - `grep -A2 "^body, html" frontend/app/globals.css | grep "background:"` → موجود ✅
+- **Invariant added (8th rule لـ D-055)**: Single source of truth for theming. نظام الثيم يعيش في ملف CSS واحد. أي ملف "legacy" يحوي `:root` overrides = خطر فوري على نظام الثيم. مراجعة كل `import "*.css"` في layout files على PR.
+- **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

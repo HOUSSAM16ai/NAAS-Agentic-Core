@@ -530,11 +530,76 @@ ISS-055: خُفِّض من 6000 إلى 3000 حرف — النماذج المجا
 
 _MAX_EXPLANATION_TOKENS = 900
 """
-الحد الأقصى للرموز المُولَّدة في شرح التمرين.
+الحد الأقصى للرموز المُولَّدة في شرح التمرين الكامل.
 
 ISS-055: خُفِّض من 1200 إلى 900 — يُقلِّص وقت التوليد مع الحفاظ على جودة الشرح.
 900 token ≈ 650 كلمة عربية — كافٍ لشرح مفصل لجزء واحد.
+
+ISS-059: الآن يُستخدم فقط للأسئلة الشاملة. الأسئلة المركَّزة تُولِّد نسبة أصغر
+عبر `_classify_question_budget()`.
 """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ISS-059 (D-053 — Question-Aware Latency Budgets):
+# تأخُّر الإجابة عند طلب «تفصيل معين» كان كارثياً (~15-18s) لأن كل سؤال
+# يطلب 900 token مهما كان حجمه. الآن نُصنِّف السؤال إلى 4 أنواع ونعطي
+# كل نوع budget مناسب — TTFT لا يتغيَّر لكن **زمن الانتهاء** ينخفض كثيراً:
+#
+#   - CONCEPT (ماذا نقصد/ما هو) → context=1200, tokens=350, TTFB+stream ≈ 6s
+#   - JUSTIFICATION (لماذا/علِّل) → context=1500, tokens=450, ≈ 7s
+#   - METHOD (كيف نُثبت/كيف نحسب) → context=2000, tokens=600, ≈ 10s
+#   - FULL (اشرح التمرين/الجزء كاملاً) → context=3000, tokens=900, ≈ 15s
+# ─────────────────────────────────────────────────────────────────────────────
+
+# مفاتيح تصنيف نوع السؤال — استدلال خفيف بدون LLM
+_CONCEPT_PATTERNS: tuple[str, ...] = (
+    "ماذا نقصد", "ماذا يقصد", "ماذا تعني", "ماذا يعني",
+    "ما المقصود", "ما معنى", "ما مفهوم",
+    "ما هو معنى", "ما هي", "ما هو",
+    "what is", "what does", "what means",
+)
+
+_JUSTIFICATION_PATTERNS: tuple[str, ...] = (
+    "لماذا", "علِّل", "علل", "برِّر", "برر",
+    "why is", "why does", "justify",
+)
+
+_METHOD_PATTERNS: tuple[str, ...] = (
+    "كيف نُثبت", "كيف نثبت", "كيف نحسب", "كيف نُبيِّن", "كيف نبين",
+    "كيف نستنتج", "كيف نجد", "كيف نُوجد", "كيف يصبح", "كيف نصل", "كيف وصلنا",
+    "how to prove", "how to compute", "how to derive",
+)
+
+_FULL_EXPLANATION_PATTERNS: tuple[str, ...] = (
+    "اشرح التمرين", "شرح التمرين كامل",
+    "اشرح الجزء الكامل", "اشرح كل",
+    "اشرح بالتفصيل", "explain everything",
+    "explain in detail", "detailed explanation",
+)
+
+
+def _classify_question_budget(question: str) -> tuple[int, int, str]:
+    """يحدد budget السؤال (context_chars, max_tokens, label).
+
+    ISS-059: تجنُّب تأخُّر «تفصيل معين» — نسأل: ما حجم الإجابة المتوقَّع؟
+    سؤال «ماذا نقصد بـ X» لا يستحق 900 token — 350 token كافية ويوفر ~12s.
+
+    Returns:
+        (context_chars, max_tokens, classification_label)
+    """
+    normalized = question.strip().lower()
+
+    if any(p in normalized for p in _FULL_EXPLANATION_PATTERNS):
+        return _MAX_EXERCISE_CONTEXT_CHARS, _MAX_EXPLANATION_TOKENS, "full"
+    if any(p in normalized for p in _METHOD_PATTERNS):
+        return 2000, 600, "method"
+    if any(p in normalized for p in _JUSTIFICATION_PATTERNS):
+        return 1500, 450, "justification"
+    if any(p in normalized for p in _CONCEPT_PATTERNS):
+        return 1200, 350, "concept"
+    # افتراضي: متوسط (شرح جزء)
+    return 2500, 700, "default"
 
 # أنماط تحديد الجزء المطلوب من التمرين
 _PART_PATTERNS: dict[str, tuple[str, ...]] = {
@@ -662,19 +727,28 @@ async def run_local_graph_with_exercise_context(
     history = history_messages or []
     history_text = _format_history(history)
 
+    # ISS-059 (D-053): تصنيف السؤال لتحديد budget مناسب — يحل كارثة التأخير
+    # عند طلبات «تفصيل معين». سؤال «ماذا نقصد» يحصل على 350 token (≈ 6s إجمالي)
+    # بدل 900 token (≈ 15s)، مع context أصغر يُسرِّع TTFB أيضاً.
+    context_budget, token_budget, q_class = _classify_question_budget(sanitized_question)
+
     # ISS-055: تقطيع ذكي للسياق — نُرسل فقط الجزء المطلوب بدلاً من 9670 حرف كاملة
-    # يُقلِّص TTFT من 44s إلى < 5s عبر تقليص context من ~9000 إلى ~2000 حرف
     requested_part = _detect_requested_part(sanitized_question)
     if requested_part:
         trimmed_content = _extract_part_context(exercise_full_content, requested_part)
-        context_label = f"الجزء {requested_part} فقط"
-    elif len(exercise_full_content) > _MAX_EXERCISE_CONTEXT_CHARS:
+        # ISS-059: قصّ إضافي للسياق حسب budget السؤال
+        if len(trimmed_content) > context_budget:
+            trimmed_content = trimmed_content[:context_budget]
+        context_label = f"الجزء {requested_part} ({q_class})"
+    elif len(exercise_full_content) > context_budget:
         # طلب عام بدون تحديد جزء — نُرسل الجزء الأول كنقطة بداية
         trimmed_content = _extract_part_context(exercise_full_content, "I")
-        context_label = "الجزء I (افتراضي — لم يُحدَّد جزء)"
+        if len(trimmed_content) > context_budget:
+            trimmed_content = trimmed_content[:context_budget]
+        context_label = f"الجزء I ({q_class})"
     else:
         trimmed_content = exercise_full_content
-        context_label = "كامل"
+        context_label = f"كامل ({q_class})"
 
     # بناء رسالة المستخدم مع السياق المُقلَّص للتمرين
     context_block = (
@@ -710,11 +784,19 @@ async def run_local_graph_with_exercise_context(
                 "intent": "exercise_explanation",
                 "question_len": len(sanitized_question),
                 "context_len": len(exercise_full_content),
+                "context_budget": context_budget,  # ISS-059
+                "token_budget": token_budget,       # ISS-059
+                "q_class": q_class,                 # ISS-059
             },
         )
         obs.increment_counter(
             "langgraph.intent.total",
             labels={"intent": "exercise_explanation", "graph": "local"},
+        )
+        # ISS-059: تتبُّع budget classification في Grafana
+        obs.increment_counter(
+            "langgraph.q_class.total",
+            labels={"q_class": q_class, "graph": "local"},
         )
 
     ai_client = get_ai_client()
@@ -726,8 +808,9 @@ async def run_local_graph_with_exercise_context(
     chunk_count = 0
     total_chars = 0
     try:
-        # ISS-STREAM-005: max_tokens يمنع timeout مع النماذج المجانية
-        async for raw_chunk in ai_client.stream_chat(messages, max_tokens=_MAX_EXPLANATION_TOKENS):
+        # ISS-059 (D-053): max_tokens ديناميكي حسب نوع السؤال
+        # CONCEPT=350 | JUSTIFICATION=450 | METHOD=600 | DEFAULT=700 | FULL=900
+        async for raw_chunk in ai_client.stream_chat(messages, max_tokens=token_budget):
             try:
                 choices = raw_chunk.get("choices") if isinstance(raw_chunk, dict) else None
                 if not choices:

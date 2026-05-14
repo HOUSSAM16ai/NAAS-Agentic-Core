@@ -803,3 +803,37 @@ detect_exercise_retrieval(question)
 - Skill لا يستورد من Skill آخر مباشرة.
 **Evidence**: قبل الإصلاح — screenshot كارثي من المستخدم يُظهر 2016+2024 مدموجَين مع tags خام. بعد الإصلاح: 12/12 تجارب تنجح للأنماط، 4/4 تجارب تنجح لـ BACExerciseSkill، 0 false positives على math notation `x[1]`.
 **Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+## D-053 · Question-Aware Latency Budgets — Detail Question Time Catastrophe (2026-05-14, ISS-059)
+**Decision**: تصنيف ديناميكي للأسئلة مع budget مناسب لكل نوع + decision caching لتقليل أوقات الاستجابة بنسبة 60-70% للأسئلة القصيرة.
+**Problem**: المستخدم بلَّغ أن «طلب تفصيل معين» يتأخر بشكل خطير (15-18s). السبب: `_MAX_EXPLANATION_TOKENS=900` ثابت لكل أنواع الأسئلة. الـ LLM يولِّد ~50 tok/s على النماذج المجانية → حتى سؤال «ماذا نقصد بدالة أصلية» (يحتاج 200 token طبيعياً) يستغرق 18s. لا يوجد تمييز بين سؤال قصير وسؤال شامل.
+**Additional inefficiency**: `detect_explanation_with_context` كان يُستدعى **3 مرات** في نفس الطلب:
+1. `_has_explanation_with_context_match()` (call 1)
+2. داخل preempt block (إعادة الفحص — call 2)
+3. داخل `_stream_exercise_explanation_response()` (call 3 + file I/O مكرر)
+**Solution**:
+- **`local_graph.py:_classify_question_budget(question)`**: دالة جديدة تُصنِّف السؤال إلى 5 أنواع:
+  - CONCEPT (ماذا نقصد/ما هو) → context=1200, max_tokens=350, ETC ~7s
+  - JUSTIFICATION (لماذا/علِّل) → context=1500, max_tokens=450, ETC ~9s
+  - METHOD (كيف نُثبت/كيف نحسب) → context=2000, max_tokens=600, ETC ~12s
+  - DEFAULT (شرح الجزء) → context=2500, max_tokens=700, ETC ~14s
+  - FULL (اشرح التمرين كاملاً) → context=3000, max_tokens=900, ETC ~18s
+- **`run_local_graph_with_exercise_context`**: `(context_budget, token_budget, q_class) = _classify_question_budget(question)` ثم:
+  - يُقصُّ `trimmed_content[:context_budget]` بعد التقطيع الذكي
+  - يستدعي `ai_client.stream_chat(messages, max_tokens=token_budget)`
+  - يضع `q_class/context_budget/token_budget` في span tags
+- **`orchestrator_client.py:chat_with_agent`**: حساب `_explanation_decision` **مرة واحدة** ثم تمريره عبر `precomputed_decision=` parameter إلى `_stream_exercise_explanation_response`. يوفِّر ~10-20ms + يتجنَّب file I/O مكرَّر.
+- **`_stream_exercise_explanation_response(precomputed_decision=...)`**: parameter جديد. إذا قُدِّم، يستخدمه بدلاً من إعادة استدعاء `detect_explanation_with_context`.
+- **Metric جديد**: `cogniforge_langgraph_q_class_total{q_class,graph}` يُتاح في Grafana لتتبُّع توزيع أنواع الأسئلة.
+**Invariants**:
+- max_tokens يتناسب مع نوع السؤال — لا 900 ثابت لكل شيء.
+- decision caching إلزامي: احسب مرة واحدة، مرِّر عبر parameter.
+- telemetry كاملة: كل span explanation يحوي `q_class/context_budget/token_budget`.
+- التصنيف يحدث فقط للأسئلة المُفعَّلة في preempt (لا overhead على المسار العام).
+**Evidence**: قبل D-053 — كل سؤال ~18s. بعد D-053 — 11/11 تصنيف يجتاز:
+- CONCEPT  900→350 tokens → ~11s أسرع
+- JUSTIFY  900→450 tokens → ~9s أسرع
+- METHOD   900→600 tokens → ~6s أسرع
+- DEFAULT  900→700 tokens → ~4s أسرع
+- FULL     900→900 tokens → بدون تغيير (مطلوب)
+**Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

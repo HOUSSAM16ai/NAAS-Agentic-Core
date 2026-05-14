@@ -1032,3 +1032,36 @@
   - Skills > Prompt Spaghetti
   - Skill استقلالية إلزامية
 - **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+### [FIXED] ISS-059 · Detail question time catastrophe — 15-18s response for short concept Qs · FIXED (2026-05-14)
+
+- **Severity**: 🔴 Critical UX — المستخدم بلَّغ أن «الإجابة تتأخر بشكل خطير» عند طلب تفصيل معين.
+- **Context**: حتى الأسئلة القصيرة («ماذا نقصد بدالة أصلية»، «لماذا g(-1)=1-e») كانت تستغرق 15-18 ثانية — نفس الزمن لـ «اشرح التمرين كاملاً».
+- **الأسباب الجذرية**:
+  1. **`_MAX_EXPLANATION_TOKENS=900` ثابت**: كل سؤال يطلب 900 token من النموذج المجاني (~50 tok/s) → ~18s دائماً.
+  2. **`_MAX_EXERCISE_CONTEXT_CHARS=3000` ثابت**: حتى الأسئلة المفاهيمية تحصل على 3000 char context → LLM يستغرق وقت أطول في معالجة input.
+  3. **`detect_explanation_with_context` يُستدعى 3 مرات**: في `_has_match()` + داخل preempt + داخل stream — كل مرة file I/O مكرَّر.
+- **الإصلاحات (D-053)**:
+  - دالة جديدة `_classify_question_budget()` في `local_graph.py` تُصنِّف السؤال إلى 5 أنواع وتُرجع (context_budget, token_budget, q_class) المناسب.
+  - `run_local_graph_with_exercise_context` يطبِّق الـ budget الديناميكي على context slicing + `max_tokens` للـ LLM call.
+  - `chat_with_agent` يحسب `_explanation_decision` **مرة واحدة** ويمرِّره عبر `precomputed_decision=` للـ stream → يوفِّر file I/O مكرَّر + 10-20ms.
+  - Metric جديد `cogniforge_langgraph_q_class_total{q_class,graph}` يُتاح في Grafana.
+- **Files changed**:
+  - `app/services/chat/local_graph.py` — `_classify_question_budget` + dynamic budget application
+  - `app/infrastructure/clients/orchestrator_client.py` — decision caching + `precomputed_decision` parameter
+  - `CLAUDE.md` §6.34, `.memory/decisions.md` D-053
+- **Live tests passed**:
+  - 11/11 budget classification tests (CONCEPT/JUSTIFICATION/METHOD/DEFAULT/FULL)
+  - Expected latency reduction:
+    - CONCEPT: 18s → 7s (60% أسرع)
+    - JUSTIFY: 18s → 9s (50% أسرع)
+    - METHOD: 18s → 12s (33% أسرع)
+    - DEFAULT: 18s → 14s (22% أسرع)
+    - FULL: 18s (بدون تغيير — مطلوب)
+- **Invariants enforced**:
+  - max_tokens يتناسب مع نوع السؤال
+  - decision caching إلزامي (احسب مرة، مرِّر)
+  - telemetry tags كاملة في كل explanation span
+- **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

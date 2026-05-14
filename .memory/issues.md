@@ -1228,3 +1228,41 @@
   - `grep -A2 "^body, html" frontend/app/globals.css | grep "background:"` → موجود ✅
 - **Invariant added (8th rule لـ D-055)**: Single source of truth for theming. نظام الثيم يعيش في ملف CSS واحد. أي ملف "legacy" يحوي `:root` overrides = خطر فوري على نظام الثيم. مراجعة كل `import "*.css"` في layout files على PR.
 - **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+### [FIXED] ISS-064 · Text cut on right + dozens of catastrophic lines + light mode broken · FIXED (2026-05-14)
+
+- **Severity**: 🔴 Critical UX — المستخدم رفع 4 screenshots وبلَّغ 3 كوارث متراكبة:
+  1. **«نصف الجملة لا يظهر و يختفي بشكل كارثي خطير مدمر و سبب فضيحة»** — text overflow على اليمين، الكلمات تنقطع («بال» مقطوعة، الباقي مخفي)
+  2. **«عشرات الخطوط الكارثية»** — borders زرقاء على h1/h2/blockquote/code + md-hr رمادي + input-area shadow
+  3. **«الوضع النهاري لا يعمل»** — light mode toggle لم يطبق pure-white بشكل موثوق
+  4. طلب: «يجب أن يظهر بشكل خارق مثل Claude بحيث يملأ الشاشة بشكل خارق و يستفيد من المساحة الكاملة من أقصى اليمين لليسار»
+- **الأسباب الجذرية**:
+  1. `.message-bubble { max-width: 90% }` + `.message.assistant { justify-content: flex-end }` (في RTL = LEFT) كان يُسبب bubble بـ 90% width على اليسار، مع 10% فجوة على اليمين، والنص يتدفق RTL من بداية الـ bubble، فيقطع الحرف الأخير.
+  2. `.markdown-content h1 { border-bottom: 2px solid var(--primary-color) }` كان يظهر كخط أزرق أفقي تحت كل عنوان رئيسي.
+  3. `.markdown-content h2 { border-right: 3px solid var(--primary-color) }` كان يظهر كخط أزرق عمودي.
+  4. `.md-hr { border-top: 1px solid var(--border-color) }` كان يظهر كخط رمادي أفقي بين الأقسام.
+  5. `.md-blockquote { background: rgba(37,99,235,0.05) }` كان يظهر بخلفية زرقاء بارزة.
+  6. `.markdown-content code { background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.15) }` بإطار أزرق.
+  7. `.input-area { box-shadow: var(--shadow-sm) }` + `:focus-within { box-shadow: var(--shadow) }` يُسببان ظلال زرقاء حول الإدخال.
+  8. `:root` فقط للـ light mode — بعض المتصفحات لا تُطبِّق بشكل موثوق على dynamic `data-theme` switch.
+- **الإصلاحات (D-056 — 5 طبقات)**:
+  - **L1 Claude-style layout**: `.messages { max-width: 920px; width: 100%; margin-inline: auto }`. `.message.assistant .message-bubble { width: 100%; max-width: 100%; padding: 0; border: none; background: transparent }`. `.message.user .message-bubble { max-width: min(85%, 600px); border-radius: 18px 18px 6px 18px }`. نفس `max-width: 920px` على `.input-area-wrapper` و `.agent-board-container`.
+  - **L2 zero-line markdown**: حذف `border-bottom` من h1 و `border-right` من h2. التركيز على `letter-spacing: -0.015em` و `font-weight: 800` للتمييز.
+  - **L3 invisible hr + transparent blockquote**: `.md-hr { height: 0; opacity: 0 }`. `.md-blockquote { background: transparent }`.
+  - **L4 clean code blocks**: `background: var(--surface-elevated); border: none`.
+  - **L5 explicit `[data-theme='light']` block**: copy من `:root` بـ stronger specificity للموثوقية.
+- **Files changed**:
+  - `frontend/app/globals.css` (8 sections rewritten — :root + data-theme variants, .messages, .message-bubble, .markdown-content h1/h2/h3/code, .md-hr, .md-blockquote, .input-area, .agent-board-container)
+  - `CLAUDE.md` §6.39, `.memory/decisions.md` D-056
+- **Verification**:
+  - `grep "max-width: 920px" globals.css` → 3 (.messages, .input-area-wrapper, .agent-board-container) ✅
+  - `grep "border-bottom.*primary-color\|border-right.*primary-color" globals.css` → 0 active ✅
+  - `grep "^\[data-theme='light'\]" globals.css` → موجود ✅
+  - `.markdown-content { width: 100%; overflow-wrap: break-word }` ✅
+- **Invariants enforced (3 new rules لـ D-056)**:
+  1. Full-width assistant, constrained user bubble (Claude-style)
+  2. No decorative borders on inline content — التمييز عبر typography
+  3. Explicit theme blocks > :root (for reliability)
+- **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

@@ -40,6 +40,28 @@
     --font-family: 'Tajawal', 'Noto Kufi Arabic', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* ISS-064 (D-056): explicit [data-theme='light'] block للموثوقية القصوى.
+   `:root` كان كافياً نظرياً، لكن للأمان على المتصفحات/البيئات المختلفة،
+   نُكرِّر القيم في selector صريح. الـ specificity أعلى = override مضمون. */
+[data-theme='light'] {
+    --primary-color: #2563eb;
+    --primary-color-rgb: 37, 99, 235;
+    --primary-hover: #1d4ed8;
+    --secondary-color: #475569;
+    --bg-color: #ffffff;
+    --surface-color: #ffffff;
+    --surface-elevated: #fafafa;
+    --text-color: #0a0a0a;
+    --text-secondary: #525252;
+    --border-color: #e5e5e5;
+    --border-subtle: #f0f0f0;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --error-color: #ef4444;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+    --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.06);
+}
+
 [data-theme='dark'] {
     /* Dark mode — أسود غني فاخر + خط أبيض راقٍ */
     --primary-color: #60a5fa;
@@ -287,13 +309,23 @@ body, html {
     height: 100%;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ISS-064 (D-056): Claude-Style Full-Width Layout
+   ───────────────────────────────────────────────────────────────────────────
+   فلسفة: مثل Claude تماماً — رسالة المساعد تملأ كامل العرض من اليمين
+   لليسار بدون أي bubble. فقط رسالة المستخدم لها bubble مُحدَّد على اليمين.
+   ─────────────────────────────────────────────────────────────────────── */
 .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 1rem 1rem 0 1rem;
+    padding: 1.25rem 1.5rem 0 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1.75rem;
+    /* ISS-064: غلاف داخلي للمحادثة مع breathing room، يستفيد من العرض الكامل */
+    max-width: 920px;
+    width: 100%;
+    margin-inline: auto;
 }
 
 .message {
@@ -301,46 +333,55 @@ body, html {
     width: 100%;
 }
 
+/* ISS-064: المستخدم على اليمين (start in RTL) */
 .message.user {
-    justify-content: flex-start; /* RTL: User messages start from Right (which is start in RTL) */
+    justify-content: flex-start;
 }
 
+/* ISS-064: المساعد لا يحتاج justify لأنه يملأ العرض الكامل */
 .message.assistant {
-    justify-content: flex-end; /* Bot on Left (End in RTL) */
+    justify-content: flex-start;
 }
 
 .message-bubble {
-    max-width: 90%;
-    padding: 1rem 1.25rem;
+    padding: 0;
     border-radius: 16px;
-    font-size: 1.025rem;
-    line-height: 1.75;
+    font-size: 1.0625rem;
+    line-height: 1.85;
     position: relative;
     font-weight: 400;
 }
 
+/* ISS-064: رسالة المستخدم — bubble مُحدَّد على اليمين، أزرق فاخر */
 .message.user .message-bubble {
     background-color: var(--primary-color);
     color: #ffffff;
-    border-bottom-right-radius: 4px;
+    border-radius: 18px 18px 6px 18px;
+    padding: 0.85rem 1.15rem;
+    max-width: min(85%, 600px);
     font-weight: 500;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
 }
 
-/* ISS-061 (D-055): رسالة المساعد بدون frame مُقزِّز.
-   - لا border (الإطار الذي شكا منه المستخدم)
-   - خلفية شفافة في الـ dark mode — النص الأبيض يتألق على الصفحة السوداء
-   - في light mode: خلفية خفيفة جداً للتمييز */
+/* ISS-064: رسالة المساعد — full-width مثل Claude، لا bubble، لا padding */
 .message.assistant .message-bubble {
     background-color: transparent;
     color: var(--text-color);
     border: none;
-    padding-inline: 0.5rem;
+    padding: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0;
 }
 
 /* Agent Status Board */
+/* ISS-064: agent-board-container بحدود الـ messages container */
 .agent-board-container {
     padding: 1rem 1.5rem 0.5rem 1.5rem;
     background: var(--bg-color);
+    max-width: 920px;
+    width: 100%;
+    margin-inline: auto;
 }
 
 .agent-board-title {
@@ -426,28 +467,33 @@ body, html {
 }
 
 /* Input Area */
+/* ISS-064 (D-056): input-area-wrapper بنفس عرض الـ messages container */
 .input-area-wrapper {
     padding: 1rem 1.5rem 1.5rem 1.5rem;
     background: var(--bg-color);
     position: sticky;
     bottom: 0;
+    max-width: 920px;
+    width: 100%;
+    margin-inline: auto;
 }
 
+/* ISS-064: input-area فاخر بحدود ناعمة جداً، لا shadow صاخب */
 .input-area {
-    background: var(--surface-color);
+    background: var(--surface-elevated);
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 0.75rem;
+    border-radius: 18px;
+    padding: 0.85rem 1rem;
     display: flex;
     align-items: flex-end;
     gap: 0.5rem;
-    box-shadow: var(--shadow-sm);
-    transition: box-shadow 0.2s;
+    box-shadow: none;
+    transition: border-color 0.2s ease;
 }
 
 .input-area:focus-within {
-    box-shadow: var(--shadow);
-    border-color: var(--primary-color);
+    box-shadow: none;
+    border-color: var(--text-secondary);
 }
 
 .input-area textarea {
@@ -622,40 +668,49 @@ body, html {
 /* ═══════════════════════════════════════════════════════════════════════════
    Markdown Content — RTL فائق الجودة مع دعم LaTeX/KaTeX
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ISS-064 (D-056): markdown-content يستفيد من العرض الكامل (لا max-width).
+   النص الآن يتدفق من اليمين لليسار بدون قص. word-wrap للأمان. */
 .markdown-content {
     direction: rtl;
     text-align: right;
-    font-size: 1rem;
-    line-height: 1.8;
+    font-size: 1.0625rem;
+    line-height: 1.85;
     color: var(--text-color);
+    width: 100%;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
 
 .markdown-content :is(p, li, h1, h2, h3, h4, h5, h6, blockquote) {
     unicode-bidi: plaintext;
 }
 
+/* ISS-064 (D-056): markdown headings نظيفة بدون borders/underlines.
+   كل border-bottom/border-right على h1/h2 كان يظهر كخطوط أفقية/عمودية
+   على الـ pure-black background — كارثة بصرية. الآن: لون مميز + ثقل
+   عظيم، لا خطوط، لا alarm. */
 .markdown-content h1 {
     font-size: 1.4rem;
-    font-weight: 700;
-    margin: 1.25rem 0 0.75rem;
-    color: var(--primary-color);
-    border-bottom: 2px solid var(--primary-color);
-    padding-bottom: 0.4rem;
+    font-weight: 800;
+    margin: 1.5rem 0 0.85rem;
+    color: var(--text-color);
+    letter-spacing: -0.015em;
+    line-height: 1.4;
 }
 
 .markdown-content h2 {
     font-size: 1.2rem;
     font-weight: 700;
-    margin: 1.1rem 0 0.6rem;
+    margin: 1.25rem 0 0.7rem;
     color: var(--text-color);
-    border-right: 3px solid var(--primary-color);
-    padding-right: 0.6rem;
+    letter-spacing: -0.01em;
+    line-height: 1.45;
 }
 
 .markdown-content h3 {
     font-size: 1.05rem;
     font-weight: 600;
-    margin: 0.9rem 0 0.5rem;
+    margin: 1rem 0 0.55rem;
     color: var(--text-color);
 }
 
@@ -673,14 +728,15 @@ body, html {
     margin-bottom: 0.35rem;
 }
 
+/* ISS-064 (D-056): code blocks بدون border حاد، لون متناغم مع الثيم */
 .markdown-content code {
-    background: rgba(37, 99, 235, 0.08);
-    color: var(--primary-color);
+    background: var(--surface-elevated);
+    color: var(--text-color);
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
     font-family: 'Fira Code', 'Courier New', monospace;
     font-size: 0.9em;
-    border: 1px solid rgba(37, 99, 235, 0.15);
+    border: none;
 }
 
 .markdown-content pre {
@@ -701,27 +757,30 @@ body, html {
     color: var(--text-color);
 }
 
-/* ─── فاصل أنيق ─────────────────────────────────────────────────────────── */
+/* ISS-064 (D-056): الفواصل الأفقية أصبحت white-space-only — لا خطوط مرئية.
+   كل `<hr>` كانت تظهر كخط أفقي رفيع على الـ pure-black يلفت النظر. */
 .md-hr {
     border: none;
-    border-top: 1px solid var(--border-color);
-    margin: 1.25rem 0;
-    opacity: 0.6;
+    height: 0;
+    margin: 1.5rem 0;
+    opacity: 0;
 }
 
-/* ─── blockquote للملاحظات التاريخية ────────────────────────────────────── */
+/* ─── blockquote للملاحظات التاريخية — بدون border حاد ─────────────────── */
 .md-blockquote {
-    border-right: 4px solid var(--primary-color);
-    background: rgba(37, 99, 235, 0.05);
-    padding: 0.75rem 1rem;
+    border-right: 2px solid var(--text-secondary);
+    background: transparent;
+    padding: 0.5rem 1rem;
     margin: 0.75rem 0;
-    border-radius: 0 8px 8px 0;
+    border-radius: 0;
+    opacity: 0.85;
     color: var(--text-secondary);
     font-style: italic;
 }
 
 [data-theme='dark'] .md-blockquote {
-    background: rgba(96, 165, 250, 0.08);
+    /* ISS-064: لا خلفية على dark mode (kept transparent for clean look) */
+    background: transparent;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

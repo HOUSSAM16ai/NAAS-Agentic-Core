@@ -3743,5 +3743,88 @@ grep -i "212.*175.*55\|gold\|d4af37" frontend/app/globals.css
 | D-054 | `\\command` → `\command` في math |
 | D-055 | luxury UI theme + zero-flicker + premium typography |
 | D-055.1 | header seamless integration (no white line on pure-black) |
-| **D-055.2** | **legacy-style.css purge — gold gradient elimination** |
+| D-055.2 | legacy-style.css purge — gold gradient elimination |
+| **D-056** | **Claude-style full-width layout + zero-line markdown + light mode hardening** |
+
+---
+
+## 6.39 Claude-Style Full-Width Layout — Zero-Line Markdown + Light Mode Hardening (2026-05-14, ISS-064 / D-056)
+
+> **3 كوارث متراكبة شاهدها المستخدم**:
+> 1. **نصف الجملة لا يظهر** — text overflow على اليمين، الكلمات تنقطع («بال» مقطوعة، الباقي مخفي)
+> 2. **عشرات الخطوط الكارثية** — h1/h2 يظهرون بخطوط زرقاء سفلية + h2 بـ border-right، md-hr يظهر كخط أفقي، code blocks بإطار أزرق
+> 3. **الوضع النهاري لا يعمل** — رغم `:root` بقيم `#ffffff`/`#0a0a0a`، التطبيق على `[data-theme='light']` كان ضعيف الموثوقية
+>
+> **طلب المستخدم**: «يجب أن يظهر بشكل خارق مثل Claude بحيث يملأ الشاشة بشكل خارق ويستفيد من المساحة الكاملة من أقصى اليمين لليسار».
+
+### الإصلاح (D-056 — 5 طبقات)
+
+**طبقة 1 — Claude-style full-width message layout**:
+- `.messages`: `max-width: 920px` + `width: 100%` + `margin-inline: auto` — يستفيد من العرض الكامل على الجوال، مع breathing room على الشاشات الكبيرة.
+- `.message.assistant .message-bubble`: `width: 100% + max-width: 100% + padding: 0 + border: none + background: transparent` — مثل Claude تماماً، النص يتدفق edge-to-edge بدون bubble.
+- `.message.user .message-bubble`: `max-width: min(85%, 600px) + border-radius: 18px 18px 6px 18px + padding: 0.85rem 1.15rem` — bubble أزرق صغير على اليمين.
+- `.input-area-wrapper` و `.agent-board-container`: نفس `max-width: 920px + margin-inline: auto` — وحدة بصرية كاملة عبر التطبيق.
+
+**طبقة 2 — Zero-line markdown headings**:
+- `.markdown-content h1`: حُذف `border-bottom: 2px solid var(--primary-color)` — كان يظهر كخط أزرق أفقي مزعج تحت كل عنوان رئيسي.
+- `.markdown-content h2`: حُذف `border-right: 3px solid var(--primary-color)` — كان يظهر كخط أزرق عمودي.
+- التركيز الآن على `letter-spacing: -0.015em + font-weight: 800` للتمييز البصري بدلاً من الخطوط.
+
+**طبقة 3 — Invisible hr + transparent blockquote**:
+- `.md-hr`: `height: 0 + opacity: 0` — كان يظهر كخط رمادي أفقي بين الأقسام («عشرات الخطوط» التي شكا منها المستخدم).
+- `.md-blockquote`: `background: transparent + border-right: 2px solid var(--text-secondary) + opacity: 0.85` — كان يظهر بخلفية زرقاء بارزة.
+
+**طبقة 4 — Code blocks بدون إطار حاد**:
+- `.markdown-content code`: `background: var(--surface-elevated) + border: none + color: var(--text-color)` — كان يظهر بإطار أزرق و خلفية زرقاء.
+
+**طبقة 5 — Explicit `[data-theme='light']` block**:
+- إضافة block صريح بـ specificity أعلى من `:root` لضمان تطبيق الوضع النهاري بشكل موثوق على كل المتصفحات/البيئات.
+- يحوي نفس قيم `:root` لكن بـ selector أقوى = override مضمون لو حدث أي conflict.
+
+### القواعد الدائمة الجديدة لـ D-056
+
+**(1) Full-width assistant, constrained user**: في تطبيقات chat الفاخرة:
+- رسالة المساعد = full-width (Claude-style)، لا bubble، لا max-width
+- رسالة المستخدم = bubble صغير (~85%) مُحدَّد على side الـ user
+- messages container = max-width ~920px + center-margin
+
+**(2) No decorative borders on inline content**: على pure-black/pure-white، أي `border` للزينة على inline elements (h1/h2/blockquote/code) يظهر كخط مرئي مزعج. استخدم `letter-spacing` و `font-weight` و `color` للتمييز البصري.
+
+**(3) Explicit theme blocks > :root**: للموثوقية القصوى، عرِّف كل theme variants في `[data-theme='*']` blocks صريحة، ليس فقط في `:root`. يضمن override على أي CSS قديم cached.
+
+### قياس النجاح حياً
+
+```bash
+# 1. تأكد من إزالة borders الزرقاء على markdown headings
+grep "border-bottom.*primary-color\|border-right.*primary-color" frontend/app/globals.css
+# المتوقع: 0 نتائج فعلية (في القواعد، ليس في التعليقات)
+
+# 2. تأكد من messages container responsive
+grep "max-width: 920px" frontend/app/globals.css
+# المتوقع: 3 نتائج — .messages, .input-area-wrapper, .agent-board-container
+
+# 3. تأكد من assistant bubble full-width
+grep -A3 "message.assistant .message-bubble" frontend/app/globals.css | grep "width: 100%"
+# المتوقع: موجود
+
+# 4. تأكد من light mode block
+grep "^\[data-theme='light'\]" frontend/app/globals.css
+# المتوقع: موجود
+```
+
+### السلسلة الكاملة (D-049 → D-056)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 | JSON envelope leak |
+| D-050 | indexed preempt + typewriter |
+| D-051 | LaTeX delimiters `\\(...\\)` → `$...$` |
+| D-052 | conversation context + chunk-tag stripping + Skills |
+| D-053 | dynamic latency budget |
+| D-054 | `\\command` → `\command` في math |
+| D-055 | luxury UI theme + zero-flicker + premium typography |
+| D-055.1 | header seamless integration |
+| D-055.2 | legacy-style.css purge |
+| **D-056** | **Claude-style full-width + zero-line markdown + light hardening** |
+
 

@@ -40,10 +40,11 @@
     --font-family: 'Tajawal', 'Noto Kufi Arabic', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* ISS-064 (D-056): explicit [data-theme='light'] block للموثوقية القصوى.
-   `:root` كان كافياً نظرياً، لكن للأمان على المتصفحات/البيئات المختلفة،
-   نُكرِّر القيم في selector صريح. الـ specificity أعلى = override مضمون. */
-[data-theme='light'] {
+/* ISS-064/065 (D-056/D-057): explicit theme blocks مع double-application
+   على html و body للموثوقية القصوى. كل selector له specificity مختلف فيوفر
+   override layers متعددة ضد أي CSS قديم مُختزَن في cache. */
+[data-theme='light'],
+body[data-theme='light'] {
     --primary-color: #2563eb;
     --primary-color-rgb: 37, 99, 235;
     --primary-hover: #1d4ed8;
@@ -62,7 +63,8 @@
     --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.06);
 }
 
-[data-theme='dark'] {
+[data-theme='dark'],
+body[data-theme='dark'] {
     /* Dark mode — أسود غني فاخر + خط أبيض راقٍ */
     --primary-color: #60a5fa;
     --primary-color-rgb: 96, 165, 250;
@@ -86,6 +88,15 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    /* ISS-065 (D-057): defensive — لا overflow horizontal على أي عنصر */
+    min-width: 0;
+}
+
+/* ISS-065 (D-057): defensive overflow-x hidden على html و body
+   يضمن أن أي محتوى overflowing لا يخلق scroll أفقي يكسر التصميم */
+html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
 }
 
 /* ISS-063 (D-055.2): body + html بنفس selector specificity كما في legacy-style.css
@@ -109,13 +120,15 @@ body, html {
     transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-/* App Container */
+/* App Container — ISS-065 (D-057): defensive overflow + max-width 100vw */
 .app-container {
     display: flex;
     flex-direction: column;
     height: 100vh;
     height: 100dvh; /* Mobile fix */
-    overflow: hidden;
+    max-width: 100vw;
+    overflow-x: hidden;
+    overflow-y: hidden;
 }
 
 /* Header — ISS-062 (D-055.1): Seamless luxury header.
@@ -211,11 +224,15 @@ body, html {
 }
 
 /* Dashboard Layout */
+/* ISS-065 (D-057): dashboard-layout يحبس overflow-x defensively */
 .dashboard-layout {
     display: flex;
     flex: 1;
     overflow: hidden;
     position: relative;
+    max-width: 100vw;
+    width: 100%;
+    min-width: 0;
 }
 
 /* Sidebar */
@@ -294,6 +311,7 @@ body, html {
 }
 
 /* Chat Area */
+/* ISS-065 (D-057): chat-area يحبس overflow-x + min-width: 0 لـ flex shrinking */
 .chat-area {
     flex: 1;
     display: flex;
@@ -301,12 +319,18 @@ body, html {
     background-color: var(--bg-color);
     position: relative;
     z-index: 1;
+    min-width: 0;
+    overflow-x: hidden;
+    width: 100%;
 }
 
 .chat-container {
     display: flex;
     flex-direction: column;
     height: 100%;
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -315,22 +339,38 @@ body, html {
    فلسفة: مثل Claude تماماً — رسالة المساعد تملأ كامل العرض من اليمين
    لليسار بدون أي bubble. فقط رسالة المستخدم لها bubble مُحدَّد على اليمين.
    ─────────────────────────────────────────────────────────────────────── */
+/* ISS-065 (D-057): messages container responsive — يدعم الهاتف والحاسوب
+   - mobile (<640px): padding أصغر، عرض كامل
+   - tablet (640-1024px): padding متوسط
+   - desktop (>1024px): max-width 920px + center */
 .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 1.25rem 1.5rem 0 1.5rem;
+    overflow-x: hidden;
+    padding: 1rem 1rem 0 1rem;
     display: flex;
     flex-direction: column;
-    gap: 1.75rem;
-    /* ISS-064: غلاف داخلي للمحادثة مع breathing room، يستفيد من العرض الكامل */
-    max-width: 920px;
+    gap: 1.5rem;
     width: 100%;
+    max-width: 100%;
     margin-inline: auto;
+    min-width: 0;
 }
 
+/* Tablet+: padding أكبر */
+@media (min-width: 640px) {
+    .messages {
+        padding: 1.25rem 1.5rem 0 1.5rem;
+        gap: 1.75rem;
+        max-width: 920px;
+    }
+}
+
+/* ISS-065 (D-057): message يحبس min-width: 0 لـ flex shrinking + overflow صحيح */
 .message {
     display: flex;
     width: 100%;
+    min-width: 0;
 }
 
 /* ISS-064: المستخدم على اليمين (start in RTL) */
@@ -343,6 +383,7 @@ body, html {
     justify-content: flex-start;
 }
 
+/* ISS-065 (D-057): message-bubble بـ word-wrap + overflow-x: hidden دفاعي */
 .message-bubble {
     padding: 0;
     border-radius: 16px;
@@ -350,6 +391,9 @@ body, html {
     line-height: 1.85;
     position: relative;
     font-weight: 400;
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
 
 /* ISS-064: رسالة المستخدم — bubble مُحدَّد على اليمين، أزرق فاخر */
@@ -375,13 +419,21 @@ body, html {
 }
 
 /* Agent Status Board */
-/* ISS-064: agent-board-container بحدود الـ messages container */
+/* ISS-065 (D-057): agent-board-container responsive */
 .agent-board-container {
-    padding: 1rem 1.5rem 0.5rem 1.5rem;
+    padding: 0.75rem 1rem 0.5rem 1rem;
     background: var(--bg-color);
-    max-width: 920px;
     width: 100%;
+    max-width: 100%;
     margin-inline: auto;
+    min-width: 0;
+}
+
+@media (min-width: 640px) {
+    .agent-board-container {
+        padding: 1rem 1.5rem 0.5rem 1.5rem;
+        max-width: 920px;
+    }
 }
 
 .agent-board-title {
@@ -467,15 +519,25 @@ body, html {
 }
 
 /* Input Area */
-/* ISS-064 (D-056): input-area-wrapper بنفس عرض الـ messages container */
+/* ISS-065 (D-057): input-area-wrapper responsive — يدعم الهاتف والحاسوب
+   - mobile: padding أصغر، عرض كامل
+   - desktop: max-width 920px + center */
 .input-area-wrapper {
-    padding: 1rem 1.5rem 1.5rem 1.5rem;
+    padding: 0.75rem 1rem 1rem 1rem;
     background: var(--bg-color);
     position: sticky;
     bottom: 0;
-    max-width: 920px;
     width: 100%;
+    max-width: 100%;
     margin-inline: auto;
+    min-width: 0;
+}
+
+@media (min-width: 640px) {
+    .input-area-wrapper {
+        padding: 1rem 1.5rem 1.5rem 1.5rem;
+        max-width: 920px;
+    }
 }
 
 /* ISS-064: input-area فاخر بحدود ناعمة جداً، لا shadow صاخب */
@@ -496,6 +558,7 @@ body, html {
     border-color: var(--text-secondary);
 }
 
+/* ISS-065 (D-057): textarea responsive، min-width: 0 لـ flex shrinking */
 .input-area textarea {
     flex: 1;
     border: none;
@@ -507,12 +570,16 @@ body, html {
     color: var(--text-color);
     outline: none;
     max-height: 150px;
+    min-width: 0;
+    width: 100%;
 }
 
+/* ISS-065 (D-057): send button touch-target 44px على الهاتف، 40px على الحاسوب */
 .input-area button {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 12px;
     border: none;
     background-color: var(--primary-color);
     color: white;
@@ -521,6 +588,13 @@ body, html {
     align-items: center;
     justify-content: center;
     transition: background-color 0.2s, transform 0.1s;
+}
+
+@media (min-width: 640px) {
+    .input-area button {
+        width: 40px;
+        height: 40px;
+    }
 }
 
 .input-area button:hover:not(:disabled) {
@@ -958,10 +1032,11 @@ body, html {
     color: var(--text-color);
 }
 
-/* KaTeX داخل بطاقة الامتحان — أنيق ومركَّز */
+/* ISS-065 (D-057): KaTeX داخل بطاقة الامتحان — مع word-wrap لمنع overflow
+   - inline math لا يجب أن يفرض expansion للـ container على الشاشات الصغيرة */
 .exam-content .katex {
-    white-space: nowrap;
     font-feature-settings: "lnum", "tnum";
+    /* white-space: nowrap محذوف — كان يُسبب overflow أفقي على الهاتف */
 }
 
 /* ISS-061 (D-055): KaTeX-display بسيط فاخر بدون أي animation/transition.

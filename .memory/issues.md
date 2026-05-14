@@ -1266,3 +1266,44 @@
   2. No decorative borders on inline content — التمييز عبر typography
   3. Explicit theme blocks > :root (for reliability)
 - **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+### [FIXED] ISS-065 · Horizontal overflow + UI sliding + light mode broken + mobile unusable · FIXED (2026-05-14)
+
+- **Severity**: 🔴 Critical UX — المستخدم رفع 7 screenshots وبلَّغ كوارث متراكبة:
+  1. «الجمل مزالت لا تظهر» — text overflow ينقطع
+  2. «خانة البحث بعد ظهور الكتابة نصفها لا يظهر» — input field cut off
+  3. «زر الإرسال يختفي» — send button off-screen
+  4. «الواجهة في حد ذاتها تختفي كليا» — entire UI sliding off-viewport
+  5. «الوضع النهاري معطل تماما» — light mode toggle has no effect
+- **طلب صريح**: «يجب أن تدعم الهاتف و الحاسوب بشكل خارق جدا خرافي احترافي فائق الجودة العالية الفاخرة الراقية الفخمة للمستقبل البعيد».
+- **الأسباب الجذرية**:
+  1. **Missing `min-width: 0` على flex children**: default = `min-width: auto` فلا تنكمش لـ shrink — تفرض expansion على parent
+  2. **No multi-layer overflow-x defense**: overflow-x: hidden مفقود على html, body, chat-area, chat-container
+  3. **Theme toggle yes single-binding**: `documentElement.dataset.theme` فقط — no fallback لـ body، no color-scheme
+  4. **Static padding غير responsive**: ضيق جداً على mobile، فقدان breathing room على desktop
+  5. **`.exam-content .katex { white-space: nowrap }` يُفرض expansion على bubble**: math equation طويلة تكسر التحجيم
+- **الإصلاح (D-057 — 5 طبقات دفاع)**:
+  - **L1 Universal min-width:0 + html/body overflow-x**: `* { min-width: 0 }` و `html, body { overflow-x: hidden; max-width: 100vw }`
+  - **L2 Multi-layer overflow defense**: على app-container, dashboard-layout, chat-area, chat-container, message-bubble, input-area textarea — كلها بـ `overflow-x: hidden + min-width: 0`
+  - **L3 Mobile-first responsive containers**: messages + input-area-wrapper + agent-board-container بـ padding ضيق على mobile (0.75rem 1rem) + `@media (min-width: 640px)` لـ padding أكبر (1.25rem 1.5rem) + max-width 920px على desktop
+  - **L4 Touch targets**: `.input-area button` = 44px على mobile (Apple HIG) → 40px على desktop عبر media query
+  - **L5 Theme dual-binding**: في CogniForgeApp.jsx، نُطبِّق theme على html + body + style.colorScheme. في CSS، supports `[data-theme='X'], body[data-theme='X']`
+  - **Bonus**: حذف `white-space: nowrap` من `.exam-content .katex` لأنه يُفرض overflow أفقي على inline math
+- **Files changed**:
+  - `frontend/app/globals.css` (10 sections rewritten — universal *, html/body, app-container, dashboard-layout, chat-area, chat-container, messages, message-bubble, input-area-wrapper, input-area textarea/button, agent-board-container, theme blocks dual-binding, exam-content katex)
+  - `frontend/app/components/CogniForgeApp.jsx` (theme effect with dual-binding + color-scheme)
+  - `CLAUDE.md` §6.40, `.memory/decisions.md` D-057
+- **Verification**:
+  - `grep -c "overflow-x: hidden"` → ≥ 5 ✅
+  - `grep -c "min-width: 0"` → ≥ 8 ✅
+  - `grep "body\[data-theme"` → 2 ✅
+  - `@media (min-width: 640px)` → 4+ مواقع ✅
+- **Invariants enforced (5 new rules لـ D-057)**:
+  1. Universal `min-width: 0` (defensive on every element)
+  2. Multi-layer overflow-x defense
+  3. Mobile-first responsive padding
+  4. Touch targets ≥ 44px على mobile
+  5. Theme dual-binding (html + body + color-scheme)
+- **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

@@ -198,8 +198,17 @@ const DashboardLayout = ({ user, token, onLogout }) => {
 
     useEffect(() => {
         if (typeof document === 'undefined') return;
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.dir = 'rtl';
+        // ISS-065 (D-057): theme switching مع fallback مزدوج —
+        // 1. data-theme على html (للـ CSS selectors)
+        // 2. data-theme على body (defensive double-application)
+        // 3. style-color-scheme لتوافق مع المتصفح (form controls, scrollbars)
+        const root = document.documentElement;
+        root.dataset.theme = theme;
+        root.dir = 'rtl';
+        root.style.colorScheme = theme;
+        if (document.body) {
+            document.body.dataset.theme = theme;
+        }
         localStorage.setItem('theme', theme);
     }, [theme]);
 

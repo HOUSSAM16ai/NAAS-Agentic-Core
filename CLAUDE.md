@@ -3439,3 +3439,133 @@ Catastrophe line (بعد الإصلاح):
 
 ---
 
+## 6.36 Luxury UI Theme System — Flicker-Free Pure Backgrounds (2026-05-14, ISS-061 / D-055)
+
+> الكوارث المُشاهَدة: (1) خط أفقي ذهبي «يظهر ويختفي مثل البث» في أعلى التمرين،
+> (2) إطار مُقزِّز حول كل رسالة، (3) ألوان مزعجة (أزرق فاتح/داكن في كل مكان)،
+> (4) خطوط عربية رديئة. الطلب: «فاخر وعظيم احترافي خارق يبهر العقول… بساطة عظيمة».
+
+### الكوارث المُشخَّصة
+
+| # | المظهر | السبب الجذري |
+|---|--------|-------------|
+| 1 | خط ذهبي/أزرق علوي «يومض» أثناء streaming | `.exam-content::before` بـ `linear-gradient` أصفر-أزرق + `katex-fade-in` animation تُطلَق على كل re-render |
+| 2 | إطار حول كل رسالة assistant مزعج | `.message.assistant .message-bubble` به `border: 1px solid + border-radius` |
+| 3 | ألوان مائلة للأزرق في "أبيض" و"أسود" | `--bg-color: #f8fafc`, `--text-color: #0f172a`, `--surface: #1e293b` — كلها مائلة للـ slate-blue |
+| 4 | خط Cairo افتراضي بحالة عادية | لا font-smoothing، لا feature-settings، لا fallbacks فاخرة |
+| 5 | KaTeX-display بـ gradient bg + hover transition | يُسبب re-paint مكلفة + flicker على كل character reveal خلال streaming |
+| 6 | gradients ذهبية على عناوين h1/h2/h3/hr | `border-image: linear-gradient` بألوان متراكبة |
+
+### الإصلاح (D-055 — تصميم فاخر بسيط حسب Vercel/Apple-grade design)
+
+**طبقة 1 — Color Palette مُعاد تصميمها** (`:root` + `[data-theme='dark']`):
+```css
+/* Light Mode — صفحة بيضاء فاخرة */
+--bg-color: #ffffff;        /* كان #f8fafc (مائل للأزرق) */
+--text-color: #0a0a0a;      /* أسود نقي (كان #0f172a) */
+--border-color: #e5e5e5;    /* رمادي محايد (كان #e2e8f0 مائل للأزرق) */
+--surface-elevated: #fafafa; /* جديد — للأسطح المرفوعة فقط */
+
+/* Dark Mode — أسود Vercel-grade + أبيض راقٍ */
+--bg-color: #0a0a0a;        /* أسود فاخر (كان #0f172a) */
+--surface-color: #0f0f0f;
+--surface-elevated: #171717;
+--text-color: #fafafa;      /* أبيض فاخر (كان #f1f5f9) */
+--border-color: #1f1f1f;    /* حدود تكاد تكون غير مرئية */
+```
+
+**طبقة 2 — Typography premium** (`@import` + `--font-family`):
+```css
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&family=Noto+Kufi+Arabic:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+--font-family: 'Tajawal', 'Noto Kufi Arabic', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern" 1, "liga" 1;
+}
+```
+Tajawal هو الأكثر أناقة في 2024+ للعربية الحديثة (يستخدمه Google Maps).
+
+**طبقة 3 — حذف الـ Flicker (3 مصادر)**:
+1. **`.exam-content::before` (الخط الذهبي) → محذوف بالكامل**.
+2. **`@keyframes katex-fade-in` + `animation` على katex-display → محذوف**:
+   كان يُطلَق على كل re-render من typewriter → flicker على كل حرف.
+3. **`transition: box-shadow` + `:hover` على katex-display → محذوف**:
+   يُسبب visual change خلال إعادة التصيير.
+
+**طبقة 4 — Exam-Card فاخر بسيط**:
+- `background: transparent`، `border: none` — لا frame مُقزِّز.
+- `.exam-badge`: pill شفاف بحدود رمادية ناعمة (كان gradient أزرق صاخب).
+- `h1/h2`: `border-bottom: 1px solid var(--border-color)` نظيف (كان `border-image: gradient`).
+- `h3`: بدون `border-right`، بدون `padding-block`، بدون `gradient bg` — اللون يساوي `--text-color`.
+- `hr`: `1px solid var(--border-color)` (كان gradient ذهبي).
+- جداول: حدود محايدة، خلفية `--surface-elevated`، لا shadows زرقاء.
+
+**طبقة 5 — Message-Bubble بدون frame**:
+```css
+.message.assistant .message-bubble {
+    background-color: transparent;  /* كان var(--surface-color) */
+    border: none;                   /* كان 1px solid var(--border-color) */
+    padding-inline: 0.5rem;
+}
+```
+النص الأبيض في الـ dark يتألق مباشرة على الصفحة السوداء.
+
+**طبقة 6 — KaTeX يرث لون النص**:
+```css
+.markdown-content .katex { color: var(--text-color); }
+.markdown-content .katex :is(.mord, .mbin, .mrel, .mopen, .mclose, .mpunct, .mop) { color: inherit; }
+```
+في dark: المعادلات تُرسَم بالأبيض الفاخر. في light: بالأسود الفاخر.
+
+### القواعد الست الدائمة (لا تُكسر بدون ADR)
+
+**(1) لا animations على المحتوى المُعاد تصييره خلال streaming**: typewriter يُسبب re-render كل ~16ms. أي `@keyframes` + `animation` على عنصر داخل rendered content = flicker بصري.
+
+**(2) لا hover transitions على عناصر خلال streaming**: `transition: box-shadow/border-color` على عناصر تُعاد تصييرها = وميض.
+
+**(3) لا gradient backgrounds على content cards خلال streaming**: gradients مكلفة في الـ paint pass. النتيجة: لا exam-card مع background gradient.
+
+**(4) Pure backgrounds**: light = `#ffffff` نقي، dark = `#0a0a0a` نقي — لا ألوان مائلة (slate-blue, indigo-tinted). الطالب يطلب «أبيض فاخر»/«أسود فاخر».
+
+**(5) Font smoothing إلزامي**: `-webkit-font-smoothing: antialiased` + `text-rendering: optimizeLegibility` — يُحسِّن قراءة العربي بشكل دراماتيكي على Retina/HiDPI.
+
+**(6) Border-image gradients محظورة على content headings**: يحدث re-paint على كل re-render. استخدم `border-bottom: 1px solid` بسيط.
+
+### قياس النجاح حياً
+
+```bash
+# 1. تأكد من حذف ::before
+grep -c "exam-content::before" frontend/app/globals.css
+# المتوقع: 0 (أو تعليق فقط)
+
+# 2. تأكد من حذف animation katex-fade-in
+grep -c "katex-fade-in" frontend/app/globals.css
+# المتوقع: 0
+
+# 3. تأكد من Pure backgrounds
+grep -E "bg-color.*#ffffff|bg-color.*#0a0a0a" frontend/app/globals.css
+# المتوقع: نتائج إيجابية
+
+# 4. تأكد من Tajawal
+grep "Tajawal" frontend/app/globals.css
+# المتوقع: في @import + --font-family
+```
+
+### السلسلة الكاملة (D-049 → D-050 → D-051 → D-052 → D-053 → D-054 → D-055)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 | JSON envelope leak |
+| D-050 | indexed preempt + typewriter |
+| D-051 | LaTeX delimiters `\\(...\\)` → `$...$` |
+| D-052 | conversation context + chunk-tag stripping + Skills |
+| D-053 | dynamic latency budget |
+| D-054 | `\\command` → `\command` في math |
+| **D-055** | **luxury UI theme + zero-flicker + premium typography** |
+
+---
+

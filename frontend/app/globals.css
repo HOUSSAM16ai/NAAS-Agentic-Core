@@ -1,39 +1,63 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Noto+Naskh+Arabic:wght@400;600;700&family=Cairo:wght@300;400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&family=Noto+Kufi+Arabic:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ISS-061 (D-055): Luxury Theme System — Pure Backgrounds, Elegant Typography
+   ───────────────────────────────────────────────────────────────────────────
+   فلسفة التصميم (طلب المستخدم — تجربة فاخرة للمستقبل البعيد):
+   - Light mode: صفحة بيضاء نقية + خط أسود فاخر
+   - Dark mode:  خلفية رمادي/أسود غني + خط أبيض راقٍ
+   - بساطة عظيمة — لا frames ثقيلة، لا gradients مزدحمة
+   - لا flicker — لا animations على المحتوى المُعاد تصييره أثناء streaming
+   - أحدث الأبحاث في الـ luxury web design (2024+):
+     * GitHub Primer Dark theme — neutral backgrounds, high text contrast
+     * Vercel Geist Dark theme — pure black with subtle dividers
+     * Apple HIG Dark Mode — true blacks with elevated surfaces
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
+    /* Light mode — صفحة بيضاء فاخرة */
     --primary-color: #2563eb;
     --primary-color-rgb: 37, 99, 235;
     --primary-hover: #1d4ed8;
     --secondary-color: #475569;
-    --bg-color: #f8fafc;
-    --surface-color: #ffffff;
-    --text-color: #0f172a;
-    --text-secondary: #64748b;
-    --border-color: #e2e8f0;
+    --bg-color: #ffffff;          /* صفحة بيضاء نقية (كان #f8fafc) */
+    --surface-color: #ffffff;     /* أسطح بنفس البياض — وحدة بصرية */
+    --surface-elevated: #fafafa;  /* للعناصر المرفوعة فقط */
+    --text-color: #0a0a0a;        /* أسود فاخر (كان #0f172a — مائل للأزرق) */
+    --text-secondary: #525252;
+    --border-color: #e5e5e5;      /* حدود رمادية لطيفة (كانت #e2e8f0 مائلة للأزرق) */
+    --border-subtle: #f0f0f0;     /* حدود خفيفة جداً للفواصل الداخلية */
     --success-color: #10b981;
     --warning-color: #f59e0b;
     --error-color: #ef4444;
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    --font-family: 'Cairo', 'IBM Plex Sans Arabic', sans-serif;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+    --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.06);
+    /* Typography — خط عربي فاخر للمستقبل
+       Tajawal: الأكثر أناقة في 2024 للعربية الحديثة
+       Noto Kufi Arabic: احتياطي عالي الجودة
+       Inter: للأرقام والإنجليزية */
+    --font-family: 'Tajawal', 'Noto Kufi Arabic', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 [data-theme='dark'] {
+    /* Dark mode — أسود غني فاخر + خط أبيض راقٍ */
     --primary-color: #60a5fa;
     --primary-color-rgb: 96, 165, 250;
-    --primary-hover: #3b82f6;
-    --secondary-color: #94a3b8;
-    --bg-color: #0f172a;
-    --surface-color: #1e293b;
-    --text-color: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --border-color: #334155;
+    --primary-hover: #93c5fd;
+    --secondary-color: #a3a3a3;
+    --bg-color: #0a0a0a;          /* أسود فاخر مثل Vercel (كان #0f172a مائل للأزرق) */
+    --surface-color: #0f0f0f;     /* surface بنفس النغمة — لا تباين مزعج */
+    --surface-elevated: #171717;  /* للعناصر المرفوعة */
+    --text-color: #fafafa;        /* أبيض فاخر (كان #f1f5f9 — مائل للأزرق) */
+    --text-secondary: #a3a3a3;
+    --border-color: #1f1f1f;      /* حدود ناعمة جداً — تكاد تكون غير مرئية */
+    --border-subtle: #141414;     /* فواصل داخلية أخف */
     --success-color: #34d399;
     --warning-color: #fbbf24;
     --error-color: #f87171;
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+    --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.6);
 }
 
 * {
@@ -49,8 +73,13 @@ body {
     background-color: var(--bg-color);
     color: var(--text-color);
     direction: rtl;
-    line-height: 1.6;
-    transition: background-color 0.3s, color 0.3s;
+    line-height: 1.7;
+    /* ISS-061 (D-055): font smoothing فاخر للنص الأبيض/الأسود */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern" 1, "liga" 1;
+    transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /* App Container */
@@ -273,25 +302,31 @@ body {
 }
 
 .message-bubble {
-    max-width: 85%;
-    padding: 1rem;
-    border-radius: 12px;
-    font-size: 1rem;
-    line-height: 1.6;
+    max-width: 90%;
+    padding: 1rem 1.25rem;
+    border-radius: 16px;
+    font-size: 1.025rem;
+    line-height: 1.75;
     position: relative;
+    font-weight: 400;
 }
 
 .message.user .message-bubble {
     background-color: var(--primary-color);
     color: #ffffff;
-    border-bottom-right-radius: 2px;
+    border-bottom-right-radius: 4px;
+    font-weight: 500;
 }
 
+/* ISS-061 (D-055): رسالة المساعد بدون frame مُقزِّز.
+   - لا border (الإطار الذي شكا منه المستخدم)
+   - خلفية شفافة في الـ dark mode — النص الأبيض يتألق على الصفحة السوداء
+   - في light mode: خلفية خفيفة جداً للتمييز */
 .message.assistant .message-bubble {
-    background-color: var(--surface-color);
+    background-color: transparent;
     color: var(--text-color);
-    border: 1px solid var(--border-color);
-    border-bottom-left-radius: 2px;
+    border: none;
+    padding-inline: 0.5rem;
 }
 
 /* Agent Status Board */
@@ -688,6 +723,19 @@ body {
     font-size: 1.05em;
     direction: ltr;
     unicode-bidi: bidi-override;
+    /* ISS-061 (D-055): KaTeX يرث لون النص — أبيض فاخر في dark، أسود فاخر في light */
+    color: var(--text-color);
+}
+
+/* ISS-061: ضمان وراثة اللون لكل عناصر KaTeX الداخلية */
+.markdown-content .katex .mord,
+.markdown-content .katex .mbin,
+.markdown-content .katex .mrel,
+.markdown-content .katex .mopen,
+.markdown-content .katex .mclose,
+.markdown-content .katex .mpunct,
+.markdown-content .katex .mop {
+    color: inherit;
 }
 
 .markdown-content .katex-display {
@@ -739,104 +787,72 @@ body {
     white-space: nowrap;
 }
 
+/* ISS-061 (D-055): striping ناعم جداً يتسق مع الـ surface-elevated */
 .math-table tr:nth-child(even) td {
-    background: rgba(0,0,0,0.02);
+    background: var(--surface-elevated);
 }
 
 [data-theme='dark'] .math-table tr:nth-child(even) td {
-    background: rgba(255,255,255,0.02);
+    background: var(--surface-elevated);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   بطاقة الامتحان — تصميم فاخر يحاكي ورقة الامتحان الرسمية
+   ISS-061 (D-055): بطاقة الامتحان — تصميم فاخر بسيط (Vercel/Apple-grade)
+   ───────────────────────────────────────────────────────────────────────────
+   فلسفة: «عظيم ببساطته» — لا frames ثقيلة، لا gradients مزدحمة، لا خطوط
+   ذهبية متراقصة. التركيز كلياً على المحتوى. النص أبيض راقٍ في الـ dark و
+   أسود فاخر في الـ light. حذف ::before (الذي كان يُسبب flicker بصري).
    ═══════════════════════════════════════════════════════════════════════════ */
 .exam-content {
-    background:
-        linear-gradient(180deg, rgba(37,99,235,0.025) 0%, transparent 80px),
-        var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 1.5rem 1.75rem;
+    background: transparent;       /* خلفية شفافة — لا inner-frame */
+    border: none;                  /* لا إطار مُقزِّز */
+    padding: 0.5rem 0;
     position: relative;
-    box-shadow:
-        0 1px 2px rgba(0,0,0,0.04),
-        0 4px 16px rgba(0,0,0,0.06),
-        0 12px 48px rgba(37,99,235,0.04);
-    overflow: hidden;
 }
 
-/* خط ذهبي علوي يُذكِّر بالرسمية — ورقة امتحان رسمية */
-.exam-content::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(37,99,235,0.0) 5%,
-        rgba(37,99,235,0.6) 30%,
-        rgba(245,158,11,0.85) 50%,
-        rgba(37,99,235,0.6) 70%,
-        rgba(37,99,235,0.0) 95%,
-        transparent 100%);
-    border-radius: 16px 16px 0 0;
-    pointer-events: none;
-}
-
-[data-theme='dark'] .exam-content {
-    background:
-        linear-gradient(180deg, rgba(96,165,250,0.04) 0%, transparent 80px),
-        var(--surface-color);
-    box-shadow:
-        0 1px 2px rgba(0,0,0,0.3),
-        0 4px 16px rgba(0,0,0,0.4),
-        0 12px 48px rgba(37,99,235,0.06);
-}
+/* ISS-061: تم حذف `.exam-content::before` (الخط الذهبي المتراقص).
+   كان يسبب flicker بصري عند كل re-render خلال streaming. الواجهة الآن نظيفة. */
 
 .exam-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    background: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(37,99,235,0.06));
-    border: 1px solid rgba(37,99,235,0.25);
-    color: var(--primary-color);
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 0.3rem 0.75rem;
-    border-radius: 20px;
-    margin-bottom: 1rem;
-    letter-spacing: 0.02em;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;          /* pill-shape فاخر */
+    margin-bottom: 1.25rem;
+    letter-spacing: 0;
+    opacity: 0.85;
 }
 
 .exam-badge-icon {
-    font-size: 0.85rem;
+    font-size: 0.78rem;
+    opacity: 0.7;
 }
 
-/* ISS-056/057 (D-049/D-051): تنسيق احترافي راقي لمحتوى تمارين البكالوريا
-   - فواصل بصرية فاخرة بين أجزاء التمرين (I, II, III)
-   - عناوين بظلال خفيفة وحدود متدرجة
-   - LaTeX بحجم مناسب على الشاشات الصغيرة
-   - تأثيرات ظهور سلسة (KaTeX fade-in) */
+/* عناوين بسيطة بدون gradient/border-image: الحد السفلي نظيف، لون النص نفسه */
 .exam-content h1,
 .exam-content h2 {
-    border-bottom: 2px solid;
-    border-image: linear-gradient(90deg, rgba(37,99,235,0.45), rgba(37,99,235,0.12) 60%, transparent) 1;
-    padding-bottom: 0.4rem;
-    margin-top: 1.75rem;
-    font-weight: 800;
-    color: var(--primary-color);
-    letter-spacing: -0.01em;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    font-weight: 700;
+    color: var(--text-color);
+    letter-spacing: -0.015em;
+    line-height: 1.4;
 }
 
 .exam-content h3 {
-    color: var(--primary-color);
-    font-weight: 700;
-    margin-top: 1.25rem;
-    border-right: 3px solid rgba(37,99,235,0.4);
-    padding-right: 0.6rem;
-    background: linear-gradient(90deg, rgba(37,99,235,0.04), transparent 70%);
-    padding-block: 0.35rem;
-    border-radius: 0 6px 6px 0;
+    color: var(--text-color);
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    /* لا border-right, لا gradient bg, لا padding-block — نظيف */
 }
 
 .exam-content h1:first-child,
@@ -845,44 +861,34 @@ body {
 }
 
 .exam-content strong {
-    color: var(--primary-color);
-    font-weight: 800;
+    color: var(--text-color);
+    font-weight: 700;
 }
 
 .exam-content hr.md-hr {
     border: none;
-    height: 2px;
-    background: linear-gradient(90deg,
-        transparent,
-        rgba(37,99,235,0.15) 20%,
-        rgba(245,158,11,0.35) 50%,
-        rgba(37,99,235,0.15) 80%,
-        transparent);
+    height: 1px;
+    background: var(--border-color);
     margin: 1.75rem 0;
-    border-radius: 2px;
 }
 
-/* جدول بطاقة الامتحان — حدود أوضح وخلفية فاخرة */
+/* جداول الامتحان — حدود ناعمة، لا gradients */
 .exam-content .math-table-wrapper {
-    border: 1px solid rgba(37,99,235,0.18);
-    box-shadow:
-        0 1px 3px rgba(0,0,0,0.05),
-        0 4px 12px rgba(37,99,235,0.06);
+    border: 1px solid var(--border-color);
+    box-shadow: none;
+    background: transparent;
 }
 
 .exam-content .math-table th {
-    background: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(37,99,235,0.05));
-    font-weight: 800;
+    background: var(--surface-elevated);
+    font-weight: 700;
     font-size: 0.95rem;
+    color: var(--text-color);
 }
 
 .exam-content .math-table th:first-child {
-    background: linear-gradient(135deg, rgba(245,158,11,0.18), rgba(245,158,11,0.05));
-    color: #b45309;
-}
-
-[data-theme='dark'] .exam-content .math-table th:first-child {
-    color: #fcd34d;
+    background: var(--surface-elevated);
+    color: var(--text-color);
 }
 
 /* KaTeX داخل بطاقة الامتحان — أنيق ومركَّز */
@@ -891,34 +897,16 @@ body {
     font-feature-settings: "lnum", "tnum";
 }
 
+/* ISS-061 (D-055): KaTeX-display بسيط فاخر بدون أي animation/transition.
+   - لا fade-in: كل re-render أثناء typewriter يُطلِق الـ animation فيظهر flicker
+   - لا hover transitions: تسبب وميض بصري على إعادة التصيير
+   - الخلفية الآن شفافة (لا gradient) — تركيز كامل على المعادلة لا على الإطار */
 .exam-content .katex-display {
     margin: 1.25rem 0;
-    padding: 0.85rem 1rem;
-    background: linear-gradient(135deg, rgba(37,99,235,0.05), rgba(37,99,235,0.02) 80%);
-    border: 1px solid rgba(37,99,235,0.12);
-    border-radius: 10px;
-    box-shadow: inset 0 1px 2px rgba(37,99,235,0.05);
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-[data-theme='dark'] .exam-content .katex-display {
-    background: linear-gradient(135deg, rgba(96,165,250,0.06), rgba(96,165,250,0.02) 80%);
-    border-color: rgba(96,165,250,0.16);
-}
-
-.exam-content .katex-display:hover {
-    border-color: rgba(37,99,235,0.28);
-    box-shadow: inset 0 1px 2px rgba(37,99,235,0.08), 0 2px 8px rgba(37,99,235,0.06);
-}
-
-/* fade-in خفيف للمعادلات لتظهر بأناقة بدل ظهور مفاجئ */
-@keyframes katex-fade-in {
-    from { opacity: 0.4; transform: translateY(2px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.exam-content .katex-display {
-    animation: katex-fade-in 0.18s ease-out;
+    padding: 0.85rem 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 /* على الشاشات الصغيرة: قلِّص حجم KaTeX قليلاً لتجنب overflow أفقي */
@@ -977,9 +965,11 @@ body {
 }
 
 /* رسالة في حالة البث */
+/* ISS-061 (D-055): streaming indicator خفيف بدون box-shadow.
+   - الـ box-shadow كان يُسبب re-paint مكلفة على كل character reveal
+   - الآن نستخدم opacity على الـ cursor فقط (لا تأثير على layout) */
 .message-bubble.streaming {
-    border-color: rgba(37, 99, 235, 0.3);
-    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.1);
+    /* لا تأثيرات بصرية على الـ bubble نفسها — الـ streaming-cursor كافٍ */
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

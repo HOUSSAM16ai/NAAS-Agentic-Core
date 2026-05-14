@@ -1113,3 +1113,46 @@
   - الخطوات الثلاث متراكبة: تطبيع الحدود → تطبيع الأوامر → تحويل لـ `$...$`
   - أي طبقة محذوفة = كارثة فورية
 - **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+### [FIXED] ISS-061 · UI catastrophe — flicker bar + ugly frame + bad fonts + slate-blue colors · FIXED (2026-05-14)
+
+- **Severity**: 🔴 Critical UX — المستخدم بلَّغ: «طالبا تقزز و اغمي عليه من قبح الألوان الكارثية البشعة و الخطوط المقززة الدميمة».
+- **الأعراض المُشاهَدة (5 screenshots من المستخدم)**:
+  1. **خط أفقي علوي ذهبي/أزرق «يظهر ويختفي مثل البث»** فوق بطاقة التمرين
+  2. **إطار مُقزِّز** حول كل رسالة مساعد (border + box-shadow ثقيلَين)
+  3. **ألوان مائلة للأزرق** (slate-tinted) — لا "أبيض فاخر" ولا "أسود فاخر"
+  4. **خطوط عربية رديئة** بلا font-smoothing
+  5. **dark/light toggle "معطلَين بشكل خطير"** — التبديل يحدث لكن الألوان لم تكن واضحة الفرق
+- **الأسباب الجذرية**:
+  1. `.exam-content::before` بـ `linear-gradient` أصفر/أزرق متراقص — كان يومض على كل re-render
+  2. `@keyframes katex-fade-in` + `animation: katex-fade-in 0.18s ease-out` على كل `.exam-content .katex-display` — typewriter يُعيد التصيير 60fps فيُطلِق الـ animation على كل character
+  3. `transition: box-shadow/border-color` على katex-display:hover و `.message-bubble.streaming` → re-paint مكلفة
+  4. `border: 1px solid var(--border-color)` على `.message.assistant .message-bubble` — هذا الإطار الذي شكا منه المستخدم
+  5. Color palette مائل للـ slate-blue: `--bg-color: #f8fafc`, `--text-color: #0f172a`, `--surface-color: #1e293b`
+  6. Cairo font بدون smoothing/feature-settings → خطوط حادة على RTL
+- **الإصلاحات (D-055 — ست طبقات)**:
+  - **L1 Color palette**: Light `--bg: #ffffff` + text `#0a0a0a` + border `#e5e5e5`. Dark `--bg: #0a0a0a` + text `#fafafa` + border `#1f1f1f`. إضافة `--surface-elevated` (لـ tables only).
+  - **L2 Typography**: import Tajawal + Noto Kufi Arabic + Inter. body بـ font-smoothing + text-rendering: optimizeLegibility + font-feature-settings.
+  - **L3 Flicker removal**: حذف `.exam-content::before` كلياً + `@keyframes katex-fade-in` + `animation` على katex-display + `transition` على katex-display:hover + box-shadow على message-bubble.streaming.
+  - **L4 Exam-Card minimal**: `background: transparent` + `border: none`. exam-badge: pill شفاف. h1/h2: border-bottom 1px (لا gradient). h3: عادي. hr: 1px solid. tables: حدود محايدة.
+  - **L5 Message-bubble**: assistant bubble بـ `background: transparent` + `border: none` (حذف الإطار المُقزِّز).
+  - **L6 KaTeX colors**: `.markdown-content .katex { color: var(--text-color) }` + كل children بـ `color: inherit` → معادلات بيضاء فاخرة في dark، سوداء فاخرة في light.
+- **Files changed**:
+  - `frontend/app/globals.css` (6 sections rewritten — theme vars, body, exam-content, message-bubble, KaTeX colors, streaming indicator)
+  - `CLAUDE.md` §6.36, `.memory/decisions.md` D-055
+- **Live verification needed in Codespaces** (sandbox can't render visuals):
+  - Toggle light/dark → خلفية تتبدل بين `#ffffff` و `#0a0a0a` فوراً
+  - تمرين 2016 يُعرَض بدون خط ذهبي علوي
+  - رسائل المساعد بدون إطار مرئي
+  - المعادلات بيضاء في dark، سوداء في light
+  - typewriter يكشف الحروف بدون flicker بصري
+- **Invariants enforced**:
+  - لا animations على المحتوى أثناء streaming
+  - لا hover transitions على re-rendered elements
+  - لا gradient backgrounds على content cards
+  - Pure backgrounds (no slate tinting)
+  - Font smoothing إلزامي للعربي
+  - Border-image gradients محظورة على content headings
+- **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

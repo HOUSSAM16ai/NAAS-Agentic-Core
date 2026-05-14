@@ -863,3 +863,30 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 - أي طبقة محذوفة من السلسلة الثلاثية (D-051 step 1 + D-054 step 2 + D-051 step 3) = كارثة مرئية فورية.
 **Evidence**: على ملف bac2016 الكامل بعد الإصلاح: 0 موضع `\\command` متبقٍ، 25× `\lambda`, 51× `\infty`, 21× `\to`, 2× `\int`, 8× `\mathbb`, 1× `\displaystyle` — كلها تُرسَم بشكل مثالي. سطر الكارثة بعد الإصلاح: `$A(\lambda) = \displaystyle\int_0^{\lambda} h(x)\,dx$` ← KaTeX يرسم: A(λ) = ∫₀^λ h(x)dx.
 **Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+## D-055 · Luxury UI Theme — Flicker-Free Pure Backgrounds + Premium Typography (2026-05-14, ISS-061)
+**Decision**: إعادة تصميم نظام الثيم بالكامل بـ pure backgrounds + premium fonts + zero flicker، حسب آخر الأبحاث في luxury web design (Vercel Geist Dark + Apple HIG + GitHub Primer).
+**Problem**: المستخدم بلَّغ 4 كوارث بصرية: (1) خط ذهبي علوي «يظهر ويختفي مثل البث» في أعلى التمرين، (2) إطار مُقزِّز حول رسائل المساعد، (3) ألوان مائلة للأزرق في كل مكان (slate-blue tinted)، (4) خطوط عربية رديئة بلا font-smoothing.
+**Root causes identified**:
+- `.exam-content::before` بـ gradient أصفر+أزرق → الخط الذهبي المتراقص
+- `@keyframes katex-fade-in` + `animation` على katex-display → flicker على كل character reveal (typewriter يُعيد التصيير ~60fps)
+- `transition: box-shadow/border-color` على katex-display + message-bubble.streaming → vibration بصري
+- `border: 1px solid` على `.message.assistant .message-bubble` → الإطار المُقزِّز
+- Colors: `--bg-color: #f8fafc`, `--text-color: #0f172a` — slate-tinted، ليست pure black/white
+- Cairo font بدون font-smoothing، بدون text-rendering tuning
+**Solution (6 layers)**:
+- **L1**: Color palette مُعاد تصميمها — Light: `#ffffff` bg + `#0a0a0a` text + `#e5e5e5` borders. Dark: `#0a0a0a` bg (Vercel-grade) + `#fafafa` text + `#1f1f1f` borders. إضافة `--surface-elevated` للأسطح المرفوعة فقط.
+- **L2**: Typography premium — `Tajawal` + `Noto Kufi Arabic` + `Inter` + `-apple-system`. font-smoothing + text-rendering: optimizeLegibility + font-feature-settings.
+- **L3**: حذف الـ Flicker — حُذف `.exam-content::before` كلياً، حُذف `@keyframes katex-fade-in` + `animation`، حُذف `transition: box-shadow` + `:hover` على katex-display، حُذف `box-shadow` على `.message-bubble.streaming`.
+- **L4**: Exam-Card بسيط فاخر — `background: transparent`، `border: none`. exam-badge: pill شفاف بحدود رمادية ناعمة. h1/h2: `border-bottom: 1px solid` نظيف (بدلاً من border-image gradient). h3: لا border-right، لا gradient bg. جداول: محايدة بـ `--surface-elevated`.
+- **L5**: Message-bubble — assistant bubble: `background: transparent` + `border: none` + `padding-inline: 0.5rem`. user bubble: لون `--primary-color` فقط مع border-radius فاخر.
+- **L6**: KaTeX يرث لون النص — `.markdown-content .katex { color: var(--text-color) }` + كل children تستخدم `color: inherit`. في dark: معادلات بيضاء راقية. في light: معادلات سوداء فاخرة.
+**Invariants** (6 قواعد دائمة):
+1. لا animations على المحتوى المُعاد تصييره خلال streaming
+2. لا hover transitions على عناصر تُعاد تصييرها
+3. لا gradient backgrounds على content cards خلال streaming
+4. Pure backgrounds: white = `#ffffff` نقي، dark = `#0a0a0a` نقي
+5. Font smoothing إلزامي للعربي
+6. Border-image gradients محظورة على content headings
+**Evidence**: الإصلاحات مطبَّقة على `globals.css`. سيُحقَّق منها حياً في Codespaces. الـ TTFT للـ paint pass الأول سينخفض بسبب إزالة gradients المتعددة.
+**Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

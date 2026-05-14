@@ -3259,3 +3259,98 @@ print('OK')
 
 ---
 
+## 6.34 Question-Aware Latency Budgets — Detail Question Time Catastrophe (2026-05-14, ISS-059 / D-053)
+
+> كارثة الوقت: عند طلب «تفصيل معين» (مثل «ماذا نقصد بدالة اصلية»، «لماذا g(-1)=1-e»)
+> كانت الإجابة تتأخر 15-18 ثانية — مثل طلب شرح كامل تماماً. السبب: max_tokens=900
+> ثابت لكل أنواع الأسئلة. الآن نُصنِّف السؤال ونعطيه budget مناسب.
+
+### المشكلة المُشخَّصة
+
+`_MAX_EXPLANATION_TOKENS = 900` كان ثابتاً لكل الأسئلة. الـ LLM يولِّد ~50 token/s
+على النماذج المجانية. النتيجة:
+- سؤال «ماذا نقصد بدالة أصلية» (يحتاج ~200 token طبيعياً) → يولِّد 900 → ~18s
+- سؤال «اشرح التمرين كاملاً» (يحتاج 900 token طبيعياً) → نفس الشيء → ~18s
+- لا تمييز → الطالب ينتظر بنفس الطول لأي سؤال
+
+### الإصلاح (D-053 — 3 طبقات)
+
+**طبقة 1 — تصنيف السؤال** (`local_graph.py:_classify_question_budget`):
+دالة جديدة تُصنِّف السؤال بناءً على patterns إلى 5 أنواع:
+
+| النوع | المثال | context | max_tokens | الزمن المتوقَّع |
+|-------|--------|---------|-----------|---------------|
+| **CONCEPT** | "ماذا نقصد بـ"، "ما هو معنى" | 1200 char | 350 | ~7s (كان ~18s) |
+| **JUSTIFICATION** | "لماذا"، "علِّل" | 1500 char | 450 | ~9s (كان ~18s) |
+| **METHOD** | "كيف نُثبت"، "كيف نحسب" | 2000 char | 600 | ~12s (كان ~18s) |
+| **DEFAULT** | "شرح الجزء الأول" | 2500 char | 700 | ~14s (كان ~18s) |
+| **FULL** | "اشرح التمرين كاملاً" | 3000 char | 900 | ~18s (لم يتغيَّر) |
+
+**طبقة 2 — تطبيق Budget الديناميكي**: في `run_local_graph_with_exercise_context`،
+`context_budget` و `token_budget` يُحسبان من السؤال ويُمرَّران إلى:
+- قَصّ الـ context: `trimmed_content = trimmed_content[:context_budget]`
+- استدعاء LLM: `ai_client.stream_chat(messages, max_tokens=token_budget)`
+- Telemetry tags: `context_budget`, `token_budget`, `q_class` لكل span
+
+**طبقة 3 — Decision Caching** (`orchestrator_client.py:chat_with_agent`):
+قبل ISS-059، `detect_explanation_with_context` كان يُستدعى **3 مرات**:
+1. في `_has_explanation_with_context_match()` للتحقق
+2. في `_stream_exercise_explanation_response()` لإعادة الجلب
+3. file I/O داخل كل واحدة منهما
+
+الآن يُحسب **مرة واحدة** في `chat_with_agent` ويُمرَّر عبر `precomputed_decision=`:
+```python
+_explanation_decision = detect_explanation_with_context(...)  # مرة واحدة
+if _explanation_decision.recognized:
+    async for chunk in self._stream_exercise_explanation_response(
+        ...,
+        precomputed_decision=_explanation_decision,  # تجنُّب إعادة الحساب
+    ): ...
+```
+يوفِّر ~10-20ms + يتجنَّب file I/O مكرَّر.
+
+### الـ Metric الجديد
+
+`cogniforge_langgraph_q_class_total{q_class,graph}` — يُتاح في Grafana لتتبُّع
+توزيع أنواع الأسئلة:
+- نسبة CONCEPT/JUSTIFICATION → مؤشر على رضى المستخدم بأسئلة قصيرة سريعة
+- نسبة FULL → مؤشر على الحاجة لمحتوى تعليمي شامل
+
+### القواعد الثلاث الدائمة (لا تُكسر بدون ADR)
+
+**(1) max_tokens يتناسب مع نوع السؤال**: السؤال القصير يستحق إجابة قصيرة سريعة.
+استخدام 900 token لكل الأسئلة = كارثة وقت. صنِّف أولاً، ثم خصِّص budget.
+
+**(2) Decision Caching إلزامي**: عند الحاجة لـ decision في عدة مراحل من نفس الطلب،
+احسبه **مرة واحدة** ومرِّره عبر parameter. تكرار `detect_*` يُكلِّف time + I/O.
+
+**(3) Telemetry tags كاملة**: كل span في explanation path يجب أن يحوي:
+`q_class`, `context_budget`, `token_budget` — يُمكِّن Grafana من تشخيص التأخير
+بنوع السؤال.
+
+### قياس النجاح حياً
+
+```bash
+# 1. كل تصنيف يُعطي budget صحيح
+python3 -c "
+import sys; sys.path.insert(0, '.')
+# تجنُّب package init الذي يحتاج sqlalchemy: استخدم importlib
+import importlib.util
+spec = importlib.util.spec_from_file_location('lg', 'app/services/chat/local_graph.py')
+# ... (راجع scripts/check_q_class.py)
+"
+
+# 2. زمن الاستجابة المتوقَّع
+# قبل D-053: كل سؤال ~18s مهما كان حجمه
+# بعد D-053:
+#   ماذا نقصد → ~7s (وفر 11s)
+#   لماذا     → ~9s (وفر 9s)
+#   كيف نُثبت  → ~12s (وفر 6s)
+#   اشرح كاملاً → ~18s (لم يتغيَّر — مطلوب)
+
+# 3. Metric في Grafana
+# rate(cogniforge_langgraph_q_class_total[5m]) by (q_class)
+```
+
+---
+

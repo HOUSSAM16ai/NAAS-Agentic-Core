@@ -221,6 +221,7 @@ class OrchestratorClient:
         question: str,
         conversation_id: int | None,
         history_messages: list[dict[str, str]] | None = None,
+        precomputed_decision: object = None,  # ExplanationWithContextDecision أو None
     ) -> AsyncGenerator[str, None]:
         """
         يشرح تمرين بكالوريا محدد بالاعتماد على محتواه الكامل من قاعدة المعرفة.
@@ -232,13 +233,21 @@ class OrchestratorClient:
         ISS-058: الآن يستخدم تاريخ المحادثة لربط أسئلة "ماذا نقصد" / "كيف نُثبت"
         بتمرين البكالوريا الذي طُلب حديثاً — فلا يذهب إلى wide-net retrieval.
 
+        ISS-059 (D-053): الآن يقبل `precomputed_decision` لتجنب استدعاء
+        `detect_explanation_with_context` مرة ثانية (الـ caller حسبها فعلاً).
+        يوفِّر ~10-20ms من زمن TTFB ويتجنَّب file I/O مكرراً.
+
         يُدرَج في fallback chain بين exercise_retrieval و LangGraph:
           file_intelligence → exercise_retrieval → exercise_explanation → LangGraph → general_chat
         """
-        decision = detect_explanation_with_context(
-            ExerciseRetrievalRequest(question=question),
-            history_messages=history_messages,
-        )
+        # ISS-059: استخدم القرار المُحسَب مسبقاً إن وُجد (يوفِّر file I/O)
+        if precomputed_decision is not None:
+            decision = precomputed_decision
+        else:
+            decision = detect_explanation_with_context(
+                ExerciseRetrievalRequest(question=question),
+                history_messages=history_messages,
+            )
         if not decision.recognized or not decision.full_content:
             return
 
@@ -876,13 +885,21 @@ class OrchestratorClient:
         # عند طلب شرح/استفسار مرتبط بتمرين بكالوريا (صريحاً أو ضمن السياق)،
         # نتجاوز orchestrator + StateGraph لمنع dump عدة تمارين غير متعلقة
         # (كارثة 2016 + 2024 المُختلطين) ولمنع تسريب tags خام مثل [ex: ex_1].
+        #
+        # ISS-059 (D-053): الآن نحسب القرار **مرة واحدة** ونمرِّره للـ stream
+        # بدل إعادة حسابه — يوفِّر ~10-20ms + file I/O مكرَّر.
         # ─────────────────────────────────────────────────────────────────────
-        if self._has_explanation_with_context_match(question, history_messages):
+        _explanation_decision = detect_explanation_with_context(
+            ExerciseRetrievalRequest(question=question),
+            history_messages=history_messages,
+        )
+        if _explanation_decision.recognized and _explanation_decision.matched_entry is not None:
             logger.info(
                 "explanation_context_preempt",
                 extra={
                     "request_id": request_id if 'request_id' in locals() else str(uuid.uuid4()),
-                    "reason": "matched_explanation_with_bac_context",
+                    "reason": _explanation_decision.reason,
+                    "matched_file": _explanation_decision.matched_entry.file_path,
                 },
             )
             exp_streamed_chars = 0
@@ -891,6 +908,7 @@ class OrchestratorClient:
                     question=question,
                     conversation_id=conversation_id,
                     history_messages=history_messages,
+                    precomputed_decision=_explanation_decision,  # ISS-059
                 ):
                     if not chunk:
                         continue

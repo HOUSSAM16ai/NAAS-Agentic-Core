@@ -119,19 +119,25 @@ Verifies the anti-flash script and lazy useState are present.
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify anti-flash script in layout.jsx
+      - name: Verify theme-init.js exists and layout loads it
         shell: bash
         run: |
           set -euo pipefail
-          if ! grep -q "dangerouslySetInnerHTML" frontend/app/layout.jsx; then
-            echo "❌ Anti-flash script missing from layout.jsx"
+          # Next.js 16 App Router: dangerouslySetInnerHTML in <head> JSX gets moved to <body>.
+          # Only reliable solution: external file in /public + <script src> in <head>.
+          if [ ! -f "frontend/public/theme-init.js" ]; then
+            echo "❌ frontend/public/theme-init.js missing"
             exit 1
           fi
-          if ! grep -q "localStorage.getItem" frontend/app/layout.jsx; then
-            echo "❌ Anti-flash script must read localStorage"
+          if ! grep -q "localStorage.getItem" frontend/public/theme-init.js; then
+            echo "❌ theme-init.js must read localStorage"
             exit 1
           fi
-          echo "✅ Anti-flash script present"
+          if ! grep -q "theme-init.js" frontend/app/layout.jsx; then
+            echo "❌ layout.jsx must load /theme-init.js"
+            exit 1
+          fi
+          echo "✅ theme-init.js present and loaded in layout"
 
       - name: Verify lazy useState for theme
         shell: bash

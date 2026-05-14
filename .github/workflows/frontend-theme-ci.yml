@@ -116,35 +116,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify anti-flash script in layout.jsx
+      - name: Verify theme-init.js exists in public/
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Checking anti-flash script ==="
-          if ! grep -q "themeScript" frontend/app/layout.jsx; then
-            echo "❌ FAIL: Anti-flash themeScript missing from layout.jsx"
-            echo "   Without it, light mode causes FOUC on every page refresh."
+          echo "=== Checking theme-init.js ==="
+          # ISS-066 rev4: Next.js 16 App Router يُنقِل dangerouslySetInnerHTML من <head>
+          # إلى <body>. الحل الوحيد الموثوق: ملف خارجي في /public يُحمَّل بـ <script src>
+          if [ ! -f "frontend/public/theme-init.js" ]; then
+            echo "❌ FAIL: frontend/public/theme-init.js missing"
+            echo "   Next.js 16 App Router requires an external script file for FOUC prevention."
             exit 1
           fi
-          if ! grep -q "dangerouslySetInnerHTML" frontend/app/layout.jsx; then
-            echo "❌ FAIL: dangerouslySetInnerHTML missing — script won't execute before hydration"
+          if ! grep -q "localStorage.getItem" frontend/public/theme-init.js; then
+            echo "❌ FAIL: theme-init.js must read localStorage"
             exit 1
           fi
-          if ! grep -q "localStorage.getItem" frontend/app/layout.jsx; then
-            echo "❌ FAIL: Anti-flash script must read localStorage to apply saved theme"
+          if ! grep -q "dataset.theme" frontend/public/theme-init.js; then
+            echo "❌ FAIL: theme-init.js must set dataset.theme"
             exit 1
           fi
-          echo "✅ Anti-flash script present and correct"
+          if ! grep -q "colorScheme" frontend/public/theme-init.js; then
+            echo "❌ FAIL: theme-init.js must set colorScheme"
+            exit 1
+          fi
+          echo "✅ theme-init.js present and correct"
+
+      - name: Verify layout.jsx loads theme-init.js in head
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking layout.jsx ==="
+          if ! grep -q "theme-init.js" frontend/app/layout.jsx; then
+            echo "❌ FAIL: layout.jsx must load /theme-init.js via <script src>"
+            exit 1
+          fi
+          # يتحقق من أنه ليس async (يجب أن يكون synchronous)
+          if grep -q "theme-init.js.*async" frontend/app/layout.jsx; then
+            echo "❌ FAIL: theme-init.js must be synchronous (no async attribute)"
+            exit 1
+          fi
+          echo "✅ layout.jsx loads theme-init.js synchronously"
 
       - name: Verify lazy useState in DashboardLayout
         shell: bash
         run: |
           set -euo pipefail
           echo "=== Checking lazy useState for theme ==="
-          # يتحقق من أن useState يستخدم lazy initializer (function) لا قيمة ثابتة
           if grep -q "useState('dark')" frontend/app/components/CogniForgeApp.jsx; then
-            echo "❌ FAIL: useState('dark') found — causes flash. Use lazy initializer instead:"
-            echo "   useState(() => localStorage.getItem('theme') === 'light' ? 'light' : 'dark')"
+            echo "❌ FAIL: useState('dark') found — causes flash. Use lazy initializer instead."
             exit 1
           fi
           if ! grep -q "useState(() =>" frontend/app/components/CogniForgeApp.jsx; then

@@ -945,3 +945,31 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 - `grep -i "212.*175.*55\|gold\|d4af37" globals.css` → 0 نتائج
 - `grep -A2 "^body, html" globals.css | grep "background:"` → موجود
 **Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+## D-056 · Claude-Style Full-Width Layout + Zero-Line Markdown + Light Mode Hardening (2026-05-14, ISS-064)
+**Decision**: إعادة تصميم layout الـ chat بأسلوب Claude (full-width assistant، constrained user bubble، messages container مع max-width 920px) + إزالة كل decorative borders على markdown headings + إضافة explicit `[data-theme='light']` block للموثوقية.
+**Problem**: المستخدم رفع 3 screenshots + screenshot من Claude.ai، وبلَّغ 3 كوارث:
+1. **نصف الجملة لا يظهر** — text overflow على اليمين، الكلمات تنقطع («بال» مقطوعة، الباقي مخفي وراء حافة الشاشة)
+2. **عشرات الخطوط الكارثية** — h1/h2/blockquote/code/hr كلها تظهر بـ borders ملوَّنة كخطوط مزعجة على pure-black
+3. **الوضع النهاري لا يعمل** — رغم `:root` بقيم pure-white، التطبيق ضعيف الموثوقية على بعض المتصفحات
+
+طلب صريح: «يجب أن يظهر بشكل خارق مثل Claude بحيث يملأ الشاشة بشكل خارق ويستفيد من المساحة الكاملة من أقصى اليمين لليسار».
+
+**Solution (5 layers)**:
+- **L1 — Claude-style layout**: `.messages` بـ `max-width: 920px + width: 100% + margin-inline: auto`. `.message.assistant .message-bubble` بـ `width: 100% + max-width: 100% + padding: 0 + border: none + background: transparent` — مثل Claude بالضبط. `.message.user .message-bubble` بـ `max-width: min(85%, 600px) + border-radius: 18px 18px 6px 18px`. `.input-area-wrapper` و `.agent-board-container` بنفس `max-width + margin-inline: auto` للوحدة البصرية.
+- **L2 — Zero-line markdown headings**: حذف `border-bottom` من h1 و `border-right` من h2. التركيز الآن على `letter-spacing` و `font-weight: 800` للتمييز.
+- **L3 — Invisible hr + transparent blockquote**: `.md-hr { height: 0; opacity: 0 }`. `.md-blockquote { background: transparent; border-right: 2px solid var(--text-secondary) }`.
+- **L4 — Code without harsh border**: `.markdown-content code { background: var(--surface-elevated); border: none; color: var(--text-color) }`.
+- **L5 — Explicit `[data-theme='light']` block**: copy of `:root` values with stronger specificity for maximum reliability across browsers.
+
+**Invariants (3 جديدة)**:
+1. Full-width assistant, constrained user bubble — chat applications الفاخرة
+2. No decorative borders on inline content (h1/h2/blockquote/code/hr) — التمييز عبر typography
+3. Explicit theme blocks > :root — للموثوقية القصوى
+
+**Evidence**:
+- `grep "max-width: 920px" globals.css` → 3 occurrences (.messages, .input-area-wrapper, .agent-board-container)
+- `grep "border-bottom.*primary-color\|border-right.*primary-color" globals.css` → 0 active rules
+- `grep "^\[data-theme='light'\]" globals.css` → موجود
+- `.markdown-content` width 100% + overflow-wrap break-word → النص لا يُقطع على الأطراف
+**Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

@@ -113,6 +113,29 @@ class OrchestratorClient:
         decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
         return decision.recognized and decision.matched_entry is not None
 
+    def _has_explanation_with_context_match(
+        self,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+    ) -> bool:
+        """يكشف عن طلب شرح مرتبط بسياق تمرين بكالوريا (إما في السؤال أو في تاريخ المحادثة).
+
+        ISS-058 (D-052 — Explanation Context Preemption Doctrine):
+        عند طلبات شرح/استفسار مفاهيمي («ماذا نقصد بدالة أصلية»، «كيف نُثبت..»،
+        «لماذا..») مرتبطة بتمرين بكالوريا (إما صريحاً في السؤال أو ضمنياً في
+        المحادثة الجارية)، نتجاوز orchestrator-service بالكامل لمنع:
+          1. dump عدة تمارين غير متعلقة (2016 + 2024 معاً — كارثة الشاشة الأخيرة)
+          2. تسريب tags مثل [ex: ex_1] / [sol: ex_1] من vector DB
+          3. هلوسة LLM بسبب context واسع وغير متعلق
+
+        نحدد التمرين الصحيح من السياق ونمرره كـ context صريح للـ LLM.
+        """
+        decision = detect_explanation_with_context(
+            ExerciseRetrievalRequest(question=question),
+            history_messages=history_messages,
+        )
+        return decision.recognized and decision.matched_entry is not None
+
     async def _execute_shell_tool(
         self,
         command: str,
@@ -206,11 +229,15 @@ class OrchestratorClient:
         العددية 2016". بدلاً من إرسال السؤال بدون سياق، نجلب النص الكامل
         (نص التمرين + الإجابة النموذجية) ونمرره للـ LLM كـ context صريح.
 
+        ISS-058: الآن يستخدم تاريخ المحادثة لربط أسئلة "ماذا نقصد" / "كيف نُثبت"
+        بتمرين البكالوريا الذي طُلب حديثاً — فلا يذهب إلى wide-net retrieval.
+
         يُدرَج في fallback chain بين exercise_retrieval و LangGraph:
           file_intelligence → exercise_retrieval → exercise_explanation → LangGraph → general_chat
         """
         decision = detect_explanation_with_context(
-            ExerciseRetrievalRequest(question=question)
+            ExerciseRetrievalRequest(question=question),
+            history_messages=history_messages,
         )
         if not decision.recognized or not decision.full_content:
             return
@@ -555,8 +582,26 @@ class OrchestratorClient:
             logger.warning("local_general_chat_stream_failed", exc_info=True)
             return
 
-    @staticmethod
-    def _sanitize_text_for_user(content: str) -> str:
+    # ISS-058 (D-052 — Retrieval Chunk Tag Stripping):
+    # vector DB / retriever ينتج chunks مع علامات داخلية مثل [ex: ex_1] / [sol: ex_1]
+    # / [grading: ex_1] تُساعد في الفهرسة لكنها لا تنتمي لواجهة المستخدم. نُزيلها
+    # قبل بثها للطالب — هذا يحدث في الـ orchestrator path قبل الـ preempt.
+    _RETRIEVAL_TAG_RE = __import__("re").compile(
+        r"\[(?:ex|sol|grading|chunk|src|source|meta|tag|id|doc):[^\]\n]{0,80}\]",
+        __import__("re").IGNORECASE,
+    )
+
+    @classmethod
+    def _strip_retrieval_tags(cls, content: str) -> str:
+        """يحذف علامات chunks الداخلية من نص المستخدم.
+
+        يحذف: [ex: ex_1] | [sol: ex_1] | [grading: ex_1] | [chunk: ...] | [src: ...]
+        أي tag على شكل [key: value] حيث key ∈ {ex, sol, grading, chunk, src, source, meta, tag, id, doc}.
+        """
+        return cls._RETRIEVAL_TAG_RE.sub("", content)
+
+    @classmethod
+    def _sanitize_text_for_user(cls, content: str) -> str:
         """يعقّم نصًا موجّهًا للمستخدم النهائي من أي تلميحات طوبولوجيا داخلية."""
         lowered = content.lower()
         blocked_tokens = (
@@ -569,7 +614,8 @@ class OrchestratorClient:
         )
         if any(token in lowered for token in blocked_tokens):
             return "تعذر إتمام طلبك حالياً بسبب ضغط أو عطل مؤقت في خدمة المحادثة. حاول مرة أخرى بعد لحظات."
-        return content
+        # ISS-058: حذف tags chunks الداخلية ([ex: ex_1], [sol: ex_1], [grading: ex_1])
+        return cls._strip_retrieval_tags(content)
 
     # ISS-STREAM-001: أنواع الأحداث التي تُمرَّر مباشرة بدون تحويل إلى assistant_delta.
     # أي نوع غير مدرج هنا ولا في _TEXT_EVENT_TYPES يُتجاهل (لا يُرسل للواجهة).
@@ -824,6 +870,54 @@ class OrchestratorClient:
                 )
                 return
             # إذا فشل البث (نادر جداً) → نُكمل المسار العادي
+
+        # ─────────────────────────────────────────────────────────────────────
+        # ISS-058 (D-052 — Explanation-with-Context Preemption):
+        # عند طلب شرح/استفسار مرتبط بتمرين بكالوريا (صريحاً أو ضمن السياق)،
+        # نتجاوز orchestrator + StateGraph لمنع dump عدة تمارين غير متعلقة
+        # (كارثة 2016 + 2024 المُختلطين) ولمنع تسريب tags خام مثل [ex: ex_1].
+        # ─────────────────────────────────────────────────────────────────────
+        if self._has_explanation_with_context_match(question, history_messages):
+            logger.info(
+                "explanation_context_preempt",
+                extra={
+                    "request_id": request_id if 'request_id' in locals() else str(uuid.uuid4()),
+                    "reason": "matched_explanation_with_bac_context",
+                },
+            )
+            exp_streamed_chars = 0
+            try:
+                async for chunk in self._stream_exercise_explanation_response(
+                    question=question,
+                    conversation_id=conversation_id,
+                    history_messages=history_messages,
+                ):
+                    if not chunk:
+                        continue
+                    exp_streamed_chars += len(chunk)
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_delta", "payload": {"content": chunk}}
+                    )
+            except Exception:
+                logger.warning("explanation_context_preempt_failed", exc_info=True)
+
+            if exp_streamed_chars > 0:
+                if _root_ctx:
+                    with contextlib.suppress(Exception):
+                        obs.end_span(
+                            _root_ctx.span_id,
+                            status="OK",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                "fallback_path": 0.75,  # explanation preempt
+                                "stream_chars": float(exp_streamed_chars),
+                            },
+                        )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
+                return
+            # إذا فشل البث → نُكمل المسار العادي
 
         payload = {
             "question": question,

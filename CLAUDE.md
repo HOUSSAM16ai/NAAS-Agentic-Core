@@ -3637,7 +3637,111 @@ grep -A2 "^\.header {" frontend/app/globals.css | grep "background-color"
 | D-053 | dynamic latency budget |
 | D-054 | `\\command` → `\command` في math |
 | D-055 | luxury UI theme + zero-flicker + premium typography |
-| **D-055.1** | **header seamless integration (no white line on pure-black)** |
+| D-055.1 | header seamless integration (no white line on pure-black) |
+| **D-055.2** | **legacy-style.css purge (gold gradient elimination)** |
 
 ---
+
+## 6.38 Legacy-Style Purge — Gold-Gradient Elimination (2026-05-14, ISS-063 / D-055.2)
+
+> **الكارثة العنيدة**: رغم D-055 و D-055.1، المستخدم بلَّغ: «الخلفية لم تصبح سوداء فاخرة في الوضع الليلي ولا بيضاء فاخرة في الوضع النهاري — مزالت كارثية مدمرة خطيرة». 
+
+### السبب الجذري النهائي — Import Order
+
+`frontend/app/layout.jsx` كان يستورد ملفَّين CSS:
+```jsx
+import "./globals.css";        // ← نظام D-055 الفاخر
+import "./legacy-style.css";   // ← يطغى بـ gradient ذهبي!
+import 'katex/dist/katex.min.css';
+```
+
+`legacy-style.css` (578 سطراً) كان يحوي:
+```css
+:root {
+    --background-color: #050506;          /* ليس pure-black */
+    --primary-color: #d4af37;             /* ذهبي */
+    --text-color: #f7f3ec;                /* cream، ليس أبيض فاخر */
+    --border-color: rgba(212,175,55,0.28); /* حدود ذهبية */
+}
+
+body, html {
+    background:
+        radial-gradient(1200px circle at 10% 0%, rgba(212, 175, 55, 0.16), transparent 60%),  /* ذهبي */
+        radial-gradient(900px circle at 90% 15%, rgba(0, 170, 255, 0.12), transparent 55%),   /* أزرق */
+        var(--background-color);
+}
+```
+
+**النتيجة**: حتى مع `--bg-color: #0a0a0a` في globals.css، الـ body كان يُرسَم بـ:
+- خلفية `#050506` (من legacy)
+- + gradient ذهبي 16% opacity
+- + gradient أزرق 12% opacity
+
+= **مزيج warm-cream + golden glow** ⇢ ليس "أسود فاخر".
+
+### الإصلاح (D-055.2 — 3 خطوات)
+
+**خطوة 1 — حذف الـ import من `layout.jsx`**:
+```jsx
+import "./globals.css";
+// import "./legacy-style.css";   ← حُذف
+import 'katex/dist/katex.min.css';
+```
+
+**خطوة 2 — حذف ملف `legacy-style.css` نفسه** (`git rm`):
+- 578 سطراً من الـ overrides الكارثية → DELETED
+- لا dependency خارجي عليه (تأكدنا بـ `grep -r "legacy-style"` → 0 references خارج التعليقات)
+- كل class selectors المستخدَمة فيه (`.app-container`, `.chat-area`, `.header`, `.message-bubble`, …) مُعرَّفة فعلاً في `globals.css`
+
+**خطوة 3 — تقوية `body` rule في `globals.css`**:
+```css
+body, html {                       /* تقوية الـ specificity */
+    height: 100%;
+    margin: 0;
+    background: var(--bg-color);   /* shorthand يُلغي background-image أي gradient */
+    ...
+}
+```
+
+الـ `background` shorthand (بدل `background-color`) يُصفّر أي `background-image` من أي CSS قديم قد يبقى في cache المتصفح.
+
+### القاعدة الدائمة الإضافية لـ D-055 (الثامنة)
+
+**(8) Single source of truth for theming**: نظام الثيم يعيش في **ملف CSS واحد** (`globals.css`). أي ملف "legacy" أو "supplemental" يحوي `:root { --bg: ... }` أو `body { background: ... }` = خطر فوري على نظام الثيم. يجب:
+- مراجعة كل `@import` و `import "*.css"` في `layout.*` على PR
+- البحث عن ملفات CSS مستقلة في `app/` و حذفها أو دمجها
+- استخدام `background` shorthand في body rule لإلغاء أي background-image قديم
+
+### قياس النجاح حياً
+
+```bash
+# 1. تأكد من حذف legacy
+[ ! -f frontend/app/legacy-style.css ] && echo "✅ DELETED"
+
+# 2. تأكد من حذف الـ import
+grep "import.*legacy-style" frontend/app/layout.jsx | grep -v "^//"
+# المتوقع: 0 نتائج (إلا في تعليقات)
+
+# 3. تأكد من قوة body rule
+grep -A2 "^body, html" frontend/app/globals.css | grep "background:"
+# المتوقع: background: var(--bg-color);
+
+# 4. تأكد من عدم وجود gradient ذهبي
+grep -i "212.*175.*55\|gold\|d4af37" frontend/app/globals.css
+# المتوقع: 0 نتائج
+```
+
+### السلسلة الكاملة (D-049 → D-055.2)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 | JSON envelope leak |
+| D-050 | indexed preempt + typewriter |
+| D-051 | LaTeX delimiters `\\(...\\)` → `$...$` |
+| D-052 | conversation context + chunk-tag stripping + Skills |
+| D-053 | dynamic latency budget |
+| D-054 | `\\command` → `\command` في math |
+| D-055 | luxury UI theme + zero-flicker + premium typography |
+| D-055.1 | header seamless integration (no white line on pure-black) |
+| **D-055.2** | **legacy-style.css purge — gold gradient elimination** |
 

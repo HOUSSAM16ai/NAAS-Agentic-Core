@@ -66,11 +66,16 @@
     padding: 0;
 }
 
-body {
+/* ISS-063 (D-055.2): body + html بنفس selector specificity كما في legacy-style.css
+   لضمان أن أي ملف CSS قديم لا يتجاوز نظام D-055 الفاخر.
+   `background` (shorthand) يُلغي أي radial-gradient ذهبي من legacy. */
+body, html {
+    height: 100%;
+    margin: 0;
     user-select: none;
     -webkit-user-select: none;
     font-family: var(--font-family);
-    background-color: var(--bg-color);
+    background: var(--bg-color);     /* shorthand يُلغي background-image gradients */
     color: var(--text-color);
     direction: rtl;
     line-height: 1.7;

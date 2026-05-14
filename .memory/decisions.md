@@ -1017,3 +1017,19 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 2. CSS theme selectors MUST include `html[data-theme='X']` as the first (highest specificity) selector.
 3. Code block colors MUST use CSS variables, never hard-coded hex values.
 **Status**: IMPLEMENTED 2026-05-14 — branch `fix/light-mode-luxury-theme`.
+
+---
+
+## D-059 — ISS-067 Always-Visible Theme Button (2026-05-14)
+
+**Problem**: Theme toggle button hidden inside dropdown — UX failure making light mode appear broken.
+**Decision**: Add dedicated `header-theme-btn` always visible in header, outside dropdown. Add all CSS vars to `:root` as safe fallback. Add comprehensive luxury light mode overrides.
+**Rationale**:
+- A theme toggle that requires 2 clicks (open menu → click toggle) is effectively broken from a UX perspective.
+- `:root` must contain all CSS variables as fallback — `html[data-theme]` may not be applied on first paint.
+- CI gate (`theme-button-gate` job) enforces that the button stays outside the dropdown permanently.
+**Invariants (3 new rules)**:
+1. Theme toggle button MUST be always visible in the header — never hidden inside a dropdown.
+2. ALL CSS variables MUST be defined in `:root` as fallback values.
+3. CI must verify `header-theme-btn` appears before `isMenuOpen &&` in JSX (line number check).
+**Status**: IMPLEMENTED 2026-05-14 — branch `fix/light-mode-theme-toggle-luxury`.

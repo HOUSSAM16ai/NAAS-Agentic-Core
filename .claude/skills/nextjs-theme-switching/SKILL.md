@@ -336,10 +336,34 @@ Read `references/github-action-template.md` for the complete 5-job workflow temp
 5. **`body` needs explicit `background`** — it does not reliably inherit `background` from `html` via CSS custom properties in all browsers.
 6. **One CSS block per element (Turbopack)** — never split `html` or `body` properties across multiple blocks. Turbopack merges them and drops earlier properties. All `html` properties in one `html { }` block, all `body` properties in one `body { }` block.
 7. **Always verify with production build** — dev server may serve cached CSS. Run `npm run build` and check `.next/server/app/index.html` for ground truth.
+8. **Theme toggle button must be always visible** (ISS-067) — never hide the theme toggle inside a dropdown menu. Place a dedicated button (`header-theme-btn`) directly in the header, outside any conditional render block.
+9. **`:root` must contain ALL CSS variables** (ISS-067) — even if `html[data-theme]` blocks define them, `:root` must have safe fallback values for every variable. Missing `:root` fallbacks cause `undefined` variables before theme is applied.
+
+---
+
+## 7. CI Gate: theme-button-gate (ISS-067)
+
+The `theme-button-gate` job in `frontend-theme-ci.yml` enforces invariants 8 and 9:
+
+```yaml
+- name: Verify theme button is outside dropdown
+  shell: bash
+  run: |
+    theme_line=$(grep -n "header-theme-btn" frontend/app/components/CogniForgeApp.jsx \
+      | head -1 | cut -d: -f1)
+    menu_line=$(grep -n "isMenuOpen &&" frontend/app/components/CogniForgeApp.jsx \
+      | head -1 | cut -d: -f1)
+    if [ "$theme_line" -ge "$menu_line" ]; then
+      echo "❌ Theme button must appear BEFORE dropdown"
+      exit 1
+    fi
+```
+
+This prevents regression where the button gets moved back inside the dropdown.
 
 ---
 
 ## References
 
 - `references/light-mode-overrides.md` — full list of light mode luxury CSS overrides (header, input, sidebar, scrollbar, blockquote, math tables)
-- `references/github-action-template.md` — complete `frontend-theme-ci.yml` with 5 jobs and all verification steps (updated for `/public/theme-init.js` pattern)
+- `references/github-action-template.md` — complete `frontend-theme-ci.yml` with 6 jobs and all verification steps (updated for ISS-067: theme-button-gate + `:root` fallback check)

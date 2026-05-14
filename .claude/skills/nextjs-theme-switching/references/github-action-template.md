@@ -10,10 +10,11 @@ Copy to `.github/workflows/frontend-theme-ci.yml`. Adjust `paths` and class name
 1. [Trigger Configuration](#trigger-configuration)
 2. [Job: theme-contracts](#job-theme-contracts)
 3. [Job: anti-flash-gate](#job-anti-flash-gate)
-4. [Job: build-check](#job-build-check)
-5. [Job: lint-frontend](#job-lint-frontend)
-6. [Job: theme-regression](#job-theme-regression)
-7. [Job: summary](#job-summary)
+4. [Job: theme-button-gate](#job-theme-button-gate) ← ISS-067
+5. [Job: build-check](#job-build-check)
+6. [Job: lint-frontend](#job-lint-frontend)
+7. [Job: theme-regression](#job-theme-regression)
+8. [Job: summary](#job-summary)
 
 ---
 
@@ -154,6 +155,60 @@ Verifies the anti-flash script and lazy useState are present.
             exit 1
           fi
           echo "✅ Lazy useState initializer present"
+```
+
+---
+
+## Job: theme-button-gate
+
+**ISS-067**: Enforces that the theme toggle button is always visible (not hidden in a dropdown).
+
+```yaml
+  theme-button-gate:
+    name: theme-button-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify dedicated theme button exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! grep -q "header-theme-btn" frontend/app/components/CogniForgeApp.jsx; then
+            echo "❌ header-theme-btn missing — theme button must be always visible"
+            exit 1
+          fi
+          if ! grep -q "header-theme-btn" frontend/app/globals.css; then
+            echo "❌ .header-theme-btn CSS missing from globals.css"
+            exit 1
+          fi
+          echo "✅ Dedicated theme button present"
+
+      - name: Verify theme button is outside dropdown
+        shell: bash
+        run: |
+          set -euo pipefail
+          theme_line=$(grep -n "header-theme-btn" frontend/app/components/CogniForgeApp.jsx \
+            | head -1 | cut -d: -f1)
+          menu_line=$(grep -n "isMenuOpen &&" frontend/app/components/CogniForgeApp.jsx \
+            | head -1 | cut -d: -f1)
+          if [ "$theme_line" -ge "$menu_line" ]; then
+            echo "❌ Theme button must appear BEFORE dropdown (line $theme_line >= $menu_line)"
+            exit 1
+          fi
+          echo "✅ Theme button outside dropdown (line $theme_line < $menu_line)"
+
+      - name: Verify theme button accessibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! grep -A5 "header-theme-btn" frontend/app/components/CogniForgeApp.jsx \
+              | grep -q "aria-label"; then
+            echo "❌ header-theme-btn missing aria-label"
+            exit 1
+          fi
+          echo "✅ Theme button has aria-label"
 ```
 
 ---

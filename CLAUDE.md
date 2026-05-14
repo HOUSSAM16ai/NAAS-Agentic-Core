@@ -3569,3 +3569,75 @@ grep "Tajawal" frontend/app/globals.css
 
 ---
 
+## 6.37 Header White-Line Catastrophe — Seamless Pure-Black Doctrine (2026-05-14, ISS-062 / D-055.1)
+
+> **الكارثة**: المستخدم رفع screenshot يُظهر **خيط أبيض رفيع** أفقي تحت كلمة "Overmind Education" (في الـ header) وفوق المحتوى. وصفه: «يظهر و يختفي مما يفسد تجربة المستخدم بشكل خطير مدمر». طلب: «اريدها تبقى مثل تلك الصفحة [الـ screenshot الآخر بدون خط]».
+
+### السبب الجذري (تتمة لـ D-055)
+
+بعد D-055 أصبحت الخلفية pure black `#0a0a0a` والحد `--border-color: #1f1f1f`. لكن `.header` لا يزال يحوي:
+```css
+.header {
+    border-bottom: 1px solid var(--border-color);  /* ← الخط الأبيض */
+    box-shadow: var(--shadow-sm);                   /* ← ظل خفيف */
+}
+```
+
+على الـ slate-blue القديم (`#0f172a` body vs `#334155` border) كان الفرق كافياً لإخفاء الخط. على pure-black، أي border `#1f1f1f` يظهر كخط مرئي.
+
+### لماذا «يظهر ويختفي»
+
+الخط نفسه **ثابت**. لكن خلال streaming، typewriter يُعيد render المحتوى أسفله ~60fps. الـ re-renders تُسبب انطباع بصري بأن الخط «يومض» بسبب التحديث المتكرر للمنطقة المحيطة. **هذا flicker إدراكي وليس CSS animation**.
+
+### الإصلاح (D-055.1 — جراحي)
+
+```css
+.header {
+    height: 60px;
+    background-color: var(--bg-color);   /* بدلاً من --surface-color */
+    border-bottom: none;                  /* كان: 1px solid var(--border-color) */
+    box-shadow: none;                     /* كان: var(--shadow-sm) */
+    ...
+}
+```
+
+الـ header الآن يندمج بسلاسة مع الـ body. لا فاصل بصري على الإطلاق.
+
+### القاعدة الدائمة الإضافية لـ D-055
+
+**(7) Pure-black backgrounds expose every border**: على `--bg: #0a0a0a`، أي `border` بلون `--border-color: #1f1f1f` على عناصر full-width سيظهر كخط أبيض رفيع — حتى لو كان مقصوداً كـ subtle divider. الـ headers/dividers الفاصلة بين كتل full-width يجب أن تستخدم:
+- **خلفية مختلفة** (لو الفصل ضروري): `background-color: var(--surface-elevated)` على الجزء الأعلى
+- **margin/padding** فقط (الخيار المُفضَّل للـ luxury minimal design)
+- **NEVER** border-bottom على عناصر تمتد عبر كامل العرض على خلفية pure-black
+
+### قياس النجاح حياً
+
+```bash
+# 1. تأكد من إزالة الخط
+grep -A8 "^\.header {" frontend/app/globals.css | grep "border-bottom: none"
+# المتوقع: border-bottom: none;
+
+# 2. تأكد من إزالة الظل
+grep -A8 "^\.header {" frontend/app/globals.css | grep "box-shadow: none"
+# المتوقع: box-shadow: none;
+
+# 3. تأكد من توحُّد الخلفية
+grep -A2 "^\.header {" frontend/app/globals.css | grep "background-color"
+# المتوقع: background-color: var(--bg-color);
+```
+
+### السلسلة الكاملة (D-049 → D-055.1)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 | JSON envelope leak |
+| D-050 | indexed preempt + typewriter |
+| D-051 | LaTeX delimiters `\\(...\\)` → `$...$` |
+| D-052 | conversation context + chunk-tag stripping + Skills |
+| D-053 | dynamic latency budget |
+| D-054 | `\\command` → `\command` في math |
+| D-055 | luxury UI theme + zero-flicker + premium typography |
+| **D-055.1** | **header seamless integration (no white line on pure-black)** |
+
+---
+

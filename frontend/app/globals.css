@@ -91,16 +91,19 @@ body {
     overflow: hidden;
 }
 
-/* Header */
+/* Header — ISS-062 (D-055.1): Seamless luxury header.
+   تم حذف `border-bottom` و `box-shadow` لأن خلفية الصفحة السوداء النقية
+   (#0a0a0a) كانت تُظهر الحد (#1f1f1f) كخط أبيض رفيع يظهر/يختفي خلال
+   streaming re-renders → كارثة بصرية. الآن الـ header يندمج بسلاسة. */
 .header {
     height: 60px;
-    background-color: var(--surface-color);
-    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);   /* بدلاً من --surface-color */
+    border-bottom: none;                  /* حُذف الخط الأبيض */
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 1.5rem;
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;                     /* حُذف الظل */
     z-index: 10;
 }
 

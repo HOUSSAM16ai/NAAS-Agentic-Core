@@ -890,3 +890,24 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 6. Border-image gradients محظورة على content headings
 **Evidence**: الإصلاحات مطبَّقة على `globals.css`. سيُحقَّق منها حياً في Codespaces. الـ TTFT للـ paint pass الأول سينخفض بسبب إزالة gradients المتعددة.
 **Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+## D-055.1 · Header Seamless Integration on Pure-Black (2026-05-14, ISS-062)
+**Decision**: حذف `border-bottom` و `box-shadow` من `.header` لأن الخلفية السوداء النقية (D-055) تجعل الحد `#1f1f1f` مرئياً كخط أبيض رفيع.
+**Problem**: المستخدم رفع screenshot يُظهر خيطاً أبيض رفيعاً تحت الـ header، يُسبب انطباع flicker «يظهر ويختفي» خلال streaming (typewriter re-renders ~60fps المنطقة أسفله). وصف المستخدم: «يفسد تجربة المستخدم بشكل خطير مدمر».
+**Root cause**: في D-055 أصبحت `--bg-color: #0a0a0a` (pure black) و `--border-color: #1f1f1f`. الـ `.header` لا يزال يحوي `border-bottom: 1px solid var(--border-color)` + `box-shadow: var(--shadow-sm)`. على slate-blue القديم، التباين كان لطيفاً. على pure-black، أي 1px border بـ `#1f1f1f` يظهر كخط مرئي.
+**Solution**:
+```css
+.header {
+    background-color: var(--bg-color);   /* كان --surface-color */
+    border-bottom: none;                  /* كان 1px solid var(--border-color) */
+    box-shadow: none;                     /* كان var(--shadow-sm) */
+}
+```
+الـ header يندمج بسلاسة مع body. لا فاصل بصري.
+**Invariant added (قاعدة 7 لـ D-055)**:
+> على `--bg: pure-black`، أي `border` بلون `--border-color` على عناصر full-width سيظهر كخط مرئي. الـ dividers بين كتل full-width على pure-black يجب أن تستخدم:
+> - خلفية مختلفة (`var(--surface-elevated)`) لو الفصل ضروري
+> - margin/padding فقط (المُفضَّل للـ luxury minimal)
+> - **NEVER** border-bottom على عناصر full-width على خلفية pure-black
+**Evidence**: `grep "border-bottom: none"` في `.header` → موجود. `grep "box-shadow: none"` في `.header` → موجود.
+**Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

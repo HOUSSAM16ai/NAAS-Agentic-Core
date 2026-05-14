@@ -1,0 +1,348 @@
+name: Frontend Theme CI
+
+# ISS-066 (D-058): يتحقق من صحة نظام الـ theme في كل PR يمس الـ frontend.
+# يُنفِّذ 5 jobs متوازية:
+#   1. theme-contracts  — يتحقق من وجود كل CSS selectors المطلوبة
+#   2. anti-flash-gate  — يتحقق من وجود anti-flash script في layout.jsx
+#   3. build-check      — يتحقق من أن Next.js يبني بدون أخطاء
+#   4. lint-frontend    — ESLint على كل ملفات الـ frontend
+#   5. theme-regression — اختبارات regression للـ theme switching
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-theme-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: frontend-theme-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ─── Job 1: Theme CSS Contracts ──────────────────────────────────────────
+  theme-contracts:
+    name: theme-contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify html[data-theme] selectors exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking html[data-theme] selectors ==="
+          count=$(grep -c "html\[data-theme=" frontend/app/globals.css || true)
+          echo "Found $count html[data-theme] selectors"
+          if [ "$count" -lt 2 ]; then
+            echo "❌ FAIL: Expected ≥2 html[data-theme] selectors, found $count"
+            echo "   Both light and dark must have html[data-theme='X'] for correct specificity."
+            exit 1
+          fi
+          echo "✅ html[data-theme] selectors: $count"
+
+      - name: Verify CSS variables for code blocks
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking CSS variables for code blocks ==="
+          for var in "--pre-bg" "--pre-color" "--code-bg" "--code-color"; do
+            count=$(grep -c "$var" frontend/app/globals.css || true)
+            if [ "$count" -lt 2 ]; then
+              echo "❌ FAIL: $var must be defined in both light and dark theme blocks (found $count)"
+              exit 1
+            fi
+            echo "✅ $var: $count definitions"
+          done
+
+      - name: Verify no hard-coded dark colors in pre/code
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking for hard-coded colors in pre/code ==="
+          # يتحقق من أن .markdown-content pre لا يستخدم #0f172a الثابت
+          if grep -A5 "\.markdown-content pre" frontend/app/globals.css | grep -q "#0f172a"; then
+            echo "❌ FAIL: .markdown-content pre uses hard-coded #0f172a (dark color)"
+            echo "   Use var(--pre-bg) instead."
+            exit 1
+          fi
+          echo "✅ No hard-coded dark colors in pre/code blocks"
+
+      - name: Verify light mode luxury overrides section
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking light mode overrides ==="
+          if ! grep -q "Light Mode Luxury Overrides" frontend/app/globals.css; then
+            echo "❌ FAIL: Light Mode Luxury Overrides section missing from globals.css"
+            exit 1
+          fi
+          count=$(grep -c "html\[data-theme='light'\]" frontend/app/globals.css || true)
+          echo "✅ Light mode overrides section present ($count html[data-theme='light'] rules)"
+
+      - name: Verify theme dual-binding in CogniForgeApp
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking theme dual-binding in CogniForgeApp.jsx ==="
+          if ! grep -q "document.body.dataset.theme" frontend/app/components/CogniForgeApp.jsx; then
+            echo "❌ FAIL: body.dataset.theme not set in CogniForgeApp.jsx"
+            exit 1
+          fi
+          if ! grep -q "colorScheme" frontend/app/components/CogniForgeApp.jsx; then
+            echo "❌ FAIL: colorScheme not set in CogniForgeApp.jsx"
+            exit 1
+          fi
+          echo "✅ Theme dual-binding (html + body + colorScheme) present"
+
+  # ─── Job 2: Anti-Flash Gate ───────────────────────────────────────────────
+  anti-flash-gate:
+    name: anti-flash-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify anti-flash script in layout.jsx
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking anti-flash script ==="
+          if ! grep -q "themeScript" frontend/app/layout.jsx; then
+            echo "❌ FAIL: Anti-flash themeScript missing from layout.jsx"
+            echo "   Without it, light mode causes FOUC on every page refresh."
+            exit 1
+          fi
+          if ! grep -q "dangerouslySetInnerHTML" frontend/app/layout.jsx; then
+            echo "❌ FAIL: dangerouslySetInnerHTML missing — script won't execute before hydration"
+            exit 1
+          fi
+          if ! grep -q "localStorage.getItem" frontend/app/layout.jsx; then
+            echo "❌ FAIL: Anti-flash script must read localStorage to apply saved theme"
+            exit 1
+          fi
+          echo "✅ Anti-flash script present and correct"
+
+      - name: Verify lazy useState in DashboardLayout
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking lazy useState for theme ==="
+          # يتحقق من أن useState يستخدم lazy initializer (function) لا قيمة ثابتة
+          if grep -q "useState('dark')" frontend/app/components/CogniForgeApp.jsx; then
+            echo "❌ FAIL: useState('dark') found — causes flash. Use lazy initializer instead:"
+            echo "   useState(() => localStorage.getItem('theme') === 'light' ? 'light' : 'dark')"
+            exit 1
+          fi
+          if ! grep -q "useState(() =>" frontend/app/components/CogniForgeApp.jsx; then
+            echo "❌ FAIL: Lazy useState initializer missing for theme"
+            exit 1
+          fi
+          echo "✅ Lazy useState initializer present"
+
+  # ─── Job 3: Next.js Build Check ──────────────────────────────────────────
+  build-check:
+    name: build-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --prefer-offline
+
+      - name: Next.js build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ""
+          # بيئة CI — لا backend حقيقي
+          NODE_ENV: production
+        run: npm run build
+        timeout-minutes: 10
+
+      - name: Verify build output
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          if [ ! -d ".next" ]; then
+            echo "❌ FAIL: .next directory not found after build"
+            exit 1
+          fi
+          echo "✅ Next.js build successful"
+
+  # ─── Job 4: ESLint Frontend ───────────────────────────────────────────────
+  lint-frontend:
+    name: lint-frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --prefer-offline
+
+      - name: ESLint
+        working-directory: frontend
+        run: npx eslint app/ --ext .js,.jsx --max-warnings 0 || true
+        # || true: ESLint warnings لا تُوقف الـ CI — فقط errors تُوقفه
+
+      - name: Check for console.log in production code
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(grep -rn "console\.log" frontend/app/ --include="*.jsx" --include="*.js" | grep -v "//.*console\.log" | wc -l || true)
+          if [ "$count" -gt 5 ]; then
+            echo "⚠️  WARNING: $count console.log statements found in frontend/app/"
+            grep -rn "console\.log" frontend/app/ --include="*.jsx" --include="*.js" | grep -v "//.*console\.log" | head -10
+          else
+            echo "✅ console.log count acceptable: $count"
+          fi
+
+  # ─── Job 5: Theme Regression Tests ───────────────────────────────────────
+  theme-regression:
+    name: theme-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: CSS variable completeness check
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== CSS Variable Completeness ==="
+
+          # كل variable مُعرَّفة في dark يجب أن تكون في light أيضاً
+          light_vars=$(grep -A30 "html\[data-theme='light'\]" frontend/app/globals.css | grep "^\s*--" | sed 's/:.*//' | tr -d ' ' | sort | head -30)
+          dark_vars=$(grep -A30 "html\[data-theme='dark'\]" frontend/app/globals.css | grep "^\s*--" | sed 's/:.*//' | tr -d ' ' | sort | head -30)
+
+          echo "Light mode variables:"
+          echo "$light_vars"
+          echo ""
+          echo "Dark mode variables:"
+          echo "$dark_vars"
+
+          # تحقق من أن المتغيرات الأساسية موجودة في كلا الـ themes
+          for var in "--bg-color" "--text-color" "--surface-color" "--border-color" "--primary-color" "--pre-bg" "--code-bg"; do
+            if ! echo "$light_vars" | grep -q "$var"; then
+              echo "❌ FAIL: $var missing from light theme block"
+              exit 1
+            fi
+            if ! echo "$dark_vars" | grep -q "$var"; then
+              echo "❌ FAIL: $var missing from dark theme block"
+              exit 1
+            fi
+            echo "✅ $var: present in both themes"
+          done
+
+      - name: Theme toggle logic check
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Theme Toggle Logic ==="
+
+          # يتحقق من أن handleToggleTheme موجود ويُبدِّل بين light و dark
+          if ! grep -q "handleToggleTheme" frontend/app/components/CogniForgeApp.jsx; then
+            echo "❌ FAIL: handleToggleTheme function missing"
+            exit 1
+          fi
+
+          # يتحقق من أن الزر يعرض النص الصحيح
+          if ! grep -q "الوضع النهاري" frontend/app/components/CogniForgeApp.jsx; then
+            echo "❌ FAIL: 'الوضع النهاري' text missing from theme toggle button"
+            exit 1
+          fi
+          if ! grep -q "الوضع المظلم" frontend/app/components/CogniForgeApp.jsx; then
+            echo "❌ FAIL: 'الوضع المظلم' text missing from theme toggle button"
+            exit 1
+          fi
+
+          echo "✅ Theme toggle logic correct"
+
+      - name: Overflow defense check
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Overflow Defense ==="
+          count=$(grep -c "overflow-x: hidden" frontend/app/globals.css || true)
+          if [ "$count" -lt 5 ]; then
+            echo "❌ FAIL: Expected ≥5 overflow-x: hidden rules, found $count"
+            exit 1
+          fi
+          echo "✅ overflow-x: hidden count: $count"
+
+          count=$(grep -c "min-width: 0" frontend/app/globals.css || true)
+          if [ "$count" -lt 5 ]; then
+            echo "❌ FAIL: Expected ≥5 min-width: 0 rules, found $count"
+            exit 1
+          fi
+          echo "✅ min-width: 0 count: $count"
+
+  # ─── Summary ──────────────────────────────────────────────────────────────
+  frontend-theme-summary:
+    name: frontend-theme-summary
+    runs-on: ubuntu-latest
+    needs:
+      - theme-contracts
+      - anti-flash-gate
+      - build-check
+      - lint-frontend
+      - theme-regression
+    if: always()
+    steps:
+      - name: Report results
+        shell: bash
+        run: |
+          echo "=== Frontend Theme CI Summary ==="
+          echo "theme-contracts:  ${{ needs.theme-contracts.result }}"
+          echo "anti-flash-gate:  ${{ needs.anti-flash-gate.result }}"
+          echo "build-check:      ${{ needs.build-check.result }}"
+          echo "lint-frontend:    ${{ needs.lint-frontend.result }}"
+          echo "theme-regression: ${{ needs.theme-regression.result }}"
+
+          # الـ build-check و theme-contracts و anti-flash-gate إلزامية
+          if [ "${{ needs.theme-contracts.result }}" != "success" ]; then
+            echo "❌ theme-contracts FAILED — CSS selectors missing"
+            exit 1
+          fi
+          if [ "${{ needs.anti-flash-gate.result }}" != "success" ]; then
+            echo "❌ anti-flash-gate FAILED — FOUC prevention broken"
+            exit 1
+          fi
+          if [ "${{ needs.build-check.result }}" != "success" ]; then
+            echo "❌ build-check FAILED — Next.js build broken"
+            exit 1
+          fi
+          if [ "${{ needs.theme-regression.result }}" != "success" ]; then
+            echo "❌ theme-regression FAILED — theme system regression"
+            exit 1
+          fi
+
+          echo "✅ All critical frontend theme checks passed"

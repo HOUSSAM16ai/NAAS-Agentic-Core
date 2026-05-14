@@ -3947,6 +3947,8 @@ grep "body\[data-theme" frontend/app/globals.css
 | D-055.1 | header seamless integration |
 | D-055.2 | legacy-style.css purge |
 | D-056 | Claude-style full-width + zero-line markdown + light hardening |
-| **D-057** | **defensive overflow + mobile/desktop responsive + theme dual-binding** |
+| D-057 | defensive overflow + mobile/desktop responsive + theme dual-binding |
+| **D-058** | **ISS-066 — light mode catastrophic fix: anti-flash script + html[data-theme] + lazy useState + CSS variables for code blocks** |
+
 
 

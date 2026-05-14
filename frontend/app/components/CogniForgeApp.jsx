@@ -132,7 +132,12 @@ const DashboardLayout = ({ user, token, onLogout }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [theme, setTheme] = useState('dark');
+    // ISS-066 (D-058): lazy initializer يقرأ localStorage مباشرة عند أول render
+    // لتجنب flash: لا نبدأ بـ 'dark' ثم نُحدِّث — نبدأ بالقيمة الصحيحة فوراً.
+    const [theme, setTheme] = useState(() => {
+        if (typeof window === 'undefined') return 'dark';
+        return localStorage.getItem('theme') === 'light' ? 'light' : 'dark';
+    });
     const [conversations, setConversations] = useState([]);
     const menuRef = useRef(null);
 
@@ -190,18 +195,15 @@ const DashboardLayout = ({ user, token, onLogout }) => {
         setIsMenuOpen(false);
     };
 
-    useEffect(() => {
-        const storedTheme = localStorage.getItem('theme');
-        const initialTheme = storedTheme === 'light' ? 'light' : 'dark';
-        setTheme(initialTheme);
-    }, []);
+    // ISS-066: localStorage قُرئ في useState lazy initializer — لا حاجة لـ useEffect هنا.
 
     useEffect(() => {
         if (typeof document === 'undefined') return;
-        // ISS-065 (D-057): theme switching مع fallback مزدوج —
-        // 1. data-theme على html (للـ CSS selectors)
-        // 2. data-theme على body (defensive double-application)
-        // 3. style-color-scheme لتوافق مع المتصفح (form controls, scrollbars)
+        // ISS-066 (D-058): theme switching — triple application للموثوقية القصوى.
+        // 1. html.dataset.theme — CSS selectors html[data-theme='light'] تعمل
+        // 2. body.dataset.theme — fallback دفاعي لـ body[data-theme='light']
+        // 3. colorScheme — يُخبر المتصفح بالـ theme لـ scrollbars + form controls
+        // 4. localStorage — يحفظ الاختيار للـ anti-flash script عند التحميل التالي
         const root = document.documentElement;
         root.dataset.theme = theme;
         root.dir = 'rtl';

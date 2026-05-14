@@ -16,27 +16,32 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-    /* Light mode — صفحة بيضاء فاخرة */
+    /* ISS-067 (D-059): :root = light mode values كـ fallback آمن.
+       جميع المتغيرات موجودة هنا لضمان عمل الـ CSS حتى قبل تطبيق html[data-theme]. */
     --primary-color: #2563eb;
     --primary-color-rgb: 37, 99, 235;
     --primary-hover: #1d4ed8;
     --secondary-color: #475569;
-    --bg-color: #ffffff;          /* صفحة بيضاء نقية (كان #f8fafc) */
-    --surface-color: #ffffff;     /* أسطح بنفس البياض — وحدة بصرية */
-    --surface-elevated: #fafafa;  /* للعناصر المرفوعة فقط */
-    --text-color: #0a0a0a;        /* أسود فاخر (كان #0f172a — مائل للأزرق) */
+    --bg-color: #ffffff;
+    --surface-color: #ffffff;
+    --surface-elevated: #f5f5f5;
+    --text-color: #0a0a0a;
     --text-secondary: #525252;
-    --border-color: #e5e5e5;      /* حدود رمادية لطيفة (كانت #e2e8f0 مائلة للأزرق) */
-    --border-subtle: #f0f0f0;     /* حدود خفيفة جداً للفواصل الداخلية */
+    --border-color: #e5e5e5;
+    --border-subtle: #f0f0f0;
     --success-color: #10b981;
     --warning-color: #f59e0b;
     --error-color: #ef4444;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
     --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.06);
-    /* Typography — خط عربي فاخر للمستقبل
-       Tajawal: الأكثر أناقة في 2024 للعربية الحديثة
-       Noto Kufi Arabic: احتياطي عالي الجودة
-       Inter: للأرقام والإنجليزية */
+    /* Code block vars — fallback light */
+    --code-bg: #f4f4f5;
+    --code-color: #18181b;
+    --code-border: #e4e4e7;
+    --pre-bg: #f8f8f8;
+    --pre-color: #1e1e1e;
+    --pre-border: rgba(0, 0, 0, 0.08);
+    /* Font */
     --font-family: 'Tajawal', 'Noto Kufi Arabic', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -47,23 +52,24 @@
 html[data-theme='light'],
 body[data-theme='light'],
 [data-theme='light'] {
+    /* ISS-067 (D-059): Light mode — صفحة بيضاء نقية فاخرة + خط أسود رهيب */
     --primary-color: #2563eb;
     --primary-color-rgb: 37, 99, 235;
     --primary-hover: #1d4ed8;
     --secondary-color: #475569;
     --bg-color: #ffffff;
     --surface-color: #ffffff;
-    --surface-elevated: #fafafa;
+    --surface-elevated: #f5f5f5;
     --text-color: #0a0a0a;
     --text-secondary: #525252;
-    --border-color: #e5e5e5;
-    --border-subtle: #f0f0f0;
-    --success-color: #10b981;
-    --warning-color: #f59e0b;
-    --error-color: #ef4444;
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-    --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.06);
-    /* ISS-066: code block colors للـ light mode */
+    --border-color: #e2e2e2;
+    --border-subtle: #ebebeb;
+    --success-color: #059669;
+    --warning-color: #d97706;
+    --error-color: #dc2626;
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+    --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+    /* Code block — light mode */
     --code-bg: #f4f4f5;
     --code-color: #18181b;
     --code-border: #e4e4e7;
@@ -210,7 +216,32 @@ body {
 }
 
 .header-menu-btn:hover {
-    background-color: var(--bg-color);
+    background-color: var(--surface-elevated);
+}
+
+/* ISS-067 (D-059): زر الـ theme — مرئي دائماً في الـ header، لا يحتاج فتح القائمة */
+.header-theme-btn {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0.5rem 0.6rem;
+    border-radius: 8px;
+    transition: background-color 0.2s, color 0.2s, transform 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.header-theme-btn:hover {
+    background-color: var(--surface-elevated);
+    transform: scale(1.08);
+}
+
+.header-theme-btn:active {
+    transform: scale(0.95);
 }
 
 .header-actions {
@@ -1582,42 +1613,138 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ISS-066 (D-058): Light Mode Luxury Overrides
+   ISS-067 (D-059): Light Mode Luxury Design System
    ───────────────────────────────────────────────────────────────────────────
-   الوضع النهاري: صفحة بيضاء نقية + خط أسود فاخر + ظلال خفيفة راقية.
-   كل override هنا يُعالج عنصراً كان يبدو "مكسوراً" في الـ light mode
-   بسبب ألوان ثابتة أو افتراضات dark-first في الـ CSS الأصلي.
+   الوضع النهاري: صفحة بيضاء نقية فاخرة + خط أسود رهيب متناسق.
+   فلسفة التصميم: بساطة عظيمة — أبيض نقي + أسود عميق + ظلال خفيفة راقية.
+   مستوحى من: Apple HIG Light Mode + Vercel Dashboard + Linear App.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Header — light mode: حد سفلي خفيف يفصل الـ header عن المحتوى */
-html[data-theme='light'] .header,
-body[data-theme='light'] .header {
-    border-bottom: 1px solid var(--border-color);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+/* ── الجذر: html و body في الـ light mode ── */
+html[data-theme='light'],
+body[data-theme='light'] {
+    background: #ffffff;
+    color: #0a0a0a;
 }
 
-/* Header menu — light mode: ظل أكثر وضوحاً */
+/* Header — light mode: حد سفلي أنيق + ظل خفيف */
+html[data-theme='light'] .header,
+body[data-theme='light'] .header {
+    background: #ffffff;
+    border-bottom: 1px solid #e2e2e2;
+    box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Header theme button — light mode */
+html[data-theme='light'] .header-theme-btn,
+body[data-theme='light'] .header-theme-btn {
+    color: #525252;
+}
+
+html[data-theme='light'] .header-theme-btn:hover,
+body[data-theme='light'] .header-theme-btn:hover {
+    background-color: #f5f5f5;
+    color: #0a0a0a;
+}
+
+/* Header menu — light mode: ظل واضح + حد أنيق */
 html[data-theme='light'] .header-menu,
 body[data-theme='light'] .header-menu {
-    box-shadow: 0 4px 16px rgb(0 0 0 / 0.10), 0 1px 4px rgb(0 0 0 / 0.06);
+    background: #ffffff;
+    border: 1px solid #e2e2e2;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.10), 0 2px 6px rgb(0 0 0 / 0.06);
+}
+
+html[data-theme='light'] .header-menu-item,
+body[data-theme='light'] .header-menu-item {
+    color: #0a0a0a;
 }
 
 html[data-theme='light'] .header-menu-item:hover,
 body[data-theme='light'] .header-menu-item:hover {
-    background-color: var(--surface-elevated);
+    background-color: #f5f5f5;
+}
+
+/* Chat area — light mode: خلفية بيضاء نقية */
+html[data-theme='light'] .chat-area,
+body[data-theme='light'] .chat-area {
+    background: #ffffff;
+}
+
+/* Messages — light mode: نص أسود عميق */
+html[data-theme='light'] .message.assistant .message-bubble,
+body[data-theme='light'] .message.assistant .message-bubble {
+    color: #0a0a0a;
+}
+
+/* Markdown content — light mode */
+html[data-theme='light'] .markdown-content,
+body[data-theme='light'] .markdown-content {
+    color: #0a0a0a;
+}
+
+html[data-theme='light'] .markdown-content h1,
+html[data-theme='light'] .markdown-content h2,
+html[data-theme='light'] .markdown-content h3,
+html[data-theme='light'] .markdown-content h4,
+body[data-theme='light'] .markdown-content h1,
+body[data-theme='light'] .markdown-content h2,
+body[data-theme='light'] .markdown-content h3,
+body[data-theme='light'] .markdown-content h4 {
+    color: #0a0a0a;
+    border-bottom-color: #e2e2e2;
+}
+
+html[data-theme='light'] .markdown-content strong,
+body[data-theme='light'] .markdown-content strong {
+    color: #0a0a0a;
+    font-weight: 700;
+}
+
+html[data-theme='light'] .markdown-content code,
+body[data-theme='light'] .markdown-content code {
+    background: #f4f4f5;
+    color: #18181b;
+    border: 1px solid #e4e4e7;
+}
+
+html[data-theme='light'] .markdown-content pre,
+body[data-theme='light'] .markdown-content pre {
+    background: #f8f8f8;
+    color: #1e1e1e;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme='light'] .markdown-content pre code,
+body[data-theme='light'] .markdown-content pre code {
+    background: transparent;
+    color: inherit;
+    border: none;
 }
 
 /* Input area — light mode: حد واضح + ظل خفيف */
 html[data-theme='light'] .input-area,
 body[data-theme='light'] .input-area {
-    border: 1.5px solid var(--border-color);
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.05);
+    background: #ffffff;
+    border: 1.5px solid #e2e2e2;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.04);
+}
+
+html[data-theme='light'] .input-area textarea,
+body[data-theme='light'] .input-area textarea {
+    background: transparent;
+    color: #0a0a0a;
+}
+
+html[data-theme='light'] .input-area textarea::placeholder,
+body[data-theme='light'] .input-area textarea::placeholder {
+    color: #a3a3a3;
 }
 
 html[data-theme='light'] .input-area:focus-within,
 body[data-theme='light'] .input-area:focus-within {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10), 0 2px 8px rgb(0 0 0 / 0.05);
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10), 0 2px 8px rgb(0 0 0 / 0.04);
 }
 
 /* User message bubble — light mode: أزرق فاخر مع ظل */
@@ -1626,19 +1753,64 @@ body[data-theme='light'] .message.user .message-bubble {
     box-shadow: 0 2px 8px rgb(37 99 235 / 0.18);
 }
 
-/* Sidebar — light mode: حد يميني واضح */
+/* Sidebar — light mode: خلفية بيضاء + حد أنيق */
 html[data-theme='light'] .sidebar,
 body[data-theme='light'] .sidebar {
-    border-left: 1px solid var(--border-color);
-    box-shadow: -4px 0 16px rgb(0 0 0 / 0.06);
+    background: #ffffff;
+    border-left: 1px solid #e2e2e2;
+    box-shadow: -4px 0 20px rgb(0 0 0 / 0.08);
 }
 
-/* Login form — light mode: ظل أعمق */
+html[data-theme='light'] .sidebar-header,
+body[data-theme='light'] .sidebar-header {
+    border-bottom: 1px solid #e2e2e2;
+}
+
+html[data-theme='light'] .conversation-item,
+body[data-theme='light'] .conversation-item {
+    color: #525252;
+}
+
+html[data-theme='light'] .conversation-item.active,
+body[data-theme='light'] .conversation-item.active {
+    background: #f0f5ff;
+    color: #2563eb;
+}
+
+/* Login form — light mode: بطاقة بيضاء فاخرة */
 html[data-theme='light'] .login-form,
 html[data-theme='light'] .register-form,
 body[data-theme='light'] .login-form,
 body[data-theme='light'] .register-form {
-    box-shadow: 0 8px 32px rgb(0 0 0 / 0.10), 0 2px 8px rgb(0 0 0 / 0.06);
+    background: #ffffff;
+    border: 1px solid #e2e2e2;
+    box-shadow: 0 8px 32px rgb(0 0 0 / 0.08), 0 2px 8px rgb(0 0 0 / 0.04);
+}
+
+html[data-theme='light'] .login-form h2,
+html[data-theme='light'] .register-form h2,
+body[data-theme='light'] .login-form h2,
+body[data-theme='light'] .register-form h2 {
+    color: #0a0a0a;
+}
+
+html[data-theme='light'] .input-group input,
+body[data-theme='light'] .input-group input {
+    background: #fafafa;
+    border: 1px solid #e2e2e2;
+    color: #0a0a0a;
+}
+
+html[data-theme='light'] .input-group input:focus,
+body[data-theme='light'] .input-group input:focus {
+    border-color: #2563eb;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+}
+
+html[data-theme='light'] .input-group input::placeholder,
+body[data-theme='light'] .input-group input::placeholder {
+    color: #a3a3a3;
 }
 
 /* Conversation items — light mode: hover واضح */
@@ -1658,11 +1830,12 @@ body[data-theme='light'] .mission-btn:hover {
     box-shadow: 0 4px 16px rgb(0 0 0 / 0.10);
 }
 
-/* Agent sidebar — light mode: حد واضح */
+/* Agent sidebar — light mode: خلفية بيضاء + حد أنيق */
 html[data-theme='light'] .agent-sidebar,
 body[data-theme='light'] .agent-sidebar {
-    border-right: 1px solid var(--border-color);
-    box-shadow: 4px 0 16px rgb(0 0 0 / 0.06);
+    background: #ffffff;
+    border-right: 1px solid #e2e2e2;
+    box-shadow: 4px 0 20px rgb(0 0 0 / 0.08);
 }
 
 /* Blockquote — light mode: خط جانبي أزرق فاخر */
@@ -1696,21 +1869,56 @@ body[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
     background: #a1a1aa;
 }
 
-/* Theme toggle button — light mode: يُظهر أيقونة القمر بوضوح */
+/* Header buttons — light mode */
 html[data-theme='light'] .header-menu-btn,
 body[data-theme='light'] .header-menu-btn {
-    color: var(--text-color);
+    color: #525252;
 }
 
 html[data-theme='light'] .header-menu-btn:hover,
 body[data-theme='light'] .header-menu-btn:hover {
-    background-color: var(--surface-elevated);
+    background-color: #f5f5f5;
+    color: #0a0a0a;
 }
 
 /* Agent status board — light mode */
 html[data-theme='light'] .agent-board-container,
 body[data-theme='light'] .agent-board-container {
-    border-bottom: 1px solid var(--border-color);
+    background: #fafafa;
+    border-bottom: 1px solid #e2e2e2;
+}
+
+/* Loading screen — light mode */
+html[data-theme='light'] .loading-screen,
+body[data-theme='light'] .loading-screen {
+    background: #ffffff;
+    color: #0a0a0a;
+}
+
+/* Status indicators — light mode */
+html[data-theme='light'] .status-online,
+body[data-theme='light'] .status-online {
+    color: #059669;
+}
+
+html[data-theme='light'] .status-offline,
+body[data-theme='light'] .status-offline {
+    color: #a3a3a3;
+}
+
+/* Scroll to bottom button — light mode */
+html[data-theme='light'] .scroll-to-bottom-btn,
+body[data-theme='light'] .scroll-to-bottom-btn {
+    background: #ffffff;
+    border: 1px solid #e2e2e2;
+    color: #525252;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+}
+
+html[data-theme='light'] .scroll-to-bottom-btn:hover,
+body[data-theme='light'] .scroll-to-bottom-btn:hover {
+    background: #f5f5f5;
+    color: #0a0a0a;
 }
 
 /* Exam badge — light mode: أزرق فاخر */

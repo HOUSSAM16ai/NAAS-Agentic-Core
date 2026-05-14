@@ -4042,4 +4042,50 @@ body { overflow-x: hidden; background: var(--bg-color); color: var(--text-color)
 | D-055.2 | legacy-style.css purge |
 | D-056 | Claude-style full-width + zero-line markdown + light hardening |
 | D-057 | defensive overflow + mobile/desktop responsive + theme dual-binding |
-| **D-058** | **ISS-066 — light mode fix: /public/theme-init.js + Turbopack single-block CSS + html[data-theme] + lazy useState** |
+| D-058 | ISS-066 — light mode fix: /public/theme-init.js + Turbopack single-block CSS + html[data-theme] + lazy useState |
+| **D-059** | **ISS-067 — always-visible theme button (header-theme-btn) + :root code vars + luxury light overrides + CI gate** |
+
+## 6.42 Always-Visible Theme Button + Luxury Light Mode (2026-05-14, ISS-067 / D-059)
+
+### المشكلة الجذرية
+
+> **ISS-067**: زر تبديل الـ theme مخفي داخل dropdown menu — المستخدم يجب أن يضغط `⋮` أولاً ثم يختار "الوضع النهاري". هذا هو السبب الحقيقي لعدم عمل الوضع النهاري من منظور UX.
+
+**مشكلة ثانوية**: `--code-bg`، `--pre-bg`، `--code-color`، `--pre-color`، `--pre-border` كانت مفقودة من `:root` — موجودة فقط في `html[data-theme='light']` و `html[data-theme='dark']`. إذا لم يُطبَّق أي منهما، هذه المتغيرات `undefined`.
+
+**مشكلة ثالثة**: الوضع النهاري يفتقر إلى overrides فاخرة لمكونات كثيرة (chat area، markdown، input، sidebar، إلخ).
+
+### الإصلاح (D-059)
+
+**`frontend/app/components/CogniForgeApp.jsx`** — زر theme دائم الظهور في الـ header:
+```jsx
+{/* ISS-067: زر الـ theme مرئي دائماً — لا يحتاج فتح القائمة */}
+<button
+    className="header-theme-btn"
+    onClick={handleToggleTheme}
+    title={theme === 'dark' ? 'الوضع النهاري' : 'الوضع المظلم'}
+    aria-label={theme === 'dark' ? 'تفعيل الوضع النهاري' : 'تفعيل الوضع المظلم'}
+>
+    <i className={`fas ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i>
+</button>
+{isMenuOpen && ( /* dropdown يأتي بعد الزر */ )}
+```
+
+**`frontend/app/globals.css`**:
+- `:root` يحتوي الآن على جميع متغيرات code blocks كـ fallback آمن
+- قسم "Light Mode Luxury Overrides" شامل: header، chat area، messages، markdown، input، sidebar، login form، agent sidebar، scroll button، status indicators
+- `.header-theme-btn` CSS كامل: base + hover + active + light mode override
+
+**`.github/workflows/frontend-theme-ci.yml`** — 6 jobs + summary:
+1. `theme-contracts` — CSS selectors + variables + `:root` fallbacks
+2. `anti-flash-gate` — theme-init.js + lazy useState + triple application
+3. `theme-button-gate` — **جديد**: يتحقق من `header-theme-btn` خارج dropdown + aria-label + CSS كامل
+4. `build-check` — Next.js production build + compiled CSS verification
+5. `lint-frontend` — ESLint + console.log audit
+6. `theme-regression` — CSS symmetry + overflow defense + Turbopack single-block
+
+### قواعد دائمة جديدة (D-059)
+
+1. **Theme button visibility**: زر تبديل الـ theme يجب أن يكون **دائماً مرئياً** في الـ header — لا يُخفى داخل dropdown.
+2. **`:root` completeness**: جميع CSS variables يجب أن تكون في `:root` كـ fallback — حتى لو كانت موجودة في `html[data-theme]` blocks.
+3. **CI gate**: `theme-button-gate` job يتحقق من أن `header-theme-btn` يظهر قبل `isMenuOpen &&` في JSX.

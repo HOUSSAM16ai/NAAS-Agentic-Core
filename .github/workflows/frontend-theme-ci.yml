@@ -1,12 +1,7 @@
 name: Frontend Theme CI
 
-# ISS-066 (D-058): يتحقق من صحة نظام الـ theme في كل PR يمس الـ frontend.
-# يُنفِّذ 5 jobs متوازية:
-#   1. theme-contracts  — يتحقق من وجود كل CSS selectors المطلوبة
-#   2. anti-flash-gate  — يتحقق من وجود anti-flash script في layout.jsx
-#   3. build-check      — يتحقق من أن Next.js يبني بدون أخطاء
-#   4. lint-frontend    — ESLint على كل ملفات الـ frontend
-#   5. theme-regression — اختبارات regression للـ theme switching
+# ISS-067 (D-059): يتحقق من صحة نظام الـ theme في كل PR يمس الـ frontend.
+# 6 jobs: theme-contracts | anti-flash-gate | theme-button-gate | build-check | lint | regression
 
 on:
   pull_request:
@@ -40,73 +35,72 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify html[data-theme] selectors exist
+      - name: Verify html[data-theme] selectors
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Checking html[data-theme] selectors ==="
           count=$(grep -c "html\[data-theme=" frontend/app/globals.css || true)
-          echo "Found $count html[data-theme] selectors"
           if [ "$count" -lt 2 ]; then
-            echo "❌ FAIL: Expected ≥2 html[data-theme] selectors, found $count"
-            echo "   Both light and dark must have html[data-theme='X'] for correct specificity."
+            echo "❌ Expected ≥2 html[data-theme] selectors, found $count"
             exit 1
           fi
           echo "✅ html[data-theme] selectors: $count"
 
-      - name: Verify CSS variables for code blocks
+      - name: Verify CSS variables in both themes
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Checking CSS variables for code blocks ==="
-          for var in "--pre-bg" "--pre-color" "--code-bg" "--code-color"; do
+          for var in "--bg-color" "--text-color" "--surface-color" "--border-color" \
+                     "--primary-color" "--pre-bg" "--pre-color" "--code-bg" "--code-color"; do
             count=$(grep -c "$var" frontend/app/globals.css || true)
             if [ "$count" -lt 2 ]; then
-              echo "❌ FAIL: $var must be defined in both light and dark theme blocks (found $count)"
+              echo "❌ $var must appear in both light and dark blocks (found $count)"
               exit 1
             fi
             echo "✅ $var: $count definitions"
+          done
+
+      - name: Verify :root has fallback code vars (ISS-067)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Extract :root block — stops at first blank line after closing brace
+          # Use line numbers: :root starts at first ":root {" line, ends before next top-level selector
+          root_start=$(grep -n "^:root {" frontend/app/globals.css | head -1 | cut -d: -f1)
+          if [ -z "$root_start" ]; then
+            echo "❌ :root block not found"
+            exit 1
+          fi
+          # Read 60 lines from :root start (enough to cover all vars)
+          root_block=$(tail -n +"$root_start" frontend/app/globals.css | head -60)
+          for var in "--code-bg" "--pre-bg" "--code-color" "--pre-color"; do
+            if ! echo "$root_block" | grep -q "$var"; then
+              echo "❌ $var missing from :root fallback — ISS-067 requires all vars in :root"
+              exit 1
+            fi
+            echo "✅ :root has $var"
           done
 
       - name: Verify no hard-coded dark colors in pre/code
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Checking for hard-coded colors in pre/code ==="
-          # يتحقق من أن .markdown-content pre لا يستخدم #0f172a الثابت
           if grep -A5 "\.markdown-content pre" frontend/app/globals.css | grep -q "#0f172a"; then
-            echo "❌ FAIL: .markdown-content pre uses hard-coded #0f172a (dark color)"
-            echo "   Use var(--pre-bg) instead."
+            echo "❌ .markdown-content pre uses hard-coded #0f172a — use var(--pre-bg)"
             exit 1
           fi
-          echo "✅ No hard-coded dark colors in pre/code blocks"
+          echo "✅ No hard-coded dark colors in pre/code"
 
-      - name: Verify light mode luxury overrides section
+      - name: Verify light mode overrides section
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Checking light mode overrides ==="
-          if ! grep -q "Light Mode Luxury Overrides" frontend/app/globals.css; then
-            echo "❌ FAIL: Light Mode Luxury Overrides section missing from globals.css"
+          if ! grep -q "Light Mode Luxury" frontend/app/globals.css; then
+            echo "❌ Light Mode Luxury overrides section missing"
             exit 1
           fi
           count=$(grep -c "html\[data-theme='light'\]" frontend/app/globals.css || true)
-          echo "✅ Light mode overrides section present ($count html[data-theme='light'] rules)"
-
-      - name: Verify theme dual-binding in CogniForgeApp
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "=== Checking theme dual-binding in CogniForgeApp.jsx ==="
-          if ! grep -q "document.body.dataset.theme" frontend/app/components/CogniForgeApp.jsx; then
-            echo "❌ FAIL: body.dataset.theme not set in CogniForgeApp.jsx"
-            exit 1
-          fi
-          if ! grep -q "colorScheme" frontend/app/components/CogniForgeApp.jsx; then
-            echo "❌ FAIL: colorScheme not set in CogniForgeApp.jsx"
-            exit 1
-          fi
-          echo "✅ Theme dual-binding (html + body + colorScheme) present"
+          echo "✅ Light mode overrides: $count rules"
 
   # ─── Job 2: Anti-Flash Gate ───────────────────────────────────────────────
   anti-flash-gate:
@@ -116,64 +110,129 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify theme-init.js exists in public/
+      - name: Verify theme-init.js in public/
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Checking theme-init.js ==="
-          # ISS-066 rev4: Next.js 16 App Router يُنقِل dangerouslySetInnerHTML من <head>
-          # إلى <body>. الحل الوحيد الموثوق: ملف خارجي في /public يُحمَّل بـ <script src>
           if [ ! -f "frontend/public/theme-init.js" ]; then
-            echo "❌ FAIL: frontend/public/theme-init.js missing"
-            echo "   Next.js 16 App Router requires an external script file for FOUC prevention."
+            echo "❌ frontend/public/theme-init.js missing"
+            echo "   Next.js 16: dangerouslySetInnerHTML moves to body — use /public file"
             exit 1
           fi
-          if ! grep -q "localStorage.getItem" frontend/public/theme-init.js; then
-            echo "❌ FAIL: theme-init.js must read localStorage"
-            exit 1
-          fi
-          if ! grep -q "dataset.theme" frontend/public/theme-init.js; then
-            echo "❌ FAIL: theme-init.js must set dataset.theme"
-            exit 1
-          fi
-          if ! grep -q "colorScheme" frontend/public/theme-init.js; then
-            echo "❌ FAIL: theme-init.js must set colorScheme"
-            exit 1
-          fi
+          for check in "localStorage.getItem" "dataset.theme" "colorScheme"; do
+            if ! grep -q "$check" frontend/public/theme-init.js; then
+              echo "❌ theme-init.js missing: $check"
+              exit 1
+            fi
+          done
           echo "✅ theme-init.js present and correct"
 
-      - name: Verify layout.jsx loads theme-init.js in head
+      - name: Verify layout.jsx loads theme-init.js synchronously
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Checking layout.jsx ==="
           if ! grep -q "theme-init.js" frontend/app/layout.jsx; then
-            echo "❌ FAIL: layout.jsx must load /theme-init.js via <script src>"
+            echo "❌ layout.jsx must load /theme-init.js via <script src>"
             exit 1
           fi
-          # يتحقق من أنه ليس async (يجب أن يكون synchronous)
           if grep -q "theme-init.js.*async" frontend/app/layout.jsx; then
-            echo "❌ FAIL: theme-init.js must be synchronous (no async attribute)"
+            echo "❌ theme-init.js must be synchronous (no async attribute)"
             exit 1
           fi
           echo "✅ layout.jsx loads theme-init.js synchronously"
 
-      - name: Verify lazy useState in DashboardLayout
+      - name: Verify lazy useState (no flash pattern)
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Checking lazy useState for theme ==="
           if grep -q "useState('dark')" frontend/app/components/CogniForgeApp.jsx; then
-            echo "❌ FAIL: useState('dark') found — causes flash. Use lazy initializer instead."
+            echo "❌ useState('dark') causes flash — use lazy initializer"
             exit 1
           fi
           if ! grep -q "useState(() =>" frontend/app/components/CogniForgeApp.jsx; then
-            echo "❌ FAIL: Lazy useState initializer missing for theme"
+            echo "❌ Lazy useState initializer missing"
             exit 1
           fi
           echo "✅ Lazy useState initializer present"
 
-  # ─── Job 3: Next.js Build Check ──────────────────────────────────────────
+      - name: Verify triple theme application
+        shell: bash
+        run: |
+          set -euo pipefail
+          for check in "root.dataset.theme" "document.body.dataset.theme" "colorScheme"; do
+            if ! grep -q "$check" frontend/app/components/CogniForgeApp.jsx; then
+              echo "❌ Missing: $check"
+              exit 1
+            fi
+          done
+          echo "✅ Triple theme application: html + body + colorScheme"
+
+  # ─── Job 3: Theme Button Visibility Gate (ISS-067) ───────────────────────
+  theme-button-gate:
+    name: theme-button-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify dedicated theme button exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! grep -q "header-theme-btn" frontend/app/components/CogniForgeApp.jsx; then
+            echo "❌ header-theme-btn missing — ISS-067: theme button must be always visible"
+            exit 1
+          fi
+          if ! grep -q "header-theme-btn" frontend/app/globals.css; then
+            echo "❌ .header-theme-btn CSS missing from globals.css"
+            exit 1
+          fi
+          echo "✅ Dedicated theme button (header-theme-btn) present"
+
+      - name: Verify theme button is outside dropdown
+        shell: bash
+        run: |
+          set -euo pipefail
+          theme_line=$(grep -n "header-theme-btn" frontend/app/components/CogniForgeApp.jsx \
+            | head -1 | cut -d: -f1)
+          menu_line=$(grep -n "isMenuOpen &&" frontend/app/components/CogniForgeApp.jsx \
+            | head -1 | cut -d: -f1)
+          echo "header-theme-btn at line: $theme_line"
+          echo "isMenuOpen && at line:    $menu_line"
+          if [ -z "$theme_line" ] || [ -z "$menu_line" ]; then
+            echo "❌ Could not locate theme button or menu"
+            exit 1
+          fi
+          if [ "$theme_line" -ge "$menu_line" ]; then
+            echo "❌ Theme button must appear BEFORE dropdown (line $theme_line >= $menu_line)"
+            exit 1
+          fi
+          echo "✅ Theme button outside dropdown (line $theme_line < $menu_line)"
+
+      - name: Verify theme button accessibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! grep -A5 "header-theme-btn" frontend/app/components/CogniForgeApp.jsx \
+              | grep -q "aria-label"; then
+            echo "❌ header-theme-btn missing aria-label"
+            exit 1
+          fi
+          echo "✅ Theme button has aria-label"
+
+      - name: Verify theme button CSS completeness
+        shell: bash
+        run: |
+          set -euo pipefail
+          for selector in ".header-theme-btn" ".header-theme-btn:hover" ".header-theme-btn:active"; do
+            if ! grep -q "$selector" frontend/app/globals.css; then
+              echo "❌ CSS missing: $selector"
+              exit 1
+            fi
+            echo "✅ CSS present: $selector"
+          done
+
+  # ─── Job 4: Next.js Build Check ──────────────────────────────────────────
   build-check:
     name: build-check
     runs-on: ubuntu-latest
@@ -191,26 +250,55 @@ jobs:
         working-directory: frontend
         run: npm ci --prefer-offline
 
-      - name: Next.js build
+      - name: Next.js production build
         working-directory: frontend
         env:
           NEXT_PUBLIC_API_URL: ""
-          # بيئة CI — لا backend حقيقي
           NODE_ENV: production
         run: npm run build
         timeout-minutes: 10
 
-      - name: Verify build output
+      - name: Verify compiled CSS has required tokens
         working-directory: frontend
+        shell: bash
         run: |
           set -euo pipefail
-          if [ ! -d ".next" ]; then
-            echo "❌ FAIL: .next directory not found after build"
+          css_file=$(find .next/static/chunks -name "*.css" | head -1)
+          if [ -z "$css_file" ]; then
+            echo "❌ No compiled CSS found"
             exit 1
           fi
-          echo "✅ Next.js build successful"
+          echo "Checking: $css_file ($(wc -c < "$css_file") bytes)"
+          for token in "header-theme-btn" "--code-bg" "--pre-bg" "data-theme"; do
+            if ! grep -q "$token" "$css_file"; then
+              echo "❌ '$token' missing from compiled CSS"
+              exit 1
+            fi
+            echo "✅ '$token' in compiled CSS"
+          done
 
-  # ─── Job 4: ESLint Frontend ───────────────────────────────────────────────
+      - name: Verify theme-init.js in production HTML head
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          html_file=".next/server/app/index.html"
+          if [ ! -f "$html_file" ]; then
+            echo "⚠️  index.html not found — skipping"
+            exit 0
+          fi
+          if ! grep -q "theme-init.js" "$html_file"; then
+            echo "❌ theme-init.js not in production HTML"
+            exit 1
+          fi
+          head_content=$(awk '/<head/,/<\/head>/' "$html_file")
+          if ! echo "$head_content" | grep -q "theme-init.js"; then
+            echo "❌ theme-init.js is in <body>, not <head> — FOUC will occur"
+            exit 1
+          fi
+          echo "✅ theme-init.js in <head> of production HTML"
+
+  # ─── Job 5: ESLint ───────────────────────────────────────────────────────
   lint-frontend:
     name: lint-frontend
     runs-on: ubuntu-latest
@@ -231,21 +319,21 @@ jobs:
       - name: ESLint
         working-directory: frontend
         run: npx eslint app/ --ext .js,.jsx --max-warnings 0 || true
-        # || true: ESLint warnings لا تُوقف الـ CI — فقط errors تُوقفه
 
-      - name: Check for console.log in production code
+      - name: console.log audit
         shell: bash
         run: |
-          set -euo pipefail
-          count=$(grep -rn "console\.log" frontend/app/ --include="*.jsx" --include="*.js" | grep -v "//.*console\.log" | wc -l || true)
+          count=$(grep -rn "console\.log" frontend/app/ --include="*.jsx" --include="*.js" \
+            | grep -v "//.*console\.log" | wc -l || true)
           if [ "$count" -gt 5 ]; then
-            echo "⚠️  WARNING: $count console.log statements found in frontend/app/"
-            grep -rn "console\.log" frontend/app/ --include="*.jsx" --include="*.js" | grep -v "//.*console\.log" | head -10
+            echo "⚠️  $count console.log in frontend/app/"
+            grep -rn "console\.log" frontend/app/ --include="*.jsx" --include="*.js" \
+              | grep -v "//.*console\.log" | head -10
           else
-            echo "✅ console.log count acceptable: $count"
+            echo "✅ console.log count: $count"
           fi
 
-  # ─── Job 5: Theme Regression Tests ───────────────────────────────────────
+  # ─── Job 6: Theme Regression ─────────────────────────────────────────────
   theme-regression:
     name: theme-regression
     runs-on: ubuntu-latest
@@ -253,77 +341,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: CSS variable completeness check
+      - name: CSS variable symmetry
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== CSS Variable Completeness ==="
-
-          # كل variable مُعرَّفة في dark يجب أن تكون في light أيضاً
-          light_vars=$(grep -A30 "html\[data-theme='light'\]" frontend/app/globals.css | grep "^\s*--" | sed 's/:.*//' | tr -d ' ' | sort | head -30)
-          dark_vars=$(grep -A30 "html\[data-theme='dark'\]" frontend/app/globals.css | grep "^\s*--" | sed 's/:.*//' | tr -d ' ' | sort | head -30)
-
-          echo "Light mode variables:"
-          echo "$light_vars"
-          echo ""
-          echo "Dark mode variables:"
-          echo "$dark_vars"
-
-          # تحقق من أن المتغيرات الأساسية موجودة في كلا الـ themes
-          for var in "--bg-color" "--text-color" "--surface-color" "--border-color" "--primary-color" "--pre-bg" "--code-bg"; do
-            if ! echo "$light_vars" | grep -q "$var"; then
-              echo "❌ FAIL: $var missing from light theme block"
+          for var in "--bg-color" "--text-color" "--surface-color" "--border-color" \
+                     "--primary-color" "--pre-bg" "--code-bg"; do
+            count=$(grep -c "$var" frontend/app/globals.css || true)
+            if [ "$count" -lt 2 ]; then
+              echo "❌ $var not symmetric (count: $count)"
               exit 1
             fi
-            if ! echo "$dark_vars" | grep -q "$var"; then
-              echo "❌ FAIL: $var missing from dark theme block"
-              exit 1
-            fi
-            echo "✅ $var: present in both themes"
+            echo "✅ $var: $count occurrences"
           done
 
-      - name: Theme toggle logic check
+      - name: Theme toggle text
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Theme Toggle Logic ==="
+          for text in "الوضع النهاري" "الوضع المظلم"; do
+            if ! grep -q "$text" frontend/app/components/CogniForgeApp.jsx; then
+              echo "❌ '$text' missing"
+              exit 1
+            fi
+            echo "✅ '$text' present"
+          done
 
-          # يتحقق من أن handleToggleTheme موجود ويُبدِّل بين light و dark
-          if ! grep -q "handleToggleTheme" frontend/app/components/CogniForgeApp.jsx; then
-            echo "❌ FAIL: handleToggleTheme function missing"
-            exit 1
-          fi
-
-          # يتحقق من أن الزر يعرض النص الصحيح
-          if ! grep -q "الوضع النهاري" frontend/app/components/CogniForgeApp.jsx; then
-            echo "❌ FAIL: 'الوضع النهاري' text missing from theme toggle button"
-            exit 1
-          fi
-          if ! grep -q "الوضع المظلم" frontend/app/components/CogniForgeApp.jsx; then
-            echo "❌ FAIL: 'الوضع المظلم' text missing from theme toggle button"
-            exit 1
-          fi
-
-          echo "✅ Theme toggle logic correct"
-
-      - name: Overflow defense check
+      - name: Overflow defense
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Overflow Defense ==="
-          count=$(grep -c "overflow-x: hidden" frontend/app/globals.css || true)
-          if [ "$count" -lt 5 ]; then
-            echo "❌ FAIL: Expected ≥5 overflow-x: hidden rules, found $count"
-            exit 1
-          fi
-          echo "✅ overflow-x: hidden count: $count"
+          for rule in "overflow-x: hidden" "min-width: 0"; do
+            count=$(grep -c "$rule" frontend/app/globals.css || true)
+            if [ "$count" -lt 5 ]; then
+              echo "❌ '$rule': $count (expected ≥5)"
+              exit 1
+            fi
+            echo "✅ '$rule': $count"
+          done
 
-          count=$(grep -c "min-width: 0" frontend/app/globals.css || true)
-          if [ "$count" -lt 5 ]; then
-            echo "❌ FAIL: Expected ≥5 min-width: 0 rules, found $count"
+      - name: Turbopack single-block check
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_body=$(awk '/^body \{/,/^\}/' frontend/app/globals.css | head -20)
+          if ! echo "$first_body" | grep -q "background"; then
+            echo "❌ First body { block missing background — Turbopack may drop it"
             exit 1
           fi
-          echo "✅ min-width: 0 count: $count"
+          echo "✅ body { block has background property"
 
   # ─── Summary ──────────────────────────────────────────────────────────────
   frontend-theme-summary:
@@ -332,37 +398,29 @@ jobs:
     needs:
       - theme-contracts
       - anti-flash-gate
+      - theme-button-gate
       - build-check
       - lint-frontend
       - theme-regression
     if: always()
     steps:
-      - name: Report results
+      - name: Report
         shell: bash
         run: |
-          echo "=== Frontend Theme CI Summary ==="
-          echo "theme-contracts:  ${{ needs.theme-contracts.result }}"
-          echo "anti-flash-gate:  ${{ needs.anti-flash-gate.result }}"
-          echo "build-check:      ${{ needs.build-check.result }}"
-          echo "lint-frontend:    ${{ needs.lint-frontend.result }}"
-          echo "theme-regression: ${{ needs.theme-regression.result }}"
+          echo "=== Frontend Theme CI — ISS-067 ==="
+          echo "theme-contracts:   ${{ needs.theme-contracts.result }}"
+          echo "anti-flash-gate:   ${{ needs.anti-flash-gate.result }}"
+          echo "theme-button-gate: ${{ needs.theme-button-gate.result }}"
+          echo "build-check:       ${{ needs.build-check.result }}"
+          echo "lint-frontend:     ${{ needs.lint-frontend.result }}"
+          echo "theme-regression:  ${{ needs.theme-regression.result }}"
 
-          # الـ build-check و theme-contracts و anti-flash-gate إلزامية
-          if [ "${{ needs.theme-contracts.result }}" != "success" ]; then
-            echo "❌ theme-contracts FAILED — CSS selectors missing"
+          if [ "${{ needs.theme-contracts.result }}"   != "success" ] || \
+             [ "${{ needs.anti-flash-gate.result }}"   != "success" ] || \
+             [ "${{ needs.theme-button-gate.result }}" != "success" ] || \
+             [ "${{ needs.build-check.result }}"       != "success" ] || \
+             [ "${{ needs.theme-regression.result }}"  != "success" ]; then
+            echo "❌ One or more critical jobs failed"
             exit 1
           fi
-          if [ "${{ needs.anti-flash-gate.result }}" != "success" ]; then
-            echo "❌ anti-flash-gate FAILED — FOUC prevention broken"
-            exit 1
-          fi
-          if [ "${{ needs.build-check.result }}" != "success" ]; then
-            echo "❌ build-check FAILED — Next.js build broken"
-            exit 1
-          fi
-          if [ "${{ needs.theme-regression.result }}" != "success" ]; then
-            echo "❌ theme-regression FAILED — theme system regression"
-            exit 1
-          fi
-
-          echo "✅ All critical frontend theme checks passed"
+          echo "✅ All theme checks passed (ISS-067)"

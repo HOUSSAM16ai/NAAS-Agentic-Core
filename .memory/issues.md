@@ -1344,3 +1344,4 @@
 - **Files**: `frontend/public/theme-init.js` (جديد), `frontend/app/layout.jsx`
 
 - **Status**: FIXED 2026-05-14 — branch `fix/light-mode-luxury-theme`.
+

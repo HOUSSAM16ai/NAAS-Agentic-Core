@@ -224,6 +224,8 @@ const DashboardLayout = ({ user, token, onLogout }) => {
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, []);
 
+    // ISS-067 (D-059): زر الـ theme مرئي دائماً في الـ header — لا يحتاج فتح القائمة.
+    // الإصلاح الجذري: نقل الزر من القائمة المنسدلة إلى الـ header مباشرة.
     const handleToggleTheme = () => {
         setTheme((prevTheme) => (prevTheme === 'dark' ? 'light' : 'dark'));
         setIsMenuOpen(false);
@@ -262,9 +264,19 @@ const DashboardLayout = ({ user, token, onLogout }) => {
                     </h2>
                 </div>
                 <div className="header-actions" ref={menuRef}>
+                    {/* ISS-067: زر الـ theme مرئي دائماً — لا يحتاج فتح القائمة */}
+                    <button
+                        className="header-theme-btn"
+                        onClick={handleToggleTheme}
+                        title={theme === 'dark' ? 'الوضع النهاري' : 'الوضع المظلم'}
+                        aria-label={theme === 'dark' ? 'تفعيل الوضع النهاري' : 'تفعيل الوضع المظلم'}
+                    >
+                        <i className={`fas ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i>
+                    </button>
                     <button
                         className="header-menu-btn"
                         onClick={() => setIsMenuOpen((prev) => !prev)}
+                        aria-label="القائمة"
                     >
                         <i className="fas fa-ellipsis-v"></i>
                     </button>

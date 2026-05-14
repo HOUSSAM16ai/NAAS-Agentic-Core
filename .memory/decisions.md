@@ -837,3 +837,29 @@ detect_exercise_retrieval(question)
 - DEFAULT  900→700 tokens → ~4s أسرع
 - FULL     900→900 tokens → بدون تغيير (مطلوب)
 **Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+## D-054 · KaTeX `\\command` Catastrophe — Double-Backslash inside Math (2026-05-14, ISS-060)
+**Decision**: إضافة خطوة طبيعية ثانية لـ `\\command → \command` في `preprocessMath` بعد تطبيع الحدود.
+**Problem**: رغم D-051 (تطبيع `\\(...\\)` → `\(...\)` → `$...$`)، الطالب رأى:
+```
+displaystyle int 0 lambda h(x),dx
+l a m b d a
+lim lambdato+infty A(lambda
+```
+KaTeX يرسم `lambda` كحروف منفصلة بدل `λ`. السبب الجذري: المحتوى داخل الرياضيات
+يحوي `\\lambda`, `\\int`, `\\displaystyle`, `\\to`, `\\infty` (knowledge_base
+يستخدم double-backslash لكل شيء). KaTeX يفسِّر `\\` كأمر `\newline` ويرى الباقي
+كنص حر — فيرسم الحروف منفصلة.
+**Solution**: إضافة سطر واحد إلى `preprocessMath` بين الخطوة 1 (تطبيع الحدود) والخطوة 3 (تحويل لـ `$...$`):
+```javascript
+processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
+```
+الـ regex يطابق `\\` + (حرف لاتيني واحد أو أكثر) أو (`,`, `;`, `!`, `{`, `}`).
+**لا يلمس** `\\\\` (4 backslashes = newline حقيقي في KaTeX).
+**Invariants**:
+- `preprocessMath` هو الحارس الوحيد لتطبيع `\\command` قبل remark-math.
+- خطوة `\\command → \command` يجب أن تأتي **بعد** تطبيع الحدود و**قبل** تحويل `\(...\)` → `$...$`.
+- knowledge_base يحتفظ بـ double-backslash (تكلفة 192+ موقع تعديل لتغييره) — التطبيع هو في طبقة العرض، لا في المصدر.
+- أي طبقة محذوفة من السلسلة الثلاثية (D-051 step 1 + D-054 step 2 + D-051 step 3) = كارثة مرئية فورية.
+**Evidence**: على ملف bac2016 الكامل بعد الإصلاح: 0 موضع `\\command` متبقٍ، 25× `\lambda`, 51× `\infty`, 21× `\to`, 2× `\int`, 8× `\mathbb`, 1× `\displaystyle` — كلها تُرسَم بشكل مثالي. سطر الكارثة بعد الإصلاح: `$A(\lambda) = \displaystyle\int_0^{\lambda} h(x)\,dx$` ← KaTeX يرسم: A(λ) = ∫₀^λ h(x)dx.
+**Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

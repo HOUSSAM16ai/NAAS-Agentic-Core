@@ -3952,3 +3952,94 @@ grep "body\[data-theme" frontend/app/globals.css
 
 
 
+
+---
+
+## 6.41 Light Mode Catastrophic Fix + Live Testing (2026-05-14, ISS-066 / D-058)
+
+### المشكلة الجذرية (4 طبقات + 2 مكتشَفتان بالتجريب الحي)
+
+> **ISS-066**: الوضع النهاري معطل كارثياً — زر التبديل لا يُنتج أي تغيير مرئي.
+
+**طبقة 1 — FOUC**: `layout.jsx` لا يضع `data-theme` على `html` قبل hydration.
+
+**طبقة 2 — CSS Specificity**: `html[data-theme='light']` selector مفقود.
+
+**طبقة 3 — Hard-coded colors**: `.markdown-content pre { background: #0f172a }` ثابت.
+
+**طبقة 4 — useState flash**: `useState('dark')` + `useEffect` يُسبب double-render.
+
+**طبقة 5 (مكتشَفة بالتجريب الحي) — Turbopack CSS merging bug**:
+Turbopack يُلغي properties عند وجود selectors متعددة للعنصر نفسه.
+`html, body { overflow-x: hidden }` + `body { background: var(--bg-color) }` = Turbopack يُبقي فقط `body { overflow-x: hidden; max-width: 100vw }` ويُلغي `background` و `color`.
+**الحل**: block واحد لكل عنصر يحتوي كل properties.
+
+**طبقة 6 (مكتشَفة بالتجريب الحي) — Next.js 16 App Router script placement**:
+`<script dangerouslySetInnerHTML>` في `<head>` JSX يُنقَل لـ `<body>` بواسطة Next.js 16.
+`next/script strategy="beforeInteractive"` يُنفَّذ عبر `__next_s` payload — بعد runtime.
+**الحل الوحيد الموثوق**: ملف خارجي في `/public/theme-init.js` + `<script src="/theme-init.js">` في `<head>`.
+
+### الإصلاح النهائي (D-058 rev4)
+
+**`frontend/public/theme-init.js`** — ملف جديد:
+```javascript
+(function(){
+  try {
+    var t = localStorage.getItem('theme') || 'dark';
+    var r = document.documentElement;
+    r.dataset.theme = t;
+    r.style.colorScheme = t;
+    if (document.body) { document.body.dataset.theme = t; }
+    else {
+      var o = new MutationObserver(function(){
+        if (document.body) { document.body.dataset.theme = t; o.disconnect(); }
+      });
+      o.observe(r, { childList: true });
+    }
+  } catch(e) {}
+})();
+```
+
+**`frontend/app/layout.jsx`**:
+```jsx
+<html lang="ar" dir="rtl" suppressHydrationWarning>
+  <head>
+    <script src="/theme-init.js" />  {/* synchronous — بدون async */}
+  </head>
+  <body suppressHydrationWarning>{children}</body>
+</html>
+```
+
+**`frontend/app/globals.css`** — دمج html و body في blocks منفصلة:
+```css
+/* WRONG — Turbopack يُلغي properties */
+html, body { overflow-x: hidden; }
+body { background: var(--bg-color); }  /* يُلغى! */
+
+/* CORRECT — block واحد لكل عنصر */
+html { overflow-x: hidden; background: var(--bg-color); color: var(--text-color); ... }
+body { overflow-x: hidden; background: var(--bg-color); color: var(--text-color); ... }
+```
+
+### قواعد دائمة جديدة (D-058)
+
+1. **Next.js 16 App Router**: لا تضع `<script dangerouslySetInnerHTML>` في `<head>` JSX — يُنقَل لـ `<body>`. استخدم ملف خارجي في `/public`.
+2. **Turbopack CSS**: لا تُكرِّر selector في blocks متعددة — Turbopack يُبقي آخر block فقط.
+3. **Anti-flash**: `<script src="/theme-init.js">` بدون `async` في `<head>` = synchronous execution قبل أي paint.
+
+### السلسلة الكاملة (D-049 → D-058)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 | JSON envelope leak |
+| D-050 | indexed preempt + typewriter |
+| D-051 | LaTeX delimiters `\\(...\\)` → `$...$` |
+| D-052 | conversation context + chunk-tag stripping + Skills |
+| D-053 | dynamic latency budget |
+| D-054 | `\\command` → `\command` في math |
+| D-055 | luxury UI theme + zero-flicker + premium typography |
+| D-055.1 | header seamless integration |
+| D-055.2 | legacy-style.css purge |
+| D-056 | Claude-style full-width + zero-line markdown + light hardening |
+| D-057 | defensive overflow + mobile/desktop responsive + theme dual-binding |
+| **D-058** | **ISS-066 — light mode fix: /public/theme-init.js + Turbopack single-block CSS + html[data-theme] + lazy useState** |

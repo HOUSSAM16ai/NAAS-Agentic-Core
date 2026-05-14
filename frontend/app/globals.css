@@ -109,20 +109,16 @@ body[data-theme='dark'],
     min-width: 0;
 }
 
-/* ISS-065 (D-057): defensive overflow-x hidden على html و body
-   يضمن أن أي محتوى overflowing لا يخلق scroll أفقي يكسر التصميم */
-html, body {
-    overflow-x: hidden;
-    max-width: 100vw;
-}
-
-/* ISS-066 (D-058): body + html يقرآن CSS variables من html[data-theme] مباشرة.
-   background + color يُطبَّقان على body صراحةً لأن body لا يرث background من html
-   في بعض المتصفحات عند استخدام CSS custom properties.
-   `background` shorthand يُلغي أي radial-gradient من legacy. */
+/* ISS-066 (D-058 rev2): html و body في block واحد لكل منهما.
+   Turbopack يُلغي properties عند وجود selectors متعددة للعنصر نفسه —
+   لذا نُدمج overflow-x + background + color في block واحد لكل عنصر.
+   body يُطبِّق background + color صراحةً لأنه لا يرث background من html
+   بشكل موثوق عبر CSS custom properties في كل المتصفحات. */
 html {
     height: 100%;
     margin: 0;
+    overflow-x: hidden;
+    max-width: 100vw;
     font-family: var(--font-family);
     background: var(--bg-color);
     color: var(--text-color);
@@ -138,10 +134,11 @@ html {
 body {
     height: 100%;
     margin: 0;
+    overflow-x: hidden;
+    max-width: 100vw;
     user-select: none;
     -webkit-user-select: none;
     font-family: var(--font-family);
-    /* ISS-066: body يُطبِّق background + color صراحةً من variables الـ html parent */
     background: var(--bg-color);
     color: var(--text-color);
     direction: rtl;

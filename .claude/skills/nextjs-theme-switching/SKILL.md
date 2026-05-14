@@ -25,26 +25,41 @@ description: >
 ## 1. Quick Diagnosis (run first)
 
 ```bash
-# Check CSS selectors
+# 1. Anti-flash file exists
+ls frontend/public/theme-init.js
+# Expected: file exists
+
+# 2. layout.jsx loads it synchronously in <head>
+grep "theme-init.js" frontend/app/layout.jsx
+# Expected: <script src="/theme-init.js" /> (no async)
+
+# 3. CSS selectors
 grep "html\[data-theme" frontend/app/globals.css
 # Expected: ≥2 results (one for light, one for dark)
 
-# Check anti-flash script
-grep "themeScript\|dangerouslySetInnerHTML" frontend/app/layout.jsx
-# Expected: both present
+# 4. No duplicate body/html blocks (Turbopack bug)
+grep -c "^body {" frontend/app/globals.css
+# Expected: 1 (not 2+)
 
-# Check for hard-coded colors in code blocks
+# 5. Hard-coded colors in code blocks
 grep -A8 "\.markdown-content pre" frontend/app/globals.css | grep "#[0-9a-f]\{6\}"
-# Expected: no output (should use var(--pre-bg) instead)
+# Expected: no output (should use var(--pre-bg))
 
-# Check lazy useState
+# 6. Lazy useState
 grep "useState(() =>" frontend/app/components/*.jsx
 # Expected: present for theme state
+
+# 7. Production HTML verification (most reliable)
+npm run build 2>/dev/null
+grep "theme-init.js" frontend/.next/server/app/index.html
+# Expected: <script src="/theme-init.js"> inside <head>
 ```
 
 **Healthy state:**
+- `frontend/public/theme-init.js` exists and is served at `/theme-init.js`
+- `layout.jsx` has `<script src="/theme-init.js">` (synchronous, no async) in `<head>`
 - `html[data-theme='light']` and `html[data-theme='dark']` both exist in CSS
-- `layout.jsx` has a synchronous `<script>` in `<head>` reading `localStorage`
+- `html` and `body` each have ONE CSS block containing all properties
 - Code block colors use `var(--pre-bg)` / `var(--code-bg)`, not hex literals
 - `useState` for theme uses a lazy initializer, not `useState('dark')`
 
@@ -55,23 +70,29 @@ grep "useState(() =>" frontend/app/components/*.jsx
 | Symptom | Root Cause | Fix |
 |---------|-----------|-----|
 | Theme toggle has no effect | `html[data-theme]` CSS selector missing | Add `html[data-theme='light/dark']` as first selector in theme blocks |
-| Flash of wrong theme on refresh | No anti-flash script in `<head>` | Add synchronous script to `layout.jsx` |
+| Flash of wrong theme on refresh | No anti-flash script in `<head>` | Create `public/theme-init.js` + `<script src="/theme-init.js">` in layout |
+| Anti-flash script in `<body>` not `<head>` | Next.js 16 moves `dangerouslySetInnerHTML` from `<head>` to `<body>` | Use external file in `/public` instead |
+| `body` background/color missing from compiled CSS | Turbopack drops properties when same element has multiple CSS blocks | Merge all `body` properties into one `body { }` block |
 | Code blocks stay dark in light mode | Hard-coded hex colors (`#0f172a`) | Replace with `var(--pre-bg)` CSS variable |
 | Brief flash before correct theme | `useState('dark')` + `useEffect` pattern | Use lazy `useState(() => localStorage...)` |
 | Theme applies to some elements, not all | `body` doesn't inherit from `html` | Set `background`/`color` explicitly on `body` using CSS variables |
 | Browser scrollbars ignore theme | Missing `colorScheme` | Set `document.documentElement.style.colorScheme = theme` |
+| Dev server shows old CSS after file change | Turbopack cache stale | `rm -rf .next` then restart dev server |
 
 ---
 
 ## 3. The Four Fixes
 
-### Fix 1 — Anti-flash script in `layout.jsx`
+### Fix 1 — Anti-flash script via `/public` file
 
-Add a synchronous `<script>` in `<head>`. It runs before React hydration, before any CSS paint.
+> ⚠️ **Next.js 16 App Router critical finding (verified live 2026-05-14):**
+> - `<script dangerouslySetInnerHTML>` in `<head>` JSX → Next.js 16 moves it to `<body>`. Does NOT work.
+> - `next/script strategy="beforeInteractive"` → executes via `__next_s` payload after runtime. Does NOT work.
+> - **Only reliable solution**: external file in `/public` + `<script src>` in `<head>`.
 
-```jsx
-// frontend/app/layout.jsx
-const themeScript = `(function(){
+**Step 1** — Create `frontend/public/theme-init.js`:
+```javascript
+(function () {
   try {
     var t = localStorage.getItem('theme') || 'dark';
     var r = document.documentElement;
@@ -80,19 +101,23 @@ const themeScript = `(function(){
     if (document.body) {
       document.body.dataset.theme = t;
     } else {
-      var o = new MutationObserver(function() {
+      var o = new MutationObserver(function () {
         if (document.body) { document.body.dataset.theme = t; o.disconnect(); }
       });
       o.observe(r, { childList: true });
     }
-  } catch(e) {}
-})();`;
+  } catch (e) {}
+})();
+```
 
+**Step 2** — Load it synchronously in `frontend/app/layout.jsx`:
+```jsx
 export default function RootLayout({ children }) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/theme-init.js" />  {/* NO async — must be synchronous */}
       </head>
       <body suppressHydrationWarning>{children}</body>
     </html>
@@ -101,6 +126,13 @@ export default function RootLayout({ children }) {
 ```
 
 **Why `suppressHydrationWarning`:** The script mutates `html.dataset.theme` before React hydrates. Without this prop, React throws a hydration mismatch warning.
+
+**Verify it works** — check production HTML:
+```bash
+npm run build
+grep "theme-init.js" .next/server/app/index.html
+# Expected: <script src="/theme-init.js"> inside <head>
+```
 
 ---
 
@@ -139,20 +171,46 @@ body[data-theme='dark'],
 }
 ```
 
-Also split `body, html { ... }` into separate rules so `body` explicitly reads variables from its `html` parent:
+Also split `body, html { ... }` into separate rules. **Critical Turbopack warning:**
 
+> ⚠️ **Turbopack CSS merging bug (verified live 2026-05-14):**
+> Multiple blocks targeting the same element get merged — later properties win, earlier ones are dropped.
+> `html, body { overflow-x: hidden }` + `body { background: var(--bg-color) }` = Turbopack keeps only `body { overflow-x: hidden; max-width: 100vw }` and **drops** `background` and `color`.
+
+**WRONG — Turbopack drops background/color:**
+```css
+html, body { overflow-x: hidden; max-width: 100vw; }
+body { background: var(--bg-color); color: var(--text-color); }  /* DROPPED */
+```
+
+**CORRECT — one block per element, all properties together:**
 ```css
 html {
+  overflow-x: hidden;
+  max-width: 100vw;
   background: var(--bg-color);
   color: var(--text-color);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 body {
+  overflow-x: hidden;
+  max-width: 100vw;
   background: var(--bg-color);  /* explicit — body doesn't always inherit background */
   color: var(--text-color);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+```
+
+**Verify after build:**
+```bash
+npm run build
+python3 -c "
+import re
+css = open('.next/server/app/index.html').read()
+# or check the compiled CSS file
+print('body has background:', 'background:var(--bg-color)' in css.replace(' ',''))
+"
 ```
 
 ---
@@ -271,15 +329,17 @@ Read `references/github-action-template.md` for the complete 5-job workflow temp
 
 ## 6. Invariants (never break these)
 
-1. **Anti-flash script is mandatory** in any Next.js app with theme switching. Without it, every page refresh produces FOUC.
+1. **Anti-flash via `/public` file** — in Next.js 16 App Router, `dangerouslySetInnerHTML` in `<head>` JSX gets moved to `<body>`. Use `frontend/public/theme-init.js` + `<script src="/theme-init.js">`.
 2. **`html[data-theme]` must be the first selector** in every theme block. JS targets `documentElement`, not `body`.
 3. **Code block colors must use CSS variables** — never hard-coded hex. Any element that must change with the theme must use `var(--*)`.
 4. **Lazy `useState` for theme** — never `useState('dark') + useEffect`. The lazy initializer reads `localStorage` synchronously on first render.
 5. **`body` needs explicit `background`** — it does not reliably inherit `background` from `html` via CSS custom properties in all browsers.
+6. **One CSS block per element (Turbopack)** — never split `html` or `body` properties across multiple blocks. Turbopack merges them and drops earlier properties. All `html` properties in one `html { }` block, all `body` properties in one `body { }` block.
+7. **Always verify with production build** — dev server may serve cached CSS. Run `npm run build` and check `.next/server/app/index.html` for ground truth.
 
 ---
 
 ## References
 
 - `references/light-mode-overrides.md` — full list of light mode luxury CSS overrides (header, input, sidebar, scrollbar, blockquote, math tables)
-- `references/github-action-template.md` — complete `frontend-theme-ci.yml` with 5 jobs and all verification steps
+- `references/github-action-template.md` — complete `frontend-theme-ci.yml` with 5 jobs and all verification steps (updated for `/public/theme-init.js` pattern)

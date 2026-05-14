@@ -1324,3 +1324,23 @@
   - `CogniForgeApp.jsx`: lazy `useState` initializer يقرأ localStorage مباشرة — لا useEffect لقراءة الـ theme.
 - **Files changed**: `frontend/app/layout.jsx`, `frontend/app/globals.css`, `frontend/app/components/CogniForgeApp.jsx`
 - **Status**: FIXED 2026-05-14 — branch `fix/light-mode-luxury-theme`.
+
+---
+
+## ISS-066-B — Live Testing Findings (2026-05-14)
+
+**اكتُشفت أثناء التجريب الحي بعد D-058 الأولي.**
+
+### Bug 1: Turbopack CSS merging
+- **Symptom**: `body { background: var(--bg-color) }` مفقود من الـ CSS المُولَّد.
+- **Root cause**: Turbopack يُلغي properties عند وجود `html, body { overflow-x: hidden }` + `body { background: ... }` كـ blocks منفصلة — يُبقي فقط آخر `body` block.
+- **Fix**: دمج كل properties في block واحد لكل عنصر (`html { ... }` و `body { ... }` منفصلان).
+- **File**: `frontend/app/globals.css`
+
+### Bug 2: Next.js 16 App Router script placement
+- **Symptom**: Anti-flash script يظهر في `<body>` وليس `<head>` رغم وضعه في `<head>` JSX.
+- **Root cause**: Next.js 16 App Router يُنقِل `<script dangerouslySetInnerHTML>` من `<head>` إلى `<body>`. `next/script beforeInteractive` يُنفَّذ عبر `__next_s` payload بعد runtime.
+- **Fix**: ملف خارجي `frontend/public/theme-init.js` + `<script src="/theme-init.js">` في `<head>` (synchronous بدون async).
+- **Files**: `frontend/public/theme-init.js` (جديد), `frontend/app/layout.jsx`
+
+- **Status**: FIXED 2026-05-14 — branch `fix/light-mode-luxury-theme`.

@@ -3135,3 +3135,127 @@ console.log('remaining \\\\\\\\(:', (r.match(/\\\\\\\\\(/g) || []).length);
 
 ---
 
+## 6.33 Explanation Context Preemption + BAC Exercise Skill + Chunk-Tag Stripping (2026-05-14, ISS-058 / D-052)
+
+> كارثة مدمرة شاهدها المستخدم: عند طلب «ماذا نقصد بدالة اصلية للدالة f» بعد تمرين 2016،
+> ظهرت **تمارين بكالوريا أخرى غير ذات صلة** (2024 احتمالات) + **tags خام** (`[ex: ex_1]`,
+> `[sol: ex_1]`, `[grading: ex_1]`) + **تكرار حرفي للإجابة النموذجية** بدل شرحها.
+> هذا القسم يحكم منع تكرار هذه الكارثة دائماً.
+
+### الكارثة المُشخَّصة
+
+| المظهر | السبب الجذري |
+|--------|---------------|
+| تمرين 2024 الاحتمالات يظهر مع 2016 الدوال | `_BAC_EXERCISE_EXPLANATION_PATTERNS` لا يشمل "ماذا نقصد"/"كيف نُثبت" → `detect_explanation_with_context` يُرجع False → يصل للـ wide-net retriever الذي يقرأ كل ملفات `knowledge_base/` |
+| `[ex: ex_1]`, `[sol: ex_1]`, `[grading: ex_1]` خام مرئية | vector DB يُرجع chunks مع علامات داخلية، لا يوجد stripping |
+| تكرار حرفي للإجابة النموذجية | `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` القديم لا يمنع النسخ صراحةً |
+| "Lambada infinity" خام | LaTeX preprocessor (D-051) لا يلتقط الـ chunks المُسرَّبة من vector DB |
+
+### الإصلاح (D-052 — 6 طبقات دفاع)
+
+**طبقة 1 — توسيع `_BAC_EXERCISE_EXPLANATION_PATTERNS`** (`exercise_retrieval.py`):
+20+ نمط جديد لاستفسارات الشرح:
+- مفاهيمية: `ماذا نقصد`, `ماذا تعني`, `ما المقصود`, `ما هو معنى`, `ما هي`, `ما هو`
+- منهجية: `كيف نُثبت`, `كيف نحسب`, `كيف نُبيِّن`, `كيف نستنتج`, `كيف نجد`, `كيف وصلنا`
+- تبرير: `لماذا`, `علِّل`, `برِّر`, `why is`, `justify`
+- دوال صريحة: `وضح g(x)`/`f(x)`/`h(x)`, `فسر g(x)`/`f(x)`/`h(x)`, `بيّن g(x)`/`f(x)`/`h(x)`
+
+**طبقة 2 — Conversation Context Detection** (`exercise_retrieval.py`):
+دالة جديدة `_detect_entry_from_history(history_messages)` تفحص آخر 10 رسائل لمعرفة
+التمرين البكالوريا الذي تجري عنه المحادثة. `detect_explanation_with_context` تأخذ الآن
+`history_messages` parameter وتستخدم 3 مراحل:
+1. سؤال + BAC specificity → استخدم التمرين من السؤال
+2. سؤال شرح + history فيه BAC → استخدم تمرين السياق
+3. خلاف ذلك → لا match (يذهب لـ LangGraph العام)
+
+**طبقة 3 — `_has_explanation_with_context_match` + Preempt** (`orchestrator_client.py`):
+في بداية `chat_with_agent`، بعد فحص `_has_indexed_match`، يُضاف فحص جديد:
+```python
+if self._has_explanation_with_context_match(question, history_messages):
+    # بث الشرح المحلي مباشرة — يتجاوز orchestrator + StateGraph
+    async for chunk in self._stream_exercise_explanation_response(...):
+        yield assistant_delta(chunk)
+```
+يضمن: لا dump لتمارين متعددة، لا تسريب JSON، لا hallucination، سرعة قصوى.
+
+**طبقة 4 — إعادة كتابة `_EXERCISE_EXPLANATION_SYSTEM_PROMPT`** (`local_graph.py`):
+prompt جديد يحظر **صراحةً** التكرار الحرفي:
+- 🎯 «التزم بكل نتيجة في الإجابة النموذجية — لا تُغيِّر ولا تستنبط»
+- 🚫 «لا تُكرِّر الإجابة النموذجية حرفياً — هذه كارثة»
+- ✍️ «اشرح الجسر بين السؤال والنتيجة: ما هي القاعدة؟ لماذا اخترناها؟ كيف طبَّقناها؟»
+- 🚫 ممنوع منعاً باتاً: نسخ فقرة، اختراع نتائج، ذكر تمارين/سنوات أخرى
+
+**طبقة 5 — Chunk-Tag Stripping** (`orchestrator_client.py`):
+`_strip_retrieval_tags()` يحذف بـ regex `\[(?:ex|sol|grading|chunk|src|source|meta|tag|id|doc):...\]`
+من أي نص قبل بثه للطالب. مدمج في `_sanitize_text_for_user`. لا false positives على
+math notation مثل `x[1]` (لأن الـ regex يتطلب `key:value` pattern).
+
+**طبقة 6 — منظومة Skills الرسمية** (`app/services/skills/`):
+وحدة جديدة تستبدل **Prompt Spaghetti** بـ Skill Architecture (CLAUDE.md §0.5):
+- `BACExerciseSkill` — class رسمي بـ contract Pydantic موحَّد
+- `BACSkillInput(question, mode, history_messages, conversation_id)`
+- `BACSkillRetrievalOutput | BACSkillExplanationOutput | SkillFailure`
+- `SkillMode.{RETRIEVE, EXPLAIN, AUTO}`
+- Prometheus metrics: `cogniforge_skill_bac_invocations_total{mode,status}` + `_duration_seconds`
+- اختبارات حية: 4/4 تنجح (RETRIEVE, EXPLAIN+history, AUTO, no-match)
+- استقلالية: لا يستورد من Skill آخر، يعمل بدون orchestrator-service
+
+### القواعد الست الدائمة (لا تُكسر بدون ADR)
+
+**(1) Conversation context ≠ vector DB**: عند سؤال شرح/استفسار، يجب فحص `history_messages`
+أولاً قبل الذهاب لـ retriever عام. السياق المحدد من المحادثة يهزم البحث الواسع دائماً.
+
+**(2) Explanation preempt يسبق orchestrator**: في `chat_with_agent`، يجب فحص
+`_has_explanation_with_context_match()` **قبل** محاولة orchestrator microservice.
+بدون ذلك، الـ orchestrator سيستدعي vector DB ويُرجع chunks من ملفات متعددة.
+
+**(3) System prompt الشرح يحظر النسخ صراحةً**: `_EXERCISE_EXPLANATION_SYSTEM_PROMPT`
+يجب أن يحوي تعليمات صريحة `🚫 لا تُكرِّر الإجابة النموذجية حرفياً`. حذف هذه التعليمات
+= عودة لكارثة "النسخ بدل الشرح".
+
+**(4) Chunk-tag stripping إلزامي**: أي نص يُبث للطالب يجب أن يمر عبر `_sanitize_text_for_user`
+الذي يستدعي `_strip_retrieval_tags` تلقائياً. لا تتجاوز هذه الطبقة أبداً.
+
+**(5) Skills > Prompt Spaghetti**: عند إضافة قدرة AI جديدة، يجب أن تكون **Skill**
+بـ contract Pydantic + metrics + tests. لا تضف logic AI مباشرة في `orchestrator_client.py`
+أو `local_graph.py` — أنشئ Skill في `app/services/skills/`.
+
+**(6) Skill استقلال إلزامي**: Skill **لا يستورد** من Skill آخر مباشرة. التواصل بين
+Skills يتم عبر `OrchestratorClient` أو caller. هذا يحفظ القدرة على الاختبار والاستبدال.
+
+### قياس النجاح حياً
+
+```bash
+# 1. Concept Q + history → matches BAC 2016 (السيناريو الكارثي)
+python3 -c "
+from app.services.capabilities.exercise_retrieval import detect_explanation_with_context, ExerciseRetrievalRequest
+history = [{'role':'user','content':'اعطني تمرين دوال 2016'},{'role':'assistant','content':'بكالوريا 2016...'}]
+d = detect_explanation_with_context(ExerciseRetrievalRequest(question='ماذا نقصد بدالة اصلية'), history_messages=history)
+assert d.recognized and 'bac2016' in d.matched_entry.file_path, 'CATASTROPHE NOT FIXED'
+print('OK')
+"
+
+# 2. BAC Exercise Skill operational
+python3 -c "
+from app.services.skills import BACExerciseSkill, BACSkillInput, SkillMode, BACSkillExplanationOutput
+skill = BACExerciseSkill()
+r = skill.invoke(BACSkillInput(
+    question='ماذا نقصد بدالة اصلية',
+    mode=SkillMode.EXPLAIN,
+    history_messages=[{'role':'user','content':'تمرين 2016 الدورة الأولى الموضوع الثاني'}]
+))
+assert isinstance(r, BACSkillExplanationOutput)
+print(f'Skill OK | match_source={r.match_source}')
+"
+
+# 3. Chunk-tag stripping (no false positives on math)
+python3 -c "
+from app.infrastructure.clients.orchestrator_client import OrchestratorClient
+assert OrchestratorClient._strip_retrieval_tags('[ex: ex_1] hi') == ' hi'
+assert OrchestratorClient._strip_retrieval_tags('x[1] = 2') == 'x[1] = 2'  # math preserved
+print('OK')
+"
+```
+
+---
+

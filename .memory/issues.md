@@ -987,3 +987,48 @@
   - knowledge_base يحترم اصطلاح `\\(...\\)` + `$$...$$`
   - `throwOnError: false` للـ KaTeX
 - **Status**: FIXED 2026-05-13 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+### [FIXED] ISS-058 · Explanation Q dumps unrelated exercise + raw chunk tags + verbatim model answer · FIXED (2026-05-14)
+
+- **Severity**: 🔴 Critical Catastrophe — تجربة مدمرة للطالب الحقيقي. النظام ردَّ على سؤال مفاهيمي بـ dump كامل لتمرينَين غير متعلقَين.
+- **Context**: المستخدم رفع 3 screenshots تُظهر:
+  1. سؤال "ماذا نقصد بدالة اصلية للدالة f" → الرد يحوي تمرين 2016 الدوال + تمرين 2024 الاحتمالات (الكامل!) معاً
+  2. tags خام `[ex: ex_1]`, `[sol: ex_1]`, `[grading: ex_1]` ظاهرة للطالب
+  3. تكرار حرفي للإجابة النموذجية بدل شرحها
+  4. نص خام `Lambada infinity` (LaTeX غير مرسوم)
+- **الأسباب الجذرية**:
+  1. **`_BAC_EXERCISE_EXPLANATION_PATTERNS` ناقص**: لا يشمل "ماذا نقصد", "ما هو", "كيف نُثبت", "لماذا" → `detect_explanation_with_context` يُرجع False → السؤال يذهب إلى مسار آخر.
+  2. **wide-net retriever في `local_store.search_local_knowledge_base`**: يقرأ كل `.md` في `knowledge_base/` (rglob), يُرجع 2016 + 2024 معاً عند غياب filters.
+  3. **vector DB tags تتسرَّب**: orchestrator's RAG يُرجع chunks مع `[ex: ex_1]`, `[sol: ex_1]`, `[grading: ex_1]` كـ علامات داخلية. لا يوجد stripping قبل البث.
+  4. **`_EXERCISE_EXPLANATION_SYSTEM_PROMPT` ضعيف**: لا يحظر النسخ صراحةً. الـ LLM يكرر الإجابة النموذجية حرفياً.
+  5. **لا preempt للسياق المحادثاتي**: حتى لو حُلَّت patterns، السؤال "ماذا نقصد بدالة" يحتاج معرفة أن الطالب يسأل عن **التمرين السابق في المحادثة**.
+- **الإصلاحات (D-052 — ست طبقات دفاع)**:
+  - **طبقة 1**: 20+ نمط explanation pattern جديد (مفاهيمية + منهجية + تبرير + دوال صريحة).
+  - **طبقة 2**: `_detect_entry_from_history()` — يفحص آخر 10 رسائل لكشف تمرين السياق. `detect_explanation_with_context` تأخذ `history_messages` parameter.
+  - **طبقة 3**: `_has_explanation_with_context_match()` + preempt block في `chat_with_agent` (يتجاوز orchestrator + StateGraph + wide-net).
+  - **طبقة 4**: إعادة كتابة `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` بتعليمات صريحة `🚫 لا تُكرِّر الإجابة النموذجية حرفياً`.
+  - **طبقة 5**: `_strip_retrieval_tags()` regex يحذف `[ex|sol|grading|chunk|src|source|meta|tag|id|doc:value]` من أي نص قبل البث. مدمج في `_sanitize_text_for_user`.
+  - **طبقة 6**: منظومة Skills رسمية جديدة في `app/services/skills/` — `BACExerciseSkill` بـ contract Pydantic + metrics + tests.
+- **Files changed**:
+  - `app/services/capabilities/exercise_retrieval.py` — 20+ patterns + `_detect_entry_from_history` + 3-stage `detect_explanation_with_context`
+  - `app/infrastructure/clients/orchestrator_client.py` — `_has_explanation_with_context_match` + preempt block + `_strip_retrieval_tags` + integration in `_sanitize_text_for_user`
+  - `app/services/chat/local_graph.py` — rewrite `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` (forbids verbatim)
+  - `app/services/skills/__init__.py` — منظومة Skills (جديد)
+  - `app/services/skills/bac_exercise_skill.py` — `BACExerciseSkill` formal Skill (جديد)
+  - `CLAUDE.md` §6.33
+  - `.memory/decisions.md` D-052, `.memory/issues.md` ISS-058
+- **Live tests passed**:
+  - 12/12 explanation patterns recognized correctly (catastrophe scenarios + direct + edge cases)
+  - 0 false positives on concept questions without context
+  - 4/4 BACExerciseSkill operations succeed (RETRIEVE, EXPLAIN+history, AUTO, no-match)
+  - chunk-tag stripping: 5/5 tags stripped, 3/3 math notations preserved (x[1], [1,2,3])
+- **Invariants enforced**:
+  - conversation context يهزم vector DB search
+  - explanation preempt يسبق orchestrator
+  - system prompt الشرح يحظر النسخ صراحةً
+  - chunk-tag stripping إلزامي
+  - Skills > Prompt Spaghetti
+  - Skill استقلالية إلزامية
+- **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

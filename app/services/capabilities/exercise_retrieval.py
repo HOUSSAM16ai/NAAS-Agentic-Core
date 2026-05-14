@@ -514,6 +514,18 @@ _BAC_EXERCISE_EXPLANATION_PATTERNS: tuple[str, ...] = (
     "شرح g(x)",
     "شرح f(x)",
     "شرح h(x)",
+    "وضح g(x)",
+    "وضح f(x)",
+    "وضح h(x)",
+    "فسر g(x)",
+    "فسر f(x)",
+    "فسر h(x)",
+    "بيّن g(x)",
+    "بيّن f(x)",
+    "بيّن h(x)",
+    "بين g(x)",
+    "بين f(x)",
+    "بين h(x)",
     # شرح + جزء من التمرين مع ذكر السنة (يُكشف لاحقاً بالسنة)
     "اشرح الجزء",
     "شرح الجزء",
@@ -526,6 +538,43 @@ _BAC_EXERCISE_EXPLANATION_PATTERNS: tuple[str, ...] = (
     "فهمني",
     "علمني",
     "وضحلي",
+    # ISS-058: أنماط استفسار مفاهيمية تتعلق بسياق التمرين الحالي
+    # هذه الأنماط تُفعَّل ضمن سياق محادثة عن تمرين بكالوريا محدد فقط
+    "ماذا نقصد",
+    "ماذا يقصد",
+    "ماذا تعني",
+    "ماذا يعني",
+    "ما المقصود",
+    "ما معنى",
+    "ما مفهوم",
+    "ما هو معنى",
+    "ما هي",
+    "ما هو",
+    "what is meant",
+    "what does",
+    # كيف نُثبت / كيف نحسب / كيف نُبيِّن — أسئلة "كيف" المنهجية
+    "كيف نُثبت",
+    "كيف نثبت",
+    "كيف نحسب",
+    "كيف نُبيِّن",
+    "كيف نبين",
+    "كيف نستنتج",
+    "كيف نجد",
+    "كيف نُوجد",
+    "كيف يصبح",
+    "كيف نصل",
+    "كيف وصلنا",
+    "how to prove",
+    "how to compute",
+    "how to derive",
+    # طلب التبرير / التفسير
+    "لماذا",
+    "علِّل",
+    "علل",
+    "برِّر",
+    "برر",
+    "why is",
+    "justify",
 )
 
 # أنماط تُحدِّد تمريناً بكالوريا بالسنة أو الموضوع أو الدالة
@@ -577,18 +626,43 @@ class ExplanationWithContextDecision(RobustBaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
+def _detect_entry_from_history(history_messages: list[dict[str, str]] | None) -> ExerciseEntry | None:
+    """يكشف عن تمرين بكالوريا مذكور حديثاً في سياق المحادثة.
+
+    ISS-058: عندما يسأل الطالب «ماذا نقصد بدالة أصلية للدالة f» بعد أن طُلب
+    منه تمرين 2016 الدوال العددية، نريد ربط السؤال بذلك التمرين تلقائياً —
+    لا الذهاب لـ wide-net retrieval الذي يُرجع تمارين أخرى غير ذات صلة.
+
+    نفحص آخر 10 رسائل بحثاً عن إشارات تمرين بكالوريا (عنوان الملف، السنة،
+    الموضوع، رقم التمرين) ونستخدمها للبحث في الفهرس.
+    """
+    if not history_messages:
+        return None
+    recent_text = " ".join(
+        str(m.get("content", ""))[:1500] for m in history_messages[-10:]
+        if isinstance(m, dict)
+    ).lower()
+    if not recent_text.strip():
+        return None
+    return _find_matching_entry(recent_text)
+
+
 def detect_explanation_with_context(
     request: ExerciseRetrievalRequest,
+    history_messages: list[dict[str, str]] | None = None,
 ) -> ExplanationWithContextDecision:
     """
     يكشف عن طلبات شرح تمرين بكالوريا محدد ويجلب محتواه الكامل كـ context للـ LLM.
 
-    المنطق ثنائي المرحلة:
-    1. هل يوجد نمط شرح + تحديد تمرين بكالوريا؟ → مسار الشرح مع السياق
-    2. هل يوجد تمرين مطابق في قاعدة المعرفة؟ → جلب النص الكامل + الإجابة النموذجية
+    المنطق ثلاثي المرحلة:
+    1. هل يوجد نمط شرح + تحديد تمرين بكالوريا في السؤال نفسه؟ → جلب التمرين
+    2. (ISS-058) هل يوجد نمط شرح/استفسار + تمرين سابق في سياق المحادثة؟ → استخدم تمرين السياق
+    3. خلاف ذلك → لا شرح مع سياق (يذهب لـ LangGraph العام)
 
     يحل ISS-053: طلبات "اشرح تمرين الدوال العددية 2016" كانت تذهب إلى LangGraph
     بدون محتوى التمرين → هلوسة. الآن يحصل LLM على النص الكامل + الإجابة النموذجية.
+    يحل ISS-058: «ماذا نقصد بدالة أصلية للدالة f» (بدون ذكر صريح للسنة/الموضوع)
+    كان يُسبب dump لكل ملفات knowledge_base/. الآن نربطه بتمرين السياق.
     """
     normalized = request.question.strip().lower()
 
@@ -596,18 +670,24 @@ def detect_explanation_with_context(
     has_explanation_pattern = any(p in normalized for p in _BAC_EXERCISE_EXPLANATION_PATTERNS)
     has_specificity = any(p in normalized for p in _BAC_SPECIFICITY_PATTERNS)
 
-    if not (has_explanation_pattern and has_specificity):
-        return ExplanationWithContextDecision(
-            recognized=False,
-            reason="no_bac_explanation_pattern",
-        )
+    matched_entry: ExerciseEntry | None = None
+    reason_used: str = ""
 
-    # المرحلة 2: البحث عن تمرين مطابق في قاعدة المعرفة
-    matched_entry = _find_matching_entry(normalized)
+    if has_explanation_pattern and has_specificity:
+        matched_entry = _find_matching_entry(normalized)
+        reason_used = "bac_explanation_with_context"
+
+    # المرحلة 2 (ISS-058): استفسار مفاهيمي + سياق محادثة عن تمرين بكالوريا
+    if matched_entry is None and has_explanation_pattern:
+        context_entry = _detect_entry_from_history(history_messages)
+        if context_entry is not None:
+            matched_entry = context_entry
+            reason_used = "bac_explanation_with_conversation_context"
+
     if matched_entry is None:
         return ExplanationWithContextDecision(
             recognized=False,
-            reason="no_matching_entry_in_index",
+            reason="no_bac_explanation_pattern" if not has_explanation_pattern else "no_matching_entry_or_context",
         )
 
     # المرحلة 3: جلب المحتوى الكامل (نص + إجابة نموذجية)
@@ -630,7 +710,7 @@ def detect_explanation_with_context(
 
     return ExplanationWithContextDecision(
         recognized=True,
-        reason="bac_explanation_with_context",
+        reason=reason_used or "bac_explanation_with_context",
         matched_entry=matched_entry,
         full_content=full_content,
         display_content=display_content,

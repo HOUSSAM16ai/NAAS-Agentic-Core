@@ -758,3 +758,48 @@ detect_exercise_retrieval(question)
 - `throwOnError: false` في KaTeX — لا تُغيِّره (يحمي من crash على LaTeX commands غير مدعومة).
 **Evidence**: قبل الإصلاح — LaTeX خام مرئي في screenshot 2026-05-13. اختبار حي بعد الإصلاح: 192 موضع `\\(...\\)` تحوَّلت كلها إلى `$...$`، 0 موضع متبقٍ، 384 inline pairs + 66 display pairs. atomicTokenLength اجتاز 6 سيناريوهات اختبار.
 **Status**: IMPLEMENTED 2026-05-13 — branch `claude/fix-exercise-display-SRmNL`.
+
+## D-052 · Explanation Context Preemption + BAC Exercise Skill + Chunk-Tag Stripping (2026-05-14, ISS-058)
+**Decision**: ست طبقات دفاع متراكبة + منظومة Skills رسمية تستبدل Prompt Spaghetti بـ contract موحَّد.
+**Problem**: المستخدم طلب «ماذا نقصد بدالة اصلية للدالة f» بعد عرض تمرين 2016 الدوال. النظام ردَّ بكارثة مدمرة:
+1. **dump تمرين البكالوريا 2024 الاحتمالات** بالكامل (غير متعلق إطلاقاً بالسؤال)
+2. **tags خام** `[ex: ex_1]`, `[sol: ex_1]`, `[grading: ex_1]` تظهر للطالب
+3. **تكرار حرفي** للإجابة النموذجية بدل شرحها
+4. **`Lambada infinity`** نص خام (LaTeX غير مرسوم)
+السبب الجذري: `_BAC_EXERCISE_EXPLANATION_PATTERNS` كان يفتقد "ماذا نقصد"/"كيف نُثبت"/"لماذا"
+فيُلغى `detect_explanation_with_context` → السؤال يذهب إلى wide-net retriever (`search_local_knowledge_base`) الذي يقرأ كل ملفات `knowledge_base/` ويُرجع 2016+2024 معاً.
+**Solution**:
+- **طبقة 1 (`exercise_retrieval.py`)**: توسيع `_BAC_EXERCISE_EXPLANATION_PATTERNS` بـ 20+ نمط:
+  - مفاهيمية: "ماذا نقصد", "ماذا تعني", "ما المقصود", "ما هو معنى", "ما هي", "ما هو"
+  - منهجية: "كيف نُثبت", "كيف نحسب", "كيف نُبيِّن", "كيف نستنتج", "كيف نجد", "كيف وصلنا"
+  - تبرير: "لماذا", "علِّل", "برِّر", "why is", "justify"
+  - دوال صريحة: "وضح/فسر/بيّن" + g(x)/f(x)/h(x)
+- **طبقة 2 (`exercise_retrieval.py:_detect_entry_from_history`)**: دالة جديدة تفحص آخر 10 رسائل لاكتشاف تمرين البكالوريا المرتبط بالمحادثة. `detect_explanation_with_context` تأخذ الآن `history_messages` parameter وتستخدم 3 مراحل (سؤال صريح → سياق → fallback).
+- **طبقة 3 (`orchestrator_client.py:chat_with_agent`)**: preempt block جديد قبل HTTP call:
+  ```python
+  if self._has_explanation_with_context_match(question, history_messages):
+      async for chunk in self._stream_exercise_explanation_response(...):
+          yield assistant_delta(chunk)
+      return
+  ```
+  يتجاوز orchestrator + StateGraph + wide-net retriever.
+- **طبقة 4 (`local_graph.py:_EXERCISE_EXPLANATION_SYSTEM_PROMPT`)**: prompt مُعاد كتابته يحظر صراحةً:
+  - 🚫 «لا تُكرِّر الإجابة النموذجية حرفياً — هذه كارثة»
+  - 🎯 «التزم بكل نتيجة — اشرح الجسر بين السؤال والنتيجة»
+  - 🚫 «ممنوع: نسخ فقرة، اختراع نتائج، ذكر تمارين أخرى»
+- **طبقة 5 (`orchestrator_client.py:_strip_retrieval_tags`)**: regex يحذف `[ex|sol|grading|chunk|src|...:value]` من أي نص قبل بثه. مدمج في `_sanitize_text_for_user`. لا false positives على `x[1]` math notation.
+- **طبقة 6 (`app/services/skills/`)**: منظومة Skills رسمية جديدة:
+  - `BACExerciseSkill` class بـ contract Pydantic موحَّد
+  - `BACSkillInput`, `BACSkillRetrievalOutput`, `BACSkillExplanationOutput`, `SkillFailure`
+  - `SkillMode.{RETRIEVE, EXPLAIN, AUTO}` — اختيار صريح يُجبر استدلال واضحاً
+  - Prometheus metrics: `cogniforge_skill_bac_invocations_total{mode,status}` + `_duration_seconds`
+  - استقلالية: لا يستورد من Skill آخر، يعمل بدون orchestrator
+**Invariants**:
+- conversation context يهزم vector DB search دائماً.
+- explanation preempt يسبق orchestrator في `chat_with_agent`.
+- system prompt الشرح يحظر النسخ صراحةً.
+- chunk-tag stripping إلزامي لكل نص يُبث للطالب.
+- Skills > Prompt Spaghetti — قدرات جديدة تذهب لـ `app/services/skills/`.
+- Skill لا يستورد من Skill آخر مباشرة.
+**Evidence**: قبل الإصلاح — screenshot كارثي من المستخدم يُظهر 2016+2024 مدموجَين مع tags خام. بعد الإصلاح: 12/12 تجارب تنجح للأنماط، 4/4 تجارب تنجح لـ BACExerciseSkill، 0 false positives على math notation `x[1]`.
+**Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

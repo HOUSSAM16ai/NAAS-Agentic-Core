@@ -1307,3 +1307,20 @@
   4. Touch targets ≥ 44px على mobile
   5. Theme dual-binding (html + body + color-scheme)
 - **Status**: FIXED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+## ISS-066 — Light Mode Catastrophic Failure (2026-05-14)
+
+- **Symptom**: زر الوضع النهاري لا يُنتج أي تغيير مرئي — الصفحة تبقى داكنة.
+- **Root causes (4 layers)**:
+  1. **FOUC**: `layout.jsx` لا يضع `data-theme` على `html` عند التحميل — React يُطبِّق الـ theme بعد hydration فقط.
+  2. **CSS Specificity**: `html[data-theme='light']` selector مفقود — فقط `[data-theme='light']` و `body[data-theme='light']`.
+  3. **Hard-coded dark colors**: `.markdown-content pre { background: #0f172a }` ثابت لا يتغير مع الـ theme.
+  4. **useState flash**: `useState('dark')` كـ initial value يُسبب flash قبل قراءة localStorage.
+- **Fix (D-058)**:
+  - `layout.jsx`: anti-flash script synchronous في `<head>` يقرأ localStorage ويُطبِّق `data-theme` على `html` قبل أي render.
+  - `globals.css`: `html[data-theme='light/dark']` مضاف كـ selector أول + CSS variables `--code-bg`, `--pre-bg`, `--pre-color` لكل theme + light mode luxury overrides section.
+  - `CogniForgeApp.jsx`: lazy `useState` initializer يقرأ localStorage مباشرة — لا useEffect لقراءة الـ theme.
+- **Files changed**: `frontend/app/layout.jsx`, `frontend/app/globals.css`, `frontend/app/components/CogniForgeApp.jsx`
+- **Status**: FIXED 2026-05-14 — branch `fix/light-mode-luxury-theme`.

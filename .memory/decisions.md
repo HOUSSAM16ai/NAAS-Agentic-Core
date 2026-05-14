@@ -1000,3 +1000,20 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 - `grep "body\[data-theme"` → 2 results ✅
 - `@media (min-width: 640px)` في 4+ مواقع ✅
 **Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+---
+
+## D-058 — ISS-066 Light Mode Fix (2026-05-14)
+
+**Problem**: Light mode toggle broken — no visual change on switch.
+**Decision**: 4-layer fix: anti-flash script + html[data-theme] CSS selector + CSS variables for code blocks + lazy useState.
+**Rationale**:
+- Anti-flash script is the only reliable way to apply theme before React hydration in Next.js.
+- `html[data-theme]` has higher specificity than `[data-theme]` alone — needed because JS sets `data-theme` on `documentElement` (html).
+- CSS variables for code blocks (`--pre-bg`, `--code-bg`) allow theme-aware styling without `[data-theme='light'] pre` overrides.
+- Lazy `useState` eliminates the double-render flash caused by `useState('dark')` + `useEffect` pattern.
+**Invariants (3 new rules)**:
+1. Any Next.js app with theme switching MUST have an anti-flash script in `<head>`.
+2. CSS theme selectors MUST include `html[data-theme='X']` as the first (highest specificity) selector.
+3. Code block colors MUST use CSS variables, never hard-coded hex values.
+**Status**: IMPLEMENTED 2026-05-14 — branch `fix/light-mode-luxury-theme`.

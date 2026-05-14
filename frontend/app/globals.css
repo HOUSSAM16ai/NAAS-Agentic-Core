@@ -40,11 +40,13 @@
     --font-family: 'Tajawal', 'Noto Kufi Arabic', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* ISS-064/065 (D-056/D-057): explicit theme blocks مع double-application
-   على html و body للموثوقية القصوى. كل selector له specificity مختلف فيوفر
-   override layers متعددة ضد أي CSS قديم مُختزَن في cache. */
-[data-theme='light'],
-body[data-theme='light'] {
+/* ISS-066 (D-058): triple-application للـ theme variables — html + body + generic.
+   html[data-theme] له أعلى specificity لأن الـ anti-flash script يضع data-theme
+   على html أولاً. body[data-theme] fallback دفاعي. [data-theme] يغطي أي عنصر آخر.
+   الترتيب مهم: light يجب أن يأتي قبل dark في الـ cascade. */
+html[data-theme='light'],
+body[data-theme='light'],
+[data-theme='light'] {
     --primary-color: #2563eb;
     --primary-color-rgb: 37, 99, 235;
     --primary-hover: #1d4ed8;
@@ -61,27 +63,42 @@ body[data-theme='light'] {
     --error-color: #ef4444;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
     --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.06);
+    /* ISS-066: code block colors للـ light mode */
+    --code-bg: #f4f4f5;
+    --code-color: #18181b;
+    --code-border: #e4e4e7;
+    --pre-bg: #f8f8f8;
+    --pre-color: #1e1e1e;
+    --pre-border: rgba(0, 0, 0, 0.08);
 }
 
-[data-theme='dark'],
-body[data-theme='dark'] {
+html[data-theme='dark'],
+body[data-theme='dark'],
+[data-theme='dark'] {
     /* Dark mode — أسود غني فاخر + خط أبيض راقٍ */
     --primary-color: #60a5fa;
     --primary-color-rgb: 96, 165, 250;
     --primary-hover: #93c5fd;
     --secondary-color: #a3a3a3;
-    --bg-color: #0a0a0a;          /* أسود فاخر مثل Vercel (كان #0f172a مائل للأزرق) */
-    --surface-color: #0f0f0f;     /* surface بنفس النغمة — لا تباين مزعج */
-    --surface-elevated: #171717;  /* للعناصر المرفوعة */
-    --text-color: #fafafa;        /* أبيض فاخر (كان #f1f5f9 — مائل للأزرق) */
+    --bg-color: #0a0a0a;
+    --surface-color: #0f0f0f;
+    --surface-elevated: #171717;
+    --text-color: #fafafa;
     --text-secondary: #a3a3a3;
-    --border-color: #1f1f1f;      /* حدود ناعمة جداً — تكاد تكون غير مرئية */
-    --border-subtle: #141414;     /* فواصل داخلية أخف */
+    --border-color: #1f1f1f;
+    --border-subtle: #141414;
     --success-color: #34d399;
     --warning-color: #fbbf24;
     --error-color: #f87171;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
     --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.6);
+    /* ISS-066: code block colors للـ dark mode */
+    --code-bg: #1e1e2e;
+    --code-color: #cdd6f4;
+    --code-border: rgba(255, 255, 255, 0.06);
+    --pre-bg: #0f172a;
+    --pre-color: #e2e8f0;
+    --pre-border: rgba(255, 255, 255, 0.08);
 }
 
 * {
@@ -99,25 +116,41 @@ html, body {
     max-width: 100vw;
 }
 
-/* ISS-063 (D-055.2): body + html بنفس selector specificity كما في legacy-style.css
-   لضمان أن أي ملف CSS قديم لا يتجاوز نظام D-055 الفاخر.
-   `background` (shorthand) يُلغي أي radial-gradient ذهبي من legacy. */
-body, html {
+/* ISS-066 (D-058): body + html يقرآن CSS variables من html[data-theme] مباشرة.
+   background + color يُطبَّقان على body صراحةً لأن body لا يرث background من html
+   في بعض المتصفحات عند استخدام CSS custom properties.
+   `background` shorthand يُلغي أي radial-gradient من legacy. */
+html {
+    height: 100%;
+    margin: 0;
+    font-family: var(--font-family);
+    background: var(--bg-color);
+    color: var(--text-color);
+    direction: rtl;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern" 1, "liga" 1;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body {
     height: 100%;
     margin: 0;
     user-select: none;
     -webkit-user-select: none;
     font-family: var(--font-family);
-    background: var(--bg-color);     /* shorthand يُلغي background-image gradients */
+    /* ISS-066: body يُطبِّق background + color صراحةً من variables الـ html parent */
+    background: var(--bg-color);
     color: var(--text-color);
     direction: rtl;
     line-height: 1.7;
-    /* ISS-061 (D-055): font smoothing فاخر للنص الأبيض/الأسود */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     font-feature-settings: "kern" 1, "liga" 1;
-    transition: background-color 0.25s ease, color 0.25s ease;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* App Container — ISS-065 (D-057): defensive overflow + max-width 100vw */
@@ -802,28 +835,39 @@ body, html {
     margin-bottom: 0.35rem;
 }
 
-/* ISS-064 (D-056): code blocks بدون border حاد، لون متناغم مع الثيم */
+/* ISS-066 (D-058): code blocks تستخدم CSS variables — تتغير مع الـ theme.
+   --code-bg / --pre-bg مُعرَّفة في كل theme block (light + dark). */
 .markdown-content code {
-    background: var(--surface-elevated);
-    color: var(--text-color);
-    padding: 0.15rem 0.4rem;
-    border-radius: 4px;
+    background: var(--code-bg);
+    color: var(--code-color);
+    padding: 0.15rem 0.45rem;
+    border-radius: 5px;
     font-family: 'Fira Code', 'Courier New', monospace;
-    font-size: 0.9em;
-    border: none;
+    font-size: 0.88em;
+    border: 1px solid var(--code-border);
+    font-weight: 500;
 }
 
 .markdown-content pre {
-    background: #0f172a;
-    color: #e2e8f0;
-    padding: 1rem 1.25rem;
+    background: var(--pre-bg);
+    color: var(--pre-color);
+    padding: 1.1rem 1.35rem;
     border-radius: 10px;
     overflow-x: auto;
     direction: ltr;
     text-align: left;
     margin-bottom: 1rem;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    border: 1px solid var(--pre-border);
+    box-shadow: var(--shadow);
+}
+
+.markdown-content pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    border: none;
+    font-size: 0.92em;
+    font-weight: 400;
 }
 
 .markdown-content strong {
@@ -1538,4 +1582,144 @@ body, html {
 .markdown-content {
     user-select: text;
     -webkit-user-select: text;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ISS-066 (D-058): Light Mode Luxury Overrides
+   ───────────────────────────────────────────────────────────────────────────
+   الوضع النهاري: صفحة بيضاء نقية + خط أسود فاخر + ظلال خفيفة راقية.
+   كل override هنا يُعالج عنصراً كان يبدو "مكسوراً" في الـ light mode
+   بسبب ألوان ثابتة أو افتراضات dark-first في الـ CSS الأصلي.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Header — light mode: حد سفلي خفيف يفصل الـ header عن المحتوى */
+html[data-theme='light'] .header,
+body[data-theme='light'] .header {
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+}
+
+/* Header menu — light mode: ظل أكثر وضوحاً */
+html[data-theme='light'] .header-menu,
+body[data-theme='light'] .header-menu {
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.10), 0 1px 4px rgb(0 0 0 / 0.06);
+}
+
+html[data-theme='light'] .header-menu-item:hover,
+body[data-theme='light'] .header-menu-item:hover {
+    background-color: var(--surface-elevated);
+}
+
+/* Input area — light mode: حد واضح + ظل خفيف */
+html[data-theme='light'] .input-area,
+body[data-theme='light'] .input-area {
+    border: 1.5px solid var(--border-color);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.05);
+}
+
+html[data-theme='light'] .input-area:focus-within,
+body[data-theme='light'] .input-area:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10), 0 2px 8px rgb(0 0 0 / 0.05);
+}
+
+/* User message bubble — light mode: أزرق فاخر مع ظل */
+html[data-theme='light'] .message.user .message-bubble,
+body[data-theme='light'] .message.user .message-bubble {
+    box-shadow: 0 2px 8px rgb(37 99 235 / 0.18);
+}
+
+/* Sidebar — light mode: حد يميني واضح */
+html[data-theme='light'] .sidebar,
+body[data-theme='light'] .sidebar {
+    border-left: 1px solid var(--border-color);
+    box-shadow: -4px 0 16px rgb(0 0 0 / 0.06);
+}
+
+/* Login form — light mode: ظل أعمق */
+html[data-theme='light'] .login-form,
+html[data-theme='light'] .register-form,
+body[data-theme='light'] .login-form,
+body[data-theme='light'] .register-form {
+    box-shadow: 0 8px 32px rgb(0 0 0 / 0.10), 0 2px 8px rgb(0 0 0 / 0.06);
+}
+
+/* Conversation items — light mode: hover واضح */
+html[data-theme='light'] .conversation-item:hover,
+body[data-theme='light'] .conversation-item:hover {
+    background-color: var(--surface-elevated);
+}
+
+/* Mission buttons — light mode: ظل خفيف */
+html[data-theme='light'] .mission-btn,
+body[data-theme='light'] .mission-btn {
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.06);
+}
+
+html[data-theme='light'] .mission-btn:hover,
+body[data-theme='light'] .mission-btn:hover {
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.10);
+}
+
+/* Agent sidebar — light mode: حد واضح */
+html[data-theme='light'] .agent-sidebar,
+body[data-theme='light'] .agent-sidebar {
+    border-right: 1px solid var(--border-color);
+    box-shadow: 4px 0 16px rgb(0 0 0 / 0.06);
+}
+
+/* Blockquote — light mode: خط جانبي أزرق فاخر */
+html[data-theme='light'] .md-blockquote,
+body[data-theme='light'] .md-blockquote {
+    background: rgba(37, 99, 235, 0.04);
+    border-right: 3px solid var(--primary-color);
+    color: var(--text-secondary);
+}
+
+/* Math table — light mode: header أزرق فاخر */
+html[data-theme='light'] .math-table th,
+body[data-theme='light'] .math-table th {
+    background: rgba(37, 99, 235, 0.06);
+}
+
+/* Scrollbar — light mode: رمادي فاخر */
+html[data-theme='light'] ::-webkit-scrollbar-track,
+body[data-theme='light'] ::-webkit-scrollbar-track {
+    background: var(--surface-elevated);
+}
+
+html[data-theme='light'] ::-webkit-scrollbar-thumb,
+body[data-theme='light'] ::-webkit-scrollbar-thumb {
+    background: #d4d4d8;
+    border-radius: 4px;
+}
+
+html[data-theme='light'] ::-webkit-scrollbar-thumb:hover,
+body[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+    background: #a1a1aa;
+}
+
+/* Theme toggle button — light mode: يُظهر أيقونة القمر بوضوح */
+html[data-theme='light'] .header-menu-btn,
+body[data-theme='light'] .header-menu-btn {
+    color: var(--text-color);
+}
+
+html[data-theme='light'] .header-menu-btn:hover,
+body[data-theme='light'] .header-menu-btn:hover {
+    background-color: var(--surface-elevated);
+}
+
+/* Agent status board — light mode */
+html[data-theme='light'] .agent-board-container,
+body[data-theme='light'] .agent-board-container {
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Exam badge — light mode: أزرق فاخر */
+html[data-theme='light'] .exam-badge,
+body[data-theme='light'] .exam-badge {
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--primary-color);
+    border: 1px solid rgba(37, 99, 235, 0.15);
 }

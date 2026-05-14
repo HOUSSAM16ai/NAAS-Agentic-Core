@@ -973,3 +973,30 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 - `grep "^\[data-theme='light'\]" globals.css` → موجود
 - `.markdown-content` width 100% + overflow-wrap break-word → النص لا يُقطع على الأطراف
 **Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).
+
+## D-057 · Defensive Overflow + Mobile/Desktop Responsive + Theme Dual-Binding (2026-05-14, ISS-065)
+**Decision**: 5 طبقات دفاع: universal min-width:0، multi-layer overflow-x hidden، mobile-first responsive containers، touch-target sizing 44px mobile / 40px desktop، theme dual-binding على html + body.
+**Problem**: المستخدم بلَّغ كوارث متراكبة بعد D-056: «الجمل مزالت لا تظهر»، «خانة البحث نصفها لا يظهر»، «زر الإرسال يختفي»، «الواجهة في حد ذاتها تختفي كليا»، «الوضع النهاري معطل تماما». طلب صريح: «يجب أن تدعم الهاتف و الحاسوب بشكل خارق جدا خرافي احترافي فائق الجودة العالية الفاخرة الراقية الفخمة للمستقبل البعيد».
+**Root causes**:
+1. Flex children بدون `min-width: 0` لا تنكمش — تفرض expansion على parent → horizontal overflow
+2. Sidebar بـ `transform: translateX(100%)` + `position: absolute` يخلق ghost overflow في Safari iOS
+3. Light mode toggle يُعدِّل `documentElement.dataset.theme` فقط — no fallback على `body`
+4. Padding ثابت = ضيق على mobile، مفقود breathing room على desktop
+**Solution**:
+- **L1 Universal min-width:0 + html/body overflow-x defense**: `* { min-width: 0 }` + `html, body { overflow-x: hidden; max-width: 100vw }`
+- **L2 Multi-layer overflow-x**: على app-container, dashboard-layout, chat-area, chat-container, message-bubble, input-area textarea
+- **L3 Mobile-first responsive**: messages/input-area-wrapper/agent-board-container بـ padding ضيق على mobile (0.75rem 1rem) + `@media (min-width: 640px)` لـ desktop (1.25rem 1.5rem + max-width 920px)
+- **L4 Touch targets**: input-area button 44px على mobile (Apple HIG + Material Design)، 40px على desktop
+- **L5 Theme dual-binding**: `root.dataset.theme + root.style.colorScheme + body.dataset.theme` في CogniForgeApp.jsx + CSS supports `[data-theme='X'], body[data-theme='X']`
+**Invariants (5 جديدة)**:
+1. Universal `min-width: 0` على كل عنصر (defensive)
+2. Multi-layer overflow-x: hidden على كل containers رئيسية
+3. Mobile-first responsive padding (start narrow، expand on `min-width: 640px`)
+4. Touch targets ≥ 44px على mobile
+5. Theme dual-binding (html + body + color-scheme)
+**Evidence**:
+- `grep -c "overflow-x: hidden"` → ≥ 5 ✅
+- `grep -c "min-width: 0"` → ≥ 8 ✅
+- `grep "body\[data-theme"` → 2 results ✅
+- `@media (min-width: 640px)` في 4+ مواقع ✅
+**Status**: IMPLEMENTED 2026-05-14 — branch `claude/fix-exercise-display-SRmNL` (PR #2063).

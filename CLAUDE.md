@@ -3825,6 +3825,128 @@ grep "^\[data-theme='light'\]" frontend/app/globals.css
 | D-055 | luxury UI theme + zero-flicker + premium typography |
 | D-055.1 | header seamless integration |
 | D-055.2 | legacy-style.css purge |
-| **D-056** | **Claude-style full-width + zero-line markdown + light hardening** |
+| D-056 | Claude-style full-width + zero-line markdown + light hardening |
+| **D-057** | **Horizontal overflow defense + mobile-first responsive + theme dual-binding** |
+
+---
+
+## 6.40 Defensive Overflow + Mobile/Desktop Responsive + Theme Dual-Binding (2026-05-14, ISS-065 / D-057)
+
+> 3 كوارث مدمرة شاهدها المستخدم بعد D-056:
+> 1. **«الجمل مزالت لا تظهر»** — text overflow على اليمين، الجمل تنقطع
+> 2. **«خانة البحث بعد ظهور الكتابة نصفها لا يظهر»** — input field overflow
+> 3. **«زر الإرسال يختفي»** — send button cut off-screen
+> 4. **«الواجهة في حد ذاتها تختفي كليا»** — whole UI sliding off-viewport
+> 5. **«الوضع النهاري معطل تماما»** — light mode toggle has no effect
+>
+> طلب: **«يجب أن تدعم الهاتف و الحاسوب بشكل خارق جدا خرافي احترافي فائق الجودة العالية الفاخرة الراقية الفخمة للمستقبل البعيد فائق الدقة للمشاريع العملاقة شديدة التعقيد».**
+
+### الأسباب الجذرية
+
+1. **Horizontal overflow chain**: عناصر داخلية (KaTeX inline `nowrap`, long Arabic words, math expressions) تُفرض expansion على الـ flex containers لأن `min-width: 0` غير مُحدَّد. الـ flex items default إلى `min-width: auto` فلا تنكمش لـ shrink عن المحتوى الطبيعي.
+2. **Sidebar absolute positioning** بـ `transform: translateX(100%)` كان يخلق ghost overflow على المتصفحات التي لا تطبق `overflow: hidden` بصرامة كافية.
+3. **Light mode toggle** كان يُعدِّل `documentElement.dataset.theme` فقط — لا fallback على `body`، لا `color-scheme` للـ browser controls.
+4. **Mobile vs desktop padding** ثابت — على الهاتف ضيق جداً، على الحاسوب يفقد breathing room.
+
+### الإصلاح (D-057 — 5 طبقات دفاع)
+
+**طبقة 1 — Universal `min-width: 0` + html/body overflow-x defense**:
+```css
+* { box-sizing: border-box; min-width: 0; }
+html, body { overflow-x: hidden; max-width: 100vw; }
+```
+يضمن أن أي flex child ينكمش لـ shrink، ولا يخرج محتوى من viewport.
+
+**طبقة 2 — Layered overflow-x on every chat container**:
+```css
+.app-container       { max-width: 100vw; overflow-x: hidden; }
+.dashboard-layout    { max-width: 100vw; width: 100%; min-width: 0; }
+.chat-area           { min-width: 0; overflow-x: hidden; width: 100%; }
+.chat-container      { width: 100%; min-width: 0; overflow-x: hidden; }
+.message-bubble      { min-width: 0; overflow-wrap: break-word; }
+.input-area textarea { min-width: 0; width: 100%; }
+```
+
+**طبقة 3 — Mobile-first responsive containers**:
+```css
+.messages, .input-area-wrapper, .agent-board-container {
+    /* mobile (<640px): padding أصغر، عرض كامل */
+    padding: 0.75rem 1rem; max-width: 100%; width: 100%;
+}
+@media (min-width: 640px) {
+    /* tablet+desktop: breathing room + max 920px center */
+    padding: 1.25rem 1.5rem; max-width: 920px;
+}
+```
+
+**طبقة 4 — Touch-target sizing (44px mobile, 40px desktop)**:
+```css
+.input-area button { width: 44px; height: 44px; flex-shrink: 0; }
+@media (min-width: 640px) {
+    .input-area button { width: 40px; height: 40px; }
+}
+```
+يحترم Apple HIG (44px) + Material Design (48px) touch target standards.
+
+**طبقة 5 — Theme dual-binding (html + body + color-scheme)**:
+```js
+// CogniForgeApp.jsx
+root.dataset.theme = theme;          // html[data-theme]
+root.style.colorScheme = theme;       // browser form controls
+document.body.dataset.theme = theme;  // body[data-theme] defensive
+```
+```css
+/* CSS supports both selectors */
+[data-theme='light'], body[data-theme='light'] { ... }
+[data-theme='dark'],  body[data-theme='dark']  { ... }
+```
+
+### القواعد الخمس الدائمة الجديدة (D-057)
+
+**(1) Universal `min-width: 0` رمز ذهبي**: أي flex item بدون `min-width: 0` يفشل في الـ shrinking ويُسبب overflow أفقي على viewports صغيرة. القاعدة: `* { min-width: 0 }` defensive.
+
+**(2) Multi-layer overflow-x defense**: html, body, app-container, dashboard-layout, chat-area كلها تحتاج `overflow-x: hidden`. لو طبقة واحدة فقدت الـ rule، أحد المتصفحات (Safari iOS مثلاً) قد يتجاوزها.
+
+**(3) Mobile-first responsive padding**: ابدأ بـ padding ضيق للهاتف (`0.75rem 1rem`)، أضف breathing room على tablet+ عبر `@media (min-width: 640px)`. **NEVER** تفترض viewport ≥ 640px.
+
+**(4) Touch targets ≥ 44px على الهاتف**: زر الإرسال + buttons interactives = 44px على mobile (Apple HIG + Material Design). على desktop يمكن تقليلها لـ 40px.
+
+**(5) Theme dual-binding (html + body)**: theme لا يطبَّق على html فقط — `body[data-theme]` + `color-scheme` لتغطية edge-cases على cached CSS، browser form controls، Safari iOS quirks.
+
+### قياس النجاح حياً
+
+```bash
+# 1. defensive overflow-x في كل containers
+grep -c "overflow-x: hidden" frontend/app/globals.css
+# المتوقع: ≥ 5
+
+# 2. min-width: 0 في كل flex children
+grep -c "min-width: 0" frontend/app/globals.css
+# المتوقع: ≥ 8
+
+# 3. responsive padding على mobile
+grep -A1 "@media (min-width: 640px)" frontend/app/globals.css | grep -c "max-width: 920px"
+# المتوقع: ≥ 3
+
+# 4. theme dual-binding
+grep "body\[data-theme" frontend/app/globals.css
+# المتوقع: 2 results
+```
+
+### السلسلة الكاملة (D-049 → D-057)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 | JSON envelope leak |
+| D-050 | indexed preempt + typewriter |
+| D-051 | LaTeX delimiters `\\(...\\)` → `$...$` |
+| D-052 | conversation context + chunk-tag stripping + Skills |
+| D-053 | dynamic latency budget |
+| D-054 | `\\command` → `\command` في math |
+| D-055 | luxury UI theme + zero-flicker + premium typography |
+| D-055.1 | header seamless integration |
+| D-055.2 | legacy-style.css purge |
+| D-056 | Claude-style full-width + zero-line markdown + light hardening |
+| **D-057** | **defensive overflow + mobile/desktop responsive + theme dual-binding** |
 
 

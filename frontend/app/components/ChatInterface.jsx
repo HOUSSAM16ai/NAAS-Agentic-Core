@@ -193,10 +193,26 @@ const ExamBadge = memo(() => (
 ExamBadge.displayName = 'ExamBadge';
 
 // ─── مكوّن Markdown مع KaTeX فائق الجودة ─────────────────────────────────────
+// ISS-073 (2026-05-15): فصل streaming عن rendering لمنع الـ flicker الكارثي.
+// المشكلة: ReactMarkdown + rehypeKatex يُعيدان بناء DOM كاملاً عند كل حرف →
+//   خطوط تظهر وتختفي + layout يتغير + KaTeX يُعيد رسم المعادلات من الصفر.
+// الحل: أثناء streaming → نص خام بسيط (لا Markdown، لا KaTeX).
+//        عند الاكتمال → ReactMarkdown + KaTeX مرة واحدة فقط.
 const Markdown = memo(({ content, isStreaming = false }) => {
     const safeContent = content || '';
-    const processedContent = preprocessMath(safeContent);
 
+    // أثناء الـ streaming: نص خام بسيط — لا re-render مكلف، لا flicker
+    if (isStreaming) {
+        return (
+            <div className="markdown-content streaming-raw" dir="rtl">
+                <span className="streaming-text">{safeContent}</span>
+                <span className="streaming-cursor" aria-hidden="true" />
+            </div>
+        );
+    }
+
+    // بعد الاكتمال: ReactMarkdown + KaTeX مرة واحدة فقط
+    const processedContent = preprocessMath(safeContent);
     const isExamContent = (
         safeContent.includes('التمرين') &&
         safeContent.includes('بكالوريا') &&
@@ -233,7 +249,6 @@ const Markdown = memo(({ content, isStreaming = false }) => {
             >
                 {processedContent}
             </ReactMarkdown>
-            {isStreaming && <span className="streaming-cursor" aria-hidden="true" />}
         </div>
     );
 });
@@ -254,12 +269,19 @@ const MessageBubble = memo(({ msg, idx }) => {
     const isStreaming = msg.role === 'assistant' && !msg.isComplete;
     const isEmpty = !msg.content || msg.content.trim() === '';
 
-    // ISS-056: للمساعد فقط — typewriter سلس يُجمِّل عرض الـ deltas المتقطعة.
-    // المستخدم لا يحتاج typewriter لرسالته الخاصة.
+    // ISS-073 (2026-05-15): إزالة useTypewriter أثناء streaming.
+    // useTypewriter + ReactMarkdown + KaTeX = re-render كارثي عند كل حرف →
+    // خطوط تظهر وتختفي + flicker مدمر.
+    // الحل: أثناء streaming → المحتوى الكامل مباشرة (Markdown يعرض نصاً خاماً).
+    //        بعد الاكتمال → useTypewriter للـ typewriter effect الجميل.
     const displayedContent = useTypewriter(
-        msg.role === 'assistant' ? (msg.content || '') : '',
-        isStreaming
+        msg.role === 'assistant' && !isStreaming ? (msg.content || '') : '',
+        false  // typewriter فقط بعد الاكتمال
     );
+    // أثناء streaming: المحتوى الكامل مباشرة بدون typewriter
+    const contentToShow = isStreaming
+        ? (msg.content || '')
+        : (msg.role === 'assistant' ? displayedContent : '');
 
     const handleCopy = useCallback(() => {
         // ننسخ النص الكامل، ليس النسخة المعروضة جزئياً
@@ -278,7 +300,7 @@ const MessageBubble = memo(({ msg, idx }) => {
                 {msg.role === 'assistant' ? (
                     isEmpty && isStreaming
                         ? <TypingIndicator />
-                        : <Markdown content={displayedContent} isStreaming={isStreaming} />
+                        : <Markdown content={contentToShow} isStreaming={isStreaming} />
                 ) : (
                     <span className="user-message-text">{msg.content}</span>
                 )}

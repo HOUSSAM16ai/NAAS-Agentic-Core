@@ -5,6 +5,10 @@ from langchain_core.messages import AIMessage
 from microservices.orchestrator_service.src.services.llm.client import (
     get_ai_client as get_llm_client,
 )
+from microservices.orchestrator_service.src.services.overmind.latex_normalizer import (
+    LatexStreamNormalizer,
+    normalize_latex,
+)
 
 from .main import AgentState, format_conversation_history
 
@@ -58,6 +62,9 @@ class GeneralKnowledgeNode:
         try:
             if writer is not None:
                 # D-048: STREAMING path — يبث token-by-token عبر custom events
+                # D-061 (ISS-074): LatexStreamNormalizer يطبِّع \[...\] → $$...$$
+                # على الـ chunks قبل إرسالها للعميل — يحل كارثة LaTeX الخام.
+                normalizer = LatexStreamNormalizer()
                 full_content_parts: list[str] = []
                 stream_messages = [
                     {"role": "system", "content": system_content},
@@ -70,16 +77,27 @@ class GeneralKnowledgeNode:
                         content = llm_client.extract_stream_content(chunk)
                         if not content:
                             continue
-                        full_content_parts.append(content)
-                        writer(
-                            {
-                                "chunk_type": "assistant_delta",
-                                "content": content,
-                                "node": "general_knowledge",
-                            }
-                        )
+                        for safe in normalizer.feed(content):
+                            full_content_parts.append(safe)
+                            writer(
+                                {
+                                    "chunk_type": "assistant_delta",
+                                    "content": safe,
+                                    "node": "general_knowledge",
+                                }
+                            )
                     except Exception:
                         continue
+                # flush أي محتوى متبقٍ في الـ buffer
+                for tail in normalizer.flush():
+                    full_content_parts.append(tail)
+                    writer(
+                        {
+                            "chunk_type": "assistant_delta",
+                            "content": tail,
+                            "node": "general_knowledge",
+                        }
+                    )
                 response_content = "".join(full_content_parts).strip()
                 if not response_content:
                     raise ValueError("Empty stream from LLM")
@@ -92,7 +110,8 @@ class GeneralKnowledgeNode:
                     ],
                     temperature=0.3,
                 )
-                response_content = resp.choices[0].message.content or ""
+                raw = resp.choices[0].message.content or ""
+                response_content = normalize_latex(raw)
 
             emit_telemetry(node_name="GeneralKnowledgeNode", start_time=start_time, state=state)
             return {

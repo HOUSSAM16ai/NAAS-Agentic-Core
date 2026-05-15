@@ -1107,3 +1107,56 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 4. `simple_client.py` يجب أن يحتفظ بـ fallback `delta.reasoning → delta.content` للتوافق المستقبلي.
 **Files**: 15 ملف — انظر ISS-069 في `.memory/issues.md`.
 **Status**: IMPLEMENTED 2026-05-15 — branch `fix/iss-069-content-none-reasoning-model`.
+
+---
+
+## D-062 — ISS-074 LaTeX Stream Normalizer + Math Pipeline Hardening (2026-05-15)
+
+**Problem**: تجريب حي 2026-05-15 لـ 7 أسئلة رياضية معقدة + 10 نماذج OpenRouter كشف 5 كوارث متراكبة:
+1. orchestrator's `SynthesizerNode`/`GeneralKnowledgeNode`/`ChatFallbackNode` لا تطبِّع LaTeX — `\[...\]` يُرسَل خاماً للعميل
+2. `_META_MARKERS` مفرطة الحساسية — تطابق phrases طبيعية → retry loop لكل سؤال
+3. System-prompt echo على أسئلة معقدة — nano-30b يُكرِّر التعليمات (`"$$ for equations, Must use $$ ..."`)
+4. خلط لغات (روسي `линейный`، صيني `向心`، إسباني `aparece`)
+5. Chat meta-narration بالإنجليزية (`"Okay, the user greeted me with..."`)
+
+**Decision**: نظام تطبيع متعدد الطبقات لـ LaTeX streaming + meta detection ذكي + foreign-script cleanup + MathSkill رسمي.
+
+**Rationale**:
+- التجريب الحي قبل: 0/5 → 6/7 ❌. بعد: 7/7 ✅ (total_time 35s)
+- الـ frontend's preprocessMath (D-051) يعمل لكن خلال streaming chunks قد تصل مُجزَّأة — server-side normalization يحل هذا
+- meta detection على prefix فقط (200 char) يجنب false positives
+- retry على نموذج مختلف (super-120b بدل nano-30b) لأن النماذج الأكبر مقاومة أكثر للـ system prompt echo
+
+**Invariants (9 قواعد دائمة)**:
+1. كل عقدة orchestrator تبث chunks **يجب** أن تستخدم `LatexStreamNormalizer` بين `llm_client.stream_chat()` و `writer({"chunk_type": "assistant_delta"})`. batch path يستخدم `normalize_latex()` على المخرج الكامل.
+2. Meta-text detection فحص prefix فقط (200 char) — `"Let me"` قد يظهر طبيعياً في شرح علمي عميق.
+3. Echo markers أعلى أولوية من meta markers — عند كشف echo → retry فوراً على نموذج أقوى.
+4. Foreign-script regex blacklist: Cyrillic (`[Ѐ-ӿ]+`) + CJK Han (`[一-鿿]+`) + Japanese hiragana/katakana (`[぀-ゟ゠-ヿ]+`). لاتيني عادي مسموح.
+5. Chat meta-narration للـ chat intent فقط — لا تكسر educational responses.
+6. System prompt قصير وإيجابي — لا قوائم طويلة من ❌، النموذج يُكرِّرها كنص.
+7. Retry يستخدم نموذج مختلف (super-120b)، ليس نفس النموذج (nano-30b).
+8. Fallback chain يخضع لبنشمارك حي دوري — أزل أي نموذج 429/404 لـ > 24h.
+9. MathSkill (app/services/skills/) هو نقطة الدخول الوحيدة من monolith.
+
+**Files**:
+- `microservices/orchestrator_service/src/services/overmind/latex_normalizer.py` (جديد)
+- `microservices/orchestrator_service/src/services/overmind/graph/{search.py, general_knowledge.py, main.py}`
+- `microservices/conversation_service/src/{math_pipeline.py, conversation_graph.py}`
+- `app/services/skills/{math_skill.py, __init__.py}` (جديد)
+- `tests/microservices/orchestrator_service/test_latex_normalizer.py` (جديد)
+- `.github/workflows/iss-074-latex-stream-normalizer-gate.yml` (جديد)
+
+**Live test results** (2026-05-15, OpenRouter API كاملاً):
+```
+1. اشتقاق متقدم (x²·e^(3x))      3.36s  ✅
+2. تكامل بالتجزئة (∫x·ln(x))      2.77s  ✅
+3. لوبيتال (sin(2x)/x)            2.03s  ✅
+4. معادلة تفاضلية (y'+2y=0)       3.08s  ✅
+5. دراسة دالة                    10.60s ✅ (retry on super-120b)
+6. فيزياء — طرد مركزي              8.36s  ✅
+7. دردشة "مرحبا"                  0.87s  ✅
+─────────────────────────────
+SUMMARY: 7/7 PASS | 35.3s total
+```
+
+**Status**: IMPLEMENTED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.

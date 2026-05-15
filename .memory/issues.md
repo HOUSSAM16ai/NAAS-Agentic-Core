@@ -1460,3 +1460,56 @@
 
 - **Status**: FIXED 2026-05-14 — branch `fix/light-mode-luxury-theme`.
 
+---
+
+## ISS-074 — Catastrophic LLM Responses: Raw LaTeX + Meta-text Echo + Foreign-script Leak (2026-05-15)
+
+**Severity**: Critical (طلب مستخدم: "إجابات كارثية و غبية كلمات غبية فقدان سياق نصوص غير منظمة")
+
+**Live Discovery (تجريب حي 2026-05-15)**:
+- تجربة 10 نماذج OpenRouter مجانية كشفت أن كل النماذج المُتاحة اليوم (nemotron-3-super-120b, nemotron-3-nano-30b, gpt-oss-20b, gpt-oss-120b) تستخدم `\[...\]` بدلاً من `$$...$$` رغم system prompt الصريح.
+- بنشمارك أيضاً: `google/gemma-4-26b-a4b-it:free` و `qwen/qwen3-coder:free` rate-limited 429؛ `deepseek/deepseek-chat-v3.1:free` و `meta-llama/llama-3.1-70b-instruct:free` و `mistralai/mistral-small-3.1-24b-instruct:free` كلها 404 No endpoints.
+- اختبار math_pipeline على 5 أسئلة معقدة: 0/5 → بعد إصلاح أولي 4/5 → بعد كل الطبقات 7/7.
+
+**Root causes (5 طبقات متراكبة)**:
+
+1. **Orchestrator nodes لا تطبِّع LaTeX** — `SynthesizerNode` (`search.py`), `GeneralKnowledgeNode` (`general_knowledge.py`), `ChatFallbackNode` (`main.py`) تبث chunks مباشرة بدون تطبيع. الـ frontend's preprocessMath يطبِّع لكن خلال streaming chunks قد تصل مُجزَّأة → typewriter يكشف حروفاً خام.
+2. **`_META_MARKERS` مفرطة الحساسية** — `"Let me"`, `"I will"`, `"I'll"` تظهر طبيعياً في شرح علمي عميق. الـ retry كان يُحدث كل سؤال.
+3. **System-prompt echo على أسئلة معقدة** — nano-30b يدمب system prompt كنص: `"$$ for equations, $$ for boxed. Must follow methodology..."`
+4. **خلط لغات** — Russian/Chinese/Spanish words في وسط نص عربي.
+5. **Chat meta-narration بالإنجليزية** — رد "مرحبا" يبدأ بـ `"Okay, the user greeted me with..."`.
+
+**Fix (D-062 — 9 طبقات)**:
+
+| # | Layer |
+|---|-------|
+| 1 | `LatexStreamNormalizer` module جديد — streaming-aware buffered normalizer |
+| 2 | تطبيق على 3 leaf nodes في orchestrator (search/general_knowledge/main) |
+| 3 | `_META_MARKERS` (13) + `_SYSTEM_PROMPT_ECHO_MARKERS` (21) + فحص prefix 200char + `_strip_meta_prefix` |
+| 4 | `_clean_foreign_scripts` يستبدل Russian/Spanish + يحذف Chinese/Japanese بـ regex unicode ranges |
+| 5 | `_strip_chat_meta_narration` (6 patterns) — للـ chat intent فقط |
+| 6 | Retry على `nemotron-super-120b` (بدل nano-30b) عند meta/echo |
+| 7 | System prompt مُختصر إيجابي (9 سطور بدل 25) — لا قوائم ❌ |
+| 8 | Fallback chain مُحدَّث (إزالة rate-limited + 404 models) |
+| 9 | `MathSkill` رسمي في `app/services/skills/` بـ Pydantic + Prometheus |
+
+**Live verification (2026-05-15)**:
+
+```
+1. اشتقاق متقدم (x²·e^(3x))      3.36s  ✅
+2. تكامل بالتجزئة (∫x·ln(x))      2.77s  ✅
+3. لوبيتال (sin(2x)/x)            2.03s  ✅
+4. معادلة تفاضلية (y'+2y=0)       3.08s  ✅
+5. دراسة دالة                    10.60s ✅ (retry on super-120b)
+6. فيزياء — طرد مركزي              8.36s  ✅
+7. دردشة "مرحبا"                  0.87s  ✅
+─────────────────────────────
+SUMMARY: 7/7 PASS | 35.3s total
+```
+
+**Files**:
+- 7 جديدة: `latex_normalizer.py` + `math_skill.py` + `__init__.py` (skills) + `test_latex_normalizer.py` + workflow YAML
+- 5 معدَّلة: `search.py` + `general_knowledge.py` + `main.py` (orchestrator) + `math_pipeline.py` + `conversation_graph.py`
+
+**Status**: FIXED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.
+

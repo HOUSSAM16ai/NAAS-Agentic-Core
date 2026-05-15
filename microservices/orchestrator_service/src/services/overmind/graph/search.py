@@ -47,6 +47,10 @@ from microservices.orchestrator_service.src.core.logging import get_logger
 from microservices.orchestrator_service.src.infrastructure.clients.research_client import (
     research_client,
 )
+from microservices.orchestrator_service.src.services.overmind.latex_normalizer import (
+    LatexStreamNormalizer,
+    normalize_latex,
+)
 
 logger = get_logger("search-graph")
 
@@ -405,13 +409,19 @@ class SynthesizerNode:
                         {"role": "system", "content": "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار."},
                         {"role": "user", "content": query},
                     ]
+                    # D-061 (ISS-074): تطبيع LaTeX على streaming chunks
+                    normalizer = LatexStreamNormalizer()
                     parts: list[str] = []
                     async for chunk in llm_client.stream_chat(stream_messages):
                         content = llm_client.extract_stream_content(chunk)
                         if not content:
                             continue
-                        parts.append(content)
-                        writer({"chunk_type": "assistant_delta", "content": content, "node": "synthesizer"})
+                        for safe in normalizer.feed(content):
+                            parts.append(safe)
+                            writer({"chunk_type": "assistant_delta", "content": safe, "node": "synthesizer"})
+                    for tail in normalizer.flush():
+                        parts.append(tail)
+                        writer({"chunk_type": "assistant_delta", "content": tail, "node": "synthesizer"})
                     text_val = "".join(parts).strip()
                 except Exception as e:
                     logger.error(f"Synthesizer no-docs streaming failed: {e}")
@@ -447,6 +457,8 @@ class SynthesizerNode:
                         get_ai_client as get_llm_client,
                     )
                     llm_client = get_llm_client()
+                    # D-061 (ISS-074): تطبيع LaTeX على streaming chunks
+                    normalizer = LatexStreamNormalizer()
                     parts: list[str] = []
                     async for chunk in llm_client.stream_chat(stream_messages):
                         try:
@@ -454,16 +466,26 @@ class SynthesizerNode:
                             content = llm_client.extract_stream_content(chunk)
                             if not content:
                                 continue
-                            parts.append(content)
-                            writer(
-                                {
-                                    "chunk_type": "assistant_delta",
-                                    "content": content,
-                                    "node": "synthesizer",
-                                }
-                            )
+                            for safe in normalizer.feed(content):
+                                parts.append(safe)
+                                writer(
+                                    {
+                                        "chunk_type": "assistant_delta",
+                                        "content": safe,
+                                        "node": "synthesizer",
+                                    }
+                                )
                         except Exception:
                             continue
+                    for tail in normalizer.flush():
+                        parts.append(tail)
+                        writer(
+                            {
+                                "chunk_type": "assistant_delta",
+                                "content": tail,
+                                "node": "synthesizer",
+                            }
+                        )
                     text_val = "".join(parts).strip()
                 except Exception as e:
                     logger.error(f"Synthesizer streaming failed: {e}")
@@ -477,7 +499,9 @@ class SynthesizerNode:
                             context=raw_doc_text, conversation=conversation_text, query=query
                         )
                     )
-                    text_val = getattr(prediction, "response", raw_doc_text).strip()
+                    raw_pred = getattr(prediction, "response", raw_doc_text).strip()
+                    # D-061: تطبيع LaTeX حتى في batch mode
+                    text_val = normalize_latex(raw_pred)
                 except Exception as e:
                     logger.error(f"Synthesizer LLM generation failed: {e}")
                     text_val = (

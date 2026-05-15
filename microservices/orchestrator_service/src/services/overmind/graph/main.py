@@ -680,6 +680,10 @@ class ChatFallbackNode:
         from microservices.orchestrator_service.src.services.llm.client import (
             get_ai_client as get_llm_client,
         )
+        from microservices.orchestrator_service.src.services.overmind.latex_normalizer import (
+            LatexStreamNormalizer,
+            normalize_latex,
+        )
 
         from .telemetry import emit_telemetry
 
@@ -708,10 +712,12 @@ class ChatFallbackNode:
         try:
             if writer is not None:
                 # D-048 + ISS-STREAM-002: STREAMING — يبث token-by-token عبر custom event
+                # D-061 (ISS-074): تطبيع LaTeX على الـ chunks قبل الإرسال
                 stream_messages = [
                     {"role": "system", "content": system_content},
                     {"role": "user", "content": user_content},
                 ]
+                normalizer = LatexStreamNormalizer()
                 parts: list[str] = []
                 async for chunk in llm_client.stream_chat(stream_messages):
                     try:
@@ -719,16 +725,26 @@ class ChatFallbackNode:
                         content = llm_client.extract_stream_content(chunk)
                         if not content:
                             continue
-                        parts.append(content)
-                        writer(
-                            {
-                                "chunk_type": "assistant_delta",
-                                "content": content,
-                                "node": "chat_fallback",
-                            }
-                        )
+                        for safe in normalizer.feed(content):
+                            parts.append(safe)
+                            writer(
+                                {
+                                    "chunk_type": "assistant_delta",
+                                    "content": safe,
+                                    "node": "chat_fallback",
+                                }
+                            )
                     except Exception:
                         continue
+                for tail in normalizer.flush():
+                    parts.append(tail)
+                    writer(
+                        {
+                            "chunk_type": "assistant_delta",
+                            "content": tail,
+                            "node": "chat_fallback",
+                        }
+                    )
                 streamed = "".join(parts).strip()
                 if streamed:
                     fallback_response = streamed
@@ -741,7 +757,9 @@ class ChatFallbackNode:
                     ],
                     temperature=0.7,
                 )
-                response_content = resp.choices[0].message.content or ""
+                raw = resp.choices[0].message.content or ""
+                # D-061: تطبيع LaTeX حتى في non-streaming path
+                response_content = normalize_latex(raw)
                 if response_content and response_content.strip():
                     fallback_response = response_content.strip()
         except Exception as error:

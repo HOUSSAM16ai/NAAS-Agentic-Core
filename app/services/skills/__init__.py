@@ -13,6 +13,7 @@ Skill — وحدة مستقلة قابلة للقياس والاختبار وا�
 
 الـ Skills المتوفرة حالياً:
 - `bac_exercise_skill.BACExerciseSkill` — استرجاع وشرح تمارين بكالوريا الجزائر.
+- `math_skill.MathSkill` — حل وشرح أسئلة الرياضيات بـ Math Pipeline (D-061).
 """
 
 from app.services.skills.bac_exercise_skill import (
@@ -23,12 +24,20 @@ from app.services.skills.bac_exercise_skill import (
     SkillFailure,
     SkillMode,
 )
+from app.services.skills.math_skill import (
+    MathSkill,
+    MathSkillInput,
+    MathSkillOutput,
+)
 
 __all__ = [
     "BACExerciseSkill",
     "BACSkillExplanationOutput",
     "BACSkillInput",
     "BACSkillRetrievalOutput",
+    "MathSkill",
+    "MathSkillInput",
+    "MathSkillOutput",
     "SkillFailure",
     "SkillMode",
 ]

@@ -26,10 +26,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re as _re
 import time
 from typing import TypedDict
-
-import re as _re
 
 from langgraph.graph import END, START, StateGraph
 
@@ -38,10 +37,45 @@ from microservices.conversation_service.prom_metrics import (
     record_graph_invocation,
 )
 
+_CYRILLIC_REPLACEMENTS = {
+    "линейный": "خطي", "линейная": "خطية", "линейное": "خطية",
+    "функция": "دالة", "уравнение": "معادلة",
+    "aparece": "يظهر", "aparecen": "تظهر",
+    "Force向心": "قوة جذب مركزية",
+    "向心": "جذب مركزي",
+}
+
+# ISS-074 (D-062): علامات تفكير صوتي إنجليزي يجب حذفها من بداية ردود chat
+_CHAT_ECHO_PATTERNS = [
+    _re.compile(r"^Okay,\s+the user[^.\n]*\.\s*", _re.IGNORECASE),
+    _re.compile(r"^First,?\s+I\s+(should|must|need|will)[^.\n]*\.\s*", _re.IGNORECASE),
+    _re.compile(r"^The user greeted me[^.\n]*\.\s*", _re.IGNORECASE),
+    _re.compile(r"^I need to (respond|answer|reply)[^.\n]*\.\s*", _re.IGNORECASE),
+    _re.compile(r"^Let me (think|respond|answer|consider)[^.\n]*\.\s*", _re.IGNORECASE),
+    _re.compile(r"^Alright,\s+the (user|question)[^.\n]*\.\s*", _re.IGNORECASE),
+]
+
+
+def _strip_chat_meta_narration(text: str) -> str:
+    """يحذف meta-narration إنجليزي من بداية ردود chat (ISS-074)."""
+    if not text:
+        return text
+    cleaned = text
+    # كرر حتى لا يبقى pattern (في حال عدة جمل meta متتالية)
+    for _ in range(5):
+        prev = cleaned
+        for rx in _CHAT_ECHO_PATTERNS:
+            cleaned = rx.sub("", cleaned, count=1)
+        cleaned = cleaned.lstrip()
+        if cleaned == prev:
+            break
+    return cleaned
+
 
 def _normalize_latex_response(text: str) -> str:
     """
     يُحوِّل \\[...\\] و \\begin{equation}...\\end{equation} إلى $$...$$ (ISS-071).
+    ينظف كلمات Cyrillic/Spanish الشاذة (ISS-074 D-062).
     يُطبَّق على كل إجابة LLM قبل إرسالها للمستخدم.
     """
     if not text:
@@ -62,7 +96,12 @@ def _normalize_latex_response(text: str) -> str:
         text, flags=_re.DOTALL,
     )
     text = _re.sub(r'\$\$\s*\$\$', '', text)
-    return text
+    # ISS-074 D-062: نظف الكلمات الأجنبية الشاذة
+    for foreign, arabic in _CYRILLIC_REPLACEMENTS.items():
+        text = text.replace(foreign, arabic)
+    text = _re.sub(r"[Ѐ-ӿ]+", "", text)  # أي Cyrillic متبقٍ
+    text = _re.sub(r"[一-鿿]+", "", text)  # Chinese CJK Han
+    return _re.sub(r"[぀-ゟ゠-ヿ]+", "", text)  # Japanese Hiragana/Katakana
 
 logger = logging.getLogger(__name__)
 
@@ -137,9 +176,10 @@ _SYSTEM_PROMPTS: dict[str, str] = {
     ),
     "chat": (
         "أنت مساعد ودود وذكي للطلاب الجزائريين.\n"
-        "رد بشكل طبيعي ومختصر باللغة العربية الفصحى.\n"
-        "إذا كان السؤال تعليمياً، شجّع الطالب على طرح السؤال بشكل كامل.\n"
-        "كن إيجابياً ومحفزاً."
+        "رد مباشرة بالعربية الفصحى — لا تكتب تفكيراً صوتياً بالإنجليزية.\n"
+        "اكتب ردك فقط، لا تشرح ماذا ستفعل أو ماذا فهمت من السؤال.\n"
+        "كن مختصراً (سطر أو سطرين)، إيجابياً، ومحفزاً.\n"
+        "إذا كان السؤال تعليمياً، شجّع الطالب على طرحه كاملاً."
     ),
 }
 
@@ -264,8 +304,11 @@ async def _call_llm_if_available(
                 logger.warning("LLM returned empty content for model=%s", model)
                 return _build_fallback_response(question, intent)
 
-            # ISS-071: تطبيع LaTeX — تحويل \[...\] → $$...$$
-            return _normalize_latex_response(content.strip())
+            # ISS-071 + ISS-074: تطبيع LaTeX + تنظيف foreign scripts + chat meta-narration
+            cleaned = _normalize_latex_response(content.strip())
+            if intent == "chat":
+                cleaned = _strip_chat_meta_narration(cleaned)
+            return cleaned
 
     except Exception as exc:
         logger.warning("LLM call failed model=%s: %s — using fallback", model, exc)

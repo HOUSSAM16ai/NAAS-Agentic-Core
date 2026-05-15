@@ -116,12 +116,16 @@ async def lifespan(app: FastAPI):
 
 # ── FastAPI App ────────────────────────────────────────────────────────────────
 
+from microservices.conversation_service.routers.import_router import router as import_router
+
 app = FastAPI(
     title="CogniForge Conversation Service",
     version=_SERVICE_VERSION,
     description="Skill مستقلة لإدارة المحادثات التعليمية — الخطوة 12",
     lifespan=lifespan,
 )
+
+app.include_router(import_router)
 
 
 # ── نماذج الـ API ─────────────────────────────────────────────────────────────

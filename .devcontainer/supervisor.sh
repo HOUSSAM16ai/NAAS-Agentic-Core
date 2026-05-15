@@ -102,8 +102,14 @@ _inject_env_secrets() {
     local secrets_file="$SCRIPT_DIR/secrets.env"
     if [ -f "$secrets_file" ]; then
         lifecycle_info "Loading fallback secrets from .devcontainer/secrets.env..."
-        while IFS='=' read -r key val; do
-            [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+        while IFS= read -r line; do
+            # تجاهل التعليقات والأسطر الفارغة
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${line// }" ]] && continue
+            # استخراج المفتاح والقيمة — نقطع عند أول = فقط
+            local key="${line%%=*}"
+            local val="${line#*=}"
+            [[ -z "$key" ]] && continue
             if [ -z "${!key:-}" ]; then
                 export "$key=$val"
                 lifecycle_info "  secrets.env -> $key injected"

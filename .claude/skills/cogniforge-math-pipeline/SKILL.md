@@ -1,20 +1,27 @@
 ---
 name: cogniforge-math-pipeline
 description: >
-  Diagnose, build, and repair the CogniForge Math Pipeline — the LangGraph 4-node
+  Diagnose, build, and repair the CogniForge Math Pipeline — the LangGraph 3-node
   StateGraph that handles BAC math questions. Use when: math responses are in wrong
   language (Russian/English mixed with Arabic), missing LaTeX or $$\boxed{}$$,
-  no step-by-step structure, a new math question type needs adding, system prompts
-  need updating, or the pipeline fails silently. Triggers on: "إجابات رياضيات كارثية",
-  "خلط لغات", "بدون LaTeX", "بدون boxed", "نوع مسألة جديد", "math pipeline",
-  "conversation_graph", "math_pipeline.py", "subject detection", "system prompt رياضيات",
-  "pipeline لا يعمل", "تصنيف المسائل", "BAC math", "شرح رياضيات".
+  LaTeX uses \[...\] instead of $$...$$, no step-by-step structure, a new math
+  question type needs adding, system prompts need updating, or the pipeline fails
+  silently. Triggers on: "إجابات رياضيات كارثية", "خلط لغات", "بدون LaTeX",
+  "بدون boxed", "\\[...\\] بدلاً من $$", "نوع مسألة جديد", "math pipeline",
+  "conversation_graph", "math_pipeline.py", "subject detection",
+  "system prompt رياضيات", "pipeline لا يعمل", "تصنيف المسائل", "BAC math",
+  "شرح رياضيات", "normalize latex", "ISS-071", "ISS-072".
 ---
 
 # CogniForge Math Pipeline
 
 > **Law:** A math response is correct only when it contains Arabic text + LaTeX `$$...$$`
 > + `$$\boxed{...}$$` + numbered steps. Anything less is a broken response.
+>
+> **ISS-071 Law (2026-05-15):** The model ALWAYS uses `\[...\]` regardless of instructions.
+> `normalize_node` is mandatory — never remove it from the pipeline.
+> **ISS-072 Law (2026-05-15):** `temperature=0.2` for math, `temperature=0.3` for general education.
+> Never use `temperature > 0.3` for math responses.
 
 ---
 
@@ -64,13 +71,12 @@ ConversationGraph (3 nodes):
          subject=="math" AND intent=="educational"?
                   YES ↓              NO ↓
            Math Pipeline        Direct LLM
-           (4 nodes)         (system prompt)
+           (3 nodes)         (system prompt + _normalize_latex_response)
 
-Math Pipeline (4 nodes):
-  problem_analysis_node   → تصنيف 11 نوع + أخطاء شائعة
-  solution_strategy_node  → اختيار الاستراتيجية + تبرير
-  step_by_step_node       → الحل الكامل 6 أقسام + LaTeX + $$\boxed{}$$
-  verification_node       → تجميع + header مناسب
+Math Pipeline (3 nodes — ISS-071 updated 2026-05-15):
+  classify_node   → deterministic — تصنيف 11 نوع (لا LLM)
+  solve_node      → LLM واحد — الحل الكامل + LaTeX + $$\boxed{}$$
+  normalize_node  → deterministic — تحويل \[...\] → $$...$$ (لا LLM)
 ```
 
 **Files:**
@@ -78,9 +84,46 @@ Math Pipeline (4 nodes):
 - `microservices/conversation_service/src/conversation_graph.py` — ConversationGraph + routing
 - `microservices/conversation_service/main.py` — ChatResponse includes `subject`
 
+**ISS-071 Critical Note:** `normalize_node` is Node 3 — it converts `\[...\]` to `$$...$$`
+after every LLM response. The model ALWAYS ignores the `$$...$$` instruction in system prompt.
+This is a known behavior of `nvidia/nemotron-3-nano-30b-a3b:free` — post-processing is the only fix.
+
 ---
 
 ## 3. Symptom → Root Cause → Fix
+
+### `\[...\]` في الإجابة بدلاً من `$$...$$` (ISS-071)
+
+**Root cause (VERIFIED LIVE 2026-05-15):** `nvidia/nemotron-3-nano-30b-a3b:free` يتجاهل قاعدة `$$...$$` في system prompt ويستخدم `\[...\]` بشكل افتراضي — هذا سلوك ثابت لا يتغير بتغيير الـ prompt.
+
+**Fix:** `normalize_node` في Math Pipeline + `_normalize_latex_response()` في conversation_graph:
+```python
+# math_pipeline.py — normalize_node (Node 3)
+async def normalize_node(state: MathPipelineState) -> MathPipelineState:
+    solution = state.get("solution", "")
+    if solution:
+        normalized = _normalize_latex(solution)
+        label = _TYPE_LABELS.get(state["math_type"], "📚 رياضيات")
+        final = f"## {label}\n\n{normalized}"
+        return {**state, "solution": normalized, "final_response": final}
+    return state
+
+# _normalize_latex() — التحويلات:
+# \[ ... \]                    → $$ ... $$
+# \begin{equation} ... \end{equation} → $$ ... $$
+# \begin{align} ... \end{align}       → $$ ... $$
+```
+
+**Verification:**
+```python
+from microservices.conversation_service.src.math_pipeline import _normalize_latex
+text = r"الحل: \[ f'(x) = 2x \]"
+result = _normalize_latex(text)
+assert r"\[" not in result  # ✅
+assert "$$" in result       # ✅
+```
+
+---
 
 ### إجابات بالروسية أو الإنجليزية
 

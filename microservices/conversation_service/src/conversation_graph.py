@@ -29,12 +29,40 @@ import os
 import time
 from typing import TypedDict
 
+import re as _re
+
 from langgraph.graph import END, START, StateGraph
 
 from microservices.conversation_service.prom_metrics import (
     record_graph_error,
     record_graph_invocation,
 )
+
+
+def _normalize_latex_response(text: str) -> str:
+    """
+    يُحوِّل \\[...\\] و \\begin{equation}...\\end{equation} إلى $$...$$ (ISS-071).
+    يُطبَّق على كل إجابة LLM قبل إرسالها للمستخدم.
+    """
+    if not text:
+        return text
+    text = _re.sub(
+        r'\\\[\s*(.*?)\s*\\\]',
+        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        text, flags=_re.DOTALL,
+    )
+    text = _re.sub(
+        r'\\begin\{equation\*?\}\s*(.*?)\s*\\end\{equation\*?\}',
+        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        text, flags=_re.DOTALL,
+    )
+    text = _re.sub(
+        r'\\begin\{align\*?\}\s*(.*?)\s*\\end\{align\*?\}',
+        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        text, flags=_re.DOTALL,
+    )
+    text = _re.sub(r'\$\$\s*\$\$', '', text)
+    return text
 
 logger = logging.getLogger(__name__)
 
@@ -68,14 +96,14 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "- اكتب بالعربية الفصحى الواضحة فقط\n"
         "- لا تخلط مع الروسية أو الإنجليزية أو الفرنسية إلا للمصطلحات التقنية\n"
         "- المصطلحات التقنية: اكتبها بالعربية أولاً ثم الأجنبية بين قوسين\n\n"
-        "## قواعد LaTeX — إلزامية\n"
-        "- المعادلات المستقلة: $$...$$\n"
+        "## قواعد LaTeX — صارمة لا تُخرق أبداً\n"
+        "- المعادلات المستقلة: $$...$$ فقط — لا تستخدم \\[...\\] أبداً\n"
         "- الرموز المضمّنة في النص: \\(...\\)\n"
         "- النتائج النهائية: $$\\boxed{...}$$\n"
-        "- أمثلة صحيحة:\n"
-        "  $$\\int_0^1 x^2\\,dx = \\frac{1}{3}$$\n"
-        "  الدالة \\(f(x) = x^2 e^{-x}\\) معرَّفة على \\(\\mathbb{R}\\)\n"
-        "  $$\\lim_{x\\to+\\infty} \\frac{x^2+1}{e^x} = 0$$\n\n"
+        "- مثال صحيح: $$f'(x) = 2x \\cdot e^{3x} + 3x^2 \\cdot e^{3x}$$\n"
+        "- مثال خاطئ: \\[f'(x) = 2x\\] — هذا ممنوع تماماً\n"
+        "- مثال صحيح: الدالة \\(f(x) = x^2 e^{-x}\\) معرَّفة على \\(\\mathbb{R}\\)\n"
+        "- مثال صحيح: $$\\lim_{x\\to+\\infty} \\frac{x^2+1}{e^x} = 0$$\n\n"
         "## منهجية الشرح العبقري (6 مراحل)\n"
         "1. **لماذا؟** — ابدأ بالسؤال: لماذا نحتاج هذه الطريقة؟ ما المشكلة التي تحلها؟\n"
         "2. **الفكرة الجوهرية** — اشرح المبدأ الرياضي بكلمات بسيطة قبل الرموز\n"
@@ -219,7 +247,7 @@ async def _call_llm_if_available(
                     "model": model,
                     "messages": messages,
                     "max_tokens": max_tokens,
-                    "temperature": 0.7,
+                    "temperature": 0.3,  # ISS-072: 0.3 للتعليم — أقل تشتتاً من 0.7
                 },
             )
             resp.raise_for_status()
@@ -236,7 +264,8 @@ async def _call_llm_if_available(
                 logger.warning("LLM returned empty content for model=%s", model)
                 return _build_fallback_response(question, intent)
 
-            return content.strip()
+            # ISS-071: تطبيع LaTeX — تحويل \[...\] → $$...$$
+            return _normalize_latex_response(content.strip())
 
     except Exception as exc:
         logger.warning("LLM call failed model=%s: %s — using fallback", model, exc)

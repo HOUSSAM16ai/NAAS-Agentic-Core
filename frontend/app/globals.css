@@ -1186,6 +1186,30 @@ body {
     /* لا تأثيرات بصرية على الـ bubble نفسها — الـ streaming-cursor كافٍ */
 }
 
+/* ISS-073 (2026-05-15): streaming-raw — نص خام أثناء البث بدون Markdown/KaTeX.
+   المشكلة: ReactMarkdown + KaTeX يُعيدان بناء DOM عند كل حرف → flicker كارثي.
+   الحل: نص خام بسيط أثناء streaming، Markdown كامل بعد الاكتمال فقط.
+   - white-space: pre-wrap يحافظ على الأسطر والمسافات
+   - لا animations، لا transitions — ثبات بصري كامل
+   - contain: content يمنع re-paint خارج الـ bubble */
+.markdown-content.streaming-raw {
+    white-space: pre-wrap;
+    font-family: inherit;
+    font-size: 1.0625rem;
+    line-height: 1.85;
+    color: var(--text-color);
+    direction: rtl;
+    text-align: right;
+    width: 100%;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    contain: content;
+}
+
+.streaming-text {
+    display: inline;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    شاشة الترحيب — تصميم جذاب
    ═══════════════════════════════════════════════════════════════════════════ */

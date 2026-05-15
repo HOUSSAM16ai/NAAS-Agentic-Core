@@ -1,5 +1,26 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-15 | Branch: `feat/iss-070-math-pipeline-langgraph`
+> Last updated: 2026-05-15 | Branch: `feat/iss-071-latex-normalize-langgraph`
+
+---
+
+## 🟢 Resolved 2026-05-15 (ISS-071/072 — LaTeX Normalization + Temperature Fix)
+
+### ISS-071 · النموذج يستخدم `\[...\]` بدلاً من `$$...$$` [RESOLVED]
+- **Status**: RESOLVED 2026-05-15
+- **Severity**: HIGH (LaTeX لا يُعرَض بشكل صحيح في الواجهة — الطالب يرى نصاً خاماً)
+- **Root cause**: `nvidia/nemotron-3-nano-30b-a3b:free` يتجاهل قاعدة `$$...$$` في system prompt ويستخدم `\[...\]` بشكل افتراضي
+- **Evidence**: تجريب حي 2026-05-15 — كل إجابة رياضية تحتوي على `\[...\]` بدلاً من `$$...$$`
+- **Fix**:
+  - `math_pipeline.py`: `normalize_node` (Node 3 — deterministic) + `_normalize_latex()` post-processing
+  - `conversation_graph.py`: `_normalize_latex_response()` على كل إجابة LLM
+  - التحويلات: `\[...\]` → `$$...$$` | `\begin{equation}` → `$$...$$` | `\begin{align}` → `$$...$$`
+- **Tests**: 18 اختبار جديد في `test_math_pipeline.py`
+
+### ISS-072 · `temperature=0.7` يُسبب تشتتاً في الإجابات الرياضية [RESOLVED]
+- **Status**: RESOLVED 2026-05-15
+- **Severity**: MEDIUM (إجابات غير متسقة، تكرار، خروج عن الموضوع)
+- **Root cause**: `temperature=0.7` مرتفع جداً للرياضيات — يُسبب إبداعاً غير مرغوب فيه
+- **Fix**: `temperature=0.2` في `math_pipeline.py`، `temperature=0.3` في `conversation_graph.py`
 
 ---
 

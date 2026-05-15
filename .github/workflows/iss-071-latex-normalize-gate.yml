@@ -1,0 +1,358 @@
+name: ISS-071/072 — LaTeX Normalize + Math Pipeline Gate
+
+on:
+  push:
+    paths:
+      - "microservices/conversation_service/src/math_pipeline.py"
+      - "microservices/conversation_service/src/conversation_graph.py"
+      - "tests/microservices/conversation_service/test_math_pipeline.py"
+  pull_request:
+    paths:
+      - "microservices/conversation_service/src/math_pipeline.py"
+      - "microservices/conversation_service/src/conversation_graph.py"
+      - "tests/microservices/conversation_service/test_math_pipeline.py"
+
+concurrency:
+  group: iss-071-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Job 1: Static Analysis ──────────────────────────────────────────────────
+  static-analysis:
+    name: Static Analysis — Ruff + Architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install ruff
+        run: pip install ruff==0.4.4
+
+      - name: Ruff lint — math_pipeline.py
+        run: ruff check microservices/conversation_service/src/math_pipeline.py
+
+      - name: Ruff lint — conversation_graph.py
+        run: ruff check microservices/conversation_service/src/conversation_graph.py
+
+      - name: Verify normalize_node exists in pipeline
+        run: |
+          grep -q "normalize_node" microservices/conversation_service/src/math_pipeline.py \
+            || (echo "❌ normalize_node missing from math_pipeline.py" && exit 1)
+          echo "✅ normalize_node present"
+
+      - name: Verify _normalize_latex function exists
+        run: |
+          grep -q "def _normalize_latex" microservices/conversation_service/src/math_pipeline.py \
+            || (echo "❌ _normalize_latex missing from math_pipeline.py" && exit 1)
+          echo "✅ _normalize_latex present"
+
+      - name: Verify _normalize_latex_response in conversation_graph
+        run: |
+          grep -q "_normalize_latex_response" microservices/conversation_service/src/conversation_graph.py \
+            || (echo "❌ _normalize_latex_response missing from conversation_graph.py" && exit 1)
+          echo "✅ _normalize_latex_response present"
+
+      - name: Verify temperature values (ISS-072)
+        run: |
+          # math_pipeline.py must use temperature <= 0.3
+          if grep -q '"temperature": 0\.[4-9]' microservices/conversation_service/src/math_pipeline.py; then
+            echo "❌ temperature too high in math_pipeline.py (must be <= 0.3)"
+            exit 1
+          fi
+          # conversation_graph.py must use temperature <= 0.5
+          if grep -q '"temperature": 0\.[6-9]' microservices/conversation_service/src/conversation_graph.py; then
+            echo "❌ temperature too high in conversation_graph.py (must be <= 0.5)"
+            exit 1
+          fi
+          echo "✅ temperature values within bounds"
+
+      - name: Verify no \[ in system prompts
+        run: |
+          # system prompts must not use \[...\] as examples — only $$...$$
+          if grep -n 'MATH_SYSTEM\|_SYSTEM_PROMPTS' microservices/conversation_service/src/math_pipeline.py \
+               microservices/conversation_service/src/conversation_graph.py | grep -q '\\\\\\['; then
+            echo "⚠️  WARNING: \\[ found in system prompt definition — verify it is not an example"
+          fi
+          echo "✅ system prompt check passed"
+
+      - name: Verify normalize_node is in graph topology
+        run: |
+          python3 - << 'EOF'
+          import ast, sys
+
+          with open("microservices/conversation_service/src/math_pipeline.py") as f:
+              src = f.read()
+
+          # Check normalize edge exists
+          if '"normalize"' not in src or "normalize_node" not in src:
+              print("❌ normalize_node not wired into graph")
+              sys.exit(1)
+
+          # Check graph has 3 nodes: classify, solve, normalize
+          for node in ["classify", "solve", "normalize"]:
+              if f'add_node("{node}"' not in src:
+                  print(f"❌ Node '{node}' missing from graph")
+                  sys.exit(1)
+
+          print("✅ Graph topology: classify → solve → normalize ✓")
+          EOF
+
+  # ── Job 2: Unit Tests ───────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests — Math Pipeline + LaTeX Normalize
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            fastapi==0.109.2 \
+            uvicorn==0.27.1 \
+            pydantic>=2.8.0 \
+            httpx>=0.27.0 \
+            langgraph \
+            prometheus-client>=0.20.0 \
+            pytest>=8.0.0 \
+            pytest-asyncio>=0.23.0 \
+            aiosqlite>=0.19.0 \
+            sqlalchemy>=2.0.0
+
+      - name: Run _normalize_latex unit tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/microservices/conversation_service/test_math_pipeline.py \
+            -k "TestNormalizeLatex" \
+            -v --tb=short \
+            --no-header
+
+      - name: Run normalize_node unit tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/microservices/conversation_service/test_math_pipeline.py \
+            -k "TestNormalizeNode" \
+            -v --tb=short \
+            --no-header
+
+      - name: Run full math pipeline test suite
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/microservices/conversation_service/test_math_pipeline.py \
+            -v --tb=short \
+            --no-header \
+            -q
+
+      - name: Coverage check — math pipeline
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pip install pytest-cov
+          pytest tests/microservices/conversation_service/test_math_pipeline.py \
+            --cov=microservices.conversation_service.src.math_pipeline \
+            --cov=microservices.conversation_service.src.conversation_graph \
+            --cov-report=term-missing \
+            --cov-fail-under=80 \
+            -q
+
+  # ── Job 3: LaTeX Contract Tests ─────────────────────────────────────────────
+  latex-contract:
+    name: LaTeX Contract — No \[...\] in Output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            langgraph \
+            prometheus-client>=0.20.0 \
+            pytest>=8.0.0 \
+            pytest-asyncio>=0.23.0 \
+            aiosqlite>=0.19.0 \
+            sqlalchemy>=2.0.0
+
+      - name: Contract test — normalize_latex converts all bracket forms
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python3 - << 'EOF'
+          import sys
+          sys.path.insert(0, ".")
+          from microservices.conversation_service.src.math_pipeline import _normalize_latex
+
+          test_cases = [
+              # (input, description)
+              (r"\[ f'(x) = 2x \]", r"\[...\] simple"),
+              (r"\[\n\frac{x^2}{2} + C\n\]", r"\[...\] multiline"),
+              (r"\begin{equation} x^2 = 4 \end{equation}", r"\begin{equation}"),
+              (r"\begin{equation*} x^2 = 4 \end{equation*}", r"\begin{equation*}"),
+              (r"\begin{align} a &= b \\ c &= d \end{align}", r"\begin{align}"),
+              (r"\begin{aligned} a &= b \end{aligned}", r"\begin{aligned}"),
+          ]
+
+          failed = []
+          for text, desc in test_cases:
+              result = _normalize_latex(text)
+              if r"\[" in result or r"\begin{equation" in result or r"\begin{align" in result:
+                  failed.append(f"FAIL: {desc} — still contains bracket form")
+                  print(f"❌ {desc}")
+                  print(f"   Input:  {text[:60]}")
+                  print(f"   Output: {result[:60]}")
+              elif "$$" not in result:
+                  failed.append(f"FAIL: {desc} — no $$ in output")
+                  print(f"❌ {desc} — no $$ found")
+              else:
+                  print(f"✅ {desc}")
+
+          # Verify existing $$ is preserved
+          preserved = _normalize_latex(r"$$\boxed{2x}$$")
+          if r"\boxed{2x}" not in preserved:
+              failed.append("FAIL: existing $$ not preserved")
+              print("❌ existing $$ not preserved")
+          else:
+              print("✅ existing $$ preserved")
+
+          # Verify inline \(...\) is preserved
+          inline = _normalize_latex(r"الدالة \(f(x) = x^2\) معرَّفة")
+          if r"\(f(x) = x^2\)" not in inline:
+              failed.append("FAIL: inline \\(...\\) not preserved")
+              print("❌ inline \\(...\\) not preserved")
+          else:
+              print("✅ inline \\(...\\) preserved")
+
+          if failed:
+              print(f"\n❌ {len(failed)} contract(s) failed:")
+              for f in failed:
+                  print(f"  - {f}")
+              sys.exit(1)
+          else:
+              print(f"\n✅ All LaTeX contracts passed")
+          EOF
+
+  # ── Job 4: Anti-Pattern Guard ───────────────────────────────────────────────
+  anti-pattern-guard:
+    name: Anti-Pattern Guard — ISS-071/072
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard — no high temperature in math pipeline
+        run: |
+          # temperature must be <= 0.3 in math_pipeline.py
+          if grep -E '"temperature":\s*0\.[4-9]' \
+               microservices/conversation_service/src/math_pipeline.py; then
+            echo "❌ ANTI-PATTERN: temperature > 0.3 in math_pipeline.py (ISS-072)"
+            exit 1
+          fi
+          echo "✅ temperature guard passed"
+
+      - name: Guard — normalize_node must not call LLM
+        run: |
+          python3 - << 'EOF'
+          import ast, sys
+
+          with open("microservices/conversation_service/src/math_pipeline.py") as f:
+              src = f.read()
+
+          tree = ast.parse(src)
+
+          for node in ast.walk(tree):
+              if isinstance(node, ast.AsyncFunctionDef) and node.name == "normalize_node":
+                  # Check no _call_openrouter inside normalize_node
+                  for child in ast.walk(node):
+                      if isinstance(child, ast.Call):
+                          func = child.func
+                          name = ""
+                          if isinstance(func, ast.Name):
+                              name = func.id
+                          elif isinstance(func, ast.Attribute):
+                              name = func.attr
+                          if "_call_openrouter" in name or "openrouter" in name.lower():
+                              print("❌ normalize_node calls LLM — must be deterministic")
+                              sys.exit(1)
+                  print("✅ normalize_node is deterministic (no LLM calls)")
+                  sys.exit(0)
+
+          print("⚠️  normalize_node not found — check pipeline structure")
+          sys.exit(1)
+          EOF
+
+      - name: Guard — fallback response must not be empty
+        run: |
+          python3 - << 'EOF'
+          import ast, sys
+
+          with open("microservices/conversation_service/src/math_pipeline.py") as f:
+              src = f.read()
+
+          if "_build_fallback_solution" not in src:
+              print("❌ _build_fallback_solution missing — students get empty responses on LLM failure")
+              sys.exit(1)
+          print("✅ fallback solution function present")
+          EOF
+
+      - name: Guard — ISS-069 content=None guard present
+        run: |
+          grep -q 'msg.get("content") or msg.get("reasoning")' \
+            microservices/conversation_service/src/math_pipeline.py \
+            || (echo "❌ ISS-069 guard missing in math_pipeline.py" && exit 1)
+          echo "✅ ISS-069 content=None guard present"
+
+  # ── Job 5: Integration Summary ──────────────────────────────────────────────
+  summary:
+    name: ISS-071/072 Gate Summary
+    runs-on: ubuntu-latest
+    needs: [static-analysis, unit-tests, latex-contract, anti-pattern-guard]
+    if: always()
+    steps:
+      - name: Report gate status
+        run: |
+          echo "## ISS-071/072 Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Static Analysis | ${{ needs.static-analysis.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| LaTeX Contract | ${{ needs.latex-contract.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Anti-Pattern Guard | ${{ needs.anti-pattern-guard.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ISS-071 Fix: normalize_node (Node 3 — deterministic)" >> $GITHUB_STEP_SUMMARY
+          echo "Converts \`\[...\]\` → \`\$\$...\$\$\` after every LLM response." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ISS-072 Fix: temperature=0.2 for math, 0.3 for general" >> $GITHUB_STEP_SUMMARY
+          echo "Reduces hallucination and language mixing in math responses." >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if any job failed
+        if: |
+          needs.static-analysis.result == 'failure' ||
+          needs.unit-tests.result == 'failure' ||
+          needs.latex-contract.result == 'failure' ||
+          needs.anti-pattern-guard.result == 'failure'
+        run: |
+          echo "❌ ISS-071/072 gate FAILED — see job details above"
+          exit 1
+
+      - name: Success
+        if: |
+          needs.static-analysis.result == 'success' &&
+          needs.unit-tests.result == 'success' &&
+          needs.latex-contract.result == 'success' &&
+          needs.anti-pattern-guard.result == 'success'
+        run: echo "✅ ISS-071/072 gate PASSED — LaTeX normalization verified"

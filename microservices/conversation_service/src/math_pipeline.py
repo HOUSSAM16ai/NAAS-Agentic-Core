@@ -1,12 +1,15 @@
 """
 LangGraph Math Pipeline — CogniForge BAC Tutor.
 
-البنية (2 nodes — مُبسَّطة لمنع meta-text):
-  START → classify_node (deterministic) → solve_node (LLM واحد) → END
+البنية (3 nodes — مُحسَّنة 2026-05-15 ISS-071):
+  START → classify_node (deterministic) → solve_node (LLM) → normalize_node (deterministic) → END
 
-درس مُكتسَب (ISS-070 live 2026-05-15):
-  3 nodes × LLM = meta-text كارثي.
-  الحل: node واحد للـ LLM مع prompt مباشر بدون هيكل معقد.
+دروس مُكتسَبة:
+  ISS-070: 3 nodes × LLM = meta-text كارثي → الحل: node واحد للـ LLM.
+  ISS-071 (2026-05-15): النموذج يستخدم \\[...\\] بدلاً من $$...$$ رغم التعليمات.
+    الحل: normalize_node يُحوِّل كل صيغ LaTeX إلى $$...$$ بعد الـ LLM.
+  ISS-072 (2026-05-15): temperature=0.7 يُسبب تشتتاً في الإجابات الرياضية.
+    الحل: temperature=0.2 للرياضيات.
 """
 
 from __future__ import annotations
@@ -23,7 +26,11 @@ logger = logging.getLogger(__name__)
 
 _NODE_TIMEOUT = 40.0
 _DEFAULT_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
-_FALLBACK_MODEL = "openai/gpt-oss-20b:free"
+_FALLBACK_MODELS = [
+    "openai/gpt-oss-20b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-4-26b-a4b-it:free",
+]
 
 _MATH_TYPES: dict[str, list[str]] = {
     "differential_eq": ["معادلة تفاضلية", "équation différentielle", "y''", "y' +", "y' ="],
@@ -68,19 +75,89 @@ _MATH_HINTS: dict[str, str] = {
     "general_math":    "",
 }
 
-# System prompt — قصير + مباشر = لا meta-text
+# System prompt — محسَّن ISS-071: قاعدة LaTeX صارمة جداً + شرح عبقري
 _MATH_SYSTEM = (
-    "أنت أستاذ رياضيات للبكالوريا الجزائرية. "
-    "اكتب بالعربية فقط. "
-    "استخدم LaTeX: $$...$$ للمعادلات، \\(...\\) للرموز المضمّنة. "
-    "ضع النتيجة النهائية في $$\\boxed{...}$$. "
-    "ابدأ بشرح لماذا نستخدم هذه الطريقة، ثم اشرح كل خطوة بتفصيل."
+    "أنت أستاذ رياضيات عبقري للبكالوريا الجزائرية.\n"
+    "اكتب بالعربية الفصحى الواضحة فقط — لا تخلط مع الروسية أو الإنجليزية.\n\n"
+    "## قواعد LaTeX — صارمة لا تُخرق أبداً\n"
+    "- المعادلات المستقلة: $$...$$ فقط — لا تستخدم \\[...\\] أبداً\n"
+    "- الرموز المضمّنة في النص: \\(...\\)\n"
+    "- النتيجة النهائية: $$\\boxed{...}$$\n"
+    "- مثال صحيح: $$f'(x) = 2x \\cdot e^{3x} + 3x^2 \\cdot e^{3x}$$\n"
+    "- مثال خاطئ: \\[f'(x) = 2x\\] — هذا ممنوع تماماً\n\n"
+    "## منهجية الشرح العبقري\n"
+    "1. **لماذا؟** — ابدأ بسؤال: لماذا نستخدم هذه الطريقة؟\n"
+    "2. **الفكرة الجوهرية** — اشرح المبدأ بكلمات بسيطة قبل الرموز\n"
+    "3. **الخطوات المرقمة** — كل خطوة في سطر منفصل مع تبرير رياضي\n"
+    "4. **الحسابات التفصيلية** — لا تتخطى خطوة واحدة\n"
+    "5. **النتيجة في صندوق** — $$\\boxed{\\text{النتيجة النهائية}}$$\n"
+    "6. **التفسير الواقعي** — ماذا تعني النتيجة في الحياة؟\n\n"
+    "لا تختصر — الطالب المبتدئ يحتاج كل التفاصيل."
 )
 
 _META_MARKERS = [
     "We need to", "Must output", "produce analysis", "I need to",
     "Let me", "I will", "I'll", "I should", "I must",
 ]
+
+# ── دالة تطبيع LaTeX (ISS-071) ────────────────────────────────────────────────
+
+import re as _re
+
+
+def _normalize_latex(text: str) -> str:
+    """
+    يُحوِّل جميع صيغ LaTeX إلى $$...$$ الموحَّدة.
+
+    المشكلة (ISS-071): النموذج يستخدم \\[...\\] و \\begin{equation}...\\end{equation}
+    بدلاً من $$...$$ رغم التعليمات الصريحة في system prompt.
+    الحل: post-processing deterministic بعد كل استجابة LLM.
+
+    التحويلات:
+      \\[ ... \\]                    → $$ ... $$
+      \\begin{equation} ... \\end{equation} → $$ ... $$
+      \\begin{align} ... \\end{align}       → $$ ... $$
+      \\begin{aligned} ... \\end{aligned}   → $$ ... $$
+    """
+    if not text:
+        return text
+
+    # \\[ ... \\] → $$ ... $$  (multiline)
+    text = _re.sub(
+        r'\\\[\s*(.*?)\s*\\\]',
+        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        text,
+        flags=_re.DOTALL,
+    )
+
+    # \\begin{equation} ... \\end{equation} → $$ ... $$
+    text = _re.sub(
+        r'\\begin\{equation\*?\}\s*(.*?)\s*\\end\{equation\*?\}',
+        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        text,
+        flags=_re.DOTALL,
+    )
+
+    # \\begin{align} ... \\end{align} → $$ ... $$
+    text = _re.sub(
+        r'\\begin\{align\*?\}\s*(.*?)\s*\\end\{align\*?\}',
+        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        text,
+        flags=_re.DOTALL,
+    )
+
+    # \\begin{aligned} ... \\end{aligned} → $$ ... $$
+    text = _re.sub(
+        r'\\begin\{aligned\*?\}\s*(.*?)\s*\\end\{aligned\*?\}',
+        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        text,
+        flags=_re.DOTALL,
+    )
+
+    # تنظيف: $$ $$ متعددة متتالية → $$ واحدة
+    text = _re.sub(r'\$\$\s*\$\$', '', text)
+
+    return text
 
 
 def _classify_math_type(question: str) -> str:
@@ -117,7 +194,7 @@ async def _call_openrouter(
         return ""
 
     chosen = model or os.environ.get("MATH_PIPELINE_MODEL", _DEFAULT_MODEL)
-    models_to_try = [chosen, _FALLBACK_MODEL]
+    models_to_try = [chosen] + _FALLBACK_MODELS
 
     try:
         import httpx
@@ -139,7 +216,7 @@ async def _call_openrouter(
                                 {"role": "user",   "content": user_prompt},
                             ],
                             "max_tokens": max_tokens,
-                            "temperature": 0.3,
+                            "temperature": 0.2,  # ISS-072: 0.2 للرياضيات — أقل تشتتاً
                         },
                     )
                     resp.raise_for_status()
@@ -235,17 +312,37 @@ def _build_fallback_solution(question: str, math_type: str) -> str:
     )
 
 
+async def normalize_node(state: MathPipelineState) -> MathPipelineState:
+    """
+    Node 3 — Deterministic. يُطبِّع صيغ LaTeX بعد الـ LLM.
+
+    ISS-071: النموذج يستخدم \\[...\\] بدلاً من $$...$$ رغم التعليمات.
+    هذا الـ node يُصحِّح ذلك بدون LLM — لا meta-text ممكن.
+    """
+    solution = state.get("solution", "")
+    if solution:
+        normalized = _normalize_latex(solution)
+        label = _TYPE_LABELS.get(state["math_type"], "📚 رياضيات")
+        final = f"## {label}\n\n{normalized}"
+        return {**state, "solution": normalized, "final_response": final}
+    return state
+
+
 def build_math_pipeline() -> object:
     """
     يبني LangGraph Math Pipeline.
-    Topology: START → classify_node → solve_node → END
+    Topology: START → classify_node → solve_node → normalize_node → END
+
+    ISS-071: normalize_node مُضاف لتحويل \\[...\\] → $$...$$ بعد الـ LLM.
     """
     builder = StateGraph(MathPipelineState)
-    builder.add_node("classify", classify_node)
-    builder.add_node("solve",    solve_node)
-    builder.add_edge(START,      "classify")
-    builder.add_edge("classify", "solve")
-    builder.add_edge("solve",    END)
+    builder.add_node("classify",  classify_node)
+    builder.add_node("solve",     solve_node)
+    builder.add_node("normalize", normalize_node)
+    builder.add_edge(START,       "classify")
+    builder.add_edge("classify",  "solve")
+    builder.add_edge("solve",     "normalize")
+    builder.add_edge("normalize", END)
     return builder.compile()
 
 

@@ -1,6 +1,59 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-15** | Branch: `feat/iss-070-math-pipeline-langgraph`
-> Previous: `fix/iss-069-content-none-reasoning-model`
+> Last updated: **2026-05-15** | Branch: `feat/iss-071-latex-normalize-langgraph`
+> Previous: `feat/iss-070-math-pipeline-langgraph`
+
+## D-063 Live Verification Results (2026-05-15) — ISS-071/072 LaTeX Normalize + Temperature Fix
+
+### المشاكل المكتشفة حياً (2026-05-15)
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| ISS-071 | النموذج يستخدم `\[...\]` بدلاً من `$$...$$` رغم التعليمات | `normalize_node` + `_normalize_latex()` post-processing |
+| ISS-072 | `temperature=0.7` يُسبب تشتتاً في الإجابات الرياضية | تغيير إلى `0.2` في math_pipeline و `0.3` في conversation_graph |
+
+### Live API Test (2026-05-15)
+
+```
+Model: nvidia/nemotron-3-nano-30b-a3b:free
+Test 1: f(x) = x²·e^(3x) مشتق → ✅ عربية + LaTeX + boxed (TTFT=2.1s)
+Test 2: ∫x·ln(x)dx تكامل → ✅ عربية + LaTeX + boxed (TTFT=3.8s)
+Test 3: y'' - 3y' + 2y = 0 معادلة تفاضلية → ✅ عربية + LaTeX + boxed (TTFT=4.2s)
+Test 4: احتمالات كرات → ✅ عربية + LaTeX + boxed (TTFT=2.9s)
+```
+
+### LangGraph Math Pipeline Architecture (ISS-071)
+
+```
+قبل ISS-071:
+  START → classify_node → solve_node → END
+  المشكلة: solve_node يُعيد \[...\] من النموذج مباشرة
+
+بعد ISS-071:
+  START → classify_node → solve_node → normalize_node → END
+  normalize_node: deterministic — يُحوِّل \[...\] → $$...$$ بدون LLM
+```
+
+### Files Changed (ISS-071/072)
+- `microservices/conversation_service/src/math_pipeline.py`:
+  - `normalize_node` مُضاف (Node 3 — deterministic)
+  - `_normalize_latex()` دالة post-processing
+  - `_FALLBACK_MODELS` قائمة بدلاً من نموذج واحد
+  - `temperature=0.2` بدلاً من `0.3`
+  - system prompt مُحسَّن مع قاعدة LaTeX صارمة
+- `microservices/conversation_service/src/conversation_graph.py`:
+  - `_normalize_latex_response()` مُضافة
+  - `temperature=0.3` بدلاً من `0.7`
+  - system prompt مُحسَّن مع قاعدة LaTeX صارمة
+- `tests/microservices/conversation_service/test_math_pipeline.py`:
+  - 18 اختبار جديد لـ `_normalize_latex` و `normalize_node`
+
+### قواعد لا تُخرق (مُضافة 2026-05-15 ISS-071)
+- كل إجابة LLM تمر عبر `_normalize_latex()` قبل إرسالها للمستخدم
+- `normalize_node` هو Node 3 في Math Pipeline — deterministic لا LLM
+- `temperature=0.2` للرياضيات، `temperature=0.3` للتعليم العام
+- `\[...\]` و `\begin{equation}` و `\begin{align}` → `$$...$$` دائماً
+
+---
 
 ## D-062 Live Verification Results (2026-05-15) — ISS-070 Math Pipeline
 

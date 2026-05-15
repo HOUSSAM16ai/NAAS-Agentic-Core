@@ -293,3 +293,4 @@ class TestConversationGraphUpdated:
 
         # يجب أن يُعيد fallback لا exception
         assert "response" in result
+

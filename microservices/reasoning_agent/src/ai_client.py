@@ -23,7 +23,9 @@ class SimpleAIClient:
 
     def __init__(self) -> None:
         self.api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
-        self.model = os.getenv("OPENROUTER_MODEL", "inclusionai/ring-2.6-1t:free")
+        # ISS-068: nemotron-3-nano-omni-30b-a3b-reasoning:free — أسرع نموذج مجاني مع reasoning tokens
+        # inclusionai/ring-2.6-1t:free معطّل (rate-limited upstream على Novita)
+        self.model = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
         self.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
     async def generate_text(

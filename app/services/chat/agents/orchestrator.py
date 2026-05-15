@@ -448,9 +448,9 @@ class OrchestratorAgent:
         )
 
         try:
-            # Quick parsing call
+            # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
             response = await self.ai_client.generate(
-                model="inclusionai/ring-2.6-1t:free",  # Use a fast model if available, or default
+                model="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question},

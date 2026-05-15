@@ -17,20 +17,24 @@ class RMCTSStrategy:
         """
         Generates N possible next steps/thoughts based on the parent.
         """
+        # ISS-068: prompt عربي للرياضيات والعلوم
         prompt = (
-            f"Context: {context}\n"
-            f"Previous Thought: {parent.content}\n\n"
-            "Task: Generate 3 distinct, high-quality reasoning steps or hypotheses to progress towards the answer.\n"
-            "Format: Return ONLY a numbered list.\n"
-            "1. [First Thought]\n"
-            "2. [Second Thought]\n"
-            "3. [Third Thought]"
+            f"السياق: {context}\n"
+            f"الفكرة السابقة: {parent.content}\n\n"
+            "المهمة: اقترح 3 خطوات تفكير متميزة للوصول إلى الإجابة.\n"
+            "التنسيق: قائمة مرقمة فقط.\n"
+            "1. [الخطوة الأولى]\n"
+            "2. [الخطوة الثانية]\n"
+            "3. [الخطوة الثالثة]"
         )
 
         try:
             content = await ai_service.generate_text(
                 prompt=prompt,
-                system_prompt="You are a Strategic Reasoning Engine. Think diversely and logically.",
+                system_prompt=(
+                    "أنت محرك تفكير رياضي استراتيجي للبكالوريا الجزائرية. "
+                    "فكّر بتنوع ومنطق رياضي صارم. أجب بالعربية."
+                ),
             )
 
             # Robust Parsing
@@ -59,19 +63,21 @@ class RMCTSStrategy:
         """
         Reflective step: Score the thought against the context.
         """
+        # ISS-068: prompt تقييم عربي
         prompt = (
-            f"Context: {context}\n"
-            f"Proposed Thought: {node.content}\n\n"
-            "Task: Evaluate this thought for accuracy, relevance, and logical soundness.\n"
-            "Output format:\n"
+            f"السياق: {context}\n"
+            f"الفكرة المقترحة: {node.content}\n\n"
+            "المهمة: قيّم هذه الفكرة من حيث الدقة الرياضية والصلة بالموضوع.\n"
+            "التنسيق:\n"
             "Score: [0.0-1.0]\n"
             "Valid: [True/False]\n"
-            "Reason: [Explanation]"
+            "Reason: [التبرير]"
         )
 
         try:
             content = await ai_service.generate_text(
-                prompt=prompt, system_prompt="You are a Critical Reviewer. Be strict."
+                prompt=prompt,
+                system_prompt="أنت مُقيِّم رياضي صارم. قيّم الدقة الرياضية بموضوعية.",
             )
 
             # Simple parsing logic (can be upgraded to Instructor later)

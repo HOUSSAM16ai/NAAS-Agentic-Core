@@ -62,7 +62,7 @@ class AvailableModels:
     """
 
     GPT_4O = "openai/gpt-4o"
-    GPT_4O_MINI = "inclusionai/ring-2.6-1t:free"
+    GPT_4O_MINI = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
     GPT_4_TURBO = "openai/gpt-4-turbo"
     GPT_4 = "openai/gpt-4"
     GPT_35_TURBO = "openai/gpt-3.5-turbo"
@@ -80,11 +80,12 @@ class AvailableModels:
     PHI_3_MINI_FREE = "microsoft/phi-3-mini-128k-instruct:free"
     KAT_CODER_PRO_FREE = "kwaipilot/kat-coder-pro:free"
     QWEN_QWEN3_CODER_FREE = "qwen/qwen3-coder:free"
-    NEMOTRON_3_SUPER_120B_FREE = "inclusionai/ring-2.6-1t:free"
-    DEVSTRAL_2512 = "mistralai/devstral-2512:free"
-    GLM_4_5_AIR_FREE = "inclusionai/ring-2.6-1t:free"
-    DEEPSEEK_R1_CHIMERA_FREE = "tngtech/deepseek-r1t2-chimera:free"
-    NEMOTRON_3_NANO = "inclusionai/ring-2.6-1t:free"
+    # ISS-068: نماذج عاملة حقيقية — مُحدَّثة بعد بنشمارك 2026-05-15
+    NEMOTRON_3_SUPER_120B_FREE = "nvidia/nemotron-3-super-120b-a12b:free"
+    DEVSTRAL_2512 = "openai/gpt-oss-120b:free"
+    GLM_4_5_AIR_FREE = "openai/gpt-oss-20b:free"
+    DEEPSEEK_R1_CHIMERA_FREE = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    NEMOTRON_3_NANO = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
 
 class ActiveModels:
@@ -112,13 +113,15 @@ class ActiveModels:
     # الذي يدعم streaming حقيقي (كلمة وراء كلمة) عبر OpenRouter (2026-05-13).
     # ISS-055: nemotron-3-nano-30b-a3b — TTFT=2.06s مع context 9670 حرف، عربية صحيحة
     # inclusionai/ring-2.6-1t:free — fallback سريع للاسترجاع
-    PRIMARY = _resolve_primary_model("nvidia/nemotron-3-nano-30b-a3b:free")
+    # ISS-068 (2026-05-15): nemotron-3-nano-omni-30b-a3b-reasoning:free — TTFT=4s، reasoning tokens
+    # inclusionai/ring-2.6-1t:free — معطّل (rate-limited upstream على Novita)
+    PRIMARY = _resolve_primary_model("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
-    GATEWAY_FALLBACK_1 = "inclusionai/ring-2.6-1t:free"
-    GATEWAY_FALLBACK_2 = "nvidia/nemotron-3-super-120b-a12b:free"
-    GATEWAY_FALLBACK_3 = "openai/gpt-oss-20b:free"
-    GATEWAY_FALLBACK_4 = "openai/gpt-oss-120b:free"
+    GATEWAY_FALLBACK_1 = "nvidia/nemotron-3-super-120b-a12b:free"
+    GATEWAY_FALLBACK_2 = "openai/gpt-oss-20b:free"
+    GATEWAY_FALLBACK_3 = "openai/gpt-oss-120b:free"
+    GATEWAY_FALLBACK_4 = "nvidia/nemotron-3-nano-30b-a3b:free"
     GATEWAY_FALLBACK_5 = "z-ai/glm-4.5-air:free"
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY

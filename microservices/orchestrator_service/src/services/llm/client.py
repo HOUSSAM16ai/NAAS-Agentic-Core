@@ -44,10 +44,10 @@ class AIClient:
             api_key=api_key or "dummy-key",
             base_url=base_url,
         )
-        # ISS-STREAM-002: inclusionai/ring-2.6-1t:free يدعم token-level streaming حقيقي عبر OpenRouter
-        # nvidia/nemotron-3-super-120b-a12b:free كان يُعيد chunk واحد فقط → لا typing effect
+        # ISS-068: nemotron-3-nano-omni-30b-a3b-reasoning:free — أسرع نموذج مجاني مع reasoning tokens
+        # inclusionai/ring-2.6-1t:free معطّل (rate-limited upstream على Novita — 2026-05-15)
         self.default_model = os.getenv(
-            "ORCHESTRATOR_LLM_MODEL", "inclusionai/ring-2.6-1t:free"
+            "ORCHESTRATOR_LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
         )
 
     async def generate(

@@ -19,7 +19,8 @@ class RetrievalEvent(Event):
 
 
 class ReasoningWorkflow(Workflow):
-    def __init__(self, timeout: int = 300, verbose: bool = True):
+    # ISS-068: timeout مُخفَّض من 300s إلى 45s — MCTS مع نماذج مجانية يتجاوز rate limits عند depth>1
+    def __init__(self, timeout: int = 45, verbose: bool = True):
         super().__init__(timeout=timeout, verbose=verbose)
         self.strategy = mcts_strategy
 
@@ -43,17 +44,29 @@ class ReasoningWorkflow(Workflow):
         context = ev.context
 
         logger.info("Executing MCTS Strategy...")
-        best_node = await self.strategy.execute(root_content=f"Analyze: {query}", context=context)
+        # ISS-068: depth=1 لتجنب rate limiting مع النماذج المجانية (depth=2 يستدعي LLM 6+ مرات)
+        best_node = await self.strategy.execute(root_content=f"Analyze: {query}", context=context, depth=1)
 
         logger.info(f"Selected best path: {best_node.content}")
 
-        # Final Synthesis
+        # Final Synthesis — ISS-068: system prompt عبقري للرياضيات والعلوم
         system_prompt = (
-            "You are the Overmind Super Reasoner.\n"
-            "Synthesize a final answer based on the provided reasoning path."
+            "أنت أستاذ رياضيات وعلوم عبقري للبكالوريا الجزائرية.\n"
+            "مهمتك: تقديم إجابة شاملة ومفصلة بناءً على مسار التفكير المُقدَّم.\n\n"
+            "قواعد لا تُكسر:\n"
+            "1. LaTeX إلزامي: $$...$$ للمعادلات، \\(...\\) للرموز المضمّنة\n"
+            "2. خطوات مرقمة مع شرح المبدأ الرياضي لكل خطوة\n"
+            "3. النتيجة النهائية في $$\\boxed{...}$$\n"
+            "4. العربية الفصحى الواضحة\n"
+            "5. أضف تفسيراً هندسياً أو فيزيائياً عند الإمكان"
         )
 
-        final_prompt = f"Query: {query}\nContext: {context}\nReasoning Path: {best_node.content}\n"
+        final_prompt = (
+            f"السؤال: {query}\n"
+            f"السياق: {context}\n"
+            f"مسار التفكير: {best_node.content}\n\n"
+            "قدّم الإجابة الكاملة المفصلة:"
+        )
 
         result = await ai_service.generate_text(prompt=final_prompt, system_prompt=system_prompt)
 

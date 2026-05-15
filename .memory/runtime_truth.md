@@ -1,6 +1,35 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-11** | Branch: `feat/microservices-user-routing-d045`
-> Previous: `feat/live-verification-d044-surgical-fixes`
+> Last updated: **2026-05-15** | Branch: `fix/iss-068-model-fix-ai-quality`
+> Previous: `feat/microservices-user-routing-d045`
+
+## D-060 Live Verification Results (2026-05-15) — ISS-068 Model Fix
+
+| Service | Port | Status | Key Fields |
+|---------|------|--------|-----------|
+| main-app | 8000 | ✅ ACTIVE | `database: ok, version: v4.1-root` |
+| user-service | 8001 | ✅ ACTIVE | `status: ok, environment: development` |
+| planning-agent | 8002 | ✅ ACTIVE | `database: postgresql+asyncpg://...` |
+| research-agent | 8007 | ✅ ACTIVE | `tavily_available: true` |
+| reasoning-agent | 8008 | ✅ ACTIVE | `llm_backend: openrouter, mcts_enabled: true` |
+
+**Active LLM Model**: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (TTFT=4s، reasoning tokens)
+**Fallback Chain**: `nemotron-super-120b` → `gpt-oss-20b` → `gpt-oss-120b` → `nemotron-nano-30b`
+**BROKEN MODEL**: `inclusionai/ring-2.6-1t:free` — rate-limited upstream على Novita — لا تستخدمه
+
+### Reasoning Agent Live Test (VERIFIED)
+```
+Query: احسب مشتقة f(x) = x^2 * ln(x)
+Status: success (19.7s)
+Answer: خطوات مفصلة + LaTeX + $$\boxed{f'(x)=x(2\ln(x)+1)}$$
+```
+
+### Key Fixes Applied (ISS-068 / D-060)
+- 14 ملف: استبدال `inclusionai/ring-2.6-1t:free` بـ `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`
+- MCTS depth: 2→1، timeout: 300s→45s
+- System prompts: LaTeX إلزامي + خطوات مرقمة + `$$\boxed{...}$$` + تفسير هندسي
+- planning-agent: يعمل مع PostgreSQL (port 5432)
+
+---
 
 ## D-045 Live Verification Results (2026-05-11) — End-to-End User Routing
 

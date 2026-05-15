@@ -1310,6 +1310,49 @@
 
 ---
 
+## ISS-068 — inclusionai/ring-2.6-1t:free Rate-Limited — All Microservices Broken (2026-05-15)
+
+- **Symptom**: جميع الخدمات المصغرة تُعيد إجابات فارغة أو تنتهي مهلتها. reasoning-agent يُسجِّل `429 rate-limited upstream` على Novita. research-agent يُعيد `results: []`. planning-agent يستخدم SQLite بدل PostgreSQL.
+- **Root cause (3 طبقات)**:
+  1. **ISS-068-A**: `inclusionai/ring-2.6-1t:free` معطّل upstream على Novita — rate-limited بشكل دائم. كان النموذج الافتراضي في 14 ملف عبر كل الخدمات.
+  2. **ISS-068-B**: MCTS depth=2 يستدعي LLM 6+ مرات لكل طلب → يُفاقم rate limiting مع النماذج المجانية.
+  3. **ISS-068-C**: planning-agent يبدأ بدون `PLANNING_DATABASE_URL` → يسقط إلى SQLite.
+- **Fix (D-060)**:
+  - استبدال `inclusionai/ring-2.6-1t:free` بـ `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (TTFT=4s، reasoning tokens) في 14 ملف.
+  - fallback chain: `nemotron-super-120b` → `gpt-oss-20b` → `gpt-oss-120b` → `nemotron-nano-30b`.
+  - MCTS depth: 2 → 1، timeout: 300s → 45s.
+  - system prompts مُحدَّثة: LaTeX إلزامي، خطوات مرقمة، `$$\boxed{...}$$`، تفسير هندسي.
+  - planning-agent يُعاد تشغيله مع `PLANNING_DATABASE_URL` صريح.
+- **Files changed**:
+  - `app/core/ai_config.py` — PRIMARY + fallback chain
+  - `app/services/chat/local_graph.py` — system prompts + exercise explanation prompt
+  - `app/services/chat/agents/socratic_tutor.py` — model hardcode
+  - `app/services/chat/agents/orchestrator.py` — model hardcode
+  - `microservices/reasoning_agent/src/ai_client.py` — default model
+  - `microservices/reasoning_agent/src/core/config.py` — DEFAULT_MODEL
+  - `microservices/reasoning_agent/src/services/reasoning_service.py` — timeout + depth + system prompt
+  - `microservices/reasoning_agent/src/services/strategies/mcts.py` — prompts عربية
+  - `microservices/research_agent/src/search_engine/super_search.py` — PRIMARY_MODEL
+  - `microservices/research_agent/src/search_engine/query_refiner.py` — default model
+  - `microservices/planning_agent/settings.py` — AI_MODEL
+  - `microservices/orchestrator_service/src/core/ai_config.py` — AvailableModels + ActiveModels
+  - `microservices/orchestrator_service/src/services/llm/client.py` — default_model
+  - `microservices/orchestrator_service/src/services/overmind/graph/main.py` — DSPy model
+  - `microservices/orchestrator_service/src/services/overmind/agents/orchestrator.py` — hardcode
+  - `microservices/conversation_service/src/conversation_graph.py` — model
+  - `microservices/auditor_service/src/ai.py` — model
+- **Benchmark results (live 2026-05-15)**:
+  - `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`: TTFT=4s، LaTeX✅، Arabic✅، reasoning tokens✅
+  - `nvidia/nemotron-3-super-120b-a12b:free`: TTFT=14s، LaTeX✅، Arabic✅
+  - `openai/gpt-oss-20b:free`: TTFT=25s، موثوق
+  - `openai/gpt-oss-120b:free`: TTFT=40s، جودة عالية
+  - `inclusionai/ring-2.6-1t:free`: ❌ معطّل
+  - `google/gemini-2.0-flash-exp:free`: ❌ No endpoints
+  - `tngtech/deepseek-r1t2-chimera:free`: ❌ No endpoints
+- **Status**: FIXED 2026-05-15 — branch `fix/iss-068-model-fix-ai-quality`.
+
+---
+
 ## ISS-066 — Light Mode Catastrophic Failure (2026-05-14)
 
 - **Symptom**: زر الوضع النهاري لا يُنتج أي تغيير مرئي — الصفحة تبقى داكنة.

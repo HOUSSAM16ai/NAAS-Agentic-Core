@@ -4099,3 +4099,152 @@ body { overflow-x: hidden; background: var(--bg-color); color: var(--text-color)
 ---
 
 **Model fix applied 2026-05-15 (ISS-068 — inclusionai/ring-2.6-1t:free Rate-Limited / D-060):** تجريب حي كشف أن `inclusionai/ring-2.6-1t:free` معطّل upstream على Novita (rate-limited بشكل دائم). كان النموذج الافتراضي في 14 ملف عبر كل الخدمات المصغرة → جميع الخدمات تُعيد إجابات فارغة أو تنتهي مهلتها. بنشمارك حي لـ 8 نماذج مجانية على OpenRouter كشف أن `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` هو الأفضل (TTFT=4s، reasoning tokens، عربية ممتازة، LaTeX صحيح). **التغييرات:** استبدال النموذج في 14 ملف عبر `app/` و `microservices/`. fallback chain: `nemotron-super-120b` → `gpt-oss-20b` → `gpt-oss-120b`. MCTS depth: 2→1، timeout: 300s→45s. System prompts مُحدَّثة: LaTeX إلزامي + خطوات مرقمة + `$$\boxed{...}$$` + تفسير هندسي. **قاعدة لا تُخرق:** `inclusionai/ring-2.6-1t:free` محظور — لا تستخدمه كنموذج افتراضي. **نتائج حية:** reasoning-agent يُجيب بخطوات مفصلة + LaTeX صحيح ✅ | research-agent `tavily_available: true` ✅ | planning-agent PostgreSQL ✅.
+
+---
+
+## 6.43 LaTeX Stream Normalizer + Math Pipeline Hardening (2026-05-15, ISS-074 / D-062)
+
+> **الكارثة المُشخَّصة بالتجريب الحي 2026-05-15**: شكوى مستخدم: «اجابات الذكاء الاصطناعي كارثية و غبية كلمات غبية فقدان سياق نصوص غير منظمة حروف متداخلة». تجريب حي لـ 10 نماذج OpenRouter مجانية + اختبار math_pipeline على 7 أسئلة معقدة كشف 5 أسباب جذرية متراكبة.
+
+### الأسباب الجذرية الخمس
+
+| # | السبب | الكارثة المرئية |
+|---|------|------------------|
+| 1 | **orchestrator nodes لا تطبِّع LaTeX** — `SynthesizerNode`/`GeneralKnowledgeNode`/`ChatFallbackNode` تبث `\[...\]` خام للعميل | الواجهة تعرض `\[f'(x)=...\]` كنص رياضي خام (لا KaTeX) |
+| 2 | **_META_MARKERS مفرطة الحساسية** — تطابق `"Let me"`, `"I will"` التي تظهر طبيعياً في شرح علمي | math_pipeline يدخل retry loop لكل سؤال → بطء + فشل |
+| 3 | **System-prompt echo على أسئلة معقدة** — نموذج nano-30b يُكرِّر تعليمات system prompt كنص (`"$$ for equations, $$ for boxed..."`) | المستخدم يرى تعليمات بدل الحل |
+| 4 | **خلط لغات** — `линейный` (روسي), `向心` (صيني), `aparece` (إسباني) | كلمات أجنبية وسط نص عربي |
+| 5 | **Chat meta-narration** — `"Okay, the user greeted me with..."` | الردود تبدأ بتفكير صوتي إنجليزي |
+
+### تجريب حي قبل الإصلاح (2026-05-15)
+
+```
+المسألة: ادرس الدالة f(x) = (x²-1)/(x+2)
+الرد:    ## 📐 مسألة اشتقاق
+
+         $$...$$ for equations, $$ for final result in boxed.
+         Must follow methodology: explain why we use this method in a line,
+         then steps numbered, final result in boxed, add short interpretation...
+```
+**0/5 tests pass** | meta-text leak | echo system prompt | foreign script leak
+
+### الإصلاح (D-062 — 9 طبقات)
+
+**طبقة 1 — `LatexStreamNormalizer` module جديد** (orchestrator):
+- ملف: `microservices/orchestrator_service/src/services/overmind/latex_normalizer.py`
+- `LatexStreamNormalizer.feed(chunk)` — buffered streaming normalizer مع lookahead
+- `normalize_latex(text)` — دالة batch للاستخدام في non-streaming paths
+- تعالج: `\[...\]`, `\\[...\\]`, `\begin{equation}`, `\begin{align}`, `\begin{aligned}`
+- 10 وحدة اختبار: char-by-char, equation env, inline preserved, forced flush, no byte loss
+
+**طبقة 2 — تطبيق على 3 leaf nodes في orchestrator**:
+- `SynthesizerNode` (`search.py`) — مساران streaming (no-docs + with-docs) + DSPy batch fallback
+- `GeneralKnowledgeNode` (`general_knowledge.py`) — streaming + non-streaming paths
+- `ChatFallbackNode` (`main.py`) — streaming + non-streaming paths
+- **القاعدة الذهبية**: كل `writer({"chunk_type": "assistant_delta", "content": ...})` يمر عبر `normalizer.feed()` أولاً
+
+**طبقة 3 — Math Pipeline meta-text detection ذكي**:
+- ملف: `microservices/conversation_service/src/math_pipeline.py`
+- `_META_MARKERS` (13 marker) — phrases-محددة فقط (`"Let me think"`, `"We need to"`, `"Okay, so"`)
+- `_SYSTEM_PROMPT_ECHO_MARKERS` (21 marker) — `"$$ for equations"`, `"Must use $$"`, `"steps numbered, final"`
+- `_META_CHECK_PREFIX_LEN = 200` — فحص prefix فقط (لا full scan)
+- `_strip_meta_prefix(text)` — يحذف meta-narration ويحتفظ بالمحتوى العلمي
+
+**طبقة 4 — Foreign-script cleanup**:
+- `_clean_foreign_scripts(text)` يستبدل: Russian → عربي، Spanish `aparece → يظهر`، Chinese `向心 → جذب مركزي`
+- Regex stripping: `[Ѐ-ӿ]+` (Cyrillic), `[一-鿿]+` (CJK Han), `[぀-ゟ゠-ヿ]+` (Japanese)
+- يُطبَّق في `normalize_node` (math_pipeline) + `_normalize_latex_response` (conversation_graph)
+
+**طبقة 5 — Chat meta-narration stripping**:
+- `_strip_chat_meta_narration(text)` في `conversation_graph.py`
+- 6 patterns: `Okay, the user...`, `First, I (should|must|need)...`, `The user greeted me...`, إلخ
+- 5-pass loop (لتغطية meta-narration متتالية)
+- يُطبَّق فقط على `intent == "chat"` (لا يكسر الإجابات التعليمية)
+
+**طبقة 6 — Retry على نموذج أقوى**:
+- عند كشف meta أو echo → retry على `nvidia/nemotron-3-super-120b-a12b:free` (بدل nano-30b)
+- prompt مُحسَّن قصير: «أستاذ رياضيات. اشرح بالعربية فقط. LaTeX: `$$...$$`. ابدأ بـ 'لحساب ...' بدون تمهيد»
+- إن فشل الـ retry أيضاً → احتفظ بالمحتوى الأطول والأنظف عبر `_strip_meta_prefix`
+
+**طبقة 7 — System prompt مُختصر + إيجابي**:
+- الـ system prompt قبل كان طويلاً جداً مع 6 ❌ ممنوعات → النموذج كان يُكرِّرها كنص
+- الجديد: 9 سطور إيجابية فقط (ماذا نفعل، لا ماذا نتجنب)
+- منهجية 4 خطوات: لماذا → خطوات مرقمة → `$$\boxed{}$$` → تفسير
+
+**طبقة 8 — Fallback chain مُحدَّث بعد بنشمارك حي**:
+- ❌ `google/gemma-4-26b-a4b-it:free` (rate-limited 429) — مُزال
+- ❌ `qwen/qwen3-coder:free` (rate-limited 429) — مُزال
+- ❌ `deepseek/deepseek-chat-v3.1:free` (404 No endpoints) — مُزال
+- ✅ `openai/gpt-oss-20b:free` (28s، عربية ممتازة، LaTeX سليم)
+- ✅ `nvidia/nemotron-3-super-120b-a12b:free` (14s، 120B params، شرح عبقري)
+- ✅ `openai/gpt-oss-120b:free` (21s، احتياطي)
+- ✅ `z-ai/glm-4.5-air:free` (reasoning mode — ISS-069 fix)
+
+**طبقة 9 — MathSkill رسمي في app/services/skills/**:
+- `MathSkill` class بـ Pydantic contract موحَّد (`MathSkillInput` → `MathSkillOutput | SkillFailure`)
+- مقاييس Prometheus: `cogniforge_skill_math_invocations_total{math_type,status}`, `_duration_seconds`, `_retries_total{reason}`
+- يستخدم `invoke_math_pipeline` تحت غطاء — لا يستورد من Skills أخرى
+- يعمل بدون orchestrator-service، آمن في وضع fallback
+
+### نتائج التجريب الحي بعد الإصلاح (2026-05-15)
+
+```
+================================================================================
+CogniForge — LIVE TEST: Math Pipeline + Conversation Graph (after D-062)
+================================================================================
+1. اشتقاق متقدم  (x²·e^(3x))         → 3.36s  ✅ PASS
+2. تكامل بالتجزئة (∫x·ln(x))           → 2.77s  ✅ PASS
+3. نهاية بقاعدة لوبيتال (sin(2x)/x)    → 2.03s  ✅ PASS
+4. معادلة تفاضلية (y'+2y=0)            → 3.08s  ✅ PASS
+5. دراسة دالة (مجال+مشتق+تغيرات)       → 10.60s ✅ PASS (retry on super-120b)
+6. فيزياء — قوة طرد مركزي               → 8.36s  ✅ PASS
+7. دردشة عامة "مرحبا، كيف حالك؟"        → 0.87s  ✅ PASS (chat intent + clean)
+================================================================================
+SUMMARY: 7/7 PASS | total_time=35.3s | كل LaTeX موحَّد $$...$$ | لا meta | لا روسي/صيني
+================================================================================
+```
+
+### القواعد الـ 9 الدائمة (لا تُكسر بدون ADR)
+
+**(1) Streaming LaTeX normalization إلزامية**: أي عقدة في orchestrator تبث chunks للمستخدم **يجب** أن تستخدم `LatexStreamNormalizer` بين `llm_client.stream_chat()` و `writer({"chunk_type": "assistant_delta"})`. الـ batch path يستخدم `normalize_latex()` على المخرج الكامل.
+
+**(2) Meta-text detection فحص prefix فقط**: نتحقق من أول 200 char من الإجابة، ليس النص كامل. كثيراً ما `"Let me"` يظهر طبيعياً في شرح علمي عميق — لا تُعاقب على ذلك.
+
+**(3) Echo markers أعلى أولوية من meta markers**: عند كشف echo (`"$$ for equations"`, `"Must use $$"`) → retry فوراً على نموذج أقوى (super-120b بدل nano-30b).
+
+**(4) Foreign-script regex blacklist**: Cyrillic + CJK Han + Japanese → احذف. لاتيني عادي مسموح (للأسماء التقنية sin/cos/lim/dx).
+
+**(5) Chat meta-narration للـ chat intent فقط**: لا تطبِّق `_strip_chat_meta_narration` على educational responses — قد تُحذف خطوة شرح مهمة.
+
+**(6) System prompt قصير وإيجابي**: لا تكتب قوائم طويلة من الـ ❌ — النموذج يُكرِّرها كنص. اكتب التعليمات الإيجابية فقط.
+
+**(7) Retry يستخدم نموذج مختلف**: عند فشل nano-30b بـ meta/echo → super-120b، لا نفس النموذج. النماذج الأكبر أكثر مقاومة لكشف الـ system prompt.
+
+**(8) Fallback chain يخضع لبنشمارك حي دوري**: كل 30 يوماً، اختبر النماذج الـ 4 الأساسية مع سؤال رياضي معقد. أزل أي نموذج يُرجع 429/404 لأكثر من 24 ساعة.
+
+**(9) MathSkill هو نقطة الدخول الوحيدة من monolith**: لا تستدعِ `invoke_math_pipeline` مباشرة من خارج `microservices/conversation_service/`. استخدم `MathSkill.invoke()` لتسجيل metrics + error handling موحَّد.
+
+### الملفات المُعدَّلة (D-062)
+
+| File | Change |
+|------|--------|
+| `microservices/orchestrator_service/src/services/overmind/latex_normalizer.py` | **جديد** — module + 10 unit tests |
+| `microservices/orchestrator_service/src/services/overmind/graph/search.py` | wire LatexStreamNormalizer في streamingَين + DSPy batch |
+| `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py` | wire LatexStreamNormalizer في streaming + non-streaming |
+| `microservices/orchestrator_service/src/services/overmind/graph/main.py` | wire LatexStreamNormalizer في ChatFallbackNode |
+| `microservices/conversation_service/src/math_pipeline.py` | system prompt قصير + meta/echo detection + retry على super-120b + foreign-script cleanup + classifier reorder |
+| `microservices/conversation_service/src/conversation_graph.py` | `_strip_chat_meta_narration` + CJK/Cyrillic cleanup في `_normalize_latex_response` |
+| `app/services/skills/math_skill.py` | **جديد** — MathSkill رسمي بـ Prometheus metrics |
+| `app/services/skills/__init__.py` | export MathSkill |
+| `tests/microservices/orchestrator_service/test_latex_normalizer.py` | **جديد** — اختبارات وحدة شاملة |
+| `.github/workflows/iss-074-latex-stream-normalizer-gate.yml` | **جديد** — CI gate بـ 4 jobs |
+
+### السلسلة الكاملة (D-049 → D-062)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 → D-055.2 | JSON envelope leak + indexed preempt + LaTeX delimiters + theme + legacy purge |
+| D-056 → D-058 | Claude-style full-width + overflow defense + light mode |
+| D-059 | always-visible theme button |
+| D-060 | ISS-068 — replace rate-limited model |
+| **D-062** | **ISS-074 — LaTeX stream normalizer + Math pipeline hardening + MathSkill** |

@@ -57,7 +57,7 @@ class AvailableModels:
     """
 
     GPT_4O = "openai/gpt-4o"
-    GPT_4O_MINI = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    GPT_4O_MINI = "nvidia/nemotron-3-nano-30b-a3b:free"
     GPT_4_TURBO = "openai/gpt-4-turbo"
     GPT_4 = "openai/gpt-4"
     GPT_35_TURBO = "openai/gpt-3.5-turbo"
@@ -79,8 +79,8 @@ class AvailableModels:
     NEMOTRON_3_SUPER_120B_FREE = "nvidia/nemotron-3-super-120b-a12b:free"
     DEVSTRAL_2512 = "openai/gpt-oss-120b:free"
     GLM_4_5_AIR_FREE = "openai/gpt-oss-20b:free"
-    DEEPSEEK_R1_CHIMERA_FREE = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
-    NEMOTRON_3_NANO = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    DEEPSEEK_R1_CHIMERA_FREE = "nvidia/nemotron-3-nano-30b-a3b:free"
+    NEMOTRON_3_NANO = "nvidia/nemotron-3-nano-30b-a3b:free"
 
 
 class ActiveModels:

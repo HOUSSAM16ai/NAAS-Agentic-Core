@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Reasoning Config
     # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens حقيقية
-    DEFAULT_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    DEFAULT_MODEL: str = "nvidia/nemotron-3-nano-30b-a3b:free"
     MAX_TOKENS: int = 1024  # حد رمزي آمن لتجنب تجاوز رصيد OpenRouter
     REASONING_TIMEOUT: int = 300
 

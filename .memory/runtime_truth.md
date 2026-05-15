@@ -1,6 +1,57 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-15** | Branch: `fix/iss-068-model-fix-ai-quality`
-> Previous: `feat/microservices-user-routing-d045`
+> Last updated: **2026-05-15** | Branch: `fix/iss-069-content-none-reasoning-model`
+> Previous: `fix/iss-068-model-fix-ai-quality`
+
+## D-061 Live Verification Results (2026-05-15) — ISS-069 content=None Fix
+
+| Service | Port | Status | Key Fields |
+|---------|------|--------|-----------|
+| main-app | 8000 | ✅ ACTIVE | `database: ok, version: v4.1-root` |
+| user-service | 8001 | ✅ ACTIVE | `status: ok, environment: development` |
+| planning-agent | 8002 | ✅ ACTIVE | `database: postgresql+asyncpg://...` |
+| orchestrator-service | 8006 | ✅ ACTIVE | `graph_ready: true, startup_state: ready` |
+| research-agent | 8007 | ✅ ACTIVE | `tavily_available: true` |
+| reasoning-agent | 8008 | ✅ ACTIVE | `llm_backend: openrouter, mcts_enabled: true` |
+
+**Active LLM Model**: `nvidia/nemotron-3-nano-30b-a3b:free` (TTFT=3.1s، جودة 4/4، content مضمون)
+**Fallback Chain**: `trinity-large-thinking:free` → `nemotron-super-120b:free` → `gpt-oss-120b:free` → `gpt-oss-20b:free` → `glm-4.5-air:free`
+**BROKEN MODELS**:
+- `inclusionai/ring-2.6-1t:free` — rate-limited upstream على Novita
+- `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` — content=None مع system prompt (reasoning-only)
+
+### ISS-069 Root Cause (VERIFIED LIVE 2026-05-15)
+```
+نموذج: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
+السلوك: message.content = None عند وجود system prompt
+السبب: نموذج reasoning-only يضع الإجابة في message.reasoning لا message.content
+الأثر: إجابات فارغة/كارثية للطلاب في كل الخدمات
+الإصلاح: استبدال بـ nemotron-3-nano-30b-a3b:free في 15 ملف
+```
+
+### Skills Pipeline Live Test (VERIFIED)
+```
+Query: اشرح قانون نيوتن الثاني مع مثال رياضي
+Mode: full
+Active: ['planning', 'research', 'reasoning']
+Duration: 22.7s
+Answer quality: LaTeX ✅ + Arabic ✅ + Steps ✅ + boxed result ✅
+```
+
+### AI Quality Benchmark (2026-05-15)
+| Test | TTFT | Quality |
+|------|------|---------|
+| تكامل ∫(x²+3x+2)dx | 3.4s | 3/3 |
+| فيزياء F=ma | 3.1s | 3/3 |
+| احتمالات كرات | 2.7s | 3/3 |
+| كهرباء توازي | 4.1s | 3/3 |
+
+### Key Fixes Applied (ISS-069 / D-061)
+- 15 ملف: استبدال `nemotron-3-nano-omni-30b-a3b-reasoning:free` بـ `nemotron-3-nano-30b-a3b:free`
+- `simple_client.py`: `_stream_model()` يُعيد توجيه `delta.reasoning` → `delta.content` كـ fallback
+- `simple_client.py`: `send_message()` يستخرج `reasoning` عند `content=None`
+- `reasoning_agent/src/ai_client.py`: نفس الإصلاح للـ non-streaming
+- `local_graph.py`: system prompts مُحسَّنة (أقل tokens، نفس الجودة)
+- `ai_config.py`: fallback chain مُحدَّث بنماذج مُتحقَّق منها حياً
 
 ## D-060 Live Verification Results (2026-05-15) — ISS-068 Model Fix
 
@@ -12,16 +63,8 @@
 | research-agent | 8007 | ✅ ACTIVE | `tavily_available: true` |
 | reasoning-agent | 8008 | ✅ ACTIVE | `llm_backend: openrouter, mcts_enabled: true` |
 
-**Active LLM Model**: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (TTFT=4s، reasoning tokens)
-**Fallback Chain**: `nemotron-super-120b` → `gpt-oss-20b` → `gpt-oss-120b` → `nemotron-nano-30b`
+**Active LLM Model**: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` ← BROKEN (see ISS-069)
 **BROKEN MODEL**: `inclusionai/ring-2.6-1t:free` — rate-limited upstream على Novita — لا تستخدمه
-
-### Reasoning Agent Live Test (VERIFIED)
-```
-Query: احسب مشتقة f(x) = x^2 * ln(x)
-Status: success (19.7s)
-Answer: خطوات مفصلة + LaTeX + $$\boxed{f'(x)=x(2\ln(x)+1)}$$
-```
 
 ### Key Fixes Applied (ISS-068 / D-060)
 - 14 ملف: استبدال `inclusionai/ring-2.6-1t:free` بـ `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`

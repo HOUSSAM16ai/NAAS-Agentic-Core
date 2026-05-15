@@ -141,7 +141,7 @@ async def _call_llm_if_available(question: str, intent: str, history: list[dict[
                 },
                 json={
                     # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
-                    "model": os.environ.get("CONVERSATION_LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"),
+                    "model": os.environ.get("CONVERSATION_LLM_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free"),
                     "messages": messages,
                     "max_tokens": 512,
                 },

@@ -5,7 +5,7 @@
 
 الاستخدام:
     python3 replace_model.py --old "inclusionai/ring-2.6-1t:free" \
-                              --new "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+                              --new "nvidia/nemotron-3-nano-30b-a3b:free"
     python3 replace_model.py --dry-run  # عرض فقط بدون تعديل
 """
 import argparse
@@ -85,7 +85,7 @@ def scan_for_remaining(old: str, root: Path) -> list[tuple[Path, int, str]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Replace broken LLM model across all services")
     parser.add_argument("--old", default="inclusionai/ring-2.6-1t:free")
-    parser.add_argument("--new", default="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
+    parser.add_argument("--new", default="nvidia/nemotron-3-nano-30b-a3b:free")
     parser.add_argument("--dry-run", action="store_true", help="Show changes without applying")
     parser.add_argument("--root", default=".", help="Project root directory")
     args = parser.parse_args()

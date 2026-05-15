@@ -41,9 +41,11 @@ class PlanningAgentSettings(BaseSettings):
 
     # AI Settings
     OPENROUTER_API_KEY: SecretStr | None = Field(None, description="مفتاح API لخدمة OpenRouter")
-    # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
+    # ISS-069 (2026-05-15): nemotron-3-nano-omni-30b-a3b-reasoning:free يضع الإجابة
+    # في message.reasoning لا message.content → content=None مع system prompt.
+    # nemotron-3-nano-30b-a3b:free: جودة 4/4، TTFT=3.1s، content مضمون دائماً.
     AI_MODEL: str = Field(
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "nvidia/nemotron-3-nano-30b-a3b:free",
         description="اسم النموذج المستخدم في التخطيط",
     )
     AI_BASE_URL: str = Field(

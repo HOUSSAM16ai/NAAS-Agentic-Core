@@ -23,9 +23,10 @@ class SimpleAIClient:
 
     def __init__(self) -> None:
         self.api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
-        # ISS-068: nemotron-3-nano-omni-30b-a3b-reasoning:free — أسرع نموذج مجاني مع reasoning tokens
-        # inclusionai/ring-2.6-1t:free معطّل (rate-limited upstream على Novita)
-        self.model = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
+        # ISS-069 (2026-05-15): nemotron-3-nano-omni-30b-a3b-reasoning:free يضع الإجابة
+        # في message.reasoning لا message.content عند وجود system prompt → content=None.
+        # nemotron-3-nano-30b-a3b:free: جودة 4/4، TTFT=3.1s، content مضمون دائماً.
+        self.model = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free")
         self.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
     async def generate_text(
@@ -61,5 +62,7 @@ class SimpleAIClient:
         if not choices:
             logger.warning("AI response missing choices.")
             return SimpleResponse(content="")
-        content = choices[0].get("message", {}).get("content", "")
+        msg = choices[0].get("message", {})
+        # ISS-069: بعض نماذج reasoning تضع الإجابة في reasoning لا content
+        content = msg.get("content") or msg.get("reasoning") or ""
         return SimpleResponse(content=str(content))

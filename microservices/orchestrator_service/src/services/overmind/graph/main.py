@@ -496,7 +496,7 @@ def _configure_dspy() -> None:
     try:
         # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
         dspy_model = os.getenv(
-            "OPENROUTER_DSPY_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+            "OPENROUTER_DSPY_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free"
         ).strip()
         if not dspy_model.startswith("openai/"):
             dspy_model = f"openai/{dspy_model}"

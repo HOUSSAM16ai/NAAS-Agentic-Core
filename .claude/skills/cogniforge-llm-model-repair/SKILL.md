@@ -5,16 +5,20 @@ description: >
   Use when: AI responses are empty, garbage, or missing LaTeX; reasoning-agent
   returns empty answers or times out; research-agent returns empty results;
   any service logs "rate-limited", "429", or "Provider returned error";
-  a model default needs updating after OpenRouter deprecates a free model.
+  a model default needs updating after OpenRouter deprecates a free model;
+  content=None from any model; reasoning-only model used as PRIMARY.
   Triggers on: "إجابات فارغة", "إجابات كارثية", "rate-limited", "429",
   "Provider returned error", "No endpoints found", "empty answer", "model broken",
   "reasoning timeout", "inclusionai", "ring-2.6", "model not working",
-  "LLM not responding", "بدون LaTeX", "إجابات غبية", "نموذج معطّل".
+  "LLM not responding", "بدون LaTeX", "إجابات غبية", "نموذج معطّل",
+  "content=None", "reasoning model", "omni-reasoning", "إجابات غير منظمة",
+  "حروف متداخلة", "فقدان سياق", "نصوص غير منظمة".
 ---
 
 # CogniForge LLM Model Repair
 
-> **Law:** A model is ACTIVE only when it returns Arabic text + LaTeX in < 30s.
+> **Law:** A model is ACTIVE only when it returns Arabic text + LaTeX in < 30s
+> AND `message.content` is non-None and non-empty with a system prompt.
 > A running service ≠ a working LLM. Always verify with a live math question.
 
 ---
@@ -30,11 +34,31 @@ grep -rn "OPENROUTER_MODEL\|DEFAULT_MODEL\|AI_MODEL\|primary_model\|self.model" 
   microservices/planning_agent/settings.py \
   | grep -v __pycache__ | grep -v "^.*#"
 
-# Step 2: Scan for banned model as active value
-grep -rn "inclusionai/ring-2.6-1t:free" --include="*.py" app/ microservices/ \
+# Step 2: Scan for banned models as active values
+grep -rn "inclusionai/ring-2.6-1t:free\|nemotron-3-nano-omni-30b-a3b-reasoning:free" \
+  --include="*.py" app/ microservices/ \
   | grep -v __pycache__ | grep -v "^.*#" | grep -v test_
 
-# Step 3: Live model test (30s)
+# Step 3: Test content=None bug (ISS-069)
+python3 -c "
+import asyncio, httpx, os
+async def test():
+    async with httpx.AsyncClient() as c:
+        r = await c.post('https://openrouter.ai/api/v1/chat/completions',
+            headers={'Authorization': f'Bearer {os.environ[\"OPENROUTER_API_KEY\"]}'},
+            json={'model': 'nvidia/nemotron-3-nano-30b-a3b:free',
+                  'messages': [{'role': 'system', 'content': 'أستاذ رياضيات.'},
+                                {'role': 'user', 'content': 'احسب 2+2'}],
+                  'max_tokens': 50}, timeout=15)
+        msg = r.json()['choices'][0]['message']
+        content = msg.get('content')
+        print('content:', repr(content))
+        assert content is not None and len(content) > 0, 'BROKEN: content=None'
+        print('OK: content is valid')
+asyncio.run(test())
+"
+
+# Step 4: Live model test (30s)
 python3 scripts/benchmark_models.py
 ```
 
@@ -42,7 +66,9 @@ python3 scripts/benchmark_models.py
 
 | Symptom | Root Cause |
 |---------|-----------|
-| `reasoning-agent` returns `{"answer": ""}` | Model rate-limited or returning empty |
+| `reasoning-agent` returns `{"answer": ""}` | Model rate-limited OR content=None bug |
+| `content=None` in any service | Reasoning-only model used as PRIMARY (ISS-069) |
+| إجابات فارغة مع system prompt | `nemotron-3-nano-omni-30b-a3b-reasoning:free` كـ PRIMARY |
 | `research-agent` returns `{"results": []}` | Tavily key missing OR model broken |
 | `429` in service logs | Model rate-limited upstream |
 | `Provider returned error` | Model endpoint removed from OpenRouter |
@@ -249,6 +275,9 @@ See `references/memory-update-template.md` for the exact format.
 - **Never** trust service logs alone — always probe `/health` AND test with a live math question.
 - **Never** set MCTS depth > 1 with free models — causes rate-limit cascade.
 - **Never** use `inclusionai/ring-2.6-1t:free` — permanently rate-limited on Novita (ISS-068).
+- **Never** use `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` as PRIMARY — content=None with system prompt (ISS-069).
+- **Never** use any model ending in `:reasoning:free` as PRIMARY without verifying `message.content` is non-None with a system prompt.
 - **Never** hardcode a model string without an env var override — use `os.getenv("MODEL_VAR", "default")`.
-- **Never** assume a model works because it appears in OpenRouter's model list — test it live.
+- **Never** assume a model works because it appears in OpenRouter's model list — test it live with a system prompt.
 - **Never** skip the memory update — the next agent session will repeat the same diagnosis.
+- **Never** accept `content=None` silently — always fallback to `reasoning` field and log a warning.

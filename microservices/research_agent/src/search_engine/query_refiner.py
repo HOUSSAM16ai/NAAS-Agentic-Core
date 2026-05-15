@@ -52,7 +52,7 @@ def _build_refiner(dspy: ModuleType) -> object:
 
 
 def get_refined_query(
-    user_query: str, api_key: str, model_name: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    user_query: str, api_key: str, model_name: str = "nvidia/nemotron-3-nano-30b-a3b:free"
 ) -> dict[str, object]:
     """
     إعادة صياغة الاستعلام عبر DSPy مع استخراج بيانات وصفية مساعدة.

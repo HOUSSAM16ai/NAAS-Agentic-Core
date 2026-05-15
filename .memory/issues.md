@@ -1,5 +1,25 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-13 | Branch: `claude/setup-microservices-monitoring-ralbR`
+> Last updated: 2026-05-15 | Branch: `fix/iss-069-content-none-reasoning-model`
+
+---
+
+## 🟢 Resolved 2026-05-15 (ISS-069 — content=None Catastrophic AI Responses)
+
+### ISS-069 · إجابات الذكاء الاصطناعي فارغة/كارثية — content=None في reasoning models [RESOLVED]
+- **Status**: RESOLVED 2026-05-15
+- **Severity**: CRITICAL (الطالب يحصل على إجابات فارغة أو مشوهة في كل الخدمات)
+- **Root cause**: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` يضع الإجابة في `message.reasoning` / `delta.reasoning` لا `message.content` / `delta.content` عند وجود system prompt. النموذج reasoning-only لا يُنتج `content` أبداً مع system prompt → `content=None` → إجابات فارغة.
+- **Evidence**: `python3 -c "... model='nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free' ..."` → `content: None, reasoning: "Okay, let's see..."` (مُتحقَّق حياً 2026-05-15)
+- **Fix**:
+  1. استبدال PRIMARY في 15 ملف: `nemotron-3-nano-omni-30b-a3b-reasoning:free` → `nemotron-3-nano-30b-a3b:free`
+  2. `simple_client.py:_stream_model()`: إعادة توجيه `delta.reasoning` → `delta.content` كـ fallback لنماذج reasoning-only
+  3. `simple_client.py:send_message()`: استخراج `reasoning` عند `content=None`
+  4. `reasoning_agent/src/ai_client.py`: نفس الإصلاح
+  5. fallback chain: `trinity-large-thinking:free` → `nemotron-super-120b:free` → `gpt-oss-120b:free` → `gpt-oss-20b:free` → `glm-4.5-air:free`
+- **قاعدة جديدة**: أي نموذج ينتهي بـ `:reasoning:free` أو يضع الإجابة في `reasoning` لا `content` يُعامَل كـ BROKEN للاستخدام التعليمي — يجب اختباره قبل تعيينه PRIMARY.
+- **Files**: `app/core/ai_config.py`, `app/core/gateway/simple_client.py`, `app/services/chat/local_graph.py`, `microservices/reasoning_agent/src/ai_client.py`, `microservices/reasoning_agent/src/core/config.py`, `microservices/planning_agent/settings.py`, `microservices/orchestrator_service/src/services/llm/client.py`, `microservices/orchestrator_service/src/core/ai_config.py`, + 7 ملفات أخرى
+
+---
 
 ---
 

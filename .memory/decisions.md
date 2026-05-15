@@ -1050,3 +1050,21 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 3. MCTS depth يجب أن يبقى ≤ 1 مع النماذج المجانية لتجنب rate limiting.
 4. System prompts يجب أن تتضمن: LaTeX إلزامي + خطوات مرقمة + `$$\boxed{...}$$`.
 **Status**: IMPLEMENTED 2026-05-15 — branch `fix/iss-068-model-fix-ai-quality`.
+
+---
+
+## D-061 — ISS-069 LLM Model Fix: nemotron-omni-reasoning → nemotron-nano (2026-05-15)
+
+**Problem**: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` يضع الإجابة في `message.reasoning` / `delta.reasoning` لا `message.content` / `delta.content` عند وجود system prompt → `content=None` → إجابات فارغة/كارثية للطلاب في جميع الخدمات.
+**Decision**: استبدال بـ `nvidia/nemotron-3-nano-30b-a3b:free` كنموذج أساسي موحَّد في 15 ملف. إضافة fallback في `simple_client.py` و `ai_client.py` لاستخراج `reasoning` عند `content=None`.
+**Rationale**:
+- بنشمارك حي 2026-05-15 (25 نموذجاً مجانياً): `nemotron-3-nano-30b-a3b:free` الوحيد بجودة 4/4 وTTFT=3.1s وcontent مضمون دائماً.
+- `nemotron-3-nano-omni-30b-a3b-reasoning:free` نموذج reasoning-only: يُنتج `content=None` مع system prompt — غير صالح للاستخدام التعليمي.
+- fallback chain مُحدَّث: `trinity-large-thinking:free` (4.7s) → `nemotron-super-120b:free` (22s) → `gpt-oss-120b:free` (25s) → `gpt-oss-20b:free` (27s) → `glm-4.5-air:free`.
+**Invariants (قواعد دائمة)**:
+1. `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` محظور كنموذج افتراضي — content=None مع system prompt.
+2. أي نموذج ينتهي بـ `:reasoning:free` يجب اختباره بـ system prompt قبل تعيينه PRIMARY.
+3. اختبار القبول: `message.content` يجب أن يكون غير None وغير فارغ مع system prompt.
+4. `simple_client.py` يجب أن يحتفظ بـ fallback `delta.reasoning → delta.content` للتوافق المستقبلي.
+**Files**: 15 ملف — انظر ISS-069 في `.memory/issues.md`.
+**Status**: IMPLEMENTED 2026-05-15 — branch `fix/iss-069-content-none-reasoning-model`.

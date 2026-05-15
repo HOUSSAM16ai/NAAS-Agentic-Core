@@ -1,11 +1,12 @@
-name: AI Quality Gate — ISS-068 Model Integrity
+name: AI Quality Gate — ISS-068/069 Model Integrity
 
 # يتحقق من:
 # 1. عدم وجود inclusionai/ring-2.6-1t:free كقيمة نشطة (محظور — rate-limited)
-# 2. وجود النموذج الأساسي الصحيح في ai_config.py
-# 3. جودة system prompts (LaTeX + خطوات مرقمة)
-# 4. MCTS depth ≤ 1 مع النماذج المجانية
-# 5. اختبارات وحدة للـ LangGraph nodes
+# 2. عدم وجود nemotron-3-nano-omni-30b-a3b-reasoning:free (محظور — content=None)
+# 3. وجود النموذج الأساسي الصحيح في ai_config.py
+# 4. جودة system prompts (LaTeX + خطوات مرقمة)
+# 5. MCTS depth ≤ 1 مع النماذج المجانية
+# 6. اختبارات وحدة للـ LangGraph nodes
 
 on:
   push:
@@ -37,51 +38,65 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check for banned model as active value
+      - name: Check for banned models as active values
         run: |
-          echo "=== Checking for inclusionai/ring-2.6-1t:free as active value ==="
-          
-          # البحث عن النموذج المحظور كقيمة نشطة (ليس في التعليقات)
-          VIOLATIONS=$(grep -rn 'inclusionai/ring-2.6-1t:free' \
-            --include="*.py" \
-            app/ microservices/ \
-            | grep -v '__pycache__' \
-            | grep -v 'test_' \
-            | grep -v '^\s*#' \
-            | grep -v '\.pyc' \
-            || true)
-          
-          if [ -n "$VIOLATIONS" ]; then
-            echo "❌ VIOLATION: inclusionai/ring-2.6-1t:free found as active value!"
-            echo "This model is rate-limited upstream on Novita (ISS-068)."
+          echo "=== Checking for banned models as active values ==="
+
+          BANNED_MODELS=(
+            "inclusionai/ring-2.6-1t:free"
+            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+          )
+
+          TOTAL_VIOLATIONS=0
+          for BANNED in "${BANNED_MODELS[@]}"; do
+            VIOLATIONS=$(grep -rn "$BANNED" \
+              --include="*.py" \
+              app/ microservices/ \
+              | grep -v '__pycache__' \
+              | grep -v 'test_' \
+              | grep -v '^\s*#' \
+              | grep -v '\.pyc' \
+              || true)
+
+            if [ -n "$VIOLATIONS" ]; then
+              echo "❌ VIOLATION: $BANNED found as active value!"
+              echo "$VIOLATIONS"
+              TOTAL_VIOLATIONS=$((TOTAL_VIOLATIONS + 1))
+            else
+              echo "✅ $BANNED — not found as active value"
+            fi
+          done
+
+          if [ "$TOTAL_VIOLATIONS" -gt 0 ]; then
             echo ""
-            echo "Violations:"
-            echo "$VIOLATIONS"
+            echo "Banned models:"
+            echo "  inclusionai/ring-2.6-1t:free → rate-limited on Novita (ISS-068)"
+            echo "  nemotron-3-nano-omni-30b-a3b-reasoning:free → content=None with system prompt (ISS-069)"
             echo ""
-            echo "Fix: Replace with nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+            echo "Fix: Replace with nvidia/nemotron-3-nano-30b-a3b:free"
             exit 1
           fi
-          
-          echo "✅ No banned model found as active value"
 
-      - name: Verify primary model is set correctly
+      - name: Verify primary model is content-safe
         run: |
           echo "=== Verifying primary model in app/core/ai_config.py ==="
-          
+
           PRIMARY=$(grep -n 'PRIMARY = _resolve_primary_model' app/core/ai_config.py | head -1)
           echo "Found: $PRIMARY"
-          
+
+          # محظور: inclusionai
           if echo "$PRIMARY" | grep -q 'inclusionai'; then
-            echo "❌ Primary model is still set to banned inclusionai model!"
+            echo "❌ Primary model is banned inclusionai model (ISS-068)!"
             exit 1
           fi
-          
-          if ! echo "$PRIMARY" | grep -q 'nvidia\|openai\|google\|meta\|qwen\|mistral'; then
-            echo "⚠️  Primary model may not be a known working model"
-            echo "Expected one of: nvidia/*, openai/*, google/*, meta/*, qwen/*, mistral/*"
+
+          # محظور: reasoning-only models
+          if echo "$PRIMARY" | grep -q 'nemotron-3-nano-omni\|reasoning:free'; then
+            echo "❌ Primary model is reasoning-only (content=None with system prompt) (ISS-069)!"
+            exit 1
           fi
-          
-          echo "✅ Primary model check passed"
+
+          echo "✅ Primary model is content-safe"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Job 2: تحقق من جودة system prompts

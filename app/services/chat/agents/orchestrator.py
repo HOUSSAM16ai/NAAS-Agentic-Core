@@ -450,7 +450,7 @@ class OrchestratorAgent:
         try:
             # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
             response = await self.ai_client.generate(
-                model="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+                model="nvidia/nemotron-3-nano-30b-a3b:free",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question},

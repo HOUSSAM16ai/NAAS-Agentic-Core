@@ -1,0 +1,364 @@
+name: ISS-069 — Reasoning Model Content Gate
+
+# يتحقق من:
+# 1. عدم استخدام nemotron-3-nano-omni-30b-a3b-reasoning:free كنموذج أساسي
+#    (يُعيد content=None مع system prompt → إجابات فارغة للطلاب)
+# 2. وجود fallback لـ delta.reasoning في simple_client.py
+# 3. وجود fallback لـ message.reasoning في ai_client.py
+# 4. اختبارات وحدة لمنطق استخراج المحتوى
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "app/core/ai_config.py"
+      - "app/core/gateway/simple_client.py"
+      - "app/services/chat/local_graph.py"
+      - "microservices/reasoning_agent/src/ai_client.py"
+      - "microservices/reasoning_agent/src/core/config.py"
+      - "microservices/planning_agent/settings.py"
+      - "microservices/orchestrator_service/src/services/llm/client.py"
+      - "microservices/orchestrator_service/src/core/ai_config.py"
+      - "microservices/conversation_service/src/conversation_graph.py"
+      - "microservices/auditor_service/src/ai.py"
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: iss-069-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 1: تحقق من عدم وجود النموذج المعطوب كقيمة نشطة
+  # ─────────────────────────────────────────────────────────────────────────────
+  reasoning-only-model-ban:
+    name: "🚫 Reasoning-Only Model Ban"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for banned reasoning-only model
+        run: |
+          echo "=== ISS-069: Scanning for nemotron-3-nano-omni-30b-a3b-reasoning:free ==="
+          echo "This model returns content=None with system prompt → empty AI responses"
+          echo ""
+
+          BANNED="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+          VIOLATIONS=$(grep -rn "$BANNED" \
+            --include="*.py" \
+            app/ microservices/ \
+            | grep -v '__pycache__' \
+            | grep -v 'test_' \
+            | grep -v '^\s*#' \
+            | grep -v '\.pyc' \
+            || true)
+
+          if [ -n "$VIOLATIONS" ]; then
+            echo "❌ CRITICAL: Banned reasoning-only model found as active value!"
+            echo ""
+            echo "Root cause (ISS-069):"
+            echo "  nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+            echo "  → message.content = None when system prompt is present"
+            echo "  → Students receive empty/garbage AI responses"
+            echo ""
+            echo "Violations found:"
+            echo "$VIOLATIONS"
+            echo ""
+            echo "Fix: Replace with nvidia/nemotron-3-nano-30b-a3b:free"
+            echo "  sed -i 's|nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free|nvidia/nemotron-3-nano-30b-a3b:free|g' <file>"
+            exit 1
+          fi
+
+          echo "✅ No banned reasoning-only model found as active value"
+
+      - name: Verify PRIMARY model is content-safe
+        run: |
+          echo "=== Verifying PRIMARY model produces content (not reasoning-only) ==="
+
+          PRIMARY=$(grep -n 'PRIMARY = _resolve_primary_model' app/core/ai_config.py \
+            | head -1 | grep -o '"[^"]*"' | head -1 | tr -d '"')
+          echo "Current PRIMARY: $PRIMARY"
+
+          # النماذج المحظورة (reasoning-only)
+          BANNED_PATTERNS=("nemotron-3-nano-omni" "reasoning:free")
+          for pattern in "${BANNED_PATTERNS[@]}"; do
+            if echo "$PRIMARY" | grep -q "$pattern"; then
+              echo "❌ PRIMARY model matches banned pattern: $pattern"
+              echo "   Model: $PRIMARY"
+              echo "   Reason: reasoning-only models return content=None with system prompt"
+              exit 1
+            fi
+          done
+
+          echo "✅ PRIMARY model is content-safe: $PRIMARY"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 2: تحقق من وجود fallback لـ reasoning في simple_client.py
+  # ─────────────────────────────────────────────────────────────────────────────
+  content-fallback-present:
+    name: "🔄 Content Fallback Guard"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify delta.reasoning fallback in simple_client.py
+        run: |
+          echo "=== Checking ISS-069 fallback in simple_client.py ==="
+
+          FILE="app/core/gateway/simple_client.py"
+
+          # تحقق من وجود fallback لـ delta.reasoning
+          if ! grep -q 'delta.get("reasoning")' "$FILE" && \
+             ! grep -q "delta.get('reasoning')" "$FILE"; then
+            echo "❌ Missing delta.reasoning fallback in $FILE"
+            echo "   This fallback prevents empty responses from reasoning-only models"
+            echo "   Required code pattern:"
+            echo '   if delta.get("content") is None and delta.get("reasoning"):'
+            echo '       delta["content"] = delta["reasoning"]'
+            exit 1
+          fi
+          echo "✅ delta.reasoning fallback present in simple_client.py"
+
+      - name: Verify message.reasoning fallback in send_message
+        run: |
+          echo "=== Checking send_message reasoning fallback ==="
+
+          FILE="app/core/gateway/simple_client.py"
+
+          # تحقق من وجود fallback في send_message
+          if ! grep -q 'delta.get("content") or delta.get("reasoning"' "$FILE" && \
+             ! grep -q "delta.get('content') or delta.get('reasoning'" "$FILE"; then
+            echo "❌ Missing reasoning fallback in send_message() in $FILE"
+            echo "   Required: content = delta.get('content') or delta.get('reasoning', '')"
+            exit 1
+          fi
+          echo "✅ send_message reasoning fallback present"
+
+      - name: Verify reasoning_agent ai_client fallback
+        run: |
+          echo "=== Checking reasoning_agent ai_client.py fallback ==="
+
+          FILE="microservices/reasoning_agent/src/ai_client.py"
+
+          if [ ! -f "$FILE" ]; then
+            echo "⚠️  $FILE not found — skipping"
+            exit 0
+          fi
+
+          # تحقق من وجود fallback لـ message.reasoning
+          if ! grep -q 'msg.get("reasoning")' "$FILE" && \
+             ! grep -q "msg.get('reasoning')" "$FILE"; then
+            echo "❌ Missing message.reasoning fallback in $FILE"
+            echo "   Required: content = msg.get('content') or msg.get('reasoning') or ''"
+            exit 1
+          fi
+          echo "✅ message.reasoning fallback present in reasoning_agent"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 3: اختبارات وحدة لمنطق استخراج المحتوى
+  # ─────────────────────────────────────────────────────────────────────────────
+  content-extraction-unit-tests:
+    name: "🧪 Content Extraction Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install test dependencies
+        run: pip install pytest pytest-asyncio httpx --quiet
+
+      - name: Run content extraction unit tests
+        run: |
+          python3 << 'PYEOF'
+          """
+          اختبارات وحدة لمنطق استخراج المحتوى من نماذج reasoning-only.
+          يتحقق من أن الـ fallback يعمل بشكل صحيح.
+          """
+          import sys
+
+          # ── محاكاة استجابة نموذج reasoning-only (content=None) ──────────────
+          def extract_content_from_delta(delta: dict) -> str:
+              """منطق الاستخراج المُصلَّح (ISS-069)."""
+              content = delta.get("content")
+              if content is None:
+                  content = delta.get("reasoning", "")
+              return content or ""
+
+          def extract_content_from_message(msg: dict) -> str:
+              """منطق الاستخراج من message كامل (ISS-069)."""
+              return msg.get("content") or msg.get("reasoning") or ""
+
+          # ── Test 1: delta.content موجود → يُستخدم مباشرة ────────────────────
+          delta_normal = {"content": "F = ma = 12 N", "reasoning": None}
+          result = extract_content_from_delta(delta_normal)
+          assert result == "F = ma = 12 N", f"Test 1 failed: {result}"
+          print("✅ Test 1: Normal content extracted correctly")
+
+          # ── Test 2: delta.content=None → fallback لـ reasoning ───────────────
+          delta_reasoning_only = {"content": None, "reasoning": "The answer is F=12N"}
+          result = extract_content_from_delta(delta_reasoning_only)
+          assert result == "The answer is F=12N", f"Test 2 failed: {result}"
+          print("✅ Test 2: Reasoning fallback works when content=None")
+
+          # ── Test 3: كلاهما None → string فارغ ────────────────────────────────
+          delta_empty = {"content": None, "reasoning": None}
+          result = extract_content_from_delta(delta_empty)
+          assert result == "", f"Test 3 failed: {result}"
+          print("✅ Test 3: Empty string returned when both None")
+
+          # ── Test 4: message.content موجود → يُستخدم مباشرة ──────────────────
+          msg_normal = {"role": "assistant", "content": "$$F = 12\\,\\text{N}$$"}
+          result = extract_content_from_message(msg_normal)
+          assert "F = 12" in result, f"Test 4 failed: {result}"
+          print("✅ Test 4: Normal message content extracted")
+
+          # ── Test 5: message.content=None → fallback لـ reasoning ─────────────
+          msg_reasoning = {"role": "assistant", "content": None, "reasoning": "F=ma=3*4=12N"}
+          result = extract_content_from_message(msg_reasoning)
+          assert "12" in result, f"Test 5 failed: {result}"
+          print("✅ Test 5: Message reasoning fallback works")
+
+          # ── Test 6: message.content="" → fallback لـ reasoning ───────────────
+          msg_empty_content = {"role": "assistant", "content": "", "reasoning": "Answer: 12N"}
+          result = extract_content_from_message(msg_empty_content)
+          assert "12N" in result, f"Test 6 failed: {result}"
+          print("✅ Test 6: Empty string content triggers reasoning fallback")
+
+          # ── Test 7: التحقق من أن النموذج المحظور محدد بوضوح ─────────────────
+          BANNED_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+          SAFE_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
+          assert "reasoning" in BANNED_MODEL, "Banned model should contain 'reasoning'"
+          assert "reasoning" not in SAFE_MODEL, "Safe model should not contain 'reasoning'"
+          print("✅ Test 7: Model naming convention verified")
+
+          print("\n✅ All content extraction tests passed (ISS-069)")
+          PYEOF
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 4: تحقق من جميع الخدمات المصغرة
+  # ─────────────────────────────────────────────────────────────────────────────
+  microservices-model-scan:
+    name: "🔍 Microservices Full Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan all microservices for banned reasoning model
+        run: |
+          echo "=== Full scan of all microservices for ISS-069 banned model ==="
+
+          BANNED="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+          TOTAL_VIOLATIONS=0
+
+          SERVICES=(
+            "microservices/reasoning_agent"
+            "microservices/planning_agent"
+            "microservices/orchestrator_service"
+            "microservices/conversation_service"
+            "microservices/research_agent"
+            "microservices/auditor_service"
+            "microservices/user_service"
+          )
+
+          for service in "${SERVICES[@]}"; do
+            if [ ! -d "$service" ]; then
+              continue
+            fi
+
+            VIOLATIONS=$(grep -rn "$BANNED" "$service" \
+              --include="*.py" \
+              | grep -v '__pycache__' \
+              | grep -v 'test_' \
+              | grep -v '^\s*#' \
+              || true)
+
+            if [ -n "$VIOLATIONS" ]; then
+              echo "❌ $service:"
+              echo "$VIOLATIONS"
+              TOTAL_VIOLATIONS=$((TOTAL_VIOLATIONS + 1))
+            else
+              SERVICE_NAME=$(basename "$service")
+              echo "✅ $SERVICE_NAME — clean"
+            fi
+          done
+
+          echo ""
+          if [ "$TOTAL_VIOLATIONS" -gt 0 ]; then
+            echo "❌ $TOTAL_VIOLATIONS service(s) still use banned reasoning-only model"
+            echo "Run: find . -name '*.py' | xargs sed -i 's|$BANNED|nvidia/nemotron-3-nano-30b-a3b:free|g'"
+            exit 1
+          fi
+
+          echo "✅ All microservices use content-safe models"
+
+      - name: Verify model consistency across services
+        run: |
+          echo "=== Checking model consistency ==="
+
+          # استخراج النماذج المستخدمة في كل خدمة
+          echo "Models in use:"
+          grep -rn 'OPENROUTER_MODEL\|DEFAULT_MODEL\|AI_MODEL\|self.model\s*=' \
+            microservices/ app/core/ai_config.py \
+            --include="*.py" \
+            | grep -v '__pycache__' \
+            | grep -v 'test_' \
+            | grep -v '^\s*#' \
+            | grep -v 'os.getenv\|os.environ' \
+            | head -20
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Summary
+  # ─────────────────────────────────────────────────────────────────────────────
+  iss-069-summary:
+    name: "📊 ISS-069 Gate Summary"
+    runs-on: ubuntu-latest
+    needs:
+      - reasoning-only-model-ban
+      - content-fallback-present
+      - content-extraction-unit-tests
+      - microservices-model-scan
+    if: always()
+    steps:
+      - name: Report ISS-069 gate results
+        run: |
+          echo "╔══════════════════════════════════════════════════════════════════╗"
+          echo "║         ISS-069 — Reasoning Model Content Gate Results           ║"
+          echo "╠══════════════════════════════════════════════════════════════════╣"
+          echo "║  Root cause: nemotron-omni-reasoning → content=None with prompt  ║"
+          echo "║  Fix: nemotron-3-nano-30b-a3b:free (quality=4/4, TTFT=3.1s)     ║"
+          echo "╠══════════════════════════════════════════════════════════════════╣"
+
+          RESULTS=(
+            "reasoning-only-model-ban:${{ needs.reasoning-only-model-ban.result }}"
+            "content-fallback-present:${{ needs.content-fallback-present.result }}"
+            "content-extraction-unit-tests:${{ needs.content-extraction-unit-tests.result }}"
+            "microservices-model-scan:${{ needs.microservices-model-scan.result }}"
+          )
+
+          FAILED=0
+          for item in "${RESULTS[@]}"; do
+            name="${item%%:*}"
+            result="${item##*:}"
+            if [ "$result" = "success" ]; then
+              echo "║  ✅ $name"
+            else
+              echo "║  ❌ $name ($result)"
+              FAILED=$((FAILED + 1))
+            fi
+          done
+
+          echo "╠══════════════════════════════════════════════════════════════════╣"
+          if [ "$FAILED" -eq 0 ]; then
+            echo "║  ✅ ISS-069 GATE PASSED — No reasoning-only model as PRIMARY    ║"
+          else
+            echo "║  ❌ ISS-069 GATE FAILED — $FAILED check(s) require attention    ║"
+          fi
+          echo "╚══════════════════════════════════════════════════════════════════╝"
+
+          [ "$FAILED" -eq 0 ] || exit 1

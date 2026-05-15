@@ -172,6 +172,16 @@ class OpenRouterClient(LLMClient):
                             break
                         try:
                             chunk = json.loads(data_str)
+                            # ISS-069: بعض نماذج reasoning تضع الإجابة في delta.reasoning
+                            # لا delta.content (مثل nemotron-omni). نُعيد توجيهها لـ content
+                            # حتى لا تصل إجابات فارغة للطالب.
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                if delta.get("content") is None and delta.get("reasoning"):
+                                    delta["content"] = delta["reasoning"]
+                                    choices[0]["delta"] = delta
+                                    chunk["choices"] = choices
                             yield chunk
                             # ISS-STREAM-004: yield control to event loop after each chunk
                             # prevents machine-gun bursts that freeze the frontend renderer
@@ -190,6 +200,9 @@ class OpenRouterClient(LLMClient):
     ) -> str:
         """
         مساعد بسيط للإرسال غير المتدفق.
+
+        ISS-069: يستخرج delta.reasoning كـ fallback عند delta.content=None
+        لضمان وصول الإجابة حتى مع نماذج reasoning-only.
         """
         messages: list[JSONDict] = [
             {"role": "system", "content": system_prompt},  # type: ignore
@@ -201,7 +214,7 @@ class OpenRouterClient(LLMClient):
             choices = chunk.get("choices", [])  # type: ignore
             if choices:
                 delta = choices[0].get("delta", {})
-                content = delta.get("content", "")
+                content = delta.get("content") or delta.get("reasoning", "")
                 if content:
                     full_content.append(content)
 

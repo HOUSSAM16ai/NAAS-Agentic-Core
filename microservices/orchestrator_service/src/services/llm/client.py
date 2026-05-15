@@ -44,10 +44,11 @@ class AIClient:
             api_key=api_key or "dummy-key",
             base_url=base_url,
         )
-        # ISS-068: nemotron-3-nano-omni-30b-a3b-reasoning:free — أسرع نموذج مجاني مع reasoning tokens
-        # inclusionai/ring-2.6-1t:free معطّل (rate-limited upstream على Novita — 2026-05-15)
+        # ISS-069 (2026-05-15): nemotron-3-nano-omni-30b-a3b-reasoning:free يضع الإجابة
+        # في message.reasoning لا message.content → content=None مع system prompt.
+        # nemotron-3-nano-30b-a3b:free: جودة 4/4، TTFT=3.1s، content مضمون دائماً.
         self.default_model = os.getenv(
-            "ORCHESTRATOR_LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+            "ORCHESTRATOR_LLM_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free"
         )
 
     async def generate(

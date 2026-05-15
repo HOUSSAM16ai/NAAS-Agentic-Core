@@ -1,5 +1,44 @@
 # Architectural Decisions
-> Last updated: 2026-05-12 | Branch: `claude/setup-microservices-monitoring-ralbR`
+> Last updated: 2026-05-15 | Branch: `feat/iss-070-math-pipeline-langgraph`
+
+## D-049 · LangGraph Math Pipeline — 4-Node Specialized BAC Math Graph (2026-05-15)
+
+**Context**: تجريب حي كشف أن إرسال الأسئلة الرياضية مباشرة للـ LLM يُنتج إجابات كارثية: خلط لغات، بدون LaTeX، بدون منهجية. السبب: LLM عام بدون سياق متخصص.
+
+**Decision**: بناء `math_pipeline.py` — LangGraph StateGraph متخصص للرياضيات بـ 4 nodes:
+1. `problem_analysis_node` — تصنيف المسألة (11 نوع) + كشف الأخطاء الشائعة
+2. `solution_strategy_node` — اختيار الاستراتيجية المثلى + تبرير الاختيار
+3. `step_by_step_node` — الحل الكامل بـ 6 أقسام إلزامية + LaTeX + `$$\boxed{}$$`
+4. `verification_node` — تجميع الإجابة النهائية مع header مناسب
+
+**Routing**: `conversation_graph.py::response_node` يُوجِّه تلقائياً:
+- `subject == "math" AND intent == "educational"` → Math Pipeline
+- غير ذلك → LLM مباشر مع system prompt متخصص
+
+**Invariants**:
+- كل node مُحمي بـ `asyncio.wait_for(timeout=40s)`
+- fallback إلزامي عند فشل أي node
+- ISS-069 guard: `content or reasoning` — لا `content=None` صامت
+- النموذج الافتراضي: `nvidia/nemotron-3-nano-30b-a3b:free` (مُتحقَّق حياً: 2.4s، عربية نقية، LaTeX)
+
+**Results (live 2026-05-15)**:
+- `∫x·ln(x)dx` → `$$\boxed{\frac{x^2}{2}\ln(x) - \frac{x^2}{4} + C}$$` في 8.4s ✅
+- `lim(x→0) sin(x)/x` → شرح Squeeze theorem كامل في 11.6s ✅
+- 36/36 اختبار ناجح ✅
+
+## D-050 · ConversationGraph 3-Node Architecture + Subject Detection (2026-05-15)
+
+**Context**: `conversation_graph.py` كان بـ 2 nodes فقط (intent → response) بدون تحليل سياق.
+
+**Decision**: ترقية إلى 3 nodes:
+- `intent_node` → `context_node` → `response_node`
+- `context_node` يكتشف المادة (math/physics/chemistry/general) ويُعزِّز السؤال
+- `ConversationState` يشمل `subject` + `enriched_question` الجديدين
+- `ChatResponse` يُعيد `subject` للـ frontend
+
+**Invariant**: `subject` يُحدَّد دائماً — لا يُعاد `None` أبداً.
+
+---
 
 ## D-048 · DSPy/raw-OpenAI Streaming via Custom Events (2026-05-12 — same branch)
 

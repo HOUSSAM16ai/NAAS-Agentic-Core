@@ -1,6 +1,37 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-15** | Branch: `fix/iss-069-content-none-reasoning-model`
-> Previous: `fix/iss-068-model-fix-ai-quality`
+> Last updated: **2026-05-15** | Branch: `feat/iss-070-math-pipeline-langgraph`
+> Previous: `fix/iss-069-content-none-reasoning-model`
+
+## D-062 Live Verification Results (2026-05-15) — ISS-070 Math Pipeline
+
+### بنشمارك النماذج الحي (2026-05-15)
+
+| Model | TTFT | Arabic | LaTeX | Status |
+|-------|------|--------|-------|--------|
+| `nvidia/nemotron-3-nano-30b-a3b:free` | 2.4s | ✅ | ✅ | **PRIMARY** |
+| `nvidia/nemotron-3-super-120b-a12b:free` | 10.3s | ✅ | ✅ | FALLBACK-1 |
+| `openai/gpt-oss-120b:free` | 41.8s | ✅ | ✅ | FALLBACK-2 |
+| `openai/gpt-oss-20b:free` | 10.4s | ✅ | ✅ | FALLBACK-3 |
+| `google/gemma-4-26b-a4b-it:free` | 15.5s | ✅ | ✅ | FALLBACK-4 |
+| `google/gemini-2.0-flash-exp:free` | N/A | ❌ | ❌ | **DEAD** — No endpoints |
+| `meta-llama/llama-3.2-11b-vision-instruct:free` | N/A | ❌ | ❌ | **DEAD** — No endpoints |
+| `deepseek/deepseek-v4-flash:free` | 51.9s | ⚠️ | ❌ | BROKEN — خلط لغات |
+
+### Math Pipeline Live Test (2026-05-15)
+
+| Test | Type | Time | LaTeX | boxed | Result |
+|------|------|------|-------|-------|--------|
+| `∫x·ln(x)dx` | integral | 8.4s | ✅ | ✅ | PASS |
+| `lim(x→0) sin(x)/x` | limit | 11.6s | ✅ | ✅ | PASS |
+| `f(x)=(x²-4)/(x-1) إشارة` | function_study | 13.5s | ✅ | ✅ | PASS |
+
+### Test Suite (2026-05-15)
+- `tests/microservices/conversation_service/test_math_pipeline.py`: **36/36 PASS**
+
+### قواعد لا تُخرق (مُضافة 2026-05-15)
+- `google/gemini-2.0-flash-exp:free` و `meta-llama/llama-3.2-11b-vision-instruct:free` → **DEAD** — لا تستخدمهما في fallback chain
+- كل سؤال رياضي تعليمي → Math Pipeline (4 nodes) لا LLM مباشر
+- `nvidia/nemotron-3-nano-30b-a3b:free` مع system prompt صارم → عربية نقية + LaTeX صحيح
 
 ## D-061 Live Verification Results (2026-05-15) — ISS-069 content=None Fix
 

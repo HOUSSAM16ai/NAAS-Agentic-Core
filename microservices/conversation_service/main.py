@@ -141,6 +141,7 @@ class ChatResponse(BaseModel):
 
     response: str
     intent: str
+    subject: str = "general"   # math | physics | chemistry | general
     thread_id: str
     correlation_id: str
     graph_ready: bool
@@ -209,6 +210,7 @@ async def chat_message(req: ChatRequest) -> ChatResponse:
         return ChatResponse(
             response=result["response"],
             intent=result["intent"],
+            subject=result.get("subject", "general"),
             thread_id=thread_id,
             correlation_id=correlation_id,
             graph_ready=_GRAPH_READY,

@@ -70,10 +70,12 @@ class AvailableModels:
     GEMINI_PRO_15 = "google/gemini-pro-1.5"
     LLAMA_3_70B = "meta-llama/llama-3-70b-instruct"
     LLAMA_3_8B = "meta-llama/llama-3-8b-instruct"
-    LLAMA_3_2_11B_VISION_FREE = "meta-llama/llama-3.2-11b-vision-instruct:free"
-    GEMINI_2_FLASH_EXP_FREE = "google/gemini-2.0-flash-exp:free"
-    PHI_3_MINI_FREE = "microsoft/phi-3-mini-128k-instruct:free"
-    KAT_CODER_PRO_FREE = "kwaipilot/kat-coder-pro:free"
+    # ISS-070 (2026-05-15): تحديث fallback chain — نماذج مُتحقَّق منها حياً
+    # gemini-2.0-flash-exp و llama-3.2-11b-vision غير متاحة → استبدال بنماذج مُتحقَّق منها
+    LLAMA_3_2_11B_VISION_FREE = "openai/gpt-oss-20b:free"          # بديل متاح
+    GEMINI_2_FLASH_EXP_FREE = "google/gemma-4-26b-a4b-it:free"     # بديل متاح
+    PHI_3_MINI_FREE = "z-ai/glm-4.5-air:free"                      # بديل متاح
+    KAT_CODER_PRO_FREE = "openai/gpt-oss-120b:free"                # بديل متاح
     QWEN_QWEN3_CODER_FREE = "qwen/qwen3-coder:free"
     # ISS-068: نماذج عاملة حقيقية — مُحدَّثة بعد بنشمارك 2026-05-15
     NEMOTRON_3_SUPER_120B_FREE = "nvidia/nemotron-3-super-120b-a12b:free"

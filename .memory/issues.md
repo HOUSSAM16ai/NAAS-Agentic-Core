@@ -1,5 +1,36 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-15 | Branch: `fix/iss-069-content-none-reasoning-model`
+> Last updated: 2026-05-15 | Branch: `feat/iss-070-math-pipeline-langgraph`
+
+---
+
+## 🟢 Resolved 2026-05-15 (ISS-070 — Catastrophic Math Responses / LangGraph Overhaul)
+
+### ISS-070 · إجابات الرياضيات كارثية — خلط لغات + system prompts ضعيفة + fallback chain معطّل [RESOLVED]
+- **Status**: RESOLVED 2026-05-15
+- **Severity**: CRITICAL (الطالب يحصل على إجابات بالروسية والإنجليزية + بدون LaTeX + بدون منهجية)
+- **Root causes**:
+  1. `conversation_service` system prompt بسيط جداً — لا LaTeX، لا منهجية، لا قواعد لغة
+  2. fallback chain يستخدم `gemini-2.0-flash-exp:free` و `llama-3.2-11b-vision:free` — كلاهما غير متاح
+  3. `nvidia/nemotron-3-nano-30b-a3b:free` يخلط اللغات مع context كبير بدون قواعد صارمة
+  4. لا يوجد pipeline متخصص للرياضيات — كل الأسئلة تذهب لـ LLM مباشر
+- **Evidence**: بنشمارك حي 2026-05-15 — النموذج يُعيد روسية + إنجليزية في نفس الإجابة
+- **Fix**:
+  1. `conversation_graph.py`: بنية جديدة `intent_node → context_node → response_node` + system prompts متخصصة + subject detection
+  2. `math_pipeline.py`: **LangGraph Math Pipeline** جديد — 4 nodes متخصصة للرياضيات
+  3. `local_graph.py`: system prompt مُحسَّن بـ 6 مراحل + قواعد لغة صارمة
+  4. `mcts.py` + `reasoning_service.py`: system prompts MCTS مُحسَّنة
+  5. fallback chain: استبدال النماذج غير المتاحة بنماذج مُتحقَّق منها حياً
+- **Files changed**:
+  - `microservices/conversation_service/src/conversation_graph.py` (بنية جديدة)
+  - `microservices/conversation_service/src/math_pipeline.py` (جديد — Math Pipeline)
+  - `microservices/conversation_service/main.py` (subject في ChatResponse)
+  - `app/services/chat/local_graph.py` (system prompts)
+  - `app/core/ai_config.py` (fallback chain)
+  - `microservices/orchestrator_service/src/core/ai_config.py` (fallback chain)
+  - `microservices/reasoning_agent/src/services/strategies/mcts.py` (prompts)
+  - `microservices/reasoning_agent/src/services/reasoning_service.py` (prompts)
+  - `tests/microservices/conversation_service/test_math_pipeline.py` (36 اختبار)
+- **Live results**: Math Pipeline ✅ | 36/36 tests ✅ | LaTeX + boxed ✅ | عربية نقية ✅
 
 ---
 

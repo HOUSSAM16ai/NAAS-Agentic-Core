@@ -1,0 +1,483 @@
+name: ISS-070 — Math Pipeline Quality Gate
+
+# يتحقق من:
+# 1. وجود math_pipeline.py وصحة بنيته (4 nodes)
+# 2. عدم استخدام نماذج غير متاحة في fallback chain
+# 3. وجود system prompts بقواعد اللغة الصارمة
+# 4. اختبارات Math Pipeline (36 اختبار)
+# 5. تصنيف 11 نوع مسألة رياضية
+# 6. subject detection في conversation_graph
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "microservices/conversation_service/src/math_pipeline.py"
+      - "microservices/conversation_service/src/conversation_graph.py"
+      - "microservices/conversation_service/main.py"
+      - "app/services/chat/local_graph.py"
+      - "app/core/ai_config.py"
+      - "microservices/orchestrator_service/src/core/ai_config.py"
+      - "microservices/reasoning_agent/src/services/strategies/mcts.py"
+      - "microservices/reasoning_agent/src/services/reasoning_service.py"
+      - "tests/microservices/conversation_service/test_math_pipeline.py"
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: iss-070-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 1: تحقق من وجود Math Pipeline وبنيته
+  # ─────────────────────────────────────────────────────────────────────────────
+  math-pipeline-structure:
+    name: "🔢 Math Pipeline Structure"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "تحقق من وجود math_pipeline.py"
+        run: |
+          if [ ! -f "microservices/conversation_service/src/math_pipeline.py" ]; then
+            echo "❌ math_pipeline.py مفقود"
+            exit 1
+          fi
+          echo "✅ math_pipeline.py موجود"
+
+      - name: "تحقق من 4 nodes في Math Pipeline"
+        run: |
+          PIPELINE="microservices/conversation_service/src/math_pipeline.py"
+          NODES=("problem_analysis_node" "solution_strategy_node" "step_by_step_node" "verification_node")
+          for node in "${NODES[@]}"; do
+            if ! grep -q "$node" "$PIPELINE"; then
+              echo "❌ Node مفقود: $node"
+              exit 1
+            fi
+            echo "✅ Node موجود: $node"
+          done
+
+      - name: "تحقق من LangGraph StateGraph"
+        run: |
+          PIPELINE="microservices/conversation_service/src/math_pipeline.py"
+          if ! grep -q "StateGraph" "$PIPELINE"; then
+            echo "❌ StateGraph مفقود في math_pipeline.py"
+            exit 1
+          fi
+          if ! grep -q "MathPipelineState" "$PIPELINE"; then
+            echo "❌ MathPipelineState مفقود"
+            exit 1
+          fi
+          echo "✅ StateGraph + MathPipelineState موجودان"
+
+      - name: "تحقق من timeout guard على كل node"
+        run: |
+          PIPELINE="microservices/conversation_service/src/math_pipeline.py"
+          TIMEOUT_COUNT=$(grep -c "asyncio.wait_for" "$PIPELINE" || true)
+          if [ "$TIMEOUT_COUNT" -lt 3 ]; then
+            echo "❌ timeout guard غير كافٍ: $TIMEOUT_COUNT (يجب >= 3)"
+            exit 1
+          fi
+          echo "✅ timeout guards: $TIMEOUT_COUNT"
+
+      - name: "تحقق من fallback في كل node"
+        run: |
+          PIPELINE="microservices/conversation_service/src/math_pipeline.py"
+          if ! grep -q "_build_fallback_solution" "$PIPELINE"; then
+            echo "❌ fallback function مفقودة"
+            exit 1
+          fi
+          echo "✅ fallback function موجودة"
+
+      - name: "تحقق من ISS-069 guard (content or reasoning)"
+        run: |
+          PIPELINE="microservices/conversation_service/src/math_pipeline.py"
+          if ! grep -q 'msg.get("content") or msg.get("reasoning")' "$PIPELINE"; then
+            echo "❌ ISS-069 guard مفقود في math_pipeline.py"
+            exit 1
+          fi
+          echo "✅ ISS-069 guard موجود"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 2: تحقق من conversation_graph المُحدَّث
+  # ─────────────────────────────────────────────────────────────────────────────
+  conversation-graph-structure:
+    name: "💬 Conversation Graph Structure"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "تحقق من 3 nodes في conversation_graph"
+        run: |
+          GRAPH="microservices/conversation_service/src/conversation_graph.py"
+          NODES=("intent_node" "context_node" "response_node")
+          for node in "${NODES[@]}"; do
+            if ! grep -q "async def $node" "$GRAPH"; then
+              echo "❌ Node مفقود: $node"
+              exit 1
+            fi
+            echo "✅ Node موجود: $node"
+          done
+
+      - name: "تحقق من subject detection"
+        run: |
+          GRAPH="microservices/conversation_service/src/conversation_graph.py"
+          if ! grep -q "_detect_subject" "$GRAPH"; then
+            echo "❌ _detect_subject مفقود"
+            exit 1
+          fi
+          if ! grep -q "_enrich_question" "$GRAPH"; then
+            echo "❌ _enrich_question مفقود"
+            exit 1
+          fi
+          echo "✅ subject detection موجود"
+
+      - name: "تحقق من ConversationState يشمل subject"
+        run: |
+          GRAPH="microservices/conversation_service/src/conversation_graph.py"
+          if ! grep -q '"subject"' "$GRAPH" && ! grep -q "subject: str" "$GRAPH"; then
+            echo "❌ subject مفقود من ConversationState"
+            exit 1
+          fi
+          echo "✅ subject موجود في ConversationState"
+
+      - name: "تحقق من توجيه الرياضيات للـ Math Pipeline"
+        run: |
+          GRAPH="microservices/conversation_service/src/conversation_graph.py"
+          if ! grep -q "invoke_math_pipeline" "$GRAPH"; then
+            echo "❌ توجيه Math Pipeline مفقود"
+            exit 1
+          fi
+          if ! grep -q 'subject == "math"' "$GRAPH"; then
+            echo "❌ شرط توجيه الرياضيات مفقود"
+            exit 1
+          fi
+          echo "✅ توجيه Math Pipeline موجود"
+
+      - name: "تحقق من system prompts متخصصة"
+        run: |
+          GRAPH="microservices/conversation_service/src/conversation_graph.py"
+          PROMPTS=("_SYSTEM_PROMPTS" "educational" "general" "chat")
+          for p in "${PROMPTS[@]}"; do
+            if ! grep -q "$p" "$GRAPH"; then
+              echo "❌ system prompt مفقود: $p"
+              exit 1
+            fi
+          done
+          echo "✅ system prompts متخصصة موجودة"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 3: تحقق من fallback chain — لا نماذج ميتة
+  # ─────────────────────────────────────────────────────────────────────────────
+  dead-model-ban:
+    name: "🚫 Dead Model Ban"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "تحقق من عدم وجود gemini-2.0-flash-exp كـ fallback نشط"
+        run: |
+          # هذا النموذج غير متاح — No endpoints found
+          DEAD_MODEL="google/gemini-2.0-flash-exp:free"
+          FILES=(
+            "app/core/ai_config.py"
+            "microservices/orchestrator_service/src/core/ai_config.py"
+          )
+          for f in "${FILES[@]}"; do
+            if grep -q "\"$DEAD_MODEL\"" "$f" 2>/dev/null; then
+              # تحقق أنه ليس في تعليق
+              if grep -v "^[[:space:]]*#" "$f" | grep -q "\"$DEAD_MODEL\""; then
+                echo "❌ نموذج ميت نشط في $f: $DEAD_MODEL"
+                exit 1
+              fi
+            fi
+          done
+          echo "✅ gemini-2.0-flash-exp غير مستخدم كـ fallback نشط"
+
+      - name: "تحقق من عدم وجود llama-3.2-11b-vision كـ fallback نشط"
+        run: |
+          DEAD_MODEL="meta-llama/llama-3.2-11b-vision-instruct:free"
+          FILES=(
+            "app/core/ai_config.py"
+            "microservices/orchestrator_service/src/core/ai_config.py"
+          )
+          for f in "${FILES[@]}"; do
+            if grep -v "^[[:space:]]*#" "$f" 2>/dev/null | grep -q "\"$DEAD_MODEL\""; then
+              echo "❌ نموذج ميت نشط في $f: $DEAD_MODEL"
+              exit 1
+            fi
+          done
+          echo "✅ llama-3.2-11b-vision غير مستخدم كـ fallback نشط"
+
+      - name: "تحقق من PRIMARY = nemotron-3-nano-30b-a3b:free"
+        run: |
+          PRIMARY="nvidia/nemotron-3-nano-30b-a3b:free"
+          if ! grep -q "$PRIMARY" "app/core/ai_config.py"; then
+            echo "❌ PRIMARY model غير صحيح في app/core/ai_config.py"
+            exit 1
+          fi
+          echo "✅ PRIMARY model صحيح: $PRIMARY"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 4: تحقق من system prompts — قواعد اللغة الصارمة
+  # ─────────────────────────────────────────────────────────────────────────────
+  system-prompt-quality:
+    name: "📝 System Prompt Quality"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "تحقق من LaTeX rules في local_graph.py"
+        run: |
+          GRAPH="app/services/chat/local_graph.py"
+          REQUIRED=("\\$\\$...\\$\\$" "\\\\\\\\boxed" "LaTeX" "العربية الفصحى")
+          for r in "${REQUIRED[@]}"; do
+            if ! grep -q "$r" "$GRAPH" 2>/dev/null; then
+              echo "⚠️ قد يكون مفقوداً: $r (تحقق يدوياً)"
+            fi
+          done
+          # تحقق من وجود boxed
+          if ! grep -q "boxed" "$GRAPH"; then
+            echo "❌ \\boxed مفقود من system prompt في local_graph.py"
+            exit 1
+          fi
+          echo "✅ LaTeX rules موجودة في local_graph.py"
+
+      - name: "تحقق من قواعد اللغة في math_pipeline.py"
+        run: |
+          PIPELINE="microservices/conversation_service/src/math_pipeline.py"
+          if ! grep -q "العربية الفصحى" "$PIPELINE"; then
+            echo "❌ قاعدة اللغة العربية مفقودة من math_pipeline.py"
+            exit 1
+          fi
+          if ! grep -q "boxed" "$PIPELINE"; then
+            echo "❌ \\boxed مفقود من math_pipeline.py"
+            exit 1
+          fi
+          echo "✅ قواعد اللغة و LaTeX موجودة في math_pipeline.py"
+
+      - name: "تحقق من 11 نوع مسألة رياضية"
+        run: |
+          PIPELINE="microservices/conversation_service/src/math_pipeline.py"
+          TYPES=("derivative" "integral" "limit" "equation" "function_study"
+                 "probability" "complex" "matrix" "geometry" "sequence" "differential_eq")
+          for t in "${TYPES[@]}"; do
+            if ! grep -q "\"$t\"" "$PIPELINE"; then
+              echo "❌ نوع مسألة مفقود: $t"
+              exit 1
+            fi
+          done
+          echo "✅ 11 نوع مسألة رياضية موجودة"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 5: تشغيل اختبارات Math Pipeline
+  # ─────────────────────────────────────────────────────────────────────────────
+  math-pipeline-tests:
+    name: "🧪 Math Pipeline Tests (36)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "إعداد Python 3.12"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: "تثبيت المتطلبات"
+        run: |
+          pip install -q \
+            fastapi==0.109.2 \
+            uvicorn==0.27.1 \
+            langgraph==1.2.0 \
+            langchain-core \
+            httpx \
+            prometheus_client \
+            pydantic \
+            sqlalchemy \
+            aiosqlite \
+            pytest \
+            pytest-asyncio \
+            anyio
+
+      - name: "تشغيل اختبارات Math Pipeline"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m pytest \
+            tests/microservices/conversation_service/test_math_pipeline.py \
+            -v \
+            --tb=short \
+            --no-header \
+            -q \
+            2>&1 | tee test_results.txt
+
+          # تحقق من عدد الاختبارات الناجحة
+          PASSED=$(grep -oP '\d+(?= passed)' test_results.txt || echo "0")
+          FAILED=$(grep -oP '\d+(?= failed)' test_results.txt || echo "0")
+
+          echo "✅ Passed: $PASSED | ❌ Failed: $FAILED"
+
+          if [ "$FAILED" -gt "0" ]; then
+            echo "❌ اختبارات فاشلة: $FAILED"
+            exit 1
+          fi
+
+          if [ "$PASSED" -lt "30" ]; then
+            echo "❌ عدد الاختبارات الناجحة أقل من المتوقع: $PASSED (يجب >= 30)"
+            exit 1
+          fi
+
+          echo "✅ جميع اختبارات Math Pipeline ناجحة: $PASSED"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 6: تحقق من تصنيف المسائل الرياضية
+  # ─────────────────────────────────────────────────────────────────────────────
+  math-classification-smoke:
+    name: "🔍 Math Classification Smoke Test"
+    runs-on: ubuntu-latest
+    needs: [math-pipeline-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "إعداد Python 3.12"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "تثبيت المتطلبات الأساسية"
+        run: pip install -q langgraph langchain-core prometheus_client pydantic sqlalchemy aiosqlite
+
+      - name: "اختبار تصنيف المسائل الرياضية"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python3 << 'EOF'
+          import sys
+          sys.path.insert(0, '.')
+          from microservices.conversation_service.src.math_pipeline import _classify_math_type
+
+          tests = [
+              ("احسب مشتق f(x) = x²", "derivative"),
+              ("احسب ∫x²dx", "integral"),
+              ("احسب نهاية الدالة عند اللانهاية", "limit"),
+              ("حل المعادلة x² - 4 = 0", "equation"),
+              ("ادرس إشارة الدالة", "function_study"),
+              ("احسب احتمال الحادثة A", "probability"),
+              ("أوجد module العدد المركب", "complex"),
+              ("احسب محدد المصفوفة", "matrix"),
+              ("ادرس تقاربية المتتالية", "sequence"),
+          ]
+
+          passed = 0
+          failed = 0
+          for question, expected in tests:
+              result = _classify_math_type(question)
+              if result == expected:
+                  print(f"✅ '{question[:30]}' → {result}")
+                  passed += 1
+              else:
+                  print(f"❌ '{question[:30]}' → {result} (expected: {expected})")
+                  failed += 1
+
+          print(f"\nResults: {passed}/{len(tests)} passed")
+          if failed > 0:
+              sys.exit(1)
+          EOF
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 7: تحقق من subject detection في conversation_graph
+  # ─────────────────────────────────────────────────────────────────────────────
+  subject-detection-smoke:
+    name: "🎯 Subject Detection Smoke Test"
+    runs-on: ubuntu-latest
+    needs: [math-pipeline-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "إعداد Python 3.12"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "تثبيت المتطلبات"
+        run: pip install -q langgraph langchain-core prometheus_client pydantic sqlalchemy aiosqlite
+
+      - name: "اختبار subject detection"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python3 << 'EOF'
+          import sys
+          sys.path.insert(0, '.')
+          from microservices.conversation_service.src.conversation_graph import (
+              _detect_subject, _classify_intent, _enrich_question
+          )
+
+          tests = [
+              (_detect_subject("احسب مشتق الدالة"), "math"),
+              (_detect_subject("احسب قوة نيوتن"), "physics"),
+              (_detect_subject("ما هو تفاعل الأكسدة"), "chemistry"),
+              (_detect_subject("مرحبا كيف حالك"), "general"),
+              (_classify_intent("اشرح لي التكامل"), "educational"),
+              (_classify_intent("مرحبا"), "chat"),
+          ]
+
+          passed = sum(1 for result, expected in tests if result == expected)
+          failed = sum(1 for result, expected in tests if result != expected)
+
+          for result, expected in tests:
+              icon = "✅" if result == expected else "❌"
+              print(f"{icon} result={result} expected={expected}")
+
+          print(f"\nResults: {passed}/{len(tests)} passed")
+          if failed > 0:
+              sys.exit(1)
+          EOF
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Summary
+  # ─────────────────────────────────────────────────────────────────────────────
+  gate-summary:
+    name: "📊 ISS-070 Gate Summary"
+    runs-on: ubuntu-latest
+    needs:
+      - math-pipeline-structure
+      - conversation-graph-structure
+      - dead-model-ban
+      - system-prompt-quality
+      - math-pipeline-tests
+      - math-classification-smoke
+      - subject-detection-smoke
+    if: always()
+    steps:
+      - name: "تقرير النتائج"
+        run: |
+          echo "## ISS-070 Math Pipeline Gate Results"
+          echo ""
+          echo "| Job | Status |"
+          echo "|-----|--------|"
+          echo "| Math Pipeline Structure | ${{ needs.math-pipeline-structure.result }} |"
+          echo "| Conversation Graph Structure | ${{ needs.conversation-graph-structure.result }} |"
+          echo "| Dead Model Ban | ${{ needs.dead-model-ban.result }} |"
+          echo "| System Prompt Quality | ${{ needs.system-prompt-quality.result }} |"
+          echo "| Math Pipeline Tests (36) | ${{ needs.math-pipeline-tests.result }} |"
+          echo "| Math Classification Smoke | ${{ needs.math-classification-smoke.result }} |"
+          echo "| Subject Detection Smoke | ${{ needs.subject-detection-smoke.result }} |"
+
+          # فشل إذا فشل أي job حرج
+          CRITICAL_JOBS=(
+            "${{ needs.math-pipeline-tests.result }}"
+            "${{ needs.dead-model-ban.result }}"
+            "${{ needs.math-pipeline-structure.result }}"
+          )
+          for status in "${CRITICAL_JOBS[@]}"; do
+            if [ "$status" = "failure" ]; then
+              echo ""
+              echo "❌ Gate FAILED — job حرج فشل"
+              exit 1
+            fi
+          done
+          echo ""
+          echo "✅ ISS-070 Gate PASSED"

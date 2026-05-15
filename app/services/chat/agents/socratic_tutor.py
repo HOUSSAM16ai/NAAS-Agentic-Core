@@ -244,8 +244,9 @@ class SocraticTutor:
         ]
 
         try:
+            # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
             response = await self.ai_client.generate(
-                model="inclusionai/ring-2.6-1t:free",
+                model="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
                 messages=messages,
                 response_format={"type": "json_object"},
             )

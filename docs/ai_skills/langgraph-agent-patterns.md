@@ -250,6 +250,33 @@ async with asyncio.timeout(30.0):
     await app.ainvoke({"question": "warmup", "intent": "", "response": "", "session_id": "warmup"})
 ```
 
+## LLM Models — Verified Live (2026-05-15 Benchmark)
+
+**قاعدة لا تُخرق:** قبل تعيين أي نموذج افتراضي، اختبره حياً على OpenRouter.
+
+| النموذج | TTFT | الجودة | الحالة |
+|---------|------|--------|--------|
+| `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` | 4s | ⭐⭐⭐⭐⭐ reasoning tokens + عربية ممتازة | ✅ **PRIMARY** |
+| `nvidia/nemotron-3-super-120b-a12b:free` | 14s | ⭐⭐⭐⭐⭐ جودة عالية | ✅ FALLBACK_1 |
+| `openai/gpt-oss-20b:free` | 25s | ⭐⭐⭐⭐ موثوق | ✅ FALLBACK_2 |
+| `openai/gpt-oss-120b:free` | 40s | ⭐⭐⭐⭐⭐ جودة عالية | ✅ FALLBACK_3 |
+| `nvidia/nemotron-3-nano-30b-a3b:free` | 4s | ⭐⭐⭐⭐ | ✅ FALLBACK_4 |
+| `inclusionai/ring-2.6-1t:free` | ∞ | ❌ | ❌ **محظور** — rate-limited upstream على Novita |
+| `google/gemini-2.0-flash-exp:free` | — | — | ❌ No endpoints |
+| `tngtech/deepseek-r1t2-chimera:free` | — | — | ❌ No endpoints |
+
+**MCTS depth مع النماذج المجانية:**
+- depth=1: آمن، TTFT معقول
+- depth=2: يستدعي LLM 6+ مرات → rate limiting حتمي → **محظور**
+
+```python
+# صحيح
+best_node = await mcts_strategy.execute(query, context, depth=1)
+
+# خطأ — يُسبب rate limiting
+best_node = await mcts_strategy.execute(query, context, depth=2)
+```
+
 ## Anti-patterns
 
 - **Do not** use `global` state inside nodes — pass everything through `AgentState`.
@@ -260,3 +287,5 @@ async with asyncio.timeout(30.0):
 - **Do not** wrap `AsyncPostgresSaver` — subclass it. LangGraph validates `isinstance(checkpointer, BaseCheckpointSaver)`.
 - **Do not** use port 6543 with psycopg/asyncpg — always convert to 5432 (ISS-040).
 - **Do not** call `ainvoke()` in lifespan without `asyncio.wait_for(..., timeout=30.0)` — unbounded awaits block ASGI startup.
+- **Do not** use `inclusionai/ring-2.6-1t:free` — rate-limited upstream على Novita (ISS-068).
+- **Do not** set MCTS depth > 1 with free models — causes rate limiting (ISS-068).

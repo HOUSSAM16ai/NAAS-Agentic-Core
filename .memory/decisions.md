@@ -1033,3 +1033,20 @@ processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
 2. ALL CSS variables MUST be defined in `:root` as fallback values.
 3. CI must verify `header-theme-btn` appears before `isMenuOpen &&` in JSX (line number check).
 **Status**: IMPLEMENTED 2026-05-14 — branch `fix/light-mode-theme-toggle-luxury`.
+
+---
+
+## D-060 — ISS-068 LLM Model Migration: inclusionai → nemotron-reasoning (2026-05-15)
+
+**Problem**: `inclusionai/ring-2.6-1t:free` rate-limited upstream على Novita — كان النموذج الافتراضي في 14 ملف. جميع الخدمات المصغرة تُعيد إجابات فارغة أو تنتهي مهلتها.
+**Decision**: استبدال بـ `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` كنموذج أساسي موحَّد.
+**Rationale**:
+- بنشمارك حي 2026-05-15: nemotron-reasoning TTFT=4s، reasoning tokens، عربية ممتازة، LaTeX صحيح.
+- fallback chain موثوق: `nemotron-super-120b` (14s) → `gpt-oss-20b` (25s) → `gpt-oss-120b` (40s).
+- MCTS depth=1 يكفي للإجابات التعليمية ويتجنب rate limiting (depth=2 يستدعي LLM 6+ مرات).
+**Invariants (قواعد دائمة)**:
+1. `inclusionai/ring-2.6-1t:free` محظور كنموذج افتراضي — rate-limited بشكل دائم على Novita.
+2. أي نموذج افتراضي جديد يجب أن يُختبر حياً قبل الاعتماد عليه.
+3. MCTS depth يجب أن يبقى ≤ 1 مع النماذج المجانية لتجنب rate limiting.
+4. System prompts يجب أن تتضمن: LaTeX إلزامي + خطوات مرقمة + `$$\boxed{...}$$`.
+**Status**: IMPLEMENTED 2026-05-15 — branch `fix/iss-068-model-fix-ai-quality`.

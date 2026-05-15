@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     ORCHESTRATOR_URL: str = "http://localhost:8006"
 
     # Reasoning Config
-    DEFAULT_MODEL: str = "inclusionai/ring-2.6-1t:free"
+    # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens حقيقية
+    DEFAULT_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
     MAX_TOKENS: int = 1024  # حد رمزي آمن لتجنب تجاوز رصيد OpenRouter
     REASONING_TIMEOUT: int = 300
 

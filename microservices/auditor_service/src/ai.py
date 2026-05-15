@@ -16,8 +16,8 @@ class SimpleAIClient:
     def __init__(self):
         self.api_key = os.environ.get("OPENROUTER_API_KEY")
         self.base_url = "https://openrouter.ai/api/v1"
-        # Default model matching the memory description
-        self.model = "inclusionai/ring-2.6-1t:free"
+        # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
+        self.model = os.environ.get("AUDITOR_LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
 
         if not self.api_key:
             logger.warning("OPENROUTER_API_KEY not found. AI calls will fail.")

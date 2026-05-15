@@ -1,0 +1,428 @@
+name: AI Quality Gate — ISS-068 Model Integrity
+
+# يتحقق من:
+# 1. عدم وجود inclusionai/ring-2.6-1t:free كقيمة نشطة (محظور — rate-limited)
+# 2. وجود النموذج الأساسي الصحيح في ai_config.py
+# 3. جودة system prompts (LaTeX + خطوات مرقمة)
+# 4. MCTS depth ≤ 1 مع النماذج المجانية
+# 5. اختبارات وحدة للـ LangGraph nodes
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "app/core/ai_config.py"
+      - "app/services/chat/local_graph.py"
+      - "app/services/chat/agents/**"
+      - "microservices/reasoning_agent/**"
+      - "microservices/research_agent/**"
+      - "microservices/planning_agent/**"
+      - "microservices/orchestrator_service/**"
+      - "microservices/conversation_service/**"
+      - "microservices/auditor_service/**"
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ai-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 1: تحقق من عدم وجود النموذج المحظور كقيمة نشطة
+  # ─────────────────────────────────────────────────────────────────────────────
+  banned-model-gate:
+    name: "🚫 Banned Model Check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for banned model as active value
+        run: |
+          echo "=== Checking for inclusionai/ring-2.6-1t:free as active value ==="
+          
+          # البحث عن النموذج المحظور كقيمة نشطة (ليس في التعليقات)
+          VIOLATIONS=$(grep -rn 'inclusionai/ring-2.6-1t:free' \
+            --include="*.py" \
+            app/ microservices/ \
+            | grep -v '__pycache__' \
+            | grep -v 'test_' \
+            | grep -v '^\s*#' \
+            | grep -v '\.pyc' \
+            || true)
+          
+          if [ -n "$VIOLATIONS" ]; then
+            echo "❌ VIOLATION: inclusionai/ring-2.6-1t:free found as active value!"
+            echo "This model is rate-limited upstream on Novita (ISS-068)."
+            echo ""
+            echo "Violations:"
+            echo "$VIOLATIONS"
+            echo ""
+            echo "Fix: Replace with nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+            exit 1
+          fi
+          
+          echo "✅ No banned model found as active value"
+
+      - name: Verify primary model is set correctly
+        run: |
+          echo "=== Verifying primary model in app/core/ai_config.py ==="
+          
+          PRIMARY=$(grep -n 'PRIMARY = _resolve_primary_model' app/core/ai_config.py | head -1)
+          echo "Found: $PRIMARY"
+          
+          if echo "$PRIMARY" | grep -q 'inclusionai'; then
+            echo "❌ Primary model is still set to banned inclusionai model!"
+            exit 1
+          fi
+          
+          if ! echo "$PRIMARY" | grep -q 'nvidia\|openai\|google\|meta\|qwen\|mistral'; then
+            echo "⚠️  Primary model may not be a known working model"
+            echo "Expected one of: nvidia/*, openai/*, google/*, meta/*, qwen/*, mistral/*"
+          fi
+          
+          echo "✅ Primary model check passed"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 2: تحقق من جودة system prompts
+  # ─────────────────────────────────────────────────────────────────────────────
+  system-prompt-quality:
+    name: "📝 System Prompt Quality"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check LaTeX requirements in educational prompts
+        run: |
+          echo "=== Checking LaTeX in educational system prompts ==="
+          
+          FILE="app/services/chat/local_graph.py"
+          
+          # تحقق من وجود LaTeX في educational prompt
+          if ! grep -q '\$\$' "$FILE"; then
+            echo "❌ Educational system prompt missing LaTeX ($$...$$)"
+            exit 1
+          fi
+          
+          if ! grep -q 'boxed' "$FILE"; then
+            echo "❌ Educational system prompt missing \\boxed{} for final results"
+            exit 1
+          fi
+          
+          if ! grep -q 'LaTeX' "$FILE"; then
+            echo "❌ Educational system prompt missing LaTeX instruction"
+            exit 1
+          fi
+          
+          echo "✅ LaTeX requirements present in educational prompts"
+
+      - name: Check exercise explanation prompt quality
+        run: |
+          echo "=== Checking exercise explanation prompt ==="
+          
+          FILE="app/services/chat/local_graph.py"
+          
+          # تحقق من وجود المبادئ الأساسية
+          CHECKS=(
+            "boxed"
+            "LaTeX"
+            "النموذجية"
+          )
+          
+          for check in "${CHECKS[@]}"; do
+            if ! grep -q "$check" "$FILE"; then
+              echo "❌ Exercise explanation prompt missing: $check"
+              exit 1
+            fi
+          done
+          
+          echo "✅ Exercise explanation prompt quality check passed"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 3: تحقق من MCTS depth
+  # ─────────────────────────────────────────────────────────────────────────────
+  mcts-depth-gate:
+    name: "🌲 MCTS Depth Gate"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check MCTS depth is not > 1 as default
+        run: |
+          echo "=== Checking MCTS depth configuration ==="
+          
+          FILE="microservices/reasoning_agent/src/services/reasoning_service.py"
+          
+          if [ ! -f "$FILE" ]; then
+            echo "⚠️  reasoning_service.py not found — skipping"
+            exit 0
+          fi
+          
+          # تحقق من أن depth=1 في الاستدعاء
+          DEPTH_CALL=$(grep -n 'strategy.execute' "$FILE" | head -1)
+          echo "Found: $DEPTH_CALL"
+          
+          if echo "$DEPTH_CALL" | grep -q 'depth=2\|depth=3\|depth=4\|depth=5'; then
+            echo "❌ MCTS depth > 1 detected!"
+            echo "This causes rate limiting with free models (ISS-068)."
+            echo "Fix: Use depth=1"
+            exit 1
+          fi
+          
+          echo "✅ MCTS depth check passed"
+
+      - name: Check MCTS timeout is reasonable
+        run: |
+          echo "=== Checking MCTS timeout ==="
+          
+          FILE="microservices/reasoning_agent/src/services/reasoning_service.py"
+          
+          if [ ! -f "$FILE" ]; then
+            exit 0
+          fi
+          
+          TIMEOUT=$(grep -n 'timeout=' "$FILE" | head -1)
+          echo "Found: $TIMEOUT"
+          
+          # تحقق من أن timeout ليس 300 ثانية (كان القيمة القديمة المعطّلة)
+          if echo "$TIMEOUT" | grep -q 'timeout=300'; then
+            echo "❌ MCTS timeout=300s is too high for free models!"
+            echo "Fix: Use timeout=45 or less"
+            exit 1
+          fi
+          
+          echo "✅ MCTS timeout check passed"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 4: اختبارات وحدة للـ AI config
+  # ─────────────────────────────────────────────────────────────────────────────
+  ai-config-unit-tests:
+    name: "🧪 AI Config Unit Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install minimal dependencies
+        run: |
+          pip install pydantic pydantic-settings python-dotenv --quiet
+
+      - name: Run AI config tests
+        env:
+          DATABASE_URL: "sqlite:///test.db"
+          SECRET_KEY: "test-secret-key-min-32-chars-here-ok"
+          ENVIRONMENT: "testing"
+        run: |
+          python3 << 'PYEOF'
+          import sys
+          sys.path.insert(0, '.')
+          
+          # Test 1: ai_config imports correctly
+          try:
+              from app.core.ai_config import get_ai_config, ActiveModels, AvailableModels
+              config = get_ai_config()
+              print(f"✅ ai_config imports OK")
+              print(f"   PRIMARY: {config.primary_model}")
+          except Exception as e:
+              print(f"❌ ai_config import failed: {e}")
+              sys.exit(1)
+          
+          # Test 2: banned model not in active config
+          BANNED = "inclusionai/ring-2.6-1t:free"
+          active_models = [
+              config.primary_model,
+              config.gateway_primary,
+              config.gateway_fallback_1,
+              config.gateway_fallback_2,
+          ]
+          for m in active_models:
+              if m == BANNED:
+                  print(f"❌ Banned model found in active config: {m}")
+                  sys.exit(1)
+          print(f"✅ No banned model in active config")
+          
+          # Test 3: primary model is a known working model
+          KNOWN_WORKING = [
+              "nvidia/", "openai/", "google/", "meta-llama/",
+              "qwen/", "mistral", "anthropic/"
+          ]
+          if not any(config.primary_model.startswith(p) for p in KNOWN_WORKING):
+              print(f"⚠️  Primary model may not be known working: {config.primary_model}")
+          else:
+              print(f"✅ Primary model is from known provider")
+          
+          # Test 4: fallback chain has at least 3 models
+          fallbacks = config.get_fallback_models()
+          if len(fallbacks) < 3:
+              print(f"❌ Fallback chain too short: {len(fallbacks)} models")
+              sys.exit(1)
+          print(f"✅ Fallback chain has {len(fallbacks)} models")
+          
+          print("\n✅ All AI config tests passed")
+          PYEOF
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 5: تحقق من microservices model configs
+  # ─────────────────────────────────────────────────────────────────────────────
+  microservices-model-audit:
+    name: "🔍 Microservices Model Audit"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit all microservice model defaults
+        run: |
+          echo "=== Auditing microservice model defaults ==="
+          
+          BANNED="inclusionai/ring-2.6-1t:free"
+          VIOLATIONS=0
+          
+          # فحص كل ملف Python في microservices
+          while IFS= read -r file; do
+            # تجاهل التعليقات والاختبارات
+            ACTIVE_USES=$(grep -n "$BANNED" "$file" 2>/dev/null \
+              | grep -v '^\s*#' \
+              | grep -v 'test_' \
+              || true)
+            
+            if [ -n "$ACTIVE_USES" ]; then
+              echo "❌ $file:"
+              echo "$ACTIVE_USES"
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done < <(find microservices/ -name "*.py" | grep -v __pycache__ | grep -v test_)
+          
+          if [ "$VIOLATIONS" -gt 0 ]; then
+            echo ""
+            echo "❌ Found $VIOLATIONS file(s) with banned model as active value"
+            echo "Fix: Replace with nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+            exit 1
+          fi
+          
+          echo "✅ All microservices use approved models"
+
+      - name: Verify reasoning agent model env var
+        run: |
+          echo "=== Checking reasoning agent model configuration ==="
+          
+          FILE="microservices/reasoning_agent/src/ai_client.py"
+          
+          if [ ! -f "$FILE" ]; then
+            echo "⚠️  ai_client.py not found"
+            exit 0
+          fi
+          
+          MODEL_LINE=$(grep -n 'OPENROUTER_MODEL\|self.model' "$FILE" | head -3)
+          echo "Model config: $MODEL_LINE"
+          
+          if echo "$MODEL_LINE" | grep -q 'inclusionai'; then
+            echo "❌ reasoning_agent still using banned model!"
+            exit 1
+          fi
+          
+          echo "✅ reasoning_agent model config OK"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 6: تحقق من LangGraph local_graph system prompts
+  # ─────────────────────────────────────────────────────────────────────────────
+  langgraph-prompt-integrity:
+    name: "🧠 LangGraph Prompt Integrity"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify local_graph system prompts
+        run: |
+          echo "=== Verifying local_graph.py system prompts ==="
+          
+          FILE="app/services/chat/local_graph.py"
+          
+          # تحقق من وجود 3 أنواع من prompts
+          for intent in "educational" "general" "chat"; do
+            if ! grep -q "\"$intent\":" "$FILE"; then
+              echo "❌ Missing intent prompt: $intent"
+              exit 1
+            fi
+          done
+          echo "✅ All 3 intent prompts present"
+          
+          # تحقق من LaTeX في educational prompt
+          EDUCATIONAL_SECTION=$(awk '/\"educational\":/,/\"general\":/' "$FILE")
+          
+          if ! echo "$EDUCATIONAL_SECTION" | grep -q '\$\$'; then
+            echo "❌ Educational prompt missing LaTeX ($$...$$)"
+            exit 1
+          fi
+          echo "✅ LaTeX present in educational prompt"
+          
+          # تحقق من exercise explanation prompt
+          if ! grep -q '_EXERCISE_EXPLANATION_SYSTEM_PROMPT' "$FILE"; then
+            echo "❌ Missing _EXERCISE_EXPLANATION_SYSTEM_PROMPT"
+            exit 1
+          fi
+          echo "✅ Exercise explanation prompt present"
+          
+          # تحقق من boxed في exercise prompt
+          EXERCISE_SECTION=$(awk '/_EXERCISE_EXPLANATION_SYSTEM_PROMPT/,/^[A-Z_]/' "$FILE")
+          if ! echo "$EXERCISE_SECTION" | grep -q 'boxed'; then
+            echo "❌ Exercise prompt missing \\boxed{} instruction"
+            exit 1
+          fi
+          echo "✅ \\boxed{} instruction present in exercise prompt"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Summary Job
+  # ─────────────────────────────────────────────────────────────────────────────
+  ai-quality-summary:
+    name: "📊 AI Quality Summary"
+    runs-on: ubuntu-latest
+    needs:
+      - banned-model-gate
+      - system-prompt-quality
+      - mcts-depth-gate
+      - ai-config-unit-tests
+      - microservices-model-audit
+      - langgraph-prompt-integrity
+    if: always()
+    steps:
+      - name: Report results
+        run: |
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║              AI Quality Gate — ISS-068 Results               ║"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          
+          jobs=(
+            "banned-model-gate:${{ needs.banned-model-gate.result }}"
+            "system-prompt-quality:${{ needs.system-prompt-quality.result }}"
+            "mcts-depth-gate:${{ needs.mcts-depth-gate.result }}"
+            "ai-config-unit-tests:${{ needs.ai-config-unit-tests.result }}"
+            "microservices-model-audit:${{ needs.microservices-model-audit.result }}"
+            "langgraph-prompt-integrity:${{ needs.langgraph-prompt-integrity.result }}"
+          )
+          
+          FAILED=0
+          for job in "${jobs[@]}"; do
+            name="${job%%:*}"
+            result="${job##*:}"
+            if [ "$result" = "success" ]; then
+              echo "║  ✅ $name"
+            else
+              echo "║  ❌ $name ($result)"
+              FAILED=$((FAILED + 1))
+            fi
+          done
+          
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          if [ "$FAILED" -eq 0 ]; then
+            echo "║  ✅ ALL CHECKS PASSED — AI quality maintained               ║"
+          else
+            echo "║  ❌ $FAILED CHECK(S) FAILED — Review required               ║"
+          fi
+          echo "╚══════════════════════════════════════════════════════════════╝"
+          
+          [ "$FAILED" -eq 0 ] || exit 1

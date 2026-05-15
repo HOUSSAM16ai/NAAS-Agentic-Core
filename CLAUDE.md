@@ -4089,3 +4089,7 @@ body { overflow-x: hidden; background: var(--bg-color); color: var(--text-color)
 1. **Theme button visibility**: زر تبديل الـ theme يجب أن يكون **دائماً مرئياً** في الـ header — لا يُخفى داخل dropdown.
 2. **`:root` completeness**: جميع CSS variables يجب أن تكون في `:root` كـ fallback — حتى لو كانت موجودة في `html[data-theme]` blocks.
 3. **CI gate**: `theme-button-gate` job يتحقق من أن `header-theme-btn` يظهر قبل `isMenuOpen &&` في JSX.
+
+---
+
+**Model fix applied 2026-05-15 (ISS-068 — inclusionai/ring-2.6-1t:free Rate-Limited / D-060):** تجريب حي كشف أن `inclusionai/ring-2.6-1t:free` معطّل upstream على Novita (rate-limited بشكل دائم). كان النموذج الافتراضي في 14 ملف عبر كل الخدمات المصغرة → جميع الخدمات تُعيد إجابات فارغة أو تنتهي مهلتها. بنشمارك حي لـ 8 نماذج مجانية على OpenRouter كشف أن `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` هو الأفضل (TTFT=4s، reasoning tokens، عربية ممتازة، LaTeX صحيح). **التغييرات:** استبدال النموذج في 14 ملف عبر `app/` و `microservices/`. fallback chain: `nemotron-super-120b` → `gpt-oss-20b` → `gpt-oss-120b`. MCTS depth: 2→1، timeout: 300s→45s. System prompts مُحدَّثة: LaTeX إلزامي + خطوات مرقمة + `$$\boxed{...}$$` + تفسير هندسي. **قاعدة لا تُخرق:** `inclusionai/ring-2.6-1t:free` محظور — لا تستخدمه كنموذج افتراضي. **نتائج حية:** reasoning-agent يُجيب بخطوات مفصلة + LaTeX صحيح ✅ | research-agent `tavily_available: true` ✅ | planning-agent PostgreSQL ✅.

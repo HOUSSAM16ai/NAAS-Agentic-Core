@@ -41,8 +41,9 @@ class PlanningAgentSettings(BaseSettings):
 
     # AI Settings
     OPENROUTER_API_KEY: SecretStr | None = Field(None, description="مفتاح API لخدمة OpenRouter")
+    # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
     AI_MODEL: str = Field(
-        "inclusionai/ring-2.6-1t:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
         description="اسم النموذج المستخدم في التخطيط",
     )
     AI_BASE_URL: str = Field(

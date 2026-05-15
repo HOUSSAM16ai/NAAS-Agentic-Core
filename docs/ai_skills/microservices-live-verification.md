@@ -308,7 +308,60 @@ curl -s -u admin:admin "http://localhost:3001/api/search?type=dash-db&limit=50" 
 
 ---
 
-## 7. Anti-patterns
+## 7. LLM Model Reality Check (ISS-068 — 2026-05-15)
+
+**قاعدة لا تُخرق:** قبل تعيين أي نموذج افتراضي، اختبره حياً.
+
+```bash
+# اختبار سريع لنموذج على OpenRouter
+python3 << 'EOF'
+import httpx, asyncio, time
+
+async def test(model):
+    headers = {
+        'Authorization': 'Bearer $OPENROUTER_API_KEY',
+        'Content-Type': 'application/json',
+    }
+    t0 = time.time()
+    async with httpx.AsyncClient(timeout=20) as c:
+        r = await c.post('https://openrouter.ai/api/v1/chat/completions',
+            headers=headers,
+            json={'model': model, 'messages': [{'role':'user','content':'مرحبا'}], 'max_tokens': 50})
+        d = r.json()
+        choices = d.get('choices', [])
+        if choices:
+            print(f'✅ {model}: {time.time()-t0:.1f}s')
+        else:
+            print(f'❌ {model}: {d.get("error",{}).get("message","?")}')
+
+asyncio.run(test('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'))
+EOF
+```
+
+**النماذج المجانية العاملة (بنشمارك 2026-05-15):**
+
+| النموذج | TTFT | الحالة |
+|---------|------|--------|
+| `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` | 4s | ✅ PRIMARY |
+| `nvidia/nemotron-3-super-120b-a12b:free` | 14s | ✅ FALLBACK_1 |
+| `openai/gpt-oss-20b:free` | 25s | ✅ FALLBACK_2 |
+| `openai/gpt-oss-120b:free` | 40s | ✅ FALLBACK_3 |
+| `inclusionai/ring-2.6-1t:free` | ∞ | ❌ **محظور** — rate-limited على Novita |
+
+**إصلاح سريع إذا كانت الخدمات تستخدم نموذجاً معطّلاً:**
+```bash
+# أعد تشغيل reasoning-agent بالنموذج الصحيح
+kill $(pgrep -f "reasoning_agent.main:app")
+OPENROUTER_MODEL="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" \
+OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
+PYTHONPATH="/workspaces/NAAS-Agentic-Core" \
+nohup python -m uvicorn microservices.reasoning_agent.main:app \
+  --host 0.0.0.0 --port 8008 --log-level warning > /tmp/reasoning.log 2>&1 &
+```
+
+---
+
+## 8. Anti-patterns
 
 - **Never** trust `ps aux | grep uvicorn` as proof of health — always probe `/health`.
 - **Never** use port 6543 with asyncpg — always convert to 5432 before passing to SQLAlchemy.
@@ -316,6 +369,8 @@ curl -s -u admin:admin "http://localhost:3001/api/search?type=dash-db&limit=50" 
 - **Never** use bare `uvicorn` binary in supervisor.sh — use `python -m uvicorn` for reliable env inheritance.
 - **Never** assume API keys are in process env — always verify with `/health` endpoint fields.
 - **Never** mark a service ACTIVE if `/health` shows `tavily_available="false"` or `llm_backend="mock"` when keys are expected.
+- **Never** use `inclusionai/ring-2.6-1t:free` as default model — rate-limited upstream (ISS-068).
+- **Never** set MCTS depth > 1 with free models — causes rate limiting cascade (ISS-068).
 
 ---
 

@@ -45,7 +45,9 @@ class ReasoningWorkflow(Workflow):
 
         logger.info("Executing MCTS Strategy...")
         # ISS-068: depth=1 لتجنب rate limiting مع النماذج المجانية (depth=2 يستدعي LLM 6+ مرات)
-        best_node = await self.strategy.execute(root_content=f"Analyze: {query}", context=context, depth=1)
+        best_node = await self.strategy.execute(
+            root_content=f"Analyze: {query}", context=context, depth=1
+        )
 
         logger.info(f"Selected best path: {best_node.content}")
 

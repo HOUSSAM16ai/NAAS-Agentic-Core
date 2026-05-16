@@ -152,8 +152,9 @@ class TestBACExercise2016WebSocket:
         assert len(resp) > 500, f"الرد قصير جداً: {len(resp)} حرف"
 
         # نص التمرين موجود
-        assert "g(x)" in resp or "g\\\\(x\\\\)" in resp or "الدالة" in resp, \
+        assert "g(x)" in resp or "g\\\\(x\\\\)" in resp or "الدالة" in resp, (
             "نص التمرين لا يحتوي على الدالة g"
+        )
         assert "f(x)" in resp or "الدالة" in resp, "نص التمرين لا يحتوي على الدالة f"
 
         # لا YAML frontmatter
@@ -161,8 +162,7 @@ class TestBACExercise2016WebSocket:
         assert "render:" not in resp, "YAML render config يظهر للطالب"
 
         # لا إجابة نموذجية
-        assert "عناصر الإجابة النموذجية" not in resp, \
-            "الإجابة النموذجية تظهر مع نص التمرين"
+        assert "عناصر الإجابة النموذجية" not in resp, "الإجابة النموذجية تظهر مع نص التمرين"
 
         # لا تلوث من تمارين أخرى
         assert "bac2024" not in resp.lower(), "تمرين 2024 يظهر مع تمرين 2016"
@@ -191,12 +191,21 @@ class TestBACExercise2016WebSocket:
         assert len(resp) > 100, f"الرد فارغ أو قصير جداً: {len(resp)}"
 
         # يجب أن يحتوي على نص السؤال
-        assert any(kw in resp for kw in ["g(x)", "الدالة", "احسب", "النهاية"]), \
+        assert any(kw in resp for kw in ["g(x)", "الدالة", "احسب", "النهاية"]), (
             "الرد لا يحتوي على نص السؤال"
+        )
 
         # يجب ألا يحتوي على حسابات الحل
-        solution_keywords = ["g(-1) =", "1 - e", "1-e", "≈ -1,718", "≈ -1.718",
-                             "g(2) =", "5e^{-2}", "الإجابة النموذجية"]
+        solution_keywords = [
+            "g(-1) =",
+            "1 - e",
+            "1-e",
+            "≈ -1,718",
+            "≈ -1.718",
+            "g(2) =",
+            "5e^{-2}",
+            "الإجابة النموذجية",
+        ]
         found = [kw for kw in solution_keywords if kw in resp]
         assert not found, f"الرد يحتوي على حل رغم الطلب بدون حل: {found}"
 
@@ -224,10 +233,12 @@ class TestBACExercise2016WebSocket:
         assert len(resp) >= 1500, f"الشرح قصير جداً: {len(resp)} حرف"
 
         # يصل إلى نتائج الإجابة النموذجية
-        assert any(kw in resp for kw in ["1 - e", "1-e", "1+5e", "1 + 5e"]), \
+        assert any(kw in resp for kw in ["1 - e", "1-e", "1+5e", "1 + 5e"]), (
             "الشرح لا يصل إلى g(-1)=1-e أو g(2)=1+5e^-2"
-        assert any(kw in resp for kw in ["+\\infty", "+∞", "لانهاية", "+inf"]), \
+        )
+        assert any(kw in resp for kw in ["+\\infty", "+∞", "لانهاية", "+inf"]), (
             "الشرح لا يذكر lim(-inf)=+inf"
+        )
         assert "0" in resp, "الشرح لا يذكر g(0)=0"
 
         # لا YAML ولا LLM failure
@@ -244,7 +255,7 @@ class TestBACExercise2016WebSocket:
         if self._conv_id is None:
             pytest.skip("T3 لم ينجح — لا conversation_id")
 
-        resp, cid = await _ws_send(
+        resp, _cid = await _ws_send(
             token=token,
             question="شرح شرح — أريد تعمقاً أكثر في كل خطوة، لماذا نفعل هذا؟ ما المبرر الرياضي؟",
             conversation_id=self._conv_id,
@@ -254,8 +265,9 @@ class TestBACExercise2016WebSocket:
         assert len(resp) >= 2000, f"الشرح المعمق قصير جداً: {len(resp)} حرف"
 
         # يحتوي على مبررات رياضية
-        assert any(kw in resp for kw in ["لوبيتال", "L'Hôpital", "مبرهنة", "نظرية", "مبرر"]), \
+        assert any(kw in resp for kw in ["لوبيتال", "L'Hôpital", "مبرهنة", "نظرية", "مبرر"]), (
             "الشرح المعمق لا يحتوي على مبررات رياضية"
+        )
 
         # لا LLM failure
         assert "System Alert" not in resp
@@ -292,9 +304,9 @@ class TestWebSocketAuthProtocol:
             # انتظر أول event
             raw = await asyncio.wait_for(ws.recv(), timeout=30)
             ev = json.loads(raw)
-            assert ev.get("type") in (
-                "conversation_init", "assistant_delta", "assistant_final"
-            ), f"event غير متوقع: {ev.get('type')}"
+            assert ev.get("type") in ("conversation_init", "assistant_delta", "assistant_final"), (
+                f"event غير متوقع: {ev.get('type')}"
+            )
 
         assert connected, "الاتصال لم يُقبل"
 
@@ -327,16 +339,17 @@ class TestWebSocketAuthProtocol:
                         delta_events.append(ev)
                     elif ev.get("type") in ("assistant_final", "stream_end"):
                         break
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
         if delta_events:
             first = delta_events[0]
             # يجب أن يكون المحتوى تحت "payload"
-            assert "payload" in first, \
-                f"assistant_delta لا يحتوي على 'payload': {first}"
-            assert "content" in first["payload"], \
+            assert "payload" in first, f"assistant_delta لا يحتوي على 'payload': {first}"
+            assert "content" in first["payload"], (
                 f"payload لا يحتوي على 'content': {first['payload']}"
+            )
             # يجب ألا يكون المحتوى في المستوى الأعلى مباشرة
-            assert first.get("content") is None or first.get("content") == "", \
+            assert first.get("content") is None or first.get("content") == "", (
                 "المحتوى في المستوى الأعلى — بنية غير متوقعة"
+            )

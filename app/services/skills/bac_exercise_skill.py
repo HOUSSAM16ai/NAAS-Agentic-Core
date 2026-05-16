@@ -28,9 +28,10 @@ ISS-058 (D-052): الـ Skill المعماري الذي يستبدل "Prompt Spa
 from __future__ import annotations
 
 import time
+from collections.abc import AsyncGenerator
 from contextlib import suppress
 from enum import Enum
-from typing import AsyncGenerator, Literal
+from typing import ClassVar, Literal
 
 from pydantic import Field
 
@@ -38,8 +39,10 @@ try:
     from app.core.logging import get_logger
 except ImportError:  # pragma: no cover — sandbox/test env without project logger
     import logging
+
     def get_logger(name: str) -> logging.Logger:  # type: ignore[no-redef]
         return logging.getLogger(name)
+
 
 from app.core.schemas import RobustBaseModel
 from app.services.capabilities.exercise_retrieval import (
@@ -54,12 +57,12 @@ from app.services.capabilities.exercise_retrieval import (
 logger = get_logger("skill.bac_exercise")
 
 
-class SkillMode(str, Enum):
+class SkillMode(str, Enum):  # noqa: UP042  # subclassing keeps str semantics on older runtimes
     """أنماط تشغيل الـ Skill — اختيار صريح يُجبر استدلال واضحاً."""
 
-    RETRIEVE = "retrieve"        # جلب نص تمرين رسمي
-    EXPLAIN = "explain"          # شرح كيف نصل للإجابة النموذجية
-    AUTO = "auto"                # تخمين النية تلقائياً
+    RETRIEVE = "retrieve"  # جلب نص تمرين رسمي
+    EXPLAIN = "explain"  # شرح كيف نصل للإجابة النموذجية
+    AUTO = "auto"  # تخمين النية تلقائياً
 
 
 class BACSkillInput(RobustBaseModel):
@@ -80,7 +83,7 @@ class BACSkillRetrievalOutput(RobustBaseModel):
     display_content: str  # نص نظيف للعرض (بدون YAML، بدون حل)
     is_streamable: bool = True
 
-    model_config = {"arbitrary_types_allowed": True}
+    model_config: ClassVar[dict[str, object]] = {"arbitrary_types_allowed": True}
 
 
 class BACSkillExplanationOutput(RobustBaseModel):
@@ -102,7 +105,7 @@ class BACSkillExplanationOutput(RobustBaseModel):
     requested_part: str | None = None
     match_source: Literal["question", "history"] = "question"
 
-    model_config = {"arbitrary_types_allowed": True}
+    model_config: ClassVar[dict[str, object]] = {"arbitrary_types_allowed": True}
 
 
 class SkillFailure(RobustBaseModel):
@@ -184,10 +187,7 @@ class BACExerciseSkill:
                     result = self._retrieve(payload)
             duration = time.perf_counter() - t0
             status = "success" if not isinstance(result, SkillFailure) else "no_match"
-            mode_label = (
-                result.mode if not isinstance(result, SkillFailure)
-                else payload.mode.value
-            )
+            mode_label = result.mode if not isinstance(result, SkillFailure) else payload.mode.value
             _record_metric(mode_label, status, duration)
             return result
         except Exception:
@@ -200,9 +200,7 @@ class BACExerciseSkill:
     # وضع RETRIEVE
     # ─────────────────────────────────────────────────────────────────────
     def _retrieve(self, payload: BACSkillInput) -> BACSkillRetrievalOutput | SkillFailure:
-        decision = detect_exercise_retrieval(
-            ExerciseRetrievalRequest(question=payload.question)
-        )
+        decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=payload.question))
         if not decision.recognized or decision.matched_entry is None:
             return SkillFailure(
                 reason=decision.reason or "no_retrieval_match",
@@ -263,12 +261,14 @@ class BACExerciseSkill:
         payload: BACSkillInput,
     ) -> AsyncGenerator[str, None]:
         """بث محتوى الاسترجاع كلمة-بكلمة (يستدعي مولِّد البث الأقدم)."""
-        result = self.invoke(BACSkillInput(
-            question=payload.question,
-            mode=SkillMode.RETRIEVE,
-            history_messages=payload.history_messages,
-            conversation_id=payload.conversation_id,
-        ))
+        result = self.invoke(
+            BACSkillInput(
+                question=payload.question,
+                mode=SkillMode.RETRIEVE,
+                history_messages=payload.history_messages,
+                conversation_id=payload.conversation_id,
+            )
+        )
         if not isinstance(result, BACSkillRetrievalOutput):
             return
 
@@ -286,12 +286,14 @@ class BACExerciseSkill:
         payload: BACSkillInput,
     ) -> AsyncGenerator[str, None]:
         """بث الشرح المُولَّد من LLM (يستدعي local_graph context-aware)."""
-        result = self.invoke(BACSkillInput(
-            question=payload.question,
-            mode=SkillMode.EXPLAIN,
-            history_messages=payload.history_messages,
-            conversation_id=payload.conversation_id,
-        ))
+        result = self.invoke(
+            BACSkillInput(
+                question=payload.question,
+                mode=SkillMode.EXPLAIN,
+                history_messages=payload.history_messages,
+                conversation_id=payload.conversation_id,
+            )
+        )
         if not isinstance(result, BACSkillExplanationOutput):
             return
 

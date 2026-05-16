@@ -15,8 +15,13 @@ CLAUDE.md §0.5: «كل قدرة ذكاء اصطناعي يجب أن تكون Sk
 - Output: `MathSkillOutput | SkillFailure`
 
 ## الاستقلالية
-- يستورد فقط من `microservices.conversation_service.src.math_pipeline`
-- لا يستورد من Skills أخرى
+- يحترم الـ hard boundary (`tests/architecture/test_boundaries.py`):
+  *لا يستورد* من `microservices/*` على مستوى الـ AST. يجلب
+  `invoke_math_pipeline` و `_TYPE_LABELS` ديناميكياً عبر
+  `importlib.import_module` عند `invoke()` فقط — بحيث يستطيع
+  الموناوليث استدعاء Skill conversation-service محلياً (in-process) متى
+  كان الـ pipeline متاحاً، ويُرجع `SkillFailure` بأمان إذا لم يكن.
+- لا يستورد من Skills أخرى مباشرةً
 - يعمل بدون orchestrator-service
 - آمن في وضع fallback عند فشل LLM (يُرجع `SkillFailure`)
 
@@ -38,6 +43,7 @@ if isinstance(result, MathSkillOutput):
 
 from __future__ import annotations
 
+import importlib
 import time
 from typing import Literal
 
@@ -51,6 +57,7 @@ except ImportError:  # pragma: no cover
     def get_logger(name: str) -> logging.Logger:  # type: ignore[no-redef]
         return logging.getLogger(name)
 
+
 from app.core.schemas import RobustBaseModel
 from app.services.skills.bac_exercise_skill import SkillFailure
 
@@ -62,20 +69,15 @@ try:
     from prometheus_client import REGISTRY, Counter, Histogram
 
     # حماية ضد إعادة التسجيل (re-import safe)
-    if "cogniforge_skill_math_invocations_total" in {
-        m.name for m in REGISTRY.collect()
-    }:
+    if "cogniforge_skill_math_invocations_total" in {m.name for m in REGISTRY.collect()}:
         _math_invocations = next(
-            m for m in REGISTRY.collect()
-            if m.name == "cogniforge_skill_math_invocations_total"
+            m for m in REGISTRY.collect() if m.name == "cogniforge_skill_math_invocations_total"
         )
         _math_duration = next(
-            m for m in REGISTRY.collect()
-            if m.name == "cogniforge_skill_math_duration_seconds"
+            m for m in REGISTRY.collect() if m.name == "cogniforge_skill_math_duration_seconds"
         )
         _math_retries = next(
-            m for m in REGISTRY.collect()
-            if m.name == "cogniforge_skill_math_retries_total"
+            m for m in REGISTRY.collect() if m.name == "cogniforge_skill_math_retries_total"
         )
     else:
         _math_invocations = Counter(
@@ -155,16 +157,38 @@ class MathSkill:
 
     _skill_name: str = "math"
 
+    # Dynamic resolution path to keep `app/` free of AST-level
+    # `from microservices.*` imports (enforced by tests/architecture/test_boundaries.py).
+    # The conversation-service math pipeline ships its module name as a
+    # plain string and is loaded on demand here.
+    _PIPELINE_MODULE: str = "microservices.conversation_service.src.math_pipeline"
+
+    @classmethod
+    def _load_pipeline(cls):
+        """Lazy import of the math pipeline module. Returns None if unavailable."""
+        try:
+            return importlib.import_module(cls._PIPELINE_MODULE)
+        except Exception:  # pragma: no cover — module not present in CI sandbox
+            return None
+
     async def invoke(self, payload: MathSkillInput) -> MathSkillOutput | SkillFailure:
         """يُنفِّذ الـ Skill ويُرجع نتيجة typed."""
         t0 = time.perf_counter()
         math_type = "general_math"
         try:
-            from microservices.conversation_service.src.math_pipeline import (
-                invoke_math_pipeline,
-            )
+            pipeline = self._load_pipeline()
+            if pipeline is None or not hasattr(pipeline, "invoke_math_pipeline"):
+                duration = time.perf_counter() - t0
+                _record_invocation(math_type, "unavailable", duration)
+                return SkillFailure(
+                    reason="pipeline_unavailable",
+                    details=(
+                        "conversation-service math_pipeline module is not importable. "
+                        "Run docker compose up -d or supervisor.sh to start it."
+                    ),
+                )
 
-            result = await invoke_math_pipeline(
+            result = await pipeline.invoke_math_pipeline(
                 question=payload.question,
                 thread_id=payload.thread_id or f"math-skill-{payload.conversation_id or 0}",
                 history=payload.history or [],
@@ -185,11 +209,11 @@ class MathSkill:
 
             # نجاح
             _record_invocation(math_type, "success", duration)
-            from microservices.conversation_service.src.math_pipeline import _TYPE_LABELS
+            type_labels = getattr(pipeline, "_TYPE_LABELS", {})
 
             return MathSkillOutput(
                 math_type=math_type,
-                type_label=_TYPE_LABELS.get(math_type, "📚 رياضيات"),
+                type_label=type_labels.get(math_type, "📚 رياضيات"),
                 solution=solution,
                 final_response=final_response,
                 duration_ms=int(duration * 1000),

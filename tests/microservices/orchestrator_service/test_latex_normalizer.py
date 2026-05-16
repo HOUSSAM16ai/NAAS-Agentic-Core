@@ -107,9 +107,7 @@ class TestLatexStreamNormalizer:
         assert "\\[" not in result
 
     def test_equation_env_streaming(self):
-        result = self._stream(
-            r"المعادلة \begin{equation} y' + 2y = 0 \end{equation} حلها."
-        )
+        result = self._stream(r"المعادلة \begin{equation} y' + 2y = 0 \end{equation} حلها.")
         assert "$$" in result
         assert "\\begin{equation" not in result
 
@@ -125,10 +123,14 @@ class TestLatexStreamNormalizer:
 
     def test_large_block_forced_flush(self):
         """block ضخم بدون إغلاق → forced flush مع تطبيع جزئي."""
+        # When the buffer crosses _MAX_BUFFER inside a block, feed() emits a
+        # forced-flushed normalized chunk and resets the buffer. The remaining
+        # output (if any) comes from flush(). Mirror that here.
         huge = r"\[" + "x = " + "a" * 9500  # أكبر من _MAX_BUFFER
         n = LatexStreamNormalizer()
-        n.feed(huge)
-        out = n.flush()
+        out: list[str] = []
+        out.extend(n.feed(huge))
+        out.extend(n.flush())
         assert len(out) > 0
         text = "".join(out)
         assert "x = " in text or "a" in text  # المحتوى لم يضع

@@ -11,18 +11,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from microservices.conversation_service.src.math_pipeline import (
-    _classify_math_type,
-    _get_math_context,
-    build_math_pipeline,
-    get_math_pipeline,
-    invoke_math_pipeline,
-)
 from microservices.conversation_service.src.conversation_graph import (
     _classify_intent,
     _detect_subject,
@@ -30,7 +22,13 @@ from microservices.conversation_service.src.conversation_graph import (
     build_conversation_graph,
     invoke_graph,
 )
-
+from microservices.conversation_service.src.math_pipeline import (
+    _classify_math_type,
+    _get_math_context,
+    build_math_pipeline,
+    get_math_pipeline,
+    invoke_math_pipeline,
+)
 
 # ── اختبارات تصنيف المسائل ────────────────────────────────────────────────────
 
@@ -159,6 +157,7 @@ class TestMathPipelineInvoke:
     async def test_fallback_when_no_api_key(self):
         """يتحقق من fallback عند غياب API key."""
         import os
+
         original = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
             result = await invoke_math_pipeline(
@@ -256,12 +255,14 @@ class TestConversationGraphUpdated:
     @pytest.mark.asyncio
     async def test_invoke_graph_math_routes_to_pipeline(self):
         """يتحقق من توجيه الأسئلة الرياضية للـ Math Pipeline."""
-        pipeline_mock = AsyncMock(return_value={
-            "final_response": "$$\\boxed{2x}$$",
-            "math_type": "derivative",
-            "solution": "f'(x) = 2x",
-            "error": None,
-        })
+        pipeline_mock = AsyncMock(
+            return_value={
+                "final_response": "$$\\boxed{2x}$$",
+                "math_type": "derivative",
+                "solution": "f'(x) = 2x",
+                "error": None,
+            }
+        )
 
         # الـ import يحدث داخل response_node — نُعيد تعريف الدالة في الـ module المُستورَد
         with patch(
@@ -293,4 +294,3 @@ class TestConversationGraphUpdated:
 
         # يجب أن يُعيد fallback لا exception
         assert "response" in result
-

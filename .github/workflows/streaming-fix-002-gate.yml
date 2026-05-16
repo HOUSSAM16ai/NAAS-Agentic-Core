@@ -64,8 +64,17 @@ jobs:
           if 'extract_stream_content' not in src:
               print('FAIL: general_knowledge.py missing extract_stream_content')
               sys.exit(1)
-          if 'chunk.get' in src:
-              print('FAIL: general_knowledge.py still uses chunk.get() (broken pattern)')
+          # Only flag *code* usage of chunk.get(...). Comments that historically
+          # mention chunk.get() as the old/broken pattern are intentional and
+          # must not trip the gate.
+          code_lines = [
+              ln for ln in src.splitlines()
+              if 'chunk.get' in ln and not ln.lstrip().startswith('#')
+          ]
+          if code_lines:
+              print('FAIL: general_knowledge.py still uses chunk.get() in code (broken pattern)')
+              for ln in code_lines:
+                  print(f'  > {ln.strip()}')
               sys.exit(1)
           print('PASS: general_knowledge.py uses extract_stream_content')
           "
@@ -129,24 +138,43 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Verify deepseek is default model (not nemotron single-chunk)
+      - name: Verify a streaming-capable model is configured (no single-chunk regression)
         run: |
           python3 -c "
           import sys, pathlib
 
-          # Check orchestrator llm client
-          orch_src = pathlib.Path('microservices/orchestrator_service/src/services/llm/client.py').read_text()
-          if 'deepseek' not in orch_src and 'ORCHESTRATOR_LLM_MODEL' not in orch_src:
-              print('FAIL: orchestrator llm/client.py missing deepseek model config')
-              sys.exit(1)
-          print('PASS: orchestrator uses deepseek/configurable model')
+          # The original ISS-STREAM-002 fix banned nemotron *omni reasoning* because it
+          # streamed in one chunk. After ISS-068 / D-060 (rate-limited inclusionai
+          # replacement) and ISS-069 / D-061 (content=None reasoning model), the
+          # current verified-live default is nvidia/nemotron-3-nano-30b-a3b:free,
+          # which streams properly. The contract this gate now enforces:
+          #   1) orchestrator can be pointed at any streaming model via ORCHESTRATOR_LLM_MODEL
+          #   2) monolith picks its model through _resolve_primary_model() (env override + default)
+          #   3) the single-chunk nemotron-3-nano-omni-30b-a3b-reasoning is NOT the default
 
-          # Check monolith ai_config
-          mono_src = pathlib.Path('app/core/ai_config.py').read_text()
-          if 'deepseek' not in mono_src:
-              print('FAIL: app/core/ai_config.py missing deepseek model')
+          orch_src = pathlib.Path('microservices/orchestrator_service/src/services/llm/client.py').read_text()
+          if 'ORCHESTRATOR_LLM_MODEL' not in orch_src and 'deepseek' not in orch_src:
+              print('FAIL: orchestrator llm/client.py missing configurable model env var')
               sys.exit(1)
-          print('PASS: monolith ai_config uses deepseek model')
+          print('PASS: orchestrator uses configurable model (ORCHESTRATOR_LLM_MODEL)')
+
+          mono_src = pathlib.Path('app/core/ai_config.py').read_text()
+          if '_resolve_primary_model' not in mono_src and 'OPENROUTER_PRIMARY_MODEL' not in mono_src:
+              print('FAIL: app/core/ai_config.py missing configurable PRIMARY model resolver')
+              sys.exit(1)
+          if 'nemotron-3-nano-omni-30b-a3b-reasoning' in mono_src:
+              # ISS-069 ban: this reasoning-only model returns content=None → empty answers
+              # Verify it appears only inside comments (historical context).
+              banned = [
+                  ln for ln in mono_src.splitlines()
+                  if 'nemotron-3-nano-omni-30b-a3b-reasoning' in ln and not ln.lstrip().startswith('#')
+              ]
+              if banned:
+                  print('FAIL: banned single-chunk reasoning model is referenced in code')
+                  for ln in banned:
+                      print(f'  > {ln.strip()}')
+                  sys.exit(1)
+          print('PASS: monolith ai_config exposes configurable PRIMARY model resolver')
           "
 
   # ── Job 4: Streaming Prometheus metrics ───────────────────────────────────

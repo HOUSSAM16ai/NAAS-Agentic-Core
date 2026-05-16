@@ -103,7 +103,9 @@ class OpenRouterClient(LLMClient):
         for model_id in models_to_try:
             try:
                 logger.info(f"Attempting model: {model_id}")
-                async for chunk in self._stream_model(client, model_id, messages, max_tokens=max_tokens):
+                async for chunk in self._stream_model(
+                    client, model_id, messages, max_tokens=max_tokens
+                ):
                     full_response_chunks.append(chunk)
                     yield chunk
 

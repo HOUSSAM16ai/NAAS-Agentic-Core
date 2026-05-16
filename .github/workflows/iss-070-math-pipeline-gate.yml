@@ -46,10 +46,14 @@ jobs:
           fi
           echo "✅ math_pipeline.py موجود"
 
-      - name: "تحقق من 4 nodes في Math Pipeline"
+      - name: "تحقق من nodes في Math Pipeline (ISS-074: 3 nodes — classify→solve→normalize)"
         run: |
           PIPELINE="microservices/conversation_service/src/math_pipeline.py"
-          NODES=("problem_analysis_node" "solution_strategy_node" "step_by_step_node" "verification_node")
+          # ISS-074 (D-062) overhauled the pipeline to 3 nodes:
+          #   classify_node → solve_node → normalize_node (LaTeX normalization is now
+          #   a deterministic post-step, not 4 separate analysis/strategy/step/verify nodes).
+          # See .memory/decisions.md D-062 and CLAUDE.md §6.43 for the rationale.
+          NODES=("classify_node" "solve_node" "normalize_node")
           for node in "${NODES[@]}"; do
             if ! grep -q "$node" "$PIPELINE"; then
               echo "❌ Node مفقود: $node"

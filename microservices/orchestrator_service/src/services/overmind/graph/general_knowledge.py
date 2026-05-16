@@ -82,6 +82,7 @@ class GeneralKnowledgeNode:
                             from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
                                 sanitize_chunk,
                             )
+
                             sanitized = sanitize_chunk(safe_chunk)
                             if not sanitized:
                                 continue
@@ -100,6 +101,7 @@ class GeneralKnowledgeNode:
                     from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
                         sanitize_chunk,
                     )
+
                     sanitized_tail = sanitize_chunk(tail_chunk)
                     if not sanitized_tail:
                         continue
@@ -130,6 +132,7 @@ class GeneralKnowledgeNode:
             from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
                 sanitize_response,
             )
+
             response_content = sanitize_response(response_content.strip(), intent="general")
 
             emit_telemetry(node_name="GeneralKnowledgeNode", start_time=start_time, state=state)

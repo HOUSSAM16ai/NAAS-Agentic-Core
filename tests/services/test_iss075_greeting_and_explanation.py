@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import re
 
-
 # ─── Test fixtures (يجب أن يطابق الـ patterns في local_graph.py + path_observer.py)
 
 _GREETING_PATTERNS = [
@@ -100,13 +99,26 @@ class TestGreetingRegex:
 # ─── Sanitizer tests ──────────────────────────────────────────────────────────
 
 _FOREIGN_REPLACEMENTS = {
-    "линейный": "خطي", "линейная": "خطية", "линейное": "خطية",
-    "функция": "دالة", "уравнение": "معادلة",
-    "også": "أيضاً", "auch": "أيضاً",
-    "aparece": "يظهر", "aparecen": "تظهر",
-    "wishes": "أمنيات", "invitation": "دعوة",
-    "。": ".", "（": "(", "）": ")", "「": '"', "」": '"',
-    "『": '"', "』": '"', "、": "،", "〜": "~",
+    "линейный": "خطي",
+    "линейная": "خطية",
+    "линейное": "خطية",
+    "функция": "دالة",
+    "уравнение": "معادلة",
+    "også": "أيضاً",
+    "auch": "أيضاً",
+    "aparece": "يظهر",
+    "aparecen": "تظهر",
+    "wishes": "أمنيات",
+    "invitation": "دعوة",
+    "。": ".",
+    "（": "(",
+    "）": ")",
+    "「": '"',
+    "」": '"',
+    "『": '"',
+    "』": '"',
+    "、": "،",
+    "〜": "~",
 }
 
 _CHAT_META_PATTERNS = [
@@ -213,6 +225,7 @@ class TestExplanationPatterns:
         from app.services.capabilities.exercise_retrieval import (
             _BAC_EXERCISE_EXPLANATION_PATTERNS,
         )
+
         positives = [
             "أريد شرح مفصل للسؤال 1 أ",
             "شرح مفصل للسؤال 1 أ",
@@ -223,5 +236,6 @@ class TestExplanationPatterns:
             "لماذا نستخدم قاعدة الضرب",
         ]
         for q in positives:
-            assert self._has_pattern(q, _BAC_EXERCISE_EXPLANATION_PATTERNS), \
+            assert self._has_pattern(q, _BAC_EXERCISE_EXPLANATION_PATTERNS), (
                 f"FAIL: {q!r} should match explanation patterns"
+            )

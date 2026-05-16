@@ -4354,4 +4354,79 @@ TOTAL: 28/28 ✅
 | D-059 | always-visible theme button |
 | D-060 | ISS-068 — replace rate-limited model |
 | D-062 | ISS-074 — LaTeX stream normalizer + Math pipeline hardening + MathSkill |
-| **D-063** | **ISS-075 — Greeting regex fix + Explanation patterns + Foreign-script sanitizer** |
+| D-063 | ISS-075 — Greeting regex fix + Explanation patterns + Foreign-script sanitizer (monolith) |
+| **D-064** | **ISS-076 — Orchestrator response sanitizer + Greeting fast-path + UI flicker fix** |
+
+---
+
+## 6.45 Orchestrator Response Sanitizer + Greeting FastPath (2026-05-15, ISS-076 / D-064)
+
+> **اكتشاف جديد بالتجريب الحي 2026-05-15**: D-063 يُصلح المسار `app/services/chat/local_graph.py`، لكن **المسار الإنتاجي الفعلي** يستخدم `microservices/orchestrator_service/` — والذي لم يُحدَّث في D-063. شكوى المستخدم بعد deploy D-063:
+> 1. **"السلام عليكم"** → 5 أسطر etymology بـ `будет на вас`, `sentido de`, `Mexico City Amigos`, `Eugène的に`
+> 2. **UI flicker** رغم ISS-073 ("الواجهة ترمش، خطوط تظهر وتختفي")
+> 3. **"اكمل"** → هلوسة Mexico City Amigos
+
+### الإصلاح (D-064 — 3 طبقات)
+
+**طبقة 1: `response_sanitizer.py` module جديد** في `microservices/orchestrator_service/src/services/overmind/`:
+- `sanitize_response(text, intent)` — تنظيف موحَّد: Cyrillic + CJK Han + Hiragana + Katakana + foreign words (Russian/Spanish/Norwegian) + CJK punctuation
+- `get_greeting_fastpath_response(query)` — 22 تحية شائعة → رد deterministic 0ms (تجنَّب LLM)
+
+**طبقة 2: تطبيق في 3 nodes orchestrator**:
+| Node | تطبيق |
+|------|-------|
+| `ChatFallbackNode` (main.py) | greeting fastpath أولاً → sanitize chat على المخرج |
+| `GeneralKnowledgeNode` (general_knowledge.py) | sanitize general على المخرج |
+| `SynthesizerNode` (search.py) | sanitize educational على text_val قبل JSON wrapping |
+
+**طبقة 3: `ChatInterface.jsx` flicker bypass**:
+```jsx
+// قبل D-064: useTypewriter بعد streaming → 2 render cycles (empty → full) → flicker
+const displayedContent = useTypewriter(...);
+
+// بعد D-064: عرض مباشر — 1 render cycle → 0 flicker
+const contentToShow = msg.role === 'assistant' ? (msg.content || '') : '';
+```
+
+### نتائج التجريب الحي
+
+```
+=== D-064 unit tests ===
+TestSanitizeForeignScripts:  7/7 PASS  (Russian/Norwegian/Spanish/CJK/Japanese)
+TestChatMetaNarration:       5/5 PASS  (Okay, the user / Let me respond — chat فقط)
+TestGreetingFastPath:       10/10 PASS (السلام/مرحبا/كيف حالك/hello/شكرا)
+TestEdgeCases:               3/3 PASS  (None safe + plain Arabic + sin/cos preserved)
+TOTAL D-064:                25/25 ✅
+
+=== سيناريوهات الكارثة الحقيقية ===
+"السلام عليكم"              → fastpath response 0ms ✅
+"будет на вас"               → "يكون عليكم" ✅
+"Mexico City Amigos"          → "" ✅
+"sentido de"                  → "بمعنى" ✅
+"Eugène的に"                 → "" ✅
+"Okay, the user...مرحبا"      → "مرحبا" ✅
+
+=== Regression (لا كسر) ===
+D-062 (LatexStreamNormalizer): 10/10 PASS
+D-063 (Greeting + Explanation): 28/28 PASS
+GRAND TOTAL: 63/63 PASS
+```
+
+### القواعد الـ 5 الدائمة (D-064)
+
+**(1) كل عقدة orchestrator تُرسل نص للمستخدم تستدعي `sanitize_response()`**: الـ LLM المجاني hallucination (Mexico City/будет/Eugène) يُنظَّف قبل reaching the user.
+
+**(2) `ChatFallbackNode` يستدعي `get_greeting_fastpath_response()` قبل LLM**: التحية معروفة → رد سريع deterministic بدلاً من etymology طويلة.
+
+**(3) Frontend لا يستخدم `useTypewriter` بعد streaming**: المحتوى الكامل يُعرَض مباشرة. typewriter يُسبب render cycles إضافية → flicker.
+
+**(4) `_FOREIGN_REPLACEMENTS` dict يُحدَّث عند ظهور كلمة شاذة جديدة في الإنتاج**: لا regex عام (قد يكسر النص العربي) — allowlist محدَّد.
+
+**(5) Chat meta-narration stripping للـ `intent="chat"` فقط**: educational/general تحتفظ بـ "Let me explain" (طبيعي في الشرح التعليمي).
+
+### السلسلة الكاملة (D-049 → D-064)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 → D-063 | JSON envelope + indexed preempt + LaTeX delimiters + theme + Claude layout + overflow + light mode + theme button + rate-limited model + LaTeX stream normalizer + Math pipeline + greeting regex (monolith) |
+| **D-064** | **ISS-076 — Orchestrator response sanitizer + greeting fast-path + UI flicker bypass** |

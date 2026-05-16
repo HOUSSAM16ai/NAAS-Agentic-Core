@@ -1578,3 +1578,87 @@ SUMMARY: 7/7 PASS | 35.3s total
 
 **Status**: FIXED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e` (PR #2075).
 
+---
+
+## ISS-076 — Orchestrator Catastrophe: "السلام عليكم" → Mexico City Amigos + UI Flicker (2026-05-15)
+
+**Severity**: Critical (مستخدم بلَّغ كوارث متعددة على المسار الإنتاجي بعد D-063)
+
+**Live Catastrophe 2026-05-15** (بعد D-063 fix — لم يصل لمسار الإنتاج):
+
+1. **"السلام عليكم"** → رد etymological مع:
+   - Russian: `будет на вас` (يكون عليكم بالروسي)
+   - Spanish: `sentido de` (بمعنى)
+   - Japanese mixed: `Eugène的に` (إيغوني الـ)
+   - Mexico City Amigos (هلوسة كاملة!)
+   - English: `wishes`, `invitation`, `complete`
+
+2. **UI Flicker مدمر**: "الواجهة ترمش... خطوط تظهر و تختفي بسرعة" — رغم ISS-073 fix
+
+3. **"اكمل"** → هلوسة Mexico City Amigos بدل الإكمال
+
+**Root Causes (3 طبقات)**:
+
+1. **D-063 لم يصل لمسار الإنتاج**: D-063 يطبَّق في:
+   - `app/services/chat/local_graph.py` (monolith fallback path)
+   - لكن المسار الإنتاجي الفعلي يستخدم `microservices/orchestrator_service/`
+   - `ChatFallbackNode` و `GeneralKnowledgeNode` و `SynthesizerNode` بلا تنظيف foreign-script
+
+2. **`useTypewriter` flicker**: عند انتقال `isStreaming: true→false`:
+   - `useState(displayed='')` initial state على mount خلال streaming
+   - useEffect ينفِّذ `setDisplayed(safeFull)` → render إضافي
+   - النتيجة: render-1 (empty) ثم render-2 (full) → flicker بصري
+
+3. **لا greeting fast-path**: حتى مع `CHAT_INTENT_TRIGGERS` يكتشف التحية، الـ LLM يأخذ "السلام عليكم" ويُولِّد etymology طويلة
+
+**Fix (D-064 — 3 طبقات + 25 unit tests)**:
+
+| # | Layer |
+|---|-------|
+| 1 | `response_sanitizer.py` module جديد في orchestrator مع `sanitize_response()` + `get_greeting_fastpath_response()` |
+| 2 | تطبيق في 3 nodes: `ChatFallbackNode` (greeting fastpath + sanitize chat), `GeneralKnowledgeNode` (sanitize general), `SynthesizerNode` (sanitize educational) |
+| 3 | `frontend/ChatInterface.jsx`: تجاوز `useTypewriter` بالكامل بعد streaming — عرض المحتوى مباشرة من `msg.content` → 0 flicker |
+
+**Greeting Fast-Path Details**:
+- 22 تحية مُدرَجة (السلام عليكم/مرحبا/كيف حالك/صباح الخير/hello/شكرا/إلخ)
+- Match exact OR prefix (السلام عليكم ورحمة الله وبركاته يطابق بـ prefix)
+- 0ms response time (لا LLM)
+- 100% deterministic (لا hallucination)
+
+**Foreign-Word Replacements**:
+```python
+"будет на вас" → "يكون عليكم"   # روسي
+"sentido de"   → "بمعنى"          # إسباني
+"Mexico City"  → ""               # هلوسة
+"Eugène"       → ""               # هلوسة فرنسية
+"også"         → "أيضاً"          # نرويجي
+```
++ regex strip للـ Cyrillic + CJK Han + Japanese kana بالكامل.
+
+**Live verification (2026-05-15)**:
+
+```
+=== D-064 unit tests ===
+TestSanitizeForeignScripts:  7/7 PASS
+TestChatMetaNarration:       5/5 PASS
+TestGreetingFastPath:       10/10 PASS
+TestEdgeCases:               3/3 PASS
+TOTAL D-064:                25/25 ✅
+
+=== Regression ===
+D-062 (LatexStreamNormalizer): 10/10 PASS
+D-063 (Greeting + Explanation): 28/28 PASS
+TOTAL: 63/63 PASS
+```
+
+**Files**:
+- `microservices/orchestrator_service/src/services/overmind/response_sanitizer.py` (جديد)
+- `microservices/orchestrator_service/src/services/overmind/graph/main.py` (ChatFallbackNode integration)
+- `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py`
+- `microservices/orchestrator_service/src/services/overmind/graph/search.py`
+- `frontend/app/components/ChatInterface.jsx` (typewriter bypass)
+- `tests/microservices/orchestrator_service/test_response_sanitizer.py` (25 tests)
+- `.github/workflows/iss-076-response-sanitizer-gate.yml` (3 jobs CI)
+
+**Status**: FIXED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e` (PR #2075).
+

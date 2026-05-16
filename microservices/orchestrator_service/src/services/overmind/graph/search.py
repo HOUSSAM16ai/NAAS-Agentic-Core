@@ -508,6 +508,12 @@ class SynthesizerNode:
                         "عذراً، تعذر صياغة الشرح المطلوب بسبب خطأ داخلي. يرجى إعادة صياغة السؤال."
                     )
 
+        # D-064 (ISS-076): تنظيف foreign-script للمخرج التعليمي
+        from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
+            sanitize_response,
+        )
+        text_val = sanitize_response(text_val, intent="educational")
+
         response_json = {
             "المصدر": source,
             "مستوى_الثقة": confidence,

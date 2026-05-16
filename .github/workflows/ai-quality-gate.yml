@@ -49,13 +49,28 @@ jobs:
 
           TOTAL_VIOLATIONS=0
           for BANNED in "${BANNED_MODELS[@]}"; do
+            # `grep -rn` emits `<path>:<lineno>:<content>`, so a comment-only
+            # mention would not start with `#` at column 0 after the prefix.
+            # Strip the prefix first with awk, *then* drop comment-only lines.
             VIOLATIONS=$(grep -rn "$BANNED" \
               --include="*.py" \
               app/ microservices/ \
+              2>/dev/null \
               | grep -v '__pycache__' \
               | grep -v 'test_' \
-              | grep -v '^\s*#' \
               | grep -v '\.pyc' \
+              | awk -F: '
+                  {
+                    path=$1; line=$2;
+                    sub("^[^:]+:[0-9]+:", "", $0);
+                    content=$0;
+                    sub("^[[:space:]]+", "", content);
+                    # skip pure-comment lines and shebang-style metadata
+                    if (substr(content, 1, 1) != "#") {
+                      print path ":" line ":" content
+                    }
+                  }
+                ' \
               || true)
 
             if [ -n "$VIOLATIONS" ]; then
@@ -225,7 +240,14 @@ jobs:
 
       - name: Install minimal dependencies
         run: |
-          pip install pydantic pydantic-settings python-dotenv --quiet
+          # `app.core.ai_config` transitively imports `app.core.logging`, which
+          # uses `python-json-logger` for structured logs. Without it the gate
+          # fails at *import* time before any assertion can run.
+          pip install --quiet \
+            pydantic \
+            pydantic-settings \
+            python-dotenv \
+            python-json-logger
 
       - name: Run AI config tests
         env:
@@ -383,9 +405,18 @@ jobs:
           echo "✅ Exercise explanation prompt present"
           
           # تحقق من boxed في exercise prompt
-          EXERCISE_SECTION=$(awk '/_EXERCISE_EXPLANATION_SYSTEM_PROMPT/,/^[A-Z_]/' "$FILE")
+          # The prompt is `_EXERCISE_EXPLANATION_SYSTEM_PROMPT = ( ... )` — a
+          # multi-line parenthesised string. Capture from the opening line to
+          # the first line that is just `)` at column 0. Earlier versions used
+          # `^[A-Z_]` as the end pattern, but that matches the *same* line that
+          # opens the range (since the constant name starts with `_`), so the
+          # captured section was a single line and the `boxed` check always
+          # failed.
+          EXERCISE_SECTION=$(awk '/^_EXERCISE_EXPLANATION_SYSTEM_PROMPT = \(/,/^\)/' "$FILE")
           if ! echo "$EXERCISE_SECTION" | grep -q 'boxed'; then
             echo "❌ Exercise prompt missing \\boxed{} instruction"
+            echo "--- captured section (first 40 lines) ---"
+            echo "$EXERCISE_SECTION" | head -40
             exit 1
           fi
           echo "✅ \\boxed{} instruction present in exercise prompt"

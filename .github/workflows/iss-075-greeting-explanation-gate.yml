@@ -81,8 +81,13 @@ jobs:
             || (echo "❌ أريد شرح pattern missing" && exit 1)
           grep -q '"ممكن تشرح"' app/services/capabilities/exercise_retrieval.py \
             || (echo "❌ ممكن تشرح pattern missing" && exit 1)
-          grep -q '"للسؤال"' app/services/capabilities/exercise_retrieval.py \
-            || (echo "❌ للسؤال pattern missing" && exit 1)
+          # The "ل" prefix patterns are stored as compound phrases
+          # ("اشرح للسؤال" / "شرح للسؤال" / "اشرح للجزء" / "اشرح للفقرة")
+          # rather than the bare "للسؤال" literal — the assertion has to look
+          # for the actual stored form.
+          grep -q '"اشرح للسؤال"\|"شرح للسؤال"\|"اشرح للجزء"\|"اشرح للفقرة"' \
+            app/services/capabilities/exercise_retrieval.py \
+            || (echo "❌ ل-prefix explanation patterns missing" && exit 1)
           grep -q '"شرح مفصل"' app/services/capabilities/exercise_retrieval.py \
             || (echo "❌ شرح مفصل pattern missing" && exit 1)
           echo "✅ All D-063 explanation patterns present"

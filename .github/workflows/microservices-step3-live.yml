@@ -223,11 +223,15 @@ jobs:
           tree = ast.parse(source)
 
           # التحقق من وجود /health endpoint
+          # NOTE: `health_check` is `async def` so we must walk both
+          # `ast.FunctionDef` AND `ast.AsyncFunctionDef`. Earlier versions
+          # of this gate only checked sync defs and falsely reported the
+          # endpoint missing.
           health_found = False
           startup_state_found = False
 
           for node in ast.walk(tree):
-              if isinstance(node, ast.FunctionDef):
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                   if node.name == "health_check":
                       health_found = True
               if isinstance(node, ast.Attribute):
@@ -371,12 +375,16 @@ jobs:
           scrape_configs = config.get("scrape_configs", [])
           job_names = [sc.get("job_name") for sc in scrape_configs]
 
-          required_jobs = [
-              "orchestrator-service",
-              "cogniforge-fastapi",
-          ]
+          # The Docker-compose-managed Prometheus names the FastAPI scrape job
+          # `cogniforge-fastapi-direct`; the native-binary stack uses
+          # `cogniforge-fastapi`. Either is acceptable; we only require *some*
+          # FastAPI scrape job to be present.
+          required_jobs = ["orchestrator-service"]
+          fastapi_aliases = ("cogniforge-fastapi", "cogniforge-fastapi-direct", "cogniforge-app")
 
           missing = [j for j in required_jobs if j not in job_names]
+          if not any(alias in job_names for alias in fastapi_aliases):
+              missing.append("cogniforge-fastapi (or cogniforge-fastapi-direct / cogniforge-app)")
           if missing:
               print(f"❌ Missing Prometheus jobs: {missing}")
               sys.exit(1)
@@ -479,8 +487,16 @@ jobs:
           services = automations.get("services", {})
           tasks = automations.get("tasks", {})
 
-          if "orchestrator-stack" not in services:
-              errors.append("Missing service: orchestrator-stack")
+          # The orchestrator service may be registered as `orchestrator-service`
+          # (post-launch name, what ships today) or the legacy `orchestrator-stack`.
+          # Accept whichever is wired so the gate tracks the live convention.
+          orch_key = None
+          for candidate in ("orchestrator-service", "orchestrator-stack"):
+              if candidate in services:
+                  orch_key = candidate
+                  break
+          if orch_key is None:
+              errors.append("Missing orchestrator service (expected 'orchestrator-service' or 'orchestrator-stack')")
 
           required_tasks = ["health-probe", "verify-stack", "run-step3-tests"]
           for task in required_tasks:
@@ -492,11 +508,12 @@ jobs:
               if "dependsOn" in svc:
                   errors.append(f"Service '{svc_name}' has forbidden 'dependsOn' (services do not support it)")
 
-          # التحقق من وجود ready command في orchestrator-stack
-          orch_stack = services.get("orchestrator-stack", {})
-          commands = orch_stack.get("commands", {})
-          if "ready" not in commands:
-              errors.append("orchestrator-stack missing 'ready' command")
+          # التحقق من وجود ready command في orchestrator service
+          if orch_key:
+              orch_stack = services.get(orch_key, {})
+              commands = orch_stack.get("commands", {})
+              if "ready" not in commands:
+                  errors.append(f"{orch_key} missing 'ready' command")
 
           if errors:
               for e in errors:

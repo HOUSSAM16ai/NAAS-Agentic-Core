@@ -199,10 +199,23 @@ jobs:
         run: |
           echo "=== Checking StateGraph topology ==="
           GRAPH="microservices/conversation_service/src/conversation_graph.py"
+          # ISS-070 (D-058) inserted `context_node` between intent_node and
+          # response_node, so the live topology is now:
+          #   START → intent_node → context_node → response_node → END
+          # The gate accepts either the 2-node legacy form (intent→response)
+          # or the 3-node form (intent→context→response).
           grep -q "add_node.*intent_node" "$GRAPH" && echo "  ✅ intent_node added" || { echo "  ❌ intent_node not added"; exit 1; }
           grep -q "add_node.*response_node" "$GRAPH" && echo "  ✅ response_node added" || { echo "  ❌ response_node not added"; exit 1; }
           grep -q "add_edge.*START.*intent_node" "$GRAPH" && echo "  ✅ START→intent_node edge" || { echo "  ❌ START→intent_node missing"; exit 1; }
-          grep -q "add_edge.*intent_node.*response_node" "$GRAPH" && echo "  ✅ intent_node→response_node edge" || { echo "  ❌ intent_node→response_node missing"; exit 1; }
+          if grep -q "add_edge.*intent_node.*response_node" "$GRAPH"; then
+            echo "  ✅ intent_node→response_node edge (legacy 2-node form)"
+          elif grep -q 'add_edge.*intent_node.*context_node' "$GRAPH" \
+            && grep -q 'add_edge.*context_node.*response_node' "$GRAPH"; then
+            echo "  ✅ intent_node→context_node→response_node chain (D-058 3-node form)"
+          else
+            echo "  ❌ intent_node→response_node chain missing in either form"
+            exit 1
+          fi
           grep -q "add_edge.*response_node.*END" "$GRAPH" && echo "  ✅ response_node→END edge" || { echo "  ❌ response_node→END missing"; exit 1; }
 
       - name: "Verify Prometheus instrumentation in nodes"

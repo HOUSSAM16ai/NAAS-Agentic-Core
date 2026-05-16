@@ -53,11 +53,16 @@ _EDUCATIONAL_PATTERNS = [
     r"(exercise|problem|solve|lesson|physics|math|chemistry|history|geography)",
     r"(حل|شرح لي|وضح لي|علمني|أريد أن أفهم|كيف أحل|ما هو الحل)",
 ]
+# ISS-075 (D-063): regex مُحدَّث ليقبل امتدادات التحية الطبيعية
+# (نسخة مطابقة من local_graph.py — D-013 يفرض تكرار التحديث).
 _GREETING_PATTERNS = [
-    r"^(السلام|مرحبا|أهلا|هلا|hello|hi\b|hey|salam|بونجور)[\s\W]*$",
-    r"^(كيف حالك|ما أخبارك|how are you|كيف الأحوال)[\s\W]*$",
-    r"^(شكرا|شكراً|merci|thank you|thanks)[\s\W]*$",
-    r"^(مع السلامة|وداعاً|bye|goodbye|au revoir)[\s\W]*$",
+    r"^(?:و\s*)?(?:عليكم\s+)?السلام(?:\s+عليكم)?(?:\s+و?رحم[ةى]\s+الله)?(?:\s+و?بركاته)?[\s\W]*$",
+    r"^(مرحبا|أهلاً?|أهلا|هلاً?|هلا)(?:\s+\S+){0,3}[\s\W]*$",
+    r"^(hello|hi|hey|salam|بونجور|bonjour|salut|good\s+(morning|afternoon|evening))(?:\s+\S+){0,2}[\s\W]*$",
+    r"^(كيف\s+حالك|ما\s+أخبارك|how\s+are\s+you|كيف\s+الأحوال)(?:\s+\S+){0,4}[\s\W]*$",
+    r"^(شكرا|شكراً|merci|thank\s+you|thanks)(?:\s+\S+){0,4}[\s\W]*$",
+    r"^(مع\s+السلامة|وداع[اً]?|bye|goodbye|au\s+revoir)(?:\s+\S+){0,3}[\s\W]*$",
+    r"^(صباح\s+(الخير|النور)|مساء\s+(الخير|النور)|ليلة\s+سعيدة|صباحك\s+\S+|مساؤك\s+\S+)[\s\W]*$",
 ]
 
 

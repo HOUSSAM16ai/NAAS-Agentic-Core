@@ -1513,3 +1513,68 @@ SUMMARY: 7/7 PASS | 35.3s total
 
 **Status**: FIXED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.
 
+---
+
+## ISS-075 — Greeting Catastrophe + Lost Explanation Context (2026-05-15)
+
+**Severity**: Critical (مستخدم بلَّغ كارثة مرئية متعددة الأشكال)
+
+**Live Catastrophe** (يوم 2026-05-15 من شكوى المستخدم):
+1. **"السلام عليكم"** → رد طويل etymological مع كلمات نرويجية (`også`)، إنجليزية (`wishes`, `invitation`)، ونقاط CJK (`。 ）（`). 634 chars بدلاً من 40 ✗
+2. **"اشرح السؤال 1 أ"** → رد قصير 2 سطر يُحيل المستخدم للرد الأول (فقدان سياق)
+3. **"أريد شرح مفصل للسؤال 1 أ"** → كارثة كاملة: هلوسة إندونيسية عن `dokumen pendidikan` (كلمات: `kurikulum, silabus, Surat Keterangan`) بدلاً من شرح BAC 2016
+
+**Root Causes (3 طبقات مختبَرة حياً)**:
+
+1. **`_GREETING_PATTERNS` regex مكسور**: 
+   - النمط `^(السلام|...)[\s\W]*$` يفشل عند "السلام عليكم" لأن "عليكم" ليست في `[\s\W]`
+   - النتيجة: التحية تُصنَّف كـ `general` → الـ LLM يأخذ "السلام عليكم" كسؤال علمي → يكتب etymology مع كلمات أجنبية
+   - مكرَّر في `local_graph.py` AND `path_observer.py` (D-013 invariant)
+
+2. **`_BAC_EXERCISE_EXPLANATION_PATTERNS` لا يشمل صياغات طبيعية**:
+   - "أريد شرح" → لا match
+   - "شرح مفصل" → لا match
+   - "للسؤال" (مع prefix ل) → لا match
+   - "ممكن تشرح" → لا match
+   - النتيجة: `detect_explanation_with_context` يُرجع `recognized=False` → يذهب للـ LLM بدون سياق → هلوسة كاملة
+
+3. **`local_graph.py` لا ينظِّف foreign-script من ردود chat**:
+   - الـ LLM أحياناً يُسرِّب `također/også/wishes/。` حتى مع system prompt واضح
+   - لا توجد طبقة sanitization بعد `ai_client.send_message()` → الكلمات الأجنبية تصل للمستخدم
+
+**Fix (D-063 — 3 طبقات)**:
+
+| # | Layer |
+|---|-------|
+| 1 | `_GREETING_PATTERNS` (في local_graph.py + path_observer.py) — 7 patterns مرنة تقبل امتدادات: "السلام عليكم ورحمة الله وبركاته"، "كيف حالك يا أستاذ"، "مرحبا بك"، "صباح الخير"، "good morning" — 18+ صيغة تطابق |
+| 2 | `_BAC_EXERCISE_EXPLANATION_PATTERNS` — أُضيفت ~20 صياغة: "أريد شرح"، "شرح مفصل"، "ممكن تشرح"، "للسؤال"، "للجزء"، "أحتاج شرح"، "explain in detail"، إلخ |
+| 3 | `_sanitize_local_graph_response` في local_graph.py — يستبدل `също/også/wishes/invitation/CJK punct` + يحذف Cyrillic/CJK Han/Japanese + يُزيل English chat meta-narration (Okay, the user / Let me respond / إلخ) |
+
+**Live verification (2026-05-15)**:
+
+```
+9/9 PASS — السيناريو الكامل من شكوى المستخدم:
+  Step 1: "السلام عليكم"                       → chat intent ✅ (كان general)
+  Step 2: تمرين BAC 2016                       → matched bac2016_*.md ✅
+  Step 3: "اشرح السؤال 1 أ"                    → explanation w/ context ✅
+  Step 4: "أريد شرح مفصل للسؤال 1 أ"           → recognized ✅ (كان False!)
+  Step 5: "ممكن تشرح لي الجزء الثاني"          → recognized ✅
+  Step 6: "أحتاج شرح للجزء الأول"               → recognized ✅
+  Step 7: "شرحلي السؤال الأول"                  → recognized ✅
+  Step 8: "كيف نُثبت أن g(x) > 0"               → recognized ✅
+  Step 9: "لماذا نستخدم قاعدة لوبيتال هنا"      → recognized ✅
+```
+
+**Unit tests**: 28/28 PASS in `tests/services/test_iss075_greeting_and_explanation.py`:
+- TestGreetingRegex: 18 صيغة تحية (إسلامية + عربية + إنجليزية + فرنسية + صباح/مساء)
+- TestForeignScriptSanitizer: 9 تنظيف (نرويجي + إنجليزي + روسي + صيني + CJK punct + meta-narration)
+- TestExplanationPatterns: 7 صياغات طلب شرح طبيعية
+
+**Files**:
+- `app/services/chat/local_graph.py` — regex + sanitizer
+- `app/telemetry/path_observer.py` — regex (D-013 mirror)
+- `app/services/capabilities/exercise_retrieval.py` — explanation patterns
+- `tests/services/test_iss075_greeting_and_explanation.py` (جديد)
+
+**Status**: FIXED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e` (PR #2075).
+

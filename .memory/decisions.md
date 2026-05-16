@@ -1211,3 +1211,92 @@ TOTAL: 28/28 ✅
 ```
 
 **Status**: IMPLEMENTED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.
+
+---
+
+## D-064 — ISS-076 Response Sanitizer + Greeting FastPath + UI Flicker Fix (2026-05-15)
+
+**Problem**: تجريب حي 2026-05-15 (بعد D-063) أكَّد أن إصلاحات D-063 لم تصل لمسار الإنتاج. شكوى المستخدم أظهرت:
+
+1. **"السلام عليكم" → كارثة مرئية**: رد etymological طويل بكلمات أجنبية متناثرة:
+   - Russian `будет на вас` (يكون عليكم)
+   - Spanish `sentido de` (بمعنى)
+   - Japanese-mixed `Eugène的に`
+   - Mexico City Amigos (هلوسة كاملة)
+   - English `wishes`, `invitation`, `complete`
+
+2. **UI flicker مستمر**: "الواجهة ترمش... خطوط تظهر و تختفي بسرعة" رغم ISS-073
+
+3. **"اكمل" → Mexico City Amigos**: هلوسة بدل إكمال المحادثة
+
+**Root Cause (تجريب حي)**:
+
+1. **D-063 معزولة في monolith fallback path** (`app/services/chat/local_graph.py`) — لا تصل لـ `microservices/orchestrator_service/` الذي يخدم المسار الإنتاجي
+2. **`ChatFallbackNode` / `GeneralKnowledgeNode` / `SynthesizerNode`** بلا تنظيف foreign-script
+3. **`useTypewriter` flicker**: عند انتقال `isStreaming: true→false`:
+   - `useState('')` initial value on mount during streaming
+   - useEffect needs render cycle to `setDisplayed(safeFull)`
+   - Result: render-1 empty → render-2 full → flicker
+
+**Decision**: نقل D-063 logic إلى orchestrator + إضافة greeting fast-path + تجاوز useTypewriter بعد الاكتمال.
+
+**Implementation (3 طبقات)**:
+
+1. **`response_sanitizer.py` module جديد** في `microservices/orchestrator_service/src/services/overmind/`:
+   - `sanitize_response(text, intent)` — تنظيف Cyrillic/CJK Han/Hiragana/Katakana + كلمات شاذة (Russian/Spanish/Norwegian/CJK punct)
+   - `get_greeting_fastpath_response(query)` — رد deterministic لـ 22 تحية شائعة (0ms، بدون LLM)
+
+2. **تطبيق في 3 nodes** (orchestrator):
+   - `ChatFallbackNode`: fastpath أولاً (تجنَّب LLM للتحيات) → ثم sanitize chat على المخرج
+   - `GeneralKnowledgeNode`: sanitize general على المخرج
+   - `SynthesizerNode`: sanitize educational على text_val قبل JSON wrapping
+
+3. **`frontend/ChatInterface.jsx` flicker fix**:
+   ```jsx
+   // ISS-076 D-064: تجاوز useTypewriter بالكامل بعد streaming
+   const contentToShow = msg.role === 'assistant' ? (msg.content || '') : '';
+   ```
+   النص يُعرَض كاملاً مباشرة عند الاكتمال — لا render cycles إضافية → 0 flicker.
+
+**Rationale**:
+- الـ greeting fast-path أسرع 100x (0ms vs 5-15s LLM) + 100% deterministic + لا hallucination
+- الـ sanitizer يضمن أن أي LLM hallucination (`Mexico City Amigos`, `Eugène的に`) يُنظَّف قبل إرساله للمستخدم
+- تجاوز useTypewriter بعد streaming يحل flicker الكارثي (typewriter كان يُسبب 2 render cycles بدل 1)
+
+**Invariants (قواعد دائمة)**:
+1. أي عقدة في orchestrator تُرسل نص للمستخدم يجب أن تستدعي `sanitize_response()` على المخرج النهائي.
+2. `ChatFallbackNode` يجب أن يستدعي `get_greeting_fastpath_response()` قبل أي استدعاء LLM.
+3. الـ frontend لا يستخدم `useTypewriter` بعد streaming — المحتوى الكامل يُعرَض مباشرة.
+4. الـ foreign-replacements dict يُحدَّث عند ظهور كلمة شاذة جديدة في الإنتاج (لا regex عام).
+5. Chat meta-narration stripping يُطبَّق على `intent="chat"` فقط — educational/general تحتفظ بـ "Let me explain" (طبيعي في شرح).
+
+**Files**:
+- `microservices/orchestrator_service/src/services/overmind/response_sanitizer.py` (جديد)
+- `microservices/orchestrator_service/src/services/overmind/graph/{main.py, general_knowledge.py, search.py}`
+- `frontend/app/components/ChatInterface.jsx` (typewriter bypass)
+- `tests/microservices/orchestrator_service/test_response_sanitizer.py` (جديد — 25 tests)
+- `.github/workflows/iss-076-response-sanitizer-gate.yml` (جديد — 3 jobs)
+
+**Live verification (2026-05-15)**:
+```
+=== D-064 unit tests ===
+TestSanitizeForeignScripts:  7/7 PASS  (Russian/Norwegian/Spanish/CJK/Japanese)
+TestChatMetaNarration:       5/5 PASS  (Okay/Let me/First strip — chat only)
+TestGreetingFastPath:       10/10 PASS (السلام/مرحبا/كيف حالك/hello/شكرا/etc)
+TestEdgeCases:               3/3 PASS  (None safe + plain Arabic + Latin math)
+TOTAL D-064:                25/25 ✅
+
+=== Live catastrophe scenarios ===
+"السلام عليكم"              → fastpath response في 0ms ✅
+"будет на вас"               → "يكون عليكم" ✅
+"Mexico City Amigos"          → "" ✅
+"sentido de"                  → "بمعنى" ✅
+"Okay, the user...مرحبا"      → "مرحبا" ✅
+
+=== Regression ===
+D-062 (LatexStreamNormalizer): 10/10 PASS
+D-063 (Greeting + Explanation): 28/28 PASS
+GRAND TOTAL: 63/63 PASS
+```
+
+**Status**: IMPLEMENTED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.

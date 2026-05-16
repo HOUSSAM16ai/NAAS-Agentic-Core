@@ -113,6 +113,12 @@ class GeneralKnowledgeNode:
                 raw = resp.choices[0].message.content or ""
                 response_content = normalize_latex(raw)
 
+            # D-064 (ISS-076): تنظيف foreign-script (intent=general — لا meta stripping)
+            from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
+                sanitize_response,
+            )
+            response_content = sanitize_response(response_content.strip(), intent="general")
+
             emit_telemetry(node_name="GeneralKnowledgeNode", start_time=start_time, state=state)
             return {
                 "final_response": response_content.strip(),

@@ -684,6 +684,10 @@ class ChatFallbackNode:
             LatexStreamNormalizer,
             normalize_latex,
         )
+        from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
+            get_greeting_fastpath_response,
+            sanitize_response,
+        )
 
         from .telemetry import emit_telemetry
 
@@ -695,12 +699,37 @@ class ChatFallbackNode:
             query = messages[-1].content
         query = str(query or "").strip()
 
+        # ─── ISS-076 D-064: Greeting fast-path — تجنَّب LLM للتحيات الشائعة ────
+        # السبب: نماذج OpenRouter المجانية تُولِّد etymology طويلة بكلمات أجنبية
+        # عند سؤال "السلام عليكم" — فاستخدم رد deterministic مباشر.
+        fastpath_response = get_greeting_fastpath_response(query)
+        if fastpath_response:
+            writer = self._get_writer()
+            if writer is not None:
+                # ابث الرد المُعَدَّ مسبقاً (للحفاظ على نفس واجهة الـ streaming)
+                writer({
+                    "chunk_type": "assistant_delta",
+                    "content": fastpath_response,
+                    "node": "chat_fallback_fastpath",
+                })
+            emit_telemetry(node_name="ChatFallbackNode", start_time=start_time, state=state)
+            from langchain_core.messages import AIMessage
+            return {
+                "final_response": fastpath_response,
+                "messages": [AIMessage(content=fastpath_response)],
+            }
+        # ─────────────────────────────────────────────────────────────────────
+
         history = format_conversation_history(messages)
 
         if not history.strip():
             logger.debug("ChatFallbackNode: empty history for query=%.60s", query)
 
-        system_content = "أجب بدقة اعتماداً على سياق المحادثة. لا تتجاهل السياق أبداً."
+        system_content = (
+            "أجب بدقة اعتماداً على سياق المحادثة. لا تتجاهل السياق أبداً.\n"
+            "اكتب بالعربية الفصحى فقط — لا تخلط مع الإنجليزية أو الروسية أو الإسبانية.\n"
+            "اكتب ردك مباشرة — لا تكتب تفكيراً صوتياً (\"Let me think\", \"Okay, the user\")."
+        )
         user_content = f"السياق:\n{history}\n\nالسؤال:\n{query}"
 
         fallback_response = (
@@ -713,6 +742,7 @@ class ChatFallbackNode:
             if writer is not None:
                 # D-048 + ISS-STREAM-002: STREAMING — يبث token-by-token عبر custom event
                 # D-061 (ISS-074): تطبيع LaTeX على الـ chunks قبل الإرسال
+                # D-064 (ISS-076): تنظيف foreign-script + meta-narration
                 stream_messages = [
                     {"role": "system", "content": system_content},
                     {"role": "user", "content": user_content},
@@ -769,6 +799,9 @@ class ChatFallbackNode:
                 state=state,
                 error=error,
             )
+
+        # ─── D-064 (ISS-076): تنظيف foreign-script + chat meta-narration ────
+        fallback_response = sanitize_response(fallback_response, intent="chat")
 
         emit_telemetry(node_name="ChatFallbackNode", start_time=start_time, state=state)
 

@@ -269,19 +269,19 @@ const MessageBubble = memo(({ msg, idx }) => {
     const isStreaming = msg.role === 'assistant' && !msg.isComplete;
     const isEmpty = !msg.content || msg.content.trim() === '';
 
-    // ISS-073 (2026-05-15): إزالة useTypewriter أثناء streaming.
-    // useTypewriter + ReactMarkdown + KaTeX = re-render كارثي عند كل حرف →
-    // خطوط تظهر وتختفي + flicker مدمر.
-    // الحل: أثناء streaming → المحتوى الكامل مباشرة (Markdown يعرض نصاً خاماً).
-    //        بعد الاكتمال → useTypewriter للـ typewriter effect الجميل.
-    const displayedContent = useTypewriter(
-        msg.role === 'assistant' && !isStreaming ? (msg.content || '') : '',
-        false  // typewriter فقط بعد الاكتمال
-    );
-    // أثناء streaming: المحتوى الكامل مباشرة بدون typewriter
-    const contentToShow = isStreaming
-        ? (msg.content || '')
-        : (msg.role === 'assistant' ? displayedContent : '');
+    // ISS-076 (2026-05-15) D-064: تجاوز useTypewriter بالكامل لمنع flicker.
+    //
+    // السبب: عند انتقال `isStreaming` من true → false، useTypewriter كان
+    // يبدأ بـ displayed='' (initial state) ثم يستدعي setDisplayed(full)
+    // في useEffect → 2 render cycles → الـ DOM يعرض "" ثم "full content"
+    // → الواجهة "ترمش" + "خطوط تظهر وتختفي".
+    //
+    // الحل: عرض المحتوى الكامل مباشرة بعد streaming. لا typewriter effect
+    // إضافي (الـ streaming نفسه يُولِّد typewriter طبيعي).
+    //
+    // ISS-073 (سابق): أثناء streaming → الـ Markdown يعرض raw text (لا ReactMarkdown
+    // re-render مكلف، لا KaTeX flicker).
+    const contentToShow = msg.role === 'assistant' ? (msg.content || '') : '';
 
     const handleCopy = useCallback(() => {
         // ننسخ النص الكامل، ليس النسخة المعروضة جزئياً

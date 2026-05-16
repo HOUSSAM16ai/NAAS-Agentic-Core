@@ -11,6 +11,85 @@ from app.infrastructure.clients.orchestrator_client import OrchestratorClient
 from app.infrastructure.clients.routing_policy import ChatRoutingPolicy
 
 
+async def _empty_stream(*_args, **_kwargs):
+    """Async generator that yields nothing — used to silence streaming fallbacks."""
+    if False:
+        yield ""
+
+
+@pytest.fixture(autouse=True)
+def _disable_preempt_paths(monkeypatch: pytest.MonkeyPatch):
+    """
+    Newer fallback paths added between D-047 → D-053 expanded
+    `OrchestratorClient.chat_with_agent` past the two-shim layout the
+    resilience tests were written for:
+
+      * D-049 `_has_indexed_match` — short-circuits when the question
+        matches a `knowledge_index` entry (e.g. probability/numerical-
+        functions BAC exercises).
+      * D-052 `_has_explanation_with_context_match` — short-circuits
+        when the question + history map to an explanation-with-context
+        request.
+      * D-047/D-048 introduced streaming fallbacks:
+        `_stream_local_graph_response` (LangGraph) and
+        `_stream_local_general_chat_response` (raw LLM safety-net) —
+        both of which try to actually call OpenRouter (401 in CI).
+
+    The resilience tests assume an HTTP-failure → local-shim →
+    sanitized-error chain. Disable every newer path file-wide so each
+    test still exercises what it was designed to exercise. Individual
+    tests that *want* to exercise a specific path can override these
+    monkeypatches.
+    """
+    # Disable the two question-classification preempts.
+    monkeypatch.setattr(
+        OrchestratorClient,
+        "_has_indexed_match",
+        lambda self, question: False,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        OrchestratorClient,
+        "_has_explanation_with_context_match",
+        lambda self, question, history_messages: False,
+        raising=False,
+    )
+    # Silence the LLM-bound streaming fallbacks so they don't try to
+    # hit OpenRouter (which 401s without an API key in CI).
+    monkeypatch.setattr(
+        OrchestratorClient,
+        "_stream_local_graph_response",
+        _empty_stream,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        OrchestratorClient,
+        "_stream_local_general_chat_response",
+        _empty_stream,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        OrchestratorClient,
+        "_stream_exercise_explanation_response",
+        _empty_stream,
+        raising=False,
+    )
+    # Make the no-op streaming retrieval defer to the legacy
+    # `_build_local_retrieval_response` shim that the tests patch.
+    async def _stream_via_build(self, question):
+        full = await self._build_local_retrieval_response(question)
+        if full:
+            yield full
+
+    monkeypatch.setattr(
+        OrchestratorClient,
+        "_stream_local_retrieval_response",
+        _stream_via_build,
+        raising=False,
+    )
+    yield
+
+
 class _AlwaysFailClient:
     def build_request(self, *_args, **_kwargs):
         return object()

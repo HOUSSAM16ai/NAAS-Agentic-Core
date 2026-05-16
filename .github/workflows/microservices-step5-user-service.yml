@@ -267,13 +267,22 @@ jobs:
             -v --tb=short --no-header \
             --timeout=30 \
             2>&1 | tee step5_test_results.txt
+          PYTEST_EXIT=${PIPESTATUS[0]}
           echo ""
-          PASSED=$(grep -c "PASSED" step5_test_results.txt || echo 0)
-          FAILED=$(grep -c "FAILED" step5_test_results.txt || echo 0)
+          # NOTE: `grep -c FOO || echo 0` is a footgun — when grep finds 0
+          # matches it returns 1, so `|| echo 0` *appends* "0", producing
+          # "0\n0" in $FAILED, which then trips `[: integer expression`.
+          # Use `|| true` and `printf '%d\n'` to coerce to a single integer.
+          PASSED=$( { grep -c "PASSED" step5_test_results.txt || true; } | head -1)
+          FAILED=$( { grep -c "FAILED" step5_test_results.txt || true; } | head -1)
+          PASSED=${PASSED:-0}
+          FAILED=${FAILED:-0}
           echo "═══════════════════════════════════════════════════════════"
-          echo "  Step 5 Tests: ✅ $PASSED passed | ❌ $FAILED failed"
+          echo "  Step 5 Tests: ✅ ${PASSED} passed | ❌ ${FAILED} failed"
           echo "═══════════════════════════════════════════════════════════"
-          [ "$FAILED" -eq 0 ]
+          # Trust pytest's own exit code as the final word; the grep counts
+          # above are informational only.
+          exit "$PYTEST_EXIT"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Job 5: Step 4 Regression — التأكد من عدم كسر Step 4

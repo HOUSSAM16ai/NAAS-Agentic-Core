@@ -4248,3 +4248,110 @@ SUMMARY: 7/7 PASS | total_time=35.3s | كل LaTeX موحَّد $$...$$ | لا me
 | D-059 | always-visible theme button |
 | D-060 | ISS-068 — replace rate-limited model |
 | **D-062** | **ISS-074 — LaTeX stream normalizer + Math pipeline hardening + MathSkill** |
+| **D-063** | **ISS-075 — Greeting regex fix + Explanation patterns expansion + Foreign-script sanitizer** |
+
+---
+
+## 6.44 Greeting Catastrophe + Lost Explanation Context (2026-05-15, ISS-075 / D-063)
+
+> **الكارثة المُشخَّصة بالتجريب الحي 2026-05-15**: شكوى المستخدم أظهرت 3 إخفاقات متراكبة على المسار الإنتاجي:
+> 1. **"السلام عليكم"** → رد etymological 634 chars بكلمات أجنبية (`også`, `wishes`, `invitation`, `。 ）（`)
+> 2. **"اشرح السؤال 1 أ"** → رد قصير 2 سطر، فقدان سياق
+> 3. **"أريد شرح مفصل للسؤال 1 أ"** → هلوسة كاملة بالإندونيسية عن "dokumen pendidikan"
+
+### الأسباب الجذرية الثلاث (مختبرة حياً)
+
+**(1) `_GREETING_PATTERNS` regex مكسور**: `^(السلام|...)[\s\W]*$` يفشل عند "السلام عليكم" لأن "عليكم" ليست في `[\s\W]`. النتيجة: التحية تُصنَّف كـ `general` بدل `chat`، فيستخدم الـ LLM الـ `general` system prompt الذي يطلب "إجابة علمية بدقة" → الـ LLM يُولِّد etymology طويلة بكلمات أجنبية.
+
+**(2) `_BAC_EXERCISE_EXPLANATION_PATTERNS` لا يشمل صياغات طبيعية**: أنماط مثل "أريد شرح"، "ممكن تشرح"، "أحتاج شرح"، "للسؤال" (مع prefix ل)، "شرح مفصل" — كلها مفقودة. النتيجة: `detect_explanation_with_context` يُرجع `recognized=False` → يذهب الطلب للـ LLM بدون سياق التمرين → هلوسة كاملة.
+
+**(3) `local_graph.py` لا ينظِّف foreign-script**: الـ LLM يُسرِّب أحياناً `också/også/wishes/invitation/。` حتى مع system prompt صارم. لا توجد طبقة sanitization بعد `ai_client.send_message()`.
+
+### الإصلاح (D-063 — 3 طبقات)
+
+**طبقة 1: إعادة كتابة `_GREETING_PATTERNS`** (في `local_graph.py` + `path_observer.py` — D-013 invariant):
+```python
+_GREETING_PATTERNS = [
+    # تحيات إسلامية + امتدادات (السلام عليكم ورحمة الله وبركاته)
+    r"^(?:و\s*)?(?:عليكم\s+)?السلام(?:\s+عليكم)?(?:\s+و?رحم[ةى]\s+الله)?(?:\s+و?بركاته)?[\s\W]*$",
+    # مرحبا/أهلا/هلا + 0-3 كلمات (مرحبا بك / أهلاً وسهلاً / هلا والله)
+    r"^(مرحبا|أهلاً?|...)(?:\s+\S+){0,3}[\s\W]*$",
+    # كيف حالك + 0-4 كلمات (كيف حالك يا أستاذ / كيف حالك اليوم)
+    r"^(كيف\s+حالك|...)(?:\s+\S+){0,4}[\s\W]*$",
+    # صباح الخير / مساء النور / ليلة سعيدة
+    r"^(صباح\s+(الخير|النور)|...)[\s\W]*$",
+    # ... 7 patterns total، تطابق 18+ صيغة
+]
+```
+
+**طبقة 2: توسيع `_BAC_EXERCISE_EXPLANATION_PATTERNS`** (في `exercise_retrieval.py`):
+- صياغات "أريد"/"ممكن"/"أحتاج": `أريد شرح`, `أريد شرحاً`, `ممكن شرح`, `ممكن تشرح`, `أحتاج شرح`, `هل يمكن أن تشرح`
+- prefix "ل": `اشرح للسؤال`, `شرح للجزء`, `اشرح للفقرة`
+- مع "مفصل": `شرح مفصل`, `اشرح بالتفصيل`, `explain in detail`, `detailed explanation`
+- بالدارجة: `ابغى شرح`, `ابغي شرح`, `ابي شرح`, `ودي شرح`
+- إنجليزي: `I want explanation`, `give me explanation`, `can you explain`
+
+**طبقة 3: `_sanitize_local_graph_response()`** (في `local_graph.py`):
+```python
+_FOREIGN_REPLACEMENTS = {
+    "også": "أيضاً", "auch": "أيضاً",         # نرويجي/دانماركي
+    "линейный": "خطي", "функция": "دالة",    # روسي
+    "aparece": "يظهر",                       # إسباني
+    "wishes": "أمنيات", "invitation": "دعوة", # إنجليزي meta
+    "。": ".", "（": "(", "）": ")", ...      # CJK punctuation → عربية
+}
+# + regex strip: Cyrillic [Ѐ-ӿ]+ / CJK Han [一-鿿]+ / Japanese kana [぀-ゟ゠-ヿ]+
+# + chat meta-narration: "Okay, the user...", "First, I need to...", "Let me respond..."
+```
+
+### نتائج التجريب الحي بعد الإصلاح
+
+```
+=== سيناريو شكوى المستخدم الكامل ===
+Step 1: "السلام عليكم"                         → intent=chat ✅ (كان general)
+Step 2: تمرين BAC 2016                          → matched ✅
+Step 3: "اشرح السؤال 1 أ"                       → explanation w/ context ✅
+Step 4: "أريد شرح مفصل للسؤال 1 أ"              → recognized ✅ (كان False — هلوسة!)
+Step 5-9: 5 صياغات إضافية                       → 5/5 ✅
+==============================================
+SUMMARY: 9/9 PASS
+
+=== UNIT TESTS ===
+TestGreetingRegex: 18/18 PASS
+TestForeignScriptSanitizer: 9/9 PASS (including full user-catastrophe text)
+TestExplanationPatterns: 7/7 PASS
+TOTAL: 28/28 ✅
+```
+
+### القواعد الـ 5 الدائمة (D-063)
+
+**(1) Greeting regex يجب أن يقبل امتدادات طبيعية**: التحية الإسلامية الكاملة "السلام عليكم ورحمة الله وبركاته" = 5 كلمات. الـ regex يجب أن يقبل 4+ كلمات إضافية بعد التحية الأساسية.
+
+**(2) D-013 invariant: `_GREETING_PATTERNS` مكرَّر في ملفين**: `local_graph.py` AND `path_observer.py`. أي تعديل يجب أن يُطبَّق في كليهما في نفس الـ PR.
+
+**(3) Explanation patterns تشمل صياغات "أريد"/"ممكن"/"أحتاج" + prefix "ل"**: الـ patterns لا تكون حرفية فقط — الطلاب يستخدمون عبارات متنوعة (أريد شرح، ممكن تشرح، أحتاج شرح، للسؤال، للجزء).
+
+**(4) Sanitization عند المخرَج النهائي إلزامية**: الـ LLM يُسرِّب أحياناً كلمات أجنبية حتى مع system prompt صارم. الحل: طبقة sanitization جراحية بعد `ai_client.send_message()` — تستبدل كلمات معروفة + تحذف كتل Cyrillic/CJK/Hiragana كاملة.
+
+**(5) Chat meta-narration stripping للـ chat فقط**: لا تُطبَّق على educational responses (قد تحذف خطوات شرح). تُطبَّق فقط عند `intent == "chat"`.
+
+### الملفات المُعدَّلة (D-063)
+
+| File | Change |
+|------|--------|
+| `app/services/chat/local_graph.py` | `_GREETING_PATTERNS` (7 → 7 مرنة) + `_sanitize_local_graph_response()` |
+| `app/telemetry/path_observer.py` | `_GREETING_PATTERNS` (mirror — D-013) |
+| `app/services/capabilities/exercise_retrieval.py` | `_BAC_EXERCISE_EXPLANATION_PATTERNS` (+20 pattern) |
+| `tests/services/test_iss075_greeting_and_explanation.py` | **جديد** — 28 unit tests |
+| `.memory/issues.md` | ISS-075 entry |
+| `.memory/decisions.md` | D-063 entry |
+
+### السلسلة الكاملة (D-049 → D-063)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 → D-058 | JSON envelope + indexed preempt + LaTeX delimiters + theme system + legacy purge + Claude-style layout + overflow defense + light mode |
+| D-059 | always-visible theme button |
+| D-060 | ISS-068 — replace rate-limited model |
+| D-062 | ISS-074 — LaTeX stream normalizer + Math pipeline hardening + MathSkill |
+| **D-063** | **ISS-075 — Greeting regex fix + Explanation patterns + Foreign-script sanitizer** |

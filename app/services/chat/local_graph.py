@@ -39,11 +39,27 @@ _EDUCATIONAL_PATTERNS = [
     r"(حل|شرح لي|وضح لي|علمني|أريد أن أفهم|كيف أحل|ما هو الحل)",
 ]
 
+# ISS-075 (D-063): تطبيقات regex الـ greeting يجب أن تسمح بكلمات إضافية
+# قبل الإصلاح: `^(السلام)[\s\W]*$` يفشل عند "السلام عليكم" لأن "عليكم"
+# ليست في `[\s\W]`. نتيجة: التحية تُصنَّف كـ `general` → الـ LLM يُولد
+# شرحاً etymological مع كلمات أجنبية (català/også/wishes/CJK punct).
+# الحل: استخدام `\b...\b` مع `.*` لقبول أي امتداد طبيعي.
+# هذا الـ regex مكرَّر في `app/telemetry/path_observer.py` — يجب تحديث كليهما (D-013).
 _GREETING_PATTERNS = [
-    r"^(السلام|مرحبا|أهلا|هلا|hello|hi\b|hey|salam|بونجور)[\s\W]*$",
-    r"^(كيف حالك|ما أخبارك|how are you|كيف الأحوال)[\s\W]*$",
-    r"^(شكرا|شكراً|merci|thank you|thanks)[\s\W]*$",
-    r"^(مع السلامة|وداعاً|bye|goodbye|au revoir)[\s\W]*$",
+    # تحيات إسلامية وعربية شاملة (السلام عليكم + ورحمة الله + إلخ)
+    r"^(?:و\s*)?(?:عليكم\s+)?السلام(?:\s+عليكم)?(?:\s+و?رحم[ةى]\s+الله)?(?:\s+و?بركاته)?[\s\W]*$",
+    # مرحبا/أهلا/هلا + امتدادات طبيعية ("مرحبا بك", "أهلاً وسهلاً", "هلا والله")
+    r"^(مرحبا|أهلاً?|أهلا|هلاً?|هلا)(?:\s+\S+){0,3}[\s\W]*$",
+    # تحيات إنجليزية/فرنسية (وحدها أو مع امتداد قصير)
+    r"^(hello|hi|hey|salam|بونجور|bonjour|salut|good\s+(morning|afternoon|evening))(?:\s+\S+){0,2}[\s\W]*$",
+    # كيف حالك + امتدادات (يا أستاذ، اليوم، إلخ)
+    r"^(كيف\s+حالك|ما\s+أخبارك|how\s+are\s+you|كيف\s+الأحوال)(?:\s+\S+){0,4}[\s\W]*$",
+    # شكر
+    r"^(شكرا|شكراً|merci|thank\s+you|thanks)(?:\s+\S+){0,4}[\s\W]*$",
+    # وداع
+    r"^(مع\s+السلامة|وداع[اً]?|bye|goodbye|au\s+revoir)(?:\s+\S+){0,3}[\s\W]*$",
+    # تحيات قصيرة (صباح الخير، مساء الخير، ليلة سعيدة، صباحك)
+    r"^(صباح\s+(الخير|النور)|مساء\s+(الخير|النور)|ليلة\s+سعيدة|صباحك\s+\S+|مساؤك\s+\S+)[\s\W]*$",
 ]
 
 _SYSTEM_PROMPTS = {
@@ -112,6 +128,69 @@ class LocalChatState(TypedDict):
     intent: str
     history_messages: list[dict]
     final_response: str
+
+
+# ─── ISS-075 D-063: Foreign-script + chat meta-narration sanitizer ────────────
+
+import re as _re_sanitize
+
+# الكلمات المختلطة (Russian/Norwegian/Spanish/etc) → استبدالها بالعربية المتوقَّعة
+_FOREIGN_REPLACEMENTS = {
+    # روسي
+    "линейный": "خطي", "линейная": "خطية", "линейное": "خطية",
+    "функция": "دالة", "уравнение": "معادلة",
+    # نرويجي/دانماركي
+    "også": "أيضاً", "auch": "أيضاً",
+    # إسباني
+    "aparece": "يظهر", "aparecen": "تظهر",
+    # إنجليزي meta في رد عربي
+    "wishes": "أمنيات", "invitation": "دعوة",
+    # CJK punctuation → علامات عربية
+    "。": ".", "（": "(", "）": ")", "「": '"', "」": '"',
+    "『": '"', "』": '"', "、": "،", "〜": "~",
+}
+
+# meta-narration بالإنجليزية في بداية ردود chat
+_CHAT_META_PATTERNS = [
+    _re_sanitize.compile(r"^Okay,\s+the user[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
+    _re_sanitize.compile(r"^First,?\s+I\s+(should|must|need|will)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
+    _re_sanitize.compile(r"^The user (greeted|said|asked|wrote)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
+    _re_sanitize.compile(r"^I need to (respond|answer|reply)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
+    _re_sanitize.compile(r"^Let me (think|respond|answer|consider)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
+    _re_sanitize.compile(r"^Alright,\s+(the\s+)?(user|question|so)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
+]
+
+
+def _sanitize_local_graph_response(text: str, intent: str) -> str:
+    """ISS-075 (D-063): ينظف foreign-script + chat meta-narration من ردود local_graph.
+
+    يعالج كارثة التحية التي شاهدها المستخدم: «السلام عليكم» يُولِّد رداً
+    etymological مع كلمات نرويجية (`også`) وإنجليزية (`wishes`) ونقاط CJK (`。`).
+
+    الـ greeting الآن يُصنَّف كـ chat (بعد regex fix) فيُمر هنا للتنظيف الأخير.
+    """
+    if not text:
+        return text
+    out = text
+    # 1. استبدالات foreign → عربي
+    for foreign, arabic in _FOREIGN_REPLACEMENTS.items():
+        out = out.replace(foreign, arabic)
+    # 2. حذف Cyrillic كامل (روسي/أوكراني)
+    out = _re_sanitize.sub(r"[Ѐ-ӿ]+", "", out)
+    # 3. حذف Chinese CJK Han
+    out = _re_sanitize.sub(r"[一-鿿]+", "", out)
+    # 4. حذف Hiragana/Katakana (ياباني)
+    out = _re_sanitize.sub(r"[぀-ゟ゠-ヿ]+", "", out)
+    # 5. للـ chat فقط — احذف meta-narration بالإنجليزية في البداية
+    if intent == "chat":
+        for _ in range(5):  # multi-pass
+            prev = out
+            for rx in _CHAT_META_PATTERNS:
+                out = rx.sub("", out, count=1)
+            out = out.lstrip()
+            if out == prev:
+                break
+    return out
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -226,6 +305,8 @@ async def _chat_node(state: LocalChatState) -> dict:
     try:
         response = await ai_client.send_message(system_prompt, user_message)
         clean = response.replace("\x00", "").strip()
+        # ISS-075 D-063: تنظيف foreign-script + chat meta-narration
+        clean = _sanitize_local_graph_response(clean, intent)
         logger.info(
             "local_graph.chat_node OK intent=%s chars=%d",
             intent,

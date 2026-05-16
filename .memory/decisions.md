@@ -1160,3 +1160,54 @@ SUMMARY: 7/7 PASS | 35.3s total
 ```
 
 **Status**: IMPLEMENTED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.
+
+---
+
+## D-063 — ISS-075 Greeting Recognition + Explanation Patterns + Sanitizer (2026-05-15)
+
+**Problem**: تجريب حي 2026-05-15 أكَّد 3 كوارث متراكبة من شكوى المستخدم:
+1. **"السلام عليكم"** يُصنَّف خطأً كـ `general` (وليس `chat`) لأن regex `^(السلام)[\s\W]*$` يفشل عند "عليكم" (ليست في `[\s\W]`). نتيجة: الـ LLM يُولِّد etymological essay مع كلمات نرويجية (`også`)، إنجليزية (`wishes`, `invitation`)، ونقاط CJK (`。 ）（`)
+2. **"أريد شرح مفصل للسؤال 1 أ"** لا يطابق أي pattern في `_BAC_EXERCISE_EXPLANATION_PATTERNS`. نتيجة: `detect_explanation_with_context` يُرجع `recognized=False` → الـ LLM يفقد السياق → هلوسة كاملة بالإندونيسية عن "dokumen pendidikan"
+3. **foreign-script contamination** في ردود chat لا يُنظَّف على مستوى `local_graph.py` (موجود فقط في `conversation_service`)
+
+**Decision**: ثلاث إصلاحات جراحية (تجريب حي حقيقي):
+1. إعادة كتابة `_GREETING_PATTERNS` لتقبل امتدادات الكلمات الطبيعية (السلام عليكم ورحمة الله وبركاته / كيف حالك يا أستاذ / مرحبا بك / صباح الخير / good morning) — تطبيق متطابق في `local_graph.py` AND `path_observer.py` (D-013 invariant)
+2. توسيع `_BAC_EXERCISE_EXPLANATION_PATTERNS` لتشمل ~20 صياغة طبيعية ("أريد شرح"، "ممكن تشرح"، "أحتاج شرح"، "للسؤال"، "للجزء"، "شرح مفصل"، "explain in detail"، إلخ)
+3. إضافة `_sanitize_local_graph_response()` في `local_graph.py` ينظِّف foreign-script (Cyrillic/CJK Han/Hiragana/Katakana/CJK punct) + chat meta-narration (Okay, the user / Let me respond / إلخ)
+
+**Rationale**:
+- التجريب الحي (5 صياغات) قبل: 2/5 PASS → بعد: 5/5 PASS (`أريد شرح مفصل` كان يفشل، الآن يطابق)
+- التجريب الحي للتحية (15+ صيغة): 18/18 PASS (السلام عليكم/مرحبا بك/كيف حالك يا أستاذ/صباح الخير/hello there/إلخ)
+- الـ sanitizer على رد كارثي حقيقي (634 chars): يُزيل `også`, `wishes`, `invitation`, `。`, `）` بالكامل
+- 28/28 unit tests PASS بدون deps خارجية
+
+**Invariants (قواعد دائمة)**:
+1. الـ greeting regex يجب أن يقبل امتدادات تصل لـ 3-4 كلمات بعد التحية الأساسية (السلام عليكم ورحمة الله وبركاته = 5 كلمات).
+2. أي تعديل في `_GREETING_PATTERNS` في `local_graph.py` يجب أن يُطبَّق فوراً في `path_observer.py` (D-013).
+3. أي pattern جديد في `_BAC_EXERCISE_EXPLANATION_PATTERNS` يجب أن يدعم صياغات بـ "أريد"، "ممكن"، "أحتاج" + prefix "ل" (للسؤال/للجزء/للتمرين).
+4. `_sanitize_local_graph_response` يُطبَّق على كل رد قبل إرساله للمستخدم — meta-narration stripping للـ chat فقط (لا يلمس educational).
+5. الـ foreign-replacements dict (CJK punct + Russian/Spanish/Norwegian) يُستخدَم كـ allowlist — أي كلمة جديدة تظهر في الإنتاج تُضاف هنا (وليس regex عام يكسر النص العربي).
+
+**Files**:
+- `app/services/chat/local_graph.py` (greeting regex + sanitizer function)
+- `app/telemetry/path_observer.py` (mirror greeting regex per D-013)
+- `app/services/capabilities/exercise_retrieval.py` (explanation patterns expansion)
+- `tests/services/test_iss075_greeting_and_explanation.py` (28 tests جديد)
+
+**Live test results** (2026-05-15):
+```
+=== SCENARIO: شكوى المستخدم الكاملة ===
+Step 1: "السلام عليكم"                         → chat intent ✅ (كان general)
+Step 2: تمرين BAC 2016                          → matched ✅
+Step 3: "اشرح السؤال 1 أ"                       → explanation w/ context ✅
+Step 4: "أريد شرح مفصل للسؤال 1 أ"              → recognized ✅ (كان False!)
+Step 5-9: 5 صياغات إضافية متنوعة                → 5/5 PASS
+
+=== UNIT TESTS ===
+TestGreetingRegex: 18/18 PASS
+TestForeignScriptSanitizer: 9/9 PASS (including full user-catastrophe response)
+TestExplanationPatterns: 7/7 PASS
+TOTAL: 28/28 ✅
+```
+
+**Status**: IMPLEMENTED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.

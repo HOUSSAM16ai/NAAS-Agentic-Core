@@ -410,18 +410,28 @@ class SynthesizerNode:
                         {"role": "user", "content": query},
                     ]
                     # D-061 (ISS-074): تطبيع LaTeX على streaming chunks
+                    from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
+                        sanitize_chunk,
+                    )
                     normalizer = LatexStreamNormalizer()
                     parts: list[str] = []
                     async for chunk in llm_client.stream_chat(stream_messages):
                         content = llm_client.extract_stream_content(chunk)
                         if not content:
                             continue
-                        for safe in normalizer.feed(content):
-                            parts.append(safe)
-                            writer({"chunk_type": "assistant_delta", "content": safe, "node": "synthesizer"})
-                    for tail in normalizer.flush():
-                        parts.append(tail)
-                        writer({"chunk_type": "assistant_delta", "content": tail, "node": "synthesizer"})
+                        for safe_chunk in normalizer.feed(content):
+                            # ISS-078 D-066: sanitize chunk قبل إرساله للعميل
+                            sanitized = sanitize_chunk(safe_chunk)
+                            if not sanitized:
+                                continue
+                            parts.append(sanitized)
+                            writer({"chunk_type": "assistant_delta", "content": sanitized, "node": "synthesizer"})
+                    for tail_chunk in normalizer.flush():
+                        sanitized_tail = sanitize_chunk(tail_chunk)
+                        if not sanitized_tail:
+                            continue
+                        parts.append(sanitized_tail)
+                        writer({"chunk_type": "assistant_delta", "content": sanitized_tail, "node": "synthesizer"})
                     text_val = "".join(parts).strip()
                 except Exception as e:
                     logger.error(f"Synthesizer no-docs streaming failed: {e}")
@@ -466,23 +476,36 @@ class SynthesizerNode:
                             content = llm_client.extract_stream_content(chunk)
                             if not content:
                                 continue
-                            for safe in normalizer.feed(content):
-                                parts.append(safe)
+                            for safe_chunk in normalizer.feed(content):
+                                # ISS-078 D-066: sanitize chunk قبل إرساله للعميل
+                                from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
+                                    sanitize_chunk,
+                                )
+                                sanitized = sanitize_chunk(safe_chunk)
+                                if not sanitized:
+                                    continue
+                                parts.append(sanitized)
                                 writer(
                                     {
                                         "chunk_type": "assistant_delta",
-                                        "content": safe,
+                                        "content": sanitized,
                                         "node": "synthesizer",
                                     }
                                 )
                         except Exception:
                             continue
-                    for tail in normalizer.flush():
-                        parts.append(tail)
+                    for tail_chunk in normalizer.flush():
+                        from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
+                            sanitize_chunk,
+                        )
+                        sanitized_tail = sanitize_chunk(tail_chunk)
+                        if not sanitized_tail:
+                            continue
+                        parts.append(sanitized_tail)
                         writer(
                             {
                                 "chunk_type": "assistant_delta",
-                                "content": tail,
+                                "content": sanitized_tail,
                                 "node": "synthesizer",
                             }
                         )

@@ -686,6 +686,7 @@ class ChatFallbackNode:
         )
         from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
             get_greeting_fastpath_response,
+            sanitize_chunk,
             sanitize_response,
         )
 
@@ -755,23 +756,31 @@ class ChatFallbackNode:
                         content = llm_client.extract_stream_content(chunk)
                         if not content:
                             continue
-                        for safe in normalizer.feed(content):
-                            parts.append(safe)
+                        for safe_chunk in normalizer.feed(content):
+                            # ISS-078 D-066: sanitize chunk قبل إرساله للعميل
+                            # يمنع Chinese/Russian/Japanese من الظهور لحظياً
+                            sanitized = sanitize_chunk(safe_chunk)
+                            if not sanitized:
+                                continue
+                            parts.append(sanitized)
                             writer(
                                 {
                                     "chunk_type": "assistant_delta",
-                                    "content": safe,
+                                    "content": sanitized,
                                     "node": "chat_fallback",
                                 }
                             )
                     except Exception:
                         continue
-                for tail in normalizer.flush():
-                    parts.append(tail)
+                for tail_chunk in normalizer.flush():
+                    sanitized_tail = sanitize_chunk(tail_chunk)
+                    if not sanitized_tail:
+                        continue
+                    parts.append(sanitized_tail)
                     writer(
                         {
                             "chunk_type": "assistant_delta",
-                            "content": tail,
+                            "content": sanitized_tail,
                             "node": "chat_fallback",
                         }
                     )

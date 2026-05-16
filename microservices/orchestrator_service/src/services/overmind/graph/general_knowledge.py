@@ -77,24 +77,37 @@ class GeneralKnowledgeNode:
                         content = llm_client.extract_stream_content(chunk)
                         if not content:
                             continue
-                        for safe in normalizer.feed(content):
-                            full_content_parts.append(safe)
+                        for safe_chunk in normalizer.feed(content):
+                            # ISS-078 D-066: sanitize chunk قبل إرساله للعميل
+                            from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
+                                sanitize_chunk,
+                            )
+                            sanitized = sanitize_chunk(safe_chunk)
+                            if not sanitized:
+                                continue
+                            full_content_parts.append(sanitized)
                             writer(
                                 {
                                     "chunk_type": "assistant_delta",
-                                    "content": safe,
+                                    "content": sanitized,
                                     "node": "general_knowledge",
                                 }
                             )
                     except Exception:
                         continue
                 # flush أي محتوى متبقٍ في الـ buffer
-                for tail in normalizer.flush():
-                    full_content_parts.append(tail)
+                for tail_chunk in normalizer.flush():
+                    from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
+                        sanitize_chunk,
+                    )
+                    sanitized_tail = sanitize_chunk(tail_chunk)
+                    if not sanitized_tail:
+                        continue
+                    full_content_parts.append(sanitized_tail)
                     writer(
                         {
                             "chunk_type": "assistant_delta",
-                            "content": tail,
+                            "content": sanitized_tail,
                             "node": "general_knowledge",
                         }
                     )

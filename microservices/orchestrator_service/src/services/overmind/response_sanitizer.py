@@ -154,6 +154,58 @@ def sanitize_response(text: str, intent: str = "general") -> str:
     return out
 
 
+# ── ISS-078 D-066: Streaming-aware sanitization ──────────────────────────────
+# المشكلة (مكتشَفة بالتجريب الحي):
+# - LLM يبث chunks مباشرة للعميل (writer({"chunk_type": "assistant_delta", ...}))
+# - sanitize_response يُطبَّق على المخرج النهائي فقط (بعد انتهاء streaming)
+# - النتيجة: chunks تحوي صينية/روسية تصل للمستخدم لحظياً قبل التنظيف
+# - المستخدم يرى الكلمات الأجنبية تومض ثم تختفي → كارثة بصرية
+#
+# الحل: sanitize_chunk() خفيف يُطبَّق على كل chunk قبل إرساله للعميل
+# - يحذف Cyrillic/CJK Han/Hiragana/Katakana فوراً (آمن على chunks مفردة)
+# - يستبدل CJK punctuation فوراً
+# - يتجاهل multi-word replacements (تحتاج سياق كامل — في sanitize_response النهائي)
+# - يتجاهل meta-narration stripping (يحتاج بداية النص)
+
+
+def sanitize_chunk(chunk: str) -> str:
+    """
+    ينظِّف chunk جزئي خلال streaming قبل إرساله للعميل.
+
+    يحذف:
+    - Cyrillic (روسي/أوكراني)
+    - CJK Han (صيني)
+    - Hiragana/Katakana (ياباني)
+    - CJK punctuation → علامات عربية/لاتينية
+
+    لا يُطبِّق:
+    - multi-word foreign replacements (تحتاج سياق كامل)
+    - meta-narration stripping (يحتاج بداية النص)
+
+    هذه الدوال تُطبَّق في sanitize_response النهائي بعد انتهاء الـ stream.
+
+    Args:
+        chunk: قطعة نص جزئية من stream
+
+    Returns:
+        chunk مُنظَّف (آمن للعرض الفوري)
+    """
+    if not chunk:
+        return chunk
+    out = chunk
+    # CJK punctuation single-char replacements (آمنة على chunks)
+    for foreign, replacement in (
+        ("。", "."), ("（", "("), ("）", ")"),
+        ("「", '"'), ("」", '"'), ("『", '"'), ("』", '"'),
+        ("、", "،"), ("〜", "~"),
+    ):
+        out = out.replace(foreign, replacement)
+    # حذف scripts كاملة (آمن — كل char منفصل)
+    out = re.sub(r"[Ѐ-ӿ]+", "", out)  # Cyrillic
+    out = re.sub(r"[一-鿿]+", "", out)  # CJK Han
+    return re.sub(r"[぀-ゟ゠-ヿ]+", "", out)  # Japanese kana
+
+
 def get_greeting_fastpath_response(query: str) -> str | None:
     """
     إذا كان السؤال تحية معروفة، يُعيد رداً deterministic بدون LLM.
@@ -223,5 +275,6 @@ def get_greeting_fastpath_response(query: str) -> str | None:
 
 __all__ = [
     "get_greeting_fastpath_response",
+    "sanitize_chunk",
     "sanitize_response",
 ]

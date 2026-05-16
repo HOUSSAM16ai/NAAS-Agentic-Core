@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re as _re
 import time
 from typing import TypedDict
 
@@ -178,8 +179,7 @@ _SYSTEM_PROMPT_ECHO_MARKERS = [
 _META_CHECK_PREFIX_LEN = 200  # نتحقق فقط من بداية الإجابة
 
 # ── دالة تطبيع LaTeX (ISS-071) ────────────────────────────────────────────────
-
-import re as _re
+# `_re` is imported at the top of the file (E402 compliance).
 
 
 def _normalize_latex(text: str) -> str:

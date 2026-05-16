@@ -199,11 +199,14 @@ jobs:
           SKILLS=(orchestrator_service user_service planning_agent conversation_service research_agent reasoning_agent content_retrieval_skill)
           FAILED=0
           for skill in "${SKILLS[@]}"; do
-            if ! find "microservices/${skill}" -name "prom_metrics.py" -q 2>/dev/null; then
+            # NOTE: GNU find has no `-q` option — earlier versions of this gate
+            # passed `-q` and silently treated every skill as missing. Use a
+            # straight quiet match instead.
+            if find "microservices/${skill}" -name "prom_metrics.py" 2>/dev/null | grep -q .; then
+              echo "PASS: ${skill} has prom_metrics.py"
+            else
               echo "FAIL: microservices/${skill} missing prom_metrics.py"
               FAILED=1
-            else
-              echo "PASS: ${skill} has prom_metrics.py"
             fi
           done
 

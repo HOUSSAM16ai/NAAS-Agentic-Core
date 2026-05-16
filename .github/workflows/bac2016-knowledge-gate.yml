@@ -35,42 +35,32 @@ jobs:
 
       - name: Verify knowledge index loads correctly
         run: |
+          # The stub MUST NOT replace `sys.modules['app']` (the real package),
+          # otherwise subsequent `from app.services.*` imports fail with
+          # "'app' is not a package". Only shim `app.core.schemas` before any
+          # heavy import is attempted; the rest of `app/` loads from disk.
           python -c "
-          import sys
+          import sys, types, importlib
           sys.path.insert(0, '.')
 
-          # Minimal stubs for CI (no full app stack needed)
-          import types
-
-          # Stub app.core.schemas
           schemas_mod = types.ModuleType('app.core.schemas')
-          class RobustBaseModel:
-              pass
-          try:
-              from pydantic import BaseModel
-              RobustBaseModel = BaseModel
-          except ImportError:
-              pass
-          schemas_mod.RobustBaseModel = RobustBaseModel
-          sys.modules['app'] = types.ModuleType('app')
-          sys.modules['app.core'] = types.ModuleType('app.core')
+          from pydantic import BaseModel
+          schemas_mod.RobustBaseModel = BaseModel
           sys.modules['app.core.schemas'] = schemas_mod
 
-          from app.services.capabilities.knowledge_index import (
-              KNOWLEDGE_INDEX, search_exercises, find_best_match
-          )
+          ki = importlib.import_module('app.services.capabilities.knowledge_index')
+          KNOWLEDGE_INDEX = ki.KNOWLEDGE_INDEX
+          search_exercises = ki.search_exercises
+          find_best_match = ki.find_best_match
 
-          # Verify index has entries
           assert len(KNOWLEDGE_INDEX) >= 3, f'Expected >= 3 entries, got {len(KNOWLEDGE_INDEX)}'
           print(f'✅ Knowledge index: {len(KNOWLEDGE_INDEX)} entries')
 
-          # Verify 2016 S1 entry exists
           results_2016 = search_exercises(year=2016, session='الأولى', exercise_number=4)
           assert len(results_2016) >= 1, '2016 S1 Ex4 not found in index'
           assert '2016' in results_2016[0].file_path or 'bac2016' in results_2016[0].file_path
           print(f'✅ 2016 S1 Ex4: {results_2016[0].file_path}')
 
-          # Verify 2024 entry exists
           results_2024 = search_exercises(year=2024, exercise_number=1)
           assert len(results_2024) >= 1, '2024 Ex1 not found in index'
           print(f'✅ 2024 Ex1: {results_2024[0].file_path}')
@@ -101,21 +91,20 @@ jobs:
 
       - name: Test retrieval intent detection
         run: |
+          # Same stubbing pattern as the import-check job — keep the real
+          # `app` package intact and only shim `app.core.schemas`.
           python -c "
-          import sys, types
+          import sys, types, importlib
           sys.path.insert(0, '.')
 
-          # Stubs
           schemas_mod = types.ModuleType('app.core.schemas')
           from pydantic import BaseModel
           schemas_mod.RobustBaseModel = BaseModel
-          sys.modules['app'] = types.ModuleType('app')
-          sys.modules['app.core'] = types.ModuleType('app.core')
           sys.modules['app.core.schemas'] = schemas_mod
 
-          from app.services.capabilities.exercise_retrieval import (
-              detect_exercise_retrieval, ExerciseRetrievalRequest
-          )
+          er = importlib.import_module('app.services.capabilities.exercise_retrieval')
+          detect_exercise_retrieval = er.detect_exercise_retrieval
+          ExerciseRetrievalRequest = er.ExerciseRetrievalRequest
 
           # Test 1: 2016 S1 Ex4 — must be recognized and matched
           r = detect_exercise_retrieval(ExerciseRetrievalRequest(
@@ -266,34 +255,43 @@ jobs:
           python-version: "3.12"
 
       - name: Install pydantic
-        run: pip install pydantic>=2.0
+        run: pip install "pydantic>=2.0"
 
       - name: Verify all new modules import cleanly
         run: |
+          # The original version of this step replaced `sys.modules['app']`
+          # with an empty ModuleType, which then *broke* `from app.services.*`
+          # imports because the stub had no `services` attribute. Use a tiny
+          # `RobustBaseModel` shim on `app.core.schemas` only — without
+          # overwriting the real `app` / `app.core` packages — by ensuring the
+          # shim is loaded *before* anything imports the real schemas module.
           python -c "
-          import sys, types
+          import sys, types, importlib
           sys.path.insert(0, '.')
 
-          # Stubs
+          # Pre-register a minimal app.core.schemas so heavy app.core imports
+          # are skipped. Real `app` and `app.services.capabilities.*` continue
+          # to load from disk normally.
           schemas_mod = types.ModuleType('app.core.schemas')
           from pydantic import BaseModel
           schemas_mod.RobustBaseModel = BaseModel
-          sys.modules['app'] = types.ModuleType('app')
-          sys.modules['app.core'] = types.ModuleType('app.core')
           sys.modules['app.core.schemas'] = schemas_mod
 
-          # Import knowledge_index
-          from app.services.capabilities.knowledge_index import (
-              KNOWLEDGE_INDEX, ExerciseEntry, search_exercises, find_best_match
-          )
+          # knowledge_index
+          knowledge_index = importlib.import_module('app.services.capabilities.knowledge_index')
+          KNOWLEDGE_INDEX = knowledge_index.KNOWLEDGE_INDEX
           print(f'✅ knowledge_index imported — {len(KNOWLEDGE_INDEX)} entries')
 
-          # Import exercise_retrieval
-          from app.services.capabilities.exercise_retrieval import (
-              detect_exercise_retrieval, ExerciseRetrievalRequest,
-              ExerciseRetrievalDecision, ExerciseRetrievalResult,
-              load_exercise_content, make_result
+          # exercise_retrieval
+          exercise_retrieval = importlib.import_module(
+              'app.services.capabilities.exercise_retrieval'
           )
+          detect_exercise_retrieval = exercise_retrieval.detect_exercise_retrieval
+          ExerciseRetrievalRequest = exercise_retrieval.ExerciseRetrievalRequest
+          ExerciseRetrievalDecision = exercise_retrieval.ExerciseRetrievalDecision
+          ExerciseRetrievalResult = exercise_retrieval.ExerciseRetrievalResult
+          load_exercise_content = exercise_retrieval.load_exercise_content
+          make_result = exercise_retrieval.make_result
           print('✅ exercise_retrieval imported')
 
           # Verify backward compatibility: make_result still works with just raw_result

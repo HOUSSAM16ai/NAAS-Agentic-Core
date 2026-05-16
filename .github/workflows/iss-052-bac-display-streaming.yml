@@ -44,12 +44,13 @@ jobs:
           import sys, types
           sys.path.insert(0, '.')
 
+          # Only shim `app.core.schemas` — never replace `app` or `app.core`
+          # with a ModuleType, otherwise `from app.services.*` fails with
+          # "'app' is not a package" because Python resolves it via the stub
+          # instead of the real package on disk.
           schemas_mod = types.ModuleType('app.core.schemas')
           from pydantic import BaseModel
           schemas_mod.RobustBaseModel = BaseModel
-          for mod in ['app', 'app.core', 'app.core.schemas']:
-              if mod not in sys.modules:
-                  sys.modules[mod] = types.ModuleType(mod)
           sys.modules['app.core.schemas'] = schemas_mod
 
           from app.services.capabilities.exercise_retrieval import (
@@ -124,12 +125,13 @@ jobs:
           import sys, types
           sys.path.insert(0, '.')
 
+          # Only shim `app.core.schemas` — never replace `app` or `app.core`
+          # with a ModuleType, otherwise `from app.services.*` fails with
+          # "'app' is not a package" because Python resolves it via the stub
+          # instead of the real package on disk.
           schemas_mod = types.ModuleType('app.core.schemas')
           from pydantic import BaseModel
           schemas_mod.RobustBaseModel = BaseModel
-          for mod in ['app', 'app.core', 'app.core.schemas']:
-              if mod not in sys.modules:
-                  sys.modules[mod] = types.ModuleType(mod)
           sys.modules['app.core.schemas'] = schemas_mod
 
           from app.services.capabilities.knowledge_index import KNOWLEDGE_INDEX, search_exercises

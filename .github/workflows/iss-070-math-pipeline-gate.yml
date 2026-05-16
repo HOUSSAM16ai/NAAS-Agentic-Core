@@ -78,9 +78,15 @@ jobs:
       - name: "تحقق من timeout guard على كل node"
         run: |
           PIPELINE="microservices/conversation_service/src/math_pipeline.py"
+          # After ISS-074 (D-062) the pipeline was collapsed from 4 nodes
+          # (problem_analysis / strategy / step_by_step / verification) to 3
+          # (classify → solve → normalize). The `solve_node` is the only LLM call
+          # and now wraps BOTH the primary call AND its retry in
+          # `asyncio.wait_for`. `normalize_node` is deterministic so it does not
+          # need a timeout. Floor lowered from 3 to 2 to match the live shape.
           TIMEOUT_COUNT=$(grep -c "asyncio.wait_for" "$PIPELINE" || true)
-          if [ "$TIMEOUT_COUNT" -lt 3 ]; then
-            echo "❌ timeout guard غير كافٍ: $TIMEOUT_COUNT (يجب >= 3)"
+          if [ "$TIMEOUT_COUNT" -lt 2 ]; then
+            echo "❌ timeout guard غير كافٍ: $TIMEOUT_COUNT (يجب >= 2)"
             exit 1
           fi
           echo "✅ timeout guards: $TIMEOUT_COUNT"
@@ -291,18 +297,35 @@ jobs:
 
       - name: "تثبيت المتطلبات"
         run: |
+          # tests/conftest.py imports `jwt`, `passlib`, and various security-layer
+          # helpers at collection time. They must all be installed *before*
+          # pytest even tries to collect the math pipeline tests.
           pip install -q \
             fastapi==0.109.2 \
             uvicorn==0.27.1 \
             langgraph==1.2.0 \
             langchain-core \
             httpx \
-            prometheus_client \
+            prometheus-client \
             pydantic \
+            pydantic-settings \
             sqlalchemy \
             aiosqlite \
-            pytest \
-            pytest-asyncio \
+            asyncpg \
+            psycopg2-binary \
+            PyJWT \
+            passlib \
+            bcrypt \
+            argon2-cffi \
+            cryptography \
+            Authlib \
+            python-multipart \
+            python-dotenv \
+            pyyaml \
+            tenacity \
+            pytest==7.4.4 \
+            pytest-asyncio==0.21.1 \
+            pytest-env \
             anyio
 
       - name: "تشغيل اختبارات Math Pipeline"

@@ -21,6 +21,11 @@ on:
       - "microservices/orchestrator_service/**"
       - "tests/microservices/orchestrator_service/test_step9_skills_pipeline.py"
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   # ── Job 1: Static checks ──────────────────────────────────────────────────
   static-checks:

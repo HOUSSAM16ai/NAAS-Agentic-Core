@@ -239,14 +239,18 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # `--timeout=30` below requires the `pytest-timeout` plugin.
+          # Also pull in argon2-cffi + cryptography + python-json-logger +
+          # python-multipart so conftest can collect without ImportError.
           pip install --quiet \
-            pytest pytest-asyncio \
+            pytest==7.4.4 pytest-asyncio==0.21.1 pytest-timeout pytest-env \
             fastapi uvicorn \
             pydantic pydantic-settings \
             prometheus-client \
-            sqlalchemy aiosqlite asyncpg \
-            PyJWT passlib bcrypt \
-            python-dotenv httpx \
+            sqlalchemy aiosqlite asyncpg psycopg2-binary \
+            PyJWT passlib bcrypt argon2-cffi cryptography \
+            python-dotenv python-multipart python-json-logger pyyaml \
+            tenacity httpx \
             langgraph langchain-core
 
       - name: "Run Step 5 tests"

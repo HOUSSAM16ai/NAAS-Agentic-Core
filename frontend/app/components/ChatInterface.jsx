@@ -269,6 +269,13 @@ const MessageBubble = memo(({ msg, idx }) => {
     const isStreaming = msg.role === 'assistant' && !msg.isComplete;
     const isEmpty = !msg.content || msg.content.trim() === '';
 
+    // ISS-078 D-066: حماية ضد فقاعة user فارغة (سبب blue-bar flicker).
+    // لو رسالة المستخدم فارغة (race condition قبل send)، تُعرَض كشريط أزرق ضخم.
+    // الحل: لا تعرض bubble للـ user الفارغة.
+    if (msg.role === 'user' && isEmpty) {
+        return null;
+    }
+
     // ISS-076 (2026-05-15) D-064: تجاوز useTypewriter بالكامل لمنع flicker.
     //
     // السبب: عند انتقال `isStreaming` من true → false، useTypewriter كان

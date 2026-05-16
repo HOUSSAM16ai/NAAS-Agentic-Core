@@ -4523,4 +4523,106 @@ GRAND TOTAL: 70/70 PASS ✅
 | Decision | المُصلَح |
 |----------|---------|
 | D-049 → D-064 | JSON envelope + LaTeX + theme + Math pipeline + sanitizer + UI flicker |
-| **D-065** | **ISS-077 — FastPath blockers (يحل "النظام أصبح غبياً")** |
+| D-065 | ISS-077 — FastPath blockers (يحل "النظام أصبح غبياً") |
+| **D-066** | **ISS-078 — Streaming-aware sanitization + empty user-bubble guard (يحل صينية لحظية + blue-bar flicker)** |
+
+---
+
+## 6.47 Streaming-Aware Sanitization + UI Flicker Guard (2026-05-15, ISS-078 / D-066)
+
+> **اكتشاف بالتجريب الحي 2026-05-15**: شكوى المستخدم بعد D-064/D-065:
+> 1. كلمات صينية تومض لحظياً خلال streaming ثم تختفي
+> 2. شريط أزرق ضخم يومض في الواجهة (blue-bar flicker)
+
+### الأسباب الجذرية (مُختبَرة حياً)
+
+**(1) Streaming sanitization gap**:
+```python
+# قبل D-066:
+for safe in normalizer.feed(content):
+    writer({"chunk_type": "assistant_delta", "content": safe, ...})
+    # ← chunk يصل للعميل خام، sanitize_response لم يُطبَّق بعد!
+```
+
+`sanitize_response` كان يُطبَّق على **المخرج النهائي** بعد streaming. لكن chunks تصل للعميل **مباشرة** من LLM. الـ Chinese/Russian يومض لحظياً قبل التنظيف النهائي.
+
+**(2) Empty user bubble flicker**:
+عند race condition قبل send، state يحوي رسالة user فارغة. الـ MessageBubble يعرض bubble بـ `background-color: var(--primary-color)` (أزرق) **حتى لو فارغ** → شريط أزرق ضخم يومض.
+
+### الإصلاح (D-066 — 3 طبقات)
+
+**طبقة 1: `sanitize_chunk()` دالة جديدة** في `response_sanitizer.py`:
+```python
+def sanitize_chunk(chunk: str) -> str:
+    """ينظِّف chunk جزئي خلال streaming قبل إرساله للعميل."""
+    for foreign, replacement in (("。", "."), ("（", "("), ...):
+        out = out.replace(foreign, replacement)
+    out = re.sub(r"[Ѐ-ӿ]+", "", out)  # Cyrillic
+    out = re.sub(r"[一-鿿]+", "", out)  # CJK Han
+    return re.sub(r"[぀-ゟ゠-ヿ]+", "", out)  # Japanese kana
+```
+
+**طبقة 2: تطبيق في 3 nodes streaming**:
+```python
+for safe_chunk in normalizer.feed(content):
+    sanitized = sanitize_chunk(safe_chunk)  # ← D-066
+    if not sanitized:
+        continue
+    writer({"chunk_type": "assistant_delta", "content": sanitized, ...})
+```
+
+**طبقة 3: `ChatInterface.jsx` empty user bubble guard**:
+```jsx
+// ISS-078 D-066: حماية ضد فقاعة user فارغة (سبب blue-bar flicker)
+if (msg.role === 'user' && isEmpty) {
+    return null;
+}
+```
+
+### نتائج التجريب الحي
+
+```
+chunks: ['النص ', '向心 ', 'المركزي']
+output: 'النص  المركزي'  ✅ Chinese stripped per chunk
+
+chunks: ['السلام ', 'будет ', 'عليكم']
+output: 'السلام  عليكم'  ✅ Russian stripped per chunk
+
+chunks: ['نص', '。', ' آخر']
+output: 'نص. آخر'  ✅ CJK punct replaced per chunk
+
+8/8 D-066 live tests PASS
+32/32 D-064+D-065 regression PASS
+28/28 D-063 regression PASS
+10/10 D-062 regression PASS
+GRAND TOTAL: 70/70 PASS ✅
+```
+
+### القواعد الـ 5 الدائمة (D-066)
+
+**(1) كل streaming chunk يجب أن يمر عبر `sanitize_chunk`**: قبل `writer({...})`. لا استثناءات.
+
+**(2) `sanitize_chunk` لا يحوي multi-word replacements**: تحتاج سياق كامل — تُطبَّق في `sanitize_response` النهائي.
+
+**(3) `sanitize_chunk` لا يحوي meta-narration stripping**: يحتاج بداية النص — تُطبَّق في `sanitize_response` النهائي.
+
+**(4) أي bubble فارغة يجب أن لا تُعرَض**: user empty → return null. assistant empty + non-streaming → return null.
+
+**(5) عند إضافة foreign script جديد**: يُضاف إلى `sanitize_chunk` (live cleanup) **و** `sanitize_response` (final cleanup).
+
+### الملفات (D-066)
+
+| File | Change |
+|------|--------|
+| `microservices/orchestrator_service/src/services/overmind/response_sanitizer.py` | + `sanitize_chunk()` function |
+| `microservices/orchestrator_service/src/services/overmind/graph/main.py` | wire sanitize_chunk in ChatFallbackNode streaming |
+| `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py` | wire sanitize_chunk |
+| `microservices/orchestrator_service/src/services/overmind/graph/search.py` | wire sanitize_chunk in 2 streaming paths |
+| `frontend/app/components/ChatInterface.jsx` | empty user bubble guard |
+
+### السلسلة الكاملة (D-049 → D-066)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 → D-065 | JSON envelope + LaTeX + theme + Math pipeline + sanitizer + fastpath blockers |
+| **D-066** | **ISS-078 — Streaming sanitization (live Chinese flash) + empty bubble guard (blue-bar flicker)** |

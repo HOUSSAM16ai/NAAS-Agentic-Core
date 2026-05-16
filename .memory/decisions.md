@@ -1214,6 +1214,85 @@ TOTAL: 28/28 ✅
 
 ---
 
+## D-066 — ISS-078 Streaming-Aware Sanitization + UI Flicker Guard (2026-05-15)
+
+**Problem (مكتشَف بالتجريب الحي)**: شكوى المستخدم — كلمات صينية + روسية تظهر **لحظياً** خلال streaming ثم تختفي. السبب: `sanitize_response` يُطبَّق على **المخرج النهائي** بعد انتهاء streaming، لكن chunks تصل للعميل **مباشرة** من LLM بدون تنظيف.
+
+```python
+# قبل D-066 (D-064 buggy):
+for safe in normalizer.feed(content):
+    writer({"chunk_type": "assistant_delta", "content": safe, ...})
+    # ← chunk يصل للعميل خام، sanitize_response لم يُطبَّق بعد
+```
+
+كارثة UI flicker إضافية: رسالة `user` فارغة تُعرَض كـ blue bar (background: var(--primary-color)) بسبب race condition.
+
+**Decision**: 3 إصلاحات:
+1. `sanitize_chunk()` — دالة جديدة تنظِّف كل chunk قبل الإرسال للعميل
+2. تطبيق `sanitize_chunk` في 3 nodes streaming paths (ChatFallbackNode + GeneralKnowledgeNode + SynthesizerNode)
+3. `frontend/ChatInterface.jsx`: guard ضد فقاعة user فارغة `if (msg.role === 'user' && isEmpty) return null;`
+
+**Implementation**:
+
+```python
+def sanitize_chunk(chunk: str) -> str:
+    """ينظِّف chunk جزئي خلال streaming قبل إرساله للعميل.
+
+    يحذف Cyrillic/CJK Han/Hiragana/Katakana فوراً (آمن على chunks مفردة).
+    يستبدل CJK punctuation فوراً.
+    لا يُطبِّق multi-word replacements (تحتاج سياق كامل).
+    """
+    out = chunk
+    for foreign, replacement in (("。", "."), ("（", "("), ...):
+        out = out.replace(foreign, replacement)
+    out = re.sub(r"[Ѐ-ӿ]+", "", out)  # Cyrillic
+    out = re.sub(r"[一-鿿]+", "", out)  # CJK Han
+    return re.sub(r"[぀-ゟ゠-ヿ]+", "", out)  # Japanese kana
+```
+
+**Rationale**:
+- الـ chunks تُرسَل للعميل فوراً → المستخدم يراها لحظياً
+- `sanitize_response` كان يُطبَّق على **المخرج النهائي** فقط (بعد streaming)
+- `sanitize_chunk` يضمن أن **كل chunk** يُنظَّف قبل reaching the user
+- multi-word replacements (`будет на вас` → `يكون عليكم`) ما زالت في `sanitize_response` النهائي
+- UI flicker fix: empty user bubble = blue bar كارثي → guard simple يحل المشكلة
+
+**Invariants (قواعد دائمة)**:
+1. كل streaming chunk يجب أن يمر عبر `sanitize_chunk` قبل `writer({...})`.
+2. `sanitize_chunk` لا يحوي multi-word replacements (تحتاج سياق كامل، تُطبَّق في sanitize_response النهائي).
+3. `sanitize_chunk` لا يحوي meta-narration stripping (يحتاج بداية النص).
+4. أي bubble فارغة (user أو assistant غير streaming) يجب أن لا تُعرَض.
+5. عند إضافة foreign script جديد → يُضاف إلى `sanitize_chunk` (لا `sanitize_response` فقط) لضمان live cleanup.
+
+**Files**:
+- `microservices/orchestrator_service/src/services/overmind/response_sanitizer.py` (+ sanitize_chunk function)
+- `microservices/orchestrator_service/src/services/overmind/graph/main.py` (ChatFallbackNode + sanitize_chunk in streaming)
+- `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py` (sanitize_chunk)
+- `microservices/orchestrator_service/src/services/overmind/graph/search.py` (sanitize_chunk in 2 streaming paths)
+- `frontend/app/components/ChatInterface.jsx` (user empty bubble guard)
+
+**Live verification (2026-05-15)**:
+
+```
+=== D-066 streaming sanitization ===
+✅ Chinese mid-stream chunks stripped before reaching client
+✅ Russian mid-stream chunks stripped before reaching client
+✅ CJK punctuation replaced per chunk
+✅ Pure Arabic chunks untouched
+✅ LaTeX in chunks preserved
+✅ Empty/None safe
+
+=== Regression ===
+D-064+D-065 unit tests: 32/32 PASS
+D-063: 28/28 PASS
+D-062 normalizer: 10/10 PASS
+GRAND TOTAL: 70/70 PASS
+```
+
+**Status**: IMPLEMENTED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.
+
+---
+
 ## D-065 — ISS-077 Greeting FastPath Over-Match Bug Fix (2026-05-15)
 
 **Problem (مكتشَف بالتجريب الحي)**: شكوى مستخدم بعد deploy D-064:

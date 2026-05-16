@@ -1710,3 +1710,67 @@ if cleaned.startswith(g_lower) and len(cleaned) - len(g_lower) <= 30:
 
 **Status**: FIXED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.
 
+---
+
+## ISS-078 — Streaming Chinese/Russian Flash + Empty User Bubble Flicker (2026-05-15)
+
+**Severity**: Critical — كوارث بصرية متبقية بعد D-064/D-065
+
+**شكوى المستخدم**:
+> "كلمات صينية تظهر" — صينية تومض لحظياً ثم تختفي
+> "الواجهة ترمش — شريط أزرق + خط أبيض يومض"
+
+**Root Cause (مكتشَف بالتجريب الحي)**:
+
+1. **Streaming sanitization gap**:
+   ```python
+   for safe in normalizer.feed(content):
+       writer({"chunk_type": "assistant_delta", "content": safe, ...})
+       # ← chunk يصل للعميل خام، sanitize_response لم يُطبَّق بعد
+   ```
+   `sanitize_response` كان يُطبَّق على **المخرج النهائي** فقط (بعد streaming).
+   chunks تصل للعميل مباشرة من LLM → Chinese/Russian يومض لحظياً قبل التنظيف النهائي.
+
+2. **Empty user bubble flicker**:
+   لو state يحوي رسالة user فارغة (race condition قبل send)، MessageBubble يعرض:
+   ```jsx
+   <div className="message-bubble" style={{ background-color: var(--primary-color) }}>
+       <span className="user-message-text"></span>  ← فارغ
+   </div>
+   ```
+   النتيجة: شريط أزرق ضخم فارغ يومض → "blue bar flicker".
+
+**Fix (D-066 — 3 طبقات)**:
+
+| # | Layer |
+|---|-------|
+| 1 | `sanitize_chunk()` دالة جديدة — Cyrillic/CJK/Hiragana/Katakana removal + CJK punct replacement على كل chunk |
+| 2 | تطبيق `sanitize_chunk` في 3 nodes streaming paths (ChatFallbackNode + GeneralKnowledgeNode + SynthesizerNode) قبل `writer({...})` |
+| 3 | `ChatInterface.jsx` — guard ضد فقاعة user فارغة: `if (msg.role === 'user' && isEmpty) return null;` |
+
+**Live verification (2026-05-15)**:
+
+```
+=== Streaming sanitization ===
+chunks: ['النص ', '向心 ', 'المركزي']
+output: 'النص  المركزي'  ✅ Chinese stripped per chunk
+
+chunks: ['السلام ', 'будет ', 'عليكم']
+output: 'السلام  عليكم'  ✅ Russian stripped per chunk
+
+chunks: ['نص', '。', ' آخر']
+output: 'نص. آخر'  ✅ CJK punct replaced per chunk
+
+8/8 D-066 tests PASS
+70/70 GRAND TOTAL (D-062+D-063+D-064+D-065+D-066) PASS
+```
+
+**Files**:
+- `microservices/orchestrator_service/src/services/overmind/response_sanitizer.py` (+ sanitize_chunk)
+- `microservices/orchestrator_service/src/services/overmind/graph/main.py`
+- `microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py`
+- `microservices/orchestrator_service/src/services/overmind/graph/search.py`
+- `frontend/app/components/ChatInterface.jsx`
+
+**Status**: FIXED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.
+

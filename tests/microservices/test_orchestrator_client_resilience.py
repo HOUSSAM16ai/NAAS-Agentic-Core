@@ -45,13 +45,13 @@ def _disable_preempt_paths(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         OrchestratorClient,
         "_has_indexed_match",
-        lambda self, question: False,
+        lambda _self, _question: False,
         raising=False,
     )
     monkeypatch.setattr(
         OrchestratorClient,
         "_has_explanation_with_context_match",
-        lambda self, question, history_messages: False,
+        lambda _self, _question, _history_messages: False,
         raising=False,
     )
     # Silence the LLM-bound streaming fallbacks so they don't try to
@@ -74,6 +74,7 @@ def _disable_preempt_paths(monkeypatch: pytest.MonkeyPatch):
         _empty_stream,
         raising=False,
     )
+
     # Make the no-op streaming retrieval defer to the legacy
     # `_build_local_retrieval_response` shim that the tests patch.
     async def _stream_via_build(self, question):

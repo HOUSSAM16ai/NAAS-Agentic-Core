@@ -4429,4 +4429,98 @@ GRAND TOTAL: 63/63 PASS
 | Decision | المُصلَح |
 |----------|---------|
 | D-049 → D-063 | JSON envelope + indexed preempt + LaTeX delimiters + theme + Claude layout + overflow + light mode + theme button + rate-limited model + LaTeX stream normalizer + Math pipeline + greeting regex (monolith) |
-| **D-064** | **ISS-076 — Orchestrator response sanitizer + greeting fast-path + UI flicker bypass** |
+| D-064 | ISS-076 — Orchestrator response sanitizer + greeting fast-path + UI flicker bypass |
+| **D-065** | **ISS-077 — FastPath over-match fix (educational verb blockers + كيف exception + tail allowlist)** |
+
+---
+
+## 6.46 Greeting FastPath Over-Match Fix (2026-05-15, ISS-077 / D-065)
+
+> **اكتشاف بالتجريب الحي 2026-05-15**: شكوى المستخدم بعد deploy D-064: "النظام أصبح أكثر غباءاً... يتعامل مع السؤال كأنه جديد".
+>
+> **السبب الجذري** (مكتشَف بـ التجريب الحي على 7 سيناريوهات):
+>
+> ```python
+> # D-064 buggy code:
+> if cleaned.startswith(g_lower) and len(cleaned) - len(g_lower) <= 30:
+>     return response  # 30 chars margin → سؤال علمي يضيع
+> ```
+>
+> النتيجة الكارثية:
+> - `"السلام عليكم اشرح لي قانون نيوتن"` → fastpath يطابق! → رد تحية فقط → **السؤال يضيع**
+> - `"مرحبا اعطني تمرين"` → fastpath يطابق! → رد تحية → **الطلب يضيع**
+> - النظام يعطي تحية بدلاً من إجابة → **يبدو "غبياً"** بالضبط كما وصف المستخدم
+
+### الإصلاح (D-065 — 3 طبقات)
+
+**طبقة 1**: `educational_blockers` قائمة — أي verb (اشرح/احسب/اعطني/تمرين/مسألة/explain/solve/calculate/ما هو/لماذا/متى/أين) يحجب fastpath فيذهب الطلب للـ LLM.
+
+**طبقة 2**: `_kayfa_greetings` exception — "كيف" interrogative blocker إلا إذا كان في "كيف حالك"/"كيف الحال"/"كيف الأحوال" (تحية مسموحة).
+
+**طبقة 3**: `allowed_tail_words` allowlist + margin reduced 30→25:
+```python
+allowed_tail_words = {
+    "وعليكم", "السلام", "ورحمة", "الله", "وبركاته",
+    "وسهلاً", "بكم", "والله", "يا", "أستاذ",
+}
+# tail بعد greeting يجب أن تكون كل كلماته من allowlist
+```
+
+### نتائج التجريب الحي (D-065)
+
+```
+=== Live test 17 cases ===
+✅ 'السلام عليكم'                          → fastpath
+✅ 'السلام عليكم ورحمة الله وبركاته'      → fastpath
+✅ 'وعليكم السلام'                         → fastpath
+✅ 'مرحبا'                                  → fastpath
+✅ 'كيف حالك'                               → fastpath (exception)
+✅ 'صباح الخير'                            → fastpath
+✅ 'شكرا'                                   → fastpath
+✅ 'hello' / 'good morning'                → fastpath
+
+⛔ BLOCKERS (was buggy in D-064):
+✅ 'السلام عليكم اشرح لي قانون نيوتن'     → BLOCKED (educational verb)
+✅ 'مرحبا اعطني تمرين'                    → BLOCKED (educational verb)
+✅ 'احسب التكامل'                         → BLOCKED
+✅ 'ما هو التكامل'                        → BLOCKED (interrogative)
+✅ 'لماذا نستخدم لوبيتال'                 → BLOCKED
+✅ 'كيف أحل هذه المسألة'                  → BLOCKED (كيف interrogative)
+✅ 'هل يمكنك شرح'                         → BLOCKED
+
+SUMMARY: 17/17 PASS
+
+=== Regression ===
+D-064 unit tests: 32/32 PASS (7 new tests for blockers)
+D-063: 28/28 PASS
+D-062 normalizer: 10/10 PASS
+GRAND TOTAL: 70/70 PASS ✅
+```
+
+### القواعد الـ 5 الدائمة (D-065)
+
+**(1) أي query يحوي educational verb يجب أن يذهب للـ LLM، لا fastpath**: قائمة blockers تشمل اشرح/احسب/اعطني/تمرين/مسألة/explain/solve/calculate/ما هو/لماذا/متى/أين.
+
+**(2) "كيف" interrogative blocker إلا في greeting patterns**: استثناءات فقط `كيف حالك`/`كيف الحال`/`كيف الأحوال`/`كيف صحتك`.
+
+**(3) tail words allowlist إلزامي**: بعد greeting يُسمح فقط بـ {وبركاته، ورحمة الله، يا أستاذ، إلخ} — أي كلمة جديدة → اختبر unit test.
+
+**(4) fastpath margin ≤25 chars**: أي توسيع يحتاج ADR ولن يُسمح بدون مراجعة كاملة.
+
+**(5) عند إضافة greeting جديد للـ `_GREETING_FASTPATH` dict**: يجب اختبار الـ blocker case المقابل (greeting + question).
+
+### الملفات (D-065)
+
+| File | Change |
+|------|--------|
+| `microservices/orchestrator_service/src/services/overmind/response_sanitizer.py` | إضافة blockers + exception + tail allowlist |
+| `tests/microservices/orchestrator_service/test_response_sanitizer.py` | +7 D-065 unit tests |
+| `.memory/decisions.md` | D-065 entry |
+| `.memory/issues.md` | ISS-077 entry |
+
+### السلسلة الكاملة (D-049 → D-065)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 → D-064 | JSON envelope + LaTeX + theme + Math pipeline + sanitizer + UI flicker |
+| **D-065** | **ISS-077 — FastPath blockers (يحل "النظام أصبح غبياً")** |

@@ -1214,6 +1214,97 @@ TOTAL: 28/28 ✅
 
 ---
 
+## D-065 — ISS-077 Greeting FastPath Over-Match Bug Fix (2026-05-15)
+
+**Problem (مكتشَف بالتجريب الحي)**: شكوى مستخدم بعد deploy D-064:
+> "النظام أصبح أكثر غباءاً... يتعامل مع السؤال كأنه جديد في بعض المرات"
+
+تجريب حي 2026-05-15 كشف bug في `get_greeting_fastpath_response`:
+
+```python
+# قبل D-065 (D-064 buggy):
+if cleaned.startswith(g_lower) and len(cleaned) - len(g_lower) <= 30:
+    return response  # 30 chars margin → سؤال علمي يضيع
+```
+
+**نتيجة الـ bug**:
+- "السلام عليكم اشرح لي قانون نيوتن" → fastpath يطابق! → رد تحية فقط → السؤال يضيع
+- "مرحبا اعطني تمرين" → fastpath يطابق! → رد تحية → الطلب يضيع
+
+المستخدم لاحظ هذا فوراً: "النظام أصبح غبياً" — لأنه يحصل على تحية بدلاً من إجابة.
+
+**Decision**: إضافة `educational_blockers` قائمة + `kayfa_greetings` exception + تشديد margin من 30→25 + verification أن الـ tail words كلها greeting tail words.
+
+**Implementation (3 طبقات حماية)**:
+
+```python
+# طبقة 1: educational verbs blocker
+educational_blockers = (
+    "اشرح", "احسب", "أوجد", "حل ", "اعطني", "تمرين", "مسألة",
+    "explain", "solve", "calculate", "ما هو", "ما هي", "لماذا",
+    "متى", "أين",
+)
+# كيف blocker EXCEPT for "كيف حالك" pattern
+_kayfa_greetings = ("كيف حالك", "كيف الحال", "كيف الأحوال", "كيف صحتك")
+if "كيف" in normalized and not any(g in normalized for g in _kayfa_greetings):
+    return None
+for blocker in educational_blockers:
+    if blocker in normalized:
+        return None  # → LLM يجيب
+
+# طبقة 2: tail-word allowlist
+allowed_tail_words = {
+    "وعليكم", "السلام", "ورحمة", "الله", "وبركاته",
+    "وسهلاً", "بكم", "والله", "يا", "أستاذ",
+}
+tail = cleaned[len(g_lower):].strip().split()
+if all(w in allowed_tail_words or len(w) <= 2 for w in tail):
+    return response
+
+# طبقة 3: margin reduced 30→25 chars
+```
+
+**Rationale**:
+- الـ blocker words = أي verb يُشير لطلب علمي/تعليمي صريح
+- "كيف حالك" مسموح كاستثناء لأنها greeting شائعة
+- الـ tail allowlist يضمن أن السؤال "السلام عليكم اشرح..." يُرفض (لأن "اشرح" ليست greeting tail)
+
+**Invariants (قواعد دائمة)**:
+1. أي query يحوي educational verb (اشرح/احسب/اعطني/تمرين) **يجب** أن يذهب للـ LLM، لا fastpath.
+2. الاستثناء الوحيد لـ "كيف" interrogative هو greeting patterns (`كيف حالك`، `كيف الحال`).
+3. الـ tail words بعد greeting يجب أن تكون من `allowed_tail_words` (وبركاته، ورحمة الله، يا أستاذ، إلخ).
+4. عند إضافة tail word جديد → يجب اختبارها بـ unit test.
+5. fastpath margin يبقى ≤25 chars — أي توسيع يحتاج ADR.
+
+**Files**:
+- `microservices/orchestrator_service/src/services/overmind/response_sanitizer.py` (greeting fastpath fix)
+- `tests/microservices/orchestrator_service/test_response_sanitizer.py` (+7 D-065 tests)
+
+**Live verification (2026-05-15)**:
+
+```
+=== D-065 unit tests ===
+✅ 'السلام عليكم'                                  → fastpath
+✅ 'السلام عليكم ورحمة الله وبركاته'               → fastpath
+✅ 'كيف حالك'                                       → fastpath (exception)
+✅ 'السلام عليكم اشرح لي قانون نيوتن'              → BLOCKED (was buggy in D-064)
+✅ 'مرحبا اعطني تمرين'                             → BLOCKED
+✅ 'احسب التكامل'                                  → BLOCKED
+✅ 'ما هو التكامل'                                 → BLOCKED
+✅ 'كيف أحل هذه المسألة'                           → BLOCKED (كيف interrogative)
+SUMMARY: 17/17 PASS
+
+=== Regression ===
+D-064 unit tests: 32/32 PASS (7 new tests for blockers)
+D-063: 28/28 PASS
+D-062 normalizer: 10/10 PASS
+GRAND TOTAL: 70/70 PASS
+```
+
+**Status**: IMPLEMENTED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.
+
+---
+
 ## D-064 — ISS-076 Response Sanitizer + Greeting FastPath + UI Flicker Fix (2026-05-15)
 
 **Problem**: تجريب حي 2026-05-15 (بعد D-063) أكَّد أن إصلاحات D-063 لم تصل لمسار الإنتاج. شكوى المستخدم أظهرت:

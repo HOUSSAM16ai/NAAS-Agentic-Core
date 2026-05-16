@@ -1662,3 +1662,51 @@ TOTAL: 63/63 PASS
 
 **Status**: FIXED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e` (PR #2075).
 
+---
+
+## ISS-077 — D-064 FastPath Over-Match: "النظام أصبح غبياً" (2026-05-15)
+
+**Severity**: Critical — regression أحدثه D-064
+
+**شكوى المستخدم بعد deploy D-064**:
+> "النظام أصبح أكثر غباءاً... يتعامل مع السؤال كأنه جديد"
+> "يتوقف في منتصف الإجابة"
+
+**Root Cause (مكتشَف بالتجريب الحي 2026-05-15)**:
+
+في D-064، `get_greeting_fastpath_response()` يُطابق بـ prefix:
+```python
+if cleaned.startswith(g_lower) and len(cleaned) - len(g_lower) <= 30:
+    return response  # 30 chars margin = bug — يلتقط أسئلة كاملة
+```
+
+نتيجة:
+- "السلام عليكم اشرح لي قانون نيوتن" → fastpath يطابق → رد تحية → السؤال يضيع
+- "مرحبا اعطني تمرين" → fastpath يطابق → رد تحية → الطلب يضيع
+- النظام يعطي تحية بدلاً من إجابة → "غباء" واضح
+
+**Fix (D-065 — 3 طبقات)**:
+
+1. `educational_blockers` قائمة: أي verb (اشرح/احسب/اعطني/تمرين/مسألة/explain/solve/calculate/ما هو/لماذا/متى/أين) يحجب fastpath.
+2. `_kayfa_greetings` exception: "كيف" blocker إلا إذا كان في "كيف حالك"/"كيف الحال"/"كيف الأحوال".
+3. `allowed_tail_words` allowlist: tail بعد greeting يجب أن تكون من قائمة محدَّدة (وبركاته/ورحمة الله/يا أستاذ/إلخ). margin مُخفَّض 30→25.
+
+**Live verification (D-065)**:
+```
+✅ 'السلام عليكم'                          → fastpath (greeting)
+✅ 'السلام عليكم اشرح لي قانون نيوتن'      → BLOCKED (was buggy)
+✅ 'مرحبا اعطني تمرين'                     → BLOCKED (was buggy)
+✅ 'كيف حالك'                              → fastpath (exception)
+✅ 'كيف أحل هذه المسألة'                   → BLOCKED (كيف interrogative)
+17/17 D-065 unit tests PASS
+32/32 D-064+D-065 PASS (7 new tests)
+70/70 GRAND TOTAL (D-062+D-063+D-064+D-065)
+```
+
+**Files**:
+- `microservices/orchestrator_service/src/services/overmind/response_sanitizer.py`
+- `tests/microservices/orchestrator_service/test_response_sanitizer.py` (+7 tests)
+- `.memory/decisions.md` (D-065 entry)
+
+**Status**: FIXED 2026-05-15 — branch `claude/fix-langgraph-math-responses-71F8e`.
+

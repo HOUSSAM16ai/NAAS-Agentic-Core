@@ -141,7 +141,7 @@ class ChatResponse(BaseModel):
 
     response: str
     intent: str
-    subject: str = "general"   # math | physics | chemistry | general
+    subject: str = "general"  # math | physics | chemistry | general
     thread_id: str
     correlation_id: str
     graph_ready: bool

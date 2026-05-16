@@ -708,13 +708,16 @@ class ChatFallbackNode:
             writer = self._get_writer()
             if writer is not None:
                 # ابث الرد المُعَدَّ مسبقاً (للحفاظ على نفس واجهة الـ streaming)
-                writer({
-                    "chunk_type": "assistant_delta",
-                    "content": fastpath_response,
-                    "node": "chat_fallback_fastpath",
-                })
+                writer(
+                    {
+                        "chunk_type": "assistant_delta",
+                        "content": fastpath_response,
+                        "node": "chat_fallback_fastpath",
+                    }
+                )
             emit_telemetry(node_name="ChatFallbackNode", start_time=start_time, state=state)
             from langchain_core.messages import AIMessage
+
             return {
                 "final_response": fastpath_response,
                 "messages": [AIMessage(content=fastpath_response)],
@@ -729,7 +732,7 @@ class ChatFallbackNode:
         system_content = (
             "أجب بدقة اعتماداً على سياق المحادثة. لا تتجاهل السياق أبداً.\n"
             "اكتب بالعربية الفصحى فقط — لا تخلط مع الإنجليزية أو الروسية أو الإسبانية.\n"
-            "اكتب ردك مباشرة — لا تكتب تفكيراً صوتياً (\"Let me think\", \"Okay, the user\")."
+            'اكتب ردك مباشرة — لا تكتب تفكيراً صوتياً ("Let me think", "Okay, the user").'
         )
         user_content = f"السياق:\n{history}\n\nالسؤال:\n{query}"
 

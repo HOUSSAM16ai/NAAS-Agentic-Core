@@ -7,13 +7,13 @@
     OPENROUTER_API_KEY=sk-or-... python3 benchmark_models.py
     python3 benchmark_models.py --key sk-or-... --question "ما هو مشتق ln(x)؟"
 """
+
 import argparse
 import asyncio
 import os
 import time
 
 import httpx
-
 
 CANDIDATES = [
     "nvidia/nemotron-3-nano-30b-a3b:free",
@@ -26,14 +26,9 @@ CANDIDATES = [
     "inclusionai/ring-2.6-1t:free",  # known broken — included to verify
 ]
 
-SYSTEM = (
-    "أنت أستاذ رياضيات للبكالوريا الجزائرية. "
-    "أجب بالعربية الفصحى مع LaTeX ($$...$$ للمعادلات)."
-)
+SYSTEM = "أنت أستاذ رياضيات للبكالوريا الجزائرية. أجب بالعربية الفصحى مع LaTeX ($$...$$ للمعادلات)."
 
-DEFAULT_QUESTION = (
-    "اشرح: إذا كانت f(x) = x*ln(x) - x، أوجد f'(x) وادرس إشارتها"
-)
+DEFAULT_QUESTION = "اشرح: إذا كانت f(x) = x*ln(x) - x، أوجد f'(x) وادرس إشارتها"
 
 
 async def test_model(model: str, api_key: str, question: str) -> dict:
@@ -77,9 +72,8 @@ async def test_model(model: str, api_key: str, question: str) -> dict:
                     "preview": content[:200],
                     "ok": True,
                 }
-            else:
-                err = d.get("error", {}).get("message", "unknown")[:80]
-                return {"model": model, "elapsed": elapsed, "ok": False, "error": err}
+            err = d.get("error", {}).get("message", "unknown")[:80]
+            return {"model": model, "elapsed": elapsed, "ok": False, "error": err}
     except Exception as e:
         return {"model": model, "elapsed": time.time() - t0, "ok": False, "error": str(e)[:80]}
 
@@ -115,7 +109,9 @@ async def main(api_key: str, question: str) -> None:
     if good:
         best = good[0]
         print(f"RECOMMENDED PRIMARY: {best['model']}")
-        print(f"  TTFT={best['elapsed']:.1f}s | LaTeX={best['has_latex']} | Arabic={best['has_arabic']}")
+        print(
+            f"  TTFT={best['elapsed']:.1f}s | LaTeX={best['has_latex']} | Arabic={best['has_arabic']}"
+        )
 
 
 if __name__ == "__main__":

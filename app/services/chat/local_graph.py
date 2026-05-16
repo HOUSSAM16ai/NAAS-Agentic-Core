@@ -137,27 +137,48 @@ import re as _re_sanitize
 # الكلمات المختلطة (Russian/Norwegian/Spanish/etc) → استبدالها بالعربية المتوقَّعة
 _FOREIGN_REPLACEMENTS = {
     # روسي
-    "линейный": "خطي", "линейная": "خطية", "линейное": "خطية",
-    "функция": "دالة", "уравнение": "معادلة",
+    "линейный": "خطي",
+    "линейная": "خطية",
+    "линейное": "خطية",
+    "функция": "دالة",
+    "уравнение": "معادلة",
     # نرويجي/دانماركي
-    "også": "أيضاً", "auch": "أيضاً",
+    "også": "أيضاً",
+    "auch": "أيضاً",
     # إسباني
-    "aparece": "يظهر", "aparecen": "تظهر",
+    "aparece": "يظهر",
+    "aparecen": "تظهر",
     # إنجليزي meta في رد عربي
-    "wishes": "أمنيات", "invitation": "دعوة",
+    "wishes": "أمنيات",
+    "invitation": "دعوة",
     # CJK punctuation → علامات عربية
-    "。": ".", "（": "(", "）": ")", "「": '"', "」": '"',
-    "『": '"', "』": '"', "、": "،", "〜": "~",
+    "。": ".",
+    "（": "(",
+    "）": ")",
+    "「": '"',
+    "」": '"',
+    "『": '"',
+    "』": '"',
+    "、": "،",
+    "〜": "~",
 }
 
 # meta-narration بالإنجليزية في بداية ردود chat
 _CHAT_META_PATTERNS = [
     _re_sanitize.compile(r"^Okay,\s+the user[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
-    _re_sanitize.compile(r"^First,?\s+I\s+(should|must|need|will)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
-    _re_sanitize.compile(r"^The user (greeted|said|asked|wrote)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
+    _re_sanitize.compile(
+        r"^First,?\s+I\s+(should|must|need|will)[^.\n]*\.\s*", _re_sanitize.IGNORECASE
+    ),
+    _re_sanitize.compile(
+        r"^The user (greeted|said|asked|wrote)[^.\n]*\.\s*", _re_sanitize.IGNORECASE
+    ),
     _re_sanitize.compile(r"^I need to (respond|answer|reply)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
-    _re_sanitize.compile(r"^Let me (think|respond|answer|consider)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
-    _re_sanitize.compile(r"^Alright,\s+(the\s+)?(user|question|so)[^.\n]*\.\s*", _re_sanitize.IGNORECASE),
+    _re_sanitize.compile(
+        r"^Let me (think|respond|answer|consider)[^.\n]*\.\s*", _re_sanitize.IGNORECASE
+    ),
+    _re_sanitize.compile(
+        r"^Alright,\s+(the\s+)?(user|question|so)[^.\n]*\.\s*", _re_sanitize.IGNORECASE
+    ),
 ]
 
 
@@ -609,7 +630,7 @@ _EXERCISE_EXPLANATION_SYSTEM_PROMPT = (
     "🎯 قانون الشرح العبقري (ISS-058 — لا يُكسر):\n"
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     "1. **المبدأ أولاً**: ما هي القاعدة الرياضية المستخدمة؟ لماذا اخترناها تحديداً؟\n"
-    "2. **الجسر الفكري**: اشرح الانتقال من السؤال إلى كل خطوة بمنطق «لأن... إذن...\"\n"
+    '2. **الجسر الفكري**: اشرح الانتقال من السؤال إلى كل خطوة بمنطق «لأن... إذن..."\n'
     "3. **الحسابات التفصيلية**: كل خطوة مع تبريرها — لا تتخطى أي خطوة\n"
     "4. **التحقق**: كيف نتأكد أن النتيجة صحيحة؟ (التحقق بالتعويض أو الحدود)\n"
     "5. **التفسير الهندسي**: ماذا تعني النتيجة هندسياً أو فيزيائياً؟\n\n"
@@ -664,28 +685,58 @@ ISS-059: الآن يُستخدم فقط للأسئلة الشاملة. الأس�
 
 # مفاتيح تصنيف نوع السؤال — استدلال خفيف بدون LLM
 _CONCEPT_PATTERNS: tuple[str, ...] = (
-    "ماذا نقصد", "ماذا يقصد", "ماذا تعني", "ماذا يعني",
-    "ما المقصود", "ما معنى", "ما مفهوم",
-    "ما هو معنى", "ما هي", "ما هو",
-    "what is", "what does", "what means",
+    "ماذا نقصد",
+    "ماذا يقصد",
+    "ماذا تعني",
+    "ماذا يعني",
+    "ما المقصود",
+    "ما معنى",
+    "ما مفهوم",
+    "ما هو معنى",
+    "ما هي",
+    "ما هو",
+    "what is",
+    "what does",
+    "what means",
 )
 
 _JUSTIFICATION_PATTERNS: tuple[str, ...] = (
-    "لماذا", "علِّل", "علل", "برِّر", "برر",
-    "why is", "why does", "justify",
+    "لماذا",
+    "علِّل",
+    "علل",
+    "برِّر",
+    "برر",
+    "why is",
+    "why does",
+    "justify",
 )
 
 _METHOD_PATTERNS: tuple[str, ...] = (
-    "كيف نُثبت", "كيف نثبت", "كيف نحسب", "كيف نُبيِّن", "كيف نبين",
-    "كيف نستنتج", "كيف نجد", "كيف نُوجد", "كيف يصبح", "كيف نصل", "كيف وصلنا",
-    "how to prove", "how to compute", "how to derive",
+    "كيف نُثبت",
+    "كيف نثبت",
+    "كيف نحسب",
+    "كيف نُبيِّن",
+    "كيف نبين",
+    "كيف نستنتج",
+    "كيف نجد",
+    "كيف نُوجد",
+    "كيف يصبح",
+    "كيف نصل",
+    "كيف وصلنا",
+    "how to prove",
+    "how to compute",
+    "how to derive",
 )
 
 _FULL_EXPLANATION_PATTERNS: tuple[str, ...] = (
-    "اشرح التمرين", "شرح التمرين كامل",
-    "اشرح الجزء الكامل", "اشرح كل",
-    "اشرح بالتفصيل", "explain everything",
-    "explain in detail", "detailed explanation",
+    "اشرح التمرين",
+    "شرح التمرين كامل",
+    "اشرح الجزء الكامل",
+    "اشرح كل",
+    "اشرح بالتفصيل",
+    "explain everything",
+    "explain in detail",
+    "detailed explanation",
 )
 
 
@@ -711,15 +762,44 @@ def _classify_question_budget(question: str) -> tuple[int, int, str]:
     # افتراضي: متوسط (شرح جزء)
     return 2500, 700, "default"
 
+
 # أنماط تحديد الجزء المطلوب من التمرين
 _PART_PATTERNS: dict[str, tuple[str, ...]] = {
-    "I": ("الجزء الأول", "الجزء i", "part i", "part 1", "الجزء 1",
-          "g(x)", "الدالة g", "دالة g", "السؤال الأول"),
-    "II": ("الجزء الثاني", "الجزء ii", "part ii", "part 2", "الجزء 2",
-           "f(x)", "الدالة f", "دالة f", "السؤال الثاني"),
-    "III": ("الجزء الثالث", "الجزء iii", "part iii", "part 3", "الجزء 3",
-            "h(x)", "الدالة h", "دالة h", "التكامل", "الدالة الأصلية",
-            "السؤال الثالث"),
+    "I": (
+        "الجزء الأول",
+        "الجزء i",
+        "part i",
+        "part 1",
+        "الجزء 1",
+        "g(x)",
+        "الدالة g",
+        "دالة g",
+        "السؤال الأول",
+    ),
+    "II": (
+        "الجزء الثاني",
+        "الجزء ii",
+        "part ii",
+        "part 2",
+        "الجزء 2",
+        "f(x)",
+        "الدالة f",
+        "دالة f",
+        "السؤال الثاني",
+    ),
+    "III": (
+        "الجزء الثالث",
+        "الجزء iii",
+        "part iii",
+        "part 3",
+        "الجزء 3",
+        "h(x)",
+        "الدالة h",
+        "دالة h",
+        "التكامل",
+        "الدالة الأصلية",
+        "السؤال الثالث",
+    ),
 }
 
 # حدود الأجزاء في الإجابة النموذجية
@@ -797,7 +877,7 @@ def _extract_part_context(full_content: str, part: str) -> str:
 
     # تأكد من عدم تجاوز الحد الأقصى
     if len(combined) > _MAX_EXERCISE_CONTEXT_CHARS * 2:
-        combined = combined[:_MAX_EXERCISE_CONTEXT_CHARS * 2]
+        combined = combined[: _MAX_EXERCISE_CONTEXT_CHARS * 2]
 
     return combined
 
@@ -861,11 +941,7 @@ async def run_local_graph_with_exercise_context(
         context_label = f"كامل ({q_class})"
 
     # بناء رسالة المستخدم مع السياق المُقلَّص للتمرين
-    context_block = (
-        f"## محتوى التمرين ({context_label})\n\n"
-        f"{trimmed_content}\n\n"
-        f"---\n\n"
-    )
+    context_block = f"## محتوى التمرين ({context_label})\n\n{trimmed_content}\n\n---\n\n"
 
     if history_text:
         user_message = (
@@ -874,10 +950,7 @@ async def run_local_graph_with_exercise_context(
             f"## طلب الطالب الحالي\n{sanitized_question}"
         )
     else:
-        user_message = (
-            f"{context_block}"
-            f"## طلب الطالب\n{sanitized_question}"
-        )
+        user_message = f"{context_block}## طلب الطالب\n{sanitized_question}"
 
     obs = None
     span_ctx = None
@@ -895,8 +968,8 @@ async def run_local_graph_with_exercise_context(
                 "question_len": len(sanitized_question),
                 "context_len": len(exercise_full_content),
                 "context_budget": context_budget,  # ISS-059
-                "token_budget": token_budget,       # ISS-059
-                "q_class": q_class,                 # ISS-059
+                "token_budget": token_budget,  # ISS-059
+                "q_class": q_class,  # ISS-059
             },
         )
         obs.increment_counter(
@@ -971,4 +1044,3 @@ async def run_local_graph_with_exercise_context(
                 value=duration_s,
                 labels={"node": "exercise_explanation_stream", "graph": "local"},
             )
-

@@ -160,12 +160,16 @@ jobs:
           assert n2.feed("") == [], "FAIL T7 empty feed"
           assert n2.flush() == [], "FAIL T7 empty flush"
 
-          # 8. plain text untouched
+          # 8. plain text untouched — collect from both feed() and flush()
+          # (feed yields the safe prefix while keeping a small lookahead;
+          #  flush then drains the remainder. This mirrors how live wiring
+          #  consumes the normalizer in routes.py / search.py / general_knowledge.py.)
           n3 = LatexStreamNormalizer()
+          out3 = []
           for c in "نص عربي بدون رياضيات":
-              n3.feed(c)
-          out3 = n3.flush()
-          assert "".join(out3) == "نص عربي بدون رياضيات", f"FAIL T8"
+              out3.extend(n3.feed(c))
+          out3.extend(n3.flush())
+          assert "".join(out3) == "نص عربي بدون رياضيات", f"FAIL T8: {out3!r}"
 
           print("🎉 ALL 8 NORMALIZER INVARIANTS PASS")
           PY

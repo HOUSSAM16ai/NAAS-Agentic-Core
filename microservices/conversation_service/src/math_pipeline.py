@@ -31,58 +31,87 @@ _DEFAULT_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
 # - qwen/qwen3-coder:free          → rate-limited 429 (مُزال)
 # - الترتيب: الأسرع → الأقوى → الأكبر
 _FALLBACK_MODELS = [
-    "openai/gpt-oss-20b:free",           # 28s، عربية ممتازة، LaTeX سليم
+    "openai/gpt-oss-20b:free",  # 28s، عربية ممتازة، LaTeX سليم
     "nvidia/nemotron-3-super-120b-a12b:free",  # 14s، 120B params، شرح عبقري
-    "openai/gpt-oss-120b:free",          # 21s، احتياطي أخير
-    "z-ai/glm-4.5-air:free",             # reasoning mode — ISS-069 fix
+    "openai/gpt-oss-120b:free",  # 21s، احتياطي أخير
+    "z-ai/glm-4.5-air:free",  # reasoning mode — ISS-069 fix
 ]
 
 # ISS-074: ترتيب الأنواع حسب التخصيص (أكثر تحديداً → أقل تحديداً)
 # function_study و differential_eq قبل derivative لتجنب false positives
 _MATH_TYPES: dict[str, list[str]] = {
-    "function_study":  ["ادرس", "دراسة الدالة", "tableau de variation", "تغيرات الدالة",
-                         "إشارة الدالة", "جدول التغيرات", "ادرس تغيرات"],
-    "differential_eq": ["معادلة تفاضلية", "équation différentielle", "y''", "y' +", "y' =",
-                         "ED:", "EDO"],
-    "derivative":      ["مشتق", "اشتقاق", "مشتقة", "f'(", "dérivée", "dériver"],
-    "integral":        ["تكامل", "∫", "intégrale", "intégrer", "primitive", "احسب التكامل"],
-    "limit":           ["نهاية الدالة", "نهاية عند", "lim(", "lim ", "limite", "∞", "لانهاية",
-                         "lim_", "limit"],
-    "matrix":          ["مصفوفة", "matrice", "déterminant", "عكسية المصفوفة", "محدد المصفوفة"],
-    "sequence":        ["متتالية", "suite", "تقاربية", "divergente", "حدود المتتالية"],
-    "equation":        ["معادلة", "حل المعادلة", "equation", "résoudre", "جذر", "حلول"],
-    "probability":     ["احتمال", "probabilité", "عشوائي", "حادثة", "variable aléatoire"],
-    "complex":         ["مركب", "complexe", "module", "argument", "conjugué", "i² = -1"],
-    "geometry":        ["هندسة", "géométrie", "مستقيم", "مستوى", "متجه", "vecteur"],
+    "function_study": [
+        # ISS-074: bare "ادرس" was overmatching genuine sequence questions like
+        # "ادرس تقاربية المتتالية". Require an explicit function/study marker.
+        "ادرس الدالة",
+        "ادرس دالة",
+        "ادرس f",
+        "ادرس g",
+        "ادرس h",
+        "دراسة الدالة",
+        "tableau de variation",
+        "تغيرات الدالة",
+        "إشارة الدالة",
+        "جدول التغيرات",
+        "ادرس تغيرات",
+    ],
+    "differential_eq": [
+        "معادلة تفاضلية",
+        "équation différentielle",
+        "y''",
+        "y' +",
+        "y' =",
+        "ED:",
+        "EDO",
+    ],
+    "derivative": ["مشتق", "اشتقاق", "مشتقة", "f'(", "dérivée", "dériver"],
+    "integral": ["تكامل", "∫", "intégrale", "intégrer", "primitive", "احسب التكامل"],
+    "limit": [
+        "نهاية الدالة",
+        "نهاية عند",
+        "lim(",
+        "lim ",
+        "limite",
+        "∞",
+        "لانهاية",
+        "lim_",
+        "limit",
+    ],
+    "matrix": ["مصفوفة", "matrice", "déterminant", "عكسية المصفوفة", "محدد المصفوفة"],
+    "sequence": ["متتالية", "suite", "تقاربية", "divergente", "حدود المتتالية"],
+    "equation": ["معادلة", "حل المعادلة", "equation", "résoudre", "جذر", "حلول"],
+    "probability": ["احتمال", "probabilité", "عشوائي", "حادثة", "variable aléatoire"],
+    "complex": ["مركب", "complexe", "module", "argument", "conjugué", "i² = -1"],
+    "geometry": ["هندسة", "géométrie", "مستقيم", "مستوى", "متجه", "vecteur"],
 }
 
 _TYPE_LABELS: dict[str, str] = {
-    "derivative":      "📐 مسألة اشتقاق",
-    "integral":        "∫ مسألة تكامل",
-    "limit":           "∞ مسألة نهايات",
-    "equation":        "⚖️ مسألة معادلات",
-    "function_study":  "📊 دراسة دالة",
-    "probability":     "🎲 مسألة احتمالات",
-    "complex":         "🔢 أعداد مركبة",
-    "matrix":          "🔲 مصفوفات",
-    "geometry":        "📐 هندسة تحليلية",
-    "sequence":        "🔢 متتاليات",
+    "derivative": "📐 مسألة اشتقاق",
+    "integral": "∫ مسألة تكامل",
+    "limit": "∞ مسألة نهايات",
+    "equation": "⚖️ مسألة معادلات",
+    "function_study": "📊 دراسة دالة",
+    "probability": "🎲 مسألة احتمالات",
+    "complex": "🔢 أعداد مركبة",
+    "matrix": "🔲 مصفوفات",
+    "geometry": "📐 هندسة تحليلية",
+    "sequence": "🔢 متتاليات",
     "differential_eq": "📈 معادلة تفاضلية",
 }
 
 _MATH_HINTS: dict[str, str] = {
-    "derivative":      "استخدم قاعدة الضرب (uv)' = u'v + uv' وقاعدة السلسلة",
-    "integral":        "فكِّر في التكامل بالتجزئة أو التعويض",
-    "limit":           "جرِّب التحليل أو قاعدة لوبيتال أو المكافئات المقاربية",
-    "equation":        "عزِّل المجهول أو حلِّل إلى عوامل",
-    "function_study":  "ابدأ بالمجال ثم المشتق ثم جدول التغيرات",
-    "probability":     "حدِّد الفضاء الاحتمالي ثم طبِّق القانون المناسب",
-    "complex":         "حوِّل بين الشكل الجبري والمثلثي والأسي",
-    "matrix":          "احسب المحدد أولاً",
-    "geometry":        "استخدم المتجهات والمعادلات الديكارتية",
-    "sequence":        "حدِّد نوع المتتالية ثم طبِّق القانون",
+    "derivative": "استخدم قاعدة الضرب (uv)' = u'v + uv' وقاعدة السلسلة",
+    "integral": "فكِّر في التكامل بالتجزئة أو التعويض",
+    "limit": "جرِّب التحليل أو قاعدة لوبيتال أو المكافئات المقاربية",
+    "equation": "عزِّل المجهول أو حلِّل إلى عوامل",
+    "function_study": "ابدأ بالمجال ثم المشتق ثم جدول التغيرات",
+    "probability": "حدِّد الفضاء الاحتمالي ثم طبِّق القانون المناسب",
+    "complex": "حوِّل بين الشكل الجبري والمثلثي والأسي",
+    "matrix": "احسب المحدد أولاً",
+    "geometry": "استخدم المتجهات والمعادلات الديكارتية",
+    "sequence": "حدِّد نوع المتتالية ثم طبِّق القانون",
     "differential_eq": "ابحث عن الحل المتجانس أولاً ثم الحل الخاص",
-    "general_math":    "",
+    "general_math": "",
 }
 
 # System prompt — ISS-074 (2026-05-15) — concise + positive instructions
@@ -172,38 +201,38 @@ def _normalize_latex(text: str) -> str:
 
     # \\[ ... \\] → $$ ... $$  (multiline)
     text = _re.sub(
-        r'\\\[\s*(.*?)\s*\\\]',
-        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        r"\\\[\s*(.*?)\s*\\\]",
+        lambda m: f"$$\n{m.group(1).strip()}\n$$",
         text,
         flags=_re.DOTALL,
     )
 
     # \\begin{equation} ... \\end{equation} → $$ ... $$
     text = _re.sub(
-        r'\\begin\{equation\*?\}\s*(.*?)\s*\\end\{equation\*?\}',
-        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        r"\\begin\{equation\*?\}\s*(.*?)\s*\\end\{equation\*?\}",
+        lambda m: f"$$\n{m.group(1).strip()}\n$$",
         text,
         flags=_re.DOTALL,
     )
 
     # \\begin{align} ... \\end{align} → $$ ... $$
     text = _re.sub(
-        r'\\begin\{align\*?\}\s*(.*?)\s*\\end\{align\*?\}',
-        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        r"\\begin\{align\*?\}\s*(.*?)\s*\\end\{align\*?\}",
+        lambda m: f"$$\n{m.group(1).strip()}\n$$",
         text,
         flags=_re.DOTALL,
     )
 
     # \\begin{aligned} ... \\end{aligned} → $$ ... $$
     text = _re.sub(
-        r'\\begin\{aligned\*?\}\s*(.*?)\s*\\end\{aligned\*?\}',
-        lambda m: f'$$\n{m.group(1).strip()}\n$$',
+        r"\\begin\{aligned\*?\}\s*(.*?)\s*\\end\{aligned\*?\}",
+        lambda m: f"$$\n{m.group(1).strip()}\n$$",
         text,
         flags=_re.DOTALL,
     )
 
     # تنظيف: $$ $$ متعددة متتالية → $$ واحدة
-    return _re.sub(r'\$\$\s*\$\$', '', text)
+    return _re.sub(r"\$\$\s*\$\$", "", text)
 
 
 def _clean_foreign_scripts(text: str) -> str:
@@ -223,9 +252,13 @@ def _clean_foreign_scripts(text: str) -> str:
         return text
     # 1) استبدالات Russian شائعة بمقابلها العربي
     replacements = {
-        "линейный": "خطي", "линейная": "خطية", "линейное": "خطية",
-        "функция": "دالة", "уравнение": "معادلة",
-        "aparece": "يظهر", "aparecen": "تظهر",
+        "линейный": "خطي",
+        "линейная": "خطية",
+        "линейное": "خطية",
+        "функция": "دالة",
+        "уравнение": "معادلة",
+        "aparece": "يظهر",
+        "aparecen": "تظهر",
         "Force向心": "قوة جذب مركزية",
         "قوة向心": "قوة جذب مركزية",
         "向心": "جذب مركزي",
@@ -254,7 +287,18 @@ def _strip_meta_prefix(text: str) -> str:
         return text
     # ابحث عن أول علامة على بدء المحتوى الفعلي
     candidates = []
-    for marker in ("$$", "\\(", "##", "**الخطوة", "**المعادلة", "**الحل", "**1.", "1.", "**القاعدة", "**لماذا"):
+    for marker in (
+        "$$",
+        "\\(",
+        "##",
+        "**الخطوة",
+        "**المعادلة",
+        "**الحل",
+        "**1.",
+        "1.",
+        "**القاعدة",
+        "**لماذا",
+    ):
         i = text.find(marker)
         if i >= 0:
             candidates.append(i)
@@ -285,14 +329,14 @@ def _get_math_context(math_type: str) -> str:
 
 
 class MathPipelineState(TypedDict):
-    question:       str
-    math_type:      str
-    math_hint:      str
-    solution:       str
+    question: str
+    math_type: str
+    math_hint: str
+    solution: str
     final_response: str
-    history:        list[dict[str, str]]
-    thread_id:      str
-    error:          str | None
+    history: list[dict[str, str]]
+    thread_id: str
+    error: str | None
 
 
 async def _call_openrouter(
@@ -310,6 +354,7 @@ async def _call_openrouter(
 
     try:
         import httpx
+
         for m in models_to_try:
             try:
                 async with httpx.AsyncClient(timeout=35.0) as client:
@@ -325,7 +370,7 @@ async def _call_openrouter(
                             "model": m,
                             "messages": [
                                 {"role": "system", "content": system_prompt},
-                                {"role": "user",   "content": user_prompt},
+                                {"role": "user", "content": user_prompt},
                             ],
                             "max_tokens": max_tokens,
                             "temperature": 0.2,  # ISS-072: 0.2 للرياضيات — أقل تشتتاً
@@ -359,10 +404,10 @@ async def classify_node(state: MathPipelineState) -> MathPipelineState:
 async def solve_node(state: MathPipelineState) -> MathPipelineState:
     """Node 2 — LLM واحد، prompt مباشر، الحل الكامل."""
     t0 = time.perf_counter()
-    question  = state["question"]
+    question = state["question"]
     math_type = state["math_type"]
     math_hint = state["math_hint"]
-    label     = _TYPE_LABELS.get(math_type, "📚 رياضيات")
+    label = _TYPE_LABELS.get(math_type, "📚 رياضيات")
 
     # سياق المحادثة السابقة
     history_ctx = ""
@@ -396,7 +441,8 @@ async def solve_node(state: MathPipelineState) -> MathPipelineState:
                 if stripped and len(stripped.strip()) > 100:
                     logger.info(
                         "math_pipeline: stripped meta-prefix (%r) — kept %d chars",
-                        meta_hit, len(stripped),
+                        meta_hit,
+                        len(stripped),
                     )
                     solution = stripped
                 else:
@@ -428,14 +474,21 @@ async def solve_node(state: MathPipelineState) -> MathPipelineState:
                             solution = _strip_meta_prefix(retry) or retry
 
         elapsed = time.perf_counter() - t0
-        logger.info("math_pipeline.solve: type=%s chars=%d time=%.2fs", math_type, len(solution), elapsed)
+        logger.info(
+            "math_pipeline.solve: type=%s chars=%d time=%.2fs", math_type, len(solution), elapsed
+        )
         final = f"## {label}\n\n{solution}"
         return {**state, "solution": solution, "final_response": final}
 
     except TimeoutError:
         logger.warning("math_pipeline.solve: timeout")
         fb = _build_fallback_solution(question, math_type)
-        return {**state, "solution": fb, "final_response": f"## {label}\n\n{fb}", "error": "timeout"}
+        return {
+            **state,
+            "solution": fb,
+            "final_response": f"## {label}\n\n{fb}",
+            "error": "timeout",
+        }
     except Exception as exc:
         logger.error("math_pipeline.solve error: %s", exc)
         fb = _build_fallback_solution(question, math_type)
@@ -478,12 +531,12 @@ def build_math_pipeline() -> object:
     ISS-071: normalize_node مُضاف لتحويل \\[...\\] → $$...$$ بعد الـ LLM.
     """
     builder = StateGraph(MathPipelineState)
-    builder.add_node("classify",  classify_node)
-    builder.add_node("solve",     solve_node)
+    builder.add_node("classify", classify_node)
+    builder.add_node("solve", solve_node)
     builder.add_node("normalize", normalize_node)
-    builder.add_edge(START,       "classify")
-    builder.add_edge("classify",  "solve")
-    builder.add_edge("solve",     "normalize")
+    builder.add_edge(START, "classify")
+    builder.add_edge("classify", "solve")
+    builder.add_edge("solve", "normalize")
     builder.add_edge("normalize", END)
     return builder.compile()
 
@@ -507,20 +560,20 @@ async def invoke_math_pipeline(
     """يستدعي Math Pipeline ويُعيد: final_response, math_type, solution, error."""
     pipeline = get_math_pipeline()
     initial_state: MathPipelineState = {
-        "question":       question,
-        "math_type":      "general_math",
-        "math_hint":      "",
-        "solution":       "",
+        "question": question,
+        "math_type": "general_math",
+        "math_hint": "",
+        "solution": "",
         "final_response": "",
-        "history":        history or [],
-        "thread_id":      thread_id,
-        "error":          None,
+        "history": history or [],
+        "thread_id": thread_id,
+        "error": None,
     }
     config = {"configurable": {"thread_id": thread_id}}
     result = await pipeline.ainvoke(initial_state, config=config)
     return {
         "final_response": result.get("final_response", ""),
-        "math_type":      result.get("math_type", "general_math"),
-        "solution":       result.get("solution", ""),
-        "error":          result.get("error"),
+        "math_type": result.get("math_type", "general_math"),
+        "solution": result.get("solution", ""),
+        "error": result.get("error"),
     }

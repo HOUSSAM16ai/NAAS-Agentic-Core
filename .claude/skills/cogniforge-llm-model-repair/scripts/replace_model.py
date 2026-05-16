@@ -8,10 +8,9 @@
                               --new "nvidia/nemotron-3-nano-30b-a3b:free"
     python3 replace_model.py --dry-run  # عرض فقط بدون تعديل
 """
-import argparse
-import re
-from pathlib import Path
 
+import argparse
+from pathlib import Path
 
 # الملفات التي يجب فحصها (بالترتيب)
 TARGET_FILES = [
@@ -55,7 +54,7 @@ def replace_in_file(path: Path, old: str, new: str, dry_run: bool) -> int:
             new_line = line.replace(old, new)
             new_lines.append(new_line)
             count += 1
-            print(f"  [{path}] line {lines.index(line)+1}:")
+            print(f"  [{path}] line {lines.index(line) + 1}:")
             print(f"    - {line.rstrip()}")
             print(f"    + {new_line.rstrip()}")
         else:
@@ -118,7 +117,7 @@ def main() -> None:
         print("✅ No active uses of old model found")
 
     if not args.dry_run and total > 0:
-        print(f"\n✅ Done. Restart affected services to apply changes.")
+        print("\n✅ Done. Restart affected services to apply changes.")
         print("   See SKILL.md §4 for restart commands.")
 
 

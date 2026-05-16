@@ -253,6 +253,7 @@ class OrchestratorClient:
 
         try:
             from app.telemetry.path_observer import mark_fallback_used
+
             mark_fallback_used("exercise_explanation_stream")
         except Exception:
             pass
@@ -310,15 +311,15 @@ class OrchestratorClient:
         # 5. الجداول → تُرسَل سطراً سطراً مع تأخير قصير
         import re as _re
 
-        _LATEX_BLOCK_RE = _re.compile(r'\$\$[^$]*?\$\$', _re.DOTALL)
+        _LATEX_BLOCK_RE = _re.compile(r"\$\$[^$]*?\$\$", _re.DOTALL)  # noqa: N806
         # ISS-057 (D-051): يحفظ أربع صيغ من LaTeX inline كـ token واحد:
         #   $...$ | \(...\) | \\(...\\) | حتى عبر كلمات بدون فراغ
         # تطابق بالترتيب: $$ أولاً (في حالة عابر سطر)، ثم $، ثم \\(...\\)، ثم \(...\)
-        _LATEX_INLINE_RE = _re.compile(
-            r'\$\$[^$\n]+?\$\$'         # $$inline$$ نادر لكن ممكن
-            r'|\$[^$\n]+?\$'            # $inline$
-            r'|\\\\\([^\n]+?\\\\\)'     # \\(inline\\)  — الصيغة في knowledge_base
-            r'|\\\([^\n]+?\\\)'         # \(inline\)
+        _LATEX_INLINE_RE = _re.compile(  # noqa: N806
+            r"\$\$[^$\n]+?\$\$"  # $$inline$$ نادر لكن ممكن
+            r"|\$[^$\n]+?\$"  # $inline$
+            r"|\\\\\([^\n]+?\\\\\)"  # \\(inline\\)  — الصيغة في knowledge_base
+            r"|\\\([^\n]+?\\\)"  # \(inline\)
         )
 
         def _split_preserving_latex(line: str) -> list[str]:
@@ -332,14 +333,14 @@ class OrchestratorClient:
             tokens: list[str] = []
             pos = 0
             for m in _LATEX_INLINE_RE.finditer(line):
-                before = line[pos:m.start()]
+                before = line[pos : m.start()]
                 if before:
-                    tokens.extend(w + ' ' for w in before.split() if w)
+                    tokens.extend(w + " " for w in before.split() if w)
                 tokens.append(m.group())
                 pos = m.end()
             remainder = line[pos:]
             if remainder:
-                tokens.extend(w + ' ' for w in remainder.split() if w)
+                tokens.extend(w + " " for w in remainder.split() if w)
             return tokens
 
         lines = full_response.splitlines(keepends=True)
@@ -349,23 +350,23 @@ class OrchestratorClient:
             stripped = line.strip()
 
             # سطر فارغ أو فاصل → فوري
-            if not stripped or stripped == '---':
+            if not stripped or stripped == "---":
                 yield line
                 i += 1
                 continue
 
             # معادلة LaTeX أحادية السطر $$...$$ — تُرسَل كوحدة واحدة لا تُكسَر
-            if stripped.startswith('$$') and stripped.endswith('$$') and len(stripped) > 4:
+            if stripped.startswith("$$") and stripped.endswith("$$") and len(stripped) > 4:
                 yield line
                 await asyncio.sleep(0.025)
                 i += 1
                 continue
 
             # معادلة LaTeX متعددة الأسطر $$ ... $$
-            if stripped.startswith('$$') and not stripped.endswith('$$'):
+            if stripped.startswith("$$") and not stripped.endswith("$$"):
                 block = line
                 i += 1
-                while i < len(lines) and '$$' not in lines[i]:
+                while i < len(lines) and "$$" not in lines[i]:
                     block += lines[i]
                     i += 1
                 if i < len(lines):
@@ -376,14 +377,14 @@ class OrchestratorClient:
                 continue
 
             # عنوان Markdown
-            if stripped.startswith('#'):
+            if stripped.startswith("#"):
                 yield line
                 await asyncio.sleep(0.018)
                 i += 1
                 continue
 
             # سطر جدول
-            if stripped.startswith('|'):
+            if stripped.startswith("|"):
                 yield line
                 await asyncio.sleep(0.010)
                 i += 1
@@ -391,16 +392,16 @@ class OrchestratorClient:
 
             # سطر عادي — word-by-word مع الحفاظ على LaTeX
             tokens = _split_preserving_latex(stripped)
-            for j, token in enumerate(tokens):
+            for _j, token in enumerate(tokens):
                 yield token
                 # تأخير أقصر للكلمات القصيرة، أطول للرموز الرياضية
-                if '$' in token:
+                if "$" in token:
                     await asyncio.sleep(0.020)
                 elif len(token) <= 3:
                     await asyncio.sleep(0.006)
                 else:
                     await asyncio.sleep(0.011)
-            yield '\n'
+            yield "\n"
             i += 1
 
     @staticmethod
@@ -897,7 +898,7 @@ class OrchestratorClient:
             logger.info(
                 "explanation_context_preempt",
                 extra={
-                    "request_id": request_id if 'request_id' in locals() else str(uuid.uuid4()),
+                    "request_id": str(uuid.uuid4()),
                     "reason": _explanation_decision.reason,
                     "matched_file": _explanation_decision.matched_entry.file_path,
                 },

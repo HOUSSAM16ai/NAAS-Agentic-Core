@@ -404,15 +404,20 @@ class SynthesizerNode:
                     from microservices.orchestrator_service.src.services.llm.client import (
                         get_ai_client as get_llm_client,
                     )
+
                     llm_client = get_llm_client()
                     stream_messages = [
-                        {"role": "system", "content": "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار."},
+                        {
+                            "role": "system",
+                            "content": "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار.",
+                        },
                         {"role": "user", "content": query},
                     ]
                     # D-061 (ISS-074): تطبيع LaTeX على streaming chunks
                     from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
                         sanitize_chunk,
                     )
+
                     normalizer = LatexStreamNormalizer()
                     parts: list[str] = []
                     async for chunk in llm_client.stream_chat(stream_messages):
@@ -425,13 +430,25 @@ class SynthesizerNode:
                             if not sanitized:
                                 continue
                             parts.append(sanitized)
-                            writer({"chunk_type": "assistant_delta", "content": sanitized, "node": "synthesizer"})
+                            writer(
+                                {
+                                    "chunk_type": "assistant_delta",
+                                    "content": sanitized,
+                                    "node": "synthesizer",
+                                }
+                            )
                     for tail_chunk in normalizer.flush():
                         sanitized_tail = sanitize_chunk(tail_chunk)
                         if not sanitized_tail:
                             continue
                         parts.append(sanitized_tail)
-                        writer({"chunk_type": "assistant_delta", "content": sanitized_tail, "node": "synthesizer"})
+                        writer(
+                            {
+                                "chunk_type": "assistant_delta",
+                                "content": sanitized_tail,
+                                "node": "synthesizer",
+                            }
+                        )
                     text_val = "".join(parts).strip()
                 except Exception as e:
                     logger.error(f"Synthesizer no-docs streaming failed: {e}")
@@ -466,6 +483,7 @@ class SynthesizerNode:
                     from microservices.orchestrator_service.src.services.llm.client import (
                         get_ai_client as get_llm_client,
                     )
+
                     llm_client = get_llm_client()
                     # D-061 (ISS-074): تطبيع LaTeX على streaming chunks
                     normalizer = LatexStreamNormalizer()
@@ -481,6 +499,7 @@ class SynthesizerNode:
                                 from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
                                     sanitize_chunk,
                                 )
+
                                 sanitized = sanitize_chunk(safe_chunk)
                                 if not sanitized:
                                     continue
@@ -498,6 +517,7 @@ class SynthesizerNode:
                         from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
                             sanitize_chunk,
                         )
+
                         sanitized_tail = sanitize_chunk(tail_chunk)
                         if not sanitized_tail:
                             continue
@@ -535,6 +555,7 @@ class SynthesizerNode:
         from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
             sanitize_response,
         )
+
         text_val = sanitize_response(text_val, intent="educational")
 
         response_json = {

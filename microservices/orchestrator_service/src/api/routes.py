@@ -923,8 +923,8 @@ async def _serialize_json_async(payload: object) -> str:
 # للمستخدم النهائي. لا تُسلسل dict خام كـ JSON إلى assistant_delta/final أبداً.
 # ─────────────────────────────────────────────────────────────────────────────
 _HUMAN_RESPONSE_FIELDS: tuple[str, ...] = (
-    "التمرين",       # SynthesizerNode envelope
-    "الإجابة",       # AdminAgentNode / RenderAnswerNode envelope
+    "التمرين",  # SynthesizerNode envelope
+    "الإجابة",  # AdminAgentNode / RenderAnswerNode envelope
     "response",
     "answer",
     "content",
@@ -1892,6 +1892,7 @@ async def _run_chat_langgraph(
     # custom chunks مباشرة + state updates لاستخراج final_response.
     # المرجع: اختبار مباشر أثبت أن writer() يُستدعى لكن on_custom_event لا يُطلق أبداً.
     import time as _time_mod
+
     streamed_chars = 0
     final_resp = None
     _stream_start = _time_mod.perf_counter()
@@ -1916,6 +1917,7 @@ async def _run_chat_langgraph(
                 streamed_chars += len(content)
                 # ISS-STREAM-002: تسجيل كل chunk في Prometheus
                 import contextlib
+
                 with contextlib.suppress(Exception):
                     record_streaming_chunk("http", str(node_name), len(content))
                 yield await _serialize_stream_frame(
@@ -1949,6 +1951,7 @@ async def _run_chat_langgraph(
 
     # ISS-STREAM-002: تسجيل الجلسة الكاملة في Prometheus
     import contextlib
+
     with contextlib.suppress(Exception):
         _stream_duration = _time_mod.perf_counter() - _stream_start
         _session_status = "success" if streamed_chars > 0 else "fallback"

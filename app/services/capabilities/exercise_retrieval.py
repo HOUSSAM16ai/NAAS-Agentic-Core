@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import ClassVar
 
 from pydantic import Field
 
@@ -225,7 +226,7 @@ class ExerciseRetrievalDecision(RobustBaseModel):
     reason: str = ""
     matched_entry: ExerciseEntry | None = None
 
-    model_config = {"arbitrary_types_allowed": True}
+    model_config: ClassVar[dict[str, object]] = {"arbitrary_types_allowed": True}
 
 
 class ExerciseRetrievalResult(RobustBaseModel):
@@ -235,7 +236,7 @@ class ExerciseRetrievalResult(RobustBaseModel):
     message: str | None = None
     entry: ExerciseEntry | None = None
 
-    model_config = {"arbitrary_types_allowed": True}
+    model_config: ClassVar[dict[str, object]] = {"arbitrary_types_allowed": True}
 
 
 def _has_explanation_intent(normalized: str) -> bool:
@@ -253,19 +254,37 @@ def _has_retrieval_intent(normalized: str) -> bool:
     if ("تمرين" in normalized or "exercise" in normalized) and _YEAR_RE.search(normalized):
         return True
     # أنماط دلالية: فعل جلب + موضوع رياضي = طلب محتوى
-    _MATH_TOPICS_DIRECT: tuple[str, ...] = (
-        "دوال عددية", "الدوال العددية",
-        "احتمالات", "الاحتمالات",
-        "أعداد مركبة", "الأعداد المركبة",
-        "تكامل", "التكامل",
-        "مشتقة", "المشتقة",
-        "متتاليات", "المتتاليات",
+    _MATH_TOPICS_DIRECT: tuple[str, ...] = (  # noqa: N806
+        "دوال عددية",
+        "الدوال العددية",
+        "احتمالات",
+        "الاحتمالات",
+        "أعداد مركبة",
+        "الأعداد المركبة",
+        "تكامل",
+        "التكامل",
+        "مشتقة",
+        "المشتقة",
+        "متتاليات",
+        "المتتاليات",
     )
-    _FETCH_VERBS: tuple[str, ...] = (
-        "اعطني", "أعطني", "هات", "هاتلي",
-        "أريد", "اريد", "أحتاج", "احتاج",
-        "أظهر", "اظهر", "عرض",
-        "show", "give", "get", "fetch", "display",
+    _FETCH_VERBS: tuple[str, ...] = (  # noqa: N806
+        "اعطني",
+        "أعطني",
+        "هات",
+        "هاتلي",
+        "أريد",
+        "اريد",
+        "أحتاج",
+        "احتاج",
+        "أظهر",
+        "اظهر",
+        "عرض",
+        "show",
+        "give",
+        "get",
+        "fetch",
+        "display",
     )
     has_fetch_verb = any(v in normalized for v in _FETCH_VERBS)
     has_math_topic = any(t in normalized for t in _MATH_TOPICS_DIRECT)
@@ -472,7 +491,9 @@ def format_exercise_for_display(entry: ExerciseEntry, raw_content: str) -> str:
     return questions_only.strip()
 
 
-def make_result(raw_result: str | None, entry: ExerciseEntry | None = None) -> ExerciseRetrievalResult:
+def make_result(
+    raw_result: str | None, entry: ExerciseEntry | None = None
+) -> ExerciseRetrievalResult:
     """يحوّل النتيجة الخام إلى عقد موحد دون كسر السلوك التاريخي."""
     if raw_result is None or not raw_result.strip():
         return ExerciseRetrievalResult(success=False)
@@ -650,14 +671,16 @@ class ExplanationWithContextDecision(RobustBaseModel):
     recognized: bool
     reason: str = ""
     matched_entry: ExerciseEntry | None = None
-    full_content: str | None = None      # نص + إجابة نموذجية → للـ LLM كـ context
-    display_content: str | None = None   # نص فقط → للعرض المبدئي للطالب
-    requested_part: str | None = None    # ISS-055: hint للتقطيع الذكي (I/II/III)
+    full_content: str | None = None  # نص + إجابة نموذجية → للـ LLM كـ context
+    display_content: str | None = None  # نص فقط → للعرض المبدئي للطالب
+    requested_part: str | None = None  # ISS-055: hint للتقطيع الذكي (I/II/III)
 
-    model_config = {"arbitrary_types_allowed": True}
+    model_config: ClassVar[dict[str, object]] = {"arbitrary_types_allowed": True}
 
 
-def _detect_entry_from_history(history_messages: list[dict[str, str]] | None) -> ExerciseEntry | None:
+def _detect_entry_from_history(
+    history_messages: list[dict[str, str]] | None,
+) -> ExerciseEntry | None:
     """يكشف عن تمرين بكالوريا مذكور حديثاً في سياق المحادثة.
 
     ISS-058: عندما يسأل الطالب «ماذا نقصد بدالة أصلية للدالة f» بعد أن طُلب
@@ -670,8 +693,7 @@ def _detect_entry_from_history(history_messages: list[dict[str, str]] | None) ->
     if not history_messages:
         return None
     recent_text = " ".join(
-        str(m.get("content", ""))[:1500] for m in history_messages[-10:]
-        if isinstance(m, dict)
+        str(m.get("content", ""))[:1500] for m in history_messages[-10:] if isinstance(m, dict)
     ).lower()
     if not recent_text.strip():
         return None
@@ -718,7 +740,9 @@ def detect_explanation_with_context(
     if matched_entry is None:
         return ExplanationWithContextDecision(
             recognized=False,
-            reason="no_bac_explanation_pattern" if not has_explanation_pattern else "no_matching_entry_or_context",
+            reason="no_bac_explanation_pattern"
+            if not has_explanation_pattern
+            else "no_matching_entry_or_context",
         )
 
     # المرحلة 3: جلب المحتوى الكامل (نص + إجابة نموذجية)
@@ -756,14 +780,45 @@ def _detect_requested_part_from_question(question: str) -> str | None:
     يُستخدم لتمرير hint للـ local_graph لتقطيع السياق ذكياً.
     """
     normalized = question.strip().lower()
-    _PART_HINTS: dict[str, tuple[str, ...]] = {
-        "I": ("الجزء الأول", "الجزء i", "part i", "part 1", "الجزء 1",
-              "g(x)", "الدالة g", "دالة g", "السؤال الأول", "g\\(x\\)"),
-        "II": ("الجزء الثاني", "الجزء ii", "part ii", "part 2", "الجزء 2",
-               "f(x)", "الدالة f", "دالة f", "السؤال الثاني", "f\\(x\\)"),
-        "III": ("الجزء الثالث", "الجزء iii", "part iii", "part 3", "الجزء 3",
-                "h(x)", "الدالة h", "دالة h", "التكامل", "الدالة الأصلية",
-                "السؤال الثالث", "h\\(x\\)"),
+    _PART_HINTS: dict[str, tuple[str, ...]] = {  # noqa: N806
+        "I": (
+            "الجزء الأول",
+            "الجزء i",
+            "part i",
+            "part 1",
+            "الجزء 1",
+            "g(x)",
+            "الدالة g",
+            "دالة g",
+            "السؤال الأول",
+            "g\\(x\\)",
+        ),
+        "II": (
+            "الجزء الثاني",
+            "الجزء ii",
+            "part ii",
+            "part 2",
+            "الجزء 2",
+            "f(x)",
+            "الدالة f",
+            "دالة f",
+            "السؤال الثاني",
+            "f\\(x\\)",
+        ),
+        "III": (
+            "الجزء الثالث",
+            "الجزء iii",
+            "part iii",
+            "part 3",
+            "الجزء 3",
+            "h(x)",
+            "الدالة h",
+            "دالة h",
+            "التكامل",
+            "الدالة الأصلية",
+            "السؤال الثالث",
+            "h\\(x\\)",
+        ),
     }
     for part, patterns in _PART_HINTS.items():
         if any(p in normalized for p in patterns):

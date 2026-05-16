@@ -20,6 +20,7 @@ import pytest
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def _ci_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """يضبط متغيرات بيئة CI آمنة لكل اختبار."""
@@ -34,6 +35,7 @@ def _ci_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ── 1. ChatRoutingPolicy Tests ────────────────────────────────────────────────
+
 
 class TestChatRoutingPolicy:
     """يتحقق من سياسة التوجيه الافتراضية والبديلة."""
@@ -61,20 +63,20 @@ class TestChatRoutingPolicy:
         from importlib import reload
 
         import app.infrastructure.clients.routing_policy as rp
+
         reload(rp)
 
         policy = rp.ChatRoutingPolicy.from_environment("http://localhost:8006")
         assert policy.targets_state_graph is False
         assert "/agent/chat" in policy.candidate_urls()[0]
 
-    def test_unknown_mode_falls_back_to_state_graph(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_unknown_mode_falls_back_to_state_graph(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """قيمة غير معروفة تعود إلى state_graph مع تحذير."""
         monkeypatch.setenv("ORCHESTRATOR_CHAT_ENDPOINT", "invalid_mode")
         from importlib import reload
 
         import app.infrastructure.clients.routing_policy as rp
+
         reload(rp)
 
         policy = rp.ChatRoutingPolicy.from_environment("http://localhost:8006")
@@ -96,6 +98,7 @@ class TestChatRoutingPolicy:
 
 
 # ── 2. Supervisor Configuration Tests ─────────────────────────────────────────
+
 
 class TestSupervisorConfig:
     """يتحقق من أن supervisor.sh يضبط المتغيرات الصحيحة."""
@@ -155,6 +158,7 @@ class TestSupervisorConfig:
 
 # ── 3. WebSocket Protocol Tests ───────────────────────────────────────────────
 
+
 class TestWebSocketProtocol:
     """يتحقق من دعم jwt subprotocol في WebSocket."""
 
@@ -183,12 +187,11 @@ class TestWebSocketProtocol:
 
 # ── 4. Orchestrator Chat Endpoint Tests ───────────────────────────────────────
 
+
 class TestOrchestratorChatEndpoint:
     """يتحقق من عقد /api/chat/messages في orchestrator."""
 
-    ROUTES = pathlib.Path(
-        "microservices/orchestrator_service/src/api/routes.py"
-    )
+    ROUTES = pathlib.Path("microservices/orchestrator_service/src/api/routes.py")
 
     def _read(self) -> str:
         return self.ROUTES.read_text()
@@ -230,12 +233,11 @@ class TestOrchestratorChatEndpoint:
 
 # ── 5. Skills Pipeline Contract Tests ─────────────────────────────────────────
 
+
 class TestSkillsPipelineContract:
     """يتحقق من عقد /compose وحقول pipeline_mode."""
 
-    PIPELINE = pathlib.Path(
-        "microservices/orchestrator_service/src/services/skills_pipeline.py"
-    )
+    PIPELINE = pathlib.Path("microservices/orchestrator_service/src/services/skills_pipeline.py")
 
     def _read(self) -> str:
         return self.PIPELINE.read_text()
@@ -274,6 +276,7 @@ class TestSkillsPipelineContract:
 
 # ── 6. Service Dependencies Tests ─────────────────────────────────────────────
 
+
 class TestServiceDependencies:
     """يتحقق من أن كل خدمة تملك prometheus-client."""
 
@@ -303,23 +306,17 @@ class TestServiceDependencies:
 
     def test_all_services_have_prom_metrics_py(self) -> None:
         for svc in self.SERVICES:
-            metrics_files = list(
-                pathlib.Path(f"microservices/{svc}").rglob("prom_metrics.py")
-            )
+            metrics_files = list(pathlib.Path(f"microservices/{svc}").rglob("prom_metrics.py"))
             assert metrics_files, f"microservices/{svc} missing prom_metrics.py"
 
     def test_all_services_have_main_py(self) -> None:
         for svc in self.SERVICES:
-            main_files = list(
-                pathlib.Path(f"microservices/{svc}").rglob("main.py")
-            )
+            main_files = list(pathlib.Path(f"microservices/{svc}").rglob("main.py"))
             assert main_files, f"microservices/{svc} missing main.py"
 
     def test_all_services_have_health_endpoint(self) -> None:
         for svc in self.SERVICES:
-            main_files = list(
-                pathlib.Path(f"microservices/{svc}").rglob("main.py")
-            )
+            main_files = list(pathlib.Path(f"microservices/{svc}").rglob("main.py"))
             assert main_files, f"microservices/{svc} missing main.py"
             content = main_files[0].read_text()
             assert "health" in content.lower(), (
@@ -328,6 +325,7 @@ class TestServiceDependencies:
 
 
 # ── 7. OrchestratorClient JWT Tests ───────────────────────────────────────────
+
 
 class TestOrchestratorClientJWT:
     """يتحقق من أن OrchestratorClient يُولِّد JWT داخلي صحيح."""

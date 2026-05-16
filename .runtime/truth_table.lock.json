@@ -1,5 +1,5 @@
 {
-  "branch": "main",
+  "branch": "claude/fix-github-actions-OA1Km",
   "components": [
     {
       "agreed": true,
@@ -9,10 +9,11 @@
         "app/services/chat/local_graph.py"
       ],
       "id": "local_graph",
-      "importer_count": 3,
+      "importer_count": 4,
       "importers_sample": [
         "app/infrastructure/clients/orchestrator_client.py",
         "app/kernel.py",
+        "app/services/skills/bac_exercise_skill.py",
         "tests/telemetry/test_distributed_tracing.py"
       ],
       "name": "LangGraph local engine",
@@ -54,7 +55,7 @@
         "app/middleware/observability/observability_middleware.py",
         "app/services/boundaries/observability_boundary_service.py",
         "app/services/chat/local_graph.py",
-        "app/telemetry/__init__.py"
+        "app/services/skills/bac_exercise_skill.py"
       ],
       "name": "Unified Observability service",
       "notes": "Wired into kernel startup; consumed by every HTTP request.",
@@ -68,11 +69,12 @@
         "app/infrastructure/clients/orchestrator_client.py"
       ],
       "id": "orchestrator_client",
-      "importer_count": 6,
+      "importer_count": 7,
       "importers_sample": [
         "app/api/routers/admin.py",
         "app/api/routers/customer_chat.py",
         "app/services/chat/orchestrator.py",
+        "app/services/skills/bac_exercise_skill.py",
         "tests/microservices/test_exercise_visibility_regression.py",
         "tests/microservices/test_orchestrator_client_resilience.py",
         "tests/test_admin_chat_history.py"
@@ -233,9 +235,10 @@
         "app/api/routers/customer_chat.py"
       ],
       "id": "customer_chat_router",
-      "importer_count": 5,
+      "importer_count": 6,
       "importers_sample": [
         "microservices/orchestrator_service/src/api/context_utils.py",
+        "microservices/orchestrator_service/src/api/context_utils.py.orig",
         "tests/api/test_chat_event_protocol_error_contract_integration.py",
         "tests/api/test_chat_event_protocol_flag_integration.py",
         "tests/api/test_final_router_gaps.py",
@@ -311,6 +314,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-05-12T22:19:24.440490+00:00",
+  "generated_at_utc": "2026-05-16T17:53:33.757321+00:00",
   "schema_version": 1
 }

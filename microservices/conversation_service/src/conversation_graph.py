@@ -38,9 +38,13 @@ from microservices.conversation_service.prom_metrics import (
 )
 
 _CYRILLIC_REPLACEMENTS = {
-    "линейный": "خطي", "линейная": "خطية", "линейное": "خطية",
-    "функция": "دالة", "уравнение": "معادلة",
-    "aparece": "يظهر", "aparecen": "تظهر",
+    "линейный": "خطي",
+    "линейная": "خطية",
+    "линейное": "خطية",
+    "функция": "دالة",
+    "уравнение": "معادلة",
+    "aparece": "يظهر",
+    "aparecen": "تظهر",
     "Force向心": "قوة جذب مركزية",
     "向心": "جذب مركزي",
 }
@@ -81,27 +85,31 @@ def _normalize_latex_response(text: str) -> str:
     if not text:
         return text
     text = _re.sub(
-        r'\\\[\s*(.*?)\s*\\\]',
-        lambda m: f'$$\n{m.group(1).strip()}\n$$',
-        text, flags=_re.DOTALL,
+        r"\\\[\s*(.*?)\s*\\\]",
+        lambda m: f"$$\n{m.group(1).strip()}\n$$",
+        text,
+        flags=_re.DOTALL,
     )
     text = _re.sub(
-        r'\\begin\{equation\*?\}\s*(.*?)\s*\\end\{equation\*?\}',
-        lambda m: f'$$\n{m.group(1).strip()}\n$$',
-        text, flags=_re.DOTALL,
+        r"\\begin\{equation\*?\}\s*(.*?)\s*\\end\{equation\*?\}",
+        lambda m: f"$$\n{m.group(1).strip()}\n$$",
+        text,
+        flags=_re.DOTALL,
     )
     text = _re.sub(
-        r'\\begin\{align\*?\}\s*(.*?)\s*\\end\{align\*?\}',
-        lambda m: f'$$\n{m.group(1).strip()}\n$$',
-        text, flags=_re.DOTALL,
+        r"\\begin\{align\*?\}\s*(.*?)\s*\\end\{align\*?\}",
+        lambda m: f"$$\n{m.group(1).strip()}\n$$",
+        text,
+        flags=_re.DOTALL,
     )
-    text = _re.sub(r'\$\$\s*\$\$', '', text)
+    text = _re.sub(r"\$\$\s*\$\$", "", text)
     # ISS-074 D-062: نظف الكلمات الأجنبية الشاذة
     for foreign, arabic in _CYRILLIC_REPLACEMENTS.items():
         text = text.replace(foreign, arabic)
     text = _re.sub(r"[Ѐ-ӿ]+", "", text)  # أي Cyrillic متبقٍ
     text = _re.sub(r"[一-鿿]+", "", text)  # Chinese CJK Han
     return _re.sub(r"[぀-ゟ゠-ヿ]+", "", text)  # Japanese Hiragana/Katakana
+
 
 logger = logging.getLogger(__name__)
 
@@ -111,18 +119,63 @@ _DEFAULT_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
 
 _INTENT_PATTERNS: dict[str, list[str]] = {
     "educational": [
-        "اشرح", "حل", "تمرين", "مسألة", "قانون", "نظرية", "درس",
-        "رياضيات", "فيزياء", "كيمياء", "بكالوريا", "باك", "احسب",
-        "أوجد", "برهن", "ادرس", "تكامل", "مشتق", "معادلة", "دالة",
-        "متجه", "مصفوفة", "احتمال", "إحصاء", "هندسة", "جبر",
-        "expliquer", "exercice", "problème", "loi", "théorème",
-        "calculer", "trouver", "démontrer", "étudier", "dériver",
-        "intégrer", "équation", "fonction", "vecteur", "matrice",
+        "اشرح",
+        "حل",
+        "تمرين",
+        "مسألة",
+        "قانون",
+        "نظرية",
+        "درس",
+        "رياضيات",
+        "فيزياء",
+        "كيمياء",
+        "بكالوريا",
+        "باك",
+        "احسب",
+        "أوجد",
+        "برهن",
+        "ادرس",
+        "تكامل",
+        "مشتق",
+        "معادلة",
+        "دالة",
+        "متجه",
+        "مصفوفة",
+        "احتمال",
+        "إحصاء",
+        "هندسة",
+        "جبر",
+        "expliquer",
+        "exercice",
+        "problème",
+        "loi",
+        "théorème",
+        "calculer",
+        "trouver",
+        "démontrer",
+        "étudier",
+        "dériver",
+        "intégrer",
+        "équation",
+        "fonction",
+        "vecteur",
+        "matrice",
     ],
     "chat": [
-        "مرحبا", "أهلا", "كيف حالك", "شكرا", "وداعا",
-        "bonjour", "merci", "salut", "hello", "hi", "صباح",
-        "مساء", "ليلة", "سلام",
+        "مرحبا",
+        "أهلا",
+        "كيف حالك",
+        "شكرا",
+        "وداعا",
+        "bonjour",
+        "merci",
+        "salut",
+        "hello",
+        "hi",
+        "صباح",
+        "مساء",
+        "ليلة",
+        "سلام",
     ],
 }
 
@@ -191,8 +244,8 @@ class ConversationState(TypedDict):
     """حالة المحادثة — تمر عبر جميع nodes."""
 
     question: str
-    intent: str          # educational | general | chat
-    subject: str         # math | physics | chemistry | general — يُكتشف في context_node
+    intent: str  # educational | general | chat
+    subject: str  # math | physics | chemistry | general — يُكتشف في context_node
     enriched_question: str  # السؤال المُعزَّز بسياق المادة
     history: list[dict[str, str]]  # [{role, content}, ...]
     response: str
@@ -319,19 +372,70 @@ async def _call_llm_if_available(
 
 _SUBJECT_PATTERNS: dict[str, list[str]] = {
     "math": [
-        "رياضيات", "تكامل", "مشتق", "دالة", "معادلة", "جبر", "مصفوفة",
-        "احتمال", "إحصاء", "هندسة", "متجه", "مركب", "حد", "تسلسل",
-        "sin", "cos", "tan", "log", "ln", "∫", "∑", "∏", "lim",
-        "math", "intégrale", "dérivée", "fonction", "équation",
+        "رياضيات",
+        "تكامل",
+        "مشتق",
+        "دالة",
+        "معادلة",
+        "جبر",
+        "مصفوفة",
+        "احتمال",
+        "إحصاء",
+        "هندسة",
+        "متجه",
+        "مركب",
+        "حد",
+        "تسلسل",
+        "sin",
+        "cos",
+        "tan",
+        "log",
+        "ln",
+        "∫",
+        "∑",
+        "∏",
+        "lim",
+        "math",
+        "intégrale",
+        "dérivée",
+        "fonction",
+        "équation",
     ],
     "physics": [
-        "فيزياء", "قوة", "طاقة", "سرعة", "تسارع", "كهرباء", "موجة",
-        "ضوء", "حرارة", "ضغط", "كتلة", "نيوتن", "كولوم", "أوم",
-        "physique", "force", "énergie", "vitesse", "accélération",
+        "فيزياء",
+        "قوة",
+        "طاقة",
+        "سرعة",
+        "تسارع",
+        "كهرباء",
+        "موجة",
+        "ضوء",
+        "حرارة",
+        "ضغط",
+        "كتلة",
+        "نيوتن",
+        "كولوم",
+        "أوم",
+        "physique",
+        "force",
+        "énergie",
+        "vitesse",
+        "accélération",
     ],
     "chemistry": [
-        "كيمياء", "تفاعل", "عنصر", "مركب", "أيون", "حمض", "قاعدة",
-        "أكسدة", "اختزال", "مول", "تركيز", "chimie", "réaction",
+        "كيمياء",
+        "تفاعل",
+        "عنصر",
+        "مركب",
+        "أيون",
+        "حمض",
+        "قاعدة",
+        "أكسدة",
+        "اختزال",
+        "مول",
+        "تركيز",
+        "chimie",
+        "réaction",
     ],
 }
 

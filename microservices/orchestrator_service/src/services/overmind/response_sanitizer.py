@@ -162,6 +162,11 @@ def get_greeting_fastpath_response(query: str) -> str | None:
     - الـ LLM المجاني يُولِّد شرحاً لغوياً معقداً لأنه يفسّر التحية كسؤال علمي
     - الـ fast-path يتجنَّب الـ LLM للحالات الشائعة → 0ms response + 100% نظيف
 
+    ⚠️ ISS-077 (D-065): القاعدة الذهبية — fastpath لا يُطابق إلا تحية صرفة.
+    إذا كان النص يحوي فعل سؤال (اشرح/احسب/اعطني/تمرين/مسألة)، رفض fastpath
+    وأرجع None ليذهب الطلب للـ LLM. يحل "النظام أصبح أغبى" — السؤال
+    "السلام عليكم اشرح لي قانون نيوتن" كان يُجاب بتحية فقط، يُفقد السؤال.
+
     Returns:
         رد عربي قصير إذا تطابق، None خلاف ذلك
     """
@@ -172,14 +177,47 @@ def get_greeting_fastpath_response(query: str) -> str | None:
     cleaned = re.sub(r"[^\w\s؀-ۿ]", "", normalized).strip()
     if not cleaned:
         return None
-    # طابق exact أو starts_with
+
+    # ⛔ ISS-077 D-065: الـ blocker — لا fastpath لو يحوي فعل سؤال/طلب
+    # تحدد لـ fastpath فقط الـ pure greetings بدون أي طلب علمي/تعليمي.
+    # ملاحظة: "كيف حالك" تحية مسموحة — نتأكد لاحقاً أنها ليست blocker.
+    educational_blockers = (
+        "اشرح", "احسب", "اوجد", "أوجد", "حل ", "اعطني", "أعطني", "هات",
+        "تمرين", "مسألة", "مادة", "درس", "قانون", "نظرية", "بكالوريا",
+        "explain", "solve", "calculate", "find", "give me", "help with",
+        "ما هو", "ما هي", "لماذا", "متى", "أين",  # سؤال interrogative
+        # "كيف" مُستثنى لأن "كيف حالك" تحية شائعة
+    )
+    # كيف interrogative — blocker إلا إذا كان في "كيف حالك" / "كيف الحال" / "كيف الأحوال"
+    _kayfa_greetings = ("كيف حالك", "كيف الحال", "كيف الأحوال", "كيف صحتك")
+    if "كيف" in normalized and not any(g in normalized for g in _kayfa_greetings):
+        return None  # كيف بمعنى آخر (مثل كيف أحل) → LLM
+    for blocker in educational_blockers:
+        if blocker in normalized:
+            return None  # سؤال علمي → اترك LLM يجيب
+
+    # طابق exact أو starts_with بهامش ضيق (≤ 5 chars) للـ punctuation فقط
     for greeting, response in _GREETING_FASTPATH.items():
         g_lower = greeting.lower()
         if cleaned == g_lower:
             return response
-        # السلام عليكم ورحمة الله وبركاته → match prefix
-        if cleaned.startswith(g_lower) and len(cleaned) - len(g_lower) <= 30:
-            return response
+        # السلام عليكم ورحمة الله وبركاته يطابق بـ prefix لأنه نفسه تحية صرفة
+        # نسمح بـ 25 char margin فقط للامتدادات المُسمَّاة (وبركاته/وسهلاً)
+        if cleaned.startswith(g_lower) and len(cleaned) - len(g_lower) <= 25:
+            # ⚠️ تأكد إضافي: الجزء التالي بعد التحية يجب أن يكون أيضاً تحية
+            # (وعليكم/ورحمة/وبركاته/وسهلاً/الله)
+            tail = cleaned[len(g_lower):].strip()
+            tail_words = tail.split()
+            allowed_tail_words = {
+                "وعليكم", "السلام", "ورحمة", "ورحمت", "رحمة", "الله",
+                "وبركاته", "بركاته", "وسهلاً", "وسهلا", "بكم", "بك",
+                "والله", "اليوم", "يا", "أستاذ", "أستاذي", "والاكرام",
+                "في",
+                # مسموح للـ prefix tail الفارغ تماماً (السلام عليكم.)
+            }
+            # كل كلمة في الـ tail يجب أن تكون من allowed_tail_words
+            if all(w in allowed_tail_words or len(w) <= 2 for w in tail_words):
+                return response
     return None
 
 

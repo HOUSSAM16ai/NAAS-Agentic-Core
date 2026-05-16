@@ -149,6 +149,50 @@ class TestGreetingFastPath:
         assert get_greeting_fastpath_response("") is None
         assert get_greeting_fastpath_response("   ") is None
 
+    # ── ISS-077 D-065: blocker tests — fastpath must NOT match questions ──
+
+    def test_greeting_plus_question_blocked(self):
+        """'السلام عليكم اشرح لي قانون نيوتن' → الـ blocker يرفض fastpath.
+
+        كان bug في D-064: prefix-match بـ 30char margin يلتقط أسئلة كاملة.
+        الـ user كان يحصل على رد greeting بدلاً من إجابة السؤال.
+        """
+        r = get_greeting_fastpath_response("السلام عليكم اشرح لي قانون نيوتن")
+        assert r is None, f"FAIL: greeting+question must reject fastpath, got {r!r}"
+
+    def test_greeting_plus_exercise_request_blocked(self):
+        r = get_greeting_fastpath_response("مرحبا اعطني تمرين")
+        assert r is None
+
+    def test_kayfa_question_blocked(self):
+        """'كيف' interrogative blocked, but 'كيف حالك' allowed."""
+        # blocker: كيف بمعنى آخر
+        assert get_greeting_fastpath_response("كيف أحل هذه المسألة") is None
+        # exception: كيف حالك تحية مسموحة
+        assert get_greeting_fastpath_response("كيف حالك") is not None
+        assert get_greeting_fastpath_response("كيف الحال") is not None
+
+    def test_what_is_blocked(self):
+        """'ما هو/ما هي' interrogative blocked."""
+        assert get_greeting_fastpath_response("ما هو التكامل") is None
+        assert get_greeting_fastpath_response("ما هي الدالة") is None
+
+    def test_why_when_where_blocked(self):
+        assert get_greeting_fastpath_response("لماذا نستخدم لوبيتال") is None
+        assert get_greeting_fastpath_response("متى نستخدم القاعدة") is None
+        assert get_greeting_fastpath_response("أين نضع الإشارة") is None
+
+    def test_solve_calculate_find_blocked(self):
+        assert get_greeting_fastpath_response("احسب التكامل") is None
+        assert get_greeting_fastpath_response("أوجد المشتقة") is None
+        assert get_greeting_fastpath_response("حل المعادلة") is None
+
+    def test_full_islamic_greeting_with_extension_allowed(self):
+        """tail words like 'وبركاته' / 'ورحمة الله' allowed in fastpath."""
+        assert get_greeting_fastpath_response("السلام عليكم ورحمة الله") is not None
+        assert get_greeting_fastpath_response("السلام عليكم ورحمة الله وبركاته") is not None
+        assert get_greeting_fastpath_response("وعليكم السلام ورحمة الله") is not None
+
 
 class TestEdgeCases:
     """حالات حافة."""

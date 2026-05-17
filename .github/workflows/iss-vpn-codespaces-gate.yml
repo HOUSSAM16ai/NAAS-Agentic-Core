@@ -2,13 +2,17 @@ name: ISS-MISC-VPN — Codespaces Connection Status Gate
 
 # Prevents the regression where users on GitHub Codespaces saw the chat UI
 # stuck on "غير متصل" (offline) unless they tunneled through a VPN. See:
-#   - CLAUDE.md §6.46 → §6.47 for the ISS-VPN forensic breakdown
+#   - CLAUDE.md §6.48 for the ISS-VPN forensic breakdown
 #   - .memory/decisions.md D-068 for the architectural decision
 #
-# Two independent fixes, both must stay healthy:
-#   1. Frontend: useAgentSocket.js translates `<cs>-3000.app.github.dev`
-#      → `<cs>-8000.app.github.dev` for the WebSocket URL.
-#   2. Backend: AppSettings expands ALLOWED_HOSTS / BACKEND_CORS_ORIGINS to
+# Three independent layers, all must stay healthy:
+#   1. Frontend: useAgentSocket.js prefers same-origin on cloud-forwarded
+#      hostnames (via the Next.js proxy). Cross-port translation remains
+#      as defensive fallback.
+#   2. Custom Next.js server: frontend/server.js proxies `/api/chat/ws` and
+#      `/admin/api/chat/ws` to uvicorn on localhost — sidesteps any
+#      Codespaces port-8000 visibility issue.
+#   3. Backend: AppSettings expands ALLOWED_HOSTS / BACKEND_CORS_ORIGINS to
 #      accept Codespaces-forwarded subdomains and produces a CORS regex.
 
 on:
@@ -16,18 +20,24 @@ on:
     paths:
       - "frontend/app/hooks/useAgentSocket.js"
       - "frontend/public/js/legacy-app.jsx"
+      - "frontend/server.js"
+      - "frontend/package.json"
       - "app/core/settings/base.py"
       - "app/core/app_blueprint.py"
       - "scripts/test_ws_url_translation.js"
+      - "scripts/test_nextjs_ws_proxy.sh"
       - "tests/config/test_codespaces_cors_vpn.py"
       - ".github/workflows/iss-vpn-codespaces-gate.yml"
   pull_request:
     paths:
       - "frontend/app/hooks/useAgentSocket.js"
       - "frontend/public/js/legacy-app.jsx"
+      - "frontend/server.js"
+      - "frontend/package.json"
       - "app/core/settings/base.py"
       - "app/core/app_blueprint.py"
       - "scripts/test_ws_url_translation.js"
+      - "scripts/test_nextjs_ws_proxy.sh"
       - "tests/config/test_codespaces_cors_vpn.py"
       - ".github/workflows/iss-vpn-codespaces-gate.yml"
 
@@ -57,6 +67,14 @@ jobs:
             exit 1
           fi
 
+      - name: Sanity — useAgentSocket prefers same-origin on cloud-forwarded hostnames
+        run: |
+          if ! grep -q "isCloudForwardedHostname" frontend/app/hooks/useAgentSocket.js; then
+            echo "❌ isCloudForwardedHostname detection removed." >&2
+            echo "   The Next.js proxy primary path depends on it." >&2
+            exit 1
+          fi
+
       - name: Sanity — legacy-app.jsx carries the same translation
         run: |
           if ! grep -q "translateCloudHostnameToBackend_legacy" frontend/public/js/legacy-app.jsx; then
@@ -64,6 +82,49 @@ jobs:
             echo "   Without it, users hitting the legacy bundle still see 'offline' on Codespaces." >&2
             exit 1
           fi
+
+  nextjs-ws-proxy:
+    name: Next.js custom server — WS proxy (sidesteps Codespaces port-8000)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install minimal deps
+        run: pip install fastapi pydantic pydantic-settings sqlalchemy aiosqlite uvicorn websockets
+
+      - name: Sanity — frontend/server.js exists and proxies WS
+        run: |
+          if [ ! -f frontend/server.js ]; then
+            echo "❌ frontend/server.js is missing." >&2
+            echo "   It's the same-origin WS proxy that makes the chat work on" >&2
+            echo "   Codespaces regardless of port-8000 visibility." >&2
+            exit 1
+          fi
+          if ! grep -q "PROXIED_WS_PATTERN" frontend/server.js; then
+            echo "❌ frontend/server.js no longer carries the WS proxy logic." >&2
+            exit 1
+          fi
+          if ! grep -q '"dev": "node server.js"' frontend/package.json; then
+            echo "❌ package.json no longer invokes the custom server for dev." >&2
+            echo "   supervisor.sh runs 'npm run dev' — this MUST go through server.js." >&2
+            exit 1
+          fi
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund --prefer-offline
+
+      - name: Live smoke — same-origin WS through Next.js proxy
+        run: bash scripts/test_nextjs_ws_proxy.sh
 
   backend-cors-codespaces:
     name: Backend — CORS + ALLOWED_HOSTS Codespaces expansion

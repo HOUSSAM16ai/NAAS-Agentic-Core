@@ -66,10 +66,13 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
 
 
         // ISS-MISC-VPN (D-068): Cloud-forwarded environments (Codespaces, Gitpod)
-        // serve the backend on a SEPARATE forwarded URL — appending ":8000" to
-        // the frontend hostname does NOT reach the backend (cloud proxy rejects).
-        // The codespaces backend lives at <name>-8000.app.github.dev, NOT at
-        // <name>-3000.app.github.dev:8000. This translation matches useAgentSocket.js.
+        // make cross-port WS unreliable for two reasons:
+        //   (1) port 8000 may be `private` on existing Codespaces (browser
+        //       gets redirected to GitHub login → WS fails silently).
+        //   (2) cross-subdomain WS may be blocked by some browser/proxy combos.
+        // ROBUST primary path: same-origin via the Next.js custom server
+        // proxy in server.js. Cross-port translation kept as fallback for
+        // users who bypass the custom server.
         const BACKEND_PORT_LEGACY = '8000';
 
         const translateCloudHostnameToBackend_legacy = (hostname) => {
@@ -88,15 +91,22 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
             return null;
         };
 
+        const isCloudForwardedHostname_legacy = (hostname) => {
+            if (!hostname || typeof hostname !== 'string') return false;
+            return (
+                /-\d+\.(?:preview\.)?app\.github\.dev$/.test(hostname) ||
+                /^\d+-[\w.-]+\.gitpod\.io$/.test(hostname)
+            );
+        };
+
         const API_ORIGIN = (() => {
             const protocol = window.location.protocol;
             const hostname = window.location.hostname;
             const port = window.location.port;
 
-            // Cloud-forwarded environments need a SEPARATE backend subdomain.
-            const cloudBackendHost = translateCloudHostnameToBackend_legacy(hostname);
-            if (cloudBackendHost) {
-                return `${protocol}//${cloudBackendHost}`;
+            // Cloud-forwarded: prefer same-origin (via Next.js proxy).
+            if (isCloudForwardedHostname_legacy(hostname)) {
+                return window.location.origin;
             }
 
             // Local dev on standard Next.js ports → backend on 8000.

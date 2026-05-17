@@ -60,7 +60,7 @@ eval(extracted);
 
 const cases = [
     // [hostname,                                          expected,                                          label]
-    ['my-cs-3000.app.github.dev',                          'my-cs-8000.app.github.dev',                       'Codespaces frontend → backend (the user catastrophe)'],
+    ['my-cs-3000.app.github.dev',                          'my-cs-8000.app.github.dev',                       'Codespaces frontend → backend (the user catastrophe — fallback path)'],
     ['my-cs-5000.app.github.dev',                          'my-cs-8000.app.github.dev',                       'Codespaces port 5000 → 8000 (Replit-style)'],
     ['my-cs-3000.preview.app.github.dev',                  'my-cs-8000.preview.app.github.dev',               'Preview subdomain'],
     ['cs-with-many-hyphens-abc-def-3000.app.github.dev',   'cs-with-many-hyphens-abc-def-8000.app.github.dev','Codespace name with hyphens'],
@@ -74,11 +74,23 @@ const cases = [
     ['',                                                   null,                                              'empty string'],
 ];
 
+// Cloud-forwarded detection (the new primary signal — controls whether the
+// frontend prefers same-origin WS through the Next.js proxy).
+const detectCases = [
+    ['my-cs-3000.app.github.dev',                  true,  'Codespaces is cloud-forwarded'],
+    ['cs-with-many-hyphens-3000.preview.app.github.dev', true, 'Codespaces preview is cloud-forwarded'],
+    ['3000-workspace.gitpod.io',                  true,  'Gitpod is cloud-forwarded'],
+    ['localhost',                                  false, 'localhost is NOT cloud-forwarded'],
+    ['my-cs.app.github.dev',                       false, 'no -port suffix → NOT cloud-forwarded'],
+    ['example.com',                                false, 'random domain is NOT cloud-forwarded'],
+];
+
 let pass = 0;
 let fail = 0;
 
 console.log(`BACKEND_PORT = ${BACKEND_PORT}`);
 console.log();
+console.log('Group 1 — translateCloudHostnameToBackend() (cross-port fallback)');
 for (const [host, expected, label] of cases) {
     const got = translateCloudHostnameToBackend(host);
     const ok = got === expected;
@@ -88,6 +100,28 @@ for (const [host, expected, label] of cases) {
     console.log(`  ${left} → ${right}`);
     if (ok) pass++; else fail++;
 }
+
+// Group 2 — cloud-forwarded detector drives same-origin preference.
+// We re-evaluate the source to extract `isCloudForwardedHostname`.
+console.log();
+console.log('Group 2 — isCloudForwardedHostname() (drives same-origin preference)');
+const isCloudStart = src.indexOf('const isCloudForwardedHostname');
+const isCloudEnd = src.indexOf('export const translateCloudHostnameToBackend');
+if (isCloudStart >= 0 && isCloudEnd > isCloudStart) {
+    // eslint-disable-next-line no-eval
+    eval(src.slice(isCloudStart, isCloudEnd).replace(/^const /gm, 'var '));
+    for (const [host, expected, label] of detectCases) {
+        const got = isCloudForwardedHostname(host);
+        const ok = got === expected;
+        const mark = ok ? '✓' : '✗';
+        console.log(`  ${mark}  ${String(host).padEnd(55)} → ${String(got).padEnd(7)}  [${label}]`);
+        if (ok) pass++; else fail++;
+    }
+} else {
+    console.error('  ✗ Could not locate isCloudForwardedHostname in source.');
+    fail++;
+}
+
 console.log();
 console.log(`${pass}/${pass + fail} pass`);
 process.exit(fail === 0 ? 0 : 1);

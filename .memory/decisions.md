@@ -1,13 +1,27 @@
 # Architectural Decisions
 > Last updated: 2026-05-17 | Branch: `claude/fix-vpn-connection-status-fj2Lm`
 
-## D-068 · Codespaces Connection Status Without VPN — Cross-Subdomain WS Fix (2026-05-17)
+## D-068 · Codespaces Connection Status Without VPN — Same-Origin WS Proxy + Cross-Subdomain Wildcard (2026-05-17, hardened later same day)
 
 **Context**: شكوى مستخدم 2026-05-17 — screenshot يُظهر تطبيق CogniForge على
 GitHub Codespaces بـ URL `x-3000.app.github.dev` مع شارة `offline ●` في
 الـ header و «غير متصل» في الشريط السفلي. الواجهة تظهر «متصل» **فقط** عند
 استخدام VPN. وصفُه: «الكارثة دمرت المشروع نهائيا حيث يجب إستخدام vpn لتظهر
 متصل». المسار التشغيلي الافتراضي لـ Codespaces مكسور.
+
+**Initial pass (3 layers)** أُطلق في commit `ec7ef32` — frontend cross-port
+translation + backend ALLOWED_HOSTS wildcards + CORS regex. الـ unit tests و
+sandbox e2e كلها خضراء.
+
+**User regression report 17:31 same day**: لا يزال "غير متصل" بدون VPN
+(`9-3000.app.github.dev`). تشخيص أعمق كشف السبب الجذري الحقيقي: **port 8000
+قد لا يكون reachable من المتصفح أصلاً** — Codespaces port visibility قد يكون
+`private` على codespaces قديمة (`devcontainer.json` يُعلن `public` لكن قد لا
+يُطبَّق على codespaces موجودة)، أو GitHub auth proxy يحجب cross-subdomain WS
+بدون authentication.
+
+**Hardening pass (4th layer — same-origin Next.js WS proxy)**: يُلغي تماماً
+الاعتماد على port 8000 reachability من المتصفح.
 
 **Root cause (مُختبَر حياً 2026-05-17)** — كارثة على ثلاث طبقات متراكبة:
 
@@ -21,16 +35,36 @@ GitHub Codespaces بـ URL `x-3000.app.github.dev` مع شارة `offline ●` �
 في فرع `port === '3000'` → `ws://localhost:8000/...` → يعمل. بدون VPN لا
 يوجد مسار نظيف للـ WS على Codespaces الافتراضي.
 
-**Decision — إصلاح جراحي على ثلاث طبقات دفاع**:
+**Decision — إصلاح جراحي على أربع طبقات دفاع**:
 
-### Layer 1: Frontend WS URL Translation
-`frontend/app/hooks/useAgentSocket.js` يُضيف `translateCloudHostnameToBackend()`:
+### Layer 4 (PRIMARY on Codespaces, hardening pass): Next.js Custom Server WS Proxy
+`frontend/server.js` (NEW) — Node http server يُغلِّف Next.js. يستمع لـ
+`upgrade` events ويُمرِّر `/api/chat/ws` و `/admin/api/chat/ws` إلى uvicorn
+على `localhost:8000` عبر raw TCP. الـ Host header الأصلي يُحفظ (لا rewrite)
+ليصل TrustedHostMiddleware بقيمة المتصفح الحقيقية. `frontend/package.json`
+تغيَّر `"dev": "node server.js"`. لا dependencies جديدة (Node built-ins فقط).
+
+هذه الطبقة هي الـ **primary path** على Codespaces: المتصفح يصل بـ
+`wss://<cs>-3000.app.github.dev/api/chat/ws` (same-origin)، الـ proxy
+يُمرِّر إلى uvicorn داخلياً. لا يحتاج port 8000 أن يكون reachable من
+المتصفح أبداً.
+
+### Layer 1: Frontend WS URL Translation + Same-Origin Preference
+`frontend/app/hooks/useAgentSocket.js` يضيف:
+- `translateCloudHostnameToBackend()` — cross-port fallback:
 
 ```javascript
 // <cs-name>-3000.app.github.dev          → <cs-name>-8000.app.github.dev
 // <cs-name>-5000.preview.app.github.dev  → <cs-name>-8000.preview.app.github.dev
 // 3000-workspace.gitpod.io               → 8000-workspace.gitpod.io
 ```
+
+- `isCloudForwardedHostname()` (hardening pass) — detector يقرر same-origin
+preference. عند return true، الـ frontend يستخدم same-origin WS URL (الذي
+يمر عبر Next.js custom server proxy) **قبل** اللجوء لـ cross-port translation.
+
+- `console.info` diagnostic — يطبع `[CogniForge WS] <path>: <url>` في DevTools
+ليُمكِّن المستخدم من التحقق ميدانياً.
 
 نفس الإصلاح في `frontend/public/js/legacy-app.jsx` (للمستخدمين على الـ
 legacy bundle).
@@ -55,20 +89,42 @@ TrustedHostMiddleware يدعم wildcards بصيغة `*.suffix` — يعمل out-
 ويُمرَّره لـ FastAPI's CORSMiddleware. الـ regex يطابق أي codespace forwarded
 URL — لا يحتاج إعداد لكل عميل.
 
+### Defense-in-depth ranking (which layer fires when)
+
+| الطبقة | الدور | متى تُفعَّل |
+|--------|------|------------|
+| 4 (Custom server WS proxy) | **PRIMARY** on Codespaces | الطلب WS من cloud-forwarded hostname → frontend يبني same-origin URL → server.js يستقبل upgrade ويُمرِّر لـ uvicorn |
+| 1 (cross-port translation) | Fallback | عند `npm run dev:next` (legacy script) أو أي setup بدون custom server |
+| 2 (ALLOWED_HOSTS wildcard) | Backend acceptance | يقبل Host header الأصلي (مُحفظ عبر Layer 4 proxy) |
+| 3 (CORS regex) | Backend HTTP requests | لـ HTTP API calls cross-origin |
+
 **Live verification (sandbox simulating Codespaces, no VPN)**:
 
 | Probe | قبل الإصلاح | بعد الإصلاح |
 |-------|-------------|--------------|
-| Frontend `my-cs-3000.app.github.dev` → WS URL | `wss://my-cs-3000.app.github.dev` (مكسور) | `wss://my-cs-8000.app.github.dev` ✅ |
-| HTTP GET `Host: my-cs-8000.app.github.dev` | HTTP 400 Invalid host | HTTP 200 ✅ |
-| RFC 6455 WS upgrade `Host: my-cs-8000.app.github.dev` | HTTP 400 | HTTP 101 Switching Protocols ✅ |
+| Frontend `my-cs-3000.app.github.dev` → WS URL on Codespaces | `wss://my-cs-3000.app.github.dev` (مكسور — port 3000 ليس عنده endpoint) | `wss://my-cs-3000.app.github.dev` (same-origin، Next.js proxy يستقبل) ✅ |
+| **Live Next.js custom server WS proxy upgrade** | N/A | **HTTP 101 Switching Protocols** ✅ |
+| HTTP GET `Host: my-cs-8000.app.github.dev` (cross-port) | HTTP 400 Invalid host | HTTP 200 ✅ |
+| RFC 6455 WS upgrade `Host: my-cs-8000.app.github.dev` (cross-port direct fallback) | HTTP 400 | HTTP 101 ✅ |
 | Wildcard for `other-cs-8000.preview.app.github.dev` | HTTP 400 | HTTP 101 ✅ |
 | Gitpod `8000-workspace.eu.gitpod.io` | HTTP 400 | HTTP 101 ✅ |
-| Attacker `evil.com` | HTTP 400 (correct) | HTTP 400 ✅ (security intact) |
+| Attacker `evil.com` (cross-port) | HTTP 400 (correct) | HTTP 400 ✅ (security intact) |
+| Attacker `evil.com` via same-origin proxy (Host preserved) | N/A | HTTP 400 ✅ (TrustedHostMiddleware enforces) |
 | CORS preflight from `https://my-cs-3000.app.github.dev` | حجب | `access-control-allow-origin` صحيح ✅ |
+| Turbopack HMR through custom server | N/A | works (SSE/HTTP — no WS conflict) ✅ |
+| `node scripts/test_ws_url_translation.js` | N/A | **18/18 pass** ✅ |
+| `bash scripts/test_nextjs_ws_proxy.sh` (live e2e: real Next.js+uvicorn) | N/A | **7/7 pass** ✅ |
 
 **Rules (دائمة — لا تُكسر بدون ADR)**:
 
+0. **`frontend/server.js` هو نقطة الدخول الافتراضية**: `npm run dev` و
+   `npm run start` يستدعيان `node server.js`. الـ `next dev` القديم متاح
+   فقط كـ `dev:next` (fallback لمطورين خارج Codespaces). حذف server.js
+   أو إرجاع `dev` لـ `next dev` يُعيد كارثة "غير متصل" على Codespaces
+   الذي port 8000 فيه private.
+0.5. **على cloud-forwarded hostnames، الـ frontend يفضِّل same-origin**:
+   `useAgentSocket.js:isCloudForwardedHostname()` يكشف ويستخدم same-origin
+   WS URL. الـ cross-port translation يبقى كـ defensive fallback.
 1. أي كود ينتج backend URL من `window.location` يجب أن يستدعي
    `translateCloudHostnameToBackend()` أو ما يكافئها (المسارات السحابية تتطلب
    subdomain منفصل لكل port — `:port` syntax لا يعمل عبر cloud proxy).
@@ -80,21 +136,28 @@ URL — لا يحتاج إعداد لكل عميل.
    — حذف الدوال يكسر الـ build.
 5. `BACKEND_CORS_ORIGIN_REGEX` هو الـ field الرسمي للـ regex — لا تُضِف
    regex ثانٍ مخفي في app_blueprint بدون تحديث الـ field.
+6. `frontend/server.js` يجب أن يحفظ Host header الأصلي عند proxying (لا
+   rewrite للـ localhost) — وإلا تُتجاوز TrustedHostMiddleware ويُفتح
+   security hole.
 
 **Tests**:
 - `tests/config/test_codespaces_cors_vpn.py` — 7 unit tests (settings expansion)
 - `tests/services/test_bac_exercise_skill_contract.py` — 7 BAC skill contract tests (skills evolution)
-- `scripts/test_ws_url_translation.js` — 12 frontend translation cases (CI-runnable via node)
+- `scripts/test_ws_url_translation.js` — 18 frontend cases (12 cross-port + 6 cloud detector)
+- `scripts/test_nextjs_ws_proxy.sh` — 7 live e2e checks (boots real Next.js + uvicorn)
 
 **Files changed**:
-- `frontend/app/hooks/useAgentSocket.js` (+44 lines)
-- `frontend/public/js/legacy-app.jsx` (+27 lines)
-- `app/core/settings/base.py` (+64 lines — new validator + new field)
-- `app/core/app_blueprint.py` (+8 lines — origin_regex parameter)
+- `frontend/server.js` (NEW — Node custom server with WS reverse proxy)
+- `frontend/package.json` (`"dev": "node server.js"`; old `next dev` → `dev:next`)
+- `frontend/app/hooks/useAgentSocket.js` (translation + isCloudForwardedHostname + diagnostic)
+- `frontend/public/js/legacy-app.jsx` (same-origin preference + legacy translation parity)
+- `app/core/settings/base.py` (new validator + new field)
+- `app/core/app_blueprint.py` (origin_regex parameter)
 - `tests/config/test_codespaces_cors_vpn.py` (NEW)
 - `tests/services/test_bac_exercise_skill_contract.py` (NEW)
-- `scripts/test_ws_url_translation.js` (NEW)
-- `.github/workflows/iss-vpn-codespaces-gate.yml` (NEW)
+- `scripts/test_ws_url_translation.js` (NEW — extended to 18 cases)
+- `scripts/test_nextjs_ws_proxy.sh` (NEW — live e2e bash)
+- `.github/workflows/iss-vpn-codespaces-gate.yml` (NEW — 2-job CI gate)
 
 ---
 

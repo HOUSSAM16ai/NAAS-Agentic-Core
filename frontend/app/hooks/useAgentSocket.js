@@ -15,17 +15,41 @@ const resolveWebSocketProtocol = (protocol) => {
 
 // ISS-MISC-VPN (2026-05-17, D-068): On cloud-forwarded environments (GitHub
 // Codespaces, Gitpod, Ona) the frontend is served at one forwarded port
-// (3000 or 5000) and the backend at another (8000). Each port gets its OWN
-// public subdomain — you CANNOT reach the backend by appending ":8000" to
-// the frontend hostname (the cloud proxy doesn't accept that syntax).
+// (3000 or 5000) and the backend at another (8000). Two failure modes
+// stack on top of each other:
 //
-// Without this translation, the WS URL resolved to the frontend hostname,
-// which has no /api/chat/ws endpoint → WS handshake failed → status stuck on
-// "offline" (غير متصل). Users worked around it by tunneling through a VPN
-// that exposed localhost directly, which is why "متصل" only appeared with
-// VPN active. This helper translates the frontend hostname → backend
-// hostname so the WS connects on the public path, no VPN required.
+//   (A) The browser may not be able to REACH the backend's cross-subdomain
+//       URL at all — Codespaces sometimes leaves port 8000 with `private`
+//       visibility on existing Codespaces, even when devcontainer.json
+//       declares it public. Browsers get redirected to GitHub login →
+//       WS handshake silently fails → status stuck on "غير متصل".
+//
+//   (B) Even when port 8000 is reachable, appending ":8000" to the
+//       frontend hostname does NOT work (the cloud proxy doesn't accept
+//       that syntax — every port gets its own subdomain).
+//
+// The ROBUST primary path: use SAME-ORIGIN WebSocket so the browser only
+// ever talks to port 3000/5000. The Next.js custom server (frontend/server.js)
+// proxies `/api/chat/ws` and `/admin/api/chat/ws` to uvicorn locally —
+// internal-only, no Codespaces port visibility involved.
+//
+// The CROSS-SUBDOMAIN translation below is kept as a defensive fallback for
+// users who run `next dev:next` (the legacy script) bypassing the custom
+// server — in that case port 8000 MUST be public and reachable.
 export const BACKEND_PORT = '8000';
+
+const FRONTEND_FORWARDED_PORTS = new Set(['3000', '5000']);
+
+// True iff window.location matches a cloud-forwarded hostname pattern
+// (Codespaces / Gitpod). On those, same-origin is preferred because the
+// custom Next.js server proxies WS to uvicorn internally.
+const isCloudForwardedHostname = (hostname) => {
+    if (!hostname || typeof hostname !== 'string') return false;
+    return (
+        /-\d+\.(?:preview\.)?app\.github\.dev$/.test(hostname) ||
+        /^\d+-[\w.-]+\.gitpod\.io$/.test(hostname)
+    );
+};
 
 export const translateCloudHostnameToBackend = (hostname) => {
     if (!hostname || typeof hostname !== 'string') return null;
@@ -52,44 +76,61 @@ export const translateCloudHostnameToBackend = (hostname) => {
     return null;
 };
 
+// Diagnostic helper — logs the chosen WS URL once per page load so users
+// can verify in DevTools that the fix is active. Stays quiet in production.
+let _wsUrlLogged = false;
+const logWsResolution = (label, url) => {
+    if (_wsUrlLogged || !isBrowser) return;
+    _wsUrlLogged = true;
+    try {
+        // eslint-disable-next-line no-console
+        console.info(`[CogniForge WS] ${label}: ${url}`);
+    } catch (_e) { /* noop */ }
+};
+
 const getWsBase = () => {
     if (!isBrowser) return '';
+
+    // 1. Explicit env override always wins.
     const configuredOrigin = WS_ORIGIN || API_ORIGIN;
     if (configuredOrigin) {
         try {
             const parsed = new URL(configuredOrigin);
             const wsProtocol = resolveWebSocketProtocol(parsed.protocol);
-            return `${wsProtocol}//${parsed.host}`;
+            const url = `${wsProtocol}//${parsed.host}`;
+            logWsResolution('using configured origin', url);
+            return url;
         } catch (error) {
             errorTracker.reportError(error, { message: 'Invalid WebSocket base configuration' });
             return '';
         }
     }
 
-    // Warn if falling back in production
-    if (process.env.NODE_ENV === 'production') {
-        console.warn('CRITICAL: NEXT_PUBLIC_WS_URL or NEXT_PUBLIC_API_URL is missing in production. Falling back to window.location, which may cause connection failures.');
-    }
-
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const hostname = window.location.hostname;
     const port = window.location.port;
 
-    // Cloud-forwarded environments: every port gets its own subdomain.
-    // Translate the frontend hostname → backend hostname (port :8000 is on a
-    // separate Codespaces/Gitpod URL, NOT reachable via ":8000" suffix).
-    const cloudBackendHost = translateCloudHostnameToBackend(hostname);
-    if (cloudBackendHost) {
-        return `${protocol}://${cloudBackendHost}`;
+    // 2. Cloud-forwarded environments: PREFER same-origin so the WS goes
+    //    through the Next.js custom server's reverse proxy → uvicorn over
+    //    localhost. This sidesteps port-8000 visibility, GitHub auth, and
+    //    any browser cross-port quirks. Works even if port 8000 is private.
+    if (isCloudForwardedHostname(hostname)) {
+        const url = `${protocol}://${window.location.host}`;
+        logWsResolution('cloud-forwarded → same-origin (via Next.js proxy)', url);
+        return url;
     }
 
-    // Local development on standard Next.js ports → backend on 8000 same host.
-    if (port === '3000' || port === '5000') {
-         return `${protocol}://${hostname}:${BACKEND_PORT}`;
+    // 3. Local dev on standard Next.js ports → backend on 8000 same host.
+    if (FRONTEND_FORWARDED_PORTS.has(port)) {
+        const url = `${protocol}://${hostname}:${BACKEND_PORT}`;
+        logWsResolution('local dev → cross-port', url);
+        return url;
     }
 
-    const host = window.location.host;
-    return `${protocol}://${host}`;
+    // 4. Same-origin fallback (reverse proxy / production).
+    const url = `${protocol}://${window.location.host}`;
+    logWsResolution('default same-origin', url);
+    return url;
 };
 
 const buildWebSocketUrlSafe = (baseUrl, endpoint, token) => {

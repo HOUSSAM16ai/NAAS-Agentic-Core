@@ -28,6 +28,10 @@ The system must preserve the following principles permanently. Every future agen
 - **Degraded ≠ Dead**: A microservice that passes `/health` but has a failed graph warmup is DEGRADED, not healthy. The `/health` endpoint must expose `startup_state` so operators can diagnose without restarting.
 - **Zombie metrics are worse than no metrics**: A dashboard panel that always shows zero is indistinguishable from "system not running". Every dashboard metric must have a verified emitter in the application source (D-016).
 - **Lock file staleness is a finding**: `.runtime/truth_table.lock.json` records the branch and timestamp it was generated on. Always check `generated_at_utc` before trusting it. A stale lock file means the CI drift gate may pass on false grounds.
+- **PRIMARY model invariants (D-067 — 2026-05-17)**: ⛔ `nvidia/nemotron-3-nano-30b-a3b:free` MUST NEVER be PRIMARY. Live benchmark proved it returns `content=None` (English reasoning only) with system prompts > 1500 chars — caused real-user "pepepe aaaa" garbage catastrophe (ISS-079). ✅ `openai/gpt-oss-20b:free` is the verified PRIMARY (2102 chunks, 4762 chars Arabic + LaTeX, finish=stop).
+- **System prompt sanity (D-067)**: System prompts > 1500 chars are FORBIDDEN — they trigger reasoning-mode in free OpenRouter models. Box-drawing chars (U+2500–U+257F) like `━━━` are FORBIDDEN in prompts — they confuse tokenizers and cause degenerate output. Keep prompts < 1000 chars, use simple punctuation (`---`, `##`).
+- **No reasoning→content leak (D-067)**: Gateway MUST NEVER redirect `delta.reasoning` to `delta.content`. The reverse of ISS-069 caused English thinking text ("We need to respond as a brilliant Algerian professor...") to be displayed to students as Arabic answers. If `content=None`, let the fallback chain trigger.
+- **Greeting fastpath is mandatory (D-067)**: Every chat entry point (monolith `local_graph.py`, orchestrator's `ChatFallbackNode`, `chat_with_agent` preempt) MUST check `_greeting_fastpath_response` / `GreetingSkill` BEFORE calling LLM. Without this, free models return etymology for "السلام عليكم" (verified live ISS-079).
 
 ---
 

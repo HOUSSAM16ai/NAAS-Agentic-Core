@@ -75,15 +75,33 @@ lifecycle_info "Launching background supervisor..."
 nohup bash "$SUPERVISOR_SCRIPT" > "$LOG_FILE" 2>&1 &
 SUPERVISOR_PID=$!
 
-# Ensure Codespaces ports are public when gh CLI is available
-# Port 3001 (Grafana) MUST be public for the cross-origin preview proxy to
-# work without an extra "Make public" click — see start_observability.sh and
-# observability/grafana/grafana.ini for the cookie/CSRF wiring.
+# Ensure Codespaces ports are public.
+#
+# ISS-MISC-VPN (D-068 second hardening 2026-05-17): if port 3000 stays
+# PRIVATE the frontend itself returns HTTP 401 to an unauthenticated browser
+# (e.g. the user's phone, or anyone visiting a shared link without GitHub
+# auth). The devcontainer.json `portsAttributes.3000.visibility` is the
+# permanent durable setting that ships with new Codespaces; the `gh ports
+# visibility` calls below are a runtime safety-net that ALSO retro-fixes
+# existing Codespaces created before that JSON was updated.
+#
+# We surface gh failures (instead of swallowing them) so users can see WHY
+# their port is still private when something goes wrong (gh not
+# authenticated, codespace name missing, etc.).
 if command -v gh >/dev/null 2>&1; then
-    lifecycle_info "Setting Codespaces port visibility (8000, 3000, 3001) to public..."
-    gh codespace ports visibility 8000:public >/dev/null 2>&1 || true
-    gh codespace ports visibility 3000:public >/dev/null 2>&1 || true
-    gh codespace ports visibility 3001:public >/dev/null 2>&1 || true
+    lifecycle_info "Setting Codespaces port visibility (3000, 5000, 8000, 3001) to public..."
+    for port_spec in 3000:public 5000:public 8000:public 3001:public; do
+        if ! gh codespace ports visibility "$port_spec" 2>/tmp/gh_ports_err; then
+            err_msg=$(cat /tmp/gh_ports_err 2>/dev/null | head -1 || true)
+            lifecycle_warn "Could not set $port_spec — ${err_msg:-no error message}"
+            lifecycle_warn "  → Open VS Code → PORTS tab → right-click port → Port Visibility → Public"
+        fi
+    done
+    rm -f /tmp/gh_ports_err
+else
+    lifecycle_warn "gh CLI missing — cannot auto-set Codespaces port visibility."
+    lifecycle_warn "  → Manually set port 3000 to Public in VS Code PORTS tab"
+    lifecycle_warn "  → Otherwise the frontend returns HTTP 401 to unauthenticated browsers."
 fi
 
 # Save supervisor PID

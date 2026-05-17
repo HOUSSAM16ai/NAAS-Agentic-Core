@@ -4830,20 +4830,37 @@ PYTHONPATH=. python3 -m pytest tests/config/test_codespaces_cors_vpn.py -v
 # Expected: 7 passed
 ```
 
-### Files Modified (D-068 — initial + hardening pass)
+### الطبقة الخامسة (hardening 2 — port visibility + CLI compat)
+
+> **3rd user report — 18:42**: `q-3000.app.github.dev` → `HTTP ERROR 401 "This page isn't working"`. الـ VS Code PORTS tab كشف أن port 3000 = **PRIVATE** بينما 8000/3001 = PUBLIC.
+
+السبب: `devcontainer.json` portsAttributes.3000 كان فقط:
+```jsonc
+"3000": { "label": "Next.js Alt", "onAutoForward": "silent" }   // ← لا visibility!
+```
+Default Codespaces port visibility = `private` → GitHub auth proxy يُرفض المتصفح بدون session → 401 قبل أن يصل أي شيء للـ WS أصلاً.
+
+ثلاث تعديلات إضافية:
+1. **`devcontainer.json` port 3000**: `"visibility":"public"` صريح + `"label":"Frontend (Next.js)"` + `"onAutoForward":"notify"`.
+2. **`frontend/server.js`**: يحترم الآن `--port N` و `--hostname H` CLI flags (للحفاظ على compatibility مع `supervisor.sh:426` الذي يستخدم `npm run dev -- --hostname 0.0.0.0 --port "$FRONTEND_PORT"`). كان يتجاهلها قبل الـ hardening 2.
+3. **`on-start.sh`**: لا يبتلع gh errors بعد الآن — يطبع `lifecycle_warn` صريح عند فشل `gh codespace ports visibility`، ويرشد المستخدم للإعداد اليدوي عبر VS Code PORTS tab. كما أضاف port 5000 للقائمة.
+
+### Files Modified (D-068 — initial + 2 hardening passes)
 
 | File | Change |
 |------|--------|
-| `frontend/server.js` | **NEW** — Node custom server with WS reverse proxy to localhost:8000 |
+| `frontend/server.js` | **NEW** — Node custom server WS proxy. Hardening 2: respects `--port`/`--hostname` CLI flags |
 | `frontend/package.json` | `"dev": "node server.js"` (was `next dev`); old kept as `dev:next` |
 | `frontend/app/hooks/useAgentSocket.js` | + `translateCloudHostnameToBackend()` + `isCloudForwardedHostname()` + same-origin preference + diagnostic console.info |
 | `frontend/public/js/legacy-app.jsx` | + legacy parity + same-origin preference for cloud-forwarded hostnames |
 | `app/core/settings/base.py` | + `BACKEND_CORS_ORIGIN_REGEX` field + `expand_cloud_forwarded_hosts_and_cors` validator |
 | `app/core/app_blueprint.py` | + `origin_regex` param in `build_cors_options` |
+| `.devcontainer/devcontainer.json` | **Hardening 2**: port 3000 → `"visibility":"public"` (was missing → default private → HTTP 401) |
+| `.devcontainer/on-start.sh` | **Hardening 2**: verbose gh ports visibility error logging + added port 5000 |
 | `tests/config/test_codespaces_cors_vpn.py` | NEW — 7 unit tests |
 | `tests/services/test_bac_exercise_skill_contract.py` | NEW — 7 BAC skill contract tests (skills system evolution) |
 | `scripts/test_ws_url_translation.js` | NEW — 18 cases CI-runnable (12 translation + 6 detector) |
-| `scripts/test_nextjs_ws_proxy.sh` | **NEW** — live e2e bash test boots real Next.js + uvicorn |
+| `scripts/test_nextjs_ws_proxy.sh` | **NEW** — live e2e bash. Hardening 2: 9/9 (added `--port` CLI compat + port 3000 public asserts) |
 | `.github/workflows/iss-vpn-codespaces-gate.yml` | NEW — 2-job CI gate (URL translation + Next.js proxy live smoke) |
 
 ### السلسلة الكاملة (D-049 → D-068)

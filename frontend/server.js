@@ -32,10 +32,27 @@ const { parse } = require('url');
 const net = require('net');
 const next = require('next');
 
+// Parse a single CLI flag (--port N, --hostname H) without pulling a CLI
+// parsing library. supervisor.sh invokes `npm run dev -- --hostname 0.0.0.0
+// --port 3000` (the same shape that `next dev` understood); we honor those
+// flags here so the supervisor's port choice survives the transition to the
+// custom server.
+function getCliFlag(name) {
+    const argv = process.argv;
+    for (let i = 0; i < argv.length; i++) {
+        if (argv[i] === `--${name}` && i + 1 < argv.length) return argv[i + 1];
+        if (argv[i].startsWith(`--${name}=`)) return argv[i].slice(name.length + 3);
+    }
+    return undefined;
+}
+
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = process.env.NEXT_HOSTNAME || '0.0.0.0';
+const hostname = getCliFlag('hostname') || process.env.NEXT_HOSTNAME || '0.0.0.0';
 const port = parseInt(
-    process.env.PORT || process.env.FRONTEND_PORT || (dev ? '5000' : '5000'),
+    getCliFlag('port') ||
+    process.env.PORT ||
+    process.env.FRONTEND_PORT ||
+    (dev ? '5000' : '5000'),
     10,
 );
 const backendHost = process.env.BACKEND_HOST || '127.0.0.1';

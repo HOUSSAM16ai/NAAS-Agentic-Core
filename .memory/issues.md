@@ -6,19 +6,28 @@
 ## 🟢 Resolved 2026-05-17 (ISS-MISC-VPN — Codespaces shows "offline" without VPN)
 
 ### ISS-MISC-VPN · Connection status stuck on "غير متصل" outside VPN [RESOLVED]
-- **Status**: RESOLVED 2026-05-17 — initial pass (3 layers), HARDENED 2026-05-17 (4th layer: Next.js WS proxy) — D-068
+- **Status**: RESOLVED 2026-05-17 — initial pass (3 layers), HARDENED twice 2026-05-17 (4th layer + 5th sweep) — D-068
 - **Severity**: CATASTROPHIC (المستخدم يصف: «الكارثة دمرت المشروع نهائيا» — لا يمكن استخدام الواجهة على Codespaces بدون tunneling عبر VPN)
-- **Reported**: مستخدم حقيقي — screenshot يُظهر `x-3000.app.github.dev` مع `offline ●` (الـ initial pass)؛ ثاني screenshot 17:31 بنفس المشكلة على `9-3000.app.github.dev` بعد المراجعة → كشف أن السبب الجذري الأعمق هو أن **port 8000 قد لا يكون reachable من المتصفح** حتى مع الـ frontend translation (Codespaces port visibility "private" by default على codespaces قديمة، أو blocked by GitHub auth) → الـ hardening pass أضاف same-origin WS proxy عبر Next.js custom server
+- **Reported**: مستخدم حقيقي — 3 screenshots متتالية على نفس اليوم:
+  1. 12:46 `x-3000.app.github.dev` مع `offline ●` (الـ initial pass — 3 layers)
+  2. 17:31 `9-3000.app.github.dev` بنفس المشكلة بعد المراجعة → الـ 4th hardening: Next.js custom server WS proxy
+  3. **18:42 `q-3000.app.github.dev` يُرجع HTTP 401 "This page isn't working"** — المتصفح لا يستطيع تحميل الـ frontend أصلاً! الـ PORTS tab في VS Code يكشف أن port 3000 = **PRIVATE** (`○`) بينما port 8000/3001 = PUBLIC (`●`) → GitHub auth proxy يرفض المتصفحات غير المُصادَقة
+  - السبب: `.devcontainer/devcontainer.json` portsAttributes.3000 كان يحوي فقط `"onAutoForward":"silent"` بدون `visibility` field → default = `private` → 401 على أي phone/browser بدون GitHub session
+  - الـ 5th sweep (هذا الـ commit): explicit `"visibility":"public"` لـ port 3000 في devcontainer.json + verbose error logging في on-start.sh + server.js يحترم `--port` CLI flag (supervisor.sh compat)
 - **Root causes (verified live 2026-05-17 على بيئة محاكاة Codespaces)**:
   1. **Frontend WebSocket URL bug**: `getWsBase()` في `frontend/app/hooks/useAgentSocket.js` كان يُرجع نفس hostname الفرونتند للـ WS. على Codespaces يكون hostname = `<cs>-3000.app.github.dev` و port = `""` (HTTPS implicit) → السطر 41 `if (port === '3000')` يعطي false → يقع على fallback السطر 45 → `wss://<cs>-3000.app.github.dev/api/chat/ws` → port 3000 ليس فيه `/api/chat/ws` endpoint → WS handshake يفشل → `setState("offline")` → الواجهة تعرض «غير متصل».
   2. **Backend TrustedHostMiddleware يرفض Host header**: الإعداد الافتراضي `ALLOWED_HOSTS = ["localhost","127.0.0.1","testserver","test"]`. عند الـ direct WS connection لـ `<cs>-8000.app.github.dev` (بعد إصلاح الـ frontend)، الـ Host header = `<cs>-8000.app.github.dev` → TrustedHostMiddleware يُعيد HTTP 400 "Invalid host".
   3. **Backend CORS يحجب الـ Origin**: `BACKEND_CORS_ORIGINS = ["http://localhost:3000"]` → يرفض `Origin: https://<cs>-3000.app.github.dev`.
   4. **VPN كان workaround**: مع VPN، المستخدم يصل بـ `localhost:3000` فيدخل في فرع السطر 41 (port=3000) فيقع على `ws://localhost:8000/...` الذي يعمل. بدون VPN، لا يوجد طريق نظيف للـ WS.
-- **Fix (4 طبقات دفاع — initial 3 + hardening 1)**:
+- **Fix (5 طبقات دفاع — initial 3 + hardening 2)**:
   1. **Frontend translation + same-origin preference** (`frontend/app/hooks/useAgentSocket.js`): دالة `translateCloudHostnameToBackend()` (cross-port fallback) + `isCloudForwardedHostname()` (يقرر same-origin أولاً). على Codespaces، يُفضِّل same-origin (يمر عبر Next.js proxy) — لا يحتاج port 8000 reachable من المتصفح أبداً. يُطبَّق نفس الإصلاح في `frontend/public/js/legacy-app.jsx`.
   2. **Backend ALLOWED_HOSTS expansion** (`app/core/settings/base.py`): model_validator `expand_cloud_forwarded_hosts_and_cors` يُضيف `*.app.github.dev`, `*.preview.app.github.dev`, `*.gitpod.io` عند `CODESPACES=true`. لا تغيير عند `CODESPACES=false`.
   3. **Backend CORS regex** (`app/core/app_blueprint.py:build_cors_options`): يقبل `BACKEND_CORS_ORIGIN_REGEX` parameter — يُولَّد تلقائياً على Codespaces ويطابق أي codespace forwarded URL.
-  4. **Next.js custom server WS proxy** (`frontend/server.js`, **NEW — hardening 2026-05-17**): Node http server يُغلِّف Next.js ويُمرِّر WS upgrades للـ `/api/chat/ws` و `/admin/api/chat/ws` إلى `localhost:8000` (uvicorn) — كل المنطق داخل الـ container، الـ Host header يُحفظ ليصل TrustedHostMiddleware بالقيمة الصحيحة. `frontend/package.json` غُيِّر `"dev": "node server.js"` ليكون default. **هذه الطبقة تحل الكارثة العنيدة**: عندما port 8000 ليس reachable من المتصفح، الـ WS يمر عبر port 3000 same-origin والـ proxy يصل لـ uvicorn داخلياً.
+  4. **Next.js custom server WS proxy** (`frontend/server.js`, **NEW — hardening 1 2026-05-17**): Node http server يُغلِّف Next.js ويُمرِّر WS upgrades للـ `/api/chat/ws` و `/admin/api/chat/ws` إلى `localhost:8000` (uvicorn) — كل المنطق داخل الـ container، الـ Host header يُحفظ ليصل TrustedHostMiddleware بالقيمة الصحيحة. `frontend/package.json` غُيِّر `"dev": "node server.js"` ليكون default. هذه الطبقة تحل قضية port 8000 reachability.
+  5. **Port 3000 visibility + supervisor.sh compat** (`devcontainer.json` + `server.js` + `on-start.sh`, **NEW — hardening 2 2026-05-17**): الـ frontend نفسه كان private (HTTP 401)! ثلاث تعديلات:
+     - `devcontainer.json` port 3000 → `"visibility":"public"` (كان مفقوداً → default private)
+     - `server.js` يحترم الآن `--port N` و `--hostname H` CLI flags (supervisor.sh يُمرِّرها)
+     - `on-start.sh` لم يعد يبتلع gh errors — يطبع warnings صريحة عند فشل `gh ports visibility` ويرشد المستخدم لإعداد manual
 - **Tests added**:
   - `tests/config/test_codespaces_cors_vpn.py` — 7 unit tests (settings expansion + regression + idempotency)
   - `scripts/test_ws_url_translation.js` — 18 cases (12 cross-port + 6 cloud detector)

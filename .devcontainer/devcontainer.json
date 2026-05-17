@@ -51,8 +51,10 @@
       "protocol": "http"
     },
     "3000": {
-      "label": "Next.js Alt",
-      "onAutoForward": "silent"
+      "label": "Frontend (Next.js)",
+      "onAutoForward": "notify",
+      "visibility": "public",
+      "protocol": "http"
     },
     "9090": {
       "label": "Prometheus (Raw Queries)",

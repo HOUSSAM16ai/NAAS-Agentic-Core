@@ -61,6 +61,22 @@ else
     record n "useAgentSocket no longer detects cloud-forwarded hostnames"
 fi
 
+# server.js MUST honor `--port N` so supervisor.sh's existing CLI shape
+# (`npm run dev -- --hostname 0.0.0.0 --port 3000`) keeps working.
+if grep -q "getCliFlag" "$ROOT/frontend/server.js"; then
+    record y "server.js honors --port / --hostname CLI flags (supervisor.sh compat)"
+else
+    record n "server.js no longer parses --port CLI flag — supervisor.sh would run on the wrong port"
+fi
+
+# devcontainer.json port 3000 MUST be public. If it isn't, the phone gets
+# HTTP 401 from GitHub auth and the chat UI never even loads.
+if grep -A4 '"3000"' "$ROOT/.devcontainer/devcontainer.json" | grep -q '"visibility": *"public"'; then
+    record y "devcontainer.json declares port 3000 visibility=public"
+else
+    record n "devcontainer.json: port 3000 is NOT public — phone browsers get HTTP 401 without VPN"
+fi
+
 # ── 2. Live WS smoke (skipped in plain CI without node_modules) ────────────
 printf "\n${CYAN}── 2. Live WS smoke (requires node_modules + python3) ──${RESET}\n"
 

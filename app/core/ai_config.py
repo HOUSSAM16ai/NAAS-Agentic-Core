@@ -118,14 +118,22 @@ class ActiveModels:
     # يضع الإجابة في delta.reasoning لا delta.content → content=None دائماً مع system prompt
     # → إجابات فارغة/كارثية للطلاب. الحل: العودة لـ nemotron-3-nano-30b-a3b:free
     # الذي أثبت: جودة 4/4، TTFT=3.1s، عربية صحيحة، LaTeX سليم، content مضمون.
-    PRIMARY = _resolve_primary_model("nvidia/nemotron-3-nano-30b-a3b:free")
+    # ISS-079 (D-067 — 2026-05-17): تجريب حي حي حقيقي على 5 نماذج مع
+    # system prompt الإنتاجي الكامل (1690 chars) كشف:
+    # ❌ nvidia/nemotron-nano-30b-a3b → content=None (راح إلى reasoning بالإنجليزية)
+    # ❌ nvidia/nemotron-super-120b → English reasoning (لا عربي)
+    # ❌ z-ai/glm-4.5-air → content=None، reasoning كله
+    # ✅ openai/gpt-oss-20b → 2102 chunks، 4762 chars، finish=stop، عربي + LaTeX نقي
+    # ✅ openai/gpt-oss-120b → 2480 chunks، 5502 chars، أفضل جودة
+    # القرار: التحويل إلى gpt-oss-20b كنموذج أساسي (يحل ISS-079 كارثة pepepe).
+    PRIMARY = _resolve_primary_model("openai/gpt-oss-20b:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
-    GATEWAY_FALLBACK_1 = "arcee-ai/trinity-large-thinking:free"
-    GATEWAY_FALLBACK_2 = "nvidia/nemotron-3-super-120b-a12b:free"
-    GATEWAY_FALLBACK_3 = "openai/gpt-oss-120b:free"
-    GATEWAY_FALLBACK_4 = "openai/gpt-oss-20b:free"
-    GATEWAY_FALLBACK_5 = "z-ai/glm-4.5-air:free"
+    GATEWAY_FALLBACK_1 = "openai/gpt-oss-120b:free"
+    GATEWAY_FALLBACK_2 = "nvidia/nemotron-3-nano-30b-a3b:free"  # works on short prompts
+    GATEWAY_FALLBACK_3 = "nvidia/nemotron-3-super-120b-a12b:free"
+    GATEWAY_FALLBACK_4 = "z-ai/glm-4.5-air:free"
+    GATEWAY_FALLBACK_5 = "arcee-ai/trinity-large-thinking:free"
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY
     TIER_SMART = PRIMARY

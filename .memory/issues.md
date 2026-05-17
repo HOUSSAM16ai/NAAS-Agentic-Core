@@ -1,5 +1,39 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-15 | Branch: `feat/iss-071-latex-normalize-langgraph`
+> Last updated: 2026-05-17 | Branch: `claude/fix-critical-project-failure-ixc1t`
+
+---
+
+## 🟢 Resolved 2026-05-17 (ISS-079 — Catastrophic Trio: Greeting + Context + Garbage)
+
+### ISS-079 · Triple Production Catastrophe [RESOLVED]
+- **Status**: RESOLVED 2026-05-17 (D-067)
+- **Severity**: CATASTROPHIC (الطالب يحصل على etymology بدلاً من تحية، هلوسة لغوية بدلاً من شرح هندسي، garbage مكرر بدلاً من شرح)
+- **Reported**: مستخدم حقيقي شاهد كل الثلاث على نفس الجلسة
+- **Root causes (verified live 2026-05-17)**:
+  1. **Greeting catastrophe**: local_graph.py لا يحوي greeting fastpath. عندما orchestrator-service غير متاح، التحية تذهب لـ LLM مع prompt "أجب بدقة" → etymology طويلة بكلمات أجنبية.
+  2. **Context loss**: nemotron-3-nano-30b فشل تماماً مع `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` (1690 chars). بنشمارك حي: `content_chunks=0`، كل المحتوى في `reasoning` field (بالإنجليزية).
+  3. **Garbage output**: Box-drawing chars `━━━` (78 char × 6 occurrences = 468 char نادر) يُربك tokenizer النماذج المجانية → degenerate "pepepe aaaa".
+  4. **Reasoning leak**: gateway's ISS-069 redirect كان يُمرِّر English thinking text كـ content عربي → "We need to respond as a brilliant Algerian professor..." يُعرَض للطالب.
+- **Live benchmark** (2026-05-17 على 5 نماذج OpenRouter):
+  - ❌ nvidia/nemotron-nano-30b → content=None (reasoning بالإنجليزية)
+  - ❌ nvidia/nemotron-super-120b → English reasoning فقط
+  - ❌ z-ai/glm-4.5-air → content=None
+  - ✅ openai/gpt-oss-20b → 2102 chunks، 4762 chars، عربي + LaTeX نقي
+  - ✅ openai/gpt-oss-120b → الأفضل، 5502 chars
+- **Fix (5 طبقات)**:
+  1. **GreetingSkill جديد** (`app/services/skills/greeting_skill.py`) — Skill رسمي بـ Pydantic + Prometheus + 25 تحية + blockers (D-065)
+  2. **Greeting fastpath في monolith** — `_greeting_fastpath_response` في local_graph + preempt في orchestrator_client
+  3. **PRIMARY model = openai/gpt-oss-20b:free** — تحديث 4 ملفات config
+  4. **Reasoning-leak guard** — gateway لم يعد يُمرِّر reasoning كـ content
+  5. **System prompt مُختصر** — _EXERCISE_EXPLANATION_SYSTEM_PROMPT من 1690 → 660 char بدون box-drawing chars
+- **Tests added**: 27 unit tests في `tests/services/test_iss079_catastrophic_fixes.py`
+- **Live verification**:
+  ```
+  TEST 1 (catastrophe #3): chunks=1749 chars=3701 finish=stop ✅ Arabic ✅ LaTeX ✅
+  TEST 2 (catastrophe #2): chunks=1623 chars=3800 ✅ is_geometric=True ✅
+  TEST 3 (catastrophe #1): GreetingSkill 0ms ✅ blockers work ✅
+  ```
+- **Files**: `app/services/skills/greeting_skill.py`, `app/services/skills/__init__.py`, `app/services/chat/local_graph.py`, `app/infrastructure/clients/orchestrator_client.py`, `app/core/gateway/simple_client.py`, `app/core/ai_config.py`, `microservices/orchestrator_service/src/core/ai_config.py`, `microservices/conversation_service/src/math_pipeline.py`, `microservices/conversation_service/src/conversation_graph.py`, `tests/services/test_iss079_catastrophic_fixes.py`
 
 ---
 

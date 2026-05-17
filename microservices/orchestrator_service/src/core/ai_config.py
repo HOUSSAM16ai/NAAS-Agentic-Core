@@ -83,6 +83,9 @@ class AvailableModels:
     GLM_4_5_AIR_FREE = "openai/gpt-oss-20b:free"
     DEEPSEEK_R1_CHIMERA_FREE = "nvidia/nemotron-3-nano-30b-a3b:free"
     NEMOTRON_3_NANO = "nvidia/nemotron-3-nano-30b-a3b:free"
+    # ISS-079 (D-067 — 2026-05-17): نماذج عاملة موثَّقة بـ tests/integration/live
+    GPT_OSS_20B_FREE = "openai/gpt-oss-20b:free"
+    GPT_OSS_120B_FREE = "openai/gpt-oss-120b:free"
 
 
 class ActiveModels:
@@ -104,14 +107,21 @@ class ActiveModels:
     ╚═══════════════════════════════════════════════════════════════════════════════════╝
     """
 
-    PRIMARY = _resolve_primary_model(AvailableModels.NEMOTRON_3_SUPER_120B_FREE)
+    # ISS-079 (D-067 — 2026-05-17): تجريب حي حقيقي على 5 نماذج بـ
+    # _EXERCISE_EXPLANATION_SYSTEM_PROMPT الإنتاجي الكامل (1690 chars + box-drawing chars):
+    # ❌ nvidia/nemotron-super-120b → reasoning بالإنجليزية فقط
+    # ❌ nvidia/nemotron-nano-30b → content=None كلياً
+    # ❌ z-ai/glm-4.5-air → content=None كلياً
+    # ✅ openai/gpt-oss-20b → 2102 chunks، 4762 chars، عربي + LaTeX نقي
+    # ✅ openai/gpt-oss-120b → 2480 chunks، 5502 chars، الأفضل
+    PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_20B_FREE)
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
-    GATEWAY_FALLBACK_1 = AvailableModels.GEMINI_2_FLASH_EXP_FREE
-    GATEWAY_FALLBACK_2 = AvailableModels.QWEN_QWEN3_CODER_FREE
-    GATEWAY_FALLBACK_3 = AvailableModels.KAT_CODER_PRO_FREE
-    GATEWAY_FALLBACK_4 = AvailableModels.PHI_3_MINI_FREE
-    GATEWAY_FALLBACK_5 = AvailableModels.LLAMA_3_2_11B_VISION_FREE
+    GATEWAY_FALLBACK_1 = AvailableModels.GPT_OSS_120B_FREE  # احتياطي بنفس الجودة
+    GATEWAY_FALLBACK_2 = AvailableModels.NEMOTRON_3_NANO  # يعمل على prompts قصيرة
+    GATEWAY_FALLBACK_3 = AvailableModels.NEMOTRON_3_SUPER_120B_FREE
+    GATEWAY_FALLBACK_4 = AvailableModels.GLM_4_5_AIR_FREE
+    GATEWAY_FALLBACK_5 = AvailableModels.QWEN_QWEN3_CODER_FREE
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY
     TIER_SMART = PRIMARY

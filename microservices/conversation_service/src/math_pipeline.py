@@ -26,7 +26,10 @@ from langgraph.graph import END, START, StateGraph
 logger = logging.getLogger(__name__)
 
 _NODE_TIMEOUT = 40.0
-_DEFAULT_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
+# ISS-079 (D-067 — 2026-05-17): تغيير الـ default — nvidia/nemotron-nano-30b
+# يفشل مع system prompts طويلة (content=None، reasoning بالإنجليزية).
+# تجريب حي حقيقي أثبت أن gpt-oss-20b هو الأنسب (عربي + LaTeX + content مضمون).
+_DEFAULT_MODEL = "openai/gpt-oss-20b:free"
 # ISS-074 (2026-05-15): fallback chain مُحدَّث بعد بنشمارك حي
 # - google/gemma-4-26b-a4b-it:free → rate-limited 429 (مُزال)
 # - qwen/qwen3-coder:free          → rate-limited 429 (مُزال)

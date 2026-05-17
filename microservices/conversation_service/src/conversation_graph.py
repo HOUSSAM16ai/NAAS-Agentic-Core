@@ -115,7 +115,9 @@ logger = logging.getLogger(__name__)
 
 # ── ثوابت ─────────────────────────────────────────────────────────────────────
 _NODE_TIMEOUT_SECONDS = 45.0
-_DEFAULT_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
+# ISS-079 (D-067 — 2026-05-17): تغيير الـ default — التجريب الحي أثبت أن
+# nvidia/nemotron-nano-30b يفشل مع system prompts طويلة.
+_DEFAULT_MODEL = "openai/gpt-oss-20b:free"
 
 _INTENT_PATTERNS: dict[str, list[str]] = {
     "educational": [

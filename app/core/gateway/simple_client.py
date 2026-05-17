@@ -167,6 +167,14 @@ class OpenRouterClient(LLMClient):
                         response=response,
                     )
 
+                # ISS-079 (D-067 — 2026-05-17): Reasoning-leak guard
+                # كارثة سابقة: ISS-069 redirect reasoning → content كان يبث
+                # التفكير الإنجليزي للطالب ("We need to respond as a brilliant
+                # Algerian Baccalaureate math professor...") كنص عربي مزعوم.
+                # الحل: لا نُمرِّر reasoning كـ content أبداً — نُعيده فارغاً
+                # ليفعّل fallback chain يستدعي نموذج آخر يُنتج content فعلي.
+                content_chunks = 0
+                reasoning_chunks = 0
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
                         data_str = line[6:]
@@ -174,22 +182,32 @@ class OpenRouterClient(LLMClient):
                             break
                         try:
                             chunk = json.loads(data_str)
-                            # ISS-069: بعض نماذج reasoning تضع الإجابة في delta.reasoning
-                            # لا delta.content (مثل nemotron-omni). نُعيد توجيهها لـ content
-                            # حتى لا تصل إجابات فارغة للطالب.
                             choices = chunk.get("choices", [])
                             if choices:
                                 delta = choices[0].get("delta", {})
-                                if delta.get("content") is None and delta.get("reasoning"):
-                                    delta["content"] = delta["reasoning"]
+                                has_content = bool(delta.get("content"))
+                                has_reasoning = bool(delta.get("reasoning"))
+                                if has_content:
+                                    content_chunks += 1
+                                if has_reasoning and not has_content:
+                                    reasoning_chunks += 1
+                                # تنظيف: لا تمرر reasoning كـ content
+                                if has_reasoning and not has_content:
+                                    delta["content"] = None
                                     choices[0]["delta"] = delta
                                     chunk["choices"] = choices
                             yield chunk
-                            # ISS-STREAM-004: yield control to event loop after each chunk
-                            # prevents machine-gun bursts that freeze the frontend renderer
                             await asyncio.sleep(0)
                         except json.JSONDecodeError:
                             continue
+                # تشخيص: إذا الكل reasoning فقط، سجِّل للمراقبة
+                if reasoning_chunks > 0 and content_chunks == 0:
+                    logger.warning(
+                        "reasoning_only_response model=%s reasoning_chunks=%d — likely model "
+                        "incompatibility with this prompt (fallback will trigger)",
+                        model_id,
+                        reasoning_chunks,
+                    )
 
         except httpx.StreamError as e:
             raise httpx.ConnectError(f"Stream error: {e}") from e
@@ -203,8 +221,9 @@ class OpenRouterClient(LLMClient):
         """
         مساعد بسيط للإرسال غير المتدفق.
 
-        ISS-069: يستخرج delta.reasoning كـ fallback عند delta.content=None
-        لضمان وصول الإجابة حتى مع نماذج reasoning-only.
+        ISS-079 (D-067): لم نعد نُمرِّر reasoning كـ content — هذا كان يسرِّب
+        التفكير الإنجليزي للطلاب. الآن نُجمِّع content فقط، ونعود فارغاً إذا
+        النموذج فشل (fallback chain يستدعي نموذج آخر).
         """
         messages: list[JSONDict] = [
             {"role": "system", "content": system_prompt},  # type: ignore
@@ -216,8 +235,8 @@ class OpenRouterClient(LLMClient):
             choices = chunk.get("choices", [])  # type: ignore
             if choices:
                 delta = choices[0].get("delta", {})
-                content = delta.get("content") or delta.get("reasoning", "")
-                if content:
+                content = delta.get("content")
+                if content and isinstance(content, str):
                     full_content.append(content)
 
         return "".join(full_content)

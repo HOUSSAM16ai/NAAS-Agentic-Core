@@ -1,0 +1,231 @@
+"""
+ISS-079 (D-067 — 2026-05-17) — اختبارات الكوارث الثلاث المُكتشفة حياً.
+
+الكوارث الموثَّقة من جلسة مستخدم حقيقية:
+
+**كارثة #1**: "السلام عليكم" → رد etymological طويل
+  - السبب: orchestrator-service غير متاح → local_graph بلا greeting fastpath
+  - الحل: `_greeting_fastpath_response` في local_graph + `GreetingSkill` رسمي
+
+**كارثة #2**: "كيف نبين أن الرباعي معين" بعد BAC 2024 → هلوسة لغوية
+  - السبب: detect_explanation_with_context يعمل لكن LLM يفشل بـ content=None
+  - الحل: استبدال PRIMARY model بـ openai/gpt-oss-20b:free
+
+**كارثة #3**: "اشرح لي خطوة خطوة السؤال 1 ج" → garbage "pepepe aaaa"
+  - السبب: nemotron-nano-30b يضع كل المحتوى في reasoning (إنجليزي)
+  - الحل: تغيير PRIMARY + إيقاف reasoning→content leak + تبسيط prompt
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+import importlib.util
+
+
+# Load local_graph WITHOUT going through app/__init__ to avoid heavy imports
+def _load_module(name: str, path: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_REPO_ROOT = Path(__file__).parent.parent.parent
+_local_graph = _load_module("lg", str(_REPO_ROOT / "app/services/chat/local_graph.py"))
+
+
+class TestCatastrophe1GreetingFastpath:
+    """ISS-079 #1: السلام عليكم → fastpath response (no LLM, no etymology)."""
+
+    def test_simple_islamic_greeting(self):
+        r = _local_graph._greeting_fastpath_response("السلام عليكم")
+        assert r is not None
+        assert "وعليكم السلام" in r
+
+    def test_full_islamic_greeting(self):
+        r = _local_graph._greeting_fastpath_response("السلام عليكم ورحمة الله وبركاته")
+        assert r is not None
+        assert "وعليكم السلام" in r
+
+    def test_response_to_greeting(self):
+        r = _local_graph._greeting_fastpath_response("وعليكم السلام")
+        assert r is not None
+
+    def test_simple_marhaba(self):
+        r = _local_graph._greeting_fastpath_response("مرحبا")
+        assert r is not None
+        assert "أهلاً" in r
+
+    def test_english_hello(self):
+        r = _local_graph._greeting_fastpath_response("hello")
+        assert r is not None
+        assert "Hi" in r or "help" in r.lower()
+
+    def test_kayfa_halak(self):
+        r = _local_graph._greeting_fastpath_response("كيف حالك")
+        assert r is not None
+        assert "بخير" in r
+
+    def test_morning_greeting(self):
+        r = _local_graph._greeting_fastpath_response("صباح الخير")
+        assert r is not None
+        assert "صباح النور" in r
+
+    def test_thanks(self):
+        r = _local_graph._greeting_fastpath_response("شكرا")
+        assert r is not None
+        assert "العفو" in r
+
+
+class TestCatastrophe1Blockers:
+    """ISS-079 #1: السؤال بفعل تعليمي يُلغي fastpath حتى لو بدأ بتحية."""
+
+    def test_greeting_with_educational_verb(self):
+        r = _local_graph._greeting_fastpath_response("السلام عليكم اشرح قانون نيوتن")
+        assert r is None, "must NOT fastpath when educational verb is present"
+
+    def test_greeting_with_tamreen_request(self):
+        r = _local_graph._greeting_fastpath_response("مرحبا اعطني تمرين")
+        assert r is None
+
+    def test_kayfa_interrogative_blocker(self):
+        # "كيف نبين" — interrogative, not greeting
+        r = _local_graph._greeting_fastpath_response("كيف نبين أن الرباعي معين")
+        assert r is None
+
+    def test_ma_huwa_blocker(self):
+        r = _local_graph._greeting_fastpath_response("ما هو التكامل")
+        assert r is None
+
+    def test_calculate_blocker(self):
+        r = _local_graph._greeting_fastpath_response("احسب التكامل")
+        assert r is None
+
+    def test_explain_blocker(self):
+        r = _local_graph._greeting_fastpath_response("اشرح لي الدالة")
+        assert r is None
+
+    def test_empty_input(self):
+        r = _local_graph._greeting_fastpath_response("")
+        assert r is None
+
+
+class TestGreetingSkillContract:
+    """ISS-079 D-067: GreetingSkill رسمي بـ Pydantic contract.
+
+    نختبر عبر file-based source inspection لتجنُّب الاعتماد على pydantic_settings
+    وبقية app/core/* الثقيلة عند تشغيل اختبار جراحي.
+    """
+
+    def test_greeting_skill_file_exists(self):
+        path = _REPO_ROOT / "app/services/skills/greeting_skill.py"
+        assert path.exists(), "GreetingSkill file must exist (D-067)"
+
+    def test_greeting_skill_exports_required_symbols(self):
+        source = (_REPO_ROOT / "app/services/skills/greeting_skill.py").read_text(encoding="utf-8")
+        for sym in (
+            "class GreetingSkill",
+            "class GreetingSkillInput",
+            "class GreetingSkillOutput",
+            "class GreetingSkillFailure",
+        ):
+            assert sym in source, f"GreetingSkill must export {sym}"
+
+    def test_greeting_skill_has_prometheus_metrics(self):
+        source = (_REPO_ROOT / "app/services/skills/greeting_skill.py").read_text(encoding="utf-8")
+        assert "skill.greeting.invocations.total" in source, (
+            "GreetingSkill must record Prometheus metrics (CLAUDE.md §0.5)"
+        )
+
+    def test_greeting_skill_has_blockers(self):
+        source = (_REPO_ROOT / "app/services/skills/greeting_skill.py").read_text(encoding="utf-8")
+        assert "_EDUCATIONAL_BLOCKERS" in source, (
+            "GreetingSkill must have blockers preventing fastpath on educational requests"
+        )
+
+    def test_greeting_skill_in_init_exports(self):
+        source = (_REPO_ROOT / "app/services/skills/__init__.py").read_text(encoding="utf-8")
+        assert "GreetingSkill" in source
+        assert "greeting_skill" in source
+
+
+class TestPrimaryModelConfig:
+    """ISS-079 D-067: PRIMARY model تغيَّر من nemotron-nano إلى gpt-oss-20b."""
+
+    def _read(self, path: str) -> str:
+        return (_REPO_ROOT / path).read_text(encoding="utf-8")
+
+    def test_app_core_ai_config_primary(self):
+        source = self._read("app/core/ai_config.py")
+        # PRIMARY line must reference gpt-oss-20b (the post-D-067 default)
+        assert 'PRIMARY = _resolve_primary_model("openai/gpt-oss-20b:free")' in source, (
+            "app/core/ai_config.py PRIMARY must be openai/gpt-oss-20b:free (D-067)"
+        )
+
+    def test_orchestrator_ai_config_primary(self):
+        source = self._read("microservices/orchestrator_service/src/core/ai_config.py")
+        assert "GPT_OSS_20B_FREE" in source, (
+            "orchestrator ai_config must have GPT_OSS_20B_FREE constant"
+        )
+        # PRIMARY assignment must use GPT_OSS_20B_FREE
+        assert "PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_20B_FREE)" in source
+
+    def test_conversation_math_pipeline_default(self):
+        source = self._read("microservices/conversation_service/src/math_pipeline.py")
+        assert '_DEFAULT_MODEL = "openai/gpt-oss-20b:free"' in source, (
+            "math_pipeline default model must be gpt-oss-20b (D-067)"
+        )
+
+    def test_conversation_graph_default(self):
+        source = self._read("microservices/conversation_service/src/conversation_graph.py")
+        assert '_DEFAULT_MODEL = "openai/gpt-oss-20b:free"' in source, (
+            "conversation_graph default model must be gpt-oss-20b (D-067)"
+        )
+
+
+class TestNoBoxDrawingInExplanationPrompt:
+    """ISS-079 D-067: prompt الشرح يجب ألا يحوي box-drawing chars (تُربك tokenizer)."""
+
+    def test_no_box_drawing_chars_in_prompt(self):
+        text = _local_graph._EXERCISE_EXPLANATION_SYSTEM_PROMPT
+        # box drawings (U+2500-U+257F) — تُسبب garbage في النماذج المجانية
+        # لا نسمح بأكثر من 2 من هذه الـ chars (مسموح حالات نادرة في tests).
+        box_count = sum(1 for c in text if 0x2500 <= ord(c) <= 0x257F)
+        assert box_count <= 2, (
+            f"Explanation prompt has {box_count} box-drawing chars — "
+            f"these confuse free OpenRouter tokenizers and trigger 'pepepe aaaa' "
+            f"garbage. D-067 reduced from 78×6=468 to 0."
+        )
+
+    def test_prompt_is_concise(self):
+        """Prompt يجب أن يكون < 1000 chars — الـ long ones يُسببون reasoning leak."""
+        text = _local_graph._EXERCISE_EXPLANATION_SYSTEM_PROMPT
+        assert len(text) < 1000, (
+            f"Prompt is {len(text)} chars; ISS-079 showed prompts > 1500 chars cause "
+            f"nemotron-nano to return content=None. Keep short."
+        )
+
+
+class TestNoReasoningContentLeak:
+    """ISS-079 D-067: gateway لم يعد يُمرِّر reasoning كـ content."""
+
+    def test_simple_client_does_not_redirect_reasoning_to_content(self):
+        """فحص source code: لا يُسمح بسطر `delta['content'] = delta['reasoning']`."""
+        source = (_REPO_ROOT / "app/core/gateway/simple_client.py").read_text(encoding="utf-8")
+        # Old code (D-067 removed): `delta["content"] = delta["reasoning"]`
+        forbidden_patterns = [
+            'delta["content"] = delta["reasoning"]',
+            "delta['content'] = delta['reasoning']",
+            'delta.get("content") or delta.get("reasoning"',
+            "delta.get('content') or delta.get('reasoning'",
+        ]
+        for pat in forbidden_patterns:
+            assert pat not in source, (
+                f"Source contains forbidden reasoning→content leak pattern: {pat!r}. "
+                f"ISS-079 showed this caused English thinking text to bleed into "
+                f"Arabic responses ('We need to respond as a brilliant professor...')."
+            )

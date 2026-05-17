@@ -837,6 +837,49 @@ class OrchestratorClient:
             )
 
         # ─────────────────────────────────────────────────────────────────────
+        # ISS-079 (D-067 — 2026-05-17): Greeting Fast-Path Preemption
+        # كارثة المستخدم: "السلام عليكم" → رد etymological طويل بكلمات أجنبية
+        # ("hopephe pepe aaaa" / "وتُستَخدم كتعبير ترحيبي" بدلاً من رد التحية)
+        # السبب: نماذج OpenRouter المجانية تفسر التحية كسؤال علمي تحت
+        # "أجب بدقة" system prompt → etymology طويلة بدلاً من رد بسيط.
+        # الحل: ردود deterministic للتحيات الشائعة (0ms، 100% نظيف).
+        # ─────────────────────────────────────────────────────────────────────
+        try:
+            from app.services.chat.local_graph import _greeting_fastpath_response
+
+            greeting_response = _greeting_fastpath_response(question)
+        except Exception:
+            greeting_response = None
+        if greeting_response:
+            logger.info(
+                "greeting_fastpath_preempt",
+                extra={
+                    "request_id": str(uuid.uuid4()),
+                    "question_len": len(question),
+                    "reason": "matched_greeting_fastpath",
+                },
+            )
+            # ابث الرد كقطعة واحدة (التحية قصيرة بطبعها)
+            yield self._normalize_stream_event(
+                {"type": "assistant_delta", "payload": {"content": greeting_response}}
+            )
+            yield self._normalize_stream_event(
+                {"type": "assistant_final", "payload": {"content": ""}}
+            )
+            if _root_ctx:
+                with contextlib.suppress(Exception):
+                    obs.end_span(
+                        _root_ctx.span_id,
+                        status="OK",
+                        metrics={
+                            "duration_ms": (time.perf_counter() - _t0) * 1000,
+                            "fallback_path": 0.25,  # greeting = أعلى أولوية
+                            "stream_chars": float(len(greeting_response)),
+                        },
+                    )
+            return
+
+        # ─────────────────────────────────────────────────────────────────────
         # ISS-056 (D-049 — Indexed Retrieval Preemption):
         # إذا طابق السؤال تمريناً محدداً في knowledge_index، نتجاوز كل
         # شيء (orchestrator + StateGraph + fallback chain) ونبث المحتوى

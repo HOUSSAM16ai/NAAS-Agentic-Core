@@ -1,5 +1,56 @@
 # Architectural Decisions
-> Last updated: 2026-05-15 | Branch: `feat/iss-070-math-pipeline-langgraph`
+> Last updated: 2026-05-17 | Branch: `claude/fix-critical-project-failure-ixc1t`
+
+## D-067 · Catastrophic Fix Trio — Greeting Fastpath + Model Switch + Reasoning-Leak Guard (2026-05-17)
+
+**Context**: تجريب حي حقيقي على جلسة مستخدم كشف 3 كوارث متراكبة:
+1. **"السلام عليكم"** → رد etymological طويل بكلمات أجنبية
+2. **"كيف نبين أن الرباعي معين"** بعد BAC 2024 → هلوسة لغوية عن "الـ التعريف"
+3. **"اشرح لي خطوة خطوة السؤال 1 ج"** → garbage "pepepe aaaaaa"
+
+**Root causes (مُختبَرة حياً 2026-05-17)**:
+
+| # | السبب | الدليل الحي |
+|---|------|-----------|
+| 1 | local_graph.py لا يحوي greeting fastpath | orchestrator down → LLM يولِّد etymology |
+| 2 | nemotron-3-nano-30b فشل مع system prompts > 1500 chars | content_chunks=0، reasoning_chars=2932 (إنجليزي) |
+| 3 | box-drawing chars `━━━` في prompt يُربك tokenizer | 78×6=468 char نادر يُسبب degenerate output |
+| 4 | gateway يُمرِّر reasoning كـ content (ISS-069 reverse) | English thinking يصل للطالب كنص عربي |
+
+**Decision (5 طبقات إصلاح جراحي)**:
+
+1. **GreetingSkill رسمي** (`app/services/skills/greeting_skill.py`) — Skill بـ Pydantic contract + Prometheus metrics + 25 تحية + blockers صارمة (D-065). يحترم §0.5 Skills Architecture.
+
+2. **Greeting fastpath في monolith** (`local_graph._greeting_fastpath_response`) + (`orchestrator_client.chat_with_agent`) — preempt قبل أي LLM call. 0ms response.
+
+3. **استبدال PRIMARY model** عبر تجريب حي على 5 نماذج OpenRouter:
+   - ❌ nvidia/nemotron-nano-30b → content=None
+   - ❌ nvidia/nemotron-super-120b → English reasoning فقط
+   - ❌ z-ai/glm-4.5-air → content=None
+   - ✅ openai/gpt-oss-20b → 2102 chunks، 4762 chars، عربي + LaTeX نقي
+   - ✅ openai/gpt-oss-120b → الأفضل (5502 chars)
+   - **PRIMARY = openai/gpt-oss-20b:free** عبر 4 ملفات config
+
+4. **Reasoning-leak guard في gateway** (`simple_client.py`):
+   - حذف `delta["content"] = delta["reasoning"]` redirect
+   - logger.warning عند content=0 + reasoning>0 → fallback يتفعَّل
+
+5. **تبسيط `_EXERCISE_EXPLANATION_SYSTEM_PROMPT`** — حذف 78×6 box-drawing chars + ≤ 1000 char.
+
+**Invariants** (لا تُكسر بدون ADR):
+
+1. PRIMARY model لا يجب أن يكون nemotron-nano-30b أبداً.
+2. أي system prompt > 1500 chars محظور — يُسبب reasoning leak.
+3. Box-drawing chars (U+2500-257F) محظورة في prompts.
+4. Gateway لا يُمرِّر reasoning كـ content.
+5. كل تحية في `_GREETING_RESPONSES` تحتاج blocker test مقابل.
+
+**Live verification (2026-05-17)**: TEST 1: 3701 chars Arabic + LaTeX ✅ | TEST 2: is_geometric=True ✅ | TEST 3: GreetingSkill 0ms ✅
+
+**Tests**: 27 (D-067) + 28 (D-063) + 56 (orchestrator) = 111 PASS ✅
+**Lint**: clean ✅ | **Format**: clean ✅ | **Runtime truth**: matches ✅
+
+---
 
 ## D-049 · LangGraph Math Pipeline — 4-Node Specialized BAC Math Graph (2026-05-15)
 

@@ -12,6 +12,7 @@ Skill — وحدة مستقلة قابلة للقياس والاختبار وا�
 5. استقلالية (لا يستورد من Skill آخر مباشرة)
 
 الـ Skills المتوفرة حالياً:
+- `greeting_skill.GreetingSkill` — ردود التحيات الحتمية (D-067 — يحل ISS-079).
 - `bac_exercise_skill.BACExerciseSkill` — استرجاع وشرح تمارين بكالوريا الجزائر.
 - `math_skill.MathSkill` — حل وشرح أسئلة الرياضيات بـ Math Pipeline (D-061).
 """
@@ -24,6 +25,13 @@ from app.services.skills.bac_exercise_skill import (
     SkillFailure,
     SkillMode,
 )
+from app.services.skills.greeting_skill import (
+    GreetingSkill,
+    GreetingSkillFailure,
+    GreetingSkillInput,
+    GreetingSkillOutput,
+    GreetingSkillResult,
+)
 from app.services.skills.math_skill import (
     MathSkill,
     MathSkillInput,
@@ -35,6 +43,11 @@ __all__ = [
     "BACSkillExplanationOutput",
     "BACSkillInput",
     "BACSkillRetrievalOutput",
+    "GreetingSkill",
+    "GreetingSkillFailure",
+    "GreetingSkillInput",
+    "GreetingSkillOutput",
+    "GreetingSkillResult",
     "MathSkill",
     "MathSkillInput",
     "MathSkillOutput",

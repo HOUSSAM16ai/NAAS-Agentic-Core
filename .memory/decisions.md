@@ -1,5 +1,102 @@
 # Architectural Decisions
-> Last updated: 2026-05-17 | Branch: `claude/fix-critical-project-failure-ixc1t`
+> Last updated: 2026-05-17 | Branch: `claude/fix-vpn-connection-status-fj2Lm`
+
+## D-068 · Codespaces Connection Status Without VPN — Cross-Subdomain WS Fix (2026-05-17)
+
+**Context**: شكوى مستخدم 2026-05-17 — screenshot يُظهر تطبيق CogniForge على
+GitHub Codespaces بـ URL `x-3000.app.github.dev` مع شارة `offline ●` في
+الـ header و «غير متصل» في الشريط السفلي. الواجهة تظهر «متصل» **فقط** عند
+استخدام VPN. وصفُه: «الكارثة دمرت المشروع نهائيا حيث يجب إستخدام vpn لتظهر
+متصل». المسار التشغيلي الافتراضي لـ Codespaces مكسور.
+
+**Root cause (مُختبَر حياً 2026-05-17)** — كارثة على ثلاث طبقات متراكبة:
+
+| # | المكان | الخطأ |
+|---|--------|-------|
+| 1 | `frontend/app/hooks/useAgentSocket.js:getWsBase()` | يُرجع `wss://<cs>-3000.app.github.dev` كـ WS URL على Codespaces — لكن port 3000 لا يحوي `/api/chat/ws` endpoint. السطر القديم `if (port === '3000')` لا يُطلَق لأن HTTPS يجعل `window.location.port = ""`. النتيجة: WS handshake يفشل → `setState("offline")` → الواجهة تظهر «غير متصل». |
+| 2 | `app/core/settings/base.py:ALLOWED_HOSTS` | الافتراضي `["localhost","127.0.0.1","testserver","test"]`. عند اتصال مباشر من المتصفح لـ `<cs>-8000.app.github.dev`، الـ Host header = `<cs>-8000.app.github.dev` → TrustedHostMiddleware يُعيد HTTP 400 "Invalid host". |
+| 3 | `app/core/settings/base.py:BACKEND_CORS_ORIGINS` | الافتراضي `["http://localhost:3000"]` → يحجب `Origin: https://<cs>-3000.app.github.dev`. |
+
+**VPN كان workaround**: عند VPN، المستخدم يصل لـ `localhost:3000` فيدخل
+في فرع `port === '3000'` → `ws://localhost:8000/...` → يعمل. بدون VPN لا
+يوجد مسار نظيف للـ WS على Codespaces الافتراضي.
+
+**Decision — إصلاح جراحي على ثلاث طبقات دفاع**:
+
+### Layer 1: Frontend WS URL Translation
+`frontend/app/hooks/useAgentSocket.js` يُضيف `translateCloudHostnameToBackend()`:
+
+```javascript
+// <cs-name>-3000.app.github.dev          → <cs-name>-8000.app.github.dev
+// <cs-name>-5000.preview.app.github.dev  → <cs-name>-8000.preview.app.github.dev
+// 3000-workspace.gitpod.io               → 8000-workspace.gitpod.io
+```
+
+نفس الإصلاح في `frontend/public/js/legacy-app.jsx` (للمستخدمين على الـ
+legacy bundle).
+
+### Layer 2: Backend ALLOWED_HOSTS auto-expansion
+`app/core/settings/base.py` model_validator جديد:
+
+```python
+@model_validator(mode="after")
+def expand_cloud_forwarded_hosts_and_cors(self) -> "AppSettings":
+    if not self.CODESPACES:
+        return self  # zero regression for local/Docker
+    # Append "*.app.github.dev", "*.preview.app.github.dev", "*.gitpod.io"
+    # Append specific origins for CODESPACE_NAME
+    # Generate BACKEND_CORS_ORIGIN_REGEX for ANY codespace
+```
+
+TrustedHostMiddleware يدعم wildcards بصيغة `*.suffix` — يعمل out-of-the-box.
+
+### Layer 3: CORS regex passthrough
+`app/core/app_blueprint.py:build_cors_options()` يقبل `origin_regex` parameter
+ويُمرَّره لـ FastAPI's CORSMiddleware. الـ regex يطابق أي codespace forwarded
+URL — لا يحتاج إعداد لكل عميل.
+
+**Live verification (sandbox simulating Codespaces, no VPN)**:
+
+| Probe | قبل الإصلاح | بعد الإصلاح |
+|-------|-------------|--------------|
+| Frontend `my-cs-3000.app.github.dev` → WS URL | `wss://my-cs-3000.app.github.dev` (مكسور) | `wss://my-cs-8000.app.github.dev` ✅ |
+| HTTP GET `Host: my-cs-8000.app.github.dev` | HTTP 400 Invalid host | HTTP 200 ✅ |
+| RFC 6455 WS upgrade `Host: my-cs-8000.app.github.dev` | HTTP 400 | HTTP 101 Switching Protocols ✅ |
+| Wildcard for `other-cs-8000.preview.app.github.dev` | HTTP 400 | HTTP 101 ✅ |
+| Gitpod `8000-workspace.eu.gitpod.io` | HTTP 400 | HTTP 101 ✅ |
+| Attacker `evil.com` | HTTP 400 (correct) | HTTP 400 ✅ (security intact) |
+| CORS preflight from `https://my-cs-3000.app.github.dev` | حجب | `access-control-allow-origin` صحيح ✅ |
+
+**Rules (دائمة — لا تُكسر بدون ADR)**:
+
+1. أي كود ينتج backend URL من `window.location` يجب أن يستدعي
+   `translateCloudHostnameToBackend()` أو ما يكافئها (المسارات السحابية تتطلب
+   subdomain منفصل لكل port — `:port` syntax لا يعمل عبر cloud proxy).
+2. `expand_cloud_forwarded_hosts_and_cors` يُنفَّذ فقط عند `CODESPACES=true`.
+   لا تغيير على local/Docker → zero regression.
+3. الـ regex المُولَّد يطابق `*-{3000|5000|8000}.(preview\.)?app\.github\.dev`
+   و `{3000|5000|8000}-*.gitpod.io` فقط. أي origin آخر يُحجَب.
+4. CI gate `.github/workflows/iss-vpn-codespaces-gate.yml` يحرس الـ contract
+   — حذف الدوال يكسر الـ build.
+5. `BACKEND_CORS_ORIGIN_REGEX` هو الـ field الرسمي للـ regex — لا تُضِف
+   regex ثانٍ مخفي في app_blueprint بدون تحديث الـ field.
+
+**Tests**:
+- `tests/config/test_codespaces_cors_vpn.py` — 7 unit tests (settings expansion)
+- `tests/services/test_bac_exercise_skill_contract.py` — 7 BAC skill contract tests (skills evolution)
+- `scripts/test_ws_url_translation.js` — 12 frontend translation cases (CI-runnable via node)
+
+**Files changed**:
+- `frontend/app/hooks/useAgentSocket.js` (+44 lines)
+- `frontend/public/js/legacy-app.jsx` (+27 lines)
+- `app/core/settings/base.py` (+64 lines — new validator + new field)
+- `app/core/app_blueprint.py` (+8 lines — origin_regex parameter)
+- `tests/config/test_codespaces_cors_vpn.py` (NEW)
+- `tests/services/test_bac_exercise_skill_contract.py` (NEW)
+- `scripts/test_ws_url_translation.js` (NEW)
+- `.github/workflows/iss-vpn-codespaces-gate.yml` (NEW)
+
+---
 
 ## D-067 · Catastrophic Fix Trio — Greeting Fastpath + Model Switch + Reasoning-Leak Guard (2026-05-17)
 

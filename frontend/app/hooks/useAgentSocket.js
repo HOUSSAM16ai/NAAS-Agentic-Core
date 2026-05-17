@@ -13,6 +13,45 @@ const resolveWebSocketProtocol = (protocol) => {
     return 'ws:';
 };
 
+// ISS-MISC-VPN (2026-05-17, D-068): On cloud-forwarded environments (GitHub
+// Codespaces, Gitpod, Ona) the frontend is served at one forwarded port
+// (3000 or 5000) and the backend at another (8000). Each port gets its OWN
+// public subdomain — you CANNOT reach the backend by appending ":8000" to
+// the frontend hostname (the cloud proxy doesn't accept that syntax).
+//
+// Without this translation, the WS URL resolved to the frontend hostname,
+// which has no /api/chat/ws endpoint → WS handshake failed → status stuck on
+// "offline" (غير متصل). Users worked around it by tunneling through a VPN
+// that exposed localhost directly, which is why "متصل" only appeared with
+// VPN active. This helper translates the frontend hostname → backend
+// hostname so the WS connects on the public path, no VPN required.
+export const BACKEND_PORT = '8000';
+
+export const translateCloudHostnameToBackend = (hostname) => {
+    if (!hostname || typeof hostname !== 'string') return null;
+
+    // GitHub Codespaces:
+    //   <codespace-name>-<port>.app.github.dev
+    //   <codespace-name>-<port>.preview.app.github.dev
+    // (The `-<port>` suffix is the only thing the proxy uses to route — name
+    // can itself contain hyphens, so we anchor the port-domain tail.)
+    const codespaces = hostname.match(
+        /^(.+)-(\d+)(\.(?:preview\.)?app\.github\.dev)$/
+    );
+    if (codespaces) {
+        const [, name, , tail] = codespaces;
+        return `${name}-${BACKEND_PORT}${tail}`;
+    }
+
+    // Gitpod / Ona: <port>-<workspace-id>.<region>.gitpod.io
+    const gitpod = hostname.match(/^(\d+)-([\w.-]+\.gitpod\.io)$/);
+    if (gitpod) {
+        return `${BACKEND_PORT}-${gitpod[2]}`;
+    }
+
+    return null;
+};
+
 const getWsBase = () => {
     if (!isBrowser) return '';
     const configuredOrigin = WS_ORIGIN || API_ORIGIN;
@@ -36,10 +75,17 @@ const getWsBase = () => {
     const hostname = window.location.hostname;
     const port = window.location.port;
 
-    // Smart fallback: if we are on port 3000 (standard Next.js), assume backend is on port 8000
-    // This fixes local production builds or direct access bypassing Nginx where backend is on default port
-    if (port === '3000') {
-         return `${protocol}://${hostname}:8000`;
+    // Cloud-forwarded environments: every port gets its own subdomain.
+    // Translate the frontend hostname → backend hostname (port :8000 is on a
+    // separate Codespaces/Gitpod URL, NOT reachable via ":8000" suffix).
+    const cloudBackendHost = translateCloudHostnameToBackend(hostname);
+    if (cloudBackendHost) {
+        return `${protocol}://${cloudBackendHost}`;
+    }
+
+    // Local development on standard Next.js ports → backend on 8000 same host.
+    if (port === '3000' || port === '5000') {
+         return `${protocol}://${hostname}:${BACKEND_PORT}`;
     }
 
     const host = window.location.host;

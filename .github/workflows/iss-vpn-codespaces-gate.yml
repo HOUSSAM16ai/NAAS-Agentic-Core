@@ -1,0 +1,104 @@
+name: ISS-MISC-VPN — Codespaces Connection Status Gate
+
+# Prevents the regression where users on GitHub Codespaces saw the chat UI
+# stuck on "غير متصل" (offline) unless they tunneled through a VPN. See:
+#   - CLAUDE.md §6.46 → §6.47 for the ISS-VPN forensic breakdown
+#   - .memory/decisions.md D-068 for the architectural decision
+#
+# Two independent fixes, both must stay healthy:
+#   1. Frontend: useAgentSocket.js translates `<cs>-3000.app.github.dev`
+#      → `<cs>-8000.app.github.dev` for the WebSocket URL.
+#   2. Backend: AppSettings expands ALLOWED_HOSTS / BACKEND_CORS_ORIGINS to
+#      accept Codespaces-forwarded subdomains and produces a CORS regex.
+
+on:
+  push:
+    paths:
+      - "frontend/app/hooks/useAgentSocket.js"
+      - "frontend/public/js/legacy-app.jsx"
+      - "app/core/settings/base.py"
+      - "app/core/app_blueprint.py"
+      - "scripts/test_ws_url_translation.js"
+      - "tests/config/test_codespaces_cors_vpn.py"
+      - ".github/workflows/iss-vpn-codespaces-gate.yml"
+  pull_request:
+    paths:
+      - "frontend/app/hooks/useAgentSocket.js"
+      - "frontend/public/js/legacy-app.jsx"
+      - "app/core/settings/base.py"
+      - "app/core/app_blueprint.py"
+      - "scripts/test_ws_url_translation.js"
+      - "tests/config/test_codespaces_cors_vpn.py"
+      - ".github/workflows/iss-vpn-codespaces-gate.yml"
+
+concurrency:
+  group: iss-vpn-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-ws-url-translation:
+    name: Frontend — WS URL translation (Codespaces → backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run WS URL translation regression test
+        run: node scripts/test_ws_url_translation.js
+
+      - name: Sanity — translateCloudHostnameToBackend is exported
+        run: |
+          if ! grep -q "export const translateCloudHostnameToBackend" frontend/app/hooks/useAgentSocket.js; then
+            echo "❌ translateCloudHostnameToBackend is no longer exported." >&2
+            echo "   The Codespaces VPN fix depends on this. Restore it before merging." >&2
+            exit 1
+          fi
+
+      - name: Sanity — legacy-app.jsx carries the same translation
+        run: |
+          if ! grep -q "translateCloudHostnameToBackend_legacy" frontend/public/js/legacy-app.jsx; then
+            echo "❌ legacy-app.jsx no longer has the cloud-hostname translation." >&2
+            echo "   Without it, users hitting the legacy bundle still see 'offline' on Codespaces." >&2
+            exit 1
+          fi
+
+  backend-cors-codespaces:
+    name: Backend — CORS + ALLOWED_HOSTS Codespaces expansion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install minimal deps
+        run: pip install fastapi pydantic pydantic-settings sqlalchemy aiosqlite pytest
+
+      - name: Pytest — Codespaces CORS regression suite
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          # Sidestep project conftest (which loads optional heavy deps).
+          cp tests/config/test_codespaces_cors_vpn.py /tmp/test_cors_standalone.py
+          cd /tmp && python -m pytest test_cors_standalone.py -v -p no:cacheprovider
+
+      - name: Sanity — expand_cloud_forwarded_hosts_and_cors validator exists
+        run: |
+          if ! grep -q "def expand_cloud_forwarded_hosts_and_cors" app/core/settings/base.py; then
+            echo "❌ The Codespaces CORS validator has been removed." >&2
+            echo "   This brings back the 'offline-without-VPN' catastrophe (ISS-MISC-VPN)." >&2
+            exit 1
+          fi
+
+      - name: Sanity — build_cors_options honors origin_regex
+        run: |
+          if ! grep -q "allow_origin_regex" app/core/app_blueprint.py; then
+            echo "❌ build_cors_options no longer passes allow_origin_regex through." >&2
+            echo "   The Codespaces CORS regex would be ignored." >&2
+            exit 1
+          fi

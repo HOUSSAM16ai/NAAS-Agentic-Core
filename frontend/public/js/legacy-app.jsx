@@ -65,12 +65,43 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         };
 
 
+        // ISS-MISC-VPN (D-068): Cloud-forwarded environments (Codespaces, Gitpod)
+        // serve the backend on a SEPARATE forwarded URL — appending ":8000" to
+        // the frontend hostname does NOT reach the backend (cloud proxy rejects).
+        // The codespaces backend lives at <name>-8000.app.github.dev, NOT at
+        // <name>-3000.app.github.dev:8000. This translation matches useAgentSocket.js.
+        const BACKEND_PORT_LEGACY = '8000';
+
+        const translateCloudHostnameToBackend_legacy = (hostname) => {
+            if (!hostname || typeof hostname !== 'string') return null;
+            const codespaces = hostname.match(
+                /^(.+)-(\d+)(\.(?:preview\.)?app\.github\.dev)$/
+            );
+            if (codespaces) {
+                const [, name, , tail] = codespaces;
+                return `${name}-${BACKEND_PORT_LEGACY}${tail}`;
+            }
+            const gitpod = hostname.match(/^(\d+)-([\w.-]+\.gitpod\.io)$/);
+            if (gitpod) {
+                return `${BACKEND_PORT_LEGACY}-${gitpod[2]}`;
+            }
+            return null;
+        };
+
         const API_ORIGIN = (() => {
             const protocol = window.location.protocol;
             const hostname = window.location.hostname;
             const port = window.location.port;
-            if (port === '3000') {
-                return `${protocol}//${hostname}:8000`;
+
+            // Cloud-forwarded environments need a SEPARATE backend subdomain.
+            const cloudBackendHost = translateCloudHostnameToBackend_legacy(hostname);
+            if (cloudBackendHost) {
+                return `${protocol}//${cloudBackendHost}`;
+            }
+
+            // Local dev on standard Next.js ports → backend on 8000.
+            if (port === '3000' || port === '5000') {
+                return `${protocol}//${hostname}:${BACKEND_PORT_LEGACY}`;
             }
             return window.location.origin;
         })();

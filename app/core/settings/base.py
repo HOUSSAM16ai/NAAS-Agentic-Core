@@ -145,6 +145,14 @@ class AppSettings(BaseServiceSettings):
 
     # CORS & Hosts
     BACKEND_CORS_ORIGINS: list[str] = Field(default=["http://localhost:3000"])
+    BACKEND_CORS_ORIGIN_REGEX: str | None = Field(
+        default=None,
+        description=(
+            "Optional regex matching allowed CORS origins. Auto-populated for "
+            "cloud-forwarded environments (Codespaces, Gitpod) so the browser "
+            "can connect from the public preview URL without manual setup."
+        ),
+    )
     ALLOWED_HOSTS: list[str] = Field(default=["localhost", "127.0.0.1", "testserver", "test"])
 
     # Infra
@@ -279,6 +287,70 @@ class AppSettings(BaseServiceSettings):
             if os.getenv(env_name):
                 continue
             setattr(self, attr_name, f"http://localhost:{local_ports[attr_name]}")
+
+        return self
+
+    @model_validator(mode="after")
+    def expand_cloud_forwarded_hosts_and_cors(self) -> "AppSettings":
+        """
+        ISS-MISC-VPN (D-068): Codespaces / Gitpod / Ona إصلاح.
+
+        على البيئات السحابية المُوجِّهة (Codespaces, Gitpod), كل منفذ يحصل
+        على subdomain مستقل ويتم تمرير Host header بنفس قيمة الـ subdomain
+        إلى uvicorn. الإعدادات الافتراضية:
+          - ALLOWED_HOSTS = [localhost, 127.0.0.1, testserver, test]
+          - BACKEND_CORS_ORIGINS = [http://localhost:3000]
+        ترفض كل اتصال خارجي ⇒ TrustedHostMiddleware يُعيد "Invalid host" و
+        CORS يحجب الـ Origin → الواجهة تظهر "غير متصل" ما لم يستعمل المستخدم
+        VPN يتجاوز الـ Codespaces proxy.
+
+        هذا الـ validator يضيف تلقائياً:
+          - wildcards إلى ALLOWED_HOSTS (TrustedHostMiddleware يدعم "*.domain")
+          - الأصل المحدد للـ frontend إلى BACKEND_CORS_ORIGINS
+          - regex CORS يطابق أي port forwarded (3000/5000) على نفس النطاق
+
+        لا يفعل شيئاً إذا CODESPACES=false → بدون regression على local/Docker.
+        """
+        if not self.CODESPACES:
+            return self
+
+        forwarding_domain = (
+            os.getenv("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
+            or self.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
+            or "app.github.dev"
+        ).strip().lower().lstrip("*").lstrip(".")
+
+        codespace_name = (
+            os.getenv("CODESPACE_NAME") or self.CODESPACE_NAME or ""
+        ).strip().lower()
+
+        # TrustedHostMiddleware يدعم wildcards بصيغة "*.suffix"
+        wildcard_hosts = {
+            f"*.{forwarding_domain}",
+            "*.app.github.dev",
+            "*.preview.app.github.dev",
+            "*.gitpod.io",
+        }
+        for host in wildcard_hosts:
+            if host not in self.ALLOWED_HOSTS:
+                self.ALLOWED_HOSTS.append(host)
+
+        # CORS: الأصول المحددة المتوقعة + regex يغطي أي codespace جديد
+        if codespace_name and forwarding_domain:
+            for port in ("3000", "5000", "8000"):
+                origin = f"https://{codespace_name}-{port}.{forwarding_domain}"
+                if origin not in self.BACKEND_CORS_ORIGINS:
+                    self.BACKEND_CORS_ORIGINS.append(origin)
+
+        if not self.BACKEND_CORS_ORIGIN_REGEX:
+            # يطابق: https://<أي-اسم>-<port>.<أي-نطاق-app.github.dev-أو-preview>
+            # وكذلك Gitpod: https://<port>-<workspace>.<region>.gitpod.io
+            self.BACKEND_CORS_ORIGIN_REGEX = (
+                r"^https://("
+                r"[\w.-]+-(?:3000|5000|8000)\.(?:preview\.)?app\.github\.dev"
+                r"|(?:3000|5000|8000)-[\w.-]+\.gitpod\.io"
+                r")$"
+            )
 
         return self
 

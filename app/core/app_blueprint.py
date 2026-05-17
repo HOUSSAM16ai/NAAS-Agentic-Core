@@ -162,7 +162,10 @@ def build_middleware_stack(settings: AppSettings) -> list[MiddlewareSpec]:
     Returns:
         list[MiddlewareSpec]: قائمة المواصفات.
     """
-    cors_options = build_cors_options(settings.BACKEND_CORS_ORIGINS)
+    cors_options = build_cors_options(
+        settings.BACKEND_CORS_ORIGINS,
+        origin_regex=getattr(settings, "BACKEND_CORS_ORIGIN_REGEX", None),
+    )
 
     stack: list[MiddlewareSpec] = [
         (TrustedHostMiddleware, {"allowed_hosts": settings.ALLOWED_HOSTS}),
@@ -179,12 +182,17 @@ def build_middleware_stack(settings: AppSettings) -> list[MiddlewareSpec]:
     return stack
 
 
-def build_cors_options(origins: list[str]) -> dict[str, object]:
+def build_cors_options(
+    origins: list[str],
+    *,
+    origin_regex: str | None = None,
+) -> dict[str, object]:
     """
     بناء خيارات CORS بشكل واضح ومتسق.
 
     Args:
-        origins: قائمة الأصول المسموح بها.
+        origins: قائمة الأصول المسموح بها (exact match).
+        origin_regex: نمط regex اختياري لمطابقة الأصول (Codespaces / Gitpod).
 
     Returns:
         dict[str, object]: قاموس خيارات CORS الجاهز للاستخدام.
@@ -192,6 +200,8 @@ def build_cors_options(origins: list[str]) -> dict[str, object]:
     allow_origins = origins or ["*"]
     options = dict(BASE_CORS_OPTIONS)
     options["allow_origins"] = allow_origins
+    if origin_regex:
+        options["allow_origin_regex"] = origin_regex
     return options
 
 

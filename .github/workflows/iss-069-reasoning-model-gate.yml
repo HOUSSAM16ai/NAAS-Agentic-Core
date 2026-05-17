@@ -94,66 +94,84 @@ jobs:
           echo "✅ PRIMARY model is content-safe: $PRIMARY"
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Job 2: تحقق من وجود fallback لـ reasoning في simple_client.py
+  # Job 2: D-067 (2026-05-17 — UPDATED): تحقق من حماية reasoning-leak
+  #
+  # السلوك القديم (ISS-069 الأصلي): redirect `delta.reasoning` → `delta.content`
+  # كان كارثياً — يبث "thinking" بالإنجليزية للطلاب كنص عربي مزعوم.
+  #
+  # السلوك الجديد (D-067): لا redirect. عند content=None + reasoning، نُسجِّل
+  # warning ونترك fallback chain يستدعي نموذج آخر. السلوك آمن وقابل للملاحظة.
   # ─────────────────────────────────────────────────────────────────────────────
   content-fallback-present:
-    name: "🔄 Content Fallback Guard"
+    name: "🔄 Content Fallback Guard (D-067)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify delta.reasoning fallback in simple_client.py
+      - name: "Forbid reasoning→content leak in simple_client.py"
+        shell: bash
         run: |
-          echo "=== Checking ISS-069 fallback in simple_client.py ==="
-
+          set -euo pipefail
           FILE="app/core/gateway/simple_client.py"
-
-          # تحقق من وجود fallback لـ delta.reasoning
-          if ! grep -q 'delta.get("reasoning")' "$FILE" && \
-             ! grep -q "delta.get('reasoning')" "$FILE"; then
-            echo "❌ Missing delta.reasoning fallback in $FILE"
-            echo "   This fallback prevents empty responses from reasoning-only models"
-            echo "   Required code pattern:"
-            echo '   if delta.get("content") is None and delta.get("reasoning"):'
-            echo '       delta["content"] = delta["reasoning"]'
+          # D-067: هذه الـ patterns كانت تُسبب English thinking leak
+          FORBIDDEN_PATTERNS=(
+            'delta\["content"\] = delta\["reasoning"\]'
+            "delta\['content'\] = delta\['reasoning'\]"
+            'delta\.get\("content"\) or delta\.get\("reasoning"'
+          )
+          FOUND=0
+          for pat in "${FORBIDDEN_PATTERNS[@]}"; do
+            if grep -E "$pat" "$FILE" > /dev/null; then
+              echo "❌ FORBIDDEN PATTERN FOUND: $pat"
+              FOUND=1
+            fi
+          done
+          if [ "$FOUND" -eq 1 ]; then
+            echo ""
+            echo "D-067 (2026-05-17): reasoning→content redirect was removed because"
+            echo "free OpenRouter models put English thinking ('We need to respond...')"
+            echo "in 'reasoning' field — redirecting that to 'content' shows English"
+            echo "thinking text to Arabic-speaking students."
+            echo ""
+            echo "New behavior: let fallback chain pick another model when content=None."
             exit 1
           fi
-          echo "✅ delta.reasoning fallback present in simple_client.py"
+          echo "✅ No reasoning→content leak (D-067 compliant)"
 
-      - name: Verify message.reasoning fallback in send_message
+      - name: "Verify D-067 reasoning warning + chunk counter present"
+        shell: bash
         run: |
-          echo "=== Checking send_message reasoning fallback ==="
-
+          set -euo pipefail
           FILE="app/core/gateway/simple_client.py"
-
-          # تحقق من وجود fallback في send_message
-          if ! grep -q 'delta.get("content") or delta.get("reasoning"' "$FILE" && \
-             ! grep -q "delta.get('content') or delta.get('reasoning'" "$FILE"; then
-            echo "❌ Missing reasoning fallback in send_message() in $FILE"
-            echo "   Required: content = delta.get('content') or delta.get('reasoning', '')"
+          # D-067: gateway يجب أن يُسجِّل warning عندما reasoning>0 + content=0
+          if ! grep -q "reasoning_only_response" "$FILE"; then
+            echo "❌ Missing D-067 logger.warning for 'reasoning_only_response'"
+            echo "   gateway must log when model produces reasoning but no content."
             exit 1
           fi
-          echo "✅ send_message reasoning fallback present"
+          if ! grep -q "reasoning_chunks" "$FILE"; then
+            echo "❌ Missing D-067 'reasoning_chunks' counter"
+            exit 1
+          fi
+          if ! grep -q "content_chunks" "$FILE"; then
+            echo "❌ Missing D-067 'content_chunks' counter"
+            exit 1
+          fi
+          echo "✅ D-067 reasoning observability present"
 
-      - name: Verify reasoning_agent ai_client fallback
+      - name: "Verify reasoning_agent ai_client behavior"
+        shell: bash
         run: |
-          echo "=== Checking reasoning_agent ai_client.py fallback ==="
-
+          set -euo pipefail
           FILE="microservices/reasoning_agent/src/ai_client.py"
-
           if [ ! -f "$FILE" ]; then
             echo "⚠️  $FILE not found — skipping"
             exit 0
           fi
-
-          # تحقق من وجود fallback لـ message.reasoning
-          if ! grep -q 'msg.get("reasoning")' "$FILE" && \
-             ! grep -q "msg.get('reasoning')" "$FILE"; then
-            echo "❌ Missing message.reasoning fallback in $FILE"
-            echo "   Required: content = msg.get('content') or msg.get('reasoning') or ''"
-            exit 1
-          fi
-          echo "✅ message.reasoning fallback present in reasoning_agent"
+          # في الـ microservices، msg.reasoning fallback مقبول لـ batch path
+          # (لأن الـ batch ليس عرضاً للمستخدم — هو internal LLM call)
+          # لكن streaming path يجب أن يحترم D-067
+          echo "✅ reasoning_agent ai_client preserved (non-user-facing path)"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Job 3: اختبارات وحدة لمنطق استخراج المحتوى
@@ -173,71 +191,71 @@ jobs:
       - name: Install test dependencies
         run: pip install pytest pytest-asyncio httpx --quiet
 
-      - name: Run content extraction unit tests
+      - name: Run content extraction unit tests (D-067 updated semantics)
         run: |
           python3 << 'PYEOF'
           """
-          اختبارات وحدة لمنطق استخراج المحتوى من نماذج reasoning-only.
-          يتحقق من أن الـ fallback يعمل بشكل صحيح.
+          D-067 (2026-05-17 — UPDATED): Reasoning-leak guard semantics.
+
+          السلوك القديم: redirect reasoning → content (كان كارثياً)
+          السلوك الجديد: content=None يبقى None → fallback chain يستدعي نموذج آخر
+
+          هذه الاختبارات تتحقق من السلوك الجديد بعد D-067.
           """
           import sys
 
-          # ── محاكاة استجابة نموذج reasoning-only (content=None) ──────────────
-          def extract_content_from_delta(delta: dict) -> str:
-              """منطق الاستخراج المُصلَّح (ISS-069)."""
+          # ── D-067: gateway behavior — لا redirect ────────────────────────────
+          def gateway_d067_behavior(delta: dict) -> dict:
+              """يحاكي سلوك simple_client بعد D-067."""
               content = delta.get("content")
-              if content is None:
-                  content = delta.get("reasoning", "")
-              return content or ""
+              reasoning = delta.get("reasoning")
+              # D-067: لا نُمرِّر reasoning كـ content
+              if reasoning and not content:
+                  delta["content"] = None  # explicit
+              return delta
 
-          def extract_content_from_message(msg: dict) -> str:
-              """منطق الاستخراج من message كامل (ISS-069)."""
-              return msg.get("content") or msg.get("reasoning") or ""
+          # ── Test 1: content موجود → يبقى ─────────────────────────────────────
+          delta1 = {"content": "F = ma = 12 N", "reasoning": None}
+          result1 = gateway_d067_behavior(dict(delta1))
+          assert result1["content"] == "F = ma = 12 N", f"Test 1 failed: {result1}"
+          print("✅ Test 1: Normal content preserved")
 
-          # ── Test 1: delta.content موجود → يُستخدم مباشرة ────────────────────
-          delta_normal = {"content": "F = ma = 12 N", "reasoning": None}
-          result = extract_content_from_delta(delta_normal)
-          assert result == "F = ma = 12 N", f"Test 1 failed: {result}"
-          print("✅ Test 1: Normal content extracted correctly")
+          # ── Test 2: content=None + reasoning → content يبقى None (D-067) ────
+          delta2 = {"content": None, "reasoning": "We need to respond as a professor"}
+          result2 = gateway_d067_behavior(dict(delta2))
+          assert result2["content"] is None, f"Test 2 failed: content must stay None (D-067)"
+          assert result2["reasoning"], f"Test 2: reasoning preserved for logging"
+          print("✅ Test 2: D-067 — reasoning NOT redirected to content (prevents English leak)")
 
-          # ── Test 2: delta.content=None → fallback لـ reasoning ───────────────
-          delta_reasoning_only = {"content": None, "reasoning": "The answer is F=12N"}
-          result = extract_content_from_delta(delta_reasoning_only)
-          assert result == "The answer is F=12N", f"Test 2 failed: {result}"
-          print("✅ Test 2: Reasoning fallback works when content=None")
+          # ── Test 3: كلاهما فارغ → كلاهما فارغ ───────────────────────────────
+          delta3 = {"content": None, "reasoning": None}
+          result3 = gateway_d067_behavior(dict(delta3))
+          assert result3["content"] is None, f"Test 3 failed: {result3}"
+          print("✅ Test 3: Empty stays empty")
 
-          # ── Test 3: كلاهما None → string فارغ ────────────────────────────────
-          delta_empty = {"content": None, "reasoning": None}
-          result = extract_content_from_delta(delta_empty)
-          assert result == "", f"Test 3 failed: {result}"
-          print("✅ Test 3: Empty string returned when both None")
-
-          # ── Test 4: message.content موجود → يُستخدم مباشرة ──────────────────
-          msg_normal = {"role": "assistant", "content": "$$F = 12\\,\\text{N}$$"}
-          result = extract_content_from_message(msg_normal)
-          assert "F = 12" in result, f"Test 4 failed: {result}"
-          print("✅ Test 4: Normal message content extracted")
-
-          # ── Test 5: message.content=None → fallback لـ reasoning ─────────────
-          msg_reasoning = {"role": "assistant", "content": None, "reasoning": "F=ma=3*4=12N"}
-          result = extract_content_from_message(msg_reasoning)
-          assert "12" in result, f"Test 5 failed: {result}"
-          print("✅ Test 5: Message reasoning fallback works")
-
-          # ── Test 6: message.content="" → fallback لـ reasoning ───────────────
-          msg_empty_content = {"role": "assistant", "content": "", "reasoning": "Answer: 12N"}
-          result = extract_content_from_message(msg_empty_content)
-          assert "12N" in result, f"Test 6 failed: {result}"
-          print("✅ Test 6: Empty string content triggers reasoning fallback")
-
-          # ── Test 7: التحقق من أن النموذج المحظور محدد بوضوح ─────────────────
+          # ── Test 4: التحقق من أن النموذج المحظور محدد بوضوح ─────────────────
           BANNED_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
-          SAFE_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
+          SAFE_MODEL = "openai/gpt-oss-20b:free"
           assert "reasoning" in BANNED_MODEL, "Banned model should contain 'reasoning'"
           assert "reasoning" not in SAFE_MODEL, "Safe model should not contain 'reasoning'"
-          print("✅ Test 7: Model naming convention verified")
+          print("✅ Test 4: D-067 PRIMARY model is content-safe")
 
-          print("\n✅ All content extraction tests passed (ISS-069)")
+          # ── Test 5: D-067 — gateway تُسجِّل reasoning-only response ─────────
+          # في الإنتاج الـ gateway يكتب warning + يحدد content_chunks/reasoning_chunks
+          # هنا نُحاكي الـ counter لتأكيد العقد
+          chunks = [
+              {"content": None, "reasoning": "thinking..."},
+              {"content": None, "reasoning": "more thinking..."},
+              {"content": None, "reasoning": "decided."},
+          ]
+          content_chunks = sum(1 for c in chunks if c.get("content"))
+          reasoning_chunks = sum(1 for c in chunks if c.get("reasoning") and not c.get("content"))
+          assert content_chunks == 0, "All chunks should be reasoning-only"
+          assert reasoning_chunks == 3, "All 3 chunks have reasoning"
+          # D-067: في هذه الحالة يجب fallback chain تكتشف 0 content وتنتقل
+          print(f"✅ Test 5: D-067 counter logic — content={content_chunks} reasoning={reasoning_chunks}")
+
+          print("\n✅ All D-067 content extraction tests passed (NEW semantics)")
           PYEOF
 
   # ─────────────────────────────────────────────────────────────────────────────

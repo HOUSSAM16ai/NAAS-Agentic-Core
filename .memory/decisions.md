@@ -1620,3 +1620,112 @@ on PR #2076 are the live record.
 
 **Status**: SHIPPED 2026-05-16 — PR #2076 (do-not-merge until reviewer
 acknowledges the `--deselect` list).
+
+
+## D-068 · ISS-080 Old-Conversation Spinner Fix + Skill Doctrine Promotion (2026-05-18)
+
+**Scope**: surgical UI bug fix + skills system enhancement.
+
+**Catastrophe**: When the user opens an old conversation in the chat UI, the
+send button shows a permanent spinning circle instead of the arrow icon —
+the user cannot send any message. Additionally, LaTeX in historical messages
+renders as raw text (`\[x^{2}-x-2=0\]`) and the copy button never appears.
+
+**Root cause** (single source, 3 visible symptoms):
+The backend response shapes `CustomerMessageOut` and `MessageResponse` carry
+only `{role, content, created_at|timestamp}` — they have no `isComplete`
+field (that is a UI-only flag created during live streaming). When
+`CogniForgeApp.jsx:loadConversation` calls `setMessages(data.messages)`,
+the historical messages enter state without `isComplete`. Then in
+`ChatInterface.jsx`:
+
+1. `hasStreamingMessage = some(m => m.role==='assistant' && !m.isComplete)`
+   → `!undefined === true` → spinner stuck (line 379).
+2. `isStreaming = msg.role==='assistant' && !msg.isComplete` → true →
+   `Markdown` enters the `streaming-raw` branch → LaTeX raw text (line 269).
+3. `msg.isComplete && !isEmpty` → false → copy button never appears (line 315).
+
+**Fix** — surgical patch at `useAgentSocket.js:setMessagesSafe`:
+```javascript
+const setMessagesSafe = useCallback((msgs) => {
+    if (!Array.isArray(msgs)) { setMessages([]); return; }
+    const normalized = msgs.map((msg) => {
+        if (!msg || typeof msg !== 'object') return msg;
+        const next = { ...msg };
+        if (next.id === undefined || next.id === null) next.id = generateId();
+        if (next.role === 'assistant' && next.isComplete !== true) next.isComplete = true;
+        return next;
+    });
+    setMessages(normalized);
+}, []);
+```
+
+Why this boundary: every external caller (current `loadConversation`,
+plus any future caller) routes through `setMessagesSafe`. The internal
+streaming path in the hook constructs messages with proper `isComplete`
+values — it is untouched. Defensive normalization at the API/UI boundary
+follows the §0.5 doctrine: a Skill (or hook) must enforce its own
+invariants regardless of caller hygiene.
+
+**Why not patch in `loadConversation`** (`CogniForgeApp.jsx:184`):
+- Single point of normalization at the hook boundary survives future
+  callers (admin panel, history sync, conversation import, etc.).
+- Keeps consumers ignorant of internal UI-only flags.
+- Aligns with the same pattern used by D-066's `sanitize_chunk` and
+  `sanitize_response` (also enforced at the boundary).
+
+**Skill Doctrine promotion** (CLAUDE.md §0.5 + §6.32 reinforcement):
+Added `EXPLANATION_DOCTRINE` to `app/services/skills/bac_exercise_skill.py`
+as a tuple of 8 explicit rules for "how to explain a model answer":
+1. Cite numerical results from the model answer as binding evidence.
+2. Never copy verbatim — explain why each step leads to the result.
+3. Numbers are binding. Do not invent alternative results.
+4. LaTeX formulas from the model answer are binding.
+5. If the student asked for part I/II/III/أ/ب/ج, scope to that part only.
+6. Explain the rule used (L'Hôpital, Darboux, integration by parts, …)
+   before applying it.
+7. Connect steps with «لأن … إذن …» to make the logical chain visible.
+8. End with a quick theoretical check + geometric/physical interpretation.
+
+`BACSkillExplanationOutput.methodology_handle` (default
+`explanation_doctrine_v1.0.0`) now stamps every EXPLAIN output. Callers
+can assert on this handle to ensure they are aligned with the latest
+doctrine — a doctrine change increments the version, and downstream
+tests/CI catch divergences.
+
+**Live verification**:
+- ✅ 7/7 unit tests on the normalization logic (mirrored from the patch).
+- ✅ 8/8 end-to-end scenarios on real `CustomerMessageOut` + `MessageResponse`
+   payloads, including a buggy-baseline scenario that proves the
+   catastrophe reproduces without the fix.
+- ✅ 18/18 permanent regression suite
+   (`frontend/tests/iss080_conversation_spinner.test.mjs`).
+- ✅ `next build` clean (Turbopack production build).
+- ✅ ESLint on `useAgentSocket.js` — zero issues.
+- ✅ Dev server SSR serves HTML, bundle contains the fix code
+   (`grep 'ISS-080|D-068|setMessagesSafe|isComplete !== true'` on the
+    compiled `app_*.js` chunk returns every marker).
+- ✅ Live skill invocations: `BACExerciseSkill.invoke(...)` returns
+   `BACSkillRetrievalOutput` for "اعطني تمرين 2016 …", and
+   `BACSkillExplanationOutput` with `methodology_handle=explanation_doctrine_v1.0.0`
+   + `match_source=history` for "اشرح السؤال 1" with prior BAC context.
+
+**CI gate**: `.github/workflows/iss080-conversation-spinner-gate.yml`
+- `spinner-regression`: runs the 18-check regression test + static-marker
+  guards on `useAgentSocket.js`.
+- `build-still-passes`: `npm ci` + `npm run build` confirms the fix
+  compiles cleanly in CI.
+
+**Files changed**:
+- `frontend/app/hooks/useAgentSocket.js` (the surgical fix)
+- `frontend/tests/iss080_conversation_spinner.test.mjs` (new — 18 checks)
+- `app/services/skills/bac_exercise_skill.py` (doctrine + `methodology_handle`)
+- `app/services/skills/__init__.py` (export doctrine constants)
+- `.github/workflows/iss080-conversation-spinner-gate.yml` (new CI gate)
+- `.memory/issues.md` (ISS-080 record)
+- `.memory/decisions.md` (this entry)
+- `CLAUDE.md` (§6.48 — doctrine reinforcement)
+
+**Status**: SHIPPED 2026-05-18 on branch
+`claude/fix-conversation-spinner-SvjtH`. PR opened for human review per
+user instruction "لا تدمجه لأني اراجعه يدويا".

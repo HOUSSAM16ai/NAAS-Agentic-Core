@@ -329,6 +329,145 @@ const MessageBubble = memo(({ msg, idx }) => {
 MessageBubble.displayName = 'MessageBubble';
 
 // ─── المكوّن الرئيسي ──────────────────────────────────────────────────────────
+// ISS-MISC-VPN (D-068 hardening 4): visible offline diagnostic.
+//
+// Catastrophe pattern: the user keeps testing on FRESH Codespaces created
+// from `main` (which does not yet contain the fix). The chat UI shows
+// "غير متصل" but the phone has no DevTools, so they can't see WHY.
+// This banner appears ONLY when WS is offline and proves at a glance:
+//   - whether `frontend/server.js` (the WS proxy) is running on this
+//     Codespace (`/cogniforge-proxy-status` returns JSON ⇔ fix active)
+//   - the exact WS URLs the frontend is attempting
+//   - a one-click retry
+//
+// If proxy is up but WS still offline → backend down / port 8000 blocked.
+// If proxy is down → user's Codespace is on `main` or `next dev` is stale
+// → they need to checkout the fix branch and restart the supervisor.
+const OfflineDiagnosticBanner = () => {
+    const [proxyStatus, setProxyStatus] = useState(null);
+    const [wsUrls, setWsUrls] = useState([]);
+    const [now, setNow] = useState(0);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        // Re-resolve candidate URLs every time the banner remounts.
+        try {
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const hostname = window.location.hostname;
+            const port = window.location.port;
+            const candidates = [];
+            const cloudRe = /-\d+\.(?:preview\.)?app\.github\.dev$/;
+            const gitpodRe = /^\d+-[\w.-]+\.gitpod\.io$/;
+            if (cloudRe.test(hostname) || gitpodRe.test(hostname)) {
+                candidates.push(`${protocol}://${window.location.host}/api/chat/ws`);
+                // Cross-port fallback
+                const cs = hostname.match(/^(.+)-(\d+)(\.(?:preview\.)?app\.github\.dev)$/);
+                if (cs) {
+                    candidates.push(`${protocol}://${cs[1]}-8000${cs[3]}/api/chat/ws`);
+                }
+            } else if (port === '3000' || port === '5000') {
+                candidates.push(`${protocol}://${hostname}:8000/api/chat/ws`);
+                candidates.push(`${protocol}://${window.location.host}/api/chat/ws`);
+            } else {
+                candidates.push(`${protocol}://${window.location.host}/api/chat/ws`);
+            }
+            setWsUrls(candidates);
+        } catch (_e) {
+            setWsUrls([]);
+        }
+
+        // Probe /cogniforge-proxy-status — the explicit "fix active?" signal.
+        fetch('/cogniforge-proxy-status', { cache: 'no-store' })
+            .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+            .then((j) => setProxyStatus({ ok: true, data: j }))
+            .catch((e) => setProxyStatus({ ok: false, error: String(e) }));
+    }, [now]);
+
+    const refresh = () => setNow((n) => n + 1);
+    const reloadPage = () => {
+        if (typeof window !== 'undefined') window.location.reload();
+    };
+
+    const proxyActive = !!proxyStatus && proxyStatus.ok;
+    return (
+        <div
+            style={{
+                margin: '0.75rem 0',
+                padding: '0.85rem 1rem',
+                background: 'rgba(255, 71, 87, 0.08)',
+                border: '1px solid rgba(255, 71, 87, 0.35)',
+                borderRadius: '12px',
+                color: 'var(--text-color, #e7e7e7)',
+                fontSize: '0.82rem',
+                lineHeight: 1.55,
+                direction: 'rtl',
+            }}
+            role="status"
+            aria-live="polite"
+        >
+            <div style={{ fontWeight: 700, marginBottom: '0.4rem' }}>
+                🔧 تشخيص الاتصال (ISS-MISC-VPN)
+            </div>
+            <div style={{ marginBottom: '0.35rem' }}>
+                <strong>هل الـ fix فعَّال؟</strong>{' '}
+                {proxyStatus === null ? (
+                    <span style={{ opacity: 0.65 }}>جاري الفحص…</span>
+                ) : proxyActive ? (
+                    <span style={{ color: '#22c55e' }}>نعم ✓ (server.js + WS proxy يعملان)</span>
+                ) : (
+                    <span style={{ color: '#ef4444' }}>
+                        لا ✗ — الـ codespace على main أو لم يُعد تشغيل supervisor.
+                        يلزم: <code>git checkout claude/fix-vpn-connection-status-fj2Lm</code> ثم{' '}
+                        <code>bash .devcontainer/supervisor.sh</code>
+                    </span>
+                )}
+            </div>
+            {wsUrls.length > 0 ? (
+                <div style={{ marginBottom: '0.35rem' }}>
+                    <strong>URLs المُجرَّبة:</strong>
+                    <ol style={{ margin: '0.2rem 1.2rem 0', padding: 0 }}>
+                        {wsUrls.map((u, i) => (
+                            <li key={u} style={{ direction: 'ltr', fontFamily: 'monospace', fontSize: '0.74rem' }}>
+                                #{i + 1} {u}
+                            </li>
+                        ))}
+                    </ol>
+                </div>
+            ) : null}
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.45rem', flexWrap: 'wrap' }}>
+                <button
+                    onClick={refresh}
+                    style={{
+                        padding: '0.3rem 0.8rem',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255,255,255,0.18)',
+                        background: 'rgba(255,255,255,0.06)',
+                        color: 'inherit',
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                    }}
+                >
+                    أعد فحص الـ proxy
+                </button>
+                <button
+                    onClick={reloadPage}
+                    style={{
+                        padding: '0.3rem 0.8rem',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255,255,255,0.18)',
+                        background: 'rgba(255,255,255,0.06)',
+                        color: 'inherit',
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                    }}
+                >
+                    أعد تحميل الصفحة
+                </button>
+            </div>
+        </div>
+    );
+};
+
 export const ChatInterface = ({ messages, onSendMessage, status, user }) => {
     const [input, setInput] = useState('');
     const messagesContainerRef = useRef(null);
@@ -472,6 +611,7 @@ export const ChatInterface = ({ messages, onSendMessage, status, user }) => {
                     </span>
                     <span className="input-hint">Enter للإرسال · Shift+Enter لسطر جديد</span>
                 </div>
+                {!isConnected && !isConnecting ? <OfflineDiagnosticBanner /> : null}
             </div>
         </div>
     );

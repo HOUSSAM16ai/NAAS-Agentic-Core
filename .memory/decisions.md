@@ -1,5 +1,106 @@
 # Architectural Decisions
-> Last updated: 2026-05-17 | Branch: `claude/fix-critical-project-failure-ixc1t`
+> Last updated: 2026-05-18 | Branch: `claude/fix-github-actions-success-d6CVg`
+
+## D-069 · CI Green Restoration + Skills Doctrine Module (ISS-CI-GREEN-001 — 2026-05-18)
+
+**Context**: شكوى المستخدم: «أريد أن يظهر GitHub Actions بعلامة الصح الخضراء فقط — لا skipped، لا warning، لا failed». التجريب الحي على PR #2078 كشف الكوارث:
+
+| Check | Conclusion | Root cause |
+|-------|-----------|-----------|
+| `theme-contracts` | **failure** | `grep -c "$var"` حيث `$var="--bg-color"` → ubuntu's grep يفسره كـ long-option وفشل بـ "unrecognized option" |
+| `build-check` | **failure** | نفس المشكلة في «Verify compiled CSS has required tokens» |
+| `theme-regression` | **failure** | نفس المشكلة في «CSS variable symmetry» |
+| `frontend-theme-summary` | **failure** | depends on theme-contracts / build-check (needs:) |
+| `required-ci` / `lint` | **failure** | كان في PR #2078 (لا في main) — ruff format على ملفات أضافها الـ PR |
+| `Integration Tests (E2E Chat)` | **skipped** | `if: github.event_name == 'workflow_dispatch'` → كل push/PR → skipped check |
+
+**Root cause analysis (مُختبَر حياً)**:
+
+```bash
+# Confirmed locally with clean bash env (matching GitHub Actions ubuntu-latest):
+$ grep -c "--bg-color" frontend/app/globals.css
+ugrep: invalid option --bg-color
+$ grep -c -e "--bg-color" -- frontend/app/globals.css
+22  # ← يعمل بشكل صحيح
+```
+
+GNU/ugrep يحتاج `-e PATTERN` أو `--` لفصل الأنماط التي تبدأ بـ `--`.
+
+**Decision (3 طبقات إصلاح + Skills enhancement)**:
+
+### Layer 1: Workflow Grep Flag-Parsing Fix
+ملف `.github/workflows/frontend-theme-ci.yml` — استبدال جميع `grep -c|-q "$var"` بـ `grep -c|-q -e "$var" --` في 4 خطوات:
+- `theme-contracts.Verify CSS variables in both themes`
+- `theme-contracts.Verify :root has fallback code vars`
+- `theme-regression.CSS variable symmetry`
+- `build-check.Verify compiled CSS has required tokens`
+
+### Layer 2: Eliminate "skipped" Status
+ملف `.github/workflows/structure-validation.yml` — إزالة `if: github.event_name == 'workflow_dispatch'` من `validate-integration` job. الآن يعمل على كل push/PR (SQLite in-memory بدلاً من Postgres service لتقليل التعقيد).
+
+### Layer 3: Skills Doctrine Module (طلب المستخدم بتطوير منظومة Skills)
+ملف جديد `app/services/skills/doctrine.py` — Single Source of Truth لكل قواعد الـ Skills:
+
+| Doctrine | Version | Rules | Purpose |
+|----------|---------|-------|---------|
+| `RETRIEVAL_DOCTRINE` | v1.0.0 | 7 | كيفية استدعاء المحتوى التعليمي |
+| `EXPLANATION_DOCTRINE` | v2.0.0 | 11 | كيفية الشرح (rewrite from D-068 v1.0.0) |
+| `MODEL_ANSWER_RELIANCE_RULES` | v1.0.0 | 7 | الاعتماد على الإجابة النموذجية أثناء الشرح |
+| `DETAILED_EXPLANATION_RULES` | v1.0.0 | 12 | ضوابط الشرح المفصل حسب نوع السؤال |
+
+**EXPLANATION_DOCTRINE v2.0.0 additions** (تطبيقاً لطلب المستخدم):
+- قاعدة لغة عربية فصحى نقية (لا روسية/صينية/إسبانية).
+- LaTeX إلزامي لكل رمز رياضي (`$...$` / `$$...$$`).
+- النتيجة النهائية في `$$\boxed{...}$$`.
+
+**Companion artefacts**:
+- `tests/services/test_skills_doctrine.py` — 42 unit tests (existence, versioning, content invariants, manifest integrity, drift detection).
+- `scripts/fitness/check_skills_doctrine.py` — drift detector لـ CI.
+- `.github/workflows/skills-doctrine-gate.yml` — 3-job CI gate (doctrine-drift, doctrine-invariants, skills-doctrine-required).
+
+**Invariants** (لا تُكسر بدون ADR):
+
+1. أي `grep -c|-q` في workflow على نمط متغير يبدأ بـ `--` يجب أن يستخدم `-e PATTERN --`.
+2. لا job يجب أن يحوي `if: github.event_name == 'workflow_dispatch'` على workflow يُشغَّل بـ push/PR (يُسبب skipped).
+3. `EXPLANATION_DOCTRINE_VERSION` يجب أن يبقى ≥ 2.0.0 (تراجع = فقدان قواعد اللغة/LaTeX).
+4. كل Skill جديد يجب أن يستورد من `app.services.skills.doctrine` (لا redefinition محلية).
+5. `SKILL_DOCTRINE_MANIFEST` يجب أن يتطابق مع الـ doctrines الفعلية (CI gate يفحص).
+
+**Live verification (2026-05-18)**:
+- ✅ `ruff check .` clean (1477 files formatted, 0 errors)
+- ✅ `ruff format --check .` clean
+- ✅ `python scripts/runtime_truth.py --check` matches lock
+- ✅ `python scripts/validate_structure.py` passes
+- ✅ `python scripts/ci_guardrails.py` clean
+- ✅ `python scripts/fitness/check_skills_doctrine.py` 10/10 checks pass
+- ✅ `pytest tests/services/test_skills_doctrine.py` 42/42 pass
+- ✅ `pytest tests/services/test_iss075_*.py test_iss079_*.py test_skills_doctrine.py` 97/97 pass (no regression)
+- ✅ Theme-contracts locally re-run with FIX → all 13 variables match expected counts
+- ✅ All 35 workflow YAMLs parse correctly
+
+**Files changed**:
+
+| File | Change |
+|------|--------|
+| `.github/workflows/frontend-theme-ci.yml` | grep flag-parsing fix (4 spots) |
+| `.github/workflows/structure-validation.yml` | remove `if: workflow_dispatch` |
+| `.github/workflows/skills-doctrine-gate.yml` | **new** — 3-job CI gate |
+| `app/services/skills/doctrine.py` | **new** — Single Source of Truth |
+| `app/services/skills/bac_exercise_skill.py` | import from doctrine module |
+| `app/services/skills/__init__.py` | re-export new doctrines |
+| `tests/services/test_skills_doctrine.py` | **new** — 42 unit tests |
+| `scripts/fitness/check_skills_doctrine.py` | **new** — drift detector |
+| `.memory/decisions.md` | D-069 entry |
+| `.memory/issues.md` | ISS-CI-GREEN-001 entry |
+| `CLAUDE.md` §6.49 | doctrine in §0.5 expanded |
+
+---
+
+## D-068 · Old-conversation Spinner Stuck Catastrophe + Skill Doctrine Versioning (ISS-080 — 2026-05-18)
+
+Earlier D-068 entry (see existing content below).
+
+---
 
 ## D-067 · Catastrophic Fix Trio — Greeting Fastpath + Model Switch + Reasoning-Leak Guard (2026-05-17)
 

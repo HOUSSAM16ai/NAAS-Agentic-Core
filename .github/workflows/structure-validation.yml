@@ -57,25 +57,14 @@ jobs:
 
   validate-integration:
     name: Integration Tests (E2E Chat)
-    if: github.event_name == 'workflow_dispatch'
+    # ISS-CI-GREEN-001: لا job يجب أن يظهر كـ "skipped" على push/PR.
+    # كان: `if: github.event_name == 'workflow_dispatch'` — كل push/PR → skipped check.
+    # الآن: يعمل دائماً. تشغيل اختبارات E2E غير المرتبطة بـ DB حقيقي (LLM_MOCK_MODE=1).
+    # PostgreSQL service ليس مطلوباً لاختبارات الـ structure/method accessibility الحالية،
+    # فأُزيل لتقليل وقت التنفيذ وضمان النجاح الحتمي.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: validate-structure
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: test_db
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_pass
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
 
     steps:
       - name: Fetch repository
@@ -98,10 +87,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
 
-      - name: Run integration tests (best effort)
+      - name: Run E2E structure tests
         env:
-          DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
-          SECRET_KEY: test-secret-key-for-ci
+          # In-memory SQLite is enough for the structure-accessibility tests in
+          # tests/integration/test_chat_e2e.py. The previous Postgres service
+          # was only needed for legacy tests that have been deleted/relocated.
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          SECRET_KEY: test-secret-key-for-ci-pipeline-secure-length
           ENVIRONMENT: testing
           LLM_MOCK_MODE: '1'
           SUPABASE_URL: https://dummy.supabase.co
@@ -111,15 +103,13 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f "tests/integration/test_chat_e2e.py" ]; then
-            if python -m pytest tests/integration/test_chat_e2e.py -v --tb=short; then
-              echo "INTEGRATION_STATUS=passed" >> "$GITHUB_ENV"
-            else
-              echo "::warning::E2E integration tests failed but are non-blocking in this workflow."
-              echo "INTEGRATION_STATUS=failed" >> "$GITHUB_ENV"
-            fi
+            # The file exists today (verified live 2026-05-18). If it ever
+            # disappears, treat that as a regression — never silently skip.
+            python -m pytest tests/integration/test_chat_e2e.py -v --tb=short
+            echo "INTEGRATION_STATUS=passed" >> "$GITHUB_ENV"
           else
-            echo "ℹ️ tests/integration/test_chat_e2e.py not found, skipping targeted E2E suite."
-            echo "INTEGRATION_STATUS=skipped" >> "$GITHUB_ENV"
+            echo "❌ tests/integration/test_chat_e2e.py missing — REGRESSION"
+            exit 1
           fi
 
       - name: Integration suite summary
@@ -128,4 +118,4 @@ jobs:
         run: |
           set -euo pipefail
           echo "### Integration smoke status: ${INTEGRATION_STATUS:-unknown}" >> "$GITHUB_STEP_SUMMARY"
-          echo "ℹ️ Integration smoke is best-effort and does not block merge in this workflow." >> "$GITHUB_STEP_SUMMARY"
+          echo "Runs on every push/PR — no longer gated on workflow_dispatch." >> "$GITHUB_STEP_SUMMARY"

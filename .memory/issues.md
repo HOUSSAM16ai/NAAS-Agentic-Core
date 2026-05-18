@@ -1,5 +1,51 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-17 | Branch: `claude/fix-critical-project-failure-ixc1t`
+> Last updated: 2026-05-18 | Branch: `claude/fix-github-actions-success-d6CVg`
+
+---
+
+## 🟢 Resolved 2026-05-18 (ISS-CI-GREEN-001 — GitHub Actions Skipped/Failed Catastrophe)
+
+### ISS-CI-GREEN-001 · GitHub Actions Not All-Green Catastrophe [RESOLVED]
+- **Status**: RESOLVED 2026-05-18 (D-069)
+- **Severity**: HIGH — مشروع لا يستطيع merge بدون CI أخضر
+- **Reported**: مستخدم حقيقي شاهد على PR #2078: 5 failures + 1 skipped في الـ checks، رغم أن main نظيف.
+- **Root causes (verified live 2026-05-18)**:
+  1. **Grep flag-parsing bug**: `grep -c "$var"` حيث `$var="--bg-color"` يُفسَّر كـ long-option بواسطة grep على ubuntu-latest → `unrecognized option --bg-color`. هذا يصيب `frontend-theme-ci.yml` في 4 مواضع: `theme-contracts`, `theme-regression`, `build-check`. تم التأكد محلياً بتشغيل clean bash env: `ugrep: invalid option --bg-color`.
+  2. **Skipped Integration Tests**: `validate-integration` في `structure-validation.yml` لديه `if: github.event_name == 'workflow_dispatch'` → كل push/PR يُنتج skipped check.
+  3. **Cascade failures**: `frontend-theme-summary` و `required-ci` depend on الـ failing jobs عبر `needs:` → cascade.
+- **Live verification of bug**:
+  ```bash
+  $ grep -c "--bg-color" frontend/app/globals.css
+  ugrep: invalid option --bg-color
+  $ grep -c -e "--bg-color" -- frontend/app/globals.css
+  22  # works correctly with -e and --
+  ```
+- **Fix (3 layers + Skills enhancement)**:
+  1. **Workflow grep fix**: استبدال 4 مواضع بـ `grep -c|-q -e "$var" --` لمنع flag-parsing.
+  2. **Eliminate skipped**: إزالة `if: github.event_name == 'workflow_dispatch'` من `validate-integration`. الـ job الآن يعمل دائماً مع SQLite in-memory.
+  3. **Skills Doctrine Module** (طلب المستخدم): ملف جديد `app/services/skills/doctrine.py` يجمع 4 doctrines رسمية لكيفية:
+     - استدعاء المحتوى (RETRIEVAL_DOCTRINE)
+     - الشرح (EXPLANATION_DOCTRINE v2.0.0 — rewrite من D-068 v1.0.0)
+     - الاعتماد على الإجابة النموذجية أثناء الشرح المفصل (MODEL_ANSWER_RELIANCE_RULES)
+     - ضوابط الشرح المفصل (DETAILED_EXPLANATION_RULES)
+- **Tests added**:
+  - 42 unit tests في `tests/services/test_skills_doctrine.py` (existence, versioning, content, manifest, integration, drift)
+  - 10 fitness checks في `scripts/fitness/check_skills_doctrine.py`
+- **Live verification (2026-05-18)**:
+  - `ruff check .` clean ✅ | `ruff format --check .` 1477 files ✅
+  - `runtime_truth.py --check` matches lock ✅
+  - `validate_structure.py` passes ✅
+  - `ci_guardrails.py` clean ✅
+  - `check_skills_doctrine.py` 10/10 checks ✅
+  - `pytest test_skills_doctrine.py` 42/42 ✅
+  - Combined regression (ISS-075 + ISS-079 + new doctrine): 97/97 PASS ✅
+  - All 35 workflow YAMLs parse correctly ✅
+- **Files changed**: see D-069 entry in `.memory/decisions.md` (full list).
+- **Invariants** (لا تُكسر):
+  1. أي `grep -c|-q "$var"` حيث الـ var قد يبدأ بـ `--` يجب أن يستخدم `-e PATTERN --`.
+  2. لا job يحوي `if: github.event_name == 'workflow_dispatch'` على workflow يُشغَّل push/PR.
+  3. EXPLANATION_DOCTRINE_VERSION ≥ 2.0.0.
+  4. كل Skill جديد يستورد من `app.services.skills.doctrine`.
 
 ---
 

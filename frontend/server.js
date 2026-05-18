@@ -116,6 +116,26 @@ app.prepare().then(() => {
         typeof app.getUpgradeHandler === 'function' ? app.getUpgradeHandler() : null;
 
     const server = createServer((req, res) => {
+        // ISS-MISC-VPN diagnostic endpoint — lets a phone browser confirm
+        // the custom server is actually running (vs plain `next dev` from
+        // before the user pulled the fix). Hit it via:
+        //   https://<cs>-3000.app.github.dev/cogniforge-proxy-status
+        if (req.url === '/cogniforge-proxy-status' || req.url === '/cogniforge-proxy-status/') {
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({
+                server: 'frontend/server.js (custom Next.js + WS proxy)',
+                fix: 'D-068 (ISS-MISC-VPN)',
+                ws_proxy: {
+                    enabled: true,
+                    paths: ['/api/chat/ws', '/admin/api/chat/ws'],
+                    upstream: `${backendHost}:${backendPort}`,
+                },
+                next_port: port,
+                next_hostname: hostname,
+                ok: true,
+            }));
+            return;
+        }
         const parsedUrl = parse(req.url, true);
         handle(req, res, parsedUrl);
     });

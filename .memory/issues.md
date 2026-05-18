@@ -6,7 +6,7 @@
 ## 🟢 Resolved 2026-05-17 (ISS-MISC-VPN — Codespaces shows "offline" without VPN)
 
 ### ISS-MISC-VPN · Connection status stuck on "غير متصل" outside VPN [RESOLVED]
-- **Status**: RESOLVED 2026-05-17 — initial pass (3 layers), HARDENED twice 2026-05-17 (4th layer + 5th sweep) — D-068
+- **Status**: RESOLVED 2026-05-17 — initial pass (3 layers), HARDENED three times 2026-05-17 (4th layer custom server + 5th port visibility + 6th self-healing/resilience/diagnostic) — D-068
 - **Severity**: CATASTROPHIC (المستخدم يصف: «الكارثة دمرت المشروع نهائيا» — لا يمكن استخدام الواجهة على Codespaces بدون tunneling عبر VPN)
 - **Reported**: مستخدم حقيقي — 3 screenshots متتالية على نفس اليوم:
   1. 12:46 `x-3000.app.github.dev` مع `offline ●` (الـ initial pass — 3 layers)
@@ -19,7 +19,7 @@
   2. **Backend TrustedHostMiddleware يرفض Host header**: الإعداد الافتراضي `ALLOWED_HOSTS = ["localhost","127.0.0.1","testserver","test"]`. عند الـ direct WS connection لـ `<cs>-8000.app.github.dev` (بعد إصلاح الـ frontend)، الـ Host header = `<cs>-8000.app.github.dev` → TrustedHostMiddleware يُعيد HTTP 400 "Invalid host".
   3. **Backend CORS يحجب الـ Origin**: `BACKEND_CORS_ORIGINS = ["http://localhost:3000"]` → يرفض `Origin: https://<cs>-3000.app.github.dev`.
   4. **VPN كان workaround**: مع VPN، المستخدم يصل بـ `localhost:3000` فيدخل في فرع السطر 41 (port=3000) فيقع على `ws://localhost:8000/...` الذي يعمل. بدون VPN، لا يوجد طريق نظيف للـ WS.
-- **Fix (5 طبقات دفاع — initial 3 + hardening 2)**:
+- **Fix (8 طبقات دفاع — initial 3 + 3 hardening passes = 5 → 8)**:
   1. **Frontend translation + same-origin preference** (`frontend/app/hooks/useAgentSocket.js`): دالة `translateCloudHostnameToBackend()` (cross-port fallback) + `isCloudForwardedHostname()` (يقرر same-origin أولاً). على Codespaces، يُفضِّل same-origin (يمر عبر Next.js proxy) — لا يحتاج port 8000 reachable من المتصفح أبداً. يُطبَّق نفس الإصلاح في `frontend/public/js/legacy-app.jsx`.
   2. **Backend ALLOWED_HOSTS expansion** (`app/core/settings/base.py`): model_validator `expand_cloud_forwarded_hosts_and_cors` يُضيف `*.app.github.dev`, `*.preview.app.github.dev`, `*.gitpod.io` عند `CODESPACES=true`. لا تغيير عند `CODESPACES=false`.
   3. **Backend CORS regex** (`app/core/app_blueprint.py:build_cors_options`): يقبل `BACKEND_CORS_ORIGIN_REGEX` parameter — يُولَّد تلقائياً على Codespaces ويطابق أي codespace forwarded URL.
@@ -28,6 +28,9 @@
      - `devcontainer.json` port 3000 → `"visibility":"public"` (كان مفقوداً → default private)
      - `server.js` يحترم الآن `--port N` و `--hostname H` CLI flags (supervisor.sh يُمرِّرها)
      - `on-start.sh` لم يعد يبتلع gh errors — يطبع warnings صريحة عند فشل `gh ports visibility` ويرشد المستخدم لإعداد manual
+  6. **Supervisor self-healing** (`supervisor.sh:launch_frontend`, **NEW — hardening 3 2026-05-17**): الـ user يبلِّغ بصورة رابعة (20:24) — الـ frontend يحمَّل لكن WS لا يزال offline. السبب: `pgrep -f "next.*dev"` يطابق Next.js القديم من قبل الـ pull → supervisor يقول "already running" → server.js الجديد لا يُشغَّل أبداً. الإصلاح: detect عند توقع `node server.js`، ابحث عن stale `next dev` وأوقفه قسراً، ثم أعد التشغيل عبر `npm run dev` الذي يستدعي الـ server.js الآن.
+  7. **Frontend multi-candidate WS resilience** (`useAgentSocket.js` + `useRealtimeConnection.js`, **NEW — hardening 3**): الـ frontend يبني الآن **قائمة مرتَّبة** من WS URL candidates بدل URL واحد. `useRealtimeConnection` تتنقل بينها عند كل failure → أي candidate يعمل → "متصل" فوراً. على Codespaces الـ candidates = [same-origin via Next.js proxy, cross-port direct]. النتيجة: إذا server.js running → same-origin يعمل، إذا port 8000 reachable → cross-port يعمل، أيهما أولاً → connected.
+  8. **Diagnostic endpoint** (`server.js:/cogniforge-proxy-status`, **NEW — hardening 3**): JSON status endpoint يكشف من المتصفح مباشرة هل server.js running و WS proxy enabled. المستخدم يفتح `https://<cs>-3000.app.github.dev/cogniforge-proxy-status` → JSON 200 إذا الـ fix فعَّال، 404 إذا plain Next.js قديم بدون proxy.
 - **Tests added**:
   - `tests/config/test_codespaces_cors_vpn.py` — 7 unit tests (settings expansion + regression + idempotency)
   - `scripts/test_ws_url_translation.js` — 18 cases (12 cross-port + 6 cloud detector)

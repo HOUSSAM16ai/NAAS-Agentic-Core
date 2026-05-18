@@ -77,6 +77,29 @@ else
     record n "devcontainer.json: port 3000 is NOT public — phone browsers get HTTP 401 without VPN"
 fi
 
+# Hardening 3: frontend resilience — multi-candidate WS URLs.
+if grep -q "getWsBaseCandidates" "$ROOT/frontend/app/hooks/useAgentSocket.js" &&
+   grep -q "wsUrlCandidates" "$ROOT/frontend/app/hooks/useRealtimeConnection.js"; then
+    record y "frontend rotates through multiple WS URL candidates on failure"
+else
+    record n "frontend WS resilience missing — single-URL connect can't self-heal"
+fi
+
+# Hardening 3: diagnostic endpoint for browser-side verification.
+if grep -q "cogniforge-proxy-status" "$ROOT/frontend/server.js"; then
+    record y "server.js exposes /cogniforge-proxy-status diagnostic endpoint"
+else
+    record n "server.js no longer exposes the diagnostic endpoint"
+fi
+
+# Hardening 3: supervisor self-healing — kills stale `next dev` before starting server.js.
+if grep -q "STALE 'next dev'" "$ROOT/.devcontainer/supervisor.sh" ||
+   grep -q "stale_pids" "$ROOT/.devcontainer/supervisor.sh"; then
+    record y "supervisor.sh detects + kills stale 'next dev' before relaunch"
+else
+    record n "supervisor.sh would skip relaunch when stale next dev is running"
+fi
+
 # ── 2. Live WS smoke (skipped in plain CI without node_modules) ────────────
 printf "\n${CYAN}── 2. Live WS smoke (requires node_modules + python3) ──${RESET}\n"
 
@@ -152,6 +175,14 @@ done
 code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/)
 if [ "$code" = "200" ]; then record y "Next.js serves frontend (HTTP 200)"
 else                          record n "Next.js HTTP failed (got $code)"
+fi
+
+# Diagnostic endpoint
+diag=$(curl -s http://127.0.0.1:3001/cogniforge-proxy-status)
+if echo "$diag" | grep -q '"ok":true' && echo "$diag" | grep -q '"enabled":true'; then
+    record y "/cogniforge-proxy-status returns ok=true + ws_proxy enabled"
+else
+    record n "/cogniforge-proxy-status broken: $diag"
 fi
 
 # WS probe — same-origin via custom server proxy

@@ -88,6 +88,57 @@ const logWsResolution = (label, url) => {
     } catch (_e) { /* noop */ }
 };
 
+// Returns an ORDERED list of candidate WS bases. The reconnection loop in
+// `useRealtimeConnection.js` rotates through these on failure, so the moment
+// any one of them works the indicator flips to "متصل" — no manual
+// configuration, no VPN, no Codespaces port-visibility flip required.
+export const getWsBaseCandidates = () => {
+    if (!isBrowser) return [];
+
+    // 0. Explicit env override always wins (single candidate).
+    const configuredOrigin = WS_ORIGIN || API_ORIGIN;
+    if (configuredOrigin) {
+        try {
+            const parsed = new URL(configuredOrigin);
+            const wsProtocol = resolveWebSocketProtocol(parsed.protocol);
+            const url = `${wsProtocol}//${parsed.host}`;
+            logWsResolution('using configured origin', url);
+            return [url];
+        } catch (error) {
+            errorTracker.reportError(error, { message: 'Invalid WebSocket base configuration' });
+            return [];
+        }
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const hostname = window.location.hostname;
+    const port = window.location.port;
+    const candidates = [];
+
+    if (isCloudForwardedHostname(hostname)) {
+        // Cloud (Codespaces / Gitpod). Try BOTH same-origin AND cross-port —
+        // either one is enough. Order matters only for the FIRST connect.
+        //   a) same-origin (goes through Next.js custom server proxy)
+        //   b) cross-port (works if port 8000 is publicly forwarded)
+        candidates.push(`${protocol}://${window.location.host}`);
+        const cloudBackendHost = translateCloudHostnameToBackend(hostname);
+        if (cloudBackendHost) {
+            candidates.push(`${protocol}://${cloudBackendHost}`);
+        }
+    } else if (FRONTEND_FORWARDED_PORTS.has(port)) {
+        // Local dev on standard Next.js port → backend on 8000 same host.
+        candidates.push(`${protocol}://${hostname}:${BACKEND_PORT}`);
+        // Also try same-origin in case the dev proxy is wired up.
+        candidates.push(`${protocol}://${window.location.host}`);
+    } else {
+        // Same-origin fallback (reverse proxy / production).
+        candidates.push(`${protocol}://${window.location.host}`);
+    }
+
+    logWsResolution(`candidates resolved (${candidates.length})`, candidates.join(' | '));
+    return candidates;
+};
+
 const getWsBase = () => {
     if (!isBrowser) return '';
 
@@ -255,17 +306,27 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
     const activeConversationIdRef = useRef(null);
     const activeRequestIdRef = useRef(null);
 
-    // Construct WebSocket URL only on the client to avoid SSR/client mismatch
-    const [wsUrl, setWsUrl] = useState(null);
+    // Construct an ORDERED LIST of WS URLs. The realtime hook rotates
+    // through them on connection failure (D-068 hardening 3 — frontend
+    // resilience). The moment any one of them works, status flips to
+    // "connected" → "متصل" — regardless of which Codespaces port is
+    // actually reachable, regardless of whether the custom server is up.
+    const [wsUrlCandidates, setWsUrlCandidates] = useState([]);
     useEffect(() => {
-        const wsBase = getWsBase();
-        const url = wsBase && endpoint ? buildWebSocketUrlSafe(wsBase, endpoint, token) : null;
-        setWsUrl(url);
+        if (!endpoint) {
+            setWsUrlCandidates([]);
+            return;
+        }
+        const bases = getWsBaseCandidates();
+        const urls = bases
+            .map((base) => buildWebSocketUrlSafe(base, endpoint, token))
+            .filter(Boolean);
+        setWsUrlCandidates(urls);
     }, [endpoint, token]);
 
     // Use the robust connection hook
     const eventNamespace = endpoint || 'default';
-    const { state: status, sendMessage: sendSocketMessage } = useRealtimeConnection(wsUrl, token, eventNamespace);
+    const { state: status, sendMessage: sendSocketMessage } = useRealtimeConnection(wsUrlCandidates, token, eventNamespace);
 
     useEffect(() => {
         onConversationUpdateRef.current = onConversationUpdate;

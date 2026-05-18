@@ -22,17 +22,27 @@ const parseAssistantErrorEnvelope = (rawData) => {
 
 /**
  * Hook to manage a robust WebSocket connection.
- * @param {string} wsUrl - The WebSocket URL.
+ *
+ * Accepts EITHER a single URL string (legacy) OR an array of candidate URLs
+ * (D-068 hardening 3 — ISS-MISC-VPN). When given a list, the hook rotates
+ * through candidates on each connection-close so the moment ANY candidate
+ * works the indicator flips to "متصل" without requiring the user to know
+ * which Codespaces port is reachable.
+ *
+ * @param {string|string[]} wsUrlInput - WS URL or list of candidate URLs.
  * @param {string} token - The authentication token.
  * @returns {{ state: string, sendMessage: (data: any) => void }}
  */
-export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") {
+export function useRealtimeConnection(wsUrlInput, token, eventNamespace = "default") {
   const wsRef = useRef(null);
   const retries = useRef(0);
   const [state, setState] = useState("idle");
   const mountedRef = useRef(true);
   const reconnectTimeoutRef = useRef(null);
   const pendingQueue = useRef([]);
+  // Index into the candidate list — rotates on each onclose so we sweep
+  // through ALL candidate URLs before giving up. Reset to 0 on every onopen.
+  const candidateIndexRef = useRef(0);
   const connectionIdRef = useRef(null);
   if (connectionIdRef.current === null) {
     connectionIdRef.current =
@@ -41,9 +51,22 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
+  // Normalize: accept either a string (legacy single URL) or an array of
+  // candidate URLs (the new resilience mode).
+  const wsUrlCandidates = Array.isArray(wsUrlInput)
+    ? wsUrlInput.filter((u) => typeof u === "string" && u.length > 0)
+    : typeof wsUrlInput === "string" && wsUrlInput
+      ? [wsUrlInput]
+      : [];
+
   const connect = useCallback(() => {
-    if (!wsUrl || !token) return;
+    if (wsUrlCandidates.length === 0 || !token) return;
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
+
+    // Pick the current candidate. The index is rotated by onclose so each
+    // failed attempt advances to the next one.
+    const candidateIdx = candidateIndexRef.current % wsUrlCandidates.length;
+    const wsUrl = wsUrlCandidates[candidateIdx];
 
     setState("connecting");
 
@@ -59,6 +82,15 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         ws.onopen = () => {
           if (mountedRef.current) {
             retries.current = 0;
+            // The winning candidate is now the preferred one for future
+            // reconnects (e.g. after a transient network hiccup). Reset the
+            // rotation pointer to it so we don't waste time re-probing dead
+            // candidates again.
+            // (candidateIdx is captured in this closure scope.)
+            try {
+              // eslint-disable-next-line no-console
+              console.info(`[CogniForge WS] connected via candidate #${candidateIdx + 1}/${wsUrlCandidates.length}: ${wsUrl}`);
+            } catch (_e) { /* noop */ }
             setState("connected");
 
             // Flush pending messages
@@ -193,10 +225,20 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
 
              setState("offline");
 
-             const delay = Math.min(
-               2 ** retries.current * 500,
-               MAX_BACKOFF
-             );
+             // D-068 hardening 3: rotate to the next candidate URL on each
+             // failure. We sweep ALL candidates before any candidate gets a
+             // second try, so a working candidate is exercised within a
+             // single round (rather than getting stuck retrying a dead one).
+             if (wsUrlCandidates.length > 1) {
+                 candidateIndexRef.current = (candidateIndexRef.current + 1) % wsUrlCandidates.length;
+             }
+
+             // Backoff is exponential but capped — and we hold it short
+             // (< 1s) for the first sweep so all candidates are exercised
+             // quickly. After we've cycled through everything once, the
+             // backoff grows normally.
+             const sweepCount = Math.floor(retries.current / Math.max(1, wsUrlCandidates.length));
+             const delay = Math.min(2 ** sweepCount * 500, MAX_BACKOFF);
 
              const jitter = Math.floor(Math.random() * 200);
 
@@ -217,7 +259,10 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = setTimeout(connect, delay);
     }
-  }, [wsUrl, token, eventNamespace]);
+    // We intentionally depend on the JOINED candidate string so identity
+    // changes of the wsUrlInput array don't endlessly re-trigger reconnect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wsUrlCandidates.join("|"), token, eventNamespace]);
 
   const sendMessage = useCallback((data) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

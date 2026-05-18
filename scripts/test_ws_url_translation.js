@@ -37,7 +37,9 @@ const src = fs.readFileSync(SOURCE, 'utf-8');
 // React along for the ride. We rely on the marker comment in the source so
 // the test breaks loudly if the function is renamed or removed.
 const start = src.indexOf('export const BACKEND_PORT');
-const end = src.indexOf('const getWsBase');
+// Use the specific signature to avoid matching the newer
+// `const getWsBaseCandidates` declaration that comes earlier.
+const end = src.indexOf('const getWsBase = ');
 if (start < 0 || end < 0 || end < start) {
     console.error(
         '✗ Could not locate translateCloudHostnameToBackend in source.\n' +

@@ -418,16 +418,53 @@ launch_frontend() {
             fi
         fi
 
-        if lifecycle_check_process "next.*dev"; then
-            lifecycle_info "Frontend Launcher: Next.js dev server already running"
-        else
-            lifecycle_info "Frontend Launcher: Starting Next.js dev server..."
-            # Using exec to replace the subshell with the process
-            (cd frontend && exec npm run dev -- --hostname 0.0.0.0 --port "$FRONTEND_PORT") &
-            FRONTEND_PID=$!
-            lifecycle_set_state "next_pid" "$FRONTEND_PID"
-            lifecycle_info "Frontend Launcher: Next.js dev server started (PID: $FRONTEND_PID)"
+        # D-068 hardening 3 (ISS-MISC-VPN 2026-05-17): self-healing detection.
+        # We must run `node server.js` (the WS-proxying custom server), NOT a
+        # plain `next dev`. If a previous Codespace boot left an old `next dev`
+        # process alive (from before the user pulled the fix), the bare
+        # "already running" check below would skip the relaunch — and the WS
+        # proxy would never come up → status stays "غير متصل".
+        #
+        # We expect server.js if it exists in the repo AND the package.json
+        # `dev` script points at it. When that's the case, anything OTHER
+        # than `node server.js` running on the frontend port is stale and
+        # must be killed before launch.
+        local expected_dev="next-dev"
+        if [ -f "frontend/server.js" ] && grep -q '"dev": "node server.js"' frontend/package.json 2>/dev/null; then
+            expected_dev="server-js"
         fi
+
+        local stale_pids=""
+        if [ "$expected_dev" = "server-js" ]; then
+            # If we expect server.js, kill any plain `next dev` that's NOT our
+            # server.js. pgrep -f matches against the full command line.
+            stale_pids=$(pgrep -f "next dev" 2>/dev/null || true)
+            if [ -n "$stale_pids" ]; then
+                lifecycle_warn "Frontend Launcher: detected STALE 'next dev' process (PID $stale_pids) — killing so server.js proxy can boot"
+                kill $stale_pids 2>/dev/null || true
+                sleep 2
+                kill -9 $stale_pids 2>/dev/null || true
+            fi
+            # The right thing to look for is `node server.js`.
+            if pgrep -f "node server.js" >/dev/null 2>&1; then
+                lifecycle_info "Frontend Launcher: Next.js custom server (server.js) already running ✓"
+                return 0
+            fi
+        else
+            # Legacy mode — package.json doesn't use the custom server yet.
+            if pgrep -f "next.*dev" >/dev/null 2>&1; then
+                lifecycle_info "Frontend Launcher: legacy 'next dev' already running (server.js not configured)"
+                return 0
+            fi
+        fi
+
+        lifecycle_info "Frontend Launcher: Starting Next.js ($expected_dev) on port $FRONTEND_PORT..."
+        # Using exec to replace the subshell with the process
+        (cd frontend && exec npm run dev -- --hostname 0.0.0.0 --port "$FRONTEND_PORT") &
+        FRONTEND_PID=$!
+        lifecycle_set_state "next_pid" "$FRONTEND_PID"
+        lifecycle_set_state "frontend_mode" "$expected_dev"
+        lifecycle_info "Frontend Launcher: Next.js dev server started (PID: $FRONTEND_PID, mode: $expected_dev)"
     else
         lifecycle_warn "Frontend Launcher: npm not available"
     fi

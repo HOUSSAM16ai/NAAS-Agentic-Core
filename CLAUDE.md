@@ -4760,4 +4760,118 @@ python3 -c "from app.services.skills import BACExerciseSkill, BACSkillInput, Ski
 |----------|---------|
 | D-049 → D-066 | JSON envelope + LaTeX + theme + Math pipeline + streaming sanitizer + UI flicker |
 | D-067 | CI repair sweep |
-| **D-068** | **ISS-080 — Old-conversation spinner stuck + raw LaTeX + missing copy button + Skill doctrine versioning** |
+| D-068 | ISS-080 — Old-conversation spinner stuck + raw LaTeX + missing copy button + Skill doctrine versioning |
+| **D-069** | **ISS-CI-GREEN-001 — All-green CI: grep flag-parsing fix + eliminate skipped + Skills Doctrine Module (v2.0.0)** |
+
+---
+
+## 6.49 CI Green Restoration + Skills Doctrine Module (2026-05-18, ISS-CI-GREEN-001 / D-069)
+
+> الكارثة المُشخَّصة بـ PR #2078: 5 failed + 1 skipped check رغم أن main أخضر.
+> طلب المستخدم: «GitHub Actions بشكل اجباري success فقط — لا skipped و لا warning و لا failed».
+> + «تطوير منظومة الـ skills للنظام لكيفية استدعاء المحتوى و كيفية الشرح و
+>    كيفية شرح الاجابة النموذجية و الاعتماد اثناء الشرح المفصل للطالب».
+
+### الأسباب الجذرية الثلاث (مُختبَرة حياً)
+
+**(1) Grep flag-parsing bug** في `frontend-theme-ci.yml` (4 مواضع):
+```bash
+# الـ workflow كان يقول:
+for var in "--bg-color" "--text-color" ...; do
+  count=$(grep -c "$var" frontend/app/globals.css || true)
+done
+
+# على ubuntu-latest، grep يفسر `--bg-color` كـ long-option:
+$ grep -c "--bg-color" frontend/app/globals.css
+ugrep: invalid option --bg-color
+```
+
+النتيجة: 13 check يفشل عبر cascade `needs:` → frontend-theme-summary + required-ci.
+
+**(2) Skipped Integration Tests**:
+```yaml
+validate-integration:
+  if: github.event_name == 'workflow_dispatch'  # ← skipped على كل push/PR
+```
+
+**(3) Skills Doctrine متناثرة** (Prompt Spaghetti):
+- `EXPLANATION_DOCTRINE` كان مُعرَّفاً محلياً في `bac_exercise_skill.py`
+- لا قواعد منفصلة لـ "كيفية استدعاء المحتوى"
+- لا قواعد لـ "الاعتماد على الإجابة النموذجية"
+- لا قواعد لـ "ضوابط الشرح المفصل"
+
+### الإصلاح (3 layers + Skills enhancement)
+
+**Layer 1** — Workflow Grep Fix (`frontend-theme-ci.yml`):
+استبدال 4 مواضع بـ `grep -c|-q -e "$var" --` لمنع long-option parsing.
+
+**Layer 2** — Eliminate Skipped (`structure-validation.yml`):
+إزالة `if: github.event_name == 'workflow_dispatch'` من `validate-integration`.
+
+**Layer 3** — Skills Doctrine Module (`app/services/skills/doctrine.py`):
+Single Source of Truth لـ 4 قواعد رسمية:
+
+| Doctrine | Version | Rules | Purpose |
+|----------|---------|-------|---------|
+| `RETRIEVAL_DOCTRINE` | v1.0.0 | 7 | كيفية استدعاء المحتوى |
+| `EXPLANATION_DOCTRINE` | **v2.0.0** | 11 | كيفية الشرح (rewrite من D-068 v1.0.0) |
+| `MODEL_ANSWER_RELIANCE_RULES` | v1.0.0 | 7 | الاعتماد على الإجابة النموذجية |
+| `DETAILED_EXPLANATION_RULES` | v1.0.0 | 12 | ضوابط الشرح المفصل |
+
+**EXPLANATION_DOCTRINE v2.0.0 additions**:
+- ✨ «اللغة عربية فصحى نقية — لا روسية/صينية/إسبانية مُسرَّبة»
+- ✨ «LaTeX إلزامي للرياضيات داخل `$...$` أو `$$...$$`»
+- ✨ «النتيجة النهائية في `$$\boxed{...}$$`»
+
+### القواعد الـ 7 الدائمة (D-069 — لا تُكسر بدون ADR)
+
+1. **Grep flag safety**: أي `grep -c|-q "$var"` على نمط قد يبدأ بـ `--` يستخدم `-e PATTERN --`.
+2. **No skipped on push/PR**: لا job يحوي `if: github.event_name == 'workflow_dispatch'` على workflow يُشغَّل push/PR.
+3. **Skills Doctrine = Single Source**: كل قاعدة AI تعيش في `app/services/skills/doctrine.py`. لا redefinition محلية.
+4. **Doctrine versioning monotonic**: EXPLANATION_DOCTRINE_VERSION لا يتراجع (v2+ بعد D-069).
+5. **Manifest integrity**: `SKILL_DOCTRINE_MANIFEST` يطابق الـ doctrines الفعلية (CI gate يفحص).
+6. **Drift detection**: `local_graph._EXERCISE_EXPLANATION_SYSTEM_PROMPT` يحوي ≥ 3 anchors: «الإجابة النموذجية»، «LaTeX»، «حرفياً».
+7. **Skills as primary AI surface**: لا تُضِف logic AI مباشرة في orchestrator_client.py — أنشئ Skill.
+
+### قياس النجاح حياً (2026-05-18)
+
+```bash
+# Grep fix verified
+$ env -i HOME=/root PATH=$PATH bash -c '
+    for var in --bg-color --text-color; do
+      grep -c -e "$var" -- frontend/app/globals.css
+    done'
+22
+31
+
+# Skills doctrine gate (10/10 ✅)
+$ python scripts/fitness/check_skills_doctrine.py
+
+# Tests (97/97 ✅)
+$ pytest tests/services/test_skills_doctrine.py \
+    tests/services/test_iss075_*.py tests/services/test_iss079_*.py --no-cov -q
+97 passed
+
+# Full quality stack
+$ ruff check . && ruff format --check . && \
+  python scripts/runtime_truth.py --check && \
+  python scripts/validate_structure.py && \
+  python scripts/ci_guardrails.py
+✅ All passed
+```
+
+### الملفات (D-069)
+
+| File | Change |
+|------|--------|
+| `.github/workflows/frontend-theme-ci.yml` | grep flag-parsing fix (4 places) |
+| `.github/workflows/structure-validation.yml` | remove `if: workflow_dispatch` |
+| `.github/workflows/skills-doctrine-gate.yml` | **new** — 3-job CI gate |
+| `app/services/skills/doctrine.py` | **new** — Single Source of Truth (4 doctrines, 37 rules) |
+| `app/services/skills/bac_exercise_skill.py` | import from doctrine + backward-compat re-export |
+| `app/services/skills/__init__.py` | re-export all doctrines + helpers |
+| `tests/services/test_skills_doctrine.py` | **new** — 42 unit tests |
+| `scripts/fitness/check_skills_doctrine.py` | **new** — drift detector |
+| `.memory/decisions.md` | D-069 entry |
+| `.memory/issues.md` | ISS-CI-GREEN-001 entry |
+| `CLAUDE.md` §6.49 | this section |

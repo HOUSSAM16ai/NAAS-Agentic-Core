@@ -50,9 +50,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # NOTE: every grep below uses `-e --` so that CSS variable names that
+          # start with `--` (e.g. `--bg-color`) are NOT swallowed as GNU/ugrep
+          # long-options. Without `--`, `grep -c "--bg-color" file` is parsed
+          # as `grep -c --bg-color file` and fails with "unrecognized option".
           for var in "--bg-color" "--text-color" "--surface-color" "--border-color" \
                      "--primary-color" "--pre-bg" "--pre-color" "--code-bg" "--code-color"; do
-            count=$(grep -c "$var" frontend/app/globals.css || true)
+            count=$(grep -c -e "$var" -- frontend/app/globals.css || true)
+            count="${count:-0}"
             if [ "$count" -lt 2 ]; then
               echo "❌ $var must appear in both light and dark blocks (found $count)"
               exit 1
@@ -73,8 +78,9 @@ jobs:
           fi
           # Read 60 lines from :root start (enough to cover all vars)
           root_block=$(tail -n +"$root_start" frontend/app/globals.css | head -60)
+          # `grep -e --` defends against `--code-bg` being parsed as a long-option.
           for var in "--code-bg" "--pre-bg" "--code-color" "--pre-color"; do
-            if ! echo "$root_block" | grep -q "$var"; then
+            if ! printf '%s\n' "$root_block" | grep -q -e "$var" --; then
               echo "❌ $var missing from :root fallback — ISS-067 requires all vars in :root"
               exit 1
             fi
@@ -269,8 +275,12 @@ jobs:
             exit 1
           fi
           echo "Checking: $css_file ($(wc -c < "$css_file") bytes)"
+          # `grep -q -e "--token" --` is mandatory: without `-e`, patterns
+          # starting with `--` are eaten as long-options on Ubuntu's
+          # ugrep/grep and the entire check silently fails with
+          # "unrecognized option --code-bg".
           for token in "header-theme-btn" "--code-bg" "--pre-bg" "data-theme"; do
-            if ! grep -q "$token" "$css_file"; then
+            if ! grep -q -e "$token" -- "$css_file"; then
               echo "❌ '$token' missing from compiled CSS"
               exit 1
             fi
@@ -345,9 +355,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # `grep -e -- "--var"` is the only safe form when the pattern itself
+          # starts with `--` (which would otherwise be eaten as a long-option).
           for var in "--bg-color" "--text-color" "--surface-color" "--border-color" \
                      "--primary-color" "--pre-bg" "--code-bg"; do
-            count=$(grep -c "$var" frontend/app/globals.css || true)
+            count=$(grep -c -e "$var" -- frontend/app/globals.css || true)
+            count="${count:-0}"
             if [ "$count" -lt 2 ]; then
               echo "❌ $var not symmetric (count: $count)"
               exit 1

@@ -61,40 +61,40 @@ from app.services.capabilities.exercise_retrieval import (
     load_exercise_content,
 )
 
-logger = get_logger("skill.bac_exercise")
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# ISS-080 (D-068, 2026-05-18) — Explanation Doctrine (single source of truth)
+# D-069 (2026-05-18): Single Source of Truth = `app.services.skills.doctrine`
 #
-# هذا هو الـ doctrine الرسمي لكيفية الشرح المفصل للطالب. يُعتمد بواسطة:
-#   - `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` في `local_graph.py` (LLM prompt)
-#   - `BACSkillExplanationOutput.methodology_handle` (Skill contract)
-#   - tests/services/test_iss080_explanation_doctrine.py (invariant tests)
+# الـ Skill يستورد الـ doctrines من `doctrine.py` بدلاً من تعريفها محلياً.
+# هذا يضمن أن:
+#   - تغيير قاعدة doctrine = تعديل ملف واحد فقط (`doctrine.py`).
+#   - الـ version pin يتزامن تلقائياً عبر كل callers (Skill + system prompts).
+#   - الـ CI gate `check_skills_doctrine.py` يفحص مكاناً واحداً.
 #
-# **القاعدة الذهبية**: الإجابة النموذجية مرجع *حُجّة* — اشرح *لماذا* تصل
-# الخطوات إليها، لا تنسخها حرفياً. الأرقام مُلزِمة، التبرير حر.
+# Backward-compat: re-export `EXPLANATION_DOCTRINE` و
+# `get_explanation_doctrine_summary` و `EXPLANATION_DOCTRINE_VERSION` تحت
+# هذا الـ namespace حتى لا يكسر أي caller قديم.
+# الأسماء مُعرَّفة في `__all__` أدناه لمنع ruff من حذفها كـ unused imports.
 # ─────────────────────────────────────────────────────────────────────────────
-
-#: مفتاح الـ doctrine — يُسمح للـ callers بالاحتجاج عليه عند تغيُّره.
-EXPLANATION_DOCTRINE_VERSION: str = "1.0.0"
-
-#: مبادئ شرح الإجابة النموذجية. يستخدمها الـ Skill عند توليد contract.
-EXPLANATION_DOCTRINE: tuple[str, ...] = (
-    "اعتمد على الإجابة النموذجية كـ *حُجّة* للنتائج العددية والصيغ النهائية.",
-    "لا تنسخ الإجابة النموذجية حرفياً — اشرح *لماذا* كل خطوة تقود للنتيجة.",
-    "أرقام الإجابة النموذجية مُلزِمة. لا تخترع نتائج بديلة.",
-    "صيغ LaTeX من الإجابة النموذجية مُلزِمة. لا تُعد صياغتها برموز مختلفة.",
-    "إذا كان الطالب طلب جزءاً محدداً (I/II/III/أ/ب/ج)، اقتصر عليه ولا تشرح غيره.",
-    "اشرح القاعدة المُستخدمة (لوبيتال، داربو، التكامل بالتجزئة...) قبل تطبيقها.",
-    "اربط بين خطوات الإجابة بـ «لأن ... إذن ...» لتوضيح المنطق التسلسلي.",
-    "في النهاية: تحقق نظري سريع («بفحص نقطة x=0 نلاحظ...») + تفسير هندسي/فيزيائي.",
+from app.services.skills.doctrine import (
+    EXPLANATION_DOCTRINE,
+    EXPLANATION_DOCTRINE_VERSION,
+    get_explanation_doctrine_summary,
 )
 
+logger = get_logger("skill.bac_exercise")
 
-def get_explanation_doctrine_summary() -> str:
-    """يُرجِع doctrine الشرح كنص قصير (للاستخدام في system prompts أو logs)."""
-    return " | ".join(EXPLANATION_DOCTRINE)
+# Backward-compat re-exports — لا تحذف هذه الأسماء بدون ADR (CI gate يحرسها).
+__all__ = [
+    "EXPLANATION_DOCTRINE",
+    "EXPLANATION_DOCTRINE_VERSION",
+    "BACExerciseSkill",
+    "BACSkillExplanationOutput",
+    "BACSkillInput",
+    "BACSkillRetrievalOutput",
+    "SkillFailure",
+    "SkillMode",
+    "get_explanation_doctrine_summary",
+]
 
 
 class SkillMode(str, Enum):  # noqa: UP042  # subclassing keeps str semantics on older runtimes

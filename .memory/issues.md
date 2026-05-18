@@ -1856,3 +1856,81 @@ output: 'نص. آخر'  ✅ CJK punct replaced per chunk
 - **Follow-up work**: the 26 pre-existing test failures are tracked as
   individual rewrites — each `--deselect` entry in `ci.yml` is a TODO.
 - **Doctrine**: D-067 + CLAUDE.md §6.46 (to be added).
+
+
+## ISS-080 — Old Conversation Spinner Catastrophe (2026-05-18)
+
+**Severity**: Critical — كارثة "المشروع دُمِّر نهائياً" مرفوعة بالـ screenshot.
+
+**Reported**: 2026-05-18 — مستخدم: «عند الدخول للمشروع و اختيار محادثة قديمة لاكمال
+العمل لا استطيع اكمال المحادثة. السهم لا يظهر بل يبقى يدور على شكل دائرة».
+الـ screenshot يُظهر: زر الإرسال = دائرة `fa-spin` + LaTeX يظهر كنص خام
+(`\[ x^{2}-x-2=0 \]` بدل المعادلة المُصيَّرة) + لا زر نسخ.
+
+**Root cause** (طبقة واحدة، 3 أعراض مرئية):
+
+`CustomerMessageOut` (`app/api/schemas/customer_chat.py:23`) و `MessageResponse`
+(`app/api/schemas/admin.py:39`) لا يحويان حقل `isComplete`. هذا حقل UI-only يصنعه
+`useAgentSocket` خلال streaming الحي. عند تحميل محادثة قديمة:
+
+```javascript
+// CogniForgeApp.jsx:184
+setMessages(data.messages || []);  // messages بدون isComplete
+```
+
+في `ChatInterface.jsx`:
+- **خط 379**: `hasStreamingMessage = messages.some(m => m.role==='assistant' && !m.isComplete)`
+  يُرجع `true` لأن `!undefined === true` → الزر يعرض دائرة `fa-spin` دائماً.
+- **خط 269**: `isStreaming = msg.role==='assistant' && !msg.isComplete` يُرجع `true`
+  → `Markdown` يدخل فرع `streaming-raw` → LaTeX يظهر كنص خام بدل تصيير KaTeX.
+- **خط 315**: `msg.role==='assistant' && msg.isComplete && !isEmpty` يُرجع `false`
+  → زر النسخ لا يظهر أبداً على رسائل التاريخ.
+
+كل الأعراض الثلاثة نتيجة لـ root cause واحد.
+
+**Fix (D-068)** — جراحي على بوابة `setMessagesSafe` في `useAgentSocket.js`:
+
+```javascript
+const setMessagesSafe = useCallback((msgs) => {
+    if (!Array.isArray(msgs)) { setMessages([]); return; }
+    const normalized = msgs.map((msg) => {
+        if (!msg || typeof msg !== 'object') return msg;
+        const next = { ...msg };
+        if (next.id === undefined || next.id === null) next.id = generateId();
+        // كل رسالة قادمة من التاريخ مكتملة بالتعريف.
+        if (next.role === 'assistant' && next.isComplete !== true) next.isComplete = true;
+        return next;
+    });
+    setMessages(normalized);
+}, []);
+```
+
+- التطبيع عند بوابة الدخول الخارجية فقط (`setMessagesSafe`) — لا يلمس المسار
+  الحي للـ streaming (الذي يُنشئ messages بـ `isComplete` صحيح).
+- يولِّد `id` إن غاب (يمنع مفتاح React مكرَّر).
+- لا يلمس رسائل المستخدم — `isComplete` خاص بالمساعد فقط.
+
+**Skill Doctrine reinforcement (D-068)**:
+أُضيف إلى `app/services/skills/bac_exercise_skill.py`:
+- `EXPLANATION_DOCTRINE` (tuple بـ 8 قواعد): القواعد الرسمية لشرح الإجابة النموذجية
+- `EXPLANATION_DOCTRINE_VERSION = "1.0.0"`: مرجع ثابت
+- `BACSkillExplanationOutput.methodology_handle`: يُعلَّق على كل مخرج EXPLAIN
+- `get_explanation_doctrine_summary()`: استخدام في system prompts و logs
+
+**Live verification**:
+- 7/7 unit tests للـ normalization
+- 8/8 end-to-end simulation (customer + admin shapes، old + live mix، ids preservation)
+- 18/18 regression suite شامل (frontend/tests/iss080_conversation_spinner.test.mjs)
+- ✅ Production build (`next build`) — clean
+- ✅ ESLint على الملف المُعدَّل — صفر تحذيرات
+- ✅ Dev server boot + SSR HTML — يعمل
+- ✅ Verified المُجمَّع: `curl /_next/.../app_fad809ba._.js | grep "ISS-080|D-068|isComplete !== true|setMessagesSafe"` يُرجع كل المعلِّمات
+- ✅ Live skill RETRIEVE: returns bac2016 file
+- ✅ Live skill EXPLAIN with history: methodology_handle=explanation_doctrine_v1.0.0,
+  match_source=history
+
+**CI gate**: `.github/workflows/iss080-conversation-spinner-gate.yml`
+- `spinner-regression`: ينفِّذ 18 فحص + يتحقق من ثبات معلِّمات الـ source.
+- `build-still-passes`: `npm ci` + `npm run build` كاملاً.
+
+**Doctrine**: D-068 + CLAUDE.md §6.47 (لاحقاً).

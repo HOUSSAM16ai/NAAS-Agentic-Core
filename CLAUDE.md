@@ -4630,3 +4630,134 @@ GRAND TOTAL: 70/70 PASS ✅
 |----------|---------|
 | D-049 → D-065 | JSON envelope + LaTeX + theme + Math pipeline + sanitizer + fastpath blockers |
 | **D-066** | **ISS-078 — Streaming sanitization (live Chinese flash) + empty bubble guard (blue-bar flicker)** |
+
+---
+
+## 6.48 Old-Conversation Spinner Catastrophe + Skill Doctrine Reinforcement (2026-05-18, ISS-080 / D-068)
+
+> **الكارثة المُشخَّصة**: عند فتح محادثة قديمة، زر الإرسال يبقى دائرة تدور (`fa-spin`)
+> بدل سهم الإرسال → المستخدم لا يستطيع إرسال أي رسالة → «دمَّر المشروع نهائياً».
+> الـ screenshot أظهر أيضاً: LaTeX يظهر كنص خام (`\[ x^{2}-x-2=0 \]`) + لا زر نسخ.
+> ثلاثة أعراض، سبب جذري واحد.
+
+### السبب الجذري
+
+`CustomerMessageOut` (`app/api/schemas/customer_chat.py:23`) و `MessageResponse`
+(`app/api/schemas/admin.py:39`) يحويان فقط `{role, content, created_at|timestamp}`
+— **لا حقل `isComplete`**. ذلك العَلَم خاص بالواجهة، يُنشئه `useAgentSocket`
+خلال streaming الحي.
+
+عند تحميل محادثة قديمة:
+```javascript
+// CogniForgeApp.jsx:184
+const data = await fetch(historyEndpoint(id))  // CustomerConversationDetails
+setMessages(data.messages || [])               // messages بدون isComplete
+```
+
+في `ChatInterface.jsx`، `!undefined === true` يُسبب الأعراض الثلاثة:
+| السطر | الفحص | النتيجة الكارثية |
+|-------|------|------------------|
+| 379 | `messages.some(m => m.role==='assistant' && !m.isComplete)` | true → زر spinner دائم |
+| 269 | `msg.role==='assistant' && !msg.isComplete` | true → `Markdown` يدخل streaming-raw → LaTeX خام |
+| 315 | `msg.isComplete && !isEmpty` | false → زر النسخ مخفي دائماً |
+
+### الإصلاح (D-068 — بوابة واحدة)
+
+```javascript
+// frontend/app/hooks/useAgentSocket.js
+const setMessagesSafe = useCallback((msgs) => {
+    if (!Array.isArray(msgs)) { setMessages([]); return; }
+    const normalized = msgs.map((msg) => {
+        if (!msg || typeof msg !== 'object') return msg;
+        const next = { ...msg };
+        if (next.id === undefined || next.id === null) next.id = generateId();
+        // كل رسالة قادمة من التاريخ مكتملة بالتعريف.
+        if (next.role === 'assistant' && next.isComplete !== true) next.isComplete = true;
+        return next;
+    });
+    setMessages(normalized);
+}, []);
+```
+
+**لماذا عند البوابة لا في `loadConversation`**: كل caller خارجي للـ hook
+يمر عبر `setMessagesSafe`. التطبيع هنا يحمي ضد أي caller مستقبلي بدون تكرار.
+نفس النمط استُخدِم في D-066 (`sanitize_chunk`/`sanitize_response` عند بوابة
+الـ streaming nodes في orchestrator).
+
+### Skill Doctrine Promotion
+
+أُضيف إلى `app/services/skills/bac_exercise_skill.py`:
+
+```python
+EXPLANATION_DOCTRINE_VERSION: str = "1.0.0"
+EXPLANATION_DOCTRINE: tuple[str, ...] = (
+    "اعتمد على الإجابة النموذجية كـ *حُجّة* للنتائج العددية والصيغ النهائية.",
+    "لا تنسخ الإجابة النموذجية حرفياً — اشرح *لماذا* كل خطوة تقود للنتيجة.",
+    "أرقام الإجابة النموذجية مُلزِمة. لا تخترع نتائج بديلة.",
+    "صيغ LaTeX من الإجابة النموذجية مُلزِمة. لا تُعد صياغتها برموز مختلفة.",
+    "إذا كان الطالب طلب جزءاً محدداً (I/II/III/أ/ب/ج)، اقتصر عليه ولا تشرح غيره.",
+    "اشرح القاعدة المُستخدمة (لوبيتال، داربو، التكامل بالتجزئة...) قبل تطبيقها.",
+    "اربط بين خطوات الإجابة بـ «لأن ... إذن ...» لتوضيح المنطق التسلسلي.",
+    "في النهاية: تحقق نظري سريع («بفحص نقطة x=0 نلاحظ...») + تفسير هندسي/فيزيائي.",
+)
+```
+
+`BACSkillExplanationOutput.methodology_handle` (default
+`explanation_doctrine_v1.0.0`) يُختم على كل مخرج EXPLAIN. تغيير الـ doctrine
+= ترقية الإصدار → كل callers يكتشفون التحديث تلقائياً عبر assertion على الـ handle.
+
+### القواعد الست الدائمة (D-068)
+
+**(1)** أي حقل UI-only (مثل `isComplete`) يجب أن يُعرَّف افتراضه عند بوابة
+دخول البيانات من backend. الـ backend response shape لا يجب أن يحمل عبء
+حقول الواجهة.
+
+**(2)** التطبيع عند بوابة الـ hook ≥ التطبيع عند كل caller — single source of truth.
+
+**(3)** `!undefined === true` فخّ خفي. عند فحص state UI-only، استخدم
+`!== true` بدل `!`.
+
+**(4)** فحص "buggy baseline" إلزامي في الـ regression suite — يثبت أن الكارثة
+حقيقية بدون الـ fix، فلا يضيع الـ fix في refactor مستقبلي.
+
+**(5)** أي قاعدة شرح / منهجية AI يجب أن تعيش كـ tuple/constant داخل الـ Skill
+ذي الصلة، لا كنص حر في system prompt. الـ prompt يستهلكها، لا يحمل تعريفها.
+
+**(6)** `methodology_handle` versioned يضمن تتبُّع التغييرات doctrine — تماماً
+كما يفعل `truth_table.lock.json` للقدرات الحية.
+
+### قياس النجاح حياً
+
+```bash
+# 1. Regression suite — 18/18
+node frontend/tests/iss080_conversation_spinner.test.mjs
+# 🎉 18/18 ISS-080 D-068 regression checks
+
+# 2. Build clean
+npm --prefix=frontend run build
+# ✓ Compiled successfully
+
+# 3. Fix code is in served bundle
+curl -s http://localhost:5050/_next/static/chunks/app_*.js | \
+  grep -o "ISS-080\|D-068\|isComplete !== true\|setMessagesSafe" | sort -u
+# D-068
+# ISS-080
+# isComplete !== true
+# setMessagesSafe
+
+# 4. Live skill works with new doctrine handle
+python3 -c "from app.services.skills import BACExerciseSkill, BACSkillInput, SkillMode; \
+  s=BACExerciseSkill(); \
+  r=s.invoke(BACSkillInput(question='اشرح السؤال 1', mode=SkillMode.EXPLAIN, \
+    history_messages=[{'role':'user','content':'تمرين 2016'}])); \
+  print(r.methodology_handle, r.match_source)"
+# explanation_doctrine_v1.0.0 history
+```
+
+### السلسلة الكاملة (D-049 → D-068)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 → D-066 | JSON envelope + LaTeX + theme + Math pipeline + streaming sanitizer + UI flicker |
+| D-067 | CI repair sweep |
+| **D-068** | **ISS-080 — Old-conversation spinner stuck + raw LaTeX + missing copy button + Skill doctrine versioning** |

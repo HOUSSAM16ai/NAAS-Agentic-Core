@@ -18,12 +18,15 @@ Skill — وحدة مستقلة قابلة للقياس والاختبار وا�
 """
 
 from app.services.skills.bac_exercise_skill import (
+    EXPLANATION_DOCTRINE,
+    EXPLANATION_DOCTRINE_VERSION,
     BACExerciseSkill,
     BACSkillExplanationOutput,
     BACSkillInput,
     BACSkillRetrievalOutput,
     SkillFailure,
     SkillMode,
+    get_explanation_doctrine_summary,
 )
 from app.services.skills.greeting_skill import (
     GreetingSkill,
@@ -39,6 +42,8 @@ from app.services.skills.math_skill import (
 )
 
 __all__ = [
+    "EXPLANATION_DOCTRINE",
+    "EXPLANATION_DOCTRINE_VERSION",
     "BACExerciseSkill",
     "BACSkillExplanationOutput",
     "BACSkillInput",
@@ -53,4 +58,5 @@ __all__ = [
     "MathSkillOutput",
     "SkillFailure",
     "SkillMode",
+    "get_explanation_doctrine_summary",
 ]

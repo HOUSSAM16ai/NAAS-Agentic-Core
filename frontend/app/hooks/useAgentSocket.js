@@ -378,7 +378,39 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
         activeRequestIdRef.current = null;
         setMessages([]);
     };
-    const setMessagesSafe = (msgs) => setMessages(msgs);
+
+    // ISS-080 (D-068, 2026-05-18): تطبيع رسائل التاريخ القادمة من الـ backend.
+    // الكارثة: عند فتح محادثة قديمة، `CustomerMessageOut`/`MessageResponse` لا
+    // يحويان حقل `isComplete`. النتيجة في `ChatInterface.jsx`:
+    //   - `hasStreamingMessage = messages.some(m => m.role==='assistant' && !m.isComplete)`
+    //     يُرجع true (لأن `!undefined === true`) → زر الإرسال يبقى دائرة تدور
+    //     بدل سهم الإرسال → المستخدم لا يستطيع إرسال أي رسالة.
+    //   - `isStreaming = msg.role==='assistant' && !msg.isComplete` يصبح true →
+    //     `Markdown` يدخل الفرع streaming-raw → LaTeX يظهر كنص خام (`\[ x^{2} \]`
+    //     بدل المعادلة المُصيَّرة).
+    //
+    // الحل: عند `setMessages` للتاريخ، نضمن لكل رسالة assistant أن
+    // `isComplete: true` (هي تاريخية → مكتملة بالتعريف)، و نولِّد `id` لو ناقص.
+    const setMessagesSafe = useCallback((msgs) => {
+        if (!Array.isArray(msgs)) {
+            setMessages([]);
+            return;
+        }
+        const normalized = msgs.map((msg) => {
+            if (!msg || typeof msg !== 'object') return msg;
+            const next = { ...msg };
+            if (next.id === undefined || next.id === null) {
+                next.id = generateId();
+            }
+            // كل رسالة قادمة من التاريخ مكتملة بالتعريف. علِّمها صراحةً
+            // فقط لرسائل المساعد (assistant) — رسائل المستخدم لا تحتاج العلم.
+            if (next.role === 'assistant' && next.isComplete !== true) {
+                next.isComplete = true;
+            }
+            return next;
+        });
+        setMessages(normalized);
+    }, []);
 
     return {
         messages,

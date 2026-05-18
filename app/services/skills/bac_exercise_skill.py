@@ -23,6 +23,13 @@ ISS-058 (D-052): الـ Skill المعماري الذي يستبدل "Prompt Spa
 **القياس**:
 - `cogniforge_skill_bac_invocations_total{mode,status}` (counter)
 - `cogniforge_skill_bac_duration_seconds{mode}` (histogram)
+
+**ISS-080 (D-068, 2026-05-18)** — Skill Doctrine موحَّد:
+كل استدعاء يَخرج من `BACExerciseSkill` يحمل معه `methodology_handle` —
+مرجع ثابت إلى الـ doctrine المُعتمد لكيفية شرح الإجابة النموذجية. هذا يفصل
+*"كيف يفكر الـ Skill"* عن *"كيف يُعبَّأ الـ system prompt"*، فإذا تغيَّرت
+الـ doctrine لاحقاً (مثلاً تعزيز قاعدة الاحتجاج بالإجابة النموذجية) — مكان
+واحد فقط يتغيَّر، وكل callers يحصلون على الترقية تلقائياً.
 """
 
 from __future__ import annotations
@@ -55,6 +62,39 @@ from app.services.capabilities.exercise_retrieval import (
 )
 
 logger = get_logger("skill.bac_exercise")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ISS-080 (D-068, 2026-05-18) — Explanation Doctrine (single source of truth)
+#
+# هذا هو الـ doctrine الرسمي لكيفية الشرح المفصل للطالب. يُعتمد بواسطة:
+#   - `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` في `local_graph.py` (LLM prompt)
+#   - `BACSkillExplanationOutput.methodology_handle` (Skill contract)
+#   - tests/services/test_iss080_explanation_doctrine.py (invariant tests)
+#
+# **القاعدة الذهبية**: الإجابة النموذجية مرجع *حُجّة* — اشرح *لماذا* تصل
+# الخطوات إليها، لا تنسخها حرفياً. الأرقام مُلزِمة، التبرير حر.
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: مفتاح الـ doctrine — يُسمح للـ callers بالاحتجاج عليه عند تغيُّره.
+EXPLANATION_DOCTRINE_VERSION: str = "1.0.0"
+
+#: مبادئ شرح الإجابة النموذجية. يستخدمها الـ Skill عند توليد contract.
+EXPLANATION_DOCTRINE: tuple[str, ...] = (
+    "اعتمد على الإجابة النموذجية كـ *حُجّة* للنتائج العددية والصيغ النهائية.",
+    "لا تنسخ الإجابة النموذجية حرفياً — اشرح *لماذا* كل خطوة تقود للنتيجة.",
+    "أرقام الإجابة النموذجية مُلزِمة. لا تخترع نتائج بديلة.",
+    "صيغ LaTeX من الإجابة النموذجية مُلزِمة. لا تُعد صياغتها برموز مختلفة.",
+    "إذا كان الطالب طلب جزءاً محدداً (I/II/III/أ/ب/ج)، اقتصر عليه ولا تشرح غيره.",
+    "اشرح القاعدة المُستخدمة (لوبيتال، داربو، التكامل بالتجزئة...) قبل تطبيقها.",
+    "اربط بين خطوات الإجابة بـ «لأن ... إذن ...» لتوضيح المنطق التسلسلي.",
+    "في النهاية: تحقق نظري سريع («بفحص نقطة x=0 نلاحظ...») + تفسير هندسي/فيزيائي.",
+)
+
+
+def get_explanation_doctrine_summary() -> str:
+    """يُرجِع doctrine الشرح كنص قصير (للاستخدام في system prompts أو logs)."""
+    return " | ".join(EXPLANATION_DOCTRINE)
 
 
 class SkillMode(str, Enum):  # noqa: UP042  # subclassing keeps str semantics on older runtimes
@@ -95,6 +135,8 @@ class BACSkillExplanationOutput(RobustBaseModel):
     - `full_content`: نص التمرين + الإجابة النموذجية (للـ LLM فقط)
     - `requested_part`: الجزء المُحدد (I / II / III) إن وُجد
     - `match_source`: "question" | "history" — من أين أتى الـ matched_entry
+    - `methodology_handle` (ISS-080 / D-068): مرجع doctrine الشرح المُعتمد —
+      كل caller يُفترض أن يحترم هذا. تغيير الـ doctrine = تغيير الرقم هنا.
     """
 
     skill: Literal["bac_exercise"] = "bac_exercise"
@@ -104,6 +146,13 @@ class BACSkillExplanationOutput(RobustBaseModel):
     full_content: str  # لا يُرسل للمستخدم — للـ LLM فقط
     requested_part: str | None = None
     match_source: Literal["question", "history"] = "question"
+    methodology_handle: str = Field(
+        default_factory=lambda: f"explanation_doctrine_v{EXPLANATION_DOCTRINE_VERSION}",
+        description=(
+            "معرّف ثابت لـ doctrine الشرح. يضمن أن الـ caller يستخدم الإصدار "
+            "المعروف من قواعد شرح الإجابة النموذجية."
+        ),
+    )
 
     model_config: ClassVar[dict[str, object]] = {"arbitrary_types_allowed": True}
 

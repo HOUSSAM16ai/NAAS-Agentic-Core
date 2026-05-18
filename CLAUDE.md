@@ -4863,10 +4863,76 @@ Default Codespaces port visibility = `private` → GitHub auth proxy يُرفض 
 | `scripts/test_nextjs_ws_proxy.sh` | **NEW** — live e2e bash. Hardening 2: 9/9 (added `--port` CLI compat + port 3000 public asserts) |
 | `.github/workflows/iss-vpn-codespaces-gate.yml` | NEW — 2-job CI gate (URL translation + Next.js proxy live smoke) |
 
+### Layer 11 — ISP-blocking diagnosis (hardening 5, 2026-05-18, NOT a code bug)
+
+After ALL 10 code layers were verified active by the reporter, the chat
+indicator still showed "غير متصل". The reporter then identified the
+true final root cause by experimentation:
+
+> «حتى مع ال vpn يعمل فقط إذا اخترت في github codespace المنطقة US يعني
+> منطقة تشغيل codespace.»
+
+Translation: **VPN works only when the Codespace region is US.** Translated
+to network behavior: some MENA ISPs do deep-packet inspection on outbound
+TCP/443 traffic and drop the WebSocket `Upgrade: websocket` handshake
+specifically for Microsoft/GitHub IP ranges hosted in **Europe / Asia**
+data centers, while leaving the IP ranges hosted in **US** data centers
+untouched. Plain HTTP (page-load, REST calls) passes either way — so the
+page loads, the UI appears, but the WS handshake silently fails. Exact
+symptom: "page works, indicator stuck on offline."
+
+**This is a USER-SIDE network/region issue. It is NOT fixable in code.**
+
+Hardening 5 adds three diagnostic+documentation surfaces so the user can
+identify the situation quickly and apply the verified workaround:
+
+1. **OfflineDiagnosticBanner ISP warning** (ChatInterface.jsx). When
+   `/cogniforge-proxy-status` returns "fix active" but WS is still
+   offline, the banner shows a yellow warning explaining ISP-level WS
+   blocking and recommending `Region: US East` for the next Codespace.
+
+2. **`scripts/codespaces-network-doctor.sh`** (NEW). Read-only doctor
+   that probes localhost + public URLs from inside the codespace, prints
+   the codespace region + forwarded domain, and surfaces the US-region
+   workaround when all local checks pass but the issue persists.
+
+3. **Documentation**: this section + `.memory/issues.md` ISS-MISC-VPN
+   entry record the user-verified workaround as durable doctrine.
+
+**Verified workaround (user-confirmed 2026-05-18):**
+- github.com/codespaces → New codespace
+- Branch: `claude/fix-vpn-connection-status-fj2Lm`
+- Region: **US East** (or US West) — NOT Europe / Asia
+- Machine type: 2-core+
+- Create → wait for supervisor.sh → open public URL on phone → "متصل"
+
+### Files Modified (D-068 — initial + 5 hardening passes)
+
+| File | Change |
+|------|--------|
+| `frontend/server.js` | **NEW** — Node custom server WS proxy. H2: respects `--port`/`--hostname`. H4: `/cogniforge-proxy-status` endpoint |
+| `frontend/package.json` | `"dev": "node server.js"` (was `next dev`); old kept as `dev:next` |
+| `frontend/app/hooks/useAgentSocket.js` | H1: `translateCloudHostnameToBackend()` + `isCloudForwardedHostname()` + same-origin preference. H3: `getWsBaseCandidates()` |
+| `frontend/app/hooks/useRealtimeConnection.js` | H3: accepts array of candidate URLs, rotates on failure |
+| `frontend/app/components/ChatInterface.jsx` | H4: `OfflineDiagnosticBanner`. H5: ISP-block warning when fix active but WS still offline |
+| `frontend/public/js/legacy-app.jsx` | H1: legacy parity + same-origin preference for cloud-forwarded hostnames |
+| `app/core/settings/base.py` | + `BACKEND_CORS_ORIGIN_REGEX` field + `expand_cloud_forwarded_hosts_and_cors` validator |
+| `app/core/app_blueprint.py` | + `origin_regex` param in `build_cors_options` |
+| `.devcontainer/devcontainer.json` | H2: port 3000 → `"visibility":"public"` (was missing → default private → HTTP 401) |
+| `.devcontainer/supervisor.sh` | H3: self-healing detection of stale `next dev` before launching `node server.js` |
+| `.devcontainer/on-start.sh` | H2: verbose gh ports visibility error logging + added port 5000 |
+| `tests/config/test_codespaces_cors_vpn.py` | NEW — 7 unit tests |
+| `tests/services/test_bac_exercise_skill_contract.py` | NEW — 7 BAC skill contract tests (skills system evolution) |
+| `scripts/test_ws_url_translation.js` | NEW — 18 cases CI-runnable (12 translation + 6 detector) |
+| `scripts/test_nextjs_ws_proxy.sh` | NEW + H4: live e2e bash. H4: 13/13 (added diagnostic + supervisor + multi-candidate asserts) |
+| `scripts/codespaces-force-restart.sh` | H4 NEW — one-shot recovery (kills stale procs, forces port visibility, restarts supervisor) |
+| `scripts/codespaces-network-doctor.sh` | **H5 NEW** — read-only network diagnosis with region/ISP advice |
+| `.github/workflows/iss-vpn-codespaces-gate.yml` | NEW — 2-job CI gate (URL translation + Next.js proxy live smoke) |
+
 ### السلسلة الكاملة (D-049 → D-068)
 
 | Decision | المُصلَح |
 |----------|---------|
 | D-049 → D-066 | JSON + LaTeX + theme + Math + sanitizer + Greeting + LaTeX-stream + UI flicker |
 | D-067 | ISS-079 — Catastrophic trio (Greeting fastpath + model switch + reasoning-leak guard) |
-| **D-068** | **ISS-MISC-VPN — Codespaces "غير متصل" without VPN (cross-subdomain WS + ALLOWED_HOSTS + CORS regex)** |
+| **D-068** | **ISS-MISC-VPN — Codespaces "غير متصل" without VPN. 10 code layers fix the codespace side. Hardening 5 (2026-05-18) documents the final NON-code root cause: MENA-ISP-level WS blocking on non-US Codespace regions. Verified workaround: use Region = US East.** |

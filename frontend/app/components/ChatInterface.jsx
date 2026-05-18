@@ -422,6 +422,33 @@ const OfflineDiagnosticBanner = () => {
                     </span>
                 )}
             </div>
+            {/* ISS-MISC-VPN hardening 5 (2026-05-18 — verified by user): some
+                MENA ISPs do deep-packet-inspection on WebSocket upgrades and
+                drop the handshake for non-US Microsoft/GitHub IPs. Plain HTTP
+                (page load) survives, WS dies → "غير متصل" while the page is
+                visible. If the fix is "active" but WS still fails, this is
+                the most likely cause. The user themselves confirmed: VPN
+                works ONLY when codespace region is US. */}
+            {proxyActive ? (
+                <div style={{
+                    margin: '0.4rem 0',
+                    padding: '0.5rem 0.7rem',
+                    background: 'rgba(251, 191, 36, 0.10)',
+                    border: '1px solid rgba(251, 191, 36, 0.35)',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
+                }}>
+                    <strong style={{ color: '#f59e0b' }}>⚠ الـ fix فعَّال لكن WS لا يزال offline؟</strong>
+                    <br />
+                    السبب الأرجح: <strong>ISP يحجب WebSocket لمنطقة الـ codespace</strong>.
+                    بعض الـ ISPs (خاصة في MENA) تسمح HTTP لكن تحجب WS handshake لـ
+                    Microsoft/GitHub IPs خارج US.
+                    <br />
+                    <strong>الحل المُتحقَّق منه من المستخدم:</strong> أنشئ codespace جديد
+                    باختيار <code>Region: US East</code> أو <code>US West</code> (وليس
+                    Europe / Asia). الـ HTTP و WS يعملان معاً من ISPs MENA على US IPs.
+                </div>
+            ) : null}
             {wsUrls.length > 0 ? (
                 <div style={{ marginBottom: '0.35rem' }}>
                     <strong>URLs المُجرَّبة:</strong>

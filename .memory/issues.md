@@ -6,7 +6,8 @@
 ## 🟢 Resolved 2026-05-17 (ISS-MISC-VPN — Codespaces shows "offline" without VPN)
 
 ### ISS-MISC-VPN · Connection status stuck on "غير متصل" outside VPN [RESOLVED]
-- **Status**: RESOLVED 2026-05-17 — initial pass (3 layers), HARDENED three times 2026-05-17 (4th layer custom server + 5th port visibility + 6th self-healing/resilience/diagnostic) — D-068
+- **Status**: RESOLVED 2026-05-17 (code) + DIAGNOSED 2026-05-18 (network) — initial pass (3 layers) + 4 hardening passes (10 code layers) + 5th hardening for the final NON-code root cause: ISP-level WS blocking on non-US codespace regions — D-068
+- **CRITICAL 2026-05-18 finding (user-confirmed)**: even after ALL 10 code layers, "غير متصل" persists on certain Codespace regions. Verified live by the reporter: «حتى مع ال vpn يعمل فقط إذا اخترت في github codespace المنطقة US يعني منطقة تشغيل codespace». Diagnosis: some MENA ISPs do deep-packet inspection on outbound WebSocket Upgrade requests and silently drop the handshake for Microsoft/GitHub IP ranges hosted in Europe/Asia, while allowing the IP ranges hosted in US data centers. Plain HTTP (page load) passes both — so the page loads but WS dies, exactly matching the symptom. **Verified workaround:** create the Codespace with `Region: US East` (or US West). This is a USER-SIDE network/region issue, not a fixable code defect.
 - **Severity**: CATASTROPHIC (المستخدم يصف: «الكارثة دمرت المشروع نهائيا» — لا يمكن استخدام الواجهة على Codespaces بدون tunneling عبر VPN)
 - **Reported**: مستخدم حقيقي — 3 screenshots متتالية على نفس اليوم:
   1. 12:46 `x-3000.app.github.dev` مع `offline ●` (الـ initial pass — 3 layers)

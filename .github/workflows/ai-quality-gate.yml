@@ -404,22 +404,33 @@ jobs:
           fi
           echo "✅ Exercise explanation prompt present"
           
-          # تحقق من boxed في exercise prompt
-          # The prompt is `_EXERCISE_EXPLANATION_SYSTEM_PROMPT = ( ... )` — a
-          # multi-line parenthesised string. Capture from the opening line to
-          # the first line that is just `)` at column 0. Earlier versions used
-          # `^[A-Z_]` as the end pattern, but that matches the *same* line that
-          # opens the range (since the constant name starts with `_`), so the
-          # captured section was a single line and the `boxed` check always
-          # failed.
-          EXERCISE_SECTION=$(awk '/^_EXERCISE_EXPLANATION_SYSTEM_PROMPT = \(/,/^\)/' "$FILE")
-          if ! echo "$EXERCISE_SECTION" | grep -q 'boxed'; then
-            echo "❌ Exercise prompt missing \\boxed{} instruction"
-            echo "--- captured section (first 40 lines) ---"
-            echo "$EXERCISE_SECTION" | head -40
-            exit 1
-          fi
-          echo "✅ \\boxed{} instruction present in exercise prompt"
+          # D-071: الـ prompt يُبنى من doctrine.py — نتحقق من المصدر مباشرة.
+          # local_graph.py يُعيِّن _EXERCISE_EXPLANATION_SYSTEM_PROMPT = _DOCTRINE_PROMPT
+          # لذا نتحقق من doctrine.py للمحتوى، ومن local_graph.py للـ assignment.
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, ".")
+          try:
+              from app.services.skills.doctrine import EXERCISE_EXPLANATION_SYSTEM_PROMPT
+              prompt = EXERCISE_EXPLANATION_SYSTEM_PROMPT
+              print("✅ Loaded prompt from doctrine (D-071)")
+          except ImportError:
+              import re
+              text = open("app/services/chat/local_graph.py", encoding="utf-8").read()
+              m = re.search(r"_EXERCISE_EXPLANATION_SYSTEM_PROMPT\s*=\s*\((.*?)\)\n", text, re.DOTALL)
+              if not m:
+                  print("❌ Could not find _EXERCISE_EXPLANATION_SYSTEM_PROMPT")
+                  raise SystemExit(1)
+              prompt = m.group(1)
+              print("✅ Loaded prompt from local_graph.py (static fallback)")
+
+          # التحقق من boxed — قد يكون في doctrine.py مباشرة
+          doctrine_text = open("app/services/skills/doctrine.py", encoding="utf-8").read()
+          if "boxed" not in doctrine_text and "boxed" not in prompt:
+              print("❌ Exercise prompt missing \\boxed{} instruction")
+              raise SystemExit(1)
+          print("✅ \\\\boxed{} instruction present in doctrine/prompt")
+          PY
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Summary Job

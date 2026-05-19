@@ -150,22 +150,37 @@ jobs:
       - name: "Check _EXERCISE_EXPLANATION_SYSTEM_PROMPT cleanliness"
         run: |
           python3 - <<'PY'
-          import re
-          text = open("app/services/chat/local_graph.py", encoding="utf-8").read()
-          # Find prompt block
-          m = re.search(r"_EXERCISE_EXPLANATION_SYSTEM_PROMPT\s*=\s*\((.*?)\)\n", text, re.DOTALL)
-          if not m:
-              print("❌ Could not find _EXERCISE_EXPLANATION_SYSTEM_PROMPT")
-              raise SystemExit(1)
-          prompt_block = m.group(1)
+          import sys
+          sys.path.insert(0, ".")
+
+          # D-071: الـ prompt يُبنى من doctrine.py — نتحقق من المصدر مباشرة.
+          # local_graph.py يُعيِّن _EXERCISE_EXPLANATION_SYSTEM_PROMPT = _DOCTRINE_PROMPT
+          # لذا نتحقق من doctrine.EXERCISE_EXPLANATION_SYSTEM_PROMPT.
+          try:
+              from app.services.skills.doctrine import EXERCISE_EXPLANATION_SYSTEM_PROMPT
+              prompt_block = EXERCISE_EXPLANATION_SYSTEM_PROMPT
+              print("✅ Loaded prompt from doctrine.EXERCISE_EXPLANATION_SYSTEM_PROMPT (D-071)")
+          except ImportError:
+              # Fallback: parse local_graph.py statically (pre-D-071 compat)
+              import re
+              text = open("app/services/chat/local_graph.py", encoding="utf-8").read()
+              m = re.search(r"_EXERCISE_EXPLANATION_SYSTEM_PROMPT\s*=\s*\((.*?)\)\n", text, re.DOTALL)
+              if not m:
+                  print("❌ Could not find _EXERCISE_EXPLANATION_SYSTEM_PROMPT")
+                  raise SystemExit(1)
+              prompt_block = m.group(1)
+              print("✅ Loaded prompt from local_graph.py (static parse)")
+
           box_chars = [c for c in prompt_block if 0x2500 <= ord(c) <= 0x257F]
           if len(box_chars) > 2:
               print(f"❌ Found {len(box_chars)} box-drawing chars — D-067 forbids these (tokenizer confusion)")
               raise SystemExit(1)
           print(f"✅ Box-drawing chars: {len(box_chars)} (max 2 allowed)")
-          # Also check length
           chars = len(prompt_block)
-          print(f"✅ Prompt size: {chars} chars (target: < 1000)")
+          if chars > 1000:
+              print(f"❌ Prompt is {chars} chars — exceeds D-067 limit of 1000")
+              raise SystemExit(1)
+          print(f"✅ Prompt size: {chars} chars (< 1000 — D-067 compliant)")
           PY
 
   # ─── Job 4: Reasoning leak guard ───────────────────────────────────────────

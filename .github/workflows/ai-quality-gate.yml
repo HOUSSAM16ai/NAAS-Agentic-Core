@@ -404,32 +404,31 @@ jobs:
           fi
           echo "✅ Exercise explanation prompt present"
           
-          # D-071: الـ prompt يُبنى من doctrine.py — نتحقق من المصدر مباشرة.
-          # local_graph.py يُعيِّن _EXERCISE_EXPLANATION_SYSTEM_PROMPT = _DOCTRINE_PROMPT
-          # لذا نتحقق من doctrine.py للمحتوى، ومن local_graph.py للـ assignment.
+          # D-071: الـ prompt يُبنى من doctrine.py — نتحقق من function body
+          # بدون import (لا dependencies مثبَّتة في هذا الـ step).
           python3 - <<'PY'
-          import sys
-          sys.path.insert(0, ".")
-          try:
-              from app.services.skills.doctrine import EXERCISE_EXPLANATION_SYSTEM_PROMPT
-              prompt = EXERCISE_EXPLANATION_SYSTEM_PROMPT
-              print("✅ Loaded prompt from doctrine (D-071)")
-          except ImportError:
-              import re
-              text = open("app/services/chat/local_graph.py", encoding="utf-8").read()
-              m = re.search(r"_EXERCISE_EXPLANATION_SYSTEM_PROMPT\s*=\s*\((.*?)\)\n", text, re.DOTALL)
-              if not m:
-                  print("❌ Could not find _EXERCISE_EXPLANATION_SYSTEM_PROMPT")
-                  raise SystemExit(1)
-              prompt = m.group(1)
-              print("✅ Loaded prompt from local_graph.py (static fallback)")
+          import re
+          doctrine = open("app/services/skills/doctrine.py", encoding="utf-8").read()
 
-          # التحقق من boxed — قد يكون في doctrine.py مباشرة
-          doctrine_text = open("app/services/skills/doctrine.py", encoding="utf-8").read()
-          if "boxed" not in doctrine_text and "boxed" not in prompt:
-              print("❌ Exercise prompt missing \\boxed{} instruction")
+          # تحقق من boxed في function body (ليس في comments)
+          m = re.search(
+              r"def build_exercise_explanation_prompt\(\).*?(?=\ndef |\Z)",
+              doctrine, re.DOTALL
+          )
+          func_body = m.group(0) if m else doctrine
+          if "boxed" not in func_body:
+              # fallback: check MODEL_ANSWER_EXPLANATION_DOCTRINE section
+              if "boxed" not in doctrine:
+                  print("❌ doctrine.py missing \\boxed{} instruction")
+                  raise SystemExit(1)
+          print("✅ \\boxed{} instruction present in doctrine.py (D-071 source)")
+
+          # تحقق من أن local_graph.py يُعيِّن من doctrine
+          lg = open("app/services/chat/local_graph.py", encoding="utf-8").read()
+          if "EXERCISE_EXPLANATION_SYSTEM_PROMPT" not in lg:
+              print("❌ local_graph.py missing EXERCISE_EXPLANATION_SYSTEM_PROMPT reference")
               raise SystemExit(1)
-          print("✅ \\\\boxed{} instruction present in doctrine/prompt")
+          print("✅ local_graph.py references doctrine prompt (D-071)")
           PY
 
   # ─────────────────────────────────────────────────────────────────────────────

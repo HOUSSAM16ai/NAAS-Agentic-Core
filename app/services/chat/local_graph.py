@@ -753,28 +753,17 @@ async def run_local_graph_stream(
 # للـ LLM كـ context صريح مع تعليمات شرح الإجابة النموذجية خطوة بخطوة.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ISS-079 (D-067 — 2026-05-17): إصلاح كارثي
-# الـ prompt السابق كان يحوي 78×`━` (box-drawing chars) متكرر 6 مرات + 1690 char
-# تجريب حي على nvidia/nemotron-nano-30b-a3b:free كشف أن هذا الـ prompt يُسبب:
-# - content_chunks=0 (الكل في reasoning بالإنجليزية)
-# - "pepepe aaaa" / etymology / English thinking leak إلى المستخدم
-# الحل: prompt مُختصر بدون chars نادرة (~ 500 chars بدل 1690).
-_EXERCISE_EXPLANATION_SYSTEM_PROMPT = (
-    "أنت أستاذ رياضيات للبكالوريا الجزائرية.\n"
-    "اشرح للطالب كيف يفكر، لا تكتفِ بالحساب.\n\n"
-    "قواعد إلزامية:\n"
-    "1. اكتب بالعربية الفصحى فقط — لا إنجليزية، لا روسية، لا تفكير صوتي.\n"
-    "2. لا تنسخ الإجابة النموذجية حرفياً — اشرح المنطق وراءها.\n"
-    "3. لا تخترع نتائج، لا تذكر تمارين أخرى، لا تجيب عن أجزاء غير مطلوبة.\n"
-    "4. LaTeX إلزامي: $$...$$ للمعادلات، \\(...\\) للرموز داخل النص.\n"
-    "5. النتائج الرئيسية: $$\\boxed{...}$$.\n\n"
-    "منهجية الشرح (5 خطوات):\n"
-    "1. المبدأ: ما القاعدة المستخدمة؟ لماذا اخترناها؟\n"
-    "2. الجسر الفكري: «لأن ... إذن ...»\n"
-    "3. الحساب التفصيلي: كل خطوة مع تبريرها.\n"
-    "4. التحقق: كيف نتأكد من صحة النتيجة؟\n"
-    "5. التفسير: ماذا تعني هندسياً أو فيزيائياً؟"
-)
+# D-071 (2026-05-19): الـ prompt يُبنى الآن من doctrine.py مباشرة.
+# هذا يضمن أن أي تغيير في EXPLANATION_DOCTRINE أو MODEL_ANSWER_EXPLANATION_DOCTRINE
+# ينعكس تلقائياً على الـ LLM instruction surface — لا drift ممكن.
+#
+# ISS-079 (D-067 — 2026-05-17): القيود الإلزامية محفوظة:
+# - < 1000 حرف (build_exercise_explanation_prompt() تُطبِّق هذا الحد)
+# - لا box-drawing chars
+# - لا تكرار
+from app.services.skills.doctrine import EXERCISE_EXPLANATION_SYSTEM_PROMPT as _DOCTRINE_PROMPT
+
+_EXERCISE_EXPLANATION_SYSTEM_PROMPT = _DOCTRINE_PROMPT
 
 
 _MAX_EXERCISE_CONTEXT_CHARS = 3000

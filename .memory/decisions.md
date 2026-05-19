@@ -1,5 +1,32 @@
 # Architectural Decisions
-> Last updated: 2026-05-18 | Branch: `claude/fix-github-actions-success-d6CVg`
+> Last updated: 2026-05-19 | Branch: `feat/skills-doctrine-enhancement`
+
+## D-071 · Skills Doctrine: build_exercise_explanation_prompt + local_graph binding (2026-05-19)
+
+**Branch**: `feat/skills-doctrine-enhancement`
+
+### المشكلة
+`_EXERCISE_EXPLANATION_SYSTEM_PROMPT` في `local_graph.py` كان مُعرَّفاً محلياً كـ string ثابت.
+أي تغيير في `EXPLANATION_DOCTRINE` أو `MODEL_ANSWER_EXPLANATION_DOCTRINE` في `doctrine.py`
+لا ينعكس تلقائياً على الـ LLM instruction surface → drift صامت.
+
+### الحل (3 طبقات)
+1. **`build_exercise_explanation_prompt()`** في `doctrine.py` — تبني الـ prompt من الـ doctrine مباشرة.
+2. **`EXERCISE_EXPLANATION_SYSTEM_PROMPT`** ثابت مُصدَّر — single source of truth.
+3. **`local_graph.py`** يستورد من `doctrine.py` — لا تعريف محلي.
+
+### التحقق الحي (2026-05-19)
+- Pipeline: `mode: full | Active: ['planning', 'research', 'reasoning']` ✅
+- Prometheus: 12/12 UP ✅
+- 42 اختبار جديد — 42/42 ✅
+- `ruff` + `runtime_truth` + `validate_structure` + `check_skills_doctrine` كلها ✅
+
+### الثوابت
+1. `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` في `local_graph.py` يُعيَّن من `doctrine.EXERCISE_EXPLANATION_SYSTEM_PROMPT`.
+2. `build_exercise_explanation_prompt()` تُنتج prompt < 1000 حرف بدون box-drawing chars.
+3. أي تغيير في الـ doctrine ينعكس تلقائياً على الـ LLM.
+
+---
 
 ## D-069 · CI Green Restoration + Skills Doctrine Module (ISS-CI-GREEN-001 — 2026-05-18)
 

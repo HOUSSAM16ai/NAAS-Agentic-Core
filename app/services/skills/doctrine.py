@@ -489,6 +489,48 @@ def get_skill_invocation_protocol_summary() -> str:
     return " | ".join(SKILL_INVOCATION_PROTOCOL)
 
 
+def build_exercise_explanation_prompt() -> str:
+    """يبني system prompt شرح التمرين مباشرةً من الـ doctrine.
+
+    D-071 (2026-05-19): هذه الدالة هي **single source of truth** للـ prompt
+    المُرسَل للـ LLM عند شرح تمارين البكالوريا. أي تغيير في الـ doctrine
+    ينعكس تلقائياً على الـ prompt — لا drift ممكن.
+
+    القيود الإلزامية (D-067):
+    - الـ prompt يجب أن يبقى < 1000 حرف (النماذج المجانية تدخل reasoning-mode
+      مع prompts > 1500 حرف).
+    - لا box-drawing chars (U+2500–U+257F) — تُربك tokenizers النماذج المجانية.
+    - لا تكرار — كل قاعدة تُذكر مرة واحدة فقط.
+
+    المُستهلكون:
+    - `app.services.chat.local_graph._EXERCISE_EXPLANATION_SYSTEM_PROMPT`
+    - `microservices.conversation_service.src.conversation_graph`
+    """
+    # الجزء الثابت — هوية الأستاذ + قاعدة اللغة (لا تتغير مع الـ doctrine)
+    header = "أنت أستاذ رياضيات للبكالوريا الجزائرية.\nاشرح للطالب كيف يفكر، لا تكتفِ بالحساب.\n\n"
+
+    # قواعد إلزامية من EXPLANATION_DOCTRINE (أول 5 قواعد — الأكثر أهمية)
+    core_rules = "\n".join(f"{i + 1}. {rule}" for i, rule in enumerate(EXPLANATION_DOCTRINE[:5]))
+
+    # منهجية الشرح من MODEL_ANSWER_EXPLANATION_DOCTRINE (أول 5 مراحل)
+    methodology_lines = "\n".join(
+        f"- {rule.split(':')[0].strip()}" for rule in MODEL_ANSWER_EXPLANATION_DOCTRINE[:5]
+    )
+
+    prompt = header + "قواعد إلزامية:\n" + core_rules + "\n\nمنهجية الشرح:\n" + methodology_lines
+
+    # ضمان عدم تجاوز 1000 حرف (D-067 invariant)
+    if len(prompt) > 1000:
+        prompt = prompt[:997] + "..."
+
+    return prompt
+
+
+#: الـ prompt المُبنى من الـ doctrine — يُستخدم في local_graph و conversation_graph.
+#: D-071: هذا الثابت هو المرجع الوحيد — لا تعريف prompt محلي في أي ملف آخر.
+EXERCISE_EXPLANATION_SYSTEM_PROMPT: Final[str] = build_exercise_explanation_prompt()
+
+
 def list_all_doctrines() -> dict[str, dict[str, object]]:
     """يُرجِع manifest كامل لكل الـ doctrines + versions + consumers (للـ CI)."""
     return SKILL_DOCTRINE_MANIFEST
@@ -499,6 +541,7 @@ __all__ = [
     "CONTENT_INVOCATION_DOCTRINE_VERSION",
     "DETAILED_EXPLANATION_RULES",
     "DETAILED_EXPLANATION_VERSION",
+    "EXERCISE_EXPLANATION_SYSTEM_PROMPT",
     "EXPLANATION_DOCTRINE",
     "EXPLANATION_DOCTRINE_VERSION",
     "MODEL_ANSWER_EXPLANATION_DOCTRINE",
@@ -512,6 +555,7 @@ __all__ = [
     "SKILL_INVOCATION_PROTOCOL_VERSION",
     "STEP_BY_STEP_EXPLANATION_RULES",
     "STEP_BY_STEP_EXPLANATION_VERSION",
+    "build_exercise_explanation_prompt",
     "get_content_invocation_summary",
     "get_detailed_explanation_summary",
     "get_explanation_doctrine_summary",

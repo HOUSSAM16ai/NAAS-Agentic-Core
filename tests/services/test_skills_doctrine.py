@@ -17,19 +17,31 @@ from __future__ import annotations
 import pytest
 
 from app.services.skills.doctrine import (
+    CONTENT_INVOCATION_DOCTRINE,
+    CONTENT_INVOCATION_DOCTRINE_VERSION,
     DETAILED_EXPLANATION_RULES,
     DETAILED_EXPLANATION_VERSION,
     EXPLANATION_DOCTRINE,
     EXPLANATION_DOCTRINE_VERSION,
+    MODEL_ANSWER_EXPLANATION_DOCTRINE,
+    MODEL_ANSWER_EXPLANATION_VERSION,
     MODEL_ANSWER_RELIANCE_RULES,
     MODEL_ANSWER_RELIANCE_VERSION,
     RETRIEVAL_DOCTRINE,
     RETRIEVAL_DOCTRINE_VERSION,
     SKILL_DOCTRINE_MANIFEST,
+    SKILL_INVOCATION_PROTOCOL,
+    SKILL_INVOCATION_PROTOCOL_VERSION,
+    STEP_BY_STEP_EXPLANATION_RULES,
+    STEP_BY_STEP_EXPLANATION_VERSION,
+    get_content_invocation_summary,
     get_detailed_explanation_summary,
     get_explanation_doctrine_summary,
+    get_model_answer_explanation_summary,
     get_model_answer_reliance_summary,
     get_retrieval_doctrine_summary,
+    get_skill_invocation_protocol_summary,
+    get_step_by_step_summary,
     list_all_doctrines,
 )
 
@@ -188,11 +200,26 @@ class TestDetailedExplanationContent:
 class TestDoctrineManifest:
     """`SKILL_DOCTRINE_MANIFEST` يجب أن يصف كل doctrine بشكل صحيح."""
 
-    def test_manifest_has_four_keys(self) -> None:
-        expected = {"retrieval", "explanation", "model_answer_reliance", "detailed_explanation"}
-        assert set(SKILL_DOCTRINE_MANIFEST.keys()) == expected
+    def test_manifest_has_required_keys(self) -> None:
+        """D-069 baseline (4 keys) + D-070 additions (4 keys) = 8 total."""
+        required = {
+            # D-069 baseline
+            "retrieval",
+            "explanation",
+            "model_answer_reliance",
+            "detailed_explanation",
+            # D-070 additions
+            "content_invocation",
+            "model_answer_explanation",
+            "step_by_step_explanation",
+            "skill_invocation_protocol",
+        }
+        assert required.issubset(set(SKILL_DOCTRINE_MANIFEST.keys())), (
+            f"Manifest missing keys: {required - set(SKILL_DOCTRINE_MANIFEST.keys())}"
+        )
 
     def test_manifest_versions_match_constants(self) -> None:
+        # D-069 baseline
         assert SKILL_DOCTRINE_MANIFEST["retrieval"]["version"] == RETRIEVAL_DOCTRINE_VERSION
         assert SKILL_DOCTRINE_MANIFEST["explanation"]["version"] == EXPLANATION_DOCTRINE_VERSION
         assert (
@@ -203,8 +230,26 @@ class TestDoctrineManifest:
             SKILL_DOCTRINE_MANIFEST["detailed_explanation"]["version"]
             == DETAILED_EXPLANATION_VERSION
         )
+        # D-070 additions
+        assert (
+            SKILL_DOCTRINE_MANIFEST["content_invocation"]["version"]
+            == CONTENT_INVOCATION_DOCTRINE_VERSION
+        )
+        assert (
+            SKILL_DOCTRINE_MANIFEST["model_answer_explanation"]["version"]
+            == MODEL_ANSWER_EXPLANATION_VERSION
+        )
+        assert (
+            SKILL_DOCTRINE_MANIFEST["step_by_step_explanation"]["version"]
+            == STEP_BY_STEP_EXPLANATION_VERSION
+        )
+        assert (
+            SKILL_DOCTRINE_MANIFEST["skill_invocation_protocol"]["version"]
+            == SKILL_INVOCATION_PROTOCOL_VERSION
+        )
 
     def test_manifest_rules_count_match(self) -> None:
+        # D-069 baseline
         assert SKILL_DOCTRINE_MANIFEST["retrieval"]["rules_count"] == len(RETRIEVAL_DOCTRINE)
         assert SKILL_DOCTRINE_MANIFEST["explanation"]["rules_count"] == len(EXPLANATION_DOCTRINE)
         assert SKILL_DOCTRINE_MANIFEST["model_answer_reliance"]["rules_count"] == len(
@@ -212,6 +257,19 @@ class TestDoctrineManifest:
         )
         assert SKILL_DOCTRINE_MANIFEST["detailed_explanation"]["rules_count"] == len(
             DETAILED_EXPLANATION_RULES
+        )
+        # D-070 additions
+        assert SKILL_DOCTRINE_MANIFEST["content_invocation"]["rules_count"] == len(
+            CONTENT_INVOCATION_DOCTRINE
+        )
+        assert SKILL_DOCTRINE_MANIFEST["model_answer_explanation"]["rules_count"] == len(
+            MODEL_ANSWER_EXPLANATION_DOCTRINE
+        )
+        assert SKILL_DOCTRINE_MANIFEST["step_by_step_explanation"]["rules_count"] == len(
+            STEP_BY_STEP_EXPLANATION_RULES
+        )
+        assert SKILL_DOCTRINE_MANIFEST["skill_invocation_protocol"]["rules_count"] == len(
+            SKILL_INVOCATION_PROTOCOL
         )
 
     def test_manifest_lists_consumers(self) -> None:
@@ -255,9 +313,137 @@ class TestDoctrineHelpers:
         assert isinstance(summary, str)
         assert len(summary) > 50
 
+    def test_content_invocation_summary(self) -> None:
+        summary = get_content_invocation_summary()
+        assert isinstance(summary, str)
+        assert len(summary) > 50
+        # The doctrine rules themselves contain " | " separators internally,
+        # so we only verify the summary is non-empty and contains all rules.
+        assert " | " in summary
+
+    def test_model_answer_explanation_summary(self) -> None:
+        summary = get_model_answer_explanation_summary()
+        assert isinstance(summary, str)
+        assert len(summary) > 50
+
+    def test_step_by_step_summary(self) -> None:
+        summary = get_step_by_step_summary()
+        assert isinstance(summary, str)
+        assert len(summary) > 50
+
+    def test_skill_invocation_protocol_summary(self) -> None:
+        summary = get_skill_invocation_protocol_summary()
+        assert isinstance(summary, str)
+        assert len(summary) > 50
+
     def test_list_all_doctrines(self) -> None:
         all_d = list_all_doctrines()
         assert all_d == SKILL_DOCTRINE_MANIFEST
+
+
+# ────────────────────────────────────────────────────────────────────────
+# 4b. D-070 Doctrine Content Tests
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestContentInvocationDoctrine:
+    """CONTENT_INVOCATION_DOCTRINE — بروتوكول استدعاء المحتوى."""
+
+    def test_mentions_intent_classification(self) -> None:
+        full_text = " ".join(CONTENT_INVOCATION_DOCTRINE)
+        assert "النية" in full_text or "Intent" in full_text or "intent" in full_text.lower()
+
+    def test_mentions_index_lookup(self) -> None:
+        full_text = " ".join(CONTENT_INVOCATION_DOCTRINE)
+        assert "knowledge_index" in full_text or "فهرس" in full_text
+
+    def test_mentions_display_strip(self) -> None:
+        full_text = " ".join(CONTENT_INVOCATION_DOCTRINE)
+        assert "format_exercise_for_display" in full_text or "التنظيف" in full_text
+
+    def test_mentions_streaming(self) -> None:
+        full_text = " ".join(CONTENT_INVOCATION_DOCTRINE)
+        assert "بث" in full_text or "stream" in full_text.lower()
+
+    def test_min_size(self) -> None:
+        assert len(CONTENT_INVOCATION_DOCTRINE) >= 5
+
+
+class TestModelAnswerExplanationDoctrine:
+    """MODEL_ANSWER_EXPLANATION_DOCTRINE — كيفية شرح الإجابة النموذجية."""
+
+    def test_mentions_understanding_phase(self) -> None:
+        full_text = " ".join(MODEL_ANSWER_EXPLANATION_DOCTRINE)
+        assert "الفهم" in full_text or "ماذا يطلب" in full_text
+
+    def test_mentions_tools_phase(self) -> None:
+        full_text = " ".join(MODEL_ANSWER_EXPLANATION_DOCTRINE)
+        assert "الأدوات" in full_text or "القاعدة" in full_text
+
+    def test_mentions_verification_phase(self) -> None:
+        full_text = " ".join(MODEL_ANSWER_EXPLANATION_DOCTRINE)
+        assert "التحقق" in full_text
+
+    def test_mentions_interpretation_phase(self) -> None:
+        full_text = " ".join(MODEL_ANSWER_EXPLANATION_DOCTRINE)
+        assert "التفسير" in full_text or "تعني" in full_text
+
+    def test_mentions_latex(self) -> None:
+        full_text = " ".join(MODEL_ANSWER_EXPLANATION_DOCTRINE)
+        assert "LaTeX" in full_text or "boxed" in full_text
+
+    def test_min_size(self) -> None:
+        assert len(MODEL_ANSWER_EXPLANATION_DOCTRINE) >= 5
+
+
+class TestStepByStepExplanationRules:
+    """STEP_BY_STEP_EXPLANATION_RULES — قواعد الشرح خطوة بخطوة."""
+
+    def test_mentions_numbering(self) -> None:
+        full_text = " ".join(STEP_BY_STEP_EXPLANATION_RULES)
+        assert "الترقيم" in full_text or "رقم" in full_text
+
+    def test_mentions_transitions(self) -> None:
+        full_text = " ".join(STEP_BY_STEP_EXPLANATION_RULES)
+        assert "إذن" in full_text or "ومنه" in full_text
+
+    def test_mentions_conclusion(self) -> None:
+        full_text = " ".join(STEP_BY_STEP_EXPLANATION_RULES)
+        assert "الخلاصة" in full_text or "خاتمة" in full_text
+
+    def test_mentions_proof_type(self) -> None:
+        full_text = " ".join(STEP_BY_STEP_EXPLANATION_RULES)
+        assert "الإثبات" in full_text or "prove" in full_text.lower()
+
+    def test_min_size(self) -> None:
+        assert len(STEP_BY_STEP_EXPLANATION_RULES) >= 5
+
+
+class TestSkillInvocationProtocol:
+    """SKILL_INVOCATION_PROTOCOL — بروتوكول استدعاء الـ Skills."""
+
+    def test_mentions_pre_invocation_check(self) -> None:
+        full_text = " ".join(SKILL_INVOCATION_PROTOCOL)
+        assert "قبل" in full_text or "pre" in full_text.lower()
+
+    def test_mentions_http_only(self) -> None:
+        full_text = " ".join(SKILL_INVOCATION_PROTOCOL)
+        assert "HTTP" in full_text
+
+    def test_mentions_timeout(self) -> None:
+        full_text = " ".join(SKILL_INVOCATION_PROTOCOL)
+        assert "timeout" in full_text.lower() or "مهلة" in full_text
+
+    def test_mentions_metrics(self) -> None:
+        full_text = " ".join(SKILL_INVOCATION_PROTOCOL)
+        assert "Prometheus" in full_text or "metrics" in full_text.lower()
+
+    def test_mentions_isolation(self) -> None:
+        full_text = " ".join(SKILL_INVOCATION_PROTOCOL)
+        assert "العزل" in full_text or "orchestrator" in full_text.lower()
+
+    def test_min_size(self) -> None:
+        assert len(SKILL_INVOCATION_PROTOCOL) >= 4
 
 
 # ────────────────────────────────────────────────────────────────────────

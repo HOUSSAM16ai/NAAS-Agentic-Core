@@ -98,8 +98,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # -p no:cov disables coverage plugin without requiring pytest-cov installed.
+          # --no-cov requires the plugin to be present; -p no:cov does not.
           python -m pytest tests/services/test_skills_doctrine.py -v --tb=short \
-            --no-cov
+            -p no:cov
 
   # ── Job 3: Required gate (success-only) ─────────────────────────────────────
   skills-doctrine-required:

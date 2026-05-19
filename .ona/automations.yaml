@@ -354,6 +354,31 @@ tasks:
     triggeredBy:
       - manual
 
+  verify-all-services:
+    name: "Verify All Microservices Health"
+    description: >
+      يتحقق من صحة جميع الخدمات المصغرة السبع عند بدء الـ Codespace.
+      يُظهر حالة كل خدمة مع تفاصيل المفاتيح (tavily، llm_backend، graph_ready).
+    command: |
+      echo "=== CogniForge — Microservices Health Check ==="
+      echo ""
+      for port in 8000 8001 8002 8003 8006 8007 8008; do
+        echo -n ":$port  "
+        curl -s --max-time 5 http://localhost:$port/health 2>/dev/null || echo "DEAD"
+        echo ""
+      done
+      echo ""
+      echo "--- تفسير النتائج ---"
+      echo ":8000 monolith     — يجب: status=ok"
+      echo ":8001 user-service — يجب: status=ok"
+      echo ":8002 planning     — يجب: status=ok + database=postgresql"
+      echo ":8003 conversation — يجب: graph_ready=true"
+      echo ":8006 orchestrator — يجب: graph_ready=true"
+      echo ":8007 research     — يجب: tavily_available=true"
+      echo ":8008 reasoning    — يجب: llm_backend=openrouter"
+    triggeredBy:
+      - postStart
+
   verify-stack:
     name: "Verify Full Stack (Step 3)"
     description: تحقق شامل من جميع مكونات الـ stack في Codespaces.

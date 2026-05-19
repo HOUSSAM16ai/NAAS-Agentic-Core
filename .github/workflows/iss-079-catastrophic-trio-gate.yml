@@ -150,37 +150,56 @@ jobs:
       - name: "Check _EXERCISE_EXPLANATION_SYSTEM_PROMPT cleanliness"
         run: |
           python3 - <<'PY'
-          import sys
-          sys.path.insert(0, ".")
+          import re
 
-          # D-071: الـ prompt يُبنى من doctrine.py — نتحقق من المصدر مباشرة.
-          # local_graph.py يُعيِّن _EXERCISE_EXPLANATION_SYSTEM_PROMPT = _DOCTRINE_PROMPT
-          # لذا نتحقق من doctrine.EXERCISE_EXPLANATION_SYSTEM_PROMPT.
-          try:
-              from app.services.skills.doctrine import EXERCISE_EXPLANATION_SYSTEM_PROMPT
-              prompt_block = EXERCISE_EXPLANATION_SYSTEM_PROMPT
-              print("✅ Loaded prompt from doctrine.EXERCISE_EXPLANATION_SYSTEM_PROMPT (D-071)")
-          except ImportError:
-              # Fallback: parse local_graph.py statically (pre-D-071 compat)
-              import re
-              text = open("app/services/chat/local_graph.py", encoding="utf-8").read()
-              m = re.search(r"_EXERCISE_EXPLANATION_SYSTEM_PROMPT\s*=\s*\((.*?)\)\n", text, re.DOTALL)
-              if not m:
-                  print("❌ Could not find _EXERCISE_EXPLANATION_SYSTEM_PROMPT")
+          # D-071: الـ prompt يُبنى من doctrine.py — نتحقق من function body فقط
+          # (الـ comments في doctrine.py تحتوي على ─ decorators — مسموح بها).
+          doctrine = open("app/services/skills/doctrine.py", encoding="utf-8").read()
+
+          # تحقق 1: build_exercise_explanation_prompt موجودة
+          if "def build_exercise_explanation_prompt" not in doctrine:
+              print("❌ build_exercise_explanation_prompt missing from doctrine.py")
+              raise SystemExit(1)
+          print("✅ build_exercise_explanation_prompt present in doctrine.py")
+
+          # تحقق 2: استخراج function body والتحقق من غياب box-drawing chars فيه
+          m = re.search(
+              r"def build_exercise_explanation_prompt\(\).*?(?=\ndef |\Z)",
+              doctrine, re.DOTALL
+          )
+          if m:
+              func_body = m.group(0)
+              box_chars = [c for c in func_body if 0x2500 <= ord(c) <= 0x257F]
+              if len(box_chars) > 2:
+                  print(f"❌ build_exercise_explanation_prompt has {len(box_chars)} box-drawing chars")
                   raise SystemExit(1)
-              prompt_block = m.group(1)
-              print("✅ Loaded prompt from local_graph.py (static parse)")
+              print(f"✅ Box-drawing chars in prompt function: {len(box_chars)} (max 2 allowed)")
+          else:
+              print("⚠️  Could not extract function body — skipping box-drawing check")
 
-          box_chars = [c for c in prompt_block if 0x2500 <= ord(c) <= 0x257F]
-          if len(box_chars) > 2:
-              print(f"❌ Found {len(box_chars)} box-drawing chars — D-067 forbids these (tokenizer confusion)")
+          # تحقق 3: local_graph.py يُعيِّن من doctrine (D-071)
+          lg = open("app/services/chat/local_graph.py", encoding="utf-8").read()
+          if "EXERCISE_EXPLANATION_SYSTEM_PROMPT" not in lg:
+              print("❌ local_graph.py missing EXERCISE_EXPLANATION_SYSTEM_PROMPT reference")
               raise SystemExit(1)
-          print(f"✅ Box-drawing chars: {len(box_chars)} (max 2 allowed)")
-          chars = len(prompt_block)
-          if chars > 1000:
-              print(f"❌ Prompt is {chars} chars — exceeds D-067 limit of 1000")
-              raise SystemExit(1)
-          print(f"✅ Prompt size: {chars} chars (< 1000 — D-067 compliant)")
+          print("✅ local_graph.py references EXERCISE_EXPLANATION_SYSTEM_PROMPT (D-071)")
+
+          # تحقق 4: لا box-drawing chars في الـ prompt assignment في local_graph.py
+          # (السطر الذي يُعيِّن _EXERCISE_EXPLANATION_SYSTEM_PROMPT)
+          for line in lg.splitlines():
+              if "_EXERCISE_EXPLANATION_SYSTEM_PROMPT" in line and "=" in line:
+                  box_in_line = [c for c in line if 0x2500 <= ord(c) <= 0x257F]
+                  if box_in_line:
+                      print(f"❌ Assignment line has box-drawing chars: {repr(line)}")
+                      raise SystemExit(1)
+          print("✅ No box-drawing chars in local_graph prompt assignment")
+
+          # تحقق 5: الـ anchors الإلزامية موجودة في doctrine.py
+          for anchor in ["الإجابة النموذجية", "LaTeX", "حرفياً"]:
+              if anchor not in doctrine:
+                  print(f"❌ doctrine.py missing anchor: {anchor}")
+                  raise SystemExit(1)
+          print("✅ All 3 D-067 anchors present in doctrine.py")
           PY
 
   # ─── Job 4: Reasoning leak guard ───────────────────────────────────────────

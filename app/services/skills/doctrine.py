@@ -451,7 +451,8 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
         "rules_count": 6,
         "consumed_by": (
             "AnswerQualitySkill.evaluate",
-            "conversation_graph._call_llm",
+            # D-073 (2026-05-19): wired into the live monolith path.
+            "local_graph._apply_answer_quality_skill",
         ),
     },
 }

@@ -214,6 +214,78 @@ def _sanitize_local_graph_response(text: str, intent: str) -> str:
     return out
 
 
+def _apply_answer_quality_skill(question: str, answer: str, intent: str) -> str:
+    """D-073: يُطبِّق ``AnswerQualitySkill`` defensively قبل إرجاع الإجابة للطالب.
+
+    قبل D-073 كان ``AnswerQualitySkill`` (D-072) موجوداً كـ class مع 6 فحوصات
+    deterministic — لكنه لم يُستدعَ من أي مسار إنتاجي. هذا يجعله Skill زومبي
+    بحسب قاعدة CLAUDE.md §6.6 (import + call chain + runtime evidence مطلوبة).
+
+    هذا الـ helper يربطه فعلياً في ``_chat_node`` كآخر طبقة دفاع قبل البث للطالب:
+
+    - يَخريط النية المحلية (``educational/general/chat``) إلى نية الـ Skill
+      (``educational/math/chat/retrieval``).
+    - يُعطِّل ``require_steps`` للإجابات القصيرة (< 300 char) — لتجنب false-positives.
+    - يَستخدم ``improved_answer`` من الـ Skill فقط عندما تُحدِث تغييراً ملموساً
+      (مثل تحويل ``\\[...\\]`` → ``$$...$$`` — ISS-071).
+    - يَلتقط أي استثناء — Skill defensive، لا يُفشل المسار أبداً.
+
+    Returns:
+        النص المُصحَّح إذا كان هناك تصحيح، وإلا النص الأصلي.
+    """
+    if not answer or not answer.strip():
+        return answer
+    try:
+        # late import — لتجنب circular dependencies في boot time
+        from app.services.skills import (
+            AnswerQualityInput,
+            AnswerQualityOutput,
+            get_answer_quality_skill,
+        )
+
+        # خرائط النية: local intents → skill intents
+        if intent == "chat":
+            skill_intent = "chat"
+        elif intent in ("educational", "math"):
+            skill_intent = "educational"
+        else:
+            # general / غير معروف → educational (الإعداد الأكثر صرامة)
+            skill_intent = "educational"
+
+        # ضوابط مرنة — الإجابات القصيرة لا تحتاج خطوات مرقمة
+        require_latex = skill_intent in ("educational", "math")
+        require_steps = skill_intent in ("educational", "math") and len(answer) > 300
+
+        result = get_answer_quality_skill().evaluate(
+            AnswerQualityInput(
+                question=question[:2000],
+                answer=answer,
+                intent=skill_intent,  # type: ignore[arg-type]
+                require_latex=require_latex,
+                require_steps=require_steps,
+            )
+        )
+        if isinstance(result, AnswerQualityOutput):
+            if result.improved_answer and result.improved_answer != answer:
+                logger.info(
+                    "answer_quality.improved chars=%d→%d score=%.2f issues=%d",
+                    len(answer),
+                    len(result.improved_answer),
+                    result.score,
+                    len(result.issues),
+                )
+                return result.improved_answer
+            logger.debug(
+                "answer_quality.passed score=%.2f issues=%d",
+                result.score,
+                len(result.issues),
+            )
+    except Exception as exc:
+        # Skill defensive — لا يُفشل المسار أبداً (D-073 invariant)
+        logger.debug("answer_quality skill non-fatal failure: %s", exc)
+    return answer
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -463,6 +535,8 @@ async def _chat_node(state: LocalChatState) -> dict:
         clean = response.replace("\x00", "").strip()
         # ISS-075 D-063: تنظيف foreign-script + chat meta-narration
         clean = _sanitize_local_graph_response(clean, intent)
+        # D-073: AnswerQualitySkill — آخر طبقة دفاع (يحل ZOMBIE skill من D-072)
+        clean = _apply_answer_quality_skill(question, clean, intent)
         logger.info(
             "local_graph.chat_node OK intent=%s chars=%d",
             intent,

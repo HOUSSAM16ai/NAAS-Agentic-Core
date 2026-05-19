@@ -1,5 +1,49 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-19 | Branch: `feat/skills-doctrine-enhancement`
+> Last updated: 2026-05-19 | Branch: `claude/fix-microservices-ci-KrgCg`
+
+---
+
+## 🟢 Resolved 2026-05-19 (D-073 — ISS-081 AnswerQualitySkill ZOMBIE Wire-In)
+
+### ISS-081 · AnswerQualitySkill Defined-But-Never-Called [RESOLVED]
+- **Status**: RESOLVED 2026-05-19 (D-073)
+- **Severity**: HIGH (architectural — Skill أُعلن RESOLVED في D-072 لكن لم يكن مرتبطاً بأي مسار إنتاجي).
+- **Root cause (verified live 2026-05-19)**:
+  ```bash
+  $ grep -rn "AnswerQualitySkill\|get_answer_quality_skill" app/ microservices/ \
+      | grep -v test_ | grep -v __init__.py | grep -v answer_quality_skill.py
+  # (empty — لا call chain من أي router)
+  ```
+  - `AnswerQualitySkill.evaluate` كانت self-reference في الـ manifest.
+  - `conversation_graph._call_llm` كان stub — لا يمكن الوصول إليه (microservices لا تستورد من `app/`).
+  - 6 فحوصات deterministic + 11 Prometheus metric تعريفات + 30 unit test — جميعها لا تُستدعى من user request.
+- **مشكلة ثانوية**: 8 D-070 رموز doctrine (`CONTENT_INVOCATION_DOCTRINE`, `MODEL_ANSWER_EXPLANATION_DOCTRINE`, `STEP_BY_STEP_EXPLANATION_RULES`, `SKILL_INVOCATION_PROTOCOL` + versions) موجودة في `doctrine.py` فقط — غير مُعاد تصديرها من `app.services.skills.__init__`.
+- **Fix (3 طبقات)**:
+  1. `_apply_answer_quality_skill()` helper جديد في `local_graph.py` — defensive، يحول local intent → skill intent، يَختار `require_latex` و `require_steps` ديناميكياً حسب الطول.
+  2. Wire في `_chat_node` بعد `_sanitize_local_graph_response`.
+  3. Re-export 8 D-070 symbols + 5 helper functions + `EXERCISE_EXPLANATION_SYSTEM_PROMPT` من package level.
+- **CI Gate extended**:
+  - `check_d070_doctrines_reexported()` — يحرس على الـ re-exports.
+  - `check_answer_quality_skill_wired()` — يحرس على الـ call chain. أي PR يعيد الـ Skill لحالة ZOMBIE يفشل CI.
+- **Manifest correction**:
+  - `consumed_by`: `("AnswerQualitySkill.evaluate", "conversation_graph._call_llm")` (stub)
+  - → `("AnswerQualitySkill.evaluate", "local_graph._apply_answer_quality_skill")` (real)
+- **Live verification**:
+  ```
+  $ python scripts/fitness/check_skills_doctrine.py
+  ✅ AnswerQualitySkill wired into local_graph._chat_node (D-073, no longer ZOMBIE)
+  ✅ D-070 doctrines re-exported from app.services.skills (D-073)
+  $ pytest tests/services/test_iss081_answer_quality_wiring.py
+  ============================== 18 passed in 0.29s ==============================
+  $ pytest tests/services/test_{skills_doctrine,iss075,iss079,iss081,answer_quality,bac_exercise,greeting,math}*.py
+  ============================= 203 passed in 0.53s ==============================
+  ```
+- **Files**: see D-073 entry in `.memory/decisions.md` (full list).
+- **Invariants** (لا تُكسر):
+  1. AnswerQualitySkill never ZOMBIE — `_apply_answer_quality_skill` يُستدعى دائماً من `_chat_node`.
+  2. Defensive — لا يُفشل المسار حتى لو فشل الـ Skill.
+  3. `improved_answer` يُستخدم فقط إذا تغيَّر عن الأصل.
+  4. 8 D-070 symbols مُعاد تصديرها من package level.
 
 ---
 

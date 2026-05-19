@@ -1,5 +1,5 @@
 {
-  "branch": "feat/skills-doctrine-enhancement",
+  "branch": "claude/fix-microservices-ci-KrgCg",
   "components": [
     {
       "agreed": true,
@@ -9,11 +9,12 @@
         "app/services/chat/local_graph.py"
       ],
       "id": "local_graph",
-      "importer_count": 5,
+      "importer_count": 6,
       "importers_sample": [
         "app/infrastructure/clients/orchestrator_client.py",
         "app/kernel.py",
         "app/services/skills/bac_exercise_skill.py",
+        "tests/services/test_iss081_answer_quality_wiring.py",
         "tests/services/test_skills_doctrine_d071.py",
         "tests/telemetry/test_distributed_tracing.py"
       ],
@@ -314,6 +315,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-05-19T02:17:13.235264+00:00",
+  "generated_at_utc": "2026-05-19T13:56:26.158770+00:00",
   "schema_version": 1
 }

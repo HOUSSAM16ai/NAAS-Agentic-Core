@@ -3,6 +3,30 @@
 
 ---
 
+## 🟢 Resolved 2026-05-19 (D-072 — AnswerQualitySkill + Zombie Microservices Fix)
+
+### D-072 · AnswerQualitySkill + Zombie Microservices [RESOLVED]
+- **Status**: RESOLVED 2026-05-19
+- **Branch**: `feat/microservices-zombie-fix-skills-enhancement`
+- **Root causes**:
+  1. **Zombie microservices**: research-agent (`tavily_available=false`), reasoning-agent (`llm_backend=mock`), orchestrator-service (DEAD), conversation-service (DEAD) — كلها تعمل بدون مفاتيح API.
+  2. **Governance violations**: `database.py` يستخدم `Any` في 13 موضع — يُفشل `test_governance_contracts_any`.
+  3. **Test failure**: `test_assess_understanding_success` يتوقع `gpt-4o-mini` لكن الكود يستخدم `nemotron-nano` المحظور.
+  4. **conversation-service fallback chain**: نموذج واحد فقط بدون fallback عند 429.
+  5. **Skills gap**: لا يوجد Skill لتقييم جودة الإجابة قبل إرسالها للطالب.
+- **Fix**:
+  1. تشغيل جميع الخدمات بالمفاتيح الحقيقية + ملء `secrets.env`.
+  2. استبدال `Any` بـ `object` + `dict[str, object]` في `database.py`.
+  3. تحديث `socratic_tutor.py` ليستخدم `ActiveModels.PRIMARY` من `ai_config`.
+  4. إضافة `_FALLBACK_CHAIN` في `conversation_graph.py` (5 نماذج).
+  5. إنشاء `AnswerQualitySkill` — Skill جديد لتقييم جودة الإجابة (20 اختبار).
+- **Live verification**:
+  - Pipeline mode: `full` ✅ | Active: `['planning', 'research', 'reasoning']` ✅
+  - conversation-service: إجابة عربية + LaTeX + خطوات مرقمة ✅
+  - 534 اختبار تمر ✅ | ruff clean ✅ | guardrails ✅ | runtime_truth ✅
+
+---
+
 ## 🟢 Resolved 2026-05-19 (D-071 — Skills Doctrine Prompt Drift)
 
 ### D-071 · Skills Doctrine: local_graph prompt drift [RESOLVED]

@@ -4913,3 +4913,155 @@ $ ruff check . && ruff format --check . && \
 | `.memory/decisions.md` | D-071 entry |
 | `.memory/issues.md` | D-071 entry |
 | `CLAUDE.md` §6.50 | this section |
+
+---
+
+## 6.51 ISS-081 — AnswerQualitySkill Wire-In: Eliminating the Zombie (2026-05-19, D-073)
+
+### القاعدة الذهبية
+
+> **CLAUDE.md §6.6**: «أي مكون بدون كل الثلاثة `import + call chain + runtime evidence`
+> يُصنَّف DORMANT أو ZOMBIE».
+
+كَوْن Skill **مُعرَّفاً** بـ Pydantic contract + Prometheus metrics + اختبارات وحدة ليس كافياً.
+الـ Skill يجب أن يكون **مُستدعى من مسار إنتاجي حقيقي** ينتهي عند طلب مستخدم فعلي.
+
+### المُكتشَف بالتجريب الحي (2026-05-19)
+
+```bash
+$ grep -rn "AnswerQualitySkill\|get_answer_quality_skill" app/ microservices/ \
+    | grep -v test_ | grep -v __init__.py | grep -v answer_quality_skill.py
+# (empty — لا call chain من أي router)
+```
+
+D-072 (2026-05-19 صباحاً) أعلن إنشاء `AnswerQualitySkill` كـ "Skill رسمي مستقل" مع:
+- 6 فحوصات deterministic (length, latex, box-drawing, numbered_steps, foreign_language, methodology)
+- 11 Prometheus metric تعريفات
+- 30 unit test في `test_answer_quality_skill.py`
+- إدراج في `__init__.py` re-exports + `SKILL_DOCTRINE_MANIFEST`
+
+لكن لا call site من أي WS router أو LangGraph node. الـ Skill عاش كـ "اختبار وحدة + تعريف"
+— لم يصل لطالب واحد. **حالة ZOMBIE perfect** بحسب §6.6.
+
+### الإصلاح (D-073 — 3 طبقات)
+
+**طبقة 1 — `_apply_answer_quality_skill()` helper في `local_graph.py`**:
+
+```python
+def _apply_answer_quality_skill(question: str, answer: str, intent: str) -> str:
+    """D-073: AnswerQualitySkill يُطبَّق defensively قبل إرجاع الإجابة للطالب."""
+    if not answer or not answer.strip():
+        return answer
+    try:
+        from app.services.skills import (
+            AnswerQualityInput, AnswerQualityOutput, get_answer_quality_skill,
+        )
+        # local intents → skill intents
+        skill_intent = "chat" if intent == "chat" else "educational"
+        require_latex = skill_intent in ("educational", "math")
+        require_steps = skill_intent in ("educational", "math") and len(answer) > 300
+        result = get_answer_quality_skill().evaluate(
+            AnswerQualityInput(
+                question=question[:2000], answer=answer, intent=skill_intent,
+                require_latex=require_latex, require_steps=require_steps,
+            )
+        )
+        if isinstance(result, AnswerQualityOutput):
+            if result.improved_answer and result.improved_answer != answer:
+                logger.info("answer_quality.improved score=%.2f", result.score)
+                return result.improved_answer
+    except Exception as exc:
+        logger.debug("answer_quality skill non-fatal failure: %s", exc)
+    return answer
+```
+
+**طبقة 2 — Wire في `_chat_node`**:
+```python
+response = await ai_client.send_message(system_prompt, user_message)
+clean = response.replace("\x00", "").strip()
+clean = _sanitize_local_graph_response(clean, intent)           # ISS-075 (D-063)
+clean = _apply_answer_quality_skill(question, clean, intent)    # ISS-081 (D-073)
+```
+
+**طبقة 3 — D-070 doctrines re-exported من package level**:
+8 رموز كانت غير متاحة من `app.services.skills` قبل D-073:
+- `CONTENT_INVOCATION_DOCTRINE` + `_VERSION`
+- `MODEL_ANSWER_EXPLANATION_DOCTRINE` + `_VERSION`
+- `STEP_BY_STEP_EXPLANATION_RULES` + `_VERSION`
+- `SKILL_INVOCATION_PROTOCOL` + `_VERSION`
+- `EXERCISE_EXPLANATION_SYSTEM_PROMPT` (D-071)
+- 4 دوال summary helper
+
+### CI Gate Extended
+
+`scripts/fitness/check_skills_doctrine.py` — فحصين جديدين:
+
+```
+=== Skills Doctrine Drift Gate (D-069 + D-073) ===
+✅ D-070 doctrines re-exported from app.services.skills (D-073)
+✅ AnswerQualitySkill wired into local_graph._chat_node (D-073, no longer ZOMBIE)
+```
+
+أي PR يعيد الـ Skill لحالة ZOMBIE (يحذف `_apply_answer_quality_skill` أو يُلغي call
+من `_chat_node`) سيفشل في CI gate.
+
+### القواعد الـ 5 الدائمة (D-073)
+
+**(1) Skill never ZOMBIE — D-073 invariant**: كل Skill جديد يُضاف إلى
+`app/services/skills/` يجب أن يكون له **مُستهلِك إنتاجي حقيقي** في الـ
+manifest قبل merge. الـ stub references (`conversation_graph._call_llm`
+عبر architectural boundary) ممنوعة.
+
+**(2) Defensive wiring**: helper يستدعي Skill يجب أن يلتقط `Exception` —
+لا Skill يُفشل المسار. المستخدم يحصل على الأصل لو فشل التحسين.
+
+**(3) `improved_answer` فقط عند تغيير ملموس**: تجنب re-emit نفس النص.
+
+**(4) D-070 doctrines re-exported**: 8 رموز يجب أن تكون متاحة من
+`app.services.skills` (وليس فقط `app.services.skills.doctrine`).
+
+**(5) Manifest reflects reality**: `consumed_by` لا يحوي stub references
+غير قابلة للوصول. CI gate يحرس على هذا.
+
+### قياس النجاح حياً (2026-05-19)
+
+```bash
+$ python scripts/fitness/check_skills_doctrine.py
+✅ AnswerQualitySkill wired into local_graph._chat_node (D-073, no longer ZOMBIE)
+
+$ pytest tests/services/test_iss081_answer_quality_wiring.py
+============================== 18 passed in 0.29s ==============================
+
+$ pytest tests/services/test_{skills_doctrine,iss075,iss079,iss081,answer_quality}*.py
+============================= 203 passed in 0.53s ==============================
+
+$ ruff check + format → All checks passed!
+$ runtime_truth.py --check → matches lock (after --update for new test importer)
+$ validate_structure.py → ✅
+$ ci_guardrails.py → ✅
+```
+
+### السلسلة الكاملة (D-049 → D-073)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 → D-068 | JSON envelope + LaTeX + theme + Math pipeline + sanitizer + UI flicker + spinner |
+| D-069 | CI all-green (grep flag fix + eliminate skipped) + Skills Doctrine Module |
+| D-070 | 4 new doctrines (CONTENT_INVOCATION / MODEL_ANSWER_EXPLANATION / STEP_BY_STEP / INVOCATION_PROTOCOL) |
+| D-071 | `build_exercise_explanation_prompt()` + local_graph doctrine binding |
+| D-072 | AnswerQualitySkill + Zombie microservices fix (claimed RESOLVED — incomplete: skill defined but never called) |
+| **D-073** | **ISS-081 — AnswerQualitySkill ACTUALLY wired into _chat_node + D-070 re-exports + CI guards** |
+
+### الملفات (D-073)
+
+| File | Change |
+|------|--------|
+| `app/services/skills/__init__.py` | re-export 8 D-070 symbols + 5 helpers + `EXERCISE_EXPLANATION_SYSTEM_PROMPT` |
+| `app/services/chat/local_graph.py` | + `_apply_answer_quality_skill()` helper + call in `_chat_node` |
+| `app/services/skills/doctrine.py` | Manifest `answer_quality.consumed_by` reflects real consumer |
+| `scripts/fitness/check_skills_doctrine.py` | + 2 new checks (D-070 re-exports + AnswerQuality wiring) |
+| `tests/services/test_iss081_answer_quality_wiring.py` | **new** — 18 regression tests |
+| `.runtime/truth_table.lock.json` | updated (new test file imports local_graph) |
+| `.memory/decisions.md` | D-073 entry |
+| `.memory/issues.md` | ISS-081 entry |
+| `CLAUDE.md` §6.51 | this section |

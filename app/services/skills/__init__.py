@@ -15,6 +15,7 @@ Skill — وحدة مستقلة قابلة للقياس والاختبار وا�
 - `greeting_skill.GreetingSkill` — ردود التحيات الحتمية (D-067 — يحل ISS-079).
 - `bac_exercise_skill.BACExerciseSkill` — استرجاع وشرح تمارين بكالوريا الجزائر.
 - `math_skill.MathSkill` — حل وشرح أسئلة الرياضيات بـ Math Pipeline (D-061).
+- `answer_quality_skill.AnswerQualitySkill` — تقييم جودة الإجابة وتحسينها (D-072).
 
 **D-069 (2026-05-18)** — Skills Doctrine Module:
 الـ `doctrine` module يُصدِّر القواعد الرسمية لكيفية:
@@ -22,8 +23,19 @@ Skill — وحدة مستقلة قابلة للقياس والاختبار وا�
 - شرح الإجابة النموذجية (EXPLANATION_DOCTRINE — v2.0.0)
 - الاعتماد على الإجابة النموذجية أثناء الشرح المفصل (MODEL_ANSWER_RELIANCE_RULES)
 - ضوابط الشرح المفصل حسب نوع السؤال (DETAILED_EXPLANATION_RULES)
+
+**D-072 (2026-05-19)** — AnswerQualitySkill:
+Skill جديد يُقيِّم جودة إجابة LLM قبل إرسالها للطالب ويُصحِّح المشاكل تلقائياً.
 """
 
+from app.services.skills.answer_quality_skill import (
+    AnswerQualityFailure,
+    AnswerQualityInput,
+    AnswerQualityOutput,
+    AnswerQualitySkill,
+    QualityIssue,
+    get_answer_quality_skill,
+)
 from app.services.skills.bac_exercise_skill import (
     BACExerciseSkill,
     BACSkillExplanationOutput,
@@ -62,7 +74,6 @@ from app.services.skills.math_skill import (
 )
 
 __all__ = [
-    # Doctrines (D-069)
     "DETAILED_EXPLANATION_RULES",
     "DETAILED_EXPLANATION_VERSION",
     "EXPLANATION_DOCTRINE",
@@ -72,7 +83,10 @@ __all__ = [
     "RETRIEVAL_DOCTRINE",
     "RETRIEVAL_DOCTRINE_VERSION",
     "SKILL_DOCTRINE_MANIFEST",
-    # Skills
+    "AnswerQualityFailure",
+    "AnswerQualityInput",
+    "AnswerQualityOutput",
+    "AnswerQualitySkill",
     "BACExerciseSkill",
     "BACSkillExplanationOutput",
     "BACSkillInput",
@@ -85,8 +99,10 @@ __all__ = [
     "MathSkill",
     "MathSkillInput",
     "MathSkillOutput",
+    "QualityIssue",
     "SkillFailure",
     "SkillMode",
+    "get_answer_quality_skill",
     "get_detailed_explanation_summary",
     "get_explanation_doctrine_summary",
     "get_model_answer_reliance_summary",

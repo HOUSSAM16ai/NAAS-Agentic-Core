@@ -22,7 +22,6 @@ import logging
 import ssl
 import time
 from collections.abc import AsyncGenerator
-from typing import Any
 
 from psycopg_pool import AsyncConnectionPool
 from sqlalchemy.engine.url import make_url
@@ -89,16 +88,24 @@ def _make_instrumented_class(base_class: type) -> type:
         على aput / aget / aget_tuple / setup.
         """
 
-        def __init__(self, pool: Any) -> None:
-            super().__init__(pool)
+        def __init__(self, pool: object) -> None:
+            super().__init__(pool)  # type: ignore[arg-type]
             # مجموعة thread_ids النشطة — تُستخدم لـ cogniforge_checkpointer_active_threads
             self._active_threads: set[str] = set()
 
-        async def aput(
-            self, config: dict, checkpoint: Any, metadata: Any, new_versions: Any
-        ) -> Any:
+        async def aput(  # type: ignore[override]
+            self,
+            config: dict[str, object],
+            checkpoint: object,
+            metadata: object,
+            new_versions: object,
+        ) -> object:
             """يكتب checkpoint مع تسجيل Prometheus."""
-            thread_id: str = config.get("configurable", {}).get("thread_id", "unknown")
+            thread_id: str = (
+                config.get("configurable", {}).get("thread_id", "unknown")  # type: ignore[union-attr]
+                if isinstance(config.get("configurable"), dict)
+                else "unknown"
+            )
             prefix = thread_id.split(":", maxsplit=1)[0] if ":" in thread_id else thread_id[:8]
             t0 = time.monotonic()
             try:
@@ -122,9 +129,13 @@ def _make_instrumented_class(base_class: type) -> type:
                     record_checkpointer_error("unknown")
                 raise
 
-        async def aget(self, config: dict) -> Any:
+        async def aget(self, config: dict[str, object]) -> object:  # type: ignore[override]
             """يقرأ checkpoint مع تسجيل Prometheus."""
-            thread_id: str = config.get("configurable", {}).get("thread_id", "unknown")
+            thread_id: str = (
+                config.get("configurable", {}).get("thread_id", "unknown")  # type: ignore[union-attr]
+                if isinstance(config.get("configurable"), dict)
+                else "unknown"
+            )
             prefix = thread_id.split(":", maxsplit=1)[0] if ":" in thread_id else thread_id[:8]
             t0 = time.monotonic()
             try:
@@ -142,9 +153,13 @@ def _make_instrumented_class(base_class: type) -> type:
                 )
                 raise
 
-        async def aget_tuple(self, config: dict) -> Any:
+        async def aget_tuple(self, config: dict[str, object]) -> object:  # type: ignore[override]
             """يقرأ checkpoint tuple مع تسجيل Prometheus."""
-            thread_id: str = config.get("configurable", {}).get("thread_id", "unknown")
+            thread_id: str = (
+                config.get("configurable", {}).get("thread_id", "unknown")  # type: ignore[union-attr]
+                if isinstance(config.get("configurable"), dict)
+                else "unknown"
+            )
             prefix = thread_id.split(":", maxsplit=1)[0] if ":" in thread_id else thread_id[:8]
             t0 = time.monotonic()
             try:
@@ -179,7 +194,7 @@ if AsyncPostgresSaver is not None:
 else:
     # Stub بسيط عند غياب langgraph-checkpoint-postgres
     class _InstrumentedCheckpointer:  # type: ignore[no-redef]
-        def __init__(self, pool: Any) -> None:
+        def __init__(self, pool: object) -> None:
             self._active_threads: set[str] = set()
 
 
@@ -199,7 +214,7 @@ def create_engine() -> AsyncEngine:
     qs = dict(url_obj.query)
     ssl_mode = qs.pop("sslmode", None) or qs.pop("ssl", None)
 
-    connect_kwargs: dict[str, Any] = {
+    connect_kwargs: dict[str, object] = {
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
     }
@@ -256,10 +271,10 @@ def _get_session_factory() -> async_sessionmaker:  # type: ignore[type-arg]
 class _LazySessionFactory:
     """Proxy يُحيل الاستدعاء إلى _get_session_factory() عند أول استخدام."""
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return _get_session_factory()(*args, **kwargs)
+    def __call__(self, *args: object, **kwargs: object) -> AsyncSession:
+        return _get_session_factory()(*args, **kwargs)  # type: ignore[return-value]
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> object:
         return getattr(_get_session_factory(), name)
 
 

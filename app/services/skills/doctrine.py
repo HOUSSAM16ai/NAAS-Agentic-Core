@@ -446,6 +446,14 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "local_graph.run_local_graph",
         ),
     },
+    "answer_quality": {
+        "version": "1.0.0",
+        "rules_count": 6,
+        "consumed_by": (
+            "AnswerQualitySkill.evaluate",
+            "conversation_graph._call_llm",
+        ),
+    },
 }
 
 

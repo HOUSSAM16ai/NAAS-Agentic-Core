@@ -244,9 +244,11 @@ class SocraticTutor:
         ]
 
         try:
-            # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
+            # D-067: استخدام PRIMARY model من ai_config — nemotron-nano محظور (ISS-079)
+            from app.core.ai_config import ActiveModels
+
             response = await self.ai_client.generate(
-                model="nvidia/nemotron-3-nano-30b-a3b:free",
+                model=ActiveModels.PRIMARY,
                 messages=messages,
                 response_format={"type": "json_object"},
             )

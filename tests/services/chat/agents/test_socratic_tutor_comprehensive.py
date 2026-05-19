@@ -106,8 +106,11 @@ async def test_assess_understanding_success(socratic_tutor, mock_ai_client):
     result = await socratic_tutor.assess_understanding("Q", "Ans")
 
     assert result == expected_json
+    # D-067: PRIMARY model من ai_config — لا نُثبِّت اسم النموذج في الـ test
+    from app.core.ai_config import ActiveModels
+
     mock_ai_client.generate.assert_called_once_with(
-        model="gpt-4o-mini", messages=ANY, response_format={"type": "json_object"}
+        model=ActiveModels.PRIMARY, messages=ANY, response_format={"type": "json_object"}
     )
 
 

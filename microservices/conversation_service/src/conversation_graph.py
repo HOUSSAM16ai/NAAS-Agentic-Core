@@ -119,6 +119,15 @@ _NODE_TIMEOUT_SECONDS = 45.0
 # nvidia/nemotron-nano-30b يفشل مع system prompts طويلة.
 _DEFAULT_MODEL = "openai/gpt-oss-20b:free"
 
+# سلسلة fallback — تُجرَّب بالترتيب عند 429 أو فشل النموذج الأساسي (D-067)
+_FALLBACK_CHAIN: list[str] = [
+    "openai/gpt-oss-20b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-3-27b-it:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+]
+
 _INTENT_PATTERNS: dict[str, list[str]] = {
     "educational": [
         "اشرح",
@@ -315,7 +324,10 @@ async def _call_llm_if_available(
     if not api_key:
         return _build_fallback_response(question, intent)
 
-    model = os.environ.get("CONVERSATION_LLM_MODEL", _DEFAULT_MODEL)
+    # بناء قائمة النماذج: النموذج المُحدَّد أولاً ثم سلسلة الـ fallback
+    primary = os.environ.get("CONVERSATION_LLM_MODEL", _DEFAULT_MODEL)
+    model_chain = [primary] + [m for m in _FALLBACK_CHAIN if m != primary]
+
     system_prompt = _get_system_prompt(intent)
     max_tokens = _get_max_tokens(intent)
 
@@ -326,48 +338,62 @@ async def _call_llm_if_available(
             messages.append({"role": h["role"], "content": h["content"]})
     messages.append({"role": "user", "content": question})
 
-    try:
-        import httpx
+    import httpx
 
-        async with httpx.AsyncClient(timeout=40.0) as client:
-            resp = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://cogniforge.dz",
-                    "X-Title": "CogniForge BAC Tutor",
-                },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": 0.3,  # ISS-072: 0.3 للتعليم — أقل تشتتاً من 0.7
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            choices = data.get("choices", [])
-            if not choices:
-                logger.warning("LLM returned no choices: %s", data.get("error", {}))
-                return _build_fallback_response(question, intent)
+    last_exc: Exception | None = None
+    for model in model_chain:
+        try:
+            async with httpx.AsyncClient(timeout=40.0) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://cogniforge.dz",
+                        "X-Title": "CogniForge BAC Tutor",
+                    },
+                    json={
+                        "model": model,
+                        "messages": messages,
+                        "max_tokens": max_tokens,
+                        "temperature": 0.3,  # ISS-072: 0.3 للتعليم — أقل تشتتاً من 0.7
+                    },
+                )
+                # 429 → جرّب النموذج التالي في السلسلة
+                if resp.status_code == 429:
+                    logger.warning("model=%s returned 429 — trying next in chain", model)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                choices = data.get("choices", [])
+                if not choices:
+                    logger.warning(
+                        "LLM returned no choices model=%s: %s", model, data.get("error", {})
+                    )
+                    continue
 
-            msg = choices[0].get("message", {})
-            # ISS-069: بعض نماذج reasoning تضع الإجابة في reasoning لا content
-            content = msg.get("content") or msg.get("reasoning") or ""
-            if not content or not content.strip():
-                logger.warning("LLM returned empty content for model=%s", model)
-                return _build_fallback_response(question, intent)
+                msg = choices[0].get("message", {})
+                # ISS-069: بعض نماذج reasoning تضع الإجابة في reasoning لا content
+                # D-067: لا نُمرِّر reasoning كـ content — إذا content=None نجرّب النموذج التالي
+                content = msg.get("content") or ""
+                if not content or not content.strip():
+                    logger.warning("LLM returned empty content model=%s — trying next", model)
+                    continue
 
-            # ISS-071 + ISS-074: تطبيع LaTeX + تنظيف foreign scripts + chat meta-narration
-            cleaned = _normalize_latex_response(content.strip())
-            if intent == "chat":
-                cleaned = _strip_chat_meta_narration(cleaned)
-            return cleaned
+                # ISS-071 + ISS-074: تطبيع LaTeX + تنظيف foreign scripts + chat meta-narration
+                cleaned = _normalize_latex_response(content.strip())
+                if intent == "chat":
+                    cleaned = _strip_chat_meta_narration(cleaned)
+                logger.info("LLM success model=%s intent=%s", model, intent)
+                return cleaned
 
-    except Exception as exc:
-        logger.warning("LLM call failed model=%s: %s — using fallback", model, exc)
-        return _build_fallback_response(question, intent)
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("LLM call failed model=%s: %s — trying next", model, exc)
+            continue
+
+    logger.error("All models in chain failed. Last error: %s", last_exc)
+    return _build_fallback_response(question, intent)
 
 
 # ── دوال تحليل المادة ─────────────────────────────────────────────────────────

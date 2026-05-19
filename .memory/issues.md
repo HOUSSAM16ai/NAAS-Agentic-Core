@@ -1,5 +1,17 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-18 | Branch: `claude/fix-github-actions-success-d6CVg`
+> Last updated: 2026-05-19 | Branch: `feat/skills-doctrine-enhancement`
+
+---
+
+## 🟢 Resolved 2026-05-19 (D-071 — Skills Doctrine Prompt Drift)
+
+### D-071 · Skills Doctrine: local_graph prompt drift [RESOLVED]
+- **Status**: RESOLVED 2026-05-19
+- **Root cause**: `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` في `local_graph.py` كان string ثابت محلي — لا يتحدث عند تغيير الـ doctrine.
+- **Fix**: `build_exercise_explanation_prompt()` + `EXERCISE_EXPLANATION_SYSTEM_PROMPT` في `doctrine.py`. `local_graph.py` يستورد منها مباشرة.
+- **Live verification**: Pipeline `mode: full` ✅ | Prometheus 12/12 ✅ | 42 tests ✅
+
+---
 
 ---
 

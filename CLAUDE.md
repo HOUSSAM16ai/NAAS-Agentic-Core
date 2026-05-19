@@ -4875,3 +4875,41 @@ $ ruff check . && ruff format --check . && \
 | `.memory/decisions.md` | D-069 entry |
 | `.memory/issues.md` | ISS-CI-GREEN-001 entry |
 | `CLAUDE.md` §6.49 | this section |
+
+---
+
+## 6.50 Skills Doctrine: build_exercise_explanation_prompt + local_graph binding (2026-05-19, D-071)
+
+### المشكلة
+`_EXERCISE_EXPLANATION_SYSTEM_PROMPT` في `local_graph.py` كان string ثابت محلي — أي تغيير في
+`EXPLANATION_DOCTRINE` أو `MODEL_ANSWER_EXPLANATION_DOCTRINE` لا ينعكس تلقائياً على الـ LLM.
+
+### الحل
+- `build_exercise_explanation_prompt()` في `doctrine.py` تبني الـ prompt من الـ doctrine مباشرة.
+- `EXERCISE_EXPLANATION_SYSTEM_PROMPT` ثابت مُصدَّر — single source of truth.
+- `local_graph.py` يستورد `EXERCISE_EXPLANATION_SYSTEM_PROMPT` من `doctrine.py`.
+
+### الثوابت الجديدة (D-071 — لا تُكسر)
+1. `local_graph._EXERCISE_EXPLANATION_SYSTEM_PROMPT` يجب أن يُعيَّن من `doctrine.EXERCISE_EXPLANATION_SYSTEM_PROMPT`.
+2. `build_exercise_explanation_prompt()` تُنتج prompt < 1000 حرف بدون box-drawing chars (D-067).
+3. أي تغيير في `EXPLANATION_DOCTRINE` أو `MODEL_ANSWER_EXPLANATION_DOCTRINE` ينعكس تلقائياً.
+4. `check_skills_doctrine.py` يتحقق من الربط في كل PR.
+
+### التحقق الحي (2026-05-19)
+- Pipeline: `mode: full | Active: ['planning', 'research', 'reasoning']` ✅
+- Prometheus: 12/12 UP ✅
+- 42 اختبار جديد في `tests/services/test_skills_doctrine_d071.py` — 42/42 ✅
+- `ruff` + `runtime_truth` + `validate_structure` + `check_skills_doctrine` كلها ✅
+
+### الملفات (D-071)
+
+| File | Change |
+|------|--------|
+| `app/services/skills/doctrine.py` | `build_exercise_explanation_prompt()` + `EXERCISE_EXPLANATION_SYSTEM_PROMPT` |
+| `app/services/chat/local_graph.py` | import من doctrine بدلاً من تعريف محلي |
+| `scripts/fitness/check_skills_doctrine.py` | تعزيز check_local_graph_prompt_alignment (D-071) |
+| `tests/services/test_skills_doctrine_d071.py` | **new** — 42 اختبار تكامل |
+| `.runtime/truth_table.lock.json` | تحديث بعد إضافة importer جديد |
+| `.memory/decisions.md` | D-071 entry |
+| `.memory/issues.md` | D-071 entry |
+| `CLAUDE.md` §6.50 | this section |

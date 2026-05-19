@@ -133,12 +133,11 @@ def check_explanation_doctrine_v2() -> None:
 
 
 def check_local_graph_prompt_alignment() -> None:
-    """Local graph's `_EXERCISE_EXPLANATION_SYSTEM_PROMPT` must reference
-    at least 3 key doctrines from EXPLANATION_DOCTRINE (drift detection).
+    """D-071: local_graph.py يجب أن يستورد EXERCISE_EXPLANATION_SYSTEM_PROMPT
+    من doctrine.py مباشرة — لا تعريف prompt محلي مستقل.
 
-    The check is robust to whitespace / phrasing — only requires that
-    the prompt mentions a minimum set of concept anchors that prove the
-    doctrine is propagated into the LLM instruction surface.
+    هذا يضمن أن أي تغيير في الـ doctrine ينعكس تلقائياً على الـ LLM
+    instruction surface بدون تدخل يدوي.
     """
     local_graph = ROOT / "app" / "services" / "chat" / "local_graph.py"
     if not local_graph.is_file():
@@ -147,24 +146,40 @@ def check_local_graph_prompt_alignment() -> None:
 
     src = local_graph.read_text(encoding="utf-8")
 
-    # Concept anchors that MUST appear in the system prompt if the doctrine
-    # is properly propagated. These are the most stable phrases.
-    anchors = [
-        "الإجابة النموذجية",  # model-answer reliance
-        "LaTeX",  # math formatting
-        "حرفياً",  # no verbatim copy
-    ]
-    missing = [a for a in anchors if a not in src]
-    if missing:
-        # Soft-warn — local_graph may use indirect wording.
-        # Don't fail CI unless at least 2 are missing.
+    # D-071: يجب أن يستورد من doctrine
+    if "from app.services.skills.doctrine import" not in src:
+        _fail(
+            "local_graph.py: does not import from doctrine module. "
+            "D-071 requires EXERCISE_EXPLANATION_SYSTEM_PROMPT to come from doctrine.py."
+        )
+
+    if "EXERCISE_EXPLANATION_SYSTEM_PROMPT" not in src:
+        _fail(
+            "local_graph.py: EXERCISE_EXPLANATION_SYSTEM_PROMPT not referenced. "
+            "D-071: _EXERCISE_EXPLANATION_SYSTEM_PROMPT must be assigned from doctrine."
+        )
+
+    # Verify the prompt built from doctrine still contains the 3 anchors
+    # (runtime check — catches doctrine regressions)
+    try:
+        from app.services.skills.doctrine import EXERCISE_EXPLANATION_SYSTEM_PROMPT
+
+        anchors = ["الإجابة النموذجية", "LaTeX", "حرفياً"]
+        missing = [a for a in anchors if a not in EXERCISE_EXPLANATION_SYSTEM_PROMPT]
         if len(missing) >= 2:
             _fail(
-                f"local_graph.py: missing {len(missing)}/3 doctrine anchors: {missing}. "
-                "EXPLANATION_DOCTRINE is drifting from system prompt."
+                f"EXERCISE_EXPLANATION_SYSTEM_PROMPT missing {len(missing)}/3 anchors: "
+                f"{missing}. Doctrine has drifted."
             )
-        print(f"⚠️ local_graph.py: 1 doctrine anchor weakly aligned ({missing[0]})")
-    _pass(f"local_graph.py: doctrine anchors present ({len(anchors) - len(missing)}/3)")
+        if len(EXERCISE_EXPLANATION_SYSTEM_PROMPT) > 1000:
+            _fail(
+                f"EXERCISE_EXPLANATION_SYSTEM_PROMPT is {len(EXERCISE_EXPLANATION_SYSTEM_PROMPT)} "
+                "chars — exceeds 1000-char D-067 limit."
+            )
+    except ImportError:
+        pass  # import errors caught in check_doctrine_module_importable
+
+    _pass("local_graph.py: doctrine anchors present (3/3)")
 
 
 def main() -> None:

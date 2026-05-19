@@ -52,6 +52,12 @@ class BACExerciseSkill:
     2026-05-18 (ISS-CI-GREEN-001 / D-069): إضافة RETRIEVAL_DOCTRINE،
     MODEL_ANSWER_RELIANCE_RULES، CONTENT_INVOCATION_RULES، DETAILED_EXPLANATION_RULES
     كقواعد رسمية مستقلة، تطبيقاً لطلب المستخدم بتطوير منظومة الـ skills.
+
+    2026-05-19 (D-070): تطوير منظومة Skills — إضافة:
+    - CONTENT_INVOCATION_DOCTRINE: بروتوكول استدعاء المحتوى التعليمي خطوة بخطوة.
+    - MODEL_ANSWER_EXPLANATION_DOCTRINE: كيفية شرح الإجابة النموذجية للطالب.
+    - STEP_BY_STEP_EXPLANATION_RULES: قواعد الشرح خطوة بخطوة.
+    - SKILL_INVOCATION_PROTOCOL: بروتوكول استدعاء الـ Skills.
 """
 
 from __future__ import annotations
@@ -213,6 +219,164 @@ DETAILED_EXPLANATION_RULES: Final[tuple[str, ...]] = (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Content Invocation Doctrine (D-070)
+# ─────────────────────────────────────────────────────────────────────────────
+# بروتوكول استدعاء المحتوى التعليمي — يحدد الخطوات الإلزامية التي يجب أن
+# يتبعها أي Skill أو handler عند استدعاء محتوى من `knowledge_base/`.
+# المُستفيدون: `BACExerciseSkill`, `local_graph`, `orchestrator_client`.
+# ─────────────────────────────────────────────────────────────────────────────
+
+CONTENT_INVOCATION_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+CONTENT_INVOCATION_DOCTRINE: Final[tuple[str, ...]] = (
+    # — الخطوة 1: تحديد النية (Intent Classification) —
+    "الخطوة 1 — تحديد النية: قبل أي استدعاء، صنِّف نية الطالب إلى: "
+    "(retrieval) طلب التمرين | (explanation) طلب شرح | (concept) سؤال مفهومي. "
+    "النية تحدد الـ Skill المُستدعى.",
+    # — الخطوة 2: تحديد المرجع (Reference Resolution) —
+    "الخطوة 2 — تحديد المرجع: ابحث عن مرجع صريح (سنة + دورة + رقم تمرين) "
+    "في السؤال الحالي أولاً، ثم في `history_messages` آخر 3 رسائل. "
+    "إن لم يوجد مرجع صريح → `reference=None` → fallback للـ LLM العام.",
+    # — الخطوة 3: الفهرسة (Index Lookup) —
+    "الخطوة 3 — الفهرسة: مع `reference != None`، ابحث في `knowledge_index` "
+    "بـ (year, session, subject_number, exercise_number). "
+    "الفهرس يُرجع `matched_entry: ExerciseEntry | None`.",
+    # — الخطوة 4: تحميل الملف (File Load) —
+    "الخطوة 4 — تحميل الملف: مع `matched_entry != None`، حمِّل ملفاً واحداً "
+    "بالضبط عبر `load_exercise_content(matched_entry.file_path)`. "
+    "لا scan على المجلد. لا قراءة ملفات إضافية.",
+    # — الخطوة 5: التنظيف (Display Strip) —
+    "الخطوة 5 — التنظيف: مرِّر المحتوى عبر `format_exercise_for_display()` "
+    "لإزالة: YAML frontmatter، أقسام الإجابة النموذجية، علامات chunk الداخلية. "
+    "المُخرَج للمستخدم يجب أن يكون نصاً تعليمياً نظيفاً فقط.",
+    # — الخطوة 6: البث (Streaming) —
+    "الخطوة 6 — البث: ابثّ المحتوى النظيف عبر `assistant_delta` envelopes. "
+    "حافظ على سلامة LaTeX: لا تقطع `$...$` أو `$$...$$` بين chunks.",
+    # — الخطوة 7: السياق (Context Injection) —
+    "الخطوة 7 — السياق: إذا كانت النية (explanation)، أضف `full_content` "
+    "(يشمل الإجابة النموذجية) إلى سياق الـ LLM. "
+    "لا تُرسل `full_content` للمستخدم مباشرة — فقط للـ LLM.",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model Answer Explanation Doctrine (D-070)
+# ─────────────────────────────────────────────────────────────────────────────
+# كيفية شرح الإجابة النموذجية للطالب — يُكمِّل EXPLANATION_DOCTRINE بتفاصيل
+# المنهجية التعليمية لكل نوع من أنواع الأسئلة في بكالوريا الجزائر.
+# ─────────────────────────────────────────────────────────────────────────────
+
+MODEL_ANSWER_EXPLANATION_VERSION: Final[str] = "1.0.0"
+
+MODEL_ANSWER_EXPLANATION_DOCTRINE: Final[tuple[str, ...]] = (
+    # — مرحلة الفهم (Understanding Phase) —
+    "مرحلة الفهم: ابدأ بـ «ماذا يطلب السؤال؟» — اقرأ المطلوب بصوت عالٍ "
+    "للطالب (جملة واحدة). هذا يُثبِّت الهدف قبل الشرح.",
+    # — مرحلة الأدوات (Tools Phase) —
+    "مرحلة الأدوات: اذكر القاعدة/النظرية/الأداة الرياضية المُستخدمة "
+    "(مثال: «نستخدم قاعدة لوبيتال لأن النهاية من الشكل 0/0»). "
+    "لا تطبِّق الأداة قبل أن تُعرِّفها.",
+    # — مرحلة التطبيق (Application Phase) —
+    "مرحلة التطبيق: طبِّق الأداة على بيانات التمرين خطوة بخطوة. "
+    "كل خطوة في سطر منفصل. كل رمز رياضي في LaTeX. "
+    "اربط بين الخطوات بـ «إذن» / «ومنه» / «بالتعويض».",
+    # — مرحلة التحقق (Verification Phase) —
+    "مرحلة التحقق: بعد الوصول للنتيجة، تحقق منها بطريقة مختلفة "
+    "(مثال: تعويض قيمة في المعادلة الأصلية، أو فحص الإشارة، "
+    "أو التحقق من الوحدات في الفيزياء).",
+    # — مرحلة التفسير (Interpretation Phase) —
+    "مرحلة التفسير: اختم بـ «ماذا تعني هذه النتيجة؟» — تفسير هندسي "
+    "(مثال: «هذا يعني أن الدالة تتزايد على المجال...») أو فيزيائي "
+    '(مثال: «هذا يعني أن الجسم يتسارع بمعدل...").',
+    # — قواعد خاصة بالرياضيات —
+    "في الرياضيات: كل نتيجة وسيطة تُكتب في `$...$`. "
+    "النتيجة النهائية في `$$\\boxed{...}$$`. "
+    "الجداول (جدول الإشارات، جدول التغيرات) تُرسم بـ Markdown.",
+    # — قواعد خاصة بالفيزياء —
+    "في الفيزياء: كل معادلة تُكتب أولاً بالرموز، ثم بالتعويض العددي، "
+    "ثم بالنتيجة مع الوحدة. مثال: $v = d/t = 100/5 = 20 \\text{ m/s}$.",
+    # — قواعد خاصة بالعلوم الطبيعية —
+    "في العلوم الطبيعية: الشرح يتبع منطق السبب والنتيجة. "
+    "كل استنتاج يُبنى على ملاحظة أو تجربة مذكورة في التمرين.",
+    # — التكيف مع مستوى الطالب —
+    "إذا أعاد الطالب السؤال أو قال «لم أفهم»: أعِد الشرح بمثال عددي "
+    "أبسط أولاً، ثم انتقل للتمرين الأصلي. لا تكرر نفس الشرح حرفياً.",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Step-by-Step Explanation Rules (D-070)
+# ─────────────────────────────────────────────────────────────────────────────
+# قواعد الشرح خطوة بخطوة — تُطبَّق على كل شرح مفصل بغض النظر عن النوع.
+# هذه القواعد تُكمِّل DETAILED_EXPLANATION_RULES بضوابط التسلسل المنطقي.
+# ─────────────────────────────────────────────────────────────────────────────
+
+STEP_BY_STEP_EXPLANATION_VERSION: Final[str] = "1.0.0"
+
+STEP_BY_STEP_EXPLANATION_RULES: Final[tuple[str, ...]] = (
+    # — التسلسل المنطقي —
+    "كل خطوة تنبثق من السابقة: لا قفز منطقي. إذا كانت الخطوة n تعتمد على "
+    'نتيجة الخطوة n-2، اذكر ذلك صراحةً («من الخطوة 2 وجدنا أن...").',
+    # — الترقيم الإلزامي —
+    "الترقيم إلزامي: **الخطوة 1:** / **الخطوة 2:** / ... "
+    "لا شرح بدون ترقيم واضح. الطالب يجب أن يعرف أين هو في الشرح.",
+    # — الحجم المتناسب —
+    "كل خطوة تحتل 2-4 أسطر. خطوة أطول من 6 أسطر = يجب تقسيمها. "
+    "خطوة أقصر من سطر = يجب دمجها مع المجاورة.",
+    # — الانتقالات (Transitions) —
+    "استخدم كلمات الانتقال: «إذن» (استنتاج)، «ومنه» (تحويل رياضي)، "
+    "«بالتعويض» (تطبيق عددي)، «نلاحظ أن» (ملاحظة)، "
+    "«نستنتج أن» (استنتاج نهائي).",
+    # — التحقق الذاتي —
+    "في نهاية كل خطوة كبيرة: جملة تحقق قصيرة بين قوسين (مثال: «(تحقق: بتعويض x=0 نجد 0 = 0 ✓)»).",
+    # — التكيف مع نوع السؤال —
+    "سؤال الإثبات (prove): ابدأ من المعطيات وانتهِ بالمطلوب. "
+    "لا تبدأ من المطلوب وترجع للمعطيات (circular reasoning).",
+    "سؤال الحساب (calculate): ابدأ بالصيغة العامة، ثم التعويض، ثم النتيجة.",
+    "سؤال الدراسة (study): ابدأ بتحديد المجال، ثم الاشتقاق، ثم الجدول، ثم الرسم (إن طُلب).",
+    # — الخاتمة الإلزامية —
+    "كل شرح ينتهي بـ «**الخلاصة:**» — جملة واحدة تلخص النتيجة الرئيسية. "
+    "هذا يُثبِّت المعلومة في ذاكرة الطالب.",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Skill Invocation Protocol (D-070)
+# ─────────────────────────────────────────────────────────────────────────────
+# بروتوكول استدعاء الـ Skills — يحدد كيف يجب أن يستدعي الـ orchestrator
+# أو الـ monolith أي Skill، وما هي الضمانات المطلوبة.
+# ─────────────────────────────────────────────────────────────────────────────
+
+SKILL_INVOCATION_PROTOCOL_VERSION: Final[str] = "1.0.0"
+
+SKILL_INVOCATION_PROTOCOL: Final[tuple[str, ...]] = (
+    # — قبل الاستدعاء (Pre-invocation) —
+    "قبل استدعاء أي Skill: تحقق من توفر المدخلات الإلزامية. "
+    "Skill مفقود مدخل إلزامي → `SkillFailure(reason='missing_input')` فوراً. "
+    "لا تستدعِ Skill بمدخلات ناقصة.",
+    # — الاستدعاء (Invocation) —
+    "الاستدعاء عبر HTTP فقط (لا import مباشر بين microservices). "
+    "كل طلب يحمل `X-Correlation-ID` للتتبع الموزع. "
+    "timeout إلزامي: ≤ 30s للـ Skills التي تستدعي LLM، ≤ 5s للـ Skills الأخرى.",
+    # — معالجة النتيجة (Result Handling) —
+    "نتيجة الـ Skill إما `SkillSuccess` أو `SkillFailure`. "
+    "لا تفترض النجاح. تحقق من النوع قبل الاستخدام.",
+    # — الـ Fallback —
+    "كل Skill يجب أن يملك fallback mode: إذا فشل الـ Skill الأساسي، "
+    "يُرجع `SkillFailure` مع `fallback_available=True` ليُعلم الـ caller "
+    "بإمكانية الاستدعاء البديل.",
+    # — القياس (Metrics) —
+    "كل استدعاء Skill يُسجَّل في Prometheus: "
+    "`cogniforge_{skill}_invocations_total{mode, status}` + "
+    "`cogniforge_{skill}_duration_seconds{mode}`. "
+    "لا Skill بدون metrics.",
+    # — العزل (Isolation) —
+    "Skill لا يستدعي Skill آخر مباشرة. كل تنسيق يمر عبر orchestrator. "
+    "هذا يمنع circular dependencies ويُبسِّط الـ debugging.",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -249,6 +413,39 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
         "rules_count": len(DETAILED_EXPLANATION_RULES),
         "consumed_by": ("local_graph._classify_question_budget",),
     },
+    "content_invocation": {
+        "version": CONTENT_INVOCATION_DOCTRINE_VERSION,
+        "rules_count": len(CONTENT_INVOCATION_DOCTRINE),
+        "consumed_by": (
+            "BACExerciseSkill._retrieve",
+            "local_graph.run_local_graph_with_exercise_context",
+            "orchestrator_client._stream_local_retrieval_response",
+        ),
+    },
+    "model_answer_explanation": {
+        "version": MODEL_ANSWER_EXPLANATION_VERSION,
+        "rules_count": len(MODEL_ANSWER_EXPLANATION_DOCTRINE),
+        "consumed_by": (
+            "BACExerciseSkill._explain",
+            "local_graph._EXERCISE_EXPLANATION_SYSTEM_PROMPT",
+        ),
+    },
+    "step_by_step_explanation": {
+        "version": STEP_BY_STEP_EXPLANATION_VERSION,
+        "rules_count": len(STEP_BY_STEP_EXPLANATION_RULES),
+        "consumed_by": (
+            "local_graph._classify_question_budget",
+            "BACExerciseSkill._explain",
+        ),
+    },
+    "skill_invocation_protocol": {
+        "version": SKILL_INVOCATION_PROTOCOL_VERSION,
+        "rules_count": len(SKILL_INVOCATION_PROTOCOL),
+        "consumed_by": (
+            "orchestrator_client.chat_with_agent",
+            "local_graph.run_local_graph",
+        ),
+    },
 }
 
 
@@ -272,28 +469,56 @@ def get_detailed_explanation_summary() -> str:
     return " | ".join(DETAILED_EXPLANATION_RULES)
 
 
+def get_content_invocation_summary() -> str:
+    """يُرجِع بروتوكول استدعاء المحتوى كنص قصير (للـ prompts / logs)."""
+    return " | ".join(CONTENT_INVOCATION_DOCTRINE)
+
+
+def get_model_answer_explanation_summary() -> str:
+    """يُرجِع doctrine شرح الإجابة النموذجية (للـ system prompts)."""
+    return " | ".join(MODEL_ANSWER_EXPLANATION_DOCTRINE)
+
+
+def get_step_by_step_summary() -> str:
+    """يُرجِع قواعد الشرح خطوة بخطوة (للـ prompts)."""
+    return " | ".join(STEP_BY_STEP_EXPLANATION_RULES)
+
+
+def get_skill_invocation_protocol_summary() -> str:
+    """يُرجِع بروتوكول استدعاء الـ Skills (للـ orchestrator / logs)."""
+    return " | ".join(SKILL_INVOCATION_PROTOCOL)
+
+
 def list_all_doctrines() -> dict[str, dict[str, object]]:
     """يُرجِع manifest كامل لكل الـ doctrines + versions + consumers (للـ CI)."""
     return SKILL_DOCTRINE_MANIFEST
 
 
 __all__ = [
+    "CONTENT_INVOCATION_DOCTRINE",
+    "CONTENT_INVOCATION_DOCTRINE_VERSION",
     "DETAILED_EXPLANATION_RULES",
     "DETAILED_EXPLANATION_VERSION",
     "EXPLANATION_DOCTRINE",
     "EXPLANATION_DOCTRINE_VERSION",
+    "MODEL_ANSWER_EXPLANATION_DOCTRINE",
+    "MODEL_ANSWER_EXPLANATION_VERSION",
     "MODEL_ANSWER_RELIANCE_RULES",
     "MODEL_ANSWER_RELIANCE_VERSION",
-    # Doctrines
     "RETRIEVAL_DOCTRINE",
-    # Versions
     "RETRIEVAL_DOCTRINE_VERSION",
-    # Manifest
     "SKILL_DOCTRINE_MANIFEST",
+    "SKILL_INVOCATION_PROTOCOL",
+    "SKILL_INVOCATION_PROTOCOL_VERSION",
+    "STEP_BY_STEP_EXPLANATION_RULES",
+    "STEP_BY_STEP_EXPLANATION_VERSION",
+    "get_content_invocation_summary",
     "get_detailed_explanation_summary",
     "get_explanation_doctrine_summary",
+    "get_model_answer_explanation_summary",
     "get_model_answer_reliance_summary",
-    # Helpers
     "get_retrieval_doctrine_summary",
+    "get_skill_invocation_protocol_summary",
+    "get_step_by_step_summary",
     "list_all_doctrines",
 ]

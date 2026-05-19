@@ -88,8 +88,11 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           # Install minimal set required to import & test the doctrine module.
+          # PyJWT is required because the root conftest.py (imported by pytest
+          # automatically) does `import jwt` at module level.
           pip install -q pytest pytest-asyncio "pydantic>=2.11.5,<3.0.0" \
-            "pydantic-settings>=2.3.0,<3.0.0"
+            "pydantic-settings>=2.3.0,<3.0.0" "PyJWT>=2.8.0,<3.0.0" \
+            "passlib>=1.7.4" "bcrypt>=3.2.0"
 
       - name: Run doctrine invariants test suite
         shell: bash

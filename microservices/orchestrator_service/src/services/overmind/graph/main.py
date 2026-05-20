@@ -500,10 +500,17 @@ def _configure_dspy() -> None:
         ).strip()
         if not dspy_model.startswith("openai/"):
             dspy_model = f"openai/{dspy_model}"
+        # DEADLOCK FIX: bound the structured-output call. Without an explicit
+        # timeout (and with DSPy's default num_retries=8) a stalled free-tier
+        # OpenRouter connection blocks SupervisorNode's worker thread forever,
+        # hanging the graph at its entry node. A bounded call raises instead,
+        # letting the deterministic heuristic fallback engage.
         lm = dspy.LM(
             model=dspy_model,
             api_base="https://openrouter.ai/api/v1",
             api_key=openrouter_key,
+            timeout=25,
+            num_retries=0,
         )
         dspy.settings.configure(lm=lm)
     except Exception as exc:
@@ -589,8 +596,13 @@ class SupervisorNode:
                 return {"intent": "admin", "query": query}
 
         try:
-            result = await asyncio.to_thread(
-                self.dspy_classifier, history=formatted_history, question=query
+            # DEADLOCK FIX: separate routing from I/O — bound the structured-output
+            # classification so a stalled LLM cannot freeze the entry node. On
+            # timeout, asyncio.TimeoutError is caught below and routing falls
+            # through to the deterministic free-response heuristic.
+            result = await asyncio.wait_for(
+                asyncio.to_thread(self.dspy_classifier, history=formatted_history, question=query),
+                timeout=30.0,
             )
             try:
                 conf = float(result.confidence)
@@ -1103,14 +1115,19 @@ def route_intent(state: AgentState) -> str:
     if intent == "search":
         intent = "educational"
 
-    node = {
+    routing_map = {
         "educational": "query_rewriter",
         "admin": "admin_agent",
         "tool": "tool_executor",
         "chat": "chat_fallback",
         "general_knowledge": "general_knowledge",
-    }.get(intent, "query_rewriter")
-    logger.info(f"SUPERVISOR_NODE → routing to → {node}")
+    }
+    # DEADLOCK FIX: guarantee a valid branch. Returning a raw intent absent
+    # from the conditional-edge map raises a LangGraph "unknown branch" error;
+    # clamp unexpected intents to a deterministic default exit.
+    if intent not in routing_map:
+        intent = "educational"
+    logger.info(f"SUPERVISOR_NODE → routing to → {routing_map[intent]}")
     return intent
 
 
@@ -1201,6 +1218,10 @@ def create_unified_graph(admin_app=None, checkpointer=None):
     )  # tool_executor -> validator directly, bypassing synthesizer to not break admin outputs
     graph.add_edge("chat_fallback", "validator")
     graph.add_edge("synthesizer", "validator")
+    # DEADLOCK FIX: general_knowledge had no outgoing edge — a silent dead-end
+    # bypassing the quality gate. Wire it into the validator so every leaf
+    # exits through the single termination path.
+    graph.add_edge("general_knowledge", "validator")
 
     graph.add_conditional_edges("validator", check_quality, {"pass": END, "fail": "supervisor"})
 

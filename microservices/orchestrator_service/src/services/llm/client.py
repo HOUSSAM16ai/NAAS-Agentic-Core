@@ -35,14 +35,19 @@ class AIClient:
         if not api_key:
             logger.warning("No API Key found for AI Client. AI features will fail.")
 
+        # DEADLOCK FIX: bound leaf-node streaming/generate I/O. Without an
+        # explicit timeout a stalled OpenRouter stream blocks the node
+        # indefinitely; a bounded client raises so the node's fallback engages.
         self.client = AsyncOpenAI(
             api_key=api_key or "dummy-key",
             base_url=base_url,
+            timeout=45.0,
         )
 
         self.sync_client = OpenAI(
             api_key=api_key or "dummy-key",
             base_url=base_url,
+            timeout=45.0,
         )
         # ISS-069 (2026-05-15): nemotron-3-nano-omni-30b-a3b-reasoning:free يضع الإجابة
         # في message.reasoning لا message.content → content=None مع system prompt.

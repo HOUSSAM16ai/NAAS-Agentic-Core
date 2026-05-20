@@ -351,3 +351,11 @@ If a doc here ever says a ZOMBIE/DORMANT component is "the primary handler", tha
 
 ## Update 2026-05-06 — Chat Stream Safety
 - Admin boundary now returns sanitized stream error payloads (no raw exception echo to client).
+
+
+## Update 2026-05-20 — BKT Cognitive Layer (D-074, E-TAALEEM Protocol V6.0)
+- **BKT is the foundational cognitive layer.** `app/services/skills/bkt_engine.py:BKTEngine` (deterministic Bayesian Knowledge Tracing) is the substrate for every future autonomous pedagogical skill (adaptive difficulty, hints, learning paths). New adaptive skills build on `student_mastery_probability` — they MUST NOT re-invent mastery tracking. Governed by the versioned `BKT_COGNITIVE_DOCTRINE` (CI-validated in `scripts/fitness/check_skills_doctrine.py`).
+- **Persistence**: append-only `student_bkt_analytics` (time-series log). Auto-created on boot; never upserted.
+- **Abstraction Ban (Zero Cognitive Overload)**: generative-UI node labels are concrete human-readable Arabic (e.g., "كرة حمراء"), never abstract symbols (A/B|A/Ā). Hybrid extraction in `OrchestratorClient` (deterministic → LLM → concrete fallback).
+- **Honest status**: BKT engine/persistence/emit = ACTIVE; the `bkt_hint_display` frontend portal = PARTIAL (stub renders fallback text; rich visualization pending).
+- **DB egress**: Codespaces blocks Postgres ports 6543/5432 — schema changes via boot auto-creation (`validate_schema_on_startup`), not sandbox SQL.

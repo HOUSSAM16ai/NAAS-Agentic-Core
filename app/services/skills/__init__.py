@@ -16,6 +16,9 @@ Skill — وحدة مستقلة قابلة للقياس والاختبار وا�
 - `bac_exercise_skill.BACExerciseSkill` — استرجاع وشرح تمارين بكالوريا الجزائر.
 - `math_skill.MathSkill` — حل وشرح أسئلة الرياضيات بـ Math Pipeline (D-061).
 - `answer_quality_skill.AnswerQualitySkill` — تقييم جودة الإجابة وتحسينها (D-072).
+- `bkt_engine.BKTEngine` — الطبقة المعرفية الأساسية (Bayesian Knowledge Tracing،
+  D-074). الأساس الذي تُبنى فوقه كل القدرات التكيّفية المستقبلية. يلتزم بـ
+  `BKT_COGNITIVE_DOCTRINE` (الإصدار `BKT_COGNITIVE_DOCTRINE_VERSION`).
 
 **D-069 (2026-05-18)** — Skills Doctrine Module:
 الـ `doctrine` module يُصدِّر القواعد الرسمية لكيفية:
@@ -51,6 +54,8 @@ from app.services.skills.bkt_engine import (
     get_bkt_engine,
 )
 from app.services.skills.doctrine import (
+    BKT_COGNITIVE_DOCTRINE,
+    BKT_COGNITIVE_DOCTRINE_VERSION,
     CONTENT_INVOCATION_DOCTRINE,
     CONTENT_INVOCATION_DOCTRINE_VERSION,
     DETAILED_EXPLANATION_RULES,
@@ -70,6 +75,7 @@ from app.services.skills.doctrine import (
     STEP_BY_STEP_EXPLANATION_RULES,
     STEP_BY_STEP_EXPLANATION_VERSION,
     build_exercise_explanation_prompt,
+    get_bkt_cognitive_summary,
     get_content_invocation_summary,
     get_detailed_explanation_summary,
     get_explanation_doctrine_summary,
@@ -94,6 +100,8 @@ from app.services.skills.math_skill import (
 )
 
 __all__ = [
+    "BKT_COGNITIVE_DOCTRINE",
+    "BKT_COGNITIVE_DOCTRINE_VERSION",
     "CONTENT_INVOCATION_DOCTRINE",
     "CONTENT_INVOCATION_DOCTRINE_VERSION",
     "DETAILED_EXPLANATION_RULES",
@@ -136,6 +144,7 @@ __all__ = [
     "SkillMode",
     "build_exercise_explanation_prompt",
     "get_answer_quality_skill",
+    "get_bkt_cognitive_summary",
     "get_bkt_engine",
     "get_content_invocation_summary",
     "get_detailed_explanation_summary",

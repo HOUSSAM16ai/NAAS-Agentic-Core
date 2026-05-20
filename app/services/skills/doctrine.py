@@ -377,6 +377,31 @@ SKILL_INVOCATION_PROTOCOL: Final[tuple[str, ...]] = (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# BKT Cognitive Doctrine (D-074 / Protocol V6.0) — الطبقة المعرفية الأساسية
+# ─────────────────────────────────────────────────────────────────────────────
+BKT_COGNITIVE_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم طبقة التتبّع المعرفي البايزي (BKT) — الأساس
+#: المعرفي لكل skill تربوي مستقبلي في منصة E-TAALEEM.
+BKT_COGNITIVE_DOCTRINE: Final[tuple[str, ...]] = (
+    "BKT هي الطبقة المعرفية الأساسية لكل skill تربوي مستقبلي — أي قدرة تكيّفية "
+    "(تدرّج الصعوبة، التلميحات، مسار التعلّم) تُبنى فوق student_mastery_probability.",
+    "Zero Cognitive Overload: الجمهور طلاب بكالوريا — الرموز المجرّدة (A, B|A, Ā) "
+    "ممنوعة نهائياً في عُقَد الواجهة التوليدية.",
+    "Abstraction Ban: كل مكوّن UI توليدي يستخدم نموذج الاستخراج الهجين "
+    "(deterministic-first ثم LLM عند الحاجة) لإخراج تسميات ملموسة بشرية "
+    "(كرة حمراء، سحب ناجح، قطعة معيبة) — وحتى الـ fallback ملموس، لا حرف مجرّد.",
+    "BKT سجل append-only فقط — كل تفاعل صف جديد؛ لا تحديث في المكان. الإتقان "
+    "السابق يُقرأ من آخر صف لنفس (user_id, concept_id). يحفظ السلسلة الزمنية كاملة.",
+    "المخطط الإلزامي: concept_id + cognitive_load_estimate (low/medium/high) + "
+    "student_mastery_probability ∈ [0,1] + interaction_timestamp.",
+    "student_mastery_probability يُحدَّث بمعادلة BKT بايزية حتمية "
+    "(P_L0/P_T/P_S/P_G) — نفس المدخلات تُنتج نفس المخرجات (قابل للاختبار).",
+    "BKT لا يكسر المحادثة أبداً — كل استدعاء معزول في try/except بجلسة DB مستقلة.",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -455,6 +480,17 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "local_graph._apply_answer_quality_skill",
         ),
     },
+    "bkt_cognitive": {
+        "version": BKT_COGNITIVE_DOCTRINE_VERSION,
+        "rules_count": len(BKT_COGNITIVE_DOCTRINE),
+        "consumed_by": (
+            # D-074 (Protocol V6.0): الطبقة المعرفية الأساسية — موصولة حيّاً.
+            "BKTEngine.evaluate",
+            "bkt_persistence.BKTAnalyticsService.evaluate_and_record",
+            "customer_chat._evaluate_and_emit_bkt",
+            "orchestrator_client._build_probability_tree_props",
+        ),
+    },
 }
 
 
@@ -496,6 +532,11 @@ def get_step_by_step_summary() -> str:
 def get_skill_invocation_protocol_summary() -> str:
     """يُرجِع بروتوكول استدعاء الـ Skills (للـ orchestrator / logs)."""
     return " | ".join(SKILL_INVOCATION_PROTOCOL)
+
+
+def get_bkt_cognitive_summary() -> str:
+    """يُرجِع doctrine الطبقة المعرفية BKT كنص قصير (للـ logs / prompts)."""
+    return " | ".join(BKT_COGNITIVE_DOCTRINE)
 
 
 def build_exercise_explanation_prompt() -> str:
@@ -546,6 +587,8 @@ def list_all_doctrines() -> dict[str, dict[str, object]]:
 
 
 __all__ = [
+    "BKT_COGNITIVE_DOCTRINE",
+    "BKT_COGNITIVE_DOCTRINE_VERSION",
     "CONTENT_INVOCATION_DOCTRINE",
     "CONTENT_INVOCATION_DOCTRINE_VERSION",
     "DETAILED_EXPLANATION_RULES",
@@ -565,6 +608,7 @@ __all__ = [
     "STEP_BY_STEP_EXPLANATION_RULES",
     "STEP_BY_STEP_EXPLANATION_VERSION",
     "build_exercise_explanation_prompt",
+    "get_bkt_cognitive_summary",
     "get_content_invocation_summary",
     "get_detailed_explanation_summary",
     "get_explanation_doctrine_summary",

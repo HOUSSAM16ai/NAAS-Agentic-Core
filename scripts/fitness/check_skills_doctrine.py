@@ -83,6 +83,8 @@ def check_skills_consume_doctrine() -> None:
 
 def check_manifest_consistency() -> None:
     from app.services.skills.doctrine import (
+        BKT_COGNITIVE_DOCTRINE,
+        BKT_COGNITIVE_DOCTRINE_VERSION,
         DETAILED_EXPLANATION_RULES,
         DETAILED_EXPLANATION_VERSION,
         EXPLANATION_DOCTRINE,
@@ -107,6 +109,8 @@ def check_manifest_consistency() -> None:
             DETAILED_EXPLANATION_VERSION,
             len(DETAILED_EXPLANATION_RULES),
         ),
+        # D-074 (Protocol V6.0): BKT cognitive layer is a first-class doctrine.
+        ("bkt_cognitive", BKT_COGNITIVE_DOCTRINE_VERSION, len(BKT_COGNITIVE_DOCTRINE)),
     ]
     for key, ver, count in pairs:
         entry = SKILL_DOCTRINE_MANIFEST.get(key)
@@ -243,6 +247,38 @@ def check_answer_quality_skill_wired() -> None:
     _pass("AnswerQualitySkill wired into local_graph._chat_node (D-073, no longer ZOMBIE)")
 
 
+def check_bkt_baseline_integrated() -> None:
+    """D-074: BKTEngine هو الطبقة المعرفية الأساسية — يجب أن يكون:
+    (1) مستهلِكاً لـ BKT_COGNITIVE_DOCTRINE من doctrine.py،
+    (2) موصولاً حيّاً في مسار المحادثة عبر customer_chat._evaluate_and_emit_bkt.
+    """
+    bkt_engine = ROOT / "app" / "services" / "skills" / "bkt_engine.py"
+    if not bkt_engine.is_file():
+        _fail("bkt_engine.py missing — BKT baseline not present.")
+    src = bkt_engine.read_text(encoding="utf-8")
+    if "from app.services.skills.doctrine import" not in src:
+        _fail(
+            "bkt_engine.py: does not consume doctrine. "
+            "D-074: BKTEngine must import BKT_COGNITIVE_DOCTRINE_VERSION from doctrine.py."
+        )
+    if "BKT_COGNITIVE_DOCTRINE_VERSION" not in src:
+        _fail("bkt_engine.py: BKT_COGNITIVE_DOCTRINE_VERSION not referenced (D-074).")
+    _pass("bkt_engine.py consumes BKT_COGNITIVE_DOCTRINE (D-074)")
+
+    chat = ROOT / "app" / "api" / "routers" / "customer_chat.py"
+    if chat.is_file():
+        chat_src = chat.read_text(encoding="utf-8")
+        if (
+            "_evaluate_and_emit_bkt(question" not in chat_src.replace("\n", " ").replace("    ", "")
+            and "_evaluate_and_emit_bkt(" not in chat_src
+        ):
+            _fail(
+                "customer_chat.py: _evaluate_and_emit_bkt not called. "
+                "D-074: BKT must be wired into the live WS chat path."
+            )
+        _pass("BKT runtime injection wired into customer_chat WS handler (D-074)")
+
+
 def main() -> None:
     print("=== Skills Doctrine Drift Gate (D-069 + D-073) ===\n")
     check_doctrine_module_importable()
@@ -252,6 +288,7 @@ def main() -> None:
     check_local_graph_prompt_alignment()
     check_d070_doctrines_reexported()
     check_answer_quality_skill_wired()
+    check_bkt_baseline_integrated()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

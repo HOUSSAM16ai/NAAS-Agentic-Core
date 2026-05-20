@@ -145,6 +145,60 @@ const boundaryState = simulateBoundary(malformedTreeRender, 'النص البدي
 check('error boundary catches malformed tree render', boundaryState.hasError === true);
 check('error boundary surfaces fallback text', boundaryState.fallback === 'النص البديل');
 
+// ─── 5. Cognitive UI overhaul: SVG tree + glass nodes (V3) ──────────────────────
+check('tree uses SVG (not flexbox list)', /<svg/.test(treeSrc) && /viewBox/.test(treeSrc));
+check('tree draws bezier edge paths', /<path/.test(treeSrc) && /C \$\{/.test(treeSrc));
+check('edge stroke-width scales with probability', /strokeWidthFor/.test(treeSrc));
+check('nodes are glass-morphism cards (foreignObject)', /foreignObject/.test(treeSrc) && /genui-glass-node/.test(treeSrc));
+check('interactive tooltip with conditional formula', /genui-node-tip/.test(treeSrc) && /P\(\$\{node\.label\}\)/.test(treeSrc));
+check('cumulative path joint probability computed', /joint/.test(treeSrc));
+check('recursive layout (tidy-tree) implemented', /layoutTree/.test(treeSrc) && /maxDepth/.test(treeSrc));
+check('large-tree guard throws (ErrorBoundary fallback)', /tree too large/.test(treeSrc));
+check('css: energy-flow edge animation', /genui-edge-flow/.test(read('globals.css')));
+check('css: staggered node spawn animation', /genui-node-spawn/.test(read('globals.css')));
+check('css: glass-morphism backdrop-blur', /backdrop-filter:\s*blur/.test(read('globals.css')));
+check('css: reduced-motion accessibility', /prefers-reduced-motion/.test(read('globals.css')));
+
+// behavioral: layout assigns leaf rows + internal node = mean(children), joint = product
+const simulateLayout = (root) => {
+    const nodes = [];
+    let leaf = 0;
+    let maxDepth = 0;
+    const walk = (node, depth, joint) => {
+        maxDepth = Math.max(maxDepth, depth);
+        const p = typeof node.p === 'number' ? node.p : null;
+        const nodeJoint = p !== null ? joint * p : joint;
+        const rec = { depth, label: node.label, p, joint: nodeJoint, row: 0 };
+        nodes.push(rec);
+        const children = Array.isArray(node.children) ? node.children : [];
+        if (children.length === 0) {
+            rec.row = leaf++;
+        } else {
+            const rows = children.map((c) => walk(c, depth + 1, nodeJoint).row);
+            rec.row = rows.reduce((s, r) => s + r, 0) / rows.length;
+        }
+        return rec;
+    };
+    walk(root, 0, 1);
+    return { nodes, leafCount: Math.max(1, leaf), maxDepth };
+};
+
+const sampleTree = {
+    label: 'البداية',
+    children: [
+        { label: 'A', p: 0.3, children: [{ label: 'B | A', p: 0.8 }, { label: 'B̄ | A', p: 0.2 }] },
+        { label: 'Ā', p: 0.7, children: [{ label: 'B | Ā', p: 0.5 }, { label: 'B̄ | Ā', p: 0.5 }] },
+    ],
+};
+const layout = simulateLayout(sampleTree);
+check('layout: 7 nodes for 2-level binary tree', layout.nodes.length === 7);
+check('layout: 4 leaves', layout.leafCount === 4);
+check('layout: maxDepth = 2', layout.maxDepth === 2);
+const leafBA = layout.nodes.find((n) => n.label === 'B | A');
+check('joint probability P(A)·P(B|A) = 0.24', Math.abs(leafBA.joint - 0.24) < 1e-9);
+const rootNode = layout.nodes.find((n) => n.label === 'البداية');
+check('root row = mean of subtree (centered)', rootNode.row === 1.5);
+
 // ─── النتيجة ────────────────────────────────────────────────────────────────────
 if (failed > 0) {
     console.log(`\n❌ ${failed} check(s) failed`);

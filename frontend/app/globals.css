@@ -1966,15 +1966,21 @@ body[data-theme='light'] .exam-badge {
     overflow-x: auto;
 }
 
-/* النص البديل (Error Boundary fallback) */
+/* النص البديل (Error Boundary fallback) — مصمَّم بعناية */
 .genui-fallback {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    border-radius: 12px;
-    background-color: var(--surface-elevated);
-    border: 1px solid var(--border-color);
+    gap: 0.6rem;
+    padding: 0.85rem 1.05rem;
+    border-radius: 14px;
+    background:
+        linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--primary-color) 7%, var(--surface-elevated)),
+            var(--surface-elevated)
+        );
+    border: 1px solid color-mix(in srgb, var(--primary-color) 22%, var(--border-color));
+    border-inline-start: 3px solid var(--primary-color);
     color: var(--text-secondary);
     font-size: 0.92rem;
     line-height: 1.6;
@@ -1983,6 +1989,7 @@ body[data-theme='light'] .exam-badge {
 .genui-fallback-icon {
     color: var(--primary-color);
     flex-shrink: 0;
+    font-size: 1.1rem;
 }
 
 /* شجرة الاحتمالات */
@@ -2023,49 +2030,152 @@ body[data-theme='light'] .exam-badge {
     border: 1px solid rgba(37, 99, 235, 0.2);
 }
 
-.genui-tree-root,
-.genui-tree-children {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
-.genui-tree-children {
-    padding-inline-start: 1.25rem;
-    border-inline-start: 2px solid var(--border-color);
-    margin-inline-start: 0.6rem;
-    margin-top: 0.35rem;
-}
-
-.genui-tree-node {
+/* لوحة الشجرة — تتمدد بنسبة الأبعاد فتبقى متجاوبة على الجوال والحاسوب */
+.genui-tree-canvas {
     position: relative;
-    margin: 0.35rem 0;
+    width: 100%;
+    margin: 0.25rem auto 0;
+    direction: ltr; /* فضاء SVG محايد الاتجاه؛ نصوص العُقد RTL داخلياً */
 }
 
-.genui-tree-cell {
-    display: inline-flex;
+.genui-tree-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+/* الفروع الموزونة: تدفّق الطاقة عبر stroke-dashoffset */
+.genui-edge {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: genui-edge-flow 0.9s ease-out forwards;
+}
+
+@keyframes genui-edge-flow {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* العُقد الزجاجية (glass-morphism) */
+.genui-glass-node {
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    direction: rtl;
+    display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
-    padding: 0.35rem 0.7rem;
-    border-radius: 10px;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
+    padding: 0 0.7rem;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--surface-color) 76%, transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid color-mix(in srgb, var(--primary-color) 26%, var(--border-color));
+    box-shadow:
+        0 4px 18px rgba(15, 23, 42, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transform: scale(0.6);
+    opacity: 0;
+    animation: genui-node-spawn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        border-color 0.18s ease;
+    outline: none;
 }
 
-.genui-tree-prob {
-    font-variant-numeric: tabular-nums;
+.genui-glass-root {
+    background: color-mix(in srgb, var(--primary-color) 16%, var(--surface-color));
+    border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
+    font-weight: 800;
+}
+
+@keyframes genui-node-spawn {
+    from {
+        transform: scale(0.6);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.genui-glass-node:hover,
+.genui-glass-node:focus-visible {
+    transform: scale(1.07);
+    border-color: var(--primary-color);
+    box-shadow:
+        0 10px 30px rgba(37, 99, 235, 0.28),
+        0 0 0 3px color-mix(in srgb, var(--primary-color) 22%, transparent);
+    z-index: 5;
+}
+
+.genui-node-label {
+    color: var(--text-color);
+    font-size: 0.96rem;
     font-weight: 700;
+    white-space: nowrap;
+}
+
+.genui-node-prob {
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
     font-size: 0.82rem;
-    color: var(--primary-color);
-    background-color: rgba(37, 99, 235, 0.08);
-    border-radius: 7px;
-    padding: 0.1rem 0.45rem;
+    color: #fff;
+    background: linear-gradient(135deg, #3b82f6, #6366f1);
+    border-radius: 8px;
+    padding: 0.12rem 0.5rem;
+    direction: ltr;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+/* التلميح التفاعلي — صيغة الاحتمال الشرطي + احتمال المسار التراكمي */
+.genui-node-tip {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 50%;
+    transform: translateX(50%) translateY(4px);
+    min-width: 150px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 10px;
+    background: var(--text-color);
+    color: var(--bg-color);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    text-align: center;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 0.16s ease,
+        transform 0.16s ease;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);
+    z-index: 10;
+}
+
+.genui-glass-node:hover .genui-node-tip,
+.genui-glass-node:focus-visible .genui-node-tip,
+.genui-glass-node:focus-within .genui-node-tip {
+    opacity: 1;
+    transform: translateX(50%) translateY(0);
+}
+
+.genui-tip-formula {
+    font-weight: 800;
     direction: ltr;
 }
 
-.genui-tree-label {
-    color: var(--text-color);
-    font-size: 0.95rem;
+.genui-tip-joint {
+    opacity: 0.85;
 }
 
 /* stub: مؤشر BKT */
@@ -2084,11 +2194,10 @@ body[data-theme='light'] .exam-badge {
     color: var(--primary-color);
 }
 
-@media (max-width: 640px) {
-    .genui-tree-children {
-        padding-inline-start: 0.8rem;
-    }
-    .genui-tree-label {
-        font-size: 0.88rem;
+/* احترام تفضيل تقليل الحركة (إتاحة) */
+@media (prefers-reduced-motion: reduce) {
+    .genui-edge,
+    .genui-glass-node {
+        animation-duration: 0.001s;
     }
 }

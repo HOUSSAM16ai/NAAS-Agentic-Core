@@ -23,6 +23,7 @@ from app.core.domain.chat import MessageRole
 from app.core.domain.user import User
 from app.deps.auth import CurrentUser, require_permissions
 from app.infrastructure.clients.orchestrator_client import orchestrator_client
+from app.services.analytics.bkt_persistence import BKTAnalyticsService
 from app.services.auth.token_decoder import decode_user_id
 from app.services.boundaries.customer_chat_boundary_service import (
     CustomerChatBoundaryService,
@@ -44,6 +45,56 @@ router = APIRouter(
 )
 
 TEXT_EVENT_TYPES = {"delta", "assistant_delta", "assistant_final"}
+
+
+async def _evaluate_and_emit_bkt(
+    *,
+    websocket: WebSocket,
+    user_id: int,
+    conversation_id: int | None,
+    question: str,
+    history_messages: list[dict[str, str]],
+    stream_request_id: str,
+) -> None:
+    """يقيّم تفاعل الطالب عبر BKTEngine، يخزّنه، ويبثّ bkt_tracking للواجهة.
+
+    معزول تماماً: أي فشل (DB أو غيره) يُسجَّل ولا يكسر مسار المحادثة.
+    """
+    try:
+        async with async_session_factory() as bkt_db:
+            evaluation = await BKTAnalyticsService(bkt_db).evaluate_and_record(
+                user_id=user_id,
+                session_id=conversation_id,
+                question=question,
+                history=history_messages,
+            )
+        # نتجاوز normalize_streaming_event عمداً: نوع ui_component يجب أن يصل
+        # للواجهة بلا تحوير (التطبيع يحوّل الأنواع المجهولة إلى assistant_delta
+        # عند تفعيل راية المغلف الموحّد).
+        await websocket.send_json(
+            _bind_stream_metadata(
+                {
+                    "type": "ui_component",
+                    "payload": {
+                        "component": "bkt_hint_display",
+                        "props": {
+                            "concept_id": evaluation.concept_id,
+                            "cognitive_load_estimate": evaluation.cognitive_load_estimate,
+                            "student_mastery_probability": (evaluation.student_mastery_probability),
+                        },
+                        "fallback_text": (
+                            f"تتبّع المعرفة: {evaluation.concept_id} — "
+                            f"إتقان {evaluation.student_mastery_probability:.0%}"
+                        ),
+                    },
+                },
+                conversation_id,
+                stream_request_id,
+            )
+        )
+    except Exception as exc:
+        # BKT must never break chat — log and continue.
+        logger.warning("bkt_tracking_failed: %s", exc, exc_info=True)
 
 
 def get_chat_actor(
@@ -413,6 +464,20 @@ async def chat_stream_ws(
                 turn_span.set_terminal("error")
                 close_ws_turn(turn_span, status="ERROR")
                 continue
+
+            # ─────────────────────────────────────────────────────────────────
+            # BKT Runtime Injection (Protocol V6.0): قيّم التفاعل، خزّنه في
+            # student_bkt_analytics، وابثّ bkt_tracking للواجهة. غير حرج —
+            # أي فشل لا يكسر مسار المحادثة (try/except معزول، جلسة DB مستقلة).
+            # ─────────────────────────────────────────────────────────────────
+            await _evaluate_and_emit_bkt(
+                websocket=websocket,
+                user_id=actor.id,
+                conversation_id=local_conversation_id,
+                question=question,
+                history_messages=history_messages,
+                stream_request_id=stream_request_id,
+            )
 
             complete_ai_response = ""
             assistant_message_persisted = False

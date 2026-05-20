@@ -56,11 +56,51 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "generated_prompts",
         "knowledge_nodes",
         "knowledge_edges",
+        "student_bkt_analytics",
     }
 )
 
 
 REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
+    "student_bkt_analytics": {
+        "columns": [
+            "id",
+            "user_id",
+            "session_id",
+            "concept_id",
+            "cognitive_load_estimate",
+            "student_mastery_probability",
+            "interaction_count",
+            "interaction_timestamp",
+            "created_at",
+        ],
+        "auto_fix": {},
+        "indexes": {
+            "user_id": 'CREATE INDEX IF NOT EXISTS "ix_student_bkt_analytics_user_id" ON "student_bkt_analytics"("user_id")',
+            "concept_id": 'CREATE INDEX IF NOT EXISTS "ix_student_bkt_analytics_concept_id" ON "student_bkt_analytics"("concept_id")',
+            "interaction_timestamp": 'CREATE INDEX IF NOT EXISTS "ix_student_bkt_analytics_interaction_timestamp" ON "student_bkt_analytics"("interaction_timestamp")',
+        },
+        "index_names": {
+            "user_id": "ix_student_bkt_analytics_user_id",
+            "concept_id": "ix_student_bkt_analytics_concept_id",
+            "interaction_timestamp": "ix_student_bkt_analytics_interaction_timestamp",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "student_bkt_analytics"('
+            '"id" SERIAL PRIMARY KEY,'
+            '"user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,'
+            '"session_id" INTEGER,'
+            '"concept_id" VARCHAR(120) NOT NULL,'
+            "\"cognitive_load_estimate\" VARCHAR(10) NOT NULL DEFAULT 'medium' "
+            "CHECK (\"cognitive_load_estimate\" IN ('low','medium','high')),"
+            '"student_mastery_probability" DOUBLE PRECISION NOT NULL DEFAULT 0.0 '
+            'CHECK ("student_mastery_probability" >= 0.0 AND "student_mastery_probability" <= 1.0),'
+            '"interaction_count" INTEGER NOT NULL DEFAULT 1,'
+            '"interaction_timestamp" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            ")"
+        ),
+    },
     "admin_conversations": {
         "columns": [
             "id",

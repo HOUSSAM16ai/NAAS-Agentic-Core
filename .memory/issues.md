@@ -2060,3 +2060,24 @@ const setMessagesSafe = useCallback((msgs) => {
 - `build-still-passes`: `npm ci` + `npm run build` كاملاً.
 
 **Doctrine**: D-068 + CLAUDE.md §6.47 (لاحقاً).
+
+---
+
+## ISS-BKT-001 — Cognitive overload (abstract tree labels) + no persistent mastery tracking (2026-05-20)
+
+**Symptom**: Probability-tree UI used abstract symbols (A, B|A, Ā) —
+unintuitive for secondary-school students. No persistent record of student
+mastery / cognitive load existed.
+
+**Root cause**: `_detect_probability_tree` hardcoded abstract labels; no BKT
+engine or analytics table.
+
+**Fix (D-074)**: concrete context-extracted labels (Abstraction Ban) + new
+`BKTEngine` Skill + `student_bkt_analytics` table (append-only) +
+`bkt_hint_display` ui_component emit from the customer WS handler.
+
+**Verification**: 29 new tests pass; all CI gates green; OpenRouter live
+connectivity confirmed. Supabase live row-insert deferred to Codespaces
+(sandbox blocks Postgres ports) — `scripts/verify_bkt_live.py` provided.
+
+**Doctrine**: D-074 + CLAUDE.md §6.52.

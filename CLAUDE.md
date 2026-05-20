@@ -5065,3 +5065,83 @@ $ ci_guardrails.py → ✅
 | `.memory/decisions.md` | D-073 entry |
 | `.memory/issues.md` | ISS-081 entry |
 | `CLAUDE.md` §6.51 | this section |
+
+---
+
+## 6.52 Database-Enforced BKT Engine + Probability-Tree Abstraction Ban (2026-05-20, D-074)
+
+> Protocol V6.0: تتبّع معرفي بايزي مُخزَّن في Supabase + حظر الرموز المجرّدة في
+> شجرة الاحتمالات. كل قدرة AI = Skill (CLAUDE.md §0.5).
+
+### ما الذي تغيّر
+
+**(1) جدول `student_bkt_analytics` (Supabase / Postgres)** — سجل append-only
+لكل تفاعل طالب: `user_id`, `session_id`, `concept_id`,
+`cognitive_load_estimate` (low/medium/high), `student_mastery_probability`
+[0,1], `interaction_count`, `interaction_timestamp`. مُسجَّل في
+`app/core/db_schema_config.py` (`_ALLOWED_TABLES` + `REQUIRED_SCHEMA`) → يُنشأ
+تلقائياً عبر `validate_schema_on_startup()` عند إقلاع التطبيق. DDL مستقل في
+`scripts/migrations/0001_student_bkt_analytics.sql`.
+
+**(2) `BKTEngine` Skill** (`app/services/skills/bkt_engine.py`) — حتمي تماماً:
+تصنيف `concept_id` + تقدير الحِمل المعرفي + تحديث BKT بايزي (prior P(L0)،
+learn P(T)، slip P(S)، guess P(G)). إشارة evidence لينة مشتقة من نوع التفاعل
+(استيضاح → ضعيف، استدلال → قوي). مقاييس Prometheus
+`cogniforge_skill_bkt_invocations_total` + `_duration_seconds`.
+
+**(3) BKT Runtime Injection** — `app/api/routers/customer_chat.py`:
+`_evaluate_and_emit_bkt()` يُقيّم التفاعل، يُخزّنه عبر `BKTAnalyticsService`
+(`app/services/analytics/bkt_persistence.py`)، ويبثّ `bkt_tracking` للواجهة
+كـ `ui_component` (`component="bkt_hint_display"`، مُسجَّل في
+`app/contracts/streaming.py:KNOWN_UI_COMPONENTS`). معزول في try/except —
+لا يكسر مسار المحادثة أبداً.
+
+**(4) Abstraction Ban** — `OrchestratorClient._detect_probability_tree`:
+التسميات الآن ملموسة من سياق المسألة ("كرة حمراء"، "قطعة معيبة"، "سحب ناجح")
+بدل الرموز المجرّدة (A, B|A, Ā). نمط هجين: استخراج حتمي أولاً
+(`_extract_concrete_events`)، ثم إثراء LLM فقط عند غياب كيان ملموس
+(`_build_probability_tree_props` → `_enrich_tree_labels_with_llm`، محروس
+بـ timeout 8s + رفض A/B). حتى الـ fallback النهائي ملموس ("الحدث الأول").
+
+### قواعد دائمة (لا تُكسر بدون ADR)
+
+1. **BKT لا يكسر المحادثة**: كل استدعاء لـ BKT من الـ router معزول في
+   try/except بجلسة DB مستقلة.
+2. **append-only**: كل تفاعل = صف جديد؛ الإتقان السابق يُقرأ من آخر صف لنفس
+   (user_id, concept_id).
+3. **Abstraction Ban مطلق**: لا رمز مجرّد (A/B/Ā) في أي تسمية عقدة — حتى الـ
+   fallback يستخدم تسميات ملموسة. أي ناتج LLM يحوي A/B يُرفَض.
+4. **BKTEngine حتمي**: نفس المدخلات → نفس المخرجات (قابل لاختبار pytest).
+5. **`student_mastery_probability` ∈ [0,1]** دائماً (مُقيَّد + CHECK في DDL).
+
+### التحقق (2026-05-20)
+
+- ✅ `ruff check/format` نظيف | `runtime_truth --check` يطابق القفل |
+  `validate_structure` ✅ | `ci_guardrails` ✅ | `check_skills_doctrine` ✅
+- ✅ 29 اختبار جديد (BKTEngine + persistence + Abstraction Ban) +
+  16 اختبار generative-UI القائمة + 113 إجمالي slice — كلها ناجحة
+- ✅ استخراج حتمي حي: "كرة حمراء"/"كرة غير حمراء"/"سحب ناجح"
+- ✅ OpenRouter متصل حياً (النموذج المجاني رجع 429 → fallback ملموس،
+  لا رموز A/B) — Abstraction Ban صامد في كل المسارات
+- ⚠️ **تحقق Supabase الحي مؤجَّل**: بيئة الـ sandbox تحجب منافذ Postgres
+  (6543/5432). الجدول يُنشأ تلقائياً عند الإقلاع في Codespaces؛ سكربت
+  التحقق الحي `scripts/verify_bkt_live.py` يُشغَّل هناك حيث egress مفتوح.
+
+### الملفات (D-074)
+
+| File | Change |
+|------|--------|
+| `app/core/domain/bkt_analytics.py` | **new** — `StudentBKTAnalytic` ORM |
+| `app/services/skills/bkt_engine.py` | **new** — `BKTEngine` Skill |
+| `app/services/analytics/bkt_persistence.py` | **new** — `BKTAnalyticsService` (append-only) |
+| `app/core/db_schema_config.py` | register `student_bkt_analytics` |
+| `app/contracts/streaming.py` | + `BKTTrackingPayload` |
+| `app/infrastructure/clients/orchestrator_client.py` | concrete labels + LLM enrichment (Abstraction Ban) |
+| `app/api/routers/customer_chat.py` | `_evaluate_and_emit_bkt()` + wiring |
+| `app/services/skills/__init__.py` | export BKT skill |
+| `scripts/migrations/0001_student_bkt_analytics.sql` | **new** — standalone DDL |
+| `scripts/verify_bkt_live.py` | **new** — Codespaces live-proof script |
+| `tests/services/test_bkt_engine.py` | **new** — 21 tests |
+| `tests/services/test_bkt_persistence_and_labels.py` | **new** — 8 tests |
+| `.runtime/truth_table.lock.json` | regenerated |
+| `.memory/decisions.md` / `.memory/issues.md` | D-074 entries |

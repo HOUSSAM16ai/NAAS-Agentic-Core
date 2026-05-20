@@ -2003,3 +2003,40 @@ tests/CI catch divergences.
 **Status**: SHIPPED 2026-05-18 on branch
 `claude/fix-conversation-spinner-SvjtH`. PR opened for human review per
 user instruction "لا تدمجه لأني اراجعه يدويا".
+
+---
+
+## D-074 — Database-Enforced BKT Engine + Probability-Tree Abstraction Ban (2026-05-20)
+
+**Context**: Protocol V6.0 — eliminate cognitive overload for Baccalaureate
+students and establish permanent Supabase-backed tracking. Branch
+`claude/bkt-database-backend-6PYeX`.
+
+**Decision**:
+1. New append-only table `student_bkt_analytics` (registered in
+   `db_schema_config.py` → auto-created by `validate_schema_on_startup()`).
+   Columns: user_id, session_id, concept_id, cognitive_load_estimate
+   (low/medium/high), student_mastery_probability [0,1], interaction_count,
+   interaction_timestamp.
+2. `BKTEngine` Skill (`app/services/skills/bkt_engine.py`) — deterministic
+   Bayesian Knowledge Tracing (P_L0/P_T/P_S/P_G) with concept classification
+   + cognitive-load estimation + soft evidence signal from interaction type.
+3. BKT Runtime Injection in `customer_chat.py` WS handler:
+   `_evaluate_and_emit_bkt()` persists via `BKTAnalyticsService` and streams
+   the `bkt_tracking` object as a `bkt_hint_display` ui_component. Isolated —
+   never breaks the chat path.
+4. Abstraction Ban: `_detect_probability_tree` now emits concrete labels
+   ("كرة حمراء", "سحب ناجح", "قطعة معيبة") instead of A/B/Ā. Hybrid:
+   deterministic extraction first, LLM enrichment only when no concrete entity
+   is found (timeout-guarded, rejects A/B); concrete generic fallback.
+
+**Append-only choice** (vs upsert): each interaction is one row; evolving
+mastery is read from the most-recent row per (user_id, concept_id).
+
+**Verification**: ruff/runtime_truth/validate_structure/ci_guardrails/
+check_skills_doctrine all green; 29 new tests + 16 existing UI-streaming tests
+pass. Live OpenRouter connectivity confirmed (free model 429 → concrete
+fallback, no A/B). Live Supabase row-insert proof deferred to Codespaces
+(`scripts/verify_bkt_live.py`) — sandbox blocks Postgres ports 6543/5432.
+
+**Status**: SHIPPED on branch `claude/bkt-database-backend-6PYeX`.

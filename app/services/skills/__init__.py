@@ -44,6 +44,12 @@ from app.services.skills.bac_exercise_skill import (
     SkillFailure,
     SkillMode,
 )
+from app.services.skills.bkt_engine import (
+    BKTEngine,
+    BKTEvaluation,
+    BKTEvaluationInput,
+    get_bkt_engine,
+)
 from app.services.skills.doctrine import (
     CONTENT_INVOCATION_DOCTRINE,
     CONTENT_INVOCATION_DOCTRINE_VERSION,
@@ -114,6 +120,9 @@ __all__ = [
     "BACSkillExplanationOutput",
     "BACSkillInput",
     "BACSkillRetrievalOutput",
+    "BKTEngine",
+    "BKTEvaluation",
+    "BKTEvaluationInput",
     "GreetingSkill",
     "GreetingSkillFailure",
     "GreetingSkillInput",
@@ -127,6 +136,7 @@ __all__ = [
     "SkillMode",
     "build_exercise_explanation_prompt",
     "get_answer_quality_skill",
+    "get_bkt_engine",
     "get_content_invocation_summary",
     "get_detailed_explanation_summary",
     "get_explanation_doctrine_summary",

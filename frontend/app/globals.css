@@ -2089,10 +2089,19 @@ body[data-theme='light'] .exam-badge {
     outline: none;
 }
 
-.genui-glass-root {
+.genui-glass-root,
+.genui-glass-node[data-outcome='root'] {
     background: color-mix(in srgb, var(--primary-color) 16%, var(--surface-color));
     border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
     font-weight: 800;
+}
+
+/* ترميز لوني دلالي للعقدة حسب نتيجة الفرع */
+.genui-glass-node[data-outcome='success'] {
+    border-color: color-mix(in srgb, #ef4444 38%, var(--border-color));
+}
+.genui-glass-node[data-outcome='failure'] {
+    border-color: color-mix(in srgb, #6366f1 38%, var(--border-color));
 }
 
 @keyframes genui-node-spawn {
@@ -2109,11 +2118,28 @@ body[data-theme='light'] .exam-badge {
 .genui-glass-node:hover,
 .genui-glass-node:focus-visible {
     transform: scale(1.07);
+    z-index: 5;
+}
+.genui-glass-node[data-outcome='success']:hover,
+.genui-glass-node[data-outcome='success']:focus-visible {
+    border-color: #ef4444;
+    box-shadow:
+        0 10px 30px rgba(239, 68, 68, 0.32),
+        0 0 0 3px rgba(239, 68, 68, 0.22);
+}
+.genui-glass-node[data-outcome='failure']:hover,
+.genui-glass-node[data-outcome='failure']:focus-visible {
+    border-color: #6366f1;
+    box-shadow:
+        0 10px 30px rgba(99, 102, 241, 0.32),
+        0 0 0 3px rgba(99, 102, 241, 0.22);
+}
+.genui-glass-node[data-outcome='root']:hover,
+.genui-glass-node[data-outcome='root']:focus-visible {
     border-color: var(--primary-color);
     box-shadow:
         0 10px 30px rgba(37, 99, 235, 0.28),
         0 0 0 3px color-mix(in srgb, var(--primary-color) 22%, transparent);
-    z-index: 5;
 }
 
 .genui-node-label {
@@ -2124,58 +2150,153 @@ body[data-theme='light'] .exam-badge {
 }
 
 .genui-node-prob {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.7rem;
     font-variant-numeric: tabular-nums;
     font-weight: 800;
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     color: #fff;
-    background: linear-gradient(135deg, #3b82f6, #6366f1);
-    border-radius: 8px;
+    border-radius: 9px;
     padding: 0.12rem 0.5rem;
     direction: ltr;
+}
+.genui-node-prob[data-outcome='success'] {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+.genui-node-prob[data-outcome='failure'] {
+    background: linear-gradient(135deg, #38bdf8, #6366f1);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+.genui-node-prob[data-outcome='root'] {
+    background: linear-gradient(135deg, #22d3ee, #3b82f6);
     box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
 }
 
-/* التلميح التفاعلي — صيغة الاحتمال الشرطي + احتمال المسار التراكمي */
-.genui-node-tip {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 50%;
-    transform: translateX(50%) translateY(4px);
-    min-width: 150px;
-    display: flex;
+/* ─── الكسور الإنسانية (½ ، 3⁄10) ─── */
+.genui-frac-vulgar {
+    font-size: 1.05em;
+    line-height: 1;
+}
+.genui-frac {
+    display: inline-flex;
     flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.5rem 0.7rem;
-    border-radius: 10px;
-    background: var(--text-color);
-    color: var(--bg-color);
-    font-size: 0.78rem;
-    line-height: 1.5;
-    text-align: center;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition:
-        opacity 0.16s ease,
-        transform 0.16s ease;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);
-    z-index: 10;
+    align-items: center;
+    line-height: 0.92;
+    font-size: 0.74em;
+}
+.genui-frac-n {
+    display: block;
+}
+.genui-frac-bar {
+    display: block;
+    width: 100%;
+    min-width: 0.85em;
+    height: 1px;
+    margin: 0.06em 0;
+    background: currentColor;
+    opacity: 0.85;
+}
+.genui-frac-d {
+    display: block;
+}
+.genui-frac-dec {
+    font-variant-numeric: tabular-nums;
+}
+.genui-frac-dec.is-compact {
+    font-size: 0.92em;
 }
 
-.genui-glass-node:hover .genui-node-tip,
-.genui-glass-node:focus-visible .genui-node-tip,
-.genui-glass-node:focus-within .genui-node-tip {
-    opacity: 1;
-    transform: translateX(50%) translateY(0);
+/* ─── التلميح عبر Portal: يطفو على مستوى <body> فلا يُقصّ أبداً ─── */
+.genui-tip-portal {
+    position: fixed;
+    transform: translateX(-50%);
+    z-index: 99999;
+    min-width: 160px;
+    max-width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: 12px;
+    background: var(--text-color);
+    color: var(--bg-color);
+    font-size: 0.8rem;
+    line-height: 1.55;
+    text-align: center;
+    box-shadow: 0 12px 34px rgba(15, 23, 42, 0.42);
+    pointer-events: none;
+    animation: genui-tip-pop 0.14s ease-out;
+    border-top: 3px solid var(--primary-color);
+}
+.genui-tip-portal[data-placement='above'] {
+    transform: translateX(-50%) translateY(-100%);
+}
+.genui-tip-portal[data-outcome='success'] {
+    border-top-color: #ef4444;
+}
+.genui-tip-portal[data-outcome='failure'] {
+    border-top-color: #6366f1;
+}
+
+@keyframes genui-tip-pop {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) scale(0.94);
+    }
+}
+.genui-tip-portal[data-placement='above'] {
+    animation: genui-tip-pop-above 0.14s ease-out;
+}
+@keyframes genui-tip-pop-above {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-100%) scale(0.94);
+    }
 }
 
 .genui-tip-formula {
     font-weight: 800;
     direction: ltr;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    flex-wrap: wrap;
 }
-
 .genui-tip-joint {
-    opacity: 0.85;
+    opacity: 0.92;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+}
+.genui-tip-joint-val {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.genui-tip-dec {
+    font-weight: 600;
+    opacity: 0.7;
+    font-size: 0.92em;
+}
+.genui-tip-arrow {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: var(--text-color);
+}
+.genui-tip-portal[data-placement='above'] .genui-tip-arrow {
+    bottom: auto;
+    top: 100%;
+    border-bottom-color: transparent;
+    border-top-color: var(--text-color);
 }
 
 /* stub: مؤشر BKT */

@@ -150,7 +150,16 @@ check('tree uses SVG (not flexbox list)', /<svg/.test(treeSrc) && /viewBox/.test
 check('tree draws bezier edge paths', /<path/.test(treeSrc) && /C \$\{/.test(treeSrc));
 check('edge stroke-width scales with probability', /strokeWidthFor/.test(treeSrc));
 check('nodes are glass-morphism cards (foreignObject)', /foreignObject/.test(treeSrc) && /genui-glass-node/.test(treeSrc));
-check('interactive tooltip with conditional formula', /genui-node-tip/.test(treeSrc) && /P\(\$\{node\.label\}\)/.test(treeSrc));
+// V4: tooltip is rendered via React Portal to document.body (escapes SVG clipping)
+check('interactive tooltip with conditional formula', /genui-tip-portal/.test(treeSrc) && /P\(\$\{node\.label\}\)/.test(treeSrc));
+check('V4: tooltip uses createPortal to document.body (no SVG z-index clipping)', /createPortal/.test(treeSrc) && /document\.body/.test(treeSrc));
+check('V4: old inline in-SVG tooltip removed', !/genui-node-tip/.test(treeSrc));
+check('V4: probabilities humanized to fractions (decimalToFraction)', /decimalToFraction/.test(treeSrc));
+check('V4: semantic outcome classification (success/failure)', /classifyOutcome/.test(treeSrc) && /'failure'/.test(treeSrc));
+check('V4: per-outcome edge gradients', /genui-edge-\$\{outcome\}/.test(treeSrc));
+check('V4: css portal tooltip floats above (high z-index)', /genui-tip-portal/.test(read('globals.css')) && /z-index:\s*99999/.test(read('globals.css')));
+check('V4: css semantic outcome node colours', /data-outcome='success'/.test(read('globals.css')) && /data-outcome='failure'/.test(read('globals.css')));
+check('V4: css fraction styling', /genui-frac/.test(read('globals.css')));
 check('cumulative path joint probability computed', /joint/.test(treeSrc));
 check('recursive layout (tidy-tree) implemented', /layoutTree/.test(treeSrc) && /maxDepth/.test(treeSrc));
 check('large-tree guard throws (ErrorBoundary fallback)', /tree too large/.test(treeSrc));

@@ -26,6 +26,7 @@ __all__ = [
     "StreamSubscribe",
     "ToolCall",
     "ToolResult",
+    "UIComponentPayload",
 ]
 
 
@@ -39,6 +40,7 @@ class MessageType(StrEnum):
     DELTA = "delta"
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
+    UI_COMPONENT = "ui_component"
     AGENT_EVENT = "agent_event"
     ERROR = "error"
     DONE = "done"
@@ -130,6 +132,32 @@ class ToolResult(RobustBaseModel):
     error: StreamError | None = Field(None, description="خطأ الأداة إن وجد")
 
 
+# المكوّنات التوليدية المعروفة (Generative UI). أي اسم خارج هذه القائمة
+# يُرفَض عند التحقق ويسقط العميل إلى النص البديل (fallback_text).
+KNOWN_UI_COMPONENTS: frozenset[str] = frozenset({"probability_tree", "bkt_hint_display"})
+
+
+class UIComponentPayload(RobustBaseModel):
+    """
+    حمولة مكوّن واجهة توليدي (Generative UI) يُبثّ للواجهة الأمامية.
+
+    العقد: ``component`` اسم من ``KNOWN_UI_COMPONENTS``، ``props`` بيانات
+    التصيير (dict)، و ``fallback_text`` نص بديل آمن يُعرَض إذا فشل التصيير
+    أو وصل chunk مُشوَّه (React Error Boundary).
+    """
+
+    component: str = Field(..., min_length=1, description="اسم المكوّن التوليدي")
+    props: dict[str, object] = Field(default_factory=dict, description="خصائص التصيير")
+    fallback_text: str = Field(..., min_length=1, description="نص بديل يُعرَض عند فشل التصيير")
+
+    @model_validator(mode="after")
+    def _validate_component_known(self) -> UIComponentPayload:
+        """يرفض أي مكوّن غير مُسجَّل في القائمة البيضاء — لا تصيير لمكوّن مجهول."""
+        if self.component not in KNOWN_UI_COMPONENTS:
+            raise ValueError(f"unknown ui component: {self.component}")
+        return self
+
+
 class MessageEnvelope(RobustBaseModel):
     """
     مغلف الرسائل الموحّد لجميع أحداث البث.
@@ -164,4 +192,6 @@ class MessageEnvelope(RobustBaseModel):
             ToolCall.model_validate(self.payload)
         elif self.type == MessageType.TOOL_RESULT:
             ToolResult.model_validate(self.payload)
+        elif self.type == MessageType.UI_COMPONENT:
+            UIComponentPayload.model_validate(self.payload)
         return self

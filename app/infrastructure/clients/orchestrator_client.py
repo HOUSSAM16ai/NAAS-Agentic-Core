@@ -752,14 +752,61 @@ class OrchestratorClient:
             },
         }
 
-    @staticmethod
-    def _detect_probability_tree(question: str) -> dict[str, object] | None:
-        """يكتشف طلبات شجرة الاحتمالات ويبني خصائص تصيير حتمية.
+    # ─────────────────────────────────────────────────────────────────────────
+    # Abstraction Ban (Cognitive Refactoring — V6.0):
+    # تسميات عُقَد شجرة الاحتمالات يجب أن تكون ملموسة ومستخرَجة من سياق المسألة
+    # ("كرة حمراء"، "سحب ناجح"، "قطعة معيبة") — لا رموز مجرّدة (A, B|A, Ā). نمط
+    # هجين: استخراج حتمي أولاً، ثم LLM فقط عند عدم وجود كيان ملموس. حتى الـ
+    # fallback النهائي ملموس ("الحدث الأول") — لا حرف A أبداً.
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # كيانات ملموسة شائعة في مسائل بكالوريا الاحتمالات (لون + اسم، نتائج ثنائية).
+    _CONCRETE_EVENT_PATTERNS: tuple[tuple[tuple[str, ...], str, str], ...] = (
+        (("كرة حمراء", "كرات حمراء", "أحمر", "حمراء"), "كرة حمراء", "كرة غير حمراء"),
+        (("كرة بيضاء", "كرات بيضاء", "أبيض", "بيضاء"), "كرة بيضاء", "كرة غير بيضاء"),
+        (("كرة سوداء", "كرات سوداء", "أسود", "سوداء"), "كرة سوداء", "كرة غير سوداء"),
+        (("كرة خضراء", "أخضر", "خضراء"), "كرة خضراء", "كرة غير خضراء"),
+        (("معيب", "معيبة", "تالف", "تالفة", "défectueu"), "قطعة معيبة", "قطعة سليمة"),
+        (("ناجح", "نجاح", "ينجح", "réussi", "succès"), "سحب ناجح", "سحب فاشل"),
+        (("مدخن", "تدخين", "fumeur"), "مدخن", "غير مدخن"),
+        (("مصاب", "مرض", "إصابة", "malade"), "مصاب", "سليم"),
+        (("ذكر", "إناث", "أنثى", "ذكور"), "ذكر", "أنثى"),
+        (("معطوب", "عطل", "panne"), "جهاز معطوب", "جهاز سليم"),
+    )
+
+    @classmethod
+    def _extract_concrete_events(cls, normalized: str) -> dict[str, str] | None:
+        """يستخرج تسميتين ملموستين من نص المسألة، أو None إن لم يجد كياناً."""
+        first: tuple[str, str] | None = None
+        second: tuple[str, str] | None = None
+        for keywords, label, label_neg in cls._CONCRETE_EVENT_PATTERNS:
+            if any(kw in normalized for kw in keywords):
+                if first is None:
+                    first = (label, label_neg)
+                elif (label, label_neg) != first:
+                    second = (label, label_neg)
+                    break
+        if first is None:
+            return None
+        if second is None:
+            # حدث ثانٍ ملموس عام مرتبط بالسحب (مستوى شرطي)
+            second = ("سحب ناجح", "سحب فاشل")
+        return {
+            "first": first[0],
+            "first_neg": first[1],
+            "second": second[0],
+            "second_neg": second[1],
+        }
+
+    @classmethod
+    def _detect_probability_tree(cls, question: str) -> dict[str, object] | None:
+        """يكتشف طلبات شجرة الاحتمالات ويبني خصائص تصيير حتمية بتسميات ملموسة.
 
         يُفعَّل عند: (1) عبارة صريحة (شجرة احتمالات / probability tree / arbre de
         probabilité) أو (2) ذِكر "احتمال" مع وجود قيمة احتمالية رقمية. يستخرج حتى
-        قيمتين احتماليتين من النص لبناء شجرة ثنائية المستوى؛ غير ذلك يستخدم
-        قيماً افتراضية متوازنة (0.5) كرسم توضيحي.
+        قيمتين احتماليتين لبناء شجرة ثنائية المستوى، وتسميات ملموسة من سياق
+        المسألة (Abstraction Ban). يضع علم ``labels_generic`` ليُفعَّل إثراء الـ
+        LLM لاحقاً عند الحاجة.
         """
         import re
 
@@ -798,32 +845,127 @@ class OrchestratorClient:
         p_first = probs[0] if probs else 0.5
         p_cond = probs[1] if len(probs) > 1 else 0.5
 
-        tree = {
+        events = cls._extract_concrete_events(normalized)
+        labels_generic = events is None
+        if events is None:
+            # fallback ملموس عام — لا رموز مجرّدة أبداً (Abstraction Ban)
+            events = {
+                "first": "الحدث الأول",
+                "first_neg": "عكس الحدث الأول",
+                "second": "الحدث الثاني",
+                "second_neg": "عكس الحدث الثاني",
+            }
+
+        tree = cls._build_tree_structure(events, p_first, p_cond, _complement)
+        return {
+            "title": "شجرة الاحتمالات",
+            "is_illustrative": not probs,
+            "labels_generic": labels_generic,
+            "tree": tree,
+        }
+
+    @staticmethod
+    def _build_tree_structure(
+        events: dict[str, str],
+        p_first: float,
+        p_cond: float,
+        complement: object,
+    ) -> dict[str, object]:
+        """يبني شجرة ثنائية المستوى بتسميات ملموسة. موضع العقدة يُمثّل الشرط."""
+        _comp = complement  # callable
+        return {
             "label": "البداية",
             "children": [
                 {
-                    "label": "A",
+                    "label": events["first"],
                     "p": round(p_first, 4),
                     "children": [
-                        {"label": "B | A", "p": round(p_cond, 4)},
-                        {"label": "B̄ | A", "p": _complement(p_cond)},
+                        {"label": events["second"], "p": round(p_cond, 4)},
+                        {"label": events["second_neg"], "p": _comp(p_cond)},  # type: ignore[operator]
                     ],
                 },
                 {
-                    "label": "Ā",
-                    "p": _complement(p_first),
+                    "label": events["first_neg"],
+                    "p": _comp(p_first),  # type: ignore[operator]
                     "children": [
-                        {"label": "B | Ā", "p": 0.5},
-                        {"label": "B̄ | Ā", "p": 0.5},
+                        {"label": events["second"], "p": 0.5},
+                        {"label": events["second_neg"], "p": 0.5},
                     ],
                 },
             ],
         }
-        return {
-            "title": "شجرة الاحتمالات",
-            "is_illustrative": not probs,
-            "tree": tree,
-        }
+
+    async def _build_probability_tree_props(self, question: str) -> dict[str, object] | None:
+        """غلاف غير متزامن: استخراج حتمي ثم إثراء LLM للتسميات عند الحاجة فقط.
+
+        إذا فشل الاستخراج الحتمي في إيجاد كيان ملموس (``labels_generic=True``)،
+        نطلب من الـ LLM استخراج كيانات ملموسة من المسألة (محروس بـ timeout،
+        مُتحقَّق منه، مع fallback آمن). لا يُغيّر بنية الشجرة ولا القيم — فقط
+        التسميات. لا حرف A/B مجرّد في أي حال.
+        """
+        props = self._detect_probability_tree(question)
+        if props is None:
+            return None
+        if not props.get("labels_generic"):
+            props.pop("labels_generic", None)
+            return props
+        # محاولة إثراء عبر LLM (best-effort)
+        with contextlib.suppress(Exception):
+            enriched = await self._enrich_tree_labels_with_llm(question)
+            if enriched is not None:
+                tree = props.get("tree")
+                if isinstance(tree, dict):
+                    children = tree.get("children")
+                    if isinstance(children, list) and len(children) == 2:
+                        children[0]["label"] = enriched["first"]
+                        children[1]["label"] = enriched["first_neg"]
+                        for branch in children:
+                            sub = branch.get("children")
+                            if isinstance(sub, list) and len(sub) == 2:
+                                sub[0]["label"] = enriched["second"]
+                                sub[1]["label"] = enriched["second_neg"]
+        props.pop("labels_generic", None)
+        return props
+
+    @staticmethod
+    async def _enrich_tree_labels_with_llm(question: str) -> dict[str, str] | None:
+        """يستخرج كيانات ملموسة عبر LLM ويُرجع dict تسميات أو None عند الفشل.
+
+        محروس بـ timeout 8s. يرفض أي ناتج يحوي رموزاً مجرّدة (A/B بمفردها).
+        """
+        import asyncio
+        import json
+
+        from app.core.ai_gateway import get_ai_client
+
+        system_prompt = (
+            "أنت مستخرج كيانات لمسائل الاحتمالات. من نص المسألة، استخرج حدثين "
+            "كعبارات اسمية عربية قصيرة وملموسة (مثل 'كرة حمراء'، 'قطعة معيبة'، "
+            "'سحب ناجح'). ممنوع منعاً باتاً استخدام الرموز المجرّدة A أو B أو Ā. "
+            "أعِد JSON فقط بهذا الشكل بلا أي نص آخر: "
+            '{"first":"...","first_neg":"...","second":"...","second_neg":"..."}'
+        )
+        ai_client = get_ai_client()
+        raw = await asyncio.wait_for(
+            ai_client.send_message(system_prompt, question.strip()[:1200], temperature=0.2),
+            timeout=8.0,
+        )
+        if not raw or not isinstance(raw, str):
+            return None
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        data = json.loads(raw[start : end + 1])
+        keys = ("first", "first_neg", "second", "second_neg")
+        if not all(isinstance(data.get(k), str) and data[k].strip() for k in keys):
+            return None
+        cleaned = {k: data[k].strip()[:60] for k in keys}
+        # رفض الرموز المجرّدة (Abstraction Ban)
+        banned = {"a", "b", "ā", "b̄", "a'", "b'"}
+        if any(cleaned[k].lower() in banned for k in keys):
+            return None
+        return cleaned
 
     @staticmethod
     def _sanitize_error_for_user(*, request_id: str) -> dict[str, object]:
@@ -1001,7 +1143,7 @@ class OrchestratorClient:
         # في الواجهة قبل اكتمال نص الـ LLM. لا return — نسقط للمسار النصي.
         # ─────────────────────────────────────────────────────────────────────
         try:
-            _ui_tree_props = self._detect_probability_tree(question)
+            _ui_tree_props = await self._build_probability_tree_props(question)
         except Exception:
             _ui_tree_props = None
         if _ui_tree_props is not None:

@@ -1,5 +1,5 @@
 {
-  "branch": "claude/generative-ui-streaming-CdLtD",
+  "branch": "claude/bkt-database-backend-6PYeX",
   "components": [
     {
       "agreed": true,
@@ -80,7 +80,7 @@
         "tests/contracts/test_generative_ui_streaming.py",
         "tests/microservices/test_exercise_visibility_regression.py",
         "tests/microservices/test_orchestrator_client_resilience.py",
-        "tests/test_admin_chat_history.py"
+        "tests/services/test_bkt_persistence_and_labels.py"
       ],
       "name": "Orchestrator HTTP client + fallback chain",
       "notes": "Sole entrypoint to chat from customer_chat.py and admin.py.",
@@ -316,6 +316,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-05-20T08:09:27.466608+00:00",
+  "generated_at_utc": "2026-05-20T18:48:24.497586+00:00",
   "schema_version": 1
 }

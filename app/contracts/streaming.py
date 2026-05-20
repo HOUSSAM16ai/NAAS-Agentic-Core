@@ -16,6 +16,7 @@ from pydantic import Field, model_validator
 from app.core.schemas import RobustBaseModel
 
 __all__ = [
+    "BKTTrackingPayload",
     "EnvelopeDirection",
     "MessageEnvelope",
     "MessageType",
@@ -156,6 +157,23 @@ class UIComponentPayload(RobustBaseModel):
         if self.component not in KNOWN_UI_COMPONENTS:
             raise ValueError(f"unknown ui component: {self.component}")
         return self
+
+
+class BKTTrackingPayload(RobustBaseModel):
+    """حمولة تتبّع المعرفة البايزي (BKT) — runtime ``bkt_tracking`` object.
+
+    تُبثّ للواجهة داخل ``props`` لمكوّن ``bkt_hint_display`` وتُخزَّن في جدول
+    ``student_bkt_analytics``. تحمل المفهوم، تقدير الحِمل المعرفي، واحتمال
+    الإتقان [0, 1] — لا رموز مجرّدة، لا تفاصيل داخلية.
+    """
+
+    concept_id: str = Field(..., min_length=1, max_length=120, description="معرّف المفهوم")
+    cognitive_load_estimate: Literal["low", "medium", "high"] = Field(
+        ..., description="تقدير الحِمل المعرفي"
+    )
+    student_mastery_probability: float = Field(
+        ..., ge=0.0, le=1.0, description="احتمال إتقان الطالب"
+    )
 
 
 class MessageEnvelope(RobustBaseModel):

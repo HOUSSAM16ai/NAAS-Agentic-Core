@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { GenerativeUIRenderer } from './generative/GenerativeUIRenderer';
 
 // ─── معالجة رموز LaTeX قبل التصيير ───────────────────────────────────────────
 // ISS-057 (D-051): قاعدة المعرفة الرسمية تستخدم \\(...\\) و \\[...\\]
@@ -274,6 +275,18 @@ const MessageBubble = memo(({ msg, idx }) => {
     // الحل: لا تعرض bubble للـ user الفارغة.
     if (msg.role === 'user' && isEmpty) {
         return null;
+    }
+
+    // Generative UI: رسالة تحمل مكوّناً تفاعلياً (شجرة احتمالات...) — تُصيَّر
+    // عبر GenerativeUIRenderer داخل Error Boundary. منفصلة عن المسار النصي.
+    if (msg.uiComponent) {
+        return (
+            <div className={`message ${msg.role}`}>
+                <div className="message-bubble genui-bubble">
+                    <GenerativeUIRenderer uiComponent={msg.uiComponent} />
+                </div>
+            </div>
+        );
     }
 
     // ISS-076 (2026-05-15) D-064: تجاوز useTypewriter بالكامل لمنع flicker.

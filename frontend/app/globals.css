@@ -1952,3 +1952,143 @@ body[data-theme='light'] .exam-badge {
     color: var(--primary-color);
     border: 1px solid rgba(37, 99, 235, 0.15);
 }
+
+/* ─── Generative UI (Streaming Components) ─────────────────────────────────── */
+/* مكوّنات الواجهة التوليدية المبثوثة عبر حدث ui_component. theme-aware عبر
+   متغيرات CSS — تعمل في الوضعين النهاري والمظلم بلا وميض. */
+
+.genui-bubble {
+    background-color: transparent;
+    border: none;
+    padding: 0.25rem 0;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+/* النص البديل (Error Boundary fallback) */
+.genui-fallback {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    background-color: var(--surface-elevated);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.genui-fallback-icon {
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+/* شجرة الاحتمالات */
+.genui-probability-tree {
+    width: 100%;
+    min-width: 0;
+    padding: 0.9rem 1.1rem;
+    border-radius: 16px;
+    background-color: var(--surface-elevated);
+    border: 1px solid var(--border-color);
+}
+
+.genui-tree-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.9rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.genui-tree-icon {
+    color: var(--primary-color);
+}
+
+.genui-tree-title {
+    font-size: 1.02rem;
+}
+
+.genui-tree-illustrative {
+    margin-inline-start: auto;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background-color: rgba(37, 99, 235, 0.1);
+    color: var(--primary-color);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.genui-tree-root,
+.genui-tree-children {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.genui-tree-children {
+    padding-inline-start: 1.25rem;
+    border-inline-start: 2px solid var(--border-color);
+    margin-inline-start: 0.6rem;
+    margin-top: 0.35rem;
+}
+
+.genui-tree-node {
+    position: relative;
+    margin: 0.35rem 0;
+}
+
+.genui-tree-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 10px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+}
+
+.genui-tree-prob {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: var(--primary-color);
+    background-color: rgba(37, 99, 235, 0.08);
+    border-radius: 7px;
+    padding: 0.1rem 0.45rem;
+    direction: ltr;
+}
+
+.genui-tree-label {
+    color: var(--text-color);
+    font-size: 0.95rem;
+}
+
+/* stub: مؤشر BKT */
+.genui-bkt-stub {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    background-color: var(--surface-elevated);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.genui-bkt-icon {
+    color: var(--primary-color);
+}
+
+@media (max-width: 640px) {
+    .genui-tree-children {
+        padding-inline-start: 0.8rem;
+    }
+    .genui-tree-label {
+        font-size: 0.88rem;
+    }
+}

@@ -638,6 +638,8 @@ class OrchestratorClient:
             "phase_completed",
             "RUN_STARTED",
             "context_missing",
+            # Generative UI — يُمرَّر للواجهة لتصيير مكوّن React تفاعلي.
+            "ui_component",
         }
     )
     _TEXT_EVENT_TYPES: frozenset[str] = frozenset(
@@ -660,6 +662,11 @@ class OrchestratorClient:
             }
 
         raw_type = str(raw_event.get("type", ChatEventType.ASSISTANT_DELTA.value))
+
+        # Generative UI: نتحقق من الحمولة عبر العقد الصارم. أي مكوّن مجهول أو
+        # حمولة مشوَّهة → noop (تُسقَط) بدل تمرير بيانات غير موثوقة للواجهة.
+        if raw_type == "ui_component":
+            return self._normalize_ui_component_event(raw_event)
 
         # أحداث التحكم تُمرَّر مباشرة بدون تحويل
         if raw_type in self._PASSTHROUGH_EVENT_TYPES:
@@ -709,6 +716,114 @@ class OrchestratorClient:
         if "persisted" in raw_event:
             result["persisted"] = bool(raw_event["persisted"])
         return result
+
+    def _normalize_ui_component_event(self, raw_event: dict) -> dict[str, object]:
+        """يتحقق من حمولة مكوّن UI توليدي ويعيد مغلفاً نظيفاً أو noop عند الفشل.
+
+        أي مكوّن مجهول (خارج القائمة البيضاء) أو حمولة مشوَّهة أو ضخمة → noop
+        (تُسقَط) — لا نمرر للواجهة بيانات غير موثوقة. هذا خط الدفاع الأول قبل
+        React Error Boundary.
+        """
+        from pydantic import ValidationError
+
+        from app.contracts.streaming import UIComponentPayload
+
+        payload = raw_event.get("payload")
+        if not isinstance(payload, dict):
+            return {"type": "noop", "payload": {}}
+        try:
+            validated = UIComponentPayload.model_validate(payload)
+        except ValidationError:
+            logger.warning("ui_component_event_rejected", exc_info=True)
+            return {"type": "noop", "payload": {}}
+        # حماية ضد الحمولات الضخمة (cap التسلسل عند 16KB)
+        try:
+            if len(json.dumps(validated.props, default=str)) > 16000:
+                logger.warning("ui_component_props_too_large")
+                return {"type": "noop", "payload": {}}
+        except (TypeError, ValueError):
+            return {"type": "noop", "payload": {}}
+        return {
+            "type": "ui_component",
+            "payload": {
+                "component": validated.component,
+                "props": validated.props,
+                "fallback_text": self._sanitize_text_for_user(validated.fallback_text),
+            },
+        }
+
+    @staticmethod
+    def _detect_probability_tree(question: str) -> dict[str, object] | None:
+        """يكتشف طلبات شجرة الاحتمالات ويبني خصائص تصيير حتمية.
+
+        يُفعَّل عند: (1) عبارة صريحة (شجرة احتمالات / probability tree / arbre de
+        probabilité) أو (2) ذِكر "احتمال" مع وجود قيمة احتمالية رقمية. يستخرج حتى
+        قيمتين احتماليتين من النص لبناء شجرة ثنائية المستوى؛ غير ذلك يستخدم
+        قيماً افتراضية متوازنة (0.5) كرسم توضيحي.
+        """
+        import re
+
+        if not question or not isinstance(question, str):
+            return None
+        normalized = question.strip().lower()
+
+        explicit_triggers = (
+            "شجرة الاحتمال",
+            "شجرة احتمال",
+            "شجرة الاحتمالات",
+            "مخطط الشجرة",
+            "شجرة القرار",
+            "probability tree",
+            "tree diagram",
+            "arbre de probabilit",
+            "arbre pondéré",
+            "diagramme en arbre",
+        )
+        has_explicit = any(trigger in normalized for trigger in explicit_triggers)
+        has_probability_word = any(
+            word in normalized for word in ("احتمال", "احتمالات", "probabilit", "proba")
+        )
+
+        # استخراج القيم الاحتمالية: كسور عشرية (0.3) أو نسب مئوية (30%)
+        decimals = [float(m) for m in re.findall(r"\b0?\.\d+\b", normalized)]
+        percents = [float(m) / 100.0 for m in re.findall(r"\b(\d{1,3})\s*%", normalized)]
+        probs = [p for p in (decimals + percents) if 0.0 < p < 1.0][:2]
+
+        if not has_explicit and not (has_probability_word and probs):
+            return None
+
+        def _complement(value: float) -> float:
+            return round(1.0 - value, 4)
+
+        p_first = probs[0] if probs else 0.5
+        p_cond = probs[1] if len(probs) > 1 else 0.5
+
+        tree = {
+            "label": "البداية",
+            "children": [
+                {
+                    "label": "A",
+                    "p": round(p_first, 4),
+                    "children": [
+                        {"label": "B | A", "p": round(p_cond, 4)},
+                        {"label": "B̄ | A", "p": _complement(p_cond)},
+                    ],
+                },
+                {
+                    "label": "Ā",
+                    "p": _complement(p_first),
+                    "children": [
+                        {"label": "B | Ā", "p": 0.5},
+                        {"label": "B̄ | Ā", "p": 0.5},
+                    ],
+                },
+            ],
+        }
+        return {
+            "title": "شجرة الاحتمالات",
+            "is_illustrative": not probs,
+            "tree": tree,
+        }
 
     @staticmethod
     def _sanitize_error_for_user(*, request_id: str) -> dict[str, object]:
@@ -878,6 +993,38 @@ class OrchestratorClient:
                         },
                     )
             return
+
+        # ─────────────────────────────────────────────────────────────────────
+        # Generative UI Streaming (probability tree):
+        # عند طلب يتضمن شجرة احتمالات، نبثّ حدث ui_component فوراً (incremental)
+        # ثم نُكمل المسار العادي لتوليد الشرح النصي — المكوّن التفاعلي يظهر
+        # في الواجهة قبل اكتمال نص الـ LLM. لا return — نسقط للمسار النصي.
+        # ─────────────────────────────────────────────────────────────────────
+        try:
+            _ui_tree_props = self._detect_probability_tree(question)
+        except Exception:
+            _ui_tree_props = None
+        if _ui_tree_props is not None:
+            logger.info(
+                "generative_ui_emit",
+                extra={
+                    "request_id": str(uuid.uuid4()),
+                    "component": "probability_tree",
+                    "question_len": len(question),
+                },
+            )
+            yield self._normalize_stream_event(
+                {
+                    "type": "ui_component",
+                    "payload": {
+                        "component": "probability_tree",
+                        "props": _ui_tree_props,
+                        "fallback_text": (
+                            "شجرة الاحتمالات (تعذّر عرض الرسم التفاعلي — هذا نص بديل)."
+                        ),
+                    },
+                }
+            )
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-056 (D-049 — Indexed Retrieval Preemption):

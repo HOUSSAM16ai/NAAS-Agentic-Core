@@ -251,6 +251,30 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                     setConversationId(payload.conversation_id);
                 }
                 refreshConversationHistory();
+            } else if (type === 'ui_component') {
+                // Generative UI: حدث مكوّن React تفاعلي يُبثّ بالتوازي مع النص.
+                // نُنشئ رسالة مساعد مستقلة تحمل وصف المكوّن (component/props/fallbackText).
+                // isComplete:true → تُصيَّر فوراً ولا تحجب زر الإرسال، وأول delta
+                // نصّي لاحق يُنشئ رسالة نصية منفصلة (لا يندمج مع فقاعة المكوّن).
+                const component = payload?.component;
+                const props = payload?.props;
+                const fallbackText = payload?.fallback_text || 'تعذّر عرض المكوّن.';
+                if (typeof component === 'string' && component) {
+                    setMessages(prev => [
+                        ...prev,
+                        {
+                            id: generateId(),
+                            role: 'assistant',
+                            content: '',
+                            isComplete: true,
+                            uiComponent: {
+                                component,
+                                props: props && typeof props === 'object' ? props : {},
+                                fallbackText: String(fallbackText),
+                            },
+                        },
+                    ]);
+                }
             } else if (type === 'delta' || type === 'assistant_delta') {
                 const content = payload?.content || '';
                 if (!content) return;

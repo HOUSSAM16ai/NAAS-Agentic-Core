@@ -70,7 +70,7 @@ async def test_supervisor_classification_is_timeout_bounded():
 
     real_wait_for = asyncio.wait_for
 
-    async def _fast_wait_for(awaitable, timeout):  # noqa: ARG001
+    async def _fast_wait_for(awaitable, timeout):
         return await real_wait_for(awaitable, timeout=0.2)
 
     import microservices.orchestrator_service.src.services.overmind.graph.main as graph_main

@@ -49,6 +49,7 @@ import time
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.doctrine import BKT_COGNITIVE_DOCTRINE_VERSION
 
 # ── معاملات BKT الافتراضية ───────────────────────────────────────────────────────
 DEFAULT_P_L0: float = 0.25  # الإتقان المسبق الأولي
@@ -282,6 +283,9 @@ class BKTEngine:
     """
 
     _skill_name: str = "bkt"
+    #: إصدار الـ doctrine الذي يلتزم به هذا الـ Skill (D-074). يُربط بـ
+    #: doctrine.BKT_COGNITIVE_DOCTRINE_VERSION — single source of truth.
+    doctrine_version: str = BKT_COGNITIVE_DOCTRINE_VERSION
 
     def evaluate(self, payload: BKTEvaluationInput) -> BKTEvaluation:
         """يُقيّم تفاعلاً ويُرجع تقييماً منظَّماً. لا يرفع استثناءات منطقية."""

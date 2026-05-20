@@ -2040,3 +2040,22 @@ fallback, no A/B). Live Supabase row-insert proof deferred to Codespaces
 (`scripts/verify_bkt_live.py`) — sandbox blocks Postgres ports 6543/5432.
 
 **Status**: SHIPPED on branch `claude/bkt-database-backend-6PYeX`.
+
+### D-074 amendment (2026-05-20) — Phase 3: Skills-framework integration + doctrine sealing
+
+BKT promoted to a **first-class versioned doctrine** in the Skills framework:
+- `doctrine.py`: `BKT_COGNITIVE_DOCTRINE` (7 immutable rules, v1.0.0) +
+  `SKILL_DOCTRINE_MANIFEST["bkt_cognitive"]` + `get_bkt_cognitive_summary()`.
+- `bkt_engine.py`: `BKTEngine.doctrine_version` bound to the doctrine constant
+  (consumes doctrine — single source of truth, mirrors BAC skill pattern).
+- `__init__.py`: exports + docstring registers `BKTEngine` as foundational layer.
+- `check_skills_doctrine.py`: new `check_bkt_baseline_integrated()` + manifest
+  pair validation → CI guards that BKT consumes the doctrine AND is wired live
+  in `customer_chat._evaluate_and_emit_bkt` (no-ZOMBIE guarantee, mirrors D-073).
+
+**Phase-1 audit verified (immutable, see CLAUDE.md §6.52 "Verified Mechanics")**:
+boot hook `kernel.py:233 → validate_schema_on_startup`; hybrid extraction in
+`orchestrator_client`; and the honest truth that `bkt_hint_display` frontend is
+a STUB (`BktHintStub`) while `probability_tree` (`ProbabilityTree.jsx`) is fully
+built. Memory sealed across CLAUDE.md §0 + §6.52, `.memory/architecture.md`,
+`.memory/runtime_truth.md` (rows 35-39).

@@ -32,6 +32,12 @@ The system must preserve the following principles permanently. Every future agen
 - **System prompt sanity (D-067)**: System prompts > 1500 chars are FORBIDDEN — they trigger reasoning-mode in free OpenRouter models. Box-drawing chars (U+2500–U+257F) like `━━━` are FORBIDDEN in prompts — they confuse tokenizers and cause degenerate output. Keep prompts < 1000 chars, use simple punctuation (`---`, `##`).
 - **No reasoning→content leak (D-067)**: Gateway MUST NEVER redirect `delta.reasoning` to `delta.content`. The reverse of ISS-069 caused English thinking text ("We need to respond as a brilliant Algerian professor...") to be displayed to students as Arabic answers. If `content=None`, let the fallback chain trigger.
 - **Greeting fastpath is mandatory (D-067)**: Every chat entry point (monolith `local_graph.py`, orchestrator's `ChatFallbackNode`, `chat_with_agent` preempt) MUST check `_greeting_fastpath_response` / `GreetingSkill` BEFORE calling LLM. Without this, free models return etymology for "السلام عليكم" (verified live ISS-079).
+- **E-TAALEEM Zero Cognitive Overload (D-074 — Protocol V6.0)**: The platform serves 800,000+ Algerian Baccalaureate students. Abstract math symbols (`A`, `B|A`, `Ā`, `B̄`) are **permanently banned** from every generative-UI node label. This is an immutable pedagogical law, not a styling preference.
+- **Abstraction Ban — Hybrid Extraction (D-074)**: Every generative-UI component MUST produce concrete, human-readable labels via the Hybrid Extraction Model — deterministic entity extraction first (`OrchestratorClient._extract_concrete_events`), LLM enrichment only when no concrete entity is found (`_enrich_tree_labels_with_llm`, timeout-guarded, A/B output rejected), and even the final fallback is concrete (`"الحدث الأول"`, never `"A"`). The orchestrator `_normalize_ui_component_event` + frontend `GenerativeUIRenderer` whitelist are the only render paths.
+- **BKT is the foundational cognitive layer (D-074)**: Bayesian Knowledge Tracing (`app/services/skills/bkt_engine.py:BKTEngine`) is the cognitive substrate for ALL future autonomous pedagogical skills (adaptive difficulty, hints, learning paths). Any adaptive capability MUST build on `student_mastery_probability`, never re-invent mastery tracking. Governed by `BKT_COGNITIVE_DOCTRINE` (versioned in `app/services/skills/doctrine.py`, CI-validated by `scripts/fitness/check_skills_doctrine.py`).
+- **BKT is append-only (D-074)**: `student_bkt_analytics` is strictly an **append-only interaction log** for time-series analytics. Each evaluation inserts ONE new row; prior mastery is read from the most-recent row per `(user_id, concept_id)`. No in-place updates, no upserts — the full temporal sequence is preserved. Mandatory schema: `concept_id`, `cognitive_load_estimate` (low/medium/high), `student_mastery_probability ∈ [0,1]`, `interaction_timestamp`.
+- **BKT never breaks chat (D-074)**: Every BKT evaluation/persist/emit call (`customer_chat._evaluate_and_emit_bkt`) is isolated in `try/except` with its own DB session. A BKT failure is logged and swallowed — it must NEVER abort a student's chat turn.
+- **Supabase schema = boot auto-creation, not sandbox migrations (D-074)**: The Codespaces/sandbox network firewall blocks Postgres egress (ports **6543/5432**). Schema changes are applied by the boot hook `app/kernel.py:233 → validate_schema_on_startup() → validate_and_fix_schema(auto_fix=True)`, driven by `app/core/db_schema_config.py:REQUIRED_SCHEMA`. Agents MUST register new tables there (never rely on running SQL from the sandbox). The standalone `.sql` under `scripts/migrations/` is for manual operator use only.
 
 ---
 
@@ -5145,3 +5151,46 @@ learn P(T)، slip P(S)، guess P(G)). إشارة evidence لينة مشتقة م
 | `tests/services/test_bkt_persistence_and_labels.py` | **new** — 8 tests |
 | `.runtime/truth_table.lock.json` | regenerated |
 | `.memory/decisions.md` / `.memory/issues.md` | D-074 entries |
+
+### Verified Mechanics (Phase-1 audit, 2026-05-20 — exact, immutable)
+
+> هذه الحقائق مُتحقَّقة من الكود الحي. لا تُعدَّل بدون إعادة تحقق + ADR.
+
+**(1) DB auto-creation hook (boot mount)**:
+```
+app/kernel.py:233  →  await validate_schema_on_startup()
+app/core/db_schema.py:324  validate_schema_on_startup()
+    →  validate_and_fix_schema(auto_fix=True)   (db_schema.py:223)
+        →  reads app/core/db_schema_config.py:REQUIRED_SCHEMA["student_bkt_analytics"]
+        →  CREATE TABLE IF NOT EXISTS … (idempotent) on every boot
+```
+The table mounts automatically on Codespaces boot — no manual migration. Registered in both `_ALLOWED_TABLES` and `REQUIRED_SCHEMA`.
+
+**(2) Hybrid Abstraction Ban extraction logic** (all in `app/infrastructure/clients/orchestrator_client.py`):
+```
+_extract_concrete_events(normalized)        — deterministic entity table (line ~778)
+_detect_probability_tree(question)          — deterministic builder, concrete labels (line ~802)
+_build_probability_tree_props(question)     — async hybrid wrapper (line ~898)
+    └─ if labels_generic →  _enrich_tree_labels_with_llm(question)  (line ~931, timeout=8s, rejects A/B)
+call site: chat_with_agent → await self._build_probability_tree_props(question) (line ~1146)
+```
+Fallback order: deterministic entity → LLM enrichment → concrete generic (`"الحدث الأول"`). **No path can emit `A`/`B|A`/`Ā`.**
+
+**(3) `bkt_hint_display` payload → frontend mapping (HONEST runtime truth)**:
+- Emitter: `app/api/routers/customer_chat.py:_evaluate_and_emit_bkt()` sends
+  `{"type":"ui_component","payload":{"component":"bkt_hint_display","props":{concept_id, cognitive_load_estimate, student_mastery_probability}, "fallback_text": "…"}}`.
+- Contract: validated by `app/contracts/streaming.py:BKTTrackingPayload` + whitelisted in `KNOWN_UI_COMPONENTS`.
+- Transport: `frontend/app/hooks/useAgentSocket.js:254` handles `ui_component` → creates an assistant message carrying `{component, props, fallbackText}`.
+- Render: `frontend/app/components/generative/GenerativeUIRenderer.jsx` `COMPONENT_REGISTRY` maps it.
+  - `probability_tree` → **fully-built** `ProbabilityTree.jsx` portal (real interactive render).
+  - `bkt_hint_display` → **STUB** (`BktHintStub`, line ~22): renders only the `fallback_text` as a safe info-note (`"مؤشر إتقان المهارة (قريباً)"`). **The full BKT visualization is NOT built yet** — the data flows end-to-end and is persisted, but the rich frontend portal is pending. Per runtime-truth doctrine: BKT engine + persistence + emit = ACTIVE; `bkt_hint_display` frontend portal = PARTIAL (stub).
+
+### Skills-framework integration (D-074 — Phase 3)
+
+BKT is registered as a first-class, versioned doctrine in the Skills framework:
+- `app/services/skills/doctrine.py`: `BKT_COGNITIVE_DOCTRINE` (7 immutable rules) + `BKT_COGNITIVE_DOCTRINE_VERSION = "1.0.0"` + `SKILL_DOCTRINE_MANIFEST["bkt_cognitive"]` + `get_bkt_cognitive_summary()`.
+- `app/services/skills/bkt_engine.py`: `BKTEngine.doctrine_version` bound to the doctrine constant (consumes doctrine — single source of truth).
+- `app/services/skills/__init__.py`: exports + docstring registers `BKTEngine` as the foundational cognitive layer.
+- `scripts/fitness/check_skills_doctrine.py`: validates the `bkt_cognitive` manifest entry **and** that `bkt_engine.py` consumes the doctrine **and** that `customer_chat._evaluate_and_emit_bkt` is wired (no-ZOMBIE guarantee, mirrors D-073).
+
+**Rule**: any future adaptive pedagogical skill consumes `BKT_COGNITIVE_DOCTRINE` and builds on `student_mastery_probability` — it must never re-invent mastery tracking. Changing a doctrine rule = bump `BKT_COGNITIVE_DOCTRINE_VERSION` + update the CI gate.

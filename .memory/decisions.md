@@ -2093,3 +2093,27 @@ tashkeel-strip regex must start at U+064B (not U+0610) or it deletes Arabic
 letters. Proven live: `scripts/test_generalization.py` 4/4 (dice, factory, cards,
 urn). Tests: `tests/services/test_probability_skill.py` (16) +
 `tests/contracts/test_generative_ui_streaming.py` (+3). All quality gates green.
+
+---
+
+## D-077 — Probability Engine Hardening (2026-05-21 · Protocol V17.0)
+
+**Context**: Live debugging exposed garbage fractions (`1/0`, `1/1`) and an Arabic
+parsing bug where the draw count ("نسحب 3 كرات") was mistaken for the urn total
+(total=3 instead of 2 → wrong P).
+
+**Decision**: Three fixes in `ProbabilityCalculatorSkill`:
+1. `_detect_total` now ignores numbers in a draw-verb context
+   (نسحب/يسحب/سحب/نأخذ/نختار/اختيار/tirage) and floors total at `sum(counts)`.
+2. Second-level expansion gated to `draws≥2 and (with_replacement or total≥3)` —
+   no degenerate `0/1`/`1/1` sub-branches on tiny urns.
+3. New `_sanitize_node` final guard applied to every strategy's tree
+   (universe/conditional/composition): guarantees `p_den≥1`, `0≤p_num≤p_den`, no
+   division by zero ever reaches the student. Composition counts clamped to total.
+
+Contract boundary reaffirmed (§3.B): backend yields structured Pydantic JSON only;
+`_build_*_tree_props` are fully try/except-guarded and `_normalize_ui_component_event`
+drops malformed payloads to `noop` — no Next.js error HTML can leak into the stream.
+
+Proven live: `scripts/omni_live_test.py` (3-turn flow, no 1/0, context retained) +
+3 new regression tests in `tests/services/test_probability_skill.py`.

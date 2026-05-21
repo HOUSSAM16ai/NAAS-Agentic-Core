@@ -303,6 +303,26 @@ class ProbabilityCalculatorSkill:
             rec["children"] = children
         return rec
 
+    @classmethod
+    def _sanitize_node(cls, node: dict[str, object]) -> dict[str, object]:
+        """حارس نهائي ضد الكسور المنحلّة (D-077 / V17.0).
+
+        يضمن لكل عقدة: ``p_den ≥ 1`` (لا قسمة على صفر أبداً) و ``0 ≤ p_num ≤ p_den``
+        و ``p`` متّسقة. هذا خط الدفاع الأخير قبل البثّ — أي خطأ حسابي سابق
+        (مقام صفر، بسط > مقام) يُقصّ بأمان بدل أن يصل للطالب كـ 1/0 أو غارباج.
+        """
+        num = int(node.get("p_num", 0) or 0)
+        den = int(node.get("p_den", 1) or 1)
+        den = max(den, 1)
+        num = max(0, min(num, den))
+        node["p_num"] = num
+        node["p_den"] = den
+        node["p"] = cls._decimal(num, den)
+        children = node.get("children")
+        if isinstance(children, list):
+            node["children"] = [cls._sanitize_node(c) for c in children if isinstance(c, dict)]
+        return node
+
     # ── مساعدات استخراج العدد ─────────────────────────────────────────────────────
     @staticmethod
     def _as_int(token: str) -> int | None:
@@ -383,15 +403,37 @@ class ProbabilityCalculatorSkill:
 
         return results
 
-    @staticmethod
-    def _detect_total(text: str, fallback: int) -> int:
-        """يكشف المجموع الصريح (مثل '11 كرة'، '8 بطاقات') أو مجموع العناصر."""
+    @classmethod
+    def _detect_total(cls, text: str, fallback: int) -> int:
+        """يكشف المجموع الصريح (مثل '11 كرة'، '8 بطاقات') أو مجموع العناصر.
+
+        D-077 (V17.0): يتجاهل الأرقام في سياق السحب — «نسحب 3 كرات» يعني عدد
+        السحبات لا حجم الكيس. الخلط بينهما كان يُنتج مقاماً خاطئاً (2/3 بدل 2/2).
+        المجموع الصريح يجب أن يكون ≥ مجموع المكوّنات المستخرَجة (ground truth).
+        """
+        normalized = cls._normalize(text)
+        draw_markers = (
+            "نسحب",
+            "يسحب",
+            "تسحب",
+            "سحب",
+            "ناخذ",
+            "ياخذ",
+            "نختار",
+            "اختيار",
+            "اختر",
+            "سحبه",
+            "tirage",
+        )
         best = fallback
         for m in re.finditer(
-            r"\b(\d{1,3})\s*(?:كرة|كرات|بطاقة|بطاقات|قطعة|قطع|عنصر|عناصر|حبة|حبات|كرية|كريات)\b",
-            text,
+            r"(\d{1,3})\s*(?:كرة|كرات|بطاقة|بطاقات|قطعة|قطع|عنصر|عناصر|حبة|حبات|كرية|كريات)",
+            normalized,
         ):
             value = int(m.group(1))
+            window = normalized[max(0, m.start() - 18) : m.start()]
+            if any(dm in window for dm in draw_markers):
+                continue  # عدد سحبات لا حجم كيس
             if value >= fallback >= 1:
                 best = max(best, value)
         return best
@@ -436,11 +478,13 @@ class ProbabilityCalculatorSkill:
 
         if is_coin:
             # وجه/كتابة — فضاء من وجهين
-            tree = cls._node(
-                "البداية",
-                1,
-                1,
-                [cls._node("وجه", 1, 2), cls._node("كتابة", 1, 2)],
+            tree = cls._sanitize_node(
+                cls._node(
+                    "البداية",
+                    1,
+                    1,
+                    [cls._node("وجه", 1, 2), cls._node("كتابة", 1, 2)],
+                )
             )
             comp = [
                 CompositionItem(label="وجه", count=1, p_num=1, p_den=2, p_decimal=0.5),
@@ -482,14 +526,16 @@ class ProbabilityCalculatorSkill:
                 p_decimal=cls._decimal(odd_count, faces),
             ),
         ]
-        tree = cls._node(
-            "البداية",
-            1,
-            1,
-            [
-                cls._node("رقم زوجي", even_count, faces),
-                cls._node("رقم فردي", odd_count, faces),
-            ],
+        tree = cls._sanitize_node(
+            cls._node(
+                "البداية",
+                1,
+                1,
+                [
+                    cls._node("رقم زوجي", even_count, faces),
+                    cls._node("رقم فردي", odd_count, faces),
+                ],
+            )
         )
         return ProbabilityModelOutput(
             strategy="universe",
@@ -576,7 +622,7 @@ class ProbabilityCalculatorSkill:
                 ]
             branches.append(cls._node(display, prim, 100, children or None))
 
-        tree = cls._node("البداية", 1, 1, branches)
+        tree = cls._sanitize_node(cls._node("البداية", 1, 1, branches))
         return ProbabilityModelOutput(
             strategy="conditional",
             total=100,
@@ -603,6 +649,8 @@ class ProbabilityCalculatorSkill:
 
         items_total = sum(c[2] for c in comp_raw)
         total = cls._detect_total(source, items_total)
+        # ground truth: المجموع لا يقل عن مجموع المكوّنات، وكل عدد ≤ المجموع.
+        total = max(total, items_total)
         if total < 2:
             return None
 
@@ -612,29 +660,34 @@ class ProbabilityCalculatorSkill:
         composition = [
             CompositionItem(
                 label=label_pos,
-                count=count,
-                p_num=count,
+                count=min(count, total),
+                p_num=min(count, total),
                 p_den=total,
-                p_decimal=cls._decimal(count, total),
+                p_decimal=cls._decimal(min(count, total), total),
             )
             for label_pos, _neg, count in comp_raw
         ]
 
-        # المستوى الأول: كل الأصناف. المستوى الثاني (إن draws≥2): شرطي/مستقل.
+        # المستوى الثاني يُبنى فقط حين يكون ذا معنى:
+        # - مع الإرجاع: مستقل، آمن دائماً.
+        # - بدون إرجاع: يتطلّب total ≥ 3 (denom2 = total-1 ≥ 2) لتفادي كسور
+        #   منحلّة (0/1، 1/1) أو قسمة على صفر — D-077 (V17.0).
+        expand_second = draws >= 2 and (with_replacement or total >= 3)
+
         level1: list[dict[str, object]] = []
         for label_pos, _neg, count in comp_raw:
             children: list[dict[str, object]] = []
-            if draws >= 2:
+            if expand_second:
                 if with_replacement:
                     children = [cls._node(lp, cnt, total) for lp, _n, cnt in comp_raw]
                 else:
-                    denom2 = max(total - 1, 1)
+                    denom2 = total - 1  # ≥ 2 (مضمون بـ expand_second)
                     for lp, _n, cnt in comp_raw:
                         sub = cnt - 1 if lp == label_pos else cnt
                         children.append(cls._node(lp, max(sub, 0), denom2))
-            level1.append(cls._node(label_pos, count, total, children or None))
+            level1.append(cls._node(label_pos, min(count, total), total, children or None))
 
-        tree = cls._node("البداية", 1, 1, level1)
+        tree = cls._sanitize_node(cls._node("البداية", 1, 1, level1))
         focal_pos, focal_neg, _ = comp_raw[0]
         return ProbabilityModelOutput(
             strategy="composition",

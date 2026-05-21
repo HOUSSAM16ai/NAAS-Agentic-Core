@@ -5254,3 +5254,49 @@ Skill رسمي جديد `app/services/skills/probability_skill.py` (يحترم �
 | `scripts/test_generalization.py` / `scripts/gitpod_ui_test.py` | **new** — live empirical proofs |
 | `tests/services/test_probability_skill.py` | **new** — 16 unit tests |
 | `tests/contracts/test_generative_ui_streaming.py` | + 3 wiring tests |
+
+---
+
+## 6.54 Probability Engine Hardening — No Garbage Fractions + Accurate Arabic Parsing (2026-05-21, D-077 · Protocol V17.0)
+
+> كارثة حية: المحرّك أنتج كسوراً منحلّة (`1/0`، `1/1`) و خلط **عدد السحبات**
+> بحجم الكيس (total=3 بدل 2). هذا القسم يحكم سلامة الحساب — لا تُكسر بدون ADR.
+
+### السببان الجذريان (مُشخَّصان حيّاً)
+1. **خلط السحب بالمجموع**: `_detect_total` كان يطابق «نسحب **3 كرات**» ويعتبر 3
+   حجم الكيس — والصحيح أن 3 هو عدد السحبات. النتيجة: `P(بيضاء)=2/3` بدل `2/2`.
+2. **كسور منحلّة**: السحب بدون إرجاع من كيس صغير (كرتان) يولّد `0/1` و `1/1`
+   في المستوى الثاني — تبدو غارباج للطالب.
+
+### الإصلاح (D-077)
+- **`_detect_total` (parsing)**: يتجاهل أي رقم مسبوق بفعل سحب
+  (نسحب/يسحب/تسحب/سحب/نأخذ/نختار/اختيار/tirage) ضمن نافذة قصيرة. المجموع
+  الصريح يجب أن يكون ≥ مجموع المكوّنات المستخرَجة (ground truth = مجموع الأعداد).
+- **بوّابة المستوى الثاني**: يُبنى فقط حين `draws ≥ 2` و(`مع الإرجاع` أو
+  `total ≥ 3`) — السحب بدون إرجاع من كيس ≤ 2 لا يُولّد فروعاً (denom2 = total-1 ≥ 2 مضمون).
+- **`_sanitize_node` (حارس نهائي إلزامي)**: يمرّ على كل عقدة في كل شجرة من كل
+  استراتيجية ويضمن `p_den ≥ 1` و `0 ≤ p_num ≤ p_den` ويُعيد حساب `p`. لا قسمة
+  على صفر، لا بسط أكبر من المقام، تصل للطالب أبداً. مطبَّق على الاستراتيجيات
+  الثلاث (universe/conditional/composition).
+- **clamp المكوّنات**: `count = min(count, total)` — لا عنصر يتجاوز المجموع.
+
+### قواعد دائمة (V17.0)
+1. **عدد السحبات ≠ حجم الفضاء**: أي رقم في سياق فعل سحب لا يُعدّ مجموعاً.
+2. **المجموع = مجموع المكوّنات كحدّ أدنى**: `total = max(detected, sum(counts))`.
+3. **حارس نهائي إلزامي**: كل شجرة احتمالات تمرّ عبر `_sanitize_node` قبل البثّ —
+   لا استثناء. أي استراتيجية جديدة يجب أن تُمرِّر جذرها عبره.
+4. **عقد العرض**: الواجهة (`fractionFromIntegers`) تُصيّر `num≥den → "1"`،
+   `num≤0 → "0"`، `den≤0 → null` — طبقة دفاع ثانية فوق حارس الخلفية.
+
+### Microservices Contract Boundary (V17.0 §3.B)
+الخلفية تُخرج **Pydantic JSON منظَّماً فقط** للواجهة — لا HTML، لا SVG، لا
+نص خام. `_build_probability_tree_props` + `_build_calculated_tree_props` محروسان
+بـ try/except شامل (يُرجعان `None` لا يُسرّبان استثناءً)، و
+`_normalize_ui_component_event` يتحقّق عبر `UIComponentPayload` ويُسقط أي حمولة
+مشوَّهة إلى `noop`. هذا يمنع تسرّب صفحة خطأ Next.js (`<nextjs-portal>`) إلى البثّ.
+
+### التحقق الحي (2026-05-21)
+- `scripts/omni_live_test.py` — المسار الثلاثي (تمرين → شجرة → «لم أفهم»): لا
+  `1/0`، السياق محفوظ، JSON نظيف ✅
+- `tests/services/test_probability_skill.py` — +3 اختبارات regression (no-div-zero،
+  draw≠total، no-degenerate) ✅

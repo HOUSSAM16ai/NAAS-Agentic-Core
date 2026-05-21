@@ -84,16 +84,47 @@ Student browser
                                           └─ chat_node → OpenRouter API → response
 ```
 
-## 25 Database Tables
+## 31 Database Tables (verified live 2026-05-21)
 ```
-Auth:     users, roles, permissions, user_roles, role_permissions, refresh_tokens, password_resets
-Audit:    audit_log
-Chat:     customer_conversations, customer_messages, admin_conversations, admin_messages
-Missions: missions, mission_plans, tasks, mission_events, mission_outbox
-AI:       prompt_templates, generated_prompts, knowledge_nodes, knowledge_edges
-Content:  content_items, content_search, content_solutions
-System:   alembic_version
+Auth:        users, roles, permissions, user_roles, role_permissions, refresh_tokens, password_resets
+Audit:       audit_log, audit_logs
+Chat:        customer_conversations, customer_messages, admin_conversations, admin_messages
+Missions:    missions, mission_plans, tasks, mission_events, mission_outbox
+AI:          prompt_templates, generated_prompts, knowledge_nodes, knowledge_edges
+Content:     content_items, content_search, content_solutions
+Checkpoints: checkpoints, checkpoint_blobs, checkpoint_migrations, checkpoint_writes
+BKT:         student_bkt_analytics
+Planning:    plan
+System:      alembic_version
 ```
+
+## Content Storage Architecture (verified live 2026-05-21)
+
+### محتوى التمارين — مكانان
+التمارين مخزّنة في **مكانين**: ملفات Markdown في المستودع (المصدر الأصلي) وجدول
+`content_items` في Supabase (نسخة runtime للاستعلام).
+
+**ملفات المستودع (المصدر):**
+- `knowledge_base/` — 2 ملف (BAC 2016 دوال عددية + BAC 2024 رياضيات)
+- `data/knowledge/` — 2 ملف (BAC 2015 أسية + BAC 2024 احتمالات)
+- `content/ar/math/` — 1 ملف (BAC 2024 علوم تجريبية)
+
+**قاعدة البيانات (runtime):**
+- `content_items` — 3 سجلات (كلها نفس تمرين الاحتمالات BAC 2024 بصيغ مختلفة)
+- `content_solutions` — 2 سجلات (solution_md فقط، steps_json=NULL، verified_by_human=False)
+- `content_search` — 1 سجل فقط له embedding (باقي التمارين غير قابلة للبحث الدلالي)
+- `knowledge_nodes` — 16 عقدة لتمرين واحد، بدون foreign key لـ content_items
+
+### مشاكل التخزين الحالية (D-078 — 2026-05-21)
+1. **تكرار**: نفس تمرين BAC 2024 موجود 3 مرات بـ IDs مختلفة
+2. **عدم اتساق metadata**: `subject` يأخذ قيم `mathematics`/`Mathematics`/`general` بدون ENUM
+3. **steps_json فارغ**: الحل موجود كـ Markdown خام فقط، غير مُهيكل
+4. **embeddings ناقصة**: 2 من 3 تمارين بدون embedding → لا يمكن البحث الدلالي فيها
+5. **knowledge_nodes منفصلة**: لا foreign key يربطها بـ content_items
+
+### النمط الصحيح (غير مكتمل بعد)
+الملف يُكتب مرة واحدة في المستودع → يُحوَّل تلقائياً لـ DB عبر GitHub Actions →
+النظام يقرأ من DB فقط. هذا النمط موجود في البنية لكن التطبيق جزئي (3 تمارين فقط).
 
 ## Critical environment facts
 - `DATABASE_URL` or `APP_DATABASE_URL` **must** be set — app crashes without it

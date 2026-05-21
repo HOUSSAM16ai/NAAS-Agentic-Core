@@ -45,11 +45,13 @@ BAC_2024 = (
 
 
 def _scan_garbage(node: dict, path: str, bad: list[str]) -> None:
-    pn, pd = node.get("p_num"), node.get("p_den")
-    if not isinstance(pd, int) or pd < 1:
-        bad.append(f"{path}/{node.get('label')}: DIV/ZERO p_den={pd}")
-    elif not isinstance(pn, int) or pn < 0 or pn > pd:
-        bad.append(f"{path}/{node.get('label')}: invalid {pn}/{pd}")
+    # D-078: الجذر بلا احتمال (لا p_num) — نتخطّاه؛ ليس كسراً منحلّاً.
+    if "p_num" in node or "p_den" in node:
+        pn, pd = node.get("p_num"), node.get("p_den")
+        if not isinstance(pd, int) or pd < 1:
+            bad.append(f"{path}/{node.get('label')}: DIV/ZERO p_den={pd}")
+        elif not isinstance(pn, int) or pn < 0 or pn > pd:
+            bad.append(f"{path}/{node.get('label')}: invalid {pn}/{pd}")
     for ch in node.get("children", []) or []:
         _scan_garbage(ch, f"{path}/{node.get('label')}", bad)
 

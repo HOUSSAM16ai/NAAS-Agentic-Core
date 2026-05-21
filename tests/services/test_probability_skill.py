@@ -27,7 +27,9 @@ def _skill() -> ProbabilityCalculatorSkill:
 
 
 def _flatten(tree: dict, acc: list[tuple[str, int, int]]) -> None:
-    acc.append((tree.get("label", ""), tree.get("p_num", -1), tree.get("p_den", -1)))
+    # D-078: الجذر بلا احتمال (لا p_num) — نتخطّاه ولا نُضمّنه في الفحص.
+    if "p_num" in tree:
+        acc.append((tree.get("label", ""), tree["p_num"], tree["p_den"]))
     for child in tree.get("children", []) or []:
         _flatten(child, acc)
 
@@ -197,7 +199,9 @@ def test_output_marks_calculated_real_values() -> None:
 
 
 def _all_nodes(tree: dict, acc: list[tuple[int, int]]) -> None:
-    acc.append((tree.get("p_num", -1), tree.get("p_den", -1)))
+    # D-078: الجذر بلا احتمال (لا p_num) — نتخطّاه.
+    if "p_num" in tree:
+        acc.append((tree["p_num"], tree["p_den"]))
     for child in tree.get("children", []) or []:
         _all_nodes(child, acc)
 
@@ -241,6 +245,90 @@ def test_tiny_urn_no_degenerate_second_level() -> None:
     assert all(pd >= 2 or (pn, pd) == (1, 1) for pn, pd in nodes), (
         f"degenerate /1 sub-branches present: {nodes}"
     )
+
+
+# ─── D-078 (V19.0) — Simultaneous vs Sequential router + frustration + no-1/1-root ─
+
+
+def test_simultaneous_routes_to_combinations_not_tree() -> None:
+    """«دفعة واحدة» = سحب آني → CombinationsModelOutput، ممنوع شجرة تتابعية."""
+    from app.services.skills.probability_skill import CombinationsModelOutput
+
+    out = _skill().analyze(
+        "كيس فيه 11 كرة: كرتان بيضاوان، أربع كرات حمراء، خمس كرات خضراء. "
+        "نسحب عشوائياً 3 كرات دفعة واحدة. احتمال"
+    )
+    assert isinstance(out, CombinationsModelOutput)
+    assert out.component == "combinations_visualizer"
+    assert out.n == 11
+    assert out.k == 3
+    assert out.total_combinations == 165  # C(11,3)
+    fav = {g.label: g.favorable_combinations for g in out.groups}
+    assert fav["كرة حمراء"] == 4  # C(4,3)
+    assert fav["كرة بيضاء"] == 0  # C(2,3) = 0
+    assert fav["كرة خضراء"] == 10  # C(5,3)
+    assert out.same_group_favorable == 14  # 4 + 0 + 10  → P(3 same) = 14/165
+
+
+def test_sequential_stays_a_tree() -> None:
+    out = _skill().analyze(
+        "كيس فيه 11 كرة: 4 حمراء و7 خضراء. نسحب كرتين على التوالي وبدون إرجاع، احتمال"
+    )
+    assert isinstance(out, ProbabilityModelOutput)
+    assert out.component == "probability_tree"
+
+
+def test_simultaneous_never_returns_tree_for_bac2024() -> None:
+    """Regression V19: السحب الآني لا يُنتج شجرة احتمالات أبداً."""
+    from app.services.skills.probability_skill import CombinationsModelOutput
+
+    out = _skill().analyze(
+        "التمرين الأول: نسحب عشوائيا 3 كرات دفعة واحدة من كيس فيه "
+        "4 كرات حمراء و5 كرات خضراء وكرتان بيضاوان"
+    )
+    assert isinstance(out, CombinationsModelOutput)
+    assert not hasattr(out, "tree")
+
+
+def test_frustration_detector_signals() -> None:
+    skill = _skill()
+    assert skill.is_confusion("مفهمتش كيفاش حسبنا الاحتمال") is True
+    assert skill.is_confusion("لم أفهم شجرة الاحتمالات") is True
+    assert skill.is_confusion("كيفاش نحسب") is True
+    assert skill.is_confusion("اشرح لي") is True
+    assert skill.is_confusion("شكرا جزيلا") is False
+
+
+def test_confusion_followup_routes_to_combinations_via_history() -> None:
+    """«مفهمتش» بعد تمرين سحب آني → combinations (سياق المحادثة يحفظ التركيبة)."""
+    from app.services.skills.probability_skill import CombinationsModelOutput
+
+    bac = "كيس فيه 11 كرة: كرتان بيضاوان، أربع كرات حمراء، خمس كرات خضراء. نسحب 3 كرات دفعة واحدة."
+    history = [
+        {"role": "user", "content": "اعطني تمرين الاحتمالات"},
+        {"role": "assistant", "content": bac},
+    ]
+    out = _skill().analyze(
+        ProbabilityInput(question="مفهمتش كيفاش حسبنا الاحتمال", history=history)
+    )
+    assert isinstance(out, CombinationsModelOutput)
+    assert out.k == 3 and out.n == 11
+
+
+def test_tree_root_has_no_dummy_probability() -> None:
+    """D-078: أُلغي جذر 1/1 الوهمي — الجذر بلا p_num/p_den."""
+    out = _skill().analyze("كيس فيه 4 حمراء و7 خضراء. نسحب كرتين على التوالي وبدون إرجاع، احتمال")
+    assert isinstance(out, ProbabilityModelOutput)
+    assert "p_num" not in out.tree
+    assert "p_den" not in out.tree
+    assert out.tree["label"] == "البداية"
+
+
+def test_combinations_safe_when_k_exceeds_total() -> None:
+    """k > n لا يُنتج استثناءً ولا قيمة غير صالحة."""
+    out = _skill().analyze("كيس فيه كرتان حمراوان، نسحب 5 كرات دفعة واحدة، احتمال")
+    # k=5 > n=2 → fails cleanly (no tree fallback, no crash)
+    assert isinstance(out, ProbabilityFailure)
 
 
 def test_composition_item_validation() -> None:

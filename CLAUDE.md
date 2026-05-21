@@ -5300,3 +5300,53 @@ Skill رسمي جديد `app/services/skills/probability_skill.py` (يحترم �
   `1/0`، السياق محفوظ، JSON نظيف ✅
 - `tests/services/test_probability_skill.py` — +3 اختبارات regression (no-div-zero،
   draw≠total، no-degenerate) ✅
+
+---
+
+## 6.55 Auto-Triggering Generative UI — Simultaneous vs Sequential Math Router (2026-05-21, D-078 · Protocol V19.0)
+
+> الكارثة التربوية: المحرّك كان يفرض **شجرة احتمالات تتابعية** على مسائل **السحب
+> الآني** («نسحب 3 كرات دفعة واحدة») — وهي تأليفية (Combinatorics) لا تتابعية.
+> هذا القسم يحكم الموجِّه التربوي وكاشف الإحباط — لا يُكسر بدون ADR.
+
+### الموجِّه التربوي (Pedagogical Math Router)
+`ProbabilityCalculatorSkill._detect_draw_mode(text)` يصنّف:
+- **`simultaneous`** («دفعة واحدة»، «في آن واحد»، «معاً») → `CombinationsModelOutput`
+  → مكوّن **`combinations_visualizer`** (فضاء C(n,k) + لكل مجموعة C(count,k)).
+  **ممنوع منعاً باتاً** تمثيله بشجرة تتابعية.
+- **`sequential`** («على التوالي»، «تباعاً») → `ProbabilityModelOutput` → `probability_tree`.
+- **`single`** (سحب مفرد) → شجرة من مستوى واحد.
+
+التحقّق الحي (BAC 2024): «نسحب 3 كرات دفعة واحدة» من كيس (2 بيضاء، 4 حمراء، 5 خضراء)
+→ C(11,3)=165، وحدث «3 من نفس اللون» = C(4,3)+C(2,3)+C(5,3) = 4+0+10 = **14/165**.
+
+### كاشف الإحباط (Frustration Detector)
+`ProbabilityCalculatorSkill.is_confusion(text)` يكشف («مفهمتش»، «لم أفهم»، «كيفاش»،
+«اشرح لي»...). الطالب لا يكتب «أنشئ واجهة» — يعبّر عن الحيرة، فيُفعَّل المكوّن
+البصري تلقائياً عبر سياق المحادثة (التركيبة محفوظة في الـ history). لا تُلوَّث
+`_PROBABILITY_CONTEXT` بكلمات الحيرة العامة (تجنّب false-positive على «اشرح قانون نيوتن»).
+
+### إلغاء جذر 1/1 الوهمي (V19.0 §2.C)
+جذر الشجرة يُبنى عبر `_root(children)` **بلا** `p_num`/`p_den` — لا احتمال وهمي
+1/1. `_sanitize_node` يتخطّى الجذر عديم الاحتمال. الواجهة (`ProbabilityTree.jsx`)
+تتعامل مع `p === null` للجذر (لا كسر يُعرَض). أي test/scan يجب أن يتخطّى العقدة
+بلا `p_num`.
+
+### العقد المعماري (V19.0 §3)
+المخرج البصري الموحَّد من `OrchestratorClient._build_calculated_ui(question, history)`:
+`{"component": "probability_tree"|"combinations_visualizer", "props": {...}, "fallback_text": str}`.
+كلا المكوّنين في `KNOWN_UI_COMPONENTS` (whitelist) ويُتحقَّق منهما عبر
+`UIComponentPayload`. الخلفية تُخرج JSON منظَّماً فقط — لا HTML، لا استثناء يتسرّب
+(كل المسار محروس بـ try/except → None عند الفشل).
+
+### قواعد دائمة (V19.0)
+1. **السحب الآني تأليفي لا تتابعي**: «دفعة واحدة» → `combinations_visualizer`، ممنوع `probability_tree`.
+2. **k ≤ n إلزامي**: `_build_combinations` يفشل بنظافة (ProbabilityFailure) إن k>n — لا استثناء، لا شجرة مضلِّلة.
+3. **لا جذر 1/1**: الجذر بلا احتمال؛ استخدم `_root()` لا `_node("البداية", 1, 1, ...)`.
+4. **كاشف الإحباط لا يلوّث السياق**: `is_confusion()` منفصل؛ لا تُضَف كلمات الحيرة لـ `_PROBABILITY_CONTEXT`.
+5. **مكوّن جديد = whitelist + registry + Pydantic**: أي مكوّن توليدي جديد يُسجَّل في `KNOWN_UI_COMPONENTS` + `GenerativeUIRenderer` + عقد Pydantic.
+
+### التحقّق الحي (2026-05-21)
+- `scripts/test_auto_ui_trigger.py` — كشف الإحباط + «دفعة واحدة» → combinations (لا شجرة)، OpenRouter LIVE ✅
+- `tests/services/test_probability_skill.py` (+7 V19) + `tests/contracts/test_generative_ui_streaming.py` ✅
+- regression: V14 gitpod / V15 generalization / V17 omni — كلها ناجحة ✅

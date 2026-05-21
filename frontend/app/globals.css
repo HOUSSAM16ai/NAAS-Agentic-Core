@@ -2315,10 +2315,185 @@ body[data-theme='light'] .exam-badge {
     color: var(--primary-color);
 }
 
+/* ── CombinationsVisualizer (السحب الآني — تأليفي، Protocol V19.0) ───────────── */
+.genui-combinations {
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1rem 1.15rem;
+    background-color: var(--surface-elevated);
+    margin: 0.5rem 0;
+}
+
+.genui-comb-header {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 0.85rem;
+}
+
+.genui-comb-icon {
+    color: var(--primary-color);
+}
+
+.genui-comb-title {
+    font-weight: 700;
+    font-size: 1.02rem;
+}
+
+.genui-comb-badge {
+    margin-inline-start: auto;
+    font-size: 0.72rem;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.genui-cnk {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    font-family: 'Cambria Math', 'Times New Roman', serif;
+}
+
+.genui-cnk-c {
+    font-style: italic;
+    font-size: 1.1em;
+}
+
+.genui-cnk-sub {
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 0.9;
+    font-size: 0.62em;
+    transform: translateY(2px);
+}
+
+.genui-comb-space {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+    margin-bottom: 0.9rem;
+}
+
+.genui-comb-space-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.genui-comb-space-formula {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.genui-comb-space-val {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+}
+
+.genui-comb-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.genui-comb-group-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.3rem;
+}
+
+.genui-comb-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.genui-comb-group-label {
+    font-weight: 600;
+}
+
+.genui-comb-group-count {
+    margin-inline-start: auto;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.genui-comb-bar-track {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 26px;
+}
+
+.genui-comb-bar {
+    height: 18px;
+    border-radius: 6px;
+    min-width: 4px;
+    opacity: 0.85;
+    transition: width 0.4s ease;
+}
+
+.genui-comb-bar-val {
+    font-size: 0.85rem;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.genui-comb-result {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.genui-comb-result-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.genui-comb-result-frac {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.genui-comb-frac-bar {
+    display: block;
+    width: 100%;
+    min-width: 28px;
+    height: 2px;
+    background: currentColor;
+    margin: 1px 0;
+}
+
+.genui-comb-result-dec {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
 /* احترام تفضيل تقليل الحركة (إتاحة) */
 @media (prefers-reduced-motion: reduce) {
     .genui-edge,
-    .genui-glass-node {
+    .genui-glass-node,
+    .genui-comb-bar {
         animation-duration: 0.001s;
+        transition: none;
     }
 }

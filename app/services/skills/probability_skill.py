@@ -182,6 +182,52 @@ _WITH_REPLACEMENT: tuple[str, ...] = (
     "avec remise",
 )
 
+# D-078 (V19.0) — وضع السحب: متزامن (تأليفي/Combinatorics) مقابل تتابعي (شجرة).
+# «دفعة واحدة» = سحب آني → C(n,k)، ممنوع تمثيله بشجرة تتابعية (كارثة تربوية).
+_SIMULTANEOUS_MARKERS: tuple[str, ...] = (
+    "دفعة واحدة",
+    "دفعة وحدة",
+    "في ان واحد",
+    "في نفس الوقت",
+    "في وقت واحد",
+    "معا",
+    "آنيا",
+    "انيا",
+    "simultan",
+    "en meme temps",
+    "a la fois",
+)
+_SEQUENTIAL_MARKERS: tuple[str, ...] = (
+    "على التوالي",
+    "تباعا",
+    "واحدة تلو",
+    "واحدة بعد",
+    "بالتتابع",
+    "successiv",
+    "l'une apres",
+    "une apres",
+)
+
+# D-078 (V19.0) — كاشف الإحباط (Frustration Detector): إشارات الحيرة تُفعِّل
+# التوجيه إلى أداة بصرية بدل توليد جدران نصّية.
+_CONFUSION_MARKERS: tuple[str, ...] = (
+    "لم افهم",
+    "لم أفهم",
+    "ما فهمت",
+    "مفهمتش",
+    "مفهمت",
+    "ما فهمتش",
+    "كيفاش",
+    "كيف",
+    "وضح لي",
+    "اشرح لي",
+    "ما هو الحل",
+    "صعب",
+    "je ne comprends",
+    "pas compris",
+    "comment",
+)
+
 # تطبيع التشكيل + الفواصل العربية قبل التحليل.
 # نحذف علامات التشكيل فقط (الحركات/التنوين/الشدة/السكون والعلامات القرآنية)
 # دون المساس بحروف العربية (U+0621–U+064A).
@@ -214,6 +260,7 @@ class ProbabilityModelOutput(RobustBaseModel):
 
     skill: Literal["probability_calculation"] = "probability_calculation"
     success: Literal[True] = True
+    component: Literal["probability_tree"] = "probability_tree"
     doctrine_version: str = DOCTRINE_VERSION
     strategy: str = Field(..., description="الاستراتيجية: universe | conditional | composition")
     total: int = Field(..., ge=1, description="حجم الفضاء العيّني (المجموع)")
@@ -223,6 +270,41 @@ class ProbabilityModelOutput(RobustBaseModel):
     composition: list[CompositionItem]
     tree: dict[str, object] = Field(..., description="شجرة احتمالات بكسور دقيقة لكل عقدة")
     title: str = "شجرة الاحتمالات"
+    duration_ms: int = 0
+
+
+class CombinationGroup(RobustBaseModel):
+    """مجموعة (لون/صنف) في مسألة سحب متزامن: عددها وعدد تأليفاتها C(count, k)."""
+
+    label: str = Field(..., min_length=1, max_length=80)
+    count: int = Field(..., ge=0, description="عدد عناصر هذه المجموعة")
+    favorable_combinations: int = Field(
+        ..., ge=0, description="C(count, k) — تأليفات اختيار k منها"
+    )
+
+
+class CombinationsModelOutput(RobustBaseModel):
+    """مخرج السحب المتزامن (Combinatorics) — Protocol V19.0 §2.B.
+
+    «دفعة واحدة» = سحب آني → فضاء العيّنة C(n, k)، لا شجرة تتابعية. هذا النموذج
+    يُغذّي مكوّن ``combinations_visualizer`` (مجموعات + صيغة C_n^k)، وهو ممنوع
+    منعاً باتاً من استخدام شجرة الاحتمالات (كارثة تربوية حين تُفرَض على مسألة آنية).
+    """
+
+    skill: Literal["probability_calculation"] = "probability_calculation"
+    success: Literal[True] = True
+    component: Literal["combinations_visualizer"] = "combinations_visualizer"
+    doctrine_version: str = DOCTRINE_VERSION
+    draw_mode: Literal["simultaneous"] = "simultaneous"
+    n: int = Field(..., ge=1, description="حجم الفضاء (عدد العناصر الكلي)")
+    k: int = Field(..., ge=1, description="عدد العناصر المسحوبة دفعةً واحدة")
+    total_combinations: int = Field(..., ge=1, description="C(n, k) — عدد تأليفات الفضاء")
+    groups: list[CombinationGroup]
+    same_group_favorable: int = Field(
+        ..., ge=0, description="مجموع C(count, k) لكل المجموعات (حدث «k من نفس الصنف»)"
+    )
+    formula: str = Field(default="C(n, k) = n! / (k!·(n-k)!)")
+    title: str = "تأليفات السحب الآني"
     duration_ms: int = 0
 
 
@@ -288,20 +370,27 @@ class ProbabilityCalculatorSkill:
     def _node(
         cls,
         label: str,
-        num: int,
-        den: int,
+        num: int | None,
+        den: int | None,
         children: list | None = None,
     ) -> dict[str, object]:
-        """عقدة شجرة بكسر تربوي خام (غير مختزَل) + قيمة عشرية."""
-        rec: dict[str, object] = {
-            "label": label,
-            "p": cls._decimal(num, den),
-            "p_num": int(num),
-            "p_den": int(den) if den > 0 else 1,
-        }
+        """عقدة شجرة بكسر تربوي خام (غير مختزَل) + قيمة عشرية.
+
+        D-078 (V19.0): الجذر يُبنى بـ num=None → بلا احتمال (يُلغى الـ 1/1 الوهمي).
+        """
+        rec: dict[str, object] = {"label": label}
+        if num is not None and den is not None:
+            rec["p"] = cls._decimal(num, den)
+            rec["p_num"] = int(num)
+            rec["p_den"] = int(den) if den > 0 else 1
         if children:
             rec["children"] = children
         return rec
+
+    @classmethod
+    def _root(cls, children: list) -> dict[str, object]:
+        """جذر الشجرة بلا احتمال (D-078) — يُلغى الـ 1/1 الوهمي."""
+        return cls._node("البداية", None, None, children)
 
     @classmethod
     def _sanitize_node(cls, node: dict[str, object]) -> dict[str, object]:
@@ -311,13 +400,15 @@ class ProbabilityCalculatorSkill:
         و ``p`` متّسقة. هذا خط الدفاع الأخير قبل البثّ — أي خطأ حسابي سابق
         (مقام صفر، بسط > مقام) يُقصّ بأمان بدل أن يصل للطالب كـ 1/0 أو غارباج.
         """
-        num = int(node.get("p_num", 0) or 0)
-        den = int(node.get("p_den", 1) or 1)
-        den = max(den, 1)
-        num = max(0, min(num, den))
-        node["p_num"] = num
-        node["p_den"] = den
-        node["p"] = cls._decimal(num, den)
+        # الجذر بلا احتمال (D-078) — لا نُلصق به كسراً وهمياً.
+        if "p_num" in node or "p_den" in node:
+            num = int(node.get("p_num", 0) or 0)
+            den = int(node.get("p_den", 1) or 1)
+            den = max(den, 1)
+            num = max(0, min(num, den))
+            node["p_num"] = num
+            node["p_den"] = den
+            node["p"] = cls._decimal(num, den)
         children = node.get("children")
         if isinstance(children, list):
             node["children"] = [cls._sanitize_node(c) for c in children if isinstance(c, dict)]
@@ -467,6 +558,46 @@ class ProbabilityCalculatorSkill:
             return 2
         return 1
 
+    @classmethod
+    def _detect_draw_mode(cls, text: str) -> str:
+        """D-078 (V19.0): «simultaneous» (دفعة واحدة) | «sequential» (على التوالي) | «single».
+
+        المتزامن له الأولوية: «نسحب 3 كرات دفعة واحدة» تأليفي حتى لو ذُكر عدد>1.
+        """
+        normalized = cls._normalize(text)
+        if any(cls._normalize(m) in normalized for m in _SIMULTANEOUS_MARKERS):
+            return "simultaneous"
+        if any(cls._normalize(m) in normalized for m in _SEQUENTIAL_MARKERS):
+            return "sequential"
+        return "single"
+
+    @classmethod
+    def _detect_draw_count(cls, text: str, default: int = 2) -> int:
+        """عدد العناصر المسحوبة k (مثل «نسحب 3 كرات» → 3)."""
+        normalized = cls._normalize(text)
+        draw_verbs = ("نسحب", "يسحب", "تسحب", "سحب", "ناخذ", "نختار", "اختيار", "tirage", "tire")
+        for m in re.finditer(
+            r"(\d{1,2}|واحدة|كرتين|كرتان|ثلاث|ثلاثة|اربع|اربعة|خمس|خمسة)\s*"
+            r"(?:كرات|كرة|بطاقات|بطاقة|قطع|قطعة|عناصر|عنصر)?",
+            normalized,
+        ):
+            window = normalized[max(0, m.start() - 18) : m.start()]
+            if not any(v in window for v in draw_verbs):
+                continue
+            tok = m.group(1)
+            if "كرتين" in tok or "كرتان" in tok:
+                return 2
+            val = cls._as_int(tok)
+            if val and val >= 1:
+                return val
+        return default
+
+    @classmethod
+    def is_confusion(cls, text: str) -> bool:
+        """D-078 (V19.0): يكشف إشارات الحيرة (Frustration Detector) لتفعيل الأداة البصرية."""
+        normalized = cls._normalize(text)
+        return any(cls._normalize(m) in normalized for m in _CONFUSION_MARKERS)
+
     # ── الاستراتيجية 1: فضاء متساوي الاحتمال (نرد / قطعة نقدية) ───────────────────────
     @classmethod
     def _strategy_universe(cls, combined: str) -> ProbabilityModelOutput | None:
@@ -478,14 +609,7 @@ class ProbabilityCalculatorSkill:
 
         if is_coin:
             # وجه/كتابة — فضاء من وجهين
-            tree = cls._sanitize_node(
-                cls._node(
-                    "البداية",
-                    1,
-                    1,
-                    [cls._node("وجه", 1, 2), cls._node("كتابة", 1, 2)],
-                )
-            )
+            tree = cls._sanitize_node(cls._root([cls._node("وجه", 1, 2), cls._node("كتابة", 1, 2)]))
             comp = [
                 CompositionItem(label="وجه", count=1, p_num=1, p_den=2, p_decimal=0.5),
                 CompositionItem(label="كتابة", count=1, p_num=1, p_den=2, p_decimal=0.5),
@@ -527,14 +651,11 @@ class ProbabilityCalculatorSkill:
             ),
         ]
         tree = cls._sanitize_node(
-            cls._node(
-                "البداية",
-                1,
-                1,
+            cls._root(
                 [
                     cls._node("رقم زوجي", even_count, faces),
                     cls._node("رقم فردي", odd_count, faces),
-                ],
+                ]
             )
         )
         return ProbabilityModelOutput(
@@ -622,7 +743,7 @@ class ProbabilityCalculatorSkill:
                 ]
             branches.append(cls._node(display, prim, 100, children or None))
 
-        tree = cls._sanitize_node(cls._node("البداية", 1, 1, branches))
+        tree = cls._sanitize_node(cls._root(branches))
         return ProbabilityModelOutput(
             strategy="conditional",
             total=100,
@@ -634,11 +755,49 @@ class ProbabilityCalculatorSkill:
             title="شجرة الاحتمالات الشرطية",
         )
 
+    # ── السحب الآني (Combinatorics) — Protocol V19.0 §2.B ────────────────────────────
+    @classmethod
+    def _build_combinations(
+        cls,
+        comp_raw: list[tuple[str, str, int]],
+        total: int,
+        combined: str,
+    ) -> CombinationsModelOutput | None:
+        """يبني نموذج تأليفات للسحب الآني: C(n,k) + C(count,k) لكل مجموعة.
+
+        «نسحب k كرات دفعة واحدة» = اختيار غير مرتَّب → فضاء العيّنة C(n,k). لكل
+        مجموعة (لون/صنف) عدد تأليفاتها C(count,k) (حدث «k من نفس الصنف»). ممنوع
+        تمثيل هذا بشجرة تتابعية (كارثة تربوية).
+        """
+        import math
+
+        k = cls._detect_draw_count(combined, default=2)
+        if k < 1 or k > total:
+            return None
+        total_comb = math.comb(total, k)
+        if total_comb < 1:
+            return None
+        groups: list[CombinationGroup] = []
+        same_group = 0
+        for label_pos, _neg, count in comp_raw:
+            c = min(count, total)
+            fav = math.comb(c, k) if c >= k else 0
+            same_group += fav
+            groups.append(CombinationGroup(label=label_pos, count=c, favorable_combinations=fav))
+        return CombinationsModelOutput(
+            n=total,
+            k=k,
+            total_combinations=total_comb,
+            groups=groups,
+            same_group_favorable=same_group,
+            title=f"تأليفات السحب الآني (اختيار {k} من {total})",
+        )
+
     # ── الاستراتيجية 3: تركيبة عددية معمّمة (كرات / بطاقات / أصناف) ────────────────────
     @classmethod
     def _strategy_composition(
         cls, question: str, history_text: str, combined: str
-    ) -> ProbabilityModelOutput | None:
+    ) -> ProbabilityModelOutput | CombinationsModelOutput | None:
         comp_raw = cls._extract_count_entities(question)
         source = question
         if not comp_raw and history_text:
@@ -652,6 +811,16 @@ class ProbabilityCalculatorSkill:
         # ground truth: المجموع لا يقل عن مجموع المكوّنات، وكل عدد ≤ المجموع.
         total = max(total, items_total)
         if total < 2:
+            return None
+
+        # D-078 (V19.0) — الموجِّه التربوي: «دفعة واحدة» = سحب آني → تأليفي
+        # (Combinatorics)، ممنوع تمثيله بشجرة تتابعية.
+        draw_mode = cls._detect_draw_mode(combined)
+        if draw_mode == "simultaneous":
+            combo = cls._build_combinations(comp_raw, total, combined)
+            if combo is not None:
+                return combo
+            # إن تعذّر بناء التأليف (k غير صالح) لا نسقط لشجرة مضلِّلة — نفشل بنظافة.
             return None
 
         with_replacement = cls._detect_replacement(combined)
@@ -687,7 +856,7 @@ class ProbabilityCalculatorSkill:
                         children.append(cls._node(lp, max(sub, 0), denom2))
             level1.append(cls._node(label_pos, min(count, total), total, children or None))
 
-        tree = cls._sanitize_node(cls._node("البداية", 1, 1, level1))
+        tree = cls._sanitize_node(cls._root(level1))
         focal_pos, focal_neg, _ = comp_raw[0]
         return ProbabilityModelOutput(
             strategy="composition",
@@ -703,8 +872,8 @@ class ProbabilityCalculatorSkill:
     # ── نقطة الدخول الرئيسية (حتمية، بلا LLM) ─────────────────────────────────────────
     def analyze(
         self, payload: ProbabilityInput | str
-    ) -> ProbabilityModelOutput | ProbabilityFailure:
-        """يحلّل المسألة عبر أنماط معمّمة ويُرجِع نموذجاً بكسور دقيقة أو فشلاً."""
+    ) -> ProbabilityModelOutput | CombinationsModelOutput | ProbabilityFailure:
+        """يحلّل المسألة عبر أنماط معمّمة ويُرجِع نموذجاً (شجرة/تأليفات) أو فشلاً."""
         t0 = time.perf_counter()
         if isinstance(payload, str):
             payload = ProbabilityInput(question=payload)
@@ -737,7 +906,10 @@ class ProbabilityCalculatorSkill:
             if model is not None:
                 duration = time.perf_counter() - t0
                 model.duration_ms = int(duration * 1000)
-                _record_metric("success", model.strategy, duration)
+                strategy_label = getattr(model, "strategy", None) or getattr(
+                    model, "draw_mode", "unknown"
+                )
+                _record_metric("success", strategy_label, duration)
                 return model
 
         return self._fail("no_model_extracted", "none", t0)
@@ -749,6 +921,8 @@ class ProbabilityCalculatorSkill:
 
 
 __all__ = [
+    "CombinationGroup",
+    "CombinationsModelOutput",
     "CompositionItem",
     "ProbabilityCalculatorSkill",
     "ProbabilityFailure",

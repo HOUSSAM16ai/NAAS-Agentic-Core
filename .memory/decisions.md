@@ -2117,3 +2117,32 @@ drops malformed payloads to `noop` — no Next.js error HTML can leak into the s
 
 Proven live: `scripts/omni_live_test.py` (3-turn flow, no 1/0, context retained) +
 3 new regression tests in `tests/services/test_probability_skill.py`.
+
+---
+
+## D-078 — Auto-Triggering UI: Simultaneous-vs-Sequential Math Router (2026-05-21 · Protocol V19.0)
+
+**Context**: The engine forced sequential probability trees onto simultaneous
+("دفعة واحدة") draws — a pedagogical error. Simultaneous draws are combinatorics
+(C(n,k)), not sequential trees. Also: dummy 1/1 root probability; students express
+confusion ("مفهمتش") rather than "generate a UI".
+
+**Decision** (`ProbabilityCalculatorSkill` + `OrchestratorClient` + frontend):
+1. **Math Router** — `_detect_draw_mode`: «دفعة واحدة» → `CombinationsModelOutput`
+   (component `combinations_visualizer`, computes C(n,k) + per-group C(count,k));
+   «على التوالي» → `ProbabilityModelOutput` (tree). Simultaneous is BANNED from trees.
+2. **Frustration Detector** — `is_confusion()` detects حيرة; the visual auto-triggers
+   via conversation history (composition retained). Confusion words are NOT added to
+   `_PROBABILITY_CONTEXT` (avoids false-positives like "اشرح قانون نيوتن").
+3. **Abolish 1/1 root** — `_root(children)` builds the root with no p_num/p_den;
+   `_sanitize_node` skips it; frontend handles `p===null`.
+4. **New component** — `combinations_visualizer` added to `KNOWN_UI_COMPONENTS`,
+   `GenerativeUIRenderer`, new `CombinationsVisualizer.jsx`. `_build_calculated_ui`
+   returns `{component, props, fallback_text}` for both component types.
+5. **k≤n guard** — `_build_combinations` returns None (→ clean ProbabilityFailure)
+   when k>n; no exception, no misleading tree.
+
+Doctrine bumped `PROBABILITY_CALCULATION_DOCTRINE_VERSION` → 1.1.0 (+2 rules).
+Proven live: `scripts/test_auto_ui_trigger.py` — confusion + "دفعة واحدة" →
+combinations (C(11,3)=165, P(3 same)=14/165), NOT a tree; OpenRouter HTTP 200.
+Tests: +7 V19 unit tests; all V14/V15/V17 regressions green; 111 tests pass.

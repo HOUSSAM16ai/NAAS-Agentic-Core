@@ -1,6 +1,7 @@
 "use client";
 
 import React, { memo } from 'react';
+import { CombinationsVisualizer } from './CombinationsVisualizer';
 import { GenerativeUIErrorBoundary } from './GenerativeUIErrorBoundary';
 import { ProbabilityTree } from './ProbabilityTree';
 
@@ -29,6 +30,7 @@ BktHintStub.displayName = 'BktHintStub';
 
 const COMPONENT_REGISTRY = {
     probability_tree: (props) => <ProbabilityTree props={props} />,
+    combinations_visualizer: (props) => <CombinationsVisualizer props={props} />,
     bkt_hint_display: (props, fallbackText) => <BktHintStub fallbackText={fallbackText} />,
 };
 

@@ -972,6 +972,88 @@ class OrchestratorClient:
             logger.warning("_build_calculated_tree_props_failed", exc_info=True)
             return None
 
+    @staticmethod
+    def _build_calculated_ui(
+        question: str,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> dict[str, object] | None:
+        """D-078 (V19.0): الموجِّه التربوي — يُرجِع حدث ui_component الصحيح.
+
+        «دفعة واحدة» (سحب آني) → ``combinations_visualizer`` (تأليفي C_n^k)؛
+        «على التوالي» / سحب مفرد → ``probability_tree``. هذا يمنع فرض شجرة
+        تتابعية على مسألة آنية (كارثة تربوية). كاشف الإحباط (مفهمتش/كيفاش)
+        يُفعِّل الأداة البصرية تلقائياً عبر سياق المحادثة. محروس بـ try/except.
+
+        المخرج: ``{"component": str, "props": dict, "fallback_text": str}`` أو None.
+        """
+        try:
+            from app.services.skills.probability_skill import (
+                CombinationsModelOutput,
+                ProbabilityCalculatorSkill,
+                ProbabilityInput,
+                ProbabilityModelOutput,
+            )
+
+            skill = ProbabilityCalculatorSkill()
+            result = skill.analyze(ProbabilityInput(question=question, history=history_messages))
+
+            if isinstance(result, CombinationsModelOutput):
+                props = {
+                    "title": result.title,
+                    "calculated": True,
+                    "draw_mode": "simultaneous",
+                    "n": result.n,
+                    "k": result.k,
+                    "total_combinations": result.total_combinations,
+                    "groups": [
+                        {
+                            "label": g.label,
+                            "count": g.count,
+                            "favorable_combinations": g.favorable_combinations,
+                        }
+                        for g in result.groups
+                    ],
+                    "same_group_favorable": result.same_group_favorable,
+                    "formula": result.formula,
+                }
+                return {
+                    "component": "combinations_visualizer",
+                    "props": props,
+                    "fallback_text": (
+                        f"سحب آني: اختيار {result.k} من {result.n} → "
+                        f"عدد التأليفات C({result.n},{result.k}) = {result.total_combinations}."
+                    ),
+                }
+
+            if isinstance(result, ProbabilityModelOutput):
+                props = {
+                    "title": result.title,
+                    "is_illustrative": False,
+                    "calculated": True,
+                    "with_replacement": result.with_replacement,
+                    "total": result.total,
+                    "composition": [
+                        {
+                            "label": item.label,
+                            "count": item.count,
+                            "p_num": item.p_num,
+                            "p_den": item.p_den,
+                            "p_decimal": item.p_decimal,
+                        }
+                        for item in result.composition
+                    ],
+                    "tree": result.tree,
+                }
+                return {
+                    "component": "probability_tree",
+                    "props": props,
+                    "fallback_text": ("شجرة الاحتمالات (تعذّر عرض الرسم التفاعلي — هذا نص بديل)."),
+                }
+            return None
+        except Exception:
+            logger.warning("_build_calculated_ui_failed", exc_info=True)
+            return None
+
     async def _build_probability_tree_props(
         self,
         question: str,
@@ -1268,33 +1350,23 @@ class OrchestratorClient:
         # Bug D fix: نمرر history_messages لاستخراج كيانات ملموسة من سياق
         # التمرين السابق (مثل "كرة حمراء" من تمرين الاحتمالات 2024).
         # ─────────────────────────────────────────────────────────────────────
+        # D-078 (V19.0): الموجِّه التربوي يختار المكوّن الصحيح — سحب آني
+        # «دفعة واحدة» → combinations_visualizer (تأليفي)؛ تتابعي → probability_tree.
+        # كاشف الإحباط (مفهمتش/كيفاش) يُفعِّل الأداة بصرياً عبر سياق المحادثة.
         try:
-            _ui_tree_props = await self._build_probability_tree_props(
-                question, history_messages=history_messages
-            )
+            _ui_event = self._build_calculated_ui(question, history_messages=history_messages)
         except Exception:
-            _ui_tree_props = None
-        if _ui_tree_props is not None:
+            _ui_event = None
+        if _ui_event is not None:
             logger.info(
                 "generative_ui_emit",
                 extra={
                     "request_id": str(uuid.uuid4()),
-                    "component": "probability_tree",
+                    "component": _ui_event.get("component"),
                     "question_len": len(question),
                 },
             )
-            yield self._normalize_stream_event(
-                {
-                    "type": "ui_component",
-                    "payload": {
-                        "component": "probability_tree",
-                        "props": _ui_tree_props,
-                        "fallback_text": (
-                            "شجرة الاحتمالات (تعذّر عرض الرسم التفاعلي — هذا نص بديل)."
-                        ),
-                    },
-                }
-            )
+            yield self._normalize_stream_event({"type": "ui_component", "payload": _ui_event})
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-056 (D-049 — Indexed Retrieval Preemption):

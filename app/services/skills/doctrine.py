@@ -405,7 +405,7 @@ BKT_COGNITIVE_DOCTRINE: Final[tuple[str, ...]] = (
 # Probability Calculation Doctrine (D-075 — Protocol V14.0 / Generative UI)
 # ─────────────────────────────────────────────────────────────────────────────
 
-PROBABILITY_CALCULATION_DOCTRINE_VERSION: Final[str] = "1.0.0"
+PROBABILITY_CALCULATION_DOCTRINE_VERSION: Final[str] = "1.1.0"
 
 #: قوانين غير قابلة للكسر تحكم محرّك حساب الاحتمالات الحتمي الذي يغذّي شجرة
 #: الاحتمالات التوليدية. الخلفية لا تُخرج HTML ولا قيماً وهمية — تحسب كسوراً
@@ -425,6 +425,10 @@ PROBABILITY_CALCULATION_DOCTRINE: Final[tuple[str, ...]] = (
     "fallback المجموع المجهول لا يُخرج حرفاً مجرّداً.",
     "العقد فصل صارم: المحرّك يُرجع Pydantic منظَّماً فقط؛ التصيير مسؤولية "
     "الواجهة (RSC) — الخلفية لا تعرف شيئاً عن SVG أو HTML.",
+    "الموجِّه التربوي (V19.0): «دفعة واحدة» (سحب آني) = تأليفي C(n,k) → مكوّن "
+    "combinations_visualizer؛ «على التوالي» (تتابعي) → probability_tree. ممنوع "
+    "فرض شجرة تتابعية على مسألة آنية (كارثة تربوية).",
+    "جذر الشجرة بلا احتمال (لا 1/1 وهمي)، ولا كسر منحلّ (1/0) يصل للطالب أبداً.",
 )
 
 
@@ -525,6 +529,8 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             # D-075 (Protocol V14.0): محرّك الاحتمالات الحتمي — موصول حيّاً.
             "ProbabilityCalculatorSkill.analyze",
             "orchestrator_client._build_probability_tree_props",
+            # D-078 (Protocol V19.0): الموجِّه التربوي (آني/تتابعي) — موصول حيّاً.
+            "orchestrator_client._build_calculated_ui",
         ),
     },
 }

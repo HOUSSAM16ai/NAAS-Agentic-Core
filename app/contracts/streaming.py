@@ -135,7 +135,9 @@ class ToolResult(RobustBaseModel):
 
 # المكوّنات التوليدية المعروفة (Generative UI). أي اسم خارج هذه القائمة
 # يُرفَض عند التحقق ويسقط العميل إلى النص البديل (fallback_text).
-KNOWN_UI_COMPONENTS: frozenset[str] = frozenset({"probability_tree", "bkt_hint_display"})
+KNOWN_UI_COMPONENTS: frozenset[str] = frozenset(
+    {"probability_tree", "bkt_hint_display", "combinations_visualizer"}
+)
 
 
 class UIComponentPayload(RobustBaseModel):

@@ -1,6 +1,35 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-15** | Branch: `feat/iss-071-latex-normalize-langgraph`
-> Previous: `feat/iss-070-math-pipeline-langgraph`
+> Last updated: **2026-05-21** | Branch: `docs/content-db-audit-2026-05-21`
+> Previous: `feat/iss-071-latex-normalize-langgraph`
+
+## D-079 Live Verification (2026-05-21) — Microservices Full Stack + Content Audit
+
+### نتائج التحقق الحي من الخدمات المصغرة (2026-05-21)
+
+**المشكلة الجذرية المكتشفة**: متغيرات البيئة (`OPENROUTER_API_KEY`, `TAVILY_API_KEY`, `DATABASE_URL`) كانت **فارغة** في process env رغم وجودها كأسماء — `secrets.env` لم يكن موجوداً. تم إنشاؤه وإعادة تشغيل الخدمات.
+
+**إصلاح إضافي**: `prometheus-client` لم يكن مثبتاً → تم تثبيته + إعادة تشغيل الخدمات.
+
+| الخدمة | المنفذ | الحالة | ملاحظة |
+|--------|--------|--------|--------|
+| FastAPI Monolith | 8000 | ✅ ACTIVE | `database: ok` |
+| user-service | 8001 | ✅ ACTIVE | `/metrics` يعمل |
+| planning-agent | 8002 | ✅ ACTIVE | asyncpg port 5432 (لا 6543) |
+| orchestrator-service | 8006 | ✅ ACTIVE | `graph_ready: true`, OUTBOX_RELAY=true |
+| research-agent | 8007 | ✅ ACTIVE | `tavily_available: true` |
+| reasoning-agent | 8008 | ✅ ACTIVE | `llm_backend: openrouter` |
+| conversation-service | 8003 | ❌ DORMANT | لم يُشغَّل في هذه الجلسة |
+| content-retrieval-skill | 8009 | ❌ DORMANT | لم يُشغَّل في هذه الجلسة |
+
+**Skills Pipeline**: `pipeline_mode=full`, `skills_active=['planning','research','reasoning']`, duration ~19s ✅
+
+**Prometheus**: 10/12 targets UP (content-retrieval-skill + conversation-service DOWN — dormant)
+
+### قواعد مُضافة من D-079
+- `secrets.env` يجب أن يكون موجوداً في `.devcontainer/` قبل بدء supervisor.sh
+- asyncpg يجب أن يستخدم port **5432** دائماً (لا 6543 PgBouncer)
+- `prometheus-client` مطلوب في كل microservice — تحقق قبل تشغيل أي خدمة
+- متغيرات البيئة الفارغة = خدمة في وضع mock/sqlite — تحقق من `/health` لا من `ps aux`
 
 ## D-063 Live Verification Results (2026-05-15) — ISS-071/072 LaTeX Normalize + Temperature Fix
 

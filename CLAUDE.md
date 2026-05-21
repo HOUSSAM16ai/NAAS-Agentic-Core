@@ -5350,3 +5350,4 @@ Skill رسمي جديد `app/services/skills/probability_skill.py` (يحترم �
 - `scripts/test_auto_ui_trigger.py` — كشف الإحباط + «دفعة واحدة» → combinations (لا شجرة)، OpenRouter LIVE ✅
 - `tests/services/test_probability_skill.py` (+7 V19) + `tests/contracts/test_generative_ui_streaming.py` ✅
 - regression: V14 gitpod / V15 generalization / V17 omni — كلها ناجحة ✅
+

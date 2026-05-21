@@ -363,17 +363,26 @@ def _find_matching_entry(normalized: str) -> ExerciseEntry | None:
     return find_best_match(tag_keywords)
 
 
-def detect_exercise_retrieval(request: ExerciseRetrievalRequest) -> ExerciseRetrievalDecision:
+def detect_exercise_retrieval(
+    request: ExerciseRetrievalRequest,
+    history_messages: list[dict[str, str]] | None = None,
+) -> ExerciseRetrievalDecision:
     """
     يتعرف على أسئلة الاسترجاع التعليمي بدقة عالية لتجنب التفعيل الخاطئ.
 
-    المنطق ثلاثي المراحل:
+    المنطق رباعي المراحل:
     1. نية الشرح/المساعدة → لا استرجاع (حتى لو ذُكر "تمرين" أو "احتمالات")
     2. نية الجلب الصريحة → استرجاع مع تحديد التمرين من الفهرس
-    3. حالة الشك → لا استرجاع (LangGraph يعالج الحالات الغامضة أفضل)
+    3. (ISS-CONV-C — LangGraph Amnesia Fix) سؤال متابعة + سياق محادثة عن تمرين
+       بكالوريا → استرجاع بالتمرين المذكور في السياق
+    4. حالة الشك → لا استرجاع (LangGraph يعالج الحالات الغامضة أفضل)
 
     يحل ISS-038: كلمة "تمرين" في سياق الشرح كانت تُطلق استرجاع تمرين
     الاحتمالات بشكل ثابت بغض النظر عن السياق.
+
+    يحل ISS-CONV-C (LangGraph Amnesia): أسئلة المتابعة مثل "اسئلة الاحتمالات فقط"
+    كانت تُعيد تشغيل SupervisorNode من الصفر وتتجاهل سياق المحادثة. الآن تُحلَّل
+    بالرجوع إلى history_messages لتحديد التمرين الصحيح.
     """
     normalized = request.question.strip().lower()
 
@@ -392,6 +401,38 @@ def detect_exercise_retrieval(request: ExerciseRetrievalRequest) -> ExerciseRetr
             reason="retrieval_intent_detected",
             matched_entry=matched_entry,
         )
+
+    # الأولوية الثالثة (ISS-CONV-C): سؤال متابعة + سياق محادثة
+    # أنماط تُشير إلى طلب تصفية/تحديد داخل تمرين سبق ذكره في المحادثة
+    _FOLLOWUP_FILTER_PATTERNS: tuple[str, ...] = (  # noqa: N806
+        "فقط",
+        "only",
+        "seulement",
+        "اسئلة",
+        "أسئلة",
+        "الأسئلة",
+        "questions",
+        "الجزء",
+        "part",
+        "partie",
+        "أعد",
+        "اعد",
+        "مرة أخرى",
+        "again",
+        "encore",
+        "هذا التمرين",
+        "نفس التمرين",
+        "same exercise",
+    )
+    is_followup = any(p in normalized for p in _FOLLOWUP_FILTER_PATTERNS)
+    if is_followup and history_messages:
+        context_entry = _detect_entry_from_history(history_messages)
+        if context_entry is not None:
+            return ExerciseRetrievalDecision(
+                recognized=True,
+                reason="followup_with_conversation_context",
+                matched_entry=context_entry,
+            )
 
     # الحالة الافتراضية: لا استرجاع — اللجوء إلى LangGraph
     return ExerciseRetrievalDecision(
@@ -440,6 +481,7 @@ _SOLUTION_SECTION_MARKERS: tuple[str, ...] = (
     "## Model Answer",
     "## Answer",
     "## وسوم البحث",
+    "## وسوم بحث",  # صيغة بديلة (مثل "## وسوم بحث مقترحة")
     "## Tags",
     "### الجزء I",  # بداية الشرح المفصَّل
     "### الجزء II",
@@ -466,29 +508,113 @@ def _trim_at_solution(content: str) -> str:
     return content[:cut_index].rstrip()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# حدود التمارين الدلالية (ISS-RAG-B — Semantic Boundary Slicing)
+#
+# المشكلة: ملف bac2024_math_experimental_subject1_ex1_ex2.md يحوي تمرينين
+# (الاحتمالات + الأعداد المركبة) في ملف واحد. عند طلب "تمرين الاحتمالات 2024"
+# كان format_exercise_for_display يُرجع كلا التمرينين لأنه لا يعرف رقم التمرين.
+#
+# الحل: _slice_exercise_by_number() يقطع المحتوى بين عناوين "## التمرين N"
+# ليُرجع فقط التمرين المطلوب بحسب entry.exercise_number.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# أنماط عناوين التمارين في ملفات knowledge_base (عربي + إنجليزي)
+_EXERCISE_HEADING_PATTERNS: tuple[str, ...] = (
+    "## التمرين الأول",
+    "## التمرين الثاني",
+    "## التمرين الثالث",
+    "## التمرين الرابع",
+    "## Exercise 1",
+    "## Exercise 2",
+    "## Exercise 3",
+    "## Exercise 4",
+    "## تمرين 1",
+    "## تمرين 2",
+    "## تمرين 3",
+    "## تمرين 4",
+)
+
+# ترتيب العناوين حسب رقم التمرين (1-indexed)
+_EXERCISE_HEADING_BY_NUMBER: dict[int, tuple[str, ...]] = {
+    1: ("## التمرين الأول", "## Exercise 1", "## تمرين 1"),
+    2: ("## التمرين الثاني", "## Exercise 2", "## تمرين 2"),
+    3: ("## التمرين الثالث", "## Exercise 3", "## تمرين 3"),
+    4: ("## التمرين الرابع", "## Exercise 4", "## تمرين 4"),
+}
+
+
+def _slice_exercise_by_number(content: str, exercise_number: int) -> str:
+    """
+    يقطع المحتوى ليُرجع فقط قسم التمرين المطلوب بحسب رقمه.
+
+    يحل ISS-RAG-B (Semantic Boundary Slicing):
+    عندما يحوي الملف أكثر من تمرين (مثل bac2024_ex1_ex2.md)، يُرجع
+    هذا التابع فقط التمرين ذا الرقم المطلوب بدلاً من كامل الملف.
+
+    الخوارزمية:
+      1. يبحث عن عنوان التمرين المطلوب (## التمرين الأول / ## Exercise 1 / ...)
+      2. يبحث عن عنوان التمرين التالي (حد نهاية القسم)
+      3. يُرجع المحتوى بين الحدين فقط
+
+    إذا لم يجد عنوان التمرين المطلوب → يُرجع المحتوى كاملاً (سلوك آمن).
+    """
+    if exercise_number not in _EXERCISE_HEADING_BY_NUMBER:
+        return content
+
+    # إيجاد موضع بداية التمرين المطلوب
+    start_idx: int | None = None
+    for heading in _EXERCISE_HEADING_BY_NUMBER[exercise_number]:
+        idx = content.find(heading)
+        if idx != -1:
+            start_idx = idx
+            break
+
+    if start_idx is None:
+        # لا يوجد عنوان صريح للتمرين → الملف يحوي تمريناً واحداً فقط
+        return content
+
+    # إيجاد موضع بداية التمرين التالي (حد النهاية)
+    end_idx: int | None = None
+    next_exercise_number = exercise_number + 1
+    if next_exercise_number in _EXERCISE_HEADING_BY_NUMBER:
+        for heading in _EXERCISE_HEADING_BY_NUMBER[next_exercise_number]:
+            idx = content.find(heading, start_idx + 1)
+            if idx != -1 and (end_idx is None or idx < end_idx):
+                end_idx = idx
+
+    if end_idx is not None:
+        return content[start_idx:end_idx].rstrip()
+    return content[start_idx:].rstrip()
+
+
 def format_exercise_for_display(entry: ExerciseEntry, raw_content: str) -> str:
     """
-    يُهيِّئ محتوى التمرين لعرض نظيف للطالب — فقط نص التمرين، بدون YAML أو حل.
+    يُهيِّئ محتوى التمرين لعرض نظيف للطالب — فقط نص التمرين المطلوب، بدون YAML أو حل.
 
     يحل ISS-051:
       - YAML frontmatter يظهر للطالب
       - عناصر الإجابة النموذجية تُكشف قبل أن يحل الطالب
       - وسوم البحث في الأسفل
-      - أكثر من تمرين يظهر في رد واحد (لأن الـ wide-net retrieval كان يقرأ كل
-        ملفات .md؛ الآن نقرأ ملفاً واحداً مطابقاً بالضبط)
+
+    يحل ISS-RAG-B (Semantic Boundary Slicing):
+      - ملفات تحوي أكثر من تمرين (مثل bac2024_ex1_ex2.md) كانت تُرجع كلا
+        التمرينين. الآن يُرجع فقط التمرين ذا الرقم المطابق لـ entry.exercise_number.
 
     Args:
-        entry: السجل المطابق من knowledge_index.
+        entry: السجل المطابق من knowledge_index (يحوي exercise_number).
         raw_content: محتوى الملف الخام (مع YAML + الحل).
 
     Returns:
-        محتوى نظيف يحوي: عنوان + بطاقة الامتحان + نص التمرين فقط.
+        محتوى نظيف يحوي: عنوان + بطاقة الامتحان + نص التمرين المطلوب فقط.
     """
     if not raw_content:
         return ""
     no_frontmatter = _strip_frontmatter(raw_content)
     questions_only = _trim_at_solution(no_frontmatter)
-    return questions_only.strip()
+    # ISS-RAG-B: قطع المحتوى على حدود التمرين المطلوب
+    sliced = _slice_exercise_by_number(questions_only, entry.exercise_number)
+    return sliced.strip()
 
 
 def make_result(

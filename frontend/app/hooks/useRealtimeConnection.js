@@ -116,6 +116,34 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         ws.onmessage = (event) => {
           if (!mountedRef.current) return;
 
+          // Bug A fix: detect HTML error pages (Next.js DevTools 500 bleed).
+          // When the backend crashes, Next.js dev server may intercept the 500
+          // and stream back a raw HTML page containing <nextjs-portal> or
+          // <!DOCTYPE html>. Guard here before JSON.parse so the HTML never
+          // reaches the chat renderer as text content.
+          if (typeof event.data === "string") {
+            const trimmed = event.data.trimStart();
+            if (trimmed.startsWith("<") || trimmed.startsWith("<!DOCTYPE")) {
+              console.error("[WS] Received HTML instead of JSON — backend 500 error page intercepted by Next.js DevTools. Suppressing HTML bleed.", event.data.slice(0, 200));
+              window.dispatchEvent(
+                new CustomEvent("agent:notification", {
+                  detail: { level: "error", message: "حدث خطأ في الخادم. يرجى المحاولة مرة أخرى." },
+                })
+              );
+              window.dispatchEvent(
+                new CustomEvent("agent:event", {
+                  detail: {
+                    type: "assistant_final",
+                    payload: { content: "" },
+                    _connection_id: connectionIdRef.current,
+                    _event_namespace: eventNamespace,
+                  },
+                })
+              );
+              return;
+            }
+          }
+
           const directAssistantError = parseAssistantErrorEnvelope(event.data);
           if (directAssistantError) {
             window.dispatchEvent(

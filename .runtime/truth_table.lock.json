@@ -80,8 +80,8 @@
         "app/services/skills/bac_exercise_skill.py",
         "scripts/gitpod_live_debug.py",
         "scripts/gitpod_ui_test.py",
-        "tests/contracts/test_four_fatal_bugs_regression.py",
-        "tests/contracts/test_generative_ui_streaming.py"
+        "scripts/omni_live_test.py",
+        "tests/contracts/test_four_fatal_bugs_regression.py"
       ],
       "name": "Orchestrator HTTP client + fallback chain",
       "notes": "Sole entrypoint to chat from customer_chat.py and admin.py.",
@@ -317,6 +317,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-05-21T11:12:55.827059+00:00",
+  "generated_at_utc": "2026-05-21T15:55:00.676217+00:00",
   "schema_version": 1
 }

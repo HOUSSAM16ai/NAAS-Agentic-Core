@@ -62,7 +62,7 @@ def _check(name: str, condition: bool, detail: str = "") -> None:
     _results.append((name, condition, detail))
     print(f"  {status}  {name}" + (f" — {detail}" if detail else ""))
     if not condition:
-        print(f"         ^ ASSERTION FAILED")
+        print("         ^ ASSERTION FAILED")
 
 
 # ── الاختبارات ─────────────────────────────────────────────────────────────────

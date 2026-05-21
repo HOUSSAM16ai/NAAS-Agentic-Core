@@ -402,6 +402,33 @@ BKT_COGNITIVE_DOCTRINE: Final[tuple[str, ...]] = (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Probability Calculation Doctrine (D-075 — Protocol V14.0 / Generative UI)
+# ─────────────────────────────────────────────────────────────────────────────
+
+PROBABILITY_CALCULATION_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم محرّك حساب الاحتمالات الحتمي الذي يغذّي شجرة
+#: الاحتمالات التوليدية. الخلفية لا تُخرج HTML ولا قيماً وهمية — تحسب كسوراً
+#: حقيقية من تركيبة المسألة العربية (Protocol V14.0 §3).
+PROBABILITY_CALCULATION_DOCTRINE: Final[tuple[str, ...]] = (
+    "حساب حقيقي لا قيم وهمية: P(الحدث) = العدد / المجموع كـ كسر مختزَل دقيق "
+    "(مثل 4/11) — ممنوع منعاً باتاً إخراج 0.5 افتراضية حين تتوفّر التركيبة.",
+    "حتمي تماماً: نفس نص المسألة يُنتج نفس الكسور دائماً — لا LLM، لا عشوائية، "
+    "قابل للاختبار بـ pytest عادي.",
+    "استخراج التركيبة من العربية: أعداد رقمية وكلمات (كرتان=2، أربع=4، خمس=5) "
+    "مقرونة بالكيانات الملموسة (حمراء، بيضاء، خضراء) — لا رموز مجرّدة.",
+    "السحب بدون إرجاع يُحدِّث المقام والبسط شرطياً ((العدد-1)/(المجموع-1))؛ "
+    "السحب مع الإرجاع يُبقي الاحتمال ثابتاً — يُكتشف الوضع من نص المسألة.",
+    "كل عقدة شجرة تحمل الكسر الدقيق (p_num/p_den) إضافةً للقيمة العشرية، "
+    "فتُصيّر الواجهة 4/11 تماماً دون إعادة بناء تقريبية من العشري.",
+    "Abstraction Ban: تسميات العُقَد ملموسة بشرية مستخرَجة من السياق — وحتى "
+    "fallback المجموع المجهول لا يُخرج حرفاً مجرّداً.",
+    "العقد فصل صارم: المحرّك يُرجع Pydantic منظَّماً فقط؛ التصيير مسؤولية "
+    "الواجهة (RSC) — الخلفية لا تعرف شيئاً عن SVG أو HTML.",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -491,6 +518,15 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "orchestrator_client._build_probability_tree_props",
         ),
     },
+    "probability_calculation": {
+        "version": PROBABILITY_CALCULATION_DOCTRINE_VERSION,
+        "rules_count": len(PROBABILITY_CALCULATION_DOCTRINE),
+        "consumed_by": (
+            # D-075 (Protocol V14.0): محرّك الاحتمالات الحتمي — موصول حيّاً.
+            "ProbabilityCalculatorSkill.analyze",
+            "orchestrator_client._build_probability_tree_props",
+        ),
+    },
 }
 
 
@@ -537,6 +573,11 @@ def get_skill_invocation_protocol_summary() -> str:
 def get_bkt_cognitive_summary() -> str:
     """يُرجِع doctrine الطبقة المعرفية BKT كنص قصير (للـ logs / prompts)."""
     return " | ".join(BKT_COGNITIVE_DOCTRINE)
+
+
+def get_probability_calculation_summary() -> str:
+    """يُرجِع doctrine حساب الاحتمالات كنص قصير (للـ logs / prompts)."""
+    return " | ".join(PROBABILITY_CALCULATION_DOCTRINE)
 
 
 def build_exercise_explanation_prompt() -> str:
@@ -600,6 +641,8 @@ __all__ = [
     "MODEL_ANSWER_EXPLANATION_VERSION",
     "MODEL_ANSWER_RELIANCE_RULES",
     "MODEL_ANSWER_RELIANCE_VERSION",
+    "PROBABILITY_CALCULATION_DOCTRINE",
+    "PROBABILITY_CALCULATION_DOCTRINE_VERSION",
     "RETRIEVAL_DOCTRINE",
     "RETRIEVAL_DOCTRINE_VERSION",
     "SKILL_DOCTRINE_MANIFEST",
@@ -614,6 +657,7 @@ __all__ = [
     "get_explanation_doctrine_summary",
     "get_model_answer_explanation_summary",
     "get_model_answer_reliance_summary",
+    "get_probability_calculation_summary",
     "get_retrieval_doctrine_summary",
     "get_skill_invocation_protocol_summary",
     "get_step_by_step_summary",

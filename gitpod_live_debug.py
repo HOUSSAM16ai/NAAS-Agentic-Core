@@ -131,9 +131,8 @@ async def login_student(client: httpx.AsyncClient) -> str | None:
             token = resp.json().get("access_token") or resp.json().get("token")
             print(f"  ✅ Login OK. Token: {str(token)[:40]}...")
             return token
-        else:
-            print(f"  ❌ Login failed: HTTP {resp.status_code} — {resp.text[:200]}")
-            return None
+        print(f"  ❌ Login failed: HTTP {resp.status_code} — {resp.text[:200]}")
+        return None
     except Exception as exc:
         print(f"  ❌ Login exception: {exc}")
         traceback.print_exc()
@@ -155,9 +154,8 @@ async def create_conversation(client: httpx.AsyncClient, token: str) -> int | No
             conv_id = resp.json().get("id") or resp.json().get("conversation_id")
             print(f"  ✅ Conversation created: id={conv_id}")
             return int(conv_id)
-        else:
-            print(f"  ❌ Create conversation failed: HTTP {resp.status_code} — {resp.text[:200]}")
-            return None
+        print(f"  ❌ Create conversation failed: HTTP {resp.status_code} — {resp.text[:200]}")
+        return None
     except Exception as exc:
         print(f"  ❌ Create conversation exception: {exc}")
         traceback.print_exc()
@@ -201,7 +199,7 @@ async def send_message_http(
         print(f"  HTTP {status} | Content-Type: {content_type}")
 
         if "text/html" in content_type or raw_body.strip().startswith("<!DOCTYPE"):
-            print(f"  🚨 BUG A CONFIRMED: Backend returned HTML instead of JSON!")
+            print("  🚨 BUG A CONFIRMED: Backend returned HTML instead of JSON!")
             print(f"  HTML preview: {raw_body[:300]}")
             result["bug_a"] = True
             result["html_response"] = raw_body[:300]
@@ -228,7 +226,7 @@ async def send_message_http(
             result["unexpected"] = raw_body[:200]
 
     except httpx.ReadTimeout:
-        print(f"  ⏱️  Timeout after 60s — backend may be hanging")
+        print("  ⏱️  Timeout after 60s — backend may be hanging")
         result["timeout"] = True
     except Exception as exc:
         print(f"  ❌ Exception: {exc}")
@@ -312,7 +310,7 @@ async def test_fallback_chain_directly() -> None:
         print(f"  Intent without history: {intent_no_history!r}")
         print(f"  History text generated: {len(history_text)} chars")
         if not history_text:
-            print(f"  🚨 BUG C INDICATOR: _format_history returned empty for non-empty history!")
+            print("  🚨 BUG C INDICATOR: _format_history returned empty for non-empty history!")
         else:
             print(f"  ✅ History text: {history_text[:100]!r}")
 
@@ -346,7 +344,7 @@ async def test_fallback_chain_directly() -> None:
                 else:
                     print(f"  ✅ Concrete label extracted: {first_label!r}")
         else:
-            print(f"  ⚠️  No tree detected for question with explicit context")
+            print("  ⚠️  No tree detected for question with explicit context")
 
         # سؤال بدون كيانات ملموسة (يجب أن يُطلق LLM enrichment)
         question_abstract = "اعطني شجرة الاحتمالات للتمرين"
@@ -356,14 +354,14 @@ async def test_fallback_chain_directly() -> None:
             tree2 = props2.get("tree", {})
             children2 = tree2.get("children", [])
             first_label2 = children2[0].get("label", "") if children2 else ""
-            print(f"\n  Abstract question tree:")
+            print("\n  Abstract question tree:")
             print(f"  labels_generic={labels_generic2}, first_label={first_label2!r}")
             if first_label2 in ("الحدث الأول",) and labels_generic2:
-                print(f"  ✅ Correct: generic fallback used, LLM enrichment will be triggered")
+                print("  ✅ Correct: generic fallback used, LLM enrichment will be triggered")
             elif first_label2.lower() in {"a", "b"}:
                 print(f"  🚨 BUG D CONFIRMED: Abstract symbol {first_label2!r} leaked!")
         else:
-            print(f"  ⚠️  No tree detected for abstract question (no probability values)")
+            print("  ⚠️  No tree detected for abstract question (no probability values)")
 
     except Exception as exc:
         print(f"  ❌ Bug D test failed: {exc}")
@@ -409,7 +407,7 @@ async def test_websocket_crash(token: str, conversation_id: int) -> None:
                     except json.JSONDecodeError:
                         # Bug A: HTML bleed — raw HTML instead of JSON
                         if raw_msg.strip().startswith("<!DOCTYPE") or "<html" in raw_msg:
-                            print(f"  🚨 BUG A CONFIRMED via WebSocket: HTML received!")
+                            print("  🚨 BUG A CONFIRMED via WebSocket: HTML received!")
                             print(f"  HTML preview: {raw_msg[:300]}")
                             error_detected = True
                             break
@@ -453,11 +451,11 @@ async def test_websocket_crash(token: str, conversation_id: int) -> None:
 
                     # Bug B check: كلا التمرينين في رد واحد؟
                     if "التمرين الأول" in full_response and "التمرين الثاني" in full_response:
-                        print(f"  🚨 BUG B CONFIRMED in live WS: Both exercises in response!")
+                        print("  🚨 BUG B CONFIRMED in live WS: Both exercises in response!")
 
                     # Bug C check: هل الرد يتجاهل السياق؟
                     if i > 1 and "التمرين الأول" in full_response and "التمرين الثاني" in full_response:
-                        print(f"  🚨 BUG C INDICATOR: Follow-up dumped full document again!")
+                        print("  🚨 BUG C INDICATOR: Follow-up dumped full document again!")
 
                     history.append({"role": "user", "content": question})
                     history.append({"role": "assistant", "content": full_response})

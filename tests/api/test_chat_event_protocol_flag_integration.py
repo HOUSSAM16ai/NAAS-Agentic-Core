@@ -13,6 +13,23 @@ from app.api.routers.admin import get_db as get_admin_db
 from app.api.routers.customer_chat import get_db as get_customer_db
 
 
+@pytest.fixture(autouse=True)
+def _isolate_bkt_runtime_injection():
+    """يعزل حقن BKT (D-074) عن اختبارات بروتوكول الأحداث.
+
+    هذه الاختبارات تحاكي جلسة قاعدة البيانات بـ ``AsyncMock`` وتتحقق من تسلسل
+    أحداث WS الدقيق. حقن BKT (``customer_chat._evaluate_and_emit_bkt``) ليس
+    موضوع هذه الاختبارات — وتشغيله ضد جلسة وهمية يُسبّب coroutine مُعلَّقاً
+    (RuntimeWarning) ويُدرج حدث ``bkt_hint_display`` إضافياً يكسر التسلسل.
+    نُحيّده هنا تماماً كما تُحيّد هذه الاختبارات خدمة حفظ المحادثة.
+    """
+    with patch(
+        "app.api.routers.customer_chat._evaluate_and_emit_bkt",
+        new=AsyncMock(return_value=None),
+    ):
+        yield
+
+
 async def _stream_single_delta() -> AsyncGenerator[dict[str, object], None]:
     """يبث حدثًا واحدًا بصيغة delta لاختبار التطبيع."""
     yield {"type": "delta", "payload": {"content": "chunk"}}

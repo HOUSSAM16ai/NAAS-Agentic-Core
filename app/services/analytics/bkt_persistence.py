@@ -46,8 +46,10 @@ class BKTAnalyticsService:
             .order_by(desc(StudentBKTAnalytic.interaction_timestamp))
             .limit(1)
         )
-        result = await self.db.execute(stmt)
-        row = result.scalar_one_or_none()
+        # `await db.scalar(...)` (SQLAlchemy 2.0 idiom) — استدعاء async واحد بلا
+        # سلسلة `.scalar_one_or_none()` متزامنة تترك coroutine مُعلَّقاً عند
+        # محاكاة الجلسة بـ AsyncMock في اختبارات الـ WS.
+        row = await self.db.scalar(stmt)
         return float(row) if row is not None else None
 
     async def interaction_count(self, user_id: int, concept_id: str) -> int:
@@ -61,8 +63,7 @@ class BKTAnalyticsService:
             .order_by(desc(StudentBKTAnalytic.interaction_timestamp))
             .limit(1)
         )
-        result = await self.db.execute(stmt)
-        row = result.scalar_one_or_none()
+        row = await self.db.scalar(stmt)
         return int(row) if row is not None else 0
 
     async def record_interaction(

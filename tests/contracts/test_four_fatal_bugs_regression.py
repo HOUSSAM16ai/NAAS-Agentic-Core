@@ -97,14 +97,8 @@ class TestSemanticBoundarySlicing:
 
     def test_formatted_length_is_reduced_for_multi_exercise_file(self) -> None:
         """الملف الذي يحوي تمرينين يُنتج محتوى أقصر بعد التقطيع."""
-        entry_ex1 = next(
-            e for e in KNOWLEDGE_INDEX
-            if e.exercise_number == 1 and e.year == 2024
-        )
-        entry_ex2 = next(
-            e for e in KNOWLEDGE_INDEX
-            if e.exercise_number == 2 and e.year == 2024
-        )
+        entry_ex1 = next(e for e in KNOWLEDGE_INDEX if e.exercise_number == 1 and e.year == 2024)
+        entry_ex2 = next(e for e in KNOWLEDGE_INDEX if e.exercise_number == 2 and e.year == 2024)
         raw = load_exercise_content(entry_ex1)
         assert raw is not None
 
@@ -145,9 +139,7 @@ class TestFollowUpContextResolution:
         req = ExerciseRetrievalRequest(question="اسئلة الاحتمالات فقط")
         decision = detect_exercise_retrieval(req, history_messages=None)
 
-        assert not decision.recognized, (
-            "Bug C: سؤال المتابعة بدون سياق يجب ألا يُطلق استرجاعاً"
-        )
+        assert not decision.recognized, "Bug C: سؤال المتابعة بدون سياق يجب ألا يُطلق استرجاعاً"
 
     def test_followup_only_pattern_with_history(self) -> None:
         """'فقط' مع سياق محادثة عن تمرين يُرجع التمرين الصحيح."""
@@ -209,9 +201,7 @@ class TestProbabilityTreePropsGuard:
         """عبارة صريحة تُطلق الكشف عن شجرة الاحتمالات."""
         from app.infrastructure.clients.orchestrator_client import OrchestratorClient
 
-        result = OrchestratorClient._detect_probability_tree(
-            "اعطني شجرة الاحتمالات للتمرين"
-        )
+        result = OrchestratorClient._detect_probability_tree("اعطني شجرة الاحتمالات للتمرين")
         # قد يُرجع None إذا لم تُوجد قيم احتمالية — هذا سلوك صحيح
         # المهم ألا يرفع استثناء
         assert result is None or isinstance(result, dict)
@@ -250,9 +240,7 @@ class TestAbstractionBan:
         assert events is not None
         for key in ("first", "first_neg", "second", "second_neg"):
             label = events[key].lower()
-            assert label not in self._ABSTRACT_BANNED, (
-                f"Bug D: رمز مجرّد {label!r} في مفتاح {key!r}"
-            )
+            assert label not in self._ABSTRACT_BANNED, f"Bug D: رمز مجرّد {label!r} في مفتاح {key!r}"
 
     def test_concrete_entities_extracted_from_defective_parts(self) -> None:
         """مسألة قطع معيبة تُنتج تسميات ملموسة."""
@@ -278,9 +266,7 @@ class TestAbstractionBan:
 
         for child in children:
             label = child.get("label", "").lower()
-            assert label not in self._ABSTRACT_BANNED, (
-                f"Bug D: رمز مجرّد {label!r} في عقدة الشجرة"
-            )
+            assert label not in self._ABSTRACT_BANNED, f"Bug D: رمز مجرّد {label!r} في عقدة الشجرة"
 
     def test_history_context_enriches_tree_labels(self) -> None:
         """سياق المحادثة يُثري تسميات الشجرة بكيانات ملموسة من التمرين السابق."""
@@ -288,14 +274,11 @@ class TestAbstractionBan:
 
         # محاكاة سياق محادثة يحوي تمرين الاحتمالات 2024 (كرات ملونة)
         history_text = (
-            "يحتوي كيس على 11 كرة متماثلة: كرتان بيضاوان وأربع كرات حمراء "
-            "وخمس كرات خضراء"
+            "يحتوي كيس على 11 كرة متماثلة: كرتان بيضاوان وأربع كرات حمراء وخمس كرات خضراء"
         ).lower()
 
         events = OrchestratorClient._extract_concrete_events(history_text)
-        assert events is not None, (
-            "Bug D: لم يُستخرج أي كيان ملموس من سياق تمرين الاحتمالات 2024"
-        )
+        assert events is not None, "Bug D: لم يُستخرج أي كيان ملموس من سياق تمرين الاحتمالات 2024"
         # يجب أن يكون أحد الكيانات كرة ملونة
         all_labels = " ".join(events.values()).lower()
         assert any(color in all_labels for color in ("حمراء", "بيضاء", "خضراء")), (

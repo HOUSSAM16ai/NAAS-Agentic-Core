@@ -50,6 +50,7 @@ def _hdr(title: str) -> None:
 
 # ─── 1. فحص الاتصال بقاعدة البيانات ─────────────────────────────────────────
 
+
 async def check_database() -> dict[str, Any]:
     _hdr("1. DATABASE CONNECTION (Supabase)")
     result: dict[str, Any] = {"ok": False}
@@ -67,7 +68,9 @@ async def check_database() -> dict[str, Any]:
 
         print(f"  Connecting to: {url[:60]}...")
         conn = await asyncpg.connect(url, ssl="require", statement_cache_size=0)
-        row = await conn.fetchrow("SELECT COUNT(*) as cnt FROM users WHERE email = $1", STUDENT_EMAIL)
+        row = await conn.fetchrow(
+            "SELECT COUNT(*) as cnt FROM users WHERE email = $1", STUDENT_EMAIL
+        )
         count = row["cnt"] if row else 0
         print(f"  ✅ Connected. Student account found: {count > 0} (email={STUDENT_EMAIL})")
         result = {"ok": True, "student_found": count > 0}
@@ -83,6 +86,7 @@ async def check_database() -> dict[str, Any]:
 
 
 # ─── 2. فحص OpenRouter API مباشرة ────────────────────────────────────────────
+
 
 async def check_openrouter() -> dict[str, Any]:
     _hdr("2. OPENROUTER API (direct)")
@@ -119,6 +123,7 @@ async def check_openrouter() -> dict[str, Any]:
 
 # ─── 3. تسجيل الدخول عبر الـ monolith ───────────────────────────────────────
 
+
 async def login_student(client: httpx.AsyncClient) -> str | None:
     _hdr("3. STUDENT LOGIN (monolith :8000)")
     try:
@@ -140,6 +145,7 @@ async def login_student(client: httpx.AsyncClient) -> str | None:
 
 
 # ─── 4. إنشاء محادثة جديدة ───────────────────────────────────────────────────
+
 
 async def create_conversation(client: httpx.AsyncClient, token: str) -> int | None:
     _hdr("4. CREATE CONVERSATION")
@@ -163,6 +169,7 @@ async def create_conversation(client: httpx.AsyncClient, token: str) -> int | No
 
 
 # ─── 5. إرسال رسالة عبر HTTP (لاكتشاف الأخطاء الخلفية) ─────────────────────
+
 
 async def send_message_http(
     client: httpx.AsyncClient,
@@ -238,6 +245,7 @@ async def send_message_http(
 
 # ─── 6. اختبار الـ fallback chain مباشرة ────────────────────────────────────
 
+
 async def test_fallback_chain_directly() -> None:
     """
     يختبر الـ fallback chain مباشرة بدون HTTP لاكتشاف الأخطاء الداخلية.
@@ -263,7 +271,9 @@ async def test_fallback_chain_directly() -> None:
         print(f"  Decision: recognized={decision.recognized}, reason={decision.reason}")
         if decision.matched_entry:
             entry = decision.matched_entry
-            print(f"  Matched entry: exercise_number={entry.exercise_number}, topics={entry.topics}")
+            print(
+                f"  Matched entry: exercise_number={entry.exercise_number}, topics={entry.topics}"
+            )
             raw = load_exercise_content(entry)
             if raw:
                 formatted = format_exercise_for_display(entry, raw)
@@ -271,12 +281,14 @@ async def test_fallback_chain_directly() -> None:
                 has_ex1 = "التمرين الأول" in formatted
                 has_ex2 = "التمرين الثاني" in formatted
                 if has_ex1 and has_ex2:
-                    print(f"  🚨 BUG B CONFIRMED: Both exercises returned! (ex1={has_ex1}, ex2={has_ex2})")
+                    print(
+                        f"  🚨 BUG B CONFIRMED: Both exercises returned! (ex1={has_ex1}, ex2={has_ex2})"
+                    )
                     print(f"  Formatted length: {len(formatted)} chars")
                     # عرض بداية التمرين الثاني لتأكيد التسرب
                     idx = formatted.find("التمرين الثاني")
                     if idx != -1:
-                        print(f"  Ex2 leaks at char {idx}: {formatted[idx:idx+100]!r}")
+                        print(f"  Ex2 leaks at char {idx}: {formatted[idx : idx + 100]!r}")
                 else:
                     print(f"  ✅ Bug B NOT present: ex1={has_ex1}, ex2={has_ex2}")
                     print(f"  Formatted length: {len(formatted)} chars")
@@ -296,7 +308,9 @@ async def test_fallback_chain_directly() -> None:
         follow_up = "اسئلة الاحتمالات فقط"
         req2 = ExerciseRetrievalRequest(question=follow_up)
         decision2 = detect_exercise_retrieval(req2)
-        print(f"  Follow-up '{follow_up}': recognized={decision2.recognized}, reason={decision2.reason}")
+        print(
+            f"  Follow-up '{follow_up}': recognized={decision2.recognized}, reason={decision2.reason}"
+        )
 
         # اختبار _classify_intent مع history
         from app.services.chat.local_graph import _classify_intent, _format_history
@@ -324,9 +338,7 @@ async def test_fallback_chain_directly() -> None:
         from app.infrastructure.clients.orchestrator_client import OrchestratorClient
 
         # سؤال من تمرين الاحتمالات 2024 (كرات ملونة)
-        question_with_context = (
-            "اعطني شجرة الاحتمالات — يحتوي كيس على كرات حمراء وبيضاء وخضراء"
-        )
+        question_with_context = "اعطني شجرة الاحتمالات — يحتوي كيس على كرات حمراء وبيضاء وخضراء"
         props = OrchestratorClient._detect_probability_tree(question_with_context)
         if props:
             tree = props.get("tree", {})
@@ -340,7 +352,9 @@ async def test_fallback_chain_directly() -> None:
                 if first_label.lower() in abstract_banned:
                     print(f"  🚨 BUG D CONFIRMED: Abstract label {first_label!r} in tree!")
                 elif first_label in ("الحدث الأول", "الحدث الثاني"):
-                    print(f"  ⚠️  BUG D PARTIAL: Generic fallback label {first_label!r} — LLM enrichment needed")
+                    print(
+                        f"  ⚠️  BUG D PARTIAL: Generic fallback label {first_label!r} — LLM enrichment needed"
+                    )
                 else:
                     print(f"  ✅ Concrete label extracted: {first_label!r}")
         else:
@@ -369,6 +383,7 @@ async def test_fallback_chain_directly() -> None:
 
 
 # ─── 7. اختبار WebSocket (يكشف Bug A بشكل مباشر) ────────────────────────────
+
 
 async def test_websocket_crash(token: str, conversation_id: int) -> None:
     """
@@ -438,7 +453,9 @@ async def test_websocket_crash(token: str, conversation_id: int) -> None:
                                 label = children[0].get("label", "")
                                 print(f"     First branch label: {label!r}")
                                 if label.lower() in {"a", "b"}:
-                                    print(f"  🚨 BUG D CONFIRMED in live WS: abstract label {label!r}")
+                                    print(
+                                        f"  🚨 BUG D CONFIRMED in live WS: abstract label {label!r}"
+                                    )
                                 elif label in ("الحدث الأول",):
                                     print(f"  ⚠️  BUG D PARTIAL: generic fallback {label!r}")
                                 else:
@@ -454,7 +471,11 @@ async def test_websocket_crash(token: str, conversation_id: int) -> None:
                         print("  🚨 BUG B CONFIRMED in live WS: Both exercises in response!")
 
                     # Bug C check: هل الرد يتجاهل السياق؟
-                    if i > 1 and "التمرين الأول" in full_response and "التمرين الثاني" in full_response:
+                    if (
+                        i > 1
+                        and "التمرين الأول" in full_response
+                        and "التمرين الثاني" in full_response
+                    ):
                         print("  🚨 BUG C INDICATOR: Follow-up dumped full document again!")
 
                     history.append({"role": "user", "content": question})
@@ -466,6 +487,7 @@ async def test_websocket_crash(token: str, conversation_id: int) -> None:
 
 
 # ─── 8. اختبار الـ backend crash مباشرة (Bug A) ──────────────────────────────
+
 
 async def test_backend_crash_directly() -> None:
     """
@@ -513,6 +535,7 @@ async def test_backend_crash_directly() -> None:
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
+
 
 async def main() -> None:
     print("\n" + "═" * 70)

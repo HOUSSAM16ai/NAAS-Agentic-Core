@@ -193,6 +193,56 @@ def test_output_marks_calculated_real_values() -> None:
         assert isinstance(pn, int) and isinstance(pd, int) and pd >= 1
 
 
+# ─── D-077 (V17.0) — no garbage fractions, accurate Arabic parsing ───────────────
+
+
+def _all_nodes(tree: dict, acc: list[tuple[int, int]]) -> None:
+    acc.append((tree.get("p_num", -1), tree.get("p_den", -1)))
+    for child in tree.get("children", []) or []:
+        _all_nodes(child, acc)
+
+
+def test_no_division_by_zero_or_overflow_anywhere() -> None:
+    """كل عقدة في كل سيناريو يجب أن تحقّق 1 ≤ p_den و 0 ≤ p_num ≤ p_den."""
+    questions = [
+        "كيس فيه كرتان: واحدة بيضاء وواحدة حمراء، نسحب كرتين بدون إرجاع، احتمال",
+        "كيس فيه كرتان بيضاوان، نسحب 3 كرات بدون إرجاع، احتمال شجرة",
+        "نرمي حجر نرد، احتمال رقم زوجي؟",
+        "مصنع: الآلة A تنتج 60% والآلة B تنتج 40%. نسبة المعيب من A هي 2% ومن B هي 5%.",
+        "علبة بها 8 بطاقات: 3 رقم 1 و5 رقم 2، نسحب بطاقتين مع الإرجاع",
+    ]
+    for q in questions:
+        out = _skill().analyze(q)
+        if not isinstance(out, ProbabilityModelOutput):
+            continue
+        nodes: list[tuple[int, int]] = []
+        _all_nodes(out.tree, nodes)
+        for pn, pd in nodes:
+            assert pd >= 1, f"division by zero (p_den={pd}) in: {q}"
+            assert 0 <= pn <= pd, f"invalid fraction {pn}/{pd} in: {q}"
+
+
+def test_draw_count_not_mistaken_for_total() -> None:
+    """«نسحب 3 كرات» = عدد سحبات لا حجم الكيس (regression: كان total=3 خطأً)."""
+    out = _skill().analyze("كيس فيه كرتان بيضاوان، نسحب 3 كرات بدون إرجاع، احتمال")
+    assert isinstance(out, ProbabilityModelOutput)
+    assert out.total == 2, (
+        f"total must be the urn size (2), not the draw count (3); got {out.total}"
+    )
+
+
+def test_tiny_urn_no_degenerate_second_level() -> None:
+    """كيس من كرتين بدون إرجاع لا يولّد فروعاً منحلّة (0/1، 1/1)."""
+    out = _skill().analyze("كيس فيه كرتان: واحدة بيضاء وواحدة حمراء، نسحب كرتين بدون إرجاع، احتمال")
+    assert isinstance(out, ProbabilityModelOutput)
+    nodes: list[tuple[int, int]] = []
+    _all_nodes(out.tree, nodes)
+    # لا عقدة فرعية بمقام 1 (التي تُنتج 0/1 أو 1/1)
+    assert all(pd >= 2 or (pn, pd) == (1, 1) for pn, pd in nodes), (
+        f"degenerate /1 sub-branches present: {nodes}"
+    )
+
+
 def test_composition_item_validation() -> None:
     item = CompositionItem(label="كرة حمراء", count=4, p_num=4, p_den=11, p_decimal=0.3636)
     assert item.p_num == 4

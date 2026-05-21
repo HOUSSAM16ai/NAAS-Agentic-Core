@@ -126,6 +126,42 @@ System:      alembic_version
 الملف يُكتب مرة واحدة في المستودع → يُحوَّل تلقائياً لـ DB عبر GitHub Actions →
 النظام يقرأ من DB فقط. هذا النمط موجود في البنية لكن التطبيق جزئي (3 تمارين فقط).
 
+## Docker Compose — الدور الحقيقي (verified 2026-05-21, D-079)
+
+### الواقع: Distributed Monolith لا Microservices حقيقية
+
+المشروع يعمل كـ **monolith داخل container واحد** رغم وجود ملفات docker-compose متعددة:
+
+```
+ما هو مكتوب:                    ما يعمل فعلاً:
+كل خدمة في container مستقل  →  supervisor.sh يُشغِّل كل uvicorn processes
+مع DB خاصة بها                  داخل container واحد (web) مع Supabase مشتركة
+```
+
+### ملفات docker-compose وحالتها
+
+| الملف | الدور | يُستخدم؟ |
+|-------|-------|----------|
+| `.devcontainer/docker-compose.host.yml` | يبني container واحد (`web`) — supervisor.sh يعمل بداخله | ✅ نعم |
+| `docker-compose.yml` (478 سطر) | stack كامل: 9 خدمات + 8 Postgres منفصلة + Redis | ❌ نظري فقط |
+| `docker-compose.step3.yml` | orchestrator مع postgres+redis مستقلين | ❌ للتطوير خارج Codespaces |
+| `docker-compose.step6.yml` | orchestrator + user-service + planning-agent | ❌ للتطوير خارج Codespaces |
+| `docker-compose.legacy.yml` | نسخة قديمة بـ `profiles: ["legacy"]` | ❌ مهجور |
+| `observability/docker-compose.observability.yml` | Grafana + Prometheus | ❌ يعملان مباشرةً بدون Docker |
+
+### المشاكل المعمارية
+
+1. **لا عزل حقيقي**: كل الخدمات تشترك في نفس process space + filesystem + Python interpreter
+2. **قاعدة بيانات واحدة مشتركة**: `docker-compose.yml` يعرّف `postgres-planning/memory/user/...` لكن كلها تستخدم Supabase واحدة فعلياً
+3. **`docker-compose.yml` وهمي**: 478 سطر لبنية لم تُختبر — تكلفة صيانة بدون فائدة
+4. **Distributed Monolith**: أسوأ من الاثنين — تعقيد microservices بدون عزلها
+
+### التوصية (D-079)
+الأولوية الحالية = المحتوى التعليمي لا البنية التحتية. الخيار الأكثر واقعية:
+- **ابقَ على supervisor.sh** كمسار التشغيل الوحيد
+- **احذف أو أرشف** `docker-compose.yml` الوهمي لتقليل تكلفة الصيانة
+- **لا تُضف خدمات جديدة** بـ docker-compose حتى يكون هناك حاجة scaling حقيقية
+
 ## Critical environment facts
 - `DATABASE_URL` or `APP_DATABASE_URL` **must** be set — app crashes without it
 - `OPENROUTER_API_KEY` **must** be set — all LLM calls fail without it (reasoning-agent falls back to mock)

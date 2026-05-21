@@ -100,6 +100,39 @@ def test_detect_percentage_extraction() -> None:
     assert props["tree"]["children"][0]["p"] == 0.3
 
 
+# ─── _build_calculated_tree_props (D-075 — real probability calculation) ─────────
+
+
+def test_calculated_tree_real_fraction_4_over_11() -> None:
+    """الخلفية تحسب P(حمراء)=4/11 ديناميكياً، لا 0.5 الوهمية."""
+    props = OrchestratorClient._build_calculated_tree_props(
+        "كيس فيه 11 كرة: كرتان بيضاوان، أربع كرات حمراء، خمس كرات خضراء. احسب احتمال سحب كرة حمراء"
+    )
+    assert props is not None
+    assert props["calculated"] is True
+    assert props["is_illustrative"] is False
+    red = next(c for c in props["composition"] if c["label"] == "كرة حمراء")
+    assert (red["p_num"], red["p_den"]) == (4, 11)
+    # عقد الشجرة تحمل الكسر الدقيق (p_num/p_den)
+    first = props["tree"]["children"][0]
+    assert first["p_num"] == 4 and first["p_den"] == 11
+
+
+def test_calculated_tree_generalizes_to_dice() -> None:
+    """تعميم (V15): النرد يُنتج رقم زوجي 3/6 لا قيمة وهمية."""
+    props = OrchestratorClient._build_calculated_tree_props(
+        "نرمي حجر نرد مرقم من 1 إلى 6، ما احتمال الحصول على رقم زوجي؟"
+    )
+    assert props is not None
+    assert props["total"] == 6
+    labels = {c["label"]: (c["p_num"], c["p_den"]) for c in props["composition"]}
+    assert labels.get("رقم زوجي") == (3, 6)
+
+
+def test_calculated_tree_none_for_non_probability() -> None:
+    assert OrchestratorClient._build_calculated_tree_props("اشرح قانون نيوتن") is None
+
+
 # ─── _normalize_ui_component_event ──────────────────────────────────────────────
 
 

@@ -53,6 +53,39 @@ const VULGAR_FRACTIONS = {
 const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
 
 /**
+ * يبني كائن كسر من بسط/مقام صحيحين دقيقين (D-075 — Protocol V14.0).
+ * الخلفية تحسب الكسر الحقيقي (4/11) وترسله كـ p_num/p_den، فنُصيّره تماماً
+ * دون أي إعادة بناء تقريبية من العشري — لا فقدان دقّة أبداً.
+ */
+const fractionFromIntegers = (num, den) => {
+    if (
+        typeof num !== 'number' ||
+        typeof den !== 'number' ||
+        !Number.isFinite(num) ||
+        !Number.isFinite(den) ||
+        den <= 0
+    ) {
+        return null;
+    }
+    const value = num / den;
+    const decimal = value.toFixed(value < 0.1 || value > 0.9 ? 3 : 2).replace(/\.?0+$/, '');
+    if (num <= 0) return { num: 0, den: 1, label: '0', vulgar: null, isClean: true, decimal };
+    if (num >= den) return { num: 1, den: 1, label: '1', vulgar: null, isClean: true, decimal };
+    // نعرض الكسر التربوي كما هو (4/11، 3/6، 60/100) دون اختزال — أوضح للطالب.
+    // الرمز الجميل (½) يُستخدم فقط حين يكون الكسر أصلاً في أبسط صورة.
+    const isLowest = (gcd(num, den) || 1) === 1;
+    const key = `${num}/${den}`;
+    return {
+        num,
+        den,
+        label: key,
+        vulgar: isLowest ? VULGAR_FRACTIONS[key] || null : null,
+        isClean: true,
+        decimal,
+    };
+};
+
+/**
  * يحوّل احتمالاً (0..1) إلى كسر بسيط إن أمكن (مقام ≤ 20، ضمن هامش صغير)،
  * وإلا يُعيد القيمة العشرية فقط. يُعيد أيضاً رمز الكسر الأنيق عند توفّره.
  */
@@ -112,7 +145,7 @@ const layoutTree = (root) => {
     let leaf = 0;
     let maxDepth = 0;
 
-    const walk = (node, depth, parent, joint) => {
+    const walk = (node, depth, parent, joint, jointNum, jointDen) => {
         if (!node || typeof node !== 'object' || typeof node.label !== 'string') {
             throw new Error('ProbabilityTree: malformed node');
         }
@@ -121,7 +154,16 @@ const layoutTree = (root) => {
         }
         maxDepth = Math.max(maxDepth, depth);
         const p = typeof node.p === 'number' && !Number.isNaN(node.p) ? node.p : null;
+        // D-075: كسر دقيق من الخلفية إن توفّر (p_num/p_den)
+        const hasExact =
+            Number.isInteger(node.p_num) && Number.isInteger(node.p_den) && node.p_den > 0;
+        const pNum = hasExact ? node.p_num : null;
+        const pDen = hasExact ? node.p_den : null;
         const nodeJoint = p !== null ? joint * p : joint;
+        // احتمال المسار التراكمي كـ كسر دقيق (يُضرب على طول المسار من الجذر)
+        const exactJoint = jointNum !== null && hasExact;
+        const nodeJointNum = exactJoint ? jointNum * pNum : null;
+        const nodeJointDen = exactJoint ? jointDen * pDen : null;
         const children = Array.isArray(node.children) ? node.children : [];
 
         const rec = {
@@ -129,7 +171,11 @@ const layoutTree = (root) => {
             depth,
             label: node.label,
             p,
+            pNum,
+            pDen,
             joint: nodeJoint,
+            jointNum: nodeJointNum,
+            jointDen: nodeJointDen,
             outcome: classifyOutcome(node.label, depth),
             row: 0,
         };
@@ -139,7 +185,9 @@ const layoutTree = (root) => {
             rec.row = leaf;
             leaf += 1;
         } else {
-            const childIds = children.map((c) => walk(c, depth + 1, rec, nodeJoint));
+            const childIds = children.map((c) =>
+                walk(c, depth + 1, rec, nodeJoint, nodeJointNum, nodeJointDen),
+            );
             rec.row =
                 childIds.reduce((sum, cid) => sum + nodes[cid].row, 0) / childIds.length;
         }
@@ -147,7 +195,7 @@ const layoutTree = (root) => {
         return rec.id;
     };
 
-    walk(root, 0, null, 1);
+    walk(root, 0, null, 1, 1, 1);
     const leafCount = Math.max(1, leaf);
     const width = PAD * 2 + maxDepth * LEVEL_GAP + NODE_W;
     const height = PAD * 2 + (leafCount - 1) * ROW_GAP + NODE_H;
@@ -303,10 +351,19 @@ export const ProbabilityTree = memo(({ props }) => {
     const fracById = useMemo(() => {
         const map = {};
         for (const n of nodes) {
-            map[n.id] = {
-                p: n.p !== null ? decimalToFraction(n.p) : null,
-                joint: decimalToFraction(n.joint),
-            };
+            // D-075: نُفضّل الكسر الدقيق من الخلفية (p_num/p_den) ثم نسقط
+            // لإعادة البناء التقريبية من العشري عند غيابه (توافق خلفي).
+            const pFrac =
+                n.pNum !== null && n.pDen !== null
+                    ? fractionFromIntegers(n.pNum, n.pDen)
+                    : n.p !== null
+                      ? decimalToFraction(n.p)
+                      : null;
+            const jointFrac =
+                n.jointNum !== null && n.jointDen !== null
+                    ? fractionFromIntegers(n.jointNum, n.jointDen)
+                    : decimalToFraction(n.joint);
+            map[n.id] = { p: pFrac, joint: jointFrac };
         }
         return map;
     }, [nodes]);

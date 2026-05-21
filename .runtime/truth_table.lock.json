@@ -1,5 +1,5 @@
 {
-  "branch": "claude/bkt-database-backend-6PYeX",
+  "branch": "claude/generative-ui-pipeline-t4AnL",
   "components": [
     {
       "agreed": true,
@@ -9,11 +9,12 @@
         "app/services/chat/local_graph.py"
       ],
       "id": "local_graph",
-      "importer_count": 6,
+      "importer_count": 7,
       "importers_sample": [
         "app/infrastructure/clients/orchestrator_client.py",
         "app/kernel.py",
         "app/services/skills/bac_exercise_skill.py",
+        "scripts/gitpod_live_debug.py",
         "tests/services/test_iss081_answer_quality_wiring.py",
         "tests/services/test_skills_doctrine_d071.py",
         "tests/telemetry/test_distributed_tracing.py"
@@ -77,10 +78,10 @@
         "app/api/routers/customer_chat.py",
         "app/services/chat/orchestrator.py",
         "app/services/skills/bac_exercise_skill.py",
-        "tests/contracts/test_generative_ui_streaming.py",
-        "tests/microservices/test_exercise_visibility_regression.py",
-        "tests/microservices/test_orchestrator_client_resilience.py",
-        "tests/services/test_bkt_persistence_and_labels.py"
+        "scripts/gitpod_live_debug.py",
+        "scripts/gitpod_ui_test.py",
+        "tests/contracts/test_four_fatal_bugs_regression.py",
+        "tests/contracts/test_generative_ui_streaming.py"
       ],
       "name": "Orchestrator HTTP client + fallback chain",
       "notes": "Sole entrypoint to chat from customer_chat.py and admin.py.",
@@ -316,6 +317,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-05-20T18:48:24.497586+00:00",
+  "generated_at_utc": "2026-05-21T11:12:55.827059+00:00",
   "schema_version": 1
 }

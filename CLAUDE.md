@@ -5194,3 +5194,63 @@ BKT is registered as a first-class, versioned doctrine in the Skills framework:
 - `scripts/fitness/check_skills_doctrine.py`: validates the `bkt_cognitive` manifest entry **and** that `bkt_engine.py` consumes the doctrine **and** that `customer_chat._evaluate_and_emit_bkt` is wired (no-ZOMBIE guarantee, mirrors D-073).
 
 **Rule**: any future adaptive pedagogical skill consumes `BKT_COGNITIVE_DOCTRINE` and builds on `student_mastery_probability` — it must never re-invent mastery tracking. Changing a doctrine rule = bump `BKT_COGNITIVE_DOCTRINE_VERSION` + update the CI gate.
+
+---
+
+## 6.53 Dynamic Probability Engine + Generalization (2026-05-21, D-075/D-076 · Protocol V14.0/V15.0)
+
+> الثورة: الخلفية تحسب احتمالات **حقيقية** ديناميكياً من نص المسألة العربي
+> (P(حمراء)=4/11)، لا تُغرق الواجهة بقيمة 0.5 وهمية ولا تُخرج HTML. فصل صارم:
+> الخلفية Pydantic منظَّم فقط؛ الواجهة (RSC) تُصيّر الشجرة التفاعلية.
+
+### الكارثة المُشخَّصة (قبل D-075)
+`OrchestratorClient._detect_probability_tree` كان يستخرج كسوراً عشرية حرفية من
+النص فقط، وعند غيابها يُسقط القيمة الافتراضية **0.5 الغبية** — لا حساب فعلي من
+تركيبة المسألة (4 كرات حمراء من 11 = 4/11).
+
+### الإصلاح (D-075 — ProbabilityCalculatorSkill)
+Skill رسمي جديد `app/services/skills/probability_skill.py` (يحترم §0.5):
+- **حتمي تماماً** — لا LLM، لا عشوائية، لا I/O — قابل للاختبار بـ pytest.
+- يستخرج التركيبة العربية (عدد + كيان ملموس) ويحسب P = العدد/المجموع كـ كسر
+  **تربوي خام** (4/11، 3/6، 60/100) — لا اختزال (أوضح للطالب).
+- كل عقدة شجرة تحمل `p_num`/`p_den` الدقيقين، فتُصيّر `ProbabilityTree.jsx` الكسر
+  تماماً (`fractionFromIntegers`) دون إعادة بناء تقريبية من العشري.
+- يستهلك `PROBABILITY_CALCULATION_DOCTRINE` من `doctrine.py` (single source).
+- موصول حيّاً عبر `OrchestratorClient._build_calculated_tree_props` الذي يسبق
+  المسار الحتمي القديم في `_build_probability_tree_props`.
+
+### التعميم (D-076 — Anti-Overfitting · Protocol V15.0)
+المحرّك ليس مخصّصاً لـ«الكرات في الكيس». خط أنابيب استراتيجيات (أول نجاح يفوز):
+- **`_strategy_conditional`** (مصنع/Bayesian): فروع رئيسية بنسب مئوية + فروع
+  شرطية (معيب/سليم) — مثل: الآلة A 60/100 → معيب 2/100، سليم 98/100.
+- **`_strategy_universe`** (نرد/قطعة نقدية): يقسّم الفضاء — رقم زوجي 3/6، فردي 3/6.
+- **`_strategy_composition`** (كرات/بطاقات/أصناف): يستخرج (عدد + كيان: لون أو رقم
+  بطاقة أو صنف) ويبني شجرة سحب بـ/بدون إرجاع — بطاقة رقم 1: 3/8، كرة حمراء: 4/11.
+
+### قواعد دائمة (لا تُكسر بدون ADR)
+1. **حساب حقيقي إلزامي**: عند توفّر التركيبة، يُحظر إخراج 0.5 افتراضية — P=العدد/المجموع.
+2. **كسور تربوية خام**: العقد تحمل الكسر كما يُشتق من المسألة (لا اختزال)؛ الرمز الجميل
+   (½) يُستخدم فقط حين يكون الكسر أصلاً في أبسط صورة.
+3. **فصل الخلفية/الواجهة**: المحرّك يُرجع Pydantic فقط — لا HTML، لا SVG. التصيير
+   مسؤولية `GenerativeUIRenderer` + `ProbabilityTree.jsx` (whitelist).
+4. **تعميم لا overfitting**: أي نمط جديد يُضاف كاستراتيجية مستقلة — لا مفردات
+   مثبَّتة. تطبيع التشكيل يجب أن يحذف الحركات فقط (U+064B+) لا حروف العربية.
+5. **استقلالية الـ Skill**: لا يستورد من Skills أخرى ولا من microservices.
+
+### التحقق الحي (2026-05-21)
+- `scripts/test_generalization.py` — 4/4 تنجح (نرد، مصنع، بطاقات، كرات) ✅
+- `scripts/gitpod_ui_test.py` — يُثبت P(حمراء)=4/11 عبر المسار الإنتاجي الكامل ✅
+- `tests/services/test_probability_skill.py` (16) + `tests/contracts/test_generative_ui_streaming.py` (19) ✅
+- ruff + ruff format + skills-doctrine-gate + runtime_truth --check ✅
+
+### الملفات (D-075/D-076)
+| File | Change |
+|------|--------|
+| `app/services/skills/probability_skill.py` | **new** — ProbabilityCalculatorSkill (3 strategies) |
+| `app/services/skills/doctrine.py` | + `PROBABILITY_CALCULATION_DOCTRINE` v1.0.0 + manifest |
+| `app/services/skills/__init__.py` | re-export الـ Skill + الـ doctrine |
+| `app/infrastructure/clients/orchestrator_client.py` | + `_build_calculated_tree_props` (wired) |
+| `frontend/app/components/generative/ProbabilityTree.jsx` | `fractionFromIntegers` + exact joint |
+| `scripts/test_generalization.py` / `scripts/gitpod_ui_test.py` | **new** — live empirical proofs |
+| `tests/services/test_probability_skill.py` | **new** — 16 unit tests |
+| `tests/contracts/test_generative_ui_streaming.py` | + 3 wiring tests |

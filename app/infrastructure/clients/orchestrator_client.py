@@ -927,6 +927,51 @@ class OrchestratorClient:
             ],
         }
 
+    @staticmethod
+    def _build_calculated_tree_props(
+        question: str,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> dict[str, object] | None:
+        """يحسب شجرة احتمالات بكسور حقيقية عبر ProbabilityCalculatorSkill (D-075).
+
+        Protocol V14.0 §3: الخلفية تحسب P(الحدث) = العدد/المجموع ديناميكياً من
+        التركيبة العربية (مثل 4/11) بدلاً من إغراق الواجهة بقيمة 0.5 وهمية. كل
+        عقدة تحمل (p_num/p_den) فتُصيّر الواجهة الكسر الدقيق. محروس بـ try/except —
+        أي فشل يُرجع None ويسقط للمسار الحتمي القديم (`_detect_probability_tree`).
+        """
+        try:
+            from app.services.skills.probability_skill import (
+                ProbabilityCalculatorSkill,
+                ProbabilityInput,
+                ProbabilityModelOutput,
+            )
+
+            skill = ProbabilityCalculatorSkill()
+            result = skill.analyze(ProbabilityInput(question=question, history=history_messages))
+            if not isinstance(result, ProbabilityModelOutput):
+                return None
+            return {
+                "title": result.title,
+                "is_illustrative": False,  # قيم محسوبة حقيقية — ليست توضيحية
+                "calculated": True,
+                "with_replacement": result.with_replacement,
+                "total": result.total,
+                "composition": [
+                    {
+                        "label": item.label,
+                        "count": item.count,
+                        "p_num": item.p_num,
+                        "p_den": item.p_den,
+                        "p_decimal": item.p_decimal,
+                    }
+                    for item in result.composition
+                ],
+                "tree": result.tree,
+            }
+        except Exception:
+            logger.warning("_build_calculated_tree_props_failed", exc_info=True)
+            return None
+
     async def _build_probability_tree_props(
         self,
         question: str,
@@ -945,6 +990,14 @@ class OrchestratorClient:
         للـ WebSocket handler وتسبيب 500 HTML bleed في Next.js DevTools.
         """
         try:
+            # ── D-075 (Protocol V14.0): REAL probability calculation first ──
+            # ProbabilityCalculatorSkill يحسب كسوراً حقيقية من تركيبة المسألة
+            # العربية (P(حمراء)=4/11) بدلاً من القيمة الوهمية 0.5. يُحاول السؤال
+            # ثم سياق المحادثة. عند النجاح نُرجع شجرة بكسور دقيقة (p_num/p_den).
+            calc_props = self._build_calculated_tree_props(question, history_messages)
+            if calc_props is not None:
+                return calc_props
+
             props = self._detect_probability_tree(question)
             if props is None:
                 return None

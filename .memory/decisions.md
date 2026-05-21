@@ -2059,3 +2059,37 @@ boot hook `kernel.py:233 → validate_schema_on_startup`; hybrid extraction in
 a STUB (`BktHintStub`) while `probability_tree` (`ProbabilityTree.jsx`) is fully
 built. Memory sealed across CLAUDE.md §0 + §6.52, `.memory/architecture.md`,
 `.memory/runtime_truth.md` (rows 35-39).
+
+---
+
+## D-075 — Dynamic Probability Engine (2026-05-21 · Protocol V14.0)
+
+**Context**: `OrchestratorClient._detect_probability_tree` extracted only literal
+decimals from text and fell back to a dumb `0.5` — no real calculation from the
+problem's composition.
+
+**Decision**: New `ProbabilityCalculatorSkill` (`app/services/skills/probability_skill.py`)
+— deterministic, pure (no LLM/IO), Pydantic contract, Prometheus metrics. Parses
+Arabic urn composition and computes exact pedagogical fractions
+(P(red)=4/11 from "4 حمراء / 11 كرة"). Each tree node carries `p_num`/`p_den`;
+frontend `ProbabilityTree.jsx` renders them exactly via `fractionFromIntegers`.
+Wired live through `OrchestratorClient._build_calculated_tree_props` (precedes the
+legacy literal path). Consumes `PROBABILITY_CALCULATION_DOCTRINE` from doctrine.py.
+
+**Backend/frontend separation enforced**: engine returns structured JSON only — no
+HTML/SVG. Rendering is the RSC's job (whitelisted `GenerativeUIRenderer`).
+
+## D-076 — Probability Engine Generalization (2026-05-21 · Protocol V15.0)
+
+**Context**: V14 engine was overfit to colored-ball urns — would fail on dice,
+factory/Bayesian, and numbered cards.
+
+**Decision**: Strategy pipeline (first success wins) — `_strategy_conditional`
+(percentage Bayesian: machine A 60/100 → defect 2/100), `_strategy_universe`
+(dice/coin: even 3/6, odd 3/6), `_strategy_composition` (generalized counts:
+balls/cards/numbers, with/without replacement). Generalizes over **patterns**
+(Total Universe, Sub-events, Conditional Branches), not vocabulary. Critical fix:
+tashkeel-strip regex must start at U+064B (not U+0610) or it deletes Arabic
+letters. Proven live: `scripts/test_generalization.py` 4/4 (dice, factory, cards,
+urn). Tests: `tests/services/test_probability_skill.py` (16) +
+`tests/contracts/test_generative_ui_streaming.py` (+3). All quality gates green.

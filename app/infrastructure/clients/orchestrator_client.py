@@ -85,20 +85,38 @@ class OrchestratorClient:
         decision = detect_file_intelligence(FileIntelligenceRequest(question=question))
         return decision.recognized, decision.extension
 
-    def _exercise_retrieval_decision(self, question: str) -> bool:
+    def _exercise_retrieval_decision(
+        self,
+        question: str,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> bool:
         """يستدعي قدرة استرجاع التمارين الرسمية لتوحيد eligibility."""
-        decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+        decision = detect_exercise_retrieval(
+            ExerciseRetrievalRequest(question=question),
+            history_messages=history_messages,
+        )
         return decision.recognized
 
-    def _exercise_retrieval_full_decision(self, question: str) -> ExerciseRetrievalDecision:
+    def _exercise_retrieval_full_decision(
+        self,
+        question: str,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> ExerciseRetrievalDecision:
         """نسخة كاملة من القرار تُرجِع matched_entry لاستخدامه في الاسترجاع المُفهرَس.
 
         ISS-051: قبل هذا الإصلاح كنا نرمي matched_entry ونستدعي wide-net search
         الذي يقرأ كل ملفات knowledge_base/ فيُعيد أكثر من تمرين دفعة واحدة.
         """
-        return detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+        return detect_exercise_retrieval(
+            ExerciseRetrievalRequest(question=question),
+            history_messages=history_messages,
+        )
 
-    def _has_indexed_match(self, question: str) -> bool:
+    def _has_indexed_match(
+        self,
+        question: str,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> bool:
         """يكشف عن طلب استرجاع تمرين بكالوريا مع تطابق مُفهرَس مؤكد.
 
         ISS-056 (D-049 — Indexed Retrieval Preemption Doctrine):
@@ -109,8 +127,13 @@ class OrchestratorClient:
           2. لا هلوسة من LLM
           3. سرعة قصوى (لا HTTP roundtrip، لا LLM call)
           4. محتوى محدد رسمياً (الملف في knowledge_base/)
+
+        ISS-CONV-C: يقبل history_messages لحل أسئلة المتابعة بالسياق.
         """
-        decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+        decision = detect_exercise_retrieval(
+            ExerciseRetrievalRequest(question=question),
+            history_messages=history_messages,
+        )
         return decision.recognized and decision.matched_entry is not None
 
     def _has_explanation_with_context_match(
@@ -180,7 +203,11 @@ class OrchestratorClient:
         result = make_file_result(extension=extension, count=files_count)
         return result.message
 
-    async def _build_local_retrieval_response(self, question: str) -> str | None:
+    async def _build_local_retrieval_response(
+        self,
+        question: str,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> str | None:
         """
         ينفذ استرجاعاً محلياً للمعرفة التعليمية عند تعطل service control plane.
 
@@ -191,8 +218,10 @@ class OrchestratorClient:
         المسار البديل: عند فشل المطابقة المُفهرَسة (entry غير موجود في الفهرس)،
         نلجأ إلى wide-net search كما في النسخة القديمة — لكنه نادر الآن
         لأن detect_exercise_retrieval يستخرج matched_entry بنفسه.
+
+        ISS-CONV-C: يقبل history_messages لحل أسئلة المتابعة بالسياق.
         """
-        decision = self._exercise_retrieval_full_decision(question)
+        decision = self._exercise_retrieval_full_decision(question, history_messages)
         if not decision.recognized:
             return None
 
@@ -276,6 +305,7 @@ class OrchestratorClient:
     async def _stream_local_retrieval_response(
         self,
         question: str,
+        history_messages: list[dict[str, str]] | None = None,
     ) -> AsyncGenerator[str, None]:
         """
         نسخة انسيابية من ``_build_local_retrieval_response`` — تبث المحتوى
@@ -286,10 +316,12 @@ class OrchestratorClient:
         ليظهر للطالب كأنه يُكتب فوراً أمام عينيه.
 
         إذا أصدر المولِّد صفر قطعة → fallback chain يتقدم للخطوة التالية.
+
+        ISS-CONV-C: يقبل history_messages لحل أسئلة المتابعة بالسياق.
         """
         import asyncio
 
-        full_response = await self._build_local_retrieval_response(question)
+        full_response = await self._build_local_retrieval_response(question, history_messages)
         if not full_response:
             return
 
@@ -895,37 +927,76 @@ class OrchestratorClient:
             ],
         }
 
-    async def _build_probability_tree_props(self, question: str) -> dict[str, object] | None:
+    async def _build_probability_tree_props(
+        self,
+        question: str,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> dict[str, object] | None:
         """غلاف غير متزامن: استخراج حتمي ثم إثراء LLM للتسميات عند الحاجة فقط.
 
         إذا فشل الاستخراج الحتمي في إيجاد كيان ملموس (``labels_generic=True``)،
-        نطلب من الـ LLM استخراج كيانات ملموسة من المسألة (محروس بـ timeout،
-        مُتحقَّق منه، مع fallback آمن). لا يُغيّر بنية الشجرة ولا القيم — فقط
-        التسميات. لا حرف A/B مجرّد في أي حال.
+        نحاول أولاً استخراج الكيانات من سياق المحادثة (history_messages) قبل
+        اللجوء للـ LLM. هذا يحل Bug D: "اعطني شجرة الاحتمالات" بعد تمرين
+        الاحتمالات 2024 يجب أن يُنتج "كرة حمراء" لا "الحدث الأول".
+
+        Bug A fix: كل المسار محروس بـ try/except شامل — أي استثناء (بما فيه
+        pydantic.ValidationError من get_settings() أو asyncio.TimeoutError من
+        _enrich_tree_labels_with_llm) يُسجَّل ويُرجع None بدلاً من الانتشار
+        للـ WebSocket handler وتسبيب 500 HTML bleed في Next.js DevTools.
         """
-        props = self._detect_probability_tree(question)
-        if props is None:
-            return None
-        if not props.get("labels_generic"):
+        try:
+            props = self._detect_probability_tree(question)
+            if props is None:
+                return None
+            if not props.get("labels_generic"):
+                props.pop("labels_generic", None)
+                return props
+
+            # Bug D fix: محاولة استخراج كيانات ملموسة من سياق المحادثة أولاً
+            # (أسرع وأكثر دقة من LLM عند وجود تمرين سابق في السياق)
+            if history_messages:
+                history_text = " ".join(
+                    str(m.get("content", ""))[:2000]
+                    for m in history_messages[-6:]
+                    if isinstance(m, dict)
+                ).lower()
+                if history_text.strip():
+                    context_events = self._extract_concrete_events(history_text)
+                    if context_events is not None:
+                        tree = props.get("tree")
+                        if isinstance(tree, dict):
+                            children = tree.get("children")
+                            if isinstance(children, list) and len(children) == 2:
+                                children[0]["label"] = context_events["first"]
+                                children[1]["label"] = context_events["first_neg"]
+                                for branch in children:
+                                    sub = branch.get("children")
+                                    if isinstance(sub, list) and len(sub) == 2:
+                                        sub[0]["label"] = context_events["second"]
+                                        sub[1]["label"] = context_events["second_neg"]
+                        props.pop("labels_generic", None)
+                        return props
+
+            # محاولة إثراء عبر LLM (best-effort) عند غياب السياق
+            with contextlib.suppress(Exception):
+                enriched = await self._enrich_tree_labels_with_llm(question)
+                if enriched is not None:
+                    tree = props.get("tree")
+                    if isinstance(tree, dict):
+                        children = tree.get("children")
+                        if isinstance(children, list) and len(children) == 2:
+                            children[0]["label"] = enriched["first"]
+                            children[1]["label"] = enriched["first_neg"]
+                            for branch in children:
+                                sub = branch.get("children")
+                                if isinstance(sub, list) and len(sub) == 2:
+                                    sub[0]["label"] = enriched["second"]
+                                    sub[1]["label"] = enriched["second_neg"]
             props.pop("labels_generic", None)
             return props
-        # محاولة إثراء عبر LLM (best-effort)
-        with contextlib.suppress(Exception):
-            enriched = await self._enrich_tree_labels_with_llm(question)
-            if enriched is not None:
-                tree = props.get("tree")
-                if isinstance(tree, dict):
-                    children = tree.get("children")
-                    if isinstance(children, list) and len(children) == 2:
-                        children[0]["label"] = enriched["first"]
-                        children[1]["label"] = enriched["first_neg"]
-                        for branch in children:
-                            sub = branch.get("children")
-                            if isinstance(sub, list) and len(sub) == 2:
-                                sub[0]["label"] = enriched["second"]
-                                sub[1]["label"] = enriched["second_neg"]
-        props.pop("labels_generic", None)
-        return props
+        except Exception:
+            logger.warning("_build_probability_tree_props_failed", exc_info=True)
+            return None
 
     @staticmethod
     async def _enrich_tree_labels_with_llm(question: str) -> dict[str, str] | None:
@@ -1141,9 +1212,13 @@ class OrchestratorClient:
         # عند طلب يتضمن شجرة احتمالات، نبثّ حدث ui_component فوراً (incremental)
         # ثم نُكمل المسار العادي لتوليد الشرح النصي — المكوّن التفاعلي يظهر
         # في الواجهة قبل اكتمال نص الـ LLM. لا return — نسقط للمسار النصي.
+        # Bug D fix: نمرر history_messages لاستخراج كيانات ملموسة من سياق
+        # التمرين السابق (مثل "كرة حمراء" من تمرين الاحتمالات 2024).
         # ─────────────────────────────────────────────────────────────────────
         try:
-            _ui_tree_props = await self._build_probability_tree_props(question)
+            _ui_tree_props = await self._build_probability_tree_props(
+                question, history_messages=history_messages
+            )
         except Exception:
             _ui_tree_props = None
         if _ui_tree_props is not None:
@@ -1173,8 +1248,9 @@ class OrchestratorClient:
         # إذا طابق السؤال تمريناً محدداً في knowledge_index، نتجاوز كل
         # شيء (orchestrator + StateGraph + fallback chain) ونبث المحتوى
         # المُفهرَس النظيف مباشرة. هذا يحل كارثة JSON envelope leak عند المصدر.
+        # ISS-CONV-C: نمرر history_messages لحل أسئلة المتابعة بالسياق.
         # ─────────────────────────────────────────────────────────────────────
-        if self._has_indexed_match(question):
+        if self._has_indexed_match(question, history_messages):
             logger.info(
                 "indexed_retrieval_preempt",
                 extra={
@@ -1185,7 +1261,9 @@ class OrchestratorClient:
             )
             ret_streamed_chars = 0
             try:
-                async for chunk in self._stream_local_retrieval_response(question):
+                async for chunk in self._stream_local_retrieval_response(
+                    question, history_messages
+                ):
                     if not chunk:
                         continue
                     ret_streamed_chars += len(chunk)
@@ -1445,7 +1523,9 @@ class OrchestratorClient:
             ret_streamed_any = False
             ret_streamed_chars = 0
             try:
-                async for chunk in self._stream_local_retrieval_response(question):
+                async for chunk in self._stream_local_retrieval_response(
+                    question, history_messages
+                ):
                     if not chunk:
                         continue
                     ret_streamed_any = True
@@ -1609,7 +1689,7 @@ class OrchestratorClient:
 
             # Ultimate safety net: STREAMING raw LLM call (no graph, no state) — D-047
             is_file_intelligence = self._file_intelligence_decision(question)[0]
-            is_exercise_retrieval = self._exercise_retrieval_decision(question)
+            is_exercise_retrieval = self._exercise_retrieval_decision(question, history_messages)
             if not is_file_intelligence and not is_exercise_retrieval:
                 _gc_t0 = time.perf_counter()
                 _gc_ctx = None

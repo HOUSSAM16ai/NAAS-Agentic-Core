@@ -582,6 +582,57 @@ paths:
                       message: Too many login attempts. Please try again later.
                     timestamp: '2026-01-03T00:00:00Z'
             application/problem+json: *id006
+  /api/v1/visual-pedagogy/probability:
+    post:
+      tags:
+      - Visual Pedagogy
+      summary: Analyze Probability Problem
+      description: >
+        Analyzes an Arabic probability problem and returns a structured generative-UI
+        payload. For impossible draw scenarios (k > available items, no replacement),
+        returns ui_mode=impossible_case with terminate_pipeline=true — no degenerate
+        math (C_2^3=0) is ever emitted. Protocol V28.0.
+      operationId: analyzeVisualPedagogyProbability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - question
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+                  maxLength: 8000
+                  description: Arabic probability question text
+                history:
+                  type: array
+                  nullable: true
+                  items:
+                    type: object
+                    additionalProperties:
+                      type: string
+                  description: Conversation history for context
+      responses:
+        '200':
+          description: Probability analysis result (tree / combinations / impossible_case)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ui_mode:
+                    type: string
+                    enum: [impossible_case]
+                  terminate_pipeline:
+                    type: boolean
+                  companion_text:
+                    type: string
+                    maxLength: 120
+                  is_impossible_case:
+                    type: boolean
   /api/v1/agents/plan:
     post:
       tags:

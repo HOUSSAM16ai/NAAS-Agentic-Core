@@ -208,6 +208,31 @@ check('joint probability P(A)·P(B|A) = 0.24', Math.abs(leafBA.joint - 0.24) < 1
 const rootNode = layout.nodes.find((n) => n.label === 'البداية');
 check('root row = mean of subtree (centered)', rootNode.row === 1.5);
 
+// ─── V30.0: CombinationsVisualizer — Sub-Group Leak + Deep Dive ──────────────────
+const combSrc = read('components/generative/CombinationsVisualizer.jsx');
+check('V30: reads is_possible flag', /is_possible/.test(combSrc));
+check('V30: renders pedagogical_string for impossible group', /pedagogical_string/.test(combSrc));
+check(
+    'V30: impossible branch does NOT render SymbolCnk (no C_n^k = 0 leak)',
+    /isPossible\s*\?[\s\S]*?SymbolCnk[\s\S]*?:\s*\([\s\S]*?genui-comb-impossible/.test(combSrc),
+);
+check('V30: deep_dive prop consumed', /deep_dive/.test(combSrc));
+check('V30: urn_state visualized (UrnState)', /UrnState/.test(combSrc) && /urn_state/.test(combSrc));
+check('V30: color tokens mapped (urn balls)', /COLOR_TOKENS/.test(combSrc));
+
+// behavioral: simulate the guardrail rendering decision per group
+const renderGroup = (g, k) => {
+    const isPossible = g.is_possible !== false;
+    if (isPossible) return { kind: 'formula', text: `C(${g.count},${k}) = ${g.favorable_combinations}` };
+    return { kind: 'pedagogical', text: g.pedagogical_string || 'مستحيل' };
+};
+const whiteGroup = { label: 'كرة بيضاء', count: 2, favorable_combinations: 0, is_possible: false, pedagogical_string: 'مستحيل (العدد المتوفر غير كافٍ لسحب المطلوب)' };
+const redGroup = { label: 'كرة حمراء', count: 4, favorable_combinations: 4, is_possible: true };
+const wr = renderGroup(whiteGroup, 3);
+const rr = renderGroup(redGroup, 3);
+check('V30: white(2) drawing 3 → pedagogical, not formula', wr.kind === 'pedagogical' && !/C\(/.test(wr.text));
+check('V30: red(4) drawing 3 → formula C(4,3) = 4', rr.kind === 'formula' && rr.text === 'C(4,3) = 4');
+
 // ─── النتيجة ────────────────────────────────────────────────────────────────────
 if (failed > 0) {
     console.log(`\n❌ ${failed} check(s) failed`);

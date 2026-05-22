@@ -423,3 +423,81 @@ def test_with_replacement_is_not_impossible() -> None:
         )
     )
     assert not isinstance(out, ImpossibleCaseOutput)
+
+
+# ─── V30.0: Sub-Group Leak Surgery + Deep Dive Generative UI ─────────────────────
+
+_BAC_URN_SIMUL = (
+    "يحتوي كيس على 11 كرة: كرتان بيضاوان، أربع كرات حمراء، خمس كرات خضراء. نسحب 3 كرات دفعة واحدة."
+)
+
+
+def test_subgroup_leak_guardrail_no_c_2_3_equals_zero() -> None:
+    """V30.0: المجموعة المستحيلة (بيضاء 2، سحب 3) لا تُخرِج C_2^3=0 مضلِّلاً."""
+    from app.services.skills.probability_skill import CombinationsModelOutput
+
+    out = _skill().analyze(_BAC_URN_SIMUL)
+    assert isinstance(out, CombinationsModelOutput)
+    white = next(g for g in out.groups if "بيضاء" in g.label)
+    assert white.is_possible is False
+    assert white.favorable_combinations == 0
+    assert "مستحيل" in white.pedagogical_string
+    # حارس صريح: لا صيغة C(...) في رسالة المجموعة المستحيلة
+    assert "C(" not in white.pedagogical_string
+
+
+def test_subgroup_possible_groups_carry_formula_string() -> None:
+    """V30.0: المجموعات الممكنة تحمل is_possible=True + صيغة C(count,k)."""
+    from app.services.skills.probability_skill import CombinationsModelOutput
+
+    out = _skill().analyze(_BAC_URN_SIMUL)
+    assert isinstance(out, CombinationsModelOutput)
+    red = next(g for g in out.groups if "حمراء" in g.label)
+    green = next(g for g in out.groups if "خضراء" in g.label)
+    assert red.is_possible is True and red.favorable_combinations == 4
+    assert red.pedagogical_string == "C(4,3) = 4"
+    assert green.is_possible is True and green.favorable_combinations == 10
+    assert green.pedagogical_string == "C(5,3) = 10"
+    # same_group: 4 + 10 = 14 (المستحيلة لا تُضاف)
+    assert out.same_group_favorable == 14
+
+
+def test_deep_dive_activated_by_confusion() -> None:
+    """V30.0: حيرة الطالب («لم أفهم أي شيء») تُفعّل deep_dive + القصة البصرية."""
+    from app.services.skills.probability_skill import CombinationsModelOutput
+
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="اريد شرح خارق لاني لم افهم اي شي",
+            history=[{"role": "user", "content": _BAC_URN_SIMUL}],
+        )
+    )
+    assert isinstance(out, CombinationsModelOutput)
+    assert out.deep_dive is True
+    # حالة الكيس وتحليل الأحداث مملوءان للقصة البصرية
+    assert len(out.urn_state) == len(out.groups)
+    assert len(out.event_analysis) == len(out.groups)
+    assert all("color" in u for u in out.urn_state)
+    impossible = [e for e in out.event_analysis if e["is_possible"] is False]
+    assert impossible and all(e["value"] == 0 for e in impossible)
+
+
+def test_deep_dive_off_without_confusion() -> None:
+    """V30.0: بلا حيرة → deep_dive=False (لا قصة بصرية مفروضة)."""
+    from app.services.skills.probability_skill import CombinationsModelOutput
+
+    out = _skill().analyze(_BAC_URN_SIMUL)
+    assert isinstance(out, CombinationsModelOutput)
+    assert out.deep_dive is False
+
+
+def test_combination_group_color_tokens() -> None:
+    """V30.0: المجموعات الملوّنة تحمل رمز CSS صحيح (red/white/green)."""
+    from app.services.skills.probability_skill import CombinationsModelOutput
+
+    out = _skill().analyze(_BAC_URN_SIMUL)
+    assert isinstance(out, CombinationsModelOutput)
+    colors = {g.label: g.color for g in out.groups}
+    assert colors["كرة حمراء"] == "red"
+    assert colors["كرة بيضاء"] == "white"
+    assert colors["كرة خضراء"] == "green"

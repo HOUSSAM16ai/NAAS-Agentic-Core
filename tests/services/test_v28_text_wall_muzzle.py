@@ -4,7 +4,7 @@ Protocol V28.0 — Text-Wall Muzzle & Pipeline Bypass tests.
 يغطي:
   • companion_text (≤ 120 حرف) موجود في ImpossibleCaseOutput.
   • terminate_pipeline=True في مخرج _build_calculated_ui للحالة المستحيلة.
-  • المكوّنات العادية لا تُوقف الـ pipeline.
+  • V30.0: كل مكوّن توليدي (combinations/tree) يُوقف الـ pipeline بجملة واحدة.
   • العقد المُفكَّك الصارم (visual_directives / numerical_state / pedagogical_message).
   • لا مفاتيح حساب منحلّة (tree/total_combinations/composition/groups) في props.
   • visual_pedagogy endpoint يُرجِع terminate_pipeline=True للحالة المستحيلة.
@@ -94,19 +94,29 @@ def test_build_calculated_ui_terminate_pipeline_true_for_impossible() -> None:
     assert len(result["companion_text"]) <= 120
 
 
-def test_build_calculated_ui_no_terminate_for_possible_draw() -> None:
-    """V28.0: المكوّنات العادية لا تُوقف الـ pipeline (terminate_pipeline absent/False)."""
+def test_build_calculated_ui_muzzles_all_generative_ui() -> None:
+    """V30.0 (يُحدِّث V28.0): كل مكوّن توليدي يُوقف الـ pipeline بجملة واحدة.
+
+    قانون الكبح النصي الصارم (Protocol V30.0 §4): «إذا استُدعيت أداة Generative
+    UI، يجب إنهاء/تقييد مخرج LLM إلى جملة واحدة». كان V28.0 يُطبِّق هذا على
+    الحالة المستحيلة فقط؛ V30.0 يعمّمه على combinations_visualizer (والشجرة)
+    لإنهاء جدران النص نهائياً.
+    """
     from app.infrastructure.clients.orchestrator_client import OrchestratorClient
 
     result = OrchestratorClient._build_calculated_ui(
         _POSSIBLE_Q,
         history_messages=[{"role": "user", "content": _BAC_URN}],
     )
-    # قد يُرجع None أو مكوّناً عادياً — في كلتا الحالتين terminate_pipeline يجب أن يكون False/absent
-    if result is not None:
-        assert result.get("terminate_pipeline") is not True, (
-            f"terminate_pipeline must NOT be True for component={result.get('component')}"
-        )
+    assert result is not None
+    assert result.get("component") == "combinations_visualizer"
+    # V30.0: المكوّن البصري يُنهي المسار بجملة مرافقة واحدة (لا جدار نصّي).
+    assert result.get("terminate_pipeline") is True, (
+        "V30.0 mandate: generative UI must muzzle the text wall (terminate_pipeline=True)"
+    )
+    companion = result.get("companion_text", "")
+    assert isinstance(companion, str) and 0 < len(companion) <= 120
+    assert "\n" not in companion
 
 
 # ── strict decoupled schema ──────────────────────────────────────────────────────

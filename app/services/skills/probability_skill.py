@@ -284,13 +284,32 @@ class ProbabilityModelOutput(RobustBaseModel):
 
 
 class CombinationGroup(RobustBaseModel):
-    """مجموعة (لون/صنف) في مسألة سحب متزامن: عددها وعدد تأليفاتها C(count, k)."""
+    """مجموعة (لون/صنف) في مسألة سحب متزامن: عددها وعدد تأليفاتها C(count, k).
+
+    ## V30.0 — حارس الحلقة الداخلية (Sub-Group Leak Guardrail)
+    حين يكون عدد المجموعة ``count`` أقل من عدد السحب ``k`` (مثل سحب 3 كرات
+    من مجموعتين بيضاوين فقط)، يكون اختيار k منها **مستحيلاً رياضياً**. في هذه
+    الحالة:
+      • لا نُنفِّذ ``math.comb`` (الذي يُرجِع 0 مضلِّلاً).
+      • لا نُخرِج ``C_2^3 = 0`` (يُربك الطالب — يبدو خطأً حسابياً).
+      • نضع ``is_possible=False`` + ``pedagogical_string`` تربوية صريحة.
+    الواجهة تعرض ``pedagogical_string`` حين ``is_possible=False`` بدل أي صيغة.
+    """
 
     label: str = Field(..., min_length=1, max_length=80)
     count: int = Field(..., ge=0, description="عدد عناصر هذه المجموعة")
     favorable_combinations: int = Field(
-        ..., ge=0, description="C(count, k) — تأليفات اختيار k منها"
+        ..., ge=0, description="C(count, k) — تأليفات اختيار k منها (0 إن مستحيل)"
     )
+    is_possible: bool = Field(
+        default=True, description="False إن k > count (اختيار مستحيل — لا تأليف)"
+    )
+    pedagogical_string: str = Field(
+        default="",
+        max_length=160,
+        description="رسالة تربوية حين الاستحالة (بدل C_n^k = 0 المضلِّل)",
+    )
+    color: str = Field(default="", description="رمز CSS للون (red/white/...) لرسم العنصر")
 
 
 class CombinationsModelOutput(RobustBaseModel):
@@ -314,6 +333,18 @@ class CombinationsModelOutput(RobustBaseModel):
         ..., ge=0, description="مجموع C(count, k) لكل المجموعات (حدث «k من نفس الصنف»)"
     )
     formula: str = Field(default="C(n, k) = n! / (k!·(n-k)!)")
+    # V30.0 — وضع الغوص العميق (Deep Dive Generative UI): يُفعَّل حين يعبّر
+    # الطالب عن حيرة كاملة («لم أفهم أي شيء»). يُغذّي القصة البصرية كاملةً
+    # (urn_state + total_draw_visual + event_analysis) بدل جدار نصّي.
+    deep_dive: bool = Field(default=False, description="True = قصة بصرية شاملة (الطالب حائر)")
+    urn_state: list[dict[str, object]] = Field(
+        default_factory=list,
+        description="حالة الكيس البصرية: [{label, count, color}] لرسم العناصر",
+    )
+    event_analysis: list[dict[str, object]] = Field(
+        default_factory=list,
+        description="تحليل بصري للأحداث: [{label, is_possible, pedagogical_string, color, value}]",
+    )
     title: str = "تأليفات السحب الآني"
     duration_ms: int = 0
 
@@ -920,18 +951,33 @@ class ProbabilityCalculatorSkill:
         )
 
     # ── السحب الآني (Combinatorics) — Protocol V19.0 §2.B ────────────────────────────
+    # V30.0 — الرسالة التربوية للمجموعة المستحيلة (بدل C_n^k = 0 المضلِّل).
+    _SUBGROUP_IMPOSSIBLE_MSG: str = "مستحيل (العدد المتوفر غير كافٍ لسحب المطلوب)"
+
+    @classmethod
+    def _color_for(cls, label: str) -> str:
+        """رمز CSS للون من تسمية المجموعة (red/white/...) — '' إن لا لون."""
+        return _COLOR_CSS_TOKEN.get(label, "")
+
     @classmethod
     def _build_combinations(
         cls,
         comp_raw: list[tuple[str, str, int]],
         total: int,
         combined: str,
+        *,
+        deep_dive: bool = False,
     ) -> CombinationsModelOutput | None:
         """يبني نموذج تأليفات للسحب الآني: C(n,k) + C(count,k) لكل مجموعة.
 
         «نسحب k كرات دفعة واحدة» = اختيار غير مرتَّب → فضاء العيّنة C(n,k). لكل
         مجموعة (لون/صنف) عدد تأليفاتها C(count,k) (حدث «k من نفس الصنف»). ممنوع
         تمثيل هذا بشجرة تتابعية (كارثة تربوية).
+
+        ## V30.0 — حارس الحلقة الداخلية (Sub-Group Leak Surgery)
+        حين ``k > count`` لمجموعة ما (مثل سحب 3 من كيس فيه كرتان بيضاوان فقط):
+        لا نستدعي ``math.comb`` ولا نُخرِج ``C_2^3 = 0``؛ بل نضع ``is_possible=False``
+        ورسالة تربوية صريحة. هكذا لا يتسرّب الصفر المضلِّل إلى الواجهة أبداً.
         """
         import math
 
@@ -941,19 +987,62 @@ class ProbabilityCalculatorSkill:
         total_comb = math.comb(total, k)
         if total_comb < 1:
             return None
+
         groups: list[CombinationGroup] = []
         same_group = 0
         for label_pos, _neg, count in comp_raw:
             c = min(count, total)
-            fav = math.comb(c, k) if c >= k else 0
+            color = cls._color_for(label_pos)
+            # ── الحارس: اختيار k من مجموعة فيها c < k مستحيل ──────────────────
+            if k > c:
+                groups.append(
+                    CombinationGroup(
+                        label=label_pos,
+                        count=c,
+                        favorable_combinations=0,
+                        is_possible=False,
+                        pedagogical_string=cls._SUBGROUP_IMPOSSIBLE_MSG,
+                        color=color,
+                    )
+                )
+                continue
+            fav = math.comb(c, k)
             same_group += fav
-            groups.append(CombinationGroup(label=label_pos, count=c, favorable_combinations=fav))
+            groups.append(
+                CombinationGroup(
+                    label=label_pos,
+                    count=c,
+                    favorable_combinations=fav,
+                    is_possible=True,
+                    pedagogical_string=f"C({c},{k}) = {fav}",
+                    color=color,
+                )
+            )
+
+        # ── القصة البصرية الشاملة (Deep Dive) — حالة الكيس + تحليل الأحداث ──────
+        urn_state = [
+            {"label": g.label, "count": g.count, "color": g.color or "muted"} for g in groups
+        ]
+        event_analysis = [
+            {
+                "label": g.label,
+                "is_possible": g.is_possible,
+                "pedagogical_string": g.pedagogical_string,
+                "color": g.color or "muted",
+                "value": g.favorable_combinations,
+            }
+            for g in groups
+        ]
+
         return CombinationsModelOutput(
             n=total,
             k=k,
             total_combinations=total_comb,
             groups=groups,
             same_group_favorable=same_group,
+            deep_dive=deep_dive,
+            urn_state=urn_state,
+            event_analysis=event_analysis,
             title=f"تأليفات السحب الآني (اختيار {k} من {total})",
         )
 
@@ -981,7 +1070,9 @@ class ProbabilityCalculatorSkill:
         # (Combinatorics)، ممنوع تمثيله بشجرة تتابعية.
         draw_mode = cls._detect_draw_mode(combined)
         if draw_mode == "simultaneous":
-            combo = cls._build_combinations(comp_raw, total, combined)
+            # V30.0: حيرة الطالب («لم أفهم أي شيء») تُفعِّل القصة البصرية الشاملة.
+            deep_dive = cls.is_confusion(question) or cls.is_confusion(combined)
+            combo = cls._build_combinations(comp_raw, total, combined, deep_dive=deep_dive)
             if combo is not None:
                 return combo
             # إن تعذّر بناء التأليف (k غير صالح) لا نسقط لشجرة مضلِّلة — نفشل بنظافة.

@@ -2350,6 +2350,79 @@ body[data-theme='light'] .exam-badge {
     white-space: nowrap;
 }
 
+/* V30.0 — شارة الشرح الخارق (Deep Dive) */
+.genui-comb-badge-deep {
+    margin-inline-start: 0.4rem;
+    border-color: color-mix(in srgb, var(--primary-color) 45%, transparent);
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+
+/* V30.0 — حالة الكيس البصرية (urn_state): كرات ملوّنة */
+.genui-comb-urn {
+    margin-bottom: 0.9rem;
+    padding: 0.7rem 0.85rem;
+    border-radius: 12px;
+    border: 1px dashed var(--border-color);
+    background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+}
+
+.genui-comb-urn-label {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.genui-comb-urn-balls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+}
+
+.genui-comb-urn-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.genui-comb-ball {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.genui-comb-urn-tag {
+    font-size: 0.78rem;
+    color: var(--text-color);
+    margin-inline-start: 0.3rem;
+    white-space: nowrap;
+}
+
+/* V30.0 — المجموعة المستحيلة (k > count): رسالة تربوية بدل C_n^k = 0 */
+.genui-comb-impossible {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, #f59e0b 40%, transparent);
+    background: color-mix(in srgb, #f59e0b 9%, transparent);
+}
+
+.genui-comb-impossible-icon {
+    color: #d97706;
+    flex-shrink: 0;
+}
+
+.genui-comb-impossible-text {
+    font-size: 0.84rem;
+    color: var(--text-color);
+}
+
 .genui-cnk {
     display: inline-flex;
     align-items: center;

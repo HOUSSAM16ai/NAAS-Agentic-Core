@@ -33,6 +33,8 @@ def _to_sqlite_ddl(sql: str) -> str:
     sql = re.sub(r"\bJSON\b", "TEXT", sql, flags=re.IGNORECASE)
     sql = re.sub(r"\bJSONB\b", "TEXT", sql, flags=re.IGNORECASE)
     sql = re.sub(r"vector\(\d+\)", "TEXT", sql, flags=re.IGNORECASE)
+    # SQLite يرفض دوال DEFAULT غير الثابتة؛ نُسقط gen_random_uuid() قبل تحويل UUID→TEXT.
+    sql = re.sub(r"DEFAULT\s+gen_random_uuid\(\)", "", sql, flags=re.IGNORECASE)
     sql = re.sub(r"\bUUID\b", "TEXT", sql, flags=re.IGNORECASE)
 
     if _should_skip_sqlite_index(sql):

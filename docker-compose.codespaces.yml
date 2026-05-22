@@ -1,0 +1,99 @@
+# =============================================================================
+# Protocol V24.0 — Codespaces DevOps Stack (focused 2-service topology)
+# =============================================================================
+# A lean, professional Docker Compose stack for GitHub Codespaces local
+# development. Unlike the canonical full microservices mesh in
+# `docker-compose.yml` (api-gateway + 7 postgres + agents), this file boots ONLY
+# the two services a developer iterates on:
+#
+#   - orchestrator : FastAPI backend (app.main:app) on port 8000
+#   - frontend     : Next.js generative UI on port 3000
+#
+# Both talk to the LIVE Supabase Postgres and OpenRouter — credentials are
+# passed through from the environment (never hard-coded). Source is bind-mounted
+# for hot-reload.
+#
+# Usage:
+#   cp .env.codespaces.example .env.codespaces
+#   # fill in DATABASE_URL / OPENROUTER_API_KEY / TAVILY_API_KEY / SECRET_KEY
+#   docker compose -f docker-compose.codespaces.yml --env-file .env.codespaces up --build
+#
+# Endpoints:
+#   backend  → http://localhost:8000/health
+#   frontend → http://localhost:3000
+# =============================================================================
+
+name: cogniforge-codespaces
+
+services:
+  # ---------------------------------------------------------------------------
+  # Orchestrator — FastAPI backend (the AI OS entrypoint)
+  # ---------------------------------------------------------------------------
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cogniforge-codespaces-orchestrator
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # --- Runtime ---
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      SECRET_KEY: ${SECRET_KEY:-super_secret_key_change_in_production}
+      # --- Database (Supabase) — process env wins over .env at import time ---
+      APP_DATABASE_URL: ${APP_DATABASE_URL:-${DATABASE_URL}}
+      DATABASE_URL: ${DATABASE_URL}
+      # --- LLM / Search providers ---
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      # --- Optional Supabase metadata (kept for parity with the monolith) ---
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ROLE_KEY: ${SUPABASE_ROLE_KEY:-}
+    volumes:
+      # Hot-reload: mount the repo, but keep the image's installed packages.
+      - .:/app
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --proxy-headers
+      --reload
+    networks:
+      - cogniforge-codespaces-net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # Frontend — Next.js generative UI
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cogniforge-codespaces-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Next.js dev server proxies /api/* to the backend on the compose network.
+      API_URL: http://orchestrator:8000
+      NODE_ENV: ${NODE_ENV:-development}
+    volumes:
+      # Hot-reload frontend source; keep container node_modules via anon volume.
+      - ./frontend:/app
+      - /app/node_modules
+    # `npm run dev` script hardcodes --port 5000; the trailing flag wins → 3000.
+    command: ["npm", "run", "dev", "--", "--port", "3000"]
+    depends_on:
+      - orchestrator
+    networks:
+      - cogniforge-codespaces-net
+
+networks:
+  cogniforge-codespaces-net:
+    driver: bridge

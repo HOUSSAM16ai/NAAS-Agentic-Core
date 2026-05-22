@@ -5,6 +5,7 @@
 # 1. Environment & Secrets
 # Never commit secrets, keys, passwords, or local environment settings!
 .env
+.env.codespaces
 .devcontainer/secrets.env
 .venv
 .venv*/
@@ -126,6 +127,8 @@ site/
 *.sqlite
 *.db
 *.sql
+# Tracked migrations are an exception — they are versioned schema, not dumps.
+!scripts/migrations/*.sql
 test_ai_enhancements.py
 actionlint
 

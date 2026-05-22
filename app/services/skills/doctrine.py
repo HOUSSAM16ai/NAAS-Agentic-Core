@@ -438,6 +438,39 @@ PROBABILITY_CALCULATION_DOCTRINE: Final[tuple[str, ...]] = (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Impossible Case UX Doctrine (D-082)
+# ─────────────────────────────────────────────────────────────────────────────
+# قواعد تجربة الحالة المستحيلة — تُطبَّق عند requested > bag_count.
+# المُستفيدون: content-retrieval-skill /impossible-case + frontend renderer.
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: نسخة doctrine الحالة المستحيلة.
+IMPOSSIBLE_CASE_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+IMPOSSIBLE_CASE_DOCTRINE: Final[tuple[str, ...]] = (
+    "لا تبدأ بالرياضيات: المرحلة 1 و2 و3 خالية تماماً من المعادلات والصيغ.",
+    "مشهد واحد في كل مرحلة: لا تعرض أكثر من فكرة واحدة في أي شاشة.",
+    "لا شجرة احتمالات في الحالة المستحيلة: الشجرة تظهر فقط للحالات الممكنة.",
+    "السؤال الحدسي (المرحلة 2) يجب أن يكون مباشراً وبسيطاً — لا معادلة، لا صفر.",
+    "الحركة البصرية (المرحلة 3) قصيرة وهادئة — shake ≤ 600ms، لا تكرار.",
+    "الرسالة التربوية (المرحلة 4) واحدة فقط — واضحة ولطيفة، تذكر الأعداد الفعلية.",
+    "deep_dive اختياري: يُعرض فقط عند ضغط المستخدم على 'اشرح لي أكثر'.",
+    "backend يُرسل contract بصري فقط (حالة + بيانات + رسالة) — لا HTML، لا SVG.",
+    "frontend مسؤول عن تحويل الـ contract إلى قصة بصرية — لا خلط منطق بحركة.",
+    "الشرح الرياضي العميق (deep_dive) يحتوي: formula + explanation + why_zero.",
+)
+
+
+def get_impossible_case_summary() -> str:
+    """يُرجِع ملخصاً موجزاً لـ doctrine الحالة المستحيلة."""
+    return (
+        f"[v{IMPOSSIBLE_CASE_DOCTRINE_VERSION}] "
+        f"{len(IMPOSSIBLE_CASE_DOCTRINE)} قاعدة — "
+        "4 مراحل بصرية، لا رياضيات قبل الفهم الحدسي، deep_dive اختياري."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -536,6 +569,16 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "orchestrator_client._build_probability_tree_props",
             # D-078 (Protocol V19.0): الموجِّه التربوي (آني/تتابعي) — موصول حيّاً.
             "orchestrator_client._build_calculated_ui",
+        ),
+    },
+    "impossible_case": {
+        "version": IMPOSSIBLE_CASE_DOCTRINE_VERSION,
+        "rules_count": len(IMPOSSIBLE_CASE_DOCTRINE),
+        "consumed_by": (
+            # D-082: content-retrieval-skill /impossible-case endpoint.
+            "content_retrieval_skill.src.impossible_case.analyze_impossible_case",
+            # frontend: ImpossibleCaseRenderer (4 مراحل بصرية).
+            "frontend.components.ImpossibleCaseRenderer",
         ),
     },
 }
@@ -648,6 +691,8 @@ __all__ = [
     "EXERCISE_EXPLANATION_SYSTEM_PROMPT",
     "EXPLANATION_DOCTRINE",
     "EXPLANATION_DOCTRINE_VERSION",
+    "IMPOSSIBLE_CASE_DOCTRINE",
+    "IMPOSSIBLE_CASE_DOCTRINE_VERSION",
     "MODEL_ANSWER_EXPLANATION_DOCTRINE",
     "MODEL_ANSWER_EXPLANATION_VERSION",
     "MODEL_ANSWER_RELIANCE_RULES",
@@ -666,6 +711,7 @@ __all__ = [
     "get_content_invocation_summary",
     "get_detailed_explanation_summary",
     "get_explanation_doctrine_summary",
+    "get_impossible_case_summary",
     "get_model_answer_explanation_summary",
     "get_model_answer_reliance_summary",
     "get_probability_calculation_summary",

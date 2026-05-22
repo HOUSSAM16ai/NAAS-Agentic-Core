@@ -906,9 +906,11 @@ launch_content_retrieval_skill() {
     lifecycle_info "Content Retrieval Skill: launching uvicorn on :${RETRIEVAL_PORT} (Step 11)..."
 
     KB_ROOT="${APP_ROOT}/knowledge_base" \
+    OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
     ENVIRONMENT="${ENVIRONMENT:-development}" \
     PYTHONPATH="$APP_ROOT" \
-    uvicorn microservices.content_retrieval_skill.main:app \
+    python -m uvicorn microservices.content_retrieval_skill.main:app \
         --host 0.0.0.0 \
         --port "$RETRIEVAL_PORT" \
         --log-level info \
@@ -963,7 +965,7 @@ launch_conversation_service() {
     OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     ENVIRONMENT="${ENVIRONMENT:-development}" \
     PYTHONPATH="$APP_ROOT" \
-    uvicorn microservices.conversation_service.main:app \
+    python -m uvicorn microservices.conversation_service.main:app \
         --host 0.0.0.0 \
         --port "$CONV_PORT" \
         --log-level info \

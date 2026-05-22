@@ -136,6 +136,7 @@ class TestRealityKernel:
             "ALLOWED_HOSTS": ["myprod.com"],
             "BACKEND_CORS_ORIGINS": ["https://myprod.com"],
             "FRONTEND_URL": "https://myprod.com",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@host:5432/db",
         }
         kernel_prod = RealityKernel(settings=prod_settings)
         assert kernel_prod.app.title == "Prod"

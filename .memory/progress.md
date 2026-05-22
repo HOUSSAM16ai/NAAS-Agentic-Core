@@ -1800,9 +1800,13 @@ cogniforge_pipeline_invocations_total{mode="full"} 2.0
 
 ---
 
-## ✅ Session: 2026-05-06 — Markdown Archive Cleanup
+## ✅ Session: 2026-05-22 — Protocol V34.0: Contextual Unmuzzle & The Teacher's Voice
 
-- حُذِف مجلد `docs/archive/` بالكامل لأنه يحتوي تقارير تاريخية غير محدثة.
-- تم ترحيل السياسة المهمة إلى `CLAUDE.md` (قسم توحيد الوثائق).
-- تم الإبقاء على `.memory/` بالكامل بدون حذف أي ملف، مع استمرار اعتباره ذاكرة التشغيل الأساسية.
+- **المهمة**: كسر حلقة الكبح النصي (Muzzle) عند حيرة الطالب في المسائل المعقدة.
+- **الإصلاح (D-083)**:
+    - تعديل `orchestrator_client.py`: تعطيل `terminate_pipeline` تلقائياً عند كشف `is_confusion`.
+    - تعديل `doctrine.py`: ترقية `EXPLANATION_DOCTRINE` إلى v2.1.0 وإضافة قواعد "صوت الأستاذ" (السرد العميق، التشبيهات، تفسير الـ Why).
+- **النتيجة**: عند قول الطالب «لم أفهم»، يبث النظام المكوّن البصري ويتبعه فوراً بشرح سردي مفصل من الـ LLM يربط المنطق بالتمثيل البصري.
+- **الملفات**: `orchestrator_client.py` + `doctrine.py`.
+
 

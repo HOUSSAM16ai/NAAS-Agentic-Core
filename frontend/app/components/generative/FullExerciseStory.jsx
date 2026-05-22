@@ -3,28 +3,20 @@
 import React, { memo, useState, useMemo } from 'react';
 
 /**
- * FullExerciseStory — Multi-Step Pedagogical Carousel (Protocol V31.5)
+ * FullExerciseStory — Multi-Step Pedagogical Carousel (Protocol V32.0)
  * ───────────────────────────────────────────────────────────────────────────
- * يُصيّر القصة التربوية الشاملة لتمرين كامل كـ Carousel متعدّد الخطوات، حين
- * يعبّر الطالب عن حيرة كاملة («لم أفهم أي شيء»). بدل مكوّن تأليفات واحد، نعرض
- * سلسلة خطوات بصرية مستقلّة تغطّي التمرين بأكمله:
- *   ① المعطيات (urn)  ② فضاء العيّنة (combinations)
- *   ③ الحدث المركّب (event_breakdown)  ④ المتغيّر العشوائي (distribution)
+ * يُصيّر القصة التربوية الشاملة لتمرين كامل كـ Carousel متعدّد الخطوات.
  *
- * كل خطوة تفصل: visual_directives / numerical_state / pedagogical_message.
- * الواجهة تختار التصيير حسب ``render_kind``.
- *
- * ## القاعدة الصارمة (Conditional Rendering — V31.5)
- * في خطوة event_breakdown: إذا ``is_possible === false`` نعرض الرسالة التربوية
- * فقط — لا نُصيّر أي صفّ حساب/احتمال (لا C_n^k=0، لا 0/165). الطالب يرى البانر
- * التربوي حصراً لتلك المجموعة.
+ * ## القاعدة الصارمة (Strict Visual Governance — V32.0)
+ * ١. التطهير المستحيل (Impossible Purge): إذا كانت الخطوة مستحيلة (is_possible: false
+ *    أو احتمال 0)، نُصيّر البانر التربوي فقط. يُمنع منعاً باتاً عرض أي كسور (0/165)
+ *    أو حسابات رياضية أو نصوص شرح تحت البانر.
+ * ٢. منع جدران النصوص: يُعرض فقط الجملة الأولى من الرسالة التربوية (بحد أقصى جملة واحدة).
  *
  * شكل props (من OrchestratorClient._build_calculated_ui):
  *   { title?, n, k, total_combinations, exercise_steps:[
  *       { step_index, step_id, title, render_kind, visual_directives,
  *         numerical_state, pedagogical_message } ] }
- *
- * عند props مشوَّهة → يُلقي استثناءً يلتقطه GenerativeUIErrorBoundary.
  */
 
 const COLOR_TOKENS = {
@@ -113,6 +105,33 @@ const EventBreakdownStep = memo(({ state }) => {
     const groups = Array.isArray(state?.groups) ? state.groups : [];
     const sameFav = Number(state?.same_group_favorable ?? state?.p_num ?? 0);
     const total = Number(state?.total_combinations ?? state?.p_den ?? 0);
+
+    // V32.0: Strict Governance — Detect if the entire step is an "Impossible State"
+    const isStateImpossible =
+        state?.is_possible === false ||
+        (groups.some((g) => g.is_possible === false) && sameFav === 0);
+
+    if (isStateImpossible) {
+        const impossibleGroups = groups.filter((g) => g.is_possible === false);
+        return (
+            <div className="genui-fes-event is-impossible-slide">
+                {impossibleGroups.length > 0 ? (
+                    impossibleGroups.map((g, i) => (
+                        <div className="genui-fes-impossible" key={i} style={{ padding: '1rem', textAlign: 'center' }}>
+                            <i className="fas fa-ban" aria-hidden="true" style={{ marginLeft: '0.5rem' }} />
+                            {g.pedagogical_string || 'هذا الحدث مستحيل (العدد غير كافٍ).'}
+                        </div>
+                    ))
+                ) : (
+                    <div className="genui-fes-impossible" style={{ padding: '1rem', textAlign: 'center' }}>
+                        <i className="fas fa-ban" aria-hidden="true" style={{ marginLeft: '0.5rem' }} />
+                        {state?.pedagogical_string || 'هذا الحدث مستحيل في هذه الظروف.'}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="genui-fes-event">
             <div className="genui-fes-event-rows">
@@ -136,17 +155,17 @@ const EventBreakdownStep = memo(({ state }) => {
                                     <strong>{fav}</strong>
                                 </span>
                             ) : (
-                                // V31.5: مجموعة مستحيلة → بانر تربوي فقط، لا صفّ حساب (لا 0).
                                 <span className="genui-fes-impossible" role="note">
                                     <i className="fas fa-ban" aria-hidden="true" />
-                                    {g.pedagogical_string || 'مستحيل (العدد غير كافٍ)'}
+                                    {g.pedagogical_string || 'مستحيل'}
                                 </span>
                             )}
                         </div>
                     );
                 })}
             </div>
-            {total > 0 && (
+            {/* V32.0: Only render probability if it's greater than zero to avoid "0/165" leaks */}
+            {total > 0 && sameFav > 0 && (
                 <div className="genui-fes-event-result">
                     <span className="genui-fes-event-result-label">الاحتمال</span>
                     <StackFraction num={sameFav} den={total} />

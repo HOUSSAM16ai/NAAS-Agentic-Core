@@ -103,6 +103,8 @@ from app.services.skills.math_skill import (
 )
 from app.services.skills.probability_skill import (
     CompositionItem,
+    ExerciseStep,
+    FullExerciseStoryOutput,
     ProbabilityCalculatorSkill,
     ProbabilityFailure,
     ProbabilityInput,
@@ -144,6 +146,8 @@ __all__ = [
     "BKTEvaluation",
     "BKTEvaluationInput",
     "CompositionItem",
+    "ExerciseStep",
+    "FullExerciseStoryOutput",
     "GreetingSkill",
     "GreetingSkillFailure",
     "GreetingSkillInput",

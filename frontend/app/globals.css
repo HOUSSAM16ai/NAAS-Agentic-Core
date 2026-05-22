@@ -2423,10 +2423,17 @@ body[data-theme='light'] .exam-badge {
     color: var(--text-color);
 }
 
+/* V31.5 — رمز التأليف C_n^k: يُجبَر على LTR كي لا تنعكس عناصره داخل حاوية RTL
+   (الانعكاس كان يُظهر [k/n] C بدل C [k/n] = «تكسّر» الصيغة). nowrap يمنع
+   انكسارها لأكثر من سطر. */
 .genui-cnk {
     display: inline-flex;
+    direction: ltr;
+    unicode-bidi: isolate;
     align-items: center;
-    gap: 1px;
+    gap: 2px;
+    white-space: nowrap;
+    flex-shrink: 0;
     font-family: 'Cambria Math', 'Times New Roman', serif;
 }
 
@@ -2438,8 +2445,10 @@ body[data-theme='light'] .exam-badge {
 .genui-cnk-sub {
     display: inline-flex;
     flex-direction: column;
+    align-items: center;
     line-height: 0.9;
     font-size: 0.62em;
+    white-space: nowrap;
     transform: translateY(2px);
 }
 
@@ -2461,6 +2470,8 @@ body[data-theme='light'] .exam-badge {
 
 .genui-comb-space-formula {
     display: inline-flex;
+    direction: ltr;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.4rem;
 }
@@ -2520,6 +2531,8 @@ body[data-theme='light'] .exam-badge {
     font-size: 0.85rem;
     white-space: nowrap;
     display: inline-flex;
+    direction: ltr;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.25rem;
 }
@@ -2557,6 +2570,294 @@ body[data-theme='light'] .exam-badge {
 }
 
 .genui-comb-result-dec {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   V31.5 — FullExerciseStory: Carousel تربوي متعدّد الخطوات (الشرح الخارق)
+   ─────────────────────────────────────────────────────────────────────────── */
+.genui-fes {
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1rem 1.15rem;
+    background-color: var(--surface-elevated);
+    margin: 0.5rem 0;
+}
+
+.genui-fes-header {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 0.85rem;
+}
+
+.genui-fes-icon {
+    color: var(--primary-color);
+}
+
+.genui-fes-title {
+    font-weight: 700;
+    font-size: 1.02rem;
+}
+
+.genui-fes-badge {
+    margin-inline-start: auto;
+    font-size: 0.72rem;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--primary-color) 45%, transparent);
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    white-space: nowrap;
+}
+
+.genui-fes-dots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.9rem;
+}
+
+.genui-fes-dot-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.genui-fes-dot-btn.is-active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+}
+
+.genui-fes-card {
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    background: color-mix(in srgb, var(--primary-color) 4%, transparent);
+}
+
+.genui-fes-step-title {
+    margin: 0 0 0.75rem;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.genui-fes-visual {
+    min-height: 48px;
+    margin-bottom: 0.75rem;
+}
+
+.genui-fes-msg {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+.genui-fes-novisual {
+    color: var(--text-secondary);
+}
+
+/* خطوة المعطيات: الكرات الملوّنة */
+.genui-fes-urn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.genui-fes-urn-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.genui-fes-urn-balls {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.genui-fes-ball {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.genui-fes-urn-tag {
+    font-size: 0.84rem;
+    color: var(--text-color);
+}
+
+/* خطوة فضاء العيّنة */
+.genui-fes-space {
+    display: inline-flex;
+    direction: ltr;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.8rem;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+}
+
+.genui-fes-eq {
+    color: var(--text-secondary);
+}
+
+.genui-fes-space-val {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+}
+
+/* خطوة الحدث المركّب */
+.genui-fes-event-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.genui-fes-event-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.genui-fes-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.genui-fes-event-label {
+    font-weight: 600;
+}
+
+.genui-fes-event-calc {
+    margin-inline-start: auto;
+    display: inline-flex;
+    direction: ltr;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+}
+
+.genui-fes-impossible {
+    margin-inline-start: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: #b45309;
+}
+
+.genui-fes-event-result {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.genui-fes-event-result-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* كسر مُكدَّس عمودياً (LTR) */
+.genui-fes-frac {
+    display: inline-flex;
+    direction: ltr;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.genui-fes-frac-bar {
+    display: block;
+    width: 100%;
+    min-width: 24px;
+    height: 2px;
+    background: currentColor;
+    margin: 1px 0;
+}
+
+/* خطوة المتغيّر العشوائي: جدول التوزيع */
+.genui-fes-dist {
+    overflow-x: auto;
+}
+
+.genui-fes-dist-table {
+    border-collapse: collapse;
+    width: 100%;
+    direction: ltr;
+    font-size: 0.88rem;
+}
+
+.genui-fes-dist-table th,
+.genui-fes-dist-table td {
+    border: 1px solid var(--border-color);
+    padding: 0.45rem 0.6rem;
+    text-align: center;
+}
+
+.genui-fes-dist-table th {
+    background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.genui-fes-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin-top: 0.9rem;
+}
+
+.genui-fes-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-color);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.genui-fes-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.genui-fes-nav-btn:not(:disabled):hover {
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    border-color: var(--primary-color);
+}
+
+.genui-fes-nav-pos {
     font-size: 0.85rem;
     color: var(--text-secondary);
 }

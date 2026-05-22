@@ -5473,3 +5473,55 @@ print('OK no garbage:', labels)"
 | D-075 → D-079 | dynamic probability engine + generalization + hardening + auto-trigger + deep-dive |
 | D-080 | docker compose architecture audit |
 | **D-081** | **garbage «كرة رقم N» entities — substring-match → standalone-noun match (ISS-083)** |
+
+---
+
+## 6.58 Full Exercise OS — Multi-Step Pedagogical Carousel + Math CSS Repair (2026-05-22, D-083 · Protocol V31.5)
+
+> ترقية محرّك الاحتمالات من مكوّن بصري واحد إلى **نظام تشغيل تمرين كامل**: حين
+> يعبّر الطالب عن حيرة كاملة في مسألة سحب آني، نُولِّد Carousel متعدّد الخطوات
+> يغطّي التمرين بأكمله، لا تأليفة واحدة. + إصلاح تكسّر صيغ الرياضيات في RTL.
+
+### الكارثتان (بلاغ الـ CTO)
+1. **CSS الرياضيات متكسّر**: صيغة التأليف `C_{11}^3 = 165` تنعكس عناصرها داخل
+   حاوية `dir="rtl"` (الـ inline-flex يقلب الترتيب → `[k/n] C` بدل `C [k/n]`).
+2. **لا شرح للتمرين الكامل**: عند «لم أفهم أي شيء» كان يُعرَض مكوّن تأليفات واحد،
+   بينما تمرين BAC 2024 يحوي أحداثاً متعدّدة (A/B/C) ومتغيّراً عشوائياً X وسحباً
+   متتالياً (الحدث D) — يستحق Carousel تربوياً لكامل التمرين.
+
+### الإصلاح (D-083)
+- **`FullExerciseStoryOutput` + `ExerciseStep`** (`probability_skill.py`):
+  `_build_full_exercise_story` يُولِّد سلسلة خطوات — ① المعطيات (urn) ② فضاء
+  العيّنة C(n,k) ③ الحدث «k من نفس الصنف» (event_breakdown) ④ المتغيّر العشوائي
+  X (توزيع فوق-هندسي حتمي بـ math.comb). يُفعَّل عند `is_confusion()` + سحب آني.
+- **عقد مُفكَّك صارم لكل خطوة**: visual_directives / numerical_state /
+  pedagogical_message — الخلفية Pydantic فقط (لا HTML).
+- **منع تسرّب الصفر**: المجموعة المستحيلة (count<k) ⇒ `is_possible=False` + رسالة
+  تربوية، لا `C_n^k=0` ولا `0/165` يصل للطالب.
+- **الكبح النصّي**: `full_exercise_story` ⇒ `terminate_pipeline=True` +
+  `companion_text` جملة واحدة — صفر جدران نصّية.
+- **إصلاح CSS الرياضيات**: `.genui-cnk` + صيغ التأليف ⇒ `direction: ltr` +
+  `unicode-bidi: isolate` + `white-space: nowrap` (لا انعكاس/انكسار في RTL).
+- **التصيير**: `FullExerciseStory.jsx` (Carousel + dots + تنقّل) مُسجَّل في
+  `KNOWN_UI_COMPONENTS` + `GenerativeUIRenderer` + `UIComponentPayload`.
+
+### قواعد دائمة (لا تُكسر بدون ADR)
+1. حيرة الطالب + سحب آني ⇒ القصة الشاملة (Carousel)، لا مكوّن واحد.
+2. كل خطوة تفصل visual/numerical/pedagogical فصلاً صارماً.
+3. المجموعة المستحيلة ⇒ بانر تربوي فقط (ممنوع `C_n^k=0` / `0/165`).
+4. `full_exercise_story` ⇒ `terminate_pipeline=True` + جملة واحدة.
+5. الخطوات معمّمة من التركيبة لا مفصّلة لمسألة بعينها (Anti-Overfitting).
+6. صيغ التأليف/الكسور تُصيَّر LTR دائماً داخل حاويات RTL.
+
+### التحقق (2026-05-22)
+BAC 2024 (4 حمراء، 5 خضراء، 2 بيضاء، k=3): C(11,3)=165، P(3 من نفس اللون)=14/165
+(البيضاء مستحيلة، لا 0)، X=عدد الحمراء توزيع [35,84,42,4]/165 يجمع 165 — مُتحقَّق
+standalone بـ math.comb. **pipeline حي (uvicorn/pytest/ruff) مؤجَّل إلى
+Codespaces/CI** (الـ sandbox يحجب تثبيت التبعيات + egress — نمط §6.56).
+
+### السلسلة الكاملة (D-049 → D-083)
+| Decision | المُصلَح |
+|----------|---------|
+| D-075 → D-081 | dynamic probability engine + generalization + auto-trigger + deep-dive + entity fix |
+| D-082 | impossible-case UX + skills doctrine |
+| **D-083** | **Full Exercise OS: multi-step pedagogical carousel + RTL math CSS repair (V31.5)** |

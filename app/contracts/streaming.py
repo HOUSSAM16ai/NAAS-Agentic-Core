@@ -141,6 +141,7 @@ KNOWN_UI_COMPONENTS: frozenset[str] = frozenset(
         "bkt_hint_display",
         "combinations_visualizer",
         "impossible_draw_animation",
+        "full_exercise_story",
     }
 )
 

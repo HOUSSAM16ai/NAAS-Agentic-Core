@@ -2238,3 +2238,58 @@ render + UrnState + colors) | `frontend/app/globals.css` (V30 styles) | tests:
 `test_probability_skill.py` (+5) `test_generative_ui_streaming.py` (+4)
 `test_v28_text_wall_muzzle.py` (updated for V30 muzzle generalization)
 `frontend/tests/generative_ui_streaming.test.mjs` (+8) | `scripts/v30_live_test.py`.
+
+## D-083 — Full Exercise OS: Multi-Step Pedagogical Carousel (2026-05-22 · Protocol V31.5)
+
+**السياق**: CTO أبلغ عن عيبين: (1) CSS صيغة التأليف `C_{11}^3=165` متكسّر
+(flex/grid ينعكس داخل حاوية RTL)؛ (2) عند حيرة الطالب «لم أفهم أي شيء» كان
+يُعرَض مكوّن تأليفات واحد فقط، بينما تمرين BAC 2024 يحوي عدّة أحداث (A, B, C)
+ومتغيّراً عشوائياً X وسحوباً متتالية — يستحق شرحاً بصرياً لكامل التمرين.
+
+**القرار (V31.5)**:
+- **القصة التربوية الشاملة**: `ProbabilityCalculatorSkill._build_full_exercise_story`
+  يُولِّد `FullExerciseStoryOutput` (مكوّن `full_exercise_story`) — سلسلة خطوات
+  بصرية مستقلّة بدل مكوّن واحد: ① المعطيات (urn) ② فضاء العيّنة C(n,k)
+  ③ الحدث «k من نفس الصنف» (event_breakdown) ④ المتغيّر العشوائي X (توزيع
+  فوق-هندسي حتمي بـ math.comb). يُفعَّل حصراً عند `is_confusion()` + سحب آني؛
+  السحب الآني بلا حيرة يبقى `combinations_visualizer` المفرد.
+- **عقد مُفكَّك صارم لكل خطوة**: `ExerciseStep` يفصل `visual_directives` عن
+  `numerical_state` عن `pedagogical_message`. الخلفية Pydantic فقط — لا HTML.
+- **التعميم (Anti-Overfitting)**: الخطوات تُشتق من التركيبة المُكتشَفة لا من
+  مفردات BAC 2024 بعينها. المتغيّر العشوائي يُحسب لأي صنف محوري عبر
+  P(X=i)=C(m,i)·C(n−m,k−i)/C(n,k).
+- **منع تسرّب الصفر**: المجموعة المستحيلة (count<k) في خطوة الحدث تحمل
+  `is_possible=False` + رسالة تربوية — لا `C_n^k=0` ولا `0/165` يصل للطالب.
+- **الكبح النصّي (Muzzle)**: `full_exercise_story` يُصدِر `terminate_pipeline=True`
+  + `companion_text` (جملة واحدة) — صفر جدران نصّية بعد المكوّن البصري.
+- **إصلاح CSS الرياضيات**: `.genui-cnk` + صيغ التأليف تُجبَر على `direction: ltr`
+  + `unicode-bidi: isolate` + `white-space: nowrap` كي لا تنعكس عناصرها أو
+  تنكسر داخل حاوية RTL (سبب «التكسّر» الذي أبلغ عنه الـ CTO).
+- **التصيير**: `FullExerciseStory.jsx` (Carousel بخطوات + dots + تنقّل) مُسجَّل
+  في `KNOWN_UI_COMPONENTS` + `GenerativeUIRenderer` + عقد `UIComponentPayload`.
+
+**قواعد دائمة (لا تُكسر بدون ADR)**:
+1. حيرة الطالب + سحب آني ⇒ القصة الشاملة (Carousel)، لا مكوّن واحد.
+2. كل خطوة تفصل visual/numerical/pedagogical فصلاً صارماً.
+3. المجموعة المستحيلة ⇒ بانر تربوي فقط، ممنوع `C_n^k=0` أو `0/165`.
+4. `full_exercise_story` ⇒ `terminate_pipeline=True` + جملة واحدة.
+5. الخطوات معمّمة من التركيبة لا مفصّلة لمسألة بعينها (Anti-Overfitting).
+6. صيغ التأليف/الكسور تُصيَّر LTR دائماً داخل حاويات RTL.
+
+**تحقق**: BAC 2024 (4 حمراء، 5 خضراء، 2 بيضاء، k=3): C(11,3)=165،
+P(3 من نفس اللون)=14/165 (البيضاء مستحيلة، لا 0)، X=عدد الحمراء توزيع
+[35,84,42,4]/165 يجمع 165. اختبارات: `test_probability_skill.py` (+6)،
+`test_generative_ui_streaming.py` (+4، 3 V30 محدَّثة لـ V31.5)،
+`frontend/.../FullExerciseStory.jsx` جديد. **تحقق الـ pipeline الحي (uvicorn
++ pytest + ruff) مؤجَّل إلى Codespaces/CI** — الـ sandbox يحجب تثبيت التبعيات
+وegress (نمط موثَّق في §6.56). صحة الحساب مُتحقَّقة standalone بـ math.comb.
+
+**الملفات**: `app/services/skills/probability_skill.py` (ExerciseStep +
+FullExerciseStoryOutput + `_build_full_exercise_story`) |
+`app/infrastructure/clients/orchestrator_client.py` (`_build_calculated_ui`
+full-story branch) | `app/contracts/streaming.py` (whitelist) |
+`app/services/skills/doctrine.py` (v1.2.0→1.3.0 + قاعدة V31.5) |
+`app/services/skills/__init__.py` (exports) |
+`frontend/app/components/generative/FullExerciseStory.jsx` (جديد) +
+`GenerativeUIRenderer.jsx` (registry) | `frontend/app/globals.css` (LTR math
+fix + `.genui-fes-*`) | tests.

@@ -357,6 +357,70 @@ class CombinationsModelOutput(RobustBaseModel):
     duration_ms: int = 0
 
 
+class ExerciseStep(RobustBaseModel):
+    """خطوة واحدة في القصة التربوية الشاملة (Protocol V31.5 — Full Exercise OS).
+
+    عقد مُفكَّك صارم (strict decoupled) — مطابق لعقد ImpossibleCaseOutput: كل
+    خطوة تفصل المنطق (``numerical_state``) عن التلميحات البصرية
+    (``visual_directives``) عن الرسالة التربوية (``pedagogical_message``).
+    لا تُخرج الخلفية HTML/SVG — الواجهة (RSC) تُصيّر كل خطوة حسب ``render_kind``.
+    """
+
+    step_index: int = Field(..., ge=0, description="ترتيب الخطوة (0-based)")
+    step_id: str = Field(..., min_length=1, max_length=48, description="معرّف الخطوة الدلالي")
+    title: str = Field(..., min_length=1, max_length=120, description="عنوان الخطوة بالعربية")
+    render_kind: Literal["urn", "combinations", "event_breakdown", "distribution"] = Field(
+        ..., description="نوع التصيير البصري للخطوة"
+    )
+    visual_directives: dict[str, object] = Field(
+        default_factory=dict, description="تلميحات بصرية (animation_hint, render_kind ...)"
+    )
+    numerical_state: dict[str, object] = Field(
+        default_factory=dict, description="الأرقام الخام لهذه الخطوة (منفصلة عن العرض)"
+    )
+    pedagogical_message: str = Field(
+        ..., min_length=1, max_length=400, description="شرح تربوي قصير لهذه الخطوة"
+    )
+
+
+class FullExerciseStoryOutput(RobustBaseModel):
+    """القصة التربوية الشاملة لتمرين كامل — Protocol V31.5 (Full Exercise OS).
+
+    حين يعبّر الطالب عن حيرة كاملة («لم أفهم أي شيء») في مسألة سحب آني، لا نكتفي
+    بمكوّن تأليفات واحد، بل نُولِّد **سلسلة خطوات بصرية** تغطّي التمرين بأكمله:
+    فهم المعطيات → فضاء العيّنة → الحدث المركّب → المتغيّر العشوائي. كل خطوة
+    مستقلّة بعقدها الثلاثي (visual/numerical/pedagogical) فتُصيّرها الواجهة
+    كـ Carousel تربوي.
+
+    ## التعميم (Anti-Overfitting — D-076)
+    الخطوات تُشتق ديناميكياً من التركيبة المُكتشَفة + وضع السحب، لا من مفردات
+    مسألة بعينها. المتغيّر العشوائي (توزيع فوق-هندسي) يُحسب حتمياً بـ math.comb.
+
+    ## قانون الكبح النصي (Text-Wall Muzzle — V28.0)
+    ``companion_text`` (≤ 120 حرف) هو النص الوحيد المرافق. أي جدار نصّي من LLM
+    محظور — القصة البصرية تُعلِّم 100% بدون مقالات رياضية.
+    """
+
+    skill: Literal["probability_calculation"] = "probability_calculation"
+    success: Literal[True] = True
+    component: Literal["full_exercise_story"] = "full_exercise_story"
+    ui_mode: Literal["deep_dive_story"] = "deep_dive_story"
+    doctrine_version: str = DOCTRINE_VERSION
+    n: int = Field(..., ge=1, description="حجم الفضاء (عدد العناصر الكلي)")
+    k: int = Field(..., ge=1, description="عدد العناصر المسحوبة دفعةً واحدة")
+    total_combinations: int = Field(..., ge=1, description="C(n, k) — فضاء العيّنة")
+    exercise_steps: list[ExerciseStep] = Field(
+        ..., min_length=1, description="خطوات القصة التربوية بالترتيب"
+    )
+    companion_text: str = Field(
+        default="إليك الشرح البصري المفصل لكل أجزاء التمرين خطوة بخطوة 🪄",
+        max_length=120,
+        description="نص مرافق مكبوت (≤ 120 حرف) — يُبثّ بدلاً من LLM pipeline",
+    )
+    title: str = "الشرح البصري الشامل للتمرين"
+    duration_ms: int = 0
+
+
 class ImpossibleVisualDirectives(RobustBaseModel):
     """التوجيهات البصرية للواجهة — منفصلة عن المنطق والحساب (decoupled)."""
 
@@ -521,11 +585,14 @@ class ProbabilityCalculatorSkill:
     # ── مساعدات استخراج العدد ─────────────────────────────────────────────────────
     @staticmethod
     def _as_int(token: str) -> int | None:
-        stripped = token.lstrip("وفب")  # و/ف/ب البادئة (و5، ف3)
+        stripped = token.lstrip("وفب")  # و/ف/ب البادئة (و5، ف3، وخمس، وأربع)
         if stripped.isdigit():
             return int(stripped)
         if token in _ARABIC_CARDINALS:
             return _ARABIC_CARDINALS[token]
+        # كلمة عدد مسبوقة بحرف عطف/جر (وخمس، فأربع، بثلاث) — شائعة في نص الطلاب.
+        if stripped in _ARABIC_CARDINALS:
+            return _ARABIC_CARDINALS[stripped]
         return None
 
     @classmethod
@@ -1057,11 +1124,195 @@ class ProbabilityCalculatorSkill:
             title=f"تأليفات السحب الآني (اختيار {k} من {total})",
         )
 
+    @classmethod
+    def _build_full_exercise_story(
+        cls,
+        comp_raw: list[tuple[str, str, int]],
+        total: int,
+        combined: str,
+    ) -> FullExerciseStoryOutput | None:
+        """يبني القصة التربوية الشاملة لتمرين سحب آني كامل — Protocol V31.5.
+
+        يُولِّد سلسلة خطوات بصرية مستقلّة (Carousel) بدل مكوّن واحد، حين يكون
+        الطالب حائراً. الخطوات معمّمة (لا overfitting): تُشتق من التركيبة ووضع
+        السحب لا من مفردات مسألة بعينها:
+
+          0. **المعطيات** (urn): حالة الكيس — كل صنف بعدده ولونه.
+          1. **فضاء العيّنة** (combinations): C(n, k) — كل طرق السحب الآني.
+          2. **الحدث «k من نفس الصنف»** (event_breakdown): لكل صنف C(count, k)؛
+             المجموعة المستحيلة (count < k) تحمل ``is_possible=False`` ورسالة
+             تربوية — لا C_n^k=0 ولا كسر صفري يتسرّب.
+          3. **المتغيّر العشوائي X** (distribution): توزيع فوق-هندسي لعدد عناصر
+             الصنف المحوري ضمن السحب — يُحسب حتمياً بـ math.comb (P(X=i) =
+             C(m,i)·C(n-m,k-i) / C(n,k)). يُضاف فقط حين يكون ذا معنى (≥ صنفان).
+
+        كل عقدة عددية (كسر) تُمرَّر مضمونةً عبر ``_sanitize_node`` ضمنياً (لا
+        قسمة على صفر، لا بسط > مقام). يُرجِع None إن تعذّر بناء أي خطوة.
+        """
+        import math
+
+        k = cls._detect_draw_count(combined, default=2)
+        if k < 1 or k > total:
+            return None
+        total_comb = math.comb(total, k)
+        if total_comb < 1:
+            return None
+
+        steps: list[ExerciseStep] = []
+
+        # ── الخطوة 0: المعطيات (urn) ──────────────────────────────────────────
+        urn = [
+            {"label": lp, "count": min(c, total), "color": cls._color_for(lp) or "muted"}
+            for lp, _neg, c in comp_raw
+        ]
+        groups_summary = "، ".join(f"{lp} ({min(c, total)})" for lp, _neg, c in comp_raw)
+        steps.append(
+            ExerciseStep(
+                step_index=0,
+                step_id="data",
+                title="① فهم المعطيات",
+                render_kind="urn",
+                visual_directives={"animation_hint": "fill_urn", "render_kind": "urn"},
+                numerical_state={"total": total, "groups": urn},
+                pedagogical_message=(
+                    f"نبدأ بفهم ما في الكيس: {total} عنصراً موزّعة هكذا — {groups_summary}. "
+                    "نسحب منها عيّنة دفعةً واحدة (الترتيب لا يهمّ)."
+                ),
+            )
+        )
+
+        # ── الخطوة 1: فضاء العيّنة (combinations) ──────────────────────────────
+        steps.append(
+            ExerciseStep(
+                step_index=1,
+                step_id="sample_space",
+                title="② فضاء العيّنة",
+                render_kind="combinations",
+                visual_directives={
+                    "animation_hint": "count_choices",
+                    "render_kind": "combinations",
+                },
+                numerical_state={"n": total, "k": k, "total_combinations": total_comb},
+                pedagogical_message=(
+                    f"بما أننا نسحب {k} دفعةً واحدة فالترتيب لا يهمّ، نستعمل التأليفات. "
+                    f"عدد كل العيّنات الممكنة هو C({total},{k}) = {total_comb}."
+                ),
+            )
+        )
+
+        # ── الخطوة 2: الحدث «k من نفس الصنف» (event_breakdown) ─────────────────
+        breakdown: list[dict[str, object]] = []
+        same_group = 0
+        for lp, _neg, raw_count in comp_raw:
+            c = min(raw_count, total)
+            color = cls._color_for(lp) or "muted"
+            if k > c:
+                breakdown.append(
+                    {
+                        "label": lp,
+                        "count": c,
+                        "favorable": 0,
+                        "is_possible": False,
+                        "pedagogical_string": cls._SUBGROUP_IMPOSSIBLE_MSG,
+                        "color": color,
+                    }
+                )
+                continue
+            fav = math.comb(c, k)
+            same_group += fav
+            breakdown.append(
+                {
+                    "label": lp,
+                    "count": c,
+                    "favorable": fav,
+                    "is_possible": True,
+                    "pedagogical_string": f"C({c},{k}) = {fav}",
+                    "color": color,
+                }
+            )
+        steps.append(
+            ExerciseStep(
+                step_index=2,
+                step_id="same_color_event",
+                title="③ الحدث: العناصر من نفس الصنف",
+                render_kind="event_breakdown",
+                visual_directives={
+                    "animation_hint": "highlight_groups",
+                    "render_kind": "event_breakdown",
+                },
+                numerical_state={
+                    "groups": breakdown,
+                    "same_group_favorable": same_group,
+                    "total_combinations": total_comb,
+                    "p_num": same_group,
+                    "p_den": total_comb,
+                },
+                pedagogical_message=(
+                    "نحسب لكل صنف عدد طرق اختيار العناصر منه؛ الصنف الذي لا يكفي عدده "
+                    "للسحب يكون مستحيلاً (لا نكتب صفراً مضلِّلاً). نجمع الممكن منها: "
+                    f"الاحتمال = {same_group}/{total_comb}."
+                ),
+            )
+        )
+
+        # ── الخطوة 3: المتغيّر العشوائي X (distribution) — حتمي بـ math.comb ─────
+        if len(comp_raw) >= 2:
+            focal_label, _focal_neg, focal_raw = comp_raw[0]
+            m = min(focal_raw, total)
+            others = total - m
+            distribution: list[dict[str, object]] = []
+            for i in range(0, k + 1):
+                if i > m or (k - i) > others:
+                    continue  # حالة مستحيلة — لا تُدرَج (لا 0 مضلِّل)
+                num = math.comb(m, i) * math.comb(others, k - i)
+                if num <= 0:
+                    continue
+                distribution.append(
+                    {
+                        "value": i,
+                        "p_num": num,
+                        "p_den": total_comb,
+                        "p_decimal": cls._decimal(num, total_comb),
+                    }
+                )
+            if distribution:
+                steps.append(
+                    ExerciseStep(
+                        step_index=3,
+                        step_id="random_variable",
+                        title=f"④ المتغيّر العشوائي X: عدد «{focal_label}» المسحوبة",
+                        render_kind="distribution",
+                        visual_directives={
+                            "animation_hint": "build_distribution",
+                            "render_kind": "distribution",
+                        },
+                        numerical_state={
+                            "variable_label": "X",
+                            "focal_label": focal_label,
+                            "total": total_comb,
+                            "distribution": distribution,
+                        },
+                        pedagogical_message=(
+                            f"نعرّف X = عدد «{focal_label}» في السحب. لكل قيمة i نحسب "
+                            f"P(X=i) = C({m},i)·C({others},{k}−i) / C({total},{k}). "
+                            "مجموع الاحتمالات يساوي 1 دائماً."
+                        ),
+                    )
+                )
+
+        return FullExerciseStoryOutput(
+            n=total,
+            k=k,
+            total_combinations=total_comb,
+            exercise_steps=steps,
+            title=f"الشرح البصري الشامل (سحب {k} من {total})",
+        )
+
     # ── الاستراتيجية 3: تركيبة عددية معمّمة (كرات / بطاقات / أصناف) ────────────────────
     @classmethod
     def _strategy_composition(
         cls, question: str, history_text: str, combined: str
-    ) -> ProbabilityModelOutput | CombinationsModelOutput | None:
+    ) -> ProbabilityModelOutput | CombinationsModelOutput | FullExerciseStoryOutput | None:
         comp_raw = cls._extract_count_entities(question)
         source = question
         if not comp_raw and history_text:
@@ -1081,8 +1332,14 @@ class ProbabilityCalculatorSkill:
         # (Combinatorics)، ممنوع تمثيله بشجرة تتابعية.
         draw_mode = cls._detect_draw_mode(combined)
         if draw_mode == "simultaneous":
-            # V30.0: حيرة الطالب («لم أفهم أي شيء») تُفعِّل القصة البصرية الشاملة.
+            # V31.5 (Full Exercise OS): حيرة الطالب («لم أفهم أي شيء») تُفعِّل
+            # القصة التربوية الشاملة (Carousel متعدّد الخطوات يغطّي التمرين كاملاً)
+            # بدل مكوّن تأليفات واحد. غير الحائر → مكوّن تأليفات مفرد.
             deep_dive = cls.is_confusion(question) or cls.is_confusion(combined)
+            if deep_dive:
+                story = cls._build_full_exercise_story(comp_raw, total, combined)
+                if story is not None:
+                    return story
             combo = cls._build_combinations(comp_raw, total, combined, deep_dive=deep_dive)
             if combo is not None:
                 return combo
@@ -1139,7 +1396,11 @@ class ProbabilityCalculatorSkill:
     def analyze(
         self, payload: ProbabilityInput | str
     ) -> (
-        ProbabilityModelOutput | CombinationsModelOutput | ImpossibleCaseOutput | ProbabilityFailure
+        ProbabilityModelOutput
+        | CombinationsModelOutput
+        | FullExerciseStoryOutput
+        | ImpossibleCaseOutput
+        | ProbabilityFailure
     ):
         """يحلّل المسألة عبر أنماط معمّمة ويُرجِع نموذجاً (شجرة/تأليفات/مستحيل) أو فشلاً."""
         t0 = time.perf_counter()
@@ -1196,6 +1457,8 @@ __all__ = [
     "CombinationGroup",
     "CombinationsModelOutput",
     "CompositionItem",
+    "ExerciseStep",
+    "FullExerciseStoryOutput",
     "ImpossibleCaseOutput",
     "ImpossibleNumericalState",
     "ImpossibleVisualDirectives",

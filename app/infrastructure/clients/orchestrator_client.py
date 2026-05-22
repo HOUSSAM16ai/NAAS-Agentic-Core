@@ -1036,6 +1036,7 @@ class OrchestratorClient:
                     "title": result.title,
                     "calculated": True,
                     "draw_mode": "simultaneous",
+                    "deep_dive": result.deep_dive,
                     "n": result.n,
                     "k": result.k,
                     "total_combinations": result.total_combinations,
@@ -1044,14 +1045,26 @@ class OrchestratorClient:
                             "label": g.label,
                             "count": g.count,
                             "favorable_combinations": g.favorable_combinations,
+                            # V30.0 — حارس الحلقة الداخلية: الواجهة تعرض
+                            # pedagogical_string حين is_possible=False بدل C_n^k=0.
+                            "is_possible": g.is_possible,
+                            "pedagogical_string": g.pedagogical_string,
+                            "color": g.color,
                         }
                         for g in result.groups
                     ],
                     "same_group_favorable": result.same_group_favorable,
                     "formula": result.formula,
+                    # V30.0 — القصة البصرية الشاملة (Deep Dive storytelling).
+                    "urn_state": result.urn_state,
+                    "event_analysis": result.event_analysis,
                 }
                 return {
                     "component": "combinations_visualizer",
+                    # V30.0 — قانون الكبح النصي: المكوّن البصري يُنهي المسار.
+                    # لا جدار نصّي ولا اشتقاق رياضي نصّي يتبع المكوّن.
+                    "terminate_pipeline": True,
+                    "companion_text": "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄",
                     "props": props,
                     "fallback_text": (
                         f"سحب آني: اختيار {result.k} من {result.n} → "
@@ -1080,6 +1093,10 @@ class OrchestratorClient:
                 }
                 return {
                     "component": "probability_tree",
+                    # V30.0 — قانون الكبح النصي: شجرة الاحتمالات تُنهي المسار أيضاً.
+                    # لا اشتقاق رياضي نصّي يتبع المكوّن البصري.
+                    "terminate_pipeline": True,
+                    "companion_text": "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄",
                     "props": props,
                     "fallback_text": ("شجرة الاحتمالات (تعذّر عرض الرسم التفاعلي — هذا نص بديل)."),
                 }

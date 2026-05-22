@@ -2081,3 +2081,20 @@ connectivity confirmed. Supabase live row-insert deferred to Codespaces
 (sandbox blocks Postgres ports) — `scripts/verify_bkt_live.py` provided.
 
 **Doctrine**: D-074 + CLAUDE.md §6.52.
+
+## ISS-082 — C(2,3)=0 Sub-Case Leak + Text-Wall on Generative UI (2026-05-22) [RESOLVED]
+
+**الأعراض**: مسألة السحب الآني (كيس 11 كرة، سحب 3 «دفعة واحدة»): الواجهة تعرض
+`C_2^3 = 0` للمجموعة البيضاء (2 متاحة)، يتبعها جدار نصّي طويل من LLM، وعند حيرة
+الطالب لا توجد قصة بصرية.
+
+**السبب الجذري**: (1) `_build_combinations` كان يستدعي `math.comb(c,k)` ويُعيد 0
+حين `c<k` → يصل للواجهة كصيغة. (2) `_build_calculated_ui` كان يُرجِع
+`terminate_pipeline` للحالة المستحيلة فقط، فبقية المكوّنات تسقط للمسار النصّي.
+
+**الإصلاح (D-079 · V30.0)**: حارس الحلقة الداخلية (`is_possible`/`pedagogical_string`)،
+كبح نصّي مُعمَّم (`terminate_pipeline=True` + جملة ≤120 حرف لكل مكوّن توليدي)،
+وقصة بصرية (`deep_dive`/`urn_state`/`event_analysis`) تُفعَّل عبر `is_confusion()`.
+
+**تحقق حي**: `scripts/v30_live_test.py` — 3/3 mandates PASS (OpenRouter HTTP 200).
+**Doctrine**: D-079 + CLAUDE.md §6.56.

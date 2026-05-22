@@ -2146,3 +2146,51 @@ Doctrine bumped `PROBABILITY_CALCULATION_DOCTRINE_VERSION` → 1.1.0 (+2 rules).
 Proven live: `scripts/test_auto_ui_trigger.py` — confusion + "دفعة واحدة" →
 combinations (C(11,3)=165, P(3 same)=14/165), NOT a tree; OpenRouter HTTP 200.
 Tests: +7 V19 unit tests; all V14/V15/V17 regressions green; 111 tests pass.
+
+## D-079 — Deep-Dive Generative UI + Sub-Case Surgery (2026-05-22 · Protocol V30.0)
+
+**المشكلة**: ثلاث كوارث تربوية على مسار الاحتمالات الآني (السحب «دفعة واحدة»):
+1. **تسرّب الحلقة الداخلية**: مجموعة (كرتان بيضاوان) يُطلَب منها C(2,3) → `math.comb`
+   يُرجِع 0 → الواجهة تعرض `C_2^3 = 0` المضلِّل (يبدو خطأً حسابياً للطالب).
+2. **جدار نصّي**: المكوّن البصري (combinations/tree) كان يُبثّ ثم يسقط للمسار النصّي
+   فيتبعه شرح LLM طويل — كارثة Cognitive Overload (CLAUDE.md §0 D-074).
+3. **لا قصة بصرية**: عند حيرة الطالب («اريد شرح خارق لاني لم افهم اي شي») لم تكن
+   هناك حمولة storytelling بصرية (urn_state/event_analysis).
+
+**القرار (V30.0)**:
+- **حارس الحلقة الداخلية** في `ProbabilityCalculatorSkill._build_combinations`:
+  حين `k > count` لمجموعةٍ ما، لا نستدعي `math.comb` ولا نُخرِج `C_n^k=0`؛ بل
+  `is_possible=False` + `pedagogical_string="مستحيل (العدد المتوفر غير كافٍ...)"`.
+  المجموعات الممكنة تحمل `is_possible=True` + `C(count,k)=fav`. (`same_group`
+  يجمع الممكنة فقط → P(3 من نفس الصنف) = 14/165 للتمرين 2024.)
+- **القصة البصرية العميقة (Deep Dive)**: `is_confusion()` → `deep_dive=True` +
+  `urn_state` (كرات ملوّنة) + `event_analysis` (تحليل لكل حدث، بلا معادلات خام).
+  `CombinationsVisualizer.jsx` يُصيّر `pedagogical_string` بدل `C_n^k=0`، يرسم
+  حالة الكيس، ويظهر شارة «شرح خارق».
+- **الكبح النصّي المُعمَّم (V30.0 §4)**: `_build_calculated_ui` يُرجِع الآن
+  `terminate_pipeline=True` + `companion_text` (جملة واحدة ≤ 120 حرف:
+  «إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄») لكل مكوّن توليدي
+  (combinations_visualizer + probability_tree)، لا للحالة المستحيلة فقط (V28.0).
+  `chat_with_agent` يُنهي المسار فوراً → صفر جدران نصّية بعد المكوّن البصري.
+
+**قواعد دائمة (لا تُكسر بدون ADR)**:
+1. `k > count` لمجموعة ⇒ `is_possible=False` + رسالة تربوية، ممنوع `C_n^k=0`.
+2. أي مكوّن Generative UI يُبثّ للطالب ⇒ `terminate_pipeline=True` + جملة واحدة.
+3. `same_group_favorable` يجمع المجموعات الممكنة فقط.
+4. الخلفية تُخرج Pydantic منظَّماً فقط — التصيير مسؤولية `GenerativeUIRenderer`.
+
+**تحقق حي (2026-05-22)**: `scripts/v30_live_test.py` يقود `chat_with_agent` كاملاً
+للسيناريو → (1) لا `C_2^3=0`، (2) نص مكبوت 45 حرف جملة واحدة، (3) deep_dive +
+urn_state + event_analysis. OpenRouter LIVE HTTP 200 (358 نموذج). Supabase
+مؤجَّل (sandbox يحجب 6543). 65 اختبار V30 + 646 إجمالي (services+contracts) ✅.
+ruff + runtime_truth + skills-doctrine + validate_structure + ci_guardrails ✅.
+
+**الملفات**: `app/services/skills/probability_skill.py` (CombinationGroup +
+is_possible/pedagogical_string/color + deep_dive/urn_state/event_analysis +
+guardrail) | `app/infrastructure/clients/orchestrator_client.py`
+(`_build_calculated_ui` muzzle + new fields) |
+`frontend/app/components/generative/CombinationsVisualizer.jsx` (pedagogical
+render + UrnState + colors) | `frontend/app/globals.css` (V30 styles) | tests:
+`test_probability_skill.py` (+5) `test_generative_ui_streaming.py` (+4)
+`test_v28_text_wall_muzzle.py` (updated for V30 muzzle generalization)
+`frontend/tests/generative_ui_streaming.test.mjs` (+8) | `scripts/v30_live_test.py`.

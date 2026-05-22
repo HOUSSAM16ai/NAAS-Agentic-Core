@@ -5352,3 +5352,48 @@ Skill رسمي جديد `app/services/skills/probability_skill.py` (يحترم �
 - regression: V14 gitpod / V15 generalization / V17 omni — كلها ناجحة ✅
 
 
+
+---
+
+## 6.56 Deep-Dive Generative UI + Sub-Case Surgery (2026-05-22, D-079 · Protocol V30.0)
+
+> ثلاث جراحات على مسار السحب الآني («دفعة واحدة»): إيقاف تسرّب `C_2^3=0`،
+> كبح جدار النص لكل مكوّن توليدي، وقصة بصرية شاملة عند حيرة الطالب.
+
+### الكوارث المُشخَّصة
+1. **تسرّب الحلقة الداخلية**: `math.comb(2,3)=0` لمجموعة (كرتان بيضاوان) →
+   الواجهة تعرض `C_2^3 = 0` المضلِّل (يبدو خطأً حسابياً للطالب).
+2. **جدار نصّي**: المكوّن البصري كان يُبثّ ثم يتبعه شرح LLM طويل (Cognitive Overload).
+3. **لا قصة بصرية**: «اريد شرح خارق لاني لم افهم اي شي» لم يُنتج storytelling بصري.
+
+### الإصلاح (D-079)
+- **حارس الحلقة الداخلية** (`ProbabilityCalculatorSkill._build_combinations`):
+  `k > count` ⇒ لا `math.comb`، لا `C_n^k=0`؛ بل `is_possible=False` +
+  `pedagogical_string="مستحيل (العدد المتوفر غير كافٍ لسحب المطلوب)"`. المجموعات
+  الممكنة: `is_possible=True` + `C(count,k)`. `same_group` يجمع الممكنة فقط
+  (التمرين 2024: أبيض مستحيل، أحمر C(4,3)=4، أخضر C(5,3)=10 → P=14/165).
+- **القصة البصرية (Deep Dive)**: `is_confusion()` ⇒ `deep_dive=True` +
+  `urn_state` (كرات ملوّنة) + `event_analysis`. `CombinationsVisualizer.jsx`
+  يُصيّر `pedagogical_string` بدل `C_n^k=0`، يرسم الكيس، يُظهر شارة «شرح خارق».
+- **الكبح النصّي المُعمَّم**: `_build_calculated_ui` يُرجِع `terminate_pipeline=True`
+  + `companion_text` (جملة ≤ 120 حرف: «إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄»)
+  لكل مكوّن توليدي (combinations + tree)، لا الحالة المستحيلة فقط (V28.0).
+
+### قواعد دائمة (لا تُكسر بدون ADR)
+1. `k > count` لمجموعة ⇒ `is_possible=False` + رسالة تربوية، ممنوع منعاً باتاً `C_n^k=0`.
+2. أي Generative UI يُبثّ للطالب ⇒ `terminate_pipeline=True` + جملة مرافقة واحدة.
+3. `same_group_favorable` يجمع المجموعات الممكنة فقط.
+4. الخلفية تُخرج Pydantic منظَّماً فقط — التصيير مسؤولية `GenerativeUIRenderer` (whitelist).
+
+### التحقّق الحي (2026-05-22)
+- `scripts/v30_live_test.py` يقود `chat_with_agent` كاملاً للسيناريو →
+  (1) لا `C_2^3=0` ✅ (2) نص مكبوت 45 حرف جملة واحدة ✅ (3) deep_dive + urn_state +
+  event_analysis ✅. OpenRouter LIVE HTTP 200 (358 نموذج). Supabase مؤجَّل (sandbox
+  يحجب 6543/5432). 65 اختبار V30 + 646 إجمالي (services+contracts) ✅.
+  ruff + runtime_truth + skills-doctrine + validate_structure + ci_guardrails ✅.
+
+### السلسلة الكاملة (D-049 → D-079)
+| Decision | المُصلَح |
+|----------|---------|
+| D-075 → D-078 | dynamic probability engine + generalization + hardening + auto-trigger router |
+| **D-079** | **deep-dive generative UI + sub-case surgery (no C_2^3=0) + universal text-wall muzzle** |

@@ -133,6 +133,68 @@ def test_calculated_tree_none_for_non_probability() -> None:
     assert OrchestratorClient._build_calculated_tree_props("اشرح قانون نيوتن") is None
 
 
+# ─── V30.0: _build_calculated_ui — Sub-Group Leak + Text-Wall Muzzle ─────────────
+
+_V30_URN_SIMUL = (
+    "يحتوي كيس على 11 كرة: كرتان بيضاوان، أربع كرات حمراء، خمس كرات خضراء. نسحب 3 كرات دفعة واحدة."
+)
+
+
+def test_calculated_ui_combinations_no_c_2_3_leak() -> None:
+    """V30.0: حمولة combinations لا تحوي C(2,3)=0 — المجموعة المستحيلة تربوية."""
+    import json
+
+    ev = OrchestratorClient._build_calculated_ui(
+        "اريد شرح خارق لاني لم افهم اي شي",
+        history_messages=[{"role": "user", "content": _V30_URN_SIMUL}],
+    )
+    assert ev is not None
+    assert ev["component"] == "combinations_visualizer"
+    blob = json.dumps(ev, ensure_ascii=False)
+    assert "C(2,3)" not in blob and "C_2^3" not in blob
+    white = next(g for g in ev["props"]["groups"] if "بيضاء" in g["label"])
+    assert white["is_possible"] is False
+    assert white["favorable_combinations"] == 0
+    assert "مستحيل" in white["pedagogical_string"]
+
+
+def test_calculated_ui_combinations_text_wall_muzzle() -> None:
+    """V30.0: المكوّن البصري يُنهي المسار (terminate_pipeline) بجملة واحدة."""
+    ev = OrchestratorClient._build_calculated_ui(
+        "اريد شرح خارق لاني لم افهم اي شي",
+        history_messages=[{"role": "user", "content": _V30_URN_SIMUL}],
+    )
+    assert ev is not None
+    assert ev["terminate_pipeline"] is True
+    companion = ev["companion_text"]
+    assert isinstance(companion, str) and 0 < len(companion) <= 120
+    # جملة واحدة فقط (لا فقرات/قوائم)
+    assert "\n" not in companion
+
+
+def test_calculated_ui_deep_dive_storytelling_payload() -> None:
+    """V30.0: حمولة الغوص العميق تحمل urn_state + event_analysis للقصة البصرية."""
+    ev = OrchestratorClient._build_calculated_ui(
+        "اريد شرح خارق لاني لم افهم اي شي",
+        history_messages=[{"role": "user", "content": _V30_URN_SIMUL}],
+    )
+    assert ev is not None
+    props = ev["props"]
+    assert props["deep_dive"] is True
+    assert isinstance(props["urn_state"], list) and props["urn_state"]
+    assert isinstance(props["event_analysis"], list) and props["event_analysis"]
+
+
+def test_calculated_ui_probability_tree_also_muzzles() -> None:
+    """V30.0: شجرة الاحتمالات (تتابعي) تُنهي المسار أيضاً (لا جدار نصّي)."""
+    ev = OrchestratorClient._build_calculated_ui(
+        "كيس فيه 11 كرة: 4 حمراء و7 خضراء. نسحب كرتين على التوالي وبدون إرجاع، احتمال"
+    )
+    assert ev is not None
+    assert ev["component"] == "probability_tree"
+    assert ev["terminate_pipeline"] is True
+
+
 # ─── _normalize_ui_component_event ──────────────────────────────────────────────
 
 

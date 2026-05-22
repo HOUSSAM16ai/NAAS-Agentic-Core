@@ -57,11 +57,70 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "knowledge_nodes",
         "knowledge_edges",
         "student_bkt_analytics",
+        "bac_exercises",
     }
 )
 
 
 REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
+    # Protocol V24.0 — جدول تمارين البكالوريا المُهيكَل (Data Engineering Mandate).
+    # يحوّل المحتوى التعليمي من نص خام إلى صفوف ذات بيانات وصفية صارمة لتغذية
+    # محرّك RAG بدقة دلالية (subject/topic/draw_type/year + parsed_entities JSONB).
+    "bac_exercises": {
+        "columns": [
+            "id",
+            "subject",
+            "topic",
+            "draw_type",
+            "year",
+            "session",
+            "branch",
+            "exam_ref",
+            "exercise_number",
+            "language",
+            "source",
+            "content_hash",
+            "raw_text",
+            "parsed_entities",
+            "created_at",
+            "updated_at",
+        ],
+        "auto_fix": {},
+        "indexes": {
+            "subject": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercises_subject" ON "bac_exercises"("subject")',
+            "topic": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercises_topic" ON "bac_exercises"("topic")',
+            "year": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercises_year" ON "bac_exercises"("year")',
+            "draw_type": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercises_draw_type" ON "bac_exercises"("draw_type")',
+            "parsed_entities": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercises_parsed_entities" ON "bac_exercises" USING GIN ("parsed_entities")',
+        },
+        "index_names": {
+            "subject": "ix_bac_exercises_subject",
+            "topic": "ix_bac_exercises_topic",
+            "year": "ix_bac_exercises_year",
+            "draw_type": "ix_bac_exercises_draw_type",
+            "parsed_entities": "ix_bac_exercises_parsed_entities",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "bac_exercises"('
+            '"id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),'
+            '"subject" VARCHAR(80) NOT NULL,'
+            '"topic" VARCHAR(120) NOT NULL,'
+            '"draw_type" VARCHAR(40),'
+            '"year" INTEGER NOT NULL CHECK ("year" BETWEEN 1990 AND 2100),'
+            '"session" VARCHAR(60),'
+            '"branch" VARCHAR(160),'
+            '"exam_ref" VARCHAR(120),'
+            '"exercise_number" INTEGER,'
+            "\"language\" VARCHAR(8) NOT NULL DEFAULT 'ar',"
+            '"source" VARCHAR(255),'
+            '"content_hash" VARCHAR(64) NOT NULL UNIQUE,'
+            '"raw_text" TEXT NOT NULL,'
+            "\"parsed_entities\" JSONB NOT NULL DEFAULT '{}',"
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
+            '"updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            ")"
+        ),
+    },
     "student_bkt_analytics": {
         "columns": [
             "id",

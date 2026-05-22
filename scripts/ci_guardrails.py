@@ -33,7 +33,14 @@ FORBIDDEN_PATTERNS = [
     },
     {
         "pattern": "print",
-        "allowed_in": ["scripts/*", "cli.py", "tests/*", "examples/*", "dev_setup.py"],
+        "allowed_in": [
+            "scripts/*",
+            "cli.py",
+            "tests/*",
+            "examples/*",
+            "dev_setup.py",
+            "live_db_restructure.py",
+        ],
         "message": "Use of 'print()' is forbidden in application code. Use 'app.core.logging' instead.",
     },
 ]

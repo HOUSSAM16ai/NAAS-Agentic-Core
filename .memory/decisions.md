@@ -1,5 +1,49 @@
 # Architectural Decisions
-> Last updated: 2026-05-19 | Branch: `claude/fix-microservices-ci-KrgCg`
+> Last updated: 2026-05-22 | Branch: `claude/e-taleem-visual-skills-rSNSA`
+
+## D-081 · ISS-083 — Garbage "كرة رقم N" Entities + Misleading Sequential Tree (2026-05-22)
+
+**Branch**: `claude/e-taleem-visual-skills-rSNSA`
+
+### الكارثة (مُبلَّغ عنها بصورة حيّة)
+
+طالب فتح تمرين BAC 2024 (سحب 3 كرات «دفعة واحدة» من كيس 11 كرة: 2 بيضاء، 4 حمراء، 5 خضراء) فظهرت **شجرة احتمالات تتابعية خاطئة رياضياً** بتسميات غارباج «كرة رقم 0» وكسور مستحيلة (3/7، 1/7). وصف المستخدم: «تجربة تعليمية غبية من العصور الحجرية، لا عمق لا تفاعل ولا تغطي التمرين».
+
+### السبب الجذري (مُثبت بالتجريب الحي)
+
+`probability_skill.py:_extract_count_entities` كان يستخرج الكيانات المرقّمة بشرط `if "رقم" not in tok` — مطابقة **سلسلة فرعية** تلتقط الصفة «مرقمة»/«مرقمتان» (تعني «مُعلَّمة بـ»، تصف ترقيم الكرات لا نوعها). فتمرين «أربع كرات حمراء مرقمة بـ 0، 1، 1، 3» يُنتج كياناً زائفاً «كرة رقم 0» (عدّ 4) → المجموع 17 بدل 11 → كسور خاطئة + شجرة تتابعية مضلِّلة.
+
+### الحل (جراحي، يعالج الجذر)
+
+1. ثابت `_NUMBERED_ENTITY_MARKERS = frozenset({"رقم","الرقم","ارقام","الارقام","رقمها","ارقامها"})` — الأسماء المستقلّة الصريحة فقط.
+2. الحلقة تستخدم `if tok not in _NUMBERED_ENTITY_MARKERS: continue` → تُستبعد «مرقمة/مرقمتان/مرقم».
+3. «بطاقة رقم 1»/«تحمل الرقم 2» الصريحة تبقى سليمة؛ ترقيم الكرات لا يُنتج كيانات زائفة.
+
+### تطوير منظومة الـ Skills (طلب المستخدم)
+
+`PROBABILITY_CALCULATION_DOCTRINE` v1.1.0 → **v1.2.0** + قاعدة تُجسّد الدرس (قبول اسم الرقم الصريح فقط، رفض صفة «مرقمة»).
+
+### النتيجة بعد الإصلاح (تجريب حي)
+
+- السحب الآني (Part I) → `combinations_visualizer`: n=11, k=3, C=165، **P(A)=14/165** (يطابق الإجابة الرسمية)، deep_dive=True عند الحيرة → القصة البصرية (urn + event_analysis).
+- السحب التتابعي (Part II) → شجرة بكسور صحيحة (4/11، 2/11، 5/11) وتسميات لون ملموسة.
+- لا «كرة رقم N» غارباج في أي مسار.
+
+### التحقق
+
+`pytest` 39 (probability) + 266 (skills+generative-ui suite) ✅ · `OrchestratorClient._build_calculated_ui` الإنتاجي ✅ · ruff · runtime_truth --check · validate_structure · ci_guardrails · skills-doctrine-gate ✅ (Python 3.12 venv).
+
+### القواعد الدائمة (D-081)
+
+1. استخراج الكيانات المرقّمة عبر `_NUMBERED_ENTITY_MARKERS` فقط — أي توسيع يُضاف للمجموعة + اختبار regression.
+2. صيغ «مرقم...» (صفة) لا تُنتج كيانات أبداً.
+3. الموجِّه التربوي (D-078) يبقى صامداً: آني → combinations، تتابعي → tree.
+
+### الملفات
+
+`app/services/skills/probability_skill.py` · `app/services/skills/doctrine.py` · `tests/services/test_probability_skill.py` (+5 tests) · `.memory/issues.md` (ISS-083) · `CLAUDE.md` §6.57.
+
+---
 
 ## D-073 · ISS-081 — AnswerQualitySkill Wire-In + D-070 Doctrine Re-exports (2026-05-19)
 

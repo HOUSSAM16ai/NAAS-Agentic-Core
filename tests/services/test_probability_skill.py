@@ -501,3 +501,90 @@ def test_combination_group_color_tokens() -> None:
     assert colors["كرة حمراء"] == "red"
     assert colors["كرة بيضاء"] == "white"
     assert colors["كرة خضراء"] == "green"
+
+
+# ─── ISS-083 (D-081): Ball-numbering must NOT create garbage "رقم N" entities ────
+# الكارثة الحية: «مرقمة بـ 0، 1، 1، 3» كان يُلتقَط كـ «كرة رقم 0»/«كرة رقم 1»
+# (السلسلة الفرعية «رقم» داخل «مرقمة») فيتضخّم المجموع (17 بدل 11) وتظهر كسور
+# خاطئة (4/17 بدل 4/11) وتسميات غارباج في شجرة الواجهة — تماماً صورة المستخدم.
+
+_BAC2024_FULL = (
+    "يحتوي كيس على 11 كرة متماثلة لا تُفرّق باللمس موزعة كما يلي: "
+    "كرتان بيضاوان مرقمتان بـ 1، 3 "
+    "أربع كرات حمراء مرقمة بـ 0، 1، 1، 3 "
+    "خمس كرات خضراء مرقمة بـ 0، 1، 1، 3، 4 "
+    "نسحب عشوائيًا 3 كرات دفعة واحدة من الكيس."
+)
+# صيغة upstream قد تُزيل «بـ» فتلتصق الأرقام بـ«مرقمة» (أسوأ حالة للالتباس).
+_BAC2024_STRIPPED = (
+    "كرتان بيضاوان مرقمتان 1 3 أربع كرات حمراء مرقمة 0 1 1 3 خمس كرات خضراء مرقمة 0 1 1 3 4"
+)
+
+
+def test_iss083_ball_numbering_creates_no_garbage_entities() -> None:
+    """«مرقمة 0 1 1 3» لا يُنتج «كرة رقم 0»/«كرة رقم 1» — ألوان فقط."""
+    entities = _skill()._extract_count_entities(_BAC2024_STRIPPED)
+    labels = {e[0] for e in entities}
+    assert labels == {"كرة حمراء", "كرة بيضاء", "كرة خضراء"}
+    assert all("رقم" not in lbl for lbl in labels)
+    counts = {e[0]: e[2] for e in entities}
+    assert counts == {"كرة حمراء": 4, "كرة بيضاء": 2, "كرة خضراء": 5}
+
+
+def test_iss083_simultaneous_draw_correct_combinations() -> None:
+    """السحب الآني → تأليفات صحيحة: n=11, k=3, C=165, P(A)=14/165."""
+    from app.services.skills.probability_skill import CombinationsModelOutput
+
+    out = _skill().analyze(_BAC2024_FULL)
+    assert isinstance(out, CombinationsModelOutput)
+    assert out.n == 11 and out.k == 3 and out.total_combinations == 165
+    assert out.same_group_favorable == 14  # P(A) = 14/165 (الإجابة الرسمية)
+    assert all("رقم" not in g.label for g in out.groups)
+
+
+def test_iss083_sequential_draw_correct_fractions_over_eleven() -> None:
+    """السحب التتابعي → شجرة بكسور /11 صحيحة وتسميات لون ملموسة (لا «رقم 0»)."""
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="اعطني شجرة الاحتمالات",
+            history=[
+                {
+                    "role": "assistant",
+                    "content": _BAC2024_STRIPPED + " نسحب 3 كرات على التوالي وبدون إرجاع.",
+                }
+            ],
+        )
+    )
+    assert isinstance(out, ProbabilityModelOutput)
+    first_level = {c["label"]: (c["p_num"], c["p_den"]) for c in out.tree["children"]}
+    assert first_level == {
+        "كرة حمراء": (4, 11),
+        "كرة بيضاء": (2, 11),
+        "كرة خضراء": (5, 11),
+    }
+    assert all("رقم" not in lbl for lbl in first_level)
+
+
+def test_iss083_explicit_numbered_cards_still_work() -> None:
+    """حارس الانحدار: «تحمل الرقم 1» و«رقم 2» الصريحة تبقى كيانات سليمة."""
+    skill = _skill()
+    e1 = {
+        x[0]: x[2]
+        for x in skill._extract_count_entities("8 بطاقات: 3 تحمل الرقم 1، و5 تحمل الرقم 2")
+    }
+    assert e1 == {"بطاقة رقم 1": 3, "بطاقة رقم 2": 5}
+    e2 = {x[0]: x[2] for x in skill._extract_count_entities("علبة بها 8 بطاقات: 3 رقم 1 و5 رقم 2")}
+    assert e2 == {"بطاقة رقم 1": 3, "بطاقة رقم 2": 5}
+
+
+def test_iss083_doctrine_rule_present_and_versioned() -> None:
+    """قاعدة ISS-083 مُسجَّلة في PROBABILITY_CALCULATION_DOCTRINE + الإصدار ≥ 1.2.0."""
+    from app.services.skills.doctrine import (
+        PROBABILITY_CALCULATION_DOCTRINE,
+        PROBABILITY_CALCULATION_DOCTRINE_VERSION,
+    )
+
+    assert PROBABILITY_CALCULATION_DOCTRINE_VERSION >= "1.2.0"
+    joined = " ".join(PROBABILITY_CALCULATION_DOCTRINE)
+    assert "ISS-083" in joined
+    assert "مرقمة" in joined  # القاعدة تذكر الصفة المرفوضة صراحةً

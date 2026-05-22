@@ -995,6 +995,7 @@ class OrchestratorClient:
         try:
             from app.services.skills.probability_skill import (
                 CombinationsModelOutput,
+                FullExerciseStoryOutput,
                 ImpossibleCaseOutput,
                 ProbabilityCalculatorSkill,
                 ProbabilityInput,
@@ -1003,6 +1004,41 @@ class OrchestratorClient:
 
             skill = ProbabilityCalculatorSkill()
             result = skill.analyze(ProbabilityInput(question=question, history=history_messages))
+
+            # V31.5 (Full Exercise OS): القصة التربوية الشاملة — Carousel متعدّد
+            # الخطوات يغطّي التمرين كاملاً (معطيات → فضاء عيّنة → حدث مركّب →
+            # متغيّر عشوائي). يُفعَّل عند حيرة الطالب. terminate_pipeline=True
+            # يكبح جدار النص — companion_text (جملة واحدة) هو النص الوحيد.
+            if isinstance(result, FullExerciseStoryOutput):
+                return {
+                    "component": "full_exercise_story",
+                    "terminate_pipeline": True,
+                    "companion_text": result.companion_text,
+                    "props": {
+                        "title": result.title,
+                        "ui_mode": result.ui_mode,
+                        "calculated": True,
+                        "n": result.n,
+                        "k": result.k,
+                        "total_combinations": result.total_combinations,
+                        "exercise_steps": [
+                            {
+                                "step_index": s.step_index,
+                                "step_id": s.step_id,
+                                "title": s.title,
+                                "render_kind": s.render_kind,
+                                "visual_directives": s.visual_directives,
+                                "numerical_state": s.numerical_state,
+                                "pedagogical_message": s.pedagogical_message,
+                            }
+                            for s in result.exercise_steps
+                        ],
+                    },
+                    "fallback_text": (
+                        f"شرح بصري شامل: سحب {result.k} من {result.n} "
+                        f"(C={result.total_combinations}) عبر {len(result.exercise_steps)} خطوات."
+                    ),
+                }
 
             # V28.0: الحالة المستحيلة — short-circuit كامل للـ pipeline.
             # terminate_pipeline=True يُوقف كل عقد LLM/شجرة/synthesizer لاحقة.

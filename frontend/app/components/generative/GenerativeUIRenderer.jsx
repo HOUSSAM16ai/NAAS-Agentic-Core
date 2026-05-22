@@ -2,6 +2,7 @@
 
 import React, { memo } from 'react';
 import { CombinationsVisualizer } from './CombinationsVisualizer';
+import { FullExerciseStory } from './FullExerciseStory';
 import { GenerativeUIErrorBoundary } from './GenerativeUIErrorBoundary';
 import { ImpossibleDrawAnimation } from './ImpossibleDrawAnimation';
 import { ProbabilityTree } from './ProbabilityTree';
@@ -32,6 +33,7 @@ BktHintStub.displayName = 'BktHintStub';
 const COMPONENT_REGISTRY = {
     probability_tree: (props) => <ProbabilityTree props={props} />,
     combinations_visualizer: (props) => <CombinationsVisualizer props={props} />,
+    full_exercise_story: (props) => <FullExerciseStory props={props} />,
     impossible_draw_animation: (props) => <ImpossibleDrawAnimation props={props} />,
     bkt_hint_display: (props, fallbackText) => <BktHintStub fallbackText={fallbackText} />,
 };

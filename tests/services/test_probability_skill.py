@@ -299,9 +299,9 @@ def test_frustration_detector_signals() -> None:
     assert skill.is_confusion("شكرا جزيلا") is False
 
 
-def test_confusion_followup_routes_to_combinations_via_history() -> None:
-    """«مفهمتش» بعد تمرين سحب آني → combinations (سياق المحادثة يحفظ التركيبة)."""
-    from app.services.skills.probability_skill import CombinationsModelOutput
+def test_confusion_followup_routes_to_full_story_via_history() -> None:
+    """V31.5: «مفهمتش» بعد تمرين سحب آني → القصة الشاملة (سياق المحادثة يحفظ التركيبة)."""
+    from app.services.skills.probability_skill import FullExerciseStoryOutput
 
     bac = "كيس فيه 11 كرة: كرتان بيضاوان، أربع كرات حمراء، خمس كرات خضراء. نسحب 3 كرات دفعة واحدة."
     history = [
@@ -311,7 +311,7 @@ def test_confusion_followup_routes_to_combinations_via_history() -> None:
     out = _skill().analyze(
         ProbabilityInput(question="مفهمتش كيفاش حسبنا الاحتمال", history=history)
     )
-    assert isinstance(out, CombinationsModelOutput)
+    assert isinstance(out, FullExerciseStoryOutput)
     assert out.k == 3 and out.n == 11
 
 
@@ -463,8 +463,8 @@ def test_subgroup_possible_groups_carry_formula_string() -> None:
 
 
 def test_deep_dive_activated_by_confusion() -> None:
-    """V30.0: حيرة الطالب («لم أفهم أي شيء») تُفعّل deep_dive + القصة البصرية."""
-    from app.services.skills.probability_skill import CombinationsModelOutput
+    """V31.5: حيرة الطالب («لم أفهم أي شيء») تُفعّل القصة الشاملة (Carousel)."""
+    from app.services.skills.probability_skill import FullExerciseStoryOutput
 
     out = _skill().analyze(
         ProbabilityInput(
@@ -472,14 +472,14 @@ def test_deep_dive_activated_by_confusion() -> None:
             history=[{"role": "user", "content": _BAC_URN_SIMUL}],
         )
     )
-    assert isinstance(out, CombinationsModelOutput)
-    assert out.deep_dive is True
-    # حالة الكيس وتحليل الأحداث مملوءان للقصة البصرية
-    assert len(out.urn_state) == len(out.groups)
-    assert len(out.event_analysis) == len(out.groups)
-    assert all("color" in u for u in out.urn_state)
-    impossible = [e for e in out.event_analysis if e["is_possible"] is False]
-    assert impossible and all(e["value"] == 0 for e in impossible)
+    assert isinstance(out, FullExerciseStoryOutput)
+    # خطوة المعطيات (urn) + خطوة الحدث (event_breakdown) تغطّيان القصة البصرية
+    urn = next(s for s in out.exercise_steps if s.step_id == "data")
+    assert len(urn.numerical_state["groups"]) >= 2
+    assert all("color" in g for g in urn.numerical_state["groups"])
+    event = next(s for s in out.exercise_steps if s.step_id == "same_color_event")
+    impossible = [g for g in event.numerical_state["groups"] if g["is_possible"] is False]
+    assert impossible and all(g["favorable"] == 0 for g in impossible)
 
 
 def test_deep_dive_off_without_confusion() -> None:
@@ -588,3 +588,95 @@ def test_iss083_doctrine_rule_present_and_versioned() -> None:
     joined = " ".join(PROBABILITY_CALCULATION_DOCTRINE)
     assert "ISS-083" in joined
     assert "مرقمة" in joined  # القاعدة تذكر الصفة المرفوضة صراحةً
+
+
+# ─── V31.5 — Full Exercise OS (FullExerciseStoryOutput) ───────────────────────
+
+_BAC2024_CONFUSED = ProbabilityInput(
+    question=(
+        "اعطني تمرين الاحتمالات 2024: كيس فيه أربع كرات حمراء وخمس كرات خضراء "
+        "وكرتان بيضاوان، نسحب 3 كرات دفعة واحدة. اريد شرح خارق لاني لم افهم اي شي."
+    )
+)
+
+
+def test_v315_confusion_simultaneous_triggers_full_story() -> None:
+    """حيرة الطالب + سحب آني → FullExerciseStoryOutput (Carousel) لا مكوّن واحد."""
+    from app.services.skills.probability_skill import FullExerciseStoryOutput
+
+    out = _skill().analyze(_BAC2024_CONFUSED)
+    assert isinstance(out, FullExerciseStoryOutput)
+    assert out.component == "full_exercise_story"
+    assert out.ui_mode == "deep_dive_story"
+    assert out.n == 11 and out.k == 3 and out.total_combinations == 165
+    assert len(out.exercise_steps) >= 3
+
+
+def test_v315_full_story_step_ids_and_separation() -> None:
+    """كل خطوة تحمل العقد الثلاثي المنفصل (visual/numerical/pedagogical)."""
+    out = _skill().analyze(_BAC2024_CONFUSED)
+    step_ids = [s.step_id for s in out.exercise_steps]
+    assert step_ids[:3] == ["data", "sample_space", "same_color_event"]
+    for s in out.exercise_steps:
+        assert s.pedagogical_message and isinstance(s.numerical_state, dict)
+        assert isinstance(s.visual_directives, dict)
+        assert s.render_kind in {"urn", "combinations", "event_breakdown", "distribution"}
+
+
+def test_v315_event_step_marks_white_impossible_no_zero_leak() -> None:
+    """خطوة الحدث: البيضاء (2<3) مستحيلة (is_possible=False)، المجموع 14/165."""
+    out = _skill().analyze(_BAC2024_CONFUSED)
+    event = next(s for s in out.exercise_steps if s.step_id == "same_color_event")
+    groups = event.numerical_state["groups"]
+    white = next(g for g in groups if g["label"] == "كرة بيضاء")
+    assert white["is_possible"] is False
+    assert white["favorable"] == 0
+    assert "مستحيل" in white["pedagogical_string"]
+    # الحدث «3 من نفس اللون» = C(4,3)+C(5,3) = 4+10 = 14
+    assert event.numerical_state["same_group_favorable"] == 14
+    assert event.numerical_state["total_combinations"] == 165
+
+
+def test_v315_random_variable_hypergeometric_sums_to_total() -> None:
+    """المتغيّر العشوائي X = عدد الحمراء: توزيع فوق-هندسي يجمع للمجموع (165)."""
+    out = _skill().analyze(_BAC2024_CONFUSED)
+    rv = next((s for s in out.exercise_steps if s.step_id == "random_variable"), None)
+    assert rv is not None, "random variable step expected for ≥2 groups"
+    dist = rv.numerical_state["distribution"]
+    # focal = first group (red=4) → P(X=i) over C(11,3)=165
+    assert all(d["p_den"] == 165 for d in dist)
+    assert sum(d["p_num"] for d in dist) == 165  # احتمالات تجمع إلى 1
+    # كل القيم ممكنة (لا p_num=0 مُدرَج)
+    assert all(d["p_num"] > 0 for d in dist)
+
+
+def test_v315_simultaneous_without_confusion_stays_single_combination() -> None:
+    """سحب آني بلا حيرة → مكوّن تأليفات مفرد (لا Carousel كامل)."""
+    from app.services.skills.probability_skill import (
+        CombinationsModelOutput,
+        FullExerciseStoryOutput,
+    )
+
+    out = _skill().analyze(
+        ProbabilityInput(
+            question=(
+                "كيس فيه أربع كرات حمراء وخمس كرات خضراء وكرتان بيضاوان، "
+                "نسحب 3 كرات دفعة واحدة. ما احتمال أن تكون من نفس اللون؟"
+            )
+        )
+    )
+    assert isinstance(out, CombinationsModelOutput)
+    assert not isinstance(out, FullExerciseStoryOutput)
+
+
+def test_v315_full_story_registered_component_and_doctrine() -> None:
+    """full_exercise_story في القائمة البيضاء + قاعدة V31.5 + الإصدار ≥ 1.3.0."""
+    from app.contracts.streaming import KNOWN_UI_COMPONENTS
+    from app.services.skills.doctrine import (
+        PROBABILITY_CALCULATION_DOCTRINE,
+        PROBABILITY_CALCULATION_DOCTRINE_VERSION,
+    )
+
+    assert "full_exercise_story" in KNOWN_UI_COMPONENTS
+    assert PROBABILITY_CALCULATION_DOCTRINE_VERSION >= "1.3.0"
+    assert "V31.5" in " ".join(PROBABILITY_CALCULATION_DOCTRINE)

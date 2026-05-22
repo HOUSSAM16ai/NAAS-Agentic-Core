@@ -133,15 +133,27 @@ def test_calculated_tree_none_for_non_probability() -> None:
     assert OrchestratorClient._build_calculated_tree_props("اشرح قانون نيوتن") is None
 
 
-# ─── V30.0: _build_calculated_ui — Sub-Group Leak + Text-Wall Muzzle ─────────────
+# ─── V30.0 / V31.5: _build_calculated_ui — Sub-Group Leak + Text-Wall Muzzle +
+#     Full Exercise OS (multi-step pedagogical carousel on confusion) ─────────────
+
+
+def test_full_exercise_story_in_whitelist_and_payload_valid() -> None:
+    """V31.5: full_exercise_story مُسجَّل + حمولة صالحة تمرّ عبر UIComponentPayload."""
+    assert "full_exercise_story" in KNOWN_UI_COMPONENTS
+    payload = UIComponentPayload(
+        component="full_exercise_story",
+        props={"n": 11, "k": 3, "total_combinations": 165, "exercise_steps": []},
+        fallback_text="شرح بصري شامل",
+    )
+    assert payload.component == "full_exercise_story"
 
 _V30_URN_SIMUL = (
     "يحتوي كيس على 11 كرة: كرتان بيضاوان، أربع كرات حمراء، خمس كرات خضراء. نسحب 3 كرات دفعة واحدة."
 )
 
 
-def test_calculated_ui_combinations_no_c_2_3_leak() -> None:
-    """V30.0: حمولة combinations لا تحوي C(2,3)=0 — المجموعة المستحيلة تربوية."""
+def test_calculated_ui_full_story_no_c_2_3_leak() -> None:
+    """V31.5: حيرة الطالب → full_exercise_story؛ لا C(2,3)=0 يتسرّب للطالب."""
     import json
 
     ev = OrchestratorClient._build_calculated_ui(
@@ -149,17 +161,20 @@ def test_calculated_ui_combinations_no_c_2_3_leak() -> None:
         history_messages=[{"role": "user", "content": _V30_URN_SIMUL}],
     )
     assert ev is not None
-    assert ev["component"] == "combinations_visualizer"
+    assert ev["component"] == "full_exercise_story"
     blob = json.dumps(ev, ensure_ascii=False)
     assert "C(2,3)" not in blob and "C_2^3" not in blob
-    white = next(g for g in ev["props"]["groups"] if "بيضاء" in g["label"])
+    event = next(
+        s for s in ev["props"]["exercise_steps"] if s["step_id"] == "same_color_event"
+    )
+    white = next(g for g in event["numerical_state"]["groups"] if "بيضاء" in g["label"])
     assert white["is_possible"] is False
-    assert white["favorable_combinations"] == 0
+    assert white["favorable"] == 0
     assert "مستحيل" in white["pedagogical_string"]
 
 
-def test_calculated_ui_combinations_text_wall_muzzle() -> None:
-    """V30.0: المكوّن البصري يُنهي المسار (terminate_pipeline) بجملة واحدة."""
+def test_calculated_ui_full_story_text_wall_muzzle() -> None:
+    """V31.5: القصة الشاملة تُنهي المسار (terminate_pipeline) بجملة واحدة."""
     ev = OrchestratorClient._build_calculated_ui(
         "اريد شرح خارق لاني لم افهم اي شي",
         history_messages=[{"role": "user", "content": _V30_URN_SIMUL}],
@@ -172,17 +187,22 @@ def test_calculated_ui_combinations_text_wall_muzzle() -> None:
     assert "\n" not in companion
 
 
-def test_calculated_ui_deep_dive_storytelling_payload() -> None:
-    """V30.0: حمولة الغوص العميق تحمل urn_state + event_analysis للقصة البصرية."""
+def test_calculated_ui_full_story_multistep_payload() -> None:
+    """V31.5: القصة الشاملة تحمل خطوات متعدّدة (معطيات → فضاء → حدث → متغيّر)."""
     ev = OrchestratorClient._build_calculated_ui(
         "اريد شرح خارق لاني لم افهم اي شي",
         history_messages=[{"role": "user", "content": _V30_URN_SIMUL}],
     )
     assert ev is not None
-    props = ev["props"]
-    assert props["deep_dive"] is True
-    assert isinstance(props["urn_state"], list) and props["urn_state"]
-    assert isinstance(props["event_analysis"], list) and props["event_analysis"]
+    steps = ev["props"]["exercise_steps"]
+    assert isinstance(steps, list) and len(steps) >= 3
+    ids = [s["step_id"] for s in steps]
+    assert ids[:3] == ["data", "sample_space", "same_color_event"]
+    for s in steps:
+        # عقد مُفكَّك صارم: visual / numerical / pedagogical
+        assert isinstance(s["visual_directives"], dict)
+        assert isinstance(s["numerical_state"], dict)
+        assert s["pedagogical_message"]
 
 
 def test_calculated_ui_probability_tree_also_muzzles() -> None:

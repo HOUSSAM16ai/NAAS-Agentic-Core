@@ -977,14 +977,20 @@ class OrchestratorClient:
         question: str,
         history_messages: list[dict[str, str]] | None = None,
     ) -> dict[str, object] | None:
-        """D-078 (V19.0): الموجِّه التربوي — يُرجِع حدث ui_component الصحيح.
+        """D-078 (V19.0 → V28.0): الموجِّه التربوي — يُرجِع حدث ui_component الصحيح.
 
         «دفعة واحدة» (سحب آني) → ``combinations_visualizer`` (تأليفي C_n^k)؛
         «على التوالي» / سحب مفرد → ``probability_tree``. هذا يمنع فرض شجرة
         تتابعية على مسألة آنية (كارثة تربوية). كاشف الإحباط (مفهمتش/كيفاش)
-        يُفعِّل الأداة البصرية تلقائياً عبر سياق المحادثة. محروس بـ try/except.
+        يُفعِّل الأداة البصرياً عبر سياق المحادثة. محروس بـ try/except.
 
-        المخرج: ``{"component": str, "props": dict, "fallback_text": str}`` أو None.
+        المخرج: ``{"component": str, "props": dict, "fallback_text": str,
+        "terminate_pipeline": bool}`` أو None.
+
+        ## V28.0 — قانون الكبح النصي (Text-Wall Muzzle)
+        ``terminate_pipeline=True`` يُصدَر حصراً مع ``impossible_case``.
+        يُلزم ``chat_with_agent`` بإنهاء المسار فوراً بعد بثّ المكوّن البصري
+        و``companion_text`` (جملة واحدة) — لا LLM، لا شجرة، لا synthesizer.
         """
         try:
             from app.services.skills.probability_skill import (
@@ -998,11 +1004,14 @@ class OrchestratorClient:
             skill = ProbabilityCalculatorSkill()
             result = skill.analyze(ProbabilityInput(question=question, history=history_messages))
 
-            # V26.2: الحالة المستحيلة لها الأولوية القصوى — تتجاوز كل عقد الحساب
-            # (شجرة/تأليفات/synthesizer) وتُرجَع مباشرة كحمولة تربوية للواجهة.
+            # V28.0: الحالة المستحيلة — short-circuit كامل للـ pipeline.
+            # terminate_pipeline=True يُوقف كل عقد LLM/شجرة/synthesizer لاحقة.
+            # companion_text (≤ 120 حرف) هو النص الوحيد المسموح به مع المكوّن.
             if isinstance(result, ImpossibleCaseOutput):
                 return {
                     "component": "impossible_draw_animation",
+                    "terminate_pipeline": True,
+                    "companion_text": result.companion_text,
                     "props": {
                         "title": result.title,
                         "ui_mode": result.ui_mode,
@@ -1368,30 +1377,58 @@ class OrchestratorClient:
             return
 
         # ─────────────────────────────────────────────────────────────────────
-        # Generative UI Streaming (probability tree):
-        # عند طلب يتضمن شجرة احتمالات، نبثّ حدث ui_component فوراً (incremental)
-        # ثم نُكمل المسار العادي لتوليد الشرح النصي — المكوّن التفاعلي يظهر
-        # في الواجهة قبل اكتمال نص الـ LLM. لا return — نسقط للمسار النصي.
-        # Bug D fix: نمرر history_messages لاستخراج كيانات ملموسة من سياق
-        # التمرين السابق (مثل "كرة حمراء" من تمرين الاحتمالات 2024).
+        # Generative UI Streaming (probability tree / impossible_case):
+        # عند طلب يتضمن شجرة احتمالات، نبثّ حدث ui_component فوراً (incremental).
+        #
+        # V28.0 — قانون الكبح النصي (Text-Wall Muzzle):
+        # إذا كان المكوّن impossible_draw_animation (terminate_pipeline=True)،
+        # نبثّ المكوّن + companion_text (جملة واحدة ≤ 120 حرف) ثم نُنهي المسار
+        # فوراً — لا LLM، لا شجرة، لا synthesizer، لا جدار نص.
+        # للمكوّنات الأخرى (probability_tree / combinations_visualizer): نسقط
+        # للمسار النصي العادي كما كان (لا return).
         # ─────────────────────────────────────────────────────────────────────
-        # D-078 (V19.0): الموجِّه التربوي يختار المكوّن الصحيح — سحب آني
-        # «دفعة واحدة» → combinations_visualizer (تأليفي)؛ تتابعي → probability_tree.
+        # D-078 (V19.0 → V28.0): الموجِّه التربوي يختار المكوّن الصحيح.
         # كاشف الإحباط (مفهمتش/كيفاش) يُفعِّل الأداة بصرياً عبر سياق المحادثة.
         try:
             _ui_event = self._build_calculated_ui(question, history_messages=history_messages)
         except Exception:
             _ui_event = None
         if _ui_event is not None:
+            _is_impossible = _ui_event.get("terminate_pipeline") is True
             logger.info(
                 "generative_ui_emit",
                 extra={
                     "request_id": str(uuid.uuid4()),
                     "component": _ui_event.get("component"),
+                    "terminate_pipeline": _is_impossible,
                     "question_len": len(question),
                 },
             )
             yield self._normalize_stream_event({"type": "ui_component", "payload": _ui_event})
+
+            # V28.0: impossible_case — terminate pipeline immediately.
+            # Emit companion_text (≤ 120 chars) as the sole text output, then return.
+            # This is the Text-Wall Muzzle: no LLM, no tree, no synthesizer follows.
+            if _is_impossible:
+                _companion = str(_ui_event.get("companion_text") or "إليك تفصيل التمرين في واجهتك التفاعلية الخيالية أدناه 🪄")
+                yield self._normalize_stream_event(
+                    {"type": "assistant_delta", "payload": {"content": _companion}}
+                )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
+                if _root_ctx:
+                    with contextlib.suppress(Exception):
+                        obs.end_span(
+                            _root_ctx.span_id,
+                            status="OK",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                "fallback_path": 0.1,  # impossible_case = أعلى أولوية بعد greeting
+                                "stream_chars": float(len(_companion)),
+                            },
+                        )
+                return
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-056 (D-049 — Indexed Retrieval Preemption):

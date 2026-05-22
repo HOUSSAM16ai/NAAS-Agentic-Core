@@ -37,9 +37,14 @@ async def analyze_probability(payload: VisualPedagogyRequest) -> dict[str, objec
 
     عند الحالة المستحيلة يكون ``ui_mode == "impossible_case"`` والبنية مُفكَّكة
     تماماً — لا تدخل أي عقدة حساب/شجرة/synthesizer.
+
+    V28.0: يُضاف ``companion_text`` (≤ 120 حرف) و``terminate_pipeline=True``
+    للحالة المستحيلة — يُعلم الواجهة بكبح أي نص LLM لاحق.
     """
     skill = ProbabilityCalculatorSkill()
     result = skill.analyze(ProbabilityInput(question=payload.question, history=payload.history))
     body = result.model_dump()
-    body["is_impossible_case"] = isinstance(result, ImpossibleCaseOutput)
+    is_impossible = isinstance(result, ImpossibleCaseOutput)
+    body["is_impossible_case"] = is_impossible
+    body["terminate_pipeline"] = is_impossible
     return body

@@ -334,7 +334,7 @@ class ImpossibleNumericalState(RobustBaseModel):
 
 
 class ImpossibleCaseOutput(RobustBaseModel):
-    """مخرج «الحالة المستحيلة» — Protocol V26.2 (محرّك البيداغوجيا البصرية).
+    """مخرج «الحالة المستحيلة» — Protocol V28.0 (محرّك البيداغوجيا البصرية).
 
     عقد مُفكَّك صارم (strict decoupled): يفصل المنطق (``numerical_state``) عن
     التلميحات البصرية (``visual_directives``) عن الرسالة التربوية
@@ -342,6 +342,11 @@ class ImpossibleCaseOutput(RobustBaseModel):
     m < k (بلا إرجاع)، نُقصِّر الدائرة (short-circuit) فوراً قبل أي عقدة حساب
     أو شجرة أو synthesizer: لا C(2,3)=0، لا صفر مجرّد، لا كسر منحلّ — بل حمولة
     تربوية نظيفة تُرجَع مباشرة للواجهة.
+
+    ## قانون الكبح النصي (Text-Wall Muzzle — Protocol V28.0)
+    ``companion_text`` هو النص الوحيد المسموح به مرافقاً للمكوّن البصري.
+    يجب أن يكون جملة واحدة أو جملتين فقط (≤ 120 حرف). أي نص إضافي من LLM
+    محظور تماماً — الواجهة البصرية تُعلِّم 100% بدون نص مطوَّل.
     """
 
     skill: Literal["probability_calculation"] = "probability_calculation"
@@ -353,6 +358,13 @@ class ImpossibleCaseOutput(RobustBaseModel):
     )
     numerical_state: ImpossibleNumericalState
     pedagogical_message: str = Field(..., min_length=1, description="رسالة تربوية لطيفة بالعربية")
+    # V28.0: النص المرافق المكبوت — جملة واحدة أو جملتان فقط (≤ 120 حرف).
+    # يُبثّ بدلاً من LLM pipeline الكامل — يمنع كارثة جدار النص.
+    companion_text: str = Field(
+        default="إليك تفصيل التمرين في واجهتك التفاعلية الخيالية أدناه 🪄",
+        max_length=120,
+        description="نص مرافق مكبوت (≤ 120 حرف) — يُبثّ بدلاً من LLM pipeline",
+    )
     # حقول ملموسة إضافية (Abstraction Ban) — لا تكسر العقد الصارم أعلاه.
     item_label: str = Field(..., min_length=1, description="التسمية العربية الملموسة")
     container: str = Field(default="كيس", description="الوعاء (كيس/صندوق/علبة)")

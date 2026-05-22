@@ -4,9 +4,10 @@ content-retrieval-skill — الخطوة 11.
 Skill مستقلة لاسترجاع المحتوى التعليمي من knowledge_base/.
 
 Contract:
-  POST /retrieve  → RetrieveResponse
-  GET  /health    → HealthResponse
-  GET  /metrics   → Prometheus text format
+  POST /retrieve        → RetrieveResponse
+  POST /impossible-case → ImpossibleCaseResponse  (D-082)
+  GET  /health          → HealthResponse
+  GET  /metrics         → Prometheus text format
 
 قواعد الـ Skill (D-038):
   - هدف واحد: تصنيف النية + جلب المحتوى
@@ -19,6 +20,12 @@ ISS-038 (الإصلاح الجذري):
   - intent_classifier يمنع التفعيل الخاطئ
   - "تمرين" في سياق الشرح → explanation (لا استرجاع)
   - فقط نية الجلب الصريحة تُفعِّل الاسترجاع
+
+D-082 (الحالة المستحيلة):
+  - /impossible-case يُحلِّل ما إذا كانت العملية مستحيلة رياضياً
+  - يُعيد contract بصري من 4 مراحل للـ frontend
+  - لا رياضيات قبل الفهم الحدسي
+  - الشرح العميق اختياري (deep_dive)
 """
 
 from __future__ import annotations
@@ -38,6 +45,10 @@ from microservices.content_retrieval_skill.prom_metrics import (
     record_request,
     set_kb_size,
     set_startup_info,
+)
+from microservices.content_retrieval_skill.src.impossible_case import (
+    ImpossibleCaseResult,
+    analyze_impossible_case,
 )
 from microservices.content_retrieval_skill.src.intent_classifier import classify_intent
 from microservices.content_retrieval_skill.src.retrieval_engine import (
@@ -98,6 +109,80 @@ class HealthResponse(BaseModel):
     kb_path: str
     kb_files: int
     version: str
+
+
+# ── نماذج الحالة المستحيلة (D-082) ───────────────────────────────────────────
+
+
+class ImpossibleCaseRequest(BaseModel):
+    """
+    طلب تحليل الحالة المستحيلة.
+
+    يُرسَل من الـ frontend عند بناء مسألة احتمالات
+    قبل أي حساب — لتجنب عرض نتائج مستحيلة للطالب.
+    """
+
+    bag_count: int = Field(..., ge=0, description="عدد العناصر في الكيس")
+    requested: int = Field(..., ge=0, description="عدد العناصر المطلوب سحبها")
+    item_name: str = Field("كرة", description="اسم العنصر (كرة، قلم، ورقة...)")
+
+
+class Stage1SceneResponse(BaseModel):
+    """المرحلة 1: بيانات المشهد البصري."""
+
+    bag_count: int
+    requested: int
+    bag_label: str
+    request_label: str
+
+
+class Stage2QuestionResponse(BaseModel):
+    """المرحلة 2: السؤال الحدسي."""
+
+    question: str
+
+
+class Stage3AnimationResponse(BaseModel):
+    """المرحلة 3: مواصفات الحركة البصرية."""
+
+    animation: str  # "shake" | "freeze" | "none"
+    duration_ms: int
+
+
+class Stage4MessageResponse(BaseModel):
+    """المرحلة 4: الرسالة التربوية."""
+
+    message: str
+    tone: str
+
+
+class DeepDiveResponse(BaseModel):
+    """الشرح الرياضي العميق — يُعرض عند طلب المستخدم فقط."""
+
+    formula: str
+    explanation: str
+    why_zero: str
+
+
+class ImpossibleCaseResponse(BaseModel):
+    """
+    استجابة تحليل الحالة المستحيلة — contract كامل للـ frontend.
+
+    is_impossible=True:
+      frontend يعرض 4 مراحل بصرية فقط، بدون شجرة احتمالات.
+    is_impossible=False:
+      frontend يكمل الحساب الطبيعي.
+    deep_dive:
+      null حتى يضغط المستخدم "اشرح لي أكثر".
+    """
+
+    is_impossible: bool
+    case_type: str
+    stage_1: Stage1SceneResponse | None = None
+    stage_2: Stage2QuestionResponse | None = None
+    stage_3: Stage3AnimationResponse | None = None
+    stage_4: Stage4MessageResponse | None = None
+    deep_dive: DeepDiveResponse | None = None
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -189,6 +274,63 @@ async def retrieve_content(request: RetrieveRequest) -> RetrieveResponse:
         kb_path=result.kb_path,
         query_subject=result.query_subject,
         query_year=result.query_year,
+    )
+
+
+@app.post("/impossible-case", response_model=ImpossibleCaseResponse)
+async def check_impossible_case(request: ImpossibleCaseRequest) -> ImpossibleCaseResponse:
+    """
+    يُحلِّل ما إذا كانت عملية السحب مستحيلة رياضياً.
+
+    المبدأ التربوي (D-082):
+      - يُستدعى قبل أي حساب احتمالي
+      - إذا is_impossible=True → frontend يعرض 4 مراحل بصرية فقط
+      - لا شجرة احتمالات، لا معادلات، لا ازدحام بصري
+      - deep_dive يُعرض فقط عند طلب المستخدم ("اشرح لي أكثر")
+
+    مثال:
+      bag_count=2, requested=3 → is_impossible=True
+      bag_count=5, requested=3 → is_impossible=False
+    """
+    result: ImpossibleCaseResult = analyze_impossible_case(
+        bag_count=request.bag_count,
+        requested=request.requested,
+        item_name=request.item_name,
+    )
+
+    return ImpossibleCaseResponse(
+        is_impossible=result.is_impossible,
+        case_type=result.case_type,
+        stage_1=Stage1SceneResponse(
+            bag_count=result.stage_1.bag_count,
+            requested=result.stage_1.requested,
+            bag_label=result.stage_1.bag_label,
+            request_label=result.stage_1.request_label,
+        )
+        if result.stage_1
+        else None,
+        stage_2=Stage2QuestionResponse(question=result.stage_2.question)
+        if result.stage_2
+        else None,
+        stage_3=Stage3AnimationResponse(
+            animation=result.stage_3.animation,
+            duration_ms=result.stage_3.duration_ms,
+        )
+        if result.stage_3
+        else None,
+        stage_4=Stage4MessageResponse(
+            message=result.stage_4.message,
+            tone=result.stage_4.tone,
+        )
+        if result.stage_4
+        else None,
+        deep_dive=DeepDiveResponse(
+            formula=result.deep_dive.formula,
+            explanation=result.deep_dive.explanation,
+            why_zero=result.deep_dive.why_zero,
+        )
+        if result.deep_dive
+        else None,
     )
 
 

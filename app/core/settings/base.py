@@ -114,6 +114,8 @@ class BaseServiceSettings(BaseSettings):
                 raise ValueError("DEBUG must be False in production")
             if self.SECRET_KEY == "changeme" or len(self.SECRET_KEY) < 32:
                 raise ValueError("Production SECRET_KEY is too weak")
+            if not self.DATABASE_URL or "sqlite" in (self.DATABASE_URL or ""):
+                raise ValueError("DATABASE_URL must be set to a real database in production")
         return self
 
     @computed_field

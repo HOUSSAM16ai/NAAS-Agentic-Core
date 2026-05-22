@@ -382,7 +382,7 @@ tasks:
       echo "💡 لفحص أعمق + اختبار pipeline حقيقي:"
       echo "   bash scripts/verify_microservices_live.sh"
     triggeredBy:
-      - postStart
+      - postDevcontainerStart
 
   verify-microservices-deep:
     name: "Verify Microservices — Deep (Secrets + Pipeline)"

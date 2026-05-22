@@ -147,6 +147,7 @@ def test_full_exercise_story_in_whitelist_and_payload_valid() -> None:
     )
     assert payload.component == "full_exercise_story"
 
+
 _V30_URN_SIMUL = (
     "يحتوي كيس على 11 كرة: كرتان بيضاوان، أربع كرات حمراء، خمس كرات خضراء. نسحب 3 كرات دفعة واحدة."
 )
@@ -164,9 +165,7 @@ def test_calculated_ui_full_story_no_c_2_3_leak() -> None:
     assert ev["component"] == "full_exercise_story"
     blob = json.dumps(ev, ensure_ascii=False)
     assert "C(2,3)" not in blob and "C_2^3" not in blob
-    event = next(
-        s for s in ev["props"]["exercise_steps"] if s["step_id"] == "same_color_event"
-    )
+    event = next(s for s in ev["props"]["exercise_steps"] if s["step_id"] == "same_color_event")
     white = next(g for g in event["numerical_state"]["groups"] if "بيضاء" in g["label"])
     assert white["is_possible"] is False
     assert white["favorable"] == 0

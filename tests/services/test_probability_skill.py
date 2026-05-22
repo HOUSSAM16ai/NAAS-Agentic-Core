@@ -680,3 +680,19 @@ def test_v315_full_story_registered_component_and_doctrine() -> None:
     assert "full_exercise_story" in KNOWN_UI_COMPONENTS
     assert PROBABILITY_CALCULATION_DOCTRINE_VERSION >= "1.3.0"
     assert "V31.5" in " ".join(PROBABILITY_CALCULATION_DOCTRINE)
+
+
+def test_waw_prefixed_cardinal_extracted() -> None:
+    """حرف العطف و/ف/ب قبل كلمة العدد (وخمس، فأربع) يُستخرَج بشكل صحيح."""
+    skill = _skill()
+    assert skill._as_int("وخمس") == 5
+    assert skill._as_int("فأربع".replace("أ", "ا")) == 4
+    assert skill._as_int("بثلاث") == 3
+    # نص طبيعي بصيغة العطف: المجموع 11 لا 6 (الخضراء لا تُسقَط)
+    entities = {
+        e[0]: e[2]
+        for e in skill._extract_count_entities(
+            "كيس فيه أربع كرات حمراء وخمس كرات خضراء وكرتان بيضاوان"
+        )
+    }
+    assert entities == {"كرة حمراء": 4, "كرة خضراء": 5, "كرة بيضاء": 2}

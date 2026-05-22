@@ -585,11 +585,14 @@ class ProbabilityCalculatorSkill:
     # ── مساعدات استخراج العدد ─────────────────────────────────────────────────────
     @staticmethod
     def _as_int(token: str) -> int | None:
-        stripped = token.lstrip("وفب")  # و/ف/ب البادئة (و5، ف3)
+        stripped = token.lstrip("وفب")  # و/ف/ب البادئة (و5، ف3، وخمس، وأربع)
         if stripped.isdigit():
             return int(stripped)
         if token in _ARABIC_CARDINALS:
             return _ARABIC_CARDINALS[token]
+        # كلمة عدد مسبوقة بحرف عطف/جر (وخمس، فأربع، بثلاث) — شائعة في نص الطلاب.
+        if stripped in _ARABIC_CARDINALS:
+            return _ARABIC_CARDINALS[stripped]
         return None
 
     @classmethod
@@ -1185,7 +1188,10 @@ class ProbabilityCalculatorSkill:
                 step_id="sample_space",
                 title="② فضاء العيّنة",
                 render_kind="combinations",
-                visual_directives={"animation_hint": "count_choices", "render_kind": "combinations"},
+                visual_directives={
+                    "animation_hint": "count_choices",
+                    "render_kind": "combinations",
+                },
                 numerical_state={"n": total, "k": k, "total_combinations": total_comb},
                 pedagogical_message=(
                     f"بما أننا نسحب {k} دفعةً واحدة فالترتيب لا يهمّ، نستعمل التأليفات. "
@@ -1230,7 +1236,10 @@ class ProbabilityCalculatorSkill:
                 step_id="same_color_event",
                 title="③ الحدث: العناصر من نفس الصنف",
                 render_kind="event_breakdown",
-                visual_directives={"animation_hint": "highlight_groups", "render_kind": "event_breakdown"},
+                visual_directives={
+                    "animation_hint": "highlight_groups",
+                    "render_kind": "event_breakdown",
+                },
                 numerical_state={
                     "groups": breakdown,
                     "same_group_favorable": same_group,

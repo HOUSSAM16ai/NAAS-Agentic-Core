@@ -1,6 +1,5 @@
 """جسر إعدادات الاختبار وتطبيق سياسات جودة نتائج الاختبارات على مستوى المستودع."""
 
-import os
 from collections.abc import Sequence
 
 from _pytest.config import Config
@@ -20,8 +19,6 @@ def pytest_sessionfinish(session: object, exitstatus: int) -> None:
     """يفرض فشل جلسة الاختبار إذا وُجدت اختبارات متخطّاة أو تحذيرات."""
 
     del exitstatus
-    if os.getenv("GITHUB_ACTIONS") == "true" and os.getenv("PYTEST_DISABLE_STRICT_POLICY") == "1":
-        return
     config: Config | None = getattr(session, "config", None)
     if config is None:
         return

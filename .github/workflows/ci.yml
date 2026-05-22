@@ -134,7 +134,6 @@ jobs:
       SUPABASE_URL: https://dummy.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
       RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
-      PYTEST_DISABLE_STRICT_POLICY: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -236,7 +235,7 @@ jobs:
           )
 
           if python -m pytest --help | grep -q -- "--cov"; then
-            run_pytest python -m pytest -v \
+            run_pytest python -m pytest -v -W error \
               --cov=app \
               --cov-report=xml:coverage.xml \
               --cov-report=term-missing \
@@ -245,7 +244,7 @@ jobs:
               "${PRE_EXISTING_FAILURES[@]}"
           else
             echo "::warning::pytest-cov plugin is unavailable; running test suite without coverage."
-            run_pytest python -m pytest -v --durations=10 --tb=short \
+            run_pytest python -m pytest -v -W error --durations=10 --tb=short \
               "${PRE_EXISTING_FAILURES[@]}"
           fi
       - name: Upload coverage artifact

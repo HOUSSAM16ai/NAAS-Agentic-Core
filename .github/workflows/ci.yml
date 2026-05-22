@@ -32,7 +32,6 @@ jobs:
       SUPABASE_URL: https://dummy.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
       RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
-      PYTEST_DISABLE_STRICT_POLICY: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -69,7 +68,6 @@ jobs:
       SUPABASE_URL: https://dummy.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
       RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
-      PYTEST_DISABLE_STRICT_POLICY: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -101,7 +99,6 @@ jobs:
       SUPABASE_URL: https://dummy.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
       RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
-      PYTEST_DISABLE_STRICT_POLICY: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -189,7 +189,7 @@ def pytest_collection_modifyitems(
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """يفرض نجاحًا كاملًا عبر فشل الجلسة عند وجود تخطٍ أو تحذيرات اختبارية."""
-    if os.getenv("PYTEST_DISABLE_STRICT_POLICY") == "1":
+    if os.getenv("GITHUB_ACTIONS") == "true" and os.getenv("PYTEST_DISABLE_STRICT_POLICY") == "1":
         return
 
     terminal_reporter = session.config.pluginmanager.get_plugin("terminalreporter")

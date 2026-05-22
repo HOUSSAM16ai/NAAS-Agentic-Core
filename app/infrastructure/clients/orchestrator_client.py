@@ -989,6 +989,7 @@ class OrchestratorClient:
         try:
             from app.services.skills.probability_skill import (
                 CombinationsModelOutput,
+                ImpossibleCaseOutput,
                 ProbabilityCalculatorSkill,
                 ProbabilityInput,
                 ProbabilityModelOutput,
@@ -996,6 +997,30 @@ class OrchestratorClient:
 
             skill = ProbabilityCalculatorSkill()
             result = skill.analyze(ProbabilityInput(question=question, history=history_messages))
+
+            # V26.2: الحالة المستحيلة لها الأولوية القصوى — تتجاوز كل عقد الحساب
+            # (شجرة/تأليفات/synthesizer) وتُرجَع مباشرة كحمولة تربوية للواجهة.
+            if isinstance(result, ImpossibleCaseOutput):
+                return {
+                    "component": "impossible_draw_animation",
+                    "props": {
+                        "title": result.title,
+                        "ui_mode": result.ui_mode,
+                        "visual_directives": {
+                            "animation_hint": result.visual_directives.animation_hint,
+                            "fallback_math": result.visual_directives.fallback_math,
+                        },
+                        "numerical_state": {
+                            "available_items": result.numerical_state.available_items,
+                            "requested_items": result.numerical_state.requested_items,
+                            "item_color": result.numerical_state.item_color,
+                        },
+                        "pedagogical_message": result.pedagogical_message,
+                        "item_label": result.item_label,
+                        "container": result.container,
+                    },
+                    "fallback_text": result.pedagogical_message,
+                }
 
             if isinstance(result, CombinationsModelOutput):
                 props = {

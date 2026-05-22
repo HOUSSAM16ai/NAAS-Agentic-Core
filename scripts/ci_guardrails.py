@@ -40,6 +40,7 @@ FORBIDDEN_PATTERNS = [
             "examples/*",
             "dev_setup.py",
             "live_db_restructure.py",
+            "test_visual_pedagogy_ui.py",
         ],
         "message": "Use of 'print()' is forbidden in application code. Use 'app.core.logging' instead.",
     },

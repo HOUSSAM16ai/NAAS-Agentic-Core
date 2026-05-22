@@ -1410,7 +1410,10 @@ class OrchestratorClient:
             # Emit companion_text (≤ 120 chars) as the sole text output, then return.
             # This is the Text-Wall Muzzle: no LLM, no tree, no synthesizer follows.
             if _is_impossible:
-                _companion = str(_ui_event.get("companion_text") or "إليك تفصيل التمرين في واجهتك التفاعلية الخيالية أدناه 🪄")
+                _companion = str(
+                    _ui_event.get("companion_text")
+                    or "إليك تفصيل التمرين في واجهتك التفاعلية الخيالية أدناه 🪄"
+                )
                 yield self._normalize_stream_event(
                     {"type": "assistant_delta", "payload": {"content": _companion}}
                 )

@@ -76,8 +76,15 @@ jobs:
             echo "❌ :root block not found"
             exit 1
           fi
-          # Read 60 lines from :root start (enough to cover all vars)
-          root_block=$(tail -n +"$root_start" frontend/app/globals.css | head -60)
+          # Read 60 lines from :root start (enough to cover all vars).
+          # NOTE: use `sed -n RANGEp` (not `tail | head`). Under `set -o pipefail`,
+          # `tail file | head -60` makes `head` close the pipe early; `tail` then
+          # gets SIGPIPE (exit 141) on its next write whenever the remaining file
+          # content exceeds the 64KB pipe buffer — a latent failure that trips once
+          # globals.css grows past ~64KB from :root. `sed -n` has no pipe, so it is
+          # deterministic regardless of file size.
+          root_end=$((root_start + 59))
+          root_block=$(sed -n "${root_start},${root_end}p" frontend/app/globals.css)
           # `grep -e --` defends against `--code-bg` being parsed as a long-option.
           for var in "--code-bg" "--pre-bg" "--code-color" "--pre-color"; do
             if ! printf '%s\n' "$root_block" | grep -q -e "$var" --; then

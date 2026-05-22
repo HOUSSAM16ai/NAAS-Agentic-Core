@@ -250,9 +250,26 @@ export const FullExerciseStory = memo(({ props }) => {
                         <div className="genui-fes-novisual">—</div>
                     )}
                 </div>
-                {typeof step.pedagogical_message === 'string' && step.pedagogical_message && (
-                    <p className="genui-fes-msg">{step.pedagogical_message}</p>
-                )}
+
+                {/* V32.0: Strict Text Purge — Return null for impossible slides & strip text walls */}
+                {(() => {
+                    const ns = step.numerical_state;
+                    const isImpossible =
+                        ns?.is_possible === false ||
+                        (step.render_kind === 'event_breakdown' &&
+                            ns?.groups?.some((g) => g.is_possible === false) &&
+                            Number(ns?.same_group_favorable ?? ns?.p_num ?? 0) === 0);
+
+                    if (isImpossible) return null;
+
+                    if (typeof step.pedagogical_message === 'string' && step.pedagogical_message) {
+                        // Extract only the first sentence to avoid text walls.
+                        // We look for the first period, exclamation mark, or question mark followed by space or end of string.
+                        const firstSentence = step.pedagogical_message.split(/[.!?](\s|$)/)[0];
+                        return <p className="genui-fes-msg">{firstSentence}.</p>;
+                    }
+                    return null;
+                })()}
             </div>
 
             {/* تنقّل */}

@@ -336,3 +336,90 @@ def test_composition_item_validation() -> None:
     assert item.p_num == 4
     with pytest.raises(Exception):  # noqa: B017 — مقام صفر مرفوض
         CompositionItem(label="x", count=1, p_num=1, p_den=0, p_decimal=0.5)
+
+
+# ── Protocol V26.2 — الحالة المستحيلة (Visual Pedagogy short-circuit) ──────────────
+
+_BAC_URN = (
+    "يحتوي كيس على 11 كرة: كرتان بيضاوان مرقمتان بـ 1 و 3، وأربع كرات حمراء، وخمس كرات خضراء."
+)
+
+
+def test_impossible_draw_short_circuits_to_pedagogical_payload() -> None:
+    """V26.2: سحب 3 بيضاء من كيس فيه 2 بيضاء → ImpossibleCaseOutput لا حساب."""
+    from app.services.skills.probability_skill import ImpossibleCaseOutput
+
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="كيفاش نسحب 3 كرات بيضاء في نفس الوقت؟",
+            history=[{"role": "user", "content": _BAC_URN}],
+        )
+    )
+    assert isinstance(out, ImpossibleCaseOutput)
+    assert out.ui_mode == "impossible_case"
+    assert out.component == "impossible_draw_animation"
+    assert out.numerical_state.available_items == 2
+    assert out.numerical_state.requested_items == 3
+    assert out.numerical_state.item_color == "white"
+    assert out.visual_directives.fallback_math is None
+    assert out.visual_directives.animation_hint == "bag_shake"
+    assert out.pedagogical_message
+
+
+def test_impossible_case_emits_no_degenerate_math() -> None:
+    """البنية لا تحوي أي مفاتيح حساب (tree/total_combinations/composition)."""
+    from app.services.skills.probability_skill import ImpossibleCaseOutput
+
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="كيفاش نسحب 3 كرات بيضاء في نفس الوقت؟",
+            history=[{"role": "user", "content": _BAC_URN}],
+        )
+    )
+    assert isinstance(out, ImpossibleCaseOutput)
+    dumped = out.model_dump()
+    for forbidden in ("tree", "total_combinations", "composition", "groups"):
+        assert forbidden not in dumped
+
+
+def test_impossible_takes_priority_over_combinations() -> None:
+    """الحالة المستحيلة لها الأولوية على مسار التأليفات (combinations)."""
+    from app.services.skills.probability_skill import (
+        CombinationsModelOutput,
+        ImpossibleCaseOutput,
+    )
+
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="نسحب 3 كرات بيضاء دفعة واحدة",
+            history=[{"role": "user", "content": _BAC_URN}],
+        )
+    )
+    assert isinstance(out, ImpossibleCaseOutput)
+    assert not isinstance(out, CombinationsModelOutput)
+
+
+def test_possible_draw_still_computes_not_impossible() -> None:
+    """سحب ممكن (3 خضراء من 5 خضراء) لا يُفعّل الحالة المستحيلة."""
+    from app.services.skills.probability_skill import ImpossibleCaseOutput
+
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="نسحب 3 كرات خضراء دفعة واحدة",
+            history=[{"role": "user", "content": _BAC_URN}],
+        )
+    )
+    assert not isinstance(out, ImpossibleCaseOutput)
+
+
+def test_with_replacement_is_not_impossible() -> None:
+    """مع الإرجاع: سحب 3 بيضاء من 2 ممكن (لا استحالة) → ليس ImpossibleCaseOutput."""
+    from app.services.skills.probability_skill import ImpossibleCaseOutput
+
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="نسحب 3 كرات بيضاء مع الإرجاع",
+            history=[{"role": "user", "content": _BAC_URN}],
+        )
+    )
+    assert not isinstance(out, ImpossibleCaseOutput)

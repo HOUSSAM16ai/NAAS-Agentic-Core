@@ -13,6 +13,7 @@ from app.api.routers import (
     security,
     system,
     ums,
+    visual_pedagogy,
 )
 
 type RouterSpec = tuple[APIRouter, str]
@@ -32,4 +33,5 @@ def base_router_registry() -> list[RouterSpec]:
         (customer_chat.router, ""),
         (content.router, ""),
         (observability.router, "/api/v1/observability"),
+        (visual_pedagogy.router, ""),
     ]

@@ -77,6 +77,16 @@ _COLOR_GROUPS: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("زرقاء", "زرق", "ازرق", "bleu"), "كرة زرقاء", "كرة غير زرقاء"),
 )
 
+# تسمية اللون الموجبة → رمز CSS (يُغذّي أنيميشن الواجهة في السيناريو المستحيل).
+_COLOR_CSS_TOKEN: dict[str, str] = {
+    "كرة حمراء": "red",
+    "كرة بيضاء": "white",
+    "كرة خضراء": "green",
+    "كرة سوداء": "black",
+    "كرة صفراء": "gold",
+    "كرة زرقاء": "blue",
+}
+
 # كلمات الأعداد العربية (مفردة + جمع) → قيمة.
 _ARABIC_CARDINALS: dict[str, int] = {
     "صفر": 0,
@@ -305,6 +315,49 @@ class CombinationsModelOutput(RobustBaseModel):
     )
     formula: str = Field(default="C(n, k) = n! / (k!·(n-k)!)")
     title: str = "تأليفات السحب الآني"
+    duration_ms: int = 0
+
+
+class ImpossibleVisualDirectives(RobustBaseModel):
+    """التوجيهات البصرية للواجهة — منفصلة عن المنطق والحساب (decoupled)."""
+
+    animation_hint: str = Field(default="bag_shake", description="تلميح الأنيميشن")
+    fallback_math: None = Field(default=None, description="لا حساب — مقصود (null)")
+
+
+class ImpossibleNumericalState(RobustBaseModel):
+    """الحالة العددية المجرّدة — الواجهة ترسم منها القصة (بلا حساب تأليفي)."""
+
+    available_items: int = Field(..., ge=0, description="عدد العناصر المتاحة فعلاً")
+    requested_items: int = Field(..., ge=1, description="عدد العناصر المطلوب سحبها")
+    item_color: str = Field(..., description="رمز اللون (white/red/...) لرسم العنصر")
+
+
+class ImpossibleCaseOutput(RobustBaseModel):
+    """مخرج «الحالة المستحيلة» — Protocol V26.2 (محرّك البيداغوجيا البصرية).
+
+    عقد مُفكَّك صارم (strict decoupled): يفصل المنطق (``numerical_state``) عن
+    التلميحات البصرية (``visual_directives``) عن الرسالة التربوية
+    (``pedagogical_message``). حين يطلب الطالب سحب k عنصراً من صنف لا يملك إلا
+    m < k (بلا إرجاع)، نُقصِّر الدائرة (short-circuit) فوراً قبل أي عقدة حساب
+    أو شجرة أو synthesizer: لا C(2,3)=0، لا صفر مجرّد، لا كسر منحلّ — بل حمولة
+    تربوية نظيفة تُرجَع مباشرة للواجهة.
+    """
+
+    skill: Literal["probability_calculation"] = "probability_calculation"
+    success: Literal[True] = True
+    component: Literal["impossible_draw_animation"] = "impossible_draw_animation"
+    ui_mode: Literal["impossible_case"] = "impossible_case"
+    visual_directives: ImpossibleVisualDirectives = Field(
+        default_factory=ImpossibleVisualDirectives
+    )
+    numerical_state: ImpossibleNumericalState
+    pedagogical_message: str = Field(..., min_length=1, description="رسالة تربوية لطيفة بالعربية")
+    # حقول ملموسة إضافية (Abstraction Ban) — لا تكسر العقد الصارم أعلاه.
+    item_label: str = Field(..., min_length=1, description="التسمية العربية الملموسة")
+    container: str = Field(default="كيس", description="الوعاء (كيس/صندوق/علبة)")
+    doctrine_version: str = DOCTRINE_VERSION
+    title: str = "عملية مستحيلة"
     duration_ms: int = 0
 
 
@@ -598,6 +651,105 @@ class ProbabilityCalculatorSkill:
         normalized = cls._normalize(text)
         return any(cls._normalize(m) in normalized for m in _CONFUSION_MARKERS)
 
+    # ── الحالة المستحيلة (Protocol V26.2) — short-circuit قبل أي حساب ─────────────────
+    _DRAW_VERBS: tuple[str, ...] = (
+        "نسحب",
+        "يسحب",
+        "تسحب",
+        "سحب",
+        "ناخذ",
+        "ياخذ",
+        "نختار",
+        "اختيار",
+        "اختر",
+        "tirage",
+        "tire",
+    )
+
+    @classmethod
+    def _detect_requested_color_count(cls, question: str) -> tuple[str, str, int] | None:
+        """يستخرج (label_pos, label_neg, k) من *عبارة السحب* فقط.
+
+        يتطلّب أن يكون اللون في طلب السحب — مسبوقاً بعدد وقريباً من فعل سحب
+        («نسحب 3 كرات بيضاء»). لا يكفي ذكر اللون في وصف المخزون («كيس فيه كرتان
+        بيضاوان، نسحب 3 كرات») — هناك السحب عامّ لا يخصّ لوناً، فلا استحالة.
+        """
+        tokens = cls._tokenize(question)
+        for keywords, label_pos, label_neg in _COLOR_GROUPS:
+            color_idx = next(
+                (i for i, tok in enumerate(tokens) if any(kw in tok for kw in keywords)),
+                None,
+            )
+            if color_idx is None:
+                continue
+            # فعل سحب ضمن نافذة قبل اللون (يثبت أن اللون جزء من طلب السحب).
+            window_start = max(0, color_idx - 6)
+            has_draw_verb = any(
+                any(v in tokens[j] for v in cls._DRAW_VERBS) for j in range(window_start, color_idx)
+            )
+            if not has_draw_verb:
+                continue
+            k = cls._count_before(tokens, color_idx, span=4)
+            if k is None or k < 1:
+                continue
+            return (label_pos, label_neg, k)
+        return None
+
+    @classmethod
+    def _available_count_for(cls, label_pos: str, text: str) -> int | None:
+        """المتاح فعلاً من صنف ما داخل نص (المخزون) — أو None إن لم يُذكَر."""
+        for lp, _neg, count in cls._extract_count_entities(text):
+            if lp == label_pos:
+                return count
+        return None
+
+    @classmethod
+    def _detect_impossible_draw(
+        cls, question: str, history_text: str, combined: str
+    ) -> ImpossibleCaseOutput | None:
+        """V26.2: يكشف طلب سحب k من صنف لا يملك إلا m<k → قصة بصرية بدل حساب.
+
+        - الكمية المطلوبة k واللون يُقرآن من *عبارة السحب* في السؤال (binding صارم).
+        - المتاح m يُقرأ من *المخزون* (التاريخ مفضّل — يحمل تركيبة الكيس الحقيقية؛
+          فالعدد الملتصق باللون في عبارة السحب هو المطلوب لا المتاح).
+        - مع الإرجاع: السحب ممكن دائماً (لا استحالة) → لا تفعيل.
+        - إن k > m (بلا إرجاع) → short-circuit إلى الحالة المستحيلة.
+        """
+        # مع الإرجاع لا توجد استحالة (يمكن سحب نفس اللون مراراً).
+        if cls._detect_replacement(combined):
+            return None
+
+        binding = cls._detect_requested_color_count(question)
+        if binding is None:
+            return None
+        label_pos, _label_neg, requested = binding
+
+        # المتاح: المخزون (التاريخ) أولاً، ثم السؤال كحلّ أخير.
+        available = cls._available_count_for(label_pos, history_text)
+        if available is None:
+            available = cls._available_count_for(label_pos, question)
+        if available is None:
+            return None
+
+        if requested <= available:
+            return None  # ليس مستحيلاً — يُترك لمسار الحساب العادي.
+
+        color_token = _COLOR_CSS_TOKEN.get(label_pos, "white")
+        item_plural = label_pos.replace("كرة", "كرات", 1)
+        message = (
+            f"كيف نسحب {requested} {item_plural} ونحن لا نملك سوى {available} منها؟ "
+            f"إذن هذه العملية مستحيلة، واحتمال حدوثها هو صفر."
+        )
+        return ImpossibleCaseOutput(
+            numerical_state=ImpossibleNumericalState(
+                available_items=available,
+                requested_items=requested,
+                item_color=color_token,
+            ),
+            pedagogical_message=message,
+            item_label=label_pos,
+        )
+
     # ── الاستراتيجية 1: فضاء متساوي الاحتمال (نرد / قطعة نقدية) ───────────────────────
     @classmethod
     def _strategy_universe(cls, combined: str) -> ProbabilityModelOutput | None:
@@ -872,8 +1024,10 @@ class ProbabilityCalculatorSkill:
     # ── نقطة الدخول الرئيسية (حتمية، بلا LLM) ─────────────────────────────────────────
     def analyze(
         self, payload: ProbabilityInput | str
-    ) -> ProbabilityModelOutput | CombinationsModelOutput | ProbabilityFailure:
-        """يحلّل المسألة عبر أنماط معمّمة ويُرجِع نموذجاً (شجرة/تأليفات) أو فشلاً."""
+    ) -> (
+        ProbabilityModelOutput | CombinationsModelOutput | ImpossibleCaseOutput | ProbabilityFailure
+    ):
+        """يحلّل المسألة عبر أنماط معمّمة ويُرجِع نموذجاً (شجرة/تأليفات/مستحيل) أو فشلاً."""
         t0 = time.perf_counter()
         if isinstance(payload, str):
             payload = ProbabilityInput(question=payload)
@@ -893,7 +1047,9 @@ class ProbabilityCalculatorSkill:
             return self._fail("no_probability_context", "none", t0)
 
         # خط أنابيب الاستراتيجيات — أول نجاح يفوز (deterministic-first).
+        # V26.1: الحالة المستحيلة لها الأولوية القصوى — short-circuit قبل أي حساب.
         for builder in (
+            lambda: self._detect_impossible_draw(question, history_text, combined),
             lambda: self._strategy_conditional(combined),
             lambda: self._strategy_universe(combined),
             lambda: self._strategy_composition(question, history_text, combined),
@@ -906,8 +1062,10 @@ class ProbabilityCalculatorSkill:
             if model is not None:
                 duration = time.perf_counter() - t0
                 model.duration_ms = int(duration * 1000)
-                strategy_label = getattr(model, "strategy", None) or getattr(
-                    model, "draw_mode", "unknown"
+                strategy_label = (
+                    getattr(model, "strategy", None)
+                    or getattr(model, "draw_mode", None)
+                    or getattr(model, "ui_mode", "unknown")
                 )
                 _record_metric("success", strategy_label, duration)
                 return model
@@ -924,6 +1082,9 @@ __all__ = [
     "CombinationGroup",
     "CombinationsModelOutput",
     "CompositionItem",
+    "ImpossibleCaseOutput",
+    "ImpossibleNumericalState",
+    "ImpossibleVisualDirectives",
     "ProbabilityCalculatorSkill",
     "ProbabilityFailure",
     "ProbabilityInput",

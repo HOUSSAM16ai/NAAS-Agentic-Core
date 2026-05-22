@@ -5397,3 +5397,79 @@ Skill رسمي جديد `app/services/skills/probability_skill.py` (يحترم �
 |----------|---------|
 | D-075 → D-078 | dynamic probability engine + generalization + hardening + auto-trigger router |
 | **D-079** | **deep-dive generative UI + sub-case surgery (no C_2^3=0) + universal text-wall muzzle** |
+
+---
+
+## 6.57 Garbage "كرة رقم N" Entities — Substring-Match Catastrophe (2026-05-22, ISS-083 / D-081)
+
+> كارثة مرئية أبلغ عنها المستخدم بصورة حيّة: تمرين BAC 2024 (سحب 3 كرات «دفعة
+> واحدة») عُرض كـ **شجرة احتمالات تتابعية خاطئة** بتسميات «كرة رقم 0» وكسور
+> مستحيلة (3/7، 1/7). هذا القسم يحكم استخراج الكيانات العددية — لا يُكسر بدون ADR.
+
+### السبب الجذري (مُثبت بالتجريب الحي)
+
+`app/services/skills/probability_skill.py:_extract_count_entities` كان يكشف الكيانات
+المرقّمة بشرط `if "رقم" not in tok` — وهي مطابقة **سلسلة فرعية** تلتقط الصفة
+«مرقمة»/«مرقمتان»/«مرقم» (تعني «مُعلَّمة بـ»، تصف *ترقيم* الكرات لا *نوعها*).
+
+```
+"أربع كرات حمراء مرقمة بـ 0، 1، 1، 3 خمس كرات خضراء مرقمة بـ 0، 1، 1، 3، 4"
+   ↓ قبل D-081
+[حمراء:4, بيضاء:2, خضراء:5, «كرة رقم 0»:4, «كرة رقم 1»:2]   ← كيانات زائفة
+   ↓ المجموع = 17 (بدل 11) → كسور 4/17 خاطئة → شجرة تتابعية مضلِّلة بـ«كرة رقم 0»
+```
+
+### الإصلاح (جراحي — يعالج الجذر)
+
+```python
+# ثابت جديد: الأسماء المستقلّة الصريحة فقط
+_NUMBERED_ENTITY_MARKERS = frozenset({"رقم", "الرقم", "ارقام", "الارقام", "رقمها", "ارقامها"})
+
+# الحلقة: مطابقة الاسم المستقل بدل السلسلة الفرعية
+for i, tok in enumerate(tokens):
+    if tok not in _NUMBERED_ENTITY_MARKERS:   # كان: if "رقم" not in tok
+        continue
+```
+
+«بطاقة رقم 1» / «تحمل الرقم 2» الصريحة تبقى كيانات سليمة؛ صفة «مرقمة» لا تُنتج
+كياناً أبداً.
+
+### النتيجة بعد الإصلاح (تجريب حي 2026-05-22)
+
+- السحب الآني (Part I) → `combinations_visualizer`: n=11, k=3, C(11,3)=165، أحمر
+  C(4,3)=4، **أبيض «مستحيل»** (2<3)، أخضر C(5,3)=10، **P(A)=14/165** (يطابق الإجابة
+  الرسمية)، `deep_dive=True` عند الحيرة → القصة البصرية (urn_state + event_analysis).
+- السحب التتابعي (Part II) → شجرة بكسور صحيحة (4/11، 2/11، 5/11) وتسميات لون ملموسة.
+- لا «كرة رقم N» غارباج في أي مسار.
+
+### تطوير منظومة الـ Skills (طلب المستخدم)
+
+`PROBABILITY_CALCULATION_DOCTRINE` v1.1.0 → **v1.2.0** + قاعدة جديدة تُجسّد الدرس:
+قبول اسم الرقم الصريح المستقل فقط، رفض صفة «مرقمة/مرقمتان/مرقم».
+
+### قواعد دائمة (D-081 — لا تُكسر بدون ADR)
+
+1. **مطابقة الأسماء المستقلّة لا السلسلة الفرعية**: استخراج الكيانات المرقّمة عبر
+   `_NUMBERED_ENTITY_MARKERS` حصراً. أي توسيع يُضاف للمجموعة + اختبار regression.
+2. **صفة «مرقم...» ليست كياناً**: «مرقمة/مرقمتان/مرقم/ترقيم» تصف الترقيم لا النوع —
+   لا تُنتج كياناً أبداً.
+3. **الموجِّه التربوي صامد** (D-078): «دفعة واحدة» → `combinations_visualizer`؛
+   «على التوالي» → `probability_tree` بكسور صحيحة وتسميات ملموسة.
+
+### قياس النجاح حياً
+
+```bash
+python3 -c "
+from app.services.skills.probability_skill import ProbabilityCalculatorSkill as P
+labels = {e[0] for e in P()._extract_count_entities('أربع كرات حمراء مرقمة 0 1 1 3 خمس كرات خضراء مرقمة 0 1 1 3 4 كرتان بيضاوان مرقمتان 1 3')}
+assert labels == {'كرة حمراء','كرة بيضاء','كرة خضراء'}, labels
+print('OK no garbage:', labels)"
+# المتوقع: OK no garbage: {'كرة حمراء','كرة بيضاء','كرة خضراء'}
+```
+
+### السلسلة الكاملة (D-049 → D-081)
+| Decision | المُصلَح |
+|----------|---------|
+| D-075 → D-079 | dynamic probability engine + generalization + hardening + auto-trigger + deep-dive |
+| D-080 | docker compose architecture audit |
+| **D-081** | **garbage «كرة رقم N» entities — substring-match → standalone-noun match (ISS-083)** |

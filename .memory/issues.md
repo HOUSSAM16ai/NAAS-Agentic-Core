@@ -1,5 +1,38 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-19 | Branch: `claude/fix-microservices-ci-KrgCg`
+> Last updated: 2026-05-22 | Branch: `claude/e-taleem-visual-skills-rSNSA`
+
+---
+
+## 🟢 Resolved 2026-05-22 (D-081 — ISS-083 Garbage "كرة رقم N" Entities + Wrong Tree)
+
+### ISS-083 · Probability skill mis-parses ball-numbering → garbage entities + wrong fractions + misleading sequential tree [RESOLVED]
+- **Status**: RESOLVED 2026-05-22 (D-081)
+- **Severity**: 🔴 CRITICAL (pedagogical — كارثة مرئية للطالب: شجرة احتمالات خاطئة رياضياً بتسميات «كرة رقم 0» وكسور 3/7 لمسألة سحب آني، أبلغ عنها المستخدم بصورة حيّة).
+- **Root cause (verified live 2026-05-22)**: في `app/services/skills/probability_skill.py:_extract_count_entities`، شرط استخراج الكيانات المرقّمة كان `if "رقم" not in tok` — يطابق **«مرقمة»/«مرقمتان»** (صفة تعني «مُعلَّمة بـ») كسلسلة فرعية تحتوي «رقم». تمرين BAC 2024 («أربع كرات حمراء مرقمة بـ 0، 1، 1، 3») كان يُنتج كيانات زائفة «كرة رقم 0» (عدّ 4) و«كرة رقم 1» (عدّ 2) فيتضخّم المجموع (17 بدل 11) → كسور خاطئة (4/17 بدل 4/11) + شجرة تتابعية مضلِّلة لمسألة سحب آني.
+  ```python
+  # reproduction (live):
+  skill._extract_count_entities("أربع كرات حمراء مرقمة 0 1 1 3 خمس كرات خضراء مرقمة 0 1 1 3 4 ...")
+  # before: [حمراء:4, بيضاء:2, خضراء:5, «كرة رقم 0»:4, «كرة رقم 1»:2]  ← garbage
+  # after:  [حمراء:4, بيضاء:2, خضراء:5]                                   ← clean
+  ```
+- **Fix (surgical, root-cause)**:
+  1. ثابت جديد `_NUMBERED_ENTITY_MARKERS = {"رقم","الرقم","ارقام","الارقام","رقمها","ارقامها"}` — الأسماء المستقلّة فقط.
+  2. الحلقة تستخدم `if tok not in _NUMBERED_ENTITY_MARKERS` بدل مطابقة السلسلة الفرعية — تستبعد «مرقمة»/«مرقمتان»/«مرقم».
+  3. النتيجة: السحب الآني → `combinations_visualizer` صحيح (n=11, k=3, C=165, P(A)=14/165 يطابق الإجابة الرسمية)؛ السحب التتابعي → شجرة بكسور /11 صحيحة وتسميات لون ملموسة (لا «رقم 0»).
+- **Skills doctrine developed (D-081)**: `PROBABILITY_CALCULATION_DOCTRINE` v1.1.0 → v1.2.0 + قاعدة جديدة تُجسّد الدرس (قبول اسم الرقم الصريح فقط، رفض صفة «مرقمة»).
+- **Live verification (2026-05-22, Python 3.12 venv)**:
+  ```
+  $ pytest tests/services/test_probability_skill.py → 39 passed
+  $ pytest <skills + generative-ui suite> → 266 passed
+  $ OrchestratorClient._build_calculated_ui(BAC2024, confused) →
+      combinations_visualizer, n=11 k=3 C=165, deep_dive=True, P(A)=14/165, NO «رقم N»
+  $ ruff check/format · runtime_truth --check · validate_structure · ci_guardrails · skills-doctrine-gate → all ✅
+  ```
+- **Files**: `app/services/skills/probability_skill.py` (`_NUMBERED_ENTITY_MARKERS` + loop), `app/services/skills/doctrine.py` (rule + version), `tests/services/test_probability_skill.py` (+5 regression tests). See D-081 in `.memory/decisions.md`.
+- **Invariants** (لا تُكسر):
+  1. استخراج الكيانات المرقّمة يقبل الأسماء المستقلّة في `_NUMBERED_ENTITY_MARKERS` فقط — أي توسيع يُضاف للمجموعة + اختبار.
+  2. «مرقمة/مرقمتان/مرقم» تُستبعد دائماً (صفة لا كيان).
+  3. السحب الآني («دفعة واحدة») → combinations، السحب التتابعي → tree بكسور صحيحة وتسميات ملموسة.
 
 ---
 

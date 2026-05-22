@@ -5525,3 +5525,32 @@ Codespaces/CI** (الـ sandbox يحجب تثبيت التبعيات + egress �
 | D-075 → D-081 | dynamic probability engine + generalization + auto-trigger + deep-dive + entity fix |
 | D-082 | impossible-case UX + skills doctrine |
 | **D-083** | **Full Exercise OS: multi-step pedagogical carousel + RTL math CSS repair (V31.5)** |
+| **D-084** | **Protocol V34.0: Contextual Unmuzzle & The Teacher's Voice (LLM Narrative + deep follow-up)** |
+
+---
+
+## 6.59 Contextual Unmuzzle & The Teacher's Voice (2026-05-22, D-084 · Protocol V34.0)
+
+> كسر "الحلقة العمياء" (Algorithmic Blindness): عندما يحار الطالب («لم أفهم»)،
+> نكسر الكبح النصي (Muzzle) ونسمح للـ LLM بتقديم سرد بيداغوجي عميق (The Teacher's Voice)
+> يرافق الواجهة البصرية، بدلاً من إعادة بث نفس المكوّن بجملة واحدة.
+
+### المشكلة
+كان نظام التوجيه (`orchestrator_client`) يفرض `terminate_pipeline=True` بمجرد بثّ
+أي Generative UI، مما يكبل الـ LLM بجملة مرافق واحدة (Muzzle). هذا يمنع الشرح
+العميق لـ "لماذا" (The Why) في المسائل المعقدة مثل BAC 2024.
+
+### الإصلاح (D-084)
+- **Contextual Unmuzzle** (`orchestrator_client.py`): استخدام `is_confusion(question)`
+  للكشف عن حيرة الطالب. إذا وُجدت، يُحوّل `terminate_pipeline` إلى `False` قسراً.
+- **The Teacher's Voice** (`doctrine.py` v2.1.0): ترقية `EXPLANATION_DOCTRINE`
+  بقواعد سردية جديدة: التشبيهات (Analogies)، شرح المنطق الجوهري، والصبور التعليمي.
+- **التكامل الهجين**: بثّ المكوّن البصري (Carousel) + شرح سردي كامل من الـ LLM
+  في نفس الوقت لحل حيرة الطالب.
+
+### القواعد الدائمة
+1. رصد الحيرة (`is_confusion`) يكسر الـ Muzzle تلقائياً (Protocol V34.0).
+2. الشرح عند الحيرة يجب أن يجمع بين "البصري" (Visual) و"السردي" (Narrative).
+3. استخدام التشبيهات (Analogies) إلزامي لتبسيط المفاهيم المعقدة.
+4. تفسير الـ "لماذا" (Why) يسبق الـ "كيف" (How).
+

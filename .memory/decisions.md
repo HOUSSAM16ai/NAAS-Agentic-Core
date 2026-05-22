@@ -2293,3 +2293,19 @@ full-story branch) | `app/contracts/streaming.py` (whitelist) |
 `frontend/app/components/generative/FullExerciseStory.jsx` (جديد) +
 `GenerativeUIRenderer.jsx` (registry) | `frontend/app/globals.css` (LTR math
 fix + `.genui-fes-*`) | tests.
+
+---
+
+## D-083 · Protocol V34.0 — Contextual Unmuzzle & The Teacher's Voice (2026-05-22)
+
+**Context**: الكشف عن "حلقة عمياء" (algorithmic blindness) في الـ Orchestrator: عند حيرة الطالب («لم أفهم»)، كان النظام يُعيد بث نفس المكوّن البصري ويُكبل الـ LLM بجملة واحدة (Muzzle)، مما يمنع الشرح السردي الضروري للمسائل المعقدة (مثل بكالوريا 2024).
+
+**Decision**:
+1. **Context-Aware Routing**: تعديل `orchestrator_client.py` ليرصد "الحيرة" (`is_confusion`) في طلب الطالب الحالي. إذا كُشفت الحيرة، يتم كسر الـ `terminate_pipeline=True` وتحويله لـ `False` قسراً.
+2. **The Teacher's Voice**: تحديث `EXPLANATION_DOCTRINE` (v2.1.0) في `doctrine.py` لتشمل قواعد "صوت الأستاذ": السرد البيداغوجي العميق، استخدام التشبيهات، وتفسير "لماذا" تم اختيار القوانين (Why vs How).
+3. **Hybrid Output**: النظام الآن يجمع بين "الواجهة البصرية" (Generative UI) و"السرد النصي المفصل" (LLM Narrative) في آن واحد عند الحاجة التربوية العميقة.
+
+**Consequence**: لم يعد "الكبح النصي" (Text-Wall Muzzle) حاجزاً أمام الفهم العميق. الواجهة البصرية تقوم بالتمثيل الحركي، والنص يقوم بالعبء البيداغوجي لتوضيح المنطق.
+
+**Files**: `app/infrastructure/clients/orchestrator_client.py` (unmuzzle logic), `app/services/skills/doctrine.py` (v2.1.0 rules).
+

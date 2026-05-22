@@ -1446,8 +1446,26 @@ class OrchestratorClient:
             _ui_event = self._build_calculated_ui(question, history_messages=history_messages)
         except Exception:
             _ui_event = None
+
         if _ui_event is not None:
             _is_impossible = _ui_event.get("terminate_pipeline") is True
+
+            # ─────────────────────────────────────────────────────────────────
+            # Protocol V34.0 — Contextual Unmuzzle & The Teacher's Voice
+            # ─────────────────────────────────────────────────────────────────
+            # إذا عبّر الطالب عن حيرة («لم أفهم»، «اشرح لي»)، نكسر حلقة الكبح
+            # النصي (Muzzle) ونسمح للـ LLM بالاستمرار لتقديم السرد البيداغوجي العميق.
+            # الواجهة البصرية تُبثّ كالعادة، لكن النص يقوم بالعبء الثقيل للشرح.
+            from app.services.skills.probability_skill import ProbabilityCalculatorSkill
+
+            _is_confusion = ProbabilityCalculatorSkill.is_confusion(question)
+            if _is_confusion and _is_impossible:
+                _is_impossible = False
+                logger.info(
+                    "contextual_unmuzzle_triggered",
+                    extra={"question": question, "component": _ui_event.get("component")},
+                )
+
             logger.info(
                 "generative_ui_emit",
                 extra={

@@ -285,9 +285,7 @@ async def _emit_terminal_frames(
                 payload["ui_component"] = ui_component
             await websocket.send_json(
                 _bind_stream_metadata(
-                    normalize_streaming_event(
-                        {"type": "assistant_final", "payload": payload}
-                    ),
+                    normalize_streaming_event({"type": "assistant_final", "payload": payload}),
                     local_conversation_id,
                     stream_request_id,
                 )

@@ -43,6 +43,8 @@ jobs:
       ORCHESTRATOR_SERVICE_URL: "http://orchestrator-service:8006"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}

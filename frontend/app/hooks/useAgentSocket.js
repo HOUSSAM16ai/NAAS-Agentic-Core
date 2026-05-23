@@ -316,6 +316,8 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                     notifyAgentError(nestedAssistantError);
                     return;
                 }
+                // ui_component: payload بصري من Math Pipeline — يُرفق بالرسالة المكتملة
+                const uiComponent = payload?.ui_component || null;
                 setMessages(prev => {
                     const last = prev[prev.length - 1];
                     if (last && last.role === 'assistant' && !last.isComplete && !last.isError) {
@@ -323,14 +325,14 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                         // → نُكمل الرسالة الحالية بدون تغيير المحتوى (الـ deltas كافية)
                         // إذا كان content غير فارغ (fallback mode) → ندمجه بشكل صحيح
                         const newContent = content ? mergeAssistantContent(last.content, content) : last.content;
-                        return [...prev.slice(0, -1), { ...last, content: newContent, isComplete: true }];
+                        return [...prev.slice(0, -1), { ...last, content: newContent, isComplete: true, uiComponent }];
                     } else if (content) {
                         // لا توجد رسالة مساعد جارية → ننشئ رسالة جديدة كاملة
-                        return [...prev, { id: generateId(), role: 'assistant', content: content, isComplete: true }];
+                        return [...prev, { id: generateId(), role: 'assistant', content: content, isComplete: true, uiComponent }];
                     }
                     // streaming mode انتهى بدون assistant_final content → نُكمل آخر رسالة
                     if (last && last.role === 'assistant' && !last.isComplete) {
-                        return [...prev.slice(0, -1), { ...last, isComplete: true }];
+                        return [...prev.slice(0, -1), { ...last, isComplete: true, uiComponent }];
                     }
                     return prev;
                 });

@@ -5,6 +5,7 @@ import { CombinationsVisualizer } from './CombinationsVisualizer';
 import { FullExerciseStory } from './FullExerciseStory';
 import { GenerativeUIErrorBoundary } from './GenerativeUIErrorBoundary';
 import { ImpossibleDrawAnimation } from './ImpossibleDrawAnimation';
+import { MathExplanationCard } from './MathExplanationCard';
 import { ProbabilityTree } from './ProbabilityTree';
 
 /**
@@ -36,6 +37,8 @@ const COMPONENT_REGISTRY = {
     full_exercise_story: (props) => <FullExerciseStory props={props} />,
     impossible_draw_animation: (props) => <ImpossibleDrawAnimation props={props} />,
     bkt_hint_display: (props, fallbackText) => <BktHintStub fallbackText={fallbackText} />,
+    // بطاقة الشرح الرياضي العميق — تُفعَّل عند math_type معروف + شرح سردي
+    math_explanation_card: (props) => <MathExplanationCard props={props} />,
 };
 
 const FallbackNote = memo(({ text }) => (

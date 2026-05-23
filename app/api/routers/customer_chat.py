@@ -229,6 +229,32 @@ def _merge_history_with_client_context(
     return merged_history[-80:]
 
 
+def _try_build_math_ui_component(response_text: str) -> dict | None:
+    """
+    يحاول بناء ui_component من نص الإجابة المكتملة.
+
+    يُفعَّل فقط عند الأسئلة الرياضية (يكتشف math_type من النص).
+    يُعيد None عند الفشل أو عند الأسئلة غير الرياضية — لا يكسر المسار أبداً.
+
+    الفصل المعماري: هذه الدالة هي الخلفية (العقل المنطقي).
+    تُحلِّل النص وتُنظِّم البيانات — الواجهة تُحوِّلها إلى قصة بصرية.
+    """
+    if not response_text or len(response_text) < 100:
+        return None
+    try:
+        from microservices.conversation_service.src.math_pipeline import (
+            _build_ui_component,
+            _classify_math_type,
+        )
+
+        math_type = _classify_math_type(response_text[:500])
+        if math_type == "general_math":
+            return None
+        return _build_ui_component(math_type, response_text, "")
+    except Exception:
+        return None
+
+
 async def _emit_terminal_frames(
     *,
     websocket: WebSocket,
@@ -245,13 +271,22 @@ async def _emit_terminal_frames(
     الذي يبقي واجهة المستخدم في حالة تحميل أبدية (ISS-016/ISS-017).
     """
     if assistant_message_persisted:
+        # بناء ui_component من النص المكتمل — لا يكسر المسار عند الفشل
+        ui_component = _try_build_math_ui_component(complete_ai_response)
+
         if pending_terminal_event is not None:
+            # حقن ui_component في الـ payload الموجود
+            if ui_component and isinstance(pending_terminal_event.get("payload"), dict):
+                pending_terminal_event["payload"]["ui_component"] = ui_component
             await websocket.send_json(pending_terminal_event)
         else:
+            payload: dict = {"content": ""}
+            if ui_component:
+                payload["ui_component"] = ui_component
             await websocket.send_json(
                 _bind_stream_metadata(
                     normalize_streaming_event(
-                        {"type": "assistant_final", "payload": {"content": ""}}
+                        {"type": "assistant_final", "payload": payload}
                     ),
                     local_conversation_id,
                     stream_request_id,

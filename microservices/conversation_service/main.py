@@ -146,6 +146,8 @@ class ChatResponse(BaseModel):
     correlation_id: str
     graph_ready: bool
     step: str = _STEP
+    # payload الواجهة التوليدية — None للأسئلة غير الرياضية
+    ui_component: dict | None = None
 
 
 class HealthResponse(BaseModel):
@@ -214,6 +216,7 @@ async def chat_message(req: ChatRequest) -> ChatResponse:
             thread_id=thread_id,
             correlation_id=correlation_id,
             graph_ready=_GRAPH_READY,
+            ui_component=result.get("ui_component"),
         )
     except Exception as exc:
         duration = time.perf_counter() - t0
@@ -275,8 +278,10 @@ async def chat_ws(websocket: WebSocket) -> None:
                 response_payload = {
                     "response": result["response"],
                     "intent": result["intent"],
+                    "subject": result.get("subject", "general"),
                     "thread_id": thread_id,
                     "correlation_id": correlation_id,
+                    "ui_component": result.get("ui_component"),
                     "done": True,
                 }
             except Exception as exc:
@@ -340,8 +345,10 @@ async def admin_chat_ws(websocket: WebSocket) -> None:
                 response_payload = {
                     "response": result["response"],
                     "intent": result["intent"],
+                    "subject": result.get("subject", "general"),
                     "thread_id": thread_id,
                     "correlation_id": correlation_id,
+                    "ui_component": result.get("ui_component"),
                     "done": True,
                 }
             except Exception as exc:

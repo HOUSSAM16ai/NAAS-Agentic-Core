@@ -230,7 +230,9 @@ def _clean_channel_b(text: str) -> str:
     cleaned = re.sub(r"<[^>]+>", "", cleaned)
 
     # 2. حذف JSX components كاملاً (لا محتوى نصي مفيد)
-    cleaned = re.sub(r"<[A-Z][a-zA-Z0-9]*(?:\s[^>]*)?>.*?</[A-Z][a-zA-Z0-9]*>", "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(
+        r"<[A-Z][a-zA-Z0-9]*(?:\s[^>]*)?>.*?</[A-Z][a-zA-Z0-9]*>", "", cleaned, flags=re.DOTALL
+    )
     cleaned = re.sub(r"<[A-Z][a-zA-Z0-9]*(?:\s[^>]*)?/>", "", cleaned)
 
     # 3. حذف inline CSS و className
@@ -238,7 +240,7 @@ def _clean_channel_b(text: str) -> str:
     cleaned = re.sub(r'\s+className\s*=\s*["\'][^"\']*["\']', "", cleaned)
 
     # 4. حذف event handlers
-    cleaned = re.sub(r'\s+on[A-Z]\w+\s*=\s*\{[^}]*\}', "", cleaned)
+    cleaned = re.sub(r"\s+on[A-Z]\w+\s*=\s*\{[^}]*\}", "", cleaned)
 
     # 5. حذف React imports وscaffolding
     cleaned = re.sub(r"import\s+React[^\n]*\n?", "", cleaned)
@@ -291,8 +293,7 @@ class OutputFirewall:
         try:
             if inp.channel == "B":
                 return self._check_channel_b(inp, t0)
-            else:
-                return self._check_channel_a(inp, t0)
+            return self._check_channel_a(inp, t0)
         except Exception as exc:
             logger.error("output_firewall.check_failed: %s", exc, exc_info=True)
             # Fail open — لا نكسر المسار أبداً

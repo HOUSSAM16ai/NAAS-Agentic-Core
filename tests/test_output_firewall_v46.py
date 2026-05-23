@@ -14,8 +14,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.services.skills.output_firewall import (
     FirewallInput,
     OutputFirewall,
@@ -27,7 +25,6 @@ from app.services.skills.topic_lock import (
     TopicLockInput,
     get_topic_lock,
 )
-
 
 # ── OutputFirewall — القناة B ─────────────────────────────────────────────────
 
@@ -55,11 +52,7 @@ class TestOutputFirewallChannelB:
 
     def test_html_div_detected_and_cleaned(self) -> None:
         """وسوم <div> تُكشَف وتُنظَّف مع الحفاظ على المحتوى النصي."""
-        text = (
-            "<div class='answer'>"
-            "الاحتمال هو نسبة الحالات المواتية إلى الحالات الممكنة."
-            "</div>"
-        )
+        text = "<div class='answer'>الاحتمال هو نسبة الحالات المواتية إلى الحالات الممكنة.</div>"
         result = self.firewall.check(FirewallInput(text=text, channel="B"))
         assert result.passed is True
         assert result.rejected is False
@@ -96,11 +89,7 @@ class TestOutputFirewallChannelB:
 
     def test_inline_css_with_html_tag_rejected(self) -> None:
         """<span> مع CSS مضمَّن يُرفض (html_tags=0.4 + inline_css=0.3 = 0.7 ≥ عتبة)."""
-        text = (
-            '<span style="color: red; font-weight: bold;">'
-            "الاحتمال المطلوب هو 3/5"
-            "</span>"
-        )
+        text = '<span style="color: red; font-weight: bold;">الاحتمال المطلوب هو 3/5</span>'
         result = self.firewall.check(FirewallInput(text=text, channel="B"))
         # html_tags (0.4) + inline_css (0.3) = 0.7 ≥ _REJECTION_THRESHOLD (0.6) → رفض
         assert result.rejected is True
@@ -127,9 +116,7 @@ class TestOutputFirewallChannelB:
     def test_cleanup_disabled_rejects_instead(self) -> None:
         """عند تعطيل التنظيف، التلوث تحت العتبة يُرفض بدل التنظيف."""
         text = "<p>الاحتمال هو 3/5</p>"
-        result = self.firewall.check(
-            FirewallInput(text=text, channel="B", allow_cleanup=False)
-        )
+        result = self.firewall.check(FirewallInput(text=text, channel="B", allow_cleanup=False))
         assert result.rejected is True
 
     def test_empty_text_passes(self) -> None:
@@ -211,7 +198,7 @@ class TestApplyChannelBFirewall:
         assert cleaned == ""
 
     def test_empty_string_passes(self) -> None:
-        cleaned, rejected = apply_channel_b_firewall("")
+        _cleaned, rejected = apply_channel_b_firewall("")
         assert rejected is False
 
     def test_singleton_reuse(self) -> None:
@@ -255,8 +242,7 @@ class TestTopicLock:
         result = self.lock.check(
             TopicLockInput(
                 response=(
-                    "لحساب الاحتمال نستخدم المشتقة الأولى للدالة "
-                    "ثم نُطبِّق قاعدة السلسلة للتكامل."
+                    "لحساب الاحتمال نستخدم المشتقة الأولى للدالة ثم نُطبِّق قاعدة السلسلة للتكامل."
                 ),
                 question="ما احتمال سحب كرة حمراء؟",
                 history=self._prob_history(),

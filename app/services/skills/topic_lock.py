@@ -70,58 +70,140 @@ def _record_check(result: str) -> None:
 _TOPIC_DEFINITIONS: dict[str, dict[str, list[str]]] = {
     "probability": {
         "keywords": [
-            "احتمال", "احتمالات", "حدث", "فضاء العينة", "تجربة عشوائية",
-            "سحب", "كرة", "بطاقة", "قرعة", "توزيع", "متغير عشوائي",
-            "probability", "random", "event", "sample space",
+            "احتمال",
+            "احتمالات",
+            "حدث",
+            "فضاء العينة",
+            "تجربة عشوائية",
+            "سحب",
+            "كرة",
+            "بطاقة",
+            "قرعة",
+            "توزيع",
+            "متغير عشوائي",
+            "probability",
+            "random",
+            "event",
+            "sample space",
         ],
         "forbidden_from_other_topics": [
             # من التفاضل والتكامل
-            "مشتقة", "تكامل", "نهاية", "دالة قابلة للاشتقاق",
-            "قاعدة السلسلة", "قاعدة الضرب", "تفاضل",
-            "derivative", "integral", "limit", "differentiation",
+            "مشتقة",
+            "تكامل",
+            "نهاية",
+            "دالة قابلة للاشتقاق",
+            "قاعدة السلسلة",
+            "قاعدة الضرب",
+            "تفاضل",
+            "derivative",
+            "integral",
+            "limit",
+            "differentiation",
         ],
     },
     "calculus": {
         "keywords": [
-            "مشتقة", "تكامل", "نهاية", "دالة", "اشتقاق", "تفاضل",
-            "تكامل محدود", "تكامل غير محدود", "قاعدة السلسلة",
-            "derivative", "integral", "limit", "differentiation", "calculus",
+            "مشتقة",
+            "تكامل",
+            "نهاية",
+            "دالة",
+            "اشتقاق",
+            "تفاضل",
+            "تكامل محدود",
+            "تكامل غير محدود",
+            "قاعدة السلسلة",
+            "derivative",
+            "integral",
+            "limit",
+            "differentiation",
+            "calculus",
         ],
         "forbidden_from_other_topics": [
             # من الاحتمالات
-            "فضاء العينة", "تجربة عشوائية", "سحب بدون إرجاع",
-            "sample space", "random experiment",
+            "فضاء العينة",
+            "تجربة عشوائية",
+            "سحب بدون إرجاع",
+            "sample space",
+            "random experiment",
         ],
     },
     "algebra": {
         "keywords": [
-            "معادلة", "مجهول", "حل المعادلة", "نظام معادلات",
-            "مصفوفة", "محدد", "قيمة ذاتية", "متجه",
-            "equation", "matrix", "determinant", "eigenvalue",
+            "معادلة",
+            "مجهول",
+            "حل المعادلة",
+            "نظام معادلات",
+            "مصفوفة",
+            "محدد",
+            "قيمة ذاتية",
+            "متجه",
+            "equation",
+            "matrix",
+            "determinant",
+            "eigenvalue",
         ],
         "forbidden_from_other_topics": [],
     },
     "geometry": {
         "keywords": [
-            "مثلث", "دائرة", "مستطيل", "مربع", "متوازي أضلاع",
-            "زاوية", "محيط", "مساحة", "حجم", "إحداثيات",
-            "triangle", "circle", "rectangle", "angle", "area", "volume",
+            "مثلث",
+            "دائرة",
+            "مستطيل",
+            "مربع",
+            "متوازي أضلاع",
+            "زاوية",
+            "محيط",
+            "مساحة",
+            "حجم",
+            "إحداثيات",
+            "triangle",
+            "circle",
+            "rectangle",
+            "angle",
+            "area",
+            "volume",
         ],
         "forbidden_from_other_topics": [],
     },
     "physics": {
         "keywords": [
-            "قوة", "طاقة", "سرعة", "تسارع", "كتلة", "شغل",
-            "كهرباء", "مقاومة", "تيار", "جهد", "موجة", "تردد",
-            "force", "energy", "velocity", "acceleration", "mass",
+            "قوة",
+            "طاقة",
+            "سرعة",
+            "تسارع",
+            "كتلة",
+            "شغل",
+            "كهرباء",
+            "مقاومة",
+            "تيار",
+            "جهد",
+            "موجة",
+            "تردد",
+            "force",
+            "energy",
+            "velocity",
+            "acceleration",
+            "mass",
         ],
         "forbidden_from_other_topics": [],
     },
     "chemistry": {
         "keywords": [
-            "تفاعل كيميائي", "معادلة كيميائية", "مول", "تركيز",
-            "حمض", "قاعدة", "أكسدة", "اختزال", "عنصر", "مركب",
-            "reaction", "molecule", "acid", "base", "oxidation",
+            "تفاعل كيميائي",
+            "معادلة كيميائية",
+            "مول",
+            "تركيز",
+            "حمض",
+            "قاعدة",
+            "أكسدة",
+            "اختزال",
+            "عنصر",
+            "مركب",
+            "reaction",
+            "molecule",
+            "acid",
+            "base",
+            "oxidation",
         ],
         "forbidden_from_other_topics": [],
     },
@@ -192,9 +274,11 @@ def _check_topic_purity(
             for other_topic, definition in _TOPIC_DEFINITIONS.items():
                 if other_topic == active_topic:
                     continue
-                if forbidden_term.lower() in [kw.lower() for kw in definition["keywords"]]:
-                    if other_topic not in leaked_topics:
-                        leaked_topics.append(other_topic)
+                if (
+                    forbidden_term.lower() in [kw.lower() for kw in definition["keywords"]]
+                    and other_topic not in leaked_topics
+                ):
+                    leaked_topics.append(other_topic)
 
     return leaked_topics
 
@@ -264,9 +348,7 @@ class TopicLock:
     def _check_impl(self, inp: TopicLockInput) -> TopicLockOutput:
         # 1. تحقق من انتقال صريح للموضوع
         combined_input = f"{inp.question} {inp.response}"
-        is_transition = any(
-            p.search(combined_input) for p in _TOPIC_TRANSITION_PATTERNS
-        )
+        is_transition = any(p.search(combined_input) for p in _TOPIC_TRANSITION_PATTERNS)
         if is_transition:
             _record_check("transition")
             return TopicLockOutput(

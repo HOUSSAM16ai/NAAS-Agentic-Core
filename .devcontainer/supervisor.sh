@@ -96,6 +96,24 @@ _inject_env_secrets() {
     local env_file=".env"
     local changed=0
 
+    # ── Load Gitpod file secrets (injected as files under /usr/local/secrets/) ──
+    # Gitpod Flex injects secrets as files when secretType=file in the environment
+    # spec. These are NOT available as env vars — must be read explicitly.
+    local gitpod_secrets_dir="/usr/local/secrets"
+    if [ -d "$gitpod_secrets_dir" ]; then
+        for secret_file in "$gitpod_secrets_dir"/*; do
+            [ -f "$secret_file" ] || continue
+            local secret_name
+            secret_name="$(basename "$secret_file")"
+            local secret_val
+            secret_val="$(tr -d '\n\r ' < "$secret_file")"
+            if [ -n "$secret_val" ] && [ -z "${!secret_name:-}" ]; then
+                export "$secret_name=$secret_val"
+                lifecycle_info "  /usr/local/secrets/$secret_name -> injected"
+            fi
+        done
+    fi
+
     # ── Load .devcontainer/secrets.env as fallback when Codespaces Secrets absent ──
     # This file is git-ignored. It lets developers run without configuring
     # Codespaces Secrets — just copy secrets.env.example and fill in values.

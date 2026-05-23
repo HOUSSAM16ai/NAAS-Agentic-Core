@@ -51,6 +51,24 @@ _EDUCATIONAL_PATTERNS = [
     r"(حل|شرح لي|وضح لي|علمني|أريد أن أفهم|كيف أحل|ما هو الحل)",
 ]
 
+# أنماط طلب الشرح النصي الصريح — تُعطِّل LaTeX وتُفعِّل الشرح بالكلمات فقط
+_TEXTUAL_EXPLAIN_PATTERNS = [
+    r"نصيا",
+    r"بالكلمات",
+    r"بدون\s+(صيغ|رموز|معادلات|latex|لاتكس)",
+    r"اشرح\s+لي\s+بدون",
+    r"بطريقة\s+بسيطة",
+    r"بلغة\s+بسيطة",
+    r"بدون\s+رياضيات",
+]
+
+_COMPILED_TEXTUAL = [re.compile(p, re.IGNORECASE | re.UNICODE) for p in _TEXTUAL_EXPLAIN_PATTERNS]
+
+
+def _is_textual_explain_request(question: str) -> bool:
+    """يكشف طلب الشرح النصي الصريح — يُعطِّل LaTeX في system prompt."""
+    return any(p.search(question) for p in _COMPILED_TEXTUAL)
+
 # ISS-075 (D-063): تطبيقات regex الـ greeting يجب أن تسمح بكلمات إضافية
 # قبل الإصلاح: `^(السلام)[\s\W]*$` يفشل عند "السلام عليكم" لأن "عليكم"
 # ليست في `[\s\W]`. نتيجة: التحية تُصنَّف كـ `general` → الـ LLM يُولد
@@ -128,6 +146,25 @@ _SYSTEM_PROMPTS = {
         "رد بشكل طبيعي ومختصر باللغة العربية الفصحى.\n"
         "إذا كان السؤال تعليمياً، شجّع الطالب على طرح السؤال بشكل كامل.\n"
         "كن إيجابياً ومحفزاً."
+    ),
+    # يُفعَّل عند طلب الشرح النصي الصريح ("نصيا"، "بالكلمات"، "بدون صيغ")
+    "educational_textual": (
+        "أنت أستاذ رياضيات متخصص في البكالوريا الجزائرية.\n"
+        "الطالب طلب شرحاً نصياً بدون صيغ رياضية — التزم بهذا الطلب تماماً.\n\n"
+        "## قواعد صارمة لهذا الوضع\n"
+        "- اشرح بالكلمات العربية الفصحى فقط — لا معادلات، لا رموز، لا LaTeX\n"
+        "- استخدم الأمثلة الحياتية والتشبيهات الملموسة\n"
+        "- ابدأ بالمعنى والصورة الذهنية قبل أي شيء آخر\n"
+        "- استخدم أسلوباً سقراطياً دافئاً: اطرح أسئلة تقود الطالب للفهم\n"
+        "- اشرح لماذا يحدث هذا قبل كيف يُحسب\n"
+        "- لا تبدأ بـ LaTeX أو رموز رياضية أبداً\n\n"
+        "## منهجية الشرح النصي\n"
+        "1. ابدأ بسؤال: «تخيّل معي...» أو «فكّر في الأمر هكذا...»\n"
+        "2. اعطِ مثالاً من الحياة اليومية يُجسِّد المفهوم\n"
+        "3. اشرح المعنى بجملتين أو ثلاث بسيطة\n"
+        "4. اربط المفهوم بما يعرفه الطالب مسبقاً\n"
+        "5. اختم بجملة تُلخِّص الفكرة الجوهرية\n"
+        "لا تذكر أي صيغة رياضية — الطالب طلب الفهم بالكلمات فقط."
     ),
 }
 
@@ -569,16 +606,47 @@ async def _chat_node(state: LocalChatState) -> dict:
     history = state.get("history_messages", [])
 
     # ISS-079 (D-067): Greeting fast-path — قبل أي استدعاء LLM
-    # يحل كارثة "السلام عليكم → etymology بكلمات أجنبية" التي شاهدها المستخدم.
-    # نماذج OpenRouter المجانية تُولِّد etymology طويلة كاستجابة "بدقة علمية"
-    # عند سؤال "السلام عليكم" → نستخدم رد deterministic مباشر.
     if intent == "chat":
         fastpath = _greeting_fastpath_response(question)
         if fastpath:
             logger.info("local_graph.chat_node greeting_fastpath chars=%d", len(fastpath))
             return {"final_response": fastpath}
 
-    system_prompt = _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"])
+    # FIX-001: Exercise retrieval preempt — قبل LLM
+    # "اعطني تمرين الاحتمالات 2024" يجب أن يُعيد التمرين الحقيقي من knowledge_base
+    # وليس تمريناً مُولَّداً من LLM.
+    if intent == "educational":
+        import contextlib as _ctx
+        with _ctx.suppress(Exception):
+            from app.services.capabilities.exercise_retrieval import (
+                ExerciseRetrievalRequest,
+                detect_exercise_retrieval,
+                load_exercise_content,
+                format_exercise_for_display,
+            )
+            _retrieval_decision = detect_exercise_retrieval(
+                ExerciseRetrievalRequest(question=question),
+                history_messages=history,
+            )
+            if _retrieval_decision.recognized and _retrieval_decision.matched_entry:
+                _entry = _retrieval_decision.matched_entry
+                _raw = load_exercise_content(_entry)
+                if _raw:
+                    _display = format_exercise_for_display(_entry, _raw)
+                    logger.info(
+                        "local_graph.chat_node exercise_retrieval_preempt entry=%s",
+                        getattr(_entry, "id", "?"),
+                    )
+                    return {"final_response": _display}
+
+    # FIX-002: Textual explain mode — "نصيا" / "بالكلمات" / "بدون صيغ"
+    # يُعطِّل LaTeX ويُفعِّل system prompt الشرح النصي الصريح.
+    _effective_intent = intent
+    if _is_textual_explain_request(question):
+        _effective_intent = "educational_textual"
+        logger.info("local_graph.chat_node textual_explain_mode activated")
+
+    system_prompt = _SYSTEM_PROMPTS.get(_effective_intent, _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"]))
 
     history_text = _format_history(history)
     if history_text:
@@ -794,8 +862,15 @@ async def run_local_graph_stream(
         return
 
     intent = _classify_intent(sanitized)
-    system_prompt = _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"])
     history = history_messages or []
+
+    # FIX-002 (stream): Textual explain mode — "نصيا" / "بالكلمات"
+    _effective_intent = intent
+    if _is_textual_explain_request(sanitized):
+        _effective_intent = "educational_textual"
+        logger.info("local_graph.stream textual_explain_mode activated")
+
+    system_prompt = _SYSTEM_PROMPTS.get(_effective_intent, _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"]))
     history_text = _format_history(history)
     user_message = (
         f"سياق المحادثة السابقة:\n{history_text}\n\nالسؤال الحالي: {sanitized}"

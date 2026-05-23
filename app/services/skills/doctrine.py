@@ -681,7 +681,14 @@ def build_exercise_explanation_prompt() -> str:
         "\n7. لا تنسخ الإجابة النموذجية حرفياً — اشرح المنطق."
     )
 
-    prompt = header + "قواعد إلزامية:\n" + core_rules + anchors + "\n\nمنهجية الشرح:\n" + methodology_lines
+    prompt = (
+        header
+        + "قواعد إلزامية:\n"
+        + core_rules
+        + anchors
+        + "\n\nمنهجية الشرح:\n"
+        + methodology_lines
+    )
 
     # ضمان عدم تجاوز 1000 حرف (D-067 invariant)
     if len(prompt) > 1000:

@@ -19,8 +19,7 @@ from app.services.skills.probability_skill import ProbabilityCalculatorSkill
 # ── بيانات الاختبار ──────────────────────────────────────────────────────────────
 
 _BAC_URN = (
-    "يحتوي كيس على 11 كرة: كرتان بيضاوان مرقمتان بـ 1 و 3، "
-    "وأربع كرات حمراء، وخمس كرات خضراء."
+    "يحتوي كيس على 11 كرة: كرتان بيضاوان مرقمتان بـ 1 و 3، وأربع كرات حمراء، وخمس كرات خضراء."
 )
 
 # MODE_A — أسئلة مباشرة (لا حيرة)
@@ -197,9 +196,7 @@ def test_routing_mode_present_in_all_component_types() -> None:
         assert result.get("component") == expected_component, (
             f"Expected {expected_component}, got {result.get('component')}"
         )
-        assert "routing_mode" in result, (
-            f"routing_mode missing for component={expected_component}"
-        )
+        assert "routing_mode" in result, f"routing_mode missing for component={expected_component}"
         assert result["routing_mode"] in ("MODE_A", "MODE_B"), (
             f"routing_mode must be MODE_A or MODE_B, got {result['routing_mode']}"
         )

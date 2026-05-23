@@ -37,6 +37,7 @@ The system must preserve the following principles permanently. Every future agen
 - **BKT is the foundational cognitive layer (D-074)**: Bayesian Knowledge Tracing (`app/services/skills/bkt_engine.py:BKTEngine`) is the cognitive substrate for ALL future autonomous pedagogical skills (adaptive difficulty, hints, learning paths). Any adaptive capability MUST build on `student_mastery_probability`, never re-invent mastery tracking. Governed by `BKT_COGNITIVE_DOCTRINE` (versioned in `app/services/skills/doctrine.py`, CI-validated by `scripts/fitness/check_skills_doctrine.py`).
 - **BKT is append-only (D-074)**: `student_bkt_analytics` is strictly an **append-only interaction log** for time-series analytics. Each evaluation inserts ONE new row; prior mastery is read from the most-recent row per `(user_id, concept_id)`. No in-place updates, no upserts — the full temporal sequence is preserved. Mandatory schema: `concept_id`, `cognitive_load_estimate` (low/medium/high), `student_mastery_probability ∈ [0,1]`, `interaction_timestamp`.
 - **BKT never breaks chat (D-074)**: Every BKT evaluation/persist/emit call (`customer_chat._evaluate_and_emit_bkt`) is isolated in `try/except` with its own DB session. A BKT failure is logged and swallowed — it must NEVER abort a student's chat turn.
+- **Dual-Mode Routing is immutable (D-085 — 2026-05-23)**: `_build_calculated_ui` stamps every UI event with `routing_mode: "MODE_A" | "MODE_B"`. MODE_A (direct question) → `terminate_pipeline=True`, companion_text only. MODE_B (confusion: «لم أفهم», «مفهمتش», «كيفاش», «اشرح لي») → `terminate_pipeline=False`, LLM narrative continues after UI. The routing decision is made **inside** `_build_calculated_ui` — never re-computed in `chat_with_agent`. `_effective_question` in MODE_B prepends the Socratic instruction before reaching LangGraph/fallback. V28.0/V30.0 Text-Wall Muzzle contracts remain valid for MODE_A. Removing `routing_mode` or collapsing the two modes breaks deep pedagogy for confused students.
 - **Math Pipeline is 4 nodes, not 3 (D-080 — 2026-05-23)**: `enrich_node` (Node 4 — deterministic, no LLM) was added after `normalize_node`. It builds `ui_component` payload from the completed solution text. Topology: `classify → solve → normalize → enrich → END`. `MathPipelineState` and `invoke_math_pipeline` now return `ui_component: dict | None`. Removing `enrich_node` breaks Generative UI for all math questions.
 - **ui_component flows through the full stack (D-080)**: `ConversationState` carries `ui_component`. `invoke_graph` returns it. `ChatResponse` (HTTP) and WebSocket payload both include it. `_try_build_math_ui_component` in `customer_chat.py` injects it into `assistant_final` for the monolith path. `useAgentSocket.js` extracts it from `assistant_final` payload and attaches it to the message. `ChatInterface.jsx` renders `GenerativeUIRenderer` **after** the text, only on `isComplete` — never during streaming.
 - **MathExplanationCard is the canonical math Generative UI component (D-080)**: Registered as `math_explanation_card` in `GenerativeUIRenderer` whitelist. Props contract: `{ math_type, label, intuition, steps[], hint, visual_metaphor }`. 11 math types supported, each with a distinct color and visual metaphor. Any new math type must be added to `_MATH_TYPES` (math_pipeline.py), `_TYPE_LABELS`, `_MATH_HINTS`, `visual_metaphors` dict inside `_build_ui_component`, and `TYPE_COLORS` in `MathExplanationCard.jsx`.
@@ -5557,4 +5558,68 @@ Codespaces/CI** (الـ sandbox يحجب تثبيت التبعيات + egress �
 2. الشرح عند الحيرة يجب أن يجمع بين "البصري" (Visual) و"السردي" (Narrative).
 3. استخدام التشبيهات (Analogies) إلزامي لتبسيط المفاهيم المعقدة.
 4. تفسير الـ "لماذا" (Why) يسبق الـ "كيف" (How).
+
+---
+
+## 6.60 Dual-Mode Routing — MODE_A / MODE_B (2026-05-23, D-085 · Protocol V38.0)
+
+> يُحدِّث ويُعمِّق D-084 (V34.0). بدلاً من كسر الـ Muzzle قسراً بعد بناء الحمولة،
+> يُحدَّد وضع التوجيه **داخل** `_build_calculated_ui` قبل بناء أي حمولة،
+> ويُصبح `routing_mode` جزءاً من العقد المُرجَع.
+
+### المشكلة (فجوة V34.0)
+كان V34.0 يكسر الـ Muzzle فقط عند `_is_confusion AND _is_impossible` — أي عند
+الحالة المستحيلة فقط. عند حيرة الطالب في سحب عادي (combinations/tree)، كان
+`terminate_pipeline=True` يُوقف المسار رغم الحيرة لأن `_is_impossible=False`.
+
+### الإصلاح (D-085)
+
+#### `_build_calculated_ui` (orchestrator_client.py)
+- يكشف `is_confusion` **داخلياً** قبل بناء الحمولة.
+- يُضيف `routing_mode: "MODE_A" | "MODE_B"` لكل dict مُرجَع.
+- يضبط `terminate_pipeline = not _is_deep_pedagogy` لجميع أنواع المكوّنات
+  (combinations_visualizer, probability_tree, impossible_draw_animation, full_exercise_story).
+
+#### `chat_with_agent` (orchestrator_client.py)
+- يقرأ `routing_mode` مباشرة من الحدث — مصدر حقيقة واحد، لا فحص حيرة ثانٍ.
+- `_is_mode_b` مُرفَّع (hoisted) قبل `try/except` ليكون مقروءاً في سلسلة الـ fallback.
+- يبني `_effective_question`: في MODE_B يُضيف تعليمة سقراطية قبل السؤال:
+  `"[وضع الشرح العميق] ابدأ بالمعنى والصورة الذهنية قبل أي صيغة..."`.
+- MODE_B يسقط للـ LLM path مباشرة بعد بثّ المكوّن البصري.
+- MODE_A يُنهي المسار بـ companion_text (جملة واحدة ≤ 120 حرف) كما كان.
+
+### عقد الوضعين
+
+| الوضع | المُشغِّل | terminate_pipeline | مخرج النص |
+|-------|-----------|-------------------|-----------|
+| **MODE_A** | سؤال مباشر | `True` | companion_text (جملة واحدة) |
+| **MODE_B** | حيرة (لم أفهم / مفهمتش / كيفاش / اشرح لي) | `False` | سرد بيداغوجي كامل من LLM |
+
+### فصل القناتين (Channel Separation)
+- **Channel 1 — UI Payload**: JSON نظيف (`component` + `props` + `routing_mode`). لا Markdown.
+- **Channel 2 — LLM Narrative**: Markdown فقط. يبدأ بالمعنى والصورة، لا LaTeX.
+- القناتان لا تتلوّثان أبداً.
+
+### القواعد الدائمة (D-085 — لا تُكسر بدون ADR)
+1. `routing_mode` يُحدَّد داخل `_build_calculated_ui` — لا يُعاد حسابه في `chat_with_agent`.
+2. MODE_B يُفعَّل لأي مكوّن (ليس impossible_case فقط).
+3. `_effective_question` في MODE_B يحمل التعليمة السقراطية — لا تُحذف.
+4. `terminate_pipeline` في MODE_A لا يزال `True` — V28.0/V30.0 ساريان في MODE_A.
+5. تعليمة MODE_B < 1000 حرف، بلا رموز box-drawing، بلا LaTeX (D-067).
+
+### التحقق الحي (2026-05-23)
+- 7/7 حالات توجيه صحيحة (MODE_A terminate=True، MODE_B terminate=False).
+- LLM في MODE_B يفتح بـ `تخيل أن لديك كيساً...` — معنى أولاً، لا LaTeX.
+- 17 اختباراً جديداً في `tests/services/test_v38_dual_mode_routing.py`.
+- 827 اختباراً تجتاز، فشلان موجودان مسبقاً في `test_skills_doctrine_d071.py`.
+
+### جدول القرارات المحدَّث
+
+| D-رقم | الموضوع |
+|--------|---------|
+| D-075 → D-081 | dynamic probability engine + generalization + auto-trigger + deep-dive + entity fix |
+| D-082 | impossible-case UX + skills doctrine |
+| **D-083** | **Full Exercise OS: multi-step pedagogical carousel (V31.5)** |
+| **D-084** | **Protocol V34.0: Contextual Unmuzzle (impossible_case فقط)** |
+| **D-085** | **Protocol V38.0: Dual-Mode Routing — MODE_A/MODE_B لجميع المكوّنات** |
 

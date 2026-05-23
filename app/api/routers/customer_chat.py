@@ -55,14 +55,13 @@ def _apply_complete_response_firewall(text: str) -> str:
 
         cleaned, was_rejected = apply_channel_b_firewall(text, intent="educational")
         if was_rejected:
-            logger.warning(
-                "customer_chat.complete_response_firewall_rejected chars=%d", len(text)
-            )
+            logger.warning("customer_chat.complete_response_firewall_rejected chars=%d", len(text))
             return text  # fail-open
         return cleaned
     except Exception as exc:
         logger.debug("customer_chat.firewall_non_fatal: %s", exc)
         return text
+
 
 COMPATIBILITY_FACADE_MODE = True
 # تنبيه معماري: هذا المسار واجهة توافقية فقط ويُمنع فيه أي تنفيذ محلي لمنطق الدردشة.
@@ -646,9 +645,7 @@ async def chat_stream_ws(
                 # D-086 (V46.0): تطبيق OutputFirewall على الإجابة المكتملة
                 # قبل الحفظ في DB — يضمن نقاء القناة B في السجل الدائم.
                 if complete_ai_response:
-                    complete_ai_response = _apply_complete_response_firewall(
-                        complete_ai_response
-                    )
+                    complete_ai_response = _apply_complete_response_firewall(complete_ai_response)
 
                 if (
                     not assistant_message_persisted

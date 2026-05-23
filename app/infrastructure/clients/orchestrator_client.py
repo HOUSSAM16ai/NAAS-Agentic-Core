@@ -977,7 +977,7 @@ class OrchestratorClient:
         question: str,
         history_messages: list[dict[str, str]] | None = None,
     ) -> dict[str, object] | None:
-        """D-078 (V19.0 → V28.0): الموجِّه التربوي — يُرجِع حدث ui_component الصحيح.
+        """D-078 (V19.0 → V38.0): الموجِّه التربوي — يُرجِع حدث ui_component الصحيح.
 
         «دفعة واحدة» (سحب آني) → ``combinations_visualizer`` (تأليفي C_n^k)؛
         «على التوالي» / سحب مفرد → ``probability_tree``. هذا يمنع فرض شجرة
@@ -985,12 +985,24 @@ class OrchestratorClient:
         يُفعِّل الأداة البصرياً عبر سياق المحادثة. محروس بـ try/except.
 
         المخرج: ``{"component": str, "props": dict, "fallback_text": str,
-        "terminate_pipeline": bool}`` أو None.
+        "terminate_pipeline": bool, "routing_mode": str}`` أو None.
 
-        ## V28.0 — قانون الكبح النصي (Text-Wall Muzzle)
-        ``terminate_pipeline=True`` يُصدَر حصراً مع ``impossible_case``.
-        يُلزم ``chat_with_agent`` بإنهاء المسار فوراً بعد بثّ المكوّن البصري
-        و``companion_text`` (جملة واحدة) — لا LLM، لا شجرة، لا synthesizer.
+        ## V38.0 — نظام التوجيه الثنائي (Dual-Mode Routing)
+
+        ### MODE_A — الوضع المباشر (Standard Direct Mode)
+        يُستخدم عند السؤال المباشر أو طلب الحل العادي.
+        - ``terminate_pipeline=True`` يُوقف المسار بعد المكوّن البصري.
+        - ``companion_text`` (جملة واحدة) هو النص الوحيد المرافق.
+
+        ### MODE_B — وضع البيداغوجيا العميقة (Deep Pedagogy Mode)
+        يُفعَّل عند إشارات الحيرة («لم أفهم»، «اشرح لي»، «كيفاش»).
+        - ``terminate_pipeline=False`` — المسار يبقى حياً.
+        - المكوّن البصري يُبثّ أولاً، ثم يستمر السرد البيداغوجي من LLM.
+        - القناتان (JSON + Markdown) منفصلتان تماماً — لا تلوّث متبادل.
+
+        ## V28.0 — قانون الكبح النصي (Text-Wall Muzzle) — ساري في MODE_A فقط
+        ``terminate_pipeline=True`` يُلزم ``chat_with_agent`` بإنهاء المسار
+        فوراً بعد بثّ المكوّن البصري و``companion_text`` — لا LLM، لا synthesizer.
         """
         try:
             from app.services.skills.probability_skill import (
@@ -1005,6 +1017,18 @@ class OrchestratorClient:
             skill = ProbabilityCalculatorSkill()
             result = skill.analyze(ProbabilityInput(question=question, history=history_messages))
 
+            # V38.0 — Dual-Mode Routing: كشف نية الطالب قبل بناء الحمولة.
+            # MODE_B يُفعَّل عند إشارات الحيرة — يُبقي المسار حياً للسرد البيداغوجي.
+            # MODE_A هو الوضع الافتراضي — يُوقف المسار بعد المكوّن البصري.
+            _combined_text = question + " " + " ".join(
+                m.get("content", "") for m in (history_messages or [])
+            )
+            _is_deep_pedagogy = (
+                ProbabilityCalculatorSkill.is_confusion(question)
+                or ProbabilityCalculatorSkill.is_confusion(_combined_text)
+            )
+            _routing_mode = "MODE_B" if _is_deep_pedagogy else "MODE_A"
+
             # V31.5 (Full Exercise OS): القصة التربوية الشاملة — Carousel متعدّد
             # الخطوات يغطّي التمرين كاملاً (معطيات → فضاء عيّنة → حدث مركّب →
             # متغيّر عشوائي). يُفعَّل عند حيرة الطالب. terminate_pipeline=True
@@ -1012,7 +1036,9 @@ class OrchestratorClient:
             if isinstance(result, FullExerciseStoryOutput):
                 return {
                     "component": "full_exercise_story",
-                    "terminate_pipeline": True,
+                    # V38.0: MODE_B (confusion) keeps pipeline alive for deep narrative.
+                    "terminate_pipeline": not _is_deep_pedagogy,
+                    "routing_mode": _routing_mode,
                     "companion_text": result.companion_text,
                     "props": {
                         "title": result.title,
@@ -1046,7 +1072,11 @@ class OrchestratorClient:
             if isinstance(result, ImpossibleCaseOutput):
                 return {
                     "component": "impossible_draw_animation",
-                    "terminate_pipeline": True,
+                    # V38.0: impossible_case always terminates in MODE_A.
+                    # In MODE_B (confusion about impossible draw), pipeline stays alive
+                    # so the LLM can explain WHY the draw is impossible pedagogically.
+                    "terminate_pipeline": not _is_deep_pedagogy,
+                    "routing_mode": _routing_mode,
                     "companion_text": result.companion_text,
                     "props": {
                         "title": result.title,
@@ -1097,9 +1127,10 @@ class OrchestratorClient:
                 }
                 return {
                     "component": "combinations_visualizer",
-                    # V30.0 — قانون الكبح النصي: المكوّن البصري يُنهي المسار.
-                    # لا جدار نصّي ولا اشتقاق رياضي نصّي يتبع المكوّن.
-                    "terminate_pipeline": True,
+                    # V38.0: MODE_B (confusion) keeps pipeline alive for deep narrative.
+                    # MODE_A terminates after the visual component (Text-Wall Muzzle).
+                    "terminate_pipeline": not _is_deep_pedagogy,
+                    "routing_mode": _routing_mode,
                     "companion_text": "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄",
                     "props": props,
                     "fallback_text": (
@@ -1129,9 +1160,10 @@ class OrchestratorClient:
                 }
                 return {
                     "component": "probability_tree",
-                    # V30.0 — قانون الكبح النصي: شجرة الاحتمالات تُنهي المسار أيضاً.
-                    # لا اشتقاق رياضي نصّي يتبع المكوّن البصري.
-                    "terminate_pipeline": True,
+                    # V38.0: MODE_B (confusion) keeps pipeline alive for deep narrative.
+                    # MODE_A terminates after the visual component (Text-Wall Muzzle).
+                    "terminate_pipeline": not _is_deep_pedagogy,
+                    "routing_mode": _routing_mode,
                     "companion_text": "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄",
                     "props": props,
                     "fallback_text": ("شجرة الاحتمالات (تعذّر عرض الرسم التفاعلي — هذا نص بديل)."),
@@ -1442,44 +1474,45 @@ class OrchestratorClient:
         # ─────────────────────────────────────────────────────────────────────
         # D-078 (V19.0 → V28.0): الموجِّه التربوي يختار المكوّن الصحيح.
         # كاشف الإحباط (مفهمتش/كيفاش) يُفعِّل الأداة بصرياً عبر سياق المحادثة.
+        # V38.0: hoisted so the fallback chain can read the routing decision
+        # even when _ui_event is None (no probability context detected).
+        _is_mode_b: bool = False
+
         try:
             _ui_event = self._build_calculated_ui(question, history_messages=history_messages)
         except Exception:
             _ui_event = None
 
         if _ui_event is not None:
+            # ─────────────────────────────────────────────────────────────────
+            # Protocol V38.0 — Dual-Mode Routing (replaces V34.0 Contextual Unmuzzle)
+            # ─────────────────────────────────────────────────────────────────
+            # _build_calculated_ui already encoded the routing decision:
+            #   MODE_A → terminate_pipeline=True  (direct question, muzzle after UI)
+            #   MODE_B → terminate_pipeline=False (confusion, keep pipeline alive)
+            #
+            # We read the decision directly from the event — no second confusion
+            # check needed here. This keeps the routing logic in one place.
+            _routing_mode = _ui_event.get("routing_mode", "MODE_A")
+            _is_mode_b = _routing_mode == "MODE_B"  # hoisted — readable by fallback chain
+            # terminate_pipeline is already False for MODE_B (set in _build_calculated_ui)
             _is_impossible = _ui_event.get("terminate_pipeline") is True
-
-            # ─────────────────────────────────────────────────────────────────
-            # Protocol V34.0 — Contextual Unmuzzle & The Teacher's Voice
-            # ─────────────────────────────────────────────────────────────────
-            # إذا عبّر الطالب عن حيرة («لم أفهم»، «اشرح لي»)، نكسر حلقة الكبح
-            # النصي (Muzzle) ونسمح للـ LLM بالاستمرار لتقديم السرد البيداغوجي العميق.
-            # الواجهة البصرية تُبثّ كالعادة، لكن النص يقوم بالعبء الثقيل للشرح.
-            from app.services.skills.probability_skill import ProbabilityCalculatorSkill
-
-            _is_confusion = ProbabilityCalculatorSkill.is_confusion(question)
-            if _is_confusion and _is_impossible:
-                _is_impossible = False
-                logger.info(
-                    "contextual_unmuzzle_triggered",
-                    extra={"question": question, "component": _ui_event.get("component")},
-                )
 
             logger.info(
                 "generative_ui_emit",
                 extra={
                     "request_id": str(uuid.uuid4()),
                     "component": _ui_event.get("component"),
+                    "routing_mode": _routing_mode,
                     "terminate_pipeline": _is_impossible,
                     "question_len": len(question),
                 },
             )
             yield self._normalize_stream_event({"type": "ui_component", "payload": _ui_event})
 
-            # V28.0: impossible_case — terminate pipeline immediately.
+            # MODE_A — Text-Wall Muzzle: terminate immediately after UI component.
             # Emit companion_text (≤ 120 chars) as the sole text output, then return.
-            # This is the Text-Wall Muzzle: no LLM, no tree, no synthesizer follows.
+            # MODE_B falls through to the LLM path below for deep pedagogical narrative.
             if _is_impossible:
                 _companion = str(
                     _ui_event.get("companion_text")
@@ -1498,11 +1531,17 @@ class OrchestratorClient:
                             status="OK",
                             metrics={
                                 "duration_ms": (time.perf_counter() - _t0) * 1000,
-                                "fallback_path": 0.1,  # impossible_case = أعلى أولوية بعد greeting
+                                "fallback_path": 0.1,
                                 "stream_chars": float(len(_companion)),
                             },
                         )
                 return
+            # MODE_B: UI emitted, pipeline continues — LLM will provide deep narrative.
+            if _is_mode_b:
+                logger.info(
+                    "deep_pedagogy_mode_active",
+                    extra={"component": _ui_event.get("component"), "question_len": len(question)},
+                )
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-056 (D-049 — Indexed Retrieval Preemption):
@@ -1609,12 +1648,29 @@ class OrchestratorClient:
                 return
             # إذا فشل البث → نُكمل المسار العادي
 
+        # V38.0 — Deep Pedagogy Mode (MODE_B): inject Socratic instruction.
+        # Rules (D-067): prompt < 1000 chars, no box-drawing chars, no LaTeX in prompt.
+        # The instruction is prepended to the question so the LLM receives it as
+        # user intent — not as a system override that triggers reasoning mode.
+        _DEEP_PEDAGOGY_INSTRUCTION = (
+            "[وضع الشرح العميق] "
+            "الطالب يعبّر عن حيرة. ابدأ بالمعنى والصورة الذهنية قبل أي صيغة. "
+            "استخدم أسلوباً سقراطياً دافئاً. "
+            "لا تبدأ بـ LaTeX أو رموز رياضية. "
+            "اشرح لماذا يحدث هذا قبل كيف يُحسب."
+        )
+        _effective_question = (
+            _DEEP_PEDAGOGY_INSTRUCTION + "\n\n" + question
+            if _is_mode_b
+            else question
+        )
+
         payload = {
-            "question": question,
+            "question": _effective_question,
             "user_id": user_id,
             "conversation_id": conversation_id,
             "history_messages": history_messages or [],
-            "context": context or {},
+            "context": {**(context or {}), "routing_mode": "MODE_B" if _is_mode_b else "MODE_A"},
         }
 
         routing_policy = ChatRoutingPolicy.from_environment(self.base_url)
@@ -1904,7 +1960,7 @@ class OrchestratorClient:
             streamed_chars = 0
             try:
                 async for chunk in self._stream_local_graph_response(
-                    question=question,
+                    question=_effective_question,
                     conversation_id=conversation_id,
                     history_messages=history_messages,
                 ):
@@ -1964,7 +2020,7 @@ class OrchestratorClient:
                 gc_streamed_chars = 0
                 try:
                     async for chunk in self._stream_local_general_chat_response(
-                        question,
+                        _effective_question,
                         history_messages=history_messages,
                     ):
                         if not chunk:

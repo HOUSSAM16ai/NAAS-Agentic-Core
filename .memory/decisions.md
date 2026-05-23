@@ -2351,3 +2351,23 @@ fix + `.genui-fes-*`) | tests.
 
 **Files**: `app/infrastructure/clients/orchestrator_client.py` (unmuzzle logic), `app/services/skills/doctrine.py` (v2.1.0 rules).
 
+---
+
+## D-085 · Protocol V38.0 — Dual-Mode Routing: MODE_A / MODE_B (2026-05-23)
+
+**Context**: V34.0 (D-084) كسر الـ Muzzle فقط عند `_is_confusion AND _is_impossible` — أي الحالة المستحيلة فقط. عند حيرة الطالب في سحب عادي (combinations/tree/full_story)، كان `terminate_pipeline=True` يُوقف المسار رغم الحيرة لأن `_is_impossible=False`. النتيجة: الطالب الحائر يتلقى جملة واحدة بدل شرح عميق.
+
+**Decision**:
+1. **Routing inside `_build_calculated_ui`**: نقل قرار التوجيه إلى داخل الدالة نفسها — يكشف `is_confusion` قبل بناء الحمولة ويُضيف `routing_mode: "MODE_A" | "MODE_B"` لكل dict مُرجَع. يضبط `terminate_pipeline = not _is_deep_pedagogy` لجميع أنواع المكوّنات الأربعة.
+2. **Single source of truth**: `chat_with_agent` يقرأ `routing_mode` من الحدث مباشرة — لا فحص حيرة ثانٍ، لا تعارض منطقي.
+3. **`_effective_question`**: في MODE_B يُضيف تعليمة سقراطية (`[وضع الشرح العميق] ابدأ بالمعنى...`) قبل السؤال لكل مسارات الـ fallback (LangGraph + general_chat).
+4. **Backward compatibility**: V28.0/V30.0 Text-Wall Muzzle لا يزال سارياً في MODE_A — لا تراجع في الأداء للأسئلة المباشرة.
+
+**Consequence**:
+- MODE_A (سؤال مباشر): `terminate_pipeline=True`، companion_text فقط.
+- MODE_B (حيرة): `terminate_pipeline=False`، UI يُبثّ أولاً ثم LLM يشرح بأسلوب سقراطي.
+- 17 اختباراً جديداً في `tests/services/test_v38_dual_mode_routing.py`.
+- تحقق حي: 7/7 حالات صحيحة، LLM يفتح بـ `تخيل أن لديك كيساً...`.
+
+**Files**: `app/infrastructure/clients/orchestrator_client.py` (routing_mode + _effective_question + hoisted _is_mode_b) | `tests/services/test_v38_dual_mode_routing.py` (17 tests جديدة) | `tests/services/test_v28_text_wall_muzzle.py` (تحديث impossible-case test) | `tests/contracts/test_generative_ui_streaming.py` (تحديث full_story muzzle test).
+

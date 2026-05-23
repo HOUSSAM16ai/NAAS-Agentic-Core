@@ -1873,4 +1873,28 @@ cogniforge_pipeline_invocations_total{mode="full"} 2.0
 - **النتيجة**: عند قول الطالب «لم أفهم»، يبث النظام المكوّن البصري ويتبعه فوراً بشرح سردي مفصل من الـ LLM يربط المنطق بالتمثيل البصري.
 - **الملفات**: `orchestrator_client.py` + `doctrine.py`.
 
+---
+
+## ✅ Session: 2026-05-23 — Protocol V38.0: Dual-Mode Routing (D-085)
+
+- **المهمة**: إصلاح فجوة V34.0 — الكبح النصي كان يُوقف المسار حتى عند حيرة الطالب في السحب العادي (combinations/tree)، لأن الكشف كان مقيّداً بـ `_is_confusion AND _is_impossible`.
+
+- **الإصلاح (D-085)**:
+  - نقل قرار التوجيه إلى داخل `_build_calculated_ui`: يكشف `is_confusion` قبل بناء الحمولة ويُضيف `routing_mode: "MODE_A" | "MODE_B"` لكل مكوّن.
+  - `terminate_pipeline = not _is_deep_pedagogy` لجميع أنواع المكوّنات الأربعة.
+  - `chat_with_agent` يقرأ `routing_mode` مباشرة — مصدر حقيقة واحد.
+  - `_effective_question` في MODE_B يُضيف تعليمة سقراطية قبل السؤال لكل مسارات الـ fallback.
+  - V28.0/V30.0 لا يزالان ساريَين في MODE_A.
+
+- **الاختبارات**:
+  - 17 اختباراً جديداً في `tests/services/test_v38_dual_mode_routing.py`.
+  - تحديث `test_v28_text_wall_muzzle.py` و`test_generative_ui_streaming.py`.
+  - 827 اختباراً تجتاز، فشلان موجودان مسبقاً (غير مرتبطَين).
+
+- **التحقق الحي** (`openai/gpt-oss-20b:free`):
+  - 7/7 حالات توجيه صحيحة.
+  - MODE_B: LLM يفتح بـ `تخيل أن لديك كيساً...` — معنى أولاً، لا LaTeX.
+
+- **الملفات**: `app/infrastructure/clients/orchestrator_client.py` | `tests/services/test_v38_dual_mode_routing.py` | `tests/services/test_v28_text_wall_muzzle.py` | `tests/contracts/test_generative_ui_streaming.py` | `CLAUDE.md` | `.memory/decisions.md` | `.memory/progress.md`.
+
 

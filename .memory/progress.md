@@ -1,5 +1,69 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-13 | Branch: `feat/bac2016-ex4-ultra-display-streaming`
+> Last updated: 2026-05-23 | Branch: `feat/math-explanation-generative-ui`
+
+---
+
+## ✅ Session: 2026-05-23 — D-080: Math Pipeline enrich_node + MathExplanationCard Generative UI
+
+**Branch**: `feat/math-explanation-generative-ui`
+**Goal**: تفعيل المفاتيح الحقيقية + بناء نظام Generative UI للشرح الرياضي العميق
+
+### ما تم إنجازه
+
+#### 1. تفعيل جميع الخدمات بالمفاتيح الحقيقية
+- إنشاء `.devcontainer/secrets.env` بـ OPENROUTER_API_KEY + TAVILY_API_KEY + DATABASE_URL
+- إعادة تشغيل 8/8 خدمات: planning (PostgreSQL حقيقي)، reasoning (openrouter)، research (tavily=true)، orchestrator (graph_ready)
+- التحقق الحي: Skills Pipeline `mode=full` ✅
+
+#### 2. إضافة enrich_node (Node 4) إلى Math Pipeline
+- **الملف**: `microservices/conversation_service/src/math_pipeline.py`
+- `enrich_node`: deterministic، لا LLM، يُحلِّل النص ويبني `ui_component`
+- `_build_ui_component()`: يستخرج الخطوات + الحدس + الاستعارة البصرية + التلميح
+- `visual_metaphors`: 10 استعارات بصرية (مشتق=عدّاد السرعة، تكامل=ملء حوض، نهاية=الاقتراب من جدار...)
+- `MathPipelineState` + `invoke_math_pipeline` يُعيدان `ui_component: dict | None`
+- Topology: `classify → solve → normalize → enrich → END`
+
+#### 3. تمرير ui_component عبر الـ stack الكامل
+- `conversation_graph.py`: `ConversationState.ui_component` + `invoke_graph` يُعيده
+- `main.py` (conversation-service): `ChatResponse.ui_component` + WebSocket payload
+- `customer_chat.py` (monolith): `_try_build_math_ui_component()` تُحقن في `assistant_final`
+
+#### 4. MathExplanationCard — مكوّن Generative UI جديد
+- **الملف**: `frontend/app/components/generative/MathExplanationCard.jsx`
+- 11 نوع رياضي، كل نوع له لون + أيقونة مختلفة
+- مكوّنات: `StepCard` (قابل للطي)، `VisualMetaphor`، `HintBadge`
+- يظهر بعد النص على `isComplete` فقط — لا streaming flicker
+- مُسجَّل في `GenerativeUIRenderer` كـ `math_explanation_card`
+
+#### 5. تحديث Frontend
+- `GenerativeUIRenderer.jsx`: تسجيل `math_explanation_card`
+- `ChatInterface.jsx`: عرض `ui_component` بعد النص (لا بدلاً منه)
+- `useAgentSocket.js`: استخراج `ui_component` من `assistant_final` payload
+
+#### 6. تحديث الذاكرة
+- `CLAUDE.md`: D-080 invariants مُضافة
+- `.memory/runtime_truth.md`: D-080 live verification
+- `.memory/decisions.md`: D-080 architectural decision
+- `.memory/progress.md`: هذا السجل
+
+### نتائج التحقق الحي
+- 3 أنواع رياضية مختبرة: derivative ✅، integral ✅، probability ✅
+- Non-math fallback: `ui_component=None` ✅
+- 820 اختباراً ✅ · ruff clean ✅
+
+### Files Changed
+- `microservices/conversation_service/src/math_pipeline.py`
+- `microservices/conversation_service/src/conversation_graph.py`
+- `microservices/conversation_service/main.py`
+- `app/api/routers/customer_chat.py`
+- `frontend/app/components/generative/MathExplanationCard.jsx` (جديد)
+- `frontend/app/components/generative/GenerativeUIRenderer.jsx`
+- `frontend/app/components/ChatInterface.jsx`
+- `frontend/app/hooks/useAgentSocket.js`
+- `CLAUDE.md`
+- `.devcontainer/secrets.env` (جديد — git-ignored)
+
+---
 
 ---
 

@@ -263,6 +263,8 @@ class ConversationState(TypedDict):
     thread_id: str
     correlation_id: str
     error: str | None
+    # payload الواجهة التوليدية — يُملأ من Math Pipeline عند subject==math
+    ui_component: dict | None
 
 
 # ── دوال مساعدة ───────────────────────────────────────────────────────────────
@@ -583,7 +585,12 @@ async def response_node(state: ConversationState) -> ConversationState:
                 if response and len(response) > 50:
                     duration = time.perf_counter() - t0
                     record_graph_invocation("response", "success", duration)
-                    return {**state, "response": response}
+                    # تمرير ui_component من Math Pipeline للحالة
+                    return {
+                        **state,
+                        "response": response,
+                        "ui_component": pipeline_result.get("ui_component"),
+                    }
                 # fallback للـ LLM المباشر إذا كان الـ pipeline فارغاً
             except Exception as pipe_exc:
                 logger.warning("math_pipeline failed, falling back to direct LLM: %s", pipe_exc)
@@ -659,12 +666,12 @@ async def invoke_graph(
     thread_id: str,
     correlation_id: str,
     history: list[dict[str, str]] | None = None,
-) -> dict[str, str]:
+) -> dict:
     """
     يستدعي الـ graph ويُعيد النتيجة.
 
     يُستخدم من main.py فقط — abstraction barrier.
-    يُعيد: response, intent, subject, error
+    يُعيد: response, intent, subject, error, ui_component
     """
     graph = get_conversation_graph()
     initial_state: ConversationState = {
@@ -677,6 +684,7 @@ async def invoke_graph(
         "thread_id": thread_id,
         "correlation_id": correlation_id,
         "error": None,
+        "ui_component": None,
     }
     config = {"configurable": {"thread_id": thread_id}}
     result = await graph.ainvoke(initial_state, config=config)
@@ -685,4 +693,5 @@ async def invoke_graph(
         "intent": result.get("intent", "general"),
         "subject": result.get("subject", "general"),
         "error": result.get("error"),
+        "ui_component": result.get("ui_component"),
     }

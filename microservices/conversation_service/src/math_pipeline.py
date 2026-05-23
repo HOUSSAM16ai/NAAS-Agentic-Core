@@ -340,6 +340,8 @@ class MathPipelineState(TypedDict):
     history: list[dict[str, str]]
     thread_id: str
     error: str | None
+    # payload الواجهة التوليدية — يُملأ في enrich_node
+    ui_component: dict | None
 
 
 async def _call_openrouter(
@@ -498,6 +500,152 @@ async def solve_node(state: MathPipelineState) -> MathPipelineState:
         return {**state, "solution": fb, "final_response": f"## {label}\n\n{fb}", "error": str(exc)}
 
 
+def _build_ui_component(
+    math_type: str,
+    solution: str,
+    question: str,
+) -> dict:
+    """
+    يبني payload الواجهة التوليدية من الحل النصي.
+
+    الفصل المعماري (القانون الأعلى):
+      - هذه الدالة هي الخلفية (العقل المنطقي)
+      - تُحلِّل النص وتُنظِّم البيانات في هيكل واضح
+      - الواجهة (MathExplanationCard) تُحوِّل هذا الهيكل إلى قصة بصرية
+      - لا خلط بين الطبقتين أبداً
+
+    الخوارزمية:
+      1. استخرج الخطوات من النص (كل سطر يبدأ بـ رقم أو ** هو خطوة)
+      2. استخرج الحدس (أول فقرة قبل أي معادلة)
+      3. أضف الاستعارة البصرية حسب نوع المسألة
+      4. أضف التلميح من _MATH_HINTS
+    """
+    label = _TYPE_LABELS.get(math_type, "📚 رياضيات")
+    hint = _MATH_HINTS.get(math_type, "")
+
+    # ── استخراج الحدس: أول فقرة نصية قبل أي معادلة LaTeX ──────────────────
+    intuition = ""
+    lines = solution.split("\n")
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # توقف عند أول معادلة أو عنوان أو خطوة مرقمة
+        if stripped.startswith("$$") or stripped.startswith("##") or stripped.startswith("**"):
+            break
+        if _re.match(r"^\d+[\.\)]\s", stripped):
+            break
+        if len(stripped) > 20:
+            intuition = stripped
+            break
+
+    # ── استخراج الخطوات: أسطر مرقمة أو عناوين ** ──────────────────────────
+    steps: list[dict] = []
+    current_step: dict | None = None
+    content_buffer: list[str] = []
+
+    def _flush_step() -> None:
+        nonlocal current_step
+        if current_step is not None:
+            current_step["content"] = "\n".join(content_buffer).strip()
+            steps.append(current_step)
+            current_step = None
+            content_buffer.clear()
+
+    for line in lines:
+        stripped = line.strip()
+        # عنوان خطوة: **نص** أو رقم. نص
+        numbered = _re.match(r"^(\d+)[\.\)]\s+(.+)", stripped)
+        bold_title = _re.match(r"^\*\*([^*]+)\*\*\s*(.*)$", stripped)
+
+        if numbered:
+            _flush_step()
+            current_step = {"id": f"step-{len(steps)}", "title": numbered.group(2)[:80]}
+            content_buffer.clear()
+        elif bold_title and len(bold_title.group(1)) < 60:
+            _flush_step()
+            title = bold_title.group(1).strip()
+            rest = bold_title.group(2).strip()
+            current_step = {"id": f"step-{len(steps)}", "title": title}
+            content_buffer.clear()
+            if rest:
+                content_buffer.append(rest)
+        elif current_step is not None:
+            content_buffer.append(stripped)
+
+    _flush_step()
+
+    # إذا لم تُستخرج خطوات، قسِّم النص إلى فقرات
+    if not steps:
+        paragraphs = [p.strip() for p in solution.split("\n\n") if p.strip()]
+        for i, para in enumerate(paragraphs[:6]):
+            if len(para) > 15:
+                steps.append({
+                    "id": f"step-{i}",
+                    "title": f"الجزء {i + 1}",
+                    "content": para[:400],
+                })
+
+    # ── الاستعارات البصرية حسب نوع المسألة ────────────────────────────────
+    visual_metaphors: dict[str, str] = {
+        "derivative": (
+            "تخيّل أنك تقود سيارة — المشتق هو عدّاد السرعة اللحظية، "
+            "لا المسافة الكلية. كلما كانت الدالة تصعد بسرعة، كان المشتق أكبر."
+        ),
+        "integral": (
+            "التكامل هو مساحة الشكل تحت المنحنى — كأنك تملأ حوضاً بالماء "
+            "شريحة رفيعة بعد شريحة، وتجمع كل الشرائح معاً."
+        ),
+        "limit": (
+            "النهاية هي الوجهة التي تقترب منها دون أن تصلها بالضرورة — "
+            "كأنك تمشي نحو جدار وتقترب منه خطوة نصف خطوة، إلى ما لا نهاية."
+        ),
+        "probability": (
+            "الاحتمال هو عالم موازٍ — نحتفظ فيه فقط بالحالات التي حقّقت الشرط، "
+            "ونحسب نسبتها من الكل."
+        ),
+        "function_study": (
+            "دراسة الدالة كأنك ترسم خريطة طريق — تبدأ بالمجال (أين الطريق موجود؟)، "
+            "ثم المشتق (أين يصعد وأين ينزل؟)، ثم جدول التغيرات (الخريطة الكاملة)."
+        ),
+        "equation": (
+            "المعادلة ميزان — ما تفعله في الطرف الأيسر يجب أن تفعله في الأيمن. "
+            "هدفك: عزل المجهول وحده على أحد الطرفين."
+        ),
+        "matrix": (
+            "المصفوفة جدول بيانات ذكي — كل عملية عليها تُحوِّل الفضاء الهندسي "
+            "بطريقة محددة: تمديد، تدوير، أو انعكاس."
+        ),
+        "complex": (
+            "العدد المركب نقطة في مستوى ثنائي الأبعاد — المحور الأفقي للجزء الحقيقي، "
+            "والمحور الرأسي للجزء التخيلي. الضرب = دوران وتمديد."
+        ),
+        "sequence": (
+            "المتتالية قائمة أرقام لها قانون خفي — اكتشف القانون وستتنبأ بأي حد "
+            "مهما كان بعيداً."
+        ),
+        "differential_eq": (
+            "المعادلة التفاضلية تصف كيف يتغير شيء ما بمرور الوقت — "
+            "كنمو السكان أو تبريد كوب القهوة. الحل هو الدالة التي تصف هذا التغير."
+        ),
+    }
+
+    metaphor = visual_metaphors.get(math_type, "")
+
+    return {
+        "component": "math_explanation_card",
+        "props": {
+            "math_type": math_type,
+            "label": label,
+            "intuition": intuition,
+            "steps": steps[:8],  # حد أقصى 8 خطوات لتجنب الازدحام
+            "hint": hint,
+            "visual_metaphor": metaphor,
+        },
+        "fallbackText": f"شرح {label}",
+    }
+
+
 def _build_fallback_solution(question: str, math_type: str) -> str:
     hint = _get_math_context(math_type)
     hint_line = f"\n\n**تلميح:** {hint}" if hint else ""
@@ -526,21 +674,49 @@ async def normalize_node(state: MathPipelineState) -> MathPipelineState:
     return state
 
 
+async def enrich_node(state: MathPipelineState) -> MathPipelineState:
+    """
+    Node 4 — Deterministic. يبني payload الواجهة التوليدية.
+
+    الفصل المعماري (القانون الأعلى):
+      - هذا الـ node هو الخلفية (العقل المنطقي)
+      - يُحلِّل الحل النصي ويُنظِّم البيانات في هيكل ui_component
+      - الواجهة (MathExplanationCard) تُحوِّل هذا الهيكل إلى قصة بصرية
+      - لا LLM هنا → لا meta-text ممكن → أمان تام
+
+    يُنتج ui_component فقط عند وجود حل حقيقي (> 50 حرف).
+    """
+    solution = state.get("solution", "")
+    math_type = state.get("math_type", "general_math")
+    question = state.get("question", "")
+
+    if solution and len(solution.strip()) > 50:
+        try:
+            ui_component = _build_ui_component(math_type, solution, question)
+            return {**state, "ui_component": ui_component}
+        except Exception as exc:
+            logger.warning("enrich_node: failed to build ui_component: %s", exc)
+
+    return {**state, "ui_component": None}
+
+
 def build_math_pipeline() -> object:
     """
     يبني LangGraph Math Pipeline.
-    Topology: START → classify_node → solve_node → normalize_node → END
+    Topology: START → classify → solve → normalize → enrich → END
 
-    ISS-071: normalize_node مُضاف لتحويل \\[...\\] → $$...$$ بعد الـ LLM.
+    Node 4 (enrich): يبني ui_component payload للواجهة التوليدية.
     """
     builder = StateGraph(MathPipelineState)
     builder.add_node("classify", classify_node)
     builder.add_node("solve", solve_node)
     builder.add_node("normalize", normalize_node)
+    builder.add_node("enrich", enrich_node)
     builder.add_edge(START, "classify")
     builder.add_edge("classify", "solve")
     builder.add_edge("solve", "normalize")
-    builder.add_edge("normalize", END)
+    builder.add_edge("normalize", "enrich")
+    builder.add_edge("enrich", END)
     return builder.compile()
 
 
@@ -559,8 +735,13 @@ async def invoke_math_pipeline(
     question: str,
     thread_id: str,
     history: list[dict[str, str]] | None = None,
-) -> dict[str, str]:
-    """يستدعي Math Pipeline ويُعيد: final_response, math_type, solution, error."""
+) -> dict:
+    """
+    يستدعي Math Pipeline ويُعيد:
+      final_response, math_type, solution, error, ui_component
+
+    ui_component: payload الواجهة التوليدية (MathExplanationCard) أو None.
+    """
     pipeline = get_math_pipeline()
     initial_state: MathPipelineState = {
         "question": question,
@@ -571,6 +752,7 @@ async def invoke_math_pipeline(
         "history": history or [],
         "thread_id": thread_id,
         "error": None,
+        "ui_component": None,
     }
     config = {"configurable": {"thread_id": thread_id}}
     result = await pipeline.ainvoke(initial_state, config=config)
@@ -579,4 +761,5 @@ async def invoke_math_pipeline(
         "math_type": result.get("math_type", "general_math"),
         "solution": result.get("solution", ""),
         "error": result.get("error"),
+        "ui_component": result.get("ui_component"),
     }

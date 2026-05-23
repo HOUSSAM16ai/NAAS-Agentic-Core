@@ -277,18 +277,6 @@ const MessageBubble = memo(({ msg, idx }) => {
         return null;
     }
 
-    // Generative UI: رسالة تحمل مكوّناً تفاعلياً (شجرة احتمالات...) — تُصيَّر
-    // عبر GenerativeUIRenderer داخل Error Boundary. منفصلة عن المسار النصي.
-    if (msg.uiComponent) {
-        return (
-            <div className={`message ${msg.role}`}>
-                <div className="message-bubble genui-bubble">
-                    <GenerativeUIRenderer uiComponent={msg.uiComponent} />
-                </div>
-            </div>
-        );
-    }
-
     // ISS-076 (2026-05-15) D-064: تجاوز useTypewriter بالكامل لمنع flicker.
     //
     // السبب: عند انتقال `isStreaming` من true → false، useTypewriter كان
@@ -323,6 +311,13 @@ const MessageBubble = memo(({ msg, idx }) => {
                         : <Markdown content={contentToShow} isStreaming={isStreaming} />
                 ) : (
                     <span className="user-message-text">{msg.content}</span>
+                )}
+
+                {/* الواجهة التوليدية — تظهر بعد اكتمال النص، تحته مباشرة.
+                    النص هو صوت المعلم الداخلي. البطاقة هي المسرح البصري.
+                    لا تظهر أثناء الـ streaming لتجنب layout shift. */}
+                {msg.role === 'assistant' && msg.isComplete && msg.uiComponent && (
+                    <GenerativeUIRenderer uiComponent={msg.uiComponent} />
                 )}
 
                 {msg.role === 'assistant' && msg.isComplete && !isEmpty && (

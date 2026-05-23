@@ -673,7 +673,15 @@ def build_exercise_explanation_prompt() -> str:
         f"- {rule.split(':')[0].strip()}" for rule in MODEL_ANSWER_EXPLANATION_DOCTRINE[:5]
     )
 
-    prompt = header + "قواعد إلزامية:\n" + core_rules + "\n\nمنهجية الشرح:\n" + methodology_lines
+    # قواعد ثابتة مطلوبة بواسطة CI gate (D-071 anchors):
+    # - LaTeX: كل رمز رياضي يُكتب بـ LaTeX داخل $$...$$.
+    # - حرفياً: لا تنسخ الإجابة النموذجية حرفياً — أضف قيمة تعليمية.
+    anchors = (
+        "\n6. استخدم LaTeX لكل رمز رياضي: $$...$$ للمعادلات."
+        "\n7. لا تنسخ الإجابة النموذجية حرفياً — اشرح المنطق."
+    )
+
+    prompt = header + "قواعد إلزامية:\n" + core_rules + anchors + "\n\nمنهجية الشرح:\n" + methodology_lines
 
     # ضمان عدم تجاوز 1000 حرف (D-067 invariant)
     if len(prompt) > 1000:

@@ -14,10 +14,7 @@ Protocol V38.0 — Dual-Mode Routing tests.
 from __future__ import annotations
 
 from app.infrastructure.clients.orchestrator_client import OrchestratorClient
-from app.services.skills.probability_skill import (
-    ProbabilityCalculatorSkill,
-    ProbabilityInput,
-)
+from app.services.skills.probability_skill import ProbabilityCalculatorSkill
 
 # ── بيانات الاختبار ──────────────────────────────────────────────────────────────
 

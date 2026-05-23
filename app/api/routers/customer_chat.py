@@ -242,15 +242,15 @@ def _try_build_math_ui_component(response_text: str) -> dict | None:
     if not response_text or len(response_text) < 100:
         return None
     try:
-        from microservices.conversation_service.src.math_pipeline import (
-            _build_ui_component,
-            _classify_math_type,
+        from app.services.math_ui_bridge import (
+            build_math_ui_component,
+            classify_math_type,
         )
 
-        math_type = _classify_math_type(response_text[:500])
-        if math_type == "general_math":
+        math_type = classify_math_type(response_text[:500])
+        if not math_type or math_type == "general_math":
             return None
-        return _build_ui_component(math_type, response_text, "")
+        return build_math_ui_component(math_type, response_text, "")
     except Exception:
         return None
 

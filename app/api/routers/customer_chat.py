@@ -3,6 +3,13 @@
 
 توفر نقاط النهاية الخاصة بالمستخدمين القياسيين للوصول إلى محادثة تعليمية
 مع فرض سياسات الأمان والملكية.
+
+## V46.0 — جدار الحماية المزدوج للقنوات
+
+يُطبَّق OutputFirewall على complete_ai_response المُجمَّع قبل الحفظ في DB.
+هذا يضمن أن أي HTML/JSX تسرَّب من LLM يُنظَّف قبل الوصول للطالب أو قاعدة البيانات.
+
+D-086 (2026-05-23): تطبيق Protocol V46.0.
 """
 
 import asyncio
@@ -33,6 +40,29 @@ from app.telemetry.path_observer import close_ws_turn, open_ws_turn
 from shared.chat_protocol.event_protocol import normalize_streaming_event
 
 logger = get_logger(__name__)
+
+
+def _apply_complete_response_firewall(text: str) -> str:
+    """D-086 (V46.0): يُطبِّق OutputFirewall على الإجابة المكتملة قبل الحفظ.
+
+    يُنظِّف HTML/JSX من complete_ai_response بعد اكتمال البث.
+    Fail-open: أي فشل يُعيد النص الأصلي دون كسر المسار.
+    """
+    if not text or not text.strip():
+        return text
+    try:
+        from app.services.skills.output_firewall import apply_channel_b_firewall
+
+        cleaned, was_rejected = apply_channel_b_firewall(text, intent="educational")
+        if was_rejected:
+            logger.warning(
+                "customer_chat.complete_response_firewall_rejected chars=%d", len(text)
+            )
+            return text  # fail-open
+        return cleaned
+    except Exception as exc:
+        logger.debug("customer_chat.firewall_non_fatal: %s", exc)
+        return text
 
 COMPATIBILITY_FACADE_MODE = True
 # تنبيه معماري: هذا المسار واجهة توافقية فقط ويُمنع فيه أي تنفيذ محلي لمنطق الدردشة.
@@ -613,6 +643,13 @@ async def chat_stream_ws(
                 # Monolith owns the message. If Orchestrator already persisted
                 # (signaled via persisted=True on terminal event), skip local write;
                 # otherwise fail-safe write. Absence of signal is treated as failure.
+                # D-086 (V46.0): تطبيق OutputFirewall على الإجابة المكتملة
+                # قبل الحفظ في DB — يضمن نقاء القناة B في السجل الدائم.
+                if complete_ai_response:
+                    complete_ai_response = _apply_complete_response_firewall(
+                        complete_ai_response
+                    )
+
                 if (
                     not assistant_message_persisted
                     and complete_ai_response

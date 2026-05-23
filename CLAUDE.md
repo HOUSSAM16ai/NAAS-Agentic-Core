@@ -5622,4 +5622,81 @@ Codespaces/CI** (الـ sandbox يحجب تثبيت التبعيات + egress �
 | **D-083** | **Full Exercise OS: multi-step pedagogical carousel (V31.5)** |
 | **D-084** | **Protocol V34.0: Contextual Unmuzzle (impossible_case فقط)** |
 | **D-085** | **Protocol V38.0: Dual-Mode Routing — MODE_A/MODE_B لجميع المكوّنات** |
+| **D-086** | **Protocol V46.0: Dual-Channel Firewall — OutputFirewall + TopicLock** |
+
+---
+
+## 6.61 Dual-Channel Firewall — OutputFirewall + TopicLock (2026-05-23, D-086 · Protocol V46.0)
+
+### المشكلة
+
+كانت القناة B (صوت المعلم) تصل للطالب بدون أي فحص للتلوث. الـ LLM يمكنه إخراج:
+- `<div>`, `<span>`, `<button>` داخل النص السردي
+- مكونات JSX مزيفة (`<ProbabilityTree>`, `<Accordion>`)
+- React imports وscaffolding مزيف
+- CSS مضمَّن في الإجابة العربية
+
+كذلك لم يكن هناك آلية لمنع تسرب مفاهيم من مواضيع أخرى (احتمالات → تفاضل).
+
+### الإصلاح (D-086)
+
+#### OutputFirewall (`app/services/skills/output_firewall.py`)
+
+جدار الحماية المزدوج للقنوات:
+
+- **القناة A** (JSON هيكلي): يرفض أي نثر سردي لا يبدأ بـ `{` أو `[`.
+- **القناة B** (صوت المعلم): يكشف HTML/JSX/markup ويُطبِّق:
+  - **تنظيف** إذا كان التلوث تحت العتبة (0.6): يُزيل الوسوم ويحتفظ بالمحتوى النصي.
+  - **رفض** إذا تجاوز التلوث العتبة: يُعيد نصاً فارغاً للمُستدعي.
+  - **Fail-open**: أي فشل داخلي يُعيد النص الأصلي — لا يكسر المسار أبداً.
+
+أنماط التلوث المُكتشَفة (مع أوزانها):
+| النمط | الوزن |
+|-------|-------|
+| وسوم HTML (`<div>`, `<span>`, إلخ) | 0.4 |
+| مكونات JSX (PascalCase) | 0.5 |
+| بوابات Next.js (`<NextPortal>`) | 0.6 |
+| CSS مضمَّن (`style=`, `className=`) | 0.3 |
+| أسهم قوائم مزيفة + event handlers | 0.3 |
+| React scaffolding (`export default function`) | 0.7 |
+
+مقاييس Prometheus:
+- `cogniforge_output_firewall_checks_total{channel, result}`
+- `cogniforge_output_firewall_rejections_total{channel, reason}`
+- `cogniforge_output_firewall_cleanups_total{channel}`
+- `cogniforge_output_firewall_duration_seconds`
+
+#### TopicLock (`app/services/skills/topic_lock.py`)
+
+قفل الموضوع وحماية نقاء السياق:
+- يُحدِّد الموضوع النشط من آخر 5 رسائل في تاريخ المحادثة.
+- يتحقق من أن الإجابة لا تتجاوز النطاق (احتمالات لا تحتوي مفاهيم تفاضل).
+- **تحذيري فقط** — يُسجِّل الانتهاكات دون رفض الإجابة.
+- يتجاهل انتقالات الموضوع الصريحة (`انتقل إلى`, `دعنا ننتقل`).
+
+مقاييس Prometheus:
+- `cogniforge_topic_lock_violations_total{active_topic, leaked_topic}`
+- `cogniforge_topic_lock_checks_total{result}`
+
+#### نقاط التطبيق
+
+| الملف | نقطة التطبيق |
+|-------|-------------|
+| `app/services/chat/local_graph.py` | `_chat_node` — بعد `_apply_answer_quality_skill` |
+| `app/api/routers/customer_chat.py` | قبل حفظ `complete_ai_response` في DB |
+
+### القواعد الدائمة (D-086 — لا تُكسر بدون ADR)
+
+1. **المعلم لا يُصيِّر**: القناة B (صوت المعلم) لا تحتوي HTML/JSX أبداً.
+2. **الواجهة لا تشرح**: القناة A (JSON هيكلي) لا تحتوي نثراً سردياً أبداً.
+3. **Fail-open إلزامي**: جدار الحماية لا يكسر المسار — أي فشل يُعيد النص الأصلي.
+4. **TopicLock تحذيري**: لا يرفض الإجابات — يُسجِّل فقط.
+5. **العتبة = 0.6**: مجموع أوزان الأنماط المُكتشَفة ≥ 0.6 → رفض كامل.
+
+### التحقق الحي (2026-05-23)
+
+- OutputFirewall: `<div>` يُنظَّف، JSX ثقيل يُرفض، LaTeX لا يُعتبر تلوثاً.
+- TopicLock: تسرب تفاضل في سياق احتمالات يُسجَّل كانتهاك.
+- 25 اختباراً في `tests/test_output_firewall_v46.py` — جميعها تجتاز.
+- الـ backend يعمل على :8000 (`/health → ok`).
 

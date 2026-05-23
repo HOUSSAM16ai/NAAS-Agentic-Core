@@ -1897,4 +1897,23 @@ cogniforge_pipeline_invocations_total{mode="full"} 2.0
 
 - **الملفات**: `app/infrastructure/clients/orchestrator_client.py` | `tests/services/test_v38_dual_mode_routing.py` | `tests/services/test_v28_text_wall_muzzle.py` | `tests/contracts/test_generative_ui_streaming.py` | `CLAUDE.md` | `.memory/decisions.md` | `.memory/progress.md`.
 
+---
+
+## D-086 · Protocol V46.0 — Dual-Channel Firewall (2026-05-23)
+
+- **المشكلة**: القناة B (صوت المعلم) بلا حماية — الـ LLM يمكنه إخراج HTML/JSX داخل النص السردي. لا آلية لمنع تسرب المواضيع.
+
+- **الإصلاح (D-086)**:
+  - **OutputFirewall** (`app/services/skills/output_firewall.py`): Skill جديد يفرض الفصل الصارم.
+    - القناة B: 6 أنماط regex مُرجَّحة. تنظيف إذا score < 0.6، رفض إذا score ≥ 0.6. Fail-open دائماً.
+    - القناة A: يرفض أي نثر لا يبدأ بـ `{` أو `[`.
+  - **TopicLock** (`app/services/skills/topic_lock.py`): Skill تحذيري يكشف تسرب المواضيع (احتمالات → تفاضل). يُسجِّل دون رفض.
+  - **نقاط التطبيق**: `local_graph.py:_chat_node` + `customer_chat.py:complete_ai_response`.
+
+- **الاختبارات**:
+  - 25 اختباراً في `tests/test_output_firewall_v46.py` — جميعها تجتاز.
+  - تحقق حي: `<div>` يُنظَّف، JSX ثقيل يُرفض، LaTeX لا يُعتبر تلوثاً.
+
+- **الملفات**: `app/services/skills/output_firewall.py` (جديد) | `app/services/skills/topic_lock.py` (جديد) | `app/services/skills/__init__.py` | `app/services/chat/local_graph.py` | `app/api/routers/customer_chat.py` | `tests/test_output_firewall_v46.py` | `CLAUDE.md` | `.memory/decisions.md` | `.memory/progress.md`.
+
 

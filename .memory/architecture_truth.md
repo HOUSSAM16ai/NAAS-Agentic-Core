@@ -57,6 +57,28 @@ To move from "transitional/zombie" to "production-grade multi-service":
 6. **Fix OTEL** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to a valid collector URL (currently `http` = invalid).
 7. **Promote ONE agentic layer** — pick exactly one of (MCP, LlamaIndex, reranker, DSPy) and wire it into the live StateGraph path. Add runtime trace assertion.
 
+## D-086 · Protocol V46.0 — Dual-Channel Firewall (2026-05-23)
+
+**Status**: ✅ ACTIVE
+
+**Skills added**:
+- `app/services/skills/output_firewall.py` — OutputFirewall: يفرض الفصل بين القناة A (JSON) والقناة B (صوت المعلم). يكشف HTML/JSX/markup ويُنظِّف أو يرفض. Fail-open.
+- `app/services/skills/topic_lock.py` — TopicLock: يكشف تسرب المواضيع (احتمالات → تفاضل). تحذيري فقط.
+
+**نقاط التطبيق**:
+- `local_graph.py:_chat_node` — بعد `_apply_answer_quality_skill`.
+- `customer_chat.py` — قبل حفظ `complete_ai_response` في DB.
+
+**مقاييس Prometheus**:
+- `cogniforge_output_firewall_checks_total{channel, result}`
+- `cogniforge_output_firewall_rejections_total{channel, reason}`
+- `cogniforge_output_firewall_cleanups_total{channel}`
+- `cogniforge_topic_lock_violations_total{active_topic, leaked_topic}`
+
+**اختبارات**: 25 في `tests/test_output_firewall_v46.py` — جميعها تجتاز.
+
+---
+
 ## Advanced LangGraph + Tavily Revival Checklist (verified 2026-05-09)
 - [ ] Add `TAVILY_API_KEY=${TAVILY_API_KEY:-}` to `docker-compose.yml` (orchestrator-service + research-agent)
 - [ ] `docker compose -f docker-compose.yml up -d orchestrator-service research-agent postgres-orchestrator redis-orchestrator`

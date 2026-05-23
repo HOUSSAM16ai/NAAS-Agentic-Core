@@ -633,6 +633,123 @@ paths:
                     maxLength: 120
                   is_impossible_case:
                     type: boolean
+  /api/v1/aek/process:
+    post:
+      tags:
+      - adaptive-educational-kernel
+      summary: Process question via Adaptive Educational Kernel
+      description: >
+        Converts a student question into a cognitive state + pedagogical intent +
+        dual-channel output (Channel A: JSON payload, Channel B: Socratic Markdown).
+        Pass updated_state from the response in subsequent requests to preserve context.
+        Protocol V44.0.
+      operationId: aekProcessQuestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - question
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+                  maxLength: 10000
+                history:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties:
+                      type: string
+                state:
+                  type: object
+                  nullable: true
+                  description: AEKRuntimeState from previous turn
+                learner_capability:
+                  type: string
+                  enum: [NOVICE, INTERMEDIATE, ADVANCED]
+                  default: INTERMEDIATE
+      responses:
+        '200':
+          description: AEK dual-channel output with updated cognitive state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channel_a:
+                    type: object
+                    description: JSON payload for frontend (intent, state, abstraction level)
+                  channel_b:
+                    type: object
+                    description: Socratic Markdown narrative
+                  updated_state:
+                    type: object
+                    description: Updated AEKRuntimeState to pass in next request
+                  processing_ms:
+                    type: number
+  /api/v1/aek/reset:
+    post:
+      tags:
+      - adaptive-educational-kernel
+      summary: Reset cognitive state for new session
+      description: Returns a fresh AEKRuntimeState for a new learning session.
+      operationId: aekResetState
+      parameters:
+      - name: learner_capability
+        in: query
+        schema:
+          type: string
+          enum: [NOVICE, INTERMEDIATE, ADVANCED]
+          default: INTERMEDIATE
+      - name: exercise_scope
+        in: query
+        schema:
+          type: string
+          enum: [PROBABILITY, CALCULUS, ALGEBRA, STATISTICS, GEOMETRY, PHYSICS, GENERAL]
+          default: GENERAL
+      responses:
+        '200':
+          description: Fresh AEKRuntimeState
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/v1/aek/states:
+    get:
+      tags:
+      - adaptive-educational-kernel
+      summary: Get FSM transition map
+      description: Returns all cognitive states, allowed transitions, intents, and scopes for diagnostics.
+      operationId: aekGetStates
+      responses:
+        '200':
+          description: FSM transition map
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  states:
+                    type: array
+                    items:
+                      type: string
+                  transitions:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string
+                  intents:
+                    type: array
+                    items:
+                      type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: string
   /api/v1/agents/plan:
     post:
       tags:

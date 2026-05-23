@@ -264,9 +264,7 @@ class AdaptiveEducationalKernel:
             CognitiveState.CONFUSION,
             CognitiveState.EMOTIONAL_RECOVERY,
         ):
-            state = state.model_copy(
-                update={"current_step_index": state.current_step_index + 1}
-            )
+            state = state.model_copy(update={"current_step_index": state.current_step_index + 1})
 
         elapsed = (time.perf_counter() - t0) * 1000
 
@@ -373,8 +371,7 @@ class AdaptiveEducationalKernel:
         if state == CognitiveState.EMOTIONAL_RECOVERY:
             pacing = "slow"
             narrative = (
-                "لا بأس — هذا المفهوم يحتاج وقتاً.\n\n"
-                "دعنا نبدأ من الصفر بخطوة واحدة بسيطة جداً."
+                "لا بأس — هذا المفهوم يحتاج وقتاً.\n\nدعنا نبدأ من الصفر بخطوة واحدة بسيطة جداً."
             )
 
         elif state == CognitiveState.CONFUSION:
@@ -385,10 +382,7 @@ class AdaptiveEducationalKernel:
             )
 
         elif intent == CognitiveIntent.VISUAL_INTUITION:
-            narrative = (
-                "قبل أي معادلة، دعنا نرى الصورة الكاملة.\n\n"
-                "تخيّل المسألة كـ..."
-            )
+            narrative = "قبل أي معادلة، دعنا نرى الصورة الكاملة.\n\nتخيّل المسألة كـ..."
 
         elif intent == CognitiveIntent.STEP_REASONING:
             step = runtime_state.current_step_index + 1

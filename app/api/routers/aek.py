@@ -88,9 +88,7 @@ async def process_question(payload: AEKProcessRequest) -> AEKProcessResponse:
     # تطبيق learner_capability من الطلب على الحالة
     state = payload.state
     if state is not None and payload.learner_capability != state.learner_capability:
-        state = state.model_copy(
-            update={"learner_capability": payload.learner_capability}
-        )
+        state = state.model_copy(update={"learner_capability": payload.learner_capability})
     elif state is None:
         state = AEKRuntimeState(learner_capability=payload.learner_capability)
 
@@ -135,10 +133,7 @@ async def get_states() -> AEKStatesResponse:
     """يُرجع خريطة الـ FSM الكاملة — مفيد للتشخيص وتوثيق الواجهة."""
     return AEKStatesResponse(
         states=[s.value for s in CognitiveState],
-        transitions={
-            k.value: [v.value for v in vs]
-            for k, vs in ALLOWED_TRANSITIONS.items()
-        },
+        transitions={k.value: [v.value for v in vs] for k, vs in ALLOWED_TRANSITIONS.items()},
         intents=[i.value for i in CognitiveIntent],
         scopes=[s.value for s in ExerciseScope],
     )

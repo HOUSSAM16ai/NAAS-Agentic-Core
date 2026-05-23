@@ -94,12 +94,14 @@ class TestAEKRuntimeState:
         """Pydantic يرفض القيم خارج [0,1] — الـ clamp يعمل في _estimate_cognitive_load."""
         import pytest as _pytest
         from pydantic import ValidationError
+
         with _pytest.raises(ValidationError):
             AEKRuntimeState(cognitive_load_index=1.5)
 
     def test_cognitive_load_rejects_below_0(self) -> None:
         import pytest as _pytest
         from pydantic import ValidationError
+
         with _pytest.raises(ValidationError):
             AEKRuntimeState(cognitive_load_index=-0.5)
 
@@ -146,24 +148,30 @@ class TestAEKRuntimeState:
 class TestConfusionDetection:
     """اختبارات كاشف الحيرة."""
 
-    @pytest.mark.parametrize("text", [
-        "لم أفهم هذه الخطوة",
-        "مفهمتش كيفاش نحسب",
-        "اشرح لي من جديد",
-        "مش واضح ليا",
-        "I don't understand this",
-        "je comprends pas",
-        "لماذا نضرب في هذا",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "لم أفهم هذه الخطوة",
+            "مفهمتش كيفاش نحسب",
+            "اشرح لي من جديد",
+            "مش واضح ليا",
+            "I don't understand this",
+            "je comprends pas",
+            "لماذا نضرب في هذا",
+        ],
+    )
     def test_detects_confusion(self, text: str) -> None:
         assert _detect_confusion(text) is True
 
-    @pytest.mark.parametrize("text", [
-        "احسب احتمال سحب كرة حمراء",
-        "ما هو C(5,2)",
-        "حل التمرين الأول",
-        "شكراً",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "احسب احتمال سحب كرة حمراء",
+            "ما هو C(5,2)",
+            "حل التمرين الأول",
+            "شكراً",
+        ],
+    )
     def test_no_false_positives(self, text: str) -> None:
         assert _detect_confusion(text) is False
 

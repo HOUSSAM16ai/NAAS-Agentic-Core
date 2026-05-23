@@ -1,6 +1,24 @@
 # Tasks — What Comes Next
-> Last updated: 2026-05-11 | Branch: `feat/microservices-step9-skills-pipeline`
+> Last updated: 2026-05-23 | Branch: `feat/math-explanation-generative-ui`
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## ✅ Resolved — D-080: Math Pipeline enrich_node + MathExplanationCard (2026-05-23)
+
+### الهدف
+بناء نظام Generative UI للشرح الرياضي العميق — النظام يُولِّد نصاً سردياً وبطاقة بصرية تفاعلية معاً.
+
+### ما تم
+- `enrich_node` (Node 4) مُضاف إلى Math Pipeline — deterministic، لا LLM
+- `_build_ui_component()` تستخرج الخطوات + الحدس + الاستعارة البصرية + التلميح
+- `ui_component` يتدفق عبر الـ stack الكامل: pipeline → graph → HTTP/WS → frontend
+- `MathExplanationCard.jsx` — مكوّن جديد، 11 نوع رياضي، ألوان مختلفة
+- `_try_build_math_ui_component` في monolith — non-breaking، try/except مُغلَّف
+- 820 اختباراً ✅ · ruff clean ✅ · 8/8 خدمات حية ✅
+- PR: `feat/math-explanation-generative-ui` → `main`
+
+---
 
 ---
 

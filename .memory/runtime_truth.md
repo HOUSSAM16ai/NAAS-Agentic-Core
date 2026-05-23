@@ -1,6 +1,77 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-21** | Branch: `docs/content-db-audit-2026-05-21`
-> Previous: `feat/iss-071-latex-normalize-langgraph`
+> Last updated: **2026-05-23** | Branch: `feat/math-explanation-generative-ui`
+> Previous: `docs/content-db-audit-2026-05-21`
+
+## D-080 Live Verification (2026-05-23) — Math Pipeline enrich_node + Generative UI
+
+### نتائج التحقق الحي (2026-05-23)
+
+**المهمة**: تفعيل المفاتيح الحقيقية + بناء Generative UI card للشرح الرياضي.
+
+**إصلاح secrets.env**: أُنشئ `.devcontainer/secrets.env` بالمفاتيح الحقيقية (OPENROUTER, TAVILY, DATABASE_URL).
+
+| الخدمة | المنفذ | الحالة | ملاحظة |
+|--------|--------|--------|--------|
+| FastAPI Monolith | 8000 | ✅ ACTIVE | `database: ok` |
+| user-service | 8001 | ✅ ACTIVE | `/metrics` يعمل |
+| planning-agent | 8002 | ✅ ACTIVE | PostgreSQL asyncpg حقيقي |
+| conversation-service | 8003 | ✅ ACTIVE | `graph_ready: true`, `enrich_node` يعمل |
+| orchestrator-service | 8006 | ✅ ACTIVE | `graph_ready: true`, OUTBOX_RELAY=true |
+| research-agent | 8007 | ✅ ACTIVE | `tavily_available: true` |
+| reasoning-agent | 8008 | ✅ ACTIVE | `llm_backend: openrouter` |
+| content-retrieval-skill | 8009 | ✅ ACTIVE | `kb_files: 3` |
+
+**Math Pipeline Live Tests**:
+- `احسب مشتق f(x) = x³ + 2x` → `type=derivative`, `ui_component=YES`, `steps=8`, `boxed=True` ✅
+- `احسب التكامل ∫ e^x·cos(x) dx` → `type=integral`, `ui_component=YES`, `steps=8` ✅
+- `احتمال الحادثة أ` → `type=probability`, `ui_component=YES`, `steps=4` ✅
+- `مرحبا كيف حالك` → `intent=chat`, `ui_component=None` ✅ (non-math fallback)
+
+**Skills Pipeline**: `pipeline_mode=full`, duration ~17s ✅
+
+**Tests**: 820 passed (153 conversation-service + 476 contracts/infrastructure + 191 unit) ✅
+
+**ruff**: All checks passed on all modified files ✅
+
+### Math Pipeline Topology (بعد D-080)
+
+```
+قبل D-080 (3 nodes):
+  START → classify_node → solve_node → normalize_node → END
+
+بعد D-080 (4 nodes):
+  START → classify_node → solve_node → normalize_node → enrich_node → END
+  enrich_node: deterministic, no LLM — يبني ui_component من النص المكتمل
+```
+
+### ui_component Flow (D-080)
+
+```
+enrich_node → MathPipelineState.ui_component
+    ↓
+invoke_math_pipeline() → returns ui_component
+    ↓
+response_node (conversation_graph) → ConversationState.ui_component
+    ↓
+invoke_graph() → returns ui_component
+    ↓
+ChatResponse.ui_component (HTTP) + WebSocket payload.ui_component
+    ↓ (monolith path)
+_try_build_math_ui_component() → injected into assistant_final payload
+    ↓
+useAgentSocket.js → msg.uiComponent
+    ↓
+ChatInterface.jsx → <GenerativeUIRenderer> after text, on isComplete
+```
+
+### قواعد مُضافة من D-080
+- Math Pipeline = 4 nodes. لا تُعيد إلى 3 nodes.
+- `enrich_node` لا يستدعي LLM — deterministic فقط.
+- `_try_build_math_ui_component` في `customer_chat.py` مُغلَّف بـ `try/except` — لا يكسر المسار أبداً.
+- `ui_component=None` للأسئلة غير الرياضية — لا بطاقة تُعرض.
+- `MathExplanationCard` يظهر فقط عند `msg.isComplete` — لا streaming flicker.
+
+---
 
 ## D-079 Live Verification (2026-05-21) — Microservices Full Stack + Content Audit
 

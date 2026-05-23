@@ -1,5 +1,47 @@
 # Architectural Decisions
-> Last updated: 2026-05-22 | Branch: `claude/e-taleem-visual-skills-rSNSA`
+> Last updated: 2026-05-23 | Branch: `feat/math-explanation-generative-ui`
+
+## D-080 · Math Pipeline enrich_node + MathExplanationCard Generative UI (2026-05-23)
+
+**Branch**: `feat/math-explanation-generative-ui`
+
+### القرار
+
+إضافة `enrich_node` (Node 4 — deterministic، لا LLM) إلى Math Pipeline بعد `normalize_node`. يُحلِّل النص المكتمل ويبني `ui_component` payload هيكلي. الواجهة تُصيِّره كـ `MathExplanationCard` — بطاقة ملوّنة تفاعلية تظهر تحت النص بعد اكتمال البث.
+
+### الفصل المعماري
+
+| الطبقة | الدور | الملف |
+|--------|-------|-------|
+| Backend (enrich_node) | يُحلِّل النص → يبني ui_component | `math_pipeline.py` |
+| Frontend (MathExplanationCard) | يُصيِّر ui_component → قصة بصرية | `MathExplanationCard.jsx` |
+| LLM (solve_node) | يكتب الشرح السردي فقط | `math_pipeline.py` |
+
+### الملفات المُعدَّلة
+
+- `microservices/conversation_service/src/math_pipeline.py` — `enrich_node`, `_build_ui_component`, `ui_component` في `MathPipelineState`
+- `microservices/conversation_service/src/conversation_graph.py` — `ui_component` في `ConversationState` و `invoke_graph`
+- `microservices/conversation_service/main.py` — `ui_component` في `ChatResponse` + WebSocket
+- `app/api/routers/customer_chat.py` — `_try_build_math_ui_component` (non-breaking)
+- `frontend/app/components/generative/MathExplanationCard.jsx` — مكوّن جديد (11 أنواع)
+- `frontend/app/components/generative/GenerativeUIRenderer.jsx` — تسجيل `math_explanation_card`
+- `frontend/app/components/ChatInterface.jsx` — عرض `ui_component` بعد النص على `isComplete`
+- `frontend/app/hooks/useAgentSocket.js` — استخراج `ui_component` من `assistant_final`
+
+### القواعد الدائمة (D-080)
+
+1. Math Pipeline = 4 nodes: `classify → solve → normalize → enrich → END`
+2. `enrich_node` لا يستدعي LLM — deterministic فقط، لا meta-text ممكن
+3. `_try_build_math_ui_component` مُغلَّف بـ `try/except` — لا يكسر المسار
+4. `ui_component=None` للأسئلة غير الرياضية (`general_math` type)
+5. `MathExplanationCard` يظهر فقط على `isComplete` — لا streaming flicker
+6. أي نوع رياضي جديد يُضاف في 4 أماكن: `_MATH_TYPES`, `_TYPE_LABELS`, `_MATH_HINTS`, `visual_metaphors`, `TYPE_COLORS`
+
+### التحقق الحي
+
+820 اختباراً ✅ · ruff clean ✅ · 8/8 خدمات حية ✅ · 3 أنواع رياضية مختبرة حياً ✅
+
+---
 
 ## D-081 · ISS-083 — Garbage "كرة رقم N" Entities + Misleading Sequential Tree (2026-05-22)
 

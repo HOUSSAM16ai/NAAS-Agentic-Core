@@ -20,10 +20,8 @@ from app.services.aek.fsm import (
     is_valid_transition,
     transition,
 )
-from app.services.aek.intents import CognitiveIntent
 from app.services.aek.kernel import AdaptiveEducationalKernel, _detect_confusion
 from app.services.aek.state import AEKRuntimeState, ExerciseScope, LearnerCapability
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FSM — الانتقالات

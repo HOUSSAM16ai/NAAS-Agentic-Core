@@ -1652,7 +1652,7 @@ class OrchestratorClient:
         # Rules (D-067): prompt < 1000 chars, no box-drawing chars, no LaTeX in prompt.
         # The instruction is prepended to the question so the LLM receives it as
         # user intent — not as a system override that triggers reasoning mode.
-        _DEEP_PEDAGOGY_INSTRUCTION = (
+        _deep_pedagogy_instruction = (
             "[وضع الشرح العميق] "
             "الطالب يعبّر عن حيرة. ابدأ بالمعنى والصورة الذهنية قبل أي صيغة. "
             "استخدم أسلوباً سقراطياً دافئاً. "
@@ -1660,7 +1660,7 @@ class OrchestratorClient:
             "اشرح لماذا يحدث هذا قبل كيف يُحسب."
         )
         _effective_question = (
-            _DEEP_PEDAGOGY_INSTRUCTION + "\n\n" + question
+            _deep_pedagogy_instruction + "\n\n" + question
             if _is_mode_b
             else question
         )

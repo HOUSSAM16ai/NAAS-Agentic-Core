@@ -19,6 +19,10 @@ Skill — وحدة مستقلة قابلة للقياس والاختبار وا�
 - `bkt_engine.BKTEngine` — الطبقة المعرفية الأساسية (Bayesian Knowledge Tracing،
   D-074). الأساس الذي تُبنى فوقه كل القدرات التكيّفية المستقبلية. يلتزم بـ
   `BKT_COGNITIVE_DOCTRINE` (الإصدار `BKT_COGNITIVE_DOCTRINE_VERSION`).
+- `output_firewall.OutputFirewall` — جدار الحماية المزدوج للقنوات (D-086 — V46.0).
+  يرفض/ينظف HTML/JSX من القناة B (صوت المعلم). المعلم لا يُصيِّر — المعلم يشرح.
+- `topic_lock.TopicLock` — قفل الموضوع وحماية نقاء السياق (D-086 — V46.0).
+  يُسجِّل انتهاكات تسرب المواضيع دون كسر المسار.
 
 **D-069 (2026-05-18)** — Skills Doctrine Module:
 الـ `doctrine` module يُصدِّر القواعد الرسمية لكيفية:
@@ -29,6 +33,11 @@ Skill — وحدة مستقلة قابلة للقياس والاختبار وا�
 
 **D-072 (2026-05-19)** — AnswerQualitySkill:
 Skill جديد يُقيِّم جودة إجابة LLM قبل إرسالها للطالب ويُصحِّح المشاكل تلقائياً.
+
+**D-086 (2026-05-23)** — OutputFirewall + TopicLock (Protocol V46.0):
+فصل صارم بين القناة A (JSON هيكلي) والقناة B (صوت المعلم).
+جدار الحماية يرفض أو ينظف أي HTML/JSX في القناة B.
+قفل الموضوع يُسجِّل انتهاكات تسرب المواضيع.
 """
 
 from app.services.skills.answer_quality_skill import (
@@ -101,6 +110,14 @@ from app.services.skills.math_skill import (
     MathSkillInput,
     MathSkillOutput,
 )
+from app.services.skills.output_firewall import (
+    ContaminationDetail,
+    FirewallInput,
+    FirewallOutput,
+    OutputFirewall,
+    apply_channel_b_firewall,
+    get_output_firewall,
+)
 from app.services.skills.probability_skill import (
     CompositionItem,
     ExerciseStep,
@@ -109,6 +126,12 @@ from app.services.skills.probability_skill import (
     ProbabilityFailure,
     ProbabilityInput,
     ProbabilityModelOutput,
+)
+from app.services.skills.topic_lock import (
+    TopicLock,
+    TopicLockInput,
+    TopicLockOutput,
+    get_topic_lock,
 )
 
 __all__ = [
@@ -160,9 +183,17 @@ __all__ = [
     "ProbabilityFailure",
     "ProbabilityInput",
     "ProbabilityModelOutput",
+    "ContaminationDetail",
+    "FirewallInput",
+    "FirewallOutput",
+    "OutputFirewall",
     "QualityIssue",
     "SkillFailure",
     "SkillMode",
+    "TopicLock",
+    "TopicLockInput",
+    "TopicLockOutput",
+    "apply_channel_b_firewall",
     "build_exercise_explanation_prompt",
     "get_answer_quality_skill",
     "get_bkt_cognitive_summary",
@@ -172,9 +203,11 @@ __all__ = [
     "get_explanation_doctrine_summary",
     "get_model_answer_explanation_summary",
     "get_model_answer_reliance_summary",
+    "get_output_firewall",
     "get_probability_calculation_summary",
     "get_retrieval_doctrine_summary",
     "get_skill_invocation_protocol_summary",
     "get_step_by_step_summary",
+    "get_topic_lock",
     "list_all_doctrines",
 ]

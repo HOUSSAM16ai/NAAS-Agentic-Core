@@ -8,6 +8,18 @@ Local LangGraph Chat Engine — CogniForge
   supervisor (تصنيف النية) → chat_node (توليد الرد) → END
 
 thread_id = conversation_id  →  كل محادثة لها ذاكرة مستقلة.
+
+## V46.0 — الفصل المزدوج للقنوات
+
+كل إجابة LLM تمر عبر طبقتين دفاعيتين قبل الوصول للطالب:
+
+1. **OutputFirewall** (output_firewall.py): يرفض أو ينظف أي HTML/JSX/markup
+   في القناة B (صوت المعلم). المعلم لا يُصيِّر — المعلم يشرح.
+
+2. **TopicLock** (topic_lock.py): يُسجِّل انتهاكات تسرب المواضيع
+   (احتمالات → تفاضل، إلخ) دون كسر المسار.
+
+D-086 (2026-05-23): تطبيق Protocol V46.0.
 """
 
 from __future__ import annotations
@@ -286,6 +298,66 @@ def _apply_answer_quality_skill(question: str, answer: str, intent: str) -> str:
     return answer
 
 
+# ─── V46.0: Output Firewall + Topic Lock helpers ──────────────────────────────
+
+
+def _apply_output_firewall(answer: str, intent: str) -> str:
+    """D-086 (V46.0): يُطبِّق OutputFirewall على القناة B (صوت المعلم).
+
+    يرفض أو ينظف أي HTML/JSX/markup في الإجابة السردية.
+    إذا رُفضت الإجابة كلياً (تلوث فوق العتبة) → يُعيد النص الأصلي
+    مع تسجيل تحذير (fail-open — لا يكسر المسار).
+
+    Returns:
+        النص المُنظَّف إذا كان هناك تلوث قابل للتنظيف، وإلا النص الأصلي.
+    """
+    if not answer or not answer.strip():
+        return answer
+    try:
+        from app.services.skills.output_firewall import apply_channel_b_firewall
+
+        cleaned, was_rejected = apply_channel_b_firewall(answer, intent=intent)
+        if was_rejected:
+            # تلوث فوق العتبة — نُعيد الأصل مع تحذير (fail-open)
+            # المُستدعي الأعلى يمكنه إعادة المحاولة إذا أراد
+            logger.warning(
+                "output_firewall.rejected_fail_open intent=%s chars=%d",
+                intent,
+                len(answer),
+            )
+            return answer
+        return cleaned
+    except Exception as exc:
+        logger.debug("output_firewall non-fatal failure: %s", exc)
+        return answer
+
+
+def _check_topic_lock(
+    question: str,
+    answer: str,
+    history: list[dict],
+) -> None:
+    """D-086 (V46.0): يفحص نقاء الموضوع — تحذيري فقط، لا يكسر المسار."""
+    try:
+        from app.services.skills.topic_lock import TopicLockInput, get_topic_lock
+
+        result = get_topic_lock().check(
+            TopicLockInput(
+                response=answer[:1000],
+                question=question[:500],
+                history=history[-5:],
+            )
+        )
+        if not result.passed and result.leaked_topics:
+            logger.warning(
+                "topic_lock.violation active=%s leaked=%s",
+                result.active_topic,
+                result.leaked_topics,
+            )
+    except Exception as exc:
+        logger.debug("topic_lock non-fatal failure: %s", exc)
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -537,6 +609,11 @@ async def _chat_node(state: LocalChatState) -> dict:
         clean = _sanitize_local_graph_response(clean, intent)
         # D-073: AnswerQualitySkill — آخر طبقة دفاع (يحل ZOMBIE skill من D-072)
         clean = _apply_answer_quality_skill(question, clean, intent)
+        # D-086 (V46.0): OutputFirewall — جدار الحماية المزدوج للقنوات
+        # القناة B (صوت المعلم) يجب أن تكون Markdown نظيفاً — لا HTML، لا JSX.
+        clean = _apply_output_firewall(clean, intent)
+        # D-086 (V46.0): TopicLock — فحص نقاء الموضوع (تحذيري فقط)
+        _check_topic_lock(question, clean, history)
         logger.info(
             "local_graph.chat_node OK intent=%s chars=%d",
             intent,

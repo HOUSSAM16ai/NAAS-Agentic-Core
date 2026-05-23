@@ -2371,3 +2371,26 @@ fix + `.genui-fes-*`) | tests.
 
 **Files**: `app/infrastructure/clients/orchestrator_client.py` (routing_mode + _effective_question + hoisted _is_mode_b) | `tests/services/test_v38_dual_mode_routing.py` (17 tests جديدة) | `tests/services/test_v28_text_wall_muzzle.py` (تحديث impossible-case test) | `tests/contracts/test_generative_ui_streaming.py` (تحديث full_story muzzle test).
 
+---
+
+## D-086 · Protocol V46.0 — Dual-Channel Firewall: OutputFirewall + TopicLock (2026-05-23)
+
+**Context**: القناة B (صوت المعلم) كانت تصل للطالب بدون أي فحص للتلوث. الـ LLM يمكنه إخراج `<div>`, JSX, React imports داخل النص السردي. لم يكن هناك آلية لمنع تسرب مفاهيم من مواضيع أخرى (احتمالات → تفاضل).
+
+**Decision**:
+1. **OutputFirewall** (`app/services/skills/output_firewall.py`): Skill جديد يفرض الفصل الصارم بين القناتين.
+   - القناة B: يكشف HTML/JSX/markup بـ 6 أنماط regex مُرجَّحة. ينظف إذا score < 0.6، يرفض إذا score ≥ 0.6. Fail-open دائماً.
+   - القناة A: يرفض أي نثر لا يبدأ بـ `{` أو `[`.
+2. **TopicLock** (`app/services/skills/topic_lock.py`): Skill تحذيري يكشف تسرب المواضيع. يُحدِّد الموضوع النشط من آخر 5 رسائل. يُسجِّل الانتهاكات دون رفض الإجابة.
+3. **نقاط التطبيق**:
+   - `local_graph.py:_chat_node`: بعد `_apply_answer_quality_skill` — طبقة دفاع إضافية.
+   - `customer_chat.py`: قبل حفظ `complete_ai_response` في DB — يضمن نقاء السجل الدائم.
+
+**Consequence**:
+- المعلم لا يُصيِّر — المعلم يشرح. القناة B نظيفة دائماً.
+- الواجهة لا تشرح — الواجهة تُصيِّر. القناة A JSON نقي دائماً.
+- 25 اختباراً في `tests/test_output_firewall_v46.py` — جميعها تجتاز.
+- مقاييس Prometheus: `cogniforge_output_firewall_*` + `cogniforge_topic_lock_*`.
+
+**Files**: `app/services/skills/output_firewall.py` (جديد) | `app/services/skills/topic_lock.py` (جديد) | `app/services/skills/__init__.py` (تحديث exports) | `app/services/chat/local_graph.py` (تطبيق الـ firewall في _chat_node) | `app/api/routers/customer_chat.py` (تطبيق الـ firewall على complete_ai_response) | `tests/test_output_firewall_v46.py` (25 اختباراً جديداً).
+

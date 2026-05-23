@@ -20,9 +20,7 @@ import importlib
 def classify_math_type(question: str) -> str | None:
     """يُصنِّف نوع المسألة الرياضية. يُرجِع None عند الفشل."""
     try:
-        mod = importlib.import_module(
-            "microservices.conversation_service.src.math_pipeline"
-        )
+        mod = importlib.import_module("microservices.conversation_service.src.math_pipeline")
         return mod._classify_math_type(question)
     except Exception:
         return None
@@ -35,9 +33,7 @@ def build_math_ui_component(
 ) -> dict[str, object] | None:
     """يبني حمولة مكوّن الواجهة البصرية للرياضيات. يُرجِع None عند الفشل."""
     try:
-        mod = importlib.import_module(
-            "microservices.conversation_service.src.math_pipeline"
-        )
+        mod = importlib.import_module("microservices.conversation_service.src.math_pipeline")
         return mod._build_ui_component(math_type, response_text, question)
     except Exception:
         return None

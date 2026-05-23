@@ -1020,13 +1020,12 @@ class OrchestratorClient:
             # V38.0 — Dual-Mode Routing: كشف نية الطالب قبل بناء الحمولة.
             # MODE_B يُفعَّل عند إشارات الحيرة — يُبقي المسار حياً للسرد البيداغوجي.
             # MODE_A هو الوضع الافتراضي — يُوقف المسار بعد المكوّن البصري.
-            _combined_text = question + " " + " ".join(
-                m.get("content", "") for m in (history_messages or [])
+            _combined_text = (
+                question + " " + " ".join(m.get("content", "") for m in (history_messages or []))
             )
-            _is_deep_pedagogy = (
-                ProbabilityCalculatorSkill.is_confusion(question)
-                or ProbabilityCalculatorSkill.is_confusion(_combined_text)
-            )
+            _is_deep_pedagogy = ProbabilityCalculatorSkill.is_confusion(
+                question
+            ) or ProbabilityCalculatorSkill.is_confusion(_combined_text)
             _routing_mode = "MODE_B" if _is_deep_pedagogy else "MODE_A"
 
             # V31.5 (Full Exercise OS): القصة التربوية الشاملة — Carousel متعدّد
@@ -1660,9 +1659,7 @@ class OrchestratorClient:
             "اشرح لماذا يحدث هذا قبل كيف يُحسب."
         )
         _effective_question = (
-            _deep_pedagogy_instruction + "\n\n" + question
-            if _is_mode_b
-            else question
+            _deep_pedagogy_instruction + "\n\n" + question if _is_mode_b else question
         )
 
         payload = {

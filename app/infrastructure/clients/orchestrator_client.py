@@ -1033,6 +1033,7 @@ class OrchestratorClient:
             _aek_state: dict[str, object] = {}
             try:
                 from app.services.aek.kernel import AdaptiveEducationalKernel
+
                 _aek_output = AdaptiveEducationalKernel().process(
                     question=question,
                     history=list(history_messages or []),

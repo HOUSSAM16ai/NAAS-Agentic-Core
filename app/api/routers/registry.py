@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.routers import (
     admin,
+    aek,
     content,
     customer_chat,
     data_mesh,
@@ -34,4 +35,5 @@ def base_router_registry() -> list[RouterSpec]:
         (content.router, ""),
         (observability.router, "/api/v1/observability"),
         (visual_pedagogy.router, ""),
+        (aek.router, ""),
     ]

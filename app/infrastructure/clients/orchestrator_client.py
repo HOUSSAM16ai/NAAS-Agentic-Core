@@ -1028,6 +1028,26 @@ class OrchestratorClient:
             ) or ProbabilityCalculatorSkill.is_confusion(_combined_text)
             _routing_mode = "MODE_B" if _is_deep_pedagogy else "MODE_A"
 
+            # V44.0 — AEK: استدعاء النواة التعليمية التكيّفية لإثراء الحمولة
+            # بالحالة المعرفية والنية التربوية. غير حرج — أي فشل يُسجَّل ويُتجاوَز.
+            _aek_state: dict[str, object] = {}
+            try:
+                from app.services.aek.kernel import AdaptiveEducationalKernel
+                _aek_output = AdaptiveEducationalKernel().process(
+                    question=question,
+                    history=list(history_messages or []),
+                )
+                _aek_state = {
+                    "cognitive_state": _aek_output.channel_a.cognitive_state,
+                    "cognitive_intent": _aek_output.channel_a.cognitive_intent,
+                    "abstraction_level": _aek_output.channel_a.abstraction_level,
+                    "cognitive_load_index": _aek_output.channel_a.cognitive_load_index,
+                    "narrative": _aek_output.channel_b.narrative,
+                    "pacing_hint": _aek_output.channel_b.pacing_hint,
+                }
+            except Exception:
+                logger.debug("aek_enrichment_skipped", exc_info=True)
+
             # V31.5 (Full Exercise OS): القصة التربوية الشاملة — Carousel متعدّد
             # الخطوات يغطّي التمرين كاملاً (معطيات → فضاء عيّنة → حدث مركّب →
             # متغيّر عشوائي). يُفعَّل عند حيرة الطالب. terminate_pipeline=True
@@ -1063,6 +1083,7 @@ class OrchestratorClient:
                         f"شرح بصري شامل: سحب {result.k} من {result.n} "
                         f"(C={result.total_combinations}) عبر {len(result.exercise_steps)} خطوات."
                     ),
+                    "aek_state": _aek_state,
                 }
 
             # V28.0: الحالة المستحيلة — short-circuit كامل للـ pipeline.
@@ -1094,6 +1115,7 @@ class OrchestratorClient:
                         "container": result.container,
                     },
                     "fallback_text": result.pedagogical_message,
+                    "aek_state": _aek_state,
                 }
 
             if isinstance(result, CombinationsModelOutput):
@@ -1136,6 +1158,7 @@ class OrchestratorClient:
                         f"سحب آني: اختيار {result.k} من {result.n} → "
                         f"عدد التأليفات C({result.n},{result.k}) = {result.total_combinations}."
                     ),
+                    "aek_state": _aek_state,
                 }
 
             if isinstance(result, ProbabilityModelOutput):
@@ -1166,6 +1189,7 @@ class OrchestratorClient:
                     "companion_text": "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄",
                     "props": props,
                     "fallback_text": ("شجرة الاحتمالات (تعذّر عرض الرسم التفاعلي — هذا نص بديل)."),
+                    "aek_state": _aek_state,
                 }
             return None
         except Exception:

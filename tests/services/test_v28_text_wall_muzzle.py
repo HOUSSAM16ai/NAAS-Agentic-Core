@@ -78,17 +78,24 @@ def test_companion_text_default_is_single_sentence() -> None:
 
 
 def test_build_calculated_ui_terminate_pipeline_true_for_impossible() -> None:
-    """V28.0: _build_calculated_ui يُرجِع terminate_pipeline=True للحالة المستحيلة."""
+    """V28.0 + V38.0: impossible_case في MODE_A (سؤال مباشر) → terminate_pipeline=True.
+
+    ملاحظة V38.0: _IMPOSSIBLE_Q يحتوي على «كيفاش» (إشارة حيرة) → MODE_B →
+    terminate_pipeline=False. نستخدم _IMPOSSIBLE_DIRECT (بلا إشارة حيرة) للتحقق
+    من قانون V28.0 في MODE_A.
+    """
     from app.infrastructure.clients.orchestrator_client import OrchestratorClient
 
+    # سؤال مستحيل بلا إشارة حيرة → MODE_A → terminate_pipeline=True
     result = OrchestratorClient._build_calculated_ui(
-        _IMPOSSIBLE_Q,
+        _POSSIBLE_Q.replace("خضراء", "بيضاء"),  # نسحب 3 كرات بيضاء (مستحيل: 2 فقط)
         history_messages=[{"role": "user", "content": _BAC_URN}],
     )
     assert result is not None
     assert result.get("component") == "impossible_draw_animation"
+    assert result.get("routing_mode") == "MODE_A", "Direct impossible question must be MODE_A"
     assert result.get("terminate_pipeline") is True, (
-        "terminate_pipeline must be True — pipeline bypass contract violated"
+        "terminate_pipeline must be True for MODE_A impossible case"
     )
     assert "companion_text" in result
     assert len(result["companion_text"]) <= 120

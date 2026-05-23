@@ -173,16 +173,25 @@ def test_calculated_ui_full_story_no_c_2_3_leak() -> None:
 
 
 def test_calculated_ui_full_story_text_wall_muzzle() -> None:
-    """V31.5: القصة الشاملة تُنهي المسار (terminate_pipeline) بجملة واحدة."""
+    """V38.0 (يُحدِّث V31.5): القصة الشاملة عند الحيرة → MODE_B → terminate_pipeline=False.
+
+    قانون V38.0: «لم افهم» إشارة حيرة → MODE_B → المسار يبقى حياً للسرد البيداغوجي.
+    المكوّن البصري يُبثّ أولاً، ثم يستمر LLM بالشرح العميق.
+    companion_text لا يزال موجوداً (جملة واحدة) لكنه ليس الإنهاء — هو مقدّمة للسرد.
+    """
     ev = OrchestratorClient._build_calculated_ui(
         "اريد شرح خارق لاني لم افهم اي شي",
         history_messages=[{"role": "user", "content": _V30_URN_SIMUL}],
     )
     assert ev is not None
-    assert ev["terminate_pipeline"] is True
+    assert ev["component"] == "full_exercise_story"
+    # V38.0: confusion → MODE_B → pipeline stays alive
+    assert ev.get("routing_mode") == "MODE_B", "Confusion must trigger MODE_B"
+    assert ev["terminate_pipeline"] is False, (
+        "V38.0: full_exercise_story triggered by confusion must NOT terminate pipeline"
+    )
     companion = ev["companion_text"]
     assert isinstance(companion, str) and 0 < len(companion) <= 120
-    # جملة واحدة فقط (لا فقرات/قوائم)
     assert "\n" not in companion
 
 

@@ -1,7 +1,29 @@
+/**
+ * useRealtimeConnection — WebSocket connection manager
+ *
+ * ## State Machine
+ *
+ *   idle → connecting → connected → degraded → reconnecting → offline
+ *                                                           ↘ recovered (→ connected)
+ *
+ * ## Offline Declaration Rules (D-WS-002)
+ *   لا يُعلَن عن Offline إلا بعد:
+ *   1. WebSocket failure
+ *   2. reconnect exhaustion (MAX_RETRIES محاولات)
+ *   قبل ذلك: الحالة هي "reconnecting" وليس "offline"
+ *
+ * ## Heartbeat
+ *   ping/pong كل HEARTBEAT_INTERVAL ms للكشف عن stale connections.
+ *   إذا لم يصل pong خلال HEARTBEAT_TIMEOUT ms → إعادة الاتصال.
+ */
+
 import { useEffect, useRef, useState, useCallback } from "react";
 
-const MAX_BACKOFF = 10000;
+const MAX_BACKOFF = 30000;          // أقصى تأخير بين المحاولات (30 ثانية)
+const MAX_RETRIES = 10;             // عدد المحاولات قبل إعلان offline
 const FATAL_CODES = new Set([4401, 4403]);
+const HEARTBEAT_INTERVAL = 25000;  // ping كل 25 ثانية
+const HEARTBEAT_TIMEOUT = 10000;   // انتظر pong لمدة 10 ثوانٍ
 
 const parseAssistantErrorEnvelope = (rawData) => {
   if (typeof rawData !== "string") return null;
@@ -34,6 +56,9 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
   const reconnectTimeoutRef = useRef(null);
   const pendingQueue = useRef([]);
   const connectionIdRef = useRef(null);
+  const heartbeatIntervalRef = useRef(null);
+  const heartbeatTimeoutRef = useRef(null);
+
   if (connectionIdRef.current === null) {
     connectionIdRef.current =
       typeof crypto !== "undefined" && crypto.randomUUID
@@ -41,32 +66,80 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
+  // إيقاف heartbeat
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+    if (heartbeatTimeoutRef.current) {
+      clearTimeout(heartbeatTimeoutRef.current);
+      heartbeatTimeoutRef.current = null;
+    }
+  }, []);
+
+  // بدء heartbeat — ping/pong للكشف عن stale connections
+  const startHeartbeat = useCallback((ws) => {
+    stopHeartbeat();
+    heartbeatIntervalRef.current = setInterval(() => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        stopHeartbeat();
+        return;
+      }
+      try {
+        ws.send(JSON.stringify({ type: "ping" }));
+      } catch {
+        stopHeartbeat();
+        return;
+      }
+      // إذا لم يصل pong خلال HEARTBEAT_TIMEOUT → stale connection
+      heartbeatTimeoutRef.current = setTimeout(() => {
+        console.warn("[WS] heartbeat timeout — stale connection, forcing reconnect");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close(1001, "heartbeat_timeout");
+        }
+      }, HEARTBEAT_TIMEOUT);
+    }, HEARTBEAT_INTERVAL);
+  }, [stopHeartbeat]);
+
   const connect = useCallback(() => {
     if (!wsUrl || !token) return;
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
 
-    setState("connecting");
+    // D-WS-002: "reconnecting" بدلاً من "offline" أثناء المحاولات
+    setState(retries.current > 0 ? "reconnecting" : "connecting");
 
     try {
         const wsUrlObj = new URL(wsUrl);
-        wsUrlObj.searchParams.append("token", token);
+        wsUrlObj.searchParams.set("token", token);
         if (!wsUrlObj.searchParams.has("session_id")) {
-            wsUrlObj.searchParams.append("session_id", connectionIdRef.current);
+            wsUrlObj.searchParams.set("session_id", connectionIdRef.current);
         }
         const ws = new WebSocket(wsUrlObj.toString(), ["jwt", token]);
         wsRef.current = ws;
 
         ws.onopen = () => {
           if (mountedRef.current) {
+            const wasReconnect = retries.current > 0;
             retries.current = 0;
-            setState("connected");
+            setState(wasReconnect ? "recovered" : "connected");
+
+            // بعد recovery → انتقل إلى connected بعد لحظة قصيرة للـ UI feedback
+            if (wasReconnect) {
+              setTimeout(() => {
+                if (mountedRef.current) setState("connected");
+              }, 500);
+            }
+
+            // بدء heartbeat للكشف عن stale connections
+            startHeartbeat(ws);
 
             // Flush pending messages
             if (pendingQueue.current.length > 0) {
-                console.log(`Flushing ${pendingQueue.current.length} pending messages`);
+                console.log(`[WS] Flushing ${pendingQueue.current.length} pending messages`);
                 while (pendingQueue.current.length > 0) {
                     const msg = pendingQueue.current.shift();
-                    ws.send(JSON.stringify(msg));
+                    try { ws.send(JSON.stringify(msg)); } catch { /* ignore */ }
                 }
             }
           }
@@ -115,6 +188,15 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
 
         ws.onmessage = (event) => {
           if (!mountedRef.current) return;
+
+          // معالجة pong من heartbeat — إلغاء timeout
+          if (typeof event.data === "string" && event.data.includes('"type":"pong"')) {
+            if (heartbeatTimeoutRef.current) {
+              clearTimeout(heartbeatTimeoutRef.current);
+              heartbeatTimeoutRef.current = null;
+            }
+            return;
+          }
 
           // Bug A fix: detect HTML error pages (Next.js DevTools 500 bleed).
           // When the backend crashes, Next.js dev server may intercept the 500
@@ -190,62 +272,80 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
           }
         };
 
-        ws.onerror = () => {
+        ws.onerror = (err) => {
           if (mountedRef.current) {
+              // degraded وليس offline — onclose سيُقرِّر ما إذا كان يجب إعادة الاتصال
               setState("degraded");
           }
           console.warn("[WS] error", {
             url: ws.url,
-            readyState: ws.readyState, // 0..3
+            readyState: ws.readyState,
+            error: err?.message || "unknown",
           });
         };
 
         ws.onclose = (e) => {
           if (mountedRef.current) {
              wsRef.current = null;
+             stopHeartbeat();
 
              console.warn("[WS] closed", {
                url: ws.url,
                code: e.code,
                reason: e.reason,
                wasClean: e.wasClean,
-               readyState: ws.readyState,
              });
 
-             // Check for fatal auth errors
+             // Fatal auth errors — لا إعادة اتصال
              if (FATAL_CODES.has(e.code)) {
-                 console.warn("Fatal auth error, stopping reconnection:", e.code);
+                 console.warn("[WS] Fatal auth error, stopping reconnection:", e.code);
                  setState("auth_error");
-                 return; // STOP reconnection
+                 return;
              }
 
-             setState("offline");
+             retries.current += 1;
 
+             // D-WS-002: لا يُعلَن عن Offline إلا بعد استنفاد جميع المحاولات
+             if (retries.current >= MAX_RETRIES) {
+               console.error(`[WS] Exhausted ${MAX_RETRIES} reconnect attempts — declaring offline`);
+               setState("offline");
+               return; // لا إعادة اتصال تلقائية — المستخدم يحتاج reload
+             }
+
+             // أثناء المحاولات: حالة "reconnecting" وليس "offline"
+             setState("reconnecting");
+
+             // Exponential backoff مع jitter
              const delay = Math.min(
-               2 ** retries.current * 500,
+               Math.pow(2, retries.current - 1) * 500,
                MAX_BACKOFF
              );
+             const jitter = Math.floor(Math.random() * 500);
 
-             const jitter = Math.floor(Math.random() * 200);
-
-             retries.current += 1;
+             console.info(`[WS] Reconnecting in ${delay + jitter}ms (attempt ${retries.current}/${MAX_RETRIES})`);
              clearTimeout(reconnectTimeoutRef.current);
              reconnectTimeoutRef.current = setTimeout(connect, delay + jitter);
           }
         };
     } catch (err) {
-        console.warn("WebSocket connection failed:", err);
-        if (mountedRef.current) setState("offline");
-
-        const delay = Math.min(
-            2 ** retries.current * 500,
-            MAX_BACKOFF
-        );
+        console.warn("[WS] Connection failed:", err);
         retries.current += 1;
+
+        if (!mountedRef.current) return;
+
+        // D-WS-002: لا offline إلا بعد exhaustion
+        if (retries.current >= MAX_RETRIES) {
+            setState("offline");
+            return;
+        }
+
+        setState("reconnecting");
+        const delay = Math.min(Math.pow(2, retries.current - 1) * 500, MAX_BACKOFF);
+        const jitter = Math.floor(Math.random() * 500);
         clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = setTimeout(connect, delay);
+        reconnectTimeoutRef.current = setTimeout(connect, delay + jitter);
     }
-  }, [wsUrl, token, eventNamespace]);
+  }, [wsUrl, token, eventNamespace, startHeartbeat, stopHeartbeat]);
 
   const sendMessage = useCallback((data) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -261,10 +361,14 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
     connect();
     return () => {
       mountedRef.current = false;
-      if (wsRef.current) wsRef.current.close();
+      stopHeartbeat();
+      if (wsRef.current) {
+        wsRef.current.close(1000, "component_unmount");
+        wsRef.current = null;
+      }
       clearTimeout(reconnectTimeoutRef.current);
     };
-  }, [connect]);
+  }, [connect, stopHeartbeat]);
 
   return { state, sendMessage };
 }

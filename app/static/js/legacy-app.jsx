@@ -65,15 +65,10 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         };
 
 
-        const API_ORIGIN = (() => {
-            const protocol = window.location.protocol;
-            const hostname = window.location.hostname;
-            const port = window.location.port;
-            if (port === '3000') {
-                return `${protocol}//${hostname}:8000`;
-            }
-            return window.location.origin;
-        })();
+        // ISS-OFFLINE-001: استخدام window.location.origin مباشرة — لا port hardcoding.
+        // في Codespaces/Gitpod: المتصفح يصل عبر proxy خارجي على نفس الـ host.
+        // Gateway (8000) يستقبل WebSocket ويُمرِّره إلى conversation-service (8003).
+        const API_ORIGIN = window.location.origin;
 
         const apiUrl = (path) => `${API_ORIGIN}${path}`;
         const wsBase = API_ORIGIN.replace(/^http/, 'ws');

@@ -440,12 +440,14 @@ launch_frontend() {
             fi
         fi
 
-        if lifecycle_check_process "next.*dev"; then
+        if lifecycle_check_process "next.*dev\|node.*server\.js"; then
             lifecycle_info "Frontend Launcher: Next.js dev server already running"
         else
             lifecycle_info "Frontend Launcher: Starting Next.js dev server..."
             # Using exec to replace the subshell with the process
-            (cd frontend && exec npm run dev -- --hostname 0.0.0.0 --port "$FRONTEND_PORT") &
+            # D-WS-001: custom server يُمرِّر WebSocket إلى Gateway (8000)
+            # next dev لا يُمرِّر WebSocket upgrades — server.js يحل هذا
+            (cd frontend && PORT="$FRONTEND_PORT" HOSTNAME="0.0.0.0" exec npm run dev) &
             FRONTEND_PID=$!
             lifecycle_set_state "next_pid" "$FRONTEND_PID"
             lifecycle_info "Frontend Launcher: Next.js dev server started (PID: $FRONTEND_PID)"

@@ -119,11 +119,15 @@ export const getWsBase = () => {
 /**
  * يبني WebSocket URL كامل لـ endpoint معين.
  *
+ * ISS-WS-001: token يُضاف كـ query param هنا إذا مُرِّر.
+ * هذا يضمن وصوله حتى عندما يحذف proxy الـ sec-websocket-protocol header.
+ *
  * @param {string} endpoint - المسار النسبي (مثل /api/chat/ws)
  * @param {string} [sessionId] - معرف الجلسة للـ session affinity
+ * @param {string} [token] - JWT token للمصادقة (اختياري — يُضاف كـ ?token=)
  * @returns {string} WebSocket URL كامل
  */
-export const buildWsUrl = (endpoint, sessionId) => {
+export const buildWsUrl = (endpoint, sessionId, token) => {
     if (!isBrowser || !endpoint) return '';
 
     const base = getWsBase();
@@ -138,6 +142,12 @@ export const buildWsUrl = (endpoint, sessionId) => {
         // أضف session_id للـ session affinity
         if (sessionId) {
             url.searchParams.set('session_id', sessionId);
+        }
+
+        // ISS-WS-001: token كـ query param — يعمل عبر كل proxies وشبكات الهاتف.
+        // sec-websocket-protocol يُحذف من Codespaces/carrier-NAT/Brave Mobile.
+        if (token) {
+            url.searchParams.set('token', token);
         }
 
         return url.toString();

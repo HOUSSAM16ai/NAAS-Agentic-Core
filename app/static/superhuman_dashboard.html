@@ -197,10 +197,12 @@
                     // Get auth token from localStorage or session
                     const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
                     
-                    // Real API call to OVERMIND CLI MINDGATE
+                    // ISS-WS-001: token عبر query param — يعمل مع Codespaces/mobile/Brave.
+                    // sec-websocket-protocol يُحذف من proxies وشبكات الهاتف.
                     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-                    const wsUrl = `${scheme}://${window.location.host}/admin/api/chat/ws`;
-                    const socket = token ? new WebSocket(wsUrl, ["jwt", token]) : new WebSocket(wsUrl);
+                    const wsBase = `${scheme}://${window.location.host}/admin/api/chat/ws`;
+                    const wsUrl = token ? `${wsBase}?token=${encodeURIComponent(token)}` : wsBase;
+                    const socket = new WebSocket(wsUrl);
                     let fullContent = '';
 
                     const handleMessage = (payload) => {

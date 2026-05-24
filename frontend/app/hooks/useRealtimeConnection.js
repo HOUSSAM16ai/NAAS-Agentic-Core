@@ -111,11 +111,27 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
 
     try {
         const wsUrlObj = new URL(wsUrl);
-        wsUrlObj.searchParams.set("token", token);
+
+        // ISS-WS-001: token يُرسَل عبر query param فقط.
+        // الكود القديم كان يُرسله في ["jwt", token] subprotocol —
+        // Codespaces edge proxy وcarrier-NAT وBrave Mobile تحذفه → 4401.
+        // query param يعمل عبر كل الشبكات لأنه جزء من URL وليس header.
+        if (token) {
+            wsUrlObj.searchParams.set("token", token);
+        }
         if (!wsUrlObj.searchParams.has("session_id")) {
             wsUrlObj.searchParams.set("session_id", connectionIdRef.current);
         }
-        const ws = new WebSocket(wsUrlObj.toString(), ["jwt", token]);
+
+        // Log auth transport mode بدون تسريب token value
+        const authMode = token ? "query_param" : "none";
+        const safeUrl = wsUrlObj.toString().replace(/token=[^&]+/, "token=[REDACTED]");
+        console.info(
+            `[WS] connecting auth_mode=${authMode} attempt=${retries.current + 1}/${MAX_RETRIES} url=${safeUrl}`
+        );
+
+        // لا subprotocols — يُبسِّط الـ handshake ويتجنب رفض proxies
+        const ws = new WebSocket(wsUrlObj.toString());
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -307,7 +323,10 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
 
              // D-WS-002: لا يُعلَن عن Offline إلا بعد استنفاد جميع المحاولات
              if (retries.current >= MAX_RETRIES) {
-               console.error(`[WS] Exhausted ${MAX_RETRIES} reconnect attempts — declaring offline`);
+               console.error(
+                 `[WS] Exhausted ${MAX_RETRIES} reconnect attempts — declaring offline. ` +
+                 `last_close_code=${e.code} auth_mode=${token ? "query_param" : "none"}`
+               );
                setState("offline");
                return; // لا إعادة اتصال تلقائية — المستخدم يحتاج reload
              }

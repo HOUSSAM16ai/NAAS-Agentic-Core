@@ -605,13 +605,14 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         : normalizedConversationId;
                 }
 
-                const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-                const wsUrl = `${wsBase}/api/chat/ws`;
+                // ISS-WS-001: token عبر query param — يعمل مع Codespaces/mobile/Brave.
+                // sec-websocket-protocol يُحذف من proxies وشبكات الهاتف.
+                const wsUrlWithToken = `${wsBase}/api/chat/ws?token=${encodeURIComponent(token)}`;
 
                 let socket = socketRef.current;
                 const isNewSocket = !socket || socket.readyState !== WebSocket.OPEN;
                 if (isNewSocket) {
-                    socket = new WebSocket(wsUrl, ['jwt', token]);
+                    socket = new WebSocket(wsUrlWithToken);
                     socketRef.current = socket;
                 }
 
@@ -965,13 +966,13 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         : normalizedConversationId;
                 }
 
-                const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-                const wsUrl = `${wsBase}/admin/api/chat/ws`;
+                // ISS-WS-001: token عبر query param — يعمل مع Codespaces/mobile/Brave.
+                const wsUrlWithToken = `${wsBase}/admin/api/chat/ws?token=${encodeURIComponent(token)}`;
 
                 let socket = socketRef.current;
                 const isNewSocket = !socket || socket.readyState !== WebSocket.OPEN;
                 if (isNewSocket) {
-                    socket = new WebSocket(wsUrl, ['jwt', token]);
+                    socket = new WebSocket(wsUrlWithToken);
                     socketRef.current = socket;
                 }
 

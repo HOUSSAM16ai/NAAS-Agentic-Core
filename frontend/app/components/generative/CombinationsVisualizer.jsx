@@ -176,7 +176,7 @@ export const CombinationsVisualizer = memo(({ props }) => {
                                 <div className="genui-comb-impossible" role="note">
                                     <i className="fas fa-ban genui-comb-impossible-icon" aria-hidden="true" />
                                     <span className="genui-comb-impossible-text">
-                                        {g.pedagogical_string || 'مستحيل (العدد المتوفر غير كافٍ لسحب المطلوب)'}
+                                        {g.pedagogical_string || 'مستحيل لهذا الصنف فقط (العدد المتوفر غير كافٍ لسحب المطلوب)'}
                                     </span>
                                 </div>
                             )}

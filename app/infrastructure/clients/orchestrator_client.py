@@ -1028,6 +1028,69 @@ class OrchestratorClient:
             ) or ProbabilityCalculatorSkill.is_confusion(_combined_text)
             _routing_mode = "MODE_B" if _is_deep_pedagogy else "MODE_A"
 
+            def _detect_focus_step(user_question: str) -> str | None:
+                """يحدِّد خطوة الشرح المطلوبة صراحةً لتخصيص الواجهة والنص المرافق."""
+                q = user_question.lower()
+                if "p(a" in q or "نفس اللون" in q or "same color" in q:
+                    return "same_color_event"
+                if "p(b" in q or "p(c" in q or "فردي" in q or "زوجي" in q:
+                    return "same_color_event"
+                if "شرطي" in q or "p_a" in q or "p a" in q:
+                    return "same_color_event"
+                if "x>1" in q or "e(x" in q or "الأمل" in q or "المتغير" in q:
+                    return "random_variable"
+                if "جداء" in q and ("معدوم" in q or "صفر" in q):
+                    return "sequential_zero_product"
+                if "فضاء" in q or "c(" in q or "تأليف" in q:
+                    return "sample_space"
+                return None
+
+            _focus_step_id = _detect_focus_step(question)
+
+            _is_no_model = getattr(result, "success", True) is False and getattr(
+                result, "reason", ""
+            ) == "no_model_extracted"
+            if (result is None or _is_no_model) and _focus_step_id and history_messages:
+                _history_context = " ".join(m.get("content", "") for m in history_messages)
+                _contextual_question = f"{_history_context} {question}".strip()
+                result = skill.analyze(
+                    ProbabilityInput(question=_contextual_question, history=history_messages)
+                )
+
+            _is_no_model = getattr(result, "success", True) is False and getattr(
+                result, "reason", ""
+            ) == "no_model_extracted"
+            if (result is None or _is_no_model) and _focus_step_id:
+                with contextlib.suppress(Exception):
+                    from app.services.capabilities.exercise_retrieval import (
+                        ExerciseRetrievalRequest,
+                        detect_exercise_retrieval,
+                        load_exercise_content,
+                    )
+
+                    _decision = detect_exercise_retrieval(
+                        ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                        history_messages=history_messages,
+                    )
+                    if _decision.recognized and _decision.matched_entry:
+                        _full = load_exercise_content(_decision.matched_entry)
+                        _contextual_question = f"{_full} {question}".strip()
+                        result = skill.analyze(
+                            ProbabilityInput(question=_contextual_question, history=history_messages)
+                        )
+
+            def _companion_text_for_focus(default_text: str) -> str:
+                """يبني نصاً مرافقاً موجهاً حسب طلب الطالب بدل تكرار عبارة عامة."""
+                if _focus_step_id == "same_color_event":
+                    return "سنشرح الآن خطوة الحدث المطلوب فقط مع ربطها بالواجهة مباشرة."
+                if _focus_step_id == "random_variable":
+                    return "سنركّز الآن على المتغير X وقانونه خطوة بخطوة داخل الواجهة."
+                if _focus_step_id == "sample_space":
+                    return "سنبدأ من فضاء العينة C(n,k) ثم نبني باقي النتائج عليه بصرياً."
+                if _focus_step_id == "sequential_zero_product":
+                    return "سنشرح خطوة الجداء المعدوم في السحب المتتالي مع منطق المتمم."
+                return default_text
+
             # V44.0 — AEK: استدعاء النواة التعليمية التكيّفية لإثراء الحمولة
             # بالحالة المعرفية والنية التربوية. غير حرج — أي فشل يُسجَّل ويُتجاوَز.
             _aek_state: dict[str, object] = {}
@@ -1059,7 +1122,7 @@ class OrchestratorClient:
                     # V38.0: MODE_B (confusion) keeps pipeline alive for deep narrative.
                     "terminate_pipeline": not _is_deep_pedagogy,
                     "routing_mode": _routing_mode,
-                    "companion_text": result.companion_text,
+                    "companion_text": _companion_text_for_focus(result.companion_text),
                     "props": {
                         "title": result.title,
                         "ui_mode": result.ui_mode,
@@ -1079,6 +1142,7 @@ class OrchestratorClient:
                             }
                             for s in result.exercise_steps
                         ],
+                        "focus_step_id": _focus_step_id,
                     },
                     "fallback_text": (
                         f"شرح بصري شامل: سحب {result.k} من {result.n} "
@@ -1098,7 +1162,7 @@ class OrchestratorClient:
                     # so the LLM can explain WHY the draw is impossible pedagogically.
                     "terminate_pipeline": not _is_deep_pedagogy,
                     "routing_mode": _routing_mode,
-                    "companion_text": result.companion_text,
+                    "companion_text": _companion_text_for_focus(result.companion_text),
                     "props": {
                         "title": result.title,
                         "ui_mode": result.ui_mode,
@@ -1146,6 +1210,8 @@ class OrchestratorClient:
                     # V30.0 — القصة البصرية الشاملة (Deep Dive storytelling).
                     "urn_state": result.urn_state,
                     "event_analysis": result.event_analysis,
+                    # طلب الطالب المركّز: يسمح للواجهة بإبراز جزء محدد بدل العرض العام.
+                    "focus_step_id": _focus_step_id,
                 }
                 return {
                     "component": "combinations_visualizer",
@@ -1153,7 +1219,7 @@ class OrchestratorClient:
                     # MODE_A terminates after the visual component (Text-Wall Muzzle).
                     "terminate_pipeline": not _is_deep_pedagogy,
                     "routing_mode": _routing_mode,
-                    "companion_text": "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄",
+                    "companion_text": _companion_text_for_focus("إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄"),
                     "props": props,
                     "fallback_text": (
                         f"سحب آني: اختيار {result.k} من {result.n} → "
@@ -1187,7 +1253,7 @@ class OrchestratorClient:
                     # MODE_A terminates after the visual component (Text-Wall Muzzle).
                     "terminate_pipeline": not _is_deep_pedagogy,
                     "routing_mode": _routing_mode,
-                    "companion_text": "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄",
+                    "companion_text": _companion_text_for_focus("إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄"),
                     "props": props,
                     "fallback_text": ("شجرة الاحتمالات (تعذّر عرض الرسم التفاعلي — هذا نص بديل)."),
                     "aek_state": _aek_state,

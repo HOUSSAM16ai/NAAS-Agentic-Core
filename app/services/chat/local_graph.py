@@ -621,8 +621,8 @@ async def _chat_node(state: LocalChatState) -> dict:
             from app.services.capabilities.exercise_retrieval import (
                 ExerciseRetrievalRequest,
                 detect_exercise_retrieval,
-                load_exercise_content,
                 format_exercise_for_display,
+                load_exercise_content,
             )
             _retrieval_decision = detect_exercise_retrieval(
                 ExerciseRetrievalRequest(question=question),

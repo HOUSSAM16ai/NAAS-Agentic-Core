@@ -5,8 +5,8 @@ Protocol V19.0 §4 — Auto-Triggering UI Live Test (Frustration + Math Router).
 يُثبت حيّاً أن النظام:
   1. يكشف الإحباط ("مفهمتش كيفاش حسبنا الاحتمال") — Frustration Detector.
   2. يكشف "دفعة واحدة" (سحب آني) — Pedagogical Math Router.
-  3. لا يُنتج شجرة احتمالات تتابعية (probability_tree) للسحب الآني، بل يوجّه إلى
-     combinations_visualizer (تأليفي C_n^k) — لا كارثة تربوية.
+  3. لا يُنتج شجرة احتمالات تتابعية (probability_tree) للسحب الآني.
+     يوجّه إلى واجهة تأليفية موثوقة: combinations_visualizer أو full_exercise_story.
   4. الجذر بلا احتمال وهمي 1/1، ولا كسور منحلّة (1/0).
 
 المسار:
@@ -129,10 +129,14 @@ def main() -> int:
     else:
         print("  ❌ لم يُكشَف السحب الآني.")
         ok = False
-    if component == "combinations_visualizer":
-        print("  ✅ وُجِّه إلى combinations_visualizer (تأليفي) — لا شجرة تتابعية.")
+    valid_components = {"combinations_visualizer", "full_exercise_story"}
+    if component in valid_components:
+        print(
+            "  ✅ وُجِّه إلى واجهة بيداغوجية صحيحة "
+            f"({component}) — لا شجرة تتابعية."
+        )
     else:
-        print(f"  ❌ وُجِّه إلى {component} بدل combinations_visualizer.")
+        print(f"  ❌ وُجِّه إلى {component} خارج المسار البيداغوجي المعتمد.")
         ok = False
     if component == "probability_tree" or "tree" in props:
         print("  ❌ كارثة تربوية: شجرة احتمالات للسحب الآني!")
@@ -141,12 +145,26 @@ def main() -> int:
         print("  ✅ لا شجرة احتمالات (probability_tree) للسحب الآني.")
     # math sanity
     if component == "combinations_visualizer":
-        if props.get("total_combinations") == 165 and props.get("same_group_favorable") == 14:
+        total = props.get("total_combinations")
+        favorable = props.get("same_group_favorable")
+    elif component == "full_exercise_story":
+        event_step = next(
+            (s for s in props.get("exercise_steps", []) if s.get("step_id") == "same_color_event"),
+            None,
+        )
+        state = (event_step or {}).get("numerical_state", {})
+        total = state.get("total_combinations")
+        favorable = state.get("same_group_favorable")
+    else:
+        total = None
+        favorable = None
+
+    if component in valid_components:
+        if total == 165 and favorable == 14:
             print("  ✅ الحساب التأليفي صحيح: C(11,3)=165، P(3 من نفس اللون)=14/165.")
         else:
             print(
-                f"  ⚠️ قيم تأليفية غير متوقَّعة: {props.get('total_combinations')}, "
-                f"{props.get('same_group_favorable')}"
+                f"  ⚠️ قيم تأليفية غير متوقَّعة: {total}, {favorable}"
             )
 
     print("\n" + "=" * 76)

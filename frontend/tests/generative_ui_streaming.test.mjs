@@ -224,9 +224,9 @@ check('V30: color tokens mapped (urn balls)', /COLOR_TOKENS/.test(combSrc));
 const renderGroup = (g, k) => {
     const isPossible = g.is_possible !== false;
     if (isPossible) return { kind: 'formula', text: `C(${g.count},${k}) = ${g.favorable_combinations}` };
-    return { kind: 'pedagogical', text: g.pedagogical_string || 'مستحيل' };
+    return { kind: 'pedagogical', text: g.pedagogical_string || 'مستحيل لهذا الصنف فقط (العدد المتوفر غير كافٍ لسحب المطلوب)' };
 };
-const whiteGroup = { label: 'كرة بيضاء', count: 2, favorable_combinations: 0, is_possible: false, pedagogical_string: 'مستحيل (العدد المتوفر غير كافٍ لسحب المطلوب)' };
+const whiteGroup = { label: 'كرة بيضاء', count: 2, favorable_combinations: 0, is_possible: false, pedagogical_string: 'مستحيل لهذا الصنف فقط (العدد المتوفر غير كافٍ لسحب المطلوب)' };
 const redGroup = { label: 'كرة حمراء', count: 4, favorable_combinations: 4, is_possible: true };
 const wr = renderGroup(whiteGroup, 3);
 const rr = renderGroup(redGroup, 3);

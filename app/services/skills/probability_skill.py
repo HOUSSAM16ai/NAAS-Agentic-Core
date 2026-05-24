@@ -1030,7 +1030,7 @@ class ProbabilityCalculatorSkill:
 
     # ── السحب الآني (Combinatorics) — Protocol V19.0 §2.B ────────────────────────────
     # V30.0 — الرسالة التربوية للمجموعة المستحيلة (بدل C_n^k = 0 المضلِّل).
-    _SUBGROUP_IMPOSSIBLE_MSG: str = "مستحيل (العدد المتوفر غير كافٍ لسحب المطلوب)"
+    _SUBGROUP_IMPOSSIBLE_MSG: str = "مستحيل لهذا الصنف فقط (العدد المتوفر غير كافٍ لسحب المطلوب)"
 
     @classmethod
     def _color_for(cls, label: str) -> str:

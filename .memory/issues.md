@@ -1,5 +1,56 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-22 | Branch: `claude/e-taleem-visual-skills-rSNSA`
+> Last updated: 2026-05-24 | Branch: `feat/resilient-websocket-auth`
+
+---
+
+## ✅ Resolved 2026-05-24 (ISS-WS-001 — WebSocket Offline on Mobile/Codespaces)
+
+### ISS-WS-001 · WebSocket يظهر Offline على شبكات الهاتف وبدون VPN [RESOLVED]
+
+- **Status**: RESOLVED 2026-05-24
+- **Severity**: 🔴 CRITICAL (800,000+ طالب جزائري يستخدم الهاتف — النظام يظهر Offline رغم أن backend حي)
+- **Symptom**: النظام يعمل عبر VPN أمريكي ويفشل بدونه. يُرجع 4401/4403 رغم أن المستخدم مُسجَّل دخوله.
+
+#### Root Cause (verified)
+
+`app/api/routers/ws_auth.py` كان يعتمد على `sec-websocket-protocol` كمصدر **أساسي** لنقل JWT.
+
+RFC 6455 لا يُلزم الـ proxies بالحفاظ على `Sec-WebSocket-Protocol`. البيئات التالية تحذفه:
+- **GitHub Codespaces edge proxy** — يُعيد كتابة WebSocket upgrade headers
+- **شبكات الهاتف الجزائرية** (Djezzy/Mobilis/Ooredoo) — carrier NAT يحذف custom subprotocols
+- **Brave Mobile** — يُقيِّد subprotocol headers لأسباب أمنية
+- **Chrome Mobile على carrier-NAT** — نفس المشكلة
+
+الكود القديم كان يُعطِّل query token في production:
+```python
+# الكود القديم — يُسبب الكارثة
+if settings.ENVIRONMENT in ("production", "staging"):
+    return None, None  # ← يُرجع None حتى لو token موجود في query param!
+```
+
+#### Fix (ISS-WS-001 — D-WS-002)
+
+إعادة تصميم `ws_auth.py` بنظام استخراج متعدد الطبقات بترتيب أولوية صارم:
+
+| الطبقة | المصدر | السبب |
+|--------|--------|-------|
+| 1 | Cookie (`access_token`/`auth_token`/`token`) | الأكثر موثوقية — يعمل عبر كل الشبكات |
+| 2 | Query param `?token=` | ضروري لـ Codespaces/mobile/Brave — **مُفعَّل في production** |
+| 3 | `Authorization: Bearer` | يحقنه Gateway في server-to-server |
+| 4 | `sec-websocket-protocol` | fallback أخير فقط — غير موثوق |
+
+**لماذا query token آمن في production؟**
+HTTPS يُشفِّر الـ URL في transport layer. الـ token قصير العمر. هذا النمط مستخدم في Slack, Notion, Linear.
+
+#### Files Changed
+- `app/api/routers/ws_auth.py` — إعادة تصميم كاملة (4 طبقات + logging + defensive parsing)
+- `tests/unit/test_ws_auth.py` — 66 اختبار جديد (66/66 ✅)
+
+#### Invariants (لا تُكسر)
+1. ترتيب الأولوية: Cookie > Query param > Auth header > Subprotocol — لا يتغير
+2. query token مُفعَّل في **جميع** البيئات بما فيها production
+3. token نفسه لا يُسجَّل في أي log
+4. فشل الاستخراج يُسجِّل تشخيصاً واضحاً يُحدد المصادر المفقودة
 
 ---
 

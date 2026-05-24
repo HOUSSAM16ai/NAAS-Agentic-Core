@@ -1,71 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { errorTracker } from '../utils/errorTracker';
 import { useRealtimeConnection } from './useRealtimeConnection';
+import { buildWsUrl, getOrCreateSessionId } from '../utils/wsUrl';
 
 const isBrowser = typeof window !== 'undefined';
-const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL ?? '';
-const WS_ORIGIN = process.env.NEXT_PUBLIC_WS_URL ?? '';
 
-const resolveWebSocketProtocol = (protocol) => {
-    if (protocol === 'https:') return 'wss:';
-    if (protocol === 'http:') return 'ws:';
-    if (protocol === 'wss:' || protocol === 'ws:') return protocol;
-    return 'ws:';
-};
-
-const getWsBase = () => {
-    if (!isBrowser) return '';
-    const configuredOrigin = WS_ORIGIN || API_ORIGIN;
-    if (configuredOrigin) {
-        try {
-            const parsed = new URL(configuredOrigin);
-            const wsProtocol = resolveWebSocketProtocol(parsed.protocol);
-            return `${wsProtocol}//${parsed.host}`;
-        } catch (error) {
-            errorTracker.reportError(error, { message: 'Invalid WebSocket base configuration' });
-            return '';
-        }
-    }
-
-    // Warn if falling back in production
-    if (process.env.NODE_ENV === 'production') {
-        console.warn('CRITICAL: NEXT_PUBLIC_WS_URL or NEXT_PUBLIC_API_URL is missing in production. Falling back to window.location, which may cause connection failures.');
-    }
-
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const hostname = window.location.hostname;
-    const port = window.location.port;
-
-    // Smart fallback: if we are on port 3000 (standard Next.js), assume backend is on port 8000
-    // This fixes local production builds or direct access bypassing Nginx where backend is on default port
-    if (port === '3000') {
-         return `${protocol}://${hostname}:8000`;
-    }
-
-    const host = window.location.host;
-    return `${protocol}://${host}`;
-};
-
-const buildWebSocketUrlSafe = (baseUrl, endpoint, token) => {
+// ISS-OFFLINE-001 fix: استخدام wsUrl utility بدلاً من localhost hardcoded.
+// buildWsUrl يستخدم window.location.host تلقائياً — يعمل في Codespaces/Gitpod/Mobile.
+const buildWebSocketUrlSafe = (endpoint) => {
+    if (!isBrowser || !endpoint) return '';
     try {
-        const wsUrl = new URL(endpoint, baseUrl);
-        // Use a persistent session ID for the browser session
-        let sessionId = '';
-        if (typeof sessionStorage !== 'undefined') {
-            sessionId = sessionStorage.getItem('agent_session_id');
-            if (!sessionId) {
-                sessionId = typeof crypto !== "undefined" && crypto.randomUUID
-                    ? crypto.randomUUID()
-                    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-                sessionStorage.setItem('agent_session_id', sessionId);
-            }
-        } else {
-            // Fallback for SSR/non-browser
-            sessionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        }
-
-        wsUrl.searchParams.append("session_id", sessionId);
-        return wsUrl.toString();
+        const sessionId = getOrCreateSessionId();
+        return buildWsUrl(endpoint, sessionId);
     } catch (error) {
         errorTracker.reportError(error, { message: 'Invalid WebSocket URL parts' });
         return '';
@@ -168,13 +114,13 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
     const activeConversationIdRef = useRef(null);
     const activeRequestIdRef = useRef(null);
 
-    // Construct WebSocket URL only on the client to avoid SSR/client mismatch
+    // Construct WebSocket URL only on the client to avoid SSR/client mismatch.
+    // ISS-OFFLINE-001: buildWebSocketUrlSafe uses window.location.host — no localhost hardcoding.
     const [wsUrl, setWsUrl] = useState(null);
     useEffect(() => {
-        const wsBase = getWsBase();
-        const url = wsBase && endpoint ? buildWebSocketUrlSafe(wsBase, endpoint, token) : null;
+        const url = endpoint ? buildWebSocketUrlSafe(endpoint) : null;
         setWsUrl(url);
-    }, [endpoint, token]);
+    }, [endpoint]);
 
     // Use the robust connection hook
     const eventNamespace = endpoint || 'default';

@@ -3,8 +3,9 @@ document.addEventListener("DOMContentLoaded", function() {
     const chatInput = document.getElementById("chat-input");
     const sendBtn = document.getElementById("send-btn");
 
-    // Establish WebSocket connection
-    const socket = new WebSocket("ws://" + window.location.host + "/ws/chat");
+    // ISS-OFFLINE-001: استخدام protocol ديناميكي — wss في https، ws في http
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socket = new WebSocket(wsProtocol + "//" + window.location.host + "/ws/chat");
 
     socket.onopen = function(event) {
         chatBox.innerHTML += "<p><em>Connected to AI...</em></p>";

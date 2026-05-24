@@ -408,8 +408,9 @@ else
         --host 0.0.0.0 \
         --port "$APP_PORT" \
         --ws websockets \
-        --ws-ping-interval 300 \
-        --ws-ping-timeout 300 \
+        --ws-ping-interval 20 \
+        --ws-ping-timeout 30 \
+        --timeout-keep-alive 75 \
         --reload \
         --log-level info &
 
@@ -989,6 +990,10 @@ launch_conversation_service() {
     python -m uvicorn microservices.conversation_service.main:app \
         --host 0.0.0.0 \
         --port "$CONV_PORT" \
+        --ws websockets \
+        --ws-ping-interval 20 \
+        --ws-ping-timeout 30 \
+        --timeout-keep-alive 75 \
         --log-level info \
         --no-access-log \
         >> "$CONV_LOG" 2>&1 &

@@ -7,6 +7,7 @@ from . import (
     observability,
     security,
     ums,
+    ws_proxy,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "observability",
     "security",
     "ums",
+    "ws_proxy",
 ]

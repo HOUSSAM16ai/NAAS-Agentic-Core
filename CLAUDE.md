@@ -5775,3 +5775,110 @@ Codespaces/CI** (الـ sandbox يحجب تثبيت التبعيات + egress �
 
 ### Live verification
 تم التحقق الحي بعد التطبيق مباشرة: اختفاء حالة `offline` واستمرار الاتصال بشكل مستقر.
+
+---
+
+## Session 2026-05-24 — ISS-OFFLINE-001 Root Cause Fix: WebSocket Gateway Routing
+
+### Root Cause (النهائي)
+
+التحقيق الحي كشف أن المشكلة لم تكن في keepalive — بل في **architectural routing failure**:
+
+```
+curl -I http://localhost:8000/api/chat/ws  → 403 Forbidden  (بدون token)
+curl -I http://localhost:8003/chat/ws      → 101 Switching Protocols ✅
+```
+
+**سلسلة الفشل الكاملة:**
+1. Frontend يبني `ws://[host]/api/chat/ws` باستخدام `window.location.host`
+2. في Codespaces/Gitpod: المتصفح يصل عبر proxy خارجي → يضرب Next.js على port 3000
+3. Next.js rewrites (`/api/:path*` → `8000/api/:path*`) تعمل فقط مع HTTP — **لا تُمرِّر WebSocket upgrade headers**
+4. Gateway (8000) كان يملك `/api/chat/ws` لكن يُرجع 403 بدون token في upgrade request
+5. WebSocket الحقيقي على `8003/chat/ws` يعمل لكن Frontend لا يعرف عنه
+6. VPN غيَّر network path وسمح بالاتصال المباشر → وهم أن المشكلة حُلَّت بـ keepalive
+
+### Architectural Fix
+
+**`app/api/routers/ws_proxy.py`** — WebSocket reverse proxy جديد:
+- يستقبل WebSocket على `8000/api/chat/ws`
+- يُمرِّره إلى `8003/chat/ws` مع الحفاظ على subprotocols (jwt, token)
+- يُمرِّر `8000/admin/api/chat/ws` → `8003/admin/chat/ws`
+- مُسجَّل أولاً في registry قبل `customer_chat.router`
+
+**`frontend/app/utils/wsUrl.js`** — WebSocket URL utility:
+- `buildWsUrl(endpoint)` يستخدم `window.location.host` دائماً
+- يكتشف Codespaces/Gitpod/Replit تلقائياً
+- ممنوع استخدام localhost أو port hardcoding
+
+**`frontend/app/hooks/useRealtimeConnection.js`** — State machine محسَّن:
+- حالات: `idle → connecting → connected → degraded → reconnecting → offline → recovered`
+- D-WS-002: لا يُعلَن عن `offline` إلا بعد 10 محاولات فاشلة
+- Heartbeat: ping/pong كل 25 ثانية للكشف عن stale connections
+- Exponential backoff مع jitter (500ms → 30s)
+
+### Permanent Rules (D-WS-001, D-WS-002)
+
+- **D-WS-001**: `404 on websocket endpoint = architectural routing failure`
+- **D-WS-001**: كل WebSocket يجب أن يمر عبر Gateway (8000) عبر ws_proxy
+- **D-WS-001**: ممنوع استخدام localhost أو port hardcoding في browser runtime
+- **D-WS-002**: لا يُعلَن عن `offline` إلا بعد WebSocket failure + reconnect exhaustion
+
+---
+
+## Realtime Infrastructure Rules (D-WS-001 — إلزامي لجميع Agents)
+
+### قوانين WebSocket المعمارية
+
+**ممنوع منعاً باتاً:**
+- ❌ إنشاء WebSocket endpoints مباشرة في frontend بدون gateway routing موحد
+- ❌ استخدام `localhost` أو `127.0.0.1` داخل browser runtime
+- ❌ hardcode أي port رقم داخل browser JavaScript
+- ❌ الاعتماد على Next.js rewrites لتمرير WebSocket (لا تعمل مع WS upgrade)
+- ❌ إعلان `offline` قبل استنفاد reconnect attempts
+
+**إلزامي:**
+- ✅ جميع WebSocket routes تمر عبر `app/api/routers/ws_proxy.py` على Gateway (8000)
+- ✅ استخدام `window.location.host` دائماً (يعمل في Codespaces/Gitpod/Mobile/VPN)
+- ✅ استخدام `frontend/app/utils/wsUrl.js:buildWsUrl()` لبناء WebSocket URLs
+- ✅ كل WebSocket جديد يجب أن يدعم: heartbeat + ping/pong + exponential reconnect + graceful degradation
+- ✅ `ws_proxy.router` يجب أن يكون أول router في `base_router_registry()`
+
+### قانون التشخيص
+
+```bash
+# تشخيص سريع لأي مشكلة WebSocket:
+curl -I -H "Upgrade: websocket" -H "Connection: Upgrade" \
+     -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+     -H "Sec-WebSocket-Version: 13" \
+     http://localhost:8000/api/chat/ws
+
+# 101 = يعمل ✅
+# 403 = يعمل لكن يحتاج token (مقبول)
+# 404 = D-WS-001 VIOLATION — architectural routing failure ❌
+```
+
+### WebSocket Ownership Map
+
+```
+Browser
+  ↓ wss://[host]/api/chat/ws
+Gateway :8000  (ws_proxy.py)
+  ↓ ws://localhost:8003/chat/ws
+Conversation Service :8003  (main.py @app.websocket("/chat/ws"))
+```
+
+### Offline Declaration Rules (D-WS-002)
+
+لا يُعلَن عن `offline` إلا بعد:
+1. WebSocket failure (onclose/onerror)
+2. 10 محاولات reconnect فاشلة (MAX_RETRIES)
+3. قبل ذلك: الحالة هي `reconnecting` وليس `offline`
+
+### uvicorn WebSocket Settings (إلزامي)
+
+```bash
+--ws websockets          # backend مستقر
+--ws-ping-interval 20    # ping كل 20 ثانية
+--ws-ping-timeout 30     # انتظر pong 30 ثانية
+--timeout-keep-alive 75  # keep-alive للشبكات المتذبذبة
+```

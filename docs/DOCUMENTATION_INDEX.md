@@ -18,6 +18,7 @@
 ### للمطورين
 - **[README.md](README.md)** - نظرة عامة على المشروع
 - **[CODESPACES_TEST_GUIDE.md](CODESPACES_TEST_GUIDE.md)** - العمل على Codespaces
+- **[WEBSOCKET_INFRASTRUCTURE.md](WEBSOCKET_INFRASTRUCTURE.md)** - بنية WebSocket الكاملة + Troubleshooting (D-WS-001)
 
 ---
 

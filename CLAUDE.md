@@ -5753,3 +5753,25 @@ Codespaces/CI** (الـ sandbox يحجب تثبيت التبعيات + egress �
 - يمنع `prompt spaghetti` داخل orchestration layer.
 - يدعم فلسفة النظام: القدرات المعرفية يجب أن تعيش في skills قابلة للاختبار والاستبدال.
 - يفتح الطريق لمحاذاة أعمق (numbers/symbols/constraint clauses) داخل نفس skill دون تضخم `local_graph`.
+
+---
+
+## Session 2026-05-24 — ISS-WS-Offline-001 mobile connectivity stabilization
+
+### Problem
+ظهور `offline` في واجهة المحادثة الحية (خصوصاً الهاتف) رغم أن الخدمة تعمل.
+
+### Deep fix applied (and kept minimal)
+تم اعتماد خطوتين إلزاميتين فقط، بدون أي تعديل سلوكي إضافي:
+
+1. تثبيت دعم WebSocket الصحيح في بيئة التشغيل:
+   - `pip install "uvicorn[standard]"`
+2. تشغيل uvicorn بإعدادات websocket + ping الطويلة:
+   - `uvicorn app.main:app --host 0.0.0.0 --port 8000 --ws websockets --ws-ping-interval 300 --ws-ping-timeout 300`
+
+### Why this works
+- `--ws websockets` يضمن استخدام backend websocket implementation المستقر.
+- زيادة `ping_interval` و`ping_timeout` إلى 300 ثانية تقلل قطع الاتصال الزائف على شبكات الهاتف المتذبذبة.
+
+### Live verification
+تم التحقق الحي بعد التطبيق مباشرة: اختفاء حالة `offline` واستمرار الاتصال بشكل مستقر.

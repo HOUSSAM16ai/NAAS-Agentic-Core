@@ -2141,3 +2141,19 @@ connectivity confirmed. Supabase live row-insert deferred to Codespaces
 - **الإجراء المقترح**:
   1. تثبيت/ترقية نسخة LangGraph المتوافقة، أو
   2. إضافة إعداد موحّد في pytest لتصفية هذا التحذير المحدد فقط على مستوى المستودع.
+
+## ISS-WS-Offline-001 — WebSocket offline indicator on mobile (2026-05-24) [RESOLVED]
+
+**Symptom**: الواجهة كانت تُظهر `offline` بشكل متكرر خصوصاً على الهاتف أثناء جلسات الدردشة الحيّة.
+
+**Root cause**: تشغيل backend بدون stack WebSocket المناسب + مهلات ping قصيرة تؤدي لانقطاع heartbeat على الشبكات المحمولة.
+
+**Applied fix (exactly as validated live)**:
+1. تثبيت دعم WebSocket الكامل لـ Uvicorn:
+   - `pip install "uvicorn[standard]"`
+2. تشغيل الخادم بإعدادات WebSocket صريحة ومهلات ping ممتدة:
+   - `uvicorn app.main:app --host 0.0.0.0 --port 8000 --ws websockets --ws-ping-interval 300 --ws-ping-timeout 300`
+
+**Live verification outcome**: اختفت حالة `offline` بعد تطبيق الخطوتين فقط، مع ثبات الاتصال أثناء الاستخدام الفعلي على الهاتف.
+
+**Operational note**: أي تشغيل بديل لا يمر بهذه الخيارات قد يعيد السلوك المتقطع نفسه على الشبكات غير المستقرة.

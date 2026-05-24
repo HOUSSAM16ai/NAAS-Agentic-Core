@@ -17,7 +17,13 @@ fi
 
 # 4) start backend
 echo "Starting uvicorn..."
-uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --reload > uvicorn.log 2>&1 &
+uvicorn app.main:app \
+  --host 0.0.0.0 \
+  --port ${PORT:-8000} \
+  --ws websockets \
+  --ws-ping-interval 300 \
+  --ws-ping-timeout 300 \
+  --reload > uvicorn.log 2>&1 &
 sleep 2
 
 # 5) show status

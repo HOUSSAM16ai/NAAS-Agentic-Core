@@ -69,6 +69,7 @@ def _is_textual_explain_request(question: str) -> bool:
     """يكشف طلب الشرح النصي الصريح — يُعطِّل LaTeX في system prompt."""
     return any(p.search(question) for p in _COMPILED_TEXTUAL)
 
+
 # ISS-075 (D-063): تطبيقات regex الـ greeting يجب أن تسمح بكلمات إضافية
 # قبل الإصلاح: `^(السلام)[\s\W]*$` يفشل عند "السلام عليكم" لأن "عليكم"
 # ليست في `[\s\W]`. نتيجة: التحية تُصنَّف كـ `general` → الـ LLM يُولد
@@ -131,7 +132,14 @@ _SYSTEM_PROMPTS = {
         "- استخدم التشبيهات والأمثلة الملموسة لتثبيت المفهوم\n"
         "- إذا كان السؤال غامضاً، اطرح توضيحاً قبل الإجابة\n"
         "- لا تختصر — الطالب يحتاج الفهم الكامل\n"
-        "- شجّع الطالب وأكد له أن الرياضيات ممتعة وليست صعبة"
+        "- شجّع الطالب وأكد له أن الرياضيات ممتعة وليست صعبة\n\n"
+        "## قواعد الجودة الإلزامية (مضاد الكوارث)\n"
+        "- التزم حرفياً بمعطيات التمرين ولا تُضِف لوناً أو رقماً غير موجود في النص.\n"
+        "- امنع التكرار: لا تعِد نفس الفقرة أو نفس القائمة بصياغات متشابهة.\n"
+        "- عند طلب «شجرة احتمالات»، ابنِ سحباً متتالياً بدون إرجاع مع فروع واضحة واحتمالات كل مستوى.\n"
+        "- ميّز بين «سحب دفعة واحدة» (توافيق) و«سحب متتالٍ» (شجرة/احتمالات شرطية).\n"
+        "- إذا ظهر تناقض في نصّ الطالب، اذكره بلطف ثم أكمل الحل على فرضية صريحة.\n"
+        "- اختم كل حل بـ «تحقّق سريع» عددي يثبت النتيجة (مثل: مجموع الاحتمالات = 1)."
     ),
     "general": (
         "أنت مساعد ذكي متخصص في خدمة الطلاب الجزائريين.\n"
@@ -231,6 +239,110 @@ _CHAT_META_PATTERNS = [
 ]
 
 
+def _normalize_for_dedup(text: str) -> str:
+    """يُطبّع الفقرة لأغراض كشف التكرار دون تغيير النص الأصلي."""
+    collapsed = _re_sanitize.sub(r"\s+", " ", text).strip()
+    # توحيد بسيط للترقيم العربي/اللاتيني لتقليل false negatives
+    return collapsed.replace("—", "-").replace("–", "-")
+
+
+def _token_signature(text: str) -> frozenset[str]:
+    """يبني بصمة كلمات مستقرة لكشف التكرار شبه المتطابق."""
+    return frozenset(tok for tok in _re_sanitize.findall(r"\w+", text.lower()) if len(tok) >= 2)
+
+
+def _is_long_educational_scaffold(norm: str, raw: str) -> bool:
+    """يحدد إن كانت الكتلة قالباً تعليمياً طويلاً قابلاً للتكرار الكارثي."""
+    lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    has_steps = bool(_re_sanitize.search(r"(^|\n)\s*(\d+[).]|[-*•])\s*", raw))
+    return len(norm) >= 140 and len(lines) >= 4 and has_steps
+
+
+def _is_near_duplicate(sig_a: frozenset[str], sig_b: frozenset[str], threshold: float = 0.82) -> bool:
+    """مقارنة تشابه Jaccard لكشف نسخة مكررة بصياغة سطحية مختلفة."""
+    if not sig_a or not sig_b:
+        return False
+    inter = len(sig_a & sig_b)
+    union = len(sig_a | sig_b)
+    if union == 0:
+        return False
+    return (inter / union) >= threshold
+
+
+def _build_precision_guardrail(question: str, intent: str) -> str:
+    """يبني حارس دقة موجزاً مرتبطاً بسؤال الطالب للحد من الانحراف/الهلوسة."""
+    if intent not in ("educational", "general"):
+        return ""
+    q = question.strip()
+    if not q:
+        return ""
+    numbers = _re_sanitize.findall(r"\b\d+\b", q)
+    arabic_colors = [c for c in ("بيضاء", "حمراء", "خضراء", "زرقاء", "سوداء", "صفراء") if c in q]
+    key_terms = [t for t in ("احتمالات", "شجرة", "بدون إرجاع", "احتمال شرطي", "تمرين") if t in q]
+    constraints: list[str] = [
+        "- لا تخترع معطيات جديدة غير موجودة في سؤال الطالب.",
+        "- إذا كان هناك نقص أو تناقض في المعطيات، صرّح بالفرضية قبل الحساب.",
+        "- لا تكرر نفس الفقرة/القائمة بصياغة مختلفة.",
+    ]
+    if numbers:
+        constraints.append(f"- الأعداد المذكورة في السؤال (مرجع إلزامي): {', '.join(numbers[:12])}.")
+    if arabic_colors:
+        constraints.append(f"- الألوان المذكورة في السؤال (مرجع إلزامي): {', '.join(arabic_colors)}.")
+    if key_terms:
+        constraints.append(f"- المفاهيم المطلوبة: {', '.join(key_terms)}.")
+    if "شجرة" in q:
+        constraints.append("- عند طلب شجرة احتمالات: قدّم سحباً متتالياً بفروع واحتمال كل فرع.")
+    return "## حارس الدقة المرتبط بالسؤال\n" + "\n".join(constraints)
+
+
+def _strip_unrequested_color_lines(question: str, answer: str, intent: str) -> str:
+    """يحذف سطور ألوان مخترعة في مسائل الاحتمالات إذا لم تَرِد في السؤال."""
+    try:
+        from app.services.skills import (
+            ExerciseAlignmentInput,
+            get_exercise_alignment_skill,
+        )
+
+        aligned = get_exercise_alignment_skill().align(
+            ExerciseAlignmentInput(question=question, answer=answer, intent=intent)
+        )
+        return aligned.aligned_answer
+    except Exception:
+        return answer
+
+
+def _dedupe_repeated_blocks(text: str) -> str:
+    """يحذف الفقرات/السطور المتطابقة المتجاورة لمنع تكرار الردود الكارثي.
+
+    يعتمد على قاعدة بسيطة وحتمية:
+    - تقسيم النص إلى blocks بواسطة سطر فارغ.
+    - إسقاط أي block متطابق مع آخر block مُحتفَظ به (بعد التطبيع).
+    """
+    blocks = [b.strip() for b in text.split("\n\n")]
+    kept: list[str] = []
+    last_norm = ""
+    last_tail_norm = ""
+    seen_long_scaffolds: list[frozenset[str]] = []
+    for block in blocks:
+        if not block:
+            continue
+        norm = _normalize_for_dedup(block)
+        if norm and (norm == last_norm or (last_tail_norm and norm == last_tail_norm)):
+            continue
+        if _is_long_educational_scaffold(norm, block):
+            sig = _token_signature(norm)
+            if any(_is_near_duplicate(sig, seen_sig) for seen_sig in seen_long_scaffolds):
+                continue
+            seen_long_scaffolds.append(sig)
+        kept.append(block)
+        last_norm = norm
+        lines = block.splitlines()
+        last_tail_norm = _normalize_for_dedup("\n".join(lines[1:])) if len(lines) >= 2 else ""
+    if not kept:
+        return text
+    return "\n\n".join(kept).strip()
+
+
 def _sanitize_local_graph_response(text: str, intent: str) -> str:
     """ISS-075 (D-063): ينظف foreign-script + chat meta-narration من ردود local_graph.
 
@@ -260,7 +372,8 @@ def _sanitize_local_graph_response(text: str, intent: str) -> str:
             out = out.lstrip()
             if out == prev:
                 break
-    return out
+    # 6. إزالة التكرار المتجاور الذي يظهر أحياناً في الإجابات الطويلة
+    return _dedupe_repeated_blocks(out)
 
 
 def _apply_answer_quality_skill(question: str, answer: str, intent: str) -> str:
@@ -617,6 +730,7 @@ async def _chat_node(state: LocalChatState) -> dict:
     # وليس تمريناً مُولَّداً من LLM.
     if intent == "educational":
         import contextlib as _ctx
+
         with _ctx.suppress(Exception):
             from app.services.capabilities.exercise_retrieval import (
                 ExerciseRetrievalRequest,
@@ -624,6 +738,7 @@ async def _chat_node(state: LocalChatState) -> dict:
                 format_exercise_for_display,
                 load_exercise_content,
             )
+
             _retrieval_decision = detect_exercise_retrieval(
                 ExerciseRetrievalRequest(question=question),
                 history_messages=history,
@@ -646,13 +761,17 @@ async def _chat_node(state: LocalChatState) -> dict:
         _effective_intent = "educational_textual"
         logger.info("local_graph.chat_node textual_explain_mode activated")
 
-    system_prompt = _SYSTEM_PROMPTS.get(_effective_intent, _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"]))
-
+    system_prompt = _SYSTEM_PROMPTS.get(
+        _effective_intent, _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"])
+    )
     history_text = _format_history(history)
     if history_text:
         user_message = f"سياق المحادثة السابقة:\n{history_text}\n\nالسؤال الحالي: {question}"
     else:
         user_message = question
+    precision_guardrail = _build_precision_guardrail(user_message, intent)
+    if precision_guardrail:
+        system_prompt = f"{system_prompt}\n\n{precision_guardrail}"
 
     import contextlib
 
@@ -673,6 +792,8 @@ async def _chat_node(state: LocalChatState) -> dict:
     try:
         response = await ai_client.send_message(system_prompt, user_message)
         clean = response.replace("\x00", "").strip()
+        # D-090: إزالة أسطر ألوان غير مطلوبة من سياق السؤال (احتمالات)
+        clean = _strip_unrequested_color_lines(user_message, clean, intent)
         # ISS-075 D-063: تنظيف foreign-script + chat meta-narration
         clean = _sanitize_local_graph_response(clean, intent)
         # D-073: AnswerQualitySkill — آخر طبقة دفاع (يحل ZOMBIE skill من D-072)
@@ -870,13 +991,18 @@ async def run_local_graph_stream(
         _effective_intent = "educational_textual"
         logger.info("local_graph.stream textual_explain_mode activated")
 
-    system_prompt = _SYSTEM_PROMPTS.get(_effective_intent, _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"]))
+    system_prompt = _SYSTEM_PROMPTS.get(
+        _effective_intent, _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"])
+    )
     history_text = _format_history(history)
     user_message = (
         f"سياق المحادثة السابقة:\n{history_text}\n\nالسؤال الحالي: {sanitized}"
         if history_text
         else sanitized
     )
+    precision_guardrail = _build_precision_guardrail(user_message, intent)
+    if precision_guardrail:
+        system_prompt = f"{system_prompt}\n\n{precision_guardrail}"
 
     obs = None
     span_ctx = None

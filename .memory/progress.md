@@ -1917,3 +1917,50 @@ cogniforge_pipeline_invocations_total{mode="full"} 2.0
 - **الملفات**: `app/services/skills/output_firewall.py` (جديد) | `app/services/skills/topic_lock.py` (جديد) | `app/services/skills/__init__.py` | `app/services/chat/local_graph.py` | `app/api/routers/customer_chat.py` | `tests/test_output_firewall_v46.py` | `CLAUDE.md` | `.memory/decisions.md` | `.memory/progress.md`.
 
 
+
+## ✅ Session: 2026-05-24 — D-090/D-091: Full-path exercise alignment hardening
+
+- **المشكلة التشغيلية**: في أسئلة المتابعة القصيرة (مثل: "اشرح المطلوب") كان النظام يبني حارس الدقة من السؤال الأخير فقط، ما يسمح بانجراف جزئي عن معطيات التمرين الأصلية. كما ظهرت حالة اختلاق ألوان غير موجودة في السؤال ضمن شرح الاحتمالات.
+
+- **الإصلاحات المنفذة**:
+  1. **D-091**: ربط `_build_precision_guardrail` بالسياق المركّب الكامل (`history + السؤال الحالي`) داخل:
+     - `_chat_node`
+     - `run_local_graph_stream`
+  2. **D-090**: إضافة `_strip_unrequested_color_lines` في `local_graph.py` لإزالة أي سطر يذكر ألواناً غير موجودة في سؤال الاحتمالات.
+
+- **التحقق الحي (End-to-End)**:
+  - `python scripts/test_auto_ui_trigger.py` ✅
+    - confusion detector يعمل
+    - draw_mode = simultaneous عند "دفعة واحدة"
+    - التوجيه إلى `full_exercise_story` (وليس `probability_tree`)
+    - اتساق عددي: `C(11,3)=165` و `P=14/165`
+
+- **اختبارات الانحدار**:
+  - `TestPrecisionGuardrail` + `TestQuestionAlignmentSanitizer` + `TestCatastropheDeepScenarioRegression`
+  - جميع assertions تمر؛ التحذير الوحيد خارجي من تبعية LangGraph.
+
+- **الأثر**:
+  - تقليل drift في إجابات المتابعة
+  - منع اختلاق كيانات لونية في مسائل الاحتمالات
+  - الحفاظ على البنية التعليمية البصرية الصحيحة في السيناريو الحي
+
+## ✅ Session: 2026-05-24 — D-092: ExerciseAlignmentSkill extraction (deep skills architecture)
+
+- **الهدف**: نقل محاذاة معطيات التمرين من دالة محلية داخل `local_graph` إلى Skill رسمية مستقلة قابلة للقياس والتوسع.
+
+- **التنفيذ**:
+  - إنشاء `app/services/skills/exercise_alignment_skill.py` مع عقود Pydantic:
+    - `ExerciseAlignmentInput`
+    - `ExerciseAlignmentOutput`
+    - `ExerciseAlignmentSkill`
+  - ربط `local_graph._strip_unrequested_color_lines` بالـ Skill الجديدة بدل منطق inline.
+  - تحديث `app/services/skills/__init__.py` لتصدير skill الجديدة عبر public API.
+
+- **الفائدة المعمارية**:
+  - التزام أقوى بعقيدة: كل قدرة ذكاء = Skill مستقلة.
+  - قابلية اختبار أفضل (unit tests مستقلة للمهارة).
+  - قابلية توسعة: لاحقاً يمكن إضافة محاذاة أرقام/رموز/وحدات بنفس skill.
+
+- **التحقق**:
+  - اختبارات مهارة جديدة: `tests/services/test_exercise_alignment_skill.py`.
+  - اختبارات الانحدار السابقة لا تزال تعمل.

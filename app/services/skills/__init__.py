@@ -98,6 +98,12 @@ from app.services.skills.doctrine import (
     get_step_by_step_summary,
     list_all_doctrines,
 )
+from app.services.skills.exercise_alignment_skill import (
+    ExerciseAlignmentInput,
+    ExerciseAlignmentOutput,
+    ExerciseAlignmentSkill,
+    get_exercise_alignment_skill,
+)
 from app.services.skills.greeting_skill import (
     GreetingSkill,
     GreetingSkillFailure,
@@ -170,6 +176,9 @@ __all__ = [
     "BKTEvaluationInput",
     "CompositionItem",
     "ContaminationDetail",
+    "ExerciseAlignmentInput",
+    "ExerciseAlignmentOutput",
+    "ExerciseAlignmentSkill",
     "ExerciseStep",
     "FirewallInput",
     "FirewallOutput",
@@ -200,6 +209,7 @@ __all__ = [
     "get_bkt_engine",
     "get_content_invocation_summary",
     "get_detailed_explanation_summary",
+    "get_exercise_alignment_skill",
     "get_explanation_doctrine_summary",
     "get_model_answer_explanation_summary",
     "get_model_answer_reliance_summary",

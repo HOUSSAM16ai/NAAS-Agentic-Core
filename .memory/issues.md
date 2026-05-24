@@ -2131,3 +2131,13 @@ connectivity confirmed. Supabase live row-insert deferred to Codespaces
 
 **تحقق حي**: `scripts/v30_live_test.py` — 3/3 mandates PASS (OpenRouter HTTP 200).
 **Doctrine**: D-079 + CLAUDE.md §6.56.
+
+## Open issue — External warning gate noise (LangGraph deprecation)
+
+- **الوصف**: بعض تشغيلات pytest تُعلَن كـ fail حسب tests-policy رغم نجاح الاختبارات، بسبب تحذير خارجي:
+  `LangChainPendingDeprecationWarning` من `langgraph.checkpoint.base`.
+- **النوع**: اعتماد خارجي/بيئي (ليس regression وظيفي في الشفرة المعدلة).
+- **الأثر**: تشويش على إشارة الجودة (false-negative policy signal).
+- **الإجراء المقترح**:
+  1. تثبيت/ترقية نسخة LangGraph المتوافقة، أو
+  2. إضافة إعداد موحّد في pytest لتصفية هذا التحذير المحدد فقط على مستوى المستودع.

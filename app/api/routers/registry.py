@@ -15,7 +15,6 @@ from app.api.routers import (
     system,
     ums,
     visual_pedagogy,
-    ws_proxy,
 )
 
 type RouterSpec = tuple[APIRouter, str]
@@ -25,12 +24,12 @@ def base_router_registry() -> list[RouterSpec]:
     """
     يبني سجل الموجهات الأساسية للتطبيق بدون موجه البوابة.
 
-    D-WS-001: ws_proxy يجب أن يكون أول router مُسجَّل حتى يأخذ
-    الأولوية على customer_chat.router في مطابقة /api/chat/ws.
+    D-WS-003 (2026-05-24): ws_proxy مُعطَّل مؤقتاً.
+    customer_chat.router يملك /api/chat/ws مباشرة ويُرسل events بالـ format
+    الصحيح (assistant_delta, assistant_final, conversation_init).
+    ws_proxy كان يُمرِّر إلى conversation-service الذي يُرجع format مختلف.
     """
     return [
-        # WebSocket proxy — يجب أن يسبق customer_chat لأخذ الأولوية
-        (ws_proxy.router, ""),
         (system.root_router, ""),
         (system.router, ""),
         (admin.router, ""),

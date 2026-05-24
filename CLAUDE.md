@@ -5693,6 +5693,36 @@ Codespaces/CI** (الـ sandbox يحجب تثبيت التبعيات + egress �
 4. **TopicLock تحذيري**: لا يرفض الإجابات — يُسجِّل فقط.
 5. **العتبة = 0.6**: مجموع أوزان الأنماط المُكتشَفة ≥ 0.6 → رفض كامل.
 
+---
+
+## 6.62 WebSocket Auth — نظام الاستخراج متعدد الطبقات (2026-05-24, D-WS-002 · ISS-WS-001)
+
+### المشكلة (ISS-WS-001)
+
+النظام كان يظهر **Offline** على شبكات الهاتف الجزائرية وGitHub Codespaces بدون VPN، رغم أن backend حي تماماً. السبب: `ws_auth.py` كان يعتمد على `sec-websocket-protocol` كمصدر أساسي لـ JWT، وكان يُعطِّل query token في production.
+
+**البيئات المتضررة**: Djezzy/Mobilis/Ooredoo carrier-NAT، GitHub Codespaces edge proxy، Brave Mobile، Chrome Mobile.
+
+**السبب الجذري**: RFC 6455 لا يُلزم الـ proxies بالحفاظ على `Sec-WebSocket-Protocol`. الكود القديم كان يُرجع `None` للـ query token في production/staging.
+
+### الإصلاح (D-WS-002)
+
+`app/api/routers/ws_auth.py` أُعيد تصميمه بنظام 4 طبقات:
+
+| الأولوية | المصدر | متى يُستخدم |
+|----------|--------|------------|
+| 1 | Cookie (`access_token`/`auth_token`/`token`) | الأكثر موثوقية — كل الشبكات |
+| 2 | Query param `?token=` | Codespaces/mobile/Brave — **مُفعَّل في production** |
+| 3 | `Authorization: Bearer` | Gateway server-to-server |
+| 4 | `sec-websocket-protocol` | fallback أخير فقط |
+
+### القواعد الدائمة (D-WS-002 — لا تُكسر)
+
+- **ترتيب الأولوية ثابت**: Cookie > Query param > Auth header > Subprotocol. أي تغيير يكسر mobile/Codespaces.
+- **query token مُفعَّل في production**: لا تُعيد إضافة `if settings.ENVIRONMENT in ("production", "staging"): return None, None` — هذا هو root cause الأصلي.
+- **لا تسريب token في logs**: `_log_auth_failure` يُسجِّل وجود/غياب المصادر فقط، لا قيمها.
+- **sec-websocket-protocol هو fallback أخير فقط**: لا تُعيده إلى الأولوية الأولى.
+
 ### التحقق الحي (2026-05-23)
 
 - OutputFirewall: `<div>` يُنظَّف، JSX ثقيل يُرفض، LaTeX لا يُعتبر تلوثاً.

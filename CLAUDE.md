@@ -5700,3 +5700,56 @@ Codespaces/CI** (الـ sandbox يحجب تثبيت التبعيات + egress �
 - 25 اختباراً في `tests/test_output_firewall_v46.py` — جميعها تجتاز.
 - الـ backend يعمل على :8000 (`/health → ok`).
 
+
+---
+
+## Session 2026-05-24 — D-090/D-091 (LocalGraph full-path alignment)
+
+### Incident pattern
+في مسار المتابعة التعليمية، الطالب يرسل سؤالاً قصيراً بعد عرض تمرين كامل. إذا بُنِيَت guardrails من آخر سطر فقط، يضعف الالتصاق بمعطيات التمرين (year/colors/entities) ويزيد drift.
+
+### Implemented controls
+1. **D-091 — Context-bound Precision Guardrail**
+   - بناء `_build_precision_guardrail` من الرسالة المركّبة (history + current question) بدل السؤال الحالي وحده.
+   - مطبّق في: `_chat_node` و `run_local_graph_stream`.
+
+2. **D-090 — Probability Entity Alignment Sanitizer**
+   - إضافة `_strip_unrequested_color_lines(question, answer, intent)`.
+   - يمنع سطور الإجابة التي تُدخل ألواناً غير موجودة في معطيات سؤال الاحتمالات.
+   - يُطبّق مباشرة بعد توليد LLM وقبل بقية طبقات sanitation/quality/firewall.
+
+### Live verification (mandatory)
+- تم تنفيذ `scripts/test_auto_ui_trigger.py` بنجاح:
+  - confusion detected
+  - draw_mode=`simultaneous` عند "دفعة واحدة"
+  - route -> `full_exercise_story` (لا tree متتالية خاطئة)
+  - تحقق عددي: `C(11,3)=165` و `14/165`
+
+### Regression coverage
+- `tests/services/test_iss079_catastrophic_fixes.py`:
+  - `TestPrecisionGuardrail`
+  - `TestQuestionAlignmentSanitizer`
+  - `TestCatastropheDeepScenarioRegression`
+
+### Operational note
+إذا ظهر warning خارجي من LangGraph في pytest policy، يُسجَّل كاعتمادية خارجية ولا يُفسَّر كفشل وظيفي ما لم تفشل assertions نفسها.
+
+---
+
+## Session 2026-05-24 — D-092: Skillization of exercise alignment
+
+### Architectural upgrade
+تم استخراج منطق محاذاة معطيات تمرين الاحتمالات من `local_graph` إلى Skill رسمية:
+- `app/services/skills/exercise_alignment_skill.py`
+
+### Contracts
+- `ExerciseAlignmentInput(question, answer, intent)`
+- `ExerciseAlignmentOutput(aligned_answer, removed_lines, applied)`
+
+### Runtime integration
+`local_graph._strip_unrequested_color_lines` أصبح wrapper يستدعي skill الجديدة بشكل دفاعي.
+
+### Why this matters
+- يمنع `prompt spaghetti` داخل orchestration layer.
+- يدعم فلسفة النظام: القدرات المعرفية يجب أن تعيش في skills قابلة للاختبار والاستبدال.
+- يفتح الطريق لمحاذاة أعمق (numbers/symbols/constraint clauses) داخل نفس skill دون تضخم `local_graph`.

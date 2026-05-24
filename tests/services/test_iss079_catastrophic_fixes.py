@@ -229,3 +229,119 @@ class TestNoReasoningContentLeak:
                 f"ISS-079 showed this caused English thinking text to bleed into "
                 f"Arabic responses ('We need to respond as a brilliant professor...')."
             )
+
+
+class TestCatastropheDeepScenarioRegression:
+    """اختبار سيناريو حي مُصغّر: رسالة كارثية طويلة مع تكرار كتل."""
+
+    def test_sanitize_removes_adjacent_duplicate_blocks(self):
+        repeated_block = (
+            "🎲 مسألة احتمالات\n"
+            "شرح تفاعلي خطوة بخطوة\n"
+            "1) نحدد الفضاء الاحتمالي.\n"
+            "2) نطبق التوافيق.\n"
+            "3) نتحقق من النتيجة.\n"
+        )
+        raw = (
+            "Okay, the user asked for help.\n"
+            f"{repeated_block}\n\n"
+            f"{repeated_block}\n\n"
+            "النتيجة النهائية: صحيحة."
+        )
+        cleaned = _local_graph._sanitize_local_graph_response(raw, "educational")
+        assert cleaned.count("🎲 مسألة احتمالات") == 1
+        assert "النتيجة النهائية: صحيحة." in cleaned
+
+    def test_sanitize_keeps_non_adjacent_sections(self):
+        """لا نحذف فقرة قد تتكرر لاحقاً بعد فاصل معرفي مختلف."""
+        block_a = "عنوان A\nشرح مختصر."
+        block_b = "عنوان B\nشرح مختلف."
+        raw = f"{block_a}\n\n{block_b}\n\n{block_a}"
+        cleaned = _local_graph._sanitize_local_graph_response(raw, "educational")
+        assert cleaned.count("عنوان A") == 2
+        assert "عنوان B" in cleaned
+
+    def test_sanitize_removes_non_adjacent_long_marker_blocks(self):
+        """نحذف تكرار الكتل التعليمية الطويلة حتى لو كانت غير متجاورة."""
+        loop_block = (
+            "🎲 مسألة احتمالات\n"
+            "شرح تفاعلي خطوة بخطوة\n"
+            "1) نحدد الفضاء الاحتمالي.\n"
+            "2) نطبق التوافيق.\n"
+            "3) نتحقق من النتيجة.\n"
+            "تفصيل إضافي طويل لضمان تجاوز حد الطول المطلوب في de-dup."
+        )
+        bridge = "فقرة انتقالية جديدة غير مكررة."
+        raw = f"{loop_block}\n\n{bridge}\n\n{loop_block}"
+        cleaned = _local_graph._sanitize_local_graph_response(raw, "educational")
+        assert cleaned.count("🎲 مسألة احتمالات") == 1
+        assert bridge in cleaned
+
+    def test_sanitize_removes_near_duplicate_scaffold_without_fixed_markers(self):
+        """نحذف القالب الطويل حتى لو اختلف العنوان/الترقيم بشكل سطحي."""
+        block_1 = (
+            "مخطط حل التمرين\n"
+            "1) نحدد المعطيات الأساسية في نص السؤال.\n"
+            "2) نختار نموذج السحب المناسب ثم نكتب الفضاء.\n"
+            "3) نحسب باحترام شرط عدم الإرجاع خطوة بخطوة.\n"
+            "4) ننهي بتحقق عددي سريع يثبت تماسك النتيجة.\n"
+        )
+        block_2 = (
+            "خارطة حل المسألة\n"
+            "1) نحدد المعطيات الأساسية في نص السؤال.\n"
+            "2) نختار نموذج السحب المناسب ثم نكتب الفضاء.\n"
+            "3) نحسب باحترام شرط عدم الإرجاع خطوة بخطوة.\n"
+            "4) ننهي بتحقق عددي سريع يثبت تماسك النتيجة.\n"
+        )
+        raw = f"{block_1}\n\nفقرة وسيطة.\n\n{block_2}"
+        cleaned = _local_graph._sanitize_local_graph_response(raw, "educational")
+        assert cleaned.count("نحدد المعطيات الأساسية") == 1
+        assert "فقرة وسيطة." in cleaned
+
+
+class TestPrecisionGuardrail:
+    """تحقق أن حارس الدقة يربط الرد مباشرة بمعطيات سؤال الطالب."""
+
+    def test_build_precision_guardrail_includes_question_entities(self):
+        q = "تمرين احتمالات 2024: كرات بيضاء وحمراء وخضراء، اسحب 3 بدون إرجاع وارسم شجرة."
+        guard = _local_graph._build_precision_guardrail(q, "educational")
+        assert "حارس الدقة المرتبط بالسؤال" in guard
+        assert "2024" in guard
+        assert "3" in guard
+        assert "بيضاء" in guard and "حمراء" in guard and "خضراء" in guard
+        assert "شجرة احتمالات" in guard or "شجرة" in guard
+
+    def test_build_precision_guardrail_disabled_for_chat(self):
+        guard = _local_graph._build_precision_guardrail("السلام عليكم", "chat")
+        assert guard == ""
+
+    def test_build_precision_guardrail_reads_context_entities(self):
+        context = (
+            "سياق المحادثة السابقة:\n"
+            "تمرين 2024: كرات بيضاء وحمراء وخضراء.\n\n"
+            "السؤال الحالي: اشرح المطلوب."
+        )
+        guard = _local_graph._build_precision_guardrail(context, "educational")
+        assert "2024" in guard
+        assert "بيضاء" in guard and "حمراء" in guard and "خضراء" in guard
+
+
+class TestQuestionAlignmentSanitizer:
+    """D-090: منع اختلاق ألوان غير موجودة في نص التمرين."""
+
+    def test_strip_unrequested_color_lines_probability(self):
+        question = "تمرين احتمالات: لدينا كرات بيضاء وحمراء فقط."
+        answer = (
+            "لدينا كرات بيضاء وحمراء.\n"
+            "كما توجد كرات زرقاء وسوداء.\n"
+            "نحسب الآن الاحتمال المطلوب."
+        )
+        cleaned = _local_graph._strip_unrequested_color_lines(question, answer, "educational")
+        assert "زرقاء" not in cleaned and "سوداء" not in cleaned
+        assert "بيضاء" in cleaned and "حمراء" in cleaned
+
+    def test_strip_unrequested_color_lines_non_probability_untouched(self):
+        question = "اشرح الاشتقاق."
+        answer = "ألوان: حمراء وزرقاء."
+        cleaned = _local_graph._strip_unrequested_color_lines(question, answer, "educational")
+        assert cleaned == answer

@@ -19,6 +19,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.websockets import WebSocketState
 
 from app.api.routers.ws_auth import extract_websocket_auth
 from app.api.schemas.admin import (
@@ -64,6 +65,15 @@ class AdminUserCountResponse(BaseModel):
 def _is_text_event(event: dict[str, object]) -> bool:
     """يتحقق من أن الحدث نصي ومسموح بتجميعه داخل مخزن النص النهائي."""
     return str(event.get("type", "")) in TEXT_EVENT_TYPES
+
+
+def _ws_is_connected(websocket: WebSocket) -> bool:
+    """يتحقق من أن WebSocket لا يزال في حالة CONNECTED قبل أي send_json.
+
+    D-WS-FLAP-001: يمنع RuntimeError عند محاولة الإرسال على socket مغلق،
+    وهو السبب الجذري لنمط الـ flapping (يعمل → يتعطل → يعود).
+    """
+    return websocket.client_state == WebSocketState.CONNECTED
 
 
 def _bind_local_conversation_id(
@@ -553,6 +563,17 @@ async def chat_stream_ws(
                             "compatibility_facade": True,
                         },
                     ):
+                        # D-WS-FLAP-001: abort stream if client disconnected mid-turn.
+                        # Without this check, send_json raises RuntimeError which
+                        # escapes the task and corrupts the outer finally block state.
+                        if not _ws_is_connected(websocket):
+                            logger.info(
+                                "admin_chat.stream_aborted: client disconnected mid-stream "
+                                "(conversation_id=%s)",
+                                lc_id,
+                            )
+                            return
+
                         normalized_event = normalize_streaming_event(event)
 
                         # ISS-STREAM-001: تصفية أحداث noop (أحداث غير معروفة من orchestrator)
@@ -670,15 +691,27 @@ async def chat_stream_ws(
                 # ── Guaranteed terminal frame ──
                 # Exactly one terminal event (assistant_final or error) per turn,
                 # so the UI never hangs. `persisted` is emitted only after a real save.
-                await _emit_terminal_frames(
-                    websocket=websocket,
-                    pending_terminal_event=pending_terminal_event,
-                    assistant_message_persisted=assistant_message_persisted,
-                    complete_ai_response=complete_ai_response,
-                    stream_error=stream_error,
-                    local_conversation_id=local_conversation_id,
-                    stream_request_id=stream_request_id,
-                )
+                # D-WS-FLAP-001: wrapped in try/except — if the client disconnected
+                # mid-stream, send_json raises RuntimeError/WebSocketDisconnect.
+                # Without this guard the exception escapes finally, the loop retries
+                # receive_json on a dead socket, and the client sees a flapping pattern.
+                try:
+                    await _emit_terminal_frames(
+                        websocket=websocket,
+                        pending_terminal_event=pending_terminal_event,
+                        assistant_message_persisted=assistant_message_persisted,
+                        complete_ai_response=complete_ai_response,
+                        stream_error=stream_error,
+                        local_conversation_id=local_conversation_id,
+                        stream_request_id=stream_request_id,
+                    )
+                except (WebSocketDisconnect, RuntimeError) as _ws_close_err:
+                    logger.info(
+                        "admin_chat.terminal_frame_skipped: client already disconnected "
+                        "(conversation_id=%s err=%s)",
+                        local_conversation_id,
+                        type(_ws_close_err).__name__,
+                    )
 
                 # Close path-aware span exactly once per turn.
                 if assistant_message_persisted:

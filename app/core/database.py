@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.pool import NullPool
 
+# NullPool removed: replaced by small pool (pool_size=5) for Supabase — D-WS-FLAP-001
 from app.core.settings.base import BaseServiceSettings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -91,13 +91,22 @@ def create_db_engine(settings: BaseServiceSettings) -> AsyncEngine:
     connect_args["prepared_statement_cache_size"] = 0
 
     if is_supabase:
+        # D-WS-FLAP-001: NullPool opens a new TCP connection per session.
+        # Under concurrent WS turns (3-4 DB sessions each), this exhausts
+        # Supabase's connection limit (~60) and causes DB errors mid-stream,
+        # which propagate as WebSocket flapping.
+        # Fix: use a small pool (5 connections) with statement_cache_size=0
+        # to avoid DuplicatePreparedStatementError at the asyncpg level.
         logger.info(
-            f"Supabase database (NullPool, no prepared statements, port {url_obj.port}): {settings.SERVICE_NAME}"
+            f"Supabase database (pool_size=5, no prepared statements, port {url_obj.port}): {settings.SERVICE_NAME}"
         )
         return create_async_engine(
             db_url,
             echo=settings.DEBUG,
-            poolclass=NullPool,
+            pool_size=5,
+            max_overflow=5,
+            pool_pre_ping=True,
+            pool_recycle=300,
             connect_args=connect_args,
         )
 

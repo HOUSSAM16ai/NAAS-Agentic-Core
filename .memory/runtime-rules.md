@@ -36,6 +36,22 @@ Skill حقيقي = **import + call chain + runtime evidence + metrics + tests**
 - [ ] Fallback mode — يعمل بدون API key (mock responses, لا crash)
 - [ ] Live verification قبل الـ commit — `/health` + `/metrics` حياً
 
+### قوانين WebSocket Flapping — D-WS-FLAP-001 (2026-05-25)
+
+**السبب الجذري للـ flapping:** `_emit_terminal_frames` تُستدعى في `finally` بدون `try/except` — إذا قطع العميل الاتصال أثناء البث، `send_json` يرمي `RuntimeError` يُسقط من `finally` ويُخرب الـ loop.
+
+**القوانين الإلزامية:**
+1. **كل `send_json` في `finally` يجب أن يكون داخل `try/except (WebSocketDisconnect, RuntimeError)`**
+2. **كل `stream_and_forward` يجب أن تتحقق من `_ws_is_connected()` في بداية كل iteration**
+3. **لا `await` ثقيل (DB/LLM) قبل بدء البث — استخدم `asyncio.create_task()`**
+4. **Supabase + asyncpg = `pool_size=5, max_overflow=5` لا `NullPool`** — NullPool يُسبب connection exhaustion تراكمي
+
+**التحقق الحي (2026-05-25):**
+- 6 سيناريوهات: Customer 3 turns + mid-stream disc + Admin turn + Admin disc → **6/6 PASS**
+- LLM يرد بالعربية، `persisted` يصل، reconnect فوري بدون flapping
+
+---
+
 ### Anti-patterns محظورة (يُرفض الـ PR الذي يحتويها)
 - **Prompt Spaghetti**: prompt واحد يحاول أكثر من مسؤولية واحدة
 - **Direct Skill-to-Skill import**: `from microservices.planning_agent import ...` داخل `research_agent`

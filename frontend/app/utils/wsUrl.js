@@ -16,6 +16,13 @@
  *   - ws:// في http، wss:// في https
  *   - دعم NEXT_PUBLIC_WS_URL للتهيئة الصريحة
  *
+ * ISS-WS-CODESPACES (2026-05-25):
+ *   في GitHub Codespaces، frontend/server.js يعمل على port 5000 ويُمرِّر
+ *   /api/chat/ws داخلياً إلى ws://127.0.0.1:8000.
+ *   الكود القديم كان يستبدل -5000. بـ -8000. في الـ URL → يتجاوز server.js →
+ *   يتصل بـ port 8000 مباشرة → يُخفق (CORS/auth/proxy مشاكل).
+ *   الحل: في Codespaces، أعِد window.location.host (port 5000) → server.js يُمرِّر.
+ *
  * ## قانون معماري (D-WS-001):
  *   ممنوع استخدام localhost داخل browser runtime.
  *   ممنوع hardcode أي port داخل browser runtime.
@@ -74,17 +81,19 @@ export const getCloudBackendHost = () => {
     const host = window.location.host; // مثل: 5000-abc123.ws-eu.gitpod.io
 
     // Gitpod / Ona: استبدل port prefix من 5000 إلى 8000
+    // كل port له subdomain مختلف → يجب الاتصال بـ 8000 subdomain مباشرة
     if (host.match(/^5000-/)) {
         return host.replace(/^5000-/, '8000-');
     }
-    // GitHub Codespaces: استبدل -5000. بـ -8000.
+
+    // GitHub Codespaces: أعِد null عمداً
+    // لا نستبدل -5000. بـ -8000. لأن frontend/server.js يعمل على port 5000
+    // ويُمرِّر /api/chat/ws داخلياً إلى ws://127.0.0.1:8000
+    // الاتصال المباشر بـ -8000. يتجاوز هذا الـ proxy ويُخفق في بعض بيئات Codespaces
     if (host.match(/-5000\./)) {
-        return host.replace(/-5000\./, '-8000.');
+        return null; // → يستخدم window.location.host (port 5000 + server.js proxy)
     }
-    // Replit: نفس النمط
-    if (host.match(/^5000-/)) {
-        return host.replace(/^5000-/, '8000-');
-    }
+
     return null;
 };
 

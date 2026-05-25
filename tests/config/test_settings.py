@@ -118,7 +118,9 @@ def test_secret_key_defaults_to_secure_value_in_development(
     monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
 
-    settings = AppSettings()
+    # _env_file=None prevents pydantic-settings from reading .env (which contains
+    # SECRET_KEY=dev-secret-change-me), so default_factory is actually invoked.
+    settings = AppSettings(_env_file=None)
 
     assert len(settings.SECRET_KEY) >= 32
 
@@ -141,8 +143,10 @@ def test_secret_key_remains_stable_across_settings_instances(
     monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
 
-    first_instance = AppSettings()
-    second_instance = AppSettings()
+    # _env_file=None prevents pydantic-settings from reading .env (which contains
+    # SECRET_KEY=dev-secret-change-me), so default_factory is actually invoked.
+    first_instance = AppSettings(_env_file=None)
+    second_instance = AppSettings(_env_file=None)
 
     assert first_instance.SECRET_KEY == second_instance.SECRET_KEY
     assert len(first_instance.SECRET_KEY) >= 32

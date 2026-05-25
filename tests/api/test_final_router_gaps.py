@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, HTTPException, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.routers.customer_chat import get_db
@@ -25,25 +25,30 @@ def customer_app():
 
 # --- Customer Chat Tests ---
 def test_customer_ws_auth_fail(customer_app):
+    # D-WS-002: accept() → send_json(error) → close(4401). No WebSocketDisconnect raised.
     client = TestClient(customer_app)
     with patch("app.api.routers.customer_chat.extract_websocket_auth", return_value=(None, None)):
-        with pytest.raises(WebSocketDisconnect):
-            with client.websocket_connect("/api/chat/ws"):
-                pass  # Already closed by server
+        with client.websocket_connect("/api/chat/ws") as ws:
+            data = ws.receive_json()
+            assert data["type"] == "error"
+            assert data["payload"]["code"] == "WS_AUTH_MISSING"
 
 
 def test_customer_ws_decode_fail(customer_app):
+    # D-WS-002: invalid token → accept() → send_json(WS_AUTH_INVALID) → close(4401).
     client = TestClient(customer_app)
     with patch(
         "app.api.routers.customer_chat.extract_websocket_auth", return_value=("token", "jwt")
     ):
         with patch("app.api.routers.customer_chat.decode_user_id", side_effect=HTTPException(401)):
-            with pytest.raises(WebSocketDisconnect):
-                with client.websocket_connect("/api/chat/ws"):
-                    pass
+            with client.websocket_connect("/api/chat/ws") as ws:
+                data = ws.receive_json()
+                assert data["type"] == "error"
+                assert data["payload"]["code"] == "WS_AUTH_INVALID"
 
 
 def test_customer_ws_admin(customer_app):
+    # D-WS-002: admin on customer endpoint → accept() → send_json(WS_AUTH_FORBIDDEN) → close(4403).
     client = TestClient(customer_app)
     mock_user = MagicMock(spec=User)
     mock_user.is_active = True
@@ -56,16 +61,14 @@ def test_customer_ws_admin(customer_app):
         "app.api.routers.customer_chat.extract_websocket_auth", return_value=("token", "jwt")
     ):
         with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
-            import pytest
-            from starlette.websockets import WebSocketDisconnect
-
-            with pytest.raises(WebSocketDisconnect) as exc:
-                with client.websocket_connect("/api/chat/ws"):
-                    pass
-            assert exc.value.code == 4401
+            with client.websocket_connect("/api/chat/ws") as ws:
+                data = ws.receive_json()
+                assert data["type"] == "error"
+                assert data["payload"]["status_code"] in (4401, 4403)
 
 
 def test_customer_ws_empty_question(customer_app):
+    # D-WS-002: inactive/missing user → accept() → send_json(error) → close(4401).
     client = TestClient(customer_app)
     mock_user = MagicMock(spec=User)
     mock_user.is_active = True
@@ -78,13 +81,10 @@ def test_customer_ws_empty_question(customer_app):
         "app.api.routers.customer_chat.extract_websocket_auth", return_value=("token", "jwt")
     ):
         with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
-            import pytest
-            from starlette.websockets import WebSocketDisconnect
-
-            with pytest.raises(WebSocketDisconnect) as exc:
-                with client.websocket_connect("/api/chat/ws"):
-                    pass
-            assert exc.value.code == 4401
+            with client.websocket_connect("/api/chat/ws") as ws:
+                data = ws.receive_json()
+                assert data["type"] == "error"
+                assert data["payload"]["status_code"] in (4401, 4403)
 
 
 # --- WS Auth Tests ---

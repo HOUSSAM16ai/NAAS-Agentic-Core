@@ -12,11 +12,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi import WebSocket
-from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, MagicMock, patch
-
 
 # ─── اختبارات ws_auth.py ─────────────────────────────────────────────────────
 
@@ -90,7 +89,7 @@ class TestExtractWebSocketAuth:
         from app.api.routers.ws_auth import extract_websocket_auth
 
         ws = self._make_ws(subprotocol="some_random_protocol")
-        token, proto = extract_websocket_auth(ws)
+        token, _proto = extract_websocket_auth(ws)
         assert token is None
 
     def test_subprotocol_jwt_without_token(self):
@@ -98,7 +97,7 @@ class TestExtractWebSocketAuth:
         from app.api.routers.ws_auth import extract_websocket_auth
 
         ws = self._make_ws(subprotocol="jwt")
-        token, proto = extract_websocket_auth(ws)
+        token, _proto = extract_websocket_auth(ws)
         assert token is None
 
 
@@ -336,8 +335,8 @@ class TestWebSocketHandshakeContract:
 
     def test_ws_endpoint_customer_exists(self):
         """يجب أن يكون /api/chat/ws موجوداً في router registry."""
-        from app.api.routers.registry import base_router_registry
         from app.api.routers import customer_chat
+        from app.api.routers.registry import base_router_registry
 
         registry = base_router_registry()
         routers = [r for r, _ in registry]
@@ -346,8 +345,8 @@ class TestWebSocketHandshakeContract:
 
     def test_ws_endpoint_admin_exists(self):
         """يجب أن يكون /admin/api/chat/ws موجوداً في router registry."""
-        from app.api.routers.registry import base_router_registry
         from app.api.routers import admin
+        from app.api.routers.registry import base_router_registry
 
         registry = base_router_registry()
         routers = [r for r, _ in registry]
@@ -359,8 +358,8 @@ class TestWebSocketHandshakeContract:
         D-WS-003: ws_proxy مُعطَّل — customer_chat.router يملك /api/chat/ws مباشرة.
         ws_proxy كان يُمرِّر إلى conversation-service بـ format مختلف.
         """
-        from app.api.routers.registry import base_router_registry
         from app.api.routers import ws_proxy
+        from app.api.routers.registry import base_router_registry
 
         registry = base_router_registry()
         routers = [r for r, _ in registry]

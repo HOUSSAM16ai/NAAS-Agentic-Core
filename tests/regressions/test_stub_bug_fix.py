@@ -1,6 +1,4 @@
-import pytest
 from fastapi.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
 
 from app.main import app
 
@@ -11,13 +9,16 @@ def test_chat_stream_is_real_implementation():
     """
     Verifies that the WebSocket chat endpoint enforces authentication.
 
-    If a stub existed, it would accept unauthenticated connections.
+    D-WS-002: accept() → send_json(WS_AUTH_MISSING) → close(4401).
+    A stub would accept unauthenticated connections without sending an error.
     """
-    with pytest.raises(WebSocketDisconnect) as exc:
-        with client.websocket_connect("/admin/api/chat/ws"):
-            pass
-
-    assert exc.value.code == 4401, (
-        f"Expected 4401 Unauthorized, but got {exc.value.code}. "
-        "The stub implementation might still be active."
-    )
+    with client.websocket_connect("/admin/api/chat/ws") as ws:
+        data = ws.receive_json()
+        assert data["type"] == "error", (
+            f"Expected error message, got: {data}. "
+            "The stub implementation might still be active."
+        )
+        assert data["payload"]["status_code"] == 4401, (
+            f"Expected 4401 Unauthorized, but got {data['payload'].get('status_code')}. "
+            "The stub implementation might still be active."
+        )

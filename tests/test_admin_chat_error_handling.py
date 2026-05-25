@@ -2,7 +2,6 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
 
 from app.core.ai_gateway import get_ai_client
 from app.core.database import get_db
@@ -12,12 +11,15 @@ from app.core.security import generate_service_token
 
 @pytest.mark.asyncio
 async def test_chat_error_handling_no_auth(test_app):
-    """Test that chat without auth closes the WebSocket."""
+    """Test that chat without auth sends JSON error then closes the WebSocket.
+
+    D-WS-002: accept() → send_json(WS_AUTH_MISSING) → close(4401).
+    """
     with TestClient(test_app) as client:
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with client.websocket_connect("/admin/api/chat/ws"):
-                pass
-        assert exc.value.code == 4401
+        with client.websocket_connect("/admin/api/chat/ws") as ws:
+            data = ws.receive_json()
+            assert data["type"] == "error"
+            assert data["payload"]["status_code"] == 4401
 
 
 @pytest.mark.asyncio

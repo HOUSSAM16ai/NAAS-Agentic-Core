@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, WebSocketDisconnect
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.routers.admin import router
@@ -61,11 +61,13 @@ async def test_get_admin_user_count_failure(client):
 
 @pytest.mark.asyncio
 async def test_admin_ws_auth_fail(app):
+    # D-WS-002: accept() → send_json(WS_AUTH_MISSING) → close(4401). No WebSocketDisconnect raised.
     client = TestClient(app)
-    with pytest.raises(WebSocketDisconnect) as exc:
-        with client.websocket_connect("/admin/api/chat/ws"):
-            pass
-    assert exc.value.code == 4401
+    with client.websocket_connect("/admin/api/chat/ws") as ws:
+        data = ws.receive_json()
+        assert data["type"] == "error"
+        assert data["payload"]["code"] == "WS_AUTH_MISSING"
+        assert data["payload"]["status_code"] == 4401
 
 
 # WebSocket testing in FastAPI TestClient is synchronous-looking but handles async.

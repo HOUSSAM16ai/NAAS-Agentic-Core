@@ -10,10 +10,10 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.core.settings.base import AppSettings
-
 
 # ─── اختبارات AppSettings defaults ──────────────────────────────────────────
 
@@ -119,8 +119,7 @@ class TestWebSocketAuthContract:
     """
 
     @pytest.fixture()
-    def app(self) -> "FastAPI":
-        from app.core.app_blueprint import build_kernel_config, build_kernel_spec
+    def app(self) -> FastAPI:
         from app.kernel import RealityKernel
 
         kernel = RealityKernel(
@@ -133,7 +132,7 @@ class TestWebSocketAuthContract:
         )
         return kernel.get_app()
 
-    def test_customer_ws_no_token_returns_json_not_403(self, app: "FastAPI") -> None:
+    def test_customer_ws_no_token_returns_json_not_403(self, app: FastAPI) -> None:
         """
         بدون token: يجب أن يصل رسالة JSON بـ type=error وليس HTTP 403.
         HTTP 403 يحدث عند close() قبل accept() — هذا هو الخلل الذي نمنع رجوعه.
@@ -146,7 +145,7 @@ class TestWebSocketAuthContract:
             assert payload.get("code") == "WS_AUTH_MISSING"
             assert payload.get("status_code") == 4401
 
-    def test_admin_ws_no_token_returns_json_not_403(self, app: "FastAPI") -> None:
+    def test_admin_ws_no_token_returns_json_not_403(self, app: FastAPI) -> None:
         """نفس الاختبار للـ admin WebSocket endpoint."""
         client = TestClient(app, raise_server_exceptions=False)
         with client.websocket_connect("/admin/api/chat/ws") as ws:
@@ -155,7 +154,7 @@ class TestWebSocketAuthContract:
             payload = data.get("payload", {})
             assert payload.get("code") == "WS_AUTH_MISSING"
 
-    def test_customer_ws_invalid_token_returns_json_not_403(self, app: "FastAPI") -> None:
+    def test_customer_ws_invalid_token_returns_json_not_403(self, app: FastAPI) -> None:
         """token غير صالح: يجب أن يصل رسالة JSON بـ code=WS_AUTH_INVALID."""
         client = TestClient(app, raise_server_exceptions=False)
         with client.websocket_connect("/api/chat/ws?token=invalid.jwt.token") as ws:
@@ -164,7 +163,7 @@ class TestWebSocketAuthContract:
             payload = data.get("payload", {})
             assert payload.get("code") == "WS_AUTH_INVALID"
 
-    def test_admin_ws_invalid_token_returns_json_not_403(self, app: "FastAPI") -> None:
+    def test_admin_ws_invalid_token_returns_json_not_403(self, app: FastAPI) -> None:
         """نفس الاختبار للـ admin WebSocket endpoint."""
         client = TestClient(app, raise_server_exceptions=False)
         with client.websocket_connect("/admin/api/chat/ws?token=invalid.jwt.token") as ws:

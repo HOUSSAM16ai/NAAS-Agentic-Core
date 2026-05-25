@@ -99,20 +99,23 @@ def test_extract_token_from_protocols():
 
 
 def test_extract_websocket_auth_fallback_prod():
+    """ISS-WS-001: query param يعمل في production (HTTPS يُشفِّر الـ URL)."""
     mock_ws = MagicMock()
     mock_ws.headers = {}
-    mock_ws.query_params = {"token": "fallback"}
+    mock_ws.query_params.get = lambda key, default="": "fallback" if key == "token" else default
 
     with patch("app.api.routers.ws_auth.get_settings") as mock_settings:
         mock_settings.return_value.ENVIRONMENT = "production"
-        token, _proto = extract_websocket_auth(mock_ws)
-        assert token is None
+        token, _source = extract_websocket_auth(mock_ws)
+        # ISS-WS-001: query token مُفعَّل في production — يجب أن يُرجع الـ token
+        assert token == "fallback"
 
 
 def test_extract_websocket_auth_success():
+    """يتحقق من استخراج token من sec-websocket-protocol."""
     mock_ws = MagicMock()
     mock_ws.headers = {"sec-websocket-protocol": "jwt, my_secret_token"}
+    mock_ws.query_params.get = lambda _key, default="": default
 
-    token, proto = extract_websocket_auth(mock_ws)
+    token, _source = extract_websocket_auth(mock_ws)
     assert token == "my_secret_token"
-    assert proto == "jwt"

@@ -109,27 +109,23 @@ class TestRouterRegistry:
 
     def test_ws_proxy_routes_before_customer_chat(self):
         """
-        D-WS-001: ws_proxy يجب أن يسبق customer_chat في registry
-        حتى يأخذ الأولوية في مطابقة /api/chat/ws.
+        D-WS-003 (2026-05-24): ws_proxy مُعطَّل مؤقتاً — customer_chat.router
+        يملك /api/chat/ws مباشرة. يتحقق هذا الاختبار من أن customer_chat.router
+        موجود في registry وأن D-WS-003 موثَّق في الكود.
         """
         with open("app/api/routers/registry.py") as f:
             source = f.read()
 
-        # ابحث عن الـ return list فقط (بعد كلمة return)
         return_block_start = source.find("return [")
         assert return_block_start != -1, "base_router_registry يجب أن يحتوي على return ["
 
         return_block = source[return_block_start:]
 
-        ws_proxy_pos = return_block.find("ws_proxy.router")
         customer_chat_pos = return_block.find("customer_chat.router")
-
-        assert ws_proxy_pos != -1, "ws_proxy.router يجب أن يكون في return list"
         assert customer_chat_pos != -1, "customer_chat.router يجب أن يكون في return list"
-        assert ws_proxy_pos < customer_chat_pos, (
-            "D-WS-001: ws_proxy.router يجب أن يسبق customer_chat.router في registry. "
-            f"ws_proxy_pos={ws_proxy_pos}, customer_chat_pos={customer_chat_pos}"
-        )
+
+        # D-WS-003: ws_proxy معطَّل مؤقتاً — موثَّق في تعليق الكود
+        assert "D-WS-003" in source, "D-WS-003 يجب أن يكون موثَّقاً في registry.py"
 
 
 # ─── اختبارات wsUrl utility ─────────────────────────────────────────────────

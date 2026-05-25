@@ -206,6 +206,22 @@ ENVEOF
         changed=1
     fi
 
+    # ── BACKEND_CORS_ORIGINS (D-WS-002) ──────────────────────────────────────
+    # يضمن أن frontend على port 5000 مسموح له بـ CORS في جميع البيئات.
+    # يُعيَّن فقط إذا لم يكن موجوداً مسبقاً (يحترم التهيئة الصريحة).
+    if ! grep -q "^BACKEND_CORS_ORIGINS=" "$env_file" 2>/dev/null; then
+        _set_env_key "BACKEND_CORS_ORIGINS" "http://localhost:3000,http://localhost:5000,http://127.0.0.1:3000,http://127.0.0.1:5000"
+        changed=1
+    fi
+
+    # ── ALLOWED_HOSTS (D-WS-002) ─────────────────────────────────────────────
+    # يضمن أن TrustedHostMiddleware يقبل Gitpod/Ona/Codespaces hosts.
+    # يُعيَّن فقط إذا لم يكن موجوداً مسبقاً.
+    if ! grep -q "^ALLOWED_HOSTS=" "$env_file" 2>/dev/null; then
+        _set_env_key "ALLOWED_HOSTS" "localhost,127.0.0.1,testserver,test,*.gitpod.io,*.ws-eu.gitpod.io,*.ws-us.gitpod.io,*.app.github.dev,*.preview.app.github.dev,*.replit.dev,*.replit.app,*.janeway.replit.dev"
+        changed=1
+    fi
+
     if [ "$changed" -eq 1 ]; then
         lifecycle_info "✅ .env updated with injected secrets"
     else

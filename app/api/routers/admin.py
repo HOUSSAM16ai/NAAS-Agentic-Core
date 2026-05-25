@@ -320,21 +320,62 @@ async def chat_stream_ws(
 ) -> None:
     """
     قناة WebSocket لبث محادثة المسؤول بشكل حي وآمن.
+
+    D-WS-002: accept() قبل close() دائماً لتجنب HTTP 403 من uvicorn.
     """
     token, selected_protocol = extract_websocket_auth(websocket)
     if not token:
+        await websocket.accept(subprotocol=selected_protocol)
+        await websocket.send_json(
+            normalize_streaming_event(
+                {
+                    "type": "error",
+                    "payload": {
+                        "details": "Authentication required. Please log in.",
+                        "code": "WS_AUTH_MISSING",
+                        "status_code": 4401,
+                    },
+                }
+            )
+        )
         await websocket.close(code=4401)
         return
 
     try:
         user_id = decode_user_id(token, get_settings().SECRET_KEY)
     except HTTPException:
+        await websocket.accept(subprotocol=selected_protocol)
+        await websocket.send_json(
+            normalize_streaming_event(
+                {
+                    "type": "error",
+                    "payload": {
+                        "details": "Invalid or expired token. Please log in again.",
+                        "code": "WS_AUTH_INVALID",
+                        "status_code": 4401,
+                    },
+                }
+            )
+        )
         await websocket.close(code=4401)
         return
 
     async with async_session_factory() as db:
         actor = await db.get(User, user_id)
         if actor is None or not actor.is_active:
+            await websocket.accept(subprotocol=selected_protocol)
+            await websocket.send_json(
+                normalize_streaming_event(
+                    {
+                        "type": "error",
+                        "payload": {
+                            "details": "User account not found or inactive.",
+                            "code": "WS_AUTH_USER_INACTIVE",
+                            "status_code": 4401,
+                        },
+                    }
+                )
+            )
             await websocket.close(code=4401)
             return
 

@@ -15,8 +15,7 @@ def test_chat_stream_is_real_implementation():
     with client.websocket_connect("/admin/api/chat/ws") as ws:
         data = ws.receive_json()
         assert data["type"] == "error", (
-            f"Expected error message, got: {data}. "
-            "The stub implementation might still be active."
+            f"Expected error message, got: {data}. The stub implementation might still be active."
         )
         assert data["payload"]["status_code"] == 4401, (
             f"Expected 4401 Unauthorized, but got {data['payload'].get('status_code')}. "

@@ -193,6 +193,7 @@ def build_cors_options(origins: str | list[str]) -> dict[str, object]:
     # لكن نُضيف guard دفاعياً لضمان list دائماً.
     if isinstance(origins, str):
         from app.core.settings.helpers import _normalize_csv_or_list
+
         origins = _normalize_csv_or_list(origins)
     allow_origins = origins or ["*"]
     options = dict(BASE_CORS_OPTIONS)

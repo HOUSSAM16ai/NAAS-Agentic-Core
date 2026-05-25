@@ -185,6 +185,7 @@ class TestAdminChatJsContract:
 
     def _read_admin_chat_js(self) -> str:
         import os
+
         path = os.path.join(
             os.path.dirname(__file__), "..", "..", "app", "static", "js", "admin_chat.js"
         )
@@ -197,18 +198,21 @@ class TestAdminChatJsContract:
         assert "/admin/api/chat/ws" in content, "admin_chat.js must use /admin/api/chat/ws"
         # تحقق من الكود فقط — استبعد التعليقات (أسطر تبدأ بـ * أو //)
         code_lines = [
-            line for line in content.splitlines()
+            line
+            for line in content.splitlines()
             if not line.strip().startswith("*") and not line.strip().startswith("//")
         ]
         code_only = "\n".join(code_lines)
-        assert "/ws/chat" not in code_only, \
+        assert "/ws/chat" not in code_only, (
             "admin_chat.js code must NOT use /ws/chat (endpoint does not exist)"
+        )
 
     def test_token_via_query_param(self):
         """يجب إرسال token عبر query param."""
         content = self._read_admin_chat_js()
-        assert "token=" in content or "encodeURIComponent" in content, \
+        assert "token=" in content or "encodeURIComponent" in content, (
             "admin_chat.js must send token via query param"
+        )
 
     def test_handles_assistant_delta(self):
         """يجب معالجة assistant_delta event."""
@@ -228,8 +232,9 @@ class TestAdminChatJsContract:
     def test_dynamic_ws_protocol(self):
         """يجب اختيار ws/wss ديناميكياً."""
         content = self._read_admin_chat_js()
-        assert "wss:" in content or "wsProtocol" in content, \
+        assert "wss:" in content or "wsProtocol" in content, (
             "admin_chat.js must use dynamic ws/wss protocol"
+        )
 
 
 # ─── اختبارات wsUrl.js — static analysis ─────────────────────────────────────
@@ -245,6 +250,7 @@ class TestWsUrlJsContract:
 
     def _read_wsurl_js(self) -> str:
         import os
+
         path = os.path.join(
             os.path.dirname(__file__), "..", "..", "frontend", "app", "utils", "wsUrl.js"
         )
@@ -254,8 +260,9 @@ class TestWsUrlJsContract:
     def test_uses_env_var_for_backend_port(self):
         """يجب استخدام NEXT_PUBLIC_BACKEND_PORT بدلاً من hardcoded 8000."""
         content = self._read_wsurl_js()
-        assert "NEXT_PUBLIC_BACKEND_PORT" in content, \
+        assert "NEXT_PUBLIC_BACKEND_PORT" in content, (
             "wsUrl.js must use NEXT_PUBLIC_BACKEND_PORT env var"
+        )
 
     def test_gitpod_cloud_detection(self):
         """يجب اكتشاف Gitpod/Ona تلقائياً."""
@@ -265,15 +272,17 @@ class TestWsUrlJsContract:
     def test_cloud_backend_host_rewrite(self):
         """يجب إعادة كتابة port prefix في Gitpod subdomain."""
         content = self._read_wsurl_js()
-        assert "8000-" in content or "replace" in content, \
+        assert "8000-" in content or "replace" in content, (
             "wsUrl.js must rewrite port prefix for cloud workspaces"
+        )
 
     def test_no_hardcoded_localhost_port(self):
         """يجب عدم وجود localhost:8000 hardcoded بدون fallback."""
         content = self._read_wsurl_js()
         # يجب أن يكون محاطاً بـ env var check
-        assert "NEXT_PUBLIC_BACKEND_PORT" in content, \
+        assert "NEXT_PUBLIC_BACKEND_PORT" in content, (
             "wsUrl.js must not hardcode port 8000 without env var override"
+        )
 
 
 # ─── اختبارات legacy-app.jsx — API_ORIGIN ────────────────────────────────────
@@ -287,41 +296,52 @@ class TestLegacyAppApiOrigin:
 
     def _read_legacy_app(self, path_prefix: str) -> str:
         import os
-        path = os.path.join(
-            os.path.dirname(__file__), "..", "..", path_prefix, "legacy-app.jsx"
-        )
+
+        path = os.path.join(os.path.dirname(__file__), "..", "..", path_prefix, "legacy-app.jsx")
         with open(os.path.abspath(path)) as f:
             return f.read()
 
-    @pytest.mark.parametrize("prefix", [
-        "frontend/public/js",
-        "app/static/js",
-    ])
+    @pytest.mark.parametrize(
+        "prefix",
+        [
+            "frontend/public/js",
+            "app/static/js",
+        ],
+    )
     def test_gitpod_port_rewrite(self, prefix):
         """يجب إعادة كتابة port prefix لـ Gitpod/Ona."""
         content = self._read_legacy_app(prefix)
-        assert "5000-" in content and "8000-" in content, \
+        assert "5000-" in content and "8000-" in content, (
             f"{prefix}/legacy-app.jsx must rewrite 5000- to 8000- for Gitpod"
+        )
 
-    @pytest.mark.parametrize("prefix", [
-        "frontend/public/js",
-        "app/static/js",
-    ])
+    @pytest.mark.parametrize(
+        "prefix",
+        [
+            "frontend/public/js",
+            "app/static/js",
+        ],
+    )
     def test_codespaces_port_rewrite(self, prefix):
         """يجب إعادة كتابة port لـ GitHub Codespaces."""
         content = self._read_legacy_app(prefix)
-        assert "app.github.dev" in content, \
+        assert "app.github.dev" in content, (
             f"{prefix}/legacy-app.jsx must handle Codespaces hostnames"
+        )
 
-    @pytest.mark.parametrize("prefix", [
-        "frontend/public/js",
-        "app/static/js",
-    ])
+    @pytest.mark.parametrize(
+        "prefix",
+        [
+            "frontend/public/js",
+            "app/static/js",
+        ],
+    )
     def test_local_dev_port_mapping(self, prefix):
         """يجب تحويل port 5000/3000 إلى 8000 في local dev."""
         content = self._read_legacy_app(prefix)
-        assert "port === '5000'" in content or "port === '3000'" in content, \
+        assert "port === '5000'" in content or "port === '3000'" in content, (
             f"{prefix}/legacy-app.jsx must map local dev ports to backend port 8000"
+        )
 
 
 # ─── اختبارات WebSocket handshake contract ───────────────────────────────────
@@ -340,8 +360,9 @@ class TestWebSocketHandshakeContract:
 
         registry = base_router_registry()
         routers = [r for r, _ in registry]
-        assert customer_chat.router in routers, \
+        assert customer_chat.router in routers, (
             "customer_chat.router must be in base_router_registry"
+        )
 
     def test_ws_endpoint_admin_exists(self):
         """يجب أن يكون /admin/api/chat/ws موجوداً في router registry."""
@@ -350,8 +371,7 @@ class TestWebSocketHandshakeContract:
 
         registry = base_router_registry()
         routers = [r for r, _ in registry]
-        assert admin.router in routers, \
-            "admin.router must be in base_router_registry"
+        assert admin.router in routers, "admin.router must be in base_router_registry"
 
     def test_ws_proxy_not_in_registry(self):
         """
@@ -363,5 +383,6 @@ class TestWebSocketHandshakeContract:
 
         registry = base_router_registry()
         routers = [r for r, _ in registry]
-        assert ws_proxy.router not in routers, \
+        assert ws_proxy.router not in routers, (
             "ws_proxy.router must NOT be in base_router_registry (D-WS-003)"
+        )

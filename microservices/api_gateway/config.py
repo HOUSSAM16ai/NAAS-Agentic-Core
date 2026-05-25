@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from urllib.parse import urlparse
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,8 +23,10 @@ class Settings(BaseSettings):
 
     # Deployment profile
     ENVIRONMENT: str = "development"
-    ALLOWED_HOSTS: list[str] = Field(default_factory=lambda: ["*"])
-    BACKEND_CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["*"])
+    # str type avoids pydantic-settings v2 DotEnvSettingsSource failing on CSV values.
+    # Use the `allowed_hosts` / `cors_origins` properties for the parsed lists.
+    ALLOWED_HOSTS: str = Field(default="*")
+    BACKEND_CORS_ORIGINS: str = Field(default="*")
     ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR: bool = False
 
     # Per-route cutover flags (Phase 0 defaults keep behavior unchanged)
@@ -61,6 +63,32 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
     )
 
+    @field_validator("ALLOWED_HOSTS", "BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def _parse_csv_or_json(cls, v: object) -> str:
+        """يُعيد القيمة كـ str — التحويل إلى list يتم عبر الـ properties."""
+        if isinstance(v, list):
+            return ",".join(v)
+        return str(v) if v is not None else "*"
+
+    @property
+    def allowed_hosts(self) -> list[str]:
+        """يُحوِّل ALLOWED_HOSTS إلى قائمة — يقبل JSON أو فواصل."""
+        v = self.ALLOWED_HOSTS.strip()
+        if v.startswith("["):
+            import json
+            return json.loads(v)
+        return [x.strip() for x in v.split(",") if x.strip()]
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """يُحوِّل BACKEND_CORS_ORIGINS إلى قائمة — يقبل JSON أو فواصل."""
+        v = self.BACKEND_CORS_ORIGINS.strip()
+        if v.startswith("["):
+            import json
+            return json.loads(v)
+        return [x.strip() for x in v.split(",") if x.strip()]
+
     @staticmethod
     def _is_container_runtime() -> bool:
         """يكشف بيئات الحاويات/العنقود لمنع localhost كوجهة بين الخدمات دون تصريح."""
@@ -80,9 +108,9 @@ class Settings(BaseSettings):
                 or len(self.SECRET_KEY) < 32
             ):
                 raise ValueError("SECRET_KEY غير آمن لبيئة production/staging")
-            if self.ALLOWED_HOSTS == ["*"]:
+            if self.allowed_hosts == ["*"]:
                 raise ValueError("ALLOWED_HOSTS لا يمكن أن تكون '*' في production/staging")
-            if self.BACKEND_CORS_ORIGINS == ["*"]:
+            if self.cors_origins == ["*"]:
                 raise ValueError("BACKEND_CORS_ORIGINS لا يمكن أن تكون '*' في production/staging")
 
         rollout_requested = (

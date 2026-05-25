@@ -631,10 +631,11 @@ launch_orchestrator_service() {
     # ── إعداد ORCHESTRATOR_DATABASE_URL ──────────────────────────────────────
     # يستخدم Supabase (نفس DATABASE_URL للمونوليث) مع schema منفصل.
     # يمكن تجاوزه بـ ORCHESTRATOR_DATABASE_URL في secrets.env.
+    # Fallback: SQLite في حالة غياب Postgres (sandbox/Codespaces firewall).
     local orch_db_url="${ORCHESTRATOR_DATABASE_URL:-${DATABASE_URL:-}}"
     if [ -z "$orch_db_url" ]; then
-        lifecycle_warn "Orchestrator: no DATABASE_URL available — skipping launch."
-        return 0
+        lifecycle_warn "Orchestrator: no DATABASE_URL — using SQLite fallback (DEGRADED mode)."
+        orch_db_url="sqlite+aiosqlite:///./orchestrator_dev.db"
     fi
 
     # ── تحويل URL إلى asyncpg (مطلوب لـ SQLAlchemy async) ────────────────────
@@ -642,12 +643,14 @@ launch_orchestrator_service() {
     # ISS-040: Supabase PgBouncer (port 6543) يرفض prepared statements حتى مع
     # statement_cache_size=0 في connect_args. الحل: استخدام port 5432 (direct
     # PostgreSQL connection) الذي يدعم prepared statements بشكل كامل.
-    orch_db_url="${orch_db_url/postgresql:\/\//postgresql+asyncpg://}"
-    orch_db_url="${orch_db_url/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
-    # تحويل port 6543 (PgBouncer) إلى 5432 (direct PostgreSQL) للـ orchestrator
-    orch_db_url=$(echo "$orch_db_url" | sed 's/:6543\//:5432\//')
-    # إزالة sslmode من URL — asyncpg يتعامل مع SSL عبر connect_args في database.py
-    orch_db_url=$(echo "$orch_db_url" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
+    if [[ "$orch_db_url" != sqlite* ]]; then
+        orch_db_url="${orch_db_url/postgresql:\/\//postgresql+asyncpg://}"
+        orch_db_url="${orch_db_url/postgresql+psycopg2:\/\//postgresql+asyncpg://}"
+        # تحويل port 6543 (PgBouncer) إلى 5432 (direct PostgreSQL) للـ orchestrator
+        orch_db_url=$(echo "$orch_db_url" | sed 's/:6543\//:5432\//')
+        # إزالة sslmode من URL — asyncpg يتعامل مع SSL عبر connect_args في database.py
+        orch_db_url=$(echo "$orch_db_url" | sed 's/[?&]sslmode=[^&]*//' | sed 's/[?&]ssl=[^&]*//')
+    fi
 
     lifecycle_info "Orchestrator: starting on :${ORCH_PORT} ..."
 

@@ -90,9 +90,13 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Orchestrator Service Starting...")
 
-    # ═══ PHASE 1: DB INIT — CRITICAL ═══════════════════════════
-    # فشل قاعدة البيانات يوقف الخدمة — لا يمكن العمل بدونها
-    await init_db()
+    # ═══ PHASE 1: DB INIT — DEGRADED-SAFE ══════════════════════
+    # في بيئة التطوير (sandbox/Codespaces) قد يكون Postgres غير متاح.
+    # init_db() تُعالج الفشل داخلياً وتُعيد None — الخدمة تبدأ في DEGRADED.
+    try:
+        await init_db()
+    except Exception as exc:
+        logger.warning("[STARTUP] init_db() raised unexpectedly (non-fatal): %s", exc)
 
     # ═══ PHASE 2: TOOLS REGISTRY — CRITICAL ════════════════════
     from microservices.orchestrator_service.src.services.tools.registry import get_registry
@@ -243,7 +247,7 @@ app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

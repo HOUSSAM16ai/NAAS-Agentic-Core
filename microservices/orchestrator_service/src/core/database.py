@@ -338,9 +338,21 @@ async def init_db() -> None:
     global _postgres_pool, postgres_checkpointer
 
     # ── PHASE 1: SQLModel tables ──────────────────────────────────────────
-    async with get_engine().begin() as conn:
-        await conn.run_sync(OrchestratorSQLModel.metadata.create_all)
-    logger.info("[DB] SQLModel tables created/verified.")
+    # غير حرج في بيئة التطوير — الـ sandbox يحجب Postgres egress (port 5432/6543).
+    # الخدمة تبدأ في وضع DEGRADED إذا فشل الاتصال بقاعدة البيانات.
+    try:
+        async with get_engine().begin() as conn:
+            await conn.run_sync(OrchestratorSQLModel.metadata.create_all)
+        logger.info("[DB] SQLModel tables created/verified.")
+    except Exception as exc:
+        logger.warning(
+            "[DB] SQLModel table creation failed (non-fatal in dev): %s — "
+            "service will start in DEGRADED mode.",
+            exc,
+        )
+        if _METRICS_AVAILABLE:
+            record_checkpointer_error("db_init_failed")
+        return
 
     # ── PHASE 2 & 3: Postgres Checkpointer ───────────────────────────────
     if AsyncPostgresSaver is None:

@@ -28,12 +28,12 @@
   "postStartCommand": "bash .devcontainer/on-start.sh",
   "postAttachCommand": "bash .devcontainer/on-attach.sh",
 
-  "forwardPorts": [3001, 8000, 5000, 3000, 9090, 3200, 3100, 4317, 4318, 5432],
-  "appPort": ["8000", "5000"],
+  "forwardPorts": [5000, 8000, 3001, 9090, 3200, 3100, 4317, 4318, 5432],
+  "appPort": ["5000", "8000"],
 
   "portsAttributes": {
-    "3001": {
-      "label": "🛰️ Mission Control (Grafana)",
+    "5000": {
+      "label": "Frontend (Next.js)",
       "onAutoForward": "openBrowser",
       "visibility": "public",
       "protocol": "http"
@@ -44,15 +44,15 @@
       "visibility": "public",
       "protocol": "http"
     },
-    "5000": {
-      "label": "Frontend (Next.js)",
+    "3001": {
+      "label": "Mission Control (Grafana)",
       "onAutoForward": "notify",
       "visibility": "public",
       "protocol": "http"
     },
     "3000": {
-      "label": "Next.js Alt",
-      "onAutoForward": "silent"
+      "label": "Next.js (unused — frontend runs on 5000)",
+      "onAutoForward": "ignore"
     },
     "9090": {
       "label": "Prometheus (Raw Queries)",

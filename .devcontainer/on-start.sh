@@ -75,14 +75,16 @@ lifecycle_info "Launching background supervisor..."
 nohup bash "$SUPERVISOR_SCRIPT" > "$LOG_FILE" 2>&1 &
 SUPERVISOR_PID=$!
 
-# Ensure Codespaces ports are public when gh CLI is available
+# Ensure Codespaces ports are public when gh CLI is available.
+# Port 5000 (Frontend) is the canonical Next.js port — must be public so the
+# Codespaces proxy forwards browser traffic correctly.
 # Port 3001 (Grafana) MUST be public for the cross-origin preview proxy to
 # work without an extra "Make public" click — see start_observability.sh and
 # observability/grafana/grafana.ini for the cookie/CSRF wiring.
 if command -v gh >/dev/null 2>&1; then
-    lifecycle_info "Setting Codespaces port visibility (8000, 3000, 3001) to public..."
+    lifecycle_info "Setting Codespaces port visibility (5000, 8000, 3001) to public..."
+    gh codespace ports visibility 5000:public >/dev/null 2>&1 || true
     gh codespace ports visibility 8000:public >/dev/null 2>&1 || true
-    gh codespace ports visibility 3000:public >/dev/null 2>&1 || true
     gh codespace ports visibility 3001:public >/dev/null 2>&1 || true
 fi
 
@@ -109,7 +111,7 @@ lifecycle_info ""
 lifecycle_info "🌐 Access Application:"
 lifecycle_info "   • Wait for 'Application is healthy' message"
 lifecycle_info "   • Backend API: http://localhost:8000"
-lifecycle_info "   • Next.js UI: http://localhost:3000"
+lifecycle_info "   • Next.js UI:  http://localhost:5000  ← opens automatically in browser"
 lifecycle_info ""
 lifecycle_info "🔍 Monitor Progress:"
 lifecycle_info "   tail -f $LOG_FILE"

@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from fastapi import WebSocket
 
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 # ─── نوع مصدر الاستخراج ─────────────────────────────────────────────────────
 
 
-class TokenSource(str, Enum):
+class TokenSource(StrEnum):
     """
     يُعرِّف مصدر استخراج رمز الدخول لأغراض التشخيص والـ logging.
     """
@@ -165,8 +165,8 @@ def _extract_from_cookie(websocket: WebSocket) -> str | None:
     if not cookie_header:
         return None
 
-    for cookie_part in cookie_header.split(";"):
-        cookie_part = cookie_part.strip()
+    for raw_cookie_part in cookie_header.split(";"):
+        cookie_part = raw_cookie_part.strip()
         if "=" not in cookie_part:
             continue
         name, _, value = cookie_part.partition("=")

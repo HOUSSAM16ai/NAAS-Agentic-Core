@@ -1047,9 +1047,10 @@ class OrchestratorClient:
 
             _focus_step_id = _detect_focus_step(question)
 
-            _is_no_model = getattr(result, "success", True) is False and getattr(
-                result, "reason", ""
-            ) == "no_model_extracted"
+            _is_no_model = (
+                getattr(result, "success", True) is False
+                and getattr(result, "reason", "") == "no_model_extracted"
+            )
             if (result is None or _is_no_model) and _focus_step_id and history_messages:
                 _history_context = " ".join(m.get("content", "") for m in history_messages)
                 _contextual_question = f"{_history_context} {question}".strip()
@@ -1057,9 +1058,10 @@ class OrchestratorClient:
                     ProbabilityInput(question=_contextual_question, history=history_messages)
                 )
 
-            _is_no_model = getattr(result, "success", True) is False and getattr(
-                result, "reason", ""
-            ) == "no_model_extracted"
+            _is_no_model = (
+                getattr(result, "success", True) is False
+                and getattr(result, "reason", "") == "no_model_extracted"
+            )
             if (result is None or _is_no_model) and _focus_step_id:
                 with contextlib.suppress(Exception):
                     from app.services.capabilities.exercise_retrieval import (
@@ -1076,7 +1078,9 @@ class OrchestratorClient:
                         _full = load_exercise_content(_decision.matched_entry)
                         _contextual_question = f"{_full} {question}".strip()
                         result = skill.analyze(
-                            ProbabilityInput(question=_contextual_question, history=history_messages)
+                            ProbabilityInput(
+                                question=_contextual_question, history=history_messages
+                            )
                         )
 
             def _companion_text_for_focus(default_text: str) -> str:
@@ -1219,7 +1223,9 @@ class OrchestratorClient:
                     # MODE_A terminates after the visual component (Text-Wall Muzzle).
                     "terminate_pipeline": not _is_deep_pedagogy,
                     "routing_mode": _routing_mode,
-                    "companion_text": _companion_text_for_focus("إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄"),
+                    "companion_text": _companion_text_for_focus(
+                        "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄"
+                    ),
                     "props": props,
                     "fallback_text": (
                         f"سحب آني: اختيار {result.k} من {result.n} → "
@@ -1253,7 +1259,9 @@ class OrchestratorClient:
                     # MODE_A terminates after the visual component (Text-Wall Muzzle).
                     "terminate_pipeline": not _is_deep_pedagogy,
                     "routing_mode": _routing_mode,
-                    "companion_text": _companion_text_for_focus("إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄"),
+                    "companion_text": _companion_text_for_focus(
+                        "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄"
+                    ),
                     "props": props,
                     "fallback_text": ("شجرة الاحتمالات (تعذّر عرض الرسم التفاعلي — هذا نص بديل)."),
                     "aek_state": _aek_state,

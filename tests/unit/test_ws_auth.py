@@ -142,9 +142,7 @@ class TestExtractFromCookie:
         assert _extract_from_cookie(ws) == "tok999"  # type: ignore[arg-type]
 
     def test_multiple_cookies_picks_access_token(self) -> None:
-        ws = _FakeWebSocket(
-            headers={"cookie": "session=sess1; access_token=mytoken; other=val"}
-        )
+        ws = _FakeWebSocket(headers={"cookie": "session=sess1; access_token=mytoken; other=val"})
         assert _extract_from_cookie(ws) == "mytoken"  # type: ignore[arg-type]
 
     def test_irrelevant_cookies_return_none(self) -> None:
@@ -237,25 +235,19 @@ class TestExtractFromSubprotocol:
         assert proto is None
 
     def test_valid_jwt_protocol(self) -> None:
-        ws = _FakeWebSocket(
-            headers={"sec-websocket-protocol": "jwt, mytoken123"}
-        )
+        ws = _FakeWebSocket(headers={"sec-websocket-protocol": "jwt, mytoken123"})
         token, proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
         assert token == "mytoken123"
         assert proto == "jwt"
 
     def test_token_before_jwt_still_works(self) -> None:
-        ws = _FakeWebSocket(
-            headers={"sec-websocket-protocol": "mytoken123, jwt"}
-        )
+        ws = _FakeWebSocket(headers={"sec-websocket-protocol": "mytoken123, jwt"})
         # jwt ليس في الموضع الصحيح — لا يوجد token بعده
         token, _proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
         assert token is None
 
     def test_no_jwt_in_protocols(self) -> None:
-        ws = _FakeWebSocket(
-            headers={"sec-websocket-protocol": "custom-proto"}
-        )
+        ws = _FakeWebSocket(headers={"sec-websocket-protocol": "custom-proto"})
         token, _proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
         assert token is None
         assert _proto is None
@@ -488,9 +480,7 @@ class TestExtractWebsocketAuthDetailed:
         assert result.selected_protocol == "jwt"
 
     def test_subprotocol_source(self) -> None:
-        ws = _FakeWebSocket(
-            headers={"sec-websocket-protocol": "jwt, stok"}
-        )
+        ws = _FakeWebSocket(headers={"sec-websocket-protocol": "jwt, stok"})
         result = extract_websocket_auth_detailed(ws)  # type: ignore[arg-type]
         assert result.token == "stok"
         assert result.source == TokenSource.SUBPROTOCOL
@@ -539,9 +529,7 @@ class TestLogging:
                 f"Token value leaked in log: {record.message}"
             )
 
-    def test_successful_extraction_logs_source(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_successful_extraction_logs_source(self, caplog: pytest.LogCaptureFixture) -> None:
         import logging
 
         ws = _FakeWebSocket(query_params={"token": "tok"})

@@ -258,7 +258,9 @@ def _is_long_educational_scaffold(norm: str, raw: str) -> bool:
     return len(norm) >= 140 and len(lines) >= 4 and has_steps
 
 
-def _is_near_duplicate(sig_a: frozenset[str], sig_b: frozenset[str], threshold: float = 0.82) -> bool:
+def _is_near_duplicate(
+    sig_a: frozenset[str], sig_b: frozenset[str], threshold: float = 0.82
+) -> bool:
     """مقارنة تشابه Jaccard لكشف نسخة مكررة بصياغة سطحية مختلفة."""
     if not sig_a or not sig_b:
         return False
@@ -285,9 +287,13 @@ def _build_precision_guardrail(question: str, intent: str) -> str:
         "- لا تكرر نفس الفقرة/القائمة بصياغة مختلفة.",
     ]
     if numbers:
-        constraints.append(f"- الأعداد المذكورة في السؤال (مرجع إلزامي): {', '.join(numbers[:12])}.")
+        constraints.append(
+            f"- الأعداد المذكورة في السؤال (مرجع إلزامي): {', '.join(numbers[:12])}."
+        )
     if arabic_colors:
-        constraints.append(f"- الألوان المذكورة في السؤال (مرجع إلزامي): {', '.join(arabic_colors)}.")
+        constraints.append(
+            f"- الألوان المذكورة في السؤال (مرجع إلزامي): {', '.join(arabic_colors)}."
+        )
     if key_terms:
         constraints.append(f"- المفاهيم المطلوبة: {', '.join(key_terms)}.")
     if "شجرة" in q:

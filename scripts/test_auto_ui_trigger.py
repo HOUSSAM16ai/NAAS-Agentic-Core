@@ -131,10 +131,7 @@ def main() -> int:
         ok = False
     valid_components = {"combinations_visualizer", "full_exercise_story"}
     if component in valid_components:
-        print(
-            "  ✅ وُجِّه إلى واجهة بيداغوجية صحيحة "
-            f"({component}) — لا شجرة تتابعية."
-        )
+        print(f"  ✅ وُجِّه إلى واجهة بيداغوجية صحيحة ({component}) — لا شجرة تتابعية.")
     else:
         print(f"  ❌ وُجِّه إلى {component} خارج المسار البيداغوجي المعتمد.")
         ok = False
@@ -163,9 +160,7 @@ def main() -> int:
         if total == 165 and favorable == 14:
             print("  ✅ الحساب التأليفي صحيح: C(11,3)=165، P(3 من نفس اللون)=14/165.")
         else:
-            print(
-                f"  ⚠️ قيم تأليفية غير متوقَّعة: {total}, {favorable}"
-            )
+            print(f"  ⚠️ قيم تأليفية غير متوقَّعة: {total}, {favorable}")
 
     print("\n" + "=" * 76)
     if ok:

@@ -59,12 +59,43 @@ export const isCloudWorkspace = () => {
 };
 
 /**
+ * يُعيد الـ host الصحيح لـ backend WebSocket في بيئة Gitpod/Ona/Codespaces.
+ *
+ * المشكلة (D-WS-002): في Gitpod/Ona، كل port له subdomain مختلف:
+ *   - Frontend (5000): 5000-<id>.ws-eu.gitpod.io
+ *   - Backend  (8000): 8000-<id>.ws-eu.gitpod.io
+ * المتصفح يصل للـ frontend عبر port 5000 subdomain.
+ * WebSocket يجب أن يصل للـ backend عبر port 8000 subdomain.
+ *
+ * @returns {string} host للـ backend WebSocket
+ */
+export const getCloudBackendHost = () => {
+    if (!isBrowser) return null;
+    const host = window.location.host; // مثل: 5000-abc123.ws-eu.gitpod.io
+
+    // Gitpod / Ona: استبدل port prefix من 5000 إلى 8000
+    if (host.match(/^5000-/)) {
+        return host.replace(/^5000-/, '8000-');
+    }
+    // GitHub Codespaces: استبدل -5000. بـ -8000.
+    if (host.match(/-5000\./)) {
+        return host.replace(/-5000\./, '-8000.');
+    }
+    // Replit: نفس النمط
+    if (host.match(/^5000-/)) {
+        return host.replace(/^5000-/, '8000-');
+    }
+    return null;
+};
+
+/**
  * يبني WebSocket base URL بشكل ديناميكي وآمن.
  *
  * الأولوية:
  * 1. NEXT_PUBLIC_WS_URL (تهيئة صريحة — أعلى أولوية)
  * 2. NEXT_PUBLIC_API_URL (إذا كان HTTP URL)
- * 3. window.location.host (الافتراضي الآمن)
+ * 3. Cloud workspace port mapping (Gitpod/Ona/Codespaces)
+ * 4. window.location.host (local dev — Next.js proxy يُمرِّر HTTP لكن ليس WS)
  *
  * @returns {string} WebSocket base URL (مثل: wss://host أو ws://host:8000)
  */
@@ -95,25 +126,26 @@ export const getWsBase = () => {
         }
     }
 
-    // 3. الافتراضي الآمن: window.location.host
-    // هذا يعمل في جميع البيئات:
-    //   - Local dev (localhost:3000 → ws://localhost:3000 → Next.js proxy → 8000)
-    //   - Codespaces (xxx.app.github.dev → wss://xxx.app.github.dev)
-    //   - Gitpod (xxx.gitpod.io → wss://xxx.gitpod.io)
-    //   - Production (example.com → wss://example.com)
     const wsProtocol = httpToWsProtocol(window.location.protocol);
-    const host = window.location.host;
 
-    // تحذير في production إذا لم تكن env vars مُعيَّنة
-    if (process.env.NODE_ENV === 'production' && !isCloudWorkspace()) {
-        console.warn(
-            '[wsUrl] NEXT_PUBLIC_WS_URL not set in production. ' +
-            'Falling back to window.location.host. ' +
-            'Set NEXT_PUBLIC_WS_URL for explicit configuration.'
-        );
+    // 3. D-WS-002: في Gitpod/Ona/Codespaces، كل port له subdomain مختلف.
+    // Frontend على 5000-<id>.ws-eu.gitpod.io → Backend على 8000-<id>.ws-eu.gitpod.io
+    if (isCloudWorkspace()) {
+        const backendHost = getCloudBackendHost();
+        if (backendHost) {
+            console.info('[wsUrl] Cloud workspace detected — using backend host:', backendHost);
+            return `${wsProtocol}//${backendHost}`;
+        }
+        // إذا لم يُمكن استخراج backend host → استخدم window.location.host
+        // (يعمل إذا كان الـ proxy يُمرِّر WebSocket)
+        return `${wsProtocol}//${window.location.host}`;
     }
 
-    return `${wsProtocol}//${host}`;
+    // 4. Local dev: ws://localhost:8000 مباشرة (Next.js proxy لا يُمرِّر WS)
+    // نستخدم port 8000 مباشرة بدلاً من window.location.host (port 5000/3000)
+    const localBackendPort = '8000';
+    const hostname = window.location.hostname; // localhost أو 127.0.0.1
+    return `ws://${hostname}:${localBackendPort}`;
 };
 
 /**

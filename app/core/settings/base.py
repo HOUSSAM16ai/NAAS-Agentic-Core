@@ -146,8 +146,40 @@ class AppSettings(BaseServiceSettings):
     API_STRICT_MODE: bool = Field(True, description="Strict API Security")
 
     # CORS & Hosts
-    BACKEND_CORS_ORIGINS: list[str] = Field(default=["http://localhost:3000"])
-    ALLOWED_HOSTS: list[str] = Field(default=["localhost", "127.0.0.1", "testserver", "test"])
+    # D-WS-002: القيم الافتراضية تشمل port 5000 (frontend في Codespaces/Gitpod/Ona)
+    # وport 3000 (local dev). يمكن تجاوزها عبر BACKEND_CORS_ORIGINS env var.
+    # النوع str | list[str] يسمح لـ pydantic-settings بتمرير CSV string إلى
+    # field_validator بدلاً من محاولة parse JSON مباشرة.
+    BACKEND_CORS_ORIGINS: str | list[str] = Field(
+        default=[
+            "http://localhost:3000",
+            "http://localhost:5000",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5000",
+        ]
+    )
+    # D-WS-002: ALLOWED_HOSTS يشمل Gitpod/Ona/Codespaces wildcard hosts.
+    # TrustedHostMiddleware يرفض أي host غير موجود هنا بـ 400.
+    # النوع str | list[str] يسمح بـ CSV في env var.
+    ALLOWED_HOSTS: str | list[str] = Field(
+        default=[
+            "localhost",
+            "127.0.0.1",
+            "testserver",
+            "test",
+            # Gitpod / Ona
+            "*.gitpod.io",
+            "*.ws-eu.gitpod.io",
+            "*.ws-us.gitpod.io",
+            # GitHub Codespaces
+            "*.app.github.dev",
+            "*.preview.app.github.dev",
+            # Replit
+            "*.replit.dev",
+            "*.replit.app",
+            "*.janeway.replit.dev",
+        ]
+    )
 
     # Infra
     REDIS_URL: str | None = None
@@ -179,7 +211,8 @@ class AppSettings(BaseServiceSettings):
     CODESPACES: bool = Field(False, description="Is running in Codespaces")
     CODESPACE_NAME: str | None = Field(None, description="Codespace Name")
     GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: str | None = Field(None)
-    FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend URL")
+    # D-WS-002: port 5000 هو المنفذ الافتراضي للـ frontend في Codespaces/Gitpod/Ona
+    FRONTEND_URL: str = Field(default="http://localhost:5000", description="Frontend URL")
     ENABLE_STATIC_FILES: bool = Field(
         True, description="Enable backend static file serving (disable for Next.js-only UI)."
     )

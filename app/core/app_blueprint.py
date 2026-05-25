@@ -179,16 +179,21 @@ def build_middleware_stack(settings: AppSettings) -> list[MiddlewareSpec]:
     return stack
 
 
-def build_cors_options(origins: list[str]) -> dict[str, object]:
+def build_cors_options(origins: str | list[str]) -> dict[str, object]:
     """
     بناء خيارات CORS بشكل واضح ومتسق.
 
     Args:
-        origins: قائمة الأصول المسموح بها.
+        origins: قائمة الأصول المسموح بها (list أو CSV string).
 
     Returns:
         dict[str, object]: قاموس خيارات CORS الجاهز للاستخدام.
     """
+    # D-WS-002: field_validator يُحوِّل str → list[str] قبل هذه الدالة،
+    # لكن نُضيف guard دفاعياً لضمان list دائماً.
+    if isinstance(origins, str):
+        from app.core.settings.helpers import _normalize_csv_or_list
+        origins = _normalize_csv_or_list(origins)
     allow_origins = origins or ["*"]
     options = dict(BASE_CORS_OPTIONS)
     options["allow_origins"] = allow_origins

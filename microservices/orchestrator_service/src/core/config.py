@@ -40,8 +40,9 @@ class Settings(BaseSettings):
         description="Shared key for internal admin-tool endpoints",
     )
 
-    # CORS
-    BACKEND_CORS_ORIGINS: list[str] = Field(default=["*"], description="CORS Allowed Origins")
+    # CORS — stored as raw string to support both comma-separated and JSON-array formats
+    # from the shared root .env. Use the `cors_origins` property for the parsed list.
+    BACKEND_CORS_ORIGINS: str = Field(default="*", description="CORS Allowed Origins (comma-sep or JSON array)")
 
     # Database
     POSTGRES_USER: str = "postgres"
@@ -73,6 +74,14 @@ class Settings(BaseSettings):
     USER_SERVICE_URL: str | None = Field(default=None, validate_default=True)
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def _coerce_cors_to_str(cls, v: object) -> str:
+        """يقبل list أو str — يُحوِّل list إلى CSV لتجنب فشل DotEnvSettingsSource."""
+        if isinstance(v, list):
+            return ",".join(str(x) for x in v)
+        return str(v) if v is not None else "*"
 
     @field_validator("CODESPACES", mode="before")
     @classmethod
@@ -121,6 +130,16 @@ class Settings(BaseSettings):
             return f"http://localhost:{local_port}"
         return f"http://{host}:{docker_port}"
 
+    @property
+    def cors_origins(self) -> list[str]:
+        """يُحوِّل BACKEND_CORS_ORIGINS إلى قائمة — يقبل JSON أو فواصل."""
+        v = self.BACKEND_CORS_ORIGINS.strip()
+        if v.startswith("["):
+            import json
+
+            return json.loads(v)
+        return [item.strip() for item in v.split(",") if item.strip()]
+
     def model_post_init(self, __context: object) -> None:
         if not self.DATABASE_URL:
             self.DATABASE_URL = (
@@ -136,7 +155,7 @@ class Settings(BaseSettings):
                 raise ValueError("DEBUG must be False in production")
             if self.SECRET_KEY == "dev_secret_key" or len(self.SECRET_KEY) < 32:
                 raise ValueError("SECRET_KEY must be strong in production")
-            if self.BACKEND_CORS_ORIGINS == ["*"]:
+            if self.cors_origins == ["*"]:
                 raise ValueError("SECURITY RISK: BACKEND_CORS_ORIGINS cannot be '*' in production.")
             if not self.ADMIN_TOOL_API_KEY or len(self.ADMIN_TOOL_API_KEY) < 24:
                 raise ValueError(

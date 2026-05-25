@@ -2285,3 +2285,73 @@ curl -I -H "Upgrade: websocket" ... http://localhost:8000/api/chat/ws
 - `--ws-ping-interval 300 --ws-ping-timeout 300` ساعد على الشبكات المتذبذبة
 - لكن المشكلة الحقيقية كانت routing failure وليس keepalive
 - الإصلاح الجديد يحل كلا المشكلتين
+
+---
+
+## ISS-WS-FLAP-001 — WebSocket Flapping (يعمل → يتعطل → يعود) — 2026-05-25
+
+**الأعراض:** WS يعمل بشكل طبيعي، ثم يتذبذب (يعمل → يتعطل → يعود) بشكل دوري.
+
+**التشخيص الجنائي:** 4 أسباب جذرية مُكتشَفة:
+
+### السبب #1 — الجذري (🟢 95%): `_emit_terminal_frames` بدون حماية في `finally`
+
+**الميكانيك:**
+1. العميل يقطع الاتصال أثناء البث (mobile nav-away, network switch)
+2. `stream_task` يُلغى في `finally`
+3. `_emit_terminal_frames` تستدعي `websocket.send_json` على socket مغلق
+4. `send_json` يرمي `RuntimeError` أو `WebSocketDisconnect`
+5. الاستثناء يُسقط من `finally` بدون معالجة
+6. الـ `while True` loop يحاول `receive_json` على socket مغلق → `WebSocketDisconnect`
+7. العميل يُعيد الاتصال → يعمل → يتكرر النمط = **FLAPPING**
+
+**الإصلاح:** لف `_emit_terminal_frames` في `try/except (WebSocketDisconnect, RuntimeError)` داخل `finally`.
+
+**الملفات:** `app/api/routers/customer_chat.py`, `app/api/routers/admin.py`
+
+### السبب #2 (🟢 85%): `NullPool` + Supabase = connection exhaustion تراكمي
+
+**الميكانيك:**
+- `NullPool` يفتح TCP connection جديد لكل `async_session_factory()`
+- كل turn يفتح 3-4 sessions (user_msg + history + assistant_msg + BKT)
+- Supabase free tier: max ~60 connections
+- بعد ~15 طلب متزامن → connection refused → DB error → stream_error → flap
+
+**الإصلاح:** استبدال `NullPool` بـ `pool_size=5, max_overflow=5, pool_recycle=300` مع `statement_cache_size=0`.
+
+**الملف:** `app/core/database.py`
+
+### السبب #3 (🟡 70%): `stream_and_forward` لا تتحقق من WS state قبل `send_json`
+
+**الميكانيك:**
+- عند disconnect، `stream_task` تستمر في قراءة HTTP stream من orchestrator
+- تحاول `send_json` على socket مغلق → `RuntimeError` داخل task
+- Task تموت صامتة، `finally` يُلغيها لكن الضرر حدث
+
+**الإصلاح:** إضافة `_ws_is_connected(websocket)` check في بداية كل iteration داخل `stream_and_forward`.
+
+### السبب #4 (🟡 60%): BKT `await` متزامن يُحجب بدء البث
+
+**الميكانيك:**
+- `_evaluate_and_emit_bkt` يُستدعى بـ `await` قبل `stream_task`
+- إذا كان Supabase بطيئاً (>500ms)، يُحجب الـ event loop
+- العميل يرى timeout قبل أول `assistant_delta` → disconnect → reconnect
+
+**الإصلاح:** تحويل إلى `asyncio.create_task()` مع `add_done_callback` للـ error logging.
+
+### التحقق الحي (2026-05-25)
+
+```
+Test 1 (Normal turn):     ✅ PASS — conversation_init → assistant_delta → assistant_final → persisted
+Test 2 (Mid-stream disc): ✅ PASS — server handles gracefully, no crash
+Test 3 (Reconnect):       ✅ PASS — NO FLAPPING — server accepts new connection immediately
+Admin endpoint:           ✅ PASS — same results
+115 unit tests:           ✅ ALL PASS
+```
+
+### قانون D-WS-FLAP-001 (إلزامي لكل agent مستقبلي)
+
+- **كل `send_json` في `finally` يجب أن يكون داخل `try/except (WebSocketDisconnect, RuntimeError)`**
+- **كل `stream_and_forward` يجب أن تتحقق من `_ws_is_connected()` في بداية كل iteration**
+- **لا `await` ثقيل (DB/LLM) قبل بدء البث — استخدم `asyncio.create_task()`**
+- **Supabase + asyncpg = `pool_size=5` لا `NullPool`** (NullPool يُسبب connection exhaustion)

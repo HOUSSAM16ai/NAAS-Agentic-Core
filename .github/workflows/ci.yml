@@ -232,6 +232,13 @@ jobs:
             # never sees a `skipped` entry from this file. The tests
             # remain runnable locally against a live server.
             --ignore=tests/integration/test_bac_exercise_websocket.py
+            # TestLiveWebSocketRouting: live tests that connect to localhost:8000
+            # and localhost:8003. In CI no services are running so they call
+            # pytest.skip() internally — which triggers the strict-quality policy.
+            # Deselect them here; they remain runnable locally against a live stack.
+            --deselect tests/microservices/test_websocket_gateway_routing.py::TestLiveWebSocketRouting::test_gateway_ws_returns_101
+            --deselect tests/microservices/test_websocket_gateway_routing.py::TestLiveWebSocketRouting::test_conversation_service_ws_returns_101
+            --deselect tests/microservices/test_websocket_gateway_routing.py::TestLiveWebSocketRouting::test_gateway_ws_not_404
           )
 
           if python -m pytest --help | grep -q -- "--cov"; then

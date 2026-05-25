@@ -1,6 +1,6 @@
 # CogniForge — Claude Code Context
 
-> **AI tutor for Algerian students** | FastAPI 8000 + Next.js 3000/5000 + LangGraph 1.1.10
+> **AI tutor for Algerian students** | FastAPI 8000 + Next.js 5000 + LangGraph 1.1.10
 > Arabic / French / Darija | BAC preparation platform
 
 ---
@@ -118,7 +118,7 @@ CogniForge is an educational AI platform for Algerian high-school students prepa
 
 | Environment | Frontend port | How it picks the port |
 |---|---|---|
-| **GitHub Codespaces** (primary) | **3000** | `.devcontainer/supervisor.sh:256` passes `--port $FRONTEND_PORT` (default 3000) to `next dev`, overriding `package.json` `--port 5000`. Process confirmed: `node next dev --port 5000 --port 3000` — last flag wins. |
+| **GitHub Codespaces** (primary) | **5000** | `supervisor.sh` sets `FRONTEND_PORT=5000` (default). `server.js` reads `PORT \|\| FRONTEND_PORT \|\| 3000`. `devcontainer.json` sets `onAutoForward: openBrowser` for port 5000 — browser tab opens automatically. |
 | **Replit** | **5000** | `frontend/package.json` script `"dev": "next dev --hostname 0.0.0.0 --port 5000"` is used directly |
 
 In both environments the backend is on **8000** and microservices in `microservices/` are **dormant by default** — neither environment starts them. The Codespaces devcontainer (`.devcontainer/docker-compose.host.yml`) launches a single `web` container; the full microservices stack only comes up when you explicitly run `docker compose -f docker-compose.yml up -d`.
@@ -220,7 +220,7 @@ curl -s http://localhost:8000/health | python -m json.tool
 
 ```
 Browser
-  └── Next.js (port 3000 — supervisor.sh overrides package.json port 5000)
+  └── Next.js (port 5000 — supervisor.sh FRONTEND_PORT=5000, server.js binds 0.0.0.0:5000)
         └── next.config.js rewrites /api/* → localhost:8000
               └── FastAPI monolith (port 8000) — requires DATABASE_URL
                     ├── /api/security/login, /register
@@ -609,7 +609,7 @@ decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question)
 
 | Service | Port | Status | Evidence |
 |---|---|---|---|
-| **Next.js** | **3000** | **ACTIVE** | `supervisor.sh` passes `--port 3000` overriding `package.json --port 5000`. HTML confirmed. |
+| **Next.js** | **5000** | **ACTIVE** | `supervisor.sh` default `FRONTEND_PORT=5000`. `server.js` binds `0.0.0.0:5000`. `devcontainer.json` `onAutoForward: openBrowser` opens browser tab automatically. |
 | **FastAPI** | **8000** | **ACTIVE** | `GET /health → {"application":"ok","database":"ok","version":"v4.1-root"}`. 62 routes. Requires `DATABASE_URL` in **process env** (not just `.env` — see §6.8). |
 | **Grafana** | **3001** | **ACTIVE** | `GET /api/health → {"database":"ok"}`. 5 dashboards. Prometheus datasource UP. All 3 targets scraping. |
 | **Prometheus** | **9090** | **ACTIVE** | `GET /-/healthy → "Prometheus Server is Healthy."` Targets: fastapi UP, grafana UP, prometheus UP. |

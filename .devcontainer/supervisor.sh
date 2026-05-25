@@ -31,7 +31,7 @@ set -Eeuo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly APP_ROOT="/app"
 readonly APP_PORT="${PORT:-8000}"
-readonly FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+readonly FRONTEND_PORT="${FRONTEND_PORT:-5000}"
 readonly HEALTH_ENDPOINT="http://localhost:${APP_PORT}/health"
 
 cd "$APP_ROOT"
@@ -442,15 +442,16 @@ launch_frontend() {
 
         if lifecycle_check_process "next.*dev\|node.*server\.js"; then
             lifecycle_info "Frontend Launcher: Next.js dev server already running"
+        elif lsof -ti :"$FRONTEND_PORT" >/dev/null 2>&1; then
+            lifecycle_warn "Frontend Launcher: Port $FRONTEND_PORT already in use — skipping start"
         else
-            lifecycle_info "Frontend Launcher: Starting Next.js dev server..."
-            # Using exec to replace the subshell with the process
+            lifecycle_info "Frontend Launcher: Starting Next.js dev server on port $FRONTEND_PORT..."
             # D-WS-001: custom server يُمرِّر WebSocket إلى Gateway (8000)
             # next dev لا يُمرِّر WebSocket upgrades — server.js يحل هذا
             (cd frontend && PORT="$FRONTEND_PORT" HOSTNAME="0.0.0.0" exec npm run dev) &
             FRONTEND_PID=$!
             lifecycle_set_state "next_pid" "$FRONTEND_PID"
-            lifecycle_info "Frontend Launcher: Next.js dev server started (PID: $FRONTEND_PID)"
+            lifecycle_info "Frontend Launcher: Next.js dev server started (PID: $FRONTEND_PID, port: $FRONTEND_PORT)"
         fi
     else
         lifecycle_warn "Frontend Launcher: npm not available"

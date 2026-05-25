@@ -1,5 +1,41 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-24 | Branch: `feat/resilient-websocket-auth`
+> Last updated: 2026-05-25 | Branch: `feat/frontend-port-5000-autostart`
+
+---
+
+## ✅ Resolved 2026-05-25 (ISS-PORT-001 — Frontend Auto-Start on Port 5000)
+
+### ISS-PORT-001 · Frontend لا يبدأ تلقائياً على المنفذ 5000 في Codespaces [RESOLVED]
+
+- **Status**: RESOLVED 2026-05-25
+- **Severity**: 🟡 MEDIUM (تجربة مطوِّر — يتطلب تشغيلاً يدوياً في كل مرة)
+
+#### Root Cause
+
+`supervisor.sh` كان يضبط `FRONTEND_PORT="${FRONTEND_PORT:-3000}"` كقيمة افتراضية، بينما:
+- `frontend/server.js` يقرأ `PORT || FRONTEND_PORT || '3000'`
+- `frontend/package.json` يُعرِّف `dev: "node server.js"` (يستخدم port 5000 فقط عبر `dev:next`)
+- `devcontainer.json` كان يضبط `onAutoForward: "notify"` للمنفذ 5000 بدلاً من `"openBrowser"`
+
+النتيجة: الـ frontend كان يبدأ على 3000 (أو لا يبدأ تلقائياً على 5000)، والمتصفح لا يفتح تلقائياً.
+
+#### Fix Applied
+
+| الملف | التغيير |
+|-------|---------|
+| `.devcontainer/supervisor.sh` | `FRONTEND_PORT` default: `3000` → `5000`؛ أُضيفت حماية `lsof` من EADDRINUSE |
+| `.devcontainer/devcontainer.json` | `forwardPorts`: 5000 أصبح أول منفذ؛ `onAutoForward` للمنفذ 5000: `"notify"` → `"openBrowser"`؛ المنفذ 3000: `"silent"` → `"ignore"` |
+| `.devcontainer/on-start.sh` | `gh codespace ports visibility 5000:public`؛ رسائل المنفذ صُحِّحت من 3000 إلى 5000 |
+| `CLAUDE.md` | جدول المنافذ وجدول الحالة صُحِّحا ليعكسا 5000 كمنفذ Codespaces الفعلي |
+
+#### Verification
+
+```bash
+# بعد إعادة فتح Codespace:
+curl -s http://localhost:5000 | head -5   # يجب أن يُرجع HTML
+curl -s http://localhost:8000/health      # يجب أن يُرجع {"status":"healthy"}
+# المنفذ 5000 يظهر في Ports panel ويفتح المتصفح تلقائياً
+```
 
 ---
 

@@ -332,9 +332,7 @@ class TestQuestionAlignmentSanitizer:
     def test_strip_unrequested_color_lines_probability(self):
         question = "تمرين احتمالات: لدينا كرات بيضاء وحمراء فقط."
         answer = (
-            "لدينا كرات بيضاء وحمراء.\n"
-            "كما توجد كرات زرقاء وسوداء.\n"
-            "نحسب الآن الاحتمال المطلوب."
+            "لدينا كرات بيضاء وحمراء.\nكما توجد كرات زرقاء وسوداء.\nنحسب الآن الاحتمال المطلوب."
         )
         cleaned = _local_graph._strip_unrequested_color_lines(question, answer, "educational")
         assert "زرقاء" not in cleaned and "سوداء" not in cleaned

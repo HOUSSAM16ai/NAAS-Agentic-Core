@@ -133,8 +133,7 @@ def _extract_token_from_protocols(protocols: list[str]) -> str | None:
 
     if jwt_index + 1 >= len(protocols):
         logger.debug(
-            "ws_auth.subprotocol: 'jwt' موجود لكن لا يوجد token بعده "
-            "(protocols_count=%d)",
+            "ws_auth.subprotocol: 'jwt' موجود لكن لا يوجد token بعده (protocols_count=%d)",
             len(protocols),
         )
         return None
@@ -222,8 +221,7 @@ def _extract_from_auth_header(websocket: WebSocket) -> str | None:
     lower = auth_header.lower()
     if not lower.startswith("bearer "):
         logger.debug(
-            "ws_auth.auth_header: Authorization موجود لكن ليس Bearer "
-            "(scheme=%s)",
+            "ws_auth.auth_header: Authorization موجود لكن ليس Bearer (scheme=%s)",
             auth_header.split()[0] if auth_header.split() else "empty",
         )
         return None
@@ -273,8 +271,7 @@ def _extract_from_subprotocol(websocket: WebSocket) -> tuple[str | None, str | N
 
     if not token:
         logger.debug(
-            "ws_auth.subprotocol: protocols موجودة لكن لا يوجد jwt+token "
-            "(protocols=%r)",
+            "ws_auth.subprotocol: protocols موجودة لكن لا يوجد jwt+token (protocols=%r)",
             protocols[:5],
         )
         return None, None
@@ -364,9 +361,7 @@ def extract_websocket_auth(websocket: WebSocket) -> tuple[str | None, str | None
         زوج ``(token, selected_protocol)`` حيث يمكن أن تكون القيم ``None``.
         ``selected_protocol`` يُستخدم في ``websocket.accept(subprotocol=...)``.
     """
-    client_host = (
-        getattr(websocket.client, "host", "unknown") if websocket.client else "unknown"
-    )
+    client_host = getattr(websocket.client, "host", "unknown") if websocket.client else "unknown"
 
     # ── الطبقة 1: Cookie ────────────────────────────────────────────────────
     cookie_token = _extract_from_cookie(websocket)
@@ -417,9 +412,7 @@ def extract_websocket_auth_detailed(websocket: WebSocket) -> WebSocketAuthResult
     Returns:
         ``WebSocketAuthResult`` يحتوي على token والمصدر والبروتوكول.
     """
-    client_host = (
-        getattr(websocket.client, "host", "unknown") if websocket.client else "unknown"
-    )
+    client_host = getattr(websocket.client, "host", "unknown") if websocket.client else "unknown"
 
     cookie_token = _extract_from_cookie(websocket)
     if cookie_token:

@@ -14,10 +14,10 @@ Root Cause (ISS-OFFLINE-001):
   - الحل: ws_proxy.py يُمرِّر WebSocket إلى 8003 مباشرة
 """
 
-
 import pytest
 
 # ─── اختبارات ws_proxy router ───────────────────────────────────────────────
+
 
 class TestWsProxyRouter:
     """يتحقق من تسجيل WebSocket proxy routes."""
@@ -25,10 +25,8 @@ class TestWsProxyRouter:
     def test_ws_proxy_routes_registered(self):
         """يتحقق من أن /api/chat/ws و /admin/api/chat/ws مُسجَّلان."""
         import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "ws_proxy",
-            "app/api/routers/ws_proxy.py"
-        )
+
+        spec = importlib.util.spec_from_file_location("ws_proxy", "app/api/routers/ws_proxy.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
@@ -46,10 +44,7 @@ class TestWsProxyRouter:
 
         from fastapi.routing import APIWebSocketRoute
 
-        spec = importlib.util.spec_from_file_location(
-            "ws_proxy",
-            "app/api/routers/ws_proxy.py"
-        )
+        spec = importlib.util.spec_from_file_location("ws_proxy", "app/api/routers/ws_proxy.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
@@ -61,10 +56,8 @@ class TestWsProxyRouter:
     def test_upstream_url_builder(self):
         """يتحقق من بناء upstream URL بشكل صحيح."""
         import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "ws_proxy",
-            "app/api/routers/ws_proxy.py"
-        )
+
+        spec = importlib.util.spec_from_file_location("ws_proxy", "app/api/routers/ws_proxy.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
@@ -86,10 +79,8 @@ class TestWsProxyRouter:
 
         import importlib
         import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "ws_proxy_env",
-            "app/api/routers/ws_proxy.py"
-        )
+
+        spec = importlib.util.spec_from_file_location("ws_proxy_env", "app/api/routers/ws_proxy.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
@@ -99,16 +90,15 @@ class TestWsProxyRouter:
 
 # ─── اختبارات registry ──────────────────────────────────────────────────────
 
+
 class TestRouterRegistry:
     """يتحقق من ترتيب الـ routers في registry."""
 
     def test_ws_proxy_registered_in_registry(self):
         """يتحقق من أن ws_proxy مُسجَّل في base_router_registry."""
         import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "ws_proxy",
-            "app/api/routers/ws_proxy.py"
-        )
+
+        spec = importlib.util.spec_from_file_location("ws_proxy", "app/api/routers/ws_proxy.py")
         ws_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ws_mod)
 
@@ -144,11 +134,13 @@ class TestRouterRegistry:
 
 # ─── اختبارات wsUrl utility ─────────────────────────────────────────────────
 
+
 class TestWsUrlUtility:
     """يتحقق من wsUrl.js utility logic (منطق Python مكافئ)."""
 
     def test_http_to_ws_protocol_mapping(self):
         """يتحقق من تحويل HTTP protocols إلى WebSocket."""
+
         # منطق مكافئ لـ httpToWsProtocol في wsUrl.js
         def http_to_ws(protocol: str) -> str:
             if protocol == "https:":
@@ -198,6 +190,7 @@ class TestWsUrlUtility:
 
 
 # ─── اختبارات live WebSocket (تتطلب services تعمل) ─────────────────────────
+
 
 @pytest.mark.integration
 class TestLiveWebSocketRouting:

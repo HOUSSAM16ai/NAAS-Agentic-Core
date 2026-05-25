@@ -29,7 +29,6 @@ from app.api.routers.ws_auth import (
     extract_websocket_auth_detailed,
 )
 
-
 # ─── Fake WebSocket ──────────────────────────────────────────────────────────
 
 
@@ -250,26 +249,26 @@ class TestExtractFromSubprotocol:
             headers={"sec-websocket-protocol": "mytoken123, jwt"}
         )
         # jwt ليس في الموضع الصحيح — لا يوجد token بعده
-        token, proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
+        token, _proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
         assert token is None
 
     def test_no_jwt_in_protocols(self) -> None:
         ws = _FakeWebSocket(
             headers={"sec-websocket-protocol": "custom-proto"}
         )
-        token, proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
+        token, _proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
         assert token is None
-        assert proto is None
+        assert _proto is None
 
     def test_empty_subprotocol_header(self) -> None:
         ws = _FakeWebSocket(headers={"sec-websocket-protocol": ""})
-        token, proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
+        token, _proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
         assert token is None
-        assert proto is None
+        assert _proto is None
 
     def test_malformed_header_with_only_commas(self) -> None:
         ws = _FakeWebSocket(headers={"sec-websocket-protocol": ",,,,"})
-        token, proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
+        token, _proto = _extract_from_subprotocol(ws)  # type: ignore[arg-type]
         assert token is None
 
 

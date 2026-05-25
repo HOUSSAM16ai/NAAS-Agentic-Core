@@ -14,10 +14,8 @@ Root Cause (ISS-OFFLINE-001):
   - الحل: ws_proxy.py يُمرِّر WebSocket إلى 8003 مباشرة
 """
 
-import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, patch, MagicMock
 
+import pytest
 
 # ─── اختبارات ws_proxy router ───────────────────────────────────────────────
 
@@ -45,6 +43,7 @@ class TestWsProxyRouter:
     def test_ws_proxy_routes_are_websocket_type(self):
         """يتحقق من أن الـ routes هي WebSocket وليس HTTP."""
         import importlib.util
+
         from fastapi.routing import APIWebSocketRoute
 
         spec = importlib.util.spec_from_file_location(
@@ -85,8 +84,8 @@ class TestWsProxyRouter:
         """يتحقق من أن CONVERSATION_SERVICE_WS_URL يُغيِّر الـ upstream."""
         monkeypatch.setenv("CONVERSATION_SERVICE_WS_URL", "ws://conv-service:9000")
 
-        import importlib.util
         import importlib
+        import importlib.util
         spec = importlib.util.spec_from_file_location(
             "ws_proxy_env",
             "app/api/routers/ws_proxy.py"

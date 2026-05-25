@@ -313,9 +313,17 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
              });
 
              // Fatal auth errors — لا إعادة اتصال
+             // D-WS-004: 4401 = token منتهي أو مفقود → يجب إعادة تسجيل الدخول
+             //           4403 = صلاحيات غير كافية (admin يحاول customer endpoint)
              if (FATAL_CODES.has(e.code)) {
-                 console.warn("[WS] Fatal auth error, stopping reconnection:", e.code);
+                 console.warn("[WS] Fatal auth error, stopping reconnection:", e.code, e.reason);
                  setState("auth_error");
+                 // أُطلق حدث عالمي ليتمكن الـ UI من إعادة توجيه المستخدم لتسجيل الدخول
+                 if (typeof window !== 'undefined') {
+                     window.dispatchEvent(new CustomEvent('agent:auth_error', {
+                         detail: { code: e.code, reason: e.reason || 'session_expired' }
+                     }));
+                 }
                  return;
              }
 

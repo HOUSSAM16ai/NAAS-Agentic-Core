@@ -233,11 +233,16 @@ const DashboardLayout = ({ user, token, onLogout }) => {
 
     const getStatusText = (st) => {
         switch (st) {
-            case 'connected': return 'متصل';
-            case 'connecting': return 'جاري الاتصال...';
+            case 'connected':    return 'متصل';
+            case 'recovered':    return 'متصل';
+            case 'connecting':   return 'جاري الاتصال...';
+            case 'reconnecting': return 'إعادة الاتصال...';
+            case 'degraded':     return 'اتصال ضعيف';
+            case 'offline':      return 'غير متصل';
+            case 'auth_error':   return 'انتهت الجلسة';
             case 'disconnected': return 'غير متصل';
-            case 'error': return 'خطأ في الاتصال';
-            default: return st;
+            case 'error':        return 'خطأ في الاتصال';
+            default:             return st || 'غير متصل';
         }
     };
 
@@ -361,6 +366,19 @@ const App = () => {
         const storedToken = localStorage.getItem('token');
         if (storedToken) setToken(storedToken);
         else setIsLoading(false);
+    }, []);
+
+    // D-WS-004: استمع لـ auth_error من useRealtimeConnection.
+    // عندما يُغلق الـ backend الاتصال بـ 4401 (token منتهي/مفقود) →
+    // أُطلق logout تلقائياً لإعادة توجيه المستخدم لتسجيل الدخول.
+    useEffect(() => {
+        const handleAuthError = (e) => {
+            console.warn('[App] WS auth error received — logging out:', e.detail);
+            logout();
+        };
+        window.addEventListener('agent:auth_error', handleAuthError);
+        return () => window.removeEventListener('agent:auth_error', handleAuthError);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {

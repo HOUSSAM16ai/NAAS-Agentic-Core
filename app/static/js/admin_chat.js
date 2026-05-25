@@ -1,58 +1,139 @@
-document.addEventListener("DOMContentLoaded", function() {
+/**
+ * admin_chat.js — Legacy static admin chat client
+ *
+ * ملاحظة: هذا الملف legacy ولا يُستخدم في الـ Next.js frontend.
+ * الـ frontend الحديث يستخدم useAgentSocket + useRealtimeConnection.
+ *
+ * الإصلاحات المُطبَّقة (D-WS-004):
+ * - الـ endpoint الصحيح: /admin/api/chat/ws (وليس /ws/chat غير الموجود)
+ * - token من localStorage يُرسَل عبر query param (وليس بدون auth)
+ * - ws/wss يختار تلقائياً حسب protocol
+ * - معالجة event types الحديثة (assistant_delta, assistant_final)
+ */
+document.addEventListener("DOMContentLoaded", function () {
     const chatBox = document.getElementById("chat-box");
     const chatInput = document.getElementById("chat-input");
     const sendBtn = document.getElementById("send-btn");
 
-    // ISS-OFFLINE-001: استخدام protocol ديناميكي — wss في https، ws في http
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(wsProtocol + "//" + window.location.host + "/ws/chat");
+    if (!chatBox || !chatInput || !sendBtn) return;
 
-    socket.onopen = function(event) {
-        chatBox.innerHTML += "<p><em>Connected to AI...</em></p>";
-    };
+    // D-WS-004: ws/wss ديناميكي — لا hardcoding
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 
-    socket.onmessage = function(event) {
-        // Since the backend streams raw lines, we need to parse the JSON content.
-        // The AI service nests the actual content inside a 'delta' key.
-        try {
-            const data = JSON.parse(event.data);
-            if (data && data.delta) { // Check for the 'delta' key
-                chatBox.innerHTML += `<span>${data.delta}</span>`;
-            } else if (event.data.includes("Error:")) { // Handle plain error messages
-                chatBox.innerHTML += `<p style="color: red;">${event.data}</p>`;
-            }
-        } catch (e) {
-            // If it's not valid JSON, it might be a plain text message or an error
-            // This also handles the final full response from invoke_chat_stream
-            // which is not a delta chunk. We can ignore it for a cleaner UI.
+    // D-WS-004: الـ endpoint الصحيح للأدمن
+    const WS_ENDPOINT = "/admin/api/chat/ws";
+
+    let socket = null;
+
+    function _getToken() {
+        return localStorage.getItem("token") || "";
+    }
+
+    function _buildWsUrl() {
+        const token = _getToken();
+        // D-WS-004: token عبر query param — يعمل عبر كل proxies (Codespaces/Gitpod/mobile)
+        // sec-websocket-protocol يُحذف من proxies وشبكات الهاتف
+        const base = wsProtocol + "//" + window.location.host + WS_ENDPOINT;
+        return token ? base + "?token=" + encodeURIComponent(token) : base;
+    }
+
+    function connect() {
+        const token = _getToken();
+        if (!token) {
+            chatBox.innerHTML += "<p style='color:red'><em>يجب تسجيل الدخول أولاً.</em></p>";
+            return;
         }
 
-        // Auto-scroll to the bottom
-        chatBox.scrollTop = chatBox.scrollHeight;
-    };
+        const url = _buildWsUrl();
+        socket = new WebSocket(url);
 
-    socket.onclose = function(event) {
-        chatBox.innerHTML += "<p><em>Connection closed.</em></p>";
-    };
+        socket.onopen = function () {
+            chatBox.innerHTML += "<p><em>متصل...</em></p>";
+        };
 
-    socket.onerror = function(error) {
-        chatBox.innerHTML += `<p><em>An error occurred: ${error.message}</em></p>`;
-    };
+        socket.onmessage = function (event) {
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.type === "assistant_delta") {
+                    const content = data?.payload?.content || "";
+                    if (content) {
+                        const lastP = chatBox.querySelector("p.assistant-streaming");
+                        if (lastP) {
+                            lastP.textContent += content;
+                        } else {
+                            const p = document.createElement("p");
+                            p.className = "assistant-streaming";
+                            p.textContent = content;
+                            chatBox.appendChild(p);
+                        }
+                    }
+                } else if (data.type === "assistant_final") {
+                    const streaming = chatBox.querySelector("p.assistant-streaming");
+                    if (streaming) {
+                        streaming.classList.remove("assistant-streaming");
+                        const extra = data?.payload?.content || "";
+                        if (extra && !streaming.textContent.endsWith(extra)) {
+                            streaming.textContent += extra;
+                        }
+                    }
+                } else if (data.type === "error") {
+                    const msg = data?.payload?.details || "خطأ غير معروف";
+                    chatBox.innerHTML += "<p style='color:red'>" + msg + "</p>";
+                } else if (data.delta) {
+                    // Legacy format
+                    chatBox.innerHTML += "<span>" + data.delta + "</span>";
+                }
+            } catch (_e) {
+                // non-JSON — ignore
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        };
+
+        socket.onclose = function () {
+            const s = chatBox.querySelector("p.assistant-streaming");
+            if (s) s.classList.remove("assistant-streaming");
+            chatBox.innerHTML += "<p><em>انقطع الاتصال.</em></p>";
+            socket = null;
+        };
+
+        socket.onerror = function () {
+            chatBox.innerHTML += "<p style='color:red'><em>خطأ في الاتصال.</em></p>";
+        };
+    }
+
+    function _doSend(message) {
+        chatBox.innerHTML += "<p><b>أنت:</b> " + message + "</p>";
+        socket.send(JSON.stringify({ question: message }));
+        chatInput.value = "";
+    }
 
     function sendMessage() {
-        const message = chatInput.value;
-        if (message.trim() !== "") {
-            chatBox.innerHTML += `<p><b>You:</b> ${message}</p>`;
-            socket.send(message);
-            chatInput.value = "";
-            chatBox.innerHTML += `<p><b>AI:</b> </p>`; // Prepare a new line for the AI's response
+        const message = chatInput.value.trim();
+        if (!message) return;
+
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            connect();
+            var attempts = 0;
+            var waitAndSend = setInterval(function () {
+                attempts++;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    clearInterval(waitAndSend);
+                    _doSend(message);
+                } else if (attempts > 50) {
+                    clearInterval(waitAndSend);
+                }
+            }, 100);
+            return;
         }
+
+        _doSend(message);
     }
 
     sendBtn.addEventListener("click", sendMessage);
-    chatInput.addEventListener("keypress", function(event) {
-        if (event.key === "Enter") {
-            sendMessage();
-        }
+    chatInput.addEventListener("keypress", function (event) {
+        if (event.key === "Enter") sendMessage();
     });
+
+    connect();
 });

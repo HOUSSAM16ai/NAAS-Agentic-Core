@@ -85,8 +85,10 @@ async def _proxy_websocket(
         upstream_url: عنوان conversation-service
         subprotocols: بروتوكولات المصادقة (jwt, token)
     """
-    # قبول اتصال المتصفح أولاً
-    selected_protocol = subprotocols[1] if len(subprotocols) > 1 else None
+    # D-WS-004: قبول اتصال المتصفح أولاً.
+    # selected_protocol: إذا أرسل المتصفح ["jwt", token] → نُرجع "jwt" فقط.
+    # إذا لم يُرسل subprotocols (query param auth) → None.
+    selected_protocol = "jwt" if "jwt" in subprotocols else (subprotocols[0] if subprotocols else None)
     await client_ws.accept(subprotocol=selected_protocol)
 
     logger.info(

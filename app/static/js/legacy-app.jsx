@@ -65,10 +65,31 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         };
 
 
-        // ISS-OFFLINE-001: استخدام window.location.origin مباشرة — لا port hardcoding.
-        // في Codespaces/Gitpod: المتصفح يصل عبر proxy خارجي على نفس الـ host.
-        // Gateway (8000) يستقبل WebSocket ويُمرِّره إلى conversation-service (8003).
-        const API_ORIGIN = window.location.origin;
+        // D-WS-004: بناء API_ORIGIN ديناميكي يدعم Gitpod/Ona/Codespaces/local.
+        // في Gitpod/Ona: كل port له subdomain مختلف.
+        //   Frontend (5000): 5000-<id>.ws-eu.gitpod.io
+        //   Backend  (8000): 8000-<id>.ws-eu.gitpod.io
+        // في local dev: Next.js على 5000/3000، backend على 8000.
+        const API_ORIGIN = (() => {
+            const protocol = window.location.protocol;
+            const hostname = window.location.hostname;
+            const port = window.location.port;
+
+            // Gitpod / Ona: استبدل port prefix في subdomain
+            if (hostname.match(/^5000-/) && hostname.includes('.gitpod.')) {
+                return `${protocol}//${hostname.replace(/^5000-/, '8000-')}`;
+            }
+            // GitHub Codespaces: استبدل -5000. بـ -8000.
+            if (hostname.match(/-5000\./) && hostname.includes('.app.github.dev')) {
+                return `${protocol}//${hostname.replace(/-5000\./, '-8000.')}`;
+            }
+            // Local dev على port 5000 أو 3000 → backend على 8000
+            if (port === '5000' || port === '3000') {
+                return `${protocol}//${hostname}:8000`;
+            }
+            // Production / Replit / أي بيئة أخرى: نفس الـ origin
+            return window.location.origin;
+        })();
 
         const apiUrl = (path) => `${API_ORIGIN}${path}`;
         const wsBase = API_ORIGIN.replace(/^http/, 'ws');

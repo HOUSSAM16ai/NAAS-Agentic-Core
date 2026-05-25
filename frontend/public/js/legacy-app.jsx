@@ -65,13 +65,30 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         };
 
 
+        // D-WS-004: بناء API_ORIGIN ديناميكي يدعم Gitpod/Ona/Codespaces/local.
+        // في Gitpod/Ona: كل port له subdomain مختلف.
+        //   Frontend (5000): 5000-<id>.ws-eu.gitpod.io
+        //   Backend  (8000): 8000-<id>.ws-eu.gitpod.io
+        // في local dev: Next.js على 5000/3000، backend على 8000.
+        // في Codespaces: proxy يُمرِّر HTTP لكن ليس WebSocket — نحتاج host backend.
         const API_ORIGIN = (() => {
             const protocol = window.location.protocol;
             const hostname = window.location.hostname;
             const port = window.location.port;
-            if (port === '3000') {
+
+            // Gitpod / Ona: استبدل port prefix في subdomain
+            if (hostname.match(/^5000-/) && hostname.includes('.gitpod.')) {
+                return `${protocol}//${hostname.replace(/^5000-/, '8000-')}`;
+            }
+            // GitHub Codespaces: استبدل -5000. بـ -8000.
+            if (hostname.match(/-5000\./) && hostname.includes('.app.github.dev')) {
+                return `${protocol}//${hostname.replace(/-5000\./, '-8000.')}`;
+            }
+            // Local dev على port 5000 أو 3000 → backend على 8000
+            if (port === '5000' || port === '3000') {
                 return `${protocol}//${hostname}:8000`;
             }
+            // Production / Replit / أي بيئة أخرى: نفس الـ origin
             return window.location.origin;
         })();
 

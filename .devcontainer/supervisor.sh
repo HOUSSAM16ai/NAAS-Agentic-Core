@@ -117,6 +117,12 @@ _inject_env_secrets() {
     # ── Load .devcontainer/secrets.env as fallback when Codespaces Secrets absent ──
     # This file is git-ignored. It lets developers run without configuring
     # Codespaces Secrets — just copy secrets.env.example and fill in values.
+    #
+    # D-WS-004 fix: devcontainer.json injects empty strings for unset secrets
+    # (e.g. APP_DATABASE_URL=""). The old check `[ -z "${!key:-}" ]` treated
+    # empty-string as "not set" and correctly injected — but only when the
+    # variable was truly absent. When devcontainer sets it to "", the variable
+    # IS set (just empty), so we must check for empty OR unset explicitly.
     local secrets_file="$SCRIPT_DIR/secrets.env"
     if [ -f "$secrets_file" ]; then
         lifecycle_info "Loading fallback secrets from .devcontainer/secrets.env..."
@@ -128,7 +134,10 @@ _inject_env_secrets() {
             local key="${line%%=*}"
             local val="${line#*=}"
             [[ -z "$key" ]] && continue
-            if [ -z "${!key:-}" ]; then
+            # D-WS-004: inject when unset OR empty (devcontainer sets empty strings
+            # for secrets not configured in Gitpod/Codespaces environment)
+            local current_val="${!key:-}"
+            if [ -z "$current_val" ]; then
                 export "$key=$val"
                 lifecycle_info "  secrets.env -> $key injected"
             fi
@@ -363,8 +372,11 @@ _export_env_file() {
         if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
             local key="${BASH_REMATCH[1]}"
             local val="${BASH_REMATCH[2]}"
-            # Don't overwrite a non-empty process env var (process env wins)
-            if [ -z "${!key:-}" ]; then
+            # D-WS-004: inject when unset OR empty.
+            # devcontainer.json sets empty strings for unconfigured secrets,
+            # so we must treat "" the same as "unset" here.
+            local current_val="${!key:-}"
+            if [ -z "$current_val" ]; then
                 export "$key"="$val"
                 exported=$((exported + 1))
             fi

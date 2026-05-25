@@ -141,9 +141,11 @@ export const getWsBase = () => {
         return `${wsProtocol}//${window.location.host}`;
     }
 
-    // 4. Local dev: ws://localhost:8000 مباشرة (Next.js proxy لا يُمرِّر WS)
-    // نستخدم port 8000 مباشرة بدلاً من window.location.host (port 5000/3000)
-    const localBackendPort = '8000';
+    // 4. Local dev: ws://localhost:<BACKEND_PORT> مباشرة
+    // Next.js proxy لا يُمرِّر WebSocket upgrade headers.
+    // NEXT_PUBLIC_BACKEND_PORT يسمح بتغيير port بدون تعديل الكود.
+    // الافتراضي 8000 — يتطابق مع uvicorn في supervisor.sh.
+    const localBackendPort = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
     const hostname = window.location.hostname; // localhost أو 127.0.0.1
     return `ws://${hostname}:${localBackendPort}`;
 };

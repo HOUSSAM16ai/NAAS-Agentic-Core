@@ -24,6 +24,7 @@ WebSocket upgrade headers. النتيجة: المتصفح يضرب:
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 
@@ -131,7 +132,7 @@ async def _proxy_websocket(
                     logger.debug("ws_proxy.upstream_to_client_error: %s", exc)
 
             # تشغيل الاتجاهين بالتوازي — أي منهما ينتهي يُلغي الآخر
-            done, pending = await asyncio.wait(
+            _done, pending = await asyncio.wait(
                 [
                     asyncio.create_task(client_to_upstream()),
                     asyncio.create_task(upstream_to_client()),
@@ -141,10 +142,8 @@ async def _proxy_websocket(
 
             for task in pending:
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
                     await task
-                except (asyncio.CancelledError, Exception):
-                    pass
 
     except TimeoutError:
         logger.error(
@@ -172,10 +171,8 @@ async def _proxy_websocket(
 
     except Exception as exc:
         logger.error("ws_proxy.unexpected_error url=%s error=%s", upstream_url, exc)
-        try:
+        with contextlib.suppress(Exception):
             await client_ws.close(code=1011)
-        except Exception:
-            pass
 
 
 @router.websocket("/api/chat/ws")

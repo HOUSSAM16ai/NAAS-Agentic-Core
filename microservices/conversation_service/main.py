@@ -26,10 +26,12 @@ Contract:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
@@ -48,6 +50,34 @@ from microservices.conversation_service.src.conversation_graph import (
     get_conversation_graph,
     invoke_graph,
 )
+
+# ── D-WS-FLAP-002: WS control-message handler (inline copy) ──────────────────
+# لا نستورد من `app.services.skills` لأن microservices ممنوع لها استيراد من
+# monolith (§0.5). نُكرِّر منطق ping/pong هنا — Single Source of Truth يبقى
+# في `app/services/skills/doctrine.py:REALTIME_PROTOCOL_DOCTRINE`.
+_WS_CONTROL_TYPES = frozenset({"ping", "heartbeat", "noop"})
+_WS_CONTROL_REPLY = {"ping": "pong", "heartbeat": "heartbeat_ack", "noop": None}
+
+
+async def _handle_control_message(websocket: WebSocket, payload: object) -> bool:
+    """يرد على ping/heartbeat/noop ويُرجع True إذا كانت رسالة تحكم."""
+    if not isinstance(payload, dict):
+        return False
+    msg_type = payload.get("type")
+    if not isinstance(msg_type, str) or msg_type.lower() not in _WS_CONTROL_TYPES:
+        return False
+    reply_type = _WS_CONTROL_REPLY.get(msg_type.lower())
+    if reply_type is None:
+        return True  # noop swallowed
+    response: dict[str, object] = {"type": reply_type, "ts": datetime.now(UTC).isoformat()}
+    corr = payload.get("id") or payload.get("request_id")
+    if corr is not None:
+        response["id"] = corr
+    with contextlib.suppress(Exception):
+        # client likely closed — let receive_json detect it
+        await websocket.send_json(response)
+    return True
+
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +287,10 @@ async def chat_ws(websocket: WebSocket) -> None:
                 await websocket.send_json({"error": "timeout", "done": True})
                 break
 
+            # D-WS-FLAP-002: ping/heartbeat/noop يُعالَجون قبل أي محاولة سؤال.
+            if await _handle_control_message(websocket, payload):
+                continue
+
             question = str(payload.get("question", "")).strip()
             if not question:
                 await websocket.send_json({"error": "empty_question", "done": True})
@@ -323,6 +357,10 @@ async def admin_chat_ws(websocket: WebSocket) -> None:
             except TimeoutError:
                 await websocket.send_json({"error": "timeout", "done": True})
                 break
+
+            # D-WS-FLAP-002: ping/heartbeat/noop يُعالَجون قبل أي محاولة سؤال.
+            if await _handle_control_message(websocket, payload):
+                continue
 
             question = str(payload.get("question", "")).strip()
             if not question:

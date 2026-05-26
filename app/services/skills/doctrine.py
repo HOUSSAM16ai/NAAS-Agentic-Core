@@ -482,6 +482,55 @@ def get_impossible_case_summary() -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Realtime Protocol Doctrine — D-WS-FLAP-002 / ISS-WS-FLAP-002 (2026-05-26)
+# ─────────────────────────────────────────────────────────────────────────────
+# هذه القواعد تحكم سلوك الـ WebSocket message loop عبر كل WS endpoints في النظام.
+# الكارثة المُشخَّصة: الواجهة ترسل `{type:"ping"}` كل 25 ثانية كـ app-level
+# heartbeat، لكن الـ WS routers (customer_chat, admin, conversation_service)
+# كانت تعالج كل رسالة واردة كـ «سؤال»، تُرجع خطأ «Question is required»،
+# ولا تُرسل `{type:"pong"}` → timeout بعد 10s → close(1001) → reconnect → flap.
+#
+# المُستفيدون:
+# - `app.services.skills.ws_heartbeat_skill.handle_control_message`
+# - `app.api.routers.customer_chat.chat_stream_ws` (WS loop)
+# - `app.api.routers.admin.admin_chat_stream_ws` (WS loop)
+# - `microservices.conversation_service.main` (WS endpoints)
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: نسخة doctrine بروتوكول الـ realtime.
+REALTIME_PROTOCOL_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+REALTIME_PROTOCOL_DOCTRINE: Final[tuple[str, ...]] = (
+    "Control messages first: أي WS endpoint يستقبل رسالة بحقل `type` يجب أن "
+    "يفحص أولاً ما إذا كانت رسالة تحكم (ping/heartbeat/noop) قبل معالجتها كسؤال.",
+    'Ping ⇒ Pong: الرسالة `{"type":"ping"}` يجب أن تُرَدّ عليها بـ '
+    '`{"type":"pong","ts":<iso-utc>}` فوراً بدون أي معالجة إضافية.',
+    'Heartbeat ⇒ Ack: الرسالة `{"type":"heartbeat"}` يجب أن تُرَدّ عليها بـ '
+    '`{"type":"heartbeat_ack","ts":<iso-utc>}`.',
+    'Noop ⇒ Silent: الرسالة `{"type":"noop"}` تُبتلَع بصمت بدون رد (لا flooding).',
+    "Heartbeat هو Skill، ليس inline code: يجب استخدام "
+    "`app.services.skills.ws_heartbeat_skill.handle_control_message` — "
+    "ممنوع نسخ منطق ping/pong في كل router (Single Source of Truth).",
+    "Fail-open: إذا فشل إرسال pong (مثل client disconnected بين receive و send)، "
+    "يُسجَّل DEBUG ولا يُكسَر loop — receive_json التالي سيكشف الإغلاق.",
+    'Correlation: لو أرسل العميل `{"type":"ping","id":"..."}`، يجب أن '
+    "يُضمَّن نفس الـ `id` في الـ pong لتمكين tracing.",
+    "Backend-initiated heartbeat ليس بديلاً عن Application-level ping: uvicorn "
+    "`--ws-ping-interval` يفحص الـ TCP layer فقط — لا يكشف إذا كان الـ handler "
+    "عالق. الـ app-level heartbeat هو نظام liveness حقيقي للطبقة العليا.",
+)
+
+
+def get_realtime_protocol_summary() -> str:
+    """يُرجِع ملخصاً موجزاً لـ doctrine بروتوكول الـ realtime (للـ logs/system prompts)."""
+    return (
+        f"[v{REALTIME_PROTOCOL_DOCTRINE_VERSION}] "
+        f"{len(REALTIME_PROTOCOL_DOCTRINE)} قاعدة — "
+        "ping/pong + heartbeat/ack موحَّد عبر Skill، fail-open، correlation IDs."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -590,6 +639,18 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "content_retrieval_skill.src.impossible_case.analyze_impossible_case",
             # frontend: ImpossibleCaseRenderer (4 مراحل بصرية).
             "frontend.components.ImpossibleCaseRenderer",
+        ),
+    },
+    "realtime_protocol": {
+        "version": REALTIME_PROTOCOL_DOCTRINE_VERSION,
+        "rules_count": len(REALTIME_PROTOCOL_DOCTRINE),
+        "consumed_by": (
+            # D-WS-FLAP-002 (2026-05-26): معالج موحَّد لـ ping/pong عبر كل WS endpoints.
+            "ws_heartbeat_skill.handle_control_message",
+            "customer_chat.chat_stream_ws",
+            "admin.admin_chat_stream_ws",
+            "conversation_service.main.chat_ws",
+            "conversation_service.main.admin_chat_ws",
         ),
     },
 }
@@ -725,6 +786,8 @@ __all__ = [
     "MODEL_ANSWER_RELIANCE_VERSION",
     "PROBABILITY_CALCULATION_DOCTRINE",
     "PROBABILITY_CALCULATION_DOCTRINE_VERSION",
+    "REALTIME_PROTOCOL_DOCTRINE",
+    "REALTIME_PROTOCOL_DOCTRINE_VERSION",
     "RETRIEVAL_DOCTRINE",
     "RETRIEVAL_DOCTRINE_VERSION",
     "SKILL_DOCTRINE_MANIFEST",
@@ -741,6 +804,7 @@ __all__ = [
     "get_model_answer_explanation_summary",
     "get_model_answer_reliance_summary",
     "get_probability_calculation_summary",
+    "get_realtime_protocol_summary",
     "get_retrieval_doctrine_summary",
     "get_skill_invocation_protocol_summary",
     "get_step_by_step_summary",

@@ -96,7 +96,7 @@ async def _proxy_websocket(
     # Determine auth transport mode for diagnostics (never log token value)
     has_token_qp = "token=" in upstream_url
     auth_mode = "query_param" if has_token_qp else ("subprotocol" if subprotocols else "none")
-    safe_upstream = upstream_url.split("?")[0] + ("?..." if "?" in upstream_url else "")
+    safe_upstream = upstream_url.split("?", maxsplit=1)[0] + ("?..." if "?" in upstream_url else "")
 
     logger.info(
         "ws_proxy.connecting upstream=%s auth_mode=%s protocols=%s",

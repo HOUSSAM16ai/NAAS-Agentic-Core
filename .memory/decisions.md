@@ -2576,3 +2576,48 @@ await websocket.send_json({
 3. Trigger أي شيء يُسبب re-render (toggle theme/sidebar) → UI يبقى "متصل".
 4. اختبر السيناريو الكارثي للمستخدم → flicker اختفى.
 5. أوقف الـ backend (kill uvicorn) → بعد 30s grace period، UI يُظهر "غير متصل".
+
+
+---
+
+## D-WS-FLAP-004 (rev. honest-debounce) — Correction (2026-05-26)
+
+**Context (تصحيح حاسم)**: المستخدم رفض الفلسفة الأصلية لـ D-WS-FLAP-004 (sticky-connected-forever) لأنها قد تخفي مشاكل حقيقية. ملاحظته:
+> «فكرة sticky "متصل" ممتازة كطبقة UX، لكنها يجب ألا تتحول إلى كذب على المستخدم. يعني: الحالة الداخلية يجب أن تبقى صادقة. والواجهة فقط هي التي تتأخر قليلًا في إظهار الانقطاع»
+> 
+> «جعل الحالة "متصل للأبد" قد يخفي المشكلة الحقيقية بدل حلها. إذا انقطع الـ WebSocket فعليًا، فالواجهة قد تبقى تقول "متصل" بينما الاتصال مات.»
+
+**المبدأ المعماري المُعدَّل (Honest Debounce)**:
+
+1. **الحالة الداخلية `state` صادقة دائماً**: تتتبع كل blip حقيقي فوراً (connecting/connected/reconnecting/degraded/offline). تُكشف للـ caller عبر `internalState` كحقل منفصل.
+
+2. **`uiState` يتأخر فقط، لا يكذب**:
+   - blip < 2 ثانية (`RECONNECT_VISIBLE_MS`): UI = "connected" (debounce قصير لتجنب flicker)
+   - 2s ≤ disconnect < 15s (`OFFLINE_GRACE_MS`): UI = "reconnecting" (**الحقيقة**)
+   - disconnect ≥ 15s: UI = "offline" (**الحقيقة الأصرح**)
+   - `auth_error` (4401/4403): يطغى فوراً، لا debounce.
+
+3. **التطوير مُدرَّج، ليس all-or-nothing**: timer واحد (`uiPromotionTimerRef`) يُجدول الترقية المدرَّجة من connected → reconnecting → offline. لو رجع internal state إلى "connected" قبل أي مرحلة، الـ timer يُلغى.
+
+**Consequence**:
+- المستخدم لا يرى flicker على blips طبيعية (< 2 ثانية).
+- المستخدم يعرف الحقيقة عند انقطاع متواصل (≥ 2 ثانية).
+- المستخدم يعرف "offline" حقيقي (≥ 15 ثانية).
+- كود الـ debug/telemetry يحصل على `internalState` بدون أي تأخير أو تحوير.
+
+**Architectural Invariants (D-WS-FLAP-004 honest-debounce — لا تُكسر بدون ADR)**:
+1. **Hook يكشف `internalState` للـ caller** — صدق المعلومة للـ debug/telemetry لا يمكن إخفاؤها.
+2. **`RECONNECT_VISIBLE_MS` ∈ [1000, 3000]** — أقل = flicker، أكثر = كذب.
+3. **`OFFLINE_GRACE_MS` ∈ [10000, 30000]** — أقل = تشويش، أكثر = إخفاء حقيقي.
+4. **`auth_error` و `offline` (بعد grace) يجب أن يطغيا على debounce** — لا تأخير على fatal errors.
+5. **`setState` على internal state يحدث فوراً في كل blip** — لا توجد طبقة وسطى تخفي الحقيقة عن internal logic.
+
+**Files (rev.)**:
+- `frontend/app/hooks/useRealtimeConnection.js` (honest-debounce + graduated promotion).
+- `tests/services/test_ws_flap_004_sticky_ui.py` (10 honest-debounce regression tests).
+
+**الفرق الجوهري عن المسودة الأولى**:
+- المسودة الأولى (sticky-forever): UI يكذب 30 ثانية، ثم يقول "offline".
+- المسودة المُعتمَدة (honest-debounce): UI صادق بعد 2 ثانية، ثم "offline" بعد 15 ثانية إذا استمر الانقطاع.
+
+**Lesson learned**: الفرق بين debounce و كذب هو في الـ duration. 2 ثانية debounce = راحة UX. 30 ثانية debounce = كذب على المستخدم. الـ honest engineering يحترم حدود الـ debounce.

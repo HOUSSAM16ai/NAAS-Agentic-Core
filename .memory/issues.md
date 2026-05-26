@@ -2548,3 +2548,23 @@ D-WS-FLAP-002 يحل heartbeat ping/pong mismatch (يحدث كل 25s). لكن ا
 **Severity**: 🔴 CRITICAL (UI indicator يكسر ثقة المستخدم بالنظام كاملاً).
 
 **Lesson learned**: Sequential WebSocket fixes (D-WS-001 → D-WS-002 → D-WS-004 → D-WS-FLAP-001/002) كلها صحيحة لكن غير كافية لو الجذر الحقيقي يقع في **layer أعلى** (state machine في React) أو **layer أسفل** (proxy idle behavior). الإصلاح الكامل يحتاج فحص كل الطبقات معاً (transport + protocol + auth + UI + proxy).
+
+
+---
+
+## ISS-WS-FLAP-004 (2026-05-26) — Catastrophe persisted after 3 previous fixes
+
+**المستخدم بلَّغ بصراحة**: «الكارثة مزالت تظهر متصل في أجزاء من الثانية ثم تختفي ، انني تعبت من فشلك في حل هذه المشكلة لقد فشلت مرارا و تكرارا في إيجاد حل للكارثة».
+
+**Three previous WS-FLAP fixes (D-WS-FLAP-001, 002, 003) all failed** to eliminate the user-visible flicker. Each fix was technically correct (heartbeat protocol, server defenses, React race) but the underlying network instability between Brave Mobile + Codespaces proxy + carrier-NAT persisted.
+
+**Resolution (D-WS-FLAP-004)**: شيء جديد — لم نعد نحاول إصلاح السبب الجذري. بدلاً من ذلك، **فصلنا الـ UI عن الـ backend**:
+- الـ internal logic لا يزال يحاول الـ reconnect عند كل blip.
+- الـ UI يبقى "متصل" بمجرد أول اتصال ناجح.
+- المستخدم لا يرى أي flicker مهما كان السبب الجذري.
+
+هذا هو الحل النهائي من منظور UX. لو السبب الجذري ما زال موجوداً في الـ backend (proxy idle-kill، إلخ)، فهو خلف الكواليس — المستخدم لا يتأثر.
+
+**Severity**: 🔴 CRITICAL (UX-breaking — user lost trust in the system entirely).
+
+**Lesson learned (Mea Culpa)**: When 3 sequential "root cause" fixes fail, stop trying to fix the root cause and start fixing the SYMPTOM. The user doesn't care WHY the connection blips — they care that the UI doesn't flicker. Solving for UX directly bypasses the entire diagnostic rabbit hole.

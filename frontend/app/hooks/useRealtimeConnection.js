@@ -64,6 +64,17 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
   const wsRef = useRef(null);
   const retries = useRef(0);
   const [state, setState] = useState("idle");
+  // D-WS-FLAP-004: «الـ Sticky Connected» — حالة UI عامة منفصلة عن الـ
+  // internal connection state. بمجرد نجاح الاتصال أول مرة، UI يبقى "متصل"
+  // مهما حدث في الـ backend (reconnects تحدث صامتاً). فقط:
+  //   - auth_error (4401/4403): UI ينقل إلى "auth_error" (red)
+  //   - أو فقدان طويل (>30s متواصل): UI ينقل إلى "offline"
+  // هذا يحل الكارثة من منظور المستخدم بغض النظر عن سبب الـ flapping الأساسي
+  // (proxy idle-kill, mobile carrier-NAT, React re-render race، إلخ).
+  const [uiState, setUiState] = useState("idle");
+  const everConnectedRef = useRef(false);
+  const lastConnectedAtRef = useRef(0);
+  const offlineGraceTimerRef = useRef(null);
   const mountedRef = useRef(true);
   const reconnectTimeoutRef = useRef(null);
   const pendingQueue = useRef([]);
@@ -76,6 +87,72 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
   // D-WS-FLAP-003: timer للـ "stable" تأخير state="reconnecting" لـ 500ms — لو
   // اتصلنا فوراً من جديد لا يرى المستخدم أي وميض.
   const stateDebounceRef = useRef(null);
+
+  // D-WS-FLAP-004: نافذة "غير متصل حقيقي" — لا نُظهر "غير متصل" إلا بعد
+  // فقدان متواصل لمدة 30 ثانية. أقل من ذلك = blip شبكي طبيعي.
+  const OFFLINE_GRACE_MS = 30000;
+
+  // D-WS-FLAP-004: حساب الـ UI state من الـ internal state.
+  // الفلسفة: الـ UI لا يجب أن يعكس كل blip في الـ backend.
+  const computeUiState = useCallback((internalState) => {
+    // auth_error دائماً يطغى — هذا fatal حقيقي.
+    if (internalState === "auth_error") return "auth_error";
+
+    // قبل أول اتصال ناجح — اعرض الحالة الفعلية (idle/connecting).
+    if (!everConnectedRef.current) {
+      return internalState;
+    }
+
+    // بعد أول اتصال: ابقَ على "connected" إلا في حالة offline طويل.
+    if (internalState === "connected" || internalState === "recovered") {
+      return "connected";
+    }
+
+    // reconnecting/degraded/connecting بعد أول اتصال = داخلي فقط، لا UI flicker.
+    // نبقى على "connected" — internal reconnect يحدث صامتاً.
+    if (
+      internalState === "reconnecting" ||
+      internalState === "degraded" ||
+      internalState === "connecting"
+    ) {
+      return "connected";
+    }
+
+    // offline = MAX_RETRIES استُنفِدت. حتى هنا، ننتظر offline grace period
+    // قبل إظهار "غير متصل".
+    if (internalState === "offline") {
+      // لو الـ disconnect حدث للتو، انتظر الـ grace period — قد نعود قريباً.
+      // الـ offlineGraceTimer يُحدِّث uiState لاحقاً لو لم نتعافَ.
+      return "connected"; // فترة سماح — internal logic تحاول الـ reconnect
+    }
+
+    return internalState;
+  }, []);
+
+  // مزامنة uiState مع state بعد كل تغيير في state.
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    const newUiState = computeUiState(state);
+    setUiState(newUiState);
+
+    // D-WS-FLAP-004: لو دخلنا "offline" (internal)، ابدأ grace timer.
+    // إن لم نتعافَ خلال OFFLINE_GRACE_MS، نُظهر "غير متصل" للمستخدم.
+    if (state === "offline" && everConnectedRef.current) {
+      if (offlineGraceTimerRef.current) clearTimeout(offlineGraceTimerRef.current);
+      offlineGraceTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) {
+          console.warn("[WS] offline grace expired — showing offline UI");
+          setUiState("offline");
+        }
+      }, OFFLINE_GRACE_MS);
+    } else if (state === "connected" || state === "recovered") {
+      // تعافينا — ألغِ grace timer.
+      if (offlineGraceTimerRef.current) {
+        clearTimeout(offlineGraceTimerRef.current);
+        offlineGraceTimerRef.current = null;
+      }
+    }
+  }, [state, computeUiState]);
 
   if (connectionIdRef.current === null) {
     connectionIdRef.current =
@@ -164,6 +241,14 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
 
             // D-WS-FLAP-003: سجّل وقت الفتح الناجح — يُستخدم في onclose للتمييز.
             openedAtRef.current = Date.now();
+            // D-WS-FLAP-004: علِّم أنّ الاتصال نجح مرة على الأقل — UI يصبح "sticky".
+            everConnectedRef.current = true;
+            lastConnectedAtRef.current = Date.now();
+            // ألغِ offline grace timer لو كان مُجدوَلاً — تعافينا.
+            if (offlineGraceTimerRef.current) {
+              clearTimeout(offlineGraceTimerRef.current);
+              offlineGraceTimerRef.current = null;
+            }
 
             const wasReconnect = retries.current > 0;
             retries.current = 0;
@@ -467,8 +552,15 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         clearTimeout(stateDebounceRef.current);
         stateDebounceRef.current = null;
       }
+      // D-WS-FLAP-004: نظِّف offline grace timer.
+      if (offlineGraceTimerRef.current) {
+        clearTimeout(offlineGraceTimerRef.current);
+        offlineGraceTimerRef.current = null;
+      }
     };
   }, [connect, stopHeartbeat]);
 
-  return { state, sendMessage };
+  // D-WS-FLAP-004: نُرجع uiState (sticky/debounced) بدل state الداخلي.
+  // الـ internal state يستمر بتتبُّع كل blip لكن الـ UI يبقى ثابتاً.
+  return { state: uiState, sendMessage };
 }

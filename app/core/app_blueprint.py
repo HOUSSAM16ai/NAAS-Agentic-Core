@@ -183,21 +183,52 @@ def build_cors_options(origins: str | list[str]) -> dict[str, object]:
     """
     بناء خيارات CORS بشكل واضح ومتسق.
 
+    D-WS-CODESPACES-001: Starlette CORSMiddleware لا تدعم wildcard subdomains
+    (مثل https://*.app.github.dev) كـ literal strings — تُعامَل كنص حرفي ولا تُطابق.
+    الحل: نُحوِّل الـ wildcard patterns إلى allow_origin_regex.
+
     Args:
         origins: قائمة الأصول المسموح بها (list أو CSV string).
 
     Returns:
         dict[str, object]: قاموس خيارات CORS الجاهز للاستخدام.
     """
+    import re
+
     # D-WS-002: field_validator يُحوِّل str → list[str] قبل هذه الدالة،
     # لكن نُضيف guard دفاعياً لضمان list دائماً.
     if isinstance(origins, str):
         from app.core.settings.helpers import _normalize_csv_or_list
 
         origins = _normalize_csv_or_list(origins)
+
     allow_origins = origins or ["*"]
     options = dict(BASE_CORS_OPTIONS)
-    options["allow_origins"] = allow_origins
+
+    # فصل الـ origins الحرفية عن الـ wildcard patterns
+    # Starlette CORSMiddleware تدعم allow_origin_regex للـ patterns المعقدة
+    literal_origins: list[str] = []
+    regex_parts: list[str] = []
+
+    for origin in allow_origins:
+        if origin == "*":
+            # allow_all_origins — نُمرِّره مباشرة
+            literal_origins.append(origin)
+        elif "*" in origin:
+            # wildcard pattern مثل https://*.app.github.dev
+            # نُحوِّله إلى regex: https://[^.]+.app.github.dev
+            escaped = re.escape(origin).replace(r"\*", r"[^.]+(?:\.[^.]+)*")
+            regex_parts.append(escaped)
+        else:
+            literal_origins.append(origin)
+
+    options["allow_origins"] = literal_origins if literal_origins else ["*"]
+
+    if regex_parts:
+        # دمج كل الـ patterns في regex واحد
+        combined_regex = "^(" + "|".join(regex_parts) + ")$"
+        options["allow_origin_regex"] = combined_regex
+
     return options
 
 

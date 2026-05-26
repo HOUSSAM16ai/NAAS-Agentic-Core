@@ -162,16 +162,24 @@ offline ← لا يُعلَن إلا هنا (D-WS-002)
 
 ## Codespaces / Gitpod Compatibility
 
-في Codespaces/Gitpod:
-- المتصفح يصل عبر `https://[workspace-id]-3000.app.github.dev`
-- `window.location.host` = `[workspace-id]-3000.app.github.dev`
-- `buildWsUrl('/api/chat/ws')` → `wss://[workspace-id]-3000.app.github.dev/api/chat/ws`
-- Next.js يستقبل الطلب → يُمرِّره إلى Gateway (8000) عبر HTTP proxy
-- **لكن WebSocket upgrade لا يُمرَّر عبر Next.js!**
-- الحل: المتصفح يتصل مباشرة بـ Gateway عبر port forwarding
+### GitHub Codespaces (D-WS-CODESPACES-001 — 2026-05-26)
 
-**ملاحظة**: في Gitpod/Ona، port 8000 مُعرَّض مباشرة للمتصفح عبر port forwarding.
-`window.location.host` في هذه الحالة يكون `[workspace-id]-8000.ws-eu.gitpod.io`.
+في GitHub Codespaces:
+- Frontend: `https://[name]-5000.app.github.dev`
+- `wsUrl.js` **لا** يُعيد كتابة الـ port (لا 5000→8000)
+- `buildWsUrl('/api/chat/ws')` → `wss://[name]-5000.app.github.dev/api/chat/ws`
+- `server.js` يستقبل الـ WebSocket upgrade على port 5000
+- `server.js` يُمرِّره داخلياً إلى `ws://127.0.0.1:8000/api/chat/ws`
+- **السبب**: Codespaces proxy لا يُمرِّر WS upgrade headers بشكل موثوق لـ port 8000
+
+### Gitpod Flex/Ona (D-WS-GITPOD-001)
+
+في Gitpod/Ona:
+- Frontend: `https://5000--[id].[cluster].gitpod.dev`
+- `wsUrl.js` يُعيد كتابة الـ port: 5000→8000
+- `buildWsUrl('/api/chat/ws')` → `wss://8000--[id].[cluster].gitpod.dev/api/chat/ws`
+- المتصفح يتصل مباشرة بـ Gateway (8000) عبر Gitpod port forwarding
+- **السبب**: Gitpod يُعرِّض كل port كـ subdomain مستقل ويُمرِّر WS بشكل صحيح
 
 ---
 

@@ -2462,3 +2462,72 @@ fix + `.genui-fes-*`) | tests.
 - `microservices/conversation_service/main.py` (نسخة inline + تطبيق في endpoint customer/admin).
 - `tests/services/test_ws_heartbeat_skill.py` (جديد — 20+ اختبار).
 - `tests/services/test_ws_router_heartbeat_integration.py` (جديد — 9 فحوصات تكامل).
+
+
+---
+
+## D-WS-FLAP-003 · Fast-Cycle Flapping Hardening + Server Primer (2026-05-26)
+
+**Context**: بعد deploy D-WS-FLAP-002 (heartbeat skill)، أبلغ المستخدم أن الـ flapping ما زال يحدث ولكن بسرعة شديدة — screenshots على Brave Mobile + Codespaces أظهرت تأرجح UI بين «متصل» (14:46:42) → «إعادة الاتصال…» (14:46:43) → «غير متصل» (14:46:45) خلال **3 ثوانٍ فقط**. هذه السرعة لا تتطابق مع heartbeat (25s) ولا مع 10 retries المطلوبة لإعلان "offline" (≈150s).
+
+**Root Causes (متعددة، متراكبة)**:
+1. **Stale-ws race condition**: عند re-render في React، الـ `useEffect` cleanup يُغلق الـ WS القديم بـ 1000 ثم effect جديد يفتح WS جديد. الـ `onclose` للقديم يفير AFTER الـ effect الجديد يُعيد `mountedRef.current = true` — فيُحدِّث retries++ ويُعلِن "reconnecting" على اتصال يعمل بالفعل.
+2. **Aggressive UI**: `MAX_RETRIES=10` يصل لـ "offline" بسرعة. كل close سريع يُعلِن "reconnecting" فوراً → flicker مرئي.
+3. **No proxy primer**: الـ WS يصل لـ FastAPI ويُعرض، لكن `server.js` proxy + Codespaces edge + carrier-NAT قد تُغلق session idle لو لم تُرسل بيانات فوراً.
+4. **Code 1000 (NORMAL_CLOSURE) treated as failure**: cleanup يرسل 1000، لكن الـ handler يَعدّ retries++ ويُعلِن reconnecting.
+
+**Decision** (4 طبقات دفاع متكاملة):
+
+### 1. Frontend: Stale-WS Detection (`useRealtimeConnection.js`)
+```js
+ws.onclose = (e) => {
+    if (!mountedRef.current) return;  // cleanup-time
+    if (wsRef.current && wsRef.current !== ws) {
+        // close لاتصال قديم بعد إعادة فتح — تجاهل
+        return;
+    }
+    // ... safe to handle close
+};
+```
+
+### 2. Frontend: Debounced UI State Transitions
+- `STABLE_THRESHOLD_MS = 3000`: لو الاتصال صمد >3s، الـ close التالي يُعتبر شبكي عابر.
+- `stateDebounceRef`: تأخير setState("reconnecting") لـ 500ms — لو نجح retry فوراً، لا flicker.
+- `SILENT_CLOSE_CODES = {1000, 1001}`: لا تُعلِن "reconnecting" لـ codes الـ normal close.
+
+### 3. Frontend: Tolerance Tuning
+- `MAX_RETRIES`: 10 → 30 (يعطي ~10 دقائق قبل "offline").
+- `HEARTBEAT_INTERVAL`: 25s → 45s (يقلل ضغط على proxies).
+- `HEARTBEAT_TIMEOUT`: 10s → 15s (تسامح أوسع مع mobile latency).
+
+### 4. Backend: Server Primer Event
+```python
+# customer_chat.py + admin.py — immediately after accept:
+await websocket.send_json({
+    "type": "session_ready",
+    "payload": {"user_id": actor.id, "ts": <iso-utc>},
+})
+```
+الـ primer يُجبر كل الـ proxies على المسار (server.js, Codespaces edge, mobile carrier-NAT) على فتح session نشط بدل idle-timeout سريع. الواجهة تتجاهل النوع غير المعروف (useAgentSocket لا يعالج `session_ready`).
+
+**Consequence**:
+- Re-renders لا تُسبب UI flap بعد الآن (stale-ws check يمنع false reconnects).
+- Codespaces/mobile networks لا تُغلق session idle بسرعة (primer يُحافظ على keepalive).
+- "غير متصل" لا يظهر إلا بعد فشل حقيقي عميق (30 محاولة، ≈10 دقائق).
+- Brief network blips على شبكات الهاتف لا تُسبب flicker مرئي (debounce 500ms).
+
+**Architectural Invariants (لا تُكسر بدون ADR)**:
+- `onclose` يجب أن يفحص `wsRef.current !== ws` قبل أي action.
+- Code 1000/1001 يجب أن تُعالَج كـ silent close — لا UI flicker.
+- أي WS endpoint جديد يجب أن يُرسل primer event فور accept() لـ proxy keepalive.
+- `MAX_RETRIES ≥ 30` و `HEARTBEAT_INTERVAL ≥ 45s` — لا تقللها بدون ADR.
+
+**Files**:
+- `frontend/app/hooks/useRealtimeConnection.js` (stale-ws check + debounce + tolerance tuning).
+- `app/api/routers/customer_chat.py` (session_ready primer).
+- `app/api/routers/admin.py` (session_ready primer).
+
+**Live verification (commands)**:
+1. Open browser console on Codespaces tab. Look for: `[WS] closed { session_ms: ..., was_stable: true/false }`.
+2. Trigger re-renders (toggle sidebar). Expect: `[WS] ignoring close of stale ws` log entries, no UI flicker.
+3. Wait 60 seconds without interacting. Expect: status stays "متصل", no "reconnecting" briefly.

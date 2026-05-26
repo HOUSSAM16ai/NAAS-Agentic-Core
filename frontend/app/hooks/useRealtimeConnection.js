@@ -19,11 +19,23 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 
-const MAX_BACKOFF = 30000;          // أقصى تأخير بين المحاولات (30 ثانية)
-const MAX_RETRIES = 10;             // عدد المحاولات قبل إعلان offline
+const MAX_BACKOFF = 30000; // أقصى تأخير بين المحاولات (30 ثانية)
+// D-WS-FLAP-003 (2026-05-26): زدنا MAX_RETRIES إلى 30 لتفادي إعلان "offline"
+// المبكر على شبكات الهاتف المتذبذبة (carrier-NAT يقطع الاتصال مؤقتاً).
+const MAX_RETRIES = 30;
 const FATAL_CODES = new Set([4401, 4403]);
-const HEARTBEAT_INTERVAL = 25000;  // ping كل 25 ثانية
-const HEARTBEAT_TIMEOUT = 10000;   // انتظر pong لمدة 10 ثوانٍ
+// D-WS-FLAP-003: heartbeat كل 45s (كان 25s) — يعطي مساحة لـ proxies بدون إغراق.
+// uvicorn --ws-ping-interval 20 يفحص الـ TCP layer تلقائياً.
+const HEARTBEAT_INTERVAL = 45000;
+const HEARTBEAT_TIMEOUT = 15000; // كان 10s — أوسع تسامحاً مع mobile latency
+// D-WS-FLAP-003: لا نُسمِّي الاتصال "reconnecting" إلا بعد فشل حقيقي.
+// 1000 = NORMAL_CLOSURE — يحدث عند unmount/cleanup أو إغلاق الـ tab.
+// 1001 = GOING_AWAY — يحدث عند navigation.
+// لا داعي للـ reconnect على هذه الـ codes إن جاءت من cleanup.
+const SILENT_CLOSE_CODES = new Set([1000, 1001]);
+// D-WS-FLAP-003: نافذة "اتصال مستقر" — لو الاتصال صمد أكثر من STABLE_THRESHOLD،
+// أي close تالٍ يُعتَبر شبكي عابر ونُعيد المحاولة دون إعلان "reconnecting" حالاً.
+const STABLE_THRESHOLD_MS = 3000;
 
 const parseAssistantErrorEnvelope = (rawData) => {
   if (typeof rawData !== "string") return null;
@@ -58,6 +70,12 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
   const connectionIdRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
   const heartbeatTimeoutRef = useRef(null);
+  // D-WS-FLAP-003: متى آخر مرة فتحنا الاتصال بنجاح (Date.now()).
+  // يُستخدم للكشف عن close سريع غير طبيعي (proxy idle-kill vs network blip).
+  const openedAtRef = useRef(0);
+  // D-WS-FLAP-003: timer للـ "stable" تأخير state="reconnecting" لـ 500ms — لو
+  // اتصلنا فوراً من جديد لا يرى المستخدم أي وميض.
+  const stateDebounceRef = useRef(null);
 
   if (connectionIdRef.current === null) {
     connectionIdRef.current =
@@ -136,6 +154,17 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
 
         ws.onopen = () => {
           if (mountedRef.current) {
+            // D-WS-FLAP-003: ألغِ أي debounce timer من المحاولة السابقة —
+            // إن كنّا في نافذة "reconnecting" قصيرة ولم نُظهر الحالة بعد،
+            // الآن نُلغي ذلك ونبقى على "connected".
+            if (stateDebounceRef.current) {
+              clearTimeout(stateDebounceRef.current);
+              stateDebounceRef.current = null;
+            }
+
+            // D-WS-FLAP-003: سجّل وقت الفتح الناجح — يُستخدم في onclose للتمييز.
+            openedAtRef.current = Date.now();
+
             const wasReconnect = retries.current > 0;
             retries.current = 0;
             setState(wasReconnect ? "recovered" : "connected");
@@ -301,58 +330,97 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         };
 
         ws.onclose = (e) => {
-          if (mountedRef.current) {
-             wsRef.current = null;
-             stopHeartbeat();
-
-             console.warn("[WS] closed", {
-               url: ws.url,
-               code: e.code,
-               reason: e.reason,
-               wasClean: e.wasClean,
-             });
-
-             // Fatal auth errors — لا إعادة اتصال
-             // D-WS-004: 4401 = token منتهي أو مفقود → يجب إعادة تسجيل الدخول
-             //           4403 = صلاحيات غير كافية (admin يحاول customer endpoint)
-             if (FATAL_CODES.has(e.code)) {
-                 console.warn("[WS] Fatal auth error, stopping reconnection:", e.code, e.reason);
-                 setState("auth_error");
-                 // أُطلق حدث عالمي ليتمكن الـ UI من إعادة توجيه المستخدم لتسجيل الدخول
-                 if (typeof window !== 'undefined') {
-                     window.dispatchEvent(new CustomEvent('agent:auth_error', {
-                         detail: { code: e.code, reason: e.reason || 'session_expired' }
-                     }));
-                 }
-                 return;
-             }
-
-             retries.current += 1;
-
-             // D-WS-002: لا يُعلَن عن Offline إلا بعد استنفاد جميع المحاولات
-             if (retries.current >= MAX_RETRIES) {
-               console.error(
-                 `[WS] Exhausted ${MAX_RETRIES} reconnect attempts — declaring offline. ` +
-                 `last_close_code=${e.code} auth_mode=${token ? "query_param" : "none"}`
-               );
-               setState("offline");
-               return; // لا إعادة اتصال تلقائية — المستخدم يحتاج reload
-             }
-
-             // أثناء المحاولات: حالة "reconnecting" وليس "offline"
-             setState("reconnecting");
-
-             // Exponential backoff مع jitter
-             const delay = Math.min(
-               Math.pow(2, retries.current - 1) * 500,
-               MAX_BACKOFF
-             );
-             const jitter = Math.floor(Math.random() * 500);
-
-             console.info(`[WS] Reconnecting in ${delay + jitter}ms (attempt ${retries.current}/${MAX_RETRIES})`);
-             clearTimeout(reconnectTimeoutRef.current);
-             reconnectTimeoutRef.current = setTimeout(connect, delay + jitter);
+          if (!mountedRef.current) {
+            // الـ component unmounted أو الـ effect cleanup قيد التنفيذ — تجاهل تماماً.
+            return;
           }
+
+          // D-WS-FLAP-003: لو الـ ws الذي أُغلق ليس wsRef.current الحالي،
+          // فهذا close لاتصال قديم (race condition من إعادة render). تجاهل.
+          if (wsRef.current && wsRef.current !== ws) {
+            console.info(
+              "[WS] ignoring close of stale ws (replaced by newer connection)",
+              { code: e.code, reason: e.reason }
+            );
+            return;
+          }
+
+          wsRef.current = null;
+          stopHeartbeat();
+
+          // D-WS-FLAP-003: قياس مدة الاتصال — يفرّق بين close فوري وعابر.
+          const sessionMs = openedAtRef.current
+            ? Date.now() - openedAtRef.current
+            : 0;
+          const wasStable = sessionMs >= STABLE_THRESHOLD_MS;
+
+          console.warn("[WS] closed", {
+            url: ws.url,
+            code: e.code,
+            reason: e.reason,
+            wasClean: e.wasClean,
+            session_ms: sessionMs,
+            was_stable: wasStable,
+          });
+
+          // Fatal auth errors — لا إعادة اتصال
+          // D-WS-004: 4401 = token منتهي أو مفقود → يجب إعادة تسجيل الدخول
+          //           4403 = صلاحيات غير كافية (admin يحاول customer endpoint)
+          if (FATAL_CODES.has(e.code)) {
+            console.warn("[WS] Fatal auth error, stopping reconnection:", e.code, e.reason);
+            setState("auth_error");
+            // أُطلق حدث عالمي ليتمكن الـ UI من إعادة توجيه المستخدم لتسجيل الدخول
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("agent:auth_error", {
+                  detail: { code: e.code, reason: e.reason || "session_expired" },
+                })
+              );
+            }
+            return;
+          }
+
+          // D-WS-FLAP-003: close codes "صامتة" لا تستحق إعلان reconnecting.
+          // 1000/1001 من cleanup/navigation. نُعيد المحاولة لكن لا نُحدِّث الـ UI.
+          const silentClose = SILENT_CLOSE_CODES.has(e.code);
+
+          retries.current += 1;
+
+          // D-WS-002: لا يُعلَن عن Offline إلا بعد استنفاد جميع المحاولات
+          if (retries.current >= MAX_RETRIES) {
+            console.error(
+              `[WS] Exhausted ${MAX_RETRIES} reconnect attempts — declaring offline. ` +
+                `last_close_code=${e.code} auth_mode=${token ? "query_param" : "none"}`
+            );
+            setState("offline");
+            return; // لا إعادة اتصال تلقائية — المستخدم يحتاج reload
+          }
+
+          // D-WS-FLAP-003: لو الاتصال كان مستقراً (>3s) أو close صامت،
+          // أبقِ الـ UI على "متصل" حتى آخر لحظة. الـ debounce يمنع flicker:
+          // لو نجحنا في الاتصال خلال 500ms، المستخدم لن يرى "إعادة الاتصال".
+          const showReconnectingState = () => {
+            if (mountedRef.current) setState("reconnecting");
+          };
+
+          if (silentClose || wasStable) {
+            // أجِّل إعلان "reconnecting" لـ 500ms — لو نجح الـ retry قبلها لا flicker.
+            clearTimeout(stateDebounceRef.current);
+            stateDebounceRef.current = setTimeout(showReconnectingState, 500);
+          } else {
+            // اتصال فشل سريعاً (<3s) ولم يكن silent — أعلِنها فوراً.
+            setState("reconnecting");
+          }
+
+          // Exponential backoff مع jitter
+          const delay = Math.min(Math.pow(2, retries.current - 1) * 500, MAX_BACKOFF);
+          const jitter = Math.floor(Math.random() * 500);
+
+          console.info(
+            `[WS] Reconnecting in ${delay + jitter}ms (attempt ${retries.current}/${MAX_RETRIES})`
+          );
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = setTimeout(connect, delay + jitter);
         };
     } catch (err) {
         console.warn("[WS] Connection failed:", err);
@@ -394,6 +462,11 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         wsRef.current = null;
       }
       clearTimeout(reconnectTimeoutRef.current);
+      // D-WS-FLAP-003: نظِّف debounce timer كذلك.
+      if (stateDebounceRef.current) {
+        clearTimeout(stateDebounceRef.current);
+        stateDebounceRef.current = null;
+      }
     };
   }, [connect, stopHeartbeat]);
 

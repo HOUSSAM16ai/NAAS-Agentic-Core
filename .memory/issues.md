@@ -2514,3 +2514,37 @@ CORS regex: https://evil.com                        → ❌ rejected
 **Severity**: 🔴 CRITICAL (يكسر التجربة كاملة في GitHub Codespaces — البيئة الأساسية للمطورين)
 
 **Resolution**: D-WS-FLAP-002 — التحقق الحي بـ 7 unit tests + 9 integration checks + 100-cycle simulation.
+
+
+---
+
+## ISS-WS-FLAP-003 (2026-05-26) — Fast-cycle flapping survived D-WS-FLAP-002
+
+**الكارثة (تأكَّدت بـ screenshots حية من المستخدم على Brave Mobile/Codespaces)**:
+الـ status indicator يتأرجح كل **3 ثوانٍ**:
+- 14:46:42 → "متصل" (نقطة خضراء)
+- 14:46:43 → "إعادة الاتصال…" (نقطة رمادية)
+- 14:46:45 → "غير متصل" (نقطة رمادية)
+- ... ويستمر
+
+**لماذا D-WS-FLAP-002 لم يكفِ**:
+D-WS-FLAP-002 يحل heartbeat ping/pong mismatch (يحدث كل 25s). لكن الـ flapping الحالي **يحدث كل 3 ثوانٍ** — أسرع 8× من heartbeat. السبب الحقيقي يجب أن يكون **race condition في React useEffect** أو **proxy idle-timeout**.
+
+**Diagnostic Evidence**:
+- Terminal تأكيد: `LISTEN :5000 :8000 :8003` كلها up.
+- Terminal: `curl -I http://127.0.0.1:8000/api/chat/ws → 404 Not Found` ✓ (طبيعي — WS لا يستجيب لـ HEAD).
+- Terminal: `websockets.connect("ws://127.0.0.1:8000/api/chat/ws")` → "WS connected" ✓.
+- Browser: flapping كل 3 ثوانٍ.
+- الفرق: المتصفح يمر بـ Codespaces edge proxy + server.js proxy + mobile carrier-NAT.
+
+**Root Causes (multi-factor)**:
+1. **Stale-WS race**: React re-render → cleanup يُغلق old WS → effect جديد يفتح new WS → onclose للقديم يفير AFTER new effect set mountedRef=true → يُحدِّث retries++ على new WS الذي يعمل بالفعل.
+2. **No primer event**: WS يصل لـ FastAPI ويُعرض، لكن proxies (server.js + Codespaces edge + carrier-NAT) قد تُغلق idle session لو لم تُرسل بيانات فوراً بعد accept.
+3. **Aggressive UI**: `MAX_RETRIES=10` يصل لـ "offline" بسرعة. كل close صغير يُعلِن "reconnecting" فوراً → flicker مرئي.
+4. **Code 1000 mistreated**: cleanup يُغلق بـ 1000 (NORMAL_CLOSURE)، لكن الـ handler يَعدّه فشل ويُحدِّث retries++.
+
+**Resolution**: راجع `decisions.md` D-WS-FLAP-003 — 4 طبقات دفاع متكاملة (stale-ws detection + debounced state + tolerance tuning + server primer event).
+
+**Severity**: 🔴 CRITICAL (UI indicator يكسر ثقة المستخدم بالنظام كاملاً).
+
+**Lesson learned**: Sequential WebSocket fixes (D-WS-001 → D-WS-002 → D-WS-004 → D-WS-FLAP-001/002) كلها صحيحة لكن غير كافية لو الجذر الحقيقي يقع في **layer أعلى** (state machine في React) أو **layer أسفل** (proxy idle behavior). الإصلاح الكامل يحتاج فحص كل الطبقات معاً (transport + protocol + auth + UI + proxy).

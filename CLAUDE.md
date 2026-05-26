@@ -6014,3 +6014,102 @@ python3 -m pytest tests/services/test_ws_router_heartbeat_integration.py -v
 | D-WS-CODESPACES-001 | same-host proxy via server.js + Codespaces WS upgrade reliability |
 | D-WS-GITPOD-001/002 | gitpod.dev wildcard support + ALLOWED_HOSTS always overwrite |
 | **D-WS-FLAP-002** | **application-layer heartbeat skill — `{type:"ping"}` → `{type:"pong"}` (end of flap)** |
+
+---
+
+## 6.64 Fast-Cycle Flapping Defense — Stale-WS + Debounce + Server Primer (2026-05-26, ISS-WS-FLAP-003 / D-WS-FLAP-003)
+
+> الكارثة المُكتشَفة بـ screenshots حية بعد deploy D-WS-FLAP-002: الـ UI status
+> يتأرجح كل 3 ثوانٍ (متصل → إعادة الاتصال → غير متصل → ...). الـ heartbeat fix
+> صحيح لكنه لا يحل flapping بهذه السرعة — الجذر في طبقات أخرى.
+
+### الأسباب الجذرية (متعددة)
+
+**(1) Stale-WS race في React useEffect**:
+عند re-render (toggle sidebar, theme change, etc.) → cleanup يُغلق old WS بـ 1000
+→ effect جديد يفتح new WS → onclose للقديم يفير AFTER mountedRef=true (من new effect)
+→ يُحدِّث retries++ على connection يعمل بالفعل → false "reconnecting".
+
+**(2) No proxy primer**: الـ WS يُعرض على FastAPI، لكن proxies (server.js +
+Codespaces edge + mobile carrier-NAT) قد تُغلق idle session لو لم تُرسل بيانات فور
+accept.
+
+**(3) Aggressive UI**: `MAX_RETRIES=10` يصل لـ "offline" بسرعة. حتى blip شبكي
+صغير يُعلِن "reconnecting" فوراً → flicker مرئي.
+
+**(4) Code 1000 يُعالَج كفشل**: cleanup يُغلق بـ 1000 (NORMAL_CLOSURE)، لكن الـ
+handler يعدّه فشل → retries++ + "reconnecting".
+
+### الإصلاح (4 طبقات)
+
+**الطبقة 1 — Stale-WS Detection** (`useRealtimeConnection.js`):
+```js
+ws.onclose = (e) => {
+    if (!mountedRef.current) return;
+    // D-WS-FLAP-003: لو الـ ws الذي أُغلق ليس wsRef.current الحالي،
+    // فهذا close لاتصال قديم (race condition). تجاهل تماماً.
+    if (wsRef.current && wsRef.current !== ws) {
+        console.info("[WS] ignoring close of stale ws");
+        return;
+    }
+    // ... safe to handle close
+};
+```
+
+**الطبقة 2 — Debounced UI State** (`useRealtimeConnection.js`):
+- `STABLE_THRESHOLD_MS = 3000`: لو الاتصال صمد >3s، أي close تالٍ يُعتبر شبكي عابر.
+- `stateDebounceRef`: تأخير `setState("reconnecting")` لـ 500ms — لو نجح retry قبلها، لا flicker.
+- `SILENT_CLOSE_CODES = {1000, 1001}`: لا تُعلِن "reconnecting" لـ codes الـ normal close.
+
+**الطبقة 3 — Tolerance Tuning**:
+- `MAX_RETRIES`: 10 → 30 (≈10 دقائق قبل "offline").
+- `HEARTBEAT_INTERVAL`: 25s → 45s (يقلل ضغط على proxies).
+- `HEARTBEAT_TIMEOUT`: 10s → 15s (تسامح أوسع مع mobile latency).
+
+**الطبقة 4 — Server Primer Event** (`customer_chat.py` + `admin.py`):
+```python
+# Immediately after accept():
+await websocket.send_json({
+    "type": "session_ready",
+    "payload": {"user_id": actor.id, "ts": <iso-utc>},
+})
+```
+يُجبر proxies على keepalive session نشط بدل idle-timeout. الواجهة تتجاهل النوع
+غير المعروف (useAgentSocket لا يعالج `session_ready`).
+
+### القواعد الأربع الدائمة (D-WS-FLAP-003 — لا تُكسر بدون ADR)
+
+1. **Stale-WS check إلزامي**: أي `onclose` handler يجب أن يفحص `wsRef.current !== ws`
+   قبل أي action. حذف هذا = عودة فورية لـ false reconnects في React re-renders.
+2. **Silent close codes**: 1000/1001 لا تُسبب UI flicker. تُعالَج بـ debounce 500ms.
+3. **Primer event إلزامي**: كل WS endpoint جديد يجب أن يُرسل event فور `accept()` —
+   حتى لو كان `{type: "session_ready"}` فارغ. هذا يحافظ على proxy session نشط.
+4. **MAX_RETRIES ≥ 30, HEARTBEAT_INTERVAL ≥ 45s**: لا تقللها بدون ADR — هذه عتبات
+   مُختبرَة لشبكات الهاتف المتذبذبة.
+
+### قياس النجاح حياً
+
+```bash
+# 1. Browser console يجب أن يُظهر:
+[WS] closed { session_ms: <N>, was_stable: true/false }
+[WS] ignoring close of stale ws  # عند re-render
+
+# 2. Trigger re-renders (toggle sidebar 5 مرات سريعاً)
+# → expect: no UI flicker، status يبقى "متصل"
+
+# 3. Wait 5 minutes idle
+# → expect: status يبقى "متصل" (لا flapping كل 3 ثوانٍ)
+```
+
+### السلسلة الكاملة (D-WS-001 → D-WS-FLAP-003)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-001 | architectural ws_proxy + wsUrl + state machine |
+| D-WS-002 | accept-before-close + CORS regex + ALLOWED_HOSTS |
+| D-WS-004 | unified WS architecture |
+| D-WS-FLAP-001 | server-side defenses (NullPool→pool, mid-stream check) |
+| D-WS-CODESPACES-001 | same-host proxy via server.js |
+| D-WS-GITPOD-001/002 | gitpod.dev wildcard support |
+| D-WS-FLAP-002 | application-layer heartbeat skill |
+| **D-WS-FLAP-003** | **stale-WS detection + debounced UI + server primer (end of fast-cycle flap)** |

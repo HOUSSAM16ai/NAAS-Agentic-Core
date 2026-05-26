@@ -14,6 +14,7 @@ D-086 (2026-05-23): تطبيق Protocol V46.0.
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -454,6 +455,24 @@ async def chat_stream_ws(
         )
         await websocket.close(code=4403)
         return
+
+    # D-WS-FLAP-003 (2026-05-26): primer event — يُرسَل فور الـ accept لإجبار
+    # كل الـ proxies على المسار (server.js, Codespaces edge, mobile carrier-NAT)
+    # على فتح/الاحتفاظ بـ session نشط بدلاً من idle-timeout سريع.
+    # الواجهة تتجاهل النوع غير المعروف (useAgentSocket لا يعالج "session_ready").
+    try:
+        await websocket.send_json(
+            {
+                "type": "session_ready",
+                "payload": {
+                    "user_id": actor.id,
+                    "ts": datetime.now(UTC).isoformat(),
+                },
+            }
+        )
+    except Exception as exc:
+        # primer non-fatal — لو فشل، السبب أن الـ socket أُغلق فوراً.
+        logger.debug("customer_chat.primer_failed: %s", exc)
 
     try:
         while True:

@@ -1,5 +1,32 @@
 # Architectural Decisions
-> Last updated: 2026-05-23 | Branch: `feat/math-explanation-generative-ui`
+> Last updated: 2026-05-26 | Branch: `fix/ws-gitpod-disconnected`
+
+## D-WS-GITPOD-001 · Gitpod Flex/Ona WebSocket Host Routing (2026-05-26)
+
+**Branch**: `fix/ws-gitpod-disconnected`
+
+### القرار
+
+Gitpod Flex/Ona يستخدم نطاق `*.gitpod.dev` (ليس `*.gitpod.io`) مع نمط double-dash:
+`<PORT>--<ENV_ID>.<cluster>.gitpod.dev`
+
+مثال: `8000--019e6245-7448-7aac-964e-e9290606bc52.eu-central-1-01.gitpod.dev`
+
+### القواعد الدائمة
+
+1. `ALLOWED_HOSTS` يجب أن يشمل `*.gitpod.dev` في كل مكان (settings, .env, supervisor.sh)
+2. `isCloudWorkspace()` يجب أن يكتشف `.gitpod.dev` صراحةً
+3. `getCloudBackendHost()` — الـ regex `/^5000-/` يُطابق كلا النمطين (single و double dash) لأن `5000--` يبدأ بـ `5000-`
+4. Port 8000 يجب أن يكون في `devcontainer.json` `forwardPorts` ليُسجَّل تلقائياً في Gitpod proxy
+5. `ws_proxy.py` مُعطَّل (D-WS-003) — `/api/chat/ws` يُعالَج مباشرة بـ `customer_chat.router`
+
+### الملفات المُعدَّلة
+
+- `app/core/settings/base.py` — `ALLOWED_HOSTS` default
+- `.devcontainer/supervisor.sh` — `_inject_env_secrets` ALLOWED_HOSTS
+- `frontend/app/utils/wsUrl.js` — `isCloudWorkspace`, `getCloudBackendHost`, `buildWsUrl` logging
+
+---
 
 ## D-080 · Math Pipeline enrich_node + MathExplanationCard Generative UI (2026-05-23)
 

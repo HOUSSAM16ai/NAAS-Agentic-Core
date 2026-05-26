@@ -223,13 +223,13 @@ ENVEOF
         changed=1
     fi
 
-    # ── ALLOWED_HOSTS (D-WS-002) ─────────────────────────────────────────────
+    # ── ALLOWED_HOSTS (D-WS-002 + D-WS-GITPOD-001) ──────────────────────────
     # يضمن أن TrustedHostMiddleware يقبل Gitpod/Ona/Codespaces hosts.
-    # يُعيَّن فقط إذا لم يكن موجوداً مسبقاً.
-    if ! grep -q "^ALLOWED_HOSTS=" "$env_file" 2>/dev/null; then
-        _set_env_key "ALLOWED_HOSTS" "localhost,127.0.0.1,testserver,test,*.gitpod.io,*.ws-eu.gitpod.io,*.ws-us.gitpod.io,*.app.github.dev,*.preview.app.github.dev,*.replit.dev,*.replit.app,*.janeway.replit.dev"
-        changed=1
-    fi
+    # D-WS-GITPOD-001: Gitpod Flex/Ona يستخدم *.gitpod.dev (ليس *.gitpod.io فقط)
+    # مثال: 8000--019e6245-....eu-central-1-01.gitpod.dev
+    # يُعيَّن دائماً لضمان تحديث القيمة عند إضافة نطاقات جديدة.
+    _set_env_key "ALLOWED_HOSTS" "localhost,127.0.0.1,testserver,test,*.gitpod.io,*.ws-eu.gitpod.io,*.ws-us.gitpod.io,*.gitpod.dev,*.eu-central-1-01.gitpod.dev,*.eu-central-1-02.gitpod.dev,*.us-east-1-01.gitpod.dev,*.app.github.dev,*.preview.app.github.dev,*.replit.dev,*.replit.app,*.janeway.replit.dev"
+    changed=1
 
     if [ "$changed" -eq 1 ]; then
         lifecycle_info "✅ .env updated with injected secrets"

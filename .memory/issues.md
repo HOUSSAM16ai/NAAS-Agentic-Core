@@ -1,5 +1,64 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-25 | Branch: `feat/frontend-port-5000-autostart`
+> Last updated: 2026-05-26 | Branch: `fix/ws-gitpod-disconnected`
+
+---
+
+## ✅ Resolved 2026-05-26 (D-WS-GITPOD-001 — WebSocket "Disconnected" on Gitpod/Ona)
+
+### D-WS-GITPOD-001 · Frontend يُظهر "Disconnected" في بيئة Gitpod Flex / Ona [RESOLVED]
+
+- **Status**: RESOLVED 2026-05-26
+- **Severity**: 🔴 CRITICAL (المستخدم لا يستطيع الدردشة)
+
+#### Root Causes (3 متداخلة)
+
+**1. `TrustedHostMiddleware` يرفض Gitpod Flex host header**
+- Gitpod Flex/Ona يستخدم نطاق `*.gitpod.dev` (ليس `*.gitpod.io`)
+- مثال: `8000--019e6245-7448-7aac-964e-e9290606bc52.eu-central-1-01.gitpod.dev`
+- `ALLOWED_HOSTS` في `settings/base.py` و `.env` و `supervisor.sh` كانت تفتقد `*.gitpod.dev`
+- النتيجة: FastAPI يُرجع `"Invalid host header"` لكل طلب عبر Gitpod proxy
+
+**2. `isCloudWorkspace()` في `wsUrl.js` لا يكتشف `*.gitpod.dev`**
+- الشرط `host.includes('.gitpod.')` يُغطي `.gitpod.dev` نظرياً لكن لم يكن مُوثَّقاً
+- أُضيف `host.endsWith('.gitpod.dev')` صراحةً مع توثيق D-WS-GITPOD-001
+
+**3. Port 8000 لم يكن مُسجَّلاً في Gitpod port registry**
+- Gitpod proxy يُرجع HTTP 401 لأي port غير مُسجَّل
+- الحل: `gitpod environment port open 8000 --name backend --admission everyone`
+- هذا يجب أن يحدث تلقائياً عبر `devcontainer.json` `forwardPorts`
+
+#### Fixes Applied
+
+| الملف | التغيير |
+|-------|---------|
+| `app/core/settings/base.py` | أُضيف `*.gitpod.dev`, `*.eu-central-1-01.gitpod.dev`, `*.eu-central-1-02.gitpod.dev`, `*.us-east-1-01.gitpod.dev` إلى `ALLOWED_HOSTS` default |
+| `.devcontainer/supervisor.sh` | `ALLOWED_HOSTS` في `_inject_env_secrets` يُحدَّث دائماً (ليس فقط عند الغياب) ليشمل `*.gitpod.dev` |
+| `.env` | `ALLOWED_HOSTS` حُدِّث مباشرة ليشمل `*.gitpod.dev` |
+| `frontend/app/utils/wsUrl.js` | `isCloudWorkspace()`: أُضيف `host.endsWith('.gitpod.dev')` صراحةً مع توثيق D-WS-GITPOD-001 |
+| `frontend/app/utils/wsUrl.js` | `getCloudBackendHost()`: أُضيف توثيق نمط `--` double-dash لـ Gitpod Flex |
+| `frontend/app/utils/wsUrl.js` | `buildWsUrl()`: أُضيف `console.info` للـ final URL (token مُخفى) |
+| `app/api/routers/ws_proxy.py` | أُضيف `auth_mode` diagnostic logging |
+
+#### Verification
+
+```bash
+# 1. TrustedHostMiddleware يقبل Gitpod host
+curl -H "Host: 8000--<ENV_ID>.eu-central-1-01.gitpod.dev" http://localhost:8000/health
+# → {"application":"ok","database":"ok"}
+
+# 2. WS عبر Gitpod proxy بدون token → auth error (ليس 404/401)
+# wss://8000--<ENV_ID>.eu-central-1-01.gitpod.dev/api/chat/ws
+# → {"type":"error","payload":{"code":"WS_AUTH_MISSING"}}
+
+# 3. WS عبر Gitpod proxy مع token → connected
+# → {"type":"error","payload":{"details":"Question is required."}}  ← صحيح
+```
+
+#### قانون دائم (D-WS-GITPOD-001)
+
+> Gitpod Flex/Ona يستخدم `<PORT>--<ENV_ID>.<cluster>.gitpod.dev` (double-dash).
+> `ALLOWED_HOSTS` يجب أن يشمل `*.gitpod.dev` دائماً.
+> Port 8000 يجب أن يكون مُسجَّلاً في `devcontainer.json` `forwardPorts`.
 
 ---
 

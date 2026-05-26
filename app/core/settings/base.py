@@ -167,10 +167,16 @@ class AppSettings(BaseServiceSettings):
             "127.0.0.1",
             "testserver",
             "test",
-            # Gitpod / Ona
+            # Gitpod / Ona (legacy *.gitpod.io + new *.gitpod.dev cluster domains)
+            # D-WS-GITPOD-001: Gitpod Flex uses <PORT>--<ENV_ID>.<cluster>.gitpod.dev
+            # e.g. 8000--019e6245-....eu-central-1-01.gitpod.dev
             "*.gitpod.io",
             "*.ws-eu.gitpod.io",
             "*.ws-us.gitpod.io",
+            "*.gitpod.dev",
+            "*.eu-central-1-01.gitpod.dev",
+            "*.eu-central-1-02.gitpod.dev",
+            "*.us-east-1-01.gitpod.dev",
             # GitHub Codespaces
             "*.app.github.dev",
             "*.preview.app.github.dev",

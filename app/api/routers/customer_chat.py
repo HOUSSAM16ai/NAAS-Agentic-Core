@@ -37,6 +37,7 @@ from app.services.boundaries.customer_chat_boundary_service import (
     CustomerChatBoundaryService,
 )
 from app.services.rbac import QA_SUBMIT
+from app.services.skills.ws_heartbeat_skill import handle_control_message
 from app.telemetry.path_observer import close_ws_turn, open_ws_turn
 from shared.chat_protocol.event_protocol import normalize_streaming_event
 
@@ -457,6 +458,14 @@ async def chat_stream_ws(
     try:
         while True:
             payload = await websocket.receive_json()
+
+            # D-WS-FLAP-002 (ISS-WS-FLAP-002): معالج heartbeat موحَّد كـ Skill.
+            # رسائل التحكم (ping/heartbeat/noop) تُعالَج هنا قبل أي محاولة
+            # لاعتبار الحمولة سؤالاً. بدون هذا الفحص، ping يُعاد إليه «Question is
+            # required» بدلاً من pong → timeout بعد 10s → close(1001) → flapping.
+            if await handle_control_message(websocket, payload):
+                continue
+
             request_id_value = payload.get("client_request_id")
             client_request_id = (
                 str(request_id_value).strip() if request_id_value is not None else None
@@ -603,7 +612,9 @@ async def chat_stream_ws(
                 )
             )
             _bkt_task.add_done_callback(
-                lambda t: logger.debug("bkt_task_done err=%s", t.exception()) if t.exception() else None
+                lambda t: (
+                    logger.debug("bkt_task_done err=%s", t.exception()) if t.exception() else None
+                )
             )
 
             complete_ai_response = ""

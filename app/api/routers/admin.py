@@ -37,6 +37,7 @@ from app.infrastructure.clients.user_client import user_client
 from app.services.auth.token_decoder import decode_user_id
 from app.services.boundaries.admin_chat_boundary_service import AdminChatBoundaryService
 from app.services.rbac import ADMIN_ROLE
+from app.services.skills.ws_heartbeat_skill import handle_control_message
 from app.telemetry.path_observer import close_ws_turn, open_ws_turn
 from shared.chat_protocol.event_protocol import normalize_streaming_event
 
@@ -412,6 +413,14 @@ async def chat_stream_ws(
     try:
         while True:
             payload = await websocket.receive_json()
+
+            # D-WS-FLAP-002 (ISS-WS-FLAP-002): heartbeat موحَّد كـ Skill.
+            # ping/heartbeat/noop يُعالَجون هنا قبل اعتبار الحمولة سؤالاً —
+            # بدون هذا الفحص يُعاد للعميل خطأ «Question is required» بدل pong
+            # → timeout 10s → close(1001) → flapping cycle.
+            if await handle_control_message(websocket, payload):
+                continue
+
             request_id_value = payload.get("client_request_id")
             client_request_id = (
                 str(request_id_value).strip() if request_id_value is not None else None

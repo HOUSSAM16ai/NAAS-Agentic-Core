@@ -5922,3 +5922,95 @@ Conversation Service :8003  (main.py @app.websocket("/chat/ws"))
 --ws-ping-timeout 30     # انتظر pong 30 ثانية
 --timeout-keep-alive 75  # keep-alive للشبكات المتذبذبة
 ```
+
+---
+
+## 6.63 Application-Layer Heartbeat Protocol — End of Flapping (2026-05-26, ISS-WS-FLAP-002 / D-WS-FLAP-002)
+
+> الكارثة الأخيرة في سلسلة WebSocket: رغم D-WS-002/D-WS-004/D-WS-FLAP-001/
+> D-WS-CODESPACES-001 الناجحة على طبقات الـ transport و auth و proxy، المتصفح
+> ما زال يتأرجح بين «متصل» و «إعادة الاتصال» و «غير متصل» كل ~35 ثانية على
+> GitHub Codespaces. الـ services الثلاث (5000، 8000، 8003) كلها تعمل، والاختبار
+> من الـ terminal ينجح. هذا القسم يكشف الطبقة المفقودة ويُغلقها نهائياً.
+
+### الجذر
+
+الواجهة (`useRealtimeConnection.js`) تنفّذ application-level heartbeat:
+1. كل 25s ترسل `{type:"ping"}` كرسالة JSON على الـ WebSocket المفتوح.
+2. تنتظر 10s ردّاً يحتوي `"type":"pong"` لإلغاء timeout.
+3. لو لم يصل pong → `ws.close(1001, "heartbeat_timeout")` → reconnect.
+
+الخادم (`customer_chat.py`/`admin.py`) كان يعتبر كل رسالة سؤالاً:
+```python
+payload = await websocket.receive_json()           # {"type":"ping"}
+question = str(payload.get("question","")).strip() # ""
+if not question:
+    await websocket.send_json({"type":"error", ...})  # ليس pong!
+    continue
+```
+→ لا pong يصل → timeout 10s → close 1001 → دورة flapping كل ~35s.
+
+### الإصلاح (D-WS-FLAP-002)
+
+**Skill رسمي موحَّد** في `app/services/skills/ws_heartbeat_skill.py`:
+- `is_control_message(payload)` — يكشف `{type: "ping"|"heartbeat"|"noop"}`.
+- `handle_control_message(websocket, payload)` — يرسل pong/heartbeat_ack/silent، يُرجع
+  `True` للرسائل المُعالَجة (المتصل يُكمل بـ `continue`) و `False` للسؤال الحقيقي.
+- Prometheus: `cogniforge_skill_ws_heartbeat_invocations_total{message_type,result}`.
+- Fail-open: فشل إرسال pong (المتصل أُغلق بين receive/send) يُسجَّل DEBUG ولا يكسر loop.
+
+**Doctrine موحَّد** `REALTIME_PROTOCOL_DOCTRINE` (v1.0.0 — 9 قواعد) في
+`app/services/skills/doctrine.py` — Single Source of Truth، مسجَّل في
+`SKILL_DOCTRINE_MANIFEST` تحت `realtime_protocol`.
+
+**تطبيق في كل WS endpoints**:
+- `customer_chat.chat_stream_ws` (live customer path) — استدعاء قبل question check.
+- `admin.admin_chat_stream_ws` (live admin path) — نفس الإصلاح.
+- `microservices/conversation_service/main.py` — نسخة inline (microservices ممنوع لها
+  استيراد من `app.*` لكنها تحترم نفس الـ doctrine).
+
+### القواعد الـ 5 الدائمة (D-WS-FLAP-002 — لا تُكسر بدون ADR)
+
+1. **Control-first**: أي WS endpoint يفحص `type` في الـ payload يجب أن يستدعي
+   `handle_control_message` أولاً قبل اعتبار الرسالة سؤالاً. حذف هذه الطبقة =
+   عودة فورية لـ flapping.
+2. **Pong format ثابت**: الرد يجب أن يحتوي `"type":"pong"` كـ substring متطابق —
+   الواجهة تفحص بـ `event.data.includes('"type":"pong"')` ليس `JSON.parse`.
+3. **Application heartbeat ≠ TCP ping**: `uvicorn --ws-ping-interval 20` يفحص الـ
+   TCP layer فقط — لا يكشف إن كان الـ handler عالقاً. الـ app-level heartbeat هو
+   نظام liveness حقيقي للطبقة العليا.
+4. **Skill is the only allowed implementation**: ممنوع نسخ منطق `ping/pong` في كل
+   router — يجب استخدام `handle_control_message`. الـ Skill هو نقطة الـ
+   instrumentation الوحيدة (Prometheus metrics + central logging).
+5. **Microservices use inline copy, not import**: `microservices/conversation_service`
+   ممنوع لها استيراد من `app.services.skills` (architectural §0.5). يجب نسخ
+   منطق الـ 14 سطر inline مع الإشارة إلى الـ doctrine.
+
+### قياس النجاح حياً
+
+```bash
+# Unit tests (7 cases): ping/heartbeat/noop/passthrough/correlation/fail-open/format
+python3 -m pytest tests/services/test_ws_heartbeat_skill.py -v
+
+# Integration tests (9 checks): router imports + call order + doctrine wiring
+python3 -m pytest tests/services/test_ws_router_heartbeat_integration.py -v
+
+# Live (Codespaces): browser stays connected past 25s mark — no reconnects.
+# Console يجب أن يُظهر:
+#   [WS] connected (no further close events for hours)
+# لا يجب أن يظهر:
+#   [WS] heartbeat timeout — stale connection, forcing reconnect  ← OLD BUG
+```
+
+### السلسلة الكاملة (D-049 → D-WS-FLAP-002)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-049 → D-086 | JSON envelope + LaTeX + theme + Math + sanitizer + V46 firewall |
+| D-WS-001 | architectural ws_proxy + wsUrl utility + state machine |
+| D-WS-002 | accept-before-close + CORS regex + ALLOWED_HOSTS wildcards |
+| D-WS-004 | unified WS architecture (admin_chat.js + jwt subprotocol fix + auth_error event) |
+| D-WS-FLAP-001 | server-side defenses (NullPool→pool, mid-stream check, _emit_terminal try) |
+| D-WS-CODESPACES-001 | same-host proxy via server.js + Codespaces WS upgrade reliability |
+| D-WS-GITPOD-001/002 | gitpod.dev wildcard support + ALLOWED_HOSTS always overwrite |
+| **D-WS-FLAP-002** | **application-layer heartbeat skill — `{type:"ping"}` → `{type:"pong"}` (end of flap)** |

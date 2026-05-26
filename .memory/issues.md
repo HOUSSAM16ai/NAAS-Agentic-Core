@@ -2471,3 +2471,46 @@ CORS regex: https://evil.com                        → ❌ rejected
 - **لا تُعيد كتابة port لـ `*.app.github.dev`** — `server.js` يُمرِّر WS على نفس الـ port
 - **`CORSMiddleware` لا تدعم `*.domain` patterns** — استخدم `allow_origin_regex` دائماً
 - **`server.js` error handler يجب أن يستخدم `socket.end()`** لا `res.writeHead()` على WS socket
+
+
+---
+
+## ISS-WS-FLAP-002 (2026-05-26) — WebSocket Application-Heartbeat Mismatch
+
+**الكارثة (مُبلَّغ عنها مع screenshots حية من المستخدم 14:46 / 14:49 / 14:50)**:
+- المتصفح على `https://*-5000.app.github.dev` يتأرجح بين «متصل» (متصل، نقطة خضراء) و «إعادة الاتصال…» (نقطة رمادية) و «غير متصل» (نقطة حمراء).
+- الـ services الأساسية كلها على ما يرام:
+  - `LISTEN :5000` (Next.js custom server) ✓
+  - `LISTEN :8000` (FastAPI uvicorn) ✓
+  - `LISTEN :8003` (conversation-service uvicorn) ✓
+- اختبار من الترمينال: `websockets.connect("ws://127.0.0.1:8000/api/chat/ws")` نجح.
+- اختبار من المتصفح: يبدأ بنجاح، ثم ينقطع كل ~35 ثانية.
+
+**التشخيص الجنائي**:
+1. الـ Frontend (`useRealtimeConnection.js:82-103`) ينفّذ heartbeat على مستوى التطبيق:
+   - كل 25s: `ws.send(JSON.stringify({type: "ping"}))`
+   - يبدأ 10s timeout: إذا لم يصل pong → `ws.close(1001, "heartbeat_timeout")`
+2. الـ Frontend (`useRealtimeConnection.js:209`) يفحص الـ pong بـ:
+   ```js
+   if (event.data.includes('"type":"pong"')) {
+       clearTimeout(heartbeatTimeoutRef.current);
+   }
+   ```
+3. الـ Backend (`customer_chat.py:459` + `admin.py:414`) لم يكن يميّز رسائل التحكم — كان يعالج كل رسالة كسؤال:
+   ```python
+   payload = await websocket.receive_json()          # {"type":"ping"}
+   question = str(payload.get("question","")).strip()  # ""
+   if not question:
+       await websocket.send_json({"type":"error", "payload":{"details":"Question is required"}})
+       continue
+   ```
+4. النتيجة: لا pong يصل أبداً → الـ timeout بعد 10s يُغلق الاتصال (code 1001) → reconnect → دورة flapping كل ~35s.
+
+**لماذا الإصلاحات السابقة (D-WS-002/D-WS-004/D-WS-FLAP-001/D-WS-CODESPACES-001) لم تكفِ**:
+كل تلك التحسينات صحيحة على مستوى الـ transport/auth/proxy لكنها لم تتعرّض لمستوى البروتوكول الأعلى (application heartbeat). كانت العَرَض الرئيسي مُختفياً خلف عمل ناجح في كل الطبقات السفلى — حتى لاحظنا أن صنف الـ control messages لم يكن جزءاً من بروتوكول الـ chat أصلاً.
+
+**الإصلاح**: راجع `decisions.md` D-WS-FLAP-002 — Skill جديد (`WebSocketHeartbeatSkill`) يعالج رسائل التحكم بشكل موحَّد قبل أي محاولة لقراءة `question` من الـ payload.
+
+**Severity**: 🔴 CRITICAL (يكسر التجربة كاملة في GitHub Codespaces — البيئة الأساسية للمطورين)
+
+**Resolution**: D-WS-FLAP-002 — التحقق الحي بـ 7 unit tests + 9 integration checks + 100-cycle simulation.

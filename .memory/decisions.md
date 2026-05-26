@@ -2421,3 +2421,44 @@ fix + `.genui-fes-*`) | tests.
 
 **Files**: `app/services/skills/output_firewall.py` (جديد) | `app/services/skills/topic_lock.py` (جديد) | `app/services/skills/__init__.py` (تحديث exports) | `app/services/chat/local_graph.py` (تطبيق الـ firewall في _chat_node) | `app/api/routers/customer_chat.py` (تطبيق الـ firewall على complete_ai_response) | `tests/test_output_firewall_v46.py` (25 اختباراً جديداً).
 
+
+
+---
+
+## D-WS-FLAP-002 · Application-Level Heartbeat Skill (2026-05-26)
+
+**Context**: بعد D-WS-FLAP-001 (server-side defenses حول NullPool / `_emit_terminal_frames` / mid-stream `_ws_is_connected`) كان الـ flapping ما زال يحدث في GitHub Codespaces على الهاتف. الـ screenshots المُرسلة من المستخدم (14:46:42 → 14:46:43) أظهرت تأرجح حالة الـ UI بين «متصل ← إعادة الاتصال ← غير متصل ← متصل». تجريب حي بفك التحليل اللوني للسبب الجذري كشف عدم تطابق بروتوكول application-level heartbeat بين الواجهة والخادم:
+
+- **Frontend** (`useRealtimeConnection.js:90`): يُرسل `{type:"ping"}` كل 25 ثانية.
+- **Frontend** (`useRealtimeConnection.js:209`): ينتظر رسالة تحتوي `"type":"pong"` لإلغاء timeout 10 ثوانٍ.
+- **Backend** (`customer_chat.py:459` و `admin.py:414`): يُعالج كل رسالة كسؤال — `payload.get("question", "")` → "" → يُرسل `{type:"error", payload:{details:"Question is required"}}`.
+- **النتيجة**: لا pong يصل أبداً → بعد 10s `ws.close(1001, "heartbeat_timeout")` → reconnect → يعيد الدورة كل ~35s.
+
+**Decision**:
+1. **`WebSocketHeartbeatSkill`** (`app/services/skills/ws_heartbeat_skill.py`) — Skill رسمي يعالج رسائل التحكم (`ping`/`heartbeat`/`noop`) بشكل موحَّد. يُرجع `True` للرسائل المُعالَجة (المتصل يُكمل بـ `continue`) و `False` للسؤال الحقيقي.
+2. **`REALTIME_PROTOCOL_DOCTRINE`** (`app/services/skills/doctrine.py` — v1.0.0 — 9 قواعد): قاعدة المعرفة المركزية. Single Source of Truth. مسجَّلة في `SKILL_DOCTRINE_MANIFEST`.
+3. **التطبيق**:
+   - `app/api/routers/customer_chat.py:chat_stream_ws` — `await handle_control_message(websocket, payload)` قبل أي محاولة قراءة `question`.
+   - `app/api/routers/admin.py:admin_chat_stream_ws` — نفس الإصلاح.
+   - `microservices/conversation_service/main.py` — نسخة inline (microservices ممنوع لها استيراد من `app.*` لكنها تحترم نفس الـ doctrine).
+4. **Pong format**: `{"type":"pong","ts":"<iso-utc>","id":"<optional-correlation>"}` — متوافق مع `event.data.includes('"type":"pong"')` على الواجهة.
+5. **Fail-open**: إذا فشل `send_json` (المتصل أُغلق بين receive و send) → DEBUG log و `True` (لا يكسر loop).
+
+**Consequence**:
+- الـ flapping يختفي على GitHub Codespaces + Gitpod + Local — بُرهنت بـ 100-cycle simulation + 7 unit tests + 9 integration checks.
+- الـ heartbeat الآن قانون معماري (REALTIME_PROTOCOL_DOCTRINE) — أي WS endpoint جديد يجب استدعاء الـ Skill قبل المعالجة العادية.
+- Prometheus: `cogniforge_skill_ws_heartbeat_invocations_total{message_type,result}` لرصد الـ heartbeat traffic.
+
+**Architectural Invariants (لا تُكسر بدون ADR)**:
+- أي WS endpoint يفحص `type` في الـ payload يجب أن يستدعي `handle_control_message` أولاً.
+- `application-level ping/pong ≠ uvicorn --ws-ping-interval` — الأول يفحص health الـ handler، الثاني يفحص الـ TCP layer فقط.
+- pong format يجب أن يحتوي `"type":"pong"` كـ substring متطابق (الواجهة تفحص بـ `includes()` ليس JSON.parse).
+
+**Files**:
+- `app/services/skills/ws_heartbeat_skill.py` (جديد — 180 سطر).
+- `app/services/skills/doctrine.py` (إضافة `REALTIME_PROTOCOL_DOCTRINE` + manifest entry).
+- `app/api/routers/customer_chat.py` (استيراد + استدعاء قبل question check).
+- `app/api/routers/admin.py` (نفس الإصلاح).
+- `microservices/conversation_service/main.py` (نسخة inline + تطبيق في endpoint customer/admin).
+- `tests/services/test_ws_heartbeat_skill.py` (جديد — 20+ اختبار).
+- `tests/services/test_ws_router_heartbeat_integration.py` (جديد — 9 فحوصات تكامل).

@@ -41,6 +41,9 @@ export const httpToWsProtocol = (protocol) => {
  * في هذه البيئات، المتصفح يصل عبر proxy خارجي → يجب استخدام
  * window.location.host بدلاً من localhost.
  *
+ * D-WS-GITPOD-001: Gitpod Flex يستخدم نطاق *.gitpod.dev (ليس *.gitpod.io)
+ * مثال: 5000--019e6245-7448-7aac-964e-e9290606bc52.eu-central-1-01.gitpod.dev
+ *
  * @returns {boolean}
  */
 export const isCloudWorkspace = () => {
@@ -51,7 +54,8 @@ export const isCloudWorkspace = () => {
         host.endsWith('.preview.app.github.dev') ||
         host.endsWith('.gitpod.io') ||
         host.endsWith('.ws-eu.gitpod.io') ||
-        host.includes('.gitpod.') ||
+        host.includes('.gitpod.') ||   // يشمل .gitpod.io و .gitpod.dev
+        host.endsWith('.gitpod.dev') || // Gitpod Flex / Ona الجديد
         host.endsWith('.replit.dev') ||
         host.endsWith('.replit.app') ||
         host.endsWith('.janeway.replit.dev')
@@ -62,29 +66,38 @@ export const isCloudWorkspace = () => {
  * يُعيد الـ host الصحيح لـ backend WebSocket في بيئة Gitpod/Ona/Codespaces.
  *
  * المشكلة (D-WS-002): في Gitpod/Ona، كل port له subdomain مختلف:
- *   - Frontend (5000): 5000-<id>.ws-eu.gitpod.io
- *   - Backend  (8000): 8000-<id>.ws-eu.gitpod.io
- * المتصفح يصل للـ frontend عبر port 5000 subdomain.
- * WebSocket يجب أن يصل للـ backend عبر port 8000 subdomain.
+ *   - Frontend (5000): 5000--<id>.<cluster>.gitpod.dev  (Gitpod Flex/Ona)
+ *                   أو 5000-<id>.ws-eu.gitpod.io         (Gitpod Classic)
+ *   - Backend  (8000): 8000--<id>.<cluster>.gitpod.dev
+ *                   أو 8000-<id>.ws-eu.gitpod.io
  *
- * @returns {string} host للـ backend WebSocket
+ * D-WS-GITPOD-001: Gitpod Flex يستخدم double-dash: <PORT>--<ENV_ID>.<cluster>.gitpod.dev
+ * الـ regex /^5000-/ يُطابق كلا النمطين (5000- و 5000--) لأن 5000-- يبدأ بـ 5000-.
+ *
+ * @returns {string | null} host للـ backend WebSocket
  */
 export const getCloudBackendHost = () => {
     if (!isBrowser) return null;
-    const host = window.location.host; // مثل: 5000-abc123.ws-eu.gitpod.io
+    const host = window.location.host;
 
-    // Gitpod / Ona: استبدل port prefix من 5000 إلى 8000
+    // Gitpod Flex/Ona: 5000--<id>.<cluster>.gitpod.dev → 8000--<id>.<cluster>.gitpod.dev
+    // Gitpod Classic: 5000-<id>.ws-eu.gitpod.io → 8000-<id>.ws-eu.gitpod.io
+    // Replit: 5000-<id>.replit.dev → 8000-<id>.replit.dev
+    // الـ regex /^5000-/ يُطابق الجميع لأن كل النماذج تبدأ بـ "5000-"
     if (host.match(/^5000-/)) {
-        return host.replace(/^5000-/, '8000-');
+        const backendHost = host.replace(/^5000-/, '8000-');
+        console.info('[wsUrl] Port-prefix rewrite: frontend=%s → backend=%s', host, backendHost);
+        return backendHost;
     }
-    // GitHub Codespaces: استبدل -5000. بـ -8000.
+
+    // GitHub Codespaces: <name>-5000.<suffix>.app.github.dev → <name>-8000.<suffix>.app.github.dev
     if (host.match(/-5000\./)) {
-        return host.replace(/-5000\./, '-8000.');
+        const backendHost = host.replace(/-5000\./, '-8000.');
+        console.info('[wsUrl] Codespaces port rewrite: frontend=%s → backend=%s', host, backendHost);
+        return backendHost;
     }
-    // Replit: نفس النمط
-    if (host.match(/^5000-/)) {
-        return host.replace(/^5000-/, '8000-');
-    }
+
+    console.warn('[wsUrl] getCloudBackendHost: no port pattern matched for host=%s — falling back to window.location.host', host);
     return null;
 };
 
@@ -147,7 +160,9 @@ export const getWsBase = () => {
     // الافتراضي 8000 — يتطابق مع uvicorn في supervisor.sh.
     const localBackendPort = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
     const hostname = window.location.hostname; // localhost أو 127.0.0.1
-    return `ws://${hostname}:${localBackendPort}`;
+    const localBase = `ws://${hostname}:${localBackendPort}`;
+    console.info('[wsUrl] Local dev mode — WS base:', localBase);
+    return localBase;
 };
 
 /**
@@ -184,7 +199,11 @@ export const buildWsUrl = (endpoint, sessionId, token) => {
             url.searchParams.set('token', token);
         }
 
-        return url.toString();
+        const finalUrl = url.toString();
+        // Redact token value from log — show only that it is present
+        const safeUrl = finalUrl.replace(/([?&]token=)[^&]+/, '$1[REDACTED]');
+        console.info('[wsUrl] buildWsUrl → %s', safeUrl);
+        return finalUrl;
     } catch (err) {
         console.error('[wsUrl] Failed to build WebSocket URL:', { endpoint, base, err });
         return '';

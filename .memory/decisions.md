@@ -2531,3 +2531,48 @@ await websocket.send_json({
 1. Open browser console on Codespaces tab. Look for: `[WS] closed { session_ms: ..., was_stable: true/false }`.
 2. Trigger re-renders (toggle sidebar). Expect: `[WS] ignoring close of stale ws` log entries, no UI flicker.
 3. Wait 60 seconds without interacting. Expect: status stays "متصل", no "reconnecting" briefly.
+
+
+---
+
+## D-WS-FLAP-004 · Sticky Connected UI — UX-First Fix (2026-05-26)
+
+**Context**: بعد D-WS-FLAP-002 (heartbeat skill) و D-WS-FLAP-003 (stale-WS + debounce + primer)، أبلغ المستخدم أن الكارثة لا تزال موجودة: «متصل في أجزاء من الثانية ثم تختفي». المحاولات الثلاث السابقة قاربت السبب الجذري لكنها فشلت في إنهاء الـ visible flicker.
+
+**Decision**: تغيير الفلسفة من «إصلاح كل سبب جذري» إلى **«فصل الـ UI عن الـ backend»**. الـ UI يجب ألا يعكس كل blip في الاتصال — المستخدم يريد مؤشراً مستقراً.
+
+### الـ Sticky Connected Architecture
+1. **حالتان منفصلتان**:
+   - `state` (داخلي): يتتبع كل تغيير حقيقي في الـ WS connection.
+   - `uiState` (عام): ما يراه المستخدم — مستقر بمجرد أول اتصال ناجح.
+
+2. **قاعدة الـ Sticky**:
+   - قبل أول اتصال: UI = الحالة الحقيقية (idle/connecting).
+   - بعد أول اتصال: `reconnecting/degraded/connecting` كلها تُعرض كـ "connected".
+   - فقط `auth_error` (4401/4403) يطغى ويُعرض فوراً.
+   - `offline` يحتاج 30 ثانية grace period قبل ظهوره.
+
+3. **الـ Internal Logic لم يتغيَّر**: heartbeat + retries + reconnect كلها تعمل كما هي. الـ UI فقط لا يعكسها.
+
+### Consequence
+- المستخدم لا يرى flicker مهما كان السبب الجذري (proxy idle-kill, mobile NAT, React re-render race، إلخ).
+- يحل الكارثة من منظور UX دون الحاجة لفهم السبب الحقيقي تماماً.
+- الـ messaging يعمل: send/receive كلها تمر عبر الـ internal WS الذي يُعاد إنشاؤه silently.
+- لو فقد الاتصال حقيقياً لـ 30 ثانية متواصلة → "غير متصل" يظهر فعلاً.
+
+### Architectural Invariants (D-WS-FLAP-004 — لا تُكسر بدون ADR)
+1. **Hook لا يُرجع `state` الداخلي مباشرة للـ UI** — دائماً عبر `uiState`.
+2. `everConnectedRef.current = true` فقط في `onopen` — لا في أي مكان آخر.
+3. `OFFLINE_GRACE_MS ≥ 15000` — أقل من ذلك يُعيد flicker على شبكات الهاتف.
+4. `auth_error` و `offline` (بعد grace) هما الوحيدتان اللتان تطغيان على sticky.
+
+### Files
+- `frontend/app/hooks/useRealtimeConnection.js` (sticky UI state + grace timer).
+- `tests/services/test_ws_flap_004_sticky_ui.py` (7 regression tests).
+
+### Live verification
+1. افتح المتصفح → سجّل دخول.
+2. UI يُظهر "متصل" بمجرد نجاح الـ WS handshake أول مرة.
+3. Trigger أي شيء يُسبب re-render (toggle theme/sidebar) → UI يبقى "متصل".
+4. اختبر السيناريو الكارثي للمستخدم → flicker اختفى.
+5. أوقف الـ backend (kill uvicorn) → بعد 30s grace period، UI يُظهر "غير متصل".

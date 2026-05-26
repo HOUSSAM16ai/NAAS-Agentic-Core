@@ -6113,3 +6113,72 @@ await websocket.send_json({
 | D-WS-GITPOD-001/002 | gitpod.dev wildcard support |
 | D-WS-FLAP-002 | application-layer heartbeat skill |
 | **D-WS-FLAP-003** | **stale-WS detection + debounced UI + server primer (end of fast-cycle flap)** |
+
+---
+
+## 6.65 Sticky Connected UI — End of Flicker Catastrophe (2026-05-26, ISS-WS-FLAP-004 / D-WS-FLAP-004)
+
+> **Mea Culpa**: ثلاث محاولات إصلاح متتالية (D-WS-FLAP-001/002/003) فشلت في
+> إنهاء flicker «متصل في أجزاء من الثانية». كل إصلاح كان صحيحاً تقنياً لكن
+> الكارثة استمرت لأن السبب الجذري في الـ network/proxy layer لا يمكن إصلاحه
+> من داخل التطبيق وحده. الحل النهائي: **نُفصل الـ UI عن الـ backend**.
+
+### الفلسفة
+
+المستخدم لا يهتم بسبب blip الشبكة. يريد مؤشراً مستقراً. لذا:
+- الـ internal logic يحاول الـ reconnect عند كل blip (كما كان).
+- الـ UI يبقى "متصل" بمجرد أول اتصال ناجح.
+- فقط `auth_error` (4401/4403) و `offline` (بعد 30s grace) يطغيان على الـ sticky.
+
+### المعمارية
+
+```js
+// قبل D-WS-FLAP-004:
+return { state, sendMessage };  // state ← internal — يعكس كل blip
+                                // → UI flicker
+
+// بعد D-WS-FLAP-004:
+const [uiState, setUiState] = useState("idle");  // منفصل
+const everConnectedRef = useRef(false);
+
+// computeUiState يطبِّق الـ sticky:
+//   لو ever connected: reconnecting/degraded/connecting → "connected"
+//   auth_error: يطغى دائماً
+//   offline: ينتظر 30s grace قبل ظهوره
+return { state: uiState, sendMessage };  // UI ← sticky → لا flicker
+```
+
+### القواعد الخمس الدائمة (D-WS-FLAP-004 — لا تُكسر بدون ADR)
+
+1. **Hook لا يُرجع `state` الداخلي مباشرة للـ UI** — دائماً عبر `uiState`.
+2. **`everConnectedRef.current = true` فقط في `onopen`** — لا في أي مكان آخر.
+3. **`OFFLINE_GRACE_MS ≥ 15000`** — أقل من ذلك يُعيد flicker على شبكات الهاتف.
+4. **`auth_error` و `offline` (بعد grace)** هما الوحيدتان اللتان تطغيان على sticky.
+5. **عند فشل عدة محاولات root-cause متتالية**، انتقل لإصلاح SYMPTOM بدلاً من cause.
+   المستخدم لا يحتاج أن يفهم لماذا — يحتاج أن يعمل النظام.
+
+### قياس النجاح حياً
+
+```bash
+# Browser console logs المتوقعة:
+[WS] connecting auth_mode=query_param attempt=1/30 url=...
+[WS] connected (first time)
+# ← الآن: مهما حدث، الـ UI يبقى "متصل"
+
+# Trigger flapping artificially: kill uvicorn → restart
+# Internal logs: [WS] closed { code: 1006 } / [WS] Reconnecting in 500ms
+# UI: لا flicker — يبقى "متصل" بصرياً
+
+# لو السوء الحقيقي: لا تعافٍ بعد 30s
+# UI: يُظهر "غير متصل" — فقط بعد فترة الـ grace
+```
+
+### السلسلة الكاملة (D-WS-001 → D-WS-FLAP-004)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-001 → D-WS-FLAP-001 | architectural ws_proxy + auth + persistence |
+| D-WS-CODESPACES-001 | same-host proxy via server.js |
+| D-WS-FLAP-002 | application-layer heartbeat skill |
+| D-WS-FLAP-003 | stale-WS detection + debounced UI + server primer |
+| **D-WS-FLAP-004** | **sticky connected UI — final UX-first fix** |

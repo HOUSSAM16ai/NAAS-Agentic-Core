@@ -35,11 +35,17 @@ const nextConfig = {
         // GitHub Codespaces
         '*.app.github.dev',
         '*.preview.app.github.dev',
-        // Gitpod / Ona
+        // Gitpod Classic
         '*.gitpod.io',
         '*.ws-eu.gitpod.io',
         '*.ws-us.gitpod.io',
         '*.ws-eu2.gitpod.io',
+        // Gitpod Flex / Ona (D-WS-GITPOD-001)
+        // Pattern: <PORT>--<ENV_ID>.<cluster>.gitpod.dev
+        '*.gitpod.dev',
+        '*.eu-central-1-01.gitpod.dev',
+        '*.eu-central-1-02.gitpod.dev',
+        '*.us-east-1-01.gitpod.dev',
     ],
 };
 

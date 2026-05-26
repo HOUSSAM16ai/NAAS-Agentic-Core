@@ -34,14 +34,30 @@ class TestCoreConfig:
         assert _normalize_csv_or_list('["foo", "bar"]') == ["foo", "bar"]
 
     def test_database_url_fallback(self):
-        """Verify DB URL fallback logic."""
-        # Clear both DATABASE_URL and APP_DATABASE_URL — base.py sets DATABASE_URL
-        # from APP_DATABASE_URL at import time, so both must be absent for fallback.
+        """Verify DB URL fallback logic.
+
+        Two sources can inject DATABASE_URL even when env vars are cleared:
+        1. base.py sets os.environ["DATABASE_URL"] from APP_DATABASE_URL at
+           module import time (before patch.dict runs).
+        2. pydantic-settings reads .env file directly via model_config env_file.
+
+        We bypass both by passing DATABASE_URL=None explicitly and overriding
+        model_config to skip .env loading for this test instance.
+        """
         clean_env = {
-            k: v for k, v in os.environ.items() if k not in ("DATABASE_URL", "APP_DATABASE_URL")
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("DATABASE_URL", "APP_DATABASE_URL")
         }
         with patch.dict(os.environ, clean_env, clear=True):
-            settings = AppSettings(ENVIRONMENT="testing", DATABASE_URL=None)
+            os.environ.pop("DATABASE_URL", None)
+            os.environ.pop("APP_DATABASE_URL", None)
+            # Bypass .env file loading by constructing with _env_file=None
+            settings = AppSettings(
+                ENVIRONMENT="testing",
+                DATABASE_URL=None,
+                _env_file=None,  # type: ignore[call-arg]
+            )
             assert "sqlite" in settings.DATABASE_URL
             assert ":memory:" in settings.DATABASE_URL
 

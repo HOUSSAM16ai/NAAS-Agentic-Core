@@ -215,13 +215,12 @@ ENVEOF
         changed=1
     fi
 
-    # ── BACKEND_CORS_ORIGINS (D-WS-002) ──────────────────────────────────────
-    # يضمن أن frontend على port 5000 مسموح له بـ CORS في جميع البيئات.
-    # يُعيَّن فقط إذا لم يكن موجوداً مسبقاً (يحترم التهيئة الصريحة).
-    if ! grep -q "^BACKEND_CORS_ORIGINS=" "$env_file" 2>/dev/null; then
-        _set_env_key "BACKEND_CORS_ORIGINS" "http://localhost:3000,http://localhost:5000,http://127.0.0.1:3000,http://127.0.0.1:5000"
-        changed=1
-    fi
+    # ── BACKEND_CORS_ORIGINS (D-WS-002 + D-WS-GITPOD-001) ───────────────────
+    # يُعيَّن دائماً لضمان تحديث القيمة عند إضافة نطاقات جديدة.
+    # D-WS-GITPOD-001: يشمل *.gitpod.dev (Gitpod Flex/Ona) و *.app.github.dev (Codespaces).
+    # ملاحظة: FastAPI CORSMiddleware يقبل wildcards فقط في subdomains (*.example.com).
+    _set_env_key "BACKEND_CORS_ORIGINS" "http://localhost:3000,http://localhost:5000,http://127.0.0.1:3000,http://127.0.0.1:5000,https://*.gitpod.io,https://*.gitpod.dev,https://*.eu-central-1-01.gitpod.dev,https://*.eu-central-1-02.gitpod.dev,https://*.us-east-1-01.gitpod.dev,https://*.app.github.dev,https://*.preview.app.github.dev,https://*.replit.dev,https://*.replit.app"
+    changed=1
 
     # ── ALLOWED_HOSTS (D-WS-002 + D-WS-GITPOD-001) ──────────────────────────
     # يضمن أن TrustedHostMiddleware يقبل Gitpod/Ona/Codespaces hosts.
@@ -473,6 +472,14 @@ launch_frontend() {
         elif lsof -ti :"$FRONTEND_PORT" >/dev/null 2>&1; then
             lifecycle_warn "Frontend Launcher: Port $FRONTEND_PORT already in use — skipping start"
         else
+            # D-WS-GITPOD-001: حذف stale lock قبل الإطلاق.
+            # عند تعطل Next.js أو إيقافه بشكل مفاجئ، يبقى ملف .next/dev/lock
+            # مقفلاً من العملية الميتة → يمنع إعادة التشغيل بخطأ "Unable to acquire lock".
+            local next_lock="frontend/.next/dev/lock"
+            if [ -f "$next_lock" ]; then
+                lifecycle_info "Frontend Launcher: Removing stale Next.js dev lock..."
+                rm -f "$next_lock" 2>/dev/null || true
+            fi
             lifecycle_info "Frontend Launcher: Starting Next.js dev server on port $FRONTEND_PORT..."
             # D-WS-001: custom server يُمرِّر WebSocket إلى Gateway (8000)
             # next dev لا يُمرِّر WebSocket upgrades — server.js يحل هذا
@@ -612,13 +619,14 @@ launch_orchestrator_service() {
 
     mkdir -p "$ORCH_LOG_DIR"
 
-    # ── التحقق من وجود OPENROUTER_API_KEY ────────────────────────────────────
+    # ── تحذير عند غياب OPENROUTER_API_KEY (لكن لا نوقف الإطلاق) ─────────────
+    # D-WS-GITPOD-001: الـ orchestrator يعمل في DEGRADED mode بدون LLM key.
+    # إيقاف الإطلاق كلياً يُسبب فشل /compose وانهيار Skills Pipeline.
     if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-        lifecycle_warn "Orchestrator: OPENROUTER_API_KEY not set — skipping launch."
-        lifecycle_warn "             Set it in Gitpod Secrets or .devcontainer/secrets.env"
-        echo "[$(date -u +%FT%TZ)] OPENROUTER_API_KEY missing — orchestrator parked" \
+        lifecycle_warn "Orchestrator: OPENROUTER_API_KEY not set — launching in DEGRADED mode (no LLM)."
+        lifecycle_warn "             Set it in Gitpod Secrets or .devcontainer/secrets.env for full functionality."
+        echo "[$(date -u +%FT%TZ)] OPENROUTER_API_KEY missing — orchestrator starting in DEGRADED mode" \
             >> "$ORCH_LOG_DIR/orchestrator.log"
-        return 0
     fi
 
     # ── idempotent: هل الخدمة تعمل بالفعل؟ ──────────────────────────────────
@@ -710,10 +718,8 @@ launch_user_service() {
     # ── التحقق من وجود DATABASE_URL ──────────────────────────────────────────
     local user_db_url="${USER_DATABASE_URL:-${DATABASE_URL:-}}"
     if [ -z "$user_db_url" ]; then
-        lifecycle_warn "UserService: no DATABASE_URL available — skipping launch."
-        echo "[$(date -u +%FT%TZ)] DATABASE_URL missing — user-service parked" \
-            >> "$USER_LOG_DIR/user_service.log"
-        return 0
+        lifecycle_warn "UserService: no DATABASE_URL — launching with SQLite fallback (DEGRADED)."
+        user_db_url="sqlite+aiosqlite:///./user_service_dev.db"
     fi
 
     # ── idempotent: هل الخدمة تعمل بالفعل؟ ──────────────────────────────────
@@ -770,10 +776,8 @@ launch_planning_agent() {
     # ── التحقق من وجود DATABASE_URL ──────────────────────────────────────────
     local planning_db_url="${PLANNING_DATABASE_URL:-${DATABASE_URL:-}}"
     if [ -z "$planning_db_url" ]; then
-        lifecycle_warn "PlanningAgent: no DATABASE_URL available — skipping launch."
-        echo "[$(date -u +%FT%TZ)] DATABASE_URL missing — planning-agent parked" \
-            >> "$PLANNING_LOG_DIR/planning_agent.log"
-        return 0
+        lifecycle_warn "PlanningAgent: no DATABASE_URL — launching with SQLite fallback (DEGRADED)."
+        planning_db_url="sqlite+aiosqlite:///./planning_agent_dev.db"
     fi
 
     # ── تحويل URL إلى asyncpg (مطلوب لـ SQLAlchemy async) ────────────────────
@@ -840,10 +844,10 @@ launch_research_agent() {
 
     mkdir -p "$RESEARCH_LOG_DIR"
 
-    # ── التحقق من توفر DATABASE_URL ──────────────────────────────────────────
+    # ── تحذير عند غياب DATABASE_URL (لكن لا نوقف الإطلاق) ───────────────────
+    # Research Agent يعمل بدون DB — يستخدم Tavily فقط.
     if [ -z "${DATABASE_URL:-}" ]; then
-        lifecycle_warn "Research Agent: DATABASE_URL not set — skipping launch"
-        return 0
+        lifecycle_warn "Research Agent: DATABASE_URL not set — launching anyway (Tavily-only mode)."
     fi
 
     # ── idempotent: تجنب إطلاق نسخة ثانية ───────────────────────────────────
@@ -898,10 +902,10 @@ launch_reasoning_agent() {
 
     mkdir -p "$REASONING_LOG_DIR"
 
-    # ── التحقق من توفر DATABASE_URL ──────────────────────────────────────────
+    # ── تحذير عند غياب DATABASE_URL (لكن لا نوقف الإطلاق) ───────────────────
+    # Reasoning Agent يعمل بدون DB — يستخدم MCTS + LLM فقط.
     if [ -z "${DATABASE_URL:-}" ]; then
-        lifecycle_warn "Reasoning Agent: DATABASE_URL not set — skipping launch"
-        return 0
+        lifecycle_warn "Reasoning Agent: DATABASE_URL not set — launching anyway (MCTS-only mode)."
     fi
 
     # ── idempotent: تجنب إطلاق نسخة ثانية ───────────────────────────────────

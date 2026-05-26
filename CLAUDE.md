@@ -6182,3 +6182,74 @@ return { state: uiState, sendMessage };  // UI ← sticky → لا flicker
 | D-WS-FLAP-002 | application-layer heartbeat skill |
 | D-WS-FLAP-003 | stale-WS detection + debounced UI + server primer |
 | **D-WS-FLAP-004** | **sticky connected UI — final UX-first fix** |
+
+---
+
+## 6.66 Honest-Debounce Doctrine — Correction to D-WS-FLAP-004 (2026-05-26)
+
+> **تصحيح معماري حاسم**: المستخدم رفض فلسفة "sticky-connected-forever"
+> لأنها قد تكذب طويلاً على المستخدم. القاعدة المُعدَّلة: **الحالة الداخلية
+> صادقة، والـ UI يتأخر قليلاً فقط (لا يكذب طويلاً)**.
+
+### الفرق بين debounce و كذب
+
+| Duration | التصنيف | السبب |
+|----------|---------|------|
+| < 2 ثانية | **debounce مقبول** | معظم blips الشبكية تنتهي خلال 2s، إظهار "reconnecting" فوراً = flicker مزعج |
+| 2s – 15s | **يجب إظهار "reconnecting"** | لو لم نتعافَ خلال 2s، هناك مشكلة حقيقية يجب أن يعرفها المستخدم |
+| > 15s | **يجب إظهار "offline"** | انقطاع متواصل = مشكلة جدية، إخفاؤها = كذب صريح |
+
+### العقد المعماري (D-WS-FLAP-004 honest-debounce)
+
+```typescript
+// Hook الـ return value:
+{
+  state: uiState,         // مُحاسَب — debounced (لـ UI فقط)
+  internalState: state,   // صادق — مكشوف للـ debug/telemetry
+  sendMessage,
+}
+```
+
+**القاعدة الذهبية**: `uiState !== internalState` خلال فترة debounce قصيرة (< 2s
+بعد blip)، لكنهما متطابقان تماماً بعد ذلك.
+
+### الـ Code المعماري
+
+```javascript
+// useEffect مزامنة state → uiState:
+if (state === "auth_error") {
+    setUiState("auth_error");  // فوراً — fatal
+}
+else if (state === "connected" || state === "recovered") {
+    setUiState("connected");   // فوراً — تعافٍ
+    cancelUiPromotion();
+}
+else if (disconnect state) {
+    // جدوَل promotion مُدرَّج:
+    //   - بعد 2s: setUiState("reconnecting")  ← الحقيقة الأولى
+    //   - بعد 15s: setUiState("offline")      ← الحقيقة الأصرح
+    scheduleUiPromotionForDisconnect();
+}
+```
+
+### القواعد الخمس الدائمة (D-WS-FLAP-004 honest-debounce — لا تُكسر بدون ADR)
+
+1. **Hook يكشف `internalState`** — صدق المعلومة للـ debug/telemetry غير قابل للإخفاء.
+2. **`RECONNECT_VISIBLE_MS ∈ [1000, 3000]`** — أقل = flicker، أكثر = كذب.
+3. **`OFFLINE_GRACE_MS ∈ [10000, 30000]`** — أقل = تشويش، أكثر = إخفاء.
+4. **`auth_error` و `offline` (بعد grace) يطغيان على debounce** — fatal لا يُؤجَّل.
+5. **`setState` يحدث فوراً في كل blip** — لا طبقة وسطى تخفي الحقيقة عن internal logic.
+
+### السلسلة الكاملة المُحدَّثة
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-001 → D-WS-FLAP-003 | architectural + protocol + race fixes |
+| **D-WS-FLAP-004 (honest-debounce)** | **صدق مع تأخير قصير ≤ 15s، ليس كذب طويل** |
+
+### Lesson learned (المضاف للـ engineering doctrine)
+
+> الفرق بين "UX-friendly debounce" و "lying to the user" هو في **المدة**.
+> 2 ثانية debounce = راحة UX. 30 ثانية debounce = كذب صريح.
+> الـ honest engineering يحترم حدود الـ debounce المعقولة، ويحرص على
+> كشف الحقيقة الكاملة للكود الذي يحتاجها (debug/telemetry).

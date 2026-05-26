@@ -1,16 +1,32 @@
 /**
  * useRealtimeConnection — WebSocket connection manager
  *
- * ## State Machine
+ * ## State Machine (internal — صادق دائماً)
  *
  *   idle → connecting → connected → degraded → reconnecting → offline
  *                                                           ↘ recovered (→ connected)
  *
- * ## Offline Declaration Rules (D-WS-002)
- *   لا يُعلَن عن Offline إلا بعد:
- *   1. WebSocket failure
- *   2. reconnect exhaustion (MAX_RETRIES محاولات)
- *   قبل ذلك: الحالة هي "reconnecting" وليس "offline"
+ * ## مبدأ معماري حاسم (D-WS-FLAP-004 — honest-debounce)
+ *
+ * الـ Hook يُصدر **حالتين منفصلتين**:
+ *
+ *   1. `internalState` — الحالة الداخلية الصادقة، تتتبع كل blip فوراً.
+ *      تُستخدم في: debug logs, telemetry, الإصلاحات المستقبلية.
+ *
+ *   2. `state` (= `uiState`) — الحالة الموجَّهة للـ UI. تتأخر قليلاً عن
+ *      `internalState` لتجنب flicker على blips قصيرة جداً، لكنها
+ *      **لا تكذب** على المستخدم:
+ *        - blip < 2 ثانية: UI = "connected" (الأرجح نتعافى — تجنب flicker)
+ *        - disconnect 2s..15s: UI = "reconnecting" (الحقيقة الصادقة)
+ *        - disconnect > 15s: UI = "offline" (الحقيقة الأصرح)
+ *
+ * هذا ليس "sticky كذب" — هذا debounce قصير محسوب لتجنب flicker على
+ * blips شبكية طبيعية، ثم إظهار الحقيقة الكاملة بعد فترة معقولة.
+ *
+ * ## Offline Declaration Rules (D-WS-002 + D-WS-FLAP-004)
+ *   - الحالة الداخلية: تُعلَن `offline` بعد استنفاد MAX_RETRIES.
+ *   - الحالة العامة (UI): تُعلَن `offline` بعد OFFLINE_GRACE_MS متواصل
+ *     من فقدان الاتصال بغض النظر عن internal retries.
  *
  * ## Heartbeat
  *   ping/pong كل HEARTBEAT_INTERVAL ms للكشف عن stale connections.
@@ -64,17 +80,24 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
   const wsRef = useRef(null);
   const retries = useRef(0);
   const [state, setState] = useState("idle");
-  // D-WS-FLAP-004: «الـ Sticky Connected» — حالة UI عامة منفصلة عن الـ
-  // internal connection state. بمجرد نجاح الاتصال أول مرة، UI يبقى "متصل"
-  // مهما حدث في الـ backend (reconnects تحدث صامتاً). فقط:
-  //   - auth_error (4401/4403): UI ينقل إلى "auth_error" (red)
-  //   - أو فقدان طويل (>30s متواصل): UI ينقل إلى "offline"
-  // هذا يحل الكارثة من منظور المستخدم بغض النظر عن سبب الـ flapping الأساسي
-  // (proxy idle-kill, mobile carrier-NAT, React re-render race، إلخ).
+  // D-WS-FLAP-004 (rev. honest-debounce — 2026-05-26):
+  //
+  // مبدأ معماري حاسم (طلب المستخدم): الـ UI **لا يكذب**. الحالة الداخلية
+  // `state` صادقة دائماً (تتتبع كل blip حقيقي). الـ `uiState` العام
+  // فقط يتأخر قليلاً في إظهار الانقطاع لتجنب flicker — لكنه لا يخفي
+  // الحقيقة.
+  //
+  // الفلسفة الصحيحة:
+  //   - blip < RECONNECT_VISIBLE_MS (2s): اعرض "متصل" (تجنب flicker)
+  //   - disconnect 2s..OFFLINE_GRACE_MS: اعرض "إعادة الاتصال" (الحقيقة)
+  //   - disconnect > OFFLINE_GRACE_MS: اعرض "غير متصل" (الحقيقة الأصرح)
+  //
+  // هكذا الـ UI صادق لكنه ناعم — لا flicker، ولا كذب.
   const [uiState, setUiState] = useState("idle");
   const everConnectedRef = useRef(false);
   const lastConnectedAtRef = useRef(0);
-  const offlineGraceTimerRef = useRef(null);
+  // timer واحد للترقية من "متصل" → "reconnecting" → "offline" بشكل مدرَّج
+  const uiPromotionTimerRef = useRef(null);
   const mountedRef = useRef(true);
   const reconnectTimeoutRef = useRef(null);
   const pendingQueue = useRef([]);
@@ -88,71 +111,90 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
   // اتصلنا فوراً من جديد لا يرى المستخدم أي وميض.
   const stateDebounceRef = useRef(null);
 
-  // D-WS-FLAP-004: نافذة "غير متصل حقيقي" — لا نُظهر "غير متصل" إلا بعد
-  // فقدان متواصل لمدة 30 ثانية. أقل من ذلك = blip شبكي طبيعي.
-  const OFFLINE_GRACE_MS = 30000;
+  // D-WS-FLAP-004 (honest-debounce):
+  // - RECONNECT_VISIBLE_MS: بعد كم ms من الفقد يصبح UI صريحاً عن الـ reconnect.
+  //   2 ثانية كافية لتجنب flicker على blips قصيرة لكن سريعة بما يكفي ليعرف
+  //   المستخدم أن هناك مشكلة فعلية.
+  // - OFFLINE_GRACE_MS: بعد كم ms من الفقد المتواصل يصبح UI صريحاً عن الـ offline.
+  //   15 ثانية تكفي لكي تنجح عدة محاولات reconnect عادة، لكنها ليست طويلة جداً.
+  const RECONNECT_VISIBLE_MS = 2000;
+  const OFFLINE_GRACE_MS = 15000;
 
-  // D-WS-FLAP-004: حساب الـ UI state من الـ internal state.
-  // الفلسفة: الـ UI لا يجب أن يعكس كل blip في الـ backend.
-  const computeUiState = useCallback((internalState) => {
-    // auth_error دائماً يطغى — هذا fatal حقيقي.
-    if (internalState === "auth_error") return "auth_error";
-
-    // قبل أول اتصال ناجح — اعرض الحالة الفعلية (idle/connecting).
-    if (!everConnectedRef.current) {
-      return internalState;
+  // إلغاء أي promotion مجدوَل (نُستدعى عند `connected`).
+  const cancelUiPromotion = useCallback(() => {
+    if (uiPromotionTimerRef.current) {
+      clearTimeout(uiPromotionTimerRef.current);
+      uiPromotionTimerRef.current = null;
     }
-
-    // بعد أول اتصال: ابقَ على "connected" إلا في حالة offline طويل.
-    if (internalState === "connected" || internalState === "recovered") {
-      return "connected";
-    }
-
-    // reconnecting/degraded/connecting بعد أول اتصال = داخلي فقط، لا UI flicker.
-    // نبقى على "connected" — internal reconnect يحدث صامتاً.
-    if (
-      internalState === "reconnecting" ||
-      internalState === "degraded" ||
-      internalState === "connecting"
-    ) {
-      return "connected";
-    }
-
-    // offline = MAX_RETRIES استُنفِدت. حتى هنا، ننتظر offline grace period
-    // قبل إظهار "غير متصل".
-    if (internalState === "offline") {
-      // لو الـ disconnect حدث للتو، انتظر الـ grace period — قد نعود قريباً.
-      // الـ offlineGraceTimer يُحدِّث uiState لاحقاً لو لم نتعافَ.
-      return "connected"; // فترة سماح — internal logic تحاول الـ reconnect
-    }
-
-    return internalState;
   }, []);
 
-  // مزامنة uiState مع state بعد كل تغيير في state.
+  // جدولة promotion مدرَّج: "connected" → "reconnecting" بعد 2s → "offline" بعد 15s.
+  // لو رجع internal state إلى "connected" قبل أي مرحلة، الـ timer يُلغى.
+  const scheduleUiPromotionForDisconnect = useCallback(() => {
+    cancelUiPromotion();
+    // المرحلة 1: بعد RECONNECT_VISIBLE_MS، أظهر "reconnecting" (الحقيقة).
+    uiPromotionTimerRef.current = setTimeout(() => {
+      if (!mountedRef.current) return;
+      // فحص: ربما عاد internal state إلى connected في هذه اللحظة.
+      // ولا نُظهر "reconnecting" لو internal لم يعد منقطعاً.
+      const stillDisconnected = !wsRef.current ||
+        (wsRef.current.readyState !== WebSocket.OPEN);
+      if (!stillDisconnected) return;
+      setUiState("reconnecting");
+      // المرحلة 2: بعد OFFLINE_GRACE_MS من الفقد الأصلي، أظهر "offline".
+      uiPromotionTimerRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
+        const stillOff = !wsRef.current ||
+          (wsRef.current.readyState !== WebSocket.OPEN);
+        if (!stillOff) return;
+        console.warn("[WS] offline grace expired — showing offline UI");
+        setUiState("offline");
+      }, OFFLINE_GRACE_MS - RECONNECT_VISIBLE_MS);
+    }, RECONNECT_VISIBLE_MS);
+  }, [cancelUiPromotion]);
+
+  // مزامنة uiState مع state — لكن بصدق: تأخير قصير لتجنب flicker، ثم الحقيقة.
   useEffect(() => {
     if (!mountedRef.current) return;
-    const newUiState = computeUiState(state);
-    setUiState(newUiState);
 
-    // D-WS-FLAP-004: لو دخلنا "offline" (internal)، ابدأ grace timer.
-    // إن لم نتعافَ خلال OFFLINE_GRACE_MS، نُظهر "غير متصل" للمستخدم.
-    if (state === "offline" && everConnectedRef.current) {
-      if (offlineGraceTimerRef.current) clearTimeout(offlineGraceTimerRef.current);
-      offlineGraceTimerRef.current = setTimeout(() => {
-        if (mountedRef.current) {
-          console.warn("[WS] offline grace expired — showing offline UI");
-          setUiState("offline");
-        }
-      }, OFFLINE_GRACE_MS);
-    } else if (state === "connected" || state === "recovered") {
-      // تعافينا — ألغِ grace timer.
-      if (offlineGraceTimerRef.current) {
-        clearTimeout(offlineGraceTimerRef.current);
-        offlineGraceTimerRef.current = null;
-      }
+    // auth_error دائماً يطغى — هذا fatal حقيقي.
+    if (state === "auth_error") {
+      cancelUiPromotion();
+      setUiState("auth_error");
+      return;
     }
-  }, [state, computeUiState]);
+
+    // قبل أول اتصال ناجح — اعرض الحالة الحقيقية فوراً (بدون كذب).
+    if (!everConnectedRef.current) {
+      cancelUiPromotion();
+      setUiState(state);
+      return;
+    }
+
+    // بعد أول اتصال:
+    //   - connected/recovered → "connected" فوراً، ألغِ أي promotion.
+    if (state === "connected" || state === "recovered") {
+      cancelUiPromotion();
+      setUiState("connected");
+      return;
+    }
+
+    //   - disconnect (reconnecting/degraded/connecting/offline): جدول promotion
+    //     مدرَّج. خلال أول 2 ثانية يبقى UI = "متصل" (debounce لتجنب flicker)،
+    //     ثم "reconnecting" (الحقيقة)، ثم "offline" (الحقيقة الأصرح).
+    if (
+      state === "reconnecting" ||
+      state === "degraded" ||
+      state === "connecting" ||
+      state === "offline"
+    ) {
+      // لا يُلغي promotion موجوداً (لو كانت سلسلة من disconnect states).
+      if (!uiPromotionTimerRef.current) {
+        scheduleUiPromotionForDisconnect();
+      }
+      return;
+    }
+  }, [state, cancelUiPromotion, scheduleUiPromotionForDisconnect]);
 
   if (connectionIdRef.current === null) {
     connectionIdRef.current =
@@ -552,15 +594,20 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         clearTimeout(stateDebounceRef.current);
         stateDebounceRef.current = null;
       }
-      // D-WS-FLAP-004: نظِّف offline grace timer.
-      if (offlineGraceTimerRef.current) {
-        clearTimeout(offlineGraceTimerRef.current);
-        offlineGraceTimerRef.current = null;
+      // D-WS-FLAP-004 (honest-debounce): نظِّف UI promotion timer.
+      if (uiPromotionTimerRef.current) {
+        clearTimeout(uiPromotionTimerRef.current);
+        uiPromotionTimerRef.current = null;
       }
     };
   }, [connect, stopHeartbeat]);
 
-  // D-WS-FLAP-004: نُرجع uiState (sticky/debounced) بدل state الداخلي.
-  // الـ internal state يستمر بتتبُّع كل blip لكن الـ UI يبقى ثابتاً.
-  return { state: uiState, sendMessage };
+  // D-WS-FLAP-004 (honest-debounce): نُرجع uiState للـ UI لكن مع الحفاظ على
+  // الصدق — uiState يتأخر قليلاً عن state (لتجنب flicker) لكنه لا يكذب:
+  //   - blip < 2s: UI = "متصل" (debounce قصير، الأرجح أن نتعافى)
+  //   - disconnect 2s..15s: UI = "reconnecting" (الحقيقة الصادقة)
+  //   - disconnect > 15s: UI = "offline" (الحقيقة الأصرح)
+  // الحالة الداخلية `state` تبقى مكشوفة عبر `internalState` لمَن يحتاج
+  // الحقيقة الفورية (debug logs, telemetry, إلخ).
+  return { state: uiState, internalState: state, sendMessage };
 }

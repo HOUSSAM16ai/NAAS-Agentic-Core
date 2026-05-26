@@ -2414,3 +2414,60 @@ Admin endpoint:           ✅ PASS — same results
 - **كل `stream_and_forward` يجب أن تتحقق من `_ws_is_connected()` في بداية كل iteration**
 - **لا `await` ثقيل (DB/LLM) قبل بدء البث — استخدم `asyncio.create_task()`**
 - **Supabase + asyncpg = `pool_size=5` لا `NullPool`** (NullPool يُسبب connection exhaustion)
+
+---
+
+## ISS-WS-CODESPACES-001 — WebSocket "Reconnecting" على GitHub Codespaces — 2026-05-26
+
+**الأعراض:** Frontend يُحمَّل بنجاح على `*-5000.app.github.dev` لكن WebSocket يبقى في حالة "reconnecting".
+
+**التشخيص الجنائي:** 3 أسباب جذرية:
+
+### السبب #1 — الجذري (🟢 95%): `wsUrl.js` يُعيد كتابة port 5000→8000 لـ Codespaces
+
+**الميكانيك:**
+- `getCloudBackendHost()` في `wsUrl.js` تُطابق `/-5000\./` وتُعيد كتابته إلى `/-8000./`
+- المتصفح يحاول الاتصال بـ `wss://[name]-8000.app.github.dev/api/chat/ws`
+- Codespaces proxy لا يُمرِّر WebSocket upgrade headers بشكل موثوق لـ port 8000
+- `server.js` على port 5000 يملك WS proxy جاهز لكن لا يُستخدم
+
+**الإصلاح:** `getCloudBackendHost()` تُعيد `null` لـ `*.app.github.dev` → `getWsBase()` يستخدم `window.location.host` (port 5000) → `server.js` يُمرِّر WS إلى `localhost:8000`.
+
+**الملف:** `frontend/app/utils/wsUrl.js`
+
+### السبب #2 (🟡 70%): `CORSMiddleware` لا تدعم wildcard subdomain patterns
+
+**الميكانيك:**
+- `BACKEND_CORS_ORIGINS` يحتوي على `https://*.app.github.dev`
+- Starlette `CORSMiddleware.is_allowed_origin()` تُقارن بـ exact match فقط
+- `https://myworkspace-5000.app.github.dev` لا يُطابق `https://*.app.github.dev` حرفياً
+- CORS preflight يفشل → browser يرفض الاتصال
+
+**الإصلاح:** `build_cors_options()` في `app_blueprint.py` يُحوِّل wildcard patterns إلى `allow_origin_regex` تلقائياً.
+
+**الملف:** `app/core/app_blueprint.py`
+
+### السبب #3 (🟡 60%): `server.js` error handler يُرسل HTTP response على socket
+
+**الميكانيك:**
+- عند فشل WS proxy، `wsProxy.on('error')` كان يستدعي `res.writeHead()` على socket
+- WebSocket socket ليس HTTP response — يُسبب crash صامت
+
+**الإصلاح:** استبدال `res.writeHead()` بـ `socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')`.
+
+**الملف:** `frontend/server.js`
+
+### التحقق الحي (2026-05-26)
+
+```
+ws://localhost:5000/api/chat/ws (Codespaces host) → ✅ WS_AUTH_MISSING (connected)
+ws://localhost:8000/api/chat/ws (direct)          → ✅ WS_AUTH_MISSING (connected)
+CORS regex: https://myworkspace-5000.app.github.dev → ✅ matched
+CORS regex: https://evil.com                        → ❌ rejected
+```
+
+### قانون D-WS-CODESPACES-001 (إلزامي لكل agent مستقبلي)
+
+- **لا تُعيد كتابة port لـ `*.app.github.dev`** — `server.js` يُمرِّر WS على نفس الـ port
+- **`CORSMiddleware` لا تدعم `*.domain` patterns** — استخدم `allow_origin_regex` دائماً
+- **`server.js` error handler يجب أن يستخدم `socket.end()`** لا `res.writeHead()` على WS socket

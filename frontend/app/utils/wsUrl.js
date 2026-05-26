@@ -74,11 +74,25 @@ export const isCloudWorkspace = () => {
  * D-WS-GITPOD-001: Gitpod Flex يستخدم double-dash: <PORT>--<ENV_ID>.<cluster>.gitpod.dev
  * الـ regex /^5000-/ يُطابق كلا النمطين (5000- و 5000--) لأن 5000-- يبدأ بـ 5000-.
  *
- * @returns {string | null} host للـ backend WebSocket
+ * D-WS-CODESPACES-001: GitHub Codespaces يستخدم نمط <name>-<port>.app.github.dev
+ * لكن proxy الـ Codespaces لا يُمرِّر WebSocket upgrade headers بشكل موثوق لـ port 8000.
+ * الحل: استخدام window.location.host (port 5000) — server.js يُمرِّر WS إلى localhost:8000.
+ * لا نُعيد كتابة الـ port لـ *.app.github.dev.
+ *
+ * @returns {string | null} host للـ backend WebSocket، أو null للاستخدام window.location.host
  */
 export const getCloudBackendHost = () => {
     if (!isBrowser) return null;
     const host = window.location.host;
+
+    // D-WS-CODESPACES-001: GitHub Codespaces — لا نُعيد كتابة الـ port.
+    // server.js على port 5000 يُمرِّر WebSocket إلى localhost:8000 داخلياً.
+    // محاولة الاتصال المباشر بـ *-8000.app.github.dev تفشل لأن Codespaces proxy
+    // لا يُمرِّر WebSocket upgrade headers بشكل موثوق لـ ports غير الأساسية.
+    if (host.endsWith('.app.github.dev') || host.endsWith('.preview.app.github.dev')) {
+        console.info('[wsUrl] GitHub Codespaces detected — using same-host proxy (server.js): %s', host);
+        return null; // يُعيد null → getWsBase يستخدم window.location.host
+    }
 
     // Gitpod Flex/Ona: 5000--<id>.<cluster>.gitpod.dev → 8000--<id>.<cluster>.gitpod.dev
     // Gitpod Classic: 5000-<id>.ws-eu.gitpod.io → 8000-<id>.ws-eu.gitpod.io
@@ -90,10 +104,10 @@ export const getCloudBackendHost = () => {
         return backendHost;
     }
 
-    // GitHub Codespaces: <name>-5000.<suffix>.app.github.dev → <name>-8000.<suffix>.app.github.dev
-    if (host.match(/-5000\./)) {
+    // Replit (نمط بديل): <name>-5000.<suffix>.replit.dev → <name>-8000.<suffix>.replit.dev
+    if (host.match(/-5000\./) && !host.endsWith('.app.github.dev')) {
         const backendHost = host.replace(/-5000\./, '-8000.');
-        console.info('[wsUrl] Codespaces port rewrite: frontend=%s → backend=%s', host, backendHost);
+        console.info('[wsUrl] Port-suffix rewrite: frontend=%s → backend=%s', host, backendHost);
         return backendHost;
     }
 
@@ -141,16 +155,24 @@ export const getWsBase = () => {
 
     const wsProtocol = httpToWsProtocol(window.location.protocol);
 
-    // 3. D-WS-002: في Gitpod/Ona/Codespaces، كل port له subdomain مختلف.
-    // Frontend على 5000-<id>.ws-eu.gitpod.io → Backend على 8000-<id>.ws-eu.gitpod.io
+    // 3. D-WS-002 / D-WS-CODESPACES-001: Cloud workspace port routing.
+    //
+    // Gitpod/Ona: كل port له subdomain مختلف → نُعيد كتابة 5000→8000.
+    //   Frontend: 5000--<id>.gitpod.dev → Backend: 8000--<id>.gitpod.dev
+    //
+    // GitHub Codespaces: getCloudBackendHost() يُعيد null عمداً.
+    //   → نستخدم window.location.host (port 5000)
+    //   → server.js يستقبل WebSocket upgrade ويُمرِّره إلى localhost:8000
+    //   هذا أكثر موثوقية من الاتصال المباشر بـ *-8000.app.github.dev
+    //   لأن Codespaces proxy لا يُمرِّر WS upgrade headers بشكل موثوق لـ ports غير الأساسية.
     if (isCloudWorkspace()) {
         const backendHost = getCloudBackendHost();
         if (backendHost) {
-            console.info('[wsUrl] Cloud workspace detected — using backend host:', backendHost);
+            console.info('[wsUrl] Cloud workspace — direct backend host:', backendHost);
             return `${wsProtocol}//${backendHost}`;
         }
-        // إذا لم يُمكن استخراج backend host → استخدم window.location.host
-        // (يعمل إذا كان الـ proxy يُمرِّر WebSocket)
+        // null → استخدم window.location.host (Codespaces: server.js proxy على نفس الـ port)
+        console.info('[wsUrl] Cloud workspace — same-host proxy path:', window.location.host);
         return `${wsProtocol}//${window.location.host}`;
     }
 

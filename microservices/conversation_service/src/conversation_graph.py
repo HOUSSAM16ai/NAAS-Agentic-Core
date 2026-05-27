@@ -117,12 +117,16 @@ logger = logging.getLogger(__name__)
 _NODE_TIMEOUT_SECONDS = 45.0
 # ISS-079 (D-067 — 2026-05-17): تغيير الـ default — التجريب الحي أثبت أن
 # nvidia/nemotron-nano-30b يفشل مع system prompts طويلة.
-_DEFAULT_MODEL = "openai/gpt-oss-20b:free"
+# ISS-082 (D-088 — 2026-05-27): gpt-oss-20b:free أصبح rate-limited بشكل دائم
+# على OpenRouter ("Provider returned error 429"). gpt-oss-120b من نفس العائلة،
+# نفس quality contract، rate limit pool مختلف. مُرقّى لـ default.
+_DEFAULT_MODEL = "openai/gpt-oss-120b:free"
 
 # سلسلة fallback — تُجرَّب بالترتيب عند 429 أو فشل النموذج الأساسي (D-067)
 _FALLBACK_CHAIN: list[str] = [
-    "openai/gpt-oss-20b:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
+    "openai/gpt-oss-20b:free",  # demoted from PRIMARY 2026-05-27 (ISS-082)
+    "nvidia/nemotron-3-super-120b-a12b:free",  # verified live 2026-05-27
+    "z-ai/glm-4.5-air:free",  # verified live 2026-05-27
     "google/gemma-3-27b-it:free",
     "meta-llama/llama-3.3-70b-instruct:free",
     "mistralai/mistral-7b-instruct:free",

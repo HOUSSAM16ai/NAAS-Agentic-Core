@@ -29,15 +29,17 @@ _NODE_TIMEOUT = 40.0
 # ISS-079 (D-067 — 2026-05-17): تغيير الـ default — nvidia/nemotron-nano-30b
 # يفشل مع system prompts طويلة (content=None، reasoning بالإنجليزية).
 # تجريب حي حقيقي أثبت أن gpt-oss-20b هو الأنسب (عربي + LaTeX + content مضمون).
-_DEFAULT_MODEL = "openai/gpt-oss-20b:free"
+# ISS-082 (D-088 — 2026-05-27): gpt-oss-20b:free أصبح rate-limited بشكل دائم
+# على OpenRouter. gpt-oss-120b من نفس العائلة، نفس quality contract،
+# rate limit pool مختلف. مُرقّى لـ default للـ math pipeline.
+_DEFAULT_MODEL = "openai/gpt-oss-120b:free"
 # ISS-074 (2026-05-15): fallback chain مُحدَّث بعد بنشمارك حي
 # - google/gemma-4-26b-a4b-it:free → rate-limited 429 (مُزال)
 # - qwen/qwen3-coder:free          → rate-limited 429 (مُزال)
 # - الترتيب: الأسرع → الأقوى → الأكبر
 _FALLBACK_MODELS = [
-    "openai/gpt-oss-20b:free",  # 28s، عربية ممتازة، LaTeX سليم
+    "openai/gpt-oss-20b:free",  # demoted from default 2026-05-27 (ISS-082)
     "nvidia/nemotron-3-super-120b-a12b:free",  # 14s، 120B params، شرح عبقري
-    "openai/gpt-oss-120b:free",  # 21s، احتياطي أخير
     "z-ai/glm-4.5-air:free",  # reasoning mode — ISS-069 fix
 ]
 

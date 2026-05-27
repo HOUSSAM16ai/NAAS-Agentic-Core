@@ -3005,3 +3005,104 @@ Found 5 SECRET_KEY default assignment(s):
 3. Send question → expect streaming answer
 4. Browser console: NO `[WS] Auth-related close` warnings
 5. Backend logs: no `decode_user_id` failures
+
+
+## D-088 · PRIMARY Model Migration: gpt-oss-20b → gpt-oss-120b (2026-05-27)
+
+### Why
+D-067 (2026-05-17) selected `openai/gpt-oss-20b:free` as PRIMARY because live
+benchmarking proved it returned 2102 chunks of clean Arabic + LaTeX with the
+production-grade educational system prompt. Ten days later, live probing
+from the user's production Codespace revealed:
+
+```
+HTTP 429 — "openai/gpt-oss-20b:free is temporarily rate-limited upstream"
+```
+
+The model is now permanently throttled on OpenRouter's free tier. Every chat
+turn was emitting `assistant_final` with `chunks=0, len=0` because PRIMARY
+returned no content, and the fallback chain either also throttled or
+silently swallowed errors. The user saw "questions don't answer" — the
+second-order symptom after D-WS-SECRET-KEY-001 fixed the auth path.
+
+### Live verification (2026-05-27, real Codespace, real user JWT)
+
+**Free model probe matrix**:
+
+| Model | Status |
+|---|---|
+| `openai/gpt-oss-20b:free` (was PRIMARY) | ❌ 429 |
+| `openai/gpt-oss-120b:free` (same family, larger) | ✅ WORKS |
+| `nvidia/nemotron-3-super-120b-a12b:free` | ✅ WORKS |
+| `z-ai/glm-4.5-air:free` | ✅ WORKS |
+
+**End-to-end WS test** (after env override `OPENROUTER_PRIMARY_MODEL=nvidia/nemotron-3-super-120b-a12b:free`):
+
+```
+✅ WS CONNECTED
+📤 sent question 'مرحبا'
+[session_ready] [conversation_init]
+اوكي حبيبي شو أخبارك في يومك؟
+✅ assistant_final | chunks=1 len=39
+```
+
+### Decision
+PRIMARY default changed from `openai/gpt-oss-20b:free` to
+`openai/gpt-oss-120b:free` in 4 hot paths:
+
+| File | Variable |
+|---|---|
+| `app/core/ai_config.py` | `ActiveModels.PRIMARY` |
+| `microservices/orchestrator_service/src/core/ai_config.py` | `ActiveModels.PRIMARY` |
+| `microservices/conversation_service/src/conversation_graph.py` | `_DEFAULT_MODEL` |
+| `microservices/conversation_service/src/math_pipeline.py` | `_DEFAULT_MODEL` |
+
+Rationale: gpt-oss-120b is the same OpenAI OSS family as gpt-oss-20b. D-067's
+benchmark showed it produced 2480 chunks / 5502 chars (even better than 20b)
+with the same Arabic + LaTeX contract. Different rate-limit pool means it
+will not 429 when its smaller sibling does. `gpt-oss-20b:free` is kept as
+`GATEWAY_FALLBACK_1` — if upstream lifts the throttle, the chain will use
+it again automatically.
+
+### Architectural Invariants (D-088 — لا تُكسر بدون ADR)
+1. **PRIMARY is never a single point of failure**: when changing PRIMARY,
+   the demoted model goes to `GATEWAY_FALLBACK_1` — never deleted from the
+   chain. Free-model availability rotates; today's 429 is tomorrow's primary.
+2. **All 4 hot paths must agree on PRIMARY**: monolith + orchestrator +
+   conversation_service (graph) + conversation_service (math pipeline).
+   Drift here means the user sees inconsistent quality across question types.
+3. **Override via `OPENROUTER_PRIMARY_MODEL` env var stays supported**:
+   `_resolve_primary_model()` reads the env var first, falls back to the
+   hardcoded default. Operators can hot-swap PRIMARY without redeploy.
+4. **Live probe BEFORE merging any PRIMARY change**: a one-line curl
+   against OpenRouter is the only way to know if a model is throttled
+   right now. Static benchmarks (`ai_config.py` comments) drift in days.
+5. **Same-family preference**: when replacing a throttled PRIMARY, prefer
+   a sibling from the same provider/family — the quality contract carries
+   over. Cross-family swaps (e.g., gpt-oss → nemotron) need new live
+   benchmarking with the production system prompt.
+
+### Files
+- `app/core/ai_config.py`
+- `microservices/orchestrator_service/src/core/ai_config.py`
+- `microservices/conversation_service/src/conversation_graph.py`
+- `microservices/conversation_service/src/math_pipeline.py`
+
+### Live verification (mandatory before merge)
+```bash
+# 1) Re-probe OpenRouter to confirm the new PRIMARY is reachable
+curl -s -X POST https://openrouter.ai/api/v1/chat/completions \
+    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+    -d '{"model":"openai/gpt-oss-120b:free","messages":[{"role":"user","content":"hi"}],"max_tokens":10}' \
+  | grep -q '"content"' && echo "✅ PRIMARY reachable"
+
+# 2) Restart monolith (env override no longer needed after merge)
+pkill -9 -f "uvicorn.*app.main"
+nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 \
+    --ws websockets --ws-ping-interval 20 --ws-ping-timeout 30 \
+    > /tmp/monolith.log 2>&1 &
+sleep 5
+
+# 3) End-to-end WS chat must produce chunks > 0
+# (use the WS test block from this PR's diagnostic scripts)
+```

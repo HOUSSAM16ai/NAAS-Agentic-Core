@@ -126,13 +126,19 @@ class ActiveModels:
     # ✅ openai/gpt-oss-20b → 2102 chunks، 4762 chars، finish=stop، عربي + LaTeX نقي
     # ✅ openai/gpt-oss-120b → 2480 chunks، 5502 chars، أفضل جودة
     # القرار: التحويل إلى gpt-oss-20b كنموذج أساسي (يحل ISS-079 كارثة pepepe).
-    PRIMARY = _resolve_primary_model("openai/gpt-oss-20b:free")
+    # ISS-082 (D-088 — 2026-05-27): تجريب حي على بيئة الإنتاج كشف أن
+    # gpt-oss-20b:free أصبح rate-limited بشكل دائم على OpenRouter
+    # ("Provider returned error 429"). كل WS chat يفشل صامتاً بـ chunks=0.
+    # gpt-oss-120b:free من نفس العائلة (OpenAI OSS) ومحقَّق حي يعمل ✅.
+    # نفس quality contract لـ gpt-oss-20b (D-067) لكن rate limit pool مختلف.
+    # gpt-oss-20b يبقى في الـ fallback chain — إن تعافى من 429 سيُستخدم تلقائياً.
+    PRIMARY = _resolve_primary_model("openai/gpt-oss-120b:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
-    GATEWAY_FALLBACK_1 = "openai/gpt-oss-120b:free"
-    GATEWAY_FALLBACK_2 = "nvidia/nemotron-3-nano-30b-a3b:free"  # works on short prompts
-    GATEWAY_FALLBACK_3 = "nvidia/nemotron-3-super-120b-a12b:free"
-    GATEWAY_FALLBACK_4 = "z-ai/glm-4.5-air:free"
+    GATEWAY_FALLBACK_1 = "openai/gpt-oss-20b:free"  # demoted from PRIMARY 2026-05-27 (ISS-082)
+    GATEWAY_FALLBACK_2 = "nvidia/nemotron-3-super-120b-a12b:free"  # verified live 2026-05-27
+    GATEWAY_FALLBACK_3 = "z-ai/glm-4.5-air:free"  # verified live 2026-05-27
+    GATEWAY_FALLBACK_4 = "nvidia/nemotron-3-nano-30b-a3b:free"  # works on short prompts
     GATEWAY_FALLBACK_5 = "arcee-ai/trinity-large-thinking:free"
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY

@@ -139,6 +139,76 @@ class TestSecretKeyConsistency:
             "Orchestrator's shared_secret default must remain `dev-secret-change-me`."
         )
 
+    def test_planning_agent_shares_canonical_secret(self) -> None:
+        """planning-agent verifies X-Service-Token signed by orchestrator — must share default."""
+        source = _read(".devcontainer/supervisor.sh")
+        assert re.search(
+            r'shared_planning_secret\s*=\s*"\$\{SECRET_KEY:-dev-secret-change-me\}"',
+            source,
+        ), (
+            "D-WS-SECRET-KEY-001: planning-agent MUST use shared_planning_secret "
+            "defaulting to `dev-secret-change-me`. Old default "
+            "`super_secret_key_change_in_production` breaks Skills Pipeline JWT verification."
+        )
+        # Defensive double-export
+        assert "PLANNING_SECRET_KEY=" in source, (
+            "planning-agent launch block must export PLANNING_SECRET_KEY too "
+            "(defensive double-coverage for pydantic-settings env_prefix quirks)."
+        )
+
+    def test_research_agent_shares_canonical_secret(self) -> None:
+        """research-agent verifies X-Service-Token signed by orchestrator — must share default."""
+        source = _read(".devcontainer/supervisor.sh")
+        assert re.search(
+            r'shared_research_secret\s*=\s*"\$\{SECRET_KEY:-dev-secret-change-me\}"',
+            source,
+        ), (
+            "D-WS-SECRET-KEY-001: research-agent MUST use shared_research_secret "
+            "defaulting to `dev-secret-change-me`. Old default "
+            "`super_secret_key_change_in_production` breaks Skills Pipeline JWT verification."
+        )
+        assert "RESEARCH_SECRET_KEY=" in source, (
+            "research-agent launch block must export RESEARCH_SECRET_KEY too."
+        )
+
+    def test_reasoning_agent_shares_canonical_secret(self) -> None:
+        """reasoning-agent verifies X-Service-Token signed by orchestrator — must share default."""
+        source = _read(".devcontainer/supervisor.sh")
+        assert re.search(
+            r'shared_reasoning_secret\s*=\s*"\$\{SECRET_KEY:-dev-secret-change-me\}"',
+            source,
+        ), (
+            "D-WS-SECRET-KEY-001: reasoning-agent MUST use shared_reasoning_secret "
+            "defaulting to `dev-secret-change-me`. Old default "
+            "`super_secret_key_change_in_production` breaks Skills Pipeline JWT verification."
+        )
+        assert "REASONING_SECRET_KEY=" in source, (
+            "reasoning-agent launch block must export REASONING_SECRET_KEY too."
+        )
+
+    def test_no_distinct_skills_pipeline_secret_defaults(self) -> None:
+        """The catastrophic `super_secret_key_change_in_production` must be gone from CODE.
+
+        It may appear in documentation comments — what matters is that no
+        actual bash variable assignment uses it as a fallback.
+        """
+        source = _read(".devcontainer/supervisor.sh")
+        # Strip shell comments (lines starting with `#`) before checking
+        code_only_lines = []
+        for raw_line in source.splitlines():
+            stripped = raw_line.lstrip()
+            if stripped.startswith("#"):
+                continue
+            code_only_lines.append(raw_line)
+        code_only = "\n".join(code_only_lines)
+        assert "super_secret_key_change_in_production" not in code_only, (
+            "REGRESSION: planning/research/reasoning agents must NOT default to "
+            "`super_secret_key_change_in_production` in actual bash code. That "
+            "string caused SECRET_KEY mismatch with orchestrator → all "
+            "X-Service-Token JWT verifications failed → Skills Pipeline DEGRADED → "
+            "chat fell back to local_graph. (Doc comments explaining the history are fine.)"
+        )
+
 
 class TestUserServiceCryptoEnvAware:
     def test_access_expire_is_env_aware(self) -> None:

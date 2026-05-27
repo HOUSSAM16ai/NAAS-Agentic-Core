@@ -815,10 +815,15 @@ launch_planning_agent() {
     # ── تشغيل uvicorn في الخلفية ──────────────────────────────────────────────
     # ISS-042 (Step 11): SECRET_KEY يجب أن يتطابق مع orchestrator لقبول X-Service-Token
     # planning-agent يقرأ SECRET_KEY (validation_alias) — ليس PLANNING_SECRET_KEY
+    # D-WS-SECRET-KEY-001 (2026-05-26): default يجب أن يطابق monolith — `dev-secret-change-me`.
+    # كان `super_secret_key_change_in_production` يُسبب فشل X-Service-Token verification
+    # بين orchestrator (`dev-secret-change-me`) و planning-agent → Skills Pipeline fails.
+    local shared_planning_secret="${SECRET_KEY:-dev-secret-change-me}"
     PLANNING_DATABASE_URL="$planning_db_url" \
     OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     PLANNING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
-    SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
+    SECRET_KEY="${shared_planning_secret}" \
+    PLANNING_SECRET_KEY="${shared_planning_secret}" \
     PLANNING_ENVIRONMENT="${ENVIRONMENT:-development}" \
     PLANNING_SERVICE_NAME="planning-agent" \
     PLANNING_SERVICE_VERSION="1.0.0" \
@@ -875,13 +880,20 @@ launch_research_agent() {
 
     lifecycle_info "Research Agent: launching uvicorn on :${RESEARCH_PORT}..."
 
+    # D-WS-SECRET-KEY-001 (2026-05-26): Skills Pipeline JWT consistency.
+    # research-agent verifies X-Service-Token signed by orchestrator
+    # (which defaults to `dev-secret-change-me`). Mismatched defaults break
+    # the Skills Pipeline silently → chat falls back to local_graph.
+    local shared_research_secret="${SECRET_KEY:-dev-secret-change-me}"
+
     # ISS-042 (Step 11): TAVILY_API_KEY و OPENROUTER_API_KEY مُحقَنان صراحةً
     RESEARCH_DATABASE_URL="$_async_db" \
     RESEARCH_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
     ENVIRONMENT="${ENVIRONMENT:-development}" \
-    SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
+    SECRET_KEY="${shared_research_secret}" \
+    RESEARCH_SECRET_KEY="${shared_research_secret}" \
     PYTHONPATH="$APP_ROOT" \
     nohup python -m uvicorn microservices.research_agent.main:app \
         --host 0.0.0.0 \
@@ -927,12 +939,19 @@ launch_reasoning_agent() {
     lifecycle_info "Reasoning Agent: launching uvicorn on :${REASONING_PORT}..."
     lifecycle_info "             LLM: ${OPENROUTER_API_KEY:+✅ OpenRouter}${OPENROUTER_API_KEY:-⚠️  mock mode (no OPENROUTER_API_KEY)}"
 
+    # D-WS-SECRET-KEY-001 (2026-05-26): Skills Pipeline JWT consistency.
+    # reasoning-agent verifies X-Service-Token signed by orchestrator
+    # (which defaults to `dev-secret-change-me`). Mismatched defaults break
+    # the Skills Pipeline silently → chat falls back to local_graph.
+    local shared_reasoning_secret="${SECRET_KEY:-dev-secret-change-me}"
+
     # ISS-042 (Step 11): OPENROUTER_API_KEY مُحقَن صراحةً لتفعيل LLM الحقيقي
     REASONING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
     OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
     ENVIRONMENT="${ENVIRONMENT:-development}" \
-    SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
+    SECRET_KEY="${shared_reasoning_secret}" \
+    REASONING_SECRET_KEY="${shared_reasoning_secret}" \
     PYTHONPATH="$APP_ROOT" \
     nohup python -m uvicorn microservices.reasoning_agent.main:app \
         --host 0.0.0.0 \

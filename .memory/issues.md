@@ -2743,3 +2743,21 @@ manually set SECRET_KEY as a Codespaces secret.
 "Shared secrets MUST have shared defaults." Service-specific dev defaults
 in supervisor.sh are dangerous when those services share JWTs. CI gate
 prevents future drift.
+
+### Extension — Skills Pipeline drift (forensic gate, 2026-05-26)
+
+After the user-service fix shipped, the new CI gate revealed the same
+disease in 3 more services: planning-agent, research-agent, reasoning-agent.
+All three had `SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}"`.
+
+These services validate `X-Service-Token` JWTs signed by orchestrator
+(which defaults to `dev-secret-change-me`). The mismatch made the entire
+Skills Pipeline (`POST /compose`) silently degrade to fallback mode — chat
+appeared to work but never used the real planning+research+reasoning
+composition. This is the **second-order** symptom of D-WS-SECRET-KEY-001
+and what the user described as "questions don't answer".
+
+**Surgical fix**: planning/research/reasoning agents each define
+`local shared_<name>_secret="${SECRET_KEY:-dev-secret-change-me}"` and
+double-export the service-specific env var alongside `SECRET_KEY`.
+Verified by the extended CI gate: 5/5 services agree on the canonical default.

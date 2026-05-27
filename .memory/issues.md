@@ -2607,3 +2607,46 @@ $ grep -n "useRef" frontend/app/hooks/useRealtimeConnection.js | grep -i offline
 3. JavaScript ReferenceError في event handlers = silent — لا يكسر الصفحة لكن يخفي وظائف.
 
 **Severity**: 🔴 CATASTROPHIC — كسرت كل الـ chat flow بعد deploy.
+
+
+---
+
+## ISS-WS-SESSION-001 (2026-05-26) — "Kicked to login then returns" cycle
+
+**Reported verbatim**:
+> «لقد عادت متصل لكن النظام لا يجيب عن الاسئلة مع انه تظهر متصل و يخرج
+>  إلى صفحة الدخول ثم يرجع يعني مثل الطرد ثم يعود لوحده»
+
+### Two distinct symptoms (one shared cause + one missing config)
+
+**Symptom 1**: "Kicked to login then returns" cycle.
+- **Root cause**: `ACCESS_EXPIRE_MINUTES = 30` (hardcoded cap in crypto.py)
+  caused tokens to expire after 30 minutes. WS reconnects post-expiry get
+  4401, frontend `auth_error` handler triggers `logout()` → `reload()`.
+- **Fix**: env-aware cap (480 min in dev, 30 in prod). See D-WS-SESSION-001.
+
+**Symptom 2**: "النظام لا يجيب عن الأسئلة" (questions don't get answered).
+- **Likely cause**: `OPENROUTER_API_KEY` not exported in process env when uvicorn
+  started. The orchestrator_client fallback chain depends on this key for
+  every LLM call (greeting fastpath, indexed retrieval, local_graph_stream,
+  local_general_chat). Without it, all paths yield no content → all_fallback_paths_exhausted
+  → error event emitted. User sees brief error or nothing.
+- **Resolution**: not a code bug. The user must:
+  1. Add `OPENROUTER_API_KEY` as a Codespaces Secret in repo settings.
+  2. Verify the Codespace devcontainer is configured to forward this secret
+     via `remoteEnv` in `devcontainer.json`.
+  3. Restart the codespace OR run `supervisor.sh restart` to pick up the new env.
+
+### Why D-WS-FLAP-002/003/004 fixes didn't help with Symptom 1
+Those fixes targeted the WS layer (heartbeat, race conditions, UX state).
+The actual cause was at the AUTH layer (JWT expiry), which was orthogonal.
+The 30-min token expiry would have caused the same kick-cycle even without
+any WS fixes.
+
+### Severity
+- Symptom 1: 🔴 CATASTROPHIC (UX-breaking for any session > 30 min).
+- Symptom 2: 🟡 HIGH (depends on user env config — not a code bug).
+
+### Resolution
+- Code: D-WS-SESSION-001 committed.
+- Config: User must export OPENROUTER_API_KEY (documented).

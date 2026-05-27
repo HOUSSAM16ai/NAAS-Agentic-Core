@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -15,8 +16,29 @@ from fastapi import HTTPException, status
 from app.core.config import AppSettings
 from app.core.domain.user import User
 
-ACCESS_EXPIRE_MINUTES: Final[int] = 30
-REAUTH_EXPIRE_MINUTES: Final[int] = 10
+# ─────────────────────────────────────────────────────────────────────────────
+# Token lifetime caps (D-WS-SESSION-001 — 2026-05-26)
+# ─────────────────────────────────────────────────────────────────────────────
+# Production cap: short-lived tokens reduce blast radius if leaked. 30 min.
+# Development cap: long-lived tokens prevent kick-to-login mid-test cycles.
+#   The user reported a catastrophic "kicked to login then returns" pattern
+#   caused by 30-minute tokens expiring during testing sessions. In dev, an
+#   8-hour cap matches typical work sessions without forcing relogin.
+#
+# Selection: ENVIRONMENT in {"development", "dev"} OR ALLOW_LONG_LIVED_TOKENS=1
+#   → 480 minutes (8 hours).
+# Otherwise:
+#   → 30 minutes (production-safe).
+#
+# This is a SECURITY-RELEVANT setting. The cap is computed once at module
+# import. Do not bypass via runtime environment manipulation in production.
+# ─────────────────────────────────────────────────────────────────────────────
+_ENV = (os.environ.get("ENVIRONMENT") or "").strip().lower()
+_ALLOW_LONG = (os.environ.get("ALLOW_LONG_LIVED_TOKENS") or "").strip() in ("1", "true", "yes")
+_IS_DEV_LIKE = _ENV in ("development", "dev", "local") or _ALLOW_LONG
+
+ACCESS_EXPIRE_MINUTES: Final[int] = 480 if _IS_DEV_LIKE else 30
+REAUTH_EXPIRE_MINUTES: Final[int] = 60 if _IS_DEV_LIKE else 10
 
 
 class AuthCrypto:

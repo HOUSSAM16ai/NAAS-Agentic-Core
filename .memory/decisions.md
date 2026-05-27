@@ -2672,3 +2672,86 @@ if (offlineGraceTimerRef.current) {  // ← ReferenceError!
 - Static audit: كل refs مُعرَّفة، لا dangling references.
 - Simulation: onopen → everConnected=true → setState("connected") → uiState="connected" → UI يُظهر "متصل" ✅.
 - جميع gates (ruff, runtime_truth, validate_structure, ci_guardrails) passing.
+
+
+---
+
+## D-WS-SESSION-001 · Environment-aware JWT lifetime cap (2026-05-26)
+
+**Context**: المستخدم بلَّغ بمشكلة جديدة بعد إصلاح D-WS-REGRESSION-001:
+> «لقد عادت متصل لكن النظام لا يجيب عن الاسئلة مع انه تظهر متصل و يخرج إلى صفحة الدخول ثم يرجع يعني مثل الطرد ثم يعود لوحده»
+
+التحقيق كشف سببين متمايزين:
+
+### السبب 1 (kicked → return): JWT يَنتهي بعد 30 دقيقة بالضبط
+
+`app/services/auth/crypto.py:18` كان يحوي:
+```python
+ACCESS_EXPIRE_MINUTES: Final[int] = 30
+```
+
+والـ `encode_access_token` يستخدم:
+```python
+expires_delta = timedelta(
+    minutes=min(self.settings.ACCESS_TOKEN_EXPIRE_MINUTES, ACCESS_EXPIRE_MINUTES)
+)
+```
+
+أي حتى لو `settings.ACCESS_TOKEN_EXPIRE_MINUTES = 8 days` (الافتراضي)، فإن
+`min(11520, 30) = 30 minutes`. الـ token ينتهي بعد 30 دقيقة بالضبط.
+
+السيناريو الكارثي:
+1. المستخدم يُسجِّل دخول في 14:00 → token صالح حتى 14:30
+2. يفتح المحادثة، يَطرح أسئلة
+3. الساعة 14:30+ → الـ token انتهى
+4. أي WS reconnect يفشل بـ 4401
+5. Frontend يُطلق `agent:auth_error` → `logout()` → `window.location.reload()`
+6. بعد reload: localStorage فارغ → AuthScreen يظهر
+7. المستخدم يَدخل بياناته (أو browser auto-fill) → cycle يتكرر
+
+**Decision**:
+- ACCESS_EXPIRE_MINUTES أصبح environment-aware:
+  - `ENVIRONMENT in {development, dev, local}` أو `ALLOW_LONG_LIVED_TOKENS=1` → **480 minutes (8 hours)**
+  - وإلا (production/staging/empty) → **30 minutes** (security cap محفوظ)
+- REAUTH_EXPIRE_MINUTES بنفس النمط: dev=60, prod=10.
+- في .devcontainer/supervisor.sh: `ENVIRONMENT=development` افتراضياً → الكاب 8 ساعات.
+
+### السبب 2 (questions don't answer): سبب منفصل — خارج النطاق
+
+الأرجح أن `OPENROUTER_API_KEY` غير مُصدَّر في process env عند تشغيل uvicorn.
+بدون الـ key، fallback chain كاملاً يفشل في توليد ردود.
+هذا ليس bug في الكود — هو missing configuration في environment المستخدم.
+يجب على المستخدم إضافة الـ key كـ Codespace secret.
+
+### Architectural Invariants (D-WS-SESSION-001)
+
+1. **Production cap stays 30 minutes** — لا تُلامس الـ security invariant. تغيير
+   هذا يحتاج ADR منفصل + threat model review.
+2. **ALLOW_LONG_LIVED_TOKENS=1 = escape hatch** للحالات الخاصة (canary, migrations)
+   — يجب توثيقه ومراجعته دورياً.
+3. **REAUTH cap يتبع نفس النمط** — لكن أقصر (60 دقيقة في dev بدلاً من 480) لأن
+   الـ reauth يُستخدم لعمليات حساسة.
+
+### UX Improvement (D-WS-SESSION-001b)
+
+عند 4401، الـ frontend الآن:
+- يُطلق `agent:notification` بمستوى warning ورسالة عربية صريحة:
+  "انتهت جلستك. يرجى تسجيل الدخول مرة أخرى."
+- يُؤجِّل `logout()` بـ 2 ثانية ليرى المستخدم الرسالة قبل reload.
+
+لا "kick صامت" بعد الآن.
+
+### Files
+- `app/services/auth/crypto.py` (env-aware caps).
+- `frontend/app/components/CogniForgeApp.jsx` (auth_error → notification + 2s delay).
+- `tests/services/test_auth_token_lifetime.py` (new — 9 regression tests).
+
+### Verification
+- 11/11 logic cases pass (env aliases, escape hatch, security invariants).
+- ruff + format + runtime_truth + validate_structure + ci_guardrails all ✅.
+
+### Lesson learned
+- Hardcoded security caps in `min()` ARE security features, but they can break
+  UX for legitimate long sessions. Environment-aware caps balance both concerns.
+- Always check user-visible cycle frequency against hardcoded timeouts before
+  blaming the obvious (network, proxy, etc.).

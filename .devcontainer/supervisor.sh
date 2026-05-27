@@ -239,6 +239,49 @@ ENVEOF
 
 _inject_env_secrets
 
+# ── D-SECRET-001: ضمان SECRET_KEY ثابت عبر كل restarts ──────────────────────
+# إذا كان SECRET_KEY لا يزال القيمة الافتراضية الضعيفة بعد _inject_env_secrets،
+# نقرأه من ملف state الثابت (يُنشئه _get_or_create_dev_secret_key في Python).
+# هذا يضمن أن كل الخدمات تستخدم نفس المفتاح حتى بدون Gitpod Secrets.
+_ensure_stable_secret_key() {
+    local state_key_file="$APP_ROOT/.devcontainer/state/dev_secret_key"
+    local current_key="${SECRET_KEY:-}"
+
+    # إذا كان المفتاح قوياً (>= 32 حرف) وليس القيمة الافتراضية → لا شيء
+    if [ -n "$current_key" ] && [ "${#current_key}" -ge 32 ] \
+       && [ "$current_key" != "dev-secret-change-me" ] \
+       && [ "$current_key" != "changeme" ]; then
+        # احفظه في ملف state لضمان ثباته
+        mkdir -p "$(dirname "$state_key_file")"
+        echo "$current_key" > "$state_key_file"
+        lifecycle_info "SECRET_KEY: strong key confirmed (${#current_key} chars) — saved to state"
+        return 0
+    fi
+
+    # حاول قراءة مفتاح ثابت من ملف state
+    if [ -f "$state_key_file" ]; then
+        local stored_key
+        stored_key=$(cat "$state_key_file" 2>/dev/null | tr -d '[:space:]')
+        if [ -n "$stored_key" ] && [ "${#stored_key}" -ge 32 ]; then
+            export SECRET_KEY="$stored_key"
+            lifecycle_info "SECRET_KEY: loaded from state file (${#stored_key} chars)"
+            return 0
+        fi
+    fi
+
+    # أنشئ مفتاحاً جديداً ثابتاً واحفظه
+    local new_key
+    new_key=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))" 2>/dev/null \
+              || openssl rand -base64 48 2>/dev/null \
+              || echo "cogniforge_fallback_$(date +%s)_key_for_dev_only")
+    mkdir -p "$(dirname "$state_key_file")"
+    echo "$new_key" > "$state_key_file"
+    export SECRET_KEY="$new_key"
+    lifecycle_info "SECRET_KEY: generated new stable key (${#new_key} chars) — saved to state"
+}
+_ensure_stable_secret_key
+
+
 lifecycle_info "✅ System ready"
 lifecycle_set_state "system_ready" "$(date +%s)"
 
@@ -1179,14 +1222,61 @@ lifecycle_info "═════════════════════�
 # Keep supervisor running to maintain state
 lifecycle_info "Supervisor entering monitoring mode..."
 
-# Monitor application health every 30 seconds
+# ── دالة إعادة تشغيل uvicorn مع المتغيرات الصحيحة ──────────────────────────
+_restart_uvicorn() {
+    lifecycle_warn "Restarting uvicorn main app..."
+
+    # أوقف أي instance قديم
+    local old_pid
+    old_pid=$(lifecycle_get_state "uvicorn_pid" 2>/dev/null || true)
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+        kill "$old_pid" 2>/dev/null || true
+        sleep 2
+    fi
+
+    # تأكد من وجود المتغيرات الأساسية
+    export ORCHESTRATOR_SERVICE_URL="http://localhost:8006"
+    export CODESPACES="true"
+    export ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR="true"
+    export ORCHESTRATOR_CHAT_ENDPOINT="${ORCHESTRATOR_CHAT_ENDPOINT:-state_graph}"
+    export PLANNING_AGENT_URL="http://localhost:8002"
+    export RESEARCH_AGENT_URL="http://localhost:8007"
+    export REASONING_AGENT_URL="http://localhost:8008"
+    export USER_SERVICE_URL="http://localhost:8001"
+
+    python -m uvicorn app.main:app \
+        --host 0.0.0.0 \
+        --port "$APP_PORT" \
+        --ws websockets \
+        --ws-ping-interval 20 \
+        --ws-ping-timeout 30 \
+        --timeout-keep-alive 75 \
+        --reload \
+        --log-level info &
+
+    local new_pid=$!
+    lifecycle_set_state "uvicorn_pid" "$new_pid"
+    lifecycle_info "Uvicorn restarted (PID: $new_pid)"
+}
+
+# Monitor application health every 30 seconds — restart uvicorn if down
 while true; do
     sleep 30
-    
+
     if lifecycle_check_http "$HEALTH_ENDPOINT" 200; then
         lifecycle_debug "Health check passed"
+        lifecycle_set_state "app_healthy" "true"
     else
-        lifecycle_warn "Health check failed - application may be down"
+        lifecycle_warn "Health check failed - restarting uvicorn"
         lifecycle_clear_state "app_healthy"
+        _restart_uvicorn
+        # انتظر حتى يبدأ
+        sleep 15
+        if lifecycle_check_http "$HEALTH_ENDPOINT" 200; then
+            lifecycle_info "Uvicorn recovered successfully"
+            lifecycle_set_state "app_healthy" "true"
+        else
+            lifecycle_warn "Uvicorn restart did not recover health — will retry next cycle"
+        fi
     fi
 done

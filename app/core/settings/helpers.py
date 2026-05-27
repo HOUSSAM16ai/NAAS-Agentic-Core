@@ -15,13 +15,49 @@ logger = logging.getLogger("app.core.settings")
 
 _DEV_SECRET_KEY_CACHE: str | None = None
 
+# مسار ملف المفتاح الثابت — يُحفظ على القرص لضمان ثباته عبر restarts
+_DEV_SECRET_KEY_FILE = "/app/.devcontainer/state/dev_secret_key"
+
 
 def _get_or_create_dev_secret_key() -> str:
-    """ينشئ مفتاحًا ثابتًا للتطوير لتجنّب إبطال الجلسات عند إعادة التشغيل."""
+    """يُعيد مفتاحاً ثابتاً للتطوير محفوظاً على القرص.
+
+    يمنع إبطال جلسات المستخدمين عند إعادة تشغيل uvicorn.
+    الأولوية: SECRET_KEY في process env → ملف على القرص → إنشاء جديد وحفظه.
+    """
     global _DEV_SECRET_KEY_CACHE
-    if _DEV_SECRET_KEY_CACHE is None:
-        _DEV_SECRET_KEY_CACHE = secrets.token_urlsafe(64)
-    return _DEV_SECRET_KEY_CACHE
+
+    # 1. إذا كان في process env مباشرة → استخدمه (يشمل ما يُحقنه supervisor.sh)
+    import os
+    env_key = os.environ.get("SECRET_KEY", "").strip()
+    if env_key and env_key not in ("dev-secret-change-me", "changeme"):
+        _DEV_SECRET_KEY_CACHE = env_key
+        return env_key
+
+    # 2. cache في الذاكرة (نفس process)
+    if _DEV_SECRET_KEY_CACHE is not None:
+        return _DEV_SECRET_KEY_CACHE
+
+    # 3. ملف ثابت على القرص (يبقى عبر restarts)
+    try:
+        import pathlib
+        key_path = pathlib.Path(_DEV_SECRET_KEY_FILE)
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        if key_path.exists():
+            stored = key_path.read_text().strip()
+            if len(stored) >= 32:
+                _DEV_SECRET_KEY_CACHE = stored
+                return stored
+        # إنشاء مفتاح جديد وحفظه
+        new_key = secrets.token_urlsafe(64)
+        key_path.write_text(new_key)
+        _DEV_SECRET_KEY_CACHE = new_key
+        return new_key
+    except Exception:
+        # fallback آمن إذا فشل القرص
+        if _DEV_SECRET_KEY_CACHE is None:
+            _DEV_SECRET_KEY_CACHE = secrets.token_urlsafe(64)
+        return _DEV_SECRET_KEY_CACHE
 
 
 def _ensure_database_url(value: str | None, environment: str) -> str:

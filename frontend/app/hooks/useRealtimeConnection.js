@@ -49,8 +49,14 @@ const FATAL_RETRY_DELAY_MS = 2000; // backoff بين محاولات 4401
 const REVALIDATION_TIMEOUT_MS = 5000; // مهلة /me probe
 // D-WS-FLAP-003: heartbeat كل 45s (كان 25s) — يعطي مساحة لـ proxies بدون إغراق.
 // uvicorn --ws-ping-interval 20 يفحص الـ TCP layer تلقائياً.
+// ISS-091 (D-WS-HEARTBEAT-002 — 2026-05-27): زدنا HEARTBEAT_TIMEOUT إلى 90s
+// (كان 15s). السبب: receive_json في server side محجوب أثناء streaming الـ LLM،
+// فلا يُعالَج ping حتى يكتمل البث. إجابات الشرح الطويلة + fallback chain تستغرق
+// 30-90s. مع timeout=15s، أي إجابة >60s كانت تُسبب false-disconnect →
+// "لا يرد عن الأسئلة" (السؤال يُرسَل لكن الـ WS يُغلق قبل وصول الرد).
+// uvicorn --ws-ping-interval 20 يحافظ على الـ TCP alive في كل الأحوال.
 const HEARTBEAT_INTERVAL = 45000;
-const HEARTBEAT_TIMEOUT = 15000; // كان 10s — أوسع تسامحاً مع mobile latency
+const HEARTBEAT_TIMEOUT = 90000; // كان 15s — يتسامح مع long LLM streams (90s)
 // D-WS-FLAP-003: لا نُسمِّي الاتصال "reconnecting" إلا بعد فشل حقيقي.
 // 1000 = NORMAL_CLOSURE — يحدث عند unmount/cleanup أو إغلاق الـ tab.
 // 1001 = GOING_AWAY — يحدث عند navigation.

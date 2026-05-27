@@ -2908,3 +2908,138 @@ Secrets pre-configured.
 
 ### PR
 `fix/secret-key-stability-auth-loop` — commit `88cf7fd9`
+
+---
+
+## ISS-091 — Q/A Session Stability Catastrophe Round 2 (2026-05-27)
+
+**Reported verbatim**:
+> «النظام لا يجيب عن الاسئلة و أجد نفسي مطرود إلى صفحة تسجيل الدخول
+>  ثم يعود يدخل إلى التطبيق بشكل كارثي خطير مدمر... يتم الدخول للحساب و
+>  تفقد الرسائل السابقة بشكل عادي لكن لا يرد عن الاسئلة و يخرج و يدخل
+>  آليا بشكل كارثي»
+
+### Symptom (User in GitHub Codespaces)
+1. ✅ Login works → token issued
+2. ✅ Browse old conversations → DB read works, history visible
+3. ❌ Send a question → NO RESPONSE
+4. ❌ Forcibly redirected to login page
+5. ❌ Re-enters automatically (cycle)
+
+### Why ISS-090 fix was insufficient
+
+ISS-090 fixed `_get_or_create_dev_secret_key()` to persist the key to a
+disk file at `/app/.devcontainer/state/dev_secret_key`. This works ONLY
+inside the official devcontainer where `WORKDIR=/app`.
+
+In OTHER environments:
+- Codespaces without devcontainer (e.g., raw fork) → `/app` doesn't exist
+- Operator running uvicorn from `/workspaces/<repo>` or `/home/user/<repo>`
+- Gitpod workspace with `WORKDIR=/workspaces/<repo>`
+
+The hardcoded `/app/.devcontainer/state/dev_secret_key` path failed silently:
+1. `key_path.parent.mkdir(parents=True, exist_ok=True)` — succeeds (creates `/app/...` if writable, else fails)
+2. If parent creation fails → `except Exception` → falls to memory-only key
+3. Every uvicorn restart → new random key → all JWTs invalidated
+4. Auth loop returns
+
+### Three Independent Root Causes (verified via forensic code review)
+
+**RC-1: Hardcoded `/app/...` path in `helpers.py`** (the actual remaining catastrophe)
+- `_DEV_SECRET_KEY_FILE = "/app/.devcontainer/state/dev_secret_key"` — only valid in canonical devcontainer
+- Operator runs from any other CWD → path doesn't exist → memory-only key generation
+
+**RC-2: `--reload` flag in production uvicorn launch** (catastrophic for WS apps)
+- `supervisor.sh` launched uvicorn with `--reload` on both initial start and restart paths
+- `--reload` watches all `.py` files. Any edit (manual or by agent) → uvicorn worker restart
+- Every worker restart KILLS all active WS connections
+- User sees: "sent question, no response, screen flickers, suddenly at login"
+
+**RC-3: Aggressive 5s health-check timeout in monitoring loop**
+- `lifecycle_check_http $HEALTH_ENDPOINT 200` — default timeout 5s
+- `/health` does a DB connectivity probe → Supabase free tier can spike to 8-12s
+- Single failure → `_restart_uvicorn` → all WS connections die
+- Even one Supabase latency blip causes a forced restart
+
+**RC-4: WebSocket receive-loop blocked during LLM stream**
+- `chat_stream_ws` does `await stream_task` which blocks `receive_json`
+- Client's `{type:"ping"}` heartbeat at T+45s cannot be processed during stream
+- With old `HEARTBEAT_TIMEOUT=15s`, client closes WS at T+60s of stream
+- User sees: "no response" (response was streaming but the WS died)
+
+### Fix (D-RELOAD-001 + D-SECRET-002 + D-HEALTH-001 + D-WS-HEARTBEAT-002)
+
+**D-SECRET-002 — Portable state path in `helpers.py`**:
+- New `_resolve_state_key_path()` function with priority:
+  1. `DEV_SECRET_KEY_FILE` env override
+  2. `/app/.devcontainer/state/dev_secret_key` (canonical devcontainer)
+  3. `<helpers.py>/../../../.devcontainer/state/dev_secret_key` (repo root)
+- Key file now persists in ALL execution environments
+- File permission set to 0600 (defensive)
+- Loud WARN log when key is GENERATED (helps operator diagnose persistence failure)
+
+**D-RELOAD-001 — Remove `--reload` from production**:
+- `supervisor.sh` launch and `_restart_uvicorn` no longer pass `--reload` by default
+- Opt-in via `DEV_RELOAD=1` env var (local development only)
+- When enabled, `--reload-exclude .devcontainer/state/* --reload-exclude .observability/*`
+  prevents reload-on-state-file-write loops
+
+**D-HEALTH-001 — Tolerant health monitoring**:
+- Default health timeout: 5s → **15s** (Supabase response can spike under load)
+- Failure threshold: 1 → **3 consecutive failures** required before restart
+- Interval: 30s (unchanged)
+- Net effect: requires ~90s of sustained failure before forcibly restarting uvicorn
+- This eliminates spurious restarts that kill active WS connections
+
+**D-WS-HEARTBEAT-002 — Frontend tolerance for long streams**:
+- `HEARTBEAT_TIMEOUT`: 15s → **90s** in `useRealtimeConnection.js`
+- LLM streams with full fallback chain can take 60-90s
+- uvicorn `--ws-ping-interval 20` already keeps the TCP layer alive at OS level
+- Application-level heartbeat now waits 90s before declaring stale (consistent with stream time)
+
+**Defensive `_restart_uvicorn` re-loads SECRET_KEY from state file**:
+- If env was somehow cleared (race, signal handling), the function re-loads
+  from `$APP_ROOT/.devcontainer/state/dev_secret_key` before launching uvicorn
+- Ensures the restarted worker uses the same key as previous
+
+**`.gitignore` adds `.devcontainer/state/dev_secret_key`**:
+- Prevents accidental commit of the per-environment secret key
+
+### Live Verification (regression suite, 2026-05-27)
+```
+tests/services/test_secret_key_persistence.py — 6/6 PASS
+  - test_dev_secret_key_persists_across_restart
+  - test_env_secret_key_overrides_disk
+  - test_default_weak_keys_ignored
+  - test_state_path_resolves_outside_app_dir
+  - test_dev_secret_key_file_env_override
+  - test_key_file_permissions_600
+
+tests/services/test_secret_key_consistency.py — 11/11 PASS (no regression)
+Total related auth/settings tests: 123/123 PASS
+
+Sandbox live verification (uvicorn boot + path resolution) verified end-to-end:
+  - /app exists (devcontainer)   → resolves /app/.devcontainer/state/...   ✅
+  - /app missing (local/Gitpod)  → resolves repo-root/.devcontainer/state/... ✅
+  - DEV_SECRET_KEY_FILE override → respects custom path                      ✅
+```
+
+NOTE: Full LLM end-to-end live test against Supabase was BLOCKED in this
+sandbox (network firewall denies Postgres egress on ports 5432/6543).
+CI on GitHub will exercise the live LLM path. The forensic fixes above
+were derived from deterministic code path analysis, not LLM-specific
+behavior.
+
+### Severity
+🔴 CATASTROPHIC — same severity as ISS-090, different root path. Users
+in any environment other than the canonical devcontainer experience
+infinite kick-to-login loops. Affects Codespaces forks, Gitpod workspaces,
+local dev runs, and any manual uvicorn launch outside `/app`.
+
+### Files Changed
+- `app/core/settings/helpers.py` — portable path resolver + chmod 0600
+- `.devcontainer/supervisor.sh` — `--reload` opt-in + 15s/3-failure health
+- `.devcontainer/supervisor.sh` `_restart_uvicorn` — defensive SECRET_KEY reload
+- `frontend/app/hooks/useRealtimeConnection.js` — HEARTBEAT_TIMEOUT 15s → 90s
+- `.gitignore` — `.devcontainer/state/dev_secret_key`
+- `tests/services/test_secret_key_persistence.py` — 6 new regression tests

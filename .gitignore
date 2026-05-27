@@ -7,6 +7,9 @@
 .env
 .env.codespaces
 .devcontainer/secrets.env
+# ISS-091 (D-SECRET-002): SECRET_KEY الثابت يجب أن لا يُلتزم به في git أبداً.
+# كل بيئة (Codespace, Gitpod, local) يجب أن تولِّد مفتاحها الخاص محلياً.
+.devcontainer/state/dev_secret_key
 .venv
 .venv*/
 venv/

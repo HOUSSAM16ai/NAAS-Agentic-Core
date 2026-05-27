@@ -3152,3 +3152,160 @@ The disk-file approach is safe because:
 ### Files changed
 - `app/core/settings/helpers.py` — `_get_or_create_dev_secret_key()`
 - `.devcontainer/supervisor.sh` — `_ensure_stable_secret_key()` + `_restart_uvicorn()`
+
+---
+
+## D-RELOAD-001 — Remove `--reload` from production uvicorn (2026-05-27)
+
+### Decision
+`supervisor.sh` MUST NOT pass `--reload` to uvicorn in production paths.
+Opt-in only via `DEV_RELOAD=1` env var for local active development.
+
+### Rationale
+`--reload` watches `.py` files in the entire project tree. ANY edit
+(human, agent, code formatter, observability writes that touch source)
+triggers a uvicorn worker restart. Every restart forcibly disconnects
+all active WebSocket connections.
+
+In GitHub Codespaces (the user's environment), this manifests as:
+- User clicks "send question"
+- Question reaches server, LLM starts streaming
+- A background process touches some `.py` file (or even just a state file
+  if `reload-exclude` isn't configured)
+- uvicorn restarts → WS connection dies mid-stream
+- User sees: no response → eventual auth failure → kicked to login
+
+When `DEV_RELOAD=1` is set, the launch automatically includes
+`--reload-exclude .devcontainer/state/* --reload-exclude .observability/*`
+to prevent reload-on-state-write loops.
+
+### Rules (permanent — do not break without ADR)
+1. Production-style environments (Codespaces user attaching to use the app,
+   Gitpod operator running for QA) MUST NOT use `--reload`.
+2. Only local developers actively editing source code should set `DEV_RELOAD=1`.
+3. If `--reload` is enabled, `--reload-exclude` MUST cover all directories
+   that the supervisor writes during normal operation:
+   - `.devcontainer/state/*`
+   - `.observability/*`
+4. `_restart_uvicorn` MUST mirror the same `--reload` policy as the initial
+   launch (no drift between the two code paths).
+
+### Files Changed
+- `.devcontainer/supervisor.sh` — initial uvicorn launch + `_restart_uvicorn`
+
+---
+
+## D-SECRET-002 — Portable SECRET_KEY state path (2026-05-27)
+
+### Decision
+`_get_or_create_dev_secret_key()` MUST resolve its state file location
+dynamically via `_resolve_state_key_path()`, NOT a hardcoded `/app/...`
+path. The resolver tries:
+  1. `DEV_SECRET_KEY_FILE` env (explicit operator override)
+  2. `/app/.devcontainer/state/dev_secret_key` (canonical devcontainer)
+  3. `<helpers.py>/../../../.devcontainer/state/dev_secret_key` (repo root)
+
+### Rationale
+ISS-090 fixed in-memory key generation by persisting to disk. But the
+hardcoded `/app/...` path silently failed in any environment where the
+working directory isn't `/app`:
+- Codespaces fork without devcontainer
+- Local dev (`/home/user/<repo>`)
+- Gitpod workspace (`/workspaces/<repo>`)
+
+When `key_path.parent.mkdir(...)` failed, the `except` branch fell to
+in-memory generation. This is the root cause of the ISS-091 catastrophe.
+
+By using `pathlib.Path(__file__).resolve().parents[3]`, the resolver finds
+the repo root regardless of CWD. The key is always persisted to a path
+that exists, and SECRET_KEY survives every restart.
+
+### Rules (permanent — do not break without ADR)
+1. NEVER hardcode `/app` in any settings/helpers module — use the resolver.
+2. `_resolve_state_key_path()` MUST be the only authority for the key path.
+3. File permission MUST be set to `0600` after creation (defensive).
+4. A loud WARN log MUST fire whenever a new key is generated (helps operators
+   detect persistence failure in CI/observability).
+5. `_restart_uvicorn` MUST re-read SECRET_KEY from the state file when env
+   appears empty (defensive against signal/race issues).
+
+### Files Changed
+- `app/core/settings/helpers.py` — new `_resolve_state_key_path()` function
+- `.devcontainer/supervisor.sh` — `_restart_uvicorn` re-reads state file
+- `.gitignore` — added `.devcontainer/state/dev_secret_key`
+- `tests/services/test_secret_key_persistence.py` — 6 regression tests
+
+---
+
+## D-HEALTH-001 — Tolerant health monitoring loop (2026-05-27)
+
+### Decision
+The supervisor monitoring loop MUST require **3 consecutive failures** with
+**15-second timeouts** before restarting uvicorn.
+
+### Rationale
+Previous config (5s timeout, 1 failure → restart) caused spurious uvicorn
+restarts whenever:
+- Supabase free tier responded slowly (regularly 8-12s under load)
+- A long-running query held a connection
+- Network blip between container and Supabase region
+
+Each restart killed all active WebSocket connections, which is the
+worst-case for users mid-stream.
+
+New defaults (configurable via env):
+- `HEALTH_TIMEOUT_SECS=15` (was implicit 5s)
+- `HEALTH_FAILURE_THRESHOLD=3` (was implicit 1)
+- `HEALTH_INTERVAL_SECS=30` (unchanged)
+
+Net effect: a forced restart requires ~90s of sustained failure (`3 × 30s`).
+Transient blips don't trigger restarts. Real outages still recover within
+~2 minutes.
+
+### Rules (permanent — do not break without ADR)
+1. `HEALTH_TIMEOUT_SECS` MUST be at least 10s to tolerate Supabase latency.
+2. `HEALTH_FAILURE_THRESHOLD` MUST be at least 2 — single failures cannot
+   trigger a restart.
+3. Recovery resets the consecutive-failure counter immediately.
+4. Each failure MUST be logged with the consecutive count so operators
+   can correlate with WS flapping reports.
+
+### Files Changed
+- `.devcontainer/supervisor.sh` — monitoring loop refactor
+
+---
+
+## D-WS-HEARTBEAT-002 — Frontend tolerance for long LLM streams (2026-05-27)
+
+### Decision
+`HEARTBEAT_TIMEOUT` in `useRealtimeConnection.js` MUST be at least 90s.
+
+### Rationale
+The server's WebSocket `receive_json` loop is blocked while a stream is
+in progress (the `await stream_task` pattern). During this time, the
+server cannot process the client's `{type:"ping"}` application heartbeat.
+
+With the old 15s timeout:
+- T=0: client sends question
+- T=45s: client sends `{type:"ping"}` (HEARTBEAT_INTERVAL)
+- T=60s: server hasn't replied with pong (still streaming) → client closes WS
+
+LLM streams with the full fallback chain (gpt-oss-120b → 20b → nemotron
+→ glm) routinely take 30-90s. The 15s timeout caused false disconnects
+that the user perceived as "no response".
+
+The 90s timeout aligns with realistic stream durations. uvicorn's
+`--ws-ping-interval 20` continues to keep the TCP layer alive at the
+OS level regardless of application heartbeat.
+
+### Rules (permanent — do not break without ADR)
+1. `HEARTBEAT_TIMEOUT` MUST NOT be reduced below 60s without simultaneously
+   refactoring the server to handle heartbeats concurrently with streams
+   (e.g., via queue-based receive loop).
+2. uvicorn `--ws-ping-interval` MUST remain set so the TCP layer doesn't
+   idle-timeout independently of the app heartbeat.
+3. Server-side WS endpoints MUST call `handle_control_message` BEFORE
+   treating any payload as a question (the heartbeat skill contract).
+
+### Files Changed
+- `frontend/app/hooks/useRealtimeConnection.js` — HEARTBEAT_TIMEOUT 15s → 90s

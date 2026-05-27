@@ -3106,3 +3106,49 @@ sleep 5
 # 3) End-to-end WS chat must produce chunks > 0
 # (use the WS test block from this PR's diagnostic scripts)
 ```
+
+---
+
+## D-SECRET-001 — Stable SECRET_KEY Architecture (2026-05-27)
+
+### Decision
+`_get_or_create_dev_secret_key()` must persist the key to disk, not generate
+it in memory. The canonical storage path is
+`.devcontainer/state/dev_secret_key`. `supervisor.sh` must call
+`_ensure_stable_secret_key()` before launching any microservice.
+
+### Rationale
+An in-memory-only secret key is invalidated on every process restart. In
+cloud environments (Codespaces, Gitpod), uvicorn restarts are routine:
+health-check failures, OOM kills, deploys, devcontainer rebuilds. Each
+restart with a new key invalidates all active JWT tokens, causing the
+auth loop catastrophe (ISS-090).
+
+The disk-file approach is safe because:
+- `.devcontainer/state/` is local to the environment, not committed
+- The file is created with `600` permissions by Python's `pathlib`
+- It is overridden by Gitpod Secrets / process env (highest priority)
+- It is regenerated automatically if deleted
+
+### Priority chain (highest → lowest)
+1. `SECRET_KEY` in process env (Gitpod Secrets, devcontainer remoteEnv)
+2. `.devcontainer/state/dev_secret_key` (persistent disk file)
+3. Generate new key → save to disk → use
+
+### Rules (permanent — do not break without ADR)
+1. **Never generate a secret key in memory only.** Always persist to disk
+   or read from an external secrets manager.
+2. **`_ensure_stable_secret_key()` must run before any `launch_*` in
+   supervisor.sh.** Services launched before this function runs may get
+   a different key than the main app.
+3. **`secrets.env` must contain a real `SECRET_KEY` (>= 32 chars).** The
+   example file ships with `dev-secret-change-me` — operators must replace
+   it before first use in any persistent environment.
+4. **The disk file path is canonical.** Do not change it without updating
+   both `helpers.py` and `supervisor.sh` atomically.
+5. **`CODESPACES=true` must be re-exported on every uvicorn restart** —
+   `AppSettings.apply_codespaces_local_overrides` reads it at import time.
+
+### Files changed
+- `app/core/settings/helpers.py` — `_get_or_create_dev_secret_key()`
+- `.devcontainer/supervisor.sh` — `_ensure_stable_secret_key()` + `_restart_uvicorn()`

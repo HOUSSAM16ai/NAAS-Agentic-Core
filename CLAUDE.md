@@ -6330,3 +6330,4 @@ Found 5 SECRET_KEY default assignment(s):
 > في supervisor.sh ليست مجرد inconvenience — هي قنابل موقوتة تنفجر عند أول
 > Codespace fresh بدون secrets manually configured. الـ CI gate الجراحي
 > (forensic-grade) هو الطريقة الوحيدة الموثوقة لمنع التكرار.
+

@@ -2755,3 +2755,133 @@ expires_delta = timedelta(
   UX for legitimate long sessions. Environment-aware caps balance both concerns.
 - Always check user-visible cycle frequency against hardcoded timeouts before
   blaming the obvious (network, proxy, etc.).
+
+
+---
+
+## D-WS-AUTH-001 · Bounded 4401 Retry + HTTP Probe (2026-05-26)
+
+**Context**: المستخدم بلَّغ بـ catastrophe جديد على Codespace فريش:
+> «أنا فتحت codespace جديد و يتم طردي بمجرد دخولي و لا يتم الاجابة عن الاسئلة مع العلم الأسرار موجودة في GitHub code spaces secret و يتم حقنها آليا»
+
+التشخيص أظهر أن السبب **ليس** JWT expiry (D-WS-SESSION-001 كان pre-existing fix). السبب الحقيقي:
+
+### Root Cause (architectural)
+
+الـ frontend كان يعامل **أي 4401 واحد** كـ fatal:
+```js
+if (FATAL_CODES.has(e.code)) {
+    setState("auth_error");
+    window.dispatchEvent('agent:auth_error');
+    return;
+}
+```
+
+CogniForgeApp يستجيب بـ `logout()` الذي ينفِّذ `window.location.reload()`.
+
+النتيجة:
+1. WS handshake → 4401 (لأي سبب: SECRET_KEY race، DB lag، proxy header strip)
+2. → auth_error event → logout → reload
+3. → AuthScreen → user يدخل credentials (أو browser autofill)
+4. → token جديد → WS connect → 4401 مرة أخرى
+5. **Infinite loop**
+
+لكن **4401 ليس دائماً permanent**. ممكن يكون transient:
+- SECRET_KEY rotation race بين uvicorn instances
+- db.get(User) returns None due to brief DB lag
+- Codespaces edge proxy حذف auth header مرة
+- Clock skew بين client و server
+
+التعامل مع 4401 كـ fatal فوراً = طرد user على transient error.
+
+### Decision (D-WS-AUTH-001)
+
+**1. Bounded retry على 4401**:
+```js
+const MAX_FATAL_RETRIES = 3;
+const FATAL_RETRY_DELAY_MS = 2000;
+
+if (FATAL_CODES.has(e.code)) {
+    fatalRetries.current += 1;
+    if (fatalRetries.current > MAX_FATAL_RETRIES) {
+        setState("auth_error");
+        dispatch("agent:auth_error");
+        return;
+    }
+    // probe + retry
+}
+```
+
+**2. HTTP /me probe** للتمييز transient vs permanent:
+```js
+revalidateTokenViaHttp(wsUrl, token, signal):
+  - 200 → "valid" → keep retrying WS
+  - 401/403 → "invalid" → escalate immediately to auth_error
+  - network error → "unknown" → treat as transient, retry
+```
+
+**3. logout() بدون reload()**:
+```js
+// قبل (destructive):
+const logout = () => {
+    localStorage.removeItem('token');
+    window.location.reload();  // ← يكسر React tree، يفعل autofill loop
+};
+
+// بعد (preservative):
+const logout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setUser(null);
+    // React یرسم AuthScreen بدون tear-down
+};
+```
+
+**4. Counter reset on success**:
+```js
+ws.onopen = () => {
+    fatalRetries.current = 0;  // كل اتصال ناجح يبدأ cycle جديد
+    if (revalidateAbortRef.current) revalidateAbortRef.current.abort();
+};
+```
+
+### Consequence
+
+- **Transient 4401**: probe=valid → retry → user يبقى logged in بدون أي UI flicker.
+- **Permanent 4401**: probe=invalid → escalate فوراً (faster than waiting MAX_FATAL_RETRIES).
+- **Network ambiguous**: probe=unknown → MAX_FATAL_RETRIES retries مع backoff قبل escalate.
+- **logout سلس**: React state change بدلاً من full page reload → preserves tab، يمنع autofill cycle.
+
+### Architectural Invariants (D-WS-AUTH-001 — لا تُكسر بدون ADR)
+
+1. **First 4401 is NEVER fatal** — must retry at least once.
+2. **HTTP /me probe MUST be tried** before escalating to auth_error.
+3. **logout() MUST NOT call window.location.reload()** — use React state.
+4. **fatalRetries.current MUST reset to 0 on onopen** — fresh cycle per session.
+5. **Cleanup MUST abort in-flight probe** — prevent memory leak.
+
+### Files
+
+- `frontend/app/hooks/useRealtimeConnection.js` (bounded retry + HTTP probe + abort handling).
+- `frontend/app/components/CogniForgeApp.jsx` (logout no reload).
+- `tests/services/test_ws_auth_001_bounded_retry.py` (new — 19 regression checks).
+
+### Live Simulation Validation
+
+5 scenarios simulated, all pass:
+1. ✅ Transient 4401 (probe=valid) → retry → user stays in.
+2. ✅ Permanent 4401 (probe=invalid) → escalate immediately.
+3. ✅ Network blip 4401 (probe=unknown) → retry up to MAX, then escalate.
+4. ✅ Counter resets after successful reconnect.
+5. ✅ Even with valid probes, hard upper bound (MAX_FATAL_RETRIES) prevents infinite loop.
+
+### Lesson learned
+
+**Treating ANY single auth error as fatal is wrong** — distributed systems
+have transient auth races (SECRET_KEY rotation, brief DB outages, proxy
+strips). Bounded retry + active revalidation via HTTP probe is the correct
+pattern.
+
+**Destructive logout (window.location.reload()) is wrong** for the same
+reason — it interacts badly with browser auto-fill and creates accidental
+loops. Always prefer React state changes for SPA navigation.

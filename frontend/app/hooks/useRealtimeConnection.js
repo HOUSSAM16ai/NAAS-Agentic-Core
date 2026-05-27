@@ -40,6 +40,13 @@ const MAX_BACKOFF = 30000; // أقصى تأخير بين المحاولات (30 
 // المبكر على شبكات الهاتف المتذبذبة (carrier-NAT يقطع الاتصال مؤقتاً).
 const MAX_RETRIES = 30;
 const FATAL_CODES = new Set([4401, 4403]);
+// D-WS-AUTH-001 (2026-05-26): bounded retry على 4401 قبل اعتباره fatal.
+// قبل: 4401 واحد → logout فوري → reload → cycle.
+// بعد: 4401 يُجرَّب N مرات مع backoff قبل اعتباره auth_error حقيقي.
+// نضيف فحص HTTP /me كـ probe لتمييز transient vs permanent.
+const MAX_FATAL_RETRIES = 3; // أقصى محاولات قبل اعتبار 4401 fatal
+const FATAL_RETRY_DELAY_MS = 2000; // backoff بين محاولات 4401
+const REVALIDATION_TIMEOUT_MS = 5000; // مهلة /me probe
 // D-WS-FLAP-003: heartbeat كل 45s (كان 25s) — يعطي مساحة لـ proxies بدون إغراق.
 // uvicorn --ws-ping-interval 20 يفحص الـ TCP layer تلقائياً.
 const HEARTBEAT_INTERVAL = 45000;
@@ -52,6 +59,32 @@ const SILENT_CLOSE_CODES = new Set([1000, 1001]);
 // D-WS-FLAP-003: نافذة "اتصال مستقر" — لو الاتصال صمد أكثر من STABLE_THRESHOLD،
 // أي close تالٍ يُعتَبر شبكي عابر ونُعيد المحاولة دون إعلان "reconnecting" حالاً.
 const STABLE_THRESHOLD_MS = 3000;
+
+// D-WS-AUTH-001 (2026-05-26): دالة probe للتحقق من صلاحية الـ token عبر HTTP.
+// نستخدم نفس wsUrl محلولاً إلى http(s) للوصول إلى /api/security/user/me.
+// إذا 200 → token صالح، 4401 على WS كان transient.
+// إذا 401 → token حقاً منتهي، فعّل auth_error.
+// إذا network error → غير قطعي، نعتبره transient (لا نُطرَد).
+const revalidateTokenViaHttp = async (wsUrl, token, signal) => {
+  if (!token || typeof wsUrl !== "string") return "unknown";
+  try {
+    // wsUrl: wss://host/api/chat/ws?token=...
+    // → https://host/api/security/user/me
+    const url = new URL(wsUrl);
+    const httpProtocol = url.protocol === "wss:" ? "https:" : "http:";
+    const httpUrl = `${httpProtocol}//${url.host}/api/security/user/me`;
+    const response = await fetch(httpUrl, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    });
+    if (response.ok) return "valid";
+    if (response.status === 401 || response.status === 403) return "invalid";
+    return "unknown";
+  } catch (_err) {
+    return "unknown";
+  }
+};
 
 const parseAssistantErrorEnvelope = (rawData) => {
   if (typeof rawData !== "string") return null;
@@ -79,6 +112,12 @@ const parseAssistantErrorEnvelope = (rawData) => {
 export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") {
   const wsRef = useRef(null);
   const retries = useRef(0);
+  // D-WS-AUTH-001 (2026-05-26): عداد منفصل لـ 4401/4403 retries.
+  // نُميِّز بين retries عامة (network blips) و retries auth-specific لأن
+  // logic كل منهما مختلف (auth يحتاج HTTP probe، network يحتاج backoff فقط).
+  const fatalRetries = useRef(0);
+  // AbortController لإلغاء HTTP probes عند unmount
+  const revalidateAbortRef = useRef(null);
   const [state, setState] = useState("idle");
   // D-WS-FLAP-004 (rev. honest-debounce — 2026-05-26):
   //
@@ -299,6 +338,13 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
 
             const wasReconnect = retries.current > 0;
             retries.current = 0;
+            // D-WS-AUTH-001: reset عداد 4401 — اتصال ناجح يُلغي أي شك في الـ token.
+            fatalRetries.current = 0;
+            // ألغِ أي probe HTTP جاري (مش محتاج لو الاتصال نجح)
+            if (revalidateAbortRef.current) {
+              revalidateAbortRef.current.abort();
+              revalidateAbortRef.current = null;
+            }
             setState(wasReconnect ? "recovered" : "connected");
 
             // بعد recovery → انتقل إلى connected بعد لحظة قصيرة للـ UI feedback
@@ -495,22 +541,125 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
             was_stable: wasStable,
           });
 
-          // Fatal auth errors — لا إعادة اتصال
-          // D-WS-004: 4401 = token منتهي أو مفقود → يجب إعادة تسجيل الدخول
-          //           4403 = صلاحيات غير كافية (admin يحاول customer endpoint)
+          // D-WS-AUTH-001 (2026-05-26): 4401/4403 لم يَعُد fatal فوراً.
+          // ─────────────────────────────────────────────────────────────────
+          // قبل: 4401 → logout فوري → reload → cycle.
+          // بعد: 4401 يُجرَّب MAX_FATAL_RETRIES مع HTTP /me probe.
+          //
+          // الـ rationale: 4401 قد يكون transient في بيئات mobile/Codespaces:
+          //   - SECRET_KEY rotation race بين uvicorn instances
+          //   - DB lag → db.get(User) returns None
+          //   - clock skew بين client و server
+          //   - Codespaces proxy حذف auth header
+          //
+          // الـ flow:
+          //   1. Increment fatalRetries.current
+          //   2. Try HTTP /me to probe token validity:
+          //      - 200 → token valid, 4401 transient → retry WS with backoff
+          //      - 401 → token truly invalid → fire auth_error (escalate)
+          //      - network error → can't tell → retry up to MAX_FATAL_RETRIES
+          //   3. After MAX_FATAL_RETRIES exhausted → fire auth_error
           if (FATAL_CODES.has(e.code)) {
-            console.warn("[WS] Fatal auth error, stopping reconnection:", e.code, e.reason);
-            setState("auth_error");
-            // أُطلق حدث عالمي ليتمكن الـ UI من إعادة توجيه المستخدم لتسجيل الدخول
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("agent:auth_error", {
-                  detail: { code: e.code, reason: e.reason || "session_expired" },
-                })
+            fatalRetries.current += 1;
+
+            console.warn("[WS] Auth-related close — investigating", {
+              code: e.code,
+              reason: e.reason,
+              attempt: fatalRetries.current,
+              max: MAX_FATAL_RETRIES,
+            });
+
+            // فحص: هل تجاوزنا الحد؟
+            if (fatalRetries.current > MAX_FATAL_RETRIES) {
+              console.error(
+                `[WS] Exhausted ${MAX_FATAL_RETRIES} auth retries — escalating to auth_error.`
               );
+              setState("auth_error");
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("agent:auth_error", {
+                    detail: { code: e.code, reason: e.reason || "session_expired_confirmed" },
+                  })
+                );
+              }
+              return;
             }
+
+            // محاولة probe HTTP /me لتمييز transient vs permanent
+            // نُلغي أي probe سابق
+            if (revalidateAbortRef.current) {
+              revalidateAbortRef.current.abort();
+            }
+            const abortCtl =
+              typeof AbortController !== "undefined" ? new AbortController() : null;
+            revalidateAbortRef.current = abortCtl;
+            const timeoutId = setTimeout(() => {
+              if (abortCtl) abortCtl.abort();
+            }, REVALIDATION_TIMEOUT_MS);
+
+            revalidateTokenViaHttp(wsUrl, token, abortCtl?.signal)
+              .then((result) => {
+                clearTimeout(timeoutId);
+                if (!mountedRef.current) return;
+                console.info("[WS] Token revalidation result:", result);
+
+                if (result === "invalid") {
+                  // Token تأكد بطلانه عبر HTTP → escalate فوراً
+                  console.error("[WS] Token confirmed invalid via /me — escalating to auth_error.");
+                  setState("auth_error");
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                      new CustomEvent("agent:auth_error", {
+                        detail: { code: e.code, reason: "token_invalid_confirmed_via_http" },
+                      })
+                    );
+                  }
+                  return;
+                }
+
+                // result === "valid" أو "unknown" → transient، أعد المحاولة
+                console.info(
+                  `[WS] 4401 treated as transient (probe=${result}) — retrying in ${FATAL_RETRY_DELAY_MS}ms`
+                );
+                // نُبقي state="connecting" أو نُحدِّثه — لكن لا "auth_error".
+                if (mountedRef.current) {
+                  setState(fatalRetries.current === 1 ? "degraded" : "reconnecting");
+                }
+                // أَطلق notification إعلامي (لا fatal)
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(
+                    new CustomEvent("agent:transient_auth_warning", {
+                      detail: {
+                        code: e.code,
+                        attempt: fatalRetries.current,
+                        max: MAX_FATAL_RETRIES,
+                        probe: result,
+                      },
+                    })
+                  );
+                }
+                clearTimeout(reconnectTimeoutRef.current);
+                reconnectTimeoutRef.current = setTimeout(connect, FATAL_RETRY_DELAY_MS);
+              })
+              .catch(() => {
+                clearTimeout(timeoutId);
+                if (!mountedRef.current) return;
+                // probe أُلغي أو فشل → اعتبره transient وأعد المحاولة
+                console.info("[WS] Token probe aborted/failed — treating as transient.");
+                if (mountedRef.current) {
+                  setState(fatalRetries.current === 1 ? "degraded" : "reconnecting");
+                }
+                clearTimeout(reconnectTimeoutRef.current);
+                reconnectTimeoutRef.current = setTimeout(connect, FATAL_RETRY_DELAY_MS);
+              });
+
+            // مُهم: نُرجع هنا لأن probe + reconnect سيتمان async.
             return;
           }
+
+          // D-WS-AUTH-001: لو وصلنا هنا، الـ close ليس auth-related.
+          // أعد ضبط fatalRetries (نجاح اتصال غير-auth).
+          fatalRetries.current = 0;
 
           // D-WS-FLAP-003: close codes "صامتة" لا تستحق إعلان reconnecting.
           // 1000/1001 من cleanup/navigation. نُعيد المحاولة لكن لا نُحدِّث الـ UI.
@@ -603,6 +752,15 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
       if (uiPromotionTimerRef.current) {
         clearTimeout(uiPromotionTimerRef.current);
         uiPromotionTimerRef.current = null;
+      }
+      // D-WS-AUTH-001: ألغِ أي HTTP /me probe جاري.
+      if (revalidateAbortRef.current) {
+        try {
+          revalidateAbortRef.current.abort();
+        } catch (_e) {
+          /* abort never throws but be safe */
+        }
+        revalidateAbortRef.current = null;
       }
     };
   }, [connect, stopHeartbeat]);

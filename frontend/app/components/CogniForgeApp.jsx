@@ -431,10 +431,14 @@ const App = () => {
     };
 
     const logout = () => {
+        // D-WS-AUTH-001 (2026-05-26): استخدام React state بدلاً من window.location.reload().
+        // قبل: reload() كان يكسر React tree و يُسبب cycle مع auto-fill المتصفح.
+        // بعد: setToken(null) + setUser(null) يُعيد render إلى AuthScreen بدون
+        //      destructive page reload — يحفظ tab state ويمنع loop.
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
-        window.location.reload();
+        // لا reload — التغيير في state يكفي لإظهار AuthScreen.
     };
 
     if (isLoading) return <div className="loading-screen"><i className="fas fa-circle-notch fa-spin"></i><h2>جاري تهيئة النظام...</h2></div>;

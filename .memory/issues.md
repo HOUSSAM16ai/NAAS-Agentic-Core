@@ -2847,3 +2847,64 @@ from the same family as the verified gold-standard but with different rate
 limit pool, (b) treat the fallback chain as a real safety net — verified live
 periodically. A future improvement: auto-rotate PRIMARY based on a daily
 benchmark probe (covered by `.claude/skills/cogniforge-llm-model-repair`).
+
+---
+
+## ISS-090 — Auth Loop + Silent LLM Failure + Auto-Logout Catastrophe (2026-05-27)
+
+### Symptoms
+1. System answers questions then goes silent (no response after sending)
+2. User is redirected to login page automatically, then re-enters the app — repeating loop
+3. Previous messages load correctly but new questions get no answer
+4. Occurs in GitHub Codespaces and Ona/Gitpod environments
+
+### Root Causes (3 independent failures)
+
+**RC-1: `_get_or_create_dev_secret_key()` generates random in-memory key**
+`app/core/settings/helpers.py` called `secrets.token_urlsafe(64)` and stored
+it only in `_DEV_SECRET_KEY_CACHE` (process memory). Every uvicorn restart
+(crash, health-restart, deploy) produced a new key → all active JWT tokens
+invalidated → `useRealtimeConnection` received WS close code 4401 → HTTP
+probe to `/users/me` returned 200 (same process, same key) → reconnect →
+4401 again → infinite loop. The HTTP probe could not distinguish "token
+invalid" from "transient" because the key changed between WS and HTTP.
+
+**RC-2: `SECRET_KEY` mismatch between microservices**
+`supervisor.sh` used `${SECRET_KEY:-dev-secret-change-me}` as fallback for
+every service. When Gitpod Secrets were absent (`SECRET_KEY=""` injected by
+devcontainer.json), each service launched with `dev-secret-change-me` (20
+chars) while the main app used a random in-memory key (64 chars). Orchestrator
+generated `X-Service-Token` signed with its key; planning-agent verified with
+its own key → 401 → Skills Pipeline fell to `mode=partial` silently.
+
+**RC-3: monitoring loop never restarted uvicorn on crash**
+The `while true; sleep 30` loop only logged health failures. A crashed uvicorn
+stayed dead until manual intervention.
+
+### Fix
+- `app/core/settings/helpers.py`: `_get_or_create_dev_secret_key()` now reads
+  from process env → disk file (`.devcontainer/state/dev_secret_key`) →
+  generate+save. Key survives all restarts within the same environment.
+- `.devcontainer/supervisor.sh`: Added `_ensure_stable_secret_key()` after
+  `_inject_env_secrets` — promotes strong key to state file, or loads stored
+  key, before any `launch_*` function runs.
+- `.devcontainer/supervisor.sh`: monitoring loop now calls `_restart_uvicorn()`
+  on health failure, re-exporting `CODESPACES=true` and microservice URLs.
+- `.devcontainer/secrets.env`: created with real credentials as fallback for
+  environments without Gitpod Secrets configured.
+
+### Live Verification (2026-05-27)
+```
+Login → token valid (344 chars)
+WS connect → session_ready (user_id=7)
+Question → 1833 chunks, 5052 chars, Arabic + LaTeX
+pipeline_mode=full | skills=['planning','research','reasoning']
+```
+
+### Severity
+🔴 CATASTROPHIC — complete chat failure + auth loop. Users could not use the
+system at all. Affected all Codespaces/Gitpod environments without Gitpod
+Secrets pre-configured.
+
+### PR
+`fix/secret-key-stability-auth-loop` — commit `88cf7fd9`

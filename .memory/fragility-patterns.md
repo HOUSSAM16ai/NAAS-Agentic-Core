@@ -352,7 +352,41 @@ These five patterns share a common root: **the gap between what the system claim
 
 **The systemic failure mode:** Each layer of the system (routing, rendering, governance, observability) has a local definition of "working" that does not align with the user-visible definition of "working". The system passes its own checks while failing the user's expectations.
 
-**The institutional memory imperative:** These patterns must be remembered because they will recur. Every time a new feature is added:
+**The institutional memory imperative:** These patterns must be remembered because they will recur.
+
+---
+
+## Pattern 6: In-Memory Singleton Secrets (ISS-090, 2026-05-27)
+
+**What happened:** `_get_or_create_dev_secret_key()` generated a random key stored
+only in `_DEV_SECRET_KEY_CACHE` (process memory). Every uvicorn restart produced a
+new key. All active JWT tokens were invalidated. Users were thrown to the login page
+and re-entered automatically in an infinite loop. The HTTP probe in
+`useRealtimeConnection` returned 200 (same process, same key) so the loop treated
+every 4401 as "transient" and kept retrying forever.
+
+**Why it recurs:** The pattern looks correct at first glance — "cache the key so it
+doesn't change within a session." The flaw is that "session" means "process lifetime,"
+not "user session." Cloud environments restart processes routinely.
+
+**The fix:** Persist the key to disk on first generation. Read from disk on subsequent
+starts. The disk file outlives any single process.
+
+**What must never be done:**
+- Do not generate cryptographic secrets in memory only. Always persist to disk or
+  read from an external secrets manager.
+- Do not assume a `lru_cache` or module-level variable survives a process restart.
+- Do not use `${SECRET_KEY:-some-default}` as a fallback in supervisor scripts without
+  first ensuring the variable is populated from a stable source. Each service that
+  uses a different default breaks cross-service JWT verification silently.
+- Do not rely on the HTTP probe in `useRealtimeConnection` to distinguish "key changed"
+  from "token expired" — both return 401/4401 and the probe cannot tell them apart.
+
+**The structural risk that remains:** `.devcontainer/state/dev_secret_key` is a local
+file that does not survive a full devcontainer rebuild. After a rebuild, a new key is
+generated and all previously issued tokens (stored in browser localStorage) become
+invalid. Users will need to log in again after a rebuild — this is acceptable and
+expected behavior, but should be documented in the onboarding guide. Every time a new feature is added:
 - A new keyword will be added to `_EDUCATIONAL_PATTERNS` instead of fixing the semantic classifier
 - A new keyword will be added to `detect_exercise_retrieval()` without a negation guard, re-introducing context blindness
 - A new sidebar will use `transform: translateX` without `aria-hidden`

@@ -368,13 +368,31 @@ const App = () => {
         else setIsLoading(false);
     }, []);
 
-    // D-WS-004: استمع لـ auth_error من useRealtimeConnection.
-    // عندما يُغلق الـ backend الاتصال بـ 4401 (token منتهي/مفقود) →
-    // أُطلق logout تلقائياً لإعادة توجيه المستخدم لتسجيل الدخول.
+    // D-WS-004 (rev. D-WS-SESSION-001 — 2026-05-26): استمع لـ auth_error من useRealtimeConnection.
+    //
+    // المستخدم اشتكى من نمط "kick → return" حيث يخرج إلى صفحة الدخول ثم يعود
+    // وحده. السبب: 4401 يُطلق logout() الذي يستدعي window.location.reload() —
+    // فالصفحة تُحمَّل، يفرغ localStorage، ويظهر AuthScreen.
+    //
+    // الإصلاح:
+    // 1. JWT cap رُفع إلى 480 دقيقة (8 ساعات) في development (crypto.py).
+    //    هذا يحل سبب 4401 الأكثر شيوعاً (انتهاء الـ token بعد 30 دقيقة).
+    // 2. هنا، نُعطي المستخدم تنبيهاً واضحاً قبل reload — لا "kick صامت".
+    //    رسالة Arabic واضحة + 2 ثانية تأخير ليرى المستخدم ما يحدث.
     useEffect(() => {
         const handleAuthError = (e) => {
-            console.warn('[App] WS auth error received — logging out:', e.detail);
-            logout();
+            console.warn('[App] WS auth error received — session expired:', e.detail);
+            // أعلِم المستخدم بالحادث قبل reload — صدق في الـ UX
+            try {
+                window.dispatchEvent(new CustomEvent('agent:notification', {
+                    detail: {
+                        level: 'warning',
+                        message: 'انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.',
+                    },
+                }));
+            } catch (_e) { /* notification non-fatal */ }
+            // أعطِ المستخدم لحظتين ليرى الرسالة قبل reload
+            setTimeout(() => logout(), 2000);
         };
         window.addEventListener('agent:auth_error', handleAuthError);
         return () => window.removeEventListener('agent:auth_error', handleAuthError);

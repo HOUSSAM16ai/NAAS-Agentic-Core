@@ -2702,3 +2702,44 @@ scenarios validate the fix.
 ### Severity
 🔴 CATASTROPHIC — completely blocked user from sending questions on fresh
 Codespace, despite all prior WS fixes being correct.
+
+
+---
+
+## ISS-WS-SECRET-KEY-001 (2026-05-26) — Cross-Service SECRET_KEY Mismatch
+
+**Reported verbatim**:
+> «اطرح سؤال لا يجيب يدخل و يخرج بسرعة و أجد نفسي في محادثة جديدة
+>  مع العلم متصل تظهر»
+
+### Why all prior fixes (D-WS-FLAP-001 ... D-WS-AUTH-001) didn't resolve it
+
+Those fixes were on the FRONTEND (WS state machine, retry policy, logout UX).
+The root cause is on the BACKEND (architectural): two services that share
+JWTs use DIFFERENT default SECRET_KEY values in supervisor.sh.
+
+Specifically:
+- `monolith` launches with `SECRET_KEY` from .env (default `dev-secret-change-me`)
+- `user-service` launches with `SECRET_KEY="${SECRET_KEY:-cogniforge-user-service-dev-key}"`
+
+When Codespaces user does NOT set SECRET_KEY as a secret (the common case),
+the two defaults diverge → user-service signs tokens with one key,
+monolith verifies with another → every WS handshake fails with 4401.
+
+HTTP /me works because `get_current_user` tries user-service first (matched
+keys within user-service). WS uses ONLY monolith's local decoder → mismatch.
+
+### Resolution
+D-WS-SECRET-KEY-001: supervisor.sh now uses `shared_user_secret` with
+default `dev-secret-change-me` (same as monolith). Defensive double-export
+of `SECRET_KEY` + `USER_SECRET_KEY`. user-service crypto.py now env-aware.
+See `.memory/decisions.md`.
+
+### Severity
+🔴 CATASTROPHIC — completely blocked chat on fresh Codespaces unless user
+manually set SECRET_KEY as a Codespaces secret.
+
+### Lesson learned
+"Shared secrets MUST have shared defaults." Service-specific dev defaults
+in supervisor.sh are dangerous when those services share JWTs. CI gate
+prevents future drift.

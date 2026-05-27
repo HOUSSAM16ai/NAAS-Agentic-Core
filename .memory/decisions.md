@@ -2885,3 +2885,86 @@ pattern.
 **Destructive logout (window.location.reload()) is wrong** for the same
 reason — it interacts badly with browser auto-fill and creates accidental
 loops. Always prefer React state changes for SPA navigation.
+
+
+---
+
+## D-WS-SECRET-KEY-001 · SECRET_KEY Mismatch Between Monolith and User-Service (2026-05-26)
+
+**Context**: المستخدم بلَّغ بعد كل الإصلاحات السابقة:
+> «اطرح سؤال لا يجيب يدخل و يخرج بسرعة و أجد نفسي في محادثة جديدة مع العلم متصل تظهر»
+
+D-WS-AUTH-001 (bounded retry + HTTP probe) خفَّفت كارثة "kicked to login" لكن لم تُلغها — لأن الـ probe كان يُرجع "valid" (HTTP /me يعمل) بينما WS handshake يرفض الـ token. هذا يَكشف SECRET_KEY mismatch بين خدمتين في نفس النظام.
+
+### Root Cause (Definitive)
+
+Forensic analysis of `.devcontainer/supervisor.sh` كشف أن:
+- **Monolith** يُحمَّل بـ `SECRET_KEY=dev-secret-change-me` (من .env أو default)
+- **Orchestrator** يُحمَّل بـ `SECRET_KEY="${shared_secret}"` = `${SECRET_KEY:-dev-secret-change-me}` ✓ (يطابق)
+- **User-service** كان يُحمَّل بـ `SECRET_KEY="${SECRET_KEY:-cogniforge-user-service-dev-key}"` ❌ (DIFFERENT default!)
+
+عندما لا يكون SECRET_KEY مُعرَّفاً كـ Codespaces secret (الحالة الافتراضية):
+- Monolith → `dev-secret-change-me`
+- Orchestrator → `dev-secret-change-me`
+- **User-service → `cogniforge-user-service-dev-key`** ❌
+
+### الـ Catastrophic Flow
+
+1. User → POST /api/security/login (monolith)
+2. monolith → `auth_boundary_service.authenticate_user` → tries `user_service_client.login_user`
+3. user-service signs JWT with `cogniforge-user-service-dev-key`
+4. token returned to frontend, stored in localStorage
+5. User opens chat → WS handshake → token sent via query param
+6. monolith `decode_user_id(token, settings.SECRET_KEY)` uses `dev-secret-change-me`
+7. **JWT signature verification FAILS** → HTTPException 401 → close(4401)
+8. Frontend: 4401 → retry → 4401 → ... → escalate → logout → AuthScreen → autofill → login → cycle
+
+**HTTP /me succeeded** (because get_current_user tries user-service first, which verified its OWN token successfully).
+**WS handshake failed** (only monolith decode path, mismatched key).
+
+This EXACT pattern explains every user-visible symptom:
+- "متصل تظهر" → because WS does briefly connect before the eventual 4401 escalation
+- "لا يجيب" → because the chat stream gets killed by 4401 mid-flight
+- "يدخل و يخرج بسرعة" → AuthScreen briefly flashes during logout cycle
+- "أجد نفسي في محادثة جديدة" → useAgentSocket re-mounts after logout → fresh state
+
+### Decision (Fix)
+
+1. **supervisor.sh**: change user-service launch to use `shared_user_secret` variable with default `dev-secret-change-me` (matching monolith):
+   ```bash
+   local shared_user_secret="${SECRET_KEY:-dev-secret-change-me}"
+   ...
+   SECRET_KEY="${shared_user_secret}" \
+   USER_SECRET_KEY="${shared_user_secret}" \   # defensive double-export
+   nohup python -m uvicorn microservices.user_service.main:app ...
+   ```
+
+2. **user-service crypto.py**: mirror monolith's D-WS-SESSION-001 env-aware token caps so token expiry is consistent (480 min dev, 30 min prod).
+
+3. **Defensive double-export**: export both `SECRET_KEY` and `USER_SECRET_KEY` to guard against any pydantic-settings env_prefix vs validation_alias quirks. Whichever the user-service settings ultimately reads, it gets the right value.
+
+### Consequence
+
+- WS handshake succeeds: token signed by user-service with `dev-secret-change-me` is verified by monolith with `dev-secret-change-me` ✓
+- HTTP /me continues working
+- Chat answers flow normally (no more 4401 cycle)
+- No more "new conversation" surprises caused by background logouts
+
+### Architectural Invariants (D-WS-SECRET-KEY-001 — لا تُكسر بدون ADR)
+
+1. **All services in the same deployment MUST use the same SECRET_KEY**. The default fallback values MUST be identical across all `supervisor.sh` service-launch blocks.
+2. **When extending the system with new microservices that handle JWTs**: the new service's launch in supervisor.sh MUST use the same `shared_secret` pattern as monolith/orchestrator.
+3. **Defensive double-export** (`SECRET_KEY` + `<SERVICE>_SECRET_KEY`) is required for any service whose settings.py uses an `env_prefix`.
+4. **The `dev-secret-change-me` literal is the canonical dev fallback** across the entire repository. Do NOT introduce service-specific dev defaults.
+
+### Files
+- `.devcontainer/supervisor.sh` (user-service launch block).
+- `microservices/user_service/src/services/auth/crypto.py` (env-aware caps).
+- `tests/services/test_secret_key_consistency.py` (new — 11 regression checks).
+
+### Live verification (after deploy)
+1. Fresh Codespace → sign in
+2. WS connect → expect "متصل" stable (no 4401 cycle)
+3. Send question → expect streaming answer
+4. Browser console: NO `[WS] Auth-related close` warnings
+5. Backend logs: no `decode_user_id` failures

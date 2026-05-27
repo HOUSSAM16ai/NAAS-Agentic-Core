@@ -283,13 +283,18 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
 
             // D-WS-FLAP-003: سجّل وقت الفتح الناجح — يُستخدم في onclose للتمييز.
             openedAtRef.current = Date.now();
-            // D-WS-FLAP-004: علِّم أنّ الاتصال نجح مرة على الأقل — UI يصبح "sticky".
+            // D-WS-FLAP-004: علِّم أنّ الاتصال نجح مرة على الأقل — UI sync useEffect
+            // سيرى هذا ويُحدِّث uiState إلى "connected" فوراً.
             everConnectedRef.current = true;
             lastConnectedAtRef.current = Date.now();
-            // ألغِ offline grace timer لو كان مُجدوَلاً — تعافينا.
-            if (offlineGraceTimerRef.current) {
-              clearTimeout(offlineGraceTimerRef.current);
-              offlineGraceTimerRef.current = null;
+            // D-WS-FLAP-004 (REGRESSION FIX 2026-05-26): ألغِ UI promotion timer
+            // المجدوَل — تعافينا، لا حاجة لإظهار "reconnecting".
+            // كان هذا السطر يشير إلى `offlineGraceTimerRef` المحذوف بعد refactor،
+            // ما يُسبب ReferenceError ويُحطِّم الـ onopen handler — وبالتالي
+            // "متصل" لم تظهر أبداً للمستخدم.
+            if (uiPromotionTimerRef.current) {
+              clearTimeout(uiPromotionTimerRef.current);
+              uiPromotionTimerRef.current = null;
             }
 
             const wasReconnect = retries.current > 0;

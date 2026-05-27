@@ -736,8 +736,18 @@ launch_user_service() {
     lifecycle_info "UserService: starting on :${USER_PORT} (Step 5 — /metrics active)..."
 
     # ── تشغيل uvicorn في الخلفية ──────────────────────────────────────────────
+    # D-WS-SECRET-KEY-001 (2026-05-26): SECRET_KEY يجب أن يتطابق مع monolith.
+    # سبب الكارثة: user-service كان يستخدم default `cogniforge-user-service-dev-key`
+    # بينما monolith يستخدم `dev-secret-change-me`. النتيجة:
+    #   - login → user-service يُوقّع token بـ key A
+    #   - WS handshake → monolith يُحاول التحقق بـ key B → 4401
+    # الحل: استخدم نفس shared_secret (الـ monolith default) كـ fallback.
+    # نُصدِّر USER_SECRET_KEY أيضاً كحماية إضافية ضد any pydantic-settings quirks
+    # حول env_prefix vs validation_alias.
+    local shared_user_secret="${SECRET_KEY:-dev-secret-change-me}"
     USER_DATABASE_URL="$user_db_url" \
-    SECRET_KEY="${SECRET_KEY:-cogniforge-user-service-dev-key}" \
+    SECRET_KEY="${shared_user_secret}" \
+    USER_SECRET_KEY="${shared_user_secret}" \
     ENVIRONMENT="${ENVIRONMENT:-development}" \
     USER_SERVICE_NAME="user-service" \
     USER_SERVICE_VERSION="1.0.0" \

@@ -4,6 +4,7 @@ Crypto Logic for User Service.
 
 from __future__ import annotations
 
+import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -15,8 +16,16 @@ from fastapi import HTTPException, status
 from microservices.user_service.models import User
 from microservices.user_service.settings import get_settings
 
-ACCESS_EXPIRE_MINUTES: Final[int] = 30
-REAUTH_EXPIRE_MINUTES: Final[int] = 10
+# D-WS-SESSION-001 / D-WS-SECRET-KEY-001 (2026-05-26):
+# Token caps env-aware لمطابقة monolith's app/services/auth/crypto.py.
+# في development: 480 دقيقة (8 ساعات) لتفادي "kick-to-login mid-test".
+# في production: 30 دقيقة (security cap).
+_ENV = (os.environ.get("ENVIRONMENT") or "").strip().lower()
+_ALLOW_LONG = (os.environ.get("ALLOW_LONG_LIVED_TOKENS") or "").strip() in ("1", "true", "yes")
+_IS_DEV_LIKE = _ENV in ("development", "dev", "local") or _ALLOW_LONG
+
+ACCESS_EXPIRE_MINUTES: Final[int] = 480 if _IS_DEV_LIKE else 30
+REAUTH_EXPIRE_MINUTES: Final[int] = 60 if _IS_DEV_LIKE else 10
 
 
 class AuthCrypto:

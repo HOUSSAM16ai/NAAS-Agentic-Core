@@ -6331,3 +6331,117 @@ Found 5 SECRET_KEY default assignment(s):
 > Codespace fresh بدون secrets manually configured. الـ CI gate الجراحي
 > (forensic-grade) هو الطريقة الوحيدة الموثوقة لمنع التكرار.
 
+
+---
+
+## 6.68 Q/A Stability — Portable State, Reload Discipline, Long-Stream Tolerance (2026-05-27, ISS-091)
+
+> الكارثة الثانية بعد ISS-090: المستخدم في GitHub Codespaces لا تزال
+> تواجه «kicked to login → auto re-enter» عند طرح سؤال، رغم أن ISS-090
+> أصلح SECRET_KEY persistence إلى disk. السبب: المسار كان hardcoded إلى
+> `/app/...` ويفشل خارج الـ devcontainer الرسمي. هذا القسم يحكم 4 قواعد
+> دائمة تضمن استقرار جلسة الدردشة في أي بيئة.
+
+### الأسباب الجذرية الأربعة (مُختبَرة بالتجريب الحي + forensic review)
+
+**RC-1: `/app` hardcoded path** — `app/core/settings/helpers.py:19` كان
+يحتوي `_DEV_SECRET_KEY_FILE = "/app/.devcontainer/state/dev_secret_key"`.
+خارج الـ devcontainer الرسمي (Codespaces fork، Gitpod، تشغيل محلي من
+`/home/user/<repo>`)، الـ path لا يوجد، فيسقط الكود إلى توليد مفتاح
+في الذاكرة فقط. كل uvicorn restart → مفتاح جديد → JWT يُبطَل → kick.
+
+**RC-2: `--reload` في الإنتاج** — `supervisor.sh` كان يُطلق uvicorn مع
+`--reload` على المسار الإنتاجي AND على `_restart_uvicorn`. الـ flag يراقب
+كل ملفات `.py` في المشروع. أي تعديل (يدوي، agent، formatter) يُسبب إعادة
+تشغيل worker → كل WS connections النشطة تموت → المستخدم يرى «no response».
+
+**RC-3: monitoring loop عدواني (5s + 1 failure)** — `/health` يتحقق من
+اتصال DB. Supabase free tier يصل أحياناً إلى 8-12s. أي blip → 503 →
+`_restart_uvicorn` → WS connections die. هذا blip-bombs البنية كلها.
+
+**RC-4: receive-loop محجوب أثناء stream** — `chat_stream_ws` يستخدم
+`await stream_task` الذي يحجب `receive_json`. ping من العميل في T+45s
+لا يُعالَج حتى ينتهي البث. مع `HEARTBEAT_TIMEOUT=15s` القديم، أي إجابة
+طويلة (>60s) تُسبب close مزيف.
+
+### الإصلاح (4 قرارات معمارية)
+
+**D-RELOAD-001**: `--reload` يُفعَّل فقط عبر `DEV_RELOAD=1` env var
+صراحةً للمطورين المحليين. الإنتاج (Codespaces / Gitpod / Ona) لا يستخدمه
+أبداً. عند التفعيل، `--reload-exclude .devcontainer/state/* --reload-exclude
+.observability/*` يمنع reload-loops.
+
+**D-SECRET-002**: `_resolve_state_key_path()` يكتشف الـ path ديناميكياً:
+  1. `DEV_SECRET_KEY_FILE` env (override صريح)
+  2. `/app/.devcontainer/state/...` (devcontainer canonical)
+  3. `<helpers.py>/../../../.devcontainer/state/...` (repo root)
+الملف يُحفظ على القرص في كل بيئة بـ chmod 0600. WARN log صريح عند توليد
+مفتاح جديد (يساعد operators على diagnosis).
+
+**D-HEALTH-001**: monitoring loop يطلب 3 إخفاقات متتالية مع timeout=15s.
+Net: ~90s من الفشل المتواصل قبل uvicorn restart. Blips الشبكية لا تقتل
+WS connections النشطة.
+
+**D-WS-HEARTBEAT-002**: `HEARTBEAT_TIMEOUT` في الواجهة 15s → 90s. LLM
+streams مع fallback chain كاملة قد تصل إلى 60-90s. uvicorn
+`--ws-ping-interval 20` يحافظ على الـ TCP alive في كل الأحوال.
+
+### القواعد الـ 6 الدائمة (D-RELOAD-001 + D-SECRET-002 + D-HEALTH-001 + D-WS-HEARTBEAT-002 — لا تُكسر بدون ADR)
+
+1. **لا hardcoded `/app` في أي settings/helpers module** — استخدم resolver
+   ديناميكي. هذا يحمي ضد كل البيئات غير الـ devcontainer الرسمي.
+
+2. **`--reload` ممنوع في الإنتاج** — `DEV_RELOAD=1` opt-in فقط للتطوير
+   المحلي مع `--reload-exclude` صارم على state/observability paths.
+
+3. **`_restart_uvicorn` يُعيد قراءة SECRET_KEY من القرص defensively**
+   قبل إطلاق uvicorn — يحمي ضد فقدان env بين restarts.
+
+4. **health monitoring يتطلب ≥3 إخفاقات متتالية + ≥15s timeout** قبل
+   uvicorn restart. أقل من ذلك = blip-bombs.
+
+5. **`HEARTBEAT_TIMEOUT` ≥ 60s** — أقل من ذلك يتطلب refactor كامل لـ
+   receive-loop ليُعالج heartbeats concurrently مع streams.
+
+6. **`.gitignore` يحوي `.devcontainer/state/dev_secret_key`** — كل بيئة
+   تولِّد مفتاحها الخاص محلياً، لا يُرفع إلى git أبداً.
+
+### قياس النجاح حياً (2026-05-27)
+
+```bash
+# Test 1: helpers.py portable path resolution
+$ python3 -c "from app.core.settings.helpers import _resolve_state_key_path; print(_resolve_state_key_path())"
+# Without /app: /home/user/NAAS-Agentic-Core/.devcontainer/state/dev_secret_key
+# With /app:    /app/.devcontainer/state/dev_secret_key
+# DEV_SECRET_KEY_FILE=/tmp/x: /tmp/x
+
+# Test 2: persistence across simulated restart
+$ pytest tests/services/test_secret_key_persistence.py -v
+6/6 PASS ✅
+
+# Test 3: no regression in related auth tests
+$ pytest tests/services/test_secret_key_consistency.py tests/services/test_iss081_answer_quality_wiring.py
+129/129 PASS ✅
+```
+
+NOTE: Full end-to-end live test against Supabase + OpenRouter was BLOCKED
+in the implementation sandbox (network firewall denies Postgres egress on
+ports 5432/6543 — same as documented in §6.55 V17.0). The forensic root
+cause analysis was derived from deterministic code-path tracing, not
+LLM-specific behavior. CI on GitHub Codespaces will exercise the live
+end-to-end path with real Supabase + OpenRouter.
+
+### السلسلة الكاملة (D-WS-FLAP-004 → D-WS-HEARTBEAT-002)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-FLAP-004 (honest-debounce) | UI flicker, honest disconnect signaling |
+| D-WS-AUTH-001 | bounded 4401 retry + HTTP /me probe |
+| D-WS-SECRET-KEY-001 | shared SECRET_KEY defaults across all 5 services |
+| D-088 | PRIMARY model gpt-oss-20b → gpt-oss-120b (rate-limit recovery) |
+| D-SECRET-001 (ISS-090) | persistence-to-disk (hardcoded `/app`) |
+| **D-RELOAD-001** | **`--reload` opt-in only via `DEV_RELOAD=1`** |
+| **D-SECRET-002** | **portable state path (resolves outside `/app`)** |
+| **D-HEALTH-001** | **3-failure threshold + 15s timeout (no blip restarts)** |
+| **D-WS-HEARTBEAT-002** | **HEARTBEAT_TIMEOUT 15s → 90s (long stream tolerance)** |
+

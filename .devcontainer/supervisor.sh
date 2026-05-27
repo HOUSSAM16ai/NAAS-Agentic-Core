@@ -485,7 +485,21 @@ else
     export USER_SERVICE_URL="http://localhost:8001"
     lifecycle_info "Microservices routing: ORCHESTRATOR_SERVICE_URL=http://localhost:8006 (state_graph mode)"
 
+    # ISS-091 (D-RELOAD-001 — 2026-05-27): --reload أُزيل من المسار الإنتاجي.
+    # السبب الجذري لـ "kick → re-enter" في Codespaces:
+    #   1. --reload يراقب كل .py في الـ repo. أي تعديل (commit hooks, agents,
+    #      formatters, observability writes) → uvicorn يُعيد تشغيل الـ worker.
+    #   2. عند إعادة التشغيل، كل WS connections تُقطع فوراً.
+    #   3. المستخدم يرى: السؤال أُرسل → لا رد → التبديل لـ login screen.
+    # القاعدة الجديدة: --reload فقط إذا DEV_RELOAD=1 صراحةً (محلي للمطورين).
+    local reload_flag=""
+    if [ "${DEV_RELOAD:-0}" = "1" ]; then
+        reload_flag="--reload --reload-exclude .devcontainer/state/* --reload-exclude .observability/*"
+        lifecycle_warn "DEV_RELOAD=1 — uvicorn --reload enabled (will kill WS connections on every .py edit)"
+    fi
+
     # Start server in background — env vars already exported above
+    # shellcheck disable=SC2086
     python -m uvicorn app.main:app \
         --host 0.0.0.0 \
         --port "$APP_PORT" \
@@ -493,7 +507,7 @@ else
         --ws-ping-interval 20 \
         --ws-ping-timeout 30 \
         --timeout-keep-alive 75 \
-        --reload \
+        $reload_flag \
         --log-level info &
 
     UVICORN_PID=$!
@@ -1234,6 +1248,21 @@ _restart_uvicorn() {
         sleep 2
     fi
 
+    # ISS-091 (D-SECRET-002 — 2026-05-27): إعادة تأكيد SECRET_KEY قبل إطلاق
+    # uvicorn — defensive في حالة فقدان env بين supervisor instances.
+    local state_key_file="$APP_ROOT/.devcontainer/state/dev_secret_key"
+    if [ -z "${SECRET_KEY:-}" ] || [ "${#SECRET_KEY}" -lt 32 ] \
+       || [ "${SECRET_KEY}" = "dev-secret-change-me" ]; then
+        if [ -f "$state_key_file" ]; then
+            local stored_key
+            stored_key=$(cat "$state_key_file" 2>/dev/null | tr -d '[:space:]')
+            if [ -n "$stored_key" ] && [ "${#stored_key}" -ge 32 ]; then
+                export SECRET_KEY="$stored_key"
+                lifecycle_info "_restart_uvicorn: SECRET_KEY reloaded from state file (${#stored_key} chars)"
+            fi
+        fi
+    fi
+
     # تأكد من وجود المتغيرات الأساسية
     export ORCHESTRATOR_SERVICE_URL="http://localhost:8006"
     export CODESPACES="true"
@@ -1244,6 +1273,13 @@ _restart_uvicorn() {
     export REASONING_AGENT_URL="http://localhost:8008"
     export USER_SERVICE_URL="http://localhost:8001"
 
+    # ISS-091 (D-RELOAD-001): --reload أُزيل (يُفعَّل عبر DEV_RELOAD=1 فقط).
+    local reload_flag=""
+    if [ "${DEV_RELOAD:-0}" = "1" ]; then
+        reload_flag="--reload --reload-exclude .devcontainer/state/* --reload-exclude .observability/*"
+    fi
+
+    # shellcheck disable=SC2086
     python -m uvicorn app.main:app \
         --host 0.0.0.0 \
         --port "$APP_PORT" \
@@ -1251,7 +1287,7 @@ _restart_uvicorn() {
         --ws-ping-interval 20 \
         --ws-ping-timeout 30 \
         --timeout-keep-alive 75 \
-        --reload \
+        $reload_flag \
         --log-level info &
 
     local new_pid=$!
@@ -1259,24 +1295,45 @@ _restart_uvicorn() {
     lifecycle_info "Uvicorn restarted (PID: $new_pid)"
 }
 
-# Monitor application health every 30 seconds — restart uvicorn if down
-while true; do
-    sleep 30
+# ISS-091 (D-HEALTH-001 — 2026-05-27): tolerant monitoring loop.
+# قبل: 5s timeout + 1 فشل → restart. ⇒ كل blip في Supabase response time يقتل
+# WS connections النشطة (هذا حدث في كل session نشطة من المستخدم).
+# بعد:
+#   - 15s timeout (Supabase free tier يصل لـ 8-12s تحت الحمل)
+#   - 3 إخفاقات متتالية مطلوبة قبل restart
+#   - intervals بين الفحوصات 30s
+# النتيجة: لا restart إلا بعد ~90s من الفشل المتواصل = ليس blip شبكي.
+HEALTH_TIMEOUT_SECS="${HEALTH_TIMEOUT_SECS:-15}"
+HEALTH_FAILURE_THRESHOLD="${HEALTH_FAILURE_THRESHOLD:-3}"
+HEALTH_INTERVAL_SECS="${HEALTH_INTERVAL_SECS:-30}"
+_health_consecutive_failures=0
 
-    if lifecycle_check_http "$HEALTH_ENDPOINT" 200; then
-        lifecycle_debug "Health check passed"
+# Monitor application health — restart uvicorn only after N consecutive failures
+while true; do
+    sleep "$HEALTH_INTERVAL_SECS"
+
+    if lifecycle_check_http "$HEALTH_ENDPOINT" 200 "$HEALTH_TIMEOUT_SECS"; then
+        if [ "$_health_consecutive_failures" -gt 0 ]; then
+            lifecycle_info "Health check recovered after $_health_consecutive_failures failure(s)"
+        fi
+        _health_consecutive_failures=0
         lifecycle_set_state "app_healthy" "true"
     else
-        lifecycle_warn "Health check failed - restarting uvicorn"
-        lifecycle_clear_state "app_healthy"
-        _restart_uvicorn
-        # انتظر حتى يبدأ
-        sleep 15
-        if lifecycle_check_http "$HEALTH_ENDPOINT" 200; then
-            lifecycle_info "Uvicorn recovered successfully"
-            lifecycle_set_state "app_healthy" "true"
-        else
-            lifecycle_warn "Uvicorn restart did not recover health — will retry next cycle"
+        _health_consecutive_failures=$((_health_consecutive_failures + 1))
+        lifecycle_warn "Health check failed (consecutive=$_health_consecutive_failures/$HEALTH_FAILURE_THRESHOLD)"
+        if [ "$_health_consecutive_failures" -ge "$HEALTH_FAILURE_THRESHOLD" ]; then
+            lifecycle_warn "Health failure threshold reached — restarting uvicorn"
+            lifecycle_clear_state "app_healthy"
+            _restart_uvicorn
+            _health_consecutive_failures=0
+            # انتظر حتى يبدأ uvicorn الجديد
+            sleep 15
+            if lifecycle_check_http "$HEALTH_ENDPOINT" 200 "$HEALTH_TIMEOUT_SECS"; then
+                lifecycle_info "Uvicorn recovered successfully"
+                lifecycle_set_state "app_healthy" "true"
+            else
+                lifecycle_warn "Uvicorn restart did not recover health — will retry next cycle"
+            fi
         fi
     fi
 done

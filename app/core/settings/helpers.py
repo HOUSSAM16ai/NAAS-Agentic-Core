@@ -7,16 +7,45 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
+import pathlib
 import secrets
 
 logger = logging.getLogger("app.core.settings")
 
 _DEV_SECRET_KEY_CACHE: str | None = None
 
-# مسار ملف المفتاح الثابت — يُحفظ على القرص لضمان ثباته عبر restarts
-_DEV_SECRET_KEY_FILE = "/app/.devcontainer/state/dev_secret_key"
+
+def _resolve_state_key_path() -> pathlib.Path:
+    """يكتشف مسار ملف المفتاح الثابت آلياً حسب موقع التطبيق.
+
+    ISS-091 (D-SECRET-002): الإصدار السابق ثبَّت ``/app/.devcontainer/state``
+    وهو يعمل فقط داخل devcontainer رسمي (WORKDIR=/app). خارجه (Codespaces
+    fork، Gitpod workspace=/workspaces/<repo>، تنفيذ يدوي من /home/user/...)
+    لا يوجد ``/app`` فينحدر الكود إلى توليد مفتاح في الذاكرة فقط — وهذا هو
+    السبب الجذري المتبقي لـ "kick → re-enter" بعد ISS-090.
+
+    أولوية الحل:
+      1. ``DEV_SECRET_KEY_FILE`` env (override صريح للعمليات).
+      2. ``/app/.devcontainer/state/dev_secret_key`` (devcontainer رسمي).
+      3. ``<file>/../../../.devcontainer/state/dev_secret_key`` (نفس الـ repo
+         بغض النظر عن الـ CWD — يعمل في كل البيئات).
+    """
+    explicit = os.environ.get("DEV_SECRET_KEY_FILE", "").strip()
+    if explicit:
+        return pathlib.Path(explicit)
+
+    canonical = pathlib.Path("/app/.devcontainer/state/dev_secret_key")
+    if canonical.parent.exists() or pathlib.Path("/app").exists():
+        return canonical
+
+    # موقع المستودع المُستنتج من ملف helpers.py نفسه:
+    # app/core/settings/helpers.py → repo root هو parents[3].
+    repo_root = pathlib.Path(__file__).resolve().parents[3]
+    return repo_root / ".devcontainer" / "state" / "dev_secret_key"
 
 
 def _get_or_create_dev_secret_key() -> str:
@@ -28,7 +57,6 @@ def _get_or_create_dev_secret_key() -> str:
     global _DEV_SECRET_KEY_CACHE
 
     # 1. إذا كان في process env مباشرة → استخدمه (يشمل ما يُحقنه supervisor.sh)
-    import os
     env_key = os.environ.get("SECRET_KEY", "").strip()
     if env_key and env_key not in ("dev-secret-change-me", "changeme"):
         _DEV_SECRET_KEY_CACHE = env_key
@@ -38,23 +66,41 @@ def _get_or_create_dev_secret_key() -> str:
     if _DEV_SECRET_KEY_CACHE is not None:
         return _DEV_SECRET_KEY_CACHE
 
-    # 3. ملف ثابت على القرص (يبقى عبر restarts)
+    # 3. ملف ثابت على القرص (يبقى عبر restarts) — مسار يُكتشف ديناميكياً
     try:
-        import pathlib
-        key_path = pathlib.Path(_DEV_SECRET_KEY_FILE)
+        key_path = _resolve_state_key_path()
         key_path.parent.mkdir(parents=True, exist_ok=True)
         if key_path.exists():
             stored = key_path.read_text().strip()
             if len(stored) >= 32:
                 _DEV_SECRET_KEY_CACHE = stored
+                logger.info(
+                    "dev_secret_key loaded from disk path=%s len=%d",
+                    key_path,
+                    len(stored),
+                )
                 return stored
         # إنشاء مفتاح جديد وحفظه
         new_key = secrets.token_urlsafe(64)
         key_path.write_text(new_key)
+        # نضبط الصلاحيات على 600 لمنع قراءة المفتاح من قِبل مستخدمين آخرين
+        with contextlib.suppress(OSError):
+            key_path.chmod(0o600)
         _DEV_SECRET_KEY_CACHE = new_key
+        logger.warning(
+            "dev_secret_key GENERATED + saved to disk path=%s — "
+            "first boot or state file was missing",
+            key_path,
+        )
         return new_key
-    except Exception:
-        # fallback آمن إذا فشل القرص
+    except Exception as exc:
+        logger.error(
+            "dev_secret_key disk persistence failed (%s) — using in-memory key. "
+            "JWTs will be invalidated on every restart!",
+            exc,
+        )
+        # fallback آمن إذا فشل القرص — هذا هو السبب الجذري لـ "kick → re-enter"
+        # إذا وصل التنفيذ هنا، تعقَّب الخطأ في os env DEV_SECRET_KEY_FILE.
         if _DEV_SECRET_KEY_CACHE is None:
             _DEV_SECRET_KEY_CACHE = secrets.token_urlsafe(64)
         return _DEV_SECRET_KEY_CACHE

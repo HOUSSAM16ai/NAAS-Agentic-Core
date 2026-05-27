@@ -2650,3 +2650,55 @@ any WS fixes.
 ### Resolution
 - Code: D-WS-SESSION-001 committed.
 - Config: User must export OPENROUTER_API_KEY (documented).
+
+
+---
+
+## ISS-WS-AUTH-001 (2026-05-26) — "Kicked immediately on fresh Codespace + no answers"
+
+**Reported verbatim**:
+> «أنا فتحت codespace جديد و يتم طردي بمجرد دخولي و لا يتم الاجابة عن الاسئلة
+>  مع العلم الأسرار موجودة في GitHub code spaces secret و يتم حقنها آليا أثناء
+>  بناء بيئة codespace»
+
+### Why D-WS-SESSION-001 wasn't enough
+D-WS-SESSION-001 extended JWT lifetime to 8h in dev — but the user was kicked
+*immediately on fresh Codespace*, not after 30 minutes. So the JWT-expiry
+theory was insufficient. The real cause is at a different layer.
+
+### Root Cause
+Frontend `useRealtimeConnection.js` treated **any** 4401 close as **fatal**:
+```js
+if (FATAL_CODES.has(e.code)) {
+    setState("auth_error");
+    window.dispatchEvent('agent:auth_error');  // → logout → reload
+    return;
+}
+```
+But 4401 can be transient in distributed systems:
+- SECRET_KEY rotation race (supervisor restarts uvicorn during fresh setup)
+- DB lag — `db.get(User, user_id)` returns None briefly
+- Codespaces edge proxy strips auth header on first request
+- Clock skew
+
+A single transient 4401 → cascade:
+1. `auth_error` state → `agent:auth_error` event
+2. `logout()` → `localStorage.removeItem` + `window.location.reload()`
+3. After reload: AuthScreen shows → user re-enters credentials (or browser
+   autofill auto-submits via Enter)
+4. New token issued → DashboardLayout renders → WS connects → 4401 again
+5. **Infinite loop. User never gets to send a question.**
+
+### Symptom 2 (questions don't answer): same cause
+If the user IS in the cycle, WS gets closed before any question can be sent
+through. So "no answers" was a downstream symptom of the auth cycle, not
+a separate bug.
+
+### Resolution
+D-WS-AUTH-001 — bounded 4401 retry + HTTP /me probe + non-destructive logout.
+See `.memory/decisions.md`. 19 static regression checks + 5 simulation
+scenarios validate the fix.
+
+### Severity
+🔴 CATASTROPHIC — completely blocked user from sending questions on fresh
+Codespace, despite all prior WS fixes being correct.

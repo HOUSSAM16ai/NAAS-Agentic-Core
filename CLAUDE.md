@@ -6253,3 +6253,80 @@ else if (disconnect state) {
 > 2 ثانية debounce = راحة UX. 30 ثانية debounce = كذب صريح.
 > الـ honest engineering يحترم حدود الـ debounce المعقولة، ويحرص على
 > كشف الحقيقة الكاملة للكود الذي يحتاجها (debug/telemetry).
+
+---
+
+## 6.67 SECRET_KEY Consistency Doctrine — All Cross-Service JWTs (2026-05-26, D-WS-SECRET-KEY-001 extended)
+
+> الكارثة المُكتشَفة بـ CI gate forensic بعد deploy D-WS-SECRET-KEY-001: ثلاثة
+> خدمات Skills Pipeline إضافية (planning, research, reasoning) كانت ما زالت
+> تستخدم `super_secret_key_change_in_production` كافتراضي — فيفشل التحقق من
+> `X-Service-Token` المُوقَّع بـ `dev-secret-change-me` من orchestrator. النتيجة:
+> Skills Pipeline يسقط صامتاً إلى `mode="fallback"`، الدردشة تظهر متصلة لكنها
+> لا تستخدم الـ pipeline الحقيقي.
+
+### القاعدة الذهبية الموسَّعة
+
+```bash
+# ❌ Wrong — service-specific defaults break JWT verification cross-service
+SECRET_KEY="${SECRET_KEY:-super_secret_key_change_in_production}" \
+SECRET_KEY="${SECRET_KEY:-cogniforge-user-service-dev-key}" \
+
+# ✅ Correct — canonical shared default + defensive double-export
+local shared_<name>_secret="${SECRET_KEY:-dev-secret-change-me}"
+...
+SECRET_KEY="${shared_<name>_secret}" \
+<SERVICE>_SECRET_KEY="${shared_<name>_secret}" \
+```
+
+### الـ 5 services التي يجب أن تتفق على `dev-secret-change-me`
+
+1. **orchestrator** (line 671 — `shared_secret`)
+2. **user-service** (line 747 — `shared_user_secret`) — D-WS-SECRET-KEY-001 الأصلي
+3. **planning-agent** (line 821 — `shared_planning_secret`) — extension
+4. **research-agent** (line 887 — `shared_research_secret`) — extension
+5. **reasoning-agent** (line 946 — `shared_reasoning_secret`) — extension
+
+### CI Gate Enforcement
+
+`scripts/fitness/check_secret_key_consistency.py` يطابق نمطين:
+- **Inline**: `SECRET_KEY="${SECRET_KEY:-<default>}"` المباشر
+- **Shared variable**: `(local )?shared_<anything>_secret="${SECRET_KEY:-<default>}"`
+
+Exit code 1 لو وُجد drift. الفحص جزء من
+`tests/services/test_secret_key_consistency.py` (11 regression checks).
+
+### قواعد دائمة (D-WS-SECRET-KEY-001 — لا تُكسر بدون ADR)
+
+1. **`dev-secret-change-me` هو الافتراضي الموحَّد** عبر المستودع كاملاً —
+   لا افتراضات service-specific (مثل `cogniforge-user-service-dev-key` أو
+   `super_secret_key_change_in_production`) في أي مكان.
+2. **شُكل النمط ثابت**: `local shared_<name>_secret="${SECRET_KEY:-dev-secret-change-me}"`
+   ثم تصدير `SECRET_KEY="${shared_<name>_secret}"` + `<SERVICE>_SECRET_KEY="${shared_<name>_secret}"`.
+3. **`<SERVICE>_SECRET_KEY` defensive export إلزامي** لأي service يحوي
+   `env_prefix` في `settings.py` — يحمي ضد quirks بين pydantic-settings و
+   validation_alias.
+4. **CI gate هو الحارس الوحيد**: لا تتغاضى عنه يدوياً. أي PR يفشل
+   `check_secret_key_consistency.py` يجب أن يُصلِح الجذر، لا يُعدِّل الـ gate.
+5. **Cross-service JWT = same default**: أي خدمة جديدة تتعامل مع JWT (sign أو
+   verify) يجب أن تنضم لقائمة الـ 5 أعلاه قبل أن تُطلَق في supervisor.sh.
+
+### قياس النجاح حياً
+
+```bash
+$ python scripts/fitness/check_secret_key_consistency.py
+Found 5 SECRET_KEY default assignment(s):
+  ✓ line 671: default = `dev-secret-change-me`
+  ✓ line 747: default = `dev-secret-change-me`
+  ✓ line 821: default = `dev-secret-change-me`
+  ✓ line 887: default = `dev-secret-change-me`
+  ✓ line 946: default = `dev-secret-change-me`
+✅ All 5 default(s) agree on `dev-secret-change-me`.
+```
+
+### الدرس المعماري
+
+> "Shared secrets MUST have shared defaults." Service-specific dev defaults
+> في supervisor.sh ليست مجرد inconvenience — هي قنابل موقوتة تنفجر عند أول
+> Codespace fresh بدون secrets manually configured. الـ CI gate الجراحي
+> (forensic-grade) هو الطريقة الوحيدة الموثوقة لمنع التكرار.

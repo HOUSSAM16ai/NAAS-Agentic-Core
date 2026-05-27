@@ -2953,14 +2953,51 @@ This EXACT pattern explains every user-visible symptom:
 ### Architectural Invariants (D-WS-SECRET-KEY-001 — لا تُكسر بدون ADR)
 
 1. **All services in the same deployment MUST use the same SECRET_KEY**. The default fallback values MUST be identical across all `supervisor.sh` service-launch blocks.
-2. **When extending the system with new microservices that handle JWTs**: the new service's launch in supervisor.sh MUST use the same `shared_secret` pattern as monolith/orchestrator.
+2. **When extending the system with new microservices that handle JWTs**: the new service's launch in supervisor.sh MUST use the same `shared_<service>_secret` pattern as monolith/orchestrator.
 3. **Defensive double-export** (`SECRET_KEY` + `<SERVICE>_SECRET_KEY`) is required for any service whose settings.py uses an `env_prefix`.
 4. **The `dev-secret-change-me` literal is the canonical dev fallback** across the entire repository. Do NOT introduce service-specific dev defaults.
+5. **CI gate is the single source of truth**: `scripts/fitness/check_secret_key_consistency.py` matches both direct inline defaults AND `shared_<anything>_secret` variable definitions. Any new pattern that bypasses these two forms is forbidden.
+
+### Extension — Skills Pipeline Drift (forensic CI gate, 2026-05-26)
+
+After the user-service fix shipped, the new CI gate
+`scripts/fitness/check_secret_key_consistency.py` revealed that **three more**
+services in supervisor.sh were still defaulting to the non-canonical
+`super_secret_key_change_in_production`:
+
+- `planning-agent` block (was line 821)
+- `research-agent` block (was line 884)
+- `reasoning-agent` block (was line 935)
+
+These services receive `X-Service-Token` JWTs signed by the orchestrator
+(which defaults to `dev-secret-change-me`). With mismatched keys, **every**
+Skills Pipeline call (`POST /compose` → planning + research + reasoning)
+silently fell back to `mode="fallback"` — chat appeared to work but never
+exercised the real LLM-backed pipeline. This is the second-order symptom
+the user reported as "questions don't answer; chat enters a new conversation":
+chat path was healthy, Skills Pipeline was degraded.
+
+**Surgical fix**: planning-agent, research-agent, reasoning-agent now each
+define a `local shared_<name>_secret="${SECRET_KEY:-dev-secret-change-me}"`
+local before their uvicorn launch, and export both `SECRET_KEY` and
+`<SERVICE>_SECRET_KEY` from it.
+
+**Gate verdict after fix**:
+```
+Found 5 SECRET_KEY default assignment(s):
+  ✓ line 671: default = `dev-secret-change-me`   (orchestrator)
+  ✓ line 747: default = `dev-secret-change-me`   (user-service)
+  ✓ line 821: default = `dev-secret-change-me`   (planning-agent)
+  ✓ line 887: default = `dev-secret-change-me`   (research-agent)
+  ✓ line 946: default = `dev-secret-change-me`   (reasoning-agent)
+✅ All 5 default(s) agree on `dev-secret-change-me`.
+```
 
 ### Files
-- `.devcontainer/supervisor.sh` (user-service launch block).
+- `.devcontainer/supervisor.sh` (user-service + 3 Skills Pipeline launch blocks).
 - `microservices/user_service/src/services/auth/crypto.py` (env-aware caps).
-- `tests/services/test_secret_key_consistency.py` (new — 11 regression checks).
+- `tests/services/test_secret_key_consistency.py` (extended — 11 regression checks, +4 new).
+- `scripts/fitness/check_secret_key_consistency.py` (extended — matches both inline and `shared_*_secret`).
 
 ### Live verification (after deploy)
 1. Fresh Codespace → sign in

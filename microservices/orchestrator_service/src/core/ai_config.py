@@ -114,13 +114,16 @@ class ActiveModels:
     # ❌ z-ai/glm-4.5-air → content=None كلياً
     # ✅ openai/gpt-oss-20b → 2102 chunks، 4762 chars، عربي + LaTeX نقي
     # ✅ openai/gpt-oss-120b → 2480 chunks، 5502 chars، الأفضل
-    PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_20B_FREE)
+    # ISS-082 (D-088 — 2026-05-27): gpt-oss-20b:free rate-limited بشكل دائم
+    # على OpenRouter ("Provider returned error 429"). gpt-oss-120b من نفس
+    # العائلة بنفس quality contract لكن rate limit pool مختلف. مُرقّى لـ PRIMARY.
+    PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_120B_FREE)
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
-    GATEWAY_FALLBACK_1 = AvailableModels.GPT_OSS_120B_FREE  # احتياطي بنفس الجودة
-    GATEWAY_FALLBACK_2 = AvailableModels.NEMOTRON_3_NANO  # يعمل على prompts قصيرة
-    GATEWAY_FALLBACK_3 = AvailableModels.NEMOTRON_3_SUPER_120B_FREE
-    GATEWAY_FALLBACK_4 = AvailableModels.GLM_4_5_AIR_FREE
+    GATEWAY_FALLBACK_1 = AvailableModels.GPT_OSS_20B_FREE  # demoted from PRIMARY 2026-05-27
+    GATEWAY_FALLBACK_2 = AvailableModels.NEMOTRON_3_SUPER_120B_FREE  # verified live 2026-05-27
+    GATEWAY_FALLBACK_3 = AvailableModels.GLM_4_5_AIR_FREE  # verified live 2026-05-27
+    GATEWAY_FALLBACK_4 = AvailableModels.NEMOTRON_3_NANO  # works on short prompts
     GATEWAY_FALLBACK_5 = AvailableModels.QWEN_QWEN3_CODER_FREE
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY

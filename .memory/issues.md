@@ -2761,3 +2761,89 @@ and what the user described as "questions don't answer".
 `local shared_<name>_secret="${SECRET_KEY:-dev-secret-change-me}"` and
 double-export the service-specific env var alongside `SECRET_KEY`.
 Verified by the extended CI gate: 5/5 services agree on the canonical default.
+
+
+## ISS-088 (2026-05-27) — `openai/gpt-oss-20b:free` Rate-Limited → Empty WS Chat Responses
+
+**Reported verbatim** (after D-WS-SECRET-KEY-001 extension shipped):
+> «اطرح سؤال لا يجيب يدخل و يخرج بسرعة و أجد نفسي في محادثة جديدة»
+
+### Symptom (verified live 2026-05-27)
+- WS auth: ✅ CONNECTED (D-WS-SECRET-KEY-001 working)
+- `session_ready` + `conversation_init` events: ✅ received
+- `assistant_final` event: ✅ received BUT with `chunks=0, len=0`
+- → Frontend sees empty response → "new conversation" appears
+
+### Root cause (verified by live OpenRouter probe)
+`openai/gpt-oss-20b:free` (the PRIMARY model per D-067) is now permanently
+rate-limited upstream:
+
+```
+$ curl -X POST https://openrouter.ai/api/v1/chat/completions \
+    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+    -d '{"model":"openai/gpt-oss-20b:free", ...}'
+
+{
+  "error": {
+    "code": 429,
+    "message": "Provider returned error",
+    "metadata": {
+      "raw": "openai/gpt-oss-20b:free is temporarily rate-limited upstream..."
+    }
+  }
+}
+```
+
+The chat handler called PRIMARY, got 429, the fallback chain either failed
+similarly or silently swallowed the exception → empty content emitted to
+`assistant_final`.
+
+### Live model probe (2026-05-27)
+
+| Model | Status |
+|---|---|
+| `openai/gpt-oss-20b:free` (was PRIMARY) | ❌ 429 rate-limited |
+| `openai/gpt-oss-120b:free` (same family, larger) | ✅ WORKS |
+| `nvidia/nemotron-3-super-120b-a12b:free` | ✅ WORKS |
+| `z-ai/glm-4.5-air:free` | ✅ WORKS |
+| `google/gemma-2-9b-it:free` | ❌ 404 deprecated |
+| `meta-llama/llama-3.2-3b-instruct:free` | ❌ 429 |
+| `mistralai/mistral-7b-instruct:free` | ❌ other error |
+
+### Resolution
+D-088: PRIMARY model changed from `openai/gpt-oss-20b:free` to
+`openai/gpt-oss-120b:free` in all 4 hot paths:
+- `app/core/ai_config.py` (monolith)
+- `microservices/orchestrator_service/src/core/ai_config.py`
+- `microservices/conversation_service/src/conversation_graph.py`
+- `microservices/conversation_service/src/math_pipeline.py`
+
+Same family (OpenAI OSS), same Arabic + LaTeX quality contract verified by
+D-067, but different rate-limit pool. `openai/gpt-oss-20b:free` demoted to
+`GATEWAY_FALLBACK_1` — if it recovers from 429 it will be used automatically.
+
+### Live verification (2026-05-27, before fix vs after)
+
+**Before fix** (PRIMARY=gpt-oss-20b):
+```
+WS chat → assistant_final received | chunks=0 len=0 ❌
+```
+
+**After live env override** `OPENROUTER_PRIMARY_MODEL=nvidia/nemotron-3-super-120b-a12b:free`:
+```
+WS chat → "اوكي حبيبي شو أخبارك في يومك؟"
+assistant_final | chunks=1 len=39 ✅
+```
+
+### Severity
+🔴 CATASTROPHIC — second-order failure after D-WS-SECRET-KEY-001 was fixed.
+Chat appears connected but produces empty responses. Free models on
+OpenRouter rotate availability so this pattern WILL recur.
+
+### Lesson learned
+"Single hard-coded PRIMARY model is a single point of failure." Free models
+on OpenRouter rate-limit unpredictably. The fix is twofold: (a) pick PRIMARY
+from the same family as the verified gold-standard but with different rate
+limit pool, (b) treat the fallback chain as a real safety net — verified live
+periodically. A future improvement: auto-rotate PRIMARY based on a daily
+benchmark probe (covered by `.claude/skills/cogniforge-llm-model-repair`).

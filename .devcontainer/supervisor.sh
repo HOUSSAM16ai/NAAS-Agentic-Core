@@ -392,11 +392,23 @@ if ! lifecycle_acquire_lock "uvicorn_launch" 60; then
 fi
 
 # Check if already running AND actually listening (not just a zombie process)
+# D-SQLITE-GUARD: also verify the running process is NOT using SQLite.
+# If DATABASE_URL=sqlite in the process env, the backend is in degraded mode
+# and must be restarted with the real Supabase URL from secrets.env.
 _uvicorn_healthy() {
     local pid
     pid=$(lifecycle_get_state "uvicorn_pid" 2>/dev/null || true)
-    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && \
-        curl -sf --connect-timeout 2 "$HEALTH_ENDPOINT" >/dev/null 2>&1
+    [ -n "$pid" ] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    curl -sf --connect-timeout 2 "$HEALTH_ENDPOINT" >/dev/null 2>&1 || return 1
+    # Guard: reject if running with SQLite (degraded mode from a secrets-less boot)
+    local proc_db
+    proc_db=$(cat /proc/"$pid"/environ 2>/dev/null | tr '\0' '\n' | grep "^DATABASE_URL=" | cut -d= -f2- || true)
+    if echo "$proc_db" | grep -q "sqlite"; then
+        lifecycle_warn "D-SQLITE-GUARD: uvicorn PID $pid is running with SQLite — forcing restart with real DB"
+        return 1
+    fi
+    return 0
 }
 
 if _uvicorn_healthy; then

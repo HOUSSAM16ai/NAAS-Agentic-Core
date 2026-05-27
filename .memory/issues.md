@@ -2568,3 +2568,42 @@ D-WS-FLAP-002 يحل heartbeat ping/pong mismatch (يحدث كل 25s). لكن ا
 **Severity**: 🔴 CRITICAL (UX-breaking — user lost trust in the system entirely).
 
 **Lesson learned (Mea Culpa)**: When 3 sequential "root cause" fixes fail, stop trying to fix the root cause and start fixing the SYMPTOM. The user doesn't care WHY the connection blips — they care that the UI doesn't flicker. Solving for UX directly bypasses the entire diagnostic rabbit hole.
+
+
+---
+
+## ISS-WS-REGRESSION-001 (2026-05-26) — "متصل" Never Appears Anymore
+
+**المستخدم بلَّغ بحدّة**: «المشكلة مزالت هذه المرة لم تظهر متصل اطلاقا https://reimagined-space-pancake-6v9g7rrqqprqfxrqv-5000.app.github.dev/»
+
+**ما يعنيه هذا**: بعد deploy D-WS-FLAP-004 honest-debounce، الـ status indicator لا يظهر "متصل" أبداً — يبقى على "جاري الاتصال..." أو يتحول إلى "إعادة الاتصال" / "غير متصل" مباشرة.
+
+**Root Cause (عبر static code audit)**:
+خلال refactor D-WS-FLAP-004 (sticky → honest-debounce)، أعدتُ تسمية `offlineGraceTimerRef` → `uiPromotionTimerRef` في الإعلان، لكن **نسيتُ تحديث الـ onopen handler**. السطر 290 لا يزال يقول:
+```js
+if (offlineGraceTimerRef.current) { ... }
+```
+
+JavaScript يرى أن `offlineGraceTimerRef` غير معرَّف (undeclared variable) → **يُرمي `ReferenceError`** → الـ onopen handler ينتهي قبل الوصول إلى `setState("connected")` → الحالة الداخلية تبقى "connecting" → UI يبقى "جاري الاتصال..." إلى الأبد.
+
+**Diagnostic Evidence**:
+```bash
+$ grep -n offlineGraceTimerRef frontend/app/hooks/useRealtimeConnection.js
+290:            if (offlineGraceTimerRef.current) {  # ← undefined!
+291:              clearTimeout(offlineGraceTimerRef.current);
+292:              offlineGraceTimerRef.current = null;
+
+$ grep -n "useRef" frontend/app/hooks/useRealtimeConnection.js | grep -i offline
+# no results — offlineGraceTimerRef was deleted but never replaced in onopen
+```
+
+**Fix applied**: استبدال `offlineGraceTimerRef.current` بـ `uiPromotionTimerRef.current` في الـ onopen handler. راجع `decisions.md` D-WS-REGRESSION-001.
+
+**Prevention**: regression test جديد `test_ws_onopen_no_dangling_refs.py` — static audit يفحص أن كل `xxxRef.current` يُطابق `useRef` declaration.
+
+**Lesson learned**:
+1. Manual rename بدون IDE = خطر. استخدم static analysis tools.
+2. اختبر الـ happy path (open → connected) دائماً، ليس فقط edge cases.
+3. JavaScript ReferenceError في event handlers = silent — لا يكسر الصفحة لكن يخفي وظائف.
+
+**Severity**: 🔴 CATASTROPHIC — كسرت كل الـ chat flow بعد deploy.

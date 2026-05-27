@@ -2621,3 +2621,54 @@ await websocket.send_json({
 - المسودة المُعتمَدة (honest-debounce): UI صادق بعد 2 ثانية، ثم "offline" بعد 15 ثانية إذا استمر الانقطاع.
 
 **Lesson learned**: الفرق بين debounce و كذب هو في الـ duration. 2 ثانية debounce = راحة UX. 30 ثانية debounce = كذب على المستخدم. الـ honest engineering يحترم حدود الـ debounce.
+
+
+---
+
+## D-WS-REGRESSION-001 · Critical Fix — onopen References Dangling Ref (2026-05-26)
+
+**Context**: المستخدم بلَّغ بصرامة: «المشكلة مزالت هذه المرة لم تظهر متصل اطلاقا». أي «متصل» لم يظهر **أبداً** بعد deploy D-WS-FLAP-004 honest-debounce.
+
+**Root Cause (مكتشَف عبر audit ثابت)**: خلال refactor D-WS-FLAP-004 من sticky-forever إلى honest-debounce، أعدتُ تسمية `offlineGraceTimerRef` إلى `uiPromotionTimerRef` في الإعلانات والـ scheduleUiPromotion… والـ cleanup، **لكن نسيتُ تحديث الـ `ws.onopen` handler**. كان السطر 290 لا يزال يقول:
+```js
+if (offlineGraceTimerRef.current) {  // ← ReferenceError!
+  clearTimeout(offlineGraceTimerRef.current);
+  offlineGraceTimerRef.current = null;
+}
+```
+
+`offlineGraceTimerRef` لم يعد موجوداً، فيُرمي JavaScript `ReferenceError` ويُحطِّم الـ onopen handler. النتيجة:
+- `setState("connected")` لا يُستدعى أبداً.
+- heartbeat لا يبدأ.
+- pending messages لا تُفلَش.
+- `state` يبقى عند "connecting" → uiState يبقى "connecting" → UI يُظهر "جاري الاتصال..." إلى الأبد.
+- **«متصل» لا تظهر أبداً.**
+
+**Decision (Fix)**:
+1. **استبدل `offlineGraceTimerRef.current` بـ `uiPromotionTimerRef.current`** في `ws.onopen`.
+2. **Static audit script**: `tests/services/test_ws_onopen_no_dangling_refs.py` — 4 regression tests:
+   - كل `xxxRef.current` يجب أن يُطابق `const xxxRef = useRef(...)`.
+   - الـ onopen لا يجوز أن يرجع لـ `offlineGraceTimerRef` (الـ specific bug).
+   - الـ onopen يجب أن يستدعي `setState("connected")` (دونها لا "متصل").
+   - الـ onopen يجب أن يضع `everConnectedRef.current = true`.
+
+**Consequence**:
+- "متصل" تظهر فوراً بعد WS handshake ناجح.
+- الحالة الداخلية صادقة (D-WS-FLAP-004 honest-debounce سليم).
+- الـ UI يحترم النموذج: blip <2s = "متصل" debounce، 2s-15s = "إعادة الاتصال"، >15s = "غير متصل".
+- audit script يمنع تكرار هذا النوع من البق في المستقبل.
+
+**Lesson learned**:
+- **Refactor + rename = خطر**. لا تعتمد على grep يدوي — استخدم IDE rename أو فحص ثابت آلي.
+- **Test the actual happy path**, ليس فقط edge cases. كنتُ أختبر debounce، failure modes، grace periods — لكن النجاح البسيط (open → connected → UI shows) لم يُختبَر.
+- **Frontend bugs may be silent**: JavaScript ReferenceError في WS event handler لا يكسر الصفحة، فقط يخفي وظيفة معينة. ضروري فحص browser console قبل deploy.
+- **Production-grade**: إضافة static analysis في CI يفحص ref consistency تلقائياً.
+
+**Files**:
+- `frontend/app/hooks/useRealtimeConnection.js` (السطر 290 — استبدال).
+- `tests/services/test_ws_onopen_no_dangling_refs.py` (جديد — 4 regression checks).
+
+**Verification**:
+- Static audit: كل refs مُعرَّفة، لا dangling references.
+- Simulation: onopen → everConnected=true → setState("connected") → uiState="connected" → UI يُظهر "متصل" ✅.
+- جميع gates (ruff, runtime_truth, validate_structure, ci_guardrails) passing.

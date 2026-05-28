@@ -125,6 +125,7 @@ def is_control_message(payload: Any) -> bool:
 async def handle_control_message(
     websocket: WebSocketLike,
     payload: Any,
+    send_lock: Any = None,
 ) -> bool:
     """
     يعالج رسالة WebSocket التحكم (ping/heartbeat/noop).
@@ -173,7 +174,12 @@ async def handle_control_message(
             response["id"] = corr_id
 
     try:
-        await websocket.send_json(response)
+        # D-096: استخدم send_lock إذا تم تمريره — يمنع التزامن مع stream/BKT
+        if send_lock is not None:
+            async with send_lock:
+                await websocket.send_json(response)
+        else:
+            await websocket.send_json(response)
         _record_invocation(msg_type, "replied")
     except Exception as exc:
         # العميل ربما أغلق الاتصال بين receive و send — هذا طبيعي.

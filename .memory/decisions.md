@@ -1,5 +1,59 @@
 # Architectural Decisions
-> Last updated: 2026-05-28 | Branch: `claude/fix-qa-session-crashes-kjoAI`
+> Last updated: 2026-05-28 | Branch: `claude/fix-ws-send-race-condition`
+
+## D-096 · WebSocket Send Concurrency Lock (2026-05-28)
+
+**Branch**: `claude/fix-ws-send-race-condition`
+
+### القرار
+
+كل `websocket.send_json` على WebSocket مشتركة بين multiple coroutines يجب أن
+يمر عبر `asyncio.Lock`. الـ lock يُنشأ مرة واحدة لكل WS handler invocation
+في `customer_chat.py` ويُمرَّر لكل دالة فرعية: `_evaluate_and_emit_bkt`،
+`_emit_terminal_frames`، `handle_control_message`، و stream_and_forward.
+
+### السبب (مكشوف بالتجريب الحي + clarification المستخدم)
+
+`Starlette WebSocket.send_json` **ليس coroutine-safe**. الـ ASGI send
+الذي تحته يفترض sequential calls. عند التزامن:
+- Frame bytes تتداخل على نفس TCP socket
+- WebSocket protocol corruption
+- silent close بـ code 1006/1011
+- frontend يرى disconnect → reconnect cycle → kick-to-login
+
+السيناريو الذي يُسبب الكارثة:
+1. `_evaluate_and_emit_bkt` كـ background task يكتب لـ Supabase ثم يُرسل ui_component
+2. `stream_and_forward` يبثّ deltas في نفس الوقت
+3. مع Supabase الأبطأ (300ms-2s)، BKT.send_json و stream.send_json **يتزامنان**
+4. ASGI corruption → silent close → frontend reconnects → 4401 → auth_error → logout
+
+**لماذا SQLite لا يُظهر الكارثة**: DB write لـ BKT يكتمل في <50ms قبل بدء stream.
+
+### التطبيق
+
+```python
+# Helper:
+async def _locked_send_json(websocket, lock, payload):
+    async with lock:
+        await websocket.send_json(payload)
+
+# في كل WS handler invocation:
+send_lock = asyncio.Lock()
+
+# يُمرَّر لكل callee:
+await _locked_send_json(websocket, send_lock, event)
+await _evaluate_and_emit_bkt(websocket=ws, send_lock=send_lock, ...)
+await _emit_terminal_frames(websocket=ws, send_lock=send_lock, ...)
+await handle_control_message(websocket, payload, send_lock=send_lock)
+```
+
+### التحقق
+
+- `tests/services/test_ws_send_concurrency_lock.py` — 6 regression tests
+- Live: 10/10 questions concurrent with pings every 500ms — all succeed
+- Live: 2 pongs + 44 deltas + final + persisted — all perfectly sequenced
+
+---
 
 ## D-095 · Never Auto-Set `ENVIRONMENT=testing` in supervisor.sh (2026-05-28)
 

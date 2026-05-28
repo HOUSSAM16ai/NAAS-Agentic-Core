@@ -79,9 +79,54 @@ router = APIRouter(
 TEXT_EVENT_TYPES = {"delta", "assistant_delta", "assistant_final"}
 
 
+async def _locked_send_json(
+    websocket: WebSocket,
+    lock: asyncio.Lock,
+    payload: dict[str, object],
+) -> None:
+    """
+    إرسال JSON عبر WebSocket مع قفل تسلسلي لمنع تداخل البايتات.
+
+    ─────────────────────────────────────────────────────────────────
+    ISS-094 round 3 (D-096 — 2026-05-28): WS Send Concurrency Race
+    ─────────────────────────────────────────────────────────────────
+
+    Starlette's `WebSocket.send_json` لا يضمن thread/coroutine safety عند
+    استدعاءات متزامنة على نفس الـ socket. السيناريو الكارثي:
+
+      1. المستخدم يرسل سؤالاً
+      2. `_evaluate_and_emit_bkt` يُطلَق كـ background task
+         - يستدعي `await async_session_factory()` (DB query بطيء عبر Supabase)
+         - ثم `await websocket.send_json({"type":"ui_component", ...})`
+      3. بالتوازي، `stream_and_forward` يبدأ streaming deltas
+         - يستدعي `await websocket.send_json({"type":"assistant_delta", ...})`
+         - عشرات المرات
+      4. **RACE**: BKT's send و stream's send يتزامنان على نفس asgi.send
+      5. النتيجة الكارثية المحتملة:
+         - WebSocket protocol corruption (interleaved frame bytes)
+         - RuntimeError من asyncio (concurrent state machine updates)
+         - silent close بـ code 1006/1011
+      6. Frontend يرى WS close → reconnect → جديد قد يفشل لـ سبب آخر
+      7. بعد 3 محاولات auth retries → auth_error → logout → kick to login
+
+    لماذا SQLite لا يُظهر هذه الكارثة:
+      - BKT يكتمل في <50ms (DB محلي)
+      - stream يبدأ بعد BKT بكثير
+      - لا تزامن فعلي → لا race
+
+    لماذا Supabase يُسبب الكارثة:
+      - BKT DB write يأخذ 300ms-2s عبر network
+      - stream يبدأ فوراً ويستمر >5s
+      - فرصة تزامن عالية على send_json
+    """
+    async with lock:
+        await websocket.send_json(payload)
+
+
 async def _evaluate_and_emit_bkt(
     *,
     websocket: WebSocket,
+    send_lock: asyncio.Lock,
     user_id: int,
     conversation_id: int | None,
     question: str,
@@ -100,10 +145,17 @@ async def _evaluate_and_emit_bkt(
                 question=question,
                 history=history_messages,
             )
+        # D-096: استخدم send_lock لمنع التزامن مع stream_and_forward.
         # نتجاوز normalize_streaming_event عمداً: نوع ui_component يجب أن يصل
         # للواجهة بلا تحوير (التطبيع يحوّل الأنواع المجهولة إلى assistant_delta
         # عند تفعيل راية المغلف الموحّد).
-        await websocket.send_json(
+        # D-096: حماية إضافية — تحقق من حالة الـ WS قبل المحاولة.
+        if websocket.client_state != WebSocketState.CONNECTED:
+            logger.debug("bkt_skipped: ws not connected (state=%s)", websocket.client_state)
+            return
+        await _locked_send_json(
+            websocket,
+            send_lock,
             _bind_stream_metadata(
                 {
                     "type": "ui_component",
@@ -299,6 +351,7 @@ def _try_build_math_ui_component(response_text: str) -> dict | None:
 async def _emit_terminal_frames(
     *,
     websocket: WebSocket,
+    send_lock: asyncio.Lock,
     pending_terminal_event: dict[str, object] | None,
     assistant_message_persisted: bool,
     complete_ai_response: str,
@@ -310,6 +363,8 @@ async def _emit_terminal_frames(
     يضمن إرسال إطار نهائي واحد فقط لكل دور (assistant_final أو error)
     وإطار 'persisted' فقط بعد حفظ فعلي. لا يُسمح بالفشل الصامت
     الذي يبقي واجهة المستخدم في حالة تحميل أبدية (ISS-016/ISS-017).
+
+    D-096: يستخدم send_lock لمنع التزامن مع BKT task و stream_and_forward.
     """
     if assistant_message_persisted:
         # بناء ui_component من النص المكتمل — لا يكسر المسار عند الفشل
@@ -319,24 +374,28 @@ async def _emit_terminal_frames(
             # حقن ui_component في الـ payload الموجود
             if ui_component and isinstance(pending_terminal_event.get("payload"), dict):
                 pending_terminal_event["payload"]["ui_component"] = ui_component
-            await websocket.send_json(pending_terminal_event)
+            await _locked_send_json(websocket, send_lock, pending_terminal_event)
         else:
             payload: dict = {"content": ""}
             if ui_component:
                 payload["ui_component"] = ui_component
-            await websocket.send_json(
+            await _locked_send_json(
+                websocket,
+                send_lock,
                 _bind_stream_metadata(
                     normalize_streaming_event({"type": "assistant_final", "payload": payload}),
                     local_conversation_id,
                     stream_request_id,
-                )
+                ),
             )
-        await websocket.send_json(
+        await _locked_send_json(
+            websocket,
+            send_lock,
             _bind_stream_metadata(
                 normalize_streaming_event({"type": "persisted"}),
                 local_conversation_id,
                 stream_request_id,
-            )
+            ),
         )
         return
 
@@ -353,7 +412,9 @@ async def _emit_terminal_frames(
         details = "Assistant produced no response."
         status_code = 500
 
-    await websocket.send_json(
+    await _locked_send_json(
+        websocket,
+        send_lock,
         _bind_stream_metadata(
             normalize_streaming_event(
                 {
@@ -363,7 +424,7 @@ async def _emit_terminal_frames(
             ),
             local_conversation_id,
             stream_request_id,
-        )
+        ),
     )
 
 
@@ -456,20 +517,28 @@ async def chat_stream_ws(
         await websocket.close(code=4403)
         return
 
+    # D-096 (2026-05-28): قفل تسلسلي للـ WebSocket sends.
+    # يُمنع التزامن بين BKT background task و stream_and_forward و
+    # _emit_terminal_frames و handle_control_message.
+    # السبب: Starlette WebSocket.send_json لا يضمن coroutine-safety
+    # عند استدعاءات متزامنة → corruption → silent close → kick.
+    send_lock = asyncio.Lock()
+
     # D-WS-FLAP-003 (2026-05-26): primer event — يُرسَل فور الـ accept لإجبار
     # كل الـ proxies على المسار (server.js, Codespaces edge, mobile carrier-NAT)
     # على فتح/الاحتفاظ بـ session نشط بدلاً من idle-timeout سريع.
     # الواجهة تتجاهل النوع غير المعروف (useAgentSocket لا يعالج "session_ready").
     try:
-        await websocket.send_json(
-            {
-                "type": "session_ready",
-                "payload": {
-                    "user_id": actor.id,
-                    "ts": datetime.now(UTC).isoformat(),
-                },
-            }
-        )
+        async with send_lock:
+            await websocket.send_json(
+                {
+                    "type": "session_ready",
+                    "payload": {
+                        "user_id": actor.id,
+                        "ts": datetime.now(UTC).isoformat(),
+                    },
+                }
+            )
     except Exception as exc:
         # primer non-fatal — لو فشل، السبب أن الـ socket أُغلق فوراً.
         logger.debug("customer_chat.primer_failed: %s", exc)
@@ -487,7 +556,7 @@ async def chat_stream_ws(
             # رسائل التحكم (ping/heartbeat/noop) تُعالَج هنا قبل أي محاولة
             # لاعتبار الحمولة سؤالاً. بدون هذا الفحص، ping يُعاد إليه «Question is
             # required» بدلاً من pong → timeout بعد 10s → close(1001) → flapping.
-            if await handle_control_message(websocket, payload):
+            if await handle_control_message(websocket, payload, send_lock=send_lock):
                 continue
 
             request_id_value = payload.get("client_request_id")
@@ -500,7 +569,9 @@ async def chat_stream_ws(
 
             question = str(payload.get("question", "")).replace("\x00", "").strip()
             if not question:
-                await websocket.send_json(
+                await _locked_send_json(
+                    websocket,
+                    send_lock,
                     _bind_stream_metadata(
                         normalize_streaming_event(
                             {
@@ -561,7 +632,9 @@ async def chat_stream_ws(
                         history_messages,
                         client_context_messages,
                     )
-                await websocket.send_json(
+                await _locked_send_json(
+                    websocket,
+                    send_lock,
                     normalize_streaming_event(
                         {
                             "type": "conversation_init",
@@ -570,10 +643,12 @@ async def chat_stream_ws(
                                 "request_id": stream_request_id,
                             },
                         }
-                    )
+                    ),
                 )
             except HTTPException as http_exc:
-                await websocket.send_json(
+                await _locked_send_json(
+                    websocket,
+                    send_lock,
                     _bind_stream_metadata(
                         normalize_streaming_event(
                             {
@@ -596,7 +671,9 @@ async def chat_stream_ws(
                     f"Failed to persist customer user message locally: {exc}",
                     exc_info=True,
                 )
-                await websocket.send_json(
+                await _locked_send_json(
+                    websocket,
+                    send_lock,
                     _bind_stream_metadata(
                         normalize_streaming_event(
                             {
@@ -609,7 +686,7 @@ async def chat_stream_ws(
                         ),
                         local_conversation_id,
                         stream_request_id,
-                    )
+                    ),
                 )
                 turn_span.set_terminal("error")
                 close_ws_turn(turn_span, status="ERROR")
@@ -628,6 +705,7 @@ async def chat_stream_ws(
             _bkt_task = asyncio.create_task(
                 _evaluate_and_emit_bkt(
                     websocket=websocket,
+                    send_lock=send_lock,  # D-096
                     user_id=actor.id,
                     conversation_id=local_conversation_id,
                     question=question,
@@ -710,8 +788,11 @@ async def chat_stream_ws(
                                 normalized_event, lc_id, request_id
                             )
                         else:
-                            await websocket.send_json(
-                                _bind_stream_metadata(normalized_event, lc_id, request_id)
+                            # D-096: send_lock يمنع التزامن مع BKT task
+                            await _locked_send_json(
+                                websocket,
+                                send_lock,
+                                _bind_stream_metadata(normalized_event, lc_id, request_id),
                             )
 
                         if _is_text_event(normalized_event) and isinstance(
@@ -733,14 +814,23 @@ async def chat_stream_ws(
                 stream_error = exc
                 logger.error(f"Error in compatibility facade stream: {exc}", exc_info=True)
                 if not isinstance(exc, WebSocketDisconnect):
-                    await websocket.send_json(
-                        normalize_streaming_event(
-                            {
-                                "type": "error",
-                                "payload": {"details": str(exc), "status_code": 500},
-                            }
-                        )
-                    )
+                    # D-096: locked send + state check
+                    if websocket.client_state == WebSocketState.CONNECTED:
+                        try:
+                            await _locked_send_json(
+                                websocket,
+                                send_lock,
+                                normalize_streaming_event(
+                                    {
+                                        "type": "error",
+                                        "payload": {"details": str(exc), "status_code": 500},
+                                    }
+                                ),
+                            )
+                        except (WebSocketDisconnect, RuntimeError) as _send_err:
+                            logger.debug(
+                                "customer_chat.error_send_failed: %s", type(_send_err).__name__
+                            )
             finally:
                 if stream_task is not None and not stream_task.done():
                     stream_task.cancel()
@@ -817,6 +907,7 @@ async def chat_stream_ws(
                 try:
                     await _emit_terminal_frames(
                         websocket=websocket,
+                        send_lock=send_lock,  # D-096
                         pending_terminal_event=pending_terminal_event,
                         assistant_message_persisted=assistant_message_persisted,
                         complete_ai_response=complete_ai_response,

@@ -116,6 +116,16 @@ const parseAssistantErrorEnvelope = (rawData) => {
  * @returns {{ state: string, sendMessage: (data: any) => void }}
  */
 export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") {
+  // ISS-096 (2026-05-28): wsUrl/token/eventNamespace يُخزَّنون في refs حتى
+  // connect useCallback لا يتغير عند تغيّرهم → useEffect الرئيسي لا يُعيد
+  // التشغيل → لا cleanup → لا إغلاق مفاجئ للـ WebSocket أثناء الدردشة.
+  const wsUrlRef = useRef(wsUrl);
+  const tokenRef = useRef(token);
+  const eventNamespaceRef = useRef(eventNamespace);
+  useEffect(() => { wsUrlRef.current = wsUrl; }, [wsUrl]);
+  useEffect(() => { tokenRef.current = token; }, [token]);
+  useEffect(() => { eventNamespaceRef.current = eventNamespace; }, [eventNamespace]);
+
   const wsRef = useRef(null);
   const retries = useRef(0);
   // D-WS-AUTH-001 (2026-05-26): عداد منفصل لـ 4401/4403 retries.
@@ -285,6 +295,9 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
   }, [stopHeartbeat]);
 
   const connect = useCallback(() => {
+    // ISS-096: اقرأ من refs — لا closure على wsUrl/token/eventNamespace.
+    const wsUrl = wsUrlRef.current;
+    const token = tokenRef.current;
     if (!wsUrl || !token) return;
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
 
@@ -410,7 +423,7 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
           };
 
           window.dispatchEvent(new CustomEvent('agent:event', { detail: mergedEvent }));
-          window.dispatchEvent(new CustomEvent(`agent:event:${eventNamespace}`, { detail: mergedEvent }));
+          window.dispatchEvent(new CustomEvent(`agent:event:${eventNamespaceRef.current}`, { detail: mergedEvent }));
         };
 
         const scheduleDeltaFlush = () => {
@@ -452,7 +465,7 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
                     type: "assistant_final",
                     payload: { content: "" },
                     _connection_id: connectionIdRef.current,
-                    _event_namespace: eventNamespace,
+                    _event_namespace: eventNamespaceRef.current,
                   },
                 })
               );
@@ -475,7 +488,7 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
             const enrichedData = {
               ...data,
               _connection_id: connectionIdRef.current,
-              _event_namespace: eventNamespace,
+              _event_namespace: eventNamespaceRef.current,
             };
 
             const eventType = data?.type;
@@ -496,7 +509,7 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
                 })
               );
               window.dispatchEvent(
-                new CustomEvent(`agent:event:${eventNamespace}`, {
+                new CustomEvent(`agent:event:${eventNamespaceRef.current}`, {
                   detail: enrichedData,
                 })
               );
@@ -732,7 +745,9 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = setTimeout(connect, delay + jitter);
     }
-  }, [wsUrl, token, eventNamespace, startHeartbeat, stopHeartbeat]);
+  // ISS-096: wsUrl/token/eventNamespace مُزالة من dependencies — تُقرأ من refs.
+  // هذا يمنع إعادة إنشاء connect عند كل تغيير في wsUrl/token → لا cleanup → لا قطع.
+  }, [startHeartbeat, stopHeartbeat]);
 
   const sendMessage = useCallback((data) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -775,6 +790,19 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
       }
     };
   }, [connect, stopHeartbeat]);
+
+  // ISS-096: عند تغيير wsUrl (null → URL حقيقي عند أول render في browser)،
+  // أو عند تغيير token، نُحاول الاتصال إذا لم يكن هناك اتصال قائم.
+  // هذا يُعوِّض عن إزالة wsUrl/token من dependencies connect.
+  useEffect(() => {
+    if (wsUrl && token && mountedRef.current) {
+      if (!wsRef.current ||
+          (wsRef.current.readyState !== WebSocket.OPEN &&
+           wsRef.current.readyState !== WebSocket.CONNECTING)) {
+        connect();
+      }
+    }
+  }, [wsUrl, token, connect]);
 
   // D-WS-FLAP-004 (honest-debounce): نُرجع uiState للـ UI لكن مع الحفاظ على
   // الصدق — uiState يتأخر قليلاً عن state (لتجنب flicker) لكنه لا يكذب:

@@ -45,9 +45,7 @@ class TestCoreConfig:
         model_config to skip .env loading for this test instance.
         """
         clean_env = {
-            k: v
-            for k, v in os.environ.items()
-            if k not in ("DATABASE_URL", "APP_DATABASE_URL")
+            k: v for k, v in os.environ.items() if k not in ("DATABASE_URL", "APP_DATABASE_URL")
         }
         with patch.dict(os.environ, clean_env, clear=True):
             os.environ.pop("DATABASE_URL", None)

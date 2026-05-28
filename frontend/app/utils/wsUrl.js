@@ -85,29 +85,44 @@ export const getCloudBackendHost = () => {
     if (!isBrowser) return null;
     const host = window.location.host;
 
-    // D-WS-CODESPACES-001: GitHub Codespaces — لا نُعيد كتابة الـ port.
+    // D-WS-CODESPACES-001 / D-WS-GITPOD-002 (ISS-096 — 2026-05-28):
+    //
+    // GitHub Codespaces AND Gitpod Flex/Ona — لا نُعيد كتابة الـ port.
     // server.js على port 5000 يُمرِّر WebSocket إلى localhost:8000 داخلياً.
-    // محاولة الاتصال المباشر بـ *-8000.app.github.dev تفشل لأن Codespaces proxy
-    // لا يُمرِّر WebSocket upgrade headers بشكل موثوق لـ ports غير الأساسية.
-    if (host.endsWith('.app.github.dev') || host.endsWith('.preview.app.github.dev')) {
-        console.info('[wsUrl] GitHub Codespaces detected — using same-host proxy (server.js): %s', host);
-        return null; // يُعيد null → getWsBase يستخدم window.location.host
+    //
+    // السبب الجذري لـ ISS-096:
+    //   - Gitpod Flex proxy يُغلق الـ WebSocket على port 8000 بعد ~10s idle
+    //     (لا يوجد رسائل بين session_ready وأول سؤال).
+    //   - الاتصال المباشر بـ 8000--<id>.gitpod.dev يمر عبر Gitpod edge proxy
+    //     الذي له idle timeout قصير جداً على ports غير الأساسية.
+    //   - port 5000 هو الـ "primary port" في Gitpod — proxy يتسامح معه أكثر.
+    //   - server.js يُمرِّر WS upgrade إلى ws://127.0.0.1:8000 داخلياً —
+    //     هذا اتصال localhost لا يمر عبر Gitpod proxy → لا idle timeout.
+    //
+    // القاعدة: كل بيئات cloud (Codespaces + Gitpod + Ona) تستخدم same-host proxy.
+    // فقط Replit يحتاج port rewrite لأن server.js لا يعمل هناك.
+    if (
+        host.endsWith('.app.github.dev') ||
+        host.endsWith('.preview.app.github.dev') ||
+        host.includes('.gitpod.dev') ||
+        host.includes('.gitpod.io')
+    ) {
+        console.info('[wsUrl] Cloud workspace (Codespaces/Gitpod/Ona) — using same-host proxy (server.js): %s', host);
+        return null; // null → getWsBase يستخدم window.location.host (port 5000)
     }
 
-    // Gitpod Flex/Ona: 5000--<id>.<cluster>.gitpod.dev → 8000--<id>.<cluster>.gitpod.dev
-    // Gitpod Classic: 5000-<id>.ws-eu.gitpod.io → 8000-<id>.ws-eu.gitpod.io
     // Replit: 5000-<id>.replit.dev → 8000-<id>.replit.dev
-    // الـ regex /^5000-/ يُطابق الجميع لأن كل النماذج تبدأ بـ "5000-"
-    if (host.match(/^5000-/)) {
+    // server.js لا يعمل في Replit — الاتصال المباشر بـ port 8000 ضروري.
+    if (host.match(/^5000-/) && (host.endsWith('.replit.dev') || host.endsWith('.replit.app') || host.endsWith('.janeway.replit.dev'))) {
         const backendHost = host.replace(/^5000-/, '8000-');
-        console.info('[wsUrl] Port-prefix rewrite: frontend=%s → backend=%s', host, backendHost);
+        console.info('[wsUrl] Replit port-prefix rewrite: frontend=%s → backend=%s', host, backendHost);
         return backendHost;
     }
 
     // Replit (نمط بديل): <name>-5000.<suffix>.replit.dev → <name>-8000.<suffix>.replit.dev
-    if (host.match(/-5000\./) && !host.endsWith('.app.github.dev')) {
+    if (host.match(/-5000\./) && (host.endsWith('.replit.dev') || host.endsWith('.replit.app'))) {
         const backendHost = host.replace(/-5000\./, '-8000.');
-        console.info('[wsUrl] Port-suffix rewrite: frontend=%s → backend=%s', host, backendHost);
+        console.info('[wsUrl] Replit port-suffix rewrite: frontend=%s → backend=%s', host, backendHost);
         return backendHost;
     }
 

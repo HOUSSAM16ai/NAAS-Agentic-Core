@@ -77,6 +77,7 @@ class Settings(BaseSettings):
         v = self.ALLOWED_HOSTS.strip()
         if v.startswith("["):
             import json
+
             return json.loads(v)
         return [x.strip() for x in v.split(",") if x.strip()]
 
@@ -86,6 +87,7 @@ class Settings(BaseSettings):
         v = self.BACKEND_CORS_ORIGINS.strip()
         if v.startswith("["):
             import json
+
             return json.loads(v)
         return [x.strip() for x in v.split(",") if x.strip()]
 

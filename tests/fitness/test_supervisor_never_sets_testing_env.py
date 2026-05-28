@@ -62,9 +62,9 @@ def test_supervisor_never_auto_sets_environment_testing() -> None:
         # Standard form
         r'_set_env_key\s+"ENVIRONMENT"\s+"testing"',
         # Without _set_env_key wrapper
-        r'^\s*ENVIRONMENT=testing\s*$',
+        r"^\s*ENVIRONMENT=testing\s*$",
         # Export form
-        r'^\s*export\s+ENVIRONMENT=testing\s*$',
+        r"^\s*export\s+ENVIRONMENT=testing\s*$",
     ]
 
     failures: list[tuple[str, list[int]]] = []
@@ -82,9 +82,7 @@ def test_supervisor_never_auto_sets_environment_testing() -> None:
         "after 30 minutes of session activity.\n\n"
         "Use ENVIRONMENT=development with TESTING=1 if you need test-mode behavior\n"
         "without breaking session lifetime.\n\n"
-        f"Matches:\n" + "\n".join(
-            f"  pattern={p!r}\n  lines={lines}" for p, lines in failures
-        )
+        "Matches:\n" + "\n".join(f"  pattern={p!r}\n  lines={lines}" for p, lines in failures)
     )
 
 
@@ -101,7 +99,7 @@ def test_supervisor_keeps_development_in_sqlite_fallback() -> None:
     # Find the SQLite fallback line
     sqlite_line_idx: int | None = None
     for i, line in enumerate(lines):
-        if 'sqlite+aiosqlite:///:memory:' in line and '_set_env_key' in line:
+        if "sqlite+aiosqlite:///:memory:" in line and "_set_env_key" in line:
             sqlite_line_idx = i
             break
 
@@ -113,7 +111,9 @@ def test_supervisor_keeps_development_in_sqlite_fallback() -> None:
     # Look for ENVIRONMENT setting within 15 lines after sqlite line
     env_set_lines = [
         (i, line)
-        for i, line in enumerate(lines[sqlite_line_idx : sqlite_line_idx + 15], start=sqlite_line_idx)
+        for i, line in enumerate(
+            lines[sqlite_line_idx : sqlite_line_idx + 15], start=sqlite_line_idx
+        )
         if re.search(r'_set_env_key\s+"ENVIRONMENT"', line) and not line.strip().startswith("#")
     ]
 

@@ -42,7 +42,9 @@ class Settings(BaseSettings):
 
     # CORS — stored as raw string to support both comma-separated and JSON-array formats
     # from the shared root .env. Use the `cors_origins` property for the parsed list.
-    BACKEND_CORS_ORIGINS: str = Field(default="*", description="CORS Allowed Origins (comma-sep or JSON array)")
+    BACKEND_CORS_ORIGINS: str = Field(
+        default="*", description="CORS Allowed Origins (comma-sep or JSON array)"
+    )
 
     # Database
     POSTGRES_USER: str = "postgres"

@@ -191,6 +191,15 @@ ENVEOF
         fi
     fi
 
+    # ── ENVIRONMENT (D-ISS-092 — 2026-05-28): ضمان development عند وجود DB حقيقي ──
+    # إذا كان DATABASE_URL حقيقياً (ليس sqlite)، يجب أن يكون ENVIRONMENT=development
+    # لضمان token lifetime = 480 دقيقة (8 ساعات) بدلاً من 30 دقيقة.
+    if [ -n "$real_db_url" ] && ! echo "$real_db_url" | grep -q "sqlite"; then
+        _set_env_key "ENVIRONMENT" "development"
+        _set_env_key "TESTING" ""
+        changed=1
+    fi
+
     # ── OPENROUTER_API_KEY ────────────────────────────────────────────────────
     if [ -n "${OPENROUTER_API_KEY:-}" ]; then
         _set_env_key "OPENROUTER_API_KEY" "$OPENROUTER_API_KEY"

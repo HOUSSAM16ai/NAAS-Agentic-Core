@@ -1,5 +1,56 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-26 | Branch: `fix/ws-gitpod-disconnected`
+> Last updated: 2026-05-28 | Branch: `main`
+
+---
+
+## ✅ Resolved 2026-05-28 (ISS-092 — System Not Responding + Kick-to-Login Loop)
+
+### ISS-092 · النظام لا يرد على الأسئلة + خروج/دخول تلقائي كارثي [RESOLVED]
+
+- **Status**: RESOLVED 2026-05-28
+- **Severity**: 🔴 CRITICAL (النظام غير قابل للاستخدام)
+- **Environment**: GitHub Codespaces
+
+#### Root Causes (3 متداخلة)
+
+**1. `ENVIRONMENT=testing` في `.env` → tokens تنتهي بعد 30 دقيقة**
+- `crypto.py` يقرأ `ENVIRONMENT` من `os.environ` عند import time
+- عندما يبدأ الـ process بـ `ENVIRONMENT=testing`، `ACCESS_EXPIRE_MINUTES=30`
+- بعد 30 دقيقة، كل WS connection يُرجع `4401` → frontend يُطلق `logout()` → kick to login
+- السبب الجذري: `secrets.env` لم يكن موجوداً → `DATABASE_URL` لم يُحقن → supervisor يضبط `ENVIRONMENT=testing`
+
+**2. `OPENROUTER_API_KEY` فارغ في process env → لا يرد على الأسئلة**
+- `devcontainer.json` يحقن `${localEnv:OPENROUTER_API_KEY}` كـ empty string عند غياب Codespaces Secrets
+- `secrets.env` لم يكن موجوداً → لا fallback
+- النتيجة: `ai_config.openrouter_api_key = None` → LLM calls تفشل صامتاً
+
+**3. `nvidia/nemotron-3-nano-30b-a3b:free` مُستخدم في `orchestrator.py:453`**
+- السطر 453 في `app/services/chat/agents/orchestrator.py` يستخدم nemotron مباشرة لاستخراج search params
+- هذا النموذج محظور (ISS-079) — يُرجع `content=None` مع system prompts > 1500 chars
+
+#### Fixes Applied
+
+| الملف | التغيير |
+|-------|---------|
+| `.devcontainer/secrets.env` | **أُنشئ** بالمفاتيح الحقيقية (OPENROUTER, TAVILY, DATABASE_URL, SECRET_KEY, ENVIRONMENT=development) |
+| `.env` | أُعيد كتابته بـ `ENVIRONMENT=development` + جميع المفاتيح الحقيقية |
+| `app/services/chat/agents/orchestrator.py` | السطر 453: `"nvidia/nemotron-3-nano-30b-a3b:free"` → `ActiveModels.PRIMARY` + import `ActiveModels` |
+| `.devcontainer/supervisor.sh` | أُضيف منطق D-ISS-092: إذا كان DATABASE_URL حقيقياً، يُضبط `ENVIRONMENT=development` صراحةً في `.env` |
+
+#### Verification (Live — 2026-05-28)
+
+```
+:8000 ok | v4.1-root | database=ok
+:8002 ok | planning-agent | postgresql+asyncpg://... (كان sqlite)
+:8007 healthy | research-agent | tavily_available=true (كان false)
+:8008 healthy | reasoning-agent | llm_backend=openrouter (كان mock)
+
+TEST 1 (greeting): PASS — 0.7s
+TEST 2 (physics "قانون أوم"): PASS — 5.3s, 96 chunks, 250 chars Arabic+LaTeX
+Token lifetime: 1440 min (كان 30 min)
+```
+
+---
 
 ---
 

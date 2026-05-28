@@ -3,6 +3,7 @@ import logging
 import re
 from collections.abc import AsyncGenerator
 
+from app.core.ai_config import ActiveModels
 from app.core.ai_gateway import AIClient
 from app.services.chat.agents.admin import AdminAgent
 from app.services.chat.agents.analytics import AnalyticsAgent
@@ -448,9 +449,9 @@ class OrchestratorAgent:
         )
 
         try:
-            # ISS-068: nemotron-reasoning — أسرع نموذج مجاني مع reasoning tokens
+            # D-067: استخدام PRIMARY model — nemotron-3-nano محظور (ISS-079, content=None)
             response = await self.ai_client.generate(
-                model="nvidia/nemotron-3-nano-30b-a3b:free",
+                model=ActiveModels.PRIMARY,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question},

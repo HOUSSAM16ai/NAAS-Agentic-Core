@@ -492,7 +492,11 @@ else
     #   2. عند إعادة التشغيل، كل WS connections تُقطع فوراً.
     #   3. المستخدم يرى: السؤال أُرسل → لا رد → التبديل لـ login screen.
     # القاعدة الجديدة: --reload فقط إذا DEV_RELOAD=1 صراحةً (محلي للمطورين).
-    local reload_flag=""
+    #
+    # ISS-091 hotfix (2026-05-27): استخدام `local` خارج الـ function ⇒
+    # bash يرفضه ⇒ supervisor يخرج عند Step 4 ⇒ frontend (5000) لا يبدأ.
+    # هذا هو نفس بق ISS-037 — استخدم متغيراً عادياً (بدون local).
+    reload_flag=""
     if [ "${DEV_RELOAD:-0}" = "1" ]; then
         reload_flag="--reload --reload-exclude .devcontainer/state/* --reload-exclude .observability/*"
         lifecycle_warn "DEV_RELOAD=1 — uvicorn --reload enabled (will kill WS connections on every .py edit)"

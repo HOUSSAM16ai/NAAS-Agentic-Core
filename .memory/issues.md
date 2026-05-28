@@ -3043,3 +3043,78 @@ local dev runs, and any manual uvicorn launch outside `/app`.
 - `frontend/app/hooks/useRealtimeConnection.js` — HEARTBEAT_TIMEOUT 15s → 90s
 - `.gitignore` — `.devcontainer/state/dev_secret_key`
 - `tests/services/test_secret_key_persistence.py` — 6 new regression tests
+
+---
+
+## ISS-091 HOTFIX — Supervisor `local` Outside Function Crash (2026-05-27)
+
+**Reported verbatim**:
+> «عند الدخول للتطبيق على المنفذ 5000 يظهر الرابط معطل»
+> (Codespace built successfully 3 times, port 5000 unreachable)
+
+### Symptom
+- Codespace builds completely (no build errors).
+- Backend (port 8000) might appear up briefly.
+- Frontend (port 5000) → browser says "site can't be reached".
+
+### Root Cause (my own ISS-091 regression — same bug as ISS-037)
+
+The ISS-091 commit added:
+```bash
+if true; then
+    ...
+    local reload_flag=""    # ← line 495, OUTSIDE any function
+    if [ "${DEV_RELOAD:-0}" = "1" ]; then
+        reload_flag="..."
+    fi
+    python -m uvicorn ...
+fi
+```
+
+With `set -Eeuo pipefail` (line 25 of supervisor.sh), bash rejects `local`
+outside functions:
+```
+bash: line 495: local: can only be used in a function
+```
+errexit (`-e`) causes immediate script exit with code 1.
+
+**Failure chain**:
+1. Step 1-3 run normally (deps, migrations, admin)
+2. Step 4 (uvicorn launch) hits `local reload_flag=""` → SCRIPT EXITS
+3. Step 4B (frontend launch) NEVER RUNS
+4. server.js never starts → port 5000 dead → "site can't be reached"
+
+This is **the exact same regression as ISS-037** (commit `3fd78247`, fixed
+2026-05-09). The CI had no static guard to catch `local` outside functions.
+
+### Fix
+- `.devcontainer/supervisor.sh:495` — removed `local` keyword (line was inside
+  an `if/else` block at script body, not inside a function).
+- `.devcontainer/supervisor.sh:1277` — kept `local` (this one IS inside the
+  `_restart_uvicorn()` function, so `local` is valid).
+
+### Regression Test (NEW)
+`tests/fitness/test_supervisor_bash_local_scope.py` — 3 tests:
+1. AST-walk: detects `local` keyword outside function definitions.
+2. `bash -n` static syntax check.
+3. Live simulation of the exact script-body if/else pattern.
+
+This guards both ISS-037 and ISS-091 from ever recurring.
+
+### Live verification (2026-05-27)
+```bash
+bash -c 'set -Eeuo pipefail; if true; then local x=""; fi'
+# → bash: line 1: local: can only be used in a function
+# → exit 1   ← THIS IS WHAT KILLED THE SUPERVISOR
+
+bash -c 'set -Eeuo pipefail; if true; then x=""; fi'
+# → exit 0   ← FIX
+```
+
+### Severity
+🔴 CATASTROPHIC — total Codespaces frontend unavailability. Required hotfix
+commit on the same branch (`claude/fix-qa-session-stability-Uzaqt`).
+
+### Files Changed
+- `.devcontainer/supervisor.sh` — `local reload_flag=""` → `reload_flag=""`
+- `tests/fitness/test_supervisor_bash_local_scope.py` — 3 new regression tests

@@ -97,7 +97,10 @@ jobs:
 
   # ─── Job 2: Primary Model Verification ─────────────────────────────────────
   primary-model-correctness:
-    name: "🎯 PRIMARY model = gpt-oss-20b (not nemotron-nano)"
+    # D-088 (2026-05-27): PRIMARY تغيَّر من gpt-oss-20b إلى gpt-oss-120b
+    # بسبب rate-limiting دائم لـ gpt-oss-20b على OpenRouter (ISS-082).
+    # gpt-oss-20b يبقى في fallback chain.
+    name: "🎯 PRIMARY model = gpt-oss-120b (not nemotron-nano, D-088)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -105,36 +108,39 @@ jobs:
 
       - name: "app/core/ai_config.py PRIMARY"
         run: |
-          if ! grep -q 'PRIMARY = _resolve_primary_model("openai/gpt-oss-20b:free")' app/core/ai_config.py; then
-            echo "❌ app/core/ai_config.py PRIMARY must be openai/gpt-oss-20b:free (D-067)"
+          if ! grep -q 'PRIMARY = _resolve_primary_model("openai/gpt-oss-120b:free")' app/core/ai_config.py; then
+            echo "❌ app/core/ai_config.py PRIMARY must be openai/gpt-oss-120b:free (D-088)"
             grep "PRIMARY = _resolve_primary_model" app/core/ai_config.py
             exit 1
           fi
-          echo "✅ app/core/ai_config.py PRIMARY correct"
+          echo "✅ app/core/ai_config.py PRIMARY correct (gpt-oss-120b)"
 
       - name: "orchestrator-service PRIMARY"
         run: |
-          if ! grep -q 'PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_20B_FREE)' microservices/orchestrator_service/src/core/ai_config.py; then
-            echo "❌ orchestrator PRIMARY must reference GPT_OSS_20B_FREE"
+          if ! grep -q 'PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_120B_FREE)' microservices/orchestrator_service/src/core/ai_config.py; then
+            echo "❌ orchestrator PRIMARY must reference GPT_OSS_120B_FREE (D-088)"
+            grep "PRIMARY = _resolve_primary_model" microservices/orchestrator_service/src/core/ai_config.py
             exit 1
           fi
-          echo "✅ orchestrator PRIMARY correct"
+          echo "✅ orchestrator PRIMARY correct (GPT_OSS_120B_FREE)"
 
       - name: "math_pipeline default"
         run: |
-          if ! grep -q '_DEFAULT_MODEL = "openai/gpt-oss-20b:free"' microservices/conversation_service/src/math_pipeline.py; then
-            echo "❌ math_pipeline default model wrong"
+          if ! grep -q '_DEFAULT_MODEL = "openai/gpt-oss-120b:free"' microservices/conversation_service/src/math_pipeline.py; then
+            echo "❌ math_pipeline default model must be gpt-oss-120b:free (D-088)"
+            grep "_DEFAULT_MODEL" microservices/conversation_service/src/math_pipeline.py | head -3
             exit 1
           fi
-          echo "✅ math_pipeline default correct"
+          echo "✅ math_pipeline default correct (gpt-oss-120b)"
 
       - name: "conversation_graph default"
         run: |
-          if ! grep -q '_DEFAULT_MODEL = "openai/gpt-oss-20b:free"' microservices/conversation_service/src/conversation_graph.py; then
-            echo "❌ conversation_graph default model wrong"
+          if ! grep -q '_DEFAULT_MODEL = "openai/gpt-oss-120b:free"' microservices/conversation_service/src/conversation_graph.py; then
+            echo "❌ conversation_graph default model must be gpt-oss-120b:free (D-088)"
+            grep "_DEFAULT_MODEL" microservices/conversation_service/src/conversation_graph.py | head -3
             exit 1
           fi
-          echo "✅ conversation_graph default correct"
+          echo "✅ conversation_graph default correct (gpt-oss-120b)"
 
   # ─── Job 3: Prompt sanity (no box-drawing chars) ───────────────────────────
   prompt-sanity:

@@ -3275,6 +3275,23 @@ Transient blips don't trigger restarts. Real outages still recover within
 
 ---
 
+## D-ISS-093 — SECRET_KEY disk-wins + RuntimeError ASGI guard (2026-05-28)
+
+### Decision
+1. `_ensure_stable_secret_key` in `supervisor.sh` MUST give priority to the on-disk state file over any process-env value. "Disk wins" prevents SECRET_KEY rotation between restarts.
+2. Both `customer_chat.py` and `admin.py` outer `except` MUST catch `(WebSocketDisconnect, RuntimeError)` — not just `WebSocketDisconnect`. `receive_json()` raises `RuntimeError` when Codespaces proxy drops the connection abruptly.
+
+### Rationale
+- SECRET_KEY rotation invalidates all existing JWTs → 4401 on every WS connect → `useRealtimeConnection` retries → exhausts `MAX_FATAL_RETRIES=3` → fires `agent:auth_error` → `logout()` → user sees login screen → logs back in → same cycle.
+- `RuntimeError` escaping the ASGI handler causes uvicorn to log `Exception in ASGI application` and close the connection non-cleanly → frontend sees unexpected close → reconnect loop.
+
+### Files Changed
+- `app/api/routers/customer_chat.py` — outer except + inner receive_json guard
+- `app/api/routers/admin.py` — same
+- `.devcontainer/supervisor.sh` — disk-wins logic + post-ensure SECRET_KEY write to .env
+
+---
+
 ## D-ISS-092 — secrets.env is mandatory for Codespaces without Secrets configured (2026-05-28)
 
 ### Decision

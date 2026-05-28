@@ -387,6 +387,12 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
           rafPending = false;
           if (!mountedRef.current || deltaBuffer.length === 0) return;
 
+          // ISS-DELTA-BUG-001 (2026-05-28): حفظ baseEvent قبل splice —
+          // deltaBuffer.splice(0) يُفرغ المصفوفة فوراً، فـ deltaBuffer[0] بعدها = undefined.
+          // النتيجة القديمة: baseEvent={} → mergedEvent بدون _connection_id/_event_namespace
+          // → useAgentSocket يستقبل event بدون metadata → قد يُرفض أو يُعالَج بشكل خاطئ.
+          const baseEvent = deltaBuffer[deltaBuffer.length - 1] || {};
+
           // Merge all buffered delta content into a single chunk
           const merged = deltaBuffer.splice(0).reduce((acc, ev) => {
             const content = ev.payload?.content;
@@ -397,7 +403,6 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
           if (!merged) return;
 
           // Use the last buffered event as the envelope, replace content with merged
-          const baseEvent = deltaBuffer[0] || {};
           const mergedEvent = {
             ...baseEvent,
             type: 'assistant_delta',

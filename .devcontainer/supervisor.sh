@@ -298,8 +298,17 @@ _ensure_stable_secret_key
 
 # D-ISS-092: بعد _ensure_stable_secret_key، اكتب SECRET_KEY النهائي في .env
 # لضمان أن uvicorn يقرأ نفس المفتاح الذي يستخدمه الـ state file.
+# ملاحظة: _set_env_key تستخدم env_file المحلي لـ _inject_env_secrets — نكتب مباشرة هنا.
+# لا نستخدم local هنا (خارج دالة) — نستخدم متغير عادي ثم نحذفه.
 if [ -n "${SECRET_KEY:-}" ]; then
-    _set_env_key "SECRET_KEY" "$SECRET_KEY"
+    _iss092_env_f=".env"
+    if grep -q "^SECRET_KEY=" "$_iss092_env_f" 2>/dev/null; then
+        sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET_KEY}|" "$_iss092_env_f"
+    else
+        echo "SECRET_KEY=${SECRET_KEY}" >> "$_iss092_env_f"
+    fi
+    unset _iss092_env_f
+    lifecycle_info "SECRET_KEY written to .env (${#SECRET_KEY} chars)"
 fi
 
 lifecycle_info "✅ System ready"

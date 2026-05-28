@@ -6450,4 +6450,161 @@ end-to-end path with real Supabase + OpenRouter.
 | **D-SECRET-002** | **portable state path (resolves outside `/app`)** |
 | **D-HEALTH-001** | **3-failure threshold + 15s timeout (no blip restarts)** |
 | **D-WS-HEARTBEAT-002** | **HEARTBEAT_TIMEOUT 15s → 90s (long stream tolerance)** |
+| **D-094-BOOT** | **supervisor.sh: لا تستدعِ nested function خارج نطاقها** |
+| **D-094-DELTA** | **flushDeltaBuffer: احفظ baseEvent قبل splice()** |
+| **D-094-REQID** | **assistant_final يجب أن يُصفِّر activeRequestIdRef** |
+
+---
+
+## 6.69 Triple Boot+Delta+RequestId Catastrophe — ISS-094 (2026-05-28)
+
+> **الكارثة**: النظام لا يبدأ أصلاً بعد restart في Codespaces. وعند بدئه يدوياً،
+> الردود تصل فارغة في الـ frontend، والمستخدم يُطرد إلى صفحة تسجيل الدخول بعد
+> كل سؤال. ثلاث مشاكل جذرية مستقلة تتضافر لتُنتج كارثة واحدة.
+
+### RC-1: Supervisor crash — `_set_env_key` خارج نطاقها (D-094-BOOT)
+
+**الجذر**: السطر 299 في `supervisor.sh` يستدعي `_set_env_key "SECRET_KEY" "$SECRET_KEY"`
+بعد انتهاء `_inject_env_secrets`. الدالة `_set_env_key` مُعرَّفة داخل `_inject_env_secrets`
+وتبقى في bash namespace لكن `env_file` متغير محلي لها — يختفي عند انتهاء الدالة.
+مع `set -u` (strict mode): `env_file: unbound variable` → crash فوري → لا uvicorn، لا frontend.
+
+```bash
+# ❌ قبل (crash):
+_inject_env_secrets() {
+    local env_file=".env"
+    _set_env_key() { ... uses $env_file ... }  # nested — env_file محلي
+}
+_ensure_stable_secret_key
+if [ -n "${SECRET_KEY:-}" ]; then
+    _set_env_key "SECRET_KEY" "$SECRET_KEY"  # ❌ env_file: unbound variable
+fi
+
+# ✅ بعد (صحيح):
+if [ -n "${SECRET_KEY:-}" ]; then
+    _iss092_env_f=".env"
+    if grep -q "^SECRET_KEY=" "$_iss092_env_f" 2>/dev/null; then
+        sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET_KEY}|" "$_iss092_env_f"
+    else
+        echo "SECRET_KEY=${SECRET_KEY}" >> "$_iss092_env_f"
+    fi
+    unset _iss092_env_f
+fi
+```
+
+**القانون الدائم (D-094-BOOT)**:
+> في bash، لا تستدعِ دالة nested خارج نطاق الدالة الأم. المتغيرات المحلية
+> للدالة الأم تختفي عند انتهائها. استخدم `sed`/`awk` مباشرة أو عرِّف الدالة
+> في النطاق العام.
+
+### RC-2: `flushDeltaBuffer` bug — `baseEvent` دائماً `undefined` (D-094-DELTA)
+
+**الجذر**: في `useRealtimeConnection.js`، `flushDeltaBuffer` كانت تستدعي
+`deltaBuffer.splice(0)` أولاً (يُفرغ المصفوفة فوراً) ثم `deltaBuffer[0]`
+(دائماً `undefined` بعد splice). النتيجة: كل الـ delta events تُرسَل بدون
+`_connection_id`/`_event_namespace`/`request_id` من الـ event الأصلي.
+
+```js
+// ❌ قبل (bug):
+const flushDeltaBuffer = () => {
+  const merged = deltaBuffer.splice(0).reduce(...);  // يُفرغ المصفوفة
+  const baseEvent = deltaBuffer[0] || {};             // دائماً undefined!
+  // mergedEvent بدون metadata → events قد تُرفض
+};
+
+// ✅ بعد (صحيح):
+const flushDeltaBuffer = () => {
+  const baseEvent = deltaBuffer[deltaBuffer.length - 1] || {};  // قبل splice
+  const merged = deltaBuffer.splice(0).reduce(...);
+  // mergedEvent يحمل كل metadata من آخر event
+};
+```
+
+**القانون الدائم (D-094-DELTA)**:
+> في JavaScript، إذا احتجت قيمة من مصفوفة قبل تفريغها بـ `splice(0)` أو
+> `length = 0`، احفظها في متغير قبل العملية. `array.splice(0)` يُعيد نسخة
+> من العناصر لكن يُفرغ المصفوفة الأصلية فوراً.
+
+### RC-3: `activeRequestIdRef` لا يُصفَّر عند `assistant_final` (D-094-REQID)
+
+**الجذر**: `useAgentSocket.js` يُصفِّر `activeRequestIdRef.current = null` عند
+`complete` و`error` لكن ليس عند `assistant_final`. الـ orchestrator يُرسل
+`assistant_final` وليس `complete`. النتيجة: بعد الرد الأول، `activeRequestId`
+لا يزال موجوداً → السؤال الثاني يُرسَل بـ `clientRequestId` جديد → الـ events
+القادمة قد تُرفض بسبب request_id mismatch → الـ frontend يعتقد أن الرد فارغ
+→ kick-to-login.
+
+```js
+// ❌ قبل (bug):
+} else if (type === 'assistant_final') {
+    const content = payload?.content || '';
+    // activeRequestIdRef.current لا يزال يحمل القيمة القديمة!
+
+// ✅ بعد (صحيح):
+} else if (type === 'assistant_final') {
+    activeRequestIdRef.current = null;  // صفِّر فوراً
+    const content = payload?.content || '';
+```
+
+**القانون الدائم (D-094-REQID)**:
+> كل event يُنهي دورة request/response يجب أن يُصفِّر `activeRequestIdRef`.
+> الـ orchestrator يُرسل `assistant_final` — ليس `complete`. تأكد من أن
+> كل terminal event type يُصفِّر الـ ref.
+
+### التحقق الحي (2026-05-28)
+
+```
+Backend:    curl http://localhost:8000/health → {"application":"ok","database":"ok"}
+Frontend:   http://localhost:5000 → HTML ✅
+Login:      houssamannaba963@gmail.com / 1111 → JWT ✅
+WS connect: ws://localhost:8000/api/chat/ws → session_ready ✅
+Q1 (مشتق x²):   998 chunks، 2412 حرف عربي + LaTeX ✅
+Token after Q1:  /api/v1/users/me → 200 (لا kick-to-login) ✅
+Q2 (تكامل x²):  972 chunks، 2501 حرف عربي + LaTeX ✅
+Model PRIMARY:   openai/gpt-oss-120b:free → finish_reason=stop ✅
+Orchestrator:    http://localhost:8006/health → graph_ready=true ✅
+```
+
+### القواعد الثلاث الدائمة (D-094 — لا تُكسر بدون ADR)
+
+1. **D-094-BOOT**: في `supervisor.sh`، لا تستدعِ دالة nested خارج نطاق الدالة الأم.
+   استخدم `sed`/`awk` مباشرة أو عرِّف الدالة في النطاق العام.
+
+2. **D-094-DELTA**: في `flushDeltaBuffer` (وأي كود مشابه)، احفظ مرجع العنصر
+   من المصفوفة **قبل** `splice(0)`. `splice` يُفرغ المصفوفة فوراً.
+
+3. **D-094-REQID**: كل terminal event (`assistant_final`, `complete`, `error`,
+   `stream_end`) يجب أن يُصفِّر `activeRequestIdRef.current = null` في
+   `useAgentSocket.js`.
+
+### ملف `secrets.env` — إلزامي عند كل restart في Codespaces
+
+```bash
+# /app/.devcontainer/secrets.env (git-ignored)
+APP_DATABASE_URL=postgresql://...
+DATABASE_URL=postgresql://...
+OPENROUTER_API_KEY=sk-or-v1-...
+TAVILY_API_KEY=tvly-dev-...
+ENVIRONMENT=development
+```
+
+هذا الملف ضروري لأن Codespaces Secrets غير مُهيَّأة في هذه البيئة.
+`supervisor.sh` يقرأه تلقائياً في `_inject_env_secrets()`.
+
+### السلسلة الكاملة (D-WS-FLAP-004 → D-094)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-FLAP-001 → D-WS-FLAP-004 | WebSocket flapping + UI flicker |
+| D-WS-AUTH-001 | bounded 4401 retry + HTTP /me probe |
+| D-WS-SECRET-KEY-001 | shared SECRET_KEY defaults |
+| D-088 | PRIMARY model gpt-oss-120b |
+| D-SECRET-001/002 | SECRET_KEY persistence + portable path |
+| D-RELOAD-001 | `--reload` opt-in only |
+| D-HEALTH-001 | 3-failure threshold |
+| D-WS-HEARTBEAT-002 | HEARTBEAT_TIMEOUT 90s |
+| ISS-093 | RuntimeError ASGI escape + disk-wins SECRET_KEY |
+| **D-094-BOOT** | **supervisor nested function scope crash** |
+| **D-094-DELTA** | **flushDeltaBuffer baseEvent-after-splice bug** |
+| **D-094-REQID** | **assistant_final activeRequestIdRef reset** |
 

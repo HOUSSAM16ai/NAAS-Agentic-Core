@@ -3198,3 +3198,91 @@ commit on the same branch (`claude/fix-qa-session-stability-Uzaqt`).
 ### Files Changed
 - `.devcontainer/supervisor.sh` — `local reload_flag=""` → `reload_flag=""`
 - `tests/fitness/test_supervisor_bash_local_scope.py` — 3 new regression tests
+
+---
+
+## ISS-094 — Supervisor boot crash + delta buffer bug + request_id leak (2026-05-28)
+
+### Symptoms
+1. النظام لا يبدأ (لا uvicorn، لا frontend) بعد restart في Codespaces.
+2. الـ WebSocket يتصل لكن الردود تصل فارغة في الـ frontend.
+3. kick-to-login بعد كل سؤال.
+
+### Root Causes (3 مشاكل مستقلة)
+
+**RC-1: `_set_env_key` خارج نطاقها في supervisor.sh**
+السطر 299 في supervisor.sh يستدعي `_set_env_key "SECRET_KEY" "$SECRET_KEY"` بعد
+انتهاء `_inject_env_secrets`. الدالة `_set_env_key` مُعرَّفة داخل `_inject_env_secrets`
+فتبقى في bash لكن `env_file` متغير محلي لها → `unbound variable` مع `set -u` → crash.
+
+**RC-2: `flushDeltaBuffer` bug في `useRealtimeConnection.js`**
+```js
+const merged = deltaBuffer.splice(0).reduce(...);  // يُفرغ المصفوفة
+const baseEvent = deltaBuffer[0] || {};             // دائماً undefined بعد splice!
+```
+النتيجة: `mergedEvent` بدون `_connection_id`/`_event_namespace`/`request_id` من الـ event
+الأصلي. الـ content موجود لكن metadata مفقودة → events قد تُرفض أو تُعالَج بشكل خاطئ.
+
+**RC-3: `activeRequestIdRef` لا يُصفَّر عند `assistant_final`**
+`useAgentSocket.js` يُصفِّر `activeRequestIdRef.current = null` عند `complete` و`error`
+لكن ليس عند `assistant_final`. الـ orchestrator يُرسل `assistant_final` وليس `complete`.
+النتيجة: بعد الرد الأول، `activeRequestId` لا يزال موجوداً → السؤال الثاني يُرسَل بـ
+`clientRequestId` جديد لكن الـ events القادمة قد تُرفض بسبب mismatch.
+
+### Fixes Applied
+
+**Fix RC-1** — `supervisor.sh` line 299:
+```bash
+# قبل (crash):
+if [ -n "${SECRET_KEY:-}" ]; then
+    _set_env_key "SECRET_KEY" "$SECRET_KEY"  # env_file: unbound variable
+fi
+
+# بعد (صحيح):
+if [ -n "${SECRET_KEY:-}" ]; then
+    _iss092_env_f=".env"
+    if grep -q "^SECRET_KEY=" "$_iss092_env_f" 2>/dev/null; then
+        sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET_KEY}|" "$_iss092_env_f"
+    else
+        echo "SECRET_KEY=${SECRET_KEY}" >> "$_iss092_env_f"
+    fi
+    unset _iss092_env_f
+fi
+```
+
+**Fix RC-2** — `useRealtimeConnection.js` `flushDeltaBuffer`:
+```js
+// قبل (bug):
+const merged = deltaBuffer.splice(0).reduce(...);
+const baseEvent = deltaBuffer[0] || {};  // undefined!
+
+// بعد (صحيح):
+const baseEvent = deltaBuffer[deltaBuffer.length - 1] || {};  // قبل splice
+const merged = deltaBuffer.splice(0).reduce(...);
+```
+
+**Fix RC-3** — `useAgentSocket.js` `assistant_final` handler:
+```js
+} else if (type === 'assistant_final') {
+    activeRequestIdRef.current = null;  // أُضيف — يُصفِّر عند اكتمال الرد
+    ...
+```
+
+### Live Verification (2026-05-28)
+```
+✅ تسجيل دخول المستخدم: houssamannaba963@gmail.com
+✅ WebSocket متصل على ws://localhost:8000/api/chat/ws
+✅ سؤال 1 (مشتق x^2): 998 chunks، 2412 حرف — رد كامل بالعربية + LaTeX
+✅ Token ثابت بعد الرد (لا kick-to-login)
+✅ سؤال 2 (تكامل x^2): 972 chunks، 2501 حرف — رد كامل بالعربية + LaTeX
+✅ النموذج PRIMARY: openai/gpt-oss-120b:free — يعمل بشكل صحيح
+✅ Orchestrator: http://localhost:8006/api/chat/messages — يعمل
+✅ Backend: http://localhost:8000/health → {"application":"ok","database":"ok"}
+✅ Frontend: http://localhost:5000 — يعمل
+```
+
+### Files Changed
+- `.devcontainer/supervisor.sh` — إصلاح `_set_env_key` خارج النطاق
+- `.devcontainer/secrets.env` — أُنشئ بالأسرار الحقيقية (git-ignored)
+- `frontend/app/hooks/useRealtimeConnection.js` — إصلاح `flushDeltaBuffer` baseEvent
+- `frontend/app/hooks/useAgentSocket.js` — إضافة `activeRequestIdRef.current = null` في `assistant_final`

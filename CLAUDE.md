@@ -6607,4 +6607,128 @@ ENVIRONMENT=development
 | **D-094-BOOT** | **supervisor nested function scope crash** |
 | **D-094-DELTA** | **flushDeltaBuffer baseEvent-after-splice bug** |
 | **D-094-REQID** | **assistant_final activeRequestIdRef reset** |
+| **D-095** | **NEVER auto-set ENVIRONMENT=testing — preserves 480-min JWT in SQLite fallback (ISS-094 round 2)** |
+
+---
+
+## 6.70 The Persistent Kick-to-Login Catastrophe — Round 2 (2026-05-28, ISS-094-R2 / D-095)
+
+> الكارثة المتكررة: المستخدم يُبلِّغ بعد كل من ISS-092 / ISS-093 / ISS-094 أنه **لا يزال** يُطرد من الجلسة بعد فترة، رغم أن كل إصلاح يدّعي الحل النهائي. السبب: ثلاث إصلاحات سابقة عالجت أعراضاً مختلفة، لكن **الجذر الأعمق** بقي.
+
+### الجذر الأعمق (مكشوف بالتجريب الحي مع SQLite + supervisor.sh simulation)
+
+عندما يفتقد المستخدم `Codespaces Secrets` **و** ينقصه `.devcontainer/secrets.env`:
+
+1. `devcontainer.json` يحقن `APP_DATABASE_URL=""` (empty string من `${localEnv:APP_DATABASE_URL}`)
+2. `supervisor.sh:_inject_env_secrets` يحسب `real_db_url=""` (empty after `:-` chain)
+3. يدخل else branch ⇒ يضبط `DATABASE_URL=sqlite+aiosqlite:///:memory:` **و**
+   ضبط `ENVIRONMENT=testing` ← السبب الجذري الحقيقي
+4. `app/services/auth/crypto.py:36-40` يقرأ `ENVIRONMENT` عند **module import time**:
+   ```python
+   _ENV = (os.environ.get("ENVIRONMENT") or "").strip().lower()
+   _IS_DEV_LIKE = _ENV in ("development", "dev", "local") or _ALLOW_LONG
+   ACCESS_EXPIRE_MINUTES: Final[int] = 480 if _IS_DEV_LIKE else 30
+   ```
+5. `testing` ليست في القائمة ⇒ `_IS_DEV_LIKE=False` ⇒ `ACCESS_EXPIRE_MINUTES=30`
+6. كل JWT يُصدَر بعمر **30 دقيقة فقط**
+7. بعد 30 دقيقة من الجلسة، كل WS reconnect يحصل على 4401 من
+   `decode_user_id` (token expired)
+8. Frontend بعد `MAX_FATAL_RETRIES=3` يُطلق `agent:auth_error` →
+   `setTimeout(logout, 2000)` → kick to login
+9. المستخدم يدخل مرة أخرى → token جديد (30 min) → cycle يتكرر **كل 30 دقيقة**
+
+### لماذا ISS-092/093/094 لم تحلّ هذا
+
+- **ISS-092**: أضاف منطق «إذا كان DB حقيقياً، اضبط ENVIRONMENT=development» —
+  لكن الـ else branch (SQLite fallback) لا يزال يكتب `ENVIRONMENT=testing`.
+  المستخدمون الذين لا يملكون secrets configured كانوا لا يزالون في 30-min mode.
+- **ISS-093**: عالج `RuntimeError` في ASGI + `SECRET_KEY` rotation. هذان جذران
+  مختلفان عن jwt lifetime.
+- **ISS-094**: عالج supervisor crash + frontend delta bug + activeRequestId reset.
+  كل هذه bugs حقيقية، لكنها لا تُفسِّر دورة الـ 30 دقيقة.
+
+### الإصلاح (D-095 — جراحي)
+
+`supervisor.sh:_inject_env_secrets` الـ else branch:
+```bash
+# ❌ قبل (D-095 violation)
+_set_env_key "DATABASE_URL" "sqlite+aiosqlite:///:memory:"
+_set_env_key "ENVIRONMENT" "testing"   # يكسر JWT lifetime
+_set_env_key "TESTING" "1"
+
+# ✅ بعد (D-095 compliant)
+lifecycle_error "🚨 CRITICAL: DATABASE_URL not configured — DEGRADED MODE"
+lifecycle_error "   To fix: configure Codespaces Secrets or create secrets.env"
+_set_env_key "DATABASE_URL" "sqlite+aiosqlite:///:memory:"
+_set_env_key "ENVIRONMENT" "development"   # ← يحافظ على 480-min tokens
+_set_env_key "TESTING" "1"                  # ← لا يزال متاحاً كـ separate flag
+```
+
+### القواعد الـ 4 الدائمة (D-095 — لا تُكسر بدون ADR)
+
+1. **`ENVIRONMENT=testing` ممنوع كقيمة تلقائية في supervisor.sh** — يجب
+   ضبطه صراحةً فقط من pytest fixtures للاختبارات الحقيقية.
+2. **JWT lifetime ≥ 480 دقيقة في كل dev/Codespaces paths** — أقل من ذلك =
+   kick-to-login catastrophe.
+3. **`TESTING=1` منفصل عن `ENVIRONMENT`**: العلَم منفصل لـ code paths
+   (LLM mocking, fixture isolation) ولا يؤثر على JWT lifetime.
+4. **رسائل CRITICAL ERROR loud عند secrets مفقودة** — المستخدم يجب أن
+   يرى فوراً ما عليه فعله (configure Codespaces Secrets أو create secrets.env).
+
+### التجريب الحي (2026-05-28)
+
+```bash
+# Test 1: محاكاة Degraded Boot (no DB env, no secrets.env)
+$ bash -c '(_inject_env_secrets simulation with empty env)'
+🚨 CRITICAL: DATABASE_URL not configured — DEGRADED MODE
+ENVIRONMENT=development   ← كان 'testing'
+DATABASE_URL=sqlite+aiosqlite:///:memory:
+TESTING=1
+
+# Test 2: التحقق أن crypto.py يحترم ENVIRONMENT=development
+$ ENVIRONMENT=development python3 -c "from app.services.auth.crypto import ACCESS_EXPIRE_MINUTES; print(ACCESS_EXPIRE_MINUTES)"
+480   ← كان 30
+
+# Test 3: end-to-end WS chat (with SQLite fallback)
+$ python3 /tmp/user_scenario.py
+✅ Step 1: /me works (200 OK)
+✅ Step 2: List conversations (17 found)
+✅ Step 3: Load conversation (2 messages)
+✅ Step 4: Q1 → 996 deltas, 2658 chars Arabic response
+✅ Step 5: Q2 (multi-turn) → 488 deltas, 1279 chars
+
+# Test 4: 5-question stress test on same WS
+$ python3 /tmp/ws_session_stress.py
+Q1: 514 deltas (15.1s) ✅
+Q2: 623 deltas (23.5s) ✅
+Q3: 479 deltas (12.5s) ✅
+Q4: 549 deltas (14.0s) ✅
+Q5: 469 deltas (16.4s) ✅
+
+# Regression: لا كسر للـ existing tests
+$ pytest tests/fitness/test_supervisor_*.py tests/services/test_secret_key_*.py
+11/11 PASS ✅
+```
+
+### الملفات (D-095)
+
+| File | Change |
+|------|--------|
+| `.devcontainer/supervisor.sh` | else branch لـ DATABASE_URL: `ENVIRONMENT=development` بدلاً من `testing` + رسالة CRITICAL ERROR loud |
+| `tests/fitness/test_supervisor_never_sets_testing_env.py` | **جديد** — 2 regression tests يمنعان عودة الـ bug |
+| `.memory/issues.md` | إدخال ISS-094-R2 / D-095 |
+| `.memory/decisions.md` | إدخال D-095 |
+| `CLAUDE.md` §6.70 | هذا القسم |
+
+### ملاحظة للمستخدم النهائي
+
+إذا كنت ترى هذه الكارثة في GitHub Codespaces:
+1. **الحل الأمثل**: قم بتكوين Codespaces Secrets في
+   `https://github.com/settings/codespaces` وأضف:
+   - `APP_DATABASE_URL` = Supabase Postgres URL
+   - `OPENROUTER_API_KEY` = مفتاح OpenRouter
+2. **الحل البديل**: انسخ `.devcontainer/secrets.env.example` إلى
+   `.devcontainer/secrets.env` واملأ القيم الحقيقية. هذا الملف git-ignored.
+3. **بعد D-095**: حتى لو لم تفعل أياً من ذلك، النظام سيعمل بـ SQLite
+   (degraded mode) لكن **لن يطردك إلى صفحة الدخول** كل 30 دقيقة.
 

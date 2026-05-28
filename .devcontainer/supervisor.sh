@@ -183,9 +183,37 @@ ENVEOF
         local existing_db
         existing_db=$(grep "^DATABASE_URL=" "$env_file" 2>/dev/null | cut -d= -f2- || true)
         if [ -z "$existing_db" ] || echo "$existing_db" | grep -q "sqlite"; then
-            lifecycle_warn "DATABASE_URL not set in environment — using in-memory SQLite (TESTING mode)"
+            # ─────────────────────────────────────────────────────────────────
+            # ISS-094 round 2 (D-095 — 2026-05-28): NEVER auto-set ENVIRONMENT=testing.
+            #
+            # السبب الجذري لـ "kick-to-login" المستمر بعد ISS-092/ISS-093/ISS-094:
+            #   1. secrets.env مفقود أو Codespaces Secrets غير مُهيَّأة
+            #   2. real_db_url فارغ → supervisor يضبط ENVIRONMENT=testing
+            #   3. crypto.py يقرأ ENVIRONMENT=testing → ACCESS_EXPIRE_MINUTES=30
+            #   4. بعد 30 دقيقة من الجلسة، كل token ينتهي → 4401 → kick
+            #
+            # الحل: حتى لو وقعنا في SQLite mode (degraded LLM)، نُبقي
+            # ENVIRONMENT=development لضمان tokens لـ 480 دقيقة.
+            # TESTING=1 يبقى كإشارة منفصلة للـ code paths التي تحتاجها.
+            # ─────────────────────────────────────────────────────────────────
+            lifecycle_error "═══════════════════════════════════════════════════════════════"
+            lifecycle_error "🚨 CRITICAL: DATABASE_URL not configured — DEGRADED MODE"
+            lifecycle_error "   Falling back to in-memory SQLite (data will be LOST on restart)"
+            lifecycle_error ""
+            lifecycle_error "   To fix permanently, do ONE of the following:"
+            lifecycle_error "   1. Configure Codespaces Secrets at:"
+            lifecycle_error "      https://github.com/settings/codespaces"
+            lifecycle_error "      Add: APP_DATABASE_URL, OPENROUTER_API_KEY"
+            lifecycle_error ""
+            lifecycle_error "   2. Or create .devcontainer/secrets.env:"
+            lifecycle_error "      cp .devcontainer/secrets.env.example .devcontainer/secrets.env"
+            lifecycle_error "      # then edit and fill in real values"
+            lifecycle_error "═══════════════════════════════════════════════════════════════"
             _set_env_key "DATABASE_URL" "sqlite+aiosqlite:///:memory:"
-            _set_env_key "ENVIRONMENT" "testing"
+            # D-095: do NOT set ENVIRONMENT=testing here — keeps JWT lifetime at 480 min
+            #        (development mode). Otherwise users get kicked to login after 30 min.
+            _set_env_key "ENVIRONMENT" "development"
+            # TESTING=1 is a separate flag for code paths that need it (LLM mocking, etc.)
             _set_env_key "TESTING" "1"
             changed=1
         fi

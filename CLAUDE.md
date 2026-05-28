@@ -6591,7 +6591,7 @@ ENVIRONMENT=development
 هذا الملف ضروري لأن Codespaces Secrets غير مُهيَّأة في هذه البيئة.
 `supervisor.sh` يقرأه تلقائياً في `_inject_env_secrets()`.
 
-### السلسلة الكاملة (D-WS-FLAP-004 → D-094)
+### السلسلة الكاملة (D-WS-FLAP-004 → D-096)
 
 | Decision | المُصلَح |
 |----------|---------|
@@ -6608,6 +6608,7 @@ ENVIRONMENT=development
 | **D-094-DELTA** | **flushDeltaBuffer baseEvent-after-splice bug** |
 | **D-094-REQID** | **assistant_final activeRequestIdRef reset** |
 | **D-095** | **NEVER auto-set ENVIRONMENT=testing — preserves 480-min JWT in SQLite fallback (ISS-094 round 2)** |
+| **D-096** | **WebSocket send concurrency lock — BKT/stream/heartbeat must not race on send_json (ISS-094 round 3)** |
 
 ---
 
@@ -6731,4 +6732,99 @@ $ pytest tests/fitness/test_supervisor_*.py tests/services/test_secret_key_*.py
    `.devcontainer/secrets.env` واملأ القيم الحقيقية. هذا الملف git-ignored.
 3. **بعد D-095**: حتى لو لم تفعل أياً من ذلك، النظام سيعمل بـ SQLite
    (degraded mode) لكن **لن يطردك إلى صفحة الدخول** كل 30 دقيقة.
+
+---
+
+## 6.71 WebSocket Send Concurrency Lock — Kick in SECONDS (2026-05-28, ISS-094-R3 / D-096)
+
+> **User clarification — the actual root cause**: المستخدم وضّح أن D-095 fix لم يكن يعالج الكارثة الحقيقية. الـ kick يحدث **في ثواني فقط** بعد 1-2 سؤال، وليس بعد 30 دقيقة. الأسرار محقونة جيداً.
+
+### الجذر الحقيقي (D-096)
+
+`customer_chat.py:WS handler` يُشغّل عمليتين متزامنتين على نفس الـ WebSocket:
+
+```python
+# BKT — background task يكتب DB ثم يُرسل ui_component
+_bkt_task = asyncio.create_task(_evaluate_and_emit_bkt(...))
+
+# stream_and_forward — يبثّ deltas + final + persisted
+await stream_task  # داخله عشرات websocket.send_json
+```
+
+**كلاهما يستدعي `websocket.send_json` على نفس الـ WS بدون قفل.**
+Starlette's `WebSocket.send_json` **ليس coroutine-safe** للاستدعاءات المتزامنة.
+
+### لماذا SQLite لا يُظهر الكارثة + Supabase نعم
+
+| DB | BKT duration | تزامن مع stream؟ |
+|----|--------------|------------------|
+| SQLite | <50ms | لا — BKT ينتهي قبل بدء stream |
+| Supabase | 300ms-2s | نعم — overlap كبير |
+
+عند overlap على Supabase:
+1. ASGI send protocol corruption (interleaved frame bytes)
+2. silent WebSocket close بـ 1006/1011
+3. Frontend reconnects automatically
+4. New WS قد يفشل لـ race آخر أو state mismatch → 4401
+5. بعد 3 محاولات → `agent:auth_error` → logout(2s) → kick to login
+6. Auto re-login → DashboardLayout fresh → conversationId=null → **"محادثة جديدة"**
+
+### الإصلاح (D-096 — جراحي)
+
+```python
+# Helper جديد
+async def _locked_send_json(websocket, lock, payload):
+    async with lock:
+        await websocket.send_json(payload)
+
+# في كل WS handler invocation
+send_lock = asyncio.Lock()
+
+# كل مسار يستخدم القفل
+await _locked_send_json(websocket, send_lock, event)
+await _evaluate_and_emit_bkt(websocket=ws, send_lock=send_lock, ...)
+await _emit_terminal_frames(websocket=ws, send_lock=send_lock, ...)
+await handle_control_message(websocket, payload, send_lock=send_lock)
+```
+
+### القواعد الـ 5 الدائمة (D-096 — لا تُكسر بدون ADR)
+
+1. **كل `websocket.send_json` على WS مشتركة يجب أن يمر عبر قفل تسلسلي.**
+2. **`_locked_send_json(ws, lock, payload)` هو نقطة الإرسال الوحيدة** في streaming paths.
+3. **`send_lock = asyncio.Lock()` يُنشأ مرة واحدة لكل WS handler** ويُمرَّر لكل callee.
+4. **`_evaluate_and_emit_bkt` و `_emit_terminal_frames` و `handle_control_message` تأخذ `send_lock`** — invariant مُتحقَّق منه بـ regression tests.
+5. **CI gate (tests/services/test_ws_send_concurrency_lock.py)** يمنع عودة الـ bug عبر static analysis لـ source code.
+
+### التجريب الحي (2026-05-28)
+
+```bash
+# Test 1: 6/6 D-096 unit tests
+$ pytest tests/services/test_ws_send_concurrency_lock.py -v
+6/6 PASS ✅
+
+# Test 2: Concurrent ping + question (forced race)
+2 pongs + 44 deltas + final + persisted — perfectly sequenced ✅
+
+# Test 3: EXTREME — 10 questions back-to-back + ping every 500ms
+=== RESULTS: 10/10 succeeded ===
+  Q1: 921 deltas (46.7s)
+  Q2: 981 deltas (33.1s)
+  Q3: 312 deltas (11.3s)
+  ... Q10: 258 deltas (19.0s)
+
+# Test 4: regression
+$ pytest tests/services/test_ws_heartbeat_skill.py tests/fitness/test_supervisor_*
+43+ PASS ✅
+```
+
+### الملفات (D-096)
+
+| File | Change |
+|------|--------|
+| `app/api/routers/customer_chat.py` | + `_locked_send_json()` helper + `send_lock = asyncio.Lock()` per WS + كل المسارات تستخدم القفل |
+| `app/services/skills/ws_heartbeat_skill.py` | + معامل اختياري `send_lock` في `handle_control_message()` |
+| `tests/services/test_ws_send_concurrency_lock.py` | **جديد** — 6 regression tests |
+| `.memory/issues.md` | إدخال ISS-094-R3 / D-096 |
+| `.memory/decisions.md` | إدخال D-096 |
+| `CLAUDE.md` §6.71 | هذا القسم |
 

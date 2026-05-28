@@ -1,5 +1,99 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-28 | Branch: `claude/fix-qa-session-crashes-kjoAI`
+> Last updated: 2026-05-28 | Branch: `claude/fix-ws-send-race-condition`
+
+---
+
+## ✅ Resolved 2026-05-28 (ISS-094-R3 — WebSocket Send Race → Kick in SECONDS, not 30 min)
+
+### ISS-094 round 3 (D-096) · المستخدم يُطرَد بعد ثواني فقط من 1-2 سؤال [RESOLVED]
+
+- **Status**: RESOLVED 2026-05-28
+- **Severity**: 🔴 CRITICAL (الكارثة المتكررة بعد D-095)
+- **Environment**: GitHub Codespaces مع Supabase (الكارثة لا تظهر مع SQLite)
+
+#### اكتشاف الجذر (مكشوف بالتجريب الحي + clarification من المستخدم)
+
+المستخدم وضّح أن الكارثة ليست بعد 30 دقيقة (D-095 fix غير صحيح للسبب الحقيقي):
+> «الأسرار موجودة ليست المشكلة فيها ... اقدر اسأل سؤال أو اثنين قبل الطرد
+>  ثم بعد ثواني يطردني و اجد نفسي في محادثة جديدة»
+
+#### الجذر الحقيقي (D-096): WS Send Concurrency Race
+
+`customer_chat.py:WS handler` يُشغّل عمليتين متزامنتين على نفس الـ WebSocket:
+
+```python
+# 1. BKT background task — يكتب لقاعدة البيانات ثم يُرسل ui_component
+_bkt_task = asyncio.create_task(_evaluate_and_emit_bkt(...))
+
+# 2. stream_and_forward — يبثّ deltas + final + persisted
+await stream_task  # داخله: await websocket.send_json(...) عشرات المرات
+```
+
+**كلاهما يستدعي `await websocket.send_json(...)` على نفس الـ WebSocket.**
+Starlette's `WebSocket.send_json` **ليس coroutine-safe** للاستدعاءات المتزامنة.
+
+#### لماذا SQLite لا يُظهر الكارثة + Supabase نعم
+
+- **SQLite**: DB write لـ BKT يكتمل في <50ms. BKT ينتهي قبل بدء stream → لا تزامن فعلي → لا race.
+- **Supabase**: DB write يأخذ 300ms-2s عبر الشبكة. BKT و stream **متزامنان** على send_json → ASGI protocol corruption → silent WebSocket close.
+
+#### السلسلة الكارثية
+
+1. المستخدم يرسل Q1 → BKT يبدأ، stream يبدأ بالتوازي
+2. BKT يكتمل قبل stream في SQLite (لا تزامن) → نجاح
+3. المستخدم يرسل Q2 → نفس الحالة، نجاح
+4. مع Supabase الأبطأ، Q3 أو Q4 قد يُسبب overlap بين BKT.send و stream.send
+5. الـ overlap يُسبب ASGI corruption → WS close بـ 1006/1011
+6. Frontend يرى close غير fatal → reconnect
+7. New WS قد يفشل لـ race condition جديدة أو state mismatch → 4401
+8. بعد 3 محاولات → `agent:auth_error` → logout(2s) → kick to login
+9. Auto re-login → DashboardLayout fresh state → conversationId=null → "محادثة جديدة"
+
+#### Fix Applied (D-096)
+
+| الملف | التغيير |
+|-------|---------|
+| `app/api/routers/customer_chat.py` | + `_locked_send_json()` helper + `send_lock = asyncio.Lock()` في كل WS handler + كل المسارات (BKT، stream، terminal_frames، session_ready، error sends، control messages) تستخدم القفل |
+| `app/services/skills/ws_heartbeat_skill.py` | + معامل اختياري `send_lock` في `handle_control_message()` لمنع pong من التزامن مع stream |
+| `tests/services/test_ws_send_concurrency_lock.py` | **جديد** — 6 regression tests يفرضون استخدام القفل |
+
+#### القواعد الـ 5 الدائمة (D-096 — لا تُكسر بدون ADR)
+
+1. **كل `websocket.send_json` على WS مشتركة يجب أن يمر عبر القفل.** الـ background tasks (BKT) و main stream لا يجوز لهما الإرسال مباشرة على نفس socket.
+2. **`_locked_send_json(ws, lock, payload)` هو نقطة الإرسال الوحيدة** لـ WS streaming paths في customer_chat.py.
+3. **`send_lock = asyncio.Lock()` يُنشأ مرة واحدة لكل WS handler invocation** ويُمرَّر لكل دالة فرعية تحتاج الإرسال.
+4. **`_evaluate_and_emit_bkt` و `_emit_terminal_frames` و `handle_control_message` تأخذ `send_lock` parameter** — هذا invariant مُتحقَّق منه بـ regression tests.
+5. **CI gate جديد** يمنع عودة الـ bug عبر static analysis لـ source code patterns.
+
+#### Verification (Live — 2026-05-28)
+
+```bash
+# Test 1: 6/6 D-096 unit tests
+$ pytest tests/services/test_ws_send_concurrency_lock.py -v
+6/6 PASS ✅
+
+# Test 2: Concurrent ping + question (forced race)
+$ python3 /tmp/test_concurrent.py
+2 pongs + 44 deltas + 1 final + 1 persisted — perfectly sequenced ✅
+
+# Test 3: EXTREME 10 questions back-to-back + concurrent pings every 500ms
+$ python3 /tmp/extreme_test.py
+=== RESULTS: 10/10 succeeded ===
+  Q1: ✅ 921 deltas in 46.7s
+  Q2: ✅ 981 deltas in 33.1s
+  Q3: ✅ 312 deltas
+  Q4: ✅ 368 deltas
+  Q5: ✅ 512 deltas
+  Q6: ✅ 511 deltas
+  Q7: ✅ 626 deltas
+  Q8: ✅ 187 deltas
+  Q9: ✅ 249 deltas
+  Q10: ✅ 258 deltas
+
+# Test 4: All heartbeat + D-095 regression tests
+$ pytest tests/services/test_ws_heartbeat_skill.py tests/fitness/
+43+ PASS ✅
+```
 
 ---
 

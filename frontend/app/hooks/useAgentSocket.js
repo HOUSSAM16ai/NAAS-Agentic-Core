@@ -256,6 +256,9 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                     return prev;
                 });
             } else if (type === 'assistant_final') {
+                // ISS-REQID-001 (2026-05-28): صفِّر activeRequestId عند اكتمال الرد
+                // حتى لا يُرفض أول delta من السؤال التالي بسبب request_id mismatch.
+                activeRequestIdRef.current = null;
                 const content = payload?.content || '';
                 const nestedAssistantError = parseNestedAssistantError(content);
                 if (nestedAssistantError) {

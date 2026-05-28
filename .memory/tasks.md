@@ -427,6 +427,16 @@ After running `docker compose -f docker-compose.yml up -d`:
 ### 15. Memory system auto-update hook
 - **Current**: Memory updated manually at end of each session
 
+### 19. Codespaces Secrets configuration
+- **Current**: `.devcontainer/secrets.env` يجب إنشاؤه يدوياً بعد كل rebuild
+- **Target**: تهيئة Codespaces Secrets الرسمية لـ `OPENROUTER_API_KEY`, `DATABASE_URL`, `TAVILY_API_KEY`
+- **Impact**: يُلغي الحاجة لـ `secrets.env` اليدوي ويُحسِّن الأمان
+
+### 20. Supervisor bash static analysis في CI
+- **Current**: `tests/fitness/test_supervisor_bash_local_scope.py` موجود لكن غير مُدرَج في CI
+- **Target**: إضافته إلى `.github/workflows/` لمنع تكرار D-094-BOOT
+- **File**: `.github/workflows/ci.yml`
+
 ### 16. Frontend: real-time trace viewer
 - **File**: `frontend/app/components/TraceViewer.jsx` (new)
 

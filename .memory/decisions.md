@@ -3358,3 +3358,74 @@ OS level regardless of application heartbeat.
 
 ### Files Changed
 - `frontend/app/hooks/useRealtimeConnection.js` — HEARTBEAT_TIMEOUT 15s → 90s
+
+---
+
+## D-094-BOOT — Bash Nested Function Scope (2026-05-28, ISS-094)
+
+### Context
+`supervisor.sh` line 299 called `_set_env_key "SECRET_KEY" "$SECRET_KEY"` after
+`_inject_env_secrets` returned. `_set_env_key` is defined inside `_inject_env_secrets`
+and remains in bash namespace, but `env_file` is a local variable of the outer
+function — it vanishes when the function returns. With `set -u`, this causes
+`env_file: unbound variable` → immediate crash → no uvicorn, no frontend.
+
+### Decision
+Replace the nested-function call with inline `sed` using a temporary global
+variable (`_iss092_env_f`) that is `unset` immediately after use.
+
+### Rule (permanent — D-094-BOOT)
+> In bash, never call a nested function outside the scope of its defining
+> function. Local variables of the outer function are gone after it returns.
+> Use `sed`/`awk` directly, or define the helper at global scope.
+
+### Files Changed
+- `.devcontainer/supervisor.sh` — replaced `_set_env_key` call with inline `sed`
+
+---
+
+## D-094-DELTA — flushDeltaBuffer baseEvent-after-splice (2026-05-28, ISS-094)
+
+### Context
+`useRealtimeConnection.js` `flushDeltaBuffer` called `deltaBuffer.splice(0)`
+(empties the array immediately) then `deltaBuffer[0]` (always `undefined`).
+Result: every merged delta event was sent without `_connection_id`,
+`_event_namespace`, or `request_id` from the original event envelope.
+`useAgentSocket` received events with missing metadata → potential rejection
+or misrouting → user saw empty responses.
+
+### Decision
+Save `baseEvent = deltaBuffer[deltaBuffer.length - 1]` **before** `splice(0)`.
+
+### Rule (permanent — D-094-DELTA)
+> In JavaScript, if you need a reference to an array element after clearing
+> the array with `splice(0)` or `length = 0`, save it in a variable first.
+> `splice` mutates the array immediately and synchronously.
+
+### Files Changed
+- `frontend/app/hooks/useRealtimeConnection.js` — baseEvent saved before splice
+
+---
+
+## D-094-REQID — assistant_final must reset activeRequestIdRef (2026-05-28, ISS-094)
+
+### Context
+`useAgentSocket.js` reset `activeRequestIdRef.current = null` on `complete`
+and `error` but not on `assistant_final`. The orchestrator sends `assistant_final`,
+not `complete`. After the first response, `activeRequestId` remained set.
+The second question sent a new `clientRequestId`, but incoming events carried
+the old `request_id` → mismatch filter dropped them → frontend saw empty
+response → kick-to-login cycle.
+
+### Decision
+Add `activeRequestIdRef.current = null` as the first statement in the
+`assistant_final` handler, before any content processing.
+
+### Rule (permanent — D-094-REQID)
+> Every terminal event type (`assistant_final`, `complete`, `error`,
+> `stream_end`) MUST reset `activeRequestIdRef.current = null` in
+> `useAgentSocket.js`. If a new terminal event type is added to the
+> orchestrator protocol, add the reset there too.
+
+### Files Changed
+- `frontend/app/hooks/useAgentSocket.js` — reset in `assistant_final` handler

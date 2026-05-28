@@ -52,6 +52,37 @@ Skill حقيقي = **import + call chain + runtime evidence + metrics + tests**
 
 ---
 
+### قواعد D-094 (2026-05-28 — لا تُكسر بدون ADR)
+
+**D-094-BOOT — Bash nested function scope**:
+```bash
+# ❌ محظور: استدعاء دالة nested خارج نطاق الدالة الأم
+_outer() { local env_file=".env"; _inner() { echo "$env_file"; } }
+_outer
+_inner  # ❌ env_file: unbound variable
+
+# ✅ صحيح: sed مباشر أو دالة في النطاق العام
+_tmp_f=".env"; sed -i "s|^KEY=.*|KEY=val|" "$_tmp_f"; unset _tmp_f
+```
+
+**D-094-DELTA — JavaScript array splice**:
+```js
+// ❌ محظور: قراءة عنصر بعد splice
+const merged = arr.splice(0).reduce(...);
+const base = arr[0] || {};  // دائماً undefined!
+
+// ✅ صحيح: احفظ قبل splice
+const base = arr[arr.length - 1] || {};
+const merged = arr.splice(0).reduce(...);
+```
+
+**D-094-REQID — Terminal events يجب أن تُصفِّر activeRequestIdRef**:
+```js
+// كل terminal event في useAgentSocket.js يجب أن يبدأ بـ:
+activeRequestIdRef.current = null;
+// ينطبق على: assistant_final, complete, error, stream_end
+```
+
 ### Anti-patterns محظورة (يُرفض الـ PR الذي يحتويها)
 - **Prompt Spaghetti**: prompt واحد يحاول أكثر من مسؤولية واحدة
 - **Direct Skill-to-Skill import**: `from microservices.planning_agent import ...` داخل `research_agent`

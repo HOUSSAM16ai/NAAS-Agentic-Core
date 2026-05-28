@@ -394,3 +394,45 @@ expected behavior, but should be documented in the onboarding guide. Every time 
 - A new component will be classified ACTIVE based on import presence alone
 
 The purpose of this document is to make these failure modes visible before they are repeated.
+
+---
+
+## ISS-094 Fragility Patterns (2026-05-28)
+
+### Pattern: Bash nested function + local variable scope (D-094-BOOT)
+**Trigger**: Calling a function defined inside another function, after the outer
+function has returned. The inner function exists in bash namespace but its
+closure over `local` variables is gone.
+**Symptom**: `variable: unbound variable` with `set -u` → supervisor crash → no boot.
+**Detection**: `python3 -c "..."` static analysis checking for `local` outside functions
+(see `tests/fitness/test_supervisor_bash_local_scope.py`).
+**Prevention**: Never define helper functions inside other functions in supervisor.sh.
+Use global-scope helpers or inline `sed`/`awk`.
+
+### Pattern: JavaScript array mutation before reference save (D-094-DELTA)
+**Trigger**: Reading `array[0]` or `array[n]` after `array.splice(0)` in the same
+function. `splice(0)` empties the array synchronously.
+**Symptom**: `baseEvent = {}` → merged delta events lose all metadata → `useAgentSocket`
+receives events without `request_id`/`_connection_id` → potential misrouting.
+**Detection**: Code review — look for `array.splice(0)` followed by `array[...]`.
+**Prevention**: Always save the reference before mutation: `const ref = arr[arr.length-1]`.
+
+### Pattern: Incomplete terminal event handling (D-094-REQID)
+**Trigger**: Adding a new terminal event type to the orchestrator protocol without
+updating all consumers. `assistant_final` was not in the reset list in `useAgentSocket`.
+**Symptom**: `activeRequestIdRef` stays set after response → next question's events
+filtered by stale request_id → empty response → kick-to-login cycle.
+**Detection**: Search `useAgentSocket.js` for all `activeRequestIdRef.current = null`
+assignments — must cover every terminal event type the orchestrator can send.
+**Prevention**: When adding a new terminal event to the orchestrator, grep for
+`activeRequestIdRef.current = null` and add the reset there too.
+
+### Pattern: Missing `secrets.env` after Codespaces restart (D-094-ENV)
+**Trigger**: Codespaces Secrets not configured → `_inject_env_secrets` finds no
+secrets → `DATABASE_URL`/`OPENROUTER_API_KEY` not injected → uvicorn starts but
+`/health` returns `{"database":"error"}` or LLM calls fail silently.
+**Symptom**: System appears to boot but gives no responses or DB errors.
+**Detection**: `curl http://localhost:8000/health` — check `"database":"ok"`.
+**Prevention**: Always ensure `.devcontainer/secrets.env` exists before running
+supervisor. The file is git-ignored; recreate it from the template after each
+environment rebuild.

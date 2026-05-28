@@ -1944,6 +1944,31 @@ cogniforge_pipeline_invocations_total{mode="full"} 2.0
   - منع اختلاق كيانات لونية في مسائل الاحتمالات
   - الحفاظ على البنية التعليمية البصرية الصحيحة في السيناريو الحي
 
+## ✅ Session: 2026-05-28 — ISS-094: Triple Boot+Delta+RequestId Catastrophe Fix
+
+- **الأعراض**: النظام لا يبدأ بعد restart في Codespaces. الردود تصل فارغة في الـ frontend.
+  المستخدم يُطرد إلى صفحة تسجيل الدخول بعد كل سؤال.
+
+- **الجذور الثلاثة**:
+  1. **RC-1 (D-094-BOOT)**: `supervisor.sh` يستدعي `_set_env_key` بعد انتهاء `_inject_env_secrets`
+     → `env_file: unbound variable` مع `set -u` → crash فوري.
+  2. **RC-2 (D-094-DELTA)**: `flushDeltaBuffer` في `useRealtimeConnection.js` تحفظ `baseEvent`
+     بعد `splice(0)` → دائماً `undefined` → events بدون metadata.
+  3. **RC-3 (D-094-REQID)**: `assistant_final` لا يُصفِّر `activeRequestIdRef.current`
+     → request_id mismatch في السؤال الثاني → kick-to-login.
+
+- **الإصلاحات**:
+  - `supervisor.sh`: استبدال `_set_env_key` بـ `sed` مباشر مع `_iss092_env_f` مؤقت.
+  - `useRealtimeConnection.js`: `baseEvent = deltaBuffer[deltaBuffer.length - 1]` قبل `splice`.
+  - `useAgentSocket.js`: `activeRequestIdRef.current = null` في بداية `assistant_final` handler.
+  - `.devcontainer/secrets.env`: أُنشئ بالأسرار الحقيقية (git-ignored).
+
+- **التحقق الحي**:
+  - Q1 (مشتق x²): 998 chunks، 2412 حرف ✅
+  - Q2 (تكامل x²): 972 chunks، 2501 حرف ✅
+  - Token ثابت بعد كل رد — لا kick-to-login ✅
+  - Backend/Frontend/Orchestrator جميعها تعمل ✅
+
 ## ✅ Session: 2026-05-24 — D-092: ExerciseAlignmentSkill extraction (deep skills architecture)
 
 - **الهدف**: نقل محاذاة معطيات التمرين من دالة محلية داخل `local_graph` إلى Skill رسمية مستقلة قابلة للقياس والتوسع.

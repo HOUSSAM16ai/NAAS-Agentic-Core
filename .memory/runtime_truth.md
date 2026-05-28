@@ -1,6 +1,42 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-23** | Branch: `feat/math-explanation-generative-ui`
-> Previous: `docs/content-db-audit-2026-05-21`
+> Last updated: **2026-05-28** | Branch: `main`
+> Previous: `feat/math-explanation-generative-ui`
+
+## ISS-092 Live Verification (2026-05-28) — System Not Responding + Kick-to-Login Fix
+
+### نتائج التحقق الحي (2026-05-28)
+
+**المشكلة**: النظام لا يرد على الأسئلة + خروج/دخول تلقائي كارثي في GitHub Codespaces.
+
+**الأسباب الجذرية المكتشفة**:
+1. `secrets.env` لم يكن موجوداً → `OPENROUTER_API_KEY=""` → LLM يفشل صامتاً
+2. `ENVIRONMENT=testing` في `.env` → tokens تنتهي بعد 30 دقيقة → kick-to-login loop
+3. `orchestrator.py:453` يستخدم `nemotron-3-nano-30b-a3b:free` المحظور (ISS-079)
+
+**الإصلاحات المطبقة**:
+- أُنشئ `.devcontainer/secrets.env` بالمفاتيح الحقيقية
+- أُعيد كتابة `.env` بـ `ENVIRONMENT=development` + جميع المفاتيح
+- `orchestrator.py:453`: nemotron → `ActiveModels.PRIMARY`
+- `supervisor.sh`: أُضيف guard D-ISS-092 لضمان `ENVIRONMENT=development` عند وجود DB حقيقي
+
+| الخدمة | المنفذ | الحالة | ملاحظة |
+|--------|--------|--------|--------|
+| FastAPI Monolith | 8000 | ✅ ACTIVE | `database: ok`, `ENVIRONMENT=development` |
+| user-service | 8001 | ✅ ACTIVE | `/metrics` يعمل |
+| planning-agent | 8002 | ✅ ACTIVE | PostgreSQL asyncpg حقيقي (كان sqlite) |
+| conversation-service | 8003 | ✅ ACTIVE | `graph_ready: true` |
+| orchestrator-service | 8006 | ✅ ACTIVE | `graph_ready: true`, OUTBOX_RELAY=true |
+| research-agent | 8007 | ✅ ACTIVE | `tavily_available: true` (كان false) |
+| reasoning-agent | 8008 | ✅ ACTIVE | `llm_backend: openrouter` (كان mock) |
+| content-retrieval | 8009 | ✅ ACTIVE | `kb_files: 3` |
+
+**نتائج التجريب الحي**:
+- Greeting fastpath: 0.7s ✅
+- Physics question ("قانون أوم"): 5.3s, 96 chunks, 250 chars Arabic+LaTeX ✅
+- Token lifetime: 1440 min (كان 30 min) ✅
+- Admin login + WS: 0.6s ✅
+
+---
 
 ## D-080 Live Verification (2026-05-23) — Math Pipeline enrich_node + Generative UI
 

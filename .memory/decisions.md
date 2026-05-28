@@ -3275,6 +3275,38 @@ Transient blips don't trigger restarts. Real outages still recover within
 
 ---
 
+## D-ISS-092 — secrets.env is mandatory for Codespaces without Secrets configured (2026-05-28)
+
+### Decision
+`.devcontainer/secrets.env` MUST exist with real API keys when GitHub Codespaces Secrets
+are not configured. Without it, all services start with empty API keys and `ENVIRONMENT=testing`.
+
+### Rationale
+`devcontainer.json` injects `${localEnv:OPENROUTER_API_KEY}` as empty string when the
+Codespaces Secret is absent. The supervisor's `_inject_env_secrets()` checks
+`[ -z "$current_val" ]` — empty string passes this check, so secrets.env IS read.
+But if secrets.env doesn't exist, there is no fallback → all keys remain empty.
+
+Consequences of missing secrets.env:
+1. `OPENROUTER_API_KEY=""` → LLM calls fail silently → no answers
+2. `DATABASE_URL` not set → supervisor sets `ENVIRONMENT=testing` → tokens expire in 30 min
+3. `TAVILY_API_KEY=""` → research-agent starts with `tavily_available=false`
+4. `llm_backend=mock` on reasoning-agent
+
+### Rules (permanent)
+1. `.devcontainer/secrets.env` MUST be created from `secrets.env.example` before first use.
+2. `supervisor.sh` MUST set `ENVIRONMENT=development` in `.env` whenever `DATABASE_URL` is real (non-sqlite). Added in D-ISS-092 fix.
+3. `orchestrator.py` MUST NEVER hardcode `nvidia/nemotron-3-nano-30b-a3b:free` — always use `ActiveModels.PRIMARY`.
+4. Token lifetime in development = 480 min minimum. `crypto.py` reads `ENVIRONMENT` at import time — the process MUST start with `ENVIRONMENT=development`.
+
+### Files Changed
+- `.devcontainer/secrets.env` — created with real keys
+- `.env` — rewritten with `ENVIRONMENT=development` + real keys
+- `app/services/chat/agents/orchestrator.py` — line 453: nemotron → `ActiveModels.PRIMARY`
+- `.devcontainer/supervisor.sh` — added D-ISS-092 ENVIRONMENT guard
+
+---
+
 ## D-WS-HEARTBEAT-002 — Frontend tolerance for long LLM streams (2026-05-27)
 
 ### Decision

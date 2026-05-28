@@ -3,6 +3,35 @@
 
 ---
 
+## ✅ Resolved 2026-05-28 (ISS-093 — ASGI Crash + SECRET_KEY Rotation → Kick-to-Login)
+
+### ISS-093 · ASGI crash عند قطع Codespaces proxy + SECRET_KEY يتغير بين restarts [RESOLVED]
+
+- **Status**: RESOLVED 2026-05-28
+- **Severity**: 🔴 CRITICAL
+
+#### Root Causes
+
+**1. `RuntimeError: WebSocket is not connected` يهرب إلى ASGI layer**
+- عندما يقطع Codespaces proxy الاتصال بشكل مفاجئ، `receive_json()` يُطلق `RuntimeError`
+- الـ `except WebSocketDisconnect` الخارجي لا يمسك `RuntimeError`
+- النتيجة: `Exception in ASGI application` → uvicorn يُسجّل error → frontend يرى close غير نظيف → reconnect loop
+
+**2. `SECRET_KEY` يتغير بين restarts → كل tokens تُبطَل → 4401 → kick-to-login**
+- `_ensure_stable_secret_key` كانت تُعطي الأولوية لـ `current_key` (من process env / `.env`) على الملف
+- إذا تغيّر `.env` أو Codespaces Secrets، يتغير `SECRET_KEY` → كل الـ tokens القديمة تُبطَل
+- الإصلاح: الملف على القرص يفوز دائماً (`disk wins`) — يضمن نفس المفتاح عبر كل restarts
+
+#### Fixes Applied
+
+| الملف | التغيير |
+|-------|---------|
+| `app/api/routers/customer_chat.py` | الـ outer `except` أصبح `(WebSocketDisconnect, RuntimeError)` + inner try/except على `receive_json()` |
+| `app/api/routers/admin.py` | نفس الإصلاح |
+| `.devcontainer/supervisor.sh` | `_ensure_stable_secret_key`: الملف على القرص يفوز دائماً + كتابة `SECRET_KEY` في `.env` بعد `_ensure_stable_secret_key` |
+
+---
+
 ## ✅ Resolved 2026-05-28 (ISS-092 — System Not Responding + Kick-to-Login Loop)
 
 ### ISS-092 · النظام لا يرد على الأسئلة + خروج/دخول تلقائي كارثي [RESOLVED]

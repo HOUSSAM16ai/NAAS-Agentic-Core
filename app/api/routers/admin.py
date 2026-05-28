@@ -747,8 +747,13 @@ async def chat_stream_ws(
                     turn_span.set_terminal("error")
                     close_ws_turn(turn_span, status="ERROR")
 
-    except WebSocketDisconnect:
-        logger.info("Admin WebSocket disconnected")
+    except (WebSocketDisconnect, RuntimeError) as exc:
+        # RuntimeError: "WebSocket is not connected" — يحدث عندما يُغلق Codespaces proxy
+        # الاتصال بشكل مفاجئ. بدون هذا الـ catch، يهرب إلى ASGI → ASGI crash → flapping.
+        if isinstance(exc, RuntimeError):
+            logger.info("admin_chat.ws_runtime_disconnect: %s", exc)
+        else:
+            logger.info("Admin WebSocket disconnected")
 
 
 @router.get(

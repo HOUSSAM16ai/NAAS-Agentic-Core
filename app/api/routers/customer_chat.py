@@ -476,7 +476,12 @@ async def chat_stream_ws(
 
     try:
         while True:
-            payload = await websocket.receive_json()
+            try:
+                payload = await websocket.receive_json()
+            except (WebSocketDisconnect, RuntimeError):
+                # D-ISS-092: receive_json() يُطلق RuntimeError عند إغلاق Codespaces proxy
+                # للاتصال بشكل مفاجئ. نُعيد الـ raise ليُمسكه الـ except الخارجي بشكل نظيف.
+                raise
 
             # D-WS-FLAP-002 (ISS-WS-FLAP-002): معالج heartbeat موحَّد كـ Skill.
             # رسائل التحكم (ping/heartbeat/noop) تُعالَج هنا قبل أي محاولة
@@ -836,8 +841,15 @@ async def chat_stream_ws(
                     turn_span.set_terminal("error")
                     close_ws_turn(turn_span, status="ERROR")
 
-    except WebSocketDisconnect:
-        logger.info("Customer WebSocket disconnected")
+    except (WebSocketDisconnect, RuntimeError) as exc:
+        # RuntimeError: "WebSocket is not connected" — يحدث عندما يُغلق Codespaces proxy
+        # الاتصال بشكل مفاجئ قبل أن يُكمل receive_json(). بدون هذا الـ catch،
+        # الـ exception يهرب إلى ASGI layer ويُسبب "Exception in ASGI application"
+        # مما يُعيد تشغيل الـ connection loop في الـ frontend → kick-to-login flapping.
+        if isinstance(exc, RuntimeError):
+            logger.info("customer_chat.ws_runtime_disconnect: %s", exc)
+        else:
+            logger.info("Customer WebSocket disconnected")
 
 
 @router.get(

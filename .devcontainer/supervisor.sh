@@ -256,29 +256,35 @@ _ensure_stable_secret_key() {
     local state_key_file="$APP_ROOT/.devcontainer/state/dev_secret_key"
     local current_key="${SECRET_KEY:-}"
 
-    # إذا كان المفتاح قوياً (>= 32 حرف) وليس القيمة الافتراضية → لا شيء
-    if [ -n "$current_key" ] && [ "${#current_key}" -ge 32 ] \
-       && [ "$current_key" != "dev-secret-change-me" ] \
-       && [ "$current_key" != "changeme" ]; then
-        # احفظه في ملف state لضمان ثباته
-        mkdir -p "$(dirname "$state_key_file")"
-        echo "$current_key" > "$state_key_file"
-        lifecycle_info "SECRET_KEY: strong key confirmed (${#current_key} chars) — saved to state"
-        return 0
-    fi
+    # D-ISS-092 (2026-05-28): الأولوية للملف على القرص دائماً.
+    # السبب: إذا تغيّر SECRET_KEY بين restarts (من .env أو Codespaces Secrets)،
+    # كل الـ tokens القديمة تُبطَل → 4401 → kick-to-login loop.
+    # الملف على القرص يضمن نفس المفتاح عبر كل restarts في نفس الـ Codespace.
+    #
+    # الاستثناء الوحيد: إذا كان الملف غير موجود أو فارغ → استخدم current_key إذا كان قوياً.
 
-    # حاول قراءة مفتاح ثابت من ملف state
+    # 1. إذا كان الملف موجوداً ومفتاحه قوي → استخدمه دائماً (حتى لو current_key مختلف)
     if [ -f "$state_key_file" ]; then
         local stored_key
         stored_key=$(cat "$state_key_file" 2>/dev/null | tr -d '[:space:]')
         if [ -n "$stored_key" ] && [ "${#stored_key}" -ge 32 ]; then
             export SECRET_KEY="$stored_key"
-            lifecycle_info "SECRET_KEY: loaded from state file (${#stored_key} chars)"
+            lifecycle_info "SECRET_KEY: loaded from state file (${#stored_key} chars) — disk wins"
             return 0
         fi
     fi
 
-    # أنشئ مفتاحاً جديداً ثابتاً واحفظه
+    # 2. الملف غير موجود أو فارغ — إذا كان current_key قوياً → احفظه واستخدمه
+    if [ -n "$current_key" ] && [ "${#current_key}" -ge 32 ] \
+       && [ "$current_key" != "dev-secret-change-me" ] \
+       && [ "$current_key" != "changeme" ]; then
+        mkdir -p "$(dirname "$state_key_file")"
+        echo "$current_key" > "$state_key_file"
+        lifecycle_info "SECRET_KEY: strong key saved to state (${#current_key} chars)"
+        return 0
+    fi
+
+    # 3. لا ملف ولا مفتاح قوي → أنشئ مفتاحاً جديداً ثابتاً واحفظه
     local new_key
     new_key=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))" 2>/dev/null \
               || openssl rand -base64 48 2>/dev/null \
@@ -290,6 +296,11 @@ _ensure_stable_secret_key() {
 }
 _ensure_stable_secret_key
 
+# D-ISS-092: بعد _ensure_stable_secret_key، اكتب SECRET_KEY النهائي في .env
+# لضمان أن uvicorn يقرأ نفس المفتاح الذي يستخدمه الـ state file.
+if [ -n "${SECRET_KEY:-}" ]; then
+    _set_env_key "SECRET_KEY" "$SECRET_KEY"
+fi
 
 lifecycle_info "✅ System ready"
 lifecycle_set_state "system_ready" "$(date +%s)"

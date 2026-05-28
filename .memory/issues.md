@@ -1,5 +1,80 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-28 | Branch: `main`
+> Last updated: 2026-05-28 | Branch: `claude/fix-qa-session-crashes-kjoAI`
+
+---
+
+## ✅ Resolved 2026-05-28 (ISS-094-R2 — Auto-`ENVIRONMENT=testing` Fallback → 30-min Tokens → Kick-to-Login)
+
+### ISS-094 round 2 (D-095) · المستخدم يُطرد إلى تسجيل الدخول رغم D-094 [RESOLVED]
+
+- **Status**: RESOLVED 2026-05-28
+- **Severity**: 🔴 CRITICAL (نفس الأعراض من ISS-092/093/094 لكن من جذر مختلف)
+- **Environment**: GitHub Codespaces بدون secrets configured
+
+#### Root Cause (مكشوف بالتجريب الحي)
+
+`supervisor.sh:_inject_env_secrets` كانت تضبط `ENVIRONMENT=testing` تلقائياً
+عند فشل اكتشاف DATABASE_URL حقيقي (sqlite fallback). الـ flow:
+
+1. Codespaces بدون Secrets configured + بدون `.devcontainer/secrets.env`
+2. `devcontainer.json` يحقن APP_DATABASE_URL="" / DATABASE_URL="" (empty strings)
+3. supervisor.sh: `real_db_url=""` → يدخل else branch
+4. `_set_env_key "ENVIRONMENT" "testing"` ← **السبب الجذري**
+5. uvicorn يبدأ. `app/services/auth/crypto.py:36-40` يقرأ ENVIRONMENT=testing
+   عند module import → `_IS_DEV_LIKE=False` → `ACCESS_EXPIRE_MINUTES=30`
+6. كل JWT يُصدَر بعمر 30 دقيقة فقط
+7. بعد 30 دقيقة من الجلسة، كل WS reconnect يحصل على token منتهي → 4401
+8. Frontend بعد MAX_FATAL_RETRIES (3) → `agent:auth_error` → logout → kick
+9. المستخدم يدخل مرة أخرى → cycle يتكرر كل 30 دقيقة
+
+#### لماذا ISS-092 لم يحلّ هذا
+
+ISS-092 أضاف: «إذا كان `real_db_url` حقيقياً، اضبط ENVIRONMENT=development».
+لكنه **لم يُصلح** else branch الذي يكتب ENVIRONMENT=testing عند SQLite fallback.
+المستخدمون بدون secrets configured كانوا لا يزالون يقعون في 30-min mode.
+
+#### Fix Applied
+
+| الملف | التغيير |
+|-------|---------|
+| `.devcontainer/supervisor.sh` | else branch لـ DATABASE_URL يضبط `ENVIRONMENT=development` بدلاً من `testing`. `TESTING=1` يبقى كإشارة منفصلة. + رسالة CRITICAL ERROR loud تطلب من المستخدم تكوين secrets |
+| `tests/fitness/test_supervisor_never_sets_testing_env.py` | **new** — regression test يمنع عودة الـ bug |
+
+#### Verification (Live — 2026-05-28)
+
+```bash
+# Test 1: simulate degraded boot (no DB, no secrets)
+$ bash -c '(simulate _inject_env_secrets with empty env)'
+🚨 CRITICAL: DATABASE_URL not configured — DEGRADED MODE
+# .env content:
+ENVIRONMENT=development   ← was 'testing'
+SECRET_KEY=dev-secret-change-me
+DATABASE_URL=sqlite+aiosqlite:///:memory:
+TESTING=1
+
+# Test 2: verify crypto.py honors ENVIRONMENT=development
+ACCESS_EXPIRE_MINUTES=480 (was 30)   ✅ NO MORE KICK-TO-LOGIN
+
+# Test 3: full chat flow with SQLite
+5 questions × 514-623 deltas each = ALL PASS ✅
+2 conversations created, multi-turn session works ✅
+
+# Test 4: regression tests
+2/2 PASS (test_supervisor_never_sets_testing_env.py)
+3/3 PASS (test_supervisor_bash_local_scope.py)
+6/6 PASS (test_secret_key_persistence.py)
+```
+
+#### قواعد دائمة جديدة (D-095 — لا تُكسر بدون ADR)
+
+1. **`ENVIRONMENT=testing` ممنوع كقيمة تلقائية في supervisor.sh** — يجب ضبطه
+   صراحةً من قِبَل المستخدم (e.g., عبر pytest fixture) فقط للاختبارات.
+2. **JWT lifetime يجب أن يبقى ≥480 دقيقة في dev/Codespaces** — أقل من ذلك
+   = kick-to-login catastrophe.
+3. **TESTING=1 منفصل عن ENVIRONMENT**: حُكم منفصل لـ code paths (LLM mocking,
+   fixture isolation) — لا يؤثر على JWT lifetime.
+4. **رسائل CRITICAL واضحة عند secrets مفقودة**: المستخدم يجب أن يعرف
+   فوراً ما عليه فعله (configure Codespaces Secrets أو create secrets.env).
 
 ---
 

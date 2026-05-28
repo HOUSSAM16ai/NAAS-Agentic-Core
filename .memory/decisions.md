@@ -1,5 +1,45 @@
 # Architectural Decisions
-> Last updated: 2026-05-26 | Branch: `fix/ws-gitpod-disconnected`
+> Last updated: 2026-05-28 | Branch: `claude/fix-qa-session-crashes-kjoAI`
+
+## D-095 · Never Auto-Set `ENVIRONMENT=testing` in supervisor.sh (2026-05-28)
+
+**Branch**: `claude/fix-qa-session-crashes-kjoAI`
+
+### القرار
+
+`supervisor.sh:_inject_env_secrets` **يجب ألا يضبط `ENVIRONMENT=testing` تلقائياً**
+حتى في degraded SQLite fallback mode. القيمة الافتراضية في كل المسارات
+التلقائية = `development`. `TESTING=1` يبقى كإشارة منفصلة للـ code paths
+التي تحتاجها (LLM mocking, fixture isolation) — لا يؤثر على JWT lifetime.
+
+### السبب (مكشوف بالتجريب الحي)
+
+`app/services/auth/crypto.py:36-40` يقرأ `ENVIRONMENT` عند module import time
+ويحسب `ACCESS_EXPIRE_MINUTES = 480 if dev_like else 30`. عندما يكون
+ENVIRONMENT=testing، JWT lifetime = 30 دقيقة → بعد 30 دقيقة، كل token
+ينتهي → WS reconnect يحصل على 4401 → frontend يُطلق auth_error → logout
+→ kick to login → cycle.
+
+### التطبيق
+
+```bash
+# قبل (D-095 violation):
+_set_env_key "DATABASE_URL" "sqlite+aiosqlite:///:memory:"
+_set_env_key "ENVIRONMENT" "testing"   # ← يكسر JWT lifetime
+_set_env_key "TESTING" "1"
+
+# بعد (D-095 compliant):
+_set_env_key "DATABASE_URL" "sqlite+aiosqlite:///:memory:"
+_set_env_key "ENVIRONMENT" "development"   # ← يحافظ على 480-min tokens
+_set_env_key "TESTING" "1"                  # ← لا يزال متاحاً كإشارة منفصلة
+```
+
+### التحقق
+
+`tests/fitness/test_supervisor_never_sets_testing_env.py` (2 tests) يحظر
+عودة الـ bug عبر static analysis لـ supervisor.sh.
+
+---
 
 ## D-WS-GITPOD-001 · Gitpod Flex/Ona WebSocket Host Routing (2026-05-26)
 

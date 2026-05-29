@@ -40,12 +40,11 @@ const MAX_BACKOFF = 30000; // أقصى تأخير بين المحاولات (30 
 // المبكر على شبكات الهاتف المتذبذبة (carrier-NAT يقطع الاتصال مؤقتاً).
 const MAX_RETRIES = 30;
 const FATAL_CODES = new Set([4401, 4403]);
-// D-WS-AUTH-001 (2026-05-26): bounded retry على 4401 قبل اعتباره fatal.
-// قبل: 4401 واحد → logout فوري → reload → cycle.
-// بعد: 4401 يُجرَّب N مرات مع backoff قبل اعتباره auth_error حقيقي.
-// نضيف فحص HTTP /me كـ probe لتمييز transient vs permanent.
-const MAX_FATAL_RETRIES = 3; // أقصى محاولات قبل اعتبار 4401 fatal
-const FATAL_RETRY_DELAY_MS = 2000; // backoff بين محاولات 4401
+// D-WS-AUTH-001 (2026-05-26) → D-WS-KICK-001 (ISS-097 — 2026-05-29):
+// 4401 لا يُسجِّل الخروج وحده أبداً. المسار الوحيد إلى auth_error هو probe
+// HTTP /me يُرجع 401/403 صراحةً (= الـ token ميت حقاً). عدّاد المحاولات
+// المنفصل (MAX_FATAL_RETRIES) أُزيل: لا حدّ يُترجَم إلى طرد — فقط نتيجة /me
+// القطعية. إعادة الاتصال على 4401-بـ-token-صالح تستخدم عدّاد retries العام.
 const REVALIDATION_TIMEOUT_MS = 5000; // مهلة /me probe
 // D-WS-FLAP-003: heartbeat كل 45s (كان 25s) — يعطي مساحة لـ proxies بدون إغراق.
 // uvicorn --ws-ping-interval 20 يفحص الـ TCP layer تلقائياً.
@@ -565,24 +564,19 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
             was_stable: wasStable,
           });
 
-          // D-WS-AUTH-001 (2026-05-26): 4401/4403 لم يَعُد fatal فوراً.
+          // D-WS-AUTH-001 (2026-05-26) → D-WS-KICK-001 (ISS-097): 4401/4403
           // ─────────────────────────────────────────────────────────────────
-          // قبل: 4401 → logout فوري → reload → cycle.
-          // بعد: 4401 يُجرَّب MAX_FATAL_RETRIES مع HTTP /me probe.
-          //
-          // الـ rationale: 4401 قد يكون transient في بيئات mobile/Codespaces:
-          //   - SECRET_KEY rotation race بين uvicorn instances
-          //   - DB lag → db.get(User) returns None
+          // 4401 قد يكون transient في بيئات mobile/Codespaces:
+          //   - DB lag → db.get(User) returns None / يرمي استثناء
           //   - clock skew بين client و server
-          //   - Codespaces proxy حذف auth header
+          //   - Codespaces proxy / carrier-NAT حذف auth header
+          //   - خلل WS من جهة الخادم (race، إغلاق مفاجئ)
           //
-          // الـ flow:
-          //   1. Increment fatalRetries.current
-          //   2. Try HTTP /me to probe token validity:
-          //      - 200 → token valid, 4401 transient → retry WS with backoff
-          //      - 401 → token truly invalid → fire auth_error (escalate)
-          //      - network error → can't tell → retry up to MAX_FATAL_RETRIES
-          //   3. After MAX_FATAL_RETRIES exhausted → fire auth_error
+          // الـ flow (D-WS-KICK-001 — لا حدّ يُترجَم إلى طرد):
+          //   1. probe HTTP /me لتأكيد صلاحية الـ token:
+          //      - 401/403 → الـ token ميت حقاً → fire auth_error (المسار الوحيد)
+          //      - 200 (valid) أو network/unknown → الـ token سليم → أعد الاتصال
+          //   2. لا تسجيل خروج أبداً ما دام /me لا يُؤكِّد البطلان.
           if (FATAL_CODES.has(e.code)) {
             fatalRetries.current += 1;
 
@@ -590,27 +584,28 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
               code: e.code,
               reason: e.reason,
               attempt: fatalRetries.current,
-              max: MAX_FATAL_RETRIES,
             });
 
-            // فحص: هل تجاوزنا الحد؟
-            if (fatalRetries.current > MAX_FATAL_RETRIES) {
-              console.error(
-                `[WS] Exhausted ${MAX_FATAL_RETRIES} auth retries — escalating to auth_error.`
-              );
-              setState("auth_error");
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("agent:auth_error", {
-                    detail: { code: e.code, reason: e.reason || "session_expired_confirmed" },
-                  })
-                );
-              }
-              return;
-            }
-
-            // محاولة probe HTTP /me لتمييز transient vs permanent
-            // نُلغي أي probe سابق
+            // ─────────────────────────────────────────────────────────────────
+            // D-WS-KICK-001 (ISS-097 — 2026-05-29): WS 4401 لا يُسجِّل الخروج وحده.
+            // ─────────────────────────────────────────────────────────────────
+            // الكارثة المُشخَّصة: الكود القديم كان يُطلق `agent:auth_error`
+            // (→ logout → "محادثة جديدة") بعد MAX_FATAL_RETRIES إغلاقات 4401
+            // *بدون* تأكيد أن الـ token فعلاً منتهٍ. مع FATAL_RETRY_DELAY_MS=2s،
+            // كان ذلك طرداً خلال ~6-8 ثوانٍ — حتى عندما يكون الـ token صالحاً
+            // تماماً. أي خلل WS من جهة الخادم (db.get transient، blip شبكي،
+            // race) كان يُترجَم إلى تسجيل خروج كارثي.
+            //
+            // القاعدة الجديدة (لا تُكسر بدون ADR): المسار **الوحيد** إلى
+            // `agent:auth_error` هو probe HTTP `/me` يُرجع 401/403 صراحةً
+            // (= الـ token ميت حقاً). أي نتيجة أخرى (200 = صالح، أو
+            // network/unknown = الخادم غير قابل للوصول) → نُبقي الجلسة
+            // ونُعيد الاتصال بـ exponential backoff. لا طرد أبداً ما دام
+            // الـ token صالحاً.
+            //
+            // إذا انتهى الـ token حقاً (بعد 8 ساعات) → /me يُرجع 401 → طرد
+            // نظيف (سلوك صحيح). وحتى حينها، FIX-B يستعيد آخر محادثة بعد
+            // إعادة الدخول فلا يفقد المستخدم سياقه.
             if (revalidateAbortRef.current) {
               revalidateAbortRef.current.abort();
             }
@@ -621,6 +616,35 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
               if (abortCtl) abortCtl.abort();
             }, REVALIDATION_TIMEOUT_MS);
 
+            // إعادة محاولة transient موحَّدة: backoff تصاعدي عبر عدّاد retries
+            // العام (لا عدّاد fatal منفصل) — فإن ظل الخادم 4401 إلى ما لا نهاية
+            // مع token صالح، نصل أخيراً إلى "offline" (الخادم معطّل) لا
+            // "auth_error" (الجلسة منتهية). هذان حدثان مختلفان تماماً.
+            const retryTransientAuth = (probe) => {
+              if (!mountedRef.current) return;
+              retries.current += 1;
+              if (retries.current >= MAX_RETRIES) {
+                console.error(
+                  `[WS] 4401 persisted ${MAX_RETRIES}× with valid/unknown token — ` +
+                    `server unreachable, declaring offline (NOT auth_error).`
+                );
+                setState("offline");
+                return;
+              }
+              setState(retries.current <= 1 ? "degraded" : "reconnecting");
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("agent:transient_auth_warning", {
+                    detail: { code: e.code, attempt: retries.current, probe },
+                  })
+                );
+              }
+              const delay = Math.min(Math.pow(2, retries.current - 1) * 500, MAX_BACKOFF);
+              const jitter = Math.floor(Math.random() * 500);
+              clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = setTimeout(connect, delay + jitter);
+            };
+
             revalidateTokenViaHttp(wsUrl, token, abortCtl?.signal)
               .then((result) => {
                 clearTimeout(timeoutId);
@@ -628,7 +652,7 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
                 console.info("[WS] Token revalidation result:", result);
 
                 if (result === "invalid") {
-                  // Token تأكد بطلانه عبر HTTP → escalate فوراً
+                  // المسار الوحيد للطرد: /me أكّد أن الـ token ميت حقاً.
                   console.error("[WS] Token confirmed invalid via /me — escalating to auth_error.");
                   setState("auth_error");
                   if (typeof window !== "undefined") {
@@ -641,40 +665,19 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
                   return;
                 }
 
-                // result === "valid" أو "unknown" → transient، أعد المحاولة
+                // result === "valid" أو "unknown" → الـ token سليم، الخلل من
+                // الخادم → أعد الاتصال، لا تطرد.
                 console.info(
-                  `[WS] 4401 treated as transient (probe=${result}) — retrying in ${FATAL_RETRY_DELAY_MS}ms`
+                  `[WS] 4401 treated as transient (probe=${result}) — token NOT dead, reconnecting.`
                 );
-                // نُبقي state="connecting" أو نُحدِّثه — لكن لا "auth_error".
-                if (mountedRef.current) {
-                  setState(fatalRetries.current === 1 ? "degraded" : "reconnecting");
-                }
-                // أَطلق notification إعلامي (لا fatal)
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(
-                    new CustomEvent("agent:transient_auth_warning", {
-                      detail: {
-                        code: e.code,
-                        attempt: fatalRetries.current,
-                        max: MAX_FATAL_RETRIES,
-                        probe: result,
-                      },
-                    })
-                  );
-                }
-                clearTimeout(reconnectTimeoutRef.current);
-                reconnectTimeoutRef.current = setTimeout(connect, FATAL_RETRY_DELAY_MS);
+                retryTransientAuth(result);
               })
               .catch(() => {
                 clearTimeout(timeoutId);
                 if (!mountedRef.current) return;
-                // probe أُلغي أو فشل → اعتبره transient وأعد المحاولة
-                console.info("[WS] Token probe aborted/failed — treating as transient.");
-                if (mountedRef.current) {
-                  setState(fatalRetries.current === 1 ? "degraded" : "reconnecting");
-                }
-                clearTimeout(reconnectTimeoutRef.current);
-                reconnectTimeoutRef.current = setTimeout(connect, FATAL_RETRY_DELAY_MS);
+                // probe أُلغي أو فشل → unknown → أعد الاتصال (لا طرد).
+                console.info("[WS] Token probe aborted/failed — treating as transient (no logout).");
+                retryTransientAuth("unknown");
               });
 
             // مُهم: نُرجع هنا لأن probe + reconnect سيتمان async.

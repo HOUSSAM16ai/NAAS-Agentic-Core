@@ -6828,3 +6828,85 @@ $ pytest tests/services/test_ws_heartbeat_skill.py tests/fitness/test_supervisor
 | `.memory/decisions.md` | إدخال D-096 |
 | `CLAUDE.md` §6.71 | هذا القسم |
 
+---
+
+## 6.72 The Idle Kick — 4401 Must Never Logout a Valid Session (2026-05-29, ISS-097 / D-WS-KICK-001)
+
+> **بلاغ المستخدم الحاسم**: «**حتى بدون طرح أي أسئلة** تحدث هذه الكارثة ... نخرج
+> ثم ندخل إلى صفحة دردشة جديدة». الطرد يحدث على اتصال خامل، بلا أي سؤال — مما
+> يُبرّئ D-096 (تزامن الإرسال يحدث أثناء البث فقط) و BKT تماماً، ويُثبت أن الكارثة
+> **على مستوى الاتصال** بحتاً.
+
+### الجذر (نصفان مستقلان، لم يُصلحهما D-095 ولا D-096)
+
+**النصف 1 — طرد كاذب**: `useRealtimeConnection.js` كان يُطلق `agent:auth_error`
+(→ `logout()` → "محادثة جديدة" فارغة) بعد *عدد* من إغلاقات `4401` المتتالية
+(`MAX_FATAL_RETRIES=3`) **دون تأكيد أن الـ token ميت فعلاً**. مع
+`FATAL_RETRY_DELAY_MS=2s` = طرد خلال ~6-8 ثوانٍ، حتى مع token صالح تماماً. على
+اتصال خامل، السبب الأرجح: بروكسي Codespaces/`server.js` يُسقط أحياناً
+`?token=` عند إعادة اتصال WS → الخادم يرى «لا token» → `4401` → تكرار → طرد.
+
+**النصف 2 — "محادثة جديدة" في كل دخول**: `DashboardLayout` كان يُحمَّل دائماً بـ
+`conversationId=null` + رسائل فارغة، فأي (إعادة) دخول يسقط في دردشة فارغة.
+
+### الإصلاح (3 طبقات على مستوى الجذر)
+
+- **A — Frontend (`useRealtimeConnection.js`)**: `agent:auth_error` (→ طرد) يُطلَق
+  **فقط** في فرع `result === "invalid"` — أي probe HTTP `/me` يُرجع 401/403 قطعياً
+  (الـ token ميت حقاً). نتيجة valid/unknown → `retryTransientAuth()` يُعيد الاتصال
+  بـ backoff تصاعدي (عبر عدّاد `retries` العام → "offline" أخيراً، لا "auth_error").
+  أُزيل `MAX_FATAL_RETRIES` و `FATAL_RETRY_DELAY_MS` (مسار العدّ الذي سبّب الطرد).
+- **B — Frontend (`CogniForgeApp.jsx`)**: عند التحميل، استعادة آخر محادثة عبر
+  `/api/chat/latest` (admin: `/admin/api/chat/latest`)، محروسة بـ `didRestoreRef`
+  أحادي الإطلاق فلا يكتب فوق "محادثة جديدة" صريحة أو فتح محادثة من القائمة.
+- **C — Backend (`customer_chat.py` + `admin.py`)**: جلب المستخدم عند الاتصال
+  `db.get(User, user_id)` مغلَّف بـ `try/except`؛ الفشل *العابر* (الـ token فُكَّ
+  بنجاح) يُغلق بـ `1013` القابل لإعادة المحاولة + كود `WS_BACKEND_TRANSIENT` بدل
+  `4401` فيُعيد العميل الاتصال بدل الطرد. المستخدم المفقود/الموقوف حقاً لا يزال
+  يُغلق `4401` (صحيح).
+
+### القواعد الـ 4 الدائمة (D-WS-KICK-001 — لا تُكسر بدون ADR)
+
+1. **المسار الوحيد إلى `agent:auth_error` هو probe `/me` يُؤكِّد 401/403**. لا عدّاد
+   إغلاقات يُترجَم إلى طرد. أي إعادة لمنطق العدّ = عودة فورية لكارثة الطرد الخامل.
+2. **`/me` هو الحكم الوحيد لصلاحية الجلسة** (token عبر Authorization header — مسار
+   موثوق منفصل عن WS؛ مناعة ضد إسقاط البروكسي لـ `?token=`).
+3. **الفشل العابر في جلب المستخدم بـ WS يُغلق `1013` لا `4401`** بعد فك الـ token
+   بنجاح. `4401` محجوز لـ token مفقود/تالف أو مستخدم موقوف فعلاً.
+4. **`DashboardLayout` يستعيد آخر محادثة عند التحميل** (محروس بـ `didRestoreRef`)
+   — لا "محادثة جديدة" فارغة قسرية.
+
+### التحقق الحي (2026-05-29 — sandbox يحجب egress فلا boot لـ uvicorn)
+
+الطرد على مستوى الاتصال، فهو قابل للتحقق محلياً بـ node v22 + stdlib:
+- **قرار الطرد (Frontend، Node — منقول بأمانة من المصدر + فحص بنيوي)**: السيناريو
+  الكارثي «خامل، 12× إغلاق 4401، token صالح» → **0 طرد، 12 إعادة اتصال**. 35×
+  4401 صالح → **offline لا auth_error**. 4401 + /me=invalid (انتهاء 8 ساعات حقيقي)
+  → طرد واحد (صحيح). 4/4 سيناريو ✅.
+- **استعادة المحادثة (Fix B، Node)**: عائد → يستأنف محادثته (404، رسالتان)؛ مستخدم
+  جديد → يبقى فارغاً؛ "محادثة جديدة" صريحة → لا تُمسح. 3/3 ✅.
+- **premise المصادقة (stdlib HS256 يُحاكي `decode_user_id`)**: token صالح لا يرفع
+  أبداً (لا 4401 عند الفك)؛ منتهٍ/توقيع خاطئ/بلا sub → 401 (طرد صحيح). ✅.
+- 7 اختبارات regression في `tests/services/test_iss097_kick_to_login.py` ✅ + كلا
+  الـ routers يُترجمان. **التحقق الكامل في المتصفح + Supabase يجري على Codespace حيّ/CI.**
+
+### الملفات (D-WS-KICK-001)
+
+| File | Change |
+|------|--------|
+| `frontend/app/hooks/useRealtimeConnection.js` | Fix A — auth_error فقط على /me invalid + retryTransientAuth |
+| `frontend/app/components/CogniForgeApp.jsx` | Fix B — استعادة آخر محادثة + didRestoreRef |
+| `app/api/routers/customer_chat.py` | Fix C — جلب عابر يُغلق 1013 لا 4401 (+contextlib) |
+| `app/api/routers/admin.py` | Fix C — نفس الإصلاح |
+| `tests/services/test_iss097_kick_to_login.py` | **جديد** — 7 regression checks |
+| `.memory/issues.md` / `.memory/decisions.md` | إدخالات ISS-097 / D-WS-KICK-001 |
+| `CLAUDE.md` §6.72 | هذا القسم |
+
+### السلسلة الكاملة (D-095 → D-WS-KICK-001)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-095 | ENVIRONMENT=testing → development (480-min JWT) |
+| D-096 | WS send concurrency lock (kick أثناء البث) |
+| **D-WS-KICK-001** | **idle 4401 لا يُسجِّل خروجاً إلا بتأكيد /me + استعادة المحادثة** |
+

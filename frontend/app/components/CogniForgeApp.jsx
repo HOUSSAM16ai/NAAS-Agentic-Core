@@ -144,6 +144,10 @@ const DashboardLayout = ({ user, token, onLogout }) => {
     const endpoint = user.is_admin ? '/admin/api/chat/ws' : '/api/chat/ws';
     const convEndpoint = user.is_admin ? '/admin/api/conversations' : '/api/chat/conversations';
     const historyEndpoint = user.is_admin ? (id) => `/admin/api/conversations/${id}` : (id) => `/api/chat/conversations/${id}`;
+    // ISS-097 (D-WS-KICK-001): نقطة استرجاع آخر محادثة — تُستخدم لاستعادة
+    // السياق عند التحميل بدل بدء "محادثة جديدة" فارغة في كل دخول.
+    const latestEndpoint = user.is_admin ? '/admin/api/chat/latest' : '/api/chat/latest';
+    const didRestoreRef = useRef(false);
 
     const fetchConversations = useCallback(async () => {
          try {
@@ -188,12 +192,48 @@ const DashboardLayout = ({ user, token, onLogout }) => {
     };
 
     const handleNewChat = () => {
+        // ISS-097: المستخدم اختار محادثة جديدة صراحةً — علِّم didRestoreRef
+        // حتى لا يُعيد effect الاسترجاع تحميل آخر محادثة فوق اختياره.
+        didRestoreRef.current = true;
         clearMessages();
         setConversationId(null);
         setConversations([]);
         setIsSidebarOpen(false);
         setIsMenuOpen(false);
     };
+
+    // ISS-097 (D-WS-KICK-001): استعادة آخر محادثة عند التحميل.
+    // الكارثة: DashboardLayout كان يبدأ دائماً بـ conversationId=null + رسائل
+    // فارغة، فبعد أي دخول (أول دخول أو إعادة دخول بعد طرد) يجد المستخدم نفسه
+    // في "محادثة جديدة" فارغة — وهو نصف شكوى المستخدم الحرفية.
+    // الحل: مرة واحدة عند التحميل، إن لم تكن هناك محادثة نشطة، نجلب آخر محادثة
+    // (/latest) ونحمِّلها. غير حرج: عند الفشل أو غياب محادثة سابقة نبقى في
+    // محادثة جديدة (مستخدم جديد). guard بـ didRestoreRef يمنع الكتابة فوق
+    // اختيار المستخدم (محادثة جديدة / فتح محادثة من القائمة).
+    useEffect(() => {
+        if (didRestoreRef.current) return;
+        didRestoreRef.current = true;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(apiUrl(latestEndpoint), {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                if (!res.ok || cancelled) return;
+                const data = await res.json();
+                if (cancelled || !data || data.conversation_id === undefined || data.conversation_id === null) {
+                    return;
+                }
+                setMessages(data.messages || []);
+                setConversationId(data.conversation_id);
+            } catch (e) {
+                // non-fatal — نبقى في محادثة جديدة فارغة
+                errorTracker.reportError(e, { message: 'Failed to restore latest conversation' });
+            }
+        })();
+        return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [latestEndpoint, token]);
 
     // ISS-066: localStorage قُرئ في useState lazy initializer — لا حاجة لـ useEffect هنا.
 

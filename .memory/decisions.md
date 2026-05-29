@@ -3523,3 +3523,26 @@ Add `activeRequestIdRef.current = null` as the first statement in the
 
 ### Files Changed
 - `frontend/app/hooks/useAgentSocket.js` — reset in `assistant_final` handler
+
+---
+
+## D-WS-KICK-001 (2026-05-29) — WS 4401 must never log out a valid session
+
+**Decision:** `agent:auth_error` (→ logout) is dispatched ONLY when an HTTP `/me` probe
+definitively returns 401/403. A count of consecutive 4401 WS closes must NEVER trigger
+logout (the removed `MAX_FATAL_RETRIES` path was the cause of the idle kick). Transient
+WS-connect user-lookup failures close with retryable `1013`, not `4401`. `DashboardLayout`
+restores the latest conversation on mount (guarded by `didRestoreRef`).
+
+**Rules (permanent):**
+1. `/me` (Authorization header) is the sole arbiter of session validity — immune to a
+   proxy dropping the WS `?token=` query param.
+2. `4401` is reserved for missing/corrupt token or a genuinely inactive user; transient
+   server-side lookup failures → `1013`.
+3. No forced blank "new conversation": resume the last conversation on load.
+
+**Files Changed**
+- `frontend/app/hooks/useRealtimeConnection.js` (Fix A)
+- `frontend/app/components/CogniForgeApp.jsx` (Fix B)
+- `app/api/routers/customer_chat.py`, `app/api/routers/admin.py` (Fix C)
+- `tests/services/test_iss097_kick_to_login.py` (new — 7 regression checks)

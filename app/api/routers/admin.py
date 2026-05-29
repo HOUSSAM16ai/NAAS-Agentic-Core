@@ -13,6 +13,7 @@
 """
 
 import asyncio
+import contextlib
 import inspect
 import uuid
 from datetime import UTC, datetime
@@ -373,7 +374,32 @@ async def chat_stream_ws(
         return
 
     async with async_session_factory() as db:
-        actor = await db.get(User, user_id)
+        # D-WS-KICK-001 (ISS-097): الـ token فُكَّ بنجاح. فشل جلب المستخدم هنا
+        # خلل خادم *عابر* لا فشل مصادقة — أغلق بـ 1013 القابل لإعادة المحاولة،
+        # لا 4401 (الذي تُترجمه الواجهة إلى تسجيل خروج).
+        try:
+            actor = await db.get(User, user_id)
+        except Exception as lookup_exc:
+            logger.warning(
+                "admin_chat.ws_user_lookup_transient: %s (closing 1013, not 4401)",
+                lookup_exc,
+            )
+            await websocket.accept(subprotocol=selected_protocol)
+            with contextlib.suppress(Exception):
+                await websocket.send_json(
+                    normalize_streaming_event(
+                        {
+                            "type": "error",
+                            "payload": {
+                                "details": "Service temporarily unavailable. Reconnecting.",
+                                "code": "WS_BACKEND_TRANSIENT",
+                                "status_code": 1013,
+                            },
+                        }
+                    )
+                )
+            await websocket.close(code=1013)
+            return
         if actor is None or not actor.is_active:
             await websocket.accept(subprotocol=selected_protocol)
             await websocket.send_json(

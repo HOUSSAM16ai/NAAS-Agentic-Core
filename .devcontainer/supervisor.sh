@@ -1356,6 +1356,36 @@ _restart_uvicorn() {
     lifecycle_info "Uvicorn restarted (PID: $new_pid)"
 }
 
+# ISS-100 (D-HEALTH-002 — 2026-05-29): "Degraded ≠ Dead" — لا تُعِد تشغيل uvicorn
+# لمجرّد أن قاعدة البيانات متعثّرة.
+#
+# الكارثة المُصلَحة (flapping + لا إجابة): الـ `/health` يُرجع HTTP 503 عندما تكون
+# Supabase غير قابلة للوصول مؤقتاً (مع أن جسم الرد يقول `"application":"ok"`).
+# المراقب القديم كان يَعدّ أي رمز ≠ 200 فشلاً → بعد 3 → يُعيد تشغيل uvicorn.
+# لكن إعادة تشغيل uvicorn **لا تُصلح** خللاً في Supabase — بل تُسقط **كل**
+# اتصالات الـ WebSocket النشطة (تأرجح متصل/غير متصل) وتقطع الإجابات الجارية
+# (لا يرد عن الأسئلة)، ثم يتكرر الفشل → حلقة إعادة تشغيل كارثية.
+#
+# الإصلاح: نُعيد التشغيل **فقط** عندما يكون التطبيق ميتاً فعلاً (لا استجابة /
+# رفض اتصال). أي استجابة تحمل `"application":"ok"` (حتى 503 بسبب DB) = التطبيق
+# حيّ ومتدهور → نتركه يعمل (لا نقتل اتصالات المستخدمين).
+_app_is_alive() {
+    local timeout="${1:-15}"
+    command -v curl >/dev/null 2>&1 || return 1
+    local resp code body
+    resp=$(curl -s -m "$timeout" -w $'\n%{http_code}' "$HEALTH_ENDPOINT" 2>/dev/null || printf '\n000')
+    code="${resp##*$'\n'}"
+    body="${resp%$'\n'*}"
+    # 200 = صحّة كاملة.
+    [ "$code" = "200" ] && return 0
+    # أي استجابة من طبقة التطبيق (حتى 503 بسبب DB) = حيّ لكن متدهور → لا تُعِد التشغيل.
+    if printf '%s' "$body" | grep -q '"application"[[:space:]]*:[[:space:]]*"ok"'; then
+        return 0
+    fi
+    # لا استجابة قابلة للاستخدام (000 / رفض اتصال / 5xx بلا application:ok) → ميت.
+    return 1
+}
+
 # ISS-091 (D-HEALTH-001 — 2026-05-27): tolerant monitoring loop.
 # قبل: 5s timeout + 1 فشل → restart. ⇒ كل blip في Supabase response time يقتل
 # WS connections النشطة (هذا حدث في كل session نشطة من المستخدم).
@@ -1363,13 +1393,13 @@ _restart_uvicorn() {
 #   - 15s timeout (Supabase free tier يصل لـ 8-12s تحت الحمل)
 #   - 3 إخفاقات متتالية مطلوبة قبل restart
 #   - intervals بين الفحوصات 30s
-# النتيجة: لا restart إلا بعد ~90s من الفشل المتواصل = ليس blip شبكي.
+#   - D-HEALTH-002: إعادة التشغيل تُحسب فقط عند موت التطبيق فعلاً، لا عند تدهور DB.
 HEALTH_TIMEOUT_SECS="${HEALTH_TIMEOUT_SECS:-15}"
 HEALTH_FAILURE_THRESHOLD="${HEALTH_FAILURE_THRESHOLD:-3}"
 HEALTH_INTERVAL_SECS="${HEALTH_INTERVAL_SECS:-30}"
 _health_consecutive_failures=0
 
-# Monitor application health — restart uvicorn only after N consecutive failures
+# Monitor application LIVENESS — restart uvicorn only after N consecutive DEATHS.
 while true; do
     sleep "$HEALTH_INTERVAL_SECS"
 
@@ -1379,21 +1409,31 @@ while true; do
         fi
         _health_consecutive_failures=0
         lifecycle_set_state "app_healthy" "true"
+    elif _app_is_alive "$HEALTH_TIMEOUT_SECS"; then
+        # D-HEALTH-002: التطبيق حيّ لكن متدهور (DB blip غالباً). إعادة التشغيل لن
+        # تُصلح ذلك وستُسقط كل اتصالات الـ WebSocket — لذا لا نُعيد التشغيل ولا
+        # نَعدّ هذا موتاً. نُصفّر عدّاد الموت لأن العملية حيّة.
+        if [ "$_health_consecutive_failures" -gt 0 ]; then
+            lifecycle_info "App alive but degraded (DB?) — NOT restarting (D-HEALTH-002)"
+        else
+            lifecycle_warn "Health degraded (non-200) but app alive — NOT restarting (D-HEALTH-002)"
+        fi
+        _health_consecutive_failures=0
     else
         _health_consecutive_failures=$((_health_consecutive_failures + 1))
-        lifecycle_warn "Health check failed (consecutive=$_health_consecutive_failures/$HEALTH_FAILURE_THRESHOLD)"
+        lifecycle_warn "App UNREACHABLE (consecutive=$_health_consecutive_failures/$HEALTH_FAILURE_THRESHOLD)"
         if [ "$_health_consecutive_failures" -ge "$HEALTH_FAILURE_THRESHOLD" ]; then
-            lifecycle_warn "Health failure threshold reached — restarting uvicorn"
+            lifecycle_warn "App death threshold reached — restarting uvicorn"
             lifecycle_clear_state "app_healthy"
             _restart_uvicorn
             _health_consecutive_failures=0
             # انتظر حتى يبدأ uvicorn الجديد
             sleep 15
-            if lifecycle_check_http "$HEALTH_ENDPOINT" 200 "$HEALTH_TIMEOUT_SECS"; then
+            if _app_is_alive "$HEALTH_TIMEOUT_SECS"; then
                 lifecycle_info "Uvicorn recovered successfully"
                 lifecycle_set_state "app_healthy" "true"
             else
-                lifecycle_warn "Uvicorn restart did not recover health — will retry next cycle"
+                lifecycle_warn "Uvicorn restart did not recover — will retry next cycle"
             fi
         fi
     fi

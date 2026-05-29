@@ -107,37 +107,64 @@ def test_latest_conversation_restore_on_mount() -> None:
     )
 
 
-# ─────────────────────────── Invariant C (backend 1013 not 4401) ───────────────────────────
+# ─────────────────── Invariant C (SUPERSEDED by D-WS-CONN-001 / ISS-100) ───────────────────
+#
+# D-WS-KICK-001 originally closed a transient connect-time `db.get(User)` failure
+# with 1013 instead of 4401. ISS-100 (D-WS-CONN-001) went further and removed the
+# connect-time DB query ENTIRELY — identity now comes from the signed JWT with zero
+# DB access — because the `db.get` at connect was itself the flap source (1013 →
+# reconnect → flap). The assertions below now enforce the DB-free connect contract.
 
 
-def test_customer_ws_transient_lookup_closes_1013() -> None:
-    src = _read(CUSTOMER)
-    assert "WS_BACKEND_TRANSIENT" in src and "close(code=1013)" in src, (
-        "D-WS-KICK-001: customer_chat WS must close a transient user-lookup failure "
-        "with retryable 1013, not 4401."
+def _ws_connect_section(src: str) -> str:
+    """Slice the WS handler from its def to the start of the receive loop.
+
+    (The HTTP `get_actor_user` dependency elsewhere may legitimately use db.get.)
+    """
+    start = src.index("async def chat_stream_ws")
+    loop = src.index("while True", start)
+    return src[start:loop]
+
+
+def test_customer_connect_has_no_db_lookup_1013_path() -> None:
+    """The connect-time db.get + 1013 transient path must be GONE (D-WS-CONN-001)."""
+    connect = _ws_connect_section(_read(CUSTOMER))
+    assert "db.get(User, user_id)" not in connect, (
+        "D-WS-CONN-001: the connect-time db.get(User) must be removed — it caused the "
+        "1013 → reconnect flap under Supabase pressure."
     )
-    # The guard must wrap db.get(User, user_id) in try/except.
-    assert re.search(
-        r"try:\s*\n\s*actor = await db\.get\(User, user_id\)\s*\n\s*except Exception",
-        src,
-    ), "D-WS-KICK-001: customer_chat WS user lookup must be wrapped in try/except."
-
-
-def test_admin_ws_transient_lookup_closes_1013() -> None:
-    src = _read(ADMIN)
-    assert "WS_BACKEND_TRANSIENT" in src and "close(code=1013)" in src, (
-        "D-WS-KICK-001: admin WS must close a transient user-lookup failure with 1013, not 4401."
+    assert "async_session_factory()" not in connect, (
+        "D-WS-CONN-001: connect must not open a DB session before the receive loop."
     )
-    assert re.search(
-        r"try:\s*\n\s*actor = await db\.get\(User, user_id\)\s*\n\s*except Exception",
-        src,
-    ), "D-WS-KICK-001: admin WS user lookup must be wrapped in try/except."
+    assert "decode_token_payload(" in connect and "WsActor(id=" in connect, (
+        "D-WS-CONN-001: customer connect must derive identity from the JWT (no DB)."
+    )
 
 
-def test_genuine_invalid_user_still_4401() -> None:
-    """A genuinely missing/inactive user must still close 4401 (correct behavior)."""
+def test_admin_connect_has_no_db_lookup_1013_path() -> None:
+    connect = _ws_connect_section(_read(ADMIN))
+    assert "db.get(User, user_id)" not in connect, (
+        "D-WS-CONN-001: admin connect-time db.get(User) must be removed (flap source)."
+    )
+    assert "async_session_factory()" not in connect, (
+        "D-WS-CONN-001: admin connect must not open a DB session before the receive loop."
+    )
+    assert "decode_token_payload(" in connect and "WsActor(id=" in connect, (
+        "D-WS-CONN-001: admin connect must derive identity from the JWT (no DB)."
+    )
+
+
+def test_invalid_token_still_closes_4401() -> None:
+    """An invalid/expired token is still rejected at connect with 4401 (the only auth reject)."""
     for src in (_read(CUSTOMER), _read(ADMIN)):
-        assert "WS_AUTH_USER_INACTIVE" in src and "close(code=4401)" in src, (
-            "D-WS-KICK-001: a genuinely None/inactive user must still close 4401 — "
-            "only *transient* lookup failures downgrade to 1013."
+        assert "WS_AUTH_INVALID" in src and "close(code=4401)" in src, (
+            "Invalid/expired token must still close 4401 at connect."
+        )
+
+
+def test_wrong_endpoint_still_closes_4403() -> None:
+    """Admin-on-customer / standard-on-admin mismatch still closes 4403 (JWT is_admin claim)."""
+    for src in (_read(CUSTOMER), _read(ADMIN)):
+        assert "close(code=4403)" in src, (
+            "Wrong-endpoint account type must still close 4403 (gate uses the JWT is_admin claim)."
         )

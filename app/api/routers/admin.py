@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.websockets import WebSocketState
 
-from app.api.routers.ws_auth import extract_websocket_auth
+from app.api.routers.ws_auth import WsActor, extract_websocket_auth
 from app.api.schemas.admin import (
     ConversationDetailsResponse,
     ConversationSummaryResponse,
@@ -36,7 +36,7 @@ from app.core.domain.user import User
 from app.deps.auth import CurrentUser, get_current_user, require_roles
 from app.infrastructure.clients.orchestrator_client import orchestrator_client
 from app.infrastructure.clients.user_client import user_client
-from app.services.auth.token_decoder import decode_user_id
+from app.services.auth.token_decoder import decode_token_payload
 from app.services.boundaries.admin_chat_boundary_service import AdminChatBoundaryService
 from app.services.rbac import ADMIN_ROLE
 from app.services.skills.ws_heartbeat_skill import handle_control_message
@@ -409,9 +409,14 @@ async def chat_stream_ws(
         await websocket.close(code=4401)
         return
 
+    # ISS-100 (D-WS-CONN-001 — 2026-05-29): الهوية من الـ JWT فقط — بلا استعلام
+    # قاعدة بيانات عند الاتصال (نفس إصلاح customer_chat). الاعتماد القديم على
+    # ``db.get(User)`` جعل كل اتصال رهيناً بـ Supabase → فشل تحت الضغط → إغلاق
+    # 1013 → تأرجح متصل/غير متصل. is_admin يأتي من الـ JWT الموقّع.
     try:
-        user_id = decode_user_id(token, get_settings().SECRET_KEY)
-    except HTTPException:
+        claims = decode_token_payload(token, get_settings().SECRET_KEY)
+        user_id = int(claims["sub"])
+    except (HTTPException, KeyError, TypeError, ValueError):
         await websocket.accept(subprotocol=selected_protocol)
         await websocket.send_json(
             normalize_streaming_event(
@@ -428,52 +433,7 @@ async def chat_stream_ws(
         await websocket.close(code=4401)
         return
 
-    async with async_session_factory() as db:
-        # D-WS-KICK-001 (ISS-097): الـ token فُكَّ بنجاح. فشل جلب المستخدم هنا
-        # خلل خادم *عابر* لا فشل مصادقة — أغلق بـ 1013 القابل لإعادة المحاولة،
-        # لا 4401 (الذي تُترجمه الواجهة إلى تسجيل خروج).
-        try:
-            actor = await db.get(User, user_id)
-        except Exception as lookup_exc:
-            logger.warning(
-                "admin_chat.ws_user_lookup_transient: %s (closing 1013, not 4401)",
-                lookup_exc,
-            )
-            await websocket.accept(subprotocol=selected_protocol)
-            with contextlib.suppress(Exception):
-                await websocket.send_json(
-                    normalize_streaming_event(
-                        {
-                            "type": "error",
-                            "payload": {
-                                "details": "Service temporarily unavailable. Reconnecting.",
-                                "code": "WS_BACKEND_TRANSIENT",
-                                "status_code": 1013,
-                            },
-                        }
-                    )
-                )
-            await websocket.close(code=1013)
-            return
-        if actor is None or not actor.is_active:
-            await websocket.accept(subprotocol=selected_protocol)
-            await websocket.send_json(
-                normalize_streaming_event(
-                    {
-                        "type": "error",
-                        "payload": {
-                            "details": "User account not found or inactive.",
-                            "code": "WS_AUTH_USER_INACTIVE",
-                            "status_code": 4401,
-                        },
-                    }
-                )
-            )
-            await websocket.close(code=4401)
-            return
-
-        # Expunge the actor so we can use it after the session is closed
-        db.expunge(actor)
+    actor = WsActor(id=user_id, is_admin=bool(claims.get("is_admin", False)))
 
     await websocket.accept(subprotocol=selected_protocol)
 

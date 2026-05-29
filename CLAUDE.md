@@ -7100,3 +7100,111 @@ Supabase محجوب في الـ sandbox (منافذ 6543/5432 — نمط موث�
 | D-WS-FLAP-005 | keepalive أثناء الدور + liveness على أي رسالة ("لا يرد عن الأسئلة") |
 | **D-WS-KICK-002** | **HTTP /me bootstrap (`fetchUser`) يُطرد فقط على 401/403 + user cache (يحل الطرد المتبقّي)** |
 
+---
+
+## 6.75 First-Seconds Flapping — DB-Free WS Connect + Degraded≠Dead Health (2026-05-29, ISS-100 / D-WS-CONN-001 + D-HEALTH-002)
+
+> **بلاغ المستخدم (الحاسم)**: «هو لا يجيب اطلاقاً سواء سؤال طويل أو قصير. بمجرد
+> دخولي أقول السلام عليكم لا يرد، و يدخل و يخرج، و تظهر متصل/غير متصل — **كل هذا
+> يحدث في الثواني الأولى فقط**».
+
+### لماذا هذا غيّر التشخيص كلياً
+
+«لا يرد حتى على السلام عليكم» + «الثواني الأولى» + «تأرجح» ⇒ **ليست** مشكلة طول
+الإجابة (D-WS-FLAP-005) ولا انتهاء token. التحية تُجاب فوراً عبر fast-path. هذا
+يعني أن **الاتصال يُنشأ ثم يُغلق فوراً بشكل متكرر** — فلا يبقى حياً حتى لمعالجة
+تحية.
+
+### الجذر (السبب الحقيقي — D-WS-CONN-001)
+
+معالج اتصال الـ WebSocket في `customer_chat.py` و `admin.py` كان ينفّذ عند **كل
+اتصال**:
+```python
+async with async_session_factory() as db:
+    actor = await db.get(User, user_id)   # ← استعلام Supabase عند كل اتصال
+```
+تحت ضغط Supabase (استنفاد pool بسبب 8 خدمات + monolith، أو بطء، أو انقطاع)، هذا
+الاستعلام يفشل → الإغلاق بـ **1013** → الواجهة تُعيد الاتصال → يفشل ثانية → **تأرجح
+متصل/غير متصل في الثواني الأولى، ولا إجابة أبداً** (الاتصال لا يثبت). إصلاح
+D-WS-KICK-001 السابق («Fix C»: 1013 بدل 4401) **حوّل الطرد إلى تأرجح** ولم يُزِل
+الاعتماد على قاعدة البيانات.
+
+### الإصلاح (D-WS-CONN-001 — هوية من الـ JWT، صفر استعلامات عند الاتصال)
+
+الهوية عند الاتصال تُشتق من الـ **JWT الموقّع** (`sub` + `is_admin`) عبر
+`decode_token_payload` + `WsActor` — **بلا أي استعلام لقاعدة البيانات**. إنشاء
+الاتصال أصبح فورياً ومستقلاً عن Supabase. عمل قاعدة البيانات يحدث **لكل دور**
+داخل جلسته الخاصة مع معالجة أخطائه دون إسقاط الاتصال. (downstream يحتاج فقط
+`actor.id` لـ `get_or_create_conversation` و `actor.is_admin` للبوابة.)
+
+- `WsActor` (مجمَّد، حقول `id`/`is_admin`/`is_active`) في `ws_auth.py`.
+- `decode_token_payload(token, secret) -> dict` في `token_decoder.py`.
+- كلا المعالجين: token غير صالح → 4401 (الرفض الوحيد عند الاتصال)؛ نوع حساب خاطئ
+  (is_admin من الـ claim) → 4403. لا 1013-عند-الاتصال، لا فحص is_active-عند-الاتصال.
+
+**المقايضة**: مستخدم بـ token صالح (≤8 ساعات) لكن عُطِّل حسابه خلال تلك المدة قد
+يتصل حتى انتهاء الـ token — مقايضة JWT قياسية ومقبولة، وأفضل بما لا يُقاس من تأرجح
+يُصيب كل المستخدمين. السحب بـ FK لمستخدم محذوف يفشل لكل-دور بنظافة.
+
+### الإصلاح المكمِّل (D-HEALTH-002 — Degraded ≠ Dead)
+
+`supervisor.sh` كان يُعيد تشغيل uvicorn بعد 3 إخفاقات لـ `/health`. لكن `/health`
+يُرجع **503 عند تعثّر Supabase** (مع أن جسمه يقول `"application":"ok"`). إعادة
+تشغيل uvicorn **لا تُصلح** خلل Supabase — بل تُسقط **كل** اتصالات الـ WebSocket
+(تأرجح) وتقطع الإجابات، ثم يتكرر الفشل → حلقة إعادة تشغيل. الإصلاح: دالة
+`_app_is_alive` — إعادة التشغيل **فقط** عند موت التطبيق فعلاً (لا استجابة / رفض
+اتصال)، أمّا 503-مع-`application:ok` فهو «حيّ لكن متدهور» → لا إعادة تشغيل.
+
+### الإثبات الحي (2026-05-29، SQLite + OpenRouter حقيقي؛ Supabase محجوب في sandbox)
+
+- **«السلام عليكم» تُجاب الآن** (71 حرف عبر fast-path)، الاتصال مستقر، لا إغلاق. ✅
+- متعدد الأدوار (4 أدوار، conv ثابت) يعمل مع الـ actor المشتق من الـ JWT — لا انحدار. ✅
+- إثبات بنيوي: قسم الاتصال (من `def chat_stream_ws` حتى `while True`) **خالٍ تماماً**
+  من `db.get` و `async_session_factory()` في كلا المعالجين (مُتحقَّق باختبارات). ✅
+- `_app_is_alive`: 503 + `application:ok` → «حيّ» (لا إعادة تشغيل) — مُتحقَّق. ✅
+- 61 اختبار WS/auth (ISS-100 + ISS-099 + ISS-097 المُحدَّث + ISS-098 + D-096 + heartbeat) ✅؛
+  ruff + runtime_truth + bash -n ✅.
+
+### القواعد الـ 5 الدائمة (D-WS-CONN-001 + D-HEALTH-002 — لا تُكسر بدون ADR)
+
+1. **اتصال WebSocket لا يستعلم قاعدة البيانات أبداً.** الهوية من الـ JWT
+   (`decode_token_payload` + `WsActor`). لا `db.get`/`async_session_factory` قبل
+   حلقة الاستقبال. أي إعادة لاستعلام-عند-الاتصال = عودة فورية لكارثة التأرجح.
+2. **عمل قاعدة البيانات لكل-دور فقط**، داخل جلسة الدور، مع معالجة أخطائه دون إسقاط الاتصال.
+3. **الرفض الوحيد عند الاتصال هو 4401** (token غير صالح) و **4403** (نوع حساب خاطئ من الـ claim).
+4. **إعادة تشغيل uvicorn فقط عند موت التطبيق فعلاً** (`_app_is_alive`). 503-مع-`application:ok`
+   = متدهور (DB) → لا إعادة تشغيل أبداً.
+5. `get_or_create_conversation` تحتاج `user.id` فقط — لا تُمرِّر إليها كائن ORM كامل
+   من وقت الاتصال؛ المعرّف من الـ JWT كافٍ.
+
+### الملفات (ISS-100)
+
+| File | Change |
+|------|--------|
+| `app/services/auth/token_decoder.py` | + `decode_token_payload()` (full validated JWT payload) |
+| `app/api/routers/ws_auth.py` | + `WsActor` (frozen, DB-free identity) |
+| `app/api/routers/customer_chat.py` | connect: JWT identity, no DB; حذف `db.get`/1013-at-connect |
+| `app/api/routers/admin.py` | connect: نفس الإصلاح (is_admin من الـ claim) |
+| `.devcontainer/supervisor.sh` | + `_app_is_alive`; المراقب يُعيد التشغيل فقط عند موت التطبيق (D-HEALTH-002) |
+| `tests/services/test_iss100_ws_connect_no_db.py` | **جديد** — 8 checks (DB-free connect) |
+| `tests/services/test_iss097_kick_to_login.py` | تحديث 4 اختبارات لتعكس عقد الاتصال الخالي من DB |
+| `CLAUDE.md` §6.75 / `.memory/*` | هذا القسم |
+
+### ملاحظة بيئية صادقة
+
+Supabase محجوب في الـ sandbox، فلم أُعِد إنتاج ضغط الاتصال الحقيقي. لكن الجذر بنيوي
+مُثبت بالكود (الاتصال لم يعد يلمس قاعدة البيانات) + إثبات حي للتحية ومتعدد الأدوار.
+الإصلاح يعمل فور `git pull` + إعادة تشغيل الـ supervisor في Codespace الحيّ.
+
+### السلسلة الكاملة (D-095 → D-WS-CONN-001)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-095 | ENVIRONMENT=testing → development (480-min JWT) |
+| D-096 | WS send concurrency lock (kick أثناء البث) |
+| D-WS-KICK-001 | idle 4401 (WebSocket) لا يُسجِّل خروجاً إلا بتأكيد /me + استعادة المحادثة |
+| D-WS-FLAP-005 | keepalive أثناء الدور + liveness على أي رسالة |
+| D-WS-KICK-002 | HTTP /me bootstrap يُطرد فقط على 401/403 + user cache |
+| **D-WS-CONN-001** | **اتصال WebSocket خالٍ من قاعدة البيانات (هوية من الـ JWT) — يحل تأرجح الثواني الأولى** |
+| **D-HEALTH-002** | **Degraded≠Dead: لا إعادة تشغيل uvicorn على 503 بسبب DB (يحفظ كل اتصالات WS)** |
+

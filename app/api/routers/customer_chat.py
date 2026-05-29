@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.websockets import WebSocketState
 
-from app.api.routers.ws_auth import extract_websocket_auth
+from app.api.routers.ws_auth import WsActor, extract_websocket_auth
 from app.api.schemas.customer_chat import (
     CustomerConversationDetails,
     CustomerConversationSummary,
@@ -34,7 +34,7 @@ from app.core.domain.user import User
 from app.deps.auth import CurrentUser, require_permissions
 from app.infrastructure.clients.orchestrator_client import orchestrator_client
 from app.services.analytics.bkt_persistence import BKTAnalyticsService
-from app.services.auth.token_decoder import decode_user_id
+from app.services.auth.token_decoder import decode_token_payload
 from app.services.boundaries.customer_chat_boundary_service import (
     CustomerChatBoundaryService,
 )
@@ -495,9 +495,20 @@ async def chat_stream_ws(
         await websocket.close(code=4401)
         return
 
+    # ISS-100 (D-WS-CONN-001 — 2026-05-29): الهوية من الـ JWT فقط — بلا أي
+    # استعلام لقاعدة البيانات عند الاتصال.
+    #
+    # الكارثة المُصلَحة (تأرجح متصل/غير متصل + لا إجابة حتى للتحية في الثواني
+    # الأولى): الكود السابق كان ينفّذ ``db.get(User)`` على Supabase عند كل اتصال.
+    # تحت ضغط Supabase (استنفاد pool / بطء / انقطاع) كان يفشل → إغلاق 1013 →
+    # الواجهة تُعيد الاتصال → يفشل ثانية → تأرجح مستمر؛ الاتصال لا يثبت أبداً
+    # فلا تُعالَج حتى رسالة «السلام عليكم». الهوية (المعرّف + is_admin) موجودة
+    # في الـ JWT الموقّع، فلا داعي لقاعدة البيانات لإنشاء الاتصال. عمل قاعدة
+    # البيانات يحدث لكل دور داخل جلسته الخاصة مع معالجة أخطائه دون إسقاط الاتصال.
     try:
-        user_id = decode_user_id(token, get_settings().SECRET_KEY)
-    except HTTPException:
+        claims = decode_token_payload(token, get_settings().SECRET_KEY)
+        user_id = int(claims["sub"])
+    except (HTTPException, KeyError, TypeError, ValueError):
         await websocket.accept(subprotocol=selected_protocol)
         await websocket.send_json(
             normalize_streaming_event(
@@ -514,54 +525,7 @@ async def chat_stream_ws(
         await websocket.close(code=4401)
         return
 
-    async with async_session_factory() as db:
-        # D-WS-KICK-001 (ISS-097): الـ token فُكَّ بنجاح (توقيع + صلاحية سليمان).
-        # أي فشل في جلب المستخدم هنا هو خلل خادم *عابر* (Supabase blip، انقطاع
-        # اتصال pool)، وليس فشل مصادقة. لا تُغلق بـ 4401 — فالواجهة تُترجم 4401
-        # المتكرر إلى تسجيل خروج. أغلق بـ 1013 (Try Again Later) القابل لإعادة
-        # المحاولة → الواجهة تُعيد الاتصال دون طرد المستخدم.
-        try:
-            actor = await db.get(User, user_id)
-        except Exception as lookup_exc:
-            logger.warning(
-                "customer_chat.ws_user_lookup_transient: %s (closing 1013, not 4401)",
-                lookup_exc,
-            )
-            await websocket.accept(subprotocol=selected_protocol)
-            with contextlib.suppress(Exception):
-                await websocket.send_json(
-                    normalize_streaming_event(
-                        {
-                            "type": "error",
-                            "payload": {
-                                "details": "Service temporarily unavailable. Reconnecting.",
-                                "code": "WS_BACKEND_TRANSIENT",
-                                "status_code": 1013,
-                            },
-                        }
-                    )
-                )
-            await websocket.close(code=1013)
-            return
-        if actor is None or not actor.is_active:
-            await websocket.accept(subprotocol=selected_protocol)
-            await websocket.send_json(
-                normalize_streaming_event(
-                    {
-                        "type": "error",
-                        "payload": {
-                            "details": "User account not found or inactive.",
-                            "code": "WS_AUTH_USER_INACTIVE",
-                            "status_code": 4401,
-                        },
-                    }
-                )
-            )
-            await websocket.close(code=4401)
-            return
-
-        # Expunge the actor so we can use it after the session is closed
-        db.expunge(actor)
+    actor = WsActor(id=user_id, is_admin=bool(claims.get("is_admin", False)))
 
     await websocket.accept(subprotocol=selected_protocol)
 

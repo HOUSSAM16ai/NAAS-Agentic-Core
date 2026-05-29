@@ -3546,3 +3546,34 @@ restores the latest conversation on mount (guarded by `didRestoreRef`).
 - `frontend/app/components/CogniForgeApp.jsx` (Fix B)
 - `app/api/routers/customer_chat.py`, `app/api/routers/admin.py` (Fix C)
 - `tests/services/test_iss097_kick_to_login.py` (new — 7 regression checks)
+
+---
+
+## D-WS-FLAP-005 — Turn keepalive + liveness-on-any-message (ISS-098) — 2026-05-29
+
+**Context:** Recurring "no answer for substantive questions" in Codespaces, proven
+live to be a false client heartbeat-timeout on long turns: the WS receive loop is
+blocked on `await stream_task` and cannot pong; the frontend cleared its 90s timeout
+only on `pong`; a 154.8s answer exceeded it → false `close(1001)` → reconnect → lost answer.
+
+**Decision:**
+1. Frontend treats ANY inbound WS message as proof of liveness (clears the heartbeat
+   timeout) — streaming deltas alone keep the connection alive.
+2. Both WS routers run a concurrent `_run_turn_keepalive` that emits a `pong` every
+   ~20s through the shared `send_lock` for the turn's duration, cancelled in `finally`.
+
+**Rules (permanent):**
+1. `clearTimeout(heartbeatTimeoutRef)` on every `ws.onmessage`, not only on `pong`.
+2. Every WS turn starts `_run_turn_keepalive` and cancels it in `finally`;
+   `_TURN_KEEPALIVE_INTERVAL_SECONDS ≤ 20s` (< half the 90s heartbeat).
+3. Admin path has full D-096 parity: every stream-phase send goes through
+   `_locked_send_json` + `send_lock` (the concurrent keepalive makes this mandatory).
+4. The keepalive uses the `pong` type (no new frame type) — the client ignores it as
+   data but it clears the heartbeat timeout, covering delta-free gaps (TTFT/Supabase).
+
+**Files Changed**
+- `frontend/app/hooks/useRealtimeConnection.js` (liveness on any message)
+- `app/api/routers/customer_chat.py` (`_run_turn_keepalive` + wiring)
+- `app/api/routers/admin.py` (`_locked_send_json` + `_run_turn_keepalive` + D-096 parity)
+- `tests/services/test_iss098_keepalive.py` (new — 8 checks)
+- `frontend/tests/iss098_heartbeat_liveness.test.mjs` (new — 6 checks)

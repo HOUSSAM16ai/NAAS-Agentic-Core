@@ -39,9 +39,15 @@ sleep 2
 rm -f frontend/.next/dev/lock 2>/dev/null || true
 (cd frontend && PORT="${FRONTEND_PORT:-5000}" HOSTNAME=0.0.0.0 nohup npm run dev > /tmp/frontend_iss101.log 2>&1 &)
 echo "  waiting for frontend to come up…"
-sleep 12
+sleep 14
 echo "  ----- frontend startup log (tail) -----"
-tail -20 /tmp/frontend_iss101.log 2>/dev/null || true
+tail -25 /tmp/frontend_iss101.log 2>/dev/null || true
+echo "  ----- which proxy is running? -----"
+if grep -q "WS-PROXY ISS-101 ws-lib v2 ACTIVE" /tmp/frontend_iss101.log 2>/dev/null; then
+  echo "  ✅ NEW instrumented ws-lib proxy is RUNNING"
+else
+  echo "  ❌ NEW proxy banner NOT found — old code or a startup error (see log above)"
+fi
 
 echo "==> [5/5] verify (section F should show [proxy:5000] OK answered)"
 python scripts/diagnose_chat.py

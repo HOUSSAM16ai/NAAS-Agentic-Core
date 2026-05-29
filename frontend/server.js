@@ -65,6 +65,8 @@ const isWsProxyPath = (url) => WS_PROXY_PATHS.some((p) => url === p || url.start
 
 const redact = (url) => (url || "").replace(/([?&]token=)[^&]+/, "$1[REDACTED]");
 
+let _connSeq = 0;
+
 /**
  * يُنشئ اتصالاً صاعداً موثوقاً إلى الـ backend ويُمرِّر الرسائل ثنائية الاتجاه.
  * @param {WebSocket} clientWs - اتصال المتصفح (بعد handleUpgrade).
@@ -73,6 +75,8 @@ const redact = (url) => (url || "").replace(/([?&]token=)[^&]+/, "$1[REDACTED]")
 function proxyToGateway(clientWs, req) {
   const url = req.url || "";
   const safe = redact(url);
+  const cid = ++_connSeq;
+  console.log(`[WS Proxy] #${cid} client connected, opening upstream: ${safe}`);
 
   const protoHeader = req.headers["sec-websocket-protocol"];
   const subprotocols = protoHeader
@@ -87,7 +91,7 @@ function proxyToGateway(clientWs, req) {
       headers: { "x-forwarded-for": (req.socket && req.socket.remoteAddress) || "" },
     });
   } catch (err) {
-    console.error("[WS Proxy] upstream connect failed:", err.message, safe);
+    console.error(`[WS Proxy] #${cid} upstream connect failed:`, err.message, safe);
     try {
       clientWs.close(1011, "upstream connect failed");
     } catch (_e) {
@@ -99,35 +103,42 @@ function proxyToGateway(clientWs, req) {
   // طابور لرسائل العميل المُرسَلة قبل فتح الاتصال الصاعد (يحفظ التحية الأولى).
   const pending = [];
   let upstreamReady = false;
+  let up2cl = 0;
+  let cl2up = 0;
 
   upstream.on("open", () => {
     upstreamReady = true;
     for (const m of pending) {
       try {
         upstream.send(m.data, { binary: m.binary });
+        cl2up++;
       } catch (_e) {
         /* noop */
       }
     }
+    console.log(`[WS Proxy] #${cid} upstream open (flushed ${pending.length} queued)`);
     pending.length = 0;
-    console.log("[WS Proxy] upstream open:", safe);
   });
 
   upstream.on("message", (data, isBinary) => {
+    up2cl++;
     if (clientWs.readyState === WebSocket.OPEN) {
       try {
         clientWs.send(data, { binary: isBinary });
-      } catch (_e) {
-        /* noop */
+      } catch (e) {
+        console.warn(`[WS Proxy] #${cid} client send failed:`, e.message);
       }
     }
   });
 
   upstream.on("close", (code, reason) => {
+    const rsn = reason ? reason.toString().slice(0, 80) : "";
+    console.log(`[WS Proxy] #${cid} upstream closed code=${code} reason="${rsn}" (up2cl=${up2cl} cl2up=${cl2up})`);
     const safeCode = code >= 1000 && code <= 4999 ? code : 1011;
     try {
-      clientWs.close(safeCode, reason);
-    } catch (_e) {
+      clientWs.close(safeCode, rsn);
+    } catch (e) {
+      console.warn(`[WS Proxy] #${cid} clientWs.close threw:`, e.message);
       try {
         clientWs.terminate();
       } catch (_e2) {
@@ -137,7 +148,7 @@ function proxyToGateway(clientWs, req) {
   });
 
   upstream.on("error", (err) => {
-    console.warn("[WS Proxy] upstream error:", err.message, safe);
+    console.warn(`[WS Proxy] #${cid} upstream error:`, err.message, safe);
     if (clientWs.readyState === WebSocket.OPEN) {
       try {
         clientWs.close(1011, "upstream error");
@@ -151,15 +162,19 @@ function proxyToGateway(clientWs, req) {
     if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
       try {
         upstream.send(data, { binary: isBinary });
-      } catch (_e) {
-        /* noop */
+        cl2up++;
+      } catch (e) {
+        console.warn(`[WS Proxy] #${cid} upstream send failed:`, e.message);
       }
     } else {
       pending.push({ data, binary: isBinary });
+      console.log(`[WS Proxy] #${cid} queued client msg (upstream not ready)`);
     }
   });
 
-  clientWs.on("close", () => {
+  clientWs.on("close", (code, reason) => {
+    const rsn = reason ? reason.toString().slice(0, 80) : "";
+    console.log(`[WS Proxy] #${cid} client closed code=${code} reason="${rsn}"`);
     try {
       upstream.close();
     } catch (_e) {
@@ -167,7 +182,8 @@ function proxyToGateway(clientWs, req) {
     }
   });
 
-  clientWs.on("error", () => {
+  clientWs.on("error", (err) => {
+    console.warn(`[WS Proxy] #${cid} client error:`, err.message);
     try {
       upstream.close();
     } catch (_e) {
@@ -190,7 +206,18 @@ app.prepare().then(() => {
   // noServer mode — نملك توجيه الـ upgrade بأنفسنا.
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
 
-  server.on("upgrade", (req, socket, head) => {
+  // ISS-101: تشخيص — كم listener لـ 'upgrade' موجود قبل إضافة handler الخاص بنا؟
+  // إن كان > 0 فهناك طرف آخر (Next/HMR) يتنافس على نفس الـ upgrade → قد يدمّر
+  // الـ socket بعد مصافحتنا (سبب 1006). نُزيل أي listeners ونجعل handler الخاص
+  // بنا هو الوحيد (HMR في dev قد يتعطّل — مقبول لاستقرار الدردشة).
+  const preCount = server.listenerCount("upgrade");
+  console.log(`[WS Proxy] upgrade listeners before ours: ${preCount}`);
+  if (preCount > 0) {
+    server.removeAllListeners("upgrade");
+    console.log(`[WS Proxy] removed ${preCount} pre-existing upgrade listener(s) — ours is now sole`);
+  }
+
+  const upgradeHandler = (req, socket, head) => {
     const url = req.url || "";
     if (!isWsProxyPath(url)) {
       // مسارات Next الداخلية (HMR) وغيرها — لا نتدخّل فيها.
@@ -201,10 +228,22 @@ app.prepare().then(() => {
     wss.handleUpgrade(req, socket, head, (clientWs) => {
       proxyToGateway(clientWs, req);
     });
-  });
+  };
+  server.on("upgrade", upgradeHandler);
+  // أعد تثبيت handler الخاص بنا دورياً إن أضاف Next listener لاحقاً (lazy).
+  const upgradeGuard = setInterval(() => {
+    const handlers = server.listeners("upgrade");
+    if (handlers.length !== 1 || handlers[0] !== upgradeHandler) {
+      console.log(`[WS Proxy] upgrade listeners drifted to ${handlers.length} — reasserting ours`);
+      server.removeAllListeners("upgrade");
+      server.on("upgrade", upgradeHandler);
+    }
+  }, 3000);
+  if (typeof upgradeGuard.unref === "function") upgradeGuard.unref();
 
   server.listen(port, hostname, () => {
     console.log(`[Server] Ready on http://${hostname}:${port}`);
+    console.log("[Server] WS-PROXY ISS-101 ws-lib v2 ACTIVE (instrumented)");
     console.log(`[Server] WS proxy (ws-lib): /api/chat/ws → ${GATEWAY_WS_URL}/api/chat/ws`);
     console.log(`[Server] Gateway: ${GATEWAY_URL}`);
   });

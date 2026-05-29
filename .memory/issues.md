@@ -3524,3 +3524,41 @@ is LOST. Short answers finish under 90s (work). Fast SQLite hid it locally; the 
 - 47 backend regression tests (ISS-098 + D-096 + heartbeat + ISS-097) ✅; 6 frontend
   node tests ✅; ruff check/format ✅.
 - Full browser + Supabase E2E runs on live Codespace/CI (sandbox egress blocked).
+
+---
+
+## ISS-099 — HTTP /me bootstrap kicks valid sessions (the residual logout path) — 2026-05-29
+
+**User report (recurring, GitHub Codespaces):** "while inside the chat, kicked to the
+login page, then find myself in a NEW conversation; exits and re-enters automatically."
+Persisted through D-095/D-096/D-WS-KICK-001/D-WS-FLAP-005.
+
+**Why it persisted:** all prior fixes hardened the WebSocket auth path. The HTTP
+bootstrap effect `fetchUser` in `CogniForgeApp.jsx` was left naive:
+`if (response.ok) setUser(); else logout();` + `catch { logout(); }`. It runs on
+mount and on every `token` change, hitting `/api/security/user/me`. In a Supabase
+deployment the backend restarts (health-monitor 3-strike), is slow, or the
+Codespaces proxy hiccups → `/me` returns 502/503/timeout/network-error → `logout()`
+→ login screen even with a valid token → re-enter → `DashboardLayout` remounts with
+`conversationId=null` → new conversation.
+
+**Ruled out (verified):** JWT lifetime = 480 min (devcontainer.json sets
+ENVIRONMENT=development, inherited by the supervisor process env → crypto.py). SECRET_KEY
+stable (disk-wins, consistent `/app/.devcontainer/state` path, env priority). So the
+kick was NOT token expiry/rotation — it was the frontend logging out on any HTTP failure.
+
+**Fix (D-WS-KICK-002):**
+- `fetchUser` logs out ONLY on HTTP 401/403 (token confirmed-invalid), mirroring the WS gate.
+- Any other failure (5xx/404/network) → transient → keep session, retry `/me` with backoff
+  (up to 40 attempts, 1s→30s), never logout.
+- User object cached in `localStorage['cogniforge_user']` (written on login + each successful
+  /me, restored on mount, cleared on real logout) → transient failure renders from cache
+  instead of dropping to AuthScreen.
+- Because `token` no longer changes on a transient failure, `DashboardLayout` is not remounted
+  → the conversation is preserved (no surprise "new conversation").
+
+**Live verification (2026-05-29):** `/api/security/user/me` contract confirmed live —
+valid token → 200, invalid/missing → 401. Decision-table test: 200→setUser, 401/403→logout,
+500/502/503/404/network → retry (no logout). 6 ISS-099 tests + 47 prior WS/auth tests = 53/53 ✅.
+Supabase egress blocked in sandbox (documented); the bug is pure frontend logic, so the fix
+applies immediately on `git pull` + supervisor restart in the live Codespace.

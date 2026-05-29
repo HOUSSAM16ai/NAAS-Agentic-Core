@@ -3562,3 +3562,45 @@ valid token → 200, invalid/missing → 401. Decision-table test: 200→setUser
 500/502/503/404/network → retry (no logout). 6 ISS-099 tests + 47 prior WS/auth tests = 53/53 ✅.
 Supabase egress blocked in sandbox (documented); the bug is pure frontend logic, so the fix
 applies immediately on `git pull` + supervisor restart in the live Codespace.
+
+---
+
+## ISS-100 — First-seconds flapping + no answer even to a greeting — 2026-05-29
+
+**User report (decisive):** "doesn't answer at all (long or short); the moment I enter and say
+'السلام عليكم' it doesn't reply; it exits/enters; shows connected/disconnected — ALL in the
+FIRST SECONDS only."
+
+**Why this reframed everything:** a greeting answers instantly via fast-path, so this is NOT
+long-answer heartbeat (D-WS-FLAP-005) nor token expiry. It's a **connect-then-immediately-drop
+loop** — the socket never stays open long enough to process even a greeting.
+
+**Root cause (D-WS-CONN-001):** the WS connect handler ran
+`async with async_session_factory() as db: actor = await db.get(User, user_id)` on EVERY
+connection. Under Supabase connection-pool pressure (8 services + monolith) / latency, that
+`db.get` raised → close 1013 → frontend reconnect → fail again → flapping in the first
+seconds, no answer ever. D-WS-KICK-001's "Fix C" (1013 instead of 4401) converted the kick
+into a flap; it did not remove the DB dependency at connect.
+
+**Fix (D-WS-CONN-001):** identity at connect derived from the signed JWT (`sub` + `is_admin`)
+via `decode_token_payload` + `WsActor` — ZERO DB queries. Connect is now instant and
+Supabase-independent. Per-turn DB work stays inside each turn's session and fails gracefully
+without dropping the connection. Downstream needs only `actor.id` (get_or_create_conversation)
+and `actor.is_admin`. Connect rejects: invalid token → 4401, wrong account type → 4403. The
+1013-at-connect and is_active-at-connect paths are removed (superseded).
+
+**Complementary fix (D-HEALTH-002):** supervisor health monitor previously restarted uvicorn
+on any non-200 /health — but /health returns 503 when Supabase is degraded (body still
+`application:ok`). Restarting uvicorn can't fix a DB blip; it only drops every WebSocket
+(flapping) and cuts answers, then loops. New `_app_is_alive` restarts ONLY when the app is
+genuinely dead (no response/refused); a 503-with-application:ok is "alive but degraded" → no
+restart.
+
+**Live verification (2026-05-29, SQLite + real OpenRouter; Supabase egress blocked in sandbox):**
+- "السلام عليكم" now answered (71 chars via fast-path), connection stable, no close.
+- Multi-turn (4 turns, stable conv) works with the JWT-derived actor — no regression.
+- Structural: the connect section (def→`while True`) is free of `db.get`/`async_session_factory`
+  in both routers (asserted by tests). `_app_is_alive`: 503+application:ok → "alive" (no restart).
+- 61 WS/auth tests pass (ISS-100 + ISS-099 + updated ISS-097 + ISS-098 + D-096 + heartbeat);
+  ruff + runtime_truth + bash -n green. Full browser + Supabase verification runs in the live
+  Codespace after pull + supervisor restart.

@@ -3606,3 +3606,36 @@ restarts/hiccups — kicking valid sessions and remounting DashboardLayout (new 
 **Files Changed**
 - `frontend/app/components/CogniForgeApp.jsx` (fetchUser gate + retry + user cache; handleLogin/logout cache mgmt)
 - `tests/services/test_iss099_http_me_kick.py` (new — 6 checks)
+
+---
+
+## D-WS-CONN-001 + D-HEALTH-002 — DB-free WS connect + Degraded≠Dead health (ISS-100) — 2026-05-29
+
+**Context:** "First-seconds" flapping + no answer even to a greeting. Root cause: the WS connect
+handler queried Supabase (`db.get(User)`) on every connection; under DB pressure it raised →
+close 1013 → reconnect → flap; the socket never stayed open to process anything. A secondary
+amplifier: the supervisor restarted uvicorn on a DB-degraded /health 503, dropping all WS.
+
+**Decision:**
+1. (D-WS-CONN-001) WS connect derives identity from the signed JWT (`decode_token_payload` +
+   `WsActor`) with ZERO DB queries. Per-turn DB work handles its own errors without dropping
+   the connection.
+2. (D-HEALTH-002) The supervisor restarts uvicorn ONLY when the app is genuinely dead
+   (`_app_is_alive`: no response / connection refused). A 503 that still reports
+   `"application":"ok"` is degraded-not-dead → no restart.
+
+**Rules (permanent):**
+1. WS connect NEVER touches the database. Identity = JWT claims. No `db.get`/`async_session_factory`
+   before the receive loop.
+2. DB work is per-turn, inside the turn's session, non-fatal to the connection.
+3. Connect rejects only on 4401 (invalid token) / 4403 (wrong account type via JWT is_admin claim).
+4. uvicorn restart only on true app death; never on DB-degraded 503.
+5. get_or_create_conversation needs only `user.id`; do not pass a connect-time ORM User.
+
+**Files Changed**
+- `app/services/auth/token_decoder.py` (+ decode_token_payload)
+- `app/api/routers/ws_auth.py` (+ WsActor)
+- `app/api/routers/customer_chat.py`, `app/api/routers/admin.py` (DB-free connect)
+- `.devcontainer/supervisor.sh` (+ _app_is_alive; restart only on true death)
+- `tests/services/test_iss100_ws_connect_no_db.py` (new — 8 checks)
+- `tests/services/test_iss097_kick_to_login.py` (updated 4 tests for DB-free connect contract)

@@ -65,3 +65,21 @@ def decode_user_id(token: str, secret_key: str) -> int:
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     except ValueError as exc:
         raise HTTPException(status_code=401, detail="Invalid user ID in token") from exc
+
+
+def decode_token_payload(token: str, secret_key: str) -> dict[str, object]:
+    """
+    فك ترميز رمز JWT وإرجاع الحمولة كاملة (موقّعة ومُتحقَّق من صلاحيتها).
+
+    تُستخدم عند اتصال WebSocket لاشتقاق الهوية (sub + is_admin) من الـ JWT
+    مباشرةً دون أي استعلام لقاعدة البيانات (ISS-100 / D-WS-CONN-001) — فالاتصال
+    لا يجب أن يعتمد على Supabase، وإلا فإن أي تعثّر في قاعدة البيانات يُسقط كل
+    اتصالات الـ WebSocket عند الإنشاء.
+
+    Raises:
+        HTTPException(401): عند فشل التحقق من التوقيع أو انتهاء الصلاحية.
+    """
+    try:
+        return jwt.decode(token, secret_key, algorithms=[ALGORITHM])
+    except jwt.PyJWTError as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc

@@ -3455,3 +3455,31 @@ const merged = deltaBuffer.splice(0).reduce(...);
 - `.devcontainer/secrets.env` — أُنشئ بالأسرار الحقيقية (git-ignored)
 - `frontend/app/hooks/useRealtimeConnection.js` — إصلاح `flushDeltaBuffer` baseEvent
 - `frontend/app/hooks/useAgentSocket.js` — إضافة `activeRequestIdRef.current = null` في `assistant_final`
+
+---
+
+## ISS-097 — The Idle Kick: 4401 logs out a VALID session (2026-05-29 / D-WS-KICK-001)
+
+**User report:** "حتى بدون طرح أي أسئلة" — kicked to login and dropped into a blank
+"new conversation" while idle (no question). Persisted through D-095 + D-096.
+
+**Root cause (two halves):**
+1. `useRealtimeConnection.js` fired `agent:auth_error` → `logout()` after a *count*
+   of consecutive 4401 closes (`MAX_FATAL_RETRIES=3`) WITHOUT confirming the token
+   was dead → kick in ~6-8s even with a valid token. Idle trigger: proxy intermittently
+   drops `?token=` on WS reconnect → server 4401 → repeat → kick.
+2. `DashboardLayout` always mounted with `conversationId=null` → blank chat on every login.
+
+**Fix (D-WS-KICK-001):**
+- A: auth_error fires ONLY when HTTP `/me` returns 401/403 (confirmed-invalid). Else
+  `retryTransientAuth()` reconnects. Removed `MAX_FATAL_RETRIES`/`FATAL_RETRY_DELAY_MS`.
+- B: restore latest conversation on mount via `/api/chat/latest` (guarded by `didRestoreRef`).
+- C: WS-connect transient `db.get` failure closes `1013` (`WS_BACKEND_TRANSIENT`), not 4401.
+
+**Live verification (node v22 + stdlib; sandbox blocks uvicorn boot):**
+- Frontend decision (faithful port + source-fidelity guard): idle 12× 4401 valid token →
+  0 logouts, 12 reconnects; 35× → offline (not auth_error); /me=invalid → 1 logout (correct). 4/4 ✅
+- Conversation restore: returning user resumes (cid=404); new user blank; explicit new-chat respected. 3/3 ✅
+- Auth premise (stdlib HS256 mirror of decode_user_id): valid never raises; expired/badsig/no-sub → 401. ✅
+- 7 regression assertions in `tests/services/test_iss097_kick_to_login.py` ✅; both routers compile.
+- Full browser + Supabase E2E runs on live Codespace/CI.

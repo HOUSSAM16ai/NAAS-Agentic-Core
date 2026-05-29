@@ -13,6 +13,7 @@ D-086 (2026-05-23): تطبيق Protocol V46.0.
 """
 
 import asyncio
+import contextlib
 import uuid
 from datetime import UTC, datetime
 
@@ -174,7 +175,7 @@ async def _evaluate_and_emit_bkt(
                 },
                 conversation_id,
                 stream_request_id,
-            )
+            ),
         )
     except Exception as exc:
         # BKT must never break chat — log and continue.
@@ -479,7 +480,34 @@ async def chat_stream_ws(
         return
 
     async with async_session_factory() as db:
-        actor = await db.get(User, user_id)
+        # D-WS-KICK-001 (ISS-097): الـ token فُكَّ بنجاح (توقيع + صلاحية سليمان).
+        # أي فشل في جلب المستخدم هنا هو خلل خادم *عابر* (Supabase blip، انقطاع
+        # اتصال pool)، وليس فشل مصادقة. لا تُغلق بـ 4401 — فالواجهة تُترجم 4401
+        # المتكرر إلى تسجيل خروج. أغلق بـ 1013 (Try Again Later) القابل لإعادة
+        # المحاولة → الواجهة تُعيد الاتصال دون طرد المستخدم.
+        try:
+            actor = await db.get(User, user_id)
+        except Exception as lookup_exc:
+            logger.warning(
+                "customer_chat.ws_user_lookup_transient: %s (closing 1013, not 4401)",
+                lookup_exc,
+            )
+            await websocket.accept(subprotocol=selected_protocol)
+            with contextlib.suppress(Exception):
+                await websocket.send_json(
+                    normalize_streaming_event(
+                        {
+                            "type": "error",
+                            "payload": {
+                                "details": "Service temporarily unavailable. Reconnecting.",
+                                "code": "WS_BACKEND_TRANSIENT",
+                                "status_code": 1013,
+                            },
+                        }
+                    )
+                )
+            await websocket.close(code=1013)
+            return
         if actor is None or not actor.is_active:
             await websocket.accept(subprotocol=selected_protocol)
             await websocket.send_json(
@@ -581,7 +609,7 @@ async def chat_stream_ws(
                         ),
                         None,
                         stream_request_id,
-                    )
+                    ),
                 )
                 continue
 
@@ -661,7 +689,7 @@ async def chat_stream_ws(
                         ),
                         local_conversation_id,
                         stream_request_id,
-                    )
+                    ),
                 )
                 turn_span.set_terminal("error")
                 close_ws_turn(turn_span, status="ERROR")

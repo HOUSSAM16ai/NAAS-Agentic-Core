@@ -600,6 +600,17 @@ launch_frontend() {
             fi
         fi
 
+        # ISS-101 (D-WS-PROXY-001): ضمان حتمي لوجود `ws` الحقيقية — server.js يحتاجها
+        # لوسيط الـ WebSocket. لا نعتمد على heuristic الـ mtime: نفحص require مباشرة،
+        # ونثبّتها صراحةً إن غابت. (الاعتماد على نسخة Next المُجمَّعة قد لا يعمل بنمط
+        # noServer → 1006). هذا يضمن أن proxy الـ WS يعمل في أول إقلاع.
+        if ! (cd frontend && node -e "require('ws').WebSocketServer" >/dev/null 2>&1); then
+            lifecycle_info "Frontend Launcher: ensuring 'ws' dependency (required by WS proxy)..."
+            (cd frontend && npm install ws@^8.18.0 >/dev/null 2>&1) \
+                && lifecycle_info "Frontend Launcher: 'ws' installed" \
+                || lifecycle_warn "Frontend Launcher: 'ws' install failed (server.js will fall back)"
+        fi
+
         if lifecycle_check_process "next.*dev\|node.*server\.js"; then
             lifecycle_info "Frontend Launcher: Next.js dev server already running"
         elif lsof -ti :"$FRONTEND_PORT" >/dev/null 2>&1; then

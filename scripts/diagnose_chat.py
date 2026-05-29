@@ -303,6 +303,50 @@ def section_logs() -> None:
         print("  (لم أجد ملفات log معروفة — جرّب: ls -la *.log .*.log)")
 
 
+def section_frontend() -> None:
+    """ISS-101: هل server.js الجديد هو الذي يعمل فعلاً؟ وهل `ws` متاحة؟"""
+    hr("H. FRONTEND PROXY (server.js) — هل الكود الجديد يعمل؟")
+    # 1) هل ملف server.js على القرص هو النسخة الجديدة (ws-lib)؟
+    is_new = run("grep -l 'ws-lib\\|loadWs\\|next/dist/compiled/ws' frontend/server.js 2>/dev/null")
+    print(f"  server.js on disk is NEW (ws-lib): {'YES' if is_new else 'NO (old http-proxy!)'}")
+    print(
+        "  server.js uses http-proxy for WS:",
+        "YES (BAD)"
+        if run("grep -c 'httpProxy.createProxyServer\\|wsProxy.ws(' frontend/server.js")
+        not in ("0", "")
+        else "no",
+    )
+    # 2) هل `ws` الحقيقية مثبَّتة (التي يحتاجها الـ proxy)؟
+    real_ws = run(
+        "cd frontend && node -e \"console.log(require('ws').WebSocketServer?'OK':'NO')\" 2>&1"
+    )
+    print(f"  real `ws` (top-level) requireable: {real_ws}")
+    # 3) هل نسخة Next المُجمَّعة تعمل في نمط noServer (الـ fallback)؟
+    next_ws = run(
+        "cd frontend && node -e \"try{const w=require('next/dist/compiled/ws');"
+        "const S=w.WebSocketServer||w.Server;new S({noServer:true});"
+        "console.log('next/dist/compiled/ws noServer: OK')}catch(e){console.log('next ws FAIL:',e.message)}\" 2>&1"
+    )
+    print(f"  {next_ws}")
+    # 4) ما الذي سجّله server.js عند الإقلاع؟ (banner يميّز القديم/الجديد)
+    print("\n  --- server.js startup banner (.frontend_launcher.log) ---")
+    print(
+        run(
+            "grep -iE 'ws-lib|WebSocket proxy|WS proxy|upstream open|\\[Server\\]|Cannot find module|Error' "
+            ".frontend_launcher.log 2>/dev/null | tail -15"
+        )
+        or "  (no frontend launcher log found)"
+    )
+    # 5) عمليات server.js الجارية (هل هناك عملية قديمة عالقة؟)
+    print("\n  --- running frontend processes ---")
+    print(
+        run(
+            "ps -eo pid,etime,cmd 2>/dev/null | grep -E 'server\\.js|next dev' | grep -v grep | head"
+        )
+        or "  (none)"
+    )
+
+
 def main() -> None:
     print("CogniForge live chat diagnostic — run in the Codespaces terminal.")
     print(f"time: {time.strftime('%Y-%m-%d %H:%M:%S')}  cwd: {os.getcwd()}")
@@ -312,6 +356,7 @@ def main() -> None:
     section_health()
     token = section_auth()
     section_ws(token)
+    section_frontend()
     section_logs()
     hr("DONE — انسخ كل ما فوق والصقه في المحادثة")
     print("ملاحظة: لا توجد أسرار في المخرجات (token/كلمة مرور DB مُخفاة).")

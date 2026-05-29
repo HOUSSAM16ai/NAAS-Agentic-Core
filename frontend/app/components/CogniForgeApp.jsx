@@ -440,32 +440,91 @@ const App = () => {
     }, []);
 
     useEffect(() => {
-        const fetchUser = async () => {
-            if (token) {
-                try {
-                    const response = await fetch(apiUrl('/api/security/user/me'), {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (response.ok) {
-                        setUser(await response.json());
-                    } else {
-                        logout();
-                    }
-                } catch (error) {
-                    errorTracker.reportError(error, { message: "Failed to fetch user" });
-                    logout();
-                } finally {
-                    setIsLoading(false);
-                }
-            } else {
+        if (!token) {
+            setIsLoading(false);
+            return;
+        }
+
+        // ISS-099 (D-WS-KICK-002 — 2026-05-29): التحقق من المستخدم عبر HTTP /me
+        // يجب أن يُسجِّل الخروج **فقط** عند 401/403 (token مؤكَّد البطلان) —
+        // تماماً مثل بوابة الـ WebSocket (D-WS-KICK-001).
+        //
+        // الكارثة المُصلَحة: الكود القديم كان يستدعي logout() على **أي** فشل
+        // (5xx، 404، timeout، خطأ شبكة). في بيئة Supabase، الـ backend يُعاد
+        // تشغيله أحياناً (health-monitor بعد 3 إخفاقات)، أو يتأخر، أو يخطئ
+        // proxy الـ Codespaces لحظياً → /me يُرجع 502/503/خطأ شبكة → logout()
+        // → طرد إلى صفحة الدخول رغم أن الـ token صالح تماماً → دخول → محادثة
+        // جديدة. الحل: 401/403 فقط تُسجِّل الخروج؛ أي فشل آخر = عابر → نُبقي
+        // الجلسة، نعرض المستخدم المُخزَّن مؤقتاً، ونُعيد المحاولة بـ backoff.
+        let cancelled = false;
+        let attempt = 0;
+        let retryTimer = null;
+
+        // استرجاع المستخدم المُخزَّن مؤقتاً فوراً حتى لا نسقط إلى شاشة الدخول
+        // أثناء فشل عابر لـ /me. وجود مستخدم مُخزَّن ⇒ نعرض التطبيق فوراً
+        // ونتحقّق في الخلفية (لا شاشة تحميل أبدية لو كان /me متعثراً).
+        try {
+            const cachedRaw = localStorage.getItem('cogniforge_user');
+            if (cachedRaw) {
+                if (!user) setUser(JSON.parse(cachedRaw));
                 setIsLoading(false);
             }
+        } catch (_e) { /* cache غير صالح — تجاهل */ }
+
+        const validate = async () => {
+            try {
+                const response = await fetch(apiUrl('/api/security/user/me'), {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                if (cancelled) return;
+                if (response.ok) {
+                    const u = await response.json();
+                    setUser(u);
+                    try {
+                        localStorage.setItem('cogniforge_user', JSON.stringify(u));
+                    } catch (_e) { /* تخزين غير متاح — غير قاتل */ }
+                    setIsLoading(false);
+                    return;
+                }
+                if (response.status === 401 || response.status === 403) {
+                    // token مؤكَّد البطلان — هذا هو المسار الوحيد للخروج.
+                    logout();
+                    return;
+                }
+                // 5xx / 404 / غير ذلك → خلل backend عابر — لا تُسجِّل الخروج.
+                scheduleRetry();
+            } catch (error) {
+                if (cancelled) return;
+                // خطأ شبكة → عابر — لا تُسجِّل الخروج.
+                errorTracker.reportError(error, { message: 'Failed to fetch user (transient)' });
+                scheduleRetry();
+            }
         };
-        fetchUser();
+
+        const scheduleRetry = () => {
+            // لا نحجب الواجهة: لو لدينا مستخدم (مُخزَّن مؤقتاً) نعرض التطبيق
+            // ونُعيد المحاولة في الخلفية. لو لا مستخدم بعد، نبقى على شاشة
+            // التحميل حتى نجاح /me أو 401/403.
+            attempt += 1;
+            if (attempt > 40) return; // توقّف صامت — تبقى الجلسة بالمستخدم المُخزَّن
+            const delay = Math.min(1000 * 2 ** Math.min(attempt, 5), 30000);
+            retryTimer = setTimeout(() => {
+                if (!cancelled) validate();
+            }, delay);
+        };
+
+        validate();
+        return () => {
+            cancelled = true;
+            if (retryTimer) clearTimeout(retryTimer);
+        };
     }, [token]);
 
     const handleLogin = (newToken, userData) => {
         localStorage.setItem('token', newToken);
+        try {
+            if (userData) localStorage.setItem('cogniforge_user', JSON.stringify(userData));
+        } catch (_e) { /* غير قاتل */ }
         setToken(newToken);
         setUser(userData);
     };
@@ -476,6 +535,9 @@ const App = () => {
         // بعد: setToken(null) + setUser(null) يُعيد render إلى AuthScreen بدون
         //      destructive page reload — يحفظ tab state ويمنع loop.
         localStorage.removeItem('token');
+        try {
+            localStorage.removeItem('cogniforge_user');
+        } catch (_e) { /* غير قاتل */ }
         setToken(null);
         setUser(null);
         // لا reload — التغيير في state يكفي لإظهار AuthScreen.

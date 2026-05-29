@@ -3577,3 +3577,32 @@ only on `pong`; a 154.8s answer exceeded it → false `close(1001)` → reconnec
 - `app/api/routers/admin.py` (`_locked_send_json` + `_run_turn_keepalive` + D-096 parity)
 - `tests/services/test_iss098_keepalive.py` (new — 8 checks)
 - `frontend/tests/iss098_heartbeat_liveness.test.mjs` (new — 6 checks)
+
+---
+
+## D-WS-KICK-002 — HTTP /me bootstrap logs out only on 401/403 + user cache (ISS-099) — 2026-05-29
+
+**Context:** The recurring "kick to login → new conversation" persisted after the
+WebSocket auth hardening (D-WS-KICK-001). Root cause was the HTTP bootstrap effect
+`fetchUser` (CogniForgeApp.jsx) calling `logout()` on ANY `/me` failure (5xx, 404,
+timeout, network error) — which happen routinely during Supabase-backed backend
+restarts/hiccups — kicking valid sessions and remounting DashboardLayout (new conv).
+
+**Decision:**
+1. The HTTP `/me` bootstrap logs out ONLY on 401/403 (token confirmed-invalid), exactly
+   like the WebSocket path.
+2. Any other failure is transient: keep the session, render from a cached user, and retry
+   `/me` with exponential backoff.
+3. The user object is cached in `localStorage['cogniforge_user']` (on login + each success),
+   restored on mount, and cleared on a real logout.
+
+**Rules (permanent):**
+1. `fetchUser` never logs out except on 401/403. No `else { logout() }` / `catch { logout() }`.
+2. Transient HTTP failures → retry, never logout.
+3. `cogniforge_user` cache prevents dropping to AuthScreen during a transient /me failure.
+4. `token` changes only on real login/logout, so DashboardLayout is not remounted (no "new
+   conversation") on backend instability.
+
+**Files Changed**
+- `frontend/app/components/CogniForgeApp.jsx` (fetchUser gate + retry + user cache; handleLogin/logout cache mgmt)
+- `tests/services/test_iss099_http_me_kick.py` (new — 6 checks)

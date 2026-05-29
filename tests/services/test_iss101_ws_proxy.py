@@ -88,3 +88,24 @@ def test_package_json_declares_ws() -> None:
     pkg = json.loads(_read(PKG))
     deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
     assert "ws" in deps, "D-WS-PROXY-001: package.json must declare `ws` as a dependency."
+
+
+def test_server_js_loads_ws_defensively() -> None:
+    """server.js must fall back to Next's vendored ws so it never crashes if `npm install`
+    has not run yet in an existing Codespace (node_modules predates the new dependency)."""
+    src = _read(SERVER)
+    assert "next/dist/compiled/ws" in src, (
+        "D-WS-PROXY-001: server.js must fall back to next/dist/compiled/ws (always present) "
+        "if the top-level `ws` is not installed — otherwise require('ws') crashes the frontend "
+        "after a git pull that added the dependency but before `npm install` runs."
+    )
+
+
+def test_supervisor_reinstalls_on_package_change() -> None:
+    """The supervisor must reinstall frontend deps when package.json changed (not only when
+    node_modules is missing), so a pulled `ws` dependency actually gets installed."""
+    sup = (REPO_ROOT / ".devcontainer" / "supervisor.sh").read_text(encoding="utf-8")
+    assert 'frontend/package.json" -nt "frontend/node_modules' in sup, (
+        "D-WS-PROXY-001: supervisor.sh must reinstall when package.json is newer than "
+        "node_modules (e.g. after git pull adds `ws`)."
+    )

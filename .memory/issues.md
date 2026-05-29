@@ -3604,3 +3604,33 @@ restart.
 - 61 WS/auth tests pass (ISS-100 + ISS-099 + updated ISS-097 + ISS-098 + D-096 + heartbeat);
   ruff + runtime_truth + bash -n green. Full browser + Supabase verification runs in the live
   Codespace after pull + supervisor restart.
+
+---
+
+## ISS-101 — THE ROOT CAUSE: server.js http-proxy drops WS with 1006 — 2026-05-29
+
+**Decisive live evidence (scripts/diagnose_chat.py in the user's Codespace):**
+```
+[direct:8000] round 1/2/3: OK answered   (session_ready→conversation_init→delta→assistant_final)
+[proxy:5000]  round 1/2/3: NO ANSWER  close=1006  frames=[session_ready, CLOSED:1006]
+```
+All backend health green (branch correct, all fixes [YES], token 1440 min, /health 200x8,
+/me 200x6, all services UP). The ONLY difference between working and failing is frontend/server.js.
+
+**Root cause (D-WS-PROXY-001):** server.js proxied the WebSocket with `http-proxy` (1.x,
+unmaintained). It forwarded the first downstream frame (session_ready) then dropped the socket
+with 1006, AND dropped the client's question that the browser sends immediately after connect
+(before the upstream socket opens). Result: no answer even to a greeting → reconnect →
+"connected/disconnected" in the first seconds. This is why every direct-:8000 test passed
+while the browser (via :5000) failed — the bug was in the proxy layer, never the backend.
+
+**Fix:** rewrote the WS proxy in server.js with the `ws` library (noServer upgrade → upstream
+WebSocket → bidirectional pipe) + a pending-message QUEUE that buffers client messages sent
+before the upstream opens and flushes them on 'open'. Added `ws` to package.json.
+
+**Live proof (faithful Python replica vs real backend):** the greeting is queued, flushed on
+upstream open, full answer streams back, clean close (vs http-proxy's 1006). 4 regression tests
+in tests/services/test_iss101_ws_proxy.py.
+
+**User action:** git pull + `npm --prefix frontend install` + restart supervisor/frontend, then
+re-run scripts/diagnose_chat.py — section F should now show [proxy:5000] OK answered.

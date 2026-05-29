@@ -7208,3 +7208,93 @@ Supabase محجوب في الـ sandbox، فلم أُعِد إنتاج ضغط ا
 | **D-WS-CONN-001** | **اتصال WebSocket خالٍ من قاعدة البيانات (هوية من الـ JWT) — يحل تأرجح الثواني الأولى** |
 | **D-HEALTH-002** | **Degraded≠Dead: لا إعادة تشغيل uvicorn على 503 بسبب DB (يحفظ كل اتصالات WS)** |
 
+---
+
+## 6.76 THE ROOT CAUSE — server.js http-proxy drops WS with 1006 (2026-05-29, ISS-101 / D-WS-PROXY-001)
+
+> **الدليل القاطع من تشخيص حيّ في Codespaces** (`scripts/diagnose_chat.py`): بعد سلسلة
+> طويلة من الإصلاحات الخلفية، كشف التشخيص أن **الـ backend سليم 100%** وأن السبب
+> الحقيقي كان في **`frontend/server.js`** طوال الوقت.
+
+### الدليل الحاسم (قسم F من التشخيص، بيئة المستخدم الحيّة)
+
+```
+-- direct backend :8000 (no proxy) --
+[direct:8000] round 1/2/3: OK answered   (session_ready→conversation_init→delta→assistant_final)
+-- via frontend :5000 (server.js proxy = مسار المتصفح) --
+[proxy:5000] round 1/2/3: NO ANSWER  close=1006  frames=[session_ready, CLOSED:1006]
+```
+
+كل فحوصات الصحة خضراء: الفرع صحيح، كل الإصلاحات `[YES]`، token 1440 دقيقة، `/health`
+مستقر 200×8، `/me` مستقر 200×6، كل الخدمات UP. الفرق الوحيد بين «يعمل» و«يفشل» هو
+**هذا الملف الوسيط**.
+
+### الجذر (D-WS-PROXY-001)
+
+`server.js` كان يُمرِّر الـ WebSocket عبر `http-proxy` (1.x، غير مُصان). هذا:
+1. يُمرِّر أول إطار من الخادم (`session_ready`) ثم يُسقط الاتصال بـ **1006** (إغلاق شاذ).
+2. **يُسقط سؤال المستخدم** الذي يُرسله المتصفح فور الاتصال — **قبل** أن يفتح الاتصال
+   الصاعد (server.js → :8000). فلا يصل السؤال للخلفية أبداً.
+النتيجة: لا إجابة حتى للتحية → الواجهة تُعيد الاتصال → «متصل/غير متصل في الثواني الأولى».
+
+هذا يُفسّر **كل** الأعراض ولماذا كل اختباراتي المباشرة على :8000 كانت تنجح بينما
+المتصفح (عبر :5000) يفشل.
+
+### الإصلاح (D-WS-PROXY-001)
+
+أُعيدت كتابة وسيط الـ WebSocket في `server.js` بمكتبة **`ws`** الموثوقة:
+1. `WebSocketServer({ noServer: true })` يستقبل الـ upgrade لمسارات الدردشة فقط.
+2. اتصال `ws.WebSocket` صاعد إلى `:8000` مع الحفاظ على `?token=` والـ subprotocol.
+3. تمرير ثنائي الاتجاه (نصي/ثنائي) مع نشر كود الإغلاق.
+4. **طابور (`pending`)** للرسائل التي يُرسلها العميل قبل فتح الاتصال الصاعد، يُفرَّغ
+   عند حدث `open` — **يحفظ التحية الأولى** (سبب ضياعها مع http-proxy).
+
+### الإثبات الحي (replica أمين، 2026-05-29)
+
+replica بايثوني مطابق لمعمارية الإصلاح ضد الـ backend الحقيقي:
+```
+[proxy] queued client msg (upstream not ready yet): {"question":"السلام عليكم"...}
+[proxy] flushed 1 queued msg(s) to upstream
+>>> [ws-proxy] OK ANSWERED  close=None  frames=[session_ready, conversation_init, delta…, assistant_final]
+```
+التحية بُوِّبت ثم أُفرِغت عند فتح الاتصال الصاعد → إجابة كاملة، إغلاق نظيف — عكس
+1006 الخاص بـ http-proxy.
+
+### القواعد الـ 4 الدائمة (D-WS-PROXY-001 — لا تُكسر بدون ADR)
+
+1. **لا `http-proxy` لتمرير WebSocket**: يجب استخدام مكتبة `ws` (WebSocketServer +
+   WebSocket). `http-proxy` 1.x يُسقط أطر WS بـ 1006.
+2. **طابور الرسائل المبكرة إلزامي**: العميل يُرسل السؤال فور الاتصال، قبل فتح الاتصال
+   الصاعد. يجب تخزينها في `pending` وتفريغها عند `upstream open`. حذف الطابور = عودة
+   «لا إجابة».
+3. **تمرير ثنائي الاتجاه + نشر كود الإغلاق**: لا تبتلع أكواد الإغلاق؛ مرِّرها.
+4. **`ws` تبعية معلنة** في `frontend/package.json` (موجودة أصلاً عبر Next).
+
+### الملفات (ISS-101)
+
+| File | Change |
+|------|--------|
+| `frontend/server.js` | إعادة كتابة وسيط WS بمكتبة `ws` + طابور للرسائل المبكرة (استبدال http-proxy) |
+| `frontend/package.json` | + `ws` كتبعية صريحة |
+| `tests/services/test_iss101_ws_proxy.py` | **جديد** — 4 فحوصات (ws + queue + لا http-proxy للـ WS) |
+| `scripts/diagnose_chat.py` | الأداة التي التقطت الدليل (proxy:5000 → 1006، direct:8000 → OK) |
+| `CLAUDE.md` §6.76 / `.memory/*` | هذا القسم |
+
+### ما يجب على المستخدم فعله
+
+```bash
+git pull origin claude/chat-session-auth-bugs-aLf74
+npm --prefix frontend install   # يضمن وجود ws (موجود غالباً عبر Next)
+# أعد تشغيل الـ supervisor / الواجهة (server.js يجب أن يُعاد تشغيله)
+```
+ثم أعد تشغيل `python scripts/diagnose_chat.py` — يجب أن يُظهر القسم F الآن
+`[proxy:5000] OK answered` بدل `1006`.
+
+### السلسلة الكاملة (D-WS-CONN-001 → D-WS-PROXY-001)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-CONN-001 | اتصال WS خالٍ من قاعدة البيانات (هوية من الـ JWT) |
+| D-HEALTH-002 | Degraded≠Dead: لا إعادة تشغيل uvicorn على 503 بسبب DB |
+| **D-WS-PROXY-001** | **السبب الجذري: server.js http-proxy → ws-library + طابور (يحل التأرجح + لا إجابة نهائياً)** |
+

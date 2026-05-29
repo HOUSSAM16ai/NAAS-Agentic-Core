@@ -3639,3 +3639,29 @@ amplifier: the supervisor restarted uvicorn on a DB-degraded /health 503, droppi
 - `.devcontainer/supervisor.sh` (+ _app_is_alive; restart only on true death)
 - `tests/services/test_iss100_ws_connect_no_db.py` (new — 8 checks)
 - `tests/services/test_iss097_kick_to_login.py` (updated 4 tests for DB-free connect contract)
+
+---
+
+## D-WS-PROXY-001 — server.js WS proxy: http-proxy → ws-library + early-message queue (ISS-101) — 2026-05-29
+
+**Context:** Live Codespaces diagnostic proved the backend is 100% healthy (direct :8000 answers
+3/3) while the browser path via server.js :5000 fails 3/3 with close=1006 right after session_ready.
+The flapping/no-answer lived entirely in frontend/server.js, which used `http-proxy` (1.x) for WS.
+
+**Decision:** Replace http-proxy WS forwarding with the `ws` library: WebSocketServer({noServer})
+owns the upgrade for chat paths; an upstream ws.WebSocket connects to the backend preserving the
+?token= query and subprotocol; messages are piped both ways with close-code propagation; and a
+`pending` queue buffers client messages sent before the upstream 'open' (the browser's question is
+sent immediately after connect) and flushes them on open.
+
+**Rules (permanent):**
+1. NEVER use http-proxy (1.x) to proxy WebSockets — it drops frames with 1006. Use `ws`.
+2. The early-client-message queue is mandatory (the greeting/question arrives before upstream open).
+3. Pipe both directions and propagate close codes; do not swallow them.
+4. `ws` is a declared dependency in frontend/package.json.
+
+**Files Changed**
+- frontend/server.js (ws-library proxy + pending queue)
+- frontend/package.json (+ ws)
+- tests/services/test_iss101_ws_proxy.py (new — 4 checks)
+- scripts/diagnose_chat.py (the tool that captured the evidence)

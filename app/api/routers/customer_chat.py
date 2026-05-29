@@ -841,24 +841,26 @@ async def chat_stream_ws(
             except Exception as exc:
                 stream_error = exc
                 logger.error(f"Error in compatibility facade stream: {exc}", exc_info=True)
-                if not isinstance(exc, WebSocketDisconnect):
-                    # D-096: locked send + state check
-                    if websocket.client_state == WebSocketState.CONNECTED:
-                        try:
-                            await _locked_send_json(
-                                websocket,
-                                send_lock,
-                                normalize_streaming_event(
-                                    {
-                                        "type": "error",
-                                        "payload": {"details": str(exc), "status_code": 500},
-                                    }
-                                ),
-                            )
-                        except (WebSocketDisconnect, RuntimeError) as _send_err:
-                            logger.debug(
-                                "customer_chat.error_send_failed: %s", type(_send_err).__name__
-                            )
+                # D-096: locked send + state check
+                if (
+                    not isinstance(exc, WebSocketDisconnect)
+                    and websocket.client_state == WebSocketState.CONNECTED
+                ):
+                    try:
+                        await _locked_send_json(
+                            websocket,
+                            send_lock,
+                            normalize_streaming_event(
+                                {
+                                    "type": "error",
+                                    "payload": {"details": str(exc), "status_code": 500},
+                                }
+                            ),
+                        )
+                    except (WebSocketDisconnect, RuntimeError) as _send_err:
+                        logger.debug(
+                            "customer_chat.error_send_failed: %s", type(_send_err).__name__
+                        )
             finally:
                 if stream_task is not None and not stream_task.done():
                     stream_task.cancel()

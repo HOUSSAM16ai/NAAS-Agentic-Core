@@ -30,7 +30,7 @@ import inspect
 import os
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 # Ensure imports work
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -81,8 +81,7 @@ def test_emit_terminal_frames_requires_send_lock() -> None:
     sig = inspect.signature(customer_chat._emit_terminal_frames)
     params = list(sig.parameters.keys())
     assert "send_lock" in params, (
-        f"D-096: `_emit_terminal_frames` does NOT accept send_lock. "
-        f"Got params: {params}."
+        f"D-096: `_emit_terminal_frames` does NOT accept send_lock. Got params: {params}."
     )
 
 
@@ -93,8 +92,7 @@ def test_handle_control_message_accepts_send_lock() -> None:
     sig = inspect.signature(handle_control_message)
     params = list(sig.parameters.keys())
     assert "send_lock" in params, (
-        f"D-096: `handle_control_message` does NOT accept send_lock. "
-        f"Got params: {params}."
+        f"D-096: `handle_control_message` does NOT accept send_lock. Got params: {params}."
     )
 
 
@@ -154,7 +152,8 @@ def test_evaluate_and_emit_bkt_uses_locked_send() -> None:
     # (well, the docstring may mention it — search for actual call pattern)
     lines = source.splitlines()
     code_lines = [
-        line for line in lines
+        line
+        for line in lines
         if not line.strip().startswith("#") and not line.strip().startswith('"')
     ]
     code_text = "\n".join(code_lines)

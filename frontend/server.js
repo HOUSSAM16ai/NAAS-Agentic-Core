@@ -30,7 +30,24 @@
 const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
-const { WebSocketServer, WebSocket } = require("ws");
+
+// ISS-101 (D-WS-PROXY-001): تحميل `ws` بشكل دفاعي.
+// المشكلة: في Codespace قائم، `npm install` لا يُعاد تلقائياً بعد git pull إذا
+// كان `node_modules` موجوداً — فقد لا تُثبَّت `ws` الجديدة، و`require("ws")` يفشل
+// → ينهار server.js → الواجهة تسقط كلياً. الحل: نجرّب `ws` العلوية أولاً، وإلا
+// نستخدم نسخة Next المُجمَّعة (`next/dist/compiled/ws`) الموجودة دائماً مع Next.
+function loadWs() {
+  let mod;
+  try {
+    mod = require("ws");
+  } catch (_e) {
+    mod = require("next/dist/compiled/ws");
+  }
+  const WebSocketServer = mod.WebSocketServer || mod.Server;
+  const WebSocket = mod.WebSocket || mod;
+  return { WebSocketServer, WebSocket };
+}
+const { WebSocketServer, WebSocket } = loadWs();
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";

@@ -586,7 +586,10 @@ launch_frontend() {
     lifecycle_info "🚀 Frontend Launcher: Starting initialization..."
 
     if command -v npm >/dev/null 2>&1; then
-        if [ ! -d "frontend/node_modules" ]; then
+        # ISS-101 (D-WS-PROXY-001): أعد التثبيت أيضاً عند تغيّر package.json
+        # (مثلاً بعد git pull أضاف تبعية `ws`) — وليس فقط عند غياب node_modules.
+        # وإلا تبقى التبعيات الجديدة غير مُثبَّتة و server.js قد ينهار.
+        if [ ! -d "frontend/node_modules" ] || [ "frontend/package.json" -nt "frontend/node_modules" ]; then
             lifecycle_info "Frontend Launcher: Installing dependencies (this may take a while)..."
             if (cd frontend && npm install); then
                 lifecycle_set_state "frontend_dependencies_installed" "$(date +%s)"

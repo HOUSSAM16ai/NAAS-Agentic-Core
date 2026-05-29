@@ -17,11 +17,23 @@ THE FIX (D-WS-AUTH-001):
   3. logout() uses React state instead of window.location.reload() — preserves tree.
   4. Counter resets on successful reconnect — fresh cycle each new session.
 
+SUPERSEDED BY D-WS-KICK-001 (ISS-097 — 2026-05-29):
+  The *count-based* escalation (MAX_FATAL_RETRIES / FATAL_RETRY_DELAY_MS) was
+  itself the cause of an idle kick: a valid token could be logged out after a
+  few 4401 closes (e.g. a proxy dropping ?token= on reconnect) without ever
+  confirming the token was dead. D-WS-KICK-001 removes the count-based path:
+  the ONLY route to auth_error is an HTTP /me probe that definitively returns
+  401/403. A valid/unknown probe → retryTransientAuth() reconnects forever
+  (never logout). The /me probe + "no immediate logout" principle of
+  D-WS-AUTH-001 REMAIN and are strengthened; this test now asserts the evolved
+  invariants.
+
 This test verifies by static inspection:
-1. fatalRetries ref exists and is separate from `retries`.
-2. MAX_FATAL_RETRIES constant defined (3-5 range).
+1. fatalRetries ref exists (kept for diagnostics) and resets in onopen.
+2. The count-based escalation constants are REMOVED (D-WS-KICK-001).
 3. revalidateTokenViaHttp function exists and calls /api/security/user/me.
-4. FATAL_CODES handler does NOT immediately dispatch auth_error.
+4. FATAL_CODES handler does NOT immediately dispatch auth_error — it probes /me
+   and only escalates on a confirmed-invalid result.
 5. logout() does NOT call window.location.reload().
 6. fatalRetries.current resets in onopen.
 7. cleanup aborts in-flight revalidateAbortRef.
@@ -50,23 +62,29 @@ class TestBoundedFatalRetry:
             "fatalRetries must be a useRef initialized to 0."
         )
 
-    def test_max_fatal_retries_constant_bounded(self) -> None:
-        """Hard upper bound — prevents infinite reconnect loop even on positive probes."""
+    def test_count_based_escalation_removed(self) -> None:
+        """D-WS-KICK-001: the count-based escalation that caused the idle kick is GONE.
+
+        MAX_FATAL_RETRIES / FATAL_RETRY_DELAY_MS were the mechanism that logged
+        out a *valid* token after a few 4401 closes. A *count* of closes must
+        never trigger logout — only a confirmed-invalid /me probe.
+        """
         source = _read("frontend/app/hooks/useRealtimeConnection.js")
-        match = re.search(r"const\s+MAX_FATAL_RETRIES\s*=\s*(\d+)", source)
-        assert match, "MAX_FATAL_RETRIES constant must be defined"
-        max_retries = int(match.group(1))
-        assert 2 <= max_retries <= 5, (
-            f"MAX_FATAL_RETRIES must be 2-5 (got {max_retries}). "
-            "Lower → quick escalation. Higher → user waits too long."
+        assert not re.search(r"const\s+MAX_FATAL_RETRIES\s*=", source), (
+            "D-WS-KICK-001: MAX_FATAL_RETRIES constant must be removed — a count of "
+            "4401 closes must never escalate to logout."
+        )
+        assert not re.search(r"const\s+FATAL_RETRY_DELAY_MS\s*=", source), (
+            "D-WS-KICK-001: FATAL_RETRY_DELAY_MS constant must be removed (count-based path gone)."
         )
 
-    def test_fatal_retry_delay_short(self) -> None:
+    def test_transient_4401_reconnects_without_logout(self) -> None:
+        """D-WS-KICK-001: a valid/unknown probe reconnects via retryTransientAuth()."""
         source = _read("frontend/app/hooks/useRealtimeConnection.js")
-        match = re.search(r"const\s+FATAL_RETRY_DELAY_MS\s*=\s*(\d+)", source)
-        assert match
-        delay = int(match.group(1))
-        assert 1000 <= delay <= 5000, f"FATAL_RETRY_DELAY_MS must be 1000-5000ms (got {delay})."
+        assert "retryTransientAuth" in source, (
+            "D-WS-KICK-001: transient 4401 (valid/unknown token) must reconnect via "
+            "retryTransientAuth(), never escalate to auth_error."
+        )
 
 
 class TestHttpRevalidationProbe:
@@ -124,19 +142,26 @@ class TestNoImmediateAuthError:
         assert ws_close_section is not None
         body = ws_close_section.group(1)
 
-        # fatalRetries.current must be incremented
+        # fatalRetries.current is still incremented (kept for diagnostics/logging).
         assert re.search(r"fatalRetries\.current\s*\+=\s*1", body), (
-            "Handler must increment fatalRetries.current on each 4401."
+            "Handler should still track fatalRetries.current on each 4401 (diagnostics)."
         )
 
-        # Must check for max retries
-        assert "MAX_FATAL_RETRIES" in body, (
-            "Handler must check fatalRetries against MAX_FATAL_RETRIES."
-        )
-
-        # Must call revalidateTokenViaHttp
-        assert "revalidateTokenViaHttp" in body, (
+        # Must probe /me before any escalation. (Checked against the full source:
+        # D-WS-KICK-001 adds a nested `retryTransientAuth` arrow fn whose `};`
+        # truncates the non-greedy onclose-body regex above — so the probe call,
+        # which lives after that nested fn, is asserted at source scope.)
+        assert "revalidateTokenViaHttp" in source, (
             "Handler must probe /me before escalating to auth_error."
+        )
+
+        # D-WS-KICK-001: the ONLY auth_error path is a confirmed-invalid /me probe.
+        # The handler must NOT escalate based on a retry count.
+        assert "token_invalid_confirmed_via_http" in source, (
+            "D-WS-KICK-001: auth_error must be gated on an HTTP-confirmed-invalid token."
+        )
+        assert source.count('"agent:auth_error"') == 1, (
+            "D-WS-KICK-001: exactly one agent:auth_error dispatch site (the confirmed-invalid branch)."
         )
 
     def test_transient_auth_warning_event_emitted(self) -> None:

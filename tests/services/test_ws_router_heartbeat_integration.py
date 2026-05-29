@@ -43,8 +43,10 @@ class TestCustomerChatWiring:
         assert ws_section_match is not None, "chat_stream_ws function not found"
         ws_section = ws_section_match.group(0)
 
-        # تحقق من ترتيب الاستدعاءات داخل while-loop
-        handle_idx = ws_section.find("handle_control_message(websocket, payload)")
+        # تحقق من ترتيب الاستدعاءات داخل while-loop.
+        # D-096 أضاف وسيط send_lock للنداء (customer_chat فقط)، لذا نطابق البادئة
+        # بدون قوس الإغلاق حتى نتحمّل التوقيع المُطوَّر (2-arg أو 3-arg).
+        handle_idx = ws_section.find("handle_control_message(websocket, payload")
         question_idx = ws_section.find('payload.get("question"')
 
         assert handle_idx > 0, "handle_control_message call not found"
@@ -57,7 +59,10 @@ class TestCustomerChatWiring:
     def test_continue_after_control(self) -> None:
         source = _read_file("app/api/routers/customer_chat.py")
         # ابحث عن النمط المحدد: if await handle_control_message(...): continue
-        pattern = r"if\s+await\s+handle_control_message\(websocket,\s*payload\)\s*:\s*\n\s*continue"
+        # D-096: نسمح بوسائط إضافية (send_lock) قبل قوس الإغلاق عبر [^)]*.
+        pattern = (
+            r"if\s+await\s+handle_control_message\(websocket,\s*payload[^)]*\)\s*:\s*\n\s*continue"
+        )
         assert re.search(pattern, source), (
             "handle_control_message must be followed by `continue` to skip question processing."
         )

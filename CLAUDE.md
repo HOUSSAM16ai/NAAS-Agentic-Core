@@ -6910,3 +6910,102 @@ $ pytest tests/services/test_ws_heartbeat_skill.py tests/fitness/test_supervisor
 | D-096 | WS send concurrency lock (kick أثناء البث) |
 | **D-WS-KICK-001** | **idle 4401 لا يُسجِّل خروجاً إلا بتأكيد /me + استعادة المحادثة** |
 
+---
+
+## 6.73 Long-Answer Heartbeat Timeout — "No Answer for Substantive Questions" (2026-05-29, ISS-098 / D-WS-FLAP-005)
+
+> **بلاغ المستخدم (متكرر، GitHub Codespaces)**: «النظام لا يجيب عن الأسئلة ...
+> يتم الدخول للحساب و تفقد الرسائل السابقة بشكل عادي لكن لا يرد عن الأسئلة».
+> الإصلاحات السابقة (ISS-092→097) أغلقت أسباب الطرد، لكن «لا يرد عن الأسئلة»
+> الجوهرية بقي. **هذه المرة أُثبت السبب بالتجريب الحي الحقيقي، لا بالتحليل الساكن.**
+
+### التجريب الحي الذي كشف الجذر (2026-05-29)
+
+بيئة حية: monolith (uvicorn، نفس أعلام الـ supervisor) + OpenRouter حقيقي
+(`gpt-oss` المجاني) + SQLite (الـ sandbox يحجب Supabase — منافذ 6543/5432).
+حساب المستخدم الحقيقي، WS مُقاد تماماً كالمتصفح (`?token=`، مفتاح `question`).
+
+| اختبار حي | نتيجة |
+|-----------|-------|
+| سؤال قصير | يُجاب فوراً (1399 delta، 3508 حرف) — يعمل |
+| متعدد الأدوار، نفس المحادثة | 4 أدوار، `conversation_id` ثابت — يعمل |
+| عمر الـ JWT | 1440 دقيقة (لا 30) — فرضية الـ 30 دقيقة ميتة |
+| **سؤال جوهري (شرح مفصل)** | **دور واحد = 154.8s، 3962 delta** — وهنا الكارثة |
+
+### الجذر (مُثبت)
+
+حلقة استقبال الـ WS في `customer_chat.py` و `admin.py` **محجوبة على
+`await stream_task`** طوال الدور الواحد، فلا تقرأ `ping` العميل ولا تردّ بـ
+`pong`. الواجهة (`useRealtimeConnection.js`) كانت تُلغي مؤقّت الـ heartbeat
+(`HEARTBEAT_TIMEOUT=90s`) **عند `pong` فقط**.
+
+سؤال جوهري ⇒ إجابة طويلة. عند نموذج مجاني (وأسوأ مع زمن Supabase)، يتجاوز
+الدور الواحد ~135s ⇒ الواجهة تُعلن الاتصال «بائتاً» زوراً ⇒ `ws.close(1001)`
+⇒ reconnect ⇒ **الإجابة الجارية تضيع** ("لا يرد عن الأسئلة"). الأسئلة القصيرة
+تنتهي تحت 90s فتعمل — ولهذا يبدو النظام «يعمل أحياناً». في SQLite السريع كل
+شيء تحت 90s فلا يظهر العطب محلياً، **بينما الإجابة الطويلة الحقيقية (154.8s)
+أعادت إنتاج العطب حتى بدون Supabase**.
+
+### الإصلاح (D-WS-FLAP-005 — طبقتان)
+
+**(1) Frontend (`useRealtimeConnection.js`)**: أي رسالة WS واردة (وليس `pong`
+فقط) تُلغي مؤقّت الـ heartbeat — تدفّق الـ deltas نفسه دليل قاطع على الحياة.
+الـ `clearTimeout` نُقل إلى أعلى `ws.onmessage` قبل فحص الـ pong-only.
+
+**(2) Backend (customer + admin)**: مهمة `_run_turn_keepalive` متزامنة تُرسل
+إطار `pong` خفيفاً كل **20s** (عبر `send_lock`) طوال الدور، تُلغى فور انتهاء
+البثّ (try/finally). هذا يُبقي العميل حياً حتى في الفجوات الخالية من deltas
+(زمن TTFT/Supabase). إضافة keepalive متزامن جعل **`send_lock` ضرورياً على
+admin** (الذي كان يفتقده — فجوة D-096 الباقية) ⇒ طُبِّقت parity كاملة لـ admin:
+`_locked_send_json` + `_emit_terminal_frames(send_lock=...)` +
+`handle_control_message(..., send_lock=...)` + توجيه كل sends أثناء البثّ.
+
+### الإثبات الحي بعد الإصلاح (2026-05-29)
+
+- دور 154.8s ⇒ **7 إطارات keepalive `pong`** عند 20/40/.../140s ⇒ الاتصال بقي
+  حياً ⇒ `assistant_final` وصل (3962 delta) — لا انقطاع، لا فقدان إجابة.
+- متعدد الأدوار + reconnect: `conversation_id` ثابت، `/api/chat/latest` يستعيد
+  المحادثة (رسالتان)، الدور بعد reconnect أُجيب — لا طرد، لا «محادثة جديدة».
+- 47 اختبار regression (ISS-098 + D-096 + heartbeat skill + ISS-097) ✅ +
+  6 اختبار frontend (node) ✅ + ruff check/format ✅.
+
+### القواعد الـ 4 الدائمة (D-WS-FLAP-005 — لا تُكسر بدون ADR)
+
+1. **العميل يعتبر أي رسالة واردة دليل حياة**: `clearTimeout(heartbeatTimeoutRef)`
+   على كل رسالة في `ws.onmessage`، ليس على `pong` فقط. الاتصال الميت فعلاً لا
+   يُرسل شيئاً فيبقى المؤقّت يعمل ويُطلق reconnect صحيحاً.
+2. **كل دور WS يُشغّل `_run_turn_keepalive` متزامناً** ويُلغيه في `finally`.
+   `_TURN_KEEPALIVE_INTERVAL_SECONDS ≤ 20s` (أقل من نصف الـ 90s heartbeat).
+3. **admin = parity كاملة مع customer في الإرسال المتزامن**: أي إرسال أثناء
+   البثّ/الـ keepalive يمرّ عبر `_locked_send_json` + `send_lock`.
+4. **الـ keepalive يُرسل `pong`** (لا نوع جديد) — العميل يتجاهله كبيانات لكنه
+   يُلغي مؤقّت الـ heartbeat، فيعمل حتى لو لم تصل deltas.
+
+### الملفات (D-WS-FLAP-005)
+
+| File | Change |
+|------|--------|
+| `frontend/app/hooks/useRealtimeConnection.js` | liveness على أي رسالة (clear heartbeat timeout) |
+| `app/api/routers/customer_chat.py` | `_run_turn_keepalive` + wiring حول `await stream_task` |
+| `app/api/routers/admin.py` | `_locked_send_json` + `_run_turn_keepalive` + D-096 parity كاملة |
+| `tests/services/test_iss098_keepalive.py` | **جديد** — 8 backend regression checks |
+| `frontend/tests/iss098_heartbeat_liveness.test.mjs` | **جديد** — 6 frontend checks |
+| `.memory/issues.md` / `.memory/decisions.md` | إدخالات ISS-098 / D-WS-FLAP-005 |
+| `CLAUDE.md` §6.73 | هذا القسم |
+
+### ملاحظة بيئية صادقة
+
+أُعيد إنتاج العطب وأُثبت الإصلاح حياً على SQLite + OpenRouter حقيقي (egress لـ
+Supabase محجوب في الـ sandbox — نمط موثّق منذ §6.55). الجذر **ليس** خاصاً بـ
+Supabase: الإجابة الطويلة وحدها (154.8s) تتجاوز الـ heartbeat. زمن Supabase
+يفاقمه فقط. التحقق الكامل عبر المتصفح + Supabase يجري في Codespace/CI الحيّ.
+
+### السلسلة الكاملة (D-095 → D-WS-FLAP-005)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-095 | ENVIRONMENT=testing → development (480-min JWT) |
+| D-096 | WS send concurrency lock (kick أثناء البث) |
+| D-WS-KICK-001 | idle 4401 لا يُسجِّل خروجاً إلا بتأكيد /me + استعادة المحادثة |
+| **D-WS-FLAP-005** | **keepalive أثناء الدور + liveness على أي رسالة (يحل "لا يرد عن الأسئلة" الجوهرية)** |
+

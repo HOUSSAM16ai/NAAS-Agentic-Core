@@ -232,6 +232,41 @@ def _ws_is_connected(websocket: WebSocket) -> bool:
     return websocket.client_state == WebSocketState.CONNECTED
 
 
+# ISS-098 (D-WS-FLAP-005 — 2026-05-29): فاصل الـ keepalive أثناء بثّ الدور.
+_TURN_KEEPALIVE_INTERVAL_SECONDS = 20.0
+
+
+async def _run_turn_keepalive(websocket: WebSocket, lock: asyncio.Lock) -> None:
+    """يُرسل إطار pong خفيفاً كل ~20s أثناء بثّ دور المحادثة.
+
+    الجذر (ISS-098): حلقة الاستقبال محجوبة طوال `await stream_task`، فلا
+    يستطيع الخادم قراءة ping العميل والرد بـ pong. مع زمن Supabase + إجابة
+    طويلة، يتجاوز الدور HEARTBEAT_TIMEOUT (90s) على العميل → close(1001)
+    كاذب → reconnect → الإجابة الجارية تضيع.
+
+    الحل: مهمة keepalive متزامنة تُرسل `pong` دورياً عبر نفس `send_lock`
+    (فلا تتعارض مع إرسال الـ deltas — D-096). العميل يتعامل مع أي رسالة
+    واردة كدليل حياة، وتحديداً `pong` يُلغي مؤقّت الـ heartbeat. تُلغى
+    المهمة فور انتهاء البثّ. لا ترفع استثناءً للخارج أبداً.
+    """
+    try:
+        while True:
+            await asyncio.sleep(_TURN_KEEPALIVE_INTERVAL_SECONDS)
+            if not _ws_is_connected(websocket):
+                return
+            try:
+                await _locked_send_json(
+                    websocket, lock, {"type": "pong", "payload": {"keepalive": True}}
+                )
+            except (WebSocketDisconnect, RuntimeError):
+                return
+            except Exception as exc:  # pragma: no cover - دفاعي
+                logger.debug("customer_chat.keepalive_send_failed: %s", type(exc).__name__)
+                return
+    except asyncio.CancelledError:
+        return
+
+
 def _bind_local_conversation_id(
     event: dict[str, object], conversation_id: int | None
 ) -> dict[str, object]:
@@ -831,7 +866,15 @@ async def chat_stream_ws(
                                 complete_ai_response += chunk_text
 
                 stream_task = asyncio.create_task(stream_and_forward())
-                await stream_task
+                # ISS-098 (D-WS-FLAP-005): keepalive متزامن يمنع false
+                # heartbeat-timeout على العميل أثناء الأدوار الطويلة.
+                keepalive_task = asyncio.create_task(_run_turn_keepalive(websocket, send_lock))
+                try:
+                    await stream_task
+                finally:
+                    keepalive_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await keepalive_task
 
             except HTTPException as http_exc:
                 stream_error = http_exc

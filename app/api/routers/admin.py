@@ -79,6 +79,52 @@ def _ws_is_connected(websocket: WebSocket) -> bool:
     return websocket.client_state == WebSocketState.CONNECTED
 
 
+async def _locked_send_json(
+    websocket: WebSocket,
+    lock: asyncio.Lock,
+    payload: dict[str, object],
+) -> None:
+    """يُسلسل كل عمليات send_json على نفس الـ WebSocket عبر قفل واحد.
+
+    D-096 (parity مع customer_chat): Starlette `WebSocket.send_json` ليس
+    آمناً عند الاستدعاء المتزامن من أكثر من coroutine (مثلاً مهمة البثّ
+    + مهمة الـ keepalive لـ ISS-098). بدون القفل تتداخل أُطر ASGI →
+    إغلاق صامت → reconnect → طرد. القفل يضمن إرسالاً ذرياً واحداً تلو الآخر.
+    """
+    async with lock:
+        await websocket.send_json(payload)
+
+
+# ISS-098 (D-WS-FLAP-005 — 2026-05-29): فاصل الـ keepalive أثناء بثّ الدور.
+_TURN_KEEPALIVE_INTERVAL_SECONDS = 20.0
+
+
+async def _run_turn_keepalive(websocket: WebSocket, lock: asyncio.Lock) -> None:
+    """يُرسل إطار pong خفيفاً كل ~20s أثناء بثّ دور محادثة المسؤول.
+
+    نفس جذر ISS-098 في customer_chat: حلقة الاستقبال محجوبة طوال
+    `await stream_task`، فلا يُرسَل pong → دور طويل (زمن Supabase) يتجاوز
+    HEARTBEAT_TIMEOUT على العميل → close(1001) كاذب → reconnect → ضياع
+    الإجابة. الـ keepalive يُبقي العميل حياً عبر `send_lock`. لا يرفع أبداً.
+    """
+    try:
+        while True:
+            await asyncio.sleep(_TURN_KEEPALIVE_INTERVAL_SECONDS)
+            if not _ws_is_connected(websocket):
+                return
+            try:
+                await _locked_send_json(
+                    websocket, lock, {"type": "pong", "payload": {"keepalive": True}}
+                )
+            except (WebSocketDisconnect, RuntimeError):
+                return
+            except Exception as exc:  # pragma: no cover - دفاعي
+                logger.debug("admin_chat.keepalive_send_failed: %s", type(exc).__name__)
+                return
+    except asyncio.CancelledError:
+        return
+
+
 def _bind_local_conversation_id(
     event: dict[str, object], conversation_id: int | None
 ) -> dict[str, object]:
@@ -173,6 +219,7 @@ def _merge_history_with_client_context(
 async def _emit_terminal_frames(
     *,
     websocket: WebSocket,
+    send_lock: asyncio.Lock,
     pending_terminal_event: dict[str, object] | None,
     assistant_message_persisted: bool,
     complete_ai_response: str,
@@ -184,26 +231,32 @@ async def _emit_terminal_frames(
     يضمن إرسال إطار نهائي واحد فقط لكل دور (assistant_final أو error)
     وإطار 'persisted' فقط بعد حفظ فعلي. لا يُسمح بالفشل الصامت
     الذي يبقي واجهة المستخدم في حالة تحميل أبدية (ISS-016/ISS-017).
+
+    D-096: كل الإرسال عبر send_lock لتفادي التداخل مع مهمة الـ keepalive.
     """
     if assistant_message_persisted:
         if pending_terminal_event is not None:
-            await websocket.send_json(pending_terminal_event)
+            await _locked_send_json(websocket, send_lock, pending_terminal_event)
         else:
-            await websocket.send_json(
+            await _locked_send_json(
+                websocket,
+                send_lock,
                 _bind_stream_metadata(
                     normalize_streaming_event(
                         {"type": "assistant_final", "payload": {"content": ""}}
                     ),
                     local_conversation_id,
                     stream_request_id,
-                )
+                ),
             )
-        await websocket.send_json(
+        await _locked_send_json(
+            websocket,
+            send_lock,
             _bind_stream_metadata(
                 normalize_streaming_event({"type": "persisted"}),
                 local_conversation_id,
                 stream_request_id,
-            )
+            ),
         )
         return
 
@@ -220,7 +273,9 @@ async def _emit_terminal_frames(
         details = "Assistant produced no response."
         status_code = 500
 
-    await websocket.send_json(
+    await _locked_send_json(
+        websocket,
+        send_lock,
         _bind_stream_metadata(
             normalize_streaming_event(
                 {
@@ -230,7 +285,7 @@ async def _emit_terminal_frames(
             ),
             local_conversation_id,
             stream_request_id,
-        )
+        ),
     )
 
 
@@ -437,18 +492,24 @@ async def chat_stream_ws(
         await websocket.close(code=4403)
         return
 
+    # D-096 (parity مع customer_chat): قفل واحد يُسلسل كل send_json على هذا
+    # الـ WebSocket — يحمي ضد تداخل مهمة البثّ مع مهمة الـ keepalive (ISS-098).
+    send_lock = asyncio.Lock()
+
     # D-WS-FLAP-003 (2026-05-26): primer event — يُرسَل فور الـ accept لإجبار
     # كل الـ proxies على المسار (server.js, Codespaces edge, mobile carrier-NAT)
     # على الاحتفاظ بـ session نشط بدلاً من idle-timeout سريع.
     try:
-        await websocket.send_json(
+        await _locked_send_json(
+            websocket,
+            send_lock,
             {
                 "type": "session_ready",
                 "payload": {
                     "user_id": actor.id,
                     "ts": datetime.now(UTC).isoformat(),
                 },
-            }
+            },
         )
     except Exception as exc:
         logger.debug("admin_chat.primer_failed: %s", exc)
@@ -461,7 +522,7 @@ async def chat_stream_ws(
             # ping/heartbeat/noop يُعالَجون هنا قبل اعتبار الحمولة سؤالاً —
             # بدون هذا الفحص يُعاد للعميل خطأ «Question is required» بدل pong
             # → timeout 10s → close(1001) → flapping cycle.
-            if await handle_control_message(websocket, payload):
+            if await handle_control_message(websocket, payload, send_lock=send_lock):
                 continue
 
             request_id_value = payload.get("client_request_id")
@@ -654,8 +715,10 @@ async def chat_stream_ws(
                                 normalized_event, lc_id, request_id
                             )
                         else:
-                            await websocket.send_json(
-                                _bind_stream_metadata(normalized_event, lc_id, request_id)
+                            await _locked_send_json(
+                                websocket,
+                                send_lock,
+                                _bind_stream_metadata(normalized_event, lc_id, request_id),
                             )
 
                         if _is_text_event(normalized_event) and isinstance(
@@ -666,20 +729,31 @@ async def chat_stream_ws(
                                 complete_ai_response += chunk_text
 
                 stream_task = asyncio.create_task(stream_and_forward())
-                await stream_task
+                # ISS-098 (D-WS-FLAP-005): keepalive متزامن يمنع false
+                # heartbeat-timeout على العميل أثناء الأدوار الطويلة.
+                keepalive_task = asyncio.create_task(_run_turn_keepalive(websocket, send_lock))
+                try:
+                    await stream_task
+                finally:
+                    keepalive_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await keepalive_task
             except HTTPException as http_exc:
                 stream_error = http_exc
             except Exception as exc:
                 stream_error = exc
-                if not isinstance(exc, WebSocketDisconnect):
-                    await websocket.send_json(
-                        normalize_streaming_event(
-                            {
-                                "type": "error",
-                                "payload": {"details": str(exc), "status_code": 500},
-                            }
+                if not isinstance(exc, WebSocketDisconnect) and _ws_is_connected(websocket):
+                    with contextlib.suppress(WebSocketDisconnect, RuntimeError):
+                        await _locked_send_json(
+                            websocket,
+                            send_lock,
+                            normalize_streaming_event(
+                                {
+                                    "type": "error",
+                                    "payload": {"details": str(exc), "status_code": 500},
+                                }
+                            ),
                         )
-                    )
             finally:
                 if stream_task is not None and not stream_task.done():
                     stream_task.cancel()
@@ -750,6 +824,7 @@ async def chat_stream_ws(
                 try:
                     await _emit_terminal_frames(
                         websocket=websocket,
+                        send_lock=send_lock,
                         pending_terminal_event=pending_terminal_event,
                         assistant_message_persisted=assistant_message_persisted,
                         complete_ai_response=complete_ai_response,

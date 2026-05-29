@@ -435,12 +435,24 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         ws.onmessage = (event) => {
           if (!mountedRef.current) return;
 
-          // معالجة pong من heartbeat — إلغاء timeout
+          // ISS-098 (D-WS-FLAP-005 — 2026-05-29): أي رسالة واردة تُثبت أن
+          // الاتصال حيّ، فتُلغي timeout الـ heartbeat — ليس pong فقط.
+          //
+          // الجذر: الـ backend receive loop محجوب أثناء `await stream_task`
+          // طوال بثّ الإجابة، فلا يستطيع قراءة ping العميل والردّ بـ pong.
+          // مع زمن Supabase + إجابة طويلة، يتجاوز الدور الواحد
+          // HEARTBEAT_TIMEOUT (90s) → close(1001) كاذب → reconnect →
+          // الإجابة الجارية تضيع ("لا يرد عن الأسئلة" للأسئلة الطويلة).
+          // تدفّق الـ deltas نفسه دليل قاطع على أن الاتصال حيّ، لذا نُلغي
+          // الـ timeout عند أي رسالة. (الاتصال الميت فعلاً لا يُرسل شيئاً
+          // فيبقى الـ timeout يعمل ويُطلق reconnect بشكل صحيح.)
+          if (heartbeatTimeoutRef.current) {
+            clearTimeout(heartbeatTimeoutRef.current);
+            heartbeatTimeoutRef.current = null;
+          }
+
+          // معالجة pong من heartbeat — لا نُعالجه كبيانات
           if (typeof event.data === "string" && event.data.includes('"type":"pong"')) {
-            if (heartbeatTimeoutRef.current) {
-              clearTimeout(heartbeatTimeoutRef.current);
-              heartbeatTimeoutRef.current = null;
-            }
             return;
           }
 

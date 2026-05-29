@@ -3483,3 +3483,44 @@ const merged = deltaBuffer.splice(0).reduce(...);
 - Auth premise (stdlib HS256 mirror of decode_user_id): valid never raises; expired/badsig/no-sub → 401. ✅
 - 7 regression assertions in `tests/services/test_iss097_kick_to_login.py` ✅; both routers compile.
 - Full browser + Supabase E2E runs on live Codespace/CI.
+
+---
+
+## ISS-098 — "No answer for substantive questions" (long-answer heartbeat timeout) — 2026-05-29
+
+**User report (recurring, GitHub Codespaces):** logs in, sees previous messages,
+but the system "doesn't answer questions" — while short questions/greetings work.
+Prior fixes (ISS-092→097) closed the kick causes; this closes the residual "no answer".
+
+**Live reproduction (2026-05-29, mandatory real test):**
+monolith uvicorn (supervisor WS flags) + real OpenRouter (gpt-oss free) + SQLite
+(sandbox blocks Supabase egress 6543/5432). Real user account, WS driven exactly
+like the browser (`?token=`, key `question`).
+- Short question → answers (1399 deltas). Multi-turn → same conversation_id. JWT=1440 min.
+- **Substantive question (detailed explanation) → a SINGLE turn took 154.8s, 3962 deltas.**
+
+**Root cause (proven):** the WS receive loop in `customer_chat.py` / `admin.py`
+blocks on `await stream_task` for the whole turn, so it cannot read the client's
+app-level `ping` and never sends `pong`. The frontend heartbeat
+(`useRealtimeConnection.js`) cleared its 90s timeout ONLY on `pong`. A long answer
+exceeds ~135s → client falsely closes (`1001`) → reconnect → the in-progress answer
+is LOST. Short answers finish under 90s (work). Fast SQLite hid it locally; the real
+154.8s answer reproduced it WITHOUT Supabase (Supabase latency only worsens it).
+
+**Fix (D-WS-FLAP-005):**
+- Frontend: ANY inbound WS message clears the heartbeat timeout (deltas prove liveness),
+  not only `pong`.
+- Backend (customer + admin): concurrent `_run_turn_keepalive` sends a `pong` every 20s
+  (via `send_lock`) for the turn's duration, cancelled in `finally`. The concurrent
+  keepalive made `send_lock` necessary on admin — closed the residual D-096 admin gap
+  with full parity (`_locked_send_json`, `_emit_terminal_frames(send_lock=...)`,
+  `handle_control_message(..., send_lock=...)`, all stream-phase sends locked).
+
+**Live verification after fix (2026-05-29):**
+- 154.8s turn → 7 keepalive pongs (20/40/.../140s) → connection stayed alive →
+  `assistant_final` delivered (3962 deltas). No false disconnect, no lost answer.
+- Multi-turn + reconnect: conversation_id stable; `/api/chat/latest` restores 2 msgs;
+  post-reconnect turn answered. No kick, no "new conversation".
+- 47 backend regression tests (ISS-098 + D-096 + heartbeat + ISS-097) ✅; 6 frontend
+  node tests ✅; ruff check/format ✅.
+- Full browser + Supabase E2E runs on live Codespace/CI (sandbox egress blocked).

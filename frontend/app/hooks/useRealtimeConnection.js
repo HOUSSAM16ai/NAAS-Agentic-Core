@@ -36,6 +36,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 import { BUILD_VERSION } from "../buildVersion";
+import { clientLog } from "../utils/clientLog";
 
 const MAX_BACKOFF = 30000; // أقصى تأخير بين المحاولات (30 ثانية)
 // D-WS-FLAP-003 (2026-05-26): زدنا MAX_RETRIES إلى 30 لتفادي إعلان "offline"
@@ -678,11 +679,13 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
               reconnectTimeoutRef.current = setTimeout(connect, delay + jitter);
             };
 
+            clientLog("ws_fatal_close", { code: e.code, reason: String(e.reason || "").slice(0, 80) });
             revalidateTokenViaHttp(wsUrl, token, abortCtl?.signal)
               .then((result) => {
                 clearTimeout(timeoutId);
                 if (!mountedRef.current) return;
                 console.info("[WS] Token revalidation result:", result);
+                clientLog("ws_revalidate_result", { code: e.code, result });
 
                 if (result === "invalid") {
                   // المسار الوحيد للطرد: /me أكّد أن الـ token ميت حقاً.

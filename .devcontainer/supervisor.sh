@@ -611,6 +611,19 @@ launch_frontend() {
                 || lifecycle_warn "Frontend Launcher: 'ws' install failed (server.js will fall back)"
         fi
 
+        # ISS-101 (D-WS-PROXY-002): امسح كاش بناء Next القديم إن كان مصدر الواجهة
+        # أحدث منه. الـ Codespaces prebuilds قد تُخبّئ `.next` مبنياً من commit قديم،
+        # فيُقدّم Next dev chunks قديمة للمتصفح (إصلاحات الواجهة لا تُحمَّل → الطرد
+        # يستمر) رغم أن الكود على القرص جديد. مسحه يُجبر إعادة تجميع نظيفة.
+        if [ -d "frontend/.next" ] && {
+            [ "frontend/server.js" -nt "frontend/.next" ] ||
+            [ "frontend/app/hooks/useRealtimeConnection.js" -nt "frontend/.next" ] ||
+            [ "frontend/app/components/CogniForgeApp.jsx" -nt "frontend/.next" ]
+        }; then
+            lifecycle_info "Frontend Launcher: clearing stale .next build cache (source is newer)..."
+            rm -rf "frontend/.next" 2>/dev/null || true
+        fi
+
         if lifecycle_check_process "next.*dev\|node.*server\.js"; then
             lifecycle_info "Frontend Launcher: Next.js dev server already running"
         elif lsof -ti :"$FRONTEND_PORT" >/dev/null 2>&1; then

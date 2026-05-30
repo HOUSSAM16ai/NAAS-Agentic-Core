@@ -199,6 +199,21 @@ function proxyToGateway(clientWs, req) {
 app.prepare().then(() => {
   const server = createServer(async (req, res) => {
     try {
+      // ISS-101 (D-WS-KICK-DIAG): beacon تشخيصي من العميل — يطبع سبب الطرد/الحدث
+      // في سجل الخادم (يُمكن للمستخدم قراءته على الجوال بلا devtools).
+      if (req.method === "POST" && (req.url || "").startsWith("/__clientlog")) {
+        let body = "";
+        req.on("data", (c) => {
+          body += c;
+          if (body.length > 4096) body = body.slice(0, 4096);
+        });
+        req.on("end", () => {
+          console.log("[CLIENT-LOG]", body.slice(0, 1000));
+          res.statusCode = 204;
+          res.end();
+        });
+        return;
+      }
       await handle(req, res, parse(req.url, true));
     } catch (err) {
       console.error("Error occurred handling", req.url, err);

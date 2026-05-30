@@ -6,6 +6,7 @@ import { useAgentSocket } from '../hooks/useAgentSocket';
 import { ChatInterface } from './ChatInterface';
 import { AgentTimeline } from './AgentTimeline';
 import { BUILD_VERSION } from '../buildVersion';
+import { clientLog } from '../utils/clientLog';
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL ?? '';
 const apiUrl = (path) => `${API_ORIGIN}${path}`;
@@ -457,6 +458,7 @@ const App = () => {
     useEffect(() => {
         const handleAuthError = (e) => {
             console.warn('[App] WS auth error received — session expired:', e.detail);
+            clientLog('auth_error_received', { detail: JSON.stringify(e.detail || {}) });
             // أعلِم المستخدم بالحادث قبل reload — صدق في الـ UX
             try {
                 window.dispatchEvent(new CustomEvent('agent:notification', {
@@ -523,14 +525,17 @@ const App = () => {
                 }
                 if (response.status === 401 || response.status === 403) {
                     // token مؤكَّد البطلان — هذا هو المسار الوحيد للخروج.
+                    clientLog('fetchUser_logout', { me_status: response.status, attempt });
                     logout();
                     return;
                 }
                 // 5xx / 404 / غير ذلك → خلل backend عابر — لا تُسجِّل الخروج.
+                clientLog('fetchUser_transient', { me_status: response.status, attempt });
                 scheduleRetry();
             } catch (error) {
                 if (cancelled) return;
                 // خطأ شبكة → عابر — لا تُسجِّل الخروج.
+                clientLog('fetchUser_network_error', { err: String(error).slice(0, 120), attempt });
                 errorTracker.reportError(error, { message: 'Failed to fetch user (transient)' });
                 scheduleRetry();
             }
@@ -569,6 +574,7 @@ const App = () => {
         // قبل: reload() كان يكسر React tree و يُسبب cycle مع auto-fill المتصفح.
         // بعد: setToken(null) + setUser(null) يُعيد render إلى AuthScreen بدون
         //      destructive page reload — يحفظ tab state ويمنع loop.
+        clientLog('logout', { stack: (new Error().stack || '').split('\n').slice(1, 4).join(' | ').slice(0, 300) });
         localStorage.removeItem('token');
         try {
             localStorage.removeItem('cogniforge_user');

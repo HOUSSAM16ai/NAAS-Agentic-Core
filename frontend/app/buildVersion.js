@@ -1,4 +1,4 @@
-// ISS-101 (D-WS-PROXY-003): مصدر الحقيقة الوحيد لإصدار بناء الواجهة.
+// ISS-101 (D-WS-KICK-DIAG-1): مصدر الحقيقة الوحيد لإصدار بناء الواجهة.
 //
 // يُستخدم في:
 //   1. ?cb=<BUILD_VERSION> على WS URL (server.js يُسجِّله — يُثبت أي JS يعمل).
@@ -7,4 +7,4 @@
 //
 // زِد هذا الرقم مع أي تغيير في منطق الاتصال/المصادقة، وحدِّث public/build.json
 // لنفس القيمة.
-export const BUILD_VERSION = "D-WS-PROXY-003";
+export const BUILD_VERSION = "D-WS-KICK-DIAG-1";

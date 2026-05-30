@@ -56,6 +56,10 @@ const REVALIDATION_TIMEOUT_MS = 5000; // مهلة /me probe
 // uvicorn --ws-ping-interval 20 يحافظ على الـ TCP alive في كل الأحوال.
 const HEARTBEAT_INTERVAL = 45000;
 const HEARTBEAT_TIMEOUT = 90000; // كان 15s — يتسامح مع long LLM streams (90s)
+// ISS-101 (D-WS-PROXY-002): بصمة بناء العميل — تُرسَل في WS URL (?cb=) ويُسجِّلها
+// server.js. تُثبت أي نسخة JS يُشغّلها المتصفح فعلاً (للكشف عن bundle قديم مُخبَّأ).
+// زِد هذا الرقم مع أي تغيير في منطق الاتصال/الـ heartbeat.
+const CLIENT_BUILD = "D-WS-PROXY-002";
 // D-WS-FLAP-003: لا نُسمِّي الاتصال "reconnecting" إلا بعد فشل حقيقي.
 // 1000 = NORMAL_CLOSURE — يحدث عند unmount/cleanup أو إغلاق الـ tab.
 // 1001 = GOING_AWAY — يحدث عند navigation.
@@ -329,6 +333,8 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         if (!wsUrlObj.searchParams.has("session_id")) {
             wsUrlObj.searchParams.set("session_id", connectionIdRef.current);
         }
+        // ISS-101: بصمة البناء — server.js يُسجِّلها لإثبات نسخة JS المُحمَّلة فعلاً.
+        wsUrlObj.searchParams.set("cb", CLIENT_BUILD);
 
         // Log auth transport mode بدون تسريب token value
         const authMode = token ? "query_param" : "none";

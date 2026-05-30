@@ -3665,3 +3665,30 @@ sent immediately after connect) and flushes them on open.
 - frontend/package.json (+ ws)
 - tests/services/test_iss101_ws_proxy.py (new — 4 checks)
 - scripts/diagnose_chat.py (the tool that captured the evidence)
+
+---
+
+## D-WS-PROXY-002 — Client heartbeat is non-fatal (ISS-101 continued) — 2026-05-30
+
+**Context:** After D-WS-PROXY-001 fixed the server.js proxy (chat answers now come through),
+live instrumented server.js logs showed connections closing with client code=1001
+("heartbeat_timeout") right after session_ready/conversation_init and before answer deltas
+(up2cl=2), then reconnecting — a churn causing incomplete answers and perceived flapping/kick.
+fix_ws_now.sh confirmed: `upgrade listeners before ours: 0` (no Next interference) and the new
+ws-lib proxy is the running process. So the proxy is correct; the churn is the client's
+app-level heartbeat proactively closing connections.
+
+**Decision:** The client heartbeat no longer calls `ws.close(1001, "heartbeat_timeout")`. It
+still sends an app-level ping (keeps proxies/NAT warm; the backend pongs, which clears the timer
+via D-WS-FLAP-005), but on a missed pong it only logs. Truly-dead connections are recycled by
+uvicorn's protocol ping/pong (`--ws-ping-interval 20 --ws-ping-timeout 30`, server-side close)
+and the browser's native onclose(1006) on TCP death → normal reconnect.
+
+**Rules (permanent):**
+1. The client WS heartbeat MUST NOT proactively close the socket. Liveness/recycling is owned by
+   uvicorn protocol ping/pong (server) + the browser (TCP death). The app ping is keepalive only.
+2. Any inbound message clears the heartbeat timer (D-WS-FLAP-005) — unchanged.
+
+**Files Changed**
+- frontend/app/hooks/useRealtimeConnection.js (heartbeat timeout → log-only, no close)
+- tests/services/test_iss101_ws_proxy.py (+ test_heartbeat_is_non_fatal)

@@ -283,11 +283,24 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
         stopHeartbeat();
         return;
       }
-      // إذا لم يصل pong خلال HEARTBEAT_TIMEOUT → stale connection
+      // ISS-101 (D-WS-PROXY-002 — 2026-05-30): الـ heartbeat لم يعد يُغلق الاتصال.
+      //
+      // الكارثة المُصلَحة: كان `ws.close(1001,"heartbeat_timeout")` يقطع اتصالات
+      // حيّة-لكن-بطيئة (دور طويل، أو pong تأخّر عبر سلسلة الـ proxy) → reconnect
+      // متكرر (close 1001) → إجابات مقطوعة + تأرجح. تشخيص حيّ أظهر اتصالات تُغلق
+      // بـ 1001 بعد session_ready/conversation_init مباشرة وقبل deltas.
+      //
+      // الكشف عن الاتصال الميت فعلاً مضمون من طبقتين أدنى: uvicorn protocol
+      // ping/pong (`--ws-ping-interval 20 --ws-ping-timeout 30`) يُغلق نصف-المفتوح
+      // من جهة الخادم، والمتصفح يُطلق onclose(1006) عند موت TCP → reconnect صحيح.
+      // لذا نكتفي هنا بـ ping تطبيقي (يُبقي proxies/NAT دافئة، والخادم يردّ pong
+      // فيُلغي أي مؤقّت عبر D-WS-FLAP-005) — بلا إغلاق استباقي.
       heartbeatTimeoutRef.current = setTimeout(() => {
-        console.warn("[WS] heartbeat timeout — stale connection, forcing reconnect");
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.close(1001, "heartbeat_timeout");
+          console.info(
+            "[WS] heartbeat: no app-level pong within window — keeping connection " +
+              "(uvicorn protocol ping + browser will recycle if truly dead)"
+          );
         }
       }, HEARTBEAT_TIMEOUT);
     }, HEARTBEAT_INTERVAL);

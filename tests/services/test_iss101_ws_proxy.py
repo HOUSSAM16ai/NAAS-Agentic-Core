@@ -100,19 +100,6 @@ def test_server_js_queues_early_client_messages() -> None:
     )
 
 
-def test_supervisor_clears_stale_next_cache() -> None:
-    """D-WS-PROXY-002: the supervisor must clear a stale `.next` dev cache when the
-    frontend source is newer — otherwise a fresh Codespace (prebuilt .next from an old
-    commit) serves stale client JS and the frontend fixes never load."""
-    sup = (REPO_ROOT / ".devcontainer" / "supervisor.sh").read_text(encoding="utf-8")
-    assert 'rm -rf "frontend/.next"' in sup, (
-        "D-WS-PROXY-002: supervisor must `rm -rf frontend/.next` when source is newer."
-    )
-    assert 'frontend/server.js" -nt "frontend/.next' in sup, (
-        "D-WS-PROXY-002: the .next clear must be gated on source being newer than the cache."
-    )
-
-
 def test_client_build_stamp_present() -> None:
     """D-WS-PROXY-002: the client stamps its build on the WS URL (?cb=) and server.js logs it,
     so we can prove which JS the browser is actually running."""
@@ -123,6 +110,47 @@ def test_client_build_stamp_present() -> None:
     server = _read(SERVER)
     assert "build=" in server and "cb=" in server, (
         "D-WS-PROXY-002: server.js must log the client build (cb) per connection."
+    )
+
+
+def test_build_version_consistent() -> None:
+    """D-WS-PROXY-003: buildVersion.js BUILD_VERSION must equal public/build.json `build`,
+    so the self-heal check compares like-for-like (mismatch only means a truly stale tab)."""
+    import json
+    import re
+
+    bv = (REPO_ROOT / "frontend" / "app" / "buildVersion.js").read_text(encoding="utf-8")
+    m = re.search(r'BUILD_VERSION\s*=\s*"([^"]+)"', bv)
+    assert m, "BUILD_VERSION constant missing in buildVersion.js"
+    build_json = json.loads((REPO_ROOT / "frontend" / "public" / "build.json").read_text("utf-8"))
+    assert build_json.get("build") == m.group(1), (
+        f"D-WS-PROXY-003: build.json ({build_json.get('build')}) must equal "
+        f"BUILD_VERSION ({m.group(1)})."
+    )
+
+
+def test_app_self_heals_stale_bundle() -> None:
+    """D-WS-PROXY-003: CogniForgeApp must compare the served build (build.json) to its
+    bundled BUILD_VERSION and reload once on mismatch — so a stale tab fixes itself."""
+    app = (REPO_ROOT / "frontend" / "app" / "components" / "CogniForgeApp.jsx").read_text("utf-8")
+    assert "build.json" in app and "BUILD_VERSION" in app, (
+        "D-WS-PROXY-003: App must fetch build.json and compare to BUILD_VERSION."
+    )
+    assert "window.location.reload()" in app, (
+        "D-WS-PROXY-003: App must reload once when the bundle is stale."
+    )
+    assert "sessionStorage" in app, (
+        "D-WS-PROXY-003: the reload must be guarded (sessionStorage) to avoid loops."
+    )
+
+
+def test_supervisor_clears_next_unconditionally_on_boot() -> None:
+    """D-WS-PROXY-003: supervisor must clear .next before launching the frontend so a fresh
+    Codespace never serves a stale prebuilt bundle."""
+    sup = (REPO_ROOT / ".devcontainer" / "supervisor.sh").read_text(encoding="utf-8")
+    assert 'rm -rf "frontend/.next"' in sup
+    assert "force a fresh client bundle" in sup, (
+        "D-WS-PROXY-003: the .next clear must run unconditionally on frontend launch."
     )
 
 

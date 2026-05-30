@@ -35,6 +35,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 
+import { BUILD_VERSION } from "../buildVersion";
+
 const MAX_BACKOFF = 30000; // أقصى تأخير بين المحاولات (30 ثانية)
 // D-WS-FLAP-003 (2026-05-26): زدنا MAX_RETRIES إلى 30 لتفادي إعلان "offline"
 // المبكر على شبكات الهاتف المتذبذبة (carrier-NAT يقطع الاتصال مؤقتاً).
@@ -56,10 +58,10 @@ const REVALIDATION_TIMEOUT_MS = 5000; // مهلة /me probe
 // uvicorn --ws-ping-interval 20 يحافظ على الـ TCP alive في كل الأحوال.
 const HEARTBEAT_INTERVAL = 45000;
 const HEARTBEAT_TIMEOUT = 90000; // كان 15s — يتسامح مع long LLM streams (90s)
-// ISS-101 (D-WS-PROXY-002): بصمة بناء العميل — تُرسَل في WS URL (?cb=) ويُسجِّلها
+// ISS-101 (D-WS-PROXY-002/003): بصمة بناء العميل — تُرسَل في WS URL (?cb=) ويُسجِّلها
 // server.js. تُثبت أي نسخة JS يُشغّلها المتصفح فعلاً (للكشف عن bundle قديم مُخبَّأ).
-// زِد هذا الرقم مع أي تغيير في منطق الاتصال/الـ heartbeat.
-const CLIENT_BUILD = "D-WS-PROXY-002";
+// المصدر الموحَّد في buildVersion.js (يُستخدم أيضاً في فحص إعادة التحميل الذاتي).
+const CLIENT_BUILD = BUILD_VERSION;
 // D-WS-FLAP-003: لا نُسمِّي الاتصال "reconnecting" إلا بعد فشل حقيقي.
 // 1000 = NORMAL_CLOSURE — يحدث عند unmount/cleanup أو إغلاق الـ tab.
 // 1001 = GOING_AWAY — يحدث عند navigation.

@@ -38,10 +38,28 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVER = REPO_ROOT / "frontend" / "server.js"
 PKG = REPO_ROOT / "frontend" / "package.json"
+HOOK = REPO_ROOT / "frontend" / "app" / "hooks" / "useRealtimeConnection.js"
 
 
 def _read(p: Path) -> str:
     return p.read_text(encoding="utf-8")
+
+
+def test_heartbeat_is_non_fatal() -> None:
+    """D-WS-PROXY-002: the client heartbeat must NOT force-close the WS on timeout.
+
+    Live logs showed connections closing with 1001 ("heartbeat_timeout") right after
+    session_ready/conversation_init and before the answer deltas → reconnect churn →
+    incomplete answers + flapping. uvicorn protocol ping/pong + the browser's native
+    dead-socket detection recycle truly-dead connections, so the app-level close is
+    redundant and harmful. The active `ws.close(1001, "heartbeat_timeout")` call must
+    be gone (the same text may remain only inside an explanatory comment).
+    """
+    src = _read(HOOK)
+    assert 'ws.close(1001, "heartbeat_timeout")' not in src, (
+        "D-WS-PROXY-002: heartbeat must not force-close with 1001 — it churned connections "
+        "and cut answers. Keep the ping, drop the close."
+    )
 
 
 def test_server_js_uses_ws_library() -> None:

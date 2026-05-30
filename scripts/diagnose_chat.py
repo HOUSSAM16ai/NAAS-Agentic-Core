@@ -225,7 +225,8 @@ def section_ws(token: str | None) -> None:
     async def probe(base_port: int, label: str, rounds: int = 3) -> None:
         import uuid
 
-        url = f"ws://127.0.0.1:{base_port}/api/chat/ws?token={token}&session_id={uuid.uuid4()}"
+        # cb=DIAGNOSTIC يُميِّز probe الأداة عن متصفح يُشغّل bundle قديماً (UNKNOWN).
+        url = f"ws://127.0.0.1:{base_port}/api/chat/ws?token={token}&session_id={uuid.uuid4()}&cb=DIAGNOSTIC"
         for r in range(rounds):
             t0 = time.time()
             frames: list[str] = []

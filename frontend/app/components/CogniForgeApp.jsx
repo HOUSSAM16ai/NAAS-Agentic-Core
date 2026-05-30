@@ -5,6 +5,7 @@ import { errorTracker } from '../utils/errorTracker';
 import { useAgentSocket } from '../hooks/useAgentSocket';
 import { ChatInterface } from './ChatInterface';
 import { AgentTimeline } from './AgentTimeline';
+import { BUILD_VERSION } from '../buildVersion';
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL ?? '';
 const apiUrl = (path) => `${API_ORIGIN}${path}`;
@@ -401,6 +402,40 @@ const App = () => {
     const [token, setToken] = useState(null);
     const [user, setUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    // ISS-101 (D-WS-PROXY-003): إعادة تحميل ذاتية عند قِدَم الـ bundle.
+    //
+    // الكارثة: تبويب متصفح حمّل JS قديماً (قبل الإصلاحات) يبقى يُشغّله ويُسبب
+    // الطرد/التأرجح، حتى بعد تحديث الخادم. الحل: نقارن إصدار الـ bundle المُجمَّع
+    // (BUILD_VERSION) مع build.json الذي يُقدّمه الخادم (يعكس الإصدار الحالي).
+    // عند الاختلاف → التبويب قديم → إعادة تحميل واحدة (محروسة بـ sessionStorage
+    // لمنع الحلقات) لجلب الكود الجديد. هذا يجعل أي تبويب قديم يُصلِح نفسه.
+    useEffect(() => {
+        let cancelled = false;
+        const checkBuild = async () => {
+            try {
+                const res = await fetch(`/build.json?ts=${Date.now()}`, { cache: 'no-store' });
+                if (!res.ok || cancelled) return;
+                const data = await res.json();
+                const serverBuild = data && data.build;
+                if (serverBuild && serverBuild !== BUILD_VERSION) {
+                    const key = `cf_reloaded_${serverBuild}`;
+                    if (sessionStorage.getItem(key)) return; // سبق وأعدنا التحميل لهذا الإصدار
+                    sessionStorage.setItem(key, '1');
+                    console.warn(
+                        `[App] stale bundle (loaded=${BUILD_VERSION}, server=${serverBuild}) — reloading once`
+                    );
+                    window.location.reload();
+                }
+            } catch (_e) {
+                /* الشبكة/ملف غير متاح — تجاهل، لا نُعيد التحميل بلا داعٍ */
+            }
+        };
+        checkBuild();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         const storedToken = localStorage.getItem('token');

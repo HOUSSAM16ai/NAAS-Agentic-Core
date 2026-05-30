@@ -3692,3 +3692,36 @@ and the browser's native onclose(1006) on TCP death → normal reconnect.
 **Files Changed**
 - frontend/app/hooks/useRealtimeConnection.js (heartbeat timeout → log-only, no close)
 - tests/services/test_iss101_ws_proxy.py (+ test_heartbeat_is_non_fatal)
+
+---
+
+## D-WS-PROXY-003 — Self-healing stale-bundle reload + always-fresh frontend (ISS-101) — 2026-05-30
+
+**Context:** The client build stamp (?cb=) proved the kick now comes purely from a STALE browser
+tab running old JS: logs showed `session_id=16f61cff build=UNKNOWN(old-bundle?)` reconnecting
+(the kick) alongside `session_id=cd37a564 build=D-WS-PROXY-002` (new code working). A tab that
+loaded the prebuilt/stale bundle before the recompile keeps running old code and cannot be
+force-updated from the server. Even fresh Codespaces served a stale prebuilt `.next` on first load.
+
+**Decision:**
+1. Single source of truth `frontend/app/buildVersion.js:BUILD_VERSION` (= public/build.json).
+   Stamped on the WS URL (?cb=) and logged by server.js per connection.
+2. Self-heal: CogniForgeApp fetches /build.json on mount; if it differs from the bundled
+   BUILD_VERSION, it reloads once (sessionStorage-guarded) → a stale tab fixes itself.
+3. supervisor.sh clears frontend/.next unconditionally before launching the frontend → a fresh
+   Codespace always compiles and serves the current client bundle on first load.
+
+**Rules (permanent):**
+1. Bump BUILD_VERSION (buildVersion.js) AND public/build.json together on any frontend
+   connection/auth change. They must stay equal (CI test enforces).
+2. The WS URL always carries ?cb=<BUILD_VERSION>; server.js logs it. UNKNOWN ⇒ stale tab.
+3. The frontend serves a fresh bundle on boot (supervisor clears .next); stale tabs self-heal
+   via the build.json check.
+
+**Files Changed**
+- frontend/app/buildVersion.js (new), frontend/public/build.json (new)
+- frontend/app/hooks/useRealtimeConnection.js (CLIENT_BUILD = BUILD_VERSION)
+- frontend/app/components/CogniForgeApp.jsx (self-heal reload)
+- .devcontainer/supervisor.sh (unconditional .next clear)
+- scripts/diagnose_chat.py (probe sends cb=DIAGNOSTIC)
+- tests/services/test_iss101_ws_proxy.py (+ consistency/self-heal/supervisor tests)

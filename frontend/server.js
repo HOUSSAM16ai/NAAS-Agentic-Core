@@ -76,7 +76,11 @@ function proxyToGateway(clientWs, req) {
   const url = req.url || "";
   const safe = redact(url);
   const cid = ++_connSeq;
-  console.log(`[WS Proxy] #${cid} client connected, opening upstream: ${safe}`);
+  // ISS-101: بصمة بناء العميل (cb) — تُثبت أي نسخة JS يُشغّلها المتصفح.
+  // غياب cb أو "UNKNOWN" ⇒ المتصفح يُشغّل bundle قديماً (يحتاج إعادة تحميل/مسح كاش).
+  const cbMatch = url.match(/[?&]cb=([^&]+)/);
+  const clientBuild = cbMatch ? decodeURIComponent(cbMatch[1]) : "UNKNOWN(old-bundle?)";
+  console.log(`[WS Proxy] #${cid} client connected (build=${clientBuild}): ${safe}`);
 
   const protoHeader = req.headers["sec-websocket-protocol"];
   const subprotocols = protoHeader

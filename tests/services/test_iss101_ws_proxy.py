@@ -100,6 +100,32 @@ def test_server_js_queues_early_client_messages() -> None:
     )
 
 
+def test_supervisor_clears_stale_next_cache() -> None:
+    """D-WS-PROXY-002: the supervisor must clear a stale `.next` dev cache when the
+    frontend source is newer — otherwise a fresh Codespace (prebuilt .next from an old
+    commit) serves stale client JS and the frontend fixes never load."""
+    sup = (REPO_ROOT / ".devcontainer" / "supervisor.sh").read_text(encoding="utf-8")
+    assert 'rm -rf "frontend/.next"' in sup, (
+        "D-WS-PROXY-002: supervisor must `rm -rf frontend/.next` when source is newer."
+    )
+    assert 'frontend/server.js" -nt "frontend/.next' in sup, (
+        "D-WS-PROXY-002: the .next clear must be gated on source being newer than the cache."
+    )
+
+
+def test_client_build_stamp_present() -> None:
+    """D-WS-PROXY-002: the client stamps its build on the WS URL (?cb=) and server.js logs it,
+    so we can prove which JS the browser is actually running."""
+    hook = _read(HOOK)
+    assert "CLIENT_BUILD" in hook and 'set("cb"' in hook, (
+        "D-WS-PROXY-002: useRealtimeConnection must stamp ?cb=<CLIENT_BUILD> on the WS URL."
+    )
+    server = _read(SERVER)
+    assert "build=" in server and "cb=" in server, (
+        "D-WS-PROXY-002: server.js must log the client build (cb) per connection."
+    )
+
+
 def test_package_json_declares_ws() -> None:
     import json
 

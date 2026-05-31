@@ -3,6 +3,17 @@
 
 ---
 
+## ✅ Resolved 2026-05-31 (ISS-102 Hardening — CI gate + admin_messages schema gap)
+
+### ISS-102 follow-up (D-WS-PROXY-004 hardening) · تثبيت النصر + سدّ الثغرات [RESOLVED]
+
+- **Status**: RESOLVED 2026-05-31 (live-verified على SQLite نظيف + OpenRouter حقيقي)
+- **Part 1 — منع العودة**: بوّابة CI `iss-102-ws-double-handshake-gate.yml` (ws-proxy-wiring + lockfile-sync(`npm ci`) + schema-gate + aggregator) + اختبار `frontend/tests/iss102_ws_double_handshake.test.mjs` (15/15: مستمع upgrade وحيد، trap، HMR delegate، perMessageDeflate/compress false، لا http-proxy).
+- **Part 2 — ثغرة `admin_messages`**: كانت مفقودة من `_ALLOWED_TABLES` + `REQUIRED_SCHEMA` → دردشة الإدمن تفشل بـ «no such table: admin_messages» على أي DB جديدة. سُجِّلت (FK→admin_conversations، بلا policy_flags، فهرس conversation_id) + اختبار `tests/core/test_admin_messages_schema.py` (4/4).
+- **إثبات حي**: على DB جديدة → `admin_messages` يُنشأ تلقائياً؛ دور إدمن عبر proxy `:5000` يجيب (72 حرف) ويُحفظ (صفّان user+assistant)، صفر «no such table»؛ customer `:5000` ANSWERED؛ validate_structure + ruff خضراء. التفاصيل: CLAUDE.md §6.77.
+
+---
+
 ## ✅ Resolved 2026-05-31 (ISS-102 — System Not Answering: Double WebSocket Handshake via server.js)
 
 ### ISS-102 (D-WS-PROXY-004) · «النظام لا يجيب عن الأسئلة» — السبب الجذري الحقيقي [RESOLVED]

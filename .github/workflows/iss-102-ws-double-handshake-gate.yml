@@ -1,0 +1,118 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CI Gate — WebSocket Single-Upgrade-Listener Contract (ISS-102 / D-WS-PROXY-004)
+#
+# يحرس السبب الجذري لـ«النظام لا يجيب»: Next 16 يُعيد تسجيل listener('upgrade')
+# → handshake مزدوج → إطار RSV1 تالف → موت الاتصال بعد session_ready. الإصلاح:
+# listener('upgrade') وحيد + اعتراض أي تسجيل لاحق كـ delegate + proxy نظيف.
+#
+#   1. ws-proxy-wiring — فحص مصدر server.js (single-listener trap + byte-clean) + syntax
+#   2. lockfile-sync   — npm ci (يثبت أن package-lock يحوي ws ومتزامن؛ فشل = الثغرة)
+#   3. schema-gate     — admin_messages مُسجَّل في REQUIRED_SCHEMA/_ALLOWED_TABLES
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "WS Double-Handshake Gate (ISS-102)"
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iss-102-ws-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ── Job 1: server.js single-upgrade-listener contract + syntax ────────────
+  ws-proxy-wiring:
+    name: ws-proxy-wiring
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: server.js syntax check
+        run: node --check frontend/server.js
+      - name: ISS-102 single-upgrade-listener regression suite
+        run: node frontend/tests/iss102_ws_double_handshake.test.mjs
+
+  # ── Job 2: package-lock sync (ws present, npm ci works) ───────────────────
+  lockfile-sync:
+    name: lockfile-sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm ci (fails if lock drifts / ws missing)
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: verify ws resolvable for the WS proxy
+        working-directory: frontend
+        run: node -e "require('ws'); console.log('ws OK', require('ws/package.json').version)"
+
+  # ── Job 3: admin_messages schema registration (no fresh-DB breakage) ──────
+  schema-gate:
+    name: schema-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      SECRET_KEY: "test-secret-key-for-ci-pipeline-secure-length"
+      ENVIRONMENT: "testing"
+      LLM_MOCK_MODE: "1"
+      SUPABASE_URL: "https://dummy.supabase.co"
+      SUPABASE_ROLE_KEY: "dummy"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install CI dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install pytest==7.4.4 pytest-asyncio==0.21.1
+      - name: admin_messages schema registration tests
+        run: pytest tests/core/test_admin_messages_schema.py -q --no-cov -p no:cacheprovider
+
+  # ── Final Gate ─────────────────────────────────────────────────────────────
+  iss-102-gate-required:
+    name: iss-102-gate-required
+    runs-on: ubuntu-latest
+    needs:
+      - ws-proxy-wiring
+      - lockfile-sync
+      - schema-gate
+    if: always() && !cancelled()
+    steps:
+      - name: Evaluate ISS-102 gates
+        run: |
+          isValid() { [ "$1" = "success" ] || [ "$1" = "skipped" ]; }
+          FAILED=0
+          for result in \
+            "${{ needs.ws-proxy-wiring.result }}" \
+            "${{ needs.lockfile-sync.result }}" \
+            "${{ needs.schema-gate.result }}"; do
+            if ! isValid "$result"; then
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -eq 1 ]; then
+            echo "❌ ISS-102 WS double-handshake gate FAILED"
+            exit 1
+          fi
+          echo "✅ ISS-102 gate passed (single upgrade listener + lock sync + admin_messages schema)"

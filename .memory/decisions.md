@@ -1,6 +1,24 @@
 # Architectural Decisions
 > Last updated: 2026-05-31 | Branch: `claude/system-not-answering-questions-vBsDi`
 
+## D-WS-PROXY-004 (hardening) · CI Gate + admin_messages Schema Gap (2026-05-31)
+
+تثبيت إصلاح D-WS-PROXY-004 إلى ضمان دائم + سدّ ثغرة كامنة:
+- **بوّابة CI** `.github/workflows/iss-102-ws-double-handshake-gate.yml`: تفشل لو فقد
+  `server.js` ضمان «مستمع upgrade وحيد» أو نظافة الـ proxy، أو لو انحرف `package-lock`
+  (`npm ci`)، أو لو فُقد تسجيل `admin_messages`. اختبار الواجهة:
+  `frontend/tests/iss102_ws_double_handshake.test.mjs` (15 فحص).
+- **ثغرة `admin_messages`** (مكتشفة أثناء التجريب الحي): مفقودة من `_ALLOWED_TABLES`
+  و`REQUIRED_SCHEMA` → دردشة الإدمن تفشل بـ «no such table» على أي DB جديدة. سُجِّلت
+  (مرآة `customer_messages` بـ FK إلى `admin_conversations`، بلا `policy_flags`).
+  اختبار: `tests/core/test_admin_messages_schema.py` (4 فحوص).
+- **قاعدة دائمة**: أي جدول تكتب فيه طبقة التطبيق يجب أن يكون في `REQUIRED_SCHEMA` +
+  `_ALLOWED_TABLES`؛ وأي تعديل على `server.js` يُبقي بوّابة ISS-102 خضراء.
+- **إثبات حي (SQLite نظيف + OpenRouter حقيقي)**: admin_messages يُنشأ تلقائياً؛ إدمن
+  عبر `:5000` يجيب ويُحفظ؛ customer عبر `:5000` ANSWERED؛ 15/15 + 4/4 + structure + ruff.
+
+---
+
 ## D-WS-PROXY-004 · True Root Cause — Double WebSocket Handshake (2026-05-31, ISS-102)
 
 **Branch**: `claude/system-not-answering-questions-vBsDi`

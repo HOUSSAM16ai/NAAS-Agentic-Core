@@ -7401,3 +7401,20 @@ proxy. التحقق الكامل بالمتصفح + Supabase يجري في Codes
 | D-WS-PROXY-003 | proxy نظيف: perMessageDeflate:false + compress:false + lock sync |
 | **D-WS-PROXY-004** | **السبب الجذري الحقيقي: منع ازدواج listener('upgrade') → لا 101 مزدوج → الإجابات تصل عبر :5000** |
 
+### تثبيت النصر + سدّ الثغرات (Hardening — 2026-05-31)
+
+بعد إثبات الإصلاح حياً، حُوِّل إلى **ضمان دائم** عبر CI + سُدَّت ثغرة كامنة اكتُشفت أثناء التجريب:
+
+1. **بوّابة CI ضد عودة الـ double-handshake** — `.github/workflows/iss-102-ws-double-handshake-gate.yml` (3 وظائف + aggregator):
+   - `ws-proxy-wiring`: `node --check server.js` + اختبار `frontend/tests/iss102_ws_double_handshake.test.mjs` (15 فحص source-inspection: مستمع upgrade وحيد، الـ trap، delegate لـ HMR، perMessageDeflate/compress false، لا http-proxy).
+   - `lockfile-sync`: `npm ci` (يفشل لو `package-lock` انحرف أو فُقد `ws` — الثغرة بالضبط التي اصطدمنا بها).
+   - `schema-gate`: `pytest tests/core/test_admin_messages_schema.py`.
+2. **ثغرة `admin_messages` (حقيقية)** — كانت مفقودة من `_ALLOWED_TABLES` و `REQUIRED_SCHEMA` في `app/core/db_schema_config.py` → `validate_schema_on_startup()` لا يُنشئها → دردشة الإدمن تفشل بـ «no such table: admin_messages» على أي DB جديدة (تظهر فقط على Supabase الحالي بصدفة تاريخية). **الإصلاح:** سُجِّلت (مرآة `customer_messages` بـ FK إلى `admin_conversations`، بلا `policy_flags`، فهرس `ix_admin_messages_conversation_id`).
+
+**التحقق الحي (2026-05-31، SQLite نظيف + OpenRouter حقيقي):**
+- `admin_messages` يُنشأ تلقائياً على DB جديدة ✅.
+- دور إدمن عبر proxy `:5000` → **يجيب** (72 حرف) **ويُحفظ** (صفّان في `admin_messages`: user + assistant)، صفر «no such table» ✅.
+- customer عبر `:5000` → ANSWERED ✅. اختبار الواجهة 15/15 ✅. اختبار schema 4/4 ✅. `validate_structure` ✅. ruff ✅.
+
+**قاعدة دائمة (D-WS-PROXY-004 hardening):** أي جدول تكتب فيه طبقة التطبيق يجب أن يكون في `REQUIRED_SCHEMA` + `_ALLOWED_TABLES` (وإلا يُكسَر على أي نشر نظيف)؛ وأي تغيير في `frontend/server.js` يجب أن يُبقي بوّابة ISS-102 خضراء (مستمع upgrade وحيد + proxy نظيف بايتاً ببايت).
+

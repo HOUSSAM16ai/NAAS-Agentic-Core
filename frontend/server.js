@@ -128,7 +128,13 @@ function proxyToGateway(clientWs, req) {
     up2cl++;
     if (clientWs.readyState === WebSocket.OPEN) {
       try {
-        clientWs.send(data, { binary: isBinary });
+        // ISS-102 (D-WS-PROXY-003 — 2026-05-31): `compress: false` إلزامي.
+        // الاتصال المواجه للعميل لا يتفاوض على permessage-deflate (extensions="")،
+        // لكن `ws.send` الافتراضي قد يضبط بِت RSV1 (الضغط) على الإطار الثاني فصاعداً
+        // عبر هذا الـ proxy → العميل يرفض الإطار بـ «RSV1 must be clear» ويُغلق
+        // الاتصال فور وصول session_ready (الإطار الأول نظيف، الثاني مُلوَّث) → لا
+        // تصل أي إجابة. فرض `compress:false` يضمن إطارات نظيفة دائماً.
+        clientWs.send(data, { binary: isBinary, compress: false });
       } catch (e) {
         console.warn(`[WS Proxy] #${cid} client send failed:`, e.message);
       }
@@ -223,7 +229,15 @@ app.prepare().then(() => {
   });
 
   // noServer mode — نملك توجيه الـ upgrade بأنفسنا.
-  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
+  // ISS-102 (D-WS-PROXY-003 — 2026-05-31): `perMessageDeflate: false` صريح.
+  // الـ proxy يُمرِّر إطاراتٍ مُفكَّكة من upstream (غير مضغوط)؛ تفعيل الضغط على
+  // الجانب المواجه للعميل يُنتج تلوّث RSV1. نُعطِّله صراحةً لضمان proxy نظيف
+  // بايتاً ببايت (لا تفاوض ضغط على أي طرف).
+  const wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: MAX_PAYLOAD,
+    perMessageDeflate: false,
+  });
 
   // ISS-101 (D-WS-RELOAD-001 — 2026-05-31): السبب الجذري لإعادة التركيب كل ~45s.
   //
@@ -239,26 +253,59 @@ app.prepare().then(() => {
   // الإصلاح: listener واحد للترقية يُوجِّه مسارات الدردشة إلى wss، ويُفوِّض كل ما
   // عداها (HMR) إلى معالج Next الرسمي getUpgradeHandler — فلا نكسر HMR ولا تحدث
   // إعادة التحميل الدورية. بلا مؤقّت دوري عدواني.
-  const nextUpgradeHandler =
+  let delegatedNextUpgrade =
     typeof app.getUpgradeHandler === "function" ? app.getUpgradeHandler() : null;
   console.log(
-    `[WS Proxy] Next upgrade delegation: ${nextUpgradeHandler ? "ENABLED (HMR preserved)" : "UNAVAILABLE"}`
+    `[WS Proxy] Next upgrade delegation: ${delegatedNextUpgrade ? "ENABLED (HMR preserved)" : "UNAVAILABLE"}`
   );
 
-  // أزِل أي listener أضافه Next تلقائياً أثناء prepare() — نُسجِّل واحداً يُوجِّه الكل.
+  // ISS-102 (D-WS-PROXY-004 — 2026-05-31): السبب الجذري الحقيقي لـ«لا يجيب».
+  //
+  // تشخيص حيّ على مستوى البايت أثبت أن Next 16 يُعيد تسجيل listener('upgrade')
+  // خاصاً به **بعد** `removeAllListeners` (lazily) → يصبح هناك listener-ان لكل
+  // ترقية WebSocket. كلاهما يُعالج /api/chat/ws: listener-نا يكتب الـ 101 الصحيح
+  // ويُمرِّر، و listener الخاص بـ Next يكتب 101 **ثانياً** (مع ترويسة date) على
+  // نفس socket العميل. فيستقبل العميل: [101] [session_ready] ثم [101 خام + إطار
+  // مُكرَّر] — يقرأ الـ«HTTP/1.1 101…» الخام كإطار WebSocket تالف (بايت 'H'=0x48
+  // → RSV1=1) فيُغلق فوراً بـ«RSV1 must be clear». الإطار الأول (session_ready)
+  // يصل سليماً، الثاني خام → لا تصل أي إجابة، والواجهة تُعيد الاتصال → «متصل/غير
+  // متصل». المسار المباشر :8000 سليم لأن لا وسيط Next فيه.
+  //
+  // الإصلاح: نملك listener('upgrade') **وحيداً**. نعترض أي محاولة من Next لتسجيل
+  // listener('upgrade') إضافي (on/addListener/prependListener) ونلتقطه كـ delegate
+  // لـ HMR بدل تركه يعمل بالتوازي. هكذا لا يحدث 101 مزدوج أبداً.
+  const _origAddListener = server.on.bind(server);
+  const _trapUpgrade = (event, listener) => {
+    if (event === "upgrade") {
+      // Next يحاول تسجيل معالج ترقية إضافياً — التقطه كـ delegate، لا تُسجّله موازياً.
+      delegatedNextUpgrade = listener;
+      return server;
+    }
+    return _origAddListener(event, listener);
+  };
+  server.on = _trapUpgrade;
+  server.addListener = _trapUpgrade;
+  server.prependListener = _trapUpgrade;
+
   server.removeAllListeners("upgrade");
-  server.on("upgrade", (req, socket, head) => {
+  _origAddListener("upgrade", (req, socket, head) => {
     const url = req.url || "";
     if (isWsProxyPath(url)) {
-      console.log("[WS Proxy] upgrade:", redact(url), "→", GATEWAY_WS_URL);
+      console.log(
+        "[WS Proxy] upgrade:",
+        redact(url),
+        "→",
+        GATEWAY_WS_URL,
+        `(listeners=${server.listenerCount("upgrade")})`
+      );
       wss.handleUpgrade(req, socket, head, (clientWs) => {
         proxyToGateway(clientWs, req);
       });
       return;
     }
     // ترقية داخلية لـ Next (HMR/Fast Refresh) — فوّضها بدل تدميرها (وإلا reload loop).
-    if (nextUpgradeHandler) {
-      nextUpgradeHandler(req, socket, head);
+    if (delegatedNextUpgrade) {
+      delegatedNextUpgrade(req, socket, head);
     } else {
       socket.destroy();
     }

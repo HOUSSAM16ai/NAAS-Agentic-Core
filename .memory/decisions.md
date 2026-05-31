@@ -1,5 +1,37 @@
 # Architectural Decisions
-> Last updated: 2026-05-28 | Branch: `claude/fix-ws-send-race-condition`
+> Last updated: 2026-05-31 | Branch: `claude/system-not-answering-questions-vBsDi`
+
+## D-WS-PROXY-004 · True Root Cause — Double WebSocket Handshake (2026-05-31, ISS-102)
+
+**Branch**: `claude/system-not-answering-questions-vBsDi`
+
+### القرار
+`frontend/server.js` يجب أن يكون المالك **الوحيد** لحدث `upgrade`. Next 16 يُعيد
+تسجيل listener('upgrade') خاصاً به lazily بعد `removeAllListeners` → listener-ان
+→ كلاهما يكتب handshake 101 على نفس socket العميل → الإطار الثاني يصل خاماً
+(نص HTTP) فيُقرأ كإطار RSV1 تالف → «RSV1 must be clear» → موت الاتصال بعد
+session_ready مباشرة → **لا تصل أي إجابة عبر :5000** (المسار المباشر :8000 سليم).
+
+### الإصلاح
+اعتراض كل `server.on/addListener/prependListener('upgrade')` لاحق والتقاطه كـ
+delegate لـ HMR بدل تسجيله موازياً؛ listener وحيد يُوجِّه مسارات الدردشة إلى
+`wss.handleUpgrade` ويُفوِّض الباقي (HMR) إلى الـ delegate. + hardening
+(D-WS-PROXY-003): `perMessageDeflate:false` + `compress:false` + مزامنة
+`package-lock.json` (كان `ws` مفقوداً → `npm ci` يفشل).
+
+### الإثبات الحي (byte-level، بالأسرار الحقيقية)
+قبل: proxy :5000 الإطار#2 = «TP/1.1 101…» خام → RSV1=1 → موت. بعد: `listeners=1`،
+كل إطارات :5000 نظيفة `0x81` RSV=0؛ `diagnose_chat.py` القسم F = direct 3/3 +
+proxy 3/3 OK؛ e2e سؤال رياضي 1515 delta/3565 حرف/53.9s؛ reconnect storm 10/10.
+بيئة: SQLite (Supabase محجوب) + OpenRouter حقيقي. التفاصيل في CLAUDE.md §6.77.
+
+### القواعد الدائمة
+1. listener('upgrade') وحيد إلزامي — اعتراض إعادة تسجيل Next.
+2. HMR عبر delegate لا listener موازٍ.
+3. proxy نظيف بايتاً ببايت (لا ضغط على الجانب المواجه للعميل).
+4. `package-lock.json` متزامن مع `package.json` (`ws` حاضر).
+
+---
 
 ## D-096 · WebSocket Send Concurrency Lock (2026-05-28)
 

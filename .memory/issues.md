@@ -1,5 +1,37 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-28 | Branch: `claude/fix-ws-send-race-condition`
+> Last updated: 2026-05-31 | Branch: `claude/system-not-answering-questions-vBsDi`
+
+---
+
+## ✅ Resolved 2026-05-31 (ISS-102 — System Not Answering: Double WebSocket Handshake via server.js)
+
+### ISS-102 (D-WS-PROXY-004) · «النظام لا يجيب عن الأسئلة» — السبب الجذري الحقيقي [RESOLVED]
+
+- **Status**: RESOLVED 2026-05-31 (live-verified بالأسرار الحقيقية)
+- **Severity**: 🔴 CRITICAL — لا تصل أي إجابة عبر مسار المتصفح (:5000)
+- **Environment**: GitHub Codespaces (مسار server.js proxy)؛ أُعيد إنتاجه حياً على SQLite + OpenRouter حقيقي.
+
+#### الجذر (مُثبت byte-level)
+Next 16 يُعيد تسجيل listener('upgrade') خاصاً به بعد `removeAllListeners` في
+`frontend/server.js` → listener-ان لكل ترقية WS → 101 مزدوج على socket العميل →
+الإطار الثاني خام («TP/1.1 101…») → RSV1=1 → «RSV1 must be clear» → موت بعد
+session_ready → لا إجابة. المسار المباشر :8000 سليم (لا وسيط Next). نجا من
+D-WS-PROXY-001/003 و D-WS-RELOAD-001 لأنها لم تلمس ازدواج الـ listener.
+
+#### الإصلاح
+اعتراض/التقاط أي listener('upgrade') إضافي كـ delegate لـ HMR؛ listener وحيد.
++ `perMessageDeflate:false` + `compress:false` + مزامنة `package-lock.json`.
+الملف: `frontend/server.js` (+ `frontend/package-lock.json`).
+
+#### الإثبات الحي بعد الإصلاح
+`listeners=1`؛ `diagnose_chat.py` F = direct 3/3 + proxy 3/3 OK؛ e2e سؤال رياضي
+1515 delta/3565 حرف/53.9s؛ reconnect storm 10/10؛ token 1440 دقيقة + /me 200×6
+(لا طرد). التفاصيل: CLAUDE.md §6.77، القرار D-WS-PROXY-004.
+
+#### ملاحظة
+الإدمن يصل عبر نفس الـ proxy بإطارات نظيفة؛ `no such table: admin_messages` أثرٌ
+خاص بـ SQLite الجديد فقط (موجود على Supabase — §6.30)، متطابق على :8000 و :5000
+فليس من الـ proxy.
 
 ---
 

@@ -7298,3 +7298,106 @@ npm --prefix frontend install   # يضمن وجود ws (موجود غالباً 
 | D-HEALTH-002 | Degraded≠Dead: لا إعادة تشغيل uvicorn على 503 بسبب DB |
 | **D-WS-PROXY-001** | **السبب الجذري: server.js http-proxy → ws-library + طابور (يحل التأرجح + لا إجابة نهائياً)** |
 
+---
+
+## 6.77 THE TRUE ROOT CAUSE — Double WebSocket Handshake (Next 16 re-attaches `upgrade` listener) (2026-05-31, ISS-102 / D-WS-PROXY-004)
+
+> **التجريب الحي الحقيقي بالأسرار** (OpenRouter + admin/user logins؛ Supabase
+> محجوب في الـ sandbox فاستُخدم SQLite degraded) كشف على **مستوى البايت** السبب
+> الجذري الذي نجا من كل إصلاحات D-WS-PROXY-001..003 و D-WS-RELOAD-001. هذا القسم
+> يحكم تمرير الـ WebSocket عبر server.js — لا يُكسر بدون ADR.
+
+### الإثبات الحي (byte-level)
+
+| المسار | النتيجة |
+|--------|---------|
+| **مباشر :8000** (لا وسيط) | كل الإطارات `0x81` (FIN=1, RSV=0) → session_ready → conversation_init → deltas → assistant_final. تحية 0.03s، سؤال رياضي **1947 delta / 4652 حرف عربي+LaTeX / 67.7s**. ✅ |
+| **عبر proxy :5000** قبل الإصلاح | الإطار #1 `session_ready` نظيف، ثم الإطار #2 = **بايتات HTTP خام** `"TP/1.1 101 Switching Protocols…sec-websocket-accept: …date: …{"user_id":2…}"` ← الـ 101 + session_ready مكتوبان **مرّة ثانية**؛ المُحلِّل يقرأ 'H'=0x48 → **RSV1=1** → «Invalid WebSocket frame: RSV1 must be clear» → إغلاق فوري بعد session_ready → **لا تصل أي إجابة**. ❌ |
+
+### السبب الجذري (مُثبت)
+
+`frontend/server.js` كان يُنفِّذ `server.removeAllListeners("upgrade")` ثم يُسجِّل
+listener-اً واحداً عند الإقلاع. لكن **Next 16 يُعيد تسجيل listener('upgrade') خاصاً
+به lazily بعد ذلك** → عند كل ترقية WebSocket يصبح هناك **listener-ان**
+(`server.listenerCount("upgrade") === 2` — مُثبت حياً). كلاهما يُعالج `/api/chat/ws`:
+listener-نا يكتب الـ 101 الصحيح ويُمرِّر؛ و listener الخاص بـ Next يكتب 101
+**ثانياً** (بترويسة `date:`) على نفس socket → العميل يستقبل `[101][session_ready]`
+ثم `[101 خام مُكرَّر]` → RSV1 → موت الاتصال. الإطار الأول سليم («يبدو متصلاً»)
+والثاني خام («لا يجيب») → reconnect → «متصل/غير متصل» → طرد لصفحة الدخول. المسار
+المباشر :8000 سليم لأن لا وسيط Next فيه.
+
+### لماذا نجا من كل الإصلاحات السابقة
+
+D-WS-PROXY-001 (http-proxy→ws-lib) و D-WS-RELOAD-001 (HMR) و D-WS-PROXY-003
+(compress/deflate) صحيحة لكنها لم تلمس **ازدواج listener الترقية**. الـ «replica
+أمين» في §6.76 نجح لأنه لم يكن خلف خادم Next المخصّص (لا listener ثانٍ). لذا بدا
+الكود صحيحاً والكارثة استمرّت — حتى أثبت التشخيص على مستوى البايت الـ 101 المزدوج.
+
+### الإصلاح (D-WS-PROXY-004 — أصغر إصلاح صحيح)
+
+`frontend/server.js`: نملك listener('upgrade') **وحيداً**، ونعترض أي تسجيل لاحق
+لـ listener('upgrade') من Next ونلتقطه كـ **delegate** لـ HMR بدل تركه يعمل
+بالتوازي:
+```js
+const _origAddListener = server.on.bind(server);
+const _trapUpgrade = (event, listener) => {
+  if (event === "upgrade") { delegatedNextUpgrade = listener; return server; } // التقاط لا تسجيل موازٍ
+  return _origAddListener(event, listener);
+};
+server.on = server.addListener = server.prependListener = _trapUpgrade;
+server.removeAllListeners("upgrade");
+_origAddListener("upgrade", (req, socket, head) => {
+  if (isWsProxyPath(req.url)) { wss.handleUpgrade(req, socket, head, cw => proxyToGateway(cw, req)); return; }
+  if (delegatedNextUpgrade) delegatedNextUpgrade(req, socket, head); else socket.destroy(); // HMR محفوظ
+});
+```
+hardening ثانوي (D-WS-PROXY-003): `perMessageDeflate:false` صريح على الـ
+WebSocketServer + `compress:false` على كل `clientWs.send` → proxy نظيف بايتاً
+ببايت. + إصلاح `package-lock.json` (كان `ws` مفقوداً منه → `npm ci` يفشل).
+
+### الإثبات بعد الإصلاح (حي)
+
+- `listeners=1` (كان 2). كل إطارات proxy :5000 نظيفة `0x81` RSV=0.
+- `diagnose_chat.py` القسم F: **`[direct:8000] 3/3 OK answered` + `[proxy:5000] 3/3 OK answered`** (كان proxy «NO ANSWER close=1006/1002»).
+- e2e عبر :5000: تحية ✅ + سؤال رياضي **1515 delta / 3565 حرف / 53.9s** ✅.
+- reconnect storm **10/10 OK**. /health 200×8. login + token 1440 دقيقة + /me 200×6 (لا طرد).
+
+### القواعد الـ 4 الدائمة (D-WS-PROXY-004 — لا تُكسر بدون ADR)
+
+1. **listener('upgrade') وحيد إلزامي**: server.js يجب أن يكون المالك الوحيد لحدث
+   `upgrade`. `removeAllListeners` عند الإقلاع **لا يكفي** — Next يُعيد التسجيل
+   lazily. يجب اعتراض كل `on/addListener/prependListener('upgrade')` لاحق
+   والتقاطه كـ delegate.
+2. **HMR عبر delegate لا listener موازٍ**: ترقيات Next الداخلية تُفوَّض إلى الـ
+   delegate المُلتقَط من داخل listener-نا الوحيد — فلا 101 مزدوج ولا reload loop.
+3. **proxy نظيف بايتاً ببايت**: `perMessageDeflate:false` + `compress:false` —
+   لا تفاوض ضغط على الجانب المواجه للعميل (الإطارات تصل مُفكَّكة من upstream).
+4. **`package-lock.json` متزامن**: `ws` يجب أن يكون في الـ lock وإلا `npm ci`
+   (CI/prebuild) يفشل → frontend بلا `ws` → server.js يسقط.
+
+### قياس النجاح حياً
+
+```bash
+DIAG_EMAIL=<user> DIAG_PASSWORD=<pwd> python scripts/diagnose_chat.py
+# القسم F: [proxy:5000] OK answered (لا NO ANSWER / لا 1006 / لا 1002)
+# سجل server.js: [WS Proxy] upgrade: … (listeners=1)
+```
+
+### ملاحظة بيئية صادقة + المسار الإداري
+
+التجريب جرى على SQLite (Supabase محجوب — منافذ 6543/5432). مسار **العميل/الطالب**
+(الشكوى الأساسية «لا يجيب») مُثبَت ومُصلَح حياً بـ OpenRouter حقيقي. مسار **الإدمن**
+يصل عبر نفس الـ proxy بإطارات نظيفة، لكن حفظ الرسالة فشل بـ
+`no such table: admin_messages` — أثرٌ خاص بـ SQLite الجديد فقط (الجدول موجود على
+Supabase الإنتاجي — §6.30)؛ يظهر متطابقاً على :8000 و :5000 فهو **ليس** من الـ
+proxy. التحقق الكامل بالمتصفح + Supabase يجري في Codespace الحيّ.
+
+### السلسلة الكاملة (D-WS-PROXY-001 → D-WS-PROXY-004)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-PROXY-001 | server.js http-proxy → ws-library + طابور للرسائل المبكرة |
+| D-WS-RELOAD-001 | عدم تدمير ترقيات Next HMR (reload loop) |
+| D-WS-PROXY-003 | proxy نظيف: perMessageDeflate:false + compress:false + lock sync |
+| **D-WS-PROXY-004** | **السبب الجذري الحقيقي: منع ازدواج listener('upgrade') → لا 101 مزدوج → الإجابات تصل عبر :5000** |
+

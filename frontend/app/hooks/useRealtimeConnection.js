@@ -386,6 +386,8 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
               revalidateAbortRef.current = null;
             }
             setState(wasReconnect ? "recovered" : "connected");
+            // ISS-101 (D-WS-KICK-DIAG): breadcrumb — اتصال ناجح (مع/بدون reconnect).
+            clientLog("ws_open", { was_reconnect: wasReconnect });
 
             // بعد recovery → انتقل إلى connected بعد لحظة قصيرة للـ UI feedback
             if (wasReconnect) {
@@ -596,6 +598,15 @@ export function useRealtimeConnection(wsUrl, token, eventNamespace = "default") 
             wasClean: e.wasClean,
             session_ms: sessionMs,
             was_stable: wasStable,
+          });
+          // ISS-101 (D-WS-KICK-DIAG): breadcrumb — يُسجِّل كل إغلاق (كوده + المدة)
+          // ليُظهر السجل التسلسل الكامل (connect → close → reconnect) المؤدّي للطرد،
+          // لا الحدث الأخير فقط. حاسم لتشخيص الطرد على الجوال بلا devtools.
+          clientLog("ws_close", {
+            code: e.code,
+            reason: String(e.reason || "").slice(0, 60),
+            session_ms: sessionMs,
+            attempt: retries.current,
           });
 
           // D-WS-AUTH-001 (2026-05-26) → D-WS-KICK-001 (ISS-097): 4401/4403

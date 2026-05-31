@@ -39,6 +39,7 @@ class SchemaValidationResult(TypedDict):
 _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
     {
         "admin_conversations",
+        "admin_messages",
         "audit_log",
         "customer_conversations",
         "customer_messages",
@@ -183,6 +184,34 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,'
             "\"conversation_type\" VARCHAR(50) DEFAULT 'general',"
             '"linked_mission_id" INTEGER,'
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            ")"
+        ),
+    },
+    # D-WS-PROXY-004 follow-up (ISS-102, 2026-05-31): admin_messages كان مفقوداً
+    # من REQUIRED_SCHEMA و _ALLOWED_TABLES → على أي قاعدة بيانات جديدة (SQLite أو
+    # Supabase نظيف) كانت دردشة الإدمن تفشل بـ "no such table: admin_messages"
+    # عند حفظ رسالة المستخدم. مرآة customer_messages لكن بـ FK إلى
+    # admin_conversations وبلا policy_flags (مطابقة ORM app/core/domain/chat.py).
+    "admin_messages": {
+        "columns": [
+            "id",
+            "conversation_id",
+            "role",
+            "content",
+            "created_at",
+        ],
+        "auto_fix": {},
+        "indexes": {
+            "conversation_id": 'CREATE INDEX IF NOT EXISTS "ix_admin_messages_conversation_id" ON "admin_messages"("conversation_id")'
+        },
+        "index_names": {"conversation_id": "ix_admin_messages_conversation_id"},
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "admin_messages"('
+            '"id" SERIAL PRIMARY KEY,'
+            '"conversation_id" INTEGER NOT NULL REFERENCES "admin_conversations"("id") ON DELETE CASCADE,'
+            '"role" VARCHAR(50) NOT NULL,'
+            '"content" TEXT NOT NULL,'
             '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
             ")"
         ),

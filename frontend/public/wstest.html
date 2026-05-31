@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WS Diagnostic — ISS-101</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background:#0a0a0a; color:#eee; margin:0; padding:16px; }
+  h1 { font-size:18px; margin:0 0 12px; }
+  .card { background:#141414; border:1px solid #222; border-radius:10px; padding:14px; margin-bottom:14px; }
+  .label { font-size:13px; color:#9aa; word-break:break-all; }
+  .res { font-size:15px; font-weight:700; margin-top:8px; }
+  .pass { color:#2ecc71; } .fail { color:#ff5252; } .pending { color:#f1c40f; }
+  pre { background:#0d0d0d; border:1px solid #1c1c1c; border-radius:8px; padding:8px; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:150px; overflow:auto; }
+  button { background:#2563eb; color:#fff; border:0; border-radius:8px; padding:12px 16px; font-size:15px; font-weight:700; width:100%; margin-top:8px; }
+  .muted { color:#778; font-size:12px; }
+</style>
+</head>
+<body>
+<h1>🔬 تشخيص WebSocket (ISS-101)</h1>
+<div class="muted" id="env"></div>
+
+<div class="card">
+  <div class="label">المسار A — عبر server.js (المنفذ 5000):</div>
+  <div class="label" id="urlA"></div>
+  <div class="res pending" id="resA">في الانتظار…</div>
+  <pre id="logA"></pre>
+</div>
+
+<div class="card">
+  <div class="label">المسار B — الـ backend مباشرة (المنفذ 8000):</div>
+  <div class="label" id="urlB"></div>
+  <div class="res pending" id="resB">في الانتظار…</div>
+  <pre id="logB"></pre>
+</div>
+
+<button onclick="runAll()">▶️ إعادة الاختبار</button>
+<div class="muted" style="margin-top:10px">
+  يقرأ الـ token من localStorage (سجّل دخولك في التطبيق أولاً في نفس المتصفح).
+</div>
+
+<script>
+function getToken() {
+  return localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+}
+function wsBase5000() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return proto + '//' + location.host; // same host (server.js on 5000)
+}
+function wsBase8000() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Codespaces host: <name>-5000.app.github.dev  →  <name>-8000.app.github.dev
+  const host = location.host.replace(/-5000\./, '-8000.');
+  return proto + '//' + host;
+}
+
+function test(base, resEl, logEl, urlEl) {
+  return new Promise((resolve) => {
+    const token = getToken();
+    const url = base + '/api/chat/ws?token=' + encodeURIComponent(token) + '&cb=WSTEST';
+    urlEl.textContent = url.replace(/token=[^&]+/, 'token=[REDACTED]');
+    const log = [];
+    const t0 = Date.now();
+    const push = (s) => { log.push('[' + (Date.now()-t0) + 'ms] ' + s); logEl.textContent = log.join('\n'); };
+    let ws, done = false, gotSessionReady = false, gotAnswer = false, answerText = '';
+    function finish(ok, msg) {
+      if (done) return; done = true;
+      resEl.textContent = msg;
+      resEl.className = 'res ' + (ok ? 'pass' : 'fail');
+      try { ws && ws.close(); } catch(e){}
+      resolve();
+    }
+    if (!token) { finish(false, '❌ لا يوجد token — سجّل الدخول أولاً'); return; }
+    try { ws = new WebSocket(url); } catch (e) { finish(false, '❌ فشل الإنشاء: ' + e.message); return; }
+    const timer = setTimeout(() => finish(gotAnswer, gotAnswer ? '✅ نجح (مهلة)' : (gotSessionReady ? '⚠️ اتصل لكن بلا إجابة' : '❌ مهلة 25s بلا اتصال')), 25000);
+    ws.onopen = () => { push('OPEN ✅ — أرسل سؤالاً'); ws.send(JSON.stringify({ question: 'السلام عليكم' })); };
+    ws.onmessage = (e) => {
+      let d = e.data; push('msg: ' + String(d).slice(0, 90));
+      try {
+        const o = JSON.parse(d); const ty = o.type; const p = o.payload || o;
+        if (ty === 'session_ready') gotSessionReady = true;
+        if (ty === 'assistant_delta') { gotAnswer = true; answerText += (p.content || ''); }
+        if (ty === 'assistant_final' || ty === 'complete') { clearTimeout(timer); finish(true, '✅ نجح — وصلت الإجابة: ' + answerText.slice(0,40)); }
+      } catch(_e){}
+    };
+    ws.onclose = (e) => {
+      push('CLOSE code=' + e.code + ' reason="' + (e.reason||'') + '" clean=' + e.wasClean);
+      clearTimeout(timer);
+      if (gotAnswer) finish(true, '✅ نجح — وصلت إجابة');
+      else finish(false, '❌ أُغلق code=' + e.code + (e.reason ? ' ("' + e.reason + '")' : '') + (gotSessionReady ? ' بعد session_ready' : ' فوراً'));
+    };
+    ws.onerror = () => push('ERROR (transport)');
+  });
+}
+
+async function runAll() {
+  document.getElementById('env').textContent = 'host=' + location.host + ' | token=' + (getToken() ? 'موجود ('+getToken().length+' حرف)' : 'مفقود');
+  ['resA','resB'].forEach(id => { document.getElementById(id).textContent='جارٍ…'; document.getElementById(id).className='res pending'; });
+  ['logA','logB'].forEach(id => document.getElementById(id).textContent='');
+  await test(wsBase5000(), resA, logA, urlA);
+  await test(wsBase8000(), resB, logB, urlB);
+}
+window.addEventListener('load', runAll);
+</script>
+</body>
+</html>

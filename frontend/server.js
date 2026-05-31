@@ -225,44 +225,48 @@ app.prepare().then(() => {
   // noServer mode — نملك توجيه الـ upgrade بأنفسنا.
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
 
-  // ISS-101: تشخيص — كم listener لـ 'upgrade' موجود قبل إضافة handler الخاص بنا؟
-  // إن كان > 0 فهناك طرف آخر (Next/HMR) يتنافس على نفس الـ upgrade → قد يدمّر
-  // الـ socket بعد مصافحتنا (سبب 1006). نُزيل أي listeners ونجعل handler الخاص
-  // بنا هو الوحيد (HMR في dev قد يتعطّل — مقبول لاستقرار الدردشة).
-  const preCount = server.listenerCount("upgrade");
-  console.log(`[WS Proxy] upgrade listeners before ours: ${preCount}`);
-  if (preCount > 0) {
-    server.removeAllListeners("upgrade");
-    console.log(`[WS Proxy] removed ${preCount} pre-existing upgrade listener(s) — ours is now sole`);
-  }
+  // ISS-101 (D-WS-RELOAD-001 — 2026-05-31): السبب الجذري لإعادة التركيب كل ~45s.
+  //
+  // الكود القديم كان يُزيل كل listeners الترقية دورياً (كل 3 ثوانٍ) ويُدمّر
+  // (socket.destroy) كل ترقية غير مسارات الدردشة — بما فيها /_next/webpack-hmr
+  // (قناة Fast Refresh في dev). النتيجة: عميل Next يفقد HMR باستمرار → يُعيد
+  // تحميل الصفحة كاملةً دورياً (~45 ثانية) → useRealtimeConnection يُعاد تركيبه:
+  // ws_open جديد was_reconnect=false، لا ws_close (unmount يتجاهله)،
+  // conversationId يُمسح → "محادثة جديدة" + "متصل/غير متصل". هذا ما أثبته سجل
+  // [CLIENT-LOG]: أربع مرات ws_open was_reconnect=false بلا أي close/logout
+  // (ISS-101 forensic, 2026-05-31).
+  //
+  // الإصلاح: listener واحد للترقية يُوجِّه مسارات الدردشة إلى wss، ويُفوِّض كل ما
+  // عداها (HMR) إلى معالج Next الرسمي getUpgradeHandler — فلا نكسر HMR ولا تحدث
+  // إعادة التحميل الدورية. بلا مؤقّت دوري عدواني.
+  const nextUpgradeHandler =
+    typeof app.getUpgradeHandler === "function" ? app.getUpgradeHandler() : null;
+  console.log(
+    `[WS Proxy] Next upgrade delegation: ${nextUpgradeHandler ? "ENABLED (HMR preserved)" : "UNAVAILABLE"}`
+  );
 
-  const upgradeHandler = (req, socket, head) => {
+  // أزِل أي listener أضافه Next تلقائياً أثناء prepare() — نُسجِّل واحداً يُوجِّه الكل.
+  server.removeAllListeners("upgrade");
+  server.on("upgrade", (req, socket, head) => {
     const url = req.url || "";
-    if (!isWsProxyPath(url)) {
-      // مسارات Next الداخلية (HMR) وغيرها — لا نتدخّل فيها.
-      socket.destroy();
+    if (isWsProxyPath(url)) {
+      console.log("[WS Proxy] upgrade:", redact(url), "→", GATEWAY_WS_URL);
+      wss.handleUpgrade(req, socket, head, (clientWs) => {
+        proxyToGateway(clientWs, req);
+      });
       return;
     }
-    console.log("[WS Proxy] upgrade:", redact(url), "→", GATEWAY_WS_URL);
-    wss.handleUpgrade(req, socket, head, (clientWs) => {
-      proxyToGateway(clientWs, req);
-    });
-  };
-  server.on("upgrade", upgradeHandler);
-  // أعد تثبيت handler الخاص بنا دورياً إن أضاف Next listener لاحقاً (lazy).
-  const upgradeGuard = setInterval(() => {
-    const handlers = server.listeners("upgrade");
-    if (handlers.length !== 1 || handlers[0] !== upgradeHandler) {
-      console.log(`[WS Proxy] upgrade listeners drifted to ${handlers.length} — reasserting ours`);
-      server.removeAllListeners("upgrade");
-      server.on("upgrade", upgradeHandler);
+    // ترقية داخلية لـ Next (HMR/Fast Refresh) — فوّضها بدل تدميرها (وإلا reload loop).
+    if (nextUpgradeHandler) {
+      nextUpgradeHandler(req, socket, head);
+    } else {
+      socket.destroy();
     }
-  }, 3000);
-  if (typeof upgradeGuard.unref === "function") upgradeGuard.unref();
+  });
 
   server.listen(port, hostname, () => {
     console.log(`[Server] Ready on http://${hostname}:${port}`);
-    console.log("[Server] WS-PROXY ISS-101 ws-lib v2 ACTIVE (instrumented)");
+    console.log("[Server] WS-PROXY D-WS-RELOAD-001 ACTIVE (HMR-delegated, no reload loop)");
     console.log(`[Server] WS proxy (ws-lib): /api/chat/ws → ${GATEWAY_WS_URL}/api/chat/ws`);
     console.log(`[Server] Gateway: ${GATEWAY_URL}`);
   });

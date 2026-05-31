@@ -181,3 +181,53 @@ def test_supervisor_reinstalls_on_package_change() -> None:
         "D-WS-PROXY-001: supervisor.sh must reinstall when package.json is newer than "
         "node_modules (e.g. after git pull adds `ws`)."
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# D-WS-RELOAD-001 (ISS-101 — 2026-05-31): the ~45s remount/reload loop.
+#
+# Forensic [CLIENT-LOG] from the user's Codespace showed 4× `ws_open`
+# was_reconnect=false ~every 45s with NO ws_close, NO logout. Root cause:
+# server.js destroyed every non-chat WebSocket upgrade — including
+# /_next/webpack-hmr — and an aggressive setInterval re-asserted that its
+# handler was the sole 'upgrade' listener every 3s. Next's dev (Fast Refresh)
+# client, perpetually unable to keep its HMR socket, full-reloaded the page on
+# a backoff (~45s) → useRealtimeConnection remounted → conversationId wiped
+# ("new conversation") + connect/disconnect churn.
+#
+# Fix: delegate non-chat upgrades to Next's getUpgradeHandler (HMR preserved);
+# remove the aggressive setInterval guard.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_server_js_delegates_hmr_upgrades_to_next() -> None:
+    """server.js must NOT destroy non-chat upgrades (it would kill /_next/webpack-hmr
+    → Next dev client reload loop). It must delegate them to Next's getUpgradeHandler."""
+    src = _read(SERVER)
+    assert "getUpgradeHandler" in src, (
+        "D-WS-RELOAD-001: server.js must obtain app.getUpgradeHandler() and delegate "
+        "non-chat (HMR) upgrades to it — destroying them causes a periodic full-page "
+        "reload that remounts the WS hook (conversation reset + connect/disconnect churn)."
+    )
+
+
+def test_server_js_has_no_aggressive_upgrade_guard() -> None:
+    """The 3s setInterval that removed every non-own 'upgrade' listener guaranteed HMR
+    could never work. It must be gone."""
+    src = _read(SERVER)
+    assert "upgradeGuard" not in src and "setInterval" not in src, (
+        "D-WS-RELOAD-001: the periodic setInterval upgrade guard must be removed — it "
+        "permanently disabled Next HMR and caused the ~45s reload/remount loop."
+    )
+
+
+def test_server_js_does_not_blanket_destroy_non_chat_upgrades() -> None:
+    """A bare `socket.destroy()` for all non-chat upgrades is the regression. Destroy is
+    only allowed as a fallback when getUpgradeHandler is unavailable."""
+    src = _read(SERVER)
+    # The only socket.destroy must sit inside the `if (nextUpgradeHandler) {...} else {`
+    # fallback — never as the unconditional non-chat branch.
+    assert src.count("socket.destroy()") <= 1, (
+        "D-WS-RELOAD-001: server.js must not unconditionally destroy non-chat upgrades; "
+        "delegate to Next instead (single destroy allowed only as the no-handler fallback)."
+    )

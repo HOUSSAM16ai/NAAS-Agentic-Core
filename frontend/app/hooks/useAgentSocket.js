@@ -301,11 +301,32 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
             } else if (type === 'error') {
                 activeRequestIdRef.current = null;
                 const details = payload?.details || 'Unknown error';
+                // ISS-104 (D-WS-FINAL-001 — 2026-06-01): إطار الفشل يجب ألا يترك
+                // الواجهة معلَّقة أبداً (ISS-016/ISS-017). نُنهي الرسالة الجارية
+                // (نحتفظ بالمحتوى المبثوث، نرفع isComplete:true → يفك زر الإرسال
+                // ويُعاد تصيير الرسالة عبر KaTeX)، ونعلِّمها isError:true. يطابق نمط
+                // معالج `complete`. بدون هذا: السهم يدور أبداً + LaTeX خام دائم.
+                setMessages(prev => {
+                    const last = prev[prev.length - 1];
+                    if (last && last.role === 'assistant' && !last.isComplete) {
+                        return [...prev.slice(0, -1), { ...last, isComplete: true, isError: true }];
+                    }
+                    return prev;
+                });
                 notifyAgentError(String(details));
                 refreshConversationHistory();
             } else if (type === 'assistant_error') {
                 activeRequestIdRef.current = null;
                 const content = payload?.content || 'Unknown assistant error';
+                // ISS-104 (D-WS-FINAL-001): finalize any in-progress streaming bubble
+                // so the send button unlocks and the streamed content renders via KaTeX.
+                setMessages(prev => {
+                    const last = prev[prev.length - 1];
+                    if (last && last.role === 'assistant' && !last.isComplete) {
+                        return [...prev.slice(0, -1), { ...last, isComplete: true, isError: true }];
+                    }
+                    return prev;
+                });
                 notifyAgentError(String(content));
                 refreshConversationHistory();
             }

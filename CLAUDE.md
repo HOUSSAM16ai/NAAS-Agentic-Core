@@ -7587,3 +7587,80 @@ sandbox) بالأسرار الحقيقية + الدخولين (`houssamannaba963
 | D-WS-CONN-002 | دور الإدمن من `roles` ضمن الـ JWT |
 | **D-WS-FINAL-001** | **كل إطار نهائي يُنهي الرسالة — `error`/`assistant_error` لا يتركان الواجهة معلَّقة (يحل تعليق سهم البحث + LaTeX الخام)** |
 
+---
+
+## 6.80 Orphaned Streaming Message — Mid-Conversation Blue Cursor + Endless Spinner (2026-06-01, ISS-105 / D-WS-ORPHAN-001)
+
+> **بلاغ المستخدم (شاشات حية):** المؤشّر الأزرق النابض يبقى ينبض في *منتصف* النصوص
+> (لا في آخرها) + سهم الإرسال يدور **بدون توقف إطلاقاً** + الرموز الرياضية تظهر خاماً
+> «بشكل كارثي خطير مدمر» و**تختفي بمجرد الدخول والخروج فقط**.
+
+### الجذر (سبب واحد لثلاثة أعراض — مؤكَّد بلقطة ما-بعد-إعادة-التحميل)
+
+حدث `ui_component` (مثل **BKT** المُبثّ بالتوازي كـ `asyncio.create_task`، أو
+`math_explanation_card` / `full_exercise_story`) قد يصل في **منتصف** بثّ النص — بين
+delta و delta. معالج `ui_component` في `useAgentSocket.js` كان يُلحِق فقاعة مكوّن
+جديدة (`isComplete:true`) **دون إنهاء** فقاعة النص الجارية قبله:
+
+```
+assistant_delta (نص التمرين) → Message A {isComplete:false}
+ui_component (BKT)            → Message B {isComplete:true}   ← A تُركت يتيمة
+assistant_delta (الإجابة)    → Message C {isComplete:false}  (B مكتملة → فقاعة جديدة)
+assistant_final              → يُنهي C فقط (الأخيرة). A تبقى isComplete:false للأبد.
+```
+
+`Message A` اليتيمة تُسبّب الأعراض الثلاثة:
+- `ChatInterface.jsx:387` `hasStreamingMessage = messages.some(!isComplete)` → true → سهم الإرسال يدور أبداً (`fa-circle-notch fa-spin`).
+- `ChatInterface.jsx:270` الفقاعة اليتيمة `isStreaming` → مؤشّر أزرق نابض عالق في *منتصف* المحادثة (`streaming-cursor`).
+- `ChatInterface.jsx:206` فرع `streaming-raw` → LaTeX خام. عند إعادة التحميل، `setMessagesSafe` (D-068) يفرض `isComplete:true` على كل الرسائل → KaTeX يُصيَّر → «تختفي بمجرد الدخول والخروج».
+
+### الإصلاح (D-WS-ORPHAN-001 — 3 طبقات)
+
+**Part 1 (الجذر):** معالج `ui_component` يستدعي `finalizeStaleAssistantMessages(prev)`
+**قبل** إلحاق فقاعة المكوّن — فلا تُترك أي فقاعة نص يتيمة.
+
+**Part 2 (دفاع عميق):** المعالجات النهائية كلها (`complete` / `assistant_final` /
+`error` / `assistant_error`) تكنس الآن **كل** رسالة مساعد عالقة (لا الأخيرة فقط) عبر
+`finalizeStaleAssistantMessages`. آمن لأن الأدوار متسلسلة (`activeRequestIdRef` + فلتر
+request_id): بوصول أي إطار نهائي كل الرسائل الجارية تنتمي للدور الحالي. `error`/`assistant_error`
+يضعان `isError` على فقاعة الدور الأخيرة فقط؛ الكنس يُنهي اليتامى السابقين **دون** `isError`.
+
+**Part 3 (LaTeX في مكوّنات Generative UI):** بطاقات `MathExplanationCard` (الشارات
+البنفسجية المرقّمة + صندوق «تلميح») و`FullExerciseStory` كانت تُصيّر حقولها النصية
+(`step.content` / `intuition` / `hint` / `pedagogical_message`) كـ `{text}` خام بلا
+أي معالجة LaTeX → رموز خام داخل البطاقة أثناء البثّ الحي. الحل: استُخرجت `preprocessMath`
+إلى وحدة مشتركة `app/utils/preprocessMath.js`، وأُنشئ مكوّن `<MathText>` (يمرّ النص عبر
+`preprocessMath` → ReactMarkdown + remark-math + rehype-katex، مع fast-path للنص العادي)،
+وطُبِّق على الحقول الرياضية في `MathExplanationCard` و`FullExerciseStory`.
+
+### القواعد الـ 5 الدائمة (D-WS-ORPHAN-001 — لا تُكسر بدون ADR)
+
+1. **`ui_component` لا يُترك يتيماً ما قبله أبداً**: أي معالج يُلحِق فقاعة مساعد جديدة
+   أثناء البثّ يجب أن يستدعي `finalizeStaleAssistantMessages(prev)` أولاً.
+2. **الكنس عند كل إطار نهائي**: `complete`/`assistant_final`/`error`/`assistant_error`
+   تُنهي **كل** رسالة مساعد عالقة، لا الأخيرة فقط.
+3. **`isError` للدور الحالي فقط**: الكنس يرفع `isComplete:true` ولا يلمس `isError` —
+   فلا تُوسَم اليتامى السابقون خطأً كأخطاء.
+4. **`preprocessMath` مصدر حقيقة واحد**: يعيش في `app/utils/preprocessMath.js` ويُعاد
+   استخدامه عبر `<MathText>` و`ChatInterface`. ممنوع إعادة تعريفه محلياً.
+5. **مكوّنات Generative UI تُصيّر الرياضيات عبر `<MathText>`**: أي حقل نصّي قد يحوي
+   LaTeX داخل مكوّن توليدي يمرّ عبر `<MathText>` لا `{text}` خام.
+
+### قياس النجاح حياً
+```bash
+node frontend/tests/iss105_orphaned_streaming_message.test.mjs   # 9 ضمانات + 8 سيناريو
+# المتوقع حياً: اطلب «اعطني تمرين دوال 2016» → لا مؤشّر أزرق في المنتصف، السهم يعود،
+# KaTeX يُصيَّر فوراً (دون الحاجة لإعادة التحميل)، والبطاقات لا تُظهر رموزاً خام.
+```
+
+### ملاحظة بيئية
+الـ sandbox بلا `node_modules` (يحجب التثبيت) فتعذّر `next build`؛ تُحقّق بنية الإصلاح
+عبر اختبارات node أمينة (تُعيد إنتاج البق ثم تُثبت الحل) + توازن JSX. التحقق الكامل
+بالمتصفح + Supabase يجري في Codespace/CI الحيّ.
+
+### السلسلة الكاملة (D-WS-FINAL-001 → D-WS-ORPHAN-001)
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-FINAL-001 | كل إطار نهائي يُنهي الرسالة (error/assistant_error) |
+| **D-WS-ORPHAN-001** | **يتيم البثّ: ui_component في المنتصف + كنس نهائي + MathText للمكوّنات (يحل المؤشّر الأزرق في المنتصف + السهم اللانهائي + LaTeX الخام)** |
+

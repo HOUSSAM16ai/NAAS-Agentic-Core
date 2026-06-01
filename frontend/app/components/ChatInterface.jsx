@@ -3,49 +3,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { GenerativeUIRenderer } from './generative/GenerativeUIRenderer';
+import { preprocessMath } from '../utils/preprocessMath';
 
-// ─── معالجة رموز LaTeX قبل التصيير ───────────────────────────────────────────
-// ISS-057 (D-051): قاعدة المعرفة الرسمية تستخدم \\(...\\) و \\[...\\]
-//   (شرطتان مائلتان خلفيتان) لإحاطة الرياضيات المضمَّنة. هذا اصطلاح ملف
-//   knowledge_base/ التاريخي (192 موضعاً في bac2016 وحده).
-//
-// ISS-060 (D-054): قاعدة المعرفة تستخدم أيضاً `\\command` (مثل `\\lambda`,
-//   `\\int`, `\\displaystyle`) داخل الرياضيات. KaTeX يفسِّر `\\` كـ newline
-//   (\newline) ويرى `lambda` كنص حر فيرسم الحروف منفصلة `l a m b d a`.
-//   لذا نُطبِّع `\\command` → `\command` بعد تطبيع الحدود.
-//
-//   قبل الإصلاح: `/\\\(([^]*?)\\\)/g` يطابق `\(` (واحد) فقط فيُبقي شرطة
-//   فائضة → markdown يراها `\$` = دولار مُهرَّب → KaTeX لا يرسم → نص خام
-//   مرئي للطالب (`$g$`, `$\mathbb{R}$`).
-//
-//   بعد الإصلاح: نُطبِّع أولاً `\\\\(` → `\\(`، ثم نحوِّل `\(...\)` → `$...$`.
-//   نفعل نفس الشيء لـ `\\[...\\]` → `$$...$$` (display).
-//   يدعم: \(g\) | \\(g\\) | \[...\] | \\[...\\] | $...$ | $$...$$
-const preprocessMath = (content) => {
-    if (!content) return '';
-    let processed = content;
-
-    // 1) قبل أي تحويل: استبدل كل `\\(...\\)` بـ `\(...\)` و `\\[...\\]` بـ `\[...\]`
-    //    هذا يُطبِّع الـ double-backslash إلى single قبل أن نشتغل عليها.
-    //    نستخدم regex بحذر لتجنب اللمس بـ `\\` خارج delimiters الرياضية.
-    processed = processed.replace(/\\\\\(/g, '\\(');
-    processed = processed.replace(/\\\\\)/g, '\\)');
-    processed = processed.replace(/\\\\\[/g, '\\[');
-    processed = processed.replace(/\\\\\]/g, '\\]');
-
-    // 2) (ISS-060) طبِّع `\\command` → `\command` لكل أوامر LaTeX داخل الرياضيات.
-    //    knowledge_base يستخدم double-backslash لكل شيء (`\\lambda`, `\\int`,
-    //    `\\displaystyle`, `\\to`, `\\infty`, `\\,`, `\\mathbb{R}`).
-    //    KaTeX يفسِّر `\\` كـ `\newline` ويرى `lambda` كنص فيرسم `l a m b d a`.
-    //    الـ regex يطابق `\\` متبوعاً بحرف لاتيني (واحد أو أكثر) أو punctuation
-    //    LaTeX خاصة (`,;!{}`). لا يلمس `\\\\` (4 backslashes = newline حقيقي).
-    processed = processed.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
-
-    // 3) حوِّل `\[...\]` → `$$...$$` (display) و `\(...\)` → `$...$` (inline)
-    processed = processed.replace(/\\\[([^]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
-    processed = processed.replace(/\\\(([^]*?)\\\)/g, (_, inner) => `$${inner}$`);
-    return processed;
-};
+// ملاحظة (ISS-105 / D-WS-ORPHAN-001): `preprocessMath` انتقلت إلى وحدة مشتركة
+// `app/utils/preprocessMath.js` لإعادة استخدامها في مكوّنات Generative UI عبر
+// <MathText>. السلوك هنا بلا تغيير — نستوردها فقط.
 
 // ─── ISS-056/057 (D-049/D-051): LaTeX-Aware Typewriter ─────────────────────
 // المشكلة: WebSocket frames تصل في رشقات (machine-gun). حتى مع rAF batching،

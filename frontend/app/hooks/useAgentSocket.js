@@ -89,6 +89,34 @@ const mergeAssistantContent = (existingContent, incomingContent) => {
     return `${current}${incoming}`;
 };
 
+/**
+ * ISS-105 (D-WS-ORPHAN-001 — 2026-06-01): إنهاء أي رسالة مساعد عالقة في حالة البثّ.
+ *
+ * السبب الجذري: حدث `ui_component` (مثل BKT المُبثّ بالتوازي كـ background task، أو
+ * `full_exercise_story`) قد يصل في منتصف بثّ النص — بين delta و delta. معالج
+ * `ui_component` كان يُلحِق فقاعة مكوّن جديدة (isComplete:true) دون إنهاء فقاعة
+ * النص الجارية قبله، فتبقى تلك الفقاعة يتيمة بـ isComplete:false للأبد →
+ *   • `hasStreamingMessage` يبقى true → زر الإرسال يدور أبداً (fa-spin).
+ *   • الفقاعة اليتيمة تبقى isStreaming → مؤشّر أزرق نابض عالق في *منتصف* المحادثة.
+ *   • تبقى في فرع streaming-raw → LaTeX خام (يختفي فقط عند إعادة التحميل عبر D-068).
+ *
+ * هذه الدالة تكنس المصفوفة وتُنهي كل رسالة مساعد لم تكتمل (ترفع isComplete:true)
+ * دون لمس isError. آمنة لأن الأدوار متسلسلة (activeRequestIdRef + فلتر request_id):
+ * بوصول أي إطار نهائي، كل الرسائل الجارية تنتمي للدور الحالي.
+ */
+const finalizeStaleAssistantMessages = (messages) => {
+    if (!Array.isArray(messages)) return messages;
+    let mutated = false;
+    const next = messages.map((msg) => {
+        if (msg && msg.role === 'assistant' && !msg.isComplete) {
+            mutated = true;
+            return { ...msg, isComplete: true };
+        }
+        return msg;
+    });
+    return mutated ? next : messages;
+};
+
 const buildClientContextMessages = (messages, currentQuestion) => {
     const safeMessages = Array.isArray(messages) ? messages : [];
     const normalized = safeMessages
@@ -206,20 +234,26 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                 const props = payload?.props;
                 const fallbackText = payload?.fallback_text || 'تعذّر عرض المكوّن.';
                 if (typeof component === 'string' && component) {
-                    setMessages(prev => [
-                        ...prev,
-                        {
-                            id: generateId(),
-                            role: 'assistant',
-                            content: '',
-                            isComplete: true,
-                            uiComponent: {
-                                component,
-                                props: props && typeof props === 'object' ? props : {},
-                                fallbackText: String(fallbackText),
+                    setMessages(prev => {
+                        // ISS-105 (D-WS-ORPHAN-001): أنهِ أي رسالة نص جارية قبل إلحاق
+                        // فقاعة المكوّن. وإلا تبقى تلك الرسالة يتيمة بـ isComplete:false
+                        // → مؤشّر أزرق عالق في المنتصف + زر إرسال يدور أبداً + LaTeX خام.
+                        const base = finalizeStaleAssistantMessages(prev);
+                        return [
+                            ...base,
+                            {
+                                id: generateId(),
+                                role: 'assistant',
+                                content: '',
+                                isComplete: true,
+                                uiComponent: {
+                                    component,
+                                    props: props && typeof props === 'object' ? props : {},
+                                    fallbackText: String(fallbackText),
+                                },
                             },
-                        },
-                    ]);
+                        ];
+                    });
                 }
             } else if (type === 'delta' || type === 'assistant_delta') {
                 const content = payload?.content || '';
@@ -248,13 +282,9 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                 });
             } else if (type === 'complete') {
                  activeRequestIdRef.current = null;
-                 setMessages(prev => {
-                    const last = prev[prev.length - 1];
-                    if (last && last.role === 'assistant') {
-                        return [...prev.slice(0, -1), { ...last, isComplete: true }];
-                    }
-                    return prev;
-                });
+                 // ISS-105: أنهِ كل رسالة مساعد عالقة (ليس الأخيرة فقط) — يحمي ضد
+                 // فقاعة نص يتيمة سبقها حدث ui_component في منتصف البثّ.
+                 setMessages(prev => finalizeStaleAssistantMessages(prev));
             } else if (type === 'assistant_final') {
                 // ISS-REQID-001 (2026-05-28): صفِّر activeRequestId عند اكتمال الرد
                 // حتى لا يُرفض أول delta من السؤال التالي بسبب request_id mismatch.
@@ -269,21 +299,24 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                 const uiComponent = payload?.ui_component || null;
                 setMessages(prev => {
                     const last = prev[prev.length - 1];
+                    let next;
                     if (last && last.role === 'assistant' && !last.isComplete && !last.isError) {
                         // ISS-STREAM-001: إذا كان content فارغاً (streaming mode)
                         // → نُكمل الرسالة الحالية بدون تغيير المحتوى (الـ deltas كافية)
                         // إذا كان content غير فارغ (fallback mode) → ندمجه بشكل صحيح
                         const newContent = content ? mergeAssistantContent(last.content, content) : last.content;
-                        return [...prev.slice(0, -1), { ...last, content: newContent, isComplete: true, uiComponent }];
+                        next = [...prev.slice(0, -1), { ...last, content: newContent, isComplete: true, uiComponent }];
                     } else if (content) {
                         // لا توجد رسالة مساعد جارية → ننشئ رسالة جديدة كاملة
-                        return [...prev, { id: generateId(), role: 'assistant', content: content, isComplete: true, uiComponent }];
+                        next = [...prev, { id: generateId(), role: 'assistant', content: content, isComplete: true, uiComponent }];
+                    } else if (last && last.role === 'assistant' && !last.isComplete) {
+                        // streaming mode انتهى بدون assistant_final content → نُكمل آخر رسالة
+                        next = [...prev.slice(0, -1), { ...last, isComplete: true, uiComponent }];
+                    } else {
+                        next = prev;
                     }
-                    // streaming mode انتهى بدون assistant_final content → نُكمل آخر رسالة
-                    if (last && last.role === 'assistant' && !last.isComplete) {
-                        return [...prev.slice(0, -1), { ...last, isComplete: true, uiComponent }];
-                    }
-                    return prev;
+                    // ISS-105: اكنس أي رسالة مساعد عالقة سابقة (نص قبل ui_component).
+                    return finalizeStaleAssistantMessages(next);
                 });
             } else if (type === 'persisted') {
                 refreshConversationHistory();
@@ -308,10 +341,12 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                 // معالج `complete`. بدون هذا: السهم يدور أبداً + LaTeX خام دائم.
                 setMessages(prev => {
                     const last = prev[prev.length - 1];
+                    let next = prev;
                     if (last && last.role === 'assistant' && !last.isComplete) {
-                        return [...prev.slice(0, -1), { ...last, isComplete: true, isError: true }];
+                        next = [...prev.slice(0, -1), { ...last, isComplete: true, isError: true }];
                     }
-                    return prev;
+                    // ISS-105: اكنس أي رسالة مساعد عالقة سابقة (دون وسمها isError).
+                    return finalizeStaleAssistantMessages(next);
                 });
                 notifyAgentError(String(details));
                 refreshConversationHistory();
@@ -322,10 +357,12 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
                 // so the send button unlocks and the streamed content renders via KaTeX.
                 setMessages(prev => {
                     const last = prev[prev.length - 1];
+                    let next = prev;
                     if (last && last.role === 'assistant' && !last.isComplete) {
-                        return [...prev.slice(0, -1), { ...last, isComplete: true, isError: true }];
+                        next = [...prev.slice(0, -1), { ...last, isComplete: true, isError: true }];
                     }
-                    return prev;
+                    // ISS-105: اكنس أي رسالة مساعد عالقة سابقة (دون وسمها isError).
+                    return finalizeStaleAssistantMessages(next);
                 });
                 notifyAgentError(String(content));
                 refreshConversationHistory();

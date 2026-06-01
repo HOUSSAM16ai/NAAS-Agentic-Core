@@ -15,6 +15,7 @@
  */
 
 import React, { memo, useState } from 'react';
+import { MathText } from './MathText';
 
 // ── ألوان حسب نوع المسألة ────────────────────────────────────────────────────
 const TYPE_COLORS = {
@@ -92,7 +93,8 @@ const StepCard = memo(({ step, index, accent }) => {
                         textAlign: 'right',
                     }}
                 >
-                    {step.title || `الخطوة ${index + 1}`}
+                    {/* ISS-105: KaTeX للعناوين التي قد تحوي رموزاً رياضية */}
+                    <MathText>{step.title || `الخطوة ${index + 1}`}</MathText>
                 </span>
                 <span style={{ color: '#94a3b8', fontSize: '12px' }}>
                     {expanded ? '▲' : '▼'}
@@ -110,7 +112,8 @@ const StepCard = memo(({ step, index, accent }) => {
                         direction: 'rtl',
                     }}
                 >
-                    {step.content}
+                    {/* ISS-105: محتوى الخطوة يحوي LaTeX (h(x), $$H(x)=…$$) → KaTeX */}
+                    <MathText block>{step.content}</MathText>
                 </div>
             )}
         </div>
@@ -143,7 +146,7 @@ const VisualMetaphor = memo(({ metaphor, accent }) => {
                     الصورة الذهنية
                 </div>
                 <div style={{ fontSize: '14px', color: '#334155', lineHeight: '1.6' }}>
-                    {metaphor}
+                    <MathText block>{metaphor}</MathText>
                 </div>
             </div>
         </div>
@@ -170,7 +173,7 @@ const HintBadge = memo(({ hint, accent }) => {
         >
             <span style={{ fontSize: '16px', flexShrink: 0 }}>🔑</span>
             <div style={{ fontSize: '13px', color: '#92400e', lineHeight: '1.5' }}>
-                <strong>تلميح: </strong>{hint}
+                <strong>تلميح: </strong><MathText>{hint}</MathText>
             </div>
         </div>
     );
@@ -259,7 +262,8 @@ export const MathExplanationCard = memo(({ props: payload }) => {
                     >
                         لماذا هذه الطريقة؟
                     </div>
-                    {intuition}
+                    {/* ISS-105: الحدس قد يحوي رموزاً رياضية → KaTeX */}
+                    <MathText block>{intuition}</MathText>
                 </div>
             )}
 

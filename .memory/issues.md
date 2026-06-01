@@ -3717,3 +3717,44 @@ in tests/services/test_iss101_ws_proxy.py.
 
 **User action:** git pull + `npm --prefix frontend install` + restart supervisor/frontend, then
 re-run scripts/diagnose_chat.py — section F should now show [proxy:5000] OK answered.
+
+---
+
+## ISS-104 (D-WS-FINAL-001) — BAC-exercise request: send button spins forever + raw LaTeX (2026-06-01)
+
+**User report (screenshots):** عند طلب «اعطني تمرين دوال 2016 الموجود في النظام/قاعدة البيانات»،
+بقي سهم مربع البحث يدور بدون توقف (تعذّر طرح سؤال جديد) + المعادلات تظهر بالرموز الخام
+(`\(g\)`, `\\(\mathbb{R}\\)`) بدل KaTeX.
+
+**Root cause (single):** the streaming assistant message's frontend-only `isComplete` flag never
+flips to `true`. The indexed-retrieval path streams `assistant_delta` frames; when the post-stream
+fail-safe DB write does not confirm, `customer_chat.py:_emit_terminal_frames` emits an **`error`**
+terminal frame (not `assistant_final`) — correct per D-006. BUT `useAgentSocket.js` `error`/
+`assistant_error` handlers only called `notifyAgentError` and never finalized the message:
+- `ChatInterface.jsx:387` `hasStreamingMessage` stays true → send button stuck on `fa-spin`.
+- `ChatInterface.jsx:270` `isStreaming` stays true → message stuck in `streaming-raw` branch
+  (raw text, no `preprocessMath`/KaTeX) → raw LaTeX shown permanently.
+This violates ISS-016/ISS-017 ("any failure path ends with a single error frame — never a hang").
+The server is correct; the frontend hung on the error frame. Ruled out: request_id matches
+(`client_request_id` echoed as `stream_request_id`); OutputFirewall is fail-open (never empties).
+
+**Fix (D-WS-FINAL-001):** `error` and `assistant_error` handlers now finalize the in-progress
+assistant message (`isComplete:true` + `isError:true`, preserving streamed content) — mirroring the
+`complete` handler — while keeping `notifyAgentError` (error stays visible) and
+`refreshConversationHistory` (verified sidebar-only via `fetchConversations`; never wipes messages).
+Once finalized, the bubble re-renders through ReactMarkdown+rehypeKatex via `preprocessMath`.
+
+**Live evidence (2026-06-01, this environment):** egress map (OpenRouter ✅/Tavily ✅/Supabase
+Postgres 6543/5432 ❌ blocked — same as §6.55/§6.74); OpenRouter `gpt-oss-120b` answered `'4'`
+finish=stop; faithful Node reproduction (verbatim reducer + mergeAssistantContent + preprocessMath)
+proved BUGGY=hang+raw-LaTeX, FIXED=unlock+KaTeX, content preserved. 21/21 checks in
+`frontend/tests/iss104_error_finalizes_message.test.mjs`; ISS-080 18/18 (no regression).
+
+**MANDATORY follow-up (Codespaces, real Supabase):** since Postgres egress is firewalled in the
+build sandbox, run the live end-to-end there with the real secrets + logins
+(`houssamannaba963@gmail.com`/`1111`, admin `benmerahhoussam16@gmail.com`/`1111`): request the
+2016 exercise, confirm no hang + KaTeX render; and investigate WHY the fail-safe write yields
+`error` (if persistence keeps failing the turn renders but is absent on reload — separate item).
+
+**Files:** `frontend/app/hooks/useAgentSocket.js` (error + assistant_error handlers),
+`frontend/tests/iss104_error_finalizes_message.test.mjs` (new, 21 checks).

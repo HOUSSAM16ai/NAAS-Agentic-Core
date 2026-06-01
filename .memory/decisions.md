@@ -3821,3 +3821,41 @@ force-updated from the server. Even fresh Codespaces served a stale prebuilt `.n
 - .devcontainer/supervisor.sh (unconditional .next clear)
 - scripts/diagnose_chat.py (probe sends cb=DIAGNOSTIC)
 - tests/services/test_iss101_ws_proxy.py (+ consistency/self-heal/supervisor tests)
+
+---
+
+## D-WS-FINAL-001 (ISS-104) — Every terminal frame MUST finalize the streaming message (2026-06-01)
+
+**Context:** Requesting a BAC exercise («دوال 2016») left the send button spinning forever and the
+equations rendered as raw LaTeX. Root cause: the server emits an `error` terminal frame when the
+post-stream fail-safe DB write doesn't confirm (correct per D-006), but the frontend `error`/
+`assistant_error` handlers never finalized the in-progress assistant bubble — so `isComplete` stayed
+`false` permanently → spinner stuck (`hasStreamingMessage`) + message frozen in `streaming-raw`
+mode (raw LaTeX). This violated ISS-016/ISS-017 ("never a hang").
+
+**Decision:** the frontend `error` and `assistant_error` handlers in `useAgentSocket.js` now finalize
+the in-progress assistant message (`isComplete:true` + `isError:true`, preserving streamed content),
+mirroring the `complete` handler. The error notification (`notifyAgentError`) is still surfaced
+(doctrine: error visible, never claim success), and `refreshConversationHistory` is kept (verified
+sidebar-only — `fetchConversations`, never touches the message list).
+
+**Permanent rule:** EVERY terminal frame type (`assistant_final`, `complete`, `error`,
+`assistant_error`) MUST set `isComplete:true` on the in-progress assistant message. A terminal frame
+that leaves `isComplete:false` is a UI-hang bug. The fix-open guard is `!last.isComplete`; if no
+in-progress assistant bubble exists, return `prev` unchanged (no fabricated empty bubble). The
+`isError:true` flag is honoured by `ChatInterface.jsx` (error class) and by the `!last.isError`
+guards in the `assistant_delta`/`assistant_final` handlers (a late stray frame cannot reopen a
+finalized errored bubble).
+
+**Not changed (deliberate):** the streaming-raw render path (transient; resolves once finalized) —
+re-rendering Markdown live during streaming was removed earlier for flicker (ISS-076/D-064); and the
+server `_emit_terminal_frames` (must emit `error` on persistence failure per D-006).
+
+**Live verification (2026-06-01):** OpenRouter live (`gpt-oss-120b` → `'4'`); faithful Node repro
+(verbatim reducer/mergeAssistantContent/preprocessMath) BUGGY=hang+raw, FIXED=unlock+KaTeX; 21/21
+`frontend/tests/iss104_error_finalizes_message.test.mjs`; ISS-080 18/18. Full Supabase end-to-end is
+MANDATORY in Codespaces (Postgres egress firewalled in the build sandbox).
+
+**Files Changed**
+- frontend/app/hooks/useAgentSocket.js (error + assistant_error handlers finalize the bubble)
+- frontend/tests/iss104_error_finalizes_message.test.mjs (new — 11 static guards + 10 scenarios)

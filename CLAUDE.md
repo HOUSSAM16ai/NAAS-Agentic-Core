@@ -7520,3 +7520,70 @@ ruff check/format + validate_structure خضراء. الإثبات الكامل �
 | D-WS-PROXY-004 | منع ازدواج listener('upgrade') + admin_messages schema gate |
 | **D-WS-CONN-002** | **دور الإدمن من `roles` ضمن الـ JWT (لا claim `is_admin` وهمي) + مواءمة اختبارات WS + `generate_service_token(roles=…)`** |
 
+---
+
+## 6.79 Terminal-Frame Finalization — Error Frame Must Never Leave the UI Hung (2026-06-01, ISS-104 / D-WS-FINAL-001)
+
+> **بلاغ المستخدم (صورتان):** عند طلب «اعطني تمرين دوال 2016 الموجود في النظام أو قاعدة
+> البيانات»، بقي سهم مربع البحث **يدور بدون توقف** (تعذّر طرح سؤال جديد) + المعادلات تظهر
+> **بالرموز الخام** (`\(g\)`, `\\(\mathbb{R}\\)`) بدل KaTeX «بشكل كارثي خطير مدمر».
+
+### الجذر (سبب واحد لعرَضين)
+
+العَلَم `isComplete` (frontend-only) لرسالة المساعد الجارية لا يُرفَع إلى `true` أبداً. مسار
+الاسترجاع المُفهرَس يبثّ `assistant_delta` ثم — عند عدم تأكيد الحفظ الاحتياطي —
+`customer_chat.py:_emit_terminal_frames` يُصدِر إطار **`error`** (بدل `assistant_final`) وهذا
+صحيح حسب D-006. لكن معالجَي `error`/`assistant_error` في `useAgentSocket.js` كانا يستدعيان
+`notifyAgentError` فقط ولا يلمسان الرسالة:
+- `ChatInterface.jsx:387` `hasStreamingMessage` يبقى true → الزر دائرة `fa-spin` أبداً.
+- `ChatInterface.jsx:270` `isStreaming` يبقى true → الرسالة في فرع `streaming-raw` (نص خام بلا
+  `preprocessMath`/KaTeX) → LaTeX خام دائم.
+
+يخالف **ISS-016/ISS-017**: «أي مسار فشل ينتهي بإطار error واحد — لا تعليق أبداً». الخادم صحيح؛
+الواجهة هي التي تعلَّقت. مُستبعَد: request_id يتطابق (`client_request_id` يُعاد كـ
+`stream_request_id`)؛ و OutputFirewall fail-open (لا يُفرّغ المحتوى).
+
+### الإصلاح (D-WS-FINAL-001)
+
+معالجا `error` و `assistant_error` في `useAgentSocket.js` يُنهيان الآن الرسالة الجارية
+(`isComplete:true` + `isError:true`، مع الحفاظ على المحتوى المبثوث) — يطابق نمط معالج
+`complete` — مع إبقاء `notifyAgentError` (الخطأ يبقى ظاهراً، لا ادّعاء نجاح) و
+`refreshConversationHistory` (مُتحقَّق أنه `fetchConversations` — sidebar فقط، لا يمسّ قائمة
+الرسائل أبداً). بعد الإنهاء، تُعاد الرسالة عبر ReactMarkdown+rehypeKatex عبر `preprocessMath`.
+
+### القاعدة الدائمة (لا تُكسر بدون ADR)
+
+1. **كل نوع إطار نهائي** (`assistant_final`, `complete`, `error`, `assistant_error`) **يجب** أن
+   يرفع `isComplete:true` على رسالة المساعد الجارية. إطار نهائي يترك `isComplete:false` = خلل
+   تعليق واجهة.
+2. الحارس `!last.isComplete`؛ إن لم توجد رسالة مساعد جارية → `return prev` (لا فقاعة فارغة مُلفَّقة).
+3. `isError:true` يُحترَم في `ChatInterface.jsx` (صنف error) وفي حُرّاس `!last.isError` في معالجَي
+   `assistant_delta`/`assistant_final` (إطار شارد متأخر لا يُعيد فتح فقاعة مُنهاة).
+4. **لا يُغيَّر** مسار التصيير أثناء البثّ (streaming-raw عابر، يُحَل عند الإنهاء — التصيير الحي
+   لـ Markdown أُزيل سابقاً للوميض ISS-076/D-064)؛ ولا يُغيَّر `_emit_terminal_frames` الخادمي
+   (يجب أن يُصدِر `error` عند فشل الحفظ حسب D-006).
+
+### التحقق الحي (2026-06-01)
+
+خريطة egress (OpenRouter ✅/Tavily ✅/Supabase Postgres 6543/5432 ❌ محجوب في sandbox — نمط
+§6.55/§6.74)؛ OpenRouter `gpt-oss-120b` → `'4'` finish=stop؛ إعادة إنتاج Node أمينة (reducer +
+mergeAssistantContent + preprocessMath حرفياً) أثبتت BUGGY=تعليق+LaTeX خام، FIXED=فك+KaTeX مع
+حفظ المحتوى؛ **21/21** في `frontend/tests/iss104_error_finalizes_message.test.mjs`؛ ISS-080 18/18
+(لا انحدار). **التجريب الحي الكامل مع Supabase إلزامي في Codespaces** (Postgres محجوب في الـ
+sandbox) بالأسرار الحقيقية + الدخولين (`houssamannaba963@gmail.com`/`1111`, الإدمن
+`benmerahhoussam16@gmail.com`/`1111`).
+
+### الملفات (ISS-104)
+
+| File | Change |
+|------|--------|
+| `frontend/app/hooks/useAgentSocket.js` | معالجا `error` + `assistant_error` يُنهيان الفقاعة الجارية |
+| `frontend/tests/iss104_error_finalizes_message.test.mjs` | **جديد** — 11 حارس ثابت + 10 سيناريو سلوكي |
+
+### السلسلة الكاملة (D-WS-CONN-002 → D-WS-FINAL-001)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-CONN-002 | دور الإدمن من `roles` ضمن الـ JWT |
+| **D-WS-FINAL-001** | **كل إطار نهائي يُنهي الرسالة — `error`/`assistant_error` لا يتركان الواجهة معلَّقة (يحل تعليق سهم البحث + LaTeX الخام)** |
+

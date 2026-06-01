@@ -1,5 +1,26 @@
 # Open Issues & Bugs
-> Last updated: 2026-05-31 | Branch: `claude/system-not-answering-questions-vBsDi`
+> Last updated: 2026-06-01 | Branch: `claude/system-not-answering-questions-vBsDi`
+
+---
+
+## ✅ Resolved 2026-06-01 (ISS-103 — Admin role mis-derived from JWT)
+
+### ISS-103 (D-WS-CONN-002) · Admin rejected on admin channel / allowed on customer channel [RESOLVED]
+
+- **Status**: RESOLVED 2026-06-01.
+- **الجذر**: بعد D-WS-CONN-001 (اتصال WS خالٍ من DB)، صار `is_admin` يُقرأ من claim
+  بولياني `is_admin` فقط — لكن رمز الوصول الحقيقي يحمل `roles: ["ADMIN", ...]` ولا
+  يحمل `is_admin` → كل توكن إدمن حقيقي = `is_admin=False` → الإدمن مرفوض على قناته
+  («Standard accounts must use the customer chat endpoint») ومسموح خطأً على قناة العميل.
+- **الإصلاح**: `admin.py` + `customer_chat.py` — `is_admin = claims["is_admin"] OR
+  (ADMIN_ROLE in claims["roles"])` (`ADMIN_ROLE` من `app/services/rbac.py`)، خالٍ من DB.
+- **أثر جانبي مكتشَف**: إزالة `decode_user_id` من المعالجين (D-WS-CONN-001) تركت 13
+  اختباراً معطلاً في `test_chat_event_protocol_{flag,error_contract}_integration.py`
+  (`AttributeError` على ترقيع `decode_user_id` + إطار `session_ready` غير متوقَّع) +
+  3 اختبارات WS في `test_admin_router_comprehensive.py`. أُوئمت كلها على العقد الجديد
+  (`decode_token_payload` + claims + `_recv()`).
+- **التحقق**: `tests/api` → **68 passed** (كان 55 passed + 13 failed). ruff check/format
+  + validate_structure خضراء. الإثبات الكامل بالمتصفح + Supabase في Codespace/CI. CLAUDE.md §6.78.
 
 ---
 

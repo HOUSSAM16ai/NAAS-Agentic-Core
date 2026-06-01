@@ -7418,3 +7418,79 @@ proxy. التحقق الكامل بالمتصفح + Supabase يجري في Codes
 
 **قاعدة دائمة (D-WS-PROXY-004 hardening):** أي جدول تكتب فيه طبقة التطبيق يجب أن يكون في `REQUIRED_SCHEMA` + `_ALLOWED_TABLES` (وإلا يُكسَر على أي نشر نظيف)؛ وأي تغيير في `frontend/server.js` يجب أن يُبقي بوّابة ISS-102 خضراء (مستمع upgrade وحيد + proxy نظيف بايتاً ببايت).
 
+---
+
+## 6.78 Admin Role from JWT `roles` — Not a Phantom `is_admin` Claim (2026-06-01, ISS-103 / D-WS-CONN-002)
+
+> متابعة مباشرة لـ D-WS-CONN-001 (§6.75): بعد جعل اتصال الـ WebSocket خالياً من
+> قاعدة البيانات (الهوية من الـ JWT)، صار `is_admin` يُقرأ من claim `is_admin`
+> بولياني فقط — لكن رمز الوصول الحقيقي لا يحمل `is_admin`، بل يحمل `roles` (قائمة
+> تحوي `"ADMIN"`). هذا القسم يحكم اشتقاق دور الإدمن من الـ JWT — لا يُكسر بدون ADR.
+
+### الجذر (D-WS-CONN-002)
+
+في كلا المعالجين كان السطر:
+```python
+actor = WsActor(id=user_id, is_admin=bool(claims.get("is_admin", False)))
+```
+رمز الوصول الفعلي (`app/services/auth/*`) يضع الدور في `roles: ["ADMIN", ...]` ولا
+يضع `is_admin` إطلاقاً. النتيجة: **كل توكن إدمن حقيقي → `is_admin=False`**:
+- الإدمن **مرفوض على قناته** (`admin.py`: «Standard accounts must use the customer
+  chat endpoint») → لا يستطيع فتح دردشة الإدمن أبداً.
+- الإدمن **مسموح خطأً على قناة العميل** (لا يُغلَق 4403) → خرق حدود القناة.
+
+### الإصلاح (`admin.py` + `customer_chat.py`)
+
+```python
+# ISS-103 (D-WS-CONN-002): is_admin من claim ``is_admin`` صراحةً أو من دور ADMIN ضمن roles.
+_claim_roles = claims.get("roles") or []
+is_admin_claim = bool(claims.get("is_admin", False)) or (
+    ADMIN_ROLE in _claim_roles if isinstance(_claim_roles, list) else False
+)
+actor = WsActor(id=user_id, is_admin=is_admin_claim)
+```
+`ADMIN_ROLE` يُستورَد من `app/services/rbac.py` (`ADMIN_ROLE = "ADMIN"`). الاشتقاق
+يبقى خالياً من قاعدة البيانات (يحترم D-WS-CONN-001): `roles` تأتي من الـ JWT الموقّع.
+
+### مواءمة الاختبارات (نفس جذر D-WS-CONN-001)
+
+إزالة `decode_user_id` من المعالجين (D-WS-CONN-001) كسرت كل اختبار يُرقِّعه
+(`patch("…decode_user_id")` → `AttributeError`) ويُموِّه الهوية عبر `db.get`، ويقرأ
+الإطار الأول مباشرةً (وهو الآن primer الـ `session_ready`). أُوئمت 4 ملفات على العقد
+الجديد بنمط موحَّد: ترقيع `decode_token_payload` بـ claims (`{"sub":"1","is_admin":…}`
+أو دور `ADMIN` ضمن `roles`) + مُساعِد `_recv()` يتخطّى `session_ready`:
+- `tests/api/test_admin_router_comprehensive.py` (3 اختبارات WS)
+- `tests/api/test_final_router_gaps.py` (3 اختبارات customer — القالب المرجعي)
+- `tests/api/test_chat_event_protocol_flag_integration.py` (8 اختبارات)
+- `tests/api/test_chat_event_protocol_error_contract_integration.py` (5 اختبارات)
+
+### القواعد الـ 4 الدائمة (D-WS-CONN-002 — لا تُكسر بدون ADR)
+
+1. **دور الإدمن يُشتق من الـ JWT**: `is_admin = claims["is_admin"] OR (ADMIN_ROLE in
+   claims["roles"])`. لا تفترض وجود بولياني `is_admin` على رمز الوصول — قد لا يكون موجوداً.
+2. **اشتقاق الدور يبقى خالياً من قاعدة البيانات** (D-WS-CONN-001): `roles` من الـ JWT
+   الموقّع، لا استعلام `db.get(User)` عند الاتصال.
+3. **اختبارات WS تُرقِّع `decode_token_payload` لا `decode_user_id`** (مُزال من المعالجين)
+   وتُمرِّر claims dict؛ وتتخطّى primer الـ `session_ready` عبر مُساعِد `_recv()`.
+4. **حدود القناة صارمة**: actor إدمن على قناة العميل → 4403؛ actor عادي على قناة الإدمن
+   → 4403. الاشتقاق الخاطئ لـ `is_admin` يكسر الحدّين معاً.
+
+### قياس النجاح حياً (2026-06-01)
+
+```bash
+DATABASE_URL="sqlite+aiosqlite:///:memory:" SECRET_KEY="…" ENVIRONMENT="testing" \
+LLM_MOCK_MODE="1" SUPABASE_URL="https://dummy.supabase.co" SUPABASE_ROLE_KEY="dummy" \
+python3.12 -m pytest tests/api -q --no-cov
+# المتوقع: 68 passed (كان 55 passed + 13 failed بسبب decode_user_id AttributeError)
+```
+ruff check/format + validate_structure خضراء. الإثبات الكامل بالمتصفح + Supabase يجري
+في Codespace/CI الحيّ (الـ sandbox يحجب egress لـ Supabase — نمط موثّق منذ §6.55).
+
+### السلسلة الكاملة (D-WS-CONN-001 → D-WS-CONN-002)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-CONN-001 | اتصال WS خالٍ من قاعدة البيانات (هوية من الـ JWT) |
+| D-WS-PROXY-004 | منع ازدواج listener('upgrade') + admin_messages schema gate |
+| **D-WS-CONN-002** | **دور الإدمن من `roles` ضمن الـ JWT (لا claim `is_admin` وهمي) + مواءمة اختبارات WS** |
+

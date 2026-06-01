@@ -433,7 +433,15 @@ async def chat_stream_ws(
         await websocket.close(code=4401)
         return
 
-    actor = WsActor(id=user_id, is_admin=bool(claims.get("is_admin", False)))
+    # ISS-103 (D-WS-CONN-002): is_admin يُشتق من claim ``is_admin`` صراحةً أو من
+    # دور ``ADMIN`` ضمن ``roles`` (رمز الوصول الحقيقي يحمل ``roles`` لا ``is_admin``).
+    # بدون اشتقاق الدور كان كل توكن إدمن حقيقي يُعطي is_admin=False → الإدمن مرفوض
+    # دائماً على قناته ("Standard accounts must use the customer chat endpoint").
+    _claim_roles = claims.get("roles") or []
+    is_admin_claim = bool(claims.get("is_admin", False)) or (
+        ADMIN_ROLE in _claim_roles if isinstance(_claim_roles, list) else False
+    )
+    actor = WsActor(id=user_id, is_admin=is_admin_claim)
 
     await websocket.accept(subprotocol=selected_protocol)
 

@@ -62,6 +62,15 @@ def _mock_async_session_context(mock_actor: SimpleNamespace) -> MagicMock:
     return manager
 
 
+def _recv(ws) -> dict[str, object]:
+    """يستقبل الحدث التالي متجاوزاً primer الـ ``session_ready`` (D-WS-FLAP-003)."""
+    while True:
+        ev = ws.receive_json()
+        if isinstance(ev, dict) and ev.get("type") == "session_ready":
+            continue
+        return ev
+
+
 def _drain_until_complete(websocket, *, max_events: int = 20) -> list[dict[str, object]]:
     """يقرأ أحداث websocket حتى complete لضمان اختبار دورة الرسالة كاملة."""
     events: list[dict[str, object]] = []
@@ -90,7 +99,10 @@ async def test_customer_ws_legacy_protocol_when_flag_disabled(test_app) -> None:
             "app.api.routers.customer_chat.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
+            with patch(
+                "app.api.routers.customer_chat.decode_token_payload",
+                return_value={"sub": "1", "is_admin": False},
+            ):
                 with patch(
                     "app.api.routers.customer_chat.async_session_factory",
                     return_value=_mock_async_session_context(mock_actor),
@@ -106,7 +118,7 @@ async def test_customer_ws_legacy_protocol_when_flag_disabled(test_app) -> None:
                             with TestClient(test_app) as client:
                                 with client.websocket_connect("/api/chat/ws") as websocket:
                                     websocket.send_json({"question": "hello"})
-                                    _conversation_init = websocket.receive_json()
+                                    _conversation_init = _recv(websocket)
                                     delta_event = websocket.receive_json()
 
     assert delta_event["type"] == "delta"
@@ -131,7 +143,10 @@ async def test_customer_ws_unified_protocol_when_flag_enabled(test_app) -> None:
             "app.api.routers.customer_chat.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
+            with patch(
+                "app.api.routers.customer_chat.decode_token_payload",
+                return_value={"sub": "1", "is_admin": False},
+            ):
                 with patch(
                     "app.api.routers.customer_chat.async_session_factory",
                     return_value=_mock_async_session_context(mock_actor),
@@ -147,7 +162,7 @@ async def test_customer_ws_unified_protocol_when_flag_enabled(test_app) -> None:
                             with TestClient(test_app) as client:
                                 with client.websocket_connect("/api/chat/ws") as websocket:
                                     websocket.send_json({"question": "hello"})
-                                    _conversation_init = websocket.receive_json()
+                                    _conversation_init = _recv(websocket)
                                     delta_event = websocket.receive_json()
 
     assert delta_event["type"] == "assistant_delta"
@@ -172,7 +187,10 @@ async def test_admin_ws_legacy_protocol_when_flag_disabled(test_app) -> None:
             "app.api.routers.admin.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.admin.decode_user_id", return_value=1):
+            with patch(
+                "app.api.routers.admin.decode_token_payload",
+                return_value={"sub": "1", "is_admin": True},
+            ):
                 with patch(
                     "app.api.routers.admin.async_session_factory",
                     return_value=_mock_async_session_context(mock_actor),
@@ -188,7 +206,7 @@ async def test_admin_ws_legacy_protocol_when_flag_disabled(test_app) -> None:
                             with TestClient(test_app) as client:
                                 with client.websocket_connect("/admin/api/chat/ws") as websocket:
                                     websocket.send_json({"question": "hello"})
-                                    _conversation_init = websocket.receive_json()
+                                    _conversation_init = _recv(websocket)
                                     delta_event = websocket.receive_json()
 
     assert delta_event["type"] == "delta"
@@ -213,7 +231,10 @@ async def test_admin_ws_unified_protocol_when_flag_enabled(test_app) -> None:
             "app.api.routers.admin.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.admin.decode_user_id", return_value=1):
+            with patch(
+                "app.api.routers.admin.decode_token_payload",
+                return_value={"sub": "1", "is_admin": True},
+            ):
                 with patch(
                     "app.api.routers.admin.async_session_factory",
                     return_value=_mock_async_session_context(mock_actor),
@@ -229,7 +250,7 @@ async def test_admin_ws_unified_protocol_when_flag_enabled(test_app) -> None:
                             with TestClient(test_app) as client:
                                 with client.websocket_connect("/admin/api/chat/ws") as websocket:
                                     websocket.send_json({"question": "hello"})
-                                    _conversation_init = websocket.receive_json()
+                                    _conversation_init = _recv(websocket)
                                     delta_event = websocket.receive_json()
 
     assert delta_event["type"] == "assistant_delta"
@@ -260,7 +281,10 @@ async def test_customer_ws_forwards_recent_history_messages_to_orchestrator(test
         "app.api.routers.customer_chat.extract_websocket_auth",
         return_value=("valid_token", "json"),
     ):
-        with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
+        with patch(
+            "app.api.routers.customer_chat.decode_token_payload",
+            return_value={"sub": "1", "is_admin": False},
+        ):
             with patch(
                 "app.api.routers.customer_chat.async_session_factory",
                 return_value=_mock_async_session_context(mock_actor),
@@ -306,7 +330,10 @@ async def test_admin_ws_forwards_recent_history_messages_to_orchestrator(test_ap
         "app.api.routers.admin.extract_websocket_auth",
         return_value=("valid_token", "json"),
     ):
-        with patch("app.api.routers.admin.decode_user_id", return_value=1):
+        with patch(
+            "app.api.routers.admin.decode_token_payload",
+            return_value={"sub": "1", "is_admin": True},
+        ):
             with patch(
                 "app.api.routers.admin.async_session_factory",
                 return_value=_mock_async_session_context(mock_actor),
@@ -358,7 +385,10 @@ async def test_customer_ws_followup_uses_previous_answer_context_behaviorally(te
         "app.api.routers.customer_chat.extract_websocket_auth",
         return_value=("valid_token", "json"),
     ):
-        with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
+        with patch(
+            "app.api.routers.customer_chat.decode_token_payload",
+            return_value={"sub": "1", "is_admin": False},
+        ):
             with patch(
                 "app.api.routers.customer_chat.async_session_factory",
                 return_value=_mock_async_session_context(mock_actor),
@@ -374,7 +404,7 @@ async def test_customer_ws_followup_uses_previous_answer_context_behaviorally(te
                         with TestClient(test_app) as client:
                             with client.websocket_connect("/api/chat/ws") as websocket:
                                 websocket.send_json({"question": "السؤال الأول"})
-                                first_init = websocket.receive_json()
+                                first_init = _recv(websocket)
                                 _first_events = _drain_until_complete(websocket)
 
                                 websocket.send_json(
@@ -426,7 +456,10 @@ async def test_admin_ws_followup_uses_previous_answer_context_behaviorally(test_
         "app.api.routers.admin.extract_websocket_auth",
         return_value=("valid_token", "json"),
     ):
-        with patch("app.api.routers.admin.decode_user_id", return_value=1):
+        with patch(
+            "app.api.routers.admin.decode_token_payload",
+            return_value={"sub": "1", "is_admin": True},
+        ):
             with patch(
                 "app.api.routers.admin.async_session_factory",
                 return_value=_mock_async_session_context(mock_actor),
@@ -442,7 +475,7 @@ async def test_admin_ws_followup_uses_previous_answer_context_behaviorally(test_
                         with TestClient(test_app) as client:
                             with client.websocket_connect("/admin/api/chat/ws") as websocket:
                                 websocket.send_json({"question": "admin-first"})
-                                first_init = websocket.receive_json()
+                                first_init = _recv(websocket)
                                 _first_events = _drain_until_complete(websocket)
 
                                 websocket.send_json(

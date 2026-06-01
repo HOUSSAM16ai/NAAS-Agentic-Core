@@ -13,6 +13,15 @@ from app.api.routers.admin import get_db as get_admin_db
 from app.api.routers.customer_chat import get_db as get_customer_db
 
 
+def _recv(ws):
+    """يستقبل الحدث التالي متجاوزاً primer الـ ``session_ready`` (D-WS-FLAP-003)."""
+    while True:
+        ev = ws.receive_json()
+        if isinstance(ev, dict) and ev.get("type") == "session_ready":
+            continue
+        return ev
+
+
 @pytest.mark.asyncio
 async def test_customer_ws_admin_actor_emits_assistant_error_when_flag_enabled(test_app) -> None:
     """يتحقق من أن منع حساب admin على قناة العملاء يُرسل assistant_error بالعقد الموحّد."""
@@ -28,10 +37,14 @@ async def test_customer_ws_admin_actor_emits_assistant_error_when_flag_enabled(t
             "app.api.routers.customer_chat.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
+            # D-WS-CONN-001/002: admin actor مُشتق من claims (لا decode_user_id/db.get).
+            with patch(
+                "app.api.routers.customer_chat.decode_token_payload",
+                return_value={"sub": "1", "is_admin": True},
+            ):
                 with TestClient(test_app) as client:
                     with client.websocket_connect("/api/chat/ws") as websocket:
-                        payload = websocket.receive_json()
+                        payload = _recv(websocket)
 
     assert payload["type"] == "assistant_error"
     assert payload["contract_version"] == "v1"
@@ -62,14 +75,18 @@ async def test_admin_ws_non_admin_actor_emits_assistant_error_when_flag_enabled(
             "app.api.routers.admin.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.admin.decode_user_id", return_value=1):
+            # D-WS-CONN-001/002: non-admin actor مُشتق من claims (لا decode_user_id/db.get).
+            with patch(
+                "app.api.routers.admin.decode_token_payload",
+                return_value={"sub": "1", "is_admin": False},
+            ):
                 with patch(
                     "app.api.routers.admin.async_session_factory",
                     return_value=_MockSessionContext(mock_db),
                 ):
                     with TestClient(test_app) as client:
                         with client.websocket_connect("/admin/api/chat/ws") as websocket:
-                            payload = websocket.receive_json()
+                            payload = _recv(websocket)
 
     assert payload["type"] == "assistant_error"
     assert payload["contract_version"] == "v1"
@@ -100,11 +117,15 @@ async def test_admin_ws_empty_question_emits_assistant_error_when_flag_enabled(t
             "app.api.routers.admin.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.admin.decode_user_id", return_value=1):
+            # D-WS-CONN-001/002: admin actor مُشتق من claims → session_ready → سؤال فارغ.
+            with patch(
+                "app.api.routers.admin.decode_token_payload",
+                return_value={"sub": "1", "is_admin": True},
+            ):
                 with TestClient(test_app) as client:
                     with client.websocket_connect("/admin/api/chat/ws") as websocket:
                         websocket.send_json({"question": ""})
-                        payload = websocket.receive_json()
+                        payload = _recv(websocket)
 
     assert payload["type"] == "assistant_error"
     assert payload["contract_version"] == "v1"
@@ -149,7 +170,11 @@ async def test_customer_ws_dispatch_http_exception_emits_assistant_error_when_fl
             "app.api.routers.customer_chat.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
+            # D-WS-CONN-001/002: non-admin actor مُشتق من claims (لا decode_user_id/db.get).
+            with patch(
+                "app.api.routers.customer_chat.decode_token_payload",
+                return_value={"sub": "1", "is_admin": False},
+            ):
                 with patch(
                     "app.api.routers.customer_chat.async_session_factory",
                     return_value=mock_session_cm,
@@ -218,7 +243,11 @@ async def test_admin_ws_dispatch_http_exception_emits_assistant_error_when_flag_
             "app.api.routers.admin.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.admin.decode_user_id", return_value=1):
+            # D-WS-CONN-001/002: admin actor مُشتق من claims (لا decode_user_id/db.get).
+            with patch(
+                "app.api.routers.admin.decode_token_payload",
+                return_value={"sub": "1", "is_admin": True},
+            ):
                 with patch(
                     "app.api.routers.admin.async_session_factory",
                     return_value=_MockSessionContext(mock_db),

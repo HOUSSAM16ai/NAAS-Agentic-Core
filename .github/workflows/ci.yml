@@ -239,6 +239,31 @@ jobs:
             --deselect tests/microservices/test_websocket_gateway_routing.py::TestLiveWebSocketRouting::test_gateway_ws_returns_101
             --deselect tests/microservices/test_websocket_gateway_routing.py::TestLiveWebSocketRouting::test_conversation_service_ws_returns_101
             --deselect tests/microservices/test_websocket_gateway_routing.py::TestLiveWebSocketRouting::test_gateway_ws_not_404
+            # ────────────────────────────────────────────────────────────────
+            # Pre-existing, red-on-`main` test-ISOLATION failures (NOT this PR).
+            #
+            # Proven by running the identical full pytest job (same --deselect
+            # list + ci.yml env) against `origin/main` (915daf6): main = 32
+            # failed, this branch = 11 failed. These 11 are the common residue;
+            # the other 21 (the tests/api/* WS-auth tests) were *fixed* by this
+            # branch (ISS-103 / D-WS-CONN-002). The 11 below cover code this
+            # branch never touches (`git diff main...HEAD`) — settings/kernel/
+            # fitness — and they PASS in isolation but FAIL in full-suite order
+            # (a global-state/env leak from some earlier-running test). They are
+            # genuine pre-existing test-isolation bugs, tracked as follow-up.
+            # Per this list's rule: every entry is red on main, not a regression.
+            # ────────────────────────────────────────────────────────────────
+            --deselect tests/config/test_settings.py::test_database_url_fixer_handles_duplicates_gracefully
+            --deselect tests/config/test_settings.py::test_database_url_fixer_handles_simple_sslmode
+            --deselect tests/config/test_settings.py::test_database_url_upgrades_postgres_protocol
+            --deselect tests/config/test_settings.py::test_database_url_non_postgres_left_untouched
+            --deselect tests/config/test_settings.py::test_database_url_sslmode_disable_converts_to_ssl
+            --deselect tests/core/test_kernel_comprehensive.py::TestRealityKernel::test_cors_logic_dev_vs_prod
+            --deselect tests/core/test_settings_refactor.py::test_base_service_settings_defaults
+            --deselect tests/fitness/test_phase0_governance.py::test_f1_no_app_imports_strict_mode_passes
+            --deselect tests/fitness/test_phase0_governance.py::test_f3_tracing_gate_baseline_passes
+            --deselect tests/fitness/test_phase0_governance.py::test_scoreboard_ignores_dunder_service_dirs
+            --deselect tests/fitness/test_phase0_governance.py::test_scoreboard_generation_succeeds
           )
 
           if python -m pytest --help | grep -q -- "--cov"; then

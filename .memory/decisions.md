@@ -1,6 +1,26 @@
 # Architectural Decisions
 > Last updated: 2026-06-01 | Branch: `claude/system-not-answering-questions-vBsDi`
 
+## D-WS-CONN-002 (CI follow-up) · generate_service_token roles + admin wiring test (2026-06-01)
+
+بعد `f368682` بقي CI `test` أحمر. إعادة إنتاج كاملة لوظيفة CI محلياً (نفس `--deselect` + بيئة
+`ci.yml`) → **معطّلان حقيقيان** (deterministic، خارج deselect)، أثر جانبي لإعادة هيكلة WS:
+
+1. `test_streaming_event_type_bug.py::test_chat_stream_has_delta_event_type`: يصادق إدمن WS عبر
+   `generate_service_token` الذي كان يضع `sub` فقط → بعد D-WS-CONN-001/002 (اشتقاق is_admin من
+   الـ JWT) صار الإدمن مرفوضاً. **الإصلاح:** معامل `roles` اختياري (keyword-only) في
+   `app/core/security.py:generate_service_token` (متوافق خلفياً)؛ اختبارات إدمن WS تمرّر
+   `roles=[ADMIN_ROLE]`. يُمارس مسار فك الـ JWT الحقيقي ويحاكي رمز الوصول الإنتاجي.
+2. `test_ws_router_heartbeat_integration.py::TestAdminWiring::test_call_before_question_check`: فحص
+   نصّي بحرفية `handle_control_message(websocket, payload)`؛ D-096 أضاف `send_lock` للنداء. اختبار
+   customer النظير كان مُرخّى مسبقاً؛ admin أُغفِل. **الإصلاح:** إرخاء الحرفية (مرآة customer).
+
+**11 فشل غير معطّل** (config/settings/kernel/fitness): كود لم يلمسه الفرع، ينجح منفرداً، غير
+مُدرَج في deselect، و`main` أخضر → ينجح على CI النظيف (تلوّث ترتيب sandbox). لا إجراء.
+
+**القاعدة:** أي مساعد توكن للاختبارات يصادق على قناة إدمن WS يجب أن يحمل دور الإدمن في الـ JWT
+(`roles=[ADMIN_ROLE]`) — اتصال WS لم يعد يقرأ DB. التحقق: 17/17 محلياً + ruff؛ `tests/api` 68/68.
+
 ## D-WS-CONN-002 · Admin Role from JWT `roles` (not phantom `is_admin`) (2026-06-01)
 
 متابعة لـ D-WS-CONN-001 (اتصال WS خالٍ من DB). كان `is_admin` يُقرأ من claim بولياني

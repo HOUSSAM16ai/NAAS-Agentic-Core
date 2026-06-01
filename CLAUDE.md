@@ -7486,11 +7486,37 @@ python3.12 -m pytest tests/api -q --no-cov
 ruff check/format + validate_structure خضراء. الإثبات الكامل بالمتصفح + Supabase يجري
 في Codespace/CI الحيّ (الـ sandbox يحجب egress لـ Supabase — نمط موثّق منذ §6.55).
 
+### متابعة CI (2026-06-01): `generate_service_token` + اختبار wiring الإدمن
+
+بعد `f368682` بقي الـ CI `test` أحمر. إعادة إنتاج كاملة لوظيفة CI محلياً (نفس قائمة
+`--deselect` + بيئة `ci.yml`) كشفت **معطّلَيْن حقيقيَّيْن** (deterministic، خارج قائمة
+الـ deselect)، كلاهما أثر جانبي لإعادة هيكلة WS على هذا الفرع لم يُلتقَط سابقاً:
+
+1. `tests/regressions/test_streaming_event_type_bug.py::test_chat_stream_has_delta_event_type`
+   — يصادق اتصال إدمن عبر `generate_service_token(str(admin_user.id))`. بعد D-WS-CONN-001/002
+   صار الاتصال يشتق `is_admin` من claims الـ JWT، لكن `app/core/security.py:generate_service_token`
+   كان يضع `sub` فقط (لا `roles`) → الإدمن مرفوض → الاختبار يستقبل `error` بدل `delta`.
+   **الإصلاح:** أُضيف معامل اختياري `roles` (keyword-only) لـ `generate_service_token`
+   (متوافق خلفياً)؛ اختبارات إدمن WS تمرّر `roles=[ADMIN_ROLE]`. هذا يُمارس مسار فك الـ JWT
+   الحقيقي ويُحاكي رمز الوصول الإنتاجي (`crypto.encode_access_token` يحمل `roles`).
+
+2. `tests/services/test_ws_router_heartbeat_integration.py::TestAdminWiring::test_call_before_question_check`
+   — فحص نصّي يبحث عن الحرفية `handle_control_message(websocket, payload)`؛ لكن D-096/D-WS-FLAP-005
+   أضاف `send_lock` فصار النداء `handle_control_message(websocket, payload, send_lock=send_lock)`.
+   اختبار customer النظير (سطر 49) كان مُرخّى مسبقاً (`...payload` بلا قوس إغلاق)، أما اختبار
+   admin (سطر 87) فأُغفِل. **الإصلاح:** إرخاء الحرفية لتُطابق التوقيع المُطوَّر — مرآة اختبار customer.
+
+**اللاحقّقات (11 فشل غير معطّل):** `tests/config/test_settings.py` (5) +
+`test_kernel_comprehensive::test_cors_logic_dev_vs_prod` + `test_settings_refactor::test_base_service_settings_defaults`
++ `test_phase0_governance.py` (4) — تغطّي كوداً **لم يلمسه هذا الفرع** (`git diff main...HEAD`)،
+وتنجح منفردة (تلوّث ترتيب/حالة شجرة عمل في الـ sandbox)، وليست في قائمة deselect، و`main` أخضر
+→ تنجح على مُشغّل CI النظيف. لا إجراء عليها.
+
 ### السلسلة الكاملة (D-WS-CONN-001 → D-WS-CONN-002)
 
 | Decision | المُصلَح |
 |----------|---------|
 | D-WS-CONN-001 | اتصال WS خالٍ من قاعدة البيانات (هوية من الـ JWT) |
 | D-WS-PROXY-004 | منع ازدواج listener('upgrade') + admin_messages schema gate |
-| **D-WS-CONN-002** | **دور الإدمن من `roles` ضمن الـ JWT (لا claim `is_admin` وهمي) + مواءمة اختبارات WS** |
+| **D-WS-CONN-002** | **دور الإدمن من `roles` ضمن الـ JWT (لا claim `is_admin` وهمي) + مواءمة اختبارات WS + `generate_service_token(roles=…)`** |
 

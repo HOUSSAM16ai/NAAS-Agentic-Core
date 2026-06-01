@@ -1,6 +1,7 @@
 "use client";
 
 import React, { memo, useState, useMemo } from 'react';
+import { MathText } from './MathText';
 
 /**
  * FullExerciseStory — Multi-Step Pedagogical Carousel (Protocol V32.0)
@@ -261,7 +262,7 @@ export const FullExerciseStory = memo(({ props }) => {
 
             {/* بطاقة الخطوة الحالية */}
             <div className="genui-fes-card">
-                <h4 className="genui-fes-step-title">{step.title}</h4>
+                <h4 className="genui-fes-step-title"><MathText>{step.title}</MathText></h4>
                 <div className="genui-fes-visual">
                     {renderer ? (
                         renderer(step.numerical_state)
@@ -285,7 +286,8 @@ export const FullExerciseStory = memo(({ props }) => {
                         // Extract only the first sentence to avoid text walls.
                         // We look for the first period, exclamation mark, or question mark followed by space or end of string.
                         const firstSentence = step.pedagogical_message.split(/[.!?](\s|$)/)[0];
-                        return <p className="genui-fes-msg">{firstSentence}.</p>;
+                        // ISS-105: الرسالة التربوية قد تحوي رموزاً رياضية → KaTeX
+                        return <p className="genui-fes-msg"><MathText>{`${firstSentence}.`}</MathText></p>;
                     }
                     return null;
                 })()}

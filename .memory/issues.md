@@ -1,5 +1,33 @@
 # Open Issues & Bugs
-> Last updated: 2026-06-01 | Branch: `claude/system-not-answering-questions-vBsDi`
+> Last updated: 2026-06-01 | Branch: `claude/search-spinner-equation-display-aZZHd`
+
+---
+
+## ✅ Resolved 2026-06-01 (ISS-105 — orphaned streaming message: mid-conversation blue cursor + endless spinner)
+
+### ISS-105 (D-WS-ORPHAN-001) · ui_component mid-stream orphans prior text bubble [RESOLVED]
+
+- **Symptom (live user screenshots)**: المؤشّر الأزرق النابض يبقى في *منتصف* النصوص +
+  سهم الإرسال يدور بدون توقف إطلاقاً + LaTeX خام يختفي فقط عند الدخول/الخروج.
+- **Root cause**: حدث `ui_component` (BKT المتوازي / `math_explanation_card` /
+  `full_exercise_story`) يصل في منتصف بثّ النص. معالج `ui_component` في
+  `useAgentSocket.js` كان يُلحِق فقاعة المكوّن دون إنهاء فقاعة النص الجارية قبله →
+  تبقى يتيمة `isComplete:false` للأبد → `hasStreamingMessage` true (سهم يدور) +
+  `streaming-cursor` عالق في المنتصف + فرع `streaming-raw` (LaTeX خام). إعادة التحميل
+  تُخفيه لأن `setMessagesSafe` (D-068) يفرض `isComplete:true`.
+- **Fix (3 طبقات)**: (1) `ui_component` يستدعي `finalizeStaleAssistantMessages(prev)`
+  قبل إلحاق الفقاعة. (2) دفاع عميق: `complete`/`assistant_final`/`error`/`assistant_error`
+  تكنس كل رسالة عالقة (لا الأخيرة فقط)؛ `isError` للدور الأخير فقط. (3) Part 3: استُخرجت
+  `preprocessMath` إلى `app/utils/preprocessMath.js` + مكوّن `<MathText>` مُطبَّق على
+  حقول `MathExplanationCard` و`FullExerciseStory` (كانت تُصيّر LaTeX خاماً).
+- **Files**: `frontend/app/hooks/useAgentSocket.js` (helper + 5 handlers),
+  `frontend/app/utils/preprocessMath.js` (new), `frontend/app/components/generative/MathText.jsx` (new),
+  `frontend/app/components/generative/MathExplanationCard.jsx`, `.../FullExerciseStory.jsx`,
+  `frontend/app/globals.css` (`.genui-mathtext`), `frontend/app/components/ChatInterface.jsx` (import),
+  `frontend/tests/iss105_orphaned_streaming_message.test.mjs` (new — 9 guards + 8 scenarios).
+- **Verification**: 6/6 frontend regression suites PASS (ISS-105 جديد + ISS-104 21/21 +
+  ISS-080 18/18 + heartbeat + double-handshake + generative_ui_streaming). `next build`
+  مؤجَّل (sandbox بلا node_modules) → التحقق بالمتصفح في Codespace/CI.
 
 ---
 

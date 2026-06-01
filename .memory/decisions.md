@@ -1,5 +1,38 @@
 # Architectural Decisions
-> Last updated: 2026-06-01 | Branch: `claude/system-not-answering-questions-vBsDi`
+> Last updated: 2026-06-01 | Branch: `claude/search-spinner-equation-display-aZZHd`
+
+## D-WS-ORPHAN-001 · Orphaned streaming message + MathText for generative UI (2026-06-01)
+
+**Context (ISS-105):** حدث `ui_component` يصل في منتصف بثّ النص (BKT المتوازي /
+`math_explanation_card` / `full_exercise_story`). معالج `ui_component` كان يُلحِق فقاعة
+المكوّن دون إنهاء فقاعة النص الجارية قبله → تبقى يتيمة `isComplete:false` → مؤشّر أزرق
+في المنتصف + سهم يدور أبداً + LaTeX خام (يختفي عند إعادة التحميل عبر D-068).
+
+**Decision (3 طبقات):**
+1. **Part 1 (root):** `ui_component` يستدعي `finalizeStaleAssistantMessages(prev)` قبل
+   إلحاق الفقاعة. دالة مساعدة جديدة تكنس كل رسالة مساعد `!isComplete` → `isComplete:true`
+   (دون لمس `isError`). آمنة لأن الأدوار متسلسلة (`activeRequestIdRef` + فلتر request_id).
+2. **Part 2 (defense-in-depth):** `complete`/`assistant_final`/`error`/`assistant_error`
+   تكنس كل اليتامى (لا الأخيرة فقط). `isError` للدور الأخير حصراً.
+3. **Part 3 (generative UI LaTeX):** `preprocessMath` استُخرجت إلى وحدة مشتركة
+   `app/utils/preprocessMath.js` + مكوّن `<MathText>` (preprocessMath → ReactMarkdown +
+   remark-math + rehype-katex، مع fast-path للنص العادي). طُبِّق على الحقول الرياضية في
+   `MathExplanationCard` و`FullExerciseStory` (كانت تُصيّر `{text}` خاماً).
+
+**Permanent rules:** (1) أي معالج يُلحِق فقاعة مساعد أثناء البثّ يستدعي
+`finalizeStaleAssistantMessages` أولاً. (2) كل إطار نهائي يكنس اليتامى. (3) `isError`
+للدور الحالي فقط. (4) `preprocessMath` مصدر حقيقة واحد. (5) مكوّنات Generative UI
+تُصيّر الرياضيات عبر `<MathText>` لا `{text}` خام.
+
+**Files Changed**
+- frontend/app/hooks/useAgentSocket.js (`finalizeStaleAssistantMessages` + 5 handlers)
+- frontend/app/utils/preprocessMath.js (new — extracted shared util + KATEX_OPTIONS)
+- frontend/app/components/generative/MathText.jsx (new)
+- frontend/app/components/generative/MathExplanationCard.jsx (MathText on 5 fields)
+- frontend/app/components/generative/FullExerciseStory.jsx (MathText on title/pedagogical_message)
+- frontend/app/components/ChatInterface.jsx (import preprocessMath from util — no behavior change)
+- frontend/app/globals.css (`.genui-mathtext`)
+- frontend/tests/iss105_orphaned_streaming_message.test.mjs (new — 9 guards + 8 scenarios)
 
 ## D-WS-CONN-002 (CI follow-up) · generate_service_token roles + admin wiring test (2026-06-01)
 

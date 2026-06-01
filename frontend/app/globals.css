@@ -2668,6 +2668,27 @@ body[data-theme='light'] .exam-badge {
     color: var(--text-secondary);
 }
 
+/* ISS-105 (D-WS-ORPHAN-001): MathText — KaTeX داخل مكوّنات Generative UI.
+   الحاوية inline افتراضياً (span) فلا تكسر تخطيط العناوين/التسميات؛ والـ block
+   variant (div) للفقرات. المعادلات تُرسَم LTR داخل سياق RTL. */
+.genui-mathtext {
+    color: inherit;
+}
+.genui-mathtext .katex {
+    color: inherit;
+    direction: ltr;
+    unicode-bidi: isolate;
+    text-align: left;
+}
+.genui-mathtext .katex-display {
+    margin: 0.4rem 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+.genui-mathtext-block {
+    display: block;
+}
+
 /* خطوة المعطيات: الكرات الملوّنة */
 .genui-fes-urn {
     display: flex;

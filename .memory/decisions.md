@@ -1,5 +1,31 @@
 # Architectural Decisions
-> Last updated: 2026-05-31 | Branch: `claude/system-not-answering-questions-vBsDi`
+> Last updated: 2026-06-01 | Branch: `claude/system-not-answering-questions-vBsDi`
+
+## D-WS-CONN-002 · Admin Role from JWT `roles` (not phantom `is_admin`) (2026-06-01)
+
+متابعة لـ D-WS-CONN-001 (اتصال WS خالٍ من DB). كان `is_admin` يُقرأ من claim بولياني
+`is_admin` فقط، لكن رمز الوصول الحقيقي يحمل `roles: ["ADMIN", ...]` ولا يحمل `is_admin`
+→ كل توكن إدمن حقيقي = `is_admin=False` → الإدمن مرفوض على قناته («Standard accounts…»)
+ومسموح خطأً على قناة العميل (لا 4403).
+
+**الإصلاح** (`admin.py` + `customer_chat.py`):
+`is_admin = claims.get("is_admin") OR (ADMIN_ROLE in claims.get("roles"))`، حيث
+`ADMIN_ROLE` من `app/services/rbac.py`. الاشتقاق يبقى خالياً من DB (يحترم D-WS-CONN-001).
+
+**مواءمة الاختبارات**: إزالة `decode_user_id` من المعالجين كسرت كل اختبار يُرقِّعه
+(`AttributeError`) ويُموِّه الهوية عبر `db.get` ويقرأ primer الـ `session_ready` كإطار أول.
+أُوئمت 4 ملفات: `test_admin_router_comprehensive.py` (3) + `test_final_router_gaps.py` (3،
+القالب المرجعي) + `test_chat_event_protocol_flag_integration.py` (8) +
+`test_chat_event_protocol_error_contract_integration.py` (5) — كلها تُرقِّع
+`decode_token_payload` بـ claims + مُساعِد `_recv()` يتخطّى `session_ready`.
+
+**القواعد الدائمة**: (1) دور الإدمن يُشتق من الـ JWT (`is_admin` OR `ADMIN_ROLE in roles`)
+— لا تفترض بولياني `is_admin`. (2) الاشتقاق خالٍ من DB. (3) اختبارات WS تُرقِّع
+`decode_token_payload` لا `decode_user_id` (مُزال) + تتخطّى `session_ready`. (4) حدود القناة
+صارمة (4403 على القناة الخطأ).
+
+**التحقق**: `tests/api` → 68 passed (كان 55+13fail). ruff + validate_structure خضراء.
+الإثبات الكامل بالمتصفح + Supabase في Codespace/CI (الـ sandbox يحجب egress). CLAUDE.md §6.78.
 
 ## D-WS-PROXY-004 (hardening) · CI Gate + admin_messages Schema Gap (2026-05-31)
 

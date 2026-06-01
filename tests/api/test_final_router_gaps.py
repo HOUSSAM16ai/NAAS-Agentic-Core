@@ -1,19 +1,17 @@
 """Tests for final remaining gaps in API routers."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.routers.customer_chat import get_db
 from app.api.routers.customer_chat import router as customer_router
 from app.api.routers.ws_auth import (
     _extract_token_from_protocols,
     _parse_protocol_header,
     extract_websocket_auth,
 )
-from app.core.domain.user import User
 
 
 @pytest.fixture
@@ -21,6 +19,15 @@ def customer_app():
     app = FastAPI()
     app.include_router(customer_router)
     return app
+
+
+def _recv(ws):
+    """يستقبل الحدث التالي متجاوزاً primer الـ ``session_ready`` (D-WS-FLAP-003)."""
+    while True:
+        ev = ws.receive_json()
+        if isinstance(ev, dict) and ev.get("type") == "session_ready":
+            continue
+        return ev
 
 
 # --- Customer Chat Tests ---
@@ -40,51 +47,51 @@ def test_customer_ws_decode_fail(customer_app):
     with patch(
         "app.api.routers.customer_chat.extract_websocket_auth", return_value=("token", "jwt")
     ):
-        with patch("app.api.routers.customer_chat.decode_user_id", side_effect=HTTPException(401)):
+        # D-WS-CONN-001: الاتصال يفك الـ JWT عبر decode_token_payload (لا decode_user_id).
+        with patch(
+            "app.api.routers.customer_chat.decode_token_payload", side_effect=HTTPException(401)
+        ):
             with client.websocket_connect("/api/chat/ws") as ws:
-                data = ws.receive_json()
+                data = _recv(ws)
                 assert data["type"] == "error"
                 assert data["payload"]["code"] == "WS_AUTH_INVALID"
 
 
 def test_customer_ws_admin(customer_app):
-    # D-WS-002: admin on customer endpoint → accept() → send_json(WS_AUTH_FORBIDDEN) → close(4403).
+    # D-WS-CONN-001/002: admin actor on customer endpoint → accept() → error(403) → close(4403).
+    # is_admin يأتي من الـ JWT (claim is_admin أو دور ADMIN ضمن roles) — لا استعلام DB.
     client = TestClient(customer_app)
-    mock_user = MagicMock(spec=User)
-    mock_user.is_active = True
-    mock_user.is_admin = True
-    mock_db = AsyncMock()
-    mock_db.get.return_value = mock_user
-    customer_app.dependency_overrides[get_db] = lambda: mock_db
 
     with patch(
         "app.api.routers.customer_chat.extract_websocket_auth", return_value=("token", "jwt")
     ):
-        with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
+        with patch(
+            "app.api.routers.customer_chat.decode_token_payload",
+            return_value={"sub": "1", "is_admin": True},
+        ):
             with client.websocket_connect("/api/chat/ws") as ws:
-                data = ws.receive_json()
+                data = _recv(ws)
                 assert data["type"] == "error"
-                assert data["payload"]["status_code"] in (4401, 4403)
+                assert data["payload"]["status_code"] == 403
+                assert "Admin accounts" in data["payload"]["details"]
 
 
 def test_customer_ws_empty_question(customer_app):
-    # D-WS-002: inactive/missing user → accept() → send_json(error) → close(4401).
+    # D-WS-CONN-001: valid non-admin connects (session_ready primer) → سؤال فارغ → خطأ واضح.
     client = TestClient(customer_app)
-    mock_user = MagicMock(spec=User)
-    mock_user.is_active = True
-    mock_user.is_admin = False
-    mock_db = AsyncMock()
-    mock_db.get.return_value = mock_user
-    customer_app.dependency_overrides[get_db] = lambda: mock_db
 
     with patch(
         "app.api.routers.customer_chat.extract_websocket_auth", return_value=("token", "jwt")
     ):
-        with patch("app.api.routers.customer_chat.decode_user_id", return_value=1):
+        with patch(
+            "app.api.routers.customer_chat.decode_token_payload",
+            return_value={"sub": "1", "is_admin": False},
+        ):
             with client.websocket_connect("/api/chat/ws") as ws:
-                data = ws.receive_json()
+                ws.send_json({"question": ""})
+                data = _recv(ws)
                 assert data["type"] == "error"
-                assert data["payload"]["status_code"] in (4401, 4403)
+                assert "Question is required" in data["payload"]["details"]
 
 
 # --- WS Auth Tests ---

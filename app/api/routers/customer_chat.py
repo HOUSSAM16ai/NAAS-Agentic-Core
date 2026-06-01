@@ -38,7 +38,7 @@ from app.services.auth.token_decoder import decode_token_payload
 from app.services.boundaries.customer_chat_boundary_service import (
     CustomerChatBoundaryService,
 )
-from app.services.rbac import QA_SUBMIT
+from app.services.rbac import ADMIN_ROLE, QA_SUBMIT
 from app.services.skills.ws_heartbeat_skill import handle_control_message
 from app.telemetry.path_observer import close_ws_turn, open_ws_turn
 from shared.chat_protocol.event_protocol import normalize_streaming_event
@@ -525,7 +525,15 @@ async def chat_stream_ws(
         await websocket.close(code=4401)
         return
 
-    actor = WsActor(id=user_id, is_admin=bool(claims.get("is_admin", False)))
+    # ISS-103 (D-WS-CONN-002): is_admin يُشتق من claim ``is_admin`` صراحةً أو من
+    # دور ``ADMIN`` ضمن ``roles`` (رمز الوصول الحقيقي يحمل ``roles`` لا ``is_admin``).
+    # بدون اشتقاق الدور كان كل توكن حقيقي يُعطي is_admin=False → دردشة الإدمن
+    # مرفوضة دائماً (admin.py: "Standard accounts must use the customer chat endpoint").
+    _claim_roles = claims.get("roles") or []
+    is_admin_claim = bool(claims.get("is_admin", False)) or (
+        ADMIN_ROLE in _claim_roles if isinstance(_claim_roles, list) else False
+    )
+    actor = WsActor(id=user_id, is_admin=is_admin_claim)
 
     await websocket.accept(subprotocol=selected_protocol)
 

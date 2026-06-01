@@ -14,6 +14,15 @@ from app.core.database import get_db
 from app.core.domain.user import User
 
 
+def _recv(ws):
+    """يستقبل الحدث التالي متجاوزاً primer الـ ``session_ready`` (D-WS-FLAP-003)."""
+    while True:
+        ev = ws.receive_json()
+        if isinstance(ev, dict) and ev.get("type") == "session_ready":
+            continue
+        return ev
+
+
 @pytest.fixture
 def app():
     app = FastAPI()
@@ -95,9 +104,14 @@ def test_chat_stream_ws_not_admin(app):
             "app.api.routers.admin.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.admin.decode_user_id", return_value=1):
+            # D-WS-CONN-001/002: الهوية من الـ JWT (لا decode_user_id ولا db.get).
+            # توكن غير إدمن (لا claim is_admin ولا دور ADMIN) → رفض على قناة الإدمن.
+            with patch(
+                "app.api.routers.admin.decode_token_payload",
+                return_value={"sub": "1", "is_admin": False},
+            ):
                 with client.websocket_connect("/admin/api/chat/ws") as websocket:
-                    data = websocket.receive_json()
+                    data = _recv(websocket)
                     assert data["type"] == "error"
                     assert "Standard accounts" in data["payload"]["details"]
 
@@ -124,10 +138,14 @@ def test_chat_stream_ws_empty_question(app):
             "app.api.routers.admin.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ):
-            with patch("app.api.routers.admin.decode_user_id", return_value=1):
+            # D-WS-CONN-001/002: توكن إدمن صالح → session_ready → سؤال فارغ → خطأ واضح.
+            with patch(
+                "app.api.routers.admin.decode_token_payload",
+                return_value={"sub": "1", "is_admin": True},
+            ):
                 with client.websocket_connect("/admin/api/chat/ws") as websocket:
                     websocket.send_json({"question": ""})
-                    data = websocket.receive_json()
+                    data = _recv(websocket)
                     assert data["type"] == "error"
                     assert "Question is required" in data["payload"]["details"]
 
@@ -170,7 +188,11 @@ def test_chat_stream_ws_orchestrator_error(app):
             "app.api.routers.admin.extract_websocket_auth",
             return_value=("valid_token", "json"),
         ),
-        patch("app.api.routers.admin.decode_user_id", return_value=1),
+        # D-WS-CONN-001/002: الهوية من الـ JWT — توكن إدمن صالح يُشغّل دوراً حقيقياً.
+        patch(
+            "app.api.routers.admin.decode_token_payload",
+            return_value={"sub": "1", "is_admin": True},
+        ),
         patch(
             "app.api.routers.admin.orchestrator_client.chat_with_agent",
             side_effect=RuntimeError("Orchestrator error"),
@@ -178,8 +200,8 @@ def test_chat_stream_ws_orchestrator_error(app):
     ):
         with client.websocket_connect("/admin/api/chat/ws") as websocket:
             websocket.send_json({"question": "test"})
-            data = websocket.receive_json()
+            data = _recv(websocket)
             if data["type"] == "conversation_init":
-                data = websocket.receive_json()
+                data = _recv(websocket)
             assert data["type"] == "error"
             assert "Orchestrator error" in data["payload"]["details"]

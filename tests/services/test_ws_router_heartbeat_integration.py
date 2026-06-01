@@ -84,7 +84,9 @@ class TestAdminWiring:
         assert ws_section_match is not None, "admin /api/chat/ws endpoint not found"
         ws_section = ws_section_match.group(0)
 
-        handle_idx = ws_section.find("handle_control_message(websocket, payload)")
+        # D-096 أضاف وسيط send_lock لنداء admin أيضاً، لذا نطابق البادئة بدون قوس
+        # الإغلاق حتى نتحمّل التوقيع المُطوَّر (2-arg أو 3-arg) — مثل اختبار customer.
+        handle_idx = ws_section.find("handle_control_message(websocket, payload")
         question_idx = ws_section.find('payload.get("question"')
 
         assert handle_idx > 0, "handle_control_message call not found in admin WS"

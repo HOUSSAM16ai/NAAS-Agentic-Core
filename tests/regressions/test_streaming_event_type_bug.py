@@ -7,6 +7,7 @@ from app.core.ai_gateway import get_ai_client
 from app.core.database import get_db
 from app.core.domain.user import User
 from app.core.security import generate_service_token
+from app.services.rbac import ADMIN_ROLE
 
 
 @pytest.mark.asyncio
@@ -31,7 +32,8 @@ async def test_chat_stream_has_delta_event_type(test_app, db_session):
     await db_session.commit()
     await db_session.refresh(admin_user)
 
-    token = generate_service_token(str(admin_user.id))
+    # D-WS-CONN-002: الاتصال يشتق is_admin من claim roles في الـ JWT (لا من DB).
+    token = generate_service_token(str(admin_user.id), roles=[ADMIN_ROLE])
 
     def override_get_ai_client():
         return mock_ai_client

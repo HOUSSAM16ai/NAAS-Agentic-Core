@@ -3,6 +3,25 @@
 
 ---
 
+## ✅ Resolved 2026-06-01 (ISS-103 CI follow-up — `test` job still red after f368682)
+
+### ISS-103 CI follow-up (D-WS-CONN-002) · 2 deterministic WS test blockers [RESOLVED]
+
+- **Status**: RESOLVED 2026-06-01. أُعيد إنتاج وظيفة CI `test` محلياً (نفس `--deselect` +
+  بيئة `ci.yml`): 13 failed / 3236 passed → **معطّلان حقيقيان** فقط (خارج deselect، deterministic):
+  1. `tests/regressions/test_streaming_event_type_bug.py::test_chat_stream_has_delta_event_type` —
+     `generate_service_token` يضع `sub` فقط → إدمن مرفوض بعد اشتقاق is_admin من الـ JWT. **الإصلاح:**
+     معامل `roles` اختياري في `generate_service_token` + اختبارات إدمن WS تمرّر `roles=[ADMIN_ROLE]`.
+  2. `tests/services/test_ws_router_heartbeat_integration.py::TestAdminWiring::test_call_before_question_check`
+     — فحص نصّي بحرفية قديمة `handle_control_message(websocket, payload)`؛ D-096 أضاف `send_lock`.
+     **الإصلاح:** إرخاء الحرفية (مرآة اختبار customer سطر 49).
+- **11 فشل غير معطّل** (config/settings/kernel/fitness): كود لم يلمسه الفرع + ينجح منفرداً + غير
+  مُدرَج + `main` أخضر ⟹ تلوّث ترتيب sandbox، ينجح على CI النظيف. لا إجراء.
+- **تحقق**: 17/17 (البلوكرَين + heartbeat suite + unit tests لـ generate_service_token) + ruff خضراء.
+  الـ admin_chat_error المُعطَّل: منطقه ينجح الآن (`1 passed`) ويبقى مُعطَّلاً لسباق teardown سابق.
+
+---
+
 ## ✅ Resolved 2026-06-01 (ISS-103 — Admin role mis-derived from JWT)
 
 ### ISS-103 (D-WS-CONN-002) · Admin rejected on admin channel / allowed on customer channel [RESOLVED]

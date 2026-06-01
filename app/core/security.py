@@ -18,7 +18,7 @@ from app.core.config import get_settings
 from app.security.passwords import pwd_context
 
 
-def generate_service_token(user_id: str) -> str:
+def generate_service_token(user_id: str, *, roles: list[str] | None = None) -> str:
     """
     توليد رمز JWT قصير الأجل للمصادقة مع الخدمات الداخلية.
 
@@ -27,15 +27,22 @@ def generate_service_token(user_id: str) -> str:
 
     Args:
         user_id (str): المعرف الفريد للمستخدم أو الخدمة التي تطلب الرمز.
+        roles (list[str] | None): أدوار RBAC اختيارية تُضمَّن في claim ``roles``
+            (مثل ``["ADMIN"]``). اتصال WebSocket يشتق ``is_admin`` من هذا الـ claim
+            (D-WS-CONN-002) تماماً كما يفعل رمز الوصول الحقيقي عبر
+            ``crypto.encode_access_token``. الافتراض ``None`` يبقي السلوك السابق
+            (``sub`` فقط) للتوافق الخلفي.
 
     Returns:
         str: رمز JWT موقع ومشفر باستخدام خوارزمية HS256.
     """
-    payload = {
+    payload: dict[str, object] = {
         "exp": datetime.now(UTC) + timedelta(minutes=5),
         "iat": datetime.now(UTC),
         "sub": user_id,
     }
+    if roles:
+        payload["roles"] = roles
     current_settings = get_settings()
     return jwt.encode(payload, current_settings.SECRET_KEY, algorithm="HS256")
 

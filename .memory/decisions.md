@@ -3932,3 +3932,28 @@ MANDATORY in Codespaces (Postgres egress firewalled in the build sandbox).
 **Files Changed**
 - frontend/app/hooks/useAgentSocket.js (error + assistant_error handlers finalize the bubble)
 - frontend/tests/iss104_error_finalizes_message.test.mjs (new — 11 static guards + 10 scenarios)
+
+---
+
+## D-LANG-GUARD-001 (ISS-107) — حارس اللغة العربية على البثّ + تنظيف سلسلة النماذج (2026-06-02)
+
+**القرار:** كل مسار بثّ يُولِّد إجابة للطالب **يجب** أن يمرّ عبر `guard_arabic_stream`
+(`app/services/skills/arabic_stream_guard.py`). يُحظر بثّ `ai_client.stream_chat` خاماً.
+
+**الآلية:** نافذة أولى (~200 حرف) → فحص النثر بعد إزالة LaTeX (يتجنّب false positive على
+العربية المثقلة بالرياضيات؛ gpt-oss الصحيح نسبته الخام 0.57) → عربي: بثّ + تنظيف الرموز
+الملتصقة | إنجليزي/غارباج: إعادة توليد بـ prompt عربي صارم ثم رسالة عربية نظيفة (لا silent
+failure، لا إنجليزية تصل للطالب).
+
+**القواعد الدائمة (لا تُكسر بدون ADR):**
+1. مسارا البثّ في `local_graph` ملفوفان بالحارس — لا تُزِل اللفّ.
+2. كشف الإنجليزية يعتمد **النثر** لا النسبة الخام (LaTeX يضخّم اللاتينية).
+3. `simple_client._stream_model` يرفع عند content_chunks==0 → تقدّم للنموذج التالي.
+4. سلسلة `ai_config` تقتصر على نماذج عربية مُتحقَّقة حياً أو محميّة بالحُرّاس.
+   nemotron-super (إنجليزي)/glm-4.5-air (فارغ)/trinity (404) **محظورة** كـ fallback.
+5. `detect_explanation_with_context` يربط المتابعات («لم افهم»/«اشرح بالعربية»/«وضّح») بتمرين
+   السياق عبر `_is_followup_explanation_request` (تأثيره صفر بلا تمرين في التاريخ).
+
+**التحقق الحي (real OpenRouter 2026-06-02):** فرض nemotron-super (مُنتِج الإنجليزية) كـ PRIMARY
+→ الحارس كشف وأعاد التوليد → عربي نظيف. المسار المُصلَح: عربي على الموضوع. 23/23 + 123 regression
+خضراء. التحقق الكامل (Supabase + WS + المتصفح) إلزامي في Codespaces.

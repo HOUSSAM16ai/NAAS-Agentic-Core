@@ -1041,25 +1041,16 @@ async def run_local_graph_stream(
     chunk_count = 0
     total_chars = 0
     try:
-        async for raw_chunk in ai_client.stream_chat(messages):
-            # raw_chunk: OpenRouter SSE delta — نستخرج فقط محتوى المساعد
-            try:
-                choices = raw_chunk.get("choices") if isinstance(raw_chunk, dict) else None
-                if not choices:
-                    continue
-                delta = choices[0].get("delta", {}) or {}
-                content = delta.get("content")
-                if not content or not isinstance(content, str):
-                    continue
-                clean = content.replace("\x00", "")
-                if not clean:
-                    continue
-                chunk_count += 1
-                total_chars += len(clean)
-                yield clean
-            except Exception:
-                # قطعة واحدة سيئة لا تكسر التيار
+        # ISS-107: حارس اللغة العربية + إعادة توليد + تنظيف الرموز الملتصقة.
+        # لا نبثّ ai_client.stream_chat خاماً للطالب أبداً (الإنجليزية/الغارباج محظورة).
+        from app.services.skills.arabic_stream_guard import guard_arabic_stream
+
+        async for clean in guard_arabic_stream(ai_client, messages):
+            if not clean:
                 continue
+            chunk_count += 1
+            total_chars += len(clean)
+            yield clean
     except Exception:
         logger.warning("local_graph.stream_failed intent=%s", intent, exc_info=True)
         if obs is not None and span_ctx is not None:
@@ -1466,23 +1457,15 @@ async def run_local_graph_with_exercise_context(
     try:
         # ISS-059 (D-053): max_tokens ديناميكي حسب نوع السؤال
         # CONCEPT=350 | JUSTIFICATION=450 | METHOD=600 | DEFAULT=700 | FULL=900
-        async for raw_chunk in ai_client.stream_chat(messages, max_tokens=token_budget):
-            try:
-                choices = raw_chunk.get("choices") if isinstance(raw_chunk, dict) else None
-                if not choices:
-                    continue
-                delta = choices[0].get("delta", {}) or {}
-                content = delta.get("content")
-                if not content or not isinstance(content, str):
-                    continue
-                clean = content.replace("\x00", "")
-                if not clean:
-                    continue
-                chunk_count += 1
-                total_chars += len(clean)
-                yield clean
-            except Exception:
+        # ISS-107: حارس اللغة العربية على شرح التمرين أيضاً (لا إنجليزية/غارباج).
+        from app.services.skills.arabic_stream_guard import guard_arabic_stream
+
+        async for clean in guard_arabic_stream(ai_client, messages, max_tokens=token_budget):
+            if not clean:
                 continue
+            chunk_count += 1
+            total_chars += len(clean)
+            yield clean
     except Exception:
         logger.warning("local_graph.exercise_explanation_stream_failed", exc_info=True)
         if obs is not None and span_ctx is not None:

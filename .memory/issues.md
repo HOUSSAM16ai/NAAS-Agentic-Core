@@ -3803,3 +3803,66 @@ build sandbox, run the live end-to-end there with the real secrets + logins
 
 **Files:** `frontend/app/hooks/useAgentSocket.js` (error + assistant_error handlers),
 `frontend/tests/iss104_error_finalizes_message.test.mjs` (new, 21 checks).
+
+---
+
+## ISS-107 — أسئلة المتابعة تنهار: إنجليزية + انحراف للكيمياء + فقدان سياق التمرين (2026-06-02)
+
+**بلاغ المستخدم (تجريب حي):** بعد استدعاء تمرين الدوال العددية BAC 2016:
+- «لم افهم التكامل» → رد **بالإنجليزية** (تعريف مجاميع ريمان).
+- «اشرح بالعربية» → **هلوسة كيمياء مشوّهة** (روابط تساهمية، رمز ملتصق «أستاذochemistry»)
+  + فقدان كامل لسياق التمرين + تأخّر شديد.
+
+**الأسباب الجذرية (مُتحقَّق منها بالكود + بنشمارك حي بالمفتاح الحقيقي 2026-06-02):**
+- **RC-1**: صفر حارس لغة/جودة على مسار البثّ الحي. `run_local_graph_stream` و
+  `run_local_graph_with_exercise_context` تبثّان قطع `ai_client.stream_chat` الخام
+  (فقط `\x00` removal). الحُرّاس القدامى يعملون في `_chat_node` غير الانسيابي (كود ميت).
+- **RC-2 (المسبّب المباشر للإنجليزية — مُثبت حياً)**: سلسلة النماذج تنحدر عند ضغط
+  gpt-oss إلى: `nemotron-3-super-120b` → **إنجليزي في content** ("We need to respond
+  in Arabic..."), `glm-4.5-air` → **content فارغ** (reasoning-only), `trinity` → **404**.
+  و `simple_client.stream_chat` كان يعتبر content_chunks==0 نجاحاً (إجابة فارغة بدل التقدّم).
+- **RC-3**: `detect_explanation_with_context` يتطلب نمطاً صارماً؛ «لم افهم»/«اشرح بالعربية»
+  لا يطابقان `_BAC_EXERCISE_EXPLANATION_PATTERNS` → يسقطان للـ LLM العام → هلوسة كيمياء
+  (الـ prompt التعليمي يسرد الكيمياء كمادة).
+- **RC-4**: بطء النموذج — `gpt-oss-120b` = 86-115s، `gpt-oss-20b` = 51s (يفسّر «يتأخر كثيرا»).
+
+**بنشمارك حي (2026-06-02، المفتاح الحقيقي + الـ prompt الإنتاجي):**
+| نموذج | النتيجة | الزمن |
+|------|---------|------|
+| gpt-oss-120b (PRIMARY) | ✅ عربي | 86-115s |
+| gpt-oss-20b | ✅ عربي (ar خام 0.57 بسبب LaTeX) | 51s |
+| nemotron-3-super-120b | ❌ إنجليزي في content | 28s |
+| glm-4.5-air | ⚠️ content فارغ | 16s |
+| nemotron-nano-30b | ✅ عربي مع prompt قصير / فارغ مع prompt طويل | 2-3s |
+| trinity-large-thinking | ❌ 404 | — |
+
+**الإصلاح (شامل دائم):**
+1. **Skill جديد** `app/services/skills/arabic_stream_guard.py` — يلفّ مساري البثّ:
+   يخزّن نافذة أولى (~200 حرف)، يفحص **النثر** (بعد إزالة LaTeX — لتجنّب false positive على
+   العربية+LaTeX)، يكشف الإنجليزية/تسريب التفكير، يعيد التوليد بـ prompt عربي صارم، ثم
+   رسالة عربية نظيفة عند الفشل النهائي. يُنظّف الرموز الملتصقة («أستاذochemistry» → «أستاذ»).
+2. **`simple_client._stream_model`**: يرفع `ValueError` عند content_chunks==0 → `stream_chat`
+   يتقدّم للنموذج التالي بدل إرجاع فراغ.
+3. **`ai_config`**: السلسلة نُظِّفت — حُذف nemotron-super (إنجليزي)/glm (فارغ)/trinity (404)؛
+   أُضيف gemma-4/qwen3-next/kimi (محميّة بالحُرّاس) + nemotron-nano.
+4. **`exercise_retrieval`**: وُسِّعت بوّابة Phase-2 بـ `_is_followup_explanation_request`
+   (علامات حيرة + «اشرح»/«اشرح بالعربية»/«وضّح») → المتابعات تبقى مربوطة بتمرين السياق.
+
+**التحقق الحي (2026-06-02، real OpenRouter):**
+- Scenario A (المسار المُصلَح): ✅ عربي، على الموضوع (تكامل g(x))، 86s.
+- **Scenario B (إثبات الكارثة)**: فُرِض `nemotron-3-super-120b` (مُنتِج الإنجليزية) كـ PRIMARY
+  → سجل الحارس «first attempt non-Arabic — regenerating» → المخرَج **عربي نظيف** («التكامل
+  هو العملية العكسية للاشتقاق...»). **بق المستخدم صار مستحيلاً بنيوياً.**
+- 23/23 اختبار ISS-107 + 117 اختبار regression (iss075/iss079/exercise_retrieval/ai_models) +
+  6 gateway — كلها خضراء. ruff نظيف.
+
+**egress الـ sandbox:** OpenRouter ✅ / Tavily ✅ / Supabase Postgres 6543 **محجوب فعلياً**
+(TCP timeout — حقيقة شبكية). الـ E2E الكامل لمسار الإجابة جرى بـ SQLite + OpenRouter الحقيقي
+(محتوى التمرين من `knowledge_base/` لا من DB). **التحقق الكامل عبر المتصفح + Supabase + WS
+إلزامي في Codespaces الحقيقي** بالدخولين (`houssamannaba963@gmail.com`/`1111`،
+أدمن `benmerahhoussam16@gmail.com`/`1111`).
+
+**الملفات:** `app/services/skills/arabic_stream_guard.py` (جديد)، `app/services/chat/local_graph.py`،
+`app/core/gateway/simple_client.py`، `app/core/ai_config.py`،
+`app/services/capabilities/exercise_retrieval.py`، `app/services/skills/__init__.py`،
+`tests/services/test_iss107_{arabic_stream_guard,context_binding,model_chain}.py` (جديدة).

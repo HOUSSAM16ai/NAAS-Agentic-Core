@@ -7723,3 +7723,42 @@ node frontend/tests/iss105_orphaned_streaming_message.test.mjs   # 9 ضمانا�
 |----------|---------|
 | D-WS-ORPHAN-001 | يتيم البثّ + كنس نهائي + MathText للمكوّنات |
 | **D-WS-CARD-PERSIST-001** | **حفظ بطاقات Generative UI عبر عمود ui_component → تبقى بعد الخروج/الدخول** |
+
+---
+
+## 6.82 Arabic Stream Guard + Model-Chain Hygiene — End of English/Garbage Answers (2026-06-02, ISS-107 / D-LANG-GUARD-001)
+
+> **بلاغ المستخدم (تجريب حي):** بعد تمرين BAC 2016، «لم افهم التكامل» → رد **بالإنجليزية**
+> (مجاميع ريمان)؛ «اشرح بالعربية» → **هلوسة كيمياء مشوّهة** («أستاذochemistry») + فقدان سياق + بطء.
+
+### الجذور (مُثبتة ببنشمارك حي على OpenRouter بالمفتاح الحقيقي 2026-06-02)
+- **RC-1**: صفر حارس لغة على مسار البثّ الحي — `run_local_graph_stream` و
+  `run_local_graph_with_exercise_context` تبثّان قطع `ai_client.stream_chat` الخام.
+- **RC-2 (مباشر)**: سلسلة fallback تنحدر إلى `nemotron-3-super-120b` (**إنجليزي في content**:
+  "We need to respond in Arabic...")، `glm-4.5-air` (**content فارغ** reasoning-only)،
+  `trinity-large-thinking` (**404**). و `stream_chat` كان يعدّ content==0 نجاحاً.
+- **RC-3**: «لم افهم»/«اشرح بالعربية» لا يطابقان أنماط الشرح الصارمة → LLM عام → هلوسة كيمياء.
+- **RC-4**: بطء (gpt-oss-120b 86-115s، gpt-oss-20b 51s) — يفسّر «يتأخر كثيرا».
+
+### الإصلاح
+1. **`arabic_stream_guard.py` (Skill جديد)** — يلفّ مساري البثّ: نافذة أولى ~200 حرف → فحص
+   **النثر بعد إزالة LaTeX** (gpt-oss الصحيح نسبته الخام 0.57 — لا false positive) → عربي: بثّ
+   + تنظيف الرموز الملتصقة | إنجليزي: إعادة توليد بـ prompt عربي صارم → رسالة عربية نظيفة.
+2. **`simple_client._stream_model`** يرفع عند `content_chunks==0` → `stream_chat` يتقدّم.
+3. **`ai_config`** السلسلة نُظِّفت (حُذف nemotron-super/glm/trinity).
+4. **`exercise_retrieval`** ربط المتابعات بتمرين السياق (`_is_followup_explanation_request`).
+
+### القواعد الدائمة (لا تُكسر بدون ADR)
+1. **كل مسار بثّ للطالب يمرّ عبر `guard_arabic_stream`** — ممنوع بثّ `stream_chat` خاماً.
+2. كشف الإنجليزية يعتمد **النثر** لا النسبة الخام (LaTeX يضخّم اللاتينية).
+3. `content_chunks==0` = فشل → تقدّم للنموذج التالي (لا «إجابة فارغة»).
+4. fallback يقتصر على نماذج عربية مُتحقَّقة أو محميّة؛ nemotron-super/glm-4.5-air/trinity **محظورة**.
+5. المتابعات («لم افهم»/«اشرح بالعربية»/«وضّح») تبقى مربوطة بتمرين السياق.
+
+### التحقق الحي (real OpenRouter 2026-06-02)
+- **Scenario B (إثبات الكارثة):** فُرِض `nemotron-3-super-120b` كـ PRIMARY → سجل الحارس
+  «first attempt non-Arabic — regenerating» → مخرَج **عربي نظيف**. بق المستخدم صار مستحيلاً بنيوياً.
+- 23/23 ISS-107 + 123 regression + 6 gateway خضراء؛ ruff نظيف.
+- **egress:** OpenRouter ✅/Tavily ✅/**Supabase 6543 محجوب** في الـ sandbox → E2E مسار الإجابة
+  بـ SQLite + OpenRouter الحقيقي. **التحقق الكامل (Supabase + WS + المتصفح) إلزامي في Codespaces**
+  بالدخولين (`houssamannaba963@gmail.com`/`1111`، أدمن `benmerahhoussam16@gmail.com`/`1111`).

@@ -440,6 +440,21 @@ export const useAgentSocket = (endpoint, token, onConversationUpdate) => {
             if (next.role === 'assistant' && next.isComplete !== true) {
                 next.isComplete = true;
             }
+            // ISS-106 (D-WS-CARD-PERSIST-001): الخلفية تُعيد البطاقة المحفوظة في
+            // الحقل ui_component (snake، شكل {component, props, fallback_text}).
+            // حوّله إلى uiComponent (camel) الذي يتوقّعه GenerativeUIRenderer،
+            // مطابقاً تماماً لتحويل معالج حدث ui_component الحيّ. هكذا تُصيَّر
+            // البطاقة من التاريخ بعد إعادة الدخول.
+            if (!next.uiComponent && next.ui_component && typeof next.ui_component === 'object') {
+                const uc = next.ui_component;
+                if (typeof uc.component === 'string' && uc.component) {
+                    next.uiComponent = {
+                        component: uc.component,
+                        props: uc.props && typeof uc.props === 'object' ? uc.props : {},
+                        fallbackText: String(uc.fallback_text || uc.fallbackText || 'تعذّر عرض المكوّن.'),
+                    };
+                }
+            }
             return next;
         });
         setMessages(normalized);

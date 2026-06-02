@@ -7664,3 +7664,62 @@ node frontend/tests/iss105_orphaned_streaming_message.test.mjs   # 9 ضمانا�
 | D-WS-FINAL-001 | كل إطار نهائي يُنهي الرسالة (error/assistant_error) |
 | **D-WS-ORPHAN-001** | **يتيم البثّ: ui_component في المنتصف + كنس نهائي + MathText للمكوّنات (يحل المؤشّر الأزرق في المنتصف + السهم اللانهائي + LaTeX الخام)** |
 
+
+---
+
+## 6.81 Generative-UI Card Persistence Across Logout/Login (2026-06-02, ISS-106 / D-WS-CARD-PERSIST-001)
+
+> سؤال المستخدم بعد E2E الحيّ لـ ISS-105: «هل البطاقات تبقى محفوظة بعد الخروج وإعادة الدخول؟»
+> الجواب كان **لا** — البطاقات التفاعلية (BKT `bkt_hint_display`، `math_explanation_card`،
+> `probability_tree`، `full_exercise_story`) كانت **حيّة فقط أثناء البثّ** وتختفي عند إعادة
+> فتح المحادثة. هذا القسم يحكم استمرارية البطاقات — لا يُكسر بدون ADR.
+
+### الجذر (مؤكَّد بوكيلَي Explore + قراءة الكود)
+`ui_component` كان يُبَثّ عبر WebSocket فقط:
+- `customer_messages` يحفظ `content` فقط — لا عمود لـ `ui_component`.
+- `save_message()` لا يستقبله؛ BKT (`_evaluate_and_emit_bkt`) والبطاقة الرياضية
+  (`_try_build_math_ui_component`) والبطاقات المحسوبة (orchestrator) كلها بثّ-فقط.
+- مسار التاريخ (`get_conversation_details`/`_latest`) و`CustomerMessageOut` يُرجعان
+  `{role, content, created_at, policy_flags}` فقط.
+- الواجهة **جاهزة** (`ChatInterface.jsx:281` يُصيّر أي رسالة فيها `uiComponent`؛
+  `setMessagesSafe` يحفظ الحقول) لكنها لا تتلقّى الحقل عند التحميل.
+
+### الإصلاح (full-stack — 4 طبقات)
+1. **Schema + ORM**: عمود JSON `ui_component` في `customer_messages` **و** `admin_messages`
+   (`db_schema_config.py` columns + `auto_fix` ALTER + create_table؛ `domain/chat.py`
+   `JSONText` مثل `policy_flags`). **auto-migrate** عند الإقلاع عبر `_fix_missing_column`
+   (ALTER على جدول موجود + CREATE على جديد) — مُتحقَّق على SQLite، ونمط `users.is_active`
+   يُثبت عمله على Supabase/PostgreSQL.
+2. **Write**: `save_message(ui_component=None)` (+ boundary). البطاقة الرياضية تُرفق برسالة
+   النص. البطاقات المستقلة (BKT + calculated-UI events) تُحفظ كصفوف مساعد `content=""` عبر
+   `_persist_ui_component_cards` (BKT في جلسته المعزولة؛ calculated-UI مُلتقَط من حلقة
+   `stream_and_forward` كقائمة `captured`). **حارس التكرار في `save_message` يتخطّى صفوف
+   `content=""`** — وإلا تُسقَط بطاقتان فارغتان في نفس الدور.
+3. **Read**: `CustomerMessageOut.ui_component` + `get_conversation_details`/`_latest`
+   يُرجعان `msg.ui_component`.
+4. **Frontend**: `setMessagesSafe` يحوّل `ui_component` (snake، `{component, props,
+   fallback_text}`) → `uiComponent` (camel، `{component, props, fallbackText}`) لكل رسالة
+   تاريخية — نفس تحويل معالج حدث `ui_component` الحيّ. التصيير دون تغيير.
+
+### القواعد الـ 4 الدائمة (لا تُكسر بدون ADR)
+1. **كل `ui_component` يُبَثّ خلال دور يجب أن يُحفظ** في عمود `ui_component` ويُعاد في مسار التاريخ.
+2. **صفوف البطاقات المستقلة `content=""` مقصودة** (فقاعة بطاقة بلا نص) وتتخطّى حارس التكرار
+   المعتمد على المحتوى في `save_message`.
+3. **التحويل عند بوّابة الواجهة**: `setMessagesSafe` هو نقطة تحويل `ui_component`→`uiComponent`
+   الوحيدة للرسائل التاريخية — لا تُكرّره في كل caller.
+4. **أي مكوّن توليدي جديد يُحفظ بالشكل السلكي** `{component, props, fallback_text}` (نفس حمولة
+   WS) فيتطابق تحويل الحيّ والتاريخ.
+
+### قياس النجاح حيّاً (2026-06-02 — backend حقيقي + OpenRouter حقيقي + SQLite؛ Supabase محجوب في sandbox)
+- ALTER auto-migration على DB موجود: `customer_messages`/`admin_messages` حصلا على `ui_component` ✅
+- دور حيّ → `SELECT ... FROM customer_messages`: صفّ BKT (content="") + صفّ نص (math card مرفقة) ✅
+- `GET /api/chat/conversations/{id}` يُرجع `ui_component` ✅
+- **Playwright متصفح حقيقي**: البطاقات تُصيَّر من التاريخ بعد إعادة تحميل الصفحة **وبعد مسح
+  التخزين + تسجيل دخول كامل** (katex=230, genui=22, BKT «تتبّع المعرفة» ظاهر، لا LaTeX خام) ✅
+- 15/15 اختبار `iss106_card_persistence.test.mjs` + ISS-104/105 سليمة + ruff + runtime_truth ✅
+
+### السلسلة الكاملة (D-WS-ORPHAN-001 → D-WS-CARD-PERSIST-001)
+| Decision | المُصلَح |
+|----------|---------|
+| D-WS-ORPHAN-001 | يتيم البثّ + كنس نهائي + MathText للمكوّنات |
+| **D-WS-CARD-PERSIST-001** | **حفظ بطاقات Generative UI عبر عمود ui_component → تبقى بعد الخروج/الدخول** |

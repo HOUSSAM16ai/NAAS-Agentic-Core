@@ -59,6 +59,11 @@ class AdminMessage(SQLModel, table=True):
     conversation_id: int = Field(foreign_key="admin_conversations.id", index=True)
     role: MessageRole = Field(sa_column=Column(FlexibleEnum(MessageRole)))
     content: str = Field(sa_column=Column(Text))
+    # ISS-106 (D-WS-CARD-PERSIST-001): persisted generative-UI card so it survives reload.
+    ui_component: dict | None = Field(
+        default=None,
+        sa_column=Column(JSONText),
+    )
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
@@ -107,6 +112,11 @@ class CustomerMessage(SQLModel, table=True):
     role: MessageRole = Field(sa_column=Column(FlexibleEnum(MessageRole)))
     content: str = Field(sa_column=Column(Text))
     policy_flags: dict[str, str] | None = Field(
+        default=None,
+        sa_column=Column(JSONText),
+    )
+    # ISS-106 (D-WS-CARD-PERSIST-001): persisted generative-UI card so it survives reload.
+    ui_component: dict | None = Field(
         default=None,
         sa_column=Column(JSONText),
     )

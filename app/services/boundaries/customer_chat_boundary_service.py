@@ -79,11 +79,16 @@ class CustomerChatBoundaryService:
         role: MessageRole,
         content: str,
         policy_flags: dict[str, str] | None = None,
+        ui_component: dict | None = None,
     ) -> None:
         """
         حفظ رسالة المحادثة مع أعلام السياسة.
+
+        ISS-106 (D-WS-CARD-PERSIST-001): ``ui_component`` يحفظ بطاقة الـ Generative UI.
         """
-        await self.persistence.save_message(conversation_id, role, content, policy_flags)
+        await self.persistence.save_message(
+            conversation_id, role, content, policy_flags, ui_component
+        )
 
     async def get_chat_history(self, conversation_id: int, limit: int = 20) -> list[dict[str, str]]:
         """
@@ -309,6 +314,8 @@ class CustomerChatBoundaryService:
                     "content": msg.content[:50000] if msg.content else "",
                     "created_at": msg.created_at.isoformat() if msg.created_at else "",
                     "policy_flags": msg.policy_flags,
+                    # ISS-106 (D-WS-CARD-PERSIST-001): re-supply the card so it survives reload.
+                    "ui_component": msg.ui_component,
                 }
                 for msg in messages
             ],
@@ -348,6 +355,8 @@ class CustomerChatBoundaryService:
                     "content": msg.content[:50000] if msg.content else "",
                     "created_at": msg.created_at.isoformat() if msg.created_at else "",
                     "policy_flags": msg.policy_flags,
+                    # ISS-106 (D-WS-CARD-PERSIST-001): re-supply the card so it survives reload.
+                    "ui_component": msg.ui_component,
                 }
                 for msg in messages
             ],

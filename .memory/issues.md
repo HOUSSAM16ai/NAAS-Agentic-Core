@@ -1,5 +1,22 @@
 # Open Issues & Bugs
-> Last updated: 2026-06-01 | Branch: `claude/search-spinner-equation-display-aZZHd`
+> Last updated: 2026-06-02 | Branch: `claude/search-spinner-equation-display-aZZHd`
+
+---
+
+## ✅ Resolved 2026-06-02 (ISS-106 — generative-UI cards disappear after logout/login)
+
+**Symptom:** البطاقات التفاعلية (BKT، بطاقة الشرح الرياضي، شجرة الاحتمالات، Full Exercise
+Story) تظهر أثناء البثّ الحيّ فقط وتختفي عند إعادة فتح المحادثة — يبقى النص فقط.
+
+**Root cause:** `ui_component` كان **حيّ-فقط** — يُبَثّ عبر WebSocket ولا يُكتب إطلاقاً في
+`customer_messages` (لا عمود)، ومسار التاريخ/`CustomerMessageOut` لا يُرجعه. الواجهة جاهزة
+لكن لا تتلقّى الحقل عند التحميل.
+
+**Fix (D-WS-CARD-PERSIST-001):** عمود JSON `ui_component` (customer + admin، auto-migrate عبر
+ALTER) → `save_message(ui_component=)` + `_persist_ui_component_cards` لصفوف البطاقات المستقلة
+(content="") + التقاط calculated-UI من حلقة البثّ + حفظ البطاقة الرياضية مع النص → إرجاعه في
+التاريخ → `setMessagesSafe` يحوّل `ui_component`→`uiComponent`. **مُتحقَّق حيّاً**: Playwright
+يُثبت بقاء البطاقات بعد إعادة التحميل والخروج/الدخول الكامل (katex=230, genui=22).
 
 ---
 

@@ -199,9 +199,13 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             "conversation_id",
             "role",
             "content",
+            "ui_component",
             "created_at",
         ],
-        "auto_fix": {},
+        "auto_fix": {
+            # ISS-106 (D-WS-CARD-PERSIST-001): generative-UI card JSON (admin parity).
+            "ui_component": 'ALTER TABLE "admin_messages" ADD COLUMN "ui_component" TEXT',
+        },
         "indexes": {
             "conversation_id": 'CREATE INDEX IF NOT EXISTS "ix_admin_messages_conversation_id" ON "admin_messages"("conversation_id")'
         },
@@ -212,6 +216,7 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"conversation_id" INTEGER NOT NULL REFERENCES "admin_conversations"("id") ON DELETE CASCADE,'
             '"role" VARCHAR(50) NOT NULL,'
             '"content" TEXT NOT NULL,'
+            '"ui_component" TEXT,'
             '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
             ")"
         ),
@@ -244,9 +249,14 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             "role",
             "content",
             "policy_flags",
+            "ui_component",
             "created_at",
         ],
-        "auto_fix": {},
+        "auto_fix": {
+            # ISS-106 (D-WS-CARD-PERSIST-001): generative-UI card JSON, so cards
+            # survive logout/login. ALTER adds the column to existing Supabase tables.
+            "ui_component": 'ALTER TABLE "customer_messages" ADD COLUMN "ui_component" TEXT',
+        },
         "indexes": {
             "conversation_id": 'CREATE INDEX IF NOT EXISTS "ix_customer_messages_conversation_id" ON "customer_messages"("conversation_id")'
         },
@@ -258,6 +268,7 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"role" VARCHAR(50) NOT NULL,'
             '"content" TEXT NOT NULL,'
             '"policy_flags" TEXT,'
+            '"ui_component" TEXT,'
             '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
             ")"
         ),

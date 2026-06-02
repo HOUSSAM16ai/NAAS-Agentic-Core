@@ -25,6 +25,9 @@ class CustomerMessageOut(RobustBaseModel):
     content: str
     created_at: str
     policy_flags: dict[str, str] | None = None
+    # ISS-106 (D-WS-CARD-PERSIST-001): persisted generative-UI card, so it
+    # re-renders after logout/login instead of disappearing.
+    ui_component: dict | None = None
 
 
 class CustomerConversationDetails(RobustBaseModel):

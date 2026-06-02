@@ -124,6 +124,37 @@ async def _locked_send_json(
         await websocket.send_json(payload)
 
 
+async def _persist_ui_component_cards(
+    *,
+    conversation_id: int,
+    cards: list[dict[str, object]],
+) -> None:
+    """يحفظ بطاقات الـ Generative UI المستقلة كصفوف مساعد content="" (ISS-106).
+
+    غير حرج: أي فشل يُسجَّل ولا يكسر الدور. كل بطاقة صف مستقل يحمل ui_component
+    بالشكل السلكي ({component, props, fallback_text}) فتُصيَّر من التاريخ بعد إعادة الدخول.
+    """
+    valid = [
+        c
+        for c in cards
+        if isinstance(c, dict) and isinstance(c.get("component"), str) and c["component"]
+    ]
+    if not valid:
+        return
+    try:
+        async with async_session_factory() as db:
+            persistence_service = CustomerChatBoundaryService(db)
+            for card in valid:
+                await persistence_service.save_message(
+                    conversation_id=conversation_id,
+                    role=MessageRole.ASSISTANT,
+                    content="",
+                    ui_component=card,
+                )
+    except Exception as exc:
+        logger.warning("ui_component_card_persist_failed: %s", exc, exc_info=True)
+
+
 async def _evaluate_and_emit_bkt(
     *,
     websocket: WebSocket,
@@ -146,6 +177,24 @@ async def _evaluate_and_emit_bkt(
                 question=question,
                 history=history_messages,
             )
+        bkt_card_payload = {
+            "component": "bkt_hint_display",
+            "props": {
+                "concept_id": evaluation.concept_id,
+                "cognitive_load_estimate": evaluation.cognitive_load_estimate,
+                "student_mastery_probability": (evaluation.student_mastery_probability),
+            },
+            "fallback_text": (
+                f"تتبّع المعرفة: {evaluation.concept_id} — "
+                f"إتقان {evaluation.student_mastery_probability:.0%}"
+            ),
+        }
+        # ISS-106 (D-WS-CARD-PERSIST-001): احفظ بطاقة BKT لتبقى بعد إعادة الدخول.
+        if conversation_id is not None:
+            await _persist_ui_component_cards(
+                conversation_id=conversation_id,
+                cards=[dict(bkt_card_payload)],
+            )
         # D-096: استخدم send_lock لمنع التزامن مع stream_and_forward.
         # نتجاوز normalize_streaming_event عمداً: نوع ui_component يجب أن يصل
         # للواجهة بلا تحوير (التطبيع يحوّل الأنواع المجهولة إلى assistant_delta
@@ -160,18 +209,7 @@ async def _evaluate_and_emit_bkt(
             _bind_stream_metadata(
                 {
                     "type": "ui_component",
-                    "payload": {
-                        "component": "bkt_hint_display",
-                        "props": {
-                            "concept_id": evaluation.concept_id,
-                            "cognitive_load_estimate": evaluation.cognitive_load_estimate,
-                            "student_mastery_probability": (evaluation.student_mastery_probability),
-                        },
-                        "fallback_text": (
-                            f"تتبّع المعرفة: {evaluation.concept_id} — "
-                            f"إتقان {evaluation.student_mastery_probability:.0%}"
-                        ),
-                    },
+                    "payload": bkt_card_payload,
                 },
                 conversation_id,
                 stream_request_id,
@@ -760,6 +798,10 @@ async def chat_stream_ws(
             pending_terminal_event: dict[str, object] | None = None
             stream_task: asyncio.Task[None] | None = None
             stream_error: HTTPException | Exception | None = None
+            # ISS-106 (D-WS-CARD-PERSIST-001): اجمع كل بطاقات ui_component المستقلة
+            # المبثوثة خلال الدور (شجرة احتمالات، بطاقة شرح، قصة تمرين...) لحفظها
+            # كصفوف مستقلة فتبقى بعد إعادة الدخول.
+            captured_ui_components: list[dict[str, object]] = []
 
             try:
 
@@ -769,6 +811,7 @@ async def chat_stream_ws(
                     meta=metadata,
                     history=history_messages,
                     request_id=stream_request_id,
+                    captured=captured_ui_components,
                 ) -> None:
                     nonlocal pending_terminal_event
                     nonlocal complete_ai_response
@@ -823,6 +866,12 @@ async def chat_stream_ws(
                                 normalized_event, lc_id, request_id
                             )
                         else:
+                            # ISS-106 (D-WS-CARD-PERSIST-001): اجمع بطاقات ui_component
+                            # المستقلة لحفظها لاحقاً (تبقى بعد إعادة الدخول).
+                            if event_type == "ui_component" and isinstance(
+                                normalized_event.get("payload"), dict
+                            ):
+                                captured.append(dict(normalized_event["payload"]))
                             # D-096: send_lock يمنع التزامن مع BKT task
                             await _locked_send_json(
                                 websocket,
@@ -912,6 +961,11 @@ async def chat_stream_ws(
                             "- Absence of signal treated as failure.",
                             local_conversation_id,
                         )
+                        # ISS-106 (D-WS-CARD-PERSIST-001): البطاقة الرياضية تُبنى من
+                        # النص المكتمل وتُرفق برسالة المساعد لتبقى بعد إعادة الدخول.
+                        _assistant_card = _try_build_math_ui_component(
+                            complete_ai_response.replace("\x00", "")
+                        )
                         for _attempt in range(2):
                             try:
                                 async with async_session_factory() as db:
@@ -920,6 +974,7 @@ async def chat_stream_ws(
                                         conversation_id=local_conversation_id,
                                         role=MessageRole.ASSISTANT,
                                         content=complete_ai_response.replace("\x00", ""),
+                                        ui_component=_assistant_card,
                                     )
                                     assistant_message_persisted = True
                                     logger.info(
@@ -941,6 +996,16 @@ async def chat_stream_ws(
                                 "[CRITICAL_DATA_LOSS] Fallback persistence completely failed for "
                                 f"conversation {local_conversation_id}."
                             )
+
+                # ── Persist standalone generative-UI cards (ISS-106) ──
+                # كل بطاقة ui_component مستقلة بُثَّت خلال الدور (شجرة احتمالات، قصة
+                # تمرين، بطاقة شرح...) تُحفظ كصف مساعد content="" لتُصيَّر من التاريخ
+                # بعد إعادة الدخول. غير حرج: أي فشل يُسجَّل ولا يكسر إنهاء الدور.
+                if captured_ui_components and local_conversation_id is not None:
+                    await _persist_ui_component_cards(
+                        conversation_id=local_conversation_id,
+                        cards=captured_ui_components,
+                    )
 
                 # ── Guaranteed terminal frame ──
                 # Exactly one terminal event (assistant_final or error) per turn,

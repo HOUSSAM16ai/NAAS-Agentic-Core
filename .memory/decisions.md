@@ -1,5 +1,45 @@
 # Architectural Decisions
-> Last updated: 2026-06-01 | Branch: `claude/search-spinner-equation-display-aZZHd`
+> Last updated: 2026-06-02 | Branch: `claude/search-spinner-equation-display-aZZHd`
+
+## D-WS-CARD-PERSIST-001 · Persist generative-UI cards across logout/login (2026-06-02)
+
+**Context (ISS-106):** البطاقات التفاعلية (BKT `bkt_hint_display`، `math_explanation_card`،
+`probability_tree`، `full_exercise_story`) كانت **حيّة فقط أثناء البثّ** وتختفي عند الخروج
+وإعادة الدخول — `customer_messages` يحفظ `content` فقط، و`save_message`/`CustomerMessageOut`/
+مسار التاريخ لا يعرفون `ui_component`. الواجهة جاهزة (`ChatInterface.jsx:281` يُصيّر أي رسالة
+فيها `uiComponent`) لكن الخلفية لا تُرسل الحقل. المستخدم طلب الحفظ في قاعدة البيانات.
+
+**Decision (full-stack persistence):**
+1. **Schema + ORM**: عمود JSON جديد `ui_component` في `customer_messages` **و** `admin_messages`
+   (`db_schema_config.py` columns + `auto_fix` ALTER + create_table؛ `domain/chat.py` `JSONText`
+   مثل `policy_flags`). الترحيل تلقائي عند الإقلاع — مُتحقَّق حيّاً: ALTER على DB موجود + CREATE
+   على جديد (SQLite + Supabase عبر `_fix_missing_column`).
+2. **Write**: `save_message(ui_component=None)` (+ boundary). البطاقة الرياضية تُرفق برسالة
+   النص (`_try_build_math_ui_component`). البطاقات المستقلة (BKT + calculated-UI events)
+   تُحفظ كصفوف مساعد `content=""` عبر `_persist_ui_component_cards` (BKT في `_evaluate_and_emit_bkt`
+   بجلسته المعزولة؛ calculated-UI مُلتقَط من حلقة `stream_and_forward`). حارس التكرار في
+   `save_message` يتخطّى صفوف `content=""` لئلا تُسقَط بطاقتان فارغتان في نفس الدور.
+3. **Read**: `CustomerMessageOut.ui_component` + `get_conversation_details`/`_latest` يُرجعان
+   `msg.ui_component`.
+4. **Frontend**: `setMessagesSafe` يحوّل `ui_component` (snake، `{component, props, fallback_text}`)
+   → `uiComponent` (camel، `{component, props, fallbackText}`) لكل رسالة تاريخية — نفس تحويل
+   معالج حدث `ui_component` الحيّ. التصيير دون تغيير.
+
+**Permanent rule:** كل `ui_component` يُبَثّ خلال دور **يجب** أن يُحفظ في `ui_component` ويُعاد
+في مسار التاريخ. صفوف البطاقات المستقلة `content=""` مقصودة (تُصيَّر فقاعة بطاقة بلا نص) وتتخطّى
+حارس التكرار المعتمد على المحتوى.
+
+**Live verification (2026-06-02):** ALTER auto-migration على DB موجود ✅ | دور حيّ (OpenRouter
+حقيقي) → DB يحوي صفّ BKT (content="") + صفّ نص (math card مرفقة) ✅ | `GET /api/chat/conversations/{id}`
+يُرجع `ui_component` ✅ | **Playwright متصفح حقيقي**: البطاقات تُصيَّر من التاريخ بعد إعادة تحميل
+الصفحة **وبعد مسح التخزين + تسجيل دخول كامل** (katex=230, genui=22, BKT ظاهر) ✅ | 15/15 اختبار
+node + ISS-104/105 سليمة + ruff + runtime_truth ✅. (Supabase Postgres محجوب في الـ sandbox —
+اختُبر على SQLite + OpenRouter حقيقي؛ مسار ALTER يعمل على الاثنين.)
+
+**Files:** `app/core/db_schema_config.py` · `app/core/domain/chat.py` ·
+`app/services/customer/chat_persistence.py` · `app/services/boundaries/customer_chat_boundary_service.py` ·
+`app/api/schemas/customer_chat.py` · `app/api/routers/customer_chat.py` ·
+`frontend/app/hooks/useAgentSocket.js` · `frontend/tests/iss106_card_persistence.test.mjs` (new).
 
 ## D-WS-ORPHAN-001 · Orphaned streaming message + MathText for generative UI (2026-06-01)
 

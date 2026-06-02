@@ -135,11 +135,20 @@ class ActiveModels:
     PRIMARY = _resolve_primary_model("openai/gpt-oss-120b:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
-    GATEWAY_FALLBACK_1 = "openai/gpt-oss-20b:free"  # demoted from PRIMARY 2026-05-27 (ISS-082)
-    GATEWAY_FALLBACK_2 = "nvidia/nemotron-3-super-120b-a12b:free"  # verified live 2026-05-27
-    GATEWAY_FALLBACK_3 = "z-ai/glm-4.5-air:free"  # verified live 2026-05-27
-    GATEWAY_FALLBACK_4 = "nvidia/nemotron-3-nano-30b-a3b:free"  # works on short prompts
-    GATEWAY_FALLBACK_5 = "arcee-ai/trinity-large-thinking:free"
+    # ISS-107 (2026-06-02): بنشمارك حي بالمفتاح الحقيقي + الـ system prompt الإنتاجي
+    # كشف أن السلسلة القديمة تنحدر إلى نماذج كارثية عند ضغط gpt-oss:
+    #   ❌ nvidia/nemotron-3-super-120b → "We need to respond in Arabic..." (إنجليزي في content)
+    #   ❌ z-ai/glm-4.5-air → content فارغ (reasoning-only)
+    #   ❌ arcee-ai/trinity-large-thinking → HTTP 404 (غير موجود)
+    # ✅ verified Arabic content (full prompt): gpt-oss-120b، gpt-oss-20b.
+    # nemotron-nano: عربي سريع مع prompt قصير، لكن reasoning-only مع prompt طويل (D-067)
+    #   — آمن الآن بفضل guard "content_chunks==0 → advance" + Arabic stream guard (ISS-107).
+    # gemma-4/qwen3-next/kimi: نماذج instruct كبيرة (429 وقت البنشمارك)، محميّة بالحُرّاس.
+    GATEWAY_FALLBACK_1 = "openai/gpt-oss-20b:free"  # ✅ Arabic content (live 2026-06-02)
+    GATEWAY_FALLBACK_2 = "nvidia/nemotron-3-nano-30b-a3b:free"  # سريع؛ محميّ بـ content==0 guard
+    GATEWAY_FALLBACK_3 = "google/gemma-4-26b-a4b-it:free"  # Gemma — عربي قوي؛ محميّ بالحُرّاس
+    GATEWAY_FALLBACK_4 = "qwen/qwen3-next-80b-a3b-instruct:free"  # instruct كبير؛ محميّ بالحُرّاس
+    GATEWAY_FALLBACK_5 = "moonshotai/kimi-k2.6:free"  # احتياطي أخير كبير؛ محميّ بالحُرّاس
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY
     TIER_SMART = PRIMARY

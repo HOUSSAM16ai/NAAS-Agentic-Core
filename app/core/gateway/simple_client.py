@@ -209,6 +209,17 @@ class OpenRouterClient(LLMClient):
                         reasoning_chunks,
                     )
 
+                # ISS-107 (D-WS-LANG-GUARD): نموذج لم يُنتج أي content حقيقي
+                # (reasoning-only مثل glm-4.5-air، أو فراغ تام) يُعَدّ فشلاً —
+                # نرفع استثناءً ليتقدّم stream_chat للنموذج التالي بدل إرجاع
+                # إجابة فارغة («لا يجيب»). آمن: كل ما بُثّ كان content=None
+                # (المستهلك يتخطّاه)، فلا غارباج وصل للطالب.
+                if content_chunks == 0:
+                    raise ValueError(
+                        f"empty_completion model={model_id} "
+                        f"(content_chunks=0 reasoning_chunks={reasoning_chunks})"
+                    )
+
         except httpx.StreamError as e:
             raise httpx.ConnectError(f"Stream error: {e}") from e
 

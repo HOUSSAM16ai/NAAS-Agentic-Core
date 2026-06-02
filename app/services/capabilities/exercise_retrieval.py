@@ -826,6 +826,44 @@ def _detect_entry_from_history(
     return _find_matching_entry(recent_text)
 
 
+# ISS-107: علامات متابعة قصيرة/حيرة تُبقي السؤال مربوطاً بتمرين السياق.
+# «لم افهم التكامل» و«اشرح بالعربية» لا يطابقان _BAC_EXERCISE_EXPLANATION_PATTERNS
+# (لا «اشرح» مجرّدة، ولا علامات الحيرة) → كانا يسقطان للـ LLM العام → هلوسة كيمياء.
+# هذه المجموعة تُفعِّل Phase-2 (المعتمد على التاريخ) فقط — تأثيرها صفر بلا تمرين
+# في السياق (`_detect_entry_from_history` يُرجع None فيسقط للمسار العام).
+_FOLLOWUP_EXPLANATION_MARKERS: tuple[str, ...] = (
+    "لم افهم",
+    "لم أفهم",
+    "ما فهمت",
+    "مافهمت",
+    "مفهمتش",
+    "ما فهمتش",
+    "كيفاش",
+    "وضّح",
+    "وضح",
+    "اشرح",
+    "إشرح",
+    "اشرحلي",
+    "فسّر",
+    "فسر",
+    "بسّط",
+    "بسط",
+    "بالعربية",
+    "اعد الشرح",
+    "أعد الشرح",
+    "اعد شرح",
+    "explain",
+    "i don't understand",
+    "didn't understand",
+    "in arabic",
+)
+
+
+def _is_followup_explanation_request(normalized: str) -> bool:
+    """يكشف متابعة شرح/حيرة قصيرة تستحق ربطها بتمرين السياق (ISS-107)."""
+    return any(m in normalized for m in _FOLLOWUP_EXPLANATION_MARKERS)
+
+
 def detect_explanation_with_context(
     request: ExerciseRetrievalRequest,
     history_messages: list[dict[str, str]] | None = None,
@@ -856,8 +894,11 @@ def detect_explanation_with_context(
         matched_entry = _find_matching_entry(normalized)
         reason_used = "bac_explanation_with_context"
 
-    # المرحلة 2 (ISS-058): استفسار مفاهيمي + سياق محادثة عن تمرين بكالوريا
-    if matched_entry is None and has_explanation_pattern:
+    # المرحلة 2 (ISS-058 + ISS-107): استفسار مفاهيمي/حيرة/متابعة قصيرة + سياق محادثة
+    # عن تمرين بكالوريا. وُسِّعت البوّابة لتشمل علامات المتابعة («لم افهم»، «اشرح
+    # بالعربية»، «وضّح») لأن «اشرح بالعربية» لا يطابق الأنماط الصارمة → كان يهلوس.
+    is_followup = has_explanation_pattern or _is_followup_explanation_request(normalized)
+    if matched_entry is None and is_followup:
         context_entry = _detect_entry_from_history(history_messages)
         if context_entry is not None:
             matched_entry = context_entry
@@ -867,7 +908,7 @@ def detect_explanation_with_context(
         return ExplanationWithContextDecision(
             recognized=False,
             reason="no_bac_explanation_pattern"
-            if not has_explanation_pattern
+            if not is_followup
             else "no_matching_entry_or_context",
         )
 

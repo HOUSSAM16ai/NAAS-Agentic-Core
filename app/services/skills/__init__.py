@@ -48,6 +48,12 @@ from app.services.skills.answer_quality_skill import (
     QualityIssue,
     get_answer_quality_skill,
 )
+from app.services.skills.arabic_stream_guard import (
+    arabic_prose_ratio,
+    guard_arabic_stream,
+    is_probably_non_arabic,
+    sanitize_stream_chunk,
+)
 from app.services.skills.bac_exercise_skill import (
     BACExerciseSkill,
     BACSkillExplanationOutput,
@@ -203,6 +209,7 @@ __all__ = [
     "TopicLockInput",
     "TopicLockOutput",
     "apply_channel_b_firewall",
+    "arabic_prose_ratio",
     "build_exercise_explanation_prompt",
     "get_answer_quality_skill",
     "get_bkt_cognitive_summary",
@@ -219,5 +226,8 @@ __all__ = [
     "get_skill_invocation_protocol_summary",
     "get_step_by_step_summary",
     "get_topic_lock",
+    "guard_arabic_stream",
+    "is_probably_non_arabic",
     "list_all_doctrines",
+    "sanitize_stream_chunk",
 ]

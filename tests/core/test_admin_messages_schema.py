@@ -17,8 +17,10 @@ def test_admin_messages_registered():
 
 def test_admin_messages_columns_match_orm():
     # يطابق ORM في app/core/domain/chat.py:AdminMessage (بلا policy_flags).
+    # D-WS-CARD-PERSIST-001 (ISS-106): عمود ``ui_component`` (JSON TEXT) أُضيف لحفظ
+    # بطاقات Generative UI عبر الخروج/الدخول — بين ``content`` و ``created_at``.
     columns = REQUIRED_SCHEMA["admin_messages"]["columns"]
-    assert columns == ["id", "conversation_id", "role", "content", "created_at"]
+    assert columns == ["id", "conversation_id", "role", "content", "ui_component", "created_at"]
     assert "policy_flags" not in columns
 
 

@@ -3957,3 +3957,40 @@ failure، لا إنجليزية تصل للطالب).
 **التحقق الحي (real OpenRouter 2026-06-02):** فرض nemotron-super (مُنتِج الإنجليزية) كـ PRIMARY
 → الحارس كشف وأعاد التوليد → عربي نظيف. المسار المُصلَح: عربي على الموضوع. 23/23 + 123 regression
 خضراء. التحقق الكامل (Supabase + WS + المتصفح) إلزامي في Codespaces.
+
+## D-DB-BRIDGE-001 — جسر Supabase للوصول إلى قاعدة البيانات عبر HTTPS (2026-06-03)
+
+**السياق:** جدار الـ sandbox/Codespaces يحجب TCP الخام إلى منافذ Postgres (5432/6543)، فكل
+تحقّق DB حي كان «مؤجَّلاً إلى Codespaces» طوال تاريخ المشروع. دالة Supabase Edge منشورة
+(`claude-admin`) تُشغّل SQL وتُرجِع JSON عبر HTTPS (منفذ 443) — المنفذ الوحيد المفتوح دائماً.
+
+**القرار:** `scripts/db_bridge.py` (stdlib `urllib` فقط) هو أداة الوصول لقاعدة البيانات من أي
+بيئة. يقرأ `SUPABASE_EDGE_FUNCTION_URL` (عام، له افتراضي) و `SUPABASE_EDGE_FUNCTION_KEY`
+(سرّ — من بيئة العملية فقط، يعيش في `.devcontainer/secrets.env` المُتجاهَل من git). `supervisor.sh`
+يحقن المتغيّرين عند الإقلاع.
+
+**الاستخدام:**
+```bash
+set -a && . .devcontainer/secrets.env && set +a
+python3 scripts/db_bridge.py --version          # SELECT version();
+python3 scripts/db_bridge.py "SELECT ... ;"     # SQL مباشر أو عبر stdin
+```
+
+**درس المصادقة:** دالة Edge بشكل افتراضي `verify_jwt = true` → بوّابة Supabase ترفض كلمة
+السر المخصّصة كـ JWT (`UNAUTHORIZED_INVALID_JWT_FORMAT`) قبل أن يعمل كود الدالة. الإصلاح:
+نشر الدالة بـ `--no-verify-jwt` فتصل كلمة السر للكود الذي يتحقق منها بنفسه.
+
+**القواعد الدائمة (لا تُكسر بدون ADR):**
+1. **قراءة/تشخيص/DDL يدوي فقط — لا كتابة مزدوجة.** صفوف المسار الحي (`customer_messages`/
+   `admin_messages` — D-006) تبقى ملك طبقة التطبيق. لا تكتبها عبر الجسر.
+2. **السرّ من البيئة حصراً** — لا يُضمَّن في الكود ولا يُلتزَم في git (لا في `.memory/` ولا
+   `CLAUDE.md`). فقط `.devcontainer/secrets.env` (مُتجاهَل) + placeholder في `secrets.env.example`.
+3. **stdlib فقط** — الأداة بلا تبعيات خارجية (تعمل في البيئات المتدهورة).
+4. **الدالة تبقى `--no-verify-jwt`** مع تحقّق كلمة السر داخل كودها.
+5. **لا يُلغي مبدأ auto-schema** — تغييرات المخطّط تبقى عبر `validate_schema_on_startup()` +
+   `db_schema_config.py:REQUIRED_SCHEMA` (D-074). الجسر للفحص والتحقّق اليدوي.
+
+**التحقق الحي (2026-06-03 — بعد `--no-verify-jwt`):** `SELECT version()` → **PostgreSQL 17.6**
+(HTTP 200) | `current_database=postgres, current_user=postgres` | استعراض المخطّط الحي يؤكّد
+وجود `customer_messages`/`admin_messages`/`student_bkt_analytics`/`users`/`customer_conversations`.
+أول تحقّق DB حي مباشر من داخل الـ sandbox دون انتظار Codespaces. مُوثَّق في CLAUDE.md §6.83.

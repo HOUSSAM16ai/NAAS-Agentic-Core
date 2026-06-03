@@ -252,6 +252,19 @@ ENVEOF
         changed=1
     fi
 
+    # ── SUPABASE_EDGE_FUNCTION_* (D-DB-BRIDGE-001) ──────────────────────────────
+    # جسر HTTPS عبر منفذ 443 لتنفيذ SQL على Supabase حين تُحجَب منافذ Postgres
+    # 5432/6543 في الـ sandbox/Codespaces. الـ URL ليس سرياً؛ الـ KEY سري ويُحقَن
+    # من secrets.env (git-ignored) أو Codespaces/Gitpod Secrets. راجع CLAUDE.md §6.83.
+    if [ -n "${SUPABASE_EDGE_FUNCTION_URL:-}" ]; then
+        _set_env_key "SUPABASE_EDGE_FUNCTION_URL" "$SUPABASE_EDGE_FUNCTION_URL"
+        changed=1
+    fi
+    if [ -n "${SUPABASE_EDGE_FUNCTION_KEY:-}" ]; then
+        _set_env_key "SUPABASE_EDGE_FUNCTION_KEY" "$SUPABASE_EDGE_FUNCTION_KEY"
+        changed=1
+    fi
+
     # ── BACKEND_CORS_ORIGINS (D-WS-002 + D-WS-GITPOD-001) ───────────────────
     # يُعيَّن دائماً لضمان تحديث القيمة عند إضافة نطاقات جديدة.
     # D-WS-GITPOD-001: يشمل *.gitpod.dev (Gitpod Flex/Ona) و *.app.github.dev (Codespaces).

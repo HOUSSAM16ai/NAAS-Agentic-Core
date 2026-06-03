@@ -262,6 +262,20 @@ AI/Learning:
   knowledge_edges    — id, source_id FK, target_id FK, relation_type, weight
 ```
 
+### DB access path for operators / Claude Code (D-DB-BRIDGE-001)
+
+```
+Two ways to reach the DB:
+  1. App runtime → asyncpg → Supabase PgBouncer :6543 / direct :5432
+     (only works where Postgres ports are open; blocked in sandbox/Codespaces)
+
+  2. scripts/db_bridge.py → HTTPS :443 → Supabase Edge Function "claude-admin"
+     → executes SQL, returns JSON   (works everywhere; 443 is never firewalled)
+        config: SUPABASE_EDGE_FUNCTION_URL (public) + SUPABASE_EDGE_FUNCTION_KEY (secret, env-only)
+        scope:  read / diagnose / manual DDL — NOT live-path writes (D-006)
+        verified live 2026-06-03: PostgreSQL 17.6, current_user=postgres
+```
+
 ---
 
 ## 6. Config System

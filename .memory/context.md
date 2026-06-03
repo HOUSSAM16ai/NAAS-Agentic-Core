@@ -42,6 +42,17 @@
 - **alembic_version**: `f2b3c4d5e6f7`
 - **PgBouncer quirk**: transaction mode — always use `statement_cache_size=0` with asyncpg
 
+## DB access for Claude Code — Supabase bridge (D-DB-BRIDGE-001, live 2026-06-03)
+- **Tool**: `scripts/db_bridge.py` runs SQL against live Supabase over **HTTPS:443** (Postgres
+  ports 5432/6543 stay firewalled in sandbox/Codespaces). Verified live: **PostgreSQL 17.6**,
+  `current_user=postgres` (full SQL access).
+- **Usage**: `set -a && . .devcontainer/secrets.env && set +a && python3 scripts/db_bridge.py "SELECT ...;"`
+- **Config (env only)**: `SUPABASE_EDGE_FUNCTION_URL` (public, default in script) +
+  `SUPABASE_EDGE_FUNCTION_KEY` (secret — lives in git-ignored `.devcontainer/secrets.env`,
+  injected by `supervisor.sh`; **never** committed to any tracked file).
+- **Scope**: read / diagnose / manual DDL only — NOT for live-path writes (`customer_messages`/
+  `admin_messages` stay app-owned per D-006). Full doctrine: CLAUDE.md §6.83.
+
 ## AI Gateway (live 2026-05-09)
 - **Client**: `SimpleAIClient` (`app/core/gateway/simple_client.py`)
 - **Primary model**: `nvidia/nemotron-3-super-120b-a12b:free`

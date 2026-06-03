@@ -28,28 +28,53 @@ import re
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from prometheus_client import CollectorRegistry, Counter
-
 logger = logging.getLogger("cogniforge.skills.arabic_stream_guard")
 
-# ─── مقاييس Prometheus (registry مستقل لكل skill — §6 doctrine) ────────────────
-_REGISTRY = CollectorRegistry()
-_GUARD_CHECKS = Counter(
-    "cogniforge_skill_lang_guard_checks_total",
-    "عدد فحوصات نافذة اللغة على البثّ الحي",
-    ["result"],  # arabic | rejected
-    registry=_REGISTRY,
-)
-_GUARD_REGEN = Counter(
-    "cogniforge_skill_lang_guard_regenerations_total",
-    "عدد إعادات التوليد بعد رفض النافذة الأولى",
-    registry=_REGISTRY,
-)
-_GUARD_FALLBACK = Counter(
-    "cogniforge_skill_lang_guard_fallback_total",
-    "عدد مرّات إصدار الرسالة العربية النظيفة بعد فشل إعادة التوليد",
-    registry=_REGISTRY,
-)
+# ─── مقاييس Prometheus — استيراد دفاعي (registry مستقل لكل skill — §6 doctrine) ──
+# نمط الكود: لا يجوز أن يفشل استيراد الـ skill بسبب غياب prometheus_client
+# (بوّابات CI minimal-deps تستورد الحزمة عبر __init__ بدون prometheus).
+try:
+    from prometheus_client import CollectorRegistry, Counter
+
+    _REGISTRY = CollectorRegistry()
+    _GUARD_CHECKS = Counter(
+        "cogniforge_skill_lang_guard_checks_total",
+        "عدد فحوصات نافذة اللغة على البثّ الحي",
+        ["result"],  # arabic | rejected
+        registry=_REGISTRY,
+    )
+    _GUARD_REGEN = Counter(
+        "cogniforge_skill_lang_guard_regenerations_total",
+        "عدد إعادات التوليد بعد رفض النافذة الأولى",
+        registry=_REGISTRY,
+    )
+    _GUARD_FALLBACK = Counter(
+        "cogniforge_skill_lang_guard_fallback_total",
+        "عدد مرّات إصدار الرسالة العربية النظيفة بعد فشل إعادة التوليد",
+        registry=_REGISTRY,
+    )
+    _METRICS_AVAILABLE = True
+except ImportError:
+    _METRICS_AVAILABLE = False
+
+
+def _record_check(result: str) -> None:
+    """يُسجِّل نتيجة فحص نافذة اللغة (arabic | rejected)."""
+    if _METRICS_AVAILABLE:
+        _GUARD_CHECKS.labels(result=result).inc()
+
+
+def _record_regen() -> None:
+    """يُسجِّل إعادة توليد بعد رفض النافذة الأولى."""
+    if _METRICS_AVAILABLE:
+        _GUARD_REGEN.inc()
+
+
+def _record_fallback() -> None:
+    """يُسجِّل إصدار الرسالة العربية النظيفة بعد فشل كل المحاولات."""
+    if _METRICS_AVAILABLE:
+        _GUARD_FALLBACK.inc()
+
 
 # ─── ثوابت ────────────────────────────────────────────────────────────────────
 _WINDOW_CHARS = 200
@@ -216,10 +241,10 @@ async def _guarded_attempt(
             if buf_len >= _WINDOW_CHARS:
                 window = "".join(buf)
                 if is_probably_non_arabic(window):
-                    _GUARD_CHECKS.labels(result="rejected").inc()
+                    _record_check("rejected")
                     yield ("reject", "")
                     return
-                _GUARD_CHECKS.labels(result="arabic").inc()
+                _record_check("arabic")
                 decided = True
                 cleaned = sanitize_stream_chunk(window)
                 if cleaned:
@@ -233,10 +258,10 @@ async def _guarded_attempt(
     if not decided and buf:
         window = "".join(buf)
         if is_probably_non_arabic(window):
-            _GUARD_CHECKS.labels(result="rejected").inc()
+            _record_check("rejected")
             yield ("reject", "")
             return
-        _GUARD_CHECKS.labels(result="arabic").inc()
+        _record_check("arabic")
         cleaned = sanitize_stream_chunk(window)
         if cleaned:
             yield ("chunk", cleaned)
@@ -268,7 +293,7 @@ async def guard_arabic_stream(
         return
 
     # المحاولة الأولى رُفضت (نافذة إنجليزية/غارباج) — أعِد التوليد بـ prompt عربي صارم
-    _GUARD_REGEN.inc()
+    _record_regen()
     logger.warning("arabic_stream_guard: first attempt non-Arabic — regenerating (strict)")
     non_system = [m for m in messages if m.get("role") != "system"]
     strict_messages = [{"role": "system", "content": _STRICT_ARABIC_PROMPT}, *non_system]
@@ -282,6 +307,6 @@ async def guard_arabic_stream(
         return
 
     # فشل كل شيء → رسالة عربية نظيفة بدل الغارباج (لا silent failure)
-    _GUARD_FALLBACK.inc()
+    _record_fallback()
     logger.error("arabic_stream_guard: regeneration also non-Arabic — emitting clean fallback")
     yield _ARABIC_FALLBACK_MESSAGE

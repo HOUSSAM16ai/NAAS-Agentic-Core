@@ -7762,3 +7762,109 @@ node frontend/tests/iss105_orphaned_streaming_message.test.mjs   # 9 ضمانا�
 - **egress:** OpenRouter ✅/Tavily ✅/**Supabase 6543 محجوب** في الـ sandbox → E2E مسار الإجابة
   بـ SQLite + OpenRouter الحقيقي. **التحقق الكامل (Supabase + WS + المتصفح) إلزامي في Codespaces**
   بالدخولين (`houssamannaba963@gmail.com`/`1111`، أدمن `benmerahhoussam16@gmail.com`/`1111`).
+
+---
+
+## 6.83 Supabase DB Bridge — SQL over HTTPS When Postgres Ports Are Firewalled (2026-06-03, D-DB-BRIDGE-001)
+
+> القاعدة الذهبية البيئية المتكررة في هذا المشروع: **جدار الـ sandbox/Codespaces يحجب
+> TCP الخام إلى منافذ Postgres (5432/6543)** — موثَّق منذ §6.55/§6.74/§6.82. كل
+> تحقّق DB حي كان «مؤجَّلاً إلى Codespaces». هذا القسم يكسر ذلك القيد نهائياً: نُشغِّل
+> SQL ضد Supabase عبر **HTTPS (منفذ 443)** الذي لا يُحجب أبداً.
+
+### المعمارية
+
+```
+Agent / scripts                 HTTPS :443 (مفتوح دائماً)        Supabase
+  python3 scripts/db_bridge.py  ───────────────────────────►  Edge Function
+    POST {"sql_query": "..."}    Authorization: Bearer <token>   "claude-admin"
+                                                                    │
+                                                                    ▼
+                                                              يُنفِّذ SQL
+                                                              ويُرجِع JSON
+  ◄───────────────────────────  {"success":true,"data":[...]}  ◄──┘
+```
+
+منفذا Postgres (5432/6543) يبقيان محجوبين — **لا نلمسهما**. الجسر يمرّ عبر طبقة
+HTTP التي يفتحها كل بيئة (نفس مبدأ `scripts/diagnose_chat.py` و OpenRouter/Tavily).
+
+### الأداة (`scripts/db_bridge.py`)
+
+- **stdlib فقط** (`urllib`) — تعمل في البيئات المتدهورة بلا أي تبعية خارجية.
+- تقرأ التهيئة من **بيئة العملية** (لا تُضمَّن الأسرار في الكود):
+  - `SUPABASE_EDGE_FUNCTION_URL` — العنوان العام (له افتراضي معروف).
+  - `SUPABASE_EDGE_FUNCTION_KEY` — الـ bearer (**إلزامي** — يعيش فقط في `.devcontainer/secrets.env` المُتجاهَل من git).
+- أكواد الخروج: `0` = HTTP 2xx، `1` = خطأ HTTP/شبكة، `2` = استخدام خاطئ / لا token.
+
+```bash
+# حمِّل الأسرار أولاً (secrets.env مُتجاهَل من git)
+set -a && . .devcontainer/secrets.env && set +a
+
+python3 scripts/db_bridge.py --version          # SELECT version();
+python3 scripts/db_bridge.py "SELECT 1;"        # SQL مباشر
+echo "SELECT now();" | python3 scripts/db_bridge.py   # SQL عبر stdin
+```
+
+`supervisor.sh` يحقن `SUPABASE_EDGE_FUNCTION_URL/KEY` في بيئة العملية عند الإقلاع
+(نفس نمط حقن الأسرار الموجود)، فالجسر متاح تلقائياً للخدمات في Codespaces.
+
+### نموذج المصادقة (درس مُكلِّف — D-DB-BRIDGE-001)
+
+دالة Supabase Edge **بشكل افتراضي `verify_jwt = true`** — فبوّابة Supabase تتحقق من
+ترويسة `Authorization` كـ **JWT صالح قبل أن يعمل كود الدالة**. كلمة السر المخصّصة
+ليست JWT، فتُرفَض على مستوى البوّابة بـ `UNAUTHORIZED_INVALID_JWT_FORMAT` ولا تصل
+لكودك أبداً. تشخيص حي (2026-06-02) أثبت:
+
+| الإرسال | النتيجة |
+|---------|---------|
+| بلا `Authorization` | `UNAUTHORIZED_NO_AUTH_HEADER` |
+| `Authorization: Bearer <كلمة سر مخصّصة>` (verify_jwt=true) | `UNAUTHORIZED_INVALID_JWT_FORMAT` |
+| ترويسات مخصّصة (`x-admin-token`/`apikey`) | `UNAUTHORIZED_NO_AUTH_HEADER` (البوّابة تتجاهلها) |
+
+**الإصلاح (من جهة مالك الدالة):** أعِد النشر بـ تعطيل فحص الـ JWT على البوّابة، فتصل
+كلمة السر المخصّصة لكود الدالة الذي يتحقق منها بنفسه:
+
+```bash
+supabase functions deploy claude-admin --no-verify-jwt
+# أو في supabase/config.toml:
+#   [functions.claude-admin]
+#   verify_jwt = false
+```
+
+### التحقق الحي (2026-06-03 — بعد إعادة النشر بـ `--no-verify-jwt`)
+
+```bash
+$ set -a && . .devcontainer/secrets.env && set +a && python3 scripts/db_bridge.py --version
+{
+  "success": true,
+  "data": [{ "version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, ..." }]
+}
+[HTTP 200 · 2180ms]
+```
+
+✅ الجسر حيّ. **PostgreSQL 17.6** مؤكَّد من داخل الـ sandbox عبر HTTPS — أول تحقّق DB
+حي مباشر دون انتظار Codespaces.
+
+### القواعد الـ 6 الدائمة (D-DB-BRIDGE-001 — لا تُكسر بدون ADR)
+
+1. **الجسر لقراءة/فحص التشخيص، لا لكتابة مزدوجة**: لا يُستخدم `db_bridge.py` لكتابة
+   صفوف يملكها المسار الحي (`customer_messages`/`admin_messages` — D-006). الكتابة
+   تبقى عبر طبقة التطبيق فقط. الجسر للتحقّق والفحص والـ DDL اليدوي للمشغّل.
+2. **الأسرار من البيئة حصراً**: `SUPABASE_EDGE_FUNCTION_KEY` لا يُضمَّن في الكود ولا
+   يُلتزَم في git. يعيش في `.devcontainer/secrets.env` (مُتجاهَل) + `secrets.env.example`
+   يوثّق المفتاحين بقيم placeholder.
+3. **stdlib فقط**: `db_bridge.py` يبقى بلا تبعيات خارجية — يعمل في البيئات المتدهورة.
+4. **الدالة تبقى `--no-verify-jwt`** مع تحقّق كلمة السر **داخل** كود الدالة. لا
+   تُعِد `verify_jwt=true` دون توفير JWT صالح (anon/service_role) للأداة.
+5. **العنوان عام، الـ token سرّي**: `SUPABASE_EDGE_FUNCTION_URL` ليس سرّاً (مُوثَّق
+   هنا)؛ `SUPABASE_EDGE_FUNCTION_KEY` سرّ مطلق.
+6. **لا يُلغي الجسر مبدأ auto-schema**: تغييرات المخطّط تبقى عبر
+   `validate_schema_on_startup()` + `db_schema_config.py:REQUIRED_SCHEMA` (§D-074).
+   الجسر للفحص والتحقّق اليدوي، لا بديل عن hook الإقلاع.
+
+### السلسلة الكاملة (D-LANG-GUARD-001 → D-DB-BRIDGE-001)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-LANG-GUARD-001 | حارس البثّ العربي + نظافة سلسلة النماذج |
+| **D-DB-BRIDGE-001** | **جسر Supabase: SQL عبر HTTPS:443 حين تُحجب منافذ Postgres (يكسر قيد «مؤجَّل إلى Codespaces»)** |

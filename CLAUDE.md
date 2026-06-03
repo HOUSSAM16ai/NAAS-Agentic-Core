@@ -7868,3 +7868,108 @@ $ set -a && . .devcontainer/secrets.env && set +a && python3 scripts/db_bridge.p
 |----------|---------|
 | D-LANG-GUARD-001 | حارس البثّ العربي + نظافة سلسلة النماذج |
 | **D-DB-BRIDGE-001** | **جسر Supabase: SQL عبر HTTPS:443 حين تُحجب منافذ Postgres (يكسر قيد «مؤجَّل إلى Codespaces»)** |
+
+---
+
+## 6.84 Catastrophic Explanation Fix — Context Loss + Fake Steps + Incomplete Urn (2026-06-03, ISS-108 / D-097)
+
+> **بلاغ المستخدم**: «النظام يولد شرحاً كارثياً، نصوصاً غبية يستحيل أن يفهمها الطالب
+> العبقري فما بالك بالضعيف». طلب الحل **بالتجريب الحي الحقيقي** (إلزامي). أُكِّدت كل
+> كارثة حياً على بيانات الإنتاج عبر جسر Supabase (conv 731، user 7).
+
+### الكوارث الأربع — مؤكَّدة حياً على بيانات الإنتاج (conv 731)
+
+| # | الكارثة | الدليل الحي |
+|---|---------|------------|
+| 1 | **هلوسة تسرّب الموضوع** عند «أكمل الشرح» | msg 3420 «أكمل الشرح» → msg 3423 **«إكمال الشرح حول قياس سمك الغشاء + معادلة التباعد»** (أشعة CT/X-ray لسؤال احتمالات) |
+| 2 | **تقطيع النثر إلى «خطوات» وهمية** | msg 3411 `math_explanation_card` بـ 7 خطوات منها step0=«بالعربي»، step6=«أتمنى أن تكون الفكرة الآن واضحة»؛ وبطاقة «⚖️ مسألة معادلات» لاحتمالات |
+| 3 | **الكيس الناقص (أبيض فقط)** | msg 3412/3416/3424 `full_exercise_story` بـ `groups=[{كرة بيضاء,2}]` فقط — الحمراء(4)+الخضراء(5) مفقودة؛ الطالب اشتكى حرفياً msg 3413 «التمرين لا يحتوي على كرات بيضاء فقط» |
+| 4 | **جدار نصّي + جداول Markdown خام** | شروح طويلة بجداول `\|...\|` لا تُرسَم |
+
+### الأسباب الجذرية (مؤكَّدة بقراءة الكود + إعادة إنتاج حتمية)
+
+1. **هلوسة (1)**: «أكمل/كمل/تابع/continue» لم تكن في `_FOLLOWUP_EXPLANATION_MARKERS`
+   (`exercise_retrieval.py`) → `detect_explanation_with_context` يُرجِع `recognized=False`
+   → يسقط لمسار MODE_B العام بلا سياق التمرين → هلوسة. (المسار: `chat_with_agent` يفحص
+   explanation-preempt قبل MODE_B — `orchestrator_client.py:1701`.)
+2. **خطوات وهمية (2)**: `_try_build_math_ui_component` (`customer_chat.py`) يُطبَّق على **كل**
+   رد → `math_pipeline._build_ui_component` يُقطّع النثر بـ regex فضفاضة (`^(\d+)[.)]`, `^**..**`)
+   ويُصنّف via `_classify_math_type` خطأً.
+3. **الكيس الناقص (3)** — **الجذر الحقيقي مؤكَّد حياً**: `_TOKEN_SPLIT_RE` في
+   `probability_skill.py` لم يكن يُقسِّم على Markdown/LaTeX (`* \ $ # _`). النص المخزَّن
+   مُنسَّق («**أربع كرات حمراء**») فيلتصق العدد بالعلامة → token=«**اربع» → `_as_int` يفشل
+   (يجرّد «وفب» فقط) → تُفقَد الحمراء والخضراء؛ الأبيض ينجو فقط لأن «كرتان» (مثنى) يُطابَق
+   كسلسلة فرعية. (إعادة إنتاج: نص نظيف → 3 ألوان؛ نص الإنتاج → أبيض فقط؛ بعد الإصلاح → 3 ألوان.)
+4. **جدار نصّي (4)**: `EXERCISE_EXPLANATION_SYSTEM_PROMPT` يطلب إسهاباً بلا منع للجداول.
+
+### الإصلاحات (قرارات المستخدم: «إيقاف التقطيع + بطاقات محقَّقة فقط» + «حسِّن النموذج إن لزم»)
+
+- **Fix 1** (`exercise_retrieval.py`): علامات متابعة «أكمل/اكمل/كمل/تابع/واصل/continue/go on»
+  أُضيفت لـ `_FOLLOWUP_EXPLANATION_MARKERS` → «أكمل الشرح» يُربَط بتمرين السياق فيُحقَن المحتوى.
+- **Fix 2** (`customer_chat.py`): `_try_build_math_ui_component` **مُعطَّل** (يُرجِع `None`) — لا
+  تقطيع نثر LLM. البطاقات المحقَّقة (probability_tree/combinations/full_exercise_story) من
+  `_build_calculated_ui` تبقى. + تصلّب دفاعي في `math_pipeline._build_ui_component` (رفض شظايا
+  + حذف fallback تقسيم الفقرات).
+- **Fix 3** (`probability_skill.py`): `_TOKEN_SPLIT_RE` يُقسِّم أيضاً على `* \ $ # _ ~ ` | /`.
+  مؤكَّد حياً: يستعيد حمراء(4)+بيضاء(2)+خضراء(5).
+- **Fix 4** (`doctrine.py` → v2.2.0): قاعدتان جديدتان (حظر الموضوع الخارجي + لا جداول/لا جدار
+  نص) + مرساتان (anchor 8/9) في `build_exercise_explanation_prompt` (873 حرف < 1000، 3 مراسي).
+- **النموذج** (`ai_config.py`): بنشمارك حي 2026-06-03 أثبت أن gpt-oss-120b + gpt-oss-20b
+  كلاهما **503 دائم** (4 جولات) → السلسلة كانت تصل nemotron (محظور كـ PRIMARY) قبل gemma.
+  gemma-4-26b = GOOD حياً (عربي 65% + LaTeX + لا تسرّب). الحل: تقديم gemma على nemotron في
+  الاحتياط (swap FALLBACK_2↔3). PRIMARY يبقى gpt-oss-120b (يتعافى آلياً).
+
+### القواعد الدائمة (D-097 — لا تُكسر بدون ADR)
+
+1. **ممنوع تقطيع نثر LLM حر إلى بطاقة خطوات**. أي بطاقة Generative UI تُبنى من بيانات محتومة
+   مُتحقَّقة فقط، لا من نص مُولَّد.
+2. **علامات المتابعة تربط بالسياق**: «أكمل/كمل/تابع/continue» يجب أن تبقى في
+   `_FOLLOWUP_EXPLANATION_MARKERS` — حذفها يُعيد هلوسة تسرّب الموضوع.
+3. **التقطيع يجب أن يُقسِّم على Markdown/LaTeX**: أي استخراج عددي من نص قد يكون مُنسَّقاً
+   يجب أن يُقسِّم على `* \ $ # _` وإلا تُفقَد الكيانات الملتصقة بالعلامات.
+4. **حارس الـ doctrine ضد التسرّب**: prompt الشرح يحوي «ممنوع أي موضوع خارجي» + «لا جداول».
+   يبقى < 1000 حرف + 3 مراسي (`الإجابة النموذجية`/`LaTeX`/`حرفياً`).
+5. **Fix 5 — جداول Markdown تُحوَّل لأسطر قابلة للقراءة**: المشروع بلا remark-gfm فالجداول
+   تُعرض خاماً (`|...|`). `preprocessMath.convertMarkdownTables` يحوّل كل كتلة جدول إلى عنوان
+   عريض + نقاط قبل ReactMarkdown — حتمي ومستقل عن النموذج. الرياضيات `$...$` لا تتأثر.
+
+### التحقق الحي (2026-06-03 — FULL-STACK E2E مُثبَت)
+
+**ما هو حقيقي:**
+- **قاعدة الإنتاج Supabase (قراءة)** عبر الجسر HTTPS:443 → `PostgreSQL 17.6`؛ conv 731 أثبت
+  الكوارث الأربع (هلوسة CT msg 3423، خطوات وهمية msg 3411، كيس أبيض-فقط msg 3412).
+- **التطبيق الكامل حياً** (`app.main:app` uvicorn حقيقي + WebSocket + JWT + تسجيل/دخول +
+  **OpenRouter gpt-oss-120b حقيقي**) → سيناريو ثلاثي (تمرين → «لم افهم» → «أكمل الشرح»):
+  - Q3 «أكمل الشرح»: **لا تسرّب غشاء/CT** (كان msg 3423) — شرح احتمالات مؤصَّل ✅
+  - Q1/Q2/Q3: **صفر `math_explanation_card`** (لا تقطيع نثر) ✅
+  - Q2: `full_exercise_story` **بكل الألوان الثلاث** (كان أبيض-فقط) ✅
+  - الحفظ في DB: 0 صفوف math_explanation_card، 0 صفوف هلوسة، 1 full_exercise_story.
+- **اختبارات:** 174 اختبار (probability/iss108/iss075/doctrine/generative_ui) + 8 ISS-108 = خضراء.
+  skills-doctrine gate ✅. ruff check/format ✅. table transform node-test (0 pipes) ✅.
+
+**القيد الصادق (لماذا ليس Supabase للحفظ الحيّ):** الـ sandbox يحجب منافذ Postgres
+(`:5432 BLOCKED`، `:443 OPEN` فقط) + لا توجد سلسلة اتصال Supabase Postgres مُعطاة → الحفظ
+الحيّ جرى على **SQLite محلي**. التشغيل الكامل ضد Supabase + سلسلة المتصفح→server.js→backend
+يجري في **Codespaces** (منفذ مفتوح + DATABASE_URL حقيقي) بالدخولين
+(user `houssamannaba963@gmail.com` / admin `benmerahhoussam16@gmail.com`).
+
+### الملفات (ISS-108 / D-097)
+
+| File | Change |
+|------|--------|
+| `app/services/skills/probability_skill.py` | `_TOKEN_SPLIT_RE` يُقسِّم على Markdown/LaTeX (Fix 3) |
+| `app/api/routers/customer_chat.py` | `_try_build_math_ui_component` مُعطَّل (Fix 2) |
+| `app/services/capabilities/exercise_retrieval.py` | علامات المتابعة (Fix 1) |
+| `app/services/skills/doctrine.py` | EXPLANATION_DOCTRINE v2.2.0 + مراسي anti-leak (Fix 4) |
+| `app/core/ai_config.py` | gemma قبل nemotron في الاحتياط |
+| `microservices/conversation_service/src/math_pipeline.py` | تصلّب دفاعي للخطوات |
+| `frontend/app/utils/preprocessMath.js` | `convertMarkdownTables` — جداول → أسطر (Fix 5) |
+| `tests/services/test_iss108_explanation_catastrophe.py` | **جديد** — regression |
+| `frontend/tests/iss108_table_transform.test.mjs` | **جديد** — frontend regression |
+
+### السلسلة الكاملة (D-DB-BRIDGE-001 → D-097)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-DB-BRIDGE-001 | جسر Supabase عبر HTTPS:443 |
+| **D-097** | **كارثة الشرح: فقدان السياق (هلوسة) + خطوات وهمية + كيس ناقص + جدار نص + سلسلة نماذج** |

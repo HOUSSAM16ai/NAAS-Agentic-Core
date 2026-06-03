@@ -577,18 +577,31 @@ def _build_ui_component(
 
     _flush_step()
 
-    # إذا لم تُستخرج خطوات، قسِّم النص إلى فقرات
-    if not steps:
-        paragraphs = [p.strip() for p in solution.split("\n\n") if p.strip()]
-        for i, para in enumerate(paragraphs[:6]):
-            if len(para) > 15:
-                steps.append(
-                    {
-                        "id": f"step-{i}",
-                        "title": f"الجزء {i + 1}",
-                        "content": para[:400],
-                    }
-                )
+    # ISS-108 (D-097): حارس ضد الخطوات الوهمية — نرفض الشظايا (عنوان بلا محتوى،
+    # أو جملة ختامية/تحية مثل «أتمنى أن تكون الفكرة واضحة»، أو «بالعربي»). بطاقة
+    # الخطوات صالحة فقط لخطوات حقيقية لها محتوى. كان النثر الحر يُقطَّع لـ «خطوات»
+    # عشوائية (مؤكَّد حياً msg 3411). كما أُزيل fallback تقسيم الفقرات «الجزء {i}».
+    non_step_phrases = (
+        "أتمنى",
+        "بالعربي",
+        "موفق",
+        "إذا بقي",
+        "إذا احتجت",
+        "أخبرني",
+        "بالتوفيق",
+        "خلاصة",
+    )
+
+    def _is_real_step(s: dict) -> bool:
+        title = str(s.get("title", "")).strip()
+        content = str(s.get("content", "")).strip()
+        if not title or len(title) < 4:
+            return False
+        if not content or len(content) < 20:
+            return False
+        return not any(ph in title for ph in non_step_phrases)
+
+    steps = [s for s in steps if _is_real_step(s)]
 
     # ── الاستعارات البصرية حسب نوع المسألة ────────────────────────────────
     visual_metaphors: dict[str, str] = {

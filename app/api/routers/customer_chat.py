@@ -398,28 +398,20 @@ def _merge_history_with_client_context(
 
 def _try_build_math_ui_component(response_text: str) -> dict | None:
     """
-    يحاول بناء ui_component من نص الإجابة المكتملة.
+    مُعطَّل عمداً (ISS-108 / D-097 — قرار المستخدم: «إيقاف التقطيع + بطاقات محقَّقة فقط»).
 
-    يُفعَّل فقط عند الأسئلة الرياضية (يكتشف math_type من النص).
-    يُعيد None عند الفشل أو عند الأسئلة غير الرياضية — لا يكسر المسار أبداً.
+    كان يُمرِّر **نص الإجابة الحر** إلى ``math_pipeline._build_ui_component`` الذي
+    يُقطّع النثر بـ regex فضفاضة فيُنتج «خطوات» عشوائية بلا معنى (مؤكَّد حياً على
+    بيانات الإنتاج msg 3411: «بالعربي»، «أتمنى أن تكون الفكرة الآن واضحة») ويُصنّف
+    شرح الاحتمالات كـ«معادلات». بطاقة ``math_explanation_card`` صالحة فقط لمخرَج
+    محتوم منظَّم — لا لنثر LLM حر. البطاقات البصرية المحقَّقة (probability_tree /
+    combinations_visualizer / full_exercise_story) تأتي من المسار المنفصل
+    ``orchestrator_client._build_calculated_ui`` وتبقى عاملة.
 
-    الفصل المعماري: هذه الدالة هي الخلفية (العقل المنطقي).
-    تُحلِّل النص وتُنظِّم البيانات — الواجهة تُحوِّلها إلى قصة بصرية.
+    القاعدة الدائمة (D-097): ممنوع تقطيع نثر LLM حر إلى بطاقة خطوات. أي بطاقة
+    Generative UI يجب أن تُبنى من بيانات محتومة مُتحقَّقة، لا من نص مُولَّد.
     """
-    if not response_text or len(response_text) < 100:
-        return None
-    try:
-        from app.services.math_ui_bridge import (
-            build_math_ui_component,
-            classify_math_type,
-        )
-
-        math_type = classify_math_type(response_text[:500])
-        if not math_type or math_type == "general_math":
-            return None
-        return build_math_ui_component(math_type, response_text, "")
-    except Exception:
-        return None
+    return None
 
 
 async def _emit_terminal_frames(

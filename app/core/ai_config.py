@@ -144,9 +144,16 @@ class ActiveModels:
     # nemotron-nano: عربي سريع مع prompt قصير، لكن reasoning-only مع prompt طويل (D-067)
     #   — آمن الآن بفضل guard "content_chunks==0 → advance" + Arabic stream guard (ISS-107).
     # gemma-4/qwen3-next/kimi: نماذج instruct كبيرة (429 وقت البنشمارك)، محميّة بالحُرّاس.
+    # ISS-108 (D-097 — 2026-06-03): بنشمارك حي بالمفتاح الحقيقي كشف أن
+    # gpt-oss-120b + gpt-oss-20b كلاهما 503 (Service Unavailable) بشكل **دائم**
+    # (4 جولات متتالية). عند هذا الانقطاع كانت السلسلة تصل أولاً إلى
+    # nemotron-3-nano (محظور كـ PRIMARY — reasoning-only مع prompt طويل، D-067)
+    # قبل gemma. التحقق الحي: gemma-4-26b = GOOD (عربي 65% + LaTeX + لا تسرّب).
+    # الحل: تقديم gemma على nemotron في سلسلة الاحتياط — أسلم نموذج صحيّ يُبلَغ
+    # أولاً عند سقوط gpt-oss. PRIMARY يبقى gpt-oss-120b (يتعافى آلياً عند عودته).
     GATEWAY_FALLBACK_1 = "openai/gpt-oss-20b:free"  # ✅ Arabic content (live 2026-06-02)
-    GATEWAY_FALLBACK_2 = "nvidia/nemotron-3-nano-30b-a3b:free"  # سريع؛ محميّ بـ content==0 guard
-    GATEWAY_FALLBACK_3 = "google/gemma-4-26b-a4b-it:free"  # Gemma — عربي قوي؛ محميّ بالحُرّاس
+    GATEWAY_FALLBACK_2 = "google/gemma-4-26b-a4b-it:free"  # ✅ GOOD حياً (2026-06-03) — عربي+LaTeX
+    GATEWAY_FALLBACK_3 = "nvidia/nemotron-3-nano-30b-a3b:free"  # سريع؛ محميّ بـ content==0 guard
     GATEWAY_FALLBACK_4 = "qwen/qwen3-next-80b-a3b-instruct:free"  # instruct كبير؛ محميّ بالحُرّاس
     GATEWAY_FALLBACK_5 = "moonshotai/kimi-k2.6:free"  # احتياطي أخير كبير؛ محميّ بالحُرّاس
     TIER_NANO = PRIMARY

@@ -1,5 +1,45 @@
 # Architectural Decisions
-> Last updated: 2026-06-02 | Branch: `claude/search-spinner-equation-display-aZZHd`
+> Last updated: 2026-06-03 | Branch: `claude/probability-exercise-2024-PNalj`
+
+## D-097 · Catastrophic Explanation Fix — context loss + fake steps + incomplete urn (2026-06-03)
+
+**Context (ISS-108):** المستخدم بلّغ عن شرح كارثي. أُكِّدت 4 كوارث حياً عبر جسر Supabase
+(conv 731): (1) «أكمل الشرح» → هلوسة أشعة CT/سمك غشاء (msg 3423)؛ (2) تقطيع النثر لخطوات
+وهمية «بالعربي»/«أتمنى أن تكون الفكرة واضحة» (msg 3411)؛ (3) كيس أبيض-فقط (msg 3412)؛ (4) جدار نص.
+
+**Decision (قرارات المستخدم: «إيقاف التقطيع + بطاقات محقَّقة فقط» + «حسِّن النموذج إن لزم»):**
+1. **Fix 1** — `exercise_retrieval._FOLLOWUP_EXPLANATION_MARKERS` += «أكمل/اكمل/كمل/تابع/واصل/
+   continue/go on» → «أكمل الشرح» يُربَط بتمرين السياق (preempt قبل MODE_B) فيُحقَن المحتوى.
+2. **Fix 2** — `customer_chat._try_build_math_ui_component` مُعطَّل (`return None`): ممنوع تقطيع
+   نثر LLM لبطاقة خطوات. البطاقات المحقَّقة من `_build_calculated_ui` تبقى. + تصلّب دفاعي في
+   `math_pipeline._build_ui_component` (رفض شظايا + حذف fallback الفقرات).
+3. **Fix 3 (الجذر الحقيقي)** — `probability_skill._TOKEN_SPLIT_RE` يُقسِّم أيضاً على
+   `* \ $ # _ ~ ` | /`. مؤكَّد بإعادة إنتاج حتمية: نص الإنتاج المُنسَّق → أبيض فقط (قبل) →
+   حمراء(4)+بيضاء(2)+خضراء(5) (بعد).
+4. **Fix 4** — `doctrine.EXPLANATION_DOCTRINE` v2.1.0→v2.2.0 + قاعدتان (حظر الموضوع الخارجي +
+   لا جداول/جدار نص) + مرساتان في `build_exercise_explanation_prompt` (873 حرف < 1000، 3 مراسي).
+5. **النموذج** — `ai_config`: بنشمارك حي أثبت gpt-oss-120b+20b = 503 دائم؛ gemma-4-26b = GOOD.
+   swap FALLBACK_2↔3 (gemma قبل nemotron المحظور كـ PRIMARY). PRIMARY=gpt-oss-120b (يتعافى آلياً).
+
+**Permanent rules:** (1) لا تقطيع نثر LLM حر لبطاقة. (2) علامات المتابعة تبقى. (3) أي استخراج
+عددي يُقسِّم على Markdown/LaTeX. (4) prompt الشرح يحوي «موضوع خارجي»+«لا جداول» < 1000 + 3 مراسي.
+
+6. **Fix 5** — `frontend/app/utils/preprocessMath.js:convertMarkdownTables`: المشروع بلا
+   remark-gfm فجداول `|...|` تُعرض خاماً. تحويل حتمي لكل كتلة جدول → عنوان عريض + نقاط قبل
+   ReactMarkdown (الرياضيات `$...$` محفوظة). 7 اختبارات node خضراء.
+
+**Live verification (FULL-STACK E2E مُثبَت 2026-06-03):** (أ) قاعدة الإنتاج Supabase (قراءة عبر
+الجسر HTTPS) → PostgreSQL 17.6؛ conv 731 أثبت الكوارث الأربع. (ب) التطبيق الكامل حياً
+(uvicorn `app.main` + WebSocket + JWT + تسجيل/دخول + OpenRouter gpt-oss-120b حقيقي) → السيناريو
+الثلاثي: «أكمل الشرح» **بلا تسرّب CT/غشاء**، صفر `math_explanation_card`، `full_exercise_story`
+بكل الألوان الثلاث؛ الحفظ في DB: 0 هلوسة / 0 fake-card / 1 full_exercise_story. (ج) 174 اختبار +
+skills-doctrine gate + ruff كلها خضراء. **القيد:** الحفظ الحيّ على SQLite (الـ sandbox يحجب
+Postgres :5432؛ لا سلسلة اتصال Supabase مُعطاة) — التشغيل ضد Supabase الإنتاجي يجري في Codespaces.
+
+**Files:** `probability_skill.py`, `customer_chat.py`, `exercise_retrieval.py`, `doctrine.py`,
+`ai_config.py`, `math_pipeline.py`, `frontend/app/utils/preprocessMath.js`,
+`tests/services/test_iss108_explanation_catastrophe.py`,
+`frontend/tests/iss108_table_transform.test.mjs`.
 
 ## D-WS-CARD-PERSIST-001 · Persist generative-UI cards across logout/login (2026-06-02)
 

@@ -43,7 +43,45 @@ export const preprocessMath = (content) => {
     // 3) حوِّل `\[...\]` → `$$...$$` (display) و `\(...\)` → `$...$` (inline)
     processed = processed.replace(/\\\[([^]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
     processed = processed.replace(/\\\(([^]*?)\\\)/g, (_, inner) => `$${inner}$`);
+
+    // 4) (ISS-108 / D-097) حوِّل جداول Markdown إلى أسطر قابلة للقراءة.
+    //    المشروع لا يستخدم remark-gfm، فجداول `| ... |` تُعرض خاماً (رموز أنابيب
+    //    مكسورة — جزء من «النصوص الغبية» التي اشتكى منها المستخدم). نكتشف كتلة
+    //    جدول (صف عناوين متبوع بصف فاصل `|---|`) ونحوّلها إلى عنوان عريض + نقاط،
+    //    فتُعرض نظيفة بدل رموز الأنابيب. النص العادي والرياضيات لا يتأثران.
+    processed = convertMarkdownTables(processed);
     return processed;
+};
+
+// يكشف صف الفاصل في جدول GFM (`|---|:--:|` — أنابيب وشرطات ونقطتان ومسافات فقط).
+const _isTableSeparator = (line) =>
+    /^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes('-') && line.includes('|');
+
+// يفصل خلايا صف جدول ويُزيل الأنابيب الطرفية.
+const _tableCells = (line) =>
+    line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+
+const convertMarkdownTables = (text) => {
+    if (!text || !text.includes('|')) return text;
+    const lines = text.split('\n');
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const next = lines[i + 1];
+        if (line.trim().startsWith('|') && next !== undefined && _isTableSeparator(next)) {
+            const header = _tableCells(line).filter(Boolean);
+            if (header.length) out.push(`**${header.join(' — ')}**`);
+            i++; // تخطَّ صف الفاصل
+            while (i + 1 < lines.length && lines[i + 1].trim().startsWith('|')) {
+                i++;
+                const row = _tableCells(lines[i]).filter((c) => c !== '');
+                if (row.length) out.push(`- ${row.join(' — ')}`);
+            }
+        } else {
+            out.push(line);
+        }
+    }
+    return out.join('\n');
 };
 
 // خيارات KaTeX الموحَّدة عبر التطبيق — مصدر حقيقة واحد.

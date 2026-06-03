@@ -1,5 +1,31 @@
 # Open Issues & Bugs
-> Last updated: 2026-06-02 | Branch: `claude/search-spinner-equation-display-aZZHd`
+> Last updated: 2026-06-03 | Branch: `claude/probability-exercise-2024-PNalj`
+
+---
+
+## ✅ Resolved 2026-06-03 (ISS-108 — catastrophic explanations: context-loss hallucination + fake steps + incomplete urn)
+
+**Symptom (بلاغ المستخدم):** «النظام يولد شرحاً كارثياً، نصوصاً غبية يستحيل أن يفهمها الطالب».
+مؤكَّد حياً على بيانات الإنتاج (جسر Supabase، conv 731، user 7):
+- «أكمل الشرح» (msg 3420) → هلوسة «قياس سمك الغشاء + معادلة التباعد» أشعة CT (msg 3423).
+- بطاقة `math_explanation_card` تُقطّع النثر لـ 7 خطوات وهمية: «بالعربي»، «أتمنى أن تكون الفكرة
+  واضحة» (msg 3411)؛ وبطاقة «⚖️ مسألة معادلات» لاحتمالات.
+- `full_exercise_story` يعرض الأبيض فقط (msg 3412/3416/3424)؛ الطالب اشتكى حرفياً (msg 3413).
+
+**Root causes (4):**
+1. «أكمل/كمل/تابع/continue» غائبة من `_FOLLOWUP_EXPLANATION_MARKERS` → `detect_explanation_with_context`
+   recognized=False → MODE_B عام بلا سياق التمرين → هلوسة.
+2. `_try_build_math_ui_component` (customer_chat) يُطبَّق على كل رد → `math_pipeline._build_ui_component`
+   regex فضفاضة تُقطّع النثر.
+3. **(الجذر الحقيقي، مؤكَّد حياً)** `_TOKEN_SPLIT_RE` (probability_skill) لا يُقسِّم على
+   Markdown/LaTeX → «**اربع»/«**خمس» يفشل `_as_int` → تُفقَد الحمراء+الخضراء؛ الأبيض ينجو
+   (مثنى «كرتان» يُطابَق كسلسلة فرعية).
+4. prompt الشرح بلا منع للجداول/الموضوع الخارجي.
+
+**Fix (D-097):** علامات متابعة (Fix 1) + تعطيل `_try_build_math_ui_component` + تصلّب الخطوات
+(Fix 2) + `_TOKEN_SPLIT_RE` يُقسِّم على `* \ $ # _` (Fix 3، مؤكَّد حياً يستعيد 3 ألوان) +
+EXPLANATION_DOCTRINE v2.2.0 anti-leak/anti-table (Fix 4) + gemma قبل nemotron في سلسلة النماذج
+(gpt-oss 503 دائم حياً). 7 ملفات + `tests/services/test_iss108_explanation_catastrophe.py`.
 
 ---
 

@@ -64,7 +64,8 @@ def run_sql(sql: str, timeout: float = 30.0) -> tuple[int, str, float]:
 
     started = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (trusted owner endpoint)
+        # Trusted owner-controlled HTTPS endpoint (Supabase Edge Function).
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             status = resp.status
             body = resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:

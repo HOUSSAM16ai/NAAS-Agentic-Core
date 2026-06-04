@@ -1,6 +1,25 @@
 # Runtime Truth Lock
-> Last updated: **2026-05-28** | Branch: `main`
-> Previous: `feat/math-explanation-generative-ui`
+> Last updated: **2026-06-04** | Branch: `claude/orchestrator-service-runtime-tjjyW`
+> Previous: `main`
+
+## Orchestrator `routes.py` Re-Activation (2026-06-04, D-098) — SQLite-Mode Full-Stack E2E
+
+**Status: orchestrator-service StateGraph (13-node) → ✅ ACTIVE (re-verified live on SQLite + real OpenRouter).**
+
+Live evidence (sandbox: Postgres TCP blocked → shared SQLite + real OpenRouter/Tavily; Supabase read via HTTPS bridge):
+- `:8006/health → {"status":"ok","graph_ready":true,"startup_state":"ready"}`; warmup ran the graph
+  (`admin.count_python_files → 1584`); `startup_info{checkpointer_backend="memory",graph_ready="true",pipeline_enabled="true"}`.
+- **Direct** `POST :8006/api/chat/messages` → real Arabic+LaTeX answers (Newton 24Δ `$$\vec F=m\vec a$$`, gravity 27Δ,
+  speed/accel 46Δ).
+- **Monolith WS** `:8000/api/chat/ws` → full 13-node graph executed (Supervisor→QueryRewriter→QueryAnalyzer→
+  InternalRetriever→Reranker→WebSearchFallback→Synthesizer→Validator); batch 4/5 routed through orchestrator.
+- **Frontend proxy** `:5000/api/chat/ws` (query-param) → server.js queue→flush→orchestrator hit (200) → 21Δ `$$K=½mv²$$`.
+- Live node counts: Supervisor×11, Validator×11, educational-pipeline×6, GeneralKnowledge×5, ExecuteTool×1; **11 answers (200)**.
+- Supabase via bridge: PostgreSQL 17.6; accounts `benmerahhoussam16@gmail.com`(id=1,admin), `houssamannaba963@gmail.com`(id=7,user).
+
+Fixes (D-098, guarded by `get_backend_name()=="sqlite"` — Postgres path untouched): `database.py:create_engine` SQLite branch,
+`database.py:init_db` psycopg-skip→MemorySaver, `routes.py:_stream_chat_langgraph` error-log fidelity. Tool: `scripts/e2e_orchestrator_live.py`.
+Constraint: full Supabase-backed run is in Codespaces (egress open) via CLAUDE.md §6.85 runbook. Gates ✅ (ruff/format/runtime_truth/validate_structure/ci_guardrails).
 
 ## ISS-092 Live Verification (2026-05-28) — System Not Responding + Kick-to-Login Fix
 

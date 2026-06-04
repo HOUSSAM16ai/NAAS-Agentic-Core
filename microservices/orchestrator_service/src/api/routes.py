@@ -1742,10 +1742,15 @@ async def _stream_chat_langgraph(
                 break
             if evt["type"] == "__ERROR__":
                 request_id = str(uuid.uuid4())
+                # The exception was raised in the background _runner task, so there
+                # is no active exception here — log the captured error/traceback the
+                # runner placed on the queue (exc_info=True would log "NoneType: None").
                 logger.error(
-                    "LangGraph streaming failure",
-                    exc_info=True,
-                    extra={"request_id": request_id, "chat_scope": chat_scope},
+                    "LangGraph streaming failure | request_id=%s chat_scope=%s | error=%s\n%s",
+                    request_id,
+                    chat_scope,
+                    evt.get("error"),
+                    evt.get("traceback"),
                 )
                 final_content = _safe_assistant_error(request_id)
                 await websocket.send_json(

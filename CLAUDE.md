@@ -7973,3 +7973,110 @@ $ set -a && . .devcontainer/secrets.env && set +a && python3 scripts/db_bridge.p
 |----------|---------|
 | D-DB-BRIDGE-001 | جسر Supabase عبر HTTPS:443 |
 | **D-097** | **كارثة الشرح: فقدان السياق (هلوسة) + خطوات وهمية + كيس ناقص + جدار نص + سلسلة نماذج** |
+
+---
+
+## 6.85 Orchestrator `routes.py` Runtime Re-Activation — SQLite-Mode Full-Stack E2E (2026-06-04, D-098)
+
+> طلب المستخدم: تشغيل حي حقيقي (runtime) للملف `microservices/orchestrator_service/src/api/routes.py`
+> الذي كان **خاملاً** (لا يُطلَق، التبعيات غير مثبَّتة) وإثبات أنه **يجيب عن الأسئلة** عبر
+> **E2E كامل شامل (FULL STACK)** بالأسرار الحقيقية. هذا القسم يحكم تشغيل الـ orchestrator على
+> SQLite حين تُحجب منافذ Postgres — لا يُكسر بدون ADR.
+
+### لماذا كان «خاملاً» وما الذي أُصلِح
+
+`routes.py` مُوصَّل بالكامل (HTTP `/api/chat/messages` + WS `/api/chat/ws` + admin WS + `/agent/chat`
++ `/compose` + missions) لكنه DORMANT في بيئة جديدة لثلاثة أسباب: (1) لا توجد عملية uvicorn على `:8006`،
+(2) تبعيات Python غير مثبَّتة (`fastapi` غير موجود في clone جديد)، (3) **منافذ Supabase Postgres
+(5432/6543) محجوبة** فالـ orchestrator لا يستطيع الاتصال بقاعدة بياناته. الإصلاح (D-098 — جراحي،
+محروس بحيث لا يمسّ مسار Postgres الإنتاجي إطلاقاً):
+
+| Fix | File:line | لماذا |
+|-----|-----------|------|
+| **create_engine SQLite-aware** | `microservices/orchestrator_service/src/core/database.py:create_engine` | aiosqlite **يرفض** asyncpg connect_args (`statement_cache_size`/`prepared_statement_cache_size`/ssl) → `TypeError` على أول اتصال → `init_db()` تتدهور ولا تُنشأ جداول. الفرع `if url_obj.get_backend_name() == "sqlite"` يبني engine نظيفاً بـ `check_same_thread=False`. |
+| **init_db checkpointer SQLite-skip** | `microservices/orchestrator_service/src/core/database.py:init_db` | بناء psycopg conninfo من URL سَكوَلايت يُنتج هدفاً غير قابل للوصول يحجب ~30s على `AsyncConnectionPool.open()`. الفرع يتخطّاه نظيفاً ويستخدم `MemorySaver`. |
+| **WS error-log fidelity** | `microservices/orchestrator_service/src/api/routes.py:_stream_chat_langgraph` | معالج `__ERROR__` كان يستخدم `exc_info=True` بلا استثناء نشط (الخطأ رُفع في مهمة خلفية) → يسجّل `NoneType: None`. الآن يسجّل الخطأ/التتبّع الملتقَط من الطابور. |
+
+**القاعدة الذهبية:** كل الفروع محروسة بـ `get_backend_name() == "sqlite"` — على Postgres
+(الإنتاج/Codespaces) لا تُؤخَذ، فمسار psycopg checkpointer + asyncpg engine يبقى كما هو تماماً.
+
+### المعمارية المُثبَتة حياً (SQLite مشترك + OpenRouter حقيقي)
+
+```
+المتصفح ≈ ws query-param ?token=  →  Next.js server.js :5000 (ws-lib proxy + early-msg queue)
+   →  Monolith :8000 (OrchestratorClient.chat_with_agent, state_graph mode، service-JWT مشترك SECRET_KEY)
+   →  Orchestrator routes.py :8006  POST /api/chat/messages
+   →  13-node LangGraph (create_unified_graph) → OpenRouter (إجابة عربية + LaTeX)
+```
+
+الـ monolith والـ orchestrator يتشاركان **ملف SQLite واحد** (`.cogniforge_e2e.db`، WAL): الـ monolith
+يُنشئ جداول `customer_conversations/messages` + `users` (عبر `validate_schema_on_startup`)، والـ
+orchestrator يقرأ/يكتبها — مرآة دقيقة لبنية Supabase المشتركة (التي تُحجب TCP في الـ sandbox، فيُستخدم
+SQLite + جسر HTTPS للتحقّق).
+
+### التحقّق الحي (2026-06-04 — SQLite + OpenRouter حقيقي؛ Supabase عبر الجسر)
+
+- **الإقلاع:** `:8006/health → {"status":"ok","graph_ready":true,"startup_state":"ready"}` |
+  warmup شغّل LangGraph حقيقياً: `TOOL EXECUTED → admin.count_python_files → عدد ملفات بايثون: 1584 ملف`
+  | `startup_info{checkpointer_backend="memory",graph_ready="true",pipeline_enabled="true"}`.
+- **المسار 1 — مباشر** `POST :8006/api/chat/messages` (JWT مشترك): إجابات حقيقية متعدّدة —
+  نيوتن (24 delta، `$$\vec F = m\vec a$$`)، الجاذبية (27 delta، `$$F=G\frac{m_1 m_2}{r^2}$$`)،
+  السرعة/التسارع (46 delta، 1312 حرف). TTFT 3.5–17s.
+- **المسار 2 — Monolith WS** `:8000/api/chat/ws`: «عرّف الذكاء الاصطناعي» شغّل الرسم الـ 13-node كاملاً
+  (`SupervisorNode → QueryRewriter → QueryAnalyzer → InternalRetriever → Reranker → WebSearchFallback →
+  Synthesizer → Validator`) → 10 deltas. دفعة 5 أسئلة → **4/5 مرّت عبر الـ orchestrator** (الباقي
+  fallback محلي مرن بالتصميم).
+- **المسار 3 — Frontend proxy** `:5000/api/chat/ws` (query-param مثل المتصفح): الطاقة الحركية →
+  `server.js #N queued client msg → upstream open (flushed 1 queued)` → orchestrator hit (200) →
+  21 delta، `$$K=\frac{1}{2}mv^2$$`، إغلاق نظيف 1000.
+- **عقد العُقد الحية:** كل أنواع العُقد نُفِّذت — Supervisor×11، Validator×11، خط التعليم×6، GeneralKnowledge×5،
+  ExecuteTool×1 | **11 إجابة chat قُدِّمت (200)**.
+- **Supabase عبر الجسر (HTTPS:443):** PostgreSQL 17.6 | الحسابان الحقيقيان موجودان
+  (`benmerahhoussam16@gmail.com` id=1 is_admin=true، `houssamannaba963@gmail.com` id=7 is_admin=false) |
+  كل الجداول المشتركة موجودة.
+
+### أداة E2E + Codespaces runbook
+
+`scripts/e2e_orchestrator_live.py` (جديد، stdlib + httpx + websockets): يسجّل دخول/يُسجِّل المستخدم ثم
+يختبر المسارات الثلاثة ويطبع تقريراً (deltas/chars/terminal/frames/answer). يعمل عبر env overrides
+(`E2E_BACKEND/ORCH/FRONTEND/EMAIL/PASSWORD`).
+
+**Codespaces runbook (Supabase الحقيقي — egress مفتوح هناك):**
+```bash
+# 1) secrets.env بالقيم الحقيقية (APP_DATABASE_URL=Supabase، OPENROUTER، TAVILY، SUPABASE_EDGE_*)
+cp .devcontainer/secrets.env.example .devcontainer/secrets.env   # ثم املأ القيم
+# 2) شغّل المنظومة كاملة (يُطلق orchestrator :8006 + monolith :8000 + frontend :5000 + الخدمات)
+bash .devcontainer/supervisor.sh
+# 3) أعِد نفس الـ E2E ضد Supabase
+python3.12 scripts/e2e_orchestrator_live.py "ما هو قانون نيوتن الثاني؟"
+# المتوقّع: المسارات الثلاثة pass، الـ orchestrator يُجيب، الرسائل تُحفظ في customer_messages على Supabase
+```
+
+### القواعد الـ 5 الدائمة (D-098 — لا تُكسر بدون ADR)
+
+1. **فروع SQLite محروسة بـ `get_backend_name()=="sqlite"`** — ممنوع تمرير asyncpg connect_args إلى aiosqlite،
+   وممنوع بناء psycopg conninfo من URL سَكوَلايت. مسار Postgres يبقى غير ممسوس.
+2. **DB مشتركة واحدة بين monolith و orchestrator** — الـ orchestrator يكتب في جداول الـ monolith
+   (`customer_conversations/messages`)؛ الـ monolith يُنشئها. لا تُعطِ الـ orchestrator ملف SQLite منفصلاً
+   (لن تكون فيه جداول المحادثات → 403/خطأ).
+3. **SECRET_KEY مشترك إلزامي** — `_build_service_jwt` (monolith) يوقّع بـ SECRET_KEY والـ orchestrator
+   يفكّه به. اختلافهما → 401/403 → سقوط إلى local_graph (المسار لا يصل الـ orchestrator أبداً).
+4. **الواجهة عبر البروكسي = query-param `?token=` بلا subprotocol** — تقديم subprotocol للبروكسي يُجبر
+   عميل ws-lib الأعلى على طلب echo لا يرسله الـ monolith → 1011. `useRealtimeConnection.js` يستخدم query-param.
+5. **الـ fallback المرن مقصود** — حين يُسبَق السؤال محلياً (تحية/تمرين مفهرَس/شرح بسياق) أو يتعذّر الـ
+   orchestrator، يجيب `local_graph`. النظام **يجيب دائماً**؛ مرور الطلب عبر الـ orchestrator ليس شرطاً
+   لكل سؤال (D-006 + سلسلة الـ fallback).
+
+### الصدق البيئي
+
+التحقّق جرى على **SQLite + OpenRouter/Tavily حقيقي** داخل الـ sandbox (Postgres TCP محجوب — نمط §6.55/§6.83).
+Supabase تحقَّق **قراءةً عبر الجسر HTTPS** (لا كتابة مزدوجة — D-006). التشغيل الكامل ضد **Supabase Postgres**
++ سلسلة المتصفح الحقيقية يجري في **Codespaces** عبر الـ runbook أعلاه بالدخولين الحقيقيين.
+
+### السلسلة الكاملة (D-097 → D-098)
+
+| Decision | المُصلَح |
+|----------|---------|
+| D-DB-BRIDGE-001 | جسر Supabase عبر HTTPS:443 |
+| D-097 | كارثة الشرح: فقدان السياق + خطوات وهمية + كيس ناقص + جدار نص |
+| **D-098** | **تشغيل orchestrator routes.py على SQLite (create_engine + init_db skip) + E2E كامل 4 طبقات + WS error-log fidelity** |

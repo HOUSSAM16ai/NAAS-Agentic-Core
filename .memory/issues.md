@@ -1,7 +1,24 @@
 # Open Issues & Bugs
-> Last updated: 2026-06-03 | Branch: `claude/probability-exercise-2024-PNalj`
+> Last updated: 2026-06-04 | Branch: `claude/orchestrator-service-runtime-tjjyW`
 
 ---
+
+## ISS-ORCH-SQLITE-001 — Orchestrator `routes.py` خامل + لا يُشغَّل على SQLite (محلول، D-098, 2026-06-04)
+
+**العَرَض:** الـ orchestrator (`microservices/orchestrator_service/src/api/routes.py`) خامل في بيئة جديدة:
+لا uvicorn على :8006، تبعيات غير مثبَّتة، ومنافذ Supabase Postgres (5432/6543) محجوبة فلا يتصل بقاعدته.
+
+**الجذر:** `database.py:create_engine` كان يمرّر دائماً asyncpg connect_args (`statement_cache_size`/
+`prepared_statement_cache_size`/ssl) → aiosqlite يرفضها بـ TypeError على أول اتصال → `init_db()` تتدهور
+ولا تُنشأ جداول → كل persistence يفشل (403/خطأ). كذلك `init_db` كان يحاول psycopg على URL سَكوَلايت (حجب ~30s).
+
+**الإصلاح (D-098):** فرعان محروسان بـ `get_backend_name()=="sqlite"` في `database.py` (create_engine نظيف +
+init_db يتخطّى psycopg → MemorySaver) + إصلاح error-logging في `routes.py:_stream_chat_langgraph`. مسار Postgres
+الإنتاجي غير ممسوس. + `scripts/e2e_orchestrator_live.py` (أداة E2E).
+
+**التحقق الحي:** `:8006/health graph_ready=true` | E2E 4 طبقات (direct/monolith/frontend) كلها تجيب بإجابات عربية
++ LaTeX حقيقية عبر OpenRouter | 13-node graph نُفِّذ كاملاً | Supabase عبر الجسر: PG 17.6 + الحسابان الحقيقيان.
+**القيد:** Postgres محجوب في sandbox → حفظ على SQLite؛ التشغيل الكامل ضد Supabase في Codespaces (CLAUDE.md §6.85 runbook).
 
 ## ✅ Resolved 2026-06-03 (ISS-108 — catastrophic explanations: context-loss hallucination + fake steps + incomplete urn)
 

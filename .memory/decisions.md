@@ -1,5 +1,29 @@
 # Architectural Decisions
-> Last updated: 2026-06-03 | Branch: `claude/probability-exercise-2024-PNalj`
+> Last updated: 2026-06-04 | Branch: `claude/orchestrator-service-runtime-tjjyW`
+
+## D-098 · Orchestrator `routes.py` runtime re-activation on SQLite + full-stack E2E (2026-06-04)
+
+**السياق:** `microservices/orchestrator_service/src/api/routes.py` كان DORMANT في بيئة جديدة (لا uvicorn
+على :8006، تبعيات غير مثبَّتة، منافذ Postgres محجوبة). الهدف: تشغيله حياً وإثبات أنه يجيب عبر E2E كامل.
+
+**التغييرات (جراحية، محروسة بـ `get_backend_name()=="sqlite"` فلا تمسّ مسار Postgres الإنتاجي):**
+1. `database.py:create_engine` — فرع SQLite يبني engine نظيفاً (`check_same_thread=False`) بدل تمرير
+   asyncpg connect_args (يرفضها aiosqlite → TypeError → init_db تتدهور ولا تُنشأ جداول).
+2. `database.py:init_db` — تخطّي psycopg checkpointer على URL سَكوَلايت (يتجنّب حجب ~30s) → MemorySaver.
+3. `routes.py:_stream_chat_langgraph` — معالج `__ERROR__` يسجّل الخطأ/التتبّع الملتقَط من الطابور بدل
+   `exc_info=True` (يطبع `NoneType: None` لأن الاستثناء رُفع في مهمة خلفية).
+4. `scripts/e2e_orchestrator_live.py` (جديد) — أداة E2E تختبر المسارات الثلاثة (direct/monolith/frontend).
+
+**القرار:** monolith + orchestrator يتشاركان ملف SQLite واحد (WAL) حين تُحجب Supabase — monolith يُنشئ جداول
+المحادثات، orchestrator يقرأ/يكتبها (مرآة بنية Supabase المشتركة).
+
+**التحقق الحي (2026-06-04 — SQLite + OpenRouter حقيقي):** `:8006/health graph_ready=true,startup_state=ready`
+| warmup شغّل LangGraph (`admin.count_python_files → 1584`) | مباشر: نيوتن 24 delta+LaTeX، جاذبية 27، سرعة/تسارع 46
+| monolith WS: 13-node كامل (Supervisor→…→Synthesizer→Validator) 10 delta، دفعة 4/5 عبر orchestrator | frontend
+proxy :5000: طاقة حركية 21 delta + `$$K=½mv²$$`، إغلاق 1000 | 11 إجابة 200، كل العُقد نُفِّذت | Supabase عبر الجسر:
+PG 17.6، الحسابان الحقيقيان (id=1 admin، id=7 user). **القيود:** Postgres TCP محجوب في sandbox → حفظ على SQLite،
+Supabase تحقَّق قراءةً عبر الجسر، التشغيل الكامل ضد Supabase في Codespaces عبر الـ runbook. **gates:**
+ruff/format/runtime_truth/validate_structure/ci_guardrails ✅. مُوثَّق في CLAUDE.md §6.85.
 
 ## D-097 · Catastrophic Explanation Fix — context loss + fake steps + incomplete urn (2026-06-03)
 

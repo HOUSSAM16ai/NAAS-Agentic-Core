@@ -211,6 +211,19 @@ def create_engine() -> AsyncEngine:
     db_url = settings.DATABASE_URL
     url_obj = make_url(db_url)
 
+    # SQLite (dev/sandbox/tests): aiosqlite does NOT accept asyncpg connect_args
+    # (statement_cache_size / prepared_statement_cache_size / ssl). Passing them
+    # raises TypeError on first connect → init_db() degrades and no tables are
+    # created. Build a clean aiosqlite engine instead so the orchestrator can run
+    # end-to-end against a shared SQLite file when Postgres egress is blocked.
+    if url_obj.get_backend_name() == "sqlite":
+        return create_async_engine(
+            db_url,
+            echo=False,
+            future=True,
+            connect_args={"check_same_thread": False},
+        )
+
     qs = dict(url_obj.query)
     ssl_mode = qs.pop("sslmode", None) or qs.pop("ssl", None)
 
@@ -361,6 +374,15 @@ async def init_db() -> None:
             "falling back to MemorySaver."
         )
         set_checkpointer_backend_info(backend="none", step="10", pool_size=0, tables_ready=False)
+        return
+
+    # SQLite (dev/sandbox): there is no Postgres to point psycopg at. Building a
+    # psycopg conninfo from a sqlite URL yields an unreachable target and blocks
+    # ~30s on AsyncConnectionPool.open() before failing, then re-tries forever.
+    # Skip it cleanly and let the graph use the MemorySaver singleton.
+    if make_url(settings.DATABASE_URL).get_backend_name() == "sqlite":
+        logger.info("[CHECKPOINTER] SQLite backend — skipping Postgres checkpointer (MemorySaver).")
+        set_checkpointer_backend_info(backend="memory", step="10", pool_size=0, tables_ready=False)
         return
 
     try:

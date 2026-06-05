@@ -59,6 +59,7 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "knowledge_edges",
         "student_bkt_analytics",
         "bac_exercises",
+        "bac_exercise_questions",
     }
 )
 
@@ -67,6 +68,47 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
     # Protocol V24.0 — جدول تمارين البكالوريا المُهيكَل (Data Engineering Mandate).
     # يحوّل المحتوى التعليمي من نص خام إلى صفوف ذات بيانات وصفية صارمة لتغذية
     # محرّك RAG بدقة دلالية (subject/topic/draw_type/year + parsed_entities JSONB).
+    # Protocol V24.1 — جدول الأسئلة الفرعية (Surgical Precision).
+    # يفصل التمارين إلى أجزاء دقيقة جداً مع إضافة بحث متجهي (Vector) لكل جزء.
+    "bac_exercise_questions": {
+        "columns": [
+            "id",
+            "exercise_id",
+            "question_number",
+            "question_text",
+            "question_type",
+            "parsed_entities",
+            "embedding",
+            "search_vector",
+            "created_at"
+        ],
+        "auto_fix": {},
+        "indexes": {
+            "exercise_id": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercise_questions_exercise_id" ON "bac_exercise_questions"("exercise_id")',
+            "embedding": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercise_questions_embedding" ON "bac_exercise_questions" USING hnsw ("embedding" vector_cosine_ops)',
+            "search_vector": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercise_questions_search_vector" ON "bac_exercise_questions" USING GIN ("search_vector")',
+            "parsed_entities": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercise_questions_parsed_entities" ON "bac_exercise_questions" USING GIN ("parsed_entities")'
+        },
+        "index_names": {
+            "exercise_id": "ix_bac_exercise_questions_exercise_id",
+            "embedding": "ix_bac_exercise_questions_embedding",
+            "search_vector": "ix_bac_exercise_questions_search_vector",
+            "parsed_entities": "ix_bac_exercise_questions_parsed_entities"
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "bac_exercise_questions"('
+            '"id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),'
+            '"exercise_id" UUID NOT NULL REFERENCES "bac_exercises"("id") ON DELETE CASCADE,'
+            '"question_number" VARCHAR(20) NOT NULL,'
+            '"question_text" TEXT NOT NULL,'
+            '"question_type" VARCHAR(50),'
+            "\"parsed_entities\" JSONB NOT NULL DEFAULT '{}',"
+            '"embedding" vector(1024),'
+            "\"search_vector\" tsvector GENERATED ALWAYS AS (to_tsvector('simple', COALESCE(\"question_text\", ''))) STORED,"
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            ")"
+        ),
+    },
     "bac_exercises": {
         "columns": [
             "id",

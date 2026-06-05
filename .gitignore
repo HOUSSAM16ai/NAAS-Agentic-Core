@@ -2,6 +2,10 @@
 # === CogniForge .gitignore - Final Form ===
 # ==========================================
 
+# E2E local/sandbox runtime artifacts (D-098) — never committed
+.cogniforge_e2e.db*
+.e2e_*.log
+
 # 1. Environment & Secrets
 # Never commit secrets, keys, passwords, or local environment settings!
 .env

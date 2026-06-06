@@ -8080,3 +8080,12 @@ Supabase تحقَّق **قراءةً عبر الجسر HTTPS** (لا كتابة 
 | D-DB-BRIDGE-001 | جسر Supabase عبر HTTPS:443 |
 | D-097 | كارثة الشرح: فقدان السياق + خطوات وهمية + كيس ناقص + جدار نص |
 | **D-098** | **تشغيل orchestrator routes.py على SQLite (create_engine + init_db skip) + E2E كامل 4 طبقات + WS error-log fidelity** |
+
+---
+## 7.0 Advanced Sovereign Architecture (D-100)
+**Doctrine of the Future:** The architecture has evolved into an **Advanced Sovereign Swarm**. We enforce CQRS (Command Query Responsibility Segregation) at the AI level, decoupling prompt-reasoning from state mutation. All Skills (Planning, Reasoning, Research) operate via Event-Driven patterns.
+
+**Core Directives for the Future:**
+1. **Agentic Swarm Pattern:** Skills must operate entirely in parallel, eliminating serial bottlenecks (as implemented in `skills_pipeline.py`).
+2. **Deep Mathematical Validation:** The Reasoning Agent utilizes MCTS (Monte Carlo Tree Search) concepts. No mathematical step is provided to the user without prior critical validation.
+3. **Immutable Memory Operations:** The `.memory` folder acts as the autonomous brain's Event Store. Changes here dictate the logic of the entire swarm.

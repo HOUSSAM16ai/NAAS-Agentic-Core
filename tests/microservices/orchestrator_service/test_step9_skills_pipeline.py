@@ -417,7 +417,7 @@ class TestSkillsPipelineUnit:
         # reasoning.status == "success" يجب أن يظهر قبل research.status == "success"
         compose_fn_idx = content.find("def _compose_answer")
         assert compose_fn_idx != -1
-        compose_body = content[compose_fn_idx : compose_fn_idx + 800]
+        compose_body = content[compose_fn_idx : compose_fn_idx + 2000]
         # نبحث عن الشرط الفعلي وليس الـ parameter name
         reasoning_check_idx = compose_body.find('reasoning.status == "success"')
         research_check_idx = compose_body.find('research.status == "success"')

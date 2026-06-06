@@ -300,7 +300,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     setup_logging(settings.SERVICE_NAME)
 
-    # Configure DSPy — ISS-042 (Step 11): dspy.OpenAI مُهمَل في DSPy 3.x، يجب dspy.LM
+    # Configure DSPy — ISS-042 (Step 11): استخدام dspy.LM للـ DSPy 3.x
     if settings.OPENROUTER_API_KEY:
         dspy_module = _load_dspy()
         if dspy_module:

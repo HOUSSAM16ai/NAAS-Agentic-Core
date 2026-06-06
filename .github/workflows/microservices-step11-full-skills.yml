@@ -61,7 +61,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install fastapi uvicorn pydantic pydantic-settings \
+          pip install fastapi uvicorn pydantic pydantic-settings sqlalchemy sqlmodel passlib bcrypt \
             prometheus-client pytest pytest-asyncio httpx pyjwt --quiet
 
       - name: Run content-retrieval-skill tests
@@ -99,7 +99,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install pytest httpx pyjwt --quiet
+        run: pip install pytest httpx pyjwt sqlalchemy sqlmodel passlib bcrypt --quiet
 
       - name: Run ISS-038 regression tests only
         run: |
@@ -123,7 +123,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install pytest httpx pyjwt --quiet
+        run: pip install pytest httpx pyjwt sqlalchemy sqlmodel passlib bcrypt --quiet
 
       - name: Verify intent classifier contract
         run: |
@@ -174,7 +174,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install fastapi uvicorn pydantic pydantic-settings \
+          pip install fastapi uvicorn pydantic pydantic-settings sqlalchemy sqlmodel passlib bcrypt \
             prometheus-client httpx --quiet
 
       - name: Verify all 7 metrics defined
@@ -224,7 +224,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install pyjwt pydantic pydantic-settings httpx --quiet
+        run: pip install pyjwt pydantic pydantic-settings httpx sqlalchemy sqlmodel passlib bcrypt --quiet
 
       - name: Verify _generate_service_token in skills_pipeline
         run: |

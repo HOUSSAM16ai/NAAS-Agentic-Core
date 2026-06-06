@@ -62,7 +62,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install fastapi uvicorn pydantic pydantic-settings \
-            prometheus-client pytest pytest-asyncio httpx --quiet
+            prometheus-client pytest pytest-asyncio httpx pyjwt --quiet
 
       - name: Run content-retrieval-skill tests
         run: |
@@ -99,7 +99,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install pytest httpx --quiet
+        run: pip install pytest httpx pyjwt --quiet
 
       - name: Run ISS-038 regression tests only
         run: |
@@ -123,7 +123,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install pytest httpx --quiet
+        run: pip install pytest httpx pyjwt --quiet
 
       - name: Verify intent classifier contract
         run: |

@@ -99,7 +99,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install pytest --quiet
+        run: pip install pytest httpx --quiet
 
       - name: Run ISS-038 regression tests only
         run: |
@@ -123,7 +123,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install pytest --quiet
+        run: pip install pytest httpx --quiet
 
       - name: Verify intent classifier contract
         run: |
@@ -224,7 +224,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install pyjwt pydantic pydantic-settings --quiet
+        run: pip install pyjwt pydantic pydantic-settings httpx --quiet
 
       - name: Verify _generate_service_token in skills_pipeline
         run: |

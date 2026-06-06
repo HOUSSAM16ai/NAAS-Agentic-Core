@@ -359,6 +359,7 @@ def _compose_answer(
     Advanced Swarm Synthesis (CQRS + Event Driven Logic)
     Merges outputs dynamically with absolute mathematical certainty.
 
+
     يُركِّب الإجابة النهائية من نتائج الـ 3 Skills.
 
     المنطق:
@@ -367,6 +368,7 @@ def _compose_answer(
       - إذا فشل الاثنان → يُعيد الخطة كإجابة أساسية
     """
     import logging
+
     logger = logging.getLogger("swarm-composer")
     logger.info("Applying Advanced Swarm Logic for Synthesis.")
     if reasoning.status == "success":

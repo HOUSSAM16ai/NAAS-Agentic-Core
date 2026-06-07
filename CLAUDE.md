@@ -8080,3 +8080,10 @@ Supabase تحقَّق **قراءةً عبر الجسر HTTPS** (لا كتابة 
 | D-DB-BRIDGE-001 | جسر Supabase عبر HTTPS:443 |
 | D-097 | كارثة الشرح: فقدان السياق + خطوات وهمية + كيس ناقص + جدار نص |
 | **D-098** | **تشغيل orchestrator routes.py على SQLite (create_engine + init_db skip) + E2E كامل 4 طبقات + WS error-log fidelity** |
+
+### RAG Vector Database Ingestion (June 2024 Update)
+**Live ETL Scripts for Production Supabase:** We rigorously enforce structural strictness for RAG by ensuring all BAC exercises ingested into the live Supabase vector database include deep `parsed_entities` JSON payloads. The live database currently contains 3 explicitly tested BAC exercises:
+1. **BAC 2024 Math (Subject 1, Ex 1):** Probability (`bac2024_math_experimental_subject1_ex1_ex2.md` reference).
+2. **BAC 2024 Math (Subject 1, Ex 2):** Complex Numbers (`bac2024_math_experimental_subject1_ex1_ex2.md` reference).
+3. **BAC 2016 Math (Subject 2, Ex 4):** Numerical Functions, Session 1 (`bac2016_s1_math_exp_subject2_ex4_numerical_functions.md` reference).
+These were ingested using isolated ETL scripts (like `live_db_restructure.py`) that strictly map the `exam_ref`, `branch`, `topic`, and JSON entities to prevent "RAG Semantic Blindness". The database is currently fully capable of distinguishing these exercises via Vector Embeddings, while local development in Codespaces safely falls back to reading the `knowledge_base/` markdown files due to egress firewall restrictions.

@@ -97,7 +97,7 @@ __all__ = [
 ]
 
 
-class SkillMode(str, Enum):  # noqa: UP042  # subclassing keeps str semantics on older runtimes
+class SkillMode(str, Enum):  # subclassing keeps str semantics on older runtimes
     """أنماط تشغيل الـ Skill — اختيار صريح يُجبر استدلال واضحاً."""
 
     RETRIEVE = "retrieve"  # جلب نص تمرين رسمي

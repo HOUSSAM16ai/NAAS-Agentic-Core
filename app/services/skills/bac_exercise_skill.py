@@ -37,7 +37,7 @@ from __future__ import annotations
 import time
 from collections.abc import AsyncGenerator
 from contextlib import suppress
-from enum import Enum
+from enum import StrEnum
 from typing import ClassVar, Literal
 
 from pydantic import Field
@@ -97,7 +97,7 @@ __all__ = [
 ]
 
 
-class SkillMode(str, Enum):  # subclassing keeps str semantics on older runtimes
+class SkillMode(StrEnum):
     """أنماط تشغيل الـ Skill — اختيار صريح يُجبر استدلال واضحاً."""
 
     RETRIEVE = "retrieve"  # جلب نص تمرين رسمي

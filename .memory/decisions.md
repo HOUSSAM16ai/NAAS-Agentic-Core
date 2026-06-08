@@ -4058,3 +4058,52 @@ python3 scripts/db_bridge.py "SELECT ... ;"     # SQL مباشر أو عبر std
 (HTTP 200) | `current_database=postgres, current_user=postgres` | استعراض المخطّط الحي يؤكّد
 وجود `customer_messages`/`admin_messages`/`student_bkt_analytics`/`users`/`customer_conversations`.
 أول تحقّق DB حي مباشر من داخل الـ sandbox دون انتظار Codespaces. مُوثَّق في CLAUDE.md §6.83.
+
+---
+
+## D-099 (2026-06-08) — تعرّف التمارين الصامد أمام «ال» + مُسترجِع Supabase القابل للتوسّع + نماذج مجانية فقط
+
+**الكارثة (ISS-109):** طلب «أعطني تمرين الأعداد المركبة 2024» كان يُرجع تمرين **الاحتمالات**.
+السبب الجذري (مُثبت): `_extract_topic_keywords` يطابق بسلسلة فرعية خام، فـ«أعداد مركبة» لا تطابق
+«الأعداد المركبة» بسبب أداة التعريف «ال» → `topic_keywords` فارغة → `search_exercises` يُعطي
++10 لكلا تمرينَي 2024 على السنة فقط → **تعادل** → الترتيب الثابت يُرجع الاحتمالات (التمرين الأول).
+لا تماثل: «احتمالات» تنجو لأنها سلسلة فرعية من «الاحتمالات» (كلمة واحدة)، لكن «أعداد مركبة»
+(كلمتان) تموت أمام «الأعداد المركبة».
+
+**الإصلاح (3 طبقات معمارية — retrieve-then-rerank، يتوسّع لمليارات التمارين):**
+1. **محرّك تطبيع عربي معمّم** `app/services/capabilities/arabic_normalize.py` (stdlib نقي):
+   `normalize_ar` يحذف «ال» لكل رمز (مع حماية الجذع القصير) + يوحّد الهمزات/ة/ى/التشكيل/التطويل/
+   الأرقام العربية. + تصنيف مرجعي `CANONICAL_TOPICS` يجسر صياغة الطالب ↔ `bac_exercises.topic`
+   (إنجليزي) ↔ raw_text العربي المميِّز. يُطبَّق على **طرفي المطابقة**.
+2. **`knowledge_index.search_exercises`**: مطابقة مطبَّعة + إشارة `canonical_topic_id` بوزن **16**
+   (> وزن السنة 10) تكسر التعادل + ترتيب حتمي `(score, canonical_hit, -exercise_number)`.
+3. **مُسترجِع Supabase** `app/services/capabilities/bac_db_retriever.py`: candidate-generation عبر
+   SQL مفهرس (سنة + `topic ILIKE` + `raw_text LIKE` المميِّز) ثم rerank متعدد الإشارات. موصول في
+   `orchestrator_client._build_local_retrieval_response` (DB-first للتمارين غير المُفهرَسة +
+   hybrid content) و `_has_indexed_match` (preempt للطلبات المُرسَّخة بنيوياً). **سلامة مطلقة:**
+   أي تعذّر وصول/خطأ/مهلة → None → يسقط للفهرس النصّي (markdown). آمن في الـ sandbox، يتفعّل في Codespaces.
+
+**ثغرة جانبية مُصلَحة:** `_YEAR_RE = 20[2-3]\d` كان لا يطابق **2016** (سنة الدوال العددية) —
+وُسِّع إلى `20[0-3]\d` في `exercise_retrieval.py` و `bac_db_retriever.py`.
+
+**نماذج مجانية فقط (طلب المستخدم):** `gpt-4o-mini` لم يعد موجوداً (مُستبدَل سابقاً). أُصلِح
+نموذجان مدفوعان قابلان للوصول: `multimodal_processor.py` (`gpt-4o` → `google/gemma-4-26b-a4b-it:free`
+المجاني المتعدّد الوسائط، قابل للتجاوز بـ `OPENROUTER_VISION_MODEL`)، و `self_healing.py`
+(`gpt-3.5-turbo` → `openai/gpt-oss-20b:free`). مسار الدردشة PRIMARY=`openai/gpt-oss-120b:free`
+وكل الـ fallbacks `:free` (مُتحقَّق). enums `GPT_4O`/`GPT_4O_MINI` خاملة (غير مُشار إليها).
+
+**التحقق الحي (2026-06-08):**
+- مصفوفة التعرّف (stdlib): 10/10 صياغات → التمرين الصحيح (شمل البق «الأعداد المركبة 2024» → ex#2).
+- **SQL المُسترجِع مقابل Supabase الحقيقي عبر الجسر**: 3/3 — كل تمرين يُرجع صفّاً واحداً صحيحاً
+  (complex→ex2، probability→ex1، numerical→ex4). `scripts/verify_exercise_retrieval_e2e.py` (Layer B).
+- ruff check/format ✅ | runtime_truth --check ✅ (لا drift).
+- **القيد الصادق:** pip محظور في الـ sandbox (لا pydantic/fastapi) → اختبارات pytest + WebSocket E2E
+  الكامل (Layer A + C) تُشغَّل في CI/Codespaces. منطق التعرّف + SQL مُتحقَّق حياً بمسار stdlib + الجسر.
+
+**القواعد الدائمة (لا تُكسر بدون ADR):**
+1. أي مطابقة موضوع/استعلام عربي تمرّ عبر `normalize_ar` على **الطرفين** — لا سلسلة فرعية خام.
+2. `canonical_topic_id` هو الإشارة الأقوى (وزن > السنة) — يكسر تعادل تمارين نفس السنة.
+3. الترتيب حتمي (لا يعتمد ترتيب القائمة) — `(score, canonical_hit, -exercise_number)`.
+4. مُسترجِع DB يُرجع None عند أي تعذّر → fallback نصّي إلزامي (لا يكسر المحادثة أبداً).
+5. الفهرس المنسَّق (`KNOWLEDGE_INDEX`) = cache سريع للتمارين الساخنة؛ Supabase = المصدر القابل للتوسّع.
+6. نماذج مجانية فقط على المسارات القابلة للوصول — أي نموذج جديد يجب أن ينتهي بـ `:free`.

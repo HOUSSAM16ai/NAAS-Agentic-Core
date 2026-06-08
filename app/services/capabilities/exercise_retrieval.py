@@ -17,6 +17,10 @@ from typing import ClassVar
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.capabilities.arabic_normalize import (
+    normalize_ar,
+    primary_canonical_topic,
+)
 from app.services.capabilities.knowledge_index import (
     ExerciseEntry,
     find_best_match,
@@ -209,8 +213,8 @@ _TOPIC_KEYWORDS: dict[str, list[str]] = {
 # "تمرين" أو "exercise" متبوعاً برقم مباشرة
 _EXERCISE_WITH_NUMBER_RE = re.compile(r"(تمرين|تمارين|exercise)\s*\d+", re.IGNORECASE)
 
-# سنة دراسية (2020–2030)
-_YEAR_RE = re.compile(r"\b20[2-3]\d\b")
+# سنة دراسية (2000–2039) — تشمل 2016 (الدورتان الاستثنائيتان) إضافةً للسنوات الحديثة
+_YEAR_RE = re.compile(r"\b20[0-3]\d\b")
 
 
 class ExerciseRetrievalRequest(RobustBaseModel):
@@ -287,7 +291,11 @@ def _has_retrieval_intent(normalized: str) -> bool:
         "display",
     )
     has_fetch_verb = any(v in normalized for v in _FETCH_VERBS)
-    has_math_topic = any(t in normalized for t in _MATH_TOPICS_DIRECT)
+    # تطبيع عربي + موضوع مرجعي → مناعة ضد أداة التعريف «ال» وتنويع الصياغة
+    has_math_topic = (
+        any(t in normalized for t in _MATH_TOPICS_DIRECT)
+        or primary_canonical_topic(normalized) is not None
+    )
     return has_fetch_verb and has_math_topic
 
 
@@ -327,10 +335,12 @@ def _extract_exercise_number(normalized: str) -> int | None:
 
 
 def _extract_topic_keywords(normalized: str) -> list[str]:
-    """يستخرج الكلمات المفتاحية للموضوع الرياضي."""
+    """يستخرج الكلمات المفتاحية للموضوع الرياضي (مطابقة مطبَّعة صامدة أمام «ال»)."""
+    norm_q = normalize_ar(normalized)
     found: list[str] = []
     for keyword, topics in _TOPIC_KEYWORDS.items():
-        if keyword in normalized:
+        kw_norm = normalize_ar(keyword)
+        if kw_norm and kw_norm in norm_q:
             found.extend(topics)
     return list(set(found))
 
@@ -339,13 +349,15 @@ def _find_matching_entry(normalized: str) -> ExerciseEntry | None:
     """
     يبحث في فهرس قاعدة المعرفة عن أفضل تمرين مطابق للسؤال.
 
-    يستخرج المعايير من النص ثم يستدعي search_exercises.
+    يستخرج المعايير (سنة/دورة/موضوع/رقم) + الموضوع المرجعي، ثم يستدعي search_exercises.
+    الموضوع المرجعي (canonical_topic_id) هو الإشارة الأقوى التي تكسر تعادل السنة.
     """
     year = _extract_year(normalized)
     session = _extract_session(normalized)
     subject_number = _extract_subject_number(normalized)
     exercise_number = _extract_exercise_number(normalized)
     topic_keywords = _extract_topic_keywords(normalized)
+    canonical = primary_canonical_topic(normalized)
 
     results = search_exercises(
         year=year,
@@ -353,6 +365,7 @@ def _find_matching_entry(normalized: str) -> ExerciseEntry | None:
         subject_number=subject_number,
         exercise_number=exercise_number,
         topic_keywords=topic_keywords if topic_keywords else None,
+        canonical_topic_id=canonical.canonical_id if canonical else None,
     )
 
     if results:

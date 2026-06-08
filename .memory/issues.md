@@ -3909,3 +3909,34 @@ build sandbox, run the live end-to-end there with the real secrets + logins
 `app/core/gateway/simple_client.py`، `app/core/ai_config.py`،
 `app/services/capabilities/exercise_retrieval.py`، `app/services/skills/__init__.py`،
 `tests/services/test_iss107_{arabic_stream_guard,context_binding,model_chain}.py` (جديدة).
+
+---
+
+## ISS-109 (2026-06-08) — استرجاع تمرين خاطئ: «الأعداد المركبة» يُرجع «الاحتمالات» (RAG Semantic Blindness) ✅ RESOLVED
+
+**العَرَض:** طلب «أعطني تمرين الأعداد المركبة 2024» يعرض تمرين **الاحتمالات** بدل الأعداد المركبة.
+يوجد 3 تمارين في قاعدة المعرفة (احتمالات 2024 ex1، أعداد مركبة 2024 ex2، دوال عددية 2016 ex4).
+
+**السبب الجذري (مُثبت بالتجريب):** أداة التعريف العربية «ال» تكسر مطابقة الموضوع ثنائي الكلمة.
+الكلمة المفتاحية «أعداد مركبة» ليست سلسلة فرعية من «الأعداد المركبة» → `_extract_topic_keywords`
+تُرجع `[]` → `search_exercises` يُعطي +10 لكلا تمرينَي 2024 على السنة فقط → تعادل → الترتيب الثابت
+يفوز فيه الاحتمالات (التمرين الأول). «احتمالات» تنجو لأنها كلمة واحدة (سلسلة فرعية من «الاحتمالات»).
+
+**الإصلاح (D-099):** محرّك تطبيع عربي معمّم (`arabic_normalize.py`) + تصنيف موضوعي مرجعي +
+تسجيل بأولوية الموضوع وكسر تعادل حتمي في `knowledge_index.search_exercises` + مُسترجِع Supabase
+قابل للتوسّع (`bac_db_retriever.py`، retrieve-then-rerank) موصول DB-first مع fallback نصّي.
+ثغرة جانبية: `_YEAR_RE` لم يكن يطابق 2016 → وُسِّع لـ `20[0-3]\d`. + استبدال نماذج مدفوعة
+قابلة للوصول بنماذج `:free` (vision + self-healing).
+
+**التحقق الحي:** التعرّف 10/10 صياغات (stdlib) | SQL مقابل Supabase الحقيقي عبر الجسر 3/3 |
+ruff + runtime_truth ✅. اختبارات pytest + WebSocket E2E الكامل في CI/Codespaces (pip محظور في الـ sandbox).
+
+**الملفات:** `app/services/capabilities/arabic_normalize.py` (جديد)،
+`app/services/capabilities/bac_db_retriever.py` (جديد)،
+`app/services/capabilities/{knowledge_index,exercise_retrieval}.py`،
+`app/infrastructure/clients/orchestrator_client.py`،
+`app/services/vision/multimodal_processor.py`،
+`microservices/orchestrator_service/src/services/overmind/agents/self_healing.py`،
+`scripts/verify_exercise_retrieval_e2e.py` (جديد)،
+`tests/services/test_{arabic_normalize,bac_db_retriever}.py` (جديدة)،
+`tests/contracts/test_exercise_recognition_definite_article.py` (جديد).

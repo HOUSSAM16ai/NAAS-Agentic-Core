@@ -24,6 +24,7 @@ from app.core.http_client_factory import HTTPClientConfig, get_http_client
 from app.core.settings.base import get_settings
 from app.infrastructure.clients.routing_policy import ChatRoutingPolicy
 from app.services.capabilities.exercise_retrieval import (
+    ExerciseEntry,
     ExerciseRetrievalDecision,
     ExerciseRetrievalRequest,
     detect_exercise_retrieval,
@@ -129,12 +130,27 @@ class OrchestratorClient:
           4. محتوى محدد رسمياً (الملف في knowledge_base/)
 
         ISS-CONV-C: يقبل history_messages لحل أسئلة المتابعة بالسياق.
+
+        التوسّع لمليارات التمارين: عند نية استرجاع مؤكدة بلا تطابق في الفهرس المنسَّق
+        (تمرين غير مُدرَج محلياً) لكن مع إشارة بنيوية كافية (سنة/رقم/موضوع مرجعي)،
+        نُفعِّل preempt الاسترجاع ليجرّب Supabase. آمن: إن لم يُنتج المسار محتوى →
+        البث الفارغ يسقط للمسار العادي (راجع chat_with_agent).
         """
         decision = detect_exercise_retrieval(
             ExerciseRetrievalRequest(question=question),
             history_messages=history_messages,
         )
-        return decision.recognized and decision.matched_entry is not None
+        if not decision.recognized:
+            return False
+        if decision.matched_entry is not None:
+            return True
+        # المسار القابل للتوسّع: نية استرجاع + إشارة بنيوية → نجرّب Supabase
+        try:
+            from app.services.capabilities.bac_db_retriever import extract_db_facets
+
+            return extract_db_facets(question).is_anchored
+        except Exception:
+            return False
 
     def _has_explanation_with_context_match(
         self,
@@ -225,7 +241,8 @@ class OrchestratorClient:
         if not decision.recognized:
             return None
 
-        # المسار المُفضَّل — مطابقة مُفهرَسة دقيقة (ملف واحد، نص نظيف)
+        # المسار المُفضَّل — مطابقة مُفهرَسة دقيقة (الـ 3 المنسَّقة): عرض غني من markdown
+        # (نص نظيف + بطاقة امتحان). الفهرس المنسَّق يعمل كـ cache سريع للتمارين الساخنة.
         if decision.matched_entry is not None:
             try:
                 raw_content = load_exercise_content(decision.matched_entry)
@@ -233,8 +250,18 @@ class OrchestratorClient:
                     return format_exercise_for_display(decision.matched_entry, raw_content)
             except Exception:
                 logger.warning("indexed_retrieval_failed", exc_info=True)
+            # الملف النصّي مفقود → نص قاعدة البيانات (Supabase = single source of truth)
+            db_text = await self._fetch_indexed_entry_db_text(decision.matched_entry)
+            if db_text:
+                return db_text
 
-        # المسار البديل — wide-net search (legacy)
+        # المسار القابل للتوسّع (مليارات التمارين) — Supabase candidate-generation + rerank
+        # يُفعَّل للتمارين غير المُدرَجة في الفهرس المنسَّق. آمن: None عند تعذّر الوصول.
+        db_match_text = await self._search_supabase_exercise(question)
+        if db_match_text:
+            return db_match_text
+
+        # المسار البديل الأخير — wide-net search (legacy)
         try:
             from app.services.chat.tools.retrieval.service import search_educational_content
 
@@ -244,6 +271,57 @@ class OrchestratorClient:
         except Exception:
             logger.warning("local_retrieval_fallback_failed", exc_info=True)
             return None
+
+    async def _fetch_indexed_entry_db_text(self, entry: ExerciseEntry) -> str | None:
+        """يجلب نص تمرين مُفهرَس من Supabase بهويته (سنة + رقم + موضوع مرجعي).
+
+        يُستخدم كـ single-source-of-truth عند غياب ملف markdown المحلي. None عند
+        أي تعذّر وصول → يبقى المسار يعتمد على الفهرس النصّي.
+        """
+        try:
+            from app.services.capabilities.bac_db_retriever import fetch_exercise_raw_text
+            from app.services.capabilities.knowledge_index import entry_canonical_ids
+
+            canonical_id = next(iter(entry_canonical_ids(entry)), None)
+            raw = await fetch_exercise_raw_text(
+                year=entry.year,
+                exercise_number=entry.exercise_number,
+                canonical_id=canonical_id,
+            )
+            return self._format_db_exercise_text(raw) if raw else None
+        except Exception:
+            logger.info("indexed_entry_db_text_failed", exc_info=True)
+            return None
+
+    async def _search_supabase_exercise(self, question: str) -> str | None:
+        """استرجاع تمرين من Supabase (candidate-gen + rerank) للتمارين غير المُفهرَسة محلياً.
+
+        المسار القابل للتوسّع لمليارات التمارين. None عند تعذّر الوصول/لا نتيجة →
+        يتقدّم المسار للبديل (wide-net / المسار العادي).
+        """
+        try:
+            from app.services.capabilities.bac_db_retriever import search_bac_exercises_db
+
+            match = await search_bac_exercises_db(question)
+            if match is not None and match.raw_text.strip():
+                return self._format_db_exercise_text(match.raw_text)
+        except Exception:
+            logger.info("supabase_exercise_search_failed", exc_info=True)
+        return None
+
+    @staticmethod
+    def _format_db_exercise_text(raw_text: str | None) -> str | None:
+        """ينظّف نص تمرين قادم من Supabase للعرض (يقطع أي قسم حل تسرَّب، يحذف الفراغ)."""
+        if not raw_text or not raw_text.strip():
+            return None
+        try:
+            from app.services.capabilities.exercise_retrieval import _trim_at_solution
+
+            cleaned = _trim_at_solution(raw_text)
+        except Exception:
+            cleaned = raw_text
+        cleaned = (cleaned or "").strip()
+        return cleaned or None
 
     async def _stream_exercise_explanation_response(
         self,

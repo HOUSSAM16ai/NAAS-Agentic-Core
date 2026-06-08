@@ -8087,3 +8087,60 @@ Supabase تحقَّق **قراءةً عبر الجسر HTTPS** (لا كتابة 
 2. **BAC 2024 Math (Subject 1, Ex 2):** Complex Numbers (`bac2024_math_experimental_subject1_ex1_ex2.md` reference).
 3. **BAC 2016 Math (Subject 2, Ex 4):** Numerical Functions, Session 1 (`bac2016_s1_math_exp_subject2_ex4_numerical_functions.md` reference).
 These were ingested using isolated ETL scripts (like `live_db_restructure.py`) that strictly map the `exam_ref`, `branch`, `topic`, and JSON entities to prevent "RAG Semantic Blindness". The database is currently fully capable of distinguishing these exercises via Vector Embeddings, while local development in Codespaces safely falls back to reading the `knowledge_base/` markdown files due to egress firewall restrictions.
+
+---
+
+## 6.86 Arabic-Normalized Exercise Recognition + Scalable Supabase Retriever (2026-06-08, ISS-109 / D-099)
+
+> الكارثة: «أعطني تمرين الأعداد المركبة 2024» كان يُرجع تمرين **الاحتمالات**. هذا القسم يحكم
+> التعرّف على التمارين على نطاق المليارات — لا يُكسر بدون ADR.
+
+### السبب الجذري (مُثبت)
+أداة التعريف العربية «ال» تكسر مطابقة الموضوع ثنائي الكلمة: «أعداد مركبة» ليست سلسلة فرعية
+من «الأعداد المركبة» → `_extract_topic_keywords` تُرجع `[]` → `search_exercises` يُعطي +10 لكلا
+تمرينَي 2024 على السنة فقط → **تعادل** → الترتيب الثابت يفوز فيه الاحتمالات (التمرين الأول).
+«احتمالات» تنجو لأنها كلمة واحدة (سلسلة فرعية من «الاحتمالات»). هذا «RAG Semantic Blindness».
+
+### المعمارية (3 طبقات — retrieve-then-rerank، مستقلة عن مصدر البيانات)
+1. **`app/services/capabilities/arabic_normalize.py`** (stdlib نقي — الأساس): `normalize_ar` يحذف
+   «ال» لكل رمز (مع حماية الجذع القصير) + يوحّد الهمزات/ة/ى/التشكيل/التطويل/الأرقام العربية،
+   يُطبَّق على **طرفي المطابقة**. + `CANONICAL_TOPICS` يجسر صياغة الطالب ↔ `bac_exercises.topic`
+   (إنجليزي) ↔ raw_text العربي المميِّز. `primary_canonical_topic(query)` هو نقطة التعرّف الموحَّدة.
+2. **`knowledge_index.search_exercises`**: مطابقة مطبَّعة + إشارة `canonical_topic_id` بوزن **16**
+   (`_W_CANONICAL_TOPIC > _W_YEAR=10`) تكسر تعادل السنة + ترتيب حتمي
+   `(score, canonical_hit, -exercise_number)` لا يعتمد ترتيب القائمة أبداً.
+3. **`app/services/capabilities/bac_db_retriever.py`** (Supabase candidate-gen + rerank): SQL مفهرس
+   (سنة + `topic ILIKE` + `raw_text LIKE` المميِّز) ثم rerank متعدد الإشارات. موصول في
+   `orchestrator_client._build_local_retrieval_response` (DB-first للتمارين غير المُفهرَسة + hybrid
+   content) و `_has_indexed_match` (preempt للطلبات المُرسَّخة بنيوياً).
+
+### القواعد الدائمة (لا تُكسر بدون ADR)
+1. **التطبيع على الطرفين إلزامي**: أي مطابقة موضوع/استعلام عربي تمرّ عبر `normalize_ar` —
+   ممنوع `if keyword in text` خام (يُعيد كارثة «ال» فوراً).
+2. **`canonical_topic_id` أقوى من السنة**: وزنه يجب أن يبقى > وزن السنة ليكسر تعادل تمارين نفس السنة.
+3. **الترتيب حتمي**: `(score, canonical_hit, -exercise_number)` — لا تعتمد النتيجة على ترتيب القائمة.
+4. **مُسترجِع DB لا يكسر المحادثة أبداً**: أي تعذّر وصول/خطأ/مهلة → `None` → fallback نصّي
+   (markdown `KNOWLEDGE_INDEX`). آمن في الـ sandbox (Postgres محجوب)، يتفعّل في Codespaces/Production.
+5. **`KNOWLEDGE_INDEX` = cache سريع للتمارين الساخنة؛ Supabase = المصدر القابل للتوسّع لمليارات التمارين.**
+   إضافة تمرين منسَّق = مدخل في `KNOWLEDGE_INDEX`؛ التوسّع الفعلي = صفوف `bac_exercises` (الـ retriever
+   يولّد المرشّحين بفلاتر مفهرسة، لا مسح كامل).
+6. **`_YEAR_RE = 20[0-3]\d`** (يشمل 2016) — لا تُضيّقه إلى `20[2-3]\d` (يُسقط الدوال العددية 2016).
+7. **نماذج مجانية فقط على المسارات القابلة للوصول**: PRIMARY=`openai/gpt-oss-120b:free` + كل fallbacks
+   `:free`. الرؤية (`multimodal_processor.py`) = `google/gemma-4-26b-a4b-it:free` (قابل للتجاوز بـ
+   `OPENROUTER_VISION_MODEL`). self-healing = `openai/gpt-oss-20b:free`. أي نموذج جديد ينتهي بـ `:free`.
+
+### التحقق الحي (2026-06-08)
+- مصفوفة التعرّف (stdlib، 10 صياغات عربي ±«ال»/فرنسي/إنجليزي): 10/10 → التمرين الصحيح.
+- **SQL المُسترجِع مقابل Supabase الحقيقي عبر الجسر**: 3/3 (complex→ex2، probability→ex1، numerical→ex4).
+- `python3 scripts/verify_exercise_retrieval_e2e.py` (Layer A تعرّف + Layer B جسر + Layer C WebSocket).
+  Layer C (WebSocket E2E) يتطلب `E2E_BACKEND` + التطبيق قيد التشغيل → **Codespaces** (pip محجوب في الـ sandbox).
+- ruff check/format ✅ | runtime_truth --check ✅ (لا drift).
+
+### Codespaces runbook (التحقق الكامل WebSocket E2E)
+```bash
+cp .devcontainer/secrets.env.example .devcontainer/secrets.env   # املأ OPENROUTER + DATABASE_URL الحقيقية
+bash .devcontainer/supervisor.sh                                  # يُطلق المنظومة كاملة
+set -a && . .devcontainer/secrets.env && set +a
+E2E_BACKEND=http://localhost:8000 python3 scripts/verify_exercise_retrieval_e2e.py
+# المتوقع: A_recognition PASS + B_supabase_sql PASS + C_websocket PASS (الردود تحوي علامات التمرين الصحيح)
+```

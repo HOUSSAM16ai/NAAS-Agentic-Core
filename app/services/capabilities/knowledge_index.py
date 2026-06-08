@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.services.capabilities.arabic_normalize import (
+    CANONICAL_TOPICS,
+    normalize_ar,
+)
+
 
 @dataclass(frozen=True)
 class ExerciseEntry:
@@ -152,6 +157,44 @@ KNOWLEDGE_INDEX: list[ExerciseEntry] = [
 ]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# جسر المواضيع المرجعية (Canonical Topic Bridge)
+#
+# لكل ExerciseEntry نحسب مجموعة canonical_id التي تنتمي إليها، بمطابقة مواضيعه
+# (entry.topics) مع أسماء CanonicalTopic البديلة بعد التطبيع. يُحسب مرة واحدة
+# ويُخزَّن (cache) لأن KNOWLEDGE_INDEX ثابت. هذه هي الإشارة الأقوى للتمييز.
+# ─────────────────────────────────────────────────────────────────────────────
+_ENTRY_CANONICAL_CACHE: dict[int, frozenset[str]] = {}
+
+
+def entry_canonical_ids(entry: ExerciseEntry) -> frozenset[str]:
+    """يُرجِع معرّفات المواضيع المرجعية التي ينتمي إليها التمرين (مطبَّعة، مخزَّنة)."""
+    key = id(entry)
+    cached = _ENTRY_CANONICAL_CACHE.get(key)
+    if cached is not None:
+        return cached
+    normalized_topics = " ".join(normalize_ar(t) for t in entry.topics)
+    ids = {
+        topic.canonical_id
+        for topic in CANONICAL_TOPICS
+        if any(alias and alias in normalized_topics for alias in topic.aliases)
+    }
+    result = frozenset(ids)
+    _ENTRY_CANONICAL_CACHE[key] = result
+    return result
+
+
+# أوزان الإشارات (Signal Weights). الموضوع المرجعي يجب أن يهيمن على تعادل السنة وحدها.
+_W_YEAR = 10
+_W_SESSION = 5
+_W_SUBJECT = 8
+_W_EXERCISE = 8
+_W_BRANCH = 3
+_W_CANONICAL_TOPIC = 16  # > _W_YEAR — يكسر «تعادل تمرينَي 2024 على السنة»
+_W_TOPIC_KW = 2
+_W_TAG_KW = 1
+
+
 def search_exercises(
     *,
     year: int | None = None,
@@ -161,20 +204,28 @@ def search_exercises(
     branch: str | None = None,
     topic_keywords: list[str] | None = None,
     tag_keywords: list[str] | None = None,
+    canonical_topic_id: str | None = None,
 ) -> list[ExerciseEntry]:
     """
-    يبحث في فهرس قاعدة المعرفة بمعايير متعددة.
+    يبحث في فهرس قاعدة المعرفة بمعايير متعددة مع تسجيل متعدد الإشارات.
 
     يُرجع قائمة التمارين المطابقة مرتبة حسب دقة التطابق.
     المعايير غير المحددة (None) لا تُطبَّق في الفلترة.
+
+    إصلاح ISS (أداة التعريف «ال»): مطابقة المواضيع تتم على الصورة **المطبَّعة**
+    عربياً (`normalize_ar`) فـ«الأعداد المركبة» تطابق «أعداد مركبة». كما أُضيفت
+    إشارة `canonical_topic_id` بوزن أعلى من السنة لتكسر تعادل تمرينَي 2024.
+
+    الترتيب حتمي: (score, الانتماء للموضوع المرجعي, -exercise_number) فلا يعتمد
+    النتيجة على ترتيب القائمة عند التعادل.
     """
-    results: list[ExerciseEntry] = []
+    results: list[tuple[int, int, int, ExerciseEntry]] = []
 
     for entry in KNOWLEDGE_INDEX:
         score = 0
 
         if year is not None and entry.year == year:
-            score += 10
+            score += _W_YEAR
         elif year is not None:
             continue  # السنة إلزامية إذا حُددت
 
@@ -182,41 +233,44 @@ def search_exercises(
             session_norm = session.strip().lower()
             entry_session_norm = entry.session.strip().lower()
             if session_norm in entry_session_norm or entry_session_norm in session_norm:
-                score += 5
+                score += _W_SESSION
 
         if subject_number is not None and entry.subject_number == subject_number:
-            score += 8
+            score += _W_SUBJECT
 
         if exercise_number is not None and entry.exercise_number == exercise_number:
-            score += 8
+            score += _W_EXERCISE
 
         if branch is not None:
             branch_norm = branch.strip().lower()
             entry_branch_norm = entry.branch.strip().lower()
             if branch_norm in entry_branch_norm or entry_branch_norm in branch_norm:
-                score += 3
+                score += _W_BRANCH
+
+        # الإشارة الأقوى: تطابق الموضوع المرجعي (يكسر تعادل السنة)
+        entry_canon = entry_canonical_ids(entry)
+        canonical_hit = 1 if (canonical_topic_id and canonical_topic_id in entry_canon) else 0
+        if canonical_hit:
+            score += _W_CANONICAL_TOPIC
 
         if topic_keywords:
             for kw in topic_keywords:
-                kw_norm = kw.strip().lower()
-                for topic in entry.topics:
-                    if kw_norm in topic.lower():
-                        score += 2
-                        break
+                kw_norm = normalize_ar(kw)
+                if kw_norm and any(kw_norm in normalize_ar(topic) for topic in entry.topics):
+                    score += _W_TOPIC_KW
 
         if tag_keywords:
             for kw in tag_keywords:
-                kw_norm = kw.strip().lower()
-                for tag in entry.tags:
-                    if kw_norm in tag.lower():
-                        score += 1
-                        break
+                kw_norm = normalize_ar(kw)
+                if kw_norm and any(kw_norm in normalize_ar(tag) for tag in entry.tags):
+                    score += _W_TAG_KW
 
         if score > 0:
-            results.append((score, entry))
+            # مفاتيح ترتيب حتمية: score ثم تطابق الموضوع ثم exercise_number تصاعدياً
+            results.append((score, canonical_hit, -entry.exercise_number, entry))
 
-    results.sort(key=lambda x: x[0], reverse=True)
-    return [entry for _, entry in results]
+    results.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+    return [entry for *_, entry in results]
 
 
 def find_best_match(query_tags: list[str]) -> ExerciseEntry | None:
@@ -229,21 +283,27 @@ def find_best_match(query_tags: list[str]) -> ExerciseEntry | None:
         return None
 
     best_score = 0
+    best_secondary = 0
     best_entry: ExerciseEntry | None = None
 
     for entry in KNOWLEDGE_INDEX:
         score = 0
-        all_entry_tags = [t.lower() for t in entry.tags + entry.topics]
+        all_entry_tags = [normalize_ar(t) for t in entry.tags + entry.topics]
 
         for tag in query_tags:
-            tag_norm = tag.strip().lower()
+            tag_norm = normalize_ar(tag)
+            if not tag_norm:
+                continue
             for entry_tag in all_entry_tags:
                 if tag_norm in entry_tag or entry_tag in tag_norm:
                     score += 1
                     break
 
-        if score > best_score:
+        # كسر التعادل: التمرين ذو الرقم الأعلى ثانوياً (حتمي، لا يعتمد ترتيب القائمة)
+        secondary = entry.exercise_number
+        if score > best_score or (score == best_score and score > 0 and secondary > best_secondary):
             best_score = score
+            best_secondary = secondary
             best_entry = entry
 
     return best_entry if best_score > 0 else None

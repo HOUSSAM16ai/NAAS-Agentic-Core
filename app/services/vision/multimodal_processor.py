@@ -7,12 +7,17 @@
 
 import base64
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.ai_gateway import AIClient
 
 logger = logging.getLogger(__name__)
+
+# نموذج رؤية مجاني فقط (لا نماذج مدفوعة). gemma-4-26b مجاني ويدعم الصور ومُتحقَّق
+# حياً في المشروع (GATEWAY_FALLBACK_2 — عربي + LaTeX). قابل للتجاوز عبر متغير البيئة.
+_VISION_MODEL = os.getenv("OPENROUTER_VISION_MODEL", "google/gemma-4-26b-a4b-it:free")
 
 
 @dataclass
@@ -81,7 +86,7 @@ class MultiModalProcessor:
         try:
             # استدعاء Vision API
             response = await self.ai_client.generate(
-                model="gpt-4o",  # يدعم Vision
+                model=_VISION_MODEL,  # نموذج رؤية مجاني فقط (google/gemma-4-26b-a4b-it:free)
                 messages=[
                     {"role": "system", "content": self.ANALYSIS_PROMPT},
                     {

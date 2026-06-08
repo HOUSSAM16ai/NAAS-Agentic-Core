@@ -117,8 +117,8 @@ class SelfHealingAgent:
         FailureType.API_ERROR: [
             HealingAction(
                 action_type="switch_model",
-                parameters={"fallback_model": "gpt-3.5-turbo"},
-                description="التبديل لنموذج بديل",
+                parameters={"fallback_model": "openai/gpt-oss-20b:free"},
+                description="التبديل لنموذج بديل (مجاني فقط)",
             ),
             HealingAction(
                 action_type="retry_with_backoff",

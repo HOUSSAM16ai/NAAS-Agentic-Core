@@ -8087,3 +8087,8 @@ Supabase تحقَّق **قراءةً عبر الجسر HTTPS** (لا كتابة 
 2. **BAC 2024 Math (Subject 1, Ex 2):** Complex Numbers (`bac2024_math_experimental_subject1_ex1_ex2.md` reference).
 3. **BAC 2016 Math (Subject 2, Ex 4):** Numerical Functions, Session 1 (`bac2016_s1_math_exp_subject2_ex4_numerical_functions.md` reference).
 These were ingested using isolated ETL scripts (like `live_db_restructure.py`) that strictly map the `exam_ref`, `branch`, `topic`, and JSON entities to prevent "RAG Semantic Blindness". The database is currently fully capable of distinguishing these exercises via Vector Embeddings, while local development in Codespaces safely falls back to reading the `knowledge_base/` markdown files due to egress firewall restrictions.
+
+
+## Content Retrieval Semantics
+- Educational queries must ALWAYS extract topics in both Arabic and English simultaneously to bridge the gap between English prompts and Arabic databases (e.g., `'complex numbers الأعداد المركبة'`).
+- Search queries constructed for `LIKE` clauses must always use `OR` operations across whitespace-split tokens.

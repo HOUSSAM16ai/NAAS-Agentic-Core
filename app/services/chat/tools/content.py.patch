@@ -1,0 +1,61 @@
+<<<<<<< SEARCH
+        # Topic detection (more specific)
+        topic_map = {
+            # Arabic topics
+            "أعداد مركبة": "complex numbers",
+            "اعداد مركبة": "complex numbers",
+            "مركب": "complex numbers",
+            "احتمال": "probability",
+            "احتمالات": "probability",
+            "سحب": "probability",  # سحب كرة = drawing = probability
+            "كرة": "probability",
+            "كرات": "probability",
+            "متتالي": "sequences",
+            "متتاليات": "sequences",
+            "دوال": "functions",
+            "دالة": "functions",
+            "نهاي": "limits",
+            "نهايات": "limits",
+            "تكامل": "integrals",
+            "مشتق": "derivatives",
+            "استمرار": "continuity",
+            "هندس": "geometry",
+            "أسية": "exponential",
+            "لوغاريتم": "logarithm",
+            # English topics
+            "complex": "complex numbers",
+            "probability": "probability",
+            "sequence": "sequences",
+            "function": "functions",
+        }
+=======
+        # Topic detection (more specific)
+        topic_map = {
+            # Arabic topics (Mapping to themselves for robust semantic DB lookup)
+            "أعداد مركبة": "الأعداد المركبة",
+            "اعداد مركبة": "الأعداد المركبة",
+            "مركب": "الأعداد المركبة",
+            "احتمال": "الاحتمالات",
+            "احتمالات": "الاحتمالات",
+            "سحب": "الاحتمالات",  # سحب كرة = drawing = probability
+            "كرة": "الاحتمالات",
+            "كرات": "الاحتمالات",
+            "متتالي": "المتتاليات",
+            "متتاليات": "المتتاليات",
+            "دوال": "الدوال",
+            "دالة": "الدوال",
+            "نهاي": "النهايات",
+            "نهايات": "النهايات",
+            "تكامل": "التكامل",
+            "مشتق": "المشتقات",
+            "استمرار": "الاستمرارية",
+            "هندس": "الهندسة",
+            "أسية": "الدوال الأسية",
+            "لوغاريتم": "اللوغاريتم",
+            # English topics
+            "complex": "complex numbers",
+            "probability": "probability",
+            "sequence": "sequences",
+            "function": "functions",
+        }
+>>>>>>> REPLACE

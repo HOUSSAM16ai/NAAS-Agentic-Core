@@ -197,3 +197,12 @@ To activate full pipeline: export `OPENROUTER_API_KEY` + `TAVILY_API_KEY` before
 | `POST /execute` (8008) | `query`, `caller_id`, `action` | None |
 | `POST /compose` (8006) | `query` | None |
 | `POST /retrieve` (8009) | `question` | None |
+
+
+### 4. Content Retrieval & Semantic Searching (Bilingual Mapping)
+- **Problem Context:** Queries mapping Arabic terms (e.g. الأعداد المركبة) explicitly to English via LLM failed against local/SQL search causing fallback cross-contamination (e.g. retrieving probability exercises).
+- **Resolution Doctrine:**
+  - AI extraction algorithms (`_ai_extract_search_params`) MUST output topics bilingually (e.g., `'complex numbers الأعداد المركبة'`).
+  - Search heuristics and topic mappings (`_heuristic_extract_search_params`) MUST include both languages.
+  - SQL text searches (`ContentSearchQuery` and `search_content`) MUST use `OR` logic when tokenizing query strings instead of `AND` logic to properly hit multi-language metadata payloads.
+  - `local_store.py` fallback heuristics (`_is_relevant_fallback`) MUST be forgiving for short standard Arabic keywords (e.g., `< 3 chars` checks must exclude explicitly mapped short educational keywords like `دوال`).

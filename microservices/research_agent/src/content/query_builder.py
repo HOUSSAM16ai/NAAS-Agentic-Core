@@ -30,7 +30,7 @@ class ContentSearchQuery:
             self.params[body_key] = like_value
 
         if term_clauses:
-            self.where_clauses.append(" AND ".join(term_clauses))
+            self.where_clauses.append("(" + " OR ".join(term_clauses) + ")")
         return self
 
     def add_id_filter(self, content_ids: list[str] | None) -> "ContentSearchQuery":

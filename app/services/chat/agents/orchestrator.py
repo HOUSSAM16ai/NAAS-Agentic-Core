@@ -428,24 +428,24 @@ class OrchestratorAgent:
         system_prompt = (
             "You are a search query parser for an educational database. "
             "Extract parameters from the user's request into a JSON object. "
-            "Fields: q (keywords - EXTRACT THE TOPIC), year (int), subject (Mathematics, Physics), "
+            "Fields: q (keywords - EXTRACT THE TOPIC IN BOTH ENGLISH AND ARABIC), year (int), subject (Mathematics, Physics), "
             "branch (experimental_sciences, math_tech, etc), set_name, level, type (exercise, lesson). "
             "\n\nIMPORTANT RULES:"
-            "\n1. 'q' MUST contain the actual TOPIC/SUBJECT being searched, NOT the full question!"
+            "\n1. 'q' MUST contain the actual TOPIC/SUBJECT being searched, NOT the full question! Always output it as 'EnglishTopic ArabicTopic'."
             "\n2. Topics examples:"
-            "\n   - 'probability' (احتمالات), 'complex numbers' (أعداد مركبة), 'sequences' (متتاليات)"
-            "\n   - 'functions' (دوال), 'derivatives' (مشتقات), 'integrals' (تكامل)"
-            "\n   - 'limits' (نهايات), 'continuity' (استمرارية), 'geometry' (هندسة)"
+            "\n   - 'probability الاحتمالات', 'complex numbers الأعداد المركبة', 'sequences المتتاليات'"
+            "\n   - 'functions الدوال', 'derivatives المشتقات', 'integrals التكامل'"
+            "\n   - 'limits النهايات', 'continuity الاستمرارية', 'geometry الهندسة'"
             "\n3. 'Subject 1' -> set_name: 'subject_1', 'Subject 2' -> set_name: 'subject_2'."
             "\n4. 'Experimental Sciences' (علوم تجريبية) -> branch: 'experimental_sciences'."
             "\n5. If a field is not present, omit it."
             "\n\nEXAMPLES:"
-            "\n- 'تمرين أعداد مركبة' -> {'q': 'complex numbers'}"
-            "\n- 'احتمالات بكالوريا 2024' -> {'q': 'probability', 'year': 2024, 'level': 'baccalaureate'}"
-            "\n- 'متتاليات علوم تجريبية' -> {'q': 'sequences', 'branch': 'experimental_sciences'}"
-            "\n- 'دوال أسية' -> {'q': 'exponential functions'}"
-            "\n- 'نهايات ودوال' -> {'q': 'limits functions'}"
-            "\n- 'سحب كرة' -> {'q': 'probability'} (this is about drawing balls = probability)"
+            "\n- 'تمرين أعداد مركبة' -> {'q': 'complex numbers الأعداد المركبة'}"
+            "\n- 'احتمالات بكالوريا 2024' -> {'q': 'probability الاحتمالات', 'year': 2024, 'level': 'baccalaureate'}"
+            "\n- 'متتاليات علوم تجريبية' -> {'q': 'sequences المتتاليات', 'branch': 'experimental_sciences'}"
+            "\n- 'دوال أسية' -> {'q': 'exponential functions الدوال الأسية'}"
+            "\n- 'نهايات ودوال' -> {'q': 'limits functions النهايات والدوال'}"
+            "\n- 'سحب كرة' -> {'q': 'probability الاحتمالات'} (this is about drawing balls = probability)"
         )
 
         try:
@@ -483,26 +483,26 @@ class OrchestratorAgent:
         # Topic detection (more specific)
         topic_map = {
             # Arabic topics
-            "أعداد مركبة": "complex numbers",
-            "اعداد مركبة": "complex numbers",
-            "مركب": "complex numbers",
-            "احتمال": "probability",
-            "احتمالات": "probability",
-            "سحب": "probability",  # سحب كرة = drawing = probability
-            "كرة": "probability",
-            "كرات": "probability",
-            "متتالي": "sequences",
-            "متتاليات": "sequences",
-            "دوال": "functions",
-            "دالة": "functions",
-            "نهاي": "limits",
-            "نهايات": "limits",
-            "تكامل": "integrals",
-            "مشتق": "derivatives",
-            "استمرار": "continuity",
-            "هندس": "geometry",
-            "أسية": "exponential",
-            "لوغاريتم": "logarithm",
+            "أعداد مركبة": "complex numbers الأعداد المركبة",
+            "اعداد مركبة": "complex numbers الأعداد المركبة",
+            "مركب": "complex numbers الأعداد المركبة",
+            "احتمال": "probability الاحتمالات",
+            "احتمالات": "probability الاحتمالات",
+            "سحب": "probability الاحتمالات",  # سحب كرة = drawing = probability
+            "كرة": "probability الاحتمالات",
+            "كرات": "probability الاحتمالات",
+            "متتالي": "sequences المتتاليات",
+            "متتاليات": "sequences المتتاليات",
+            "دوال": "functions الدوال",
+            "دالة": "functions الدوال",
+            "نهاي": "limits النهايات",
+            "نهايات": "limits النهايات",
+            "تكامل": "integrals التكامل",
+            "مشتق": "derivatives المشتقات",
+            "استمرار": "continuity الاستمرارية",
+            "هندس": "geometry الهندسة",
+            "أسية": "exponential الأسية",
+            "لوغاريتم": "logarithm اللوغاريتم",
             # English topics
             "complex": "complex numbers",
             "probability": "probability",

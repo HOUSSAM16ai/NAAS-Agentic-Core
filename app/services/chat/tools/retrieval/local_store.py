@@ -239,10 +239,21 @@ def _is_relevant_fallback(metadata: dict, body: str, query: str) -> bool:
     # Check title
     title = str(metadata.get("title", "")).lower()
     for token in query_tokens:
-        if len(token) < 3:  # Skip short words to avoid noise
+        if len(token) < 3 and token not in ["دوال", "دالة"]:  # Specific allowance
             continue
         if token in title:
             return True
+
+    # Check topics
+    topics = metadata.get("topics", [])
+    if isinstance(topics, list):
+        for topic in topics:
+            topic_str = str(topic).lower()
+            for token in query_tokens:
+                if len(token) < 3 and token not in ["دوال", "دالة"]:
+                    continue
+                if token in topic_str:
+                    return True
 
     # Check tags
     tags = metadata.get("tags", [])
@@ -250,7 +261,7 @@ def _is_relevant_fallback(metadata: dict, body: str, query: str) -> bool:
         for tag in tags:
             tag_str = str(tag).lower()
             for token in query_tokens:
-                if len(token) < 3:
+                if len(token) < 3 and token not in ["دوال", "دالة"]:
                     continue
                 if token in tag_str:
                     return True

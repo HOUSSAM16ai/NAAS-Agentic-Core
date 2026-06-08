@@ -47,9 +47,13 @@ async def search_content(
         params["subject"] = subject
 
     if q:
-        # Simple LIKE search for now (works on both sqlite and postgres)
-        query_str += " AND (title LIKE :q OR md_content LIKE :q)"
-        params["q"] = f"%{q}%"
+        terms = [t for t in q.split() if t.strip()]
+        term_clauses = []
+        for i, term in enumerate(terms):
+            term_clauses.append(f"(title LIKE :q_{i} OR md_content LIKE :q_{i})")
+            params[f"q_{i}"] = f"%{term}%"
+        if term_clauses:
+            query_str += " AND (" + " OR ".join(term_clauses) + ")"
 
     query_str += " LIMIT 50"
 

@@ -537,6 +537,37 @@ def get_realtime_protocol_summary() -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Skills Platform Doctrine (D-100 — Registry + Composition + Observability)
+# ─────────────────────────────────────────────────────────────────────────────
+#: نسخة doctrine منصّة الـ Skills الموحَّدة.
+SKILLS_PLATFORM_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+SKILLS_PLATFORM_DOCTRINE: Final[tuple[str, ...]] = (
+    "Single registry: كل Skill يُسجَّل في `registry.get_skill_registry()` ببيانات "
+    "وصفية موحَّدة (name, contract, primary_method, consumed_by, status).",
+    "No ZOMBIE: كل Skill مُسجَّل يجب أن يملك مُستهلِكاً حيّاً في `consumed_by` — "
+    "الـ CI gate يحرس على ذلك (مرآة D-073).",
+    "Additive only: المنصّة لا تُعيد توصيل المسار الحيّ — تُوفِّر صياغة رسمية "
+    "(compose_text_refinement) + سطح رصد (/api/v1/skills) دون لمس الدردشة الحيّة.",
+    "Graceful degradation: كل خطوة في `compose_text_refinement` معزولة — فشلها "
+    "يُتجاهَل ويُحتفَظ بالنص (لا يكسر المسار أبداً).",
+    "Flagged dormants: الـ Skills المُفعَّلة من قدرات DORMANT (retrieval_rerank, "
+    "mcp_tool) مُعطَّلة افتراضياً وتُرجِع None عند التعطيل (صفر تغيير سلوكي).",
+    "Metric-emitter contract (§6.21): كل مقياس يُعرَض في المنصّة له مُصدِر حقيقي "
+    "في الكود — لا zombie metrics.",
+)
+
+
+def get_skills_platform_summary() -> str:
+    """يُرجِع ملخصاً موجزاً لـ doctrine منصّة الـ Skills (للـ logs/system prompts)."""
+    return (
+        f"[v{SKILLS_PLATFORM_DOCTRINE_VERSION}] "
+        f"{len(SKILLS_PLATFORM_DOCTRINE)} قاعدة — registry موحَّد، no-ZOMBIE، "
+        "additive، graceful degradation، flagged dormants، metric-emitter contract."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -657,6 +688,16 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "admin.admin_chat_stream_ws",
             "conversation_service.main.chat_ws",
             "conversation_service.main.admin_chat_ws",
+        ),
+    },
+    "skills_platform": {
+        "version": SKILLS_PLATFORM_DOCTRINE_VERSION,
+        "rules_count": len(SKILLS_PLATFORM_DOCTRINE),
+        "consumed_by": (
+            # D-100: المنصّة الموحَّدة — registry + composition + observability.
+            "api.routers.skills.list_skills",
+            "api.routers.skills.refine_endpoint",
+            "registry.get_skill_registry",
         ),
     },
 }
@@ -799,6 +840,8 @@ __all__ = [
     "REALTIME_PROTOCOL_DOCTRINE_VERSION",
     "RETRIEVAL_DOCTRINE",
     "RETRIEVAL_DOCTRINE_VERSION",
+    "SKILLS_PLATFORM_DOCTRINE",
+    "SKILLS_PLATFORM_DOCTRINE_VERSION",
     "SKILL_DOCTRINE_MANIFEST",
     "SKILL_INVOCATION_PROTOCOL",
     "SKILL_INVOCATION_PROTOCOL_VERSION",
@@ -816,6 +859,7 @@ __all__ = [
     "get_realtime_protocol_summary",
     "get_retrieval_doctrine_summary",
     "get_skill_invocation_protocol_summary",
+    "get_skills_platform_summary",
     "get_step_by_step_summary",
     "list_all_doctrines",
 ]

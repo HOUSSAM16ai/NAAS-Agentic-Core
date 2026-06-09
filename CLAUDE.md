@@ -8144,3 +8144,64 @@ set -a && . .devcontainer/secrets.env && set +a
 E2E_BACKEND=http://localhost:8000 python3 scripts/verify_exercise_retrieval_e2e.py
 # المتوقع: A_recognition PASS + B_supabase_sql PASS + C_websocket PASS (الردود تحوي علامات التمرين الصحيح)
 ```
+
+---
+
+## 6.87 Unified Skills Platform — Registry + Composition + Observability (2026-06-09, D-100)
+
+> تحقيق §0.5 (النجمة القطبية): طبقة موحِّدة فوق الـ 14 Skill — **اكتشاف + بيانات وصفية +
+> تركيب رسمي + رصد**، مع تفعيل قدرتين كانتا DORMANT (LlamaIndex/Reranker + MCP) كـ Skills
+> اختيارية. **كل شيء إضافي 100% — لا يلمس مسار الإقلاع ولا الدردشة الحيّة.**
+
+### المكوّنات
+
+| المكوّن | الملف | الدور |
+|---------|-------|------|
+| **SkillRegistry** | `app/services/skills/registry.py` | سجل في-العملية لكل الـ 14 Skill ببيانات وصفية موحَّدة (name, contract, primary_method, consumed_by, status). استيراد الـ Skills كسول (lazy) — الرصد لا يستورد pydantic. |
+| **compose_text_refinement** | `registry.py` | خط تنقية الإجابة الرسمي (exercise_alignment → answer_quality → output_firewall → topic_lock) كبدائية قابلة لإعادة الاستخدام. كل خطوة معزولة (graceful degradation) — لا تكسر المسار. |
+| **`/api/v1/skills`** | `app/api/routers/skills.py` | سطح رصد قراءة-أولاً: `GET /` (قائمة)، `GET /{name}` (تفاصيل)، `POST /refine` (auth — التركيب)، `POST /retrieve` + `POST /mcp` (auth، خلف علم — 503 عند التعطيل). مُركَّب في `base_router_registry()`. |
+| **RetrievalRerankSkill** | `app/services/skills/retrieval_rerank_skill.py` | يُفعِّل `LlamaIndexDriver` + `RerankerDriver` (كانا DORMANT) كـ Skill. علم `ENABLE_RETRIEVAL_RERANK_SKILL` (افتراضي False → يُرجِع None). |
+| **MCPToolSkill** | `app/services/skills/mcp_tool_skill.py` | يُفعِّل `MCPServer` (8 أدوات) كـ Skill. علم `ENABLE_MCP_TOOL_SKILL` (افتراضي False → يُرجِع None). |
+| **SKILLS_PLATFORM_DOCTRINE** | `app/services/skills/doctrine.py` (v1.0.0) | 6 قواعد + manifest entry `skills_platform`. |
+| **CI gate** | `scripts/fitness/check_skills_doctrine.py:check_skills_platform` | يحرس: manifest متّسق + الـ registry مكتمل (14) + no-ZOMBIE + الموجِّه مُركَّب. |
+
+### القواعد الست الدائمة (D-100 — لا تُكسر بدون ADR)
+
+1. **Single registry**: كل Skill يُسجَّل في `get_skill_registry()` ببيانات وصفية موحَّدة.
+2. **No ZOMBIE**: كل Skill مُسجَّل يملك مُستهلِكاً حيّاً في `consumed_by` — الـ CI gate يحرس (مرآة D-073).
+3. **Additive only**: المنصّة لا تُعيد توصيل المسار الحيّ — `local_graph._chat_node` chain يبقى مرجعاً؛ التركيب عبر الخدمات يبقى في `microservices/.../skills_pipeline.py:run_skills_pipeline`.
+4. **Graceful degradation**: كل خطوة في `compose_text_refinement` معزولة بـ try/except — فشلها يُتجاهَل ويُحتفَظ بالنص.
+5. **Flagged dormants**: الـ Skills المُفعَّلة من قدرات DORMANT مُعطَّلة افتراضياً وتُرجِع None عند التعطيل (صفر تغيير سلوكي). علم الميزة: env var (override، 12-factor) أولاً ثم الإعدادات.
+6. **Metric-emitter contract (§6.21)**: كل مقياس يُعرَض له مُصدِر حقيقي — `cogniforge_skill_compose_*`، `cogniforge_skill_registry_skills`، `cogniforge_skill_retrieval_*`، `cogniforge_skill_mcp_*`.
+
+### ما هو مُستبعَد صراحةً (بأسباب موثَّقة)
+
+- **Kagent** (`KagentDriver`): محجوب أمنياً («Invalid token») — يحتاج نظام token داخلياً. ZOMBIE يبقى.
+- **TLM / cleanlab**: غير مُثبَّت — ليس جزءاً من المستودع.
+- **Docker-forcing**: كسر Codespaces مراراً (error 1302 — §6.16). المنظومة تعمل uvicorn-native بلا Docker.
+
+### قياس النجاح حياً (Codespaces — الـ sandbox يحجب pip + Postgres)
+
+```bash
+# الرصد — 14 Skill (12 ACTIVE + 2 FLAGGED)
+curl -s http://localhost:8000/api/v1/skills | python3 -m json.tool
+# تحقّق في-العملية
+python3 scripts/verify_skills_platform.py
+ENABLE_RETRIEVAL_RERANK_SKILL=1 ENABLE_MCP_TOOL_SKILL=1 python3 scripts/verify_skills_platform.py
+# تحقّق المنظومة كاملة (8 خدمات + pipeline full + /api/v1/skills + WS turn)
+python3 scripts/verify_full_stack_codespaces.py
+```
+
+### التحقق في الـ sandbox (الآن)
+
+- `ruff check` + `ruff format --check` ✅ | `runtime_truth --check` ✅ (الـ lock يسجّل تفعيل الـ drivers: importer 1→2) | `validate_structure` ✅ | `ci_guardrails` ✅.
+- اختبار منطق الـ registry/compose المستقل (stdlib): 14 Skill، 12 ACTIVE + 2 FLAGGED، no-ZOMBIE، ترتيب + عزل فشل + env-override ✅.
+- اختبارات regression: `tests/services/test_skills_registry.py` (registry + compose + manifest).
+- **التحقق الحي الكامل** (الخدمات + الـ endpoints + flagged skills) يجري في Codespaces/CI حيث pydantic + الخدمات متوفّرة.
+
+### السلسلة الكاملة (D-099 → D-100)
+
+| Decision | المُصلَح/المُضاف |
+|----------|-----------------|
+| D-099 | تعرّف عربي مُطبَّع + مُسترجِع Supabase قابل للتوسّع |
+| **D-100** | **منصّة Skills موحَّدة: registry + compose + /api/v1/skills + تفعيل LlamaIndex/Reranker/MCP كـ Skills (flagged) + CI gate** |

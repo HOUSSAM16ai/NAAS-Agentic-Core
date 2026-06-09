@@ -1,5 +1,5 @@
 {
-  "branch": "claude/probability-exercise-2024-PNalj",
+  "branch": "claude/exercise-retrieval-e2e-p8yolh",
   "components": [
     {
       "agreed": true,
@@ -150,9 +150,10 @@
         "app/drivers/llamaindex_driver.py"
       ],
       "id": "llamaindex_driver",
-      "importer_count": 1,
+      "importer_count": 2,
       "importers_sample": [
-        "app/drivers/__init__.py"
+        "app/drivers/__init__.py",
+        "app/services/skills/retrieval_rerank_skill.py"
       ],
       "name": "LlamaIndex driver",
       "notes": "No live importer.",
@@ -166,9 +167,10 @@
         "app/drivers/reranker_driver.py"
       ],
       "id": "reranker_driver",
-      "importer_count": 1,
+      "importer_count": 2,
       "importers_sample": [
-        "app/drivers/__init__.py"
+        "app/drivers/__init__.py",
+        "app/services/skills/retrieval_rerank_skill.py"
       ],
       "name": "Reranker driver (monolith)",
       "notes": "Driver registered only via dormant MCPIntegrations.",
@@ -318,6 +320,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-06-03T21:18:26.622919+00:00",
+  "generated_at_utc": "2026-06-09T14:49:48.906617+00:00",
   "schema_version": 1
 }

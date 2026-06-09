@@ -12,6 +12,7 @@ from app.api.routers import (
     data_mesh,
     observability,
     security,
+    skills,
     system,
     ums,
     visual_pedagogy,
@@ -41,4 +42,5 @@ def base_router_registry() -> list[RouterSpec]:
         (observability.router, "/api/v1/observability"),
         (visual_pedagogy.router, ""),
         (aek.router, ""),
+        (skills.router, ""),
     ]

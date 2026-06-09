@@ -316,7 +316,12 @@ jobs:
 
           echo "=== 2. Every Skill has /health in main.py ==="
           for skill in "${SKILLS[@]}"; do
-            main=$(find "microservices/${skill}" -name "main.py" 2>/dev/null | head -1)
+            # Prefer the canonical top-level main.py; `find | head -1` is
+            # non-deterministic (services have a nested graph/main.py too).
+            main="microservices/${skill}/main.py"
+            if [ ! -f "$main" ]; then
+              main=$(find "microservices/${skill}" -name "main.py" 2>/dev/null | head -1)
+            fi
             if [ -z "$main" ]; then
               echo "FAIL: microservices/${skill} missing main.py"
               FAILED=1

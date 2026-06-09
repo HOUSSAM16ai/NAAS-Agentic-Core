@@ -165,7 +165,12 @@ jobs:
           )
           FAILED=0
           for skill in "${SKILLS[@]}"; do
-            main_file=$(find "microservices/${skill}" -name "main.py" 2>/dev/null | head -1)
+            # Prefer the canonical top-level main.py; `find | head -1` is
+            # non-deterministic (services have a nested graph/main.py too).
+            main_file="microservices/${skill}/main.py"
+            if [ ! -f "$main_file" ]; then
+              main_file=$(find "microservices/${skill}" -name "main.py" 2>/dev/null | head -1)
+            fi
             if [ -z "$main_file" ]; then
               echo "FAIL: microservices/${skill} missing main.py"
               FAILED=1

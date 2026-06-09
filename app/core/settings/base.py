@@ -222,6 +222,15 @@ class AppSettings(BaseServiceSettings):
     ENABLE_STATIC_FILES: bool = Field(
         True, description="Enable backend static file serving (disable for Next.js-only UI)."
     )
+    # Skills Platform — opt-in activation of dormant capabilities (default OFF → zero
+    # behavior change unless explicitly enabled). Each gated skill returns None when off.
+    ENABLE_RETRIEVAL_RERANK_SKILL: bool = Field(
+        False,
+        description="Enable RetrievalRerankSkill (LlamaIndex retrieval + CrossEncoder rerank).",
+    )
+    ENABLE_MCP_TOOL_SKILL: bool = Field(
+        False, description="Enable MCPToolSkill (8-tool MCP bridge: list + call)."
+    )
 
     # Security (Tokens)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(60 * 24 * 8, description="Access Token Expiry")

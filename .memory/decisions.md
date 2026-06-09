@@ -4107,3 +4107,27 @@ python3 scripts/db_bridge.py "SELECT ... ;"     # SQL مباشر أو عبر std
 4. مُسترجِع DB يُرجع None عند أي تعذّر → fallback نصّي إلزامي (لا يكسر المحادثة أبداً).
 5. الفهرس المنسَّق (`KNOWLEDGE_INDEX`) = cache سريع للتمارين الساخنة؛ Supabase = المصدر القابل للتوسّع.
 6. نماذج مجانية فقط على المسارات القابلة للوصول — أي نموذج جديد يجب أن ينتهي بـ `:free`.
+
+---
+
+## D-100 (2026-06-09) — Unified Skills Platform (Registry + Composition + Observability)
+
+تحقيق §0.5: طبقة موحِّدة فوق الـ 14 Skill — **اكتشاف + بيانات وصفية + تركيب رسمي + رصد**.
+كل شيء إضافي 100% — لا يلمس مسار الإقلاع ولا الدردشة الحيّة. تفصيل كامل: CLAUDE.md §6.87.
+
+**المُضاف:**
+- `app/services/skills/registry.py` — `SkillRegistry` (14 Skill، lazy) + `compose_text_refinement`
+  (خط تنقية: exercise_alignment → answer_quality → output_firewall → topic_lock، graceful degradation).
+- `app/api/routers/skills.py` — `/api/v1/skills` (list/detail) + `/refine` + `/retrieve` + `/mcp` (auth).
+- `app/services/skills/retrieval_rerank_skill.py` — تفعيل LlamaIndex/Reranker DORMANT كـ Skill (flag `ENABLE_RETRIEVAL_RERANK_SKILL`).
+- `app/services/skills/mcp_tool_skill.py` — تفعيل MCPServer (8 أدوات) كـ Skill (flag `ENABLE_MCP_TOOL_SKILL`).
+- `SKILLS_PLATFORM_DOCTRINE` (v1.0.0) + manifest entry + `check_skills_platform` CI gate.
+
+**القواعد الدائمة:** (1) registry واحد (2) no-ZOMBIE — كل Skill له consumed_by حيّ (3) additive only
+(4) graceful degradation (5) flagged dormants مُعطَّلة افتراضياً (env-override أولاً ثم settings)
+(6) metric-emitter contract.
+
+**مُستبعَد بأسباب:** Kagent (محجوب أمنياً)، TLM/cleanlab (غير مُثبَّت)، Docker-forcing (error 1302).
+
+**التحقق:** ruff ✅ | runtime_truth --check ✅ (الـ drivers importer 1→2) | validate_structure ✅
+| ci_guardrails ✅ | اختبار registry/compose مستقل (stdlib) ✅. التحقق الحي الكامل في Codespaces.

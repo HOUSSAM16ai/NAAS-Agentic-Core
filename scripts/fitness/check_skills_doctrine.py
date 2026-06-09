@@ -279,8 +279,74 @@ def check_bkt_baseline_integrated() -> None:
         _pass("BKT runtime injection wired into customer_chat WS handler (D-074)")
 
 
+def check_skills_platform() -> None:
+    """D-100: منصّة الـ Skills الموحَّدة يجب أن تكون:
+    (1) manifest entry 'skills_platform' متّسق (version + rules_count)،
+    (2) registry مكتمل (كل الـ 14 Skills مُسجَّلة) وبلا ZOMBIE (consumed_by غير فارغ)،
+    (3) موجِّه `/api/v1/skills` يستهلك الـ registry ومُركَّب في base_router_registry.
+    """
+    from app.services.skills.doctrine import (
+        SKILL_DOCTRINE_MANIFEST,
+        SKILLS_PLATFORM_DOCTRINE,
+        SKILLS_PLATFORM_DOCTRINE_VERSION,
+    )
+    from app.services.skills.registry import get_skill_registry
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("skills_platform")
+    if entry is None:
+        _fail("Manifest missing 'skills_platform' entry (D-100).")
+    if entry["version"] != SKILLS_PLATFORM_DOCTRINE_VERSION:
+        _fail(
+            f"Manifest version mismatch for skills_platform: "
+            f"{entry['version']} != {SKILLS_PLATFORM_DOCTRINE_VERSION}"
+        )
+    if entry["rules_count"] != len(SKILLS_PLATFORM_DOCTRINE):
+        _fail(
+            f"Manifest rules_count mismatch for skills_platform: "
+            f"{entry['rules_count']} != {len(SKILLS_PLATFORM_DOCTRINE)}"
+        )
+    _pass(f"Manifest entry 'skills_platform' consistent (v{SKILLS_PLATFORM_DOCTRINE_VERSION})")
+
+    reg = get_skill_registry()
+    names = set(reg.names())
+    expected = {
+        "greeting",
+        "bac_exercise",
+        "math",
+        "answer_quality",
+        "bkt_engine",
+        "probability",
+        "exercise_alignment",
+        "output_firewall",
+        "topic_lock",
+        "arabic_stream_guard",
+        "ws_heartbeat",
+        "text_refinement_compose",
+        "retrieval_rerank",
+        "mcp_tool",
+    }
+    missing = expected - names
+    if missing:
+        _fail(f"Registry missing skills: {sorted(missing)} (D-100).")
+    for d in reg.list():
+        if not d.consumed_by:
+            _fail(f"Skill '{d.name}' is ZOMBIE — empty consumed_by (D-100).")
+    _pass(f"Skill registry complete: {len(names)} skills, no ZOMBIE (D-100)")
+
+    router = ROOT / "app" / "api" / "routers" / "skills.py"
+    if not router.is_file():
+        _fail("app/api/routers/skills.py missing — Skills Platform router not wired (D-100).")
+    rsrc = router.read_text(encoding="utf-8")
+    if "get_skill_registry" not in rsrc or "compose_text_refinement" not in rsrc:
+        _fail("skills.py router does not consume the registry/composer (D-100).")
+    reg_file = (ROOT / "app" / "api" / "routers" / "registry.py").read_text(encoding="utf-8")
+    if "skills.router" not in reg_file:
+        _fail("skills.router not mounted in base_router_registry (D-100).")
+    _pass("Skills Platform router wired + mounted (D-100, not ZOMBIE)")
+
+
 def main() -> None:
-    print("=== Skills Doctrine Drift Gate (D-069 + D-073) ===\n")
+    print("=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100) ===\n")
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
     check_manifest_consistency()
@@ -289,6 +355,7 @@ def main() -> None:
     check_d070_doctrines_reexported()
     check_answer_quality_skill_wired()
     check_bkt_baseline_integrated()
+    check_skills_platform()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

@@ -70,6 +70,8 @@ tags:
   description: Administrative operations
 - name: Observability
   description: Monitoring, metrics, and health checks
+- name: Skills Platform
+  description: Skills registry, composition, and observability
 components:
   securitySchemes:
     BearerAuth:
@@ -1480,3 +1482,72 @@ paths:
         '200':
           description: Content solution
       description: Get Content Solution
+  /api/v1/skills:
+    get:
+      tags:
+      - Skills Platform
+      summary: List Registered Skills
+      operationId: listSkills
+      responses:
+        '200':
+          description: Registry of all skills with contracts and status
+      description: List Registered Skills
+  /api/v1/skills/{name}:
+    get:
+      tags:
+      - Skills Platform
+      summary: Skill Detail
+      operationId: getSkill
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Skill name
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Skill descriptor
+        '404':
+          description: Skill not found
+      description: Skill Detail
+  /api/v1/skills/refine:
+    post:
+      tags:
+      - Skills Platform
+      summary: Run Answer Refinement Pipeline
+      operationId: refineSkillText
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Refined text with applied/failed steps
+      description: Run Answer Refinement Pipeline
+  /api/v1/skills/retrieve:
+    post:
+      tags:
+      - Skills Platform
+      summary: Semantic Retrieval And Rerank
+      operationId: retrieveSkill
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Retrieval + rerank result
+        '503':
+          description: RetrievalRerankSkill disabled
+      description: Semantic Retrieval And Rerank (flagged)
+  /api/v1/skills/mcp:
+    post:
+      tags:
+      - Skills Platform
+      summary: MCP Tool Bridge
+      operationId: mcpSkill
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: MCP tool list or call result
+        '503':
+          description: MCPToolSkill disabled
+      description: MCP Tool Bridge (flagged)

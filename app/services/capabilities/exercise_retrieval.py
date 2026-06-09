@@ -290,12 +290,21 @@ def _has_retrieval_intent(normalized: str) -> bool:
         "fetch",
         "display",
     )
-    has_fetch_verb = any(v in normalized for v in _FETCH_VERBS)
-    # تطبيع عربي + موضوع مرجعي → مناعة ضد أداة التعريف «ال» وتنويع الصياغة
+    # تطبيع عربي + موضوع مرجعي → مناعة ضد أداة التعريف «ال» وتنويع الصياغة (عربي/فرنسي/إنجليزي)
     has_math_topic = (
         any(t in normalized for t in _MATH_TOPICS_DIRECT)
         or primary_canonical_topic(normalized) is not None
     )
+    has_year = _YEAR_RE.search(normalized) is not None
+    # "تمرين"/"exercise" + موضوع رياضي محدد = طلب تمرين (حتى بلا سنة)
+    #   مثل: «تمرين الدوال العددية»
+    if ("تمرين" in normalized or "exercise" in normalized) and has_math_topic:
+        return True
+    # موضوع رياضي مرجعي + سنة (بلا فعل جلب صريح) = طلب تمرين تلك السنة
+    #   مثل: «nombres complexes 2024» / «الأعداد المركبة 2024»
+    if has_math_topic and has_year:
+        return True
+    has_fetch_verb = any(v in normalized for v in _FETCH_VERBS)
     return has_fetch_verb and has_math_topic
 
 

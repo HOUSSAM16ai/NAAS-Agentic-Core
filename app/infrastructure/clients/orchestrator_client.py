@@ -1083,6 +1083,7 @@ class OrchestratorClient:
         فوراً بعد بثّ المكوّن البصري و``companion_text`` — لا LLM، لا synthesizer.
         """
         try:
+            from app.services.capabilities.arabic_normalize import primary_canonical_topic
             from app.services.skills.probability_skill import (
                 CombinationsModelOutput,
                 FullExerciseStoryOutput,
@@ -1091,6 +1092,13 @@ class OrchestratorClient:
                 ProbabilityInput,
                 ProbabilityModelOutput,
             )
+
+            # ISS-110 (D-101): حاجب تبديل الموضوع — إذا كان السؤال الحالي يذكر
+            # صراحةً موضوعاً مرجعياً غير الاحتمالات (دوال عددية / أعداد مركبة)،
+            # فلا تُبنى أي واجهة احتمالات من سياق الـ history حتى مع وجود حيرة.
+            _canonical = primary_canonical_topic(question)
+            if _canonical is not None and _canonical.canonical_id != "probability":
+                return None
 
             skill = ProbabilityCalculatorSkill()
             result = skill.analyze(ProbabilityInput(question=question, history=history_messages))
@@ -1125,10 +1133,11 @@ class OrchestratorClient:
 
             _focus_step_id = _detect_focus_step(question)
 
-            _is_no_model = (
-                getattr(result, "success", True) is False
-                and getattr(result, "reason", "") == "no_model_extracted"
-            )
+            # ISS-110: نقبل أيضاً `no_probability_intent_in_question` — سؤال متابعة
+            # بخطوة تركيز صريحة (_focus_step_id) يُعاد تحليله بالسياق الكامل.
+            _is_no_model = getattr(result, "success", True) is False and getattr(
+                result, "reason", ""
+            ) in ("no_model_extracted", "no_probability_intent_in_question")
             if (result is None or _is_no_model) and _focus_step_id and history_messages:
                 _history_context = " ".join(m.get("content", "") for m in history_messages)
                 _contextual_question = f"{_history_context} {question}".strip()
@@ -1136,10 +1145,11 @@ class OrchestratorClient:
                     ProbabilityInput(question=_contextual_question, history=history_messages)
                 )
 
-            _is_no_model = (
-                getattr(result, "success", True) is False
-                and getattr(result, "reason", "") == "no_model_extracted"
-            )
+            # ISS-110: نقبل أيضاً `no_probability_intent_in_question` — سؤال متابعة
+            # بخطوة تركيز صريحة (_focus_step_id) يُعاد تحليله بالسياق الكامل.
+            _is_no_model = getattr(result, "success", True) is False and getattr(
+                result, "reason", ""
+            ) in ("no_model_extracted", "no_probability_intent_in_question")
             if (result is None or _is_no_model) and _focus_step_id:
                 with contextlib.suppress(Exception):
                     from app.services.capabilities.exercise_retrieval import (
@@ -1638,6 +1648,59 @@ class OrchestratorClient:
             return
 
         # ─────────────────────────────────────────────────────────────────────
+        # ISS-056 (D-049 — Indexed Retrieval Preemption):
+        # إذا طابق السؤال تمريناً محدداً في knowledge_index، نتجاوز كل
+        # شيء (orchestrator + StateGraph + fallback chain) ونبث المحتوى
+        # المُفهرَس النظيف مباشرة. هذا يحل كارثة JSON envelope leak عند المصدر.
+        # ISS-CONV-C: نمرر history_messages لحل أسئلة المتابعة بالسياق.
+        #
+        # ISS-110 (D-101): هذه الكتلة تسبق الآن _build_calculated_ui — طلب
+        # تمرين صريح («اعطني تمرين الدوال العددية») يهزم دائماً الواجهة
+        # المحسوبة. قبل هذا الترتيب، MODE_A كان يُنهي المسار بمكوّن احتمالات
+        # مبني من history التمرين السابق قبل وصول الاسترجاع المُفهرَس (كارثة حية).
+        # ─────────────────────────────────────────────────────────────────────
+        if self._has_indexed_match(question, history_messages):
+            logger.info(
+                "indexed_retrieval_preempt",
+                extra={
+                    "request_id": str(uuid.uuid4()),
+                    "question_len": len(question),
+                    "reason": "matched_knowledge_index_entry",
+                },
+            )
+            ret_streamed_chars = 0
+            try:
+                async for chunk in self._stream_local_retrieval_response(
+                    question, history_messages
+                ):
+                    if not chunk:
+                        continue
+                    ret_streamed_chars += len(chunk)
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_delta", "payload": {"content": chunk}}
+                    )
+            except Exception:
+                logger.warning("indexed_retrieval_preempt_failed", exc_info=True)
+
+            if ret_streamed_chars > 0:
+                if _root_ctx:
+                    with contextlib.suppress(Exception):
+                        obs.end_span(
+                            _root_ctx.span_id,
+                            status="OK",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                "fallback_path": 0.5,  # preempt = أعلى من file_intelligence
+                                "stream_chars": float(ret_streamed_chars),
+                            },
+                        )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
+                return
+            # إذا فشل البث (نادر جداً) → نُكمل المسار العادي
+
+        # ─────────────────────────────────────────────────────────────────────
         # Generative UI Streaming (probability tree / impossible_case):
         # عند طلب يتضمن شجرة احتمالات، نبثّ حدث ui_component فوراً (incremental).
         #
@@ -1718,54 +1781,6 @@ class OrchestratorClient:
                     "deep_pedagogy_mode_active",
                     extra={"component": _ui_event.get("component"), "question_len": len(question)},
                 )
-
-        # ─────────────────────────────────────────────────────────────────────
-        # ISS-056 (D-049 — Indexed Retrieval Preemption):
-        # إذا طابق السؤال تمريناً محدداً في knowledge_index، نتجاوز كل
-        # شيء (orchestrator + StateGraph + fallback chain) ونبث المحتوى
-        # المُفهرَس النظيف مباشرة. هذا يحل كارثة JSON envelope leak عند المصدر.
-        # ISS-CONV-C: نمرر history_messages لحل أسئلة المتابعة بالسياق.
-        # ─────────────────────────────────────────────────────────────────────
-        if self._has_indexed_match(question, history_messages):
-            logger.info(
-                "indexed_retrieval_preempt",
-                extra={
-                    "request_id": str(uuid.uuid4()),
-                    "question_len": len(question),
-                    "reason": "matched_knowledge_index_entry",
-                },
-            )
-            ret_streamed_chars = 0
-            try:
-                async for chunk in self._stream_local_retrieval_response(
-                    question, history_messages
-                ):
-                    if not chunk:
-                        continue
-                    ret_streamed_chars += len(chunk)
-                    yield self._normalize_stream_event(
-                        {"type": "assistant_delta", "payload": {"content": chunk}}
-                    )
-            except Exception:
-                logger.warning("indexed_retrieval_preempt_failed", exc_info=True)
-
-            if ret_streamed_chars > 0:
-                if _root_ctx:
-                    with contextlib.suppress(Exception):
-                        obs.end_span(
-                            _root_ctx.span_id,
-                            status="OK",
-                            metrics={
-                                "duration_ms": (time.perf_counter() - _t0) * 1000,
-                                "fallback_path": 0.5,  # preempt = أعلى من file_intelligence
-                                "stream_chars": float(ret_streamed_chars),
-                            },
-                        )
-                yield self._normalize_stream_event(
-                    {"type": "assistant_final", "payload": {"content": ""}}
-                )
-                return
-            # إذا فشل البث (نادر جداً) → نُكمل المسار العادي
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-058 (D-052 — Explanation-with-Context Preemption):

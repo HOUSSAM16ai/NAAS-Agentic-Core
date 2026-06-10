@@ -3940,3 +3940,43 @@ ruff + runtime_truth ✅. اختبارات pytest + WebSocket E2E الكامل �
 `scripts/verify_exercise_retrieval_e2e.py` (جديد)،
 `tests/services/test_{arabic_normalize,bac_db_retriever}.py` (جديدة)،
 `tests/contracts/test_exercise_recognition_definite_article.py` (جديد).
+
+---
+
+## ISS-110 (2026-06-10) — «تمرين الدوال العددية» يُرجع واجهة تأليفات الاحتمالات (Topic-Switch Hijack) ✅ RESOLVED
+
+**العَرَض (transcript حي من المستخدم):** في محادثة واحدة: «الأعداد المركبة» ✅ → «الاحتمالات» ✅
+→ «اعطني تمرين الدوال العددية» → **combinations_visualizer** (C(11,3)=165 من كيس تمرين
+الاحتمالات السابق) + «إليك الشرح البصري المفصل 🪄» بدل تمرين الدوال 2016. نفس الخطأ مع
+«لسنة 2016».
+
+**الجذر المزدوج (مُثبت بالتجريب الحي):**
+1. **RC-1**: بوابة `_PROBABILITY_CONTEXT` في `probability_skill.analyze` كانت تفحص النص
+   المُدمَج (سؤال + history) — سؤال بلا أي كلمة احتمالية يمرّ لأن الـ history يحوي
+   «احتمالات/سحب/كيس»، ثم `_strategy_composition` يستخرج تركيبة الكيس **من الـ history**.
+2. **RC-2**: `_build_calculated_ui` كان يسبق `_has_indexed_match` في `chat_with_agent`،
+   و MODE_A (`terminate_pipeline=True`) يُنهي المسار قبل وصول الاسترجاع المُفهرَس (الذي
+   كان يتعرّف صحيحاً على ملف bac2016 طوال الوقت).
+
+**الإصلاح (D-101):** (1) إعادة ترتيب: الاسترجاع المُفهرَس يسبق الواجهة المحسوبة.
+(2) بوابة نية السؤال الحالي في الـ skill: سياق history-فقط يتطلب حيرة أو متابعة احتمالية
+(`_has_followup_probability_intent` — E(X)/جداء/نفس اللون...) وإلا
+`no_probability_intent_in_question`. (3) حاجب تبديل الموضوع في `_build_calculated_ui`
+عبر `primary_canonical_topic` — موضوع صريح غير الاحتمالات → None حتى مع حيرة.
+(4) doctrine v1.4.0 بقاعدة جديدة.
+
+**التحقق الحي (sandbox: SQLite + OpenRouter حقيقي — Supabase 6543 محجوب، نمط §6.55):**
+`scripts/verify_iss110_live.py` → **7/7**: Q3/Q4 يُرجعان تمرين الدوال 2016 (2328 حرف) بلا
+أي مكوّن احتمالات، و Q5 «مفهمتش» بعد تمرين الاحتمالات يبثّ `full_exercise_story` (MODE_B
+سليم، 6830 حرف سرد). 62 اختبار probability+ISS-110 + 128 اختبار regression (V38/genUI/
+ISS-108/doctrine/registry) ✅. مقارنة git-stash أثبتت أن فشل resilience suite (13) سابق
+وموجود في PRE_EXISTING_FAILURES بالـ CI — صفر انحدار.
+
+**ملاحظة نافذة معروفة (سابقة، خارج النطاق):** الـ skill يقرأ `history[-6:]` — حيرة بعيدة
+عن تمرين الاحتمالات بأكثر من 6 رسائل (مع حارس التكرار الذي يمنع إعادة حفظ التمرين المُكرَّر)
+لا تجد التركيبة. مُثبت بـ git-stash أنه سلوك سابق للإصلاح.
+
+**الملفات:** `app/infrastructure/clients/orchestrator_client.py` (reorder + topic guard +
+retry reason)، `app/services/skills/probability_skill.py` (بوابة النية + followup markers)،
+`app/services/skills/doctrine.py` (v1.4.0)، `tests/services/test_iss110_topic_switch_routing.py`
+(جديد)، `tests/services/test_probability_skill.py` (+6)، `scripts/verify_iss110_live.py` (جديد).

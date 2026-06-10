@@ -246,6 +246,30 @@ _CONFUSION_MARKERS: tuple[str, ...] = (
     "comment",
 )
 
+# ISS-110 (D-101): إشارات متابعة احتمالية — سؤال متابعة بعد تمرين احتمالات
+# (مثل «احسب الأمل الرياضي E(X)») لا يحوي كلمة احتمالية صريحة لكنه يستهدف
+# خطوة من التمرين. مرآة `_detect_focus_step` في orchestrator_client.
+_FOLLOWUP_PROBABILITY_INTENT: tuple[str, ...] = (
+    "p(",
+    "p_a",
+    "نفس اللون",
+    "same color",
+    "فردي",
+    "زوجي",
+    "شرطي",
+    "جداء",
+    "الامل",
+    "الأمل",
+    "امل رياضي",
+    "متغير عشوائي",
+    "المتغير",
+    "e(x",
+    "x>1",
+    "فضاء",
+    "تأليف",
+    "تاليف",
+)
+
 # تطبيع التشكيل + الفواصل العربية قبل التحليل.
 # نحذف علامات التشكيل فقط (الحركات/التنوين/الشدة/السكون والعلامات القرآنية)
 # دون المساس بحروف العربية (U+0621–U+064A).
@@ -775,6 +799,16 @@ class ProbabilityCalculatorSkill:
         """D-078 (V19.0): يكشف إشارات الحيرة (Frustration Detector) لتفعيل الأداة البصرية."""
         normalized = cls._normalize(text)
         return any(cls._normalize(m) in normalized for m in _CONFUSION_MARKERS)
+
+    @classmethod
+    def _has_followup_probability_intent(cls, text: str) -> bool:
+        """ISS-110 (D-101): هل السؤال الحالي متابعة لخطوة احتمالية من السياق؟
+
+        يلتقط متابعات مثل «احسب الأمل الرياضي E(X)» أو «P(A)» التي لا تحمل
+        كلمة احتمالية صريحة لكنها تستهدف خطوة من تمرين الاحتمالات في الـ history.
+        """
+        normalized = cls._normalize(text)
+        return any(cls._normalize(m) in normalized for m in _FOLLOWUP_PROBABILITY_INTENT)
 
     # ── الحالة المستحيلة (Protocol V26.2) — short-circuit قبل أي حساب ─────────────────
     _DRAW_VERBS: tuple[str, ...] = (
@@ -1424,6 +1458,20 @@ class ProbabilityCalculatorSkill:
         normalized = self._normalize(combined)
         if not any(self._normalize(c) in normalized for c in _PROBABILITY_CONTEXT):
             return self._fail("no_probability_context", "none", t0)
+
+        # ISS-110 (D-101): سياق الاحتمالات من الـ history وحده لا يكفي.
+        # السؤال الحالي نفسه يجب أن يحمل نية احتمالية: سياق صريح، أو حيرة
+        # (متابعة بيداغوجية)، أو إشارة خطوة متابعة (E(X)/جداء/نفس اللون...).
+        # بدون هذه البوابة: «اعطني تمرين الدوال العددية» بعد تمرين احتمالات
+        # كان يُولِّد combinations_visualizer من كيس التمرين السابق (كارثة حية).
+        question_norm = self._normalize(question)
+        q_has_context = any(self._normalize(c) in question_norm for c in _PROBABILITY_CONTEXT)
+        if (
+            not q_has_context
+            and history_text
+            and not (self.is_confusion(question) or self._has_followup_probability_intent(question))
+        ):
+            return self._fail("no_probability_intent_in_question", "none", t0)
 
         # خط أنابيب الاستراتيجيات — أول نجاح يفوز (deterministic-first).
         # V26.1: الحالة المستحيلة لها الأولوية القصوى — short-circuit قبل أي حساب.

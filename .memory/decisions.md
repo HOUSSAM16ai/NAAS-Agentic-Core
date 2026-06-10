@@ -4131,3 +4131,27 @@ python3 scripts/db_bridge.py "SELECT ... ;"     # SQL مباشر أو عبر std
 
 **التحقق:** ruff ✅ | runtime_truth --check ✅ (الـ drivers importer 1→2) | validate_structure ✅
 | ci_guardrails ✅ | اختبار registry/compose مستقل (stdlib) ✅. التحقق الحي الكامل في Codespaces.
+
+---
+
+## D-101 (2026-06-10) — Current-Question Probability Intent Gate + Indexed-First Preemption (ISS-110)
+
+طلب تمرين صريح يهزم دائماً الواجهة المحسوبة، وواجهة الاحتمالات من سياق الـ history لا
+تُبنى إلا حين يُظهر **السؤال الحالي نفسه** نية احتمالية. تفصيل كامل: CLAUDE.md §6.88.
+
+**القرارات:**
+1. **ترتيب preemption في `chat_with_agent`**: `greeting → indexed-match → calculated-UI →
+   explanation-with-context → orchestrator/LLM`. عكس هذا الترتيب يُعيد كارثة ISS-110 فوراً.
+2. **بوابة نية السؤال الحالي** (`probability_skill.analyze`): سياق احتمالي من history فقط
+   + سؤال بلا سياق/حيرة/متابعة → `ProbabilityFailure(reason="no_probability_intent_in_question")`.
+   `_FOLLOWUP_PROBABILITY_INTENT` مرآة `_detect_focus_step` (E(X)/جداء/نفس اللون/شرطي/فضاء/تأليف...).
+3. **حاجب تبديل الموضوع** (`_build_calculated_ui`): `primary_canonical_topic(question)` غير
+   probability → `None` — حتى مع إشارة حيرة («لم أفهم تمرين الدوال العددية»).
+4. **focus-retry يقبل السبب الجديد**: `_is_no_model` يشمل `no_probability_intent_in_question`
+   إضافةً لـ `no_model_extracted` — متابعات الخطوات تبقى تعمل عبر إعادة التحليل بالسياق.
+5. **doctrine bump**: `PROBABILITY_CALCULATION_DOCTRINE` v1.3.0 → **v1.4.0** + قاعدة
+   «نية السؤال الحالي إلزامية».
+
+**التحقق:** `scripts/verify_iss110_live.py` حي 7/7 (SQLite + OpenRouter حقيقي) |
+62 + 128 اختبار ✅ | ruff/runtime_truth/validate_structure/ci_guardrails/check_skills_doctrine ✅
+| مقارنة git-stash: صفر انحدار (فشل resilience سابق وفي PRE_EXISTING_FAILURES).

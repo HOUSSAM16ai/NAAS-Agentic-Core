@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import time
 import uuid
 from ast import literal_eval
@@ -1490,6 +1491,16 @@ class OrchestratorClient:
             },
         }
 
+    @staticmethod
+    def _explanation_via_orchestrator_enabled() -> bool:
+        """D-103: هل يُمرَّر شرح التمارين عبر orchestrator (الرسم الـ13-node)؟
+
+        رافعة رجوع فورية بلا deploy (نمط D-025 / routing_policy):
+        ``EXPLANATION_VIA_ORCHESTRATOR=0`` يعيد السلوك المحلي القديم.
+        """
+        raw = os.getenv("EXPLANATION_VIA_ORCHESTRATOR", "1").strip().lower()
+        return raw not in ("0", "false", "no")
+
     def _build_service_jwt(self, user_id: int) -> str:
         """يُولِّد JWT داخلي قصير العمر لمصادقة الـ monolith مع orchestrator-service.
 
@@ -1783,18 +1794,23 @@ class OrchestratorClient:
                 )
 
         # ─────────────────────────────────────────────────────────────────────
-        # ISS-058 (D-052 — Explanation-with-Context Preemption):
-        # عند طلب شرح/استفسار مرتبط بتمرين بكالوريا (صريحاً أو ضمن السياق)،
-        # نتجاوز orchestrator + StateGraph لمنع dump عدة تمارين غير متعلقة
-        # (كارثة 2016 + 2024 المُختلطين) ولمنع تسريب tags خام مثل [ex: ex_1].
+        # ISS-058 (D-052 — Explanation-with-Context):
+        # عند طلب شرح/استفسار مرتبط بتمرين بكالوريا (صريحاً أو ضمن السياق).
         #
-        # ISS-059 (D-053): الآن نحسب القرار **مرة واحدة** ونمرِّره للـ stream
+        # ISS-059 (D-053): نحسب القرار **مرة واحدة** ونمرِّره للـ stream
         # بدل إعادة حسابه — يوفِّر ~10-20ms + file I/O مكرَّر.
+        #
+        # D-103: افتراضياً نمرّر الشرح عبر orchestrator (الرسم الـ13-node) مع
+        # **حقن** محتوى التمرين الدقيق في context — الرسم يتجاوز retriever-ه
+        # كلياً ويستخدم المحقون كمصدر وحيد، فيُحيَّد سبب منع D-052 الأصلي
+        # (خلط تمارين vector DB + tags خام) بالبناء. الشرح المحلي يبقى fallback
+        # كاملاً. رافعة رجوع فورية: EXPLANATION_VIA_ORCHESTRATOR=0.
         # ─────────────────────────────────────────────────────────────────────
         _explanation_decision = detect_explanation_with_context(
             ExerciseRetrievalRequest(question=question),
             history_messages=history_messages,
         )
+        _exercise_injection: dict[str, str] = {}
         if _explanation_decision.recognized and _explanation_decision.matched_entry is not None:
             logger.info(
                 "explanation_context_preempt reason=%s matched_file=%s history_len=%s",
@@ -1807,40 +1823,53 @@ class OrchestratorClient:
                     "matched_file": _explanation_decision.matched_entry.file_path,
                 },
             )
-            exp_streamed_chars = 0
-            try:
-                async for chunk in self._stream_exercise_explanation_response(
-                    question=question,
-                    conversation_id=conversation_id,
-                    history_messages=history_messages,
-                    precomputed_decision=_explanation_decision,  # ISS-059
-                ):
-                    if not chunk:
-                        continue
-                    exp_streamed_chars += len(chunk)
-                    yield self._normalize_stream_event(
-                        {"type": "assistant_delta", "payload": {"content": chunk}}
-                    )
-            except Exception:
-                logger.warning("explanation_context_preempt_failed", exc_info=True)
-
-            if exp_streamed_chars > 0:
-                if _root_ctx:
-                    with contextlib.suppress(Exception):
-                        obs.end_span(
-                            _root_ctx.span_id,
-                            status="OK",
-                            metrics={
-                                "duration_ms": (time.perf_counter() - _t0) * 1000,
-                                "fallback_path": 0.75,  # explanation preempt
-                                "stream_chars": float(exp_streamed_chars),
-                            },
-                        )
-                yield self._normalize_stream_event(
-                    {"type": "assistant_final", "payload": {"content": ""}}
+            _exp_full_content = str(getattr(_explanation_decision, "full_content", "") or "")
+            if self._explanation_via_orchestrator_enabled() and _exp_full_content.strip():
+                # D-103: حقن المحتوى والمتابعة إلى orchestrator — لا بثّ محلي هنا.
+                _exercise_injection = {
+                    "exercise_content": _exp_full_content,
+                    "exercise_ref": str(_explanation_decision.matched_entry.file_path),
+                }
+                logger.info(
+                    "explanation_via_orchestrator file=%s chars=%s",
+                    _explanation_decision.matched_entry.file_path,
+                    len(_exp_full_content),
                 )
-                return
-            # إذا فشل البث → نُكمل المسار العادي
+            else:
+                exp_streamed_chars = 0
+                try:
+                    async for chunk in self._stream_exercise_explanation_response(
+                        question=question,
+                        conversation_id=conversation_id,
+                        history_messages=history_messages,
+                        precomputed_decision=_explanation_decision,  # ISS-059
+                    ):
+                        if not chunk:
+                            continue
+                        exp_streamed_chars += len(chunk)
+                        yield self._normalize_stream_event(
+                            {"type": "assistant_delta", "payload": {"content": chunk}}
+                        )
+                except Exception:
+                    logger.warning("explanation_context_preempt_failed", exc_info=True)
+
+                if exp_streamed_chars > 0:
+                    if _root_ctx:
+                        with contextlib.suppress(Exception):
+                            obs.end_span(
+                                _root_ctx.span_id,
+                                status="OK",
+                                metrics={
+                                    "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                    "fallback_path": 0.75,  # explanation preempt
+                                    "stream_chars": float(exp_streamed_chars),
+                                },
+                            )
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_final", "payload": {"content": ""}}
+                    )
+                    return
+                # إذا فشل البث → نُكمل المسار العادي
 
         # V38.0 — Deep Pedagogy Mode (MODE_B): inject Socratic instruction.
         # Rules (D-067): prompt < 1000 chars, no box-drawing chars, no LaTeX in prompt.
@@ -1862,7 +1891,12 @@ class OrchestratorClient:
             "user_id": user_id,
             "conversation_id": conversation_id,
             "history_messages": history_messages or [],
-            "context": {**(context or {}), "routing_mode": "MODE_B" if _is_mode_b else "MODE_A"},
+            "context": {
+                **(context or {}),
+                "routing_mode": "MODE_B" if _is_mode_b else "MODE_A",
+                # D-103: محتوى التمرين المحقون (إن وُجد) — الرسم يستهلكه بدل retriever-ه
+                **_exercise_injection,
+            },
         }
 
         routing_policy = ChatRoutingPolicy.from_environment(self.base_url)
@@ -1941,20 +1975,47 @@ class OrchestratorClient:
 
                 try:
                     response.raise_for_status()
+                    # D-103: حارس البثّ الفارغ — orchestrator أجاب 200 لكن لم يبثّ
+                    # أي محتوى مرئي ولا إطاراً نهائياً ⇒ نعامله كفشل ونُكمل للمرشح
+                    # التالي / الـ fallback المحلي بدل إنهاء الدور فارغاً.
+                    _orch_visible = False
                     async for line in response.aiter_lines():
                         if not line.strip():
                             continue
                         try:
                             parsed_line = json.loads(line)
-                            yield self._normalize_stream_event(parsed_line)
+                            normalized = self._normalize_stream_event(parsed_line)
+                            _ntype = (
+                                normalized.get("type") if isinstance(normalized, dict) else None
+                            )
+                            if _ntype == "assistant_delta":
+                                _ncontent = (normalized.get("payload") or {}).get("content")
+                                if isinstance(_ncontent, str) and _ncontent:
+                                    _orch_visible = True
+                            elif _ntype in (
+                                "assistant_final",
+                                "assistant_error",
+                                "error",
+                                "complete",
+                            ):
+                                _orch_visible = True
+                            yield normalized
                         except json.JSONDecodeError:
                             recovered = self._recover_structured_event(line)
                             if recovered is not None:
+                                _orch_visible = True
                                 yield self._normalize_stream_event(recovered)
                             else:
                                 logger.warning(f"Received non-JSON line from agent: {line[:50]}...")
+                                _orch_visible = True
                                 yield self._normalize_stream_event(line)
-                    return
+                    if _orch_visible:
+                        return
+                    connection_errors.append(f"{candidate_url} => empty_stream")
+                    logger.warning(
+                        "chat_routing_empty_stream",
+                        extra={"request_id": request_id, "candidate_url": candidate_url},
+                    )
                 finally:
                     await response.aclose()
 
@@ -2094,6 +2155,16 @@ class OrchestratorClient:
                     question=question,
                     conversation_id=conversation_id,
                     history_messages=history_messages,
+                    # ISS-059 + D-103: القرار محسوب مسبقاً في بداية chat_with_agent —
+                    # لا إعادة كشف ولا file I/O مكرَّر في مسار الـ fallback.
+                    precomputed_decision=(
+                        _explanation_decision
+                        if (
+                            _explanation_decision.recognized
+                            and _explanation_decision.matched_entry is not None
+                        )
+                        else None
+                    ),
                 ):
                     if not chunk:
                         continue

@@ -89,6 +89,23 @@ class ChatRunContext(TypedDict, total=False):
     thread_id: int | str
     session_id: int | str
     user_id: int
+    # D-103: محتوى تمرين محقون من الـ monolith (شرح-بسياق عبر الرسم الـ13-node)
+    exercise_content: str
+    exercise_ref: str
+
+
+# D-103: سقف حجم المحتوى المحقون — أكبر تمرين معروف ~9.7K حرف؛ 16K هامش آمن.
+_INJECTED_EXERCISE_MAX_CHARS = 16000
+
+
+def _extract_injected_exercise(context: ChatRunContext | None) -> str:
+    """يستخرج محتوى التمرين المحقون من سياق الطلب — str نظيف أو "" (D-103)."""
+    if not isinstance(context, dict):
+        return ""
+    raw = context.get("exercise_content")
+    if not isinstance(raw, str):
+        return ""
+    return raw.strip()[:_INJECTED_EXERCISE_MAX_CHARS]
 
 
 class MissionEventEnvelope(TypedDict):
@@ -1583,6 +1600,10 @@ async def _stream_chat_langgraph(
             )
             inputs: dict[str, object] = {"messages": graph_messages, "query": prepared_objective}
             inputs = _merge_admin_inputs(inputs, admin_payload if chat_scope == "admin" else None)
+            # D-103: تمرير محتوى التمرين المحقون إلى حالة الرسم (مسار WS)
+            _injected_exercise = _extract_injected_exercise(context)
+            if _injected_exercise:
+                inputs["exercise_content"] = _injected_exercise
             state_dict = inputs
             payload_messages = state_dict.get("messages", [])
             await _append_telemetry_line(
@@ -1891,6 +1912,15 @@ async def _run_chat_langgraph(
     )
     inputs: dict[str, object] = {"messages": graph_messages, "query": prepared_objective}
     inputs = _merge_admin_inputs(inputs, admin_payload)
+    # D-103: تمرير محتوى التمرين المحقون إلى حالة الرسم (مسار HTTP — يستدعيه الـ monolith)
+    _injected_exercise = _extract_injected_exercise(context)
+    if _injected_exercise:
+        logger.info(
+            "[D-103] injected_exercise chars=%s ref=%s",
+            len(_injected_exercise),
+            str(context.get("exercise_ref", ""))[:120],
+        )
+        inputs["exercise_content"] = _injected_exercise
 
     # ISS-STREAM-002 (جراحي): astream_events لا يُطلق on_custom_event في LangGraph 1.2.0
     # عند استخدام stream_writer(). الحل: astream(stream_mode=["custom","updates"]) يُعيد

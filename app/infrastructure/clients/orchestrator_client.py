@@ -1797,7 +1797,10 @@ class OrchestratorClient:
         )
         if _explanation_decision.recognized and _explanation_decision.matched_entry is not None:
             logger.info(
-                "explanation_context_preempt",
+                "explanation_context_preempt reason=%s matched_file=%s history_len=%s",
+                _explanation_decision.reason,
+                _explanation_decision.matched_entry.file_path,
+                len(history_messages or []),
                 extra={
                     "request_id": str(uuid.uuid4()),
                     "reason": _explanation_decision.reason,

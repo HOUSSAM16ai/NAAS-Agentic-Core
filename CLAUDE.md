@@ -8278,3 +8278,66 @@ python3 scripts/verify_full_stack_codespaces.py
 |----------|-----------------|
 | D-100 | منصّة Skills موحَّدة (registry + compose + observability) |
 | **D-101** | **ISS-110 — بوابة نية السؤال الحالي + الاسترجاع المُفهرَس أولاً + حاجب تبديل الموضوع (يحل اختطاف «تمرين الدوال» بواجهة الاحتمالات)** |
+
+---
+
+## 6.89 System-Prompt History Poisoning — Structural-Only History Binding (2026-06-10, ISS-111 / D-102)
+
+> **اكتُشفت خلال التحقق الحي العميق** (LangGraph + الخدمات المصغرة بعد ISS-110): سؤال
+> فيزياء عام في **محادثة جديدة فارغة** كان يُختطف لتمرين 2024 ويُمنع من الوصول للـ
+> orchestrator. هذا القسم يحكم فحص history المحادثة في كواشف الاسترجاع — لا يُكسر بدون ADR.
+
+### الجذر الثلاثي (مُثبت حياً بسطر log كاشف `history_len=2`)
+
+1. **`get_chat_history` يحقن رسالة system**: `chat_persistence.py` يضع
+   `{"role":"system", "content":get_customer_system_prompt()}` في رأس كل history —
+   برومبت Overmind الإنجليزي ("...math, physics, programming...").
+2. **`_detect_entry_from_history` كان يفحص كل الرسائل** بما فيها system.
+3. **tag-fallback فضفاض**: `_find_matching_entry` عند غياب تطابق بنيوي يطابق أي كلمة
+   ‎>2 حرف مع وسوم التمارين — "math" من برومبت النظام تطابق وسوم تمرين 2024.
+
+**النتيجة**: كل سؤال يحوي أي marker شرح («اشرح/وضح/أكمل/لم أفهم»...) في أي محادثة →
+explanation-preempt يربطه زائفاً بتمرين 2024 → حقن التمرين + رفض الموضوع الأصلي
+(«ملزم بالتركيز على تمرين الاحتمالات») + **المسار لا يصل أبداً للـ orchestrator/LangGraph
+العميق** (الـ preempt قبل HTTP).
+
+### الإصلاح (D-102)
+
+- `_detect_entry_from_history`: يفحص رسائل **user/assistant فقط** — رسائل system ليست
+  دليلاً من المحادثة.
+- الربط بالتاريخ **بنيوي حصراً**: `_find_matching_entry(recent_text, allow_tag_fallback=False)`
+  — سنة/دورة/موضوع/رقم تمرين/موضوع مرجعي. الـ tag-fallback محجوز لسؤال الطالب المباشر
+  (default=True بلا تغيير).
+- log كاشف دائم: `explanation_context_preempt reason=… matched_file=… history_len=…`.
+
+### القواعد الأربع الدائمة (D-102 — لا تُكسر بدون ADR)
+
+1. **رسائل system لا تدخل أي كاشف history**: أي كاشف جديد يفحص تاريخ المحادثة يجب أن
+   يُرشِّح `role in ("user", "assistant")` أولاً.
+2. **الربط بالتاريخ يتطلب تطابقاً بنيوياً**: ممنوع tag-fallback على نص الـ history —
+   التطابق البنيوي (سنة/موضوع/رقم/canonical) فقط يثبت أن المحادثة عن تمرين بعينه.
+3. **سطور log التشخيصية تحمل بياناتها في النص**: الـ extras dict لا يظهر في formatters
+   قياسية — أي log توجيهي حرج يضع الحقول الحاسمة في نص الرسالة.
+4. **درس منهجي (إعادة الإنتاج الأمينة)**: عند «دالة حتمية تعطي نتائج مختلفة» — المدخلات
+   مختلفة فعلاً. أعد إنتاج الـ history **كما يبنيه الخادم** (بما فيه رسالة system من
+   `get_chat_history`) لا كما تتخيله.
+
+### التحقق الحي (2026-06-10 — المنظومة كاملة على SQLite + OpenRouter حقيقي؛ Supabase محجوب نمط §6.55)
+
+- **5 خدمات حية**: monolith :8000 + orchestrator :8006 (`graph_ready=true`) +
+  planning :8002 + research :8007 + reasoning :8008.
+- **قبل الإصلاح**: «قانون نيوتن... اشرح» عبر WS → «عذراً... ملزم بتمرين الاحتمالات» +
+  **صفر** POST لـ :8006. **بعده**: إجابة نيوتن عبر **الرسم الـ13-node** (`POST 200`،
+  إطارات `phase_start`، 21 delta، 1.49s) — مسار WS → monolith → orchestrator →
+  LangGraph → OpenRouter كامل.
+- **Skills Pipeline**: `POST :8006/compose` → **`pipeline_mode=full`** +
+  `skills_active=[planning, research, reasoning]` (16.7s، إجابة مركَّبة 1299 حرف).
+- **ISS-110 صامد مع الـ orchestrator الحي**: `verify_iss110_live.py` → **7/7**.
+- 9 اختبارات ISS-111 + 256 regression خضراء | ruff + runtime_truth + skills-doctrine ✅.
+
+### السلسلة الكاملة (D-101 → D-102)
+
+| Decision | المُصلَح/المُضاف |
+|----------|-----------------|
+| D-101 | ISS-110 — بوابة نية السؤال الحالي + الاسترجاع المُفهرَس أولاً |
+| **D-102** | **ISS-111 — تسميم history برسالة النظام: فحص user/assistant فقط + ربط بنيوي حصراً (يفتح طريق WS → orchestrator 13-node)** |

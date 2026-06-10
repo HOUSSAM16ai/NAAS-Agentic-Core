@@ -696,3 +696,95 @@ def test_waw_prefixed_cardinal_extracted() -> None:
         )
     }
     assert entities == {"كرة حمراء": 4, "كرة خضراء": 5, "كرة بيضاء": 2}
+
+
+# ─── ISS-110 (D-101): نية السؤال الحالي إلزامية — topic-switch catastrophe ──────
+
+
+_ISS110_PROB_HISTORY = [
+    {"role": "user", "content": "اعطني تمرين الاحتمالات"},
+    {
+        "role": "assistant",
+        "content": (
+            "يحتوي كيس على 11 كرة: كرتان بيضاوان، أربع كرات حمراء، خمس كرات "
+            "خضراء. نسحب عشوائيًا 3 كرات دفعة واحدة من الكيس. احسب احتمال "
+            "الحادثة A: الحصول على 3 كرات من نفس اللون."
+        ),
+    },
+]
+
+
+def test_iss110_new_topic_request_after_probability_history_blocked() -> None:
+    """«اعطني تمرين الدوال العددية» بعد تمرين احتمالات → لا واجهة احتمالات.
+
+    الكارثة الحية: السياق الاحتمالي في الـ history كان يمرّر البوابة ثم
+    تُستخرج تركيبة الكيس من الـ history → combinations_visualizer خاطئ.
+    """
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="اعطني تمرين الدوال العددية",
+            history=_ISS110_PROB_HISTORY,
+        )
+    )
+    assert isinstance(out, ProbabilityFailure)
+    assert out.reason == "no_probability_intent_in_question"
+
+
+def test_iss110_new_topic_request_with_year_blocked() -> None:
+    """«اعطني تمرين الدوال العددية لسنة 2016» → نفس الحجب."""
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="اعطني تمرين الدوال العددية لسنة 2016",
+            history=_ISS110_PROB_HISTORY,
+        )
+    )
+    assert isinstance(out, ProbabilityFailure)
+    assert out.reason == "no_probability_intent_in_question"
+
+
+def test_iss110_followup_intent_expectation_still_works() -> None:
+    """متابعة «احسب الأمل الرياضي E(X)» (بلا كلمة احتمالية صريحة) تبقى مقبولة."""
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="احسب الأمل الرياضي E(X)",
+            history=_ISS110_PROB_HISTORY,
+        )
+    )
+    assert not (
+        isinstance(out, ProbabilityFailure) and out.reason == "no_probability_intent_in_question"
+    )
+
+
+def test_iss110_confusion_followup_still_passes_gate() -> None:
+    """«مفهمتش كيفاش حسبنا» بعد تمرين احتمالات تبقى تُفعِّل الأداة (MODE_B)."""
+    out = _skill().analyze(
+        ProbabilityInput(question="مفهمتش كيفاش حسبنا", history=_ISS110_PROB_HISTORY)
+    )
+    assert not (
+        isinstance(out, ProbabilityFailure) and out.reason == "no_probability_intent_in_question"
+    )
+
+
+def test_iss110_question_with_own_probability_context_unaffected() -> None:
+    """سؤال يحمل سياقه الاحتمالي بنفسه لا يتأثر بالبوابة الجديدة (لا حجب)."""
+    out = _skill().analyze(
+        ProbabilityInput(
+            question="كيس فيه 4 كرات حمراء و7 كرات بيضاء، احسب احتمال سحب حمراء",
+            history=_ISS110_PROB_HISTORY,
+        )
+    )
+    # البوابة لا تحجبه — يُنتج نموذجاً ناجحاً (شجرة أو تأليفات حسب وضع السحب
+    # المُكتشَف من النص المُدمَج) وليس ProbabilityFailure.
+    assert not isinstance(out, ProbabilityFailure)
+    assert getattr(out, "success", False) is True
+
+
+def test_iss110_doctrine_rule_present() -> None:
+    """قاعدة ISS-110 موجودة في الـ doctrine والإصدار ≥ 1.4.0."""
+    from app.services.skills.doctrine import (
+        PROBABILITY_CALCULATION_DOCTRINE,
+        PROBABILITY_CALCULATION_DOCTRINE_VERSION,
+    )
+
+    assert PROBABILITY_CALCULATION_DOCTRINE_VERSION >= "1.4.0"
+    assert "ISS-110" in " ".join(PROBABILITY_CALCULATION_DOCTRINE)

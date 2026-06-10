@@ -8205,3 +8205,76 @@ python3 scripts/verify_full_stack_codespaces.py
 |----------|-----------------|
 | D-099 | تعرّف عربي مُطبَّع + مُسترجِع Supabase قابل للتوسّع |
 | **D-100** | **منصّة Skills موحَّدة: registry + compose + /api/v1/skills + تفعيل LlamaIndex/Reranker/MCP كـ Skills (flagged) + CI gate** |
+
+---
+
+## 6.88 Topic-Switch Hijack — Current-Question Intent Gate + Indexed-First Preemption (2026-06-10, ISS-110 / D-101)
+
+> **الكارثة المُبلَّغة (transcript حي):** في محادثة واحدة، بعد استرجاع تمرين الاحتمالات،
+> طلب «اعطني تمرين الدوال العددية» أرجع **combinations_visualizer** (C(11,3)=165 من كيس
+> التمرين السابق) + «إليك الشرح البصري المفصل 🪄» بدل تمرين الدوال 2016 — رغم أن
+> الاسترجاع المُفهرَس كان يتعرّف على الملف الصحيح طوال الوقت. هذا القسم يحكم توجيه
+> الواجهة المحسوبة مقابل الاسترجاع — لا يُكسر بدون ADR.
+
+### الجذر المزدوج (مُثبت بالتجريب الحي)
+
+1. **RC-1 — بوابة السياق على النص المُدمَج** (`probability_skill.py:analyze`): فحص
+   `_PROBABILITY_CONTEXT` كان يجري على `combined = question + history` — سؤال بلا أي
+   كلمة احتمالية («اعطني تمرين الدوال العددية») يمرّ لأن الـ history يحوي
+   «احتمالات/سحب/كيس»، ثم `_strategy_composition` يستخرج تركيبة الكيس **من الـ history**
+   ويبني `CombinationsModelOutput` لتمرينٍ لم يطلبه الطالب.
+2. **RC-2 — ترتيب الـ preemption** (`orchestrator_client.py:chat_with_agent`):
+   `_build_calculated_ui` كان يسبق `_has_indexed_match`، و MODE_A
+   (`terminate_pipeline=True`) يُنهي المسار فوراً — الاسترجاع المُفهرَس لا يُنفَّذ أبداً.
+
+### الإصلاح (D-101 — 4 طبقات)
+
+- **إعادة ترتيب**: `greeting → indexed-match → calculated-UI → explanation-with-context
+  → orchestrator/LLM`. طلب تمرين صريح يبثّ النص النظيف ويُنهي المسار قبل أي واجهة محسوبة.
+- **بوابة نية السؤال الحالي** (`analyze`): سياق احتمالي من الـ history فقط يتطلب أن يحمل
+  السؤال الحالي نفسه: كلمة سياق صريحة، أو إشارة حيرة (`is_confusion`)، أو متابعة خطوة
+  (`_has_followup_probability_intent` — `p(`/جداء/نفس اللون/فردي/زوجي/شرطي/الأمل/المتغير/
+  `e(x`/فضاء/تأليف). وإلا → `ProbabilityFailure(reason="no_probability_intent_in_question")`.
+- **حاجب تبديل الموضوع** (`_build_calculated_ui`): `primary_canonical_topic(question)`
+  (من arabic_normalize — D-099) يُرجع موضوعاً غير `probability` → `None` فوراً — حتى مع
+  حيرة («لم أفهم تمرين الدوال العددية» بعد سياق احتمالات).
+- **focus-retry موسَّع**: `_is_no_model` يقبل `no_probability_intent_in_question` إضافةً
+  لـ `no_model_extracted` — متابعات خطوات التمرين تبقى تعمل عبر إعادة التحليل بالسياق الكامل.
+
+### القواعد الخمس الدائمة (D-101 — لا تُكسر بدون ADR)
+
+1. **الاسترجاع المُفهرَس يسبق الواجهة المحسوبة دائماً** في `chat_with_agent` — عكس
+   الترتيب يُعيد كارثة الاختطاف فوراً (يحرسه فحص بنيوي في
+   `tests/services/test_iss110_topic_switch_routing.py`).
+2. **سياق history وحده لا يُفعِّل واجهة الاحتمالات**: السؤال الحالي يجب أن يحمل نية
+   احتمالية بنفسه (سياق/حيرة/متابعة).
+3. **طلب موضوع صريح آخر يحجب الأداة تماماً** — `primary_canonical_topic` هو الحَكَم،
+   حتى مع إشارات حيرة.
+4. **أي marker متابعة جديد** يُضاف إلى `_FOLLOWUP_PROBABILITY_INTENT` (الـ skill) **و**
+   `_detect_focus_step` (orchestrator) معاً — هما مرآتان.
+5. **doctrine bump إلزامي**: أي تعديل على هذه القواعد = ترقية
+   `PROBABILITY_CALCULATION_DOCTRINE_VERSION` (حالياً v1.4.0) + تحديث الاختبارات.
+
+### التحقق الحي (2026-06-10 — SQLite + OpenRouter حقيقي؛ Supabase 6543 محجوب في الـ sandbox، نمط §6.55)
+
+- `scripts/verify_iss110_live.py` → **7/7**: Q1 أعداد مركبة ✅ | Q2 احتمالات ✅ |
+  **Q3 «اعطني تمرين الدوال العددية» → نص تمرين الدوال 2016 (2328 حرف)، صفر مكوّن
+  احتمالات** ✅ | Q4 «لسنة 2016» نفس الشيء ✅ | Q5 «مفهمتش» بعد تمرين الاحتمالات →
+  `full_exercise_story` (MODE_B سليم، 6830 حرف سرد LLM) ✅.
+- 62 اختبار probability+ISS-110 + 128 regression (V38/genUI/ISS-108/doctrine/registry) ✅.
+- مقارنة git-stash: مجموعتا فشل resilience suite متطابقتان قبل/بعد الإصلاح (كلها في
+  PRE_EXISTING_FAILURES بالـ CI) — **صفر انحدار**.
+
+### ملاحظة نافذة معروفة (سابقة — خارج نطاق ISS-110)
+
+الـ skill يقرأ `history[-6:]` (كل رسالة ≤2000 حرف): حيرة تأتي بعد أكثر من 6 رسائل من
+تمرين الاحتمالات (خصوصاً مع حارس التكرار الذي يمنع إعادة حفظ تمرين مُكرَّر) لا تجد
+التركيبة → لا واجهة. مُثبت بـ git-stash أنه سلوك سابق للإصلاح. توسيع النافذة يحتاج ADR
+مستقلاً (موازنة دقة الاستخراج مقابل تلوّث السياق).
+
+### السلسلة الكاملة (D-100 → D-101)
+
+| Decision | المُصلَح/المُضاف |
+|----------|-----------------|
+| D-100 | منصّة Skills موحَّدة (registry + compose + observability) |
+| **D-101** | **ISS-110 — بوابة نية السؤال الحالي + الاسترجاع المُفهرَس أولاً + حاجب تبديل الموضوع (يحل اختطاف «تمرين الدوال» بواجهة الاحتمالات)** |

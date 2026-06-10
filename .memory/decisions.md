@@ -4155,3 +4155,22 @@ python3 scripts/db_bridge.py "SELECT ... ;"     # SQL مباشر أو عبر std
 **التحقق:** `scripts/verify_iss110_live.py` حي 7/7 (SQLite + OpenRouter حقيقي) |
 62 + 128 اختبار ✅ | ruff/runtime_truth/validate_structure/ci_guardrails/check_skills_doctrine ✅
 | مقارنة git-stash: صفر انحدار (فشل resilience سابق وفي PRE_EXISTING_FAILURES).
+
+---
+
+## D-102 (2026-06-10) — History Binding is Structural-Only + System Messages Are Not Evidence (ISS-111)
+
+تفصيل كامل: CLAUDE.md §6.89.
+
+**القرارات:**
+1. **رسائل system ليست دليلاً من المحادثة**: أي كاشف يفحص history المحادثة
+   (`_detect_entry_from_history` وأمثاله) يفحص user/assistant فقط.
+2. **الربط بالتاريخ بنيوي حصراً**: `allow_tag_fallback=False` — يتطلب سنة/دورة/موضوع/
+   رقم/موضوع مرجعي. الـ tag-fallback على كلمات عامة محجوز لسؤال الطالب المباشر فقط.
+3. **log كاشف إلزامي**: `explanation_context_preempt reason=… matched_file=… history_len=…`
+   في نص الرسالة (الـ extras لا تظهر في formatters قياسية).
+4. **درس منهجي**: «deterministic function, different results» = المدخلات مختلفة فعلاً —
+   الـ history الحقيقي في الخادم يحوي رسالة system لا تظهر في إعادة الإنتاج الساذجة.
+
+**التحقق:** المنظومة كاملة حية (monolith :8000 + orchestrator :8006 + planning :8002 +
+research :8007 + reasoning :8008) — نيوتن عبر الرسم الـ13-node، compose=full، ISS-110 7/7.

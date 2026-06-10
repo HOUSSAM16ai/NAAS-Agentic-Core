@@ -354,12 +354,19 @@ def _extract_topic_keywords(normalized: str) -> list[str]:
     return list(set(found))
 
 
-def _find_matching_entry(normalized: str) -> ExerciseEntry | None:
+def _find_matching_entry(
+    normalized: str, *, allow_tag_fallback: bool = True
+) -> ExerciseEntry | None:
     """
     يبحث في فهرس قاعدة المعرفة عن أفضل تمرين مطابق للسؤال.
 
     يستخرج المعايير (سنة/دورة/موضوع/رقم) + الموضوع المرجعي، ثم يستدعي search_exercises.
     الموضوع المرجعي (canonical_topic_id) هو الإشارة الأقوى التي تكسر تعادل السنة.
+
+    ISS-111 (D-102): ``allow_tag_fallback=False`` يقصر المطابقة على الإشارات
+    البنيوية (سنة/دورة/موضوع/رقم/موضوع مرجعي). الـ tag-fallback يطابق أي كلمة
+    عامة (مثل "math" من system prompt) — آمن لسؤال الطالب المباشر، كارثي
+    لفحص history المحادثة.
     """
     year = _extract_year(normalized)
     session = _extract_session(normalized)
@@ -379,6 +386,9 @@ def _find_matching_entry(normalized: str) -> ExerciseEntry | None:
 
     if results:
         return results[0]
+
+    if not allow_tag_fallback:
+        return None
 
     # بحث بالوسوم إذا لم تُوجد نتائج بالمعايير
     tag_keywords = [w for w in normalized.split() if len(w) > 2]
@@ -840,12 +850,20 @@ def _detect_entry_from_history(
     """
     if not history_messages:
         return None
-    recent_text = " ".join(
-        str(m.get("content", ""))[:1500] for m in history_messages[-10:] if isinstance(m, dict)
-    ).lower()
+    # ISS-111 (D-102): رسائل system ليست دليلاً من المحادثة — برومبت Overmind
+    # الإنجليزي ("...math, physics...") كان يمر عبر tag-fallback ويربط **كل**
+    # سؤال يحوي «اشرح» بتمرين 2024 حتى في محادثة جديدة فارغة (مؤكَّد حياً).
+    conversational = [
+        m
+        for m in history_messages[-10:]
+        if isinstance(m, dict) and m.get("role") in ("user", "assistant")
+    ]
+    recent_text = " ".join(str(m.get("content", ""))[:1500] for m in conversational).lower()
     if not recent_text.strip():
         return None
-    return _find_matching_entry(recent_text)
+    # ISS-111 (D-102): الربط بالتاريخ يتطلب تطابقاً بنيوياً (سنة/موضوع/رقم) —
+    # الـ tag-fallback على كلمات عامة من الـ history يُنتج ربطاً زائفاً.
+    return _find_matching_entry(recent_text, allow_tag_fallback=False)
 
 
 # ISS-107: علامات متابعة قصيرة/حيرة تُبقي السؤال مربوطاً بتمرين السياق.

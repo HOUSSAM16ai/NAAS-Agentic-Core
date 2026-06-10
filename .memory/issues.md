@@ -3980,3 +3980,38 @@ ISS-108/doctrine/registry) ✅. مقارنة git-stash أثبتت أن فشل re
 retry reason)، `app/services/skills/probability_skill.py` (بوابة النية + followup markers)،
 `app/services/skills/doctrine.py` (v1.4.0)، `tests/services/test_iss110_topic_switch_routing.py`
 (جديد)، `tests/services/test_probability_skill.py` (+6)، `scripts/verify_iss110_live.py` (جديد).
+
+---
+
+## ISS-111 (2026-06-10) — System-Prompt History Poisoning: «اشرح» يختطف أي سؤال لتمرين 2024 ✅ RESOLVED
+
+**الاكتشاف:** خلال التحقق الحي العميق لـ LangGraph + الخدمات المصغرة (بعد ISS-110). سؤال
+«ما هو قانون نيوتن الثاني؟ اشرح بإيجاز مع الصيغة الرياضية» في **محادثة جديدة فارغة** عبر
+WS أُجيب بـ: «عذراً، لا يمكنني الخوض في موضوع غير متعلق بتمرين الرياضيات المذكور أعلاه...
+(حساب الاحتمالات، المتغيّر العشوائي)» — حقن تمرين 2024 + **المسار لم يصل للـ orchestrator
+أبداً** (explanation-preempt يخطفه قبل HTTP).
+
+**الجذر الثلاثي (مُثبت حياً بسطر log كاشف `history_len=2`):**
+1. `chat_persistence.get_chat_history` يحقن `{"role":"system", "content":get_customer_system_prompt()}`
+   في رأس كل history (برومبت Overmind الإنجليزي: "...math, physics, programming...").
+2. `_detect_entry_from_history` كان يفحص **كل** رسائل الـ history بما فيها system.
+3. `_find_matching_entry` عند غياب تطابق بنيوي يسقط لـ **tag-fallback** بكل الكلمات
+   ‎>2 حرف — كلمة "math" من برومبت النظام تطابق وسوم تمرين 2024 → ربط زائف لكل سؤال
+   يحوي أي marker شرح («اشرح/وضح/أكمل/لم أفهم...») في **أي** محادثة.
+
+**الإصلاح (D-102):** (1) `_detect_entry_from_history` يفحص رسائل user/assistant فقط.
+(2) الربط بالتاريخ بنيوي حصراً: `_find_matching_entry(recent_text, allow_tag_fallback=False)`
+— سنة/دورة/موضوع/رقم/موضوع مرجعي، لا وسوم عامة. مسار سؤال الطالب المباشر يحتفظ بالـ
+fallback (default=True). + سطر log كاشف دائم (reason/matched_file/history_len).
+
+**التحقق الحي (المنظومة كاملة: monolith + orchestrator + 3 skills agents):**
+- قبل الإصلاح: e2e [3] → «عذراً...» + 0 POST لـ :8006. بعده: e2e [3] → إجابة نيوتن عبر
+  **الرسم الـ13-node** (POST 200 على :8006، إطارات phase_start، 1.49s).
+- `verify_iss110_live.py` مع orchestrator حي → **7/7** (إصلاح ISS-110 صامد).
+- `POST :8006/compose` → **pipeline_mode=full** + skills_active=[planning,research,reasoning].
+- 9 اختبارات ISS-111 جديدة + 256 اختبار regression (retrieval/iss075/108/110/probability/
+  V38/genUI/doctrine) كلها خضراء. ruff + runtime_truth + skills-doctrine ✅.
+
+**الملفات:** `app/services/capabilities/exercise_retrieval.py` (الإصلاح المزدوج)،
+`app/infrastructure/clients/orchestrator_client.py` (log كاشف)،
+`tests/services/test_iss111_system_prompt_history_poisoning.py` (جديد — 9 اختبارات).

@@ -4174,3 +4174,40 @@ python3 scripts/db_bridge.py "SELECT ... ;"     # SQL مباشر أو عبر std
 
 **التحقق:** المنظومة كاملة حية (monolith :8000 + orchestrator :8006 + planning :8002 +
 research :8007 + reasoning :8008) — نيوتن عبر الرسم الـ13-node، compose=full، ISS-110 7/7.
+
+---
+
+## D-103 (2026-06-10) — Explanation via the 13-Node Graph + Reasoning-Agent Consultation
+
+تفصيل كامل: CLAUDE.md §6.90. طلب المستخدم الصريح: «المزيد عبر LangGraph والخدمات المصغرة»
++ «الجودة أولاً» (TTFT حتى 15-20s مقبول).
+
+**القرارات:**
+1. **شرح التمارين بسياق (tier 2.5) يمرّ عبر orchestrator افتراضياً** مع **حقن**
+   `exercise_content` (المحتوى الكامل من `detect_explanation_with_context`) في
+   `context` — **يُعدِّل D-052 rule 2**: سبب المنع الأصلي (vector DB يخلط تمارين +
+   tags خام) يُحيَّد بالبناء لأن الرسم يتجاوز retriever-ه كلياً عند الحقن.
+2. **سلسلة الحُرّاس في الرسم عند الحقن**: Supervisor ⇒ educational حتمياً (لا DSPy)؛
+   QueryRewriter/QueryAnalyzer ⇒ no-op (يوفّر 2 LLM calls)؛ InternalRetriever ⇒
+   المستند المحقون فقط (source="محتوى التمرين المرفق")؛ Reranker ⇒ passthrough.
+3. **رافعة رجوع فورية**: `EXPLANATION_VIA_ORCHESTRATOR=0` يعيد البثّ المحلي القديم
+   بلا deploy (نمط D-025). الشرح المحلي يبقى fallback كاملاً (tier 2.5 في السلسلة
+   يتلقى `precomputed_decision` — ISS-059 parity).
+4. **حارس البثّ الفارغ**: orchestrator 200 بلا أي delta مرئي ولا إطار نهائي ⇒
+   `empty_stream` ويُكمل للـ fallback. أي terminal (final/error/complete) ⇒ return
+   (يحفظ عقد الإطار النهائي الواحد — ISS-016).
+5. **استشارة reasoning-agent (:8008 MCTS) من SynthesizerNode** للأسئلة الرياضية
+   المعقدة (كاشف حتمي `_is_complex_math_query` — markers صريحة تشمل الصيغ المعرَّفة
+   بـ«ال» درس ISS-109). **fail-open مطلق** + سقف `asyncio.wait_for` (افتراضي 20s،
+   `ORCHESTRATOR_REASONING_CONSULT_TIMEOUT`). تعطيل عبر
+   `ORCHESTRATOR_REASONING_CONSULT_ENABLED=0`. الـ hint يُنسج في المواضع الثلاثة
+   (no-docs streaming / with-docs streaming / DSPy batch) بصيغة «تحقق منه ولا تنسخه حرفياً».
+6. **Metric بمُصدِر حقيقي (§6.21)**: `cogniforge_reasoning_consult_total{status}`
+   (success/error/timeout/disabled/skipped) في prom_metrics الـ orchestrator.
+
+**الملفات:** `graph/main.py` (AgentState + Supervisor/QueryRewriter guards)،
+`graph/search.py` (Analyzer/Retriever/Reranker guards + consult helpers + Synthesizer wiring)،
+`src/api/routes.py` (ChatRunContext + `_extract_injected_exercise` + plumbing HTTP/WS)،
+`src/core/prom_metrics.py` (العدّاد)، `app/infrastructure/clients/orchestrator_client.py`
+(tier 2.5 injection + علم + empty-stream guard + precomputed fallback)،
+اختباران جديدان (31 اختبار).

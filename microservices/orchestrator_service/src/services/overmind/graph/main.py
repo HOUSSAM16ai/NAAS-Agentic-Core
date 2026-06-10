@@ -108,6 +108,10 @@ class AgentState(TypedDict):
     final_response: object
     tools_executed: bool
     retry_count: int
+    # D-103: محتوى تمرين محقون من الـ monolith (شرح-بسياق عبر الرسم).
+    # عند وجوده: supervisor يفرض educational، retriever يتجاوز البحث الدلالي
+    # ويستخدم هذا المحتوى كمصدر وحيد — لا vector DB ولا خلط تمارين.
+    exercise_content: str
 
 
 ADMIN_METRIC_TRIGGERS = {
@@ -570,6 +574,15 @@ class SupervisorNode:
         if "original_query" not in state:
             updates["original_query"] = query
 
+        # D-103: محتوى تمرين محقون من الـ monolith ⇒ المسار تعليمي بالبناء —
+        # الـ monolith حقنه فقط بعد detect_explanation_with_context. تصنيف حتمي
+        # فوري (لا DSPy) يمنع misroute إلى chat/general يُضيع المحتوى المحقون.
+        if str(state.get("exercise_content") or "").strip():
+            updates["intent"] = "educational"
+            updates["query"] = query
+            emit_telemetry(node_name="SupervisorNode", start_time=start_time, state=state)
+            return updates
+
         formatted_history = format_conversation_history(messages)
         resolved_q = _resolve_query_from_history(query=query, messages=messages)
 
@@ -977,6 +990,11 @@ class QueryRewriterNode:
         query = str(state.get("query", "")).strip()
         logger.debug("QueryRewriterNode query=%.80s", query)
         messages = state.get("messages", [])
+        # D-103: مع محتوى تمرين محقون لا حاجة لإعادة الصياغة المرجعية —
+        # الاسترجاع سيتجاوز البحث ويستخدم المحتوى المحقون مباشرة (يوفّر LLM call).
+        if str(state.get("exercise_content") or "").strip():
+            emit_telemetry(node_name="QueryRewriterNode", start_time=start_time, state=state)
+            return {"query": query}
         if not query or len(messages) <= 1:
             emit_telemetry(node_name="QueryRewriterNode", start_time=start_time, state=state)
             return {"query": query}

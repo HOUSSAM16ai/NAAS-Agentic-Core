@@ -99,6 +99,12 @@ class QueryAnalyzerNode:
         messages = state.get("messages", [])
         error = None
 
+        # D-103: محتوى تمرين محقون ⇒ الاسترجاع سيتجاوز البحث الدلالي،
+        # فلا حاجة لاستخراج filters عبر DSPy (يوفّر LLM call كامل).
+        if str(state.get("exercise_content") or "").strip():
+            emit_telemetry(node_name="QueryAnalyzerNode", start_time=start_time, state=state)
+            return {"filters": QueryFilters(question=query)}
+
         from .main import format_conversation_history
 
         # Exclude the current user query from history ONLY for prompt formatting
@@ -158,6 +164,26 @@ class InternalRetrieverNode:
         from .telemetry import emit_telemetry
 
         start_time = time.time()
+
+        # D-103: محتوى تمرين محقون من الـ monolith ⇒ تجاوز البحث الدلالي كلياً.
+        # المصدر الوحيد = المحتوى المحقون — لا vector DB، لا خلط تمارين، لا tags خام
+        # (يُحيّد سبب منع D-052 بالبناء).
+        injected_exercise = str(state.get("exercise_content") or "").strip()
+        if injected_exercise:
+            docs = [
+                LlamaDocument(
+                    text=injected_exercise,
+                    metadata={"source": "محتوى التمرين المرفق", "score": 1.0},
+                )
+            ]
+            emit_telemetry(
+                node_name="InternalRetrieverNode",
+                start_time=start_time,
+                state=state,
+                retrieval_source="injected_exercise",
+            )
+            return {"retrieved_docs": docs}
+
         filters: QueryFilters = state.get("filters")
 
         exact_filters: dict[str, int | str] = {}
@@ -251,6 +277,11 @@ class RerankerNode:
         if not docs:
             emit_telemetry(node_name="RerankerNode", start_time=start_time, state=state)
             return {"reranked_docs": []}
+
+        # D-103: مستند محقون واحد لا يحتاج cross-encoder — passthrough مباشر.
+        if str(state.get("exercise_content") or "").strip():
+            emit_telemetry(node_name="RerankerNode", start_time=start_time, state=state)
+            return {"reranked_docs": list(docs)}
 
         if self.reranker:
             try:
@@ -348,6 +379,104 @@ class EducationalSynthesizer(dspy.Signature):
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# D-103 (Change B): استشارة reasoning-agent (:8008 MCTS) للأسئلة الرياضية
+# المعقدة قبل التوليف — تعميق الرسم بالوكلاء. fail-open مطلق: أي خطأ/مهلة/
+# تعطيل ⇒ "" والتوليف يتابع بدون الاستشارة. لا تفشل دور الطالب أبداً.
+# ─────────────────────────────────────────────────────────────────────────────
+_REASONING_CONSULT_MARKERS: tuple[str, ...] = (
+    "تكامل",
+    "اشتقاق",
+    "مشتق",
+    "نهاية",
+    "معادلة تفاضلية",
+    "برهن",
+    "أثبت",
+    "اثبت",
+    "استنتج",
+    "ادرس الدالة",
+    "ادرس تغيرات",
+    "دالة أصلية",
+    "دالة اصلية",
+    "متتالية",
+    "عدد مركب",
+    "العدد المركب",
+    "أعداد مركبة",
+    "اعداد مركبة",
+    "الأعداد المركبة",
+    "الاعداد المركبة",
+    "lim",
+    "integral",
+    "derivative",
+    "prove",
+)
+
+_REASONING_HINT_MAX_CHARS = 4000
+
+
+def _is_complex_math_query(query: str) -> bool:
+    """كاشف حتمي محافظ — لا LLM: السؤال معقد رياضياً فقط عند وجود marker صريح."""
+    text = str(query or "").strip()
+    if len(text) < 15:
+        return False
+    lowered = text.lower()
+    return any(marker in lowered for marker in _REASONING_CONSULT_MARKERS)
+
+
+async def _consult_reasoning_agent(query: str) -> str:
+    """يستشير reasoning-agent ويُرجع hint نصياً — أو "" عند أي تعذّر (fail-open)."""
+    from microservices.orchestrator_service.src.core.prom_metrics import (
+        record_reasoning_consult,
+    )
+
+    enabled = os.environ.get("ORCHESTRATOR_REASONING_CONSULT_ENABLED", "1").strip().lower()
+    if enabled in ("0", "false", "no"):
+        record_reasoning_consult("disabled")
+        return ""
+    if not _is_complex_math_query(query):
+        record_reasoning_consult("skipped")
+        return ""
+
+    try:
+        timeout_raw = os.environ.get("ORCHESTRATOR_REASONING_CONSULT_TIMEOUT", "20")
+        timeout_s = max(1.0, float(timeout_raw or "20"))
+    except (TypeError, ValueError):
+        timeout_s = 20.0
+
+    try:
+        # import كسول: يسهّل الاختبار (monkeypatch) ولا يكلّف وقت import الوحدة.
+        from microservices.orchestrator_service.src.infrastructure.clients.reasoning_client import (
+            reasoning_client,
+        )
+
+        data = await asyncio.wait_for(reasoning_client.reason_deeply(query), timeout=timeout_s)
+        if isinstance(data, dict) and not data.get("error"):
+            answer = str(data.get("answer") or "").strip()
+            trace = str(data.get("logic_trace") or "").strip()
+            hint = answer
+            if trace and trace not in hint:
+                hint = (hint + "\n" + trace).strip()
+            if hint:
+                record_reasoning_consult("success")
+                logger.info("reasoning_consult success chars=%s", len(hint))
+                return hint[:_REASONING_HINT_MAX_CHARS]
+        record_reasoning_consult("error")
+    except TimeoutError:
+        record_reasoning_consult("timeout")
+        logger.warning("reasoning_consult timeout after %.1fs", timeout_s)
+    except Exception as exc:
+        record_reasoning_consult("error")
+        logger.warning("reasoning_consult failed: %s", exc)
+    return ""
+
+
+def _weave_reasoning_hint(base_text: str, reasoning_hint: str) -> str:
+    """يُلحق hint الاستدلال بنص الـ prompt — صيغة موحَّدة للمواضع الثلاثة."""
+    if not reasoning_hint:
+        return base_text
+    return f"{base_text}\n\nتحليل استدلالي مساعد (تحقق منه ولا تنسخه حرفياً):\n{reasoning_hint}"
+
+
 class SynthesizerNode:
     def __init__(self):
         self.generator = dspy.Predict(EducationalSynthesizer)
@@ -393,6 +522,10 @@ class SynthesizerNode:
 
         conversation_text = "\n".join(recent_messages) if recent_messages else query
 
+        # D-103 (Change B): استشارة reasoning-agent للأسئلة الرياضية المعقدة —
+        # fail-open: "" عند أي تعذّر، والتوليف يتابع كالمعتاد.
+        reasoning_hint = await _consult_reasoning_agent(query)
+
         if not reranked:
             # ISS-STREAM-002: عند عدم وجود نتائج بحث → استخدم LLM مباشرة مع streaming
             writer = self._get_writer()
@@ -411,7 +544,8 @@ class SynthesizerNode:
                             "role": "system",
                             "content": "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار.",
                         },
-                        {"role": "user", "content": query},
+                        # D-103: حقن hint الاستدلال عند توفره (فرع no-docs)
+                        {"role": "user", "content": _weave_reasoning_hint(query, reasoning_hint)},
                     ]
                     # D-061 (ISS-074): تطبيع LaTeX على streaming chunks
                     from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
@@ -476,6 +610,8 @@ class SynthesizerNode:
                         f"السؤال الحالي: {query}\n\n"
                         "اكتب الشرح أو الحل."
                     )
+                    # D-103: حقن hint الاستدلال عند توفره (فرع with-docs)
+                    user_msg = _weave_reasoning_hint(user_msg, reasoning_hint)
                     stream_messages = [
                         {"role": "system", "content": system_msg},
                         {"role": "user", "content": user_msg},
@@ -537,9 +673,11 @@ class SynthesizerNode:
             if not text_val:
                 # Fallback إلى DSPy (batch mode أو فشل streaming)
                 try:
+                    # D-103: حقن hint الاستدلال في مسار DSPy batch أيضاً
+                    dspy_context = _weave_reasoning_hint(raw_doc_text, reasoning_hint)
                     prediction = await anyio.to_thread.run_sync(
                         lambda: self.generator(
-                            context=raw_doc_text, conversation=conversation_text, query=query
+                            context=dspy_context, conversation=conversation_text, query=query
                         )
                     )
                     raw_pred = getattr(prediction, "response", raw_doc_text).strip()

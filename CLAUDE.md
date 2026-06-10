@@ -8341,3 +8341,88 @@ explanation-preempt يربطه زائفاً بتمرين 2024 → حقن الت�
 |----------|-----------------|
 | D-101 | ISS-110 — بوابة نية السؤال الحالي + الاسترجاع المُفهرَس أولاً |
 | **D-102** | **ISS-111 — تسميم history برسالة النظام: فحص user/assistant فقط + ربط بنيوي حصراً (يفتح طريق WS → orchestrator 13-node)** |
+
+---
+
+## 6.90 More-via-LangGraph — Explanation via the 13-Node Graph + Reasoning-Agent Consultation (2026-06-10, D-103)
+
+> طلب المستخدم الصريح: تمرير المزيد من الأسئلة عبر LangGraph والخدمات المصغرة («كلاهما»،
+> «الجودة أولاً»). هذا القسم يحكم حقن محتوى التمرين في الرسم + استشارة reasoning-agent —
+> لا يُكسر بدون ADR.
+
+### Change A — شرح التمارين بسياق عبر الرسم الـ13-node (يُعدِّل D-052 rule 2)
+
+بعد ISS-110/111، الفئة الوحيدة المتبقية التي تستخدم LLM **محلياً** كانت شرح التمارين بسياق
+(tier 2.5). قاعدة D-052 منعت تمريرها للـ orchestrator لأن retriever-ه (vector DB) كان يُرجع
+تمارين مختلطة + tags خام. **الحل يُحيّد سبب المنع بالبناء**:
+
+```
+monolith chat_with_agent:
+  detect_explanation_with_context ⇒ recognized + matched_entry
+    ⇒ (العلم مفعَّل) حقن context["exercise_content"] = decision.full_content
+    ⇒ المتابعة إلى orchestrator POST /api/chat/messages (لا بثّ محلي)
+orchestrator graph (عند وجود exercise_content في الحالة):
+  Supervisor      ⇒ intent="educational" حتمياً (لا DSPy، لا misroute)
+  QueryRewriter   ⇒ no-op (يوفّر LLM call)
+  QueryAnalyzer   ⇒ filters فارغة (يوفّر LLM call)
+  InternalRetriever ⇒ المستند المحقون فقط (source="محتوى التمرين المرفق") — لا research_client
+  Reranker        ⇒ passthrough (لا cross-encoder)
+  Synthesizer     ⇒ يبني الشرح من المحتوى المحقون + المحادثة
+```
+
+التوصيل: `ChatRunContext.exercise_content` + `_extract_injected_exercise` (سقف 16K حرف) في
+`routes.py` على المسارين (HTTP `_run_chat_langgraph` + WS `_runner`)، وحقل
+`AgentState.exercise_content` في `graph/main.py`.
+
+### Change B — استشارة reasoning-agent (:8008 MCTS) من SynthesizerNode
+
+`_is_complex_math_query` (حتمي — markers صريحة: تكامل/اشتقاق/نهاية/برهن/أثبت/ادرس الدالة/
+متتالية/أعداد مركبة **بصيغها المعرَّفة بـ«ال» — درس ISS-109**/lim/integral/prove، طول ≥ 15)
+⇒ `_consult_reasoning_agent` يستدعي `reasoning_client.reason_deeply` بسقف `asyncio.wait_for`
+(افتراضي 20s). الـ hint (answer + logic_trace، ≤ 4000 حرف) يُنسج في المواضع الثلاثة للـ prompt
+(no-docs streaming / with-docs streaming / DSPy batch) بصيغة
+«تحليل استدلالي مساعد (تحقق منه ولا تنسخه حرفياً)».
+
+### القواعد الـ 6 الدائمة (D-103 — لا تُكسر بدون ADR)
+
+1. **حقن `exercise_content` ⇒ retriever الرسم يتجاوز البحث الدلالي كلياً** — المصدر الوحيد
+   هو المحقون. أي مسار يخلط المحقون مع vector DB يُعيد كارثة D-052 (تمارين مختلطة + tags خام).
+2. **`EXPLANATION_VIA_ORCHESTRATOR=0` رافعة رجوع فورية** بلا deploy (نمط D-025) — تعيد البثّ
+   المحلي القديم. الشرح المحلي يبقى في fallback chain دائماً ويتلقى `precomputed_decision`
+   (ISS-059 parity).
+3. **استشارة reasoning-agent fail-open مطلقاً**: أي خطأ/مهلة/تعطيل ⇒ "" والتوليف يتابع.
+   ممنوع أن تُفشل الاستشارة دور الطالب. سقف زمني إلزامي (`ORCHESTRATOR_REASONING_CONSULT_TIMEOUT`).
+4. **حارس البثّ الفارغ**: orchestrator 200 بلا أي `assistant_delta` مرئي ولا إطار نهائي ⇒
+   `empty_stream` ⇒ المتابعة للمرشح التالي/الـ fallback المحلي. أي terminal
+   (`assistant_final`/`error`/`complete`/`assistant_error`) ⇒ return — يحفظ عقد الإطار
+   النهائي الواحد (ISS-016).
+5. **Supervisor يفرض educational عند الحقن قبل أي DSPy** — الـ monolith حقن المحتوى فقط بعد
+   `detect_explanation_with_context`، فالمسار تعليمي بالبناء. misroute إلى chat/general
+   يُضيع المحتوى المحقون.
+6. **markers الكشف الرياضي تشمل الصيغ المعرَّفة بـ«ال»** (درس ISS-109): «الأعداد المركبة»
+   وليس فقط «أعداد مركبة» — أداة التعريف تكسر مطابقة السلاسل الفرعية ثنائية الكلمات.
+
+### قياس النجاح حياً
+
+```bash
+# 1. شرح تمرين عبر الرسم — سجل :8006 يُظهر POST + log الحقن
+#    «اعطني تمرين دوال 2016» ثم «اشرح السؤال 1»
+grep "injected_exercise" /tmp/orchestrator.log   # [D-103] injected_exercise chars=... ref=...
+
+# 2. استشارة reasoning — سجل :8008 يُظهر POST /execute
+curl -s localhost:8006/metrics | grep cogniforge_reasoning_consult_total
+
+# 3. رجوع فوري بلا deploy
+export EXPLANATION_VIA_ORCHESTRATOR=0   # الشرح يعود محلياً
+
+# 4. اختبارات
+pytest tests/services/test_d103_explanation_via_orchestrator.py \
+       tests/microservices/orchestrator_service/test_d103_injected_context.py --no-cov
+```
+
+### السلسلة الكاملة (D-102 → D-103)
+
+| Decision | المُصلَح/المُضاف |
+|----------|-----------------|
+| D-102 | ISS-111 — تسميم history برسالة النظام |
+| **D-103** | **More-via-LangGraph: شرح التمارين عبر الرسم (حقن exercise_content) + استشارة reasoning-agent من Synthesizer (fail-open)** |

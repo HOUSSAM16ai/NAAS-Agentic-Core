@@ -4015,3 +4015,22 @@ fallback (default=True). + سطر log كاشف دائم (reason/matched_file/his
 **الملفات:** `app/services/capabilities/exercise_retrieval.py` (الإصلاح المزدوج)،
 `app/infrastructure/clients/orchestrator_client.py` (log كاشف)،
 `tests/services/test_iss111_system_prompt_history_poisoning.py` (جديد — 9 اختبارات).
+
+---
+
+## D-103 (2026-06-10) — More-via-LangGraph: Explanation Routing + Reasoning Consult (feature)
+
+**الطلب:** المستخدم طلب تمرير المزيد من الأسئلة عبر LangGraph الـ13-node والخدمات
+المصغرة («كلاهما» + «الجودة أولاً»). الفئة الوحيدة المتبقية محلياً مع LLM كانت
+شرح التمارين بسياق (tier 2.5).
+
+**التنفيذ:** حقن `exercise_content` من الـ monolith إلى الرسم (retriever يتجاوز
+البحث الدلالي كلياً — يُحيّد سبب منع D-052 بالبناء) + استشارة reasoning-agent
+(:8008 MCTS) من SynthesizerNode للأسئلة الرياضية المعقدة (fail-open، سقف 20s).
+رافعتا رجوع: `EXPLANATION_VIA_ORCHESTRATOR=0` و `ORCHESTRATOR_REASONING_CONSULT_ENABLED=0`.
+
+**ملاحظة درس ISS-109 المتكرر:** markers الكشف الرياضي يجب أن تشمل الصيغ المعرَّفة
+(«الأعداد المركبة» وليس فقط «أعداد مركبة») — أداة التعريف «ال» تكسر مطابقة السلاسل
+الفرعية ثنائية الكلمات.
+
+التفصيل: CLAUDE.md §6.90 + decisions.md D-103.

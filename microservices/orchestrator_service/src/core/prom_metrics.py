@@ -319,6 +319,13 @@ STREAMING_SESSIONS_TOTAL: Counter = _make_counter(
     ["channel", "status"],  # status: success|fallback|error
 )
 
+# D-103 (Change B): استشارة reasoning-agent من داخل SynthesizerNode
+REASONING_CONSULT_TOTAL: Counter = _make_counter(
+    "cogniforge_reasoning_consult_total",
+    "إجمالي استشارات reasoning-agent من الرسم — D-103",
+    ["status"],  # status: success|error|timeout|disabled|skipped
+)
+
 STREAMING_DURATION: Histogram = _make_histogram(
     "cogniforge_streaming_duration_seconds",
     "زمن جلسة البث الكاملة من أول chunk إلى assistant_final",
@@ -479,6 +486,16 @@ def record_streaming_chunk(channel: str, node: str, chars: int) -> None:
     """
     STREAMING_CHUNKS_TOTAL.labels(channel=channel, node=node).inc()
     STREAMING_CHARS_TOTAL.labels(channel=channel).inc(chars)
+
+
+def record_reasoning_consult(status: str) -> None:
+    """
+    يُسجِّل استشارة reasoning-agent من SynthesizerNode (D-103).
+
+    المدخلات:
+        status: "success" | "error" | "timeout" | "disabled" | "skipped"
+    """
+    REASONING_CONSULT_TOTAL.labels(status=status).inc()
 
 
 def record_streaming_session(channel: str, status: str, duration_seconds: float) -> None:

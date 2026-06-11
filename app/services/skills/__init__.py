@@ -40,6 +40,12 @@ Skill جديد يُقيِّم جودة إجابة LLM قبل إرسالها لل
 قفل الموضوع يُسجِّل انتهاكات تسرب المواضيع.
 """
 
+from app.services.skills.adaptive_pedagogy_skill import (
+    AdaptivePedagogySkill,
+    PedagogyDirective,
+    PedagogyInput,
+    get_adaptive_pedagogy_skill,
+)
 from app.services.skills.answer_quality_skill import (
     AnswerQualityFailure,
     AnswerQualityInput,
@@ -191,6 +197,7 @@ __all__ = [
     "SKILL_INVOCATION_PROTOCOL_VERSION",
     "STEP_BY_STEP_EXPLANATION_RULES",
     "STEP_BY_STEP_EXPLANATION_VERSION",
+    "AdaptivePedagogySkill",
     "AnswerQualityFailure",
     "AnswerQualityInput",
     "AnswerQualityOutput",
@@ -223,6 +230,8 @@ __all__ = [
     "MathSkillInput",
     "MathSkillOutput",
     "OutputFirewall",
+    "PedagogyDirective",
+    "PedagogyInput",
     "ProbabilityCalculatorSkill",
     "ProbabilityFailure",
     "ProbabilityInput",
@@ -244,6 +253,7 @@ __all__ = [
     "arabic_prose_ratio",
     "build_exercise_explanation_prompt",
     "compose_text_refinement",
+    "get_adaptive_pedagogy_skill",
     "get_answer_quality_skill",
     "get_bkt_cognitive_summary",
     "get_bkt_engine",

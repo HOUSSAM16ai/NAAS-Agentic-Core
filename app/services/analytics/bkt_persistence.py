@@ -22,7 +22,7 @@ from app.core.domain.bkt_analytics import StudentBKTAnalytic
 from app.services.skills.bkt_engine import (
     BKTEvaluation,
     BKTEvaluationInput,
-    classify_concept,
+    classify_concept_with_context,
     get_bkt_engine,
 )
 
@@ -101,7 +101,9 @@ class BKTAnalyticsService:
         يقرأ الإتقان السابق لنفس المفهوم لاستخدامه كـ prior، فيتراكم الإتقان
         عبر التفاعلات (سجل append-only).
         """
-        concept_id = classify_concept(question)
+        # ISS-112: نفس التصنيف الواعي بالسياق الذي يستخدمه BKTEngine.evaluate —
+        # وإلا قُرئ الـ prior من مفهوم وكُتب التقييم على مفهوم آخر.
+        concept_id = classify_concept_with_context(question, history)
         prior = await self.latest_mastery(user_id, concept_id)
         prior_count = await self.interaction_count(user_id, concept_id)
 

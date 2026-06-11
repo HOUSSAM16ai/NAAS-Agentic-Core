@@ -398,8 +398,6 @@ class OrchestratorClient:
 
         ISS-CONV-C: يقبل history_messages لحل أسئلة المتابعة بالسياق.
         """
-        import asyncio
-
         full_response = await self._build_local_retrieval_response(question, history_messages)
         if not full_response:
             return
@@ -410,6 +408,60 @@ class OrchestratorClient:
             mark_fallback_used("local_retrieval_stream")
         except Exception:
             pass
+
+        async for chunk in self._stream_markdown_typing(full_response):
+            yield chunk
+
+    async def _stream_question_only_response(
+        self,
+        question: str,
+        history_messages: list[dict[str, str]] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """ISS-112: «أعطني السؤال رقم N فقط» — اقتطاع حتمي من النص الرسمي.
+
+        الفضيحة المُشخَّصة حياً: طلب «السؤال رقم 2 فقط» كان يُرجع التمرين كاملاً
+        أو حلاً مُهلوَساً من LLM. هذا المسار صفر-LLM: يكشف النية + يقتطع السؤال
+        المرقَّم من display_content (بدون حل أصلاً) ويبثّه typing-effect.
+        يُصدر صفر قطعة عند عدم التعرف → المسار يتابع طبيعياً.
+        """
+        try:
+            from app.services.capabilities.exercise_retrieval import (
+                detect_question_only_request,
+            )
+
+            decision = detect_question_only_request(
+                ExerciseRetrievalRequest(question=question),
+                history_messages=history_messages,
+            )
+        except Exception:
+            logger.warning("question_only_detection_failed", exc_info=True)
+            return
+        if not decision.recognized or not decision.sliced_content:
+            return
+
+        logger.info(
+            "question_only_preempt reason=%s n=%s file=%s",
+            decision.reason,
+            decision.question_number,
+            getattr(decision.matched_entry, "file_path", None),
+        )
+        try:
+            from app.telemetry.path_observer import mark_fallback_used
+
+            mark_fallback_used("question_only_stream")
+        except Exception:
+            pass
+
+        async for chunk in self._stream_markdown_typing(decision.sliced_content):
+            yield chunk
+
+    async def _stream_markdown_typing(self, full_response: str) -> AsyncGenerator[str, None]:
+        """يبثّ نصاً ثابتاً (markdown) بإيقاع typing-effect مع حماية LaTeX.
+
+        مُستخرَج من ``_stream_local_retrieval_response`` (ISS-112) ليُشارَك مع
+        مسار «السؤال فقط» — السلوك مطابق حرفياً لما قبل الاستخراج.
+        """
+        import asyncio
 
         # ── استراتيجية البث الذكي (ISS-STREAM-002) ──────────────────────────
         # الهدف: typing-effect سلس يحاكي LLM streaming حقيقي.
@@ -1659,6 +1711,42 @@ class OrchestratorClient:
             return
 
         # ─────────────────────────────────────────────────────────────────────
+        # ISS-112 — «أعطني السؤال رقم N فقط» (question-only preempt):
+        # يسبق الاسترجاع المُفهرَس: طلب سؤال مرقَّم محدد يجب أن يُقتطع من النص
+        # الرسمي (صفر LLM) لا أن يُغرق الطالب بالتمرين كاملاً أو — أسوأ —
+        # بحل مُهلوَس. نية الشرح («اشرح السؤال 2») لا تُختطف (الكاشف يرفضها).
+        # صفر قطع مبثوثة ⇒ المسار يتابع طبيعياً (fail-open).
+        # ─────────────────────────────────────────────────────────────────────
+        qo_streamed_chars = 0
+        try:
+            async for chunk in self._stream_question_only_response(question, history_messages):
+                if not chunk:
+                    continue
+                qo_streamed_chars += len(chunk)
+                yield self._normalize_stream_event(
+                    {"type": "assistant_delta", "payload": {"content": chunk}}
+                )
+        except Exception:
+            logger.warning("question_only_preempt_failed", exc_info=True)
+
+        if qo_streamed_chars > 0:
+            if _root_ctx:
+                with contextlib.suppress(Exception):
+                    obs.end_span(
+                        _root_ctx.span_id,
+                        status="OK",
+                        metrics={
+                            "duration_ms": (time.perf_counter() - _t0) * 1000,
+                            "fallback_path": 0.4,  # بين التحية والاسترجاع المُفهرَس
+                            "stream_chars": float(qo_streamed_chars),
+                        },
+                    )
+            yield self._normalize_stream_event(
+                {"type": "assistant_final", "payload": {"content": ""}}
+            )
+            return
+
+        # ─────────────────────────────────────────────────────────────────────
         # ISS-056 (D-049 — Indexed Retrieval Preemption):
         # إذا طابق السؤال تمريناً محدداً في knowledge_index، نتجاوز كل
         # شيء (orchestrator + StateGraph + fallback chain) ونبث المحتوى
@@ -1885,6 +1973,15 @@ class OrchestratorClient:
         _effective_question = (
             _deep_pedagogy_instruction + "\n\n" + question if _is_mode_b else question
         )
+
+        # D-104 (Adaptive Pedagogy): التوجيه التربوي المشتق من إتقان BKT —
+        # يُسبق في السؤال (قبل تعليمة MODE_B إن وُجدت) فيصل تلقائياً للـ
+        # orchestrator وكل مسارات الـ fallback المحلية عبر _effective_question.
+        # المسارات الحتمية (تحية/مفهرَس/سؤال-فقط/UI محسوبة) سبقت هذه النقطة
+        # وتستخدم السؤال الخام — لا تلوّث.
+        _pedagogy_directive = str((context or {}).get("pedagogy_directive") or "").strip()
+        if _pedagogy_directive:
+            _effective_question = f"[توجيه تربوي] {_pedagogy_directive}\n\n{_effective_question}"
 
         payload = {
             "question": _effective_question,

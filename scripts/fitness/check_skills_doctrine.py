@@ -83,6 +83,8 @@ def check_skills_consume_doctrine() -> None:
 
 def check_manifest_consistency() -> None:
     from app.services.skills.doctrine import (
+        ADAPTIVE_PEDAGOGY_DOCTRINE,
+        ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION,
         BKT_COGNITIVE_DOCTRINE,
         BKT_COGNITIVE_DOCTRINE_VERSION,
         DETAILED_EXPLANATION_RULES,
@@ -111,6 +113,12 @@ def check_manifest_consistency() -> None:
         ),
         # D-074 (Protocol V6.0): BKT cognitive layer is a first-class doctrine.
         ("bkt_cognitive", BKT_COGNITIVE_DOCTRINE_VERSION, len(BKT_COGNITIVE_DOCTRINE)),
+        # D-104: adaptive pedagogy — قراءة الإتقان تقود عمق التدريس.
+        (
+            "adaptive_pedagogy",
+            ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION,
+            len(ADAPTIVE_PEDAGOGY_DOCTRINE),
+        ),
     ]
     for key, ver, count in pairs:
         entry = SKILL_DOCTRINE_MANIFEST.get(key)
@@ -315,6 +323,7 @@ def check_skills_platform() -> None:
         "math",
         "answer_quality",
         "bkt_engine",
+        "adaptive_pedagogy",
         "probability",
         "exercise_alignment",
         "output_firewall",
@@ -345,6 +354,23 @@ def check_skills_platform() -> None:
     _pass("Skills Platform router wired + mounted (D-100, not ZOMBIE)")
 
 
+def check_adaptive_pedagogy_wiring() -> None:
+    """D-104: التوجيه التربوي موصول فعلاً — ليس skill معرَّفاً بلا مستهلك."""
+    router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    if "_build_pedagogy_directive" not in router_src:
+        _fail("customer_chat lost _build_pedagogy_directive (D-104 ZOMBIE).")
+    if '"pedagogy_directive": pedagogy' not in router_src:
+        _fail("customer_chat no longer passes pedagogy_directive in context (D-104).")
+    if 'get("pedagogy_directive")' not in client_src:
+        _fail("orchestrator_client no longer reads pedagogy_directive (D-104).")
+    if "[توجيه تربوي]" not in client_src:
+        _fail("orchestrator_client no longer prepends the pedagogy directive (D-104).")
+    _pass("Adaptive pedagogy wired: BKT mastery read drives teaching depth (D-104)")
+
+
 def main() -> None:
     print("=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100) ===\n")
     check_doctrine_module_importable()
@@ -356,6 +382,7 @@ def main() -> None:
     check_answer_quality_skill_wired()
     check_bkt_baseline_integrated()
     check_skills_platform()
+    check_adaptive_pedagogy_wiring()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

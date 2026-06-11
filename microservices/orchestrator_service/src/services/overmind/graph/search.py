@@ -438,10 +438,13 @@ async def _consult_reasoning_agent(query: str) -> str:
         return ""
 
     try:
-        timeout_raw = os.environ.get("ORCHESTRATOR_REASONING_CONSULT_TIMEOUT", "20")
-        timeout_s = max(1.0, float(timeout_raw or "20"))
+        # D-103: السقف الافتراضي 35s — بنشمارك حي أثبت أن MCTS (depth 1) يستغرق
+        # ~23s لمسألة تكامل بالتجزئة. سقف 20s كان يُهدر الوقت ثم يُسقط الـ hint
+        # دائماً (timeout). «الجودة أولاً» (طلب المستخدم) ⇒ نمنحه فرصة الإكمال.
+        timeout_raw = os.environ.get("ORCHESTRATOR_REASONING_CONSULT_TIMEOUT", "35")
+        timeout_s = max(1.0, float(timeout_raw or "35"))
     except (TypeError, ValueError):
-        timeout_s = 20.0
+        timeout_s = 35.0
 
     try:
         # import كسول: يسهّل الاختبار (monkeypatch) ولا يكلّف وقت import الوحدة.

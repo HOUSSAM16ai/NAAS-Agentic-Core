@@ -142,6 +142,7 @@ def sanitize_response(text: str, intent: str = "general") -> str:
     out = re.sub(r"[Ѐ-ӿ]+", "", out)  # Cyrillic
     out = re.sub(r"[一-鿿]+", "", out)  # CJK Han
     out = re.sub(r"[぀-ゟ゠-ヿ]+", "", out)  # Japanese kana
+    out = re.sub(r"[가-힣ㄱ-ㅎㅏ-ㅣ]+", "", out)  # Korean Hangul (D-103 live finding)
     # 3. meta-narration للـ chat فقط
     if intent == "chat":
         for _ in range(5):  # multi-pass
@@ -209,7 +210,8 @@ def sanitize_chunk(chunk: str) -> str:
     # حذف scripts كاملة (آمن — كل char منفصل)
     out = re.sub(r"[Ѐ-ӿ]+", "", out)  # Cyrillic
     out = re.sub(r"[一-鿿]+", "", out)  # CJK Han
-    return re.sub(r"[぀-ゟ゠-ヿ]+", "", out)  # Japanese kana
+    out = re.sub(r"[぀-ゟ゠-ヿ]+", "", out)  # Japanese kana
+    return re.sub(r"[가-힣ㄱ-ㅎㅏ-ㅣ]+", "", out)  # Korean Hangul (D-103 live finding)
 
 
 def get_greeting_fastpath_response(query: str) -> str | None:

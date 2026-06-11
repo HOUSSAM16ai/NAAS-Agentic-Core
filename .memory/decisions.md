@@ -4198,8 +4198,8 @@ research :8007 + reasoning :8008) — نيوتن عبر الرسم الـ13-node
    (يحفظ عقد الإطار النهائي الواحد — ISS-016).
 5. **استشارة reasoning-agent (:8008 MCTS) من SynthesizerNode** للأسئلة الرياضية
    المعقدة (كاشف حتمي `_is_complex_math_query` — markers صريحة تشمل الصيغ المعرَّفة
-   بـ«ال» درس ISS-109). **fail-open مطلق** + سقف `asyncio.wait_for` (افتراضي 20s،
-   `ORCHESTRATOR_REASONING_CONSULT_TIMEOUT`). تعطيل عبر
+   بـ«ال» درس ISS-109). **fail-open مطلق** + سقف `asyncio.wait_for` (افتراضي 35s —
+   بنشمارك حي أثبت MCTS ~23s؛ `ORCHESTRATOR_REASONING_CONSULT_TIMEOUT`). تعطيل عبر
    `ORCHESTRATOR_REASONING_CONSULT_ENABLED=0`. الـ hint يُنسج في المواضع الثلاثة
    (no-docs streaming / with-docs streaming / DSPy batch) بصيغة «تحقق منه ولا تنسخه حرفياً».
 6. **Metric بمُصدِر حقيقي (§6.21)**: `cogniforge_reasoning_consult_total{status}`
@@ -4211,3 +4211,32 @@ research :8007 + reasoning :8008) — نيوتن عبر الرسم الـ13-node
 `src/core/prom_metrics.py` (العدّاد)، `app/infrastructure/clients/orchestrator_client.py`
 (tier 2.5 injection + علم + empty-stream guard + precomputed fallback)،
 اختباران جديدان (31 اختبار).
+
+---
+
+## D-104 (2026-06-11) — Adaptive Pedagogy Layer + ISS-112 Question-Only Retrieval
+
+تفصيل كامل: CLAUDE.md §6.91. «المعيار الأعلى الاستقلال المعرفي» — إغلاق حلقة BKT.
+
+**القرارات:**
+1. **ISS-112 (الفضيحة الحية)**: طلب «السؤال رقم N فقط/بدون حل» يُقتطع حتمياً من النص
+   الرسمي (`detect_question_only_request` + `_extract_numbered_question`) عبر preempt
+   جديد بعد التحية وقبل المفهرَس — **صفر LLM، صفر هلوسة**. نية الشرح تهزم الاقتطاع.
+   البند المكرر عبر الأجزاء يُرجَع بكل مطابقاته مع عناوين أجزائها.
+2. **تصنيف BKT**: «الأعداد/الاعداد المركبة» (الصيغ المعرَّفة/الجمع) أُضيفت لـ
+   `classify_concept` — كانت تسقط لـ general (درس ISS-109 المتكرر).
+3. **D-104**: `AdaptivePedagogySkill` (الـ skill رقم 15) — حتمي بلا LLM وبلا I/O:
+   socratic (≥0.7) / guided (0.35–0.7) / scaffolded (<0.35 أو مجهول)، الحِمل المرتفع
+   يُخفِّض درجة، + كتالوج مفاهيم خاطئة لكل concept_id.
+4. **التوصيل**: `customer_chat._build_pedagogy_directive` (جلسة معزولة + سقف 2s +
+   fail-open، يقرأ `latest_mastery`/`interaction_count` الموجودتين) ⇒
+   `context["pedagogy_directive"]` ⇒ `orchestrator_client` يُسبقها في
+   `_effective_question` («[توجيه تربوي] ...») — تصل للـ orchestrator وكل الـ fallbacks؛
+   المسارات الحتمية (تحية/مفهرَس/سؤال-فقط/UI) لا تتلوث.
+5. **Doctrine**: `ADAPTIVE_PEDAGOGY_DOCTRINE` v1.0.0 (8 قواعد) + manifest + بوابة CI
+   مُقوّاة (`check_adaptive_pedagogy_wiring` — no-ZOMBIE نمط D-073).
+
+**الملفات:** `adaptive_pedagogy_skill.py` (جديد)، `exercise_retrieval.py` (كاشف+مُقتطِع)،
+`orchestrator_client.py` (preempt + حقن التوجيه + `_stream_markdown_typing` مُستخرَجة)،
+`customer_chat.py`، `bkt_engine.py`، `doctrine.py`، `registry.py`، `check_skills_doctrine.py`،
+اختباران جديدان (51 اختباراً).

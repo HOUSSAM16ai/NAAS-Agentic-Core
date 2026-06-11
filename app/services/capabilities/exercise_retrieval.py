@@ -1046,3 +1046,217 @@ def _detect_requested_part_from_question(question: str) -> str | None:
         if any(p in normalized for p in patterns):
             return part
     return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ISS-112 — «أعطني السؤال رقم N فقط» (question-only retrieval)
+#
+# الفضيحة المُشخَّصة حياً (2026-06-11): «اعطني السؤال رقم 2 ... فقط السؤال»
+# كان يُرجع التمرين كاملاً، أو أسوأ — حلاً كاملاً مُهلوَساً من LLM بنص مشوه.
+# الحل الحتمي: كشف نية «السؤال فقط» + اقتطاع السؤال المرقَّم من نص التمرين
+# الرسمي (بدون حل أصلاً — display_content) — صفر LLM، صفر هلوسة.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+
+_QUESTION_ONLY_MARKERS: tuple[str, ...] = (
+    "فقط",
+    "بدون حل",
+    "بدون الحل",
+    "بدون اجابة",
+    "بدون إجابة",
+    "بدون الاجابة",
+    "بدون الإجابة",
+    "نص السؤال",
+    "question only",
+    "without solution",
+)
+
+_QUESTION_REQUEST_VERBS: tuple[str, ...] = (
+    "اعطني",
+    "أعطني",
+    "اعطيني",
+    "أعطيني",
+    "اريد",
+    "أريد",
+    "هات",
+    "اكتب لي",
+    "ابغى",
+    "ابغي",
+)
+
+_ORDINAL_QUESTION_NUMBERS: tuple[tuple[str, int], ...] = (
+    ("الأول", 1),
+    ("الاول", 1),
+    ("الثاني", 2),
+    ("الثالث", 3),
+    ("الرابع", 4),
+    ("الخامس", 5),
+)
+
+_QUESTION_NUMBER_RE = re.compile(r"(?:السؤال|سؤال)\s*(?:رقم\s*)?(\d{1,2})")
+
+
+class QuestionOnlyDecision(RobustBaseModel):
+    """قرار «أعطني السؤال N فقط» — اقتطاع حتمي من النص الرسمي."""
+
+    recognized: bool = False
+    reason: str = ""
+    matched_entry: ExerciseEntry | None = None
+    question_number: int | None = None
+    sliced_content: str = ""
+
+
+def _extract_question_number(normalized: str) -> int | None:
+    """يستخرج رقم السؤال المطلوب («السؤال رقم 2» / «السؤال الثاني»)."""
+    text = normalized.translate(_ARABIC_INDIC_DIGITS)
+    m = _QUESTION_NUMBER_RE.search(text)
+    if m:
+        try:
+            n = int(m.group(1))
+            if 1 <= n <= 20:
+                return n
+        except ValueError:
+            pass
+    if "السؤال" in text or "سؤال" in text:
+        for word, n in _ORDINAL_QUESTION_NUMBERS:
+            if word in text:
+                return n
+    return None
+
+
+def _resolve_question_number_from_history(
+    history_messages: list[dict[str, str]] | None,
+) -> int | None:
+    """متابعة «اريد السؤال فقط» بلا رقم: آخر رقم سؤال ذكره الطالب في الحوار."""
+    if not history_messages:
+        return None
+    for msg in reversed(history_messages[-8:]):
+        if not isinstance(msg, dict) or msg.get("role") != "user":
+            continue
+        n = _extract_question_number(str(msg.get("content", "")).strip().lower())
+        if n is not None:
+            return n
+    return None
+
+
+def _extract_numbered_question(display_content: str, question_number: int) -> str | None:
+    """يقتطع السؤال المرقَّم N من نص التمرين (مع عنوان جزئه للسياق).
+
+    التمرين قد يحوي البند N في أكثر من جزء (مثل «2.» في (1) و (2) بتمرين
+    الاحتمالات) — نُرجِع كل المطابقات كلٌّ مع عنوان جزئها: صدقٌ أوضح من تخمين.
+    """
+    numbered_re = re.compile(r"^\s*(?:\*\*)?(\d{1,2})[.)ـ-]\s*")
+    part_header_re = re.compile(r"^\s*(?:\*\*\(|##+\s|\*\*[IV1-9])")
+
+    lines = display_content.splitlines()
+    current_part: str = ""
+    matches: list[str] = []
+    collecting: list[str] | None = None
+
+    def _flush() -> None:
+        nonlocal collecting
+        if collecting:
+            block = "\n".join(collecting).strip()
+            if block:
+                header = f"{current_part}\n\n" if current_part else ""
+                matches.append(header + block)
+        collecting = None
+
+    for raw_line in lines:
+        line = raw_line.translate(_ARABIC_INDIC_DIGITS)
+        m = numbered_re.match(line)
+        if m:
+            _flush()
+            if int(m.group(1)) == question_number:
+                collecting = [raw_line.rstrip()]
+            continue
+        if part_header_re.match(line):
+            _flush()
+            stripped = raw_line.strip()
+            if not stripped.startswith("## التمرين") and not stripped.startswith("# "):
+                current_part = stripped
+            continue
+        if collecting is not None:
+            collecting.append(raw_line.rstrip())
+    _flush()
+
+    if not matches:
+        return None
+    return "\n\n---\n\n".join(matches)
+
+
+def detect_question_only_request(
+    request: ExerciseRetrievalRequest,
+    history_messages: list[dict[str, str]] | None = None,
+) -> QuestionOnlyDecision:
+    """يكشف طلب «السؤال رقم N فقط / بدون حل» ويُجهِّز الاقتطاع الحتمي.
+
+    قواعد (ISS-112):
+    1. نية الشرح تُلغي — «اشرح السؤال 2» طلبُ شرحٍ لا استرجاع.
+    2. wants_only = marker صريح («فقط»/«بدون حل»/«نص السؤال») أو
+       (رقم سؤال + فعل طلب «اعطني/اريد/هات»).
+    3. الكيان: من السؤال (detect_exercise_retrieval) ثم من history
+       (الربط البنيوي D-102 — رسائل user/assistant فقط).
+    4. الرقم الغائب يُستكمل من آخر طلب مرقَّم في الحوار.
+    5. صفر LLM — المحتوى من النص الرسمي فقط (display = بدون حل أصلاً).
+    """
+    normalized = request.question.strip().lower()
+    if not normalized:
+        return QuestionOnlyDecision(reason="empty_question")
+
+    if _has_explanation_intent(normalized):
+        return QuestionOnlyDecision(reason="explanation_intent_wins")
+
+    question_number = _extract_question_number(normalized)
+    has_marker = any(marker in normalized for marker in _QUESTION_ONLY_MARKERS)
+    has_verb = any(verb in normalized for verb in _QUESTION_REQUEST_VERBS)
+    mentions_question = "سؤال" in normalized or "question" in normalized
+
+    wants_only = (has_marker and mentions_question) or (question_number is not None and has_verb)
+    if not wants_only:
+        return QuestionOnlyDecision(reason="no_question_only_intent")
+
+    if question_number is None:
+        question_number = _resolve_question_number_from_history(history_messages)
+
+    retrieval = detect_exercise_retrieval(request)
+    matched_entry = retrieval.matched_entry
+    if matched_entry is None:
+        matched_entry = _detect_entry_from_history(history_messages)
+    if matched_entry is None:
+        return QuestionOnlyDecision(reason="no_exercise_context", question_number=question_number)
+
+    raw_content = load_exercise_content(matched_entry)
+    if not raw_content:
+        return QuestionOnlyDecision(reason="content_file_not_found")
+
+    display_content = format_exercise_for_display(matched_entry, raw_content)
+
+    sliced: str | None = None
+    if question_number is not None:
+        sliced = _extract_numbered_question(display_content, question_number)
+    if sliced:
+        title_line = next(
+            (
+                ln.strip()
+                for ln in display_content.splitlines()
+                if ln.strip().startswith("## التمرين")
+            ),
+            "",
+        )
+        if title_line:
+            sliced = f"{title_line}\n\n{sliced}"
+        reason = "question_only_sliced"
+    else:
+        # لا رقم (أو فشل الاقتطاع) → النص الرسمي للأسئلة فقط (بدون حل)
+        sliced = display_content
+        reason = "question_only_full_display"
+
+    return QuestionOnlyDecision(
+        recognized=True,
+        reason=reason,
+        matched_entry=matched_entry,
+        question_number=question_number,
+        sliced_content=sliced,
+    )

@@ -220,6 +220,66 @@ async def _evaluate_and_emit_bkt(
         logger.warning("bkt_tracking_failed: %s", exc, exc_info=True)
 
 
+_PEDAGOGY_DIRECTIVE_TIMEOUT_S = 2.0
+
+
+async def _build_pedagogy_directive(
+    *,
+    user_id: int,
+    question: str,
+    history_messages: list[dict[str, str]],
+) -> str:
+    """D-104: يقرأ صورة المتعلم من BKT ويشتق توجيهاً تربوياً لعمق التدريس.
+
+    «المنسّق يملك صورة المتعلم» — لأول مرة قراءة الإتقان تقود سلوك المعلم:
+    سقراطي للمتمكن، سقالات كاملة للمبتدئ، والتقاط المفاهيم الخاطئة قبل أن
+    تتجذر. fail-open مطلق: أي تعذّر (DB/مهلة/تصنيف) ⇒ "" — التوجيه التربوي
+    لا يكسر دور الطالب أبداً (نفس عزل BKT — جلسة مستقلة + سقف زمني).
+    """
+    try:
+        from app.services.skills.adaptive_pedagogy_skill import (
+            PedagogyInput,
+            get_adaptive_pedagogy_skill,
+        )
+        from app.services.skills.bkt_engine import (
+            classify_concept_with_context,
+            estimate_cognitive_load,
+        )
+
+        # ISS-112: تصنيف واعٍ بالسياق — «اشرح السؤال 2» يلتصق بمفهوم الحوار
+        concept_id = classify_concept_with_context(question, history_messages)
+
+        async def _read_snapshot() -> tuple[float | None, int]:
+            async with async_session_factory() as ped_db:
+                service = BKTAnalyticsService(ped_db)
+                mastery = await service.latest_mastery(user_id, concept_id)
+                count = await service.interaction_count(user_id, concept_id)
+                return mastery, count
+
+        mastery, interaction_count = await asyncio.wait_for(
+            _read_snapshot(), timeout=_PEDAGOGY_DIRECTIVE_TIMEOUT_S
+        )
+        directive = get_adaptive_pedagogy_skill().derive(
+            PedagogyInput(
+                question=question,
+                concept_id=concept_id,
+                mastery=mastery,
+                interaction_count=interaction_count,
+                cognitive_load=estimate_cognitive_load(question),
+            )
+        )
+        logger.info(
+            "pedagogy_directive level=%s concept=%s mastery=%s",
+            directive.guidance_level,
+            concept_id,
+            f"{mastery:.2f}" if mastery is not None else "none",
+        )
+        return directive.directive_text
+    except Exception as exc:
+        logger.debug("pedagogy_directive_failed (fail-open): %s", exc)
+        return ""
+
+
 def get_chat_actor(
     current: CurrentUser = Depends(require_permissions(QA_SUBMIT)),
 ) -> CurrentUser:
@@ -795,6 +855,15 @@ async def chat_stream_ws(
             # كصفوف مستقلة فتبقى بعد إعادة الدخول.
             captured_ui_components: list[dict[str, object]] = []
 
+            # D-104: صورة المتعلم تقود عمق التدريس — التوجيه التربوي التكيفي
+            # يُقرأ من إتقان BKT (fail-open، سقف 2s، جلسة DB معزولة) ويُمرَّر
+            # عبر context ليُسبق في سؤال الـ LLM (orchestrator + fallbacks).
+            pedagogy_directive = await _build_pedagogy_directive(
+                user_id=actor.id,
+                question=question,
+                history_messages=history_messages,
+            )
+
             try:
 
                 async def stream_and_forward(
@@ -804,6 +873,7 @@ async def chat_stream_ws(
                     history=history_messages,
                     request_id=stream_request_id,
                     captured=captured_ui_components,
+                    pedagogy=pedagogy_directive,
                 ) -> None:
                     nonlocal pending_terminal_event
                     nonlocal complete_ai_response
@@ -817,6 +887,7 @@ async def chat_stream_ws(
                             "chat_scope": "customer",
                             "metadata": meta,
                             "compatibility_facade": True,
+                            "pedagogy_directive": pedagogy,
                         },
                     ):
                         # D-WS-FLAP-001: abort stream if client disconnected mid-turn.

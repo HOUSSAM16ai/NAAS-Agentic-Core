@@ -364,6 +364,15 @@ def _build_registry() -> SkillRegistry:
             consumed_by=("customer_chat._evaluate_and_emit_bkt",),
         ),
         SkillDescriptor(
+            name="adaptive_pedagogy",
+            summary="طبقة البيداغوجيا التكيفية — قراءة إتقان BKT تقود عمق التدريس (D-104).",
+            input_contract="PedagogyInput",
+            output_contract="PedagogyDirective",
+            primary_method="derive",
+            metrics_prefix="cogniforge_skill_pedagogy",
+            consumed_by=("customer_chat._build_pedagogy_directive",),
+        ),
+        SkillDescriptor(
             name="probability",
             summary="محرّك الاحتمالات الحتمي + الموجِّه التربوي (D-075/D-078).",
             input_contract="ProbabilityInput",

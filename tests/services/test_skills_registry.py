@@ -25,6 +25,7 @@ EXPECTED = {
     "math",
     "answer_quality",
     "bkt_engine",
+    "adaptive_pedagogy",
     "probability",
     "exercise_alignment",
     "output_firewall",
@@ -41,11 +42,11 @@ class TestRegistry:
     def test_registry_complete(self) -> None:
         reg = get_skill_registry()
         assert set(reg.names()) == EXPECTED
-        assert len(reg.list()) == 14
+        assert len(reg.list()) == 15
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 12
+        assert len(reg.by_status("ACTIVE")) == 13
         assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:

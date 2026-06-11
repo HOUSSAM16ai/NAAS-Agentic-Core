@@ -74,7 +74,24 @@ _CONCEPT_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
     ),
     ("derivatives", ("مشتق", "اشتقاق", "dérivée", "derivative", "نهاية المشتق")),
     ("limits", ("نهاية", "نهايات", "limite", "limit", "لوبيتال", "l'hopital", "lhopital")),
-    ("complex_numbers", ("عقدي", "عقدية", "complexe", "complex number", "عدد مركب", "z =")),
+    (
+        "complex_numbers",
+        (
+            "عقدي",
+            "عقدية",
+            "complexe",
+            "complex number",
+            "عدد مركب",
+            # ISS-112: الصيغ المعرَّفة/الجمع — «الأعداد المركبة» ليست سلسلة فرعية
+            # من «عدد مركب» (درس ISS-109: أداة التعريف تكسر مطابقة ثنائية الكلمات)
+            "أعداد مركبة",
+            "اعداد مركبة",
+            "الأعداد المركبة",
+            "الاعداد المركبة",
+            "العدد المركب",
+            "z =",
+        ),
+    ),
     (
         "numerical_functions",
         ("دالة", "دوال", "fonction", "function", "تغيرات", "مجال التعريف", "اتجاه التغير"),
@@ -98,6 +115,32 @@ def classify_concept(question: str) -> str:
         if any(kw in normalized for kw in keywords):
             return concept_id
     return "general"
+
+
+def classify_concept_with_context(
+    question: str,
+    history: list[dict[str, str]] | None = None,
+) -> str:
+    """تصنيف واعٍ بالسياق — يحل عمى المتابعات (ISS-112).
+
+    «اشرح السؤال رقم 2 من هذا التمرين» لا يحمل كلمة المفهوم ⇒ كان يسقط لـ
+    'general' فتُقرأ/تُكتب صفوف إتقان على المفهوم الخاطئ («تتبّع المعرفة:
+    general» في الفضيحة الحية). عند فشل تصنيف السؤال وحده، نُصنِّف آخر رسائل
+    الحوار (user/assistant فقط — درس D-102: رسائل system ليست دليلاً).
+    """
+    concept = classify_concept(question)
+    if concept != "general" or not history:
+        return concept
+    recent_parts: list[str] = []
+    for msg in history[-6:]:
+        if not isinstance(msg, dict) or msg.get("role") not in ("user", "assistant"):
+            continue
+        content = str(msg.get("content", "")).strip()
+        if content:
+            recent_parts.append(content[:600])
+    if not recent_parts:
+        return concept
+    return classify_concept(" ".join(reversed(recent_parts)))
 
 
 # ── تقدير الحِمل المعرفي ───────────────────────────────────────────────────────────
@@ -290,7 +333,8 @@ class BKTEngine:
     def evaluate(self, payload: BKTEvaluationInput) -> BKTEvaluation:
         """يُقيّم تفاعلاً ويُرجع تقييماً منظَّماً. لا يرفع استثناءات منطقية."""
         t0 = time.perf_counter()
-        concept_id = classify_concept(payload.question)
+        # ISS-112: تصنيف واعٍ بالسياق — المتابعات («اشرح السؤال 2») تلتصق بمفهوم الحوار
+        concept_id = classify_concept_with_context(payload.question, payload.history)
         cognitive_load = estimate_cognitive_load(payload.question)
         correct = infer_correctness_signal(payload.question)
         prior = payload.prior_mastery if payload.prior_mastery is not None else DEFAULT_P_L0
@@ -323,6 +367,7 @@ __all__ = [
     "BKTEvaluation",
     "BKTEvaluationInput",
     "classify_concept",
+    "classify_concept_with_context",
     "estimate_cognitive_load",
     "get_bkt_engine",
     "infer_correctness_signal",

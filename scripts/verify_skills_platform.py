@@ -47,8 +47,8 @@ async def main() -> None:
     # 1) Registry
     reg = get_skill_registry()
     names = reg.names()
-    if len(names) != 14:
-        _fail(f"expected 14 skills, got {len(names)}: {names}")
+    if len(names) != 15:
+        _fail(f"expected 15 skills, got {len(names)}: {names}")
     if len(reg.by_status("ACTIVE")) != 12:
         _fail(f"expected 12 ACTIVE, got {len(reg.by_status('ACTIVE'))}")
     if len(reg.by_status("FLAGGED")) != 2:

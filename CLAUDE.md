@@ -8379,7 +8379,8 @@ orchestrator graph (عند وجود exercise_content في الحالة):
 `_is_complex_math_query` (حتمي — markers صريحة: تكامل/اشتقاق/نهاية/برهن/أثبت/ادرس الدالة/
 متتالية/أعداد مركبة **بصيغها المعرَّفة بـ«ال» — درس ISS-109**/lim/integral/prove، طول ≥ 15)
 ⇒ `_consult_reasoning_agent` يستدعي `reasoning_client.reason_deeply` بسقف `asyncio.wait_for`
-(افتراضي 20s). الـ hint (answer + logic_trace، ≤ 4000 حرف) يُنسج في المواضع الثلاثة للـ prompt
+(افتراضي **35s** — بنشمارك حي: MCTS يستغرق ~23s لمسألة تكامل بالتجزئة؛ سقف 20s الأول كان
+يُهدر الانتظار ويُسقط الـ hint دائماً). الـ hint (answer + logic_trace، ≤ 4000 حرف) يُنسج في المواضع الثلاثة للـ prompt
 (no-docs streaming / with-docs streaming / DSPy batch) بصيغة
 «تحليل استدلالي مساعد (تحقق منه ولا تنسخه حرفياً)».
 
@@ -8426,3 +8427,83 @@ pytest tests/services/test_d103_explanation_via_orchestrator.py \
 |----------|-----------------|
 | D-102 | ISS-111 — تسميم history برسالة النظام |
 | **D-103** | **More-via-LangGraph: شرح التمارين عبر الرسم (حقن exercise_content) + استشارة reasoning-agent من Synthesizer (fail-open)** |
+
+### التحقق الحي بالأسرار الحقيقية (2026-06-11 — D-103 live E2E)
+
+OpenRouter حقيقي عبر المكدس الكامل (WS → monolith → orchestrator :8006 → reasoning :8008؛
+SQLite مشترك — Supabase مُتحقَّق قراءةً عبر جسر HTTPS لأن TCP محجوب في الـ sandbox):
+- **A**: «اشرح السؤال الأول» ⇒ `[D-103] injected_exercise chars=9670` +
+  `retrieval_source=injected_exercise` ⇒ شرح عربي حقيقي 2292 حرفاً (TTFT 2.7s) — لا envelope
+  ولا tags ولا اعتذار. **B**: `reasoning_consult success chars=2042` + metric. **C**: orchestrator
+  ميت ⇒ fallback محلي حقيقي 5368 حرفاً. ISS-110 حي 7/7 + دور admin + صفوف BKT.
+- **اكتشافان أصلحتهما الحياة**: سقف الاستشارة 20s→35s، وحارس **الهانغول الكوري** في المُطهِّر
+  (نموذج مجاني سرّب `앞에서먼저` في رد MODE_B حقيقي) — `sanitize_response` + `sanitize_chunk`.
+
+---
+
+## 6.91 Adaptive Pedagogy Layer + Question-Only Retrieval (2026-06-11, D-104 + ISS-112)
+
+> «المعيار الأعلى ليس الانبهار اللحظي، بل الاستقلال المعرفي» — فلسفة E-TAALEEM مُجسَّدة
+> هندسياً: **إغلاق حلقة BKT** (الكتابة → القراءة → تكييف عمق التدريس) + إنهاء فضيحة
+> «اعطني السؤال رقم 2» المُشخَّصة حياً. لا يُكسر بدون ADR.
+
+### ISS-112 — فضيحة «السؤال رقم 2» (مُشخَّصة من transcript حي)
+
+| العرَض الحي | الجذر | الإصلاح |
+|------------|-------|---------|
+| «اعطني السؤال رقم 2 فقط» ⇒ التمرين كاملاً | لا كاشف لنية «سؤال مرقَّم فقط» | `detect_question_only_request` + `_extract_numbered_question` (exercise_retrieval.py) — اقتطاع حتمي من النص الرسمي، **صفر LLM** |
+| «اعطني السؤال رقم 2» ⇒ **حل كامل مُهلوَس** بنص مشوه (Wege/substitue/apoptomorphic) | الطلب سقط لمسار LLM | preempt جديد في `chat_with_agent` بعد التحية وقبل المفهرَس (`_stream_question_only_response`، fallback_path=0.4) |
+| «تتبّع المعرفة: **general**» لسؤال أعداد مركبة | «الأعداد/الاعداد المركبة» ليست في keywords التصنيف (درس ISS-109 المتكرر: «ال» تكسر المطابقة ثنائية الكلمات) | الصيغ المعرَّفة/الجمع أُضيفت لـ `classify_concept` (bkt_engine.py) |
+
+**قواعد ISS-112 الدائمة**: (1) طلب سؤال مرقَّم = اقتطاع من النص الرسمي حصراً — ممنوع LLM.
+(2) نية الشرح («اشرح السؤال 2») تهزم الاقتطاع دائماً. (3) البند المكرر عبر الأجزاء يُرجَع
+بكل مطابقاته مع عناوين أجزائها (صدق أوضح من تخمين). (4) الرقم الغائب يُستكمل من آخر طلب
+مرقَّم في الحوار. (5) صفر قطع مبثوثة ⇒ المسار يتابع (fail-open).
+
+### D-104 — طبقة البيداغوجيا التكيفية (إغلاق حلقة BKT)
+
+الفجوة التي كانت تخون الفلسفة: `latest_mastery()` موجود لكن **لا شيء يقرأه ليتكيف** —
+المتمكن (0.9) والضائع (0.1) يتلقيان نفس أسلوب الشرح حرفياً.
+
+```
+customer_chat (المنسّق يملك صورة المتعلم):
+  _build_pedagogy_directive(user_id, question, history)
+    classify_concept ⇒ concept_id
+    BKTAnalyticsService.latest_mastery + interaction_count   (جلسة معزولة، سقف 2s)
+    AdaptivePedagogySkill.derive ⇒ PedagogyDirective
+  ⇒ context["pedagogy_directive"]
+orchestrator_client.chat_with_agent:
+  «[توجيه تربوي] {directive}» يُسبق في _effective_question (بعد MODE_B إن وُجد)
+  ⇒ يصل للـ orchestrator وكل مسارات الـ fallback — المسارات الحتمية لا تتلوث
+```
+
+**السياسة الحتمية** (`adaptive_pedagogy_skill.py`): mastery ≥ 0.7 ⇒ `socratic` (قُد بأسئلة،
+لا تكشف الحل)؛ 0.35–0.7 ⇒ `guided` (تلميح ثم خطوات بفجوات)؛ < 0.35 أو مجهول ⇒ `scaffolded`
+(شرح كامل بسقالات)؛ حِمل مرتفع ⇒ تخفيض درجة. + **كتالوج المفاهيم الخاطئة** لكل concept_id
+(تكامل الجداء = جداء التكاملين، ضرب الاحتمالات بلا استقلال...) ⇒ تصحيح «على مستوى الفكر
+لا الحكم». metrics: `cogniforge_skill_pedagogy_invocations_total{guidance_level}`.
+
+**القواعد الـ 8 الدائمة**: `ADAPTIVE_PEDAGOGY_DOCTRINE` v1.0.0 في `doctrine.py` (manifest
+`adaptive_pedagogy`) — أبرزها: يُبنى حصراً فوق `student_mastery_probability` (D-074)؛
+fail-open مطلق؛ عتبات حتمية (تغييرها = ترقية doctrine)؛ توجيه < 400 حرف D-067-safe؛
+الغاية الاستقلال المعرفي. **Registry: 15 skill** (كان 14) — بوابة
+`check_skills_doctrine.py` تحرس الـ manifest + التوصيل الفعلي (no-ZOMBIE نمط D-073).
+
+### قياس النجاح حياً
+
+```bash
+# الفضيحة مستحيلة بنيوياً:
+#   «اعطني السؤال رقم 2 ...» ⇒ log: question_only_preempt reason=question_only_sliced n=2
+# البيداغوجيا التكيفية:
+#   grep "pedagogy_directive level=" — scaffolded للمبتدئ، socratic بعد إتقان ≥ 0.7
+pytest tests/services/test_iss112_question_only.py tests/services/test_d104_adaptive_pedagogy.py --no-cov
+python scripts/fitness/check_skills_doctrine.py   # … Adaptive pedagogy wired (D-104)
+```
+
+### السلسلة الكاملة (D-103 → D-104)
+
+| Decision | المُصلَح/المُضاف |
+|----------|-----------------|
+| D-103 | شرح التمارين عبر الرسم + استشارة reasoning (مُتحقَّق حياً بالأسرار الحقيقية) |
+| **ISS-112** | **فضيحة «السؤال رقم 2»: اقتطاع حتمي صفر-LLM + إصلاح تصنيف BKT للأعداد المركبة** |
+| **D-104** | **طبقة البيداغوجيا التكيفية: قراءة إتقان BKT تقود عمق التدريس (socratic/guided/scaffolded) + كاشف المفاهيم الخاطئة — Skill رقم 15** |

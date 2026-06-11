@@ -412,6 +412,33 @@ BKT_COGNITIVE_DOCTRINE: Final[tuple[str, ...]] = (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Adaptive Pedagogy Doctrine (D-104) — إغلاق حلقة BKT: القراءة تقود السلوك
+# ─────────────────────────────────────────────────────────────────────────────
+ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: «المعيار الأعلى ليس الانبهار اللحظي، بل الاستقلال المعرفي» — E-TAALEEM.
+#: قوانين طبقة البيداغوجيا التكيفية: قراءة الإتقان تُحدِّد عمق التدريس.
+ADAPTIVE_PEDAGOGY_DOCTRINE: Final[tuple[str, ...]] = (
+    "عمق التدريس يتبع الإتقان: socratic عند mastery >= 0.7 (قُد بأسئلة، لا تكشف "
+    "الحل مباشرة)، guided في المنتصف (تلميح ثم خطوات بفجوات)، scaffolded تحت 0.35 "
+    "أو عند غياب البيانات (شرح كامل بسقالات).",
+    "يُبنى حصراً فوق student_mastery_probability من BKT (D-074) — ممنوع إعادة "
+    "اختراع تتبّع إتقان موازٍ.",
+    "fail-open مطلق: أي تعذّر (DB/تصنيف/مهلة) ينتج توجيهاً فارغاً — التوجيه "
+    "التربوي لا يكسر دور الطالب أبداً.",
+    "السياسة حتمية بعتبات ثابتة — نفس (mastery, load) تُنتج نفس المستوى دائماً؛ "
+    "تغيير العتبات يتطلب ترقية إصدار هذا الـ doctrine.",
+    "directive_text أقل من 400 حرف، عربي بسيط، بلا LaTeX وبلا رموز box-drawing "
+    "(قواعد D-067) — يُسبق في السؤال كتوجيه لا كـ system prompt.",
+    "الحِمل المعرفي المرتفع يُخفِّض درجة واحدة — «دع العقل يعمل، لكن لا تحرقه بالحمل الزائد».",
+    "التقاط المفهوم الخاطئ قبل أن يتجذر: markers حتمية لكل concept_id — التصحيح "
+    "«على مستوى الفكر لا على مستوى الحكم»، بلطف ودون لوم.",
+    "الغاية العليا الاستقلال المعرفي: المتمكن يُقاد لحلّه بنفسه — أن يصبح الطالب "
+    "أكبر من حاجته إلى الجواب.",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Probability Calculation Doctrine (D-075 — Protocol V14.0 / Generative UI)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -664,6 +691,15 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "orchestrator_client._build_probability_tree_props",
         ),
     },
+    "adaptive_pedagogy": {
+        "version": ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION,
+        "rules_count": len(ADAPTIVE_PEDAGOGY_DOCTRINE),
+        "consumed_by": (
+            "AdaptivePedagogySkill.derive",
+            "customer_chat._build_pedagogy_directive",
+            "orchestrator_client.chat_with_agent",
+        ),
+    },
     "probability_calculation": {
         "version": PROBABILITY_CALCULATION_DOCTRINE_VERSION,
         "rules_count": len(PROBABILITY_CALCULATION_DOCTRINE),
@@ -753,6 +789,11 @@ def get_skill_invocation_protocol_summary() -> str:
 def get_bkt_cognitive_summary() -> str:
     """يُرجِع doctrine الطبقة المعرفية BKT كنص قصير (للـ logs / prompts)."""
     return " | ".join(BKT_COGNITIVE_DOCTRINE)
+
+
+def get_adaptive_pedagogy_summary() -> str:
+    """ملخص doctrine البيداغوجيا التكيفية (D-104) — سطر واحد للاستهلاك البرمجي."""
+    return " | ".join(ADAPTIVE_PEDAGOGY_DOCTRINE)
 
 
 def get_probability_calculation_summary() -> str:

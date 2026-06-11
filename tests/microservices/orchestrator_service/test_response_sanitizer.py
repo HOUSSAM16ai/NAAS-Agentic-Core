@@ -67,6 +67,26 @@ class TestSanitizeForeignScripts:
         kana = sum(1 for c in out if 0x3040 <= ord(c) <= 0x30FF)
         assert kana == 0
 
+    def test_remove_korean_hangul(self):
+        """D-103 live finding: نموذج مجاني سرّب هانغول كورياً في رد MODE_B حقيقي."""
+        from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
+            sanitize_chunk,
+        )
+
+        text = "Category : 앞에서먼저 شرح الاحتمال"
+        out = sanitize_response(text, intent="chat")
+        hangul = sum(1 for c in out if 0xAC00 <= ord(c) <= 0xD7A3)
+        assert hangul == 0
+        assert "شرح الاحتمال" in out
+        # نفس الحارس على مسار streaming (sanitize_chunk)
+        chunk_out = sanitize_chunk("나는 الدالة")
+        assert sum(1 for c in chunk_out if 0xAC00 <= ord(c) <= 0xD7A3) == 0
+        assert "الدالة" in chunk_out
+
+    def test_arabic_and_latex_preserved_after_hangul_guard(self):
+        out = sanitize_response("الدالة g معرفة على R بـ g(x)=1+e^{-x}", intent="educational")
+        assert "الدالة" in out and "g(x)" in out
+
 
 class TestChatMetaNarration:
     """حذف meta-narration بالإنجليزية في بداية ردود chat فقط."""

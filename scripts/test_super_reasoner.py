@@ -50,27 +50,41 @@ async def main():
 
 # Pytest hook to skip if dependencies missing
 def test_super_reasoner_import():
-    import sys
-    from unittest.mock import MagicMock
+    """D-105 (ISS-113): الحقن مُسيَّج بـ patch.dict — يستعيد sys.modules كاملة عند الخروج.
 
-    # Mock llama_index modules if they don't exist
+    الحقن العاري السابق (sys.modules[...] = MagicMock() بلا تنظيف) كان يسمّم جلسة
+    pytest كاملة عند جمع هذا السكربت — ممنوع نهائياً (بوابة check_test_hygiene).
+    """
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    mock_modules: dict = {}
+    # Mock llama_index modules only if they don't exist (scoped to this test)
     if "llama_index" not in sys.modules:
         mock_llama_index = MagicMock()
-        sys.modules["llama_index"] = mock_llama_index
-        sys.modules["llama_index.core"] = mock_llama_index
-        sys.modules["llama_index.core.schema"] = mock_llama_index
-        sys.modules["llama_index.core.workflow"] = mock_llama_index
-        sys.modules["llama_index.core.vector_stores"] = mock_llama_index
-        sys.modules["llama_index.embeddings.huggingface"] = mock_llama_index
-        sys.modules["llama_index.vector_stores.supabase"] = mock_llama_index
-        sys.modules["llama_index.core.retrievers"] = mock_llama_index
+        mock_modules = dict.fromkeys(
+            (
+                "llama_index",
+                "llama_index.core",
+                "llama_index.core.schema",
+                "llama_index.core.workflow",
+                "llama_index.core.vector_stores",
+                "llama_index.embeddings.huggingface",
+                "llama_index.vector_stores.supabase",
+                "llama_index.core.retrievers",
+            ),
+            mock_llama_index,
+        )
 
-    try:
-        from microservices.reasoning_agent.src.workflow import SuperReasoningWorkflow  # noqa: F401
-    except ImportError:
-        pytest.skip("llama-index.core.workflow not available")
-    except Exception as e:
-        pytest.skip(f"Skipping due to import error: {e}")
+    with patch.dict(sys.modules, mock_modules):
+        try:
+            from microservices.reasoning_agent.src.workflow import (  # noqa: F401
+                SuperReasoningWorkflow,
+            )
+        except ImportError:
+            pytest.skip("llama-index.core.workflow not available")
+        except Exception as e:
+            pytest.skip(f"Skipping due to import error: {e}")
 
 
 if __name__ == "__main__":

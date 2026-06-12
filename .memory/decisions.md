@@ -4240,3 +4240,18 @@ research :8007 + reasoning :8008) — نيوتن عبر الرسم الـ13-node
 `orchestrator_client.py` (preempt + حقن التوجيه + `_stream_markdown_typing` مُستخرَجة)،
 `customer_chat.py`، `bkt_engine.py`، `doctrine.py`، `registry.py`، `check_skills_doctrine.py`،
 اختباران جديدان (51 اختباراً).
+
+## D-105 — Test-Hygiene Doctrine + CI Overhaul (2026-06-12, ISS-113)
+
+**القرار:** (1) `testpaths = tests scripts/ci microservices` — جمع صريح دائماً.
+(2) ممنوع كتابة sys.modules بقيمة Mock في أي ملف يجمعه pytest؛ polyfill مشروع =
+ModuleType مشروط بـ`find_spec is None`/`except ImportError`. (3) ممنوع os.environ writes
+على مستوى الوحدة خارج allowlist قابلة للتقليص فقط. (4) بوابة `check_test_hygiene.py`
+في guardrails تفرض 2+3. (5) fixtures تستعيد ما تحذفه؛ teardown_module الحاذف ممنوع.
+(6) subprocess بـ`sys.executable`. (7) `_global_state_isolation` autouse دفاع عميق.
+(8) jobs اختبار متوازية بدل xdist (الترتيب داخل-العملية مقصود) + frontend-tests job +
+concurrency لكل workflow. (9) قوائم deselect تتقلص فقط (40→17): 12 resilience أُعيدت
+كتابتها على عقد D-025/D-047/D-049، 11 isolation أُصلحت جذرياً.
+
+**البديل المرفوض:** pytest-xdist (يكسر الترتيب المقصود لعزل سجل جداول SQLAlchemy)؛
+إصلاح d103 بجعل الاختبار «محصناً» من Mock (يعالج العرض لا الجذر).

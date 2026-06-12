@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
-    """ينفذ أمرًا فرعيًا ويعيد النتيجة للتحقق من نجاح بوابات الحوكمة."""
+    """ينفذ أمرًا فرعيًا ويعيد النتيجة للتحقق من نجاح بوابات الحوكمة.
+
+    D-105 (ISS-113): ``"python"`` العارية تُستبدل بـ ``sys.executable`` — في البيئات
+    التي تكون فيها ``python`` إصداراً أقدم من 3.12، السكربتات التي تستخدم PEP 695
+    (``def inject[T]``) تفشل بـ SyntaxError زائف لا علاقة له بالحوكمة.
+    """
+    command = [sys.executable if part == "python" else part for part in command]
     return subprocess.run(command, cwd=REPO_ROOT, check=False, capture_output=True, text=True)
 
 

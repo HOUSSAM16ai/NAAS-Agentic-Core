@@ -8,6 +8,11 @@ on:
   #   branches: [ main ]
   workflow_dispatch:
 
+# D-105: يلغي التشغيلات البائتة عند دفع أحدث — يوفر دقائق runners
+concurrency:
+  group: omega_pipeline-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: write
   id-token: write  # Required for Workload Identity Federation

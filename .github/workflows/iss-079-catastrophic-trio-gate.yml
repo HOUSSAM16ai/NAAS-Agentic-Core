@@ -39,6 +39,11 @@ on:
       - "app/core/ai_config.py"
       - "microservices/orchestrator_service/src/core/ai_config.py"
 
+# D-105: يلغي التشغيلات البائتة عند دفع أحدث — يوفر دقائق runners
+concurrency:
+  group: iss-079-catastrophic-trio-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   PYTHON_VERSION: "3.12"
 

@@ -23,6 +23,11 @@ on:
       - "observability/native/prometheus.yml"
       - "tests/microservices/orchestrator_service/test_step10_*.py"
 
+# D-105: يلغي التشغيلات البائتة عند دفع أحدث — يوفر دقائق runners
+concurrency:
+  group: microservices-step10-postgres-checkpointer-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   PYTHON_VERSION: "3.12"
 

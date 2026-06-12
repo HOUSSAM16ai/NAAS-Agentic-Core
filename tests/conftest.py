@@ -235,6 +235,30 @@ def event_loop() -> asyncio.AbstractEventLoop:
         loop.close()
 
 
+@pytest.fixture(autouse=True)
+def _global_state_isolation() -> None:
+    """D-105 (ISS-113): عزل الحالة العالمية لكل اختبار — يقتل فئة بق «يمرّ منفرداً ويفشل
+    بترتيب الحزمة الكاملة».
+
+    - snapshot/restore كامل لـ ``os.environ``: أي تسريب env من اختبار (كتابة عارية بدون
+      monkeypatch) يُمحى قبل الاختبار التالي.
+    - عند رصد تسريب، يُصفَّر كاش ``get_settings`` (lru_cache) لأن قيمه اشتُقت من بيئة
+      ملوثة — الاختبار التالي يبني settings نظيفة من البيئة القانونية.
+    - الاسترجاع يحدث بعد teardown كل الـ fixtures الدالية الأخرى (autouse setup أولاً
+      ⇒ teardown أخيراً) فلا يتعارض مع monkeypatch.
+    """
+    env_snapshot = dict(os.environ)
+    yield
+    leaked = dict(os.environ) != env_snapshot
+    if leaked:
+        os.environ.clear()
+        os.environ.update(env_snapshot)
+        with suppress(Exception):
+            from app.core.settings.base import get_settings
+
+            get_settings.cache_clear()
+
+
 @pytest.fixture(scope="session")
 def static_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """بناء بنية ملفات ثابتة افتراضية لاختبارات الواجهة."""

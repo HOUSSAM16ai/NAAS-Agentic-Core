@@ -47,6 +47,11 @@ on:
       - "microservices/conversation_service/src/conversation_graph.py"
       - "app/services/skills/math_skill.py"
 
+# D-105: يلغي التشغيلات البائتة عند دفع أحدث — يوفر دقائق runners
+concurrency:
+  group: iss-074-latex-stream-normalizer-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   PYTHON_VERSION: "3.12"
 

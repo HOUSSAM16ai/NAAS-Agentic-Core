@@ -34,6 +34,11 @@ on:
       - "tests/microservices/conversation_service/**"
       - ".github/workflows/microservices-step12-conversation-service.yml"
 
+# D-105: يلغي التشغيلات البائتة عند دفع أحدث — يوفر دقائق runners
+concurrency:
+  group: microservices-step12-conversation-service-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   PYTHON_VERSION: "3.12"
   DATABASE_URL: "sqlite+aiosqlite:///:memory:"

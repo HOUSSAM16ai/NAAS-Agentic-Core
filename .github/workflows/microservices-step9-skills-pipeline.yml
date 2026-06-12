@@ -21,6 +21,11 @@ on:
       - "microservices/orchestrator_service/**"
       - "tests/microservices/orchestrator_service/test_step9_skills_pipeline.py"
 
+# D-105: يلغي التشغيلات البائتة عند دفع أحدث — يوفر دقائق runners
+concurrency:
+  group: microservices-step9-skills-pipeline-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
   pull-requests: write

@@ -1,25 +1,18 @@
+"""تحقق يدوي لمنطق SuperSearchOrchestrator (بـ mocks كاملة — بلا شبكة).
+
+D-105 (ISS-113): كل حقن sys.modules هنا مُسيَّج بـ ``patch.dict`` يستعيد الحالة
+الأصلية عند الخروج. الحقن العاري على مستوى الوحدة كان يسمّم جلسة pytest كاملة
+(mock.Document يتسرب لكل مستورد لاحق) — ممنوع نهائياً (بوابة check_test_hygiene).
+"""
+
 import asyncio
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add src to path
 sys.path.append(os.path.join(os.getcwd(), "microservices/research_agent/src"))
-
-# Mock dependencies that are not installed in the test environment or irrelevant
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-# Setup Mock Logger to print
-mock_logger = MagicMock()
-
-
-def log_side_effect(msg, *args):
-    print(f"[LOG] {msg} {args}")
-
-
-mock_logger.info.side_effect = log_side_effect
-mock_logger.warning.side_effect = log_side_effect
-mock_logger.error.side_effect = log_side_effect
 
 
 # Define dummy classes for isinstance checks
@@ -31,96 +24,111 @@ class MockFirecrawlApp:
     pass
 
 
-# Mock modules
-mock_modules = [
-    "langchain_community.utilities",
-    "langchain_core.prompts",
-    "langchain_openai",
-    "bs4",
-    "microservices.research_agent.src.logging",
-    "flupy",
-    "llama_index",
-    "llama_index.core",
-    "llama_index.core.schema",
-    "llama_index.core.retrievers",
-    "llama_index.core.indices",
-    "llama_index.core.vector_stores",
-    "llama_index.embeddings",
-    "llama_index.embeddings.huggingface",
-    "llama_index.retrievers.bm25",
-    "llama_index.vector_stores",
-    "llama_index.vector_stores.supabase",
-]
+def _build_mock_modules() -> dict:
+    """يبني خريطة الموديولات الوهمية — تُحقن فقط داخل سياق patch.dict."""
+    mock_logger = MagicMock()
 
-for mod in mock_modules:
-    sys.modules[mod] = MagicMock()
+    def log_side_effect(msg, *args):
+        print(f"[LOG] {msg} {args}")
 
-# Handle tavily and firecrawl specifically to provide classes
-mock_tavily = MagicMock()
-mock_tavily.TavilyClient = MockTavilyClient
-sys.modules["tavily"] = mock_tavily
+    mock_logger.info.side_effect = log_side_effect
+    mock_logger.warning.side_effect = log_side_effect
+    mock_logger.error.side_effect = log_side_effect
 
-mock_firecrawl = MagicMock()
-mock_firecrawl.FirecrawlApp = MockFirecrawlApp
-sys.modules["firecrawl"] = mock_firecrawl
+    mock_modules = {
+        name: MagicMock()
+        for name in (
+            "langchain_community.utilities",
+            "langchain_core.prompts",
+            "langchain_openai",
+            "bs4",
+            "microservices.research_agent.src.logging",
+            "flupy",
+            "llama_index",
+            "llama_index.core",
+            "llama_index.core.schema",
+            "llama_index.core.retrievers",
+            "llama_index.core.indices",
+            "llama_index.core.vector_stores",
+            "llama_index.embeddings",
+            "llama_index.embeddings.huggingface",
+            "llama_index.retrievers.bm25",
+            "llama_index.vector_stores",
+            "llama_index.vector_stores.supabase",
+        )
+    }
 
-# Patch get_logger to return our printing mock
-sys.modules["microservices.research_agent.src.logging"].get_logger.return_value = mock_logger
+    # tavily/firecrawl يحتاجان classes حقيقية لفحوصات isinstance
+    mock_tavily = MagicMock()
+    mock_tavily.TavilyClient = MockTavilyClient
+    mock_modules["tavily"] = mock_tavily
 
-from microservices.research_agent.src.search_engine.super_search import (
-    ResearchPlan,
-    SuperSearchOrchestrator,
-)
+    mock_firecrawl = MagicMock()
+    mock_firecrawl.FirecrawlApp = MockFirecrawlApp
+    mock_modules["firecrawl"] = mock_firecrawl
+
+    mock_modules["microservices.research_agent.src.logging"].get_logger.return_value = mock_logger
+    return mock_modules
 
 
 async def test_search_pipeline():
     print("Testing SuperSearchOrchestrator Logic (Mocked)...")
 
-    # Mock components
-    mock_llm = AsyncMock()
-    mock_search = MagicMock()
-    # Explicitly delete 'results' so hasattr(mock_search, 'results') is False
-    # This ensures the orchestrator doesn't treat it as DuckDuckGo wrapper
-    del mock_search.results
+    # الحقن مُسيَّج: patch.dict يلتقط snapshot لـ sys.modules ويستعيدها كاملة عند
+    # الخروج — أي استيراد يحدث داخل النافذة (بما فيه super_search) يُمحى أثره.
+    with patch.dict(sys.modules, _build_mock_modules()):
+        # إخلاء وحدات search_engine المخبأة (إن وُجدت) ليُعاد استيرادها تحت الـ mocks؛
+        # patch.dict يعيد النسخ الحقيقية المخبأة عند الخروج.
+        for cached in [
+            m for m in sys.modules if m.startswith("microservices.research_agent.src.search_engine")
+        ]:
+            sys.modules.pop(cached, None)
 
-    mock_scraper = MagicMock()
+        from microservices.research_agent.src.search_engine.super_search import (
+            ResearchPlan,
+            SuperSearchOrchestrator,
+        )
 
-    # Configure Scraper to be Async-friendly
-    # This avoids potential issues with asyncio.to_thread wrapping a MagicMock return value
-    mock_scraper.scrape = AsyncMock()
-    long_content = "A" * 200 + " Synthesized Answer Source Content"
-    mock_scraper.scrape.return_value = long_content
+        # Mock components
+        mock_llm = AsyncMock()
+        mock_search = MagicMock()
+        # Explicitly delete 'results' so hasattr(mock_search, 'results') is False
+        # This ensures the orchestrator doesn't treat it as DuckDuckGo wrapper
+        del mock_search.results
 
-    # Configure Search to be Async-friendly
-    mock_search.search = AsyncMock()
-    mock_search.search.return_value = [{"url": "http://test.com", "content": "test content"}]
+        mock_scraper = MagicMock()
 
-    # Setup orchestrator
-    orchestrator = SuperSearchOrchestrator(
-        llm=mock_llm, search_tool=mock_search, web_scraper=mock_scraper
-    )
+        # Configure Scraper to be Async-friendly
+        mock_scraper.scrape = AsyncMock()
+        long_content = "A" * 200 + " Synthesized Answer Source Content"
+        mock_scraper.scrape.return_value = long_content
 
-    # 1. Test Planning
-    print("- Testing Planning Phase...")
-    # Mock _create_plan to bypass LangChain internals and ensure planning succeeds
-    orchestrator._create_plan = AsyncMock(
-        return_value=ResearchPlan(sub_queries=["q1", "q2"], required_info=["info1"])
-    )
+        # Configure Search to be Async-friendly
+        mock_search.search = AsyncMock()
+        mock_search.search.return_value = [{"url": "http://test.com", "content": "test content"}]
 
-    # 2. Test Execution
-    print("- Testing Execution...")
+        # Setup orchestrator
+        orchestrator = SuperSearchOrchestrator(
+            llm=mock_llm, search_tool=mock_search, web_scraper=mock_scraper
+        )
 
-    # Mock synthesis response
-    # The orchestrator calls llm.ainvoke(prompt).content
-    mock_response = MagicMock()
-    mock_response.content = "Synthesized Answer"
-    mock_llm.ainvoke.return_value = mock_response
+        # 1. Test Planning
+        print("- Testing Planning Phase...")
+        orchestrator._create_plan = AsyncMock(
+            return_value=ResearchPlan(sub_queries=["q1", "q2"], required_info=["info1"])
+        )
 
-    result = await orchestrator.execute("test query")
+        # 2. Test Execution
+        print("- Testing Execution...")
+        mock_response = MagicMock()
+        mock_response.content = "Synthesized Answer"
+        mock_llm.ainvoke.return_value = mock_response
 
-    print(f"Result: {result}")
-    assert "Synthesized Answer" in result
-    print("✅ SuperSearchOrchestrator Pipeline Verified.")
+        result = await orchestrator.execute("test query")
+
+        print(f"Result: {result}")
+        assert "Synthesized Answer" in result
+        print("✅ SuperSearchOrchestrator Pipeline Verified.")
 
 
 if __name__ == "__main__":

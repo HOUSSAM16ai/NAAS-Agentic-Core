@@ -40,15 +40,28 @@ import pytest
 
 @pytest.fixture
 def isolated_helpers():
-    """يستورد helpers.py بشكل معزول لكل اختبار (لتنظيف الـ module-level cache)."""
-    # نُنظِّف أي state سابق
-    for key in ("SECRET_KEY", "DEV_SECRET_KEY_FILE"):
+    """يستورد helpers.py بشكل معزول لكل اختبار (لتنظيف الـ module-level cache).
+
+    D-105 (ISS-113): الـ fixture كانت تحذف ``SECRET_KEY``/``DEV_SECRET_KEY_FILE`` من
+    البيئة **بلا استرجاع** — تلوث يتسرب لبقية الجلسة فتسقط خدمات microservices
+    اللاحقة إلى مفتاحها الافتراضي بينما اختباراتها تسكّ التوكن بقيمة أخرى ⇒ 401.
+    الآن: snapshot قبل الحذف + استرجاع كامل (البيئة + cache الوحدة) في teardown.
+    """
+    saved_env = {key: os.environ.get(key) for key in ("SECRET_KEY", "DEV_SECRET_KEY_FILE")}
+    for key in saved_env:
         os.environ.pop(key, None)
 
     from app.core.settings import helpers
 
+    saved_cache = helpers._DEV_SECRET_KEY_CACHE
     helpers._DEV_SECRET_KEY_CACHE = None  # تنظيف الـ in-memory cache
-    return helpers
+    yield helpers
+    helpers._DEV_SECRET_KEY_CACHE = saved_cache
+    for key, value in saved_env.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
 
 
 def test_dev_secret_key_persists_across_restart(isolated_helpers, tmp_path: Path) -> None:
@@ -155,7 +168,7 @@ def test_key_file_permissions_600(isolated_helpers, tmp_path: Path) -> None:
     assert mode <= 0o644, f"Key file mode too permissive: {oct(mode)}"
 
 
-def teardown_module(_module):
-    """نظِّف أي env vars عُيِّنت أثناء الاختبارات."""
-    for key in ("SECRET_KEY", "DEV_SECRET_KEY_FILE"):
-        os.environ.pop(key, None)
+# D-105 (ISS-113): أُزيل ``teardown_module`` الذي كان يحذف SECRET_KEY/DEV_SECRET_KEY_FILE
+# من البيئة **بلا استرجاع** بعد كل teardowns — كان يلغي استعادة fixture ``isolated_helpers``
+# ويُسرّب SECRET_KEY=None لبقية الجلسة (401 في اختبارات microservices اللاحقة).
+# الاستعادة لكل-اختبار في الـ fixture أعلاه تغطي التنظيف كاملاً.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from types import ModuleType, SimpleNamespace
 
@@ -10,7 +11,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # Provide a lightweight redis.asyncio stub for environments without redis dependency.
-if "redis" not in sys.modules:
+# D-105 (ISS-113): الحارس الصحيح هو «غير قابل للتثبيت» (find_spec) لا «غير مستورد بعد»
+# (in sys.modules) — الصيغة القديمة كانت تُظلِّل redis الحقيقي لو لم يكن مستورداً بعد.
+if importlib.util.find_spec("redis") is None:
     redis_module = ModuleType("redis")
     redis_asyncio_module = ModuleType("redis.asyncio")
 

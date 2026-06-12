@@ -22,6 +22,11 @@ on:
       - "docs/ai_skills/bac-exercise-explanation.md"
       - "knowledge_base/**"
 
+# D-105: يلغي التشغيلات البائتة عند دفع أحدث — يوفر دقائق runners
+concurrency:
+  group: iss-052-bac-display-streaming-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   # ─── Job 1: Semantic Retrieval — 10 طرق استدعاء ──────────────────────────
   semantic-retrieval-gate:

@@ -16,6 +16,11 @@ on:
       - "app/services/capabilities/knowledge_index.py"
       - "docs/ai_skills/bac-exercise-explanation.md"
 
+# D-105: يلغي التشغيلات البائتة عند دفع أحدث — يوفر دقائق runners
+concurrency:
+  group: bac2016-knowledge-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   # ─── Job 1: Knowledge Index Integrity ────────────────────────────────────
   knowledge-index-integrity:

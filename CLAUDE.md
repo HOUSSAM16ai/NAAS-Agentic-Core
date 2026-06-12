@@ -8507,3 +8507,69 @@ python scripts/fitness/check_skills_doctrine.py   # … Adaptive pedagogy wired 
 | D-103 | شرح التمارين عبر الرسم + استشارة reasoning (مُتحقَّق حياً بالأسرار الحقيقية) |
 | **ISS-112** | **فضيحة «السؤال رقم 2»: اقتطاع حتمي صفر-LLM + إصلاح تصنيف BKT للأعداد المركبة** |
 | **D-104** | **طبقة البيداغوجيا التكيفية: قراءة إتقان BKT تقود عمق التدريس (socratic/guided/scaffolded) + كاشف المفاهيم الخاطئة — Skill رقم 15** |
+
+---
+
+## 6.92 Test-Hygiene Doctrine + CI Overhaul — sys.modules Poisoning Catastrophe (2026-06-12, ISS-113 / D-105)
+
+> **الكارثة**: الـ workflow الرئيسي «CI» أحمر منذ D-103 — اختبار واحد من 3445
+> (`test_d103_injected_context::test_retriever_returns_injected_doc_only`) يفشل بـ
+> `mock.Document` على CI بينما يمرّ محلياً. هذا القسم يحكم نظافة الاختبارات وبنية CI —
+> لا يُكسر بدون ADR.
+
+### الجذر (مُثبت بإعادة إنتاج محلية مطابقة 100%: نفس الاختبار، نفس الخطأ حرفياً)
+
+1. `pytest.ini` كان **بلا `testpaths`** ⇒ pytest يجمع من جذر المستودع ⇒ يلتقط
+   `scripts/test_*.py` (سكربتات تحقق يدوي).
+2. **`scripts/test_search_pipeline.py`** كان يحقن `sys.modules[m] = MagicMock()` **على
+   مستوى الوحدة — وقت الجمع** لـ21 موديولاً (llama_index.core.schema + tavily + bs4 +
+   langchain...) بلا تنظيف؛ و`scripts/test_super_reasoner.py` مثله داخل جسد الاختبار.
+3. ترتيب الجمع: `scripts/` قبل `tests/` ⇒ السم يُزرع أول الجلسة. `test_d103` أول مستورد
+   لـ`graph/search.py` ⇒ `from llama_index.core.schema import Document` يلتقط
+   `mock.Document` ⇒ الفشل. (محلياً كان يمرّ لأن التشغيلات استهدفت `tests/` فقط.)
+
+### اكتشافات أعمق أثناء الإصلاح (كلها أُصلحت بالجذر)
+
+- **`APP_DATABASE_URL` collection-time poison**: 3 ملفات WS tests كانت تكتب
+  `os.environ.setdefault("APP_DATABASE_URL", sqlite)` على مستوى الوحدة، و`base.py:78`
+  يفضّله على `DATABASE_URL` وقت التحقق ⇒ 7 اختبارات settings/kernel «تمرّ منفردة وتفشل
+  بالحزمة». أُزيل السطر من الملفات الثلاثة.
+- **`isolated_helpers` + `teardown_module` leak**: fixture في `test_secret_key_persistence`
+  كانت تحذف `SECRET_KEY` بلا استرجاع، و`teardown_module` يحذفه نهائياً بعد كل
+  الـteardowns ⇒ `SECRET_KEY=None` يتسرب للجلسة ⇒ 8 اختبارات microservices تسقط 401
+  (الخدمة تتراجع لمفتاحها الافتراضي بينما الاختبار يسكّ بـfallback آخر). أُصلحت الـfixture
+  (snapshot/استرجاع كامل) وحُذف teardown_module.
+- **`python` العارية في subprocess**: `test_phase0_governance` كان يستدعي `"python"`
+  (قد تكون 3.11) فتفشل سكربتات PEP 695 بـSyntaxError زائف. الآن `sys.executable`.
+- **حارس polyfill خاطئ**: `test_orchestrator_admin_tool_security` كان يستبدل redis بشرط
+  `"redis" not in sys.modules` (يُظلِّل redis الحقيقي غير المستورد بعد) — الصحيح
+  `importlib.util.find_spec("redis") is None`.
+
+### القواعد الدائمة (D-105 — لا تُكسر بدون ADR)
+
+1. **`testpaths = tests scripts/ci microservices` في pytest.ini** — جمع صريح أبداً.
+   سكربتات التحقق اليدوي في `scripts/` لا تُجمع.
+2. **ممنوع أي كتابة `sys.modules` بقيمة Mock** في ملف يجمعه pytest — تُظلِّل موديولات
+   حقيقية وتسمّم الجلسة. polyfill مشروع = `types.ModuleType` مشروط بغياب التبعية
+   (`find_spec is None` أو `except ImportError`).
+3. **ممنوع `os.environ[...] =` على مستوى الوحدة** خارج allowlist موثَّقة قابلة للتقليص فقط.
+4. **بوابة `scripts/fitness/check_test_hygiene.py`** (AST) تفرض 2+3 في job guardrails —
+   لا تُعطَّل ولا يُضاف للـallowlist بدون مراجعة.
+5. **fixtures التي تحذف/تعدّل env يجب أن تستعيد** (snapshot في setup، استرجاع في teardown).
+   `teardown_module` الذي يحذف env بلا استرجاع ممنوع.
+6. **subprocess في الاختبارات يستدعي `sys.executable`** لا `"python"` العارية.
+7. **fixture `_global_state_isolation`** (autouse في tests/conftest.py) تستعيد os.environ
+   وتصفّر كاش settings عند رصد تسريب — دفاع عميق، لا رخصة للتسريب.
+8. **بنية CI**: جوبا اختبار متوازيان (`test-monolith` بالتغطية + `test-microservices`) —
+   **xdist غير آمن** (الترتيب داخل-العملية مقصود لعزل سجل الجداول). + job
+   `frontend-tests` (8 ملفات node حتمية). + `concurrency` إلزامي في كل workflow جديد.
+9. **قوائم deselect تتقلص فقط**: أي إدخال جديد يتطلب إثبات «أحمر على main» + تعليقاً
+   يشرح الجذر. D-105 قلّصها من 40 إلى 17 (12 resilience أُعيدت كتابتها على العقد الحالي
+   + 11 isolation أُصلحت جذرياً).
+
+### السلسلة الكاملة (D-104 → D-105)
+
+| Decision | المُصلَح/المُضاف |
+|----------|-----------------|
+| D-104 | طبقة البيداغوجيا التكيفية + ISS-112 |
+| **D-105** | **ISS-113 — تسميم sys.modules وقت الجمع + إصلاح 23 اختباراً مستثنى بالجذر + بوابة نظافة + تقسيم jobs + frontend-tests + concurrency×38** |

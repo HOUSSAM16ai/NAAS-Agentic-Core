@@ -18,6 +18,11 @@ on:
     branches:
       - main
 
+# D-105: يلغي التشغيلات البائتة عند دفع أحدث — يوفر دقائق runners
+concurrency:
+  group: iss080-conversation-spinner-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   spinner-regression:
     name: ISS-080 spinner regression

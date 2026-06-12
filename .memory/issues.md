@@ -4051,3 +4051,31 @@ keywords التصنيف تفتقد الصيغ المعرَّفة/الجمع («�
 **الإصلاح (D-104 commit):** كاشف + مُقتطِع حتمي + preempt صفر-LLM + إصلاح keywords.
 تحقق حي على العبارات الحرفية للفضيحة: 51/51 اختبار + سيناريو WS حي.
 التفصيل: CLAUDE.md §6.91.
+
+## ISS-113 — CI أحمر: تسميم sys.modules وقت الجمع (mock.Document) + 4 فئات عزل (2026-06-12, D-105)
+
+**العرض:** workflow «CI» أحمر منذ D-103: `test_d103_injected_context::test_retriever_returns_injected_doc_only`
+يفشل على CI بـ`<MagicMock name='mock.Document().text'>` ويمرّ محلياً. إعادة إنتاج محلية
+مطابقة 100% (`python -m pytest` بلا مسارات): `1 failed, 3444 passed, 41 deselected`.
+
+**الجذور (5 — كلها أُصلحت بالجذر):**
+1. `pytest.ini` بلا `testpaths` ⇒ يجمع `scripts/test_*.py` ⇒ `scripts/test_search_pipeline.py`
+   يحقن MagicMock في sys.modules لـ21 موديولاً **وقت الجمع** (llama/tavily/bs4/langchain) بلا
+   تنظيف + `scripts/test_super_reasoner.py` مثله داخل الاختبار ⇒ `graph/search.py` يلتقط
+   `mock.Document` عند أول استيراد (في d103).
+2. 3 ملفات WS tests تكتب `APP_DATABASE_URL=sqlite` setdefault على مستوى الوحدة +
+   `base.py:78` يفضّله وقت التحقق ⇒ 7 فشل settings/kernel «full-suite only».
+3. `isolated_helpers` (test_secret_key_persistence) تحذف SECRET_KEY بلا استرجاع +
+   `teardown_module` يحذفه بعد كل الـteardowns ⇒ SECRET_KEY=None للجلسة ⇒ 8× 401 في
+   microservices tests (الخدمة على المفتاح الافتراضي، الاختبار على fallback آخر).
+4. `test_phase0_governance` يستدعي `"python"` العارية في subprocess ⇒ SyntaxError زائف
+   على PEP 695 في البيئات ذات python≠3.12.
+5. حارس polyfill خاطئ في `test_orchestrator_admin_tool_security`: `"redis" not in
+   sys.modules` يُظلِّل redis الحقيقي غير المستورد — الصحيح `find_spec is None`.
+
+**الإصلاح (D-105):** testpaths صريح + تسييج patch.dict للسكربتين + إزالة سموم
+APP_DATABASE_URL + استرجاع كامل في isolated_helpers + حذف teardown_module + sys.executable
++ إصلاح الحارس + fixture عزل autouse `_global_state_isolation` + **بوابة
+`check_test_hygiene.py`** (AST، في guardrails) + إعادة كتابة 12 اختبار resilience على
+العقد الحالي + ترقية ci.yml (تقسيم test إلى monolith/microservices + frontend-tests +
+concurrency في 38 workflow). قوائم deselect: 40 → 17.

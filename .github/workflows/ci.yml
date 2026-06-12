@@ -121,9 +121,29 @@ jobs:
           python scripts/fitness/check_no_app_imports_in_microservices.py --strict
           python scripts/fitness/check_route_registry_parity.py
           python scripts/fitness/check_tracing_gate.py
+          # D-105 (ISS-113): بوابة نظافة الاختبارات — تمنع تسميم sys.modules/os.environ
+          # على مستوى الوحدة في أي ملف يجمعه pytest (فئة البق التي أسقطت CI).
+          python scripts/fitness/check_test_hygiene.py
 
-  test:
-    name: test
+  # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
+  # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders
+  # microservices tests last *within one process* (SQLAlchemy table-registry
+  # isolation), which makes pytest-xdist unsafe. Job-level splitting is the
+  # safe parallelism: each job is a fresh process with its own ordering.
+  #
+  # Deselect-list history: the original 40-entry PRE_EXISTING_FAILURES list
+  # was burned down in D-105 —
+  #   * 12 × test_orchestrator_client_resilience — REWRITTEN onto the current
+  #     chat_with_agent contract (D-025/D-047/D-049 era) and re-enabled.
+  #   * 11 × isolation failures (test_settings, kernel CORS, settings_refactor,
+  #     phase0_governance) — ROOT-CAUSE FIXED (APP_DATABASE_URL collection-time
+  #     poison, isolated_helpers env restore, teardown_module leak,
+  #     sys.executable in subprocess gates) and re-enabled.
+  # The remaining entries are contract-drift rewrites tracked as follow-up.
+  # Do NOT widen these lists silently — every entry must be a pre-existing
+  # failure that has been red on main, not a regression from a later PR.
+  test-monolith:
+    name: test-monolith
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -146,54 +166,75 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
-      - name: Run tests
+      - name: Run monolith tests (tests/ minus microservices + scripts/ci)
         shell: bash
         run: |
           set -euo pipefail
-          run_pytest() {
-            set +e
-            "$@"
-            pytest_exit_code=$?
-            set -e
-
-            if [ "$pytest_exit_code" -eq 5 ]; then
-              echo "::warning::pytest collected no tests; treating as a non-blocking skip."
-              return 0
-            fi
-
-            return "$pytest_exit_code"
-          }
-
-          # ────────────────────────────────────────────────────────────────
-          # Pre-existing test failures on `main` (not introduced by this PR).
-          # Tracked in PR #2076 / claude/fix-github-actions-OA1Km.
-          #
-          # These 26 tests assert against an *older* shape of
-          # `OrchestratorClient.chat_with_agent` and the conversation /
-          # state-graph contract. The application code moved on:
-          #
-          #   * D-025 changed the default ChatRoutingPolicy target from
-          #     `/agent/chat` → `/api/chat/messages`.
-          #   * D-047 / D-048 made every fallback stream tokens through
-          #     `assistant_delta` envelopes instead of returning raw strings.
-          #   * D-049 / D-052 added preempt branches for indexed retrieval
-          #     and explanation-with-context.
-          #   * Step 12 (D-042) replaced the conversation-service stub
-          #     with a real LangGraph Skill.
-          #
-          # The tests below have not been updated yet and they have been
-          # red on `main` since 2026-05-15. Deselect them here so the
-          # rest of the suite (2520+ passing tests) can gate green; track
-          # the rewrite as follow-up work. Do NOT widen this list silently
-          # — every entry must be a pre-existing failure that has been
-          # red on main, not a regression introduced by a later PR.
-          # ────────────────────────────────────────────────────────────────
-          PRE_EXISTING_FAILURES=(
+          MONOLITH_DESELECTS=(
+            # Contract-drift rewrites tracked as follow-up (red on main).
             --deselect tests/architecture/test_governance.py::test_governance_contracts_any
             --deselect tests/integration/test_import_conversation.py::test_import_new_conversation_returns_imported
             --deselect tests/integration/test_import_conversation.py::test_import_twice_returns_already_exists
             --deselect tests/integration/test_import_conversation.py::test_import_wrong_user_id_returns_not_found
             --deselect tests/services/chat/agents/test_socratic_tutor_comprehensive.py::test_assess_understanding_success
+            # Teardown-only failure: the test itself PASSES but the
+            # SQLAlchemy/aiosqlite connection cleanup races with a daemon
+            # thread on test exit. Tracked as follow-up.
+            --deselect tests/test_admin_chat_error_handling.py::test_chat_error_handling_with_auth_but_service_error
+            # Live WebSocket integration tests gated by a module-level
+            # skipif(<server not running>) — they can never run in CI and the
+            # strict no-skip policy in conftest would fail the session.
+            --ignore=tests/integration/test_bac_exercise_websocket.py
+          )
+          # D-105: أرضية التغطية — قياس محلي 2026-06-12: 68.68% على app/.
+          # الأرضية 67% (هامش أمان 1.7pt لتباين البيئات). ratchet فقط — لا تخفّضها.
+          python -m pytest tests scripts/ci -v \
+            --ignore=tests/microservices \
+            --cov=app \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing \
+            --cov-fail-under=67 \
+            --durations=10 \
+            --tb=short \
+            "${MONOLITH_DESELECTS[@]}"
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+  test-microservices:
+    name: test-microservices
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      SECRET_KEY: test-secret-key-for-ci-pipeline-secure-length
+      ENVIRONMENT: testing
+      LLM_MOCK_MODE: "1"
+      SUPABASE_URL: https://dummy.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
+      RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - uses: ./.github/actions/setup
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+      - name: Run microservices tests (tests/microservices + microservices/*/tests)
+        shell: bash
+        run: |
+          set -euo pipefail
+          MICROSERVICES_DESELECTS=(
+            # Contract-drift rewrites tracked as follow-up (red on main).
             --deselect tests/microservices/orchestrator_service/test_routing.py::test_general_knowledge_node_uses_resolved_state_query
             --deselect tests/microservices/test_agent_chat_contract.py::test_agent_chat_admin_path_forwards_aligned_admin_state
             --deselect tests/microservices/test_conversation_service_capabilities.py::test_conversation_health_declares_stub_by_default
@@ -203,89 +244,44 @@ jobs:
             --deselect tests/microservices/test_orchestrator_chat_stategraph.py::test_chat_http_messages_uses_stategraph
             --deselect tests/microservices/test_orchestrator_chat_stategraph.py::test_chat_ws_customer_uses_stategraph
             --deselect tests/microservices/test_orchestrator_chat_stategraph.py::test_chat_ws_admin_uses_stategraph
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_user_facing_error_is_sanitized
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_local_fallback_still_works_for_file_count
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_local_fallback_supports_generic_extension_file_count
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_local_retrieval_fallback_for_exercise_request
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_local_general_chat_fallback_when_specialized_fallbacks_miss
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_local_fallback_can_be_disabled_with_flag
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_local_fallback_supports_csv_and_json_file_count
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_unsupported_extension_returns_sanitized_error_when_count_fails
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_multi_target_candidates_disabled_by_default
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_multi_target_candidates_enabled_only_in_breakglass
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_file_intelligence_fallback_concurrency_smoke
-            --deselect tests/microservices/test_orchestrator_client_resilience.py::test_exercise_retrieval_fallback_concurrency_smoke
-            # Teardown-only failure: the test itself PASSES but the
-            # SQLAlchemy/aiosqlite connection cleanup races with a
-            # daemon thread on test exit ("Event loop is closed" →
-            # "no active connection" in teardown). Not introduced by
-            # this PR. Tracked as follow-up.
-            --deselect tests/test_admin_chat_error_handling.py::test_chat_error_handling_with_auth_but_service_error
-            # The repo-level `conftest.py::pytest_sessionfinish` enforces
-            # a strict-quality policy that fails the entire pytest run
-            # when ANY test is skipped (even legitimately). The six
-            # tests in `tests/integration/test_bac_exercise_websocket.py`
-            # are *live* WebSocket integration tests gated by a
-            # module-level `pytestmark = pytest.mark.skipif(<server not
-            # running>)` — they can never run in CI. `--ignore` keeps
-            # pytest from collecting them at all, so the strict policy
-            # never sees a `skipped` entry from this file. The tests
-            # remain runnable locally against a live server.
-            --ignore=tests/integration/test_bac_exercise_websocket.py
-            # TestLiveWebSocketRouting: live tests that connect to localhost:8000
-            # and localhost:8003. In CI no services are running so they call
-            # pytest.skip() internally — which triggers the strict-quality policy.
-            # Deselect them here; they remain runnable locally against a live stack.
+            # Live tests that connect to localhost:8000/8003 — no services run
+            # in CI; they call pytest.skip() internally which trips the strict
+            # no-skip policy. They remain runnable locally against a live stack.
             --deselect tests/microservices/test_websocket_gateway_routing.py::TestLiveWebSocketRouting::test_gateway_ws_returns_101
             --deselect tests/microservices/test_websocket_gateway_routing.py::TestLiveWebSocketRouting::test_conversation_service_ws_returns_101
             --deselect tests/microservices/test_websocket_gateway_routing.py::TestLiveWebSocketRouting::test_gateway_ws_not_404
-            # ────────────────────────────────────────────────────────────────
-            # Pre-existing, red-on-`main` test-ISOLATION failures (NOT this PR).
-            #
-            # Proven by running the identical full pytest job (same --deselect
-            # list + ci.yml env) against `origin/main` (915daf6): main = 32
-            # failed, this branch = 11 failed. These 11 are the common residue;
-            # the other 21 (the tests/api/* WS-auth tests) were *fixed* by this
-            # branch (ISS-103 / D-WS-CONN-002). The 11 below cover code this
-            # branch never touches (`git diff main...HEAD`) — settings/kernel/
-            # fitness — and they PASS in isolation but FAIL in full-suite order
-            # (a global-state/env leak from some earlier-running test). They are
-            # genuine pre-existing test-isolation bugs, tracked as follow-up.
-            # Per this list's rule: every entry is red on main, not a regression.
-            # ────────────────────────────────────────────────────────────────
-            --deselect tests/config/test_settings.py::test_database_url_fixer_handles_duplicates_gracefully
-            --deselect tests/config/test_settings.py::test_database_url_fixer_handles_simple_sslmode
-            --deselect tests/config/test_settings.py::test_database_url_upgrades_postgres_protocol
-            --deselect tests/config/test_settings.py::test_database_url_non_postgres_left_untouched
-            --deselect tests/config/test_settings.py::test_database_url_sslmode_disable_converts_to_ssl
-            --deselect tests/core/test_kernel_comprehensive.py::TestRealityKernel::test_cors_logic_dev_vs_prod
-            --deselect tests/core/test_settings_refactor.py::test_base_service_settings_defaults
-            --deselect tests/fitness/test_phase0_governance.py::test_f1_no_app_imports_strict_mode_passes
-            --deselect tests/fitness/test_phase0_governance.py::test_f3_tracing_gate_baseline_passes
-            --deselect tests/fitness/test_phase0_governance.py::test_scoreboard_ignores_dunder_service_dirs
-            --deselect tests/fitness/test_phase0_governance.py::test_scoreboard_generation_succeeds
           )
+          python -m pytest tests/microservices microservices -v \
+            --durations=10 \
+            --tb=short \
+            "${MICROSERVICES_DESELECTS[@]}"
 
-          if python -m pytest --help | grep -q -- "--cov"; then
-            run_pytest python -m pytest -v \
-              --cov=app \
-              --cov-report=xml:coverage.xml \
-              --cov-report=term-missing \
-              --durations=10 \
-              --tb=short \
-              "${PRE_EXISTING_FAILURES[@]}"
-          else
-            echo "::warning::pytest-cov plugin is unavailable; running test suite without coverage."
-            run_pytest python -m pytest -v --durations=10 --tb=short \
-              "${PRE_EXISTING_FAILURES[@]}"
-          fi
-      - name: Upload coverage artifact
-        if: always()
-        uses: actions/upload-artifact@v4
+  # ── Frontend regression tests (D-105) ─────────────────────────────────────
+  # 8 deterministic node test files (zero npm dependencies — pure source
+  # inspection + behavior replicas). Previously they only ran inside 3
+  # issue-specific gates; now they gate every PR.
+  frontend-tests:
+    name: frontend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: coverage-report
-          path: coverage.xml
-          retention-days: 7
+          node-version: "20"
+      - name: Run frontend node tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          for f in frontend/tests/*.test.mjs; do
+            echo "── node $f"
+            if ! node "$f"; then
+              echo "❌ FAILED: $f"
+              failed=1
+            fi
+          done
+          exit "$failed"
 
   # ── Microservices Skills Structural Check ─────────────────────────────────
   skills-structural:
@@ -356,7 +352,16 @@ jobs:
   required-ci:
     name: required-ci
     runs-on: ubuntu-latest
-    needs: [lint, contracts, guardrails, test, skills-structural]
+    needs:
+      [
+        lint,
+        contracts,
+        guardrails,
+        test-monolith,
+        test-microservices,
+        frontend-tests,
+        skills-structural,
+      ]
     if: always() && !cancelled()
     steps:
       - name: Evaluate required checks
@@ -366,7 +371,9 @@ jobs:
           echo "lint=${{ needs.lint.result }}"
           echo "contracts=${{ needs.contracts.result }}"
           echo "guardrails=${{ needs.guardrails.result }}"
-          echo "test=${{ needs.test.result }}"
+          echo "test-monolith=${{ needs.test-monolith.result }}"
+          echo "test-microservices=${{ needs.test-microservices.result }}"
+          echo "frontend-tests=${{ needs.frontend-tests.result }}"
           echo "skills-structural=${{ needs.skills-structural.result }}"
 
           # Allow skipped as a valid success state alongside success
@@ -377,7 +384,9 @@ jobs:
           if ! isValid "${{ needs.lint.result }}" || \
              ! isValid "${{ needs.contracts.result }}" || \
              ! isValid "${{ needs.guardrails.result }}" || \
-             ! isValid "${{ needs.test.result }}" || \
+             ! isValid "${{ needs.test-monolith.result }}" || \
+             ! isValid "${{ needs.test-microservices.result }}" || \
+             ! isValid "${{ needs.frontend-tests.result }}" || \
              ! isValid "${{ needs.skills-structural.result }}"; then
             echo "❌ One or more required checks failed"
             exit 1
@@ -386,4 +395,5 @@ jobs:
           echo "✅ All required checks passed"
           echo ""
           echo "Skills Architecture: ✅ Verified"
+          echo "Frontend: 8 node regression suites ✅"
           echo "Microservices: 8 services | Prometheus: ≥12 targets | Grafana: ≥16 dashboards"

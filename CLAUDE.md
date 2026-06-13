@@ -8656,7 +8656,8 @@ Codespaces** بالأسرار الحقيقية — الـ sandbox بارد وي�
 |-----|--------|--------|
 | **P4 — LearningPathSkill** | D-111 | ✅ **مُنفَّذ ومُتحقَّق** — Skill #17 حتمي فوق BKT، موصول حيّاً في customer_chat، يبثّ learning_path_card (مُسجَّل + محفوظ)، frontend + CSS + doctrine + gate + tests |
 | **P1 — Orchestrator واعٍ بالإتقان** | D-108 | مُصمَّم — D-104 يثبّت `pedagogy_directive` في السؤال نحو الـ orchestrator؛ الترقية البنيوية (AgentState.cognitive_context + قراءة SupervisorNode/SynthesizerNode) تحتاج تشغيل الـ orchestrator للتحقق الحي (Codespaces) |
-| **P3 — Real Synthesis** | D-110 | مُصمَّم — استبدال `_compose_answer` (أول-ناجح) بتركيب مرتّب + composition_confidence؛ يحتاج تشغيل skills_pipeline للتحقق |
+| **P3 — Real Synthesis** | D-110 | ✅ **مُنفَّذ ومُتحقَّق حياً** — `_compose_answer` تركيب مرتّب (reasoning+research مدموجان) + `composition_confidence ∈ [0,1]` + مقياس Prometheus `cogniforge_pipeline_composition_confidence`؛ مكشوف في `/compose` (مُتحقَّق حياً) + 7 اختبارات |
+| **S1 — Mandatory Backbone (D-112)** | D-112 | ✅ **مُنفَّذ ومُتحقَّق حياً** — hard-fail `ORCHESTRATOR_REQUIRED` بلا fallback محلي (REQUIRE_ORCHESTRATOR=1)؛ orchestrator UP→إجابة، DOWN→خطأ صريح صفر deltas؛ §6.96 |
 | **P2 — CritiqueNode** | D-109 | مُصمَّم — عقدة تحقق ذاتي بعد Synthesizer (fail-open، علم بيئي)؛ تحتاج الرسم الـ13-node حيّاً للتحقق |
 
 ### قاعدة الصدق (runtime-truth)

@@ -2161,6 +2161,51 @@ class OrchestratorClient:
             "Failed to chat with agent across all endpoints", extra={"diagnostic": diagnostic}
         )
 
+        # ─────────────────────────────────────────────────────────────────────
+        # D-112 (2026-06-13): العمود الفقري الإلزامي — الخدمات المصغرة + الرسم
+        # الـ13-node هي القلب الوحيد. عند تعذّرها لا نسقط بصمت إلى local_graph
+        # الضعيف؛ بل نُصدِر خطأً صريحاً («runtime truth over synthetic certainty»).
+        # علم REQUIRE_ORCHESTRATOR=1 افتراضي مُفعَّل؛ =0 يُعيد الـ fallback القديم
+        # (rollback بلا deploy — نمط D-025).
+        # ─────────────────────────────────────────────────────────────────────
+        _require_orch = os.environ.get("REQUIRE_ORCHESTRATOR", "1").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if _require_orch:
+            logger.error(
+                "orchestrator_required_hard_fail",
+                extra={"request_id": request_id, "diagnostic": diagnostic},
+            )
+            with contextlib.suppress(Exception):
+                obs.record_metric(
+                    "routing.target.total",
+                    1.0,
+                    labels={"target": "orchestrator_required_error"},
+                )
+            if _root_ctx:
+                with contextlib.suppress(Exception):
+                    obs.end_span(
+                        _root_ctx.span_id,
+                        status="ERROR",
+                        metrics={
+                            "duration_ms": (time.perf_counter() - _t0) * 1000,
+                            "hard_fail": 1.0,
+                        },
+                    )
+            yield {
+                "type": "error",
+                "payload": {
+                    "code": "ORCHESTRATOR_REQUIRED",
+                    "message": (
+                        "النظام يتطلب الخدمات الذكية المتقدمة وهي غير متاحة حالياً. "
+                        "يرجى المحاولة بعد قليل."
+                    ),
+                },
+            }
+            return
+
         if fallback_enabled:
             # تسجيل الـ fallback المحلي كـ metric — يُظهر في Grafana أن الخدمة المصغرة غير متاحة
             with contextlib.suppress(Exception):

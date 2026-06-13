@@ -72,7 +72,13 @@ def _disable_preempt_paths(monkeypatch: pytest.MonkeyPatch):
 
     سيناريوهات الاسترجاع تعيد توجيه ``_stream_local_retrieval_response`` إلى
     الـ shim القديم ``_build_local_retrieval_response`` الذي ترقّعه الاختبارات.
+
+    D-112 (ISS-CI-GREEN-002): هذا الملف يوثّق عقد الـ fallback المحلي — وهو الآن
+    **مسار rollback اختياري** بعد جعل الخدمات المصغرة إلزامية (hard-fail افتراضي).
+    نضبط ``REQUIRE_ORCHESTRATOR=0`` لاختبار هذا المسار القائم؛ سلوك hard-fail
+    الافتراضي مُغطّى في ``tests/services/test_d112_mandatory_orchestrator.py``.
     """
+    monkeypatch.setenv("REQUIRE_ORCHESTRATOR", "0")
     monkeypatch.setattr(
         OrchestratorClient,
         "_has_indexed_match",

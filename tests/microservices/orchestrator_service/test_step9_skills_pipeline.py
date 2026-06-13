@@ -412,13 +412,14 @@ class TestSkillsPipelineUnit:
         assert "total_duration_ms: float" in content
 
     def test_compose_answer_uses_reasoning_first(self):
-        """_compose_answer يُعطي الأولوية لـ reasoning عند النجاح."""
+        """_compose_answer يُعطي الأولوية لـ reasoning عند النجاح (D-110: تركيب مرتّب)."""
         content = SKILLS_PIPELINE.read_text()
-        # reasoning.status == "success" يجب أن يظهر قبل research.status == "success"
         compose_fn_idx = content.find("def _compose_answer")
         assert compose_fn_idx != -1
-        compose_body = content[compose_fn_idx : compose_fn_idx + 800]
-        # نبحث عن الشرط الفعلي وليس الـ parameter name
+        # D-110: نحدّ جسم الدالة حتى تعريف الدالة التالية (لا نافذة ثابتة هشّة —
+        # docstring الـ Real Synthesis الطويل كان يتجاوز 800 حرف).
+        next_def_idx = content.find("\ndef ", compose_fn_idx + 1)
+        compose_body = content[compose_fn_idx : next_def_idx if next_def_idx != -1 else len(content)]
         reasoning_check_idx = compose_body.find('reasoning.status == "success"')
         research_check_idx = compose_body.find('research.status == "success"')
         assert reasoning_check_idx != -1, "reasoning.status check missing"

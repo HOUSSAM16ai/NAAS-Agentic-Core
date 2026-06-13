@@ -681,6 +681,38 @@ def get_learning_path_summary() -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Mandatory Orchestration Doctrine (D-112 · العمود الفقري الإلزامي)
+# ─────────────────────────────────────────────────────────────────────────────
+# قرار المستخدم (2026-06-13): الخدمات المصغرة + الرسم الـ13-node هي القلب
+# الإلزامي الوحيد. عند تعذّرها ⇒ خطأ صريح، لا fallback صامت إلى local_graph.
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: نسخة doctrine العمود الفقري الإلزامي.
+MANDATORY_ORCHESTRATION_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+MANDATORY_ORCHESTRATION_DOCTRINE: Final[tuple[str, ...]] = (
+    "الخدمات المصغرة + الرسم الـ13-node هي القلب الإلزامي الوحيد للتوليد — "
+    "لا نتظاهر أن الرسم المحلي ذا العقدتين بديل عنها (runtime truth over synthetic certainty).",
+    "عند تعذّر الـ orchestrator (تعذّر اتصال/empty_stream) ⇒ إطار error صريح بالرمز "
+    "ORCHESTRATOR_REQUIRED ورسالة عربية واضحة — صفر سقوط صامت إلى local_graph.",
+    "علم REQUIRE_ORCHESTRATOR=1 افتراضي مُفعَّل؛ =0 يُعيد الـ fallback القديم "
+    "(rollback فوري بلا deploy — نمط D-025).",
+    "المقايضة الصريحة: فقدان المرونة عمداً — سقوط الـ orchestrator في الإنتاج = "
+    "انقطاع كامل (لا إجابة ضعيفة). القرار يخصّ المالك ومُوثَّق.",
+    "الموصول حيّاً: orchestrator_client.chat_with_agent بعد فشل كل المرشّحين.",
+)
+
+
+def get_mandatory_orchestration_summary() -> str:
+    """يُرجِع ملخص doctrine العمود الفقري الإلزامي (للـ logs)."""
+    return (
+        f"[v{MANDATORY_ORCHESTRATION_DOCTRINE_VERSION}] "
+        f"{len(MANDATORY_ORCHESTRATION_DOCTRINE)} قاعدة — microservices-only، "
+        "hard-fail ORCHESTRATOR_REQUIRED، علم rollback، مقايضة مرونة صريحة."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -842,6 +874,14 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "customer_chat._evaluate_and_emit_bkt",
         ),
     },
+    "mandatory_orchestration": {
+        "version": MANDATORY_ORCHESTRATION_DOCTRINE_VERSION,
+        "rules_count": len(MANDATORY_ORCHESTRATION_DOCTRINE),
+        "consumed_by": (
+            # D-112: العمود الفقري الإلزامي — hard-fail عند تعذّر الـ orchestrator.
+            "orchestrator_client.chat_with_agent",
+        ),
+    },
 }
 
 
@@ -983,6 +1023,8 @@ __all__ = [
     "IMPOSSIBLE_CASE_DOCTRINE_VERSION",
     "LEARNING_PATH_DOCTRINE",
     "LEARNING_PATH_DOCTRINE_VERSION",
+    "MANDATORY_ORCHESTRATION_DOCTRINE",
+    "MANDATORY_ORCHESTRATION_DOCTRINE_VERSION",
     "MODEL_ANSWER_EXPLANATION_DOCTRINE",
     "MODEL_ANSWER_EXPLANATION_VERSION",
     "MODEL_ANSWER_RELIANCE_RULES",

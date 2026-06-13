@@ -79,7 +79,7 @@ RETRIEVAL_DOCTRINE_VERSION: Final[str] = "1.0.0"
 
 #: نسخة doctrine الشرح — تطابق `EXPLANATION_DOCTRINE_VERSION` في
 #: `bac_exercise_skill.py` (يبقى متزامناً عبر تعريف موحَّد هنا).
-EXPLANATION_DOCTRINE_VERSION: Final[str] = "2.2.0"
+EXPLANATION_DOCTRINE_VERSION: Final[str] = "2.3.0"
 
 #: نسخة doctrine الاعتماد على الإجابة النموذجية.
 MODEL_ANSWER_RELIANCE_VERSION: Final[str] = "1.0.0"
@@ -154,6 +154,9 @@ EXPLANATION_DOCTRINE: Final[tuple[str, ...]] = (
     "التمرين فقل ذلك صراحةً — لا تخترع سياقاً آخر.",
     "تجنّب جدار النص: أقسام قصيرة معنونة، نقاط مرقّمة موجزة، بلا جداول Markdown "
     "(لا تُرسَم فتظهر خاماً). تشبيه واحد يكفي — لا تكرار.",
+    # — منع تسرّب الواجهات (D-106 — ISS-114) —
+    "ممنوع إخراج HTML/JSX أو أكواد واجهات (<div>، <span>، className...) في نص "
+    "الطالب — الواجهات تُبنى حصراً عبر قناة ui_component المُهيكلة، لا بنص يكتبه النموذج.",
 )
 
 
@@ -442,7 +445,7 @@ ADAPTIVE_PEDAGOGY_DOCTRINE: Final[tuple[str, ...]] = (
 # Probability Calculation Doctrine (D-075 — Protocol V14.0 / Generative UI)
 # ─────────────────────────────────────────────────────────────────────────────
 
-PROBABILITY_CALCULATION_DOCTRINE_VERSION: Final[str] = "1.4.0"
+PROBABILITY_CALCULATION_DOCTRINE_VERSION: Final[str] = "1.5.0"
 
 #: قوانين غير قابلة للكسر تحكم محرّك حساب الاحتمالات الحتمي الذي يغذّي شجرة
 #: الاحتمالات التوليدية. الخلفية لا تُخرج HTML ولا قيماً وهمية — تحسب كسوراً
@@ -485,6 +488,10 @@ PROBABILITY_CALCULATION_DOCTRINE: Final[tuple[str, ...]] = (
     "يحجب الأداة تماماً، والاسترجاع المُفهرَس يسبق دائماً الواجهة المحسوبة في "
     "chat_with_agent — مكوّن احتمالات مبني من كيس تمرين سابق رداً على طلب "
     "موضوع جديد = كارثة توجيه حية.",
+    "كلمات فضاء العيّنة (نرد/عملة) تُؤخذ من سؤال الطالب ورسائله فقط — نص "
+    "المساعد في الـ history ليس دليلاً (ISS-114 · مرآة D-102): مثال توضيحي "
+    "بالنرد في إجابة سابقة كان يطغى على تركيبة الكيس الحقيقية. والتركيبة "
+    "المستخرَجة من نص التمرين تسبق فضاء العيّنة العام في خط الاستراتيجيات.",
 )
 
 
@@ -598,6 +605,45 @@ def get_skills_platform_summary() -> str:
         f"[v{SKILLS_PLATFORM_DOCTRINE_VERSION}] "
         f"{len(SKILLS_PLATFORM_DOCTRINE)} قاعدة — registry موحَّد، no-ZOMBIE، "
         "additive، graceful degradation، flagged dormants، metric-emitter contract."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Content Integrity Doctrine (D-106 · ISS-114)
+# ─────────────────────────────────────────────────────────────────────────────
+# حارس نزاهة المحتوى المواجه للطالب — يلتقط الغارباج اللاتيني وتسريب HTML على
+# كامل بثّ الإجابة (لا أول نافذة فقط). المُستهلِك: orchestrator_client (مخرج
+# الـ orchestrator HTTP) + local_graph (المسار المحلي).
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: نسخة doctrine نزاهة المحتوى.
+CONTENT_INTEGRITY_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+CONTENT_INTEGRITY_DOCTRINE: Final[tuple[str, ...]] = (
+    "كل بثّ مواجه للطالب يمرّ عبر StreamIntegrityFilter على **كامل التيار** — "
+    "لا أول 200 حرف فقط (ثغرة arabic_stream_guard التاريخية).",
+    "الثغرة الأكبر مُغلقة: بثّ orchestrator-service (MODE_B) عبر HTTP لم يكن "
+    "يمرّ بأي حارس — الآن يُلفّ بالمرشّح عند مخرج المونوليث (نقطة الاختناق "
+    "الوحيدة المواجهة للطالب)؛ response_sanitizer للخدمة يبقى دفاعاً ثانوياً.",
+    "وضع اللغة العربي (نسبة ≥ 0.5 في أول نافذة) يُفعِّل فلترة اللاتيني؛ الإجابة "
+    "الفرنسية/Darija المشروعة تمرّ بلا حذف (تنظيف HTML فقط) — لا إفراط حذف.",
+    "spans الرياضيات (LaTeX: $...$, $$...$$, \\(...\\), \\[...\\]) تُبثّ حرفياً "
+    "أبداً — صفر مساس (قوانين D-051/D-062).",
+    "الـ allowlist التقنية محافظة (مفردات رياضية + BAC فرنسية، مقارنة بعد "
+    "NFD-strip): توسيعها = ترقية doctrine. كل ما عداها من لاتيني >2 حرف يُحذف.",
+    "fail-open مطلق: أي استثناء في المرشّح ⇒ تعطيل دائم وإرجاع النص الخام — "
+    "حارس النزاهة لا يكسر دور الطالب أبداً.",
+    "HTML/JSX لا يصل نص الطالب أبداً — الواجهات حصراً عبر قناة ui_component "
+    "المُهيكلة (Channel A — D-086)، لا عبر نص يكتبه الـ LLM.",
+)
+
+
+def get_content_integrity_summary() -> str:
+    """يُرجِع ملخص doctrine نزاهة المحتوى (للـ logs / system prompts)."""
+    return (
+        f"[v{CONTENT_INTEGRITY_DOCTRINE_VERSION}] "
+        f"{len(CONTENT_INTEGRITY_DOCTRINE)} قاعدة — فلترة كامل البثّ، حماية "
+        "اللاتيني التقني، LaTeX حرفي، fail-open، HTML ممنوع في نص الطالب."
     )
 
 
@@ -743,6 +789,17 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "registry.get_skill_registry",
         ),
     },
+    "content_integrity": {
+        "version": CONTENT_INTEGRITY_DOCTRINE_VERSION,
+        "rules_count": len(CONTENT_INTEGRITY_DOCTRINE),
+        "consumed_by": (
+            # D-106 (ISS-114): حارس نزاهة المحتوى — موصول حيّاً عند مخرج البثّ.
+            "ContentIntegritySkill.check",
+            "orchestrator_client.chat_with_agent",
+            "local_graph.run_local_graph_stream",
+            "local_graph.run_local_graph_with_exercise_context",
+        ),
+    },
 }
 
 
@@ -838,6 +895,8 @@ def build_exercise_explanation_prompt() -> str:
         # D-097 (ISS-108): حارس ضد هلوسة تسرّب الموضوع + جدار النص.
         "\n8. التزم بمعطيات هذا التمرين حصراً — ممنوع أي موضوع خارجي (طب/أشعة/مثال بعيد)."
         "\n9. أقسام قصيرة ونقاط موجزة. لا جداول. لا تكرار."
+        # D-106 (ISS-114): منع تسرّب HTML/أكواد الواجهات في نص الطالب.
+        "\n10. ممنوع HTML/أكواد واجهات في نصك — الواجهات تُبنى تلقائياً، لا تكتبها."
     )
 
     prompt = (
@@ -869,6 +928,8 @@ def list_all_doctrines() -> dict[str, dict[str, object]]:
 __all__ = [
     "BKT_COGNITIVE_DOCTRINE",
     "BKT_COGNITIVE_DOCTRINE_VERSION",
+    "CONTENT_INTEGRITY_DOCTRINE",
+    "CONTENT_INTEGRITY_DOCTRINE_VERSION",
     "CONTENT_INVOCATION_DOCTRINE",
     "CONTENT_INVOCATION_DOCTRINE_VERSION",
     "DETAILED_EXPLANATION_RULES",

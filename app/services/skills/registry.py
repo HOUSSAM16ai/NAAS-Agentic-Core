@@ -438,6 +438,18 @@ def _build_registry() -> SkillRegistry:
             metrics_prefix="cogniforge_skill_compose",
             consumed_by=("api.routers.skills.refine_endpoint",),
         ),
+        SkillDescriptor(
+            name="content_integrity",
+            summary="حارس نزاهة المحتوى — يلتقط الغارباج اللاتيني وتسريب HTML على كامل البثّ (D-106).",
+            input_contract="ContentIntegrityInput",
+            output_contract="ContentIntegrityOutput",
+            primary_method="check",
+            metrics_prefix="cogniforge_skill_content_integrity",
+            consumed_by=(
+                "orchestrator_client.chat_with_agent",
+                "local_graph.run_local_graph_stream",
+            ),
+        ),
         # ── FLAGGED (مُعطَّلة افتراضياً — تفعيل اختياري عبر علم) ──
         SkillDescriptor(
             name="retrieval_rerank",

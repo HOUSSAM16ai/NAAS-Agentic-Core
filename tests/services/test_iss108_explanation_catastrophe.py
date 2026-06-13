@@ -108,7 +108,10 @@ class TestExplanationDoctrineGuard:
     def test_version_bumped(self) -> None:
         from app.services.skills.doctrine import EXPLANATION_DOCTRINE_VERSION
 
-        assert EXPLANATION_DOCTRINE_VERSION == "2.2.0"
+        # ISS-108 رفعها إلى 2.2.0؛ D-106 (ISS-114) رفعها إلى 2.3.0 (قاعدة لا-HTML).
+        # نتحقق ≥ 2.2.0 (رتيب) فلا يكسر الاختبار أي رفع لاحق.
+        parts = tuple(int(p) for p in EXPLANATION_DOCTRINE_VERSION.split("."))
+        assert parts >= (2, 2, 0)
 
     def test_prompt_has_anti_leak_and_within_budget(self) -> None:
         from app.services.skills.doctrine import EXERCISE_EXPLANATION_SYSTEM_PROMPT

@@ -1058,13 +1058,14 @@ async def run_local_graph_stream(
         async for clean in guard_arabic_stream(ai_client, messages):
             if not clean:
                 continue
+            emit = clean
             if _integrity is not None:
-                clean = _integrity.feed(clean)
-                if not clean:
+                emit = _integrity.feed(clean)
+                if not emit:
                     continue
             chunk_count += 1
-            total_chars += len(clean)
-            yield clean
+            total_chars += len(emit)
+            yield emit
         if _integrity is not None:
             tail = _integrity.flush()
             if tail:
@@ -1492,13 +1493,14 @@ async def run_local_graph_with_exercise_context(
         async for clean in guard_arabic_stream(ai_client, messages, max_tokens=token_budget):
             if not clean:
                 continue
+            emit = clean
             if _integrity is not None:
-                clean = _integrity.feed(clean)
-                if not clean:
+                emit = _integrity.feed(clean)
+                if not emit:
                     continue
             chunk_count += 1
-            total_chars += len(clean)
-            yield clean
+            total_chars += len(emit)
+            yield emit
         if _integrity is not None:
             tail = _integrity.flush()
             if tail:

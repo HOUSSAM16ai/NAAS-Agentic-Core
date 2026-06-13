@@ -1,6 +1,7 @@
 "use client";
 
 import React, { memo } from 'react';
+import { BktMasteryCard } from './BktMasteryCard';
 import { CombinationsVisualizer } from './CombinationsVisualizer';
 import { FullExerciseStory } from './FullExerciseStory';
 import { GenerativeUIErrorBoundary } from './GenerativeUIErrorBoundary';
@@ -21,22 +22,15 @@ import { ProbabilityTree } from './ProbabilityTree';
  * لا نُلوّث DOM بمكوّنات غير مُستدعاة.
  */
 
-// stub: bkt_hint_display مُسجَّل كنوع معروف لكن لم يُبنَ بعد — يعرض النص البديل
-// بأمان (info note) بدل الانهيار.
-const BktHintStub = memo(({ fallbackText }) => (
-    <div className="genui-bkt-stub" role="note">
-        <i className="fas fa-lightbulb genui-bkt-icon" aria-hidden="true" />
-        <span>{fallbackText || 'مؤشر إتقان المهارة (قريباً).'}</span>
-    </div>
-));
-BktHintStub.displayName = 'BktHintStub';
-
 const COMPONENT_REGISTRY = {
     probability_tree: (props) => <ProbabilityTree props={props} />,
     combinations_visualizer: (props) => <CombinationsVisualizer props={props} />,
     full_exercise_story: (props) => <FullExerciseStory props={props} />,
     impossible_draw_animation: (props) => <ImpossibleDrawAnimation props={props} />,
-    bkt_hint_display: (props, fallbackText) => <BktHintStub fallbackText={fallbackText} />,
+    // D-106 (ISS-114): بطاقة إتقان معرفي حقيقية (استبدلت الـ stub).
+    bkt_hint_display: (props, fallbackText) => (
+        <BktMasteryCard props={props} fallbackText={fallbackText} />
+    ),
     // بطاقة الشرح الرياضي العميق — تُفعَّل عند math_type معروف + شرح سردي
     math_explanation_card: (props) => <MathExplanationCard props={props} />,
 };

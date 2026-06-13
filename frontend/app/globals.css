@@ -32,6 +32,10 @@
     --success-color: #10b981;
     --warning-color: #f59e0b;
     --error-color: #ef4444;
+    /* D-106 (ISS-114): تدرّج لون إتقان BKT (light fallback). */
+    --genui-mastery-low: #ef4444;
+    --genui-mastery-mid: #f59e0b;
+    --genui-mastery-high: #10b981;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
     --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.06);
     /* Code block vars — fallback light */
@@ -96,6 +100,10 @@ body[data-theme='dark'],
     --success-color: #34d399;
     --warning-color: #fbbf24;
     --error-color: #f87171;
+    /* D-106 (ISS-114): تدرّج لون إتقان BKT (dark — أكثر إشراقاً). */
+    --genui-mastery-low: #f87171;
+    --genui-mastery-mid: #fbbf24;
+    --genui-mastery-high: #34d399;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
     --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.6);
     /* ISS-066: code block colors للـ dark mode */
@@ -2315,6 +2323,96 @@ body[data-theme='light'] .exam-badge {
     color: var(--primary-color);
 }
 
+/* ── BktMasteryCard (D-106 · ISS-114) — حلقة تقدّم الإتقان المعرفي ─────────────── */
+.genui-bkt-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 1.1rem;
+    border-radius: 16px;
+    background-color: var(--surface-elevated);
+    border: 1px solid var(--border-color);
+    margin: 0.5rem 0;
+}
+
+.genui-bkt-ring {
+    position: relative;
+    flex-shrink: 0;
+    width: 80px;
+    height: 80px;
+    display: grid;
+    place-items: center;
+}
+
+.genui-bkt-ring-track {
+    stroke: var(--border-color);
+}
+
+.genui-bkt-ring-fill {
+    transition: stroke-dashoffset 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    animation: genui-ring-fill 0.7s ease-out;
+}
+
+.genui-bkt-low .genui-bkt-ring-fill {
+    stroke: var(--genui-mastery-low);
+}
+
+.genui-bkt-mid .genui-bkt-ring-fill {
+    stroke: var(--genui-mastery-mid);
+}
+
+.genui-bkt-high .genui-bkt-ring-fill {
+    stroke: var(--genui-mastery-high);
+}
+
+.genui-bkt-pct {
+    position: absolute;
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: var(--text-color);
+}
+
+.genui-bkt-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.genui-bkt-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.genui-bkt-load {
+    align-self: flex-start;
+    font-size: 0.78rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+}
+
+.genui-bkt-load-low {
+    color: var(--genui-mastery-high);
+}
+
+.genui-bkt-load-medium {
+    color: var(--genui-mastery-mid);
+}
+
+.genui-bkt-load-high {
+    color: var(--genui-mastery-low);
+}
+
+@keyframes genui-ring-fill {
+    from {
+        stroke-dashoffset: 201;
+    }
+}
+
 /* ── CombinationsVisualizer (السحب الآني — تأليفي، Protocol V19.0) ───────────── */
 .genui-combinations {
     border: 1px solid var(--border-color);
@@ -2887,7 +2985,8 @@ body[data-theme='light'] .exam-badge {
 @media (prefers-reduced-motion: reduce) {
     .genui-edge,
     .genui-glass-node,
-    .genui-comb-bar {
+    .genui-comb-bar,
+    .genui-bkt-ring-fill {
         animation-duration: 0.001s;
         transition: none;
     }

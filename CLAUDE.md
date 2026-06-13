@@ -8673,3 +8673,39 @@ evidence»، لا تُعلَن ACTIVE قبل التحقق الحي في Codespac
 | D-107 | تأجيل الصوت (جاهزية موثّقة) |
 | **D-111** | **LearningPathSkill (#17) — المسار التعلّمي التكيفي فوق BKT** |
 | D-108/D-109/D-110 | orchestrator واعٍ بالإتقان / CritiqueNode / Real Synthesis (مُصمَّمة — تحقق حيّ في Codespaces) |
+
+---
+
+## 6.96 Mandatory Microservices Backbone — Hard-Fail (2026-06-13, D-112 · Phase 3 S1)
+
+> **قرار المستخدم الحاسم:** الخدمات المصغرة + الرسم الـ13-node هي **القلب الإلزامي
+> الوحيد**. إن لم تعمل ⇒ النظام **يتوقف برسالة خطأ صريحة**، لا fallback صامت إلى
+> `local_graph`. تجسيد «runtime truth over synthetic certainty» حتى نهايته: لا
+> نتظاهر أن الرسم المحلي ذا العقدتين بديل عن الـ13-node.
+
+### التغيير (S1 — العمود الفقري)
+`orchestrator_client.chat_with_agent`: بعد فشل كل مرشّحي الـ orchestrator HTTP
+(تعذّر اتصال/empty_stream)، إذا `REQUIRE_ORCHESTRATOR=1` (افتراضي) ⇒ إطار `error`
+صريح بالرمز `ORCHESTRATOR_REQUIRED` (صفر `assistant_delta` محلي) — لا
+`_stream_local_graph_response`. `=0` يُعيد الـ fallback القديم (rollback بلا
+deploy — نمط D-025). `MANDATORY_ORCHESTRATION_DOCTRINE` v1.0.0 + manifest.
+
+### القواعد الدائمة (D-112)
+1. الخدمات المصغرة + الرسم الـ13-node هي القلب الإلزامي للتوليد.
+2. تعذّرها ⇒ `ORCHESTRATOR_REQUIRED` صريح، صفر سقوط صامت إلى local_graph.
+3. `REQUIRE_ORCHESTRATOR=1` افتراضي؛ `=0` rollback فوري.
+4. **مقايضة صريحة**: سقوط الـ orchestrator في الإنتاج = انقطاع كامل (لا إجابة ضعيفة). القرار يخصّ المالك ومُوثَّق.
+
+### التحقق الحي (2026-06-13 — المكدس الكامل، الأسرار الحقيقية)
+بيئة: monolith :8000 → orchestrator :8006 (الرسم الـ13-node، `graph_ready=true`) →
+**OpenRouter حقيقي**؛ SQLite (Postgres 6543 محجوب في الـ sandbox)؛ Supabase مُؤكَّد
+حياً عبر جسر HTTPS (`db_bridge.py` → PostgreSQL 17.6، 34 جدول).
+- **orchestrator UP**: «قانون نيوتن» → 44 delta، إجابة نظيفة + `learning_path_card` (P4 حيّ). 6× `POST /api/chat/messages` 200 (المسار عبر الخدمات لا المحلي).
+- **orchestrator DOWN**: نفس السؤال → `error=ORCHESTRATOR_REQUIRED`، **صفر delta، لا local** ✅.
+- **ISS-114 حيّ 6/6**: صفر غارباج لاتيني على مسار orchestrator-HTTP (3201 حرف نظيف)، صفر HTML خام، الكيس الصحيح (لا نرد/عملة)، «الدوال المركبة 2024» → الأعداد المركبة. الفرنسي المشروع يمرّ (بوابة الوضع العربي).
+- `scripts/verify_revolution_live.py` (6/6) + `tests/services/test_d112_mandatory_orchestrator.py` (3/3).
+
+### الحالة المتبقية (Phase 3 S2–S4 — مُصمَّمة، التتمة)
+- **S2**: port المهارات الحتمية (probability/content_integrity/learning_path/greeting/indexed-retrieval + knowledge_base) **داخل** الـ orchestrator كعقد رسم — «إزالة كل مسار المونوليث» الكاملة (المونوليث = بوابة WS رقيقة). كبير — يُرحَّل عبر مراحل مُتحقَّقة.
+- **S3/S4**: P1 Mastery-Aware Orchestrator + P3 Real Synthesis + P2 CritiqueNode داخل الرسم.
+- القيد المعماري: المونوليث لا يستورد من `microservices/` والعكس — «النقل» = port (نسخ مستقل)، لا import.

@@ -4286,3 +4286,12 @@ SupervisorNode/SynthesizerNode (D-104 يثبّت الموجِّه في السؤ�
 _compose_answer بتركيب مرتّب + composition_confidence. الحالة: مُصمَّمة — التحقق
 الحيّ يتطلب تشغيل الـ orchestrator في Codespaces (الـ sandbox بارد + Postgres
 محجوب). لا تُعلَن ACTIVE قبل runtime evidence (doctrine §6.6).
+
+## D-112 — Mandatory Microservices Backbone / Hard-Fail (Phase 3 S1, 2026-06-13)
+قرار المستخدم: الخدمات المصغرة + الرسم الـ13-node = القلب الإلزامي الوحيد؛ تعذّرها
+⇒ خطأ صريح ORCHESTRATOR_REQUIRED لا fallback صامت إلى local_graph. علم
+REQUIRE_ORCHESTRATOR=1 افتراضي (=0 rollback). MANDATORY_ORCHESTRATION_DOCTRINE
+v1.0.0. مقايضة صريحة: سقوط orchestrator = انقطاع كامل (لا إجابة ضعيفة).
+**تحقق حي كامل** (monolith→orchestrator 13-node→OpenRouter حقيقي؛ SQLite؛ Supabase
+عبر جسر HTTPS): UP→44 delta+learning_path_card؛ DOWN→ORCHESTRATOR_REQUIRED صفر delta؛
+ISS-114 حيّ 6/6. المتبقّي S2 (port skills إلى الرسم) / S3-S4 (P1/P2/P3) مُصمَّمة.

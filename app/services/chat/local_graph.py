@@ -1045,12 +1045,32 @@ async def run_local_graph_stream(
         # لا نبثّ ai_client.stream_chat خاماً للطالب أبداً (الإنجليزية/الغارباج محظورة).
         from app.services.skills.arabic_stream_guard import guard_arabic_stream
 
+        # ISS-114 (D-106): طبقة نزاهة المحتوى فوق حارس اللغة — تلتقط الغارباج
+        # اللاتيني (snake_case/diacritics) وتسريب HTML على كامل التيار. fail-open.
+        _integrity = None
+        try:
+            from app.services.skills.content_integrity_skill import StreamIntegrityFilter
+
+            _integrity = StreamIntegrityFilter()
+        except Exception:  # pragma: no cover - fail-open
+            _integrity = None
+
         async for clean in guard_arabic_stream(ai_client, messages):
             if not clean:
                 continue
+            if _integrity is not None:
+                clean = _integrity.feed(clean)
+                if not clean:
+                    continue
             chunk_count += 1
             total_chars += len(clean)
             yield clean
+        if _integrity is not None:
+            tail = _integrity.flush()
+            if tail:
+                chunk_count += 1
+                total_chars += len(tail)
+                yield tail
     except Exception:
         logger.warning("local_graph.stream_failed intent=%s", intent, exc_info=True)
         if obs is not None and span_ctx is not None:
@@ -1460,12 +1480,31 @@ async def run_local_graph_with_exercise_context(
         # ISS-107: حارس اللغة العربية على شرح التمرين أيضاً (لا إنجليزية/غارباج).
         from app.services.skills.arabic_stream_guard import guard_arabic_stream
 
+        # ISS-114 (D-106): طبقة نزاهة المحتوى فوق حارس اللغة. fail-open.
+        _integrity = None
+        try:
+            from app.services.skills.content_integrity_skill import StreamIntegrityFilter
+
+            _integrity = StreamIntegrityFilter()
+        except Exception:  # pragma: no cover - fail-open
+            _integrity = None
+
         async for clean in guard_arabic_stream(ai_client, messages, max_tokens=token_budget):
             if not clean:
                 continue
+            if _integrity is not None:
+                clean = _integrity.feed(clean)
+                if not clean:
+                    continue
             chunk_count += 1
             total_chars += len(clean)
             yield clean
+        if _integrity is not None:
+            tail = _integrity.flush()
+            if tail:
+                chunk_count += 1
+                total_chars += len(tail)
+                yield tail
     except Exception:
         logger.warning("local_graph.exercise_explanation_stream_failed", exc_info=True)
         if obs is not None and span_ctx is not None:

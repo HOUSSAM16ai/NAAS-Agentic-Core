@@ -246,6 +246,26 @@ _CONFUSION_MARKERS: tuple[str, ...] = (
     "comment",
 )
 
+# ISS-114 (D-106): طلب توليد واجهة صريح — الطالب يطلب «قم بتوليد واجهة تشرح
+# الحادثة» فيكتب الـ LLM HTML خاماً (كارثة). نوجّهه للأداة البصرية المُهيكلة
+# بدلاً من LLM. إشارة *تفعيل* (لا متابعة خطوة) — لا تُلوَّث _PROBABILITY_CONTEXT
+# (درس D-078/D-101: تلويث قائمة السياق يخلق false positives).
+_VISUAL_REQUEST_MARKERS: tuple[str, ...] = (
+    "توليد واجهة",
+    "ولد واجهة",
+    "انشئ واجهة",
+    "اصنع واجهة",
+    "اعمل واجهة",
+    "اعمل لي واجهة",
+    "صمم واجهة",
+    "اريد واجهة",
+    "واجهة تشرح",
+    "واجهة توضح",
+    "واجهة تفاعلية",
+    "generate ui",
+    "genere une interface",
+)
+
 # ISS-110 (D-101): إشارات متابعة احتمالية — سؤال متابعة بعد تمرين احتمالات
 # (مثل «احسب الأمل الرياضي E(X)») لا يحوي كلمة احتمالية صريحة لكنه يستهدف
 # خطوة من التمرين. مرآة `_detect_focus_step` في orchestrator_client.
@@ -801,6 +821,13 @@ class ProbabilityCalculatorSkill:
         return any(cls._normalize(m) in normalized for m in _CONFUSION_MARKERS)
 
     @classmethod
+    def is_visual_request(cls, text: str) -> bool:
+        """ISS-114 (D-106): هل يطلب الطالب توليد واجهة صريحاً؟ يوجّه للأداة
+        البصرية المُهيكلة بدل ترك الـ LLM يكتب HTML خاماً."""
+        normalized = cls._normalize(text)
+        return any(cls._normalize(m) in normalized for m in _VISUAL_REQUEST_MARKERS)
+
+    @classmethod
     def _has_followup_probability_intent(cls, text: str) -> bool:
         """ISS-110 (D-101): هل السؤال الحالي متابعة لخطوة احتمالية من السياق؟
 
@@ -911,12 +938,21 @@ class ProbabilityCalculatorSkill:
 
     # ── الاستراتيجية 1: فضاء متساوي الاحتمال (نرد / قطعة نقدية) ───────────────────────
     @classmethod
-    def _strategy_universe(cls, combined: str) -> ProbabilityModelOutput | None:
-        normalized = cls._normalize(combined)
-        is_dice = any(k in normalized for k in ("نرد", "زهر", "dice", "حجر النرد", "حجر نرد", "dé"))
-        is_coin = any(k in normalized for k in ("قطعة نقدية", "قطعة نقود", "عملة", "coin", "piece"))
+    def _strategy_universe(
+        cls, question: str, user_history_text: str, combined: str
+    ) -> ProbabilityModelOutput | None:
+        # ISS-114 (D-106 · مرآة D-102): مُشغِّلات فضاء العيّنة (نرد/عملة) تُؤخذ من
+        # نص الطالب فقط (السؤال + رسائله) — أمثلة المساعد التوضيحية («رمي نردٍ
+        # ست وجوه») ليست دليلاً. بدون هذا القيد كان قالب النرد العام يطغى على
+        # تركيبة الكيس الحقيقية حين يذكر المساعد مثالاً بالنرد (كارثة حية).
+        trigger = cls._normalize(f"{question}\n{user_history_text}")
+        is_dice = any(k in trigger for k in ("نرد", "زهر", "dice", "حجر النرد", "حجر نرد", "dé"))
+        is_coin = any(k in trigger for k in ("قطعة نقدية", "قطعة نقود", "عملة", "coin", "piece"))
         if not (is_dice or is_coin):
             return None
+
+        # استخراج عدد الأوجه يبقى من النص الكامل (قد يرد في نص التمرين).
+        normalized = cls._normalize(combined)
 
         if is_coin:
             # وجه/كتابة — فضاء من وجهين
@@ -1447,27 +1483,37 @@ class ProbabilityCalculatorSkill:
 
         question = payload.question or ""
         history_text = ""
+        user_history_text = ""
         if payload.history:
-            history_text = " ".join(
-                str(m.get("content", ""))[:2000]
-                for m in payload.history[-6:]
-                if isinstance(m, dict)
+            recent = [m for m in payload.history[-6:] if isinstance(m, dict)]
+            history_text = " ".join(str(m.get("content", ""))[:2000] for m in recent)
+            # ISS-114 (D-106): نص الطالب فقط لمُشغِّلات فضاء العيّنة (لا رسائل المساعد).
+            user_history_text = " ".join(
+                str(m.get("content", ""))[:2000] for m in recent if m.get("role") == "user"
             )
         combined = f"{question}\n{history_text}".strip()
 
         normalized = self._normalize(combined)
-        if not any(self._normalize(c) in normalized for c in _PROBABILITY_CONTEXT):
+        question_norm = self._normalize(question)
+        # ISS-114 (D-106): طلب توليد واجهة صريح + إشارة احتمالية في السؤال نفسه
+        # («قم بتوليد واجهة تشرح الحادثة P(A)») يمرّ بوابة السياق حتى في محادثة
+        # جديدة بلا history — وإلا يسقط للـ LLM فيكتب HTML خاماً.
+        _visual_q = self.is_visual_request(question) and (
+            "p(" in question_norm or "حادث" in question_norm or "احتمال" in question_norm
+        )
+        if not any(self._normalize(c) in normalized for c in _PROBABILITY_CONTEXT) and not _visual_q:
             return self._fail("no_probability_context", "none", t0)
 
         # ISS-110 (D-101): سياق الاحتمالات من الـ history وحده لا يكفي.
         # السؤال الحالي نفسه يجب أن يحمل نية احتمالية: سياق صريح، أو حيرة
-        # (متابعة بيداغوجية)، أو إشارة خطوة متابعة (E(X)/جداء/نفس اللون...).
+        # (متابعة بيداغوجية)، أو إشارة خطوة متابعة (E(X)/جداء/نفس اللون...)،
+        # أو طلب توليد واجهة صريح (ISS-114).
         # بدون هذه البوابة: «اعطني تمرين الدوال العددية» بعد تمرين احتمالات
         # كان يُولِّد combinations_visualizer من كيس التمرين السابق (كارثة حية).
-        question_norm = self._normalize(question)
         q_has_context = any(self._normalize(c) in question_norm for c in _PROBABILITY_CONTEXT)
         if (
             not q_has_context
+            and not _visual_q
             and history_text
             and not (self.is_confusion(question) or self._has_followup_probability_intent(question))
         ):
@@ -1475,11 +1521,14 @@ class ProbabilityCalculatorSkill:
 
         # خط أنابيب الاستراتيجيات — أول نجاح يفوز (deterministic-first).
         # V26.1: الحالة المستحيلة لها الأولوية القصوى — short-circuit قبل أي حساب.
+        # ISS-114 (D-106): التركيبة الحقيقية المستخرَجة من نص التمرين تسبق فضاء
+        # العيّنة العام (نرد/عملة). سؤال نرد حقيقي بلا تركيبة → composition تُرجع
+        # None → universe يعمل؛ لكن كيس 11 كرة في الـ history يهزم قالب النرد.
         for builder in (
             lambda: self._detect_impossible_draw(question, history_text, combined),
             lambda: self._strategy_conditional(combined),
-            lambda: self._strategy_universe(combined),
             lambda: self._strategy_composition(question, history_text, combined),
+            lambda: self._strategy_universe(question, user_history_text, combined),
         ):
             try:
                 model = builder()

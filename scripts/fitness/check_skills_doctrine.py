@@ -331,6 +331,7 @@ def check_skills_platform() -> None:
         "arabic_stream_guard",
         "ws_heartbeat",
         "text_refinement_compose",
+        "content_integrity",
         "retrieval_rerank",
         "mcp_tool",
     }
@@ -371,8 +372,39 @@ def check_adaptive_pedagogy_wiring() -> None:
     _pass("Adaptive pedagogy wired: BKT mastery read drives teaching depth (D-104)")
 
 
+def check_content_integrity_wired() -> None:
+    """D-106 (ISS-114): حارس نزاهة المحتوى موصول فعلاً — ليس skill بلا مستهلك.
+
+    يحرس: (1) المرشّح موصول عند مخرج orchestrator HTTP (الثغرة الكبرى)،
+    (2) موصول في المسار المحلي، (3) manifest entry متّسق.
+    """
+    from app.services.skills.doctrine import (
+        CONTENT_INTEGRITY_DOCTRINE,
+        CONTENT_INTEGRITY_DOCTRINE_VERSION,
+        SKILL_DOCTRINE_MANIFEST,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("content_integrity")
+    if entry is None:
+        _fail("Manifest missing 'content_integrity' entry (D-106).")
+    if entry["version"] != CONTENT_INTEGRITY_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for content_integrity (D-106).")
+    if entry["rules_count"] != len(CONTENT_INTEGRITY_DOCTRINE):
+        _fail("Manifest rules_count mismatch for content_integrity (D-106).")
+
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    if "StreamIntegrityFilter" not in client_src or "sanitize_final_text" not in client_src:
+        _fail("orchestrator_client no longer wires StreamIntegrityFilter (D-106 ZOMBIE).")
+    local_src = (ROOT / "app/services/chat/local_graph.py").read_text(encoding="utf-8")
+    if "StreamIntegrityFilter" not in local_src:
+        _fail("local_graph no longer wires StreamIntegrityFilter (D-106 ZOMBIE).")
+    _pass("Content integrity wired: stream-wide guard on orchestrator + local paths (D-106)")
+
+
 def main() -> None:
-    print("=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100) ===\n")
+    print("=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100 + D-106) ===\n")
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
     check_manifest_consistency()
@@ -383,6 +415,7 @@ def main() -> None:
     check_bkt_baseline_integrated()
     check_skills_platform()
     check_adaptive_pedagogy_wiring()
+    check_content_integrity_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

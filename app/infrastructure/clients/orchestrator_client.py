@@ -1162,9 +1162,14 @@ class OrchestratorClient:
             _combined_text = (
                 question + " " + " ".join(m.get("content", "") for m in (history_messages or []))
             )
-            _is_deep_pedagogy = ProbabilityCalculatorSkill.is_confusion(
-                question
-            ) or ProbabilityCalculatorSkill.is_confusion(_combined_text)
+            # ISS-114 (D-106): طلب توليد واجهة صريح («قم بتوليد واجهة تشرح
+            # الحادثة») يُفعِّل MODE_B (مكوّن بصري + سرد بيداغوجي) — لا يصل
+            # الطلب أبداً لـ LLM يكتب HTML خاماً.
+            _is_deep_pedagogy = (
+                ProbabilityCalculatorSkill.is_confusion(question)
+                or ProbabilityCalculatorSkill.is_confusion(_combined_text)
+                or ProbabilityCalculatorSkill.is_visual_request(question)
+            )
             _routing_mode = "MODE_B" if _is_deep_pedagogy else "MODE_A"
 
             def _detect_focus_step(user_question: str) -> str | None:
@@ -2076,6 +2081,20 @@ class OrchestratorClient:
                     # أي محتوى مرئي ولا إطاراً نهائياً ⇒ نعامله كفشل ونُكمل للمرشح
                     # التالي / الـ fallback المحلي بدل إنهاء الدور فارغاً.
                     _orch_visible = False
+                    # ISS-114 (D-106): الثغرة الكبرى — بثّ orchestrator HTTP كان
+                    # يصل للطالب بلا حارس (غارباج لاتيني + HTML). نلفّه بمرشّح
+                    # نزاهة المحتوى على كامل التيار. fail-open: None = سلوك اليوم.
+                    _integrity = None
+                    try:
+                        from app.services.skills.content_integrity_skill import (
+                            StreamIntegrityFilter,
+                            sanitize_final_text,
+                        )
+
+                        _integrity = StreamIntegrityFilter()
+                    except Exception:  # pragma: no cover - fail-open على مستوى التوصيل
+                        _integrity = None
+                        sanitize_final_text = None  # type: ignore[assignment]
                     async for line in response.aiter_lines():
                         if not line.strip():
                             continue
@@ -2088,13 +2107,21 @@ class OrchestratorClient:
                             if _ntype == "assistant_delta":
                                 _ncontent = (normalized.get("payload") or {}).get("content")
                                 if isinstance(_ncontent, str) and _ncontent:
+                                    # عقد empty_stream (D-103 rule 4): يُحسَب من
+                                    # المحتوى الخام قبل الفلترة.
                                     _orch_visible = True
-                            elif _ntype in (
-                                "assistant_final",
-                                "assistant_error",
-                                "error",
-                                "complete",
-                            ):
+                                    if _integrity is not None:
+                                        cleaned = _integrity.feed(_ncontent)
+                                        if not cleaned:
+                                            continue  # المرشّح حجز/حذف هذه القطعة
+                                        normalized["payload"]["content"] = cleaned
+                            elif _ntype == "assistant_final":
+                                _orch_visible = True
+                                if sanitize_final_text is not None:
+                                    _fc = (normalized.get("payload") or {}).get("content")
+                                    if isinstance(_fc, str) and _fc:
+                                        normalized["payload"]["content"] = sanitize_final_text(_fc)
+                            elif _ntype in ("assistant_error", "error", "complete"):
                                 _orch_visible = True
                             yield normalized
                         except json.JSONDecodeError:
@@ -2106,6 +2133,11 @@ class OrchestratorClient:
                                 logger.warning(f"Received non-JSON line from agent: {line[:50]}...")
                                 _orch_visible = True
                                 yield self._normalize_stream_event(line)
+                    # ISS-114: إفراغ ذيل المرشّح المحجوز (صفر فقدان bytes).
+                    if _integrity is not None:
+                        _tail = _integrity.flush()
+                        if _tail:
+                            yield {"type": "assistant_delta", "payload": {"content": _tail}}
                     if _orch_visible:
                         return
                     connection_errors.append(f"{candidate_url} => empty_stream")

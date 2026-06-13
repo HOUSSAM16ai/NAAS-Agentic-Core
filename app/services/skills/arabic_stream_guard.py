@@ -152,6 +152,10 @@ _FOREIGN_BLOCKS = re.compile(r"[Ѐ-ӿ一-鿿぀-ヿㇰ-ㇿ]+")
 # لاتيني ملتصق مباشرةً بحرف عربي (الرمز المشوّه «أستاذochemistry» → «أستاذ»)
 _GLUED_LATIN = re.compile(r"(?<=[؀-ۿ])[A-Za-z]{2,}")
 _ENGLISH_WORD = re.compile(r"[A-Za-z]{2,}")
+# ISS-114 (D-106): رموز snake_case لاتينية («experiences_random») غارباج صريح —
+# لا تظهر أبداً في محتوى تعليمي مشروع. تقوية stateless إضافية (المرشّح ذو الحالة
+# في content_integrity_skill يغطّي الحالات المقسومة عبر الـ chunks).
+_SNAKE_LATIN = re.compile(r"\b[A-Za-zÀ-ɏ]+_[A-Za-zÀ-ɏ_]+\b")
 
 
 def _strip_math(text: str) -> str:
@@ -201,6 +205,7 @@ def sanitize_stream_chunk(text: str) -> str:
     if not text:
         return text
     out = _FOREIGN_BLOCKS.sub("", text)
+    out = _SNAKE_LATIN.sub("", out)  # ISS-114: snake_case غارباج صريح
     return _GLUED_LATIN.sub("", out)
 
 

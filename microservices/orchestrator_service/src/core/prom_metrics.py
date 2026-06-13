@@ -31,6 +31,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 
 logger = logging.getLogger(__name__)
@@ -242,6 +243,12 @@ PIPELINE_ACTIVE: Gauge = _make_gauge(
     "عدد طلبات Skills Pipeline النشطة حالياً",
 )
 
+# D-110 (Real Synthesis): ثقة التركيب — دالة من عدد الـ skills الناجحة وتداخلها.
+PIPELINE_COMPOSITION_CONFIDENCE: Gauge = _make_gauge(
+    "cogniforge_pipeline_composition_confidence",
+    "ثقة التركيب النهائي [0,1] — آخر استدعاء للـ Pipeline",
+)
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Postgres Checkpointer — مقاييس الذاكرة التراكمية الدائمة (Step 10)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -401,6 +408,12 @@ def record_pipeline_invocation(
 def record_pipeline_error(error_type: str) -> None:
     """يُسجِّل خطأ في Skills Pipeline."""
     PIPELINE_ERRORS.labels(error_type=error_type).inc()
+
+
+def set_composition_confidence(confidence: float) -> None:
+    """D-110: يُحدِّث مقياس ثقة التركيب النهائي [0,1]."""
+    with contextlib.suppress(Exception):
+        PIPELINE_COMPOSITION_CONFIDENCE.set(max(0.0, min(1.0, float(confidence))))
 
 
 def set_pipeline_active(count: int) -> None:

@@ -8573,3 +8573,103 @@ python scripts/fitness/check_skills_doctrine.py   # … Adaptive pedagogy wired 
 |----------|-----------------|
 | D-104 | طبقة البيداغوجيا التكيفية + ISS-112 |
 | **D-105** | **ISS-113 — تسميم sys.modules وقت الجمع + إصلاح 23 اختباراً مستثنى بالجذر + بوابة نظافة + تقسيم jobs + frontend-tests + concurrency×38** |
+
+---
+
+## 6.93 Voice Tutor Future-Readiness (DEFERRED — D-107)
+
+> قرار المستخدم (2026-06-13): الصوت **مؤجَّل** للمستقبل مع الاستعداد له بنماذج
+> AI متقدمة فائقة الجودة — لا تنفيذ الآن، الأولوية لعظمة توليد المحتوى. هذا
+> القسم يوثّق المعمارية المستقبلية ونقاط الامتداد فلا يُعاد استكشافها.
+
+### لماذا التأجيل (لا الإهمال)
+الجودة أولاً: إصلاح كوارث المحتوى (ISS-114) والتطوير الثوري للـ Skills يسبق أي
+ميزة جديدة. وقاعدة D-073 (لا ZOMBIE) تمنع إنزال قدرة نصف-موصولة: الصوت يصل **فقط**
+كـ `VoiceSkill` كامل end-to-end في تغيير واحد.
+
+### المعمارية المستقبلية (عند التنفيذ)
+- **TTS لكل رسالة + قراءة تلقائية** عند `assistant_final`/انتقال `isComplete`.
+- **STT** لإملاء السؤال صوتياً.
+- **نماذج صوتية متقدمة عبر HTTPS** (جودة عالية) — لا Web Speech API الأضعف.
+  مرشحون يُقيَّمون وقت التنفيذ؛ لا شيء موصول الآن.
+- **القاعدة الملزِمة (D-107)**: الصوت = `VoiceSkill` بعقد Pydantic + Prometheus
+  metrics + tests + doctrine entry + registry + **مستهلك حيّ** — في PR واحد.
+
+### نقاط الامتداد (مُسجَّلة حرفياً — لا تُعاد دراستها)
+| الغرض | الموقع |
+|------|--------|
+| زر TTS لكل رسالة | نمط زر النسخ `ChatInterface.jsx` (شريط أفعال الرسالة) |
+| toggle القراءة التلقائية | نمط `header-theme-btn` في `CogniForgeApp.jsx` |
+| trigger القراءة | `assistant_final` / انتقال `isComplete` في `useAgentSocket.js` |
+| تجريد LaTeX قبل النطق | `frontend/app/utils/preprocessMath.js` (أساس `stripMathForSpeech`) |
+
+---
+
+## 6.94 Four-Catastrophe Content Integrity Fix (2026-06-13, ISS-114 / D-106)
+
+> transcript حي أظهر 4 كوارث على المسار الإنتاجي. الإصلاح يُغلق الثغرة الكبرى:
+> بثّ orchestrator HTTP (MODE_B) كان يصل للطالب **بلا أي حارس**.
+
+### الكوارث الأربع والجذور (file:line)
+| # | الكارثة | الجذر |
+|---|---------|------|
+| 1 | غارباج لاتيني («experiences_random»، «brückecónceptual»، «exitos») | حارس البثّ يفحص أول 200 حرف فقط (`arabic_stream_guard.py`)؛ والثغرة الكبرى: حلقة `aiter_lines` في `orchestrator_client.py` تبثّ مخرَج الـ orchestrator للطالب بلا حارس |
+| 2 | تسريب HTML خام («قم بتوليد واجهة» → `<div class="card">`) | لا كاشف لنية «توليد واجهة» → يسقط للـ LLM؛ output_firewall لا يُطبَّق على بثّ الـ orchestrator |
+| 3 | واجهة نرد/عملة عامة بدل كيس التمرين | `_strategy_universe` يُفعَّل من أمثلة المساعد في الـ history + يسبق composition |
+| 4 | «الدوال المركبة 2024» → تمرين الاحتمالات + BKT خاطئ | aliases «دوال مركبة» مفقودة في arabic_normalize + bkt_engine |
+
+### الإصلاح (طبقات)
+- **ContentIntegritySkill (#16)** — `StreamIntegrityFilter` ذو حالة على **كامل
+  التيار** موصول في مخرج الـ orchestrator HTTP + المسارات المحلية. يحذف الغارباج
+  اللاتيني (snake_case/diacritics/خارج allowlist) و HTML، يحفظ LaTeX حرفياً،
+  بوابة الوضع العربي تحمي الفرنسي، fail-open مطلق.
+- **كاشف نية «توليد واجهة»** → `is_visual_request` يوجّه لـ MODE_B (مكوّن بصري)
+  بدل LLM يكتب HTML. + قاعدة EXPLANATION_DOCTRINE v2.3.0 «لا HTML في نص الطالب».
+- **توجيه**: composition قبل universe + universe يُفعَّل من نص الطالب فقط (مرآة
+  D-102). PROBABILITY_CALCULATION_DOCTRINE v1.5.0.
+- **aliases**: «دوال مركبة/الدوال المركبة/...» في arabic_normalize + bkt_engine.
+
+### القواعد الدائمة (لا تُكسر بدون ADR)
+1. كل بثّ مواجه للطالب (orchestrator HTTP + محلي) يمرّ عبر `StreamIntegrityFilter`
+   على كامل التيار — لا أول نافذة فقط.
+2. universe (نرد/عملة) لا يُفعَّل من نص المساعد في الـ history.
+3. طلب «توليد واجهة» يُوجَّه للأداة البصرية المُهيكلة — HTML في نص الطالب مستحيل بنيوياً.
+4. صياغة «الدوال المركبة» = الأعداد المركبة (لا الدوال العددية).
+
+### التحقق
+203 اختبار backend + 18 frontend (BktMasteryCard) + skills-doctrine gate (16 skill، لا
+ZOMBIE) + ruff. **التحقق الحي الكامل (orchestrator HTTP MODE_B + Supabase) يجري في
+Codespaces** بالأسرار الحقيقية — الـ sandbox بارد ويحجب Postgres (نمط §6.55/§6.84).
+سكربت `scripts/verify_iss114_live.py` (مُخطَّط) يُعيد تشغيل transcript الكارثة هناك.
+
+---
+
+## 6.95 Revolutionary Skills/LangGraph Development (2026-06-13, D-108→D-111)
+
+> طلب المستخدم: تطوير ثوري لمنظومة الخدمات المصغرة و LangGraph. الجوهر المُشخَّص:
+> الـ orchestrator اليوم موجِّه ذكي **أعمى عن حالة الطالب** (BKT monolith-only)،
+> و`_compose_answer` ليس تركيباً، ولا عقدة تحقق ذاتي. الأركان الأربعة تحوّله إلى
+> **عقل تربوي واعٍ يتحقق من إجاباته**.
+
+### الأركان (الحالة)
+| ركن | القرار | الحالة |
+|-----|--------|--------|
+| **P4 — LearningPathSkill** | D-111 | ✅ **مُنفَّذ ومُتحقَّق** — Skill #17 حتمي فوق BKT، موصول حيّاً في customer_chat، يبثّ learning_path_card (مُسجَّل + محفوظ)، frontend + CSS + doctrine + gate + tests |
+| **P1 — Orchestrator واعٍ بالإتقان** | D-108 | مُصمَّم — D-104 يثبّت `pedagogy_directive` في السؤال نحو الـ orchestrator؛ الترقية البنيوية (AgentState.cognitive_context + قراءة SupervisorNode/SynthesizerNode) تحتاج تشغيل الـ orchestrator للتحقق الحي (Codespaces) |
+| **P3 — Real Synthesis** | D-110 | مُصمَّم — استبدال `_compose_answer` (أول-ناجح) بتركيب مرتّب + composition_confidence؛ يحتاج تشغيل skills_pipeline للتحقق |
+| **P2 — CritiqueNode** | D-109 | مُصمَّم — عقدة تحقق ذاتي بعد Synthesizer (fail-open، علم بيئي)؛ تحتاج الرسم الـ13-node حيّاً للتحقق |
+
+### قاعدة الصدق (runtime-truth)
+P1/P2/P3 تمسّ الـ orchestrator microservice الذي لا يعمل في الـ sandbox البارد
+(صفر منافذ + Postgres محجوب). وفق doctrine «import + call chain + runtime
+evidence»، لا تُعلَن ACTIVE قبل التحقق الحي في Codespaces بالأسرار. P4 مُنفَّذ
+بالكامل لأنه Skill monolith حتمي قابل للاختبار in-process.
+
+### السلسلة
+| Decision | الموضوع |
+|----------|---------|
+| D-105 | test-hygiene + CI overhaul |
+| D-106 | ISS-114 — إصلاح الكوارث الأربع + ContentIntegritySkill (#16) |
+| D-107 | تأجيل الصوت (جاهزية موثّقة) |
+| **D-111** | **LearningPathSkill (#17) — المسار التعلّمي التكيفي فوق BKT** |
+| D-108/D-109/D-110 | orchestrator واعٍ بالإتقان / CritiqueNode / Real Synthesis (مُصمَّمة — تحقق حيّ في Codespaces) |

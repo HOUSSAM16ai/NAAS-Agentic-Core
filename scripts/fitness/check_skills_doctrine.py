@@ -332,6 +332,7 @@ def check_skills_platform() -> None:
         "ws_heartbeat",
         "text_refinement_compose",
         "content_integrity",
+        "learning_path",
         "retrieval_rerank",
         "mcp_tool",
     }
@@ -403,8 +404,37 @@ def check_content_integrity_wired() -> None:
     _pass("Content integrity wired: stream-wide guard on orchestrator + local paths (D-106)")
 
 
+def check_learning_path_wired() -> None:
+    """D-111: المسار التعلّمي التكيفي موصول فعلاً — ليس skill بلا مستهلك.
+
+    يحرس: (1) manifest entry 'learning_path' متّسق، (2) موصول حيّاً بعد تقييم
+    BKT في customer_chat، (3) المكوّن learning_path_card في القائمة البيضاء.
+    """
+    from app.contracts.streaming import KNOWN_UI_COMPONENTS
+    from app.services.skills.doctrine import (
+        LEARNING_PATH_DOCTRINE,
+        LEARNING_PATH_DOCTRINE_VERSION,
+        SKILL_DOCTRINE_MANIFEST,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("learning_path")
+    if entry is None:
+        _fail("Manifest missing 'learning_path' entry (D-111).")
+    if entry["version"] != LEARNING_PATH_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for learning_path (D-111).")
+    if entry["rules_count"] != len(LEARNING_PATH_DOCTRINE):
+        _fail("Manifest rules_count mismatch for learning_path (D-111).")
+
+    router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+    if "get_learning_path_skill" not in router_src or "learning_path_card" not in router_src:
+        _fail("customer_chat no longer emits learning_path (D-111 ZOMBIE).")
+    if "learning_path_card" not in KNOWN_UI_COMPONENTS:
+        _fail("learning_path_card not whitelisted in KNOWN_UI_COMPONENTS (D-111).")
+    _pass("Learning path wired: adaptive next-step over BKT mastery (D-111)")
+
+
 def main() -> None:
-    print("=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100 + D-106) ===\n")
+    print("=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100 + D-106 + D-111) ===\n")
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
     check_manifest_consistency()
@@ -416,6 +446,7 @@ def main() -> None:
     check_skills_platform()
     check_adaptive_pedagogy_wiring()
     check_content_integrity_wired()
+    check_learning_path_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

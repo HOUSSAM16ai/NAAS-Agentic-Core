@@ -450,6 +450,15 @@ def _build_registry() -> SkillRegistry:
                 "local_graph.run_local_graph_stream",
             ),
         ),
+        SkillDescriptor(
+            name="learning_path",
+            summary="المسار التعلّمي التكيفي — يقترح المفهوم التالي وصعوبة متكيفة فوق BKT (D-111).",
+            input_contract="LearningPathInput",
+            output_contract="LearningPathOutput",
+            primary_method="derive",
+            metrics_prefix="cogniforge_skill_learning_path",
+            consumed_by=("customer_chat._evaluate_and_emit_bkt",),
+        ),
         # ── FLAGGED (مُعطَّلة افتراضياً — تفعيل اختياري عبر علم) ──
         SkillDescriptor(
             name="retrieval_rerank",

@@ -6,6 +6,7 @@ import { CombinationsVisualizer } from './CombinationsVisualizer';
 import { FullExerciseStory } from './FullExerciseStory';
 import { GenerativeUIErrorBoundary } from './GenerativeUIErrorBoundary';
 import { ImpossibleDrawAnimation } from './ImpossibleDrawAnimation';
+import { LearningPathCard } from './LearningPathCard';
 import { MathExplanationCard } from './MathExplanationCard';
 import { ProbabilityTree } from './ProbabilityTree';
 
@@ -33,6 +34,10 @@ const COMPONENT_REGISTRY = {
     ),
     // بطاقة الشرح الرياضي العميق — تُفعَّل عند math_type معروف + شرح سردي
     math_explanation_card: (props) => <MathExplanationCard props={props} />,
+    // D-111: المسار التعلّمي التكيفي — الخطوة التالية المقترحة فوق BKT.
+    learning_path_card: (props, fallbackText) => (
+        <LearningPathCard props={props} fallbackText={fallbackText} />
+    ),
 };
 
 const FallbackNote = memo(({ text }) => (

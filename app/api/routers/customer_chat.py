@@ -215,6 +215,47 @@ async def _evaluate_and_emit_bkt(
                 stream_request_id,
             ),
         )
+        # D-111: المسار التعلّمي التكيفي — يقترح الخطوة التالية فوق إتقان BKT.
+        # معزول داخل نفس try (لا يكسر الدردشة)؛ الـ Skill حتمي بلا I/O.
+        with contextlib.suppress(Exception):
+            from app.services.skills.learning_path_skill import (
+                LearningPathInput,
+                get_learning_path_skill,
+            )
+
+            path = get_learning_path_skill().derive(
+                LearningPathInput(
+                    concept_id=evaluation.concept_id,
+                    mastery=evaluation.student_mastery_probability,
+                )
+            )
+            lp_card_payload = {
+                "component": "learning_path_card",
+                "props": {
+                    "current_concept": path.current_concept,
+                    "next_concept": path.next_concept,
+                    "advanced": path.advanced,
+                    "target_difficulty": path.target_difficulty,
+                    "recommendation_text": path.recommendation_text,
+                    "rationale": path.rationale,
+                },
+                "fallback_text": path.recommendation_text,
+            }
+            if conversation_id is not None:
+                await _persist_ui_component_cards(
+                    conversation_id=conversation_id,
+                    cards=[dict(lp_card_payload)],
+                )
+            if websocket.client_state == WebSocketState.CONNECTED:
+                await _locked_send_json(
+                    websocket,
+                    send_lock,
+                    _bind_stream_metadata(
+                        {"type": "ui_component", "payload": lp_card_payload},
+                        conversation_id,
+                        stream_request_id,
+                    ),
+                )
     except Exception as exc:
         # BKT must never break chat — log and continue.
         logger.warning("bkt_tracking_failed: %s", exc, exc_info=True)

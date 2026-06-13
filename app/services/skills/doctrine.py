@@ -648,6 +648,39 @@ def get_content_integrity_summary() -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Learning Path Doctrine (D-111 · المسار التعلّمي التكيفي)
+# ─────────────────────────────────────────────────────────────────────────────
+# القفزة التربوية فوق BKT (D-074): يقترح الخطوة التالية وصعوبة متكيفة من الإتقان.
+# «المعيار الأعلى ليس الانبهار اللحظي، بل الاستقلال المعرفي» — فلسفة E-TAALEEM.
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: نسخة doctrine المسار التعلّمي.
+LEARNING_PATH_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+LEARNING_PATH_DOCTRINE: Final[tuple[str, ...]] = (
+    "يُبنى حصراً فوق student_mastery_probability (D-074) — لا يُعيد اختراع تتبّع "
+    "الإتقان؛ يستهلك BKT_COGNITIVE_DOCTRINE و ADAPTIVE_PEDAGOGY_DOCTRINE.",
+    "حتمي تماماً: نفس (المفهوم، الإتقان) ⇒ نفس التوصية — لا LLM، لا I/O داخل "
+    "الـ Skill (الإتقان يُمرَّر من المُستدعي) — قابل لاختبار pytest.",
+    "إتقان ≥ 0.7 ⇒ تقدّم للمفهوم التالي في تسلسل منهج BAC + صعوبة hard (الطالب جاهز للتحدّي).",
+    "0.35 ≤ إتقان < 0.7 ⇒ ابقَ على المفهوم + صعوبة medium (ترسيخ قبل التقدّم).",
+    "إتقان < 0.35 أو مجهول ⇒ ابقَ على المفهوم + صعوبة easy (ثبّت الأساس أولاً).",
+    "التسلسل خريطة منهج ثابتة (لا overfitting لمسألة بعينها)؛ المفهوم الأخير في "
+    "السلسلة يبقى عليه عند الإتقان (لا يخترع مفهوماً غير موجود).",
+    "fail-open مطلق: أي تعذّر ⇒ توصية محايدة آمنة — لا يكسر دور الطالب.",
+)
+
+
+def get_learning_path_summary() -> str:
+    """يُرجِع ملخص doctrine المسار التعلّمي (للـ logs)."""
+    return (
+        f"[v{LEARNING_PATH_DOCTRINE_VERSION}] "
+        f"{len(LEARNING_PATH_DOCTRINE)} قاعدة — فوق BKT، حتمي، 3 عتبات إتقان، "
+        "تسلسل منهج ثابت، fail-open."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -800,6 +833,15 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "local_graph.run_local_graph_with_exercise_context",
         ),
     },
+    "learning_path": {
+        "version": LEARNING_PATH_DOCTRINE_VERSION,
+        "rules_count": len(LEARNING_PATH_DOCTRINE),
+        "consumed_by": (
+            # D-111: المسار التعلّمي التكيفي — موصول حيّاً بعد تقييم BKT.
+            "LearningPathSkill.derive",
+            "customer_chat._evaluate_and_emit_bkt",
+        ),
+    },
 }
 
 
@@ -939,6 +981,8 @@ __all__ = [
     "EXPLANATION_DOCTRINE_VERSION",
     "IMPOSSIBLE_CASE_DOCTRINE",
     "IMPOSSIBLE_CASE_DOCTRINE_VERSION",
+    "LEARNING_PATH_DOCTRINE",
+    "LEARNING_PATH_DOCTRINE_VERSION",
     "MODEL_ANSWER_EXPLANATION_DOCTRINE",
     "MODEL_ANSWER_EXPLANATION_VERSION",
     "MODEL_ANSWER_RELIANCE_RULES",

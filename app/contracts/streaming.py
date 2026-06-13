@@ -142,6 +142,8 @@ KNOWN_UI_COMPONENTS: frozenset[str] = frozenset(
         "combinations_visualizer",
         "impossible_draw_animation",
         "full_exercise_story",
+        # D-111: المسار التعلّمي التكيفي — بطاقة الخطوة التالية المقترحة.
+        "learning_path_card",
     }
 )
 

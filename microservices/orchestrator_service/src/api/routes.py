@@ -3143,6 +3143,7 @@ class ComposeResponse(BaseModel):
     pipeline_mode: str
     skills_active: list[str]
     total_duration_ms: float
+    composition_confidence: float = 0.0  # D-110: ثقة التركيب [0,1]
     plan: SkillResultSchema
     research: SkillResultSchema
     reasoning: SkillResultSchema
@@ -3217,6 +3218,7 @@ async def compose_skills(
         pipeline_mode=result.pipeline_mode,
         skills_active=result.skills_active,
         total_duration_ms=result.total_duration_ms,
+        composition_confidence=result.composition_confidence,
         plan=SkillResultSchema(**result.plan.__dict__),
         research=SkillResultSchema(**result.research.__dict__),
         reasoning=SkillResultSchema(**result.reasoning.__dict__),

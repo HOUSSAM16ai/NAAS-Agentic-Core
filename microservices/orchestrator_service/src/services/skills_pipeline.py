@@ -24,6 +24,7 @@ Skills Composition Pipeline — الخطوة 11.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
@@ -97,6 +98,7 @@ class PipelineResult:
     total_duration_ms: float
     skills_active: list[str] = field(default_factory=list)
     pipeline_mode: str = "full"  # "full" | "partial" | "fallback"
+    composition_confidence: float = 0.0  # D-110: ثقة التركيب [0,1]
 
 
 # ── استدعاءات الـ Skills ──────────────────────────────────────────────────────
@@ -354,34 +356,67 @@ def _compose_answer(
     plan: SkillResult,
     research: SkillResult,
     reasoning: SkillResult,
-) -> str:
+) -> tuple[str, float]:
     """
-    يُركِّب الإجابة النهائية من نتائج الـ 3 Skills.
+    D-110 (Real Synthesis): تركيب حقيقي مرتّب — ليس «أول-ناجح-يفوز».
 
-    المنطق:
-      - إذا نجح reasoning → الإجابة هي reasoning.data["answer"]
-      - إذا فشل reasoning لكن نجح research → يُعيد ملخص البحث
-      - إذا فشل الاثنان → يُعيد الخطة كإجابة أساسية
+    بدل انتقاء ناتج واحد، نَدمج النواتج الناجحة في إجابة واحدة مرتّبة:
+      - reasoning (الحل/التفكير العميق) هو الجوهر إن نجح.
+      - research (المراجع/الملخص) يُضاف كسياق داعم إن نجح ووُجد جوهر.
+      - plan (الخطة) يُضاف كهيكل إن لم يوجد جوهر أقوى.
+    ويُرجِع `composition_confidence ∈ [0,1]` دالةً من عدد النواتج الناجحة
+    وتداخلها (reasoning+research معاً = ثقة أعلى). حتمي، fail-open.
     """
+    successes = {s.skill: s for s in (plan, research, reasoning) if s.status == "success"}
+    reasoning_answer = ""
     if reasoning.status == "success":
-        answer = str(reasoning.data.get("answer", ""))
-        if answer:
-            return answer
+        reasoning_answer = str(reasoning.data.get("answer", "")).strip()
 
+    research_summary = ""
+    research_results: list[object] = []
     if research.status == "success":
-        summary = str(research.data.get("summary", ""))
-        results = research.data.get("results", [])
-        if summary:
-            return summary
-        if results:
-            return f"نتائج البحث لـ '{query}': " + " | ".join(str(r) for r in results[:3])
+        research_summary = str(research.data.get("summary", "")).strip()
+        rr = research.data.get("results", [])
+        research_results = list(rr) if isinstance(rr, list) else []
 
-    plan_steps = plan.data.get("plan_steps", [])
-    if plan_steps:
+    plan_steps = plan.data.get("plan_steps", []) if isinstance(plan.data, dict) else []
+
+    # ── التركيب المرتّب ──────────────────────────────────────────────────────
+    core = reasoning_answer
+    if not core and research_summary:
+        core = research_summary
+    if not core and research_results:
+        core = "نتائج البحث: " + " | ".join(str(r) for r in research_results[:3])
+
+    parts: list[str] = []
+    if core:
+        parts.append(core)
+        # دمج المراجع الداعمة فقط حين يكون الجوهر من reasoning (تجنّب التكرار).
+        if reasoning_answer and research_summary and research_summary != reasoning_answer:
+            parts.append(f"\n\nمراجع داعمة:\n{research_summary}")
+    elif plan_steps:
         steps_text = "\n".join(f"- {s}" for s in plan_steps[:5])
-        return f"خطة للإجابة على '{query}':\n{steps_text}"
+        parts.append(f"خطة للإجابة على '{query}':\n{steps_text}")
 
-    return f"لم أتمكن من معالجة طلبك: {query}"
+    composed = "\n".join(parts).strip()
+
+    # ── ثقة التركيب (مبنية على النواتج الناجحة فعلاً، لا fallback data) ───────
+    n = len(successes)
+    if not composed:
+        confidence = 0.1
+        composed = f"لم أتمكن من معالجة طلبك: {query}"
+    elif n == 0:
+        # لا skill نجح — المحتوى من fallback data فقط ⇒ ثقة منخفضة صريحة.
+        confidence = 0.25
+    elif n >= 3:
+        confidence = 0.9
+    elif n == 2:
+        # reasoning ضمن الناجحين ⇒ ثقة أعلى (حل فعلي لا مجرد بحث).
+        confidence = 0.78 if "reasoning" in successes else 0.68
+    else:
+        confidence = 0.55 if "reasoning" in successes else 0.45
+
+    return composed, round(confidence, 3)
 
 
 def _determine_pipeline_mode(
@@ -449,18 +484,28 @@ async def run_skills_pipeline(
             _call_reasoning_skill(query, "", correlation_id, client),
         )
 
-    # ── التركيب النهائي ───────────────────────────────────────────────────────
+    # ── التركيب النهائي (D-110: تركيب مرتّب + ثقة) ────────────────────────────
     total_duration_ms = (time.monotonic() - pipeline_start) * 1000
-    composed_answer = _compose_answer(query, plan_result, research_result, reasoning_result)
+    composed_answer, composition_confidence = _compose_answer(
+        query, plan_result, research_result, reasoning_result
+    )
     pipeline_mode, active_skills = _determine_pipeline_mode(
         plan_result, research_result, reasoning_result
     )
+    with contextlib.suppress(Exception):
+        from microservices.orchestrator_service.src.core.prom_metrics import (
+            set_composition_confidence,
+        )
+
+        set_composition_confidence(composition_confidence)
 
     logger.info(
-        "pipeline_complete correlation_id=%s mode=%s active_skills=%s duration_ms=%.1f",
+        "pipeline_complete correlation_id=%s mode=%s active_skills=%s "
+        "confidence=%.2f duration_ms=%.1f",
         correlation_id,
         pipeline_mode,
         active_skills,
+        composition_confidence,
         total_duration_ms,
     )
 
@@ -474,4 +519,5 @@ async def run_skills_pipeline(
         total_duration_ms=total_duration_ms,
         skills_active=active_skills,
         pipeline_mode=pipeline_mode,
+        composition_confidence=composition_confidence,
     )

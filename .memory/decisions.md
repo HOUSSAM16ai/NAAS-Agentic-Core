@@ -4255,3 +4255,34 @@ concurrency لكل workflow. (9) قوائم deselect تتقلص فقط (40→17)
 
 **البديل المرفوض:** pytest-xdist (يكسر الترتيب المقصود لعزل سجل جداول SQLAlchemy)؛
 إصلاح d103 بجعل الاختبار «محصناً» من Mock (يعالج العرض لا الجذر).
+
+## D-106 — ContentIntegritySkill + Four-Catastrophe Fix (2026-06-13, ISS-114)
+StreamIntegrityFilter ذو حالة على كامل بثّ الطالب (orchestrator HTTP + محلي):
+يحذف الغارباج اللاتيني (snake_case/diacritics/خارج allowlist) و HTML، يحفظ LaTeX
+حرفياً، بوابة الوضع العربي تحمي الفرنسي، fail-open مطلق. Skill #16. كاشف
+is_visual_request يوجّه «توليد واجهة» لـ MODE_B بدل HTML من LLM. EXPLANATION
+v2.3.0 (لا HTML في نص الطالب). توجيه: composition قبل universe + universe من نص
+الطالب فقط (مرآة D-102)، PROBABILITY v1.5.0. aliases «دوال مركبة» في
+arabic_normalize + bkt_engine. **القواعد:** كل بثّ يمرّ بالمرشّح على كامل التيار؛
+universe لا من نص المساعد؛ HTML في نص الطالب مستحيل بنيوياً.
+
+## D-107 — Voice Tutor Deferral (2026-06-13)
+الصوت مؤجَّل بنماذج AI متقدمة؛ الجودة أولاً + D-073 يمنع قدرة نصف-موصولة. الصوت
+يصل فقط كـ VoiceSkill كامل end-to-end. نقاط الامتداد موثّقة (§6.93).
+
+## D-111 — LearningPathSkill (revolution P4, 2026-06-13)
+Skill #17 حتمي فوق BKT (D-074): يقرأ إتقان المفهوم الحالي ويقترح المفهوم التالي
+في تسلسل منهج BAC + صعوبة متكيفة (≥0.7 advance hard، 0.35-0.7 consolidate medium،
+<0.35 scaffold easy). موصول حيّاً في customer_chat._evaluate_and_emit_bkt يبثّ
+learning_path_card (whitelisted + محفوظ عبر عمود ui_component). frontend
+LearningPathCard.jsx + CSS (theme-law). LEARNING_PATH_DOCTRINE v1.0.0 + manifest +
+gate. **القواعد:** يُبنى فوق student_mastery_probability لا يُعيد اختراعه؛ حتمي
+بلا I/O؛ تسلسل المنهج خريطة ثابتة (لا overfitting)؛ fail-open.
+
+## D-108/D-109/D-110 — Mastery-Aware Orchestrator / CritiqueNode / Real Synthesis (مُصمَّمة)
+تطوير ثوري للـ orchestrator: P1 يثبّت cognitive_context في AgentState ويُقرأ في
+SupervisorNode/SynthesizerNode (D-104 يثبّت الموجِّه في السؤال الآن)؛ P2 عقدة
+تحقق ذاتي بعد Synthesizer (fail-open، علم ENABLE_CRITIQUE_NODE)؛ P3 يستبدل
+_compose_answer بتركيب مرتّب + composition_confidence. الحالة: مُصمَّمة — التحقق
+الحيّ يتطلب تشغيل الـ orchestrator في Codespaces (الـ sandbox بارد + Postgres
+محجوب). لا تُعلَن ACTIVE قبل runtime evidence (doctrine §6.6).

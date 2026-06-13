@@ -4079,3 +4079,13 @@ APP_DATABASE_URL + استرجاع كامل في isolated_helpers + حذف teardo
 `check_test_hygiene.py`** (AST، في guardrails) + إعادة كتابة 12 اختبار resilience على
 العقد الحالي + ترقية ci.yml (تقسيم test إلى monolith/microservices + frontend-tests +
 concurrency في 38 workflow). قوائم deselect: 40 → 17.
+
+## ISS-114 — Four Content Catastrophes (2026-06-13 · D-106)
+transcript حي: (1) غارباج لاتيني («experiences_random»، «brückecónceptual»،
+«exitos»، «Eingaben»، «Sweg») يصل الطالب؛ (2) تسريب HTML خام عند «قم بتوليد
+واجهة»؛ (3) واجهة نرد/عملة عامة بدل كيس التمرين (أمثلة المساعد تُسمِّم
+`_strategy_universe`)؛ (4) «الدوال المركبة 2024» → تمرين الاحتمالات + BKT خاطئ.
+الجذر الأكبر: بثّ orchestrator HTTP (MODE_B) يصل الطالب بلا حارس.
+الإصلاح: ContentIntegritySkill (#16، فلترة كامل التيار، fail-open) + كاشف نية
+توليد واجهة + إعادة ترتيب الاستراتيجيات + aliases. الحالة: RESOLVED (203 backend
++ 18 frontend + gate). تحقق حيّ كامل للـ orchestrator HTTP في Codespaces.

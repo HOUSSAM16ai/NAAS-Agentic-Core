@@ -948,6 +948,16 @@ body {
     color: var(--text-color);
 }
 
+/* كارثة «النسخ يُظهر أكواد»: KaTeX يُخرج `.katex-mathml` يحوي مصدر TeX الخام
+   (<annotation encoding="application/x-tex">) للـ a11y. تحديد + Ctrl+C كان يلتقطه
+   فيظهر TeX خاماً. نمنعه من التحديد فيبقى `.katex-html` المرئي فقط قابلاً للنسخ. */
+.markdown-content .katex-mathml,
+.exam-content .katex-mathml,
+.genui-mathtext .katex-mathml {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
 /* ISS-061: ضمان وراثة اللون لكل عناصر KaTeX الداخلية */
 .markdown-content .katex .mord,
 .markdown-content .katex .mbin,

@@ -1501,7 +1501,10 @@ class ProbabilityCalculatorSkill:
         _visual_q = self.is_visual_request(question) and (
             "p(" in question_norm or "حادث" in question_norm or "احتمال" in question_norm
         )
-        if not any(self._normalize(c) in normalized for c in _PROBABILITY_CONTEXT) and not _visual_q:
+        if (
+            not any(self._normalize(c) in normalized for c in _PROBABILITY_CONTEXT)
+            and not _visual_q
+        ):
             return self._fail("no_probability_context", "none", t0)
 
         # ISS-110 (D-101): سياق الاحتمالات من الـ history وحده لا يكفي.

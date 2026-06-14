@@ -419,7 +419,9 @@ class TestSkillsPipelineUnit:
         # D-110: نحدّ جسم الدالة حتى تعريف الدالة التالية (لا نافذة ثابتة هشّة —
         # docstring الـ Real Synthesis الطويل كان يتجاوز 800 حرف).
         next_def_idx = content.find("\ndef ", compose_fn_idx + 1)
-        compose_body = content[compose_fn_idx : next_def_idx if next_def_idx != -1 else len(content)]
+        compose_body = content[
+            compose_fn_idx : next_def_idx if next_def_idx != -1 else len(content)
+        ]
         reasoning_check_idx = compose_body.find('reasoning.status == "success"')
         research_check_idx = compose_body.find('research.status == "success"')
         assert reasoning_check_idx != -1, "reasoning.status check missing"

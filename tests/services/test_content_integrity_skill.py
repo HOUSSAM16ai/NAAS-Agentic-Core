@@ -139,3 +139,45 @@ def test_sanitize_final_text_helper() -> None:
     )
     assert "exitos" not in out
     assert "الإجابة النهائية" in out
+
+
+class TestBranchCoverage:
+    """تغطية الفروع المتبقية (guards الفارغة/المعطَّلة + LaTeX-command + الواجهة)."""
+
+    def test_empty_chunk_and_disabled_feed(self) -> None:
+        flt = StreamIntegrityFilter()
+        assert flt.feed("") == ""  # chunk فارغ
+        flt._disabled = True
+        assert flt.feed("نص") == "نص"  # معطَّل ⇒ خام
+        assert flt.flush() == ""  # flush معطَّل
+
+    def test_backslash_latex_command_allowed_in_prose(self) -> None:
+        # أمر LaTeX شارد خارج الرياضيات مسبوق بـ \ يُسمح به (L358).
+        src = (
+            "النص العربي الطويل الكافي لتجاوز نافذة القرار اللغوي العربية ثم \\alpha "
+            "يظهر كأمر شارد هنا تماماً في الجملة."
+        )
+        out, stripped, _ = _run([src])
+        assert "alpha" in out
+        assert stripped == 0
+
+    def test_sanitize_final_text_empty(self) -> None:
+        assert sanitize_final_text("") == ""
+
+    def test_check_accepts_raw_string(self) -> None:
+        res = ContentIntegritySkill().check(
+            "نص عربي نظيف وطويل كافٍ لتجاوز نافذة القرار اللغوي العربية المطلوبة هنا."
+        )
+        assert res.passed is True
+        assert res.tokens_stripped == 0
+
+    def test_stream_filter_factory(self) -> None:
+        assert isinstance(ContentIntegritySkill.stream_filter(), StreamIntegrityFilter)
+
+    def test_carry_trailing_alpha_then_resolve(self) -> None:
+        # ذيل لاتيني ممتد عبر الـ chunks ثم يُحَل (carry loop L293).
+        flt = StreamIntegrityFilter()
+        out = flt.feed("نص عربي طويل كافٍ لتجاوز نافذة القرار اللغوي العربية ثم sin")
+        out += flt.feed("us نهاية") + flt.flush()
+        # «sinus» ليست في allowlist (sin نعم، sinus لا) ⇒ تُحذف ككلمة كاملة.
+        assert "نهاية" in out and "sinus" not in out

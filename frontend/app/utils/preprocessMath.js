@@ -84,6 +84,85 @@ const convertMarkdownTables = (text) => {
     return out.join('\n');
 };
 
+// ─── نسخ نظيف: markdown + LaTeX → نص قابل للقراءة ────────────────────────────
+// كارثة «النسخ يُظهر أكواد برمجية»: زرّ النسخ كان ينسخ `msg.content` الخام
+// (`$$...$$`, `\frac{}{}`, `\boxed{}`, عناوين `##`, جداول `|...|`, تشديد `**`).
+// هذه الدالة تحوّله إلى نص عربي نظيف للطالب. حتمية نقية — قابلة للاختبار بـ node.
+
+const _GREEK = {
+    alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', zeta: 'ζ',
+    eta: 'η', theta: 'θ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π',
+    rho: 'ρ', sigma: 'σ', tau: 'τ', phi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+    Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Pi: 'Π', Sigma: 'Σ',
+    Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+};
+
+const _SYM = {
+    times: '×', cdot: '·', div: '÷', pm: '±', mp: '∓', ast: '*',
+    leq: '≤', le: '≤', geq: '≥', ge: '≥', neq: '≠', ne: '≠', approx: '≈',
+    equiv: '≡', to: '→', rightarrow: '→', Rightarrow: '⇒', leftarrow: '←',
+    infty: '∞', sum: '∑', int: '∫', prod: '∏', partial: '∂', nabla: '∇',
+    in: '∈', notin: '∉', forall: '∀', exists: '∃', cup: '∪', cap: '∩',
+    subset: '⊂', supset: '⊃', emptyset: '∅', angle: '∠', perp: '⊥',
+    lim: 'lim', ln: 'ln', log: 'log', sin: 'sin', cos: 'cos', tan: 'tan',
+    exp: 'exp', max: 'max', min: 'min', dots: '…', ldots: '…', cdots: '…',
+    quad: ' ', qquad: '  ', displaystyle: '', limits: '', left: '', right: '',
+};
+
+const _stripLatexCommands = (s) => {
+    let t = s;
+    t = t.replace(/\\\\/g, ' '); // فاصل السطر في TeX → مسافة
+    t = t.replace(/\\left\s*([([{|.])/g, '$1').replace(/\\right\s*([)\]}|.])/g, '$1');
+    t = t.replace(/\\[,;:!]/g, ' ').replace(/\\ /g, ' '); // أوامر التباعد
+    // \frac{a}{b} → a/b  (يدعم \dfrac/\tfrac)
+    t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (_, a, b) => `${a}/${b}`);
+    t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, (_, x) => `√(${x})`);
+    t = t.replace(/\\(?:boxed|text|mathrm|operatorname|mathbf|mathit)\s*\{([^{}]*)\}/g, (_, x) => x);
+    const _BB = { R: 'ℝ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', C: 'ℂ' };
+    t = t.replace(/\\mathbb\s*\{([RNZQC])\}/g, (_, x) => _BB[x] || x);
+    // أمر LaTeX عام → رمز/يوناني/الاسم (الأطول-أولاً يضمنه محرّك الـ regex بالطول)
+    t = t.replace(/\\([a-zA-Z]+)/g, (_, name) => {
+        if (_SYM[name] !== undefined) return _SYM[name];
+        if (_GREEK[name] !== undefined) return _GREEK[name];
+        return name; // غير مُعيَّن → احذف الـ backslash، أبقِ الاسم مقروءاً
+    });
+    t = t.replace(/\^\{([^{}]*)\}/g, (_, x) => `^(${x})`);
+    t = t.replace(/_\{([^{}]*)\}/g, (_, x) => `_(${x})`);
+    t = t.replace(/[{}]/g, ''); // أقواس الأوامر المتبقية
+    return t;
+};
+
+export const markdownToPlainText = (content) => {
+    if (!content) return '';
+    let t = content;
+    // 1) طبِّع double-backslash (مثل preprocessMath)
+    t = t.replace(/\\\\\(/g, '\\(').replace(/\\\\\)/g, '\\)');
+    t = t.replace(/\\\\\[/g, '\\[').replace(/\\\\\]/g, '\\]');
+    t = t.replace(/\\\\([a-zA-Z]+|[,;!{}])/g, '\\$1');
+    // 2) جداول markdown → أسطر مقروءة
+    t = convertMarkdownTables(t);
+    // 3) أسوار/شيفرة inline (أبقِ المحتوى)
+    t = t.replace(/```[a-zA-Z]*\n?/g, '').replace(/`([^`]*)`/g, '$1');
+    // 4) أزل محدّدات الرياضيات (أبقِ المحتوى)
+    t = t.replace(/\$\$([^]*?)\$\$/g, (_, x) => x);
+    t = t.replace(/\$([^$\n]*?)\$/g, (_, x) => x);
+    t = t.replace(/\\\[([^]*?)\\\]/g, (_, x) => x);
+    t = t.replace(/\\\(([^]*?)\\\)/g, (_, x) => x);
+    // 5) بسّط أوامر LaTeX → Unicode/نص
+    t = _stripLatexCommands(t);
+    // 6) أزل تنسيق markdown
+    t = t.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+    t = t.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1');
+    t = t.replace(/\*([^*\n]+)\*/g, '$1');
+    t = t.replace(/^\s*>\s?/gm, '');
+    t = t.replace(/^\s*[-*+]\s+/gm, '• ');
+    t = t.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1'); // روابط
+    t = t.replace(/^\s*[-—_]{3,}\s*$/gm, ''); // hr
+    // 7) تنظيف المسافات
+    t = t.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n');
+    return t.trim();
+};
+
 // خيارات KaTeX الموحَّدة عبر التطبيق — مصدر حقيقة واحد.
 export const KATEX_OPTIONS = {
     throwOnError: false,

@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { GenerativeUIRenderer } from './generative/GenerativeUIRenderer';
-import { preprocessMath } from '../utils/preprocessMath';
+import { preprocessMath, markdownToPlainText } from '../utils/preprocessMath';
 
 // ملاحظة (ISS-105 / D-WS-ORPHAN-001): `preprocessMath` انتقلت إلى وحدة مشتركة
 // `app/utils/preprocessMath.js` لإعادة استخدامها في مكوّنات Generative UI عبر
@@ -254,8 +254,9 @@ const MessageBubble = memo(({ msg, idx }) => {
     const contentToShow = msg.role === 'assistant' ? (msg.content || '') : '';
 
     const handleCopy = useCallback(() => {
-        // ننسخ النص الكامل، ليس النسخة المعروضة جزئياً
-        navigator.clipboard.writeText(msg.content).then(() => {
+        // ننسخ النص الكامل كنصّ نظيف قابل للقراءة — لا markdown/LaTeX خام.
+        // (كارثة «النسخ يُظهر أكواد برمجية»: كان ينسخ msg.content الخام.)
+        navigator.clipboard.writeText(markdownToPlainText(msg.content)).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         });

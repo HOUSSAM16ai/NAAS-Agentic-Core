@@ -1,4 +1,5 @@
 # Tasks — What Comes Next
+> 🧭 **خارطة الطريق الثورية الكاملة (المراحل M0→M11):** **`.memory/roadmap.md`** — المصدر الحيّ الوحيد. المخطّط التالي: M6 صدق BKT · M7 واجهات بلا أرقام · M8 وضع التحقق · M9 فجوة الوهم · M10 هجرة الرسم.
 > Last updated: 2026-05-23 | Branch: `feat/math-explanation-generative-ui`
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
 

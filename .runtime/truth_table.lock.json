@@ -1,5 +1,5 @@
 {
-  "branch": "claude/exercise-retrieval-e2e-p8yolh",
+  "branch": "claude/adaptive-learning-platform-k7drf3",
   "components": [
     {
       "agreed": true,
@@ -58,7 +58,7 @@
         "app/middleware/observability/observability_middleware.py",
         "app/services/boundaries/observability_boundary_service.py",
         "app/services/chat/local_graph.py",
-        "app/services/skills/bac_exercise_skill.py"
+        "app/services/skills/answer_redaction_skill.py"
       ],
       "name": "Unified Observability service",
       "notes": "Wired into kernel startup; consumed by every HTTP request.",
@@ -320,6 +320,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-06-09T14:49:48.906617+00:00",
+  "generated_at_utc": "2026-06-14T05:26:50.915347+00:00",
   "schema_version": 1
 }

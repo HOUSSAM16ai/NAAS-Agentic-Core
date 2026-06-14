@@ -363,11 +363,23 @@ class StreamIntegrityFilter:
 
 
 def sanitize_final_text(text: str) -> str:
-    """تنظيف دفعي one-shot للنص النهائي (الإطار المحفوظ في DB)."""
+    """تنظيف دفعي one-shot للنص النهائي (الإطار المحفوظ في DB).
+
+    D-113: بعد تنظيف الغارباج/HTML، يمرّ النص عبر حارس حجب الإجابة النهائية
+    (`AnswerRedactionSkill`) — شبكة الأمان الأخيرة ضد كشف الحل للطالب. fail-open.
+    """
     if not text:
         return text or ""
     flt = StreamIntegrityFilter()
-    return flt.feed(text) + flt.flush()
+    cleaned = flt.feed(text) + flt.flush()
+    try:
+        from app.services.skills.answer_redaction_skill import redact_final_answers
+
+        redacted, _ = redact_final_answers(cleaned)
+        return redacted
+    except Exception:  # pragma: no cover - fail-open
+        logger.debug("answer redaction in sanitize_final_text failed (fail-open)", exc_info=True)
+        return cleaned
 
 
 class ContentIntegritySkill:

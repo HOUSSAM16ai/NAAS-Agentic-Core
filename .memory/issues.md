@@ -4089,3 +4089,14 @@ transcript حي: (1) غارباج لاتيني («experiences_random»، «brüc
 الإصلاح: ContentIntegritySkill (#16، فلترة كامل التيار، fail-open) + كاشف نية
 توليد واجهة + إعادة ترتيب الاستراتيجيات + aliases. الحالة: RESOLVED (203 backend
 + 18 frontend + gate). تحقق حيّ كامل للـ orchestrator HTTP في Codespaces.
+
+## ISS-115 — Illusion of Mastery / Answer Leak (2026-06-14 · D-113)
+المنصّة تكشف الحلّ الكامل عند الشرح (P(A)=14/165, C(11,3)=165, E(X)=1.73,
+$$\boxed{}$$, جدول P(X)) → الطالب يظن أنه فهم ثم يرسب (recognition vs generation).
+الجذر: EXPLANATION_DOCTRINE تأمر بإخراج النتيجة النهائية + full_content (مع الإجابة
+النموذجية) يصل الـ LLM. الإصلاح (D-113): doctrine سقراطي v3.0.0 + أسئلة-فقط
+للـ LLM + AnswerRedactionSkill (حارس حتمي fail-open، نطاق ضيّق). الحالة: Phase 1
+RESOLVED (محلياً) — 24 اختبار في test_iss115_socratic_no_answer.py + skills gate؛
+التحقق الحي الكامل في Codespaces. المتبقّي: SynthesizerNode socratic + سُلّم الدعم
+5-درجات + صدق BKT (assisted vs unaided-delayed) + واجهات بلا أرقام + وضع التحقق +
+مقياس فجوة الوهم.

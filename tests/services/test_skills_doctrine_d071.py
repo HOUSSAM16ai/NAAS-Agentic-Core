@@ -81,12 +81,18 @@ class TestBuildExerciseExplanationPrompt:
         prompt = build_exercise_explanation_prompt()
         assert "حرفياً" in prompt
 
-    def test_contains_methodology_section(self) -> None:
-        """منهجية الشرح يجب أن تكون موجودة."""
+    def test_contains_socratic_methodology(self) -> None:
+        """D-113 (ISS-115): المنهجية صارت سقراطية — توليد مُجبَر لا كشف للحل.
+
+        قبل D-113 كان الـ prompt يحوي «منهجية/مرحلة» تشرح خطوات الحل. الآن المنهجية
+        سقراطية: تلميحات متدرّجة + منع كشف النتيجة النهائية.
+        """
         from app.services.skills.doctrine import build_exercise_explanation_prompt
 
         prompt = build_exercise_explanation_prompt()
-        assert "منهجية" in prompt or "مرحلة" in prompt
+        assert "سقراطية" in prompt or "تلميح" in prompt or "لا تكشف" in prompt
+        # المنع المطلق لكشف النتيجة النهائية يجب أن يكون صريحاً
+        assert "ممنوع" in prompt and "نتيجة نهائية" in prompt
 
     def test_deterministic(self) -> None:
         """الدالة حتمية — نفس المدخلات = نفس المخرجات."""

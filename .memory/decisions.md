@@ -4295,3 +4295,20 @@ v1.0.0. مقايضة صريحة: سقوط orchestrator = انقطاع كامل (
 **تحقق حي كامل** (monolith→orchestrator 13-node→OpenRouter حقيقي؛ SQLite؛ Supabase
 عبر جسر HTTPS): UP→44 delta+learning_path_card؛ DOWN→ORCHESTRATOR_REQUIRED صفر delta؛
 ISS-114 حيّ 6/6. المتبقّي S2 (port skills إلى الرسم) / S3-S4 (P1/P2/P3) مُصمَّمة.
+
+## D-113 — وَهْم الإتقان / Socratic No-Answer OS (ISS-115, 2026-06-14)
+الكارثة: «اشرح السؤال الأول من تمرين الاحتمالات» يُسلّم الحلّ كاملاً
+(C(11,3)=165, P(A)=14/165, E(X)=1.73) → وهم الطلاقة → انهيار يوم الامتحان
+(Bjork: الأداء≠التعلّم). قرار المالك: منع مطلق لكشف النتيجة + وضع تحقق منفصل؛
+إصلاح سقراطي شامل أولاً؛ واجهات بتدرّج بصري بلا جواب. الإصلاح (3 طبقات fail-open):
+(1) EXPLANATION_DOCTRINE v3.0.0 سقراطي — القاعدة الذهبية «لا تكشف خطوةً يولّدها
+الطالب» + منع مطلق + محاولة-قبل-الشرح + سُلّم تلميحات + بروتوكول «لم أفهم»؛
+MODEL_ANSWER_* صارت verification-only؛ build_exercise_explanation_prompt أُعيد
+(742 حرف، مراسي محفوظة). (2) الشرح يستقبل display_content (أسئلة-فقط) لا
+full_content. (3) AnswerRedactionSkill (#18) حتمي — يحجب \boxed/P()=/E()=/C()=عدد
++ جداول P(X) + علامات «الإجابة النهائية»، نطاق ضيّق (يحفظ C(n,k) التعليمية)؛
+موصول في sanitize_final_text (orchestrator+محلي) + local_graph._apply_answer_redaction
++ redact_chunk. بوّابة check_answer_redaction_wired. الحالة: Phase 1 مُنفَّذ + مُتحقَّق
+محلياً (algorithm standalone + doctrine + registry + ruff + runtime_truth)؛ التحقق
+الحي الكامل عبر WS + الطبقات المتبقية (SynthesizerNode socratic، سُلّم 5-درجات،
+صدق BKT، واجهات بلا أرقام، وضع التحقق، فجوة الوهم) في Codespaces/متابعة.

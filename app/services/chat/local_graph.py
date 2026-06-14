@@ -488,6 +488,27 @@ def _apply_output_firewall(answer: str, intent: str) -> str:
         return answer
 
 
+def _apply_answer_redaction(answer: str, intent: str) -> str:
+    """D-113 (ISS-115 — وَهْم الإتقان): يحجب أي نتيجة نهائية صريحة قبل وصولها للطالب.
+
+    شبكة الأمان الحتمية الأخيرة: حتى مع الـ doctrine السقراطي + أسئلة-فقط، قد
+    يخترع نموذج مجاني نتيجة (`$$\\boxed{}$$`، `P(A)=14/165`). هذا الحارس يحجبها.
+    fail-open مطلق — لا يكسر دور الطالب.
+    """
+    if not answer or not answer.strip():
+        return answer
+    try:
+        from app.services.skills.answer_redaction_skill import redact_final_answers
+
+        redacted, n = redact_final_answers(answer)
+        if n:
+            logger.info("answer_redaction.applied intent=%s redactions=%d", intent, n)
+        return redacted
+    except Exception as exc:
+        logger.debug("answer_redaction non-fatal failure: %s", exc)
+        return answer
+
+
 def _check_topic_lock(
     question: str,
     answer: str,
@@ -807,6 +828,8 @@ async def _chat_node(state: LocalChatState) -> dict:
         # D-086 (V46.0): OutputFirewall — جدار الحماية المزدوج للقنوات
         # القناة B (صوت المعلم) يجب أن تكون Markdown نظيفاً — لا HTML، لا JSX.
         clean = _apply_output_firewall(clean, intent)
+        # D-113 (ISS-115): حجب أي نتيجة نهائية تسرّبت — توليد مُجبَر سقراطي.
+        clean = _apply_answer_redaction(clean, intent)
         # D-086 (V46.0): TopicLock — فحص نقاء الموضوع (تحذيري فقط)
         _check_topic_lock(question, clean, history)
         logger.info(
@@ -1490,6 +1513,15 @@ async def run_local_graph_with_exercise_context(
         except Exception:  # pragma: no cover - fail-open
             _integrity = None
 
+        # D-113 (ISS-115): حجب per-chunk للـ \boxed المباشر (النتائج اللفظية
+        # تُحجب نهائياً عبر sanitize_final_text على الإطار النهائي).
+        try:
+            from app.services.skills.answer_redaction_skill import redact_chunk
+        except Exception:  # pragma: no cover - fail-open
+
+            def redact_chunk(text: str) -> str:
+                return text
+
         async for clean in guard_arabic_stream(ai_client, messages, max_tokens=token_budget):
             if not clean:
                 continue
@@ -1498,6 +1530,9 @@ async def run_local_graph_with_exercise_context(
                 emit = _integrity.feed(clean)
                 if not emit:
                     continue
+            emit = redact_chunk(emit)
+            if not emit:
+                continue
             chunk_count += 1
             total_chars += len(emit)
             yield emit

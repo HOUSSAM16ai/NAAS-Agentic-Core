@@ -474,9 +474,7 @@ def check_answer_redaction_wired() -> None:
 
 
 def main() -> None:
-    print(
-        "=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100 + D-106 + D-111 + D-113) ===\n"
-    )
+    print("=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100 + D-106 + D-111 + D-113) ===\n")
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
     check_manifest_consistency()

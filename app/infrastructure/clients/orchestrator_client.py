@@ -356,7 +356,11 @@ class OrchestratorClient:
                 ExerciseRetrievalRequest(question=question),
                 history_messages=history_messages,
             )
-        if not decision.recognized or not decision.full_content:
+        # D-113 (ISS-115 — وَهْم الإتقان): الشرح السقراطي يستقبل **أسئلة التمرين
+        # فقط** (display_content)، لا الإجابة النموذجية (full_content). فلا يملك
+        # الـ LLM ما يكشفه. full_content محجوز لوضع التحقق المنفصل حصراً.
+        socratic_content = (getattr(decision, "display_content", None) or "").strip()
+        if not decision.recognized or not socratic_content:
             return
 
         try:
@@ -371,7 +375,7 @@ class OrchestratorClient:
 
             async for chunk in run_local_graph_with_exercise_context(
                 question=question,
-                exercise_full_content=decision.full_content,
+                exercise_full_content=socratic_content,
                 conversation_id=conversation_id,
                 history_messages=history_messages,
             ):

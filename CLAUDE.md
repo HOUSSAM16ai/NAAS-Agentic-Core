@@ -8710,3 +8710,66 @@ deploy — نمط D-025). `MANDATORY_ORCHESTRATION_DOCTRINE` v1.0.0 + manifest.
 - **S2**: port المهارات الحتمية (probability/content_integrity/learning_path/greeting/indexed-retrieval + knowledge_base) **داخل** الـ orchestrator كعقد رسم — «إزالة كل مسار المونوليث» الكاملة (المونوليث = بوابة WS رقيقة). كبير — يُرحَّل عبر مراحل مُتحقَّقة.
 - **S3/S4**: P1 Mastery-Aware Orchestrator + P3 Real Synthesis + P2 CritiqueNode داخل الرسم.
 - القيد المعماري: المونوليث لا يستورد من `microservices/` والعكس — «النقل» = port (نسخ مستقل)، لا import.
+
+---
+
+## 6.97 وَهْم الإتقان — Socratic No-Answer OS (2026-06-14, ISS-115 / D-113)
+
+> **الكارثة (transcript حي):** عند «اشرح السؤال الأول من تمرين الاحتمالات» كان النظام
+> يُسلّم الحلّ الكامل (`C(11,3)=165`، `P(A)=14/165`، `P(B)=56/165`، `E(X)=1.73`، جدول
+> قانون X). الطالب يقرأ، يومئ، يشعر أنه «فهم» (وهم الطلاقة)، ثم ينهار يوم الامتحان لأن
+> الدراسة درّبت **التعرّف** بينما الامتحان يطلب **التوليد** (Bjork: الأداء ≠ التعلّم؛
+> Roediger: أثر الاختبار؛ Kapur: الفشل المُنتِج؛ Renkl: تلاشي المثال المحلول).
+
+### الجذر المؤكَّد
+- `doctrine.py:EXPLANATION_DOCTRINE` (v2.3.0) كان يأمر صراحةً: «اعتمد على الإجابة النموذجية
+  كحُجّة للنتائج النهائية» + «النتيجة النهائية في `$$\boxed{}$$`» → الـ LLM يطبع كل الأجوبة.
+- `exercise_retrieval.detect_explanation_with_context` كان يمرّر `full_content` (يحوي
+  الإجابة النموذجية) للـ LLM، لا `display_content` (أسئلة فقط).
+
+### الإصلاح (3 طبقات دفاع — الكل fail-open)
+1. **doctrine سقراطي (v3.0.0):** أُعيدت كتابة `EXPLANATION_DOCTRINE` بالكامل — القاعدة
+   الذهبية «لا تكشف خطوةً يستطيع الطالب توليدها» + منع مطلق للنتيجة النهائية + محاولة قبل
+   الشرح + سُلّم تلميحات متصاعد + بروتوكول «لم أفهم» (تشخيص لا إعادة اشتقاق) + شرح ذاتي +
+   تفنيد بعد الخطأ. `build_exercise_explanation_prompt` أُعيدت كتابته (742 حرف، يحفظ مراسي
+   CI «الإجابة النموذجية»/«LaTeX»/«حرفياً»). `MODEL_ANSWER_*` صارت **لوضع التحقق حصراً**.
+2. **أسئلة-فقط للـ LLM:** `orchestrator_client._stream_exercise_explanation_response` يمرّر
+   `display_content` (أسئلة بلا حل) لا `full_content` — فلا يملك الـ LLM ما يكشفه.
+3. **حارس حتمي أخير — `AnswerRedactionSkill` (Skill #18):** `app/services/skills/answer_redaction_skill.py`
+   يحجب `\boxed{X}`→`\boxed{?}`، و`P(...)=/E(...)=/C(...)=<عدد>`، وأسطر «إذن…=عدد»، وعلامات
+   «الإجابة النهائية:». **نطاق ضيّق** يحفظ الصيغ التعليمية (`نستخدم C(n,k)`، الصيغ الرمزية).
+   موصول في `content_integrity.sanitize_final_text` (يغطّي orchestrator + المحلي على الإطار
+   النهائي) + `local_graph._apply_answer_redaction` (في `_chat_node`) + `redact_chunk`
+   per-chunk للبثّ المباشر.
+
+### القواعد الدائمة (D-113 — لا تُكسر بدون ADR)
+1. **القاعدة الذهبية فوق كل القواعد:** لا تكشف نتيجةً أو خطوةً يستطيع الطالب توليدها بنفسه.
+2. **الشرح يستقبل أسئلة-فقط** (`display_content`)؛ الإجابة النموذجية (`full_content`) لوضع
+   التحقق حصراً.
+3. **كل مخرَج نهائي مواجه للطالب يمرّ عبر `sanitize_final_text`** (الذي يستدعي
+   `redact_final_answers`) — لا تتجاوزه.
+4. **«لم أفهم» = تشخيص + تلميح أدنى واحد**، ممنوع إعادة اشتقاق الحل (أكثر الردود تدميراً).
+5. **حجب النطاق الضيّق:** لا تُوسِّع الـ redaction لتشمل المساواة الرمزية الوسيطة (false-positive).
+6. `EXPLANATION_DOCTRINE_VERSION ≥ 3.0.0`؛ بوّابة `check_skills_doctrine.check_answer_redaction_wired`
+   تحرس التوصيل + وجود قواعد المنع («لا تكشف» + «ممنوع»).
+
+### التحقق
+- **محلياً (sandbox — بلا pydantic):** خوارزمية الـ redaction مُثبتة standalone — كل التسريبات
+  (`14/165`, `165`, `1.73`, `\boxed`, جدول P(X)) محجوبة؛ التعليم الوسيط محفوظ؛ صفر false-positive.
+  doctrine standalone: v3.0.0، 3 مراسي، 742 حرف، قاعدة التسريب القديمة أُزيلت. registry: 18 skill،
+  `answer_redaction` non-ZOMBIE. ruff + runtime_truth ✅.
+- **CI/Codespaces (بالأسرار):** `tests/services/test_iss115_socratic_no_answer.py` (24 اختبار) +
+  بوّابة skills-doctrine. **سيناريو الكارثة الحي عبر WS:** «اشرح السؤال الأول» → أسئلة سقراطية +
+  تلميح أدنى، **صفر** `14/165`/`165`/`$$\boxed{}$$`؛ «لم أفهم» → سؤال تشخيصي لا إعادة اشتقاق.
+
+### نطاق هذه الجولة + المتابعة
+- **مُنفَّذ (Phase 1):** الطبقات الثلاث أعلاه (المسار المحلي + مخرج orchestrator عبر
+  `sanitize_final_text`). **متابعة:** فرض السقراطية داخل `SynthesizerNode` (الرسم 13-node)،
+  سُلّم الدعم 5-درجات في `AdaptivePedagogySkill`، صدق BKT (assisted vs unaided-delayed)،
+  واجهات مولدة بلا أرقام نهائية، وضع التحقق المنفصل، مقياس «فجوة الوهم».
+
+### السلسلة الكاملة (D-112 → D-113)
+| Decision | الموضوع |
+|----------|---------|
+| D-112 | العمود الفقري الإلزامي (microservices hard-fail) |
+| **D-113** | **وَهْم الإتقان — Socratic No-Answer: doctrine سقراطي + أسئلة-فقط + AnswerRedactionSkill** |

@@ -54,6 +54,14 @@ from app.services.skills.answer_quality_skill import (
     QualityIssue,
     get_answer_quality_skill,
 )
+from app.services.skills.answer_redaction_skill import (
+    AnswerRedactionInput,
+    AnswerRedactionOutput,
+    AnswerRedactionSkill,
+    get_answer_redaction_skill,
+    redact_chunk,
+    redact_final_answers,
+)
 from app.services.skills.arabic_stream_guard import (
     arabic_prose_ratio,
     guard_arabic_stream,
@@ -75,6 +83,8 @@ from app.services.skills.bkt_engine import (
     get_bkt_engine,
 )
 from app.services.skills.doctrine import (
+    ANSWER_REDACTION_DOCTRINE,
+    ANSWER_REDACTION_DOCTRINE_VERSION,
     BKT_COGNITIVE_DOCTRINE,
     BKT_COGNITIVE_DOCTRINE_VERSION,
     CONTENT_INVOCATION_DOCTRINE,
@@ -174,6 +184,8 @@ from app.services.skills.topic_lock import (
 )
 
 __all__ = [
+    "ANSWER_REDACTION_DOCTRINE",
+    "ANSWER_REDACTION_DOCTRINE_VERSION",
     "BKT_COGNITIVE_DOCTRINE",
     "BKT_COGNITIVE_DOCTRINE_VERSION",
     "CONTENT_INVOCATION_DOCTRINE",
@@ -202,6 +214,9 @@ __all__ = [
     "AnswerQualityInput",
     "AnswerQualityOutput",
     "AnswerQualitySkill",
+    "AnswerRedactionInput",
+    "AnswerRedactionOutput",
+    "AnswerRedactionSkill",
     "BACExerciseSkill",
     "BACSkillExplanationOutput",
     "BACSkillInput",
@@ -255,6 +270,7 @@ __all__ = [
     "compose_text_refinement",
     "get_adaptive_pedagogy_skill",
     "get_answer_quality_skill",
+    "get_answer_redaction_skill",
     "get_bkt_cognitive_summary",
     "get_bkt_engine",
     "get_content_invocation_summary",
@@ -275,5 +291,7 @@ __all__ = [
     "guard_arabic_stream",
     "is_probably_non_arabic",
     "list_all_doctrines",
+    "redact_chunk",
+    "redact_final_answers",
     "sanitize_stream_chunk",
 ]

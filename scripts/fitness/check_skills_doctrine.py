@@ -85,6 +85,8 @@ def check_manifest_consistency() -> None:
     from app.services.skills.doctrine import (
         ADAPTIVE_PEDAGOGY_DOCTRINE,
         ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION,
+        ANSWER_REDACTION_DOCTRINE,
+        ANSWER_REDACTION_DOCTRINE_VERSION,
         BKT_COGNITIVE_DOCTRINE,
         BKT_COGNITIVE_DOCTRINE_VERSION,
         DETAILED_EXPLANATION_RULES,
@@ -101,6 +103,12 @@ def check_manifest_consistency() -> None:
     pairs = [
         ("retrieval", RETRIEVAL_DOCTRINE_VERSION, len(RETRIEVAL_DOCTRINE)),
         ("explanation", EXPLANATION_DOCTRINE_VERSION, len(EXPLANATION_DOCTRINE)),
+        # D-113 (ISS-115): الحارس الحتمي ضد كشف الإجابة النهائية.
+        (
+            "answer_redaction",
+            ANSWER_REDACTION_DOCTRINE_VERSION,
+            len(ANSWER_REDACTION_DOCTRINE),
+        ),
         (
             "model_answer_reliance",
             MODEL_ANSWER_RELIANCE_VERSION,
@@ -322,6 +330,7 @@ def check_skills_platform() -> None:
         "bac_exercise",
         "math",
         "answer_quality",
+        "answer_redaction",
         "bkt_engine",
         "adaptive_pedagogy",
         "probability",
@@ -433,8 +442,41 @@ def check_learning_path_wired() -> None:
     _pass("Learning path wired: adaptive next-step over BKT mastery (D-111)")
 
 
+def check_answer_redaction_wired() -> None:
+    """D-113 (ISS-115 — وَهْم الإتقان): الحارس الحتمي ضد كشف الإجابة موصول فعلاً.
+
+    يحرس: (1) `sanitize_final_text` (content_integrity) يستدعي `redact_final_answers`
+    فيغطّي مخرج orchestrator + المسار المحلي النهائي، (2) `local_graph` يحوي
+    `_apply_answer_redaction` ويستدعيه، (3) الـ doctrine السقراطي يمنع كشف النتيجة.
+    """
+    ci = (ROOT / "app/services/skills/content_integrity_skill.py").read_text(encoding="utf-8")
+    if "redact_final_answers" not in ci:
+        _fail(
+            "content_integrity.sanitize_final_text no longer calls redact_final_answers "
+            "(D-113 ZOMBIE — answer redaction not on the final-frame path)."
+        )
+    local_src = (ROOT / "app/services/chat/local_graph.py").read_text(encoding="utf-8")
+    if "_apply_answer_redaction" not in local_src:
+        _fail("local_graph.py: _apply_answer_redaction not defined (D-113).")
+    if "_apply_answer_redaction(clean" not in local_src:
+        _fail("local_graph._chat_node does not call _apply_answer_redaction (D-113 ZOMBIE).")
+
+    # الـ doctrine السقراطي يجب أن يمنع كشف النتيجة النهائية صراحةً
+    from app.services.skills.doctrine import EXPLANATION_DOCTRINE
+
+    joined = " ".join(EXPLANATION_DOCTRINE)
+    if "لا تكشف" not in joined or "ممنوع" not in joined:
+        _fail(
+            "EXPLANATION_DOCTRINE no longer forbids revealing answers "
+            "(D-113: must contain Socratic no-answer rules)."
+        )
+    _pass("Answer redaction wired: Socratic no-answer + deterministic final guard (D-113)")
+
+
 def main() -> None:
-    print("=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100 + D-106 + D-111) ===\n")
+    print(
+        "=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100 + D-106 + D-111 + D-113) ===\n"
+    )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
     check_manifest_consistency()
@@ -447,6 +489,7 @@ def main() -> None:
     check_adaptive_pedagogy_wiring()
     check_content_integrity_wired()
     check_learning_path_wired()
+    check_answer_redaction_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

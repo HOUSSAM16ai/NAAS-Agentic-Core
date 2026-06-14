@@ -355,6 +355,18 @@ def _build_registry() -> SkillRegistry:
             ),
         ),
         SkillDescriptor(
+            name="answer_redaction",
+            summary="الحارس الحتمي الأخير ضد كشف الإجابة النهائية — توليد مُجبَر سقراطي (D-113).",
+            input_contract="AnswerRedactionInput",
+            output_contract="AnswerRedactionOutput",
+            primary_method="redact",
+            metrics_prefix="cogniforge_skill_answer_redaction",
+            consumed_by=(
+                "content_integrity.sanitize_final_text",
+                "local_graph._apply_answer_redaction",
+            ),
+        ),
+        SkillDescriptor(
             name="bkt_engine",
             summary="الطبقة المعرفية الأساسية Bayesian Knowledge Tracing (D-074).",
             input_contract="BKTEvaluationInput",

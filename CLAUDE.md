@@ -8768,8 +8768,30 @@ deploy — نمط D-025). `MANDATORY_ORCHESTRATION_DOCTRINE` v1.0.0 + manifest.
   سُلّم الدعم 5-درجات في `AdaptivePedagogySkill`، صدق BKT (assisted vs unaided-delayed)،
   واجهات مولدة بلا أرقام نهائية، وضع التحقق المنفصل، مقياس «فجوة الوهم».
 
+### الجولة 2 (2026-06-14) — السقراطية في الخدمات المصغرة + سُلّم الدعم الخماسي
+الجولة 1 غطّت المسار المحلي. الجولة 2 تُغلق الكارثة على **المسار الإلزامي** (الخدمات
+المصغرة — D-112) + تُضيف سُلّم الدعم المتدرّج:
+1. **port الحجب إلى الـ orchestrator** (`response_sanitizer.py`): `redact_final_answers`
+   + `_strip_boxed` (نسخة مستقلة stdlib — المونوليث لا يستورد من microservices). مدموج
+   في `sanitize_response` (يغطّي مخرج كل عقدة: Synthesizer/ChatFallback/GeneralKnowledge)
+   + `sanitize_chunk` (حجب `\boxed` الحيّ). نطاق ضيّق (يحفظ `C(n,k)` + قانون أوم `U=RI`).
+2. **عقد السقراطية في `SynthesizerNode`** (`search.py`): system prompts «اكتب الشرح أو
+   الحل» → «قُد بأسئلة وتلميحات؛ ممنوع كشف النتيجة لتمرين يحلّه الطالب؛ المعرفة العامة
+   تُجاب مباشرة» (فرعا no-docs + with-docs + `EducationalSynthesizer` DSPy signature).
+3. **سُلّم الدعم الخماسي** (`adaptive_pedagogy_skill.py` → doctrine v1.1.0): `support_level`
+   1..5 (worked_example→completion→backward_fading→prompted→unaided) مشتقّ حتمياً من
+   الإتقان + الحِمل؛ `guidance_level` الثلاثي يبقى دون تغيير (توافق خلفي)؛ clause «مستوى
+   الدعم» يُلحق بـ `directive_text` فيصل الـ LLM عبر prepend الموجود (لا plumbing إضافي).
+- **التحقق:** port الحجب stdlib مُثبت standalone (تسريبات محجوبة، صفر false-positive على
+  `C(n,k)`/`U=RI`)؛ سُلّم الدعم 8 حالات mastery→level + طول ≤400؛ ruff + runtime_truth +
+  doctrine standalone خضراء. اختبارات: `test_response_sanitizer.py` (+8 D-113) +
+  `test_d104_adaptive_pedagogy.py` (+سُلّم الدعم). التحقق الحي الكامل عبر WS في Codespaces.
+- **مؤجَّل:** تمرير `support_level` مُهيكلاً في AgentState/routes (الـ directive يصل عبر
+  prepend حالياً)؛ صدق BKT بالمنحنيين؛ واجهات بلا أرقام؛ وضع التحقق؛ فجوة الوهم.
+
 ### السلسلة الكاملة (D-112 → D-113)
 | Decision | الموضوع |
 |----------|---------|
 | D-112 | العمود الفقري الإلزامي (microservices hard-fail) |
-| **D-113** | **وَهْم الإتقان — Socratic No-Answer: doctrine سقراطي + أسئلة-فقط + AnswerRedactionSkill** |
+| **D-113 (ج1)** | **وَهْم الإتقان — Socratic No-Answer: doctrine سقراطي + أسئلة-فقط + AnswerRedactionSkill (المسار المحلي)** |
+| **D-113 (ج2)** | **السقراطية + الحجب في الـ orchestrator (response_sanitizer + SynthesizerNode) + سُلّم الدعم الخماسي (v1.1.0)** |

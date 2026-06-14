@@ -4312,3 +4312,19 @@ full_content. (3) AnswerRedactionSkill (#18) حتمي — يحجب \boxed/P()=/E
 محلياً (algorithm standalone + doctrine + registry + ruff + runtime_truth)؛ التحقق
 الحي الكامل عبر WS + الطبقات المتبقية (SynthesizerNode socratic، سُلّم 5-درجات،
 صدق BKT، واجهات بلا أرقام، وضع التحقق، فجوة الوهم) في Codespaces/متابعة.
+
+## D-113 (الجولة 2) — السقراطية في الخدمات المصغرة + سُلّم الدعم الخماسي (2026-06-14)
+متابعة D-113 ج1 (المسار المحلي). ج2 تُغلق الكارثة على المسار الإلزامي (الخدمات
+المصغرة — D-112): (1) port حجب الإجابة إلى orchestrator `response_sanitizer.py`
+(`redact_final_answers`+`_strip_boxed`، نسخة stdlib مستقلة — لا import من app/)،
+مدموج في `sanitize_response` (يغطّي كل العقد) + `sanitize_chunk` (حجب \boxed حيّ)،
+نطاق ضيّق يحفظ C(n,k) و U=RI. (2) عقد السقراطية في `SynthesizerNode` (search.py):
+system prompts «اكتب الحل» → «قُد بأسئلة؛ ممنوع كشف النتيجة لتمرين؛ المعرفة العامة
+تُجاب» + EducationalSynthesizer signature. (3) سُلّم الدعم الخماسي في
+`adaptive_pedagogy_skill.py` (doctrine v1.1.0): support_level 1..5
+(worked_example→unaided) حتمي من الإتقان+الحِمل؛ guidance_level الثلاثي دون تغيير
+(توافق خلفي)؛ clause «مستوى الدعم» يُلحق بـ directive_text فيصل الـ LLM عبر prepend
+الموجود (D-104) بلا plumbing. التحقق: standalone (حجب stdlib + ladder mapping +
+طول≤400) + ruff + runtime_truth خضراء؛ +8 اختبار orchestrator redaction + ladder
+tests؛ الحي الكامل عبر WS في Codespaces. مؤجَّل: support_level مُهيكل في
+AgentState/routes، صدق BKT، واجهات بلا أرقام، وضع التحقق، فجوة الوهم.

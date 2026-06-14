@@ -367,7 +367,10 @@ class WebSearchFallbackNode:
 class EducationalSynthesizer(dspy.Signature):
     """Synthesize an educational response from retrieved documents.
     You MUST obey any constraints specified in the conversation (e.g., 'question 1 only', 'no solution').
-    Write your output clearly in Arabic."""
+    D-113 (Socratic No-Answer): if the source is an EXERCISE the student must solve,
+    NEVER reveal the final numeric result or a step the student can generate — guide
+    with questions and graded hints instead. If it is a general-knowledge question,
+    answer directly. Write your output clearly in Arabic."""
 
     context: str = dspy.InputField(desc="The raw retrieved exercise or document text.")
     conversation: str = dspy.InputField(
@@ -545,7 +548,12 @@ class SynthesizerNode:
                     stream_messages = [
                         {
                             "role": "system",
-                            "content": "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار.",
+                            # D-113: سقراطي للتمارين، إجابة مباشرة للمعرفة العامة.
+                            "content": (
+                                "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار. إذا كان "
+                                "السؤال تمريناً يحلّه الطالب: قُده بأسئلة وتلميحات ولا "
+                                "تكشف النتيجة النهائية. للمعرفة العامة: أجب مباشرة."
+                            ),
                         },
                         # D-103: حقن hint الاستدلال عند توفره (فرع no-docs)
                         {"role": "user", "content": _weave_reasoning_hint(query, reasoning_hint)},
@@ -603,15 +611,21 @@ class SynthesizerNode:
                 # نُحاكي نفس قالب EducationalSynthesizer signature ولكن بـ streaming.
                 try:
                     system_msg = (
-                        "أنت مدرس بكالوريا جزائري. اعتمد على context الذي يحويه التمرين "
-                        "أو الدرس من قاعدة المعرفة، وعلى محادثة الطالب. اكتب شرحاً متماسكاً "
-                        "بالعربية الفصحى. لا تُكرر نص المصدر حرفياً."
+                        "أنت مدرس بكالوريا جزائري تُعلّم بالطريقة السقراطية. اعتمد على "
+                        "context من قاعدة المعرفة وعلى محادثة الطالب. اكتب بالعربية الفصحى "
+                        "ولا تُكرر نص المصدر حرفياً. "
+                        # D-113: لا تُسلّم الحلّ لتمرين يحلّه الطالب.
+                        "إذا كان المصدر تمريناً يجب أن يحلّه الطالب: علّمه كيف يفكّر، قُده "
+                        "بأسئلة وتلميحات متدرّجة، وممنوع كشف النتيجة النهائية (أرقام/كسور/"
+                        "$$\\boxed{...}$$). إذا كان سؤال معرفة عامة: أجب مباشرة."
                     )
                     user_msg = (
                         f"المصدر (context):\n{raw_doc_text}\n\n"
                         f"محادثة الطالب:\n{conversation_text}\n\n"
                         f"السؤال الحالي: {query}\n\n"
-                        "اكتب الشرح أو الحل."
+                        # D-113: وجِّه نحو الحل، لا تُسلّمه (للتمارين).
+                        "وجِّه الطالب نحو الحل بأسئلة وتلميحات؛ لا تكشف النتيجة النهائية "
+                        "لتمرين يحلّه بنفسه."
                     )
                     # D-103: حقن hint الاستدلال عند توفره (فرع with-docs)
                     user_msg = _weave_reasoning_hint(user_msg, reasoning_hint)

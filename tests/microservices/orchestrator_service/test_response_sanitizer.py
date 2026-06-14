@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
     get_greeting_fastpath_response,
+    redact_final_answers,
+    sanitize_chunk,
     sanitize_response,
 )
 
@@ -233,3 +235,47 @@ class TestEdgeCases:
         assert "sin(x)" in out
         assert "cos(y)" in out
         assert "dx" in out
+
+
+class TestAnswerRedactionD113:
+    """D-113 (ISS-115 — وَهْم الإتقان): حجب الإجابة النهائية في مخرج الـ orchestrator.
+
+    شبكة الأمان: كل مخرجات العقد تمرّ عبر sanitize_response → redact_final_answers.
+    """
+
+    def test_redacts_probability_results(self):
+        out = sanitize_response(
+            "العدد الكلي = C(11,3) = 165 إذن P(A)=14/165 ثم P(B)=56/165",
+            intent="educational",
+        )
+        for leak in ("165", "14/165", "56/165"):
+            assert leak not in out, f"leaked: {leak} in {out!r}"
+
+    def test_redacts_expectation_and_boxed(self):
+        assert "1.73" not in sanitize_response("إذن الأمل E(X)=1.73", intent="educational")
+        out = sanitize_response(r"النتيجة $$\boxed{14/165}$$", intent="educational")
+        assert "14/165" not in out and "\\boxed{?}" in out
+
+    def test_redacts_distribution_table(self):
+        out = sanitize_response("P(X=0)=10/165 و P(X=1)=45/165", intent="educational")
+        assert "10/165" not in out and "45/165" not in out
+
+    def test_preserves_intermediate_teaching(self):
+        # صفر false-positive: الصيغ التعليمية الرمزية تبقى
+        keep = r"نستخدم C(n,k) و $C(n,k)=\frac{n!}{k!(n-k)!}$"
+        assert sanitize_response(keep, intent="educational") == keep
+
+    def test_general_knowledge_formula_survives(self):
+        # قانون أوم العام U=RI ليس نتيجة تمرين → لا يُحجب
+        out = sanitize_response("قانون أوم هو U=RI حيث U التوتر", intent="general")
+        assert "U=RI" in out
+
+    def test_chunk_strips_boxed_live(self):
+        assert "165" not in sanitize_chunk(r"الجواب $$\boxed{165}$$ هنا")
+
+    def test_redact_final_answers_idempotent(self):
+        once = redact_final_answers("P(A)=14/165 و $$\\boxed{165}$$")
+        assert redact_final_answers(once) == once
+
+    def test_empty_safe(self):
+        assert redact_final_answers("") == ""

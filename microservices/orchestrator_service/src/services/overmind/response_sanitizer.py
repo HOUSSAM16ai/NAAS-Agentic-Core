@@ -38,6 +38,88 @@ from __future__ import annotations
 
 import re
 
+# ── D-113 (ISS-115 — وَهْم الإتقان): حجب الإجابة النهائية ─────────────────────
+# port مستقل من `app/services/skills/answer_redaction_skill.py` (المونوليث لا
+# يستورد من microservices والعكس — نفس نمط heartbeat/content_integrity).
+# الكارثة: مخرج الـ orchestrator (SynthesizerNode) يكشف الحلّ الكامل
+# (P(A)=14/165، C(11,3)=165، E(X)=1.73، $$\boxed{}$$) → وهم الطلاقة → انهيار
+# يوم الامتحان. الحارس حتمي، نطاق ضيّق (يحفظ C(n,k) التعليمية)، fail-open.
+_MATH_MASK = "?"
+_PROSE_MASK = "؟"
+_NUM = r"[-+]?\d[\d.,]*\s*(?:/\s*\d[\d.,]*)?\s*%?"
+# نتيجة احتمال/توافيق/أمل صريحة: P(...)=، E(...)=، C(...)=<عدد ختامي فقط>.
+_FINAL_RESULT_RE = re.compile(
+    r"(?P<lhs>[PECpec]\s*(?:_?[A-Za-z])?\s*\([^)\n]{0,60}\)\s*=\s*)(?P<rhs>" + _NUM + r")"
+)
+# خلاصة لفظية تنتهي بعدد: «إذن/ومنه/النتيجة/الجواب ... = <عدد>».
+_CONCLUSION_RE = re.compile(
+    r"(?P<lhs>(?:إذن|ومنه|النتيجة|الجواب|فإن)[^=\n]{0,90}=\s*)(?P<rhs>" + _NUM + r")"
+)
+# أسطر العلامات الصريحة للنتيجة النهائية.
+_RESULT_MARKER_RE = re.compile(
+    r"(?P<lbl>(?:الإجابة|النتيجة|الجواب)\s*(?:النهائية|النهائي)\s*[:：]?\s*)(?P<val>.+)"
+)
+
+
+def _strip_boxed(text: str) -> str:
+    r"""يستبدل محتوى كل `\boxed{...}` بـ `?` (موازنة أقواس). يُبقي الصندوق صالحاً."""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        idx = text.find("\\boxed", i)
+        if idx == -1:
+            out.append(text[i:])
+            break
+        out.append(text[i:idx])
+        j = idx + len("\\boxed")
+        while j < n and text[j] in " \t":
+            j += 1
+        if j < n and text[j] == "{":
+            depth = 0
+            k = j
+            while k < n:
+                if text[k] == "{":
+                    depth += 1
+                elif text[k] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        k += 1
+                        break
+                k += 1
+            out.append("\\boxed{" + _MATH_MASK + "}")
+            i = k
+        else:
+            out.append(text[idx : idx + len("\\boxed")])
+            i = idx + len("\\boxed")
+    return "".join(out)
+
+
+def redact_final_answers(text: str) -> str:
+    """يحجب كل نتيجة نهائية صريحة من النص. حتمي، fail-open (أي فشل → النص كما هو)."""
+    if not text or not text.strip():
+        return text or ""
+    try:
+        result = _strip_boxed(text)
+        result = _FINAL_RESULT_RE.sub(lambda m: f"{m.group('lhs')}{_PROSE_MASK}", result)
+        result = _CONCLUSION_RE.sub(lambda m: f"{m.group('lhs')}{_PROSE_MASK}", result)
+        return _RESULT_MARKER_RE.sub(
+            lambda m: f"{m.group('lbl')}{_PROSE_MASK} (حاول أن تصل إليها بنفسك)", result
+        )
+    except Exception:  # pragma: no cover - fail-open مطلق
+        return text
+
+
+def _redact_boxed_chunk(text: str) -> str:
+    r"""حجب آمن للبثّ المباشر (per-chunk): `\boxed{...}` فقط (لا يحتاج سياق سطر)."""
+    if not text or "\\boxed" not in text:
+        return text or ""
+    try:
+        return _strip_boxed(text)
+    except Exception:  # pragma: no cover
+        return text
+
+
 # ── Foreign-word replacements (Russian/Norwegian/Spanish → عربي) ──────────────
 _FOREIGN_REPLACEMENTS: dict[str, str] = {
     # روسي
@@ -152,7 +234,8 @@ def sanitize_response(text: str, intent: str = "general") -> str:
             out = out.lstrip()
             if out == prev:
                 break
-    return out
+    # 4. D-113: حجب الإجابة النهائية — شبكة الأمان على كل مخرجات العقد (نطاق ضيّق).
+    return redact_final_answers(out)
 
 
 # ── ISS-078 D-066: Streaming-aware sanitization ──────────────────────────────
@@ -211,7 +294,9 @@ def sanitize_chunk(chunk: str) -> str:
     out = re.sub(r"[Ѐ-ӿ]+", "", out)  # Cyrillic
     out = re.sub(r"[一-鿿]+", "", out)  # CJK Han
     out = re.sub(r"[぀-ゟ゠-ヿ]+", "", out)  # Japanese kana
-    return re.sub(r"[가-힣ㄱ-ㅎㅏ-ㅣ]+", "", out)  # Korean Hangul (D-103 live finding)
+    out = re.sub(r"[가-힣ㄱ-ㅎㅏ-ㅣ]+", "", out)  # Korean Hangul (D-103 live finding)
+    # D-113: حجب \boxed الحيّ (النتائج اللفظية تُحجب نهائياً في sanitize_response)
+    return _redact_boxed_chunk(out)
 
 
 def get_greeting_fastpath_response(query: str) -> str | None:
@@ -320,6 +405,7 @@ def get_greeting_fastpath_response(query: str) -> str | None:
 
 __all__ = [
     "get_greeting_fastpath_response",
+    "redact_final_answers",
     "sanitize_chunk",
     "sanitize_response",
 ]

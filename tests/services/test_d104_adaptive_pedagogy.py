@@ -187,5 +187,37 @@ class TestWiringInvariants:
         names = [d.name for d in get_skill_registry().list()]
         assert "adaptive_pedagogy" in names
         entry = SKILL_DOCTRINE_MANIFEST["adaptive_pedagogy"]
-        assert entry["version"] == "1.0.0"
+        assert entry["version"] == "1.1.0"  # D-113: سُلّم الدعم الخماسي
         assert "customer_chat._build_pedagogy_directive" in entry["consumed_by"]
+
+
+class TestSupportLadder:
+    """D-113: سُلّم الدعم الخماسي — السقالة تتلاشى مع الإتقان."""
+
+    @pytest.mark.parametrize(
+        ("mastery", "load", "expected_level", "expected_label"),
+        [
+            (None, "medium", 1, "worked_example"),
+            (0.1, "medium", 1, "worked_example"),
+            (0.3, "medium", 2, "completion"),
+            (0.5, "medium", 3, "backward_fading"),
+            (0.7, "medium", 4, "prompted"),
+            (0.9, "medium", 5, "unaided"),
+            (0.9, "high", 4, "prompted"),  # حِمل مرتفع ⇒ دعم أكثر (درجة أقل)
+            (0.1, "high", 1, "worked_example"),  # لا أقل من 1
+        ],
+    )
+    def test_support_levels(self, skill, mastery, load, expected_level, expected_label):
+        d = skill.derive(
+            PedagogyInput(question="سؤال عن الاحتمالات", mastery=mastery, cognitive_load=load)
+        )
+        assert d.support_level == expected_level
+        assert d.ladder_label == expected_label
+        # درجة الدعم تظهر في التوجيه ليصل الـ LLM عبر prepend (لا plumbing إضافي)
+        assert "مستوى الدعم" in d.directive_text
+
+    def test_unaided_is_golden_threshold(self, skill):
+        """العتبة الذهبية: الإتقان العالي ⇒ بلا دعم (يولّد الطالب الحلّ وحده)."""
+        d = skill.derive(PedagogyInput(question="احسب", mastery=0.95))
+        assert d.support_level == 5
+        assert "بلا مساعدة" in d.directive_text

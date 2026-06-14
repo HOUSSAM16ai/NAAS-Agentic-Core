@@ -39,6 +39,25 @@ DIRECTIVE_MAX_CHARS: int = 400
 
 GuidanceLevel = str  # "socratic" | "guided" | "scaffolded"
 
+# ── سُلّم الدعم الخماسي (D-113 — worked-example fading, Renkl & Atkinson) ──────
+# درجة 1 = أثقل دعم (مثال محلول كامل) ... درجة 5 = بلا دعم (unaided — العتبة
+# الذهبية للإتقان الحقيقي). البحث «وَهْم الإتقان»: السقالة التي لا تتلاشى تصير
+# قفصاً — يجب أن يتلاشى الدعم مع نموّ الإتقان حتى يولّد الطالب الحلّ وحده.
+_SUPPORT_LADDER_LABELS: dict[int, str] = {
+    1: "worked_example",
+    2: "completion",
+    3: "backward_fading",
+    4: "prompted",
+    5: "unaided",
+}
+_SUPPORT_LADDER_CLAUSES: dict[int, str] = {
+    1: " مستوى الدعم: مثال محلول كامل، واطلب «لماذا؟» قبل كل خطوة.",
+    2: " مستوى الدعم: اعرض الحل بفجوات يملؤها الطالب.",
+    3: " مستوى الدعم: احذف الخطوات الأخيرة ليُكملها الطالب بنفسه.",
+    4: " مستوى الدعم: لا تعرض خطوات؛ تلميح أدنى عند التعثّر فقط.",
+    5: " مستوى الدعم: بلا مساعدة — اطلب حلّاً كاملاً غير مدعوم.",
+}
+
 # ── كتالوج المفاهيم الخاطئة الشائعة (BAC الجزائر) ─────────────────────────────
 # marker في سؤال الطالب ⇒ المفهوم الخاطئ ربما يتجذر — وجّه التصحيح للفكرة.
 _MISCONCEPTION_CATALOG: dict[str, tuple[tuple[str, str], ...]] = {
@@ -125,6 +144,9 @@ class PedagogyDirective(RobustBaseModel):
     directive_text: str = Field(..., max_length=DIRECTIVE_MAX_CHARS)
     misconception_alerts: tuple[str, ...] = ()
     mastery_used: float | None = None
+    # D-113: درجة سُلّم الدعم 1..5 (1=مثال محلول كامل ← 5=بلا دعم/unaided).
+    support_level: int = Field(default=1, ge=1, le=5)
+    ladder_label: str = "worked_example"
     doctrine_version: str = ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION
 
 
@@ -156,6 +178,27 @@ def _classify_guidance(mastery: float | None, cognitive_load: str) -> GuidanceLe
     return level
 
 
+def _classify_support_level(mastery: float | None, cognitive_load: str) -> int:
+    """D-113: درجة سُلّم الدعم الخماسي (1..5) — أدق من guidance_level الثلاثي.
+
+    1=worked_example (إتقان منخفض/مجهول) ... 5=unaided (إتقان عالٍ). الحِمل
+    المرتفع يزيد الدعم (يُنقص الدرجة بمقدار 1، بحدّ أدنى 1). حتمي.
+    """
+    if mastery is None or mastery < 0.2:
+        level = 1
+    elif mastery < 0.4:
+        level = 2
+    elif mastery < 0.6:
+        level = 3
+    elif mastery < 0.8:
+        level = 4
+    else:
+        level = 5
+    if cognitive_load == "high":
+        level = max(1, level - 1)  # حِمل مرتفع ⇒ دعم أكثر
+    return level
+
+
 class AdaptivePedagogySkill:
     """Skill رسمي (§0.5): مسؤولية واحدة — تحويل صورة المتعلم إلى توجيه تدريسي."""
 
@@ -166,6 +209,7 @@ class AdaptivePedagogySkill:
         """يشتق التوجيه التربوي حتمياً — لا يرفع أبداً نحو المسار الحي."""
         t0 = time.perf_counter()
         level = _classify_guidance(payload.mastery, payload.cognitive_load)
+        support_level = _classify_support_level(payload.mastery, payload.cognitive_load)
         text = _DIRECTIVE_TEXTS[level]
         if payload.cognitive_load == "high":
             text = (text + _HIGH_LOAD_SUFFIX)[:DIRECTIVE_MAX_CHARS]
@@ -175,11 +219,17 @@ class AdaptivePedagogySkill:
             correction = " انتبه: " + alerts[0] + " — صحّح الفكرة بلطف دون لوم."
             text = (text + correction)[:DIRECTIVE_MAX_CHARS]
 
+        # D-113: clause سُلّم الدعم يُلحق أخيراً (يُقتطع أولاً عند التجاوز فيبقى
+        # «انتبه» المفهومي محفوظاً قبله).
+        text = (text + _SUPPORT_LADDER_CLAUSES[support_level])[:DIRECTIVE_MAX_CHARS]
+
         directive = PedagogyDirective(
             guidance_level=level,
             directive_text=text,
             misconception_alerts=alerts,
             mastery_used=payload.mastery,
+            support_level=support_level,
+            ladder_label=_SUPPORT_LADDER_LABELS[support_level],
         )
         self._record_metrics(level, time.perf_counter() - t0)
         return directive

@@ -85,8 +85,13 @@ def _strip_boxed(text: str) -> tuple[str, int]:
                         k += 1
                         break
                 k += 1
-            out.append("\\boxed{" + _MATH_MASK + "}")
-            count += 1
+            inner = text[j + 1 : k - 1]  # محتوى الصندوق بلا الأقواس
+            if inner == _MATH_MASK:
+                # مُحجَب مسبقاً — لا تُعِد الحجب (idempotent: تطبيقان = تطبيق واحد)
+                out.append(text[idx:k])
+            else:
+                out.append("\\boxed{" + _MATH_MASK + "}")
+                count += 1
             i = k
         else:
             out.append(text[idx : idx + len("\\boxed")])
@@ -117,6 +122,8 @@ def redact_final_answers(text: str) -> tuple[str, int]:
 
         def _mask_marker(match: re.Match[str]) -> str:
             nonlocal total
+            if match.group("val").lstrip().startswith(_PROSE_MASK):
+                return match.group(0)  # مُحجَب مسبقاً — idempotent
             total += 1
             return f"{match.group('lbl')}{_PROSE_MASK} (حاول أن تصل إليها بنفسك)"
 

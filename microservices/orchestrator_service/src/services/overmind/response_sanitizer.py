@@ -95,17 +95,66 @@ def _strip_boxed(text: str) -> str:
     return "".join(out)
 
 
-def redact_final_answers(text: str) -> str:
-    """يحجب كل نتيجة نهائية صريحة من النص. حتمي، fail-open (أي فشل → النص كما هو)."""
+# D-114: الفواصل الحارسة للمثال المحلول — نسخة من
+# app/services/skills/doctrine.py:WORKED_EXAMPLE_OPEN/CLOSE (حدّ معماري: المونوليث
+# لا يستورد من microservices والعكس). يجب أن تبقى القيمتان متطابقتين حرفياً.
+_WE_OPEN = "⟦مثال_محلول⟧"
+_WE_CLOSE = "⟦/مثال_محلول⟧"
+
+
+def _redact_core(text: str) -> str:
+    """يحجب كل نتيجة نهائية صريحة (بلا وعي بالفواصل)."""
+    result = _strip_boxed(text)
+    result = _FINAL_RESULT_RE.sub(lambda m: f"{m.group('lhs')}{_PROSE_MASK}", result)
+    result = _CONCLUSION_RE.sub(lambda m: f"{m.group('lhs')}{_PROSE_MASK}", result)
+    return _RESULT_MARKER_RE.sub(
+        lambda m: f"{m.group('lbl')}{_PROSE_MASK} (حاول أن تصل إليها بنفسك)", result
+    )
+
+
+def _strip_sentinels(text: str) -> str:
+    """يحذف علامات الفواصل الحارسة من المُخرَج (لا تصل الطالب أبداً)."""
+    return text.replace(_WE_OPEN, "").replace(_WE_CLOSE, "")
+
+
+def _redact_outside_sentinels(text: str) -> str:
+    """D-114: يحجب ما *خارج* الفواصل ويمرّر ما *بداخلها* حرفياً (مثال محلول مماثل)."""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        start = text.find(_WE_OPEN, i)
+        if start == -1:
+            out.append(_redact_core(text[i:]))
+            break
+        out.append(_redact_core(text[i:start]))
+        end = text.find(_WE_CLOSE, start + len(_WE_OPEN))
+        if end == -1:
+            # فاصل غير مُغلق ⇒ fail-closed: احجب الباقي
+            out.append(_redact_core(text[start + len(_WE_OPEN) :]))
+            break
+        out.append(text[start + len(_WE_OPEN) : end])  # داخل الفاصل يمرّ حرفياً
+        i = end + len(_WE_CLOSE)
+    return "".join(out)
+
+
+def redact_final_answers(text: str, support_level: int | None = None) -> str:
+    """يحجب كل نتيجة نهائية صريحة من النص. حتمي، fail-open (أي فشل → النص كما هو).
+
+    D-114: عند ``support_level == 1`` ووجود الفواصل الحارسة، يُعفى ما *بداخلها*
+    (المثال المحلول على مسألة مماثلة) ويُحجب ما *خارجها*. غير ذلك ⇒ حجب كامل
+    مع إزالة أي علامات فواصل شاردة (fail-closed).
+    """
     if not text or not text.strip():
         return text or ""
     try:
-        result = _strip_boxed(text)
-        result = _FINAL_RESULT_RE.sub(lambda m: f"{m.group('lhs')}{_PROSE_MASK}", result)
-        result = _CONCLUSION_RE.sub(lambda m: f"{m.group('lhs')}{_PROSE_MASK}", result)
-        return _RESULT_MARKER_RE.sub(
-            lambda m: f"{m.group('lbl')}{_PROSE_MASK} (حاول أن تصل إليها بنفسك)", result
-        )
+        has_sentinels = _WE_OPEN in text and _WE_CLOSE in text
+        if support_level == 1 and has_sentinels:
+            return _redact_outside_sentinels(text)
+        result = _redact_core(text)
+        if has_sentinels or _WE_OPEN in result or _WE_CLOSE in result:
+            result = _strip_sentinels(result)
+        return result
     except Exception:  # pragma: no cover - fail-open مطلق
         return text
 
@@ -198,7 +247,7 @@ _GREETING_FASTPATH: dict[str, str] = {
 }
 
 
-def sanitize_response(text: str, intent: str = "general") -> str:
+def sanitize_response(text: str, intent: str = "general", support_level: int | None = None) -> str:
     """
     ينظِّف رد LLM قبل إرساله للمستخدم.
 
@@ -206,10 +255,12 @@ def sanitize_response(text: str, intent: str = "general") -> str:
     1. استبدالات Russian/Spanish/Norwegian/CJK punct → عربي
     2. حذف Cyrillic / CJK Han / Hiragana / Katakana بـ regex
     3. للـ chat فقط: حذف English meta-narration في البداية
+    4. حجب الإجابة النهائية (واعٍ بالفواصل عند support_level==1 — D-114)
 
     Args:
         text: النص الخام من الـ LLM
         intent: chat | educational | general | admin
+        support_level: D-114 — 1 يُعفي كتلة المثال المحلول الملفوفة بالفواصل.
 
     Returns:
         النص النظيف
@@ -234,8 +285,8 @@ def sanitize_response(text: str, intent: str = "general") -> str:
             out = out.lstrip()
             if out == prev:
                 break
-    # 4. D-113: حجب الإجابة النهائية — شبكة الأمان على كل مخرجات العقد (نطاق ضيّق).
-    return redact_final_answers(out)
+    # 4. D-113/D-114: حجب الإجابة النهائية — واعٍ بالفواصل عند support_level==1.
+    return redact_final_answers(out, support_level)
 
 
 # ── ISS-078 D-066: Streaming-aware sanitization ──────────────────────────────
@@ -277,18 +328,10 @@ def sanitize_chunk(chunk: str) -> str:
     if not chunk:
         return chunk
     out = chunk
-    # CJK punctuation single-char replacements (آمنة على chunks)
-    for foreign, replacement in (
-        ("。", "."),
-        ("（", "("),
-        ("）", ")"),
-        ("「", '"'),
-        ("」", '"'),
-        ("『", '"'),
-        ("』", '"'),
-        ("、", "،"),
-        ("〜", "~"),
-    ):
+    # D-114: استبدالات الكلمات الأجنبية الكاملة (روسي/نرويجي/إسباني + علامات CJK)
+    # — best-effort على الـ chunk (الكلمات المنقسمة عبر chunks يلتقطها التنظيف
+    # النهائي sanitize_response). آمن: استبدال نصّي مباشر بلا false-positive.
+    for foreign, replacement in _FOREIGN_REPLACEMENTS.items():
         out = out.replace(foreign, replacement)
     # حذف scripts كاملة (آمن — كل char منفصل)
     out = re.sub(r"[Ѐ-ӿ]+", "", out)  # Cyrillic

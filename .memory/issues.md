@@ -4100,3 +4100,14 @@ RESOLVED (محلياً) — 24 اختبار في test_iss115_socratic_no_answer.
 التحقق الحي الكامل في Codespaces. المتبقّي: SynthesizerNode socratic + سُلّم الدعم
 5-درجات + صدق BKT (assisted vs unaided-delayed) + واجهات بلا أرقام + وضع التحقق +
 مقياس فجوة الوهم.
+
+## ISS-116 — Pedagogical Bankruptcy: Novice gets no Worked Example (2026-06-15 · D-114)
+المبتدئ المطلق (إتقان 14%) حار وسأل «لو جاء يوم الامتحان لا أستطيع حله؟» فردّ النظام
+بحلقة أسئلة سقراطية لا نهائية بلا أي مثال محلول → غرق ورسب. + كارثة B: رموز أجنبية
+مُسرّبة (også/функция/Murphy/headcount) أثناء البثّ الحيّ. الجذر: D-113 طُبِّق بإفراط
+(حرم المبتدئ من worked-example effect)؛ support_level=1 يُحسب لكن يُرمى؛ sanitize_chunk
+أضعف من sanitize_response. الإصلاح (D-114): تمرير support_level عبر السلسلة + حجب واعٍ
+بالفواصل (يُعفي مثالاً مماثلاً مكشوفاً، يُبقي تمرين الطالب محجوباً) + WorkedExampleSkill
+(#19) + WorkedExampleCard + تقوية sanitize_chunk. الحالة: RESOLVED محلياً (sentinel
+redaction في المنفذين + بوّابة المهارة + sanitize_chunk + 16 frontend check + ruff +
+py_compile 3.12)؛ التحقق الحي الكامل (WS + Supabase + orchestrator) في Codespaces.

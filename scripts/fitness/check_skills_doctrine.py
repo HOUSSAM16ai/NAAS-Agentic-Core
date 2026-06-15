@@ -98,6 +98,8 @@ def check_manifest_consistency() -> None:
         RETRIEVAL_DOCTRINE,
         RETRIEVAL_DOCTRINE_VERSION,
         SKILL_DOCTRINE_MANIFEST,
+        WORKED_EXAMPLE_DOCTRINE,
+        WORKED_EXAMPLE_DOCTRINE_VERSION,
     )
 
     pairs = [
@@ -126,6 +128,12 @@ def check_manifest_consistency() -> None:
             "adaptive_pedagogy",
             ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION,
             len(ADAPTIVE_PEDAGOGY_DOCTRINE),
+        ),
+        # D-114 (ISS-116): المثال المحلول المُتدرّج المُقيَّد بالإتقان.
+        (
+            "worked_example",
+            WORKED_EXAMPLE_DOCTRINE_VERSION,
+            len(WORKED_EXAMPLE_DOCTRINE),
         ),
     ]
     for key, ver, count in pairs:
@@ -344,6 +352,7 @@ def check_skills_platform() -> None:
         "learning_path",
         "retrieval_rerank",
         "mcp_tool",
+        "worked_example",
     }
     missing = expected - names
     if missing:
@@ -473,8 +482,61 @@ def check_answer_redaction_wired() -> None:
     _pass("Answer redaction wired: Socratic no-answer + deterministic final guard (D-113)")
 
 
+def check_worked_example_wired() -> None:
+    """D-114 (ISS-116 — المثال المحلول المُتدرّج): المهارة موصولة فعلاً — ليست
+    skill بلا مستهلك.
+
+    يحرس: (1) manifest entry 'worked_example' متّسق، (2) WorkedExampleSkill موجود
+    ويستهلك الـ doctrine، (3) موصول حيّاً في customer_chat عبر
+    _maybe_emit_worked_example، (4) المكوّن worked_example_card في القائمة البيضاء،
+    (5) الحجب الواعي بالفواصل يقبل support_level في كلا المنفذين.
+    """
+    from app.contracts.streaming import KNOWN_UI_COMPONENTS
+    from app.services.skills.doctrine import (
+        SKILL_DOCTRINE_MANIFEST,
+        WORKED_EXAMPLE_DOCTRINE,
+        WORKED_EXAMPLE_DOCTRINE_VERSION,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("worked_example")
+    if entry is None:
+        _fail("Manifest missing 'worked_example' entry (D-114).")
+    if entry["version"] != WORKED_EXAMPLE_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for worked_example (D-114).")
+    if entry["rules_count"] != len(WORKED_EXAMPLE_DOCTRINE):
+        _fail("Manifest rules_count mismatch for worked_example (D-114).")
+
+    skill_file = ROOT / "app" / "services" / "skills" / "worked_example_skill.py"
+    if not skill_file.is_file():
+        _fail("worked_example_skill.py missing (D-114).")
+    sk_src = skill_file.read_text(encoding="utf-8")
+    if "from app.services.skills.doctrine import" not in sk_src:
+        _fail("worked_example_skill.py does not consume the doctrine module (D-114).")
+
+    router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+    if "_maybe_emit_worked_example" not in router_src:
+        _fail("customer_chat no longer emits worked_example (D-114 ZOMBIE).")
+    if "worked_example_card" not in KNOWN_UI_COMPONENTS:
+        _fail("worked_example_card not whitelisted in KNOWN_UI_COMPONENTS (D-114).")
+
+    # الإعفاء الواعي بالفواصل: redact_final_answers يجب أن يقبل support_level في
+    # كلا المنفذين (app + microservices) — وإلا الـ orchestrator يُعيد حجب المثال.
+    ar_src = (ROOT / "app/services/skills/answer_redaction_skill.py").read_text(encoding="utf-8")
+    if "support_level" not in ar_src:
+        _fail("answer_redaction_skill no longer accepts support_level (D-114).")
+    rs_file = (
+        ROOT / "microservices/orchestrator_service/src/services/overmind/response_sanitizer.py"
+    )
+    if rs_file.is_file() and "support_level" not in rs_file.read_text(encoding="utf-8"):
+        _fail("response_sanitizer (orchestrator port) lost support_level exemption (D-114).")
+    _pass("Worked example wired: mastery-gated isomorphic reveal + sentinel redaction (D-114)")
+
+
 def main() -> None:
-    print("=== Skills Doctrine Drift Gate (D-069 + D-073 + D-100 + D-106 + D-111 + D-113) ===\n")
+    print(
+        "=== Skills Doctrine Drift Gate "
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-114) ===\n"
+    )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
     check_manifest_consistency()
@@ -488,6 +550,7 @@ def main() -> None:
     check_content_integrity_wired()
     check_learning_path_wired()
     check_answer_redaction_wired()
+    check_worked_example_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

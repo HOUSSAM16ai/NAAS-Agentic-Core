@@ -27,7 +27,11 @@ import time
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
-from app.services.skills.doctrine import ANSWER_REDACTION_DOCTRINE_VERSION
+from app.services.skills.doctrine import (
+    ANSWER_REDACTION_DOCTRINE_VERSION,
+    WORKED_EXAMPLE_CLOSE,
+    WORKED_EXAMPLE_OPEN,
+)
 
 logger = logging.getLogger("cogniforge.skills.answer_redaction")
 
@@ -99,8 +103,78 @@ def _strip_boxed(text: str) -> tuple[str, int]:
     return "".join(out), count
 
 
-def redact_final_answers(text: str) -> tuple[str, int]:
+def _redact_core(text: str) -> tuple[str, int]:
+    """يحجب كل نتيجة نهائية صريحة من ``text`` (بلا وعي بالفواصل). حتمي."""
+    total = 0
+    result, n_boxed = _strip_boxed(text)
+    total += n_boxed
+
+    def _mask_rhs(match: re.Match[str]) -> str:
+        nonlocal total
+        total += 1
+        return f"{match.group('lhs')}{_PROSE_MASK}"
+
+    result = _FINAL_RESULT_RE.sub(_mask_rhs, result)
+    result = _CONCLUSION_RE.sub(_mask_rhs, result)
+
+    def _mask_marker(match: re.Match[str]) -> str:
+        nonlocal total
+        if match.group("val").lstrip().startswith(_PROSE_MASK):
+            return match.group(0)  # مُحجَب مسبقاً — idempotent
+        total += 1
+        return f"{match.group('lbl')}{_PROSE_MASK} (حاول أن تصل إليها بنفسك)"
+
+    result = _RESULT_MARKER_RE.sub(_mask_marker, result)
+    return result, total
+
+
+def _strip_sentinels(text: str) -> str:
+    """يحذف علامات الفواصل الحارسة من المُخرَج النهائي (لا تصل الطالب أبداً)."""
+    return text.replace(WORKED_EXAMPLE_OPEN, "").replace(WORKED_EXAMPLE_CLOSE, "")
+
+
+def _redact_outside_sentinels(text: str) -> tuple[str, int]:
+    """D-114: يحجب ما *خارج* الفواصل الحارسة ويمرّر ما *بداخلها* حرفياً.
+
+    المثال المحلول (على مسألة مماثلة) داخل الفواصل آمن الكشف؛ أي تسرّب لإجابة
+    تمرين الطالب خارجها يُحجب. الفاصل غير المُغلق ⇒ fail-closed (حجب الباقي).
+    العلامات تُزال من المُخرَج النهائي.
+    """
+    out: list[str] = []
+    total = 0
+    i = 0
+    n = len(text)
+    open_t, close_t = WORKED_EXAMPLE_OPEN, WORKED_EXAMPLE_CLOSE
+    while i < n:
+        start = text.find(open_t, i)
+        if start == -1:
+            seg, c = _redact_core(text[i:])
+            out.append(seg)
+            total += c
+            break
+        # خارج الفاصل (قبل الفتح) ⇒ يُحجب
+        seg, c = _redact_core(text[i:start])
+        out.append(seg)
+        total += c
+        end = text.find(close_t, start + len(open_t))
+        if end == -1:
+            # فاصل غير مُغلق ⇒ fail-closed: احجب الباقي ولا تكشفه
+            seg, c = _redact_core(text[start + len(open_t) :])
+            out.append(seg)
+            total += c
+            break
+        # داخل الفاصل ⇒ يمرّ حرفياً (مثال محلول مماثل آمن)؛ العلامات تُزال
+        out.append(text[start + len(open_t) : end])
+        i = end + len(close_t)
+    return "".join(out), total
+
+
+def redact_final_answers(text: str, support_level: int | None = None) -> tuple[str, int]:
     """يحجب كل نتيجة نهائية صريحة من ``text``. حتمي، fail-open.
+
+    D-114: عند ``support_level == 1`` ووجود الفواصل الحارسة، يُعفى ما *بداخلها*
+    (المثال المحلول على مسألة مماثلة) ويُحجب ما *خارجها*. غير ذلك ⇒ حجب كامل
+    (fail-closed) مع إزالة أي علامات فواصل شاردة كي لا تصل الطالب.
 
     Returns:
         (النص المحجوب، عدد الحجوبات).
@@ -108,26 +182,13 @@ def redact_final_answers(text: str) -> tuple[str, int]:
     if not text or not text.strip():
         return text or "", 0
     try:
-        total = 0
-        result, n_boxed = _strip_boxed(text)
-        total += n_boxed
-
-        def _mask_rhs(match: re.Match[str]) -> str:
-            nonlocal total
-            total += 1
-            return f"{match.group('lhs')}{_PROSE_MASK}"
-
-        result = _FINAL_RESULT_RE.sub(_mask_rhs, result)
-        result = _CONCLUSION_RE.sub(_mask_rhs, result)
-
-        def _mask_marker(match: re.Match[str]) -> str:
-            nonlocal total
-            if match.group("val").lstrip().startswith(_PROSE_MASK):
-                return match.group(0)  # مُحجَب مسبقاً — idempotent
-            total += 1
-            return f"{match.group('lbl')}{_PROSE_MASK} (حاول أن تصل إليها بنفسك)"
-
-        result = _RESULT_MARKER_RE.sub(_mask_marker, result)
+        has_sentinels = WORKED_EXAMPLE_OPEN in text and WORKED_EXAMPLE_CLOSE in text
+        if support_level == 1 and has_sentinels:
+            return _redact_outside_sentinels(text)
+        # الافتراضي fail-closed: حجب كامل + إزالة أي علامات فواصل شاردة.
+        result, total = _redact_core(text)
+        if has_sentinels or WORKED_EXAMPLE_OPEN in result or WORKED_EXAMPLE_CLOSE in result:
+            result = _strip_sentinels(result)
         return result, total
     except Exception:  # pragma: no cover - fail-open مطلق
         logger.debug("answer_redaction failed (fail-open)", exc_info=True)
@@ -156,6 +217,8 @@ class AnswerRedactionInput(RobustBaseModel):
     """مدخلات الحجب."""
 
     text: str = Field(..., max_length=200_000)
+    #: D-114: support_level==1 يُفعّل الإعفاء الواعي بالفواصل (المثال المحلول).
+    support_level: int | None = Field(default=None, ge=1, le=5)
 
 
 class AnswerRedactionOutput(RobustBaseModel):
@@ -201,7 +264,7 @@ class AnswerRedactionSkill:
         if isinstance(payload, str):
             payload = AnswerRedactionInput(text=payload)
         try:
-            cleaned, n = redact_final_answers(payload.text)
+            cleaned, n = redact_final_answers(payload.text, payload.support_level)
             _record_metric("success", n, time.perf_counter() - t0)
             return AnswerRedactionOutput(
                 redacted_text=cleaned,

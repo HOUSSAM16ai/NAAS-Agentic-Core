@@ -4328,3 +4328,43 @@ system prompts «اكتب الحل» → «قُد بأسئلة؛ ممنوع كش
 طول≤400) + ruff + runtime_truth خضراء؛ +8 اختبار orchestrator redaction + ladder
 tests؛ الحي الكامل عبر WS في Codespaces. مؤجَّل: support_level مُهيكل في
 AgentState/routes، صدق BKT، واجهات بلا أرقام، وضع التحقق، فجوة الوهم.
+
+## D-114 — المثال المحلول المُتدرّج المُقيَّد بالإتقان (2026-06-15 · ISS-116)
+الكارثة (transcript حي): طالب بإتقان 14% (مبتدئ مطلق) حار وسأل «لو جاء يوم الامتحان
+لا أستطيع حله؟» فردّ النظام بحلقة سقراطية فارغة بلا أي مثال محلول → غرق ورسب. D-113
+(«لا تكشف أبداً») طُبِّق بإفراط فحرم المبتدئ من المخطط الذهني (worked-example effect،
+Sweller). الجذر المعماري: `adaptive_pedagogy_skill` يحسب support_level=1 بشكل صحيح
+لكن `customer_chat._build_pedagogy_directive` يرمي الرقم؛ والحجب أعمى عن المستوى.
+
+الحل (التوفيق بين illusion_gap و worked-example effect): المبتدئ المطلق يتلقّى مثالاً
+محلولاً كاملاً على مسألة **مماثلة** (isomorphic، أرقام مختلفة)، بينما تمرينه المُقيَّم
+يبقى محجوباً ويُقاس على الأداء غير المدعوم. دراسة مثال على مسألة أخرى = اكتساب مخطط
+لا وهم طلاقة. 6 محاور:
+1. **العقيدة**: EXPLANATION 3.0→3.1.0 (استثناء المبتدئ على مسألة مماثلة)،
+   ANSWER_REDACTION 1.0→1.1.0 (إعفاء واعٍ بالفواصل)، ADAPTIVE_PEDAGOGY 1.1→1.2.0
+   (support_level يعبر السلسلة)، WORKED_EXAMPLE 1.0.0 جديدة + ثوابت الفواصل الحارسة
+   `WORKED_EXAMPLE_OPEN/CLOSE` (`⟦مثال_محلول⟧`/`⟦/مثال_محلول⟧`، عربي خالص).
+2. **تمرير support_level** (int 1..5) عبر السلسلة كاملةً: customer_chat → context →
+   orchestrator_client → routes (ChatRunContext + `_extract_support_level`) →
+   AgentState → SynthesizerNode. الافتراض الآمن = 5 (محجوب كلياً) عند أي تعذّر —
+   لا 1 — كي لا يكشف فشلٌ واحد كل الإجابات (fail-closed).
+3. **الحجب الواعي بالفواصل** في كلا المنفذين المستقلين (`answer_redaction_skill` +
+   microservices `response_sanitizer`): support_level==1 + فواصل ⇒ يُعفي ما داخلها،
+   يحجب ما خارجها، يزيل العلامات؛ غياب الفواصل/مستوى آخر ⇒ حجب كامل (fail-closed).
+4. **WorkedExampleSkill (#19)** (`worked_example_skill.py`): حتمي، كتالوج منهجيات
+   مُتحوِّلة لكل مفهوم (subgoal labels + أسئلة «لماذا؟») + بوّابة الكشف
+   (support_level==1 أو confusion≥2) + prompt_directive يلفّ المثال بالفواصل. مُسجَّل
+   في registry (consumed_by غير فارغ — no-ZOMBIE).
+5. **WorkedExampleCard** (Generative UI): خريطة منهجية بصرية تُفرز الدوبامين — كشف
+   تدريجي تفاعلي (active recall) + شارات أهداف ملوّنة + مقياس إتقان يمتلئ بالنجاح
+   المستقل + جسر «جرّب تمرينك». مُسجَّل في whitelist + GenerativeUIRenderer + يُحفظ
+   عبر عمود ui_component (D-WS-CARD-PERSIST-001، بلا تغيير مخطّط).
+6. **تقوية sanitize_chunk** (الكارثة B — الرموز المقززة): تطبيق `_FOREIGN_REPLACEMENTS`
+   الكامل على البثّ الحيّ (آمن، يحفظ LaTeX/الفرنسية المشروعة).
+قرار streaming: المونوليث يحفظ complete_ai_response المُتراكم (D-006) — لذا الحجب
+الواعي + إزالة العلامات يقعان فيه: تراكم خام (مع الفواصل) للحجب النهائي، وإزالة
+العلامات على نسخة العرض الحيّ فقط (الطالب لا يرى ⟦⟧). الحالة: مُنفَّذ كاملاً + مُتحقَّق
+محلياً (sentinel redaction في المنفذين + بوّابة المهارة + extract clamp + sanitize_chunk
++ doctrine standalone + 16 frontend check + ruff + py_compile 3.12). التحقق الحي
+الكامل (WS + Supabase + orchestrator، طالب إتقان<0.2 ⇒ بطاقة + مثال مماثل مكشوف +
+تمرينه محجوب) في Codespaces. عدّاد المهارات 18→19.

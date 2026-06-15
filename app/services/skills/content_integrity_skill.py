@@ -362,11 +362,14 @@ class StreamIntegrityFilter:
 # ── المساعد الدفعي + الواجهة (façade) ─────────────────────────────────────────────
 
 
-def sanitize_final_text(text: str) -> str:
+def sanitize_final_text(text: str, support_level: int | None = None) -> str:
     """تنظيف دفعي one-shot للنص النهائي (الإطار المحفوظ في DB).
 
     D-113: بعد تنظيف الغارباج/HTML، يمرّ النص عبر حارس حجب الإجابة النهائية
     (`AnswerRedactionSkill`) — شبكة الأمان الأخيرة ضد كشف الحل للطالب. fail-open.
+
+    D-114: ``support_level == 1`` يُفعّل الإعفاء الواعي بالفواصل الحارسة — كتلة
+    المثال المحلول (على مسألة مماثلة) تمرّ، وما عداها يُحجب (fail-closed).
     """
     if not text:
         return text or ""
@@ -375,7 +378,7 @@ def sanitize_final_text(text: str) -> str:
     try:
         from app.services.skills.answer_redaction_skill import redact_final_answers
 
-        redacted, _ = redact_final_answers(cleaned)
+        redacted, _ = redact_final_answers(cleaned, support_level)
         return redacted
     except Exception:  # pragma: no cover - fail-open
         logger.debug("answer redaction in sanitize_final_text failed (fail-open)", exc_info=True)

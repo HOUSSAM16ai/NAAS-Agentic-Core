@@ -2482,6 +2482,180 @@ body[data-theme='light'] .exam-badge {
     color: var(--primary-color);
 }
 
+/* ── WorkedExampleCard (المثال المحلول المُتدرّج — D-114) ────────────────────── */
+.genui-we-card {
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    padding: 1rem 1.15rem;
+    background: var(--surface-elevated);
+    margin: 0.6rem 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(99, 102, 241, 0.06);
+}
+
+.genui-we-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+}
+
+.genui-we-icon {
+    color: #f59e0b;
+}
+
+.genui-we-title {
+    font-weight: 800;
+    color: var(--text-color);
+    letter-spacing: -0.01em;
+}
+
+.genui-we-concept {
+    margin-inline-start: auto;
+    font-size: 0.78rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary, var(--text-color));
+}
+
+.genui-we-mastery {
+    margin-bottom: 0.85rem;
+}
+
+.genui-we-mastery-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--border-color);
+    overflow: hidden;
+}
+
+.genui-we-mastery-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6366f1, #10b981);
+    transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.genui-we-mastery-label {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.74rem;
+    color: var(--text-secondary, var(--text-color));
+    opacity: 0.85;
+}
+
+.genui-we-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.genui-we-step {
+    border-inline-start: 3px solid var(--we-accent, #6366f1);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0 12px 12px 0;
+    background: color-mix(in srgb, var(--we-accent, #6366f1) 6%, transparent);
+    animation: genui-we-fade 0.32s ease both;
+}
+
+@keyframes genui-we-fade {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.genui-we-step-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.genui-we-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+}
+
+.genui-we-step-badge {
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+
+.genui-we-step-why {
+    margin: 0;
+    color: var(--text-color);
+    line-height: 1.6;
+    opacity: 0.92;
+}
+
+.genui-we-next {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+}
+
+.genui-we-next:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4);
+}
+
+.genui-we-next:active {
+    transform: translateY(0);
+}
+
+.genui-we-progress {
+    font-size: 0.74rem;
+    opacity: 0.85;
+    background: rgba(255, 255, 255, 0.22);
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+}
+
+.genui-we-bridge {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(99, 102, 241, 0.08));
+    color: var(--text-color);
+    font-weight: 600;
+    line-height: 1.6;
+    animation: genui-we-fade 0.32s ease both;
+}
+
+.genui-we-bridge i {
+    color: #10b981;
+    margin-top: 0.2rem;
+}
+
 /* ── CombinationsVisualizer (السحب الآني — تأليفي، Protocol V19.0) ───────────── */
 .genui-combinations {
     border: 1px solid var(--border-color);

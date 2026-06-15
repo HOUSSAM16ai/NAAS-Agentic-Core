@@ -92,10 +92,15 @@ class ChatRunContext(TypedDict, total=False):
     # D-103: محتوى تمرين محقون من الـ monolith (شرح-بسياق عبر الرسم الـ13-node)
     exercise_content: str
     exercise_ref: str
+    # D-114: درجة سُلّم الدعم (1..5) + توجيه المثال المحلول للمبتدئ المطلق.
+    support_level: int
+    worked_example_directive: str
 
 
 # D-103: سقف حجم المحتوى المحقون — أكبر تمرين معروف ~9.7K حرف؛ 16K هامش آمن.
 _INJECTED_EXERCISE_MAX_CHARS = 16000
+# D-114: سقف توجيه المثال المحلول (نص قصير منظَّم).
+_WORKED_EXAMPLE_DIRECTIVE_MAX_CHARS = 4000
 
 
 def _extract_injected_exercise(context: ChatRunContext | None) -> str:
@@ -106,6 +111,28 @@ def _extract_injected_exercise(context: ChatRunContext | None) -> str:
     if not isinstance(raw, str):
         return ""
     return raw.strip()[:_INJECTED_EXERCISE_MAX_CHARS]
+
+
+def _extract_support_level(context: ChatRunContext | None) -> int:
+    """D-114: يستخرج support_level من السياق (clamp 1..5، افتراض آمن = 5/محجوب)."""
+    if not isinstance(context, dict):
+        return 5
+    raw = context.get("support_level")
+    try:
+        level = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 5
+    return level if 1 <= level <= 5 else 5
+
+
+def _extract_worked_example_directive(context: ChatRunContext | None) -> str:
+    """D-114: يستخرج توجيه المثال المحلول المحقون — str نظيف أو "" (للمبتدئ المطلق)."""
+    if not isinstance(context, dict):
+        return ""
+    raw = context.get("worked_example_directive")
+    if not isinstance(raw, str):
+        return ""
+    return raw.strip()[:_WORKED_EXAMPLE_DIRECTIVE_MAX_CHARS]
 
 
 class MissionEventEnvelope(TypedDict):
@@ -1604,6 +1631,11 @@ async def _stream_chat_langgraph(
             _injected_exercise = _extract_injected_exercise(context)
             if _injected_exercise:
                 inputs["exercise_content"] = _injected_exercise
+            # D-114: تمرير support_level + توجيه المثال المحلول إلى حالة الرسم (مسار WS)
+            inputs["support_level"] = _extract_support_level(context)
+            _we_directive = _extract_worked_example_directive(context)
+            if _we_directive:
+                inputs["worked_example_directive"] = _we_directive
             state_dict = inputs
             payload_messages = state_dict.get("messages", [])
             await _append_telemetry_line(
@@ -1921,6 +1953,13 @@ async def _run_chat_langgraph(
             str(context.get("exercise_ref", ""))[:120],
         )
         inputs["exercise_content"] = _injected_exercise
+
+    # D-114: تمرير support_level + توجيه المثال المحلول إلى حالة الرسم (مسار HTTP)
+    inputs["support_level"] = _extract_support_level(context)
+    _we_directive = _extract_worked_example_directive(context)
+    if _we_directive:
+        logger.info("[D-114] worked_example_directive chars=%s", len(_we_directive))
+        inputs["worked_example_directive"] = _we_directive
 
     # ISS-STREAM-002 (جراحي): astream_events لا يُطلق on_custom_event في LangGraph 1.2.0
     # عند استخدام stream_writer(). الحل: astream(stream_mode=["custom","updates"]) يُعيد

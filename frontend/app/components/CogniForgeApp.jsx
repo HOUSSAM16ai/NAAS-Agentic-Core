@@ -7,6 +7,7 @@ import { ChatInterface } from './ChatInterface';
 import { AgentTimeline } from './AgentTimeline';
 import { BUILD_VERSION } from '../buildVersion';
 import { clientLog } from '../utils/clientLog';
+import { markdownToPlainText } from '../utils/preprocessMath';
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL ?? '';
 const apiUrl = (path) => `${API_ORIGIN}${path}`;
@@ -264,6 +265,35 @@ const DashboardLayout = ({ user, token, onLogout }) => {
         };
         document.addEventListener('mousedown', handleOutsideClick);
         return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, []);
+
+    // كارثة «نسخ كامل الواجهة يُظهر سلسلة طويلة من الأكواد البرمجية»:
+    // تحديد الكل (Ctrl+A) ثم النسخ كان يجمع مصدر LaTeX/markup الخام عبر كل الرسائل.
+    // طبقة أمان عامة: نعترض كل حدث `copy` على الوثيقة وننظّف التحديد عبر
+    // markdownToPlainText (يزيل محدّدات الرياضيات وأوامر LaTeX ورموز markdown).
+    // لا نتدخّل في حقول الإدخال، ولا نغيّر شيئاً إن كان التحديد نظيفاً أصلاً.
+    useEffect(() => {
+        const handleCopy = (event) => {
+            const active = document.activeElement;
+            const tag = active && active.tagName ? active.tagName.toLowerCase() : '';
+            if (tag === 'input' || tag === 'textarea' || (active && active.isContentEditable)) {
+                return;
+            }
+            const selected = window.getSelection ? String(window.getSelection() || '') : '';
+            if (!selected) return;
+            let cleaned;
+            try {
+                cleaned = markdownToPlainText(selected);
+            } catch {
+                return;
+            }
+            if (cleaned && cleaned !== selected && event.clipboardData) {
+                event.clipboardData.setData('text/plain', cleaned);
+                event.preventDefault();
+            }
+        };
+        document.addEventListener('copy', handleCopy);
+        return () => document.removeEventListener('copy', handleCopy);
     }, []);
 
     // ISS-067 (D-059): زر الـ theme مرئي دائماً في الـ header — لا يحتاج فتح القائمة.

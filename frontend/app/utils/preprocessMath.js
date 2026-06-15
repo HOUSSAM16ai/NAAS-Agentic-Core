@@ -114,8 +114,12 @@ const _stripLatexCommands = (s) => {
     t = t.replace(/\\\\/g, ' '); // فاصل السطر في TeX → مسافة
     t = t.replace(/\\left\s*([([{|.])/g, '$1').replace(/\\right\s*([)\]}|.])/g, '$1');
     t = t.replace(/\\[,;:!]/g, ' ').replace(/\\ /g, ' '); // أوامر التباعد
-    // \frac{a}{b} → a/b  (يدعم \dfrac/\tfrac)
-    t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (_, a, b) => `${a}/${b}`);
+    // \binom{n}{k} → C(n,k) أولاً (يحلّ الداخلي قبل \frac الخارجي في الكسور المتداخلة)
+    t = t.replace(/\\[dt]?binom\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (_, n, k) => `C(${n},${k})`);
+    // \frac{a}{b} → (a)/(b)  (يدعم \dfrac/\tfrac؛ تمريرتان لكسر متداخل مستوى واحد)
+    for (let i = 0; i < 2; i++) {
+        t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (_, a, b) => `(${a})/(${b})`);
+    }
     t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, (_, x) => `√(${x})`);
     t = t.replace(/\\(?:boxed|text|mathrm|operatorname|mathbf|mathit)\s*\{([^{}]*)\}/g, (_, x) => x);
     const _BB = { R: 'ℝ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', C: 'ℂ' };

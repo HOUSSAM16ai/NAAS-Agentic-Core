@@ -48,7 +48,7 @@ check('\\leq → ≤', out.includes('≤'));
 check('\\to → →', out.includes('→'));
 check('\\infty → ∞', out.includes('∞'));
 check('\\sqrt{2} → √(2)', out.includes('√(2)'));
-check('\\frac{a}{b} → a/b', out.includes('a/b'));
+check('\\frac{a}{b} → (a)/(b)', out.includes('(a)/(b)'));
 check('\\boxed{14/165} → 14/165 (content kept, box removed)', out.includes('14/165'));
 check('superscript x^2 readable', out.includes('x^2') || out.includes('x^(2)'));
 

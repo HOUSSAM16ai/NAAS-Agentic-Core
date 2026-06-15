@@ -948,14 +948,13 @@ body {
     color: var(--text-color);
 }
 
-/* كارثة «النسخ يُظهر أكواد»: KaTeX يُخرج `.katex-mathml` يحوي مصدر TeX الخام
-   (<annotation encoding="application/x-tex">) للـ a11y. تحديد + Ctrl+C كان يلتقطه
-   فيظهر TeX خاماً. نمنعه من التحديد فيبقى `.katex-html` المرئي فقط قابلاً للنسخ. */
-.markdown-content .katex-mathml,
-.exam-content .katex-mathml,
-.genui-mathtext .katex-mathml {
-    user-select: none;
-    -webkit-user-select: none;
+/* كارثة «نسخ كامل الواجهة يُظهر سلسلة طويلة من الأكواد»: KaTeX يُخرج لكل صيغة
+   `.katex-mathml` يحوي <annotation encoding="application/x-tex"> بمصدر TeX الخام
+   (\frac, \binom, \mathbb…). تحديد الكل (Ctrl+A) كان يجمعه من كل الصيغ. نمنعه من
+   التحديد **عالمياً** فلا يدخل أي نسخ؛ يبقى `.katex-html` المرئي (Unicode) قابلاً للنسخ. */
+.katex-mathml {
+    user-select: none !important;
+    -webkit-user-select: none !important;
 }
 
 /* ISS-061: ضمان وراثة اللون لكل عناصر KaTeX الداخلية */

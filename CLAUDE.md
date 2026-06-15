@@ -8829,3 +8829,85 @@ deploy — نمط D-025). `MANDATORY_ORCHESTRATION_DOCTRINE` v1.0.0 + manifest.
 | D-112 | العمود الفقري الإلزامي (microservices hard-fail) |
 | **D-113 (ج1)** | **وَهْم الإتقان — Socratic No-Answer: doctrine سقراطي + أسئلة-فقط + AnswerRedactionSkill (المسار المحلي)** |
 | **D-113 (ج2)** | **السقراطية + الحجب في الـ orchestrator (response_sanitizer + SynthesizerNode) + سُلّم الدعم الخماسي (v1.1.0)** |
+
+---
+
+## 6.98 المثال المحلول المُتدرّج المُقيَّد بالإتقان (2026-06-15, ISS-116 / D-114)
+
+> يُكمّل D-113 (السقراطية) ويُصحّح إفراطه المدمّر. الكارثة (transcript حي): طالب بإتقان
+> **14%** (مبتدئ مطلق) حار وسأل «لو جاء يوم الامتحان لا أستطيع حله؟» فردّ النظام بحلقة
+> أسئلة سقراطية لا نهائية **بلا أي مثال محلول** → غرق ورسب. + كارثة B: رموز أجنبية
+> مُسرّبة حيّاً (`også`/`функция`/`Murphy`/`headcount`). هذا القسم يحكم متى وكيف يُكشف
+> المثال المحلول — لا يُكسر بدون ADR.
+
+### الجذر
+D-113 طبّق «لا تكشف أبداً» عالمياً فحرم المبتدئ المطلق من المخطط الذهني الذي يحتاجه
+(worked-example effect — Sweller/Renkl: المبتدئ يتعلّم من دراسة حلّ كامل أولاً، ثم
+يتلاشى الدعم، ثم يُقاس غير المدعوم). معمارياً: `adaptive_pedagogy_skill` يحسب
+`support_level=1` صحيحاً لكن `customer_chat._build_pedagogy_directive` كان يرمي الرقم
+ويُمرّر النص فقط؛ والحجب (`answer_redaction_skill` + `sanitize_final_text`) أعمى عن
+المستوى؛ و`sanitize_chunk` أضعف من `sanitize_response` (بلا قائمة كلمات أجنبية).
+
+### الحل — التوفيق بين فجوة الوهم وتأثير المثال المحلول
+المبتدئ المطلق يتلقّى مثالاً محلولاً كاملاً على مسألة **مماثلة (isomorphic — أرقام/سياق
+مختلف)**، بينما **تمرينه المُقيَّم يبقى محجوباً** ويُقاس على الأداء غير المدعوم. دراسة
+مثال على مسألة أخرى = اكتساب مخطط، لا وهم طلاقة (الوهم يأتي من إعادة قراءة حلّ المسألة
+التي ستُقيَّم عليها).
+
+### القواعد الـ 7 الدائمة (D-114 — لا تُكسر بدون ADR)
+1. **حدّ «المماثل ↔ المُقيَّم» هو أطروحة الأمان**: المثال يُلَفّ بفواصل عربية حارسة
+   `⟦مثال_محلول⟧ … ⟦/مثال_محلول⟧`؛ الحجب يُعفي ما **داخلها** عند `support_level==1`
+   ويحجب ما **خارجها**؛ غياب الفواصل أو مستوى آخر ⇒ **حجب كامل (fail-closed)** — فلا
+   تتسرّب إجابة تمرين الطالب أبداً.
+2. **الافتراض الآمن = 5** (محجوب كلياً) عند كل حدّ في السلسلة عند أي تعذّر — لا 1 —
+   كي لا يكشف فشلٌ واحد كل الإجابات.
+3. **`support_level` يعبر السلسلة كاملةً** (customer_chat → context → orchestrator_client
+   → routes `ChatRunContext`+`_extract_support_level` → `AgentState` → `SynthesizerNode`)
+   ويُمرَّر إلى **كلا** منفذَي الحجب المستقلَّين (`answer_redaction_skill` +
+   microservices `response_sanitizer`) — وإلا الـ orchestrator يُعيد حجب المثال.
+4. **بوّابة الكشف**: المثال يُكشف فقط عند `support_level==1` (إتقان <0.2) أو حيرة
+   متكرّرة (≥2 «لم أفهم»). الخريطة المنهجية حتمية (المهارة المُتحوِّلة)؛ المثال الملموس
+   بالأرقام يُولِّده الـ LLM في السرد (ملفوفاً بالفواصل).
+5. **العرض الحيّ يحذف العلامات، التراكم يحفظها**: المونوليث يحفظ `complete_ai_response`
+   المُتراكم (D-006) — لذا التراكم خام (مع الفواصل) للحجب النهائي الواعي، وإزالة العلامات
+   على نسخة العرض فقط (الطالب لا يرى ⟦⟧).
+6. **`WorkedExampleSkill` (#19) حتمي + no-ZOMBIE**: كتالوج منهجيات لكل مفهوم + بوّابة +
+   prompt_directive؛ مُسجَّل في registry بـ `consumed_by` غير فارغ. `worked_example_card`
+   في `KNOWN_UI_COMPONENTS` + `GenerativeUIRenderer` + يُحفظ عبر عمود ui_component.
+7. **`sanitize_chunk` يُطبّق `_FOREIGN_REPLACEMENTS` الكامل** (آمن، يحفظ LaTeX/الفرنسية).
+
+### الملفات (D-114)
+| File | Change |
+|------|--------|
+| `app/services/skills/doctrine.py` | EXPLANATION 3.1.0 / ANSWER_REDACTION 1.1.0 / ADAPTIVE_PEDAGOGY 1.2.0 / WORKED_EXAMPLE 1.0.0 + ثوابت الفواصل + manifest |
+| `app/services/skills/worked_example_skill.py` | **جديد** — Skill #19 (كتالوج منهجيات + بوّابة + prompt) |
+| `app/services/skills/answer_redaction_skill.py` | `redact_final_answers(text, support_level)` واعٍ بالفواصل |
+| `app/services/skills/content_integrity_skill.py` | `sanitize_final_text(text, support_level)` |
+| `app/services/skills/registry.py` | تسجيل `worked_example` (#19) |
+| `app/api/routers/customer_chat.py` | snapshot + `_maybe_emit_worked_example` + عرض/حجب واعٍ |
+| `app/infrastructure/clients/orchestrator_client.py` | قراءة `_support_level` + `sanitize_final_text(_fc, _support_level)` |
+| `app/contracts/streaming.py` | `worked_example_card` في whitelist |
+| `microservices/.../api/routes.py` | `ChatRunContext` + extractors + توصيل المُشغّلَين |
+| `microservices/.../graph/main.py` | حقلان في `AgentState` |
+| `microservices/.../graph/search.py` | `SynthesizerNode` يفرّع على support_level==1 + يمرّره لـ sanitize_response |
+| `microservices/.../response_sanitizer.py` | port الحجب الواعي + تقوية `sanitize_chunk` |
+| `frontend/app/components/generative/WorkedExampleCard.jsx` | **جديد** — بطاقة دوبامين (كشف تدريجي + مقياس إتقان) |
+| `frontend/app/components/generative/GenerativeUIRenderer.jsx` | تسجيل `worked_example_card` |
+| `frontend/app/globals.css` | أنماط `.genui-we-*` |
+| `scripts/fitness/check_skills_doctrine.py` | `check_worked_example_wired` + pairs + expected set |
+
+### التحقق
+- **Sandbox** (Postgres + pip محجوبان — §6.55): الحجب الواعي بالفواصل في المنفذين
+  (داخل الفواصل ينجو، خارجها يُحجب، غيابها ⇒ fail-closed، مستوى 5 ⇒ حجب كامل) +
+  `_extract_support_level` clamp/افتراض 5 + `sanitize_chunk` (لاتيني محجوب،
+  LaTeX/فرنسي مشروع سليم) + doctrine standalone (742 حرف، 3 مراسي، manifest متّسق) +
+  16 frontend check + ruff + py_compile 3.12 — **كلها خضراء ✅**.
+- **Codespaces** (E2E حي إلزامي): طالب إتقان<0.2 ⇒ `worked_example_card` يُبثّ ويُحفظ +
+  السرد يُظهر المثال المماثل (مكشوف) وتمرين الطالب يبقى محجوباً + طالب level 5 ⇒
+  محجوب كلياً (لا انحدار) + MODE_B بلا رموز لاتينية معزولة. الدخولان الحقيقيان.
+
+### السلسلة الكاملة (D-113 → D-114)
+| Decision | الموضوع |
+|----------|---------|
+| D-113 (ج1+ج2) | وَهْم الإتقان — Socratic No-Answer (محلي + orchestrator + سُلّم الدعم) |
+| **D-114** | **المثال المحلول المُتدرّج: مثال على مسألة مماثلة للمبتدئ + تمرينه محجوب + Skill #19 + بطاقة دوبامين + تقوية sanitize_chunk (يحل الإفلاس البيداغوجي ISS-116)** |

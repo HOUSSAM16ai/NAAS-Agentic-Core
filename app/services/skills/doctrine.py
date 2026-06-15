@@ -81,7 +81,10 @@ RETRIEVAL_DOCTRINE_VERSION: Final[str] = "1.0.0"
 #: `bac_exercise_skill.py` (يبقى متزامناً عبر تعريف موحَّد هنا).
 #: v3.0.0 (D-113 / ISS-115 — وَهْم الإتقان): تحوُّل ثوري من «شرح يكشف الحل»
 #: إلى «توليد مُجبَر سقراطي» — ممنوع منعاً باتاً كشف أي نتيجة نهائية للطالب.
-EXPLANATION_DOCTRINE_VERSION: Final[str] = "3.0.0"
+#: v3.1.0 (D-114 / ISS-116 — المثال المحلول المُتدرّج): استثناء واحد محكوم
+#: للقاعدة الذهبية — المبتدئ المطلق (support_level==1) يتلقّى مثالاً محلولاً
+#: كاملاً على مسألة *مماثلة* (لا تمرينه المُقيَّم) لبناء المخطط الذهني (Sweller).
+EXPLANATION_DOCTRINE_VERSION: Final[str] = "3.1.0"
 
 #: نسخة doctrine الاعتماد على الإجابة النموذجية.
 #: ⚠️ D-113: هذه القواعد تُستخدم *حصراً* في وضع التحقق (verification mode) —
@@ -90,7 +93,19 @@ EXPLANATION_DOCTRINE_VERSION: Final[str] = "3.0.0"
 MODEL_ANSWER_RELIANCE_VERSION: Final[str] = "1.0.0"
 
 #: نسخة doctrine حجب الإجابة النهائية (D-113 — شبكة الأمان الحتمية).
-ANSWER_REDACTION_DOCTRINE_VERSION: Final[str] = "1.0.0"
+#: v1.1.0 (D-114): إعفاء واعٍ بالفواصل — كتل المثال المحلول الملفوفة بالفواصل
+#: الحارسة معفاة من الحجب عند support_level==1؛ غياب الفواصل = حجب كامل (fail-closed).
+ANSWER_REDACTION_DOCTRINE_VERSION: Final[str] = "1.1.0"
+
+#: نسخة doctrine المثال المحلول المُتدرّج (D-114 / ISS-116).
+WORKED_EXAMPLE_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: D-114: الفواصل الحارسة لكتلة المثال المحلول — عربي خالص (لا لاتيني/أقواس
+#: ASCII كي لا يكسرها مُطهّر اللغة أو مُفكِّك Markdown). الحجب الواعي يُعفي ما
+#: *بداخلها* عند support_level==1 ويحجب ما خارجها (راجع redact_final_answers).
+#: نفس القيمتين منسوختان في microservices response_sanitizer (حدّ معماري).
+WORKED_EXAMPLE_OPEN: Final[str] = "⟦مثال_محلول⟧"
+WORKED_EXAMPLE_CLOSE: Final[str] = "⟦/مثال_محلول⟧"
 
 #: نسخة doctrine الشرح التفصيلي.
 DETAILED_EXPLANATION_VERSION: Final[str] = "1.0.0"
@@ -180,6 +195,13 @@ EXPLANATION_DOCTRINE: Final[tuple[str, ...]] = (
     # — منع تسرّب الواجهات (D-106) —
     "ممنوع إخراج HTML/JSX أو أكواد واجهات (<div>، className...) في نص الطالب — "
     "الواجهات تُبنى حصراً عبر قناة ui_component المُهيكلة.",
+    # — استثناء المبتدئ المطلق (D-114 — Sweller worked-example effect) —
+    "استثناء وحيد محكوم للقاعدة الذهبية: المبتدئ المطلق (support_level==1، إتقان "
+    "<0.2، أو حيرة متكرّرة) يتلقّى مثالاً محلولاً كاملاً — لكن على مسألة *مماثلة* "
+    "(أرقام/سياق مختلف)، لا على تمرينه المُقيَّم. تمرينه يبقى محجوباً ويُقاس "
+    "إتقانه على الأداء غير المدعوم. دراسة مثال على مسألة أخرى تبني المخطط الذهني "
+    "ولا تُنتج وهم طلاقة (Sweller/Renkl). يُولَّد عبر WorkedExampleSkill ويُلَفّ "
+    "بالفواصل الحارسة فيُعفى من الحجب — راجع WORKED_EXAMPLE_DOCTRINE.",
 )
 
 
@@ -202,6 +224,51 @@ ANSWER_REDACTION_DOCTRINE: Final[tuple[str, ...]] = (
     "احذف جداول توزيع الاحتمال الكاملة `P(X=...)` التي تكشف القانون جاهزاً.",
     "fail-open مطلق: أي فشل في الحارس ⇒ النص كما هو (لا يكسر دور الطالب).",
     "الحارس حتمي — بلا LLM، بلا عشوائية — قابل للاختبار بـ pytest.",
+    # — الإعفاء الواعي بالفواصل (D-114) —
+    "إعفاء support_level==1 الواعي بالفواصل: عند support_level==1 ووجود الفواصل "
+    "الحارسة (⟦مثال_محلول⟧ … ⟦/مثال_محلول⟧)، يُحجب كل ما *خارج* الفواصل ويمرّ ما "
+    "*بداخلها* (مثال محلول على مسألة مماثلة آمن الكشف). تُزال علامات الفواصل من "
+    "المُخرَج النهائي. غياب الفواصل أو support_level != 1 ⇒ حجب كامل (fail-closed) — "
+    "فلا تتسرّب إجابة تمرين الطالب المُقيَّم أبداً.",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Worked Example Doctrine — المثال المحلول المُتدرّج المُقيَّد بالإتقان (D-114)
+# ─────────────────────────────────────────────────────────────────────────────
+# ISS-116 (الإفلاس البيداغوجي): طالب بإتقان 14% (مبتدئ مطلق) حار وسأل «لو جاء
+# يوم الامتحان لا أستطيع حله؟» فردّ النظام بحلقة أسئلة سقراطية لا نهائية بلا أي
+# مثال محلول — فغرق ورسب. D-113 («لا تكشف أبداً») طُبِّق بإفراط مدمّر فحرم
+# المبتدئ المطلق من المخطط الذهني الذي يحتاجه.
+#
+# المعالجة (Sweller worked-example effect + Renkl backward-fading): المبتدئ
+# يحتاج مثالاً محلولاً كاملاً أولاً لبناء المخطط، ثم تلاشياً تدريجياً للسقالة،
+# ثم قياس الإتقان غير المدعوم. التوفيق مع أطروحة المنصة (illusion_gap =
+# assisted − unaided_delayed): المثال المحلول على مسألة *مماثلة* (لا المُقيَّمة)
+# يبني المخطط دون وهم طلاقة — تمرين الطالب يبقى محجوباً ويُقاس وحده.
+# المُستهلكون: WorkedExampleSkill.derive، customer_chat._maybe_emit_worked_example،
+# SynthesizerNode (graph/search.py)، redact_final_answers (الإعفاء الواعي).
+# ─────────────────────────────────────────────────────────────────────────────
+
+WORKED_EXAMPLE_DOCTRINE: Final[tuple[str, ...]] = (
+    "بوّابة الكشف: المثال المحلول الكامل يُكشف فقط عند support_level==1 (إتقان "
+    "<0.2) أو حيرة متكرّرة (2+ «لم أفهم»). غير ذلك يبقى السُلّم: 2-3 إكمال/تلاشٍ "
+    "عكسي، 4 تلميحات سقراطية، 5 بلا دعم (unaided).",
+    "مسألة مماثلة لا المُقيَّمة: المثال المحلول يُبنى على مسألة *مماثلة* (isomorphic "
+    "— نفس المبدأ، أرقام/سياق مختلف)، لا على تمرين الطالب المُقيَّم. تمرينه يبقى "
+    "محجوباً ويُقاس إتقانه على الأداء غير المدعوم — هذا يحفظ فجوة الوهم.",
+    "الفواصل الحارسة إلزامية: المثال يُلَفّ بـ ⟦مثال_محلول⟧ … ⟦/مثال_محلول⟧ (عربي "
+    "خالص، بلا لاتيني كي لا يكسره مُطهّر اللغة). الحجب يُعفي ما بداخلها ويُطبَّق "
+    "خارجها. غياب الفواصل ⇒ حجب كامل (fail-closed).",
+    "بنية المثال (worked-example effect): خطوات صغيرة، كل خطوة بتسمية هدف فرعي "
+    "ملموسة (subgoal label) ولونها، وسؤال شرح ذاتي «لماذا؟» قبل الانتقال — "
+    "Chi self-explanation. لا قراءة سلبية.",
+    "الجسر الإلزامي: المثال يُختم بجسر «الآن طبّق نفس الطريقة على تمرينك» — "
+    "تمرين الطالب نفسه يبقى محجوباً (سقراطي). المثال يبني المخطط؛ التطبيق يقيس.",
+    "حتمي وfail-open: WorkedExampleSkill يقرّر الكشف حتمياً (بلا LLM/IO)؛ أي "
+    "تعذّر ⇒ لا كشف (سقراطي افتراضي) — لا يكسر دور الطالب أبداً.",
+    "الافتراض الآمن = 5: support_level الغائب/المُتعذّر يصل دائماً كـ 5 (محجوب "
+    "كلياً) عند كل حدّ في السلسلة — فشلٌ واحد لا يكشف أي إجابة (fail-closed).",
 )
 
 
@@ -462,7 +529,7 @@ BKT_COGNITIVE_DOCTRINE: Final[tuple[str, ...]] = (
 # ─────────────────────────────────────────────────────────────────────────────
 # Adaptive Pedagogy Doctrine (D-104) — إغلاق حلقة BKT: القراءة تقود السلوك
 # ─────────────────────────────────────────────────────────────────────────────
-ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION: Final[str] = "1.1.0"
+ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION: Final[str] = "1.2.0"
 
 #: «المعيار الأعلى ليس الانبهار اللحظي، بل الاستقلال المعرفي» — E-TAALEEM.
 #: قوانين طبقة البيداغوجيا التكيفية: قراءة الإتقان تُحدِّد عمق التدريس.
@@ -487,6 +554,11 @@ ADAPTIVE_PEDAGOGY_DOCTRINE: Final[tuple[str, ...]] = (
     "سُلّم الدعم 5 درجات (support_level 1..5): 1=مثال محلول كامل ← 2=إكمال "
     "← 3=تلاشٍ عكسي ← 4=تلميحات ← 5=بلا دعم (unaided). السقالة تتلاشى مع نموّ "
     "الإتقان (worked-example fading) — السقالة التي لا تُزال تصير قفصاً.",
+    # D-114 (v1.2.0): support_level يعبر السلسلة كاملةً ويحكم الكشف.
+    "support_level (int 1..5) يُمرَّر صراحةً عبر السلسلة كاملةً (customer_chat → "
+    "context → orchestrator_client → routes → AgentState → SynthesizerNode) "
+    "ويحكم عمق الكشف وبوّابة المثال المحلول (D-114). الافتراض الآمن عند أي "
+    "تعذّر = 5 (محجوب كلياً) — لا 1 — كي لا يكشف فشلٌ واحد كل الإجابات.",
 )
 
 
@@ -941,6 +1013,17 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "orchestrator_client.chat_with_agent",
         ),
     },
+    "worked_example": {
+        "version": WORKED_EXAMPLE_DOCTRINE_VERSION,
+        "rules_count": len(WORKED_EXAMPLE_DOCTRINE),
+        "consumed_by": (
+            # D-114 (ISS-116): المثال المحلول المُتدرّج — موصول حيّاً للمبتدئ.
+            "WorkedExampleSkill.derive",
+            "customer_chat._maybe_emit_worked_example",
+            "search.SynthesizerNode",
+            "answer_redaction.redact_final_answers",
+        ),
+    },
 }
 
 
@@ -1002,6 +1085,11 @@ def get_probability_calculation_summary() -> str:
 def get_answer_redaction_summary() -> str:
     """يُرجِع doctrine حجب الإجابة النهائية كنص قصير (للـ logs)."""
     return " | ".join(ANSWER_REDACTION_DOCTRINE)
+
+
+def get_worked_example_summary() -> str:
+    """يُرجِع doctrine المثال المحلول المُتدرّج كنص قصير (للـ prompts / logs)."""
+    return " | ".join(WORKED_EXAMPLE_DOCTRINE)
 
 
 def build_exercise_explanation_prompt() -> str:
@@ -1096,6 +1184,10 @@ __all__ = [
     "SKILL_INVOCATION_PROTOCOL_VERSION",
     "STEP_BY_STEP_EXPLANATION_RULES",
     "STEP_BY_STEP_EXPLANATION_VERSION",
+    "WORKED_EXAMPLE_CLOSE",
+    "WORKED_EXAMPLE_DOCTRINE",
+    "WORKED_EXAMPLE_DOCTRINE_VERSION",
+    "WORKED_EXAMPLE_OPEN",
     "build_exercise_explanation_prompt",
     "get_bkt_cognitive_summary",
     "get_content_invocation_summary",
@@ -1110,5 +1202,6 @@ __all__ = [
     "get_skill_invocation_protocol_summary",
     "get_skills_platform_summary",
     "get_step_by_step_summary",
+    "get_worked_example_summary",
     "list_all_doctrines",
 ]

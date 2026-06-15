@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import uuid
 from datetime import UTC, datetime
+from typing import NamedTuple
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,6 +65,43 @@ def _apply_complete_response_firewall(text: str) -> str:
         return cleaned
     except Exception as exc:
         logger.debug("customer_chat.firewall_non_fatal: %s", exc)
+        return text
+
+
+def _strip_worked_example_markers(text: str) -> str:
+    """D-114: يحذف علامات الفواصل الحارسة للعرض الحيّ (الطالب لا يرى ⟦⟧).
+
+    النص المُتراكم (complete_ai_response) يحتفظ بالعلامات للحجب النهائي الواعي؛
+    هذه الدالة للعرض فقط. fail-open.
+    """
+    if not text:
+        return text
+    try:
+        from app.services.skills.doctrine import (
+            WORKED_EXAMPLE_CLOSE,
+            WORKED_EXAMPLE_OPEN,
+        )
+
+        return text.replace(WORKED_EXAMPLE_OPEN, "").replace(WORKED_EXAMPLE_CLOSE, "")
+    except Exception:
+        return text
+
+
+def _apply_final_answer_redaction(text: str, support_level: int | None) -> str:
+    """D-114: حجب الإجابة النهائية الواعي بالفواصل على الإجابة المحفوظة.
+
+    support_level==1 ⇒ يُعفي كتلة المثال المحلول (الملفوفة بالفواصل) ويحجب ما
+    عداها؛ غير ذلك ⇒ حجب كامل (شبكة أمان D-113 + إزالة أي علامات شاردة). fail-open.
+    """
+    if not text or not text.strip():
+        return text
+    try:
+        from app.services.skills.answer_redaction_skill import redact_final_answers
+
+        redacted, _ = redact_final_answers(text, support_level)
+        return redacted
+    except Exception as exc:
+        logger.debug("customer_chat.final_redaction_non_fatal: %s", exc)
         return text
 
 
@@ -263,19 +301,65 @@ async def _evaluate_and_emit_bkt(
 
 _PEDAGOGY_DIRECTIVE_TIMEOUT_S = 2.0
 
+#: D-114: علامات الحيرة — تكرارها (2+) يفرض المثال المحلول (support_level=1).
+_CONFUSION_MARKERS: tuple[str, ...] = (
+    "لم أفهم",
+    "لم افهم",
+    "مفهمتش",
+    "ما فهمت",
+    "مافهمت",
+    "ما افهم",
+    "لا أفهم",
+    "لا افهم",
+    "صعب",
+    "ماقدرت",
+    "ما قدرت",
+)
+
+
+class _PedagogySnapshot(NamedTuple):
+    """D-114: صورة المتعلم المُجمَّعة — تُمرَّر للسياق وتقود بوّابة المثال المحلول.
+
+    ``support_level`` الافتراض الآمن = 5 (محجوب كلياً) عند أي تعذّر — لا 1 — كي
+    لا يكشف فشلٌ واحد كل الإجابات (fail-closed).
+    """
+
+    directive_text: str
+    support_level: int
+    confusion_count: int
+    concept_id: str
+    mastery: float | None
+
+
+def _count_confusion_signals(history_messages: list[dict[str, str]] | None, question: str) -> int:
+    """يَعُدّ رسائل الطالب التي تُعبّر عن حيرة (السؤال الحالي + سجل المحادثة).
+
+    حتمي، بلا I/O. تكرار الحيرة (≥2) ⇒ المبتدئ عالق ويحتاج مثالاً محلولاً.
+    """
+    texts: list[str] = [str(question or "")]
+    for msg in history_messages or []:
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            texts.append(str(msg.get("content") or ""))
+    count = 0
+    for text in texts:
+        low = text.strip()
+        if any(marker in low for marker in _CONFUSION_MARKERS):
+            count += 1
+    return count
+
 
 async def _build_pedagogy_directive(
     *,
     user_id: int,
     question: str,
     history_messages: list[dict[str, str]],
-) -> str:
-    """D-104: يقرأ صورة المتعلم من BKT ويشتق توجيهاً تربوياً لعمق التدريس.
+) -> _PedagogySnapshot:
+    """D-104/D-114: يقرأ صورة المتعلم من BKT ويشتق توجيهاً تربوياً + support_level.
 
-    «المنسّق يملك صورة المتعلم» — لأول مرة قراءة الإتقان تقود سلوك المعلم:
-    سقراطي للمتمكن، سقالات كاملة للمبتدئ، والتقاط المفاهيم الخاطئة قبل أن
-    تتجذر. fail-open مطلق: أي تعذّر (DB/مهلة/تصنيف) ⇒ "" — التوجيه التربوي
-    لا يكسر دور الطالب أبداً (نفس عزل BKT — جلسة مستقلة + سقف زمني).
+    «المنسّق يملك صورة المتعلم» — قراءة الإتقان تقود سلوك المعلم: سقراطي للمتمكن،
+    مثال محلول كامل للمبتدئ المطلق (D-114)، والتقاط المفاهيم الخاطئة قبل أن تتجذر.
+    fail-open مطلق: أي تعذّر (DB/مهلة/تصنيف) ⇒ snapshot آمن (directive=""،
+    support_level=5 محجوب كلياً) — التوجيه لا يكسر دور الطالب أبداً.
     """
     try:
         from app.services.skills.adaptive_pedagogy_skill import (
@@ -309,15 +393,104 @@ async def _build_pedagogy_directive(
                 cognitive_load=estimate_cognitive_load(question),
             )
         )
+        # D-114: الحيرة المتكرّرة تفرض المثال المحلول حتى لو الإتقان غير منخفض.
+        confusion = _count_confusion_signals(history_messages, question)
+        support_level = directive.support_level
+        if confusion >= 2:
+            support_level = 1
         logger.info(
-            "pedagogy_directive level=%s concept=%s mastery=%s",
+            "pedagogy_directive level=%s support_level=%s concept=%s mastery=%s confusion=%s",
             directive.guidance_level,
+            support_level,
             concept_id,
             f"{mastery:.2f}" if mastery is not None else "none",
+            confusion,
         )
-        return directive.directive_text
+        return _PedagogySnapshot(
+            directive_text=directive.directive_text,
+            support_level=support_level,
+            confusion_count=confusion,
+            concept_id=concept_id,
+            mastery=mastery,
+        )
     except Exception as exc:
         logger.debug("pedagogy_directive_failed (fail-open): %s", exc)
+        # fail-closed على support_level: 5 = محجوب كلياً (لا كشف عند الخطأ).
+        return _PedagogySnapshot("", 5, 0, "general", None)
+
+
+async def _maybe_emit_worked_example(
+    *,
+    websocket: WebSocket,
+    send_lock: asyncio.Lock,
+    conversation_id: int | None,
+    question: str,
+    snapshot: _PedagogySnapshot,
+    stream_request_id: str,
+) -> str:
+    """D-114: عند المبتدئ المطلق (support_level==1)، يبثّ بطاقة المثال المحلول
+    (خريطة منهجية بصرية) ويُرجِع توجيه الـ LLM لتوليد مثال محلول على مسألة مماثلة.
+
+    الخريطة المنهجية حتمية (تنقل المهارة المُتحوِّلة: «كيف أحل أي تمرين مهما تغيّر»).
+    المثال الملموس بالأرقام يُولِّده الـ LLM في السرد (ملفوف بالفواصل الحارسة).
+    fail-open: أي تعذّر ⇒ "" (سقراطي افتراضي) — لا يكسر الدور.
+    """
+    try:
+        from app.services.skills.worked_example_skill import (
+            WorkedExampleInput,
+            get_worked_example_skill,
+        )
+
+        result = get_worked_example_skill().derive(
+            WorkedExampleInput(
+                exercise_text=question,
+                concept_id=snapshot.concept_id,
+                mastery=snapshot.mastery,
+                support_level=snapshot.support_level,
+                confusion_count=snapshot.confusion_count,
+            )
+        )
+        if not result.should_reveal:
+            return ""
+
+        steps = [
+            {
+                "title": s.title,
+                "subgoal_label": s.subgoal_label,
+                "subgoal_color": s.subgoal_color,
+                "self_explanation_prompt": s.self_explanation_prompt,
+            }
+            for s in result.steps
+        ]
+        we_card_payload = {
+            "component": "worked_example_card",
+            "props": {
+                "concept_id": snapshot.concept_id,
+                "title": result.card_title,
+                "steps": steps,
+                "mastery": snapshot.mastery,
+                "bridge_text": result.bridge_text,
+            },
+            "fallback_text": result.bridge_text,
+        }
+        if conversation_id is not None:
+            await _persist_ui_component_cards(
+                conversation_id=conversation_id,
+                cards=[dict(we_card_payload)],
+            )
+        if websocket.client_state == WebSocketState.CONNECTED:
+            await _locked_send_json(
+                websocket,
+                send_lock,
+                _bind_stream_metadata(
+                    {"type": "ui_component", "payload": we_card_payload},
+                    conversation_id,
+                    stream_request_id,
+                ),
+            )
+        return result.prompt_directive
+    except Exception as exc:
+        logger.debug("worked_example_failed (fail-open): %s", exc)
         return ""
 
 
@@ -896,13 +1069,27 @@ async def chat_stream_ws(
             # كصفوف مستقلة فتبقى بعد إعادة الدخول.
             captured_ui_components: list[dict[str, object]] = []
 
-            # D-104: صورة المتعلم تقود عمق التدريس — التوجيه التربوي التكيفي
-            # يُقرأ من إتقان BKT (fail-open، سقف 2s، جلسة DB معزولة) ويُمرَّر
-            # عبر context ليُسبق في سؤال الـ LLM (orchestrator + fallbacks).
-            pedagogy_directive = await _build_pedagogy_directive(
+            # D-104/D-114: صورة المتعلم تقود عمق التدريس — التوجيه التربوي التكيفي
+            # يُقرأ من إتقان BKT (fail-open، سقف 2s، جلسة DB معزولة) ويُمرَّر عبر
+            # context ليُسبق في سؤال الـ LLM (orchestrator + fallbacks). support_level
+            # يعبر السلسلة كاملةً ويحكم بوّابة المثال المحلول + إعفاء الحجب.
+            pedagogy_snapshot = await _build_pedagogy_directive(
                 user_id=actor.id,
                 question=question,
                 history_messages=history_messages,
+            )
+            pedagogy_directive = pedagogy_snapshot.directive_text
+            support_level = pedagogy_snapshot.support_level
+
+            # D-114: المبتدئ المطلق (support_level==1) يتلقّى بطاقة المثال المحلول
+            # (خريطة منهجية بصرية) + توجيه الـ LLM لتوليد مثال على مسألة مماثلة.
+            worked_example_directive = await _maybe_emit_worked_example(
+                websocket=websocket,
+                send_lock=send_lock,
+                conversation_id=local_conversation_id,
+                question=question,
+                snapshot=pedagogy_snapshot,
+                stream_request_id=stream_request_id,
             )
 
             try:
@@ -915,6 +1102,8 @@ async def chat_stream_ws(
                     request_id=stream_request_id,
                     captured=captured_ui_components,
                     pedagogy=pedagogy_directive,
+                    sup_level=support_level,
+                    worked_directive=worked_example_directive,
                 ) -> None:
                     nonlocal pending_terminal_event
                     nonlocal complete_ai_response
@@ -929,6 +1118,8 @@ async def chat_stream_ws(
                             "metadata": meta,
                             "compatibility_facade": True,
                             "pedagogy_directive": pedagogy,
+                            "support_level": sup_level,
+                            "worked_example_directive": worked_directive,
                         },
                     ):
                         # D-WS-FLAP-001: abort stream if client disconnected mid-turn.
@@ -976,11 +1167,28 @@ async def chat_stream_ws(
                                 normalized_event.get("payload"), dict
                             ):
                                 captured.append(dict(normalized_event["payload"]))
+                            # D-114: احذف علامات الفواصل الحارسة من العرض الحيّ فقط
+                            # (الطالب لا يرى ⟦⟧)؛ التراكم الخام يبقى للحجب النهائي الواعي.
+                            display_event = normalized_event
+                            if (
+                                sup_level == 1
+                                and _is_text_event(normalized_event)
+                                and isinstance(normalized_event.get("payload"), dict)
+                            ):
+                                _disp = normalized_event["payload"].get("content")
+                                if isinstance(_disp, str) and _disp:
+                                    display_event = {
+                                        **normalized_event,
+                                        "payload": {
+                                            **normalized_event["payload"],
+                                            "content": _strip_worked_example_markers(_disp),
+                                        },
+                                    }
                             # D-096: send_lock يمنع التزامن مع BKT task
                             await _locked_send_json(
                                 websocket,
                                 send_lock,
-                                _bind_stream_metadata(normalized_event, lc_id, request_id),
+                                _bind_stream_metadata(display_event, lc_id, request_id),
                             )
 
                         if _is_text_event(normalized_event) and isinstance(
@@ -1045,6 +1253,12 @@ async def chat_stream_ws(
                 # قبل الحفظ في DB — يضمن نقاء القناة B في السجل الدائم.
                 if complete_ai_response:
                     complete_ai_response = _apply_complete_response_firewall(complete_ai_response)
+                    # D-114: حجب الإجابة النهائية الواعي بالفواصل على النسخة المحفوظة
+                    # (support_level==1 ⇒ يُعفي كتلة المثال المحلول ويزيل العلامات؛
+                    # غير ذلك ⇒ حجب كامل = شبكة أمان D-113). support_level من صورة المتعلم.
+                    complete_ai_response = _apply_final_answer_redaction(
+                        complete_ai_response, support_level
+                    )
 
                 if (
                     not assistant_message_persisted

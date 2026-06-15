@@ -112,6 +112,11 @@ class AgentState(TypedDict):
     # عند وجوده: supervisor يفرض educational، retriever يتجاوز البحث الدلالي
     # ويستخدم هذا المحتوى كمصدر وحيد — لا vector DB ولا خلط تمارين.
     exercise_content: str
+    # D-114: درجة سُلّم الدعم (1..5، افتراض 5/محجوب) + توجيه المثال المحلول.
+    # support_level==1 ⇒ SynthesizerNode يُولِّد مثالاً محلولاً على مسألة مماثلة
+    # (ملفوفاً بالفواصل الحارسة) بدل السقراطية البحتة (worked-example effect).
+    support_level: int
+    worked_example_directive: str
 
 
 ADMIN_METRIC_TRIGGERS = {

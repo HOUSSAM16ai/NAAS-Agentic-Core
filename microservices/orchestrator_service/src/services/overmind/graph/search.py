@@ -508,6 +508,23 @@ class SynthesizerNode:
         query = state.get("query", "")
         messages = state.get("messages", [])
 
+        # D-114: المثال المحلول للمبتدئ المطلق — support_level==1 + توجيه محقون ⇒
+        # نُولِّد مثالاً محلولاً كاملاً على مسألة مماثلة (ملفوفاً بالفواصل الحارسة)
+        # بدل السقراطية البحتة (worked-example effect). افتراض 5 (محجوب) آمن.
+        try:
+            _support_level = int(state.get("support_level") or 5)
+        except (TypeError, ValueError):
+            _support_level = 5
+        _we_directive = str(state.get("worked_example_directive") or "").strip()
+        _worked_example_mode = _support_level == 1 and bool(_we_directive)
+        _we_system_prompt = (
+            "أنت مدرس بكالوريا جزائري. الطالب مبتدئ مطلق ويحتاج مثالاً محلولاً "
+            "كاملاً ليبني المخطط الذهني (worked-example effect). اتبع توجيه المثال "
+            "المحلول حرفياً: وَلِّد مثالاً على مسألة *مماثلة* بأرقام مختلفة عن تمرين "
+            "الطالب، أظهِر كل خطوة بنتيجتها كاملةً داخل الفواصل المطلوبة، ثم اختم "
+            "خارجها بدعوة الطالب لتطبيق المنهجية على تمرينه (دون حلّه له)."
+        )
+
         recent_messages: list[str] = []
         for msg in messages[-6:]:
             content = getattr(msg, "content", None)
@@ -545,18 +562,24 @@ class SynthesizerNode:
                     )
 
                     llm_client = get_llm_client()
-                    stream_messages = [
-                        {
-                            "role": "system",
-                            # D-113: سقراطي للتمارين، إجابة مباشرة للمعرفة العامة.
-                            "content": (
-                                "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار. إذا كان "
-                                "السؤال تمريناً يحلّه الطالب: قُده بأسئلة وتلميحات ولا "
-                                "تكشف النتيجة النهائية. للمعرفة العامة: أجب مباشرة."
-                            ),
-                        },
+                    if _worked_example_mode:
+                        # D-114: المبتدئ المطلق — مثال محلول على مسألة مماثلة.
+                        _sys_content = _we_system_prompt
+                        _user_content = _weave_reasoning_hint(
+                            f"{_we_directive}\n\nموضوع الطالب: {query}", reasoning_hint
+                        )
+                    else:
+                        # D-113: سقراطي للتمارين، إجابة مباشرة للمعرفة العامة.
+                        _sys_content = (
+                            "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار. إذا كان "
+                            "السؤال تمريناً يحلّه الطالب: قُده بأسئلة وتلميحات ولا "
+                            "تكشف النتيجة النهائية. للمعرفة العامة: أجب مباشرة."
+                        )
                         # D-103: حقن hint الاستدلال عند توفره (فرع no-docs)
-                        {"role": "user", "content": _weave_reasoning_hint(query, reasoning_hint)},
+                        _user_content = _weave_reasoning_hint(query, reasoning_hint)
+                    stream_messages = [
+                        {"role": "system", "content": _sys_content},
+                        {"role": "user", "content": _user_content},
                     ]
                     # D-061 (ISS-074): تطبيع LaTeX على streaming chunks
                     from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
@@ -610,23 +633,32 @@ class SynthesizerNode:
                 # D-048: STREAMING — استدعاء raw OpenAI مع stream=True + custom events
                 # نُحاكي نفس قالب EducationalSynthesizer signature ولكن بـ streaming.
                 try:
-                    system_msg = (
-                        "أنت مدرس بكالوريا جزائري تُعلّم بالطريقة السقراطية. اعتمد على "
-                        "context من قاعدة المعرفة وعلى محادثة الطالب. اكتب بالعربية الفصحى "
-                        "ولا تُكرر نص المصدر حرفياً. "
-                        # D-113: لا تُسلّم الحلّ لتمرين يحلّه الطالب.
-                        "إذا كان المصدر تمريناً يجب أن يحلّه الطالب: علّمه كيف يفكّر، قُده "
-                        "بأسئلة وتلميحات متدرّجة، وممنوع كشف النتيجة النهائية (أرقام/كسور/"
-                        "$$\\boxed{...}$$). إذا كان سؤال معرفة عامة: أجب مباشرة."
-                    )
-                    user_msg = (
-                        f"المصدر (context):\n{raw_doc_text}\n\n"
-                        f"محادثة الطالب:\n{conversation_text}\n\n"
-                        f"السؤال الحالي: {query}\n\n"
-                        # D-113: وجِّه نحو الحل، لا تُسلّمه (للتمارين).
-                        "وجِّه الطالب نحو الحل بأسئلة وتلميحات؛ لا تكشف النتيجة النهائية "
-                        "لتمرين يحلّه بنفسه."
-                    )
+                    if _worked_example_mode:
+                        # D-114: المبتدئ المطلق — مثال محلول على مسألة مماثلة.
+                        system_msg = _we_system_prompt
+                        user_msg = (
+                            f"{_we_directive}\n\n"
+                            f"موضوع الطالب: {query}\n\n"
+                            f"مرجع مساعد (لا تنسخه، استلهم منه مسألة مماثلة):\n{raw_doc_text}"
+                        )
+                    else:
+                        system_msg = (
+                            "أنت مدرس بكالوريا جزائري تُعلّم بالطريقة السقراطية. اعتمد على "
+                            "context من قاعدة المعرفة وعلى محادثة الطالب. اكتب بالعربية الفصحى "
+                            "ولا تُكرر نص المصدر حرفياً. "
+                            # D-113: لا تُسلّم الحلّ لتمرين يحلّه الطالب.
+                            "إذا كان المصدر تمريناً يجب أن يحلّه الطالب: علّمه كيف يفكّر، قُده "
+                            "بأسئلة وتلميحات متدرّجة، وممنوع كشف النتيجة النهائية (أرقام/كسور/"
+                            "$$\\boxed{...}$$). إذا كان سؤال معرفة عامة: أجب مباشرة."
+                        )
+                        user_msg = (
+                            f"المصدر (context):\n{raw_doc_text}\n\n"
+                            f"محادثة الطالب:\n{conversation_text}\n\n"
+                            f"السؤال الحالي: {query}\n\n"
+                            # D-113: وجِّه نحو الحل، لا تُسلّمه (للتمارين).
+                            "وجِّه الطالب نحو الحل بأسئلة وتلميحات؛ لا تكشف النتيجة النهائية "
+                            "لتمرين يحلّه بنفسه."
+                        )
                     # D-103: حقن hint الاستدلال عند توفره (فرع with-docs)
                     user_msg = _weave_reasoning_hint(user_msg, reasoning_hint)
                     stream_messages = [
@@ -711,7 +743,8 @@ class SynthesizerNode:
             sanitize_response,
         )
 
-        text_val = sanitize_response(text_val, intent="educational")
+        # D-114: support_level==1 يُعفي كتلة المثال المحلول الملفوفة من الحجب.
+        text_val = sanitize_response(text_val, intent="educational", support_level=_support_level)
 
         response_json = {
             "المصدر": source,

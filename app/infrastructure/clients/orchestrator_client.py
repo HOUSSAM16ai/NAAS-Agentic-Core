@@ -1992,6 +1992,15 @@ class OrchestratorClient:
         if _pedagogy_directive:
             _effective_question = f"[توجيه تربوي] {_pedagogy_directive}\n\n{_effective_question}"
 
+        # D-114: support_level يحكم إعفاء الحجب (sanitize_final_text). الافتراض
+        # الآمن = 5 (محجوب كلياً) عند الغياب/الخطأ — لا 1 (fail-closed).
+        try:
+            _support_level = int((context or {}).get("support_level") or 5)
+        except (TypeError, ValueError):
+            _support_level = 5
+        if _support_level < 1 or _support_level > 5:
+            _support_level = 5
+
         payload = {
             "question": _effective_question,
             "user_id": user_id,
@@ -2124,7 +2133,11 @@ class OrchestratorClient:
                                 if sanitize_final_text is not None:
                                     _fc = (normalized.get("payload") or {}).get("content")
                                     if isinstance(_fc, str) and _fc:
-                                        normalized["payload"]["content"] = sanitize_final_text(_fc)
+                                        # D-114: support_level==1 يُعفي كتلة المثال
+                                        # المحلول الملفوفة بالفواصل من الحجب.
+                                        normalized["payload"]["content"] = sanitize_final_text(
+                                            _fc, _support_level
+                                        )
                             elif _ntype in ("assistant_error", "error", "complete"):
                                 _orch_visible = True
                             yield normalized

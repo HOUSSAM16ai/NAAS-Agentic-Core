@@ -8981,3 +8981,58 @@ Skills هي السلطة الوحيدة؛ النظام يتعطّل بدونها
 |----------|---------|
 | D-114 | المثال المحلول المكشوف (كارثة حيّة — عُكِس) |
 | **D-115** | **البروتوكول السقراطي المنضبط: توليد في الـ orchestrator فقط + قفل المفهوم + مُطهّر مُصفّح + حذف المثال المكشوف (يحل ISS-116)** |
+
+---
+
+## 6.100 مُعلّم الاحتمالات البصري التفاعلي — قتل غارباج LLM من المصدر (2026-06-16, ISS-116 / D-116)
+
+> رغم D-115، transcript حي يُظهر استمرار الكارثة: `ë` («نحسب ë نِسَب») + علامات تجميعية
+> لاتينية U+0305 فوق كل كلمة («لا̅ يمكن̅») + قفز المفهوم إلى «عام» + نص سقراطي مجرّد يغرق
+> المبتدئ. هذا القسم يحكم تحويل الاحتمالات إلى تجربة بصرية تفاعلية حتمية — لا يُكسر بدون ADR.
+
+### الجذر الحاسم
+المحرّك الحتمي (`ProbabilityCalculatorSkill`) + الكاروسيل البصري (`full_exercise_story`)
+**موجودان ويعملان بصفر هلوسة** (transcript يُثبت: C(11,3)=165 + جدول توزيع X بكسور حقيقية).
+**كل الغارباج يأتي حصراً من نص الـ LLM السقراطي** المعروض بجانب البصري. الحل: للاحتمالات،
+المُعلّم البصري الحتمي هو **التجربة الكاملة** — لا نص LLM إطلاقاً.
+
+### القواعد الـ 6 الدائمة (D-116 — لا تُكسر بدون ADR)
+1. **الاحتمالات = بصري حتمي كامل**: `orchestrator_client._build_calculated_ui` يضبط
+   `terminate_pipeline=True` **دائماً** (حتى عند الحيرة/MODE_B) لكل مكوّنات الاحتمالات
+   (full_exercise_story/combinations_visualizer/probability_tree/impossible). صفر سرد LLM ⇒
+   صفر `ë`/علامات/قفز للحالة الفاشلة. (يَعكِس جزء MODE_B من D-085 للاحتمالات فقط.)
+2. **المُعلّم التفاعلي** (`FullExerciseStory.jsx` مُعزَّز، لا مكوّن جديد): `ExerciseStep.interactive`
+   حقل حتمي (`question` + `answer_kind` choice/number + `expected`/`expected_index` + `hint`).
+   الواجهة: سؤال أولاً → الطالب يحاول → تلميح عند الخطأ → «اكشف الخطوة» (لا فخّ) → يُكشف المحتوى.
+   الطالب يبني P(A)=14/165 بنفسه (قيادة لا تلقين — متّسق مع «لا تكشف»). حتمي بلا LLM.
+3. **المُطهّر يحذف العلامات التجميعية U+0300–U+036F** (`_strip_garbage_markers` في
+   content_integrity + response_sanitizer). حركات العربية U+064B–U+065F/U+0670 خارج النطاق فتبقى سليمة.
+4. **`_allow_token` يقبل ASCII المفرد فقط**: `ë`/الحرف اللاتيني المُلكَّن المنفرد يُحذف؛ `x/n/dx/ln` يبقى.
+5. **قفل المفهوم نافذة `[-60:]` + رسائل الطالب حصراً** (`classify_concept_with_context`): متابعة
+   «اريد شرح بصري»/«كيف نسحبها» تبقى على مفهوم التمرين النشط (probability)، مناعة ضد هلوسة المساعد.
+6. **الاحتمالات تُدار بـ `ProbabilityCalculatorSkill` الحتمي** (عمود Skills) — صفر LLM = صفر هلوسة.
+   المواضيع المفتوحة تبقى على الـ orchestrator/LangGraph (D-112/D-115).
+
+### الملفات (D-116)
+| File | Change |
+|------|--------|
+| `app/infrastructure/clients/orchestrator_client.py` | `_build_calculated_ui`: terminate_pipeline=True دائماً للاحتمالات (4 مواقع) |
+| `app/services/skills/probability_skill.py` | `ExerciseStep.interactive` + ملء 3 خطوات (question/expected/hint حتمي) |
+| `frontend/app/components/generative/FullExerciseStory.jsx` | `StepInteraction` + حالة revealed + شريط تقدّم |
+| `frontend/app/globals.css` | أنماط `.genui-fes-interact/-question/-choices/-verify/-hint/-reveal-btn/-progress` |
+| `app/services/skills/content_integrity_skill.py` | `_COMBINING_MARKS_RE` + `_allow_token` ASCII-only |
+| `microservices/.../response_sanitizer.py` | حذف U+0300–U+036F في strip_garbage_markers |
+| `app/services/skills/bkt_engine.py` | قفل المفهوم نافذة [-60:] + رسائل الطالب حصراً |
+
+### التحقق
+- **Sandbox**: المُطهّر (`ë`/U+0305 يُحذفان، الحركات/LaTeX سليمة) + قفل المفهوم على السيناريو
+  الحرفي (محادثة طويلة + هلوسة مساعد ⇒ يبقى probability) + 19 فحص frontend (التفاعل + الكشف
+  + الكيس + التقدّم + الخلفية الحتمية) + ruff + py_compile 3.12 + runtime_truth — **خضراء**.
+- **Codespaces (E2E حي إلزامي)**: احتمالات 2024 → «لم أفهم» متكرّر ⇒ مُعلّم بصري تفاعلي
+  (كيس + سؤال واحد + تحقق + كشف جزئي)، **صفر نص LLM، صفر `ë`/علامات/قفز**، الطالب يبني P(A)=14/165.
+
+### السلسلة (D-115 → D-116)
+| Decision | الموضوع |
+|----------|---------|
+| D-115 | البروتوكول السقراطي المنضبط (نصّي) |
+| **D-116** | **مُعلّم الاحتمالات البصري التفاعلي + terminate LLM للاحتمالات (صفر هلوسة) + مُطهّر U+0305/`ë` + قفل مفهوم [-60:]** |

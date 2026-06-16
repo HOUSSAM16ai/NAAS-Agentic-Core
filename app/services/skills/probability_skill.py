@@ -429,6 +429,13 @@ class ExerciseStep(RobustBaseModel):
     pedagogical_message: str = Field(
         ..., min_length=1, max_length=400, description="شرح تربوي قصير لهذه الخطوة"
     )
+    # D-116 (المُعلّم التفاعلي): سؤال واحد حتمي + إجابة متوقَّعة + تلميح — يُمكّن
+    # الواجهة من «اسأل → الطالب يحاول → تحقق → اكشف الخطوة». فارغ ⇒ كشف مباشر.
+    # العقد: {question, answer_kind: "choice"|"number", choices?, expected_index?,
+    #         expected?, hint}. حتمي بلا LLM — الطالب يبني الجواب بنفسه (لا تلقين).
+    interactive: dict[str, object] = Field(
+        default_factory=dict, description="عقد السؤال الواحد التفاعلي الحتمي (D-116)"
+    )
 
 
 class FullExerciseStoryOutput(RobustBaseModel):
@@ -1252,6 +1259,13 @@ class ProbabilityCalculatorSkill:
                     f"نبدأ بفهم ما في الكيس: {total} عنصراً موزّعة هكذا — {groups_summary}. "
                     "نسحب منها عيّنة دفعةً واحدة (الترتيب لا يهمّ)."
                 ),
+                interactive={
+                    "question": f"نسحب {k} كرات دفعةً واحدة — هل يهمّ ترتيب سحبها؟",
+                    "answer_kind": "choice",
+                    "choices": ["نعم، الترتيب يهمّ", "لا، لا يهمّ الترتيب"],
+                    "expected_index": 1,
+                    "hint": "دفعةً واحدة = لا يوجد أوّل/ثانٍ/ثالث ⇒ الترتيب لا يهمّ.",
+                },
             )
         )
 
@@ -1271,6 +1285,12 @@ class ProbabilityCalculatorSkill:
                     f"بما أننا نسحب {k} دفعةً واحدة فالترتيب لا يهمّ، نستعمل التأليفات. "
                     f"عدد كل العيّنات الممكنة هو C({total},{k}) = {total_comb}."
                 ),
+                interactive={
+                    "question": f"كم عدد طرق اختيار {k} كرات من بين {total}؟ (اكتب العدد)",
+                    "answer_kind": "number",
+                    "expected": total_comb,
+                    "hint": f"الترتيب لا يهمّ ⇒ استعمل التأليفات: C({total},{k}).",
+                },
             )
         )
 
@@ -1326,6 +1346,14 @@ class ProbabilityCalculatorSkill:
                     "للسحب يكون مستحيلاً (لا نكتب صفراً مضلِّلاً). نجمع الممكن منها: "
                     f"الاحتمال = {same_group}/{total_comb}."
                 ),
+                interactive={
+                    "question": f"كم عدد طرق اختيار {k} كرات من نفس اللون؟ (اجمع كل لون ممكن)",
+                    "answer_kind": "number",
+                    "expected": same_group,
+                    "hint": (
+                        f"لكل لون احسب C(عدد اللون,{k}) — اللون الذي عدده أقل من {k} مستحيل — ثم اجمع."
+                    ),
+                },
             )
         )
 

@@ -161,19 +161,24 @@ _INSTRUCTION_LEAK_RE = re.compile(
     r"single flowing syntax|semantic nuances|prepares the learner|التوجيه التربوي|"
     r"تفعيل الفهم المبكر|مثال_محلول).*$"
 )
+# D-116: علامات تجميعية لاتينية دخيلة (U+0300–U+036F) — تظهر فوق حروف عربية كغارباج
+# («لا̅ يمكن̅»). حركات العربية (U+064B–U+065F، U+0670) خارج هذا النطاق فتبقى سليمة.
+_COMBINING_MARKS_RE = re.compile(r"[̀-ͯ]")
 
 
 def _strip_garbage_markers(text: str) -> str:
-    """D-115: يحذف الفواصل الحارسة المشوّهة + تعليمات الـ system prompt المُسرَّبة.
+    """D-115/D-116: يحذف الفواصل المشوّهة + تعليمات الـ system prompt المُسرَّبة +
+    العلامات التجميعية اللاتينية الدخيلة.
 
     حتمي، fail-open. يُطبَّق على كل نثر (داخل/خارج الوضع العربي) — `⟦⟧` و
-    `WARM-UP` يجب ألا يصلا الطالب أبداً مهما تشوّها أو انقسما عبر chunks.
+    `WARM-UP` والعلامات الدخيلة يجب ألا تصل الطالب أبداً مهما تشوّهت أو انقسمت.
     """
     if not text:
         return text or ""
     try:
         out = _BRACKET_BLOCK_RE.sub("", text)
         out = out.replace("⟦", "").replace("⟧", "")
+        out = _COMBINING_MARKS_RE.sub("", out)  # D-116: علامات U+0305 الدخيلة
         out = _MARKER_PHRASE_RE.sub("", out)
         return _INSTRUCTION_LEAK_RE.sub("", out)
     except Exception:  # pragma: no cover — fail-open
@@ -380,8 +385,10 @@ class StreamIntegrityFilter:
 
     @staticmethod
     def _allow_token(tok: str, text: str, pos: int) -> bool:
+        # D-116: المتغيّرات القصيرة المسموحة ASCII فقط (x, n, dx, ln) — الحرف
+        # اللاتيني المُلكَّن المنفرد (ë) غارباج هلوسة يُحذف، لا يُعدّ متغيّراً.
         if len(tok) <= 2:
-            return True  # P(A), dx, ln, متغيرات مفردة
+            return tok.isascii()
         if pos > 0 and text[pos - 1] == "\\":
             return True  # أمر LaTeX شارد خارج الرياضيات
         return _strip_accents(tok) in _TECH_ALLOWLIST

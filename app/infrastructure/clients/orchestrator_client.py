@@ -1274,7 +1274,9 @@ class OrchestratorClient:
                 return {
                     "component": "full_exercise_story",
                     # V38.0: MODE_B (confusion) keeps pipeline alive for deep narrative.
-                    "terminate_pipeline": not _is_deep_pedagogy,
+                    # D-116: الاحتمالات = مُعلّم بصري حتمي كامل ⇒ terminate دائماً
+                    # (حتى عند الحيرة) — لا سرد LLM (مصدر الغارباج). البصري هو البيداغوجيا.
+                    "terminate_pipeline": True,
                     "routing_mode": _routing_mode,
                     "companion_text": _companion_text_for_focus(result.companion_text),
                     "props": {
@@ -1314,7 +1316,9 @@ class OrchestratorClient:
                     # V38.0: impossible_case always terminates in MODE_A.
                     # In MODE_B (confusion about impossible draw), pipeline stays alive
                     # so the LLM can explain WHY the draw is impossible pedagogically.
-                    "terminate_pipeline": not _is_deep_pedagogy,
+                    # D-116: الاحتمالات = مُعلّم بصري حتمي كامل ⇒ terminate دائماً
+                    # (حتى عند الحيرة) — لا سرد LLM (مصدر الغارباج). البصري هو البيداغوجيا.
+                    "terminate_pipeline": True,
                     "routing_mode": _routing_mode,
                     "companion_text": _companion_text_for_focus(result.companion_text),
                     "props": {
@@ -1371,7 +1375,9 @@ class OrchestratorClient:
                     "component": "combinations_visualizer",
                     # V38.0: MODE_B (confusion) keeps pipeline alive for deep narrative.
                     # MODE_A terminates after the visual component (Text-Wall Muzzle).
-                    "terminate_pipeline": not _is_deep_pedagogy,
+                    # D-116: الاحتمالات = مُعلّم بصري حتمي كامل ⇒ terminate دائماً
+                    # (حتى عند الحيرة) — لا سرد LLM (مصدر الغارباج). البصري هو البيداغوجيا.
+                    "terminate_pipeline": True,
                     "routing_mode": _routing_mode,
                     "companion_text": _companion_text_for_focus(
                         "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄"
@@ -1407,7 +1413,9 @@ class OrchestratorClient:
                     "component": "probability_tree",
                     # V38.0: MODE_B (confusion) keeps pipeline alive for deep narrative.
                     # MODE_A terminates after the visual component (Text-Wall Muzzle).
-                    "terminate_pipeline": not _is_deep_pedagogy,
+                    # D-116: الاحتمالات = مُعلّم بصري حتمي كامل ⇒ terminate دائماً
+                    # (حتى عند الحيرة) — لا سرد LLM (مصدر الغارباج). البصري هو البيداغوجيا.
+                    "terminate_pipeline": True,
                     "routing_mode": _routing_mode,
                     "companion_text": _companion_text_for_focus(
                         "إليك الشرح البصري المفصل للتمرين خطوة بخطوة 🪄"

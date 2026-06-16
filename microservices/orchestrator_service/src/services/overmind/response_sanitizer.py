@@ -132,6 +132,8 @@ def strip_garbage_markers(text: str) -> str:
         out = _BRACKET_BLOCK_RE.sub("", text)
         # أقواس يتيمة/مشوّهة باقية
         out = out.replace("⟦", "").replace("⟧", "")
+        # D-116: علامات تجميعية لاتينية دخيلة (U+0300–U+036F) — «لا̅ يمكن̅».
+        out = re.sub(r"[̀-ͯ]", "", out)
         out = _MARKER_PHRASE_RE.sub("", out)
         return _INSTRUCTION_LEAK_RE.sub("", out)
     except Exception:  # pragma: no cover — fail-open

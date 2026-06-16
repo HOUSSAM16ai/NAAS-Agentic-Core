@@ -137,19 +137,22 @@ def classify_concept_with_context(
     concept = classify_concept(question)
     if concept != "general" or not history:
         return concept
-    # D-115 (قفل المفهوم — ضد تسمّم السياق): السؤال بلا مفهوم (متابعة/حيرة مثل
-    # «لم أفهم»). الكارثة الحية: المسح كان يشمل رسائل المساعد، فإذا هلوس المساعد
-    # «متتالية»/«معادلة» تسمّم التصنيف ودخل حلقة مفهوم خاطئ. الإصلاح: ثبّت المفهوم
-    # من رسائل الطالب (user) حصراً — هي مصدر الحقيقة عن التمرين، مناعة ضد الهلوسة.
-    # أحدث مفهوم ذكره الطالب صراحةً يفوز (يحترم تبديل الموضوع الذي يقرره الطالب).
-    for msg in reversed(history[-12:]):
+    # D-115/D-116 (قفل المفهوم — ضد تسمّم السياق): السؤال بلا مفهوم (متابعة/حيرة
+    # مثل «لم أفهم»/«اريد شرح بصري»/«كيف نسحبها»). الكارثة الحية: المسح كان يشمل
+    # رسائل المساعد، فإذا هلوس المساعد «متتالية»/«معادلة» تسمّم التصنيف ودخل حلقة
+    # مفهوم خاطئ. الإصلاح: ثبّت المفهوم من رسائل الطالب (user) حصراً — مصدر الحقيقة
+    # عن التمرين، مناعة ضد الهلوسة. أحدث مفهوم ذكره الطالب صراحةً يفوز (يحترم تبديل
+    # الموضوع الذي يقرره الطالب). D-116: نمسح *كل* رسائل الطالب (بحدّ آمن كبير) كي
+    # يبقى التمرين الأصلي «اعطني تمرين الاحتمالات» مُرسَّخاً مهما طال الحوار.
+    recent = history[-60:] if len(history) > 60 else history
+    for msg in reversed(recent):
         if not isinstance(msg, dict) or msg.get("role") != "user":
             continue
         c = classify_concept(str(msg.get("content", "")))
         if c != "general":
             return c
     # احتياط أخير: لو لم يذكر الطالب أي مفهوم صريح، جرّب آخر رسالة مساعد.
-    for msg in reversed(history[-6:]):
+    for msg in reversed(recent):
         if not isinstance(msg, dict) or msg.get("role") != "assistant":
             continue
         c = classify_concept(str(msg.get("content", "")))

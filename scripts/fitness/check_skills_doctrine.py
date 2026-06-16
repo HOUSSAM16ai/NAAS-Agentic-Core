@@ -352,7 +352,6 @@ def check_skills_platform() -> None:
         "learning_path",
         "retrieval_rerank",
         "mcp_tool",
-        "worked_example",
     }
     missing = expected - names
     if missing:
@@ -482,14 +481,13 @@ def check_answer_redaction_wired() -> None:
     _pass("Answer redaction wired: Socratic no-answer + deterministic final guard (D-113)")
 
 
-def check_worked_example_wired() -> None:
-    """D-114 (ISS-116 — المثال المحلول المُتدرّج): المهارة موصولة فعلاً — ليست
-    skill بلا مستهلك.
+def check_socratic_protocol_wired() -> None:
+    """D-115 (ISS-116 — يَعكِس D-114): البروتوكول السقراطي المنضبط + المُطهّر المُصفّح.
 
-    يحرس: (1) manifest entry 'worked_example' متّسق، (2) WorkedExampleSkill موجود
-    ويستهلك الـ doctrine، (3) موصول حيّاً في customer_chat عبر
-    _maybe_emit_worked_example، (4) المكوّن worked_example_card في القائمة البيضاء،
-    (5) الحجب الواعي بالفواصل يقبل support_level في كلا المنفذين.
+    يحرس: (1) manifest entry 'worked_example' (المُعاد توجيهه) متّسق، (2) لا توليد
+    تعليمي مكشوف في المونوليث (لا `_maybe_emit_worked_example`، لا `worked_example_card`)،
+    (3) السلطة الوحيدة للتوليد هي SynthesizerNode (orchestrator) عبر البروتوكول المنضبط،
+    (4) المُطهّر المُصفّح موصول في المونوليث والـ orchestrator، (5) support_level يمرّ.
     """
     from app.contracts.streaming import KNOWN_UI_COMPONENTS
     from app.services.skills.doctrine import (
@@ -500,42 +498,46 @@ def check_worked_example_wired() -> None:
 
     entry = SKILL_DOCTRINE_MANIFEST.get("worked_example")
     if entry is None:
-        _fail("Manifest missing 'worked_example' entry (D-114).")
+        _fail("Manifest missing 'worked_example' (socratic protocol) entry (D-115).")
     if entry["version"] != WORKED_EXAMPLE_DOCTRINE_VERSION:
-        _fail("Manifest version mismatch for worked_example (D-114).")
+        _fail("Manifest version mismatch for worked_example (D-115).")
     if entry["rules_count"] != len(WORKED_EXAMPLE_DOCTRINE):
-        _fail("Manifest rules_count mismatch for worked_example (D-114).")
+        _fail("Manifest rules_count mismatch for worked_example (D-115).")
 
-    skill_file = ROOT / "app" / "services" / "skills" / "worked_example_skill.py"
-    if not skill_file.is_file():
-        _fail("worked_example_skill.py missing (D-114).")
-    sk_src = skill_file.read_text(encoding="utf-8")
-    if "from app.services.skills.doctrine import" not in sk_src:
-        _fail("worked_example_skill.py does not consume the doctrine module (D-114).")
-
+    # D-115: المثال المكشوف مُزال — لا skill/card/wiring تعليمي في المونوليث.
+    if (ROOT / "app/services/skills/worked_example_skill.py").exists():
+        _fail("worked_example_skill.py must be removed (D-115 reverses the reveal).")
     router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
-    if "_maybe_emit_worked_example" not in router_src:
-        _fail("customer_chat no longer emits worked_example (D-114 ZOMBIE).")
-    if "worked_example_card" not in KNOWN_UI_COMPONENTS:
-        _fail("worked_example_card not whitelisted in KNOWN_UI_COMPONENTS (D-114).")
+    if "_maybe_emit_worked_example" in router_src:
+        _fail("customer_chat still emits worked_example reveal (D-115 must remove it).")
+    if "worked_example_card" in KNOWN_UI_COMPONENTS:
+        _fail("worked_example_card must be removed from KNOWN_UI_COMPONENTS (D-115).")
 
-    # الإعفاء الواعي بالفواصل: redact_final_answers يجب أن يقبل support_level في
-    # كلا المنفذين (app + microservices) — وإلا الـ orchestrator يُعيد حجب المثال.
-    ar_src = (ROOT / "app/services/skills/answer_redaction_skill.py").read_text(encoding="utf-8")
-    if "support_level" not in ar_src:
-        _fail("answer_redaction_skill no longer accepts support_level (D-114).")
+    # السلطة الوحيدة للتوليد: SynthesizerNode يطبّق البروتوكول السقراطي المنضبط.
+    search_src = (
+        ROOT / "microservices/orchestrator_service/src/services/overmind/graph/search.py"
+    ).read_text(encoding="utf-8")
+    if "_build_socratic_prompt" not in search_src or "_SOCRATIC_CORE_PROMPT" not in search_src:
+        _fail("SynthesizerNode lost the disciplined Socratic protocol (D-115).")
+
+    # المُطهّر المُصفّح موصول في المنفذين (يحذف ⟦⟧ المشوّهة + تعليمات مُسرَّبة).
+    ci_src = (ROOT / "app/services/skills/content_integrity_skill.py").read_text(encoding="utf-8")
+    if "_strip_garbage_markers" not in ci_src:
+        _fail("content_integrity lost the bulletproof garbage stripper (D-115).")
     rs_file = (
         ROOT / "microservices/orchestrator_service/src/services/overmind/response_sanitizer.py"
     )
-    if rs_file.is_file() and "support_level" not in rs_file.read_text(encoding="utf-8"):
-        _fail("response_sanitizer (orchestrator port) lost support_level exemption (D-114).")
-    _pass("Worked example wired: mastery-gated isomorphic reveal + sentinel redaction (D-114)")
+    if rs_file.is_file():
+        rs_src = rs_file.read_text(encoding="utf-8")
+        if "strip_garbage_markers" not in rs_src or "support_level" not in rs_src:
+            _fail("response_sanitizer (orchestrator) lost garbage stripper/support_level (D-115).")
+    _pass("Socratic protocol wired: orchestrator-only generation + bulletproof sanitizer (D-115)")
 
 
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-114) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
@@ -550,7 +552,7 @@ def main() -> None:
     check_content_integrity_wired()
     check_learning_path_wired()
     check_answer_redaction_wired()
-    check_worked_example_wired()
+    check_socratic_protocol_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

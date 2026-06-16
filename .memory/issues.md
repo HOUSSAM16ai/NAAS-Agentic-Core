@@ -4111,3 +4111,11 @@ RESOLVED (محلياً) — 24 اختبار في test_iss115_socratic_no_answer.
 (#19) + WorkedExampleCard + تقوية sanitize_chunk. الحالة: RESOLVED محلياً (sentinel
 redaction في المنفذين + بوّابة المهارة + sanitize_chunk + 16 frontend check + ruff +
 py_compile 3.12)؛ التحقق الحي الكامل (WS + Supabase + orchestrator) في Codespaces.
+
+## ISS-116 (round 2) — D-114 Catastrophe → D-115 Disciplined Socratic (2026-06-16)
+D-114 (المثال المحلول المكشوف، 2026-06-15) جعل الأمور أسوأ حيّاً: تسرّب ⟦⟧ مشوّهة +
+WARM-UP إنجليزي + هلوسة فرنسية + قفز مواضيع (احتمالات→متتاليات) + جدران نص → انهيار
+الطالب. الجذر: LLM مجاني لا يُخرج فواصل ⟦⟧ بدقة. الإصلاح (D-115): حذف المثال المكشوف
+كلياً + بروتوكول سقراطي منضبط في الـ orchestrator (السلطة الوحيدة) + قفل المفهوم +
+مُطهّر مُصفّح. الحالة: RESOLVED محلياً (sanitizer + concept-lock + source + ruff +
+runtime_truth + 4 frontend tests + gate file-assertions)؛ التحقق الحي في Codespaces.

@@ -483,6 +483,41 @@ def _weave_reasoning_hint(base_text: str, reasoning_hint: str) -> str:
     return f"{base_text}\n\nتحليل استدلالي مساعد (تحقق منه ولا تنسخه حرفياً):\n{reasoning_hint}"
 
 
+# ── D-115: البروتوكول السقراطي المنضبط (قالب المالك — خطوة واحدة) ──────────────
+# السلطة الوحيدة للتعليم هي هذا الرسم (LangGraph). الرد قصير منضبط: صياغة + نوع
+# المسألة + سؤال تشخيصي واحد + أصغر خطوة — بلا كشف، بلا مثال موازٍ، بلا قفز موضوع.
+# قصير عمداً (D-067: < 1500 حرف يمنع reasoning-mode في النماذج المجانية).
+_SOCRATIC_CORE_PROMPT = (
+    "أنت أستاذ بكالوريا جزائري تُعلّم بالطريقة السقراطية. ردّك قصير جداً ومنضبط — "
+    "لا جدران نص ولا أمثلة موازية.\n"
+    "للتمرين الذي يحلّه الطالب اتبع هذا القالب حرفياً وباختصار:\n"
+    "1) أعِد صياغة المطلوب في سطر واحد («فهمت المطلوب: ...»).\n"
+    "2) حدّد نوع المسألة (عدّ / احتمال شرطي / مقارنة / اختيار نموذج / استنتاج).\n"
+    "3) اطرح سؤالاً تشخيصياً واحداً فقط.\n"
+    "4) أعطِ أصغر خطوة صحيحة تالية — لا الحل، ولا أي نتيجة نهائية (أرقام/كسور/$$\\boxed{}$$).\n"
+    "5) اطلب من الطالب أن يُكمل الخطوة بنفسه.\n"
+    "ممنوع منعاً باتاً: كشف الجواب النهائي، توليد مثال موازٍ، تغيير الموضوع، أي لغة "
+    "غير العربية، أي HTML أو رموز أقواس غريبة.\n"
+    "للمعرفة العامة (سؤال ليس تمريناً يحلّه الطالب): أجب مباشرة بإيجاز."
+)
+_SOCRATIC_DEPTH_CLAUSES: dict[int, str] = {
+    1: (
+        "\nالطالب مبتدئ غارق (إتقان منخفض): ثبّت فكرة واحدة فقط بأبسط لغة. ابدأ بـ "
+        "«ما المعطى؟ ما المطلوب؟» ثم خطوة واحدة صغيرة جداً — لا تُكثر."
+    ),
+    2: "\nالطالب يبني المفهوم: تلميح موجِّه واحد ثم خطوة واحدة صغيرة.",
+    3: "\nالطالب يبني المفهوم: تلميح موجِّه واحد ثم خطوة واحدة صغيرة.",
+    4: "\nالطالب متمكّن: ادفعه ليستنتج القاعدة بنفسه — «ما الفرق عن الحالة السابقة؟».",
+    5: "\nالطالب متمكّن: ادفعه ليستنتج القاعدة بنفسه — «ما الفرق عن الحالة السابقة؟».",
+}
+
+
+def _build_socratic_prompt(support_level: int) -> str:
+    """يبني نظام البروتوكول السقراطي المنضبط بعمق تلميح يتبع support_level (1..5)."""
+    clause = _SOCRATIC_DEPTH_CLAUSES.get(support_level, _SOCRATIC_DEPTH_CLAUSES[3])
+    return _SOCRATIC_CORE_PROMPT + clause
+
+
 class SynthesizerNode:
     def __init__(self):
         self.generator = dspy.Predict(EducationalSynthesizer)
@@ -508,22 +543,13 @@ class SynthesizerNode:
         query = state.get("query", "")
         messages = state.get("messages", [])
 
-        # D-114: المثال المحلول للمبتدئ المطلق — support_level==1 + توجيه محقون ⇒
-        # نُولِّد مثالاً محلولاً كاملاً على مسألة مماثلة (ملفوفاً بالفواصل الحارسة)
-        # بدل السقراطية البحتة (worked-example effect). افتراض 5 (محجوب) آمن.
+        # D-115: البروتوكول السقراطي المنضبط — support_level (1..5) يحكم عمق التلميح
+        # فقط (لا كشف، لا مثال موازٍ). افتراض 5 آمن. يَعكِس D-114 (المثال المكشوف).
         try:
             _support_level = int(state.get("support_level") or 5)
         except (TypeError, ValueError):
             _support_level = 5
-        _we_directive = str(state.get("worked_example_directive") or "").strip()
-        _worked_example_mode = _support_level == 1 and bool(_we_directive)
-        _we_system_prompt = (
-            "أنت مدرس بكالوريا جزائري. الطالب مبتدئ مطلق ويحتاج مثالاً محلولاً "
-            "كاملاً ليبني المخطط الذهني (worked-example effect). اتبع توجيه المثال "
-            "المحلول حرفياً: وَلِّد مثالاً على مسألة *مماثلة* بأرقام مختلفة عن تمرين "
-            "الطالب، أظهِر كل خطوة بنتيجتها كاملةً داخل الفواصل المطلوبة، ثم اختم "
-            "خارجها بدعوة الطالب لتطبيق المنهجية على تمرينه (دون حلّه له)."
-        )
+        _socratic_prompt = _build_socratic_prompt(_support_level)
 
         recent_messages: list[str] = []
         for msg in messages[-6:]:
@@ -562,24 +588,10 @@ class SynthesizerNode:
                     )
 
                     llm_client = get_llm_client()
-                    if _worked_example_mode:
-                        # D-114: المبتدئ المطلق — مثال محلول على مسألة مماثلة.
-                        _sys_content = _we_system_prompt
-                        _user_content = _weave_reasoning_hint(
-                            f"{_we_directive}\n\nموضوع الطالب: {query}", reasoning_hint
-                        )
-                    else:
-                        # D-113: سقراطي للتمارين، إجابة مباشرة للمعرفة العامة.
-                        _sys_content = (
-                            "أنت مدرس بكالوريا جزائري. أجب بدقة واختصار. إذا كان "
-                            "السؤال تمريناً يحلّه الطالب: قُده بأسئلة وتلميحات ولا "
-                            "تكشف النتيجة النهائية. للمعرفة العامة: أجب مباشرة."
-                        )
-                        # D-103: حقن hint الاستدلال عند توفره (فرع no-docs)
-                        _user_content = _weave_reasoning_hint(query, reasoning_hint)
+                    # D-115: البروتوكول السقراطي المنضبط (قالب المالك) — فرع no-docs.
                     stream_messages = [
-                        {"role": "system", "content": _sys_content},
-                        {"role": "user", "content": _user_content},
+                        {"role": "system", "content": _socratic_prompt},
+                        {"role": "user", "content": _weave_reasoning_hint(query, reasoning_hint)},
                     ]
                     # D-061 (ISS-074): تطبيع LaTeX على streaming chunks
                     from microservices.orchestrator_service.src.services.overmind.response_sanitizer import (
@@ -633,32 +645,14 @@ class SynthesizerNode:
                 # D-048: STREAMING — استدعاء raw OpenAI مع stream=True + custom events
                 # نُحاكي نفس قالب EducationalSynthesizer signature ولكن بـ streaming.
                 try:
-                    if _worked_example_mode:
-                        # D-114: المبتدئ المطلق — مثال محلول على مسألة مماثلة.
-                        system_msg = _we_system_prompt
-                        user_msg = (
-                            f"{_we_directive}\n\n"
-                            f"موضوع الطالب: {query}\n\n"
-                            f"مرجع مساعد (لا تنسخه، استلهم منه مسألة مماثلة):\n{raw_doc_text}"
-                        )
-                    else:
-                        system_msg = (
-                            "أنت مدرس بكالوريا جزائري تُعلّم بالطريقة السقراطية. اعتمد على "
-                            "context من قاعدة المعرفة وعلى محادثة الطالب. اكتب بالعربية الفصحى "
-                            "ولا تُكرر نص المصدر حرفياً. "
-                            # D-113: لا تُسلّم الحلّ لتمرين يحلّه الطالب.
-                            "إذا كان المصدر تمريناً يجب أن يحلّه الطالب: علّمه كيف يفكّر، قُده "
-                            "بأسئلة وتلميحات متدرّجة، وممنوع كشف النتيجة النهائية (أرقام/كسور/"
-                            "$$\\boxed{...}$$). إذا كان سؤال معرفة عامة: أجب مباشرة."
-                        )
-                        user_msg = (
-                            f"المصدر (context):\n{raw_doc_text}\n\n"
-                            f"محادثة الطالب:\n{conversation_text}\n\n"
-                            f"السؤال الحالي: {query}\n\n"
-                            # D-113: وجِّه نحو الحل، لا تُسلّمه (للتمارين).
-                            "وجِّه الطالب نحو الحل بأسئلة وتلميحات؛ لا تكشف النتيجة النهائية "
-                            "لتمرين يحلّه بنفسه."
-                        )
+                    # D-115: البروتوكول السقراطي المنضبط (قالب المالك) — فرع with-docs.
+                    # نفس الـ system prompt المنضبط؛ المصدر سياق مساعد لا يُكشف منه الجواب.
+                    system_msg = _socratic_prompt
+                    user_msg = (
+                        f"المصدر (سياق مساعد — لا تنسخه ولا تكشف منه نتيجة نهائية):\n{raw_doc_text}\n\n"
+                        f"محادثة الطالب:\n{conversation_text}\n\n"
+                        f"السؤال الحالي: {query}"
+                    )
                     # D-103: حقن hint الاستدلال عند توفره (فرع with-docs)
                     user_msg = _weave_reasoning_hint(user_msg, reasoning_hint)
                     stream_messages = [

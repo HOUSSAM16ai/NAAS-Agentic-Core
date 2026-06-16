@@ -144,8 +144,6 @@ KNOWN_UI_COMPONENTS: frozenset[str] = frozenset(
         "full_exercise_story",
         # D-111: المسار التعلّمي التكيفي — بطاقة الخطوة التالية المقترحة.
         "learning_path_card",
-        # D-114: المثال المحلول المُتدرّج — خريطة منهجية بصرية للمبتدئ المطلق.
-        "worked_example_card",
     }
 )
 

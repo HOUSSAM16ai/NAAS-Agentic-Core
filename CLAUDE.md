@@ -8911,3 +8911,73 @@ D-113 طبّق «لا تكشف أبداً» عالمياً فحرم المبتد
 |----------|---------|
 | D-113 (ج1+ج2) | وَهْم الإتقان — Socratic No-Answer (محلي + orchestrator + سُلّم الدعم) |
 | **D-114** | **المثال المحلول المُتدرّج: مثال على مسألة مماثلة للمبتدئ + تمرينه محجوب + Skill #19 + بطاقة دوبامين + تقوية sanitize_chunk (يحل الإفلاس البيداغوجي ISS-116)** |
+
+---
+
+## 6.99 البروتوكول السقراطي المنضبط — يَعكِس D-114 (2026-06-16, ISS-116 / D-115)
+
+> **D-114 (المثال المحلول المكشوف، §6.98) جعل الأمور أسوأ حيّاً.** الطالب طلب
+> الاحتمالات، قال «لم أفهم» 5 مرات، فانهار النظام: تسرّب فواصل `⟦مثال_محلول⟧` مشوّهة +
+> system prompt إنجليزي (`WARM-UP: The instruction must be rendered...`) + هلوسة فرنسية/
+> ألمانية (`après compter`, `Ministerpräsident`) + قفز من الاحتمالات إلى متتاليات/معادلات +
+> جدران نص. الطالب انهار: «لن أنجح هذا العام لقد خيّبت أمل أسرتي». هذا القسم يحكم
+> الإصلاح الجذري — لا يُكسر بدون ADR.
+
+### الجذر
+الاعتماد على LLM مجاني لتوليد سرد المثال المحلول (`worked_example_directive` + الفواصل
+الحارسة `⟦⟧`) كان الخطأ القاتل: النموذج **لا يستطيع** إخراج `⟦⟧` (U+27E6/27E7) بدقة —
+يشوّهها/يقسمها/يسرّبها، ويهلوس لغات، ويصدى الـ system prompt. + تسمّم المفهوم: عند «لم
+أفهم» كان `classify_concept_with_context` يقرأ رسائل المساعد المهلوسة («متتالية») فيدخل
+حلقة مفهوم خاطئ.
+
+### التصحيح (مالك المشروع): «الرد الجيد لا يقول الجواب بل يقول ما الخطوة التالية الصحيحة»
+المشكلة ليست «لا تكشف» بل التنفيذ الكارثي. + مطلب معماري: الخدمات المصغرة + LangGraph +
+Skills هي السلطة الوحيدة؛ النظام يتعطّل بدونها.
+
+### القواعد الـ 7 الدائمة (D-115 — لا تُكسر بدون ADR)
+1. **السلطة الوحيدة للتوليد التعليمي هي الـ orchestrator/LangGraph** (`SynthesizerNode`).
+   لا توليد تعليمي في المونوليث (بوّابة رقيقة). hard-fail `ORCHESTRATOR_REQUIRED` بلا
+   fallback تعليمي محلي (D-112 مُعزَّز).
+2. **البروتوكول السقراطي المنضبط** (`_build_socratic_prompt` في `graph/search.py`): صياغة
+   المطلوب + نوع المسألة + سؤال تشخيصي واحد + أصغر خطوة. لا جدران، لا أمثلة موازية، لا كشف.
+3. **support_level (1..5) يحكم عمق التلميح فقط** — لا يفتح كشف الجواب أبداً في التدفّق العادي.
+4. **قفل المفهوم** (`bkt_engine.classify_concept_with_context`): متابعة الحيرة تُثبَّت من
+   رسائل الطالب (user) حصراً — لا من رسائل المساعد (قد تكون مهلوسة). يمنع قفز المواضيع.
+5. **المُطهّر المُصفّح إلزامي** (`strip_garbage_markers`/`_strip_garbage_markers`): regex يحذف
+   أي `⟦⟧` مشوّهة/مقسّمة + تعليمات system prompt مُسرَّبة (WARM-UP/coalesced/rendered) + لغة
+   غير عربية معزولة، على deltas + النهائي، في المونوليث (StreamIntegrityFilter +
+   customer_chat) والـ orchestrator (response_sanitizer). يحفظ «مثال محلول» (مسافة) واللاتيني المشروع.
+6. **المثال المكشوف مُزال نهائياً**: لا `worked_example_skill` ولا `worked_example_card` ولا
+   `_maybe_emit_worked_example` ولا `worked_example_directive`. أي إعادة لها = عودة الكارثة.
+7. **الكشف لوضع مراجعة منفصل فقط** (M8 — مؤجَّل). الحجب fail-closed في التدفّق العادي.
+
+### الملفات (D-115)
+| File | Change |
+|------|--------|
+| `microservices/.../graph/search.py` | `_build_socratic_prompt` + `_SOCRATIC_CORE_PROMPT`/depth clauses؛ حذف فرع `_worked_example_mode` |
+| `microservices/.../response_sanitizer.py` | `strip_garbage_markers` (⟦⟧ + WARM-UP) موصول في sanitize_chunk + sanitize_response |
+| `app/services/skills/content_integrity_skill.py` | `_strip_garbage_markers` في StreamIntegrityFilter._filter_prose |
+| `app/services/skills/bkt_engine.py` | قفل المفهوم: متابعة الحيرة من رسائل الطالب حصراً |
+| `app/api/routers/customer_chat.py` | حذف `_maybe_emit_worked_example` + الكارت + directive؛ `_strip_display_garbage` على كل delta |
+| `microservices/.../graph/main.py` + `api/routes.py` | حذف `worked_example_directive` (إبقاء `support_level`) |
+| `app/contracts/streaming.py` + `GenerativeUIRenderer.jsx` | إزالة `worked_example_card` |
+| `app/services/skills/doctrine.py` | `WORKED_EXAMPLE_DOCTRINE` أُعيد توجيهه v2.0.0 (بروتوكول سقراطي + fail-closed) |
+| `app/services/skills/registry.py` | حذف descriptor `worked_example` (عدّاد المهارات 19→18) |
+| `scripts/fitness/check_skills_doctrine.py` | `check_socratic_protocol_wired` (يَعكِس `check_worked_example_wired`) |
+| **محذوف** | `worked_example_skill.py` + `WorkedExampleCard.jsx` + اختبارات D-114 |
+
+### التحقق
+- **Sandbox**: المُطهّر على كل أشكال `⟦⟧` المشوّهة + WARM-UP (يحفظ «مثال محلول»/LaTeX/فرنسي) +
+  قفل المفهوم (متابعة حيرة بعد احتمالات + هلوسة مساعد «متتالية» ⇒ يبقى probability) + بنية
+  البروتوكول (نوع/سؤال/خطوة) + doctrine v2.0.0 manifest متّسق + ruff + py_compile 3.12 +
+  runtime_truth + gate file-assertions + 4 frontend tests — **كلها خضراء**.
+- **Codespaces (E2E حي إلزامي)**: سيناريو الكارثة الحرفي (احتمالات 2024 → 5× «لم أفهم»):
+  صفر `⟦⟧`/إنجليزي/فرنسي/قفز مواضيع، رد قصير منضبط (نوع + سؤال + خطوة)، تلميح يرتفع درجة،
+  لا كشف؛ التوليد عبر `POST /api/chat/messages` (لا fallback)؛ orchestrator مُوقَف ⇒
+  `ORCHESTRATOR_REQUIRED`. الدخولان الحقيقيان.
+
+### السلسلة (D-114 → D-115)
+| Decision | الموضوع |
+|----------|---------|
+| D-114 | المثال المحلول المكشوف (كارثة حيّة — عُكِس) |
+| **D-115** | **البروتوكول السقراطي المنضبط: توليد في الـ orchestrator فقط + قفل المفهوم + مُطهّر مُصفّح + حذف المثال المكشوف (يحل ISS-116)** |

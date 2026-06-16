@@ -102,6 +102,42 @@ _WE_OPEN = "⟦مثال_محلول⟧"
 _WE_CLOSE = "⟦/مثال_محلول⟧"
 
 
+# ── D-115: المُطهّر المُصفّح (Bulletproof) — شبكة أمان ضد كل غارباج مُسرَّب ─────
+# الكارثة الحيّة: النماذج المجانية تُسرّب فواصل ⟦⟧ مشوّهة/مقسّمة، تعليمات
+# system prompt إنجليزية (WARM-UP...)، وأقواس يتيمة. هذه الدالة تحذفها بـ regex
+# قوي مهما تشوّهت — تُطبَّق على deltas + النهائي، حتمية، fail-open.
+# أي قوس زاوية رياضي ⟦...⟧ (U+27E6/27E7) مكتمل (حتى لو طويلاً)
+_BRACKET_BLOCK_RE = re.compile(r"⟦[^⟧\n]{0,120}⟧")
+# عبارة الفاصل بالأندرسكور (شكل العلامة لا العربية الطبيعية «مثال محلول» بمسافة)
+_MARKER_PHRASE_RE = re.compile(r"/?\s*مثال_محلول")
+# أسطر تعليمات مُسرَّبة (system prompt بالإنجليزية أو علامات توجيه داخلية)
+_INSTRUCTION_LEAK_RE = re.compile(
+    r"(?im)^.*?(?:WARM[\s\-]?UP|the instruction must|coalesced|rendered in a|"
+    r"single flowing syntax|semantic nuances|prepares the learner|التوجيه التربوي|"
+    r"تفعيل الفهم المبكر|مثال_محلول).*$"
+)
+
+
+def strip_garbage_markers(text: str) -> str:
+    """D-115: يحذف كل أشكال الفواصل/التعليمات المُسرَّبة (حتمي، fail-open).
+
+    - كتل ⟦...⟧ المكتملة (يحذف العلامة، يُبقي المحتوى الداخلي عبر التقاط منفصل).
+    - الأقواس اليتيمة ⟦/⟧ مهما تشوّهت أو انقسمت عبر chunks.
+    - عبارة العلامة «مثال_محلول» (بالأندرسكور — ليست عربية طبيعية).
+    - أسطر تعليمات system prompt الإنجليزية المُسرَّبة.
+    """
+    if not text:
+        return text or ""
+    try:
+        out = _BRACKET_BLOCK_RE.sub("", text)
+        # أقواس يتيمة/مشوّهة باقية
+        out = out.replace("⟦", "").replace("⟧", "")
+        out = _MARKER_PHRASE_RE.sub("", out)
+        return _INSTRUCTION_LEAK_RE.sub("", out)
+    except Exception:  # pragma: no cover — fail-open
+        return text
+
+
 def _redact_core(text: str) -> str:
     """يحجب كل نتيجة نهائية صريحة (بلا وعي بالفواصل)."""
     result = _strip_boxed(text)
@@ -268,6 +304,8 @@ def sanitize_response(text: str, intent: str = "general", support_level: int | N
     if not text:
         return text
     out = text
+    # 0. D-115: حذف الغارباج المُسرَّب (فواصل ⟦⟧ مشوّهة + تعليمات إنجليزية)
+    out = strip_garbage_markers(out)
     # 1. استبدالات
     for foreign, arabic in _FOREIGN_REPLACEMENTS.items():
         out = out.replace(foreign, arabic)
@@ -328,6 +366,8 @@ def sanitize_chunk(chunk: str) -> str:
     if not chunk:
         return chunk
     out = chunk
+    # D-115: حذف الغارباج المُسرَّب فوراً على الـ chunk (فواصل ⟦⟧ + تعليمات إنجليزية)
+    out = strip_garbage_markers(out)
     # D-114: استبدالات الكلمات الأجنبية الكاملة (روسي/نرويجي/إسباني + علامات CJK)
     # — best-effort على الـ chunk (الكلمات المنقسمة عبر chunks يلتقطها التنظيف
     # النهائي sanitize_response). آمن: استبدال نصّي مباشر بلا false-positive.

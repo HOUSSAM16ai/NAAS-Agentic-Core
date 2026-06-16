@@ -471,18 +471,6 @@ def _build_registry() -> SkillRegistry:
             metrics_prefix="cogniforge_skill_learning_path",
             consumed_by=("customer_chat._evaluate_and_emit_bkt",),
         ),
-        SkillDescriptor(
-            name="worked_example",
-            summary="المثال المحلول المُتدرّج — خريطة منهجية + مثال على مسألة مماثلة للمبتدئ (D-114).",
-            input_contract="WorkedExampleInput",
-            output_contract="WorkedExampleOutput",
-            primary_method="derive",
-            metrics_prefix="cogniforge_skill_worked_example",
-            consumed_by=(
-                "customer_chat._maybe_emit_worked_example",
-                "search.SynthesizerNode",
-            ),
-        ),
         # ── FLAGGED (مُعطَّلة افتراضياً — تفعيل اختياري عبر علم) ──
         SkillDescriptor(
             name="retrieval_rerank",

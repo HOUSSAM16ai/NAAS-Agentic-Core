@@ -215,6 +215,95 @@ const STEP_RENDERERS = {
     distribution: (state) => <DistributionStep state={state} />,
 };
 
+// ── D-116: طبقة التفاعل — سؤال واحد → الطالب يحاول → تحقق → كشف الخطوة ──────────
+// «قيادة لا تلقين»: لا يُكشف عدّ/كسر الخطوة حتى يحاول الطالب أو يضغط «اكشف».
+// الطالب يبني الجواب بنفسه (متّسق مع «لا تكشف»). حتمي بالكامل — لا LLM.
+const StepInteraction = memo(({ interactive, onReveal }) => {
+    const q = interactive || {};
+    const [value, setValue] = useState('');
+    const [wrong, setWrong] = useState(false);
+    const [showHint, setShowHint] = useState(false);
+
+    const checkNumber = () => {
+        const got = parseInt(String(value).replace(/[^0-9]/g, ''), 10);
+        if (Number.isFinite(got) && got === Number(q.expected)) {
+            onReveal(true);
+        } else {
+            setWrong(true);
+            setShowHint(true);
+        }
+    };
+    const checkChoice = (idx) => {
+        if (idx === Number(q.expected_index)) {
+            onReveal(true);
+        } else {
+            setWrong(true);
+            setShowHint(true);
+        }
+    };
+
+    return (
+        <div className="genui-fes-interact">
+            <p className="genui-fes-question">
+                <i className="fas fa-circle-question" aria-hidden="true" />{' '}
+                <MathText>{q.question || 'ما الخطوة التالية؟'}</MathText>
+            </p>
+
+            {q.answer_kind === 'choice' && Array.isArray(q.choices) && (
+                <div className="genui-fes-choices">
+                    {q.choices.map((c, i) => (
+                        <button
+                            key={i}
+                            type="button"
+                            className="genui-fes-choice"
+                            onClick={() => checkChoice(i)}
+                        >
+                            <MathText>{String(c)}</MathText>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {q.answer_kind === 'number' && (
+                <div className="genui-fes-numrow">
+                    <input
+                        className="genui-fes-input"
+                        inputMode="numeric"
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && checkNumber()}
+                        placeholder="اكتب العدد ثم تحقّق"
+                        aria-label="إجابتك"
+                    />
+                    <button type="button" className="genui-fes-verify" onClick={checkNumber}>
+                        تحقّق
+                    </button>
+                </div>
+            )}
+
+            {wrong && (
+                <p className="genui-fes-feedback" role="status">
+                    حاول مرة أخرى — أنت قريب 🤔
+                </p>
+            )}
+            {showHint && q.hint && (
+                <p className="genui-fes-hint">
+                    <i className="fas fa-lightbulb" aria-hidden="true" /> <MathText>{String(q.hint)}</MathText>
+                </p>
+            )}
+
+            <button
+                type="button"
+                className="genui-fes-reveal-btn"
+                onClick={() => onReveal(false)}
+            >
+                اكشف الخطوة <i className="fas fa-arrow-down" aria-hidden="true" />
+            </button>
+        </div>
+    );
+});
+StepInteraction.displayName = 'StepInteraction';
+
 export const FullExerciseStory = memo(({ props }) => {
     if (!props || typeof props !== 'object') {
         throw new Error('FullExerciseStory: missing props');
@@ -224,6 +313,8 @@ export const FullExerciseStory = memo(({ props }) => {
         [props.exercise_steps],
     );
     const [active, setActive] = useState(0);
+    // D-116: الخطوات المكشوفة — الخطوة التفاعلية تبدأ بسؤال؛ المحتوى يُكشف بعد المحاولة.
+    const [revealed, setRevealed] = useState(() => new Set());
 
     if (steps.length === 0) {
         throw new Error('FullExerciseStory: no steps');
@@ -234,6 +325,19 @@ export const FullExerciseStory = memo(({ props }) => {
     const renderKind = typeof step.render_kind === 'string' ? step.render_kind : '';
     const renderer = STEP_RENDERERS[renderKind];
     const title = typeof props.title === 'string' ? props.title : 'الشرح البصري الشامل';
+    // D-116: سؤال تفاعلي حتمي لهذه الخطوة (إن وُجد ولم يُكشف بعد).
+    const interactive =
+        step.interactive && typeof step.interactive === 'object' && step.interactive.question
+            ? step.interactive
+            : null;
+    const isRevealed = !interactive || revealed.has(clamped);
+    const revealStep = () =>
+        setRevealed((prev) => {
+            const next = new Set(prev);
+            next.add(clamped);
+            return next;
+        });
+    const progressPct = Math.round(((clamped + 1) / steps.length) * 100);
 
     return (
         <div className="genui-fes" dir="rtl">
@@ -260,37 +364,56 @@ export const FullExerciseStory = memo(({ props }) => {
                 ))}
             </div>
 
+            {/* D-116: شريط التقدّم — «ماذا أفعل الآن؟» شاشة واحدة في كل مرة */}
+            <div className="genui-fes-progress" aria-hidden="true">
+                <div className="genui-fes-progress-fill" style={{ width: `${progressPct}%` }} />
+            </div>
+
             {/* بطاقة الخطوة الحالية */}
             <div className="genui-fes-card">
                 <h4 className="genui-fes-step-title"><MathText>{step.title}</MathText></h4>
-                <div className="genui-fes-visual">
-                    {renderer ? (
-                        renderer(step.numerical_state)
-                    ) : (
-                        <div className="genui-fes-novisual">—</div>
-                    )}
-                </div>
 
-                {/* V32.0: Strict Text Purge — Return null for impossible slides & strip text walls */}
-                {(() => {
-                    const ns = step.numerical_state;
-                    const isImpossible =
-                        ns?.is_possible === false ||
-                        (step.render_kind === 'event_breakdown' &&
-                            ns?.groups?.some((g) => g.is_possible === false) &&
-                            Number(ns?.same_group_favorable ?? ns?.p_num ?? 0) === 0);
+                {/* D-116: سؤال تفاعلي أولاً (قيادة لا تلقين) — الطالب يحاول ثم يُكشف المحتوى */}
+                {!isRevealed ? (
+                    <StepInteraction interactive={interactive} onReveal={revealStep} />
+                ) : (
+                    <>
+                        <div className="genui-fes-visual">
+                            {renderer ? (
+                                renderer(step.numerical_state)
+                            ) : (
+                                <div className="genui-fes-novisual">—</div>
+                            )}
+                        </div>
 
-                    if (isImpossible) return null;
+                        {/* V32.0: Strict Text Purge — Return null for impossible slides & strip text walls */}
+                        {(() => {
+                            const ns = step.numerical_state;
+                            const isImpossible =
+                                ns?.is_possible === false ||
+                                (step.render_kind === 'event_breakdown' &&
+                                    ns?.groups?.some((g) => g.is_possible === false) &&
+                                    Number(ns?.same_group_favorable ?? ns?.p_num ?? 0) === 0);
 
-                    if (typeof step.pedagogical_message === 'string' && step.pedagogical_message) {
-                        // Extract only the first sentence to avoid text walls.
-                        // We look for the first period, exclamation mark, or question mark followed by space or end of string.
-                        const firstSentence = step.pedagogical_message.split(/[.!?](\s|$)/)[0];
-                        // ISS-105: الرسالة التربوية قد تحوي رموزاً رياضية → KaTeX
-                        return <p className="genui-fes-msg"><MathText>{`${firstSentence}.`}</MathText></p>;
-                    }
-                    return null;
-                })()}
+                            if (isImpossible) return null;
+
+                            if (
+                                typeof step.pedagogical_message === 'string' &&
+                                step.pedagogical_message
+                            ) {
+                                // Extract only the first sentence to avoid text walls.
+                                const firstSentence = step.pedagogical_message.split(/[.!?](\s|$)/)[0];
+                                // ISS-105: الرسالة التربوية قد تحوي رموزاً رياضية → KaTeX
+                                return (
+                                    <p className="genui-fes-msg">
+                                        <MathText>{`${firstSentence}.`}</MathText>
+                                    </p>
+                                );
+                            }
+                            return null;
+                        })()}
+                    </>
+                )}
             </div>
 
             {/* تنقّل */}

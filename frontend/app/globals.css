@@ -2986,6 +2986,112 @@ body[data-theme='light'] .exam-badge {
     background: color-mix(in srgb, var(--primary-color) 4%, transparent);
 }
 
+/* ── D-116: طبقة التفاعل (سؤال واحد → تحقق → كشف) + شريط التقدّم ──────────────── */
+.genui-fes-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--border-color);
+    overflow: hidden;
+    margin: 0 0 0.7rem;
+}
+.genui-fes-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6366f1, #10b981);
+    transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.genui-fes-interact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    animation: genui-we-fade 0.3s ease both;
+}
+.genui-fes-question {
+    margin: 0;
+    font-weight: 700;
+    line-height: 1.6;
+    color: var(--text-color);
+}
+.genui-fes-question i {
+    color: #6366f1;
+}
+.genui-fes-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.genui-fes-choice {
+    text-align: start;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--surface-elevated);
+    color: var(--text-color);
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.genui-fes-choice:hover {
+    transform: translateY(-1px);
+    border-color: #6366f1;
+}
+.genui-fes-numrow {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+.genui-fes-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--surface-color);
+    color: var(--text-color);
+    font-size: 1rem;
+}
+.genui-fes-verify {
+    padding: 0.55rem 1.1rem;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.genui-fes-feedback {
+    margin: 0;
+    color: #f59e0b;
+    font-weight: 600;
+}
+.genui-fes-hint {
+    margin: 0;
+    padding: 0.6rem 0.85rem;
+    border-radius: 10px;
+    background: color-mix(in srgb, #f59e0b 12%, transparent);
+    color: var(--text-color);
+    line-height: 1.6;
+}
+.genui-fes-hint i {
+    color: #f59e0b;
+}
+.genui-fes-reveal-btn {
+    align-self: flex-start;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-secondary, var(--text-color));
+    font-weight: 600;
+    cursor: pointer;
+    opacity: 0.85;
+}
+.genui-fes-reveal-btn:hover {
+    opacity: 1;
+    border-color: #6366f1;
+}
+
 .genui-fes-step-title {
     margin: 0 0 0.75rem;
     font-size: 0.98rem;

@@ -4119,3 +4119,10 @@ WARM-UP إنجليزي + هلوسة فرنسية + قفز مواضيع (احتم
 كلياً + بروتوكول سقراطي منضبط في الـ orchestrator (السلطة الوحيدة) + قفل المفهوم +
 مُطهّر مُصفّح. الحالة: RESOLVED محلياً (sanitizer + concept-lock + source + ruff +
 runtime_truth + 4 frontend tests + gate file-assertions)؛ التحقق الحي في Codespaces.
+
+## ISS-116 (round 3) — D-116 Interactive Visual Tutor + garbage at source (2026-06-16)
+رغم D-115: `ë` + علامات تجميعية U+0305 + قفز مفهوم + نص سقراطي مجرّد يغرق المبتدئ.
+الإصلاح (D-116): الاحتمالات = بصري حتمي كامل (terminate LLM دائماً ⇒ صفر غارباج) +
+مُعلّم تفاعلي (سؤال→تحقق→كشف، الطالب يبني الجواب) + مُطهّر U+0305/`ë` + قفل مفهوم [-60:]
+رسائل الطالب حصراً. الحالة: RESOLVED محلياً (sanitizer + concept-lock + 19 frontend +
+ruff + py_compile + runtime_truth)؛ التحقق الحي في Codespaces.

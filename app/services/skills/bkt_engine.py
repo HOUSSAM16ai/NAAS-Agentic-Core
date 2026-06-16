@@ -137,16 +137,25 @@ def classify_concept_with_context(
     concept = classify_concept(question)
     if concept != "general" or not history:
         return concept
-    recent_parts: list[str] = []
-    for msg in history[-6:]:
-        if not isinstance(msg, dict) or msg.get("role") not in ("user", "assistant"):
+    # D-115 (قفل المفهوم — ضد تسمّم السياق): السؤال بلا مفهوم (متابعة/حيرة مثل
+    # «لم أفهم»). الكارثة الحية: المسح كان يشمل رسائل المساعد، فإذا هلوس المساعد
+    # «متتالية»/«معادلة» تسمّم التصنيف ودخل حلقة مفهوم خاطئ. الإصلاح: ثبّت المفهوم
+    # من رسائل الطالب (user) حصراً — هي مصدر الحقيقة عن التمرين، مناعة ضد الهلوسة.
+    # أحدث مفهوم ذكره الطالب صراحةً يفوز (يحترم تبديل الموضوع الذي يقرره الطالب).
+    for msg in reversed(history[-12:]):
+        if not isinstance(msg, dict) or msg.get("role") != "user":
             continue
-        content = str(msg.get("content", "")).strip()
-        if content:
-            recent_parts.append(content[:600])
-    if not recent_parts:
-        return concept
-    return classify_concept(" ".join(reversed(recent_parts)))
+        c = classify_concept(str(msg.get("content", "")))
+        if c != "general":
+            return c
+    # احتياط أخير: لو لم يذكر الطالب أي مفهوم صريح، جرّب آخر رسالة مساعد.
+    for msg in reversed(history[-6:]):
+        if not isinstance(msg, dict) or msg.get("role") != "assistant":
+            continue
+        c = classify_concept(str(msg.get("content", "")))
+        if c != "general":
+            return c
+    return concept
 
 
 # ── تقدير الحِمل المعرفي ───────────────────────────────────────────────────────────

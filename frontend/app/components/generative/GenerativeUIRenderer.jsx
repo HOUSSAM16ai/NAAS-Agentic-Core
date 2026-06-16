@@ -9,7 +9,6 @@ import { ImpossibleDrawAnimation } from './ImpossibleDrawAnimation';
 import { LearningPathCard } from './LearningPathCard';
 import { MathExplanationCard } from './MathExplanationCard';
 import { ProbabilityTree } from './ProbabilityTree';
-import { WorkedExampleCard } from './WorkedExampleCard';
 
 /**
  * GenerativeUIRenderer
@@ -38,10 +37,6 @@ const COMPONENT_REGISTRY = {
     // D-111: المسار التعلّمي التكيفي — الخطوة التالية المقترحة فوق BKT.
     learning_path_card: (props, fallbackText) => (
         <LearningPathCard props={props} fallbackText={fallbackText} />
-    ),
-    // D-114: المثال المحلول المُتدرّج — خريطة منهجية بصرية للمبتدئ المطلق.
-    worked_example_card: (props, fallbackText) => (
-        <WorkedExampleCard props={props} fallbackText={fallbackText} />
     ),
 };
 

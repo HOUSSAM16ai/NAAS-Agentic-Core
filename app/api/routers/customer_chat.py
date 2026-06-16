@@ -68,21 +68,17 @@ def _apply_complete_response_firewall(text: str) -> str:
         return text
 
 
-def _strip_worked_example_markers(text: str) -> str:
-    """D-114: يحذف علامات الفواصل الحارسة للعرض الحيّ (الطالب لا يرى ⟦⟧).
-
-    النص المُتراكم (complete_ai_response) يحتفظ بالعلامات للحجب النهائي الواعي؛
-    هذه الدالة للعرض فقط. fail-open.
+def _strip_display_garbage(text: str) -> str:
+    """D-115: مُطهّر العرض الحيّ المُصفّح — يحذف فواصل ⟦⟧ المشوّهة + تعليمات
+    system prompt المُسرَّبة + أي رموز غريبة قبل عرضها للطالب. شبكة أمان فوق
+    تنظيف الـ orchestrator. fail-open (لا يكسر البثّ).
     """
     if not text:
         return text
     try:
-        from app.services.skills.doctrine import (
-            WORKED_EXAMPLE_CLOSE,
-            WORKED_EXAMPLE_OPEN,
-        )
+        from app.services.skills.content_integrity_skill import _strip_garbage_markers
 
-        return text.replace(WORKED_EXAMPLE_OPEN, "").replace(WORKED_EXAMPLE_CLOSE, "")
+        return _strip_garbage_markers(text)
     except Exception:
         return text
 
@@ -417,81 +413,6 @@ async def _build_pedagogy_directive(
         logger.debug("pedagogy_directive_failed (fail-open): %s", exc)
         # fail-closed على support_level: 5 = محجوب كلياً (لا كشف عند الخطأ).
         return _PedagogySnapshot("", 5, 0, "general", None)
-
-
-async def _maybe_emit_worked_example(
-    *,
-    websocket: WebSocket,
-    send_lock: asyncio.Lock,
-    conversation_id: int | None,
-    question: str,
-    snapshot: _PedagogySnapshot,
-    stream_request_id: str,
-) -> str:
-    """D-114: عند المبتدئ المطلق (support_level==1)، يبثّ بطاقة المثال المحلول
-    (خريطة منهجية بصرية) ويُرجِع توجيه الـ LLM لتوليد مثال محلول على مسألة مماثلة.
-
-    الخريطة المنهجية حتمية (تنقل المهارة المُتحوِّلة: «كيف أحل أي تمرين مهما تغيّر»).
-    المثال الملموس بالأرقام يُولِّده الـ LLM في السرد (ملفوف بالفواصل الحارسة).
-    fail-open: أي تعذّر ⇒ "" (سقراطي افتراضي) — لا يكسر الدور.
-    """
-    try:
-        from app.services.skills.worked_example_skill import (
-            WorkedExampleInput,
-            get_worked_example_skill,
-        )
-
-        result = get_worked_example_skill().derive(
-            WorkedExampleInput(
-                exercise_text=question,
-                concept_id=snapshot.concept_id,
-                mastery=snapshot.mastery,
-                support_level=snapshot.support_level,
-                confusion_count=snapshot.confusion_count,
-            )
-        )
-        if not result.should_reveal:
-            return ""
-
-        steps = [
-            {
-                "title": s.title,
-                "subgoal_label": s.subgoal_label,
-                "subgoal_color": s.subgoal_color,
-                "self_explanation_prompt": s.self_explanation_prompt,
-            }
-            for s in result.steps
-        ]
-        we_card_payload = {
-            "component": "worked_example_card",
-            "props": {
-                "concept_id": snapshot.concept_id,
-                "title": result.card_title,
-                "steps": steps,
-                "mastery": snapshot.mastery,
-                "bridge_text": result.bridge_text,
-            },
-            "fallback_text": result.bridge_text,
-        }
-        if conversation_id is not None:
-            await _persist_ui_component_cards(
-                conversation_id=conversation_id,
-                cards=[dict(we_card_payload)],
-            )
-        if websocket.client_state == WebSocketState.CONNECTED:
-            await _locked_send_json(
-                websocket,
-                send_lock,
-                _bind_stream_metadata(
-                    {"type": "ui_component", "payload": we_card_payload},
-                    conversation_id,
-                    stream_request_id,
-                ),
-            )
-        return result.prompt_directive
-    except Exception as exc:
-        logger.debug("worked_example_failed (fail-open): %s", exc)
-        return ""
 
 
 def get_chat_actor(
@@ -1081,16 +1002,9 @@ async def chat_stream_ws(
             pedagogy_directive = pedagogy_snapshot.directive_text
             support_level = pedagogy_snapshot.support_level
 
-            # D-114: المبتدئ المطلق (support_level==1) يتلقّى بطاقة المثال المحلول
-            # (خريطة منهجية بصرية) + توجيه الـ LLM لتوليد مثال على مسألة مماثلة.
-            worked_example_directive = await _maybe_emit_worked_example(
-                websocket=websocket,
-                send_lock=send_lock,
-                conversation_id=local_conversation_id,
-                question=question,
-                snapshot=pedagogy_snapshot,
-                stream_request_id=stream_request_id,
-            )
+            # D-115: التوليد التعليمي يحدث حصراً في الـ orchestrator (السلطة الوحيدة).
+            # support_level يُمرَّر ليحكم عمق التلميح السقراطي هناك (لا مثال مكشوف
+            # ولا توجيه LLM محقون — يَعكِس D-114 الذي تسبّب بالغارباج).
 
             try:
 
@@ -1103,7 +1017,6 @@ async def chat_stream_ws(
                     captured=captured_ui_components,
                     pedagogy=pedagogy_directive,
                     sup_level=support_level,
-                    worked_directive=worked_example_directive,
                 ) -> None:
                     nonlocal pending_terminal_event
                     nonlocal complete_ai_response
@@ -1119,7 +1032,6 @@ async def chat_stream_ws(
                             "compatibility_facade": True,
                             "pedagogy_directive": pedagogy,
                             "support_level": sup_level,
-                            "worked_example_directive": worked_directive,
                         },
                     ):
                         # D-WS-FLAP-001: abort stream if client disconnected mid-turn.
@@ -1167,13 +1079,11 @@ async def chat_stream_ws(
                                 normalized_event.get("payload"), dict
                             ):
                                 captured.append(dict(normalized_event["payload"]))
-                            # D-114: احذف علامات الفواصل الحارسة من العرض الحيّ فقط
-                            # (الطالب لا يرى ⟦⟧)؛ التراكم الخام يبقى للحجب النهائي الواعي.
+                            # D-115: مُطهّر العرض المُصفّح على كل delta نصّي — شبكة
+                            # أمان فوق تنظيف الـ orchestrator (لا ⟦⟧ ولا تعليمات مُسرَّبة).
                             display_event = normalized_event
-                            if (
-                                sup_level == 1
-                                and _is_text_event(normalized_event)
-                                and isinstance(normalized_event.get("payload"), dict)
+                            if _is_text_event(normalized_event) and isinstance(
+                                normalized_event.get("payload"), dict
                             ):
                                 _disp = normalized_event["payload"].get("content")
                                 if isinstance(_disp, str) and _disp:
@@ -1181,7 +1091,7 @@ async def chat_stream_ws(
                                         **normalized_event,
                                         "payload": {
                                             **normalized_event["payload"],
-                                            "content": _strip_worked_example_markers(_disp),
+                                            "content": _strip_display_garbage(_disp),
                                         },
                                     }
                             # D-096: send_lock يمنع التزامن مع BKT task
@@ -1196,7 +1106,8 @@ async def chat_stream_ws(
                         ):
                             chunk_text = normalized_event["payload"].get("content")
                             if isinstance(chunk_text, str) and chunk_text:
-                                complete_ai_response += chunk_text
+                                # D-115: التراكم النظيف (لا غارباج في النسخة المحفوظة).
+                                complete_ai_response += _strip_display_garbage(chunk_text)
 
                 stream_task = asyncio.create_task(stream_and_forward())
                 # ISS-098 (D-WS-FLAP-005): keepalive متزامن يمنع false
@@ -1253,9 +1164,8 @@ async def chat_stream_ws(
                 # قبل الحفظ في DB — يضمن نقاء القناة B في السجل الدائم.
                 if complete_ai_response:
                     complete_ai_response = _apply_complete_response_firewall(complete_ai_response)
-                    # D-114: حجب الإجابة النهائية الواعي بالفواصل على النسخة المحفوظة
-                    # (support_level==1 ⇒ يُعفي كتلة المثال المحلول ويزيل العلامات؛
-                    # غير ذلك ⇒ حجب كامل = شبكة أمان D-113). support_level من صورة المتعلم.
+                    # D-113/D-115: حجب الإجابة النهائية على النسخة المحفوظة — شبكة أمان
+                    # حتمية ضد كشف الجواب (لا كشف في التدفّق العادي؛ الكشف لوضع مراجعة منفصل).
                     complete_ai_response = _apply_final_answer_redaction(
                         complete_ai_response, support_level
                     )

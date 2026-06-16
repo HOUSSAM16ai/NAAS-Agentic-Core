@@ -4368,3 +4368,41 @@ Sweller). الجذر المعماري: `adaptive_pedagogy_skill` يحسب suppor
 + doctrine standalone + 16 frontend check + ruff + py_compile 3.12). التحقق الحي
 الكامل (WS + Supabase + orchestrator، طالب إتقان<0.2 ⇒ بطاقة + مثال مماثل مكشوف +
 تمرينه محجوب) في Codespaces. عدّاد المهارات 18→19.
+
+## D-115 — البروتوكول السقراطي المنضبط (يَعكِس D-114) (2026-06-16 · ISS-116)
+D-114 (المثال المحلول المكشوف) كان كارثة حيّة: الطالب طلب الاحتمالات، قال «لم أفهم»
+5 مرات، فانهار النظام (تسرّب فواصل ⟦⟧ مشوّهة + system prompt إنجليزي «WARM-UP...» +
+هلوسة فرنسية/ألمانية + قفز إلى متتاليات/معادلات + جدران نص) وانهار الطالب: «لن أنجح
+لقد خيّبت أمل أسرتي». الجذر: الاعتماد على LLM مجاني لتوليد سرد المثال المحلول
+(worked_example_directive + sentinels) — النموذج لا يُخرج ⟦⟧ بدقة، يشوّهها/يسرّبها.
+
+**تصحيح المالك الحاسم**: المشكلة ليست «لا تكشف» بل التنفيذ الكارثي. القاعدة الذهبية:
+«الرد الجيد لا يقول الجواب بل يقول ما الخطوة التالية الصحيحة». + مطلب معماري: الخدمات
+المصغرة + LangGraph + Skills هي السلطة الوحيدة؛ النظام يتعطّل بدونها.
+
+الإصلاح (6 ركائز):
+0. **السلطة الوحيدة (D-112 مُعزَّز)**: التوليد التعليمي حصراً في الـ orchestrator
+   (SynthesizerNode). المونوليث بوّابة رقيقة (يمرّر support_level + يُطهّر). hard-fail
+   `ORCHESTRATOR_REQUIRED` بلا fallback تعليمي محلي.
+1. **حذف المثال المكشوف**: حُذف `worked_example_directive` + فرع `_worked_example_mode`
+   في SynthesizerNode + `worked_example_skill.py` + `WorkedExampleCard.jsx` +
+   `worked_example_card` من whitelist/registry + `_maybe_emit_worked_example` من
+   customer_chat — قتل مصدر الغارباج دفعةً واحدة.
+2. **البروتوكول السقراطي المنضبط** (قالب المالك في SynthesizerNode): `_build_socratic_prompt`
+   — صياغة المطلوب + نوع المسألة + سؤال تشخيصي واحد + أصغر خطوة، لا كشف، لا جدران.
+   support_level (1..5) يحكم عمق التلميح فقط (1=ثبّت فكرة واحدة للغارق ← 5=استنتج بنفسك).
+3. **قفل المفهوم** (`bkt_engine.classify_concept_with_context`): متابعة الحيرة تُثبَّت من
+   رسائل الطالب (user) حصراً — لا من رسائل المساعد (قد تكون مهلوسة) — مناعة ضد قفز
+   المواضيع (الاحتمالات → متتاليات الكارثي).
+4. **سُلّم التلميح**: support_level من adaptive_pedagogy + الحيرة المتكرّرة (≥2) تفرض
+   level=1 (ثبّت فكرة واحدة، لا مثال جديد، لا قفز).
+5. **مُطهّر مُصفّح (Bulletproof)**: `strip_garbage_markers`/`_strip_garbage_markers` في
+   response_sanitizer (orchestrator) + content_integrity (StreamIntegrityFilter) — regex
+   يحذف أي ⟦⟧ مشوّهة/مقسّمة + تعليمات system prompt مُسرَّبة (WARM-UP/coalesced/rendered)
+   + يحفظ العربية الطبيعية «مثال محلول» (مسافة) واللاتيني المشروع. على deltas + النهائي.
+الـ doctrine `WORKED_EXAMPLE_DOCTRINE` أُعيد توجيهه (v2.0.0) ليوثّق البروتوكول السقراطي
++ الحجب fail-closed (الاسم باقٍ للتوافق). عدّاد المهارات 19→18. الحالة: مُنفَّذ + مُتحقَّق
+محلياً (المُطهّر على كل أشكال ⟦⟧ المشوّهة + WARM-UP + قفل المفهوم ضد الهلوسة + بنية
+البروتوكول + ruff + py_compile 3.12 + runtime_truth + gate file-assertions + 4 frontend).
+التحقق الحي الكامل (WS + Supabase + orchestrator، سيناريو الكارثة: احتمالات 2024 → 5×
+«لم أفهم» ⇒ صفر ⟦⟧/إنجليزي/فرنسي/قفز مواضيع، رد منضبط، hard-fail بلا orchestrator) في Codespaces.

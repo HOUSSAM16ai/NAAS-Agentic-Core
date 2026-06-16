@@ -153,6 +153,32 @@ _MULTISPACE = re.compile(r"[ \t]{2,}")
 _MATH_PAIRS: dict[str, str] = {"$$": "$$", "$": "$", "\\(": "\\)", "\\[": "\\]"}
 _MATH_OPENERS = frozenset(_MATH_PAIRS)
 
+# ── D-115: المُطهّر المُصفّح — فواصل ⟦⟧ مشوّهة + تعليمات system prompt مُسرَّبة ──
+_BRACKET_BLOCK_RE = re.compile(r"⟦[^⟧\n]{0,120}⟧")
+_MARKER_PHRASE_RE = re.compile(r"/?\s*مثال_محلول")
+_INSTRUCTION_LEAK_RE = re.compile(
+    r"(?im)^.*?(?:WARM[\s\-]?UP|the instruction must|coalesced|rendered in a|"
+    r"single flowing syntax|semantic nuances|prepares the learner|التوجيه التربوي|"
+    r"تفعيل الفهم المبكر|مثال_محلول).*$"
+)
+
+
+def _strip_garbage_markers(text: str) -> str:
+    """D-115: يحذف الفواصل الحارسة المشوّهة + تعليمات الـ system prompt المُسرَّبة.
+
+    حتمي، fail-open. يُطبَّق على كل نثر (داخل/خارج الوضع العربي) — `⟦⟧` و
+    `WARM-UP` يجب ألا يصلا الطالب أبداً مهما تشوّها أو انقسما عبر chunks.
+    """
+    if not text:
+        return text or ""
+    try:
+        out = _BRACKET_BLOCK_RE.sub("", text)
+        out = out.replace("⟦", "").replace("⟧", "")
+        out = _MARKER_PHRASE_RE.sub("", out)
+        return _INSTRUCTION_LEAK_RE.sub("", out)
+    except Exception:  # pragma: no cover — fail-open
+        return text
+
 
 def _strip_accents(token: str) -> str:
     """يزيل التشكيل اللاتيني (é→e) للمقارنة مع الـ allowlist."""
@@ -324,7 +350,9 @@ class StreamIntegrityFilter:
     def _filter_prose(self, prose: str) -> str:
         if not prose:
             return ""
-        cleaned = self._strip_markup(prose)
+        # D-115: حذف الفواصل المشوّهة + تعليمات system prompt المُسرَّبة دائماً.
+        cleaned = _strip_garbage_markers(prose)
+        cleaned = self._strip_markup(cleaned)
         if self._arabic_mode:
             cleaned = self._strip_latin_garbage(cleaned)
         return cleaned

@@ -4188,3 +4188,13 @@ BKT («تتبّع المعرفة») والمسار («ترسيخ المهارة�
 محفوظ: D-116/D-119/D-120 + عقد props. الحالة: RESOLVED محلياً (25 فحص d121 + لا انحدار في
 4 اختبارات frontend)؛ تحقق بصري حي في Codespaces. مراحل تالية: شاشات routing كاملة +
 combinations_visualizer/probability_tree + محيط الدردشة.
+
+## D-122 — natural exercise-part references → deterministic visual (2026-06-17)
+بعد D-117→D-121: «كيف احل السؤال الأول» (إشارة طبيعية للسؤال 1 = P(A)، بلا رمز P(A)) كانت
+تسقط لمسار LLM السقراطي العام + عربية مكسورة («كلزيادة») بدل تفصيل الحدث الملموس. الإصلاح
+(D-122، orchestrator_client.py، topic-safe): `_detect_part_reference` يربط «السؤال الأول»/
+«الحدث A»/«الجزء الأول»→same_color_event و«السؤال الثاني»→random_variable، محروساً بـ
+`_is_probability_context` (history) — فيُوجَّه للبصري الحتمي (الكاروسيل على خطوة الحدث +
+الكشف التدريجي)، صفر نص LLM. topic-safe (حاجب D-101 أولاً + شرط سياق الاحتمالات). الحالة:
+RESOLVED محلياً (8 اختبار + لا انحدار D-120/ISS-110 + ruff + runtime_truth)؛ تحقق حي في
+Codespaces بعد pull+restart (transcript المالك من إصدار قبل D-120/D-121).

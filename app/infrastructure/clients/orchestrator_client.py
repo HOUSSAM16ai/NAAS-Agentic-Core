@@ -1193,7 +1193,52 @@ class OrchestratorClient:
                     return "sample_space"
                 return None
 
+            # D-122: إشارات طبيعية لأجزاء التمرين («السؤال الأول» = P(A) = الحدث A)
+            # — لا تحوي رمز P(A) لكنها تستهدف خطوة. تُطبَّق فقط ضمن سياق احتمالات
+            # مؤكَّد (حارس أدناه) تجنّباً لتحميل احتمالات في محادثة موضوع آخر.
+            def _detect_part_reference(user_question: str) -> str | None:
+                q = user_question.lower()
+                # السؤال 2 / المتغير العشوائي X (يُفحَص أولاً: «الثاني» أكثر تحديداً)
+                if (
+                    "السؤال الثاني" in q
+                    or "السؤال 2" in q
+                    or "السوال الثاني" in q
+                    or "الجزء الثاني" in q
+                ):
+                    return "random_variable"
+                # السؤال 1 / الحدث A (الافتراض الرئيسي لتمرين الاحتمالات)
+                if (
+                    "السؤال الاول" in q
+                    or "السؤال الأول" in q
+                    or "السؤال 1" in q
+                    or "السوال الاول" in q
+                    or "الجزء الاول" in q
+                    or "الجزء الأول" in q
+                    or "الجزء 1" in q
+                    or "الحدث a" in q
+                    or "الحادثة a" in q
+                    or "حل السؤال" in q
+                    or "حل السوال" in q
+                ):
+                    return "same_color_event"
+                return None
+
+            # D-122: حارس سياق الاحتمالات — إشارة احتمالية ملموسة في السؤال+الـ history.
+            def _is_probability_context(text: str) -> bool:
+                t = text or ""
+                return any(
+                    marker in t
+                    for marker in ("كرات", "كرة", "كيس", "احتمال", "سحب", "نسحب", "p(a", "p(b")
+                )
+
             _focus_step_id = _detect_focus_step(question)
+            # D-122: لو لم يُطابق رمز صريح، جرّب الإشارة الطبيعية لجزء التمرين —
+            # فقط ضمن سياق احتمالات (history) كي لا تُحمَّل احتمالات في موضوع آخر.
+            # «لم أفهم» في سياق احتمالات بلا جزء محدّد ⇒ خطوة الحدث (السؤال الرئيسي).
+            if _focus_step_id is None and _is_probability_context(_combined_text):
+                _focus_step_id = _detect_part_reference(question)
+                if _focus_step_id is None and _is_deep_pedagogy:
+                    _focus_step_id = "same_color_event"
 
             # ISS-110: نقبل أيضاً `no_probability_intent_in_question` — سؤال متابعة
             # بخطوة تركيز صريحة (_focus_step_id) يُعاد تحليله بالسياق الكامل.

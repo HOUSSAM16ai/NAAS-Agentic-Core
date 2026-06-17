@@ -156,10 +156,15 @@ _MATH_OPENERS = frozenset(_MATH_PAIRS)
 # ── D-115: المُطهّر المُصفّح — فواصل ⟦⟧ مشوّهة + تعليمات system prompt مُسرَّبة ──
 _BRACKET_BLOCK_RE = re.compile(r"⟦[^⟧\n]{0,120}⟧")
 _MARKER_PHRASE_RE = re.compile(r"/?\s*مثال_محلول")
+# D-117: العلامات الداخلية المُسرَّبة («الطالب يرى التعليم لا هندسة التعليم») —
+# أي سطر يصف تفكير النظام نفسه (توجيه D-104، قالب D-115 السقراطي، وضع MODE_B،
+# هلوسة «Konzept») يُحذف بالكامل. دفاع عميق: حتى لو سرّب النموذج العنوان، يُمحى.
 _INSTRUCTION_LEAK_RE = re.compile(
     r"(?im)^.*?(?:WARM[\s\-]?UP|the instruction must|coalesced|rendered in a|"
-    r"single flowing syntax|semantic nuances|prepares the learner|التوجيه التربوي|"
-    r"تفعيل الفهم المبكر|مثال_محلول).*$"
+    r"single flowing syntax|semantic nuances|prepares the learner|Konzept|"
+    r"التوجيه التربوي|توجيه تربوي|تفعيل الفهم المبكر|مثال_محلول|"
+    r"مستوى الدعم|نوع المسألة|سؤال تشخيصي|أصغر خطوة|اطلب من الطالب|"
+    r"وضع الشرح العميق|فهمت المطلوب).*$"
 )
 # D-116: علامات تجميعية لاتينية دخيلة (U+0300–U+036F) — تظهر فوق حروف عربية كغارباج
 # («لا̅ يمكن̅»). حركات العربية (U+064B–U+065F، U+0670) خارج هذا النطاق فتبقى سليمة.

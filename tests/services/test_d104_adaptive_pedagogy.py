@@ -161,24 +161,28 @@ class TestWiringInvariants:
     def test_router_passes_directive_in_context(self):
         assert '"pedagogy_directive": pedagogy' in self.ROUTER_SRC
 
-    def test_client_prepends_directive_to_effective_question(self):
-        assert 'get("pedagogy_directive")' in self.CLIENT_SRC
-        assert "[توجيه تربوي]" in self.CLIENT_SRC
-        # التوجيه يُحقن بعد بناء _effective_question (بعد MODE_B) وقبل الـ payload
+    def test_client_does_not_prepend_directive_d117(self):
+        # D-117 (فصل الطبقات): التوجيه لم يَعُد يُسبَق للسؤال — كان النموذج يُردّده
+        # حرفياً («[توجيه تربوي] ... مستوى الدعم: ...») فيرى الطالب «هندسة التعليم».
+        # العمق يصل عبر support_level (في context → SynthesizerNode). لا prepend.
+        assert 'f"[توجيه تربوي]' not in self.CLIENT_SRC, "D-117: directive prepend must be gone"
+        # support_level مقروء في الـ client ويُمرَّر للـ payload عبر context
+        assert 'get("support_level")' in self.CLIENT_SRC
+        # ترتيب: بناء _effective_question (بعد MODE_B) ثم قراءة support_level ثم الـ payload
         eff_pos = self.CLIENT_SRC.index("_effective_question = (")
-        ped_pos = self.CLIENT_SRC.index('get("pedagogy_directive")')
+        sup_pos = self.CLIENT_SRC.index('get("support_level")')
         payload_pos = self.CLIENT_SRC.index('"routing_mode": "MODE_B" if _is_mode_b else "MODE_A"')
-        assert eff_pos < ped_pos < payload_pos
+        assert eff_pos < sup_pos < payload_pos
 
-    def test_deterministic_paths_precede_directive_injection(self):
-        """التحية/المفهرَس/سؤال-فقط تسبق الحقن — لا تلوّث للمسارات الحتمية."""
-        ped_pos = self.CLIENT_SRC.index('get("pedagogy_directive")')
+    def test_deterministic_paths_precede_support_level_read(self):
+        """التحية/المفهرَس/سؤال-فقط تسبق قراءة support_level — لا تلوّث للمسارات الحتمية."""
+        sup_pos = self.CLIENT_SRC.index('get("support_level")')
         for marker in (
             "_greeting_fastpath_response",
             "_has_indexed_match(",
             "_stream_question_only_response(",
         ):
-            assert self.CLIENT_SRC.index(marker) < ped_pos, marker
+            assert self.CLIENT_SRC.index(marker) < sup_pos, marker
 
     def test_registry_and_doctrine_registered(self):
         from app.services.skills.doctrine import SKILL_DOCTRINE_MANIFEST
@@ -213,7 +217,8 @@ class TestSupportLadder:
         )
         assert d.support_level == expected_level
         assert d.ladder_label == expected_label
-        # درجة الدعم تظهر في التوجيه ليصل الـ LLM عبر prepend (لا plumbing إضافي)
+        # D-117: directive_text يحوي «مستوى الدعم» للقياس فقط (لوحة المعلم) — لا
+        # يُسبَق للسؤال ولا يصل لأي prompt؛ العمق يصل عبر support_level المنفصل.
         assert "مستوى الدعم" in d.directive_text
 
     def test_unaided_is_golden_threshold(self, skill):

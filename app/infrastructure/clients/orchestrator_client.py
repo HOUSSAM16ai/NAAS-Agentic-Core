@@ -1233,6 +1233,21 @@ class OrchestratorClient:
                             )
                         )
 
+            # D-117 (Fix 4 — best-effort): حيرة عامة («لم أفهم» بلا خطوة تركيز
+            # محددة) بعد تمرين احتمالات → أعِد استخراج تركيبة الكيس من الـ history
+            # فيُعاد بثّ البصري الحتمي بدل السقوط للـ LLM (مصدر الغارباج). إن تعذّر
+            # الاستخراج يبقى result فاشلاً → return None → الإصلاحات 1-3 تضمن نظافة
+            # مخرَج الـ LLM. (المفهوم=probability مضمون بحاجب تبديل الموضوع أعلاه.)
+            _is_no_model = getattr(result, "success", True) is False and getattr(
+                result, "reason", ""
+            ) in ("no_model_extracted", "no_probability_intent_in_question")
+            if (result is None or _is_no_model) and _is_deep_pedagogy and history_messages:
+                _history_context = " ".join(m.get("content", "") for m in history_messages).strip()
+                if _history_context:
+                    result = skill.analyze(
+                        ProbabilityInput(question=_history_context, history=history_messages)
+                    )
+
             def _companion_text_for_focus(default_text: str) -> str:
                 """يبني نصاً مرافقاً موجهاً حسب طلب الطالب بدل تكرار عبارة عامة."""
                 if _focus_step_id == "same_color_event":
@@ -1991,14 +2006,12 @@ class OrchestratorClient:
             _deep_pedagogy_instruction + "\n\n" + question if _is_mode_b else question
         )
 
-        # D-104 (Adaptive Pedagogy): التوجيه التربوي المشتق من إتقان BKT —
-        # يُسبق في السؤال (قبل تعليمة MODE_B إن وُجدت) فيصل تلقائياً للـ
-        # orchestrator وكل مسارات الـ fallback المحلية عبر _effective_question.
-        # المسارات الحتمية (تحية/مفهرَس/سؤال-فقط/UI محسوبة) سبقت هذه النقطة
-        # وتستخدم السؤال الخام — لا تلوّث.
-        _pedagogy_directive = str((context or {}).get("pedagogy_directive") or "").strip()
-        if _pedagogy_directive:
-            _effective_question = f"[توجيه تربوي] {_pedagogy_directive}\n\n{_effective_question}"
+        # D-117 (فصل الطبقات: الطالب يرى التعليم لا هندسة التعليم): التوجيه التربوي
+        # (D-104) لم يَعُد يُسبَق للسؤال. كان النموذج المجاني يُردّده حرفياً
+        # («[توجيه تربوي] ... مستوى الدعم: ...») فيرى الطالب «هندسة التعليم» لا
+        # التعليم. عمق التدريس يصل الآن عبر `support_level` (مُمرَّر في context →
+        # يستهلكه SynthesizerNode في الرسم). التوجيه يبقى في context للقياس فقط
+        # (يصل ضمن `**(context or {})` في الـ payload) — لا يُسبَق للسؤال أبداً.
 
         # D-114: support_level يحكم إعفاء الحجب (sanitize_final_text). الافتراض
         # الآمن = 5 (محجوب كلياً) عند الغياب/الخطأ — لا 1 (fail-closed).

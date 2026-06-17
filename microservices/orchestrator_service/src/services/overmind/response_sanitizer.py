@@ -110,11 +110,15 @@ _WE_CLOSE = "⟦/مثال_محلول⟧"
 _BRACKET_BLOCK_RE = re.compile(r"⟦[^⟧\n]{0,120}⟧")
 # عبارة الفاصل بالأندرسكور (شكل العلامة لا العربية الطبيعية «مثال محلول» بمسافة)
 _MARKER_PHRASE_RE = re.compile(r"/?\s*مثال_محلول")
-# أسطر تعليمات مُسرَّبة (system prompt بالإنجليزية أو علامات توجيه داخلية)
+# أسطر تعليمات مُسرَّبة (system prompt بالإنجليزية أو علامات توجيه داخلية).
+# D-117: «الطالب يرى التعليم لا هندسة التعليم» — أي سطر يصف تفكير النظام نفسه
+# (توجيه D-104، قالب D-115 السقراطي، وضع MODE_B، هلوسة «Konzept») يُحذف بالكامل.
 _INSTRUCTION_LEAK_RE = re.compile(
     r"(?im)^.*?(?:WARM[\s\-]?UP|the instruction must|coalesced|rendered in a|"
-    r"single flowing syntax|semantic nuances|prepares the learner|التوجيه التربوي|"
-    r"تفعيل الفهم المبكر|مثال_محلول).*$"
+    r"single flowing syntax|semantic nuances|prepares the learner|Konzept|"
+    r"التوجيه التربوي|توجيه تربوي|تفعيل الفهم المبكر|مثال_محلول|"
+    r"مستوى الدعم|نوع المسألة|سؤال تشخيصي|أصغر خطوة|اطلب من الطالب|"
+    r"وضع الشرح العميق|فهمت المطلوب).*$"
 )
 
 

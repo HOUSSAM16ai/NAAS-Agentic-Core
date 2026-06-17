@@ -274,7 +274,7 @@ def check_answer_quality_skill_wired() -> None:
 def check_bkt_baseline_integrated() -> None:
     """D-074: BKTEngine هو الطبقة المعرفية الأساسية — يجب أن يكون:
     (1) مستهلِكاً لـ BKT_COGNITIVE_DOCTRINE من doctrine.py،
-    (2) موصولاً حيّاً في مسار المحادثة عبر customer_chat._evaluate_and_emit_bkt.
+    (2) موصولاً حيّاً في مسار المحادثة عبر customer_chat._evaluate_bkt_cards (D-118).
     """
     bkt_engine = ROOT / "app" / "services" / "skills" / "bkt_engine.py"
     if not bkt_engine.is_file():
@@ -292,15 +292,19 @@ def check_bkt_baseline_integrated() -> None:
     chat = ROOT / "app" / "api" / "routers" / "customer_chat.py"
     if chat.is_file():
         chat_src = chat.read_text(encoding="utf-8")
-        if (
-            "_evaluate_and_emit_bkt(question" not in chat_src.replace("\n", " ").replace("    ", "")
-            and "_evaluate_and_emit_bkt(" not in chat_src
-        ):
+        # D-118: التقييم موصول عبر `_evaluate_bkt_cards` (يُرجِع الحمولات)، والإصدار
+        # يقع بعد الإطار النهائي للمحتوى (لا تشظٍّ). نتحقّق من كليهما.
+        if "_evaluate_bkt_cards(" not in chat_src:
             _fail(
-                "customer_chat.py: _evaluate_and_emit_bkt not called. "
-                "D-074: BKT must be wired into the live WS chat path."
+                "customer_chat.py: _evaluate_bkt_cards not called. "
+                "D-074/D-118: BKT must be wired into the live WS chat path."
             )
-        _pass("BKT runtime injection wired into customer_chat WS handler (D-074)")
+        if "await _bkt_task" not in chat_src:
+            _fail(
+                "customer_chat.py: BKT cards not emitted after terminal frame. "
+                "D-118: tracking cards must be sequenced post-content (no mid-stream fragmentation)."
+            )
+        _pass("BKT runtime injection wired + sequenced post-content (D-074/D-118)")
 
 
 def check_skills_platform() -> None:

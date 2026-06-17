@@ -4468,3 +4468,35 @@ D-114 (المثال المحلول المكشوف) كان كارثة حيّة: �
 D-104 + المُطهّر على transcript الكارثة الحرفي + بوّابة wiring + ruff check/format +
 runtime_truth --check + py_compile 3.12 + D-116 frontend). التحقق الحي الكامل (E2E:
 احتمالات 2024 → «لم أفهم» متكرّر ⇒ صفر تسرّب داخلي/لغة أجنبية) في Codespaces بالدخولين الحقيقيين.
+
+## D-118 — تسلسل بطاقات التتبّع بعد الإطار النهائي للمحتوى (2026-06-17, ISS-116)
+الكارثة (transcript حي بعد D-117): نص التمرين مُشظّى — بطاقة BKT («14% تتبّع
+المعرفة») وبطاقة learning_path («ترسيخ المهارة سهل...») تظهران في منتصف التمرين
+فتقطّعانه. (D-117 نجح: التسرّب مُغلَق؛ المتبقّي تشظٍّ بصري.)
+
+الجذر (مؤكَّد بقراءة الكود + Explore): `_evaluate_and_emit_bkt` يُشغَّل عبر
+`asyncio.create_task` (customer_chat.py) بالتوازي مع بثّ المحتوى ويُصدِر إطارَي
+`ui_component` (BKT + learning_path) بين إطارات `assistant_delta`. مع زمن Supabase
+يهبط الإصدار وسط البثّ. الواجهة (useAgentSocket) تستدعي finalizeStaleAssistantMessages
+(تُنهي فقاعة النص) ثم تُلحق البطاقة → أول delta تالٍ يُنشئ فقاعة نص جديدة ⇒ التمرين
+ينقسم والبطاقات بينه. صفر gating: كل دور.
+
+الإصلاح (جراحي — فصل التقييم عن الإصدار):
+- `_evaluate_bkt_cards` (يحلّ محل `_evaluate_and_emit_bkt`): يُجري الكتابة التحليلية
+  append-only (D-074، متزامنة عبر create_task فلا تتأثر TTFT) + يشتق learning_path +
+  يبني حمولتَي البطاقتين ويُرجعهما list[dict]. لا websocket/send_lock في التوقيع، لا
+  emit، لا persist. معزول كلياً (fail-open → []).
+- بعد `_emit_terminal_frames` (المحتوى اكتمل): await مهمة التقييم → احفظ البطاقتين
+  (بعد رسالة المساعد + captured_ui_components ⇒ ترتيب reload محتوى→مرئي→تتبّع) →
+  أصدرهما عبر `_locked_send_json` (D-096) مع فحص WS، كلٌّ في try معزول.
+- صفر تغيير في الواجهة.
+
+القاعدة الدائمة: بطاقات التتبّع/التحليل (bkt_hint_display, learning_path_card) تُصدَر
+حصراً بعد الإطار النهائي للمحتوى — ممنوع mid-stream. الكتابة التحليلية append-only
+وحدها قد تجري متزامنة (بلا emit). ترتيب الحفظ: محتوى → بطاقات مرئية → تتبّع. كل send
+عبر _locked_send_json (D-096). العقود محفوظة: D-074/D-111/D-096/D-WS-CARD-PERSIST-001/ISS-016.
+
+الحالة: مُنفَّذ + مُتحقَّق محلياً (7 اختبار D-118 + مواءمة D-096 ضد المصدر + بوّابة
+check_bkt_baseline_integrated [الاسم الجديد + await _bkt_task] + consumed_by في
+registry+doctrine + D-116 frontend + ruff + runtime_truth + py_compile 3.12). التحقق
+الحي الكامل (E2E: تمرين الاحتمالات 2024 ⇒ نص متّصل غير مشظّى + بطاقتان أسفله) في Codespaces.

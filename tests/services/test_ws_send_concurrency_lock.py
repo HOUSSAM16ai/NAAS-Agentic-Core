@@ -16,11 +16,21 @@ sends). On slow DB (Supabase, 300ms-2s per write), BKT and stream
 overlap → ASGI protocol corruption → silent WebSocket close → frontend
 reconnects → if SECRET_KEY/state mismatch → 4401 → kick to login.
 
+D-118 UPDATE (2026-06-17): the BKT background task no longer sends at all.
+`_evaluate_bkt_cards` only evaluates + returns card payloads; the cards are
+emitted by the orchestrator AFTER the content terminal frame (so they no
+longer fragment the streaming exercise text). This is a STRONGER guarantee
+than D-096 for BKT — zero concurrent BKT send. The send_lock invariant
+still holds: every websocket send (stream deltas, keepalive, terminal
+frames, post-content card emission) goes through `_locked_send_json`.
+
 INVARIANT (enforced by these tests):
-1. `_evaluate_and_emit_bkt` must accept a `send_lock` parameter.
-2. `_emit_terminal_frames` must accept a `send_lock` parameter.
-3. `_locked_send_json` helper exists and uses an asyncio.Lock.
-4. `handle_control_message` must accept an optional `send_lock` parameter.
+1. `_evaluate_bkt_cards` must NOT send (no websocket/send_lock param, no
+   `_locked_send_json`/`websocket.send_json` in body) — D-118.
+2. BKT cards must be emitted via `_locked_send_json` after `_emit_terminal_frames`.
+3. `_emit_terminal_frames` must accept a `send_lock` parameter.
+4. `_locked_send_json` helper exists and uses an asyncio.Lock.
+5. `handle_control_message` must accept an optional `send_lock` parameter.
 """
 
 from __future__ import annotations
@@ -60,16 +70,27 @@ def test_locked_send_json_exists() -> None:
     )
 
 
-def test_evaluate_and_emit_bkt_requires_send_lock() -> None:
-    """`_evaluate_and_emit_bkt` must accept a `send_lock` parameter."""
+def test_bkt_eval_does_not_send() -> None:
+    """D-118: `_evaluate_bkt_cards` must NOT send — it only evaluates + returns payloads.
+
+    The old `_evaluate_and_emit_bkt` sent ui_component frames mid-stream
+    (fragmenting the exercise). D-118 removes the send entirely: the function
+    has no `websocket`/`send_lock` param and never calls send. This is the
+    structural guarantee that BKT cards cannot land mid-stream.
+    """
     from app.api.routers import customer_chat
 
-    sig = inspect.signature(customer_chat._evaluate_and_emit_bkt)
+    assert not hasattr(customer_chat, "_evaluate_and_emit_bkt"), (
+        "D-118: old `_evaluate_and_emit_bkt` (which emitted mid-stream) must be gone."
+    )
+    assert hasattr(customer_chat, "_evaluate_bkt_cards"), (
+        "D-118: `_evaluate_bkt_cards` (eval-only, returns payloads) is missing."
+    )
+    sig = inspect.signature(customer_chat._evaluate_bkt_cards)
     params = list(sig.parameters.keys())
-    assert "send_lock" in params, (
-        f"D-096: `_evaluate_and_emit_bkt` does NOT accept send_lock. "
-        f"Got params: {params}. Without it, BKT races with stream_and_forward "
-        f"on websocket.send_json → ASGI corruption → silent close → kick."
+    assert "websocket" not in params and "send_lock" not in params, (
+        f"D-118: `_evaluate_bkt_cards` must not take websocket/send_lock "
+        f"(it must not send). Got params: {params}."
     )
 
 
@@ -136,19 +157,11 @@ def test_locked_send_json_serializes_concurrent_sends() -> None:
     asyncio.run(run())
 
 
-def test_evaluate_and_emit_bkt_uses_locked_send() -> None:
-    """The BKT function body must NOT use raw `websocket.send_json` — only locked."""
+def test_bkt_eval_body_has_no_send() -> None:
+    """D-118: `_evaluate_bkt_cards` body must contain NO send at all."""
     from app.api.routers import customer_chat
 
-    source = inspect.getsource(customer_chat._evaluate_and_emit_bkt)
-
-    # The function should call _locked_send_json, not websocket.send_json directly
-    assert "_locked_send_json" in source, (
-        "D-096: `_evaluate_and_emit_bkt` body does NOT use _locked_send_json. "
-        "This is required to prevent races with stream_and_forward."
-    )
-    # Should NOT contain raw `websocket.send_json` call
-    # (well, the docstring may mention it — search for actual call pattern)
+    source = inspect.getsource(customer_chat._evaluate_bkt_cards)
     lines = source.splitlines()
     code_lines = [
         line
@@ -156,7 +169,31 @@ def test_evaluate_and_emit_bkt_uses_locked_send() -> None:
         if not line.strip().startswith("#") and not line.strip().startswith('"')
     ]
     code_text = "\n".join(code_lines)
-    assert "await websocket.send_json" not in code_text, (
-        "D-096: `_evaluate_and_emit_bkt` still calls `await websocket.send_json` "
-        "directly. Use `_locked_send_json` instead."
+    assert "_locked_send_json" not in code_text and "websocket.send_json" not in code_text, (
+        "D-118: `_evaluate_bkt_cards` must not send (eval-only, returns payloads). "
+        "Emission happens after the content terminal frame in the chat handler."
+    )
+
+
+def test_bkt_cards_emitted_via_locked_send_after_terminal() -> None:
+    """D-118: BKT cards are emitted via `_locked_send_json` AFTER `_emit_terminal_frames`.
+
+    Preserves the D-096 invariant (every send through the lock) while guaranteeing
+    the cards land after the content (no mid-stream fragmentation).
+    """
+    from app.api.routers import customer_chat
+
+    src = inspect.getsource(customer_chat)
+    # The handler awaits the eval task and emits cards through the lock.
+    assert "await _bkt_task" in src, "D-118: handler must await the BKT eval task."
+    term_idx = src.index("await _emit_terminal_frames(")
+    bkt_await_idx = src.index("await _bkt_task")
+    assert bkt_await_idx > term_idx, (
+        "D-118: BKT card emission must come AFTER the content terminal frame "
+        "(sequenced, not concurrent) to avoid fragmenting the exercise text."
+    )
+    # The post-terminal emission must go through the lock (D-096 preserved).
+    post = src[term_idx:]
+    assert '"type": "ui_component", "payload": _card' in post, (
+        "D-118: post-terminal block must emit the BKT card payloads."
     )

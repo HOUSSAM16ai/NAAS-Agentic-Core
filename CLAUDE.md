@@ -9110,3 +9110,76 @@ Skills هي السلطة الوحيدة؛ النظام يتعطّل بدونها
 |----------|---------|
 | D-116 | مُعلّم الاحتمالات البصري التفاعلي + terminate LLM للاحتمالات |
 | **D-117** | **فصل الطبقات: حذف prepend التوجيه + برومبت سقراطي سلوكي + مُطهّر العلامات الداخلية + إعادة بثّ بصري الاحتمالات (يحل تسرّب «المنصة تتكلّم من داخل عقلها»)** |
+
+---
+
+## 6.102 تسلسل بطاقات التتبّع بعد المحتوى — وقف تشظّي التمرين (2026-06-17, ISS-116 / D-118)
+
+> **الكارثة (transcript حي بعد D-117):** «الكارثة مزالت + جودة مقرفة مقززة بشكل
+> مرعب — تدمير للإنسان». تشخيص: نص التمرين **مُشظّى** — «خمس كرات خضراء مرقمة بـ:
+> 0، 1» يُفصَل عن «، 1، 3، 4»، و«A: ... من نفس» عن «اللون.». بطاقة إتقان BKT
+> («14% تتبّع المعرفة») وبطاقة المسار («ترسيخ المهارة سهل · لنبدأ بأساسيات
+> الاحتمالات») تظهران **في منتصف** التمرين فتقطّعانه. (D-117 نجح: ردّ «لم افهم»
+> نظيف بلا «نوع المسألة»/«[توجيه تربوي]» — التسرّب مُغلَق؛ المتبقّي تشظٍّ.)
+
+### الجذر (مؤكَّد بقراءة الكود + وكيل Explore)
+`_evaluate_and_emit_bkt` كان يُشغَّل عبر `asyncio.create_task` (customer_chat.py)
+**بالتوازي** مع بثّ المحتوى، فيُصدِر إطارَي `ui_component` (BKT + learning_path)
+**بين** إطارات `assistant_delta`. مع زمن Supabase (100–2000ms) يهبط الإصدار وسط
+البثّ. الواجهة (useAgentSocket: معالج `ui_component`) تستدعي
+`finalizeStaleAssistantMessages` (تُنهي فقاعة النص الجارية) ثم تُلحق فقاعة البطاقة
+→ أول delta تالٍ يجد آخر رسالة مكتملة (البطاقة) فيُنشئ **فقاعة نص جديدة** ⇒ التمرين
+ينقسم والبطاقات بينه. صفر gating: كل دور (تحية/تمرين/مرئي).
+
+### الإصلاح (D-118 — جراحي: فصل التقييم عن الإصدار)
+- **`_evaluate_bkt_cards`** (يحلّ محل `_evaluate_and_emit_bkt`): يُجري الكتابة
+  التحليلية append-only (`BKTAnalyticsService.evaluate_and_record` — D-074، تبقى
+  متزامنة عبر `create_task` فلا تتأثر TTFT) + يشتق `learning_path` + يبني
+  حمولتَي البطاقتين ويُرجعهما `list[dict]`. **لا websocket في التوقيع، لا emit،
+  لا persist.** معزول كلياً (fail-open → `[]`).
+- **بعد `_emit_terminal_frames`** (المحتوى اكتمل): انتظر مهمة التقييم (انتهت أثناء
+  البثّ → فوري) → احفظ البطاقتين (بعد رسالة المساعد + `captured_ui_components` ⇒
+  ترتيب reload = محتوى → مرئي → تتبّع) → أصدرهما عبر `_locked_send_json` (D-096)
+  مع فحص حالة الـ WS، كلٌّ في try معزول.
+- **صفر تغيير في الواجهة:** معالج `ui_component` يُنهي العالق (لا شيء — المحتوى
+  نُهِّي) ثم يُلحق البطاقة نظيفة أسفل المحتوى.
+
+### القاعدة الدائمة (D-118 — لا تُكسر بدون ADR)
+بطاقات التتبّع/التحليل (`bkt_hint_display`, `learning_path_card`) تُصدَر **حصراً
+بعد الإطار النهائي للمحتوى** — ممنوع إصدارها متزامنةً في منتصف البثّ. الكتابة
+التحليلية (append-only DB) وحدها قد تجري متزامنة (بلا emit). ترتيب الحفظ: محتوى
+→ بطاقات مرئية → تتبّع. كل send يبقى عبر `_locked_send_json` (D-096 محفوظ).
+
+### العقود المحفوظة
+D-074 (BKT لا يكسر الدردشة + append-only)، D-111 (learning path)، D-096 (send_lock
+على كل send)، D-WS-CARD-PERSIST-001 (البطاقات تبقى بعد الدخول)، ISS-016 (إطار نهائي
+واحد قبل البطاقات).
+
+### التحقق (2026-06-17)
+- **Sandbox**: 7 اختبارات D-118 (`test_d118_card_sequencing.py` — source-inspection:
+  التقييم بلا emit/persist/ws-param، الإصدار بعد terminal، الحفظ ثم القفل، معزول) +
+  مواءمة D-096 (`test_ws_send_concurrency_lock.py`: التقييم لا يُرسِل + البطاقات عبر
+  القفل بعد terminal — مُتحقَّق ضد المصدر؛ يستورد fastapi → CI) + تحديث
+  `consumed_by` (registry + doctrine) + بوّابة `check_bkt_baseline_integrated` (الاسم
+  الجديد + `await _bkt_task`) + D-116 frontend (لا انحدار) + ruff + runtime_truth +
+  py_compile 3.12.
+- **Codespaces (E2E حي إلزامي)**: «اعطني تمرين الاحتمالات 2024» ⇒ نص التمرين متّصل
+  غير مشظّى + بطاقتا BKT/المسار مرة واحدة أسفله؛ «كيف احل السؤال الأول» ⇒ الكاروسيل
+  ثم البطاقتان أسفله؛ «لم افهم» ⇒ ردّ نظيف + البطاقتان أسفله؛ صفر تشظٍّ، صفر تسرّب.
+  الدخولان الحقيقيان (`houssamannaba963@gmail.com` / `benmerahhoussam16@gmail.com`).
+
+### الملفات (D-118)
+| File | Change |
+|------|--------|
+| `app/api/routers/customer_chat.py` | `_evaluate_and_emit_bkt` → `_evaluate_bkt_cards` (يُرجِع payloads، بلا emit/persist) + إصدار البطاقات بعد `_emit_terminal_frames` (persist ثم `_locked_send_json`، معزول) |
+| `app/services/skills/registry.py` + `doctrine.py` | `consumed_by` → `customer_chat._evaluate_bkt_cards` |
+| `scripts/fitness/check_skills_doctrine.py` | `check_bkt_baseline_integrated`: الاسم الجديد + `await _bkt_task` |
+| `tests/services/test_d118_card_sequencing.py` | **جديد** — 7 اختبارات تسلسل |
+| `tests/services/test_ws_send_concurrency_lock.py` | مواءمة عقد D-118 (التقييم لا يُرسِل؛ البطاقات عبر القفل بعد terminal) |
+| `tests/api/test_chat_event_protocol_flag_integration.py` | patch الاسم الجديد (`return_value=[]`) |
+
+### السلسلة (D-117 → D-118)
+| Decision | الموضوع |
+|----------|---------|
+| D-117 | فصل الطبقات (تسرّب التفكير الداخلي للشاشة) |
+| **D-118** | **تسلسل بطاقات التتبّع بعد المحتوى — وقف تشظّي نص التمرين (BKT/learning_path لا تُبثّ mid-stream)** |

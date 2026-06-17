@@ -175,25 +175,26 @@ def test_bkt_eval_body_has_no_send() -> None:
     )
 
 
-def test_bkt_cards_emitted_via_locked_send_after_terminal() -> None:
-    """D-118: BKT cards are emitted via `_locked_send_json` AFTER `_emit_terminal_frames`.
+def test_bkt_analytics_awaited_after_terminal_no_card_emit() -> None:
+    """D-119: BKT analytics task is awaited after `_emit_terminal_frames` to ensure the
+    append-only write completes — but NO tracking card is emitted (behind-the-scenes).
 
-    Preserves the D-096 invariant (every send through the lock) while guaranteeing
-    the cards land after the content (no mid-stream fragmentation).
+    Tracking cards (bkt_hint_display / learning_path_card) are no longer shown to the
+    student (owner decision). The send_lock invariant (D-096) still holds for the
+    stream deltas, keepalive, and terminal frames.
     """
     from app.api.routers import customer_chat
 
     src = inspect.getsource(customer_chat)
-    # The handler awaits the eval task and emits cards through the lock.
-    assert "await _bkt_task" in src, "D-118: handler must await the BKT eval task."
+    # The handler awaits the BKT eval task AFTER the terminal frame (analytics completes).
+    assert "await _bkt_task" in src, "D-119: handler must await the BKT analytics task."
     term_idx = src.index("await _emit_terminal_frames(")
     bkt_await_idx = src.index("await _bkt_task")
     assert bkt_await_idx > term_idx, (
-        "D-118: BKT card emission must come AFTER the content terminal frame "
-        "(sequenced, not concurrent) to avoid fragmenting the exercise text."
+        "D-119: BKT analytics await must come AFTER the content terminal frame."
     )
-    # The post-terminal emission must go through the lock (D-096 preserved).
-    post = src[term_idx:]
-    assert '"type": "ui_component", "payload": _card' in post, (
-        "D-118: post-terminal block must emit the BKT card payloads."
+    # D-119: NO tracking-card emission after the terminal frame.
+    post = src[term_idx : src.index("# Close path-aware span")]
+    assert '"type": "ui_component", "payload": _card' not in post, (
+        "D-119: tracking cards must NOT be emitted to the student (behind-the-scenes)."
     )

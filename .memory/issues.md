@@ -4179,3 +4179,12 @@ BKT («تتبّع المعرفة») والمسار («ترسيخ المهارة�
 + `is_visual_request` case-insensitive ⇒ P(A)/P(B)/P(C)/E(X) ⇒ البصري الحتمي لا LLM.
 الحالة: RESOLVED محلياً (6 backend + 11 frontend + standalone logic [old False→new True]
 + لا انحدار ISS-114/ISS-110 + ruff + runtime_truth + py_compile)؛ E2E حي في Codespaces.
+
+## D-121 — الثورة البصرية (المرحلة 1): مختبر الاكتشاف التدريجي (2026-06-17)
+طلب المالك (بعد إغلاق D-117→D-120): إعادة تصميم UI ثورية «شاشة واحدة، كشف واحد». المرحلة 1
+(frontend-only، عقد البيانات محفوظ): `FullExerciseStory.jsx` — خطوة الحدث صارت
+`EventLayeredReveal` (كشف طبقةً طبقة: فروع قابلة للنقر → تجميع 14 → مقام 165 → نتيجة 14/165
+احتفالية، لا «0» مضلِّل)، + مشهد كيس بطل بدخول تتابعي، + CSS فاخر/keyframes على tokens قائمة.
+محفوظ: D-116/D-119/D-120 + عقد props. الحالة: RESOLVED محلياً (25 فحص d121 + لا انحدار في
+4 اختبارات frontend)؛ تحقق بصري حي في Codespaces. مراحل تالية: شاشات routing كاملة +
+combinations_visualizer/probability_tree + محيط الدردشة.

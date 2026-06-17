@@ -55,25 +55,30 @@ const StackFraction = memo(({ num, den }) => (
 ));
 StackFraction.displayName = 'StackFraction';
 
-// ── خطوة المعطيات: حالة الكيس بكرات ملوّنة ───────────────────────────────────
+// ── خطوة المعطيات: حالة الكيس بكرات ملوّنة (مشهد بطل — دخول تتابعي) ────────────
 const UrnStep = memo(({ state }) => {
     const groups = Array.isArray(state?.groups) ? state.groups : [];
+    let ballSeq = 0; // D-121: ترقيم عام للكرات لتأخير الدخول التتابعي عبر المجموعات.
     return (
-        <div className="genui-fes-urn">
+        <div className="genui-fes-urn is-hero">
             {groups.map((g, i) => {
                 const count = Math.max(0, Number(g.count) || 0);
                 const color = colorFor(g.color, i);
                 return (
                     <div className="genui-fes-urn-group" key={`${g.label}-${i}`}>
                         <div className="genui-fes-urn-balls">
-                            {Array.from({ length: Math.min(count, 14) }).map((_, b) => (
-                                <span
-                                    className="genui-fes-ball"
-                                    key={b}
-                                    style={{ background: color }}
-                                    aria-hidden="true"
-                                />
-                            ))}
+                            {Array.from({ length: Math.min(count, 14) }).map((_, b) => {
+                                const delay = ballSeq;
+                                ballSeq += 1;
+                                return (
+                                    <span
+                                        className="genui-fes-ball"
+                                        key={b}
+                                        style={{ background: color, '--genui-ball-i': delay }}
+                                        aria-hidden="true"
+                                    />
+                                );
+                            })}
                         </div>
                         <span className="genui-fes-urn-tag">
                             {g.label} <strong>({count})</strong>
@@ -101,81 +106,149 @@ const CombinationsStep = memo(({ state }) => {
 });
 CombinationsStep.displayName = 'CombinationsStep';
 
-// ── خطوة الحدث المركّب: لكل صنف C(count,k) أو بانر مستحيل (لا 0) ───────────────
-const EventBreakdownStep = memo(({ state }) => {
+// ── D-121: الكشف التدريجي للحدث (Layered Reveal) — مختبر اكتشاف P(A) ───────────
+// «شاشة واحدة، كشف واحد»: الطالب يكشف الفروع بالنقر (أبيض مستحيل/أحمر/أخضر)، ثم
+// يبني النسبة طبقةً طبقة: تجميع → مقام → نتيجة. بناء تراكمي يرى فيه «كيف تولد
+// النسبة» بدل قصف كل شيء دفعة واحدة. V32.0 محفوظ: الأبيض المستحيل = رسالة تربوية
+// (لا «0» مضلِّل)، والنتيجة لا تظهر إلا عند توفّر بسط ومقام موجبين.
+const EventLayeredReveal = memo(({ state }) => {
     const groups = Array.isArray(state?.groups) ? state.groups : [];
     const sameFav = Number(state?.same_group_favorable ?? state?.p_num ?? 0);
     const total = Number(state?.total_combinations ?? state?.p_den ?? 0);
+    const n = Number(state?.n) || 0;
+    const k = Number(state?.k) || 3;
 
-    // V32.0: Strict Governance — Detect if the entire step is an "Impossible State"
+    // V32.0: الحالة المستحيلة الكلية — بانر تربوي فقط (لا حساب، لا 0).
     const isStateImpossible =
         state?.is_possible === false ||
         (groups.some((g) => g.is_possible === false) && sameFav === 0);
 
+    const [open, setOpen] = useState(() => new Set());
+    const [layer, setLayer] = useState(0); // 0=فروع 1=تجميع 2=مقام 3=نتيجة
+
     if (isStateImpossible) {
-        const impossibleGroups = groups.filter((g) => g.is_possible === false);
+        const impossible = groups.filter((g) => g.is_possible === false);
+        const banners = impossible.length > 0 ? impossible : [state];
         return (
             <div className="genui-fes-event is-impossible-slide">
-                {impossibleGroups.length > 0 ? (
-                    impossibleGroups.map((g, i) => (
-                        <div className="genui-fes-impossible" key={i} style={{ padding: '1rem', textAlign: 'center' }}>
-                            <i className="fas fa-ban" aria-hidden="true" style={{ marginLeft: '0.5rem' }} />
-                            {g.pedagogical_string || 'هذا الحدث مستحيل (العدد غير كافٍ).'}
-                        </div>
-                    ))
-                ) : (
-                    <div className="genui-fes-impossible" style={{ padding: '1rem', textAlign: 'center' }}>
-                        <i className="fas fa-ban" aria-hidden="true" style={{ marginLeft: '0.5rem' }} />
-                        {state?.pedagogical_string || 'هذا الحدث مستحيل في هذه الظروف.'}
+                {banners.map((g, i) => (
+                    <div
+                        className="genui-fes-impossible"
+                        key={i}
+                        style={{ padding: '1rem', textAlign: 'center' }}
+                    >
+                        <i
+                            className="fas fa-ban"
+                            aria-hidden="true"
+                            style={{ marginInlineEnd: '0.5rem' }}
+                        />
+                        {(g && g.pedagogical_string) || 'هذا الحدث مستحيل (العدد غير كافٍ).'}
                     </div>
-                )}
+                ))}
             </div>
         );
     }
 
+    const allSeen = groups.length > 0 && groups.every((_, i) => open.has(i));
+    const openBranch = (i) =>
+        setOpen((prev) => {
+            const next = new Set(prev);
+            next.add(i);
+            return next;
+        });
+    const nextLayer = () => setLayer((l) => Math.min(3, l + 1));
+    const layerCta =
+        layer === 0 ? 'اجمع الحالات الملائمة' : layer === 1 ? 'كم عدد كل الاحتمالات؟' : 'اكشف النتيجة';
+
     return (
-        <div className="genui-fes-event">
-            <div className="genui-fes-event-rows">
+        <div className="genui-fes-reveal">
+            {/* طبقة 1 — الفروع القابلة للنقر (الطالب يكتشف كل لون) */}
+            <div className="genui-fes-branches">
                 {groups.map((g, i) => {
                     const isPossible = g.is_possible !== false;
                     const color = colorFor(g.color, i);
                     const count = Number(g.count) || 0;
                     const fav = Number(g.favorable) || 0;
+                    const isOpen = open.has(i);
                     return (
-                        <div className="genui-fes-event-row" key={`${g.label}-${i}`}>
-                            <span
-                                className="genui-fes-dot"
-                                style={{ background: color }}
-                                aria-hidden="true"
-                            />
-                            <span className="genui-fes-event-label">{g.label}</span>
-                            {isPossible ? (
-                                <span className="genui-fes-event-calc">
-                                    <Cnk n={count} k={Number(state?.k) || count} />
+                        <button
+                            type="button"
+                            key={`${g.label}-${i}`}
+                            className={`genui-fes-branch${isOpen ? ' is-open' : ''}${isPossible ? '' : ' is-impossible'}`}
+                            onClick={() => openBranch(i)}
+                            aria-expanded={isOpen}
+                        >
+                            <span className="genui-fes-branch-head">
+                                <span
+                                    className="genui-fes-dot"
+                                    style={{ background: color }}
+                                    aria-hidden="true"
+                                />
+                                <span className="genui-fes-branch-label">{g.label}</span>
+                            </span>
+                            {!isOpen && <span className="genui-fes-branch-tap">اضغط للكشف</span>}
+                            {isOpen && isPossible && (
+                                <span className="genui-fes-branch-val">
+                                    <Cnk n={count} k={k} />
                                     <span className="genui-fes-eq">=</span>
                                     <strong>{fav}</strong>
                                 </span>
-                            ) : (
-                                <span className="genui-fes-impossible" role="note">
-                                    <i className="fas fa-ban" aria-hidden="true" />
+                            )}
+                            {isOpen && !isPossible && (
+                                <span className="genui-fes-branch-imp">
+                                    <i className="fas fa-ban" aria-hidden="true" />{' '}
                                     {g.pedagogical_string || 'مستحيل'}
                                 </span>
                             )}
-                        </div>
+                        </button>
                     );
                 })}
             </div>
-            {/* V32.0: Only render probability if it's greater than zero to avoid "0/165" leaks */}
-            {total > 0 && sameFav > 0 && (
-                <div className="genui-fes-event-result">
-                    <span className="genui-fes-event-result-label">الاحتمال</span>
+
+            {/* زر تقدّم الطبقة — يظهر بعد كشف كل الفروع */}
+            {allSeen && layer < 3 && (
+                <button type="button" className="genui-fes-next-layer" onClick={nextLayer}>
+                    {layerCta} <i className="fas fa-arrow-down" aria-hidden="true" />
+                </button>
+            )}
+
+            {/* طبقة 2 — التجميع */}
+            {layer >= 1 && sameFav > 0 && (
+                <div className="genui-fes-layer genui-fes-sum">
+                    <span className="genui-fes-layer-label">عدد الحالات الملائمة</span>
+                    <strong className="genui-fes-layer-val">{sameFav}</strong>
+                    <span className="genui-fes-why">
+                        نجمع لأن الفروع منفصلة — كل حالة بلون واحد فقط.
+                    </span>
+                </div>
+            )}
+
+            {/* طبقة 3 — المقام (كل الاحتمالات) */}
+            {layer >= 2 && total > 0 && (
+                <div className="genui-fes-layer genui-fes-denom">
+                    <span className="genui-fes-layer-label">كل الاحتمالات</span>
+                    <span className="genui-fes-layer-calc">
+                        <Cnk n={n} k={k} />
+                        <span className="genui-fes-eq">=</span>
+                        <strong>{total}</strong>
+                    </span>
+                </div>
+            )}
+
+            {/* طبقة 4 — النتيجة (لحظة الاكتشاف) */}
+            {layer >= 3 && total > 0 && sameFav > 0 && (
+                <div className="genui-fes-result-reveal">
+                    <span className="genui-fes-result-label">الاحتمال</span>
                     <StackFraction num={sameFav} den={total} />
+                    <span className="genui-fes-bravo">
+                        <i className="fas fa-circle-check" aria-hidden="true" /> أحسنت — وصلت بنفسك 🎉
+                    </span>
                 </div>
             )}
         </div>
     );
 });
-EventBreakdownStep.displayName = 'EventBreakdownStep';
+EventLayeredReveal.displayName = 'EventLayeredReveal';
 
 // ── خطوة المتغيّر العشوائي: جدول توزيع P(X=i) ─────────────────────────────────
 const DistributionStep = memo(({ state }) => {
@@ -211,7 +284,8 @@ DistributionStep.displayName = 'DistributionStep';
 const STEP_RENDERERS = {
     urn: (state) => <UrnStep state={state} />,
     combinations: (state) => <CombinationsStep state={state} />,
-    event_breakdown: (state) => <EventBreakdownStep state={state} />,
+    // D-121: خطوة الحدث تُصيَّر كمختبر اكتشاف تدريجي (فروع → تجميع → مقام → نتيجة).
+    event_breakdown: (state) => <EventLayeredReveal state={state} />,
     distribution: (state) => <DistributionStep state={state} />,
 };
 

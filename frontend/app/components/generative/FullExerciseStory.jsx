@@ -312,7 +312,17 @@ export const FullExerciseStory = memo(({ props }) => {
         () => (Array.isArray(props.exercise_steps) ? props.exercise_steps : []),
         [props.exercise_steps],
     );
-    const [active, setActive] = useState(0);
+    // D-120: افتح الكاروسيل على الخطوة المطلوبة (focus_step_id) لا دائماً على الكيس.
+    // سؤال P(A) ⇒ focus_step_id="same_color_event" ⇒ يهبط على خطوة الحدث مباشرةً
+    // (أبيض مستحيل/أحمر 4/أخضر 10 → 14/165) بدل إعادة «فهم المعطيات» كل مرة (تقدّم
+    // محسوس، لا تكرار). fallback إلى 0 عند غياب التطابق.
+    const initialStep = useMemo(() => {
+        const focusId = typeof props.focus_step_id === 'string' ? props.focus_step_id : '';
+        if (!focusId) return 0;
+        const idx = steps.findIndex((s) => s && s.step_id === focusId);
+        return idx >= 0 ? idx : 0;
+    }, [steps, props.focus_step_id]);
+    const [active, setActive] = useState(initialStep);
     // D-116: الخطوات المكشوفة — الخطوة التفاعلية تبدأ بسؤال؛ المحتوى يُكشف بعد المحاولة.
     const [revealed, setRevealed] = useState(() => new Set());
 

@@ -200,18 +200,17 @@ async def _evaluate_bkt_cards(
     conversation_id: int | None,
     question: str,
     history_messages: list[dict[str, str]],
-) -> list[dict[str, object]]:
-    """D-118: يقيّم تفاعل الطالب عبر BKTEngine ويبني حمولتَي بطاقتَي التتبّع.
+) -> None:
+    """D-119: تتبّع معرفي خلف الكواليس — بلا أي بطاقة تظهر للطالب.
 
-    يُرجِع قائمة حمولات ``ui_component`` (bkt_hint_display + learning_path_card)
-    **بلا بثّ ولا حفظ** — يقوم المنسّق بإصدارها وحفظها **بعد** الإطار النهائي
-    للمحتوى (D-118) كي لا تُشظّي نص التمرين أثناء البثّ.
+    يُجري كتابة BKT التحليلية append-only (D-074 — تغذّي ``support_level``
+    والبيداغوجيا التكيفية) ويشتقّ المسار التعلّمي (D-111) ويُسجِّله
+    (telemetry / لوحة المعلم مستقبلاً) — ثم **يُرجِع ``[]``**. قرار المالك
+    (D-119): «تتبّع المعرفة» و«ترسيخ المهارة» خلف الكواليس، لا في سطح الطالب —
+    كانتا تظهران بعد كل دور فتُكرَّران وتُشوّشان. سطح الطالب = تعليم نظيف فقط.
 
-    الكتابة التحليلية (append-only — D-074) تحدث هنا (تُشغَّل متزامنة عبر
-    ``create_task`` فلا تؤثّر TTFT). معزول كلياً: أي فشل (DB أو غيره) يُسجَّل
-    ويُرجِع ما تجمّع — لا يكسر مسار المحادثة أبداً (D-074).
+    معزول كلياً: أي فشل (DB أو غيره) يُسجَّل ولا يكسر مسار المحادثة (D-074).
     """
-    cards: list[dict[str, object]] = []
     try:
         async with async_session_factory() as bkt_db:
             evaluation = await BKTAnalyticsService(bkt_db).evaluate_and_record(
@@ -220,22 +219,15 @@ async def _evaluate_bkt_cards(
                 question=question,
                 history=history_messages,
             )
-        cards.append(
-            {
-                "component": "bkt_hint_display",
-                "props": {
-                    "concept_id": evaluation.concept_id,
-                    "cognitive_load_estimate": evaluation.cognitive_load_estimate,
-                    "student_mastery_probability": (evaluation.student_mastery_probability),
-                },
-                "fallback_text": (
-                    f"تتبّع المعرفة: {evaluation.concept_id} — "
-                    f"إتقان {evaluation.student_mastery_probability:.0%}"
-                ),
-            }
+        # D-119: التتبّع خلف الكواليس — نُسجِّل الإتقان بدل عرض بطاقة للطالب.
+        logger.info(
+            "bkt_tracking concept=%s mastery=%.2f load=%s (behind-the-scenes, no card)",
+            evaluation.concept_id,
+            evaluation.student_mastery_probability,
+            evaluation.cognitive_load_estimate,
         )
-        # D-111: المسار التعلّمي التكيفي — يقترح الخطوة التالية فوق إتقان BKT.
-        # معزول داخل suppress (لا يكسر بناء بطاقة BKT)؛ الـ Skill حتمي بلا I/O.
+        # D-111: المسار التعلّمي التكيفي — يُشتقّ فوق إتقان BKT ويُسجَّل (telemetry).
+        # مُستهلَك خلف الكواليس (لا بطاقة طالب — D-119)؛ معزول داخل suppress.
         with contextlib.suppress(Exception):
             from app.services.skills.learning_path_skill import (
                 LearningPathInput,
@@ -248,24 +240,16 @@ async def _evaluate_bkt_cards(
                     mastery=evaluation.student_mastery_probability,
                 )
             )
-            cards.append(
-                {
-                    "component": "learning_path_card",
-                    "props": {
-                        "current_concept": path.current_concept,
-                        "next_concept": path.next_concept,
-                        "advanced": path.advanced,
-                        "target_difficulty": path.target_difficulty,
-                        "recommendation_text": path.recommendation_text,
-                        "rationale": path.rationale,
-                    },
-                    "fallback_text": path.recommendation_text,
-                }
+            logger.info(
+                "learning_path next=%s difficulty=%s reco=%s (behind-the-scenes, no card)",
+                path.next_concept,
+                path.target_difficulty,
+                path.recommendation_text,
             )
     except Exception as exc:
-        # BKT must never break chat — log and return whatever accumulated.
+        # BKT must never break chat — log and continue (no student-facing impact).
         logger.warning("bkt_tracking_failed: %s", exc, exc_info=True)
-    return cards
+    # D-119: لا بطاقات للطالب — التتبّع خلف الكواليس حصراً (return None).
 
 
 _PEDAGOGY_DIRECTIVE_TIMEOUT_S = 2.0
@@ -1232,39 +1216,13 @@ async def chat_stream_ws(
                         type(_ws_close_err).__name__,
                     )
 
-                # ── D-118: بطاقات التتبّع تُصدَر بعد الإطار النهائي للمحتوى ──
-                # كانت تُبثّ متزامنةً (asyncio.create_task) فتهبط بين deltas
-                # وتُشظّي نص التمرين لفقاعات مكسورة. الآن: انتظر التقييم (انتهى
-                # أثناء البثّ → فوري)، احفظ ثم أصدِر البطاقتين أسفل المحتوى — مرة
-                # نظيفة، بترتيب live/reload موحَّد (محتوى → مرئي → تتبّع). معزول
-                # كلياً: لا يكسر إنهاء الدور (D-074: BKT لا يكسر الدردشة أبداً).
-                _bkt_cards: list[dict[str, object]] = []
-                try:
-                    _bkt_cards = await _bkt_task
-                except Exception as _bkt_exc:
-                    logger.debug("bkt_cards_await_failed: %s", _bkt_exc)
-                if _bkt_cards:
-                    if local_conversation_id is not None:
-                        with contextlib.suppress(Exception):
-                            await _persist_ui_component_cards(
-                                conversation_id=local_conversation_id,
-                                cards=[dict(c) for c in _bkt_cards],
-                            )
-                    for _card in _bkt_cards:
-                        if websocket.client_state != WebSocketState.CONNECTED:
-                            break
-                        try:
-                            await _locked_send_json(
-                                websocket,
-                                send_lock,  # D-096
-                                _bind_stream_metadata(
-                                    {"type": "ui_component", "payload": _card},
-                                    local_conversation_id,
-                                    stream_request_id,
-                                ),
-                            )
-                        except (WebSocketDisconnect, RuntimeError):
-                            break
+                # ── D-119: التتبّع المعرفي خلف الكواليس — لا بطاقة للطالب ──
+                # نضمن اكتمال كتابة BKT التحليلية (append-only — D-074، تغذّي
+                # support_level) + تسجيل المسار التعلّمي قبل إنهاء الدور. لا
+                # بطاقات تُبثّ أو تُحفظ للطالب (قرار المالك D-119: «تتبّع المعرفة»
+                # و«ترسيخ المهارة» خلف الكواليس، لا في سطح الطالب). معزول كلياً.
+                with contextlib.suppress(Exception):
+                    await _bkt_task
 
                 # Close path-aware span exactly once per turn — final event type
                 # mirrors what `_emit_terminal_frames` actually sent.

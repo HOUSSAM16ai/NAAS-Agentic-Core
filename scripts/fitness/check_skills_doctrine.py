@@ -292,19 +292,20 @@ def check_bkt_baseline_integrated() -> None:
     chat = ROOT / "app" / "api" / "routers" / "customer_chat.py"
     if chat.is_file():
         chat_src = chat.read_text(encoding="utf-8")
-        # D-118: التقييم موصول عبر `_evaluate_bkt_cards` (يُرجِع الحمولات)، والإصدار
-        # يقع بعد الإطار النهائي للمحتوى (لا تشظٍّ). نتحقّق من كليهما.
+        # D-119: التقييم موصول عبر `_evaluate_bkt_cards` (تحليلات append-only خلف
+        # الكواليس، يُرجِع None — لا بطاقة طالب)، ويُنتظَر بعد الإطار النهائي لضمان
+        # اكتمال الكتابة قبل إنهاء الدور. نتحقّق من كليهما.
         if "_evaluate_bkt_cards(" not in chat_src:
             _fail(
                 "customer_chat.py: _evaluate_bkt_cards not called. "
-                "D-074/D-118: BKT must be wired into the live WS chat path."
+                "D-074/D-119: BKT analytics must run in the live WS chat path."
             )
         if "await _bkt_task" not in chat_src:
             _fail(
-                "customer_chat.py: BKT cards not emitted after terminal frame. "
-                "D-118: tracking cards must be sequenced post-content (no mid-stream fragmentation)."
+                "customer_chat.py: BKT analytics task not awaited. "
+                "D-119: append-only write must complete before turn ends (behind-the-scenes)."
             )
-        _pass("BKT runtime injection wired + sequenced post-content (D-074/D-118)")
+        _pass("BKT analytics wired behind-the-scenes, no student card (D-074/D-119)")
 
 
 def check_skills_platform() -> None:
@@ -435,12 +436,13 @@ def check_content_integrity_wired() -> None:
 
 
 def check_learning_path_wired() -> None:
-    """D-111: المسار التعلّمي التكيفي موصول فعلاً — ليس skill بلا مستهلك.
+    """D-111/D-119: المسار التعلّمي التكيفي موصول فعلاً — ليس skill بلا مستهلك.
 
-    يحرس: (1) manifest entry 'learning_path' متّسق، (2) موصول حيّاً بعد تقييم
-    BKT في customer_chat، (3) المكوّن learning_path_card في القائمة البيضاء.
+    D-119 (قرار المالك): المسار يُشتقّ خلف الكواليس (مُستهلَك + مُسجَّل telemetry)
+    ولا يُعرَض كبطاقة للطالب — كانت تُكرَّر وتُشوّش. الحرس: (1) manifest متّسق،
+    (2) ``get_learning_path_skill`` مُستدعى حيّاً في customer_chat (مُستهلَك،
+    لا ZOMBIE) — بلا اشتراط بناء بطاقة طالب.
     """
-    from app.contracts.streaming import KNOWN_UI_COMPONENTS
     from app.services.skills.doctrine import (
         LEARNING_PATH_DOCTRINE,
         LEARNING_PATH_DOCTRINE_VERSION,
@@ -456,11 +458,10 @@ def check_learning_path_wired() -> None:
         _fail("Manifest rules_count mismatch for learning_path (D-111).")
 
     router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
-    if "get_learning_path_skill" not in router_src or "learning_path_card" not in router_src:
-        _fail("customer_chat no longer emits learning_path (D-111 ZOMBIE).")
-    if "learning_path_card" not in KNOWN_UI_COMPONENTS:
-        _fail("learning_path_card not whitelisted in KNOWN_UI_COMPONENTS (D-111).")
-    _pass("Learning path wired: adaptive next-step over BKT mastery (D-111)")
+    # D-119: يكفي استدعاء الـ Skill (مُستهلَك خلف الكواليس) — لا اشتراط بطاقة طالب.
+    if "get_learning_path_skill" not in router_src:
+        _fail("customer_chat no longer derives learning_path (D-111/D-119 ZOMBIE).")
+    _pass("Learning path wired behind-the-scenes over BKT mastery (D-111/D-119)")
 
 
 def check_answer_redaction_wired() -> None:

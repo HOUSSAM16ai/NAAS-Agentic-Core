@@ -4500,3 +4500,27 @@ runtime_truth --check + py_compile 3.12 + D-116 frontend). التحقق الحي
 check_bkt_baseline_integrated [الاسم الجديد + await _bkt_task] + consumed_by في
 registry+doctrine + D-116 frontend + ruff + runtime_truth + py_compile 3.12). التحقق
 الحي الكامل (E2E: تمرين الاحتمالات 2024 ⇒ نص متّصل غير مشظّى + بطاقتان أسفله) في Codespaces.
+
+## D-119 — التتبّع المعرفي خلف الكواليس (لا بطاقات تتبّع للطالب) (2026-06-17, ISS-116)
+قرار المالك (transcript حي بعد D-118): بطاقتا التتبّع — إتقان BKT («تتبّع المعرفة»)
+والمسار التعلّمي («ترسيخ المهارة») — يجب ألّا تظهرا للطالب إطلاقاً («خلف الكواليس، لا
+في النص الذي يراه الطالب»). كانتا تظهران بعد كل دور فتُكرَّران وتُشوّشان. التدفّق
+المطلوب: نص التمرين → كتلة بصرية واحدة → خطوة تعليمية → جواب.
+
+الإصلاح: `customer_chat._evaluate_bkt_cards` (→ `-> None`) يُبقي كتابة BKT التحليلية
+append-only (D-074 — تغذّي support_level) + اشتقاق المسار (D-111)، ويُسجِّلهما
+(logger.info — telemetry خلف الكواليس)، ولا يبني أي بطاقة (حُذفت كتلتا bkt_hint_display
++ learning_path_card). التنسيق (finally) يحتفظ بـ `await _bkt_task` فقط (ضمان اكتمال
+الكتابة) — حُذفت كتلة الإصدار/الحفظ D-118. البطاقات البصرية للاحتمالات
+(full_exercise_story/combinations_visualizer/probability_tree) بلا مساس. الواجهة بلا
+تغيير (registry متسامح؛ المكوّنان يبقيان في KNOWN_UI_COMPONENTS — لا مُصدِر جديد).
+
+القاعدة الدائمة: bkt_hint_display + learning_path_card لا تُبثّان ولا تُحفظان للطالب —
+التتبّع خلف الكواليس حصراً. يبقى ACTIVE: BKT append-only (تغذّي support_level) + اشتقاق
+المسار (مُسجَّل). سطح الطالب = تعليم نظيف فقط. البوّابتان: check_bkt_baseline_integrated
+(تحليلات + await _bkt_task، لا بطاقات) + check_learning_path_wired (يكفي
+get_learning_path_skill مُستدعى — أُسقط اشتراط بطاقة الطالب). LEARNING_PATH_DOCTRINE v1.1.0.
+
+الحالة: مُنفَّذ + مُتحقَّق محلياً (8 اختبار D-119 + مواءمة test_ws_send_concurrency_lock
+ضد المصدر + حذف test_d118 + doctrine + D-116 frontend + ruff + runtime_truth +
+py_compile 3.12). التحقق الحي الكامل (E2E: صفر بطاقات تتبّع، سطح نظيف) في Codespaces.

@@ -763,7 +763,7 @@ def get_content_integrity_summary() -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 #: نسخة doctrine المسار التعلّمي.
-LEARNING_PATH_DOCTRINE_VERSION: Final[str] = "1.0.0"
+LEARNING_PATH_DOCTRINE_VERSION: Final[str] = "1.1.0"
 
 LEARNING_PATH_DOCTRINE: Final[tuple[str, ...]] = (
     "يُبنى حصراً فوق student_mastery_probability (D-074) — لا يُعيد اختراع تتبّع "
@@ -776,6 +776,8 @@ LEARNING_PATH_DOCTRINE: Final[tuple[str, ...]] = (
     "التسلسل خريطة منهج ثابتة (لا overfitting لمسألة بعينها)؛ المفهوم الأخير في "
     "السلسلة يبقى عليه عند الإتقان (لا يخترع مفهوماً غير موجود).",
     "fail-open مطلق: أي تعذّر ⇒ توصية محايدة آمنة — لا يكسر دور الطالب.",
+    "D-119: التوصية تُشتقّ وتُسجَّل خلف الكواليس (telemetry / لوحة المعلم) — "
+    "لا تُعرَض كبطاقة للطالب (سطح الطالب = تعليم نظيف فقط، لا تتبّع مُكرَّر).",
 )
 
 

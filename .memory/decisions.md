@@ -4553,3 +4553,27 @@ True لكل P(A)/P(B)/P(C)/P(X>1)] + لا انحدار ISS-114/ISS-110/D-116 + r
 + py_compile 3.12). E2E حي كامل (P(A)⇒خطوة الحدث، لا حلقة، لا تسرّب) في Codespaces.
 
 خارج النطاق: إعادة تصميم UI الثورية الكاملة (7 شاشات) — مشروع مستقل، تُعرَض كخطوة قادمة.
+
+## D-121 — الثورة البصرية (المرحلة 1): مختبر الاكتشاف التدريجي (2026-06-17)
+بعد إغلاق سلسلة الكوارث (D-117→D-120)، اختار المالك إعادة تصميم UI الثورية: تجربة «شاشة
+واحدة، كشف واحد» (مختبر اكتشاف). القرار المعماري الحاسم (درس D-114): frontend-only، بلا
+مسّ لعقد البيانات الخلفي — الخلفية (`full_exercise_story`) تُخرج أصلاً كل البيانات؛ الثورة
+= إعادة تصييرها.
+
+الإصلاح (المرحلة 1): `FullExerciseStory.jsx` — `EventLayeredReveal` يحلّ محل
+`EventBreakdownStep`: خطوة الحدث صارت آلة كشف تدريجي (فروع قابلة للنقر → تجميع → مقام →
+نتيجة احتفالية)، `open` Set + `layer` 0→3، النتيجة فقط عند layer>=3 && بسط>0 && مقام>0،
+الأبيض المستحيل عبر pedagogical_string (لا «0»). مشهد الكيس البطل (UrnStep.is-hero) بدخول
+تتابعي عبر --genui-ball-i. `globals.css`: أنماط جديدة + keyframes (genui-ball-in/
+genui-layer-in/genui-result-pop) على tokens قائمة، تحترم prefers-reduced-motion.
+
+العقود المحفوظة: D-116 (StepInteraction/revealed/genui-fes-interact + isRevealed gate)،
+D-120 (focus_step_id → useState(initialStep))، D-119 (لا بطاقات تتبّع)، عقد props +
+MathText + RTL + theme — بلا تغيير.
+
+الحالة: مُنفَّذ + مُتحقَّق محلياً (25 فحص d121 + لا انحدار d116/d120/generative_ui_streaming/
+iss114 + توازن JSX). التصيير البصري لا يُختبَر في الـ sandbox → تحقق بصري حي إلزامي في
+Codespaces (تمرين الاحتمالات 2024 → كشف طبقةً طبقة → 14/165 باحتفال، فاتح/داكن + موبايل/كمبيوتر).
+
+خارج النطاق (مراحل تالية بعد تحقق بصري): شاشات منفصلة بـ routing كامل الشاشة، إعادة تصميم
+combinations_visualizer/probability_tree، إعادة تصميم محيط الدردشة.

@@ -916,7 +916,7 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             # D-074 (Protocol V6.0): الطبقة المعرفية الأساسية — موصولة حيّاً.
             "BKTEngine.evaluate",
             "bkt_persistence.BKTAnalyticsService.evaluate_and_record",
-            "customer_chat._evaluate_and_emit_bkt",
+            "customer_chat._evaluate_bkt_cards",
             "orchestrator_client._build_probability_tree_props",
         ),
     },
@@ -989,7 +989,7 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
         "consumed_by": (
             # D-111: المسار التعلّمي التكيفي — موصول حيّاً بعد تقييم BKT.
             "LearningPathSkill.derive",
-            "customer_chat._evaluate_and_emit_bkt",
+            "customer_chat._evaluate_bkt_cards",
         ),
     },
     "mandatory_orchestration": {

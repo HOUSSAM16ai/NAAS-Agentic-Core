@@ -153,6 +153,11 @@ async def _locked_send_json(
       - BKT DB write يأخذ 300ms-2s عبر network
       - stream يبدأ فوراً ويستمر >5s
       - فرصة تزامن عالية على send_json
+
+    D-118 (2026-06-17): بطاقات BKT/المسار لم تَعُد تُبثّ أثناء البثّ — تُقيَّم
+    متزامنةً (`_evaluate_bkt_cards`، بلا send) وتُصدَر بعد الإطار النهائي للمحتوى.
+    القفل يبقى ضرورياً للتزامن بين بثّ الـ deltas و keepalive (D-WS-FLAP-005)
+    وإصدار البطاقات بعد النهاية — كل send يمرّ عبره (D-096).
     """
     async with lock:
         await websocket.send_json(payload)
@@ -189,20 +194,24 @@ async def _persist_ui_component_cards(
         logger.warning("ui_component_card_persist_failed: %s", exc, exc_info=True)
 
 
-async def _evaluate_and_emit_bkt(
+async def _evaluate_bkt_cards(
     *,
-    websocket: WebSocket,
-    send_lock: asyncio.Lock,
     user_id: int,
     conversation_id: int | None,
     question: str,
     history_messages: list[dict[str, str]],
-    stream_request_id: str,
-) -> None:
-    """يقيّم تفاعل الطالب عبر BKTEngine، يخزّنه، ويبثّ bkt_tracking للواجهة.
+) -> list[dict[str, object]]:
+    """D-118: يقيّم تفاعل الطالب عبر BKTEngine ويبني حمولتَي بطاقتَي التتبّع.
 
-    معزول تماماً: أي فشل (DB أو غيره) يُسجَّل ولا يكسر مسار المحادثة.
+    يُرجِع قائمة حمولات ``ui_component`` (bkt_hint_display + learning_path_card)
+    **بلا بثّ ولا حفظ** — يقوم المنسّق بإصدارها وحفظها **بعد** الإطار النهائي
+    للمحتوى (D-118) كي لا تُشظّي نص التمرين أثناء البثّ.
+
+    الكتابة التحليلية (append-only — D-074) تحدث هنا (تُشغَّل متزامنة عبر
+    ``create_task`` فلا تؤثّر TTFT). معزول كلياً: أي فشل (DB أو غيره) يُسجَّل
+    ويُرجِع ما تجمّع — لا يكسر مسار المحادثة أبداً (D-074).
     """
+    cards: list[dict[str, object]] = []
     try:
         async with async_session_factory() as bkt_db:
             evaluation = await BKTAnalyticsService(bkt_db).evaluate_and_record(
@@ -211,46 +220,22 @@ async def _evaluate_and_emit_bkt(
                 question=question,
                 history=history_messages,
             )
-        bkt_card_payload = {
-            "component": "bkt_hint_display",
-            "props": {
-                "concept_id": evaluation.concept_id,
-                "cognitive_load_estimate": evaluation.cognitive_load_estimate,
-                "student_mastery_probability": (evaluation.student_mastery_probability),
-            },
-            "fallback_text": (
-                f"تتبّع المعرفة: {evaluation.concept_id} — "
-                f"إتقان {evaluation.student_mastery_probability:.0%}"
-            ),
-        }
-        # ISS-106 (D-WS-CARD-PERSIST-001): احفظ بطاقة BKT لتبقى بعد إعادة الدخول.
-        if conversation_id is not None:
-            await _persist_ui_component_cards(
-                conversation_id=conversation_id,
-                cards=[dict(bkt_card_payload)],
-            )
-        # D-096: استخدم send_lock لمنع التزامن مع stream_and_forward.
-        # نتجاوز normalize_streaming_event عمداً: نوع ui_component يجب أن يصل
-        # للواجهة بلا تحوير (التطبيع يحوّل الأنواع المجهولة إلى assistant_delta
-        # عند تفعيل راية المغلف الموحّد).
-        # D-096: حماية إضافية — تحقق من حالة الـ WS قبل المحاولة.
-        if websocket.client_state != WebSocketState.CONNECTED:
-            logger.debug("bkt_skipped: ws not connected (state=%s)", websocket.client_state)
-            return
-        await _locked_send_json(
-            websocket,
-            send_lock,
-            _bind_stream_metadata(
-                {
-                    "type": "ui_component",
-                    "payload": bkt_card_payload,
+        cards.append(
+            {
+                "component": "bkt_hint_display",
+                "props": {
+                    "concept_id": evaluation.concept_id,
+                    "cognitive_load_estimate": evaluation.cognitive_load_estimate,
+                    "student_mastery_probability": (evaluation.student_mastery_probability),
                 },
-                conversation_id,
-                stream_request_id,
-            ),
+                "fallback_text": (
+                    f"تتبّع المعرفة: {evaluation.concept_id} — "
+                    f"إتقان {evaluation.student_mastery_probability:.0%}"
+                ),
+            }
         )
         # D-111: المسار التعلّمي التكيفي — يقترح الخطوة التالية فوق إتقان BKT.
-        # معزول داخل نفس try (لا يكسر الدردشة)؛ الـ Skill حتمي بلا I/O.
+        # معزول داخل suppress (لا يكسر بناء بطاقة BKT)؛ الـ Skill حتمي بلا I/O.
         with contextlib.suppress(Exception):
             from app.services.skills.learning_path_skill import (
                 LearningPathInput,
@@ -263,36 +248,24 @@ async def _evaluate_and_emit_bkt(
                     mastery=evaluation.student_mastery_probability,
                 )
             )
-            lp_card_payload = {
-                "component": "learning_path_card",
-                "props": {
-                    "current_concept": path.current_concept,
-                    "next_concept": path.next_concept,
-                    "advanced": path.advanced,
-                    "target_difficulty": path.target_difficulty,
-                    "recommendation_text": path.recommendation_text,
-                    "rationale": path.rationale,
-                },
-                "fallback_text": path.recommendation_text,
-            }
-            if conversation_id is not None:
-                await _persist_ui_component_cards(
-                    conversation_id=conversation_id,
-                    cards=[dict(lp_card_payload)],
-                )
-            if websocket.client_state == WebSocketState.CONNECTED:
-                await _locked_send_json(
-                    websocket,
-                    send_lock,
-                    _bind_stream_metadata(
-                        {"type": "ui_component", "payload": lp_card_payload},
-                        conversation_id,
-                        stream_request_id,
-                    ),
-                )
+            cards.append(
+                {
+                    "component": "learning_path_card",
+                    "props": {
+                        "current_concept": path.current_concept,
+                        "next_concept": path.next_concept,
+                        "advanced": path.advanced,
+                        "target_difficulty": path.target_difficulty,
+                        "recommendation_text": path.recommendation_text,
+                        "rationale": path.rationale,
+                    },
+                    "fallback_text": path.recommendation_text,
+                }
+            )
     except Exception as exc:
-        # BKT must never break chat — log and continue.
+        # BKT must never break chat — log and return whatever accumulated.
         logger.warning("bkt_tracking_failed: %s", exc, exc_info=True)
+    return cards
 
 
 _PEDAGOGY_DIRECTIVE_TIMEOUT_S = 2.0
@@ -954,23 +927,21 @@ async def chat_stream_ws(
 
             # ─────────────────────────────────────────────────────────────────
             # BKT Runtime Injection (Protocol V6.0): قيّم التفاعل، خزّنه في
-            # student_bkt_analytics، وابثّ bkt_tracking للواجهة. غير حرج —
-            # أي فشل لا يكسر مسار المحادثة (try/except معزول، جلسة DB مستقلة).
+            # student_bkt_analytics، وابنِ بطاقتَي التتبّع. غير حرج — أي فشل لا
+            # يكسر مسار المحادثة (try/except معزول، جلسة DB مستقلة).
             #
-            # D-WS-FLAP-001: يُشغَّل كـ background task بدل await متزامن.
-            # await المتزامن يُحجب بدء البث إذا كان Supabase بطيئاً (>500ms)،
-            # مما يُسبب timeout في العميل → disconnect → reconnect → flapping.
-            # RUF006: نحتفظ بمرجع الـ task لمنع garbage collection المبكر.
+            # D-WS-FLAP-001: التقييم يُشغَّل كـ background task (DB متزامن) فلا
+            # يُحجب بدء البثّ. RUF006: نحتفظ بمرجع الـ task لمنع GC المبكر.
+            # D-118: الإصدار لم يَعُد هنا — `_evaluate_bkt_cards` يُرجِع الحمولات
+            # فقط (بلا بثّ/حفظ)، والمنسّق يُصدِرها بعد الإطار النهائي للمحتوى كي
+            # لا تُشظّي نص التمرين أثناء البثّ (كانت تُقطّعه لفقاعات مكسورة).
             # ─────────────────────────────────────────────────────────────────
             _bkt_task = asyncio.create_task(
-                _evaluate_and_emit_bkt(
-                    websocket=websocket,
-                    send_lock=send_lock,  # D-096
+                _evaluate_bkt_cards(
                     user_id=actor.id,
                     conversation_id=local_conversation_id,
                     question=question,
                     history_messages=history_messages,
-                    stream_request_id=stream_request_id,
                 )
             )
             _bkt_task.add_done_callback(
@@ -1260,6 +1231,40 @@ async def chat_stream_ws(
                         local_conversation_id,
                         type(_ws_close_err).__name__,
                     )
+
+                # ── D-118: بطاقات التتبّع تُصدَر بعد الإطار النهائي للمحتوى ──
+                # كانت تُبثّ متزامنةً (asyncio.create_task) فتهبط بين deltas
+                # وتُشظّي نص التمرين لفقاعات مكسورة. الآن: انتظر التقييم (انتهى
+                # أثناء البثّ → فوري)، احفظ ثم أصدِر البطاقتين أسفل المحتوى — مرة
+                # نظيفة، بترتيب live/reload موحَّد (محتوى → مرئي → تتبّع). معزول
+                # كلياً: لا يكسر إنهاء الدور (D-074: BKT لا يكسر الدردشة أبداً).
+                _bkt_cards: list[dict[str, object]] = []
+                try:
+                    _bkt_cards = await _bkt_task
+                except Exception as _bkt_exc:
+                    logger.debug("bkt_cards_await_failed: %s", _bkt_exc)
+                if _bkt_cards:
+                    if local_conversation_id is not None:
+                        with contextlib.suppress(Exception):
+                            await _persist_ui_component_cards(
+                                conversation_id=local_conversation_id,
+                                cards=[dict(c) for c in _bkt_cards],
+                            )
+                    for _card in _bkt_cards:
+                        if websocket.client_state != WebSocketState.CONNECTED:
+                            break
+                        try:
+                            await _locked_send_json(
+                                websocket,
+                                send_lock,  # D-096
+                                _bind_stream_metadata(
+                                    {"type": "ui_component", "payload": _card},
+                                    local_conversation_id,
+                                    stream_request_id,
+                                ),
+                            )
+                        except (WebSocketDisconnect, RuntimeError):
+                            break
 
                 # Close path-aware span exactly once per turn — final event type
                 # mirrors what `_emit_terminal_frames` actually sent.

@@ -18,14 +18,14 @@ def _isolate_bkt_runtime_injection():
     """يعزل حقن BKT (D-074) عن اختبارات بروتوكول الأحداث.
 
     هذه الاختبارات تحاكي جلسة قاعدة البيانات بـ ``AsyncMock`` وتتحقق من تسلسل
-    أحداث WS الدقيق. حقن BKT (``customer_chat._evaluate_and_emit_bkt``) ليس
+    أحداث WS الدقيق. حقن BKT (``customer_chat._evaluate_bkt_cards`` — D-118) ليس
     موضوع هذه الاختبارات — وتشغيله ضد جلسة وهمية يُسبّب coroutine مُعلَّقاً
-    (RuntimeWarning) ويُدرج حدث ``bkt_hint_display`` إضافياً يكسر التسلسل.
-    نُحيّده هنا تماماً كما تُحيّد هذه الاختبارات خدمة حفظ المحادثة.
+    (RuntimeWarning) ويُدرج حدثَي ``bkt_hint_display``/``learning_path_card`` يكسران
+    التسلسل. نُحيّده هنا (يُرجِع ``[]``) تماماً كما تُحيّد خدمة حفظ المحادثة.
     """
     with patch(
-        "app.api.routers.customer_chat._evaluate_and_emit_bkt",
-        new=AsyncMock(return_value=None),
+        "app.api.routers.customer_chat._evaluate_bkt_cards",
+        new=AsyncMock(return_value=[]),
     ):
         yield
 

@@ -373,7 +373,7 @@ def _build_registry() -> SkillRegistry:
             output_contract="BKTEvaluation",
             primary_method="evaluate",
             metrics_prefix="cogniforge_skill_bkt",
-            consumed_by=("customer_chat._evaluate_and_emit_bkt",),
+            consumed_by=("customer_chat._evaluate_bkt_cards",),
         ),
         SkillDescriptor(
             name="adaptive_pedagogy",
@@ -469,7 +469,7 @@ def _build_registry() -> SkillRegistry:
             output_contract="LearningPathOutput",
             primary_method="derive",
             metrics_prefix="cogniforge_skill_learning_path",
-            consumed_by=("customer_chat._evaluate_and_emit_bkt",),
+            consumed_by=("customer_chat._evaluate_bkt_cards",),
         ),
         # ── FLAGGED (مُعطَّلة افتراضياً — تفعيل اختياري عبر علم) ──
         SkillDescriptor(

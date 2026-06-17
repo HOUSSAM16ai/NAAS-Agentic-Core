@@ -4167,3 +4167,15 @@ BKT («تتبّع المعرفة») والمسار («ترسيخ المهارة�
 (8 اختبار D-119 + مواءمة D-096 ضد المصدر + حذف test_d118 + بوّابتا BKT/learning_path
 + doctrine v1.1.0 + D-116 frontend + ruff + runtime_truth + py_compile 3.12)؛ التحقق
 الحي الكامل (E2E: تمرين الاحتمالات 2024 ⇒ نص + بصري واحد، صفر بطاقات تتبّع) في Codespaces.
+
+## ISS-116 (round 7) — D-120: probability tutor stuck loop + LLM-text leak (2026-06-17)
+بعد D-119: النظام عالق في حلقة — سؤال «كيف أتعلم حساب احتمال الحادثة P(A)» يُعيد نفس
+بطاقة الخطوة 1 (الكيس) كل دور، وأحياناً يسقط لمسار LLM يسأل «كم العدد الكلي؟» مع تسرّب
+إنجليزي («determination»). جذران: (1) `FullExerciseStory` يستخدم `useState(0)` ويتجاهل
+`focus_step_id` ⇒ يفتح دائماً على الكيس؛ (2) `_has_followup_probability_intent` يطابق
+عبر `_normalize` بلا lowercase ⇒ `"p("` لا يطابق `P(A)` (حرف كبير) ⇒ «...الحادثة P(A)»
+بلا «احتمال» تفشل بوّابة D-101 ⇒ LLM. الإصلاح (D-120): Fix A — الكاروسيل يُهيّأ على
+خطوة `focus_step_id` (P(A)⇒خطوة الحدث مباشرةً)؛ Fix B — `_has_followup_probability_intent`
++ `is_visual_request` case-insensitive ⇒ P(A)/P(B)/P(C)/E(X) ⇒ البصري الحتمي لا LLM.
+الحالة: RESOLVED محلياً (6 backend + 11 frontend + standalone logic [old False→new True]
++ لا انحدار ISS-114/ISS-110 + ruff + runtime_truth + py_compile)؛ E2E حي في Codespaces.

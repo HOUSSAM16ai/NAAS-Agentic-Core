@@ -830,9 +830,12 @@ class ProbabilityCalculatorSkill:
     @classmethod
     def is_visual_request(cls, text: str) -> bool:
         """ISS-114 (D-106): هل يطلب الطالب توليد واجهة صريحاً؟ يوجّه للأداة
-        البصرية المُهيكلة بدل ترك الـ LLM يكتب HTML خاماً."""
-        normalized = cls._normalize(text)
-        return any(cls._normalize(m) in normalized for m in _VISUAL_REQUEST_MARKERS)
+        البصرية المُهيكلة بدل ترك الـ LLM يكتب HTML خاماً.
+
+        D-120: case-insensitive — «Generate UI» (حرف كبير) يطابق «generate ui».
+        """
+        normalized = cls._normalize(text).lower()
+        return any(cls._normalize(m).lower() in normalized for m in _VISUAL_REQUEST_MARKERS)
 
     @classmethod
     def _has_followup_probability_intent(cls, text: str) -> bool:
@@ -840,9 +843,13 @@ class ProbabilityCalculatorSkill:
 
         يلتقط متابعات مثل «احسب الأمل الرياضي E(X)» أو «P(A)» التي لا تحمل
         كلمة احتمالية صريحة لكنها تستهدف خطوة من تمرين الاحتمالات في الـ history.
+
+        D-120: المطابقة case-insensitive (مرآة `_detect_focus_step` التي تُحوِّل
+        لأحرف صغيرة). بدونها `"p("` لا يطابق `P(A)` (حرف كبير) فتسقط متابعات
+        P(A)/P(B)/P(C)/E(X) لمسار LLM (تسرّب «determination»).
         """
-        normalized = cls._normalize(text)
-        return any(cls._normalize(m) in normalized for m in _FOLLOWUP_PROBABILITY_INTENT)
+        normalized = cls._normalize(text).lower()
+        return any(cls._normalize(m).lower() in normalized for m in _FOLLOWUP_PROBABILITY_INTENT)
 
     # ── الحالة المستحيلة (Protocol V26.2) — short-circuit قبل أي حساب ─────────────────
     _DRAW_VERBS: tuple[str, ...] = (

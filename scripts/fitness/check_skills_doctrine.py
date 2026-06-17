@@ -374,7 +374,13 @@ def check_skills_platform() -> None:
 
 
 def check_adaptive_pedagogy_wiring() -> None:
-    """D-104: التوجيه التربوي موصول فعلاً — ليس skill معرَّفاً بلا مستهلك."""
+    """D-104/D-117: التوجيه التربوي موصول للقياس + support_level يقود عمق التدريس.
+
+    D-117 (فصل الطبقات «الطالب يرى التعليم لا هندسة التعليم»): التوجيه التربوي
+    لم يَعُد يُسبَق للسؤال («[توجيه تربوي] ...») — كان النموذج المجاني يُردّده
+    حرفياً فيرى الطالب لغة النظام الداخلية. العمق يصل الآن عبر `support_level`
+    (مُمرَّر في context → يستهلكه SynthesizerNode). البوّابة تفرض غياب الـ prepend.
+    """
     router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
     client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
         encoding="utf-8"
@@ -383,11 +389,14 @@ def check_adaptive_pedagogy_wiring() -> None:
         _fail("customer_chat lost _build_pedagogy_directive (D-104 ZOMBIE).")
     if '"pedagogy_directive": pedagogy' not in router_src:
         _fail("customer_chat no longer passes pedagogy_directive in context (D-104).")
-    if 'get("pedagogy_directive")' not in client_src:
-        _fail("orchestrator_client no longer reads pedagogy_directive (D-104).")
-    if "[توجيه تربوي]" not in client_src:
-        _fail("orchestrator_client no longer prepends the pedagogy directive (D-104).")
-    _pass("Adaptive pedagogy wired: BKT mastery read drives teaching depth (D-104)")
+    if '"support_level": sup_level' not in router_src:
+        _fail("customer_chat no longer passes support_level in context (D-114/D-117).")
+    # D-117: الـ prepend ممنوع — النموذج يُردّده حرفياً (تسرّب «هندسة التعليم»).
+    if 'f"[توجيه تربوي]' in client_src:
+        _fail("orchestrator_client must NOT prepend the pedagogy directive (D-117 leak).")
+    if 'get("support_level")' not in client_src:
+        _fail("orchestrator_client no longer reads support_level (D-114/D-117).")
+    _pass("Adaptive pedagogy wired: support_level drives depth, no directive leak (D-117)")
 
 
 def check_content_integrity_wired() -> None:

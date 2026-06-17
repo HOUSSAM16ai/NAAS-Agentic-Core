@@ -3,8 +3,8 @@
 يثبت (stdlib + source-inspection — يعمل في الـ sandbox):
 1. المُطهّر المُصفّح يحذف كل أشكال ⟦⟧ المشوّهة + تعليمات system prompt المُسرَّبة
    + يحفظ العربية الطبيعية والـ LaTeX والفرنسية المشروعة — على sanitize_chunk والنهائي.
-2. SynthesizerNode يطبّق البروتوكول السقراطي المنضبط (نوع المسألة + سؤال واحد +
-   خطوة) ولا يحوي فرع المثال المكشوف (_worked_example_mode) — يَعكِس D-114.
+2. SynthesizerNode يطبّق البروتوكول السقراطي الطبيعي (D-117: تعليمات سلوكية بلا
+   عناوين مُرقَّمة) ولا يحوي فرع المثال المكشوف (_worked_example_mode) — يَعكِس D-114.
 3. routes.py يمرّر support_level في المُشغّلَين ولا يمرّر worked_example_directive.
 4. AgentState يحمل support_level ولا يحمل worked_example_directive.
 """
@@ -74,10 +74,21 @@ class TestSocraticProtocol:
         assert "_SOCRATIC_CORE_PROMPT" in GRAPH_SEARCH
         assert "_SOCRATIC_DEPTH_CLAUSES" in GRAPH_SEARCH
 
-    def test_prompt_embodies_owner_template(self):
-        # نوع المسألة + سؤال تشخيصي واحد + أصغر خطوة + لا كشف
-        for anchor in ("نوع المسألة", "سؤال تشخيصي واحد", "أصغر خطوة", "الجواب النهائي"):
-            assert anchor in GRAPH_SEARCH, f"missing template anchor: {anchor}"
+    def test_prompt_is_behavioral_not_labeled_template(self):
+        # D-117 (فصل الطبقات): البرومبت سلوكي طبيعي — لا قالب مُرقَّم بعناوين
+        # يَنسخها النموذج. العناوين الداخلية تظهر فقط ضمن قائمة «ممنوع» + نمط طبيعي.
+        # ممنوع: القالب المُرقَّم القديم (D-115) الذي سرّب العناوين حرفياً.
+        assert "اتبع هذا القالب حرفياً" not in GRAPH_SEARCH
+        assert "1) أعِد صياغة" not in GRAPH_SEARCH
+        assert "فهمت المطلوب: ..." not in GRAPH_SEARCH
+        # مطلوب: نمط طبيعي + قاعدة عدم الكشف + منع صريح للعناوين الداخلية
+        assert "لننظر إلى هذا الجزء فقط" in GRAPH_SEARCH
+        assert "لا تكشف الجواب النهائي" in GRAPH_SEARCH
+        assert "لا يراها الطالب" in GRAPH_SEARCH
+        for forbidden_label in ("نوع المسألة", "سؤال تشخيصي", "أصغر خطوة", "مستوى الدعم"):
+            assert forbidden_label in GRAPH_SEARCH, (
+                f"missing forbidden-label clause: {forbidden_label}"
+            )
 
     def test_worked_example_reveal_removed(self):
         assert "_worked_example_mode" not in GRAPH_SEARCH
@@ -101,4 +112,8 @@ class TestRoutingThreading:
 
     def test_agent_state_keeps_support_level_drops_directive(self):
         assert "support_level: int" in GRAPH_MAIN
-        assert "worked_example_directive" not in GRAPH_MAIN
+        # يجب ألّا يكون حقلاً في AgentState (التحقق من شكل التعليق المُوثِّق لإزالته
+        # «(worked_example_directive مُزال)» مسموح — نمنع فقط حقل الحالة الفعلي).
+        assert "worked_example_directive:" not in GRAPH_MAIN
+        assert 'state["worked_example_directive"]' not in GRAPH_MAIN
+        assert 'get("worked_example_directive")' not in GRAPH_MAIN

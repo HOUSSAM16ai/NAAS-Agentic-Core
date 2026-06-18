@@ -4198,3 +4198,12 @@ combinations_visualizer/probability_tree + محيط الدردشة.
 الكشف التدريجي)، صفر نص LLM. topic-safe (حاجب D-101 أولاً + شرط سياق الاحتمالات). الحالة:
 RESOLVED محلياً (8 اختبار + لا انحدار D-120/ISS-110 + ruff + runtime_truth)؛ تحقق حي في
 Codespaces بعد pull+restart (transcript المالك من إصدار قبل D-120/D-121).
+
+## D-123 — probability canonical-content immunization (no LLM/contamination/hallucination) (2026-06-18)
+بعد D-121 (الكشف التدريجي يعمل): متابعات الاحتمالات تسقط للـ LLM حين يفشل استخراج التركيبة من
+history[-6:] ⇒ حلقة «كم عدد الكرات؟» + هلوسة («2 برتقالية + 3 زرقاء») ⇒ تلوّث الـ history ⇒
+كاروسيل خاطئ («سحب 2 من 11»/«كرة زرقاء»). الإصلاح (D-123، orchestrator_client._build_calculated_ui):
+استخراج ثلاثي محصَّن — السؤال وحده (inline) → المحتوى الرسمي المُفهرَس + نية السؤال بـ history=None
+(مناعة من التلوّث) → آخر ملاذ. يضمن الكاروسيل الصحيح ⇒ terminate ⇒ صفر LLM/هلوسة/تلوّث. الحالة:
+RESOLVED محلياً (10 اختبار + لا انحدار D-120/D-122 + ruff + runtime_truth)؛ تحقق حي في Codespaces
+بعد pull D-120→D-123 + restart.

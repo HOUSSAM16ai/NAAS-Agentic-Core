@@ -1158,14 +1158,66 @@ class OrchestratorClient:
                 return None
 
             skill = ProbabilityCalculatorSkill()
-            result = skill.analyze(ProbabilityInput(question=question, history=history_messages))
+            _combined_text = (
+                question + " " + " ".join(m.get("content", "") for m in (history_messages or []))
+            )
+
+            # D-122/D-123: حارس سياق الاحتمالات (مُعرَّف مبكراً — للتحصين والتركيز).
+            def _is_probability_context(text: str) -> bool:
+                t = text or ""
+                return any(
+                    marker in t
+                    for marker in ("كرات", "كرة", "كيس", "احتمال", "سحب", "نسحب", "p(a", "p(b")
+                )
+
+            # ─────────────────────────────────────────────────────────────────
+            # D-123 — تحصين بالمحتوى الرسمي (history-immune):
+            # الكارثة الحيّة: نص LLM مُهلوَس في الـ history («2 برتقالية + 3 زرقاء»)
+            # كان يُسمّم استخراج التركيبة ⇒ كاروسيل خاطئ («سحب 2 من 11»/«كرة زرقاء»).
+            # الحل: (1) جرّب السؤال وحده (تركيبة inline مثل «كيس فيه 4 حمراء و7 بيضاء»).
+            # (2) إن لم توجد + سياق احتمالات (محادثة التمرين المُفهرَس) ⇒ ابنِ من
+            # **المحتوى الرسمي للتمرين** + نية السؤال، بـ history=None ⇒ مناعة كاملة
+            # من تلوّث الـ history. (3) آخر ملاذ: الاستخراج بالـ history (السلوك الأصلي).
+            # هذا يضمن الكاروسيل الصحيح (2بيضاء/4حمراء/5خضراء) ⇒ terminate=True ⇒ صفر LLM.
+            # ─────────────────────────────────────────────────────────────────
+            def _result_ok(r: object) -> bool:
+                return r is not None and getattr(r, "success", True) is not False
+
+            # (1) السؤال وحده — يلتقط التركيبة الـ inline بلا تلوّث history.
+            result = skill.analyze(ProbabilityInput(question=question, history=None))
+
+            # (2) محادثة التمرين المُفهرَس: المحتوى الرسمي + نية السؤال، history=None.
+            if not _result_ok(result) and _is_probability_context(_combined_text):
+                with contextlib.suppress(Exception):
+                    from app.services.capabilities.exercise_retrieval import (
+                        ExerciseRetrievalRequest,
+                        detect_exercise_retrieval,
+                        load_exercise_content,
+                    )
+
+                    _canon = detect_exercise_retrieval(
+                        ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                        history_messages=history_messages,
+                    )
+                    if _canon.recognized and _canon.matched_entry:
+                        _official = load_exercise_content(_canon.matched_entry)
+                        # المحتوى الرسمي (التركيبة) + السؤال الحالي (نية الحيرة/التركيز)؛
+                        # السؤال الحالي نظيف — التلوّث كان في الـ history (مُسقَط بـ None).
+                        _canon_result = skill.analyze(
+                            ProbabilityInput(question=f"{_official} {question}", history=None)
+                        )
+                        if _result_ok(_canon_result):
+                            result = _canon_result
+
+            # (3) آخر ملاذ — السلوك الأصلي (history). نادر بعد التحصين.
+            if not _result_ok(result):
+                result = skill.analyze(
+                    ProbabilityInput(question=question, history=history_messages)
+                )
 
             # V38.0 — Dual-Mode Routing: كشف نية الطالب قبل بناء الحمولة.
             # MODE_B يُفعَّل عند إشارات الحيرة — يُبقي المسار حياً للسرد البيداغوجي.
             # MODE_A هو الوضع الافتراضي — يُوقف المسار بعد المكوّن البصري.
-            _combined_text = (
-                question + " " + " ".join(m.get("content", "") for m in (history_messages or []))
-            )
             # ISS-114 (D-106): طلب توليد واجهة صريح («قم بتوليد واجهة تشرح
             # الحادثة») يُفعِّل MODE_B (مكوّن بصري + سرد بيداغوجي) — لا يصل
             # الطلب أبداً لـ LLM يكتب HTML خاماً.
@@ -1223,14 +1275,7 @@ class OrchestratorClient:
                     return "same_color_event"
                 return None
 
-            # D-122: حارس سياق الاحتمالات — إشارة احتمالية ملموسة في السؤال+الـ history.
-            def _is_probability_context(text: str) -> bool:
-                t = text or ""
-                return any(
-                    marker in t
-                    for marker in ("كرات", "كرة", "كيس", "احتمال", "سحب", "نسحب", "p(a", "p(b")
-                )
-
+            # D-122: حارس سياق الاحتمالات مُعرَّف مبكراً أعلاه (D-123) — يُعاد استخدامه هنا.
             _focus_step_id = _detect_focus_step(question)
             # D-122: لو لم يُطابق رمز صريح، جرّب الإشارة الطبيعية لجزء التمرين —
             # فقط ضمن سياق احتمالات (history) كي لا تُحمَّل احتمالات في موضوع آخر.

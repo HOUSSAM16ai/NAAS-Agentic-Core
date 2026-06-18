@@ -4601,3 +4601,28 @@ markers غير مشروطة، الإشارات الطبيعية مشروطة ب�
 runtime_truth + py_compile 3.12). تحقق حي في Codespaces بعد pull+restart (transcript المالك
 يطابق إصداراً قبل D-120/D-121 — يجب pull الكل معاً). حدّ معروف: تعميم لتمارين احتمالات
 متعددة (حالياً 2024 الوحيد المفهرَس).
+
+## D-123 — تحصين الاحتمالات بالمحتوى الرسمي (history-immune) (2026-06-18)
+الكارثة (screenshots + transcript حي): متابعات الاحتمالات («لم افهم كيف جاءت 14»، «لا اعرف»)
+حين يعجز الـ skill عن استخراج التركيبة من نافذة history[-6:] ⇒ None ⇒ سقوط لمسار LLM
+سقراطي ⇒ حلقة «كم عدد الكرات؟» + هلوسة مثال («2 برتقالية + 3 زرقاء») ⇒ النص دخل history ⇒
+الاستخراج التالي قرأ الهلوسة ⇒ كاروسيل خاطئ («سحب 2 من 11»/«كرة زرقاء»). نص الـ LLM يُسمّم
+المحرّك الحتمي.
+
+الجذر: `_build_calculated_ui` يستخرج من `analyze(question, history=history_messages)` —
+history مُلوَّث؛ وعند الفشل ⇒ None ⇒ LLM ⇒ حلقة + هلوسة.
+
+الإصلاح (orchestrator_client._build_calculated_ui): استخراج ثلاثي محصَّن — (1)
+`analyze(question, history=None)` للتركيبة inline؛ (2) حين سياق احتمالات + detect_exercise_retrieval
+⇒ load_exercise_content ⇒ `analyze(question=f"{official} {question}", history=None)` (التركيبة من
+المحتوى الرسمي + نية السؤال، مناعة من تلوّث history)؛ (3) آخر ملاذ بالـ history. النتيجة: كاروسيل
+صحيح دائماً ⇒ terminate=True (D-116) ⇒ MODE_A ⇒ صفر LLM ⇒ لا حلقة/هلوسة/تلوّث. + focus (D-122)
+يفتح على خطوة الحدث.
+
+القاعدة الدائمة: (1) محادثة التمرين الاحتمالي تُبنى من المحتوى الرسمي المُفهرَس حصراً (history=None)؛
+(2) التمرين الاحتمالي لا يسقط للـ LLM أبداً. topic-safe: حاجب D-101 + الاسترجاع المُفهرَس أولاً.
+
+الحالة: مُنفَّذ + مُتحقَّق محلياً (10 اختبار D-123 + لا انحدار D-120/D-122=14/14 + ruff +
+runtime_truth + py_compile 3.12). تحقق حي في Codespaces بعد pull D-120→D-123 + restart.
+خارج النطاق: `_build_probability_tree_props` (شجرة inline منفصلة)؛ ثبات الخطوة عبر الأدوار؛
+تعميم لتمارين متعددة.

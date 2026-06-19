@@ -1623,6 +1623,74 @@ class OrchestratorClient:
             return "sum"
         return None
 
+    #: D-125: أفعال إجرائية — «لماذا/ليش» معها تبقى سؤالاً حسابياً (قوالب D-124)،
+    #: لا مفاهيمياً («لماذا نجمع»، «لماذا لا نحسب الأبيض»). تحفّظ المالك رقم 3.
+    _PROCEDURAL_VERBS: tuple[str, ...] = (
+        "نجمع",
+        "نحسب",
+        "نحسبها",
+        "نضرب",
+        "نستخرج",
+        "نستخدم",
+        "لا نحسب",
+        "كيف وجدنا",
+        "كيف حصلنا",
+        "كيف نحسب",
+    )
+
+    @classmethod
+    def _detect_conceptual_question(cls, question: str) -> bool:
+        """D-125: هل السؤال مفاهيمي/مقارنة (يطلب المعنى/العلاقة لا خطوات الحساب)؟
+
+        يحل «متلازمة الردود المعلبة»: «ما الفرق بين 165 و 14» يطلب العلاقة (البسط
+        مقابل المقام)، لا حساب 165. أوسع من الكلمات الحرفية (تحفّظ المالك 1): يشمل
+        الدارجة «ليش»/«علاش»، و«نفسر»/«المقصود»/«الناتج»/«نقسم/النسبة». «لماذا/ليش»
+        + فعل إجرائي ⇒ ليس مفاهيمياً (تحفّظ 3)؛ أي علامة قوية ⇒ مفاهيمي حتى مع فعل
+        إجرائي (الهجين، تحفّظ 2).
+        """
+        q = (question or "").lower()
+        # علامات مفاهيمية قوية ⇒ مفاهيمي دائماً (تهزم حتى الأفعال الإجرائية — الهجين).
+        strong = (
+            "الفرق",
+            "الاختلاف",
+            "العلاقة",
+            "الرابط",
+            "مقارنة",
+            "قارن",
+            "ما يميز",
+            "الهدف",
+            "الغرض",
+            "الغاية",
+            "الفائدة",
+            "ما فائدة",
+            "فائدة",
+            "ما معنى",
+            "معنى",
+            "ماذا يعني",
+            "ماذا تعني",
+            "المقصود",
+            "ما المقصود",
+            "نفسر",
+            "التفسير",
+            "كيف نفسر",
+            "النسبة",
+            "نقسم",
+            "القسمة",
+            "البسط والمقام",
+            "بسط ومقام",
+        )
+        if any(m in q for m in strong):
+            return True
+        # «ليش/لماذا» + رقم/مفهوم وبلا فعل إجرائي ⇒ مفاهيمي («ليش 14؟»). تحفّظ 3.
+        why = ("ليش", "لماذا", "علاش", "وعلاش", "علاه")
+        if any(w in q for w in why):
+            if any(p in q for p in cls._PROCEDURAL_VERBS):
+                return False
+            concept_ref = ("14", "165", "الناتج", "البسط", "المقام")
+            if any(c in q for c in concept_ref):
+                return True
+        return False
+
     @staticmethod
     def _fmt_comb(c: int, k: int, fav: int) -> str:
         """يبني توسيع المضروب الحتمي: ``C(c,k) = (c×…×(c-k+1))/(k×…×1) = fav``.
@@ -1692,6 +1760,13 @@ class OrchestratorClient:
             total = result.total_combinations
             groups = list(result.groups)
             same = result.same_group_favorable
+
+            # D-125: السؤال المفاهيمي/المقارنة («ما الفرق بين 165 و 14»، «ما الهدف
+            # من 14») يطلب **العلاقة** لا خطوات الحساب. يُفحَص **قبل** مطابقة الأرقام
+            # كي لا يطبع قالب الحساب (متلازمة الردود المعلبة). يهزم مطابقة الأرقام دائماً.
+            if cls._detect_conceptual_question(question):
+                return cls._format_conceptual_relationship(question, n, k, total, same, groups)
+
             subpart = cls._detect_subpart_question(question)
 
             def _group_for_color(color: str) -> object | None:
@@ -1771,6 +1846,53 @@ class OrchestratorClient:
         except Exception:
             logger.warning("_build_probability_direct_explanation_failed", exc_info=True)
             return None
+
+    @classmethod
+    def _format_conceptual_relationship(
+        cls,
+        question: str,
+        n: int,
+        k: int,
+        total: int,
+        same: int,
+        groups: list,
+    ) -> str:
+        """D-125: شرح العلاقة الحواري القصير (المقام مقابل البسط) — حتمي، لا حساب.
+
+        يحل «متلازمة الردود المعلبة»: «ما الفرق بين 165 و 14» يطلب المعنى. المخرج
+        ≤3 أسطر جوهرية (تحفّظ المالك 4 — لا فقرة فلسفية). الهجين (وُجد فعل حسابي
+        «كيف حصلنا/نحسب/وجدنا») ⇒ سطر حسابي **واحد** منفصل عبر ``_fmt_comb`` (يَنجو
+        من حجب D-113). redaction-safe: لا «P(...)=عدد»/«\\boxed»/«خلاصة … = عدد».
+        """
+
+        def _bare(label: str) -> str:
+            return label.replace("كرة ", "", 1).strip() or label
+
+        possible = [g for g in groups if getattr(g, "is_possible", True)]
+        impossible = [g for g in groups if not getattr(g, "is_possible", True)]
+        favs_parts = " + ".join(f"{g.favorable_combinations} لل{_bare(g.label)}" for g in possible)
+        imp_note = ""
+        if impossible:
+            names = " و".join(f"ال{_bare(g.label)}" for g in impossible)
+            imp_note = f"؛ و{names} مستحيلة (عددها أقل من {k})"
+
+        body = (
+            f"## العلاقة بين {total} و {same} (المقام والبسط)\n\n"
+            f"**{total}** هو عدد كل الطرق الممكنة لسحب {k} كرات مهما كان لونها — "
+            f"هذا هو **المقام** (ساحة كل ما يمكن أن يحدث).\n\n"
+            f"**{same}** هو عدد الطرق التي تحقق «{k} من نفس اللون» فقط "
+            f"({favs_parts}{imp_note}) — هذا هو **البسط** (الحالات التي تنجح).\n\n"
+            f"فالاحتمال هو نسبة البسط إلى المقام: {same} من كل {total}."
+        )
+
+        # الهجين (تحفّظ المالك 2): إن طلب الطالب الحساب أيضاً، سطر حسابي واحد فقط.
+        ql = (question or "").lower()
+        if any(v in ql for v in ("كيف حصلنا", "كيف نحسب", "كيف وجدنا", "احسب", "الحساب")):
+            favs_sum = " + ".join(str(g.favorable_combinations) for g in possible)
+            body += (
+                f"\n\nوللتذكير بالحساب فقط: {cls._fmt_comb(n, k, total)}، و {favs_sum} = {same}."
+            )
+        return body
 
     async def _build_probability_tree_props(
         self,
@@ -2169,9 +2291,12 @@ class OrchestratorClient:
         # صفر LLM) يكسر حلقة الكاروسيل. يقع **قبل** _build_calculated_ui. topic-safe:
         # _build_probability_direct_explanation يُرجِع None لغير الاحتمالات.
         # ─────────────────────────────────────────────────────────────────────
+        # D-125: السؤال المفاهيمي/المقارنة («ما الفرق بين 165 و 14»، «ليش 14»)
+        # يصل المخرج حتى بلا رقم/حيرة — كي يُجاب بشرح العلاقة لا قالب الحساب.
+        _conceptual = self._detect_conceptual_question(question)
         _subpart = self._detect_subpart_question(question)
         _confusion_count = self._count_probability_confusion(question, history_messages)
-        if _subpart is not None or _confusion_count >= 2:
+        if _conceptual or _subpart is not None or _confusion_count >= 2:
             _direct = self._build_probability_direct_explanation(question, history_messages)
             if _direct:
                 logger.info(
@@ -2180,7 +2305,11 @@ class OrchestratorClient:
                         "request_id": str(uuid.uuid4()),
                         "subpart": _subpart or "",
                         "confusion_count": _confusion_count,
-                        "reason": "subpart_question" if _subpart else "repeated_confusion",
+                        "reason": (
+                            "conceptual_question"
+                            if _conceptual
+                            else ("subpart_question" if _subpart else "repeated_confusion")
+                        ),
                     },
                 )
                 _direct_chars = 0

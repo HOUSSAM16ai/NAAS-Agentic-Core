@@ -1534,6 +1534,244 @@ class OrchestratorClient:
             logger.warning("_build_calculated_ui_failed", exc_info=True)
             return None
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # D-124 — مخرج الطوارئ الحتمي (Deterministic Escape Hatch):
+    # كسر «حلقة الموت اللانهائية». بعد D-116/D-123 صار كل سؤال احتمالات يُنهي
+    # دائماً إلى الكاروسيل البصري (terminate=True، صفر LLM). النتيجة الكارثية:
+    # سؤال محدّد («كيف وجدنا 4 الحمراء؟») أو حيرة متكررة («لم أفهم»×N) يُعيدان
+    # طباعة **نفس الكاروسيل** بلا تقدّم ولا إجابة — الطالب محاصَر. الحل (تشخيص
+    # المالك CTO-grade): عداد محاولات + مخرج طوارئ ⇒ سؤال محدّد (فوراً) أو حيرة
+    # ≥ 2 يكسران الكاروسيل ويقدّمان **شرحاً رياضياً مباشراً حتمياً** (محسوباً من
+    # التمرين الرسمي عبر ProbabilityCalculatorSkill، history=None — D-123 — صفر
+    # LLM، صفر هلوسة). استثناء مقصود ومُصرَّح من المالك لِـ doctrine السقراطي
+    # (D-113/D-115): الطالب العالق يستحق المثال المحلول لكسر الحلقة.
+    # ─────────────────────────────────────────────────────────────────────────
+
+    #: D-124: علامات الحيرة المتكررة — **بلا «كيف» المجرّدة** (تكسر «كيف افهم
+    #: السؤال الأول» الأولى، وهي سؤال عام يستحق الكاروسيل لا الشرح المباشر).
+    _PROBABILITY_CONFUSION_MARKERS: tuple[str, ...] = (
+        "لم أفهم",
+        "لم افهم",
+        "مفهمتش",
+        "ما فهمت",
+        "مافهمت",
+        "ما افهم",
+        "لا أفهم",
+        "لا افهم",
+        "مازلت",
+        "ما زلت",
+        "اشرح لي",
+        "اشرحلي",
+        "وضح لي",
+        "وضحلي",
+        "أين الشرح",
+        "اين الشرح",
+        "لا أعرف",
+        "لا اعرف",
+        "ماعرفت",
+        "ما عرفت",
+        "صعب",
+        "أعد الشرح",
+        "اعد الشرح",
+    )
+
+    @classmethod
+    def _count_probability_confusion(
+        cls, question: str, history_messages: list[dict[str, str]] | None
+    ) -> int:
+        """يَعُدّ رسائل الطالب الدالة على حيرة متكررة (السؤال الحالي + سجل المحادثة).
+
+        حتمي، بلا I/O — نمط ``customer_chat._count_confusion_signals``. تكرار
+        الحيرة (≥2) ⇒ الطالب عالق بعد رؤية الكاروسيل ⇒ مخرج الطوارئ. **بلا «كيف»
+        المجرّدة** (D-124) كي لا يُحسب «كيف افهم السؤال الأول» الأول كحيرة. الرسالة
+        التي هي علامة استفهام صرفة («؟») تُحسب حيرةً (الطالب يكرّرها أمام الكاروسيل).
+        """
+        texts: list[str] = [str(question or "")]
+        for msg in history_messages or []:
+            if isinstance(msg, dict) and msg.get("role") == "user":
+                texts.append(str(msg.get("content") or ""))
+        count = 0
+        for text in texts:
+            low = text.strip()
+            if low in ("؟", "?", "؟؟", "??", "؟!", "!؟"):
+                count += 1
+                continue
+            if any(marker in low for marker in cls._PROBABILITY_CONFUSION_MARKERS):
+                count += 1
+        return count
+
+    @staticmethod
+    def _detect_subpart_question(question: str) -> str | None:
+        """يكشف سؤالاً محدّداً عن جزئية حسابية في تمرين الاحتمالات.
+
+        يُرجِع: ``"red"``/``"green"``/``"white"`` (لون) | ``"total"`` (فضاء العينة
+        C(11,3)) | ``"sum"`` (مجموع الحالات الملائمة 14) | ``None``. السؤال العام
+        («كيف افهم السؤال الأول») ⇒ ``None`` (يبقى للكاروسيل البصري). D-124.
+        """
+        q = (question or "").lower()
+        if any(m in q for m in ("حمراء", "الحمراء", "احمر", "الأحمر", "الاحمر", "حمر")):
+            return "red"
+        if any(m in q for m in ("خضراء", "الخضراء", "اخضر", "الأخضر", "الاخضر", "خضر")):
+            return "green"
+        if any(m in q for m in ("بيضاء", "البيضاء", "ابيض", "الأبيض", "الابيض", "بيض")):
+            return "white"
+        if any(m in q for m in ("165", "فضاء العينة", "العدد الكلي", "الفضاء", "c(11", "الكلي")):
+            return "total"
+        if any(
+            m in q for m in ("14", "الملائمة", "الملاءمة", "نجمع", "لماذا نجمع", "الحالات الملائمة")
+        ):
+            return "sum"
+        return None
+
+    @staticmethod
+    def _fmt_comb(c: int, k: int, fav: int) -> str:
+        """يبني توسيع المضروب الحتمي: ``C(c,k) = (c×…×(c-k+1))/(k×…×1) = fav``.
+
+        مثال: ``_fmt_comb(4, 3, 4)`` ⇒ ``"C(4,3) = (4×3×2)/(3×2×1) = 4"``. النمط
+        المُقوَّس يَنجو من حجب الإجابة (D-113) لأن RHS ليس عدداً صرفاً بعد ``=``.
+        """
+        if k < 1 or c < k:
+            return f"C({c},{k}) = {fav}"
+        num = "×".join(str(c - i) for i in range(k))
+        den = "×".join(str(k - i) for i in range(k))
+        return f"C({c},{k}) = ({num})/({den}) = {fav}"
+
+    @classmethod
+    def _build_probability_direct_explanation(
+        cls,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+    ) -> str | None:
+        """D-124: شرح رياضي مباشر حتمي لتمرين الاحتمالات (يكسر حلقة الكاروسيل).
+
+        يُحمّل التمرين الرسمي المُفهرَس (D-123: ``history=None`` ⇒ مناعة من تلوّث
+        الـ history)، يحلّله عبر ``ProbabilityCalculatorSkill`` (مخرَج
+        ``CombinationsModelOutput``)، ثم يُنسِّق الجزئية المطلوبة (لون/فضاء/مجموع)
+        أو الاشتقاق الكامل — **صفر LLM، صفر هلوسة**. يُرجِع ``None`` إن لم يكن تمرين
+        احتمالات معروفاً (topic-safe) أو تعذّر الحساب. النصّ مُصمَّم لِيَنجو من حجب
+        الإجابة (D-113): يتجنّب ``P(...)=عدد``/``\\boxed``/«النتيجة/إذن … = عدد».
+        """
+        try:
+            from app.services.capabilities.arabic_normalize import primary_canonical_topic
+            from app.services.capabilities.exercise_retrieval import (
+                ExerciseRetrievalRequest,
+                detect_exercise_retrieval,
+                load_exercise_content,
+            )
+            from app.services.skills.probability_skill import (
+                CombinationsModelOutput,
+                ProbabilityCalculatorSkill,
+                ProbabilityInput,
+            )
+
+            # topic-safe: طلب موضوع آخر صريح (دوال/أعداد مركبة) ⇒ لا شرح احتمالات.
+            _canonical = primary_canonical_topic(question)
+            if _canonical is not None and _canonical.canonical_id != "probability":
+                return None
+
+            # تحميل التمرين الرسمي المُفهرَس (history-immune — D-123).
+            _decision = detect_exercise_retrieval(
+                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                history_messages=history_messages,
+            )
+            if not (_decision.recognized and _decision.matched_entry):
+                return None
+            _official = load_exercise_content(_decision.matched_entry)
+            if not _official:
+                return None
+
+            # تحليل حتمي من المحتوى الرسمي وحده (بلا سؤال الطالب ⇒ غير حائر ⇒
+            # CombinationsModelOutput بالمجموعات، لا قصة بصرية deep_dive).
+            skill = ProbabilityCalculatorSkill()
+            result = skill.analyze(ProbabilityInput(question=_official, history=None))
+            if not isinstance(result, CombinationsModelOutput):
+                return None
+
+            n = result.n
+            k = result.k
+            total = result.total_combinations
+            groups = list(result.groups)
+            same = result.same_group_favorable
+            subpart = cls._detect_subpart_question(question)
+
+            def _group_for_color(color: str) -> object | None:
+                for g in groups:
+                    if (g.color or "") == color:
+                        return g
+                return None
+
+            # ── جزئية لون واحد ────────────────────────────────────────────────
+            if subpart in ("red", "green", "white"):
+                g = _group_for_color(subpart)
+                if g is not None:
+                    if g.is_possible:
+                        return (
+                            f"## كيف نحسب تأليفات {g.label}\n\n"
+                            f"عدد {g.label} في الكيس: {g.count}، ونريد اختيار {k} منها "
+                            f"دفعةً واحدة (اختيار غير مرتّب). نطبّق قانون التوافيق:\n\n"
+                            f"{cls._fmt_comb(g.count, k, g.favorable_combinations)}\n\n"
+                            f"أي توجد {g.favorable_combinations} طريقة لاختيار {k} كرات "
+                            f"من نفس هذا اللون — وهي إحدى مكوّنات الحالات الملائمة."
+                        )
+                    return (
+                        f"## لماذا هذا اللون مستحيل\n\n"
+                        f"عدد {g.label} في الكيس: {g.count}، ونحتاج اختيار {k}. بما أن "
+                        f"{g.count} أصغر من {k}، لا يمكن سحب {k} كرات من هذا اللون معاً — "
+                        f"لذلك عدد تأليفاته صفر، وهذا اللون لا يساهم في الحالات الملائمة."
+                    )
+
+            # ── فضاء العينة C(n,k) ────────────────────────────────────────────
+            if subpart == "total":
+                return (
+                    f"## فضاء العينة C({n},{k})\n\n"
+                    f"نسحب {k} كرات من {n} دفعةً واحدة. السحب الآني = اختيار غير مرتّب، "
+                    f"فعدد كل الإمكانات هو:\n\n"
+                    f"{cls._fmt_comb(n, k, total)}\n\n"
+                    f"أي يوجد {total} طريقة مختلفة لاختيار {k} كرات من الكيس — وهو مقام الاحتمال."
+                )
+
+            # ── مجموع الحالات الملائمة + الاحتمال ─────────────────────────────
+            possible = [g for g in groups if g.is_possible]
+            favs = " + ".join(str(g.favorable_combinations) for g in possible)
+            if subpart == "sum":
+                lines = "\n".join(
+                    (
+                        f"- {g.label}: {cls._fmt_comb(g.count, k, g.favorable_combinations)}"
+                        if g.is_possible
+                        else f"- {g.label}: مستحيل (العدد {g.count} أصغر من {k})"
+                    )
+                    for g in groups
+                )
+                return (
+                    f"## كيف نجمع لنحصل على الحالات الملائمة\n\n"
+                    f"الحدث «{k} كرات من نفس اللون» يتحقق بأيّ لون ممكن:\n\n"
+                    f"{lines}\n\n"
+                    f"نجمع الحالات الممكنة فقط: {favs} = {same}\n\n"
+                    f"وبذلك يكون الاحتمال {same}/{total}."
+                )
+
+            # ── الاشتقاق الكامل (حيرة متكررة، بلا جزئية محدّدة) ────────────────
+            full_lines = "\n".join(
+                (
+                    f"   - {g.label}: {cls._fmt_comb(g.count, k, g.favorable_combinations)}"
+                    if g.is_possible
+                    else f"   - {g.label}: مستحيل (العدد {g.count} أصغر من {k})"
+                )
+                for g in groups
+            )
+            return (
+                f"## الحل الكامل خطوة بخطوة\n\n"
+                f"1) فضاء العينة — نسحب {k} كرات من {n} دفعةً واحدة:\n\n"
+                f"   {cls._fmt_comb(n, k, total)}\n\n"
+                f"2) الحالات الملائمة (الحدث: {k} كرات من نفس اللون) — لكل لون على حدة:\n\n"
+                f"{full_lines}\n\n"
+                f"3) نجمع الحالات الممكنة فقط: {favs} = {same}\n\n"
+                f"4) الاحتمال = {same}/{total}."
+            )
+        except Exception:
+            logger.warning("_build_probability_direct_explanation_failed", exc_info=True)
+            return None
+
     async def _build_probability_tree_props(
         self,
         question: str,
@@ -1920,6 +2158,60 @@ class OrchestratorClient:
                 )
                 return
             # إذا فشل البث (نادر جداً) → نُكمل المسار العادي
+
+        # ─────────────────────────────────────────────────────────────────────
+        # D-124 — مخرج الطوارئ الحتمي (Deterministic Escape Hatch):
+        # كسر «حلقة الموت اللانهائية» في تمرين الاحتمالات. بعد D-116/D-123 صار كل
+        # سؤال احتمالات يُنهي دائماً إلى الكاروسيل (صفر LLM) ⇒ سؤال محدّد («كيف
+        # وجدنا 4 الحمراء؟») أو حيرة متكررة («لم أفهم»×N) يُعيدان طباعة نفس
+        # الكاروسيل بلا تقدّم. الحل (تشخيص المالك): سؤال محدّد (فوراً) أو عداد
+        # الحيرة ≥ 2 ⇒ شرح رياضي **مباشر حتمي** (من التمرين الرسمي، history=None،
+        # صفر LLM) يكسر حلقة الكاروسيل. يقع **قبل** _build_calculated_ui. topic-safe:
+        # _build_probability_direct_explanation يُرجِع None لغير الاحتمالات.
+        # ─────────────────────────────────────────────────────────────────────
+        _subpart = self._detect_subpart_question(question)
+        _confusion_count = self._count_probability_confusion(question, history_messages)
+        if _subpart is not None or _confusion_count >= 2:
+            _direct = self._build_probability_direct_explanation(question, history_messages)
+            if _direct:
+                logger.info(
+                    "probability_direct_explanation_escape_hatch",
+                    extra={
+                        "request_id": str(uuid.uuid4()),
+                        "subpart": _subpart or "",
+                        "confusion_count": _confusion_count,
+                        "reason": "subpart_question" if _subpart else "repeated_confusion",
+                    },
+                )
+                _direct_chars = 0
+                try:
+                    async for _chunk in self._stream_markdown_typing(_direct):
+                        if not _chunk:
+                            continue
+                        _direct_chars += len(_chunk)
+                        yield self._normalize_stream_event(
+                            {"type": "assistant_delta", "payload": {"content": _chunk}}
+                        )
+                except Exception:
+                    logger.warning("probability_direct_explanation_stream_failed", exc_info=True)
+                if _direct_chars > 0:
+                    if _root_ctx:
+                        with contextlib.suppress(Exception):
+                            obs.end_span(
+                                _root_ctx.span_id,
+                                status="OK",
+                                metrics={
+                                    "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                    # بين preempt (0.5) والكاروسيل المحسوب
+                                    "fallback_path": 0.45,
+                                    "stream_chars": float(_direct_chars),
+                                },
+                            )
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_final", "payload": {"content": ""}}
+                    )
+                    return
+                # إن فشل البث (نادر) → نُكمل إلى الكاروسيل العادي أدناه
 
         # ─────────────────────────────────────────────────────────────────────
         # Generative UI Streaming (probability tree / impossible_case):

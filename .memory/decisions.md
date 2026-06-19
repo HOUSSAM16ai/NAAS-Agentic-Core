@@ -4626,3 +4626,18 @@ history مُلوَّث؛ وعند الفشل ⇒ None ⇒ LLM ⇒ حلقة + ه�
 runtime_truth + py_compile 3.12). تحقق حي في Codespaces بعد pull D-120→D-123 + restart.
 خارج النطاق: `_build_probability_tree_props` (شجرة inline منفصلة)؛ ثبات الخطوة عبر الأدوار؛
 تعميم لتمارين متعددة.
+
+## D-124 — مخرج الطوارئ الحتمي: كسر حلقة الكاروسيل + شرح رياضي مباشر (2026-06-19, ISS-116)
+الكارثة: بعد D-116/D-123 صار كل سؤال احتمالات يُنهي دائماً إلى الكاروسيل (terminate=True، صفر
+LLM). النتيجة «حلقة موت لا نهائية»: سؤال محدّد («كيف وجدنا 4 الحمراء؟») أو حيرة متكررة («لم
+أفهم»×N) يُعيدان نفس الكاروسيل بلا تقدّم. تشخيص المالك: عداد محاولات + مخرج طوارئ مفقودان.
+الإصلاح (`orchestrator_client.py`، قبل `_build_calculated_ui`): `_count_probability_confusion`
+(عداد حيرة حتمي، بلا «كيف» المجرّدة) + `_detect_subpart_question` (red/green/white/total/sum) +
+`_build_probability_direct_explanation` (يحمّل التمرين الرسمي، `history=None` — D-123 — يحلّل عبر
+ProbabilityCalculatorSkill، يُنسِّق عبر `_fmt_comb` = `C(4,3)=(4×3×2)/(3×2×1)=4`، topic-safe، صفر
+LLM). الشرط: سؤال محدّد (فوراً) أو حيرة ≥2 ⇒ بثّ مباشر + assistant_final + return (كسر الحلقة).
+النصّ مُصمَّم لِيَنجو من حجب D-113 (لا `P(...)=عدد`/`\boxed`/خلاصة+=عدد؛ النمط المُقوَّس يَنجو من
+`_FINAL_RESULT_RE`). استثناء مقصود ومُصرَّح من المالك لِـ doctrine السقراطي. الحالة: RESOLVED
+محلياً (24 اختبار + لا انحدار D-120/D-122/D-123 + ruff + py_compile 3.12 + runtime_truth)؛ تحقق
+حي في Codespaces بعد pull D-120→D-124 + restart. خارج النطاق: تمارين احتمالات أخرى (2024 الوحيد
+المفهرَس)؛ `_build_probability_tree_props` (شجرة inline منفصلة)؛ ثبات الخطوة عبر الأدوار (frontend).

@@ -175,8 +175,30 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             "interaction_count",
             "interaction_timestamp",
             "created_at",
+            # D-126: الإتقان الصادق ثنائي القناة (Two-Signal Honest Mastery).
+            "durable_mastery",
+            "support_level",
+            "delay_hours",
+            "novel_item",
         ],
-        "auto_fix": {},
+        # D-126: أعمدة القناة الدائمة تُضاف تلقائياً على الإقلاع (auto-migration §6.77)
+        # على القواعد القائمة — append-only، لا تكسر الصفوف السابقة (افتراضات آمنة).
+        "auto_fix": {
+            "durable_mastery": (
+                'ALTER TABLE "student_bkt_analytics" ADD COLUMN "durable_mastery" '
+                "DOUBLE PRECISION NOT NULL DEFAULT 0.0"
+            ),
+            "support_level": (
+                'ALTER TABLE "student_bkt_analytics" ADD COLUMN "support_level" INTEGER'
+            ),
+            "delay_hours": (
+                'ALTER TABLE "student_bkt_analytics" ADD COLUMN "delay_hours" DOUBLE PRECISION'
+            ),
+            "novel_item": (
+                'ALTER TABLE "student_bkt_analytics" ADD COLUMN "novel_item" '
+                "BOOLEAN NOT NULL DEFAULT FALSE"
+            ),
+        },
         "indexes": {
             "user_id": 'CREATE INDEX IF NOT EXISTS "ix_student_bkt_analytics_user_id" ON "student_bkt_analytics"("user_id")',
             "concept_id": 'CREATE INDEX IF NOT EXISTS "ix_student_bkt_analytics_concept_id" ON "student_bkt_analytics"("concept_id")',
@@ -199,7 +221,13 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             'CHECK ("student_mastery_probability" >= 0.0 AND "student_mastery_probability" <= 1.0),'
             '"interaction_count" INTEGER NOT NULL DEFAULT 1,'
             '"interaction_timestamp" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
-            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
+            # D-126: القناة الدائمة (durable) + مدخلاتها (append-only).
+            '"durable_mastery" DOUBLE PRECISION NOT NULL DEFAULT 0.0 '
+            'CHECK ("durable_mastery" >= 0.0 AND "durable_mastery" <= 1.0),'
+            '"support_level" INTEGER,'
+            '"delay_hours" DOUBLE PRECISION,'
+            '"novel_item" BOOLEAN NOT NULL DEFAULT FALSE'
             ")"
         ),
     },

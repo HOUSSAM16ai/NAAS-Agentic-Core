@@ -280,6 +280,104 @@ def update_mastery(
     return round(min(max(transitioned, 0.0), 1.0), 4)
 
 
+# ── D-126: الإتقان الصادق ثنائي القناة (Two-Signal Honest Mastery) ──────────────────
+# جوهر «صدق BKT» (roadmap M6): نفصل **الأداء المدعوم** (assisted — مُضخَّم بالمساعدة) عن
+# **الإتقان الحقيقي الدائم** (durable — مُثبَت بأداء غير مدعوم + مؤجَّل + على بند جديد).
+# فجوة الوهم = assisted − durable = مقياس النجاح الوحيد (CLAUDE.md §0.6). حتمي 100%، صفر LLM.
+# port مباشر لخوارزمية المالك (قيم مُختبَرة: مُسلَّم الحل → durable≈0، مُولِّد بنفسه → durable عالٍ).
+
+#: مستوى الدعم 1..5 (1 = مثال محلول كامل، 5 = غير مدعوم). يأتي من AdaptivePedagogySkill (D-114).
+_SCAFFOLD_LEAK: dict[int, float] = {1: 0.85, 2: 0.55, 3: 0.30, 4: 0.12, 5: 0.0}
+_GENERATION_WEIGHT: dict[int, float] = {1: 0.10, 2: 0.30, 3: 0.55, 4: 0.80, 5: 1.0}
+#: durable لا يرتفع إلا عند أداء غير مدعوم تماماً (الطالب يُولِّد الحل بنفسه).
+_DURABLE_UNAIDED_LEVEL: int = 5
+#: durable يرتفع فقط بعد تأخير ≥ يوم (أثر المباعدة — تعلّم دائم لا حفظ لحظي).
+_DURABLE_MIN_DELAY_HOURS: float = 24.0
+#: زيادة durable عند تحقّق كل الشروط (غير مدعوم + مؤجَّل + بند جديد).
+_DURABLE_GAIN: float = 0.5
+#: هبوط durable عند فشل رغم مساعدة ثقيلة (support ≥ 4) — الإتقان لم يكن حقيقياً.
+_DURABLE_DECAY: float = 0.7
+
+
+def scaffold_leak(support_level: int) -> float:
+    """مقدار تضخيم المساعدة لاحتمال «صحيح بلا معرفة». مساعدة ثقيلة (1) ⇒ غير تشخيصي."""
+    return _SCAFFOLD_LEAK.get(support_level, 0.0)
+
+
+def generation_weight(support_level: int) -> float:
+    """وزن أثر التوليد على التعلّم: كلما ولّد الطالب أكثر (دعم أقل) رسخ التعلّم أكثر."""
+    return _GENERATION_WEIGHT.get(support_level, 1.0)
+
+
+def delay_weight(delay_hours: float) -> float:
+    """وزن أثر المباعدة الزمنية: التذكّر المؤجَّل دليل تعلّم دائم لا حفظ لحظي."""
+    if delay_hours < 0.5:
+        return 0.3
+    if delay_hours < 24.0:
+        return 0.7
+    return 1.0
+
+
+def update_mastery_two_signal(
+    prior: float,
+    correct: bool,
+    *,
+    support_level: int,
+    delay_hours: float = 0.0,
+    novel_item: bool = False,
+    prior_durable: float = 0.0,
+    p_s: float = DEFAULT_P_S,
+    p_g: float = DEFAULT_P_G,
+    p_t: float = DEFAULT_P_T,
+) -> tuple[float, float]:
+    """يُحدِّث القناتين: (assisted المدعوم المُضخَّم، durable الدائم الصادق). حتمي، صفر LLM.
+
+    القناة المدعومة: بايز قياسي لكن ``p_cu = p_G + (1-p_G)·scaffold_leak`` — المساعدة
+    الثقيلة تُضخّم احتمال الصواب بلا معرفة فالإجابة المدعومة غير تشخيصية؛ والانتقال
+    ``p_T·generation_weight·delay_weight``. القناة الدائمة: ترتفع **فقط** عند
+    ``correct ∧ support_level≥5 ∧ delay_hours≥24 ∧ novel_item`` (غير مدعوم + مؤجَّل +
+    بند جديد)؛ وتهبط عند ``¬correct ∧ support_level≥4`` (فشل رغم مساعدة ثقيلة).
+    """
+    prior = min(max(prior, 0.0), 1.0)
+    prior_durable = min(max(prior_durable, 0.0), 1.0)
+
+    # ── القناة المدعومة (assisted) — مُضخَّمة بالمساعدة، غير تشخيصية وحدها ──
+    leak = scaffold_leak(support_level)
+    p_ck = 1.0 - p_s
+    p_cu = p_g + (1.0 - p_g) * leak  # المساعدة ترفع احتمال «صحيح بلا معرفة»
+    if correct:
+        numerator = prior * p_ck
+        denominator = numerator + (1.0 - prior) * p_cu
+    else:
+        numerator = prior * (1.0 - p_ck)
+        denominator = numerator + (1.0 - prior) * (1.0 - p_cu)
+    posterior = numerator / denominator if denominator > 0 else prior
+    eff_transit = p_t * generation_weight(support_level) * delay_weight(delay_hours)
+    assisted = posterior + (1.0 - posterior) * eff_transit
+
+    # ── القناة الدائمة (durable) — لا ترتفع إلا بأداء غير مدعوم + مؤجَّل + جديد ──
+    durable = prior_durable
+    if (
+        correct
+        and support_level >= _DURABLE_UNAIDED_LEVEL
+        and delay_hours >= _DURABLE_MIN_DELAY_HOURS
+        and novel_item
+    ):
+        durable = prior_durable + (1.0 - prior_durable) * _DURABLE_GAIN
+    elif not correct and support_level >= 4:
+        durable = prior_durable * _DURABLE_DECAY
+
+    return (
+        round(min(max(assisted, 0.0), 1.0), 4),
+        round(min(max(durable, 0.0), 1.0), 4),
+    )
+
+
+def illusion_gap(assisted: float, durable: float) -> float:
+    """فجوة الوهم = الأداء المدعوم − الإتقان الدائم الصادق (مقياس النجاح الوحيد)."""
+    return round(max(0.0, min(max(assisted, 0.0), 1.0) - min(max(durable, 0.0), 1.0)), 4)
+
+
 # ── Prometheus metrics ─────────────────────────────────────────────────────────────
 try:
     from prometheus_client import REGISTRY, Counter, Histogram
@@ -321,13 +419,25 @@ class BKTEvaluationInput(RobustBaseModel):
 
 
 class BKTEvaluation(RobustBaseModel):
-    """مخرج التقييم — الكائن الذي يُبثّ كـ bkt_tracking ويُخزَّن في DB."""
+    """مخرج التقييم — الكائن الذي يُبثّ كـ bkt_tracking ويُخزَّن في DB.
+
+    D-126: حقول القناة الدائمة اختيارية (افتراضات آمنة) — لا تكسر المستهلكين
+    الحاليين (D-118/D-119 + bkt_tracking payload). تُملأ في طبقة التخزين
+    (``BKTAnalyticsService``) حيث يتوفّر support_level/delay/novelty.
+    """
 
     concept_id: str
     cognitive_load_estimate: CognitiveLoad
     student_mastery_probability: float = Field(..., ge=0.0, le=1.0)
     prior_mastery: float = Field(..., ge=0.0, le=1.0)
     evidence_correct: bool
+    # D-126: الإتقان الصادق ثنائي القناة (assisted = student_mastery، durable الدائم).
+    durable_mastery: float = Field(default=0.0, ge=0.0, le=1.0)
+    support_level: int | None = Field(default=None, ge=1, le=5)
+    delay_hours: float | None = Field(default=None, ge=0.0)
+    novel_item: bool = False
+    #: فجوة الوهم = الأداء المدعوم − الإتقان الدائم (مقياس النجاح الوحيد، §0.6).
+    illusion_gap: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 # ── Skill ─────────────────────────────────────────────────────────────────────────
@@ -386,8 +496,13 @@ __all__ = [
     "BKTEvaluationInput",
     "classify_concept",
     "classify_concept_with_context",
+    "delay_weight",
     "estimate_cognitive_load",
+    "generation_weight",
     "get_bkt_engine",
+    "illusion_gap",
     "infer_correctness_signal",
+    "scaffold_leak",
     "update_mastery",
+    "update_mastery_two_signal",
 ]

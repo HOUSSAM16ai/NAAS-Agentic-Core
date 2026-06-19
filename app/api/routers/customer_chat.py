@@ -200,14 +200,20 @@ async def _evaluate_bkt_cards(
     conversation_id: int | None,
     question: str,
     history_messages: list[dict[str, str]],
+    support_level: int | None = None,
+    novel_item: bool = False,
 ) -> None:
     """D-119: تتبّع معرفي خلف الكواليس — بلا أي بطاقة تظهر للطالب.
 
     يُجري كتابة BKT التحليلية append-only (D-074 — تغذّي ``support_level``
     والبيداغوجيا التكيفية) ويشتقّ المسار التعلّمي (D-111) ويُسجِّله
-    (telemetry / لوحة المعلم مستقبلاً) — ثم **يُرجِع ``[]``**. قرار المالك
+    (telemetry / لوحة المعلم مستقبلاً) — ثم **يُرجِع ``None``**. قرار المالك
     (D-119): «تتبّع المعرفة» و«ترسيخ المهارة» خلف الكواليس، لا في سطح الطالب —
     كانتا تظهران بعد كل دور فتُكرَّران وتُشوّشان. سطح الطالب = تعليم نظيف فقط.
+
+    D-126: يُمرِّر ``support_level`` (إن توفّر) لحساب **القناة الدائمة الصادقة**
+    (durable). في الدردشة الحرة ``support_level=None`` ⇒ durable يُحمَل دون تضخيم
+    (لا نمنح إتقاناً دائماً بلا دليل أداء غير مدعوم — يُغذَّى من وضع التحقق M8).
 
     معزول كلياً: أي فشل (DB أو غيره) يُسجَّل ولا يكسر مسار المحادثة (D-074).
     """
@@ -218,12 +224,17 @@ async def _evaluate_bkt_cards(
                 session_id=conversation_id,
                 question=question,
                 history=history_messages,
+                support_level=support_level,
+                novel_item=novel_item,
             )
-        # D-119: التتبّع خلف الكواليس — نُسجِّل الإتقان بدل عرض بطاقة للطالب.
+        # D-119/D-126: التتبّع خلف الكواليس — نُسجِّل القناتين + فجوة الوهم بدل بطاقة.
         logger.info(
-            "bkt_tracking concept=%s mastery=%.2f load=%s (behind-the-scenes, no card)",
+            "bkt_tracking concept=%s assisted=%.2f durable=%.2f illusion_gap=%.2f "
+            "load=%s (behind-the-scenes, no card)",
             evaluation.concept_id,
             evaluation.student_mastery_probability,
+            evaluation.durable_mastery,
+            evaluation.illusion_gap,
             evaluation.cognitive_load_estimate,
         )
         # D-111: المسار التعلّمي التكيفي — يُشتقّ فوق إتقان BKT ويُسجَّل (telemetry).

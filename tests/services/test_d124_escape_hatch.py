@@ -210,7 +210,8 @@ class TestSourceWiring:
         assert preempt_pos < hatch_pos
 
     def test_escape_condition_subpart_or_confusion(self) -> None:
-        assert "if _subpart is not None or _confusion_count >= 2:" in CLIENT_SRC
+        # D-125: تطوّر الشرط ليشمل المفاهيمي — العداد + subpart لا يزالان فيه.
+        assert "_subpart is not None or _confusion_count >= 2:" in CLIENT_SRC
 
     def test_direct_explanation_uses_history_none(self) -> None:
         # D-123 immunity: التحليل من المحتوى الرسمي بـ history=None.

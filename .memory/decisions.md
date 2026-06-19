@@ -4652,3 +4652,17 @@ D-113). المفاهيمي يُفحَص **قبل** `_detect_subpart_question` (�
 chat_with_agent يشمل `_conceptual`. صفر LLM (قاعدة المالك: مسار الاحتمالات = صفر LLM). الحالة:
 RESOLVED محلياً (16 اختبار + لا انحدار D-124/D-123/D-122/D-120 + ruff + py_compile + runtime_truth)؛
 تحقق حي في Codespaces بعد pull + restart.
+
+## D-126 — الإتقان الصادق ثنائي القناة (Two-Signal Honest Mastery) (2026-06-19, roadmap M6)
+ثورة التعليم المخصص (قرار المالك): نفصل assisted (المدعوم المُضخَّم) عن durable (الدائم الصادق
+= غير مدعوم support≥5 + مؤجَّل delay≥24h + بند جديد novel). فجوة الوهم = assisted − durable =
+المقياس الوحيد (§0.6). حتمي، صفر LLM، يبني على BKTEngine القائم (D-074 — لا ملف موازٍ). port
+خوارزمية المالك: scaffold_leak/generation_weight/delay_weight/update_mastery_two_signal/
+illusion_gap في bkt_engine.py؛ أعمدة durable_mastery/support_level/delay_hours/novel_item على
+student_bkt_analytics عبر auto_fix (auto-migration §6.77)؛ evaluate_and_record يحسب+يكتب durable؛
+_evaluate_bkt_cards يُمرِّر support_level (خلف الكواليس D-119)؛ audit_no_reveal يُعيد استخدام
+redact_final_answers (D-113، لا حارس موازٍ)؛ BKT_COGNITIVE_DOCTRINE v2.0.0. البرهان: مُسلَّم الحل
+⇒ durable=0.0 (فجوة 0.29)، مُولِّد ⇒ durable=0.75 (فجوة 0.14). في الدردشة الحرة بلا support_level
+⇒ durable carry-forward (لا تضخيم — يُغذَّى من وضع التحقق M8). عُقد DSPy/LLM مؤجَّلة (ADR منفصل —
+تتعارض مع «صفر LLM للاحتمالات»). الحالة: RESOLVED محلياً (20 اختبار + لا انحدار + ruff +
+runtime_truth + validate_structure)؛ تحقق حي في Codespaces.

@@ -39,6 +39,13 @@ class StudentBKTAnalytic(SQLModel, table=True):
     cognitive_load_estimate: str = Field(default="medium", max_length=10)
     student_mastery_probability: float = Field(default=0.0)
     interaction_count: int = Field(default=1)
+    # D-126: الإتقان الصادق ثنائي القناة — القناة الدائمة (durable) + مدخلاتها.
+    # durable لا يرتفع إلا بأداء غير مدعوم (support_level≥5) + مؤجَّل (delay_hours≥24)
+    # + على بند جديد (novel_item). فجوة الوهم = student_mastery − durable.
+    durable_mastery: float = Field(default=0.0)
+    support_level: int | None = Field(default=None)
+    delay_hours: float | None = Field(default=None)
+    novel_item: bool = Field(default=False)
     interaction_timestamp: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), index=True),

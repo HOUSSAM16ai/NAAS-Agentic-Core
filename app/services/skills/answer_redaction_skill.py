@@ -195,6 +195,34 @@ def redact_final_answers(text: str, support_level: int | None = None) -> tuple[s
         return text, 0
 
 
+_AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+
+
+def _normalize_for_audit(text: str) -> str:
+    """تطبيع للتدقيق: أرقام عربية → لاتينية، حذف الفواصل/المسافات الزائدة."""
+    out = (text or "").translate(_AR_DIGITS).replace("٬", "").replace(",", "")
+    return re.sub(r"\s+", " ", out).strip().lower()
+
+
+def audit_no_reveal(text: str, forbidden: tuple[str, ...] = ()) -> bool:
+    """D-126: هل يُسرِّب النصّ جواباً نهائياً؟ (يُعيد استخدام منطق الحجب — لا حارس موازٍ).
+
+    True إن: (1) كشف ``redact_final_answers`` نمطاً نهائياً صريحاً (P(...)=عدد /
+    \\boxed / «النتيجة … = عدد»)، أو (2) ظهر أحد ``forbidden`` (أجوبة محظورة محددة
+    مثل ``("14/165",)``) بعد التطبيع. حتمي، fail-open (أي خطأ ⇒ False = لا حجب زائد).
+    """
+    if not text or not text.strip():
+        return False
+    try:
+        _, n = redact_final_answers(text, support_level=5)  # 5 = حجب كامل (fail-closed)
+        if n > 0:
+            return True
+        norm = _normalize_for_audit(text)
+        return any(f and _normalize_for_audit(f) in norm for f in forbidden)
+    except Exception:  # pragma: no cover — fail-open
+        return False
+
+
 def redact_chunk(text: str) -> str:
     r"""حجب آمن للبثّ المباشر (per-chunk): `\boxed{...}` فقط (لا يحتاج سياقاً).
 
@@ -292,6 +320,7 @@ __all__ = [
     "AnswerRedactionInput",
     "AnswerRedactionOutput",
     "AnswerRedactionSkill",
+    "audit_no_reveal",
     "get_answer_redaction_skill",
     "redact_chunk",
     "redact_final_answers",

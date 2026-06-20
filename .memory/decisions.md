@@ -4666,3 +4666,14 @@ redact_final_answers (D-113، لا حارس موازٍ)؛ BKT_COGNITIVE_DOCTRINE
 ⇒ durable carry-forward (لا تضخيم — يُغذَّى من وضع التحقق M8). عُقد DSPy/LLM مؤجَّلة (ADR منفصل —
 تتعارض مع «صفر LLM للاحتمالات»). الحالة: RESOLVED محلياً (20 اختبار + لا انحدار + ruff +
 runtime_truth + validate_structure)؛ تحقق حي في Codespaces.
+
+## D-127 — المعمارية الإدراكية العصبية-الرمزية + التصعيد السقراطي (2026-06-19, ISS-116)
+رؤية المالك (Cognitive OS): الطبقة 1 (LLM) تفهم وتصنّف أي صياغة→مفهوم بلا رياضيات؛ الطبقة 2
+(BKT D-126)؛ الطبقة 3 (المحرك الرمزي يضمن الأرقام)؛ الطبقة 4 (سقراطي)؛ الطبقة 5 (النموذج العقلي:
+سبب الحيرة). الكارثة: «ما هو البسط» → حل كامل؛ «لم أفهم»×2 → تكرار byte-identical. الإصلاح:
+ConceptDiagnosisSkill (concept+misconception، enum ثابت، هجين: حتمي ثم LLM محروس عند unknown،
+enum-validated+timeout+fallback)؛ `_build_cognitive_response` (استجابة مدفوعة بالمفهوم + تصعيد
+سقراطي عبر `_count_prior_concept`: شرح→سؤال→إعادة توجيه)؛ الأرقام رمزية (الطبقة 3، صفر LLM،
+تَنجو D-113)؛ موصول في chat_with_agent (LLM فقط عند unknown+سياق احتمالات). registry=19،
+doctrine CONCEPT_DIAGNOSIS_DOCTRINE v1.0.0 + manifest. الحالة: RESOLVED محلياً (22 اختبار + لا
+انحدار + ruff + runtime_truth)؛ تحقق حي في Codespaces.

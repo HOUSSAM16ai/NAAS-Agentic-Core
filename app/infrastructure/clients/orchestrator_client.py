@@ -1894,6 +1894,260 @@ class OrchestratorClient:
             )
         return body
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # D-127 — المعمارية الإدراكية العصبية-الرمزية (Layers 3/4/5):
+    # استجابة مدفوعة بالمفهوم (لا بالصياغة) + تصعيد سقراطي مضاد للتكرار. كل صياغات
+    # المفهوم الواحد → استجابة واحدة؛ نفس المفهوم مرّتين → سؤال سقراطي لا تكرار.
+    # الأرقام من المحرك الرمزي (الطبقة 3، صفر LLM). التشخيص من الطبقة 1 (ConceptDiagnosisSkill).
+    # ─────────────────────────────────────────────────────────────────────────
+    @staticmethod
+    def _is_prob_context(text: str) -> bool:
+        """سياق احتمالات (لتقييد استدعاء LLM التشخيص على الاحتمالات فقط)."""
+        t = text or ""
+        return any(
+            m in t
+            for m in (
+                "كرات",
+                "كرة",
+                "كيس",
+                "احتمال",
+                "سحب",
+                "نسحب",
+                "البسط",
+                "المقام",
+                "p(a",
+                "p(b",
+                "165",
+                "14",
+            )
+        )
+
+    @staticmethod
+    def _concept_of_text(text: str) -> str:
+        """D-127: المفهوم الحتمي لرسالة طالب (incl. confusion→full_solution)."""
+        from app.services.skills.concept_diagnosis_skill import ConceptDiagnosisSkill
+
+        c = ConceptDiagnosisSkill.diagnose_deterministic(text).concept
+        if c == "unknown":
+            low = (text or "").strip().lower()
+            if any(
+                m in low for m in ("لم أفهم", "لم افهم", "مفهمتش", "ما فهمت", "لا أفهم", "لا افهم")
+            ) or low in ("؟", "?"):
+                return "full_solution"
+        return c
+
+    @classmethod
+    def _count_prior_concept(
+        cls, concept: str, history_messages: list[dict[str, str]] | None
+    ) -> int:
+        """عدد رسائل الطالب السابقة التي تخصّ نفس المفهوم (سُلّم التصعيد السقراطي)."""
+        count = 0
+        for msg in history_messages or []:
+            if (
+                isinstance(msg, dict)
+                and msg.get("role") == "user"
+                and cls._concept_of_text(str(msg.get("content", ""))) == concept
+            ):
+                count += 1
+        return count
+
+    @classmethod
+    def _load_canonical_combinations(
+        cls, question: str, history_messages: list[dict[str, str]] | None
+    ):
+        """D-127: يحمّل تركيبة التمرين الرسمي (CombinationsModelOutput) — مناعة D-123.
+
+        يُرجِع None لغير الاحتمالات (topic-safe) أو عند تعذّر الحساب.
+        """
+        try:
+            from app.services.capabilities.arabic_normalize import primary_canonical_topic
+            from app.services.capabilities.exercise_retrieval import (
+                ExerciseRetrievalRequest,
+                detect_exercise_retrieval,
+                load_exercise_content,
+            )
+            from app.services.skills.probability_skill import (
+                CombinationsModelOutput,
+                ProbabilityCalculatorSkill,
+                ProbabilityInput,
+            )
+
+            _canonical = primary_canonical_topic(question)
+            if _canonical is not None and _canonical.canonical_id != "probability":
+                return None
+            _decision = detect_exercise_retrieval(
+                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                history_messages=history_messages,
+            )
+            if not (_decision.recognized and _decision.matched_entry):
+                return None
+            _official = load_exercise_content(_decision.matched_entry)
+            if not _official:
+                return None
+            result = ProbabilityCalculatorSkill().analyze(
+                ProbabilityInput(question=_official, history=None)
+            )
+            return result if isinstance(result, CombinationsModelOutput) else None
+        except Exception:
+            logger.warning("_load_canonical_combinations_failed", exc_info=True)
+            return None
+
+    @classmethod
+    def _build_cognitive_response(
+        cls,
+        concept: str,
+        misconception: str,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+    ) -> str | None:
+        """D-127: الطبقة 4 — استجابة مدفوعة بالمفهوم + تصعيد سقراطي (شرح→سؤال→تشخيص).
+
+        المستوى من عدد المرّات السابقة لنفس المفهوم (`_count_prior_concept`): مرّة1 شرح،
+        مرّة2 سؤال سقراطي (حسب `misconception`)، مرّة3+ إعادة توجيه. الأرقام رمزية (الطبقة 3).
+        يَنجو من حجب D-113. يُرجِع None لغير الاحتمالات أو مفهوم غير مدعوم.
+        """
+        combo = cls._load_canonical_combinations(question, history_messages)
+        if combo is None:
+            return None
+        n, k, total, same = (
+            combo.n,
+            combo.k,
+            combo.total_combinations,
+            combo.same_group_favorable,
+        )
+        groups = list(combo.groups)
+        possible = [g for g in groups if g.is_possible]
+        favs_lines = "\n".join(
+            (
+                f"- {g.label}: {cls._fmt_comb(g.count, k, g.favorable_combinations)}"
+                if g.is_possible
+                else f"- {g.label}: مستحيل (العدد {g.count} أصغر من {k})"
+            )
+            for g in groups
+        )
+        favs_sum = " + ".join(str(g.favorable_combinations) for g in possible)
+        level = cls._count_prior_concept(concept, history_messages)
+
+        # ── numerator (البسط/14) ──────────────────────────────────────────────
+        if concept == "numerator":
+            if level == 0:
+                return (
+                    "## ما هو البسط؟\n\n"
+                    "البسط هو عدد الطرق التي **تحقق الشرط المطلوب** (3 كرات من نفس اللون). "
+                    "نعدّها لكل لون ممكن:\n\n"
+                    f"{favs_lines}\n\n"
+                    f"فالبسط = {favs_sum} = {same}: الحالات التي «تنجح» من بين كل الإمكانات."
+                )
+            if level == 1:
+                if misconception == "sample_space_confusion":
+                    return (
+                        "شرحنا أن البسط هو الحالات التي تحقق الشرط. لنفرّقه عن المقام بسؤال:\n\n"
+                        f"من بين كل الطرق الـ{total}، كم طريقة فقط تعطي 3 كرات من **نفس اللون**؟ "
+                        "(لا تحسب — فكّر: أيّ الألوان يكفي عددها لذلك؟)"
+                    )
+                return (
+                    "بدل أن أعيد الشرح، سؤال لك:\n\n"
+                    "من الألوان الثلاثة (حمراء/خضراء/بيضاء)، أيّها يمكن أن يعطيك 3 كرات من نفس "
+                    "اللون، وأيّها مستحيل؟ ولماذا؟"
+                )
+            return (
+                "شرحنا البسط مرّتين — لنحدّد أين تحديداً تتعثّر. اختر حرفاً واحداً:\n\n"
+                "(أ) معنى «الحالات الملائمة» نفسها\n"
+                "(ب) لماذا اللون الأبيض مستحيل\n"
+                f"(ج) لماذا نجمع {favs_sum} لنحصل على {same}\n\n"
+                "أخبرني بالحرف وسأركّز معك على تلك النقطة وحدها."
+            )
+
+        # ── denominator (المقام/165) ──────────────────────────────────────────
+        if concept == "denominator":
+            if level == 0:
+                return (
+                    "## ما هو المقام؟\n\n"
+                    f"المقام هو عدد **كل** الطرق الممكنة لسحب {k} كرات من {n} مهما كان لونها:\n\n"
+                    f"{cls._fmt_comb(n, k, total)}\n\n"
+                    "إنه ساحة كل ما يمكن أن يحدث — القاسم الذي نقسم عليه."
+                )
+            if level == 1:
+                return (
+                    "سؤال لك حتى نتأكّد من فهم المقام:\n\n"
+                    f"عندما نسحب {k} كرات من {n}، هل عدد كل الاختيارات الممكنة يعتمد على "
+                    "**ألوان** الكرات أم على **عددها** فقط؟"
+                )
+            return (
+                "شرحنا المقام مرّتين. لنحدّد العقدة — اختر: (أ) لماذا نختار بالتوافيق لا "
+                "بالترتيب، أم (ب) معنى «كل الطرق الممكنة»؟ أخبرني بالحرف."
+            )
+
+        # ── ratio (العلاقة/الفرق) ─────────────────────────────────────────────
+        if concept == "ratio":
+            if level == 0:
+                return cls._format_conceptual_relationship(question, n, k, total, same, groups)
+            if level == 1:
+                return (
+                    "شرحنا العلاقة. سؤال لك:\n\n"
+                    f"لو كان البسط {same} والمقام {total}، فهل يكبر الاحتمال كلما كبر **البسط** "
+                    "أم كلما كبر **المقام**؟ ولماذا؟"
+                )
+            return (
+                "لنحدّد العقدة في معنى النسبة — اختر: (أ) معنى «من بين»، (ب) لماذا البسط فوق "
+                "والمقام تحت، (ج) ماذا يعني أن الاحتمال بين 0 و1؟ أخبرني بالحرف."
+            )
+
+        # ── الألوان ───────────────────────────────────────────────────────────
+        if concept in ("color_red", "color_green", "color_white"):
+            color = {"color_red": "red", "color_green": "green", "color_white": "white"}[concept]
+            g = next((x for x in groups if (x.color or "") == color), None)
+            if g is not None:
+                if level == 0:
+                    if g.is_possible:
+                        return (
+                            f"## تأليفات {g.label}\n\n"
+                            f"عدد {g.label}: {g.count}، نختار منها {k}:\n\n"
+                            f"{cls._fmt_comb(g.count, k, g.favorable_combinations)}\n\n"
+                            f"أي {g.favorable_combinations} طريقة — إحدى مكوّنات البسط."
+                        )
+                    return (
+                        f"## لماذا {g.label} مستحيلة؟\n\n"
+                        f"عددها {g.count} فقط، ونحتاج اختيار {k}. بما أن {g.count} أصغر من {k}، "
+                        "لا يمكن سحب 3 منها معاً — لذلك لا تساهم في البسط."
+                    )
+                if level == 1:
+                    return (
+                        f"سؤال لك عن {g.label}: لماذا نستخدم التوافيق C لا الترتيب عند عدّ "
+                        f"اختيار {k} كرات منها؟ (تلميح: هل يهمّنا ترتيب سحبها؟)"
+                    )
+                return (
+                    f"شرحنا {g.label} مرّتين. أين العقدة — في الصيغة C أم في معنى «اختيار دون "
+                    "ترتيب»؟ أخبرني."
+                )
+
+        # ── full_solution / حيرة عامة ─────────────────────────────────────────
+        if concept == "full_solution":
+            if level == 0:
+                return (
+                    "## الحل الكامل خطوة بخطوة\n\n"
+                    f"1) فضاء العينة — نسحب {k} كرات من {n} دفعةً واحدة:\n\n"
+                    f"   {cls._fmt_comb(n, k, total)}\n\n"
+                    "2) الحالات الملائمة (3 كرات من نفس اللون) — لكل لون:\n\n"
+                    f"{favs_lines}\n\n"
+                    f"3) نجمع الممكنة: {favs_sum} = {same}\n\n"
+                    f"4) الاحتمال = {same} من كل {total}."
+                )
+            if level == 1:
+                return (
+                    "شرحنا الحل كاملاً. بدل تكراره، لنحدّد أين تحديداً تعثّرت — اختر حرفاً:\n\n"
+                    f"(أ) فضاء العينة ({total} — كل الطرق)\n"
+                    f"(ب) عدّ الحالات الملائمة ({same})\n"
+                    "(ج) معنى الاحتمال نفسه (البسط على المقام)\n\n"
+                    "أخبرني بالحرف وسأركّز على تلك النقطة وحدها."
+                )
+            return (
+                "نحن ندور في النقطة نفسها. أخبرني بكلماتك أنت: ما **أول** خطوة لم تتّضح لك؟ "
+                "حتى أبدأ منها معك بدل إعادة كل شيء."
+            )
+
+        return None
+
     async def _build_probability_tree_props(
         self,
         question: str,
@@ -2291,24 +2545,66 @@ class OrchestratorClient:
         # صفر LLM) يكسر حلقة الكاروسيل. يقع **قبل** _build_calculated_ui. topic-safe:
         # _build_probability_direct_explanation يُرجِع None لغير الاحتمالات.
         # ─────────────────────────────────────────────────────────────────────
-        # D-125: السؤال المفاهيمي/المقارنة («ما الفرق بين 165 و 14»، «ليش 14»)
-        # يصل المخرج حتى بلا رقم/حيرة — كي يُجاب بشرح العلاقة لا قالب الحساب.
+        # D-127 — المعمارية الإدراكية العصبية-الرمزية (الطبقة 1: فهم → مفهوم):
+        # نُشخّص المفهوم (حتمي أولاً، LLM محروس عند unknown في سياق احتمالات فقط)،
+        # ثم نبني استجابة مدفوعة بالمفهوم + تصعيد سقراطي مضاد للتكرار (الطبقة 4).
+        # كل صياغات «البسط/14» → numerator → تعريف؛ نفس المفهوم مرّتين → سؤال سقراطي.
+        # D-125: المفاهيمي/المقارنة لا يزال مدعوماً عبر concept=ratio.
         _conceptual = self._detect_conceptual_question(question)
         _subpart = self._detect_subpart_question(question)
         _confusion_count = self._count_probability_confusion(question, history_messages)
-        if _conceptual or _subpart is not None or _confusion_count >= 2:
-            _direct = self._build_probability_direct_explanation(question, history_messages)
+
+        from app.services.skills.concept_diagnosis_skill import ConceptDiagnosisSkill
+
+        _det = ConceptDiagnosisSkill.diagnose_deterministic(question)
+        _concept = _det.concept
+        _misconception = _det.misconception
+        _history_text = " ".join(
+            str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
+        )
+        # الطبقة 1 LLM فقط عند unknown + سياق احتمالات (لا هدر على غير الاحتمالات).
+        if _concept == "unknown" and self._is_prob_context(question + " " + _history_text):
+            with contextlib.suppress(Exception):
+                from app.services.skills.concept_diagnosis_skill import (
+                    ConceptDiagnosisInput,
+                    get_concept_diagnosis_skill,
+                )
+
+                _diag = await get_concept_diagnosis_skill().diagnose(
+                    ConceptDiagnosisInput(question=question, history=history_messages)
+                )
+                _concept = _diag.concept
+                _misconception = _diag.misconception
+        # حيرة عامة بلا مفهوم محدّد ⇒ full_solution (مع تصعيد سقراطي عند التكرار).
+        if _concept == "unknown" and _confusion_count >= 2:
+            _concept, _misconception = "full_solution", "none"
+
+        if _concept != "unknown" or _conceptual or _subpart is not None or _confusion_count >= 2:
+            # D-127: الاستجابة المدفوعة بالمفهوم أولاً؛ fallback إلى منطق D-124/D-125.
+            _direct = None
+            if _concept != "unknown":
+                _direct = self._build_cognitive_response(
+                    _concept, _misconception, question, history_messages
+                )
+            if not _direct:
+                _direct = self._build_probability_direct_explanation(question, history_messages)
             if _direct:
                 logger.info(
                     "probability_direct_explanation_escape_hatch",
                     extra={
                         "request_id": str(uuid.uuid4()),
+                        "concept": _concept,
+                        "misconception": _misconception,
                         "subpart": _subpart or "",
                         "confusion_count": _confusion_count,
                         "reason": (
-                            "conceptual_question"
-                            if _conceptual
-                            else ("subpart_question" if _subpart else "repeated_confusion")
+                            f"concept:{_concept}"
+                            if _concept != "unknown"
+                            else (
+                                "conceptual_question"
+                                if _conceptual
+                                else ("subpart_question" if _subpart else "repeated_confusion")
+                            )
                         ),
                     },
                 )

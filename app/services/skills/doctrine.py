@@ -520,6 +520,25 @@ BKT_COGNITIVE_DOCTRINE: Final[tuple[str, ...]] = (
     "«الرضا اللحظي» أو مدّة الجلسة أو عدد الرسائل — نُحسّن على تقليص الفجوة.",
 )
 
+# ── D-127: المعمارية الإدراكية العصبية-الرمزية — الطبقتان 1 (الفهم) و 5 (النموذج العقلي) ──
+CONCEPT_DIAGNOSIS_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم تشخيص المفهوم (الطبقة 1) + النموذج العقلي (الطبقة 5).
+CONCEPT_DIAGNOSIS_DOCTRINE: Final[tuple[str, ...]] = (
+    "الطبقة 1 (LLM) تُصنّف فقط — مخرج (concept + misconception) من enum ثابت، بلا "
+    "رياضيات/أرقام/نثر/إجابة. مجرّد تشخيص لِـ «ما الذي يحاول الطالب قوله؟».",
+    "النموذج العقلي (الطبقة 5): نخزّن *سبب* الحيرة (misconception: sample_space_confusion / "
+    "fraction_meaning_confusion / order_vs_selection_confusion) لا «أخطأ». المفهوم الخاطئ "
+    "يقود اختيار التدخّل السقراطي التالي.",
+    "كل صياغات المفهوم الواحد («ما هو البسط»/«لماذا 14»/«ما الهدف من 14»/«واش راه 14») ⇒ "
+    "مفهوم واحد (numerator) ⇒ تدخّل واحد مُوجَّه. لا قاعدة جديدة لكل صياغة.",
+    "التشخيص هجين: خريطة حتمية أولاً (سريعة/آمنة)، LLM محروس فقط عند unknown — مخرج مُتحقَّق "
+    "ضد الـ enum + timeout + fallback حتمي. أي مخرج خارج الـ enum ⇒ unknown (آمن).",
+    "الحقيقة الرياضية (الأرقام) تبقى في المحرك الرمزي حصراً (الطبقة 3) — صفر LLM. 14 تبقى 14.",
+    "لا تكرار حرفي: نفس المفهوم مرّتين ⇒ تصعيد سقراطي (شرح → سؤال → تشخيص/إعادة توجيه)، "
+    "لا نصّ متطابق. الأستاذ الحقيقي لا يُعيد الشرح للمرّة الثالثة — بل يسأل.",
+)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Adaptive Pedagogy Doctrine (D-104) — إغلاق حلقة BKT: القراءة تقود السلوك
@@ -930,6 +949,15 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "orchestrator_client._build_probability_tree_props",
         ),
     },
+    "concept_diagnosis": {
+        "version": CONCEPT_DIAGNOSIS_DOCTRINE_VERSION,
+        "rules_count": len(CONCEPT_DIAGNOSIS_DOCTRINE),
+        "consumed_by": (
+            # D-127: الطبقتان 1+5 — موصولة حيّاً في مخرج الطوارئ الاحتمالي.
+            "ConceptDiagnosisSkill.diagnose",
+            "orchestrator_client.chat_with_agent",
+        ),
+    },
     "adaptive_pedagogy": {
         "version": ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION,
         "rules_count": len(ADAPTIVE_PEDAGOGY_DOCTRINE),
@@ -1148,6 +1176,8 @@ def list_all_doctrines() -> dict[str, dict[str, object]]:
 __all__ = [
     "BKT_COGNITIVE_DOCTRINE",
     "BKT_COGNITIVE_DOCTRINE_VERSION",
+    "CONCEPT_DIAGNOSIS_DOCTRINE",
+    "CONCEPT_DIAGNOSIS_DOCTRINE_VERSION",
     "CONTENT_INTEGRITY_DOCTRINE",
     "CONTENT_INTEGRITY_DOCTRINE_VERSION",
     "CONTENT_INVOCATION_DOCTRINE",

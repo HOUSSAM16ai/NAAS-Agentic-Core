@@ -38,6 +38,7 @@ EXPECTED = {
     "answer_redaction",
     "retrieval_rerank",
     "mcp_tool",
+    "concept_diagnosis",
 }
 
 
@@ -45,11 +46,11 @@ class TestRegistry:
     def test_registry_complete(self) -> None:
         reg = get_skill_registry()
         assert set(reg.names()) == EXPECTED
-        assert len(reg.list()) == 18
+        assert len(reg.list()) == 19
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 16
+        assert len(reg.by_status("ACTIVE")) == 17
         assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:

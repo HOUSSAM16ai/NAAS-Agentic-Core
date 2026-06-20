@@ -376,6 +376,15 @@ def _build_registry() -> SkillRegistry:
             consumed_by=("customer_chat._evaluate_bkt_cards",),
         ),
         SkillDescriptor(
+            name="concept_diagnosis",
+            summary="الطبقتان 1+5 العصبي-الرمزي — تشخيص المفهوم + المفهوم الخاطئ (D-127).",
+            input_contract="ConceptDiagnosisInput",
+            output_contract="ConceptDiagnosisOutput",
+            primary_method="diagnose",
+            metrics_prefix="cogniforge_skill_concept_diagnosis",
+            consumed_by=("orchestrator_client.chat_with_agent",),
+        ),
+        SkillDescriptor(
             name="adaptive_pedagogy",
             summary="طبقة البيداغوجيا التكيفية — قراءة إتقان BKT تقود عمق التدريس (D-104).",
             input_contract="PedagogyInput",

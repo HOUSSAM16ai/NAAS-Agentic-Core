@@ -172,8 +172,9 @@ class TestSourceWiring:
         assert conc < subp, "conceptual check MUST precede number matching (D-125)"
 
     def test_escape_condition_includes_conceptual(self) -> None:
+        # D-127: تطوّر الشرط ليشمل المفهوم المُشخَّص — _conceptual لا يزال جزءاً منه.
         assert "_conceptual = self._detect_conceptual_question(question)" in CLIENT_SRC
-        assert "if _conceptual or _subpart is not None or _confusion_count >= 2:" in CLIENT_SRC
+        assert "_conceptual or _subpart is not None or _confusion_count >= 2:" in CLIENT_SRC
 
     def test_relationship_explains_numerator_denominator(self) -> None:
         seg = CLIENT_SRC[CLIENT_SRC.index("def _format_conceptual_relationship(") :]

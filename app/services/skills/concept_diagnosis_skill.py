@@ -51,6 +51,7 @@ Concept = Literal[
     "color_red",  # تأليفات الحمراء (C(4,3)=4)
     "color_green",  # تأليفات الخضراء (C(5,3)=10)
     "color_white",  # البيضاء المستحيلة
+    "event_meaning",  # D-128: معنى الحادثة A/B/C/D (ماذا نقصد بالحادثة)
     "full_solution",  # «اشرح السؤال الأول» / حيرة عامة
     "unknown",  # لم يُصنَّف حتمياً ⇒ يُحال للـ LLM
 ]
@@ -73,6 +74,7 @@ _VALID_CONCEPTS: frozenset[str] = frozenset(
         "color_red",
         "color_green",
         "color_white",
+        "event_meaning",
         "full_solution",
         "unknown",
     )
@@ -153,6 +155,29 @@ _NUMERATOR_PROCEDURAL: tuple[str, ...] = (
     "كيف نحسب 14",
     "وجدنا 14",
 )
+#: D-128: معنى الحادثة (A/B/C/D) — «ماذا نقصد بالحادثة A»، «الحادثة A كيف افهمها».
+_EVENT_MARKERS: tuple[str, ...] = (
+    "الحادثة a",
+    "الحادثة b",
+    "الحادثة c",
+    "الحادثة d",
+    "الحدث a",
+    "الحدث b",
+    "الحدث c",
+    "الحدث d",
+    "الحادثه a",
+    "الحادثه b",
+    "الحادثه c",
+    "الحادثه d",
+    "ماذا نقصد بالحادثة",
+    "ماذا نقصد بالحدث",
+    "ما معنى الحادثة",
+    "ما معنى الحدث",
+    "ما هي الحادثة",
+    "ما هو الحدث",
+    "كيف افهم الحادثة",
+    "كيف افهم الحدث",
+)
 
 
 class ConceptDiagnosisInput(RobustBaseModel):
@@ -218,6 +243,9 @@ def _infer_misconception(concept: str, normalized: str) -> Misconception:
         return "fraction_meaning_confusion"
     if concept == "combinations":
         return "order_vs_selection_confusion"
+    if concept == "event_meaning":
+        # D-128: لا يفهم ما الذي «ينجح» في الحادثة (الحالات الملائمة).
+        return "favourable_outcomes_confusion"
     return "none"
 
 
@@ -240,8 +268,11 @@ class ConceptDiagnosisSkill:
         """الجزء الحتمي السريع — يُرجِع concept=unknown إن لم يُطابق (يُحال للـ LLM)."""
         q = _normalize(question)
         concept: Concept = "unknown"
-        # الأكثر تحديداً أولاً: الألوان، ثم ratio (مقارنة)، ثم numerator/denominator.
-        if any(m in q for m in ("الحمراء", "حمراء", "احمر")):
+        # D-128: معنى الحادثة أولاً (أعلى مستوى — «ماذا نقصد بالحادثة A»).
+        # ثم الألوان، ثم ratio (مقارنة)، ثم numerator/denominator.
+        if any(m in q for m in _EVENT_MARKERS):
+            concept = "event_meaning"
+        elif any(m in q for m in ("الحمراء", "حمراء", "احمر")):
             concept = "color_red"
         elif any(m in q for m in ("الخضراء", "خضراء", "اخضر")):
             concept = "color_green"
@@ -295,6 +326,7 @@ class ConceptDiagnosisSkill:
                 "denominator (المقام/فضاء العينة/كل الطرق) | numerator (البسط/الحالات "
                 "الملائمة) | ratio (الفرق بين البسط والمقام/معنى النسبة) | combinations "
                 "(التوافيق/الترتيب) | color_red | color_green | color_white | "
+                "event_meaning (يسأل عن معنى الحادثة A/B/C/D) | "
                 "full_solution (يريد الحل كاملاً) | unknown.\n"
                 "أعِد الكلمة الإنجليزية فقط."
             )

@@ -14,6 +14,7 @@ import time
 import uuid
 from ast import literal_eval
 from collections.abc import AsyncGenerator
+from typing import ClassVar
 
 import httpx
 import jwt as pyjwt
@@ -2121,6 +2122,24 @@ class OrchestratorClient:
                     "ترتيب»؟ أخبرني."
                 )
 
+        # ── event_meaning (معنى الحادثة A) — D-128 ────────────────────────────
+        if concept == "event_meaning":
+            if level == 0:
+                return (
+                    "## ماذا نقصد بالحادثة A؟\n\n"
+                    "الحادثة A هي **الهدف** الذي نريد حساب احتماله: الحصول على **3 كرات من نفس "
+                    "اللون** عند سحب 3 دفعةً واحدة.\n\n"
+                    "أي السحبة «تنجح» وتحقّق A إذا كانت الكرات الثلاث **كلها حمراء**، أو **كلها "
+                    "خضراء**، أو **كلها بيضاء**. وإلا فالحادثة A لم تتحقّق.\n\n"
+                    "لاحظ: عدد البيضاء 2 فقط، فلا يمكن سحب 3 بيضاء — إذن A تتحقّق باللون الأحمر "
+                    "أو الأخضر."
+                )
+            # level >= 1 ⇒ يُستبدَل بالسرد السقراطي المُولَّد (chat_with_agent)؛ هذا fallback.
+            return (
+                "الحادثة A تعني «3 كرات من نفس اللون». سؤال لك: لو سحبت 3 كرات، متى تقول إنها "
+                "«نجحت» وحقّقت A، ومتى تقول إنها فشلت؟ أعطني مثالاً من عندك."
+            )
+
         # ── full_solution / حيرة عامة ─────────────────────────────────────────
         if concept == "full_solution":
             if level == 0:
@@ -2133,20 +2152,127 @@ class OrchestratorClient:
                     f"3) نجمع الممكنة: {favs_sum} = {same}\n\n"
                     f"4) الاحتمال = {same} من كل {total}."
                 )
-            if level == 1:
-                return (
-                    "شرحنا الحل كاملاً. بدل تكراره، لنحدّد أين تحديداً تعثّرت — اختر حرفاً:\n\n"
-                    f"(أ) فضاء العينة ({total} — كل الطرق)\n"
-                    f"(ب) عدّ الحالات الملائمة ({same})\n"
-                    "(ج) معنى الاحتمال نفسه (البسط على المقام)\n\n"
-                    "أخبرني بالحرف وسأركّز على تلك النقطة وحدها."
-                )
+            # level >= 1 ⇒ يُستبدَل بالسرد السقراطي المُولَّد (chat_with_agent)؛ هذا fallback.
             return (
-                "نحن ندور في النقطة نفسها. أخبرني بكلماتك أنت: ما **أول** خطوة لم تتّضح لك؟ "
-                "حتى أبدأ منها معك بدل إعادة كل شيء."
+                "شرحنا الحل كاملاً. بدل تكراره، لنحدّد أين تحديداً تعثّرت — اختر حرفاً:\n\n"
+                f"(أ) فضاء العينة ({total} — كل الطرق)\n"
+                f"(ب) عدّ الحالات الملائمة ({same})\n"
+                "(ج) معنى الاحتمال نفسه (البسط على المقام)\n\n"
+                "أخبرني بالحرف وسأركّز على تلك النقطة وحدها."
             )
 
         return None
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # D-128 — السرد السقراطي المُولَّد بالـ LLM (الطبقة 4 — الـ LLM كجهاز عصبي):
+    # عند التصعيد (التكرار) يُولّد الـ LLM **تدخّلاً سقراطياً فريداً** — الـ LLM يُنتج
+    # **الفهم/التربية** (السؤال السقراطي) لا **الحقيقة** (الأرقام تُحقن من المحرك الرمزي).
+    # محروس: عربي فقط + لا كشف جواب + لا garbage + timeout + fallback حتمي. يُلغي التكرار.
+    # ─────────────────────────────────────────────────────────────────────────
+    _CONCEPT_AR: ClassVar[dict[str, str]] = {
+        "numerator": "البسط (الحالات الملائمة)",
+        "denominator": "المقام (كل الطرق الممكنة)",
+        "ratio": "النسبة بين البسط والمقام",
+        "combinations": "التوافيق (الاختيار دون ترتيب)",
+        "color_red": "تأليفات الكرات الحمراء",
+        "color_green": "تأليفات الكرات الخضراء",
+        "color_white": "استحالة 3 كرات بيضاء",
+        "event_meaning": "معنى الحادثة A (3 من نفس اللون)",
+        "full_solution": "الحل الكامل خطوة بخطوة",
+    }
+    _MISCONCEPTION_AR: ClassVar[dict[str, str]] = {
+        "sample_space_confusion": "يخلط بين البسط (الحالات الملائمة) والمقام (كل الطرق)",
+        "fraction_meaning_confusion": "لا يفهم معنى النسبة (البسط مقسوم على المقام)",
+        "order_vs_selection_confusion": "يظن أن ترتيب السحب مهمّ بينما هو اختيار فقط",
+        "favourable_outcomes_confusion": "لا يفهم ما الذي «ينجح» ويحقّق الشرط",
+        "none": "غير محدّد",
+    }
+
+    @staticmethod
+    def _symbolic_facts_brief(combo) -> str:
+        """D-128: حقائق رمزية مُختصرة (المعطيات + تعريف الحدث) — بلا الجواب النهائي.
+
+        نحقن المعطيات (عدد كل لون) + تعريف الحادثة A فقط؛ **لا** نحقن 14/165 (النتائج
+        المحسوبة) كي لا يكشفها الـ LLM — الطالب يُقاد لاكتشافها سقراطياً.
+        """
+        parts = [f"الكيس فيه {combo.n} كرة، نسحب {combo.k} دفعةً واحدة"]
+        for g in combo.groups:
+            parts.append(f"{g.label}: {g.count}")
+        parts.append("الحادثة A = 3 كرات من نفس اللون")
+        return "؛ ".join(parts)
+
+    @classmethod
+    async def _generate_socratic_narrative(
+        cls,
+        concept: str,
+        misconception: str,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+    ) -> str | None:
+        """D-128: تدخّل سقراطي فريد مُولَّد بالـ LLM (محروس). يُرجِع None ⇒ القالب الحتمي.
+
+        يُستدعى عند التصعيد (`level ≥ 1`) فقط — المرّة الأولى تبقى شرحاً حتمياً. الـ LLM
+        يُنتج الفهم (سؤال يقود الطالب)؛ الأرقام من المحرك الرمزي (محقونة). محروس بطبقات
+        قائمة + timeout + fallback. أي فشل/كشف/garbage ⇒ None (لا تدهور للطالب).
+        """
+        try:
+            import asyncio
+            import re as _re
+
+            level = cls._count_prior_concept(concept, history_messages)
+            if level < 1:
+                return None  # المرّة الأولى ⇒ شرح حتمي (لا LLM)
+            combo = cls._load_canonical_combinations(question, history_messages)
+            if combo is None:
+                return None
+
+            facts = cls._symbolic_facts_brief(combo)
+            prior_qs = " | ".join(
+                str(m.get("content", ""))[:80]
+                for m in (history_messages or [])[-8:]
+                if isinstance(m, dict) and m.get("role") == "user"
+            )
+            from app.core.ai_gateway import get_ai_client
+
+            system_prompt = (
+                "أنت معلّم سقراطي تربوي جزائري. مهمتك توليد **سؤال واحد** يقود الطالب — لا الحل. "
+                "ممنوع منعاً باتاً كشف الجواب النهائي أو أي كسر نهائي (مثل 14/165 أو 56/165). "
+                "ممنوع الحساب. استخدم الأرقام المعطاة في «الحقائق» فقط ولا تخترع غيرها. الطالب "
+                "عالق وكرّر سؤاله — غيّر الزاوية ولا تُعِد ما قيل. عربية فصحى فقط، جملة أو جملتان، "
+                "أقل من 50 كلمة، وتنتهي بعلامة استفهام."
+            )
+            user = (
+                f"المفهوم: {cls._CONCEPT_AR.get(concept, concept)}.\n"
+                f"المفهوم الخاطئ عند الطالب: {cls._MISCONCEPTION_AR.get(misconception, '')}.\n"
+                f"الحقائق (لا تُغيّرها ولا تتجاوزها): {facts}\n"
+                f"أسئلة الطالب السابقة: {prior_qs}\n"
+                "ولّد سؤالاً سقراطياً واحداً جديداً يكشف النقطة العالقة (لا تكرار)."
+            )
+            raw = await asyncio.wait_for(
+                get_ai_client().send_message(system_prompt, user, temperature=0.6),
+                timeout=12.0,
+            )
+            if not raw or not isinstance(raw, str) or not raw.strip():
+                return None
+            text = raw.strip()
+
+            # ── الحراسة (طبقات قائمة) ──────────────────────────────────────────
+            from app.services.skills.answer_redaction_skill import redact_final_answers
+            from app.services.skills.arabic_stream_guard import is_probably_non_arabic
+            from app.services.skills.content_integrity_skill import _strip_garbage_markers
+
+            text = _strip_garbage_markers(text)
+            text, _ = redact_final_answers(text, support_level=5)
+            text = text.strip()
+            if not text or is_probably_non_arabic(text):
+                return None
+            # رفض إن كشف الكسر النهائي رغم الحجب (شبكة أمان أخيرة).
+            if _re.search(r"14\s*/\s*165|56\s*/\s*165", text):
+                return None
+            return text
+        except Exception:
+            logger.warning("_generate_socratic_narrative_failed", exc_info=True)
+            return None
 
     async def _build_probability_tree_props(
         self,
@@ -2586,6 +2712,14 @@ class OrchestratorClient:
                 _direct = self._build_cognitive_response(
                     _concept, _misconception, question, history_messages
                 )
+                # D-128: عند التصعيد (تكرار نفس المفهوم) يُولّد الـ LLM سرداً سقراطياً
+                # فريداً (الفهم) — يستبدل القالب الحتمي المتكرّر. محروس + fallback إليه.
+                with contextlib.suppress(Exception):
+                    _narr = await self._generate_socratic_narrative(
+                        _concept, _misconception, question, history_messages
+                    )
+                    if _narr:
+                        _direct = _narr
             if not _direct:
                 _direct = self._build_probability_direct_explanation(question, history_messages)
             if _direct:

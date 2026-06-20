@@ -548,6 +548,24 @@ CONCEPT_DIAGNOSIS_DOCTRINE: Final[tuple[str, ...]] = (
 )
 
 
+# ── D-129: محرّك السياسة التربوية — الطبقة 4 (أقل تدخّل مفيد الآن) ──────────────────
+PEDAGOGICAL_POLICY_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم اختيار التدخّل التربوي (الطبقة 4، D-129).
+PEDAGOGICAL_POLICY_DOCTRINE: Final[tuple[str, ...]] = (
+    "العقد التربوي: تعريف → سؤال سقراطي محدود → اعتراف بالإجابة + تقدّم → حلّ رمزي عند الحاجة. "
+    "كل خطوة = أصغر تدخّل مفيد الآن، لا «رد» منفصل بل إدارة لرحلة الإتقان.",
+    "السقراطية محدودة بميزانية (MAX_SOCRATIC): بعد سؤالين بلا تقدّم ⇒ حلّ رمزي متدرّج "
+    "(إنقاذ تربوي)، لا سؤال إضافي. ممنوع الاستجواب اللانهائي.",
+    "الاعتراف بإجابة الطالب إلزامي: إجابة قصيرة بعد سؤال (لا تبدأ بأداة استفهام) ⇒ اعتراف "
+    "«أحسنت» + تقدّم خطوة، لا سؤال أصمّ آخر. الإجابة لا تُقابل بالصمت بل بالتقدير.",
+    "القرار حتمي تماماً — لا LLM في اختيار التدخّل. الـ LLM للسرد السقراطي فقط (D-128، محروس)؛ "
+    "الحلّ الرمزي من المحرك الرمزي (D-113-safe).",
+    "القاعدة الذهبية: لا سؤال إضافي بلا معنى · لا تكرار بلا تقدّم · لا إجابة بلا سياق · "
+    "لا حلّ رمزي قبل أن تُستنفد محاولة الفهم.",
+)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Adaptive Pedagogy Doctrine (D-104) — إغلاق حلقة BKT: القراءة تقود السلوك
 # ─────────────────────────────────────────────────────────────────────────────
@@ -966,6 +984,15 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "orchestrator_client.chat_with_agent",
         ),
     },
+    "pedagogical_policy": {
+        "version": PEDAGOGICAL_POLICY_DOCTRINE_VERSION,
+        "rules_count": len(PEDAGOGICAL_POLICY_DOCTRINE),
+        "consumed_by": (
+            # D-129: الطبقة 4 — موصولة حيّاً في مخرج الطوارئ الاحتمالي.
+            "PedagogicalPolicySkill.decide",
+            "orchestrator_client.chat_with_agent",
+        ),
+    },
     "adaptive_pedagogy": {
         "version": ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION,
         "rules_count": len(ADAPTIVE_PEDAGOGY_DOCTRINE),
@@ -1205,6 +1232,8 @@ __all__ = [
     "MODEL_ANSWER_EXPLANATION_VERSION",
     "MODEL_ANSWER_RELIANCE_RULES",
     "MODEL_ANSWER_RELIANCE_VERSION",
+    "PEDAGOGICAL_POLICY_DOCTRINE",
+    "PEDAGOGICAL_POLICY_DOCTRINE_VERSION",
     "PROBABILITY_CALCULATION_DOCTRINE",
     "PROBABILITY_CALCULATION_DOCTRINE_VERSION",
     "REALTIME_PROTOCOL_DOCTRINE",

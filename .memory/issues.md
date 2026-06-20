@@ -4233,3 +4233,14 @@ enum-only)؛ الطبقة 5 misconception؛ الطبقة 4 تصعيد سقراط
 الحدث الحتمي) + السرد السقراطي المُولَّد بالـ LLM عند التصعيد (الفهم لا الحقيقة، حقائق محقونة بلا
 14/165، محروس + fallback حتمي) + إلغاء سقف التكرار. تحقق حي بـ OpenRouter (3 ردود فريدة، صفر كشف)
 + Supabase bridge (أعمدة D-126 حيّة). الحالة: RESOLVED محلياً + live؛ WS الكامل في Codespaces.
+
+## ISS-116 (D-129) — محرّك السياسة التربوية: حلقة الاستجواب اللانهائي (2026-06-20)
+بعد D-128: السرد السقراطي فريد لكن النظام **يسأل بلا نهاية**، لا يعترف بإجابات الطالب («نفس
+اللون»/«2»/«أقل من ثلاثة»/«التوافيق») ولا يتقدّم. الجذر: `_generate_socratic_narrative` يُستدعى عند
+كل تصعيد بلا حدّ. الإصلاح (D-129، الطبقة 4 الحتمية — صفر LLM في القرار): `PedagogicalPolicySkill`
+(#20) — `is_answer_message` + `count_socratic_questions` + `MAX_SOCRATIC=2` ⇒ تعريف→سؤال محدود→
+اعتراف→حلّ رمزي؛ `_build_symbolic_reveal` حتمي من المحرك الرمزي (4/10/14/165، يَنجو من D-113)؛
+أُزيلت بوّابة `level<1` (السياسة هي البوّابة الوحيدة). doctrine PEDAGOGICAL_POLICY_DOCTRINE v1.0.0
++ gate. تحقق حي: OpenRouter (3 ردود سقراطية فريدة صفر كشف) + standalone (الحلقة تنكسر بعد سؤالين
+→ symbolic_reveal، reveal يَنجو من D-113) + Supabase bridge. registry=20 (18 ACTIVE + 2 FLAGGED).
+الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل في Codespaces.

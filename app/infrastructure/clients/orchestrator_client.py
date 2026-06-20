@@ -2211,17 +2211,14 @@ class OrchestratorClient:
     ) -> str | None:
         """D-128: تدخّل سقراطي فريد مُولَّد بالـ LLM (محروس). يُرجِع None ⇒ القالب الحتمي.
 
-        يُستدعى عند التصعيد (`level ≥ 1`) فقط — المرّة الأولى تبقى شرحاً حتمياً. الـ LLM
-        يُنتج الفهم (سؤال يقود الطالب)؛ الأرقام من المحرك الرمزي (محقونة). محروس بطبقات
-        قائمة + timeout + fallback. أي فشل/كشف/garbage ⇒ None (لا تدهور للطالب).
+        D-129: يُستدعى عندما تقرّر السياسة التربوية `socratic` (هي البوّابة الوحيدة الآن —
+        لا بوّابة level داخلية). الـ LLM يُنتج الفهم (سؤال يقود الطالب)؛ الأرقام من المحرك
+        الرمزي (محقونة). محروس بطبقات قائمة + timeout + fallback. أي فشل/كشف/garbage ⇒ None.
         """
         try:
             import asyncio
             import re as _re
 
-            level = cls._count_prior_concept(concept, history_messages)
-            if level < 1:
-                return None  # المرّة الأولى ⇒ شرح حتمي (لا LLM)
             combo = cls._load_canonical_combinations(question, history_messages)
             if combo is None:
                 return None
@@ -2273,6 +2270,50 @@ class OrchestratorClient:
         except Exception:
             logger.warning("_generate_socratic_narrative_failed", exc_info=True)
             return None
+
+    @classmethod
+    def _build_symbolic_reveal(
+        cls,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+        *,
+        acknowledge: bool = False,
+    ) -> str | None:
+        """D-129: الحلّ الرمزي المتدرّج — الإنقاذ التربوي بعد استنفاد السقراطية (الطبقة 4).
+
+        حتمي تماماً (من المحرك الرمزي). يُسبَق باعتراف عند ``acknowledge``. يَنجو من حجب
+        D-113 (نمط ``_fmt_comb`` + «من كل»). يُرجِع None لغير الاحتمالات.
+        """
+        combo = cls._load_canonical_combinations(question, history_messages)
+        if combo is None:
+            return None
+        n, k, total, same = (
+            combo.n,
+            combo.k,
+            combo.total_combinations,
+            combo.same_group_favorable,
+        )
+        favs_lines = "\n".join(
+            (
+                f"- {g.label} (العدد {g.count}): {cls._fmt_comb(g.count, k, g.favorable_combinations)}"
+                if g.is_possible
+                else f"- {g.label} (العدد {g.count}): مستحيلة (أقل من {k})"
+            )
+            for g in combo.groups
+        )
+        favs_sum = " + ".join(
+            str(g.favorable_combinations) for g in combo.groups if g.is_possible
+        )
+        prefix = "إجابتك في الطريق الصحيح — " if acknowledge else ""
+        return (
+            f"{prefix}لنُكمل معاً خطوة بخطوة حتى النهاية:\n\n"
+            f"**الحالات الملائمة** (3 كرات من نفس اللون) — لكل لون:\n\n"
+            f"{favs_lines}\n\n"
+            f"نجمع الحالات الممكنة فقط: {favs_sum} = {same}\n\n"
+            f"**كل الطرق الممكنة** لسحب {k} من {n}:\n\n"
+            f"{cls._fmt_comb(n, k, total)}\n\n"
+            f"فاحتمال الحادثة A هو {same} من كل {total}."
+        )
 
     async def _build_probability_tree_props(
         self,
@@ -2709,17 +2750,55 @@ class OrchestratorClient:
             # D-127: الاستجابة المدفوعة بالمفهوم أولاً؛ fallback إلى منطق D-124/D-125.
             _direct = None
             if _concept != "unknown":
-                _direct = self._build_cognitive_response(
-                    _concept, _misconception, question, history_messages
+                # D-129: محرّك السياسة التربوية (الطبقة 4) يقرّر التدخّل: تعريف →
+                # سؤال سقراطي محدود → اعتراف + تقدّم → حلّ رمزي عند نفاد الميزانية.
+                # يكسر الاستجواب اللانهائي ويعترف بإجابات الطالب.
+                from app.services.skills.pedagogical_policy_skill import (
+                    PolicyInput,
+                    get_pedagogical_policy_skill,
                 )
-                # D-128: عند التصعيد (تكرار نفس المفهوم) يُولّد الـ LLM سرداً سقراطياً
-                # فريداً (الفهم) — يستبدل القالب الحتمي المتكرّر. محروس + fallback إليه.
-                with contextlib.suppress(Exception):
-                    _narr = await self._generate_socratic_narrative(
+
+                _policy = get_pedagogical_policy_skill().decide(
+                    PolicyInput(
+                        concept=_concept,
+                        misconception=_misconception,
+                        question=question,
+                        history=history_messages,
+                    )
+                )
+                _ack = "إجابتك في الطريق الصحيح — " if _policy.acknowledge else ""
+                if _policy.action == "symbolic_reveal":
+                    # D-129: الإنقاذ التربوي الحتمي بعد استنفاد السقراطية.
+                    _direct = self._build_symbolic_reveal(
+                        question, history_messages, acknowledge=_policy.acknowledge
+                    )
+                elif _policy.action == "socratic":
+                    # D-128: سرد سقراطي مُولَّد فريد (محروس)؛ اعتراف بإجابة الطالب.
+                    with contextlib.suppress(Exception):
+                        _narr = await self._generate_socratic_narrative(
+                            _concept, _misconception, question, history_messages
+                        )
+                        if _narr:
+                            _direct = (_ack + _narr) if _ack else _narr
+                    if not _direct:  # fallback: قالب حتمي
+                        _det = self._build_cognitive_response(
+                            _concept, _misconception, question, history_messages
+                        )
+                        if _det:
+                            _direct = (_ack + _det) if _ack else _det
+                else:  # definition
+                    _direct = self._build_cognitive_response(
                         _concept, _misconception, question, history_messages
                     )
-                    if _narr:
-                        _direct = _narr
+                logger.info(
+                    "pedagogical_policy",
+                    extra={
+                        "concept": _concept,
+                        "action": _policy.action,
+                        "acknowledge": _policy.acknowledge,
+                        "socratic_count": _policy.socratic_count,
+                    },
+                )
             if not _direct:
                 _direct = self._build_probability_direct_explanation(question, history_messages)
             if _direct:

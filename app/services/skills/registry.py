@@ -385,6 +385,15 @@ def _build_registry() -> SkillRegistry:
             consumed_by=("orchestrator_client.chat_with_agent",),
         ),
         SkillDescriptor(
+            name="pedagogical_policy",
+            summary="الطبقة 4 — محرّك السياسة التربوية: تعريف→سؤال محدود→اعتراف→حلّ رمزي (D-129).",
+            input_contract="PolicyInput",
+            output_contract="PolicyOutput",
+            primary_method="decide",
+            metrics_prefix="cogniforge_skill_pedagogical_policy",
+            consumed_by=("orchestrator_client.chat_with_agent",),
+        ),
+        SkillDescriptor(
             name="adaptive_pedagogy",
             summary="طبقة البيداغوجيا التكيفية — قراءة إتقان BKT تقود عمق التدريس (D-104).",
             input_contract="PedagogyInput",

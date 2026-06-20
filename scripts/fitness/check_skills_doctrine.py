@@ -548,10 +548,49 @@ def check_socratic_protocol_wired() -> None:
     _pass("Socratic protocol wired: orchestrator-only generation + bulletproof sanitizer (D-115)")
 
 
+def check_pedagogical_policy_wired() -> None:
+    """D-129 (الطبقة 4 — محرّك السياسة التربوية): يحرس أن السياسة موصولة فعلاً.
+
+    الكارثة (بعد D-128): السرد السقراطي فريد لكن النظام يسأل بلا توقف ولا يعترف
+    بإجابات الطالب ولا يتقدّم — حلقة استجواب. السياسة الحتمية تكسرها: ميزانية أسئلة
+    (MAX_SOCRATIC) ثم حلّ رمزي + اعتراف. يحرس: (1) manifest entry متّسق، (2) الـ Skill
+    يستهلك الـ doctrine، (3) `orchestrator_client.chat_with_agent` يستدعي السياسة
+    ويفرّع على `symbolic_reveal` عبر `_build_symbolic_reveal` (لا ZOMBIE).
+    """
+    from app.services.skills.doctrine import (
+        PEDAGOGICAL_POLICY_DOCTRINE,
+        PEDAGOGICAL_POLICY_DOCTRINE_VERSION,
+        SKILL_DOCTRINE_MANIFEST,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("pedagogical_policy")
+    if entry is None:
+        _fail("Manifest missing 'pedagogical_policy' entry (D-129).")
+    if entry["version"] != PEDAGOGICAL_POLICY_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for pedagogical_policy (D-129).")
+    if entry["rules_count"] != len(PEDAGOGICAL_POLICY_DOCTRINE):
+        _fail("Manifest rules_count mismatch for pedagogical_policy (D-129).")
+
+    skill = (ROOT / "app/services/skills/pedagogical_policy_skill.py").read_text(encoding="utf-8")
+    if "from app.services.skills.doctrine import" not in skill:
+        _fail("pedagogical_policy_skill.py does not consume doctrine (D-129).")
+    if "MAX_SOCRATIC" not in skill:
+        _fail("pedagogical_policy_skill.py lost the MAX_SOCRATIC budget (D-129).")
+
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    if "get_pedagogical_policy_skill" not in client_src:
+        _fail("orchestrator_client does not invoke the pedagogical policy (D-129 ZOMBIE).")
+    if "_build_symbolic_reveal" not in client_src:
+        _fail("orchestrator_client lost the deterministic symbolic-reveal escape (D-129).")
+    _pass("Pedagogical policy wired: bounded Socratic → acknowledge → symbolic reveal (D-129)")
+
+
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
@@ -567,6 +606,7 @@ def main() -> None:
     check_learning_path_wired()
     check_answer_redaction_wired()
     check_socratic_protocol_wired()
+    check_pedagogical_policy_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

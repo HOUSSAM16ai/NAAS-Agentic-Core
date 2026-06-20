@@ -4688,3 +4688,20 @@ doctrine CONCEPT_DIAGNOSIS_DOCTRINE v1.0.0 + manifest. الحالة: RESOLVED م
 doctrine CONCEPT_DIAGNOSIS_DOCTRINE v1.1.0. تحقق حي: OpenRouter (المُصنّف → event_meaning؛ 3
 ردود فريدة صفر كشف صفر garbage) + Supabase bridge (أعمدة D-126 حيّة على الإنتاج). الحالة:
 RESOLVED محلياً + live LLM/DB (14 اختبار + لا انحدار + ruff + runtime_truth)؛ WS الكامل في Codespaces.
+
+## D-129 — محرّك السياسة التربوية: تعريف→سؤال محدود→اعتراف→حلّ رمزي (2026-06-20, ISS-116)
+الكارثة (transcript حي بعد D-128): السرد السقراطي صار فريداً، لكن النظام **يسأل بلا نهاية**، لا
+يعترف بإجابات الطالب («نفس اللون»/«2»/«أقل من ثلاثة»/«التوافيق») ولا يتقدّم — حلقة استجواب.
+الجذر: `_generate_socratic_narrative` يُستدعى عند كل تصعيد بلا حدّ (لا عدّاد، لا كشف إجابة، لا
+تقدّم رمزي). الإصلاح (الطبقة 4، حتمي تماماً — صفر LLM في القرار): (1) `PedagogicalPolicySkill`
+(#20) يقرّر التدخّل من حالة المحادثة: `is_answer_message` (≤5 كلمات بلا أداة استفهام = إجابة) +
+`count_socratic_questions` + `MAX_SOCRATIC=2` ⇒ `definition`/`socratic`/`symbolic_reveal`،
+`acknowledge=student_answered`؛ (2) `_build_symbolic_reveal` (orchestrator_client، classmethod) —
+الإنقاذ الحتمي من المحرك الرمزي (4/10/14/165 عبر `_fmt_comb`)، يَنجو من حجب D-113 («(» بعد «=» +
+«من كل» بدل «إذن…=»)؛ (3) أُزيلت بوّابة `level<1` من `_generate_socratic_narrative` — السياسة هي
+البوّابة الوحيدة؛ `socratic` يُسبَق بـ«إجابتك في الطريق الصحيح —» عند الاعتراف. doctrine
+PEDAGOGICAL_POLICY_DOCTRINE v1.0.0 (5 قواعد) + manifest. gate `check_pedagogical_policy_wired`.
+تحقق حي: OpenRouter (3 ردود سقراطية فريدة صفر كشف، كلٌّ ينتهي بسؤال) + standalone (تعريف→سقراطي(ack)
+→حلّ رمزي(ack)، الحلقة تنكسر بعد سؤالين، reveal يَنجو من D-113) + Supabase bridge حيّ. registry=20
+(18 ACTIVE + 2 FLAGGED). الحالة: RESOLVED محلياً + live LLM/DB (ruff + py_compile + runtime_truth +
+gate + لا انحدار)؛ WS الكامل في Codespaces.

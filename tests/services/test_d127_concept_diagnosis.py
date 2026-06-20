@@ -215,6 +215,7 @@ class TestSourceWiring:
         assert conclusion_re.search("الاحتمال = 14 من كل 165") is None
 
     def test_doctrine_present(self) -> None:
-        assert 'CONCEPT_DIAGNOSIS_DOCTRINE_VERSION: Final[str] = "1.0.0"' in DOCTRINE_SRC
+        # D-128: bumped 1.0.0 → 1.1.0 (السرد السقراطي المُولَّد + event_meaning).
+        assert "CONCEPT_DIAGNOSIS_DOCTRINE_VERSION: Final[str] = " in DOCTRINE_SRC
         assert '"concept_diagnosis": {' in DOCTRINE_SRC
         assert "الطبقة 1 (LLM) تُصنّف فقط" in DOCTRINE_SRC

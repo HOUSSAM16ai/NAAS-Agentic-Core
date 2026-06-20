@@ -4677,3 +4677,14 @@ enum-validated+timeout+fallback)؛ `_build_cognitive_response` (استجابة �
 تَنجو D-113)؛ موصول في chat_with_agent (LLM فقط عند unknown+سياق احتمالات). registry=19،
 doctrine CONCEPT_DIAGNOSIS_DOCTRINE v1.0.0 + manifest. الحالة: RESOLVED محلياً (22 اختبار + لا
 انحدار + ruff + runtime_truth)؛ تحقق حي في Codespaces.
+
+## D-128 — الـ LLM كجهاز عصبي: السرد السقراطي المُولَّد + event_meaning (2026-06-20, ISS-116)
+الحقيقة المعمارية (المالك): الـ LLM = الجهاز العصبي يُنتج الفهم/التربية (السرد السقراطي) لا
+الحقيقة (الأرقام من المحرك الرمزي). الكارثة: «معنى الحادثة A» → حل كامل؛ التصعيد يُكرّر «نحن
+ندور» حرفياً. الإصلاح: (1) مفهوم event_meaning حتمي (تعريف الحدث من نص التمرين)؛ (2)
+`_generate_socratic_narrative` (orchestrator_client) — عند level≥1 يُولّد الـ LLM سؤالاً سقراطياً
+فريداً، الحقائق الرمزية محقونة (بلا 14/165)، محروس (redact_final_answers + _strip_garbage_markers
++ is_probably_non_arabic + timeout + شبكة أمان 14/165 + fallback حتمي)؛ (3) إلغاء سقف التكرار.
+doctrine CONCEPT_DIAGNOSIS_DOCTRINE v1.1.0. تحقق حي: OpenRouter (المُصنّف → event_meaning؛ 3
+ردود فريدة صفر كشف صفر garbage) + Supabase bridge (أعمدة D-126 حيّة على الإنتاج). الحالة:
+RESOLVED محلياً + live LLM/DB (14 اختبار + لا انحدار + ruff + runtime_truth)؛ WS الكامل في Codespaces.

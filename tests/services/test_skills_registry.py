@@ -2,7 +2,7 @@
 D-100 — Skills Platform regression tests (registry + composition).
 
 يثبت:
-  • الـ registry يبني 20 Skill (18 ACTIVE + 2 FLAGGED) بلا ZOMBIE.
+  • الـ registry يبني 21 Skill (19 ACTIVE + 2 FLAGGED) بلا ZOMBIE.
   • الـ FLAGGED مُعطَّلة افتراضياً ومُفعَّلة عبر علم البيئة.
   • `compose_text_refinement` يحافظ على الترتيب، يعزل الفشل، ويتدهور رشيقاً.
   • الـ manifest يصف skills_platform باتّساق.
@@ -40,6 +40,7 @@ EXPECTED = {
     "mcp_tool",
     "concept_diagnosis",
     "pedagogical_policy",
+    "socratic_evaluator",
 }
 
 
@@ -47,11 +48,11 @@ class TestRegistry:
     def test_registry_complete(self) -> None:
         reg = get_skill_registry()
         assert set(reg.names()) == EXPECTED
-        assert len(reg.list()) == 20
+        assert len(reg.list()) == 21
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 18
+        assert len(reg.by_status("ACTIVE")) == 19
         assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:

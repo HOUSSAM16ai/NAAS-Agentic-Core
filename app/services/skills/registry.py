@@ -386,12 +386,21 @@ def _build_registry() -> SkillRegistry:
         ),
         SkillDescriptor(
             name="pedagogical_policy",
-            summary="الطبقة 4 — محرّك السياسة التربوية: تعريف→سؤال محدود→اعتراف→حلّ رمزي (D-129).",
+            summary="الطبقة 4 — محرّك السياسة التربوية: تعريف→سؤال محدود→اعتراف→حلّ رمزي (D-129/D-130).",
             input_contract="PolicyInput",
             output_contract="PolicyOutput",
             primary_method="decide",
             metrics_prefix="cogniforge_skill_pedagogical_policy",
             consumed_by=("orchestrator_client.chat_with_agent",),
+        ),
+        SkillDescriptor(
+            name="socratic_evaluator",
+            summary="الطبقة 1 — مُقيّم الإجابات السقراطي (الإصغاء النشط): يُقيّم رد الطالب الحرّ (D-130).",
+            input_contract="SocraticEvaluatorInput",
+            output_contract="SocraticEvaluatorOutput",
+            primary_method="evaluate",
+            metrics_prefix="cogniforge_skill_socratic_evaluator",
+            consumed_by=("orchestrator_client._stream_socratic_evaluation",),
         ),
         SkillDescriptor(
             name="adaptive_pedagogy",

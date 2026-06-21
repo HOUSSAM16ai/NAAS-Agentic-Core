@@ -115,6 +115,8 @@ from app.services.skills.doctrine import (
     SKILL_DOCTRINE_MANIFEST,
     SKILL_INVOCATION_PROTOCOL,
     SKILL_INVOCATION_PROTOCOL_VERSION,
+    SOCRATIC_EVALUATOR_DOCTRINE,
+    SOCRATIC_EVALUATOR_DOCTRINE_VERSION,
     STEP_BY_STEP_EXPLANATION_RULES,
     STEP_BY_STEP_EXPLANATION_VERSION,
     build_exercise_explanation_prompt,
@@ -192,6 +194,12 @@ from app.services.skills.retrieval_rerank_skill import (
     RetrievalRerankSkill,
     get_retrieval_rerank_skill,
 )
+from app.services.skills.socratic_evaluator_skill import (
+    SocraticEvaluatorInput,
+    SocraticEvaluatorOutput,
+    SocraticEvaluatorSkill,
+    get_socratic_evaluator_skill,
+)
 from app.services.skills.topic_lock import (
     TopicLock,
     TopicLockInput,
@@ -227,6 +235,8 @@ __all__ = [
     "SKILL_DOCTRINE_MANIFEST",
     "SKILL_INVOCATION_PROTOCOL",
     "SKILL_INVOCATION_PROTOCOL_VERSION",
+    "SOCRATIC_EVALUATOR_DOCTRINE",
+    "SOCRATIC_EVALUATOR_DOCTRINE_VERSION",
     "STEP_BY_STEP_EXPLANATION_RULES",
     "STEP_BY_STEP_EXPLANATION_VERSION",
     "AdaptivePedagogySkill",
@@ -287,6 +297,9 @@ __all__ = [
     "SkillFailure",
     "SkillMode",
     "SkillRegistry",
+    "SocraticEvaluatorInput",
+    "SocraticEvaluatorOutput",
+    "SocraticEvaluatorSkill",
     "TopicLock",
     "TopicLockInput",
     "TopicLockOutput",
@@ -314,6 +327,7 @@ __all__ = [
     "get_retrieval_rerank_skill",
     "get_skill_invocation_protocol_summary",
     "get_skill_registry",
+    "get_socratic_evaluator_skill",
     "get_step_by_step_summary",
     "get_topic_lock",
     "guard_arabic_stream",

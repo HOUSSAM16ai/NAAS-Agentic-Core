@@ -4705,3 +4705,28 @@ PEDAGOGICAL_POLICY_DOCTRINE v1.0.0 (5 قواعد) + manifest. gate `check_pedago
 →حلّ رمزي(ack)، الحلقة تنكسر بعد سؤالين، reveal يَنجو من D-113) + Supabase bridge حيّ. registry=20
 (18 ACTIVE + 2 FLAGGED). الحالة: RESOLVED محلياً + live LLM/DB (ruff + py_compile + runtime_truth +
 gate + لا انحدار)؛ WS الكامل في Codespaces.
+
+## D-130 — الإصغاء النشط: مُقيّم الإجابات السقراطي (يحل الخيانة البيداغوجية) (2026-06-21, ISS-116)
+الكارثة (transcript حي): النظام سأل سؤالاً سقراطياً ممتازاً، فأجاب الطالب **إجابة عبقرية** («نفس
+اللون فقط، الحمراء والخضراء — اكتشف أن البيضاء مستحيلة»)، فبدل أن يكافئه ويُكمل **أعاد طباعة التمرين
+كاملاً**. الجذر: (1) إجابة الطالب الحرة تحوي كلمات اللون ⇒ `_has_indexed_match` (PREEMPT #3) يُعيد
+طباعة التمرين قبل مخرج التقييم (PREEMPT #4)؛ (2) `is_answer_message` (D-129) يقصر الإجابة على ≤5 كلمات
+فيفوّت الإجابة العبقرية الطويلة. تشخيص المالك: النظام نسي أنه ينتظر إجابة — النصف الثاني (الإصغاء
+النشط) غائب. الإصلاح (الطبقة 1 العصبي-الرمزي): (1) `_in_socratic_dialogue` — قفل الحالة عبر التاريخ
+(لا حقل دائم): أحدث رسالة مساعد سؤال سقراطي + سياق احتمالات + إجابة الطالب، يُدرَج في `chat_with_agent`
+**قبل** الاسترجاع المُفهرَس ⇒ لا إعادة طباعة؛ (2) `SocraticEvaluatorSkill` (#21) — LLM محروس يُقيّم
+**فهم** الطالب (يقارن رده الحرّ بالهدف التربوي المستتر لكل مفهوم)، fallback حتمي، التشجيع لا يكشف
+نتيجة (redact_final_answers + _strip_garbage_markers + is_probably_non_arabic + timeout)؛ (3)
+`_build_symbolic_step` — التسليم الرمزي المتدرّج: عند الفهم خطوة المفهوم الحالي (C(4,3)+C(5,3)=14) +
+سؤال المتابعة، لا الحل كاملاً، يَنجو من D-113. **تحسينا المالك:** (A، Concern 1) `is_response_to_socratic`
+كشف الإجابة بالفعل الكلامي لا بالطول (العبقرية الطويلة و«نفس اللون» القصيرة كلتاهما إجابة؛ «اعطني تمرين
+الدوال»/تبديل الموضوع ليست إجابة)؛ (B، Concern 2) `socratic_budget(concept, support_level, confusion)`
+ميزانية تكيّفية (مفاهيمي 2/بصيرة سريعة 1؛ متعثّر −1/متمكّن +1؛ حيرة −1؛ clamp [1,3]) تربط السياسة بـ
+BKT (D-126) بدل `MAX_SOCRATIC` الثابت؛ `support_level` في `PolicyInput`. doctrine SOCRATIC_EVALUATOR
+v1.0.0 (6 قواعد) + PEDAGOGICAL_POLICY v1.0.0→v1.1.0 (7 قواعد) + manifest. gate
+`check_socratic_evaluator_wired` (يحرس الالتقاط المبكر قبل الاسترجاع المُفهرَس). تحقق حي: OpenRouter
+(الإجابة العبقرية → understood=true + تشجيع يعترف بـ«البيضاء مستحيلة» + صفر كشف؛ خاطئة → understood=false
+بلا عقاب) + standalone (speech-act مستقل عن الطول + budget متكيّف + symbolic step يَنجو من D-113 +
+الالتقاط قبل _has_indexed_match) + Supabase bridge (4028 رسالة). registry=21 (19 ACTIVE + 2 FLAGGED).
+الحالة: RESOLVED محلياً + live LLM/DB (ruff + py_compile + runtime_truth + gate + لا انحدار)؛ WS الكامل
+في Codespaces.

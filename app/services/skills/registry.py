@@ -394,6 +394,15 @@ def _build_registry() -> SkillRegistry:
             consumed_by=("orchestrator_client.chat_with_agent",),
         ),
         SkillDescriptor(
+            name="student_state",
+            summary="قراءة حالة الطالب كإشارة قرار — النيّة (متعدّد-إشارات) + الإحباط اللحظي (D-133).",
+            input_contract="StudentStateInput",
+            output_contract="StudentState",
+            primary_method="read",
+            metrics_prefix="cogniforge_skill_student_state",
+            consumed_by=("orchestrator_client.chat_with_agent",),
+        ),
+        SkillDescriptor(
             name="semantic_property",
             summary="الطبقة 2 — الطبقة الدلالية + Misconception Graph (شخّص ثم تدخّل، D-131).",
             input_contract="SemanticPropertyInput",

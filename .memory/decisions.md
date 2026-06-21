@@ -4776,3 +4776,20 @@ Listener+Definer لا judge — يُعرّف المفهوم لا يحسب الح
 Supabase bridge (4054 رسالة). registry=22. نطاق مُقيَّد (الاحتمالات)؛ twin دائم/توسيع المنهج مؤجَّل حتى
 تُثبت المقاييس (source=llm) الأثر. الحالة: RESOLVED محلياً + live LLM/DB (ruff + py_compile + runtime_truth +
 gate + لا انحدار)؛ WS الكامل في Codespaces.
+
+## D-133 (2026-06-21) — حالة الطالب كإشارة قرار: النيّة + الإحباط تُغيّران نوع التدخّل
+إعادة توجيه المالك: القفزة ليست RAG/MCP/Agent بل أن النظام يفكّر بـ«المفهوم» بينما الطالب يتحرّك بـ**نيّة**
+و**حالة شعورية متغيّرة**. التشخيص يتوسّع من Concept→Misconception إلى **Intent(+secondary)→Concept→
+Misconception→Frustration**. الحكم الحاسم: **«إشارة قرار» تُغيّر نوع الرد فعلاً، لا «قاموس طبقات»**.
+نقد المالك الثلاثي مُجسَّد: (1) متعدّد-إشارات (primary+secondary، «لم أفهم X»=confusion+definition ضمنياً)؛
+(2) LLM مُفسِّر ثانوي لا حَكَم (حتمي+BKT السلطة، LLM عند unknown فقط ولا يطغى)؛ (3) الإحباط لحظي يتلاشى
+(نافذة حديثة، يتعافى، لا يُخزَّن كصفة). المكوّنات: StudentStateSkill (#23، read حتمي + read_or_classify محروس) +
+جدول السياسة في pedagogical_policy (PolicyInput+=intent/frustration، socratic_budget(high)=0،
+response_mode_for، PolicyOutput.response_mode) + توصيل orchestrator_client (confusion⇒تعريف+مثال ملموس من
+المحرك الرمزي+سؤال موجِّه واحد محروس؛ example_request⇒_build_concrete_example؛ procedure⇒_build_symbolic_reveal؛
+intent+frustration+support_level→PolicyInput) + مقاييس tutor_intent/_frustration/_response_mode. doctrine
+STUDENT_STATE v1.0.0 (7 قواعد) + manifest + gate check_student_state_wired. تحقق حي: OpenRouter LIVE (Intent
+Listener على 3 صياغات دارجة جديدة ⇒ 3/3؛ السؤال الموجِّه المحروس عربي صفر كشف 14/165) + standalone (كل نيّة
++ تصعيد/تلاشي الإحباط + budget(high)=0 + جدول السياسة + manifest متّسق) + ruff+format+py_compile+runtime_truth.
+registry=23. نطاق الاحتمالات؛ توسيع الحالات+RAG+MCP مؤجَّل حتى تُثبت المقاييس أن نوع الرد تغيّر. الحالة:
+RESOLVED محلياً + live LLM (gate+pytest+WS الكامل في Codespaces — pydantic محجوب في الـ sandbox).

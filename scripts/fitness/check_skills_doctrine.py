@@ -733,10 +733,84 @@ def check_semantic_property_wired() -> None:
     _pass("Semantic layer + Misconception Graph + D-132 new-question readiness wired (D-131/D-132)")
 
 
+def check_student_state_wired() -> None:
+    """D-133 (حالة الطالب كإشارة قرار): يحرس أن النيّة/الإحباط يُغيّران البيداغوجيا فعلاً.
+
+    إعادة توجيه المالك: النظام يفكّر بالمفهوم بينما الطالب يتحرّك بنيّة وحالة شعورية.
+    يحرس: (1) manifest متّسق، (2) الـ Skill يستهلك doctrine + متعدّد-إشارات + LLM ثانوي
+    لا يطغى + لا تخزين للإحباط (نقد المالك 1/2/3)، (3) موصول حيّاً في orchestrator_client
+    (لا ZOMBIE)، (4) `PolicyInput` يكتسب intent+frustration و`socratic_budget` يحترم
+    frustration، (5) مقاييس intent/frustration/response_mode لها مُصدِر حيّ.
+    """
+    from app.services.skills.doctrine import (
+        SKILL_DOCTRINE_MANIFEST,
+        STUDENT_STATE_DOCTRINE,
+        STUDENT_STATE_DOCTRINE_VERSION,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("student_state")
+    if entry is None:
+        _fail("Manifest missing 'student_state' entry (D-133).")
+    if entry["version"] != STUDENT_STATE_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for student_state (D-133).")
+    if entry["rules_count"] != len(STUDENT_STATE_DOCTRINE):
+        _fail("Manifest rules_count mismatch for student_state (D-133).")
+
+    skill = (ROOT / "app/services/skills/student_state_skill.py").read_text(encoding="utf-8")
+    if "from app.services.skills.doctrine import" not in skill:
+        _fail("student_state_skill.py does not consume doctrine (D-133).")
+    # نقد 1: متعدّد-إشارات (primary + secondary).
+    if "primary_intent" not in skill or "secondary_signals" not in skill:
+        _fail("student_state_skill lost the multi-signal output (D-133 critique 1).")
+    # نقد 2: LLM ثانوي لا يطغى (يُستدعى فقط عند primary=unknown).
+    if "def read" not in skill or "def read_or_classify" not in skill:
+        _fail("student_state_skill missing read/read_or_classify (D-133).")
+    if 'primary_intent != "unknown"' not in skill:
+        _fail(
+            "student_state LLM not gated to primary=unknown — may override deterministic (D-133 critique 2)."
+        )
+    # نقد 3: الإحباط لحظي لا يُخزَّن (لا I/O / لا DB في الـ Skill).
+    for forbidden in ("async_session", "session_factory", "INSERT", "commit("):
+        if forbidden in skill:
+            _fail(
+                f"student_state_skill persists state ('{forbidden}') — frustration must be transient (D-133 critique 3)."
+            )
+
+    # التوصيل الحيّ (لا ZOMBIE): orchestrator_client يقرأ الحالة ويمرّر intent+frustration.
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    if "get_student_state_skill" not in client_src:
+        _fail("orchestrator_client does not invoke StudentStateSkill (D-133 ZOMBIE).")
+    if (
+        "intent=_state.primary_intent" not in client_src
+        or "frustration=_state.frustration" not in client_src
+    ):
+        _fail("orchestrator_client does not thread intent/frustration into PolicyInput (D-133).")
+
+    # السياسة: PolicyInput يكتسب intent+frustration؛ socratic_budget يحترم frustration؛ response_mode.
+    policy = (ROOT / "app/services/skills/pedagogical_policy_skill.py").read_text(encoding="utf-8")
+    if "intent:" not in policy or "frustration:" not in policy:
+        _fail("PolicyInput missing intent/frustration fields (D-133).")
+    if 'frustration == "high"' not in policy:
+        _fail("socratic_budget does not stop questioning on high frustration (D-133).")
+    if "def response_mode_for" not in policy or "response_mode" not in policy:
+        _fail("pedagogical_policy missing response_mode (the decision signal, D-133).")
+
+    # المقاييس الثلاثة الجديدة لها مُصدِر حيّ.
+    metrics_src = (ROOT / "app/services/skills/tutor_metrics.py").read_text(encoding="utf-8")
+    for fn in ("record_intent", "record_frustration", "record_response_mode"):
+        if f"def {fn}" not in metrics_src:
+            _fail(f"tutor_metrics missing D-133 metric {fn}.")
+        if fn not in client_src and fn not in policy:
+            _fail(f"D-133 metric {fn} has no live emitter (orchestrator_client/policy).")
+    _pass("Student-state (intent + transient frustration) wired as a decision signal (D-133)")
+
+
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132 + D-133) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
@@ -755,6 +829,7 @@ def main() -> None:
     check_pedagogical_policy_wired()
     check_socratic_evaluator_wired()
     check_semantic_property_wired()
+    check_student_state_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

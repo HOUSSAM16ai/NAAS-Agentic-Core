@@ -2214,6 +2214,86 @@ class OrchestratorClient:
         parts.append("الحادثة A = 3 كرات من نفس اللون")
         return "؛ ".join(parts)
 
+    @staticmethod
+    def _balls_brief(combo) -> str:
+        """D-133: معطيات الكيس **محايدة للمفهوم** (ألوان + أعداد بلا تعريف الحادثة A).
+
+        تُستخدم لإثراء رد الحيرة وللمثال الملموس لأي مفهوم — لا A-bias (تعميم لا special-casing).
+        """
+        colors = "، ".join(f"{g.label}: {g.count}" for g in combo.groups)
+        return f"الكيس فيه {combo.n} كرة (نسحب {combo.k} دفعةً واحدة): {colors}"
+
+    @classmethod
+    async def _generate_guiding_question(
+        cls,
+        concept: str,
+        balls: str,
+    ) -> str | None:
+        """D-133: سؤال موجِّه واحد محروس **عام لأي مفهوم** (لإثراء رد الحيرة).
+
+        الـ LLM = مُفسِّر/موجِّه لا حَكَم: يولّد سؤالاً يقود الطالب لتطبيق المفهوم على معطيات
+        الكيس — لا يحسب، لا يكشف نتيجة. محروس بنفس طبقات D-128 + timeout + fallback ⇒ None.
+        """
+        try:
+            import asyncio
+            import re as _re
+
+            from app.core.ai_gateway import get_ai_client
+
+            system_prompt = (
+                "أنت معلّم تربوي جزائري. ولّد **سؤالاً واحداً** يقود الطالب لتطبيق المفهوم على "
+                "معطيات الكيس — لا تشرح، لا تحسب، لا تكشف أي نتيجة نهائية أو كسر (مثل 14/165). "
+                "عربية فصحى، جملة واحدة قصيرة تنتهي بعلامة استفهام."
+            )
+            user = (
+                f"المفهوم: {cls._CONCEPT_AR.get(concept, concept)}.\n"
+                f"معطيات الكيس (استخدمها فقط): {balls}\n"
+                "ولّد سؤالاً واحداً يطبّق المفهوم على هذه المعطيات."
+            )
+            raw = await asyncio.wait_for(
+                get_ai_client().send_message(system_prompt, user, temperature=0.5),
+                timeout=10.0,
+            )
+            if not raw or not isinstance(raw, str) or not raw.strip():
+                return None
+
+            from app.services.skills.answer_redaction_skill import redact_final_answers
+            from app.services.skills.arabic_stream_guard import is_probably_non_arabic
+            from app.services.skills.content_integrity_skill import _strip_garbage_markers
+
+            text = _strip_garbage_markers(raw.strip())
+            text, _ = redact_final_answers(text, support_level=5)
+            text = text.strip()
+            if not text or is_probably_non_arabic(text):
+                return None
+            if _re.search(r"14\s*/\s*165|56\s*/\s*165", text):
+                return None
+            return text
+        except Exception:  # pragma: no cover — fail-safe
+            return None
+
+    @classmethod
+    def _build_concrete_example(
+        cls,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+    ) -> str | None:
+        """D-133 (intent=example_request): **مثال ملموس قبل النظرية** — حتمي.
+
+        المعطيات الملموسة من المحرك الرمزي (الكيس الفعلي) لا LLM. يَنجو من حجب D-113
+        (لا نتيجة نهائية). يُرجِع None لغير الاحتمالات.
+        """
+        combo = cls._load_canonical_combinations(question, history_messages)
+        if combo is None:
+            return None
+        balls = cls._balls_brief(combo)
+        return (
+            f"لنبدأ بمثال ملموس من هذا التمرين قبل أي قاعدة:\n\n"
+            f"{balls}.\n\n"
+            f"تخيّل سحبة واحدة: نأخذ {combo.k} كرات معاً وننظر إلى ألوانها وأرقامها — "
+            f"هذا هو الموقف الذي نعمل عليه. أيّ حالة تريد أن نتتبّعها معاً خطوة بخطوة؟"
+        )
+
     @classmethod
     async def _generate_socratic_narrative(
         cls,
@@ -2857,14 +2937,23 @@ class OrchestratorClient:
         # ─────────────────────────────────────────────────────────────────────
         try:
             from app.services.skills.semantic_property_skill import get_semantic_property_skill
+            from app.services.skills.student_state_skill import (
+                StudentStateInput,
+                get_student_state_skill,
+            )
 
             _sps = get_semantic_property_skill()
+            # D-133: قراءة حالة الطالب (نيّة + إحباط) كإشارة قرار — حتمي.
+            _state = get_student_state_skill().read(
+                StudentStateInput(question=question, history=history_messages)
+            )
             _hist_text = " ".join(
                 str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
             )
             _ql = (question or "").lower()
-            _confused = any(
-                m in _ql for m in ("لم افهم", "لم أفهم", "مش فاهم", "ما فهمت", "لا افهم", "لا أفهم")
+            # D-133: الحيرة = primary_intent (أو secondary) لا markers مبعثرة.
+            _confused = (
+                _state.primary_intent == "confusion" or "confusion" in _state.secondary_signals
             )
             _compute = any(
                 m in _ql
@@ -2876,14 +2965,33 @@ class OrchestratorClient:
             if _wants_def and not _compute and self._is_prob_context(question + " " + _hist_text):
                 _def = await _sps.interpret_or_define(question)
                 if _def is not None:
-                    from app.services.skills.tutor_metrics import record_definitional_answer
+                    from app.services.skills.tutor_metrics import (
+                        record_definitional_answer,
+                        record_intent,
+                        record_response_mode,
+                    )
 
                     record_definitional_answer(_def.concept_id, resolved=True, source=_def.source)
+                    record_intent(_state.primary_intent)
                     _text = (
                         f"## {_def.title}\n\n{_def.definition}"
                         if _def.title and _def.title != "تعريف"
                         else _def.definition
                     )
+                    # D-133 (وصفة المالك): الحيرة ⇒ تعريف + **مثال ملموس** + **سؤال موجِّه واحد**
+                    # — لا تعريف-فقط. المعطيات من المحرك الرمزي (محايدة للمفهوم)، السؤال محروس.
+                    _mode = "define"
+                    if _confused:
+                        _mode = "confusion_enriched"
+                        with contextlib.suppress(Exception):
+                            _combo = self._load_canonical_combinations(question, history_messages)
+                            if _combo is not None:
+                                _balls = self._balls_brief(_combo)
+                                _gq = await self._generate_guiding_question(_def.concept_id, _balls)
+                                _text += f"\n\nلنربطها بهذا التمرين: {_balls}.\n\n" + (
+                                    _gq or "هل يمكنك تطبيق هذا على معطيات الكيس؟"
+                                )
+                    record_response_mode(_mode)
                     _def_chars = 0
                     async for chunk in self._stream_markdown_typing(_text):
                         if not chunk:
@@ -2895,7 +3003,13 @@ class OrchestratorClient:
                     if _def_chars > 0:
                         logger.info(
                             "definitional_preempt",
-                            extra={"concept": _def.concept_id, "source": _def.source},
+                            extra={
+                                "concept": _def.concept_id,
+                                "source": _def.source,
+                                "intent": _state.primary_intent,
+                                "frustration": _state.frustration,
+                                "response_mode": _mode,
+                            },
                         )
                         yield self._normalize_stream_event(
                             {"type": "assistant_final", "payload": {"content": ""}}
@@ -3041,10 +3155,52 @@ class OrchestratorClient:
         if _concept == "unknown" and _confusion_count >= 2:
             _concept, _misconception = "full_solution", "none"
 
-        if _concept != "unknown" or _conceptual or _subpart is not None or _confusion_count >= 2:
+        # D-133: حالة الطالب (نيّة + إحباط) — إشارة قرار تُغيّر نوع الرد + ميزانية السقراطية.
+        # حتمي أولاً (رخيص)؛ LLM ثانوي **فقط** عند primary=unknown + سياق احتمالات (نقد المالك 2،
+        # لا هدر LLM على غير الاحتمالات — يُحاكي بوّابة concept_diagnosis).
+        from app.services.skills.student_state_skill import (
+            StudentStateInput,
+            get_student_state_skill,
+        )
+
+        _state = get_student_state_skill().read(
+            StudentStateInput(question=question, history=history_messages)
+        )
+        if _state.primary_intent == "unknown" and self._is_prob_context(
+            question + " " + _history_text
+        ):
+            with contextlib.suppress(Exception):
+                _state = await get_student_state_skill().read_or_classify(
+                    StudentStateInput(question=question, history=history_messages)
+                )
+        try:  # BKT/الإتقان هي السلطة (نقد 2): support_level من context (D-104/D-126).
+            _sup_level = int((context or {}).get("support_level") or 5)
+        except (TypeError, ValueError):
+            _sup_level = 5
+
+        if (
+            _concept != "unknown"
+            or _conceptual
+            or _subpart is not None
+            or _confusion_count >= 2
+            or _state.primary_intent in ("example_request", "procedure")
+        ):
             # D-127: الاستجابة المدفوعة بالمفهوم أولاً؛ fallback إلى منطق D-124/D-125.
             _direct = None
-            if _concept != "unknown":
+            # D-133: النيّة تُحدّد نوع الرد قبل السياسة (إشارة قرار، لا تصنيف):
+            #   example_request ⇒ مثال قبل النظرية؛ procedure ⇒ خطوات رمزية متدرّجة.
+            if _state.primary_intent in ("example_request", "procedure"):
+                from app.services.skills.tutor_metrics import record_response_mode
+
+                if _state.primary_intent == "example_request":
+                    _direct = self._build_concrete_example(question, history_messages)
+                    if _direct:
+                        record_response_mode("example_first")
+                else:  # procedure
+                    _direct = self._build_symbolic_reveal(question, history_messages)
+                    if _direct:
+                        record_response_mode("steps")
+            if _direct is None and _concept != "unknown":
                 # D-129: محرّك السياسة التربوية (الطبقة 4) يقرّر التدخّل: تعريف →
                 # سؤال سقراطي محدود → اعتراف + تقدّم → حلّ رمزي عند نفاد الميزانية.
                 # يكسر الاستجواب اللانهائي ويعترف بإجابات الطالب.
@@ -3059,6 +3215,10 @@ class OrchestratorClient:
                         misconception=_misconception,
                         question=question,
                         history=history_messages,
+                        # D-133: إشارة القرار — النيّة + الإحباط + الإتقان (BKT) تُغيّر التدخّل.
+                        intent=_state.primary_intent,
+                        frustration=_state.frustration,
+                        support_level=_sup_level,
                     )
                 )
                 _ack = "إجابتك في الطريق الصحيح — " if _policy.acknowledge else ""
@@ -3092,6 +3252,10 @@ class OrchestratorClient:
                         "action": _policy.action,
                         "acknowledge": _policy.acknowledge,
                         "socratic_count": _policy.socratic_count,
+                        # D-133: إشارة القرار — يُثبت أن النيّة/الإحباط غيّرا البيداغوجيا.
+                        "intent": _state.primary_intent,
+                        "frustration": _state.frustration,
+                        "response_mode": _policy.response_mode,
                     },
                 )
             if not _direct:

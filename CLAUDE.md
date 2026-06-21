@@ -10017,3 +10017,67 @@ LLM مسموح فقط في غير الحاسم (صياغة/تلخيص غير ر�
 |----------|---------|
 | D-131 | الطبقة الدلالية + Misconception Graph («شخّص ثم تدخّل») |
 | **D-132** | **جاهزية الأسئلة الجديدة: تغطية مفاهيم التمرين + LLM Listener-Definer محروس + إزالة الـ default المُجمَّد (يحل «المتغير العشوائي ⇒ سؤال عن الحادثة A»)** |
+
+---
+
+## 6.117 حالة الطالب كإشارة قرار — النيّة + الإحباط تُغيّران نوع التدخّل (2026-06-21, D-133)
+
+> إعادة توجيه المالك: القفزة ليست RAG/MCP/Agent، بل أن النظام يفكّر بـ«المفهوم» بينما الطالب
+> يتحرّك بـ**نيّة** و**حالة شعورية متغيّرة**. التشخيص يتوسّع من `Concept → Misconception` إلى
+> **`Intent (+secondary) → Concept → Misconception → Frustration`**. الحكم الحاسم: هذه **«إشارة
+> قرار» تُغيّر نوع الرد فعلاً، لا «قاموس طبقات»** — «إذا بقيت labels جميلة فلن يتغير شيء».
+
+### الكارثة
+نفس المفهوم بنيّات مختلفة، والنظام يعاملها كلها كـ«تعريف» ثم سلسلة أسئلة: «لم أفهم X» = حيرة
+(لا تعريف-فقط)؛ «أعطني مثالاً» = طلب مثال؛ «كيف نحسب» = إجراء. و«لم أفهم»×5 = **إحباط** لا يراه
+النظام (`confusion_count` يُقلّص الميزانية فقط، لا يُغيّر نوع الرد).
+
+### نقد المالك الثلاثي (مُجسَّد في العقد)
+1. **متعدّد الإشارات لا تصنيف جامد:** «لم أفهم المتغير العشوائي» = confusion + (definition ضمنياً) —
+   `primary_intent + secondary_signals` تحفظ الحزمة كاملة (heuristic: الحيرة عن مفهوم مُسمّى تحمل طلب تعريف).
+2. **LLM = مُفسِّر ثانوي لا حَكَم:** الكواشف الحتمية + BKT (knowledge tracing) هي السلطة؛ الـ LLM
+   يُستدعى **فقط** عند `primary=unknown` (صياغة جديدة) ولا يطغى على إشارة حتمية.
+3. **الإحباط لحظي يتلاشى:** نافذة حديثة (آخر ~4 رسائل)، يتعافى فور رسالة غير-حيرة، يُغيّر السياسة
+   لهذا الدور فقط، **لا يُخزَّن** كصفة طالب. لا I/O، لا حالة دائمة.
+
+### المكوّنات
+- **`StudentStateSkill` (Skill #23، `student_state_skill.py`)**: `read` حتمي ⇒
+  `StudentState(primary_intent, secondary_signals, frustration)`؛ `read_or_classify` async (LLM ثانوي عند
+  unknown فقط، محروس enum). مقاييس `cogniforge_skill_student_state_*`. fail-open ⇒ `(definition, (), none)`.
+- **جدول السياسة (القلب)** في `pedagogical_policy_skill`: `PolicyInput` يكتسب `intent`+`frustration`؛
+  `socratic_budget(frustration=="high")⇒0` (إيقاف التكرار)؛ `response_mode_for` يربط النيّة بالبيداغوجيا
+  (confusion_enriched/example_first/steps/relationship/define/hint/evaluate)؛ `PolicyOutput.response_mode`.
+- **التوصيل** (`orchestrator_client.chat_with_agent`): الـ preempt chain العامل يبقى؛ قراران جديدان:
+  (أ) **confusion ⇒ تعريف + مثال ملموس (من المحرك الرمزي، `_balls_brief`) + سؤال موجِّه واحد محروس
+  (`_generate_guiding_question`)** — وصفة المالك، يحلّ «لم أفهم X» حرفياً؛ (ب) **example_request ⇒
+  `_build_concrete_example` (مثال قبل النظرية)** و**procedure ⇒ `_build_symbolic_reveal` (خطوات)**؛
+  (ج) intent+frustration+support_level (BKT) تُمرَّر لـ `PolicyInput`.
+- **القياس** (`tutor_metrics`): `cogniforge_tutor_intent_total` + `_frustration_total` + `_response_mode_total`
+  — يُثبت أن الـ label أنتج بيداغوجيا مغايرة (لا تصنيفاً).
+
+### القواعد الـ 5 الدائمة (D-133 — لا تُكسر بدون ADR)
+1. **إشارة قرار لا قاموس labels:** كل intent يجب أن يُنتج **نوع رد مغايراً** (جدول السياسة). label بلا
+   تغيير سياسة = فشل.
+2. **متعدّد-إشارات:** `primary_intent + secondary_signals` — لا تقسيم الحزمة لنيّة واحدة جامدة (نقد 1).
+3. **LLM = مُفسِّر ثانوي لا حَكَم:** الحتمي + BKT هي السلطة؛ LLM عند unknown فقط ولا يطغى (نقد 2).
+4. **الإحباط لحظي يتلاشى:** نافذة حديثة، يتعافى، لهذا الدور فقط، **لا يُخزَّن** كصفة (نقد 3).
+5. **LLM=Listener، الأرقام من الرمزي؛ حتمي-أولاً + fail-open؛** توسيع الحالات + RAG + MCP مؤجَّل حتى
+   تُثبت المقاييس أن نوع الرد تغيّر.
+
+### التحقق (2026-06-21 — اجبارية المالك، full stack)
+- **OpenRouter LIVE (المفتاح الحقيقي، HTTPS):** الـ Intent Listener (LLM ثانوي) على 3 صياغات دارجة
+  جديدة («وريني كيفاش نوصل»⇒procedure، «ما عندي فكرة واش يعني»⇒confusion، «ابغى نشوف حاجة محلولة»
+  ⇒example_request) — 3/3 صحيح. السؤال الموجِّه المحروس: عربي، ينتهي بـ؟، **صفر كشف 14/165**.
+- **Standalone (sandbox يحجب pydantic):** كل نيّة تُصنَّف (خاصةً «لم أفهم المتغير العشوائي»⇒confusion
+  +secondary=definition)؛ تصعيد **وتلاشي** الإحباط (0→high ثم تعافٍ)؛ `socratic_budget(high)=0`؛ جدول
+  السياسة (intent⇒mode مغاير)؛ doctrine manifest متّسق (v1.0.0، 7 قواعد).
+- **بوّابات:** ruff + ruff format + py_compile 3.12 + runtime_truth --check ✅.
+- **Codespaces (WS كامل + check_skills_doctrine + pytest — متبقٍّ، pydantic محجوب هنا):** «ما هو X»⇒تعريف؛
+  «لم أفهم X»⇒تعريف+مثال+سؤال واحد؛ «أعطني مثالاً»⇒مثال قبل النظرية؛ «كيف نحسب»⇒خطوات؛ «لم أفهم»×4⇒
+  إحباط عالٍ⇒خطوة رمزية أقرب + إيقاف التكرار، ثم رسالة غير-حيرة⇒الإحباط يتلاشى. registry=23. الدخولان الحقيقيان.
+
+### السلسلة (D-132 → D-133)
+| Decision | الموضوع |
+|----------|---------|
+| D-132 | جاهزية الأسئلة الجديدة (LLM Listener-Definer) |
+| **D-133** | **حالة الطالب كإشارة قرار: النيّة (متعدّد-إشارات) + الإحباط اللحظي تُغيّران نوع التدخّل (confusion⇒تعريف+مثال+سؤال؛ frustration عالٍ⇒إيقاف التكرار)** |

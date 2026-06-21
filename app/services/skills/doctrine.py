@@ -935,6 +935,36 @@ def get_mandatory_orchestration_summary() -> str:
     )
 
 
+# ── D-133: حالة الطالب كإشارة قرار — النيّة + الإحباط (إعادة توجيه المالك) ─────────────
+STUDENT_STATE_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم قراءة حالة الطالب (النيّة + الإحباط، D-133).
+STUDENT_STATE_DOCTRINE: Final[tuple[str, ...]] = (
+    "إشارة قرار لا قاموس labels: كل intent يجب أن يُنتج **نوع رد مغايراً** فعلاً (تعريف/مثال/"
+    "خطوات/علاقة/تعريف+مثال+سؤال/تلميح). label بلا تغيير سياسة = فشل. القيمة في البيداغوجيا المغايرة.",
+    "متعدّد الإشارات لا تصنيف جامد: الخرج primary_intent + secondary_signals — «لم أفهم X» = "
+    "confusion + (definition) — تحفظ الحزمة النفسية/اللغوية كاملة، لا تقسيمها لنيّة واحدة صارمة.",
+    "النيّة تُحدّد نوع الرد لا الكلمة: «لم أفهم X» = confusion (تعريف + مثال ملموس + سؤال موجِّه "
+    "واحد)، لا تعريف-فقط ولا سقراطية متكررة؛ «أعطني مثالاً» = مثال قبل النظرية؛ «كيف نحسب» = خطوات.",
+    "الإحباط حالة شعورية تُوقف التكرار: «لم أفهم»×كثير = frustration عالٍ ⇒ تقليل الأسئلة + كشف "
+    "خطوة رمزية أقرب (socratic_budget→0)، ممنوع سقراطية متكررة على طالب محبَط.",
+    "الإحباط لحظي يتلاشى لا هوية ثابتة (نقد المالك 3): يُحسب من نافذة حديثة، يتعافى فور رسالة "
+    "غير-حيرة، يُغيّر السياسة لهذا الدور فقط، **لا يُخزَّن** كصفة طالب. لا I/O، لا حالة دائمة.",
+    "LLM = مُفسِّر ثانوي لا حَكَم (نقد المالك 2): الكواشف الحتمية + BKT (knowledge tracing) هي "
+    "السلطة؛ الـ LLM يُستدعى **فقط** عند primary=unknown (صياغة جديدة) ولا يطغى على إشارة حتمية.",
+    "حتمي-أولاً + fail-open: markers أولاً ثم LLM للصياغات الجديدة؛ أي تعذّر ⇒ حالة آمنة "
+    "(definition/none) — قراءة الحالة لا تكسر دور الطالب أبداً.",
+)
+
+
+def get_student_state_summary() -> str:
+    """يُرجِع ملخص doctrine حالة الطالب (للـ logs)."""
+    return (
+        f"[v{STUDENT_STATE_DOCTRINE_VERSION}] {len(STUDENT_STATE_DOCTRINE)} قاعدة — "
+        "إشارة قرار، متعدّد-إشارات، LLM مُفسِّر ثانوي، إحباط لحظي يتلاشى."
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1159,6 +1189,16 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "search.SynthesizerNode",
             "content_integrity.strip_garbage_markers",
             "answer_redaction.redact_final_answers",
+        ),
+    },
+    "student_state": {
+        "version": STUDENT_STATE_DOCTRINE_VERSION,
+        "rules_count": len(STUDENT_STATE_DOCTRINE),
+        "consumed_by": (
+            # D-133: قراءة حالة الطالب (نيّة + إحباط) — إشارة قرار موصولة حيّاً.
+            "StudentStateSkill.read",
+            "orchestrator_client.chat_with_agent",
+            "pedagogical_policy.PolicyInput",
         ),
     },
 }

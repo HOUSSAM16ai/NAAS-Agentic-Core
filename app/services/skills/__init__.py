@@ -212,6 +212,12 @@ from app.services.skills.socratic_evaluator_skill import (
     SocraticEvaluatorSkill,
     get_socratic_evaluator_skill,
 )
+from app.services.skills.student_state_skill import (
+    StudentState,
+    StudentStateInput,
+    StudentStateSkill,
+    get_student_state_skill,
+)
 from app.services.skills.topic_lock import (
     TopicLock,
     TopicLockInput,
@@ -321,6 +327,9 @@ __all__ = [
     "SocraticEvaluatorInput",
     "SocraticEvaluatorOutput",
     "SocraticEvaluatorSkill",
+    "StudentState",
+    "StudentStateInput",
+    "StudentStateSkill",
     "TopicLock",
     "TopicLockInput",
     "TopicLockOutput",
@@ -351,6 +360,7 @@ __all__ = [
     "get_skill_registry",
     "get_socratic_evaluator_skill",
     "get_step_by_step_summary",
+    "get_student_state_skill",
     "get_topic_lock",
     "guard_arabic_stream",
     "is_probably_non_arabic",

@@ -4283,3 +4283,15 @@ conditional تعريفات حتمية) + `define_concept` LLM Listener-Definer �
 تحقق حي: OpenRouter (4 مفاهيم جديدة ⇒ 4/4 تعريفات صفر كشف) + standalone (X→random_variable لا same_color) +
 Supabase (4054 رسالة). registry=22. نطاق الاحتمالات؛ توسيع/twin مؤجَّل حتى تُثبت المقاييس الأثر. الحالة:
 RESOLVED محلياً + live LLM/DB؛ WS الكامل في Codespaces.
+
+## ISS-116 (D-133, 2026-06-21) — النظام يفكّر بالمفهوم لا بالنيّة/الحالة الشعورية
+الكارثة (إعادة توجيه المالك): «لم أفهم المتغير العشوائي» يُعامَل كتعريف-فقط ثم سلسلة أسئلة؛ «أعطني مثالاً»/
+«كيف نحسب» لا يُلتقَطان؛ «لم أفهم»×5 = إحباط لا يراه النظام. الجذر: التشخيص يقف عند Concept→Misconception،
+بلا طبقة نيّة (Intent) ولا طبقة إحباط (Frustration). الإصلاح (D-133): StudentStateSkill (#23) يقرأ حزمة
+متعدّدة-إشارات (primary_intent+secondary_signals+frustration لحظي)؛ جدول سياسة يربط النيّة بالبيداغوجيا
+(confusion⇒تعريف+مثال ملموس+سؤال واحد؛ example⇒مثال قبل النظرية؛ procedure⇒خطوات؛ frustration عالٍ⇒
+socratic_budget=0=إيقاف التكرار+كشف خطوة رمزية أقرب). نقد المالك الثلاثي مُدمَج (متعدّد-إشارات/LLM ثانوي لا
+حَكَم/إحباط لحظي لا يُخزَّن). doctrine STUDENT_STATE v1.0.0 + gate check_student_state_wired. تحقق حي:
+OpenRouter (Intent Listener 3 صياغات دارجة ⇒ 3/3 + سؤال موجِّه محروس صفر كشف) + standalone (كل نيّة + تصعيد/
+تلاشي الإحباط + budget(high)=0). registry=23. توسيع/RAG/MCP مؤجَّل حتى تُثبت المقاييس الأثر. الحالة: RESOLVED
+محلياً + live LLM؛ WS الكامل + gate + pytest في Codespaces.

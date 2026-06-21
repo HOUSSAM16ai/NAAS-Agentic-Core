@@ -41,11 +41,30 @@ try:
             "Pedagogical outcome per interaction.",
             ["outcome"],
         )
+        # D-133: قراءة حالة الطالب — يُثبت أن الـ label غيّر نوع الرد (لا تصنيف فقط).
+        _INTENT = Counter(
+            "cogniforge_tutor_intent_total",
+            "Student-intent reads, labelled by primary intent.",
+            ["primary"],
+        )
+        _FRUSTRATION = Counter(
+            "cogniforge_tutor_frustration_total",
+            "Transient frustration level per interaction (D-133).",
+            ["level"],
+        )
+        _RESPONSE_MODE = Counter(
+            "cogniforge_tutor_response_mode_total",
+            "Chosen response mode per interaction — proves intent changed the pedagogy.",
+            ["mode"],
+        )
     else:  # pragma: no cover — re-import in same process (tests)
         _REPETITION_AVOIDED = None  # type: ignore[assignment]
         _DEFINITIONAL_ANSWER = None  # type: ignore[assignment]
         _INTERVENTION = None  # type: ignore[assignment]
         _PROGRESS = None  # type: ignore[assignment]
+        _INTENT = None  # type: ignore[assignment]
+        _FRUSTRATION = None  # type: ignore[assignment]
+        _RESPONSE_MODE = None  # type: ignore[assignment]
 
     def record_repetition_avoided() -> None:
         """قياس 1: تراجع التكرار الحرفي."""
@@ -80,6 +99,24 @@ try:
             if _PROGRESS is not None:
                 _PROGRESS.labels(outcome=outcome or "unknown").inc()
 
+    def record_intent(primary: str) -> None:
+        """D-133: توزيع النيّة الأساسية المُلتقَطة (confusion/example_request/procedure/...)."""
+        with contextlib.suppress(Exception):
+            if _INTENT is not None:
+                _INTENT.labels(primary=primary or "unknown").inc()
+
+    def record_frustration(level: str) -> None:
+        """D-133: حالة الإحباط اللحظية (none/low/medium/high)."""
+        with contextlib.suppress(Exception):
+            if _FRUSTRATION is not None:
+                _FRUSTRATION.labels(level=level or "none").inc()
+
+    def record_response_mode(mode: str) -> None:
+        """D-133: نوع الرد المُختار — يُثبت أن الـ label أنتج بيداغوجيا مغايرة."""
+        with contextlib.suppress(Exception):
+            if _RESPONSE_MODE is not None:
+                _RESPONSE_MODE.labels(mode=mode or "unknown").inc()
+
 except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbox)
 
     def record_repetition_avoided() -> None:
@@ -96,10 +133,22 @@ except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbo
     def record_progress(outcome: str) -> None:
         pass
 
+    def record_intent(primary: str) -> None:
+        pass
+
+    def record_frustration(level: str) -> None:
+        pass
+
+    def record_response_mode(mode: str) -> None:
+        pass
+
 
 __all__ = [
     "record_definitional_answer",
+    "record_frustration",
+    "record_intent",
     "record_intervention",
     "record_progress",
     "record_repetition_avoided",
+    "record_response_mode",
 ]

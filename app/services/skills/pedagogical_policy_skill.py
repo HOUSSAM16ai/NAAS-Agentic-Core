@@ -235,12 +235,18 @@ def socratic_budget(
     concept: str,
     support_level: int | None = None,
     confusion_count: int = 0,
+    frustration: str | None = None,
 ) -> int:
     """D-130 (تحسين B، يحل Concern 2): ميزانية الأسئلة السقراطية التكيّفية.
 
     مرتبطة بالمفهوم (مفاهيمي أعمق، بصيرة سريعة أقصر) وبحالة الطالب (BKT support_level،
     D-104/D-126) وبالحيرة المتكرّرة. clamp [1, 3]. ممنوع سقف ثابت واحد لكل المفاهيم.
+
+    D-133: ``frustration=="high"`` ⇒ **0** (إيقاف التكرار فوراً، كشف خطوة رمزية أقرب) —
+    إشارة لحظية لا هوية: تُغيّر هذا الدور فقط. الإحباط يطغى على بقية الميزانية.
     """
+    if frustration == "high":  # D-133: لا سؤال إضافي لطالب محبَط ⇒ حلّ رمزي مباشر
+        return 0
     budget = 1 if concept in _QUICK_INSIGHT_CONCEPTS else 2  # مفاهيمي/غير معروف ⇒ أساس 2
     if isinstance(support_level, int):
         if support_level <= 2:  # متعثّر ⇒ سرّع للسقالة الرمزية (لا نُحبطه)
@@ -250,6 +256,30 @@ def socratic_budget(
     if confusion_count > 1:  # حيرة متكرّرة ⇒ تصاعد أسرع
         budget -= confusion_count - 1
     return max(1, min(3, budget))
+
+
+#: D-133: خريطة النيّة → نوع الرد (إشارة قرار: الـ label يُنتج بيداغوجيا مغايرة، لا تصنيفاً).
+_INTENT_RESPONSE_MODE: dict[str, str] = {
+    "confusion": "confusion_enriched",  # تعريف + مثال ملموس + سؤال واحد
+    "example_request": "example_first",  # مثال قبل النظرية
+    "procedure": "steps",  # خطوات لا تعريف
+    "comparison": "relationship",  # شرح علاقة (D-125)
+    "definition": "define",  # تعريف (D-132)
+    "hint_request": "hint",  # تلميح أدنى
+    "answer": "evaluate",  # تقييم الإجابة (D-130)
+}
+
+
+def response_mode_for(intent: str | None, action: PolicyAction, frustration: str | None) -> str:
+    """D-133: نوع الرد المُختار — يربط النيّة/الإحباط بالبيداغوجيا الفعلية (للقياس + التوجيه)."""
+    if frustration == "high":
+        return "reveal"  # إيقاف التكرار + كشف خطوة أقرب
+    if intent and intent in _INTENT_RESPONSE_MODE:
+        return _INTENT_RESPONSE_MODE[intent]
+    # غير محدّد ⇒ مشتقّ من الإجراء الحتمي القائم.
+    return {"definition": "define", "socratic": "socratic", "symbolic_reveal": "reveal"}.get(
+        action, action
+    )
 
 
 # ── العقود (Pydantic) ────────────────────────────────────────────────────────
@@ -262,6 +292,10 @@ class PolicyInput(RobustBaseModel):
     history: list[dict[str, str]] | None = None
     #: D-130 (تحسين B): مستوى الدعم (1..5، BKT/D-126) لميزانية سقراطية تكيّفية.
     support_level: int | None = None
+    #: D-133: نيّة الطالب الأساسية (StudentStateSkill) — تُحدّد نوع الرد.
+    intent: str | None = None
+    #: D-133: حالة الإحباط اللحظية (none/low/medium/high) — high ⇒ إيقاف التكرار.
+    frustration: str | None = None
 
 
 class PolicyOutput(RobustBaseModel):
@@ -271,6 +305,8 @@ class PolicyOutput(RobustBaseModel):
     acknowledge: bool = False
     socratic_count: int = 0
     student_answered: bool = False
+    #: D-133: نوع الرد المُختار — يُثبت أن النيّة/الإحباط أنتجا بيداغوجيا مغايرة.
+    response_mode: str = "socratic"
 
 
 # ── Prometheus metrics ─────────────────────────────────────────────────────────────
@@ -313,30 +349,50 @@ class PedagogicalPolicySkill:
     doctrine_version: str = PEDAGOGICAL_POLICY_DOCTRINE_VERSION
 
     def decide(self, payload: PolicyInput) -> PolicyOutput:
-        """يقرّر أقل تدخّل مفيد الآن — حتمي. لا يرفع استثناءات منطقية."""
+        """يقرّر أقل تدخّل مفيد الآن — حتمي. لا يرفع استثناءات منطقية.
+
+        D-133: النيّة + الإحباط (إشارة قرار) يُغيّران الإجراء فعلاً — لا تصنيف فقط:
+        ``frustration=="high"`` ⇒ ميزانية 0 ⇒ ``symbolic_reveal`` (إيقاف التكرار)؛
+        و``response_mode`` يربط النيّة بالبيداغوجيا (confusion_enriched/example_first/steps/...).
+        """
         socratic_count = count_socratic_questions(payload.history)
         answered = student_answered(payload.question, payload.history)
         def_given = definition_already_given(payload.history)
-        # D-130 (تحسين B): ميزانية تكيّفية حسب المفهوم + حالة الطالب + الحيرة.
+        # D-130 (تحسين B) + D-133: ميزانية تكيّفية حسب المفهوم + حالة الطالب + الحيرة + الإحباط.
         budget = socratic_budget(
             payload.concept,
             payload.support_level,
             _count_confusion(payload.history),
+            payload.frustration,
         )
 
         if socratic_count >= budget:
-            action: PolicyAction = "symbolic_reveal"  # نفاد الميزانية ⇒ إنقاذ تربوي
+            action: PolicyAction = "symbolic_reveal"  # نفاد الميزانية/إحباط ⇒ إنقاذ تربوي
         elif not def_given and not answered:
             action = "definition"  # المفهوم جديد ⇒ تعريف موجز
         else:
             action = "socratic"  # لمس الفكرة ⇒ سؤال موجّه واحد (محدود)
 
+        mode = response_mode_for(payload.intent, action, payload.frustration)
         _record(action, answered)
+        with contextlib.suppress(Exception):
+            from app.services.skills.tutor_metrics import (
+                record_frustration,
+                record_intent,
+                record_response_mode,
+            )
+
+            if payload.intent:
+                record_intent(payload.intent)
+            if payload.frustration:
+                record_frustration(payload.frustration)
+            record_response_mode(mode)
         return PolicyOutput(
             action=action,
             acknowledge=answered,
             socratic_count=socratic_count,
             student_answered=answered,
+            response_mode=mode,
         )
 
 
@@ -362,6 +418,7 @@ __all__ = [
     "get_pedagogical_policy_skill",
     "is_answer_message",
     "is_response_to_socratic",
+    "response_mode_for",
     "socratic_budget",
     "student_answered",
 ]

@@ -121,6 +121,40 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
         concept_id="product_even",
         domain="arithmetic_property",
     ),
+    # D-132: مفاهيم التمرين الأخرى (تعريفات حتمية مُؤصَّلة) — جاهزية لمفاهيم التمرين كاملاً.
+    "random_variable": PropertySpec(
+        property_id="random_variable",
+        markers=("المتغير العشوائي", "متغير عشوائي", "المتغيّر العشوائي", "المتغير العشوائي x"),
+        title="ماذا نقصد بالمتغير العشوائي X؟",
+        definition=(
+            "المتغير العشوائي هو **قاعدة تُعطي لكل نتيجة ممكنة عدداً**. في هذا التمرين، X هو **عدد "
+            "الكرات التي تحمل رقماً زوجياً** في السحب الثلاثي — فيأخذ قيمة من 0 إلى 3 حسب السحبة."
+        ),
+        concept_id="random_variable",
+        domain="probability_concept",
+    ),
+    "expected_value": PropertySpec(
+        property_id="expected_value",
+        markers=("الأمل الرياضي", "الامل الرياضي", "الأمل", "أمله", "e(x"),
+        title="ماذا نقصد بالأمل الرياضي E(X)؟",
+        definition=(
+            "الأمل الرياضي E(X) هو **متوسط القيم التي يأخذها المتغير X موزوناً باحتمالاتها** — "
+            "القيمة المتوقَّعة لـ X على المدى الطويل لو كرّرنا السحب كثيراً."
+        ),
+        concept_id="expected_value",
+        domain="probability_concept",
+    ),
+    "conditional_probability": PropertySpec(
+        property_id="conditional_probability",
+        markers=("الاحتمال الشرطي", "احتمال شرطي", "بعلم أن", "بعلم ان", "p_a", "pa(b"),
+        title="ماذا نقصد بالاحتمال الشرطي؟",
+        definition=(
+            "الاحتمال الشرطي هو **احتمال تحقّق حادثة بعلم أن حادثة أخرى قد وقعت**. مثلاً P_A(B) = "
+            "احتمال تحقّق B بشرط أننا نعلم أن A قد تحقّقت — فنُقيّد فضاء الإمكانات بالحالات التي تحقّق A."
+        ),
+        concept_id="conditional_probability",
+        domain="probability_concept",
+    ),
 }
 
 
@@ -370,6 +404,78 @@ class SemanticPropertySkill:
             return None
         except Exception:  # pragma: no cover — fail-safe
             return None
+
+    @classmethod
+    async def define_concept(cls, question: str) -> str | None:
+        """D-132: الـ LLM Listener-Definer — تعريف مفاهيمي قصير لمفهوم **جديد** (محروس).
+
+        جوهر «الجاهزية للأسئلة الجديدة»: المفهوم غير الموجود في السجلّ. الـ LLM يُنتج **تعريفاً
+        عاماً** (معرفة عامة) لا حقيقة محسوبة. تحت سقف صارم قابل للتحقق: لا حساب، لا كشف نتيجة نهائية،
+        عربية فصحى، جملة أو جملتان. أي فشل/شكّ ⇒ None (لا تدهور).
+        """
+        import asyncio
+
+        try:
+            from app.core.ai_gateway import get_ai_client
+
+            system_prompt = (
+                "أنت مُعرِّف مفاهيم تعليمي (Listener-Definer). عرّف المفهوم الذي يسأل عنه الطالب "
+                "في درس الاحتمالات **تعريفاً عاماً قصيراً** (جملة أو جملتان)، عربية فصحى. "
+                "**لا تحسب، لا تحلّ التمرين، ولا تذكر أي نتيجة نهائية أو كسر (مثل 14/165). "
+                "عرّف المفهوم فقط — ما هو؟**"
+            )
+            raw = await asyncio.wait_for(
+                get_ai_client().send_message(
+                    system_prompt, question.strip()[:400], temperature=0.2
+                ),
+                timeout=cls._LLM_TIMEOUT_S,
+            )
+            if not raw or not isinstance(raw, str) or not raw.strip():
+                return None
+            text = raw.strip()
+
+            # ── الحراسة (طبقات قائمة، سقف صارم قابل للتحقق) ──────────────────────
+            import re as _re
+
+            from app.services.skills.answer_redaction_skill import redact_final_answers
+            from app.services.skills.arabic_stream_guard import is_probably_non_arabic
+            from app.services.skills.content_integrity_skill import _strip_garbage_markers
+
+            text = _strip_garbage_markers(text)
+            text, _ = redact_final_answers(text, support_level=5)
+            text = text.strip()
+            if not text or is_probably_non_arabic(text):
+                return None
+            # شبكة أمان: لا كشف نتيجة نهائية رغم الحجب.
+            if _re.search(r"14\s*/\s*165|56\s*/\s*165", text):
+                return None
+            return text
+        except Exception:  # pragma: no cover — fail-safe
+            return None
+
+    async def interpret_or_define(self, question: str) -> SemanticPropertyOutput | None:
+        """D-132: حتمي أولاً (السجلّ)؛ ثم الـ LLM-Definer للأسئلة الجديدة؛ ثم None.
+
+        هذا يجعل المنصة **جاهزة لأي مفهوم جديد**: المفاهيم المعروفة تعريفها حتمي ملموس؛ المفهوم
+        الجديد يُعرَّف عبر الـ Listener-Definer المحروس. لا default مُجمَّد لمفهوم واحد.
+        """
+        out = self.interpret(question)
+        if out is not None:
+            return out
+        if not self.is_definitional(question):
+            return None
+        definition = await self.define_concept(question)
+        if not definition:
+            return None
+        _record("novel", "llm")
+        return SemanticPropertyOutput(
+            property_id="novel",
+            title="تعريف",
+            definition=definition,
+            concept_id="novel",
+            domain="probability_concept",
+            source="llm",
+        )
 
     def diagnose_misconception(
         self,

@@ -29,7 +29,7 @@ try:
         _DEFINITIONAL_ANSWER = Counter(
             "cogniforge_tutor_definitional_answer_total",
             "Definitional questions answered immediately (resolved) or not.",
-            ["concept", "resolved"],
+            ["concept", "source", "resolved"],
         )
         _INTERVENTION = Counter(
             "cogniforge_tutor_intervention_total",
@@ -53,12 +53,19 @@ try:
             if _REPETITION_AVOIDED is not None:
                 _REPETITION_AVOIDED.inc()
 
-    def record_definitional_answer(concept: str, resolved: bool) -> None:
-        """قياس 2: سؤال تعريفي أُجيب بتعريف فوري (resolved=true) أم سقط."""
+    def record_definitional_answer(
+        concept: str, resolved: bool, source: str = "deterministic"
+    ) -> None:
+        """قياس 2: سؤال تعريفي أُجيب بتعريف فوري (resolved=true) أم سقط.
+
+        D-132: ``source`` (deterministic | llm) — ``llm`` يقيس **جاهزية الأسئلة الجديدة**.
+        """
         with contextlib.suppress(Exception):
             if _DEFINITIONAL_ANSWER is not None:
                 _DEFINITIONAL_ANSWER.labels(
-                    concept=concept or "unknown", resolved=str(bool(resolved)).lower()
+                    concept=concept or "unknown",
+                    source=source or "deterministic",
+                    resolved=str(bool(resolved)).lower(),
                 ).inc()
 
     def record_intervention(mtype: str) -> None:
@@ -78,7 +85,9 @@ except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbo
     def record_repetition_avoided() -> None:
         pass
 
-    def record_definitional_answer(concept: str, resolved: bool) -> None:
+    def record_definitional_answer(
+        concept: str, resolved: bool, source: str = "deterministic"
+    ) -> None:
         pass
 
     def record_intervention(mtype: str) -> None:

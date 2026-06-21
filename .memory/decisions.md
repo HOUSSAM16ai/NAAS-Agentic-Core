@@ -4755,3 +4755,24 @@ v1.0.0 (6 قواعد) + CONCEPT_DIAGNOSIS v1.1.0→v1.2.0 + manifest + gate `che
 registry=22 (20 ACTIVE + 2 FLAGGED). نطاق مُقيَّد: الاحتمالات فقط؛ توسيع المنهج + Cognitive Twin الدائم
 مؤجَّل (D-132 roadmap) حتى تُثبت المقاييس الأثر. الحالة: RESOLVED محلياً + live LLM/DB (ruff + py_compile +
 runtime_truth + gate + لا انحدار)؛ WS الكامل في Codespaces.
+
+## D-132 — جاهزية الأسئلة الجديدة: تغطية المفاهيم + LLM Listener-Definer (2026-06-21, ISS-116)
+الكارثة (transcript حي): «ماذا نقصد بالمتغير العشوائي»/«لم افهم المتغير العشوائي» ⇒ النظام يردّ بسؤال
+سقراطي عن الحادثة A بدل تعريف المتغير العشوائي. الجذر: نظام بـ10 مفاهيم ثابتة + default-ان مُجمَّدان
+(`_stream_socratic_evaluation` unknown→event_meaning؛ `_build_cognitive_response` interpret None→same_color)
+يوجّهان أي مفهوم غير معروف للحادثة A؛ random_variable بلا تعريف في PROPERTY_REGISTRY. نقد المالك: المنصة
+تتعامل مع نص السؤال لا النية؛ الطالب يطرح أسئلة جديدة دائماً. الإصلاح (D-132، 4 طبقات): (1) توسيع
+PROPERTY_REGISTRY بمفاهيم التمرين (random_variable/expected_value/conditional) تعريفات حتمية؛ (2)
+`define_concept` — LLM Listener-Definer للمفاهيم الجديدة (تعريف مفاهيمي عام محروس: redact_final_answers +
+_strip_garbage_markers + is_probably_non_arabic + timeout + شبكة 14/165 + fallback)، + `interpret_or_define`
+(حتمي أولاً ثم Definer)؛ (3) إزالة الـ default-ين المُجمَّدين (event_meaning يُرجِع None للمفهوم غير الحدثي،
+same_color مشروط بسؤال حدثي صريح)؛ (4) preempt تعريفي عام في chat_with_agent (يسبق الالتقاط السقراطي،
+يلتقط «ماذا نقصد»/«لم افهم X» عن مفهوم مُسمّى، ممنوع على طلبات الحساب) + metric source label
+(deterministic|llm). doctrine SEMANTIC_PROPERTY v1.0.0→v1.1.0 + gate check_semantic_property_wired (D-132:
+define_concept + interpret_or_define + لا default مُجمَّد + preempt قبل السقراطية). سقف الـ LLM (قرار المالك):
+Listener+Definer لا judge — يُعرّف المفهوم لا يحسب الحقيقة. تحقق حي: OpenRouter (4 مفاهيم جديدة غير في
+السجلّ: الوسيط/الانحراف المعياري/الحوادث المستقلة/فضاء العينة ⇒ 4/4 تعريفات عربية صفر كشف) + standalone
+(المتغير العشوائي ⇒ random_variable لا same_color؛ preempt قبل السقراطية؛ طلبات الحساب لا تُفعّله) +
+Supabase bridge (4054 رسالة). registry=22. نطاق مُقيَّد (الاحتمالات)؛ twin دائم/توسيع المنهج مؤجَّل حتى
+تُثبت المقاييس (source=llm) الأثر. الحالة: RESOLVED محلياً + live LLM/DB (ruff + py_compile + runtime_truth +
+gate + لا انحدار)؛ WS الكامل في Codespaces.

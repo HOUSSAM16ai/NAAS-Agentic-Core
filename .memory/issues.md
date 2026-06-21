@@ -4272,3 +4272,14 @@ v1.0.0 + CONCEPT_DIAGNOSIS v1.2.0 + gate `check_semantic_property_wired`. تحق
 معدوم + دارجة ⇒ product_zero، 6/7) + standalone (الثلاثة طلاب → عقد/تدخّلات/bkt مختلفة) + Supabase bridge
 (4040 رسالة). registry=22 (20 ACTIVE + 2 FLAGGED). نطاق مُقيَّد (الاحتمالات فقط)؛ التوسّع مؤجَّل (D-132)
 حتى تُثبت المقاييس الأثر. الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل في Codespaces.
+
+## ISS-116 (D-132) — «المتغير العشوائي» ⇒ سؤال عن الحادثة A + جاهزية الأسئلة الجديدة (2026-06-21)
+«ماذا نقصد بالمتغير العشوائي»/«لم افهم المتغير العشوائي» ⇒ النظام يردّ بسؤال سقراطي عن الحادثة A بدل
+تعريف X. الجذر: 10 مفاهيم ثابتة + default-ان مُجمَّدان (unknown→event_meaning، interpret None→same_color)؛
+random_variable بلا تعريف. الإصلاح (D-132): توسيع PROPERTY_REGISTRY (random_variable/expected_value/
+conditional تعريفات حتمية) + `define_concept` LLM Listener-Definer محروس للمفاهيم الجديدة + `interpret_or_define`
++ إزالة الـ default-ين المُجمَّدين + preempt تعريفي عام (قبل السقراطية، «ماذا نقصد»/«لم افهم X»، ممنوع على
+الحساب) + metric source label. doctrine v1.1.0 + gate D-132. سقف الـ LLM: Definer لا judge (يُعرّف لا يحسب).
+تحقق حي: OpenRouter (4 مفاهيم جديدة ⇒ 4/4 تعريفات صفر كشف) + standalone (X→random_variable لا same_color) +
+Supabase (4054 رسالة). registry=22. نطاق الاحتمالات؛ توسيع/twin مؤجَّل حتى تُثبت المقاييس الأثر. الحالة:
+RESOLVED محلياً + live LLM/DB؛ WS الكامل في Codespaces.

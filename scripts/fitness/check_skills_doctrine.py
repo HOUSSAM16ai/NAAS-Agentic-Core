@@ -647,10 +647,75 @@ def check_socratic_evaluator_wired() -> None:
     _pass("Socratic evaluator wired: active-listener capture before indexed-retrieval (D-130)")
 
 
+def check_semantic_property_wired() -> None:
+    """D-131 (الطبقة 2 — الطبقة الدلالية + Misconception Graph): يحرس التوصيل.
+
+    الكارثة: «ماذا نقصد بجداء معدوم» لا يُجاب لأن event_meaning مُجمَّد على الحادثة A.
+    الحل: طبقة دلالية عامة data-driven (لا special-casing) + Misconception Graph «شخّص ثم
+    تدخّل». يحرس: (1) manifest متّسق، (2) الـ Skill يستهلك doctrine، (3) `_build_cognitive_response`
+    يستدعي الطبقة (لا if/elif لكل حادثة)، (4) كل عقدة misconception لها `bkt_concept` + `mtype` من
+    التصنيف الثلاثي (لا عقدة بلا أثر)، (5) المقاييس السلوكية الأربعة لها مُصدِر حيّ.
+    """
+    from app.services.skills.doctrine import (
+        SEMANTIC_PROPERTY_DOCTRINE,
+        SEMANTIC_PROPERTY_DOCTRINE_VERSION,
+        SKILL_DOCTRINE_MANIFEST,
+    )
+    from app.services.skills.semantic_property_skill import (
+        MISCONCEPTION_GRAPH,
+        MISCONCEPTION_TYPES,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("semantic_property")
+    if entry is None:
+        _fail("Manifest missing 'semantic_property' entry (D-131).")
+    if entry["version"] != SEMANTIC_PROPERTY_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for semantic_property (D-131).")
+    if entry["rules_count"] != len(SEMANTIC_PROPERTY_DOCTRINE):
+        _fail("Manifest rules_count mismatch for semantic_property (D-131).")
+
+    skill = (ROOT / "app/services/skills/semantic_property_skill.py").read_text(encoding="utf-8")
+    if "from app.services.skills.doctrine import" not in skill:
+        _fail("semantic_property_skill.py does not consume doctrine (D-131).")
+    if "PROPERTY_REGISTRY" not in skill or "MISCONCEPTION_GRAPH" not in skill:
+        _fail("semantic_property_skill.py lost the data-driven registry/graph (D-131).")
+
+    # D-131: كل عقدة misconception لها bkt_concept + mtype صحيح (لا عقدة بلا أثر).
+    for concept_id, nodes in MISCONCEPTION_GRAPH.items():
+        for node in nodes:
+            if not node.bkt_concept:
+                _fail(f"Misconception node '{node.id}' ({concept_id}) lacks bkt_concept (D-131).")
+            if node.mtype not in MISCONCEPTION_TYPES:
+                _fail(f"Misconception node '{node.id}' has invalid mtype '{node.mtype}' (D-131).")
+
+    # التوصيل: نداء واحد للطبقة في _build_cognitive_response (لا special-casing لكل حادثة).
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    if "get_semantic_property_skill" not in client_src:
+        _fail("orchestrator_client does not invoke the semantic layer (D-131 ZOMBIE).")
+    if "diagnose_misconception" not in client_src:
+        _fail("orchestrator_client does not use the Misconception Graph (D-131 — diagnose).")
+
+    # المقاييس السلوكية الأربعة (§5) لها مُصدِر حيّ.
+    metrics_src = (ROOT / "app/services/skills/tutor_metrics.py").read_text(encoding="utf-8")
+    for fn in (
+        "record_repetition_avoided",
+        "record_definitional_answer",
+        "record_intervention",
+        "record_progress",
+    ):
+        if f"def {fn}" not in metrics_src:
+            _fail(f"tutor_metrics missing behavioral metric {fn} (D-131 §5).")
+        if fn not in client_src:
+            _fail(f"behavioral metric {fn} has no live emitter in orchestrator_client (D-131 §5).")
+    _pass("Semantic layer + Misconception Graph wired, behavioral metrics live (D-131)")
+
+
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
@@ -668,6 +733,7 @@ def main() -> None:
     check_socratic_protocol_wired()
     check_pedagogical_policy_wired()
     check_socratic_evaluator_wired()
+    check_semantic_property_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

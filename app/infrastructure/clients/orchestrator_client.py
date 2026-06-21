@@ -2122,18 +2122,29 @@ class OrchestratorClient:
                     "ترتيب»؟ أخبرني."
                 )
 
-        # ── event_meaning (معنى الحادثة A) — D-128 ────────────────────────────
+        # ── event_meaning (معنى الحادثة A/B/C/D) — D-131: الطبقة الدلالية العامة ──
+        # نداء واحد للطبقة الدلالية (data-driven، لا special-casing لكل حادثة). يُغطّي
+        # «جداء معدوم/فردي/زوجي» + «نفس اللون» عبر PROPERTY_REGISTRY. الافتراض A للسؤال العام.
         if concept == "event_meaning":
             if level == 0:
-                return (
-                    "## ماذا نقصد بالحادثة A؟\n\n"
-                    "الحادثة A هي **الهدف** الذي نريد حساب احتماله: الحصول على **3 كرات من نفس "
-                    "اللون** عند سحب 3 دفعةً واحدة.\n\n"
-                    "أي السحبة «تنجح» وتحقّق A إذا كانت الكرات الثلاث **كلها حمراء**، أو **كلها "
-                    "خضراء**، أو **كلها بيضاء**. وإلا فالحادثة A لم تتحقّق.\n\n"
-                    "لاحظ: عدد البيضاء 2 فقط، فلا يمكن سحب 3 بيضاء — إذن A تتحقّق باللون الأحمر "
-                    "أو الأخضر."
+                from app.services.skills.semantic_property_skill import (
+                    PROPERTY_REGISTRY,
+                    get_semantic_property_skill,
                 )
+                from app.services.skills.tutor_metrics import record_definitional_answer
+
+                _sp = get_semantic_property_skill().interpret(question)
+                if _sp is None:  # سؤال تعريفي عام «ماذا نقصد بالحادثة» ⇒ الافتراض A
+                    _sp_spec = PROPERTY_REGISTRY["same_color"]
+                    _pid, _title, _definition = (
+                        _sp_spec.property_id,
+                        _sp_spec.title,
+                        _sp_spec.definition,
+                    )
+                else:
+                    _pid, _title, _definition = _sp.property_id, _sp.title, _sp.definition
+                record_definitional_answer(_pid, resolved=True)
+                return f"## {_title}\n\n{_definition}"
             # level >= 1 ⇒ يُستبدَل بالسرد السقراطي المُولَّد (chat_with_agent)؛ هذا fallback.
             return (
                 "الحادثة A تعني «3 كرات من نفس اللون». سؤال لك: لو سحبت 3 كرات، متى تقول إنها "
@@ -2410,14 +2421,22 @@ class OrchestratorClient:
                 ConceptDiagnosisInput,
                 get_concept_diagnosis_skill,
             )
+            from app.services.skills.semantic_property_skill import get_semantic_property_skill
             from app.services.skills.socratic_evaluator_skill import (
                 SocraticEvaluatorInput,
                 get_socratic_evaluator_skill,
+            )
+            from app.services.skills.tutor_metrics import (
+                record_intervention,
+                record_progress,
+                record_repetition_avoided,
             )
 
             combo = self._load_canonical_combinations(question, history_messages)
             if combo is None:
                 return  # غير احتمالات ⇒ لا نلتقط (المسار يُكمل)
+            # قياس 1 (D-131 §5): التقطنا إجابة الطالب بدل إعادة طباعة التمرين.
+            record_repetition_avoided()
 
             # المفهوم الحالي: من السؤال السقراطي السابق + إجابة الطالب (الطبقة 1، D-127).
             prior_socratic = ""
@@ -2443,17 +2462,36 @@ class OrchestratorClient:
                 )
             )
 
+            _mtype = ""
             if result.understood:
                 body = self._build_symbolic_step(combo, result.next_focus, acknowledge=True)
                 # نُسبق التشجيع المُولَّد (إن وُجد ولم يكن مكرّراً للاعتراف القياسي).
                 enc = (result.encouragement or "").strip()
                 text = f"{enc}\n\n{body}" if enc and "الطريق الصحيح" not in enc else body
+                record_progress("advanced")  # قياس 4: تقدّم لخطوة جديدة
             else:
+                # D-131 «شخّص ثم تدخّل»: نشخّص الاعتقاد الخاطئ من رد الطالب ⇒ تدخّل مُوجَّه
+                # (مختلف لكل misconception)، لا تلميح موحَّد. عند الغموض نُصدر probe تشخيصياً.
                 enc = (result.encouragement or "فكرة جيدة — لنقترب أكثر.").strip()
-                text = (
-                    f"{enc} لاحظ نوع كل كرة: أيّ الألوان يكفي عددها لسحب 3 منها معاً؟ "
-                    "ابدأ بعدّ الألوان الممكنة فقط."
+                _mc = get_semantic_property_skill().diagnose_misconception(
+                    concept, question, history_messages
                 )
+                if _mc is not None:
+                    _mtype = _mc.mtype
+                    record_intervention(_mc.mtype)  # قياس 3: تدخّل مُصنَّف بنوع الاعتقاد الخاطئ
+                    record_progress("advanced")
+                    text = f"{enc}\n\n{_mc.intervention}"
+                else:
+                    _probe = get_semantic_property_skill().first_probe(concept)
+                    record_progress("repeated")
+                    text = (
+                        f"{enc} {_probe}"
+                        if _probe
+                        else (
+                            f"{enc} لاحظ نوع كل كرة: أيّ الألوان يكفي عددها لسحب 3 منها معاً؟ "
+                            "ابدأ بعدّ الألوان الممكنة فقط."
+                        )
+                    )
 
             logger.info(
                 "socratic_evaluation",
@@ -2462,6 +2500,7 @@ class OrchestratorClient:
                     "understood": result.understood,
                     "source": result.source,
                     "next_focus": result.next_focus or "",
+                    "misconception_mtype": _mtype,
                 },
             )
 

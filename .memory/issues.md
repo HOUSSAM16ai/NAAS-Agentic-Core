@@ -4258,3 +4258,17 @@ D-113). تحسينا المالك: (A) `is_response_to_socratic` كشف بالف
 العبقرية → understood=true + تشجيع يعترف بـ«البيضاء مستحيلة» + صفر كشف؛ خاطئة → understood=false) +
 standalone + Supabase bridge (4028 رسالة). registry=21 (19 ACTIVE + 2 FLAGGED). الحالة: RESOLVED
 محلياً + live LLM/DB؛ WS الكامل في Codespaces.
+
+## ISS-116 (D-131) — «ماذا نقصد بجداء معدوم» لا يُجاب + من Concept إلى Misconception Graph (2026-06-21)
+«ماذا نقصد بجداء أرقامها معدوم؟» (الحادثة D) لا يُجاب — فرع `event_meaning` مُجمَّد على الحادثة A («نفس
+اللون»)، و`_EVENT_MARKERS` لا يطابق «جداء/معدوم». نقد المالك: لا special-casing بـ if/elif لكل حادثة؛
+القفزة من Concept Graph إلى Misconception Graph؛ LLM = Listener فقط؛ قياس سلوكي قبل التوسّع. الإصلاح
+(D-131، الطبقة 2): `SemanticPropertySkill` (#22) — طبقة دلالية عامة data-driven (`PROPERTY_REGISTRY`
+A/B/C/D، إضافة خاصية = مدخل لا فرع كود) + تعريفات حتمية (معدوم→«كرة واحدة على الأقل تحمل 0»)؛
+`MISCONCEPTION_GRAPH` «شخّص ثم تدخّل» (3 طلاب نفس السؤال ⇒ 3 misconceptions ⇒ 3 تدخّلات، كل عقدة لها
+mtype ثلاثي + bkt_concept صريح + probe)؛ `tutor_metrics` 4 مقاييس سلوكية حيّة؛ `_build_cognitive_response`
+نداء واحد للطبقة (لا if/elif)؛ `bkt_engine` يتعرّف على product_zero/odd/even. doctrine SEMANTIC_PROPERTY
+v1.0.0 + CONCEPT_DIAGNOSIS v1.2.0 + gate `check_semantic_property_wired`. تحقق حي: OpenRouter (Listener:
+معدوم + دارجة ⇒ product_zero، 6/7) + standalone (الثلاثة طلاب → عقد/تدخّلات/bkt مختلفة) + Supabase bridge
+(4040 رسالة). registry=22 (20 ACTIVE + 2 FLAGGED). نطاق مُقيَّد (الاحتمالات فقط)؛ التوسّع مؤجَّل (D-132)
+حتى تُثبت المقاييس الأثر. الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل في Codespaces.

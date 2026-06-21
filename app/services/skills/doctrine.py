@@ -521,7 +521,8 @@ BKT_COGNITIVE_DOCTRINE: Final[tuple[str, ...]] = (
 )
 
 # ── D-127/D-128: المعمارية الإدراكية العصبية-الرمزية — الطبقات 1 (الفهم) و 4 (السقراطي) و 5 ──
-CONCEPT_DIAGNOSIS_DOCTRINE_VERSION: Final[str] = "1.1.0"
+# D-131: event_meaning يشمل خصائص الجداء (B/C/D) عبر الطبقة الدلالية العامة.
+CONCEPT_DIAGNOSIS_DOCTRINE_VERSION: Final[str] = "1.2.0"
 
 #: قوانين غير قابلة للكسر تحكم تشخيص المفهوم (الطبقة 1) + النموذج العقلي (الطبقة 5) +
 #: السرد السقراطي المُولَّد (الطبقة 4، D-128).
@@ -545,6 +546,31 @@ CONCEPT_DIAGNOSIS_DOCTRINE: Final[tuple[str, ...]] = (
     "+ timeout + fallback حتمي. أي فشل/شكّ ⇒ القالب الحتمي (لا تدهور للطالب). يُلغي التكرار.",
     "مفهوم event_meaning (معنى الحادثة A/B/C/D) = تعريف الحدث الملموس من نص التمرين (حقيقة)، "
     "لا الحل الكامل. كل صياغات معنى الحادثة ⇒ event_meaning.",
+    # D-131 (الطبقة الدلالية العامة):
+    "event_meaning يشمل خصائص الجداء (B فردي / C زوجي / D معدوم) عبر الطبقة الدلالية العامة "
+    "(SemanticPropertySkill) — لا special-casing لكل حادثة. «ماذا نقصد بجداء معدوم» ⇒ تعريف "
+    "حتمي (الرقم 0)، لا «نفس اللون» الخاطئ ولا حساب.",
+)
+
+
+# ── D-131: الطبقة الدلالية + Misconception Graph — الطبقة 2 (substrate التوأم المعرفي) ──
+SEMANTIC_PROPERTY_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم الطبقة الدلالية + شبكة المفاهيم الخاطئة (D-131).
+SEMANTIC_PROPERTY_DOCTRINE: Final[tuple[str, ...]] = (
+    "طبقة دلالية عامة data-driven لا special-casing: أي خاصية/اعتقاد خاطئ جديد = مدخل في "
+    "PROPERTY_REGISTRY / MISCONCEPTION_GRAPH، لا فرع if/elif جديد. مفسّر واحد لكل العبارات الرياضية.",
+    "المعمارية العصبية-الرمزية: الـ LLM = Listener فقط (لغة حرّة → property/misconception canonical "
+    "عبر مخرج enum مُقيَّد محروس + fallback حتمي) — ليس حَكماً خفياً ولا مصدراً للحقيقة. الأرقام من "
+    "المحرك الرمزي حصراً (الطبقة 3). دمج لا اختيار.",
+    "Misconception Graph «شخّص ثم تدخّل»: نفس المفهوم بـ misconceptions مختلفة ⇒ تدخّلات مختلفة. "
+    "عند الغموض يُصدَر probe تشخيصي قبل التدخّل. ممنوع تدخّل واحد موحَّد لكل من يسأل عن نفس المفهوم.",
+    "تصنيف الاعتقاد الخاطئ مبدئي صغير: rule_property | symbol_meaning | example_linking — لا اسم "
+    "جديد لكل خطأ (يمنع تضخّم عقد متشابهة). كل عقدة لها bkt_concept صريح (لا عقدة بلا أثر مقاس).",
+    "التعريف حقيقة حتمية (الطبقة 3) يُسلَّم للسياسة لا نهايةُ المسار: التعريف ثم السياسة التربوية "
+    "(D-129: تعريف→سؤال→اعتراف→تقدّم) — فتُجاب «لماذا/كيف» لا «ما معنى» فقط.",
+    "القياس قبل التوسّع: أي توسّع (مفاهيم منهج أخرى / twin دائم) مؤجَّل حتى تُثبت المقاييس السلوكية "
+    "(cogniforge_tutor_*) تحسّناً حقيقياً: تقليل التكرار، تعريف فوري، اختلاف التدخّلات، تقدّم بعد كل تفاعل.",
 )
 
 
@@ -1012,6 +1038,15 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "orchestrator_client.chat_with_agent",
         ),
     },
+    "semantic_property": {
+        "version": SEMANTIC_PROPERTY_DOCTRINE_VERSION,
+        "rules_count": len(SEMANTIC_PROPERTY_DOCTRINE),
+        "consumed_by": (
+            # D-131: الطبقة 2 — الطبقة الدلالية + Misconception Graph.
+            "SemanticPropertySkill.interpret",
+            "orchestrator_client._build_cognitive_response",
+        ),
+    },
     "pedagogical_policy": {
         "version": PEDAGOGICAL_POLICY_DOCTRINE_VERSION,
         "rules_count": len(PEDAGOGICAL_POLICY_DOCTRINE),
@@ -1277,6 +1312,8 @@ __all__ = [
     "REALTIME_PROTOCOL_DOCTRINE_VERSION",
     "RETRIEVAL_DOCTRINE",
     "RETRIEVAL_DOCTRINE_VERSION",
+    "SEMANTIC_PROPERTY_DOCTRINE",
+    "SEMANTIC_PROPERTY_DOCTRINE_VERSION",
     "SKILLS_PLATFORM_DOCTRINE",
     "SKILLS_PLATFORM_DOCTRINE_VERSION",
     "SKILL_DOCTRINE_MANIFEST",

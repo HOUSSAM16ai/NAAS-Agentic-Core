@@ -4730,3 +4730,28 @@ v1.0.0 (6 قواعد) + PEDAGOGICAL_POLICY v1.0.0→v1.1.0 (7 قواعد) + mani
 الالتقاط قبل _has_indexed_match) + Supabase bridge (4028 رسالة). registry=21 (19 ACTIVE + 2 FLAGGED).
 الحالة: RESOLVED محلياً + live LLM/DB (ruff + py_compile + runtime_truth + gate + لا انحدار)؛ WS الكامل
 في Codespaces.
+
+## D-131 — الطبقة الدلالية العامة + Misconception Graph (substrate التوأم المعرفي) (2026-06-21, ISS-116)
+الكارثة (transcript حي): «ماذا نقصد بجداء أرقامها معدوم؟» (شرط الحادثة D) لا يُجاب — بينما «ماذا نقصد
+بالحادثة A» تعمل. الجذر: فرع `event_meaning` في `_build_cognitive_response` **مُجمَّد على الحادثة A**
+(«نفس اللون»)؛ و`_EVENT_MARKERS` لا يطابق «جداء/معدوم». نقد المالك (CTO-grade): (1) لا special-casing
+بـ if/elif لكل حادثة — طبقة دلالية عامة؛ (2) القفزة من Concept Graph إلى **Misconception Graph** («ما
+الاعتقاد الخاطئ؟»)؛ (3) LLM = Listener فقط؛ (4) **قياس سلوكي** قبل أي توسّع. الإصلاح (الطبقة 2 العصبي-
+الرمزي): (1) `SemanticPropertySkill` (#22) — مفسّر واحد + `PROPERTY_REGISTRY` data-driven (إضافة خاصية =
+مدخل dict، لا فرع كود) يُغطّي A(same_color)/B(product_odd)/C(product_even)/D(product_zero)؛ التعريفات
+حقائق حتمية (معدوم→«كرة واحدة على الأقل تحمل 0»). `interpret` حتمي + `interpret_or_classify` هجين (LLM
+Listener: enum مُقيَّد + timeout + fallback)؛ (2) `MISCONCEPTION_GRAPH` — «شخّص ثم تدخّل»: 3 طلاب نفس
+السؤال ⇒ 3 misconceptions مختلفة (`unknown_zero_property`/`unknown_product_meaning`/`unknown_ball_mapping`)
+⇒ 3 تدخّلات مختلفة. كل عقدة لها `mtype` (تصنيف ثلاثي rule_property/symbol_meaning/example_linking) +
+`bkt_concept` صريح (لا عقدة بلا أثر) + `probe` تشخيصي. `diagnose_misconception` حتمي بـ signals، موصول
+في `_stream_socratic_evaluation` (D-130) عند understood=false؛ (3) `tutor_metrics` — 4 مقاييس سلوكية
+(`cogniforge_tutor_repetition_avoided/definitional_answer/intervention/progress`) بمُصدِرات حيّة؛ (4)
+`_build_cognitive_response` event_meaning = نداء واحد للطبقة (لا if/elif)؛ `concept_diagnosis._EVENT_MARKERS`
++ «جداء/معدوم»؛ `bkt_engine.classify_concept` يتعرّف على product_zero/odd/even. doctrine SEMANTIC_PROPERTY
+v1.0.0 (6 قواعد) + CONCEPT_DIAGNOSIS v1.1.0→v1.2.0 + manifest + gate `check_semantic_property_wired`
+(يحرس: لا special-casing + كل عقدة لها bkt_concept/mtype + المقاييس الأربعة حيّة). تحقق حي: OpenRouter
+(الـ Listener: «معدوم» + دارجة «واش راه/علاش قال» ⇒ product_zero، 6/7) + standalone (الثلاثة طلاب → 3 عقد
++ 3 mtypes + 3 تدخّلات + 3 bkt_concepts؛ لا special-casing؛ صفر أرقام نهائية) + Supabase bridge (4040 رسالة).
+registry=22 (20 ACTIVE + 2 FLAGGED). نطاق مُقيَّد: الاحتمالات فقط؛ توسيع المنهج + Cognitive Twin الدائم
+مؤجَّل (D-132 roadmap) حتى تُثبت المقاييس الأثر. الحالة: RESOLVED محلياً + live LLM/DB (ruff + py_compile +
+runtime_truth + gate + لا انحدار)؛ WS الكامل في Codespaces.

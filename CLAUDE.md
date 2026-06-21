@@ -9885,3 +9885,76 @@ LLM مسموح فقط في غير الحاسم (صياغة/تلخيص غير ر�
 |----------|---------|
 | D-129 | محرّك السياسة التربوية: تعريف→سؤال محدود→اعتراف→حلّ رمزي (يكسر حلقة الاستجواب اللانهائي) |
 | **D-130** | **الإصغاء النشط: مُقيّم الإجابات السقراطي + قفل الحالة عبر التاريخ + كشف بالفعل الكلامي + ميزانية تكيّفية (يحل الخيانة البيداغوجية)** |
+
+---
+
+## 6.115 الطبقة الدلالية + Misconception Graph — substrate التوأم المعرفي (2026-06-21, ISS-116 / D-131)
+
+> **الكارثة (transcript المالك):** «ماذا نقصد بجداء أرقامها معدوم؟» (تعريف شرط الحادثة D) لا يُجاب —
+> بينما «ماذا نقصد بالحادثة A؟» تعمل. السبب: فرع `event_meaning` في `_build_cognitive_response` كان
+> **مُجمَّداً على الحادثة A** («نفس اللون»). تشخيص المالك: المنصة تتعامل مع **نص** السؤال لا **نوعه**.
+
+### القرار التنفيذي (CTO-grade) — نحتفظ / نؤجّل / نقيس
+حكم المالك يُقيّد النطاق ويمنع تضخّم الطبقات بلا أثر:
+- **نحتفظ:** طبقة دلالية عامة واحدة (لا special-casing) · LLM كـ **Listener فقط** (enum مُقيَّد) ·
+  المحرك الرمزي = الحقيقة · ربط الخرج بـ D-129 + D-130 + BKT.
+- **نؤجّل (ADR منفصل):** توسيع Misconception Graph لكل المنهج · Cognitive Twin دائم مُجمَّع · أي تعقيد
+  في LangGraph/الخدمات المصغرة. النطاق الآن = **مجال الاحتمالات فقط**.
+- **نقيس (الشرط الوحيد للنجاح):** المقاييس السلوكية الأربعة (`cogniforge_tutor_*`).
+
+### الإصلاح (D-131 — الطبقة 2: الطبقة الدلالية + Misconception Graph)
+- **`SemanticPropertySkill` (#22، `semantic_property_skill.py`)**: **مفسّر واحد + `PROPERTY_REGISTRY`
+  data-driven** (إضافة خاصية = مدخل dict، **لا فرع كود**). يُغطّي A (same_color) / B (product_odd) /
+  C (product_even) / D (product_zero) عبر السجلّ. `interpret(question)` حتمي؛ `interpret_or_classify`
+  هجين (حتمي ثم LLM Listener محروس: enum مُقيَّد + timeout + fallback). التعريفات حقائق ملموسة (الطبقة 3):
+  معدوم→«حاصل ضرب = 0، كرة واحدة على الأقل تحمل 0»؛ فردي→«كلها فردية»؛ زوجي→«واحدة زوجية على الأقل».
+- **`MISCONCEPTION_GRAPH` (الطبقة 2 الحقيقية — «شخّص ثم تدخّل»)**: القفزة من Concept Graph إلى
+  Misconception Graph. ثلاثة طلاب يسألون «ماذا يعني الجداء معدوم؟» لكنهم يحملون misconceptions مختلفة ⇒
+  **تدخّلات مختلفة**: `unknown_zero_property` (mtype=rule_property، probe «كم 7×0؟») /
+  `unknown_product_meaning` (symbol_meaning، «الجداء جمع أم ضرب؟») / `unknown_ball_mapping`
+  (example_linking، «أي كرة تحمل 0؟»). كل عقدة لها `mtype` (تصنيف ثلاثي صغير يمنع تضخّم العقد) +
+  `bkt_concept` صريح (**لا عقدة بلا أثر**). `diagnose_misconception` حتمي بـ signals؛ عند الغموض يُصدَر
+  probe تشخيصي قبل التدخّل.
+- **الربط:** `_build_cognitive_response` فرع `event_meaning` = **نداء واحد** للطبقة الدلالية (لا if/elif
+  لكل حادثة)؛ `_stream_socratic_evaluation` (D-130) عند understood=false ⇒ `diagnose_misconception` ⇒
+  تدخّل مُوجَّه. `concept_diagnosis._EVENT_MARKERS` + «جداء/معدوم» ⇒ event_meaning. `bkt_engine.classify_concept`
+  يتعرّف على `product_zero/odd/even`.
+- **القياس السلوكي (§5، `tutor_metrics.py`)**: 4 مقاييس Prometheus بمُصدِرات حيّة —
+  `cogniforge_tutor_repetition_avoided_total` · `_definitional_answer_total{concept,resolved}` ·
+  `_intervention_total{mtype}` · `_progress_total{outcome}`. تُثبت: تراجع التكرار، تعريف فوري، اختلاف
+  التدخّلات، تقدّم بعد كل تفاعل. **بلا قياس = لا نجاح.**
+
+### القواعد الـ 9 الدائمة (D-131 — لا تُكسر بدون ADR)
+1. طبقة دلالية عامة لا special-casing (خاصية/اعتقاد جديد = مدخل data).
+2. «شخّص ثم تدخّل»: نفس المفهوم بـ misconceptions مختلفة ⇒ تدخّلات مختلفة + probe عند الغموض.
+3. التعريف حقيقة حتمية (الطبقة 3) يُسلَّم للسياسة (D-129) لا نهايةُ المسار.
+4. LLM للفهم لا للحقيقة؛ الأرقام من المحرك الرمزي حصراً.
+5. كل (property, misconception) تُسجَّل في BKT (الطبقة 2+5) — صورة عقلية لا «صحيح/خطأ».
+6. enum مستقر (التمييز داخل event_meaning عبر الطبقة الدلالية).
+7. سقف الـ LLM (Listener فقط): enum مُقيَّد محروس + fallback حتمي — لا حَكم خفي.
+8. القياس قبل التوسّع: أي توسّع مؤجَّل حتى تُثبت المقاييس الأربعة أثراً. عقدة بلا `bkt_concept` = ممنوعة.
+9. تصنيف الاعتقاد الخاطئ ثلاثي صغير (`rule_property|symbol_meaning|example_linking`) — لا اسم لكل خطأ.
+
+### التحقق الحي (2026-06-21 — اجبارية المالك، full stack)
+- **OpenRouter LIVE (المفتاح الحقيقي):** الـ Listener — «ماذا نقصد بجداء أرقامها معدوم» + صياغات دارجة
+  («واش راه هاد الجداء المعدوم»، «علاش قال معدوم») ⇒ `product_zero` (6/7، صفر حساب) ✅.
+- **Standalone (sandbox يحجب pydantic):** توجيه A/B/C/D data-driven؛ التعريفات الصحيحة؛ **الثلاثة طلاب →
+  3 عقد + 3 mtypes + 3 تدخّلات + 3 bkt_concepts مختلفة**؛ لا special-casing (نداء واحد)؛ صفر أرقام نهائية.
+- **Supabase Edge bridge (HTTPS:443):** النظام حيّ (4040 رسالة).
+- **بوّابات:** ruff + py_compile 3.12 + runtime_truth + `check_semantic_property_wired` + لا انحدار.
+  registry=22 (20 ACTIVE + 2 FLAGGED).
+- **Codespaces (WS كامل — متبقٍّ):** «ماذا نقصد بجداء معدوم» ⇒ تعريف D الملموس (الرقم 0)، لا حل، لا «نفس
+  اللون» الخاطئ؛ ثم السياسة (D-129) تُكمل. الدخولان الحقيقيان.
+
+### خريطة التوأم المعرفي (D-132 roadmap) — الطبقات القائمة + الناقص
+| الطبقة | الـ Skill | الحالة |
+|--------|-----------|--------|
+| 1 Listener · 2 Misconception · 3 Symbolic · 4 Planner · 5 BKT · 6 Adaptive | ConceptDiagnosis · **SemanticProperty(D-131)** · ProbabilityCalculator · PedagogicalPolicy · BKTEngine · AdaptivePedagogy | كلها قائمة |
+**الناقص (ADR منفصل، بعد إثبات الأثر):** Frustration State · Learning Preference/Transfer · persisted Twin
+في جدول · توسيع MISCONCEPTION_GRAPH لكل المنهج. الخدمات المصغرة + LangGraph 13-node (D-112) مسار الأسئلة العامة.
+
+### السلسلة (D-130 → D-131)
+| Decision | الموضوع |
+|----------|---------|
+| D-130 | الإصغاء النشط: مُقيّم الإجابات السقراطي |
+| **D-131** | **الطبقة الدلالية العامة + Misconception Graph («شخّص ثم تدخّل») + القياس السلوكي (يحل «جداء معدوم لا يُجاب»)** |

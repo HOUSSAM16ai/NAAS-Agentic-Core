@@ -67,6 +67,10 @@ _CONCEPT_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
         "conditional_probability",
         ("احتمال شرط", "احتمال مشروط", "شجرة الاحتمال", "شجرة احتمال", "بشرط", "conditional"),
     ),
+    # D-131: مفاهيم خصائص الجداء الدقيقة (Misconception Graph → BKT). الأكثر تحديداً أولاً.
+    ("product_zero", ("جداء معدوم", "حاصل الضرب معدوم", "ارقامها معدوم", "جداء صفر", "معدوم")),
+    ("product_odd", ("جداء فردي", "حاصل الضرب فردي", "ارقامها فردي")),
+    ("product_even", ("جداء زوجي", "حاصل الضرب زوجي", "ارقامها زوجي")),
     ("probability", ("احتمال", "احتمالات", "عشوائي", "حادثة", "probabilit", "variable aléatoire")),
     (
         "integration",

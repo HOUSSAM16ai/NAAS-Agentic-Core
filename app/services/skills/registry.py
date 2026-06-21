@@ -394,6 +394,15 @@ def _build_registry() -> SkillRegistry:
             consumed_by=("orchestrator_client.chat_with_agent",),
         ),
         SkillDescriptor(
+            name="semantic_property",
+            summary="الطبقة 2 — الطبقة الدلالية + Misconception Graph (شخّص ثم تدخّل، D-131).",
+            input_contract="SemanticPropertyInput",
+            output_contract="SemanticPropertyOutput",
+            primary_method="interpret",
+            metrics_prefix="cogniforge_skill_semantic_property",
+            consumed_by=("orchestrator_client._build_cognitive_response",),
+        ),
+        SkillDescriptor(
             name="socratic_evaluator",
             summary="الطبقة 1 — مُقيّم الإجابات السقراطي (الإصغاء النشط): يُقيّم رد الطالب الحرّ (D-130).",
             input_contract="SocraticEvaluatorInput",

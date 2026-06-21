@@ -121,18 +121,135 @@ def definition_already_given(history: list[dict[str, str]] | None) -> bool:
     return False
 
 
-def student_answered(question: str, history: list[dict[str, str]] | None) -> bool:
-    """هل الطالب يُجيب سؤالاً سقراطياً سابقاً؟ (آخر مساعد سأل «؟» + الحالي إجابة)."""
-    last_assistant = None
+def _has_pending_socratic_question(history: list[dict[str, str]] | None) -> bool:
+    """D-130: هل أحدث رسالة مساعد سؤال سقراطي معلّق (تنتهي بـ«؟»)؟"""
     for msg in reversed(history or []):
-        if isinstance(msg, dict) and msg.get("role") == "assistant":
-            last_assistant = str(msg.get("content", "")).strip()
-            break
-    if not last_assistant:
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("role") == "assistant":
+            content = str(msg.get("content", "")).strip()
+            return content.endswith("؟") or content.endswith("?")
+    return False
+
+
+#: أفعال طلب صريحة (الرسالة التي تبدأ/تحوي واحداً منها + اسم تمرين = طلب جديد لا إجابة).
+_EXPLICIT_REQUEST_VERBS: tuple[str, ...] = (
+    "اعطني",
+    "أعطني",
+    "اعطيني",
+    "هات",
+    "هاتي",
+    "اكتب",
+    "ارسم",
+    "أرسم",
+    "ابدأ",
+)
+#: كلمات تدلّ على طلب محتوى/تمرين جديد.
+_NEW_CONTENT_WORDS: tuple[str, ...] = (
+    "تمرين",
+    "تمارين",
+    "مسألة",
+    "مسائل",
+    "درس",
+    "exercice",
+    "exercise",
+)
+
+
+def _is_explicit_request(normalized: str) -> bool:
+    """D-130 (تحسين A): هل الرسالة أمر/طلب محتوى جديد صريح (لا إجابة سقراطية)؟"""
+    padded = f" {normalized} "
+    has_verb = any(
+        normalized.startswith(v + " ") or f" {v} " in padded for v in _EXPLICIT_REQUEST_VERBS
+    )
+    has_new_content = any(w in normalized for w in _NEW_CONTENT_WORDS)
+    return has_verb and has_new_content
+
+
+def _is_topic_switch(message: str) -> bool:
+    """D-130 (تحسين A): هل الرسالة تبديل موضوع صريح (≠ احتمالات)؟ (حارس D-101)."""
+    try:
+        from app.services.capabilities.arabic_normalize import primary_canonical_topic
+
+        topic = primary_canonical_topic(message)
+        return topic is not None and topic.canonical_id != "probability"
+    except Exception:  # pragma: no cover - fail-safe
         return False
-    if not (last_assistant.endswith("؟") or last_assistant.endswith("?")):
+
+
+def is_response_to_socratic(message: str, history: list[dict[str, str]] | None) -> bool:
+    """D-130 (تحسين A، يحل Concern 1): هل رسالة الطالب إجابة على سؤال سقراطي معلّق؟
+
+    **مستقل عن الطول تماماً** (فعل كلامي لا عدد كلمات): إجابة = «سؤال سقراطي معلّق» و«ليست
+    أمراً صريحاً لمحتوى جديد» و«ليست تبديل موضوع». «نفس اللون» القصيرة والإجابة العبقرية
+    الطويلة كلتاهما إجابة؛ «اعطني تمرين الدوال» ليست إجابة.
+    """
+    if not _has_pending_socratic_question(history):
         return False
-    return is_answer_message(question)
+    t = _normalize(message)
+    if not t:
+        return False
+    if _is_explicit_request(t):
+        return False
+    return not _is_topic_switch(message)
+
+
+def student_answered(question: str, history: list[dict[str, str]] | None) -> bool:
+    """هل الطالب يُجيب سؤالاً سقراطياً سابقاً؟
+
+    D-130 (تحسين A): يُحدَّد بالفعل الكلامي عبر ``is_response_to_socratic`` (مستقل عن الطول)
+    بدل عدّ الكلمات (D-129 الأصلي كان يقصره على ≤5 كلمات — كان يفوّت الإجابات العبقرية الطويلة).
+    """
+    return is_response_to_socratic(question, history)
+
+
+#: مفاهيم بصيرة سريعة (تكفيها لمسة واحدة) — أساس ميزانية 1.
+_QUICK_INSIGHT_CONCEPTS: frozenset[str] = frozenset(
+    {"color_white", "color_red", "color_green", "combinations"}
+)
+#: علامات الحيرة (لرفع وتيرة التصعيد للرمزي).
+_CONFUSION_MARKERS: tuple[str, ...] = (
+    "لم افهم",
+    "لم أفهم",
+    "مفهمتش",
+    "ما فهمت",
+    "لا افهم",
+    "لا أفهم",
+    "مازلت لا",
+)
+
+
+def _count_confusion(history: list[dict[str, str]] | None) -> int:
+    """عدد علامات الحيرة في رسائل الطالب (لتعديل الميزانية التكيّفية)."""
+    count = 0
+    for msg in history or []:
+        if not isinstance(msg, dict) or msg.get("role") != "user":
+            continue
+        low = _normalize(str(msg.get("content", "")))
+        if any(m in low for m in _CONFUSION_MARKERS):
+            count += 1
+    return count
+
+
+def socratic_budget(
+    concept: str,
+    support_level: int | None = None,
+    confusion_count: int = 0,
+) -> int:
+    """D-130 (تحسين B، يحل Concern 2): ميزانية الأسئلة السقراطية التكيّفية.
+
+    مرتبطة بالمفهوم (مفاهيمي أعمق، بصيرة سريعة أقصر) وبحالة الطالب (BKT support_level،
+    D-104/D-126) وبالحيرة المتكرّرة. clamp [1, 3]. ممنوع سقف ثابت واحد لكل المفاهيم.
+    """
+    budget = 1 if concept in _QUICK_INSIGHT_CONCEPTS else 2  # مفاهيمي/غير معروف ⇒ أساس 2
+    if isinstance(support_level, int):
+        if support_level <= 2:  # متعثّر ⇒ سرّع للسقالة الرمزية (لا نُحبطه)
+            budget -= 1
+        elif support_level >= 4:  # متمكّن ⇒ يحتمل عمقاً سقراطياً أكبر
+            budget += 1
+    if confusion_count > 1:  # حيرة متكرّرة ⇒ تصاعد أسرع
+        budget -= confusion_count - 1
+    return max(1, min(3, budget))
 
 
 # ── العقود (Pydantic) ────────────────────────────────────────────────────────
@@ -143,6 +260,8 @@ class PolicyInput(RobustBaseModel):
     misconception: str = Field(default="none", max_length=64)
     question: str = Field(..., min_length=1, max_length=8000)
     history: list[dict[str, str]] | None = None
+    #: D-130 (تحسين B): مستوى الدعم (1..5، BKT/D-126) لميزانية سقراطية تكيّفية.
+    support_level: int | None = None
 
 
 class PolicyOutput(RobustBaseModel):
@@ -180,12 +299,14 @@ except Exception:  # pragma: no cover
 
 class PedagogicalPolicySkill:
     """
-    Skill حتمي لاختيار التدخّل التربوي (الطبقة 4 — D-129).
+    Skill حتمي لاختيار التدخّل التربوي (الطبقة 4 — D-129/D-130).
 
     عقد دائم (لا يُكسر بدون ADR):
-    1. السقراطية محدودة بميزانية (MAX_SOCRATIC) — بعدها حلّ رمزي، لا استجواب لا نهائي.
-    2. الاعتراف بإجابة الطالب إلزامي (acknowledge عند student_answered).
-    3. حتمي تماماً — لا LLM في القرار. الـ LLM للسرد السقراطي فقط (D-128).
+    1. السقراطية محدودة بميزانية **تكيّفية** (``socratic_budget`` حسب المفهوم/الحالة، D-130
+       تحسين B) — بعدها حلّ رمزي، لا استجواب لا نهائي.
+    2. الاعتراف بإجابة الطالب إلزامي (acknowledge عند student_answered) — يُحدَّد بالفعل الكلامي
+       لا بالطول (D-130 تحسين A).
+    3. حتمي تماماً — لا LLM في القرار. الـ LLM للسرد السقراطي/التقييم فقط (D-128/D-130).
     """
 
     _skill_name: str = "pedagogical_policy"
@@ -196,8 +317,14 @@ class PedagogicalPolicySkill:
         socratic_count = count_socratic_questions(payload.history)
         answered = student_answered(payload.question, payload.history)
         def_given = definition_already_given(payload.history)
+        # D-130 (تحسين B): ميزانية تكيّفية حسب المفهوم + حالة الطالب + الحيرة.
+        budget = socratic_budget(
+            payload.concept,
+            payload.support_level,
+            _count_confusion(payload.history),
+        )
 
-        if socratic_count >= MAX_SOCRATIC:
+        if socratic_count >= budget:
             action: PolicyAction = "symbolic_reveal"  # نفاد الميزانية ⇒ إنقاذ تربوي
         elif not def_given and not answered:
             action = "definition"  # المفهوم جديد ⇒ تعريف موجز
@@ -234,5 +361,7 @@ __all__ = [
     "definition_already_given",
     "get_pedagogical_policy_skill",
     "is_answer_message",
+    "is_response_to_socratic",
+    "socratic_budget",
     "student_answered",
 ]

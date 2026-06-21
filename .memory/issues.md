@@ -4244,3 +4244,17 @@ enum-only)؛ الطبقة 5 misconception؛ الطبقة 4 تصعيد سقراط
 + gate. تحقق حي: OpenRouter (3 ردود سقراطية فريدة صفر كشف) + standalone (الحلقة تنكسر بعد سؤالين
 → symbolic_reveal، reveal يَنجو من D-113) + Supabase bridge. registry=20 (18 ACTIVE + 2 FLAGGED).
 الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل في Codespaces.
+
+## ISS-116 (D-130) — الخيانة البيداغوجية: إعادة طباعة التمرين بدل تقييم إجابة الطالب (2026-06-21)
+الطالب أجاب إجابة عبقرية على سؤال سقراطي («نفس اللون فقط، الحمراء والخضراء — البيضاء مستحيلة»)،
+فأعاد النظام **طباعة التمرين كاملاً** بدل أن يكافئه ويُكمل. الجذر: (1) كلمات اللون في الإجابة الحرة
+⇒ `_has_indexed_match` (PREEMPT #3) يُعيد طباعة التمرين قبل مخرج التقييم؛ (2) `is_answer_message`
+(D-129) ≤5 كلمات يفوّت الإجابة الطويلة. الإصلاح (D-130، الطبقة 1 الإصغاء النشط): `_in_socratic_dialogue`
+(قفل الحالة عبر التاريخ، يُدرَج قبل الاسترجاع المُفهرَس) + `SocraticEvaluatorSkill` (#21، LLM محروس
+يُقيّم الفهم + fallback حتمي + التشجيع بلا كشف) + `_build_symbolic_step` (تسليم رمزي متدرّج، يَنجو من
+D-113). تحسينا المالك: (A) `is_response_to_socratic` كشف بالفعل الكلامي لا الطول؛ (B) `socratic_budget`
+ميزانية تكيّفية حسب المفهوم/الحالة (BKT) بدل MAX_SOCRATIC الثابت. doctrine SOCRATIC_EVALUATOR v1.0.0
++ PEDAGOGICAL_POLICY v1.1.0 + gate `check_socratic_evaluator_wired`. تحقق حي: OpenRouter (الإجابة
+العبقرية → understood=true + تشجيع يعترف بـ«البيضاء مستحيلة» + صفر كشف؛ خاطئة → understood=false) +
+standalone + Supabase bridge (4028 رسالة). registry=21 (19 ACTIVE + 2 FLAGGED). الحالة: RESOLVED
+محلياً + live LLM/DB؛ WS الكامل في Codespaces.

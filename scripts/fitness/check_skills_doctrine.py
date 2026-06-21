@@ -584,13 +584,73 @@ def check_pedagogical_policy_wired() -> None:
         _fail("orchestrator_client does not invoke the pedagogical policy (D-129 ZOMBIE).")
     if "_build_symbolic_reveal" not in client_src:
         _fail("orchestrator_client lost the deterministic symbolic-reveal escape (D-129).")
-    _pass("Pedagogical policy wired: bounded Socratic → acknowledge → symbolic reveal (D-129)")
+    # D-130 (تحسينا المالك): كشف الإجابة بالفعل الكلامي لا الطول + ميزانية تكيّفية.
+    if "is_response_to_socratic" not in skill or "socratic_budget" not in skill:
+        _fail(
+            "pedagogical_policy_skill.py lost D-130 refinements "
+            "(is_response_to_socratic / socratic_budget)."
+        )
+    _pass(
+        "Pedagogical policy wired: bounded Socratic → acknowledge → symbolic reveal (D-129/D-130)"
+    )
+
+
+def check_socratic_evaluator_wired() -> None:
+    """D-130 (الطبقة 1 — الإصغاء النشط / مُقيّم الإجابات السقراطي): يحرس التوصيل.
+
+    الكارثة (الخيانة البيداغوجية): الطالب يُجيب إجابة عبقرية على سؤال سقراطي، فيُعيد
+    النظام طباعة التمرين كاملاً بدل تقييم الإجابة ومكافأتها. المُقيّم هو «الأذن الصاغية»
+    المفقودة. يحرس: (1) manifest entry متّسق، (2) الـ Skill يستهلك doctrine، (3) موصول
+    حيّاً في `chat_with_agent` **قبل** الاسترجاع المُفهرَس (`_in_socratic_dialogue` +
+    `_stream_socratic_evaluation` + `_build_symbolic_step`)، (4) لا إعادة طباعة.
+    """
+    from app.services.skills.doctrine import (
+        SKILL_DOCTRINE_MANIFEST,
+        SOCRATIC_EVALUATOR_DOCTRINE,
+        SOCRATIC_EVALUATOR_DOCTRINE_VERSION,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("socratic_evaluator")
+    if entry is None:
+        _fail("Manifest missing 'socratic_evaluator' entry (D-130).")
+    if entry["version"] != SOCRATIC_EVALUATOR_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for socratic_evaluator (D-130).")
+    if entry["rules_count"] != len(SOCRATIC_EVALUATOR_DOCTRINE):
+        _fail("Manifest rules_count mismatch for socratic_evaluator (D-130).")
+
+    skill = (ROOT / "app/services/skills/socratic_evaluator_skill.py").read_text(encoding="utf-8")
+    if "from app.services.skills.doctrine import" not in skill:
+        _fail("socratic_evaluator_skill.py does not consume doctrine (D-130).")
+    if "redact_final_answers" not in skill:
+        _fail("socratic_evaluator_skill.py lost the answer-redaction guard (D-130).")
+
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    for needle in (
+        "get_socratic_evaluator_skill",
+        "_in_socratic_dialogue",
+        "_stream_socratic_evaluation",
+        "_build_symbolic_step",
+    ):
+        if needle not in client_src:
+            _fail(f"orchestrator_client lost D-130 wiring: {needle} (active-listener ZOMBIE).")
+
+    # D-130: الالتقاط المبكر يجب أن يسبق الاسترجاع المُفهرَس (وإلا تُعاد طباعة التمرين).
+    eval_pos = client_src.find("_in_socratic_dialogue(question")
+    indexed_pos = client_src.find("_has_indexed_match(question")
+    if eval_pos == -1 or indexed_pos == -1 or eval_pos > indexed_pos:
+        _fail(
+            "D-130: socratic-evaluation capture must precede indexed-retrieval in "
+            "chat_with_agent (else the student's answer re-prints the exercise)."
+        )
+    _pass("Socratic evaluator wired: active-listener capture before indexed-retrieval (D-130)")
 
 
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
@@ -607,6 +667,7 @@ def main() -> None:
     check_answer_redaction_wired()
     check_socratic_protocol_wired()
     check_pedagogical_policy_wired()
+    check_socratic_evaluator_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

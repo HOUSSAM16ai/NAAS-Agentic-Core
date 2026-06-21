@@ -2301,9 +2301,7 @@ class OrchestratorClient:
             )
             for g in combo.groups
         )
-        favs_sum = " + ".join(
-            str(g.favorable_combinations) for g in combo.groups if g.is_possible
-        )
+        favs_sum = " + ".join(str(g.favorable_combinations) for g in combo.groups if g.is_possible)
         prefix = "إجابتك في الطريق الصحيح — " if acknowledge else ""
         return (
             f"{prefix}لنُكمل معاً خطوة بخطوة حتى النهاية:\n\n"
@@ -2314,6 +2312,164 @@ class OrchestratorClient:
             f"{cls._fmt_comb(n, k, total)}\n\n"
             f"فاحتمال الحادثة A هو {same} من كل {total}."
         )
+
+    @classmethod
+    def _in_socratic_dialogue(
+        cls, question: str, history_messages: list[dict[str, str]] | None
+    ) -> bool:
+        """D-130: هل نحن وسط حوار سقراطي والطالب يُجيب سؤالنا السقراطي؟
+
+        قفل الحالة عبر التاريخ (لا حقل دائم): أحدث رسالة مساعد سؤال سقراطي طرحناه
+        (تنتهي بـ«؟»، ليست إفراغ تمرين)، ضمن سياق احتمالات، ورسالة الطالب الحالية
+        إجابة (فعل كلامي لا طول — `is_response_to_socratic`، تحسين A). حارس تبديل
+        الموضوع (D-101) داخل `is_response_to_socratic`.
+        """
+        try:
+            from app.services.skills.pedagogical_policy_skill import is_response_to_socratic
+
+            # أحدث رسالة مساعد يجب أن تكون سؤالاً سقراطياً (لا إفراغ تمرين).
+            last_assistant = None
+            for msg in reversed(history_messages or []):
+                if isinstance(msg, dict) and msg.get("role") == "assistant":
+                    last_assistant = str(msg.get("content", "")).strip()
+                    break
+            if not last_assistant:
+                return False
+            if not (last_assistant.endswith("؟") or last_assistant.endswith("?")):
+                return False
+            # تمييز السؤال السقراطي من إفراغ تمرين ينتهي صدفةً بـ«؟».
+            if len(last_assistant) > 600 or any(
+                m in last_assistant
+                for m in ("التمرين الأول", "يحتوي كيس على", "احسب احتمال الحادثة")
+            ):
+                return False
+            # سياق احتمالات (الحوار عن تمرين الاحتمالات).
+            _hist_text = " ".join(
+                str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
+            )
+            if not cls._is_prob_context(question + " " + _hist_text):
+                return False
+            # رسالة الطالب الحالية إجابة (مستقل عن الطول، حارس تبديل الموضوع داخله).
+            return is_response_to_socratic(question, history_messages)
+        except Exception:  # pragma: no cover - fail-safe
+            logger.warning("_in_socratic_dialogue_failed", exc_info=True)
+            return False
+
+    @classmethod
+    def _build_symbolic_step(cls, combo, focus: str | None, *, acknowledge: bool = False) -> str:
+        """D-130: الخطوة الرمزية المتدرّجة (التسليم الرمزي) — حتمية من المحرك الرمزي.
+
+        عند فهم الطالب: نكشف **خطوة المفهوم الحالي** + سؤال المتابعة، لا الحل كاملاً
+        (يُبقي السُّلّم السقراطي حياً، يحترم مثال المالك «C(4,3)+C(5,3)=14»). يَنجو من
+        حجب D-113 (نمط `_fmt_comb` + «من كل»).
+        """
+        prefix = "إجابتك في الطريق الصحيح — " if acknowledge else ""
+        n, k, total = combo.n, combo.k, combo.total_combinations
+        # خطوة البسط (الحالات الملائمة): الافتراضي والأكثر شيوعاً بعد فهم «نفس اللون».
+        if focus in (None, "denominator", "numerator", "event_meaning"):
+            favs_lines = "\n".join(
+                (
+                    f"- {g.label}: {cls._fmt_comb(g.count, k, g.favorable_combinations)}"
+                    if g.is_possible
+                    else f"- {g.label}: مستحيلة (أقل من {k})"
+                )
+                for g in combo.groups
+            )
+            favs_sum = " + ".join(
+                str(g.favorable_combinations) for g in combo.groups if g.is_possible
+            )
+            same = combo.same_group_favorable
+            return (
+                f"{prefix}بما أننا اقتصرنا على الألوان الممكنة، نحسب **الحالات الملائمة**:\n\n"
+                f"{favs_lines}\n\n"
+                f"نجمعها: {favs_sum} = {same}\n\n"
+                f"والآن سؤالٌ يقودنا للخطوة التالية: كم عدد **كل** الطرق الممكنة لسحب {k} كرات من {n}؟"
+            )
+        # خطوة المقام (كل الطرق).
+        if focus == "ratio":
+            return (
+                f"{prefix}**كل الطرق الممكنة** لسحب {k} من {n}:\n\n"
+                f"{cls._fmt_comb(n, k, total)}\n\n"
+                f"الآن لديك البسط والمقام — كيف تُكوّن منهما الاحتمال؟"
+            )
+        # افتراضي: الحلّ الرمزي الكامل المتدرّج (fallback).
+        return cls._build_symbolic_reveal("", None, acknowledge=acknowledge) or (
+            f"{prefix}لنُكمل معاً خطوةً بخطوة."
+        )
+
+    async def _stream_socratic_evaluation(
+        self, question: str, history_messages: list[dict[str, str]] | None
+    ):
+        """D-130: يُقيّم إجابة الطالب الحرّة ويبثّ المكافأة + التسليم الرمزي المتدرّج.
+
+        understood=true ⇒ تشجيع (LLM محروس) + خطوة رمزية حتمية + سؤال المتابعة.
+        understood=false ⇒ اعتراف لطيف + تلميح. **لا إعادة طباعة للتمرين مهما حدث.**
+        """
+        try:
+            from app.services.skills.concept_diagnosis_skill import (
+                ConceptDiagnosisInput,
+                get_concept_diagnosis_skill,
+            )
+            from app.services.skills.socratic_evaluator_skill import (
+                SocraticEvaluatorInput,
+                get_socratic_evaluator_skill,
+            )
+
+            combo = self._load_canonical_combinations(question, history_messages)
+            if combo is None:
+                return  # غير احتمالات ⇒ لا نلتقط (المسار يُكمل)
+
+            # المفهوم الحالي: من السؤال السقراطي السابق + إجابة الطالب (الطبقة 1، D-127).
+            prior_socratic = ""
+            for msg in reversed(history_messages or []):
+                if isinstance(msg, dict) and msg.get("role") == "assistant":
+                    prior_socratic = str(msg.get("content", ""))[:600]
+                    break
+            _diag = await get_concept_diagnosis_skill().diagnose(
+                ConceptDiagnosisInput(
+                    question=f"{prior_socratic} {question}".strip(),
+                    history=history_messages,
+                )
+            )
+            concept = _diag.concept if _diag.concept != "unknown" else "event_meaning"
+
+            facts = self._symbolic_facts_brief(combo)
+            result = await get_socratic_evaluator_skill().evaluate(
+                SocraticEvaluatorInput(
+                    student_answer=question,
+                    concept=concept,
+                    facts=facts,
+                    history=history_messages,
+                )
+            )
+
+            if result.understood:
+                body = self._build_symbolic_step(combo, result.next_focus, acknowledge=True)
+                # نُسبق التشجيع المُولَّد (إن وُجد ولم يكن مكرّراً للاعتراف القياسي).
+                enc = (result.encouragement or "").strip()
+                text = f"{enc}\n\n{body}" if enc and "الطريق الصحيح" not in enc else body
+            else:
+                enc = (result.encouragement or "فكرة جيدة — لنقترب أكثر.").strip()
+                text = (
+                    f"{enc} لاحظ نوع كل كرة: أيّ الألوان يكفي عددها لسحب 3 منها معاً؟ "
+                    "ابدأ بعدّ الألوان الممكنة فقط."
+                )
+
+            logger.info(
+                "socratic_evaluation",
+                extra={
+                    "concept": concept,
+                    "understood": result.understood,
+                    "source": result.source,
+                    "next_focus": result.next_focus or "",
+                },
+            )
+
+            async for chunk in self._stream_markdown_typing(text):
+                yield chunk
+        except Exception:
+            logger.warning("_stream_socratic_evaluation_failed", exc_info=True)
+            return
 
     async def _build_probability_tree_props(
         self,
@@ -2648,6 +2804,46 @@ class OrchestratorClient:
                 {"type": "assistant_final", "payload": {"content": ""}}
             )
             return
+
+        # ─────────────────────────────────────────────────────────────────────
+        # ISS-116 (D-130 — الإصغاء النشط / مُقيّم الإجابات السقراطي):
+        # إذا كانت أحدث رسالة مساعد سؤالاً سقراطياً طرحناه، فرسالة الطالب الحالية
+        # = **إجابة** على ذلك السؤال — تُقيَّم وتُكافأ، لا تُعاد طباعة التمرين.
+        # يسبق الاسترجاع المُفهرَس (#3) لأن إجابة الطالب الحرة («نفس اللون فقط،
+        # الحمراء والخضراء») تحوي كلمات اللون فتُطابق _has_indexed_match فتُعيد
+        # طباعة التمرين كاملاً (الخيانة البيداغوجية). قفل الحالة عبر التاريخ
+        # (لا حقل دائم). حارس تبديل الموضوع (D-101) داخل is_response_to_socratic.
+        # ─────────────────────────────────────────────────────────────────────
+        if self._in_socratic_dialogue(question, history_messages):
+            se_streamed_chars = 0
+            try:
+                async for chunk in self._stream_socratic_evaluation(question, history_messages):
+                    if not chunk:
+                        continue
+                    se_streamed_chars += len(chunk)
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_delta", "payload": {"content": chunk}}
+                    )
+            except Exception:
+                logger.warning("socratic_evaluation_preempt_failed", exc_info=True)
+
+            if se_streamed_chars > 0:
+                if _root_ctx:
+                    with contextlib.suppress(Exception):
+                        obs.end_span(
+                            _root_ctx.span_id,
+                            status="OK",
+                            metrics={
+                                "duration_ms": (time.perf_counter() - _t0) * 1000,
+                                "fallback_path": 0.45,  # بين question-only والاسترجاع المُفهرَس
+                                "stream_chars": float(se_streamed_chars),
+                            },
+                        )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
+                return
+            # إذا فشل البث (نادر) → نُكمل المسار العادي (لا إعادة طباعة بسبب fail-open)
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-056 (D-049 — Indexed Retrieval Preemption):

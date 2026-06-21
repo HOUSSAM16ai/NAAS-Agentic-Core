@@ -2122,9 +2122,12 @@ class OrchestratorClient:
                     "ترتيب»؟ أخبرني."
                 )
 
-        # ── event_meaning (معنى الحادثة A/B/C/D) — D-131: الطبقة الدلالية العامة ──
+        # ── event_meaning (معنى الحادثة A/B/C/D) — D-131/D-132: الطبقة الدلالية العامة ──
         # نداء واحد للطبقة الدلالية (data-driven، لا special-casing لكل حادثة). يُغطّي
-        # «جداء معدوم/فردي/زوجي» + «نفس اللون» عبر PROPERTY_REGISTRY. الافتراض A للسؤال العام.
+        # «جداء معدوم/فردي/زوجي» + «نفس اللون» عبر PROPERTY_REGISTRY.
+        # D-132: لا default مُجمَّد لـ same_color — الافتراض A فقط لسؤال «الحادثة» الصريح؛
+        # المفاهيم غير الحدثية (المتغير العشوائي/الأمل/...) يلتقطها preempt التعريف في
+        # chat_with_agent عبر interpret_or_define قبل الوصول هنا.
         if concept == "event_meaning":
             if level == 0:
                 from app.services.skills.semantic_property_skill import (
@@ -2134,17 +2137,16 @@ class OrchestratorClient:
                 from app.services.skills.tutor_metrics import record_definitional_answer
 
                 _sp = get_semantic_property_skill().interpret(question)
-                if _sp is None:  # سؤال تعريفي عام «ماذا نقصد بالحادثة» ⇒ الافتراض A
-                    _sp_spec = PROPERTY_REGISTRY["same_color"]
-                    _pid, _title, _definition = (
-                        _sp_spec.property_id,
-                        _sp_spec.title,
-                        _sp_spec.definition,
-                    )
-                else:
-                    _pid, _title, _definition = _sp.property_id, _sp.title, _sp.definition
-                record_definitional_answer(_pid, resolved=True)
-                return f"## {_title}\n\n{_definition}"
+                if _sp is not None:
+                    record_definitional_answer(_sp.concept_id, resolved=True)
+                    return f"## {_sp.title}\n\n{_sp.definition}"
+                # D-132: الافتراض A **فقط** عند سؤال حدثي صريح (الحادثة/الحدث/A).
+                _q = (question or "").lower()
+                if any(m in _q for m in ("الحادثة", "الحدث", "a", "نفس اللون")):
+                    _spec = PROPERTY_REGISTRY["same_color"]
+                    record_definitional_answer(_spec.concept_id, resolved=True)
+                    return f"## {_spec.title}\n\n{_spec.definition}"
+                return None  # مفهوم غير معروف غير حدثي ⇒ لا نُقحمه في الحادثة A
             # level >= 1 ⇒ يُستبدَل بالسرد السقراطي المُولَّد (chat_with_agent)؛ هذا fallback.
             return (
                 "الحادثة A تعني «3 كرات من نفس اللون». سؤال لك: لو سحبت 3 كرات، متى تقول إنها "
@@ -2843,6 +2845,64 @@ class OrchestratorClient:
                 {"type": "assistant_final", "payload": {"content": ""}}
             )
             return
+
+        # ─────────────────────────────────────────────────────────────────────
+        # ISS-116 (D-132 — Generalized Concept Understanding / preempt تعريفي عام):
+        # «جاهزية للأسئلة الجديدة دائماً». إن كان السؤال نية تعريفية («ماذا نقصد بـ X»)
+        # أو حيرة عن مفهوم مُسمّى («لم افهم المتغير العشوائي») ضمن سياق احتمالات ⇒ نُعرّف X
+        # عبر interpret_or_define (السجلّ الحتمي أولاً، ثم الـ LLM Listener-Definer للمفاهيم
+        # الجديدة). يسبق الالتقاط السقراطي لأن «لم افهم المتغير العشوائي» سؤال تعريفي جديد لا
+        # إجابة على السؤال السقراطي السابق. يحلّ الكارثة: كان يُعاد بسؤال عن الحادثة A.
+        # لا default مُجمَّد لمفهوم واحد. ممنوع على طلبات الحساب.
+        # ─────────────────────────────────────────────────────────────────────
+        try:
+            from app.services.skills.semantic_property_skill import get_semantic_property_skill
+
+            _sps = get_semantic_property_skill()
+            _hist_text = " ".join(
+                str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
+            )
+            _ql = (question or "").lower()
+            _confused = any(
+                m in _ql for m in ("لم افهم", "لم أفهم", "مش فاهم", "ما فهمت", "لا افهم", "لا أفهم")
+            )
+            _compute = any(
+                m in _ql
+                for m in ("احسب", "أحسب", "كم ", "اوجد", "أوجد", "بين ان", "بيّن أن", "استنتج")
+            )
+            _wants_def = _sps.is_definitional(question) or (
+                _confused and _sps.interpret(question) is not None
+            )
+            if _wants_def and not _compute and self._is_prob_context(question + " " + _hist_text):
+                _def = await _sps.interpret_or_define(question)
+                if _def is not None:
+                    from app.services.skills.tutor_metrics import record_definitional_answer
+
+                    record_definitional_answer(_def.concept_id, resolved=True, source=_def.source)
+                    _text = (
+                        f"## {_def.title}\n\n{_def.definition}"
+                        if _def.title and _def.title != "تعريف"
+                        else _def.definition
+                    )
+                    _def_chars = 0
+                    async for chunk in self._stream_markdown_typing(_text):
+                        if not chunk:
+                            continue
+                        _def_chars += len(chunk)
+                        yield self._normalize_stream_event(
+                            {"type": "assistant_delta", "payload": {"content": chunk}}
+                        )
+                    if _def_chars > 0:
+                        logger.info(
+                            "definitional_preempt",
+                            extra={"concept": _def.concept_id, "source": _def.source},
+                        )
+                        yield self._normalize_stream_event(
+                            {"type": "assistant_final", "payload": {"content": ""}}
+                        )
+                        return
+        except Exception:
+            logger.warning("definitional_preempt_failed", exc_info=True)
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-116 (D-130 — الإصغاء النشط / مُقيّم الإجابات السقراطي):

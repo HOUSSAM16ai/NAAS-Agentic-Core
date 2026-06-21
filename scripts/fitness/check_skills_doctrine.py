@@ -709,13 +709,34 @@ def check_semantic_property_wired() -> None:
             _fail(f"tutor_metrics missing behavioral metric {fn} (D-131 §5).")
         if fn not in client_src:
             _fail(f"behavioral metric {fn} has no live emitter in orchestrator_client (D-131 §5).")
-    _pass("Semantic layer + Misconception Graph wired, behavioral metrics live (D-131)")
+
+    # D-132: جاهزية الأسئلة الجديدة + لا default مُجمَّد لمفهوم واحد.
+    if "def define_concept" not in skill or "def interpret_or_define" not in skill:
+        _fail("semantic_property_skill missing define_concept/interpret_or_define (D-132).")
+    if "redact_final_answers" not in skill:
+        _fail("define_concept lost the answer-redaction guard (D-132 LLM ceiling).")
+    if "random_variable" not in skill or "expected_value" not in skill:
+        _fail("PROPERTY_REGISTRY missing exercise concepts random_variable/expected_value (D-132).")
+    if "interpret_or_define" not in client_src:
+        _fail("orchestrator_client missing the definitional preempt interpret_or_define (D-132).")
+    # لا default مُجمَّد لمفهوم واحد في فرع event_meaning (D-132 قاعدة 3).
+    _em = client_src.find('if concept == "event_meaning":')
+    if _em != -1:
+        _seg = client_src[_em : _em + 1500]
+        if '_sp_spec = PROPERTY_REGISTRY["same_color"]' in _seg and "any(m in _q" not in _seg:
+            _fail("event_meaning still uses an UNCONDITIONAL same_color default (D-132 rule 3).")
+    # preempt التعريفي يسبق الالتقاط السقراطي (سؤال تعريفي جديد لا إجابة سقراطية).
+    _defp = client_src.find("interpret_or_define(question)")
+    _socp = client_src.find("_in_socratic_dialogue(question")
+    if _defp == -1 or _socp == -1 or _defp > _socp:
+        _fail("D-132: definitional preempt must precede the socratic capture in chat_with_agent.")
+    _pass("Semantic layer + Misconception Graph + D-132 new-question readiness wired (D-131/D-132)")
 
 
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()

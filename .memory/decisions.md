@@ -4826,3 +4826,21 @@ detect_active_concept + on_path no-hijack). تحقق: standalone بالكود ا
 detect_active_concept + D-135 لا يختطف + مسار factorial يعمل) PASS؛ OpenRouter LIVE (مثال product_even
 بديل، صفر كشف، مختلف)؛ Supabase bridge LIVE (4098 رسالة)؛ ruff+format+py_compile+runtime_truth ✅؛
 registry=24. الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل + gate + pytest في Codespaces.
+
+## D-137 (2026-06-22) — ISS-116: فكّ تشابك التوجيه (semantic_property ↔ understanding_state)
+transcript حيّ بعد D-136: «ما هو الاحتمال الشرطي»⇒«14 من 165»؛ «اعطني مثال»(بعد الحالات الملائمة)⇒مثال
+الشرطي؛ «لم أفهم»⇒الحادثة A؛ «ما هو المتغير العشوائي»⇒الحادثة A. 6 أسباب: (1) `_DEFINITIONAL_MARKERS`
+يفوّت «ما هو X» المجرّدة؛ (2) «الاحتمال» المجرّدة في `kc_ratio.gap_signals` تختطف؛ (3) «الحالات الملائمة»
+غير مُسجَّل؛ (4) `detect_active_concept` يقرأ مثال المساعد («نفس اللون» العابرة)⇒same_color؛ (5)
+`_has_pending_socratic_question`/`_in_socratic_dialogue` يستخدمان `endswith("؟")` فيفوّتان السؤال المنتهي
+بأمر («...A؟ أعطني مثالاً») — الخيانة البيداغوجية؛ (6) `_wants_def` لا يستخدم نيّة StudentState.
+الإصلاح: markers += «ما هو/ما هي/عرّف» + `_wants_def += primary_intent=='definition'`؛ حذف «الاحتمال» من
+kc_ratio؛ تسجيل `favorable_cases` (تعريف+مثال D-113-safe)؛ `detect_active_concept` يُفضّل رسائل الطالب
+ويتجاهل أمثلة المساعد (`_CONCEPT_ARTIFACT_MARKERS`)؛ معالج المثال يَفعل على الحيرة+مفهوم نشط؛
+`_current_focus_kc` يتجاهل المثال/التعريف؛ كشف «؟» في أي موضع (لا endswith، رسالة قصيرة) +
+`_is_counter_question`. doctrine SEMANTIC_PROPERTY v1.2.0→v1.3.0 + gate (D-137 routing-separation).
+تحقق: scripts/verify_d137_live.py (8-turn routing 6/6 + لا 14/165) + Supabase bridge LIVE (4116 رسالة) +
+OpenRouter LIVE (finish=stop) + test_d137 (12) + لا انحدار D-127→D-137 (181 ناجح) + ruff/format/
+py_compile/runtime_truth/skills-doctrine ✅. أُصلحت 10 اختبارات pre-existing حمراء (drift D-128→D-132،
+مُثبت بـ git-stash أنها سابقة لـ D-137؛ منها إصلاح جذري لكشف السؤال السقراطي). registry=24.
+الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل + المتصفح في Codespaces (llama_index محجوب في الـ sandbox).

@@ -2515,9 +2515,11 @@ class OrchestratorClient:
                     break
             if not last_assistant:
                 return False
-            if not (last_assistant.endswith("؟") or last_assistant.endswith("?")):
+            # D-137: السؤال السقراطي قد ينتهي بأمر («...A؟ أعطني مثالاً») — نكشف «؟» في أي
+            # موضع (لا endswith فقط) وإلا تُهمَل إجابة الطالب (كارثة الخيانة البيداغوجية).
+            if "؟" not in last_assistant and "?" not in last_assistant:
                 return False
-            # تمييز السؤال السقراطي من إفراغ تمرين ينتهي صدفةً بـ«؟».
+            # تمييز السؤال السقراطي من إفراغ تمرين يحوي صدفةً «؟».
             if len(last_assistant) > 600 or any(
                 m in last_assistant
                 for m in ("التمرين الأول", "يحتوي كيس على", "احسب احتمال الحادثة")
@@ -3096,8 +3098,12 @@ class OrchestratorClient:
                 m in _ql
                 for m in ("احسب", "أحسب", "كم ", "اوجد", "أوجد", "بين ان", "بيّن أن", "استنتج")
             )
-            _wants_def = _sps.is_definitional(question) or (
-                _confused and _sps.interpret(question) is not None
+            # D-137: نيّة التعريف من StudentState تُفعّل مسار التعريف أيضاً — «ما هو X»
+            # يصنّفها StudentState `definition`، فلا تسقط لـ D-135 (كارثة «14 من 165» للشرطي).
+            _wants_def = (
+                _sps.is_definitional(question)
+                or _state.primary_intent == "definition"
+                or (_confused and _sps.interpret(question) is not None)
             )
             if _wants_def and not _compute and self._is_prob_context(question + " " + _hist_text):
                 _def = await _sps.interpret_or_define(question)
@@ -3162,6 +3168,7 @@ class OrchestratorClient:
         # والاسترجاع المُفهرَس. لا تكرار (المعروض already ⇒ زاوية LLM محروسة).
         # ─────────────────────────────────────────────────────────────────────
         try:
+            from app.services.skills.semantic_property_skill import get_semantic_property_skill
             from app.services.skills.student_state_skill import (
                 StudentStateInput,
                 get_student_state_skill,
@@ -3173,9 +3180,19 @@ class OrchestratorClient:
             _ex_hist = " ".join(
                 str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
             )
-            if _ex_state.primary_intent == "example_request" and self._is_prob_context(
-                question + " " + _ex_hist
-            ):
+            # D-137: يَفعل على example_request **أو** الحيرة مع مفهوم نشط — «لم أفهم» بعد شرح
+            # الاحتمال الشرطي يُعيد إشراك المفهوم النشط (الاحتمال الشرطي) لا الحادثة A الافتراضية.
+            _ex_confused = (
+                _ex_state.primary_intent == "confusion"
+                or "confusion" in _ex_state.secondary_signals
+            )
+            _ex_active = get_semantic_property_skill().detect_active_concept(
+                question, history_messages
+            )
+            _ex_fire = _ex_state.primary_intent == "example_request" or (
+                _ex_confused and _ex_active is not None
+            )
+            if _ex_fire and self._is_prob_context(question + " " + _ex_hist):
                 _ce = await self._build_concept_example(question, history_messages)
                 if _ce:
                     from app.services.skills.tutor_metrics import (
@@ -3183,7 +3200,7 @@ class OrchestratorClient:
                         record_response_mode,
                     )
 
-                    record_intent("example_request")
+                    record_intent(_ex_state.primary_intent)
                     record_response_mode("example_first")
                     _ce_chars = 0
                     async for chunk in self._stream_markdown_typing(_ce):

@@ -172,8 +172,9 @@ class TestWiring:
         src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
             encoding="utf-8"
         )
-        eval_pos = src.find("_in_socratic_dialogue(question")
-        indexed_pos = src.find("_has_indexed_match(question")
+        # D-137: مطابقة صيغة الاستدعاء بـ `self.` — متينة على لفّ الأسطر (ruff قد يلفّ الوسائط).
+        eval_pos = src.find("self._in_socratic_dialogue(")
+        indexed_pos = src.find("self._has_indexed_match(")
         assert eval_pos != -1 and indexed_pos != -1
         assert eval_pos < indexed_pos, "socratic capture must precede indexed-retrieval (D-130)"
 

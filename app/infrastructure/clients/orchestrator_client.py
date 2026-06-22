@@ -2295,6 +2295,93 @@ class OrchestratorClient:
         )
 
     @classmethod
+    async def _build_concept_example(
+        cls,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+    ) -> str | None:
+        """D-136: مثال **واعٍ بالمفهوم النشط** (لا مثال الحادثة A الأعمى الافتراضي).
+
+        المفهوم من السياق (`detect_active_concept`): «اعطني مثال» بعد تعريف product_even ⇒ مثال
+        product_even. deterministic أولاً (`PropertySpec.example`)؛ إن عُرِض المثال already ⇒ زاوية
+        مختلفة (LLM محروس) — لا تكرار. يُرجِع None إن لا مفهوم نشط (يسقط للمعالج العام).
+        """
+        try:
+            from app.services.skills.semantic_property_skill import get_semantic_property_skill
+
+            concept = get_semantic_property_skill().detect_active_concept(
+                question, history_messages
+            )
+            if concept is None or not concept.example:
+                return None
+            shown = " ".join(
+                str(m.get("content", ""))
+                for m in (history_messages or [])
+                if isinstance(m, dict) and m.get("role") == "assistant"
+            )
+            already = concept.example[:40] in shown  # نفس المثال عُرِض already؟
+            if not already:
+                return f"## مثال ملموس\n\n{concept.example}"
+            # تكرار ⇒ زاوية مختلفة (LLM محروس)؛ fallback للمثال الحتمي خير من مثال أعمى.
+            alt = await cls._generate_concept_example_llm(concept, question, history_messages)
+            return alt or f"مثال آخر للتوضيح:\n\n{concept.example}"
+        except Exception:  # pragma: no cover — fail-safe
+            return None
+
+    @classmethod
+    async def _generate_concept_example_llm(
+        cls,
+        concept,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+    ) -> str | None:
+        """D-136: مثال بديل (زاوية مختلفة) للمفهوم — LLM محروس. LLM = التدريس، symbolic = الأرقام.
+
+        يُستدعى فقط عند تكرار المثال الحتمي. محروس بنفس طبقات D-128 + timeout + fallback ⇒ None.
+        """
+        try:
+            import asyncio
+            import re as _re
+
+            from app.core.ai_gateway import get_ai_client
+
+            combo = cls._load_canonical_combinations(question, history_messages)
+            facts = cls._balls_brief(combo) if combo is not None else ""
+            system_prompt = (
+                "أنت معلّم رياضيات جزائري. أعطِ **مثالاً ملموساً واحداً مختلفاً** يوضّح المفهوم "
+                "باستخدام معطيات هذا التمرين. لا تشرح القاعدة، لا تحسب نتيجة نهائية، ولا تذكر أي "
+                "كسر نهائي (مثل 14/165). عربية فصحى، جملتان كحدّ أقصى."
+            )
+            user = (
+                f"المفهوم: {concept.title}\n"
+                f"تعريفه: {concept.definition}\n"
+                f"معطيات التمرين (استخدمها): {facts}\n"
+                f"مثال سبق عرضه (لا تُكرّره — غيّر الزاوية): {concept.example}\n"
+                "أعطِ مثالاً ملموساً مختلفاً."
+            )
+            raw = await asyncio.wait_for(
+                get_ai_client().send_message(system_prompt, user, temperature=0.5),
+                timeout=10.0,
+            )
+            if not raw or not isinstance(raw, str) or not raw.strip():
+                return None
+
+            from app.services.skills.answer_redaction_skill import redact_final_answers
+            from app.services.skills.arabic_stream_guard import is_probably_non_arabic
+            from app.services.skills.content_integrity_skill import _strip_garbage_markers
+
+            text = _strip_garbage_markers(raw.strip())
+            text, _ = redact_final_answers(text, support_level=5)
+            text = text.strip()
+            if not text or is_probably_non_arabic(text):
+                return None
+            if _re.search(r"14\s*/\s*165|56\s*/\s*165", text):
+                return None
+            return f"مثال آخر:\n\n{text}"
+        except Exception:  # pragma: no cover — fail-safe
+            return None
+
+    @classmethod
     async def _generate_socratic_narrative(
         cls,
         concept: str,
@@ -3067,6 +3154,53 @@ class OrchestratorClient:
                         return
         except Exception:
             logger.warning("definitional_preempt_failed", exc_info=True)
+
+        # ─────────────────────────────────────────────────────────────────────
+        # ISS-116 (D-136 — مثال واعٍ بالمفهوم النشط): «اعطني مثال» ⇒ مثال **المفهوم
+        # الذي يجري الحوار عنه** (product_even/expected_value…) لا مثال الحادثة A الأعمى
+        # الافتراضي (كارثة transcript: 4 أسئلة مختلفة ⇒ نفس مثال A). يسبق D-135 (المكبوح)
+        # والاسترجاع المُفهرَس. لا تكرار (المعروض already ⇒ زاوية LLM محروسة).
+        # ─────────────────────────────────────────────────────────────────────
+        try:
+            from app.services.skills.student_state_skill import (
+                StudentStateInput,
+                get_student_state_skill,
+            )
+
+            _ex_state = get_student_state_skill().read(
+                StudentStateInput(question=question, history=history_messages)
+            )
+            _ex_hist = " ".join(
+                str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
+            )
+            if _ex_state.primary_intent == "example_request" and self._is_prob_context(
+                question + " " + _ex_hist
+            ):
+                _ce = await self._build_concept_example(question, history_messages)
+                if _ce:
+                    from app.services.skills.tutor_metrics import (
+                        record_intent,
+                        record_response_mode,
+                    )
+
+                    record_intent("example_request")
+                    record_response_mode("example_first")
+                    _ce_chars = 0
+                    async for chunk in self._stream_markdown_typing(_ce):
+                        if not chunk:
+                            continue
+                        _ce_chars += len(chunk)
+                        yield self._normalize_stream_event(
+                            {"type": "assistant_delta", "payload": {"content": chunk}}
+                        )
+                    if _ce_chars > 0:
+                        logger.info("concept_example_preempt", extra={"intent": "example_request"})
+                        yield self._normalize_stream_event(
+                            {"type": "assistant_final", "payload": {"content": ""}}
+                        )
+                        return
+        except Exception:
+            logger.warning("concept_example_preempt_failed", exc_info=True)
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-116 (D-130 — الإصغاء النشط / مُقيّم الإجابات السقراطي):

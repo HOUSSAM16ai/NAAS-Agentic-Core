@@ -64,6 +64,8 @@ class PropertySpec:
     definition: str
     concept_id: str  # canonical / BKT concept
     domain: str  # probability_event | arithmetic_property
+    #: D-136: مثال ملموس حتمي مُؤصَّل بأرقام التمرين (للأسئلة «اعطني مثال» — واعٍ بالمفهوم).
+    example: str = ""
 
 
 #: إضافة خاصية جديدة = مدخل هنا، **لا فرع كود**.
@@ -79,6 +81,10 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
         ),
         concept_id="event_meaning",
         domain="probability_event",
+        example=(
+            "مثال ملموس: لو سحبتَ 3 كرات خضراء (كلها خضراء) ⇒ تحقّقت A؛ أمّا لو سحبتَ كرتين حمراوين "
+            "وكرة خضراء (لونان مختلفان) ⇒ **لم** تتحقّق A، لأن A تتطلّب لوناً واحداً للكرات الثلاث."
+        ),
     ),
     "product_zero": PropertySpec(
         property_id="product_zero",
@@ -98,6 +104,10 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
         ),
         concept_id="product_zero",
         domain="arithmetic_property",
+        example=(
+            "مثال ملموس: لو سحبتَ الكرة الحمراء التي تحمل الرقم **0** مع كرتين أخريين أرقامهما 1 و3، "
+            "فالجداء = 0×1×3 = **0** ⇒ تحقّق «الجداء معدوم»؛ يكفي وجود كرة واحدة تحمل 0."
+        ),
     ),
     "product_odd": PropertySpec(
         property_id="product_odd",
@@ -109,6 +119,10 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
         ),
         concept_id="product_odd",
         domain="arithmetic_property",
+        example=(
+            "مثال ملموس: لو سحبتَ 3 كرات أرقامها 1 و3 و1 (كلها فردية) ⇒ الجداء = 1×3×1 = 3 **فردي**. "
+            "لكن لو ظهر فيها الرقم 4 أو 0 (زوجي) ⇒ يصبح الجداء زوجياً، فلا يتحقّق الشرط."
+        ),
     ),
     "product_even": PropertySpec(
         property_id="product_even",
@@ -120,6 +134,10 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
         ),
         concept_id="product_even",
         domain="arithmetic_property",
+        example=(
+            "مثال ملموس: لو سحبتَ الكرة الخضراء التي تحمل الرقم **4** (وهو زوجي) مع كرتين أرقامهما 1 و3، "
+            "فالجداء = 4×1×3 = 12 **زوجي** — لأن وجود عامل زوجي واحد (4) يكفي ليصبح الجداء كله زوجياً."
+        ),
     ),
     # D-132: مفاهيم التمرين الأخرى (تعريفات حتمية مُؤصَّلة) — جاهزية لمفاهيم التمرين كاملاً.
     "random_variable": PropertySpec(
@@ -132,6 +150,10 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
         ),
         concept_id="random_variable",
         domain="probability_concept",
+        example=(
+            "مثال ملموس: لو سحبتَ كرة رقمها 4 (زوجي) وكرة رقمها 0 (زوجي) وكرة رقمها 1 (فردي)، فإن "
+            "عدد الكرات ذات الرقم الزوجي = 2 ⇒ X = **2**. لو كانت كلها فردية ⇒ X = 0، وهكذا."
+        ),
     ),
     "expected_value": PropertySpec(
         property_id="expected_value",
@@ -143,6 +165,10 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
         ),
         concept_id="expected_value",
         domain="probability_concept",
+        example=(
+            "مثال ملموس على فكرة الأمل: لو كان X يأخذ القيمة 0 باحتمال النصف والقيمة 2 باحتمال النصف، "
+            "فالأمل = (0 × ½) + (2 × ½) = 1 — أي **نضرب كل قيمة في احتمالها ثم نجمع**؛ نفس الطريقة تُطبَّق على قيم X هنا."
+        ),
     ),
     "conditional_probability": PropertySpec(
         property_id="conditional_probability",
@@ -154,6 +180,10 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
         ),
         concept_id="conditional_probability",
         domain="probability_concept",
+        example=(
+            "مثال ملموس على الفكرة: لو علمتَ أن الكرات الثلاث من **نفس اللون** (تحقّقت A)، فإننا نحسب "
+            "احتمال B **داخل هذه الحالة فقط** — نُقصِر الفضاء على سحبات A ثم ننظر أيّها يحقّق B أيضاً."
+        ),
     ),
 }
 
@@ -256,6 +286,7 @@ class SemanticPropertyOutput(RobustBaseModel):
     concept_id: str
     domain: str
     source: str = "deterministic"  # deterministic | llm | fallback
+    example: str = ""  # D-136: مثال ملموس واعٍ بالمفهوم (لأسئلة «اعطني مثال»)
 
 
 class MisconceptionOutput(RobustBaseModel):
@@ -339,7 +370,27 @@ class SemanticPropertySkill:
                     concept_id=spec.concept_id,
                     domain=spec.domain,
                     source="deterministic",
+                    example=spec.example,
                 )
+        return None
+
+    def detect_active_concept(
+        self, question: str, history: list[dict[str, str]] | None = None
+    ) -> SemanticPropertyOutput | None:
+        """D-136: المفهوم النشط — من السؤال (interpret) وإلا من آخر مفهوم نُوقش في التاريخ.
+
+        يحلّ «اعطني مثال» (بلا marker): يعرف أن الحوار عن product_even (عُرِّف الدور السابق).
+        يفحص آخر ~6 رسائل (الأحدث أولاً) — أوّل مفهوم مُطابَق هو النشط.
+        """
+        out = self.interpret(question)
+        if out is not None:
+            return out
+        for msg in reversed((history or [])[-6:]):
+            if not isinstance(msg, dict):
+                continue
+            found = self.interpret(str(msg.get("content", "")))
+            if found is not None:
+                return found
         return None
 
     def is_definitional(self, question: str) -> bool:

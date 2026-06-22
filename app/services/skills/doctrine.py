@@ -555,9 +555,9 @@ CONCEPT_DIAGNOSIS_DOCTRINE: Final[tuple[str, ...]] = (
 
 # ── D-131: الطبقة الدلالية + Misconception Graph — الطبقة 2 (substrate التوأم المعرفي) ──
 # D-132: جاهزية الأسئلة الجديدة عبر LLM Listener-Definer المحروس + لا default مُجمَّد.
-SEMANTIC_PROPERTY_DOCTRINE_VERSION: Final[str] = "1.1.0"
+SEMANTIC_PROPERTY_DOCTRINE_VERSION: Final[str] = "1.2.0"
 
-#: قوانين غير قابلة للكسر تحكم الطبقة الدلالية + شبكة المفاهيم الخاطئة (D-131/D-132).
+#: قوانين غير قابلة للكسر تحكم الطبقة الدلالية + شبكة المفاهيم الخاطئة (D-131/D-132/D-136).
 SEMANTIC_PROPERTY_DOCTRINE: Final[tuple[str, ...]] = (
     "طبقة دلالية عامة data-driven لا special-casing: أي خاصية/اعتقاد خاطئ جديد = مدخل في "
     "PROPERTY_REGISTRY / MISCONCEPTION_GRAPH، لا فرع if/elif جديد. مفسّر واحد لكل العبارات الرياضية.",
@@ -577,6 +577,11 @@ SEMANTIC_PROPERTY_DOCTRINE: Final[tuple[str, ...]] = (
     "عبر LLM Listener-Definer محروس (تعريف مفاهيمي عام قصير، عربي، لا حساب، لا كشف نتيجة نهائية). "
     "ممنوع default مُجمَّد لمفهوم واحد (unknown ≠ event_meaning، interpret None ≠ same_color) — المفهوم "
     "غير المعروف يُعرَّف أو يُترك للسياسة، لا يُقحَم في الحادثة A. القياس عبر source=llm.",
+    # D-136 (مثال واعٍ بالمفهوم — قتل المثال الأعمى المتكرّر):
+    "المثال واعٍ بالمفهوم النشط لا أعمى: «اعطني مثال» ⇒ مثال **المفهوم الذي يجري الحوار عنه** "
+    "(detect_active_concept من السياق: PropertySpec.example الحتمي لكل مفهوم)، لا مثال الحادثة A "
+    "الافتراضي. ممنوع مثال/تعريف مكرّر حرفياً — المعروض already ⇒ زاوية مختلفة (LLM محروس) أو تقدّم. "
+    "ومحرّك حالة الفهم (D-135) لا يختطف أسئلة خارج مسار نفس-اللون (decide ⇒ None) فتُسلَّم للمعالج الواعي.",
 )
 
 

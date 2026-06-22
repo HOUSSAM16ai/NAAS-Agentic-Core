@@ -450,13 +450,19 @@ class UnderstandingStateSkill:
                 text=f"أحسنت ✅ — فهمتَ هذه النقطة. ننتقل الآن إلى **{nxt.title}**:\n\n{self._representation(nxt, 0)}",
             )
 
-        # B) فجوة صريحة ⇒ ذلك المكوّن؛ وإلا: حيرة على التركيز الحالي ⇒ صعّده (لا تقفز للجبهة)؛
-        # وإلا الجبهة التعليمية (أوّل غير مفهوم).
+        # B) فجوة صريحة ⇒ ذلك المكوّن؛ وإلا: حيرة على التركيز الحالي ⇒ صعّده (لا تقفز للجبهة).
+        # D-136 (كبح الاختطاف): لا تتقدّم في المسار إلا إذا كنا فعلاً وسطه (مكوّن مسار شُرح already).
+        # سؤال عن مفهوم خارج مسار نفس-اللون (product_even/expected_value…) ⇒ None ⇒ يُسلَّم للمعالج
+        # الواعي بالمفهوم بدل اختطافه إلى مثال الحادثة A الافتراضي.
         target = gap
         if target is None:
             _confused = any(_normalize(c) in _normalize(question) for c in _CONFUSION_MARKERS)
             focus = self._current_focus_kc(kcs, history) if _confused else None
-            target = focus or self._next_unmastered(kcs, states)
+            if focus is not None:
+                target = focus
+            else:
+                on_path = any(s in ("explained", "understood") for s in states.values())
+                target = self._next_unmastered(kcs, states) if on_path else None
         if target is None:
             return None
         st = states.get(target.kc_id, "not_addressed")

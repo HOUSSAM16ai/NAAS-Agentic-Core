@@ -730,7 +730,18 @@ def check_semantic_property_wired() -> None:
     _socp = client_src.find("_in_socratic_dialogue(question")
     if _defp == -1 or _socp == -1 or _defp > _socp:
         _fail("D-132: definitional preempt must precede the socratic capture in chat_with_agent.")
-    _pass("Semantic layer + Misconception Graph + D-132 new-question readiness wired (D-131/D-132)")
+    # D-136: مثال واعٍ بالمفهوم — PropertySpec.example + detect_active_concept + معالج orchestrator.
+    if "example:" not in skill or "def detect_active_concept" not in skill:
+        _fail(
+            "semantic_property_skill missing PropertySpec.example / detect_active_concept (D-136)."
+        )
+    if "_build_concept_example" not in client_src:
+        _fail(
+            "orchestrator_client missing the concept-aware example handler _build_concept_example (D-136)."
+        )
+    _pass(
+        "Semantic layer + Misconception Graph + D-132 readiness + D-136 concept-aware examples wired"
+    )
 
 
 def check_student_state_wired() -> None:
@@ -869,8 +880,14 @@ def check_understanding_state_wired() -> None:
         _fail("tutor_metrics missing record_understanding (D-135).")
     if "record_understanding" not in client_src:
         _fail("record_understanding has no live emitter in orchestrator_client (D-135).")
+    # D-136: كبح الاختطاف — decide لا يتقدّم في المسار إلا إذا كنا فعلاً وسطه (on_path)؛
+    # سؤال عن مفهوم خارج مسار نفس-اللون ⇒ None (لا default إلى kc_event_meaning).
+    if "on_path" not in skill:
+        _fail(
+            "understanding_state.decide still hijacks non-path questions (D-136 — missing on_path scope)."
+        )
     _pass(
-        "Understanding-State engine (Learning State, KC-aware, evidence, proactive) wired (D-135)"
+        "Understanding-State engine (Learning State, KC-aware, evidence, proactive, no-hijack) wired (D-135/D-136)"
     )
 
 

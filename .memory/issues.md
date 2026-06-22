@@ -4306,3 +4306,12 @@ _is_short_answer_in_dialogue يمنع إعادة طباعة التمرين عل�
 check_understanding_state_wired. تحقق: standalone بالكود الحقيقي PASS (factorial بلا رقم، evidence vs
 acknowledgment، تمثيل level≥1، برهان⇒advance). registry=24. WS الكامل + gate + pytest في Codespaces.
 الحالة: RESOLVED محلياً + standalone؛ التحقق الحي الكامل في Codespaces.
+
+## ISS-116 (D-136, 2026-06-22) — المثال الأعمى المتكرّر (regression سبّبه D-133/D-135)
+transcript: «اعطني مثال» عن جداء زوجي ⇒ مثال الحادثة A؛ «اعطني مثال عن الأمل الرياضي» ⇒ نفس مثال الحادثة
+A؛ مكرّر 4 مرّات. الجذر: D-135 يختطف كل سؤال احتمالات (مكوّناته مسار نفس-اللون فقط) ⇒ kc_event_meaning
+افتراضياً؛ + PropertySpec بلا example + لا كشف مفهوم من السياق. الإصلاح (D-136): (A) كبح D-135 — decide=None
+لغير مساره (on_path)؛ (B) PropertySpec.example لكل مفهوم + detect_active_concept (من السياق) + معالج
+_build_concept_example واعٍ (يسبق D-135) + تصعيد LLM محروس عند التكرار. doctrine v1.2.0 + gate (example +
+detect_active_concept + on_path). تحقق: standalone بالكود الحقيقي PASS + OpenRouter LIVE (بديل product_even
+صفر كشف) + Supabase bridge LIVE. registry=24. WS الكامل في Codespaces. الحالة: RESOLVED محلياً + live LLM/DB.

@@ -4810,3 +4810,19 @@ record_understanding + record_progress (نقيس الإتقان لا جمال ا
 evidence vs «فهمت» + تمثيل level≥1 لا تكرار + برهان⇒advance) PASS؛ ruff+format+py_compile+runtime_truth ✅؛
 registry=24. RAG/MCP/توسيع Misconception مؤجَّل حتى تُثبت المقاييس الأثر. الحالة: RESOLVED محلياً +
 standalone؛ gate+pytest+WS الكامل في Codespaces (pydantic محجوب في الـ sandbox).
+
+## D-136 (2026-06-22) — أمثلة واعية بالمفهوم + كبح اختطاف محرّك حالة الفهم
+regression حيّ سبّبه كود D-133/D-135: «اعطني مثال» عن جداء زوجي ثم عن الأمل الرياضي ⇒ نفس مثال الحادثة A
+أربع مرّات (مثال أعمى + تكرار). الجذر: (1) UnderstandingStateSkill (D-135) يختطف كل سؤال احتمالات —
+مكوّناته الستّة تُغطّي مسار P(A) نفس-اللون فقط، فيسقط decide إلى _next_unmastered ⇒ kc_event_meaning
+افتراضياً ⇒ مثال الحادثة A ثم يتكرّر؛ (2) PropertySpec فيه definition فقط لا example، و_build_concrete_example
+أعمى، ولا كشف للمفهوم من السياق. الإصلاح (إصلاحان): A) كبح D-135 — decide يُرجِع None ما لم يكن السؤال
+ضمن مسار نفس-اللون (gap/برهان/حيرة+focus)؛ أُزيل السقوط غير المشروط إلى _next_unmastered (on_path يُشترَط).
+B) أمثلة واعية: PropertySpec.example (مثال حتمي لكل مفهوم من السبعة) + interpret يُرجِعه +
+detect_active_concept(question, history) (المفهوم من السؤال وإلا من آخر مفهوم في التاريخ) + معالج
+_build_concept_example في orchestrator (يسبق D-135) ⇒ مثال المفهوم النشط؛ التكرار ⇒ _generate_concept_example_llm
+(زاوية مختلفة، LLM محروس). doctrine SEMANTIC_PROPERTY v1.1.0→v1.2.0 (+قاعدة D-136) + gate (example +
+detect_active_concept + on_path no-hijack). تحقق: standalone بالكود الحقيقي (كل المفاهيم لها example +
+detect_active_concept + D-135 لا يختطف + مسار factorial يعمل) PASS؛ OpenRouter LIVE (مثال product_even
+بديل، صفر كشف، مختلف)؛ Supabase bridge LIVE (4098 رسالة)؛ ruff+format+py_compile+runtime_truth ✅؛
+registry=24. الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل + gate + pytest في Codespaces.

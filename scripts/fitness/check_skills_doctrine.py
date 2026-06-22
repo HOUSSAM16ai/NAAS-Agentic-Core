@@ -807,10 +807,77 @@ def check_student_state_wired() -> None:
     _pass("Student-state (intent + transient frustration) wired as a decision signal (D-133)")
 
 
+def check_understanding_state_wired() -> None:
+    """D-135 (محرّك حالة الفهم — Learning State): يحرس النموذج المبدئي.
+
+    يحرس: (1) manifest متّسق، (2) الـ Skill يستهلك doctrine + KC-aware (knowledge_components من combo)
+    + detect_gap بالمعنى + understanding_state دلالي + الفهم يتطلّب evidence (لا «فهمت» وحدها) +
+    تمثيل استباقي + الأرقام من combo لا LLM، (3) موصول حيّاً في orchestrator_client (لا ZOMBIE)،
+    (4) مقياس understanding له مُصدِر حيّ.
+    """
+    from app.services.skills.doctrine import (
+        SKILL_DOCTRINE_MANIFEST,
+        UNDERSTANDING_STATE_DOCTRINE,
+        UNDERSTANDING_STATE_DOCTRINE_VERSION,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("understanding_state")
+    if entry is None:
+        _fail("Manifest missing 'understanding_state' entry (D-135).")
+    if entry["version"] != UNDERSTANDING_STATE_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for understanding_state (D-135).")
+    if entry["rules_count"] != len(UNDERSTANDING_STATE_DOCTRINE):
+        _fail("Manifest rules_count mismatch for understanding_state (D-135).")
+
+    skill = (ROOT / "app/services/skills/understanding_state_skill.py").read_text(encoding="utf-8")
+    if "from app.services.skills.doctrine import" not in skill:
+        _fail("understanding_state_skill.py does not consume doctrine (D-135).")
+    # KC-aware: المكوّنات من combo (لا أرقام مكتوبة)؛ detect_gap بالمعنى.
+    for fn in (
+        "def knowledge_components",
+        "def detect_gap",
+        "def understanding_state",
+        "def decide",
+    ):
+        if fn not in skill:
+            _fail(f"understanding_state_skill missing {fn} (D-135).")
+    # نقد 1: KC-aware — المكوّنات والأرقام من combo (لا number-match مثبَّت).
+    if "combo.total_combinations" not in skill or "combo.groups" not in skill:
+        _fail("understanding_state KCs not derived from symbolic combo (D-135 critique 1).")
+    # نقد 3: الفهم يتطلّب evidence (لا صحة فقط) — understood مشروط بـ evidence_markers.
+    if "evidence_markers" not in skill or "has_evidence" not in skill:
+        _fail("understanding_state does not require understanding_evidence (D-135 critique 3).")
+    # نقد 4: تمثيل استباقي يتصاعد.
+    if "representations" not in skill or "_explain_count" not in skill:
+        _fail("understanding_state lacks proactive representation escalation (D-135 critique 4).")
+    # الأرقام من المحرك الرمزي لا LLM (صفر استدعاء LLM في الـ Skill).
+    if "send_message" in skill or "get_ai_client" in skill:
+        _fail("understanding_state must be LLM-free (numbers from symbolic engine, D-135).")
+
+    # التوصيل الحيّ (لا ZOMBIE).
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    if "get_understanding_state_skill" not in client_src:
+        _fail("orchestrator_client does not invoke UnderstandingStateSkill (D-135 ZOMBIE).")
+    if "_is_short_answer_in_dialogue" not in client_src:
+        _fail("orchestrator_client missing the answer-without-'؟' guard (D-135 Part F).")
+
+    # مقياس الفهم له مُصدِر حيّ.
+    metrics_src = (ROOT / "app/services/skills/tutor_metrics.py").read_text(encoding="utf-8")
+    if "def record_understanding" not in metrics_src:
+        _fail("tutor_metrics missing record_understanding (D-135).")
+    if "record_understanding" not in client_src:
+        _fail("record_understanding has no live emitter in orchestrator_client (D-135).")
+    _pass(
+        "Understanding-State engine (Learning State, KC-aware, evidence, proactive) wired (D-135)"
+    )
+
+
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132 + D-133) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132 + D-133 + D-135) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
@@ -830,6 +897,7 @@ def main() -> None:
     check_socratic_evaluator_wired()
     check_semantic_property_wired()
     check_student_state_wired()
+    check_understanding_state_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

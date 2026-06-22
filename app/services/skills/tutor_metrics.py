@@ -57,6 +57,12 @@ try:
             "Chosen response mode per interaction — proves intent changed the pedagogy.",
             ["mode"],
         )
+        # D-135: حالة الفهم لكل مكوّن معرفي — يقيس الإتقان المستقلّ (لا جمال الحوار).
+        _UNDERSTANDING = Counter(
+            "cogniforge_tutor_understanding_total",
+            "Per-knowledge-component understanding state (Learning State, D-135).",
+            ["kc", "state"],
+        )
     else:  # pragma: no cover — re-import in same process (tests)
         _REPETITION_AVOIDED = None  # type: ignore[assignment]
         _DEFINITIONAL_ANSWER = None  # type: ignore[assignment]
@@ -65,6 +71,7 @@ try:
         _INTENT = None  # type: ignore[assignment]
         _FRUSTRATION = None  # type: ignore[assignment]
         _RESPONSE_MODE = None  # type: ignore[assignment]
+        _UNDERSTANDING = None  # type: ignore[assignment]
 
     def record_repetition_avoided() -> None:
         """قياس 1: تراجع التكرار الحرفي."""
@@ -117,6 +124,12 @@ try:
             if _RESPONSE_MODE is not None:
                 _RESPONSE_MODE.labels(mode=mode or "unknown").inc()
 
+    def record_understanding(kc: str, state: str) -> None:
+        """D-135: حالة فهم مكوّن معرفي (not_addressed/explained/understood) — قياس الإتقان."""
+        with contextlib.suppress(Exception):
+            if _UNDERSTANDING is not None:
+                _UNDERSTANDING.labels(kc=kc or "unknown", state=state or "unknown").inc()
+
 except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbox)
 
     def record_repetition_avoided() -> None:
@@ -142,6 +155,9 @@ except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbo
     def record_response_mode(mode: str) -> None:
         pass
 
+    def record_understanding(kc: str, state: str) -> None:
+        pass
+
 
 __all__ = [
     "record_definitional_answer",
@@ -151,4 +167,5 @@ __all__ = [
     "record_progress",
     "record_repetition_avoided",
     "record_response_mode",
+    "record_understanding",
 ]

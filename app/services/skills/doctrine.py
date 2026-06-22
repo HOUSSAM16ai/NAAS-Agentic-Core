@@ -965,6 +965,36 @@ def get_student_state_summary() -> str:
     )
 
 
+# ── D-135: محرّك حالة الفهم — Learning State («ماذا فهم الطالب فعلاً؟») ────────────────
+UNDERSTANDING_STATE_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم تتبّع حالة الفهم (Learning State، D-135).
+UNDERSTANDING_STATE_DOCTRINE: Final[tuple[str, ...]] = (
+    "Learning State هو المحور: القرار يُبنى على «ماذا فُهم وما بقي غير مفهوم» (حالة المكوّنات "
+    "المعرفية)، لا على آخر رسالة. السؤال يتحوّل من «ما المفهوم؟» إلى «ماذا فهم الطالب فعلاً؟».",
+    "KC-aware لا number-match (نقد المالك 1): الفجوة تُشخَّص بالمعنى (gap_signals)؛ المكوّنات المعرفية "
+    "مُشتقّة من المحرك الرمزي (combo)؛ الرقم إشارة واحدة لا مستخرَج. «لماذا قسمنا على 3!» (بلا رقم) ⇒ kc_factorial.",
+    "التكرار دلالي لا حرفي (نقد المالك 2): الحالة على مستوى المكوّن (شُرح/فُهم)، لا توقيع نصّي. مكوّن "
+    "مفهوم لا يُعاد شرحه أبداً؛ «14/165» ≡ «14 من 165» ≡ «عدد الحالات 14» = نفس المكوّن.",
+    "الفهم ببرهان لا صحة (نقد المالك 3): understood يتطلّب understanding_evidence (إظهار مرتبط بالمكوّن)، "
+    "لا مجرّد correct_answer. «فهمت» المجرّدة = إقرار ضعيف لا برهان — لا تُرقّي المكوّن إلى مفهوم.",
+    "استباقي لا تفاعلي (نقد المالك 4): مكوّن شُرح بلا فهم ⇒ تمثيل أعلى تلقائياً (شرح→مثال→تشبيه→سؤال "
+    "تطبيقي) قبل شكوى الطالب «انت تكرر» — Adaptive Learning.",
+    "الاعتراف والتقدّم أساسي: برهان فهم ⇒ «أحسنت ✅» + التقدّم لأوّل مكوّن غير مفهوم (الجبهة التعليمية)، "
+    "تغيير الاستراتيجية لا مزيد كلام.",
+    "الأرقام من المحرك الرمزي حصراً (ProbabilityCalculatorSkill/combo)؛ صفر LLM في الحقيقة؛ كل التمثيلات "
+    "حتمية وتَنجو من حجب D-113. الـ LLM (سؤال موجِّه/تقييم) محروس فقط (D-128/D-130).",
+)
+
+
+def get_understanding_state_summary() -> str:
+    """يُرجِع ملخص doctrine حالة الفهم (للـ logs)."""
+    return (
+        f"[v{UNDERSTANDING_STATE_DOCTRINE_VERSION}] {len(UNDERSTANDING_STATE_DOCTRINE)} قاعدة — "
+        "Learning State، KC-aware، تكرار دلالي، فهم ببرهان، تمثيل استباقي."
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1199,6 +1229,15 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "StudentStateSkill.read",
             "orchestrator_client.chat_with_agent",
             "pedagogical_policy.PolicyInput",
+        ),
+    },
+    "understanding_state": {
+        "version": UNDERSTANDING_STATE_DOCTRINE_VERSION,
+        "rules_count": len(UNDERSTANDING_STATE_DOCTRINE),
+        "consumed_by": (
+            # D-135: محرّك حالة الفهم (Learning State) — موصول حيّاً في مخرج الطوارئ.
+            "UnderstandingStateSkill.decide",
+            "orchestrator_client.chat_with_agent",
         ),
     },
 }

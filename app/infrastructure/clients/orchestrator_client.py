@@ -2449,6 +2449,56 @@ class OrchestratorClient:
             return False
 
     @classmethod
+    def _is_short_answer_in_dialogue(
+        cls, question: str, history_messages: list[dict[str, str]] | None
+    ) -> bool:
+        """D-135: إجابة قصيرة وسط حوار تمرين نشط (تلميح/شرح سابق، **لا «؟» شرط**)؟
+
+        يمنع إعادة طباعة التمرين على إجابة الطالب الصحيحة («اللون الأحمر والأخضر فقط») — تُترَك
+        لمحرّك حالة الفهم (D-135) ليُقيّمها كبرهان فهم ويتقدّم. حارس تبديل الموضوع (D-101) داخله.
+        """
+        try:
+            norm = (question or "").strip()
+            if not norm or len(norm.split()) > 8:  # الإجابات قصيرة؛ الطلبات الجديدة أطول
+                return False
+            _low = norm.lower()
+            if any(
+                m in _low
+                for m in (
+                    "اعطني",
+                    "أعطني",
+                    "اعطيني",
+                    "هات",
+                    "اكتب",
+                    "ارسم",
+                    "تمرين",
+                    "مسألة",
+                    "درس",
+                )
+            ):
+                return False  # طلب محتوى/تمرين جديد صريح — ليس إجابة
+            last_assistant = None
+            for msg in reversed(history_messages or []):
+                if isinstance(msg, dict) and msg.get("role") == "assistant":
+                    last_assistant = str(msg.get("content", "")).strip()
+                    break
+            if not last_assistant:
+                return False
+            if len(last_assistant) > 600 or "يحتوي كيس على" in last_assistant:
+                return False  # آخر رسالة كانت إفراغ التمرين نفسه — ليست حوار تدريس
+            _hist_text = " ".join(
+                str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
+            )
+            if not cls._is_prob_context(question + " " + _hist_text):
+                return False
+            from app.services.capabilities.arabic_normalize import primary_canonical_topic
+
+            _topic = primary_canonical_topic(question)
+            return not (_topic is not None and _topic.canonical_id != "probability")
+        except Exception:  # pragma: no cover - fail-safe
+            return False
+
+    @classmethod
     def _build_symbolic_step(cls, combo, focus: str | None, *, acknowledge: bool = False) -> str:
         """D-130: الخطوة الرمزية المتدرّجة (التسليم الرمزي) — حتمية من المحرك الرمزي.
 
@@ -3070,7 +3120,9 @@ class OrchestratorClient:
         # المحسوبة. قبل هذا الترتيب، MODE_A كان يُنهي المسار بمكوّن احتمالات
         # مبني من history التمرين السابق قبل وصول الاسترجاع المُفهرَس (كارثة حية).
         # ─────────────────────────────────────────────────────────────────────
-        if self._has_indexed_match(question, history_messages):
+        if self._has_indexed_match(
+            question, history_messages
+        ) and not self._is_short_answer_in_dialogue(question, history_messages):
             logger.info(
                 "indexed_retrieval_preempt",
                 extra={
@@ -3184,12 +3236,52 @@ class OrchestratorClient:
             or _subpart is not None
             or _confusion_count >= 2
             or _state.primary_intent in ("example_request", "procedure")
+            # D-135: إجابة قصيرة وسط حوار تمرين ⇒ ادخل ليُقيّمها محرّك حالة الفهم (اعتراف+تقدّم).
+            or self._is_short_answer_in_dialogue(question, history_messages)
         ):
             # D-127: الاستجابة المدفوعة بالمفهوم أولاً؛ fallback إلى منطق D-124/D-125.
             _direct = None
+            # D-135: محرّك حالة الفهم (Learning State) — الأولوية: يُجيب الفجوة المعرفية المحدّدة،
+            # يتقدّم على برهان الفهم، ويُصعّد التمثيل استباقياً (لا تكرار دلالي). الأرقام من المحرك
+            # الرمزي (combo)، صفر LLM. يحلّ الكارثة: «كيف وصلنا ل 10»⇒kc_combination، «لماذا قسمنا
+            # على 3!»⇒kc_factorial (بلا رقم)، «لم أفهم»×2⇒تمثيل مختلف لا تكرار، إجابة⇒اعتراف+تقدّم.
+            with contextlib.suppress(Exception):
+                _us_combo = self._load_canonical_combinations(question, history_messages)
+                if _us_combo is not None:
+                    from app.services.skills.tutor_metrics import (
+                        record_progress,
+                        record_understanding,
+                    )
+                    from app.services.skills.understanding_state_skill import (
+                        get_understanding_state_skill,
+                    )
+
+                    _us = get_understanding_state_skill().decide(
+                        question=question,
+                        history=history_messages,
+                        combo=_us_combo,
+                        intent=_state.primary_intent,
+                        frustration=_state.frustration,
+                    )
+                    if _us is not None and _us.text:
+                        _direct = _us.text
+                        record_understanding(_us.kc_id, _us.action)
+                        record_progress(
+                            "advanced"
+                            if _us.action in ("advance", "mastered")
+                            else ("re_represented" if _us.action == "re_represent" else "explained")
+                        )
+                        logger.info(
+                            "understanding_state",
+                            extra={
+                                "kc": _us.kc_id,
+                                "action": _us.action,
+                                "representation_level": _us.representation_level,
+                            },
+                        )
             # D-133: النيّة تُحدّد نوع الرد قبل السياسة (إشارة قرار، لا تصنيف):
             #   example_request ⇒ مثال قبل النظرية؛ procedure ⇒ خطوات رمزية متدرّجة.
-            if _state.primary_intent in ("example_request", "procedure"):
+            if _direct is None and _state.primary_intent in ("example_request", "procedure"):
                 from app.services.skills.tutor_metrics import record_response_mode
 
                 if _state.primary_intent == "example_request":

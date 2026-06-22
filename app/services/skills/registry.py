@@ -403,6 +403,15 @@ def _build_registry() -> SkillRegistry:
             consumed_by=("orchestrator_client.chat_with_agent",),
         ),
         SkillDescriptor(
+            name="understanding_state",
+            summary="محرّك حالة الفهم (Learning State) — ماذا فهم الطالب فعلاً؟ KC-aware + تمثيل استباقي (D-135).",
+            input_contract="combo + history",
+            output_contract="UnderstandingDecision",
+            primary_method="decide",
+            metrics_prefix="cogniforge_skill_understanding_state",
+            consumed_by=("orchestrator_client.chat_with_agent",),
+        ),
+        SkillDescriptor(
             name="semantic_property",
             summary="الطبقة 2 — الطبقة الدلالية + Misconception Graph (شخّص ثم تدخّل، D-131).",
             input_contract="SemanticPropertyInput",

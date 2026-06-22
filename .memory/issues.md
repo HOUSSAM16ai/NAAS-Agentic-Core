@@ -4295,3 +4295,14 @@ socratic_budget=0=إيقاف التكرار+كشف خطوة رمزية أقرب)
 OpenRouter (Intent Listener 3 صياغات دارجة ⇒ 3/3 + سؤال موجِّه محروس صفر كشف) + standalone (كل نيّة + تصعيد/
 تلاشي الإحباط + budget(high)=0). registry=23. توسيع/RAG/MCP مؤجَّل حتى تُثبت المقاييس الأثر. الحالة: RESOLVED
 محلياً + live LLM؛ WS الكامل + gate + pytest في Codespaces.
+
+## ISS-116 (D-135, 2026-06-22) — النظام يكرر بدل أن يبني الفهم (Learning State مفقود)
+transcript حيّ: السؤال الفرعي («كيف وصلنا ل 10»/«لماذا ضربنا 5×4×3») يتلقّى نفس الكشف الكامل؛ إجابة
+صحيحة («اللون الأحمر والأخضر فقط») تُعيد طباعة التمرين؛ «لم أفهم»×N ⇒ نفس النص. الجذر: لا نموذج لـ
+«ماذا فهم الطالب فعلاً» (Learning State). الإصلاح (D-135): UnderstandingStateSkill (#24، حتمي، صفر LLM)
+يُفكّك الحلّ إلى مكوّنات معرفية من المحرك الرمزي، يُشخّص الفجوة بالمعنى (لا رقم)، يتتبّع حالة كل مكوّن
+دلالياً (الفهم ببرهان لا «فهمت»)، ويُصعّد التمثيل استباقياً (لا تكرار) + يتقدّم على البرهان. + حارس
+_is_short_answer_in_dialogue يمنع إعادة طباعة التمرين على الإجابة القصيرة. doctrine v1.0.0 + gate
+check_understanding_state_wired. تحقق: standalone بالكود الحقيقي PASS (factorial بلا رقم، evidence vs
+acknowledgment، تمثيل level≥1، برهان⇒advance). registry=24. WS الكامل + gate + pytest في Codespaces.
+الحالة: RESOLVED محلياً + standalone؛ التحقق الحي الكامل في Codespaces.

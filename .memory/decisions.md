@@ -4793,3 +4793,20 @@ Listener على 3 صياغات دارجة جديدة ⇒ 3/3؛ السؤال ال
 + تصعيد/تلاشي الإحباط + budget(high)=0 + جدول السياسة + manifest متّسق) + ruff+format+py_compile+runtime_truth.
 registry=23. نطاق الاحتمالات؛ توسيع الحالات+RAG+MCP مؤجَّل حتى تُثبت المقاييس أن نوع الرد تغيّر. الحالة:
 RESOLVED محلياً + live LLM (gate+pytest+WS الكامل في Codespaces — pydantic محجوب في الـ sandbox).
+
+## D-135 (2026-06-22) — محرّك حالة الفهم (Understanding State Engine / Learning State)
+نقد المالك الأعمق: المشكلة لم تعد Concept/Misconception/Intent/Frustration (موجودة) بل **Learning State**:
+«ماذا فهم الطالب فعلاً، وما بقي؟». كل الكارثة (تكرار/قفز) من غياب نموذج `student_understanding_state`.
+نقد رباعي مُجسَّد: (1) Knowledge Gap لا رقم — «لماذا قسمنا على 3!» (بلا رقم) ⇒ kc_factorial؛ (2) تكرار
+دلالي لا حرفي (حالة المكوّن لا توقيع نصّي)؛ (3) الفهم ببرهان لا صحة (evidence_markers، «فهمت» وحدها ضعيفة)؛
+(4) استباقي (تمثيل أعلى تلقائياً قبل «انت تكرر»). الحل: `UnderstandingStateSkill` (#24، حتمي، صفر LLM):
+knowledge_components(combo) ⇒ 6 KCs مُشتقّة من المحرك الرمزي (الأرقام من _expand_comb) + detect_gap بالمعنى +
+understanding_state دلالي {not_addressed/explained/understood} + _current_focus_kc (الحيرة تُصعّد التركيز
+الحالي) + decide (برهان⇒تقدّم، فجوة⇒شرح، شُرح-بلا-فهم⇒تمثيل أعلى). موصول في orchestrator_client (أولوية
+في مخرج الطوارئ) + _is_short_answer_in_dialogue (يمنع إعادة طباعة التمرين على إجابة قصيرة). مقياس
+record_understanding + record_progress (نقيس الإتقان لا جمال الحوار). doctrine UNDERSTANDING_STATE v1.0.0
+(7 قواعد) + manifest + gate check_understanding_state_wired. الطبقات الستّ للمالك موجودة كـ Skills — لا
+ملفات موازية؛ الجديد الوحيد = محرّك حالة الفهم. تحقق: standalone بالكود الحقيقي (6 KCs + factorial بلا رقم +
+evidence vs «فهمت» + تمثيل level≥1 لا تكرار + برهان⇒advance) PASS؛ ruff+format+py_compile+runtime_truth ✅؛
+registry=24. RAG/MCP/توسيع Misconception مؤجَّل حتى تُثبت المقاييس الأثر. الحالة: RESOLVED محلياً +
+standalone؛ gate+pytest+WS الكامل في Codespaces (pydantic محجوب في الـ sandbox).

@@ -224,6 +224,12 @@ from app.services.skills.topic_lock import (
     TopicLockOutput,
     get_topic_lock,
 )
+from app.services.skills.understanding_state_skill import (
+    KnowledgeComponent,
+    UnderstandingDecision,
+    UnderstandingStateSkill,
+    get_understanding_state_skill,
+)
 
 __all__ = [
     "ANSWER_REDACTION_DOCTRINE",
@@ -293,6 +299,7 @@ __all__ = [
     "GreetingSkillInput",
     "GreetingSkillOutput",
     "GreetingSkillResult",
+    "KnowledgeComponent",
     "MCPToolInput",
     "MCPToolOutput",
     "MCPToolSkill",
@@ -333,6 +340,8 @@ __all__ = [
     "TopicLock",
     "TopicLockInput",
     "TopicLockOutput",
+    "UnderstandingDecision",
+    "UnderstandingStateSkill",
     "apply_channel_b_firewall",
     "arabic_prose_ratio",
     "build_exercise_explanation_prompt",
@@ -362,6 +371,7 @@ __all__ = [
     "get_step_by_step_summary",
     "get_student_state_skill",
     "get_topic_lock",
+    "get_understanding_state_skill",
     "guard_arabic_stream",
     "is_probably_non_arabic",
     "list_all_doctrines",

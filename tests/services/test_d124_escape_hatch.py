@@ -205,13 +205,17 @@ class TestSourceWiring:
 
     def test_escape_hatch_follows_indexed_preempt(self) -> None:
         # المخرج يقع بعد الاسترجاع المُفهرَس (طلب «اعطني التمرين» يُخدَم أولاً).
-        preempt_pos = CLIENT_SRC.index("if self._has_indexed_match(question, history_messages):")
-        hatch_pos = CLIENT_SRC.index("_subpart = self._detect_subpart_question(question)")
+        # D-137: matcher متين على لفّ الأسطر (الاستدعاء متعدّد الأسطر بعد ruff).
+        preempt_pos = CLIENT_SRC.find("if self._has_indexed_match(")
+        hatch_pos = CLIENT_SRC.find("_subpart = self._detect_subpart_question(question)")
+        assert preempt_pos != -1 and hatch_pos != -1
         assert preempt_pos < hatch_pos
 
     def test_escape_condition_subpart_or_confusion(self) -> None:
         # D-125: تطوّر الشرط ليشمل المفاهيمي — العداد + subpart لا يزالان فيه.
-        assert "_subpart is not None or _confusion_count >= 2:" in CLIENT_SRC
+        # D-137: الشرط أصبح متعدّد الأسطر — نطابق بعد تطبيع المسافات.
+        flat = " ".join(CLIENT_SRC.split())
+        assert "or _subpart is not None or _confusion_count >= 2" in flat
 
     def test_direct_explanation_uses_history_none(self) -> None:
         # D-123 immunity: التحليل من المحتوى الرسمي بـ history=None.

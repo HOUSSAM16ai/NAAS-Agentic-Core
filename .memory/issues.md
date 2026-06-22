@@ -4315,3 +4315,11 @@ A؛ مكرّر 4 مرّات. الجذر: D-135 يختطف كل سؤال احتم
 _build_concept_example واعٍ (يسبق D-135) + تصعيد LLM محروس عند التكرار. doctrine v1.2.0 + gate (example +
 detect_active_concept + on_path). تحقق: standalone بالكود الحقيقي PASS + OpenRouter LIVE (بديل product_even
 صفر كشف) + Supabase bridge LIVE. registry=24. WS الكامل في Codespaces. الحالة: RESOLVED محلياً + live LLM/DB.
+
+## ISS-116 / D-137 (2026-06-22) — تشابك التوجيه: «ما هو X»⇒«14/165»، مثال خاطئ، event-A عند الحيرة
+نظامان للمفاهيم يتصارعان بإشارات متداخلة. الإصلاح (6 جراحات): «ما هو X» تعريف موثوق (markers + StudentState
+intent)؛ حذف «الاحتمال» المجرّدة من kc_ratio؛ تسجيل favorable_cases؛ detect_active_concept يُفضّل رسائل
+الطالب (لا أمثلة المساعد)؛ الحيرة تُعيد إشراك المفهوم النشط؛ كشف السؤال السقراطي بـ «؟» في أي موضع +
+حارس السؤال المضادّ (يحل الخيانة البيداغوجية حياً). تحقق: verify_d137_live (8-turn 6/6) + Supabase
+(4116) + OpenRouter (stop) + 181 اختبار D-1xx ناجح + 10 اختبارات pre-existing مُصلَحة. الحالة: RESOLVED
+محلياً + live LLM/DB؛ WS الكامل في Codespaces.

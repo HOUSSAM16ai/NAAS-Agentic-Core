@@ -74,9 +74,11 @@ class TestGeneratedSocraticGuards:
         assert "async def _generate_socratic_narrative(" in CLIENT_SRC
 
     def test_starts_at_escalation_only(self) -> None:
+        # D-129/D-137: بوّابة التصعيد انتقلت إلى محرّك السياسة (`_policy.action == "socratic"`)
+        # — لا بوّابة `level` داخلية. السرد لا يُستدعى إلا تحت قرار السياسة السقراطي.
         seg = CLIENT_SRC[CLIENT_SRC.index("async def _generate_socratic_narrative(") :][:3500]
-        assert "if level < 1:" in seg  # المرّة الأولى ⇒ شرح حتمي (لا LLM)
-        assert "return None" in seg
+        assert "return None" in seg  # fallback حتمي عند أي فشل
+        assert 'elif _policy.action == "socratic":' in CLIENT_SRC  # البوّابة الوحيدة
 
     def test_facts_injected_not_generated(self) -> None:
         # الحقائق الرمزية محقونة؛ 14/165 **غير** محقونة (الطالب يُقاد لاكتشافها).
@@ -99,21 +101,24 @@ class TestGeneratedSocraticGuards:
         assert "ممنوع الحساب" in CLIENT_SRC
 
     def test_wired_in_chat_for_escalation(self) -> None:
-        # موصول في chat_with_agent: يُولَّد ويستبدل القالب الحتمي عند التصعيد.
-        seg = CLIENT_SRC[CLIENT_SRC.index("_direct = self._build_cognitive_response(") :][:900]
+        # D-137: موصول تحت قرار السياسة السقراطي (D-129) — يُولَّد ويستبدل القالب الحتمي،
+        # مع fallback إلى _build_cognitive_response. (الترتيب: السرد قبل الـ fallback.)
+        seg = CLIENT_SRC[CLIENT_SRC.index('elif _policy.action == "socratic":') :][:900]
         assert "await self._generate_socratic_narrative(" in seg
         assert "if _narr:" in seg
+        assert "_build_cognitive_response(" in seg  # fallback حتمي
 
 
 # ── 3. event_meaning level-0 تعريف حتمي (لا الحل الكامل) ─────────────────────────
 class TestEventDefinition:
     def test_event_branch_in_cognitive_response(self) -> None:
+        # D-132/D-137: الفرع يُعرّف الحادثة عبر السجلّ الحتمي (PROPERTY_REGISTRY["same_color"]
+        # عنوانه «ماذا نقصد بالحادثة A؟») لا نصاً inline، ولا يكشف 14/165.
         assert 'if concept == "event_meaning":' in CLIENT_SRC
-        seg = CLIENT_SRC[CLIENT_SRC.index('if concept == "event_meaning":') :][:900]
-        assert "ماذا نقصد بالحادثة A" in seg
-        assert "3 كرات من نفس اللون" in seg
-        # لا يكشف الجواب النهائي 14/165 في التعريف.
-        assert "14/165" not in seg
+        seg = CLIENT_SRC[CLIENT_SRC.index('if concept == "event_meaning":') :][:1500]
+        assert 'PROPERTY_REGISTRY["same_color"]' in seg  # التعريف من السجلّ (لا full_solution)
+        assert "نفس اللون" in seg
+        assert "14/165" not in seg  # لا كشف الجواب النهائي في التعريف
 
     def test_event_precedes_full_solution(self) -> None:
         # الحدث يُفحَص قبل full_solution (لا يسقط للحل الكامل).
@@ -125,7 +130,11 @@ class TestEventDefinition:
 # ── 4. doctrine + redaction-safety ─────────────────────────────────────────────
 class TestDoctrineAndSafety:
     def test_doctrine_bumped(self) -> None:
-        assert 'CONCEPT_DIAGNOSIS_DOCTRINE_VERSION: Final[str] = "1.1.0"' in DOCTRINE_SRC
+        # D-137: نسخة CONCEPT_DIAGNOSIS تطوّرت (≥ 1.1.0) — نتحقّق من التطوّر + المحتوى الجوهري.
+        from app.services.skills.doctrine import CONCEPT_DIAGNOSIS_DOCTRINE_VERSION
+
+        major, minor, *_ = (int(x) for x in CONCEPT_DIAGNOSIS_DOCTRINE_VERSION.split("."))
+        assert (major, minor) >= (1, 1)
         assert "الـ LLM = الجهاز العصبي" in DOCTRINE_SRC
         assert "السرد السقراطي المُولَّد محروس إلزامياً" in DOCTRINE_SRC
 

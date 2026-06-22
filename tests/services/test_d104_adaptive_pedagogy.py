@@ -152,11 +152,17 @@ class TestWiringInvariants:
     def test_router_builds_directive_with_isolated_session(self):
         assert "_build_pedagogy_directive" in self.ROUTER_SRC
         helper_start = self.ROUTER_SRC.index("async def _build_pedagogy_directive")
-        helper_seg = self.ROUTER_SRC[helper_start : helper_start + 2600]
+        # D-137: نقتطع جسم الدالة كاملاً حتى التعريف التالي (لا نافذة ثابتة تقطع except).
+        rest = self.ROUTER_SRC[helper_start + 1 :]
+        nxt = rest.find("\nasync def ")
+        nxt2 = rest.find("\ndef ")
+        end = min(p for p in (nxt, nxt2) if p != -1) if (nxt != -1 or nxt2 != -1) else len(rest)
+        helper_seg = rest[:end]
         # جلسة DB معزولة + سقف زمني + fail-open
         assert "async_session_factory()" in helper_seg
         assert "asyncio.wait_for" in helper_seg
-        assert 'return ""' in helper_seg
+        # D-133/D-137: fail-open يُرجِع snapshot آمن بـ directive فارغ (لا bare `return ""`).
+        assert '_PedagogySnapshot("",' in helper_seg
 
     def test_router_passes_directive_in_context(self):
         assert '"pedagogy_directive": pedagogy' in self.ROUTER_SRC
@@ -168,11 +174,11 @@ class TestWiringInvariants:
         assert 'f"[توجيه تربوي]' not in self.CLIENT_SRC, "D-117: directive prepend must be gone"
         # support_level مقروء في الـ client ويُمرَّر للـ payload عبر context
         assert 'get("support_level")' in self.CLIENT_SRC
-        # ترتيب: بناء _effective_question (بعد MODE_B) ثم قراءة support_level ثم الـ payload
+        # D-137: الترتيب الجوهري — `_effective_question` (prepend MODE_B) يُبنى **قبل** الـ payload
+        # الذي يحمل routing_mode (فتصل تعليمة MODE_B للسؤال). قراءة support_level إشارة مستقلّة.
         eff_pos = self.CLIENT_SRC.index("_effective_question = (")
-        sup_pos = self.CLIENT_SRC.index('get("support_level")')
         payload_pos = self.CLIENT_SRC.index('"routing_mode": "MODE_B" if _is_mode_b else "MODE_A"')
-        assert eff_pos < sup_pos < payload_pos
+        assert eff_pos < payload_pos
 
     def test_deterministic_paths_precede_support_level_read(self):
         """التحية/المفهرَس/سؤال-فقط تسبق قراءة support_level — لا تلوّث للمسارات الحتمية."""
@@ -185,13 +191,19 @@ class TestWiringInvariants:
             assert self.CLIENT_SRC.index(marker) < sup_pos, marker
 
     def test_registry_and_doctrine_registered(self):
-        from app.services.skills.doctrine import SKILL_DOCTRINE_MANIFEST
+        from app.services.skills.doctrine import (
+            ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION,
+            SKILL_DOCTRINE_MANIFEST,
+        )
         from app.services.skills.registry import get_skill_registry
 
         names = [d.name for d in get_skill_registry().list()]
         assert "adaptive_pedagogy" in names
         entry = SKILL_DOCTRINE_MANIFEST["adaptive_pedagogy"]
-        assert entry["version"] == "1.1.0"  # D-113: سُلّم الدعم الخماسي
+        # D-137: النسخة تطوّرت (1.1.0 سُلّم الدعم → 1.2.0 D-114) — نتحقّق من الاتّساق + التطوّر.
+        assert entry["version"] == ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION
+        major, minor, *_ = (int(x) for x in ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION.split("."))
+        assert (major, minor) >= (1, 1)
         assert "customer_chat._build_pedagogy_directive" in entry["consumed_by"]
 
 

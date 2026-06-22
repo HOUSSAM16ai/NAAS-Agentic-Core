@@ -637,8 +637,9 @@ def check_socratic_evaluator_wired() -> None:
             _fail(f"orchestrator_client lost D-130 wiring: {needle} (active-listener ZOMBIE).")
 
     # D-130: الالتقاط المبكر يجب أن يسبق الاسترجاع المُفهرَس (وإلا تُعاد طباعة التمرين).
-    eval_pos = client_src.find("_in_socratic_dialogue(question")
-    indexed_pos = client_src.find("_has_indexed_match(question")
+    # نطابق صيغة الاستدعاء بـ `self.` (يميّزها عن تعريف الدالة) ومتينة على لفّ الأسطر.
+    eval_pos = client_src.find("self._in_socratic_dialogue(")
+    indexed_pos = client_src.find("self._has_indexed_match(")
     if eval_pos == -1 or indexed_pos == -1 or eval_pos > indexed_pos:
         _fail(
             "D-130: socratic-evaluation capture must precede indexed-retrieval in "
@@ -739,8 +740,23 @@ def check_semantic_property_wired() -> None:
         _fail(
             "orchestrator_client missing the concept-aware example handler _build_concept_example (D-136)."
         )
+    # D-137: «ما هو X» تعريف موثوق — _DEFINITIONAL_MARKERS يشمل «ما هو»؛ _wants_def يستخدم
+    # نيّة StudentState؛ «الحالات الملائمة» مفهوم مُسجَّل؛ معالج المثال يَفعل على الحيرة+مفهوم نشط.
+    if '"ما هو "' not in skill:
+        _fail(
+            "_DEFINITIONAL_MARKERS missing bare 'ما هو' — 'ما هو X' not treated as definition (D-137)."
+        )
+    if '"favorable_cases"' not in skill or "الحالات الملائمة" not in skill:
+        _fail("PROPERTY_REGISTRY missing the 'favorable_cases' concept (D-137).")
+    if '_state.primary_intent == "definition"' not in client_src:
+        _fail(
+            "_wants_def does not use StudentState definition intent (D-137 — 'ما هو X' reliable)."
+        )
+    if "_ex_confused" not in client_src or "_ex_active" not in client_src:
+        _fail("concept-example handler does not re-engage the active concept on confusion (D-137).")
     _pass(
-        "Semantic layer + Misconception Graph + D-132 readiness + D-136 concept-aware examples wired"
+        "Semantic layer + Misconception Graph + D-132 readiness + D-136 concept-aware examples + "
+        "D-137 routing-untangle wired"
     )
 
 
@@ -886,15 +902,26 @@ def check_understanding_state_wired() -> None:
         _fail(
             "understanding_state.decide still hijacks non-path questions (D-136 — missing on_path scope)."
         )
+    # D-137: إشارات D-135 خاصة بخطوة الحساب لا كلمات مفهوم عامة — «الاحتمال» المجرّدة (عنصر
+    # gap_signal مستقل) تختطف «ما هو الاحتمال الشرطي». يجب ألا توجد كعنصر مفرد.
+    if '"الاحتمال",' in skill:
+        _fail(
+            "understanding_state has the over-broad bare 'الاحتمال' gap_signal — hijacks concept "
+            "questions like 'ما هو الاحتمال الشرطي' (D-137)."
+        )
+    # D-137: _current_focus_kc لا يقفل على مثال/تعريف مفهوم (تجنّب تسرّب «نفس اللون» العابرة).
+    if "## مثال" not in skill or "مثال ملموس" not in skill:
+        _fail("understanding_state._current_focus_kc lacks the concept-artifact guard (D-137).")
     _pass(
-        "Understanding-State engine (Learning State, KC-aware, evidence, proactive, no-hijack) wired (D-135/D-136)"
+        "Understanding-State engine (Learning State, KC-aware, evidence, proactive, no-hijack, "
+        "D-137 routing-separation) wired (D-135/D-136/D-137)"
     )
 
 
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132 + D-133 + D-135) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132 + D-133 + D-135 + D-137) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()

@@ -295,10 +295,13 @@ class UnderstandingStateSkill:
                 kc_id="kc_ratio",
                 title="تكوين الاحتمال",
                 order=5,
+                # D-137: حُذفت «الاحتمال» المجرّدة — كانت تُطابق كل سؤال احتمالات (حتى
+                # «ما هو الاحتمال الشرطي») فيختطف D-135 ويبثّ «14 من 165». الإشارات الآن
+                # خاصة بـ**خطوة تكوين النسبة** لا كلمة مفهوم عامة.
                 gap_signals=(
                     "النسبة",
-                    "الاحتمال",
                     "كيف نكون الاحتمال",
+                    "كيف نكوّن الاحتمال",
                     "البسط على المقام",
                     "نقسم البسط",
                 ),
@@ -395,7 +398,13 @@ class UnderstandingStateSkill:
         for m in reversed(history or []):
             if not isinstance(m, dict) or m.get("role") != "assistant":
                 continue
-            low = _normalize(str(m.get("content", "")))
+            raw = str(m.get("content", ""))
+            # D-137 (حارس تسرّب التركيز): إذا كانت آخر رسالة مساعد **مثالاً/تعريفاً لمفهوم**
+            # (لا شرح خطوة حساب)، فلا تقفل التركيز عليها — كلمات مثل «نفس اللون» العابرة في
+            # مثال الاحتمال الشرطي كانت تقفل خطأً على kc_event_meaning ⇒ «لم أفهم» ⇒ الحادثة A.
+            if any(mk in raw for mk in ("## مثال", "مثال ملموس", "مثال آخر", "## ماذا نقصد")):
+                return None
+            low = _normalize(raw)
             for kc in kcs:
                 if any(_normalize(mk) in low for mk in kc.explain_markers):
                     return kc

@@ -185,6 +185,32 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
             "احتمال B **داخل هذه الحالة فقط** — نُقصِر الفضاء على سحبات A ثم ننظر أيّها يحقّق B أيضاً."
         ),
     ),
+    # D-137: «الحالات الملائمة» مفهوم مُسجَّل (كان غير مُسجَّل ⇒ detect_active_concept يتخطّاه
+    # إلى مفهوم أقدم ⇒ «اعطني مثال» بعده يُعطي مثالاً خاطئاً). تعريف المفهوم (لا خطوة الحساب —
+    # خطوة العدّ تخصّ D-135 kc_favorable_cases).
+    "favorable_cases": PropertySpec(
+        property_id="favorable_cases",
+        markers=(
+            "الحالات الملائمة",
+            "الحالة الملائمة",
+            "الحالات المناسبة",
+            "الحالات الناجحة",
+            "الحالات المؤاتية",
+            "العدد الملائم",
+        ),
+        title="ماذا نقصد بالحالات الملائمة؟",
+        definition=(
+            "الحالات الملائمة لحادثةٍ هي **عدد النتائج التي تُحقّق تلك الحادثة** من بين كل النتائج "
+            "الممكنة. هي **بسط** الاحتمال: كلّما زادت الحالات الملائمة زاد احتمال الحادثة."
+        ),
+        concept_id="favorable_cases",
+        domain="probability_concept",
+        example=(
+            "مثال ملموس على الفكرة: لحادثة «نفس اللون» نعدّ تأليفات كل لون على حدة — "
+            "C(4,3) = (4×3×2)/(3×2×1) للحمراء، وC(5,3) = (5×4×3)/(3×2×1) للخضراء، "
+            "أمّا البيضاء فمستحيلة لأن عددها أقل من المطلوب — ثم **نجمع الممكنة فقط** لنحصل على الحالات الملائمة."
+        ),
+    ),
 }
 
 
@@ -324,12 +350,20 @@ except Exception:  # pragma: no cover
         pass
 
 
-#: نية تعريفية صريحة («ماذا نقصد / ما معنى / ما المقصود / كيف أفهم»).
+#: نية تعريفية صريحة («ماذا نقصد / ما معنى / ما المقصود / كيف أفهم / ما هو X / عرّف»).
+#: D-137: «ما هو X» المجرّدة كانت مفقودة ⇒ «ما هو الاحتمال الشرطي» لم تُعدّ تعريفية ⇒ سقطت
+#: لـ D-135 فبثّ «14 من 165». أي سؤال «ما هو/ما هي/عرّف» نيّته تعريف.
 _DEFINITIONAL_MARKERS: tuple[str, ...] = (
     "ماذا نقصد",
     "ما معنى",
     "ما المقصود",
     "ما هو معنى",
+    "ما هو ",
+    "ما هي ",
+    "ماهو ",
+    "ماهي ",
+    "عرف ",
+    "عرّف ",
     "كيف افهم",
     "ماذا يعني",
     "ماذا تعني",
@@ -339,6 +373,9 @@ _DEFINITIONAL_MARKERS: tuple[str, ...] = (
 )
 #: enum مُقيَّد لمخرج الـ LLM Listener (الطبقة 1 الآمنة).
 _VALID_PROPERTIES: frozenset[str] = frozenset(PROPERTY_REGISTRY)
+
+#: D-137: رؤوس أمثلة/تعريفات المساعد — تُتجاهَل عند كشف المفهوم النشط (markers عابرة تُضلّل).
+_CONCEPT_ARTIFACT_MARKERS: tuple[str, ...] = ("## مثال", "مثال ملموس", "مثال آخر", "## ماذا نقصد")
 
 
 class SemanticPropertySkill:
@@ -377,20 +414,32 @@ class SemanticPropertySkill:
     def detect_active_concept(
         self, question: str, history: list[dict[str, str]] | None = None
     ) -> SemanticPropertyOutput | None:
-        """D-136: المفهوم النشط — من السؤال (interpret) وإلا من آخر مفهوم نُوقش في التاريخ.
+        """D-136/D-137: المفهوم النشط — من السؤال (interpret) وإلا من آخر مفهوم **سأل عنه الطالب**.
 
-        يحلّ «اعطني مثال» (بلا marker): يعرف أن الحوار عن product_even (عُرِّف الدور السابق).
-        يفحص آخر ~6 رسائل (الأحدث أولاً) — أوّل مفهوم مُطابَق هو النشط.
+        D-137: المفهوم النشط هو ما طرحه **الطالب** (رسائل user)، لا ما ذكره المساعد عابراً في
+        مثاله. كان مثال «الاحتمال الشرطي» يذكر «نفس اللون» فيُكتشَف خطأً same_color (الحادثة A)
+        ⇒ «لم أفهم» يُعيد الحادثة A. الحل: نُفضّل رسائل الطالب، ونتجاهل أمثلة/تعريفات المساعد.
+        يفحص آخر ~6 رسائل (الأحدث أولاً).
         """
         out = self.interpret(question)
         if out is not None:
             return out
-        for msg in reversed((history or [])[-6:]):
-            if not isinstance(msg, dict):
-                continue
-            found = self.interpret(str(msg.get("content", "")))
-            if found is not None:
-                return found
+        recent = [m for m in (history or [])[-6:] if isinstance(m, dict)]
+        # (1) أولوية: آخر مفهوم سأل عنه الطالب صراحةً.
+        for msg in reversed(recent):
+            if msg.get("role") == "user":
+                found = self.interpret(str(msg.get("content", "")))
+                if found is not None:
+                    return found
+        # (2) fallback: رسائل المساعد — لكن نتجاهل أمثلة/تعريفات المفهوم (markers عابرة).
+        for msg in reversed(recent):
+            if msg.get("role") != "user":
+                raw = str(msg.get("content", ""))
+                if any(mk in raw for mk in _CONCEPT_ARTIFACT_MARKERS):
+                    continue
+                found = self.interpret(raw)
+                if found is not None:
+                    return found
         return None
 
     def is_definitional(self, question: str) -> bool:

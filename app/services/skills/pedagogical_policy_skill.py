@@ -122,14 +122,48 @@ def definition_already_given(history: list[dict[str, str]] | None) -> bool:
 
 
 def _has_pending_socratic_question(history: list[dict[str, str]] | None) -> bool:
-    """D-130: هل أحدث رسالة مساعد سؤال سقراطي معلّق (تنتهي بـ«؟»)؟"""
+    """D-130/D-137: هل أحدث رسالة مساعد سؤال سقراطي معلّق؟
+
+    D-137 (إصلاح جذري): السؤال السقراطي الواقعي قد ينتهي بأمر («متى تنجح A؟ أعطني مثالاً»)
+    فالـ «؟» في **منتصف** الرسالة لا آخرها — `endswith` كان يفوّتها فتُهمَل إجابة الطالب
+    (كارثة الخيانة البيداغوجية). نكشف «؟» في أي موضع ضمن رسالة **قصيرة** (لا إفراغ تمرين طويل).
+    """
     for msg in reversed(history or []):
         if not isinstance(msg, dict):
             continue
         if msg.get("role") == "assistant":
             content = str(msg.get("content", "")).strip()
-            return content.endswith("؟") or content.endswith("?")
+            if len(content) > 500:  # إفراغ تمرين/شرح طويل ⇒ ليس سؤالاً سقراطياً معلّقاً
+                return False
+            return "؟" in content or "?" in content
     return False
+
+
+#: D-137: أدوات استفهام (الرسالة التي تبدأ بإحداها وتنتهي بـ«؟» = سؤال مضادّ لا إجابة).
+_INTERROGATIVE_OPENERS: tuple[str, ...] = (
+    "لماذا",
+    "ماذا",
+    "كيف",
+    "هل",
+    "متى",
+    "اين",
+    "أين",
+    "كم ",
+    "ما هو",
+    "ما هي",
+    "ماهو",
+    "ماهي",
+    "علاش",
+    "واش",
+    "شنو",
+)
+
+
+def _is_counter_question(normalized: str) -> bool:
+    """D-137: هل الرسالة سؤال مضادّ (يبدأ بأداة استفهام وينتهي بـ«؟») لا إجابة؟"""
+    if not (normalized.endswith("؟") or normalized.endswith("?")):
+        return False
+    return any(normalized.startswith(w) for w in _INTERROGATIVE_OPENERS)
 
 
 #: أفعال طلب صريحة (الرسالة التي تبدأ/تحوي واحداً منها + اسم تمرين = طلب جديد لا إجابة).
@@ -190,6 +224,8 @@ def is_response_to_socratic(message: str, history: list[dict[str, str]] | None) 
     if not t:
         return False
     if _is_explicit_request(t):
+        return False
+    if _is_counter_question(t):  # D-137: سؤال مضادّ («لماذا نسأل هذا؟») ليس إجابة
         return False
     return not _is_topic_switch(message)
 

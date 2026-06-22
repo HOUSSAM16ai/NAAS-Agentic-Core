@@ -100,8 +100,8 @@ class TestNoFrozenDefault:
 
     def test_no_regression_d130_order(self) -> None:
         src = self._client()
-        # D-130: socratic capture still before indexed retrieval
-        assert src.find("_in_socratic_dialogue(question") < src.find("_has_indexed_match(question")
+        # D-130: socratic capture still before indexed retrieval (D-137: `self.`-form, lf-robust)
+        assert src.find("self._in_socratic_dialogue(") < src.find("self._has_indexed_match(")
 
     def test_metric_source_label(self) -> None:
         from app.services.skills import tutor_metrics
@@ -119,7 +119,9 @@ class TestDoctrine:
             SKILL_DOCTRINE_MANIFEST,
         )
 
-        assert SEMANTIC_PROPERTY_DOCTRINE_VERSION == "1.1.0"
+        # D-137: السجلّ تطوّر (1.1.0 → 1.2.0 D-136 → 1.3.0 D-137) — نتحقّق ≥ 1.1.0 + الاتّساق.
+        major, minor, *_ = (int(x) for x in SEMANTIC_PROPERTY_DOCTRINE_VERSION.split("."))
+        assert (major, minor) >= (1, 1)
         entry = SKILL_DOCTRINE_MANIFEST["semantic_property"]
-        assert entry["version"] == "1.1.0"
+        assert entry["version"] == SEMANTIC_PROPERTY_DOCTRINE_VERSION
         assert entry["rules_count"] == len(SEMANTIC_PROPERTY_DOCTRINE)

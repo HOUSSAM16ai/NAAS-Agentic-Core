@@ -173,11 +173,11 @@ def test_calculated_ui_full_story_no_c_2_3_leak() -> None:
 
 
 def test_calculated_ui_full_story_text_wall_muzzle() -> None:
-    """V38.0 (يُحدِّث V31.5): القصة الشاملة عند الحيرة → MODE_B → terminate_pipeline=False.
+    """D-116 §6.116 (يُحدِّث V38.0/V31.5): القصة الشاملة عند الحيرة → MODE_B + terminate=True.
 
-    قانون V38.0: «لم افهم» إشارة حيرة → MODE_B → المسار يبقى حياً للسرد البيداغوجي.
-    المكوّن البصري يُبثّ أولاً، ثم يستمر LLM بالشرح العميق.
-    companion_text لا يزال موجوداً (جملة واحدة) لكنه ليس الإنهاء — هو مقدّمة للسرد.
+    قانون D-116 (ثابت): الاحتمالات = مُعلّم بصري حتمي كامل ⇒ terminate دائماً حتى عند
+    الحيرة. «لم افهم» تبقى إشارة MODE_B، لكن البصري الحتمي هو البيداغوجيا (صفر سرد LLM —
+    مصدر الغارباج). companion_text جملة واحدة هي النص الوحيد المسموح مع المكوّن.
     """
     ev = OrchestratorClient._build_calculated_ui(
         "اريد شرح خارق لاني لم افهم اي شي",
@@ -185,10 +185,10 @@ def test_calculated_ui_full_story_text_wall_muzzle() -> None:
     )
     assert ev is not None
     assert ev["component"] == "full_exercise_story"
-    # V38.0: confusion → MODE_B → pipeline stays alive
+    # D-116: confusion → MODE_B (إشارة) لكن المسار يُكبَح نصّياً (terminate=True)
     assert ev.get("routing_mode") == "MODE_B", "Confusion must trigger MODE_B"
-    assert ev["terminate_pipeline"] is False, (
-        "V38.0: full_exercise_story triggered by confusion must NOT terminate pipeline"
+    assert ev["terminate_pipeline"] is True, (
+        "D-116: probability is fully deterministic-visual — terminate always, even MODE_B confusion"
     )
     companion = ev["companion_text"]
     assert isinstance(companion, str) and 0 < len(companion) <= 120

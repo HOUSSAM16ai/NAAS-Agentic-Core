@@ -10364,3 +10364,72 @@ Misconception Check»** يقودها سؤال واحد قبل كل تدخّل: *
 |----------|---------|
 | D-138 | المصفوفة التصعيدية التكيّفية (Escalation + Understanding-Signal + Misconception) |
 | **D-139** | **قتل انحراف المفهوم إلى الحادثة A: تحصين detect_active_concept + توسيع بوّابة المصفوفة + تسجيل نمطَي السحب + حارس D-135 (كل أسئلة المفهوم تُمسَك قبل D-135)** |
+
+---
+
+## 6.123 إخضار الـ CI: مواءمة اختبارات العقود المُتجاوَزة + توثيق الثورة (2026-06-23, ISS-116 / D-140)
+
+> طلب المالك المزدوج: **(1) ظهور علامة الصح الخضراء في GitHub Actions**، و**(2) توثيق
+> ثورة الاحتمالات (D-114→D-139) بعمق في CLAUDE.md و `.memory/`**. هذا القسم يغلق الحلقة.
+
+### الجذر الوحيد لاحمرار الـ CI (تشخيص جنائي من سجلّات الـ Actions)
+الـ HEAD (45ea319) كان أحمر في workflowين: **CI** (12 فشل في test-monolith + lint) و
+**Generative UI Streaming Gate** (1 فشل). كل الإخفاقات تعود لسبب **واحد**: merge-base هو
+`origin/main` (2f5e598) — **كامل ثورة D-114→D-139 تعيش على هذا الفرع**، فـ `main` يحمل
+العقود القديمة (خضراء هناك)، بينما قرارات هذا الفرع الثابتة طوّرت محرّك الاحتمالات لكن
+**4 ملفات اختبار لم تُحدَّث** للعقد الجديد:
+- **D-116 §6.116 (ثابت):** `_build_calculated_ui` يضبط `terminate_pipeline=True` **دائماً** لكل
+  مكوّنات الاحتمالات حتى MODE_B (يَعكِس جزء MODE_B من D-085 للاحتمالات فقط). الكود صحيح؛
+  الاختبارات التي تؤكّد `terminate_pipeline is False` تحمل عقد D-085 المُتجاوَز.
+- **D-123 §6.118:** السحب المستحيل على مدخل الكيس يُطوى داخل `combinations_visualizer` (مباشر) /
+  `full_exercise_story` (حيرة) بمجموعة `is_possible` + `pedagogical_string` (بلا `C_n^k=0` مضلِّل)،
+  لا في مكوّن `impossible_draw_animation` مستقلّ (الذي يبقى حيّاً ويُختبَر على مستوى `analyze()`).
+- **D-138:** الـ registry ACTIVE صار 22→24 (`micro_simulation` + `pedagogical_escalation`).
+
+### الإصلاح (مواءمة العقد لا التعطيل — يحترم D-105 قاعدة 9 «قوائم deselect تتقلّص فقط»)
+الإصلاح الأمين هو **تحديث الاختبارات للعقد الموثَّق الحالي**، لا إضافتها لـ deselect:
+1. **lint:** `ruff format tests/services/test_d126_two_signal_bkt.py` (لفّ سطر واحد) → repo نظيف.
+2. **`test_skills_registry.py`:** `EXPECTED` += micro_simulation/pedagogical_escalation؛ الإجمالي
+   24→26؛ `test_status_split` ACTIVE 22→24.
+3. **`test_v38_dual_mode_routing.py` (6 اختبارات):** `routing_mode=="MODE_B"` يبقى إشارة، لكن
+   `terminate_pipeline is True` دائماً (D-116)؛ المدخلات تُنتج `combinations_visualizer`/
+   `full_exercise_story` لا `impossible_draw_animation`/`probability_tree`؛ إعادة تسمية الاختبارات
+   المُضلِّلة؛ اختبار التغطية يؤكّد المكوّنات الثلاثة الفعلية (combinations MODE_A + full_exercise_story
+   MODE_B + probability_tree MODE_B).
+4. **`test_v28_text_wall_muzzle.py` (3 اختبارات):** المستحيل المباشر → `combinations_visualizer`
+   (term=True، companion ≤120، لا `= 0` في أي مجموعة)؛ اختبار الـ schema المُفكَّك الصارم يُعاد
+   توجيهه لمستوى `analyze()` (حيث يُنتَج `ImpossibleCaseOutput` فعلاً).
+5. **`test_generative_ui_streaming.py` (1):** `terminate_pipeline is True` (D-116).
+
+### المخرجات الحالية الدقيقة (مُلتقَطة حيّاً عبر stub harness)
+| المدخل | المكوّن | routing_mode | terminate |
+|--------|---------|--------------|-----------|
+| `نسحب 3 كرات خضراء دفعة واحدة` | combinations_visualizer | MODE_A | True |
+| `لم أفهم/مفهمتش/je ne comprends pas` (حيرة) | full_exercise_story | MODE_B | True |
+| `كيفاش نسحب 3 كرات بيضاء من كيس فيه كرتان بيضاوان؟` | probability_tree | MODE_B | True |
+| `نسحب 3 كرات بيضاء دفعة واحدة` (مستحيل مباشر) | combinations_visualizer | MODE_A | True |
+
+### القواعد الـ 4 الدائمة (D-140 — لا تُكسر بدون ADR)
+1. **الاختبار يحمل العقد الحالي لا المُتجاوَز:** عند تطوّر عقد محرّك (مثل D-116/D-123)، تُحدَّث
+   الاختبارات في نفس الـ PR — لا تُترك تحمل عقداً ميتاً ثم تُعطَّل.
+2. **المواءمة لا التعطيل:** قوائم deselect تتقلّص فقط (D-105 قاعدة 9). أي فشل يُصلَح بالجذر
+   (تحديث الاختبار للعقد الصحيح) لا بإخفائه.
+3. **عقد المكوّن المُتجاوَز يُختبَر حيث يُنتَج:** `ImpossibleCaseOutput` لم يَعُد يصل عبر
+   `_build_calculated_ui` لمدخلات الكيس، لكن `analyze()` لا يزال يُنتجه — فالـ schema الصارم
+   يُختبَر هناك (لا يُحذف الاختبار).
+4. **الالتقاط الحيّ قبل التأكيد:** عند تحديث اختبار سلوكي، تُلتقَط المخرجات الفعلية عبر
+   stub harness (نمط §6.55) قبل كتابة التأكيدات — لا تخمين.
+
+### التحقق
+- **Sandbox:** stub harness يُشغّل كل الاختبارات المُحرَّرة الـ 12 → **كلها تمرّ** (الإخفاقات
+  الثلاثة المتبقّية في الـ harness بيئية فقط: `fastapi`/`monkeypatch` مفقودان — تمرّ في الـ CI).
+  `ruff check` + `ruff format --check` repo نظيف؛ `check_skills_doctrine` + `runtime_truth --check`
+  + `validate_structure` خضراء؛ التغطية 69.12% ≥ 67% (تعديلات اختبار فقط).
+- **CI (الهدف):** بعد الدفع، **CI + Generative UI Streaming Gate + required-ci** كلها خضراء —
+  علامة الصح التي طلبها المالك.
+
+### السلسلة (D-139 → D-140)
+| Decision | الموضوع |
+|----------|---------|
+| D-139 | قتل انحراف المفهوم إلى الحادثة A (كل أسئلة المفهوم تُمسَك قبل D-135) |
+| **D-140** | **إخضار الـ CI: مواءمة 4 ملفات اختبار للعقود الثابتة D-116/D-123/D-138 (لا تعطيل) → علامة الصح الخضراء** |

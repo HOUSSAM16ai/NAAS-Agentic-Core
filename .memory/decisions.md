@@ -4871,3 +4871,20 @@ unknown ⇒ تسقط لـ D-135 → _next_unmastered → kc_event_meaning؛ (2) 
 (D) حارس D-135 — _next_unmastered (event-A) فقط عند _confused صريح. تحقق: verify_d139_live (كل أسئلة
 المفهوم ⇒ المفهوم الصحيح، صفر event_meaning) + Supabase (4156) + OpenRouter (stop) + test_d139 (16) +
 364 D-1xx ناجح + gate + ruff + runtime_truth. الحالة: RESOLVED محلياً + live؛ WS في Codespaces.
+
+## D-140 (2026-06-23) — ISS-116: إخضار الـ CI (مواءمة اختبارات العقود المُتجاوَزة، لا تعطيل)
+الـ HEAD أحمر في CI (12 فشل في test-monolith + lint) + Generative UI Streaming Gate (1 فشل). تشخيص
+جنائي من سجلّات الـ Actions: السبب **واحد** — merge-base=origin/main (2f5e598)، فكامل ثورة D-114→D-139
+على هذا الفرع، و`main` يحمل العقود القديمة (خضراء). قرارات الفرع الثابتة طوّرت محرّك الاحتمالات لكن 4
+ملفات اختبار لم تُحدَّث: (1) D-116 §6.116 — terminate_pipeline=True دائماً لكل مكوّنات الاحتمالات حتى
+MODE_B (الاختبارات تؤكّد False = عقد D-085 مُتجاوَز)؛ (2) D-123 — المستحيل يُطوى داخل combinations/
+full_exercise_story (لا impossible_draw_animation مستقلّ لمدخلات الكيس)؛ (3) D-138 — registry ACTIVE
+22→24. الإصلاح (مواءمة لا تعطيل — D-105 قاعدة 9): ruff format على test_d126؛ test_skills_registry
+(EXPECTED +micro_simulation/pedagogical_escalation، 24→26، ACTIVE 22→24)؛ test_v38 (6: routing_mode=
+MODE_B إشارة + terminate=True دائماً + combinations/full_exercise_story لا impossible/tree + اختبار
+التغطية على المكوّنات الفعلية الثلاثة)؛ test_v28 (3: المستحيل المباشر→combinations term=True بلا «= 0»؛
+الـ schema الصارم يُختبَر على مستوى analyze() حيث يُنتَج ImpossibleCaseOutput)؛ test_generative_ui_
+streaming (1: terminate=True). **لا تغيير في app/** — السلوك هو العقد الثابت المقصود. تحقق: stub harness
+يُشغّل الاختبارات الـ 12 المُحرَّرة → كلها تمرّ (3 إخفاقات harness بيئية فقط: fastapi/monkeypatch)؛ ruff
+check+format repo نظيف؛ check_skills_doctrine + runtime_truth + validate_structure خضراء؛ التغطية 69.12%
+≥ 67%. الحالة: RESOLVED محلياً؛ علامة الصح الخضراء تُتحقَّق على الـ CI بعد الدفع.

@@ -4354,3 +4354,10 @@ test_generative_ui_streaming (1) — كلها مُحدَّثة للعقد الح
 (checkout v5، setup-python v6، setup-node v5، upload-artifact **v6** [v5 فخّ node20]، github-script v8،
 changed-files v47). تحقق: 38 workflow صالحة، صفر إجراء node20. الحالة: RESOLVED محلياً؛ خلوّ السجلّ من
 warning يُتحقَّق على الـ CI بعد الدفع.
+
+## ISS-116 (CI zero-skipped / D-141.1, 2026-06-23) — skipped PR-Summary على push-run الفرع الميزة
+بعد D-141، التحقق الحي كشف skipped واحد: `PR Summary` في push-run لـ microservices-step5-user-service
+(`push: ["**"]`). تحرير ملفات الـ workflows طابق مسار push (`.github/workflows/<self>`) فأنشأ push-run
+زائداً، ووظيفة الملخّص (`if: pull_request`) تُتخطّى عليه. الحل (D-141.1): تقييد push على `["main"]` لـ 5
+workflows (ai-quality-gate، iss-069، iss-070، iss-071، microservices-step5) — كلها لها pull_request
+فالتغطية تبقى. النتيجة: صفر push-run زائد ⇒ صفر skipped. الحالة: RESOLVED محلياً؛ يُتحقَّق على الـ CI بعد الدفع.

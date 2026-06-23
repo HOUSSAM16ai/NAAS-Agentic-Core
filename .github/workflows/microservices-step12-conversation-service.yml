@@ -58,7 +58,7 @@ jobs:
     name: "Static Checks — Skill Contract Validation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Verify required files exist"
         run: |
@@ -140,7 +140,7 @@ jobs:
     name: "Metrics Gate — 11 Prometheus Metrics"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Verify all 11 metrics defined in prom_metrics.py"
         run: |
@@ -198,7 +198,7 @@ jobs:
     name: "Graph Gate — LangGraph StateGraph Validation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Verify StateGraph topology"
         run: |
@@ -246,8 +246,8 @@ jobs:
     name: "Lint — ruff check"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: "Install ruff"
@@ -268,8 +268,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [static-checks, metrics-gate, graph-gate, lint]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -317,8 +317,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [step12-tests]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"

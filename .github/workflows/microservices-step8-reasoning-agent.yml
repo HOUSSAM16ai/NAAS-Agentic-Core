@@ -44,7 +44,7 @@ jobs:
     name: "Static Checks — requirements + prom_metrics + main.py"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "prometheus-client in requirements.txt"
         run: |
@@ -103,7 +103,7 @@ jobs:
     name: "Infrastructure — supervisor + automations + prometheus"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "supervisor.sh — launch_reasoning_agent() defined"
         run: |
@@ -157,7 +157,7 @@ jobs:
     name: "Grafana Dashboard — JSON valid + UID correct"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Dashboard file exists"
         run: |
@@ -201,8 +201,8 @@ jobs:
     name: "Ruff Lint — reasoning_agent"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: "Install ruff"
@@ -218,8 +218,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [static-checks, infrastructure-gate, dashboard-gate, lint]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -249,7 +249,7 @@ jobs:
 
       - name: "Upload test output"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: step8-test-output
           path: step8_test_output.txt
@@ -260,8 +260,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [step8-tests]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -311,10 +311,10 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Post PR comment"
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const body = `## ✅ Step 8 — Reasoning Agent CI Gate

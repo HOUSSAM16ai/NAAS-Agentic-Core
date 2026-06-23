@@ -10433,3 +10433,52 @@ Misconception Check»** يقودها سؤال واحد قبل كل تدخّل: *
 |----------|---------|
 | D-139 | قتل انحراف المفهوم إلى الحادثة A (كل أسئلة المفهوم تُمسَك قبل D-135) |
 | **D-140** | **إخضار الـ CI: مواءمة 4 ملفات اختبار للعقود الثابتة D-116/D-123/D-138 (لا تعطيل) → علامة الصح الخضراء** |
+
+---
+
+## 6.124 CI نظيفة تماماً: صفر warning — حذف gitlink الشبح + ترقية الإجراءات إلى node24 (2026-06-23, ISS-116 / D-141)
+
+> طلب المالك: «GitHub Actions ناجح 100% — لا skipped، لا warning، الكل success فقط». تشخيص جنائي
+> لـ commit `0f31af9` أثبت أن **الفحوص خضراء 100% أصلاً** (120/120 check + 23 run، صفر skipped/failed)،
+> لكن بقي **تحذيران `##[warning]`** يظهران بالأصفر حتى على الوظائف الناجحة. هذا القسم يزيلهما.
+
+### السبب الجذري للتحذيرين
+1. **gitlink شبح اسمه `repo`**: الـ index كان يحوي `160000 070a6d15… repo` **بلا ملف `.gitmodules`**.
+   تنظيف ما-بعد-checkout في **كل وظيفة** يسجّل `fatal: No url found for submodule path 'repo'` +
+   `##[warning]The process '/usr/bin/git' failed with exit code 128`. (`repo/` مجلّد فارغ، لا مرجع له.)
+2. **إهلاك Node-20**: `##[warning]Node.js 20 is deprecated…` من 6 إجراءات ما زالت على node20.
+
+### الإصلاح
+- **حذف الـ gitlink**: `git rm --cached repo` — يزيل التحذير الأول من كل وظيفة. آمن (لا مرجع، لا محتوى).
+- **ترقية كل إجراء node20 إلى أصغر major يعمل بـ node24** (مُتحقَّق من `using: node24` في `action.yml`):
+
+  | الإجراء | من | إلى | ملاحظة |
+  |---------|-----|------|--------|
+  | actions/checkout | @v4 | **@v5** | node24 ✓ |
+  | actions/setup-python | @v5 | **@v6** | node24 ✓ |
+  | actions/setup-node | @v4 | **@v5** | node24 ✓ |
+  | actions/upload-artifact | @v4 | **@v6** | ⚠ v5 ما زال node20 — لذا v6 |
+  | actions/github-script | @v7 | **@v8** | node24 ✓ |
+  | tj-actions/changed-files | @v46 | **@v47** | node24 ✓ (استخدام واحد في knowledge_ingestion.yml) |
+
+  الإجراء المركّب المحلي `./.github/actions/setup` هو `shell: bash` فقط (بلا node) — لا يحتاج تغيير.
+  الـ runner `2.335.1` يدعم node24 (setup-python@v6 يتطلب ≥2.327.1 ✓).
+
+### القواعد الدائمة (D-141 — لا تُكسر بدون ADR)
+1. **ممنوع gitlink بلا `.gitmodules`**: أي مدخل `160000` في الـ index بلا تعريف submodule = تحذير
+   `exit 128` في كل وظيفة. يجب حذفه فوراً.
+2. **كل إجراء GitHub Actions يجب أن يعمل بـ node24**: عند إضافة `uses:` جديد، تحقّق من `using: node24`
+   في `action.yml` للنسخة المُثبَّتة. **`upload-artifact@v5` فخّ — ما زال node20؛ استخدم v6+.**
+3. **path-skipped ليست skipped على الـ PR**: GitHub يُبلّغ الفحوص المطلوبة المُتخطّاة بسبب `paths:`
+   كـ success تلقائياً — لذا لا نحذف فلاتر `paths:` (تُبطئ الـ CI بلا فائدة على الحالة الخضراء).
+
+### التحقق
+- YAML: كل 38 workflow تُحلَّل بنجاح. صفر إجراء node20 متبقٍّ (`grep` فارغ).
+- بعد الدفع: CI يُعاد تشغيله؛ كل الفحوص `success`؛ سجلّ وظيفة (lint) خالٍ من `##[warning]` Node-20
+  ومن `submodule path 'repo'` / `exit code 128`.
+
+### السلسلة (D-140 → D-141)
+| Decision | الموضوع |
+|----------|---------|
+| D-140 | إخضار الـ CI: مواءمة اختبارات العقود المُتجاوَزة → علامة الصح الخضراء |
+| **D-141** | **CI نظيفة تماماً: حذف gitlink الشبح `repo` + ترقية 6 إجراءات إلى node24 (صفر warning)** |

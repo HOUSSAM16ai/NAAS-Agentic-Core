@@ -36,7 +36,7 @@ jobs:
     name: "🚫 Banned Model Check"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check for banned models as active values
         run: |
@@ -120,7 +120,7 @@ jobs:
     name: "📝 System Prompt Quality"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check LaTeX requirements in educational prompts
         run: |
@@ -175,7 +175,7 @@ jobs:
     name: "🌲 MCTS Depth Gate"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check MCTS depth is not > 1 as default
         run: |
@@ -230,10 +230,10 @@ jobs:
     name: "🧪 AI Config Unit Tests"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: "pip"
@@ -310,7 +310,7 @@ jobs:
     name: "🔍 Microservices Model Audit"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Audit all microservice model defaults
         run: |
@@ -371,7 +371,7 @@ jobs:
     name: "🧠 LangGraph Prompt Integrity"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Verify local_graph system prompts
         run: |

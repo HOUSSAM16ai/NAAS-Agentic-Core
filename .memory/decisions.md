@@ -4888,3 +4888,15 @@ streaming (1: terminate=True). **لا تغيير في app/** — السلوك ه
 يُشغّل الاختبارات الـ 12 المُحرَّرة → كلها تمرّ (3 إخفاقات harness بيئية فقط: fastapi/monkeypatch)؛ ruff
 check+format repo نظيف؛ check_skills_doctrine + runtime_truth + validate_structure خضراء؛ التغطية 69.12%
 ≥ 67%. الحالة: RESOLVED محلياً؛ علامة الصح الخضراء تُتحقَّق على الـ CI بعد الدفع.
+
+## D-141 (2026-06-23) — ISS-116: CI نظيفة تماماً (صفر warning) — gitlink شبح + ترقية node24
+بعد أن صارت الفحوص خضراء 100% (D-140: 120/120 check + 23 run، صفر skipped/failed على 0f31af9)، طلب المالك
+«لا warning إطلاقاً». تشخيص: تحذيران `##[warning]` يظهران بالأصفر حتى على الوظائف الناجحة: (1) gitlink شبح
+`repo` (`160000 070a6d15… repo` في الـ index بلا `.gitmodules`) ⇒ تنظيف ما-بعد-checkout يسجّل
+`fatal: No url found for submodule path 'repo'` + `##[warning] git exit 128` في كل وظيفة؛ (2) إهلاك Node-20
+من 6 إجراءات. الإصلاح: (A) `git rm --cached repo` (آمن — لا مرجع/محتوى)؛ (B) ترقية كل إجراء node20 لأصغر
+major بـ node24 (مُتحقَّق من `using: node24`): checkout@v4→v5، setup-python@v5→v6، setup-node@v4→v5،
+upload-artifact@v4→**v6** (فخّ: v5 ما زال node20)، github-script@v7→v8، tj-actions/changed-files@v46→v47.
+المركّب المحلي `./.github/actions/setup` bash-only (لا تغيير). تحقق: 38 workflow YAML صالحة، صفر إجراء
+node20 متبقٍّ. الحالة: RESOLVED محلياً؛ خلوّ السجلّ من `##[warning]` يُتحقَّق على الـ CI بعد الدفع.
+قاعدة دائمة: `upload-artifact@v5` ما زال node20 — استخدم v6+؛ أي gitlink بلا `.gitmodules` = تحذير في كل وظيفة.

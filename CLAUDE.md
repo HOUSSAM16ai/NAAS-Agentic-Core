@@ -10244,3 +10244,69 @@ LLM مسموح فقط في غير الحاسم (صياغة/تلخيص غير ر�
 |----------|---------|
 | D-136 | أمثلة واعية بالمفهوم + كبح اختطاف D-135 |
 | **D-137** | **فكّ تشابك التوجيه: «ما هو X» تعريف موثوق + كبح D-135 عن أسئلة المفهوم + المفهوم النشط من الطالب + كشف السؤال السقراطي بـ «؟» في أي موضع** |
+
+---
+
+## 6.121 المصفوفة التصعيدية التكيّفية — Escalation + Understanding-Signal + Misconception (2026-06-22, ISS-116 / D-138)
+
+> **الكارثة (transcript حيّ بعد D-137):** الطالب يسأل تباعاً عن الاحتمال الشرطي «اعطني مثال» →
+> «لم أفهم» → «اعطني مثال عددي» → «كيف» → «لم أفهم». النظام **ينحرف** للحادثة A (نفس اللون) من
+> تمرين البكالوريا، **يُكرّر «تخيّل أنك سحبت 3 كرات…» حرفياً**، ولا يملك **مثالاً عددياً مصغّراً**.
+
+### الجذر (مؤكَّد بتتبّع agentين)
+لا توجد **ذاكرة تصعيد بيداغوجي** ولا **حسّ تعلّم**. كل دور يُعيد القرار من الصفر؛ «كيف»/«لم أفهم»
+يسقطان لـ D-135 (`understanding_state._current_focus_kc`) الذي يعمل على مكوّنات تمرين البكالوريا
+(event_meaning) لا على المفهوم النشط ⇒ انحراف + تكرار `representations[1]` بلا تصعيد.
+
+### حكم المالك (يحكم النطاق)
+لا «سُلَّم جامد» L1/L2/L3 يُمرَّر كل طالب عبره. **«Escalation Matrix + Understanding Signal +
+Misconception Check»** يقودها سؤال واحد قبل كل تدخّل: **«هل تناسب هذه السقالة قدرة الطالب الحالية
+(support_level/BKT) وصعوبة الخطوة القادمة؟»** — التصعيد على **أثر الفهم** لا عدّ «لم أفهم». القرار
+التنفيذي: نحتفظ بالمصفوفة؛ نؤجّل أي تعقيد (واجهة توليدية/microservices)؛ نقيس الأثر السلوكي فقط.
+
+### الإصلاح (D-138 — مهارتان حتميتان + توصيل موحّد)
+- **`MicroSimulationSkill`** (`app/services/skills/micro_simulation_skill.py`): خادم محتوى L3 حتمي
+  صفر-LLM — `MICRO_SIMULATIONS` (8 مفاهيم)، مثال isomorphic **≤320 حرف** بأرقام صغيرة خاصة (يَنجو من
+  حجب D-113، لا يكشف 14/165). conditional_probability: «10 طلاب، 6 بنظّارة ⇒ 6 من 10؛ بعلم النادي
+  العلمي 5 أعضاء 3 بنظّارة ⇒ 3 من 5».
+- **`PedagogicalEscalationSkill`** (`app/services/skills/pedagogical_escalation_skill.py`): المصفوفة
+  التكيّفية النقية الحتمية **concept-scoped** تدمج ثلاث إشارات قبل التصعيد:
+  **(أ) Understanding Signal** — `_has_understanding_evidence` عبر `PropertySpec.evidence_markers`
+  (آلية لا «فهمت») ⇒ `mastered` (توقّف). **(ب) Misconception Check** — `diagnose_misconception` ⇒
+  `target_misconception` (تدخّل مُوجَّه، +عقد conditional_probability في `MISCONCEPTION_GRAPH`).
+  **(ج) Ability Calibration** — `support_level` (1..5 من BKT): منخفضة (1-2) ⇒ تصعيد أسرع للمحاكاة
+  (سقف L3)؛ عالية (4-5) ⇒ رُتبة أخف أولاً (student agency). **ذاكرة التصعيد** (`_levels_delivered`
+  من نصّ المفهوم نفسه) تمنع تكرار رُتبة؛ استنفاد L3 ⇒ `exhausted` (تسليم لطيف).
+- **التوصيل** (`orchestrator_client.chat_with_agent`): بلوك تعليم مفهوم موحّد مدفوع بالمصفوفة **يسبق**
+  preempt التعريف العام (الذي يبقى للمفاهيم الجديدة غير المُسجَّلة عبر LLM Listener-Definer). يقرأ
+  `support_level` من context، يُجري Misconception Check، يبني `EscalationInput` ويبثّ القرار.
+  concept-scoped ⇒ صفر انحراف لـ event-A. مسار حلّ تمرين البكالوريا (socratic/D-135) دون مساس.
+
+### القواعد الـ 8 الدائمة (D-138 — لا تُكسر بدون ADR)
+1. السقالة تُختار بسؤال «هل تناسب قدرة الطالب (support_level/BKT) وصعوبة الخطوة؟» — لا سلّم جامد.
+2. التصعيد على **أثر الفهم** (`evidence_markers`) لا عدّ «لم أفهم». دليل فهم ⇒ توقّف + اعتراف.
+3. **Misconception Check قبل التصعيد**: عقدة مُشخَّصة ⇒ تدخّل مُوجَّه، لا تسلّق أعمى. كل عقدة لها `bkt_concept`.
+4. ممنوع تكرار رُتبة؛ استنفاد L3 ⇒ تسليم لطيف (لا L4/واجهة توليدية الآن).
+5. **concept-scoped** (المفهوم النشط `detect_active_concept`)، لا مكوّنات تمرين البكالوريا.
+6. Micro-Simulation حتمي صفر-LLM، isomorphic، **≤320 حرف**، أرقام صغيرة خاصة (يَنجو من حجب D-113).
+7. policy أولاً، content-server ثانياً؛ لا واجهة توليدية/microservices في القلب الآن (نؤجّل حتى يَثبت القلب).
+8. نقيس الأثر السلوكي فقط: تراجع التكرار + تدرّج الرُّتب (`record_escalation`) + ارتفاع الإتقان (BKT).
+
+### التحقق الحي (2026-06-22 — اجبارية المالك)
+- **`scripts/verify_d138_live.py` (كود المهارات الحقيقي):** transcript الكارثة → تعريف→مثال→محاكاة؛
+  «اعطني مثال عددي» ⇒ L3 محاكاة (10 طلاب، صفر event-A)؛ «لم أفهم»/«كيف» ⇒ exhausted (لا تكرار)؛
+  المعايرة (منخفضة sup=2→L3 ≥ عالية sup=5→L2)؛ Understanding Signal ⇒ mastered؛ Misconception ⇒
+  target_misconception؛ micro-sim ≤320 حرف يَنجو D-113 — **10/10 PASS**. **Supabase Edge bridge
+  (HTTPS:443):** حيّ (4130 رسالة). **OpenRouter (HTTPS):** حيّ (finish=stop).
+- **اختبارات:** `tests/services/test_d138_escalation_matrix.py` (17) + لا انحدار D-127→D-137
+  (348 ناجح إجمالاً) + بوّابة skills-doctrine (الفحصان الجديدان) + ruff + format + py_compile 3.12 +
+  runtime_truth. registry=26.
+- **Codespaces (WS كامل + المتصفح — متبقٍّ، llama_index محجوب في الـ sandbox):** transcript الكارثة
+  بالدخولين الحقيقيين ⇒ تصعيد مُعايَر، مثال عددي مصغّر، توقّف عند دليل الفهم، تدخّل مُوجَّه عند
+  misconception، صفر تكرار/انحراف/«14/165».
+
+### السلسلة (D-137 → D-138)
+| Decision | الموضوع |
+|----------|---------|
+| D-137 | فكّ تشابك التوجيه («ما هو X» تعريف + كبح D-135) |
+| **D-138** | **المصفوفة التصعيدية التكيّفية: Escalation + Understanding-Signal + Misconception-Check + Micro-Simulation (يحل تكرار/انحراف الحادثة A + المثال العددي المفقود)** |

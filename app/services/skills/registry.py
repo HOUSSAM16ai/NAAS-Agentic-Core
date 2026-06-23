@@ -421,6 +421,27 @@ def _build_registry() -> SkillRegistry:
             consumed_by=("orchestrator_client._build_cognitive_response",),
         ),
         SkillDescriptor(
+            name="pedagogical_escalation",
+            summary="المصفوفة التصعيدية التكيّفية — Understanding-Signal + Misconception-Check + ability (D-138).",
+            input_contract="EscalationInput",
+            output_contract="EscalationDecision",
+            primary_method="decide",
+            metrics_prefix="cogniforge_tutor_escalation",
+            consumed_by=("orchestrator_client.chat_with_agent",),
+        ),
+        SkillDescriptor(
+            name="micro_simulation",
+            summary="خادم المحاكيات المصغّرة الحتمي (L3) — مثال عددي isomorphic ≤320 حرف صفر-LLM (D-138).",
+            input_contract="concept_id",
+            output_contract="str | None",
+            primary_method="get_micro_simulation",
+            metrics_prefix="cogniforge_tutor_micro_simulation",
+            consumed_by=(
+                "pedagogical_escalation_skill.decide",
+                "orchestrator_client.chat_with_agent",
+            ),
+        ),
+        SkillDescriptor(
             name="socratic_evaluator",
             summary="الطبقة 1 — مُقيّم الإجابات السقراطي (الإصغاء النشط): يُقيّم رد الطالب الحرّ (D-130).",
             input_contract="SocraticEvaluatorInput",

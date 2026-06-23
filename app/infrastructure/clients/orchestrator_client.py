@@ -3066,13 +3066,129 @@ class OrchestratorClient:
             return
 
         # ─────────────────────────────────────────────────────────────────────
+        # ISS-116 (D-138 — المصفوفة التصعيدية التكيّفية): تعليم **مفهوم مُسمّى** عبر
+        # Escalation Matrix + Understanding-Signal + Misconception-Check، مُعايَرةً بقدرة
+        # الطالب (support_level/BKT). concept-scoped ⇒ لا انحراف لـ event-A؛ ذاكرة التصعيد ⇒
+        # لا تكرار؛ «اعطني مثال عددي» ⇒ محاكاة مصغّرة حتمية (L3)؛ دليل فهم ⇒ توقّف؛ مفهوم خاطئ ⇒
+        # تدخّل مُوجَّه. المسار الأساسي لتعليم المفهوم المعروف؛ preempt التعريف أدناه يبقى
+        # للمفاهيم الجديدة غير المُسجَّلة (LLM Listener-Definer). حكم المالك: «أقل تدخّل مفيد».
+        # ─────────────────────────────────────────────────────────────────────
+        try:
+            from app.services.skills.micro_simulation_skill import get_micro_simulation_skill
+            from app.services.skills.pedagogical_escalation_skill import (
+                EscalationInput,
+                get_pedagogical_escalation_skill,
+            )
+            from app.services.skills.semantic_property_skill import (
+                PROPERTY_REGISTRY,
+                get_semantic_property_skill,
+            )
+            from app.services.skills.student_state_skill import (
+                StudentStateInput,
+                get_student_state_skill,
+            )
+
+            _concept_teach_intents = frozenset(
+                {"definition", "example_request", "confusion", "procedure", "hint_request"}
+            )
+            _esc_state = get_student_state_skill().read(
+                StudentStateInput(question=question, history=history_messages)
+            )
+            _esc_hist = " ".join(
+                str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
+            )
+            _esc_sps = get_semantic_property_skill()
+            _esc_active = (
+                _esc_sps.detect_active_concept(question, history_messages)
+                if _esc_state.primary_intent in _concept_teach_intents
+                and self._is_prob_context(question + " " + _esc_hist)
+                else None
+            )
+            if _esc_active is not None:
+                # support_level من BKT (D-104/D-126) عبر context — يُعايِر الرُّتبة.
+                try:
+                    _esc_sup = int((context or {}).get("support_level") or 0) or None
+                except (TypeError, ValueError):
+                    _esc_sup = None
+                # آخر رسالة طالب (للـ Misconception Check).
+                _esc_last = next(
+                    (
+                        str(m.get("content", ""))
+                        for m in reversed(history_messages or [])
+                        if isinstance(m, dict) and m.get("role") == "user"
+                    ),
+                    question,
+                )
+                _esc_mis = _esc_sps.diagnose_misconception(
+                    _esc_active.concept_id, _esc_last, history_messages
+                )
+                _esc_spec = PROPERTY_REGISTRY.get(_esc_active.property_id)
+                _esc_decision = get_pedagogical_escalation_skill().decide(
+                    EscalationInput(
+                        concept_id=_esc_active.concept_id,
+                        title=_esc_active.title,
+                        definition=_esc_active.definition,
+                        example=_esc_active.example,
+                        micro_sim=get_micro_simulation_skill().get_micro_simulation(
+                            _esc_active.concept_id
+                        ),
+                        intent=_esc_state.primary_intent,
+                        frustration=_esc_state.frustration,
+                        support_level=_esc_sup,
+                        history=history_messages or [],
+                        evidence_markers=(_esc_spec.evidence_markers if _esc_spec else ()),
+                        misconception_intervention=(_esc_mis.intervention if _esc_mis else None),
+                        misconception_mtype=(_esc_mis.mtype if _esc_mis else None),
+                    )
+                )
+                if _esc_decision.text:
+                    from app.services.skills.tutor_metrics import (
+                        record_intent,
+                        record_intervention,
+                        record_repetition_avoided,
+                        record_response_mode,
+                    )
+
+                    record_intent(_esc_state.primary_intent)
+                    record_response_mode(_esc_decision.action)
+                    record_repetition_avoided()  # المصفوفة تمنع التكرار بالتصميم.
+                    if _esc_decision.action == "target_misconception" and _esc_mis is not None:
+                        record_intervention(_esc_mis.mtype)
+                    _esc_chars = 0
+                    async for chunk in self._stream_markdown_typing(_esc_decision.text):
+                        if not chunk:
+                            continue
+                        _esc_chars += len(chunk)
+                        yield self._normalize_stream_event(
+                            {"type": "assistant_delta", "payload": {"content": chunk}}
+                        )
+                    if _esc_chars > 0:
+                        logger.info(
+                            "pedagogical_escalation",
+                            extra={
+                                "concept": _esc_active.concept_id,
+                                "action": _esc_decision.action,
+                                "level": _esc_decision.strategy_level,
+                                "intent": _esc_state.primary_intent,
+                                "support_level": _esc_sup,
+                            },
+                        )
+                        yield self._normalize_stream_event(
+                            {"type": "assistant_final", "payload": {"content": ""}}
+                        )
+                        return
+        except Exception:
+            logger.warning("pedagogical_escalation_failed", exc_info=True)
+
+        # ─────────────────────────────────────────────────────────────────────
         # ISS-116 (D-132 — Generalized Concept Understanding / preempt تعريفي عام):
         # «جاهزية للأسئلة الجديدة دائماً». إن كان السؤال نية تعريفية («ماذا نقصد بـ X»)
         # أو حيرة عن مفهوم مُسمّى («لم افهم المتغير العشوائي») ضمن سياق احتمالات ⇒ نُعرّف X
         # عبر interpret_or_define (السجلّ الحتمي أولاً، ثم الـ LLM Listener-Definer للمفاهيم
         # الجديدة). يسبق الالتقاط السقراطي لأن «لم افهم المتغير العشوائي» سؤال تعريفي جديد لا
         # إجابة على السؤال السقراطي السابق. يحلّ الكارثة: كان يُعاد بسؤال عن الحادثة A.
-        # لا default مُجمَّد لمفهوم واحد. ممنوع على طلبات الحساب.
+        # لا default مُجمَّد لمفهوم واحد. ممنوع على طلبات الحساب. D-138: المفاهيم المُسجَّلة
+        # يتولّاها بلوك المصفوفة التصعيدية أعلاه؛ هذا يبقى للمفاهيم الجديدة غير المُسجَّلة.
         # ─────────────────────────────────────────────────────────────────────
         try:
             from app.services.skills.semantic_property_skill import get_semantic_property_skill

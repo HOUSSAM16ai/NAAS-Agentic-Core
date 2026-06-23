@@ -4844,3 +4844,18 @@ OpenRouter LIVE (finish=stop) + test_d137 (12) + لا انحدار D-127→D-137
 py_compile/runtime_truth/skills-doctrine ✅. أُصلحت 10 اختبارات pre-existing حمراء (drift D-128→D-132،
 مُثبت بـ git-stash أنها سابقة لـ D-137؛ منها إصلاح جذري لكشف السؤال السقراطي). registry=24.
 الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل + المتصفح في Codespaces (llama_index محجوب في الـ sandbox).
+
+## D-138 (2026-06-22) — ISS-116: المصفوفة التصعيدية التكيّفية (Escalation + Understanding-Signal + Misconception)
+transcript حيّ بعد D-137: «اعطني مثال عددي»/«كيف»/«لم أفهم» عن الاحتمال الشرطي ⇒ انحراف للحادثة A +
+تكرار «تخيّل أنك سحبت 3 كرات» حرفياً + لا مثال عددي. الجذر: لا ذاكرة تصعيد؛ «كيف»/«لم أفهم» يسقطان
+لـ D-135 الذي يعمل على مكوّنات تمرين البكالوريا لا المفهوم النشط. حكم المالك: لا سلّم جامد —
+«Escalation Matrix + Understanding Signal + Misconception Check» مُعايَرة بقدرة الطالب (support_level/BKT)
+وصعوبة الخطوة، التصعيد على أثر الفهم لا عدّ «لم أفهم». الحل: مهارتان حتميتان — MicroSimulationSkill
+(خادم L3، 8 مفاهيم، ≤320 حرف، صفر-LLM، يَنجو D-113) + PedagogicalEscalationSkill (concept-scoped،
+يدمج evidence_markers + diagnose_misconception + support_level calibration + _levels_delivered no-repeat).
+التوصيل: بلوك موحّد في chat_with_agent يسبق preempt التعريف العام (يبقى للمفاهيم الجديدة). + عقد
+conditional_probability في MISCONCEPTION_GRAPH + evidence_markers في PropertySpec + مقياسا
+record_escalation/record_micro_simulation. تحقق: scripts/verify_d138_live.py 10/10 + Supabase (4130) +
+OpenRouter (stop) + test_d138 (17) + لا انحدار D-127→D-137 (348 ناجح) + gate + ruff + runtime_truth.
+registry=26. doctrine PEDAGOGICAL_ESCALATION v1.0.0 (7) + MICRO_SIMULATION v1.0.0 (3).
+الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل + المتصفح في Codespaces (llama_index محجوب في الـ sandbox).

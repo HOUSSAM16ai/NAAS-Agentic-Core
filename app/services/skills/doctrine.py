@@ -1008,6 +1008,62 @@ def get_understanding_state_summary() -> str:
     )
 
 
+# ── D-138: المصفوفة التصعيدية التكيّفية — Escalation + Understanding-Signal + Misconception ──
+PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم المصفوفة التصعيدية التكيّفية (D-138).
+PEDAGOGICAL_ESCALATION_DOCTRINE: Final[tuple[str, ...]] = (
+    "السقالة تُختار بسؤال واحد قبل كل تدخّل (حكم المالك): «هل تناسب قدرة الطالب الحالية "
+    "(support_level/BKT) وصعوبة الخطوة القادمة؟» — لا تُمرَّر كل الحالات عبر سلّم جامد L1/L2/L3. "
+    "نفس النيّة + طالب مختلف ⇒ رُتبة مختلفة (مرونة لا جمود).",
+    "التصعيد يعتمد على أثر الفهم (Understanding Signal) لا عدّ «لم أفهم»: دليل فهم المفهوم "
+    "(evidence_markers — آلية لا تقليد عبارة) ⇒ action=mastered (توقّف + اعتراف). القيمة في تتبّع "
+    "الإتقان لا تصنيف إجابة واحدة.",
+    "Misconception Check قبل التصعيد (تشخيص دقيق للاستدلال): عقدة مُشخَّصة (diagnose_misconception) ⇒ "
+    "action=target_misconception (intervention مُوجَّه) بدل تسلّق السلّم أعمى. كل عقدة لها bkt_concept صريح.",
+    "Ability + Step-Difficulty Calibration: support_level (1..5 من BKT) يُعايِر الرُّتبة — قدرة منخفضة "
+    "(1-2) ⇒ تصعيد أسرع لسقالة أعلى (محاكاة مصغّرة)؛ قدرة عالية (4-5) ⇒ رُتبة أخف (تعريف + سؤال موجِّه، "
+    "student agency) لا إفراط في السقالة.",
+    "ممنوع تكرار رُتبة استراتيجية: ذاكرة التصعيد (stateless من history) تمنع إعادة نفس المستوى؛ الحيرة ⇒ "
+    "المستوى التالي غير المُسلَّم المُعايَر بالقدرة؛ استنفاد L3 ⇒ exhausted (تسليم لطيف، لا تكرار، لا L4 الآن).",
+    "concept-scoped حصراً: تعمل على المفهوم النشط (detect_active_concept)، لا على مكوّنات تمرين البكالوريا "
+    "(لا انحراف لـ event-A/نفس اللون). سُلّم الاستراتيجية: L1_DEFINITION → L2_ANALOGY → L3_MICRO_SIMULATION "
+    "(L4_VISUAL مؤجَّل — لا واجهة توليدية في القلب الآن).",
+    "policy أولاً، content-server ثانياً: المصفوفة تقرّر، MicroSimulationSkill يخدم L3. نقيس الأثر السلوكي "
+    "فقط (تراجع التكرار + تدرّج الرُّتب + ارتفاع الإتقان BKT) — لا تحسين على «الرضا اللحظي».",
+)
+
+
+def get_pedagogical_escalation_summary() -> str:
+    """يُرجِع ملخص doctrine المصفوفة التصعيدية (للـ logs)."""
+    return (
+        f"[v{PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION}] {len(PEDAGOGICAL_ESCALATION_DOCTRINE)} قاعدة — "
+        "Escalation + Understanding-Signal + Misconception-Check + ability calibration."
+    )
+
+
+# ── D-138: محرّك المحاكيات المصغّرة الحتمي — خادم محتوى L3 ────────────────────────────
+MICRO_SIMULATION_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم محرّك المحاكيات المصغّرة (D-138).
+MICRO_SIMULATION_DOCTRINE: Final[tuple[str, ...]] = (
+    "حتمي 100% صفر-LLM (نقد MathDial): الأمثلة ثابتة في كود، لا يُولّدها نموذج (النماذج تكشف الحل "
+    "مبكراً أو تُعطي feedback غير دقيق). محرّك المحتوى لا يخترع الأرقام.",
+    "قصير جداً isomorphic لا شرح جديد كامل: ≤320 حرف (≤3 جُمل)، مُصمَّم للتشابه البنيوي مع المفهوم — "
+    "أرقام صغيرة آمنة خاصة به (لا أرقام التمرين 11/165) فيَنجو من حجب D-113 ولا يكشف جواب التمرين.",
+    "خادم L3 للمصفوفة لا مسار مستقلّ: يُستدعى فقط حين تقرّر المصفوفة التصعيدية أن الوقت مناسب "
+    "لمحاكاة مصغّرة (قدرة منخفضة / طلب مثال عددي / استنفاد الرُّتب الأخفّ). مفهوم بلا محاكاة ⇒ None.",
+)
+
+
+def get_micro_simulation_summary() -> str:
+    """يُرجِع ملخص doctrine المحاكيات المصغّرة (للـ logs)."""
+    return (
+        f"[v{MICRO_SIMULATION_DOCTRINE_VERSION}] {len(MICRO_SIMULATION_DOCTRINE)} قاعدة — "
+        "deterministic، isomorphic، ≤320 حرف، خادم L3."
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Skill Doctrine Manifest (للـ CI gate)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1253,6 +1309,25 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "orchestrator_client.chat_with_agent",
         ),
     },
+    "pedagogical_escalation": {
+        "version": PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION,
+        "rules_count": len(PEDAGOGICAL_ESCALATION_DOCTRINE),
+        "consumed_by": (
+            # D-138: المصفوفة التصعيدية التكيّفية — موصولة حيّاً في بلوك تعليم المفهوم.
+            "PedagogicalEscalationSkill.decide",
+            "orchestrator_client.chat_with_agent",
+        ),
+    },
+    "micro_simulation": {
+        "version": MICRO_SIMULATION_DOCTRINE_VERSION,
+        "rules_count": len(MICRO_SIMULATION_DOCTRINE),
+        "consumed_by": (
+            # D-138: خادم محتوى L3 الحتمي — موصول حيّاً عبر المصفوفة التصعيدية.
+            "MicroSimulationSkill.get_micro_simulation",
+            "PedagogicalEscalationSkill.decide",
+            "orchestrator_client.chat_with_agent",
+        ),
+    },
 }
 
 
@@ -1398,10 +1473,14 @@ __all__ = [
     "LEARNING_PATH_DOCTRINE_VERSION",
     "MANDATORY_ORCHESTRATION_DOCTRINE",
     "MANDATORY_ORCHESTRATION_DOCTRINE_VERSION",
+    "MICRO_SIMULATION_DOCTRINE",
+    "MICRO_SIMULATION_DOCTRINE_VERSION",
     "MODEL_ANSWER_EXPLANATION_DOCTRINE",
     "MODEL_ANSWER_EXPLANATION_VERSION",
     "MODEL_ANSWER_RELIANCE_RULES",
     "MODEL_ANSWER_RELIANCE_VERSION",
+    "PEDAGOGICAL_ESCALATION_DOCTRINE",
+    "PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION",
     "PEDAGOGICAL_POLICY_DOCTRINE",
     "PEDAGOGICAL_POLICY_DOCTRINE_VERSION",
     "PROBABILITY_CALCULATION_DOCTRINE",
@@ -1431,8 +1510,10 @@ __all__ = [
     "get_detailed_explanation_summary",
     "get_explanation_doctrine_summary",
     "get_impossible_case_summary",
+    "get_micro_simulation_summary",
     "get_model_answer_explanation_summary",
     "get_model_answer_reliance_summary",
+    "get_pedagogical_escalation_summary",
     "get_probability_calculation_summary",
     "get_realtime_protocol_summary",
     "get_retrieval_doctrine_summary",

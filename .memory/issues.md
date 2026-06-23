@@ -4323,3 +4323,10 @@ intent)؛ حذف «الاحتمال» المجرّدة من kc_ratio؛ تسجي�
 حارس السؤال المضادّ (يحل الخيانة البيداغوجية حياً). تحقق: verify_d137_live (8-turn 6/6) + Supabase
 (4116) + OpenRouter (stop) + 181 اختبار D-1xx ناجح + 10 اختبارات pre-existing مُصلَحة. الحالة: RESOLVED
 محلياً + live LLM/DB؛ WS الكامل في Codespaces.
+
+## ISS-116 / D-138 (2026-06-22) — تكرار/انحراف الحادثة A عند تعليم المفهوم + المثال العددي المفقود
+الاحتمال الشرطي: «اعطني مثال عددي»/«كيف»/«لم أفهم» ⇒ نص الحادثة A المتكرّر، لا تصعيد، لا مثال عددي.
+الحل (D-138): مصفوفة تصعيدية تكيّفية (تعريف→مثال→محاكاة مصغّرة) concept-scoped + Understanding Signal
+(توقّف عند أثر الفهم) + Misconception Check (تدخّل مُوجَّه) + معايرة بالقدرة (support_level) + لا تكرار
+رُتبة (ذاكرة من history) + MicroSimulationSkill حتمي ≤320 حرف. تحقق: verify_d138_live 10/10 + Supabase
+(4130) + OpenRouter (stop) + 17 اختبار + 348 D-1xx ناجح. الحالة: RESOLVED محلياً + live؛ WS في Codespaces.

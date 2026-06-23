@@ -63,6 +63,17 @@ try:
             "Per-knowledge-component understanding state (Learning State, D-135).",
             ["kc", "state"],
         )
+        # D-138: المصفوفة التصعيدية — يقيس **تدرّج الرُّتب** (تعريف→مثال→محاكاة)، الأثر السلوكي.
+        _ESCALATION = Counter(
+            "cogniforge_tutor_escalation_total",
+            "Pedagogical escalation decisions, labelled by concept + strategy level (D-138).",
+            ["concept", "level"],
+        )
+        _MICRO_SIMULATION = Counter(
+            "cogniforge_tutor_micro_simulation_total",
+            "Deterministic micro-simulations served (L3 content), labelled by concept (D-138).",
+            ["concept"],
+        )
     else:  # pragma: no cover — re-import in same process (tests)
         _REPETITION_AVOIDED = None  # type: ignore[assignment]
         _DEFINITIONAL_ANSWER = None  # type: ignore[assignment]
@@ -72,6 +83,8 @@ try:
         _FRUSTRATION = None  # type: ignore[assignment]
         _RESPONSE_MODE = None  # type: ignore[assignment]
         _UNDERSTANDING = None  # type: ignore[assignment]
+        _ESCALATION = None  # type: ignore[assignment]
+        _MICRO_SIMULATION = None  # type: ignore[assignment]
 
     def record_repetition_avoided() -> None:
         """قياس 1: تراجع التكرار الحرفي."""
@@ -130,6 +143,18 @@ try:
             if _UNDERSTANDING is not None:
                 _UNDERSTANDING.labels(kc=kc or "unknown", state=state or "unknown").inc()
 
+    def record_escalation(concept: str, level: str) -> None:
+        """D-138: قرار تصعيد بيداغوجي (concept + level) — يُثبت تدرّج الرُّتب (لا تكرار)."""
+        with contextlib.suppress(Exception):
+            if _ESCALATION is not None:
+                _ESCALATION.labels(concept=concept or "unknown", level=level or "unknown").inc()
+
+    def record_micro_simulation(concept: str) -> None:
+        """D-138: محاكاة مصغّرة حتمية قُدِّمت (محتوى L3)، مُصنَّفة بالمفهوم."""
+        with contextlib.suppress(Exception):
+            if _MICRO_SIMULATION is not None:
+                _MICRO_SIMULATION.labels(concept=concept or "unknown").inc()
+
 except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbox)
 
     def record_repetition_avoided() -> None:
@@ -158,12 +183,20 @@ except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbo
     def record_understanding(kc: str, state: str) -> None:
         pass
 
+    def record_escalation(concept: str, level: str) -> None:
+        pass
+
+    def record_micro_simulation(concept: str) -> None:
+        pass
+
 
 __all__ = [
     "record_definitional_answer",
+    "record_escalation",
     "record_frustration",
     "record_intent",
     "record_intervention",
+    "record_micro_simulation",
     "record_progress",
     "record_repetition_avoided",
     "record_response_mode",

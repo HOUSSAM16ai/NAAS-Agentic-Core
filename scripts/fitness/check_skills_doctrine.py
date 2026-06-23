@@ -918,10 +918,104 @@ def check_understanding_state_wired() -> None:
     )
 
 
+def check_micro_simulation_wired() -> None:
+    """D-138 (خادم المحاكيات المصغّرة الحتمي — L3): يحرس الحتمية + الطول + التوصيل.
+
+    يحرس: (1) manifest متّسق، (2) الـ Skill يستهلك doctrine، (3) حتمي صفر-LLM (لا send_message/
+    get_ai_client)، (4) كل محاكاة ≤320 حرف (نقد المالك #2: محاكاة لا «شرح كامل»)، (5) موصول حيّاً.
+    """
+    from app.services.skills.doctrine import (
+        MICRO_SIMULATION_DOCTRINE,
+        MICRO_SIMULATION_DOCTRINE_VERSION,
+        SKILL_DOCTRINE_MANIFEST,
+    )
+    from app.services.skills.micro_simulation_skill import MICRO_SIM_MAX_CHARS, MICRO_SIMULATIONS
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("micro_simulation")
+    if entry is None:
+        _fail("Manifest missing 'micro_simulation' entry (D-138).")
+    if entry["version"] != MICRO_SIMULATION_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for micro_simulation (D-138).")
+    if entry["rules_count"] != len(MICRO_SIMULATION_DOCTRINE):
+        _fail("Manifest rules_count mismatch for micro_simulation (D-138).")
+
+    skill = (ROOT / "app/services/skills/micro_simulation_skill.py").read_text(encoding="utf-8")
+    if "from app.services.skills.doctrine import" not in skill:
+        _fail("micro_simulation_skill.py does not consume doctrine (D-138).")
+    # حتمي صفر-LLM (نقد MathDial): لا استدعاء نموذج.
+    if "send_message" in skill or "get_ai_client" in skill:
+        _fail("micro_simulation_skill must be LLM-free (deterministic content, D-138).")
+    # قيد الطول الصارم (نقد المالك #2): محاكاة مصغّرة لا «شرح كامل».
+    for cid, sim in MICRO_SIMULATIONS.items():
+        if len(sim) > MICRO_SIM_MAX_CHARS:
+            _fail(f"Micro-simulation '{cid}' exceeds {MICRO_SIM_MAX_CHARS} chars (D-138 rule #2).")
+        if "14/165" in sim or "14 من 165" in sim:
+            _fail(f"Micro-simulation '{cid}' leaks the exercise answer (D-138 / D-113).")
+
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    if "get_micro_simulation_skill" not in client_src:
+        _fail("orchestrator_client does not invoke MicroSimulationSkill (D-138 ZOMBIE).")
+    _pass("Micro-simulation engine wired: deterministic, ≤320 chars, L3 content server (D-138)")
+
+
+def check_pedagogical_escalation_wired() -> None:
+    """D-138 (المصفوفة التصعيدية التكيّفية): يحرس الإشارات الثلاث + لا تكرار + التوصيل.
+
+    حكم المالك: «Escalation Matrix + Understanding-Signal + Misconception-Check» مُعايَرة بالقدرة.
+    يحرس: (1) manifest متّسق، (2) يستهلك doctrine + حتمي صفر-LLM، (3) يدمج Understanding-Signal
+    (`_has_understanding_evidence`) + Misconception-Check (`misconception_intervention`) +
+    ability calibration (`support_level`) + لا تكرار رُتبة (`_levels_delivered`)، (4) موصول حيّاً.
+    """
+    from app.services.skills.doctrine import (
+        PEDAGOGICAL_ESCALATION_DOCTRINE,
+        PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION,
+        SKILL_DOCTRINE_MANIFEST,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("pedagogical_escalation")
+    if entry is None:
+        _fail("Manifest missing 'pedagogical_escalation' entry (D-138).")
+    if entry["version"] != PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for pedagogical_escalation (D-138).")
+    if entry["rules_count"] != len(PEDAGOGICAL_ESCALATION_DOCTRINE):
+        _fail("Manifest rules_count mismatch for pedagogical_escalation (D-138).")
+
+    skill = (ROOT / "app/services/skills/pedagogical_escalation_skill.py").read_text(
+        encoding="utf-8"
+    )
+    if "from app.services.skills.doctrine import" not in skill:
+        _fail("pedagogical_escalation_skill.py does not consume doctrine (D-138).")
+    if "send_message" in skill or "get_ai_client" in skill:
+        _fail("pedagogical_escalation must be LLM-free (deterministic policy, D-138).")
+    # الإشارات الثلاث + لا تكرار رُتبة (نقد المالك النهائي).
+    if "_has_understanding_evidence" not in skill:
+        _fail("escalation missing Understanding Signal (_has_understanding_evidence, D-138 #3).")
+    if "misconception_intervention" not in skill or "target_misconception" not in skill:
+        _fail("escalation missing Misconception Check (D-138 #1).")
+    if "support_level" not in skill or "_calibrate" not in skill:
+        _fail("escalation missing ability/step-difficulty calibration (D-138 owner verdict).")
+    if "_levels_delivered" not in skill:
+        _fail("escalation missing escalation memory / no-repeat (_levels_delivered, D-138 #4).")
+
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    if "get_pedagogical_escalation_skill" not in client_src:
+        _fail("orchestrator_client does not invoke PedagogicalEscalationSkill (D-138 ZOMBIE).")
+    if "_esc_decision" not in client_src or "detect_active_concept" not in client_src:
+        _fail("escalation not concept-scoped / not wired in chat_with_agent (D-138 #5).")
+    _pass(
+        "Pedagogical escalation matrix wired: Understanding-Signal + Misconception-Check + "
+        "ability calibration + no-repeat (D-138)"
+    )
+
+
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132 + D-133 + D-135 + D-137) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132 + D-133 + D-135 + D-137 + D-138) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
@@ -942,6 +1036,8 @@ def main() -> None:
     check_semantic_property_wired()
     check_student_state_wired()
     check_understanding_state_wired()
+    check_micro_simulation_wired()
+    check_pedagogical_escalation_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

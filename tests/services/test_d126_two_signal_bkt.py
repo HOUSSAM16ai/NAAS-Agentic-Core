@@ -164,7 +164,9 @@ _SCHEMA_SRC = (REPO_ROOT / "app/core/db_schema_config.py").read_text(encoding="u
 _PERSIST_SRC = (REPO_ROOT / "app/services/analytics/bkt_persistence.py").read_text(encoding="utf-8")
 _ORM_SRC = (REPO_ROOT / "app/core/domain/bkt_analytics.py").read_text(encoding="utf-8")
 _CHAT_SRC = (REPO_ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
-_REDACT_SRC = (REPO_ROOT / "app/services/skills/answer_redaction_skill.py").read_text(encoding="utf-8")
+_REDACT_SRC = (REPO_ROOT / "app/services/skills/answer_redaction_skill.py").read_text(
+    encoding="utf-8"
+)
 _DOCTRINE_SRC = (REPO_ROOT / "app/services/skills/doctrine.py").read_text(encoding="utf-8")
 
 

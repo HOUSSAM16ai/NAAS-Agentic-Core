@@ -78,11 +78,11 @@ def test_companion_text_default_is_single_sentence() -> None:
 
 
 def test_build_calculated_ui_terminate_pipeline_true_for_impossible() -> None:
-    """V28.0 + V38.0: impossible_case في MODE_A (سؤال مباشر) → terminate_pipeline=True.
+    """V28.0 + D-116/D-123: سحب مستحيل مباشر (MODE_A) → combinations_visualizer + terminate=True.
 
-    ملاحظة V38.0: _IMPOSSIBLE_Q يحتوي على «كيفاش» (إشارة حيرة) → MODE_B →
-    terminate_pipeline=False. نستخدم _IMPOSSIBLE_DIRECT (بلا إشارة حيرة) للتحقق
-    من قانون V28.0 في MODE_A.
+    D-123 §6.118: عبر `_build_calculated_ui` (history=None) يُطوى السحب المستحيل داخل
+    combinations_visualizer (مجموعة is_possible + pedagogical_string، بلا `C_n^k=0`)
+    لا في مكوّن impossible_draw_animation مستقلّ. D-116: الكبح النصّي ساري (terminate=True).
     """
     from app.infrastructure.clients.orchestrator_client import OrchestratorClient
 
@@ -92,13 +92,17 @@ def test_build_calculated_ui_terminate_pipeline_true_for_impossible() -> None:
         history_messages=[{"role": "user", "content": _BAC_URN}],
     )
     assert result is not None
-    assert result.get("component") == "impossible_draw_animation"
+    assert result.get("component") == "combinations_visualizer"
     assert result.get("routing_mode") == "MODE_A", "Direct impossible question must be MODE_A"
     assert result.get("terminate_pipeline") is True, (
-        "terminate_pipeline must be True for MODE_A impossible case"
+        "terminate_pipeline must be True for MODE_A probability case (D-116)"
     )
     assert "companion_text" in result
     assert len(result["companion_text"]) <= 120
+    # D-123: لا رياضيات منحلّة — لا مجموعة تحمل `= 0` المضلِّل.
+    for group in result.get("props", {}).get("groups", []):
+        ped = group.get("pedagogical_string") or ""
+        assert "= 0" not in ped, f"Degenerate C_n^k=0 leaked into group: {ped}"
 
 
 def test_build_calculated_ui_muzzles_all_generative_ui() -> None:
@@ -130,32 +134,36 @@ def test_build_calculated_ui_muzzles_all_generative_ui() -> None:
 
 
 def test_impossible_case_strict_decoupled_schema() -> None:
-    """V28.0: العقد المُفكَّك الصارم — visual_directives / numerical_state / pedagogical_message."""
-    from app.infrastructure.clients.orchestrator_client import OrchestratorClient
+    """V28.0: العقد المُفكَّك الصارم لـ ImpossibleCaseOutput — visual_directives /
+    numerical_state / pedagogical_message — يُتحقَّق على مستوى analyze() حيث يُنتَج فعلاً.
 
-    result = OrchestratorClient._build_calculated_ui(
-        _IMPOSSIBLE_Q,
-        history_messages=[{"role": "user", "content": _BAC_URN}],
+    عبر `_build_calculated_ui` (history=None) يُطوى السحب داخل combinations (D-123)؛
+    لكن مسار `analyze()` (الذي يقرأ الكيس من history) لا يزال يُنتج ImpossibleCaseOutput
+    بالعقد المُفكَّك الصارم — وهو ما تحرسه هذه الاختبارات.
+    """
+    out = _skill().analyze(
+        ProbabilityInput(question=_IMPOSSIBLE_Q, history=[{"role": "user", "content": _BAC_URN}])
     )
-    assert result is not None
-    props = result["props"]
-    # visual_directives
-    vd = props["visual_directives"]
-    assert vd["animation_hint"] == "bag_shake"
-    assert vd["fallback_math"] is None, "fallback_math must be null — no degenerate math"
-    # numerical_state
-    ns = props["numerical_state"]
-    assert ns["available_items"] == 2
-    assert ns["requested_items"] == 3
-    assert ns["item_color"] == "white"
-    # pedagogical_message
-    assert props["pedagogical_message"]
-    # ui_mode
-    assert props["ui_mode"] == "impossible_case"
+    assert isinstance(out, ImpossibleCaseOutput)
+    # visual_directives — لا رياضيات منحلّة (fallback_math=None)
+    assert out.visual_directives.animation_hint == "bag_shake"
+    assert out.visual_directives.fallback_math is None, "fallback_math must be null"
+    # numerical_state — العقد المُفكَّك (متاح/مطلوب/لون)
+    assert out.numerical_state.available_items == 2
+    assert out.numerical_state.requested_items == 3
+    assert out.numerical_state.item_color == "white"
+    # pedagogical_message + ui_mode
+    assert out.pedagogical_message
+    assert out.ui_mode == "impossible_case"
 
 
 def test_impossible_case_no_degenerate_math_in_props() -> None:
-    """V28.0: props لا تحوي tree/total_combinations/composition/groups."""
+    """D-123 §6.118: لا رياضيات منحلّة — السحب المستحيل لا يُنتج `C_n^k=0` المضلِّل.
+
+    عبر `_build_calculated_ui` (history=None) يُطوى المستحيل داخل combinations؛ القاعدة
+    الثابتة: أي مجموعة غير ممكنة تحمل رسالة تربوية (is_possible) بلا `= 0` مضلِّل،
+    ولا حقل `fallback_math` رقمي منحلّ في أي خطوة.
+    """
     from app.infrastructure.clients.orchestrator_client import OrchestratorClient
 
     result = OrchestratorClient._build_calculated_ui(
@@ -164,9 +172,15 @@ def test_impossible_case_no_degenerate_math_in_props() -> None:
     )
     assert result is not None
     props = result.get("props", {})
-    for forbidden_key in ("tree", "total_combinations", "composition", "groups"):
-        assert forbidden_key not in props, (
-            f"Degenerate math key '{forbidden_key}' must not appear in impossible_case props"
+    # أي مجموعة (إن وُجدت) لا تحمل `= 0` المضلِّل.
+    for group in props.get("groups", []):
+        ped = group.get("pedagogical_string") or ""
+        assert "= 0" not in ped, f"Degenerate C_n^k=0 leaked: {ped}"
+    # full_exercise_story (مسار الحيرة): خطوات الحدث لا تحمل رياضيات منحلّة.
+    for step in props.get("exercise_steps", []):
+        vd = step.get("visual_directives") or {}
+        assert vd.get("fallback_math") in (None, ""), (
+            f"Degenerate fallback_math leaked into step: {vd.get('fallback_math')}"
         )
 
 

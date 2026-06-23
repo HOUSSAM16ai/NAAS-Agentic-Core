@@ -1,14 +1,20 @@
 """
-Protocol V38.0 — Dual-Mode Routing tests.
+Protocol V38.0 — Dual-Mode Routing tests (مُحدَّثة بعقد D-116 §6.116).
 
 يغطي:
-  • MODE_A (سؤال مباشر): routing_mode="MODE_A", terminate_pipeline=True.
-  • MODE_B (حيرة الطالب): routing_mode="MODE_B", terminate_pipeline=False.
+  • MODE_A (سؤال مباشر): routing_mode="MODE_A".
+  • MODE_B (حيرة الطالب): routing_mode="MODE_B" — لا يزال إشارة توجيه.
   • فصل القناتين: JSON (ui_component) + Markdown (narrative) لا يتلوّثان.
   • _build_calculated_ui يُرجِع routing_mode في كل مكوّن.
-  • الحالة المستحيلة في MODE_B: terminate_pipeline=False (الـ LLM يشرح السبب).
-  • الحالة المستحيلة في MODE_A: terminate_pipeline=True (الكبح النصي ساري).
-  • _effective_question يحمل تعليمة البيداغوجيا العميقة في MODE_B.
+
+ملاحظة عقد D-116 (§6.116 — قاعدة ثابتة لا تُكسر): الاحتمالات = مُعلّم بصري حتمي
+كامل ⇒ `terminate_pipeline=True` **دائماً** لكل مكوّنات الاحتمالات (combinations /
+tree / full_exercise_story / impossible)، حتى في MODE_B. هذا يَعكِس جزء MODE_B من
+D-085 للاحتمالات فقط: routing_mode=MODE_B يبقى إشارةً، لكن البصري الحتمي هو
+البيداغوجيا (صفر سرد LLM — مصدر الغارباج). الحالة المستحيلة على مدخلات الكيس تُطوى
+داخل combinations_visualizer (D-123): مجموعة `is_possible` + `pedagogical_string`
+بلا `C_n^k=0` مضلِّل؛ المكوّن المستقل `impossible_draw_animation` يُختبَر على مستوى
+`analyze()` (test_v28_text_wall_muzzle::test_impossible_case_has_companion_text).
 """
 
 from __future__ import annotations
@@ -76,70 +82,84 @@ def test_confusion_question_yields_mode_b() -> None:
     )
 
 
-def test_confusion_question_does_not_terminate_pipeline() -> None:
-    """MODE_B: سؤال حيرة → terminate_pipeline=False (المسار يبقى حياً)."""
+def test_confusion_question_terminates_pipeline_d116() -> None:
+    """MODE_B: سؤال حيرة → terminate_pipeline=True (D-116: الاحتمالات بصري حتمي كامل).
+
+    عقد D-116 §6.116 (ثابت): الاحتمالات = مُعلّم بصري حتمي ⇒ terminate دائماً حتى عند
+    الحيرة — البصري الحتمي هو البيداغوجيا، لا سرد LLM (مصدر الغارباج). routing_mode
+    يبقى MODE_B كإشارة، لكن المسار يُكبَح نصّياً.
+    """
     result = OrchestratorClient._build_calculated_ui(
         _CONFUSION_ARABIC,
         history_messages=[{"role": "user", "content": _BAC_URN}],
     )
     assert result is not None
-    assert result.get("terminate_pipeline") is False, (
-        "MODE_B must NOT terminate pipeline — deep pedagogy narrative must flow"
+    assert result.get("routing_mode") == "MODE_B"
+    assert result.get("terminate_pipeline") is True, (
+        "D-116: probability tutor is fully deterministic-visual — terminate always, even MODE_B"
     )
 
 
 def test_darija_confusion_yields_mode_b() -> None:
-    """MODE_B: حيرة بالدارجة (مفهمتش) → routing_mode='MODE_B'."""
+    """MODE_B: حيرة بالدارجة (مفهمتش) → routing_mode='MODE_B' + terminate=True (D-116)."""
     result = OrchestratorClient._build_calculated_ui(
         _CONFUSION_DARIJA,
         history_messages=[{"role": "user", "content": _BAC_URN}],
     )
     assert result is not None
     assert result.get("routing_mode") == "MODE_B"
-    assert result.get("terminate_pipeline") is False
+    assert result.get("terminate_pipeline") is True
 
 
 def test_french_confusion_yields_mode_b() -> None:
-    """MODE_B: حيرة بالفرنسية → routing_mode='MODE_B'."""
+    """MODE_B: حيرة بالفرنسية → routing_mode='MODE_B' + terminate=True (D-116)."""
     result = OrchestratorClient._build_calculated_ui(
         _CONFUSION_FRENCH,
         history_messages=[{"role": "user", "content": _BAC_URN}],
     )
     assert result is not None
     assert result.get("routing_mode") == "MODE_B"
-    assert result.get("terminate_pipeline") is False
+    assert result.get("terminate_pipeline") is True
 
 
 # ── اختبارات الحالة المستحيلة في MODE_A و MODE_B ─────────────────────────────────
 
 
 def test_impossible_direct_mode_a_terminates() -> None:
-    """MODE_A + impossible: terminate_pipeline=True — الكبح النصي ساري."""
+    """MODE_A + سحب مستحيل (مباشر): يُطوى داخل combinations_visualizer + terminate=True (D-123).
+
+    عقد D-123 §6.118: السحب المستحيل على مدخل الكيس لا يُنتج مكوّناً مستقلاً بل يُطوى
+    داخل combinations_visualizer (مجموعة is_possible + pedagogical_string، بلا C_n^k=0).
+    """
     result = OrchestratorClient._build_calculated_ui(
         _IMPOSSIBLE_DIRECT,
         history_messages=[{"role": "user", "content": _BAC_URN}],
     )
     assert result is not None
-    assert result.get("component") == "impossible_draw_animation"
+    assert result.get("component") == "combinations_visualizer"
     assert result.get("routing_mode") == "MODE_A"
     assert result.get("terminate_pipeline") is True, (
         "Impossible draw in MODE_A must terminate — no LLM should follow"
     )
 
 
-def test_impossible_confusion_mode_b_keeps_pipeline_alive() -> None:
-    """MODE_B + impossible: terminate_pipeline=False — LLM يشرح لماذا السحب مستحيل."""
+def test_impossible_confusion_mode_b_terminates_d116() -> None:
+    """MODE_B + سحب مستحيل (حيرة): full_exercise_story + terminate=True (D-116).
+
+    «كيفاش» إشارة حيرة ⇒ routing_mode=MODE_B، لكن D-116 يكبح المسار نصّياً
+    (terminate=True) — المُعلّم البصري الحتمي يشرح، لا سرد LLM.
+    """
     result = OrchestratorClient._build_calculated_ui(
         _IMPOSSIBLE_Q,
         history_messages=[{"role": "user", "content": _BAC_URN}],
     )
     assert result is not None
-    assert result.get("component") == "impossible_draw_animation"
+    assert result.get("component") == "full_exercise_story"
     assert result.get("routing_mode") == "MODE_B", (
         "Confusion marker in question must trigger MODE_B even for impossible draw"
     )
-    assert result.get("terminate_pipeline") is False, (
-        "MODE_B impossible draw must keep pipeline alive — LLM explains WHY it's impossible"
+    assert result.get("terminate_pipeline") is True, (
+        "D-116: probability MODE_B still terminates — deterministic visual is the pedagogy"
     )
 
 
@@ -181,13 +201,19 @@ def test_companion_text_is_single_sentence_mode_a() -> None:
 
 
 def test_routing_mode_present_in_all_component_types() -> None:
-    """routing_mode موجود في كل أنواع المكوّنات (combinations, tree, impossible)."""
+    """routing_mode + terminate=True في كل المكوّنات التي يُنتجها المحرّك فعلاً.
+
+    عبر `_build_calculated_ui` (history=None، D-123): combinations_visualizer (MODE_A) +
+    full_exercise_story (MODE_B حيرة) + probability_tree (سحب متسلسل صريح). كلها
+    terminate_pipeline=True (D-116). `impossible_draw_animation` غير قابل للوصول هنا
+    (يُختبَر على مستوى analyze()).
+    """
     cases = [
-        (_DIRECT_SIMULTANEOUS, "combinations_visualizer"),
-        (_DIRECT_SEQUENTIAL, "probability_tree"),
-        (_IMPOSSIBLE_DIRECT, "impossible_draw_animation"),
+        ("نسحب 3 كرات خضراء دفعة واحدة", "combinations_visualizer", "MODE_A"),
+        (_CONFUSION_ARABIC, "full_exercise_story", "MODE_B"),
+        ("كيفاش نسحب 3 كرات بيضاء من كيس فيه كرتان بيضاوان؟", "probability_tree", "MODE_B"),
     ]
-    for question, expected_component in cases:
+    for question, expected_component, expected_mode in cases:
         result = OrchestratorClient._build_calculated_ui(
             question,
             history_messages=[{"role": "user", "content": _BAC_URN}],
@@ -196,9 +222,11 @@ def test_routing_mode_present_in_all_component_types() -> None:
         assert result.get("component") == expected_component, (
             f"Expected {expected_component}, got {result.get('component')}"
         )
-        assert "routing_mode" in result, f"routing_mode missing for component={expected_component}"
-        assert result["routing_mode"] in ("MODE_A", "MODE_B"), (
-            f"routing_mode must be MODE_A or MODE_B, got {result['routing_mode']}"
+        assert result.get("routing_mode") == expected_mode, (
+            f"Expected {expected_mode}, got {result.get('routing_mode')}"
+        )
+        assert result.get("terminate_pipeline") is True, (
+            f"D-116: all probability components terminate — {expected_component}"
         )
 
 

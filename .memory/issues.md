@@ -4337,3 +4337,12 @@ intent)؛ حذف «الاحتمال» المجرّدة من kc_ratio؛ تسجي�
 + full history + exercise-dump skip) + توسيع بوّابة المصفوفة (حارس حساب + متابعة كيف/لماذا) + تسجيل نمطَي
 السحب + حارس D-135 (event-A فقط عند حيرة). تحقق: verify_d139_live (كل أسئلة المفهوم صحيحة) + 16 اختبار +
 364 D-1xx ناجح. الحالة: RESOLVED محلياً + live؛ WS في Codespaces.
+
+## ISS-116 (CI-green / D-140, 2026-06-23) — احمرار الـ CI: اختبارات تحمل عقوداً مُتجاوَزة
+الـ HEAD أحمر: CI (12 فشل test-monolith + lint format) + Generative UI Streaming Gate (1 فشل). الجذر
+الوحيد: كامل ثورة D-114→D-139 على هذا الفرع (merge-base=origin/main)، فطوّرت قرارات ثابتة (D-116
+terminate=True دائماً للاحتمالات · D-123 المستحيل يُطوى داخل combinations · D-138 registry 22→24)
+محرّك الاحتمالات بينما 4 ملفات اختبار بقيت تحمل العقد القديم. الحل (D-140، مواءمة لا تعطيل — D-105
+قاعدة 9): test_d126 (format) · test_skills_registry (26/ACTIVE 24) · test_v38 (6) · test_v28 (3) ·
+test_generative_ui_streaming (1) — كلها مُحدَّثة للعقد الحالي؛ صفر تغيير في app/. تحقق: stub harness
+(12 اختبار محرَّر تمرّ) + ruff + gates + التغطية 69.12%. الحالة: RESOLVED محلياً؛ العلامة الخضراء على الـ CI بعد الدفع.

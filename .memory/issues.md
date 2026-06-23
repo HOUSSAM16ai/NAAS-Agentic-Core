@@ -4330,3 +4330,10 @@ intent)؛ حذف «الاحتمال» المجرّدة من kc_ratio؛ تسجي�
 (توقّف عند أثر الفهم) + Misconception Check (تدخّل مُوجَّه) + معايرة بالقدرة (support_level) + لا تكرار
 رُتبة (ذاكرة من history) + MicroSimulationSkill حتمي ≤320 حرف. تحقق: verify_d138_live 10/10 + Supabase
 (4130) + OpenRouter (stop) + 17 اختبار + 348 D-1xx ناجح. الحالة: RESOLVED محلياً + live؛ WS في Codespaces.
+
+## ISS-116 / D-139 (2026-06-23) — انحراف المفهوم إلى الحادثة A («كيف»/السحب على التوالي ⇒ event-A)
+أسئلة المفهوم تسقط لـ D-135 (event-A) بسبب بوّابة مصفوفة ضيّقة + انجراف detect_active_concept من إفراغ
+التمرين + «السحب على التوالي» غير مُسجَّل. الحل (D-139، 4 طبقات): تحصين detect_active_concept (new-def→None
++ full history + exercise-dump skip) + توسيع بوّابة المصفوفة (حارس حساب + متابعة كيف/لماذا) + تسجيل نمطَي
+السحب + حارس D-135 (event-A فقط عند حيرة). تحقق: verify_d139_live (كل أسئلة المفهوم صحيحة) + 16 اختبار +
+364 D-1xx ناجح. الحالة: RESOLVED محلياً + live؛ WS في Codespaces.

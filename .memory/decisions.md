@@ -4859,3 +4859,15 @@ record_escalation/record_micro_simulation. تحقق: scripts/verify_d138_live.py
 OpenRouter (stop) + test_d138 (17) + لا انحدار D-127→D-137 (348 ناجح) + gate + ruff + runtime_truth.
 registry=26. doctrine PEDAGOGICAL_ESCALATION v1.0.0 (7) + MICRO_SIMULATION v1.0.0 (3).
 الحالة: RESOLVED محلياً + live LLM/DB؛ WS الكامل + المتصفح في Codespaces (llama_index محجوب في الـ sandbox).
+
+## D-139 (2026-06-23) — ISS-116: قتل انحراف المفهوم إلى الحادثة A (أسئلة المفهوم تُمسَك قبل D-135)
+transcript حيّ بعد D-138: «كيف نضيق الإمكانيات»/«كيف نحصل على معدومة»/«لم أفهم» المتكرّرة/«ما هو السحب
+على التوالي» ⇒ نص الحادثة A («كلها خضراء ⇒ تحقّقت A»). 3 جذور: (1) بوّابة بلوك المصفوفة الضيّقة ⇒ «كيف»
+unknown ⇒ تسقط لـ D-135 → _next_unmastered → kc_event_meaning؛ (2) detect_active_concept ينجرف (نافذة
+[-6:] + assistant-fallback يفحص إفراغ التمرين ⇒ same_color)؛ (3) «السحب على التوالي» غير مُسجَّل.
+الإصلاح: (A) detect_active_concept — new-definitional→None + user-scan كامل التاريخ + _EXERCISE_DUMP_MARKERS؛
+(B) توسيع بوّابة المصفوفة — _esc_compute (حارس حساب) + _esc_followup (كيف/لماذا/وضح ⇒ تُمسَك حتى unknown)
++ interpret مباشر؛ (C) تسجيل sequential_without_replacement + simultaneous_draw (+ micro-sims)؛
+(D) حارس D-135 — _next_unmastered (event-A) فقط عند _confused صريح. تحقق: verify_d139_live (كل أسئلة
+المفهوم ⇒ المفهوم الصحيح، صفر event_meaning) + Supabase (4156) + OpenRouter (stop) + test_d139 (16) +
+364 D-1xx ناجح + gate + ruff + runtime_truth. الحالة: RESOLVED محلياً + live؛ WS في Codespaces.

@@ -3098,9 +3098,38 @@ class OrchestratorClient:
                 str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
             )
             _esc_sps = get_semantic_property_skill()
+            # D-139: حارس الحساب — «احسب/كم/اوجد/بيّن/استنتج» تبقى للمسار الحسابي (لا تُفعَّل المصفوفة).
+            _esc_ql = (question or "").lower()
+            _esc_compute = any(
+                m in _esc_ql
+                for m in ("احسب", "أحسب", "كم ", "اوجد", "أوجد", "بيّن", "بين ان", "استنتج")
+            )
+            # D-139: متابعة المفهوم — «كيف/لماذا/وضح/اشرح/مثال/لم أفهم/؟» تُمسَك حتى لو صُنّفت unknown
+            # (كانت «كيف نضيق الإمكانيات» / «كيف نحصل على معدومة» تسقط لـ D-135 → نص الحادثة A).
+            _esc_followup = any(
+                m in _esc_ql
+                for m in (
+                    "كيف",
+                    "لماذا",
+                    "علاش",
+                    "وضح",
+                    "اشرح",
+                    "بسط",
+                    "؟",
+                    "مثال",
+                    "لم افهم",
+                    "لم أفهم",
+                    "مفهمتش",
+                )
+            )
+            _esc_teach_ok = _esc_state.primary_intent in _concept_teach_intents or (
+                _esc_state.primary_intent == "unknown"
+                and (_esc_followup or _esc_sps.interpret(question) is not None)
+            )
             _esc_active = (
                 _esc_sps.detect_active_concept(question, history_messages)
-                if _esc_state.primary_intent in _concept_teach_intents
+                if _esc_teach_ok
+                and not _esc_compute
                 and self._is_prob_context(question + " " + _esc_hist)
                 else None
             )

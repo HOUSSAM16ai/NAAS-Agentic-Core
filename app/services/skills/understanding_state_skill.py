@@ -469,7 +469,9 @@ class UnderstandingStateSkill:
             focus = self._current_focus_kc(kcs, history) if _confused else None
             if focus is not None:
                 target = focus
-            else:
+            elif _confused:
+                # D-139 (دفاع عميق): الافتراض لـ _next_unmastered (= kc_event_meaning، نص الحادثة A)
+                # يُسمَح به **فقط** عند حيرة صريحة على التمرين — لا لسؤال «كيف/ماذا» عام (يُسلَّم للمصفوفة).
                 on_path = any(s in ("explained", "understood") for s in states.values())
                 target = self._next_unmastered(kcs, states) if on_path else None
         if target is None:

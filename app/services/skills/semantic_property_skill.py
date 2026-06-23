@@ -246,6 +246,70 @@ PROPERTY_REGISTRY: dict[str, PropertySpec] = {
             "نجمع الممكنة",
         ),
     ),
+    # D-139: نمطا السحب — مفهومان مُسجَّلان (كان «ما هو السحب على التوالي» ينجرف للحادثة A).
+    "sequential_without_replacement": PropertySpec(
+        property_id="sequential_without_replacement",
+        markers=(
+            "السحب على التوالي",
+            "على التوالي بدون إرجاع",
+            "على التوالي وبدون إرجاع",
+            "بدون إرجاع",
+            "بدون ارجاع",
+            "على التوالي",
+        ),
+        title="ماذا نقصد بالسحب على التوالي بدون إرجاع؟",
+        definition=(
+            "السحب على التوالي بدون إرجاع يعني سحب الكرات **واحدة تلو الأخرى**، وكل كرة مسحوبة "
+            "**لا تُعاد** إلى الكيس. لذلك **يتناقص عدد الكرات** في كل سحبة، و**الترتيب يهمّ** "
+            "(السحبة الأولى ثم الثانية ثم الثالثة)."
+        ),
+        concept_id="sequential_without_replacement",
+        domain="probability_concept",
+        example=(
+            "مثال ملموس: كيس فيه 3 كرات (حمراء، زرقاء، خضراء). نسحب كرتين على التوالي بدون إرجاع: "
+            "نأخذ الأولى ونحتفظ بها خارج الكيس، ثم نسحب الثانية من **الكرتين الباقيتين فقط**. "
+            "عدد الإمكانات ينقص من 3 إلى 2 بين السحبتين."
+        ),
+        evidence_markers=(
+            "الترتيب يهم",
+            "لا نعيد",
+            "بدون اعادة",
+            "ينقص العدد",
+            "يتناقص العدد",
+            "واحدة تلو الاخرى",
+        ),
+    ),
+    "simultaneous_draw": PropertySpec(
+        property_id="simultaneous_draw",
+        markers=(
+            "السحب دفعة واحدة",
+            "دفعة واحدة",
+            "دفعةً واحدة",
+            "في آن واحد",
+            "في ان واحد",
+            "السحب الآني",
+            "الآني",
+        ),
+        title="ماذا نقصد بالسحب دفعة واحدة؟",
+        definition=(
+            "السحب دفعة واحدة (آنياً) يعني أخذ الكرات **معاً في وقت واحد** دون ترتيب — نحصل على "
+            "**مجموعة** من الكرات لا تسلسلاً. لا يوجد «أوّل» و«ثانٍ»، فقط أيّ كرات اجتمعت معاً. "
+            "هذا **عكس** السحب على التوالي حيث يهمّ الترتيب."
+        ),
+        concept_id="simultaneous_draw",
+        domain="probability_concept",
+        example=(
+            "مثال ملموس: كيس فيه 4 كرات. السحب «دفعة واحدة» = نُدخل اليد ونأخذ 3 كرات معاً في "
+            "قبضة واحدة — لا نميّز أيّها سُحبت أولاً. النتيجة **مجموعة** من 3 كرات، والترتيب لا يهمّ."
+        ),
+        evidence_markers=(
+            "معا في وقت واحد",
+            "لا يهم الترتيب",
+            "مجموعة",
+            "دون ترتيب",
+            "دفعة واحدة معا",
+        ),
+    ),
 }
 
 
@@ -437,6 +501,17 @@ _VALID_PROPERTIES: frozenset[str] = frozenset(PROPERTY_REGISTRY)
 #: D-137: رؤوس أمثلة/تعريفات المساعد — تُتجاهَل عند كشف المفهوم النشط (markers عابرة تُضلّل).
 _CONCEPT_ARTIFACT_MARKERS: tuple[str, ...] = ("## مثال", "مثال ملموس", "مثال آخر", "## ماذا نقصد")
 
+#: D-139: علامات إفراغ التمرين + تمثيلات D-135 (الحادثة A) — يجب ألا تُحدِّد المفهوم النشط أبداً.
+#: كان «ما هو السحب على التوالي» ينجرف لـ same_color من نص التمرين («نفس اللون»/«الحادثة A»).
+_EXERCISE_DUMP_MARKERS: tuple[str, ...] = (
+    "التمرين",
+    "يحتوي كيس",
+    "نسحب عشوائي",
+    "احسب احتمال الحادثة",
+    "كلها خضراء",  # تمثيل kc_event_meaning (D-135) — نص الحادثة A العابر
+    "تخيل انك سحبت 3 كرات",
+)
+
 
 class SemanticPropertySkill:
     """
@@ -484,22 +559,33 @@ class SemanticPropertySkill:
         out = self.interpret(question)
         if out is not None:
             return out
-        recent = [m for m in (history or [])[-6:] if isinstance(m, dict)]
-        # (1) أولوية: آخر مفهوم سأل عنه الطالب صراحةً.
-        for msg in reversed(recent):
-            if msg.get("role") == "user":
+        # D-139: سؤال تعريفي عن مفهوم **جديد** (غير مُسجَّل) ⇒ لا تنجرف لمفهوم سابق/تمرين.
+        # أي «ما هو X» يُعيد ضبط المفهوم النشط؛ يُسلَّم لـ LLM Listener-Definer (D-132). يحلّ
+        # «ما هو السحب على التوالي» الذي كان ينجرف لـ same_color من نص التمرين.
+        if self.is_definitional(question):
+            return None
+        history = history or []
+        # (1) D-139: المفهوم النشط = آخر مفهوم سأل عنه **الطالب** صراحةً — كامل التاريخ (لا [-6:]).
+        # يحلّ قطع النافذة في المحادثات الطويلة (كان «ما هو الاحتمال الشرطي» يخرج خارج النافذة).
+        for msg in reversed(history):
+            if isinstance(msg, dict) and msg.get("role") == "user":
                 found = self.interpret(str(msg.get("content", "")))
                 if found is not None:
                     return found
-        # (2) fallback: رسائل المساعد — لكن نتجاهل أمثلة/تعريفات المفهوم (markers عابرة).
-        for msg in reversed(recent):
-            if msg.get("role") != "user":
-                raw = str(msg.get("content", ""))
-                if any(mk in raw for mk in _CONCEPT_ARTIFACT_MARKERS):
-                    continue
-                found = self.interpret(raw)
-                if found is not None:
-                    return found
+        # (2) fallback مقيّد: رسائل مساعد قصيرة (لا أمثلة/تعريفات، لا إفراغ تمرين، لا نص الحادثة A).
+        for msg in reversed(history[-6:]):
+            if not isinstance(msg, dict) or msg.get("role") == "user":
+                continue
+            raw = str(msg.get("content", ""))
+            if (
+                len(raw) > 400
+                or any(mk in raw for mk in _CONCEPT_ARTIFACT_MARKERS)
+                or any(mk in _normalize(raw) for mk in _EXERCISE_DUMP_MARKERS)
+            ):
+                continue
+            found = self.interpret(raw)
+            if found is not None:
+                return found
         return None
 
     def is_definitional(self, question: str) -> bool:

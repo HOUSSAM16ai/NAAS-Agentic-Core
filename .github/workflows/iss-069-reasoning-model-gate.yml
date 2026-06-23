@@ -9,7 +9,7 @@ name: ISS-069 — Reasoning Model Content Gate
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
     paths:
       - "app/core/ai_config.py"
       - "app/core/gateway/simple_client.py"

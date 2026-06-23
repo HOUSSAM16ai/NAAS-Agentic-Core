@@ -10,7 +10,7 @@ name: ISS-070 — Math Pipeline Quality Gate
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
     paths:
       - "microservices/conversation_service/src/math_pipeline.py"
       - "microservices/conversation_service/src/conversation_graph.py"

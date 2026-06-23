@@ -10,7 +10,7 @@ name: AI Quality Gate — ISS-068/069 Model Integrity
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
     paths:
       - "app/core/ai_config.py"
       - "app/services/chat/local_graph.py"

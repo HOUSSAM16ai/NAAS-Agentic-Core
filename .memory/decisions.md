@@ -4900,3 +4900,14 @@ upload-artifact@v4→**v6** (فخّ: v5 ما زال node20)، github-script@v7�
 المركّب المحلي `./.github/actions/setup` bash-only (لا تغيير). تحقق: 38 workflow YAML صالحة، صفر إجراء
 node20 متبقٍّ. الحالة: RESOLVED محلياً؛ خلوّ السجلّ من `##[warning]` يُتحقَّق على الـ CI بعد الدفع.
 قاعدة دائمة: `upload-artifact@v5` ما زال node20 — استخدم v6+؛ أي gitlink بلا `.gitmodules` = تحذير في كل وظيفة.
+
+## D-141.1 (2026-06-23) — ISS-116: صفر skipped (تقييد push على الفروع الميزة)
+بعد D-141، التحقق الحي على 53d3c37 كشف **skipped واحد**: وظيفة `PR Summary` في **push-run** لـ
+`microservices-step5-user-service.yml` (`push: branches: ["**"]`). تحرير ملفات الـ workflows في D-141
+طابق مسار push (`.github/workflows/<self>`) فأنشأ push-run زائداً على الفرع الميزة؛ الوظيفة محروسة بـ
+`if: github.event_name == 'pull_request'` فتُتخطّى على push (صحيح بالتصميم، لكنها تظهر skipped). الإصلاح:
+تقييد push على `["main"]` لكل workflow يُشغّل push على الفروع الميزة وله pull_request (آمن — تغطية PR
+تبقى): ai-quality-gate، iss-069، iss-070، iss-071، microservices-step5-user-service. (الفروع المحدَّدة
+`feat/...*`/`copilot/**` لا تطابق فرعنا — تُترك.) النتيجة: لا push-run زائد على الفروع الميزة ⇒ لا وظيفة
+ملخّص مُتخطّاة. قاعدة دائمة: push يُقيَّد على `[main]` (مع pull_request للـ PRs) — `["**"]`/بلا branches
+يُنشئ push-runs زائدة بوظائف skipped.

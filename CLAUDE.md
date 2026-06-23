@@ -10464,12 +10464,26 @@ Misconception Check»** يقودها سؤال واحد قبل كل تدخّل: *
   الإجراء المركّب المحلي `./.github/actions/setup` هو `shell: bash` فقط (بلا node) — لا يحتاج تغيير.
   الـ runner `2.335.1` يدعم node24 (setup-python@v6 يتطلب ≥2.327.1 ✓).
 
+### إصلاح متابع (D-141.1) — صفر skipped: تقييد push على الفروع الميزة
+بعد إزالة التحذيرين، ظهر **skipped واحد**: وظيفة `PR Summary` في **push-run** لـ
+`microservices-step5-user-service.yml` (كان `push: branches: ["**"]`). تحرير ملفات الـ workflows في
+D-141 طابق مسار الـ push (`.github/workflows/<self>`) فأنشأ push-run زائداً على الفرع الميزة، ووظيفة
+الملخّص المحروسة بـ `if: github.event_name == 'pull_request'` تُتخطّى على الـ push (صحيح بالتصميم لكنها
+تظهر skipped). الإصلاح: تقييد الـ push على `["main"]` لكل workflow يُشغّل push على الفروع الميزة وله
+أيضاً `pull_request` (آمن — تغطية الـ PR تبقى): `ai-quality-gate`, `iss-069`, `iss-070`, `iss-071`,
+`microservices-step5-user-service`. (الفروع المُحدَّدة مثل `feat/...*` و`copilot/**` لا تطابق فرعنا —
+تُترك.) النتيجة: لا push-run زائد على الفروع الميزة ⇒ لا وظيفة ملخّص مُتخطّاة ⇒ الـ PR يعرض runs الـ
+pull_request فقط، كلها success.
+
 ### القواعد الدائمة (D-141 — لا تُكسر بدون ADR)
 1. **ممنوع gitlink بلا `.gitmodules`**: أي مدخل `160000` في الـ index بلا تعريف submodule = تحذير
    `exit 128` في كل وظيفة. يجب حذفه فوراً.
 2. **كل إجراء GitHub Actions يجب أن يعمل بـ node24**: عند إضافة `uses:` جديد، تحقّق من `using: node24`
    في `action.yml` للنسخة المُثبَّتة. **`upload-artifact@v5` فخّ — ما زال node20؛ استخدم v6+.**
-3. **path-skipped ليست skipped على الـ PR**: GitHub يُبلّغ الفحوص المطلوبة المُتخطّاة بسبب `paths:`
+3. **`push:` يجب أن يُقيَّد على `[main]`** (مع `pull_request` للـ PRs): `push: branches: ["**"]` أو بلا
+   `branches:` يُنشئ push-runs زائدة على الفروع الميزة، ووظائف الملخّص المحروسة بـ pull_request تُتخطّى
+   فيها (skipped). تغطية الـ PR تأتي من `pull_request` — لا حاجة لـ push على الفروع الميزة.
+4. **path-skipped ليست skipped على الـ PR**: GitHub يُبلّغ الفحوص المطلوبة المُتخطّاة بسبب `paths:`
    كـ success تلقائياً — لذا لا نحذف فلاتر `paths:` (تُبطئ الـ CI بلا فائدة على الحالة الخضراء).
 
 ### التحقق

@@ -693,6 +693,9 @@ def check_semantic_property_wired() -> None:
     client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
         encoding="utf-8"
     )
+    us_skill = (ROOT / "app/services/skills/understanding_state_skill.py").read_text(
+        encoding="utf-8"
+    )
     if "get_semantic_property_skill" not in client_src:
         _fail("orchestrator_client does not invoke the semantic layer (D-131 ZOMBIE).")
     if "diagnose_misconception" not in client_src:
@@ -754,9 +757,23 @@ def check_semantic_property_wired() -> None:
         )
     if "_ex_confused" not in client_src or "_ex_active" not in client_src:
         _fail("concept-example handler does not re-engage the active concept on confusion (D-137).")
+    # D-139: قتل انحراف المفهوم إلى الحادثة A — أسئلة المفهوم تُمسَك دائماً قبل D-135.
+    if "_EXERCISE_DUMP_MARKERS" not in skill:
+        _fail("detect_active_concept lacks _EXERCISE_DUMP_MARKERS drift guard (D-139).")
+    if "if self.is_definitional(question):" not in skill:
+        _fail("detect_active_concept lacks the new-definitional reset guard (D-139).")
+    if '"sequential_without_replacement"' not in skill or '"simultaneous_draw"' not in skill:
+        _fail("PROPERTY_REGISTRY missing the drawing-mode concepts (D-139).")
+    if "_esc_compute" not in client_src or "_esc_followup" not in client_src:
+        _fail(
+            "escalation gate missing the compute/followup guard (D-139 — concept Qs reach matrix)."
+        )
+    if "elif _confused:" not in us_skill:
+        _fail(
+            "understanding_state lacks the D-139 event-A default guard (no kc_event_meaning unless confused)."
+        )
     _pass(
-        "Semantic layer + Misconception Graph + D-132 readiness + D-136 concept-aware examples + "
-        "D-137 routing-untangle wired"
+        "Semantic layer + D-132 readiness + D-136 examples + D-137 untangle + D-139 drift-kill wired"
     )
 
 

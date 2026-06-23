@@ -38,7 +38,7 @@ jobs:
     name: "Static Checks — Step 7 Artefacts"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Check prometheus-client in requirements.txt"
         run: |
@@ -116,7 +116,7 @@ jobs:
     name: "Grafana Dashboard Validation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Check dashboard file exists"
         run: |
@@ -153,8 +153,8 @@ jobs:
     name: "Ruff Lint"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install ruff --quiet
@@ -168,8 +168,8 @@ jobs:
     name: "Step 7 Tests (50+ assertions)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -197,8 +197,8 @@ jobs:
     name: "Step 6 Regression (planning-agent)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install pytest pytest-asyncio aiosqlite prometheus-client fastapi httpx pydantic pydantic-settings --quiet
@@ -220,7 +220,7 @@ jobs:
     name: "YAML Validation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: pip install pyyaml --quiet
       - name: "Validate automations.yaml"
         run: |
@@ -244,9 +244,9 @@ jobs:
     needs: [static-checks, dashboard-gate, lint, step7-tests, step6-regression, yaml-gate]
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: "Post PR comment"
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const body = `## ✅ Step 7: Research Agent CI Gate — PASSED

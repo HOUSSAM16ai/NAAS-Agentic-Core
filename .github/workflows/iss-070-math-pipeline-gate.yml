@@ -36,7 +36,7 @@ jobs:
     name: "🔢 Math Pipeline Structure"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "تحقق من وجود math_pipeline.py"
         run: |
@@ -116,7 +116,7 @@ jobs:
     name: "💬 Conversation Graph Structure"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "تحقق من 3 nodes في conversation_graph"
         run: |
@@ -184,7 +184,7 @@ jobs:
     name: "🚫 Dead Model Ban"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "تحقق من عدم وجود gemini-2.0-flash-exp كـ fallback نشط"
         run: |
@@ -236,7 +236,7 @@ jobs:
     name: "📝 System Prompt Quality"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "تحقق من LaTeX rules في local_graph.py"
         run: |
@@ -287,10 +287,10 @@ jobs:
     name: "🧪 Math Pipeline Tests (36)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "إعداد Python 3.12"
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: "pip"
@@ -366,10 +366,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [math-pipeline-tests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "إعداد Python 3.12"
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -421,10 +421,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [math-pipeline-tests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "إعداد Python 3.12"
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 

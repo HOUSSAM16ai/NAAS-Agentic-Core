@@ -37,7 +37,7 @@ jobs:
     name: "Static Checks — skills_pipeline.py"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Verify skills_pipeline.py exists"
         run: |
@@ -116,7 +116,7 @@ jobs:
     name: "Prometheus Config Gate"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Verify skills-pipeline scrape job"
         run: |
@@ -140,7 +140,7 @@ jobs:
     name: "Grafana Dashboard Gate"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Verify dashboard file exists"
         run: |
@@ -178,8 +178,8 @@ jobs:
     name: "Ruff Lint"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install ruff --quiet
@@ -199,8 +199,8 @@ jobs:
     name: "Step 9 Tests (85+ assertions)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: "Install test dependencies"
@@ -226,8 +226,8 @@ jobs:
     name: "Regression — Steps 4–8"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: "Install dependencies"
@@ -261,9 +261,9 @@ jobs:
     needs: [static-checks, prometheus-gate, dashboard-gate, lint, step9-tests, regression-steps-4-8]
     if: always() && github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: "Post PR comment"
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const results = {

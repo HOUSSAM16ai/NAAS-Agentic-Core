@@ -42,7 +42,7 @@ jobs:
     name: "Static Checks"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "P1 — prometheus-client in requirements.txt"
         run: |
@@ -121,7 +121,7 @@ jobs:
     name: "Docker Compose Step 6 Validation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Validate docker-compose.step6.yml syntax"
         run: |
@@ -157,7 +157,7 @@ jobs:
     name: "Grafana Dashboard Validation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Validate dashboard JSON"
         run: |
@@ -194,8 +194,8 @@ jobs:
     name: "Ruff Lint"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: "Install ruff"
@@ -213,8 +213,8 @@ jobs:
     name: "Step 6 Tests (51 tests)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -244,7 +244,7 @@ jobs:
 
       - name: "Upload test results"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: step6-test-results
           path: step6_test_results.txt
@@ -254,8 +254,8 @@ jobs:
     name: "Step 5 Regression Guard"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -292,7 +292,7 @@ jobs:
       pull-requests: write
     steps:
       - name: "Post PR comment"
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const jobs = {

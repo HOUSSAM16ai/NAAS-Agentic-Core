@@ -61,7 +61,7 @@ jobs:
     name: "🔍 Static structure + imports"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Verify LatexStreamNormalizer module exists
         run: |
@@ -113,8 +113,8 @@ jobs:
     name: "🧪 LatexStreamNormalizer unit tests"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -184,8 +184,8 @@ jobs:
     name: "🧪 Math pipeline helpers (foreign-script, meta-text)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 

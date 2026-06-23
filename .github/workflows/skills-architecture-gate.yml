@@ -48,8 +48,8 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
       RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify each Skill has prom_metrics.py with ≥ 7 cogniforge_ metrics
         shell: bash
         run: |
@@ -135,7 +135,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify no cross-microservice imports
         shell: bash
         run: |
@@ -149,7 +149,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify every Skill has /health endpoint
         shell: bash
         run: |
@@ -191,7 +191,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify ≥ 16 Grafana dashboards exist
         shell: bash
         run: |
@@ -222,7 +222,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify ≥ 12 Prometheus scrape targets in prometheus.yml
         shell: bash
         run: |
@@ -275,8 +275,8 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: dummy-key-for-ci
       RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies

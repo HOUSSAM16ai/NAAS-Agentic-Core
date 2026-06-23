@@ -36,7 +36,7 @@ jobs:
     name: "🚫 Reasoning-Only Model Ban"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Scan for banned reasoning-only model
         run: |
@@ -106,7 +106,7 @@ jobs:
     name: "🔄 Content Fallback Guard (D-067)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: "Forbid reasoning→content leak in simple_client.py"
         shell: bash
@@ -180,10 +180,10 @@ jobs:
     name: "🧪 Content Extraction Tests"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: "pip"
@@ -265,7 +265,7 @@ jobs:
     name: "🔍 Microservices Full Scan"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Scan all microservices for banned reasoning model
         run: |

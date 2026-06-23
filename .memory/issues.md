@@ -4346,3 +4346,11 @@ terminate=True دائماً للاحتمالات · D-123 المستحيل يُ�
 قاعدة 9): test_d126 (format) · test_skills_registry (26/ACTIVE 24) · test_v38 (6) · test_v28 (3) ·
 test_generative_ui_streaming (1) — كلها مُحدَّثة للعقد الحالي؛ صفر تغيير في app/. تحقق: stub harness
 (12 اختبار محرَّر تمرّ) + ruff + gates + التغطية 69.12%. الحالة: RESOLVED محلياً؛ العلامة الخضراء على الـ CI بعد الدفع.
+
+## ISS-116 (CI clean-green / D-141, 2026-06-23) — صفر warning: gitlink شبح + node20 deprecation
+الفحوص خضراء 100% (D-140) لكن بقي تحذيران `##[warning]` بالأصفر على وظائف ناجحة: (1) gitlink شبح `repo`
+في الـ index بلا `.gitmodules` ⇒ `fatal: No url found for submodule path 'repo'` + `git exit 128` في كل
+وظيفة؛ (2) إهلاك Node-20 من 6 إجراءات. الحل (D-141): `git rm --cached repo` + ترقية node24
+(checkout v5، setup-python v6، setup-node v5، upload-artifact **v6** [v5 فخّ node20]، github-script v8،
+changed-files v47). تحقق: 38 workflow صالحة، صفر إجراء node20. الحالة: RESOLVED محلياً؛ خلوّ السجلّ من
+warning يُتحقَّق على الـ CI بعد الدفع.

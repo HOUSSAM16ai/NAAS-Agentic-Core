@@ -1924,6 +1924,79 @@ class OrchestratorClient:
         )
 
     @staticmethod
+    def _norm_for_dedup(text: str) -> str:
+        """D-142 (1B): تطبيع نصّ للمقارنة على التكرار."""
+        try:
+            from app.services.capabilities.arabic_normalize import normalize_ar
+
+            return normalize_ar(text or "")
+        except Exception:  # pragma: no cover - fail-safe
+            return (text or "").strip().lower()
+
+    @classmethod
+    def _recently_emitted(
+        cls,
+        candidate: str,
+        history_messages: list[dict[str, str]] | None,
+        *,
+        lookback: int = 6,
+        threshold: float = 0.8,
+    ) -> bool:
+        """D-142 (1B): هل بُثّ نصّ شبيه بـ ``candidate`` في رسائل المساعد الأخيرة؟
+
+        حارس تكرار عام: احتواء أو تداخل رموز ≥ ``threshold`` مع رسالة مساعد سابقة ⇒ True،
+        فيُصعّد المُنادي إلى الرُّتبة التالية بدل الإعادة الحرفية (يكسر كارثة التكرار ×3).
+        """
+        cand = cls._norm_for_dedup(candidate)
+        cand_tokens = set(cand.split())
+        if not cand_tokens:
+            return False
+        seen = 0
+        for msg in reversed(history_messages or []):
+            if not isinstance(msg, dict) or msg.get("role") != "assistant":
+                continue
+            seen += 1
+            if seen > lookback:
+                break
+            prev = cls._norm_for_dedup(str(msg.get("content", "")))
+            if not prev:
+                continue
+            if cand in prev or prev in cand:
+                return True
+            prev_tokens = set(prev.split())
+            if prev_tokens and len(cand_tokens & prev_tokens) / len(cand_tokens) >= threshold:
+                return True
+        return False
+
+    @classmethod
+    def _verify_answer_against_combo(cls, answer: str, combo) -> bool:
+        """D-142 (1A): تحقّق رمزي من صحة إجابة الطالب مقابل المحرك الرمزي (combo).
+
+        صحيحة حتمياً حين تُسمّي لوناً ممكناً (عدده ≥ k) أو تُقرّ باستحالة لون (عدده < k).
+        مستقلّ عن تشخيص المفهوم ⇒ يُكرّم الإجابة الصحيحة حتى لو أخطأ التشخيص (السلطة الرمزية).
+        """
+        try:
+            from app.services.capabilities.arabic_normalize import normalize_ar
+
+            norm = normalize_ar(answer or "")
+            if not norm:
+                return False
+            possible = [
+                normalize_ar(getattr(g, "label", ""))
+                for g in getattr(combo, "groups", [])
+                if getattr(g, "is_possible", True)
+            ]
+            possible_words = {p.split()[-1] for p in possible if p.split()}
+            mentions_possible = any(w and w in norm for w in possible_words)
+            raw = answer or ""
+            mentions_impossible = any(
+                w in raw for w in ("مستحيل", "لا يمكن", "فقط", "لونين", "غير كاف", "2 فقط")
+            )
+            return mentions_possible or mentions_impossible
+        except Exception:  # pragma: no cover - fail-safe
+            return False
+
+    @staticmethod
     def _concept_of_text(text: str) -> str:
         """D-127: المفهوم الحتمي لرسالة طالب (incl. confusion→full_solution)."""
         from app.services.skills.concept_diagnosis_skill import ConceptDiagnosisSkill
@@ -2674,12 +2747,15 @@ class OrchestratorClient:
             concept = _diag.concept if _diag.concept != "unknown" else "event_meaning"
 
             facts = self._symbolic_facts_brief(combo)
+            # D-142 (1A): السلطة الرمزية — تحقّق صحة الإجابة مقابل المحرك الرمزي (combo).
+            _verified = self._verify_answer_against_combo(question, combo)
             result = await get_socratic_evaluator_skill().evaluate(
                 SocraticEvaluatorInput(
                     student_answer=question,
                     concept=concept,
                     facts=facts,
                     history=history_messages,
+                    verified_correct=_verified,
                 )
             )
 
@@ -2714,6 +2790,14 @@ class OrchestratorClient:
                         )
                     )
 
+            # D-142 (1B): حارس التكرار — إن كان النصّ المختار مُكرّراً لرسالة مساعد سابقة،
+            # نُصعّد إلى الحلّ الرمزي المتدرّج (الإنقاذ) بدل الإعادة الحرفية (يكسر التكرار ×3).
+            if self._recently_emitted(text, history_messages):
+                _reveal = self._build_symbolic_reveal(question, history_messages, acknowledge=True)
+                if _reveal and not self._recently_emitted(_reveal, history_messages):
+                    text = _reveal
+                    record_progress("advanced")
+
             logger.info(
                 "socratic_evaluation",
                 extra={
@@ -2722,6 +2806,7 @@ class OrchestratorClient:
                     "source": result.source,
                     "next_focus": result.next_focus or "",
                     "misconception_mtype": _mtype,
+                    "verified_correct": _verified,
                 },
             )
 

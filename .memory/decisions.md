@@ -4911,3 +4911,34 @@ node20 متبقٍّ. الحالة: RESOLVED محلياً؛ خلوّ السجلّ
 `feat/...*`/`copilot/**` لا تطابق فرعنا — تُترك.) النتيجة: لا push-run زائد على الفروع الميزة ⇒ لا وظيفة
 ملخّص مُتخطّاة. قاعدة دائمة: push يُقيَّد على `[main]` (مع pull_request للـ PRs) — `["**"]`/بلا branches
 يُنشئ push-runs زائدة بوظائف skipped.
+
+---
+
+## D-142 — المعلّم السقراطي: السلطة الرمزية + حارس التكرار + حارس الانحراف (المرحلة 1) (2026-06-24, ISS-117)
+
+**السياق:** transcript حيّ على تمرين الاحتمالات 2024 — الطالب يقدّم استنتاجين صحيحين («الخضراء و
+الحمراء فقط»، «لونين 2 فقط» = البيضاء مستحيلة)، فيردّ النظام «أحسنت» ثم يُعيد نفس التلميح حرفياً ×3 بلا
+تقدّم، وينجرف على «ماذا نقصد لم أفهم» إلى «لم أفهم أي مفهوم؟».
+
+**الأسباب الجذرية:** (1) LLM فلاكي يحكم سؤالاً رمزياً مغلقاً فيُرجِع understood=false لإجابة صحيحة ⇒
+فرع التلميح المُبرمَج. (2) صفر dedup ⇒ تكرار حرفي ×3. (3) acknowledge≠progress. (4) `mastered` لا يُطلَق
+(evidence_markers فارغة). (5) حالة مُعاد بناؤها من التاريخ بلا حالة دائمة (انجراف + ميزانية عامة).
+
+**القرار (المالك: Both, staged + المسار: monolith live path + جدول tutor_state دائم):**
+- **المرحلة 1 (مُنفَّذة):** 1A السلطة الرمزية — `deterministically_correct` (توحيد الهمزات `_sig_norm`)
+  حاكمة؛ الـ LLM يرفع understood فقط لا يخفض؛ `verified_correct` من
+  `OrchestratorClient._verify_answer_against_combo`. 1B حارس التكرار — `_recently_emitted` يُصعّد إلى
+  `_build_symbolic_reveal` بدل الإعادة. 1D حارس الانحراف — `_is_bare_confusion_definitional` يُبقي
+  المفهوم النشط على الحيرة المجرّدة، يُعيد الضبط على التسمية الجديدة فقط.
+- **المرحلة 2 (مُصمَّمة staged):** جدول `tutor_state` دائم ذو معنى تعليمي (kc_progress: state/evidence/
+  difficulty/representations + ability_snapshot من BKT D-126 + last_step_emitted) + `SemanticTutorSkill`؛
+  قرار السقالة = f(دليل الفهم، القدرة، صعوبة الخطوة) لا «مصفوفة levels»؛ خلف `SEMANTIC_TUTOR_ENABLED`؛
+  بوّابة قياس (§2D): التوسّع مرهون بهبوط repetition_rate→0 + advance_after_correct≈100% + over-jump→0 +
+  فجوة الوهم (D-126) ⤵.
+
+**القواعد الدائمة:** الصحّة/الأرقام من المحرك الرمزي لا الـ LLM؛ لا تكرار حرفي (تصعيد)؛ الحيرة المجرّدة
+تُبقي المفهوم؛ fail-open مطلق.
+
+**التحقق:** sandbox — stub-harness + `tests/services/test_d142_semantic_tutor_phase1.py` + ruff +
+runtime_truth خضراء. **Codespaces (إلزامي):** إعادة transcript الكارثة عبر WS بالدخولين الحقيقيين مقابل
+OpenRouter+Supabase. الحالة: المرحلة 1 RESOLVED محلياً؛ يُتحقَّق حيّاً على Codespaces/CI.

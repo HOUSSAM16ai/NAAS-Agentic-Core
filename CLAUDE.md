@@ -10542,15 +10542,30 @@ pull_request فقط، كلها success.
 3. **الحيرة المجرّدة تُبقي المفهوم النشط؛** التسمية الجديدة وحدها تُعيد الضبط.
 4. **fail-open مطلق:** كل حارس داخل `try/except` ولا يُجهض دور الطالب.
 
-### المرحلة 2 — المعلّم الدلالي الحالة (مُصمَّمة، staged — البناء بعد إثبات لِفت التعلّم)
-وفق قرار المالك «Both, staged» ونقده (لا «مصفوفة levels» بل **مصفوفة + دليل فهم + صعوبة الخطوة**):
-جدول `tutor_state` دائم (auto-create على الإقلاع كـ `student_bkt_analytics`) يحمل سجلًّا **ذا معنى
-تعليمي** (`kc_progress` لكل مكوّن معرفي: state/evidence/difficulty/representations + `ability_snapshot`
-من BKT D-126 + `last_step_emitted`)؛ قرار السقالة كل دور = `f(دليل الفهم، قدرة الطالب، صعوبة الخطوة
-التالية)` — تقدّم حتمي عند إشارة فهم موثوقة، وإدراج خطوة وسطى أصغر بدل القفز فوق قدرة الطالب؛
-`SemanticTutorSkill` (Listener LLM ⟵ حقيقة رمزية ⟵ Policy واعية بالحالة ⟵ Generator محروس) خلف
-`SEMANTIC_TUTOR_ENABLED`. **بوّابة القياس (§2D):** التوسّع مرهون بهبوط `repetition_rate→0`،
-`advance_after_correct≈100%`، `over-jump_rate≈0`، و**فجوة الوهم** (D-126) ⤵ — لا توسيع قبل إثبات اللِّفت.
+### المرحلة 2 — مدير الحوار الموحَّد + الحالة الدائمة (مُنفَّذة، FLAGGED خلف `SEMANTIC_TUTOR_ENABLED`)
+وفق قرار المالك «ثورة معمارية + جدول قاعدة بيانات + المونوليث الحيّ أولاً» ونقده (لا «مصفوفة levels»
+بل **مصفوفة + دليل فهم + صعوبة الخطوة**):
+- **جدول `tutor_state` دائم** (`app/core/domain/tutor_state.py` + `db_schema_config.py` —
+  auto-create على الإقلاع كـ `student_bkt_analytics`؛ DDL `scripts/migrations/0002_tutor_state.sql`):
+  صف حيّ واحد لكل محادثة (upsert) يحمل سجلًّا **ذا معنى تعليمي**: `active_concept`، `kc_progress`
+  (state/evidence/difficulty/representations)، `ability_snapshot` من BKT (D-126)،
+  `socratic_count_by_concept` (ميزانية لكل مفهوم لا عامّة)، `last_step_emitted` (مرساة منع تكرار
+  تنجو من نافذة الـ50 رسالة — جذر ISS-117 #5). `TutorStateService` (load + record_turn، upsert،
+  جلسة معزولة، fail-open مطلق — نمط `BKTAnalyticsService`).
+- **`DialogueManagerSkill`** (`dialogue_manager_skill.py`، Skill #N، FLAGGED): سلطة قرار الدور
+  الموحَّدة، حتمية 100% (صفر LLM). قرار كل دور = `f(دليل الفهم verified/understood، قدرة BKT،
+  صعوبة الخطوة التالية)` — لا «هل وصلنا level 3»: تقدّم حتمي عند دليل موثوق؛ حلّ رمزي عند استنفاد
+  الميزانية؛ تصعيد عند تكرار `last_step_emitted`؛ **خطوة وسطى أصغر بدل القفز** فوق قدرة الطالب.
+  doctrine `DIALOGUE_MANAGER_DOCTRINE` v1.0.0 + manifest + registry (FLAGGED) + بوّابة
+  `check_dialogue_manager_wired` (no-ZOMBIE) + مقياس `cogniforge_skill_dialogue_manager_total`.
+- **التوصيل (المونوليث الحيّ):** `customer_chat` يحمّل `tutor_state` قبل الدور (context) ويُحدِّثه
+  بعده (record_turn — كلاهما خلف العلم)؛ `orchestrator_client._stream_socratic_evaluation` يستشير
+  `DialogueManager` ويستخدم مرساة `last_step_emitted` الدائمة في حارس التكرار. الـ skills القائمة
+  (concept diagnosis / semantic property / socratic evaluator / probability) صارت أدواته.
+- **السلامة:** `SEMANTIC_TUTOR_ENABLED` **افتراضي OFF** ⇒ صفر I/O/قرار جديد على المسار الحيّ حتى
+  التحقق الحيّ في Codespaces؛ كل مسار fail-open للسلوك القائم؛ `=1` تفعيل، `=0` rollback فوري.
+- **بوّابة القياس (§2D):** التفعيل/التوسّع مرهون بهبوط `repetition_rate→0`، `advance_after_correct≈100%`،
+  `over-jump_rate≈0`، و**فجوة الوهم** (D-126) ⤵ — لا توسيع للحالة قبل إثبات اللِّفت حيّاً.
 
 ### التحقق
 - **Sandbox (الآن — pydantic/Postgres محجوبان §6.55):** stub-harness على المنطق الصرف +
@@ -10565,4 +10580,5 @@ pull_request فقط، كلها success.
 | Decision | الموضوع |
 |----------|---------|
 | D-141 | CI نظيفة تماماً (صفر warning) |
-| **D-142 (المرحلة 1)** | **المعلّم السقراطي: السلطة الرمزية (1A) + حارس التكرار (1B) + حارس الانحراف (1D) — يحلّ تكرار التلميح ×3 + تجاهل الإجابة الصحيحة + الانجراف؛ المرحلة 2 (المعلّم الدلالي الحالة + جدول tutor_state) مُصمَّمة staged خلف بوّابة القياس** |
+| **D-142 (المرحلة 1)** | **المعلّم السقراطي: السلطة الرمزية (1A) + حارس التكرار (1B) + حارس الانحراف (1D) — يحلّ تكرار التلميح ×3 + تجاهل الإجابة الصحيحة + الانجراف (مُفعَّل)** |
+| **D-142 (المرحلة 2)** | **مدير الحوار الموحَّد (`DialogueManagerSkill`) + جدول `tutor_state` دائم + `TutorStateService` + توصيل المونوليث الحيّ — قرار الدور = evidence×ability×difficulty، FLAGGED خلف `SEMANTIC_TUTOR_ENABLED` (افتراضي OFF، fail-open، تفعيل بعد التحقق الحيّ في Codespaces)** |

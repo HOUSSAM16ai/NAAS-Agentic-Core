@@ -4942,3 +4942,24 @@ node20 متبقٍّ. الحالة: RESOLVED محلياً؛ خلوّ السجلّ
 **التحقق:** sandbox — stub-harness + `tests/services/test_d142_semantic_tutor_phase1.py` + ruff +
 runtime_truth خضراء. **Codespaces (إلزامي):** إعادة transcript الكارثة عبر WS بالدخولين الحقيقيين مقابل
 OpenRouter+Supabase. الحالة: المرحلة 1 RESOLVED محلياً؛ يُتحقَّق حيّاً على Codespaces/CI.
+
+### D-142 المرحلة 2 (2026-06-24) — مدير الحوار الموحَّد + الحالة الدائمة (ثورة معمارية)
+
+قرار المالك: ثورة معمارية + جدول قاعدة بيانات + المونوليث الحيّ أولاً. مُنفَّذ:
+- **جدول `tutor_state` دائم** (ORM `app/core/domain/tutor_state.py` + `db_schema_config` auto-create +
+  DDL `scripts/migrations/0002_tutor_state.sql`): صف حيّ لكل محادثة (upsert) — active_concept،
+  kc_progress، ability_snapshot (BKT D-126)، socratic_count_by_concept (ميزانية لكل مفهوم)،
+  last_step_emitted (مرساة منع تكرار تنجو من النافذة — جذر ISS-117 #5). `TutorStateService`
+  (load + record_turn، معزول، fail-open).
+- **`DialogueManagerSkill`** (FLAGGED): سلطة قرار الدور الموحَّدة الحتمية (صفر LLM). قرار =
+  f(دليل الفهم، قدرة BKT، صعوبة الخطوة التالية) — تقدّم حتمي / حلّ رمزي عند الميزانية / تصعيد عند
+  التكرار / خطوة وسطى بدل القفز. doctrine v1.0.0 + manifest + registry + بوّابة
+  check_dialogue_manager_wired + مقياس Prometheus. الـ skills القائمة أدواته.
+- **التوصيل:** customer_chat (load قبل/record بعد، خلف العلم) + orchestrator_client._stream_socratic_evaluation
+  (يستشير DialogueManager + يستخدم last_step_emitted الدائمة).
+- **السلامة:** `SEMANTIC_TUTOR_ENABLED` افتراضي OFF ⇒ صفر تغيير على المسار الحيّ حتى التحقق في
+  Codespaces؛ fail-open مطلق؛ =0 rollback فوري.
+
+التحقق: standalone harness (DialogueManager 6 حالات + budget) + tests/services/test_d142_phase2_dialogue_manager.py
++ ruff + runtime_truth (lock مُحدَّث) + validate_structure + ci_guardrails + check_dialogue_manager_wired
+(CI). الحالة: مُنفَّذ، FLAGGED؛ التفعيل + E2E حيّ في Codespaces (بوّابة §2D: فجوة الوهم ⤵).

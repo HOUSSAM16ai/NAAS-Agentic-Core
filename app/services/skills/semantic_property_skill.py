@@ -498,6 +498,23 @@ _DEFINITIONAL_MARKERS: tuple[str, ...] = (
 #: enum مُقيَّد لمخرج الـ LLM Listener (الطبقة 1 الآمنة).
 _VALID_PROPERTIES: frozenset[str] = frozenset(PROPERTY_REGISTRY)
 
+#: D-142 (1D): علامات الحيرة — حيرة بلا تسمية مفهوم جديد تُبقي المفهوم النشط (لا تنجرف).
+_CONFUSION_MARKERS: tuple[str, ...] = (
+    "لم أفهم",
+    "لم افهم",
+    "مفهمتش",
+    "ما فهمت",
+    "لا أفهم",
+    "لا افهم",
+    "ما فهمتش",
+    "صعب",
+    "مش فاهم",
+)
+#: D-142 (1D): كلمات وظيفية تُهمَل عند فحص «هل سمّى السؤال مفهوماً جديداً؟».
+_STOPWORDS_FOR_CONCEPT_NAMING: frozenset[str] = frozenset(
+    {"بكلمة", "كلمة", "في", "عن", "ال", "هذا", "هذه", "ذلك", "هنا", "ب", "بـ"}
+)
+
 #: D-137: رؤوس أمثلة/تعريفات المساعد — تُتجاهَل عند كشف المفهوم النشط (markers عابرة تُضلّل).
 _CONCEPT_ARTIFACT_MARKERS: tuple[str, ...] = ("## مثال", "مثال ملموس", "مثال آخر", "## ماذا نقصد")
 
@@ -560,9 +577,10 @@ class SemanticPropertySkill:
         if out is not None:
             return out
         # D-139: سؤال تعريفي عن مفهوم **جديد** (غير مُسجَّل) ⇒ لا تنجرف لمفهوم سابق/تمرين.
-        # أي «ما هو X» يُعيد ضبط المفهوم النشط؛ يُسلَّم لـ LLM Listener-Definer (D-132). يحلّ
-        # «ما هو السحب على التوالي» الذي كان ينجرف لـ same_color من نص التمرين.
-        if self.is_definitional(question):
+        # أي «ما هو X» يُعيد ضبط المفهوم النشط؛ يُسلَّم لـ LLM Listener-Definer (D-132).
+        # D-142 (1D): لكن «ماذا نقصد لم أفهم» (حيرة بلا تسمية مفهوم) **لا** تُعيد الضبط —
+        # تُبقي المفهوم النشط (من تاريخ الطالب)، وإلا انجرف النظام إلى «لم أفهم أي مفهوم؟».
+        if self.is_definitional(question) and not self._is_bare_confusion_definitional(question):
             return None
         history = history or []
         # (1) D-139: المفهوم النشط = آخر مفهوم سأل عنه **الطالب** صراحةً — كامل التاريخ (لا [-6:]).
@@ -592,6 +610,24 @@ class SemanticPropertySkill:
         """هل السؤال نية تعريفية («ماذا نقصد/ما معنى»)؟"""
         norm = _normalize(question)
         return any(m in norm for m in _DEFINITIONAL_MARKERS)
+
+    def _is_bare_confusion_definitional(self, question: str) -> bool:
+        """D-142 (1D): سؤال تعريفي/حيرة **بلا تسمية مفهوم جديد** («ماذا نقصد لم أفهم»)؟
+
+        نزع علامات التعريف والحيرة؛ إن لم يبقَ أي رمز ذي معنى ⇒ حيرة مجرّدة ⇒ نُبقي المفهوم
+        النشط (لا نُعيد ضبطه). يميّز «ماذا نقصد لم أفهم» (حيرة) عن «ما هو الاحتمال الشرطي»
+        (تسمية مفهوم جديد → إعادة ضبط صحيحة).
+        """
+        norm = _normalize(question)
+        if not norm:
+            return True
+        residual = norm
+        for m in (*_DEFINITIONAL_MARKERS, *_CONFUSION_MARKERS):
+            residual = residual.replace(_normalize(m), " ")
+        tokens = [
+            t for t in residual.split() if len(t) > 1 and t not in _STOPWORDS_FOR_CONCEPT_NAMING
+        ]
+        return len(tokens) == 0
 
     async def interpret_or_classify(self, question: str) -> SemanticPropertyOutput | None:
         """هجين: حتمي أولاً؛ عند الغموض + نية تعريفية ⇒ LLM Listener محروس (enum مُقيَّد)."""

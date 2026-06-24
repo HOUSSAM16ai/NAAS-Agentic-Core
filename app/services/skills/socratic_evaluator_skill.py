@@ -44,10 +44,18 @@ from app.core.schemas import RobustBaseModel
 from app.services.skills.doctrine import SOCRATIC_EVALUATOR_DOCTRINE_VERSION
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+#: D-142 (1A): توحيد الهمزات/الألف المقصورة/التاء المربوطة لمطابقة الإشارات بمتانة
+#: («الأحمر»/«الأخضر» يجب أن تطابق «احمر»/«اخضر»).
+_AR_UNIFY = str.maketrans("أإآٱىة", "اااايه")
 
 
 def _normalize(text: str) -> str:
     return (text or "").translate(_AR_DIGITS).strip().lower()
+
+
+def _sig_norm(text: str) -> str:
+    """تطبيع متين لمطابقة إشارات الفهم: أرقام + همزات + ألف مقصورة + تاء مربوطة."""
+    return _normalize(text).translate(_AR_UNIFY)
 
 
 # ── الهدف التربوي المستتر لكل مفهوم (الطبقة 1 تقارن رد الطالب به) ──────────────────
@@ -89,8 +97,32 @@ def next_focus_for(concept: str) -> str | None:
 
 #: علامات فهم «الحالات الملائمة» حتمياً (للـ fallback عند تعذّر الـ LLM).
 _UNDERSTANDING_SIGNALS: tuple[str, ...] = ("نفس اللون", "نفس لون", "ذات اللون", "اللون نفسه")
-_COLOR_SIGNALS: tuple[str, ...] = ("حمراء", "خضراء", "احمر", "اخضر")
-_IMPOSSIBLE_SIGNALS: tuple[str, ...] = ("مستحيل", "لا يمكن", "فقط", "2 فقط", "غير كاف")
+_COLOR_SIGNALS: tuple[str, ...] = ("حمراء", "خضراء", "احمر", "اخضر", "الاحمر", "الاخضر")
+_IMPOSSIBLE_SIGNALS: tuple[str, ...] = ("مستحيل", "لا يمكن", "فقط", "2 فقط", "غير كاف", "لونين")
+
+#: المفاهيم المغلقة التي يملك المحرك الرمزي حقيقتها (يمكن التحقق من صحة الإجابة حتمياً).
+_SYMBOLIC_VERIFIABLE_CONCEPTS: frozenset[str] = frozenset(
+    {"numerator", "event_meaning", "color_white"}
+)
+
+
+def deterministically_correct(student_answer: str, concept: str) -> bool:
+    """D-142 (1A): هل إجابة الطالب صحيحة **حتمياً** (مُتحقَّقة رمزياً)؟
+
+    تُرجِع True فقط حين تحمل الإجابة دلالة فهم **قابلة للتحقق** (سمّى الحمراء/الخضراء أو
+    أقرّ باستحالة البيضاء «فقط»/«مستحيل»/«لونين»). هذا هو **السلطة الرمزية**: حين تكون True
+    يُمنع على الـ LLM الفلاكي أن يخفض `understood` إلى False (يكسر كارثة التكرار). للمفاهيم
+    غير القابلة للتحقق تُرجِع False ⇒ يُترك القرار للـ LLM (لا تأكيد كاذب).
+    """
+    if concept not in _SYMBOLIC_VERIFIABLE_CONCEPTS:
+        return False
+    t = _sig_norm(student_answer)
+    if not t:
+        return False
+    has_same_color = any(_sig_norm(s) in t for s in _UNDERSTANDING_SIGNALS)
+    has_color = any(_sig_norm(s) in t for s in _COLOR_SIGNALS)
+    has_impossible = any(_sig_norm(s) in t for s in _IMPOSSIBLE_SIGNALS)
+    return has_same_color or has_color or has_impossible
 
 
 def _heuristic_understood(student_answer: str, concept: str) -> bool:
@@ -102,11 +134,8 @@ def _heuristic_understood(student_answer: str, concept: str) -> bool:
     t = _normalize(student_answer)
     if not t:
         return False
-    if concept in ("numerator", "event_meaning", "color_white"):
-        has_same_color = any(s in t for s in _UNDERSTANDING_SIGNALS)
-        has_color = any(s in t for s in _COLOR_SIGNALS)
-        has_impossible = any(s in t for s in _IMPOSSIBLE_SIGNALS)
-        return (has_same_color and has_color) or has_impossible
+    if concept in _SYMBOLIC_VERIFIABLE_CONCEPTS:
+        return deterministically_correct(student_answer, concept)
     # لمفاهيم أخرى: أي رد غير فارغ يُعدّ محاولة فهم (لا نعاقب) — التسليم المتدرّج يُكمل.
     return True
 
@@ -119,6 +148,9 @@ class SocraticEvaluatorInput(RobustBaseModel):
     concept: str = Field(..., min_length=1, max_length=64)
     facts: str = Field(default="", max_length=2000)
     history: list[dict[str, str]] | None = None
+    #: D-142 (1A): إشارة السلطة الرمزية — يحسبها المُنسّق من المحرك الرمزي (combo). حين True
+    #: يُمنع على الـ LLM إخفاض `understood` إلى False (إجابة مُتحقَّقة صحيحة ⇒ تقدّم حتمي).
+    verified_correct: bool = False
 
 
 class SocraticEvaluatorOutput(RobustBaseModel):
@@ -182,9 +214,16 @@ class SocraticEvaluatorSkill:
         """يُقيّم رد الطالب الحرّ — LLM محروس مع fallback حتمي. لا يرفع استثناءات."""
         t0 = time.perf_counter()
         nxt = next_focus_for(payload.concept)
+        # D-142 (1A): السلطة الرمزية — إجابة مُتحقَّقة صحيحة (من combo عبر `verified_correct`
+        # أو من الإشارات الحتمية). حين True يُمنع على الـ LLM إخفاضها (يكسر كارثة التكرار).
+        det_correct = payload.verified_correct or deterministically_correct(
+            payload.student_answer, payload.concept
+        )
         llm_result = await self._evaluate_with_llm(payload)
         if llm_result is not None:
             understood, encouragement = llm_result
+            if det_correct:
+                understood = True  # الـ LLM قد يرفع فقط، لا يخفض إجابةً مُتحقَّقة صحيحة
             out = SocraticEvaluatorOutput(
                 understood=understood,
                 encouragement=encouragement or _DEFAULT_ENCOURAGEMENT,
@@ -194,7 +233,7 @@ class SocraticEvaluatorSkill:
             _record(out.understood, out.source, time.perf_counter() - t0)
             return out
         # fallback حتمي (fail-open)
-        understood = _heuristic_understood(payload.student_answer, payload.concept)
+        understood = det_correct or _heuristic_understood(payload.student_answer, payload.concept)
         out = SocraticEvaluatorOutput(
             understood=understood,
             encouragement=_DEFAULT_ENCOURAGEMENT if understood else "فكرة جيدة — لنقترب أكثر.",
@@ -296,6 +335,7 @@ __all__ = [
     "SocraticEvaluatorInput",
     "SocraticEvaluatorOutput",
     "SocraticEvaluatorSkill",
+    "deterministically_correct",
     "get_socratic_evaluator_skill",
     "hidden_goal_for",
     "next_focus_for",

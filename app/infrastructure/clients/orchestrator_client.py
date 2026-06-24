@@ -1996,6 +1996,70 @@ class OrchestratorClient:
         except Exception:  # pragma: no cover - fail-safe
             return False
 
+    @classmethod
+    def _near_dup(cls, a: str, b: str, *, threshold: float = 0.8) -> bool:
+        """D-142 (1B/Phase2): تداخل رموز/احتواء بين نصّين (حارس التكرار ضد مرساة الحالة)."""
+        na, nb = cls._norm_for_dedup(a), cls._norm_for_dedup(b)
+        if not na or not nb:
+            return False
+        if na in nb or nb in na:
+            return True
+        ta = set(na.split())
+        if not ta:
+            return False
+        return len(ta & set(nb.split())) / len(ta) >= threshold
+
+    @staticmethod
+    def _semantic_tutor_enabled() -> bool:
+        """D-142 Phase 2: علم `SEMANTIC_TUTOR_ENABLED` (env أولاً ثم الإعدادات، افتراضي False)."""
+        import os
+
+        raw = os.getenv("SEMANTIC_TUTOR_ENABLED")
+        if raw is not None:
+            return raw.strip().lower() in {"1", "true", "yes", "on"}
+        try:
+            from app.core.config import get_settings
+
+            value = getattr(get_settings(), "SEMANTIC_TUTOR_ENABLED", None)
+            return value if isinstance(value, bool) else False
+        except Exception:  # pragma: no cover - fail-safe
+            return False
+
+    @classmethod
+    def _dialogue_decision(
+        cls,
+        *,
+        question: str,
+        concept: str,
+        verified_correct: bool,
+        understood: bool,
+        tutor_state: dict,
+        candidate_text: str,
+    ):
+        """D-142 Phase 2: يستشير DialogueManagerSkill بإشارات الدور — fail-open (None عند الخطأ)."""
+        try:
+            from app.services.skills.dialogue_manager_skill import (
+                DialogueInput,
+                get_dialogue_manager_skill,
+            )
+
+            budget_map = tutor_state.get("socratic_count_by_concept") or {}
+            socratic_count = int(budget_map.get(concept, 0)) if isinstance(budget_map, dict) else 0
+            return get_dialogue_manager_skill().decide(
+                DialogueInput(
+                    question=question,
+                    concept=concept,
+                    verified_correct=bool(verified_correct),
+                    understood=bool(understood),
+                    ability=float(tutor_state.get("ability_snapshot") or 0.0),
+                    socratic_count=socratic_count,
+                    last_step_emitted=str(tutor_state.get("last_step_emitted") or ""),
+                    candidate_text=candidate_text or "",
+                )
+            )
+        except Exception:  # pragma: no cover - fail-safe
+            return None
+
     @staticmethod
     def _concept_of_text(text: str) -> str:
         """D-127: المفهوم الحتمي لرسالة طالب (incl. confusion→full_solution)."""
@@ -2703,12 +2767,19 @@ class OrchestratorClient:
         )
 
     async def _stream_socratic_evaluation(
-        self, question: str, history_messages: list[dict[str, str]] | None
+        self,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+        tutor_state: dict | None = None,
     ):
         """D-130: يُقيّم إجابة الطالب الحرّة ويبثّ المكافأة + التسليم الرمزي المتدرّج.
 
         understood=true ⇒ تشجيع (LLM محروس) + خطوة رمزية حتمية + سؤال المتابعة.
         understood=false ⇒ اعتراف لطيف + تلميح. **لا إعادة طباعة للتمرين مهما حدث.**
+
+        D-142 Phase 2: ``tutor_state`` (الحالة الدائمة) يُغذّي حارس التكرار بمرساة
+        ``last_step_emitted`` (تنجو من نافذة التاريخ)، ويُستشار ``DialogueManagerSkill``
+        (خلف العلم ``SEMANTIC_TUTOR_ENABLED``، fail-open) لقرار التقدّم/التصعيد/عدم القفز.
         """
         try:
             from app.services.skills.concept_diagnosis_skill import (
@@ -2790,11 +2861,46 @@ class OrchestratorClient:
                         )
                     )
 
-            # D-142 (1B): حارس التكرار — إن كان النصّ المختار مُكرّراً لرسالة مساعد سابقة،
-            # نُصعّد إلى الحلّ الرمزي المتدرّج (الإنقاذ) بدل الإعادة الحرفية (يكسر التكرار ×3).
-            if self._recently_emitted(text, history_messages):
+            # D-142 Phase 2: سلطة قرار الدور (DialogueManager) خلف العلم، fail-open. تُعيد
+            # تشكيل القرار بإشارات حيّة (دليل + قدرة BKT + ميزانية المفهوم الدائمة + منع تكرار).
+            _dm_reason = ""
+            _ts = tutor_state if isinstance(tutor_state, dict) else {}
+            _last_step = str(_ts.get("last_step_emitted") or "")
+            if self._semantic_tutor_enabled():
+                _dm = self._dialogue_decision(
+                    question=question,
+                    concept=concept,
+                    verified_correct=_verified,
+                    understood=result.understood,
+                    tutor_state=_ts,
+                    candidate_text=text,
+                )
+                if _dm is not None:
+                    _dm_reason = _dm.reason
+                    _action = _dm.action
+                    if _action == "acknowledge_advance":
+                        text = self._build_symbolic_step(combo, _dm.focus, acknowledge=True)
+                    elif _action == "intermediate_scaffold":
+                        text = self._build_symbolic_step(combo, "numerator", acknowledge=True)
+                    elif _action == "symbolic_reveal":
+                        _rv = self._build_symbolic_reveal(
+                            question, history_messages, acknowledge=True
+                        )
+                        if _rv:
+                            text = _rv
+                    record_progress("advanced")
+
+            # D-142 (1B): حارس التكرار — مُكرّر لرسالة مساعد سابقة أو لمرساة الحالة الدائمة
+            # (last_step_emitted تنجو من نافذة الـ50 رسالة) ⇒ تصعيد للحلّ الرمزي، لا إعادة حرفية.
+            if self._recently_emitted(text, history_messages) or (
+                _last_step and self._near_dup(text, _last_step)
+            ):
                 _reveal = self._build_symbolic_reveal(question, history_messages, acknowledge=True)
-                if _reveal and not self._recently_emitted(_reveal, history_messages):
+                if (
+                    _reveal
+                    and not self._recently_emitted(_reveal, history_messages)
+                    and not (_last_step and self._near_dup(_reveal, _last_step))
+                ):
                     text = _reveal
                     record_progress("advanced")
 
@@ -2807,6 +2913,7 @@ class OrchestratorClient:
                     "next_focus": result.next_focus or "",
                     "misconception_mtype": _mtype,
                     "verified_correct": _verified,
+                    "dialogue_manager_reason": _dm_reason,
                 },
             )
 
@@ -3460,8 +3567,13 @@ class OrchestratorClient:
         # ─────────────────────────────────────────────────────────────────────
         if self._in_socratic_dialogue(question, history_messages):
             se_streamed_chars = 0
+            _tutor_state = (context or {}).get("tutor_state") if isinstance(context, dict) else None
             try:
-                async for chunk in self._stream_socratic_evaluation(question, history_messages):
+                async for chunk in self._stream_socratic_evaluation(
+                    question,
+                    history_messages,
+                    tutor_state=_tutor_state if isinstance(_tutor_state, dict) else None,
+                ):
                     if not chunk:
                         continue
                     se_streamed_chars += len(chunk)

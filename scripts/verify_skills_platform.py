@@ -3,7 +3,7 @@
 verify_skills_platform.py — تحقّق حيّ في-العملية لمنصّة الـ Skills (D-100).
 
 يفحص:
-  1. الـ registry يبني 14 Skill (12 ACTIVE + 2 FLAGGED) بلا ZOMBIE.
+  1. الـ registry يبني 27 Skill (24 ACTIVE + 3 FLAGGED) بلا ZOMBIE.
   2. `compose_text_refinement` يُشغِّل خط التنقية الحقيقي ويُرجِع نصاً منقَّحاً.
   3. الـ Skills المُفعَّلة من قدرات DORMANT تحترم العلم:
        • مُعطَّلة افتراضياً → تُرجِع None.
@@ -47,12 +47,12 @@ async def main() -> None:
     # 1) Registry
     reg = get_skill_registry()
     names = reg.names()
-    if len(names) != 24:
-        _fail(f"expected 24 skills, got {len(names)}: {names}")
-    if len(reg.by_status("ACTIVE")) != 22:
-        _fail(f"expected 22 ACTIVE, got {len(reg.by_status('ACTIVE'))}")
-    if len(reg.by_status("FLAGGED")) != 2:
-        _fail(f"expected 2 FLAGGED, got {len(reg.by_status('FLAGGED'))}")
+    if len(names) != 27:
+        _fail(f"expected 27 skills, got {len(names)}: {names}")
+    if len(reg.by_status("ACTIVE")) != 24:
+        _fail(f"expected 24 ACTIVE, got {len(reg.by_status('ACTIVE'))}")
+    if len(reg.by_status("FLAGGED")) != 3:
+        _fail(f"expected 3 FLAGGED, got {len(reg.by_status('FLAGGED'))}")
     for d in reg.list():
         if not d.consumed_by:
             _fail(f"ZOMBIE skill (empty consumed_by): {d.name}")

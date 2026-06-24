@@ -58,6 +58,7 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "knowledge_nodes",
         "knowledge_edges",
         "student_bkt_analytics",
+        "tutor_state",
         "bac_exercises",
         "bac_exercise_questions",
     }
@@ -228,6 +229,48 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"support_level" INTEGER,'
             '"delay_hours" DOUBLE PRECISION,'
             '"novel_item" BOOLEAN NOT NULL DEFAULT FALSE'
+            ")"
+        ),
+    },
+    # D-142 (Phase 2): حالة جلسة التدريس الدائمة — صف حيّ واحد لكل محادثة (upsert).
+    # يُنشأ تلقائياً على الإقلاع (auto-create §6.77) على أي قاعدة نظيفة (SQLite/Supabase).
+    "tutor_state": {
+        "columns": [
+            "id",
+            "conversation_id",
+            "user_id",
+            "active_concept",
+            "active_misconception",
+            "kc_progress",
+            "ability_snapshot",
+            "socratic_count_by_concept",
+            "last_step_emitted",
+            "turn_count",
+            "updated_at",
+            "created_at",
+        ],
+        "indexes": {
+            "conversation_id": 'CREATE UNIQUE INDEX IF NOT EXISTS "ix_tutor_state_conversation_id" ON "tutor_state"("conversation_id")',
+            "user_id": 'CREATE INDEX IF NOT EXISTS "ix_tutor_state_user_id" ON "tutor_state"("user_id")',
+        },
+        "index_names": {
+            "conversation_id": "ix_tutor_state_conversation_id",
+            "user_id": "ix_tutor_state_user_id",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "tutor_state"('
+            '"id" SERIAL PRIMARY KEY,'
+            '"conversation_id" INTEGER NOT NULL UNIQUE,'
+            '"user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,'
+            "\"active_concept\" VARCHAR(120) NOT NULL DEFAULT '',"
+            "\"active_misconception\" VARCHAR(120) NOT NULL DEFAULT '',"
+            "\"kc_progress\" TEXT NOT NULL DEFAULT '{}',"
+            '"ability_snapshot" DOUBLE PRECISION NOT NULL DEFAULT 0.0,'
+            "\"socratic_count_by_concept\" TEXT NOT NULL DEFAULT '{}',"
+            "\"last_step_emitted\" TEXT NOT NULL DEFAULT '',"
+            '"turn_count" INTEGER NOT NULL DEFAULT 0,'
+            '"updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
             ")"
         ),
     },

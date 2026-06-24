@@ -548,6 +548,17 @@ def _build_registry() -> SkillRegistry:
         ),
         # ── FLAGGED (مُعطَّلة افتراضياً — تفعيل اختياري عبر علم) ──
         SkillDescriptor(
+            name="dialogue_manager",
+            summary="سلطة قرار الدور التعليمي الموحَّدة: evidence×ability×difficulty (D-142 Phase 2).",
+            input_contract="DialogueInput",
+            output_contract="DialogueDecision",
+            primary_method="decide",
+            metrics_prefix="cogniforge_skill_dialogue_manager",
+            consumed_by=("orchestrator_client._stream_socratic_evaluation",),
+            status="FLAGGED",
+            feature_flag="SEMANTIC_TUTOR_ENABLED",
+        ),
+        SkillDescriptor(
             name="retrieval_rerank",
             summary="استرجاع دلالي (LlamaIndex) + إعادة ترتيب (Reranker/CrossEncoder).",
             input_contract="RetrievalRerankInput",

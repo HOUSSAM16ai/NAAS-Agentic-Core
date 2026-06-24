@@ -88,6 +88,12 @@ from app.services.skills.concept_diagnosis_skill import (
     ConceptDiagnosisSkill,
     get_concept_diagnosis_skill,
 )
+from app.services.skills.dialogue_manager_skill import (
+    DialogueDecision,
+    DialogueInput,
+    DialogueManagerSkill,
+    get_dialogue_manager_skill,
+)
 from app.services.skills.doctrine import (
     ANSWER_REDACTION_DOCTRINE,
     ANSWER_REDACTION_DOCTRINE_VERSION,
@@ -287,6 +293,9 @@ __all__ = [
     "ConceptDiagnosisOutput",
     "ConceptDiagnosisSkill",
     "ContaminationDetail",
+    "DialogueDecision",
+    "DialogueInput",
+    "DialogueManagerSkill",
     "ExerciseAlignmentInput",
     "ExerciseAlignmentOutput",
     "ExerciseAlignmentSkill",
@@ -354,6 +363,7 @@ __all__ = [
     "get_concept_diagnosis_skill",
     "get_content_invocation_summary",
     "get_detailed_explanation_summary",
+    "get_dialogue_manager_skill",
     "get_exercise_alignment_skill",
     "get_explanation_doctrine_summary",
     "get_mcp_tool_skill",

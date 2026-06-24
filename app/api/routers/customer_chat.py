@@ -35,6 +35,7 @@ from app.core.domain.user import User
 from app.deps.auth import CurrentUser, require_permissions
 from app.infrastructure.clients.orchestrator_client import orchestrator_client
 from app.services.analytics.bkt_persistence import BKTAnalyticsService
+from app.services.analytics.tutor_state_service import TutorStateService
 from app.services.auth.token_decoder import decode_token_payload
 from app.services.boundaries.customer_chat_boundary_service import (
     CustomerChatBoundaryService,
@@ -45,6 +46,24 @@ from app.telemetry.path_observer import close_ws_turn, open_ws_turn
 from shared.chat_protocol.event_protocol import normalize_streaming_event
 
 logger = get_logger(__name__)
+
+
+def _semantic_tutor_enabled() -> bool:
+    """D-142 Phase 2: علم `SEMANTIC_TUTOR_ENABLED` (env أولاً ثم الإعدادات، افتراضي False).
+
+    OFF افتراضياً ⇒ ذاكرة جلسة التدريس الدائمة لا تُحمَّل/تُكتَب (صفر I/O جديد على المسار
+    الحيّ). تُفعَّل بعد التحقق الحيّ في Codespaces.
+    """
+    import os
+
+    raw = os.getenv("SEMANTIC_TUTOR_ENABLED")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    with contextlib.suppress(Exception):
+        value = getattr(get_settings(), "SEMANTIC_TUTOR_ENABLED", None)
+        if isinstance(value, bool):
+            return value
+    return False
 
 
 def _apply_complete_response_firewall(text: str) -> str:
@@ -968,6 +987,17 @@ async def chat_stream_ws(
             pedagogy_directive = pedagogy_snapshot.directive_text
             support_level = pedagogy_snapshot.support_level
 
+            # D-142 Phase 2: ذاكرة جلسة التدريس الدائمة (خلف العلم SEMANTIC_TUTOR_ENABLED —
+            # افتراضي OFF ⇒ صفر I/O جديد على المسار الحيّ). تُحمَّل قبل الدور وتُمرَّر عبر
+            # context فينجو حارس التكرار/الانحراف من نافذة الـ50 رسالة. fail-open مطلق.
+            tutor_state_ctx: dict[str, object] | None = None
+            if _semantic_tutor_enabled() and local_conversation_id is not None:
+                with contextlib.suppress(Exception):
+                    async with async_session_factory() as _ts_db:
+                        tutor_state_ctx = await TutorStateService(_ts_db).load(
+                            local_conversation_id
+                        )
+
             # D-115: التوليد التعليمي يحدث حصراً في الـ orchestrator (السلطة الوحيدة).
             # support_level يُمرَّر ليحكم عمق التلميح السقراطي هناك (لا مثال مكشوف
             # ولا توجيه LLM محقون — يَعكِس D-114 الذي تسبّب بالغارباج).
@@ -983,6 +1013,7 @@ async def chat_stream_ws(
                     captured=captured_ui_components,
                     pedagogy=pedagogy_directive,
                     sup_level=support_level,
+                    tstate=tutor_state_ctx,
                 ) -> None:
                     nonlocal pending_terminal_event
                     nonlocal complete_ai_response
@@ -998,6 +1029,8 @@ async def chat_stream_ws(
                             "compatibility_facade": True,
                             "pedagogy_directive": pedagogy,
                             "support_level": sup_level,
+                            # D-142 Phase 2: الحالة الدائمة (None عند العلم OFF).
+                            "tutor_state": tstate,
                         },
                     ):
                         # D-WS-FLAP-001: abort stream if client disconnected mid-turn.
@@ -1234,6 +1267,26 @@ async def chat_stream_ws(
                 # و«ترسيخ المهارة» خلف الكواليس، لا في سطح الطالب). معزول كلياً.
                 with contextlib.suppress(Exception):
                     await _bkt_task
+
+                # D-142 Phase 2: تحديث ذاكرة جلسة التدريس الدائمة (خلف العلم، fail-open).
+                # يضبط آخر خطوة عُرضت (مرساة منع التكرار تنجو من النافذة) + المفهوم النشط +
+                # ميزانية المفهوم + قدرة الطالب (من BKT) — صف حيّ واحد لكل محادثة (upsert).
+                if (
+                    _semantic_tutor_enabled()
+                    and local_conversation_id is not None
+                    and complete_ai_response
+                ):
+                    with contextlib.suppress(Exception):
+                        _is_socratic_q = complete_ai_response.rstrip().endswith(("؟", "?"))
+                        async with async_session_factory() as _ts_db2:
+                            await TutorStateService(_ts_db2).record_turn(
+                                conversation_id=local_conversation_id,
+                                user_id=actor.id,
+                                active_concept=pedagogy_snapshot.concept_id,
+                                assistant_text=complete_ai_response,
+                                is_socratic_question=_is_socratic_q,
+                                ability_snapshot=pedagogy_snapshot.mastery,
+                            )
 
                 # Close path-aware span exactly once per turn — final event type
                 # mirrors what `_emit_terminal_frames` actually sent.

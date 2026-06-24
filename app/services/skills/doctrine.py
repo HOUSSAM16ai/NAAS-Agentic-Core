@@ -978,6 +978,36 @@ def get_student_state_summary() -> str:
     )
 
 
+# ── D-142 (Phase 2): مدير الحوار الموحَّد + الحالة الدائمة ─────────────────────────────
+DIALOGUE_MANAGER_DOCTRINE_VERSION: Final[str] = "1.0.0"
+
+#: قوانين غير قابلة للكسر تحكم سلطة قرار الدور التعليمي (D-142 Phase 2).
+DIALOGUE_MANAGER_DOCTRINE: Final[tuple[str, ...]] = (
+    "قرار الدور = f(دليل الفهم، قدرة الطالب، صعوبة الخطوة التالية) كل دور — لا «مصفوفة levels» "
+    "جامدة (نقد المالك). الإشارات الثلاث تُحسَب حيّاً، لا «هل وصلنا level 3».",
+    "التقدّم حتمي عند دليل فهم موثوق (verified رمزياً أو understood): اعتراف + خطوة تالية، "
+    "ممنوع إعادة السؤال نفسه.",
+    "لا تكرار حرفي: النصّ المُرشَّح المُكرّر لـ last_step_emitted (مرساة دائمة تنجو من نافذة "
+    "التاريخ) ⇒ تصعيد للحلّ الرمزي، لا إعادة.",
+    "لا قفز فوق قدرة الطالب: قدرة < صعوبة الخطوة التالية ⇒ خطوة وسطى أصغر، لا تمثيل أعلى من "
+    "مستوى المتعلّم.",
+    "الميزانية السقراطية **لكل مفهوم** (من الحالة الدائمة) لا عامّة تتسرّب بين المفاهيم؛ استنفادها "
+    "⇒ حلّ رمزي لا سؤال إضافي.",
+    "حتمي 100% (صفر LLM) قابل للاختبار بـ pytest؛ الأرقام/الصحّة من المحرك الرمزي؛ القدرة من BKT "
+    "(D-126). fail-open: أي خطأ ⇒ السلوك القائم.",
+    "بوّابة القياس (§2D): التوسّع مرهون بهبوط repetition_rate→0 + advance_after_correct≈100% + "
+    "over-jump→0 + فجوة الوهم (D-126) ⤵ — لا توسيع للحالة قبل إثبات اللِّفت.",
+)
+
+
+def get_dialogue_manager_summary() -> str:
+    """يُرجِع ملخص doctrine مدير الحوار (للـ logs)."""
+    return (
+        f"[v{DIALOGUE_MANAGER_DOCTRINE_VERSION}] {len(DIALOGUE_MANAGER_DOCTRINE)} قاعدة — "
+        "evidence×ability×difficulty، تقدّم حتمي، لا تكرار، لا قفز، ميزانية لكل مفهوم."
+    )
+
+
 # ── D-135: محرّك حالة الفهم — Learning State («ماذا فهم الطالب فعلاً؟») ────────────────
 UNDERSTANDING_STATE_DOCTRINE_VERSION: Final[str] = "1.0.0"
 
@@ -1298,6 +1328,15 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "StudentStateSkill.read",
             "orchestrator_client.chat_with_agent",
             "pedagogical_policy.PolicyInput",
+        ),
+    },
+    "dialogue_manager": {
+        "version": DIALOGUE_MANAGER_DOCTRINE_VERSION,
+        "rules_count": len(DIALOGUE_MANAGER_DOCTRINE),
+        "consumed_by": (
+            # D-142 Phase 2: سلطة قرار الدور — موصولة حيّاً في المسار السقراطي (خلف العلم).
+            "DialogueManagerSkill.decide",
+            "orchestrator_client._stream_socratic_evaluation",
         ),
     },
     "understanding_state": {

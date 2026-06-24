@@ -1029,10 +1029,59 @@ def check_pedagogical_escalation_wired() -> None:
     )
 
 
+def check_dialogue_manager_wired() -> None:
+    """D-142 Phase 2 (مدير الحوار الموحَّد): يحرس سلطة قرار الدور الموصولة (لا ZOMBIE).
+
+    يحرس: (1) manifest متّسق، (2) الـ Skill يستهلك doctrine وحتمي (لا LLM في decide)،
+    (3) القرار = evidence×ability×difficulty (التقدّم/التصعيد/عدم القفز موجودة)،
+    (4) موصول حيّاً في orchestrator_client خلف العلم SEMANTIC_TUTOR_ENABLED.
+    """
+    from app.services.skills.doctrine import (
+        DIALOGUE_MANAGER_DOCTRINE,
+        DIALOGUE_MANAGER_DOCTRINE_VERSION,
+        SKILL_DOCTRINE_MANIFEST,
+    )
+
+    entry = SKILL_DOCTRINE_MANIFEST.get("dialogue_manager")
+    if entry is None:
+        _fail("Manifest missing 'dialogue_manager' entry (D-142 Phase 2).")
+    if entry["version"] != DIALOGUE_MANAGER_DOCTRINE_VERSION:
+        _fail("Manifest version mismatch for dialogue_manager (D-142).")
+    if entry["rules_count"] != len(DIALOGUE_MANAGER_DOCTRINE):
+        _fail("Manifest rules_count mismatch for dialogue_manager (D-142).")
+
+    skill = (ROOT / "app/services/skills/dialogue_manager_skill.py").read_text(encoding="utf-8")
+    if "from app.services.skills.doctrine import" not in skill:
+        _fail("dialogue_manager_skill.py does not consume doctrine (D-142).")
+    # حتمي: لا LLM في decide (الأرقام/الصحّة من المحرك الرمزي، القدرة من BKT).
+    for forbidden in ("get_ai_client", "send_message", "async def decide"):
+        if forbidden in skill:
+            _fail(f"dialogue_manager must be deterministic (found '{forbidden}') — D-142.")
+    # القرار الثلاثي: تقدّم حتمي + تصعيد عند التكرار/الميزانية + عدم القفز.
+    for token in ("acknowledge_advance", "symbolic_reveal", "intermediate_scaffold"):
+        if token not in skill:
+            _fail(f"dialogue_manager missing decision action '{token}' (D-142).")
+
+    # التوصيل الحيّ (لا ZOMBIE): orchestrator_client يستشيره خلف العلم.
+    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+        encoding="utf-8"
+    )
+    if (
+        "get_dialogue_manager_skill" not in client_src
+        or "_dialogue_decision" not in client_src
+        or "_semantic_tutor_enabled" not in client_src
+    ):
+        _fail("orchestrator_client does not invoke DialogueManager behind flag (D-142 ZOMBIE).")
+    _pass(
+        "DialogueManager wired: evidence×ability×difficulty, deterministic, behind "
+        "SEMANTIC_TUTOR_ENABLED (D-142 Phase 2)"
+    )
+
+
 def main() -> None:
     print(
         "=== Skills Doctrine Drift Gate "
-        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132 + D-133 + D-135 + D-137 + D-138) ===\n"
+        "(D-069 + D-073 + D-100 + D-106 + D-111 + D-113 + D-115 + D-129 + D-130 + D-131 + D-132 + D-133 + D-135 + D-137 + D-138 + D-142) ===\n"
     )
     check_doctrine_module_importable()
     check_skills_consume_doctrine()
@@ -1055,6 +1104,7 @@ def main() -> None:
     check_understanding_state_wired()
     check_micro_simulation_wired()
     check_pedagogical_escalation_wired()
+    check_dialogue_manager_wired()
     print("\n=== ✅ All skills doctrine checks passed ===")
 
 

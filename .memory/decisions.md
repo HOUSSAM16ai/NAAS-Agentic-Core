@@ -4963,3 +4963,23 @@ OpenRouter+Supabase. الحالة: المرحلة 1 RESOLVED محلياً؛ يُ
 التحقق: standalone harness (DialogueManager 6 حالات + budget) + tests/services/test_d142_phase2_dialogue_manager.py
 + ruff + runtime_truth (lock مُحدَّث) + validate_structure + ci_guardrails + check_dialogue_manager_wired
 (CI). الحالة: مُنفَّذ، FLAGGED؛ التفعيل + E2E حيّ في Codespaces (بوّابة §2D: فجوة الوهم ⤵).
+
+### D-143 المرحلة 1 (2026-06-24) — الإجابة الحسابية الحتمية للاحتمالات (ISS-117)
+
+كارثة حيّة (transcript المالك): أسئلة الحادثة B (56)، مبدأ الضرب (11×10×9)، جداء الأرقام ⇒ تُجاب
+بمحتوى الحادثة A (14/165) + تكرار حرفي. تأكيد جنائي حيّ (جسر Supabase): محادثة 788 كرّرت الإغلاق ×3،
+15 رسالة «14/165». الجذور: RC-1 المصفوفة تسبق المسار الحسابي و_esc_compute لا تستبعد «نضرب/حصلنا»؛
+RC-2 المحرّك يعرف الحادثة A فقط؛ RC-3 لا routing لـ 56؛ RC-4 لا dedup على الاستنفاد.
+
+نقد المالك (CTO) مُطبَّق: (1) صفر باب LLM في مسار الرياضيات — الحادثة B تُحسَب حتمياً
+(number_parity_counts ⇒ odd=8 ⇒ C(8,3)/C(11,3)=56/165)، والحوادث غير المنمذجة ⇒ تأجيل حتمي صادق
+يُبعدها عن الحادثة A بلا أيّ رقم من LLM. (2) التصعيد مشروط بإشارة فهم حقيقية. (3) المرحلة 2 (C/D/X/
+E(X)/الشرطي) تُشحَن حدثاً حدثاً خلف بوّابة القياس cogniforge_tutor_routing_total.
+
+المُنفَّذ: ProbabilityCalculatorSkill.number_parity_counts + OrchestratorClient.
+_build_probability_computational_answer (preempt حتمي قبل المصفوفة) + _esc_compute extension +
+detect_active_concept no-drift + dedup عند emit المصفوفة + record_probability_routing metric.
+
+التحقق: fuzz 1809 صياغة (MSA+دارجة+فرنسي) ⇒ صفر انحراف للحادثة A، صفر اختطاف؛ ruff/runtime_truth/
+validate_structure/py_compile ✅؛ tests/services/test_d143_probability_computational.py (CI). جسر
+Supabase حيّ: PostgreSQL 17.6 + tutor_state موجود. Codespaces: verify_d143_live.py + المرحلة 2 بعد المقاييس.

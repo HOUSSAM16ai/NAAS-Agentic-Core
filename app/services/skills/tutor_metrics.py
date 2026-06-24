@@ -74,6 +74,13 @@ try:
             "Deterministic micro-simulations served (L3 content), labelled by concept (D-138).",
             ["concept"],
         )
+        # D-143: بوّابة قياس توجيه الاحتمالات — يُثبت أن الحدث الصحيح أُجيب (لا انحراف لـ A،
+        # لا تكرار). outcome ∈ {correct_event, deferred, drifted_to_a, repeated}.
+        _PROB_ROUTING = Counter(
+            "cogniforge_tutor_routing_total",
+            "Probability sub-question routing outcome per event (D-143 measurement gate).",
+            ["event", "outcome"],
+        )
     else:  # pragma: no cover — re-import in same process (tests)
         _REPETITION_AVOIDED = None  # type: ignore[assignment]
         _DEFINITIONAL_ANSWER = None  # type: ignore[assignment]
@@ -85,6 +92,7 @@ try:
         _UNDERSTANDING = None  # type: ignore[assignment]
         _ESCALATION = None  # type: ignore[assignment]
         _MICRO_SIMULATION = None  # type: ignore[assignment]
+        _PROB_ROUTING = None  # type: ignore[assignment]
 
     def record_repetition_avoided() -> None:
         """قياس 1: تراجع التكرار الحرفي."""
@@ -155,6 +163,12 @@ try:
             if _MICRO_SIMULATION is not None:
                 _MICRO_SIMULATION.labels(concept=concept or "unknown").inc()
 
+    def record_probability_routing(event: str, outcome: str) -> None:
+        """D-143: نتيجة توجيه سؤال احتمالي. outcome ∈ {correct_event,deferred,drifted_to_a,repeated}."""
+        with contextlib.suppress(Exception):
+            if _PROB_ROUTING is not None:
+                _PROB_ROUTING.labels(event=event or "unknown", outcome=outcome or "unknown").inc()
+
 except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbox)
 
     def record_repetition_avoided() -> None:
@@ -189,6 +203,9 @@ except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbo
     def record_micro_simulation(concept: str) -> None:
         pass
 
+    def record_probability_routing(event: str, outcome: str) -> None:
+        pass
+
 
 __all__ = [
     "record_definitional_answer",
@@ -197,6 +214,7 @@ __all__ = [
     "record_intent",
     "record_intervention",
     "record_micro_simulation",
+    "record_probability_routing",
     "record_progress",
     "record_repetition_avoided",
     "record_response_mode",

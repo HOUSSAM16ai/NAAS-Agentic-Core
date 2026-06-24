@@ -589,6 +589,33 @@ class ProbabilityCalculatorSkill:
     def _decimal(num: int, den: int) -> float:
         return round(num / den, 6) if den > 0 else 0.0
 
+    @staticmethod
+    def number_parity_counts(content: str) -> dict[str, int] | None:
+        """D-143: يستخرج أرقام الكرات المرقّمة من نصّ التمرين ويحسب توزيعها (حتمي، صفر LLM).
+
+        يدعم تمارين الكرات المرقّمة («... مرقمة بـ: 0، 1، 1، 3»). يُرجِع
+        ``{"odd","even","zero","total"}`` أو ``None`` إن لم توجد كرات مرقّمة. يُمكّن
+        حساب الحوادث المعتمدة على أرقام الكرات (جداء فردي/زوجي/معدوم) **دون أيّ تقدير
+        من LLM** — الأرقام من نصّ التمرين الرسمي حصراً.
+        """
+        if not content or not isinstance(content, str):
+            return None
+        # توحيد الأرقام العربية-الهندية إلى ASCII قبل الاستخراج.
+        text = content.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+        nums: list[int] = []
+        # كل مجموعة مرقّمة: «... مرقم<...> ب<ـ>: <أرقام مفصولة بفواصل>».
+        for match in re.finditer(r"مرقم\S*\s+ب[ـ\s]*[:：]?\s*([0-9،,\s]+)", text):
+            nums.extend(int(d) for d in re.findall(r"\d", match.group(1)))
+        if not nums:
+            return None
+        odd = sum(1 for x in nums if x % 2 == 1)
+        return {
+            "odd": odd,
+            "even": len(nums) - odd,
+            "zero": sum(1 for x in nums if x == 0),
+            "total": len(nums),
+        }
+
     @classmethod
     def _node(
         cls,

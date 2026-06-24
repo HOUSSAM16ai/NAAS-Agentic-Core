@@ -1849,6 +1849,156 @@ class OrchestratorClient:
             return None
 
     @classmethod
+    def _build_probability_computational_answer(
+        cls,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+    ) -> tuple[str, str] | None:
+        """D-143: إجابة حتمية مباشرة لأسئلة الاحتمالات الحسابية — صفر LLM، topic-safe.
+
+        يُجيب صراحةً (قبل سُلّم الحادثة A): (1) «لماذا نضرب 11×10×9» ⇒ مبدأ العدّ + القسمة
+        على !3 ؛ (2) «كيف حصلنا على 56» / الحادثة B (جداء فردي) ⇒ C(عدد الفردية,k)/C(n,k)
+        من أرقام الكرات الرسمية ؛ (3) الحوادث غير المنمذجة بعد (C/D/X/الأمل/الشرطي) ⇒
+        **تأجيل حتمي صادق** يسمّي الحدث ويُبعده صراحةً عن الحادثة A — **بلا أيّ رقم من LLM
+        وبلا أرقام الحادثة A**. يُرجِع ``(text, event)`` أو ``None`` (فيتولّى المسار القائم
+        الحادثة A / الحيرة / التحية). نقد المالك #1: لا باب LLM في مسار الرياضيات.
+        """
+        try:
+            from math import comb
+
+            from app.services.capabilities.arabic_normalize import primary_canonical_topic
+            from app.services.capabilities.exercise_retrieval import (
+                ExerciseRetrievalRequest,
+                detect_exercise_retrieval,
+                load_exercise_content,
+            )
+            from app.services.skills.probability_skill import (
+                CombinationsModelOutput,
+                ProbabilityCalculatorSkill,
+                ProbabilityInput,
+            )
+
+            raw = (question or "").strip()
+            # حارس اللصق/الاسترجاع: سؤال الطالب قصير؛ لصق التمرين كامل (يحوي «56/فردي/زوجي»)
+            # يجب أن يتولّاه الاسترجاع المُفهرَس، لا هذا المسار.
+            if len(raw) > 300:
+                return None
+            q = raw.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")).lower()
+
+            # topic-safe: طلب موضوع آخر صريح (دوال/أعداد مركبة) ⇒ لا شرح احتمالات.
+            _canonical = primary_canonical_topic(question)
+            if _canonical is not None and _canonical.canonical_id != "probability":
+                return None
+
+            # تصنيف السؤال الحسابي (حوادث الجداء قبل مبدأ العدّ لمنع التباس «نضرب»).
+            is_event_b = (
+                "56" in q
+                or "p(b" in q
+                or "الحادثة b" in q
+                or ("جداء" in q and ("فردي" in q or "الفردي" in q))
+            )
+            uncovered: tuple[str, str] | None = None
+            if ("جداء" in q and ("زوجي" in q or "الزوجي" in q)) or "p(c" in q or "الحادثة c" in q:
+                uncovered = ("event_c", "الحادثة C (جداء أرقامها زوجي)")
+            elif (
+                "معدوم" in q
+                or "الحادثة d" in q
+                or "بدون ارجاع" in q
+                or "بدون إرجاع" in q
+                or ("التوالي" in q and "ارجاع" in q)
+            ):
+                uncovered = ("event_d", "الحادثة D (السحب على التوالي بدون إرجاع — جداء معدوم)")
+            elif "المتغير العشوائي" in q or "قانون الاحتمال" in q or "قانون احتمال" in q:
+                uncovered = ("random_var", "المتغير العشوائي X")
+            elif "الامل" in q or "الأمل" in q or "e(x" in q:
+                uncovered = ("expected", "الأمل الرياضي E(X)")
+            elif "الشرطي" in q or "شرطي" in q or "p_a" in q or "pa(" in q:
+                uncovered = ("conditional", "الاحتمال الشرطي P_A(B)")
+            # مبدأ العدّ: «نضرب/ضربنا/الترتيب/ثلاثة أرقام» وليس عن جداء أرقام الكرات (B/C/D).
+            mult_markers = (
+                "نضرب",
+                "ضربنا",
+                "نضربها",
+                "11×10×9",
+                "11x10x9",
+                "الترتيب",
+                "ثلاثة ارقام",
+                "ثلاثة أرقام",
+                "ثلاث ارقام",
+            )
+            is_combinations = any(m in q for m in mult_markers) and "جداء" not in q
+
+            if not (is_event_b or is_combinations or uncovered is not None):
+                return None
+
+            # تحميل التمرين الرسمي المُفهرَس (history-immune — D-123).
+            _decision = detect_exercise_retrieval(
+                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                history_messages=history_messages,
+            )
+            if not (_decision.recognized and _decision.matched_entry):
+                return None
+            _official = load_exercise_content(_decision.matched_entry)
+            if not _official:
+                return None
+            _combo = ProbabilityCalculatorSkill().analyze(
+                ProbabilityInput(question=_official, history=None)
+            )
+            if not isinstance(_combo, CombinationsModelOutput):
+                return None
+            n, k, total = _combo.n, _combo.k, _combo.total_combinations
+
+            # (1) الحادثة B — حتمي من أرقام الكرات الرسمية (Stage 1).
+            if is_event_b:
+                parity = ProbabilityCalculatorSkill.number_parity_counts(_official)
+                if parity is None or parity.get("total", 0) != n:
+                    return None
+                odd = parity["odd"]
+                fav = comb(odd, k)
+                text = (
+                    "## الحالات الملائمة للحادثة B (جداء الأرقام فردي)\n\n"
+                    "جداء ثلاثة أعداد يكون **فردياً** فقط إذا كان كلّ عددٍ منها فردياً — يكفي "
+                    "عددٌ زوجيّ واحد ليُصبح الجداء زوجياً. إذن نختار الكرات الثلاث من الكرات ذات "
+                    f"الأرقام الفردية فقط.\n\nعدد الكرات ذات رقمٍ فردي في الكيس: {odd}، نختار "
+                    f"منها {k}:\n\n{cls._fmt_comb(odd, k, fav)}\n\nوفضاء العيّنة هو كلّ طرق سحب "
+                    f"{k} من {n}:\n\n{cls._fmt_comb(n, k, total)}\n\nفعدد الحالات الملائمة "
+                    f"للحادثة B هو {fav} من أصل {total}."
+                )
+                return (text, "event_b")
+
+            # (2) مبدأ العدّ (لماذا نضرب 11×10×9) — حتمي.
+            if is_combinations:
+                num = "×".join(str(n - i) for i in range(k))
+                den = "×".join(str(k - i) for i in range(k))
+                prod = 1
+                for i in range(k):
+                    prod *= n - i
+                text = (
+                    f"## لماذا نضرب {num}\n\n"
+                    f"عند سحب {k} كرات من {n}، نَعُدّ بمبدأ الضرب: للكرة الأولى {n} احتمالاً، "
+                    f"وبعد سحبها تبقى {n - 1} للثانية، ثمّ {n - 2} للثالثة — فعدد الترتيبات هو "
+                    f"{num} = {prod}.\n\nلكنّ السحب **دفعةً واحدة** لا يهتمّ بالترتيب (نفس الكرات "
+                    f"الثلاث بأيّ ترتيب = سحبةٌ واحدة)، وكلّ مجموعة من {k} كرات تُرتَّب بـ {den} "
+                    f"طريقة، لذلك نقسم عليها:\n\n{cls._fmt_comb(n, k, total)}\n\nفنحصل على عدد "
+                    f"المجموعات غير المرتّبة، وهو مقام الاحتمال. (لاحظ: هذا عدّ طرق السحب، وهو "
+                    f"يختلف عن **جداء أرقام** الكرات في الحوادث B وC وD.)"
+                )
+                return (text, "combinations")
+
+            # (3) حوادث غير منمذجة بعد ⇒ تأجيل حتمي صادق (لا أرقام، لا LLM، لا الحادثة A).
+            ev_id, ev_label = uncovered  # type: ignore[misc]
+            text = (
+                f"## {ev_label}\n\n"
+                f"سؤالك يخصّ **{ev_label}** — وهو **ليس** الحادثة A (3 كرات من نفس اللون، "
+                f"التي قيمتها 14/165). لهذه الحادثة حسابُها الخاصّ من أرقام الكرات أو نوع السحب، "
+                f"وسنحسبها بدقّة خطوةً بخطوة. لنبدأ: ما المُعطى الذي تريد أن نُوضّحه أولاً فيها؟"
+            )
+            return (text, ev_id)
+        except Exception:
+            logger.warning("_build_probability_computational_answer_failed", exc_info=True)
+            return None
+
+    @classmethod
     def _format_conceptual_relationship(
         cls,
         question: str,
@@ -3258,6 +3408,40 @@ class OrchestratorClient:
             return
 
         # ─────────────────────────────────────────────────────────────────────
+        # D-143 (ISS-117): أسئلة الاحتمالات الحسابية تُجاب حتمياً **قبل** سُلّم الحادثة A.
+        # «لماذا نضرب 11×10×9» ⇒ مبدأ العدّ؛ «كيف حصلنا على 56» ⇒ الحادثة B (56/165 من أرقام
+        # الكرات)؛ الحوادث غير المنمذجة (C/D/X/الأمل/الشرطي) ⇒ تأجيل حتمي صادق يُبعدها عن A.
+        # صفر LLM في مسار الرياضيات (نقد المالك #1). يكسر اختطاف المصفوفة للأسئلة الحسابية.
+        # ─────────────────────────────────────────────────────────────────────
+        _comp = self._build_probability_computational_answer(question, history_messages)
+        if _comp is not None:
+            _comp_text, _comp_event = _comp
+            with contextlib.suppress(Exception):
+                from app.services.skills.tutor_metrics import record_probability_routing
+
+                record_probability_routing(
+                    _comp_event,
+                    "correct_event" if _comp_event in ("event_b", "combinations") else "deferred",
+                )
+            _comp_chars = 0
+            async for chunk in self._stream_markdown_typing(_comp_text):
+                if not chunk:
+                    continue
+                _comp_chars += len(chunk)
+                yield self._normalize_stream_event(
+                    {"type": "assistant_delta", "payload": {"content": chunk}}
+                )
+            if _comp_chars > 0:
+                logger.info(
+                    "probability_computational_answer",
+                    extra={"event": _comp_event, "stream_chars": float(_comp_chars)},
+                )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
+                return
+
+        # ─────────────────────────────────────────────────────────────────────
         # ISS-116 (D-138 — المصفوفة التصعيدية التكيّفية): تعليم **مفهوم مُسمّى** عبر
         # Escalation Matrix + Understanding-Signal + Misconception-Check، مُعايَرةً بقدرة
         # الطالب (support_level/BKT). concept-scoped ⇒ لا انحراف لـ event-A؛ ذاكرة التصعيد ⇒
@@ -3291,10 +3475,25 @@ class OrchestratorClient:
             )
             _esc_sps = get_semantic_property_skill()
             # D-139: حارس الحساب — «احسب/كم/اوجد/بيّن/استنتج» تبقى للمسار الحسابي (لا تُفعَّل المصفوفة).
+            # D-143: + «نضرب/ضربنا/ضرب/حصلنا على» — أسئلة العدّ/الجداء يتولّاها المسار الحسابي الحتمي
+            # (defense-in-depth خلف preempt _build_probability_computational_answer)، لا سُلّم الحادثة A.
             _esc_ql = (question or "").lower()
             _esc_compute = any(
                 m in _esc_ql
-                for m in ("احسب", "أحسب", "كم ", "اوجد", "أوجد", "بيّن", "بين ان", "استنتج")
+                for m in (
+                    "احسب",
+                    "أحسب",
+                    "كم ",
+                    "اوجد",
+                    "أوجد",
+                    "بيّن",
+                    "بين ان",
+                    "استنتج",
+                    "نضرب",
+                    "ضربنا",
+                    "ضرب ",
+                    "حصلنا على",
+                )
             )
             # D-139: متابعة المفهوم — «كيف/لماذا/وضح/اشرح/مثال/لم أفهم/؟» تُمسَك حتى لو صُنّفت unknown
             # (كانت «كيف نضيق الإمكانيات» / «كيف نحصل على معدومة» تسقط لـ D-135 → نص الحادثة A).
@@ -3362,6 +3561,18 @@ class OrchestratorClient:
                         misconception_mtype=(_esc_mis.mtype if _esc_mis else None),
                     )
                 )
+                # D-143 (RC-4): حارس التكرار — إن كان نصّ المصفوفة مُكرّراً لرسالة مساعد سابقة
+                # (مثل «مررنا بالتعريف والمثال والمحاكاة…» عند استنفاد السُّلّم)، نُصعّد إلى الحلّ
+                # الرمزي الحتمي بدل إعادته حرفياً (يكسر التكرار اللانهائي). يعمل حتى لو تجاوز
+                # نافذة التاريخ عبر _recently_emitted.
+                if _esc_decision.text and self._recently_emitted(
+                    _esc_decision.text, history_messages
+                ):
+                    _esc_alt = self._build_probability_direct_explanation(
+                        question, history_messages
+                    ) or self._build_symbolic_reveal(question, history_messages, acknowledge=True)
+                    if _esc_alt and not self._recently_emitted(_esc_alt, history_messages):
+                        _esc_decision = _esc_decision.model_copy(update={"text": _esc_alt})
                 if _esc_decision.text:
                     from app.services.skills.tutor_metrics import (
                         record_intent,

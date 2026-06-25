@@ -45,7 +45,7 @@ class TestComputationalRouting:
         for q in ("كيف حصلنا على 56", "بيّن أن P(B)=56/165", "احتمال الحادثة B جداء فردي"):
             r = self._route(q)
             assert r is not None, q
-            event, text = r
+            text, event = r  # builder returns (text, event)
             assert event == "event_b", q
             assert "(8×7×6)" in text and "= 56" in text  # C(8,3)=56
             assert "165" in text
@@ -59,7 +59,7 @@ class TestComputationalRouting:
         ):
             r = self._route(q)
             assert r is not None, q
-            event, text = r
+            text, event = r  # builder returns (text, event)
             assert event == "combinations", q
             assert "نقسم" in text  # divide by 3! (counting principle)
             assert "جداء أرقام" in text  # distinguishes from product events
@@ -76,7 +76,7 @@ class TestComputationalRouting:
         for q, expected_event in cases.items():
             r = self._route(q)
             assert r is not None, q
-            event, text = r
+            text, event = r  # builder returns (text, event)
             assert event == expected_event, f"{q} -> {event}"
             assert "ليس الحادثة A" in text  # explicitly distanced from event A
             assert "14/165" not in text and "14 من" not in text  # never event-A's number
@@ -112,3 +112,51 @@ class TestDriftGuard:
         ]
         for q in ("لماذا نضرب 11×10×9", "كيف حصلنا على 56"):
             assert sps.detect_active_concept(q, history) is None, q
+
+
+class TestRepetitionGuard:
+    """RC-4 on the computational path: a repeated computational question must NOT
+    re-emit the identical text — it advances to a DIFFERENT deterministic representation
+    (variation, not repetition; owner critique #2). All zero-LLM."""
+
+    def test_deferral_never_prints_event_a_number(self):
+        # The honest deferral must distance from event A WITHOUT printing 14/165.
+        text, event = OrchestratorClient._build_probability_computational_answer(
+            "احتمال الحادثة C جداء زوجي", None
+        )
+        assert event == "event_c"
+        assert "ليس الحادثة A" in text  # clean contiguous phrase (no markdown between)
+        assert "14/165" not in text and "14 من" not in text
+
+    def test_combinations_variant_differs_and_teaches(self):
+        base = OrchestratorClient._build_probability_computational_answer(
+            "لماذا نضرب 11×10×9", None
+        )
+        assert base is not None
+        base_text, event = base
+        assert event == "combinations"
+        var = OrchestratorClient._probability_computational_variant("combinations", None)
+        assert var is not None
+        assert var != base_text  # a DIFFERENT representation, not a verbatim repeat
+        assert "نقسم" in var  # still teaches the counting principle
+        assert "14/165" not in var
+
+    def test_event_b_variant_differs_and_keeps_56(self):
+        base_text, event = OrchestratorClient._build_probability_computational_answer(
+            "كيف حصلنا على 56", None
+        )
+        assert event == "event_b"
+        var = OrchestratorClient._probability_computational_variant("event_b", None)
+        assert var is not None
+        assert var != base_text
+        assert "= 56" in var  # still deterministically 56
+        assert "نفس اللون" not in var
+
+    def test_deferral_variant_distinct_and_clean(self):
+        var = OrchestratorClient._probability_computational_variant("event_d", None)
+        assert var is not None
+        assert "14/165" not in var and "نفس اللون" not in var
+
+    def test_advance_prompt_distinct_and_clean(self):
+        adv = OrchestratorClient._probability_computational_advance_prompt()
+        assert adv and "14/165" not in adv and "نفس اللون" not in adv

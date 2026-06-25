@@ -63,7 +63,7 @@ def _semantic_tutor_enabled() -> bool:
         value = getattr(get_settings(), "SEMANTIC_TUTOR_ENABLED", None)
         if isinstance(value, bool):
             return value
-    return False
+    return True
 
 
 def _apply_complete_response_firewall(text: str) -> str:

@@ -217,7 +217,7 @@ class TestWiring:
 
     def test_detect_active_concept_new_definitional_guard(self) -> None:
         assert "_EXERCISE_DUMP_MARKERS" in self.SPS
-        assert "if self.is_definitional(question):" in self.SPS
+        assert "if self.is_definitional(question)" in self.SPS
 
     def test_understanding_state_guard(self) -> None:
         assert "elif _confused:" in self.US

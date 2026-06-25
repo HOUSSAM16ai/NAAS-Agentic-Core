@@ -1901,7 +1901,10 @@ class OrchestratorClient:
             # D-143 Phase 1.5: لا نعترض الأسئلة التعريفية/الاستفسارية ("ما هو"، "لم أفهم") لكي تلتقطها
             # الطبقة الدلالية (D-132) ولا تُختطَف كإجابات حسابية مؤجلة.
             from app.services.skills.semantic_property_skill import get_semantic_property_skill
-            from app.services.skills.student_state_skill import StudentStateInput, get_student_state_skill
+            from app.services.skills.student_state_skill import (
+                StudentStateInput,
+                get_student_state_skill,
+            )
             _sps = get_semantic_property_skill()
             _state = get_student_state_skill().read(
                 StudentStateInput(question=question, history=history_messages)

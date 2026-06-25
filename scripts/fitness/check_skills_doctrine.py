@@ -760,7 +760,7 @@ def check_semantic_property_wired() -> None:
     # D-139: قتل انحراف المفهوم إلى الحادثة A — أسئلة المفهوم تُمسَك دائماً قبل D-135.
     if "_EXERCISE_DUMP_MARKERS" not in skill:
         _fail("detect_active_concept lacks _EXERCISE_DUMP_MARKERS drift guard (D-139).")
-    if "if self.is_definitional(question):" not in skill:
+    if "if self.is_definitional(question)" not in skill:
         _fail("detect_active_concept lacks the new-definitional reset guard (D-139).")
     if '"sequential_without_replacement"' not in skill or '"simultaneous_draw"' not in skill:
         _fail("PROPERTY_REGISTRY missing the drawing-mode concepts (D-139).")

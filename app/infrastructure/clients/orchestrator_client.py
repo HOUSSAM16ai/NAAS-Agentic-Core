@@ -1986,17 +1986,100 @@ class OrchestratorClient:
                 return (text, "combinations")
 
             # (3) حوادث غير منمذجة بعد ⇒ تأجيل حتمي صادق (لا أرقام، لا LLM، لا الحادثة A).
+            # نقد المالك #1: لا تُذكر أرقام الحادثة A (14/165) إطلاقاً — حتى للمقارنة.
             ev_id, ev_label = uncovered  # type: ignore[misc]
             text = (
                 f"## {ev_label}\n\n"
-                f"سؤالك يخصّ **{ev_label}** — وهو **ليس** الحادثة A (3 كرات من نفس اللون، "
-                f"التي قيمتها 14/165). لهذه الحادثة حسابُها الخاصّ من أرقام الكرات أو نوع السحب، "
-                f"وسنحسبها بدقّة خطوةً بخطوة. لنبدأ: ما المُعطى الذي تريد أن نُوضّحه أولاً فيها؟"
+                f"سؤالك يخصّ {ev_label} — وهو ليس الحادثة A (3 كرات من نفس اللون). لهذه "
+                f"الحادثة حسابُها الخاصّ من أرقام الكرات أو نوع السحب، وسنحسبها بدقّة خطوةً "
+                f"بخطوة. لنبدأ: ما المُعطى الذي تريد أن نُوضّحه أولاً فيها؟"
             )
             return (text, ev_id)
         except Exception:
             logger.warning("_build_probability_computational_answer_failed", exc_info=True)
             return None
+
+    @classmethod
+    def _probability_computational_variant(
+        cls, event: str, history_messages: list[dict[str, str]] | None
+    ) -> str | None:
+        """D-143 (RC-4): تمثيلٌ حتميّ **مختلف** للسؤال الحسابي نفسه عند تكراره — تخصيصٌ
+        بيداغوجي لا إعادة حرفية (نقد المالك #2). صفر LLM. يُرجِع None عند أيّ تعذّر.
+        """
+        try:
+            # الحوادث المؤجَّلة: خطوةٌ عمليّة مختلفة (لا تحتاج تحميل الأرقام).
+            if event not in ("combinations", "event_b"):
+                return (
+                    "## لنبدأ خطوةً عمليّة\n\n"
+                    "لنحسب هذه الحادثة بدقّة نحتاج أوّلاً تحديد الكرات المعنيّة بها (حسب أرقامها "
+                    "أو نوع السحب). أخبرني: هل نبدأ بعدّ الكرات التي تُحقّق الشرط، أم بفضاء العيّنة "
+                    "(كلّ طرق السحب)؟"
+                )
+
+            from math import comb
+
+            from app.services.capabilities.exercise_retrieval import (
+                ExerciseRetrievalRequest,
+                detect_exercise_retrieval,
+                load_exercise_content,
+            )
+            from app.services.skills.probability_skill import (
+                CombinationsModelOutput,
+                ProbabilityCalculatorSkill,
+                ProbabilityInput,
+            )
+
+            _decision = detect_exercise_retrieval(
+                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                history_messages=history_messages,
+            )
+            if not (_decision.recognized and _decision.matched_entry):
+                return None
+            official = load_exercise_content(_decision.matched_entry)
+            if not official:
+                return None
+            combo = ProbabilityCalculatorSkill().analyze(
+                ProbabilityInput(question=official, history=None)
+            )
+            if not isinstance(combo, CombinationsModelOutput):
+                return None
+            n, k, total = combo.n, combo.k, combo.total_combinations
+
+            if event == "combinations":
+                return (
+                    "## بمثالٍ ملموس\n\n"
+                    "لنُسمِّ ثلاث كرات: أ، ب، ج. ترتيبُها يُعطي 6 صفوف: (أ،ب،ج)، (أ،ج،ب)، "
+                    "(ب،أ،ج)، (ب،ج،أ)، (ج،أ،ب)، (ج،ب،أ) — أي 3×2×1=6 ترتيباتٍ لنفس المجموعة "
+                    "الواحدة. لكنّ السحب دفعةً واحدة لا يميّز بينها فهي سحبةٌ واحدة. لذلك بعد عدّ "
+                    f"الترتيبات {n}×{n - 1}×{n - 2} نقسم على 3!=6 لنُلغي تكرار الترتيب، فيتبقّى عدد "
+                    f"المجموعات {cls._fmt_comb(n, k, total)}."
+                )
+
+            # event_b — صياغةٌ بديلة (تركيز على «لا رقم زوجي»).
+            parity = ProbabilityCalculatorSkill.number_parity_counts(official)
+            if parity is None or parity.get("total", 0) != n:
+                return None
+            odd = parity["odd"]
+            fav = comb(odd, k)
+            return (
+                "## بطريقةٍ أخرى للحادثة B\n\n"
+                "جداء الأرقام فردي ⟺ لا يدخل فيه أيّ رقمٍ زوجي (رقمٌ زوجيٌّ واحد يجعل الجداء "
+                f"زوجياً). فننظر فقط إلى الكرات ذات الأرقام الفردية وعددها {odd}، ونعدّ طرق "
+                f"اختيار {k} منها: {cls._fmt_comb(odd, k, fav)}؛ وكلّ طرق السحب "
+                f"{cls._fmt_comb(n, k, total)}. فالحالات الملائمة {fav} من {total}."
+            )
+        except Exception:
+            logger.warning("_probability_computational_variant_failed", exc_info=True)
+            return None
+
+    @staticmethod
+    def _probability_computational_advance_prompt() -> str:
+        """D-143 (RC-4): مُوجِّه تقدّمٍ نهائيّ حين تُستنفَد التمثيلات — لا إعادة حرفية."""
+        return (
+            "## لنُطبّق معاً\n\n"
+            "شرحنا الفكرة بأكثر من طريقة — لِنُثبّتها بالحساب على جزءٍ محدّد. أيّهما تريد أن "
+            "نُفصّل الآن: عدّ كلّ طرق السحب (المقام)، أم عدّ الحالات الملائمة لحادثةٍ بعينها؟"
+        )
 
     @classmethod
     def _format_conceptual_relationship(
@@ -3416,30 +3499,49 @@ class OrchestratorClient:
         _comp = self._build_probability_computational_answer(question, history_messages)
         if _comp is not None:
             _comp_text, _comp_event = _comp
-            with contextlib.suppress(Exception):
-                from app.services.skills.tutor_metrics import record_probability_routing
+            # D-143 (RC-4): لا تُعَد الإجابة الحسابية نفسها حرفياً عند تكرار السؤال. عند
+            # التكرار نتقدّم لتمثيلٍ حتميّ **مختلف** (تخصيص بيداغوجي، نقد المالك #2) ثم
+            # لمُوجِّه تقدّم — صفر LLM، صفر تكرار حرفي. لو استُنفِدت كلّها ⇒ نُسلّم للطبقة التالية.
+            _comp_outcome = (
+                "correct_event" if _comp_event in ("event_b", "combinations") else "deferred"
+            )
+            _comp_emit = True
+            if self._recently_emitted(_comp_text, history_messages):
+                _comp_var = self._probability_computational_variant(_comp_event, history_messages)
+                if _comp_var and not self._recently_emitted(_comp_var, history_messages):
+                    _comp_text, _comp_outcome = _comp_var, "advanced"
+                else:
+                    _comp_adv = self._probability_computational_advance_prompt()
+                    if not self._recently_emitted(_comp_adv, history_messages):
+                        _comp_text, _comp_outcome = _comp_adv, "advanced"
+                    else:
+                        _comp_emit = False
+            if _comp_emit:
+                with contextlib.suppress(Exception):
+                    from app.services.skills.tutor_metrics import record_probability_routing
 
-                record_probability_routing(
-                    _comp_event,
-                    "correct_event" if _comp_event in ("event_b", "combinations") else "deferred",
-                )
-            _comp_chars = 0
-            async for chunk in self._stream_markdown_typing(_comp_text):
-                if not chunk:
-                    continue
-                _comp_chars += len(chunk)
-                yield self._normalize_stream_event(
-                    {"type": "assistant_delta", "payload": {"content": chunk}}
-                )
-            if _comp_chars > 0:
-                logger.info(
-                    "probability_computational_answer",
-                    extra={"event": _comp_event, "stream_chars": float(_comp_chars)},
-                )
-                yield self._normalize_stream_event(
-                    {"type": "assistant_final", "payload": {"content": ""}}
-                )
-                return
+                    record_probability_routing(_comp_event, _comp_outcome)
+                _comp_chars = 0
+                async for chunk in self._stream_markdown_typing(_comp_text):
+                    if not chunk:
+                        continue
+                    _comp_chars += len(chunk)
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_delta", "payload": {"content": chunk}}
+                    )
+                if _comp_chars > 0:
+                    logger.info(
+                        "probability_computational_answer",
+                        extra={
+                            "event": _comp_event,
+                            "outcome": _comp_outcome,
+                            "stream_chars": float(_comp_chars),
+                        },
+                    )
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_final", "payload": {"content": ""}}
+                    )
+                    return
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-116 (D-138 — المصفوفة التصعيدية التكيّفية): تعليم **مفهوم مُسمّى** عبر

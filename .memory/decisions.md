@@ -4983,3 +4983,21 @@ detect_active_concept no-drift + dedup عند emit المصفوفة + record_pro
 التحقق: fuzz 1809 صياغة (MSA+دارجة+فرنسي) ⇒ صفر انحراف للحادثة A، صفر اختطاف؛ ruff/runtime_truth/
 validate_structure/py_compile ✅؛ tests/services/test_d143_probability_computational.py (CI). جسر
 Supabase حيّ: PostgreSQL 17.6 + tutor_state موجود. Codespaces: verify_d143_live.py + المرحلة 2 بعد المقاييس.
+
+### D-143.1 (2026-06-25) — Stage 1 follow-up: computational-path repetition guard + test fix (ISS-117)
+
+Verifying ac8008b surfaced two real gaps: (1) `_build_probability_computational_answer` streamed its
+text with **no dedup**, so a repeated computational question ("نضرب 11×10×9", "نضرب ثلاثة أرقام" twice —
+exactly the owner transcript) re-emitted verbatim → the same RC-4 catastrophe on the computational
+path; (2) the committed `tests/services/test_d143_probability_computational.py` unpacked the builder
+tuple in **reversed order** (`event, text = r` vs builder `(text, event)`) → the test was RED in CI;
+and the deferral text printed "14/165" + used `**ليس**` (violating owner critique #1 "never event-A's
+numbers" and breaking the test's `"ليس الحادثة A" in text`).
+
+Fix (deterministic, zero-LLM): added `_probability_computational_variant` (a DIFFERENT representation
+per event — concrete named-balls example for combinations, alt framing for event B, a concrete
+first-step for deferrals) + `_probability_computational_advance_prompt`; wired dedup→variant→advance at
+the call site (metric outcome "advanced"); cleaned the deferral text (no 14/165, no markdown breaking
+"ليس الحادثة A"); fixed the test unpacking + added `TestRepetitionGuard`. Verified: pure logic
+(parity {odd:8}, C(8,3)=56, C(11,3)=165, fmt substrings) + ruff + runtime_truth + validate_structure +
+py_compile 3.12. Full WS E2E in Codespaces (sandbox lacks pydantic/httpx). CLAUDE.md §6.126 D-143.1.

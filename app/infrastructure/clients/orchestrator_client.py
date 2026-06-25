@@ -1897,6 +1897,30 @@ class OrchestratorClient:
                 or "الحادثة b" in q
                 or ("جداء" in q and ("فردي" in q or "الفردي" in q))
             )
+
+            # D-143 Phase 1.5: لا نعترض الأسئلة التعريفية/الاستفسارية ("ما هو"، "لم أفهم") لكي تلتقطها
+            # الطبقة الدلالية (D-132) ولا تُختطَف كإجابات حسابية مؤجلة.
+            from app.services.skills.semantic_property_skill import get_semantic_property_skill
+            from app.services.skills.student_state_skill import StudentStateInput, get_student_state_skill
+            _sps = get_semantic_property_skill()
+            _state = get_student_state_skill().read(
+                StudentStateInput(question=question, history=history_messages)
+            )
+            _confused = (_state.primary_intent == "confusion" or "confusion" in _state.secondary_signals)
+            _wants_def = (
+                _sps.is_definitional(question)
+                or _state.primary_intent == "definition"
+                or (_confused and _sps.interpret(question) is not None)
+            )
+
+            _compute = any(
+                m in q
+                for m in ("احسب", "أحسب", "كم ", "اوجد", "أوجد", "بين ان", "بيّن أن", "استنتج", "كيف", "لماذا")
+            ) or any(m in q for m in ("56", "p(b", "الحادثة b", "جداء", "معدوم", "بدون ارجاع", "التوالي", "p(c", "p_a", "e(x"))
+
+            if _wants_def and not _compute:
+                return None
+
             uncovered: tuple[str, str] | None = None
             if ("جداء" in q and ("زوجي" in q or "الزوجي" in q)) or "p(c" in q or "الحادثة c" in q:
                 uncovered = ("event_c", "الحادثة C (جداء أرقامها زوجي)")

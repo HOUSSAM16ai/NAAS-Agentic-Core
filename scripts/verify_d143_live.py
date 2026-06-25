@@ -95,15 +95,17 @@ def main() -> int:
         for q in qs:
             total += 1
             r = _route(q)
-            ev = r[0] if r else None
+            ev = r[1] if r else None
             dist[ev] = dist.get(ev, 0) + 1
             if r is None:
                 fails.append(("MISSED", expected, q))
             elif ev != expected:
                 fails.append(("WRONG", f"{expected}->{ev}", q))
-            elif expected == "event_b" and ("= 56" not in r[1] or "(8×7×6)" not in r[1]):
+
+                fails.append(("WRONG", f"{expected}->{ev}", q))
+            elif expected == "event_b" and ("= 56" not in r[0] or "(8×7×6)" not in r[0]):
                 fails.append(("BAD56", expected, q))
-            elif expected not in ("event_b", "combinations") and "ليس الحادثة A" not in r[1]:
+            elif expected not in ("event_b", "combinations") and "ليس الحادثة A" not in r[0]:
                 fails.append(("NO_DISTANCE", expected, q))
 
     pt_total, pt_hijacked = 0, []

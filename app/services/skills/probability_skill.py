@@ -604,7 +604,7 @@ class ProbabilityCalculatorSkill:
         text = content.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
         nums: list[int] = []
         # كل مجموعة مرقّمة: «... مرقم<...> ب<ـ>: <أرقام مفصولة بفواصل>».
-        for match in re.finditer(r"مرقم\S*\s+ب[ـ\s]*[:：]?\s*([0-9،,\s]+)", text):
+        for match in re.finditer(r"مرقم\S*\s+ب[ـ\s]*[:：]?\s*([\d،,\s\(\)\\$]+)", text):
             nums.extend(int(d) for d in re.findall(r"\d", match.group(1)))
         if not nums:
             return None

@@ -61,8 +61,8 @@ class TestRegistry:
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 24
-        assert len(reg.by_status("FLAGGED")) == 3
+        assert len(reg.by_status("ACTIVE")) == 25
+        assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:
         for d in get_skill_registry().list():

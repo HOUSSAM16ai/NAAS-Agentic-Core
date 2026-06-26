@@ -10542,7 +10542,7 @@ pull_request فقط، كلها success.
 3. **الحيرة المجرّدة تُبقي المفهوم النشط؛** التسمية الجديدة وحدها تُعيد الضبط.
 4. **fail-open مطلق:** كل حارس داخل `try/except` ولا يُجهض دور الطالب.
 
-### المرحلة 2 — مدير الحوار الموحَّد + الحالة الدائمة (مُنفَّذة، FLAGGED خلف `SEMANTIC_TUTOR_ENABLED`)
+### المرحلة 2 — مدير الحوار الموحَّد + الحالة الدائمة (مُنفَّذة ومفعلة كليًا ACTIVE — `SEMANTIC_TUTOR_ENABLED=True`)
 وفق قرار المالك «ثورة معمارية + جدول قاعدة بيانات + المونوليث الحيّ أولاً» ونقده (لا «مصفوفة levels»
 بل **مصفوفة + دليل فهم + صعوبة الخطوة**):
 - **جدول `tutor_state` دائم** (`app/core/domain/tutor_state.py` + `db_schema_config.py` —
@@ -10562,8 +10562,7 @@ pull_request فقط، كلها success.
   بعده (record_turn — كلاهما خلف العلم)؛ `orchestrator_client._stream_socratic_evaluation` يستشير
   `DialogueManager` ويستخدم مرساة `last_step_emitted` الدائمة في حارس التكرار. الـ skills القائمة
   (concept diagnosis / semantic property / socratic evaluator / probability) صارت أدواته.
-- **السلامة:** `SEMANTIC_TUTOR_ENABLED` **افتراضي OFF** ⇒ صفر I/O/قرار جديد على المسار الحيّ حتى
-  التحقق الحيّ في Codespaces؛ كل مسار fail-open للسلوك القائم؛ `=1` تفعيل، `=0` rollback فوري.
+- **السلامة:** `SEMANTIC_TUTOR_ENABLED` **تم تفعيله (ACTIVE)** ⇒ ليكون المصدر الفعلي للقرار بدلاً من المحرك المفكك السابق، لحل جذور `ISS-117`. المنظومة أصبحت الآن stateful pedagogically حيث تتدخل بناءً على الفهم والقدرة والصعوبة (evidence × ability × difficulty).
 - **بوّابة القياس (§2D):** التفعيل/التوسّع مرهون بهبوط `repetition_rate→0`، `advance_after_correct≈100%`،
   `over-jump_rate≈0`، و**فجوة الوهم** (D-126) ⤵ — لا توسيع للحالة قبل إثبات اللِّفت حيّاً.
 
@@ -10581,7 +10580,7 @@ pull_request فقط، كلها success.
 |----------|---------|
 | D-141 | CI نظيفة تماماً (صفر warning) |
 | **D-142 (المرحلة 1)** | **المعلّم السقراطي: السلطة الرمزية (1A) + حارس التكرار (1B) + حارس الانحراف (1D) — يحلّ تكرار التلميح ×3 + تجاهل الإجابة الصحيحة + الانجراف (مُفعَّل)** |
-| **D-142 (المرحلة 2)** | **مدير الحوار الموحَّد (`DialogueManagerSkill`) + جدول `tutor_state` دائم + `TutorStateService` + توصيل المونوليث الحيّ — قرار الدور = evidence×ability×difficulty، FLAGGED خلف `SEMANTIC_TUTOR_ENABLED` (افتراضي OFF، fail-open، تفعيل بعد التحقق الحيّ في Codespaces)** |
+| **D-142 (المرحلة 2)** | **مدير الحوار الموحَّد (`DialogueManagerSkill`) + جدول `tutor_state` دائم + `TutorStateService` + توصيل المونوليث الحيّ — قرار الدور = evidence×ability×difficulty، مفعل كليًا ACTIVE كالمصدر الفعلي لقرارات الدور التعليمي (stateful pedagogically) وحل جذر `ISS-117`** |
 
 ---
 

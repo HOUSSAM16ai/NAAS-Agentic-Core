@@ -555,7 +555,7 @@ def _build_registry() -> SkillRegistry:
             primary_method="decide",
             metrics_prefix="cogniforge_skill_dialogue_manager",
             consumed_by=("orchestrator_client._stream_socratic_evaluation",),
-            status="FLAGGED",
+            status="ACTIVE",
             feature_flag="SEMANTIC_TUTOR_ENABLED",
         ),
         SkillDescriptor(

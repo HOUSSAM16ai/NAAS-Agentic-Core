@@ -4957,8 +4957,7 @@ OpenRouter+Supabase. الحالة: المرحلة 1 RESOLVED محلياً؛ يُ
   check_dialogue_manager_wired + مقياس Prometheus. الـ skills القائمة أدواته.
 - **التوصيل:** customer_chat (load قبل/record بعد، خلف العلم) + orchestrator_client._stream_socratic_evaluation
   (يستشير DialogueManager + يستخدم last_step_emitted الدائمة).
-- **السلامة:** `SEMANTIC_TUTOR_ENABLED` افتراضي OFF ⇒ صفر تغيير على المسار الحيّ حتى التحقق في
-  Codespaces؛ fail-open مطلق؛ =0 rollback فوري.
+- **السلامة:** `SEMANTIC_TUTOR_ENABLED` تم تفعيله (ACTIVE) ليكون المصدر الفعلي للقرار بدلاً من المحرك المفكك السابق، لحل جذور `ISS-117`. المنظومة أصبحت الآن stateful pedagogically حيث تتدخل بناءً على الفهم والقدرة والصعوبة (evidence × ability × difficulty).
 
 التحقق: standalone harness (DialogueManager 6 حالات + budget) + tests/services/test_d142_phase2_dialogue_manager.py
 + ruff + runtime_truth (lock مُحدَّث) + validate_structure + ci_guardrails + check_dialogue_manager_wired

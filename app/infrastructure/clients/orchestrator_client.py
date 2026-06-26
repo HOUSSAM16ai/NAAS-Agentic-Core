@@ -3453,6 +3453,11 @@ class OrchestratorClient:
 
         from app.telemetry.unified_observability import get_unified_observability
 
+
+        from app.services.skills.pedagogical_policy_engine import PedagogicalPolicyEngine, PolicyObservation
+        from app.services.analytics.tutor_state_service import TutorStateService
+        from app.services.skills.concept_diagnosis_skill import get_concept_diagnosis_skill, ConceptDiagnosisInput
+
         obs = get_unified_observability()
         _t0 = time.perf_counter()
         _root_ctx = None
@@ -3466,6 +3471,53 @@ class OrchestratorClient:
                 },
             )
 
+
+        # Extract current state
+        tutor_state = context.get("tutor_state", {}) if isinstance(context, dict) else {}
+
+        # Formulate Observation
+        diagnosis_input = ConceptDiagnosisInput(question=question, history=history_messages)
+        diagnosis = get_concept_diagnosis_skill().analyze(diagnosis_input)
+
+        is_correct = self._verify_answer_against_combo(question, self._load_canonical_combinations(question, history_messages))
+
+        obs = PolicyObservation(
+            question=question,
+            active_concept=diagnosis.concept_id or tutor_state.get("active_concept", ""),
+            is_correct=is_correct,
+            has_misconception=bool(diagnosis.misconception_id),
+            detected_misconception=diagnosis.misconception_id or "",
+            is_frustrated=False # Could be inferred from sentiment, using default
+        )
+
+        # Consult Policy Engine
+        engine = PedagogicalPolicyEngine()
+        policy_decision = engine.evaluate_turn(tutor_state, obs)
+
+        # We must inject policy_decision into the context so it can be passed back to record_turn in customer_chat
+        if context is not None:
+            context["policy_decision"] = policy_decision
+
+        # Enforce Symbolic Truth explicitly: if question targets unmodeled mathematical event, force drift prevention
+        _comp = self._build_probability_computational_answer(question, history_messages)
+        if _comp:
+            _comp_text, _comp_event = _comp
+            if _comp_event.startswith("defer_"):
+                # Strict drift prevention: Unmodeled event
+                yield self._normalize_stream_event({"type": "assistant_delta", "payload": {"content": _comp_text}})
+                yield self._normalize_stream_event({"type": "assistant_final", "payload": {"content": ""}})
+                return
+
+        # In D-144, if the policy engine mandates a specific pedagogical action (e.g. symbolic reveal or intermediate scaffold)
+        # we bypass the standard generative fallbacks and directly emit that action.
+        if policy_decision.next_action == "symbolic_reveal":
+            _reveal_text = self._build_symbolic_reveal(question, history_messages, acknowledge=obs.is_correct)
+            if _reveal_text:
+                yield self._normalize_stream_event({"type": "assistant_delta", "payload": {"content": _reveal_text}})
+                yield self._normalize_stream_event({"type": "assistant_final", "payload": {"content": ""}})
+                return
+
+
         # ─────────────────────────────────────────────────────────────────────
         # ISS-079 (D-067 — 2026-05-17): Greeting Fast-Path Preemption
         # كارثة المستخدم: "السلام عليكم" → رد etymological طويل بكلمات أجنبية
@@ -3476,10 +3528,47 @@ class OrchestratorClient:
         # ─────────────────────────────────────────────────────────────────────
         try:
             from app.services.chat.local_graph import _greeting_fastpath_response
+            from app.services.skills.pedagogical_policy_engine import PedagogicalPolicyEngine, PolicyObservation
+            from app.services.analytics.tutor_state_service import TutorStateService
 
             greeting_response = _greeting_fastpath_response(question)
         except Exception:
             greeting_response = None
+
+            # Extract current state
+            tutor_state = context.get("tutor_state", {}) if isinstance(context, dict) else {}
+
+            # Formulate Observation
+            from app.services.skills.concept_diagnosis_skill import get_concept_diagnosis_skill, ConceptDiagnosisInput
+            diagnosis_input = ConceptDiagnosisInput(question=question, history=history_messages)
+            diagnosis = get_concept_diagnosis_skill().analyze(diagnosis_input)
+
+            is_correct = cls._verify_answer_against_combo(question, cls._load_canonical_combinations(question, history_messages))
+
+            obs = PolicyObservation(
+                question=question,
+                active_concept=diagnosis.concept_id or tutor_state.get("active_concept", ""),
+                is_correct=is_correct,
+                has_misconception=bool(diagnosis.misconception_id),
+                detected_misconception=diagnosis.misconception_id or "",
+                is_frustrated=False # Could be inferred from sentiment, using default
+            )
+
+            # Consult Policy Engine
+            engine = PedagogicalPolicyEngine()
+            decision = engine.evaluate_turn(tutor_state, obs)
+
+            # Enforce Symbolic Truth explicitly: if question targets unmodeled mathematical event, force drift prevention
+            _comp = cls._build_probability_computational_answer(question, history_messages)
+            if _comp:
+                _comp_text, _comp_event = _comp
+                if _comp_event.startswith("defer_"):
+                    # Strict drift prevention: Unmodeled event
+                    yield cls._normalize_stream_event({"type": "assistant_delta", "payload": {"content": _comp_text}})
+                    yield cls._normalize_stream_event({"type": "assistant_final", "payload": {"content": ""}})
+                    return
+
+
         if greeting_response:
             logger.info(
                 "greeting_fastpath_preempt",

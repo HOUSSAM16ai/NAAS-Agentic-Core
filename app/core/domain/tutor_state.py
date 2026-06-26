@@ -42,6 +42,15 @@ class TutorState(SQLModel, table=True):
     #: JSON (نصّ): {kc_id: {state, evidence, difficulty, representations[], attempts}}.
     kc_progress: str = Field(default="{}", sa_column=Column(Text, nullable=False))
     ability_snapshot: float = Field(default=0.0)
+
+    learning_stage: str = Field(default="definition", max_length=50)
+    representation_used: str = Field(default="text", max_length=50)
+    interventions_used: str = Field(default="[]", sa_column=Column(Text, nullable=False))
+    mastery_score: float = Field(default=0.0)
+    dead_ends: str = Field(default="[]", sa_column=Column(Text, nullable=False))
+    frustration_score: float = Field(default=0.0)
+    next_best_action: str = Field(default="", max_length=120)
+
     #: JSON (نصّ): {concept_id: count} — ميزانية سقراطية لكل مفهوم.
     socratic_count_by_concept: str = Field(default="{}", sa_column=Column(Text, nullable=False))
     #: مرساة منع التكرار — آخر خطوة/سؤال عُرض للطالب (ينجو من نافذة التاريخ).

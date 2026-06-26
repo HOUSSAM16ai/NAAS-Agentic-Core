@@ -32,6 +32,13 @@ EMPTY_STATE: dict[str, object] = {
     "active_misconception": "",
     "kc_progress": {},
     "ability_snapshot": 0.0,
+    "learning_stage": "definition",
+    "representation_used": "text",
+    "interventions_used": [],
+    "mastery_score": 0.0,
+    "dead_ends": [],
+    "frustration_score": 0.0,
+    "next_best_action": "",
     "socratic_count_by_concept": {},
     "last_step_emitted": "",
     "turn_count": 0,
@@ -70,6 +77,13 @@ class TutorStateService:
                 "active_misconception": row.active_misconception or "",
                 "kc_progress": _loads(row.kc_progress),
                 "ability_snapshot": float(row.ability_snapshot or 0.0),
+                "learning_stage": row.learning_stage or "definition",
+                "representation_used": row.representation_used or "text",
+                "interventions_used": _loads(row.interventions_used) if isinstance(_loads(row.interventions_used), list) else [],
+                "mastery_score": float(row.mastery_score or 0.0),
+                "dead_ends": _loads(row.dead_ends) if isinstance(_loads(row.dead_ends), list) else [],
+                "frustration_score": float(row.frustration_score or 0.0),
+                "next_best_action": row.next_best_action or "",
                 "socratic_count_by_concept": _loads(row.socratic_count_by_concept),
                 "last_step_emitted": row.last_step_emitted or "",
                 "turn_count": int(row.turn_count or 0),
@@ -87,6 +101,13 @@ class TutorStateService:
         assistant_text: str,
         is_socratic_question: bool,
         ability_snapshot: float | None = None,
+        learning_stage: str | None = None,
+        representation_used: str | None = None,
+        interventions_used: list[str] | None = None,
+        mastery_score: float | None = None,
+        dead_ends: list[str] | None = None,
+        frustration_score: float | None = None,
+        next_best_action: str | None = None,
     ) -> None:
         """upsert بعد الدور: يضبط آخر خطوة عُرضت + المفهوم النشط + ميزانية المفهوم. fail-open.
 
@@ -106,6 +127,20 @@ class TutorStateService:
             row.turn_count = int(row.turn_count or 0) + 1
             if ability_snapshot is not None:
                 row.ability_snapshot = float(max(0.0, min(1.0, ability_snapshot)))
+            if learning_stage is not None:
+                row.learning_stage = learning_stage
+            if representation_used is not None:
+                row.representation_used = representation_used
+            if interventions_used is not None:
+                row.interventions_used = json.dumps(interventions_used, ensure_ascii=False)
+            if mastery_score is not None:
+                row.mastery_score = float(max(0.0, min(1.0, mastery_score)))
+            if dead_ends is not None:
+                row.dead_ends = json.dumps(dead_ends, ensure_ascii=False)
+            if frustration_score is not None:
+                row.frustration_score = float(max(0.0, min(1.0, frustration_score)))
+            if next_best_action is not None:
+                row.next_best_action = next_best_action
             if is_socratic_question and concept:
                 budget = _loads(row.socratic_count_by_concept)
                 budget[concept] = int(budget.get(concept, 0)) + 1

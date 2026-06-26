@@ -5000,3 +5000,9 @@ the call site (metric outcome "advanced"); cleaned the deferral text (no 14/165,
 "ليس الحادثة A"); fixed the test unpacking + added `TestRepetitionGuard`. Verified: pure logic
 (parity {odd:8}, C(8,3)=56, C(11,3)=165, fmt substrings) + ruff + runtime_truth + validate_structure +
 py_compile 3.12. Full WS E2E in Codespaces (sandbox lacks pydantic/httpx). CLAUDE.md §6.126 D-143.1.
+
+
+## D-144 (2026-06-26) - Pedagogical Policy Engine
+**Status**: ✅ ACTIVE
+**Context**: The system drifted to Event A when queried for math concepts because progression was blindly inferred from `history_messages`.
+**Decision**: Introduced `PedagogicalPolicyEngine`. Enrich `TutorState` to be the sole source of pedagogical truth (stages, representations, dead ends). `DialogueManagerSkill` becomes the executor, not the ultimate authority.

@@ -3451,12 +3451,15 @@ class OrchestratorClient:
         """
         import time
 
+        from app.services.skills.concept_diagnosis_skill import (
+            ConceptDiagnosisInput,
+            get_concept_diagnosis_skill,
+        )
+        from app.services.skills.pedagogical_policy_engine import (
+            PedagogicalPolicyEngine,
+            PolicyObservation,
+        )
         from app.telemetry.unified_observability import get_unified_observability
-
-
-        from app.services.skills.pedagogical_policy_engine import PedagogicalPolicyEngine, PolicyObservation
-        from app.services.analytics.tutor_state_service import TutorStateService
-        from app.services.skills.concept_diagnosis_skill import get_concept_diagnosis_skill, ConceptDiagnosisInput
 
         obs = get_unified_observability()
         _t0 = time.perf_counter()
@@ -3476,17 +3479,17 @@ class OrchestratorClient:
         tutor_state = context.get("tutor_state", {}) if isinstance(context, dict) else {}
 
         # Formulate Observation
-        diagnosis_input = ConceptDiagnosisInput(question=question, history=history_messages)
-        diagnosis = get_concept_diagnosis_skill().analyze(diagnosis_input)
+        ConceptDiagnosisInput(question=question, history=history_messages)
+        diagnosis = get_concept_diagnosis_skill().diagnose_deterministic(question)
 
         is_correct = self._verify_answer_against_combo(question, self._load_canonical_combinations(question, history_messages))
 
         obs = PolicyObservation(
             question=question,
-            active_concept=diagnosis.concept_id or tutor_state.get("active_concept", ""),
+            active_concept=diagnosis.concept or tutor_state.get("active_concept", ""),
             is_correct=is_correct,
-            has_misconception=bool(diagnosis.misconception_id),
-            detected_misconception=diagnosis.misconception_id or "",
+            has_misconception=bool(diagnosis.misconception),
+            detected_misconception=diagnosis.misconception or "",
             is_frustrated=False # Could be inferred from sentiment, using default
         )
 
@@ -3528,8 +3531,10 @@ class OrchestratorClient:
         # ─────────────────────────────────────────────────────────────────────
         try:
             from app.services.chat.local_graph import _greeting_fastpath_response
-            from app.services.skills.pedagogical_policy_engine import PedagogicalPolicyEngine, PolicyObservation
-            from app.services.analytics.tutor_state_service import TutorStateService
+            from app.services.skills.pedagogical_policy_engine import (
+                PedagogicalPolicyEngine,
+                PolicyObservation,
+            )
 
             greeting_response = _greeting_fastpath_response(question)
         except Exception:
@@ -3539,33 +3544,36 @@ class OrchestratorClient:
             tutor_state = context.get("tutor_state", {}) if isinstance(context, dict) else {}
 
             # Formulate Observation
-            from app.services.skills.concept_diagnosis_skill import get_concept_diagnosis_skill, ConceptDiagnosisInput
-            diagnosis_input = ConceptDiagnosisInput(question=question, history=history_messages)
-            diagnosis = get_concept_diagnosis_skill().analyze(diagnosis_input)
+            from app.services.skills.concept_diagnosis_skill import (
+                ConceptDiagnosisInput,
+                get_concept_diagnosis_skill,
+            )
+            ConceptDiagnosisInput(question=question, history=history_messages)
+            diagnosis = get_concept_diagnosis_skill().diagnose_deterministic(question)
 
-            is_correct = cls._verify_answer_against_combo(question, cls._load_canonical_combinations(question, history_messages))
+            is_correct = self._verify_answer_against_combo(question, self._load_canonical_combinations(question, history_messages))
 
             obs = PolicyObservation(
                 question=question,
-                active_concept=diagnosis.concept_id or tutor_state.get("active_concept", ""),
+                active_concept=diagnosis.concept or tutor_state.get("active_concept", ""),
                 is_correct=is_correct,
-                has_misconception=bool(diagnosis.misconception_id),
-                detected_misconception=diagnosis.misconception_id or "",
+                has_misconception=bool(diagnosis.misconception),
+                detected_misconception=diagnosis.misconception or "",
                 is_frustrated=False # Could be inferred from sentiment, using default
             )
 
             # Consult Policy Engine
             engine = PedagogicalPolicyEngine()
-            decision = engine.evaluate_turn(tutor_state, obs)
+            engine.evaluate_turn(tutor_state, obs)
 
             # Enforce Symbolic Truth explicitly: if question targets unmodeled mathematical event, force drift prevention
-            _comp = cls._build_probability_computational_answer(question, history_messages)
+            _comp = self._build_probability_computational_answer(question, history_messages)
             if _comp:
                 _comp_text, _comp_event = _comp
                 if _comp_event.startswith("defer_"):
                     # Strict drift prevention: Unmodeled event
-                    yield cls._normalize_stream_event({"type": "assistant_delta", "payload": {"content": _comp_text}})
-                    yield cls._normalize_stream_event({"type": "assistant_final", "payload": {"content": ""}})
+                    yield self._normalize_stream_event({"type": "assistant_delta", "payload": {"content": _comp_text}})
+                    yield self._normalize_stream_event({"type": "assistant_final", "payload": {"content": ""}})
                     return
 
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-from app.core.domain.tutor_state import TutorState
-from app.services.skills.dialogue_manager_skill import get_dialogue_manager_skill, DialogueInput, DialogueDecision
+from app.services.skills.dialogue_manager_skill import (
+    DialogueInput,
+    get_dialogue_manager_skill,
+)
 
 logger = logging.getLogger("cogniforge.skills.pedagogical_policy")
 
@@ -64,14 +66,13 @@ class PedagogicalPolicyEngine:
         # Otherwise, map mastery to stage smoothly
         if mastery < 0.2:
             return "definition"
-        elif mastery < 0.4:
+        if mastery < 0.4:
             return "example"
-        elif mastery < 0.6:
+        if mastery < 0.6:
             return "procedure"
-        elif mastery < 0.8:
+        if mastery < 0.8:
             return "application"
-        else:
-            return "assessment"""
+        return "assessment"""
 
     def _choose_intervention(self, state: dict[str, Any], mastery: float, obs: PolicyObservation) -> PolicyDecision:
         """يختار أقل تدخل مفيد بناءً على حالة الطالب وإتقانه."""
@@ -114,8 +115,7 @@ class PedagogicalPolicyEngine:
         new_mastery = self._estimate_mastery(obs, current_mastery)
 
         # 3. Choose Lowest Useful Intervention
-        decision = self._choose_intervention(state, new_mastery, obs)
+        return self._choose_intervention(state, new_mastery, obs)
 
         # The Orchestrator Client will handle updating the state via TutorStateService.record_turn
         # based on this decision and the generated response.
-        return decision

@@ -83,8 +83,7 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             "search_vector",
             "created_at",
         ],
-        "auto_fix": {},
-                "auto_fix": {
+        "auto_fix": {
             "learning_stage": 'ALTER TABLE "tutor_state" ADD COLUMN "learning_stage" VARCHAR(50) NOT NULL DEFAULT \'definition\'',
             "representation_used": 'ALTER TABLE "tutor_state" ADD COLUMN "representation_used" VARCHAR(50) NOT NULL DEFAULT \'text\'',
             "interventions_used": 'ALTER TABLE "tutor_state" ADD COLUMN "interventions_used" TEXT NOT NULL DEFAULT \'[]\'',

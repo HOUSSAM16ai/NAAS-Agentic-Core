@@ -4386,3 +4386,8 @@ acknowledge≠progress. (4) evidence_markers فارغة. (5) حالة مُعاد
 حرفي للإغلاق. تأكيد حيّ من الإنتاج (جسر Supabase): محادثة 788 ×3، 15 رسالة «14/165». الحل (D-143 م1):
 preempt حسابي حتمي قبل المصفوفة (مبدأ العدّ + الحادثة B 56/165 من أرقام الكرات) + تأجيل صادق للحوادث
 غير المنمذجة (C/D/X/الأمل/الشرطي) بلا LLM + حارس dedup + بوّابة قياس. fuzz 1809 صياغة ⇒ صفر انحراف.
+
+
+## ISS-118: Pedagogical Drift & Repetition
+**Symptom**: System repeats math explanations, drifts to Event A for unmodeled probability questions, and infers state redundantly from history.
+**Resolution (D-144)**: Enforced `PedagogicalPolicyEngine`. State is explicitly tracked via `TutorState`. Deferred unmodeled probability questions directly via Symbolic Engine, bypassing LLM generation.

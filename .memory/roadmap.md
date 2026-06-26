@@ -155,3 +155,7 @@
 - **فلسفة الـ Skills**: CLAUDE.md §0.5 + `app/services/skills/doctrine.py`.
 - **منصّة الـ Skills الموحَّدة**: §6.87 (D-100) — registry + `/api/v1/skills`.
 - **البحث الأساس**: «وَهْم الإتقان» (Bjork / Roediger / Kapur / Renkl).
+
+
+### M12 — Pedagogical Policy Consolidation (D-144)
+Formalized `PedagogicalPolicyEngine` orchestrating `DialogueManagerSkill` through rich `TutorState`.

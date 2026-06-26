@@ -10651,3 +10651,7 @@ pull_request فقط، كلها success.
 |----------|---------|
 | D-142 | المعلّم السقراطي + مدير الحوار + tutor_state |
 | **D-143 (المرحلة 1)** | **إجابة حسابية حتمية (مبدأ العدّ + الحادثة B 56/165) + تأجيل صادق بلا LLM + حارس تكرار + بوّابة قياس — يحلّ انحراف الحادثة A + التكرار الحرفي** |
+
+
+### D-144 (2026-06-26) — Stateful Pedagogical Policy Engine (Monolith)
+Introduced `PedagogicalPolicyEngine` above `DialogueManagerSkill`. State is strictly persisted in `tutor_state` (learning_stage, dead_ends, interventions_used), forcing architectural progression and preventing concept drift/looping.

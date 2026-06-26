@@ -84,6 +84,15 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             "created_at",
         ],
         "auto_fix": {},
+                "auto_fix": {
+            "learning_stage": 'ALTER TABLE "tutor_state" ADD COLUMN "learning_stage" VARCHAR(50) NOT NULL DEFAULT \'definition\'',
+            "representation_used": 'ALTER TABLE "tutor_state" ADD COLUMN "representation_used" VARCHAR(50) NOT NULL DEFAULT \'text\'',
+            "interventions_used": 'ALTER TABLE "tutor_state" ADD COLUMN "interventions_used" TEXT NOT NULL DEFAULT \'[]\'',
+            "mastery_score": 'ALTER TABLE "tutor_state" ADD COLUMN "mastery_score" DOUBLE PRECISION NOT NULL DEFAULT 0.0',
+            "dead_ends": 'ALTER TABLE "tutor_state" ADD COLUMN "dead_ends" TEXT NOT NULL DEFAULT \'[]\'',
+            "frustration_score": 'ALTER TABLE "tutor_state" ADD COLUMN "frustration_score" DOUBLE PRECISION NOT NULL DEFAULT 0.0',
+            "next_best_action": 'ALTER TABLE "tutor_state" ADD COLUMN "next_best_action" VARCHAR(120) NOT NULL DEFAULT \'\'',
+        },
         "indexes": {
             "exercise_id": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercise_questions_exercise_id" ON "bac_exercise_questions"("exercise_id")',
             "embedding": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercise_questions_embedding" ON "bac_exercise_questions" USING hnsw ("embedding" vector_cosine_ops)',
@@ -243,6 +252,13 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             "active_misconception",
             "kc_progress",
             "ability_snapshot",
+            "learning_stage",
+            "representation_used",
+            "interventions_used",
+            "mastery_score",
+            "dead_ends",
+            "frustration_score",
+            "next_best_action",
             "socratic_count_by_concept",
             "last_step_emitted",
             "turn_count",
@@ -266,6 +282,13 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             "\"active_misconception\" VARCHAR(120) NOT NULL DEFAULT '',"
             "\"kc_progress\" TEXT NOT NULL DEFAULT '{}',"
             '"ability_snapshot" DOUBLE PRECISION NOT NULL DEFAULT 0.0,'
+            "\"learning_stage\" VARCHAR(50) NOT NULL DEFAULT 'definition',"
+            "\"representation_used\" VARCHAR(50) NOT NULL DEFAULT 'text',"
+            "\"interventions_used\" TEXT NOT NULL DEFAULT '[]',"
+            '"mastery_score" DOUBLE PRECISION NOT NULL DEFAULT 0.0,'
+            "\"dead_ends\" TEXT NOT NULL DEFAULT '[]',"
+            '"frustration_score" DOUBLE PRECISION NOT NULL DEFAULT 0.0,'
+            "\"next_best_action\" VARCHAR(120) NOT NULL DEFAULT '',"
             "\"socratic_count_by_concept\" TEXT NOT NULL DEFAULT '{}',"
             "\"last_step_emitted\" TEXT NOT NULL DEFAULT '',"
             '"turn_count" INTEGER NOT NULL DEFAULT 0,'

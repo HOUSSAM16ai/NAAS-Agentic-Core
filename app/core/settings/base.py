@@ -222,7 +222,9 @@ class AppSettings(BaseServiceSettings):
     ENABLE_STATIC_FILES: bool = Field(
         True, description="Enable backend static file serving (disable for Next.js-only UI)."
     )
-    SEMANTIC_TUTOR_ENABLED: bool = Field(True, description="D-142 Phase 2: تمكين مدير الحوار السقراطي الموحد (DialogueManagerSkill)")
+    SEMANTIC_TUTOR_ENABLED: bool = Field(
+        True, description="D-142 Phase 2: تمكين مدير الحوار السقراطي الموحد (DialogueManagerSkill)"
+    )
     # Skills Platform — opt-in activation of dormant capabilities (default OFF → zero
     # behavior change unless explicitly enabled). Each gated skill returns None when off.
     ENABLE_RETRIEVAL_RERANK_SKILL: bool = Field(

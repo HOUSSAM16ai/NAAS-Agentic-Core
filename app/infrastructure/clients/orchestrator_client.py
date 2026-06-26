@@ -1905,11 +1905,14 @@ class OrchestratorClient:
                 StudentStateInput,
                 get_student_state_skill,
             )
+
             _sps = get_semantic_property_skill()
             _state = get_student_state_skill().read(
                 StudentStateInput(question=question, history=history_messages)
             )
-            _confused = (_state.primary_intent == "confusion" or "confusion" in _state.secondary_signals)
+            _confused = (
+                _state.primary_intent == "confusion" or "confusion" in _state.secondary_signals
+            )
             _wants_def = (
                 _sps.is_definitional(question)
                 or _state.primary_intent == "definition"
@@ -1918,8 +1921,33 @@ class OrchestratorClient:
 
             _compute = any(
                 m in q
-                for m in ("احسب", "أحسب", "كم ", "اوجد", "أوجد", "بين ان", "بيّن أن", "استنتج", "كيف", "لماذا")
-            ) or any(m in q for m in ("56", "p(b", "الحادثة b", "جداء", "معدوم", "بدون ارجاع", "التوالي", "p(c", "p_a", "e(x"))
+                for m in (
+                    "احسب",
+                    "أحسب",
+                    "كم ",
+                    "اوجد",
+                    "أوجد",
+                    "بين ان",
+                    "بيّن أن",
+                    "استنتج",
+                    "كيف",
+                    "لماذا",
+                )
+            ) or any(
+                m in q
+                for m in (
+                    "56",
+                    "p(b",
+                    "الحادثة b",
+                    "جداء",
+                    "معدوم",
+                    "بدون ارجاع",
+                    "التوالي",
+                    "p(c",
+                    "p_a",
+                    "e(x",
+                )
+            )
 
             if _wants_def and not _compute:
                 return None

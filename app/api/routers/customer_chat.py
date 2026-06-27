@@ -1279,17 +1279,28 @@ async def chat_stream_ws(
                     with contextlib.suppress(Exception):
                         _is_socratic_q = complete_ai_response.rstrip().endswith(("؟", "?"))
                         async with async_session_factory() as _ts_db2:
-
                             # D-144: Pull policy_decision injected by OrchestratorClient
-                            policy_decision = tutor_state_ctx.get("policy_decision") if tutor_state_ctx else None
+                            policy_decision = (
+                                tutor_state_ctx.get("policy_decision") if tutor_state_ctx else None
+                            )
 
-                            learning_stage = policy_decision.learning_stage if policy_decision else "definition"
-                            representation_used = policy_decision.representation if policy_decision else "text"
-                            interventions_used = tutor_state_ctx.get("interventions_used", []) if tutor_state_ctx else []
+                            learning_stage = (
+                                policy_decision.learning_stage if policy_decision else "definition"
+                            )
+                            representation_used = (
+                                policy_decision.representation if policy_decision else "text"
+                            )
+                            interventions_used = (
+                                tutor_state_ctx.get("interventions_used", [])
+                                if tutor_state_ctx
+                                else []
+                            )
 
                             # Log intervention
                             if policy_decision:
-                                interventions_used.append(f"{learning_stage}_{policy_decision.next_action}")
+                                interventions_used.append(
+                                    f"{learning_stage}_{policy_decision.next_action}"
+                                )
 
                             await TutorStateService(_ts_db2).record_turn(
                                 conversation_id=local_conversation_id,
@@ -1302,7 +1313,6 @@ async def chat_stream_ws(
                                 representation_used=representation_used,
                                 interventions_used=interventions_used,
                             )
-
 
                 # Close path-aware span exactly once per turn — final event type
                 # mirrors what `_emit_terminal_frames` actually sent.

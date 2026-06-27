@@ -79,9 +79,13 @@ class TutorStateService:
                 "ability_snapshot": float(row.ability_snapshot or 0.0),
                 "learning_stage": row.learning_stage or "definition",
                 "representation_used": row.representation_used or "text",
-                "interventions_used": _loads(row.interventions_used) if isinstance(_loads(row.interventions_used), list) else [],
+                "interventions_used": _loads(row.interventions_used)
+                if isinstance(_loads(row.interventions_used), list)
+                else [],
                 "mastery_score": float(row.mastery_score or 0.0),
-                "dead_ends": _loads(row.dead_ends) if isinstance(_loads(row.dead_ends), list) else [],
+                "dead_ends": _loads(row.dead_ends)
+                if isinstance(_loads(row.dead_ends), list)
+                else [],
                 "frustration_score": float(row.frustration_score or 0.0),
                 "next_best_action": row.next_best_action or "",
                 "socratic_count_by_concept": _loads(row.socratic_count_by_concept),

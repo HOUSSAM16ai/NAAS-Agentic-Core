@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 """
 D-143 (ISS-117) — deterministic computational answers for BAC-2024 probability.
 
@@ -56,7 +58,8 @@ class TestComputationalRouting:
     async def test_event_b_56_deterministic(self):
         for q in ("كيف حصلنا على 56", "بيّن أن P(B)=56/165", "احتمال الحادثة B جداء فردي"):
             r = await self._route(q)
-            if r is None: continue
+            if r is None:
+                continue
             text, event = r  # builder returns (text, event)
             assert event == "event_b", q
             assert "(8×7×6)" in text and "= 56" in text  # C(8,3)=56
@@ -73,7 +76,8 @@ class TestComputationalRouting:
             "اقصد لماذا نضرب ثلاثة أرقام في بعضهم",
         ):
             r = await self._route(q)
-            if r is None: continue
+            if r is None:
+                continue
             text, event = r  # builder returns (text, event)
             assert event == "combinations", q
             assert "نقسم" in text  # divide by 3! (counting principle)
@@ -93,7 +97,8 @@ class TestComputationalRouting:
         }
         for q, expected_event in cases.items():
             r = await self._route(q)
-            if r is None: continue
+            if r is None:
+                continue
             text, event = r  # builder returns (text, event)
             assert event == expected_event, f"{q} -> {event}"
             assert "14/165" not in text  # explicitly distanced from event A numbers
@@ -180,7 +185,8 @@ class TestRepetitionGuard:
         res = await OrchestratorClient._build_probability_computational_answer(
             "كيف حصلنا على 56", None
         )
-        if res is None: return
+        if res is None:
+            return
         base_text, event = res
         assert event == "event_b"
         var = OrchestratorClient._probability_computational_variant("event_b", None)

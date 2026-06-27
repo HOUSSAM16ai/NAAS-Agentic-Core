@@ -2046,6 +2046,7 @@ class OrchestratorClient:
 
             try:
                 import asyncio
+
                 from app.core.ai_gateway import get_ai_client
 
                 system_prompt = (
@@ -2068,7 +2069,6 @@ class OrchestratorClient:
                     timeout=15.0,
                 )
                 if raw and isinstance(raw, str) and raw.strip():
-                    from app.services.skills.answer_redaction_skill import redact_final_answers
                     from app.services.skills.content_integrity_skill import _strip_garbage_markers
 
                     text = _strip_garbage_markers(raw.strip())

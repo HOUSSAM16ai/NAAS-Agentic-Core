@@ -11,9 +11,11 @@ from app.services.skills.dialogue_manager_skill import (
 
 logger = logging.getLogger("cogniforge.skills.pedagogical_policy")
 
+
 @dataclass
 class PolicyObservation:
     """الملاحظات التي يجمعها المحرك التربوي من الدور الحالي."""
+
     question: str
     active_concept: str
     is_correct: bool = False
@@ -21,14 +23,17 @@ class PolicyObservation:
     has_misconception: bool = False
     detected_misconception: str = ""
 
+
 @dataclass
 class PolicyDecision:
     """القرار التربوي النهائي."""
+
     next_action: str
     learning_stage: str
     representation: str
     focus: str | None
     reason: str
+
 
 class PedagogicalPolicyEngine:
     """
@@ -58,7 +63,10 @@ class PedagogicalPolicyEngine:
         stages = ["definition", "example", "procedure", "application", "assessment"]
 
         # If the current stage is a dead end or fully exhausted, force progression
-        if current_stage in dead_ends or len([i for i in interventions_used if i.startswith(current_stage)]) > 2:
+        if (
+            current_stage in dead_ends
+            or len([i for i in interventions_used if i.startswith(current_stage)]) > 2
+        ):
             current_idx = stages.index(current_stage) if current_stage in stages else 0
             if current_idx < len(stages) - 1:
                 return stages[current_idx + 1]
@@ -72,12 +80,14 @@ class PedagogicalPolicyEngine:
             return "procedure"
         if mastery < 0.8:
             return "application"
-        return "assessment"""
+        return "assessment"
 
-    def _choose_intervention(self, state: dict[str, Any], mastery: float, obs: PolicyObservation) -> PolicyDecision:
+    def _choose_intervention(
+        self, state: dict[str, Any], mastery: float, obs: PolicyObservation
+    ) -> PolicyDecision:
         """يختار أقل تدخل مفيد بناءً على حالة الطالب وإتقانه."""
         learning_stage = self._determine_learning_stage(mastery, state)
-        representation = "text" # Default
+        representation = "text"  # Default
 
         if obs.is_frustrated:
             representation = "micro_simulation"
@@ -91,9 +101,11 @@ class PedagogicalPolicyEngine:
             ability=mastery,
             understood=obs.is_correct,
             verified_correct=obs.is_correct,
-            socratic_count=int(state.get("socratic_count_by_concept", {}).get(obs.active_concept, 0)),
-            candidate_text="", # Not evaluating candidate text here yet
-            last_step_emitted=str(state.get("last_step_emitted", ""))
+            socratic_count=int(
+                state.get("socratic_count_by_concept", {}).get(obs.active_concept, 0)
+            ),
+            candidate_text="",  # Not evaluating candidate text here yet
+            last_step_emitted=str(state.get("last_step_emitted", "")),
         )
 
         dm_decision = dm_skill.decide(dm_input)
@@ -103,7 +115,7 @@ class PedagogicalPolicyEngine:
             learning_stage=learning_stage,
             representation=representation,
             focus=dm_decision.focus,
-            reason=f"policy_engine_directed: {dm_decision.reason}"
+            reason=f"policy_engine_directed: {dm_decision.reason}",
         )
 
     def evaluate_turn(self, state: dict[str, Any], obs: PolicyObservation) -> PolicyDecision:

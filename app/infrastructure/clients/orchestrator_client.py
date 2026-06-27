@@ -3474,7 +3474,6 @@ class OrchestratorClient:
                 },
             )
 
-
         # Extract current state
         tutor_state = context.get("tutor_state", {}) if isinstance(context, dict) else {}
 
@@ -3482,7 +3481,9 @@ class OrchestratorClient:
         ConceptDiagnosisInput(question=question, history=history_messages)
         diagnosis = get_concept_diagnosis_skill().diagnose_deterministic(question)
 
-        is_correct = self._verify_answer_against_combo(question, self._load_canonical_combinations(question, history_messages))
+        is_correct = self._verify_answer_against_combo(
+            question, self._load_canonical_combinations(question, history_messages)
+        )
 
         obs = PolicyObservation(
             question=question,
@@ -3490,7 +3491,7 @@ class OrchestratorClient:
             is_correct=is_correct,
             has_misconception=bool(diagnosis.misconception),
             detected_misconception=diagnosis.misconception or "",
-            is_frustrated=False # Could be inferred from sentiment, using default
+            is_frustrated=False,  # Could be inferred from sentiment, using default
         )
 
         # Consult Policy Engine
@@ -3507,19 +3508,28 @@ class OrchestratorClient:
             _comp_text, _comp_event = _comp
             if _comp_event.startswith("defer_"):
                 # Strict drift prevention: Unmodeled event
-                yield self._normalize_stream_event({"type": "assistant_delta", "payload": {"content": _comp_text}})
-                yield self._normalize_stream_event({"type": "assistant_final", "payload": {"content": ""}})
+                yield self._normalize_stream_event(
+                    {"type": "assistant_delta", "payload": {"content": _comp_text}}
+                )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
                 return
 
         # In D-144, if the policy engine mandates a specific pedagogical action (e.g. symbolic reveal or intermediate scaffold)
         # we bypass the standard generative fallbacks and directly emit that action.
         if policy_decision.next_action == "symbolic_reveal":
-            _reveal_text = self._build_symbolic_reveal(question, history_messages, acknowledge=obs.is_correct)
+            _reveal_text = self._build_symbolic_reveal(
+                question, history_messages, acknowledge=obs.is_correct
+            )
             if _reveal_text:
-                yield self._normalize_stream_event({"type": "assistant_delta", "payload": {"content": _reveal_text}})
-                yield self._normalize_stream_event({"type": "assistant_final", "payload": {"content": ""}})
+                yield self._normalize_stream_event(
+                    {"type": "assistant_delta", "payload": {"content": _reveal_text}}
+                )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
                 return
-
 
         # ─────────────────────────────────────────────────────────────────────
         # ISS-079 (D-067 — 2026-05-17): Greeting Fast-Path Preemption
@@ -3548,10 +3558,13 @@ class OrchestratorClient:
                 ConceptDiagnosisInput,
                 get_concept_diagnosis_skill,
             )
+
             ConceptDiagnosisInput(question=question, history=history_messages)
             diagnosis = get_concept_diagnosis_skill().diagnose_deterministic(question)
 
-            is_correct = self._verify_answer_against_combo(question, self._load_canonical_combinations(question, history_messages))
+            is_correct = self._verify_answer_against_combo(
+                question, self._load_canonical_combinations(question, history_messages)
+            )
 
             obs = PolicyObservation(
                 question=question,
@@ -3559,7 +3572,7 @@ class OrchestratorClient:
                 is_correct=is_correct,
                 has_misconception=bool(diagnosis.misconception),
                 detected_misconception=diagnosis.misconception or "",
-                is_frustrated=False # Could be inferred from sentiment, using default
+                is_frustrated=False,  # Could be inferred from sentiment, using default
             )
 
             # Consult Policy Engine
@@ -3572,10 +3585,13 @@ class OrchestratorClient:
                 _comp_text, _comp_event = _comp
                 if _comp_event.startswith("defer_"):
                     # Strict drift prevention: Unmodeled event
-                    yield self._normalize_stream_event({"type": "assistant_delta", "payload": {"content": _comp_text}})
-                    yield self._normalize_stream_event({"type": "assistant_final", "payload": {"content": ""}})
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_delta", "payload": {"content": _comp_text}}
+                    )
+                    yield self._normalize_stream_event(
+                        {"type": "assistant_final", "payload": {"content": ""}}
+                    )
                     return
-
 
         if greeting_response:
             logger.info(

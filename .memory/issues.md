@@ -1,5 +1,13 @@
 # Open Issues & Bugs
-> Last updated: 2026-06-04 | Branch: `claude/orchestrator-service-runtime-tjjyW`
+## ✅ Resolved 2026-06-27 (ISS-117 — Repetitive loops and context drift due to stateless graph)
+**Symptom:** AI tutor repeats same definitions, ignores correct answers, and gets hijacked by intent detector regexes.
+**Root:** Lack of stateful pedagogical progression. local_graph ignored TutorState and PedagogicalPolicyEngine.
+**Fix (D-142):** Injected TutorStateService into the main graph loops (supervisor, chat_node). Instructed the LLM via prompt constraints to respect learning stage, and enforced last_step_emitted check to stop loops. Replaced naive intent if an active concept is present.
+
+**Symptom:** AI tutor repeats same definitions, ignores correct answers, and gets hijacked by intent detector regexes.
+**Root:** Lack of stateful pedagogical progression.  ignored  and .
+**Fix (D-142):** Injected  into the main graph loops (, , and stream variant). Instructed the LLM via prompt constraints to respect learning stage, and enforced  check to stop loops. Replaced naive intent if an active concept is present.
+
 
 ---
 

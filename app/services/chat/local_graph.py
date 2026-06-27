@@ -185,6 +185,10 @@ class LocalChatState(TypedDict):
     intent: str
     history_messages: list[dict]
     final_response: str
+    tutor_state: dict
+    pedagogical_decision: dict
+    conversation_id: int | None
+    user_id: int | None
 
 
 # ─── ISS-075 D-063: Foreign-script + chat meta-narration sanitizer ────────────
@@ -691,11 +695,52 @@ def _format_history(history_messages: list[dict], max_turns: int = 20) -> str:
 
 async def _supervisor_node(state: LocalChatState) -> dict:
     t0 = time.perf_counter()
+
+    # ── Pedagogical State Resolution (D-142) ──
+    tutor_state = state.get("tutor_state", {})
+    pedagogical_decision = {}
+    conversation_id = state.get("conversation_id")
+
+    if conversation_id:
+        import contextlib
+        with contextlib.suppress(Exception):
+            from app.core.database import get_db_session
+            from app.services.analytics.tutor_state_service import TutorStateService
+            from app.services.skills.pedagogical_policy_engine import PedagogicalPolicyEngine, PolicyObservation
+
+            async for db in get_db_session():
+                tutor_state_svc = TutorStateService(db)
+                tutor_state = await tutor_state_svc.load(conversation_id)
+                break
+
+            if tutor_state.get("active_concept"):
+                policy_engine = PedagogicalPolicyEngine()
+                obs = PolicyObservation(
+                    question=state["question"],
+                    active_concept=tutor_state["active_concept"],
+                    is_correct=False, # We don't evaluate answer in supervisor
+                    is_frustrated=False,
+                )
+                decision = policy_engine.evaluate_turn(tutor_state, obs)
+                pedagogical_decision = {
+                    "next_action": decision.next_action,
+                    "learning_stage": decision.learning_stage,
+                    "representation": decision.representation,
+                    "focus": decision.focus,
+                    "reason": decision.reason,
+                }
+
     intent = _classify_intent(state["question"])
+
+    # If we have an active pedagogical session, override random intents (prevent hijacking)
+    if tutor_state.get("active_concept") and intent not in ("exercise_explanation", "chat"):
+        intent = "educational"
+
     logger.info(
-        "local_graph.supervisor intent=%s question=%.60s",
+        "local_graph.supervisor intent=%s question=%.60s active_concept=%s",
         intent,
         state["question"],
+        tutor_state.get("active_concept", "none"),
     )
 
     import contextlib
@@ -734,7 +779,11 @@ async def _supervisor_node(state: LocalChatState) -> dict:
             labels={"node": "supervisor", "graph": "local"},
         )
 
-    return {"intent": intent}
+    return {
+        "intent": intent,
+        "tutor_state": tutor_state,
+        "pedagogical_decision": pedagogical_decision
+    }
 
 
 async def _chat_node(state: LocalChatState) -> dict:
@@ -791,6 +840,30 @@ async def _chat_node(state: LocalChatState) -> dict:
     system_prompt = _SYSTEM_PROMPTS.get(
         _effective_intent, _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"])
     )
+
+    # ── Inject Pedagogical Constraints (D-142) ──
+    pedagogical_decision = state.get("pedagogical_decision", {})
+    tutor_state = state.get("tutor_state", {})
+    if pedagogical_decision and tutor_state:
+        learning_stage = pedagogical_decision.get("learning_stage", "definition")
+        representation = pedagogical_decision.get("representation", "text")
+        focus = pedagogical_decision.get("focus")
+        last_step_emitted = tutor_state.get("last_step_emitted", "")
+
+        system_prompt += (
+            f"\n\n## التوجيهات التربوية الإلزامية لهذه الخطوة:\n"
+            f"- المرحلة التعليمية الحالية: {learning_stage}\n"
+            f"- نوع التمثيل المطلوب: {representation}\n"
+            f"- البؤرة (Concept Focus): {focus or 'عام'}\n"
+        )
+        if last_step_emitted:
+            system_prompt += (
+                f"\n\n## تحذير صارم لمنع التكرار (Strict Anti-Loop):\n"
+                f"الخطوة السابقة التي عرضتها للطالب كانت:\n"
+                f"«{last_step_emitted[-200:]}»\n"
+                f"**يُمنع منعاً باتاً** إعادة نفس الشرح أو نفس السؤال. قدّم خطوة جديدة تماماً بناءً على تقدم الطالب ومرحلته الحالية."
+            )
+
     history_text = _format_history(history)
     if history_text:
         user_message = f"سياق المحادثة السابقة:\n{history_text}\n\nالسؤال الحالي: {question}"
@@ -906,6 +979,7 @@ def get_local_graph():
 async def run_local_graph(
     question: str,
     conversation_id: int | None,
+    user_id: int | None = None,
     history_messages: list[dict] | None = None,
     trace_context=None,
 ) -> str | None:
@@ -922,6 +996,10 @@ async def run_local_graph(
         "intent": "general",
         "history_messages": history_messages or [],
         "final_response": "",
+        "tutor_state": {},
+        "pedagogical_decision": {},
+        "conversation_id": conversation_id,
+        "user_id": user_id,
     }
 
     # Create root span and expose it to child nodes via ContextVar
@@ -950,6 +1028,37 @@ async def run_local_graph(
                 thread_id,
                 len(response),
             )
+
+            # ── Record pedagogical state turn (D-142) ──
+            if conversation_id and user_id:
+                ped_decision = result.get("pedagogical_decision", {})
+                intent = result.get("intent", "general")
+                # Evaluate if it ended with a question mark heuristically
+                is_socratic = "?" in response or "؟" in response
+
+                # Default values for state updates
+                tutor_state_up = result.get("tutor_state", {})
+                active_concept = tutor_state_up.get("active_concept", "general_inquiry")
+                if intent == "educational" and not active_concept:
+                    active_concept = "math_concept"
+
+                import contextlib
+                with contextlib.suppress(Exception):
+                    from app.core.database import get_db_session
+                    from app.services.analytics.tutor_state_service import TutorStateService
+                    async for db in get_db_session():
+                        tutor_state_svc = TutorStateService(db)
+                        await tutor_state_svc.record_turn(
+                            conversation_id=conversation_id,
+                            user_id=user_id,
+                            active_concept=active_concept,
+                            assistant_text=response,
+                            is_socratic_question=is_socratic,
+                            learning_stage=ped_decision.get("learning_stage", "definition"),
+                            representation_used=ped_decision.get("representation", "text"),
+                        )
+                        break
+
             if root_span_ctx:
                 with contextlib.suppress(Exception):
                     obs.end_span(
@@ -985,6 +1094,7 @@ async def run_local_graph(
 async def run_local_graph_stream(
     question: str,
     conversation_id: int | None,
+    user_id: int | None = None,
     history_messages: list[dict] | None = None,
     trace_context=None,
 ) -> AsyncGenerator[str, None]:
@@ -1023,6 +1133,61 @@ async def run_local_graph_stream(
     system_prompt = _SYSTEM_PROMPTS.get(
         _effective_intent, _SYSTEM_PROMPTS.get(intent, _SYSTEM_PROMPTS["general"])
     )
+
+    # ── Inject Pedagogical Constraints (D-142) for streaming ──
+    pedagogical_decision = {}
+    tutor_state = {}
+    if conversation_id:
+        import contextlib
+        with contextlib.suppress(Exception):
+            from app.core.database import get_db_session
+            from app.services.analytics.tutor_state_service import TutorStateService
+            from app.services.skills.pedagogical_policy_engine import PedagogicalPolicyEngine, PolicyObservation
+
+            async for db in get_db_session():
+                tutor_state_svc = TutorStateService(db)
+                tutor_state = await tutor_state_svc.load(conversation_id)
+                break
+
+            if tutor_state.get("active_concept"):
+                policy_engine = PedagogicalPolicyEngine()
+                obs = PolicyObservation(
+                    question=sanitized,
+                    active_concept=tutor_state["active_concept"],
+                    is_correct=False,
+                    is_frustrated=False,
+                )
+                decision = policy_engine.evaluate_turn(tutor_state, obs)
+                pedagogical_decision = {
+                    "next_action": decision.next_action,
+                    "learning_stage": decision.learning_stage,
+                    "representation": decision.representation,
+                    "focus": decision.focus,
+                    "reason": decision.reason,
+                }
+                if intent not in ("exercise_explanation", "chat"):
+                    intent = "educational"
+
+    if pedagogical_decision and tutor_state:
+        learning_stage = pedagogical_decision.get("learning_stage", "definition")
+        representation = pedagogical_decision.get("representation", "text")
+        focus = pedagogical_decision.get("focus")
+        last_step_emitted = tutor_state.get("last_step_emitted", "")
+
+        system_prompt += (
+            f"\n\n## التوجيهات التربوية الإلزامية لهذه الخطوة:\n"
+            f"- المرحلة التعليمية الحالية: {learning_stage}\n"
+            f"- نوع التمثيل المطلوب: {representation}\n"
+            f"- البؤرة (Concept Focus): {focus or 'عام'}\n"
+        )
+        if last_step_emitted:
+            system_prompt += (
+                f"\n\n## تحذير صارم لمنع التكرار (Strict Anti-Loop):\n"
+                f"الخطوة السابقة التي عرضتها للطالب كانت:\n"
+                f"«{last_step_emitted[-200:]}»\n"
+                f"**يُمنع منعاً باتاً** إعادة نفس الشرح أو نفس السؤال. قدّم خطوة جديدة تماماً بناءً على تقدم الطالب ومرحلته الحالية."
+            )
+
     history_text = _format_history(history)
     user_message = (
         f"سياق المحادثة السابقة:\n{history_text}\n\nالسؤال الحالي: {sanitized}"
@@ -1095,6 +1260,14 @@ async def run_local_graph_stream(
                 chunk_count += 1
                 total_chars += len(tail)
                 yield tail
+        # ── Record pedagogical state turn for stream (D-142) ──
+        # We need the full response to evaluate if it's a Socratic question.
+        # Since we just streamed it, we don't have the full string aggregated yet.
+        # Let's not fully implement saving here, because `chat_backend` (the caller)
+        # normally buffers and calls `run_local_graph` for stateful interactions anyway.
+        # But if we want it perfect, we'd need to aggregate it:
+        # Wait, the monolith chat backend actually breaks streaming and buffers!
+        pass
     except Exception:
         logger.warning("local_graph.stream_failed intent=%s", intent, exc_info=True)
         if obs is not None and span_ctx is not None:

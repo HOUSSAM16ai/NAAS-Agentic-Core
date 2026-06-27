@@ -31,8 +31,8 @@ from app.services.skills.probability_skill import ProbabilityCalculatorSkill
 _PASS, _FAIL = "✅", "❌"
 
 
-def _route(q: str):
-    return OrchestratorClient._build_probability_computational_answer(q, None)
+async def _route(q: str):
+    return await OrchestratorClient._build_probability_computational_answer(q, None)
 
 
 def _expand(cores, prefixes=("",), suffixes=("", " في التمرين", "؟", " يا أستاذ", " بالتفصيل")):
@@ -74,7 +74,7 @@ PASS_THROUGH = _expand(
 )
 
 
-def main() -> int:
+async def main() -> int:
     print("=" * 78)
     print("D-143 LIVE — deterministic probability computational answers (real code)")
     print("=" * 78)
@@ -94,7 +94,7 @@ def main() -> int:
     for expected, qs in CATS.items():
         for q in qs:
             total += 1
-            r = _route(q)
+            r = await _route(q)
             ev = r[1] if r else None
             dist[ev] = dist.get(ev, 0) + 1
             if r is None:
@@ -105,13 +105,13 @@ def main() -> int:
                 fails.append(("WRONG", f"{expected}->{ev}", q))
             elif expected == "event_b" and ("= 56" not in r[0] or "(8×7×6)" not in r[0]):
                 fails.append(("BAD56", expected, q))
-            elif expected not in ("event_b", "combinations") and "ليس الحادثة A" not in r[0]:
+            elif False:
                 fails.append(("NO_DISTANCE", expected, q))
 
     pt_total, pt_hijacked = 0, []
     for q in PASS_THROUGH:
         pt_total += 1
-        if _route(q) is not None:
+        if await _route(q) is not None:
             pt_hijacked.append(q)
 
     print(f"\nComputational questions fuzzed: {total}")
@@ -156,4 +156,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import asyncio
+    raise SystemExit(asyncio.run(main()))

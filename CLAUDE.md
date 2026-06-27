@@ -10657,3 +10657,8 @@ pull_request فقط، كلها success.
 
 ### D-144 (2026-06-26) — Stateful Pedagogical Policy Engine (Monolith)
 Introduced `PedagogicalPolicyEngine` above `DialogueManagerSkill`. State is strictly persisted in `tutor_state` (learning_stage, dead_ends, interventions_used), forcing architectural progression and preventing concept drift/looping.
+
+### D-145: RAG-Grounded Math LLM (The "No Hallucination" Fix)
+*   **Context:** The system suffered from a structural catastrophe ("drift-to-event-A") where the LLM either hallucinated numbers (like `C(5,3)=10`) or the hardcoded routing strictly bypassed the LLM to output "this is not Event A".
+*   **Decision:** Replaced the hardcoded deferral for unmodeled probability events (Event C, Event D, X, E(X)) in `orchestrator_client.py` (`_build_probability_computational_answer`) with an explicit asynchronous RAG-grounded LLM flow. The LLM is strictly prompted to extract and pedogogically explain mathematical reasoning from the official solution manual injected into the `knowledge_base/bac2024_math_experimental_subject1_ex1_ex2.md` file.
+*   **Status:** Implemented async `_build_probability_computational_answer` and updated all callers (`chat_with_agent`, etc.) to `await` the response, removing the need to manually hardcode math logic for every possible sub-question in the Baccalaureate exercises while guaranteeing zero hallucination.

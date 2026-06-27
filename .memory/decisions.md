@@ -1,4 +1,12 @@
 # Architectural Decisions
+## D-142 · Stateful Pedagogical Progression via TutorState (2026-06-27)
+**السياق:** المستخدم أبلغ عن سلوك الكارثة حيث يقوم مساعد الذكاء الاصطناعي بتكرار نفس الأسئلة وإعادة الشرح الحرفي والضياع بين المفاهيم والانجراف في نوايا التوجيه. كان مسار `local_graph.py` يستند إلى التوجيه الساذج (regex intent) وإعادة بناء الحالة من نافذة السجل.
+**التغييرات:**
+1. ربط الـ `LocalChatState` بذاكرة `tutor_state` و`pedagogical_decision` عبر تحميلها من `TutorStateService` لكل `conversation_id`.
+2. دمج `PedagogicalPolicyEngine` في `_supervisor_node` لتحديد التدخل الأدنى المفيد، وإلغاء اختطاف النوايا (Intent Hijacking) عبر إجبار التوجيه التعليمي عند نشاط مفهوم.
+3. حقن تعليمات إلزامية في `system_prompt` في `_chat_node` تمنع حرفياً تكرار `last_step_emitted` وتحدد مرحلة التعلم ونوع التمثيل.
+4. حفظ تقدم الجولة بنهاية `run_local_graph` عبر `TutorStateService.record_turn` للحفاظ على ذاكرة مستمرة.
+# Architectural Decisions
 > Last updated: 2026-06-04 | Branch: `claude/orchestrator-service-runtime-tjjyW`
 
 ## D-098 · Orchestrator `routes.py` runtime re-activation on SQLite + full-stack E2E (2026-06-04)

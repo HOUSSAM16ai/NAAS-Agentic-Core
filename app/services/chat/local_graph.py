@@ -696,17 +696,21 @@ def _format_history(history_messages: list[dict], max_turns: int = 20) -> str:
 async def _supervisor_node(state: LocalChatState) -> dict:
     t0 = time.perf_counter()
 
+    import contextlib
+
     # ── Pedagogical State Resolution (D-142) ──
     tutor_state = state.get("tutor_state", {})
     pedagogical_decision = {}
     conversation_id = state.get("conversation_id")
 
     if conversation_id:
-        import contextlib
         with contextlib.suppress(Exception):
             from app.core.database import get_db_session
             from app.services.analytics.tutor_state_service import TutorStateService
-            from app.services.skills.pedagogical_policy_engine import PedagogicalPolicyEngine, PolicyObservation
+            from app.services.skills.pedagogical_policy_engine import (
+                PedagogicalPolicyEngine,
+                PolicyObservation,
+            )
 
             async for db in get_db_session():
                 tutor_state_svc = TutorStateService(db)
@@ -1060,6 +1064,7 @@ async def run_local_graph(
                         break
 
             if root_span_ctx:
+                import contextlib
                 with contextlib.suppress(Exception):
                     obs.end_span(
                         root_span_ctx.span_id,
@@ -1069,6 +1074,7 @@ async def run_local_graph(
             return response
         logger.warning("local_graph.run_empty_response thread_id=%s", thread_id)
         if root_span_ctx:
+            import contextlib
             with contextlib.suppress(Exception):
                 obs.end_span(
                     root_span_ctx.span_id,
@@ -1078,10 +1084,12 @@ async def run_local_graph(
     except Exception:
         logger.warning("local_graph.run_failed thread_id=%s", thread_id, exc_info=True)
         if root_span_ctx:
+            import contextlib
             with contextlib.suppress(Exception):
                 obs.end_span(root_span_ctx.span_id, status="ERROR")
     finally:
         if token is not None:
+            import contextlib
             with contextlib.suppress(Exception):
                 _graph_trace_context.reset(token)
 
@@ -1137,12 +1145,15 @@ async def run_local_graph_stream(
     # ── Inject Pedagogical Constraints (D-142) for streaming ──
     pedagogical_decision = {}
     tutor_state = {}
+    import contextlib
     if conversation_id:
-        import contextlib
         with contextlib.suppress(Exception):
             from app.core.database import get_db_session
             from app.services.analytics.tutor_state_service import TutorStateService
-            from app.services.skills.pedagogical_policy_engine import PedagogicalPolicyEngine, PolicyObservation
+            from app.services.skills.pedagogical_policy_engine import (
+                PedagogicalPolicyEngine,
+                PolicyObservation,
+            )
 
             async for db in get_db_session():
                 tutor_state_svc = TutorStateService(db)

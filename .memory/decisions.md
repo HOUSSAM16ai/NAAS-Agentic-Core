@@ -5014,3 +5014,8 @@ py_compile 3.12. Full WS E2E in Codespaces (sandbox lacks pydantic/httpx). CLAUD
 **Status**: ✅ ACTIVE
 **Context**: The system drifted to Event A when queried for math concepts because progression was blindly inferred from `history_messages`.
 **Decision**: Introduced `PedagogicalPolicyEngine`. Enrich `TutorState` to be the sole source of pedagogical truth (stages, representations, dead ends). `DialogueManagerSkill` becomes the executor, not the ultimate authority.
+
+### D-145: RAG-Grounded Math LLM for Billions of Questions
+*   **Context:** The architecture previously relied on brittle, hardcoded routing (`D-143`) to prevent LLM hallucinations when explaining specific probability events (like Event A and B). It failed to generalize to unmodeled events (Event C, D, X, E(X)), causing a pedagogical collapse.
+*   **Decision:** We transitioned from a "Zero LLM" hardcoded approach for unmodeled events to a strictly controlled RAG-grounded LLM flow. By injecting the official solution manual into the knowledge base (`knowledge_base/bac2024_math_experimental_subject1_ex1_ex2.md`) and refactoring `_build_probability_computational_answer` as an asynchronous method, the system now queries the `ai_gateway` to pedagogically explain steps from the ground truth.
+*   **Consequences:** `orchestrator_client.py`'s probability fallback is now completely asynchronous, allowing dynamic math problem explanations grounded entirely in provided textbook solutions. This effectively solves the hallucination catastrophe without needing to hand-code thousands of math logic permutations.

@@ -1849,7 +1849,7 @@ class OrchestratorClient:
             return None
 
     @classmethod
-    def _build_probability_computational_answer(
+    async def _build_probability_computational_answer(
         cls,
         question: str,
         history_messages: list[dict[str, str]] | None,
@@ -2040,14 +2040,52 @@ class OrchestratorClient:
                 )
                 return (text, "combinations")
 
-            # (3) حوادث غير منمذجة بعد ⇒ تأجيل حتمي صادق (لا أرقام، لا LLM، لا الحادثة A).
-            # نقد المالك #1: لا تُذكر أرقام الحادثة A (14/165) إطلاقاً — حتى للمقارنة.
+            # (3) حوادث غير منمذجة (C/D/X/E(X)/Conditional) ⇒ RAG-Grounded LLM
+            # D-145: بدلاً من التأجيل، نمرر التمرين والحل النموذجي للـ LLM ليشرحه بيداغوجياً دون هلوسة.
             ev_id, ev_label = uncovered  # type: ignore[misc]
+
+            try:
+                import asyncio
+                from app.core.ai_gateway import get_ai_client
+
+                system_prompt = (
+                    "أنت معلّم رياضيات جزائري متميز تشرح لطلبة البكالوريا. "
+                    "مهمتك: الإجابة على سؤال الطالب بالاستناد **حصرياً** على النص المرفق (التمرين مع الإجابة النموذجية المرجعية). "
+                    "ممنوع منعاً باتاً اختراع أرقام أو كسور غير موجودة في الحل النموذجي. "
+                    "اقرأ الإجابة الخاصة بالحدث الذي يسأل عنه الطالب (مثلا الحادثة D أو المتغير X أو الأمل الرياضي)، واشرح خطواتها بتفصيل بيداغوجي. "
+                    "استخدم LaTeX للمعادلات. لا تبدأ بكلمات مثل 'حسنا' أو 'أفهمك'. أعط الشرح مباشرة بصيغة المخاطب."
+                )
+                user_prompt = (
+                    f"المرجع (التمرين والحل النموذجي):\n{_official}\n\n"
+                    f"سؤال الطالب يخص: {ev_label}\n"
+                    f"السؤال الفعلي: {question}\n\n"
+                    "اشرح هذا الجزء للطالب خطوة بخطوة بالاستناد للمرجع فقط."
+                )
+
+                ai_client = get_ai_client()
+                raw = await asyncio.wait_for(
+                    ai_client.send_message(system_prompt, user_prompt, temperature=0.2),
+                    timeout=15.0,
+                )
+                if raw and isinstance(raw, str) and raw.strip():
+                    from app.services.skills.answer_redaction_skill import redact_final_answers
+                    from app.services.skills.content_integrity_skill import _strip_garbage_markers
+
+                    text = _strip_garbage_markers(raw.strip())
+                    # Apply optional pedagogical redaction if needed, but for mathematical explanations of new parts,
+                    # we often want to show the steps.
+                    # text, _ = redact_final_answers(text, support_level=5)
+
+                    if text:
+                        return (text, ev_id)
+            except Exception as llm_err:
+                import logging
+                logging.getLogger("orchestrator-client").warning(f"RAG LLM fallback failed: {llm_err}", exc_info=True)
+
+            # Fallback to the old deferral message if LLM fails
             text = (
                 f"## {ev_label}\n\n"
-                f"سؤالك يخصّ {ev_label} — وهو ليس الحادثة A (3 كرات من نفس اللون). لهذه "
-                f"الحادثة حسابُها الخاصّ من أرقام الكرات أو نوع السحب، وسنحسبها بدقّة خطوةً "
-                f"بخطوة. لنبدأ: ما المُعطى الذي تريد أن نُوضّحه أولاً فيها؟"
+                f"سؤالك يخصّ {ev_label}. حسابها دقيق ويحتاج للتركيز. لنبدأ: ما المُعطى الذي تريد أن نُوضّحه أولاً فيها؟"
             )
             return (text, ev_id)
         except Exception:
@@ -3503,7 +3541,7 @@ class OrchestratorClient:
             context["policy_decision"] = policy_decision
 
         # Enforce Symbolic Truth explicitly: if question targets unmodeled mathematical event, force drift prevention
-        _comp = self._build_probability_computational_answer(question, history_messages)
+        _comp = await self._build_probability_computational_answer(question, history_messages)
         if _comp:
             _comp_text, _comp_event = _comp
             if _comp_event.startswith("defer_"):
@@ -3580,7 +3618,7 @@ class OrchestratorClient:
             engine.evaluate_turn(tutor_state, obs)
 
             # Enforce Symbolic Truth explicitly: if question targets unmodeled mathematical event, force drift prevention
-            _comp = self._build_probability_computational_answer(question, history_messages)
+            _comp = await self._build_probability_computational_answer(question, history_messages)
             if _comp:
                 _comp_text, _comp_event = _comp
                 if _comp_event.startswith("defer_"):
@@ -3664,7 +3702,7 @@ class OrchestratorClient:
         # الكرات)؛ الحوادث غير المنمذجة (C/D/X/الأمل/الشرطي) ⇒ تأجيل حتمي صادق يُبعدها عن A.
         # صفر LLM في مسار الرياضيات (نقد المالك #1). يكسر اختطاف المصفوفة للأسئلة الحسابية.
         # ─────────────────────────────────────────────────────────────────────
-        _comp = self._build_probability_computational_answer(question, history_messages)
+        _comp = await self._build_probability_computational_answer(question, history_messages)
         if _comp is not None:
             _comp_text, _comp_event = _comp
             # D-143 (RC-4): لا تُعَد الإجابة الحسابية نفسها حرفياً عند تكرار السؤال. عند

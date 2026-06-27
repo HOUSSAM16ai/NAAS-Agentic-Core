@@ -722,7 +722,7 @@ async def _supervisor_node(state: LocalChatState) -> dict:
                 obs = PolicyObservation(
                     question=state["question"],
                     active_concept=tutor_state["active_concept"],
-                    is_correct=False, # We don't evaluate answer in supervisor
+                    is_correct=False,  # We don't evaluate answer in supervisor
                     is_frustrated=False,
                 )
                 decision = policy_engine.evaluate_turn(tutor_state, obs)
@@ -786,7 +786,7 @@ async def _supervisor_node(state: LocalChatState) -> dict:
     return {
         "intent": intent,
         "tutor_state": tutor_state,
-        "pedagogical_decision": pedagogical_decision
+        "pedagogical_decision": pedagogical_decision,
     }
 
 
@@ -1047,9 +1047,11 @@ async def run_local_graph(
                     active_concept = "math_concept"
 
                 import contextlib
+
                 with contextlib.suppress(Exception):
                     from app.core.database import get_db_session
                     from app.services.analytics.tutor_state_service import TutorStateService
+
                     async for db in get_db_session():
                         tutor_state_svc = TutorStateService(db)
                         await tutor_state_svc.record_turn(
@@ -1065,6 +1067,7 @@ async def run_local_graph(
 
             if root_span_ctx:
                 import contextlib
+
                 with contextlib.suppress(Exception):
                     obs.end_span(
                         root_span_ctx.span_id,
@@ -1075,6 +1078,7 @@ async def run_local_graph(
         logger.warning("local_graph.run_empty_response thread_id=%s", thread_id)
         if root_span_ctx:
             import contextlib
+
             with contextlib.suppress(Exception):
                 obs.end_span(
                     root_span_ctx.span_id,
@@ -1085,11 +1089,13 @@ async def run_local_graph(
         logger.warning("local_graph.run_failed thread_id=%s", thread_id, exc_info=True)
         if root_span_ctx:
             import contextlib
+
             with contextlib.suppress(Exception):
                 obs.end_span(root_span_ctx.span_id, status="ERROR")
     finally:
         if token is not None:
             import contextlib
+
             with contextlib.suppress(Exception):
                 _graph_trace_context.reset(token)
 
@@ -1146,6 +1152,7 @@ async def run_local_graph_stream(
     pedagogical_decision = {}
     tutor_state = {}
     import contextlib
+
     if conversation_id:
         with contextlib.suppress(Exception):
             from app.core.database import get_db_session

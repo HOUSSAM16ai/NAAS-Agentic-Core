@@ -2080,7 +2080,10 @@ class OrchestratorClient:
                         return (text, ev_id)
             except Exception as llm_err:
                 import logging
-                logging.getLogger("orchestrator-client").warning(f"RAG LLM fallback failed: {llm_err}", exc_info=True)
+
+                logging.getLogger("orchestrator-client").warning(
+                    f"RAG LLM fallback failed: {llm_err}", exc_info=True
+                )
 
             # Fallback to the old deferral message if LLM fails
             text = (

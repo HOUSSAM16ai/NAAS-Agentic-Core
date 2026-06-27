@@ -26,21 +26,16 @@ _OFFICIAL = (
 
 class TestNumberParityCounts:
     @pytest.mark.asyncio
-
     async def test_official_2024_counts(self):
         p = ProbabilityCalculatorSkill.number_parity_counts(_OFFICIAL)
         assert p == {"odd": 8, "even": 3, "zero": 2, "total": 11}
 
     @pytest.mark.asyncio
-
-
     async def test_no_numbered_balls_returns_none(self):
         assert ProbabilityCalculatorSkill.number_parity_counts("كيس فيه 4 كرات حمراء") is None
         assert ProbabilityCalculatorSkill.number_parity_counts("") is None
 
     @pytest.mark.asyncio
-
-
     async def test_arabic_indic_digits(self):
         p = ProbabilityCalculatorSkill.number_parity_counts("كرات مرقمة بـ: ١، ٣، ٤")
         assert p == {"odd": 2, "even": 1, "zero": 0, "total": 3}
@@ -53,8 +48,6 @@ class TestComputationalRouting:
         return await OrchestratorClient._build_probability_computational_answer(q, None)
 
     @pytest.mark.asyncio
-
-
     async def test_event_b_56_deterministic(self):
         for q in ("كيف حصلنا على 56", "بيّن أن P(B)=56/165", "احتمال الحادثة B جداء فردي"):
             r = await self._route(q)
@@ -67,8 +60,6 @@ class TestComputationalRouting:
             assert "نفس اللون" not in text  # NOT event A
 
     @pytest.mark.asyncio
-
-
     async def test_combinations_why_multiply(self):
         for q in (
             "لماذا نضرب 11×10×9",
@@ -84,8 +75,6 @@ class TestComputationalRouting:
             assert "جداء أرقام" in text  # distinguishes from product events
 
     @pytest.mark.asyncio
-
-
     async def test_uncovered_events_honest_deferral_never_event_a(self):
         cases = {
             "احتمال الحادثة C جداء زوجي": "event_c",
@@ -105,8 +94,6 @@ class TestComputationalRouting:
             assert "14/165" not in text and "14 من" not in text  # never event-A's number
 
     @pytest.mark.asyncio
-
-
     async def test_pass_through_not_hijacked(self):
         # greetings / retrieval / event-A / general → None (handled by the existing chain).
         for q in (
@@ -119,8 +106,6 @@ class TestComputationalRouting:
             assert await self._route(q) is None, q
 
     @pytest.mark.asyncio
-
-
     async def test_long_paste_not_hijacked(self):
         # a full-exercise paste (>300 chars, contains 56/فردي) must defer to retrieval, not event B.
         paste = "التمرين الأول الاحتمالات " + _OFFICIAL + " الحادثة B جداء فردي P(B)=56/165 " * 6
@@ -130,7 +115,6 @@ class TestComputationalRouting:
 
 class TestDriftGuard:
     @pytest.mark.asyncio
-
     async def test_detect_active_concept_no_drift_for_computational(self):
         from app.services.skills.semantic_property_skill import get_semantic_property_skill
 
@@ -151,8 +135,6 @@ class TestRepetitionGuard:
     (variation, not repetition; owner critique #2). All zero-LLM."""
 
     @pytest.mark.asyncio
-
-
     async def test_deferral_never_prints_event_a_number(self):
         # The honest deferral must distance from event A WITHOUT printing 14/165.
         text, event = await OrchestratorClient._build_probability_computational_answer(
@@ -163,8 +145,6 @@ class TestRepetitionGuard:
         assert "14/165" not in text and "14 من" not in text
 
     @pytest.mark.asyncio
-
-
     async def test_combinations_variant_differs_and_teaches(self):
         base = await OrchestratorClient._build_probability_computational_answer(
             "لماذا نضرب 11×10×9", None
@@ -179,8 +159,6 @@ class TestRepetitionGuard:
         assert "14/165" not in var
 
     @pytest.mark.asyncio
-
-
     async def test_event_b_variant_differs_and_keeps_56(self):
         res = await OrchestratorClient._build_probability_computational_answer(
             "كيف حصلنا على 56", None
@@ -196,16 +174,12 @@ class TestRepetitionGuard:
         assert "نفس اللون" not in var
 
     @pytest.mark.asyncio
-
-
     async def test_deferral_variant_distinct_and_clean(self):
         var = OrchestratorClient._probability_computational_variant("event_d", None)
         assert var is not None
         assert "14/165" not in var and "نفس اللون" not in var
 
     @pytest.mark.asyncio
-
-
     async def test_advance_prompt_distinct_and_clean(self):
         adv = OrchestratorClient._probability_computational_advance_prompt()
         assert adv and "14/165" not in adv and "نفس اللون" not in adv

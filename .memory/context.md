@@ -1,3 +1,9 @@
+
+> **Note: Core Architectural Doctrine Update**
+> This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
+> The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
+> See `cognitive_lab_philosophy.md` for the foundational doctrine.
+
 # CogniForge — Project Context
 > 🧭 **الرؤية الثورية وخارطة الطريق:** المصدر الحيّ الوحيد هو **`.memory/roadmap.md`** (ملخّص في CLAUDE.md §0.6).
 > Last updated: **2026-05-12** | Branch: `claude/setup-microservices-monitoring-ralbR`.

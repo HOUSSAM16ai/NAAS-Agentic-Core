@@ -1,3 +1,9 @@
+
+> **Note: Core Architectural Doctrine Update**
+> This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
+> The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
+> See `cognitive_lab_philosophy.md` for the foundational doctrine.
+
 # Architecture Deep-Dive
 > Last updated: 2026-05-11 | Branch: `feat/microservices-step12-conversation-service`
 > **Authoritative runtime status of every capability lives in `.memory/runtime_truth.md`.**

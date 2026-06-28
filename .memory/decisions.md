@@ -1,3 +1,9 @@
+
+> **Note: Core Architectural Doctrine Update**
+> This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
+> The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
+> See `cognitive_lab_philosophy.md` for the foundational doctrine.
+
 # Architectural Decisions
 ## D-142 · Stateful Pedagogical Progression via TutorState (2026-06-27)
 **السياق:** المستخدم أبلغ عن سلوك الكارثة حيث يقوم مساعد الذكاء الاصطناعي بتكرار نفس الأسئلة وإعادة الشرح الحرفي والضياع بين المفاهيم والانجراف في نوايا التوجيه. كان مسار `local_graph.py` يستند إلى التوجيه الساذج (regex intent) وإعادة بناء الحالة من نافذة السجل.

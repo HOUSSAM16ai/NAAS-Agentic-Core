@@ -1,16 +1,19 @@
 # CogniForge — Claude Code Context
 
+> **The system is not a Chat Tutor. It is a Cognitive Lab / Thinking Engine that models, tests, and improves student reasoning.**
+> Chat is an assistive interface only. The platform core is: Interactive Object UI, Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation.
 > **AI tutor for Algerian students** | FastAPI 8000 + Next.js 5000 + LangGraph 1.1.10
 > Arabic / French / Darija | BAC preparation platform
 
 ---
 
-## 0. Core System Doctrine
+## 0. Core System Doctrine: The Cognitive Lab
 
 **Single writer. Single terminal frame. No silent failure.** These are operational laws, not aspirations.
 
 The system must preserve the following principles permanently. Every future agent must inherit and obey these rules automatically:
 
+- **Cognitive Lab Authority**: The platform is an engine that makes human reasoning observable, diagnosable, testable, and continuously improvable. Any future feature that improves chat while weakening the core pillars (Interactive Object UI, Cognitive Modeling, Error Memory, Adaptive Generation, Simulation) is architecturally incorrect.
 - **Runtime truth over synthetic certainty**: Code presence ≠ runtime usage. A capability is real ONLY when proven by import + call chain + runtime evidence. Anything missing one of those three is treated as DORMANT or ZOMBIE until proven otherwise.
 - **Instrumentation before visualization**: Dashboards must never outpace instrumentation.
 - **Observability is for diagnosis, not decoration**: Every visualization must support debugging.
@@ -112,20 +115,42 @@ Skill حقيقي = **import + call chain + runtime evidence + metrics + tests**
 
 ---
 
-## 0.6. النجمة القطبية الثورية وخارطة الطريق
+## 0.6. The Cognitive Lab Vision & Execution Roadmap
 
-> **المصدر التفصيلي الحيّ الوحيد للرؤية وخارطة الطريق هو `.memory/roadmap.md`.**
-> هذا القسم ملخّص مكثّف — لا تُكرِّر تفاصيله؛ حدِّث `roadmap.md` عند أي تطوّر.
+> **The system is not a Chat Tutor. It is a Cognitive Lab / Thinking Engine.**
+> The chat interface is merely a delivery mechanism. The true core consists of an Interactive Object UI, Cognitive Modeling, Error Memory, Adaptive Generation, and a Simulation Engine.
 
-**الرؤية:** المعيار الأعلى ليس الانبهار اللحظي بل **الاستقلال المعرفي**. نحارب **وَهْم
-الطلاقة** (الطالب يقرأ الحل، يشعر أنه «فهم»، ثم ينهار في الامتحان لأن الدراسة درّبت
-**التعرّف** بينما الامتحان يطلب **التوليد** — Bjork). النظام يُجبر الطالب على **توليد**
-كل خطوة يستطيعها، يقود سقراطياً، **لا يكشف نتيجة نهائية أبداً** (إلا وضع تحقق صريح)،
-ويقيس الإتقان **الحقيقي غير المدعوم** لا الوهم.
+### 7-Phase Cognitive Lab Architecture
 
-**المبادئ الثابتة (Immutable):** القاعدة الذهبية «لا تكشف ما يولّده الطالب» (P-A) ·
-منع مطلق للنتيجة النهائية (P-B) · microservices-only hard-fail (P-C, D-112) · القياس
-الصادق = **فجوة الوهم** (P-D) · كل قدرة = Skill (P-E, §0.5) · BKT الطبقة الأساس (P-F, D-074).
+**Phase 1: Interactive Object UI (World Building)**
+- **Concept:** Students do not read a text wall. They interact with a canvas.
+- **Mapping:** `ExerciseRenderer` (or equivalent generative UI layer) creates a manipulable object map (e.g., a bag, balls, colors) instead of text. The student drags, drops, and interacts.
+
+**Phase 2: Cognitive Modeling (The AI doesn't know the answer, it knows the mind)**
+- **Concept:** The system measures *how* the student thinks (e.g., What did they click first? Did they ignore numbers? How many seconds did it take?).
+- **Mapping:** `TutorStateService` stores the "Digital Twin of the Mind," capturing interaction latency, choice patterns, and cognitive focus.
+
+**Phase 3: Building the Mind (Diagnostic Socratic Feedback)**
+- **Concept:** Instead of "wrong answer," the system identifies the cognitive flaw (e.g., "You think order matters").
+- **Mapping:** `SocraticEvaluatorSkill` and `ConceptDiagnosisSkill` explain mental errors, not just calculation errors.
+
+**Phase 4: Digital Twin of the Mind**
+- **Concept:** Every student has a dynamic cognitive map covering Logic, Probability, Deduction, and Model Selection.
+- **Mapping:** `BKTEngine` (Bayesian Knowledge Tracing) evolves into tracking specific cognitive vulnerabilities and conceptual fragility rather than static scores.
+
+**Phase 5: Dynamic Generation Engine**
+- **Concept:** No static question bank. The system generates new exercises targeting the exact cognitive weakness (e.g., confusing arrangements vs. combinations) with 85% similarity but a different context.
+- **Mapping:** `PedagogicalPolicyEngine` orchestrates the generation of adaptive exercises based on the digital twin's error memory.
+
+**Phase 6: Simulation Engine**
+- **Concept:** The student can run "Million Trials" inside the canvas to see empirical convergence towards theoretical probability.
+- **Mapping:** The platform provides a `SimulationEngine` capability (to be implemented as a dedicated microservice/tool) allowing "what if" constraint modification and behavioral observation.
+
+**Phase 7: Error Memory & Predictive Tutoring**
+- **Concept:** The system remembers mastered concepts, fragile understandings, and frequent errors to predict mistakes before they happen.
+- **Mapping:** Extended `TutorStateService` and `BKTAnalyticsService` track and predict conceptual fragility.
+
+**Execution Rule:** Any PR that degrades this vision into a standard text-based Q&A bot must be rejected.
 
 **خريطة المراحل (جدول الحالة — التفصيل في `roadmap.md`):**
 

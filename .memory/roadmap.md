@@ -1,3 +1,9 @@
+
+> **Note: Core Architectural Doctrine Update**
+> This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
+> The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
+> See `cognitive_lab_philosophy.md` for the foundational doctrine.
+
 # 🧭 خارطة الطريق الثورية — النجمة القطبية (Single Source of Truth)
 ## 1. الرؤية (لماذا نبني هذا أصلاً)
 **تحديث (2026-06-27):** تم تطبيق التقدم التعليمي القائم على الحالة الدائمة (Stateful Pedagogical Progression) في المسار الحي (Monolith). النظام الآن يلتزم بمبدأ 'التدخل الأدنى المفيد' ولا يسمح بالتكرار العشوائي، حيث يقرأ الحالة عبر `TutorState` ويوجه LLM بناءً على ذلك، محبطاً كل أشكال الضياع أو الانجراف في موضوعات أخرى عبر حراسة صارمة للنوايا.

@@ -108,6 +108,7 @@ async def _call_planning_skill(
     query: str,
     correlation_id: str,
     client: httpx.AsyncClient,
+    trace_headers: dict[str, str] | None = None,
 ) -> SkillResult:
     """
     يستدعي planning-agent عبر HTTP لتوليد خطة استراتيجية.
@@ -128,6 +129,12 @@ async def _call_planning_skill(
     service_token = _generate_service_token(settings.SECRET_KEY)
 
     try:
+        headers = {
+            "X-Correlation-ID": correlation_id,
+            "X-Service-Token": service_token,
+        }
+        if trace_headers:
+            headers.update(trace_headers)
         response = await client.post(
             url,
             json={
@@ -136,10 +143,7 @@ async def _call_planning_skill(
                 "action": "generate_plan",
                 "payload": {"query": query, "subject": "general", "difficulty": "medium"},
             },
-            headers={
-                "X-Correlation-ID": correlation_id,
-                "X-Service-Token": service_token,
-            },
+            headers=headers,
             timeout=_SKILL_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
@@ -189,6 +193,7 @@ async def _call_research_skill(
     plan_context: str,
     correlation_id: str,
     client: httpx.AsyncClient,
+    trace_headers: dict[str, str] | None = None,
 ) -> SkillResult:
     """
     يستدعي research-agent عبر HTTP لاسترجاع المعلومات ذات الصلة.
@@ -208,6 +213,12 @@ async def _call_research_skill(
     service_token = _generate_service_token(settings.SECRET_KEY)
 
     try:
+        headers = {
+            "X-Correlation-ID": correlation_id,
+            "X-Service-Token": service_token,
+        }
+        if trace_headers:
+            headers.update(trace_headers)
         response = await client.post(
             url,
             json={
@@ -220,10 +231,7 @@ async def _call_research_skill(
                     "max_results": 5,
                 },
             },
-            headers={
-                "X-Correlation-ID": correlation_id,
-                "X-Service-Token": service_token,
-            },
+            headers=headers,
             timeout=_SKILL_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
@@ -273,6 +281,7 @@ async def _call_reasoning_skill(
     context: str,
     correlation_id: str,
     client: httpx.AsyncClient,
+    trace_headers: dict[str, str] | None = None,
 ) -> SkillResult:
     """
     يستدعي reasoning-agent عبر HTTP للتفكير العميق (MCTS + LLM).
@@ -292,6 +301,12 @@ async def _call_reasoning_skill(
     service_token = _generate_service_token(settings.SECRET_KEY)
 
     try:
+        headers = {
+            "X-Correlation-ID": correlation_id,
+            "X-Service-Token": service_token,
+        }
+        if trace_headers:
+            headers.update(trace_headers)
         response = await client.post(
             url,
             json={
@@ -300,10 +315,7 @@ async def _call_reasoning_skill(
                 "action": "reason",
                 "payload": {"query": query, "context": context},
             },
-            headers={
-                "X-Correlation-ID": correlation_id,
-                "X-Service-Token": service_token,
-            },
+            headers=headers,
             timeout=_SKILL_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
@@ -447,6 +459,7 @@ def _determine_pipeline_mode(
 async def run_skills_pipeline(
     query: str,
     correlation_id: str | None = None,
+    trace_context: object | None = None,
 ) -> PipelineResult:
     """
     يُشغِّل Skills Composition Pipeline الكامل.
@@ -478,10 +491,14 @@ async def run_skills_pipeline(
         # ISS-042 (Step 11): الـ 3 Skills تعمل بالتوازي لتقليل الزمن الإجمالي.
         # reasoning يستقبل السياق الأولي (query فقط) ويعمل بالتوازي مع planning+research.
         # هذا يُقلِّل الزمن من (planning + research + reasoning) إلى max(الثلاثة).
+        trace_headers = {}
+        if trace_context and hasattr(trace_context, "to_headers"):
+            trace_headers = trace_context.to_headers()
+
         plan_result, research_result, reasoning_result = await asyncio.gather(
-            _call_planning_skill(query, correlation_id, client),
-            _call_research_skill(query, "", correlation_id, client),
-            _call_reasoning_skill(query, "", correlation_id, client),
+            _call_planning_skill(query, correlation_id, client, trace_headers=trace_headers),
+            _call_research_skill(query, "", correlation_id, client, trace_headers=trace_headers),
+            _call_reasoning_skill(query, "", correlation_id, client, trace_headers=trace_headers),
         )
 
     # ── التركيب النهائي (D-110: تركيب مرتّب + ثقة) ────────────────────────────

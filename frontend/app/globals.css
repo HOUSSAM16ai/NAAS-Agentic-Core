@@ -316,12 +316,15 @@ body {
     bottom: 0;
     right: 0; /* RTL Sidebar starts at Right */
     transform: translateX(100%);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease, visibility 0s linear 0.3s;
     z-index: 50; /* Higher than dashboard content */
+    visibility: hidden; /* Hide structurally when closed */
 }
 
 .sidebar.open {
     transform: translateX(0);
+    transition: transform 0.3s ease, visibility 0s linear 0s;
+    visibility: visible;
 }
 
 /* Overlay for mobile */
@@ -1453,15 +1456,18 @@ body {
     bottom: 0;
     left: 0; /* RTL End */
     transform: translateX(-100%);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease, visibility 0s linear 0.3s;
     z-index: 50; /* Ensure high Z-index */
     padding: 1rem;
     overflow-y: auto;
     box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+    visibility: hidden; /* Hide structurally when closed */
 }
 
 .agent-sidebar.open {
     transform: translateX(0);
+    transition: transform 0.3s ease, visibility 0s linear 0s;
+    visibility: visible;
 }
 
 .agent-sidebar-header {

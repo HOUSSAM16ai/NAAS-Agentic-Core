@@ -28,6 +28,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from .trace_utils import extract_trace_context, OrchestratorTraceContext
 
 from microservices.orchestrator_service.src.api.context_utils import (
     _extract_client_context_messages,
@@ -1579,6 +1580,10 @@ async def _stream_chat_langgraph(
                 f"messages_in_request={len(incoming_messages)}"
             )
             config = {"configurable": {"thread_id": thread_id}}
+            if "trace_context" in context:
+                tc = context["trace_context"]
+                config["metadata"] = config.get("metadata", {})
+                config["metadata"]["langsmith-trace"] = tc.trace_id
 
             # فحص حالة الـ checkpointer لتحديد ما إذا كانت الحالة محفوظة مسبقاً
             checkpointer = get_checkpointer()
@@ -1910,6 +1915,11 @@ async def _run_chat_langgraph(
     thread_id = _resolve_thread_id(context, conversation_id)
     prepared_objective = _augment_ambiguous_objective(objective, history_messages)
     config = {"configurable": {"thread_id": thread_id}}
+    if "trace_context" in context:
+        tc = context["trace_context"]
+        config["metadata"] = config.get("metadata", {})
+        config["metadata"]["langsmith-trace"] = tc.trace_id
+
     logger.info(
         "[THREAD_BINDING] channel=http thread_id=%s source=%s conversation_id=%s",
         thread_id,
@@ -2645,6 +2655,10 @@ async def chat_with_agent_endpoint(
     Direct chat endpoint for the Orchestrator Agent (Microservice).
     Streams the response chunk by chunk.
     """
+
+    # Extract trace context
+    trace_context = extract_trace_context(fastapi_req)
+
     user_id, auth_payload = _decode_auth_payload_or_401(authorization)
     request.user_id = user_id  # Override body user_id with JWT user_id
 
@@ -2652,6 +2666,9 @@ async def chat_with_agent_endpoint(
 
     # Prepare context
     context = request.context.copy()
+    if trace_context:
+        context["trace_context"] = trace_context
+        request.context["trace_context"] = trace_context
     context.update(
         {
             "user_id": request.user_id,
@@ -2719,6 +2736,11 @@ async def chat_with_agent_endpoint(
                 final_resp = None
                 admin_streamed_chars = 0  # D-047
                 config = {"configurable": {"thread_id": thread_id}}
+                if "trace_context" in request.context:
+                    tc = request.context["trace_context"]
+                    config["metadata"] = config.get("metadata", {})
+                    config["metadata"]["langsmith-trace"] = tc.trace_id
+
                 async for event in admin_app.astream_events(
                     admin_inputs, config=config, version="v2"
                 ):
@@ -3184,6 +3206,7 @@ class ComposeResponse(BaseModel):
 )
 async def compose_skills(
     request: ComposeRequest,
+    fastapi_req: Request,
     x_correlation_id: str | None = Header(default=None, alias="X-Correlation-ID"),
 ) -> ComposeResponse:
     """
@@ -3197,11 +3220,15 @@ async def compose_skills(
     """
     correlation_id = request.correlation_id or x_correlation_id or str(uuid.uuid4())
 
+    # Extract trace context
+    trace_context = extract_trace_context(fastapi_req)
+
     set_pipeline_active(1)
     try:
         result = await run_skills_pipeline(
             query=request.query,
             correlation_id=correlation_id,
+            trace_context=trace_context,
         )
     except Exception as exc:
         set_pipeline_active(0)

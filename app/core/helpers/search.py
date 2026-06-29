@@ -10,7 +10,7 @@ class FallbackQueryExpander:
     """
     A simple rule-based query expander to handle multilingual search
     when the advanced LLM-based query refiner is unavailable.
-    (Moved from microservices to app core to break dependency)
+    (Moved to app core to break dependency)
     """
 
     # Mapping English/French terms to Arabic Baccalaureate keywords

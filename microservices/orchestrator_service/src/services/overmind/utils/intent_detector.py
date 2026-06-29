@@ -82,6 +82,13 @@ class IntentDetector:
         return [
             *[(pattern, ChatIntent.ADMIN_QUERY, self._empty_params) for pattern in admin_queries],
             (r"(حلل|analyze|explain|اشرح)\s+(.+)", ChatIntent.DEEP_ANALYSIS, self._empty_params),
+            (analytics_keywords, ChatIntent.ANALYTICS_REPORT, self._empty_params),
+            (
+                r"(ملخص|تلخيص|خلاصة|لخص|summarize|summary)"
+                r".*(ما تعلمت|ما تعلمته|تعلمي|محادثاتي|دردشاتي|سجلي|what i learned|what i've learned|my learning|my chats|my history)",
+                ChatIntent.LEARNING_SUMMARY,
+                self._empty_params,
+            ),
             (
                 r"((أ|ا)ريد|بدي|i want|need|show|أعطني|هات|give me)?\s*(.*)(20[1-2][0-9]|bac|بكالوريا|subject|topic|lesson|درس|موضوع|تمارين|تمرين|exam|exercise|exercises|احتمالات|دوال|متتاليات|probability|functions|sequences)(.+)?",
                 ChatIntent.CONTENT_RETRIEVAL,
@@ -103,13 +110,6 @@ class IntentDetector:
                 self._extract_query,
             ),
             (r"(فهرس|index)\s+(المشروع|project)", ChatIntent.PROJECT_INDEX, self._empty_params),
-            (analytics_keywords, ChatIntent.ANALYTICS_REPORT, self._empty_params),
-            (
-                r"(ملخص|تلخيص|خلاصة|لخص|summarize|summary)"
-                r".*(ما تعلمت|ما تعلمته|تعلمي|محادثاتي|دردشاتي|سجلي|what i learned|what i've learned|my learning|my chats|my history)",
-                ChatIntent.LEARNING_SUMMARY,
-                self._empty_params,
-            ),
             (
                 r"(واجب|مسار|تعلم|homework|learning path|challenge|خطة|خريطة|منهج|plan|roadmap|study plan|ابدأ|start studying)",
                 ChatIntent.CURRICULUM_PLAN,

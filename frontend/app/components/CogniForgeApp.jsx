@@ -382,7 +382,10 @@ const DashboardLayout = ({ user, token, onLogout }) => {
 
             <div className="dashboard-layout">
                 {/* Agent Sidebar (Left in RTL) */}
-                <div className={`agent-sidebar ${isAgentSidebarOpen ? 'open' : ''}`}>
+                <div
+                    className={`agent-sidebar ${isAgentSidebarOpen ? 'open' : ''}`}
+                    inert={!isAgentSidebarOpen ? "true" : undefined}
+                >
                      <div className="agent-sidebar-header">
                         <h3>فريق العملاء</h3>
                         <button onClick={() => setIsAgentSidebarOpen(false)} style={{background:'none', border:'none', fontSize:'1.2rem', cursor:'pointer'}}>
@@ -395,7 +398,10 @@ const DashboardLayout = ({ user, token, onLogout }) => {
                 </div>
 
                 <div className={`sidebar-overlay ${isSidebarOpen ? 'visible' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
-                <div className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+                <div
+                    className={`sidebar ${isSidebarOpen ? 'open' : ''}`}
+                    inert={!isSidebarOpen ? "true" : undefined}
+                >
                      <div className="sidebar-header">
                         <h3>المحادثات</h3>
                         <button className="close-sidebar-btn" onClick={() => setIsSidebarOpen(false)} style={{background:'none', border:'none', fontSize:'1.2rem', cursor:'pointer'}}>

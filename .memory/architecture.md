@@ -10,6 +10,7 @@
 > This file describes the live request flow and middleware stack only.
 > Anything documented here must be backed by import + call chain + runtime evidence (see CLAUDE.md §6.6).
 > **Skills Philosophy (D-038):** كل قدرة AI = Skill مستقل. انظر CLAUDE.md §0.5 و `.memory/decisions.md#D-038`.
+> 🏗️ **Agentic Runtime layer map:** `.memory/agentic_runtime_doctrine.md` (D-146 · CLAUDE.md §0.7) — every layer graded ACTIVE/PARTIAL/PLANNED/DORMANT per §6.6.
 
 ---
 

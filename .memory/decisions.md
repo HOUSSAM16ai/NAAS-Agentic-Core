@@ -5030,3 +5030,39 @@ py_compile 3.12. Full WS E2E in Codespaces (sandbox lacks pydantic/httpx). CLAUD
 1. **Context:** The LLM was hallucinating intermediate math (e.g. C(14,3)=364 and 'بطاقة رقم 0 (العدد 3)') for BAC 2024 probability because Socratic filters missed informal conclusion markers like 'نجمع الحالات الممكنة فقط: 4+10+1=15'.
 2. **Decision:** Expand `_FINAL_RESULT_RE` and `_CONCLUSION_RE` in `answer_redaction_skill.py` and `response_sanitizer.py` to globally catch and redact any arithmetic culmination `= <NUM>` and semantic probability outputs `فاحتمال الحادثة هو <NUM>`.
 3. **Consequence:** Solves the hallucination at its root by severing the LLM's ability to present final answers, forcing it to stick to the generalized `skills` pipeline and step-by-step Socratic inquiry. Ensures future-proofing for millions of unseen exercises without custom rules.
+
+## D-146 (2026-06-29) — Agentic Cognitive Runtime Doctrine (architectural review)
+
+**Status**: ✅ ACTIVE (additive documentation — zero behavior change)
+
+**Context**: An owner architectural review reframed CogniForge through a fact-checked lens:
+*Claude Code (and CogniForge itself) is an **agentic runtime** — a simple model→tool→append
+loop whose power lives in the layers around it* (configuration contract, skills, hooks,
+memory, knowledge/retrieval, planner, reasoning, verification, observability, plugin,
+evolution). The platform already lives this pattern partially (27 registered Skills with
+Pydantic contracts + metrics + `/api/v1/skills`, microservices spine D-112, BKT + `tutor_state`
+memory, deterministic redaction guards, in-process observability) — but no single doctrine
+named these as **layers** or stated which are real vs. aspirational.
+
+**Decision**: Capture the vision as a **concise, additive** doctrine bound to the project's
+deepest law (§6.6 "runtime truth over synthetic certainty"), not as an aspirational wishlist.
+Deliverables: new `.memory/agentic_runtime_doctrine.md` (Layer × Reality map graded
+ACTIVE/PARTIAL/PLANNED/DORMANT/ZOMBIE) + a <40-line pointer at `CLAUDE.md §0.7` + a
+cross-cutting "Agentic Runtime Layer Map" subsection in `roadmap.md` + one-line pointers in
+`context.md`/`architecture.md`. No code, no CLAUDE.md slimming.
+
+**Honest grounding (verified live 2026-06-29 over `app/`)**: every "ACTIVE" claim was
+checked against the codebase, not assumed. Notable downgrades enforced by §6.6:
+- **Plugin system → DORMANT (ZOMBIE)**: `app/core/registry/plugin_loader.py` +
+  `plugin_registry.py` exist but have **zero live import** from kernel/main/routers.
+- **Knowledge Graph → PARTIAL**: retrieval (knowledge_index + Supabase `bac_exercises`) is
+  ACTIVE; a true graph lives only in DORMANT microservices retrievers.
+- **CritiqueNode (D-109) / Evolution engine → PLANNED**: no code; aspirational only.
+- **Subagents/multi-agent → PARTIAL**: Claude Code subagents (tooling) ACTIVE; in-app
+  `graph/workflow.py` remains ZOMBIE (KAgent-blocked).
+
+**Consequence**: Future architectural work targets a named layer instead of bolting logic
+onto the chat path; aspirational layers (rows 12–13, CritiqueNode) enter the table as ACTIVE
+only with the full import + call chain + runtime evidence proof. Logs `DOC-DEBT-001`
+(CLAUDE.md is an encyclopedia, violating the "contract not encyclopedia" principle) **without
+acting on it**. Win condition unchanged: shrink the illusion gap (`roadmap.md` §7).

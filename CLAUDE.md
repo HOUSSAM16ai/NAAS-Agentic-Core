@@ -170,6 +170,34 @@ Skill حقيقي = **import + call chain + runtime evidence + metrics + tests**
 
 ---
 
+## 0.7. Agentic Cognitive Runtime Doctrine
+
+> **Detailed source: `.memory/agentic_runtime_doctrine.md` (D-146).** This is a pointer,
+> not a copy — kept short on purpose (`DOC-DEBT-001`: CLAUDE.md is a contract, not an
+> encyclopedia).
+
+CogniForge is an **agentic runtime**: a simple model→tool→append loop whose power lives in
+the *layers around it*. Four principles govern every architectural decision:
+
+- **Context engineering > prompting** — the control surface is `CLAUDE.md` + `.memory/` +
+  `app/services/skills/`, not one big prompt.
+- **Capability ≠ safety** — safety-critical invariants are enforced by deterministic gates
+  (hooks, CI, redaction skills), never by prose a model "should" obey.
+- **Curated memory, not bloat** — memory holds stable invariants + verified facts only.
+- **Separate the roles** — Configuration / Procedure (Skills) / Verification / Safety are
+  distinct; a writer never silently grades its own work.
+
+**13 runtime layers, each graded by §6.6** (ACTIVE only with import + call chain + runtime
+evidence). ACTIVE: Configuration, Skills Engine (27 skills, D-100), Hooks/Policy
+(`PedagogicalPolicyEngine`, D-144), Memory (BKT + `tutor_state`, D-074/D-142),
+Verification (redaction/firewall/integrity, D-086/D-113), Observability (in-process).
+PARTIAL: Subagents, Knowledge/Retrieval, Planner, Reasoning, Context engine.
+**DORMANT/ZOMBIE:** Plugin loader (`app/core/registry/plugin_loader.py` — exists, **no live
+import**). **PLANNED:** CritiqueNode (D-109), Evolution engine. *Promoting any non-ACTIVE
+layer requires the full three-leg proof — do not soften the status.*
+
+---
+
 ## 1. What This Project Does
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.

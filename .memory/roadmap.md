@@ -12,7 +12,9 @@
 > CLAUDE.md §0.6 يُلخّصه ويشير إليه. القرارات التفصيلية في `.memory/decisions.md`
 > (D-104→D-113)؛ الكوارث المُصلَحة في `.memory/issues.md`؛ السرد الكامل في CLAUDE.md §6.91→§6.97.
 >
-> آخر تحديث: **2026-06-14** | الفرع: `claude/adaptive-learning-platform-k7drf3`
+> آخر تحديث: **2026-06-29** | الفرع: `claude/claude-memory-architecture-review-mjwkxm`
+> 🏗️ **العدسة المعمارية المُكمِّلة:** `agentic_runtime_doctrine.md` (D-146) — خريطة طبقات
+> الـ Agentic Runtime مُقيَّمة بصدق حسب §6.6 (ACTIVE/PARTIAL/PLANNED/DORMANT).
 
 ---
 
@@ -83,6 +85,22 @@
 | **M9 — مقياس فجوة الوهم** | Prometheus/Grafana: الأداء المدعوم − القدرة المؤجَّلة | — | 📋 | — |
 | **M10 — هجرة الرسم S2–S4** | port المهارات الحتمية داخل الـ orchestrator graph (المونوليث = بوابة WS رقيقة) + CritiqueNode (تحقق ذاتي) + Mastery-Aware Orchestrator + Real Synthesis | D-108/109/110 (مُصمَّمة) | 📋 | §6.95/§6.96 |
 | M11 — الصوت | TTS/STT بنماذج صوتية متقدمة | D-107 | ⏸️ مؤجَّل | §6.93 |
+
+---
+
+## 4.5. العدسة المعمارية — خريطة طبقات الـ Agentic Runtime (D-146)
+
+> الرؤية الثورية: CogniForge **agentic runtime** — حلقة model→tool→append بسيطة، والقوة في
+> **الطبقات حولها**. الجدول الكامل (13 طبقة مُقيَّمة بصدق) في `agentic_runtime_doctrine.md`.
+> الخريطة البيداغوجية أعلاه (M0–M11) والخريطة المعمارية هنا **عدستان للنظام نفسه**.
+
+| الطبقة | الحالة (§6.6) | الطبقة | الحالة (§6.6) |
+|--------|---------------|--------|---------------|
+| Configuration / Skills / Hooks / Memory / Verification / Observability | ✅ ACTIVE | Subagents / Knowledge / Planner / Reasoning / Context | 🟡 PARTIAL |
+| Plugin loader (`app/core/registry/`) | 🔴 DORMANT (ZOMBIE — لا import حيّ) | CritiqueNode (D-109) · Evolution engine | 📋 PLANNED |
+
+**قاعدة الصدق:** لا تُرفَع أي طبقة إلى ACTIVE دون البرهان الثلاثي (import + call chain +
+runtime evidence). دَيْن موثَّق: `DOC-DEBT-001` (CLAUDE.md موسوعة لا عقد — مُسجَّل، غير مُعالَج).
 
 ---
 

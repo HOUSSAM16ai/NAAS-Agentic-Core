@@ -100,7 +100,7 @@ class IntentDetector:
             # Flexible Content Retrieval: Catch implicit content requests
             # e.g., "Math 2024", "Probability", "Subject 1", "Lesson about X"
             (
-                r"((أ|ا)ريد|بدي|i want|need|show|أعطني|هات|give me)?\s*(.*)(20[1-2][0-9]|bac|بكالوريا|subject|topic|lesson|درس|موضوع|تمارين|تمرين|exam|exercise|exercises|question|احتمالات|دوال|متتاليات|probability|functions|sequences)(.+)?",
+                r"^((أ|ا)ريد|بدي|i want|need|show|أعطني|هات|give me)?\s*(.{0,60})(20[1-2][0-9]|bac|بكالوريا|subject|topic|lesson|درس|موضوع|تمارين|تمرين|exam|exercise|exercises|question|احتمالات|دوال|متتاليات|probability|functions|sequences)(.{0,60})?$",
                 ChatIntent.CONTENT_RETRIEVAL,
                 self._extract_query_optional,
             ),

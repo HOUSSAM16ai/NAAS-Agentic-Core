@@ -10726,7 +10726,7 @@ The following foundational architectural invariants have been established in the
 
 1. **Trace Continuity (Split-Brain Tracing Resolved):** Microservices strictly isolate context while participating in standard W3C tracing. The Orchestrator microservice correctly parses W3C `traceparent` headers via `microservices/orchestrator_service/src/api/trace_utils.py`, injecting `langsmith-trace` into LangGraph execution, preventing disconnected traces across system boundaries.
 2. **Rendering Integrity (DOM Leakage Fixed):** UI elements holding state enforce strict true DOM exclusion via React's `inert` attribute and structured `visibility: hidden` delayed CSS transitions to prevent sidebars from remaining queryable while visually hidden, thereby preserving pedagogical Socratic masking.
-3. **Routing Philosophy (IntentGreediness Fixed):** Broad heuristic intent matching (e.g. any message with 'تمرين') has been replaced with bounded, bounded regex patterns (`\b`) prioritizing specific `_ANALYTICS_PATTERNS` before `_EDUCATIONAL_PATTERNS` across both `app/services/chat/local_graph.py` and `app/telemetry/path_observer.py`, stopping general questions from being hijacked into educational logic flows.
+3. **Routing Philosophy (IntentGreediness Fixed):** Broad heuristic intent matching (e.g. any message with 'تمرين') has been replaced with bounded, length-bounded regex patterns (`.{0,60}` and removal of `\b` for Arabic prefixed words) prioritizing specific `_ANALYTICS_PATTERNS` before `_EDUCATIONAL_PATTERNS` across both `app/services/chat/local_graph.py` and `app/telemetry/path_observer.py`, stopping general questions from being hijacked into educational logic flows.
 
 ---
 

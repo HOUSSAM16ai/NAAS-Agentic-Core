@@ -28,7 +28,6 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from .trace_utils import extract_trace_context, OrchestratorTraceContext
 
 from microservices.orchestrator_service.src.api.context_utils import (
     _extract_client_context_messages,
@@ -69,6 +68,8 @@ from microservices.orchestrator_service.src.services.overmind.state import Missi
 from microservices.orchestrator_service.src.services.overmind.utils.tools import tool_registry
 from microservices.orchestrator_service.src.services.skills_pipeline import run_skills_pipeline
 from microservices.orchestrator_service.src.services.tools.registry import get_registry
+
+from .trace_utils import extract_trace_context
 
 logger = logging.getLogger(__name__)
 

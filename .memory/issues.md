@@ -4399,3 +4399,20 @@ preempt حسابي حتمي قبل المصفوفة (مبدأ العدّ + ال�
 ## ISS-118: Pedagogical Drift & Repetition
 **Symptom**: System repeats math explanations, drifts to Event A for unmodeled probability questions, and infers state redundantly from history.
 **Resolution (D-144)**: Enforced `PedagogicalPolicyEngine`. State is explicitly tracked via `TutorState`. Deferred unmodeled probability questions directly via Symbolic Engine, bypassing LLM generation.
+
+
+## ISS-119: Generic "punt" after the Socratic ladder (E(X) catastrophe)
+**Symptom** (live BAC-2024 transcript): student asks «كيف أحسب الأمل الرياضي E(X)؟»;
+the tutor walks definition → concrete example → micro-simulation (generic, exercise-disconnected),
+then on ladder-exhaustion **punts back** — «مررنا بالتعريف والمثال والمحاكاة المصغّرة … أيّ خطوة
+تريد أن نبدأ بها؟» — handing cognitive load to the confused student instead of leading.
+**Root cause**: `PedagogicalEscalationSkill` is concept-scoped + intentionally generic (D-138,
+to survive D-113 redaction); it had **no "apply-to-exercise" rung**, so exhaustion degraded to a
+generic handoff (`pedagogical_escalation_skill.py:214–215`).
+**Resolution (D-147)**: data-driven `APPLY_STEPS` registry (concept_id → one concrete leading
+**question** tying the concept to *this exercise's structure*, e.g. expected_value → «ما القيم
+التي يمكن أن يأخذها X؟»). On exhaustion `decide()` emits it (`text_kind="apply"`); unknown
+concepts keep the generic handoff (no regression). Questions, not answers ⇒ survive
+`redact_final_answers` (D-113) — verified 8/8. Keys ⊆ `MICRO_SIMULATIONS` (naming consistency,
+no per-exercise bloat). Live: `scripts/verify_iss119_live.py` + 6 tests in
+`test_d138_escalation_matrix.py`. Full WS E2E mandatory in Codespaces (§6.55).

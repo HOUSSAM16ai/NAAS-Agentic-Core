@@ -68,6 +68,8 @@ class EscalationInput(RobustBaseModel):
     #: مفهوم خاطئ مُشخَّص (الأورقستريتور يُجريه عبر diagnose_misconception ويمرّره).
     misconception_intervention: str | None = None
     misconception_mtype: str | None = None
+    #: D-147: سؤال «خطوة التطبيق» على هذا التمرين — يُستبدَل به الـ punt العام عند نفاد السُّلّم.
+    apply_step: str | None = None
 
 
 class EscalationDecision(RobustBaseModel):
@@ -181,6 +183,30 @@ class PedagogicalEscalationSkill:
                 return f"{head}{payload.definition}", "definition"
         return "", ""
 
+    @staticmethod
+    def _exhausted_decision(
+        payload: EscalationInput, *, fallback_text: str, fallback_rationale: str
+    ) -> EscalationDecision:
+        """D-147: عند نفاد السُّلّم — قُد بسؤال تطبيق مرتبط بالتمرين بدل الـ punt العام.
+
+        إن توفّر `apply_step` (مفهوم معروف) ⇒ سؤال قائد ملموس (text_kind=apply). وإلّا ⇒
+        التسليم العامّ القديم (concept مجهول) — فلا انحدار في السلوك للحالات غير المُغطّاة.
+        """
+        step = (payload.apply_step or "").strip()
+        if step:
+            return EscalationDecision(
+                action="exhausted",
+                text_kind="apply",
+                text=step,
+                rationale="apply_to_exercise",
+            )
+        return EscalationDecision(
+            action="exhausted",
+            text_kind="handoff",
+            text=fallback_text,
+            rationale=fallback_rationale,
+        )
+
     # ── القرار ────────────────────────────────────────────────────────────────
     def decide(self, payload: EscalationInput) -> EscalationDecision:
         """يقرّر أقل تدخّل مفيد الآن (mastered/target_misconception/teach/exhausted)."""
@@ -207,23 +233,21 @@ class PedagogicalEscalationSkill:
         target = self._calibrate(self._base_level(payload, delivered), payload, delivered)
         if target > L3_MICRO_SIMULATION:
             self._record(payload.concept_id, "exhausted")
-            return EscalationDecision(
-                action="exhausted",
-                text_kind="handoff",
-                text=(
+            return self._exhausted_decision(
+                payload,
+                fallback_text=(
                     "مررنا بالتعريف والمثال والمحاكاة المصغّرة — لننتقل لتطبيق الفكرة على التمرين "
                     "خطوة بخطوة. أيّ خطوة تريد أن نبدأ بها؟"
                 ),
-                rationale="ladder_exhausted",
+                fallback_rationale="ladder_exhausted",
             )
         text, kind = self._render(target, payload)
         if not text:  # لا محتوى (نادر) ⇒ تسليم لطيف بدل فراغ.
             self._record(payload.concept_id, "exhausted")
-            return EscalationDecision(
-                action="exhausted",
-                text_kind="handoff",
-                text="لنطبّق الفكرة على التمرين خطوة بخطوة — أيّ جزء تريد أن نبدأ به؟",
-                rationale="no_content",
+            return self._exhausted_decision(
+                payload,
+                fallback_text="لنطبّق الفكرة على التمرين خطوة بخطوة — أيّ جزء تريد أن نبدأ به؟",
+                fallback_rationale="no_content",
             )
         self._record(payload.concept_id, f"L{target}")
         return EscalationDecision(

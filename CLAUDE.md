@@ -10727,3 +10727,45 @@ The following foundational architectural invariants have been established in the
 1. **Trace Continuity (Split-Brain Tracing Resolved):** Microservices strictly isolate context while participating in standard W3C tracing. The Orchestrator microservice correctly parses W3C `traceparent` headers via `microservices/orchestrator_service/src/api/trace_utils.py`, injecting `langsmith-trace` into LangGraph execution, preventing disconnected traces across system boundaries.
 2. **Rendering Integrity (DOM Leakage Fixed):** UI elements holding state enforce strict true DOM exclusion via React's `inert` attribute and structured `visibility: hidden` delayed CSS transitions to prevent sidebars from remaining queryable while visually hidden, thereby preserving pedagogical Socratic masking.
 3. **Routing Philosophy (IntentGreediness Fixed):** Broad heuristic intent matching (e.g. any message with 'تمرين') has been replaced with bounded, bounded regex patterns (`\b`) prioritizing specific `_ANALYTICS_PATTERNS` before `_EDUCATIONAL_PATTERNS` across both `app/services/chat/local_graph.py` and `app/telemetry/path_observer.py`, stopping general questions from being hijacked into educational logic flows.
+
+---
+
+## 6.127 Exercise-Connected Apply-Step — End of the Generic Socratic Punt (2026-06-30, ISS-119 / D-147)
+
+> كارثة حيّة (BAC-2024): الطالب يسأل «كيف أحسب الأمل الرياضي E(X)؟»، فيمشي المعلّم في سُلّم
+> التصعيد (تعريف → مثال → محاكاة مصغّرة) بمحتوى **عام منفصل عن التمرين**، ثم عند نفاد السُّلّم
+> **يرمي الحِمل على الطالب الحائر**: «مررنا بالتعريف والمثال والمحاكاة المصغّرة … أيّ خطوة تريد
+> أن نبدأ بها؟» بدل أن يقوده لأول خطوة ملموسة.
+
+### الجذر
+`PedagogicalEscalationSkill` (D-138) concept-scoped وعامّ بنيّة (ليَنجو من حجب D-113)، وكان
+**بلا رُتبة «تطبيق على التمرين»** — فنفاد السُّلّم ينحدر إلى punt عامّ
+(`pedagogical_escalation_skill.py:214–215`، حرفياً نصّ الترانسكريبت).
+
+### الإصلاح (حتمي، صفر-LLM، إضافي)
+- **`APPLY_STEPS`** خفيف في `micro_simulation_skill.py`: مفتاح = نفس `concept_id` الخاص بـ
+  `MICRO_SIMULATIONS` (توحيد تسمية + لا تضخّم لكلّ تمرين)، قيمة = **سؤال قائد واحد** يربط المفهوم
+  ببنية هذا التمرين دون كشف نتيجة (E(X) → «ما القيم التي يمكن أن يأخذها X؟»). + `get_apply_step()`.
+- `EscalationInput.apply_step` + `decide()` يُصدِره عند `exhausted`
+  (`text_kind="apply"`, `rationale="apply_to_exercise"`) عبر `_exhausted_decision`؛ المفهوم غير
+  المُغطّى ⇒ التسليم العامّ القديم (لا انحدار). `orchestrator_client` يمرّر `apply_step` عند بناء
+  `EscalationInput`. doctrine → v1.1.0.
+
+### القواعد الدائمة (D-147 — لا تُكسر بدون ADR)
+1. نفاد سُلّم التصعيد ⇒ **سؤال تطبيق مرتبط ببنية التمرين** (APPLY_STEPS)، لا punt عامّ «أيّ خطوة تريد؟».
+2. خطوة التطبيق **سؤال لا جواب** (توليد لا كشف) ⇒ تَنجو من حجب D-113 (مُتحقَّق 8/8).
+3. مفاتيح `APPLY_STEPS` ⊆ `MICRO_SIMULATIONS` (توحيد التسمية)، خفيفة ومحدّدة بالمفاهيم (لا قاعدة لكلّ تمرين).
+4. المفهوم غير المُغطّى ⇒ التسليم العامّ القديم (صفر انحدار).
+
+### التحقق
+- **Sandbox** (pydantic محجوب — §6.55): `scripts/verify_iss119_live.py` عبر المنطق الحقيقي
+  (decide + redact_final_answers) → ALL PASS؛ 6 اختبارات في `tests/services/test_d138_escalation_matrix.py`؛
+  ruff + runtime_truth. **التحقق الكامل WS→orchestrator→المتصفح إلزامي في Codespaces** بالأسرار
+  الحقيقية: «اعطني تمرين الاحتمالات 2024» → «كيف أحسب الأمل الرياضي» → «لم أفهم»×2 ⇒ سؤال قيم X،
+  صفر «أيّ خطوة تريد»، صفر تسريب (E(X)=/14/165).
+
+### السلسلة (D-146 → D-147)
+| Decision | الموضوع |
+|----------|---------|
+| D-146 | Agentic Cognitive Runtime doctrine |
+| **D-147** | **خطوة التطبيق المرتبطة بالتمرين تستبدل الـ punt السقراطي العام (يحلّ كارثة E(X) — ISS-119)** |

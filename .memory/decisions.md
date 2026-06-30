@@ -5066,3 +5066,30 @@ onto the chat path; aspirational layers (rows 12–13, CritiqueNode) enter the t
 only with the full import + call chain + runtime evidence proof. Logs `DOC-DEBT-001`
 (CLAUDE.md is an encyclopedia, violating the "contract not encyclopedia" principle) **without
 acting on it**. Win condition unchanged: shrink the illusion gap (`roadmap.md` §7).
+
+## D-147 (2026-06-30) — Exercise-connected apply-step replaces the generic Socratic punt (ISS-119)
+
+**Status**: ✅ ACTIVE (additive, deterministic zero-LLM, regression-safe)
+
+**Context**: Live E(X) transcript — after the escalation ladder (definition → example →
+micro-simulation) exhausted, the tutor emitted a generic punt «أيّ خطوة تريد أن نبدأ بها؟»
+instead of leading the confused student to the first concrete step. Root cause: the escalation
+skill (D-138) is concept-scoped + intentionally generic and had no "apply-to-exercise" rung.
+
+**Decision**: Add a light, data-driven `APPLY_STEPS: dict[str, str]` to `micro_simulation_skill.py`
+(key = same `concept_id` as `MICRO_SIMULATIONS` ⇒ naming consistency; value = one concrete leading
+**question** connecting the concept to this exercise's structure, never a final answer) +
+`get_apply_step()`. `EscalationInput` gains `apply_step`; `PedagogicalEscalationSkill.decide()`
+emits it on exhaustion (`text_kind="apply"`, `rationale="apply_to_exercise"`) via the new
+`_exhausted_decision` helper, falling back to the old generic handoff only when absent (unknown
+concept → no regression). `orchestrator_client.py` passes `apply_step=get_apply_step(concept_id)`
+at the `EscalationInput` call site. Doctrine `PEDAGOGICAL_ESCALATION_DOCTRINE` → v1.1.0 (+1 rule).
+
+**Owner cautions honored**: (1) registry light + concept-scoped (8 entries, keys ⊆ MICRO_SIMULATIONS
+— no per-exercise bloat); (2) strict redaction — all 8 apply-steps verified `redact_final_answers`
+count=0; (3) concept-naming unified by construction (same key space as micro-sims).
+
+**Consequence**: ladder exhaustion now leads with a concrete exercise-step question (E(X) →
+«ما القيم التي يمكن أن يأخذها X؟») instead of punting; deterministic, redaction-safe, no behavior
+change for uncovered concepts. Verification: `scripts/verify_iss119_live.py` (ALL PASS) + 6 tests.
+**Mandatory live E2E in Codespaces** (real secrets, WS path) per §6.55. CLAUDE.md §6.127.

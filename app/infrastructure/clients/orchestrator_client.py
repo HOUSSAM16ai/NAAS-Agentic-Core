@@ -3863,6 +3863,10 @@ class OrchestratorClient:
                         micro_sim=get_micro_simulation_skill().get_micro_simulation(
                             _esc_active.concept_id
                         ),
+                        # D-147: سؤال خطوة التطبيق على التمرين — يستبدل الـ punt العام عند نفاد السُّلّم.
+                        apply_step=get_micro_simulation_skill().get_apply_step(
+                            _esc_active.concept_id
+                        ),
                         intent=_esc_state.primary_intent,
                         frustration=_esc_state.frustration,
                         support_level=_esc_sup,

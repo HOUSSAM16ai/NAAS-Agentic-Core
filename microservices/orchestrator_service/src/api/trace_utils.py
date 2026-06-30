@@ -1,7 +1,8 @@
 import re
-from typing import Optional, Dict, Any
-from fastapi import Request
 from dataclasses import dataclass
+
+from fastapi import Request
+
 
 @dataclass
 class OrchestratorTraceContext:
@@ -14,7 +15,8 @@ class OrchestratorTraceContext:
     def traceparent(self) -> str:
         return f"00-{self.trace_id}-{self.span_id}-{self.flags}"
 
-def extract_trace_context(request: Request) -> Optional[OrchestratorTraceContext]:
+
+def extract_trace_context(request: Request) -> OrchestratorTraceContext | None:
     traceparent = request.headers.get("traceparent")
     if not traceparent:
         return None
@@ -26,4 +28,6 @@ def extract_trace_context(request: Request) -> Optional[OrchestratorTraceContext
 
     trace_id, span_id, flags = match.groups()
     sampled = flags.endswith("1")
-    return OrchestratorTraceContext(trace_id=trace_id, span_id=span_id, sampled=sampled, flags=flags)
+    return OrchestratorTraceContext(
+        trace_id=trace_id, span_id=span_id, sampled=sampled, flags=flags
+    )

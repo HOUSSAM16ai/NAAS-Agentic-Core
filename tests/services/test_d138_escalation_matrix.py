@@ -16,6 +16,7 @@ from pathlib import Path
 
 from app.services.skills.answer_redaction_skill import redact_final_answers
 from app.services.skills.micro_simulation_skill import (
+    APPLY_STEPS,
     MICRO_SIM_MAX_CHARS,
     MICRO_SIMULATIONS,
     get_micro_simulation_skill,
@@ -217,3 +218,67 @@ class TestWiring:
         names = set(get_skill_registry().names())
         assert "pedagogical_escalation" in names
         assert "micro_simulation" in names
+
+
+# ── D-147: نفاد السُّلّم ⇒ سؤال تطبيق مرتبط بالتمرين بدل الـ punt العام ────────────
+class TestApplyStepOnExhaustion:
+    def _exhausted_history(self) -> list[dict]:
+        s = _skill()
+        h = [_usr("ما هو"), _asst(s.decide(_inp("definition", [])).text)]
+        h += [_usr("اعطني مثال"), _asst(s.decide(_inp("example_request", h)).text)]
+        h += [
+            _usr("اعطني مثال عددي"),
+            _asst(s.decide(_inp("example_request", [*h, _usr("اعطني مثال عددي")])).text),
+        ]
+        return h
+
+    def test_exhaustion_with_apply_step_leads_not_punts(self) -> None:
+        # عند توفّر apply_step (مثل مسار الأورقستريتور الحيّ) ⇒ سؤال تطبيق ملموس لا punt عام.
+        s = _skill()
+        h = self._exhausted_history()
+        d = s.decide(
+            EscalationInput(
+                concept_id=_SPEC.concept_id,
+                title=_SPEC.title,
+                definition=_SPEC.definition,
+                example=_SPEC.example,
+                micro_sim=_MICRO,
+                apply_step=APPLY_STEPS["conditional_probability"],
+                intent="confusion",
+                history=h,
+                evidence_markers=_SPEC.evidence_markers,
+            )
+        )
+        assert d.action == "exhausted" and d.text_kind == "apply"
+        assert d.rationale == "apply_to_exercise"
+        assert "أيّ خطوة تريد" not in d.text  # لا punt عام
+        assert "الفضاء الجديد" in d.text  # سؤال تطبيق ملموس مرتبط بالتمرين
+
+    def test_exhaustion_without_apply_step_falls_back_to_handoff(self) -> None:
+        # المفهوم غير المُغطّى (apply_step=None) ⇒ التسليم العامّ القديم (لا انحدار).
+        s = _skill()
+        d = s.decide(_inp("confusion", self._exhausted_history()))
+        assert d.action == "exhausted" and d.text_kind == "handoff"
+
+    def test_expected_value_apply_step_is_x_domain_question(self) -> None:
+        # قلب كارثة E(X): يقود لقيم X لا «أيّ خطوة تريد؟».
+        step = get_micro_simulation_skill().get_apply_step("expected_value")
+        assert step and "ما القيم التي يمكن أن يأخذها X" in step
+
+    def test_all_apply_steps_survive_d113_redaction(self) -> None:
+        # كل خطوة تطبيق سؤال لا جواب ⇒ صفر حجب (لا تسريب نتيجة نهائية).
+        for cid, txt in APPLY_STEPS.items():
+            out, n = redact_final_answers(txt)
+            assert n == 0 and out == txt, f"{cid} leaked under redaction"
+
+    def test_registry_light_and_concept_scoped(self) -> None:
+        # خفيف ومحدّد بالمفاهيم (نقد المالك #1+#3): المفاتيح ⊆ MICRO_SIMULATIONS.
+        assert set(APPLY_STEPS).issubset(set(MICRO_SIMULATIONS))
+        assert len(APPLY_STEPS) <= 10
+
+    def test_orchestrator_passes_apply_step(self) -> None:
+        # wiring: مسار الأورقستريتور يمرّر apply_step فعلاً.
+        src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
+            encoding="utf-8"
+        )
+        assert "get_apply_step(" in src

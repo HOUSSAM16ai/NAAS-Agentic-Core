@@ -1039,7 +1039,8 @@ def get_understanding_state_summary() -> str:
 
 
 # ── D-138: المصفوفة التصعيدية التكيّفية — Escalation + Understanding-Signal + Misconception ──
-PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION: Final[str] = "1.0.0"
+# ── D-147: نفاد السُّلّم ⇒ سؤال تطبيق مرتبط بالتمرين بدل الـ punt العام ──
+PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION: Final[str] = "1.1.0"
 
 #: قوانين غير قابلة للكسر تحكم المصفوفة التصعيدية التكيّفية (D-138).
 PEDAGOGICAL_ESCALATION_DOCTRINE: Final[tuple[str, ...]] = (
@@ -1061,6 +1062,9 @@ PEDAGOGICAL_ESCALATION_DOCTRINE: Final[tuple[str, ...]] = (
     "(L4_VISUAL مؤجَّل — لا واجهة توليدية في القلب الآن).",
     "policy أولاً، content-server ثانياً: المصفوفة تقرّر، MicroSimulationSkill يخدم L3. نقيس الأثر السلوكي "
     "فقط (تراجع التكرار + تدرّج الرُّتب + ارتفاع الإتقان BKT) — لا تحسين على «الرضا اللحظي».",
+    "D-147: نفاد السُّلّم (exhausted) ⇒ سؤال «خطوة تطبيق» مرتبط ببنية هذا التمرين (APPLY_STEPS، concept-scoped) "
+    "يقود الطالب للخطوة الأولى الملموسة — لا punt عامّ («أيّ خطوة تريد؟»). يبقى سؤالاً (توليد لا كشف) ⇒ يَنجو "
+    "من حجب D-113؛ المفهوم غير المُغطّى يرجع للتسليم العامّ القديم (لا انحدار).",
 )
 
 

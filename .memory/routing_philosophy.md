@@ -16,9 +16,9 @@ Intent Routing MUST NOT rely on unbounded greedy regular expressions (`(.*)`) or
 - `app/services/chat/intent_detector.py` (Monolith Fallback Router)
 - `microservices/orchestrator_service/src/services/overmind/utils/intent_detector.py` (Microservice Router)
 
-## 5. Student Interaction Contract
-When a student pastes a long problem description or an analytical question containing words like "تمرين", the system MUST NOT blindly serve a retrieved document. Instead, it must trigger the tutor to read, analyze, and assist the student pedagogically.
 
+## 5. Student Interaction Contract
+When a student pastes a long problem description or an analytical question containing words like "تمرين", the system MUST NOT blindly serve a retrieved document or fall back to an answer-machine response (e.g., `general_knowledge`). Instead, it must fall back to the `educational` intent and trigger the tutor (`SynthesizerNode`) to read, analyze, and assist the student pedagogically step-by-step.
 ## 6. Acceptance Criteria
 - A purely conversational or long analytical query containing the word "تمرين" does not trigger `CONTENT_RETRIEVAL`.
 - A direct, short query like "اريد تمرين الاحتمالات" successfully triggers `CONTENT_RETRIEVAL`.

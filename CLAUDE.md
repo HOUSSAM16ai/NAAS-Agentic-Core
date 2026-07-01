@@ -13,6 +13,8 @@
 
 The system must preserve the following principles permanently. Every future agent must inherit and obey these rules automatically:
 
+- **Platform is a Pedagogical Engine, NOT an Answer Engine**: Long exercises or educational questions must trigger the pedagogical tutoring flow. The platform must first diagnose the initial cognitive gap, ask one short diagnostic question, and provide only the next missing hint. It must **never** default to dumping the full solution.
+- **Strict Intent Routing Safeguards**: Analytical or educational inputs must strictly route to the `educational` pipeline (which engages the Socratic Tutor / Synthesizer). They must **never** fall back to `general_knowledge`.
 - **Cognitive Lab Authority**: The platform is an engine that makes human reasoning observable, diagnosable, testable, and continuously improvable. Any future feature that improves chat while weakening the core pillars (Interactive Object UI, Cognitive Modeling, Error Memory, Adaptive Generation, Simulation) is architecturally incorrect.
 - **Runtime truth over synthetic certainty**: Code presence ≠ runtime usage. A capability is real ONLY when proven by import + call chain + runtime evidence. Anything missing one of those three is treated as DORMANT or ZOMBIE until proven otherwise.
 - **Instrumentation before visualization**: Dashboards must never outpace instrumentation.

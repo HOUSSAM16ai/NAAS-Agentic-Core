@@ -670,7 +670,17 @@ class SupervisorNode:
                 updates["original_query"] = state.get("query", "")
             return updates
 
-        intent = "general_knowledge"
+        educational_triggers = {
+            "تمرين", "تمارين", "احتمالات", "دوال", "متتاليات",
+            "بكالوريا", "bac", "احسب", "أحسب", "استنتج", "برهن",
+            "بيّن", "بين", "معادلة", "مسألة", "دالة", "probability",
+            "sequence", "function", "integral", "derivative"
+        }
+        if any(trigger in query_normalized for trigger in educational_triggers):
+            intent = "educational"
+        else:
+            intent = "general_knowledge"
+
         emit_telemetry(node_name="SupervisorNode", start_time=start_time, state=state)
         updates = {"intent": intent, "query": query}
         if "original_query" not in state:

@@ -671,10 +671,27 @@ class SupervisorNode:
             return updates
 
         educational_triggers = {
-            "تمرين", "تمارين", "احتمالات", "دوال", "متتاليات",
-            "بكالوريا", "bac", "احسب", "أحسب", "استنتج", "برهن",
-            "بيّن", "بين", "معادلة", "مسألة", "دالة", "probability",
-            "sequence", "function", "integral", "derivative"
+            "تمرين",
+            "تمارين",
+            "احتمالات",
+            "دوال",
+            "متتاليات",
+            "بكالوريا",
+            "bac",
+            "احسب",
+            "أحسب",
+            "استنتج",
+            "برهن",
+            "بيّن",
+            "بين",
+            "معادلة",
+            "مسألة",
+            "دالة",
+            "probability",
+            "sequence",
+            "function",
+            "integral",
+            "derivative",
         }
         if any(trigger in query_normalized for trigger in educational_triggers):
             intent = "educational"

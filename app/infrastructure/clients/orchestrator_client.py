@@ -1193,7 +1193,7 @@ class OrchestratorClient:
                     from app.services.capabilities.exercise_retrieval import (
                         ExerciseRetrievalRequest,
                         detect_exercise_retrieval,
-                        load_exercise_content,
+                        load_exercise_questions_only,
                     )
 
                     _canon = detect_exercise_retrieval(
@@ -1201,7 +1201,9 @@ class OrchestratorClient:
                         history_messages=history_messages,
                     )
                     if _canon.recognized and _canon.matched_entry:
-                        _official = load_exercise_content(_canon.matched_entry)
+                        # ISS-120 (D-153): أسئلة-فقط — نثر الحل النموذجي يولِّد كياناً
+                        # وهمياً («بطاقة رقم 0») يُفسد فضاء العينة (n=14 بدل 11).
+                        _official = load_exercise_questions_only(_canon.matched_entry)
                         # المحتوى الرسمي (التركيبة) + السؤال الحالي (نية الحيرة/التركيز)؛
                         # السؤال الحالي نظيف — التلوّث كان في الـ history (مُسقَط بـ None).
                         _canon_result = skill.analyze(
@@ -1308,7 +1310,7 @@ class OrchestratorClient:
                     from app.services.capabilities.exercise_retrieval import (
                         ExerciseRetrievalRequest,
                         detect_exercise_retrieval,
-                        load_exercise_content,
+                        load_exercise_questions_only,
                     )
 
                     _decision = detect_exercise_retrieval(
@@ -1316,7 +1318,8 @@ class OrchestratorClient:
                         history_messages=history_messages,
                     )
                     if _decision.recognized and _decision.matched_entry:
-                        _full = load_exercise_content(_decision.matched_entry)
+                        # ISS-120 (D-153): أسئلة-فقط قبل استخراج الكيانات.
+                        _full = load_exercise_questions_only(_decision.matched_entry)
                         _contextual_question = f"{_full} {question}".strip()
                         result = skill.analyze(
                             ProbabilityInput(
@@ -1725,7 +1728,7 @@ class OrchestratorClient:
             from app.services.capabilities.exercise_retrieval import (
                 ExerciseRetrievalRequest,
                 detect_exercise_retrieval,
-                load_exercise_content,
+                load_exercise_questions_only,
             )
             from app.services.skills.probability_skill import (
                 CombinationsModelOutput,
@@ -1739,13 +1742,15 @@ class OrchestratorClient:
                 return None
 
             # تحميل التمرين الرسمي المُفهرَس (history-immune — D-123).
+            # ISS-120 (D-153): أسئلة-فقط — نثر الحل النموذجي («تحمل الرقم 0 …
+            # وعددها 3 كرات») يولِّد كياناً وهمياً يُفسد فضاء العينة (14 بدل 11).
             _decision = detect_exercise_retrieval(
                 ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
                 history_messages=history_messages,
             )
             if not (_decision.recognized and _decision.matched_entry):
                 return None
-            _official = load_exercise_content(_decision.matched_entry)
+            _official = load_exercise_questions_only(_decision.matched_entry)
             if not _official:
                 return None
 
@@ -1871,6 +1876,7 @@ class OrchestratorClient:
                 ExerciseRetrievalRequest,
                 detect_exercise_retrieval,
                 load_exercise_content,
+                load_exercise_questions_only,
             )
             from app.services.skills.probability_skill import (
                 CombinationsModelOutput,
@@ -1993,11 +1999,14 @@ class OrchestratorClient:
             )
             if not (_decision.recognized and _decision.matched_entry):
                 return None
+            # ISS-120 (D-153): الاستخراج/التكافؤ من أسئلة-فقط؛ الحل الكامل
+            # (`_official`) يبقى حصراً لمرجع RAG-Grounded LLM أدناه (D-145).
             _official = load_exercise_content(_decision.matched_entry)
-            if not _official:
+            _official_qonly = load_exercise_questions_only(_decision.matched_entry)
+            if not _official or not _official_qonly:
                 return None
             _combo = ProbabilityCalculatorSkill().analyze(
-                ProbabilityInput(question=_official, history=None)
+                ProbabilityInput(question=_official_qonly, history=None)
             )
             if not isinstance(_combo, CombinationsModelOutput):
                 return None
@@ -2005,7 +2014,7 @@ class OrchestratorClient:
 
             # (1) الحادثة B — حتمي من أرقام الكرات الرسمية (Stage 1).
             if is_event_b:
-                parity = ProbabilityCalculatorSkill.number_parity_counts(_official)
+                parity = ProbabilityCalculatorSkill.number_parity_counts(_official_qonly)
                 if parity is None or parity.get("total", 0) != n:
                     return None
                 odd = parity["odd"]
@@ -2117,7 +2126,7 @@ class OrchestratorClient:
             from app.services.capabilities.exercise_retrieval import (
                 ExerciseRetrievalRequest,
                 detect_exercise_retrieval,
-                load_exercise_content,
+                load_exercise_questions_only,
             )
             from app.services.skills.probability_skill import (
                 CombinationsModelOutput,
@@ -2131,7 +2140,8 @@ class OrchestratorClient:
             )
             if not (_decision.recognized and _decision.matched_entry):
                 return None
-            official = load_exercise_content(_decision.matched_entry)
+            # ISS-120 (D-153): أسئلة-فقط قبل استخراج الكيانات.
+            official = load_exercise_questions_only(_decision.matched_entry)
             if not official:
                 return None
             combo = ProbabilityCalculatorSkill().analyze(
@@ -2425,13 +2435,16 @@ class OrchestratorClient:
         """D-127: يحمّل تركيبة التمرين الرسمي (CombinationsModelOutput) — مناعة D-123.
 
         يُرجِع None لغير الاحتمالات (topic-safe) أو عند تعذّر الحساب.
+        ISS-120 (D-153): يقرأ **أسئلة-فقط** — تغذية الملف الكامل (مع الحل النموذجي)
+        كانت تولِّد كياناً وهمياً «بطاقة رقم 0 (العدد 3)» من نثر الحل («…لا تحمل
+        الرقم 0 … سحب 3 كرات») ⇒ n=14 و C(14,3)=364 بدل 11/165 — كارثة الطالب.
         """
         try:
             from app.services.capabilities.arabic_normalize import primary_canonical_topic
             from app.services.capabilities.exercise_retrieval import (
                 ExerciseRetrievalRequest,
                 detect_exercise_retrieval,
-                load_exercise_content,
+                load_exercise_questions_only,
             )
             from app.services.skills.probability_skill import (
                 CombinationsModelOutput,
@@ -2448,7 +2461,7 @@ class OrchestratorClient:
             )
             if not (_decision.recognized and _decision.matched_entry):
                 return None
-            _official = load_exercise_content(_decision.matched_entry)
+            _official = load_exercise_questions_only(_decision.matched_entry)
             if not _official:
                 return None
             result = ProbabilityCalculatorSkill().analyze(
@@ -4371,6 +4384,33 @@ class OrchestratorClient:
                 )
             if not _direct:
                 _direct = self._build_probability_direct_explanation(question, history_messages)
+            # ISS-120 (D-153): حارس التكرار على مسار محرّك حالة الفهم — كان هذا
+            # المسار يتجاوز `_recently_emitted` و`last_step_emitted` فيبثّ نفس
+            # التمثيل («تخيّل أنك سحبت 3 كرات…») حرفياً كل دور («لم أفهم»×2 ⇒
+            # نفس النص). عند التكرار ⇒ تصعيد للحلّ الرمزي المتدرّج؛ وإن كان هو
+            # الآخر مكرَّراً ⇒ إسقاط النص فيتولّى الكاروسيل/المسار التالي.
+            if _direct:
+                with contextlib.suppress(Exception):
+                    _d153_ts = (
+                        (context or {}).get("tutor_state") if isinstance(context, dict) else None
+                    )
+                    _d153_last = (
+                        str(_d153_ts.get("last_step_emitted") or "")
+                        if isinstance(_d153_ts, dict)
+                        else ""
+                    )
+                    if self._recently_emitted(_direct, history_messages) or (
+                        _d153_last and self._near_dup(_direct, _d153_last)
+                    ):
+                        _reveal = self._build_symbolic_reveal(question, history_messages)
+                        if (
+                            _reveal
+                            and not self._recently_emitted(_reveal, history_messages)
+                            and not (_d153_last and self._near_dup(_reveal, _d153_last))
+                        ):
+                            _direct = _reveal
+                        else:
+                            _direct = None
             if _direct:
                 logger.info(
                     "probability_direct_explanation_escape_hatch",

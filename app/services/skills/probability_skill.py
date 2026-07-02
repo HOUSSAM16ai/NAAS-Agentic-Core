@@ -709,7 +709,8 @@ class ProbabilityCalculatorSkill:
         """
         tokens = cls._tokenize(text)
         item_noun = cls._detect_item_noun(tokens)
-        results: list[tuple[str, str, int]] = []
+        color_results: list[tuple[str, str, int]] = []
+        numbered_results: list[tuple[str, str, int]] = []
         seen: set[str] = set()
 
         # (1) كيانات ملوّنة
@@ -726,7 +727,7 @@ class ProbabilityCalculatorSkill:
             if label_pos in seen:
                 continue
             seen.add(label_pos)
-            results.append((label_pos, label_neg, count))
+            color_results.append((label_pos, label_neg, count))
 
         # (2) كيانات مرقّمة *صريحة*: token هو الاسم المستقل «رقم/الرقم» متبوعاً
         # برقم (بطاقة رقم 1). D-081 (ISS-083): مطابقة الأسماء المستقلّة فقط —
@@ -746,9 +747,40 @@ class ProbabilityCalculatorSkill:
             if count is None or count <= 0:
                 continue
             seen.add(label_pos)
-            results.append((label_pos, f"{item_noun} ليست رقم {number}", count))
+            numbered_results.append((label_pos, f"{item_noun} ليست رقم {number}", count))
 
-        return results
+        # ISS-120 (D-153): حارس الكيان الوهمي في التركيبة المختلطة — حين تُوجد
+        # كيانات ملوّنة ويُطابق المجموع الصريح المذكور في النص («يحتوي كيس على
+        # 11 كرة») مجموع الألوان وحدها، فالأرقام **صفات** للكرات الملوّنة لا
+        # مجموعات مستقلة ⇒ تُسقَط الكيانات المرقّمة كلياً. نثر الحل النموذجي
+        # («…تحمل الرقم 0 … وعددها 3 كرات») كان يولِّد «بطاقة رقم 0 (العدد 3)»
+        # ⇒ n=14 و C(14,3)=364 بدل 11/165. تمارين البطاقات النقية (D-076) بلا
+        # كيانات لون — لا تتأثر.
+        if color_results and numbered_results:
+            color_sum = sum(count for _, _, count in color_results)
+            stated_total = cls._detect_total(text, fallback=1)
+            if stated_total == color_sum:
+                return color_results
+
+        return color_results + numbered_results
+
+    @classmethod
+    def _stated_denominators(cls, text: str) -> set[int]:
+        """D-152 + ISS-120 (D-153): المقامات المُصرَّح بها في النص.
+
+        تلتقط الصيغتين: القسمة الخام (``14/165``) **و** LaTeX
+        (``\\frac{56}{165}`` / ``\\dfrac{...}{...}``). بوّابة D-152 الأصلية كانت
+        عمياء عن ``\\frac`` — المحتوى الرسمي يكتب كل المقامات بها، فلم تُطلَق
+        البوّابة قط وتسرّب فضاء عينة وهمي (C(14,3)=364) للطالب.
+        """
+        denoms: set[int] = set()
+        for _, den in re.findall(r"(\d+)\s*/\s*(\d+)", text):
+            if int(den) > 1:
+                denoms.add(int(den))
+        for _, den in re.findall(r"\\d?frac\{(\d+)\}\{(\d+)\}", text):
+            if int(den) > 1:
+                denoms.add(int(den))
+        return denoms
 
     @classmethod
     def _detect_total(cls, text: str, fallback: int) -> int:
@@ -1181,15 +1213,14 @@ class ProbabilityCalculatorSkill:
         if total_comb < 1:
             return None
 
-        # Validation Gate: Reject if total_comb contradicts explicitly stated denominators in the exercise text
-        # This prevents UI corruption from historical text pollution
-        stated_denoms_match = re.findall(r"(\d+)\s*/\s*(\d+)", combined)
-        if stated_denoms_match:
-            stated_denoms = {int(den) for _, den in stated_denoms_match if int(den) > 1}
-            if stated_denoms and not any(
-                (total_comb % d == 0) or (d % total_comb == 0) for d in stated_denoms
-            ):
-                return None
+        # Validation Gate (D-152 + ISS-120/D-153): رفض total_comb المتناقض مع
+        # المقامات المُصرَّح بها في النص — يشمل صيغة LaTeX \frac التي كانت
+        # البوّابة الأصلية عمياء عنها (فلم تُطلَق قط على المحتوى الرسمي).
+        stated_denoms = cls._stated_denominators(combined)
+        if stated_denoms and not any(
+            (total_comb % d == 0) or (d % total_comb == 0) for d in stated_denoms
+        ):
+            return None
 
         groups: list[CombinationGroup] = []
         same_group = 0
@@ -1283,15 +1314,14 @@ class ProbabilityCalculatorSkill:
         if total_comb < 1:
             return None
 
-        # Validation Gate: Reject if total_comb contradicts explicitly stated denominators in the exercise text
-        # This prevents UI corruption from historical text pollution
-        stated_denoms_match = re.findall(r"(\d+)\s*/\s*(\d+)", combined)
-        if stated_denoms_match:
-            stated_denoms = {int(den) for _, den in stated_denoms_match if int(den) > 1}
-            if stated_denoms and not any(
-                (total_comb % d == 0) or (d % total_comb == 0) for d in stated_denoms
-            ):
-                return None
+        # Validation Gate (D-152 + ISS-120/D-153): رفض total_comb المتناقض مع
+        # المقامات المُصرَّح بها في النص — يشمل صيغة LaTeX \frac التي كانت
+        # البوّابة الأصلية عمياء عنها (فلم تُطلَق قط على المحتوى الرسمي).
+        stated_denoms = cls._stated_denominators(combined)
+        if stated_denoms and not any(
+            (total_comb % d == 0) or (d % total_comb == 0) for d in stated_denoms
+        ):
+            return None
 
         steps: list[ExerciseStep] = []
 

@@ -91,6 +91,9 @@ def is_answer_message(text: str) -> bool:
     t = _normalize(text)
     if not t:
         return False
+    # ISS-120 (D-153): الحيرة المجرّدة ليست إجابة (اتساق مع is_response_to_socratic).
+    if _is_bare_confusion(t):
+        return False
     words = t.split()
     if len(words) > 5:
         return False
@@ -211,6 +214,41 @@ def _is_topic_switch(message: str) -> bool:
         return False
 
 
+#: ISS-120 (D-153): إشارات الحيرة المجرّدة — «لم أفهم» **ليست إجابة** على سؤال
+#: سقراطي؛ هي حيرة تُوجَّه لمسارات الحيرة. معاملتها كإجابة كانت تُنتج
+#: «إجابتك في الطريق الصحيح —» رداً على «لم أفهم» (خيانة بيداغوجية).
+#: نسخة محلية مصغّرة (استقلالية الـ Skills — §0.5، نمط D-013).
+_BARE_CONFUSION_MARKERS: tuple[str, ...] = (
+    "لم افهم",
+    "لم أفهم",
+    "ما فهمت",
+    "مافهمت",
+    "مفهمتش",
+    "ما فهمتش",
+    "لا افهم",
+    "لا أفهم",
+    "لست افهم",
+    "مش فاهم",
+    "لم استوعب",
+    "je ne comprends pas",
+    "i don't understand",
+)
+
+
+def _is_bare_confusion(normalized: str) -> bool:
+    """ISS-120 (D-153): هل الرسالة حيرة مجرّدة (لا محتوى إجابة فيها)؟
+
+    حيرة مجرّدة = تحوي إشارة حيرة **و** قصيرة (≤ 6 كلمات) — «لم أفهم»،
+    «لم افهم التمرين»، «مفهمتش». رسالة أطول تحوي محتوى فعلياً («لم أفهم
+    لماذا نجمع الحالات الممكنة…») تُترَك للمُقيّم يزنها كاملة.
+    """
+    if not normalized:
+        return False
+    if len(normalized.split()) > 6:
+        return False
+    return any(m in normalized for m in _BARE_CONFUSION_MARKERS)
+
+
 def is_response_to_socratic(message: str, history: list[dict[str, str]] | None) -> bool:
     """D-130 (تحسين A، يحل Concern 1): هل رسالة الطالب إجابة على سؤال سقراطي معلّق؟
 
@@ -222,6 +260,11 @@ def is_response_to_socratic(message: str, history: list[dict[str, str]] | None) 
         return False
     t = _normalize(message)
     if not t:
+        return False
+    # ISS-120 (D-153): الحيرة المجرّدة («لم أفهم») ليست إجابة أبداً — تُوجَّه
+    # لمسارات الحيرة (تصعيد التمثيل)، لا لتقييم الإجابات (كانت تُنتج
+    # «إجابتك في الطريق الصحيح —» رداً على «لم أفهم»).
+    if _is_bare_confusion(t):
         return False
     if _is_explicit_request(t):
         return False

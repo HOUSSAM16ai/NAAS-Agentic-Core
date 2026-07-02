@@ -5105,3 +5105,39 @@ change for uncovered concepts. Verification: `scripts/verify_iss119_live.py` (AL
 - **Context:** The `FullExerciseStory` UI component for probability combinatorics suffered from "historical pollution" (e.g. `C(23,3)=1771`) where elements like `بطاقة رقم 0 اضغط للكشف` passed in the `history_text` were mistakenly extracted as real entities by `_extract_count_entities`.
 - **Action:** Implemented a Strict Validation Gate inside `ProbabilityCalculatorSkill._strategy_composition`. We extract explicitly stated probability fractions from the problem `source` using regex `r'(\d+)\s*/\s*(\d+)'`. We reject the generation path (returning `None`) if the dynamically computed `total_combinations` does not have a clean modular relationship with any of the stated denominators.
 - **Result:** Invalid entities injected via user chat history can no longer override explicitly stated values and mathematical facts in the problem itself, successfully forcing fallback to deep generative text without corrupting the visual state.
+
+## D-153 (2026-07-02) — ISS-120: أسئلة-فقط للمحرك الرمزي + الحيرة ليست إجابة + دستور Pedagogical OS
+**Context:** live transcript on BAC-2024: phantom «بطاقة رقم 0 (العدد 3)» + C(14,3)=364 emitted to a
+real student; «لم أفهم» repeated the same hint verbatim then earned «إجابتك في الطريق الصحيح»; Next.js
+`inert` string-attribute overlay covered the mobile screen. Reproduced live on HEAD: the canonical
+loaders feed the **raw official file (statement + worked solution)** to entity extraction; solution
+prose «…لا تحمل الرقم 0 … سحب 3 كرات» matches `_NUMBERED_ENTITY_MARKERS`; D-152's slash-only gate
+never fires on LaTeX `\frac{56}{165}`.
+
+**Decision (6 fixes + constitution + gate):**
+1. `load_exercise_questions_only` (exercise_retrieval — wraps `_trim_at_solution`) used at **all 6**
+   analyze/parity-feeding sites in `orchestrator_client`; full content stays **only** for the D-145
+   RAG-grounded reference (explains, never extracts).
+2. Mixed-composition phantom guard in `_extract_count_entities`: colors present AND stated total ==
+   sum(colors) ⇒ numbered entities dropped (numbers are ball attributes). Card-only exercises (D-076)
+   unaffected.
+3. Shared `_stated_denominators` parses bare `N/M` **and** LaTeX `\frac{N}{M}` — both builders' gates.
+4. Understanding-state emit path now guarded: `_recently_emitted` + `tutor_state.last_step_emitted`
+   anchor; on dup ⇒ escalate to symbolic reveal, else drop to carousel. `_explain_count` also counts
+   representation snippets ⇒ level actually progresses.
+5. `_is_bare_confusion` (confusion marker + ≤6 words) in `is_response_to_socratic`,
+   `_heuristic_understood`, and a deterministic block in `evaluate` (no LLM call) — bare confusion is
+   NEVER an answer, never acknowledged, never `understood`.
+6. `inert={cond || undefined}` (boolean) in CogniForgeApp.jsx (both sidebars); DOM exclusion preserved.
+**Constitution:** owner's Pedagogical OS doctrine codified in `.memory/pedagogical_os.md` (creed,
+canonical turn chain, Core/Shell/Policy/Verification split, 7 laws, constitutional Q&A, mandatory
+16-layer technology matrix with honest §6.6 statuses, billions-of-exercises rule: structured
+`parsed_entities` over prose extraction; extraction never sees solution prose) + CLAUDE.md §0.8
+pointer + **mandatory CI gate** `scripts/fitness/check_pedagogical_os.py` (static-text, runs in
+degraded sandboxes; wired into skills-doctrine-gate workflow).
+
+**Consequence:** full official file now yields the correct 3-color/11/165 combo even unfixed callers;
+poisoned compositions rejected by the LaTeX-aware gate; verbatim repetition and confusion-as-answer
+structurally impossible; overlay gone. Tests: `tests/services/test_iss120_canonical_combo_poisoning.py`
++ `frontend/tests/iss120_inert_boolean_attribute.test.mjs`; D-123/D-124 source tests aligned.
+Mandatory live E2E in Codespaces (real logins, WS + browser) per §6.55. CLAUDE.md §6.128.

@@ -185,3 +185,16 @@ runtime evidence). دَيْن موثَّق: `DOC-DEBT-001` (CLAUDE.md موسوع
 
 ### M12 — Pedagogical Policy Consolidation (D-144)
 Formalized `PedagogicalPolicyEngine` orchestrating `DialogueManagerSkill` through rich `TutorState`.
+
+### M13 — الكيانات المهيكلة قبل الاستخراج من النثر (Structured Entities @ Billions Scale — D-153)
+> الطموح: ملايير التمارين. الدرس الدستوري: ISS-120 («بطاقة رقم 0» الوهمية من نثر الحل النموذجي).
+- **الهدف**: تركيبة كل تمرين وحقائقه الرمزية تأتي من **`parsed_entities` المهيكلة** في Supabase
+  `bac_exercises` (موجودة فعلاً للتمارين الثلاثة المُهاجَرة) — استخراج النثر (`_extract_count_entities`)
+  يصبح fallback مُقيَّداً للمحتوى غير المهيكل فقط، ولا يرى نثر الحل أبداً (`load_exercise_questions_only`).
+- **دَين قابلية التوسّع المعروف**: `_load_canonical_combinations` وأشقاؤه يستدعون
+  `detect_exercise_retrieval(question="اعطني تمرين الاحتمالات 2024")` — سؤال قانوني **مُثبَّت حرفياً**
+  لتمرين واحد. التعميم = اشتقاق التمرين النشط من `tutor_state.active_concept`/الـ history ثم قراءة
+  `parsed_entities` من الـ DB (عبر مسار retrieval المُفهرَس القائم — D-099).
+- **DKT (Deep Knowledge Tracing)**: طبقة تحليلات مخطَّطة فوق BKT ثنائي القناة (D-126) — **PLANNED**،
+  لا تُبنى قبل أن تُثبت مقاييس فجوة الوهم الحاجة (قاعدة «القياس قبل التوسّع»).
+- **الحارس**: بوّابة `scripts/fitness/check_pedagogical_os.py` (D-153) تفرض قواعد الدستور بدءاً من الآن.

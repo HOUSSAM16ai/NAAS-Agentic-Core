@@ -200,6 +200,30 @@ layer requires the full three-leg proof — do not soften the status.*
 
 ---
 
+## 0.8. Pedagogical OS Constitution (D-153)
+
+> **الدستور الكامل: `.memory/pedagogical_os.md`** — هذا مؤشر فقط (العقد لا الموسوعة).
+> تحرسه بوّابة CI إلزامية: `scripts/fitness/check_pedagogical_os.py`.
+
+**الجملة الدستورية:** «الطالب لا يرسل سؤالاً إلى النظام؛ الطالب يدخل مسار تعلّم حيّ،
+والنظام مسؤول عن حفظ هذا المسار من الانهيار.»
+
+**السلسلة القانونية للدور:** `Routing/Intent → Diagnosis → TutorState → Pedagogical
+Policy → Symbolic Truth → Micro-Example → Response Guard → Learning Update →
+Hooks/Extensibility → Verification`.
+
+**القوانين السبعة:** التعليم قبل الإجابة · الحالة قبل الرد · التشخيص قبل الشرح ·
+التلميح قبل الحل · الحقيقة الرمزية قبل اللغة · التقدّم قبل الإطناب · التوسعة تخدم العقل.
+
+**قاعدة الفصل:** Core = Teaching Intelligence (يقرّر) · Runtime Shell = Claude Code /
+MCP / hooks / subagents / compaction (يخدم العقل ولا يصير عقلاً موازياً) · Truth =
+Symbolic Engine · Memory = TutorState · Law = Pedagogical Policy · Safety = Response Guard.
+
+**قاعدة المليارات:** تركيبة التمرين من الكيانات المهيكلة (`parsed_entities`) لا من
+استخراج النثر؛ والاستخراج **لا يرى نثر الحل النموذجي أبداً** (ISS-120 هو البرهان).
+
+---
+
 ## 1. What This Project Does
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.
@@ -10777,9 +10801,80 @@ The following foundational architectural invariants have been established in the
 - To prevent UI state corruption from historical chat text containing entities (like UI labels e.g., "بطاقة رقم 0 اضغط للكشف"), `ProbabilityCalculatorSkill` enforces a strict arithmetic Validation Gate.
 - The generated `total_combinations` (sample space denominator) must perfectly align with explicitly stated denominators provided in the original text (e.g., `P(B)=56/165` mandates `165` or a multiple of it).
 - If a mismatch is detected, the combinatorial visualization path is safely aborted (`return None`), and the system gracefully degrades to standard LLM logic.
+- **D-153 hardening (ISS-120):** the gate is now **LaTeX-aware** — the official content writes every denominator as `\frac{56}{165}` (zero bare `N/M`), so the original slash-only regex never fired. `_stated_denominators` parses both forms and is the single shared implementation for both builders.
 
+---
 
-### Probability Skill Validation Gate (D-152)
-- To prevent UI state corruption from historical chat text containing entities (like UI labels e.g., "بطاقة رقم 0 اضغط للكشف"), `ProbabilityCalculatorSkill` enforces a strict arithmetic Validation Gate.
-- The generated `total_combinations` (sample space denominator) must perfectly align with explicitly stated denominators provided in the original text (e.g., `P(B)=56/165` mandates `165` or a multiple of it).
-- If a mismatch is detected, the combinatorial visualization path is safely aborted (`return None`), and the system gracefully degrades to standard LLM logic.
+## 6.128 تسميم المُحمِّل القانوني + «الحيرة إجابة» + التكرار غير المحروس + `inert` النصية (2026-07-02, ISS-120 / D-153)
+
+> **الكارثة (transcript + screenshot حيّان):** على تمرين الاحتمالات BAC-2024:
+> «كيف احل السؤال الأول» ⇒ حل يحوي كياناً وهمياً «**بطاقة رقم 0 (العدد 3)**: C(3,3)»
+> + «سحب 3 من **14**: C(14,3)» (الصحيح 11 كرة / C(11,3)=165)؛ «لم أفهم» ⇒ **نفس النص
+> حرفياً** مرتين («تخيّل أنك سحبت 3 كرات…»)؛ ثم «لم أفهم» أخرى ⇒ «**إجابتك في الطريق
+> الصحيح** —» + إعادة الحساب الوهمي نفسه؛ + Next.js error overlay يغطي شاشة الهاتف.
+> هذا القسم أطلق أيضاً **دستور نظام التشغيل التربوي** (§0.8 + `.memory/pedagogical_os.md`).
+
+### الجذور الخمسة (مُثبتة بإعادة إنتاج حيّة على HEAD)
+
+| # | الجذر | الدليل |
+|---|-------|--------|
+| 1 | **المحرك الرمزي يقرأ الملف الرسمي كاملاً بما فيه الحل النموذجي**: `_load_canonical_combinations` + 5 مسارات أخرى تستدعي `load_exercise_content` (خام) ثم `analyze` — نثر الحل «…سحب 3 كرات لا تحمل **الرقم 0**…» (سطر 148) يطابق `_NUMBERED_ENTITY_MARKERS` (D-081) ⇒ كيان وهمي (count=3) ⇒ n=14، C(14,3)=364 | إعادة إنتاج stub: entities تحوي `('بطاقة رقم 0', 3)`، analyze ⇒ n=14/total=364 |
+| 2 | **بوّابة D-152 عمياء عن LaTeX**: regex `(\d+)/(\d+)` لا يرى `\frac{56}{165}` — الملف الرسمي فيه 13 `\frac` وصفر `N/M` خام ⇒ البوّابة لم تُطلَق قط | grep الملف الرسمي |
+| 3 | **مسار محرّك حالة الفهم يتجاوز حارس التكرار**: كتلة الـ emit تبثّ `_us.text` مباشرة بلا `_recently_emitted` ولا مرساة `last_step_emitted`؛ و`_explain_count` يعدّ بالـ explain_markers فقط والتمثيل «تخيّل أنك سحبت…» لا يحويها ⇒ المستوى عالق ⇒ تكرار حرفي | تتبّع الكود + الترانسكريبت |
+| 4 | **«لم أفهم» تُعامَل كإجابة صحيحة**: `is_response_to_socratic` تقبل الحيرة المجرّدة، و`_heuristic_understood` تُرجِع True لأي نص غير فارغ ⇒ `understood=True` ⇒ «إجابتك في الطريق الصحيح» | تتبّع الكود |
+| 5 | **`inert` نصية**: `inert={cond ? "true" : undefined}` في `CogniForgeApp.jsx` — React 19 يعامل `inert` كسمة boolean ⇒ تحذير console ⇒ Next.js overlay يغطي الشاشة | screenshot |
+
+### الإصلاح (D-153)
+- **A — أسئلة-فقط للمحرك الرمزي**: `load_exercise_questions_only` (جديد في
+  `exercise_retrieval.py` — يلفّ `_trim_at_solution`) يُستخدم في **كل** المسارات
+  الستة التي تُغذّي `analyze`/`number_parity_counts`. مرجع RAG-Grounded LLM
+  (D-145) يبقى بالملف الكامل **حصراً** (الشرح لا الاستخراج).
+- **B — حارس الكيان الوهمي** (`_extract_count_entities`): تركيبة مختلطة
+  (ألوان + «رقم N») والمجموع الصريح («11 كرة») = مجموع الألوان ⇒ الأرقام صفات
+  للكرات ⇒ تُسقَط الكيانات المرقّمة. تمارين البطاقات النقية (D-076) لا تتأثر.
+- **C — بوّابة LaTeX-aware**: `_stated_denominators` مشتركة تلتقط `N/M` و`\frac{N}{M}`
+  في كلا الـ builders — التركيبة المسمومة (364 مقابل 165 مُصرَّحة) تُرفض.
+- **D — حارس التكرار على مسار محرّك حالة الفهم**: قبل البثّ، `_recently_emitted`
+  + مرساة `tutor_state.last_step_emitted`؛ عند التكرار ⇒ تصعيد للحلّ الرمزي، وإلا
+  إسقاط للكاروسيل. + `_explain_count` يعدّ بمقاطع نصوص التمثيلات ⇒ المستوى يتقدّم.
+- **E — الحيرة المجرّدة ليست إجابة أبداً**: `_is_bare_confusion` (إشارة حيرة +
+  ≤6 كلمات) في `is_response_to_socratic` (policy) و`_heuristic_understood` +
+  كتلة حتمية في `evaluate` (evaluator، بلا استدعاء LLM) ⇒ «إجابتك في الطريق
+  الصحيح» رداً على «لم أفهم» مستحيلة بنيوياً. الإجابات الحقيقية (القصيرة
+  والعبقرية الطويلة) تبقى إجابات.
+- **F — `inert` boolean**: `inert={cond || undefined}` (الشريطان) — عزل DOM
+  (rendering integrity) محفوظ بلا overlay.
+
+### القواعد الدائمة (D-153 — لا تُكسر بدون ADR)
+1. **أي نص يُغذَّى لاستخراج الكيانات يجب أن يكون خالياً من نثر الحل**
+   (`load_exercise_questions_only`). الملف الكامل لمسارات RAG-Grounded حصراً.
+2. **بوّابات التحقق العددية تقرأ LaTeX**: أي بوّابة مقامات جديدة تستخدم
+   `_stated_denominators` — لا regex slash-only.
+3. **الحيرة المجرّدة حيرة، ليست إجابة**: لا acknowledge، لا understood، لا
+   «إجابتك في الطريق الصحيح» — تُوجَّه لمسارات تصعيد التمثيل.
+4. **كل مسار بثّ للطالب يمرّ بحارس تكرار** (`_recently_emitted` + مرساة
+   `last_step_emitted`) — لا استثناء لمسارات جديدة.
+5. **`inert` boolean-only** في كل الواجهة.
+6. **بوّابة `check_pedagogical_os.py` بوّابة إصدار**: تحرس الدستور (§0.8) +
+   وجود مكوّنات الـ Core الإلزامية + القواعد 1-5 — لا تُعطَّل ولا تُلتَفّ.
+
+### التحقق (2026-07-02)
+- **إعادة إنتاج ثم إثبات الإصلاح (stub harness — pydantic محجوب في الـ sandbox §6.55):**
+  قبل: entities تحوي `('بطاقة رقم 0', 3)` + n=14/total=364. بعد: **الملف الكامل نفسه**
+  ⇒ 3 ألوان فقط، n=11، C(11,3)=165، same=14 ✅؛ التركيبة المسمومة تُرفض بالبوّابة ✅؛
+  parity الحادثة B سليمة `{odd:8, even:3, zero:2, total:11}` ✅.
+- منطق الحيرة standalone: «لم أفهم»/«مفهمتش»/«لم افهم التمرين» ليست إجابات؛
+  «نفس اللون» والإجابة العبقرية الطويلة تبقيان إجابتين ✅.
+- `check_pedagogical_os.py` ✅ (29 مكوّناً إلزامياً + كل الأسلاك) |
+  `iss120_inert_boolean_attribute.test.mjs` 4/4 ✅ | اختبارات regression:
+  `tests/services/test_iss120_canonical_combo_poisoning.py`.
+- **Codespaces (E2E حيّ إلزامي):** إعادة الترانسكريبت الحرفي عبر WS + المتصفح ⇒
+  «كيف احل السؤال الأول» بأرقام 11/165 الصحيحة، صفر «بطاقة رقم 0»، صفر تكرار
+  حرفي، صفر «إجابتك في الطريق الصحيح» للحيرة، صفر overlay. الدخولان الحقيقيان.
+
+### السلسلة (D-147 → D-153)
+| Decision | الموضوع |
+|----------|---------|
+| D-147 | خطوة التطبيق المرتبطة بالتمرين |
+| D-152 | بوّابة المقامات (slash-only — لم تُطلَق على LaTeX) |
+| **D-153** | **ISS-120: أسئلة-فقط للمحرك الرمزي + حارس الكيان الوهمي + بوّابة LaTeX + حارس تكرار حالة الفهم + الحيرة ليست إجابة + inert boolean + دستور Pedagogical OS (§0.8) وبوّابته الإلزامية** |

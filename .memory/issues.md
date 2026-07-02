@@ -4416,3 +4416,32 @@ concepts keep the generic handoff (no regression). Questions, not answers ⇒ su
 `redact_final_answers` (D-113) — verified 8/8. Keys ⊆ `MICRO_SIMULATIONS` (naming consistency,
 no per-exercise bloat). Live: `scripts/verify_iss119_live.py` + 6 tests in
 `test_d138_escalation_matrix.py`. Full WS E2E mandatory in Codespaces (§6.55).
+
+## ISS-120 (2026-07-02) — تسميم المُحمِّل القانوني + «الحيرة إجابة» + التكرار غير المحروس + inert النصية
+**الأعراض (transcript + screenshot حيّان، BAC-2024):** «كيف احل السؤال الأول» ⇒ حل بكيان وهمي
+«بطاقة رقم 0 (العدد 3): C(3,3)» + «سحب 3 من 14: C(14,3)» (الصحيح 11/165)؛ «لم أفهم» ⇒ نفس النص
+حرفياً («تخيّل أنك سحبت 3 كرات…») مرتين؛ «لم أفهم» أخرى ⇒ «إجابتك في الطريق الصحيح —» + إعادة
+الحساب الوهمي؛ + Next.js error overlay («Received the string `true` for boolean attribute `inert`»)
+يغطي شاشة الهاتف.
+
+**الجذور الخمسة (مُثبتة بإعادة إنتاج حيّة على HEAD — stub harness):**
+(1) `_load_canonical_combinations` + 5 مسارات أخرى تُغذّي `analyze` بالملف الرسمي **كاملاً بما
+فيه الحل النموذجي** — نثر الحل «…سحب 3 كرات لا تحمل الرقم 0…» يطابق `_NUMBERED_ENTITY_MARKERS`
+(D-081) ⇒ كيان وهمي (count=3) ⇒ n=14، C(14,3)=364. (2) بوّابة D-152 slash-only عمياء عن
+`\frac{56}{165}` (الملف فيه 13 \frac وصفر N/M خام) ⇒ لم تُطلَق قط. (3) مسار محرّك حالة الفهم
+(understanding_state emit) يتجاوز `_recently_emitted` و`last_step_emitted`؛ و`_explain_count`
+أعمى عن التمثيلات بلا markers ⇒ المستوى عالق ⇒ تكرار حرفي. (4) `is_response_to_socratic` تقبل
+الحيرة المجرّدة + `_heuristic_understood` تُرجِع True لأي نص غير فارغ ⇒ «لم أفهم» = understood.
+(5) `inert={cond ? "true" : undefined}` نصية في `CogniForgeApp.jsx:387,403`.
+
+**الحل (D-153):** أسئلة-فقط (`load_exercise_questions_only`) في 6 مسارات الاستخراج (الملف الكامل
+لمرجع RAG D-145 حصراً) + حارس الكيان الوهمي في التركيبة المختلطة + بوّابة `_stated_denominators`
+LaTeX-aware مشتركة + حارس تكرار على مسار حالة الفهم (+`_explain_count` بمقاطع التمثيلات) +
+`_is_bare_confusion` في policy+evaluator (الحيرة ليست إجابة أبداً) + `inert={cond || undefined}` +
+**دستور Pedagogical OS** (`.memory/pedagogical_os.md` + CLAUDE.md §0.8) وبوّابته الإلزامية
+`scripts/fitness/check_pedagogical_os.py` (29 مكوّن Core + كل الأسلاك).
+
+**الحالة:** RESOLVED محلياً (إعادة إنتاج ⇒ إثبات: الملف الكامل نفسه يعطي الآن 3 ألوان/11/165؛
+بوّابة + حيرة + inert كلها مُثبتة standalone + بوّابة CI خضراء). التحقق الحيّ الكامل عبر
+WS + المتصفح في Codespaces بالدخولين الحقيقيين (sandbox يحجب pydantic/Postgres — §6.55).
+راجع CLAUDE.md §6.128.

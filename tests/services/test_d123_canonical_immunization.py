@@ -46,7 +46,8 @@ class TestImmunizationWiring:
 
     def test_step2_canonical_official_content_history_none(self) -> None:
         # الخطوة 2: المحتوى الرسمي + نية السؤال، history=None (مناعة من التلوّث).
-        assert "load_exercise_content(" in _BUILD_UI
+        # ISS-120 (D-153): أسئلة-فقط — نثر الحل النموذجي ممنوع على استخراج الكيانات.
+        assert "load_exercise_questions_only(" in _BUILD_UI
         assert 'ProbabilityInput(question=f"{_official} {question}", history=None)' in _BUILD_UI
         assert "detect_exercise_retrieval(" in _BUILD_UI
 

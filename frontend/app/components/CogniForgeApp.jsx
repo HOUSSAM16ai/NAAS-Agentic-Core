@@ -382,9 +382,12 @@ const DashboardLayout = ({ user, token, onLogout }) => {
 
             <div className="dashboard-layout">
                 {/* Agent Sidebar (Left in RTL) */}
+                {/* ISS-120 (D-153): `inert` سمة boolean في React 19 — تمرير السلسلة
+                    "true" يُطلق خطأ console («Received the string `true`…») ويُظهر
+                    الـ Next.js error overlay للطالب. النمط الصحيح: `cond || undefined`. */}
                 <div
                     className={`agent-sidebar ${isAgentSidebarOpen ? 'open' : ''}`}
-                    inert={!isAgentSidebarOpen ? "true" : undefined}
+                    inert={!isAgentSidebarOpen || undefined}
                 >
                      <div className="agent-sidebar-header">
                         <h3>فريق العملاء</h3>
@@ -400,7 +403,7 @@ const DashboardLayout = ({ user, token, onLogout }) => {
                 <div className={`sidebar-overlay ${isSidebarOpen ? 'visible' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
                 <div
                     className={`sidebar ${isSidebarOpen ? 'open' : ''}`}
-                    inert={!isSidebarOpen ? "true" : undefined}
+                    inert={!isSidebarOpen || undefined}
                 >
                      <div className="sidebar-header">
                         <h3>المحادثات</h3>

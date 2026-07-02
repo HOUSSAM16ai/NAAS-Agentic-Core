@@ -5093,3 +5093,15 @@ count=0; (3) concept-naming unified by construction (same key space as micro-sim
 «ما القيم التي يمكن أن يأخذها X؟») instead of punting; deterministic, redaction-safe, no behavior
 change for uncovered concepts. Verification: `scripts/verify_iss119_live.py` (ALL PASS) + 6 tests.
 **Mandatory live E2E in Codespaces** (real secrets, WS path) per §6.55. CLAUDE.md §6.127.
+
+
+## Memory / Decisions Update
+- **Context:** The `FullExerciseStory` UI component for probability combinatorics suffered from "historical pollution" (e.g. `C(23,3)=1771`) where elements like `بطاقة رقم 0 اضغط للكشف` passed in the `history_text` were mistakenly extracted as real entities by `_extract_count_entities`.
+- **Action:** Implemented a Strict Validation Gate inside `ProbabilityCalculatorSkill._strategy_composition`. We extract explicitly stated probability fractions from the problem `source` using regex `r'(\d+)\s*/\s*(\d+)'`. We reject the generation path (returning `None`) if the dynamically computed `total_combinations` does not have a clean modular relationship with any of the stated denominators.
+- **Result:** Invalid entities injected via user chat history can no longer override explicitly stated values and mathematical facts in the problem itself, successfully forcing fallback to deep generative text without corrupting the visual state.
+
+
+## Memory / Decisions Update
+- **Context:** The `FullExerciseStory` UI component for probability combinatorics suffered from "historical pollution" (e.g. `C(23,3)=1771`) where elements like `بطاقة رقم 0 اضغط للكشف` passed in the `history_text` were mistakenly extracted as real entities by `_extract_count_entities`.
+- **Action:** Implemented a Strict Validation Gate inside `ProbabilityCalculatorSkill._strategy_composition`. We extract explicitly stated probability fractions from the problem `source` using regex `r'(\d+)\s*/\s*(\d+)'`. We reject the generation path (returning `None`) if the dynamically computed `total_combinations` does not have a clean modular relationship with any of the stated denominators.
+- **Result:** Invalid entities injected via user chat history can no longer override explicitly stated values and mathematical facts in the problem itself, successfully forcing fallback to deep generative text without corrupting the visual state.

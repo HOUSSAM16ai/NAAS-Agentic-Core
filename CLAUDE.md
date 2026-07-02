@@ -10771,3 +10771,15 @@ The following foundational architectural invariants have been established in the
 |----------|---------|
 | D-146 | Agentic Cognitive Runtime doctrine |
 | **D-147** | **خطوة التطبيق المرتبطة بالتمرين تستبدل الـ punt السقراطي العام (يحلّ كارثة E(X) — ISS-119)** |
+
+
+### Probability Skill Validation Gate (D-152)
+- To prevent UI state corruption from historical chat text containing entities (like UI labels e.g., "بطاقة رقم 0 اضغط للكشف"), `ProbabilityCalculatorSkill` enforces a strict arithmetic Validation Gate.
+- The generated `total_combinations` (sample space denominator) must perfectly align with explicitly stated denominators provided in the original text (e.g., `P(B)=56/165` mandates `165` or a multiple of it).
+- If a mismatch is detected, the combinatorial visualization path is safely aborted (`return None`), and the system gracefully degrades to standard LLM logic.
+
+
+### Probability Skill Validation Gate (D-152)
+- To prevent UI state corruption from historical chat text containing entities (like UI labels e.g., "بطاقة رقم 0 اضغط للكشف"), `ProbabilityCalculatorSkill` enforces a strict arithmetic Validation Gate.
+- The generated `total_combinations` (sample space denominator) must perfectly align with explicitly stated denominators provided in the original text (e.g., `P(B)=56/165` mandates `165` or a multiple of it).
+- If a mismatch is detected, the combinatorial visualization path is safely aborted (`return None`), and the system gracefully degrades to standard LLM logic.

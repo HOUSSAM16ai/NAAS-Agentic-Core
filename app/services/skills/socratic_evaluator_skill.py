@@ -125,14 +125,47 @@ def deterministically_correct(student_answer: str, concept: str) -> bool:
     return has_same_color or has_color or has_impossible
 
 
+#: ISS-120 (D-153): إشارات الحيرة المجرّدة — «لم أفهم» ليست دلالة فهم أبداً.
+#: نسخة محلية مصغّرة (استقلالية الـ Skills — §0.5، نمط D-013؛ المرآة في
+#: pedagogical_policy_skill._BARE_CONFUSION_MARKERS).
+_BARE_CONFUSION_MARKERS: tuple[str, ...] = (
+    "لم افهم",
+    "لم أفهم",
+    "ما فهمت",
+    "مافهمت",
+    "مفهمتش",
+    "ما فهمتش",
+    "لا افهم",
+    "لا أفهم",
+    "لست افهم",
+    "مش فاهم",
+    "لم استوعب",
+    "je ne comprends pas",
+    "i don't understand",
+)
+
+
+def _is_bare_confusion(text: str) -> bool:
+    """ISS-120 (D-153): حيرة مجرّدة (إشارة حيرة + ≤ 6 كلمات) — ليست إجابة/فهماً."""
+    t = _normalize(text)
+    if not t or len(t.split()) > 6:
+        return False
+    return any(m in t for m in _BARE_CONFUSION_MARKERS)
+
+
 def _heuristic_understood(student_answer: str, concept: str) -> bool:
     """D-130: تقييم حتمي احتياطي (fail-open) — هل يحمل الرد دلالة الفهم؟
 
     لا يعاقب الطالب: عند الشكّ يُرجِع True (الطالب شغّل عقله) — التسليم الرمزي المتدرّج
     سيُكمل بأمان دون كشف الجواب كاملاً.
+    ISS-120 (D-153): الحيرة المجرّدة («لم أفهم») مستثناة صراحةً — «أي رد غير
+    فارغ يُعدّ فهماً» كانت تُحوّل «لم أفهم» إلى understood=True ⇒ «إجابتك في
+    الطريق الصحيح» + إعادة الحساب نفسه (كارثة الترانسكريبت).
     """
     t = _normalize(student_answer)
     if not t:
+        return False
+    if _is_bare_confusion(student_answer):
         return False
     if concept in _SYMBOLIC_VERIFIABLE_CONCEPTS:
         return deterministically_correct(student_answer, concept)
@@ -214,6 +247,18 @@ class SocraticEvaluatorSkill:
         """يُقيّم رد الطالب الحرّ — LLM محروس مع fallback حتمي. لا يرفع استثناءات."""
         t0 = time.perf_counter()
         nxt = next_focus_for(payload.concept)
+        # ISS-120 (D-153): سلطة حتمية مضادّة (مرآة D-142 1A) — الحيرة المجرّدة
+        # («لم أفهم») ليست فهماً أبداً: understood=False حتمياً، بلا استدعاء LLM،
+        # وبلا «إجابتك في الطريق الصحيح». تُوجَّه لمسار تصعيد التمثيل.
+        if _is_bare_confusion(payload.student_answer):
+            out = SocraticEvaluatorOutput(
+                understood=False,
+                encouragement="لا بأس إطلاقاً — لنُبسّطها بخطوة أصغر.",
+                next_focus=nxt,
+                source="fallback",
+            )
+            _record(out.understood, out.source, time.perf_counter() - t0)
+            return out
         # D-142 (1A): السلطة الرمزية — إجابة مُتحقَّقة صحيحة (من combo عبر `verified_correct`
         # أو من الإشارات الحتمية). حين True يُمنع على الـ LLM إخفاضها (يكسر كارثة التكرار).
         det_correct = payload.verified_correct or deterministically_correct(

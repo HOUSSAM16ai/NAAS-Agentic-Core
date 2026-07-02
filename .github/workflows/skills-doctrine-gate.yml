@@ -68,6 +68,14 @@ jobs:
           set -euo pipefail
           python scripts/fitness/check_skills_doctrine.py
 
+      - name: Run Pedagogical OS constitution gate (D-153)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # static-text gate (no app imports) — verifies the constitution doc,
+          # the mandatory Core components, and the ISS-120 permanent rules.
+          python scripts/fitness/check_pedagogical_os.py
+
   # ── Job 2: Skills doctrine invariant tests (pytest) ─────────────────────────
   doctrine-invariants:
     name: doctrine-invariants

@@ -368,13 +368,22 @@ class UnderstandingStateSkill:
         return states
 
     def _explain_count(self, kc: KnowledgeComponent, history: list[dict[str, str]] | None) -> int:
-        """كم مرّة شُرح هذا المكوّن (لتصعيد التمثيل الاستباقي)."""
+        """كم مرّة شُرح هذا المكوّن (لتصعيد التمثيل الاستباقي).
+
+        ISS-120 (D-153): العدّ بالـ explain_markers وحدها كان أعمى عن التمثيلات
+        التي لا تحوي أيّ marker («تخيّل أنك سحبت 3 كرات…») ⇒ المستوى يعلق عند
+        نفس القيمة ⇒ نفس النص يتكرّر حرفياً كل دور. نَعُدّ أيضاً بمقاطع نصوص
+        التمثيلات نفسها (حتمية من combo نفسه فتُطابق ما بُثّ سابقاً).
+        """
+        rep_snippets = [_normalize(r)[:24] for r in kc.representations if r]
         count = 0
         for m in history or []:
             if not isinstance(m, dict) or m.get("role") != "assistant":
                 continue
             low = _normalize(str(m.get("content", "")))
-            if any(_normalize(mk) in low for mk in kc.explain_markers):
+            if any(_normalize(mk) in low for mk in kc.explain_markers) or any(
+                sn and sn in low for sn in rep_snippets
+            ):
                 count += 1
         return count
 

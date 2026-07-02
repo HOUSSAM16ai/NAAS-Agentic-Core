@@ -222,7 +222,8 @@ class TestSourceWiring:
         seg = CLIENT_SRC[CLIENT_SRC.index("def _build_probability_direct_explanation(") :]
         seg = seg[: seg.index("\n    async def _build_probability_tree_props")]
         assert "skill.analyze(ProbabilityInput(question=_official, history=None))" in seg
-        assert "load_exercise_content(" in seg
+        # ISS-120 (D-153): أسئلة-فقط — نثر الحل النموذجي ممنوع على استخراج الكيانات.
+        assert "load_exercise_questions_only(" in seg
         assert 'canonical_id != "probability"' in seg  # topic-safe
 
     def test_direct_explanation_returns_and_breaks_loop(self) -> None:

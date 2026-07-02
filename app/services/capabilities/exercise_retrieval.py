@@ -488,6 +488,21 @@ def load_exercise_content(entry: ExerciseEntry) -> str | None:
     return file_path.read_text(encoding="utf-8")
 
 
+def load_exercise_questions_only(entry: ExerciseEntry) -> str | None:
+    """ISS-120 (D-153): يحمِّل نص التمرين **بلا الحل النموذجي** (أسئلة-فقط).
+
+    القاعدة الدستورية: أي نص يُغذَّى لاستخراج الكيانات/التركيبة (المحرك الرمزي)
+    يجب أن يكون خالياً من نثر الحل — نثر الحل («…تحمل الرقم 0 … وعددها 3 كرات»)
+    يولِّد كياناً وهمياً («بطاقة رقم 0») يُفسد فضاء العينة (n=14 بدل 11).
+    الحل النموذجي الكامل يبقى متاحاً عبر ``load_exercise_content`` لمسارات
+    RAG-Grounded LLM (D-145) حصراً.
+    """
+    raw = load_exercise_content(entry)
+    if not raw:
+        return raw
+    return _trim_at_solution(raw)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # عرض التمرين بشكل نظيف للطالب (D-048)
 #

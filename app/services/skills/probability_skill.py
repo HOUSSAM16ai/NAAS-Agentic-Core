@@ -1183,10 +1183,12 @@ class ProbabilityCalculatorSkill:
 
         # Validation Gate: Reject if total_comb contradicts explicitly stated denominators in the exercise text
         # This prevents UI corruption from historical text pollution
-        stated_denoms_match = re.findall(r'(\d+)\s*/\s*(\d+)', combined)
+        stated_denoms_match = re.findall(r"(\d+)\s*/\s*(\d+)", combined)
         if stated_denoms_match:
             stated_denoms = {int(den) for _, den in stated_denoms_match if int(den) > 1}
-            if stated_denoms and not any((total_comb % d == 0) or (d % total_comb == 0) for d in stated_denoms):
+            if stated_denoms and not any(
+                (total_comb % d == 0) or (d % total_comb == 0) for d in stated_denoms
+            ):
                 return None
 
         groups: list[CombinationGroup] = []
@@ -1283,10 +1285,12 @@ class ProbabilityCalculatorSkill:
 
         # Validation Gate: Reject if total_comb contradicts explicitly stated denominators in the exercise text
         # This prevents UI corruption from historical text pollution
-        stated_denoms_match = re.findall(r'(\d+)\s*/\s*(\d+)', combined)
+        stated_denoms_match = re.findall(r"(\d+)\s*/\s*(\d+)", combined)
         if stated_denoms_match:
             stated_denoms = {int(den) for _, den in stated_denoms_match if int(den) > 1}
-            if stated_denoms and not any((total_comb % d == 0) or (d % total_comb == 0) for d in stated_denoms):
+            if stated_denoms and not any(
+                (total_comb % d == 0) or (d % total_comb == 0) for d in stated_denoms
+            ):
                 return None
 
         steps: list[ExerciseStep] = []

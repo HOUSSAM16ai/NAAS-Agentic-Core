@@ -5141,3 +5141,46 @@ poisoned compositions rejected by the LaTeX-aware gate; verbatim repetition and 
 structurally impossible; overlay gone. Tests: `tests/services/test_iss120_canonical_combo_poisoning.py`
 + `frontend/tests/iss120_inert_boolean_attribute.test.mjs`; D-123/D-124 source tests aligned.
 Mandatory live E2E in Codespaces (real logins, WS + browser) per §6.55. CLAUDE.md §6.128.
+
+## D-154 (2026-07-02) — ISS-121: Progressive Disclosure + redaction-neutral dedup + LaTeX math + M10-S2.1 port
+
+**Context:** post-D-153 the numbers are correct but the tutor became a solution-dump machine:
+bare «كيف» routed procedure intent straight to `_build_symbolic_reveal` (full derivation ending
+«فاحتمال الحادثة A هو 14 من كل 165»); a CORRECT student answer re-emitted the same dump verbatim
+because the dedup guard compared the fresh candidate (digits) against the SAVED copy (redacted to
+«؟» by D-113 `_apply_final_answer_redaction`) — redaction-transform blindness — and the only
+escalation alternative was the (already duplicated) reveal itself; ASCII formulas bidi-scramble in
+RTL; Samsung native selection copies the hidden `.katex-mathml` annotation → doubled digits.
+
+**Decision (4 tracks):**
+1. **Progressive disclosure (roadmap §7 «صفر كشف» enforced structurally):** procedure intent ⇒
+   `_build_symbolic_step(combo, None)` (numerator step ending with a question), never reveal —
+   reveal stays exclusively the D-129 budget-exhaustion rescue; ALL deterministic builder tails
+   (`_build_symbolic_reveal`, `_build_probability_direct_explanation` full + subpart-sum) now end
+   with a generation prompt «ركّب الاحتمال **بنفسك** … فما قيمة P(A)؟» — the final ratio is NEVER
+   printed; the student composes it (generation effect).
+2. **Redaction-neutral, never-emit-dup dedup:** `_norm_for_dedup` (orchestrator_client) and
+   `dialogue_manager_skill._norm` collapse digit/«؟» runs to `#` after normalize_ar ⇒ saved-redacted
+   ≡ emitted-full; both emit paths (`_stream_socratic_evaluation` via `_is_dup`, understanding-state
+   guard via `_d153_dup`) walk an alternatives ladder (reveal → step numerator → step ratio →
+   deterministic generation prompt) and emit the first non-duplicate — structural zero-repetition.
+3. **Math display:** `_fmt_comb` emits LaTeX `$C_{n}^{k} = \dfrac{…\times…}{…} = fav$` (KaTeX renders
+   LTR-isolated — kills bidi scrambling in every deterministic template at once; structurally
+   survives `redact_final_answers` since `C_{n}^{k}` has no parenthesised `C(...)=N` shape);
+   `.katex-mathml { display:none !important }` in globals.css (Samsung ignores user-select on
+   native selection; a11y trade-off documented — KaTeX visual layer + aria remain).
+4. **M10-S2.1 (gradual microservices migration, owner mandate):** independent stdlib port
+   `microservices/orchestrator_service/src/services/overmind/probability_tutor.py`
+   (solution-immune `parse_composition` with LaTeX-aware denominator gate, LaTeX `fmt_comb`,
+   zero-reveal ladder `deterministic_turn` with dedup) wired into `SynthesizerNode` behind
+   `ORCHESTRATOR_PROB_TUTOR_ENABLED` (default off) — honest §6.6 status **FLAGGED** until live
+   Codespaces verification flips it.
+
+**Consequence:** «كيف» ⇒ one step + question; correct answer ⇒ acknowledgement + NEW next step;
+exhaustion ⇒ scaffold without the final ratio; formulas render KaTeX-clean; copy is single;
+M10-S2 seed lives in the orchestrator. Tests: `tests/services/test_iss121_progressive_disclosure.py`,
+`tests/microservices/orchestrator_service/test_probability_tutor_port.py`,
+`frontend/tests/iss121_math_display.test.mjs`; gate extended with 4 D-154 checks
+(progressive-disclosure / redaction-neutral-dedup / math-display / port). D-124+ISS-120 tests
+aligned to the LaTeX/ladder contracts (D-105 rule: align, never deselect). Mandatory live E2E in
+Codespaces (real logins; replay transcript; flip the flag). CLAUDE.md §6.129.

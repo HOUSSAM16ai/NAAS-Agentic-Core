@@ -10,6 +10,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from ast import literal_eval
@@ -1697,16 +1698,18 @@ class OrchestratorClient:
 
     @staticmethod
     def _fmt_comb(c: int, k: int, fav: int) -> str:
-        """يبني توسيع المضروب الحتمي: ``C(c,k) = (c×…×(c-k+1))/(k×…×1) = fav``.
+        r"""يبني توسيع المضروب الحتمي بصيغة LaTeX (ISS-121 / D-154).
 
-        مثال: ``_fmt_comb(4, 3, 4)`` ⇒ ``"C(4,3) = (4×3×2)/(3×2×1) = 4"``. النمط
-        المُقوَّس يَنجو من حجب الإجابة (D-113) لأن RHS ليس عدداً صرفاً بعد ``=``.
+        مثال: ``_fmt_comb(4, 3, 4)`` ⇒ ``"$C_{4}^{3} = \dfrac{4\times 3\times 2}{3\times 2\times 1} = 4$"``.
+        LaTeX ⇒ KaTeX يُصيّرها LTR-معزولة داخل فقرات RTL (يقتل بعثرة bidi التي
+        شوّهت «(5×4×3)/(3×2×1)» على الهاتف)، وصيغة ``C_{n}^{k}`` (بلا قوسين بعد C)
+        تَنجو بنيوياً من حجب D-113 (`_FINAL_RESULT_RE` يتطلب ``C(...)=عدد``).
         """
         if k < 1 or c < k:
-            return f"C({c},{k}) = {fav}"
-        num = "×".join(str(c - i) for i in range(k))
-        den = "×".join(str(k - i) for i in range(k))
-        return f"C({c},{k}) = ({num})/({den}) = {fav}"
+            return f"$C_{{{c}}}^{{{k}}} = {fav}$"
+        num = r"\times ".join(str(c - i) for i in range(k))
+        den = r"\times ".join(str(k - i) for i in range(k))
+        return f"$C_{{{c}}}^{{{k}}} = \\dfrac{{{num}}}{{{den}}} = {fav}$"
 
     @classmethod
     def _build_probability_direct_explanation(
@@ -1827,8 +1830,10 @@ class OrchestratorClient:
                     f"## كيف نجمع لنحصل على الحالات الملائمة\n\n"
                     f"الحدث «{k} كرات من نفس اللون» يتحقق بأيّ لون ممكن:\n\n"
                     f"{lines}\n\n"
-                    f"نجمع الحالات الممكنة فقط: {favs} = {same}\n\n"
-                    f"وبذلك يكون الاحتمال {same}/{total}."
+                    f"نجمع الحالات الممكنة فقط: ${favs} = {same}$\n\n"
+                    # ISS-121 (D-154): صفر كشف للنتيجة — الطالب يركّب النسبة بنفسه.
+                    f"وبهذا أصبح لديك البسط. ركّب الاحتمال **بنفسك**: البسط على "
+                    f"المقام {total} — فما قيمة P(A)؟"
                 )
 
             # ── الاشتقاق الكامل (حيرة متكررة، بلا جزئية محدّدة) ────────────────
@@ -1846,8 +1851,10 @@ class OrchestratorClient:
                 f"   {cls._fmt_comb(n, k, total)}\n\n"
                 f"2) الحالات الملائمة (الحدث: {k} كرات من نفس اللون) — لكل لون على حدة:\n\n"
                 f"{full_lines}\n\n"
-                f"3) نجمع الحالات الممكنة فقط: {favs} = {same}\n\n"
-                f"4) الاحتمال = {same}/{total}."
+                f"3) نجمع الحالات الممكنة فقط: ${favs} = {same}$\n\n"
+                # ISS-121 (D-154): صفر كشف للنتيجة — الخطوة الأخيرة توليد لا تلقين.
+                f"4) والآن الخطوة الأخيرة **لك**: ركّب الاحتمال بنفسك — البسط على "
+                f"المقام. فما قيمة P(A) التي تحصل عليها؟"
             )
         except Exception:
             logger.warning("_build_probability_direct_explanation_failed", exc_info=True)
@@ -2264,13 +2271,20 @@ class OrchestratorClient:
 
     @staticmethod
     def _norm_for_dedup(text: str) -> str:
-        """D-142 (1B): تطبيع نصّ للمقارنة على التكرار."""
+        """D-142 (1B) + ISS-121 (D-154): تطبيع نصّ للمقارنة على التكرار — محايد للحجب.
+
+        النسخة المحفوظة (history + `last_step_emitted`) تمرّ عبر حجب D-113
+        («14» ⇒ «؟») بينما المبثوثة كاملة الأرقام ⇒ حارس التكرار كان يَعمى عن
+        تحويل الحجب فيبثّ الحل المكرَّر (كارثة الترانسكريبت). نستبدل مقاطع
+        الأرقام و«؟/?» بعنصر نائب موحّد فتتطابق النسختان بنيوياً.
+        """
         try:
             from app.services.capabilities.arabic_normalize import normalize_ar
 
-            return normalize_ar(text or "")
+            base = normalize_ar(text or "")
         except Exception:  # pragma: no cover - fail-safe
-            return (text or "").strip().lower()
+            base = (text or "").strip().lower()
+        return re.sub(r"[\d؟?]+", "#", base)
 
     @classmethod
     def _recently_emitted(
@@ -2962,14 +2976,19 @@ class OrchestratorClient:
         )
         favs_sum = " + ".join(str(g.favorable_combinations) for g in combo.groups if g.is_possible)
         prefix = "إجابتك في الطريق الصحيح — " if acknowledge else ""
+        # ISS-121 (D-154): صفر كشف للنتيجة النهائية (roadmap §7) — الإنقاذ يقدّم
+        # كل المكوّنات (scaffold مشروع — D-129) لكن **تركيب النسبة النهائية يولّده
+        # الطالب بنفسه** (generation effect؛ «التلميح قبل الحل»). ممنوع طباعة
+        # «فاحتمال الحادثة A هو X من كل Y».
         return (
             f"{prefix}لنُكمل معاً خطوة بخطوة حتى النهاية:\n\n"
             f"**الحالات الملائمة** (3 كرات من نفس اللون) — لكل لون:\n\n"
             f"{favs_lines}\n\n"
-            f"نجمع الحالات الممكنة فقط: {favs_sum} = {same}\n\n"
+            f"نجمع الحالات الممكنة فقط: ${favs_sum} = {same}$\n\n"
             f"**كل الطرق الممكنة** لسحب {k} من {n}:\n\n"
             f"{cls._fmt_comb(n, k, total)}\n\n"
-            f"فاحتمال الحادثة A هو {same} من كل {total}."
+            f"الآن أمامك كل المكوّنات — ركّب الاحتمال **بنفسك**: البسط على المقام. "
+            f"فما قيمة P(A) التي تحصل عليها؟"
         )
 
     @classmethod
@@ -3232,19 +3251,28 @@ class OrchestratorClient:
                             text = _rv
                     record_progress("advanced")
 
-            # D-142 (1B): حارس التكرار — مُكرّر لرسالة مساعد سابقة أو لمرساة الحالة الدائمة
-            # (last_step_emitted تنجو من نافذة الـ50 رسالة) ⇒ تصعيد للحلّ الرمزي، لا إعادة حرفية.
-            if self._recently_emitted(text, history_messages) or (
-                _last_step and self._near_dup(text, _last_step)
-            ):
-                _reveal = self._build_symbolic_reveal(question, history_messages, acknowledge=True)
-                if (
-                    _reveal
-                    and not self._recently_emitted(_reveal, history_messages)
-                    and not (_last_step and self._near_dup(_reveal, _last_step))
-                ):
-                    text = _reveal
-                    record_progress("advanced")
+            # D-142 (1B) + ISS-121 (D-154): «ممنوع بثّ مكرَّر» بنيوياً — التطبيع صار
+            # محايداً للحجب (أرقام/«؟» ⇒ #) فلا يَعمى عن النسخة المحفوظة المحجوبة؛
+            # وعند التكرار نجرّب سلسلة بدائل بالترتيب (إنقاذ ⇒ خطوات السُّلّم بؤرةً
+            # بؤرة ⇒ مُوجّه توليد قصير) ونبثّ **أول غير مكرَّر** — كل دور يقدّم جديداً.
+            def _is_dup(t: str) -> bool:
+                return self._recently_emitted(t, history_messages) or (
+                    _last_step and self._near_dup(t, _last_step)
+                )
+
+            if _is_dup(text):
+                _alternatives = (
+                    self._build_symbolic_reveal(question, history_messages, acknowledge=True),
+                    self._build_symbolic_step(combo, "numerator", acknowledge=True),
+                    self._build_symbolic_step(combo, "ratio", acknowledge=True),
+                    "أنت تملك الآن كل المعطيات — جرّب بنفسك: ركّب البسط على المقام، "
+                    "وأخبرني ما قيمة P(A) التي حصلت عليها، وسأخبرك إن أصبت.",
+                )
+                for _cand in _alternatives:
+                    if _cand and not _is_dup(_cand):
+                        text = _cand
+                        record_progress("advanced")
+                        break
 
             logger.info(
                 "socratic_evaluation",
@@ -4320,8 +4348,14 @@ class OrchestratorClient:
                     _direct = self._build_concrete_example(question, history_messages)
                     if _direct:
                         record_response_mode("example_first")
-                else:  # procedure
-                    _direct = self._build_symbolic_reveal(question, history_messages)
+                else:  # procedure — ISS-121 (D-154): سُلّم لا تفريغ
+                    # «كيف» تدخل السُّلّم من خطوة البسط **المنتهية بسؤال** («كم عدد
+                    # كل الطرق؟») — التفريغ الكامل (`_build_symbolic_reveal`) محجوز
+                    # حصراً لإنقاذ استنفاد الميزانية (D-129). القانون الرابع:
+                    # «التلميح قبل الحل» + مقياس roadmap §7 (صفر كشف للنتيجة).
+                    _proc_combo = self._load_canonical_combinations(question, history_messages)
+                    if _proc_combo is not None:
+                        _direct = self._build_symbolic_step(_proc_combo, None)
                     if _direct:
                         record_response_mode("steps")
             if _direct is None and _concept != "unknown":
@@ -4399,18 +4433,36 @@ class OrchestratorClient:
                         if isinstance(_d153_ts, dict)
                         else ""
                     )
-                    if self._recently_emitted(_direct, history_messages) or (
-                        _d153_last and self._near_dup(_direct, _d153_last)
-                    ):
-                        _reveal = self._build_symbolic_reveal(question, history_messages)
-                        if (
-                            _reveal
-                            and not self._recently_emitted(_reveal, history_messages)
-                            and not (_d153_last and self._near_dup(_reveal, _d153_last))
-                        ):
-                            _direct = _reveal
-                        else:
-                            _direct = None
+
+                    def _d153_dup(t: str) -> bool:
+                        return self._recently_emitted(t, history_messages) or (
+                            _d153_last and self._near_dup(t, _d153_last)
+                        )
+
+                    if _d153_dup(_direct):
+                        # ISS-121 (D-154): سلسلة بدائل — أول غير مكرَّر يُبثّ؛ وإلا
+                        # يسقط النص فيتولّى الكاروسيل/المسار التالي. صفر بثّ مكرَّر.
+                        _lad_combo = self._load_canonical_combinations(question, history_messages)
+                        _alts: tuple[str | None, ...] = (
+                            self._build_symbolic_reveal(question, history_messages),
+                            (
+                                self._build_symbolic_step(_lad_combo, "numerator")
+                                if _lad_combo is not None
+                                else None
+                            ),
+                            (
+                                self._build_symbolic_step(_lad_combo, "ratio")
+                                if _lad_combo is not None
+                                else None
+                            ),
+                            "أنت تملك الآن كل المعطيات — جرّب بنفسك: ركّب البسط على "
+                            "المقام، وأخبرني ما قيمة P(A) التي حصلت عليها، وسأخبرك إن أصبت.",
+                        )
+                        _direct = None
+                        for _cand in _alts:
+                            if _cand and not _d153_dup(_cand):
+                                _direct = _cand
+                                break
             if _direct:
                 logger.info(
                     "probability_direct_explanation_escape_hatch",

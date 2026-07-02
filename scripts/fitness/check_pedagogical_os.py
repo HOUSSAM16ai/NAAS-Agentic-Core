@@ -195,9 +195,11 @@ def check_understanding_state_repetition_guard() -> None:
     if marker not in client:
         _fail("understanding-state emit path lacks the ISS-120 repetition guard")
         return
-    tail = client.split(marker, 1)[1][:1800]
-    if "_recently_emitted(_direct" not in tail or "last_step_emitted" not in tail:
-        _fail("repetition guard incomplete (needs _recently_emitted + last_step_emitted anchor)")
+    tail = client.split(marker, 1)[1][:2600]
+    # D-154: الحارس صار سلسلة بدائل عبر `_d153_dup` (يستدعي _recently_emitted داخلياً).
+    has_guard = "_recently_emitted(_direct" in tail or "_d153_dup(_direct)" in tail
+    if not has_guard or "last_step_emitted" not in tail:
+        _fail("repetition guard incomplete (needs dedup check + last_step_emitted anchor)")
         return
     us_skill = _read("app/services/skills/understanding_state_skill.py")
     if "rep_snippets" not in us_skill:
@@ -223,8 +225,85 @@ def check_inert_boolean_only() -> None:
         _pass("inert is boolean-only across the frontend")
 
 
+# ── D-154 (ISS-121): الكشف التدريجي + حارس تكرار محايد للحجب + عرض سليم ────────
+def check_progressive_disclosure() -> None:
+    """القانون الرابع «التلميح قبل الحل» مُنفَّذ بنيوياً (roadmap §7: صفر كشف)."""
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    ok = True
+    if "فاحتمال الحادثة A هو {same} من كل {total}" in client:
+        _fail("symbolic reveal still prints the final ratio (answer dump)")
+        ok = False
+    if "ركّب الاحتمال **بنفسك**" not in client:
+        _fail("reveal generation-question tail missing")
+        ok = False
+    proc = client.split("else:  # procedure — ISS-121 (D-154): سُلّم لا تفريغ", 1)
+    if len(proc) != 2 or "_build_symbolic_step(_proc_combo, None)" not in proc[1][:700]:
+        _fail("procedure intent must enter the ladder (step), not the full reveal")
+        ok = False
+    if ok:
+        _pass("progressive disclosure enforced (no final-answer dump; procedure → ladder)")
+
+
+def check_redaction_neutral_dedup() -> None:
+    """حارس التكرار محايد لتحويل الحجب (المحفوظ «؟» ≡ المبثوث بالأرقام) + سلسلة بدائل."""
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    dm = _read("app/services/skills/dialogue_manager_skill.py")
+    ok = True
+    if 'r"[\\d؟?]+"' not in client:
+        _fail("_norm_for_dedup lacks redaction-neutral placeholder normalization")
+        ok = False
+    if 'r"[\\d؟?]+"' not in dm:
+        _fail("dialogue_manager _norm lacks redaction-neutral normalization")
+        ok = False
+    if (
+        "def _is_dup(t: str) -> bool:" not in client
+        or "def _d153_dup(t: str) -> bool:" not in client
+    ):
+        _fail("never-emit-dup alternative ladders missing")
+        ok = False
+    if ok:
+        _pass("dedup guard is redaction-neutral + never emits a duplicate (alternative ladders)")
+
+
+def check_math_display_integrity() -> None:
+    """الصيغ الحتمية LaTeX (LTR-معزولة — لا بعثرة bidi) + لا نسخ مضاعف على الموبايل."""
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    css = _read("frontend/app/globals.css")
+    ok = True
+    if "C_{{{c}}}^{{{k}}}" not in client:
+        _fail("_fmt_comb no longer emits LaTeX (bidi scrambling returns)")
+        ok = False
+    mathml_rule = css.split(".katex-mathml {", 1)
+    if len(mathml_rule) != 2 or "display: none !important" not in mathml_rule[1].split("}")[0]:
+        _fail(".katex-mathml must be display:none (mobile copy duplication)")
+        ok = False
+    if ok:
+        _pass("deterministic math renders as LaTeX; katex-mathml hidden (no copy doubling)")
+
+
+def check_probability_tutor_port() -> None:
+    """M10-S2.1: الـ port مستقل داخل الـ orchestrator وخلف علم (FLAGGED صادق)."""
+    port_path = "microservices/orchestrator_service/src/services/overmind/probability_tutor.py"
+    port = _read(port_path)
+    search = _read("microservices/orchestrator_service/src/services/overmind/graph/search.py")
+    ok = True
+    if not port:
+        return
+    if "from app" in port or "import app" in port:
+        _fail("probability_tutor port must not import from app.* (independence)")
+        ok = False
+    if "ORCHESTRATOR_PROB_TUTOR_ENABLED" not in search:
+        _fail("SynthesizerNode hook for probability_tutor missing / not flag-gated")
+        ok = False
+    if "من كل {" in port:
+        _fail("orchestrator port leaks the final ratio")
+        ok = False
+    if ok:
+        _pass("M10-S2.1 probability_tutor port independent + flag-gated in SynthesizerNode")
+
+
 def main() -> None:
-    print("=== Pedagogical OS Constitution Gate (D-153 / ISS-120) ===")
+    print("=== Pedagogical OS Constitution Gate (D-153 / ISS-120 + D-154 / ISS-121) ===")
     check_constitution_document()
     check_core_components_exist()
     check_questions_only_extraction()
@@ -233,6 +312,10 @@ def main() -> None:
     check_confusion_never_an_answer()
     check_understanding_state_repetition_guard()
     check_inert_boolean_only()
+    check_progressive_disclosure()
+    check_redaction_neutral_dedup()
+    check_math_display_integrity()
+    check_probability_tutor_port()
     if _FAILURES:
         print(f"\n=== ❌ {len(_FAILURES)} Pedagogical OS violation(s) ===")
         sys.exit(1)

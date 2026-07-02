@@ -573,6 +573,53 @@ class SynthesizerNode:
 
         conversation_text = "\n".join(recent_messages) if recent_messages else query
 
+        # ISS-121 (D-154 — M10-S2.1): معلّم الاحتمالات الحتمي داخل الـ orchestrator —
+        # أول خطوة هجرة roadmap M10-S2 (port مستقل، صفر LLM، صفر هلوسة، صفر تفريغ).
+        # خلف علم `ORCHESTRATOR_PROB_TUTOR_ENABLED` (افتراضي معطَّل — حالة FLAGGED
+        # صادقة §6.6 حتى التحقق الحي في Codespaces). fail-open مطلق ⇒ مسار الـ LLM.
+        _injected_for_tutor = str(state.get("exercise_content") or "").strip()
+        if _injected_for_tutor and os.environ.get(
+            "ORCHESTRATOR_PROB_TUTOR_ENABLED", ""
+        ).strip().lower() in ("1", "true", "yes"):
+            try:
+                from microservices.orchestrator_service.src.services.overmind.probability_tutor import (
+                    deterministic_turn,
+                )
+
+                _det_text = deterministic_turn(
+                    question=query,
+                    exercise_content=_injected_for_tutor,
+                    history=recent_messages,
+                    support_level=_support_level,
+                )
+            except Exception:
+                _det_text = None
+            if _det_text:
+                writer = self._get_writer()
+                if writer is not None:
+                    writer(
+                        {
+                            "chunk_type": "assistant_delta",
+                            "content": _det_text,
+                            "node": "synthesizer",
+                        }
+                    )
+                from langchain_core.messages import AIMessage
+
+                logger.info("probability_tutor_deterministic_turn (M10-S2.1)")
+                return {
+                    "final_response": {
+                        "المصدر": "معلّم الاحتمالات الحتمي",
+                        "مستوى_الثقة": "1.00",
+                        "التمرين": _det_text,
+                        "السنة": str(filters.year) if filters else "N/A",
+                        "الشعبة": filters.branch if filters else "غير محدد",
+                        "المادة": filters.subject if filters else "غير محدد",
+                        "رقم_التمرين": filters.exercise_num if filters else 1,
+                    },
+                    "messages": [AIMessage(content=_det_text)],
+                }
+
         # D-103 (Change B): استشارة reasoning-agent للأسئلة الرياضية المعقدة —
         # fail-open: "" عند أي تعذّر، والتوليف يتابع كالمعتاد.
         reasoning_hint = await _consult_reasoning_agent(query)

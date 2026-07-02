@@ -153,6 +153,11 @@ runtime evidence). دَيْن موثَّق: `DOC-DEBT-001` (CLAUDE.md موسوع
 - **S2**: port المهارات الحتمية (probability / content_integrity / learning_path / greeting /
   indexed-retrieval + knowledge_base) **داخل** الـ orchestrator كعقد رسم — المونوليث يصبح
   بوابة WS رقيقة. «النقل» = port مستقل (نسخ)، لا import (المونوليث ولا microservices يستوردان من بعضهما).
+  - **S2.1 ✅ منجز-خلف-علم (D-154، 2026-07-02)**: أول port حيّ —
+    `microservices/orchestrator_service/src/services/overmind/probability_tutor.py` (stdlib مستقل:
+    parse_composition محصَّن ضد نثر الحل + بوّابة مقامات LaTeX-aware + سُلّم كشف تدريجي صفر-نتيجة
+    بحارس dedup) موصول في `SynthesizerNode` خلف `ORCHESTRATOR_PROB_TUTOR_ENABLED` (افتراضي off).
+    الحالة الصادقة (§6.6): **FLAGGED** — يُقلب العلم بعد التحقق الحيّ في Codespaces.
 - **S3**: Mastery-Aware Orchestrator (P1, D-108) + Real Synthesis (P3, D-110 — `composition_confidence`).
 - **S4**: CritiqueNode (P2, D-109) — عقدة تحقق ذاتي بعد Synthesizer (fail-open، علم بيئي).
 - **قاعدة الصدق**: لا تُعلَن أيٌّ منها ACTIVE قبل التحقق الحيّ في Codespaces بالأسرار
@@ -167,7 +172,7 @@ runtime evidence). دَيْن موثَّق: `DOC-DEBT-001` (CLAUDE.md موسوع
 | **فجوة الوهم** | assisted_mastery − unaided_delayed_mastery | ↓ نحو الصفر |
 | **الإتقان غير المدعوم المؤجَّل** | قدرة الطالب على الحلّ بلا دعم بعد فترة | ↑ |
 | **نسبة التوليد/التعرّف** | كم خطوة ولّدها الطالب مقابل كم قرأها | ↑ التوليد |
-| **معدّل كشف النتيجة خارج وضع التحقق** | تسريبات `$$\boxed{}$$`/`P(A)=رقم` للطالب | = 0 (صفر مطلق) |
+| **معدّل كشف النتيجة خارج وضع التحقق** | تسريبات `$$\boxed{}$$`/`P(A)=رقم` للطالب | = 0 (صفر مطلق) — **مُنفَّذ بنيوياً في البُناة الحتمية (D-154)**: كل الذيول أسئلة توليد «ركّب الاحتمال بنفسك»، النسبة النهائية لا تُطبع أبداً |
 
 **ممنوع** التحسين على: مدة الجلسة، عدد الرسائل، «الرضا» اللحظي — كلها مؤشرات وهم طلاقة.
 

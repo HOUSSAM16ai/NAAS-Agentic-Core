@@ -954,8 +954,12 @@ body {
 /* كارثة «نسخ كامل الواجهة يُظهر سلسلة طويلة من الأكواد»: KaTeX يُخرج لكل صيغة
    `.katex-mathml` يحوي <annotation encoding="application/x-tex"> بمصدر TeX الخام
    (\frac, \binom, \mathbb…). تحديد الكل (Ctrl+A) كان يجمعه من كل الصيغ. نمنعه من
-   التحديد **عالمياً** فلا يدخل أي نسخ؛ يبقى `.katex-html` المرئي (Unicode) قابلاً للنسخ. */
+   التحديد **عالمياً** فلا يدخل أي نسخ؛ يبقى `.katex-html` المرئي (Unicode) قابلاً للنسخ.
+   ISS-121 (D-154): متصفح Samsung/Android يتجاهل user-select عند النسخ بالتحديد
+   الأصلي فتُنسَخ أرقام التمرين مضاعفة («1\n1») — نُخفي الـ MathML كلياً (display:none).
+   مقايضة a11y موثَّقة في D-154؛ إتاحة الرياضيات لقارئ الشاشة تُعالَج بحل مخصص لاحقاً. */
 .katex-mathml {
+    display: none !important;
     user-select: none !important;
     -webkit-user-select: none !important;
 }

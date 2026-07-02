@@ -84,11 +84,12 @@ def _detect_subpart_question(question: str) -> str | None:
 
 
 def _fmt_comb(c: int, k: int, fav: int) -> str:
+    # ISS-121 (D-154): نسخة مرآة للعقد الحالي — LaTeX (LTR-معزول، ناجٍ من الحجب بنيوياً).
     if k < 1 or c < k:
-        return f"C({c},{k}) = {fav}"
-    num = "×".join(str(c - i) for i in range(k))
-    den = "×".join(str(k - i) for i in range(k))
-    return f"C({c},{k}) = ({num})/({den}) = {fav}"
+        return f"$C_{{{c}}}^{{{k}}} = {fav}$"
+    num = r"\times ".join(str(c - i) for i in range(k))
+    den = r"\times ".join(str(k - i) for i in range(k))
+    return f"$C_{{{c}}}^{{{k}}} = \\dfrac{{{num}}}{{{den}}} = {fav}$"
 
 
 # ── 1. كاشف السؤال المحدّد ─────────────────────────────────────────────────────
@@ -148,17 +149,22 @@ class TestConfusionCounter:
 # ── 3. منسّق التوافيق (توسيع المضروب الحتمي) ────────────────────────────────────
 class TestFmtComb:
     def test_red_4_choose_3(self) -> None:
-        assert _fmt_comb(4, 3, 4) == "C(4,3) = (4×3×2)/(3×2×1) = 4"
+        assert (
+            _fmt_comb(4, 3, 4)
+            == "$C_{4}^{3} = \\dfrac{4\\times 3\\times 2}{3\\times 2\\times 1} = 4$"
+        )
 
     def test_green_5_choose_3(self) -> None:
-        assert _fmt_comb(5, 3, 10) == "C(5,3) = (5×4×3)/(3×2×1) = 10"
+        out = _fmt_comb(5, 3, 10)
+        assert out.startswith("$C_{5}^{3}") and out.endswith("= 10$")
 
     def test_total_11_choose_3(self) -> None:
-        assert _fmt_comb(11, 3, 165) == "C(11,3) = (11×10×9)/(3×2×1) = 165"
+        out = _fmt_comb(11, 3, 165)
+        assert "C_{11}^{3}" in out and out.endswith("= 165$")
 
     def test_impossible_guard(self) -> None:
         # c < k ⇒ لا توسيع مضروب مضلِّل.
-        assert _fmt_comb(2, 3, 0) == "C(2,3) = 0"
+        assert _fmt_comb(2, 3, 0) == "$C_{2}^{3} = 0$"
 
 
 # ── 4. النصّ يَنجو من حجب الإجابة (D-113) — يتجنّب أنماط الحجب ────────────────────
@@ -171,8 +177,10 @@ class TestRedactionSurvival:
         final_result_re = re.compile(
             r"(?P<lhs>[PECpec]\s*(?:_?[A-Za-z])?\s*\([^)\n]{0,60}\)\s*=\s*)(?P<rhs>" + num_re + r")"
         )
-        # النمط المُقوَّس لا يُطابَق (RHS = «(» وليس رقماً) ⇒ يَنجو من الحجب.
-        assert final_result_re.search("C(4,3) = (4×3×2)/(3×2×1) = 4") is None
+        # ISS-121 (D-154): صيغة LaTeX ``C_{n}^{k}`` بلا قوسين بعد C ⇒ النمط
+        # ``C(...)=عدد`` لا يُطابَق بنيوياً ⇒ تَنجو من الحجب.
+        assert final_result_re.search(_fmt_comb(4, 3, 4)) is None
+        assert final_result_re.search(_fmt_comb(11, 3, 165)) is None
 
     def test_probability_line_avoids_conclusion_keywords(self) -> None:
         # «الاحتمال = 14/165» لا يبدأ بـ إذن/ومنه/النتيجة/الجواب/فإن ⇒ يَنجو.

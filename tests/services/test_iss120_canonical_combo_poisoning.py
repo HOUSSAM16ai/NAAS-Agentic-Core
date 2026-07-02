@@ -180,8 +180,10 @@ class TestSourceWiring:
         src = self._orch_src()
         block = src.split("حارس التكرار على مسار محرّك حالة الفهم", 1)
         assert len(block) == 2, "ISS-120 repetition guard comment missing"
-        tail = block[1][:1500]
-        assert "_recently_emitted(_direct" in tail
+        tail = block[1][:2600]
+        # ISS-121 (D-154): الحارس صار سلسلة بدائل عبر `_d153_dup` (تستدعي
+        # `_recently_emitted` داخلياً) — لا بثّ مكرَّر بنيوياً.
+        assert "_d153_dup(_direct)" in tail
         assert "last_step_emitted" in tail
 
     def test_explain_count_counts_representation_snippets(self):

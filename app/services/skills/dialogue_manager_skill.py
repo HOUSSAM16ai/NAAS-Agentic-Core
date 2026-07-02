@@ -28,6 +28,7 @@ levels» جامدة (نقد المالك): `f(دليل الفهم، قدرة ا�
 from __future__ import annotations
 
 import contextlib
+import re
 
 from pydantic import Field
 
@@ -38,7 +39,11 @@ _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
 
 def _norm(text: str) -> str:
-    return (text or "").translate(_AR_DIGITS).strip().lower()
+    # ISS-121 (D-154): حياد تحويل الحجب — النسخة المحفوظة تمرّ بحجب D-113
+    # («14»⇒«؟») بينما المرشَّح كامل الأرقام؛ توحيد الأرقام و«؟/?» بعنصر نائب
+    # يجعل near_duplicate يرى النسختين نصاً واحداً (لا بثّ مكرَّر بعد الحجب).
+    base = (text or "").translate(_AR_DIGITS).strip().lower()
+    return re.sub(r"[\d؟?]+", "#", base)
 
 
 #: صعوبة كل مفهوم/مكوّن معرفي [0,1] — لمعايرة الخطوة التالية مقابل قدرة الطالب.

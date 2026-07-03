@@ -96,8 +96,13 @@ class TestZeroFinalAnswer:
         # فرع procedure في كتلة حالة الفهم يستدعي خطوة السُّلّم لا التفريغ.
         block = src.split("else:  # procedure — ISS-121 (D-154): سُلّم لا تفريغ", 1)
         assert len(block) == 2, "procedure ladder branch missing"
-        tail = block[1][:900]
+        # ISS-122 (D-155): probe التشخيص أولاً ثم الخطوة المحسوبة — النافذة تتّسع لهما.
+        tail = block[1][:1300]
+        assert "_build_diagnostic_probe(_proc_combo)" in tail
         assert "_build_symbolic_step(_proc_combo, None)" in tail
+        assert tail.index("_build_diagnostic_probe(_proc_combo)") < tail.index(
+            "_build_symbolic_step(_proc_combo, None)"
+        )
         # لا استدعاء فعلي للتفريغ (ذكره في التعليق التوثيقي مسموح).
         assert "self._build_symbolic_reveal(" not in tail
 
@@ -131,21 +136,27 @@ class TestNeverEmitDupChain:
         ).read_text(encoding="utf-8")
 
     def test_socratic_evaluation_has_alternatives_ladder(self):
+        # ISS-122 (D-155): البدائل صارت واعية بالسؤال المعلّق (_first/_second من
+        # _pending) والإنقاذ الكامل (reveal) **أخيراً** — كان أول البدائل فيعيد المعروض.
         src = self._src()
         seg = src.split("def _is_dup(t: str) -> bool:", 1)
         assert len(seg) == 2, "no-dup chain missing from _stream_socratic_evaluation"
-        tail = seg[1][:1600]
-        assert '_build_symbolic_step(combo, "numerator"' in tail
-        assert '_build_symbolic_step(combo, "ratio"' in tail
-        assert "ركّب البسط على المقام" in tail
+        tail = seg[1][:1900]
+        assert '("ratio", "numerator") if _pending == "denominator"' in tail
+        assert "_build_symbolic_step(combo, _first" in tail
+        assert "_build_symbolic_step(combo, _second" in tail
+        assert "جرّب بنفسك: ركّب البسط" in tail
+        assert tail.index("_build_symbolic_reveal") > tail.index("جرّب بنفسك: ركّب البسط")
 
     def test_understanding_state_guard_has_ladder(self):
         src = self._src()
         seg = src.split("def _d153_dup(t: str) -> bool:", 1)
         assert len(seg) == 2, "understanding-state ladder guard missing"
-        tail = seg[1][:2200]
-        assert '_build_symbolic_step(_lad_combo, "numerator")' in tail
-        assert '_build_symbolic_step(_lad_combo, "ratio")' in tail
+        tail = seg[1][:2900]
+        assert "_build_symbolic_step(_lad_combo, _lf)" in tail
+        assert "_build_symbolic_step(_lad_combo, _ls)" in tail
+        # ISS-122 (D-155): الإنقاذ الكامل آخر البدائل.
+        assert tail.index("_build_symbolic_reveal") > tail.index("جرّب بنفسك: ركّب البسط")
 
     def test_distinct_progressive_texts(self):
         combo = _combo()

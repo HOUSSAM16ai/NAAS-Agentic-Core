@@ -237,9 +237,17 @@ def check_progressive_disclosure() -> None:
         _fail("reveal generation-question tail missing")
         ok = False
     proc = client.split("else:  # procedure — ISS-121 (D-154): سُلّم لا تفريغ", 1)
-    if len(proc) != 2 or "_build_symbolic_step(_proc_combo, None)" not in proc[1][:700]:
+    if len(proc) != 2 or "_build_symbolic_step(_proc_combo, None)" not in proc[1][:1300]:
         _fail("procedure intent must enter the ladder (step), not the full reveal")
         ok = False
+    # ISS-122 (D-155): «التشخيص قبل الشرح» — probe التشخيص يسبق الخطوة المحسوبة.
+    if len(proc) == 2:
+        tail = proc[1][:1300]
+        probe_i = tail.find("_build_diagnostic_probe(_proc_combo)")
+        step_i = tail.find("_build_symbolic_step(_proc_combo, None)")
+        if probe_i < 0 or step_i < 0 or probe_i > step_i:
+            _fail("diagnostic probe must come before the computed step (D-155)")
+            ok = False
     if ok:
         _pass("progressive disclosure enforced (no final-answer dump; procedure → ladder)")
 
@@ -302,8 +310,66 @@ def check_probability_tutor_port() -> None:
         _pass("M10-S2.1 probability_tutor port independent + flag-gated in SynthesizerNode")
 
 
+def check_numeric_answer_verification() -> None:
+    """ISS-122 (D-155): الحقيقة الرمزية تحكم إجابة الطالب الرقمية («هل هي 14 من 165»)."""
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    ok = True
+    if "def _verify_numeric_answer(" not in client:
+        _fail("_verify_numeric_answer missing — numeric student answers invisible")
+        ok = False
+    if "def _pending_focus_from_history(" not in client:
+        _fail("_pending_focus_from_history missing — no pending-question derivation")
+        ok = False
+    if "if same in nums and total in nums:" not in client:
+        _fail("final-ratio verdict must compare combo-derived numbers (no hardcoding)")
+        ok = False
+    if "أحسنت! ✅ إجابتك صحيحة تماماً" not in client:
+        _fail("explicit acknowledgement of a correct final answer missing")
+        ok = False
+    if ok:
+        _pass("numeric answers judged by the symbolic engine + explicit acknowledge-and-advance")
+
+
+def check_conceptual_escapes_socratic() -> None:
+    """ISS-122 (D-155): سؤال مفاهيمي أثناء الحوار السقراطي ⇒ شرح العلاقة (D-125)، ليس إجابة."""
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    ok = True
+    gate = client.split(
+        "if (\n            self._in_socratic_dialogue(question, history_messages)", 1
+    )
+    if len(gate) != 2 or "_detect_conceptual_question(question)" not in gate[1][:400]:
+        _fail("socratic interception must exclude conceptual questions (D-155)")
+        ok = False
+    if "_QUESTION_OPENERS_NOT_ANSWERS" not in client:
+        _fail("interrogative-opener guard missing at the socratic gate")
+        ok = False
+    if len(gate) == 2 and "_QUESTION_OPENERS_NOT_ANSWERS" not in gate[1][:600]:
+        _fail("interrogative-opener guard must be applied at the socratic gate itself")
+        ok = False
+    if ok:
+        _pass("conceptual/interrogative turns escape the socratic swallow (D-125 reachable)")
+
+
+def check_reveal_last_in_ladders() -> None:
+    """ISS-122 (D-155): الإنقاذ الكامل (reveal superset) آخر بدائل السُّلّم دائماً."""
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    ok = True
+    for closure in ("def _is_dup(t: str) -> bool:", "def _d153_dup(t: str) -> bool:"):
+        seg = client.split(closure, 1)
+        tail = seg[1][:2600] if len(seg) == 2 else ""
+        rev = tail.find("_build_symbolic_reveal")
+        gen = tail.find("جرّب بنفسك: ركّب البسط")  # قد تلتفّ بقية الجملة على سطر تالٍ
+        if rev < 0 or gen < 0 or rev < gen:
+            _fail(f"reveal must be the LAST ladder alternative after {closure!r}")
+            ok = False
+    if ok:
+        _pass("reveal is the last ladder alternative in both dedup chains (D-155)")
+
+
 def main() -> None:
-    print("=== Pedagogical OS Constitution Gate (D-153 / ISS-120 + D-154 / ISS-121) ===")
+    print(
+        "=== Pedagogical OS Constitution Gate (D-153/ISS-120 + D-154/ISS-121 + D-155/ISS-122) ==="
+    )
     check_constitution_document()
     check_core_components_exist()
     check_questions_only_extraction()
@@ -316,6 +382,9 @@ def main() -> None:
     check_redaction_neutral_dedup()
     check_math_display_integrity()
     check_probability_tutor_port()
+    check_numeric_answer_verification()
+    check_conceptual_escapes_socratic()
+    check_reveal_last_in_ladders()
     if _FAILURES:
         print(f"\n=== ❌ {len(_FAILURES)} Pedagogical OS violation(s) ===")
         sys.exit(1)

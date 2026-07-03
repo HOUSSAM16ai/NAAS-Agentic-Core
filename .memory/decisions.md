@@ -5184,3 +5184,51 @@ M10-S2 seed lives in the orchestrator. Tests: `tests/services/test_iss121_progre
 (progressive-disclosure / redaction-neutral-dedup / math-display / port). D-124+ISS-120 tests
 aligned to the LaTeX/ladder contracts (D-105 rule: align, never deselect). Mandatory live E2E in
 Codespaces (real logins; replay transcript; flip the flag). CLAUDE.md §6.129.
+
+## D-155 (2026-07-02) — ISS-122: Acknowledge-and-Advance — the loop finally reads the student
+
+**Context:** post-D-154 the tutor was mechanically correct (zero dump, zero verbatim repetition,
+LaTeX) but pedagogically deaf: the student's CORRECT final answer «هل هي 14 من 165» was invisible
+to every verification layer (color-signals only; the LLM evaluator is deliberately blind to 14/165
+per D-128 no-reveal), so the system re-asked the question just answered; conceptual questions
+(«العلاقة بين 14 و 165», «لماذا حصلنا على…») were swallowed by the socratic interception (which
+precedes the D-124/D-125 block) and fell into a content-blind dedup ladder whose FIRST alternative
+was the reveal superset; and a first «كيف احل السؤال الأول» jumped straight to computed content
+with zero diagnosis. Owner: «النظام ما زال يفكر بمنطق كيف أُجيب؟ بدل كيف أُعلّم؟».
+
+**Decision (5 fixes — deterministic-first, history-derived state, zero DB change):**
+1. **Symbolic numeric verification**: `_verify_numeric_answer(answer, combo, pending_focus)` —
+   numbers from combo only (same/total/n/favs, Arabic digits translated). Verdicts: `final_ratio`
+   (any phrasing: 14/165، 14 من 165، 14 على 165) | `step_correct` | `direction` («نفس الشئ مع 11»)
+   | None (left to the evaluator — no false acknowledgement). `_pending_focus_from_history` derives
+   the pending question from OUR OWN number-free templates in the latest assistant message (they
+   survive D-113 redaction of the saved copy by construction). Feeds `verified_correct` (the
+   existing one-way raise — the LLM can never downgrade it). No change to LLM fact injection
+   (D-128 no-reveal intact).
+2. **Acknowledge-and-advance**: `final_ratio` ⇒ deterministic number-free confirmation
+   «أحسنت! ✅ إجابتك صحيحة تماماً…» + advance to الحادثة B with ONE diagnostic question (متى يكون
+   جداء ثلاثة أعداد فردياً؟) — no step, no reveal, no carousel; partial verdicts ⇒ ack + the next
+   UNANSWERED step. The deterministic numeric verdict bypasses the DialogueManager reshaping.
+3. **Conceptual escape**: the socratic interception gate now excludes
+   `_detect_conceptual_question` and `_QUESTION_OPENERS_NOT_ANSWERS` (لماذا/ليش/علاش/كيف/ما الفرق
+   — deliberately NOT «هل»: «هل هي 14 من 165» remains an answer) ⇒ D-125's
+   `_format_conceptual_relationship` is finally reachable mid-dialogue; inside the D-124 block a
+   conceptual question short-circuits directly to `_build_probability_direct_explanation` before
+   the understanding-state/policy engines.
+4. **Pending-aware ladders, reveal LAST**: both dedup chains (`_is_dup` + `_d153_dup`) now order
+   alternatives [next-unanswered step (from pending_focus) → other step → generation prompt →
+   reveal] — kills the disguised-repetition superset (transcript turn 4).
+5. **Diagnosis before content**: `_build_diagnostic_probe(combo)` — one diagnostic question with
+   ZERO computed values («أيّ الألوان يمكن أن تعطينا 3 كرات من نفس اللون؟ ولماذا؟») emitted on the
+   first procedure/help request (`_has_prior_tutoring_step` False) and for «كيف افهم للتمرين»-class
+   first-help turns (previously the generic LLM fallback); the student generates the «البيضاء
+   مستحيلة» insight themselves; the color answer is then verified by the EXISTING color signals.
+
+**Consequence:** the owner's 8-turn transcript replayed on the pure deterministic logic gives:
+probe (no computed values) → color answer acknowledged + numerator step → «نفس الشئ مع 11»
+acknowledged + ratio step → «هل هي 14 من 165» ⇒ explicit confirmation + advance to event B →
+conceptual questions reach D-125 → zero near-dup across turns; all new texts survive real
+`redact_final_answers`. Gate extended to 15 checks (numeric verification / conceptual escape /
+reveal-last / probe-first). Tests: `tests/services/test_iss122_acknowledge_and_advance.py` (24);
+test_iss121 aligned to the reordered-ladder contract (D-105: align, never deselect). Mandatory
+live E2E in Codespaces (real logins; replay the transcript). CLAUDE.md §6.130.

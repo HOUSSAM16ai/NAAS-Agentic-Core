@@ -2349,6 +2349,155 @@ class OrchestratorClient:
         except Exception:  # pragma: no cover - fail-safe
             return False
 
+    #: ISS-122 (D-155): قوالب أسئلة الخطوات التي نطرحها نحن — تُعرِّف «السؤال
+    #: المعلّق» المشتق من أحدث رسالة مساعد (لا حالة دائمة جديدة). أي قالب سؤال
+    #: جديد في البُناة الحتمية يجب أن يُسجَّل هنا وإلا صار سؤاله غير مرئي للتحقّق.
+    _STEP_QUESTION_MARKERS: tuple[tuple[str, str], ...] = (
+        ("كم عدد **كل** الطرق الممكنة", "denominator"),
+        ("كم عدد كل الطرق الممكنة", "denominator"),
+        ("كيف تُكوّن منهما الاحتمال", "ratio"),
+        ("فما قيمة P(A)", "ratio"),
+        ("ما قيمة P(A) التي حصلت عليها", "ratio"),
+        ("أيّ الألوان يمكن أن تعطينا", "colors"),
+    )
+
+    #: ISS-122 (D-155): علامات «خطوة تدريس سابقة» — وجود أيٍّ منها في رسائل
+    #: المساعد يعني أن الحوار التدريسي بدأ (فلا يُعاد probe التشخيص الأول).
+    _TUTORING_STEP_MARKERS: tuple[str, ...] = (
+        "الحالات الملائمة",
+        "كم عدد **كل** الطرق",
+        "كيف تُكوّن منهما الاحتمال",
+        "أيّ الألوان يمكن أن تعطينا",
+        "لنُكمل معاً خطوة بخطوة",
+        "فما قيمة P(A)",
+    )
+
+    #: ISS-122 (D-155): بادئات استفهامية تجعل الرسالة سؤالاً لا إجابةً تُقيَّم —
+    #: تسقط لكتلة D-124/D-125 (شرح العلاقة/الاشتقاق). «هل» ليست هنا عمداً:
+    #: «هل هي 14 من 165» إجابة تطلب تأكيداً.
+    _QUESTION_OPENERS_NOT_ANSWERS: tuple[str, ...] = (
+        "لماذا",
+        "ليش",
+        "علاش",
+        "كيف",
+        "ما الفرق",
+    )
+
+    @classmethod
+    def _pending_focus_from_history(
+        cls, history_messages: list[dict[str, str]] | None
+    ) -> str | None:
+        """ISS-122 (D-155): السؤال المعلّق — أيّ خطوة سألنا عنها الطالب آخر مرة؟
+
+        حتمي: يطابق قوالبنا نحن في أحدث رسالة مساعد (القوالب بلا أرقام فتنجو من
+        حجب D-113 في النسخة المحفوظة). ``denominator``/``ratio``/``colors``/None.
+        """
+        last_assistant = ""
+        for msg in reversed(history_messages or []):
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                last_assistant = str(msg.get("content", ""))
+                break
+        if not last_assistant:
+            return None
+        for marker, focus in cls._STEP_QUESTION_MARKERS:
+            if marker in last_assistant:
+                return focus
+        return None
+
+    @staticmethod
+    def _extract_answer_numbers(text: str) -> set[int]:
+        """ISS-122 (D-155): أعداد رسالة الطالب (أرقام عربية ⇒ لاتينية أولاً)."""
+        digits = (text or "").translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+        return {int(m) for m in re.findall(r"\d+", digits)}
+
+    @classmethod
+    def _verify_numeric_answer(cls, answer: str, combo, pending_focus: str | None) -> str | None:
+        """ISS-122 (D-155): الحقيقة الرمزية تحكم إجابة الطالب **الرقمية**.
+
+        كارثة الترانسكريبت: «هل هي 14 من 165» (الإجابة الصحيحة!) كانت غير مرئية
+        لكل طبقات التحقّق (ألوان فقط) ⇒ أُعيد سؤال ما أُجيب للتو. الأرقام من
+        ``combo`` حصراً (صفر hardcoding). يُرجِع:
+        ``"final_ratio"`` (النسبة النهائية بأي صياغة) | ``"step_correct"``
+        (خطوة السؤال المعلّق) | ``"direction"`` (اتجاه صحيح — «نفس الشئ مع 11»)
+        | ``None`` (غير مؤكَّدة ⇒ تُترك للمُقيّم).
+        """
+        try:
+            nums = cls._extract_answer_numbers(answer)
+            if not nums:
+                return None
+            same = int(combo.same_group_favorable)
+            total = int(combo.total_combinations)
+            n = int(combo.n)
+            favs = {
+                int(g.favorable_combinations)
+                for g in getattr(combo, "groups", [])
+                if getattr(g, "is_possible", False)
+            }
+            # النسبة النهائية صحيحة بأي صياغة («14/165»، «14 من 165»، «14 على 165»)
+            # وفي أي سؤال معلّق — تأكيد ما ولّده الطالب ليس كشفاً.
+            if same in nums and total in nums:
+                return "final_ratio"
+            if pending_focus == "denominator":
+                if total in nums:
+                    return "step_correct"
+                if n in nums:  # «نفس الشئ مع 11» — الاتجاه صحيح، نُكمل الحساب معاً.
+                    return "direction"
+                return None
+            if pending_focus in (None, "numerator") and (same in nums or (favs and favs <= nums)):
+                return "step_correct"
+            return None
+        except Exception:  # pragma: no cover - fail-safe
+            return None
+
+    @classmethod
+    def _has_prior_tutoring_step(cls, history_messages: list[dict[str, str]] | None) -> bool:
+        """ISS-122 (D-155): هل بُثّت أي خطوة تدريس (probe/سُلّم/إنقاذ) سابقاً؟"""
+        for msg in history_messages or []:
+            if not isinstance(msg, dict) or msg.get("role") != "assistant":
+                continue
+            content = str(msg.get("content", ""))
+            if any(m in content for m in cls._TUTORING_STEP_MARKERS):
+                return True
+        return False
+
+    @classmethod
+    def _build_diagnostic_probe(cls, combo) -> str:
+        """ISS-122 (D-155): سؤال تشخيصي واحد قبل أي محتوى محسوب — «التشخيص قبل الشرح».
+
+        صفر قيم محسوبة (لا C، لا مجاميع) — الطالب يولّد بصيرة «البيضاء مستحيلة»
+        بنفسه (generation effect). يَنجو من حجب D-113 بنيوياً (لا «=»، لا نتيجة).
+        """
+        comp = "، ".join(
+            f"{g.count} {str(g.label).replace('كرة ', '')}" for g in getattr(combo, "groups", [])
+        )
+        k = int(combo.k)
+        return (
+            f"لنبدأ من فهمك أنت — نسحب {k} كرات دفعة واحدة من كيس فيه: {comp}.\n\n"
+            f"سؤال واحد قبل أي حساب: أيّ الألوان يمكن أن تعطينا {k} كرات "
+            f"من نفس اللون؟ ولماذا؟"
+        )
+
+    @staticmethod
+    def _is_first_help_request(question: str) -> bool:
+        """ISS-122 (D-155): أول طلب مساعدة عام («كيف افهم التمرين»/«من أين أبدأ»)."""
+        try:
+            from app.services.capabilities.arabic_normalize import normalize_ar
+
+            norm = normalize_ar(question or "")
+        except Exception:  # pragma: no cover - fail-safe
+            norm = (question or "").strip()
+        markers = (
+            "كيف افهم",
+            "كيف نفهم",
+            "كيف احل",
+            "كيف نحل",
+            "من اين ابدا",
+            "من اين نبدا",
+            "كيف ابدا",
+            "كيف نبدا",
+        )
+        return any(m in norm for m in markers)
+
     @classmethod
     def _near_dup(cls, a: str, b: str, *, threshold: float = 0.8) -> bool:
         """D-142 (1B/Phase2): تداخل رموز/احتواء بين نصّين (حارس التكرار ضد مرساة الحالة)."""
@@ -3179,55 +3328,85 @@ class OrchestratorClient:
             concept = _diag.concept if _diag.concept != "unknown" else "event_meaning"
 
             facts = self._symbolic_facts_brief(combo)
+            # ISS-122 (D-155): الحقيقة الرمزية تحكم إجابة الطالب **الرقمية** أولاً —
+            # السؤال المعلّق يُشتق من قوالبنا في أحدث رسالة مساعد، والأرقام من
+            # combo حصراً. كارثة الترانسكريبت: «هل هي 14 من 165» أُعيد سؤالها.
+            _pending = self._pending_focus_from_history(history_messages)
+            _numeric = self._verify_numeric_answer(question, combo, _pending)
             # D-142 (1A): السلطة الرمزية — تحقّق صحة الإجابة مقابل المحرك الرمزي (combo).
-            _verified = self._verify_answer_against_combo(question, combo)
-            result = await get_socratic_evaluator_skill().evaluate(
-                SocraticEvaluatorInput(
-                    student_answer=question,
-                    concept=concept,
-                    facts=facts,
-                    history=history_messages,
-                    verified_correct=_verified,
-                )
-            )
+            _verified = self._verify_answer_against_combo(question, combo) or _numeric is not None
 
             _mtype = ""
-            if result.understood:
-                body = self._build_symbolic_step(combo, result.next_focus, acknowledge=True)
-                # نُسبق التشجيع المُولَّد (إن وُجد ولم يكن مكرّراً للاعتراف القياسي).
-                enc = (result.encouragement or "").strip()
-                text = f"{enc}\n\n{body}" if enc and "الطريق الصحيح" not in enc else body
-                record_progress("advanced")  # قياس 4: تقدّم لخطوة جديدة
-            else:
-                # D-131 «شخّص ثم تدخّل»: نشخّص الاعتقاد الخاطئ من رد الطالب ⇒ تدخّل مُوجَّه
-                # (مختلف لكل misconception)، لا تلميح موحَّد. عند الغموض نُصدر probe تشخيصياً.
-                enc = (result.encouragement or "فكرة جيدة — لنقترب أكثر.").strip()
-                _mc = get_semantic_property_skill().diagnose_misconception(
-                    concept, question, history_messages
+            result = None
+            if _numeric == "final_ratio":
+                # ISS-122 (D-155): اعتراف صريح + تقدّم للسؤال الفرعي التالي — بلا
+                # أرقام (يَنجو من حجب D-113 بنيوياً؛ تأكيد ما ولّده الطالب ليس كشفاً).
+                text = (
+                    "أحسنت! ✅ إجابتك صحيحة تماماً — ركّبت احتمال الحادثة A بنفسك: "
+                    "الحالات الملائمة على كل الحالات الممكنة.\n\n"
+                    "ننتقل للسؤال التالي في التمرين — **الحادثة B**: جداء الأرقام "
+                    "عدد فردي. قبل أي حساب، سؤال واحد: متى يكون جداء ثلاثة أعداد فردياً؟"
                 )
-                if _mc is not None:
-                    _mtype = _mc.mtype
-                    record_intervention(_mc.mtype)  # قياس 3: تدخّل مُصنَّف بنوع الاعتقاد الخاطئ
-                    record_progress("advanced")
-                    text = f"{enc}\n\n{_mc.intervention}"
+                record_progress("advanced")
+            elif _numeric in ("step_correct", "direction"):
+                # ISS-122 (D-155): خطوة جزئية صحيحة ⇒ اعتراف + **الخطوة التالية غير
+                # المُجابة** (لا إعادة سؤال ما أُجيب، لا reveal superset).
+                if _pending == "denominator" or _numeric == "direction":
+                    text = self._build_symbolic_step(combo, "ratio", acknowledge=True)
                 else:
-                    _probe = get_semantic_property_skill().first_probe(concept)
-                    record_progress("repeated")
                     text = (
-                        f"{enc} {_probe}"
-                        if _probe
-                        else (
-                            f"{enc} لاحظ نوع كل كرة: أيّ الألوان يكفي عددها لسحب 3 منها معاً؟ "
-                            "ابدأ بعدّ الألوان الممكنة فقط."
-                        )
+                        "أحسنت — هذا هو عدد الحالات الملائمة (البسط). "
+                        f"والآن: كم عدد **كل** الطرق الممكنة لسحب {combo.k} كرات من {combo.n}؟"
                     )
+                record_progress("advanced")
+            else:
+                result = await get_socratic_evaluator_skill().evaluate(
+                    SocraticEvaluatorInput(
+                        student_answer=question,
+                        concept=concept,
+                        facts=facts,
+                        history=history_messages,
+                        verified_correct=_verified,
+                    )
+                )
+
+                if result.understood:
+                    body = self._build_symbolic_step(combo, result.next_focus, acknowledge=True)
+                    # نُسبق التشجيع المُولَّد (إن وُجد ولم يكن مكرّراً للاعتراف القياسي).
+                    enc = (result.encouragement or "").strip()
+                    text = f"{enc}\n\n{body}" if enc and "الطريق الصحيح" not in enc else body
+                    record_progress("advanced")  # قياس 4: تقدّم لخطوة جديدة
+                else:
+                    # D-131 «شخّص ثم تدخّل»: نشخّص الاعتقاد الخاطئ من رد الطالب ⇒ تدخّل مُوجَّه
+                    # (مختلف لكل misconception)، لا تلميح موحَّد. عند الغموض نُصدر probe تشخيصياً.
+                    enc = (result.encouragement or "فكرة جيدة — لنقترب أكثر.").strip()
+                    _mc = get_semantic_property_skill().diagnose_misconception(
+                        concept, question, history_messages
+                    )
+                    if _mc is not None:
+                        _mtype = _mc.mtype
+                        record_intervention(_mc.mtype)  # قياس 3: تدخّل مُصنَّف بنوع الاعتقاد
+                        record_progress("advanced")
+                        text = f"{enc}\n\n{_mc.intervention}"
+                    else:
+                        _probe = get_semantic_property_skill().first_probe(concept)
+                        record_progress("repeated")
+                        text = (
+                            f"{enc} {_probe}"
+                            if _probe
+                            else (
+                                f"{enc} لاحظ نوع كل كرة: أيّ الألوان يكفي عددها لسحب 3 منها "
+                                "معاً؟ ابدأ بعدّ الألوان الممكنة فقط."
+                            )
+                        )
 
             # D-142 Phase 2: سلطة قرار الدور (DialogueManager) خلف العلم، fail-open. تُعيد
             # تشكيل القرار بإشارات حيّة (دليل + قدرة BKT + ميزانية المفهوم الدائمة + منع تكرار).
             _dm_reason = ""
             _ts = tutor_state if isinstance(tutor_state, dict) else {}
             _last_step = str(_ts.get("last_step_emitted") or "")
-            if self._semantic_tutor_enabled():
+            # ISS-122 (D-155): الحكم الرقمي الحتمي نهائي — لا يُعاد تشكيله بالـ DM.
+            if self._semantic_tutor_enabled() and _numeric is None and result is not None:
                 _dm = self._dialogue_decision(
                     question=question,
                     concept=concept,
@@ -3261,12 +3440,18 @@ class OrchestratorClient:
                 )
 
             if _is_dup(text):
+                # ISS-122 (D-155): «الخطوة التالية غير المُجابة» أولاً (من السؤال
+                # المعلّق)، والإنقاذ الكامل (reveal superset) **أخيراً** — كان أول
+                # البدائل فيعيد طباعة المعروض (تكرار مُقنَّع، الدور 4 في الترانسكريبت).
+                _first, _second = (
+                    ("ratio", "numerator") if _pending == "denominator" else ("numerator", "ratio")
+                )
                 _alternatives = (
-                    self._build_symbolic_reveal(question, history_messages, acknowledge=True),
-                    self._build_symbolic_step(combo, "numerator", acknowledge=True),
-                    self._build_symbolic_step(combo, "ratio", acknowledge=True),
+                    self._build_symbolic_step(combo, _first, acknowledge=True),
+                    self._build_symbolic_step(combo, _second, acknowledge=True),
                     "أنت تملك الآن كل المعطيات — جرّب بنفسك: ركّب البسط على المقام، "
                     "وأخبرني ما قيمة P(A) التي حصلت عليها، وسأخبرك إن أصبت.",
+                    self._build_symbolic_reveal(question, history_messages, acknowledge=True),
                 )
                 for _cand in _alternatives:
                     if _cand and not _is_dup(_cand):
@@ -3278,11 +3463,13 @@ class OrchestratorClient:
                 "socratic_evaluation",
                 extra={
                     "concept": concept,
-                    "understood": result.understood,
-                    "source": result.source,
-                    "next_focus": result.next_focus or "",
+                    "understood": bool(_numeric) or bool(result and result.understood),
+                    "source": (result.source if result else f"numeric:{_numeric}"),
+                    "next_focus": (result.next_focus or "") if result else "",
                     "misconception_mtype": _mtype,
                     "verified_correct": _verified,
+                    "numeric_verdict": _numeric or "",
+                    "pending_focus": _pending or "",
                     "dialogue_manager_reason": _dm_reason,
                 },
             )
@@ -4131,8 +4318,17 @@ class OrchestratorClient:
         # الحمراء والخضراء») تحوي كلمات اللون فتُطابق _has_indexed_match فتُعيد
         # طباعة التمرين كاملاً (الخيانة البيداغوجية). قفل الحالة عبر التاريخ
         # (لا حقل دائم). حارس تبديل الموضوع (D-101) داخل is_response_to_socratic.
+        #
+        # ISS-122 (D-155): سؤال مفاهيمي/استفهامي أثناء الحوار («لم افهم العلاقة
+        # بين 14 و 165»، «لماذا حصلنا على 14 و 165») **ليس إجابةً تُقيَّم** — كان
+        # يُبتلع هنا فيسقط في سُلّم بدائل أصمّ. يسقط الآن لكتلة D-124/D-125
+        # (شرح العلاقة/الاشتقاق). «هل هي 14 من 165» تبقى إجابة (تطلب تأكيداً).
         # ─────────────────────────────────────────────────────────────────────
-        if self._in_socratic_dialogue(question, history_messages):
+        if (
+            self._in_socratic_dialogue(question, history_messages)
+            and not self._detect_conceptual_question(question)
+            and not (question or "").strip().startswith(self._QUESTION_OPENERS_NOT_ANSWERS)
+        ):
             se_streamed_chars = 0
             _tutor_state = (context or {}).get("tutor_state") if isinstance(context, dict) else None
             try:
@@ -4290,23 +4486,53 @@ class OrchestratorClient:
         except (TypeError, ValueError):
             _sup_level = 5
 
+        # ISS-122 (D-155): أول طلب مساعدة عام («كيف افهم للتمرين»/«من أين أبدأ»)
+        # في سياق احتمالات وقبل أي خطوة تدريس ⇒ probe تشخيصي حتمي (كان يسقط
+        # للـ LLM fallback العام فيُنتج جملة عامة بلا تشخيص).
+        _first_help = (
+            self._is_first_help_request(question)
+            and self._is_prob_context(question + " " + _history_text)
+            and not self._has_prior_tutoring_step(history_messages)
+        )
+
         if (
             _concept != "unknown"
             or _conceptual
             or _subpart is not None
             or _confusion_count >= 2
             or _state.primary_intent in ("example_request", "procedure")
+            or _first_help
             # D-135: إجابة قصيرة وسط حوار تمرين ⇒ ادخل ليُقيّمها محرّك حالة الفهم (اعتراف+تقدّم).
             or self._is_short_answer_in_dialogue(question, history_messages)
         ):
             # D-127: الاستجابة المدفوعة بالمفهوم أولاً؛ fallback إلى منطق D-124/D-125.
             _direct = None
+            # ISS-122 (D-155): سؤال مفاهيمي («العلاقة/لماذا/الفرق») ⇒ شرح العلاقة
+            # (D-125) مباشرةً — لا يعالجه محرّك حالة الفهم ولا السياسة (كانا
+            # يختطفانه لتمثيل مكرَّر). قاعدة D-125: الفحص المفاهيمي يسبق كل شيء.
+            if _conceptual:
+                _direct = self._build_probability_direct_explanation(question, history_messages)
+            # ISS-122 (D-155): «التشخيص قبل الشرح» — أول طلب مساعدة ⇒ سؤال تشخيصي
+            # واحد بلا أي قيم محسوبة، ثم ننتظر محاولة الطالب.
+            if _direct is None and _first_help:
+                with contextlib.suppress(Exception):
+                    _fh_combo = self._load_canonical_combinations(question, history_messages)
+                    if _fh_combo is not None:
+                        _direct = self._build_diagnostic_probe(_fh_combo)
+                        from app.services.skills.tutor_metrics import record_response_mode
+
+                        record_response_mode("diagnostic_probe")
             # D-135: محرّك حالة الفهم (Learning State) — الأولوية: يُجيب الفجوة المعرفية المحدّدة،
             # يتقدّم على برهان الفهم، ويُصعّد التمثيل استباقياً (لا تكرار دلالي). الأرقام من المحرك
             # الرمزي (combo)، صفر LLM. يحلّ الكارثة: «كيف وصلنا ل 10»⇒kc_combination، «لماذا قسمنا
             # على 3!»⇒kc_factorial (بلا رقم)، «لم أفهم»×2⇒تمثيل مختلف لا تكرار، إجابة⇒اعتراف+تقدّم.
+            # ISS-122 (D-155): مُقيَّد بـ `_direct is None` — المفاهيمي/probe التشخيص لهما الأولوية.
             with contextlib.suppress(Exception):
-                _us_combo = self._load_canonical_combinations(question, history_messages)
+                _us_combo = (
+                    self._load_canonical_combinations(question, history_messages)
+                    if _direct is None
+                    else None
+                )
                 if _us_combo is not None:
                     from app.services.skills.tutor_metrics import (
                         record_progress,
@@ -4355,9 +4581,15 @@ class OrchestratorClient:
                     # «التلميح قبل الحل» + مقياس roadmap §7 (صفر كشف للنتيجة).
                     _proc_combo = self._load_canonical_combinations(question, history_messages)
                     if _proc_combo is not None:
-                        _direct = self._build_symbolic_step(_proc_combo, None)
-                    if _direct:
-                        record_response_mode("steps")
+                        # ISS-122 (D-155): «التشخيص قبل الشرح» — أول طلب إجراء في
+                        # التمرين يتلقى probe تشخيصياً واحداً (صفر قيم محسوبة) ثم
+                        # ننتظر محاولة الطالب؛ الخطوة المحسوبة بعد أول تفاعل فقط.
+                        if not self._has_prior_tutoring_step(history_messages):
+                            _direct = self._build_diagnostic_probe(_proc_combo)
+                            record_response_mode("diagnostic_probe")
+                        else:
+                            _direct = self._build_symbolic_step(_proc_combo, None)
+                            record_response_mode("steps")
             if _direct is None and _concept != "unknown":
                 # D-129: محرّك السياسة التربوية (الطبقة 4) يقرّر التدخّل: تعريف →
                 # سؤال سقراطي محدود → اعتراف + تقدّم → حلّ رمزي عند نفاد الميزانية.
@@ -4442,21 +4674,29 @@ class OrchestratorClient:
                     if _d153_dup(_direct):
                         # ISS-121 (D-154): سلسلة بدائل — أول غير مكرَّر يُبثّ؛ وإلا
                         # يسقط النص فيتولّى الكاروسيل/المسار التالي. صفر بثّ مكرَّر.
+                        # ISS-122 (D-155): «الخطوة التالية غير المُجابة» أولاً (من
+                        # السؤال المعلّق) والإنقاذ الكامل (reveal superset) أخيراً.
                         _lad_combo = self._load_canonical_combinations(question, history_messages)
+                        _lad_pending = self._pending_focus_from_history(history_messages)
+                        _lf, _ls = (
+                            ("ratio", "numerator")
+                            if _lad_pending == "denominator"
+                            else ("numerator", "ratio")
+                        )
                         _alts: tuple[str | None, ...] = (
-                            self._build_symbolic_reveal(question, history_messages),
                             (
-                                self._build_symbolic_step(_lad_combo, "numerator")
+                                self._build_symbolic_step(_lad_combo, _lf)
                                 if _lad_combo is not None
                                 else None
                             ),
                             (
-                                self._build_symbolic_step(_lad_combo, "ratio")
+                                self._build_symbolic_step(_lad_combo, _ls)
                                 if _lad_combo is not None
                                 else None
                             ),
                             "أنت تملك الآن كل المعطيات — جرّب بنفسك: ركّب البسط على "
                             "المقام، وأخبرني ما قيمة P(A) التي حصلت عليها، وسأخبرك إن أصبت.",
+                            self._build_symbolic_reveal(question, history_messages),
                         )
                         _direct = None
                         for _cand in _alts:

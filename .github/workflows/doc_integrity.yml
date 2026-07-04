@@ -99,7 +99,7 @@ jobs:
       - name: No dated diagnostic dumps outside docs/archive
         run: |
           # Phase reports, dated forensics, and ULTRA_* files belong in docs/archive,
-          # not in docs/ root or docs/diagnostics/. Warn for now (advisory).
+          # not in docs/ root or docs/diagnostics/. Enforced since D-156.
           patterns=(
             "PHASE_[0-9]*_*.md"
             "ULTRA_FORENSIC_*.md"
@@ -111,13 +111,14 @@ jobs:
           for pat in "${patterns[@]}"; do
             matches=$(find docs -path docs/archive -prune -o -type f -name "$pat" -print 2>/dev/null || true)
             if [ -n "$matches" ]; then
-              echo "::warning::Dated diagnostic outside docs/archive match '$pat':"
+              echo "::error::Dated diagnostic outside docs/archive match '$pat' (move it to docs/archive/<category>/):"
               echo "$matches"
               fail=1
             fi
           done
-          # Advisory only — does not block merge until consolidation PR lands.
-          exit 0
+          # Enforced (D-156): the consolidation PR has landed. Dated diagnostics
+          # MUST live in docs/archive — fail if any match escapes the archive.
+          exit $fail
 
       - name: Truth-table coherence (no orphan rows)
         run: |

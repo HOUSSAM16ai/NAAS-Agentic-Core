@@ -2126,16 +2126,37 @@ change to make `histograms` label-aware — out of scope for this fix.
 | Mission Control panels populate after a real chat turn | LIKELY — pending fresh Codespace rebuild + browser session; all upstream pieces verified independently |
 | Per-endpoint latency heatmap renders correctly | PARTIAL — heatmap will populate (aggregate data), but `endpoint` label filtering won't work until histograms become label-aware (out of scope) |
 
-## 15. Documentation Consolidation Policy (2026-05-06)
+## 15. Documentation Consolidation Policy (D-156 — 2026-07-04)
 
-- تم اعتماد `CLAUDE.md` و مجلد `.memory/` كمرجع تشغيلي مختصر للمعلومات الحرجة.
-- أي تقارير قديمة/أرشيفية تم حذفها من `docs/archive/` لتقليل الضجيج ومنع تضارب الحقائق.
-- الوثائق التي تبقى مرجعية:
-  - `AGENTS.md` (قواعد التطوير)
-  - `docs/architecture/MICROSERVICES_CONSTITUTION.md` (الدستور المعماري)
-  - `docs/ARCH_MICROSERVICES_CONSTITUTION.md` (ملخص إنجليزي)
-  - `README.md` و `CHANGELOG.md` و `SECURITY.md`
-- قبل إضافة أي ملف Markdown جديد: إذا كانت المعلومة تشغيلية قصيرة، توضع في `.memory/*.md` بدل إنشاء تقرير طويل جديد.
+**الحقيقة التشغيلية تعيش في مكانين فقط:** `CLAUDE.md` (الدستور التشغيلي + سجلّ العقائد §6.x)
+و `.memory/` (الذاكرة المؤسسية، فهرسها `.memory/README.md`). كل ما في `docs/` **مرجع مساند** أو
+**أرشيف مُجمَّد**. عند أي تضارب: `CLAUDE.md` + `.memory/runtime_truth.md` يحسمان. خريطة السلطة
+الكاملة في `docs/DOCUMENTATION_INDEX.md`.
+
+### الخريطة الموحَّدة (هرم السلطة)
+
+| المستوى | المصدر |
+|---------|--------|
+| 🏛️ الدستور | `CLAUDE.md` |
+| 🧠 الذاكرة | `.memory/` → `.memory/README.md` (roadmap · decisions · issues · runtime_truth · pedagogical_os) |
+| ⚖️ الدستور المعماري | `docs/architecture/MICROSERVICES_CONSTITUTION.md` + `docs/ARCH_MICROSERVICES_CONSTITUTION.md` |
+| 📖 قواعد الوكلاء | `AGENTS.md` (+ مشغّلات `docs/ai_skills/`) |
+| 📄 مراجع مساندة | `docs/` (مفهرسة في `docs/DOCUMENTATION_INDEX.md`) |
+| 🎓 مواد المنحة | `docs/grant-program/` (خارج النطاق الهندسي) |
+| 🗄️ أرشيف مُجمَّد | `docs/archive/` — تقارير منتهية، **لا تُستشهد كحقيقة** |
+
+### القواعد الأربع الملزِمة (تحرسها بوّابة `doc-integrity`)
+
+1. معلومة تشغيلية قصيرة ⇒ `.memory/*.md` — **لا ملف MD جديد في `docs/`**.
+2. قرار معماري ⇒ `.memory/decisions.md` + قسم `CLAUDE.md §6.x`.
+3. **تقرير مؤرَّخ/تشخيص منتهٍ ⇒ `docs/archive/<فئة>/`** — بوّابة `doc-integrity` **تفشل** (منذ D-156)
+   على أي `PHASE_*/ULTRA_*/*_DIAGNOSIS_2026-*/FORENSIC_BASELINE_*` خارج الأرشيف. الأرشيف مُجمَّد
+   (مؤرشف لا محذوف) — يُقرأ للتاريخ، لا يُحدَّث.
+4. أي ملف مرجعي جديد في `docs/` ⇒ سطر في `docs/DOCUMENTATION_INDEX.md` في نفس الـ PR.
+
+> D-156 نقل 109 ملفاً مؤرَّخاً إلى `docs/archive/` + `docs/grant-program/` وأنشأ فهارس فاخرة موحَّدة
+> (`.memory/README.md` · `docs/archive/README.md` · `docs/grant-program/README.md`) وفرض بوّابة الأرشفة.
+> التفصيل: §6.131.
 
 
 
@@ -11035,3 +11056,61 @@ The following foundational architectural invariants have been established in the
 |----------|---------|
 | D-154 | ISS-121: نهاية آلة التفريغ (Progressive Disclosure + dedup محايد للحجب) |
 | **D-155** | **ISS-122: الاعتراف والتقدّم — التحقّق الرقمي الرمزي + تأكيد الإجابة الصحيحة والتقدّم + الهروب المفاهيمي + التشخيص قبل المحتوى + reveal أخيراً (يحل «كيف أُجيب؟» ⇒ «كيف أُعلّم؟»)** |
+
+---
+
+## 6.131 تنظيم التوثيق الثوري الموحَّد + فرض بوّابة الأرشفة (2026-07-04, D-156)
+
+> طلب المالك: **(1)** تنظيم شامل ثوري لكل ملفات MD/التوثيق موحَّداً حول `CLAUDE.md` + `.memory/`
+> بجودة فاخرة؛ **(2)** GitHub Actions يُظهر **success فقط** — صفر failed/skipped/warning إطلاقاً.
+> هذا القسم يحكم أين تعيش الحقيقة التشغيلية وأين تُؤرشَف التقارير — لا يُكسر بدون ADR.
+
+### الجذر (لماذا الآن)
+
+بوّابة `doc-integrity` نفسها كانت **تنتظر هذا الـ PR**: خطوتها الاستشارية «No dated diagnostic
+dumps outside docs/archive» تُصدِر `::warning::` لكل `PHASE_*/ULTRA_*/*_DIAGNOSIS_2026-*/FORENSIC_BASELINE_*`
+خارج `docs/archive/`، بتعليق حرفي: «Advisory only — does not block merge until **consolidation PR
+lands**». فكل جولة CI — حتى الخضراء — كانت تحمل تحذيرات صفراء. توحيد التوثيق + فرض البوّابة يحقّق
+مطلبَي المالك معاً.
+
+### الإصلاح (D-156)
+
+- **109 حركة أرشفة (`git mv`)** إلى `docs/archive/{diagnostics,forensics,reports,audits,plans,
+  phase-reports,api-first,cs-guides,solid,one-off,architecture-forensics,root-reports}/` +
+  `docs/grant-program/` (بما فيها مجلدات الجذر `application/`, `briefs/`, `toolkit/`, `research/`).
+  الملف المتعثّر الوحيد `docs/contracts/PHASE_1_COMPLETION_SUMMARY.md` (تقرير إكمال مؤرَّخ 2026-01-03،
+  **صفر مراجع** في code/tests/CI، ليس عقد API) نُقل إلى `docs/archive/phase-reports/`. **كل المسارات
+  المحميّة سليمة**: عقود `docs/contracts/` *الفعلية* (JSON/openapi/graphql/README/style-guide)،
+  `docs/ai_skills/**`، الدستور/PRINCIPLES/ADRs/runbooks، `dec_pomdp_nexp_proof`،
+  `CUTOVER_SCOREBOARD.md`، ملفات community-health في الجذر، `replit.md`.
+- **فرض البوّابة**: `.github/workflows/doc_integrity.yml` الخطوة «No dated diagnostic dumps»
+  `exit 0` → `exit $fail` (+ `::warning::` → `::error::`، التعليقات → «Enforced since D-156»). أي
+  تشخيص مؤرَّخ يفلت من `docs/archive/` **يُفشل** CI — يقتل التحذير نهائياً.
+- **فهارس فاخرة موحَّدة**: `.memory/README.md` (فهرس الذاكرة المؤسسية بمستويات السلطة + 4 قواعد
+  ملزِمة)، `docs/archive/README.md` (إشعار التجميد + جدول الفئات + البدائل الحيّة)،
+  `docs/grant-program/README.md`؛ و`docs/DOCUMENTATION_INDEX.md` أُعيدت كتابته كخريطة هرم السلطة
+  (§0 → أقسام 1-6 → قواعد الإضافة).
+- **إصلاح CI الأخضر**: مواءمة الاختبار الأحمر الوحيد `tests/services/test_d143_probability_computational.py`
+  لعقد LaTeX (D-154): `C_{8}^{3}` + `8\times 7\times 6` (كان ASCII `(8×7×6)` — إغفال مواءمة من D-154
+  تعذّر تشغيله في الـ sandbox؛ مُتحقَّق حرفياً مقابل سجلّ الـ CI الحيّ).
+
+### القواعد الأربع الدائمة (D-156 — لا تُكسر بدون ADR)
+
+1. **الحقيقة التشغيلية في مكانين فقط**: `CLAUDE.md` (دستور) + `.memory/` (ذاكرة، فهرسها
+   `.memory/README.md`). `docs/` مرجع مساند أو أرشيف. عند التضارب: `CLAUDE.md` + `runtime_truth.md`.
+2. **التقارير المؤرَّخة/التشخيصات المنتهية ⇒ `docs/archive/<فئة>/`** — تحرسه البوّابة المفروضة.
+   الأرشيف مُجمَّد (مؤرشف لا محذوف): يُقرأ للتاريخ، لا يُستشهد كحقيقة، لا يُحدَّث.
+3. **ممنوع ملف MD تشغيلي جديد خارج `.memory/`**؛ أي ملف مرجعي جديد في `docs/` ⇒ سطر في
+   `docs/DOCUMENTATION_INDEX.md` في نفس الـ PR.
+4. **مواد المنحة ⇒ `docs/grant-program/`** (خارج النطاق الهندسي).
+
+### قياس النجاح
+- محلياً: الخطوة المفروضة تُرجِع 0 (صفر مطابق خارج الأرشيف) + كل بوّابات CI خضراء + صفر مرجع لأي
+  مسار مُنقول عبر tests/scripts/workflows.
+- CI: **كل** run = `success`، صفر `skipped`، صفر `::warning::` — مطلب المالك حرفياً.
+
+### السلسلة (D-155 → D-156)
+| Decision | الموضوع |
+|----------|---------|
+| D-155 | ISS-122: الاعتراف والتقدّم (التحقّق الرقمي الرمزي + التشخيص قبل المحتوى) |
+| **D-156** | **تنظيم التوثيق الثوري الموحَّد (109 ملفات → أرشيف/منحة) + فرض بوّابة الأرشفة + فهارس فاخرة → CI أخضر بلا warning** |

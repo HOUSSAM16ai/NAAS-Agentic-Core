@@ -218,7 +218,7 @@ python3 -m pytest tests/services/overmind/art/test_styles.py -v
 
 For complete API reference and advanced usage:
 
-👉 **[CS73_IMPLEMENTATION_GUIDE.md](../../../docs/CS73_IMPLEMENTATION_GUIDE.md)**
+👉 **[CS73_IMPLEMENTATION_GUIDE.md](../../../../../../docs/archive/cs-guides/CS73_IMPLEMENTATION_GUIDE.md)**
 
 Includes:
 - Detailed API documentation

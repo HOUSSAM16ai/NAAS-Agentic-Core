@@ -55,7 +55,9 @@ class TestComputationalRouting:
                 continue
             text, event = r  # builder returns (text, event)
             assert event == "event_b", q
-            assert "(8×7×6)" in text and "= 56" in text  # C(8,3)=56
+            # ISS-121 (D-154): الصيغ الحتمية صارت LaTeX ($C_{8}^{3} = \dfrac{...}$)
+            assert "C_{8}^{3}" in text and "8\\times 7\\times 6" in text  # C(8,3)
+            assert "= 56" in text
             assert "165" in text
             assert "نفس اللون" not in text  # NOT event A
 

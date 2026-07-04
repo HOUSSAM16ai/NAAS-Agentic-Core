@@ -5272,3 +5272,47 @@ outside `docs/archive/`, with the literal comment «Advisory only — does not b
 **Consequence:** documentation is single-authority and self-guarding; the enforced gate makes
 warning-drift impossible. CLAUDE.md §6.131. No behavioral/code change beyond the one test-contract
 alignment — pure documentation + one CI gate flip.
+
+## D-157 (2026-07-04) — Honest Mastery Engine (Phase A): إغلاق حلقة فجوة الوهم (ISS-123)
+
+**السياق:** المقياس الوحيد للنجاح (فجوة الوهم = assisted − durable، §0.6) مكسور بنيوياً —
+`illusion_gap ≈ assisted` دائماً لأن القناة الدائمة (durable) لا تتحرّك. الإصلاح يُخرِّط على أبعاد
+«الخوارزميات الثورية» الخمسة: كسر التعقيد (O(1) online)، تغيير المنظور (قياس durable لا assisted)،
+الموازنة دقة/تقريب (منحنى نسيان لوغاريتمي-خطي)، التعلّم الذاتي (نصف-العمر يُتعلَّم)، الأناقة
+(دالة اضمحلال مغلقة الصيغة + سجلّ append-only واحد).
+
+**القرار (المرحلة A — داخلي، حتمي 100%، صفر LLM، fail-open):**
+1. **إشارة صواب ثلاثية الحالة** (`bkt_engine.infer_correctness_signal_3state`): CORRECT/INCORRECT/
+   UNKNOWN. UNKNOWN (لا دليل) ⇒ `update_mastery_3state` يُحمِّل prior دون تغيير — يزيل التحيّز
+   الهابط (الافتراض القديم `False`).
+2. **قناة دائمة بمنحنى نسيان متّصل** (`durable_update_continuous` + `half_life_days` +
+   `predicted_recall`): يَعكِس البوّابة الثنائية الصارمة (التي جمّدت durable). durable قوّةٌ تضمحلّ
+   بالزمن (`2^(−Δt/نصف-العمر)`، Half-Life Regression) وتتراكم بالدليل غير المدعوم:
+   `gain = base · generation_weight(support) · delay_weight(Δt) · novelty`. **الثابت المضاد للوهم
+   محفوظ:** `generation_weight(1)=0.10` ⇒ الكسب ≈0 عند الدعم الثقيل (لا يُضخَّم durable بالمساعدة —
+   مُثبت: support=1 يمنح ~عُشر كسب support=5).
+3. **تجاوز رمزي مُتحقَّق (A1b)** (`customer_chat._derive_correctness_override`): الأوراكل الحتمي
+   (D-155: `_verify_numeric_answer`/`_verify_answer_against_combo`/`_load_canonical_combinations`)
+   يحكم إشارة الصواب لأدوار الاحتمالات بدل التخمين اللفظي (عالي الدقة: يؤكّد الصواب فقط، لا يُرجِع
+   incorrect). «دليل رمزي للتتبّع البايزي».
+4. **إصلاح ترتيب الإطلاق (A2)**: `_bkt_task` نُقل إلى ما بعد حساب `support_level` — كان يُطلَق
+   فارغاً فيتجمّد durable. يزيل أيضاً سباق read/write (البيداغوجيا تقرأ prior قبل كتابة الدور).
+   `novel_item` يُشتق حتمياً (`prior_count == 0`).
+5. **بثّ M9** (`tutor_metrics.record_illusion_gap`/`record_mastery_channels`/`record_durable_rise`):
+   `cogniforge_tutor_illusion_gap` + `_assisted_mastery` + `_durable_mastery` (Histograms) +
+   `_durable_rise_total{cause}` — تُبَثّ من `bkt_persistence.evaluate_and_record` (fail-open).
+   لوحة `observability/grafana/dashboards/180-illusion-gap.json` (النجم القطبي).
+
+**العقود المحفوظة:** D-074 (append-only + BKT لا يكسر الدردشة)، D-118/D-119 (خلف الكواليس، لا بطاقة)،
+D-126 (القناة المدعومة دون تغيير)، D-155 (الأوراكل الرمزي). `BKT_COGNITIVE_DOCTRINE` v2.0.0→**3.0.0**.
+
+**القواعد الدائمة (D-157):** (a) إشارة الصواب ثلاثية — UNKNOWN لا يُحدِّث الإتقان. (b) durable
+منحنى نسيان متّصل، الكسب ∝ generation_weight ⇒ لا يُضخَّم بالمساعدة أبداً. (c) الأرقام/الصحّة من
+المحرك الرمزي حين توفّر (heuristics → exact). (d) فجوة الوهم تُبَثّ إلى Prometheus (M9). (e) durable
+لا يرتفع بصدق إلا بدليل غير مدعوم مؤجَّل — آلية توليده (M8) مؤجَّلة للمرحلة B.
+
+**التحقق:** 32 اختبار standalone في `test_d126_two_signal_bkt.py` (البرهان: مُسلَّم الحل durable=0.044
+مقابل مُولِّد 0.746؛ الثابت المضاد للوهم؛ الإشارة الثلاثية؛ منحنى النسيان) ALL PASS + ruff +
+runtime_truth. **الحيّ الكامل (WS E2E: durable يرتفع + M9 يُبَثّ + لوحة 180 تُملأ) في Codespaces
+بالدخولين الحقيقيين.** CLAUDE.md §6.132. المرحلة B (وضع تحقّق M8 + مُجدوِل مراجعة + بوّابة M6) تُغلق
+الحلقة لاحقاً.

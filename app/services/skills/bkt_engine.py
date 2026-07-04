@@ -247,20 +247,52 @@ _MASTERY_PATTERNS: tuple[str, ...] = (
 )
 
 
-def infer_correctness_signal(question: str) -> bool:
-    """يشتق إشارة evidence لينة: True (إتقان ظاهر) أو False (حيرة/استيضاح).
+# ── D-157 (§6.132): إشارة صواب ثلاثية الحالة — تُزيل التحيّز الهابط (ISS-123) ──────────
+# الجذر: الافتراض القديم ``False`` كان يُعامِل كل دور بلا عبارة إتقان صريحة كـ«إجابة
+# خاطئة» ⇒ يُسمِّم مدخل القناتين ويُهبِط الإتقان بلا دليل. الإصلاح: ثلاث حالات صريحة —
+# CORRECT (دليل إتقان)، INCORRECT (حيرة/استيضاح = دليل سلبي حقيقي)، UNKNOWN (لا دليل
+# ⇒ **لا تحديث**). حتمي، صفر LLM.
+CorrectnessSignal = str  # "correct" | "incorrect" | "unknown"
+CORRECT: CorrectnessSignal = "correct"
+INCORRECT: CorrectnessSignal = "incorrect"
+UNKNOWN: CorrectnessSignal = "unknown"
 
-    الافتراضي False — السؤال المجرّد بلا إشارة إتقان يُعامَل كطلب مساعدة
-    (evidence ضعيف) لأن غالبية تفاعلات الطلاب استفسارية.
+
+def infer_correctness_signal_3state(question: str) -> CorrectnessSignal:
+    """يشتق إشارة صواب ثلاثية الحالة من نوع التفاعل (حتمي، صفر LLM).
+
+    CORRECT: عبارة إتقان/نتيجة صريحة. INCORRECT: حيرة/استيضاح (دليل سلبي حقيقي).
+    UNKNOWN: لا دليل (طلب تمرين، تحية، رسالة محايدة) ⇒ **لا يُحدَّث الإتقان**.
+    يُصلِح جذر ISS-123: الافتراض القديم كان UNKNOWN⇒INCORRECT فيُهبِط الإتقان بلا
+    دليل ويُجمِّد فجوة الوهم بلا معنى.
     """
     if not question:
-        return False
+        return UNKNOWN
     normalized = question.strip().lower()
     if any(p in normalized for p in _MASTERY_PATTERNS):
-        return True
+        return CORRECT
     if any(p in normalized for p in _CONFUSION_PATTERNS):
-        return False
-    return False
+        return INCORRECT
+    return UNKNOWN
+
+
+def infer_correctness_signal(question: str) -> bool:
+    """توافق خلفي (bool): True فقط عند دليل إتقان صريح (CORRECT)، غير ذلك False.
+
+    المسار الحيّ يستخدم ``infer_correctness_signal_3state`` — الفرق أن UNKNOWN لم
+    يَعُد يُحدِّث الإتقان كخطأ (ISS-123/D-157).
+    """
+    return infer_correctness_signal_3state(question) == CORRECT
+
+
+def update_mastery_3state(prior: float, signal: CorrectnessSignal) -> float:
+    """يُحدِّث القناة المدعومة بالإشارة الثلاثية — UNKNOWN ⇒ يُحمَل prior دون تغيير.
+
+    يُصلِح ISS-123: الرسائل المحايدة (طلب تمرين/تحية) لم تَعُد تُهبِط الإتقان.
+    """
+    if signal == UNKNOWN:
+        return round(min(max(prior, 0.0), 1.0), 4)
+    return update_mastery(prior, signal == CORRECT)
 
 
 def update_mastery(
@@ -293,14 +325,8 @@ def update_mastery(
 #: مستوى الدعم 1..5 (1 = مثال محلول كامل، 5 = غير مدعوم). يأتي من AdaptivePedagogySkill (D-114).
 _SCAFFOLD_LEAK: dict[int, float] = {1: 0.85, 2: 0.55, 3: 0.30, 4: 0.12, 5: 0.0}
 _GENERATION_WEIGHT: dict[int, float] = {1: 0.10, 2: 0.30, 3: 0.55, 4: 0.80, 5: 1.0}
-#: durable لا يرتفع إلا عند أداء غير مدعوم تماماً (الطالب يُولِّد الحل بنفسه).
-_DURABLE_UNAIDED_LEVEL: int = 5
-#: durable يرتفع فقط بعد تأخير ≥ يوم (أثر المباعدة — تعلّم دائم لا حفظ لحظي).
-_DURABLE_MIN_DELAY_HOURS: float = 24.0
-#: زيادة durable عند تحقّق كل الشروط (غير مدعوم + مؤجَّل + بند جديد).
-_DURABLE_GAIN: float = 0.5
-#: هبوط durable عند فشل رغم مساعدة ثقيلة (support ≥ 4) — الإتقان لم يكن حقيقياً.
-_DURABLE_DECAY: float = 0.7
+# ملاحظة (D-157): ثوابت البوّابة الثنائية الصارمة القديمة أُزيلت — القناة الدائمة
+# صارت منحنى نسيان متّصل (`durable_update_continuous` أدناه، يَعكِس البوّابة).
 
 
 def scaffold_leak(support_level: int) -> float:
@@ -338,9 +364,10 @@ def update_mastery_two_signal(
 
     القناة المدعومة: بايز قياسي لكن ``p_cu = p_G + (1-p_G)·scaffold_leak`` — المساعدة
     الثقيلة تُضخّم احتمال الصواب بلا معرفة فالإجابة المدعومة غير تشخيصية؛ والانتقال
-    ``p_T·generation_weight·delay_weight``. القناة الدائمة: ترتفع **فقط** عند
-    ``correct ∧ support_level≥5 ∧ delay_hours≥24 ∧ novel_item`` (غير مدعوم + مؤجَّل +
-    بند جديد)؛ وتهبط عند ``¬correct ∧ support_level≥4`` (فشل رغم مساعدة ثقيلة).
+    ``p_T·generation_weight·delay_weight``. القناة الدائمة (D-157): منحنى نسيان متّصل
+    عبر ``durable_update_continuous`` — تتراكم بالدليل غير المدعوم المؤجَّل وتضمحلّ
+    بالزمن، والكسب ∝ ``generation_weight(support)`` فلا تُضخَّم بالمساعدة (الثابت
+    المضاد للوهم محفوظ). يَعكِس البوّابة الثنائية الصارمة التي جمّدت durable على 0.
     """
     prior = min(max(prior, 0.0), 1.0)
     prior_durable = min(max(prior_durable, 0.0), 1.0)
@@ -359,22 +386,78 @@ def update_mastery_two_signal(
     eff_transit = p_t * generation_weight(support_level) * delay_weight(delay_hours)
     assisted = posterior + (1.0 - posterior) * eff_transit
 
-    # ── القناة الدائمة (durable) — لا ترتفع إلا بأداء غير مدعوم + مؤجَّل + جديد ──
-    durable = prior_durable
-    if (
-        correct
-        and support_level >= _DURABLE_UNAIDED_LEVEL
-        and delay_hours >= _DURABLE_MIN_DELAY_HOURS
-        and novel_item
-    ):
-        durable = prior_durable + (1.0 - prior_durable) * _DURABLE_GAIN
-    elif not correct and support_level >= 4:
-        durable = prior_durable * _DURABLE_DECAY
-
-    return (
-        round(min(max(assisted, 0.0), 1.0), 4),
-        round(min(max(durable, 0.0), 1.0), 4),
+    # ── القناة الدائمة (durable) — منحنى نسيان متّصل (D-157، يَعكِس البوّابة الصارمة) ──
+    durable, _cause = durable_update_continuous(
+        prior_durable,
+        correct,
+        support_level=support_level,
+        delay_hours=delay_hours,
+        novel_item=novel_item,
     )
+
+    return (round(min(max(assisted, 0.0), 1.0), 4), durable)
+
+
+# ── D-157 (§6.132): منحنى النسيان — القناة الدائمة التي ترتفع بصدق (ISS-124) ──────────
+# الجذر: البوّابة الثنائية الصارمة (correct ∧ support≥5 ∧ delay≥24h ∧ novel) لا تتحقّق
+# أبداً في الدردشة الحيّة ⇒ durable مُجمَّد على 0 ⇒ illusion_gap≈assisted بلا معنى.
+# الإصلاح: تحديث **متّصل** بمنحنى نسيان (Half-Life Regression، Duolingo 2016): durable
+# قوّةٌ تتراكم بالدليل غير المدعوم المؤجَّل وتضمحلّ بالزمن. الثابت المضاد للوهم محفوظ:
+# الكسب ∝ generation_weight(support) ⇒ ≈0 عند الدعم الثقيل (لا يُضخَّم durable بالمساعدة).
+_HL_BASE_DAYS: float = 1.0  # نصف-عمر أساسي عند durable=0
+_HL_MAX_DAYS: float = 180.0  # سقف نصف-العمر عند durable=1 (إتقان راسخ)
+_DURABLE_BASE_GAIN: float = 0.5  # الكسب الأقصى (غير مدعوم + مؤجَّل + جديد)
+_NOVELTY_RETEST_FACTOR: float = 0.5  # إعادة اختبار بند معروف تُكسِب أقل من بند جديد
+_DURABLE_FAIL_DECAY: float = 0.7  # هبوط إضافي عند فشل رغم مساعدة ثقيلة (support≥4)
+
+
+def half_life_days(durable: float) -> float:
+    """نصف-عمر التذكّر (أيام) — يطول تربيعياً كلما رسخ الإتقان الدائم. مغلق الصيغة."""
+    d = min(max(durable, 0.0), 1.0)
+    return _HL_BASE_DAYS + (_HL_MAX_DAYS - _HL_BASE_DAYS) * (d * d)
+
+
+def predicted_recall(durable: float, days_elapsed: float) -> float:
+    """احتمال الاستدعاء غير المدعوم الآن = 2^(−Δt/نصف-العمر) (منحنى النسيان)."""
+    hl = half_life_days(durable)
+    if hl <= 0.0:
+        return 0.0
+    return 2.0 ** (-max(0.0, days_elapsed) / hl)
+
+
+def durable_update_continuous(
+    prior_durable: float,
+    correct: bool,
+    *,
+    support_level: int,
+    delay_hours: float = 0.0,
+    novel_item: bool = False,
+) -> tuple[float, str]:
+    """يُحدِّث القناة الدائمة بمنحنى نسيان متّصل. يُرجِع ``(durable, cause)`` — حتمي، O(1).
+
+    القوّة تضمحلّ أولاً بالزمن المنقضي (``predicted_recall``)، ثم ترتفع بالدليل غير
+    المدعوم: ``gain = base · generation_weight(support) · delay_weight(Δt) · novelty``.
+    عند الدعم الثقيل (support=1) ⇒ ``generation_weight≈0.1`` ⇒ الكسب ≈0 (لا يُضخَّم
+    durable بالمساعدة — **الثابت المضاد للوهم**). الفشل رغم مساعدة ثقيلة ⇒ اضمحلال
+    إضافي (الإتقان كان وهماً). ``cause ∈ {unaided_delayed_novel, retest, none}`` (M9).
+    """
+    prior_durable = min(max(prior_durable, 0.0), 1.0)
+    days = max(0.0, delay_hours / 24.0)
+    decayed = prior_durable * predicted_recall(prior_durable, days)
+    cause = "none"
+    if correct:
+        gen = generation_weight(support_level)
+        dly = delay_weight(delay_hours)
+        nov = 1.0 if novel_item else _NOVELTY_RETEST_FACTOR
+        gain = _DURABLE_BASE_GAIN * gen * dly * nov
+        durable = decayed + (1.0 - decayed) * gain
+        if gain > 0.0:
+            cause = "unaided_delayed_novel" if (novel_item and support_level >= 4) else "retest"
+    elif support_level >= 4:
+        durable = decayed * _DURABLE_FAIL_DECAY
+    else:
+        durable = decayed
+    return round(min(max(durable, 0.0), 1.0), 4), cause
 
 
 def illusion_gap(assisted: float, durable: float) -> float:
@@ -420,6 +503,10 @@ class BKTEvaluationInput(RobustBaseModel):
     question: str = Field(..., min_length=1, max_length=8000)
     prior_mastery: float | None = Field(default=None, ge=0.0, le=1.0)
     history: list[dict[str, str]] | None = None
+    # D-157 (A1b): تجاوز إشارة الصواب بدليل مُتحقَّق رمزياً (الأوراكل الحتمي D-155)
+    # حين يتوفّر — «دليل رمزي للتتبّع البايزي» يفوق التخمين اللفظي. None ⇒ الإشارة
+    # اللفظية الثلاثية (``infer_correctness_signal_3state``).
+    correctness_signal: CorrectnessSignal | None = None
 
 
 class BKTEvaluation(RobustBaseModel):
@@ -435,6 +522,9 @@ class BKTEvaluation(RobustBaseModel):
     student_mastery_probability: float = Field(..., ge=0.0, le=1.0)
     prior_mastery: float = Field(..., ge=0.0, le=1.0)
     evidence_correct: bool
+    #: D-157: الإشارة الثلاثية المُستخدَمة (correct/incorrect/unknown). UNKNOWN ⇒ لا
+    #: تحديث للإتقان (يُصلِح التحيّز الهابط ISS-123). يقود القناة الدائمة في التخزين.
+    correctness_signal: CorrectnessSignal = UNKNOWN
     # D-126: الإتقان الصادق ثنائي القناة (assisted = student_mastery، durable الدائم).
     durable_mastery: float = Field(default=0.0, ge=0.0, le=1.0)
     support_level: int | None = Field(default=None, ge=1, le=5)
@@ -468,9 +558,11 @@ class BKTEngine:
         # ISS-112: تصنيف واعٍ بالسياق — المتابعات («اشرح السؤال 2») تلتصق بمفهوم الحوار
         concept_id = classify_concept_with_context(payload.question, payload.history)
         cognitive_load = estimate_cognitive_load(payload.question)
-        correct = infer_correctness_signal(payload.question)
+        # D-157: الإشارة الثلاثية — تجاوز رمزي (A1b) إن توفّر، وإلا اللفظية. UNKNOWN
+        # ⇒ لا يُحدَّث الإتقان كخطأ (يُصلِح التحيّز الهابط ISS-123).
+        signal = payload.correctness_signal or infer_correctness_signal_3state(payload.question)
         prior = payload.prior_mastery if payload.prior_mastery is not None else DEFAULT_P_L0
-        new_mastery = update_mastery(prior, correct)
+        new_mastery = update_mastery_3state(prior, signal)
 
         _record_invocation(concept_id, cognitive_load, time.perf_counter() - t0)
 
@@ -479,7 +571,8 @@ class BKTEngine:
             cognitive_load_estimate=cognitive_load,
             student_mastery_probability=new_mastery,
             prior_mastery=round(min(max(prior, 0.0), 1.0), 4),
-            evidence_correct=correct,
+            evidence_correct=(signal == CORRECT),
+            correctness_signal=signal,
         )
 
 
@@ -495,18 +588,27 @@ def get_bkt_engine() -> BKTEngine:
 
 
 __all__ = [
+    "CORRECT",
+    "INCORRECT",
+    "UNKNOWN",
     "BKTEngine",
     "BKTEvaluation",
     "BKTEvaluationInput",
+    "CorrectnessSignal",
     "classify_concept",
     "classify_concept_with_context",
     "delay_weight",
+    "durable_update_continuous",
     "estimate_cognitive_load",
     "generation_weight",
     "get_bkt_engine",
+    "half_life_days",
     "illusion_gap",
     "infer_correctness_signal",
+    "infer_correctness_signal_3state",
+    "predicted_recall",
     "scaffold_leak",
     "update_mastery",
+    "update_mastery_3state",
     "update_mastery_two_signal",
 ]

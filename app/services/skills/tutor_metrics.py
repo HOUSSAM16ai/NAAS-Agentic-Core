@@ -18,7 +18,7 @@ from __future__ import annotations
 import contextlib
 
 try:
-    from prometheus_client import REGISTRY, Counter
+    from prometheus_client import REGISTRY, Counter, Histogram
 
     _existing = {m.name for m in REGISTRY.collect()}
     if "cogniforge_tutor_repetition_avoided" not in _existing:
@@ -81,6 +81,28 @@ try:
             "Probability sub-question routing outcome per event (D-143 measurement gate).",
             ["event", "outcome"],
         )
+        # D-157 (M9 — النجم القطبي §0.6): فجوة الوهم + القناتان. المقياس الوحيد
+        # للنجاح يُبَثّ أخيراً (كان يُحسَب ويُسجَّل في اللوغ فقط بلا رصد).
+        _ILLUSION_GAP = Histogram(
+            "cogniforge_tutor_illusion_gap",
+            "Illusion gap = assisted − durable mastery per interaction (§0.6 north star).",
+            buckets=(0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0),
+        )
+        _ASSISTED_MASTERY = Histogram(
+            "cogniforge_tutor_assisted_mastery",
+            "Assisted mastery probability per interaction (scaffold-inflated channel).",
+            buckets=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+        )
+        _DURABLE_MASTERY = Histogram(
+            "cogniforge_tutor_durable_mastery",
+            "Durable (honest) mastery probability per interaction — forgetting-curve channel.",
+            buckets=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+        )
+        _DURABLE_RISE = Counter(
+            "cogniforge_tutor_durable_rise_total",
+            "Durable-mastery rise events, labelled by cause (D-157).",
+            ["cause"],
+        )
     else:  # pragma: no cover — re-import in same process (tests)
         _REPETITION_AVOIDED = None  # type: ignore[assignment]
         _DEFINITIONAL_ANSWER = None  # type: ignore[assignment]
@@ -93,6 +115,10 @@ try:
         _ESCALATION = None  # type: ignore[assignment]
         _MICRO_SIMULATION = None  # type: ignore[assignment]
         _PROB_ROUTING = None  # type: ignore[assignment]
+        _ILLUSION_GAP = None  # type: ignore[assignment]
+        _ASSISTED_MASTERY = None  # type: ignore[assignment]
+        _DURABLE_MASTERY = None  # type: ignore[assignment]
+        _DURABLE_RISE = None  # type: ignore[assignment]
 
     def record_repetition_avoided() -> None:
         """قياس 1: تراجع التكرار الحرفي."""
@@ -169,6 +195,26 @@ try:
             if _PROB_ROUTING is not None:
                 _PROB_ROUTING.labels(event=event or "unknown", outcome=outcome or "unknown").inc()
 
+    def record_illusion_gap(gap: float) -> None:
+        """D-157 (M9): فجوة الوهم لكل تفاعل — المقياس الوحيد للنجاح (§0.6)."""
+        with contextlib.suppress(Exception):
+            if _ILLUSION_GAP is not None:
+                _ILLUSION_GAP.observe(max(0.0, min(1.0, float(gap))))
+
+    def record_mastery_channels(assisted: float, durable: float) -> None:
+        """D-157 (M9): توزيع القناتين (المدعوم مقابل الدائم الصادق) لكل تفاعل."""
+        with contextlib.suppress(Exception):
+            if _ASSISTED_MASTERY is not None:
+                _ASSISTED_MASTERY.observe(max(0.0, min(1.0, float(assisted))))
+            if _DURABLE_MASTERY is not None:
+                _DURABLE_MASTERY.observe(max(0.0, min(1.0, float(durable))))
+
+    def record_durable_rise(cause: str) -> None:
+        """D-157 (M9): حدث ارتفاع الإتقان الدائم. cause ∈ {unaided_delayed_novel,retest,none}."""
+        with contextlib.suppress(Exception):
+            if _DURABLE_RISE is not None:
+                _DURABLE_RISE.labels(cause=cause or "none").inc()
+
 except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbox)
 
     def record_repetition_avoided() -> None:
@@ -206,13 +252,25 @@ except Exception:  # pragma: no cover — prometheus غير متوفّر (sandbo
     def record_probability_routing(event: str, outcome: str) -> None:
         pass
 
+    def record_illusion_gap(gap: float) -> None:
+        pass
+
+    def record_mastery_channels(assisted: float, durable: float) -> None:
+        pass
+
+    def record_durable_rise(cause: str) -> None:
+        pass
+
 
 __all__ = [
     "record_definitional_answer",
+    "record_durable_rise",
     "record_escalation",
     "record_frustration",
+    "record_illusion_gap",
     "record_intent",
     "record_intervention",
+    "record_mastery_channels",
     "record_micro_simulation",
     "record_probability_routing",
     "record_progress",

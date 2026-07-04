@@ -7,7 +7,8 @@
 # CogniForge — Project Context
 > 🧭 **الرؤية الثورية وخارطة الطريق:** المصدر الحيّ الوحيد هو **`.memory/roadmap.md`** (ملخّص في CLAUDE.md §0.6).
 > 🏗️ **العدسة المعمارية (Agentic Runtime):** `.memory/agentic_runtime_doctrine.md` (D-146 · CLAUDE.md §0.7) — خريطة الطبقات مُقيَّمة بصدق حسب §6.6.
-> Last updated: **2026-05-12** | Branch: `claude/setup-microservices-monitoring-ralbR`.
+> Last updated: **2026-07-04** | Branch: `claude/probability-exercise-system-design-4tq23e`.
+> 📚 **التوثيق موحَّد (D-156):** الحقيقة التشغيلية في `CLAUDE.md` + `.memory/` (فهرسها `.memory/README.md`)؛ التقارير المؤرَّخة مؤرشفة في `docs/archive/` وبوّابة `doc-integrity` تفرض ذلك. خريطة السلطة: `docs/DOCUMENTATION_INDEX.md`.
 > **Runtime capability status:** see `.memory/runtime_truth.md` (authoritative — verified live 2026-05-11; static contract sweep 2026-05-12 — see D-046).
 > **CI gates today:** ruff/contracts/guardrails/tests + structure-validation + `doc-integrity` + `runtime-truth-drift-check` + `microservices-transition` + `microservices-step3-live` + `microservices-step4` + `microservices-step5-user-service` + `microservices-step6-planning-agent` + `microservices-step7-research-agent` + `microservices-step8-reasoning-agent` + `microservices-step9-skills-pipeline` + `microservices-step10-postgres-checkpointer` + `microservices-step11-full-skills` + `microservices-step12-conversation-service` + `skills-architecture-gate` + `microservices-d045-user-routing`. **All 21 workflow YAMLs validated 2026-05-12 (D-046).**
 

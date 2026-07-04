@@ -5232,3 +5232,43 @@ conceptual questions reach D-125 → zero near-dup across turns; all new texts s
 reveal-last / probe-first). Tests: `tests/services/test_iss122_acknowledge_and_advance.py` (24);
 test_iss121 aligned to the reordered-ladder contract (D-105: align, never deselect). Mandatory
 live E2E in Codespaces (real logins; replay the transcript). CLAUDE.md §6.130.
+
+## D-156 (2026-07-04) — Revolutionary unified documentation reorganization + enforced archival gate
+
+**Context:** the owner requested (1) a comprehensive, project-wide MD/documentation reorganization
+unified around `CLAUDE.md` + `.memory/` at luxury quality, and (2) GitHub Actions showing SUCCESS
+ONLY — zero failed, zero skipped, zero warnings. The architectural key: the `doc-integrity` gate
+itself was *waiting for this PR* — its advisory step («No dated diagnostic dumps outside
+docs/archive») emitted a `::warning::` for every `PHASE_*/ULTRA_*/*_DIAGNOSIS_2026-*/FORENSIC_BASELINE_*`
+outside `docs/archive/`, with the literal comment «Advisory only — does not block merge until
+**consolidation PR lands**». This IS that PR.
+
+**Decision:**
+1. **109 `git mv` archival moves** into `docs/archive/{diagnostics,forensics,reports,audits,plans,
+   phase-reports,api-first,cs-guides,solid,one-off,architecture-forensics,root-reports}/` +
+   `docs/grant-program/` (incl. root dirs `application/`, `briefs/`, `toolkit/`, `research/`). The
+   one straggler blocking enforcement — `docs/contracts/PHASE_1_COMPLETION_SUMMARY.md` (a dated
+   2026-01-03 completion report with ZERO code/test/CI references, not a contract spec) — moved to
+   `docs/archive/phase-reports/`. All protected paths preserved: `docs/contracts/` *specs*
+   (JSON/openapi/graphql/README/style-guide), `docs/ai_skills/**`, constitution/PRINCIPLES/ADRs/
+   runbooks, `dec_pomdp_nexp_proof`, `CUTOVER_SCOREBOARD.md`, community-health root files, replit.md.
+2. **Gate flipped to enforcing**: `.github/workflows/doc_integrity.yml` «No dated diagnostic dumps»
+   step `exit 0` → `exit $fail` (+ `::warning::` → `::error::`, comments updated to «Enforced since
+   D-156»). Dated diagnostics escaping `docs/archive/` now FAIL CI — permanently killing the warning.
+3. **Luxury unified indexes**: `.memory/README.md` (institutional-memory index with authority
+   levels + 4 binding rules), `docs/archive/README.md` (frozen-history notice + category table +
+   live alternatives), `docs/grant-program/README.md`; `docs/DOCUMENTATION_INDEX.md` rewritten as
+   the unified authority-pyramid map (§0 hierarchy → sections 1-6 → addition rules).
+4. **CI green fix**: aligned the single red test `tests/services/test_d143_probability_computational.py`
+   to the D-154 LaTeX contract (`C_{8}^{3}` + `8\times 7\times 6`, was ASCII `(8×7×6)` — a D-154
+   contract-alignment miss the sandbox couldn't run; verified verbatim against the live CI log).
+
+**Rules (D-156):** (a) operational truth lives in exactly two places — `CLAUDE.md` (constitution) +
+`.memory/` (memory, indexed by `.memory/README.md`); `docs/` is supporting reference or archive.
+(b) Dated reports / finished diagnostics ⇒ `docs/archive/<category>/` — enforced by `doc-integrity`.
+(c) No new operational MD outside `.memory/`; any new `docs/` reference ⇒ a line in
+`DOCUMENTATION_INDEX.md` in the same PR. (d) Grant material ⇒ `docs/grant-program/`.
+
+**Consequence:** documentation is single-authority and self-guarding; the enforced gate makes
+warning-drift impossible. CLAUDE.md §6.131. No behavioral/code change beyond the one test-contract
+alignment — pure documentation + one CI gate flip.

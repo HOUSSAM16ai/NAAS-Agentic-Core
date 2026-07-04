@@ -213,6 +213,35 @@ async def _persist_ui_component_cards(
         logger.warning("ui_component_card_persist_failed: %s", exc, exc_info=True)
 
 
+def _derive_correctness_override(
+    question: str, history_messages: list[dict[str, str]]
+) -> str | None:
+    """D-157 (A1b): إشارة صواب مُتحقَّقة رمزياً لأدوار الاحتمالات — الأوراكل الحتمي
+    (D-155) يحكم بدل التخمين اللفظي. يُرجِع ``"correct"`` عند تأكيد رمزي حاسم لإجابة
+    صحيحة (⇒ يرفع الإتقان الدائم بصدق)، وإلا ``None`` (⇒ الإشارة اللفظية الثلاثية).
+    عالي الدقة: لا يُرجِع ``"incorrect"`` (غياب التأكيد ≠ خطأ — قد لا يُجيب الطالب
+    أصلاً). fail-open مطلق — أي تعذّر يُرجِع None.
+    """
+    try:
+        from app.infrastructure.clients.orchestrator_client import OrchestratorClient
+
+        combo = OrchestratorClient._load_canonical_combinations(question, history_messages)
+        if combo is None:
+            return None
+        pending = OrchestratorClient._pending_focus_from_history(history_messages)
+        if OrchestratorClient._verify_numeric_answer(question, combo, pending) in (
+            "final_ratio",
+            "step_correct",
+            "direction",
+        ):
+            return "correct"
+        if OrchestratorClient._verify_answer_against_combo(question, combo):
+            return "correct"
+    except Exception:  # pragma: no cover - fail-open
+        return None
+    return None
+
+
 async def _evaluate_bkt_cards(
     *,
     user_id: int,
@@ -221,6 +250,7 @@ async def _evaluate_bkt_cards(
     history_messages: list[dict[str, str]],
     support_level: int | None = None,
     novel_item: bool = False,
+    correctness_signal: str | None = None,
 ) -> None:
     """D-119: تتبّع معرفي خلف الكواليس — بلا أي بطاقة تظهر للطالب.
 
@@ -237,6 +267,9 @@ async def _evaluate_bkt_cards(
     معزول كلياً: أي فشل (DB أو غيره) يُسجَّل ولا يكسر مسار المحادثة (D-074).
     """
     try:
+        # D-157 (A1b): الأوراكل الرمزي يُحسَب هنا (داخل المهمة الخلفية، خارج المسار
+        # الحيّ) — إشارة صواب مُتحقَّقة رمزياً لأدوار الاحتمالات تفوق التخمين اللفظي.
+        signal = correctness_signal or _derive_correctness_override(question, history_messages)
         async with async_session_factory() as bkt_db:
             evaluation = await BKTAnalyticsService(bkt_db).evaluate_and_record(
                 user_id=user_id,
@@ -245,6 +278,7 @@ async def _evaluate_bkt_cards(
                 history=history_messages,
                 support_level=support_level,
                 novel_item=novel_item,
+                correctness_signal=signal,
             )
         # D-119/D-126: التتبّع خلف الكواليس — نُسجِّل القناتين + فجوة الوهم بدل بطاقة.
         logger.info(
@@ -939,31 +973,11 @@ async def chat_stream_ws(
                 close_ws_turn(turn_span, status="ERROR")
                 continue
 
-            # ─────────────────────────────────────────────────────────────────
-            # BKT Runtime Injection (Protocol V6.0): قيّم التفاعل، خزّنه في
-            # student_bkt_analytics، وابنِ بطاقتَي التتبّع. غير حرج — أي فشل لا
-            # يكسر مسار المحادثة (try/except معزول، جلسة DB مستقلة).
-            #
-            # D-WS-FLAP-001: التقييم يُشغَّل كـ background task (DB متزامن) فلا
-            # يُحجب بدء البثّ. RUF006: نحتفظ بمرجع الـ task لمنع GC المبكر.
-            # D-118: الإصدار لم يَعُد هنا — `_evaluate_bkt_cards` يُرجِع الحمولات
-            # فقط (بلا بثّ/حفظ)، والمنسّق يُصدِرها بعد الإطار النهائي للمحتوى كي
-            # لا تُشظّي نص التمرين أثناء البثّ (كانت تُقطّعه لفقاعات مكسورة).
-            # ─────────────────────────────────────────────────────────────────
-            _bkt_task = asyncio.create_task(
-                _evaluate_bkt_cards(
-                    user_id=actor.id,
-                    conversation_id=local_conversation_id,
-                    question=question,
-                    history_messages=history_messages,
-                )
-            )
-            _bkt_task.add_done_callback(
-                lambda t: (
-                    logger.debug("bkt_task_done err=%s", t.exception()) if t.exception() else None
-                )
-            )
-
+            # D-157 (ISS-124): تقييم BKT مؤجَّل إلى ما بعد حساب support_level +
+            # الإشارة الرمزية (أدناه) — كان يُطلَق هنا فارغاً (support_level=None)
+            # فيتجمّد durable على 0 وتُصبح فجوة الوهم بلا معنى. يبقى background task
+            # (D-WS-FLAP-001) لكنه الآن يقرأ prior بعد قراءة البيداغوجيا له (يزيل
+            # سباق read/write) ويحمل support_level + الأوراكل الرمزي.
             complete_ai_response = ""
             assistant_message_persisted = False
             orchestrator_persisted = False
@@ -986,6 +1000,24 @@ async def chat_stream_ws(
             )
             pedagogy_directive = pedagogy_snapshot.directive_text
             support_level = pedagogy_snapshot.support_level
+
+            # D-157: تقييم BKT الآن (بعد حساب support_level) — background task فلا يُحجب
+            # البثّ (D-WS-FLAP-001)، ويحسب durable + فجوة الوهم (M9). الأوراكل الرمزي
+            # (A1b) يُحسَب داخل المهمة (خلف الكواليس، خارج المسار الحيّ — D-119).
+            _bkt_task = asyncio.create_task(
+                _evaluate_bkt_cards(
+                    user_id=actor.id,
+                    conversation_id=local_conversation_id,
+                    question=question,
+                    history_messages=history_messages,
+                    support_level=support_level,
+                )
+            )
+            _bkt_task.add_done_callback(
+                lambda t: (
+                    logger.debug("bkt_task_done err=%s", t.exception()) if t.exception() else None
+                )
+            )
 
             # D-142 Phase 2: ذاكرة جلسة التدريس الدائمة (خلف العلم SEMANTIC_TUTOR_ENABLED —
             # افتراضي OFF ⇒ صفر I/O جديد على المسار الحيّ). تُحمَّل قبل الدور وتُمرَّر عبر

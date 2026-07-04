@@ -24,9 +24,14 @@ from app.services.skills.bkt_engine import (
     BKTEvaluation,
     BKTEvaluationInput,
     classify_concept_with_context,
+    durable_update_continuous,
     get_bkt_engine,
     illusion_gap,
-    update_mastery_two_signal,
+)
+from app.services.skills.tutor_metrics import (
+    record_durable_rise,
+    record_illusion_gap,
+    record_mastery_channels,
 )
 
 logger = logging.getLogger("cogniforge.analytics.bkt")
@@ -132,6 +137,7 @@ class BKTAnalyticsService:
         history: list[dict[str, str]] | None = None,
         support_level: int | None = None,
         novel_item: bool = False,
+        correctness_signal: str | None = None,
     ) -> BKTEvaluation:
         """ينفّذ التقييم الكامل ويُخزّنه — نقطة الدخول الوحيدة من الـ router.
 
@@ -153,34 +159,50 @@ class BKTAnalyticsService:
         last_ts = await self._latest_timestamp(user_id, concept_id)
 
         evaluation = get_bkt_engine().evaluate(
-            BKTEvaluationInput(question=question, prior_mastery=prior, history=history)
+            BKTEvaluationInput(
+                question=question,
+                prior_mastery=prior,
+                history=history,
+                # D-157 (A1b): تجاوز رمزي مُتحقَّق (الأوراكل الحتمي D-155) إن توفّر.
+                correctness_signal=correctness_signal,
+            )
         )
 
-        # D-126: القناة الدائمة الصادقة (حتمي، صفر LLM). delay_hours من آخر تفاعل
-        # لنفس المفهوم (أثر المباعدة). بلا support_level ⇒ durable يُحمَل دون تغيير
-        # (لا نُضخِّمه بافتراض). novel_item يُمرَّر من الـ router (افتراض آمن False).
+        # D-157: القناة الدائمة الصادقة بمنحنى نسيان متّصل (حتمي، صفر LLM). delay_hours
+        # من آخر تفاعل لنفس المفهوم (أثر المباعدة). ``novel_item`` مشتقّ حتمياً: أول
+        # تفاعل على هذا المفهوم = بند جديد. UNKNOWN (لا دليل) ⇒ durable يُحمَل دون
+        # تغيير. بلا support_level ⇒ نفترض دعماً ثقيلاً (1) فلا يُضخَّم durable.
         delay_hours = _hours_since(last_ts)
-        if support_level is not None:
-            _assisted2, durable = update_mastery_two_signal(
-                prior if prior is not None else 0.25,
-                evaluation.evidence_correct,
-                support_level=support_level,
-                delay_hours=delay_hours if delay_hours is not None else 0.0,
-                novel_item=novel_item,
-                prior_durable=prior_durable,
-            )
-        else:
+        effective_novel = novel_item or prior_count == 0
+        if evaluation.correctness_signal == "unknown":
             durable = round(min(max(prior_durable, 0.0), 1.0), 4)
+            durable_cause = "none"
+        else:
+            sup = support_level if support_level is not None else 1
+            durable, durable_cause = durable_update_continuous(
+                prior_durable,
+                evaluation.evidence_correct,
+                support_level=sup,
+                delay_hours=delay_hours if delay_hours is not None else 0.0,
+                novel_item=effective_novel,
+            )
 
+        gap = illusion_gap(evaluation.student_mastery_probability, durable)
         evaluation = evaluation.model_copy(
             update={
                 "durable_mastery": durable,
                 "support_level": support_level,
                 "delay_hours": delay_hours,
-                "novel_item": novel_item,
-                "illusion_gap": illusion_gap(evaluation.student_mastery_probability, durable),
+                "novel_item": effective_novel,
+                "illusion_gap": gap,
             }
         )
+
+        # D-157 (M9 §0.6): بثّ النجم القطبي — فجوة الوهم + القناتان (fail-open داخلياً).
+        record_illusion_gap(gap)
+        record_mastery_channels(evaluation.student_mastery_probability, durable)
+        if durable > prior_durable + 1e-9:
+            record_durable_rise(durable_cause)
 
         await self.record_interaction(
             user_id=user_id,

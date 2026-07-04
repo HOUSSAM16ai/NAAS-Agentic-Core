@@ -1,0 +1,154 @@
+{
+  "uid": "cogniforge-illusion-gap",
+  "title": "CogniForge — Illusion Gap (North Star, D-157)",
+  "description": "المقياس الوحيد للنجاح (§0.6): فجوة الوهم = الأداء المدعوم − الإتقان الدائم الصادق. القناتان + منحنى النسيان + أسباب ارتفاع durable.",
+  "tags": ["cogniforge", "illusion-gap", "bkt", "honest-mastery", "d-157", "north-star"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "فجوة الوهم (متوسط) — Illusion Gap",
+      "description": "assisted − durable. الهدف: تقليصها. أعلى = وهم طلاقة أكبر (تعلّم مدعوم لا يرسخ).",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_tutor_illusion_gap_sum[10m]) / clamp_min(rate(cogniforge_tutor_illusion_gap_count[10m]), 1)",
+          "legendFormat": "illusion gap",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.2 },
+              { "color": "red", "value": 0.4 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 2,
+      "title": "الأداء المدعوم مقابل الإتقان الدائم — Assisted vs Durable",
+      "description": "القناة المدعومة (مُضخَّمة بالمساعدة) مقابل الدائمة الصادقة. الفجوة بينهما = فجوة الوهم.",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 16, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_tutor_assisted_mastery_sum[10m]) / clamp_min(rate(cogniforge_tutor_assisted_mastery_count[10m]), 1)",
+          "legendFormat": "assisted (مدعوم)",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(cogniforge_tutor_durable_mastery_sum[10m]) / clamp_min(rate(cogniforge_tutor_durable_mastery_count[10m]), 1)",
+          "legendFormat": "durable (دائم صادق)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "calcs": ["mean", "lastNotNull"] } }
+    },
+    {
+      "id": 3,
+      "title": "توزيع فجوة الوهم (p50/p90/p99)",
+      "description": "كمّيات فجوة الوهم — الذيل العالي يكشف الطلاب الأكثر عرضة لوهم الطلاقة.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(cogniforge_tutor_illusion_gap_bucket[10m]))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.9, rate(cogniforge_tutor_illusion_gap_bucket[10m]))",
+          "legendFormat": "p90",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(cogniforge_tutor_illusion_gap_bucket[10m]))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 5 },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 4,
+      "title": "أسباب ارتفاع الإتقان الدائم / sec",
+      "description": "durable يرتفع بصدق فقط بدليل غير مدعوم مؤجَّل جديد (unaided_delayed_novel) أو إعادة اختبار (retest). لا ارتفاع = غياب آلية التوليد (M8).",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_tutor_durable_rise_total[10m])",
+          "legendFormat": "cause={{cause}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "reqps"
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 5,
+      "title": "معدّل تفاعلات BKT المُقيَّمة / sec",
+      "description": "عدد التفاعلات التي مرّت بمحرّك الإتقان الصادق (يؤكّد أن المقياس حيّ — لا لوحة زومبي §6.21).",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(cogniforge_tutor_illusion_gap_count[10m])",
+          "legendFormat": "evaluations/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "reqps"
+        }
+      }
+    }
+  ]
+}

@@ -4523,3 +4523,31 @@ assisted − durable (§0.6)، لكن `illusion_gap ≈ assisted` دائماً �
 بثّ M9 + لوحة Grafana. 32 اختبار standalone (ALL PASS) + ruff + runtime_truth. التحقق
 الحيّ الكامل (durable يرتفع + اللوحة تُملأ) في Codespaces بالدخولين الحقيقيين. راجع
 CLAUDE.md §6.132.
+
+## ISS-124 (2026-07-05) — كارثة الاحتمالات الحيّة تنجو من D-113→D-155: تفريغ + تجاهل الإجابة الصحيحة + صفر تشخيص
+
+**الأعراض (ترانسكليت حيّ، BAC-2024):** (S1) «إجابتك في الطريق الصحيح —» ثم تفريغ الحل (البسط
+`4+10=14` + المقام `C(11,3)=165`)؛ (S2) الطالب يُجيب «14 على 165» صحيحاً ⇒ إعادة تفريغ لا اعتراف؛
+(S3) «كيف نحسب الحادثة A» ⇒ تفريغ البسط فوراً لا سؤال تشخيصي.
+
+**الجذور (file:line — مؤكَّدة، بعضها حيّاً عبر جسر Supabase):**
+1. `tutor_state.kc_progress` يُحمَّل ولا يُكتَب أبداً — `record_turn` (`app/services/analytics/tutor_state_service.py:99`)
+   بلا معامل ⇒ المصدر الوحيد للحقيقة `{}` دائماً ⇒ المهارات ترجع لمسح نصّ السجل.
+2. **المخطط ميت على الإنتاج** — 7 أعمدة D-144 مفقودة (ALTERs مُفلترة خطأً تحت `bac_exercise_questions`
+   لا `tutor_state` في `app/core/db_schema_config.py`؛ `create_table` بـ `IF NOT EXISTS` = no-op) ⇒
+   **كل كتابة tutor_state تفشل صامتة** (حيّاً: صفّان فقط، آخر كتابة 2026-06-26 — D-142→D-157 لم يُخزَّن قط).
+3. القرار مُجزّأ عبر ~13 كتلة preempt في `orchestrator_client.chat_with_agent`؛ كل حارس تكرار أعمى عن الكتل الأخرى.
+4. `S1` = `_build_symbolic_reveal:3097` يُفرّغ بالتصميم. `S2` = الاعتراف موجود (`_verify_numeric_answer:2414`→final_ratio)
+   لكنه سجين خلف `_in_socratic_dialogue:3170` (يرفض الدور حين رسالة سابقة > 600 حرف — وتفريغ S1 يتجاوزها).
+   `S3` = probe غير قابل للوصول (`_is_first_help_request` علامات هشّة + `understanding_state` يسبقه).
+5. علم `_semantic_tutor_enabled` مُعرّف مرّتين بافتراضين متعارضين (True في customer_chat، False في orchestrator).
+
+**الأثر:** كل معمارية الحالة الدائمة (D-142→D-157) no-op على الإنتاج؛ الطالب يُحاصَر في تفريغ/تكرار،
+والإجابة الصحيحة تُتجاهَل — نقيض «التلميح قبل الحل» و«الحالة قبل الرد» (دستور Pedagogical OS).
+
+**الحالة:** RESOLVED محلياً (D-158 Phase 1) — علم موحَّد + `kc_progress` يُكتَب + إصلاح المخطط (طُبِّق حيّاً
+عبر الجسر: 12→19 عموداً) + طبقة `_cognitive_turn` (S2 على المستوى الأعلى يكسر سجن 600-حرف، S3 تشخيص من
+`attempts`، S1 خطوة تدريجية بلا تكرار عبر الكتل، خلف `COGNITIVE_TURN_ENABLED`) + حذف الكتلة الميتة.
+`scripts/verify_d158_live.py` يُعيد الترانسكليت على المصدر الفعلي: **6/6 PASS**. `check_pedagogical_os` 15/15.
+**التحقق الحيّ الكامل (uvicorn+WS+Supabase، الدخولين الحقيقيين، العلم مُفعَّل) في Codespaces عبر
+`scripts/verify_d158_e2e.py`.** راجع CLAUDE.md §6.133 و D-158.

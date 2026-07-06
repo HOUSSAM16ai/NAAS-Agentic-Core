@@ -2513,19 +2513,21 @@ class OrchestratorClient:
 
     @staticmethod
     def _semantic_tutor_enabled() -> bool:
-        """D-142 Phase 2: علم `SEMANTIC_TUTOR_ENABLED` (env أولاً ثم الإعدادات، افتراضي False)."""
-        import os
+        """D-142/D-158: علم تحميل+كتابة `tutor_state` — قارئ موحَّد (افتراض True).
 
-        raw = os.getenv("SEMANTIC_TUTOR_ENABLED")
-        if raw is not None:
-            return raw.strip().lower() in {"1", "true", "yes", "on"}
-        try:
-            from app.core.config import get_settings
+        D-158: يُفوَّض إلى `app.core.feature_flags` — يُنهي الافتراض المتعارض (كان False هنا
+        و True في customer_chat) الذي كان يُعطِّل سلطة `DialogueManagerSkill` في الإنتاج.
+        """
+        from app.core.feature_flags import semantic_tutor_enabled
 
-            value = getattr(get_settings(), "SEMANTIC_TUTOR_ENABLED", None)
-            return value if isinstance(value, bool) else False
-        except Exception:  # pragma: no cover - fail-safe
-            return False
+        return semantic_tutor_enabled()
+
+    @staticmethod
+    def _cognitive_turn_enabled() -> bool:
+        """D-158: علم طبقة القرار الموحَّدة `_cognitive_turn` (افتراض False)."""
+        from app.core.feature_flags import cognitive_turn_enabled
+
+        return cognitive_turn_enabled()
 
     @classmethod
     def _dialogue_decision(
@@ -3100,11 +3102,17 @@ class OrchestratorClient:
         history_messages: list[dict[str, str]] | None,
         *,
         acknowledge: bool = False,
+        delivered: set[str] | None = None,
     ) -> str | None:
         """D-129: الحلّ الرمزي المتدرّج — الإنقاذ التربوي بعد استنفاد السقراطية (الطبقة 4).
 
         حتمي تماماً (من المحرك الرمزي). يُسبَق باعتراف عند ``acknowledge``. يَنجو من حجب
         D-113 (نمط ``_fmt_comb`` + «من كل»). يُرجِع None لغير الاحتمالات.
+
+        D-158: ``delivered`` (اختياري) — مجموعة مفاتيح الخطوات المعروضة سابقاً (من
+        ``kc_progress.representations_delivered`` الدائم). عند تمريرها، تُحذف الكتلة
+        المعروضة مسبقاً (numerator/denominator) فلا يُعاد التفريغ عبر الأدوار (يقتل S1
+        بنيوياً). الافتراضي (None) مطابق بايتياً للسلوك السابق (كل الكتل).
         """
         combo = cls._load_canonical_combinations(question, history_messages)
         if combo is None:
@@ -3129,16 +3137,23 @@ class OrchestratorClient:
         # كل المكوّنات (scaffold مشروع — D-129) لكن **تركيب النسبة النهائية يولّده
         # الطالب بنفسه** (generation effect؛ «التلميح قبل الحل»). ممنوع طباعة
         # «فاحتمال الحادثة A هو X من كل Y».
-        return (
-            f"{prefix}لنُكمل معاً خطوة بخطوة حتى النهاية:\n\n"
+        _d = delivered or set()
+        num_block = (
             f"**الحالات الملائمة** (3 كرات من نفس اللون) — لكل لون:\n\n"
             f"{favs_lines}\n\n"
             f"نجمع الحالات الممكنة فقط: ${favs_sum} = {same}$\n\n"
-            f"**كل الطرق الممكنة** لسحب {k} من {n}:\n\n"
-            f"{cls._fmt_comb(n, k, total)}\n\n"
-            f"الآن أمامك كل المكوّنات — ركّب الاحتمال **بنفسك**: البسط على المقام. "
-            f"فما قيمة P(A) التي تحصل عليها؟"
         )
+        den_block = f"**كل الطرق الممكنة** لسحب {k} من {n}:\n\n{cls._fmt_comb(n, k, total)}\n\n"
+        body = f"{prefix}لنُكمل معاً خطوة بخطوة حتى النهاية:\n\n"
+        if "numerator" not in _d:
+            body += num_block
+        if "ratio" not in _d and "denominator" not in _d:
+            body += den_block
+        body += (
+            "الآن أمامك كل المكوّنات — ركّب الاحتمال **بنفسك**: البسط على المقام. "
+            "فما قيمة P(A) التي تحصل عليها؟"
+        )
+        return body
 
     @classmethod
     def _in_socratic_dialogue(
@@ -3275,6 +3290,147 @@ class OrchestratorClient:
         return cls._build_symbolic_reveal("", None, acknowledge=acknowledge) or (
             f"{prefix}لنُكمل معاً خطوةً بخطوة."
         )
+
+    #: D-158: مُعرّف المكوّن المعرفي لمسار الحادثة A (نفس اللون) في tutor_state.kc_progress.
+    _KC_PROB_A: str = "prob_event_a"
+
+    @classmethod
+    def _cognitive_turn(
+        cls,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+        tutor_state: dict | None,
+        _policy_decision=None,  # D-158 Phase 1: محجوز (القرار من kc_progress، لا policy بعد)
+    ) -> tuple[str | None, dict | None]:
+        """D-158: طبقة القرار الموحَّدة فوق ``tutor_state`` المُخزَّن (حتمية، صفر LLM، fail-open).
+
+        المصدر الوحيد للقرار = ``kc_progress`` الدائم (لا مسح نصّ). تقتل الأعراض الثلاثة
+        بنيوياً وعبر الكتل:
+        - **S2** (أعلى أولوية): إجابة رقمية صحيحة ⇒ اعتراف + تقدّم — على المستوى الأعلى،
+          لا تمرّ عبر `_in_socratic_dialogue` فينكسر سجن الـ600-حرف (رسالة سابقة طويلة لم
+          تعد تُخفي إجابة الطالب الصحيحة).
+        - **S3**: أول تفاعل مع المكوّن (``attempts==0``) ⇒ سؤال تشخيصي (لا تفريغ) — مقاد
+          بـ ``attempts`` الدائم لا بقوائم علامات هشّة («كيف نحسب» = «كيف افهم»).
+        - **S1**: غير ذلك ⇒ خطوة **واحدة** لم تُعرَض بعد (``representations_delivered``)
+          عبر `_build_symbolic_step`؛ التفريغ الكامل غير ممكن (السجل الدائم يمنع التكرار).
+
+        يُرجِع ``(text, kc_progress_delta)`` أو ``(None, None)`` (تسليم للكتل القائمة).
+        يحقن الدلتا أيضاً في ``tutor_state["kc_progress_delta"]`` (dict مشترك) ليحفظها
+        customer_chat عبر ``record_turn``.
+        """
+        try:
+            if not isinstance(tutor_state, dict):
+                return None, None
+            combo = cls._load_canonical_combinations(question, history_messages)
+            if combo is None:
+                return None, None
+            # حارس تبديل الموضوع (D-101): سؤال غير احتمالي ⇒ تسليم للكتل.
+            with contextlib.suppress(Exception):
+                from app.services.capabilities.arabic_normalize import primary_canonical_topic
+
+                _topic = primary_canonical_topic(question)
+                if _topic is not None and _topic.canonical_id != "probability":
+                    return None, None
+            # طلب محتوى/تمرين جديد صريح ⇒ ليس تفاعل تدريس (تسليم للاسترجاع).
+            _low = (question or "").strip().lower()
+            if any(m in _low for m in ("اعطني", "أعطني", "اعطيني", "هات", "اكتب", "ارسم", "درس")):
+                return None, None
+
+            kc_progress = tutor_state.get("kc_progress")
+            kc_progress = kc_progress if isinstance(kc_progress, dict) else {}
+            pending = kc_progress.get("_pending")
+            pending = pending if isinstance(pending, dict) else {}
+            entry = kc_progress.get(cls._KC_PROB_A)
+            entry = (
+                dict(entry)
+                if isinstance(entry, dict)
+                else {
+                    "state": "not_addressed",
+                    "attempts": 0,
+                    "evidence": "none",
+                    "difficulty": 0.0,
+                    "representations_delivered": [],
+                    "last_emitted_hash": "",
+                    "updated_turn": 0,
+                }
+            )
+            delivered = list(entry.get("representations_delivered") or [])
+            turn_no = int(tutor_state.get("turn_count") or 0) + 1
+
+            def _finish(
+                text: str,
+                *,
+                advance_state: str | None = None,
+                clear_pending: bool = False,
+                add_step: str | None = None,
+                new_pending: str | None = None,
+            ) -> tuple[str, dict]:
+                if add_step and add_step not in delivered:
+                    delivered.append(add_step)
+                entry["representations_delivered"] = delivered
+                if advance_state:
+                    entry["state"] = advance_state
+                entry["updated_turn"] = turn_no
+                entry["last_emitted_hash"] = cls._norm_for_dedup(text)[:120]
+                delta: dict = {cls._KC_PROB_A: entry}
+                if clear_pending:
+                    delta["_pending"] = {}
+                elif new_pending:
+                    delta["_pending"] = {"kc_id": cls._KC_PROB_A, "step_key": new_pending}
+                tutor_state["kc_progress_delta"] = delta
+                return text, delta
+
+            # ── S2: إجابة رقمية صحيحة ⇒ اعتراف + تقدّم (المستوى الأعلى — لا سجن 600-حرف) ──
+            _pending_focus = pending.get("step_key") or cls._pending_focus_from_history(
+                history_messages
+            )
+            _numeric = cls._verify_numeric_answer(question, combo, _pending_focus)
+            if _numeric == "final_ratio":
+                entry["attempts"] = int(entry.get("attempts") or 0) + 1
+                entry["evidence"] = "verified"
+                text = (
+                    "أحسنت! ✅ إجابتك صحيحة تماماً — ركّبت احتمال الحادثة A بنفسك: "
+                    "الحالات الملائمة على كل الحالات الممكنة.\n\n"
+                    "ننتقل للسؤال التالي في التمرين — **الحادثة B**: جداء الأرقام "
+                    "عدد فردي. قبل أي حساب، سؤال واحد: متى يكون جداء ثلاثة أعداد فردياً؟"
+                )
+                return _finish(text, advance_state="understood", clear_pending=True)
+            if _numeric in ("step_correct", "direction"):
+                text = cls._build_symbolic_step(combo, "ratio", acknowledge=True)
+                if not cls._recently_emitted(text, history_messages):
+                    entry["attempts"] = int(entry.get("attempts") or 0) + 1
+                    entry["evidence"] = "verified"
+                    return _finish(text, add_step="ratio", new_pending="ratio")
+
+            entry["attempts"] = int(entry.get("attempts") or 0) + 1
+
+            # ── S3: أول تفاعل ⇒ التشخيص قبل الشرح ──
+            if "diagnostic_probe" not in delivered:
+                text = cls._build_diagnostic_probe(combo)
+                return _finish(
+                    text,
+                    advance_state="explained",
+                    add_step="diagnostic_probe",
+                    new_pending="numerator",
+                )
+
+            # ── S1: كشف تدريجي — خطوة واحدة لم تُعرَض بعد (لا تفريغ كامل) ──
+            for step in ("numerator", "ratio"):
+                if step in delivered:
+                    continue
+                text = cls._build_symbolic_step(combo, step)
+                if cls._recently_emitted(text, history_messages):
+                    continue
+                return _finish(text, add_step=step, new_pending=step)
+
+            # كل الخطوات عُرضت ⇒ إنقاذ متدرّج (delivered يحذف المعروض؛ يبقى ذيل التوليد فقط).
+            text = cls._build_symbolic_reveal(
+                question, history_messages, acknowledge=bool(_numeric), delivered=set(delivered)
+            )
+            return _finish(text or "", new_pending="ratio")
+        except Exception:  # pragma: no cover - fail-safe (never abort a turn)
+            logger.warning("_cognitive_turn_failed", exc_info=True)
+            return None, None
 
     async def _stream_socratic_evaluation(
         self,
@@ -3785,6 +3941,22 @@ class OrchestratorClient:
                 )
                 return
 
+        # D-158: طبقة القرار الموحَّدة فوق tutor_state المُخزَّن (خلف COGNITIVE_TURN_ENABLED،
+        # افتراض OFF ⇒ سلوك اليوم دون تغيير). عند التفعيل تعترض دور الاحتمالات وتُصدِر خطوة
+        # واحدة تدريجية (تقتل التفريغ + التكرار + سجن 600-حرف بنيوياً). fail-open ⇒ تسليم للكتل.
+        if self._cognitive_turn_enabled():
+            _ct_text, _ct_delta = self._cognitive_turn(
+                question, history_messages, tutor_state, policy_decision
+            )
+            if _ct_text:
+                yield self._normalize_stream_event(
+                    {"type": "assistant_delta", "payload": {"content": _ct_text}}
+                )
+                yield self._normalize_stream_event(
+                    {"type": "assistant_final", "payload": {"content": ""}}
+                )
+                return
+
         # In D-144, if the policy engine mandates a specific pedagogical action (e.g. symbolic reveal or intermediate scaffold)
         # we bypass the standard generative fallbacks and directly emit that action.
         if policy_decision.next_action == "symbolic_reveal":
@@ -3810,57 +3982,13 @@ class OrchestratorClient:
         # ─────────────────────────────────────────────────────────────────────
         try:
             from app.services.chat.local_graph import _greeting_fastpath_response
-            from app.services.skills.pedagogical_policy_engine import (
-                PedagogicalPolicyEngine,
-                PolicyObservation,
-            )
 
             greeting_response = _greeting_fastpath_response(question)
         except Exception:
+            # D-158: أُزيل هنا التكرار الميت (PedagogicalPolicyEngine/evaluate_turn +
+            # فحص defer مكرَّر يُهمَل ناتجه) الذي كان يعمل فقط لو فشل استيراد التحية.
+            # المنطق الحقيقي (policy + defer) يجري مرة واحدة في أعلى الدالة.
             greeting_response = None
-
-            # Extract current state
-            tutor_state = context.get("tutor_state", {}) if isinstance(context, dict) else {}
-
-            # Formulate Observation
-            from app.services.skills.concept_diagnosis_skill import (
-                ConceptDiagnosisInput,
-                get_concept_diagnosis_skill,
-            )
-
-            ConceptDiagnosisInput(question=question, history=history_messages)
-            diagnosis = get_concept_diagnosis_skill().diagnose_deterministic(question)
-
-            is_correct = self._verify_answer_against_combo(
-                question, self._load_canonical_combinations(question, history_messages)
-            )
-
-            obs = PolicyObservation(
-                question=question,
-                active_concept=diagnosis.concept or tutor_state.get("active_concept", ""),
-                is_correct=is_correct,
-                has_misconception=bool(diagnosis.misconception),
-                detected_misconception=diagnosis.misconception or "",
-                is_frustrated=False,  # Could be inferred from sentiment, using default
-            )
-
-            # Consult Policy Engine
-            engine = PedagogicalPolicyEngine()
-            engine.evaluate_turn(tutor_state, obs)
-
-            # Enforce Symbolic Truth explicitly: if question targets unmodeled mathematical event, force drift prevention
-            _comp = await self._build_probability_computational_answer(question, history_messages)
-            if _comp:
-                _comp_text, _comp_event = _comp
-                if _comp_event.startswith("defer_"):
-                    # Strict drift prevention: Unmodeled event
-                    yield self._normalize_stream_event(
-                        {"type": "assistant_delta", "payload": {"content": _comp_text}}
-                    )
-                    yield self._normalize_stream_event(
-                        {"type": "assistant_final", "payload": {"content": ""}}
-                    )
-                    return
 
         if greeting_response:
             logger.info(

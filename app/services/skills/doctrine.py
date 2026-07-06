@@ -984,7 +984,7 @@ def get_student_state_summary() -> str:
 
 
 # ── D-142 (Phase 2): مدير الحوار الموحَّد + الحالة الدائمة ─────────────────────────────
-DIALOGUE_MANAGER_DOCTRINE_VERSION: Final[str] = "1.0.0"
+DIALOGUE_MANAGER_DOCTRINE_VERSION: Final[str] = "1.1.0"
 
 #: قوانين غير قابلة للكسر تحكم سلطة قرار الدور التعليمي (D-142 Phase 2).
 DIALOGUE_MANAGER_DOCTRINE: Final[tuple[str, ...]] = (
@@ -1002,6 +1002,9 @@ DIALOGUE_MANAGER_DOCTRINE: Final[tuple[str, ...]] = (
     "(D-126). fail-open: أي خطأ ⇒ السلوك القائم.",
     "بوّابة القياس (§2D): التوسّع مرهون بهبوط repetition_rate→0 + advance_after_correct≈100% + "
     "over-jump→0 + فجوة الوهم (D-126) ⤵ — لا توسيع للحالة قبل إثبات اللِّفت.",
+    "D-158: قرار الدور يقرأ tutor_state.kc_progress الدائم (representations_delivered / _pending) "
+    "لا مسح نصّ السجل؛ خطوة موجودة في representations_delivered لا تُعاد أبداً (منع تكرار عبر الكتل). "
+    "طبقة _cognitive_turn خلف COGNITIVE_TURN_ENABLED هي المستهلِك الجديد فوق tutor_state المُخزَّن.",
 )
 
 
@@ -1346,6 +1349,8 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             # D-142 Phase 2: سلطة قرار الدور — موصولة حيّاً في المسار السقراطي (خلف العلم).
             "DialogueManagerSkill.decide",
             "orchestrator_client._stream_socratic_evaluation",
+            # D-158: طبقة القرار الموحَّدة فوق tutor_state.kc_progress الدائم (خلف COGNITIVE_TURN_ENABLED).
+            "orchestrator_client._cognitive_turn",
         ),
     },
     "understanding_state": {

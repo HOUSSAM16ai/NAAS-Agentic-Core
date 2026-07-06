@@ -225,6 +225,10 @@ class AppSettings(BaseServiceSettings):
     SEMANTIC_TUTOR_ENABLED: bool = Field(
         True, description="D-142 Phase 2: تمكين مدير الحوار السقراطي الموحد (DialogueManagerSkill)"
     )
+    COGNITIVE_TURN_ENABLED: bool = Field(
+        False,
+        description="D-158: طبقة القرار الموحَّدة _cognitive_turn فوق tutor_state (افتراض OFF).",
+    )
     # Skills Platform — opt-in activation of dormant capabilities (default OFF → zero
     # behavior change unless explicitly enabled). Each gated skill returns None when off.
     ENABLE_RETRIEVAL_RERANK_SKILL: bool = Field(

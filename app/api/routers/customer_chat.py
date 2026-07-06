@@ -49,21 +49,14 @@ logger = get_logger(__name__)
 
 
 def _semantic_tutor_enabled() -> bool:
-    """D-142 Phase 2: علم `SEMANTIC_TUTOR_ENABLED` (env أولاً ثم الإعدادات، افتراضي False).
+    """D-142/D-158: علم تحميل+كتابة `tutor_state` — قارئ موحَّد (افتراض True).
 
-    OFF افتراضياً ⇒ ذاكرة جلسة التدريس الدائمة لا تُحمَّل/تُكتَب (صفر I/O جديد على المسار
-    الحيّ). تُفعَّل بعد التحقق الحيّ في Codespaces.
+    D-158: يُفوَّض إلى `app.core.feature_flags` (مصدر واحد لكل الأعلام، افتراض واحد) بدل
+    التعريف المزدوج المتعارض الذي كان يُعطِّل سلطة الحوار في المُنسّق.
     """
-    import os
+    from app.core.feature_flags import semantic_tutor_enabled
 
-    raw = os.getenv("SEMANTIC_TUTOR_ENABLED")
-    if raw is not None:
-        return raw.strip().lower() in {"1", "true", "yes", "on"}
-    with contextlib.suppress(Exception):
-        value = getattr(get_settings(), "SEMANTIC_TUTOR_ENABLED", None)
-        if isinstance(value, bool):
-            return value
-    return True
+    return semantic_tutor_enabled()
 
 
 def _apply_complete_response_firewall(text: str) -> str:
@@ -1334,6 +1327,14 @@ async def chat_stream_ws(
                                     f"{learning_stage}_{policy_decision.next_action}"
                                 )
 
+                            # D-158: دلتا تقدّم المكوّنات المعرفية (يبنيها _cognitive_turn،
+                            # يحقنها في dict tutor_state المشترك). المصدر الوحيد لِـ
+                            # representations_delivered / _pending الذي يقتل التكرار عبر الكتل.
+                            _kc_delta = (
+                                tutor_state_ctx.get("kc_progress_delta")
+                                if tutor_state_ctx
+                                else None
+                            )
                             await TutorStateService(_ts_db2).record_turn(
                                 conversation_id=local_conversation_id,
                                 user_id=actor.id,
@@ -1344,6 +1345,7 @@ async def chat_stream_ws(
                                 learning_stage=learning_stage,
                                 representation_used=representation_used,
                                 interventions_used=interventions_used,
+                                kc_progress=_kc_delta if isinstance(_kc_delta, dict) else None,
                             )
 
                 # Close path-aware span exactly once per turn — final event type

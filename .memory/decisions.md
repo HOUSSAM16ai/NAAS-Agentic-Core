@@ -5316,3 +5316,60 @@ D-126 (القناة المدعومة دون تغيير)، D-155 (الأوراك�
 runtime_truth. **الحيّ الكامل (WS E2E: durable يرتفع + M9 يُبَثّ + لوحة 180 تُملأ) في Codespaces
 بالدخولين الحقيقيين.** CLAUDE.md §6.132. المرحلة B (وضع تحقّق M8 + مُجدوِل مراجعة + بوّابة M6) تُغلق
 الحلقة لاحقاً.
+
+## D-158 (2026-07-05) — Cognitive Turn Engine: tutor_state كمصدر وحيد لقرار الدور + إصلاح المخطط الميت (ISS-124)
+
+**السياق:** رغم سلسلة D-113→D-155، الترانسكريبت الحيّ ما زال يُظهر ثلاثة أعراض على تمرين الاحتمالات
+BAC-2024: (S1) «إجابتك في الطريق الصحيح —» + تفريغ الحل (البسط 14 + المقام C(11,3)=165)؛ (S2) الطالب
+يُجيب «14 على 165» صحيحاً ⇒ إعادة تفريغ لا اعتراف؛ (S3) «كيف نحسب الحادثة A» ⇒ تفريغ فوري لا سؤال
+تشخيصي. المالك أطّر العلاج بـ «هياكل البيانات كنموذج معرفي» (Graph / FSM / حالة علائقية O(1)).
+
+**الجذر الأعمق (مؤكَّد حيّاً عبر جسر Supabase HTTPS):** (1) `tutor_state.kc_progress` يُحمَّل ولا
+يُكتَب أبداً — `record_turn` بلا معامل له ⇒ المصدر الوحيد للحقيقة فارغ `{}` دائماً ⇒ كل مهارة ترجع
+لمسح نصّ السجل. (2) **المخطط ميت على الإنتاج**: 7 أعمدة D-144 (`learning_stage`…`next_best_action`)
+مفقودة على DB الإنتاج لأن ALTERs كانت مُفلترة خطأً تحت مدخل `bac_exercise_questions` (لا `tutor_state`)
+و`create_table` يستخدم `IF NOT EXISTS` (no-op على جدول قائم) ⇒ **كل كتابة tutor_state تفشل صامتة**
+(صفّان فقط، آخر كتابة 2026-06-26 — كل D-142→D-157 لم يُخزَّن قط). (3) القرار مُجزّأ عبر ~13 كتلة
+preempt في `chat_with_agent`، كلٌّ يُعيد بناء حالته من النصّ وحارس تكراره لا يرى الكتل الأخرى.
+(4) علم `_semantic_tutor_enabled` مُعرّف مرّتين بافتراضين متعارضين. (5) كتلة PolicyEngine مكرَّرة ميتة
+في `except` يُهمَل ناتجها.
+
+**آلية الأعراض:** S1 = `_build_symbolic_reveal` يُفرّغ البسط+المقام بالتصميم. S2 = الاعتراف الصحيح
+موجود (`_verify_numeric_answer`→final_ratio) لكنه سجين خلف `_in_socratic_dialogue` الذي يرفض الدور حين
+تتجاوز رسالة المساعد السابقة 600 حرف — وتفريغ S1 نفسه يتجاوز 600 حرف (النظام يُعمي نفسه عن إجابة الطالب
+الصحيحة). S3 = probe التشخيص غير قابل للوصول (قوائم علامات هشّة + `understanding_state` يسبقه).
+
+**القرار (Phase 1 — إضافي، خلف علم، حتمي، fail-open):**
+1. **علم موحَّد** `app/core/feature_flags.py` — `semantic_tutor_enabled()` (افتراض True) + `cognitive_turn_enabled()`
+   (افتراض False)؛ كلا التعريفين المتعارضين يُفوّضان إليه.
+2. **`kc_progress` يُكتَب أخيراً** — `record_turn(kc_progress=...)` يدمج مفتاحاً-مفتاحاً؛ `customer_chat`
+   يمرّر الدلتا التي يبنيها `_cognitive_turn`.
+3. **إصلاح المخطط الميت** — ALTERs الـ7 نُقلت إلى مدخل `tutor_state.auto_fix` الصحيح (+ `kc_progress`
+   دفاعياً)؛ طُبِّقت حيّاً على DB الإنتاج عبر الجسر (12→19 عموداً).
+4. **`_cognitive_turn`** — طبقة قرار واحدة فوق `kc_progress` الدائم: S2 اعتراف+تقدّم على المستوى الأعلى
+   (يكسر سجن 600-حرف)، S3 تشخيص عند `attempts==0`، S1 خطوة واحدة تدريجية من `representations_delivered`
+   (لا تفريغ، لا تكرار عبر الكتل). خلف `COGNITIVE_TURN_ENABLED`.
+5. **`_build_symbolic_reveal(delivered=...)`** — يحذف الكتلة المعروضة مسبقاً؛ الافتراضي مطابق بايتياً.
+6. **حذف الكتلة الميتة** في `except` التحية.
+
+**العقود المحفوظة:** D-006 (المونوليث المالك الوحيد للحفظ)، D-113/D-154 (صفر كشف للنسبة النهائية —
+الطالب يُركّبها)، D-155 (`_verify_numeric_answer` + acknowledge-and-advance)، D-142 (`DialogueManagerSkill`
+سلطة القرار)، D-126 (durable/BKT)، كل مراسي `check_pedagogical_os` + `check_skills_doctrine`.
+`DIALOGUE_MANAGER_DOCTRINE` v1.0.0→**1.1.0** (+قاعدة D-158، consumed_by += `_cognitive_turn`).
+
+**القواعد الدائمة (D-158):** (a) `tutor_state.kc_progress` هو المصدر الوحيد لِـ representations_delivered /
+_pending — لا مسح نصّ. (b) خطوة في representations_delivered لا تُعاد أبداً (منع تكرار عبر الكتل). (c) الإجابة
+الرقمية الصحيحة تُعترَف على المستوى الأعلى بلا شرط طول الرسالة السابقة. (d) التشخيص قبل الشرح مقاد بـ
+`attempts` الدائم لا بقوائم علامات. (e) أي عمود يكتبه ORM يجب أن يملك `auto_fix` تحت مدخل جدوله نفسه
+(وإلا يُكسَر صامتاً على أي نشر). (f) `COGNITIVE_TURN_ENABLED` افتراض OFF ⇒ سلوك اليوم دون تغيير؛ التفعيل
+بعد التحقّق الحيّ في Codespaces. (g) fail-open مطلق: `_cognitive_turn` لا يُجهض دوراً أبداً.
+
+**التحقق:** إصلاح المخطط طُبِّق وتُحقِّق حيّاً عبر الجسر (tutor_state 12→19 عموداً على Supabase). إعادة
+تشغيل الترانسكليت الكارثي على **مصدر الدوال الفعلي** (`scripts/verify_d158_live.py` — exec للمصدر المقتطَع
+مقابل combo حقيقي): Turn1 «كيف نحسب» → سؤال تشخيصي (لا تفريغ)؛ Turn2 → خطوة البسط فقط (لا المقام)؛
+Turn3 «14 على 165» بعد رسالة سابقة 1536 حرفاً → «أحسنت ✅» + تقدّم للحادثة B (سجن 600-حرف مكسور)؛ صفر
+خطوة مُكرَّرة — **6/6 PASS**. `check_pedagogical_os` 15/15 ✅ + `py_compile` + `ruff`. **الحيّ الكامل
+(uvicorn+WS+Supabase + الدخولين الحقيقيين + `COGNITIVE_TURN_ENABLED=1`) في Codespaces عبر
+`scripts/verify_d158_e2e.py`** (الـ sandbox يحجب pip/Postgres — §6.55). `check_skills_doctrine` يُشغَّل في
+CI (يحتاج pydantic). CLAUDE.md §6.133. **Phase 2 (مؤجَّل):** ترقية `MISCONCEPTION_GRAPH` إلى graph حقيقي
+(`knowledge_nodes`+`knowledge_edges`)، حالة FSM دائمة في `tutor_state`، وتقاعد مسح النصّ في `understanding_state`.

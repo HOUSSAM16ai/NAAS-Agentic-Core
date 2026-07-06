@@ -112,6 +112,7 @@ class TutorStateService:
         dead_ends: list[str] | None = None,
         frustration_score: float | None = None,
         next_best_action: str | None = None,
+        kc_progress: dict | None = None,
     ) -> None:
         """upsert بعد الدور: يضبط آخر خطوة عُرضت + المفهوم النشط + ميزانية المفهوم. fail-open.
 
@@ -149,6 +150,14 @@ class TutorStateService:
                 budget = _loads(row.socratic_count_by_concept)
                 budget[concept] = int(budget.get(concept, 0)) + 1
                 row.socratic_count_by_concept = json.dumps(budget, ensure_ascii=False)
+            # D-158: دمج دلتا تقدّم المكوّنات المعرفية (المصدر الوحيد لِـ
+            # representations_delivered / _pending). الدمج على مستوى المفتاح الأعلى:
+            # قيمة الدلتا (السابق + الإضافة، بناها _cognitive_turn) تحلّ محلّ القيمة السابقة.
+            if isinstance(kc_progress, dict) and kc_progress:
+                merged = _loads(row.kc_progress)
+                for _k, _v in kc_progress.items():
+                    merged[_k] = _v
+                row.kc_progress = json.dumps(merged, ensure_ascii=False)
             row.updated_at = utc_now()
             await self.db.commit()
         except Exception:  # pragma: no cover - fail-safe

@@ -83,15 +83,11 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             "search_vector",
             "created_at",
         ],
-        "auto_fix": {
-            "learning_stage": 'ALTER TABLE "tutor_state" ADD COLUMN "learning_stage" VARCHAR(50) NOT NULL DEFAULT \'definition\'',
-            "representation_used": 'ALTER TABLE "tutor_state" ADD COLUMN "representation_used" VARCHAR(50) NOT NULL DEFAULT \'text\'',
-            "interventions_used": 'ALTER TABLE "tutor_state" ADD COLUMN "interventions_used" TEXT NOT NULL DEFAULT \'[]\'',
-            "mastery_score": 'ALTER TABLE "tutor_state" ADD COLUMN "mastery_score" DOUBLE PRECISION NOT NULL DEFAULT 0.0',
-            "dead_ends": 'ALTER TABLE "tutor_state" ADD COLUMN "dead_ends" TEXT NOT NULL DEFAULT \'[]\'',
-            "frustration_score": 'ALTER TABLE "tutor_state" ADD COLUMN "frustration_score" DOUBLE PRECISION NOT NULL DEFAULT 0.0',
-            "next_best_action": 'ALTER TABLE "tutor_state" ADD COLUMN "next_best_action" VARCHAR(120) NOT NULL DEFAULT \'\'',
-        },
+        # D-158: نُقلت ALTERs الخاصة بـ tutor_state من هنا (كانت مُفلترة خطأً تحت
+        # bac_exercise_questions فلم تُطبَّق أبداً — الجذر الأعمق: أعمدة tutor_state
+        # الناقصة على DB قديمة ⇒ كل كتابات record_turn تفشل صامتة). مكانها الصحيح
+        # الآن تحت مدخل "tutor_state" أدناه.
+        "auto_fix": {},
         "indexes": {
             "exercise_id": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercise_questions_exercise_id" ON "bac_exercise_questions"("exercise_id")',
             "embedding": 'CREATE INDEX IF NOT EXISTS "ix_bac_exercise_questions_embedding" ON "bac_exercise_questions" USING hnsw ("embedding" vector_cosine_ops)',
@@ -295,6 +291,21 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
             ")"
         ),
+        # D-158: auto_fix في مكانه الصحيح أخيراً. الأعمدة أدناه كانت تُنشأ فقط عبر
+        # CREATE TABLE IF NOT EXISTS (no-op على جدول D-142 القائم) وALTERs كانت مُفلترة
+        # تحت الجدول الخطأ ⇒ كل كتابات tutor_state تفشل صامتة على DB قديمة (السبب الأعمق
+        # لِـ ISS-124). تُطبَّق فقط للأعمدة المرصودة ناقصة (idempotent). kc_progress مُدرج
+        # دفاعياً (موجود أصلاً على DB الحالية فلا يُطبَّق).
+        "auto_fix": {
+            "kc_progress": 'ALTER TABLE "tutor_state" ADD COLUMN "kc_progress" TEXT NOT NULL DEFAULT \'{}\'',
+            "learning_stage": 'ALTER TABLE "tutor_state" ADD COLUMN "learning_stage" VARCHAR(50) NOT NULL DEFAULT \'definition\'',
+            "representation_used": 'ALTER TABLE "tutor_state" ADD COLUMN "representation_used" VARCHAR(50) NOT NULL DEFAULT \'text\'',
+            "interventions_used": 'ALTER TABLE "tutor_state" ADD COLUMN "interventions_used" TEXT NOT NULL DEFAULT \'[]\'',
+            "mastery_score": 'ALTER TABLE "tutor_state" ADD COLUMN "mastery_score" DOUBLE PRECISION NOT NULL DEFAULT 0.0',
+            "dead_ends": 'ALTER TABLE "tutor_state" ADD COLUMN "dead_ends" TEXT NOT NULL DEFAULT \'[]\'',
+            "frustration_score": 'ALTER TABLE "tutor_state" ADD COLUMN "frustration_score" DOUBLE PRECISION NOT NULL DEFAULT 0.0',
+            "next_best_action": 'ALTER TABLE "tutor_state" ADD COLUMN "next_best_action" VARCHAR(120) NOT NULL DEFAULT \'\'',
+        },
     },
     "admin_conversations": {
         "columns": [

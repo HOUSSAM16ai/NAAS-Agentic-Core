@@ -7,8 +7,9 @@ Feature flags — قارئ موحَّد لأعلام المسار التعليم
 env أولاً ثم الإعدادات (12-factor)، fail-open.
 
 - `semantic_tutor_enabled()`  — افتراض **True**: تحميل/كتابة ذاكرة جلسة التدريس الدائمة.
-- `cognitive_turn_enabled()`   — افتراض **False**: طبقة القرار الجديدة `_cognitive_turn`
-  (D-158). مفصولة عن الأولى ليبدأ `kc_progress` بالتعبئة الصامتة قبل تفعيل التوجيه الجديد.
+- `cognitive_turn_enabled()`   — افتراض **True** (D-159 — قرار المالك بعد نجاح التحقق الحي
+  الكامل E2E: uvicorn + WS + الدخول الحقيقي + آلة الحالات A→B فوق `kc_progress` الدائم).
+  الرجوع الفوري بلا deploy: `COGNITIVE_TURN_ENABLED=0`.
 
 يعيش في `app.core` (لا `microservices/`) فيستورده كلٌّ من الـ routers و `infrastructure` دون
 كسر حدود المعمارية (`check_no_app_imports` يستهدف `microservices/` فقط).
@@ -47,8 +48,12 @@ def semantic_tutor_enabled() -> bool:
 
 
 def cognitive_turn_enabled() -> bool:
-    """D-158: طبقة القرار الموحَّدة `_cognitive_turn` فوق `tutor_state`. افتراض False."""
-    return _flag("COGNITIVE_TURN_ENABLED", "COGNITIVE_TURN_ENABLED", False)
+    """D-158/D-159: طبقة القرار الموحَّدة `_cognitive_turn` فوق `tutor_state`.
+
+    افتراض **True** منذ D-159 (بعد نجاح E2E الحي الكامل — قاعدة D-158-f استوفيت).
+    الرجوع الفوري: `COGNITIVE_TURN_ENABLED=0` (env يتقدّم على الإعدادات، بلا deploy).
+    """
+    return _flag("COGNITIVE_TURN_ENABLED", "COGNITIVE_TURN_ENABLED", True)
 
 
 __all__ = ["cognitive_turn_enabled", "semantic_tutor_enabled"]

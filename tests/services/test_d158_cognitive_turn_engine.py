@@ -75,10 +75,15 @@ def test_semantic_tutor_flag_single_default_true(monkeypatch):
     assert OrchestratorClient._semantic_tutor_enabled() is True
 
 
-def test_cognitive_turn_flag_default_off(monkeypatch):
+def test_cognitive_turn_flag_default_on_with_rollback_lever(monkeypatch):
+    # D-159: الافتراض True (قرار المالك بعد نجاح E2E الحي — قاعدة D-158-f استوفيت).
     monkeypatch.delenv("COGNITIVE_TURN_ENABLED", raising=False)
     from app.core.feature_flags import cognitive_turn_enabled
 
+    assert cognitive_turn_enabled() is True
+    assert OrchestratorClient._cognitive_turn_enabled() is True
+    # رافعة الرجوع الفوري بلا deploy: env=0 يتقدّم على الافتراض.
+    monkeypatch.setenv("COGNITIVE_TURN_ENABLED", "0")
     assert cognitive_turn_enabled() is False
     assert OrchestratorClient._cognitive_turn_enabled() is False
 

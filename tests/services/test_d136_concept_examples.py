@@ -144,7 +144,8 @@ class TestWiringAndRedaction:
             SKILL_DOCTRINE_MANIFEST,
         )
 
-        assert SEMANTIC_PROPERTY_DOCTRINE_VERSION == "1.3.0"
+        # D-159 رفع الإصدار (حواف الـ graph + تشخيص الجذر + المرآة) — الحد الأدنى D-136 محفوظ.
+        assert SEMANTIC_PROPERTY_DOCTRINE_VERSION == "1.4.0"
         entry = SKILL_DOCTRINE_MANIFEST["semantic_property"]
-        assert entry["version"] == "1.3.0"
+        assert entry["version"] == "1.4.0"
         assert entry["rules_count"] == len(SEMANTIC_PROPERTY_DOCTRINE)

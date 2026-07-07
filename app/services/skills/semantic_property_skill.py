@@ -414,6 +414,107 @@ MISCONCEPTION_GRAPH: dict[str, tuple[MisconceptionNode, ...]] = {
 }
 
 
+# ── D-159 (WP-D): الحواف — ترقية الـ dict المسطّح إلى graph حقيقي قابل للاجتياز ────────
+@dataclass(frozen=True)
+class GraphEdge:
+    """حافة معرفية موجَّهة بين مفهومين (عقد الـ graph = concept_ids/bkt_concepts)."""
+
+    source: str
+    target: str
+    relation: str  # prerequisite_of | confused_with
+
+
+#: حواف الشبكة المعرفية الحتمية — «تشخيص الجذر عبر الحواف» (أساس فجوة الوهم، D-158 Phase 2).
+#: prerequisite_of: فهم المصدر شرطٌ مسبق لفهم الهدف؛ confused_with: خلط شائع بين مفهومين.
+MISCONCEPTION_EDGES: tuple[GraphEdge, ...] = (
+    GraphEdge("product_meaning", "product_zero", "prerequisite_of"),
+    GraphEdge("product_meaning", "product_odd", "prerequisite_of"),
+    GraphEdge("product_meaning", "product_even", "prerequisite_of"),
+    GraphEdge("ball_number_mapping", "product_zero", "prerequisite_of"),
+    GraphEdge("ball_number_mapping", "product_odd", "prerequisite_of"),
+    GraphEdge("event_meaning", "favorable_cases", "prerequisite_of"),
+    GraphEdge("simultaneous_draw", "favorable_cases", "prerequisite_of"),
+    GraphEdge("event_meaning", "conditional_probability", "prerequisite_of"),
+    GraphEdge("favorable_cases", "conditional_probability", "prerequisite_of"),
+    GraphEdge("random_variable", "expected_value", "prerequisite_of"),
+    GraphEdge("product_odd", "product_even", "confused_with"),
+    GraphEdge("sequential_without_replacement", "simultaneous_draw", "confused_with"),
+)
+
+
+@dataclass(frozen=True)
+class RootDiagnosis:
+    """نتيجة اجتياز الجذر: المفهوم-الجذر الضعيف + نصّ التدخّل المُوجَّه إليه."""
+
+    root_concept_id: str
+    intervention_text: str
+
+
+def _prerequisites_of(concept_id: str) -> tuple[str, ...]:
+    """المصادر التي هي شرط مسبق لهذا المفهوم (اجتياز الحواف الواردة)."""
+    return tuple(
+        e.source
+        for e in MISCONCEPTION_EDGES
+        if e.relation == "prerequisite_of" and e.target == concept_id
+    )
+
+
+def _concept_definition(concept_id: str) -> tuple[str, str] | None:
+    """(عنوان، تعريف/تدخّل) لمفهومٍ ما — من سجلّ الخصائص أو عقد الاعتقادات. None إن غاب."""
+    for spec in PROPERTY_REGISTRY.values():
+        if spec.concept_id == concept_id and spec.definition:
+            return spec.title, spec.definition
+    for nodes in MISCONCEPTION_GRAPH.values():
+        for node in nodes:
+            if node.bkt_concept == concept_id and node.intervention:
+                return concept_id, node.intervention
+    return None
+
+
+def _kc_is_weak(kc_progress: dict, concept_id: str) -> bool:
+    """ضعيف = شُرح للطالب ولم يُبرهَن فهمه (الحالة الدائمة من tutor_state.kc_progress)."""
+    entry = kc_progress.get(concept_id)
+    if not isinstance(entry, dict):
+        return False
+    return entry.get("state") == "explained" and entry.get("evidence") != "verified"
+
+
+def diagnose_root(concept_id: str, kc_progress: object) -> RootDiagnosis | None:
+    """D-159 (WP-D): يجتاز حواف `prerequisite_of` ليجد **أعمق شرطٍ مسبق ضعيف**.
+
+    «التدخّل يستهدف الجذر لا العرَض»: طالبٌ يتعثر في `product_zero` وجذر صعوبته أن
+    `product_meaning` (معنى الجداء نفسه) شُرح ولم يُبرهَن ⇒ التدخّل يُثبّت الجذر أولاً.
+    الضعف يُقرأ من الحالة الدائمة (`tutor_state.kc_progress` — D-158) حصراً: مفهوم بلا
+    سجل ليس «ضعيفاً» (لا تدخّل أعمى). حتمي، صفر LLM، fail-open (None عند أي غياب).
+    """
+    if not isinstance(kc_progress, dict) or not kc_progress:
+        return None
+
+    def _deepest_weak(cid: str, visited: frozenset[str]) -> str | None:
+        if cid in visited:
+            return None
+        for prereq in _prerequisites_of(cid):
+            deeper = _deepest_weak(prereq, visited | {cid})
+            if deeper is not None:
+                return deeper
+            if _kc_is_weak(kc_progress, prereq):
+                return prereq
+        return None
+
+    root = _deepest_weak(concept_id, frozenset())
+    if root is None or root == concept_id:
+        return None
+    found = _concept_definition(root)
+    if found is None:
+        return None
+    title, definition = found
+    text = (
+        f"جذر الصعوبة أعمق قليلاً — لنُثبّت أولاً **{title}**:\n\n{definition}\n\n"
+        "حين تتضح هذه النقطة، يصير سؤالك الحالي خطوة طبيعية — أخبرني بما فهمت منها."
+    )
+    return RootDiagnosis(root_concept_id=root, intervention_text=text)
+
+
 def concept_for(property_id: str) -> str:
     """الـ concept_id (canonical/BKT) للخاصية."""
     spec = PROPERTY_REGISTRY.get(property_id)
@@ -817,15 +918,19 @@ def get_semantic_property_skill() -> SemanticPropertySkill:
 
 __all__ = [
     "CONCEPT_GRAPH",
+    "MISCONCEPTION_EDGES",
     "MISCONCEPTION_GRAPH",
     "MISCONCEPTION_TYPES",
     "PROPERTY_REGISTRY",
+    "GraphEdge",
     "MisconceptionNode",
     "MisconceptionOutput",
     "PropertySpec",
+    "RootDiagnosis",
     "SemanticPropertyInput",
     "SemanticPropertyOutput",
     "SemanticPropertySkill",
     "concept_for",
+    "diagnose_root",
     "get_semantic_property_skill",
 ]

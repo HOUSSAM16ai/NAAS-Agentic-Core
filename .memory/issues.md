@@ -4551,3 +4551,17 @@ CLAUDE.md §6.132.
 `scripts/verify_d158_live.py` يُعيد الترانسكليت على المصدر الفعلي: **6/6 PASS**. `check_pedagogical_os` 15/15.
 **التحقق الحيّ الكامل (uvicorn+WS+Supabase، الدخولين الحقيقيين، العلم مُفعَّل) في Codespaces عبر
 `scripts/verify_d158_e2e.py`.** راجع CLAUDE.md §6.133 و D-158.
+
+## ISS-125 (2026-07-07) — افتراض علم متعارض ثانٍ (settings يطغى على feature_flags) — أُصلح ضمن D-159
+
+**الاكتشاف (حي أثناء E2E):** بعد قلب افتراض `cognitive_turn_enabled()` إلى True في
+`app/core/feature_flags.py`، الخادم المُقلَع **بلا** env بقي على السلوك القديم و`kc_progress`
+بقي بلا عُقد المحرّك. الجذر: `AppSettings.COGNITIVE_TURN_ENABLED` (base.py) كان افتراضه False،
+و`_flag` يقرأ env أولاً ثم **settings** ثم الافتراض — فحين يغيب env تفوز settings القديمة.
+نفس عائلة جذر ISS-124 #4 (افتراضان متعارضان لنفس العلم في موضعين).
+
+**الإصلاح:** توحيد الافتراض True في الموضعين + اختبار حارس
+`test_settings_default_matches_flag` (يقارن `AppSettings.model_fields[...]` بقارئ العلم) —
+القاعدة الدائمة D-159-f: أي علم جديد يُعرَّف في الموضعين بنفس القيمة.
+
+**الحالة:** RESOLVED — E2E أُعيد بالافتراضات الحقيقية (بلا env) و PASSED.

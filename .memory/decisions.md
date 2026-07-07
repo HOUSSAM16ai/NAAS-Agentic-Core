@@ -5373,3 +5373,71 @@ Turn3 «14 على 165» بعد رسالة سابقة 1536 حرفاً → «أح�
 `scripts/verify_d158_e2e.py`** (الـ sandbox يحجب pip/Postgres — §6.55). `check_skills_doctrine` يُشغَّل في
 CI (يحتاج pydantic). CLAUDE.md §6.133. **Phase 2 (مؤجَّل):** ترقية `MISCONCEPTION_GRAPH` إلى graph حقيقي
 (`knowledge_nodes`+`knowledge_edges`)، حالة FSM دائمة في `tutor_state`، وتقاعد مسح النصّ في `understanding_state`.
+
+## D-159 (2026-07-07) — الهياكل المعرفية الحقيقية: D-158 Phase 2 مُنفَّذة + تفعيل محرّك الدور المعرفي افتراضياً
+
+**السياق:** طلب المالك «بناء خوارزميات ثورية» بفلسفة صريحة: «الخوارزمية بلا هيكل بيانات صحيح =
+محرك فيراري على دراجة خشبية» — تطابق واحداً-لواحد مع D-158 Phase 2 المؤجَّلة. الاستكشاف أكّد
+الهياكل المزيفة: `kc_progress` JSON حرّ يُبنى بـ dict literals يدوية؛ «FSM» التصعيد يُعيد بناء
+الرُّتب من مسح نصّ التاريخ (يتبخر خارج نافذة الـ50 رسالة وعند إعادة التشغيل)؛ `understanding_state`
+يُعيد بناء الحالة من نصّ رسائل المساعد (أعمى عن حجب D-113 في النسخ المحفوظة)؛ `MISCONCEPTION_GRAPH`
+dict مسطّح **بلا حواف**؛ جدولا `knowledge_nodes`/`knowledge_edges` ZOMBIE (في REQUIRED_SCHEMA بـ
+pgvector+HNSW وصفر مستهلك)؛ و`_cognitive_turn` عقدة واحدة مُجمَّدة (`prob_event_a`) تعِد بالحادثة B
+ثم لا تملك لها حالة.
+
+**القرار (5 حزم + تفعيل):**
+1. **WP-A — المخطط المُهيكَل** (`app/services/skills/kc_progress_schema.py`): `KCEntry` stdlib
+   dataclass (state/attempts/evidence/difficulty/representations_delivered/last_emitted_hash/
+   updated_turn/escalation_levels) + `parse_kc_entry` fail-open (توافق خلفي مع كل الصفوف القديمة)
+   + `to_dict` مطابق لمفاتيح D-158 (الجديد يُكتب فقط عند وجوده) + `pending_of`/`make_pending`
+   (إدارة `_pending` الموحَّدة) + `escalation_levels_of`. `_cognitive_turn` صار يمرّ عبره حصراً.
+2. **WP-B — FSM التصعيد الدائم**: `EscalationInput.delivered_levels` من
+   `tutor_state.kc_progress.<concept>.escalation_levels`؛ `_levels_delivered` = **اتحاد** الحالة
+   الدائمة ومسح النصّ (شبكة أمان للأدوار قبل التخزين)؛ كتلة المصفوفة تكتب الرُّتبة المُسلَّمة
+   (`mark_escalation("L{n}")`) + `understood` عند mastered في دلتا `kc_progress`.
+3. **WP-C — سلطة الحالة الدائمة في understanding_state**: `understanding_state(...,
+   kc_progress=)` — السجل الدائم يرفع الحالة (monotone، لا يُنزِل ما أثبته النصّ)؛
+   `UnderstandingDecision.understood_kc_id` (المكوّن المُبرهَن يختلف عن التالي المشروح عند
+   advance)؛ المُنسّق يكتب قرار المحرّك (understood/explained + rep-level) في الدلتا.
+4. **WP-D — الـ graph الحقيقي بالحواف**: `GraphEdge` + `MISCONCEPTION_EDGES` (12 حافة
+   prerequisite_of/confused_with) + `diagnose_root` (DFS حتمي يجد أعمق شرط مسبق **ضعيف** —
+   ضعيف = explained بلا verified في الحالة الدائمة؛ مفهوم بلا سجل ليس ضعيفاً ⇒ لا تدخّل أعمى)
+   ⇒ التدخّل يستهدف الجذر لا العرَض. + `scripts/sync_knowledge_graph.py`: مزامنة idempotent
+   (UUIDv5 + ON CONFLICT DO UPDATE) لـ knowledge_nodes/knowledge_edges عبر جسر HTTPS + بوّابة
+   تكافؤ code↔DB — **نُفِّذت حيّاً على Supabase الإنتاجي: 21 عقدة + 19 حافة، parity ✅ MATCH**
+   (الجدولان ZOMBIE صارا مرآة حيّة؛ المسار الحي يبقى in-code — لا I/O في مسار الدور).
+5. **WP-E — المحرّك متعدد العُقد**: `_KC_PROB_B` + `_cognitive_turn_event_b` + `_load_canonical_parity`
+   (أسئلة-فقط + `number_parity_counts` D-143) — بعد إتقان A ينتقل المحرّك تلقائياً لعقدة B
+   (probe → numerator C(8,3)=56 عبر `_fmt_comb` → ratio → إقفال). بذر عقدة B عند إتقان A
+   (probe مُسلَّم + `_pending=(B, parity)`). صفر LLM في الأرقام؛ النصوص تَنجو من حجب D-113.
+6. **التفعيل (قرار المالك)**: `COGNITIVE_TURN_ENABLED` افتراضه **True** (feature_flags +
+   AppSettings معاً — اكتُشف حيّاً أن افتراض settings القديم False كان يطغى على قارئ العلم حين
+   يغيب env؛ نفس نمط جذر ISS-124 #4). rollback فوري: `COGNITIVE_TURN_ENABLED=0`.
+
+**التحقق الحي (2026-07-07 — E2E FULL-STACK حقيقي في الـ sandbox، pip يعمل خلافاً للجلسات السابقة):**
+- `scripts/verify_d159_live.py` (الكود الحقيقي، py3.12): **25/25 PASS**.
+- **E2E كامل** (`scripts/verify_d159_e2e.py`): uvicorn حقيقي + WS + JWT + تسجيل دخول المستخدم
+  الحقيقي + SQLite (Postgres TCP محجوب): U1 التمرين → U2 probe (لا تفريغ) → U3 «14 على 165» ⇒
+  أحسنت + الانتقال للحادثة B → U4 «الفردية عددها 8» ⇒ خطوة النسبة → U5 «56 من 165» ⇒ إقفال B؛
+  وقراءة DB مباشرة: `kc_progress.prob_event_a=understood` + `prob_event_b=understood` —
+  **مرّتين: مع العلم env=1 ثم بالافتراضات الحقيقية (default-on) — PASSED**.
+- Supabase الإنتاجي عبر الجسر: مزامنة الـ graph + اجتياز `prerequisite_of` حي بـ JOIN.
+- بوّابات: `check_pedagogical_os` **19/19** (4 فحوص D-159 جديدة) + `check_skills_doctrine` +
+  `check_test_hygiene` + `validate_structure` + `ci_guardrails` + `runtime_truth --check` +
+  ruff check/format — كلها خضراء. اختبارات: `test_d159_cognitive_structures.py` (24) +
+  مواءمة `test_d158` (علم default-on + رافعة الرجوع) + 140 انحدار (d135/d137/d138/d139/iss120/
+  iss121/iss122) — كلها ناجحة.
+
+**doctrine bumps:** SEMANTIC_PROPERTY 1.3.0→**1.4.0** (+قاعدتا الحواف/المرآة) · PEDAGOGICAL_ESCALATION
+1.1.0→**1.2.0** (+قاعدة FSM الدائم) · UNDERSTANDING_STATE 1.0.0→**1.1.0** (+قاعدة سلطة الحالة الدائمة).
+
+**القواعد الدائمة (D-159):** (a) كل قراءة/كتابة لمدخل kc_progress عبر `kc_progress_schema` — لا dict
+literals يدوية في مسارات القرار. (b) ذاكرة التصعيد سلطتها الحالة الدائمة والنصّ شبكة أمان — الاتحاد.
+(c) الحالة الدائمة سلطة understanding_state، والترقية أحادية الاتجاه. (d) الحواف data لا كود؛
+`diagnose_root` لا يتدخّل بلا سجل دائم. (e) الجدولان مرآة (tooling) — المسار الحي in-code حتمي.
+(f) أي علم feature جديد يُعرَّف افتراضه في مكانين (feature_flags + AppSettings) **بنفس القيمة** —
+الاختبار `test_settings_default_matches_flag` يحرسه. (g) fail-open مطلق يبقى سارياً.
+
+**المتبقي (مؤجَّل بوعي):** تعميم المحرّك للحوادث C/D/X/E(X) (بعد خُضرة مقاييس A→B)؛ توسيع
+MISCONCEPTION_EDGES لبقية المنهج (بوّابة «القياس قبل التوسّع»)؛ M10-S2 port داخل الـ orchestrator.
+CLAUDE.md §6.134.

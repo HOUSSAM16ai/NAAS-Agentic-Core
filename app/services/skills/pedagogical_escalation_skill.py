@@ -70,6 +70,9 @@ class EscalationInput(RobustBaseModel):
     misconception_mtype: str | None = None
     #: D-147: سؤال «خطوة التطبيق» على هذا التمرين — يُستبدَل به الـ punt العام عند نفاد السُّلّم.
     apply_step: str | None = None
+    #: D-159 (WP-B): الرُّتب المُسلَّمة من الحالة الدائمة (tutor_state.kc_progress.escalation_levels)
+    #: — FSM حقيقي يَنجو من نافذة الـ50 رسالة وإعادة تشغيل العملية. None ⇒ مسح النصّ وحده.
+    delivered_levels: list[int] | None = None
 
 
 class EscalationDecision(RobustBaseModel):
@@ -120,8 +123,17 @@ class PedagogicalEscalationSkill:
         return False
 
     def _levels_delivered(self, payload: EscalationInput) -> set[int]:
-        """الرُّتب المُسلَّمة لهذا المفهوم (من نصّه نفسه في رسائل المساعد — concept-scoped)."""
+        """الرُّتب المُسلَّمة لهذا المفهوم — الحالة الدائمة (D-159) ∪ مسح النصّ (شبكة أمان).
+
+        D-159 (WP-B): `delivered_levels` من `tutor_state.kc_progress` هي ذاكرة FSM
+        الدائمة (تَنجو من نافذة الـ50 رسالة وإعادة تشغيل العملية — كان مسح النصّ وحده
+        يتبخر خارجهما فيتكرّر التعريف/المثال). مسح نصّ المساعد يبقى fallback للأدوار
+        السابقة على التخزين — **الاتحاد** يمنع تكرار الرُّتبة من أي مصدر.
+        """
         delivered: set[int] = set()
+        for lvl in payload.delivered_levels or []:
+            if isinstance(lvl, int) and L1_DEFINITION <= lvl <= L4_VISUAL:
+                delivered.add(lvl)
         assistant_text = " ".join(
             _norm(str(m.get("content", "")))
             for m in (payload.history or [])

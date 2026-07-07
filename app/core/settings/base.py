@@ -226,8 +226,11 @@ class AppSettings(BaseServiceSettings):
         True, description="D-142 Phase 2: تمكين مدير الحوار السقراطي الموحد (DialogueManagerSkill)"
     )
     COGNITIVE_TURN_ENABLED: bool = Field(
-        False,
-        description="D-158: طبقة القرار الموحَّدة _cognitive_turn فوق tutor_state (افتراض OFF).",
+        True,
+        description=(
+            "D-158/D-159: طبقة القرار الموحَّدة _cognitive_turn فوق tutor_state. "
+            "افتراض ON منذ D-159 (بعد نجاح E2E الحي — قاعدة D-158-f). الرجوع: env=0."
+        ),
     )
     # Skills Platform — opt-in activation of dormant capabilities (default OFF → zero
     # behavior change unless explicitly enabled). Each gated skill returns None when off.

@@ -2266,6 +2266,9 @@ class OrchestratorClient:
                 "p(b",
                 "165",
                 "14",
+                # D-159: مفردات تمرين الاحتمالات (أسئلة الحادثة A/B بلا ذكر الكيس صراحةً).
+                "الحادثة",
+                "الفردية",
             )
         )
 
@@ -2524,7 +2527,7 @@ class OrchestratorClient:
 
     @staticmethod
     def _cognitive_turn_enabled() -> bool:
-        """D-158: علم طبقة القرار الموحَّدة `_cognitive_turn` (افتراض False)."""
+        """D-158/D-159: علم طبقة القرار الموحَّدة `_cognitive_turn` (افتراض True منذ D-159)."""
         from app.core.feature_flags import cognitive_turn_enabled
 
         return cognitive_turn_enabled()
@@ -3293,6 +3296,39 @@ class OrchestratorClient:
 
     #: D-158: مُعرّف المكوّن المعرفي لمسار الحادثة A (نفس اللون) في tutor_state.kc_progress.
     _KC_PROB_A: str = "prob_event_a"
+    #: D-159 (WP-E): مُعرّف مكوّن الحادثة B (جداء الأرقام فردي) — المحرّك متعدد العُقد.
+    _KC_PROB_B: str = "prob_event_b"
+
+    @classmethod
+    def _load_canonical_parity(
+        cls, _question: str, history_messages: list[dict[str, str]] | None
+    ) -> dict[str, int] | None:
+        """D-159 (WP-E): توزيع أرقام كرات التمرين الرسمي (odd/even/zero/total) — حتمي.
+
+        يقرأ **أسئلة-فقط** (مناعة ISS-120) ويستخدم `number_parity_counts` (D-143) —
+        صفر LLM؛ يُغذّي عقدة الحادثة B في محرّك الدور. None عند تعذّر أي خطوة (fail-open).
+        """
+        try:
+            from app.services.capabilities.exercise_retrieval import (
+                ExerciseRetrievalRequest,
+                detect_exercise_retrieval,
+                load_exercise_questions_only,
+            )
+            from app.services.skills.probability_skill import ProbabilityCalculatorSkill
+
+            _decision = detect_exercise_retrieval(
+                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                history_messages=history_messages,
+            )
+            if not (_decision.recognized and _decision.matched_entry):
+                return None
+            _official = load_exercise_questions_only(_decision.matched_entry)
+            if not _official:
+                return None
+            return ProbabilityCalculatorSkill.number_parity_counts(_official)
+        except Exception:  # pragma: no cover - fail-safe
+            logger.warning("_load_canonical_parity_failed", exc_info=True)
+            return None
 
     @classmethod
     def _cognitive_turn(
@@ -3302,17 +3338,22 @@ class OrchestratorClient:
         tutor_state: dict | None,
         _policy_decision=None,  # D-158 Phase 1: محجوز (القرار من kc_progress، لا policy بعد)
     ) -> tuple[str | None, dict | None]:
-        """D-158: طبقة القرار الموحَّدة فوق ``tutor_state`` المُخزَّن (حتمية، صفر LLM، fail-open).
+        """D-158/D-159: طبقة القرار الموحَّدة فوق ``tutor_state`` المُخزَّن (حتمية، صفر LLM).
 
-        المصدر الوحيد للقرار = ``kc_progress`` الدائم (لا مسح نصّ). تقتل الأعراض الثلاثة
-        بنيوياً وعبر الكتل:
+        المصدر الوحيد للقرار = ``kc_progress`` الدائم (لا مسح نصّ) عبر المخطط المُهيكَل
+        `kc_progress_schema` (D-159 WP-A — لا dict literals يدوية بعد اليوم). تقتل
+        الأعراض الثلاثة بنيوياً وعبر الكتل:
         - **S2** (أعلى أولوية): إجابة رقمية صحيحة ⇒ اعتراف + تقدّم — على المستوى الأعلى،
           لا تمرّ عبر `_in_socratic_dialogue` فينكسر سجن الـ600-حرف (رسالة سابقة طويلة لم
           تعد تُخفي إجابة الطالب الصحيحة).
-        - **S3**: أول تفاعل مع المكوّن (``attempts==0``) ⇒ سؤال تشخيصي (لا تفريغ) — مقاد
-          بـ ``attempts`` الدائم لا بقوائم علامات هشّة («كيف نحسب» = «كيف افهم»).
+        - **S3**: أول تفاعل مع المكوّن ⇒ سؤال تشخيصي (لا تفريغ) — مقاد بالحالة الدائمة
+          لا بقوائم علامات هشّة («كيف نحسب» = «كيف افهم»).
         - **S1**: غير ذلك ⇒ خطوة **واحدة** لم تُعرَض بعد (``representations_delivered``)
           عبر `_build_symbolic_step`؛ التفريغ الكامل غير ممكن (السجل الدائم يمنع التكرار).
+
+        D-159 (WP-E): المحرّك **متعدد العُقد** — بعد إتقان `prob_event_a` ينتقل تلقائياً
+        إلى `prob_event_b` (جداء الأرقام فردي؛ الأرقام من `number_parity_counts` الحتمي
+        D-143) — آلة حالات معرفية حقيقية لا عقدة واحدة مُجمَّدة.
 
         يُرجِع ``(text, kc_progress_delta)`` أو ``(None, None)`` (تسليم للكتل القائمة).
         يحقن الدلتا أيضاً في ``tutor_state["kc_progress_delta"]`` (dict مشترك) ليحفظها
@@ -3321,8 +3362,17 @@ class OrchestratorClient:
         try:
             if not isinstance(tutor_state, dict):
                 return None, None
-            combo = cls._load_canonical_combinations(question, history_messages)
-            if combo is None:
+            # D-159 (ISS-125 lesson): بوّابة سياق الاحتمالات **قبل** أي تحميل — مع التفعيل
+            # الافتراضي كان المحرّك يختطف أسئلة عامة (قانون نيوتن!) لأن مُحمّل التمرين
+            # الرسمي يتعرّف دائماً. المحرّك يعمل فقط حين يكون السؤال/الحوار احتمالياً فعلاً.
+            _ct_hist = " ".join(
+                str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
+            )
+            if not cls._is_prob_context(f"{question} {_ct_hist}"):
+                return None, None
+            # طلب محتوى/تمرين جديد صريح ⇒ ليس تفاعل تدريس (تسليم للاسترجاع).
+            _low = (question or "").strip().lower()
+            if any(m in _low for m in ("اعطني", "أعطني", "اعطيني", "هات", "اكتب", "ارسم", "درس")):
                 return None, None
             # حارس تبديل الموضوع (D-101): سؤال غير احتمالي ⇒ تسليم للكتل.
             with contextlib.suppress(Exception):
@@ -3331,31 +3381,35 @@ class OrchestratorClient:
                 _topic = primary_canonical_topic(question)
                 if _topic is not None and _topic.canonical_id != "probability":
                     return None, None
-            # طلب محتوى/تمرين جديد صريح ⇒ ليس تفاعل تدريس (تسليم للاسترجاع).
-            _low = (question or "").strip().lower()
-            if any(m in _low for m in ("اعطني", "أعطني", "اعطيني", "هات", "اكتب", "ارسم", "درس")):
+            combo = cls._load_canonical_combinations(question, history_messages)
+            if combo is None:
                 return None, None
+
+            from app.services.skills.kc_progress_schema import (
+                PENDING_KEY,
+                make_pending,
+                parse_kc_entry,
+                pending_of,
+            )
 
             kc_progress = tutor_state.get("kc_progress")
             kc_progress = kc_progress if isinstance(kc_progress, dict) else {}
-            pending = kc_progress.get("_pending")
-            pending = pending if isinstance(pending, dict) else {}
-            entry = kc_progress.get(cls._KC_PROB_A)
-            entry = (
-                dict(entry)
-                if isinstance(entry, dict)
-                else {
-                    "state": "not_addressed",
-                    "attempts": 0,
-                    "evidence": "none",
-                    "difficulty": 0.0,
-                    "representations_delivered": [],
-                    "last_emitted_hash": "",
-                    "updated_turn": 0,
-                }
-            )
-            delivered = list(entry.get("representations_delivered") or [])
+            pending = pending_of(kc_progress)
+            entry_a = parse_kc_entry(kc_progress.get(cls._KC_PROB_A))
             turn_no = int(tutor_state.get("turn_count") or 0) + 1
+
+            # D-159 (WP-E): اختيار العقدة النشطة — إتقان A ينقل المحرّك للحادثة B تلقائياً.
+            active_kc = cls._KC_PROB_A
+            parity: dict[str, int] | None = None
+            if entry_a.state == "understood":
+                parity = cls._load_canonical_parity(question, history_messages)
+                if parity and int(parity.get("odd", 0)) >= int(combo.k):
+                    active_kc = cls._KC_PROB_B
+            entry = (
+                entry_a
+                if active_kc == cls._KC_PROB_A
+                else parse_kc_entry(kc_progress.get(cls._KC_PROB_B))
+            )
 
             def _finish(
                 text: str,
@@ -3365,47 +3419,60 @@ class OrchestratorClient:
                 add_step: str | None = None,
                 new_pending: str | None = None,
             ) -> tuple[str, dict]:
-                if add_step and add_step not in delivered:
-                    delivered.append(add_step)
-                entry["representations_delivered"] = delivered
+                if add_step:
+                    entry.mark_delivered(add_step)
                 if advance_state:
-                    entry["state"] = advance_state
-                entry["updated_turn"] = turn_no
-                entry["last_emitted_hash"] = cls._norm_for_dedup(text)[:120]
-                delta: dict = {cls._KC_PROB_A: entry}
+                    entry.state = advance_state
+                entry.updated_turn = turn_no
+                entry.last_emitted_hash = cls._norm_for_dedup(text)[:120]
+                delta: dict = {active_kc: entry.to_dict()}
                 if clear_pending:
-                    delta["_pending"] = {}
+                    delta[PENDING_KEY] = {}
                 elif new_pending:
-                    delta["_pending"] = {"kc_id": cls._KC_PROB_A, "step_key": new_pending}
+                    delta[PENDING_KEY] = make_pending(active_kc, new_pending)
                 tutor_state["kc_progress_delta"] = delta
                 return text, delta
 
+            if active_kc == cls._KC_PROB_B:
+                return cls._cognitive_turn_event_b(
+                    question, history_messages, combo, parity, entry, _finish
+                )
+
             # ── S2: إجابة رقمية صحيحة ⇒ اعتراف + تقدّم (المستوى الأعلى — لا سجن 600-حرف) ──
-            _pending_focus = pending.get("step_key") or cls._pending_focus_from_history(
-                history_messages
-            )
+            _pending_focus = (
+                pending[1] if pending and pending[0] == cls._KC_PROB_A else None
+            ) or cls._pending_focus_from_history(history_messages)
             _numeric = cls._verify_numeric_answer(question, combo, _pending_focus)
             if _numeric == "final_ratio":
-                entry["attempts"] = int(entry.get("attempts") or 0) + 1
-                entry["evidence"] = "verified"
+                entry.attempts += 1
+                entry.evidence = "verified"
                 text = (
                     "أحسنت! ✅ إجابتك صحيحة تماماً — ركّبت احتمال الحادثة A بنفسك: "
                     "الحالات الملائمة على كل الحالات الممكنة.\n\n"
                     "ننتقل للسؤال التالي في التمرين — **الحادثة B**: جداء الأرقام "
                     "عدد فردي. قبل أي حساب، سؤال واحد: متى يكون جداء ثلاثة أعداد فردياً؟"
                 )
-                return _finish(text, advance_state="understood", clear_pending=True)
+                text, delta = _finish(text, advance_state="understood", clear_pending=True)
+                # D-159 (WP-E): بذر عقدة الحادثة B — سؤالها التشخيصي طُرح في النصّ نفسه،
+                # فتُسجَّل الحالة صادقةً: probe مُسلَّم + السؤال المعلّق صار على B.
+                entry_b = parse_kc_entry(kc_progress.get(cls._KC_PROB_B))
+                entry_b.mark_delivered("diagnostic_probe")
+                entry_b.state = "explained"
+                entry_b.updated_turn = turn_no
+                delta[cls._KC_PROB_B] = entry_b.to_dict()
+                delta[PENDING_KEY] = make_pending(cls._KC_PROB_B, "parity")
+                return text, delta
             if _numeric in ("step_correct", "direction"):
                 text = cls._build_symbolic_step(combo, "ratio", acknowledge=True)
                 if not cls._recently_emitted(text, history_messages):
-                    entry["attempts"] = int(entry.get("attempts") or 0) + 1
-                    entry["evidence"] = "verified"
+                    entry.attempts += 1
+                    entry.evidence = "verified"
                     return _finish(text, add_step="ratio", new_pending="ratio")
 
-            entry["attempts"] = int(entry.get("attempts") or 0) + 1
+            entry.attempts += 1
 
             # ── S3: أول تفاعل ⇒ التشخيص قبل الشرح ──
-            if "diagnostic_probe" not in delivered:
+            if "diagnostic_probe" not in entry.representations_delivered:
                 text = cls._build_diagnostic_probe(combo)
                 return _finish(
                     text,
@@ -3416,7 +3483,7 @@ class OrchestratorClient:
 
             # ── S1: كشف تدريجي — خطوة واحدة لم تُعرَض بعد (لا تفريغ كامل) ──
             for step in ("numerator", "ratio"):
-                if step in delivered:
+                if step in entry.representations_delivered:
                     continue
                 text = cls._build_symbolic_step(combo, step)
                 if cls._recently_emitted(text, history_messages):
@@ -3425,12 +3492,112 @@ class OrchestratorClient:
 
             # كل الخطوات عُرضت ⇒ إنقاذ متدرّج (delivered يحذف المعروض؛ يبقى ذيل التوليد فقط).
             text = cls._build_symbolic_reveal(
-                question, history_messages, acknowledge=bool(_numeric), delivered=set(delivered)
+                question,
+                history_messages,
+                acknowledge=bool(_numeric),
+                delivered=set(entry.representations_delivered),
             )
             return _finish(text or "", new_pending="ratio")
         except Exception:  # pragma: no cover - fail-safe (never abort a turn)
             logger.warning("_cognitive_turn_failed", exc_info=True)
             return None, None
+
+    @classmethod
+    def _cognitive_turn_event_b(
+        cls,
+        question: str,
+        history_messages: list[dict[str, str]] | None,
+        combo,
+        parity: dict[str, int] | None,
+        entry,
+        _finish,
+    ) -> tuple[str | None, dict | None]:
+        """D-159 (WP-E): دور الحادثة B (جداء الأرقام فردي) — حتمي من المحرك الرمزي.
+
+        الأرقام من `number_parity_counts` (D-143) حصراً: عدد الكرات الفردية o ⇒ الحالات
+        الملائمة C(o,k)؛ المقام نفسه من الجزء A. صفر LLM؛ النصوص تَنجو من حجب D-113
+        (نمط `_fmt_comb` LaTeX + أسئلة توليد — النسبة النهائية لا تُطبع أبداً D-154).
+        """
+        import math
+
+        if not parity:
+            return None, None
+        odd = int(parity.get("odd", 0))
+        k = int(combo.k)
+        total = int(combo.total_combinations)
+        n = int(combo.n)
+        fav_b = math.comb(odd, k) if odd >= k else 0
+        if fav_b <= 0:
+            return None, None
+
+        # ── S2-B: إجابة رقمية صحيحة على B ⇒ اعتراف + إقفال العقدة ──
+        nums = cls._extract_answer_numbers(question)
+        if fav_b in nums and total in nums:
+            entry.attempts += 1
+            entry.evidence = "verified"
+            text = (
+                "أحسنت! ✅ ركّبت احتمال الحادثة B بنفسك — الحالات الملائمة على كل "
+                "الحالات الممكنة.\n\n"
+                "أنجزت الحادثتين A و B بيديك. حين تريد نتابع بقية أجزاء التمرين "
+                "(الحادثة C أو المتغيّر العشوائي) بنفس الطريقة — أيّها تختار؟"
+            )
+            return _finish(text, advance_state="understood", clear_pending=True)
+        if nums and (fav_b in nums or odd in nums):
+            # خطوة صحيحة (وجد عدد الفرديات أو الحالات الملائمة) ⇒ اعتراف + خطوة النسبة.
+            text = (
+                "إجابتك في الطريق الصحيح — هذا بالضبط ما نحتاجه للحادثة B.\n\n"
+                f"وكل الطرق الممكنة لم تتغيّر عن الجزء السابق (نفس الكيس ونفس السحب): "
+                f"{cls._fmt_comb(n, k, total)}\n\n"
+                "الآن لديك البسط والمقام — كيف تُكوّن منهما احتمال الحادثة B؟"
+            )
+            if not cls._recently_emitted(text, history_messages):
+                entry.attempts += 1
+                entry.evidence = "verified"
+                return _finish(text, add_step="ratio", new_pending="ratio")
+
+        entry.attempts += 1
+
+        # ── S3-B: التشخيص قبل الشرح (يُبذَر عادةً من نهاية الجزء A) ──
+        if "diagnostic_probe" not in entry.representations_delivered:
+            text = (
+                "ننتقل للحادثة B: **جداء الأرقام الثلاثة عدد فردي**.\n\n"
+                "سؤال واحد قبل أي حساب: متى يكون جداء ثلاثة أعداد فردياً؟ "
+                "وأيّ كرات الكيس تحمل أرقاماً فردية؟"
+            )
+            return _finish(
+                text,
+                advance_state="explained",
+                add_step="diagnostic_probe",
+                new_pending="parity",
+            )
+
+        # ── S1-B: كشف تدريجي — خطوة واحدة لم تُعرَض بعد ──
+        if "numerator" not in entry.representations_delivered:
+            text = (
+                "الجداء يكون فردياً فقط إذا كانت **كل** الأرقام الثلاثة فردية — "
+                f"فنقتصر على الكرات ذات الأرقام الفردية وعددها {odd}.\n\n"
+                f"الحالات الملائمة للحادثة B: {cls._fmt_comb(odd, k, fav_b)}\n\n"
+                "والآن سؤالٌ يقودنا للخطوة التالية: كم عدد **كل** الطرق الممكنة للسحب؟"
+            )
+            if not cls._recently_emitted(text, history_messages):
+                return _finish(text, add_step="numerator", new_pending="numerator")
+        if "ratio" not in entry.representations_delivered:
+            text = (
+                f"**كل الطرق الممكنة** لم تتغيّر عن الجزء السابق: "
+                f"{cls._fmt_comb(n, k, total)}\n\n"
+                "الآن لديك البسط والمقام — كيف تُكوّن منهما احتمال الحادثة B؟"
+            )
+            if not cls._recently_emitted(text, history_messages):
+                return _finish(text, add_step="ratio", new_pending="ratio")
+
+        # كل الخطوات عُرضت ⇒ مُوجّه توليد (لا كشف للنسبة النهائية — D-113/D-154).
+        text = (
+            "أمامك الآن كل المكوّنات — ركّب احتمال الحادثة B **بنفسك**: "
+            "الحالات الملائمة على كل الحالات الممكنة. فما النسبة التي تحصل عليها؟"
+        )
+        if cls._recently_emitted(text, history_messages):
+            return None, None  # تسليم للكتل القائمة بدل بثّ مكرَّر (قاعدة D-154).
+        return _finish(text, new_pending="ratio")
 
     async def _stream_socratic_evaluation(
         self,
@@ -4210,6 +4377,28 @@ class OrchestratorClient:
                     _esc_active.concept_id, _esc_last, history_messages
                 )
                 _esc_spec = PROPERTY_REGISTRY.get(_esc_active.property_id)
+                # D-159 (WP-B): ذاكرة FSM الدائمة لهذا المفهوم من tutor_state.kc_progress —
+                # تَنجو من نافذة الـ50 رسالة وإعادة تشغيل العملية (مسح النصّ يبقى شبكة أمان).
+                from app.services.skills.kc_progress_schema import (
+                    escalation_levels_of,
+                    parse_kc_entry,
+                )
+
+                _esc_kcp = tutor_state.get("kc_progress") if isinstance(tutor_state, dict) else None
+                _esc_kcp = _esc_kcp if isinstance(_esc_kcp, dict) else {}
+                _esc_levels = escalation_levels_of(_esc_kcp, _esc_active.concept_id)
+                # D-159 (WP-D): تشخيص الجذر عبر حواف الـ graph — حين يكون جذر الصعوبة
+                # شرطاً مسبقاً ضعيفاً (بحسب الحالة الدائمة)، يستهدف التدخّلُ الجذرَ لا
+                # العرَض («أساس فجوة الوهم»). fail-open ⇒ التدخّل الأصلي دون تغيير.
+                _esc_intervention = _esc_mis.intervention if _esc_mis else None
+                _esc_root = None
+                if _esc_mis is not None:
+                    with contextlib.suppress(Exception):
+                        from app.services.skills.semantic_property_skill import diagnose_root
+
+                        _esc_root = diagnose_root(_esc_mis.bkt_concept, _esc_kcp)
+                        if _esc_root is not None:
+                            _esc_intervention = _esc_root.intervention_text
                 _esc_decision = get_pedagogical_escalation_skill().decide(
                     EscalationInput(
                         concept_id=_esc_active.concept_id,
@@ -4228,8 +4417,10 @@ class OrchestratorClient:
                         support_level=_esc_sup,
                         history=history_messages or [],
                         evidence_markers=(_esc_spec.evidence_markers if _esc_spec else ()),
-                        misconception_intervention=(_esc_mis.intervention if _esc_mis else None),
+                        misconception_intervention=_esc_intervention,
                         misconception_mtype=(_esc_mis.mtype if _esc_mis else None),
+                        # D-159 (WP-B): الرُّتب المُسلَّمة من الحالة الدائمة (FSM حقيقي).
+                        delivered_levels=_esc_levels,
                     )
                 )
                 # D-143 (RC-4): حارس التكرار — إن كان نصّ المصفوفة مُكرّراً لرسالة مساعد سابقة
@@ -4274,8 +4465,26 @@ class OrchestratorClient:
                                 "level": _esc_decision.strategy_level,
                                 "intent": _esc_state.primary_intent,
                                 "support_level": _esc_sup,
+                                "root_concept": (_esc_root.root_concept_id if _esc_root else ""),
                             },
                         )
+                        # D-159 (WP-B): كتابة الرُّتبة المُسلَّمة في الحالة الدائمة عبر دلتا
+                        # kc_progress (يحفظها customer_chat عبر record_turn) — نهاية «FSM»
+                        # الذي يُعيد بناء نفسه من مسح النصّ. fail-open مطلق.
+                        with contextlib.suppress(Exception):
+                            _esc_entry = parse_kc_entry(_esc_kcp.get(_esc_active.concept_id))
+                            _esc_entry.attempts += 1
+                            if _esc_decision.action == "teach" and _esc_decision.strategy_level:
+                                _esc_entry.mark_escalation(f"L{_esc_decision.strategy_level}")
+                                if _esc_entry.state == "not_addressed":
+                                    _esc_entry.state = "explained"
+                            elif _esc_decision.action == "mastered":
+                                _esc_entry.state = "understood"
+                                _esc_entry.evidence = "verified"
+                            if isinstance(tutor_state, dict):
+                                _esc_delta = tutor_state.setdefault("kc_progress_delta", {})
+                                if isinstance(_esc_delta, dict):
+                                    _esc_delta[_esc_active.concept_id] = _esc_entry.to_dict()
                         yield self._normalize_stream_event(
                             {"type": "assistant_final", "payload": {"content": ""}}
                         )
@@ -4670,12 +4879,19 @@ class OrchestratorClient:
                         get_understanding_state_skill,
                     )
 
+                    # D-159 (WP-C): الحالة الدائمة (tutor_state.kc_progress) هي سلطة حالة
+                    # المكوّنات — تقاعد إعادة البناء من مسح النصّ (يبقى fallback).
+                    _us_kcp = (
+                        tutor_state.get("kc_progress") if isinstance(tutor_state, dict) else None
+                    )
+                    _us_kcp = _us_kcp if isinstance(_us_kcp, dict) else {}
                     _us = get_understanding_state_skill().decide(
                         question=question,
                         history=history_messages,
                         combo=_us_combo,
                         intent=_state.primary_intent,
                         frustration=_state.frustration,
+                        kc_progress=_us_kcp,
                     )
                     if _us is not None and _us.text:
                         _direct = _us.text
@@ -4693,6 +4909,31 @@ class OrchestratorClient:
                                 "representation_level": _us.representation_level,
                             },
                         )
+                        # D-159 (WP-C): كتابة قرار المحرّك في الحالة الدائمة — المكوّن
+                        # المُبرهَن يصير understood والمشروح explained (دلتا kc_progress
+                        # يحفظها customer_chat عبر record_turn). fail-open مطلق.
+                        with contextlib.suppress(Exception):
+                            from app.services.skills.kc_progress_schema import parse_kc_entry
+
+                            _us_delta = (
+                                tutor_state.setdefault("kc_progress_delta", {})
+                                if isinstance(tutor_state, dict)
+                                else {}
+                            )
+                            if isinstance(_us_delta, dict):
+                                if _us.understood_kc_id:
+                                    _u_entry = parse_kc_entry(_us_kcp.get(_us.understood_kc_id))
+                                    _u_entry.state = "understood"
+                                    _u_entry.evidence = "verified"
+                                    _u_entry.attempts += 1
+                                    _us_delta[_us.understood_kc_id] = _u_entry.to_dict()
+                                if _us.kc_id and _us.kc_id != _us.understood_kc_id:
+                                    _t_entry = parse_kc_entry(_us_kcp.get(_us.kc_id))
+                                    if _t_entry.state == "not_addressed":
+                                        _t_entry.state = "explained"
+                                    _t_entry.attempts += 1
+                                    _t_entry.mark_delivered(f"rep{_us.representation_level}")
+                                    _us_delta[_us.kc_id] = _t_entry.to_dict()
             # D-133: النيّة تُحدّد نوع الرد قبل السياسة (إشارة قرار، لا تصنيف):
             #   example_request ⇒ مثال قبل النظرية؛ procedure ⇒ خطوات رمزية متدرّجة.
             if _direct is None and _state.primary_intent in ("example_request", "procedure"):

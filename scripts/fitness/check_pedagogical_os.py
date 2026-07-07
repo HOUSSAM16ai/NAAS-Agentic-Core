@@ -366,6 +366,86 @@ def check_reveal_last_in_ladders() -> None:
         _pass("reveal is the last ladder alternative in both dedup chains (D-155)")
 
 
+def check_structured_kc_progress() -> None:
+    """D-159 (WP-A): مدخلات kc_progress عبر المخطط المُهيكَل — لا dict literals يدوية."""
+    ok = True
+    schema = _read("app/services/skills/kc_progress_schema.py")
+    for symbol in ("class KCEntry", "def parse_kc_entry", "def pending_of", "def make_pending"):
+        if symbol not in schema:
+            _fail(f"kc_progress_schema is missing {symbol!r} (D-159 WP-A)")
+            ok = False
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    turn = client.split("def _cognitive_turn(", 1)
+    body = turn[1][:9000] if len(turn) == 2 else ""
+    if "parse_kc_entry" not in body or "make_pending" not in body:
+        _fail("_cognitive_turn must read/write kc_progress via kc_progress_schema (D-159 WP-A)")
+        ok = False
+    if '"representations_delivered": []' in body:
+        _fail("_cognitive_turn still builds raw kc entry dict literals (D-159 WP-A)")
+        ok = False
+    if ok:
+        _pass("kc_progress goes through the structured schema (no raw dict literals) (D-159)")
+
+
+def check_persistent_escalation_fsm() -> None:
+    """D-159 (WP-B): FSM التصعيد الدائم — delivered_levels من tutor_state لا مسح النصّ وحده."""
+    ok = True
+    skill = _read("app/services/skills/pedagogical_escalation_skill.py")
+    if "delivered_levels: list[int] | None" not in skill:
+        _fail("EscalationInput must accept persistent delivered_levels (D-159 WP-B)")
+        ok = False
+    if "payload.delivered_levels" not in skill:
+        _fail("_levels_delivered must union the persistent FSM memory (D-159 WP-B)")
+        ok = False
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    if "escalation_levels_of(_esc_kcp" not in client:
+        _fail("escalation block must read persistent levels from tutor_state (D-159 WP-B)")
+        ok = False
+    if "mark_escalation" not in client:
+        _fail("escalation block must persist the delivered level back to kc_progress (D-159 WP-B)")
+        ok = False
+    if ok:
+        _pass("escalation FSM is persistent: reads+writes tutor_state.kc_progress (D-159)")
+
+
+def check_misconception_graph_edges() -> None:
+    """D-159 (WP-D): الشبكة graph حقيقي بحواف + تشخيص الجذر + مرآة knowledge_nodes/edges."""
+    ok = True
+    sps = _read("app/services/skills/semantic_property_skill.py")
+    for symbol in ("class GraphEdge", "MISCONCEPTION_EDGES", "def diagnose_root"):
+        if symbol not in sps:
+            _fail(f"semantic_property_skill is missing {symbol!r} (D-159 WP-D)")
+            ok = False
+    if "prerequisite_of" not in sps:
+        _fail("graph edges must include prerequisite_of relations (D-159 WP-D)")
+        ok = False
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    if "diagnose_root(_esc_mis.bkt_concept" not in client:
+        _fail("escalation block must consult diagnose_root (root not symptom) (D-159 WP-D)")
+        ok = False
+    if not (ROOT / "scripts" / "sync_knowledge_graph.py").exists():
+        _fail("scripts/sync_knowledge_graph.py (DB mirror + parity gate) is missing (D-159 WP-D)")
+        ok = False
+    if ok:
+        _pass("misconception graph has traversable edges + root diagnosis + DB mirror (D-159)")
+
+
+def check_multi_kc_engine() -> None:
+    """D-159 (WP-E): محرّك الدور متعدد العُقد — عقدة الحادثة B فوق الحالة الدائمة."""
+    ok = True
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    for symbol in ("_KC_PROB_B", "def _cognitive_turn_event_b", "def _load_canonical_parity"):
+        if symbol not in client:
+            _fail(f"multi-KC engine is missing {symbol!r} (D-159 WP-E)")
+            ok = False
+    uss = _read("app/services/skills/understanding_state_skill.py")
+    if "kc_progress: dict | None = None" not in uss or "understood_kc_id" not in uss:
+        _fail("understanding_state must accept persistent kc_progress authority (D-159 WP-C)")
+        ok = False
+    if ok:
+        _pass("cognitive turn engine is multi-KC (A→B) over persistent state (D-159)")
+
+
 def main() -> None:
     print(
         "=== Pedagogical OS Constitution Gate (D-153/ISS-120 + D-154/ISS-121 + D-155/ISS-122) ==="
@@ -385,6 +465,10 @@ def main() -> None:
     check_numeric_answer_verification()
     check_conceptual_escapes_socratic()
     check_reveal_last_in_ladders()
+    check_structured_kc_progress()
+    check_persistent_escalation_fsm()
+    check_misconception_graph_edges()
+    check_multi_kc_engine()
     if _FAILURES:
         print(f"\n=== ❌ {len(_FAILURES)} Pedagogical OS violation(s) ===")
         sys.exit(1)

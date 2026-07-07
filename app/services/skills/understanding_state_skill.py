@@ -93,6 +93,9 @@ class UnderstandingDecision:
     kc_id: str
     representation_level: int
     text: str
+    #: D-159 (WP-C): المكوّن الذي **بُرهن فهمه** في هذا الدور (يختلف عن kc_id عند advance —
+    #: kc_id هو المكوّن التالي المشروح). يُمكّن المُنادي من تخزين understood في الحالة الدائمة.
+    understood_kc_id: str = ""
 
 
 # ── Prometheus metrics ─────────────────────────────────────────────────────────────
@@ -342,9 +345,18 @@ class UnderstandingStateSkill:
 
     # ── C) حالة الفهم لكل مكوّن (semantic + evidence) ──────────────────────────
     def understanding_state(
-        self, history: list[dict[str, str]] | None, kcs: list[KnowledgeComponent]
+        self,
+        history: list[dict[str, str]] | None,
+        kcs: list[KnowledgeComponent],
+        kc_progress: dict | None = None,
     ) -> dict[str, KCState]:
-        """حالة كل مكوّن من المحادثة: explained (شُرح) / understood (بُرهن) / not_addressed."""
+        """حالة كل مكوّن: الحالة الدائمة (D-159) هي السلطة؛ مسح النصّ fallback.
+
+        D-159 (WP-C — «تقاعد مسح النصّ»): سجل `tutor_state.kc_progress` الدائم يتقدّم
+        على إعادة البناء من نصّ المحادثة — يَنجو من نافذة الـ50 رسالة ومن حجب D-113
+        (النسخة المحفوظة بلا أرقام لا تُطابق explain_markers). الترقية أحادية الاتجاه
+        (monotone): الدائم يرفع الحالة ولا يُنزِل ما أثبته النصّ — مناعة من سجل قديم فاسد.
+        """
         assistant_text = " ".join(
             _normalize(str(m.get("content", "")))
             for m in (history or [])
@@ -365,6 +377,16 @@ class UnderstandingStateSkill:
                 states[kc.kc_id] = "explained"
             else:
                 states[kc.kc_id] = "not_addressed"
+        if isinstance(kc_progress, dict):
+            for kc in kcs:
+                persisted = kc_progress.get(kc.kc_id)
+                if not isinstance(persisted, dict):
+                    continue
+                p_state = persisted.get("state")
+                if p_state == "understood":
+                    states[kc.kc_id] = "understood"
+                elif p_state == "explained" and states.get(kc.kc_id) == "not_addressed":
+                    states[kc.kc_id] = "explained"
         return states
 
     def _explain_count(self, kc: KnowledgeComponent, history: list[dict[str, str]] | None) -> int:
@@ -435,12 +457,17 @@ class UnderstandingStateSkill:
         combo,
         intent: str | None = None,
         frustration: str | None = None,
+        kc_progress: dict | None = None,
     ) -> UnderstandingDecision | None:
-        """يقرّر أصغر تدخّل يبني الفهم — حتمي. None لغير الاحتمالات/تعذّر."""
+        """يقرّر أصغر تدخّل يبني الفهم — حتمي. None لغير الاحتمالات/تعذّر.
+
+        D-159 (WP-C): ``kc_progress`` (الحالة الدائمة من tutor_state) هي سلطة حالة
+        المكوّنات — مسح النصّ fallback للأدوار السابقة على التخزين.
+        """
         kcs = self.knowledge_components(combo)
         if not kcs:
             return None
-        states = self.understanding_state(history, kcs)
+        states = self.understanding_state(history, kcs, kc_progress=kc_progress)
 
         # A) برهان فهم في الرسالة الحالية لمكوّن **سبق شرحه** ⇒ اعتراف + تقدّم (نقد 3).
         # يفوز على تفسير «فجوة» إلا إذا سأل الطالب عن مكوّن **مختلف** صراحةً (gap ≠ المُبرهَن).
@@ -460,12 +487,14 @@ class UnderstandingStateSkill:
                     kc_id=answered.kc_id,
                     representation_level=0,
                     text="أحسنت ✅ — لقد بنيتَ كل خطوات هذا الجزء بنفسك. أنت جاهز للجزء التالي.",
+                    understood_kc_id=answered.kc_id,
                 )
             return UnderstandingDecision(
                 action="advance",
                 kc_id=nxt.kc_id,
                 representation_level=0,
                 text=f"أحسنت ✅ — فهمتَ هذه النقطة. ننتقل الآن إلى **{nxt.title}**:\n\n{self._representation(nxt, 0)}",
+                understood_kc_id=answered.kc_id,
             )
 
         # B) فجوة صريحة ⇒ ذلك المكوّن؛ وإلا: حيرة على التركيز الحالي ⇒ صعّده (لا تقفز للجبهة).
@@ -495,6 +524,7 @@ class UnderstandingStateSkill:
                     kc_id=target.kc_id,
                     representation_level=0,
                     text="أحسنت ✅ — هذه النقطة واضحة لديك. أتقنتَ كل خطوات هذا الجزء.",
+                    understood_kc_id=target.kc_id,
                 )
             target = nxt
             st = states.get(target.kc_id, "not_addressed")

@@ -560,7 +560,8 @@ CONCEPT_DIAGNOSIS_DOCTRINE: Final[tuple[str, ...]] = (
 
 # ── D-131: الطبقة الدلالية + Misconception Graph — الطبقة 2 (substrate التوأم المعرفي) ──
 # D-132: جاهزية الأسئلة الجديدة عبر LLM Listener-Definer المحروس + لا default مُجمَّد.
-SEMANTIC_PROPERTY_DOCTRINE_VERSION: Final[str] = "1.3.0"
+# D-159: الحواف (MISCONCEPTION_EDGES) + تشخيص الجذر عبر الاجتياز + مرآة knowledge_nodes/edges.
+SEMANTIC_PROPERTY_DOCTRINE_VERSION: Final[str] = "1.4.0"
 
 #: قوانين غير قابلة للكسر تحكم الطبقة الدلالية + شبكة المفاهيم الخاطئة (D-131/D-132/D-136/D-137).
 SEMANTIC_PROPERTY_DOCTRINE: Final[tuple[str, ...]] = (
@@ -595,6 +596,14 @@ SEMANTIC_PROPERTY_DOCTRINE: Final[tuple[str, ...]] = (
     "مسار التعريف **قبل** D-135. إشارات D-135 يجب أن تكون خاصة بخطوة الحساب لا كلمات مفهوم عامة — "
     "ممنوع «الاحتمال»/«نفس اللون» المجرّدة في gap_signals (تختطف). الحيرة تُعيد إشراك المفهوم النشط "
     "(detect_active_concept) لا تسقط للحادثة A الافتراضية؛ و_current_focus_kc لا يقفل على مثال/تعريف مفهوم.",
+    # D-159 (WP-D — الـ graph الحقيقي بالحواف):
+    "الشبكة graph حقيقي قابل للاجتياز لا dict مسطّحاً: الحواف (MISCONCEPTION_EDGES — prerequisite_of/"
+    "confused_with) تربط المفاهيم، و`diagnose_root` يجتازها ليجد **أعمق شرطٍ مسبق ضعيف** بحسب الحالة "
+    "الدائمة (tutor_state.kc_progress) ⇒ التدخّل يستهدف الجذر لا العرَض (أساس فجوة الوهم). مفهوم بلا "
+    "سجل دائم ليس «ضعيفاً» — لا تدخّل أعمى. أي حافة جديدة = مدخل data لا فرع كود.",
+    "جدولا knowledge_nodes/knowledge_edges مرآة حيّة للـ graph (scripts/sync_knowledge_graph.py عبر "
+    "جسر HTTPS + بوّابة تكافؤ code↔DB) — المسار الحي يبقى in-code حتمياً (لا I/O لقاعدة البيانات في "
+    "مسار الدور). المزامنة idempotent (UUIDv5 + ON CONFLICT DO UPDATE).",
 )
 
 
@@ -1017,7 +1026,7 @@ def get_dialogue_manager_summary() -> str:
 
 
 # ── D-135: محرّك حالة الفهم — Learning State («ماذا فهم الطالب فعلاً؟») ────────────────
-UNDERSTANDING_STATE_DOCTRINE_VERSION: Final[str] = "1.0.0"
+UNDERSTANDING_STATE_DOCTRINE_VERSION: Final[str] = "1.1.0"
 
 #: قوانين غير قابلة للكسر تحكم تتبّع حالة الفهم (Learning State، D-135).
 UNDERSTANDING_STATE_DOCTRINE: Final[tuple[str, ...]] = (
@@ -1035,6 +1044,10 @@ UNDERSTANDING_STATE_DOCTRINE: Final[tuple[str, ...]] = (
     "تغيير الاستراتيجية لا مزيد كلام.",
     "الأرقام من المحرك الرمزي حصراً (ProbabilityCalculatorSkill/combo)؛ صفر LLM في الحقيقة؛ كل التمثيلات "
     "حتمية وتَنجو من حجب D-113. الـ LLM (سؤال موجِّه/تقييم) محروس فقط (D-128/D-130).",
+    "D-159 (WP-C — تقاعد مسح النصّ): الحالة الدائمة (tutor_state.kc_progress) هي **سلطة** حالة المكوّنات "
+    "(understood/explained) — مسح نصّ المحادثة fallback للأدوار السابقة على التخزين فقط. الترقية أحادية "
+    "الاتجاه (الدائم يرفع ولا يُنزِل ما أثبته النصّ)، وقرار المحرّك (understood_kc_id + المكوّن المشروح) "
+    "يُكتب فوراً في kc_progress عبر دلتا record_turn — الذاكرة تتراكم لا تُعاد هندستها كل دور.",
 )
 
 
@@ -1048,7 +1061,8 @@ def get_understanding_state_summary() -> str:
 
 # ── D-138: المصفوفة التصعيدية التكيّفية — Escalation + Understanding-Signal + Misconception ──
 # ── D-147: نفاد السُّلّم ⇒ سؤال تطبيق مرتبط بالتمرين بدل الـ punt العام ──
-PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION: Final[str] = "1.1.0"
+# ── D-159 (WP-B): FSM دائم — الرُّتب المُسلَّمة من tutor_state.kc_progress لا مسح النصّ وحده ──
+PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION: Final[str] = "1.2.0"
 
 #: قوانين غير قابلة للكسر تحكم المصفوفة التصعيدية التكيّفية (D-138).
 PEDAGOGICAL_ESCALATION_DOCTRINE: Final[tuple[str, ...]] = (
@@ -1073,6 +1087,10 @@ PEDAGOGICAL_ESCALATION_DOCTRINE: Final[tuple[str, ...]] = (
     "D-147: نفاد السُّلّم (exhausted) ⇒ سؤال «خطوة تطبيق» مرتبط ببنية هذا التمرين (APPLY_STEPS، concept-scoped) "
     "يقود الطالب للخطوة الأولى الملموسة — لا punt عامّ («أيّ خطوة تريد؟»). يبقى سؤالاً (توليد لا كشف) ⇒ يَنجو "
     "من حجب D-113؛ المفهوم غير المُغطّى يرجع للتسليم العامّ القديم (لا انحدار).",
+    "D-159 (WP-B — FSM دائم): ذاكرة التصعيد سلطتها الحالة الدائمة (delivered_levels من "
+    "tutor_state.kc_progress.escalation_levels — تَنجو من نافذة الـ50 رسالة وإعادة تشغيل العملية)، "
+    "ومسح نصّ المساعد شبكة أمان للأدوار السابقة على التخزين — **الاتحاد** يمنع تكرار الرُّتبة من أي "
+    "مصدر. كل رُتبة تُبثّ (action=teach) تُكتب فوراً في kc_progress عبر دلتا record_turn.",
 )
 
 

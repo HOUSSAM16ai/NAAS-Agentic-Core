@@ -446,9 +446,41 @@ def check_multi_kc_engine() -> None:
         _pass("cognitive turn engine is multi-KC (A→B) over persistent state (D-159)")
 
 
+def check_step_explanation_teaches() -> None:
+    """D-160 (ISS-126): «اشرح اشتقاق هذه الخطوة» — يُعلّم القيمة، لا يُعيد الإنقاذ حرفياً.
+
+    الكارثة: «كيف حسبنا 4» ×3 ⇒ نفس النصّ حرفياً (الإنقاذ النهائي بلا حارس + لا فرع
+    يشرح اشتقاق قيمة). القفل: (أ) كاشف data-driven يربط قيمة السؤال بجزئية combo،
+    (ب) الإنقاذ النهائي في _cognitive_turn محروس بـ _recently_emitted، (ج) الطالب
+    العالق يتعلّم جزئية ملموسة لم تُعرَض (لا كشف P(A) — M6/M8).
+    """
+    ok = True
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    if "def _detect_step_explanation(" not in client:
+        _fail("missing data-driven _detect_step_explanation (D-160 ISS-126)")
+        ok = False
+    if "subpart = forced_subpart or cls._detect_subpart_question(question)" not in client:
+        _fail("_build_probability_direct_explanation must honor forced_subpart (D-160)")
+        ok = False
+    turn = client.split("def _cognitive_turn(", 1)
+    body = turn[1].split("def _cognitive_turn_event_b(", 1)[0] if len(turn) == 2 else ""
+    if "_detect_step_explanation(question, combo)" not in body:
+        _fail("_cognitive_turn must route step-explanation requests (D-160)")
+        ok = False
+    if "if text and not cls._recently_emitted(text, history_messages):" not in body:
+        _fail("_cognitive_turn terminal reveal must be dedup-guarded (D-160)")
+        ok = False
+    if 'for _part in ("red", "green", "white", "total", "sum"):' not in body:
+        _fail("stuck student must be taught a concrete unshown part, not looped (D-160)")
+        ok = False
+    if ok:
+        _pass("step-explanation teaches the value + guarded terminal reveal (D-160)")
+
+
 def main() -> None:
     print(
-        "=== Pedagogical OS Constitution Gate (D-153/ISS-120 + D-154/ISS-121 + D-155/ISS-122) ==="
+        "=== Pedagogical OS Constitution Gate (D-153/ISS-120 + D-154/ISS-121 + "
+        "D-155/ISS-122 + D-160/ISS-126) ==="
     )
     check_constitution_document()
     check_core_components_exist()
@@ -469,6 +501,7 @@ def main() -> None:
     check_persistent_escalation_fsm()
     check_misconception_graph_edges()
     check_multi_kc_engine()
+    check_step_explanation_teaches()
     if _FAILURES:
         print(f"\n=== ❌ {len(_FAILURES)} Pedagogical OS violation(s) ===")
         sys.exit(1)

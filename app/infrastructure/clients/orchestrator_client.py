@@ -1628,6 +1628,68 @@ class OrchestratorClient:
             return "sum"
         return None
 
+    #: D-160 (ISS-126): علامات طلب شرح اشتقاق قيمة/خطوة («كيف حسبنا 4»، «اشرح كيف
+    #: وصلنا لـ 10»، «من أين جاءت»). تُفرّق طلب الشرح عن محاولة الإجابة الرقمية.
+    _STEP_EXPLAIN_MARKERS: tuple[str, ...] = (
+        "كيف حسبنا",
+        "كيف حسبت",
+        "كيف نحسب",
+        "كيف وجدنا",
+        "كيف وصلنا",
+        "كيف جاء",
+        "من اين",
+        "من أين",
+        "اشرح",
+        "اشرح لي",
+        "وضح",
+        "وضّح",
+        "بين",
+        "بيّن",
+        "كيفاش",
+        "علاش",
+    )
+
+    @classmethod
+    def _detect_step_explanation(cls, question: str, combo) -> str | None:
+        """D-160 (ISS-126): يكشف طلب شرح اشتقاق **خطوة/قيمة** ويربطه بجزئية.
+
+        يحلّ الكارثة: «كيف حسبنا 4» (كيف اشتُقّت ``C(4,3)=4``) كان يسقط للإنقاذ النهائي
+        المكرَّر لأن `_detect_subpart_question` يربط الألوان و14/165 **فقط** — لا القيم
+        الملائمة 4/10. هذا الكاشف **data-driven** (يقرأ ``combo``، لا أرقاماً مُصلَّبة):
+        يطابق أرقام السؤال ضد ``total_combinations``/``same_group_favorable`` وكل مجموعة
+        (``favorable_combinations`` أو ``count``) ⇒ يعمل لأي تمرين لا هذا وحده.
+
+        يُرجِع ``"red"``/``"green"``/``"white"``/``"total"``/``"sum"`` | ``None``. يشترط
+        علامة شرح صريحة (`_STEP_EXPLAIN_MARKERS`) كي لا تُلتقَط محاولة إجابة رقمية
+        («14 على 165» تبقى للتحقّق الرقمي S2، لا للشرح).
+        """
+        try:
+            q = (question or "").lower()
+            if not any(m in q for m in cls._STEP_EXPLAIN_MARKERS):
+                return None
+            # (أ) الكلمات اللونية / 14 / 165 — يعالجها الكاشف القائم مباشرةً.
+            word_part = cls._detect_subpart_question(question)
+            if word_part is not None:
+                return word_part
+            # (ب) مطابقة data-driven لأرقام السؤال ضد قيم combo.
+            nums = {int(n) for n in re.findall(r"\d+", q)}
+            if not nums:
+                return None
+            if int(getattr(combo, "total_combinations", -1)) in nums:
+                return "total"
+            if int(getattr(combo, "same_group_favorable", -1)) in nums:
+                return "sum"
+            for g in getattr(combo, "groups", []) or []:
+                gfav = int(getattr(g, "favorable_combinations", -1))
+                gcount = int(getattr(g, "count", -1))
+                if gfav in nums or gcount in nums:
+                    color = getattr(g, "color", None)
+                    if color in ("red", "green", "white"):
+                        return color
+            return None
+        except Exception:  # pragma: no cover - fail-safe
+            return None
+
     #: D-125: أفعال إجرائية — «لماذا/ليش» معها تبقى سؤالاً حسابياً (قوالب D-124)،
     #: لا مفاهيمياً («لماذا نجمع»، «لماذا لا نحسب الأبيض»). تحفّظ المالك رقم 3.
     _PROCEDURAL_VERBS: tuple[str, ...] = (
@@ -1716,8 +1778,14 @@ class OrchestratorClient:
         cls,
         question: str,
         history_messages: list[dict[str, str]] | None,
+        *,
+        forced_subpart: str | None = None,
     ) -> str | None:
         """D-124: شرح رياضي مباشر حتمي لتمرين الاحتمالات (يكسر حلقة الكاروسيل).
+
+        D-160 (ISS-126): ``forced_subpart`` (اختياري) — يتجاوز `_detect_subpart_question`
+        فيسمح لِـ `_cognitive_turn` بتوجيه الشرح لجزئية كشفها كاشف data-driven من قيمة
+        السؤال (مثل «كيف حسبنا 4» ⇒ «red»)؛ يُعيد استخدام هذا الكود التعليمي كما هو.
 
         يُحمّل التمرين الرسمي المُفهرَس (D-123: ``history=None`` ⇒ مناعة من تلوّث
         الـ history)، يحلّله عبر ``ProbabilityCalculatorSkill`` (مخرَج
@@ -1776,7 +1844,7 @@ class OrchestratorClient:
             if cls._detect_conceptual_question(question):
                 return cls._format_conceptual_relationship(question, n, k, total, same, groups)
 
-            subpart = cls._detect_subpart_question(question)
+            subpart = forced_subpart or cls._detect_subpart_question(question)
 
             def _group_for_color(color: str) -> object | None:
                 for g in groups:
@@ -3438,6 +3506,21 @@ class OrchestratorClient:
                     question, history_messages, combo, parity, entry, _finish
                 )
 
+            # ── F2 (D-160/ISS-126): طلب شرح اشتقاق خطوة/قيمة («كيف حسبنا 4») ⇒ يُعلّم
+            #    اشتقاق تلك الجزئية (يُعيد استخدام _build_probability_direct_explanation،
+            #    forced_subpart)، dedup-محروس. يقتل الكارثة الجذرية: كان «كيف حسبنا 4»
+            #    يسقط للإنقاذ النهائي المكرَّر «ركّب بنفسك» لأن لا فرع يشرح اشتقاق قيمة.
+            #    **قبل S2**: طلب الشرح الصريح (بعلامة) يهزم تحقّق الإجابة الرقمية — «كيف
+            #    حسبنا 14» شرحٌ لا إجابةَ «14» (لا اختطاف). الإجابة بلا علامة تبقى لـ S2.
+            _explain_part = cls._detect_step_explanation(question, combo)
+            if _explain_part is not None:
+                _teach = cls._build_probability_direct_explanation(
+                    question, history_messages, forced_subpart=_explain_part
+                )
+                if _teach and not cls._recently_emitted(_teach, history_messages):
+                    entry.attempts += 1
+                    return _finish(_teach, add_step=_explain_part)
+
             # ── S2: إجابة رقمية صحيحة ⇒ اعتراف + تقدّم (المستوى الأعلى — لا سجن 600-حرف) ──
             _pending_focus = (
                 pending[1] if pending and pending[0] == cls._KC_PROB_A else None
@@ -3490,14 +3573,30 @@ class OrchestratorClient:
                     continue
                 return _finish(text, add_step=step, new_pending=step)
 
-            # كل الخطوات عُرضت ⇒ إنقاذ متدرّج (delivered يحذف المعروض؛ يبقى ذيل التوليد فقط).
+            # ── F1 (D-160): الإنقاذ النهائي محروس ضد التكرار (كان يُرجَع بلا حارس ⇒
+            #    كارثة الترانسكريبت ×3). حين لا يكون مكرَّراً ⇒ يُبَثّ. ──
             text = cls._build_symbolic_reveal(
                 question,
                 history_messages,
                 acknowledge=bool(_numeric),
                 delivered=set(entry.representations_delivered),
             )
-            return _finish(text or "", new_pending="ratio")
+            if text and not cls._recently_emitted(text, history_messages):
+                return _finish(text, new_pending="ratio")
+
+            # ── F3 (D-160): الإنقاذ مكرَّر ⇒ الطالب العالق يتعلّم لا يدور: علّم اشتقاق
+            #    أصغر جزئية ملموسة لم تُعرَض بعد (لا كشف P(A) النهائي — يحترم M6/M8). ──
+            for _part in ("red", "green", "white", "total", "sum"):
+                if _part in entry.representations_delivered:
+                    continue
+                _t = cls._build_probability_direct_explanation(
+                    question, history_messages, forced_subpart=_part
+                )
+                if _t and not cls._recently_emitted(_t, history_messages):
+                    return _finish(_t, add_step=_part)
+
+            # كل شيء عُلِّم ومكرَّر ⇒ تسليم للكتل (fail-open) بدل إعادة نصّ مكرَّر.
+            return None, None
         except Exception:  # pragma: no cover - fail-safe (never abort a turn)
             logger.warning("_cognitive_turn_failed", exc_info=True)
             return None, None
@@ -5017,6 +5116,21 @@ class OrchestratorClient:
                         "response_mode": _policy.response_mode,
                     },
                 )
+            # F4 (D-160/ISS-126): نفس نيّة «اشرح اشتقاق هذه القيمة» في الكتلة القديمة
+            # (defense-in-depth: لو عمل هذا المسار — cognitive_turn مُعطَّل أو أرجع None —
+            # يظلّ «كيف حسبنا 4» يُعلّم اشتقاق الحمراء بدل الاشتقاق الكامل العام).
+            if not _direct:
+                with contextlib.suppress(Exception):
+                    _sc_combo = self._load_canonical_combinations(question, history_messages)
+                    _sc_part = (
+                        self._detect_step_explanation(question, _sc_combo)
+                        if _sc_combo is not None
+                        else None
+                    )
+                    if _sc_part is not None:
+                        _direct = self._build_probability_direct_explanation(
+                            question, history_messages, forced_subpart=_sc_part
+                        )
             if not _direct:
                 _direct = self._build_probability_direct_explanation(question, history_messages)
             # ISS-120 (D-153): حارس التكرار على مسار محرّك حالة الفهم — كان هذا

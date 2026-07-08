@@ -5441,3 +5441,40 @@ literals يدوية في مسارات القرار. (b) ذاكرة التصعي�
 **المتبقي (مؤجَّل بوعي):** تعميم المحرّك للحوادث C/D/X/E(X) (بعد خُضرة مقاييس A→B)؛ توسيع
 MISCONCEPTION_EDGES لبقية المنهج (بوّابة «القياس قبل التوسّع»)؛ M10-S2 port داخل الـ orchestrator.
 CLAUDE.md §6.134.
+
+## D-160 (2026-07-08) — قتل كارثة تدريس الاحتمالات من الجذر + دمج محدود للتعقيد (ISS-126)
+
+**السياق:** transcript حيّ (BAC-2024): «كيف حسبنا 4» ×3 ⇒ النصّ نفسه حرفياً. المرّة الـ47 لنمط
+الفشل عبر D-113→D-159. القرار (المالك): **جذري + دمج محدود** — لا كاشف رقم 47، بل إصلاح داخل
+السلطة المعرفية الوحيدة (`_cognitive_turn`) + تقليص سطح المُمهِّدات المتداخلة.
+
+**الجذر (3 إخفاقات):** (1) `_detect_subpart_question` يربط الألوان و14/165 فقط — لا القيم الملائمة
+4/10. (2) الإنقاذ النهائي `_cognitive_turn:_build_symbolic_reveal` بلا حارس `_recently_emitted`.
+(3) كشف نصفي عبثي (14+165 ثم رفض التركيب ⇒ حلقة «ركّب بنفسك»).
+
+**الإصلاح (`app/infrastructure/clients/orchestrator_client.py`):**
+- **F1** — حارس تكرار شامل: الإنقاذ النهائي وكل فرع في `_cognitive_turn` يمرّ عبر `_recently_emitted`.
+- **F2** — `_detect_step_explanation(question, combo)` **data-driven** (يطابق أرقام السؤال ضد
+  `total_combinations`/`same_group_favorable`/`group.favorable_combinations|count` + الكلمات اللونية،
+  مشروط بعلامة شرح) + مُعامل `forced_subpart` في `_build_probability_direct_explanation` (سطر واحد —
+  يُعيد استخدام كوده التعليمي، صفر كود جديد). موضوع **قبل** S2 ⇒ طلب الشرح الصريح يهزم تحقّق الإجابة
+  الرقمية («اشرح كيف حسبنا 14» شرحٌ لا إجابةَ «14»؛ الإجابة بلا علامة تبقى لـ S2).
+- **F3** — الطالب العالق يتعلّم اشتقاق أصغر جزئية ملموسة لم تُعرَض (red→green→white→total→sum)،
+  **لا كشف P(A) النهائي** (M6/M8؛ `redact_final_answers` يحجبه على أي حال).
+- **F4** — نفس النيّة+الحارس في الكتلة القديمة (escape-hatch، defense-in-depth) + الدمج البنيوي:
+  `_cognitive_turn` يُرجِع مبكراً ⇒ الكتل الاحتمالية القديمة (computational/escalation/socratic/
+  escape-hatch) مسارات ميتة للتدفّق الطبيعي. **لا حذف** (خطر CI — لها اختبارات)؛ مؤجَّل لـ M13.
+
+**القواعد الدائمة (D-160):** (a) لا فرع في السلطة يُعيد نصّاً — `_recently_emitted` قبل كل بثّ.
+(b) طلب الشرح الصريح (بعلامة) يُعلّم دائماً — يهزم تحقّق الإجابة الرقمية. (c) الكشف data-driven من
+قيم combo — لا 4/10 مُصلَّبة (يعمل لأي تمرين). (d) الطالب العالق يتعلّم اشتقاقاً ملموساً — لا كشف
+للنسبة النهائية (M6/M8). (e) `_build_probability_direct_explanation` هو المصدر التعليمي الوحيد
+(forced_subpart) — لا كود تعليمي مُكرَّر.
+
+**التحقق:** stub-harness (الكود الحقيقي المُقتطَع بـ ast + `_verify_numeric_answer` الحقيقي) —
+«كيف حسبنا 4» ×3 ⇒ TEACH:red/reveal/TEACH:green (صفر تكرار)؛ «اشرح كيف حسبنا 14» ⇒ sum (لا اختطاف)؛
+«14»/«14 على 165» بلا علامة ⇒ S2 سليم (step_correct/final_ratio). `check_pedagogical_os` (+قاعدة
+D-160) · ruff check/format · runtime_truth --check — كلها خضراء. اختبار جديد
+`tests/services/test_iss126_step_explanation.py` (source-guards deps-free + detector + behavioral).
+**التحقق الحي الكامل WS+المتصفح+Supabase إلزامي في Codespaces** (sandbox يحجب pip/Postgres —
+نمط §6.55). CLAUDE.md §6.135.

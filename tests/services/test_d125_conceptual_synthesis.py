@@ -168,7 +168,9 @@ class TestSourceWiring:
         seg = CLIENT_SRC[CLIENT_SRC.index("def _build_probability_direct_explanation(") :]
         seg = seg[: seg.index("def _format_conceptual_relationship(")]
         conc = seg.index("cls._detect_conceptual_question(question)")
-        subp = seg.index("subpart = cls._detect_subpart_question(question)")
+        # D-160 (ISS-126): أُضيف `forced_subpart or` أمام الكاشف (يُعيد استخدامه من
+        # `_cognitive_turn`) — العقد (المفاهيمي قبل مطابقة الأرقام) ما زال قائماً.
+        subp = seg.index("subpart = forced_subpart or cls._detect_subpart_question(question)")
         assert conc < subp, "conceptual check MUST precede number matching (D-125)"
 
     def test_escape_condition_includes_conceptual(self) -> None:

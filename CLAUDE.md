@@ -11371,3 +11371,52 @@ lands**». فكل جولة CI — حتى الخضراء — كانت تحمل ت
 |----------|---------|
 | D-159 | الهياكل المعرفية الحقيقية (Phase 2) |
 | **D-160** | **قتل كارثة تدريس الاحتمالات: نيّة «اشرح اشتقاق الخطوة» (data-driven) + حارس تكرار شامل + الطالب العالق يتعلّم لا يدور + دمج محدود (يُصلِح ISS-126)** |
+
+---
+
+## 6.136 قنبلة `npm@latest` — فشل بناء Codespaces على كل الفروع (2026-07-09, ISS-127 / D-161)
+
+> **الكارثة:** إنشاء Codespace يفشل بـ `Error code: 1302 (UnifiedContainersErrorFatalCreatingContainer)`
+> على **main والفرع الجديد معاً** — دون أي commit مسبِّب. **المنهجية (قرار المالك):** لا إصلاح
+> بالفرضية — الـ Creation Log الكامل أولاً. الفرضيات الأولية (الحجم/Grafana/BuildKit/network_mode)
+> **سقطت كلها أمام الدليل**.
+
+### السطر الأحمر الحقيقي (creation.log — دليل قاطع)
+```
+100 | >>> RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+102 | >>>     npm install -g npm@latest        ← الخطوة الفاشلة
+npm error code EBADENGINE
+npm error notsup Required: {"node":"^22.22.2 || ^24.15.0 || >=26.0.0"}   ← npm@12.0.0
+npm error notsup Actual:   {"npm":"10.8.2","node":"v20.20.2"}
+"npm install -g npm@latest" did not complete successfully: exit code: 1
+```
+
+### الجذر
+`npm@latest` غير مُثبَّت في `Dockerfile:100`: لحظة نشر npm **v12.0.0** (أسقط دعم Node 20)
+صار كل بناء على كل فرع يفشل — **قنبلة موقوتة خارجية** (registry publish)، صفر علاقة بكود
+المستودع. البصمة التشخيصية: فشل متزامن على كل الفروع بلا commit ⇒ تبعية خارجية غير مُثبَّتة.
+
+### الإصلاح (D-161)
+حذف `npm install -g npm@latest` (npm 10.8.2 المرفق مع NodeSource متوافق كلياً — lockfileVersion 3،
+لا engines في frontend) + اختبار regression بلا تبعيات
+`tests/fitness/test_dockerfile_no_unpinned_npm.py` (يمسح Dockerfile* + `.devcontainer/`،
+يتجاهل التعليقات، negative-control مُتحقَّق).
+
+### القواعد الدائمة (D-161 — لا تُكسر بدون ADR)
+1. **ممنوع `npm install -g npm@latest`** (أو أي `@latest` غير مُثبَّت لأداة runtime-حرجة) في
+   Dockerfile/سكربتات `.devcontainer/` — الترقيات تُثبَّت على major مُتحقَّق التوافق مع Node الصورة.
+2. **1302 عَرَضٌ لا سبب** (تكريس §6.16): السبب في سطر أسبق داخل الـ Creation Log — السطر الأحمر
+   الحقيقي أولاً، ثم إصلاح ذلك السطر حصراً. لا تعديل devcontainer بالفرضية أبداً.
+3. **فشل متزامن على كل الفروع بلا commit = قنبلة خارجية** — ابحث في التبعيات غير المُثبَّتة لا في الكود.
+
+### التحقق
+- **Sandbox** (Docker محجوب): الاختباران يمرّان + negative-control + مسح المستودع (الموضع الوحيد
+  Dockerfile:100) + ruff نظيف.
+- **النهائي (المالك):** بعد merge — إنشاء Codespace جديد ⇒ البناء يتجاوز خطوة Node بنجاح.
+  main يبقى مكسوراً حتى الدمج (متوقَّع — الإصلاح على الفرع).
+
+### السلسلة (D-160 → D-161)
+| Decision | الموضوع |
+|----------|---------|
+| D-160 | قتل كارثة تدريس الاحتمالات (نيّة اشرح الاشتقاق + حارس التكرار) |
+| **D-161** | **قنبلة npm@latest: حذف الترقية غير المُثبَّتة + قفل regression (يحل فشل بناء Codespaces 1302 على كل الفروع — ISS-127)** |

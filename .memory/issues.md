@@ -4591,3 +4591,37 @@ P(A)؟»). المرّة الـ47 لنفس نمط الفشل عبر D-113→D-159
 ⇒ TEACH:sum (لا اختطاف)؛ «14»/«14 على 165» بلا علامة ⇒ S2 يعمل. بوّابة `check_pedagogical_os`
 (+قاعدة D-160) خضراء · ruff · runtime_truth. **التحقق الحي الكامل عبر WS + المتصفح إلزامي في
 Codespaces** بالدخولين الحقيقيين (sandbox يحجب pip/Postgres). CLAUDE.md §6.135.
+
+## ISS-127 (2026-07-09) — فشل بناء Codespaces على كل الفروع (error 1302): قنبلة `npm@latest` الموقوتة — أُصلح (D-161)
+
+**البلاغ (المالك + 4 لقطات creation.log):** إنشاء Codespace يفشل بـ
+`Error code: 1302 (UnifiedContainersErrorFatalCreatingContainer)` على **main والفرع
+الجديد معاً** — دون أي commit مسبِّب.
+
+**المنهجية (قرار المالك الحاسم):** لا إصلاح بالفرضية — أولاً استخراج الـ Creation Log
+الكامل والسطر الأحمر الحقيقي. الفرضيات الأولية (الحجم/Grafana/BuildKit/network_mode)
+**سقطت كلها أمام الدليل**.
+
+**السطر الأحمر الحقيقي (creation.log 1979-2005):**
+```
+100 | >>> RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+101 | >>>     apt-get install -y nodejs && \
+102 | >>>     npm install -g npm@latest        ← الخطوة الفاشلة
+npm error code EBADENGINE
+npm error notsup Required: {"node":"^22.22.2 || ^24.15.0 || >=26.0.0"}   ← npm@12.0.0
+npm error notsup Actual:   {"npm":"10.8.2","node":"v20.20.2"}
+"npm install -g npm@latest" did not complete successfully: exit code: 1
+```
+
+**الجذر:** `npm@latest` غير مُثبَّت الإصدار في `Dockerfile:100`. لحظة نشر npm الإصدار
+**12.0.0** (الذي أسقط دعم Node 20)، صار **كل** بناء على **كل** فرع يفشل — قنبلة موقوتة
+خارجية، صفر علاقة بأي تغيير في المستودع (يفسّر تطابق الفشل على الفرعين).
+
+**الإصلاح (D-161):** حذف `npm install -g npm@latest` من Dockerfile — NodeSource يرفق
+npm 10.8.2 متوافقاً كلياً (lockfileVersion 3، لا حقل engines في frontend). + اختبار
+regression بلا تبعيات `tests/fitness/test_dockerfile_no_unpinned_npm.py` (يمسح
+Dockerfile* + .devcontainer/، يتجاهل التعليقات، negative-control مُتحقَّق).
+
+**الحالة:** RESOLVED على الفرع — **التحقق النهائي = إنشاء Codespace جديد بعد merge**
+(البناء لا يُختبر في الـ sandbox — Docker محجوب). main يبقى مكسوراً حتى الدمج (متوقَّع).
+CLAUDE.md §6.136.

@@ -5478,3 +5478,26 @@ D-160) · ruff check/format · runtime_truth --check — كلها خضراء. ا
 `tests/services/test_iss126_step_explanation.py` (source-guards deps-free + detector + behavioral).
 **التحقق الحي الكامل WS+المتصفح+Supabase إلزامي في Codespaces** (sandbox يحجب pip/Postgres —
 نمط §6.55). CLAUDE.md §6.135.
+
+## D-161 (2026-07-09) — حظر `npm install -g npm@latest` في بناء الحاوية (ISS-127)
+
+**السياق:** فشل إنشاء Codespaces على كل الفروع بـ error 1302. المالك فرض المنهجية
+الاحترافية: **لا إصلاح قبل السطر الأحمر الحقيقي من الـ Creation Log** — وكان محقاً؛
+كل الفرضيات الأولية سقطت، والدليل أظهر `npm install -g npm@latest` (Dockerfile:100)
+يفشل بـ EBADENGINE لأن npm@12.0.0 أسقط دعم Node 20 (يتطلب ^22.22.2 || ^24.15.0 || >=26).
+
+**القرار:** حذف الترقية كلياً (npm 10.8.2 المرفق مع NodeSource كافٍ ومتوافق).
+
+**القواعد الدائمة (D-161 — لا تُكسر بدون ADR):**
+1. **ممنوع `npm install -g npm@latest`** (أو أي `@latest` غير مُثبَّت لأداة runtime-حرجة)
+   في Dockerfile أو سكربتات `.devcontainer/` — أي ترقية مستقبلية تُثبَّت على major
+   مُتحقَّق التوافق مع Node الصورة. يحرسه `tests/fitness/test_dockerfile_no_unpinned_npm.py`.
+2. **درس منهجي (تكريس قاعدة §6.16):** خطأ 1302 عَرَضٌ لا سبب — السبب دائماً في سطر
+   أسبق داخل الـ Creation Log. لا تعديل devcontainer/Dockerfile بالفرضية أبداً؛
+   السطر الأحمر الحقيقي أولاً، ثم إصلاح ذلك السطر حصراً.
+3. **قنبلة موقوتة خارجية = فشل متزامن على كل الفروع بلا commit** — هذه البصمة
+   التشخيصية تعني تبعية خارجية غير مُثبَّتة (registry publish)، لا كود المستودع.
+
+**التحقق:** الاختباران يمرّان مباشرة + negative-control (إعادة حقن السطر ⇒ الكاشف
+يلتقطه) + مسح المستودع: الموضع الوحيد كان Dockerfile:100. ruff نظيف. **التحقق
+النهائي بإنشاء Codespace جديد بعد merge** (Docker محجوب في الـ sandbox). §6.136.

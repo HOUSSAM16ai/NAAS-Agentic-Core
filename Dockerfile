@@ -95,9 +95,14 @@ RUN set -eux; \
     /opt/prometheus/prometheus --version
 
 # Install Node.js 20 (LTS) manually to avoid devcontainer feature GPG errors
+# D-161 (ISS-127): NEVER `npm install -g npm@latest` here. npm@12.0.0 dropped
+# Node 20 support (EBADENGINE: requires ^22.22.2 || ^24.15.0 || >=26.0.0) and
+# broke EVERY Codespace build on EVERY branch with error 1302 the moment it was
+# published — a time bomb, no repo commit involved (creation.log 2026-07-09).
+# NodeSource's nodejs already bundles a compatible npm (10.8.2, lockfileVersion 3
+# support). Any future npm upgrade must be PINNED to a Node-20-compatible major.
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g npm@latest
+    apt-get install -y nodejs
 
 # Create app user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser

@@ -477,10 +477,96 @@ def check_step_explanation_teaches() -> None:
         _pass("step-explanation teaches the value + guarded terminal reveal (D-160)")
 
 
+def check_question_never_verified_as_answer() -> None:
+    """D-162 (ISS-128): «السؤال ليس إجابة أبداً» — بوّابة الفعل الكلامي الرمزية.
+
+    الكارثة: «ماذا نسمي حساب 4 و 10 لم افهمها؟» (سؤال تسمية مفاهيمي) اعتُرفت
+    «إجابتك في الطريق الصحيح» وكُشف جواب السؤال المعلّق (165). القفل: (أ) حارس
+    استفهامي أول `_verify_numeric_answer`، (ب) pending = بؤرة السؤال المطروح
+    فعلاً (خطوة البسط تسأل عن المقام ⇒ "denominator")، (ج) مُجيب التسمية الحتمي
+    قبل S2 + مفهوم `combinations` في السجلّ، (د) السؤال وسط الحوار يهرب من S1.
+    """
+    ok = True
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    if "def _is_question_not_answer(" not in client:
+        _fail("missing speech-act gate _is_question_not_answer (D-162 ISS-128)")
+        ok = False
+    verify = client.split("def _verify_numeric_answer(", 1)
+    vbody = verify[1].split("\n    @", 1)[0] if len(verify) == 2 else ""
+    if "cls._is_question_not_answer(answer)" not in vbody:
+        _fail("_verify_numeric_answer must reject questions first (D-162 ISS-128)")
+        ok = False
+    turn = client.split("def _cognitive_turn(", 1)
+    body = turn[1].split("def _cognitive_turn_event_b(", 1)[0] if len(turn) == 2 else ""
+    if '"denominator" if step == "numerator"' not in body:
+        _fail("pending must be the question actually asked, not the delivered step (D-162)")
+        ok = False
+    if "_detect_naming_question(question, combo)" not in body:
+        _fail("_cognitive_turn must answer naming questions by name (D-162 ISS-128)")
+        ok = False
+    if 'if _is_q and not _qg.startswith(("كيف", "كيفاش")):' not in body:
+        _fail("mid-dialogue questions must escape the blind S1 ladder (D-162 ISS-128)")
+        ok = False
+    if "_NAMING_MARKERS" not in client:
+        _fail("missing _NAMING_MARKERS (naming intent — D-162 ISS-128)")
+        ok = False
+    sps = _read("app/services/skills/semantic_property_skill.py")
+    if '"combinations": PropertySpec(' not in sps:
+        _fail("PROPERTY_REGISTRY must define the combinations concept (D-162 ISS-128)")
+        ok = False
+    if "ماذا نسمي" not in sps:
+        _fail("_DEFINITIONAL_MARKERS must recognize naming intent (D-162 ISS-128)")
+        ok = False
+    if ok:
+        _pass("a question is never verified as an answer + naming answered by name (D-162)")
+
+
+def check_split_brain_parity() -> None:
+    """D-162 (ISS-128) — Track 2A: انضباط تكافؤ split-brain (monolith ↔ orchestrator port).
+
+    عقود المحرّك الجوهرية يجب أن توجد في **النسختين** (`orchestrator_client.py`
+    الحيّ + port `probability_tutor.py` في الخدمة المصغرة — M10-S2.1/D-154):
+    أي تعديل مستقبلي على واحدة دون الأخرى يُفشل CI (نمط D-013 الثنائي).
+    """
+    ok = True
+    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    port = _read("microservices/orchestrator_service/src/services/overmind/probability_tutor.py")
+    contracts = (
+        # (وصف العقد، علامة monolith، علامة الـ port)
+        ("speech-act gate", "def _is_question_not_answer(", "def is_question_not_answer("),
+        ("naming markers", "_NAMING_MARKERS", "NAMING_MARKERS"),
+        ("naming detector", "def _detect_naming_question(", "def detect_naming_question("),
+        ("naming answer", "def _build_naming_answer(", "def build_naming_answer("),
+        (
+            "question openers",
+            "_QUESTION_OPENERS_NOT_ANSWERS",
+            "QUESTION_OPENERS_NOT_ANSWERS",
+        ),
+        ("redaction-neutral dedup", "def _norm_for_dedup(", "def norm_for_dedup("),
+        ("LaTeX comb formatter", "def _fmt_comb(", "def fmt_comb("),
+    )
+    for name, mono_marker, port_marker in contracts:
+        if mono_marker not in client:
+            _fail(f"split-brain parity: monolith missing `{mono_marker}` ({name})")
+            ok = False
+        if port_marker not in port:
+            _fail(f"split-brain parity: orchestrator port missing `{port_marker}` ({name})")
+            ok = False
+    # «هل» مستثناة في النسختين (D-155): وجودها في أي من الـ tuples انحدار.
+    for label, src in (("monolith", client), ("port", port)):
+        openers_seg = src.split("QUESTION_OPENERS_NOT_ANSWERS", 1)
+        seg = openers_seg[1].split(")", 1)[0] if len(openers_seg) == 2 else ""
+        if '"هل"' in seg:
+            _fail(f"split-brain parity: «هل» must stay an answer (D-155) — found in {label}")
+            ok = False
+    if ok:
+        _pass("split-brain parity: tutor contracts exist in both brains (D-162 Track 2A)")
+
+
 def main() -> None:
     print(
         "=== Pedagogical OS Constitution Gate (D-153/ISS-120 + D-154/ISS-121 + "
-        "D-155/ISS-122 + D-160/ISS-126) ==="
+        "D-155/ISS-122 + D-160/ISS-126 + D-162/ISS-128) ==="
     )
     check_constitution_document()
     check_core_components_exist()
@@ -502,6 +588,8 @@ def main() -> None:
     check_misconception_graph_edges()
     check_multi_kc_engine()
     check_step_explanation_teaches()
+    check_question_never_verified_as_answer()
+    check_split_brain_parity()
     if _FAILURES:
         print(f"\n=== ❌ {len(_FAILURES)} Pedagogical OS violation(s) ===")
         sys.exit(1)

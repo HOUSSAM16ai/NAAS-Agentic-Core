@@ -1690,6 +1690,81 @@ class OrchestratorClient:
         except Exception:  # pragma: no cover - fail-safe
             return None
 
+    @classmethod
+    def _detect_naming_question(cls, question: str, combo) -> bool:
+        """D-162 (ISS-128): يكشف سؤال التسمية عن قيم خطوات التمرين — data-driven.
+
+        «ماذا نسمي حساب 4 و 10 لم افهمها؟» يطلب **اسم** العملية (التوافيق C(n,k))،
+        لا نتيجتها. الشرط: علامة تسمية (`_NAMING_MARKERS`) **+** (أرقام السؤال ⊆
+        قيم خطوات ``combo`` — favs/same/total/n/k/counts — **أو** ذكر الحساب/العملية).
+        الأرقام من المحرك الرمزي حصراً ⇒ يعمل لأي تمرين (ملايير التمارين).
+        """
+        try:
+            q = (question or "").lower()
+            if not any(m in q for m in cls._NAMING_MARKERS):
+                return False
+            nums = cls._extract_answer_numbers(q)
+            if nums:
+                values = {
+                    int(getattr(combo, "total_combinations", -1)),
+                    int(getattr(combo, "same_group_favorable", -1)),
+                    int(getattr(combo, "n", -1)),
+                    int(getattr(combo, "k", -1)),
+                }
+                for g in getattr(combo, "groups", []) or []:
+                    values.add(int(getattr(g, "favorable_combinations", -1)))
+                    values.add(int(getattr(g, "count", -1)))
+                return nums <= values
+            return any(w in q for w in ("حساب", "الحساب", "العملية", "الطريقة", "c("))
+        except Exception:  # pragma: no cover - fail-safe
+            return False
+
+    @classmethod
+    def _build_naming_answer(cls, combo, pending_focus: str | None) -> str | None:
+        """D-162 (ISS-128): يُجيب سؤال التسمية بالاسم — حتمي، صفر LLM.
+
+        تعريف **التوافيق** من ``PROPERTY_REGISTRY["combinations"]`` (مصدر واحد —
+        D-131 data-not-code) + ربط بقيمة واحدة عبر ``_fmt_comb`` (LaTeX، يَنجو من
+        حجب D-113 بنيوياً — D-154) + **إعادة طرح السؤال المعلّق** (نصّه يطابق
+        `_STEP_QUESTION_MARKERS` فيبقى pending مشتقاً صحيحاً) — لا تقدّم زائف.
+        """
+        try:
+            definition = None
+            with contextlib.suppress(Exception):
+                from app.services.skills.semantic_property_skill import PROPERTY_REGISTRY
+
+                _spec = PROPERTY_REGISTRY.get("combinations")
+                definition = getattr(_spec, "definition", None) if _spec else None
+            if not definition:
+                definition = (
+                    "هذا الحساب نسمّيه **التوافيق** (Combinations) ويُرمز له $C_{n}^{k}$: "
+                    "عدد طرق اختيار k عناصر من بين n عنصراً **دون اهتمام بالترتيب**."
+                )
+            parts = [definition]
+            _groups = [
+                g for g in (getattr(combo, "groups", []) or []) if getattr(g, "is_possible", False)
+            ]
+            if _groups:
+                _g0 = _groups[0]
+                parts.append(
+                    "مثلاً القيمة التي وجدناها لهذه المجموعة هي عدد التوافيق: "
+                    + cls._fmt_comb(
+                        int(_g0.count),
+                        int(getattr(combo, "k", 3)),
+                        int(_g0.favorable_combinations),
+                    )
+                )
+            if pending_focus == "denominator":
+                parts.append(
+                    "والآن نعود لسؤالنا: كم عدد كل الطرق الممكنة لسحب "
+                    f"{int(getattr(combo, 'k', 3))} كرات من {int(getattr(combo, 'n', 0))}؟"
+                )
+            elif pending_focus == "ratio":
+                parts.append("والآن نعود لسؤالنا: لديك البسط والمقام — كيف تُكوّن منهما الاحتمال؟")
+            return "\n\n".join(parts)
+        except Exception:  # pragma: no cover - fail-safe
+            return None
+
     #: D-125: أفعال إجرائية — «لماذا/ليش» معها تبقى سؤالاً حسابياً (قوالب D-124)،
     #: لا مفاهيمياً («لماذا نجمع»، «لماذا لا نحسب الأبيض»). تحفّظ المالك رقم 3.
     _PROCEDURAL_VERBS: tuple[str, ...] = (
@@ -1745,6 +1820,11 @@ class OrchestratorClient:
             "القسمة",
             "البسط والمقام",
             "بسط ومقام",
+            # D-162 (ISS-128): نية التسمية («ماذا نسمي حساب 4 و 10؟») مفاهيمية —
+            # الطالب يطلب اسم العملية (التوافيق)، لا خطوات الحساب.
+            "نسمي",
+            "ما اسم",
+            "تسمية",
         )
         if any(m in q for m in strong):
             return True
@@ -2443,16 +2523,67 @@ class OrchestratorClient:
         "فما قيمة P(A)",
     )
 
-    #: ISS-122 (D-155): بادئات استفهامية تجعل الرسالة سؤالاً لا إجابةً تُقيَّم —
-    #: تسقط لكتلة D-124/D-125 (شرح العلاقة/الاشتقاق). «هل» ليست هنا عمداً:
-    #: «هل هي 14 من 165» إجابة تطلب تأكيداً.
+    #: ISS-122 (D-155) + ISS-128 (D-162): بادئات استفهامية تجعل الرسالة سؤالاً لا
+    #: إجابةً تُقيَّم — تسقط لطبقات الإجابة (F2/التسمية/D-124/D-125). «هل» ليست هنا
+    #: عمداً: «هل هي 14 من 165» إجابة تطلب تأكيداً. D-162 وسّعها بعد كارثة
+    #: «ماذا نسمي حساب 4 و 10 لم افهمها؟» التي اعتُرفت «إجابة في الطريق الصحيح».
     _QUESTION_OPENERS_NOT_ANSWERS: tuple[str, ...] = (
         "لماذا",
         "ليش",
         "علاش",
         "كيف",
+        "كيفاش",
+        "ماذا",
+        "ما هو",
+        "ما هي",
+        "ماهو",
+        "ماهي",
+        "ما اسم",
         "ما الفرق",
+        "ما معنى",
+        "ما المقصود",
+        "متى",
+        "أين",
+        "اين",
+        "من أين",
+        "من اين",
+        "شنو",
+        "واش",
     )
+
+    #: D-162 (ISS-128): علامات نية التسمية («ماذا **نسمي** حساب 4 و 10؟») — الطالب
+    #: يطلب **اسم** العملية (التوافيق)، لا نتيجتها. كانت عمياء عنها كل الطبقات.
+    _NAMING_MARKERS: tuple[str, ...] = (
+        "نسمي",
+        "ما اسم",
+        "ما إسم",
+        "يسمى",
+        "تسمى",
+        "تسميه",
+        "تسمية",
+    )
+
+    @classmethod
+    def _is_question_not_answer(cls, message: str) -> bool:
+        """D-162 (ISS-128): بوّابة الفعل الكلامي — سؤال الطالب لا يُقيَّم كإجابة أبداً.
+
+        الكارثة: «ماذا نسمي حساب 4 و 10 لم افهمها؟» احتوت أرقاماً تطابق قيم
+        combo فاعتُرفت ``step_correct`` وكُشف جواب السؤال المعلّق (165). السؤال
+        والإجابة يجب أن يتمايزا **قبل** أي مطابقة رقمية. «هل» مستثناة عمداً
+        (قاعدة D-155 الثابتة: «هل هي 14 من 165» إجابة تطلب تأكيداً).
+        """
+        try:
+            q = (message or "").strip().lower()
+            if not q:
+                return False
+            # «و ماذا نسمي...» — واو العطف لا تحجب البادئة (دون مسّ «واش» الدارجة).
+            if q.startswith("و "):
+                q = q[2:].lstrip()
+            if q.startswith(cls._QUESTION_OPENERS_NOT_ANSWERS):
+                return True
+            return any(m in q for m in cls._NAMING_MARKERS)
+        except Exception:  # pragma: no cover - fail-safe
+            return False
 
     @classmethod
     def _pending_focus_from_history(
@@ -2493,6 +2624,11 @@ class OrchestratorClient:
         | ``None`` (غير مؤكَّدة ⇒ تُترك للمُقيّم).
         """
         try:
+            # D-162 (ISS-128): بوّابة الفعل الكلامي أولاً — «ماذا نسمي حساب 4 و 10
+            # لم افهمها؟» سؤالٌ يحمل أرقاماً تطابق favs فكان يُعترف step_correct
+            # ويُكشف جواب السؤال المعلّق. السؤال ليس إجابة أبداً (عدا «هل» — D-155).
+            if cls._is_question_not_answer(answer):
+                return None
             nums = cls._extract_answer_numbers(answer)
             if not nums:
                 return None
@@ -3521,10 +3657,22 @@ class OrchestratorClient:
                     entry.attempts += 1
                     return _finish(_teach, add_step=_explain_part)
 
-            # ── S2: إجابة رقمية صحيحة ⇒ اعتراف + تقدّم (المستوى الأعلى — لا سجن 600-حرف) ──
+            # السؤال المعلّق (D-155/D-158): kc_progress الدائم أولاً ثم اشتقاق التاريخ.
             _pending_focus = (
                 pending[1] if pending and pending[0] == cls._KC_PROB_A else None
             ) or cls._pending_focus_from_history(history_messages)
+
+            # ── F2b (D-162/ISS-128): سؤال التسمية («ماذا نسمي حساب 4 و 10؟») يُجاب
+            #    بالاسم (التوافيق — data-driven من combo) + إعادة طرح السؤال المعلّق،
+            #    مع إبقاء pending كما هو (لا تقدّم زائف). حتمي، صفر LLM. ──
+            _is_q = cls._is_question_not_answer(question)
+            if _is_q and cls._detect_naming_question(question, combo):
+                _name_text = cls._build_naming_answer(combo, _pending_focus)
+                if _name_text and not cls._recently_emitted(_name_text, history_messages):
+                    entry.attempts += 1
+                    return _finish(_name_text)
+
+            # ── S2: إجابة رقمية صحيحة ⇒ اعتراف + تقدّم (المستوى الأعلى — لا سجن 600-حرف) ──
             _numeric = cls._verify_numeric_answer(question, combo, _pending_focus)
             if _numeric == "final_ratio":
                 entry.attempts += 1
@@ -3564,6 +3712,16 @@ class OrchestratorClient:
                     new_pending="numerator",
                 )
 
+            # ── D-162 (ISS-128): سؤال وسط الحوار (بعد probe) لم تُجبه F2/التسمية ⇒
+            #    يهرب لطبقات الإجابة (D-124/D-125/D-132 ثم LLM المحروس) — سُلّم S1
+            #    الأعمى للأدوار غير الاستفهامية حصراً (كان سيكشف 165 متجاهلاً السؤال).
+            #    أسئلة «كيف/كيفاش» الإجرائية تبقى لسلسلة F2/F1/F3 التعليمية (D-160). ──
+            _qg = (question or "").strip().lower()
+            if _qg.startswith("و "):
+                _qg = _qg[2:].lstrip()
+            if _is_q and not _qg.startswith(("كيف", "كيفاش")):
+                return None, None
+
             # ── S1: كشف تدريجي — خطوة واحدة لم تُعرَض بعد (لا تفريغ كامل) ──
             for step in ("numerator", "ratio"):
                 if step in entry.representations_delivered:
@@ -3571,7 +3729,15 @@ class OrchestratorClient:
                 text = cls._build_symbolic_step(combo, step)
                 if cls._recently_emitted(text, history_messages):
                     continue
-                return _finish(text, add_step=step, new_pending=step)
+                # D-162 (ISS-128): pending = بؤرة **السؤال المطروح فعلاً** في نصّ
+                # الخطوة، لا اسم الخطوة المُسلَّمة — خطوة البسط تسأل عن المقام
+                # («كم عدد كل الطرق الممكنة؟»)؛ تخزين "numerator" جعل {4,10} في
+                # سؤالٍ لاحق تُعترف step_correct (favs ⊆ nums) — كارثة الترانسكريبت.
+                return _finish(
+                    text,
+                    add_step=step,
+                    new_pending=("denominator" if step == "numerator" else step),
+                )
 
             # ── F1 (D-160): الإنقاذ النهائي محروس ضد التكرار (كان يُرجَع بلا حارس ⇒
             #    كارثة الترانسكريبت ×3). حين لا يكون مكرَّراً ⇒ يُبَثّ. ──

@@ -74,6 +74,64 @@ _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 _CONFUSION = ("لم افهم", "لم أفهم", "مفهمتش", "ما فهمت", "لا افهم", "لا أفهم", "مش فاهم")
 _PROCEDURE = ("كيف", "كيفاش", "ما هي الخطوات", "خطوات الحل", "طريقة الحساب")
 
+#: D-162 (ISS-128) — port متكافئ مع monolith (بوّابة تكافؤ split-brain): بادئات
+#: استفهامية تجعل الرسالة سؤالاً لا إجابةً/دوراً سُلّمياً. «هل» مستثناة عمداً
+#: (D-155: «هل هي 14 من 165» إجابة تطلب تأكيداً).
+QUESTION_OPENERS_NOT_ANSWERS: tuple[str, ...] = (
+    "لماذا",
+    "ليش",
+    "علاش",
+    "كيف",
+    "كيفاش",
+    "ماذا",
+    "ما هو",
+    "ما هي",
+    "ماهو",
+    "ماهي",
+    "ما اسم",
+    "ما الفرق",
+    "ما معنى",
+    "ما المقصود",
+    "متى",
+    "أين",
+    "اين",
+    "من أين",
+    "من اين",
+    "شنو",
+    "واش",
+)
+
+#: D-162 (ISS-128): علامات نية التسمية («ماذا **نسمي** حساب 4 و 10؟») — الطالب
+#: يطلب **اسم** العملية (التوافيق)، لا نتيجتها.
+NAMING_MARKERS: tuple[str, ...] = (
+    "نسمي",
+    "ما اسم",
+    "ما إسم",
+    "يسمى",
+    "تسمى",
+    "تسميه",
+    "تسمية",
+)
+
+
+def is_question_not_answer(message: str) -> bool:
+    """D-162 (ISS-128): بوّابة الفعل الكلامي — سؤال الطالب لا يُعامل كإجابة/دور سُلّمي.
+
+    port متكافئ مع ``OrchestratorClient._is_question_not_answer`` (monolith) —
+    العقلان لا يفترقان (بوّابة تكافؤ split-brain في ``check_pedagogical_os``).
+    """
+    try:
+        q = _norm(message)
+        if not q:
+            return False
+        if q.startswith("و "):
+            q = q[2:].lstrip()
+        if q.startswith(QUESTION_OPENERS_NOT_ANSWERS):
+            return True
+        return any(m in q for m in NAMING_MARKERS)
+    except Exception:
+        return False
+
 
 def _norm(text: str) -> str:
     return (text or "").translate(_AR_DIGITS).strip().lower()
@@ -231,6 +289,47 @@ def build_rescue(comp: dict) -> str:
     )
 
 
+def detect_naming_question(question: str, comp: dict) -> bool:
+    """D-162 (ISS-128): سؤال تسمية عن قيم خطوات التمرين — data-driven من ``comp``."""
+    try:
+        q = _norm(question)
+        if not any(m in q for m in NAMING_MARKERS):
+            return False
+        nums = {int(m) for m in re.findall(r"\d+", q)}
+        if nums:
+            values = {int(comp["n"]), int(comp["k"]), int(comp["total"]), int(comp["same"])}
+            for g in comp.get("groups", []):
+                values.add(int(g["count"]))
+                values.add(int(g["fav"]))
+            return nums <= values
+        return any(w in q for w in ("حساب", "الحساب", "العملية", "الطريقة", "c("))
+    except Exception:
+        return False
+
+
+def build_naming_answer(comp: dict) -> str:
+    """D-162 (ISS-128): يُجيب سؤال التسمية بالاسم (التوافيق) + إعادة طرح سؤال المقام.
+
+    حتمي صفر-LLM؛ ``fmt_comb`` LaTeX يَنجو من حجب D-113 بنيوياً (D-154)، ونصّ
+    إعادة السؤال يطابق قوالب الخطوات فيبقى السؤال المعلّق مرئياً للتحقّق.
+    """
+    k, n = comp["k"], comp["n"]
+    possible = [g for g in comp.get("groups", []) if g.get("possible")]
+    sample = ""
+    if possible:
+        g0 = possible[0]
+        sample = "\n\nمثلاً القيمة التي وجدناها لهذه المجموعة هي عدد التوافيق: " + fmt_comb(
+            int(g0["count"]), k, int(g0["fav"])
+        )
+    return (
+        "هذا الحساب نسمّيه **التوافيق** (Combinations) ويُرمز له $C_{n}^{k}$: "
+        "عدد طرق اختيار k عناصر من بين n عنصراً **دون اهتمام بالترتيب** — "
+        "نستخدمه هنا لأن السحب «دفعة واحدة» لا ترتيب فيه."
+        f"{sample}\n\n"
+        f"والآن نعود لسؤالنا: كم عدد كل الطرق الممكنة لسحب {k} كرات من {n}؟"
+    )
+
+
 def _is_tutoring_turn(question: str) -> bool:
     """دور تدريسي: حيرة مجرّدة، «كيف»، أو إجابة قصيرة — لا طلب شرح غني (للـ LLM)."""
     q = _norm(question)
@@ -254,8 +353,6 @@ def deterministic_turn(
     بتطبيع محايد للحجب ضد كل أسطر الـ history (لا بثّ مكرَّر بنيوياً — ISS-121).
     """
     try:
-        if not _is_tutoring_turn(question):
-            return None
         comp = parse_composition(exercise_content)
         if comp is None:
             return None
@@ -263,6 +360,18 @@ def deterministic_turn(
 
         def _dup(text: str) -> bool:
             return any(_near_dup(text, p) for p in prior)
+
+        # D-162 (ISS-128): بوّابة الفعل الكلامي — سؤال التسمية يُجاب بالاسم (حتمي)،
+        # وأي سؤال آخر غير إجرائي («ماذا/لماذا/ما هو...») لا يدخل السُّلّم الأعمى
+        # (يسقط للـ LLM المحروس). أسئلة «كيف/كيفاش» الإجرائية تبقى للسُّلّم (غايته).
+        # port متكافئ مع monolith `_cognitive_turn` (بوّابة تكافؤ split-brain).
+        if detect_naming_question(question, comp):
+            _naming = build_naming_answer(comp)
+            return _naming if not _dup(_naming) else None
+        if is_question_not_answer(question) and not _norm(question).startswith(("كيف", "كيفاش")):
+            return None
+        if not _is_tutoring_turn(question):
+            return None
 
         ladder = (
             build_step(comp, None),
@@ -280,10 +389,13 @@ def deterministic_turn(
 
 
 __all__ = [
+    "build_naming_answer",
     "build_rescue",
     "build_step",
+    "detect_naming_question",
     "deterministic_turn",
     "fmt_comb",
+    "is_question_not_answer",
     "norm_for_dedup",
     "parse_composition",
 ]

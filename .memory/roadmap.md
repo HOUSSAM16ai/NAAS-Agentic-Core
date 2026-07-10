@@ -163,6 +163,11 @@ runtime evidence). دَيْن موثَّق: `DOC-DEBT-001` (CLAUDE.md موسوع
     parse_composition محصَّن ضد نثر الحل + بوّابة مقامات LaTeX-aware + سُلّم كشف تدريجي صفر-نتيجة
     بحارس dedup) موصول في `SynthesizerNode` خلف `ORCHESTRATOR_PROB_TUTOR_ENABLED` (افتراضي off).
     الحالة الصادقة (§6.6): **FLAGGED** — يُقلب العلم بعد التحقق الحيّ في Codespaces.
+  - **S2.2 ✅ بوّابة تكافؤ split-brain (D-162، 2026-07-10)**: عقود المعلّم الجوهرية (بوّابة
+    الفعل الكلامي «السؤال ليس إجابة» + مُجيب التسمية + dedup المحايد للحجب + `fmt_comb`)
+    محروسة الآن في **النسختين** (monolith `orchestrator_client` + الـ port) عبر
+    `check_pedagogical_os.check_split_brain_parity` — أي افتراق مستقبلي يُفشل CI
+    (نمط D-013 الثنائي). المرآة المعرفية زُومنت حيّاً (22 عقدة/19 حافة، parity MATCH).
 - **S3**: Mastery-Aware Orchestrator (P1, D-108) + Real Synthesis (P3, D-110 — `composition_confidence`).
 - **S4**: CritiqueNode (P2, D-109) — عقدة تحقق ذاتي بعد Synthesizer (fail-open، علم بيئي).
 - **قاعدة الصدق**: لا تُعلَن أيٌّ منها ACTIVE قبل التحقق الحيّ في Codespaces بالأسرار

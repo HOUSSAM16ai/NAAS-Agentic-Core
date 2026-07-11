@@ -4647,3 +4647,24 @@ data-driven + إعادة طرح السؤال المعلّق) + مفهوم `combi
 **الحالة:** RESOLVED — مُتحقَّق حياً E2E FULL-STACK في الـ sandbox (uvicorn + WS +
 OpenRouter حقيقي): `scripts/verify_d162_e2e.py` 9/9 PASS + `verify_d158_e2e.py` PASS
 (صفر انحدار). التفصيل: D-162 في decisions.md + CLAUDE.md §6.137.
+
+---
+
+## D-163 (2026-07-11) — Split-Brain Decomposition + Port Activation (M13 + M10-S2)
+
+**النوع:** دَيْن معماري (تقليل تعقيد + إتمام هجرة تدريجية) — لا كارثة runtime.
+
+**الكارثتان الهندسيتان:** (1) God-file `orchestrator_client.py` (6,154 سطراً — ~42% عقل احتمالات
+حتمي منفصل عن النقل، تفكيكه مؤجَّل مرّتين لنصف قطر الانفجار). (2) split-brain: عقلان متوازيان،
+الـ port يغطّي النصف الأول فقط، `support_level` ميت، لا حركة حية على :8006.
+
+**الحل:** استخراج العقل verbatim إلى `probability_tutor_brain.py` (وراثة mixin، صفر تغيير سلوكي) ⇒
+انكماش −38%؛ توسيع الـ port بالنصف التربوي (verify_numeric_answer + probe + build_symbolic_step +
+تفعيل support_level)؛ إثبات حي 7/7 على :8006 ⇒ قلب العلم إلى ACTIVE default-on (رافعة رجوع `=0`).
+بوّابة التكافؤ وُسّعت إلى 12 عقداً + حارس الوراثة.
+
+**الحالة:** RESOLVED — مُتحقَّق حياً E2E FULL-STACK (OpenRouter حقيقي + SQLite؛ Supabase عبر
+جسر HTTPS): `verify_m10s2_port_live.py` **7/7** (بالعلم + بالافتراض الجديد) + `verify_d162_e2e.py`
+**9/9** + `verify_d158_e2e.py` PASS على العقل المُفكَّك (صفر انحدار) + 746 اختبار نصف قطر الانفجار.
+Supabase: PostgreSQL 17.6، tutor_state 19 عموداً، الحسابان، 38 عقدة معرفية. التفصيل: D-163 في
+decisions.md + CLAUDE.md §6.138.

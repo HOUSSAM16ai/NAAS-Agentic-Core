@@ -10,7 +10,7 @@
 
 | المستوى | المصدر | الدور |
 |---------|--------|------|
-| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية + سجلّ العقائد §6.x (D-001→D-156) |
+| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية + سجلّ العقائد §6.x (D-001→D-163) |
 | 🧠 الذاكرة | `.memory/` → [`README.md`](../.memory/README.md) | roadmap · decisions · issues · runtime_truth · pedagogical_os |
 | ⚖️ الدستور المعماري | [`architecture/MICROSERVICES_CONSTITUTION.md`](architecture/MICROSERVICES_CONSTITUTION.md) + [`ARCH_MICROSERVICES_CONSTITUTION.md`](ARCH_MICROSERVICES_CONSTITUTION.md) | حدود الخدمات |
 | 📖 قواعد الوكلاء | [`../AGENTS.md`](../AGENTS.md) | قواعد التطوير + مشغّلات `ai_skills/` |

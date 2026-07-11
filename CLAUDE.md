@@ -11491,3 +11491,75 @@ D-099) + `parsed_entities` + مدخل `KNOWLEDGE_INDEX` للساخن — الم�
 |----------|---------|
 | D-161 | قنبلة npm@latest (فشل بناء Codespaces 1302) |
 | **D-162** | **ISS-128 — «السؤال ليس إجابة»: بوّابة الفعل الكلامي + pending = السؤال المطروح فعلاً + مُجيب التسمية (التوافيق) + بوّابة تكافؤ split-brain (مُتحقَّق حياً E2E 9/9)** |
+
+---
+
+## 6.138 حلّ split-brain + تقليل التعقيد الكارثي — الانتقال التدريجي للخدمات المصغرة (2026-07-11, D-163)
+
+> **الكارثتان الهندسيتان** (حُلّتا ثم وُثّقتا — لا كارثة runtime): (1) **التعقيد** — God-file
+> `orchestrator_client.py` بـ **6,154 سطراً**، منها ~2,600 (~42%) «عقل احتمالات» حتمي؛ (2)
+> **split-brain** — عقلان يُصانان بالتوازي (المونوليث ↔ port الخدمة المصغرة) يفترقان في القدرة.
+> هذا القسم يحكم بنية العقل الواحد والانتقال M10-S2 — لا يُكسر بدون ADR.
+
+### الجذر (مؤكَّد بالاستكشاف)
+عقل الاحتمالات الحتمي (`_cognitive_turn`, `_verify_numeric_answer`, `_build_symbolic_*`,
+`_detect_*`, `_build_diagnostic_probe`, dedup, الثوابت) **منفصل تماماً عن النقل**: كله
+`@classmethod/@staticmethod` على `(question, history, combo, kc_progress)`، صفر اعتماد على
+HTTP أو instance-state. تفكيكه أُجِّل مرّتين (D-160/M13) لنصف قطر الانفجار: ~28 اختبار
+source-inspection + ~17 دالة بوّابة تُثبّت substrings في هذا الملف بعينه. والـ port
+(`microservices/.../probability_tutor.py`) يغطّي النصف الأول فقط (الفعل الكلامي + السُّلّم +
+التسمية + dedup)؛ ينقصه التحقّق الرقمي/الـ probe/الاعتراف، ومعامل `support_level` ميت، **ولا
+حركة حية** (لا driver يجمع العلم + `exercise_content`).
+
+### الإصلاح (5 مراحل، كلٌّ commit مستقل بعد checkpoint أخضر)
+- **Stage 1 — الاستخراج (M13)**: نقل **حرفي (verbatim، صفر إعادة صياغة)** للعقل إلى
+  `app/services/skills/probability_tutor_brain.py` (`class ProbabilityTutorBrain`، نفس الأسماء
+  بما فيها الشرطة السفلية). `class OrchestratorClient(ProbabilityTutorBrain)` (mixin) ⇒ كل
+  `cls._x`/`self._x` في `chat_with_agent` تُحل عبر الـ MRO دون تغيير ⇒ سلوك runtime مطابق بالبايت.
+  God-file: **6,154 → 3,832 سطراً (−38%)**. تحديث lockstep (D-013/D-140) لـ ~13 دالة بوّابة +
+  11 ملف اختبار source-inspection (ضمّ `client + brain` في مصدر القراءة + إعادة توجيه
+  slice-endpoints للدالة التالية داخل العقل).
+- **Stage 2 — سدّ فجوة split-brain (M10-S2.1)**: port النصف التربوي المفقود إلى
+  `probability_tutor.py` (stdlib، صفر import من `app/`): `verify_numeric_answer` +
+  `extract_answer_numbers` + `pending_focus_from_history` + `build_diagnostic_probe` +
+  `build_symbolic_step` (الاعتراف والتقدّم) + `has_prior_tutoring_step`، وتفعيل `support_level`
+  عبر `_ladder_for_support` (يُشكّل السُّلّم **دون إسقاط رُتبة** — الواثق يتلقّى تلميحاً افتتاحياً
+  أخفّ، المتعثّر يبدأ بالسقالة الكاملة — نظير D-115). بوّابة التكافؤ: **12 عقداً** (كان 7) + حارس
+  `support_level` + حارس الوراثة (no-ZOMBIE).
+- **Stage 3 — الإثبات الحي + قلب العلم**: `scripts/verify_m10s2_port_live.py` (جديد — سدّ فجوة
+  الاستكشاف) ⇒ **7/7** على :8006 حقيقي. قلب `ORCHESTRATOR_PROB_TUTOR_ENABLED` الافتراضي
+  `""`→`"1"` (**ACTIVE default-on**) + إعادة الإثبات بلا env صريح ⇒ 7/7. رافعة الرجوع الفوري
+  `=0` بلا deploy (D-025).
+- **Stage 4/5 — التوثيق + CI**: هذا القسم + `.memory/{runtime_truth,architecture,decisions,issues,context,README}.md` + الفهرس.
+
+### القواعد الـ 5 الدائمة (D-163 — لا تُكسر بدون ADR)
+1. **العقل وحدة واحدة**: `probability_tutor_brain.py` هو المكان الوحيد لدوال المعلّم الحتمي —
+   **ممنوع** إعادة أي منها إلى `orchestrator_client.py` (عودة الـ God-file).
+2. **تكافؤ العقلين مفروض CI**: `check_split_brain_parity` (12 عقداً monolith brain ↔ port) —
+   أي تعديل على واحدة دون الأخرى يُفشل CI (نمط D-013 الثنائي) + حارس الوراثة (العقل مستهلَك حياً).
+3. **الـ port ACTIVE default-on** خلف `ORCHESTRATOR_PROB_TUTOR_ENABLED` (افتراضه `"1"`)؛ رافعة
+   الرجوع `=0` بلا deploy. الترقية إلى ACTIVE استوفت البرهان الثلاثي (import + call chain + runtime).
+4. **الاستخراج/الترحيل verbatim** (صفر تغيير سلوكي) — الأرقام من المحرك الرمزي حصراً (صفر LLM
+   في مسار الأرقام)؛ `support_level` يُشكّل السُّلّم دون إسقاط رُتبة (لا فقدان قدرة).
+5. **الصدق البيئي**: على SQLite+HTTP لا checkpointer للـ orchestrator (D-098) والـ POST handler
+   يقرأ التاريخ من DB لا من الجسم (`history_len=0`) ⇒ استمرارية أدوار :8006 قيدُ orchestrator لا
+   عيبُ port؛ قدرة الاعتراف مُثبتة على مستوى وحدة الـ port + حياً على مسار المونوليث (D-162 T5/T6).
+
+### التحقق الحي (2026-07-11 — OpenRouter حقيقي + SQLite؛ Supabase عبر جسر HTTPS، Postgres TCP محجوب §6.55)
+- `scripts/verify_m10s2_port_live.py` **7/7** على :8006 (بالعلم صراحةً + بالافتراض الجديد بلا env):
+  probe-first (سؤال تشخيصي، صفر قيم محسوبة) + السُّلّم يسأل عن المقام + `support_level=1` يبدأ بخطوة
+  البسط + zero-leak (14/165) + عربي نظيف + fail-open (بلا exercise_content ⇒ توليف LLM) + الاعتراف.
+- **صفر انحدار على العقل المُفكَّك**: `verify_d162_e2e.py` **9/9** (transcript كارثة ISS-128 عبر WS)
+  + `verify_d158_e2e.py` **PASS** (محرّك الدور المعرفي) + **746 passed / 2 deselected** عبر نصف قطر
+  الانفجار الكامل.
+- **Supabase الإنتاجي عبر الجسر**: PostgreSQL 17.6، `tutor_state` 19 عموداً (D-158/159)، الحسابان
+  (admin `benmerahhoussam16@gmail.com` + user `houssamannaba963@gmail.com`)، 38 عقدة في `knowledge_nodes`.
+- البوّابات: `check_pedagogical_os` (يقرأ العقل + الـ client) + `check_skills_doctrine` +
+  `runtime_truth --check` + `validate_structure` + `ci_guardrails` + `check_test_hygiene` +
+  ruff check/format — كلها خضراء.
+
+### السلسلة (D-162 → D-163)
+| Decision | الموضوع |
+|----------|---------|
+| D-162 | ISS-128 — «السؤال ليس إجابة» + بوّابة تكافؤ split-brain (Track 2A) |
+| **D-163** | **حلّ split-brain + تقليل التعقيد: استخراج عقل الاحتمالات (God-file 6,154→3,832 سطراً، −38%) إلى `probability_tutor_brain.py` + تفعيل port الخدمة المصغرة ACTIVE default-on بعد إثبات حي 7/7 (M13 + M10-S2)** |

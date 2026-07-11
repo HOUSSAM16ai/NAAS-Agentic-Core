@@ -133,9 +133,10 @@ class TestOwnerScenario:
 # ── لا special-casing + التوصيل (فحص بنيوي) ──────────────────────────────────
 class TestNoSpecialCasing:
     def test_cognitive_response_single_semantic_call(self) -> None:
+        # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin.
         src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
             encoding="utf-8"
-        )
+        ) + (ROOT / "app/services/skills/probability_tutor_brain.py").read_text(encoding="utf-8")
         i = src.find('if concept == "event_meaning":')
         assert i != -1
         seg = src[i : i + 1400]

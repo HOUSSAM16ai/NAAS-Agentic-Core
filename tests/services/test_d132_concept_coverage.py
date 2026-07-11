@@ -72,9 +72,10 @@ class TestInterpretOrDefine:
 # ── فحص بنيوي: لا default مُجمَّد + ترتيب preempt ────────────────────────────
 class TestNoFrozenDefault:
     def _client(self) -> str:
+        # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin.
         return (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
             encoding="utf-8"
-        )
+        ) + (ROOT / "app/services/skills/probability_tutor_brain.py").read_text(encoding="utf-8")
 
     def test_definitional_preempt_precedes_socratic(self) -> None:
         src = self._client()

@@ -20,7 +20,9 @@ SKILL_SRC = (REPO_ROOT / "app/services/skills/concept_diagnosis_skill.py").read_
 )
 CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
     encoding="utf-8"
-)
+) + (REPO_ROOT / "app/services/skills/probability_tutor_brain.py").read_text(
+    encoding="utf-8"
+)  # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin
 DOCTRINE_SRC = (REPO_ROOT / "app/services/skills/doctrine.py").read_text(encoding="utf-8")
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")

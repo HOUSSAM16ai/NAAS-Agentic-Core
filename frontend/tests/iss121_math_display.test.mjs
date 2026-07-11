@@ -38,10 +38,17 @@ check('.katex-mathml has display:none !important', mathmlBlock.includes('display
 check('.katex-mathml keeps user-select:none (defense in depth)', mathmlBlock.includes('user-select: none'));
 
 // ── 2. Backend builders emit LaTeX, not raw ASCII fractions (bidi-safe) ──────
-const orch = readFileSync(
-    resolve(repoRoot, 'app', 'infrastructure', 'clients', 'orchestrator_client.py'),
-    'utf-8',
-);
+// D-163: عقل الاحتمالات الحتمي (_fmt_comb + الإنقاذ) استُخرج من الـ God-file إلى
+// الوحدة المستقلة probability_tutor_brain.py — نضمّ الاثنين ليصمد أي pin.
+const orch =
+    readFileSync(
+        resolve(repoRoot, 'app', 'infrastructure', 'clients', 'orchestrator_client.py'),
+        'utf-8',
+    ) +
+    readFileSync(
+        resolve(repoRoot, 'app', 'services', 'skills', 'probability_tutor_brain.py'),
+        'utf-8',
+    );
 check(
     '_fmt_comb emits LaTeX $C_{n}^{k}$ form',
     orch.includes('C_{{{c}}}^{{{k}}}') && orch.includes('\\\\dfrac'),

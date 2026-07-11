@@ -567,6 +567,16 @@ def check_split_brain_parity() -> None:
         ),
         ("redaction-neutral dedup", "def _norm_for_dedup(", "def norm_for_dedup("),
         ("LaTeX comb formatter", "def _fmt_comb(", "def fmt_comb("),
+        # D-163 (Stage 2): النصف التربوي — الـ port سدّ فجوة split-brain.
+        ("numeric verifier", "def _verify_numeric_answer(", "def verify_numeric_answer("),
+        ("answer-number extractor", "def _extract_answer_numbers(", "def extract_answer_numbers("),
+        (
+            "pending-focus derivation",
+            "def _pending_focus_from_history(",
+            "def pending_focus_from_history(",
+        ),
+        ("diagnostic probe", "def _build_diagnostic_probe(", "def build_diagnostic_probe("),
+        ("symbolic step (acknowledge)", "def _build_symbolic_step(", "def build_symbolic_step("),
     )
     for name, mono_marker, port_marker in contracts:
         if mono_marker not in brain:
@@ -582,8 +592,13 @@ def check_split_brain_parity() -> None:
         if '"هل"' in seg:
             _fail(f"split-brain parity: «هل» must stay an answer (D-155) — found in {label}")
             ok = False
+    # D-163 (Stage 2): الـ port فعّل معامل support_level (لم يعد ميتاً) وحرّك
+    # الرُّتب دون إسقاط سقالة — نظير D-115 (عمق الدعم).
+    if "def _ladder_for_support(" not in port:
+        _fail("split-brain parity: port must shape the ladder by support_level (D-163 — was dead)")
+        ok = False
     if ok:
-        _pass("split-brain parity: tutor contracts exist in both brains (D-162 Track 2A)")
+        _pass("split-brain parity: tutor contracts exist in both brains (D-162 Track 2A + D-163)")
 
 
 def main() -> None:

@@ -1063,15 +1063,18 @@ def check_dialogue_manager_wired() -> None:
             _fail(f"dialogue_manager missing decision action '{token}' (D-142).")
 
     # التوصيل الحيّ (لا ZOMBIE): orchestrator_client يستشيره خلف العلم.
+    # D-163: التعريف (`_dialogue_decision` + الاستيراد الكسول لـ get_dialogue_manager_skill)
+    # يعيش في العقل المستخرَج `probability_tutor_brain.py`؛ موقع الاستدعاء يبقى في الـ client.
     client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
         encoding="utf-8"
     )
-    if (
-        "get_dialogue_manager_skill" not in client_src
-        or "_dialogue_decision" not in client_src
-        or "_semantic_tutor_enabled" not in client_src
-    ):
+    brain_src = (ROOT / "app/services/skills/probability_tutor_brain.py").read_text(
+        encoding="utf-8"
+    )
+    if "_dialogue_decision" not in client_src or "_semantic_tutor_enabled" not in client_src:
         _fail("orchestrator_client does not invoke DialogueManager behind flag (D-142 ZOMBIE).")
+    if "get_dialogue_manager_skill" not in brain_src or "def _dialogue_decision" not in brain_src:
+        _fail("probability_tutor_brain lost the DialogueManager capability (D-142/D-163).")
     _pass(
         "DialogueManager wired: evidence×ability×difficulty, deterministic, behind "
         "SEMANTIC_TUTOR_ENABLED (D-142 Phase 2)"

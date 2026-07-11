@@ -19,7 +19,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
     encoding="utf-8"
-)
+) + (REPO_ROOT / "app/services/skills/probability_tutor_brain.py").read_text(
+    encoding="utf-8"
+)  # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin
 
 
 # ── نُسَخ standalone مطابقة لمنطق D-124 (sandbox-safe replicas) ────────────────
@@ -228,7 +230,9 @@ class TestSourceWiring:
     def test_direct_explanation_uses_history_none(self) -> None:
         # D-123 immunity: التحليل من المحتوى الرسمي بـ history=None.
         seg = CLIENT_SRC[CLIENT_SRC.index("def _build_probability_direct_explanation(") :]
-        seg = seg[: seg.index("\n    async def _build_probability_tree_props")]
+        # D-163: نهاية slice = الدالة التالية داخل العقل المستخرَج (_build_probability_tree_props
+        # بقيت في الـ client كبانية UI فلم تعد تلي هذه الدالة في السلسلة المضمومة).
+        seg = seg[: seg.index("\n    async def _build_probability_computational_answer")]
         assert "skill.analyze(ProbabilityInput(question=_official, history=None))" in seg
         # ISS-120 (D-153): أسئلة-فقط — نثر الحل النموذجي ممنوع على استخراج الكيانات.
         assert "load_exercise_questions_only(" in seg

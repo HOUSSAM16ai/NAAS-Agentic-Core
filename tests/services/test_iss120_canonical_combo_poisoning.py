@@ -162,8 +162,11 @@ class TestSourceWiring:
     """Source-inspection: الأسلاك الدائمة لقواعد D-153 (تحرسها أيضاً بوّابة CI)."""
 
     def _orch_src(self) -> str:
+        # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin.
         return (
             _REPO_ROOT / "app" / "infrastructure" / "clients" / "orchestrator_client.py"
+        ).read_text(encoding="utf-8") + (
+            _REPO_ROOT / "app" / "services" / "skills" / "probability_tutor_brain.py"
         ).read_text(encoding="utf-8")
 
     def test_canonical_loaders_use_questions_only(self):

@@ -55,6 +55,19 @@ def _read(rel: str) -> str:
     return p.read_text(encoding="utf-8")
 
 
+# D-163 (M13): عقل الاحتمالات استُخرج من الـ God-file إلى وحدة مستقلة.
+# - CLIENT_PATH: التوصيل (chat_with_agent + preempts + streaming) — يبقى في الـ client.
+# - BRAIN_PATH: الدوال الحتمية المستخرَجة (`_cognitive_turn`, `_verify_numeric_answer`,
+#   `_build_*`, `_detect_*`, الثوابت) — pins الأجساد تُقرأ من هنا.
+CLIENT_PATH = "app/infrastructure/clients/orchestrator_client.py"
+BRAIN_PATH = "app/services/skills/probability_tutor_brain.py"
+
+
+def _read_monolith_tutor() -> str:
+    """عقل المونوليث الكامل = التوصيل (client) + الدوال المستخرَجة (brain) — D-163."""
+    return _read(CLIENT_PATH) + "\n" + _read(BRAIN_PATH)
+
+
 # ── 1) الدستور موجود ومكتمل ─────────────────────────────────────────────────
 def check_constitution_document() -> None:
     doc = _read(".memory/pedagogical_os.md")
@@ -128,16 +141,16 @@ def check_questions_only_extraction() -> None:
     if "def load_exercise_questions_only(" not in retrieval:
         _fail("load_exercise_questions_only missing from exercise_retrieval.py")
         return
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
-    calls = client.count("load_exercise_questions_only(")
+    tutor = _read_monolith_tutor()  # D-163: مواقع الاستدعاء موزّعة بين client + brain
+    calls = tutor.count("load_exercise_questions_only(")
     if calls < 6:
         _fail(
-            f"orchestrator_client uses load_exercise_questions_only only {calls}×"
+            f"monolith tutor uses load_exercise_questions_only only {calls}×"
             " (expected ≥ 6 — solution prose must never feed entity extraction)"
         )
         return
     # مرجع RAG-Grounded (D-145) يبقى بالمحتوى الكامل — مقصود.
-    if "load_exercise_content(_decision.matched_entry)" not in client:
+    if "load_exercise_content(_decision.matched_entry)" not in tutor:
         _fail("D-145 RAG reference no longer loads full official content (should stay full)")
         return
     _pass(f"entity extraction is solution-free ({calls} questions-only call sites; RAG keeps full)")
@@ -228,12 +241,13 @@ def check_inert_boolean_only() -> None:
 # ── D-154 (ISS-121): الكشف التدريجي + حارس تكرار محايد للحجب + عرض سليم ────────
 def check_progressive_disclosure() -> None:
     """القانون الرابع «التلميح قبل الحل» مُنفَّذ بنيوياً (roadmap §7: صفر كشف)."""
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    client = _read(CLIENT_PATH)
+    brain = _read(BRAIN_PATH)  # D-163: البُناة الرمزية تعيش في العقل المستخرَج
     ok = True
-    if "فاحتمال الحادثة A هو {same} من كل {total}" in client:
+    if "فاحتمال الحادثة A هو {same} من كل {total}" in client + brain:
         _fail("symbolic reveal still prints the final ratio (answer dump)")
         ok = False
-    if "ركّب الاحتمال **بنفسك**" not in client:
+    if "ركّب الاحتمال **بنفسك**" not in brain:
         _fail("reveal generation-question tail missing")
         ok = False
     proc = client.split("else:  # procedure — ISS-121 (D-154): سُلّم لا تفريغ", 1)
@@ -254,10 +268,11 @@ def check_progressive_disclosure() -> None:
 
 def check_redaction_neutral_dedup() -> None:
     """حارس التكرار محايد لتحويل الحجب (المحفوظ «؟» ≡ المبثوث بالأرقام) + سلسلة بدائل."""
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    client = _read(CLIENT_PATH)
+    brain = _read(BRAIN_PATH)  # D-163: تعريف _norm_for_dedup في العقل المستخرَج
     dm = _read("app/services/skills/dialogue_manager_skill.py")
     ok = True
-    if 'r"[\\d؟?]+"' not in client:
+    if 'r"[\\d؟?]+"' not in brain:
         _fail("_norm_for_dedup lacks redaction-neutral placeholder normalization")
         ok = False
     if 'r"[\\d؟?]+"' not in dm:
@@ -275,10 +290,10 @@ def check_redaction_neutral_dedup() -> None:
 
 def check_math_display_integrity() -> None:
     """الصيغ الحتمية LaTeX (LTR-معزولة — لا بعثرة bidi) + لا نسخ مضاعف على الموبايل."""
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    brain = _read(BRAIN_PATH)  # D-163: تعريف _fmt_comb في العقل المستخرَج
     css = _read("frontend/app/globals.css")
     ok = True
-    if "C_{{{c}}}^{{{k}}}" not in client:
+    if "C_{{{c}}}^{{{k}}}" not in brain:
         _fail("_fmt_comb no longer emits LaTeX (bidi scrambling returns)")
         ok = False
     mathml_rule = css.split(".katex-mathml {", 1)
@@ -312,18 +327,19 @@ def check_probability_tutor_port() -> None:
 
 def check_numeric_answer_verification() -> None:
     """ISS-122 (D-155): الحقيقة الرمزية تحكم إجابة الطالب الرقمية («هل هي 14 من 165»)."""
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    brain = _read(BRAIN_PATH)  # D-163: دوال التحقق الرمزي في العقل المستخرَج
+    tutor = _read_monolith_tutor()
     ok = True
-    if "def _verify_numeric_answer(" not in client:
+    if "def _verify_numeric_answer(" not in brain:
         _fail("_verify_numeric_answer missing — numeric student answers invisible")
         ok = False
-    if "def _pending_focus_from_history(" not in client:
+    if "def _pending_focus_from_history(" not in brain:
         _fail("_pending_focus_from_history missing — no pending-question derivation")
         ok = False
-    if "if same in nums and total in nums:" not in client:
+    if "if same in nums and total in nums:" not in brain:
         _fail("final-ratio verdict must compare combo-derived numbers (no hardcoding)")
         ok = False
-    if "أحسنت! ✅ إجابتك صحيحة تماماً" not in client:
+    if "أحسنت! ✅ إجابتك صحيحة تماماً" not in tutor:
         _fail("explicit acknowledgement of a correct final answer missing")
         ok = False
     if ok:
@@ -374,8 +390,8 @@ def check_structured_kc_progress() -> None:
         if symbol not in schema:
             _fail(f"kc_progress_schema is missing {symbol!r} (D-159 WP-A)")
             ok = False
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
-    turn = client.split("def _cognitive_turn(", 1)
+    brain = _read(BRAIN_PATH)  # D-163: _cognitive_turn في العقل المستخرَج
+    turn = brain.split("def _cognitive_turn(", 1)
     body = turn[1][:9000] if len(turn) == 2 else ""
     if "parse_kc_entry" not in body or "make_pending" not in body:
         _fail("_cognitive_turn must read/write kc_progress via kc_progress_schema (D-159 WP-A)")
@@ -433,9 +449,9 @@ def check_misconception_graph_edges() -> None:
 def check_multi_kc_engine() -> None:
     """D-159 (WP-E): محرّك الدور متعدد العُقد — عقدة الحادثة B فوق الحالة الدائمة."""
     ok = True
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    brain = _read(BRAIN_PATH)  # D-163: محرّك الدور متعدد العُقد في العقل المستخرَج
     for symbol in ("_KC_PROB_B", "def _cognitive_turn_event_b", "def _load_canonical_parity"):
-        if symbol not in client:
+        if symbol not in brain:
             _fail(f"multi-KC engine is missing {symbol!r} (D-159 WP-E)")
             ok = False
     uss = _read("app/services/skills/understanding_state_skill.py")
@@ -455,14 +471,14 @@ def check_step_explanation_teaches() -> None:
     العالق يتعلّم جزئية ملموسة لم تُعرَض (لا كشف P(A) — M6/M8).
     """
     ok = True
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
-    if "def _detect_step_explanation(" not in client:
+    brain = _read(BRAIN_PATH)  # D-163: كاشف الاشتقاق + _cognitive_turn في العقل المستخرَج
+    if "def _detect_step_explanation(" not in brain:
         _fail("missing data-driven _detect_step_explanation (D-160 ISS-126)")
         ok = False
-    if "subpart = forced_subpart or cls._detect_subpart_question(question)" not in client:
+    if "subpart = forced_subpart or cls._detect_subpart_question(question)" not in brain:
         _fail("_build_probability_direct_explanation must honor forced_subpart (D-160)")
         ok = False
-    turn = client.split("def _cognitive_turn(", 1)
+    turn = brain.split("def _cognitive_turn(", 1)
     body = turn[1].split("def _cognitive_turn_event_b(", 1)[0] if len(turn) == 2 else ""
     if "_detect_step_explanation(question, combo)" not in body:
         _fail("_cognitive_turn must route step-explanation requests (D-160)")
@@ -487,16 +503,16 @@ def check_question_never_verified_as_answer() -> None:
     قبل S2 + مفهوم `combinations` في السجلّ، (د) السؤال وسط الحوار يهرب من S1.
     """
     ok = True
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
-    if "def _is_question_not_answer(" not in client:
+    brain = _read(BRAIN_PATH)  # D-163: بوّابة الفعل الكلامي + _cognitive_turn في العقل
+    if "def _is_question_not_answer(" not in brain:
         _fail("missing speech-act gate _is_question_not_answer (D-162 ISS-128)")
         ok = False
-    verify = client.split("def _verify_numeric_answer(", 1)
+    verify = brain.split("def _verify_numeric_answer(", 1)
     vbody = verify[1].split("\n    @", 1)[0] if len(verify) == 2 else ""
     if "cls._is_question_not_answer(answer)" not in vbody:
         _fail("_verify_numeric_answer must reject questions first (D-162 ISS-128)")
         ok = False
-    turn = client.split("def _cognitive_turn(", 1)
+    turn = brain.split("def _cognitive_turn(", 1)
     body = turn[1].split("def _cognitive_turn_event_b(", 1)[0] if len(turn) == 2 else ""
     if '"denominator" if step == "numerator"' not in body:
         _fail("pending must be the question actually asked, not the delivered step (D-162)")
@@ -507,7 +523,7 @@ def check_question_never_verified_as_answer() -> None:
     if 'if _is_q and not _qg.startswith(("كيف", "كيفاش")):' not in body:
         _fail("mid-dialogue questions must escape the blind S1 ladder (D-162 ISS-128)")
         ok = False
-    if "_NAMING_MARKERS" not in client:
+    if "_NAMING_MARKERS" not in brain:
         _fail("missing _NAMING_MARKERS (naming intent — D-162 ISS-128)")
         ok = False
     sps = _read("app/services/skills/semantic_property_skill.py")
@@ -522,15 +538,22 @@ def check_question_never_verified_as_answer() -> None:
 
 
 def check_split_brain_parity() -> None:
-    """D-162 (ISS-128) — Track 2A: انضباط تكافؤ split-brain (monolith ↔ orchestrator port).
+    """D-162 (ISS-128) — Track 2A + D-163: انضباط تكافؤ split-brain (brain ↔ orchestrator port).
 
-    عقود المحرّك الجوهرية يجب أن توجد في **النسختين** (`orchestrator_client.py`
-    الحيّ + port `probability_tutor.py` في الخدمة المصغرة — M10-S2.1/D-154):
-    أي تعديل مستقبلي على واحدة دون الأخرى يُفشل CI (نمط D-013 الثنائي).
+    عقود المحرّك الجوهرية يجب أن توجد في **النسختين** — عقل المونوليث المستخرَج
+    (`probability_tutor_brain.py`، D-163/M13) + port الخدمة المصغرة
+    (`probability_tutor.py` — M10-S2.1/D-154): أي تعديل مستقبلي على واحدة دون
+    الأخرى يُفشل CI (نمط D-013 الثنائي). كما يُتحقَّق أن `OrchestratorClient`
+    يرث العقل فعلاً (استهلاك حي — لا ZOMBIE، نمط D-073).
     """
     ok = True
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    client = _read(CLIENT_PATH)
+    brain = _read(BRAIN_PATH)
     port = _read("microservices/orchestrator_service/src/services/overmind/probability_tutor.py")
+    # D-163: العقل مستهلَك حياً بالوراثة — إزالتها تجعله ZOMBIE فوراً.
+    if "class OrchestratorClient(ProbabilityTutorBrain)" not in client:
+        _fail("OrchestratorClient must inherit ProbabilityTutorBrain (D-163 — brain is live)")
+        ok = False
     contracts = (
         # (وصف العقد، علامة monolith، علامة الـ port)
         ("speech-act gate", "def _is_question_not_answer(", "def is_question_not_answer("),
@@ -546,14 +569,14 @@ def check_split_brain_parity() -> None:
         ("LaTeX comb formatter", "def _fmt_comb(", "def fmt_comb("),
     )
     for name, mono_marker, port_marker in contracts:
-        if mono_marker not in client:
-            _fail(f"split-brain parity: monolith missing `{mono_marker}` ({name})")
+        if mono_marker not in brain:
+            _fail(f"split-brain parity: monolith brain missing `{mono_marker}` ({name})")
             ok = False
         if port_marker not in port:
             _fail(f"split-brain parity: orchestrator port missing `{port_marker}` ({name})")
             ok = False
     # «هل» مستثناة في النسختين (D-155): وجودها في أي من الـ tuples انحدار.
-    for label, src in (("monolith", client), ("port", port)):
+    for label, src in (("monolith brain", brain), ("port", port)):
         openers_seg = src.split("QUESTION_OPENERS_NOT_ANSWERS", 1)
         seg = openers_seg[1].split(")", 1)[0] if len(openers_seg) == 2 else ""
         if '"هل"' in seg:

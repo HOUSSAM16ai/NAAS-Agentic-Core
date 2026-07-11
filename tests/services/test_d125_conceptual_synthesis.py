@@ -18,7 +18,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
     encoding="utf-8"
-)
+) + (REPO_ROOT / "app/services/skills/probability_tutor_brain.py").read_text(
+    encoding="utf-8"
+)  # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin
 
 
 # ── نُسَخ standalone مطابقة لمنطق D-125 (sandbox-safe replicas) ────────────────
@@ -182,7 +184,8 @@ class TestSourceWiring:
 
     def test_relationship_explains_numerator_denominator(self) -> None:
         seg = CLIENT_SRC[CLIENT_SRC.index("def _format_conceptual_relationship(") :]
-        seg = seg[: seg.index("\n    async def _build_probability_tree_props")]
+        # D-163: نهاية slice = الدالة التالية داخل العقل المستخرَج (بعد الاستخراج).
+        seg = seg[: seg.index("\n    def _is_prob_context(")]
         assert "المقام" in seg and "البسط" in seg
         assert "نسبة البسط إلى المقام" in seg  # العلاقة لا الحساب
         assert "_fmt_comb(" in seg  # السطر الهجين الحسابي عبر _fmt_comb (يَنجو من الحجب)

@@ -1,6 +1,29 @@
 # Runtime Truth Lock
-> Last updated: **2026-06-04** | Branch: `claude/orchestrator-service-runtime-tjjyW`
-> Previous: `main`
+> Last updated: **2026-07-11** | Branch: `claude/post-incident-docs-testing-rl5dy5`
+> Previous: `main` (D-162)
+
+## Split-Brain Decomposition + Port Activation (2026-07-11, D-163) — Verified Live
+
+**الكارثتان المحلولتان هندسياً**: (1) God-file `orchestrator_client.py` (6,154 سطراً) — عقل
+احتمالات حتمي بـ ~2,600 سطراً استُخرج؛ (2) split-brain — عقلان يُصانان بالتوازي، الـ port ينقصه
+النصف التربوي ولا حركة حية.
+
+| المكوّن | الحالة | الدليل الحي (2026-07-11) |
+|---------|--------|------------------------|
+| **`app/services/skills/probability_tutor_brain.py`** (العقل المستخرَج، 2,358 سطراً) | **ACTIVE** | import + call chain (`class OrchestratorClient(ProbabilityTutorBrain)`) + runtime: D-162 E2E 9/9 + D-158 E2E PASS عبر WS + OpenRouter حقيقي — سلوك مطابق بالبايت (صفر انحدار). |
+| **`orchestrator_client.py`** بعد الانكماش (6,154 → 3,832 سطراً، −38%) | **ACTIVE** | يرث العقل mixin؛ كل `cls._x`/`self._x` تُحل عبر الـ MRO. |
+| **port `microservices/.../probability_tutor.py`** (595 سطراً) | **ACTIVE (default-on منذ D-163 Stage 3)** | `scripts/verify_m10s2_port_live.py` **7/7** على :8006 حقيقي (probe-first + السُّلّم + support_level + الاعتراف + zero-leak + fail-open). العلم `ORCHESTRATOR_PROB_TUTOR_ENABLED` افتراضه `"1"`؛ رافعة الرجوع `=0` (بلا deploy — D-025). |
+| **بوّابة تكافؤ split-brain** (`check_pedagogical_os:check_split_brain_parity`) | **ACTIVE (CI)** | 12 عقداً brain↔port (كان 7) + حارس `support_level` + حارس الوراثة (no-ZOMBIE). |
+
+**Supabase الإنتاجي عبر الجسر HTTPS (2026-07-11)**: PostgreSQL 17.6؛ `tutor_state` 19 عموداً
+(D-158/159)؛ الحسابان (`benmerahhoussam16@gmail.com` admin، `houssamannaba963@gmail.com` user)؛
+38 عقدة في `knowledge_nodes` (مرآة الـ misconception graph).
+
+**قيد بيئي صادق**: على SQLite+HTTP لا checkpointer للـ orchestrator (D-098) والـ POST handler
+يقرأ التاريخ من DB لا من الجسم (`history_len=0`) ⇒ استمرارية الأدوار عبر :8006 قيدُ orchestrator
+لا عيبُ port؛ قدرة الاعتراف مُثبتة على مستوى وحدة الـ port + حياً على مسار المونوليث (D-162 T5/T6).
+
+---
 
 ## Orchestrator `routes.py` Re-Activation (2026-06-04, D-098) — SQLite-Mode Full-Stack E2E
 

@@ -5553,3 +5553,45 @@ uvicorn حقيقي + WS + تسجيل دخول المستخدم الحقيقي + 
 **صفر مواءمة لزمت** (الفشل الوحيد pre-existing ومستثنى في CI). البوّابات: pedagogical_os
 (21 فحصاً منها 2 جديدان) + skills_doctrine + runtime_truth + structure + guardrails +
 test_hygiene + ruff — كلها خضراء. CLAUDE.md §6.137.
+
+## D-163 (2026-07-11) — حلّ split-brain + تقليل التعقيد: استخراج عقل الاحتمالات + تفعيل الـ port (M13 + M10-S2)
+
+**الكارثتان (هندسيتان، حُلّتا ثم وُثّقتا):**
+1. **التعقيد**: God-file `orchestrator_client.py` = 6,154 سطراً؛ منها ~2,600 (~42%) عقل احتمالات
+   حتمي منفصل تماماً عن النقل (`@classmethod/@staticmethod`، صفر HTTP/instance-state). أُجِّل
+   تفكيكه مرّتين (D-160/M13) لنصف قطر الانفجار (~28 اختبار source-inspection + ~17 دالة بوّابة).
+2. **split-brain**: عقلان بالتوازي — عقل المونوليث الكامل مقابل port الخدمة المصغرة الذي يغطّي
+   النصف الأول فقط (الفعل الكلامي + السُّلّم + التسمية + dedup)، بلا التحقّق الرقمي/الـ probe/
+   الاعتراف، ومعامل `support_level` ميت، ولا حركة حية (لا driver يجمع العلم + exercise_content).
+
+**الحل (5 مراحل، كلٌّ commit مستقل بعد checkpoint أخضر):**
+- **Stage 1 — الاستخراج (M13)**: نقل حرفي (verbatim، صفر إعادة صياغة) للعقل إلى
+  `app/services/skills/probability_tutor_brain.py` (`class ProbabilityTutorBrain`، نفس الأسماء).
+  `class OrchestratorClient(ProbabilityTutorBrain)` (mixin) ⇒ كل مواقع الاستدعاء تُحل عبر الـ MRO
+  دون تغيير. God-file: 6,154 → 3,832 سطراً (−38%). تحديث lockstep (D-013/D-140) لـ ~13 دالة بوّابة
+  + 11 ملف اختبار source-inspection (ضمّ client+brain في مصدر القراءة + إعادة توجيه slice-endpoints).
+  **746 passed / 2 deselected** عبر نصف قطر الانفجار الكامل (صفر انحدار).
+- **Stage 2 — سدّ الفجوة (M10-S2.1)**: port النصف التربوي المفقود إلى `probability_tutor.py`
+  (stdlib، صفر import من app): `verify_numeric_answer` + `extract_answer_numbers` +
+  `pending_focus_from_history` + `build_diagnostic_probe` + `build_symbolic_step` (الاعتراف والتقدّم)
+  + `has_prior_tutoring_step`، وتفعيل `support_level` عبر `_ladder_for_support` (يُشكّل السُّلّم دون
+  إسقاط رُتبة — نظير D-115). ترقية `deterministic_turn`: تسمية ← تحقّق رقمي/اعتراف ← probe-first ←
+  سُلّم مُشكَّل ← fail-open. بوّابة التكافؤ: 12 عقداً (كان 7) + حارس support_level. +10 اختبارات port.
+- **Stage 3 — الإثبات الحي + قلب العلم**: `scripts/verify_m10s2_port_live.py` (جديد — سدّ فجوة
+  الاستكشاف) ⇒ **7/7** على :8006 حقيقي (probe-first + السُّلّم + support_level + zero-leak + fail-open
+  + الاعتراف). قلب `ORCHESTRATOR_PROB_TUTOR_ENABLED` default `""`→`"1"` (ACTIVE) + إعادة الإثبات بلا
+  env صريح ⇒ 7/7. رافعة الرجوع `=0` بلا deploy (D-025).
+- **Stage 4/5 — التوثيق + CI**: هذا الإدخال + runtime_truth (D-098→D-163) + architecture (D-146→D-163)
+  + CLAUDE.md §6.138 + الفهرس.
+
+**التحقق الحي (2026-07-11، OpenRouter حقيقي + SQLite؛ Supabase عبر جسر HTTPS — Postgres TCP محجوب):**
+D-162 catastrophe E2E **9/9** + D-158 cognitive-turn E2E **PASS** على العقل المُفكَّك (صفر انحدار).
+Supabase الإنتاجي: PostgreSQL 17.6، tutor_state 19 عموداً، الحسابان، 38 عقدة معرفية.
+
+**القواعد الدائمة (لا تُكسر بدون ADR):**
+1. العقل وحدة واحدة — **ممنوع** إعادة أي دالة إلى `orchestrator_client.py` (عودة God-file).
+2. تكافؤ العقلين مفروض CI (`check_split_brain_parity` — 12 عقداً + حارس الوراثة no-ZOMBIE).
+3. الـ port ACTIVE default-on؛ رافعة الرجوع `ORCHESTRATOR_PROB_TUTOR_ENABLED=0` بلا deploy.
+4. الاستخراج/الترحيل **verbatim** (صفر تغيير سلوكي) — الأرقام من المحرك الرمزي حصراً (صفر LLM).
+5. الصدق البيئي: قيد استمرارية أدوار :8006 على SQLite قيدُ orchestrator (لا checkpointer، D-098)
+   لا عيبُ port؛ الاعتراف مُثبت وحدةً + على مسار المونوليث (D-162 T5/T6). CLAUDE.md §6.138.

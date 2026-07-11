@@ -7,6 +7,7 @@
 .e2e_*.log
 .e2e_env.sh
 .e2e_d163.db*
+.pr_body_*.md
 
 # 1. Environment & Secrets
 # Never commit secrets, keys, passwords, or local environment settings!

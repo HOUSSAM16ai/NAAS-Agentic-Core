@@ -113,6 +113,42 @@ NAMING_MARKERS: tuple[str, ...] = (
     "تسمية",
 )
 
+#: D-155/D-163 (WP: parity): علامات قوالب الأسئلة التي نطرحها نحن — تُستنبط منها
+#: بؤرة السؤال المعلّق (بلا أرقام ⇒ تَنجو من حجب D-113 في النسخة المحفوظة). port
+#: متكافئ مع monolith ``_STEP_QUESTION_MARKERS`` (بوّابة تكافؤ split-brain).
+STEP_QUESTION_MARKERS: tuple[tuple[str, str], ...] = (
+    ("كم عدد **كل** الطرق الممكنة", "denominator"),
+    ("كم عدد كل الطرق الممكنة", "denominator"),
+    ("كيف تُكوّن منهما الاحتمال", "ratio"),
+    ("فما قيمة P(A)", "ratio"),
+    ("ما قيمة P(A) التي حصلت عليها", "ratio"),
+    ("أيّ الألوان يمكن أن تعطينا", "colors"),
+)
+
+#: D-155/D-163: علامات أي خطوة تدريس بُثّت سابقاً (probe/سُلّم/إنقاذ) — تحكم
+#: «التشخيص قبل الشرح» (لا probe مكرَّر بعد بدء التدريس).
+TUTORING_STEP_MARKERS: tuple[str, ...] = (
+    "الحالات الملائمة",
+    "كم عدد **كل** الطرق",
+    "كيف تُكوّن منهما الاحتمال",
+    "أيّ الألوان يمكن أن تعطينا",
+    "لنُكمل معاً خطوة بخطوة",
+    "فما قيمة P(A)",
+    "لنبدأ من فهمك أنت",
+)
+
+#: D-155: أول طلب مساعدة عام يستحق probe التشخيص قبل أي محتوى محسوب.
+_FIRST_HELP_MARKERS: tuple[str, ...] = (
+    "كيف افهم",
+    "كيف نفهم",
+    "كيف احل",
+    "كيف نحل",
+    "من اين ابدا",
+    "من اين نبدا",
+    "كيف ابدا",
+    "كيف نبدا",
+)
+
 
 def is_question_not_answer(message: str) -> bool:
     """D-162 (ISS-128): بوّابة الفعل الكلامي — سؤال الطالب لا يُعامل كإجابة/دور سُلّمي.
@@ -330,6 +366,139 @@ def build_naming_answer(comp: dict) -> str:
     )
 
 
+def extract_answer_numbers(text: str) -> set[int]:
+    """D-155/D-163: أعداد رسالة الطالب (أرقام عربية ⇒ لاتينية أولاً)."""
+    return {int(m) for m in re.findall(r"\d+", _norm(text))}
+
+
+def pending_focus_from_history(history: list[str] | None) -> str | None:
+    """D-155/D-163: بؤرة السؤال المعلّق — أيّ خطوة سألنا عنها الطالب آخر مرة؟
+
+    history في الـ port قوائم نصوص مسبوقة بـ ``"Assistant: "`` — نفحص أحدث رسالة
+    مساعد ضد قوالبنا (بلا أرقام ⇒ تَنجو من حجب D-113). port متكافئ مع monolith
+    ``_pending_focus_from_history``.
+    """
+    for line in reversed(history or []):
+        if not isinstance(line, str):
+            continue
+        if line.startswith("Assistant: ") or line.startswith("assistant:"):
+            for marker, focus in STEP_QUESTION_MARKERS:
+                if marker in line:
+                    return focus
+            return None
+    return None
+
+
+def has_prior_tutoring_step(history: list[str] | None) -> bool:
+    """D-155/D-163: هل بُثّت أي خطوة تدريس (probe/سُلّم/إنقاذ) سابقاً؟"""
+    for line in history or []:
+        if (
+            isinstance(line, str)
+            and line.startswith(("Assistant: ", "assistant:"))
+            and any(m in line for m in TUTORING_STEP_MARKERS)
+        ):
+            return True
+    return False
+
+
+def verify_numeric_answer(answer: str, comp: dict, pending_focus: str | None) -> str | None:
+    """D-155/D-163: الحقيقة الرمزية تحكم إجابة الطالب **الرقمية**.
+
+    الأرقام من ``comp`` حصراً (صفر hardcoding). يُرجِع: ``"final_ratio"`` (النسبة
+    النهائية بأي صياغة) | ``"step_correct"`` (خطوة السؤال المعلّق) | ``"direction"``
+    (اتجاه صحيح — «نفس الشئ مع 11») | ``None`` (غير مؤكَّدة ⇒ للمُقيّم). port متكافئ
+    مع monolith ``_verify_numeric_answer`` (بوّابة تكافؤ split-brain).
+    """
+    try:
+        # D-162 (ISS-128): بوّابة الفعل الكلامي أولاً — السؤال ليس إجابة أبداً
+        # (عدا «هل» — D-155)؛ «ماذا نسمي حساب 4 و 10» يحمل أرقاماً لكنه سؤال.
+        if is_question_not_answer(answer):
+            return None
+        nums = extract_answer_numbers(answer)
+        if not nums:
+            return None
+        same = int(comp["same"])
+        total = int(comp["total"])
+        n = int(comp["n"])
+        favs = {int(g["fav"]) for g in comp.get("groups", []) if g.get("possible")}
+        if same in nums and total in nums:
+            return "final_ratio"
+        if pending_focus == "denominator":
+            if total in nums:
+                return "step_correct"
+            if n in nums:  # «نفس الشئ مع 11» — الاتجاه صحيح، نُكمل الحساب معاً.
+                return "direction"
+            return None
+        if pending_focus in (None, "numerator") and (same in nums or (favs and favs <= nums)):
+            return "step_correct"
+        return None
+    except Exception:
+        return None
+
+
+def build_diagnostic_probe(comp: dict) -> str:
+    """D-155/D-163: سؤال تشخيصي واحد قبل أي محتوى محسوب — «التشخيص قبل الشرح».
+
+    صفر قيم محسوبة (لا C، لا مجاميع) — الطالب يولّد بصيرة «البيضاء مستحيلة» بنفسه
+    (generation effect). يَنجو من حجب D-113 بنيوياً. port متكافئ مع monolith.
+    """
+    k = int(comp["k"])
+    parts = "، ".join(
+        f"{g['count']} {str(g['label']).replace('كرة ', '')}" for g in comp.get("groups", [])
+    )
+    return (
+        f"لنبدأ من فهمك أنت — نسحب {k} كرات دفعة واحدة من كيس فيه: {parts}.\n\n"
+        f"سؤال واحد قبل أي حساب: أيّ الألوان يمكن أن تعطينا {k} كرات "
+        f"من نفس اللون؟ ولماذا؟"
+    )
+
+
+def build_symbolic_step(comp: dict, focus: str | None, *, acknowledge: bool = False) -> str:
+    """D-155/D-163: الخطوة الرمزية المتدرّجة — اعتراف + تقدّم (لا الحل كاملاً).
+
+    عند إجابة صحيحة نكشف **خطوة المفهوم الحالي** + سؤال المتابعة، يبقى السُّلّم
+    السقراطي حياً. يَنجو من حجب D-113. port متكافئ مع monolith ``_build_symbolic_step``.
+    """
+    prefix = "إجابتك في الطريق الصحيح — " if acknowledge else ""
+    n, k, total = comp["n"], comp["k"], comp["total"]
+    if focus == "ratio":
+        return (
+            f"{prefix}**كل الطرق الممكنة** لسحب {k} من {n}:\n\n"
+            f"{fmt_comb(n, k, total)}\n\n"
+            f"الآن لديك البسط والمقام — كيف تُكوّن منهما الاحتمال؟"
+        )
+    # الافتراضي: خطوة البسط (الحالات الملائمة) — الأكثر شيوعاً بعد فهم «نفس اللون».
+    return f"{prefix}{build_step(comp, None)}"
+
+
+def _ladder_for_support(comp: dict, support_level: int) -> tuple[str, ...]:
+    """D-115/D-163: مستوى الدعم يشكّل السُّلّم (المعامل لم يعد ميتاً).
+
+    القاعدة تحفظ **كل** الرُّتب للجميع (لا إسقاط سقالة ⇒ لا فقدان قدرة): الطالب
+    الواثق (≥ 4) يتلقّى تلميحاً افتتاحياً أخفّ **يسبق** السقالة الكاملة ليقود
+    نفسه؛ المتعثّر (≤ 3) يبدأ مباشرةً بخطوة البسط الكاملة. نظير D-115 (عمق الدعم).
+    """
+    base = (
+        build_step(comp, None),
+        build_step(comp, "ratio"),
+        build_rescue(comp),
+        "أنت تملك الآن كل المعطيات — جرّب بنفسك: ركّب البسط على المقام، "
+        "وأخبرني ما قيمة P(A) التي حصلت عليها، وسأخبرك إن أصبت.",
+    )
+    try:
+        lvl = int(support_level)
+    except (TypeError, ValueError):
+        lvl = 3
+    if lvl >= 4:
+        k = int(comp["k"])
+        light = (
+            "لنبدأ بتلميح خفيف: ركّز على الألوان الممكنة فقط — أيّ الألوان عددها "
+            f"يكفي لسحب {k} كرات من نفس اللون؟ ابدأ بعدّها، وسأرافقك خطوةً بخطوة."
+        )
+        return (light, *base)
+    return base
+
+
 def _is_tutoring_turn(question: str) -> bool:
     """دور تدريسي: حيرة مجرّدة، «كيف»، أو إجابة قصيرة — لا طلب شرح غني (للـ LLM)."""
     q = _norm(question)
@@ -370,17 +539,36 @@ def deterministic_turn(
             return _naming if not _dup(_naming) else None
         if is_question_not_answer(question) and not _norm(question).startswith(("كيف", "كيفاش")):
             return None
+
+        # D-155/D-163: التحقّق الرقمي — إجابة الطالب الصحيحة تُعترَف وتتقدّم (لا يُعاد
+        # سؤال ما أُجيب للتو). يسبق السُّلّم الأعمى — «هل هي 14 من 165» إجابة لا حيرة.
+        _pending = pending_focus_from_history(prior)
+        _verdict = verify_numeric_answer(question, comp, _pending)
+        if _verdict == "final_ratio":
+            _ack = (
+                "أحسنت! ✅ إجابتك صحيحة تماماً: هذا هو احتمال الحادثة الأولى. "
+                "الآن سؤالٌ يقودنا للحادثة التالية: متى يكون جداء ثلاثة أعداد فردياً؟"
+            )
+            return _ack if not _dup(_ack) else None
+        if _verdict in ("step_correct", "direction"):
+            _nxt = "ratio" if _pending == "denominator" else None
+            _step = build_symbolic_step(comp, _nxt, acknowledge=True)
+            if not _dup(_step):
+                return _step
+
         if not _is_tutoring_turn(question):
             return None
 
-        ladder = (
-            build_step(comp, None),
-            build_step(comp, "ratio"),
-            build_rescue(comp),
-            "أنت تملك الآن كل المعطيات — جرّب بنفسك: ركّب البسط على المقام، "
-            "وأخبرني ما قيمة P(A) التي حصلت عليها، وسأخبرك إن أصبت.",
-        )
-        for text in ladder:
+        # D-155/D-163: التشخيص قبل الشرح — أول طلب مساعدة عام (بلا خطوة تدريس سابقة)
+        # ⇒ سؤال تشخيصي واحد (صفر قيم محسوبة) يقود الطالب لبصيرة «البيضاء مستحيلة».
+        _q = _norm(question)
+        if any(m in _q for m in _FIRST_HELP_MARKERS) and not has_prior_tutoring_step(prior):
+            _probe = build_diagnostic_probe(comp)
+            if not _dup(_probe):
+                return _probe
+
+        # D-115/D-163: مستوى الدعم يشكّل السُّلّم (تلميح افتتاحي للواثق — لا إسقاط رُتبة).
+        for text in _ladder_for_support(comp, support_level):
             if not _dup(text):
                 return text
         return None
@@ -389,13 +577,19 @@ def deterministic_turn(
 
 
 __all__ = [
+    "build_diagnostic_probe",
     "build_naming_answer",
     "build_rescue",
     "build_step",
+    "build_symbolic_step",
     "detect_naming_question",
     "deterministic_turn",
+    "extract_answer_numbers",
     "fmt_comb",
+    "has_prior_tutoring_step",
     "is_question_not_answer",
     "norm_for_dedup",
     "parse_composition",
+    "pending_focus_from_history",
+    "verify_numeric_answer",
 ]

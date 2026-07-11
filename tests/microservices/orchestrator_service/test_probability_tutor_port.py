@@ -11,10 +11,17 @@ M10-S2.1 (ISS-121 / D-154) — معلّم الاحتمالات الحتمي دا
 """
 
 from microservices.orchestrator_service.src.services.overmind.probability_tutor import (
+    build_diagnostic_probe,
+    build_symbolic_step,
     deterministic_turn,
+    detect_naming_question,
     fmt_comb,
+    has_prior_tutoring_step,
+    is_question_not_answer,
     norm_for_dedup,
     parse_composition,
+    pending_focus_from_history,
+    verify_numeric_answer,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -93,3 +100,77 @@ class TestProgressiveLadder:
     def test_latex_fmt(self):
         out = fmt_comb(5, 3, 10)
         assert out.startswith("$") and "C_{5}^{3}" in out and "\\dfrac" in out
+
+
+class TestStatefulTutoring:
+    """D-163 (Stage 2): النصف التربوي المُرحَّل — سدّ فجوة split-brain.
+
+    الـ port صار يعترف بالإجابة الرقمية الصحيحة ويتقدّم، ويشخّص قبل المحتوى،
+    ويحترم مستوى الدعم — نظائر D-155/D-115 — لا يبثّ السُّلّم فقط.
+    """
+
+    def _comp(self):
+        c = parse_composition(_OFFICIAL)
+        assert c is not None
+        return c
+
+    def test_probe_first_on_first_help_request(self):
+        # أول طلب مساعدة عام ⇒ سؤال تشخيصي (صفر قيم محسوبة، لا 165).
+        probe = deterministic_turn("كيف احل التمرين", _OFFICIAL, history=[])
+        assert probe and "أيّ الألوان" in probe
+        assert "165" not in probe and "=" not in probe
+
+    def test_correct_final_ratio_acknowledged_and_advances(self):
+        # «هل هي 14 من 165» (الإجابة الصحيحة) ⇒ اعتراف + انتقال (لا يُعاد السؤال).
+        hist = ["Assistant: أيّ الألوان يمكن أن تعطينا 3 كرات من نفس اللون؟"]
+        out = deterministic_turn("هل هي 14 من 165", _OFFICIAL, history=hist)
+        assert out and "أحسنت" in out and "جداء" in out
+
+    def test_verify_numeric_answer_uses_symbolic_numbers(self):
+        comp = self._comp()
+        assert verify_numeric_answer("14 من 165", comp, None) == "final_ratio"
+        assert verify_numeric_answer("165", comp, "denominator") == "step_correct"
+        assert verify_numeric_answer("11", comp, "denominator") == "direction"
+        # سؤال يحمل أرقاماً ليس إجابة (بوّابة الفعل الكلامي — D-162).
+        assert verify_numeric_answer("ماذا نسمي حساب 4 و 10", comp, None) is None
+        # «هل» تبقى إجابة (D-155).
+        assert verify_numeric_answer("هل هي 14 و 165", comp, None) == "final_ratio"
+
+    def test_pending_focus_derived_from_our_templates(self):
+        hist = ["User: نعم", "Assistant: كم عدد كل الطرق الممكنة لسحب 3 كرات من 11؟"]
+        assert pending_focus_from_history(hist) == "denominator"
+        assert pending_focus_from_history(["User: مرحبا"]) is None
+        assert pending_focus_from_history([]) is None
+
+    def test_diagnostic_probe_zero_reveal(self):
+        probe = build_diagnostic_probe(self._comp())
+        assert "أيّ الألوان" in probe
+        # صفر كشف بنيوي: لا نتيجة، لا مساواة، لا نسبة نهائية.
+        assert "165" not in probe and "14" not in probe and "=" not in probe
+
+    def test_symbolic_step_acknowledge_survives_redaction(self):
+        step = build_symbolic_step(self._comp(), None, acknowledge=True)
+        assert step.startswith("إجابتك في الطريق الصحيح")
+        # يَنجو من حجب D-113: النسبة النهائية لا تُطبع (نمط _fmt_comb + سؤال).
+        assert "من كل 165" not in step and "14/165" not in step
+
+    def test_has_prior_tutoring_step(self):
+        assert has_prior_tutoring_step(["Assistant: نحسب الحالات الملائمة لكل لون"])
+        assert not has_prior_tutoring_step(["User: كيف احل", "Assistant: مرحبا بك"])
+
+    def test_support_level_shapes_ladder_no_rung_dropped(self):
+        # منخفض ⇒ يبدأ بخطوة البسط الكاملة؛ عالٍ ⇒ تلميح افتتاحي أخفّ يسبقها.
+        low = deterministic_turn("لم أفهم", _OFFICIAL, history=[], support_level=1)
+        high = deterministic_turn("لم أفهم", _OFFICIAL, history=[], support_level=5)
+        assert low and high and low != high
+        assert "الحالات الملائمة" in low
+        assert "تلميح خفيف" in high
+        # لا رُتبة مُسقَطة: الطالب الواثق يصل خطوة البسط في الدور التالي.
+        nxt = deterministic_turn("لم أفهم", _OFFICIAL, history=[high], support_level=5)
+        assert nxt and "الحالات الملائمة" in nxt
+
+    def test_speech_act_gate_and_naming_parity(self):
+        # عقود متكافئة مع monolith (بوّابة split-brain) تعمل فعلاً على الـ port.
+        assert is_question_not_answer("ماذا نسمي هذا الحساب")
+        assert not is_question_not_answer("14 من 165")
+        assert detect_naming_question("ماذا نسمي حساب 4 و 10", self._comp())

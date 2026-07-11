@@ -13,8 +13,8 @@ M10-S2.1 (ISS-121 / D-154) — معلّم الاحتمالات الحتمي دا
 from microservices.orchestrator_service.src.services.overmind.probability_tutor import (
     build_diagnostic_probe,
     build_symbolic_step,
-    deterministic_turn,
     detect_naming_question,
+    deterministic_turn,
     fmt_comb,
     has_prior_tutoring_step,
     is_question_not_answer,

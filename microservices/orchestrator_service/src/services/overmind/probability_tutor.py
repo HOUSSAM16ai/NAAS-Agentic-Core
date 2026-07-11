@@ -14,8 +14,14 @@ import من ``app.*`` ولا من microservices أخرى؛ نفس نمط ``respo
 - ``deterministic_turn``: قرار الدور — دور تدريسي (حيرة/«كيف»/إجابة قصيرة) على محتوى
   محقون (D-103) ⇒ أول نصّ سُلّم **غير مكرَّر** (تطبيع محايد للحجب) — صفر LLM.
 
-الحالة المُعلنة بصدق (§6.6): **FLAGGED** خلف ``ORCHESTRATOR_PROB_TUTOR_ENABLED``
-(افتراضي معطَّل) حتى التحقق الحي في Codespaces — قاعدة الصدق في roadmap M10.
+D-163 (Stage 2): سُدّت فجوة split-brain — الـ port اكتسب النصف التربوي (التحقّق
+الرقمي ``verify_numeric_answer``، الاعتراف والتقدّم ``build_symbolic_step``، الـ probe
+التشخيصي ``build_diagnostic_probe``، وتفعيل ``support_level`` عبر ``_ladder_for_support``).
+
+الحالة المُعلنة بصدق (§6.6): **ACTIVE (افتراضي ON منذ D-163 Stage 3)** خلف
+``ORCHESTRATOR_PROB_TUTOR_ENABLED`` — مُثبَت حياً على :8006
+(``scripts/verify_m10s2_port_live.py`` — 7/7). رافعة الرجوع الفوري:
+``ORCHESTRATOR_PROB_TUTOR_ENABLED=0`` (بلا deploy — نمط D-025).
 """
 
 from __future__ import annotations

@@ -573,13 +573,15 @@ class SynthesizerNode:
 
         conversation_text = "\n".join(recent_messages) if recent_messages else query
 
-        # ISS-121 (D-154 — M10-S2.1): معلّم الاحتمالات الحتمي داخل الـ orchestrator —
-        # أول خطوة هجرة roadmap M10-S2 (port مستقل، صفر LLM، صفر هلوسة، صفر تفريغ).
-        # خلف علم `ORCHESTRATOR_PROB_TUTOR_ENABLED` (افتراضي معطَّل — حالة FLAGGED
-        # صادقة §6.6 حتى التحقق الحي في Codespaces). fail-open مطلق ⇒ مسار الـ LLM.
+        # ISS-121 (D-154 — M10-S2.1) + D-163 (Stage 3): معلّم الاحتمالات الحتمي داخل
+        # الـ orchestrator — خطوة هجرة roadmap M10-S2 (port مستقل، صفر LLM، صفر هلوسة).
+        # خلف علم `ORCHESTRATOR_PROB_TUTOR_ENABLED` — **افتراضي مُفعَّل (ON)** بعد
+        # الإثبات الحي على :8006 (scripts/verify_m10s2_port_live.py — 7/7). رافعة
+        # الرجوع الفوري: `ORCHESTRATOR_PROB_TUTOR_ENABLED=0` (بلا deploy — نمط D-025).
+        # fail-open مطلق ⇒ مسار الـ LLM عند أي تعذّر أو عند غياب exercise_content.
         _injected_for_tutor = str(state.get("exercise_content") or "").strip()
         if _injected_for_tutor and os.environ.get(
-            "ORCHESTRATOR_PROB_TUTOR_ENABLED", ""
+            "ORCHESTRATOR_PROB_TUTOR_ENABLED", "1"
         ).strip().lower() in ("1", "true", "yes"):
             try:
                 from microservices.orchestrator_service.src.services.overmind.probability_tutor import (

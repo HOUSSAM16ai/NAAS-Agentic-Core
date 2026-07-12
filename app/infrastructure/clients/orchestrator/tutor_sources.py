@@ -26,6 +26,7 @@ TUTOR_SOURCE_FILES: tuple[str, ...] = (
     "app/infrastructure/clients/orchestrator_client.py",
     "app/services/skills/probability_tutor_brain.py",
     "app/infrastructure/clients/orchestrator/stream_normalization.py",  # D-164 Slice 1
+    "app/infrastructure/clients/orchestrator/text_streaming.py",  # D-164 Slice 2
 )
 
 

@@ -62,10 +62,26 @@ def _read(rel: str) -> str:
 CLIENT_PATH = "app/infrastructure/clients/orchestrator_client.py"
 BRAIN_PATH = "app/services/skills/probability_tutor_brain.py"
 
+# D-164: مصدر الحقيقة الوحيد لملفات مصدر المعلّم = manifest `tutor_sources.py`.
+# نقرأ القائمة **نصياً** (لا نستورد app) لتبقى هذه البوّابة static-text صرفة تعمل في
+# البيئات المتدهورة (بلا pydantic)؛ إضافة mixin مستقبلاً = سطر واحد في الـ manifest.
+_TUTOR_MANIFEST_PATH = "app/infrastructure/clients/orchestrator/tutor_sources.py"
+
+
+def _tutor_source_files() -> list[str]:
+    """قائمة ملفات مصدر المعلّم من الـ manifest (source of truth) — D-164، بلا استيراد app."""
+    manifest = _read(_TUTOR_MANIFEST_PATH)
+    m = re.search(r"TUTOR_SOURCE_FILES[^(]*\(([^)]*)\)", manifest, re.DOTALL)
+    if not m:
+        _fail(f"{_TUTOR_MANIFEST_PATH}: TUTOR_SOURCE_FILES manifest not found (D-164)")
+        return [CLIENT_PATH, BRAIN_PATH]
+    files = re.findall(r'"([^"]+)"', m.group(1))
+    return files or [CLIENT_PATH, BRAIN_PATH]
+
 
 def _read_monolith_tutor() -> str:
-    """عقل المونوليث الكامل = التوصيل (client) + الدوال المستخرَجة (brain) — D-163."""
-    return _read(CLIENT_PATH) + "\n" + _read(BRAIN_PATH)
+    """عقل المونوليث الكامل = كل TUTOR_SOURCE_FILES (client + brain + mixins) — D-164 (كان D-163)."""
+    return "\n".join(_read(rel) for rel in _tutor_source_files())
 
 
 # ── 1) الدستور موجود ومكتمل ─────────────────────────────────────────────────
@@ -551,7 +567,8 @@ def check_split_brain_parity() -> None:
     brain = _read(BRAIN_PATH)
     port = _read("microservices/orchestrator_service/src/services/overmind/probability_tutor.py")
     # D-163: العقل مستهلَك حياً بالوراثة — إزالتها تجعله ZOMBIE فوراً.
-    if "class OrchestratorClient(ProbabilityTutorBrain)" not in client:
+    # D-164: paren مفتوح — يسمح بإضافة mixins بعد ProbabilityTutorBrain مع بقاء العقل أول base.
+    if "class OrchestratorClient(ProbabilityTutorBrain" not in client:
         _fail("OrchestratorClient must inherit ProbabilityTutorBrain (D-163 — brain is live)")
         ok = False
     contracts = (

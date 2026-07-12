@@ -48,7 +48,11 @@ def test_monolith_routers_read_persisted_signal() -> None:
 
 def test_orchestrator_client_preserves_persisted_flag() -> None:
     """The normalizer in OrchestratorClient must NOT drop the persisted flag."""
-    source = _read("app/infrastructure/clients/orchestrator_client.py")
+    # D-164: `_normalize_stream_event` lives in the StreamNormalizationMixin now; read the
+    # full tutor source (client + brain + mixins) via the single manifest.
+    from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
+    source = read_tutor_source()
     assert 'result["persisted"] = bool(raw_event["persisted"])' in source, (
         "OrchestratorClient._normalize_stream_event must preserve event['persisted'] "
         "through the envelope; otherwise the Monolith cannot coordinate writes."

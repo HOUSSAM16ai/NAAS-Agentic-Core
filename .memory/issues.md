@@ -4668,3 +4668,18 @@ OpenRouter حقيقي): `scripts/verify_d162_e2e.py` 9/9 PASS + `verify_d158_e2e
 **9/9** + `verify_d158_e2e.py` PASS على العقل المُفكَّك (صفر انحدار) + 746 اختبار نصف قطر الانفجار.
 Supabase: PostgreSQL 17.6، tutor_state 19 عموداً، الحسابان، 38 عقدة معرفية. التفصيل: D-163 في
 decisions.md + CLAUDE.md §6.138.
+
+## كارثة التعقيد المدمر — God-file `orchestrator_client.py` (D-164، 2026-07-13، RESOLVED جزئياً)
+
+**العَرَض:** بعد D-163، `orchestrator_client.py` = 3,832 سطراً (`chat_with_agent` وحده ~1,837)،
+مُجمَّد بـ ~25 بوّابة/اختبار source-inspection = خرق DRY يمنع التفكيك (M13 مؤجَّل مراراً).
+
+**الحل (SOLID/KISS/DRY/YAGNI verbatim):** مانيفست `TUTOR_SOURCE_FILES` (مصدر وحيد) + 3 mixins
+متماسكة (`StreamNormalizationMixin`/`TextStreamingMixin`/`ProbabilityUIMixin`) ⇒ God-file
+**3,832 → 2,786 (−27%؛ −55% تراكمياً)**، سلوك مطابق بالبايت، importer_count 8 ثابت.
+
+**درس منهجي:** التأكيدات الإيجابية على **الـ interior strings** لدالة منقولة (call sites، nested
+`def`s، counts مثل `load_exercise_questions_only`) تُكسر مثل أسماء الدوال — grep-الأسماء وحده لا يكفي؛
+CI (test-monolith/test-microservices) التقط 6 منها فأُصلحت بتحويل قرّائها لـ `read_tutor_source()`
+(مع إبقاء القراءة client-only للتأكيدات السلبية). المتبقّي: Slice 5 (routes.py) + live E2E في
+Codespaces. التفصيل: D-164 + CLAUDE.md §6.139.

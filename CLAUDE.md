@@ -11563,3 +11563,66 @@ source-inspection + ~17 دالة بوّابة تُثبّت substrings في هذ�
 |----------|---------|
 | D-162 | ISS-128 — «السؤال ليس إجابة» + بوّابة تكافؤ split-brain (Track 2A) |
 | **D-163** | **حلّ split-brain + تقليل التعقيد: استخراج عقل الاحتمالات (God-file 6,154→3,832 سطراً، −38%) إلى `probability_tutor_brain.py` + تفعيل port الخدمة المصغرة ACTIVE default-on بعد إثبات حي 7/7 (M13 + M10-S2)** |
+
+---
+
+## 6.139 تفكيك God-file عبر mixins + مانيفست DRY يُذيب هشاشة البوّابات (2026-07-13, D-164)
+
+> يُكمِل D-163: بعد استخراج «عقل الاحتمالات» (`probability_tutor_brain.py`)، بقي
+> `orchestrator_client.py` God-file بـ 3,832 سطراً، مُجمَّداً في مكانه بـ ~25 بوّابة/اختبار
+> source-inspection تقرأ كل منها `read_text(client)+read_text(brain)` وتؤكّد substrings —
+> وهي نفسها **خرق DRY** يجعل أي استخراج تغييراً في ~25 ملفاً. هذا القسم يحكم نمط التفكيك — لا
+> يُكسر بدون ADR.
+
+### البصيرة الحاسمة (SOLID/DRY على آلية التجميد نفسها)
+مصدر الحقيقة الوحيد لـ«ملفات مصدر المعلّم» صار مانيفست واحد
+`app/infrastructure/clients/orchestrator/tutor_sources.py` (`TUTOR_SOURCE_FILES` +
+`read_tutor_source()` — stdlib، بلا pydantic). البوّابات/الاختبارات تقرأ الـ concatenation عبره،
+فإضافة mixin جديد = **سطر واحد** في المانيفست لا تغيير 25 ملفاً. `check_pedagogical_os` (static،
+لا يستورد app) يقرأ قائمة الملفات نصياً من المانيفست؛ `check_skills_doctrine` + الاختبارات
+(تستورد app في CI) تستورد `read_tutor_source` مباشرة.
+
+### التفكيك (mixins verbatim — سلوك مطابق بالبايت)
+`class OrchestratorClient(ProbabilityTutorBrain, StreamNormalizationMixin, TextStreamingMixin,
+ProbabilityUIMixin)` — `ProbabilityTutorBrain` يبقى **أول base**؛ كل `self._x`/`cls._x` يُحل
+عبر الـ MRO. الـ mixins تحت `app/infrastructure/clients/orchestrator/`:
+
+| Slice | Mixin | الدوال | التأثير |
+|-------|-------|--------|---------|
+| 0 | — | مانيفست DRY + `check_pedagogical_os` يقرأه + relax parity paren | صفر سلوك |
+| 1 | `StreamNormalizationMixin` | `_normalize_stream_event`/`_normalize_ui_component_event`/`_sanitize_error_for_user`/`_recover_structured_event` + frozensets | 3,832→3,678 |
+| 2 | `TextStreamingMixin` | `_stream_markdown_typing`/`_format_history_for_prompt`/`_strip_retrieval_tags`/`_sanitize_text_for_user` + `_RETRIEVAL_TAG_RE` | 3,678→3,521 |
+| 3 | `ProbabilityUIMixin` | `_extract_concrete_events`/`_detect_probability_tree`/`_build_tree_structure`/`_build_calculated_tree_props`/`_build_calculated_ui`/`_build_probability_tree_props`/`_enrich_tree_labels_with_llm` (`_stream_socratic_evaluation` يبقى في الـ client بين المنطقتين) | 3,521→2,786 |
+
+**God-file: 3,832 → 2,786 سطراً (−27% هذه الدفعة؛ −55% تراكمياً منذ 6,154 قبل D-163).**
+
+### القواعد الـ 7 الدائمة (D-164 — لا تُكسر بدون ADR)
+1. **`TUTOR_SOURCE_FILES` هو المصدر الوحيد** لتركيبة مصدر المعلّم؛ أي استخراج mixin جديد =
+   سطر واحد يُضاف إليه، والبوّابات/الاختبارات تتبعه تلقائياً.
+2. **`ProbabilityTutorBrain` أول base دائماً**؛ الـ mixins تُضاف بعده. النقل **verbatim** (صفر
+   تغيير سلوكي).
+3. **تسمية آمنة من importer-grep**: الـ mixins تحت `orchestrator/` (لا `orchestrator_client`)
+   فلا يتغيّر `importer_count` في `runtime_truth` (يبقى 8).
+4. **المنهجية**: فقط التأكيدات الإيجابية (`X in client`) لدوال **مُنقولة** تحتاج قارئ المانيفست؛
+   التأكيدات السلبية (`X not in client`) لا تنكسر من النقل (النقل لا يُضيف نصاً)؛ استدعاءات
+   السلوك (`client._x(...)`) تُحل عبر MRO فلا تحتاج تغييراً.
+5. **قارئ المانيفست يُثبَّت على جملة الإسناد** `TUTOR_SOURCE_FILES ... = ( ... )` لا ذِكرها في
+   docstring؛ وبوّابة الوراثة regex يتسامح مع لفّ أسطر الـ bases مع بقاء العقل أول base.
+6. **ممنوع إعادة تكوين God-file**: الدوال المُستخرَجة لا تعود للـ client.
+7. **كل mixin مسؤولية واحدة** (SRP): stream-normalization / text-streaming / probability-UI.
+
+### التحقق
+- **محلياً (sandbox — pip محجوب §6.55)**: ruff check/format + `py_compile` + `check_pedagogical_os`
+  (stdlib، أخضر) + `runtime_truth --check` (importer 8، مطابق) + `validate_structure` +
+  `ci_guardrails` — كلها خضراء عبر كل Slice. + byte-identity للمانيفست + إعادة إنتاج سلايس test_d123.
+- **CI (البرهان الحي)**: `check_skills_doctrine` + pytest (test-monolith/test-microservices) +
+  التغطية 67% + frontend — تُتحقَّق عبر GitHub Actions (dispatch على الفرع). البرهان: علامة الصح الخضراء.
+- **live E2E full-stack**: النقل verbatim فالهدف إثبات أن مسار الدردشة يعمل بلا كسر import/wiring —
+  يُشغَّل في **Codespaces** (pip + Postgres مفتوحان) بالدخولين الحقيقيين عبر
+  `scripts/verify_d162_e2e.py` (9/9) + `verify_d158_e2e.py` + smoke احتمالات جديد.
+
+### السلسلة (D-163 → D-164)
+| Decision | الموضوع |
+|----------|---------|
+| D-163 | استخراج عقل الاحتمالات (God-file 6,154→3,832) + تفعيل port |
+| **D-164** | **مانيفست DRY (`TUTOR_SOURCE_FILES`) يُذيب هشاشة الـ25 بوّابة + تفكيك 3 mixins متماسكة (God-file 3,832→2,786، −27%؛ −55% تراكمياً) — SOLID/KISS/DRY/YAGNI verbatim** |

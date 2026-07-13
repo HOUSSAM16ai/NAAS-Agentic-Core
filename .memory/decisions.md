@@ -5595,3 +5595,32 @@ Supabase الإنتاجي: PostgreSQL 17.6، tutor_state 19 عموداً، ال�
 4. الاستخراج/الترحيل **verbatim** (صفر تغيير سلوكي) — الأرقام من المحرك الرمزي حصراً (صفر LLM).
 5. الصدق البيئي: قيد استمرارية أدوار :8006 على SQLite قيدُ orchestrator (لا checkpointer، D-098)
    لا عيبُ port؛ الاعتراف مُثبت وحدةً + على مسار المونوليث (D-162 T5/T6). CLAUDE.md §6.138.
+
+## D-164 (2026-07-13) — تفكيك God-file عبر mixins + مانيفست DRY يُذيب هشاشة البوّابات
+
+**السياق:** بعد D-163، `orchestrator_client.py` بقي God-file بـ 3,832 سطراً، مُجمَّداً بـ ~25 بوّابة/
+اختبار source-inspection تقرأ كل منها `read_text(client)+read_text(brain)` وتؤكّد substrings —
+وهي نفسها **خرق DRY** يجعل أي استخراج تغييراً في ~25 ملفاً (لهذا أُجِّل M13 مراراً).
+
+**القرار:** مانيفست واحد `app/infrastructure/clients/orchestrator/tutor_sources.py`
+(`TUTOR_SOURCE_FILES` + `read_tutor_source()` — stdlib، بلا pydantic) صار المصدر الوحيد لتركيبة
+مصدر المعلّم؛ إضافة mixin = **سطر واحد**. ثم تفكيك 3 mixins **verbatim** (سلوك مطابق بالبايت):
+`StreamNormalizationMixin` (Slice 1) + `TextStreamingMixin` (Slice 2) + `ProbabilityUIMixin`
+(Slice 3). `class OrchestratorClient(ProbabilityTutorBrain, StreamNormalizationMixin,
+TextStreamingMixin, ProbabilityUIMixin)` — العقل أول base، كل `self._x`/`cls._x` عبر الـ MRO.
+**God-file: 3,832 → 2,786 سطراً (−27%؛ −55% تراكمياً منذ 6,154).**
+
+**القواعد الدائمة:** (1) `TUTOR_SOURCE_FILES` مصدر وحيد. (2) `ProbabilityTutorBrain` أول base دائماً؛
+النقل verbatim. (3) تسمية آمنة من importer-grep (`orchestrator/` لا `orchestrator_client`) ⇒
+importer_count يبقى 8. (4) فقط التأكيدات الإيجابية **لدوال منقولة** — بما فيها الـ interior strings
+(call sites، nested defs، counts) لا أسماء الدوال فقط — تحتاج قارئ المانيفست؛ السلبية آمنة تلقائياً؛
+سلوك MRO لا يحتاج تغييراً. (5) قارئ المانيفست يُثبَّت على جملة الإسناد لا docstring؛ بوّابة الوراثة
+regex يتسامح مع لفّ الأسطر. (6) ممنوع إعادة تكوين God-file. (7) SRP لكل mixin.
+
+**التحقق:** محلياً (sandbox، pip محجوب): ruff + py_compile + check_pedagogical_os (stdlib) +
+runtime_truth (importer 8) + validate_structure + ci_guardrails — خضراء عبر كل Slice. CI (GitHub
+Actions dispatch): lint/contracts/guardrails/skills-structural/frontend خضراء من أول دفعة؛ 6 اختبارات
+source-inspection تؤكّد interior strings لـ `_build_calculated_ui` المنقولة فشلت أولاً (منهجية
+grep-الأسماء أغفلتها) وأُصلحت بتحويلها لقارئ المانيفست (d122/iss120/d117 — الأخير يحتفظ بـ CLIENT_SRC
+للسلبية `[توجيه تربوي]` ويضيف TUTOR_SRC للإيجابية). live E2E full-stack verbatim ⇒ Codespaces.
+CLAUDE.md §6.139.

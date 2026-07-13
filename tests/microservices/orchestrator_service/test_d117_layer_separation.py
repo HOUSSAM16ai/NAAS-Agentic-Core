@@ -17,10 +17,16 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
+# CLIENT_SRC stays client-only for the "no `[توجيه تربوي]` prepend in the client" negative check.
 CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
     encoding="utf-8"
 )
+# D-164: `_build_calculated_ui` moved to ProbabilityUIMixin; positive assertions of its inner
+# strings read the full tutor source via the manifest.
+TUTOR_SRC = read_tutor_source()
 SEARCH_SRC = (
     REPO_ROOT / "microservices/orchestrator_service/src/services/overmind/graph/search.py"
 ).read_text(encoding="utf-8")
@@ -130,5 +136,6 @@ class TestSanitizerStripsInternalMarkers:
 class TestProbabilityConfusionReEmitsVisual:
     def test_generic_confusion_reextracts_from_history(self):
         # D-117 Fix 4: حيرة عامة + history احتمالات ⇒ إعادة تحليل بنص الـ history
-        assert "_is_deep_pedagogy and history_messages" in CLIENT_SRC
-        assert "ProbabilityInput(question=_history_context" in CLIENT_SRC
+        # D-164: هذا المنطق يعيش داخل `_build_calculated_ui` في ProbabilityUIMixin الآن.
+        assert "_is_deep_pedagogy and history_messages" in TUTOR_SRC
+        assert "ProbabilityInput(question=_history_context" in TUTOR_SRC

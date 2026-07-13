@@ -15,10 +15,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# D-164: `_build_calculated_ui` (+ its inner `_detect_part_reference`/`_is_probability_context`
+# helpers) live in the ProbabilityUIMixin now; read the full tutor source via the manifest.
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-    encoding="utf-8"
-)
+CLIENT_SRC = read_tutor_source()
 
 
 # نسخة standalone مطابقة لمنطق D-122 (sandbox-safe replica).

@@ -16,10 +16,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# D-164: `_build_calculated_ui`/`_build_probability_tree_props` live in the ProbabilityUIMixin
+# now; read the full tutor source (client + brain + mixins) via the single manifest.
+# (stdlib-only import — pydantic-free, still runs in the sandbox.)
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-    encoding="utf-8"
-)
+CLIENT_SRC = read_tutor_source()
 # نطاق دالة _build_calculated_ui (نتأكّد أن الإصلاح داخلها لا في مكان آخر).
 _BUILD_UI = CLIENT_SRC[CLIENT_SRC.index("def _build_calculated_ui(") :]
 _BUILD_UI = _BUILD_UI[: _BUILD_UI.index("\n    async def _build_probability_tree_props")]

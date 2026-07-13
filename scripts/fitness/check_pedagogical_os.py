@@ -71,7 +71,8 @@ _TUTOR_MANIFEST_PATH = "app/infrastructure/clients/orchestrator/tutor_sources.py
 def _tutor_source_files() -> list[str]:
     """قائمة ملفات مصدر المعلّم من الـ manifest (source of truth) — D-164، بلا استيراد app."""
     manifest = _read(_TUTOR_MANIFEST_PATH)
-    m = re.search(r"TUTOR_SOURCE_FILES[^(]*\(([^)]*)\)", manifest, re.DOTALL)
+    # يُثبَّت على جملة الإسناد `TUTOR_SOURCE_FILES ... = ( ... )` لا ذِكرها في docstring.
+    m = re.search(r"TUTOR_SOURCE_FILES[^=\n]*=\s*\((.*?)\)", manifest, re.DOTALL)
     if not m:
         _fail(f"{_TUTOR_MANIFEST_PATH}: TUTOR_SOURCE_FILES manifest not found (D-164)")
         return [CLIENT_PATH, BRAIN_PATH]
@@ -567,9 +568,10 @@ def check_split_brain_parity() -> None:
     brain = _read(BRAIN_PATH)
     port = _read("microservices/orchestrator_service/src/services/overmind/probability_tutor.py")
     # D-163: العقل مستهلَك حياً بالوراثة — إزالتها تجعله ZOMBIE فوراً.
-    # D-164: paren مفتوح — يسمح بإضافة mixins بعد ProbabilityTutorBrain مع بقاء العقل أول base.
-    if "class OrchestratorClient(ProbabilityTutorBrain" not in client:
-        _fail("OrchestratorClient must inherit ProbabilityTutorBrain (D-163 — brain is live)")
+    # D-164: قائمة الـ bases قد تُلَفّ على أسطر (ruff) — regex يتسامح مع المسافات/الأسطر
+    # لكن يفرض بقاء `ProbabilityTutorBrain` **أول base** بعد القوس مباشرةً.
+    if not re.search(r"class OrchestratorClient\(\s*ProbabilityTutorBrain\b", client):
+        _fail("OrchestratorClient must inherit ProbabilityTutorBrain first (D-163 — brain is live)")
         ok = False
     contracts = (
         # (وصف العقد، علامة monolith، علامة الـ port)

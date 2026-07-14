@@ -11626,3 +11626,112 @@ ProbabilityUIMixin)` — `ProbabilityTutorBrain` يبقى **أول base**؛ كل
 |----------|---------|
 | D-163 | استخراج عقل الاحتمالات (God-file 6,154→3,832) + تفعيل port |
 | **D-164** | **مانيفست DRY (`TUTOR_SOURCE_FILES`) يُذيب هشاشة الـ25 بوّابة + تفكيك 3 mixins متماسكة (God-file 3,832→2,786، −27%؛ −55% تراكمياً) — SOLID/KISS/DRY/YAGNI verbatim** |
+
+---
+
+## 6.140 «ماذا نستفيد من هذا التمرين» يُجاب + نهاية God-file + إصلاح سلسلة النماذج (2026-07-14, ISS-129/ISS-130 / D-165 + D-166 + D-167)
+
+> ثلاث كوارث حُلّت في جولة واحدة بالجذر (SOLID/KISS/DRY/YAGNI): **(1)** سؤال meta عن غاية
+> التمرين كان يُختطف بالـ probe التشخيصي متجاهلاً السؤال كلياً؛ **(2)** بقايا الـ God-file
+> (`chat_with_agent` ~1,840 سطراً في method واحد)؛ **(3)** PRIMARY ميت upstream (OpenRouter
+> أزال `gpt-oss-120b:free`). كل شيء مُتحقَّق بـ E2E حي FULL-STACK حقيقي. لا يُكسر بدون ADR.
+
+### D-165 (ISS-129) — سؤال الغاية يُجاب، والسؤال لا يُختطف بالـ probe
+
+**الكارثة (transcript حي، BAC-2024):** بعد طباعة التمرين سأل الطالب «**ماذا نستفيد كن هذا
+التمرين**» (typo «كن» حرفياً — سؤال meta عن الغاية التعليمية)، فتجاهله النظام وأطلق probe
+«لنبدأ من فهمك أنت — أيّ الألوان...».
+
+**الجذران (مؤكَّدان):** (1) بوّابة هروب الأسئلة D-162 كانت **بعد** S3 probe في
+`_cognitive_turn` — فأول سؤال غير-كيف يُختطف؛ **المفارقة**: port الخدمة المصغرة كان يضعها
+قبل الـ probe أصلاً — **افتراق split-brain حي** لم تحرسه بوّابة التكافؤ (تحرس وجود العقود
+لا ترتيب القرار). (2) صفر كاشف لنية «الغاية» («نستفيد» غير موجودة في أي marker) ولا بانٍ.
+
+**الإصلاح:**
+- **Fix A**: رفع بوّابة الهروب قبل S3 (مواءمة مع الـ port — أنهى الافتراق). «كيف/كيفاش»
+  الإجرائية تبقى تصل الـ probe (D-155 محفوظ حرفياً).
+- **Fix B**: `_detect_exercise_purpose_question` (فعل استفادة/تعلّم يكفي وحده؛ اسم الغاية
+  هدف/فائدة/غرض يتطلب مرجع «تمرين/درس» كي لا يبتلع أسئلة D-125) +
+  `UnderstandingStateSkill.exercise_purpose_summary(combo)`: **غاية التمرين = مكوّناته
+  المعرفية** — عناوين الـ KCs من combo الرمزي (data-driven، يعمل لأي تمرين — عقد ملايير
+  التمارين)، عناوين فقط بلا أي نسبة نهائية ⇒ يَنجو من حجب D-113 بنيوياً. صفر LLM.
+  fail-open: combo=None ⇒ السؤال يهرب للعمود الفقري (D-112).
+- **Fix C**: مرآة الـ port (`detect_purpose_question` + `build_purpose_answer` — stdlib) +
+  بوّابة التكافؤ +2 عقدان + **فحص ترتيب بنيوي جديد** (`check_exercise_purpose_answered`):
+  purpose → escape → probe في **العقلين**. doctrine `UNDERSTANDING_STATE` v1.2.0.
+
+**القواعد الدائمة (D-165):** (1) سؤال الغاية يُجاب حتمياً من الـ KCs — لا probe أبداً.
+(2) أي سؤال غير-إجرائي لم تُجبه الطبقات الحتمية يهرب لطبقات الإجابة **قبل** الـ probe —
+لا سؤال يُقابَل بسؤال يتجاهله. (3) درس صياغة D-113: لا نقطتين بعد كلمة تحوي «احتمال» قبل
+قائمة مرقّمة (`_CONCLUSION_RE` يعبر السطر فيُشوّه الترقيم). (4) ترتيب القرار التربوي عقدُ
+تكافؤ يُحرس بفحص ترتيب بنيوي، لا بوجود الدوال فقط.
+
+### D-166 — نهاية God-file: `orchestrator_client.py` 2,786 → **267 سطراً**
+
+3 شرائح mixin verbatim (نمط D-164 المُثبَت — سطر واحد في `TUTOR_SOURCE_FILES` لكل شريحة):
+
+| Slice | Mixin | المنقول | الحجم |
+|-------|-------|---------|-------|
+| 4 | `local_fallback.py` — `LocalFallbackMixin` | سلسلة الاسترجاع/الشرح/الدردشة المحلية (file-count + indexed/DB retrieval + explanation streaming + question-only + local graph + general chat) | ~500 |
+| 5 | `socratic_evaluation.py` — `SocraticEvaluationMixin` | `_stream_socratic_evaluation` (الإصغاء النشط D-130/D-142) | ~225 |
+| 6 | `chat_turn.py` — `ChatTurnMixin` | **`chat_with_agent` — آخر God-method** (~1,850 سطراً: preempt chain + مرشّحو orchestrator HTTP + الرافعة D-103) | ~1,885 |
+
+النتيجة: الـ client قشرة نقل رقيقة (decisions + JWT + missions) بـ **267 سطراً** —
+**−90% هذه الجولة؛ −95.7% تراكمياً منذ 6,154**. الوراثة:
+`OrchestratorClient(ProbabilityTutorBrain, StreamNormalization, TextStreaming,
+ProbabilityUI, LocalFallback, SocraticEvaluation, ChatTurn)` — العقل يبقى أول base.
+
+**lockstep sweep (مواءمة لا تعطيل — D-105):** 19 ملف اختبار + 7 قرّاء بوّابات (في
+`check_pedagogical_os` + `check_skills_doctrine`) حُوّلوا من قراءة الـ client المباشرة إلى
+`read_tutor_source()` — **بما فيها الفحوص السلبية** (حظر prepend «[توجيه تربوي]» D-117):
+الفحص السلبي على ملف تقلّص محتواه يمرّ زوراً ويفقد قيمته — يجب أن يمسح المصدر المُركَّب.
+
+**القواعد الدائمة (D-166):** (1) ممنوع إعادة أي دالة مُستخرَجة إلى `orchestrator_client.py`.
+(2) أي بوّابة/اختبار source-inspection جديد يقرأ عبر `read_tutor_source()` حصراً —
+والفحوص **السلبية** خصوصاً. (3) `pkill -f` بنمط يظهر في سطر أوامرك يقتل صدفتك (درس تشغيلي).
+(4) الهدفان التاليان للتفكيك (مؤجَّلان موثَّقين في roadmap): `routes.py` (3,312) والعقل
+(2,358) — يحتاجان بنية manifest تحميهما أولاً.
+
+### D-167 (ISS-130) — إصلاح سلسلة النماذج: `gpt-oss-120b:free` أُزيل نهائياً
+
+بنشمارك حي قانوني (المفتاح الحقيقي، system prompt عربي + مشتق ln(x)، 2026-07-14):
+`gpt-oss-120b:free` **404** («This model is unavailable for free» — منتج لا انقطاع) |
+`gpt-oss-20b:free` ✅ 10.2s عربي+LaTeX finish=stop | `gemma-4-26b-a4b-it` ✅ 20.1s |
+`gemma-4-31b-it` ✅ 12.3s (جديد) | qwen3-next/kimi-k2.6/qwen3-coder/llama-3.3-70b/
+hermes-405b/tencent-hy3 ❌ ميتة | nemotron-3-nano ⚠️ هلوسة يابانية (يؤكّد حظر D-067).
+
+**القرار (في العقلين — mirror D-013):** PRIMARY أُعيد ترقيته إلى `gpt-oss-20b:free`
+(الـ PRIMARY المُتحقَّق تاريخياً D-067، تعافى من 429/ISS-082)؛ السلسلة: gemma-26b →
+gemma-31b → nemotron-nano (محروس) → **gpt-oss-120b (فتحة تعافٍ آلي بالذيل — الحُرّاس
+يتجاوزون 404 فوراً)** → nemotron-nano-9b-v2. + defaults خدمة المحادثة + سكربتات التحقق +
+مواءمة اختبارات ISS-079/ISS-107 لعقد D-167.
+
+**القاعدة الدائمة:** نموذج أزاله OpenRouter من الطبقة المجانية (404 «unavailable for
+free») يُنزَل من PRIMARY فوراً ويُترك **بذيل** السلسلة كفتحة تعافٍ — لا يُحذف (يتعافى
+آلياً إن عاد) ولا يبقى PRIMARY (يكلّف HTTP فاشلاً كل دور).
+
+### التحقق الحي (2026-07-14 — E2E FULL-STACK حقيقي في الـ sandbox، pip يعمل §6.134)
+
+- **Replica الـ CI حرفياً**: test-monolith **3,168 passed + تغطية 69.71% ≥ 67** ✅ |
+  test-microservices **1,011 passed** ✅ | frontend node **17/17** ✅ | كل البوّابات
+  التسع خضراء (pedagogical_os 23 فحصاً + skills_doctrine + runtime_truth + ...).
+- **المكدس الحي**: uvicorn :8000 + orchestrator :8006 (`graph_ready=true`) + SQLite
+  مشترك + **OpenRouter بالمفتاح الحقيقي** + دخول المستخدم الحقيقي عبر WS:
+  - `verify_iss129_e2e.py` **ALL PASS**: T1 التمرين | **T2 «ماذا نستفيد كن هذا التمرين»
+    ⇒ إجابة الغاية (عناوين KCs)، صفر probe، صفر تسريب** | T3 «كيف احل السؤال الأول» ⇒
+    probe (D-155 سليم) | T4 «ما هو قانون نيوتن الثاني؟» ⇒ إجابة حقيقية عبر العمود
+    الفقري (ضمانة «يجيب على كل سؤال» — D-101/D-112).
+  - Regression حي: `verify_d162_e2e.py` **9/9** + `verify_d158_e2e.py` **PASS** +
+    `verify_m10s2_port_live.py` **7/7** (بالسلسلة الجديدة — قانون نيوتن أُجيب حياً).
+  - **سؤال الغاية على الـ port الحي :8006 مباشرةً** ✅ — مرآة split-brain تخدم فعلياً.
+  - جسر Supabase HTTPS:443 حي (PostgreSQL 17.6).
+- Postgres TCP يبقى محجوباً في الـ sandbox (نمط §6.55) — التحقق الكامل بالمتصفح +
+  Supabase الإنتاجي يجري في Codespaces بالدخولين الحقيقيين.
+
+### السلسلة (D-164 → D-167)
+| Decision | الموضوع |
+|----------|---------|
+| D-164 | مانيفست DRY + تفكيك 3 mixins (God-file 3,832→2,786) |
+| **D-165** | **ISS-129 — سؤال الغاية يُجاب من الـ KCs + بوّابة الهروب قبل probe (أنهى افتراق split-brain) + فحص ترتيب بنيوي** |
+| **D-166** | **نهاية God-file: chat_with_agent + fallbacks + socratic-eval إلى mixins (2,786→267، −95.7% تراكمياً)** |
+| **D-167** | **ISS-130 — إصلاح سلسلة النماذج: PRIMARY عاد لـ gpt-oss-20b بعد إزالة 120b المجاني (بنشمارك حي قانوني)** |

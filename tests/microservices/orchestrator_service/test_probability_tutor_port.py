@@ -12,8 +12,10 @@ M10-S2.1 (ISS-121 / D-154) — معلّم الاحتمالات الحتمي دا
 
 from microservices.orchestrator_service.src.services.overmind.probability_tutor import (
     build_diagnostic_probe,
+    build_purpose_answer,
     build_symbolic_step,
     detect_naming_question,
+    detect_purpose_question,
     deterministic_turn,
     fmt_comb,
     has_prior_tutoring_step,
@@ -174,3 +176,39 @@ class TestStatefulTutoring:
         assert is_question_not_answer("ماذا نسمي هذا الحساب")
         assert not is_question_not_answer("14 من 165")
         assert detect_naming_question("ماذا نسمي حساب 4 و 10", self._comp())
+
+
+class TestExercisePurposeMirror:
+    """D-165 (ISS-129): مرآة «غاية التمرين» في الـ port — تكافؤ split-brain فعلي."""
+
+    def test_catastrophe_purpose_answered_not_probed(self):
+        """«ماذا نستفيد كن هذا التمرين» ⇒ إجابة الغاية، لا probe، لا سقوط للـ LLM."""
+        t = deterministic_turn("ماذا نستفيد كن هذا التمرين", _OFFICIAL, history=[])
+        assert t is not None
+        assert "لنبدأ من فهمك أنت" not in t
+        assert "معنى الحادثة" in t and "فضاء العيّنة" in t
+
+    def test_detector_matrix(self):
+        assert detect_purpose_question("ما الفائدة من هذا التمرين")
+        assert detect_purpose_question("واش نستافدو من التمرين")
+        assert detect_purpose_question("ماذا نتعلم من التمرين")
+        # أسماء الغاية بلا مرجع تمرين ⇒ ليست سؤال غاية (تبقى للـ LLM/المفاهيمي).
+        assert not detect_purpose_question("ما الهدف من الحادثة A")
+        assert not detect_purpose_question("ما فائدة 14")
+        assert not detect_purpose_question("كيف احل السؤال الأول")
+
+    def test_purpose_answer_no_final_ratio_and_data_driven(self):
+        comp = parse_composition(_OFFICIAL)
+        text = build_purpose_answer(comp)
+        assert "14/165" not in text and "14 من 165" not in text and "\\boxed" not in text
+        assert f"المجموع {comp['n']}" in text  # مؤرَّض من comp لا نص مُصلَّب
+
+    def test_dedup_no_verbatim_repeat(self):
+        t = deterministic_turn("ماذا نستفيد من هذا التمرين", _OFFICIAL, history=[])
+        assert t
+        again = deterministic_turn("ماذا نستفيد من هذا التمرين", _OFFICIAL, history=[t])
+        assert again is None
+
+    def test_kayf_still_gets_probe(self):
+        t = deterministic_turn("كيف احل السؤال الأول", _OFFICIAL, history=[])
+        assert t and "لنبدأ من فهمك أنت" in t

@@ -372,6 +372,84 @@ def build_naming_answer(comp: dict) -> str:
     )
 
 
+#: D-165 (ISS-129): أفعال «الاستفادة/التعلّم» — غير ملتبسة، تكفي وحدها (mirror
+#: لـ `ProbabilityTutorBrain._PURPOSE_VERB_MARKERS` — بوّابة تكافؤ split-brain).
+PURPOSE_VERB_MARKERS: tuple[str, ...] = (
+    "نستفيد",
+    "استفيد",
+    "نستافد",
+    "يستفيد",
+    "نتعلم",
+    "اتعلم",
+    "يعلمنا",
+    "تعلمنا",
+)
+#: أسماء الغاية الملتبسة — تتطلب مرجع تمرين صريحاً («ما الهدف من التمرين»).
+#: `_norm` هنا لا يحذف «ال» — الاحتواء يغطيها («هدف» ⊂ «الهدف»)؛ الهمزات بصورتيها.
+PURPOSE_NOUN_MARKERS: tuple[str, ...] = ("هدف", "غرض", "غاية", "فائدة", "فايدة", "أهمية", "اهمية")
+PURPOSE_EXERCISE_REFS: tuple[str, ...] = ("تمرين", "درس")
+
+
+def detect_purpose_question(question: str) -> bool:
+    """D-165 (ISS-129): هل السؤال عن **غاية التمرين** («ماذا نستفيد/نتعلم منه؟»)؟
+
+    mirror لـ ``ProbabilityTutorBrain._detect_exercise_purpose_question`` — سؤال
+    meta كان يُختطف بالـ probe في عقل المونوليث (الـ port كان يُسقطه للـ LLM بلا
+    إجابة مؤرَّضة). فعل الاستفادة يكفي وحده؛ اسم الغاية يتطلب مرجع «تمرين/درس».
+    """
+    try:
+        q = _norm(question)
+        if not q:
+            return False
+        if any(v in q for v in PURPOSE_VERB_MARKERS):
+            return True
+        if any(nn in q for nn in PURPOSE_NOUN_MARKERS):
+            return any(ref in q for ref in PURPOSE_EXERCISE_REFS)
+        return False
+    except Exception:
+        return False
+
+
+def build_purpose_answer(comp: dict) -> str:
+    """D-165 (ISS-129): إجابة «غاية التمرين» الحتمية — mirror لبانٍ المونوليث.
+
+    الغاية = المهارات المعرفية التي يدرّبها التمرين (نفس محاور
+    ``UnderstandingStateSkill.knowledge_components`` — stdlib هنا، قاعدة M10: لا
+    import من ``app/``). مقدّمة مؤرَّضة من ``comp`` (data-driven) + عناوين فقط،
+    بلا أي نسبة نهائية ⇒ تَنجو من حجب D-113 بنيوياً. صفر LLM.
+    """
+    k, n = comp["k"], comp["n"]
+    comp_desc = "، ".join(
+        f"{g['count']} {str(g['label']).replace('كرة ', '')}" for g in comp.get("groups", [])
+    )
+    titles = "\n".join(
+        f"{i}. **{t}**"
+        for i, t in enumerate(
+            (
+                "معنى الحادثة",
+                "معنى التأليفة C(n,k)",
+                "لماذا نقسم على k!",
+                "عدّ الحالات الملائمة",
+                "فضاء العيّنة",
+                "تكوين الاحتمال",
+            ),
+            1,
+        )
+    )
+    # ملاحظة صياغة (D-113): لا نقطتين قبل قائمة مرقّمة («احتمال…:» + رقم عبر السطر
+    # تُطابق أنماط الخلاصة في الحجب) — نفس عقد صياغة بانٍ المونوليث.
+    return (
+        f"سؤال ممتاز — هذا التمرين ليس مجرد أرقام: سحب {k} كرات من كيس فيه "
+        f"{comp_desc} (المجموع {n}) تدريبٌ مركّز على مهارات ستخدمك في كل تمارين "
+        "الاحتمالات يوم البكالوريا.\n\n"
+        f"{titles}\n\n"
+        "كل سؤال في التمرين يبني مهارة من هذه — لذلك نحلّه خطوة بخطوة بدل حفظ "
+        "النتيجة.\n"
+        "حين تكون جاهزاً أخبرني: من أين تحب أن نبدأ — بفهم الحادثة A أم بعدّ كل "
+        "الطرق الممكنة؟"
+    )
+
+
 def extract_answer_numbers(text: str) -> set[int]:
     """D-155/D-163: أعداد رسالة الطالب (أرقام عربية ⇒ لاتينية أولاً)."""
     return {int(m) for m in re.findall(r"\d+", _norm(text))}
@@ -543,6 +621,11 @@ def deterministic_turn(
         if detect_naming_question(question, comp):
             _naming = build_naming_answer(comp)
             return _naming if not _dup(_naming) else None
+        # D-165 (ISS-129): سؤال «غاية التمرين» يُجاب حتمياً (mirror لعقل المونوليث)
+        # قبل بوّابة هروب الأسئلة — كان يسقط للـ LLM بلا إجابة مؤرَّضة.
+        if detect_purpose_question(question):
+            _purpose = build_purpose_answer(comp)
+            return _purpose if not _dup(_purpose) else None
         if is_question_not_answer(question) and not _norm(question).startswith(("كيف", "كيفاش")):
             return None
 
@@ -585,10 +668,12 @@ def deterministic_turn(
 __all__ = [
     "build_diagnostic_probe",
     "build_naming_answer",
+    "build_purpose_answer",
     "build_rescue",
     "build_step",
     "build_symbolic_step",
     "detect_naming_question",
+    "detect_purpose_question",
     "deterministic_turn",
     "extract_answer_numbers",
     "fmt_comb",

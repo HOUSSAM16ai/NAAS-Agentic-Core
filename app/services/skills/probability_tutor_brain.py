@@ -331,6 +331,71 @@ class ProbabilityTutorBrain:
                 return True
         return False
 
+    #: D-165 (ISS-129): أفعال «الاستفادة/التعلّم» — غير ملتبسة، تكفي وحدها في سياق
+    #: احتمالات («ماذا نستفيد من هذا التمرين؟» — transcript الكارثة الحرفي). صور
+    #: مُطبَّعة عبر normalize_ar (ال محذوفة، الهمزات موحَّدة).
+    _PURPOSE_VERB_MARKERS: ClassVar[tuple[str, ...]] = (
+        "نستفيد",
+        "استفيد",
+        "نستافد",
+        "يستفيد",
+        "نتعلم",
+        "اتعلم",
+        "يعلمنا",
+        "تعلمنا",
+    )
+    #: أسماء الغاية الملتبسة — تتطلب مرجع تمرين صريحاً («ما الهدف من التمرين»)؛
+    #: بدونه تبقى لطبقة D-125 المفاهيمية («ما الهدف من 14» = علاقة البسط/المقام).
+    _PURPOSE_NOUN_MARKERS: ClassVar[tuple[str, ...]] = (
+        "هدف",
+        "غرض",
+        "غايه",
+        "فايده",
+        "اهميه",
+    )
+    _PURPOSE_EXERCISE_REFS: ClassVar[tuple[str, ...]] = ("تمرين", "درس")
+
+    @classmethod
+    def _detect_exercise_purpose_question(cls, question: str) -> bool:
+        """D-165 (ISS-129): هل السؤال عن **غاية التمرين** («ماذا نستفيد/نتعلم منه؟»)؟
+
+        سؤال meta عن الغاية التعليمية — كان يُختطف بالـ probe التشخيصي (S3) متجاهلاً
+        السؤال كلياً (transcript الكارثة). حتمي: فعل استفادة/تعلّم يكفي وحده؛ اسم
+        الغاية (هدف/فائدة/غرض) يتطلب مرجع «تمرين/درس» كي لا يبتلع أسئلة D-125
+        المفاهيمية («ما الهدف من 14»).
+        """
+        try:
+            from app.services.capabilities.arabic_normalize import normalize_ar
+
+            norm = normalize_ar(question or "")
+        except Exception:  # pragma: no cover - fail-safe
+            norm = (question or "").strip().lower()
+        if not norm:
+            return False
+        if any(v in norm for v in cls._PURPOSE_VERB_MARKERS):
+            return True
+        if any(n in norm for n in cls._PURPOSE_NOUN_MARKERS):
+            return any(ref in norm for ref in cls._PURPOSE_EXERCISE_REFS)
+        return False
+
+    @classmethod
+    def _build_exercise_purpose_answer(cls, combo) -> str | None:
+        """D-165 (ISS-129): إجابة «غاية التمرين» الحتمية — من المكوّنات المعرفية.
+
+        يفوّض إلى `UnderstandingStateSkill.exercise_purpose_summary` (DRY — الـ KCs
+        تعيش هناك، D-135): غاية التمرين = مكوّناته المعرفية، مشتقة من combo الرمزي
+        (data-driven — تعمل لأي تمرين). صفر LLM، بلا أي نسبة نهائية (تَنجو من حجب
+        D-113 بنيوياً). fail-open ⇒ None (السؤال يهرب للـ LLM المحروس — D-112).
+        """
+        try:
+            from app.services.skills.understanding_state_skill import (
+                get_understanding_state_skill,
+            )
+
+            return get_understanding_state_skill().exercise_purpose_summary(combo)
+        except Exception:  # pragma: no cover - fail-safe
+            return None
+
     @staticmethod
     def _fmt_comb(c: int, k: int, fav: int) -> str:
         r"""يبني توسيع المضروب الحتمي بصيغة LaTeX (ISS-121 / D-154).
@@ -2130,6 +2195,21 @@ class ProbabilityTutorBrain:
                 tutor_state["kc_progress_delta"] = delta
                 return text, delta
 
+            # ── D-165 (ISS-129): سؤال «غاية التمرين» («ماذا نستفيد من هذا التمرين؟»)
+            #    يُجاب حتمياً من المكوّنات المعرفية (data-driven من combo — عقد ملايير
+            #    التمارين) قبل أي probe/سُلّم — كان يُختطف بالـ probe التشخيصي متجاهلاً
+            #    السؤال كلياً. dedup-محروس؛ فشل البناء ⇒ هروب لطبقات الإجابة (D-112). ──
+            if cls._detect_exercise_purpose_question(question):
+                _purpose = cls._build_exercise_purpose_answer(combo)
+                if _purpose and not cls._recently_emitted(_purpose, history_messages):
+                    entry.attempts += 1
+                    with contextlib.suppress(Exception):
+                        from app.services.skills.tutor_metrics import record_definitional_answer
+
+                        record_definitional_answer("exercise_purpose", True, source="deterministic")
+                    return _finish(_purpose, add_step="exercise_purpose")
+                return None, None
+
             if active_kc == cls._KC_PROB_B:
                 return cls._cognitive_turn_event_b(
                     question, history_messages, combo, parity, entry, _finish
@@ -2193,6 +2273,19 @@ class ProbabilityTutorBrain:
                     entry.evidence = "verified"
                     return _finish(text, add_step="ratio", new_pending="ratio")
 
+            # ── D-162 (ISS-128) + D-165 (ISS-129): سؤال لم تُجبه F2/التسمية/الغاية ⇒
+            #    يهرب لطبقات الإجابة (D-124/D-125/D-132 ثم LLM المحروس) — سُلّم S1
+            #    الأعمى للأدوار غير الاستفهامية حصراً (كان سيكشف 165 متجاهلاً السؤال).
+            #    أسئلة «كيف/كيفاش» الإجرائية تبقى للتشخيص/السُّلّم (D-155/D-160).
+            #    D-165 Fix A: البوّابة **قبل** probe S3 (كانت بعده — فكان أول سؤال
+            #    غير-كيف يُختطف بالـ probe متجاهلاً السؤال؛ port الخدمة المصغرة كان
+            #    أصلاً يضعها قبل الـ probe — افتراق split-brain حي أُنهي هنا). ──
+            _qg = (question or "").strip().lower()
+            if _qg.startswith("و "):
+                _qg = _qg[2:].lstrip()
+            if _is_q and not _qg.startswith(("كيف", "كيفاش")):
+                return None, None
+
             entry.attempts += 1
 
             # ── S3: أول تفاعل ⇒ التشخيص قبل الشرح ──
@@ -2204,16 +2297,6 @@ class ProbabilityTutorBrain:
                     add_step="diagnostic_probe",
                     new_pending="numerator",
                 )
-
-            # ── D-162 (ISS-128): سؤال وسط الحوار (بعد probe) لم تُجبه F2/التسمية ⇒
-            #    يهرب لطبقات الإجابة (D-124/D-125/D-132 ثم LLM المحروس) — سُلّم S1
-            #    الأعمى للأدوار غير الاستفهامية حصراً (كان سيكشف 165 متجاهلاً السؤال).
-            #    أسئلة «كيف/كيفاش» الإجرائية تبقى لسلسلة F2/F1/F3 التعليمية (D-160). ──
-            _qg = (question or "").strip().lower()
-            if _qg.startswith("و "):
-                _qg = _qg[2:].lstrip()
-            if _is_q and not _qg.startswith(("كيف", "كيفاش")):
-                return None, None
 
             # ── S1: كشف تدريجي — خطوة واحدة لم تُعرَض بعد (لا تفريغ كامل) ──
             for step in ("numerator", "ratio"):

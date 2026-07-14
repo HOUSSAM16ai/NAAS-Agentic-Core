@@ -317,6 +317,37 @@ class UnderstandingStateSkill:
         ]
         return kcs
 
+    # ── A2) غاية التمرين = مكوّناته المعرفية (D-165 / ISS-129) ──────────────────
+    def exercise_purpose_summary(self, combo) -> str | None:
+        """يبني إجابة «ماذا نستفيد من هذا التمرين؟» من المكوّنات المعرفية الحتمية.
+
+        D-165 (ISS-129): سؤال الغاية meta كان يُختطف بالـ probe التشخيصي متجاهلاً
+        السؤال. الغاية = عناوين الـ KCs المشتقة من combo الرمزي (data-driven — تعمل
+        لأي تمرين، عقد ملايير التمارين). **عناوين فقط، بلا أي نسبة نهائية** ⇒ تَنجو
+        من حجب D-113 بنيوياً. صفر LLM؛ fail-open ⇒ None.
+        """
+        kcs = self.knowledge_components(combo)
+        if not kcs:
+            return None
+        try:
+            k = int(combo.k)
+            comp = "، ".join(f"{g.count} {str(g.label).replace('كرة ', '')}" for g in combo.groups)
+        except Exception:  # pragma: no cover — combo مشوَّه
+            return None
+        # ملاحظة صياغة (D-113): لا نُنهي المقدمة بنقطتين قبل قائمة مرقّمة — «احتمال…:»
+        # متبوعة برقم عبر السطر تُطابق `_CONCLUSION_RE` فيُشوَّه الترقيم (false-positive).
+        titles = "\n".join(f"{i}. **{kc.title}**" for i, kc in enumerate(kcs, 1))
+        return (
+            f"سؤال ممتاز — هذا التمرين ليس مجرد أرقام: سحب {k} كرات من كيس فيه "
+            f"{comp} تدريبٌ مركّز على مهارات ستخدمك في كل تمارين الاحتمالات يوم "
+            "البكالوريا.\n\n"
+            f"{titles}\n\n"
+            "كل سؤال في التمرين يبني مهارة من هذه — لذلك نحلّه خطوة بخطوة بدل حفظ "
+            "النتيجة.\n"
+            "حين تكون جاهزاً أخبرني: من أين تحب أن نبدأ — بفهم الحادثة A أم بعدّ كل "
+            "الطرق الممكنة؟"
+        )
+
     # ── B) مُشخِّص الفجوة المعرفية (semantic, not number) ──────────────────────
     def detect_gap(self, question: str, kcs: list[KnowledgeComponent]) -> KnowledgeComponent | None:
         """يُطابق نية السؤال بـ gap_signals للمكوّن (معنى لا رقم). None إن لا فجوة صريحة."""

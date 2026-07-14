@@ -132,7 +132,10 @@ class ActiveModels:
     # gpt-oss-120b:free من نفس العائلة (OpenAI OSS) ومحقَّق حي يعمل ✅.
     # نفس quality contract لـ gpt-oss-20b (D-067) لكن rate limit pool مختلف.
     # gpt-oss-20b يبقى في الـ fallback chain — إن تعافى من 429 سيُستخدم تلقائياً.
-    PRIMARY = _resolve_primary_model("openai/gpt-oss-120b:free")
+    # ISS-130 (D-167 — 2026-07-14): gpt-oss-120b:free أُزيل نهائياً من OpenRouter
+    # (404) ⇒ إعادة ترقية gpt-oss-20b (الـ PRIMARY المُتحقَّق تاريخياً — D-067،
+    # وتعافى من 429 — مُتحقَّق حياً 10.2s عربي+LaTeX finish=stop).
+    PRIMARY = _resolve_primary_model("openai/gpt-oss-20b:free")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
     # ISS-107 (2026-06-02): بنشمارك حي بالمفتاح الحقيقي + الـ system prompt الإنتاجي
@@ -151,11 +154,23 @@ class ActiveModels:
     # قبل gemma. التحقق الحي: gemma-4-26b = GOOD (عربي 65% + LaTeX + لا تسرّب).
     # الحل: تقديم gemma على nemotron في سلسلة الاحتياط — أسلم نموذج صحيّ يُبلَغ
     # أولاً عند سقوط gpt-oss. PRIMARY يبقى gpt-oss-120b (يتعافى آلياً عند عودته).
-    GATEWAY_FALLBACK_1 = "openai/gpt-oss-20b:free"  # ✅ Arabic content (live 2026-06-02)
-    GATEWAY_FALLBACK_2 = "google/gemma-4-26b-a4b-it:free"  # ✅ GOOD حياً (2026-06-03) — عربي+LaTeX
+    # ISS-130 (D-167 — 2026-07-14): OpenRouter أزال النسخة المجانية من
+    # gpt-oss-120b نهائياً (404 «This model is unavailable for free») — منتج
+    # لا انقطاع. بنشمارك حي قانوني (system prompt عربي + مشتق ln(x)):
+    #   ✅ gpt-oss-20b:free      → 10.2s، عربي + LaTeX، finish=stop (الأسرع الصحيح)
+    #   ✅ gemma-4-26b-a4b-it    → 20.1s، عربي + LaTeX، finish=stop
+    #   ✅ gemma-4-31b-it        → 12.3s، عربي + LaTeX، finish=stop (جديد)
+    #   ❌ gpt-oss-120b:free     → 404 (أُزيل من الطبقة المجانية)
+    #   ❌ qwen3-next / kimi-k2.6 / qwen3-coder / llama-3.3-70b → ميتة/Provider error
+    #   ⚠️ nemotron-3-nano       → هلوسة يابانية (يؤكّد حظر D-067 كـ PRIMARY)
+    # القرار: إعادة ترقية gpt-oss-20b إلى PRIMARY (هو الـ PRIMARY المُتحقَّق تاريخياً
+    # D-067)؛ gemma-4 بإصداريه بعده؛ gpt-oss-120b يبقى في ذيل السلسلة كفتحة
+    # تعافٍ آلي إن أعاد OpenRouter نسخته المجانية (الحُرّاس يتجاوزون 404 فوراً).
+    GATEWAY_FALLBACK_1 = "google/gemma-4-26b-a4b-it:free"  # ✅ GOOD حياً (2026-07-14) — عربي+LaTeX
+    GATEWAY_FALLBACK_2 = "google/gemma-4-31b-it:free"  # ✅ GOOD حياً (2026-07-14) — عربي+LaTeX
     GATEWAY_FALLBACK_3 = "nvidia/nemotron-3-nano-30b-a3b:free"  # سريع؛ محميّ بـ content==0 guard
-    GATEWAY_FALLBACK_4 = "qwen/qwen3-next-80b-a3b-instruct:free"  # instruct كبير؛ محميّ بالحُرّاس
-    GATEWAY_FALLBACK_5 = "moonshotai/kimi-k2.6:free"  # احتياطي أخير كبير؛ محميّ بالحُرّاس
+    GATEWAY_FALLBACK_4 = "openai/gpt-oss-120b:free"  # ميت 404 (2026-07-14) — فتحة تعافٍ آلي
+    GATEWAY_FALLBACK_5 = "nvidia/nemotron-nano-9b-v2:free"  # ملاذ أخير؛ محميّ بالحُرّاس
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY
     TIER_SMART = PRIMARY

@@ -32,7 +32,8 @@ _NODE_TIMEOUT = 40.0
 # ISS-082 (D-088 — 2026-05-27): gpt-oss-20b:free أصبح rate-limited بشكل دائم
 # على OpenRouter. gpt-oss-120b من نفس العائلة، نفس quality contract،
 # rate limit pool مختلف. مُرقّى لـ default للـ math pipeline.
-_DEFAULT_MODEL = "openai/gpt-oss-120b:free"
+# ISS-130 (D-167 — 2026-07-14): gpt-oss-120b:free أُزيل من OpenRouter (404) — العودة للـ 20b المُتحقَّق.
+_DEFAULT_MODEL = "openai/gpt-oss-20b:free"
 # ISS-074 (2026-05-15): fallback chain مُحدَّث بعد بنشمارك حي
 # - google/gemma-4-26b-a4b-it:free → rate-limited 429 (مُزال)
 # - qwen/qwen3-coder:free          → rate-limited 429 (مُزال)

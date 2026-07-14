@@ -220,7 +220,8 @@ def check_confusion_never_an_answer() -> None:
 
 # ── 3e) حارس التكرار على مسار محرّك حالة الفهم ────────────────────────────────
 def check_understanding_state_repetition_guard() -> None:
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    # D-166: chat_with_agent يعيش في mixin مستخرَج — المصدر المُركَّب عبر الـ manifest.
+    client = _read_monolith_tutor()
     marker = "حارس التكرار على مسار محرّك حالة الفهم"
     if marker not in client:
         _fail("understanding-state emit path lacks the ISS-120 repetition guard")
@@ -258,7 +259,7 @@ def check_inert_boolean_only() -> None:
 # ── D-154 (ISS-121): الكشف التدريجي + حارس تكرار محايد للحجب + عرض سليم ────────
 def check_progressive_disclosure() -> None:
     """القانون الرابع «التلميح قبل الحل» مُنفَّذ بنيوياً (roadmap §7: صفر كشف)."""
-    client = _read(CLIENT_PATH)
+    client = _read_monolith_tutor()  # D-166: chat_with_agent في mixin مستخرَج
     brain = _read(BRAIN_PATH)  # D-163: البُناة الرمزية تعيش في العقل المستخرَج
     ok = True
     if "فاحتمال الحادثة A هو {same} من كل {total}" in client + brain:
@@ -285,7 +286,8 @@ def check_progressive_disclosure() -> None:
 
 def check_redaction_neutral_dedup() -> None:
     """حارس التكرار محايد لتحويل الحجب (المحفوظ «؟» ≡ المبثوث بالأرقام) + سلسلة بدائل."""
-    client = _read(CLIENT_PATH)
+    # D-166: سلاسل البدائل تعيش في mixins مستخرَجة — نقرأ المصدر المُركَّب عبر الـ manifest.
+    tutor = _read_monolith_tutor()
     brain = _read(BRAIN_PATH)  # D-163: تعريف _norm_for_dedup في العقل المستخرَج
     dm = _read("app/services/skills/dialogue_manager_skill.py")
     ok = True
@@ -295,10 +297,7 @@ def check_redaction_neutral_dedup() -> None:
     if 'r"[\\d؟?]+"' not in dm:
         _fail("dialogue_manager _norm lacks redaction-neutral normalization")
         ok = False
-    if (
-        "def _is_dup(t: str) -> bool:" not in client
-        or "def _d153_dup(t: str) -> bool:" not in client
-    ):
+    if "def _is_dup(t: str) -> bool:" not in tutor or "def _d153_dup(t: str) -> bool:" not in tutor:
         _fail("never-emit-dup alternative ladders missing")
         ok = False
     if ok:
@@ -365,7 +364,7 @@ def check_numeric_answer_verification() -> None:
 
 def check_conceptual_escapes_socratic() -> None:
     """ISS-122 (D-155): سؤال مفاهيمي أثناء الحوار السقراطي ⇒ شرح العلاقة (D-125)، ليس إجابة."""
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    client = _read_monolith_tutor()  # D-166: chat_with_agent في mixin مستخرَج
     ok = True
     gate = client.split(
         "if (\n            self._in_socratic_dialogue(question, history_messages)", 1
@@ -385,7 +384,8 @@ def check_conceptual_escapes_socratic() -> None:
 
 def check_reveal_last_in_ladders() -> None:
     """ISS-122 (D-155): الإنقاذ الكامل (reveal superset) آخر بدائل السُّلّم دائماً."""
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    # D-166: سلاسل البدائل تعيش في mixins مستخرَجة — المصدر المُركَّب عبر الـ manifest.
+    client = _read_monolith_tutor()
     ok = True
     for closure in ("def _is_dup(t: str) -> bool:", "def _d153_dup(t: str) -> bool:"):
         seg = client.split(closure, 1)
@@ -430,7 +430,7 @@ def check_persistent_escalation_fsm() -> None:
     if "payload.delivered_levels" not in skill:
         _fail("_levels_delivered must union the persistent FSM memory (D-159 WP-B)")
         ok = False
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    client = _read_monolith_tutor()  # D-166: chat_with_agent في mixin مستخرَج
     if "escalation_levels_of(_esc_kcp" not in client:
         _fail("escalation block must read persistent levels from tutor_state (D-159 WP-B)")
         ok = False
@@ -452,7 +452,7 @@ def check_misconception_graph_edges() -> None:
     if "prerequisite_of" not in sps:
         _fail("graph edges must include prerequisite_of relations (D-159 WP-D)")
         ok = False
-    client = _read("app/infrastructure/clients/orchestrator_client.py")
+    client = _read_monolith_tutor()  # D-166: chat_with_agent في mixin مستخرَج
     if "diagnose_root(_esc_mis.bkt_concept" not in client:
         _fail("escalation block must consult diagnose_root (root not symptom) (D-159 WP-D)")
         ok = False

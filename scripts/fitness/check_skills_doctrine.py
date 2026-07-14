@@ -25,6 +25,19 @@ from pathlib import Path
 
 # Ensure project root is in sys.path
 ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _read_tutor_source() -> str:
+    """مصدر المعلّم المُركَّب (client + brain + mixins) عبر manifest D-164/D-166.
+
+    الفحوص السلبية (مثل حظر prepend «[توجيه تربوي]» — D-117) يجب أن تمسح النص
+    المُركَّب كاملاً وإلا فقدت قيمتها بعد استخراج chat_with_agent إلى mixin.
+    """
+    from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
+    return read_tutor_source()
+
+
 sys.path.insert(0, str(ROOT))
 
 
@@ -387,9 +400,7 @@ def check_adaptive_pedagogy_wiring() -> None:
     (مُمرَّر في context → يستهلكه SynthesizerNode). البوّابة تفرض غياب الـ prepend.
     """
     router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     if "_build_pedagogy_directive" not in router_src:
         _fail("customer_chat lost _build_pedagogy_directive (D-104 ZOMBIE).")
     if '"pedagogy_directive": pedagogy' not in router_src:
@@ -424,9 +435,7 @@ def check_content_integrity_wired() -> None:
     if entry["rules_count"] != len(CONTENT_INTEGRITY_DOCTRINE):
         _fail("Manifest rules_count mismatch for content_integrity (D-106).")
 
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     if "StreamIntegrityFilter" not in client_src or "sanitize_final_text" not in client_src:
         _fail("orchestrator_client no longer wires StreamIntegrityFilter (D-106 ZOMBIE).")
     local_src = (ROOT / "app/services/chat/local_graph.py").read_text(encoding="utf-8")
@@ -577,9 +586,7 @@ def check_pedagogical_policy_wired() -> None:
     if "MAX_SOCRATIC" not in skill:
         _fail("pedagogical_policy_skill.py lost the MAX_SOCRATIC budget (D-129).")
 
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     if "get_pedagogical_policy_skill" not in client_src:
         _fail("orchestrator_client does not invoke the pedagogical policy (D-129 ZOMBIE).")
     if "_build_symbolic_reveal" not in client_src:
@@ -624,9 +631,7 @@ def check_socratic_evaluator_wired() -> None:
     if "redact_final_answers" not in skill:
         _fail("socratic_evaluator_skill.py lost the answer-redaction guard (D-130).")
 
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     for needle in (
         "get_socratic_evaluator_skill",
         "_in_socratic_dialogue",
@@ -690,9 +695,7 @@ def check_semantic_property_wired() -> None:
                 _fail(f"Misconception node '{node.id}' has invalid mtype '{node.mtype}' (D-131).")
 
     # التوصيل: نداء واحد للطبقة في _build_cognitive_response (لا special-casing لكل حادثة).
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     us_skill = (ROOT / "app/services/skills/understanding_state_skill.py").read_text(
         encoding="utf-8"
     )
@@ -821,9 +824,7 @@ def check_student_state_wired() -> None:
             )
 
     # التوصيل الحيّ (لا ZOMBIE): orchestrator_client يقرأ الحالة ويمرّر intent+frustration.
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     if "get_student_state_skill" not in client_src:
         _fail("orchestrator_client does not invoke StudentStateSkill (D-133 ZOMBIE).")
     if (
@@ -899,9 +900,7 @@ def check_understanding_state_wired() -> None:
         _fail("understanding_state must be LLM-free (numbers from symbolic engine, D-135).")
 
     # التوصيل الحيّ (لا ZOMBIE).
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     if "get_understanding_state_skill" not in client_src:
         _fail("orchestrator_client does not invoke UnderstandingStateSkill (D-135 ZOMBIE).")
     if "_is_short_answer_in_dialogue" not in client_src:
@@ -969,9 +968,7 @@ def check_micro_simulation_wired() -> None:
         if "14/165" in sim or "14 من 165" in sim:
             _fail(f"Micro-simulation '{cid}' leaks the exercise answer (D-138 / D-113).")
 
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     if "get_micro_simulation_skill" not in client_src:
         _fail("orchestrator_client does not invoke MicroSimulationSkill (D-138 ZOMBIE).")
     _pass("Micro-simulation engine wired: deterministic, ≤320 chars, L3 content server (D-138)")
@@ -1016,9 +1013,7 @@ def check_pedagogical_escalation_wired() -> None:
     if "_levels_delivered" not in skill:
         _fail("escalation missing escalation memory / no-repeat (_levels_delivered, D-138 #4).")
 
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     if "get_pedagogical_escalation_skill" not in client_src:
         _fail("orchestrator_client does not invoke PedagogicalEscalationSkill (D-138 ZOMBIE).")
     if "_esc_decision" not in client_src or "detect_active_concept" not in client_src:
@@ -1065,9 +1060,7 @@ def check_dialogue_manager_wired() -> None:
     # التوصيل الحيّ (لا ZOMBIE): orchestrator_client يستشيره خلف العلم.
     # D-163: التعريف (`_dialogue_decision` + الاستيراد الكسول لـ get_dialogue_manager_skill)
     # يعيش في العقل المستخرَج `probability_tutor_brain.py`؛ موقع الاستدعاء يبقى في الـ client.
-    client_src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     brain_src = (ROOT / "app/services/skills/probability_tutor_brain.py").read_text(
         encoding="utf-8"
     )

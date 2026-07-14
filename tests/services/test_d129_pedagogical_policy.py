@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.pedagogical_policy_skill import (
     MAX_SOCRATIC,
     PedagogicalPolicySkill,
@@ -200,9 +201,7 @@ class TestSymbolicRevealSurvivesRedaction:
 # ── التوصيل + الـ manifest (لا ZOMBIE) ────────────────────────────────────────
 class TestWiringAndManifest:
     def test_orchestrator_client_wires_policy(self) -> None:
-        src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        )
+        src = read_tutor_source()
         assert "get_pedagogical_policy_skill" in src
         assert "_build_symbolic_reveal" in src
         # القرار يفرّع على الأفعال الثلاثة

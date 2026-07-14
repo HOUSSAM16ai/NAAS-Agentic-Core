@@ -14,14 +14,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_SRC = (REPO_ROOT / "app/services/skills/concept_diagnosis_skill.py").read_text(
     encoding="utf-8"
 )
-CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-    encoding="utf-8"
-) + (REPO_ROOT / "app/services/skills/probability_tutor_brain.py").read_text(
-    encoding="utf-8"
+CLIENT_SRC = (
+    read_tutor_source()
 )  # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin
 DOCTRINE_SRC = (REPO_ROOT / "app/services/skills/doctrine.py").read_text(encoding="utf-8")
 

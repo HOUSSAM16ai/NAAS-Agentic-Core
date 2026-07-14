@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.semantic_property_skill import (
     PROPERTY_REGISTRY,
     get_semantic_property_skill,
@@ -73,9 +74,7 @@ class TestInterpretOrDefine:
 class TestNoFrozenDefault:
     def _client(self) -> str:
         # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin.
-        return (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        ) + (ROOT / "app/services/skills/probability_tutor_brain.py").read_text(encoding="utf-8")
+        return read_tutor_source()
 
     def test_definitional_preempt_precedes_socratic(self) -> None:
         src = self._client()

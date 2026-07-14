@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.understanding_state_skill import (
     UnderstandingStateSkill,
     get_understanding_state_skill,
@@ -181,9 +182,7 @@ class TestRedactionAndWiring:
         assert "send_message" not in src and "get_ai_client" not in src
 
     def test_wired_in_orchestrator(self) -> None:
-        src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        )
+        src = read_tutor_source()
         assert "get_understanding_state_skill" in src
         assert "_is_short_answer_in_dialogue" in src
 

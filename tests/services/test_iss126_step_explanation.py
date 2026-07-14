@@ -61,12 +61,10 @@ def _combo() -> SimpleNamespace:
 
 
 def _client_src() -> str:
-    # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin.
-    return (_REPO_ROOT / "app" / "infrastructure" / "clients" / "orchestrator_client.py").read_text(
-        encoding="utf-8"
-    ) + (_REPO_ROOT / "app" / "services" / "skills" / "probability_tutor_brain.py").read_text(
-        encoding="utf-8"
-    )
+    # D-163/D-166: العقل + الـ mixins مستخرَجة — المصدر المُركَّب عبر manifest D-164.
+    from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
+    return read_tutor_source()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

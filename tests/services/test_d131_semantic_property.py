@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.semantic_property_skill import (
     MISCONCEPTION_GRAPH,
     MISCONCEPTION_TYPES,
@@ -134,9 +135,7 @@ class TestOwnerScenario:
 class TestNoSpecialCasing:
     def test_cognitive_response_single_semantic_call(self) -> None:
         # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin.
-        src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        ) + (ROOT / "app/services/skills/probability_tutor_brain.py").read_text(encoding="utf-8")
+        src = read_tutor_source()
         i = src.find('if concept == "event_meaning":')
         assert i != -1
         seg = src[i : i + 1400]

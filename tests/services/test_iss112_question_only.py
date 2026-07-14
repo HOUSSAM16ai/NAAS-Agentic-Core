@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.capabilities.exercise_retrieval import (
     ExerciseRetrievalRequest,
     _extract_numbered_question,
@@ -163,9 +164,7 @@ class TestBKTConceptFix:
 class TestRoutingOrder:
     """الـ preempt الجديد في موضعه الصحيح: بعد التحية وقبل المفهرَس."""
 
-    CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    CLIENT_SRC = read_tutor_source()
 
     def test_question_only_between_greeting_and_indexed(self):
         greeting_pos = self.CLIENT_SRC.index("_greeting_fastpath_response")

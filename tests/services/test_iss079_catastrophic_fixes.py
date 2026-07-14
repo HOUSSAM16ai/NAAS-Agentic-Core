@@ -154,12 +154,15 @@ class TestGreetingSkillContract:
 
 
 class TestPrimaryModelConfig:
-    """ISS-079 D-067 → D-088: PRIMARY model.
+    """ISS-079 D-067 → D-088 → D-167: PRIMARY model.
 
     D-067 (2026-05-17): PRIMARY تغيَّر من nemotron-nano إلى gpt-oss-20b.
     D-088 (2026-05-27): PRIMARY تغيَّر من gpt-oss-20b إلى gpt-oss-120b بسبب
       rate-limiting دائم لـ gpt-oss-20b على OpenRouter (ISS-082).
-      gpt-oss-20b يبقى في fallback chain.
+    D-167 (2026-07-14 / ISS-130): OpenRouter أزال النسخة المجانية من
+      gpt-oss-120b نهائياً (404) ⇒ إعادة ترقية gpt-oss-20b (تعافى من 429 —
+      مُتحقَّق حياً عربي+LaTeX finish=stop). gpt-oss-120b يبقى في ذيل السلسلة
+      كفتحة تعافٍ آلي.
     """
 
     def _read(self, path: str) -> str:
@@ -167,17 +170,17 @@ class TestPrimaryModelConfig:
 
     def test_app_core_ai_config_primary(self):
         source = self._read("app/core/ai_config.py")
-        # D-088: PRIMARY تغيَّر إلى gpt-oss-120b (rate-limit recovery)
-        assert 'PRIMARY = _resolve_primary_model("openai/gpt-oss-120b:free")' in source, (
-            "app/core/ai_config.py PRIMARY must be openai/gpt-oss-120b:free (D-088). "
-            "gpt-oss-20b:free أصبح rate-limited دائماً على OpenRouter (ISS-082)."
+        # D-167: PRIMARY عاد إلى gpt-oss-20b (120b المجاني أُزيل نهائياً — 404)
+        assert 'PRIMARY = _resolve_primary_model("openai/gpt-oss-20b:free")' in source, (
+            "app/core/ai_config.py PRIMARY must be openai/gpt-oss-20b:free (D-167). "
+            "gpt-oss-120b:free أُزيل نهائياً من OpenRouter (ISS-130)."
         )
 
-    def test_app_core_ai_config_has_20b_in_fallback(self):
+    def test_app_core_ai_config_has_recovery_slot(self):
         source = self._read("app/core/ai_config.py")
-        # gpt-oss-20b يجب أن يبقى في fallback chain (لا يُحذف)
-        assert "openai/gpt-oss-20b:free" in source, (
-            "app/core/ai_config.py يجب أن يحتوي gpt-oss-20b:free في fallback chain."
+        # gpt-oss-120b يبقى في ذيل السلسلة كفتحة تعافٍ آلي (لا يُحذف)
+        assert "openai/gpt-oss-120b:free" in source, (
+            "app/core/ai_config.py يجب أن يحتوي gpt-oss-120b:free كفتحة تعافٍ في الذيل."
         )
 
     def test_orchestrator_ai_config_primary(self):
@@ -185,26 +188,23 @@ class TestPrimaryModelConfig:
         assert "GPT_OSS_20B_FREE" in source, (
             "orchestrator ai_config must have GPT_OSS_20B_FREE constant"
         )
-        # D-088: PRIMARY يستخدم GPT_OSS_120B_FREE
-        assert (
-            "PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_120B_FREE)" in source
-            or "PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_20B_FREE)" in source
-        ), "orchestrator ai_config PRIMARY must use GPT_OSS_120B_FREE or GPT_OSS_20B_FREE"
+        # D-167: PRIMARY يستخدم GPT_OSS_20B_FREE (mirror لسلسلة المونوليث)
+        assert "PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_20B_FREE)" in source, (
+            "orchestrator ai_config PRIMARY must use GPT_OSS_20B_FREE (D-167)"
+        )
 
     def test_conversation_math_pipeline_default(self):
         source = self._read("microservices/conversation_service/src/math_pipeline.py")
-        # D-088: _DEFAULT_MODEL تغيَّر إلى gpt-oss-120b
-        assert '_DEFAULT_MODEL = "openai/gpt-oss-120b:free"' in source, (
-            "math_pipeline default model must be gpt-oss-120b:free (D-088). "
-            "gpt-oss-20b:free أصبح rate-limited دائماً (ISS-082)."
+        # D-167: _DEFAULT_MODEL عاد إلى gpt-oss-20b (120b المجاني أُزيل — 404)
+        assert '_DEFAULT_MODEL = "openai/gpt-oss-20b:free"' in source, (
+            "math_pipeline default model must be gpt-oss-20b:free (D-167/ISS-130)."
         )
 
     def test_conversation_graph_default(self):
         source = self._read("microservices/conversation_service/src/conversation_graph.py")
-        # D-088: _DEFAULT_MODEL تغيَّر إلى gpt-oss-120b
-        assert '_DEFAULT_MODEL = "openai/gpt-oss-120b:free"' in source, (
-            "conversation_graph default model must be gpt-oss-120b:free (D-088). "
-            "gpt-oss-20b:free أصبح rate-limited دائماً (ISS-082)."
+        # D-167: _DEFAULT_MODEL عاد إلى gpt-oss-20b (120b المجاني أُزيل — 404)
+        assert '_DEFAULT_MODEL = "openai/gpt-oss-20b:free"' in source, (
+            "conversation_graph default model must be gpt-oss-20b:free (D-167/ISS-130)."
         )
 
 

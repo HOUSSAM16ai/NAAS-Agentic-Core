@@ -14,6 +14,7 @@ ISS-121 (D-154) — نهاية «آلة تفريغ الحلول»: الكشف ا
 3. الصيغ ASCII (`C(5,3) = (5×4×3)/(3×2×1) = 10`) تتبعثر بالـ bidi داخل RTL.
 """
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.infrastructure.clients.orchestrator_client import OrchestratorClient
 from app.services.skills.dialogue_manager_skill import near_duplicate
 
@@ -81,18 +82,14 @@ class TestZeroFinalAnswer:
         assert "من كل" not in num and "من كل" not in ratio
 
     def test_direct_explanation_tails_are_generative(self):
-        src = (
-            _REPO_ROOT / "app" / "infrastructure" / "clients" / "orchestrator_client.py"
-        ).read_text(encoding="utf-8")
+        src = read_tutor_source()
         # الذيول القديمة الكاشفة ذهبت
         assert "فاحتمال الحادثة A هو {same} من كل {total}." not in src
         assert 'f"4) الاحتمال = {same}/{total}."' not in src
         assert 'f"وبذلك يكون الاحتمال {same}/{total}."' not in src
 
     def test_procedure_routes_to_ladder_not_reveal(self):
-        src = (
-            _REPO_ROOT / "app" / "infrastructure" / "clients" / "orchestrator_client.py"
-        ).read_text(encoding="utf-8")
+        src = read_tutor_source()
         # فرع procedure في كتلة حالة الفهم يستدعي خطوة السُّلّم لا التفريغ.
         block = src.split("else:  # procedure — ISS-121 (D-154): سُلّم لا تفريغ", 1)
         assert len(block) == 2, "procedure ladder branch missing"
@@ -131,9 +128,7 @@ class TestNeverEmitDupChain:
     """Track 2: سلسلة «ممنوع بثّ مكرَّر» — بدائل السُّلّم موجودة في المسارين."""
 
     def _src(self) -> str:
-        return (
-            _REPO_ROOT / "app" / "infrastructure" / "clients" / "orchestrator_client.py"
-        ).read_text(encoding="utf-8")
+        return read_tutor_source()
 
     def test_socratic_evaluation_has_alternatives_ladder(self):
         # ISS-122 (D-155): البدائل صارت واعية بالسؤال المعلّق (_first/_second من

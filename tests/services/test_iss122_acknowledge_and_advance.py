@@ -41,9 +41,10 @@ def _combo() -> SimpleNamespace:
 
 
 def _client_src() -> str:
-    return (_REPO_ROOT / "app" / "infrastructure" / "clients" / "orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    # D-166: سلاسل البدائل تعيش في mixins مستخرَجة — المصدر المُركَّب عبر الـ manifest (D-164).
+    from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
+    return read_tutor_source()
 
 
 class TestNumericVerification:

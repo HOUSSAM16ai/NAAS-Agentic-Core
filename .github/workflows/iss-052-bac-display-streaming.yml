@@ -210,16 +210,15 @@ jobs:
           ast.parse(src)
           print('✅ orchestrator_client.py syntax OK')
 
-          # D-164: streaming helpers moved to orchestrator/ mixins (TUTOR_SOURCE_FILES).
-          # Verify the improvements against the full composed tutor source.
-          _tutor = (
-              'app/infrastructure/clients/orchestrator_client.py',
-              'app/services/skills/probability_tutor_brain.py',
-              'app/infrastructure/clients/orchestrator/stream_normalization.py',
-              'app/infrastructure/clients/orchestrator/text_streaming.py',
-              'app/infrastructure/clients/orchestrator/probability_ui.py',
-          )
-          tutor_src = '\n'.join(pathlib.Path(p).read_text() for p in _tutor)
+          # D-164/D-166: streaming helpers moved to orchestrator/ mixins
+          # (TUTOR_SOURCE_FILES). Glob-based so future slices are covered.
+          _base = pathlib.Path('app/infrastructure/clients')
+          _tutor = [
+              _base / 'orchestrator_client.py',
+              pathlib.Path('app/services/skills/probability_tutor_brain.py'),
+              *sorted((_base / 'orchestrator').glob('*.py')),
+          ]
+          tutor_src = '\n'.join(p.read_text() for p in _tutor)
           assert '_split_preserving_latex' in tutor_src, 'Missing _split_preserving_latex'
           assert 'ISS-STREAM-002' in tutor_src, 'Missing ISS-STREAM-002 marker'
           assert 'asyncio.sleep' in tutor_src, 'Missing asyncio.sleep in streaming'

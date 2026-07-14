@@ -116,8 +116,12 @@ jobs:
           grep -q "instrument_fastapi_app" app/kernel.py \
             || { echo "::error::app/kernel.py missing instrument_fastapi_app wiring"; exit 1; }
           # Mark fallback in orchestrator client
-          grep -q "mark_fallback_used" app/infrastructure/clients/orchestrator_client.py \
-            || { echo "::error::orchestrator_client missing mark_fallback_used"; exit 1; }
+          # D-166: fallback chain moved to orchestrator/local_fallback.py mixin —
+          # grep the composed tutor source (client + orchestrator/ mixins).
+          grep -rq "mark_fallback_used" \
+            app/infrastructure/clients/orchestrator_client.py \
+            app/infrastructure/clients/orchestrator/ \
+            || { echo "::error::orchestrator tutor source missing mark_fallback_used"; exit 1; }
           echo "✅ All wiring tokens present"
 
       # ---- 5. CLAUDE.md + .memory have observability section --------------

@@ -88,7 +88,16 @@ jobs:
           python3 -c "
           import sys, pathlib
 
-          src = pathlib.Path('app/infrastructure/clients/orchestrator_client.py').read_text()
+          # D-166: chat_with_agent + fallbacks moved to orchestrator/ mixins
+          # (TUTOR_SOURCE_FILES manifest). Read the composed tutor source —
+          # glob-based so future slices are covered automatically.
+          _base = pathlib.Path('app/infrastructure/clients')
+          _files = [
+              _base / 'orchestrator_client.py',
+              pathlib.Path('app/services/skills/probability_tutor_brain.py'),
+              *sorted((_base / 'orchestrator').glob('*.py')),
+          ]
+          src = '\n'.join(p.read_text() for p in _files)
 
           checks = {
               'ChatRoutingPolicy import': 'ChatRoutingPolicy',

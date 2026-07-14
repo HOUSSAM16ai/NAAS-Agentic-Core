@@ -70,17 +70,16 @@ jobs:
           import pathlib
           import sys
 
-          # D-164: the orchestrator tutor logic is decomposed across orchestrator_client.py
-          # + mixins under orchestrator/ + probability_tutor_brain.py (see TUTOR_SOURCE_FILES).
-          # Read the full composed source so moved wiring symbols are still found.
-          _tutor_files = (
-              "app/infrastructure/clients/orchestrator_client.py",
-              "app/services/skills/probability_tutor_brain.py",
-              "app/infrastructure/clients/orchestrator/stream_normalization.py",
-              "app/infrastructure/clients/orchestrator/text_streaming.py",
-              "app/infrastructure/clients/orchestrator/probability_ui.py",
-          )
-          src = "\n".join(pathlib.Path(f).read_text() for f in _tutor_files)
+          # D-164/D-166: the orchestrator tutor logic is decomposed across
+          # orchestrator_client.py + mixins under orchestrator/ + the brain
+          # (see TUTOR_SOURCE_FILES). Glob-based so future slices are covered.
+          _base = pathlib.Path("app/infrastructure/clients")
+          _tutor_files = [
+              _base / "orchestrator_client.py",
+              pathlib.Path("app/services/skills/probability_tutor_brain.py"),
+              *sorted((_base / "orchestrator").glob("*.py")),
+          ]
+          src = "\n".join(p.read_text() for p in _tutor_files)
           checks = {
               "ui_component in passthrough set": '"ui_component"',
               "dedicated normalizer method": "_normalize_ui_component_event",

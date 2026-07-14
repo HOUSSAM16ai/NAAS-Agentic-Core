@@ -213,3 +213,8 @@ Formalized `PedagogicalPolicyEngine` orchestrating `DialogueManagerSkill` throug
 - **DKT (Deep Knowledge Tracing)**: طبقة تحليلات مخطَّطة فوق BKT ثنائي القناة (D-126) — **PLANNED**،
   لا تُبنى قبل أن تُثبت مقاييس فجوة الوهم الحاجة (قاعدة «القياس قبل التوسّع»).
 - **الحارس**: بوّابة `scripts/fitness/check_pedagogical_os.py` (D-153) تفرض قواعد الدستور بدءاً من الآن.
+- **حالة تفكيك التعقيد (2026-07-14 — D-163→D-166)**: God-file المونوليث **انتهى** —
+  `orchestrator_client.py` 6,154 → **267 سطراً** (قشرة نقل؛ العقل + 6 mixins خلف مانيفست
+  `TUTOR_SOURCE_FILES`). **الهدفان التاليان (مؤجَّلان موثَّقين — يحتاجان بنية manifest تحميهما
+  أولاً)**: `microservices/orchestrator_service/src/api/routes.py` (3,312 سطراً — تقسيم
+  APIRouter modules) + `probability_tutor_brain.py` (2,358 — detectors/builders/turn-engine).

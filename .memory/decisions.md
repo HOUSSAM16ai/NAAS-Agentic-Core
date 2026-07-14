@@ -5624,3 +5624,68 @@ source-inspection تؤكّد interior strings لـ `_build_calculated_ui` الم
 grep-الأسماء أغفلتها) وأُصلحت بتحويلها لقارئ المانيفست (d122/iss120/d117 — الأخير يحتفظ بـ CLIENT_SRC
 للسلبية `[توجيه تربوي]` ويضيف TUTOR_SRC للإيجابية). live E2E full-stack verbatim ⇒ Codespaces.
 CLAUDE.md §6.139.
+
+## D-165 (2026-07-14) — سؤال «غاية التمرين» يُجاب + بوّابة الهروب قبل probe (ISS-129)
+
+**الكارثة (transcript حي):** «ماذا نستفيد كن هذا التمرين» (سؤال meta عن الغاية) اختُطف
+بالـ probe التشخيصي («لنبدأ من فهمك أنت...») متجاهلاً السؤال كلياً.
+
+**الجذران:** (1) بوّابة هروب الأسئلة (D-162) كانت **بعد** S3 probe في
+`probability_tutor_brain._cognitive_turn` — بينما port الخدمة المصغرة يضعها **قبل**
+الـ probe: افتراق split-brain حي لم تحرسه بوّابة التكافؤ (تحرس وجود العقود لا **ترتيب
+القرار**). (2) صفر كاشف/بانٍ لنية «الغاية» («نستفيد» غير موجودة في أي marker).
+
+**القرار:**
+- Fix A: رفع بوّابة الهروب قبل S3 (مواءمة مع الـ port — أنهى الافتراق)؛ «كيف/كيفاش»
+  تبقى تصل الـ probe (D-155 محفوظ).
+- Fix B: `_detect_exercise_purpose_question` (فعل استفادة يكفي وحده؛ اسم الغاية يتطلب
+  مرجع «تمرين/درس» — لا يبتلع أسئلة D-125) + `UnderstandingStateSkill.
+  exercise_purpose_summary(combo)`: غاية التمرين = عناوين مكوّناته المعرفية (data-driven
+  من combo — عقد ملايير التمارين؛ بلا أي نسبة نهائية ⇒ يَنجو من حجب D-113). صفر LLM،
+  fail-open ⇒ العمود الفقري D-112. قياس: `record_definitional_answer("exercise_purpose")`.
+- Fix C: مرآة الـ port (`detect_purpose_question`/`build_purpose_answer` — stdlib) +
+  بوّابة التكافؤ +2 عقدان + فحص ترتيب بنيوي `check_exercise_purpose_answered`
+  (purpose → escape → probe في العقلين). doctrine UNDERSTANDING_STATE v1.2.0.
+
+**درس صياغة D-113:** `_CONCLUSION_RE` يعبر السطر — «...الاحتمالات يوم البكالوريا:» متبوعة
+بقائمة مرقّمة تُشوّه «1.» إلى «؟». القاعدة: لا نقطتين بعد كلمة تحوي «احتمال» قبل قائمة.
+
+**التحقق الحي (E2E FULL-STACK حقيقي — uvicorn+WS+OpenRouter الحقيقي+دخول المستخدم):**
+`verify_iss129_e2e.py` ALL PASS (الغاية تُجاب، صفر probe، صفر تسريب، «كيف» probe سليم،
+سؤال عام أُجيب عبر العمود الفقري) + سؤال الغاية على الـ port الحي :8006 مباشرة ✅ +
+49 اختباراً (test_iss129 + مرآة الـ port) + مواءمة ISS-128 replay (T2 صارت «كيف افهم...»).
+CLAUDE.md §6.140.
+
+## D-166 (2026-07-14) — نهاية God-file: chat_with_agent إلى mixin (2,786→267 سطراً)
+
+**القرار:** 3 شرائح verbatim (نمط D-164 — سطر manifest لكل شريحة): Slice 4
+`LocalFallbackMixin` (سلسلة الاسترجاع/الشرح/الدردشة المحلية ~500) + Slice 5
+`SocraticEvaluationMixin` (~225) + Slice 6 `ChatTurnMixin` (**`chat_with_agent` آخر
+God-method** ~1,885 + رافعة D-103). الـ client صار قشرة نقل (decisions+JWT+missions)
+بـ **267 سطراً** — −95.7% تراكمياً منذ 6,154. العقل يبقى أول base في الـ MRO.
+
+**lockstep sweep (مواءمة لا تعطيل — D-105):** 19 ملف اختبار + 7 قرّاء بوّابات حُوّلوا
+لـ `read_tutor_source()` — **درس جديد:** الفحوص **السلبية** (حظر prepend «[توجيه تربوي]»
+D-117) تمرّ زوراً على ملف تقلّص محتواه — يجب أن تمسح المصدر المُركَّب.
+
+**التحقق:** replica الـ CI حرفياً (monolith 3,168 passed + تغطية 69.71% | microservices
+1,011 passed | frontend 17/17) + كل البوّابات التسع + E2E حي كامل (d162 9/9 + d158 +
+m10s2 7/7) — سلوك مطابق بالبايت. **الهدفان التاليان (مؤجَّلان):** `routes.py` (3,312)
+والعقل (2,358) — يحتاجان بنية manifest أولاً. CLAUDE.md §6.140.
+
+## D-167 (2026-07-14) — إصلاح سلسلة النماذج: إزالة gpt-oss-120b:free من OpenRouter (ISS-130)
+
+**الاكتشاف الحي:** `openai/gpt-oss-120b:free` (PRIMARY) يُرجع 404 «This model is
+unavailable for free» — إزالة منتج نهائية لا انقطاع. بنشمارك قانوني (المفتاح الحقيقي،
+system prompt عربي + مشتق ln(x)): gpt-oss-20b ✅ 10.2s عربي+LaTeX | gemma-4-26b ✅ 20.1s |
+gemma-4-31b ✅ 12.3s (جديد) | qwen3-next/kimi/qwen3-coder/llama-3.3/hermes/hy3 ❌ |
+nemotron-nano ⚠️ هلوسة يابانية (يؤكّد حظر D-067).
+
+**القرار (العقلان — mirror D-013):** PRIMARY أُعيد إلى `gpt-oss-20b:free` (المُتحقَّق
+تاريخياً D-067، تعافى من ISS-082)؛ السلسلة: gemma-26b → gemma-31b → nemotron-nano
+(محروس) → gpt-oss-120b (**فتحة تعافٍ آلي بالذيل**) → nemotron-nano-9b-v2. + defaults
+خدمة المحادثة + سكربتات التحقق + مواءمة اختبارات ISS-079/ISS-107.
+
+**قاعدة دائمة:** نموذج أزاله OpenRouter من الطبقة المجانية يُنزَل من PRIMARY فوراً
+ويُترك بذيل السلسلة (لا يُحذف — يتعافى آلياً؛ لا يبقى PRIMARY — HTTP فاشل كل دور).
+تم عبر skill `cogniforge-llm-model-repair`. CLAUDE.md §6.140.

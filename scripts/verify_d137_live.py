@@ -158,7 +158,7 @@ def check_openrouter() -> bool:
         return True
     try:
         payload = {
-            "model": "openai/gpt-oss-120b:free",
+            "model": "openai/gpt-oss-20b:free",
             "messages": [{"role": "user", "content": "قل: جاهز"}],
             "max_tokens": 8,
         }

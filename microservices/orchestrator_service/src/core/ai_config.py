@@ -117,14 +117,20 @@ class ActiveModels:
     # ISS-082 (D-088 — 2026-05-27): gpt-oss-20b:free rate-limited بشكل دائم
     # على OpenRouter ("Provider returned error 429"). gpt-oss-120b من نفس
     # العائلة بنفس quality contract لكن rate limit pool مختلف. مُرقّى لـ PRIMARY.
-    PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_120B_FREE)
+    # ISS-130 (D-167 — 2026-07-14): OpenRouter أزال النسخة المجانية من
+    # gpt-oss-120b نهائياً (404) ⇒ إعادة ترقية gpt-oss-20b (تعافى من 429 —
+    # مُتحقَّق حياً عربي+LaTeX finish=stop). gemma-4 بإصداريه بعده (GOOD حياً)؛
+    # gpt-oss-120b في الذيل كفتحة تعافٍ آلي (mirror لسلسلة المونوليث — D-013).
+    PRIMARY = _resolve_primary_model(AvailableModels.GPT_OSS_20B_FREE)
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
-    GATEWAY_FALLBACK_1 = AvailableModels.GPT_OSS_20B_FREE  # demoted from PRIMARY 2026-05-27
-    GATEWAY_FALLBACK_2 = AvailableModels.NEMOTRON_3_SUPER_120B_FREE  # verified live 2026-05-27
-    GATEWAY_FALLBACK_3 = AvailableModels.GLM_4_5_AIR_FREE  # verified live 2026-05-27
-    GATEWAY_FALLBACK_4 = AvailableModels.NEMOTRON_3_NANO  # works on short prompts
-    GATEWAY_FALLBACK_5 = AvailableModels.QWEN_QWEN3_CODER_FREE
+    GATEWAY_FALLBACK_1 = (
+        AvailableModels.GEMINI_2_FLASH_EXP_FREE
+    )  # gemma-4-26b — GOOD حياً 2026-07-14
+    GATEWAY_FALLBACK_2 = "google/gemma-4-31b-it:free"  # GOOD حياً 2026-07-14 — عربي+LaTeX
+    GATEWAY_FALLBACK_3 = AvailableModels.NEMOTRON_3_NANO  # works on short prompts (guarded)
+    GATEWAY_FALLBACK_4 = AvailableModels.GPT_OSS_120B_FREE  # ميت 404 — فتحة تعافٍ آلي
+    GATEWAY_FALLBACK_5 = "nvidia/nemotron-nano-9b-v2:free"  # ملاذ أخير؛ محميّ بالحُرّاس
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY
     TIER_SMART = PRIMARY

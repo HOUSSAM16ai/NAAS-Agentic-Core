@@ -120,7 +120,8 @@ _NODE_TIMEOUT_SECONDS = 45.0
 # ISS-082 (D-088 — 2026-05-27): gpt-oss-20b:free أصبح rate-limited بشكل دائم
 # على OpenRouter ("Provider returned error 429"). gpt-oss-120b من نفس العائلة،
 # نفس quality contract، rate limit pool مختلف. مُرقّى لـ default.
-_DEFAULT_MODEL = "openai/gpt-oss-120b:free"
+# ISS-130 (D-167 — 2026-07-14): gpt-oss-120b:free أُزيل من OpenRouter (404) — العودة للـ 20b المُتحقَّق.
+_DEFAULT_MODEL = "openai/gpt-oss-20b:free"
 
 # سلسلة fallback — تُجرَّب بالترتيب عند 429 أو فشل النموذج الأساسي (D-067)
 _FALLBACK_CHAIN: list[str] = [

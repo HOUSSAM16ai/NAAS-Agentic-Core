@@ -21,9 +21,7 @@ from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_sou
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 # CLIENT_SRC stays client-only for the "no `[توجيه تربوي]` prepend in the client" negative check.
-CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-    encoding="utf-8"
-)
+CLIENT_SRC = read_tutor_source()
 # D-164: `_build_calculated_ui` moved to ProbabilityUIMixin; positive assertions of its inner
 # strings read the full tutor source via the manifest.
 TUTOR_SRC = read_tutor_source()

@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-    encoding="utf-8"
-)
+CLIENT_SRC = read_tutor_source()
 
 
 class TestExplanationRoutingStructure:

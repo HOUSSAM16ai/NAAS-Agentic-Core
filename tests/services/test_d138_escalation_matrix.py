@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.answer_redaction_skill import redact_final_answers
 from app.services.skills.micro_simulation_skill import (
     APPLY_STEPS,
@@ -181,9 +182,7 @@ class TestMicroSimulation:
 
 # ── فحص بنيوي للتوصيل (no-ZOMBIE + concept-scoped + ترتيب) ─────────────────────
 class TestWiring:
-    CLIENT_SRC = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    CLIENT_SRC = read_tutor_source()
 
     def test_escalation_invoked_and_concept_scoped(self) -> None:
         assert "get_pedagogical_escalation_skill" in self.CLIENT_SRC
@@ -278,7 +277,5 @@ class TestApplyStepOnExhaustion:
 
     def test_orchestrator_passes_apply_step(self) -> None:
         # wiring: مسار الأورقستريتور يمرّر apply_step فعلاً.
-        src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        )
+        src = read_tutor_source()
         assert "get_apply_step(" in src

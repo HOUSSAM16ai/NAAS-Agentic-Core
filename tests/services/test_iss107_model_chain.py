@@ -78,5 +78,7 @@ class TestChainHygiene:
         assert "nemotron-3-super-120b" not in joined  # إنجليزي في content
 
     def test_primary_is_verified_arabic(self):
+        # ISS-130 (D-167 — 2026-07-14): gpt-oss-120b:free أُزيل من OpenRouter (404)
+        # ⇒ إعادة ترقية gpt-oss-20b (تعافى من 429 — مُتحقَّق حياً عربي+LaTeX).
         cfg = get_ai_config()
-        assert cfg.primary_model == "openai/gpt-oss-120b:free"
+        assert cfg.primary_model == "openai/gpt-oss-20b:free"

@@ -1,5 +1,5 @@
 {
-  "branch": "claude/system-review-probability-dve60q",
+  "branch": "claude/code-complexity-refactor-paxhds",
   "components": [
     {
       "agreed": true,
@@ -9,9 +9,10 @@
         "app/services/chat/local_graph.py"
       ],
       "id": "local_graph",
-      "importer_count": 7,
+      "importer_count": 8,
       "importers_sample": [
-        "app/infrastructure/clients/orchestrator_client.py",
+        "app/infrastructure/clients/orchestrator/chat_turn.py",
+        "app/infrastructure/clients/orchestrator/local_fallback.py",
         "app/kernel.py",
         "app/services/skills/bac_exercise_skill.py",
         "scripts/gitpod_live_debug.py",
@@ -35,7 +36,7 @@
       "importers_sample": [
         "app/api/routers/admin.py",
         "app/api/routers/customer_chat.py",
-        "app/infrastructure/clients/orchestrator_client.py"
+        "app/infrastructure/clients/orchestrator/local_fallback.py"
       ],
       "name": "WS chat path observer",
       "notes": "Imported by customer_chat.py + admin.py at WS turn entry.",
@@ -52,7 +53,7 @@
       "importer_count": 9,
       "importers_sample": [
         "app/api/routers/observability.py",
-        "app/infrastructure/clients/orchestrator_client.py",
+        "app/infrastructure/clients/orchestrator/chat_turn.py",
         "app/kernel.py",
         "app/middleware/fastapi_observability.py",
         "app/middleware/observability/observability_middleware.py",
@@ -321,6 +322,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-06-24T04:35:37.946049+00:00",
+  "generated_at_utc": "2026-07-14T14:07:12.267421+00:00",
   "schema_version": 1
 }

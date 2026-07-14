@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.semantic_property_skill import (
     PROPERTY_REGISTRY,
     get_semantic_property_skill,
@@ -122,9 +123,7 @@ class TestUnderstandingStateNoHijack:
 # ── فحص بنيوي + نجاة حجب D-113 ───────────────────────────────────────────────
 class TestWiringAndRedaction:
     def test_orchestrator_concept_example_handler(self) -> None:
-        src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        )
+        src = read_tutor_source()
         assert "_build_concept_example" in src
         assert "detect_active_concept" in (
             ROOT / "app/services/skills/semantic_property_skill.py"

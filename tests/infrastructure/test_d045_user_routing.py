@@ -330,10 +330,12 @@ class TestServiceDependencies:
 class TestOrchestratorClientJWT:
     """يتحقق من أن OrchestratorClient يُولِّد JWT داخلي صحيح."""
 
-    CLIENT_SRC = pathlib.Path("app/infrastructure/clients/orchestrator_client.py")
-
     def _read(self) -> str:
-        return self.CLIENT_SRC.read_text()
+        # D-166: chat_with_agent (الترويسات/التدفق) في mixin مستخرَج — المصدر
+        # المُركَّب عبر manifest D-164.
+        from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
+
+        return read_tutor_source()
 
     def test_has_service_jwt_builder(self) -> None:
         assert "_build_service_jwt" in self._read()

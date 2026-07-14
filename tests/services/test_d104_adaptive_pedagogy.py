@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.adaptive_pedagogy_skill import (
     DIRECTIVE_MAX_CHARS,
     GUIDED_THRESHOLD,
@@ -145,9 +146,7 @@ class TestWiringInvariants:
     """no-ZOMBIE (نمط D-073): الـ skill مُستهلَك فعلاً على المسار الحي."""
 
     ROUTER_SRC = (REPO_ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
-    CLIENT_SRC = (REPO_ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    CLIENT_SRC = read_tutor_source()
 
     def test_router_builds_directive_with_isolated_session(self):
         assert "_build_pedagogy_directive" in self.ROUTER_SRC

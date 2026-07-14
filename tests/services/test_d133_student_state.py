@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.pedagogical_policy_skill import (
     PolicyInput,
     get_pedagogical_policy_skill,
@@ -153,9 +154,7 @@ class TestDecisionSignal:
 # ── فحص بنيوي: التوصيل (لا ZOMBIE) + نقد 2 (LLM لا يطغى) ──────────────────────
 class TestWiring:
     def _client(self) -> str:
-        return (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        )
+        return read_tutor_source()
 
     def test_skill_consumed_in_client(self) -> None:
         src = self._client()

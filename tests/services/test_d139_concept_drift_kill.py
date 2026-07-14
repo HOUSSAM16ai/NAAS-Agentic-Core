@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.micro_simulation_skill import (
     MICRO_SIM_MAX_CHARS,
     get_micro_simulation_skill,
@@ -206,9 +207,7 @@ class TestUnderstandingStateGuard:
 
 # ── فحص بنيوي للتوصيل ─────────────────────────────────────────────────────────
 class TestWiring:
-    CLIENT = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-        encoding="utf-8"
-    )
+    CLIENT = read_tutor_source()
     SPS = (ROOT / "app/services/skills/semantic_property_skill.py").read_text(encoding="utf-8")
     US = (ROOT / "app/services/skills/understanding_state_skill.py").read_text(encoding="utf-8")
 

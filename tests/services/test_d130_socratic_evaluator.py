@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_source
 from app.services.skills.pedagogical_policy_skill import (
     is_response_to_socratic,
     socratic_budget,
@@ -169,9 +170,7 @@ class TestSymbolicStepSurvivesRedaction:
 # ── التوصيل المبكر (لا إعادة طباعة) + registry ────────────────────────────────
 class TestWiring:
     def test_capture_precedes_indexed_retrieval(self) -> None:
-        src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        )
+        src = read_tutor_source()
         # D-137: مطابقة صيغة الاستدعاء بـ `self.` — متينة على لفّ الأسطر (ruff قد يلفّ الوسائط).
         eval_pos = src.find("self._in_socratic_dialogue(")
         indexed_pos = src.find("self._has_indexed_match(")
@@ -179,9 +178,9 @@ class TestWiring:
         assert eval_pos < indexed_pos, "socratic capture must precede indexed-retrieval (D-130)"
 
     def test_evaluator_methods_wired(self) -> None:
-        src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        )
+        # D-166: التقييم السقراطي في mixin مستخرَج — المصدر المُركَّب عبر الـ manifest (D-164).
+
+        src = read_tutor_source()
         for needle in (
             "get_socratic_evaluator_skill",
             "_stream_socratic_evaluation",
@@ -191,9 +190,7 @@ class TestWiring:
 
     def test_no_directive_prepend_regression(self) -> None:
         # D-117 invariant: لا يُسبَق التوجيه التربوي للسؤال.
-        src = (ROOT / "app/infrastructure/clients/orchestrator_client.py").read_text(
-            encoding="utf-8"
-        )
+        src = read_tutor_source()
         assert 'f"[توجيه تربوي]' not in src
 
     def test_registry_registers_skill(self) -> None:

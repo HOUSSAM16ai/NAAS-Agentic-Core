@@ -1026,7 +1026,7 @@ def get_dialogue_manager_summary() -> str:
 
 
 # ── D-135: محرّك حالة الفهم — Learning State («ماذا فهم الطالب فعلاً؟») ────────────────
-UNDERSTANDING_STATE_DOCTRINE_VERSION: Final[str] = "1.1.0"
+UNDERSTANDING_STATE_DOCTRINE_VERSION: Final[str] = "1.2.0"
 
 #: قوانين غير قابلة للكسر تحكم تتبّع حالة الفهم (Learning State، D-135).
 UNDERSTANDING_STATE_DOCTRINE: Final[tuple[str, ...]] = (
@@ -1048,6 +1048,10 @@ UNDERSTANDING_STATE_DOCTRINE: Final[tuple[str, ...]] = (
     "(understood/explained) — مسح نصّ المحادثة fallback للأدوار السابقة على التخزين فقط. الترقية أحادية "
     "الاتجاه (الدائم يرفع ولا يُنزِل ما أثبته النصّ)، وقرار المحرّك (understood_kc_id + المكوّن المشروح) "
     "يُكتب فوراً في kc_progress عبر دلتا record_turn — الذاكرة تتراكم لا تُعاد هندستها كل دور.",
+    "D-165 (ISS-129 — غاية التمرين = مكوّناته المعرفية): سؤال الغاية meta («ماذا نستفيد/نتعلم من هذا "
+    "التمرين؟») يُجاب حتمياً من عناوين الـ KCs (exercise_purpose_summary — data-driven من combo، عناوين "
+    "فقط بلا أي نسبة نهائية) ولا يُختطف بالـ probe التشخيصي أبداً؛ وأي سؤال غير-إجرائي لم تُجبه الطبقات "
+    "الحتمية يهرب لطبقات الإجابة (D-112) **قبل** الـ probe — لا سؤال يُقابَل بسؤال يتجاهله.",
 )
 
 

@@ -510,6 +510,53 @@ def check_step_explanation_teaches() -> None:
         _pass("step-explanation teaches the value + guarded terminal reveal (D-160)")
 
 
+def check_exercise_purpose_answered() -> None:
+    """D-165 (ISS-129): سؤال «غاية التمرين» يُجاب — والسؤال لا يُختطف بالـ probe.
+
+    الكارثة: «ماذا نستفيد من هذا التمرين؟» ⇒ probe تشخيصي يتجاهل السؤال كلياً
+    (S3 كان يسبق بوّابة هروب الأسئلة في عقل المونوليث — بينما الـ port يضعها قبل
+    الـ probe: افتراق split-brain حي). القفل البنيوي (ترتيب داخل جسم الدالة):
+    (أ) purpose قبل probe في العقلين، (ب) question-escape قبل probe في العقلين.
+    """
+    ok = True
+    brain = _read(BRAIN_PATH)
+    port = _read("microservices/orchestrator_service/src/services/overmind/probability_tutor.py")
+
+    turn = brain.split("def _cognitive_turn(", 1)
+    body = turn[1].split("def _cognitive_turn_event_b(", 1)[0] if len(turn) == 2 else ""
+    p_purpose = body.find("_detect_exercise_purpose_question(question)")
+    p_escape = body.find('if _is_q and not _qg.startswith(("كيف", "كيفاش")):')
+    p_probe = body.find("_build_diagnostic_probe(combo)")
+    if p_purpose == -1:
+        _fail("_cognitive_turn must route exercise-purpose questions (D-165 ISS-129)")
+        ok = False
+    elif not (-1 < p_purpose < p_probe):
+        _fail("_cognitive_turn: purpose answer must come BEFORE the diagnostic probe (D-165)")
+        ok = False
+    if not (-1 < p_escape < p_probe):
+        _fail(
+            "_cognitive_turn: question-escape gate must come BEFORE the S3 probe "
+            "(D-165 Fix A — first-turn question was hijacked by the probe)"
+        )
+        ok = False
+
+    dt = port.split("def deterministic_turn(", 1)
+    dt_body = dt[1] if len(dt) == 2 else ""
+    q_purpose = dt_body.find("detect_purpose_question(question)")
+    q_escape = dt_body.find("is_question_not_answer(question)")
+    q_probe = dt_body.find("build_diagnostic_probe(comp)")
+    if q_purpose == -1:
+        _fail("port deterministic_turn must route exercise-purpose questions (D-165)")
+        ok = False
+    elif not (-1 < q_purpose < q_escape < q_probe):
+        _fail("port deterministic_turn: purpose → escape → probe order broken (D-165)")
+        ok = False
+    if ok:
+        _pass(
+            "exercise-purpose answered + question-escape precedes the probe in BOTH brains (D-165)"
+        )
+
+
 def check_question_never_verified_as_answer() -> None:
     """D-162 (ISS-128): «السؤال ليس إجابة أبداً» — بوّابة الفعل الكلامي الرمزية.
 
@@ -596,6 +643,17 @@ def check_split_brain_parity() -> None:
         ),
         ("diagnostic probe", "def _build_diagnostic_probe(", "def build_diagnostic_probe("),
         ("symbolic step (acknowledge)", "def _build_symbolic_step(", "def build_symbolic_step("),
+        # D-165 (ISS-129): سؤال «غاية التمرين» يُجاب حتمياً في العقلين.
+        (
+            "exercise-purpose detector",
+            "def _detect_exercise_purpose_question(",
+            "def detect_purpose_question(",
+        ),
+        (
+            "exercise-purpose answer",
+            "def _build_exercise_purpose_answer(",
+            "def build_purpose_answer(",
+        ),
     )
     for name, mono_marker, port_marker in contracts:
         if mono_marker not in brain:
@@ -646,6 +704,7 @@ def main() -> None:
     check_multi_kc_engine()
     check_step_explanation_teaches()
     check_question_never_verified_as_answer()
+    check_exercise_purpose_answered()
     check_split_brain_parity()
     if _FAILURES:
         print(f"\n=== ❌ {len(_FAILURES)} Pedagogical OS violation(s) ===")

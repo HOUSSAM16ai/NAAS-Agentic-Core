@@ -57,7 +57,16 @@ jobs:
           python3 -c "
           import sys, pathlib
 
-          src = pathlib.Path('app/infrastructure/clients/orchestrator_client.py').read_text()
+          # D-164: tutor logic decomposed across client + orchestrator/ mixins + brain
+          # (TUTOR_SOURCE_FILES). Read the composed source so moved symbols are found.
+          _tutor_files = (
+              'app/infrastructure/clients/orchestrator_client.py',
+              'app/services/skills/probability_tutor_brain.py',
+              'app/infrastructure/clients/orchestrator/stream_normalization.py',
+              'app/infrastructure/clients/orchestrator/text_streaming.py',
+              'app/infrastructure/clients/orchestrator/probability_ui.py',
+          )
+          src = '\n'.join(pathlib.Path(f).read_text() for f in _tutor_files)
 
           # ISS-STREAM-001: تحقق من وجود _PASSTHROUGH_EVENT_TYPES
           checks = {
@@ -70,7 +79,7 @@ jobs:
           failed = False
           for name, pattern in checks.items():
               if pattern not in src:
-                  print(f'FAIL: orchestrator_client.py missing {name} ({pattern})')
+                  print(f'FAIL: orchestrator tutor source missing {name} ({pattern})')
                   failed = True
               else:
                   print(f'PASS: Found {name}')

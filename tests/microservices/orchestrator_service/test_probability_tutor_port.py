@@ -212,3 +212,59 @@ class TestExercisePurposeMirror:
     def test_kayf_still_gets_probe(self):
         t = deterministic_turn("كيف احل السؤال الأول", _OFFICIAL, history=[])
         assert t and "لنبدأ من فهمك أنت" in t
+
+
+class TestStepExplanationTeaches:
+    """D-168 (M10-S2.3): «كيف حسبنا 4» تُعلَّم حتمياً على الـ port — لا سُلّم أعمى."""
+
+    def test_detect_step_explanation_data_driven(self):
+        from microservices.orchestrator_service.src.services.overmind.probability_tutor import (
+            detect_step_explanation,
+            detect_subpart_question,
+        )
+
+        comp = parse_composition(_OFFICIAL)
+        # قيمة ملائمة (4 = C(4,3) للحمراء) بعلامة شرح ⇒ مجموعة الحمراء.
+        part = detect_step_explanation("كيف حسبنا 4", comp)
+        assert isinstance(part, dict) and part["fav"] == 4
+        # فضاء العينة بالكلمات.
+        assert detect_step_explanation("اشرح العدد الكلي", comp) == "total"
+        # مجموع الملائمة بالرقم.
+        assert detect_step_explanation(f"من اين جاء {comp['same']}", comp) == "sum"
+        # محاولة إجابة رقمية بلا علامة شرح ⇒ ليست طلب شرح (تبقى للتحقّق الرقمي).
+        assert detect_step_explanation("14 على 165", comp) is None
+        # الكاشف الجزئي بالكلمات اللونية.
+        g = detect_subpart_question("لماذا البيضاء مستحيلة", comp)
+        assert isinstance(g, dict) and g["possible"] is False
+
+    def test_teaching_text_zero_final_ratio(self):
+        from microservices.orchestrator_service.src.services.overmind.probability_tutor import (
+            build_step_explanation,
+            detect_step_explanation,
+        )
+
+        comp = parse_composition(_OFFICIAL)
+        for q in ("كيف حسبنا 4", "اشرح العدد الكلي", "من اين جاء 14", "علاش البيضاء مستحيلة"):
+            part = detect_step_explanation(q, comp)
+            assert part is not None, q
+            text = build_step_explanation(comp, part)
+            assert "14/165" not in text and "14 من 165" not in text and "\\boxed" not in text
+            assert text.rstrip().endswith("؟"), "التعليم يقود بسؤال (توليد لا كشف)"
+
+    def test_deterministic_turn_teaches_before_blind_ladder(self):
+        t = deterministic_turn("كيف حسبنا 4", _OFFICIAL, history=[])
+        assert t and "C_{4}^{3}" in t, "explain-request must teach the derivation"
+        # dedup: التكرار لا يُعيد النص نفسه.
+        again = deterministic_turn("كيف حسبنا 4", _OFFICIAL, history=[t])
+        assert again is None or norm_for_dedup(again) != norm_for_dedup(t)
+
+    def test_parity_gate_has_new_contracts(self):
+        gate = (_REPO_ROOT / "scripts" / "fitness" / "check_pedagogical_os.py").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            '"def detect_subpart_question("',
+            '"def detect_step_explanation("',
+            '"def build_step_explanation("',
+        ):
+            assert marker in gate, f"parity contract missing: {marker}"

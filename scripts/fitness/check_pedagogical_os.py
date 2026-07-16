@@ -686,6 +686,22 @@ def check_split_brain_parity() -> None:
             "def _build_exercise_purpose_answer(",
             "def build_purpose_answer(",
         ),
+        # D-168 (M10-S2.3): «كيف حسبنا 4» تُعلَّم حتمياً في العقلين — لا سُلّم أعمى.
+        (
+            "subpart detector",
+            "def _detect_subpart_question(",
+            "def detect_subpart_question(",
+        ),
+        (
+            "step-explanation detector",
+            "def _detect_step_explanation(",
+            "def detect_step_explanation(",
+        ),
+        (
+            "step-explanation teacher",
+            "def _build_probability_direct_explanation(",
+            "def build_step_explanation(",
+        ),
     )
     for name, mono_marker, port_marker in contracts:
         if mono_marker not in brain:

@@ -241,9 +241,9 @@ jobs:
             --deselect tests/microservices/test_conversation_service_capabilities.py::test_conversation_health_can_declare_parity_ready
             --deselect tests/microservices/test_conversation_service_journey.py::test_conversation_ws_synthetic_journey_customer
             --deselect tests/microservices/test_exercise_visibility_regression.py::test_exercise_request_is_visible_on_stream
-            --deselect tests/microservices/test_orchestrator_chat_stategraph.py::test_chat_http_messages_uses_stategraph
-            --deselect tests/microservices/test_orchestrator_chat_stategraph.py::test_chat_ws_customer_uses_stategraph
-            --deselect tests/microservices/test_orchestrator_chat_stategraph.py::test_chat_ws_admin_uses_stategraph
+            # D-168: the 3 test_orchestrator_chat_stategraph deselects were removed —
+            # FakeGraph now implements astream (ISS-STREAM-002 contract) + STATE_DIR
+            # points at tmp_path, so the trio is green again (deselect list shrank).
             # Live tests that connect to localhost:8000/8003 — no services run
             # in CI; they call pytest.skip() internally which trips the strict
             # no-skip policy. They remain runnable locally against a live stack.

@@ -11735,3 +11735,93 @@ free») يُنزَل من PRIMARY فوراً ويُترك **بذيل** السل�
 | **D-165** | **ISS-129 — سؤال الغاية يُجاب من الـ KCs + بوّابة الهروب قبل probe (أنهى افتراق split-brain) + فحص ترتيب بنيوي** |
 | **D-166** | **نهاية God-file: chat_with_agent + fallbacks + socratic-eval إلى mixins (2,786→267، −95.7% تراكمياً)** |
 | **D-167** | **ISS-130 — إصلاح سلسلة النماذج: PRIMARY عاد لـ gpt-oss-20b بعد إزالة 120b المجاني (بنشمارك حي قانوني)** |
+
+---
+
+## 6.141 قتل الملفين الضخمين الأخيرين + M10-S2.3 — مانيفستا الخدمة المصغرة والعقل (2026-07-16, D-168)
+
+> يُكمِل D-163→D-166: بعد نهاية God-file المونوليث، بقي هدفا roadmap المؤجَّلان («يحتاجان
+> بنية manifest تحميهما أولاً»): `routes.py` (3,312) و`probability_tutor_brain.py` (2,441).
+> هذه الجولة تُنجزهما بنمط D-164 المُثبَت + تزيد تكافؤ split-brain. لا يُكسر بدون ADR.
+
+### Stage A — مانيفست API + تفكيك routes.py (3,312 → **1,561 سطراً، −53%**)
+- **مانيفست جديد** `microservices/orchestrator_service/src/api/api_sources.py`
+  (stdlib — مرآة `tutor_sources.py`): `API_SOURCE_FILES` + `read_api_source()`. القرّاء
+  النصيون (test_d103/d115/**d117 السلبي**/fence/streaming-fix-002-gate) يقرأون المُركَّب.
+- **6 وحدات مستخرَجة حرفياً** (طبقات باتجاه واحد — لا وحدة تستورد routes):
+  `chat_types` (leaf: الثوابت + ChatRunContext + extractors + StreamFrame) →
+  `chat_context` (history/digest + entity/ambiguity guard + checkpoint) +
+  `identity_access` (هوية/JWT/admin guards) + `stream_serialization` (NDJSON +
+  ISS-056 extractor + telemetry) + `conversation_store` (httpx lifecycle +
+  ensure/persist — D-006 سليم) → `chat_stream_engine` (المحركان + `active_background_tasks`).
+- **قواعد الإقامة**: router + كل الـ 17 @router handler + schemas الطلب/الرد +
+  `_extract_chat_objective` تبقى في routes.py ⇒ بوّابة الـ AST
+  (`check_stategraph_runtime_backbone`) + test_d045 + step9/step10 + context_resurrection
+  **بلا أي تغيير**. إعادة استيراد كل المنقول في namespace (noqa: F401) تحفظ استيرادات
+  الـ runtime الخارجية (main.py + 6 ملفات اختبار).
+- **حذف** `routes.py.orig` (2,812 سطراً ميتاً — نفاية §6.23).
+
+### Stage B — تفكيك العقل (2,441 → جذر تركيب ~55 سطراً + 5 mixins)
+- **مانيفست العقل** `app/services/skills/probability_brain/brain_sources.py`
+  (`BRAIN_SOURCE_FILES` + `read_brain_source`). `check_pedagogical_os`: `_read_brain()`
+  نصّي (استبدل الـ 10 قراءات المباشرة + بوّابة التكافؤ) + **فحص اتساق**:
+  `BRAIN_SOURCE_FILES ⊆ TUTOR_SOURCE_FILES`. `check_skills_doctrine`:
+  `_read_brain_source()` عبر importlib (يتجاوز `skills/__init__` الـ pydantic-ي).
+- **تقسيم متجاور** (ترتيب الـ bases == ترتيب الأسطر الأصلي ⇒ مراسي أول-الظهور محفوظة
+  بنيوياً): `escape_hatch` (D-124/125/160/162/165) + `cognitive_verification` (D-127
+  L3/L5) + `cognitive_response` (D-127 L4) + `socratic_narrative` (D-128/129/130) +
+  `turn_engine` (D-158/159). `ProbabilityTutorBrain` صار جذر تركيب؛ MRO
+  `OrchestratorClient(ProbabilityTutorBrain, ...)` بلا مساس.
+- workflows العقل الأربعة + `iss121_math_display.test.mjs` تقرأ glob
+  `probability_brain/*.py` (تغطية آلية لأي شريحة قادمة).
+
+### Stage C — M10-S2.3: «كيف حسبنا 4» تُعلَّم على الـ port الحي
+- `probability_tutor.py` (stdlib، fail-open): `detect_subpart_question` +
+  `detect_step_explanation` (data-driven من قيم `parse_composition` — صفر أرقام مُصلَّبة،
+  عقد ملايير التمارين) + `build_step_explanation` (يُعلّم الاشتقاق عبر `fmt_comb`، يقود
+  بسؤال، **صفر كشف للنسبة النهائية** — يَنجو من حجب D-113) — موصولة في
+  `deterministic_turn` بعد naming/purpose و**قبل** بوّابة هروب الأسئلة (مرآة D-160 F2).
+- بوّابة التكافؤ: **17 عقداً مزدوجاً** (كانت 14) — يُغلق آخر فجوة split-brain حية من
+  صنف ISS-126.
+
+### إصلاحات جانبية مأصولة (لا ترقيع)
+- **الاختبارات الثلاثة المُستثناة تاريخياً** في `test_orchestrator_chat_stategraph`
+  أُصلحت جذرياً (FakeGraph يطبّق `astream` — عقد ISS-STREAM-002 + `STATE_DIR→tmp_path`)
+  ⇒ **قائمة deselect في ci.yml تقلّصت بـ 3** (D-105: القوائم تتقلص فقط).
+- ترقيعات `get_settings` في test_outbox + test_admin_tool_security انتقلت إلى
+  `identity_access` (قاعدة late-binding أدناه).
+
+### القواعد الـ 6 الدائمة (D-168 — لا تُكسر بدون ADR)
+1. **قاعدة monkeypatch late-binding**: رقِّع الوحدة التي **يعيش فيها المستدعي** —
+   ترقيع `routes.<name>` لا يصل دالةً يستدعيها كود يعيش في وحدة شقيقة
+   (`chat_stream_engine._persist_assistant_message`، `chat_context.get_checkpointer`،
+   `identity_access.get_settings`). أي ترقيع مستقبلي على اسم مُعاد تصديره يجب أن
+   يستهدف وحدة موقع النداء.
+2. **المانيفستات الثلاثة هي مصدر الحقيقة** (`TUTOR_SOURCE_FILES` + `BRAIN_SOURCE_FILES`
+   + `API_SOURCE_FILES`): أي استخراج جديد = سطر واحد في المانيفست المناسب؛
+   البوّابات/الاختبارات تقرأ المُركَّب حصراً — والفحوص **السلبية** خصوصاً. تبقى
+   tuples حرفية من strings (البوّابات تقرأها regex-نصياً).
+3. **قواعد إقامة routes.py**: الـ handlers بمسارات literal تبقى فيه (بوّابة AST تقرأه
+   وحده) — وممنوع إعادة أي helper مُستخرَج إليه (عودة الـ God-file). الوحدات المستخرَجة
+   لا تستورد routes أبداً (fence يفرضها + «لا from app.*»).
+4. **تقسيم العقل متجاور**: أي شريحة عقل جديدة تُنقل كنطاق أسطر متجاور ويُحافَظ على
+   ترتيب الـ bases == ترتيب الأسطر — يحفظ مراسي أول-الظهور بلا تحليل لكل بوّابة.
+5. **`BRAIN_SOURCE_FILES ⊆ TUTOR_SOURCE_FILES`** (فحص CI) — فحوص المصدر المُركَّب لا
+   تفقد محتوى العقل صامتة.
+6. النقل **verbatim** دائماً (سلوك مطابق بالبايت)؛ مواءمة الاختبارات لا تعطيلها
+   (deselect يتقلص فقط — وقد تقلّص بـ 3 هنا).
+
+### التحقق (2026-07-16)
+- كل البوّابات التسع خضراء (pedagogical_os **24 فحصاً** منها فحص الاتساق الجديد +
+  17 عقد تكافؤ) | ruff + format نظيفان (1,681 ملفاً) | runtime_truth يطابق القفل |
+  17/17 اختبار frontend node.
+- pytest: 1,541 services + 1,755 microservices/unit/infrastructure/architecture +
+  الاختبارات المُستثناة سابقاً 5/5 — مواقع الفشل الوحيدة هي الـ 6 pre-existing
+  المُستثناة في CI (لم تتغير).
+- **E2E حي FULL-STACK** (القسم أدناه يُحدَّث بعد التشغيل الحي في هذه الجولة نفسها).
+
+### السلسلة (D-167 → D-168)
+| Decision | الموضوع |
+|----------|---------|
+| D-167 | إصلاح سلسلة النماذج (PRIMARY → gpt-oss-20b) |
+| **D-168** | **قتل الهدفين المؤجَّلين: routes.py 3,312→1,561 (−53%) + العقل 2,441→جذر 55 + 5 mixins + مانيفستا API/العقل + M10-S2.3 (17 عقد تكافؤ) + قاعدة late-binding + deselect −3** |

@@ -5689,3 +5689,52 @@ nemotron-nano ⚠️ هلوسة يابانية (يؤكّد حظر D-067).
 **قاعدة دائمة:** نموذج أزاله OpenRouter من الطبقة المجانية يُنزَل من PRIMARY فوراً
 ويُترك بذيل السلسلة (لا يُحذف — يتعافى آلياً؛ لا يبقى PRIMARY — HTTP فاشل كل دور).
 تم عبر skill `cogniforge-llm-model-repair`. CLAUDE.md §6.140.
+
+## D-168 (2026-07-16) — قتل الملفين الضخمين الأخيرين + M10-S2.3: مانيفستا API/العقل + تفكيك routes.py والعقل
+
+**السياق:** بعد D-166 بقي هدفا M13 المؤجَّلان («يحتاجان بنية manifest تحميهما أولاً»):
+`routes.py` (3,312 سطراً) و`probability_tutor_brain.py` (2,441 سطراً). هذه الجولة
+أنجزتهما بنمط D-164 المُثبَت (نقل حرفي + مانيفست DRY) + أغلقت آخر فجوة split-brain
+حية من صنف ISS-126.
+
+**Stage A — routes.py 3,312 → 1,561 (−53%):** مانيفست جديد
+`microservices/orchestrator_service/src/api/api_sources.py` (`API_SOURCE_FILES` +
+`read_api_source()` — stdlib، مرآة tutor_sources) + 6 وحدات مستخرَجة حرفياً بطبقات
+باتجاه واحد: `chat_types` (leaf) → `chat_context` + `identity_access` +
+`stream_serialization` + `conversation_store` → `chat_stream_engine` (المحركان +
+`active_background_tasks`). قواعد الإقامة: router + كل الـ 17 @router handler +
+schemas + `_extract_chat_objective` تبقى في routes.py ⇒ بوّابة الـ AST
+(`check_stategraph_runtime_backbone`) + test_d045 + step9/step10 بلا أي تغيير.
+إعادة استيراد كل المنقول (noqa: F401) تحفظ استيرادات runtime الخارجية. حذف
+`routes.py.orig` (2,812 سطراً ميتاً).
+
+**Stage B — العقل 2,441 → جذر تركيب ~55 + 5 mixins:** مانيفست
+`app/services/skills/probability_brain/brain_sources.py` (`BRAIN_SOURCE_FILES` +
+`read_brain_source`)؛ تقسيم متجاور (ترتيب bases == ترتيب الأسطر ⇒ مراسي أول-الظهور
+محفوظة بنيوياً): `escape_hatch` + `cognitive_verification` + `cognitive_response` +
+`socratic_narrative` + `turn_engine`. `check_pedagogical_os`: `_read_brain()` نصّي +
+فحص اتساق **`BRAIN_SOURCE_FILES ⊆ TUTOR_SOURCE_FILES`**. workflows العقل الأربعة +
+iss121 frontend test تقرأ glob `probability_brain/*.py`.
+
+**Stage C — M10-S2.3:** «كيف حسبنا 4» تُعلَّم على الـ port الحي:
+`detect_subpart_question` + `detect_step_explanation` + `build_step_explanation`
+(data-driven من `parse_composition`، صفر أرقام مُصلَّبة، صفر كشف للنسبة النهائية)
+موصولة في `deterministic_turn` قبل بوّابة هروب الأسئلة (مرآة D-160 F2). بوّابة
+التكافؤ: **17 عقداً مزدوجاً** (كانت 14).
+
+**إصلاحات جانبية مأصولة:** الاختبارات الثلاثة المُستثناة تاريخياً في
+`test_orchestrator_chat_stategraph` أُصلحت جذرياً (FakeGraph يطبّق `astream` — عقد
+ISS-STREAM-002 + `STATE_DIR→tmp_path`) ⇒ **deselect في ci.yml −3** (D-105: القوائم
+تتقلص فقط). ترقيعات `get_settings` (test_outbox + admin_tool_security) انتقلت إلى
+`identity_access` (قاعدة late-binding).
+
+**القواعد الدائمة:** (1) قاعدة monkeypatch late-binding — رقِّع الوحدة التي يعيش
+فيها **المستدعي**؛ (2) المانيفستات الثلاثة (`TUTOR/BRAIN/API_SOURCE_FILES`) مصدر
+الحقيقة — استخراج جديد = سطر واحد، tuples حرفية نصية؛ (3) قواعد إقامة routes.py —
+الـ handlers فيه، الوحدات المستخرَجة لا تستورد routes؛ (4) تقسيم العقل متجاور؛
+(5) `BRAIN ⊆ TUTOR` فحص CI؛ (6) verbatim دائماً + مواءمة لا تعطيل.
+
+**التحقق:** كل البوّابات التسع خضراء (pedagogical_os 24 فحصاً + 17 عقد تكافؤ) +
+ruff (1,681 ملفاً) + runtime_truth + 17/17 frontend + pytest (1,541 services +
+1,755 broad + الاختبارات المُستثناة سابقاً 5/5). E2E حي FULL-STACK في Stage E.
+CLAUDE.md §6.141.

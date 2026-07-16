@@ -161,8 +161,13 @@ runtime evidence). دَيْن موثَّق: `DOC-DEBT-001` (CLAUDE.md موسوع
   - **S2.1 ✅ منجز-خلف-علم (D-154، 2026-07-02)**: أول port حيّ —
     `microservices/orchestrator_service/src/services/overmind/probability_tutor.py` (stdlib مستقل:
     parse_composition محصَّن ضد نثر الحل + بوّابة مقامات LaTeX-aware + سُلّم كشف تدريجي صفر-نتيجة
-    بحارس dedup) موصول في `SynthesizerNode` خلف `ORCHESTRATOR_PROB_TUTOR_ENABLED` (افتراضي off).
+    بحارس dedup) موصول في `SynthesizerNode` خلف `ORCHESTRATOR_PROB_TUTOR_ENABLED` (افتراضه "1" — **ACTIVE default-on منذ D-163 Stage 3**؛ رافعة الرجوع `=0`).
     الحالة الصادقة (§6.6): **FLAGGED** — يُقلب العلم بعد التحقق الحيّ في Codespaces.
+  - **S2.3 ✅ «كيف حسبنا 4» تُعلَّم على الـ port (D-168، 2026-07-16)**: `detect_subpart_question`
+    + `detect_step_explanation` + `build_step_explanation` (data-driven من `parse_composition`،
+    صفر كشف للنسبة — يَنجو من حجب D-113) موصولة في `deterministic_turn` قبل بوّابة هروب
+    الأسئلة (مرآة D-160 F2). بوّابة التكافؤ صارت **17 عقداً** — أُغلقت آخر فجوة split-brain
+    حية من صنف ISS-126.
   - **S2.2 ✅ بوّابة تكافؤ split-brain (D-162، 2026-07-10)**: عقود المعلّم الجوهرية (بوّابة
     الفعل الكلامي «السؤال ليس إجابة» + مُجيب التسمية + dedup المحايد للحجب + `fmt_comb`)
     محروسة الآن في **النسختين** (monolith `orchestrator_client` + الـ port) عبر
@@ -215,6 +220,10 @@ Formalized `PedagogicalPolicyEngine` orchestrating `DialogueManagerSkill` throug
 - **الحارس**: بوّابة `scripts/fitness/check_pedagogical_os.py` (D-153) تفرض قواعد الدستور بدءاً من الآن.
 - **حالة تفكيك التعقيد (2026-07-14 — D-163→D-166)**: God-file المونوليث **انتهى** —
   `orchestrator_client.py` 6,154 → **267 سطراً** (قشرة نقل؛ العقل + 6 mixins خلف مانيفست
-  `TUTOR_SOURCE_FILES`). **الهدفان التاليان (مؤجَّلان موثَّقين — يحتاجان بنية manifest تحميهما
-  أولاً)**: `microservices/orchestrator_service/src/api/routes.py` (3,312 سطراً — تقسيم
-  APIRouter modules) + `probability_tutor_brain.py` (2,358 — detectors/builders/turn-engine).
+  `TUTOR_SOURCE_FILES`). **الهدفان المؤجَّلان أُنجزا (D-168، 2026-07-16 — §6.141)**:
+  `routes.py` **3,312 → 1,561 سطراً (−53%)** خلف مانيفست `api_sources.API_SOURCE_FILES`
+  (6 وحدات chat_types/chat_context/identity_access/stream_serialization/conversation_store/
+  chat_stream_engine — الـ handlers بقيت في routes فبوّابة الـ AST بلا تغيير) +
+  `probability_tutor_brain.py` **2,441 → جذر تركيب ~55 سطراً + 5 mixins متجاورة** خلف
+  مانيفست `brain_sources.BRAIN_SOURCE_FILES` (فحص CI: `BRAIN ⊆ TUTOR`). قاعدة
+  **monkeypatch late-binding** (رقِّع وحدة المستدعي) صارت عقداً دائماً — §6.141.

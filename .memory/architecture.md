@@ -11,38 +11,51 @@
 > Anything documented here must be backed by import + call chain + runtime evidence (see CLAUDE.md §6.6).
 > **Skills Philosophy (D-038):** كل قدرة AI = Skill مستقل. انظر CLAUDE.md §0.5 و `.memory/decisions.md#D-038`.
 
-## معمارية العقل الواحد المستخرَج + التكافؤ عبر العقلين (D-163 — M13 + M10-S2)
+## معمارية العقل الواحد المستخرَج + التكافؤ عبر العقلين (D-163→D-168 — M13 + M10-S2)
 
 **قبل D-163**: منطق المعلّم الحتمي للاحتمالات كان مبعثراً في God-file
 `orchestrator_client.py` (6,154 سطراً) ومكرَّراً جزئياً في port الخدمة المصغرة — «split-brain»
 يُصان يدوياً في نسختين تفترقان في القدرة.
 
-**بعد D-163** — عقلان بعقدٍ واحد مُتحقَّق منه بوّابةً:
+**بعد D-163→D-168** — عقلان بعقدٍ واحد مُتحقَّق منه بوّابةً، وثلاثة مانيفستات DRY:
 
 ```
-عقل المونوليث (الاستخراج M13):
-  app/services/skills/probability_tutor_brain.py  ← class ProbabilityTutorBrain (2,358 سطراً)
-    كل الدوال الحتمية: _cognitive_turn · _verify_numeric_answer · _build_symbolic_* ·
-    _detect_* · _build_diagnostic_probe · dedup · الثوابت الصفّية.
-    ▲ وراثة mixin (صفر تغيير في مواقع الاستدعاء — MRO)
-  app/infrastructure/clients/orchestrator_client.py ← class OrchestratorClient(ProbabilityTutorBrain)
-    النقل + التوجيه (chat_with_agent) + fallback chain فقط (3,832 سطراً بعد الانكماش −38%).
+عقل المونوليث (M13 — D-163 استخراج + D-168 تفكيك):
+  app/services/skills/probability_tutor_brain.py  ← جذر تركيب (~55 سطراً)
+    class ProbabilityTutorBrain(EscapeHatch, CognitiveVerification, CognitiveResponse,
+                                SocraticNarrative, CognitiveTurnEngine)
+  app/services/skills/probability_brain/          ← 5 mixins متجاورة (D-168 Stage B)
+    escape_hatch · cognitive_verification · cognitive_response · socratic_narrative · turn_engine
+    + brain_sources.py (BRAIN_SOURCE_FILES + read_brain_source — مانيفست العقل)
+  app/infrastructure/clients/orchestrator_client.py ← قشرة نقل (267 سطراً، −95.7% منذ 6,154)
+    class OrchestratorClient(ProbabilityTutorBrain, ...6 mixins نقل/توجيه D-164/D-166)
+    + orchestrator/tutor_sources.py (TUTOR_SOURCE_FILES — مانيفست المعلّم الكامل)
+
+routes.py الخدمة المصغرة (D-168 Stage A — 3,312→1,561 سطراً −53%):
+  src/api/routes.py         ← router + 17 handler + schemas + _extract_chat_objective فقط
+  src/api/{chat_types → chat_context·identity_access·stream_serialization·conversation_store
+           → chat_stream_engine}  ← 6 وحدات مستخرَجة حرفياً بطبقات باتجاه واحد
+  + api_sources.py (API_SOURCE_FILES + read_api_source — مانيفست API)
 
 port الخدمة المصغرة (الهجرة M10-S2، ACTIVE default-on منذ D-163 Stage 3):
   microservices/orchestrator_service/src/services/overmind/probability_tutor.py  (stdlib، صفر import من app)
     parse_composition · fmt_comb · build_step/rescue · deterministic_turn +
     (D-163) verify_numeric_answer · build_diagnostic_probe · build_symbolic_step ·
-    pending_focus_from_history · _ladder_for_support (support_level لم يعد ميتاً).
+    pending_focus_from_history · _ladder_for_support +
+    (D-168 M10-S2.3) detect_subpart_question · detect_step_explanation · build_step_explanation
     ▲ hook في SynthesizerNode (graph/search.py) خلف ORCHESTRATOR_PROB_TUTOR_ENABLED (افتراضه "1").
 
 بوّابة التكافؤ (CI): scripts/fitness/check_pedagogical_os.py:check_split_brain_parity
-  12 عقداً يجب وجودها في العقلين (monolith brain ↔ port) — أي تعديل على واحدة دون
-  الأخرى يُفشل CI (نمط D-013 الثنائي) + حارس الوراثة (العقل مستهلَك حياً، لا ZOMBIE).
+  17 عقداً يجب وجودها في العقلين (monolith brain ↔ port) — أي تعديل على واحدة دون
+  الأخرى يُفشل CI (نمط D-013 الثنائي) + حارس الوراثة + فحص BRAIN ⊆ TUTOR.
 ```
 
-**القاعدة الدائمة**: العقل وحدة واحدة — **ممنوع** إعادة أي دالة إلى `orchestrator_client.py`
-(عودة الـ God-file)؛ التكافؤ عقل↔port مفروض CI؛ العلم الافتراضي ON ورافعة الرجوع
-`ORCHESTRATOR_PROB_TUTOR_ENABLED=0` بلا deploy (D-025). التفصيل: CLAUDE.md §6.138.
+**القاعدة الدائمة**: العقل وحدة واحدة — **ممنوع** إعادة أي دالة مُستخرَجة إلى
+`orchestrator_client.py` أو `routes.py` (عودة الـ God-file)؛ المانيفستات الثلاثة
+(`TUTOR/BRAIN/API_SOURCE_FILES`) هي مصدر الحقيقة للبوّابات (استخراج جديد = سطر واحد)؛
+قاعدة monkeypatch late-binding: رقِّع الوحدة التي يعيش فيها المستدعي؛ التكافؤ عقل↔port
+مفروض CI؛ العلم الافتراضي ON ورافعة الرجوع `ORCHESTRATOR_PROB_TUTOR_ENABLED=0` بلا
+deploy (D-025). التفصيل: CLAUDE.md §6.138 + §6.139 + §6.141.
 > 🏗️ **Agentic Runtime layer map:** `.memory/agentic_runtime_doctrine.md` (D-146 · CLAUDE.md §0.7) — every layer graded ACTIVE/PARTIAL/PLANNED/DORMANT per §6.6.
 
 ---

@@ -12,7 +12,7 @@
  * تشغيل: node frontend/tests/iss121_math_display.test.mjs
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -38,17 +38,22 @@ check('.katex-mathml has display:none !important', mathmlBlock.includes('display
 check('.katex-mathml keeps user-select:none (defense in depth)', mathmlBlock.includes('user-select: none'));
 
 // ── 2. Backend builders emit LaTeX, not raw ASCII fractions (bidi-safe) ──────
-// D-163: عقل الاحتمالات الحتمي (_fmt_comb + الإنقاذ) استُخرج من الـ God-file إلى
-// الوحدة المستقلة probability_tutor_brain.py — نضمّ الاثنين ليصمد أي pin.
-const orch =
-    readFileSync(
-        resolve(repoRoot, 'app', 'infrastructure', 'clients', 'orchestrator_client.py'),
-        'utf-8',
-    ) +
-    readFileSync(
-        resolve(repoRoot, 'app', 'services', 'skills', 'probability_tutor_brain.py'),
-        'utf-8',
-    );
+// D-163/D-168: عقل الاحتمالات مُفكَّك (brain root + probability_brain mixins +
+// clients/orchestrator mixins) — نقرأ المصدر المُركَّب glob-اً ليصمد أي استخراج قادم.
+const orch = [
+    resolve(repoRoot, 'app', 'infrastructure', 'clients', 'orchestrator_client.py'),
+    resolve(repoRoot, 'app', 'services', 'skills', 'probability_tutor_brain.py'),
+    ...readdirSync(resolve(repoRoot, 'app', 'services', 'skills', 'probability_brain'))
+        .filter((f) => f.endsWith('.py'))
+        .sort()
+        .map((f) => resolve(repoRoot, 'app', 'services', 'skills', 'probability_brain', f)),
+    ...readdirSync(resolve(repoRoot, 'app', 'infrastructure', 'clients', 'orchestrator'))
+        .filter((f) => f.endsWith('.py'))
+        .sort()
+        .map((f) => resolve(repoRoot, 'app', 'infrastructure', 'clients', 'orchestrator', f)),
+]
+    .map((f) => readFileSync(f, 'utf-8'))
+    .join('\n');
 check(
     '_fmt_comb emits LaTeX $C_{n}^{k}$ form',
     orch.includes('C_{{{c}}}^{{{k}}}') && orch.includes('\\\\dfrac'),

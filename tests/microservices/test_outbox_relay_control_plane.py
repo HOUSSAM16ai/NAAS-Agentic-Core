@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from microservices.orchestrator_service.src.api import routes
+from microservices.orchestrator_service.src.api import identity_access, routes
 from microservices.orchestrator_service.src.core.database import get_db
 
 
@@ -39,8 +39,10 @@ def _build_test_app() -> FastAPI:
 def test_trigger_outbox_relay_requires_admin_access(monkeypatch) -> None:
     """يرفض endpoint relay بدون مصادقة داخلية/إدارية."""
 
+    # D-168: حارس الوصول (require_internal_admin_access) يعيش في identity_access —
+    # الترقيع يستهدف الوحدة التي يعيش فيها المستدعي (قاعدة late-binding).
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
     )
@@ -66,8 +68,10 @@ def test_trigger_outbox_relay_normalizes_limits_and_returns_summary(monkeypatch)
         _ = session
         return fake_manager
 
+    # D-168: حارس الوصول (require_internal_admin_access) يعيش في identity_access —
+    # الترقيع يستهدف الوحدة التي يعيش فيها المستدعي (قاعدة late-binding).
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
     )
@@ -100,8 +104,10 @@ def test_trigger_outbox_relay_normalizes_processing_timeout(monkeypatch) -> None
         _ = session
         return fake_manager
 
+    # D-168: حارس الوصول (require_internal_admin_access) يعيش في identity_access —
+    # الترقيع يستهدف الوحدة التي يعيش فيها المستدعي (قاعدة late-binding).
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
     )
@@ -127,8 +133,10 @@ def test_trigger_outbox_relay_normalizes_processing_timeout(monkeypatch) -> None
 def test_outbox_status_requires_admin_access(monkeypatch) -> None:
     """يرفض endpoint status دون اعتماد إداري/داخلي."""
 
+    # D-168: حارس الوصول (require_internal_admin_access) يعيش في identity_access —
+    # الترقيع يستهدف الوحدة التي يعيش فيها المستدعي (قاعدة late-binding).
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
     )
@@ -162,8 +170,10 @@ def test_outbox_status_returns_operational_snapshot(monkeypatch) -> None:
                 "generated_at": "2026-01-01T00:00:00+00:00",
             }
 
+    # D-168: حارس الوصول (require_internal_admin_access) يعيش في identity_access —
+    # الترقيع يستهدف الوحدة التي يعيش فيها المستدعي (قاعدة late-binding).
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
     )
@@ -217,8 +227,10 @@ def test_admin_tool_invoke_count_python_files_success(monkeypatch) -> None:
 
             return _tool
 
+    # D-168: حارس الوصول (require_internal_admin_access) يعيش في identity_access —
+    # الترقيع يستهدف الوحدة التي يعيش فيها المستدعي (قاعدة late-binding).
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
     )
@@ -255,8 +267,10 @@ def test_admin_tool_invoke_sanitizes_tool_errors(monkeypatch) -> None:
 
             return _tool
 
+    # D-168: حارس الوصول (require_internal_admin_access) يعيش في identity_access —
+    # الترقيع يستهدف الوحدة التي يعيش فيها المستدعي (قاعدة late-binding).
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
     )

@@ -45,7 +45,7 @@ if importlib.util.find_spec("redis") is None:
     sys.modules["redis"] = redis_module
     sys.modules["redis.asyncio"] = redis_asyncio_module
 
-from microservices.orchestrator_service.src.api import routes
+from microservices.orchestrator_service.src.api import identity_access, routes
 from microservices.orchestrator_service.src.contracts.admin_tools import ADMIN_TOOL_CONTRACT
 
 
@@ -57,8 +57,9 @@ def _build_test_app() -> FastAPI:
 
 def test_admin_tool_routes_reject_unauthenticated_requests(monkeypatch) -> None:
     """يرفض الوصول إلى أدوات الإدارة دون اعتماد صريح."""
+    # D-168: حارس الوصول يعيش في identity_access — الترقيع يستهدف وحدة المستدعي.
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
     )
@@ -72,8 +73,9 @@ def test_admin_tool_routes_reject_unauthenticated_requests(monkeypatch) -> None:
 
 def test_admin_tool_routes_allow_internal_key(monkeypatch) -> None:
     """يسمح بالوصول الداخلي فقط عند إرسال مفتاح إداري صحيح."""
+    # D-168: حارس الوصول يعيش في identity_access — الترقيع يستهدف وحدة المستدعي.
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY="x" * 40),
     )
@@ -91,8 +93,9 @@ def test_admin_tool_routes_allow_internal_key(monkeypatch) -> None:
 def test_admin_tool_routes_reject_non_admin_bearer(monkeypatch) -> None:
     """يرفض JWT صحيحاً لكنه بلا صلاحية إدارية عند الوصول لأدوات الإدارة."""
     secret = "x" * 40
+    # D-168: حارس الوصول يعيش في identity_access — الترقيع يستهدف وحدة المستدعي.
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY=secret),
     )
@@ -111,8 +114,9 @@ def test_admin_tool_routes_reject_non_admin_bearer(monkeypatch) -> None:
 def test_admin_tool_routes_allow_admin_bearer(monkeypatch) -> None:
     """يسمح JWT إداري صريح بالوصول مع بقاء السياسة fail-closed لغير ذلك."""
     secret = "x" * 40
+    # D-168: حارس الوصول يعيش في identity_access — الترقيع يستهدف وحدة المستدعي.
     monkeypatch.setattr(
-        routes,
+        identity_access,
         "get_settings",
         lambda: SimpleNamespace(ADMIN_TOOL_API_KEY="internal-key-1234567890", SECRET_KEY=secret),
     )

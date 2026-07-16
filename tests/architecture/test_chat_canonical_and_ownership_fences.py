@@ -40,11 +40,19 @@ def test_orchestrator_state_uses_microservice_mission_models_only() -> None:
 
 
 def test_orchestrator_routes_do_not_import_monolith_api_surfaces() -> None:
-    """يمنع توسيع split-brain عبر استيراد واجهات monolith داخل مسارات orchestrator."""
+    """يمنع توسيع split-brain عبر استيراد واجهات monolith داخل مسارات orchestrator.
 
-    routes_module = Path("microservices/orchestrator_service/src/api/routes.py").read_text(
-        encoding="utf-8"
-    )
+    D-168: يمسح كل ملفات ``API_SOURCE_FILES`` (routes.py + الوحدات المستخرَجة) —
+    الحاجز يمتد تلقائياً لأي وحدة جديدة تُضاف للمانيفست. الوحدات المستخرَجة
+    ممنوعة أيضاً من الاستيراد العكسي من routes (طبقات باتجاه واحد — درء الدورات).
+    """
 
-    assert "from app.api" not in routes_module
-    assert "from app.services.chat" not in routes_module
+    from microservices.orchestrator_service.src.api.api_sources import API_SOURCE_FILES
+
+    for rel in API_SOURCE_FILES:
+        module_src = Path(rel).read_text(encoding="utf-8")
+        assert "from app.api" not in module_src, rel
+        assert "from app.services.chat" not in module_src, rel
+        if not rel.endswith("/routes.py"):
+            assert "from .routes" not in module_src, f"{rel}: extracted module imports routes"
+            assert ".api.routes import" not in module_src, f"{rel}: extracted module imports routes"

@@ -21,9 +21,13 @@ GRAPH_MAIN = (
 GRAPH_SEARCH = (
     REPO_ROOT / "microservices/orchestrator_service/src/services/overmind/graph/search.py"
 ).read_text(encoding="utf-8")
-ROUTES_SRC = (REPO_ROOT / "microservices/orchestrator_service/src/api/routes.py").read_text(
-    encoding="utf-8"
+# D-168: routes.py decomposed into sibling modules — read the composed API source
+# through the manifest so plumbing assertions survive verbatim extractions.
+from microservices.orchestrator_service.src.api.api_sources import (
+    read_api_source,
 )
+
+ROUTES_SRC = read_api_source()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

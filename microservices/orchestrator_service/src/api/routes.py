@@ -2,13 +2,11 @@ import asyncio
 import json
 import logging
 import os
-import re
 import time
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import suppress
 
-import anyio
 import httpx
 import jwt
 from fastapi import (
@@ -48,7 +46,6 @@ from microservices.orchestrator_service.src.core.prom_metrics import (
 )
 from microservices.orchestrator_service.src.core.security import (
     decode_user_id,
-    extract_bearer_token,
     extract_websocket_auth,
 )
 from microservices.orchestrator_service.src.models.mission import Mission
@@ -97,9 +94,32 @@ from .chat_types import (
     MAX_HISTORY_SUMMARY_MESSAGES,
     ChatRunContext,
     MissionEventEnvelope,  # noqa: F401
-    StreamFrame,
     _extract_injected_exercise,
     _extract_support_level,
+)
+from .identity_access import (
+    _build_conversation_thread_id,
+    _coerce_admin_state,  # noqa: F401
+    _conversation_id_from_scoped_thread,
+    _decode_auth_payload_or_401,
+    _emit_identity_diagnostic_log,
+    _is_admin_payload,
+    _merge_admin_inputs,
+    _resolve_effective_conversation_id,
+    _resolve_session_id_from_incoming,
+    _resolve_thread_id,
+    _safe_assistant_error,
+    _safe_conversation_id,
+    _safe_thread_id,
+    require_internal_admin_access,
+)
+from .stream_serialization import (
+    _HUMAN_RESPONSE_FIELDS,  # noqa: F401
+    _append_telemetry_line,
+    _extract_human_readable_response,
+    _serialize_json_async,  # noqa: F401
+    _serialize_stream_frame,
+    _serialize_stream_frame_sync,  # noqa: F401
 )
 from .trace_utils import extract_trace_context
 
@@ -108,58 +128,6 @@ logger = logging.getLogger(__name__)
 active_background_tasks = set()
 
 type JsonObject = dict[str, object]
-
-
-def _resolve_session_id_from_incoming(incoming: dict[str, object]) -> str | None:
-    """يستخرج session_id بشكل صريح من الحمولة أو من context لدعم تشخيص ثبات الهوية."""
-    direct_session = incoming.get("session_id")
-    if isinstance(direct_session, str) and direct_session.strip():
-        return direct_session.strip()
-
-    context_payload = incoming.get("context")
-    if isinstance(context_payload, dict):
-        context_session = context_payload.get("session_id")
-        if isinstance(context_session, str) and context_session.strip():
-            return context_session.strip()
-    return None
-
-
-def _emit_identity_diagnostic_log(
-    *,
-    route_name: str,
-    conversation_id: int | str,
-    thread_id: str | None,
-    session_id: str | None,
-) -> None:
-    """يسجل بصمة الهوية لكل رسالة مع معلومات الحاوية لتأكيد تغيّر المسار أو ثباته."""
-    orchestrator_instance_id = os.getenv("ORCHESTRATOR_INSTANCE_ID", "").strip() or "unset"
-    hostname = os.getenv("HOSTNAME", "").strip() or "unknown"
-    container_id = hostname
-    logger.info(
-        "[IDENTITY_DIAGNOSTIC] route=%s conversation_id=%s thread_id=%s session_id=%s "
-        "orchestrator_instance_id=%s hostname=%s container_id=%s",
-        route_name,
-        conversation_id,
-        thread_id or "missing",
-        session_id or "missing",
-        orchestrator_instance_id,
-        hostname,
-        container_id,
-    )
-
-
-async def _append_telemetry_line(line: str) -> None:
-    """يكتب سطر تتبع حرج إلى ملف أدلة قابل للفحص خارج مخرجات الطرفية."""
-    import os
-
-    import anyio
-
-    def write_sync():
-        path = os.path.join(os.getenv("STATE_DIR", "/app"), "telemetry_evidence.txt")
-        with open(path, "a", encoding="utf-8") as telemetry_file:
-            telemetry_file.write(f"{line}\n")
-
-    await anyio.to_thread.run_sync(write_sync)
 
 
 router = APIRouter(
@@ -203,258 +171,6 @@ class OutboxStatusResponse(BaseModel):
     published: int
     oldest_pending_age_seconds: int | None
     generated_at: str
-
-
-def _is_admin_payload(payload: dict[str, object]) -> bool:
-    """يتحقق من صلاحيات الإدارة داخل حمولة JWT وفق مبدأ أقل صلاحية وfail-closed."""
-    role = str(payload.get("role", "")).lower().strip()
-    scope_text = str(payload.get("scope", "")).lower()
-    has_admin_role = role in {"admin", "super_admin", "superadmin"}
-    has_admin_flag = payload.get("is_admin") is True
-    has_admin_scope = "admin" in scope_text and "tool" in scope_text
-    return has_admin_role or has_admin_flag or has_admin_scope
-
-
-def _coerce_admin_state(payload: dict[str, object] | None = None) -> dict[str, object]:
-    """يبني حالة إدارة ضيقة ومتوافقة لعقدة التحكم دون توسيع الواجهة العامة."""
-
-    safe_payload = payload or {}
-    role = str(safe_payload.get("role", "")).strip().lower()
-    scope = str(safe_payload.get("scope", "")).strip().lower()
-    is_admin = _is_admin_payload(safe_payload)
-    return {
-        "is_admin": is_admin,
-        "user_role": role,
-        "scope": scope,
-    }
-
-
-def _merge_admin_inputs(
-    base_inputs: dict[str, object], admin_payload: dict[str, object] | None
-) -> dict[str, object]:
-    """يحقن غلاف الإدارة الموحد فقط عند الحاجة، مع إبقاء المسارات الأخرى دون تغيير."""
-
-    if admin_payload is None:
-        return base_inputs
-    return {**base_inputs, **_coerce_admin_state(admin_payload)}
-
-
-async def require_internal_admin_access(
-    authorization: str | None = Header(default=None),
-    x_internal_admin_key: str | None = Header(default=None),
-) -> int:
-    """يفرض مصادقة وتفويضاً مغلقين لمسارات الأدوات عبر مفتاح داخلي أو JWT إداري صريح."""
-    settings = get_settings()
-
-    if (
-        x_internal_admin_key
-        and settings.ADMIN_TOOL_API_KEY
-        and x_internal_admin_key == settings.ADMIN_TOOL_API_KEY
-    ):
-        return 0
-
-    token = extract_bearer_token(authorization)
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-    except jwt.PyJWTError as exc:
-        raise HTTPException(status_code=401, detail="Invalid token") from exc
-
-    if not _is_admin_payload(payload):
-        raise HTTPException(status_code=403, detail="forbidden")
-
-    user_id = int(payload.get("sub", payload.get("user_id", 0)) or 0)
-    if user_id <= 0:
-        raise HTTPException(status_code=403, detail="forbidden")
-    return user_id
-
-
-def _safe_assistant_error(request_id: str) -> str:
-    """يبني رسالة خطأ آمنة للمستخدم دون أي تسريب تشخيصي داخلي."""
-    return f"تعذر معالجة طلب الدردشة حالياً. رقم المتابعة: {request_id}"
-
-
-def _safe_conversation_id(raw_value: object) -> int | None:
-    """يحوّل conversation_id بشكل آمن لدعم int أو string رقمي مع تتبع تشخيصي واضح."""
-    if raw_value is None:
-        return None
-    if isinstance(raw_value, int):
-        return raw_value
-    if isinstance(raw_value, str):
-        stripped = raw_value.strip()
-        if not stripped:
-            return None
-        try:
-            parsed = int(stripped)
-            logger.warning(
-                "[CONV_ID_TYPE] Received conversation_id as string '%s' and converted to int=%s",
-                raw_value,
-                parsed,
-            )
-            return parsed
-        except ValueError:
-            logger.error(
-                "[CONV_ID_TYPE] Invalid numeric conversion for conversation_id='%s'; using None",
-                raw_value,
-            )
-            return None
-
-    logger.error(
-        "[CONV_ID_TYPE] Unexpected conversation_id type=%s; using None",
-        type(raw_value).__name__,
-    )
-    return None
-
-
-def _resolve_effective_conversation_id(
-    *, incoming_value: object, sticky_value: int | None
-) -> int | None:
-    """يحدّد conversation_id النهائي مع أولوية للطلب الحالي ثم ذاكرة الاتصال."""
-    parsed = _safe_conversation_id(incoming_value)
-    if parsed is not None:
-        return parsed
-    return sticky_value
-
-
-def _safe_thread_id(raw_value: object) -> str | None:
-    """يطبّع thread_id لدعم int/str مع رفض القيم الفارغة."""
-    if raw_value is None:
-        return None
-    if isinstance(raw_value, int):
-        return str(raw_value)
-    if isinstance(raw_value, str):
-        normalized = raw_value.strip()
-        if normalized:
-            return normalized
-    return None
-
-
-def _resolve_thread_id(context: ChatRunContext, fallback_conversation_id: int | str) -> str:
-    """يستخرج thread_id ثابتًا من السياق مع عزل المستخدم."""
-    explicit = _safe_thread_id(context.get("thread_id"))
-    if explicit:
-        return explicit
-
-    conv_id = context.get("conversation_id", fallback_conversation_id)
-    user_id = context.get("user_id")
-    if user_id is None:
-        raise ValueError(
-            f"[THREAD_RESOLUTION] user_id required for safe thread binding. conv_id={conv_id!r}"
-        )
-    return f"u{user_id}:c{conv_id}"
-
-
-def _build_conversation_thread_id(user_id: int, conversation_id: int | str) -> str:
-    """يبني معرف خيط حتمي خاص بالمحادثة لضمان ثبات checkpointer بين الأدوار."""
-    return f"u{user_id}:c{conversation_id}"
-
-
-def _conversation_id_from_scoped_thread(thread_id: str, user_id: int) -> int | None:
-    """يستخرج conversation_id من thread_id مقيّد بالمستخدم: u<uid>:c<cid>."""
-    normalized = thread_id.strip()
-    match = re.fullmatch(r"u(\d+):c(\d+)", normalized)
-    if not match:
-        return None
-    scoped_user_id = int(match.group(1))
-    if scoped_user_id != user_id:
-        return None
-    return int(match.group(2))
-
-
-def _decode_auth_payload_or_401(authorization: str | None) -> tuple[int, dict[str, object]]:
-    """يفك JWT من ترويسة Authorization ويعيد user_id والحمولة مع فشل مغلق."""
-    token = extract_bearer_token(authorization)
-    settings = get_settings()
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-    except jwt.PyJWTError as exc:
-        raise HTTPException(status_code=401, detail="Invalid token") from exc
-    user_id = int(payload.get("sub", payload.get("user_id", 0)) or 0)
-    if user_id <= 0:
-        raise HTTPException(status_code=401, detail="Invalid user")
-    return user_id, payload
-
-
-async def _serialize_json_async(payload: object) -> str:
-    """يُسلسل الحمولة إلى JSON داخل خيط منفصل لحماية حلقة الأحداث من الحجب."""
-    return await anyio.to_thread.run_sync(lambda p: json.dumps(p, ensure_ascii=False), payload)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ISS-056 (D-049 — JSON Envelope Anti-Leak Doctrine):
-# SynthesizerNode في graph/search.py يُرجِع `final_response` كـ dict بمظروف:
-#   {"المصدر": ..., "مستوى_الثقة": ..., "التمرين": <نص حقيقي للطالب>,
-#    "السنة": ..., "الشعبة": ..., "المادة": ..., "رقم_التمرين": ...}
-#
-# قبل الإصلاح: `_serialize_json_async(final_resp)` كان يُسلسل المظروف كاملاً كـ
-# JSON ويرسله للطالب → كارثة تظهر فيها {"المصدر":"معرفة مادة"... } مكشوفة.
-#
-# بعد الإصلاح: نستخرج الحقل البشري (`التمرين`/`الإجابة`/`response`) فقط.
-# هذه الدالة **يجب** أن تُستخدم في كل مكان يُحوَّل فيه `final_response` إلى نص
-# للمستخدم النهائي. لا تُسلسل dict خام كـ JSON إلى assistant_delta/final أبداً.
-# ─────────────────────────────────────────────────────────────────────────────
-_HUMAN_RESPONSE_FIELDS: tuple[str, ...] = (
-    "التمرين",  # SynthesizerNode envelope
-    "الإجابة",  # AdminAgentNode / RenderAnswerNode envelope
-    "response",
-    "answer",
-    "content",
-    "text",
-    "final_response",  # nested fallback
-)
-
-
-def _extract_human_readable_response(final_resp: object) -> str:
-    """يستخرج النص البشري من `final_response` بدون تسريب مظروف JSON.
-
-    يحل ISS-056 — JSON Envelope Leak Catastrophe.
-
-    قواعد دائمة:
-    - dict مع حقل بشري معروف (`التمرين`/`الإجابة`/…) → النص فقط
-    - dict مع حقل خطأ (`خطأ`) → رسالة خطأ نظيفة بالعربية
-    - dict بدون حقل بشري → "لا توجد تفاصيل متاحة." (لا dump للمظروف)
-    - str → التنظيف فقط
-    - None → الـ fallback الافتراضي
-    """
-    if isinstance(final_resp, dict):
-        # حالة الخطأ من RenderAnswerNode — رسالة نظيفة، لا dump
-        error_msg = final_resp.get("خطأ")
-        if isinstance(error_msg, str) and error_msg.strip():
-            action = str(final_resp.get("الإجراء", "")).strip()
-            tail = f"\n\n{action}" if action else ""
-            return f"حدث خطأ أثناء معالجة طلبك: {error_msg.strip()}{tail}"
-
-        for key in _HUMAN_RESPONSE_FIELDS:
-            value = final_resp.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-            # حالة nested: قد يكون response_json داخل response_json
-            if isinstance(value, dict):
-                nested = _extract_human_readable_response(value)
-                if nested and nested != "لا توجد تفاصيل متاحة.":
-                    return nested
-
-        # dict بدون حقل بشري معروف — لا تكشف المظروف الداخلي للطالب
-        return "لا توجد تفاصيل متاحة."
-
-    if final_resp is None:
-        return "لا توجد تفاصيل متاحة."
-
-    text = str(final_resp).strip()
-    return text or "لا توجد تفاصيل متاحة."
-
-
-async def _serialize_stream_frame(payload: object) -> str:
-    """يبني NDJSON صارمًا لضمان عدم تسريب dict خام إلى عميل البث النصي."""
-    return _serialize_stream_frame_sync(payload)
-
-
-def _serialize_stream_frame_sync(payload: object) -> str:
-    """سريع، متزامن، آمن لـ event loop."""
-    if isinstance(payload, dict):
-        frame = StreamFrame.model_validate(payload).model_dump()
-    else:
-        frame = StreamFrame(type="assistant_delta", payload={"content": str(payload)}).model_dump()
-    return json.dumps(frame, ensure_ascii=False) + "\n"
 
 
 @router.get(

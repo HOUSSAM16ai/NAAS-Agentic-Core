@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from microservices.orchestrator_service.src.api import routes
+from microservices.orchestrator_service.src.api import chat_context, routes
 
 
 def test_build_graph_messages_graph_includes_short_anchor_with_checkpointer() -> None:
@@ -161,7 +161,7 @@ def test_conversation_id_from_scoped_thread_rejects_user_mismatch() -> None:
 @pytest.mark.asyncio
 async def test_detect_checkpoint_state_when_unavailable(monkeypatch) -> None:
     """يتأكد من الإرجاع الآمن عند غياب checkpointer."""
-    monkeypatch.setattr(routes, "get_checkpointer", lambda: None)
+    monkeypatch.setattr(chat_context, "get_checkpointer", lambda: None)
     available, has_state = await routes._detect_checkpoint_state("thread-1")
     assert available is False
     assert has_state is False
@@ -175,7 +175,7 @@ async def test_detect_checkpoint_state_when_state_exists(monkeypatch) -> None:
         async def aget_tuple(self, _config: dict[str, object]) -> object:
             return {"checkpoint": "exists"}
 
-    monkeypatch.setattr(routes, "get_checkpointer", _FakeCheckpointer)
+    monkeypatch.setattr(chat_context, "get_checkpointer", _FakeCheckpointer)
     available, has_state = await routes._detect_checkpoint_state("thread-1")
     assert available is True
     assert has_state is True
@@ -203,7 +203,7 @@ async def test_extract_checkpoint_history_normalizes_langchain_messages(monkeypa
         async def aget(self, _config: dict[str, object]) -> _FakeCheckpoint:
             return _FakeCheckpoint()
 
-    monkeypatch.setattr(routes, "get_checkpointer", _FakeCheckpointer)
+    monkeypatch.setattr(chat_context, "get_checkpointer", _FakeCheckpointer)
     history = await routes._extract_checkpoint_history("u7:c12", max_messages=4)
     assert history == [
         {"role": "user", "content": "أين تقع فرنسا؟"},
@@ -214,7 +214,7 @@ async def test_extract_checkpoint_history_normalizes_langchain_messages(monkeypa
 @pytest.mark.asyncio
 async def test_extract_checkpoint_history_returns_empty_without_checkpointer(monkeypatch) -> None:
     """يتأكد من السلوك الآمن عندما لا يتوفر checkpointer."""
-    monkeypatch.setattr(routes, "get_checkpointer", lambda: None)
+    monkeypatch.setattr(chat_context, "get_checkpointer", lambda: None)
     history = await routes._extract_checkpoint_history("u7:c12")
     assert history == []
 
@@ -258,7 +258,7 @@ def test_extract_recent_entity_anchor_prefers_recent_user_entity() -> None:
 
 def test_augment_ambiguous_objective_injects_anchor_when_entity_missing(monkeypatch) -> None:
     # mock _extract_recent_entity_anchor
-    monkeypatch.setattr(routes, "_extract_recent_entity_anchor", lambda _: "الجزائر")
+    monkeypatch.setattr(chat_context, "_extract_recent_entity_anchor", lambda _: "الجزائر")
     """يتأكد من إضافة مرجع إلزامي عندما يكون السؤال إحاليًا بلا كيان صريح."""
     prepared = routes._augment_ambiguous_objective(
         "ما هي عاصمتها؟",

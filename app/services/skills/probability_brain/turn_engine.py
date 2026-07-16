@@ -49,8 +49,13 @@ class CognitiveTurnEngineMixin:
             # D-159 (ISS-125 lesson): بوّابة سياق الاحتمالات **قبل** أي تحميل — مع التفعيل
             # الافتراضي كان المحرّك يختطف أسئلة عامة (قانون نيوتن!) لأن مُحمّل التمرين
             # الرسمي يتعرّف دائماً. المحرّك يعمل فقط حين يكون السؤال/الحوار احتمالياً فعلاً.
+            # ISS-131 (D-169 — قاعدة D-102): رسائل system لا تدخل الكاشف — برومبت الإدمن
+            # (21K حرف يحوي «كرة/احتمال») كان يجعل كل سؤال إدمن «سياق احتمالات» فيُختطف
+            # بالـ probe. الكاشف يقرأ رسائل الطالب/المساعد حصراً.
             _ct_hist = " ".join(
-                str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
+                str(m.get("content", ""))
+                for m in (history_messages or [])
+                if isinstance(m, dict) and m.get("role") in ("user", "assistant")
             )
             if not cls._is_prob_context(f"{question} {_ct_hist}"):
                 return None, None

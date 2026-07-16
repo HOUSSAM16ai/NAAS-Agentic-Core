@@ -48,6 +48,20 @@ class ChatTurnMixin:
         raw = os.getenv("EXPLANATION_VIA_ORCHESTRATOR", "1").strip().lower()
         return raw not in ("0", "false", "no")
 
+    # ISS-131 (D-169): مفاتيح داخلية للمونوليث لا تركب سلك HTTP نحو الـ orchestrator.
+    # `policy_decision` = dataclass قرار المحرّك التربوي (غير قابل لـ JSON — كان يُفشل
+    # تسلسل الجسم فيفشل كل مرشّحي الـ orchestrator ⇒ ORCHESTRATOR_REQUIRED للأسئلة
+    # العامة). `tutor_state` = ذاكرة التدريس الدائمة (D-142) — ملكية المونوليث حصراً؛
+    # الـ orchestrator يستهلك `support_level`/`exercise_content` المستخرجَين منفصلَين.
+    _INTERNAL_CONTEXT_KEYS: frozenset[str] = frozenset({"policy_decision", "tutor_state"})
+
+    @classmethod
+    def _sanitize_wire_context(cls, context: dict[str, object] | None) -> dict[str, object]:
+        """نسخة الـ context الصالحة للسلك — بلا مفاتيح داخلية غير قابلة للتسلسل."""
+        if not isinstance(context, dict):
+            return {}
+        return {k: v for k, v in context.items() if k not in cls._INTERNAL_CONTEXT_KEYS}
+
     async def chat_with_agent(
         self,
         question: str,
@@ -85,8 +99,10 @@ class ChatTurnMixin:
                 },
             )
 
-        # Extract current state
-        tutor_state = context.get("tutor_state", {}) if isinstance(context, dict) else {}
+        # Extract current state (ISS-131: القيمة قد تكون None صراحةً — طبِّعها إلى dict
+        # مع الحفاظ على هوية الـ dict المشترك حين يوجد — هو قناة الـ handoff لـ record_turn)
+        _ts_raw = context.get("tutor_state") if isinstance(context, dict) else None
+        tutor_state = _ts_raw if isinstance(_ts_raw, dict) else {}
 
         # Formulate Observation
         ConceptDiagnosisInput(question=question, history=history_messages)
@@ -109,9 +125,14 @@ class ChatTurnMixin:
         engine = PedagogicalPolicyEngine()
         policy_decision = engine.evaluate_turn(tutor_state, obs)
 
-        # We must inject policy_decision into the context so it can be passed back to record_turn in customer_chat
-        if context is not None:
-            context["policy_decision"] = policy_decision
+        # ISS-131 (D-169): الحقن في dict الـ tutor_state **المشترك** — هو ما يقرأه
+        # `customer_chat.record_turn` فعلاً (`tutor_state_ctx.get("policy_decision")`).
+        # الحقن القديم في context الأعلى (D-144) لم يقرأه أحد قط، وكان يُسمِّم جسم
+        # HTTP نحو الـ orchestrator (dataclass غير قابل لـ JSON ⇒ فشل كل المرشّحين
+        # ⇒ ORCHESTRATOR_REQUIRED للأسئلة العامة). القرار الداخلي لا يركب السلك أبداً
+        # (يُجرَّد في `_sanitize_wire_context`).
+        if isinstance(tutor_state, dict):
+            tutor_state["policy_decision"] = policy_decision
 
         # Enforce Symbolic Truth explicitly: if question targets unmodeled mathematical event, force drift prevention
         _comp = await self._build_probability_computational_answer(question, history_messages)
@@ -799,8 +820,13 @@ class ChatTurnMixin:
         _det = ConceptDiagnosisSkill.diagnose_deterministic(question)
         _concept = _det.concept
         _misconception = _det.misconception
+        # ISS-131 (D-169 — قاعدة D-102): رسائل system لا تدخل كواشف الـ history —
+        # برومبت النظام (خصوصاً برومبت الإدمن الذي يحوي «كرة/احتمال») كان يُفعِّل
+        # «سياق الاحتمالات» زوراً لكل سؤال. الكاشف يقرأ رسائل الطالب/المساعد حصراً.
         _history_text = " ".join(
-            str(m.get("content", "")) for m in (history_messages or []) if isinstance(m, dict)
+            str(m.get("content", ""))
+            for m in (history_messages or [])
+            if isinstance(m, dict) and m.get("role") in ("user", "assistant")
         )
         # الطبقة 1 LLM فقط عند unknown + سياق احتمالات (لا هدر على غير الاحتمالات).
         if _concept == "unknown" and self._is_prob_context(question + " " + _history_text):
@@ -1347,13 +1373,23 @@ class ChatTurnMixin:
         if _support_level < 1 or _support_level > 5:
             _support_level = 5
 
+        # ISS-131 (D-169): معرّف محادثة الإدمن يعيش في جدول `admin_conversations`
+        # (فضاء أسماء منفصل — ISS-019) بينما `_ensure_conversation` في الـ orchestrator
+        # يتحقق من الملكية ضد فضاء محادثات العميل ⇒ تمريره يُرجِع 403 لكل دور إدمن.
+        # الحل: لا يُمرَّر عبر الحدود — الـ orchestrator يشتق محادثته من session/thread،
+        # والمونوليث يبقى المالك الوحيد لحفظ رسائل الإدمن (D-006 fail-safe write).
+        _wire_conversation_id = (
+            None
+            if isinstance(context, dict) and context.get("chat_scope") == "admin"
+            else conversation_id
+        )
         payload = {
             "question": _effective_question,
             "user_id": user_id,
-            "conversation_id": conversation_id,
+            "conversation_id": _wire_conversation_id,
             "history_messages": history_messages or [],
             "context": {
-                **(context or {}),
+                **self._sanitize_wire_context(context),
                 "routing_mode": "MODE_B" if _is_mode_b else "MODE_A",
                 # D-103: محتوى التمرين المحقون (إن وُجد) — الرسم يستهلكه بدل retriever-ه
                 **_exercise_injection,
@@ -1399,9 +1435,14 @@ class ChatTurnMixin:
         )
 
         # توليد JWT داخلي لمصادقة الـ monolith مع orchestrator-service
-        # يُجدَّد مع كل طلب لضمان عدم انتهاء الصلاحية
+        # يُجدَّد مع كل طلب لضمان عدم انتهاء الصلاحية.
+        # ISS-131 (D-169): القناة الإدارية تحمل claim الإدمن (درس D-162/§6.78) —
+        # بدونه ValidateAccessNode يرفض أدوات الإدمن بـ ADMIN_ACCESS_DENIED.
         try:
-            service_token = self._build_service_jwt(user_id)
+            service_token = self._build_service_jwt(
+                user_id,
+                is_admin=isinstance(context, dict) and context.get("chat_scope") == "admin",
+            )
             auth_headers = {
                 "Authorization": f"Bearer {service_token}",
                 "X-Correlation-ID": request_id,

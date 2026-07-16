@@ -258,8 +258,16 @@ class ProbabilityUIMixin:
                 return None
 
             skill = ProbabilityCalculatorSkill()
+            # ISS-131 (D-169 — قاعدة D-102): رسائل system لا تدخل كاشف السياق —
+            # برومبت الإدمن يحوي «كرة/احتمال» فكان يجعل كل سؤال إدمن «سياق احتمالات»
+            # ويُفعِّل خطوة تركيز زائفة. الحوار = رسائل الطالب/المساعد حصراً.
+            _dialogue_history = [
+                m
+                for m in (history_messages or [])
+                if isinstance(m, dict) and m.get("role") in ("user", "assistant")
+            ]
             _combined_text = (
-                question + " " + " ".join(m.get("content", "") for m in (history_messages or []))
+                question + " " + " ".join(str(m.get("content", "")) for m in _dialogue_history)
             )
 
             # D-122/D-123: حارس سياق الاحتمالات (مُعرَّف مبكراً — للتحصين والتركيز).
@@ -392,8 +400,9 @@ class ProbabilityUIMixin:
             _is_no_model = getattr(result, "success", True) is False and getattr(
                 result, "reason", ""
             ) in ("no_model_extracted", "no_probability_intent_in_question")
-            if (result is None or _is_no_model) and _focus_step_id and history_messages:
-                _history_context = " ".join(m.get("content", "") for m in history_messages)
+            if (result is None or _is_no_model) and _focus_step_id and _dialogue_history:
+                # ISS-131: الاستخراج من حوار الطالب/المساعد حصراً (لا نثر system).
+                _history_context = " ".join(str(m.get("content", "")) for m in _dialogue_history)
                 _contextual_question = f"{_history_context} {question}".strip()
                 result = skill.analyze(
                     ProbabilityInput(question=_contextual_question, history=history_messages)
@@ -434,8 +443,11 @@ class ProbabilityUIMixin:
             _is_no_model = getattr(result, "success", True) is False and getattr(
                 result, "reason", ""
             ) in ("no_model_extracted", "no_probability_intent_in_question")
-            if (result is None or _is_no_model) and _is_deep_pedagogy and history_messages:
-                _history_context = " ".join(m.get("content", "") for m in history_messages).strip()
+            if (result is None or _is_no_model) and _is_deep_pedagogy and _dialogue_history:
+                # ISS-131: الاستخراج من حوار الطالب/المساعد حصراً (لا نثر system).
+                _history_context = " ".join(
+                    str(m.get("content", "")) for m in _dialogue_history
+                ).strip()
                 if _history_context:
                     result = skill.analyze(
                         ProbabilityInput(question=_history_context, history=history_messages)

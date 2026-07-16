@@ -178,21 +178,31 @@ class OrchestratorClient(
         )
         return decision.recognized and decision.matched_entry is not None
 
-    def _build_service_jwt(self, user_id: int) -> str:
+    def _build_service_jwt(self, user_id: int, *, is_admin: bool = False) -> str:
         """يُولِّد JWT داخلي قصير العمر لمصادقة الـ monolith مع orchestrator-service.
 
         يستخدم نفس SECRET_KEY المشترك بين الـ monolith والـ orchestrator.
         صالح لمدة 5 دقائق فقط — يُجدَّد مع كل طلب.
+
+        ISS-131 (D-169 — نفس درس D-162/§6.78): دور الإدمن يجب أن يُحمل في الـ JWT
+        صراحةً — `_is_admin_payload` في الـ orchestrator fail-closed (يفحص
+        `role`/`is_admin`/`scope`)، وبدون الـ claim كانت أداة الإدمن تُنفَّذ ثم
+        تُرفض بـ `ADMIN_ACCESS_DENIED` في `ValidateAccessNode` (سيناريو «كم عدد
+        ملفات بايثون» الحي). القناة الإدارية للمونوليث موثوقة (actor.is_admin
+        مُتحقَّق عند اتصال WS — D-WS-CONN-002) فالـ claim نقلٌ للحقيقة لا تصعيد.
         """
         settings = get_settings()
         now = int(time.time())
-        payload = {
+        payload: dict[str, object] = {
             "sub": str(user_id),
             "user_id": user_id,
             "iat": now,
             "exp": now + 300,  # 5 دقائق
             "iss": "cogniforge-monolith",
         }
+        if is_admin:
+            payload["is_admin"] = True
+            payload["role"] = "admin"
         return pyjwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
     async def _get_client(self) -> httpx.AsyncClient:

@@ -65,8 +65,13 @@ class TestNoDirectivePrepend:
 
     def test_directive_not_consumed_by_orchestrator(self):
         # الـ orchestrator يستهلك support_level فقط — لا pedagogy_directive (لا leak path)
+        # D-168: الفحص السلبي يمسح كل ملفات API_SOURCE_FILES (لا يمرّ زوراً بعد التفكيك)
+        from microservices.orchestrator_service.src.api.api_sources import (
+            API_SOURCE_FILES,
+        )
+
         for f in (
-            "microservices/orchestrator_service/src/api/routes.py",
+            *API_SOURCE_FILES,
             "microservices/orchestrator_service/src/services/overmind/graph/main.py",
             "microservices/orchestrator_service/src/services/overmind/graph/search.py",
         ):

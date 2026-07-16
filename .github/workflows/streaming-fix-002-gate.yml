@@ -101,7 +101,12 @@ jobs:
         run: |
           python3 -c "
           import sys, pathlib
-          src = pathlib.Path('microservices/orchestrator_service/src/api/routes.py').read_text()
+          # D-168: routes.py decomposed — scan the composed API source (glob keeps
+          # future extracted modules covered automatically, D-166 precedent).
+          src = '\n'.join(
+              p.read_text()
+              for p in sorted(pathlib.Path('microservices/orchestrator_service/src/api').glob('*.py'))
+          )
           checks = {
               'astream call': '.astream(',
               'custom mode': '\"custom\"',
@@ -211,7 +216,11 @@ jobs:
         run: |
           python3 -c "
           import sys, pathlib
-          src = pathlib.Path('microservices/orchestrator_service/src/api/routes.py').read_text()
+          # D-168: routes.py decomposed — scan the composed API source.
+          src = '\n'.join(
+              p.read_text()
+              for p in sorted(pathlib.Path('microservices/orchestrator_service/src/api').glob('*.py'))
+          )
           if 'record_streaming_chunk' not in src or 'record_streaming_session' not in src:
               print('FAIL: routes.py missing streaming metrics imports/calls')
               sys.exit(1)

@@ -21,9 +21,13 @@ GRAPH_MAIN = (
 GRAPH_SEARCH = (
     REPO_ROOT / "microservices/orchestrator_service/src/services/overmind/graph/search.py"
 ).read_text(encoding="utf-8")
-ROUTES_SRC = (REPO_ROOT / "microservices/orchestrator_service/src/api/routes.py").read_text(
-    encoding="utf-8"
+# D-168: routes.py decomposed — read the composed API source via the manifest
+# (stdlib-only import chain; the package __init__ files are empty, sandbox-safe).
+from microservices.orchestrator_service.src.api.api_sources import (
+    read_api_source,
 )
+
+ROUTES_SRC = read_api_source()
 
 
 def _load_response_sanitizer():

@@ -5738,3 +5738,27 @@ ISS-STREAM-002 + `STATE_DIR→tmp_path`) ⇒ **deselect في ci.yml −3** (D-10
 ruff (1,681 ملفاً) + runtime_truth + 17/17 frontend + pytest (1,541 services +
 1,755 broad + الاختبارات المُستثناة سابقاً 5/5). E2E حي FULL-STACK في Stage E.
 CLAUDE.md §6.141.
+
+## D-169 (2026-07-16) — ISS-131: سلك نظيف + فرض D-102 + هوية الإدمن (اكتشافات E2E الحي لـ D-168)
+
+**السياق:** E2E الحي في D-168 Stage E كشف 5 كوارث pre-existing مقنَّعة (تفصيلها الحرفي
+في CLAUDE.md §6.142): (1) `context["policy_decision"]` (dataclass، D-144) يُسمِّم جسم POST
+نحو الـ orchestrator ⇒ TypeError قبل السلك ⇒ **الأسئلة العامة في محادثة جديدة تتلقى
+`error`**؛ (2) الحقن كان في الـ dict الخطأ (لا يقرأه `record_turn`)؛ (3) بوّابات سياق
+الاحتمالات تمسح رسالة system (خرق D-102) ⇒ **كل سؤال إدمن يُختطف بالـ probe** (برومبت
+الإدمن يحوي «كرة/احتمال»)؛ (4) معرّف محادثة الإدمن يعبر لفضاء العميل ⇒ 403؛ (5) service
+JWT بلا claim إداري ⇒ ADMIN_ACCESS_DENIED (درس D-162 غير مطبَّق).
+
+**الإصلاحات (كلها بالجذر + regression):** `_sanitize_wire_context` +
+`_INTERNAL_CONTEXT_KEYS` (chat_turn) · الحقن في `tutor_state` المشترك (هوية dict محفوظة)
+· فلتر `role in (user, assistant)` في turn_engine + chat_turn + probability_ui (3 مواقع)
+· `_wire_conversation_id=None` لنطاق admin · `_build_service_jwt(user_id, is_admin=...)`.
+11 اختباراً في `test_iss131_wire_context_and_system_prompt.py`.
+
+**متبقٍّ مُشخَّص (ISS-132، ADR مستقل):** أدوات الإدمن عبر `/api/chat/messages` —
+`AgentState` لا يُصرّح حقول الإدمن (تسقط عند عبور الرسم) والـ handler يتجاهل
+`_jwt_payload`؛ بنيوية منذ D-025. قناة الإدمن العامة سليمة حياً.
+
+**تحقق حي بعد الإصلاح:** سؤال عام محادثة جديدة ⇒ إجابة عبر الرسم (كان error) · admin
+قانون أوم ⇒ إجابة حقيقية · إعادة كامل الحزمة: d162 9/9 + iss129 + d158 + m10s2 7/7 +
+stage-c خضراء · Supabase الإنتاجي عبر الجسر (PG 17.6). CLAUDE.md §6.142.

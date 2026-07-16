@@ -20,7 +20,11 @@ _ROOT = Path(__file__).resolve().parents[4]
 # Canonical, fixed order: routes.py first (router + all @router handlers stay there —
 # the AST backbone gate parses it alone), then the extracted helper modules (D-168 —
 # append each new extraction below, in dependency-layer order).
-API_SOURCE_FILES: tuple[str, ...] = ("microservices/orchestrator_service/src/api/routes.py",)
+API_SOURCE_FILES: tuple[str, ...] = (
+    "microservices/orchestrator_service/src/api/routes.py",
+    "microservices/orchestrator_service/src/api/chat_types.py",  # D-168 Slice A1
+    "microservices/orchestrator_service/src/api/chat_context.py",  # D-168 Slice A1
+)
 
 
 def read_api_source() -> str:

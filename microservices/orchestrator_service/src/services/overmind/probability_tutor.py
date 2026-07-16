@@ -331,6 +331,121 @@ def build_rescue(comp: dict) -> str:
     )
 
 
+#: D-168 (M10-S2.3 — mirror D-160/ISS-126): علامات طلب شرح اشتقاق قيمة/خطوة
+#: («كيف حسبنا 4»، «اشرح كيف وصلنا لـ 10»). تُفرّق طلب الشرح عن الإجابة الرقمية.
+STEP_EXPLAIN_MARKERS: tuple[str, ...] = (
+    "كيف حسبنا",
+    "كيف حسبت",
+    "كيف نحسب",
+    "كيف وجدنا",
+    "كيف وصلنا",
+    "كيف جاء",
+    "من اين",
+    "من أين",
+    "اشرح",
+    "اشرح لي",
+    "وضح",
+    "وضّح",
+    "بين",
+    "بيّن",
+    "كيفاش",
+    "علاش",
+)
+
+
+def detect_subpart_question(question: str, comp: dict) -> object | None:
+    """D-168 (mirror D-124): يكشف سؤالاً محدّداً عن جزئية حسابية في التمرين.
+
+    يُرجِع مجموعة اللون (dict من ``comp["groups"]``) | ``"total"`` (فضاء العينة)
+    | ``"sum"`` (مجموع الملائمة) | ``None``. data-driven: التسميات من ``_COLORS``
+    وقيم ``comp`` — لا أرقام مُصلَّبة (عقد ملايير التمارين).
+    """
+    try:
+        q = _norm(question)
+        for keywords, label in _COLORS:
+            if any(kw in q for kw in keywords):
+                for g in comp.get("groups", []):
+                    if g["label"] == label:
+                        return g
+        if (
+            any(m in q for m in ("فضاء العينة", "العدد الكلي", "الفضاء", "الكلي", "c("))
+            or str(comp["total"]) in q
+        ):
+            return "total"
+        if (
+            any(m in q for m in ("الملائمة", "الملاءمة", "نجمع", "لماذا نجمع"))
+            or str(comp["same"]) in q
+        ):
+            return "sum"
+        return None
+    except Exception:
+        return None
+
+
+def detect_step_explanation(question: str, comp: dict) -> object | None:
+    """D-168 (mirror D-160/ISS-126): يكشف طلب شرح اشتقاق **خطوة/قيمة** ويربطه بجزئية.
+
+    يشترط علامة شرح صريحة (``STEP_EXPLAIN_MARKERS``) كي لا تُلتقَط محاولة إجابة
+    رقمية («14 على 165» تبقى للتحقّق الرقمي)، ثم يطابق الكلمات/الأرقام ضد قيم
+    ``comp`` (favs/counts/total/same) — data-driven، صفر أرقام مُصلَّبة.
+    """
+    try:
+        q = _norm(question)
+        if not any(m in q for m in STEP_EXPLAIN_MARKERS):
+            return None
+        part = detect_subpart_question(question, comp)
+        if part is not None:
+            return part
+        nums = {int(m) for m in re.findall(r"\d+", q)}
+        if not nums:
+            return None
+        if int(comp["total"]) in nums:
+            return "total"
+        if int(comp["same"]) in nums:
+            return "sum"
+        for g in comp.get("groups", []):
+            if int(g["fav"]) in nums or int(g["count"]) in nums:
+                return g
+        return None
+    except Exception:
+        return None
+
+
+def build_step_explanation(comp: dict, part: object) -> str:
+    """D-168 (mirror D-160 F3): يُعلّم اشتقاق الجزئية المطلوبة — **لا نسبة نهائية**.
+
+    الطالب العالق يتعلّم اشتقاق أصغر جزئية ملموسة عبر ``fmt_comb`` (LaTeX،
+    يَنجو من حجب D-113) ثم يُقاد للخطوة التالية بسؤال — صفر كشف لـ P(A).
+    """
+    k, n = comp["k"], comp["n"]
+    if part == "total":
+        return (
+            f"**من أين جاء العدد الكلي؟** نسحب {k} كرات من {n} دون ترتيب — "
+            f"هذا عدد التوافيق:\n\n{fmt_comb(n, k, comp['total'])}\n\n"
+            "والآن: ما الحالات الملائمة التي نقسمها على هذا العدد؟"
+        )
+    if part == "sum":
+        favs = " + ".join(str(g["fav"]) for g in comp["groups"] if g["possible"])
+        return (
+            "**من أين جاء مجموع الحالات الملائمة؟** نحسب توافيق كل لون ممكن ثم نجمع "
+            f"(الألوان المستحيلة تساهم بصفر):\n\n${favs} = {comp['same']}$\n\n"
+            f"والآن: كم عدد **كل** الطرق الممكنة لسحب {k} من {n}؟"
+        )
+    if isinstance(part, dict):
+        if not part.get("possible"):
+            return (
+                f"**لماذا {part['label']} مستحيلة؟** عددها {part['count']} أصغر من {k} "
+                f"— لا يمكن سحب {k} كرات منها معاً، فتساهم بصفر في الحالات الملائمة.\n\n"
+                "أيّ الألوان الأخرى يبقى ممكناً؟"
+            )
+        return (
+            f"**كيف حسبنا قيمة {part['label']}؟** نختار {k} كرات من {part['count']} "
+            f"دون ترتيب — توافيق:\n\n{fmt_comb(part['count'], k, part['fav'])}\n\n"
+            "طبّق الفكرة نفسها على لون آخر: ماذا تجد؟"
+        )
+    return build_diagnostic_probe(comp)
+
+
 def detect_naming_question(question: str, comp: dict) -> bool:
     """D-162 (ISS-128): سؤال تسمية عن قيم خطوات التمرين — data-driven من ``comp``."""
     try:
@@ -626,6 +741,14 @@ def deterministic_turn(
         if detect_purpose_question(question):
             _purpose = build_purpose_answer(comp)
             return _purpose if not _dup(_purpose) else None
+        # D-168 (M10-S2.3 — mirror D-160 F2): طلب الشرح الصريح («كيف حسبنا 4»)
+        # يُعلّم اشتقاق الجزئية المطلوبة — يسبق بوّابة هروب الأسئلة لأن «اشرح»
+        # طلب تعليم لا إجابة، ويهزم السُّلّم الأعمى (كان يسقط له فيتكرر).
+        _explain_part = detect_step_explanation(question, comp)
+        if _explain_part is not None:
+            _teach = build_step_explanation(comp, _explain_part)
+            if not _dup(_teach):
+                return _teach
         if is_question_not_answer(question) and not _norm(question).startswith(("كيف", "كيفاش")):
             return None
 
@@ -671,9 +794,12 @@ __all__ = [
     "build_purpose_answer",
     "build_rescue",
     "build_step",
+    "build_step_explanation",
     "build_symbolic_step",
     "detect_naming_question",
     "detect_purpose_question",
+    "detect_step_explanation",
+    "detect_subpart_question",
     "deterministic_turn",
     "extract_answer_numbers",
     "fmt_comb",

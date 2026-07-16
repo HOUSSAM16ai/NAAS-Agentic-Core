@@ -25,6 +25,11 @@ _ROOT = Path(__file__).resolve().parents[4]
 TUTOR_SOURCE_FILES: tuple[str, ...] = (
     "app/infrastructure/clients/orchestrator_client.py",
     "app/services/skills/probability_tutor_brain.py",
+    "app/services/skills/probability_brain/escape_hatch.py",  # D-168 Slice B1
+    "app/services/skills/probability_brain/cognitive_verification.py",  # D-168 Slice B2
+    "app/services/skills/probability_brain/cognitive_response.py",  # D-168 Slice B3
+    "app/services/skills/probability_brain/socratic_narrative.py",  # D-168 Slice B4
+    "app/services/skills/probability_brain/turn_engine.py",  # D-168 Slice B5
     "app/infrastructure/clients/orchestrator/stream_normalization.py",  # D-164 Slice 1
     "app/infrastructure/clients/orchestrator/text_streaming.py",  # D-164 Slice 2
     "app/infrastructure/clients/orchestrator/probability_ui.py",  # D-164 Slice 3

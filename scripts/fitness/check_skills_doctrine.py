@@ -38,6 +38,21 @@ def _read_tutor_source() -> str:
     return read_tutor_source()
 
 
+def _read_brain_source() -> str:
+    """مصدر العقل المُركَّب (composition root + mixins) عبر manifest D-168.
+
+    تحميل مباشر بـ importlib (يتجاوز `app.services.skills.__init__` الذي يستورد
+    pydantic) — يحفظ خاصية البيئات المتدهورة لهذه البوّابة.
+    """
+    import importlib.util
+
+    manifest_path = ROOT / "app/services/skills/probability_brain/brain_sources.py"
+    spec = importlib.util.spec_from_file_location("brain_sources_gate", manifest_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.read_brain_source()
+
+
 sys.path.insert(0, str(ROOT))
 
 
@@ -1061,9 +1076,7 @@ def check_dialogue_manager_wired() -> None:
     # D-163: التعريف (`_dialogue_decision` + الاستيراد الكسول لـ get_dialogue_manager_skill)
     # يعيش في العقل المستخرَج `probability_tutor_brain.py`؛ موقع الاستدعاء يبقى في الـ client.
     client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
-    brain_src = (ROOT / "app/services/skills/probability_tutor_brain.py").read_text(
-        encoding="utf-8"
-    )
+    brain_src = _read_brain_source()  # D-168: العقل مُفكَّك — المصدر المُركَّب عبر manifest
     if "_dialogue_decision" not in client_src or "_semantic_tutor_enabled" not in client_src:
         _fail("orchestrator_client does not invoke DialogueManager behind flag (D-142 ZOMBIE).")
     if "get_dialogue_manager_skill" not in brain_src or "def _dialogue_decision" not in brain_src:

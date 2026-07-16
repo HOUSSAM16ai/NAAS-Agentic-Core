@@ -85,6 +85,38 @@ def _read_monolith_tutor() -> str:
     return "\n".join(_read(rel) for rel in _tutor_source_files())
 
 
+# D-168: مصدر الحقيقة الوحيد لملفات مصدر «العقل» = manifest `brain_sources.py`.
+# نقرأ القائمة **نصياً** (لا نستورد app — سلسلة `app.services.skills` تستورد pydantic).
+_BRAIN_MANIFEST_PATH = "app/services/skills/probability_brain/brain_sources.py"
+
+
+def _brain_source_files() -> list[str]:
+    """قائمة ملفات مصدر العقل من الـ manifest (source of truth) — D-168، بلا استيراد app."""
+    manifest = _read(_BRAIN_MANIFEST_PATH)
+    m = re.search(r"BRAIN_SOURCE_FILES[^=\n]*=\s*\((.*?)\)", manifest, re.DOTALL)
+    if not m:
+        _fail(f"{_BRAIN_MANIFEST_PATH}: BRAIN_SOURCE_FILES manifest not found (D-168)")
+        return [BRAIN_PATH]
+    files = re.findall(r'"([^"]+)"', m.group(1))
+    return files or [BRAIN_PATH]
+
+
+def _read_brain() -> str:
+    """مصدر العقل المُركَّب = كل BRAIN_SOURCE_FILES (composition root + mixins) — D-168."""
+    return "\n".join(_read(rel) for rel in _brain_source_files())
+
+
+def check_brain_manifest_subset_of_tutor() -> None:
+    """D-168: كل مدخل في BRAIN_SOURCE_FILES يجب أن يظهر في TUTOR_SOURCE_FILES —
+    وإلا فقدت فحوص المصدر المُركَّب (client+brain+mixins) محتوى العقل صامتة."""
+    tutor = set(_tutor_source_files())
+    missing = [rel for rel in _brain_source_files() if rel not in tutor]
+    if missing:
+        _fail(f"brain manifest entries missing from TUTOR_SOURCE_FILES (D-168): {missing}")
+        return
+    _pass("brain manifest ⊆ tutor manifest — composed-source checks never lose brain content")
+
+
 # ── 1) الدستور موجود ومكتمل ─────────────────────────────────────────────────
 def check_constitution_document() -> None:
     doc = _read(".memory/pedagogical_os.md")
@@ -260,7 +292,7 @@ def check_inert_boolean_only() -> None:
 def check_progressive_disclosure() -> None:
     """القانون الرابع «التلميح قبل الحل» مُنفَّذ بنيوياً (roadmap §7: صفر كشف)."""
     client = _read_monolith_tutor()  # D-166: chat_with_agent في mixin مستخرَج
-    brain = _read(BRAIN_PATH)  # D-163: البُناة الرمزية تعيش في العقل المستخرَج
+    brain = _read_brain()  # D-163: البُناة الرمزية تعيش في العقل المستخرَج
     ok = True
     if "فاحتمال الحادثة A هو {same} من كل {total}" in client + brain:
         _fail("symbolic reveal still prints the final ratio (answer dump)")
@@ -288,7 +320,7 @@ def check_redaction_neutral_dedup() -> None:
     """حارس التكرار محايد لتحويل الحجب (المحفوظ «؟» ≡ المبثوث بالأرقام) + سلسلة بدائل."""
     # D-166: سلاسل البدائل تعيش في mixins مستخرَجة — نقرأ المصدر المُركَّب عبر الـ manifest.
     tutor = _read_monolith_tutor()
-    brain = _read(BRAIN_PATH)  # D-163: تعريف _norm_for_dedup في العقل المستخرَج
+    brain = _read_brain()  # D-163: تعريف _norm_for_dedup في العقل المستخرَج
     dm = _read("app/services/skills/dialogue_manager_skill.py")
     ok = True
     if 'r"[\\d؟?]+"' not in brain:
@@ -306,7 +338,7 @@ def check_redaction_neutral_dedup() -> None:
 
 def check_math_display_integrity() -> None:
     """الصيغ الحتمية LaTeX (LTR-معزولة — لا بعثرة bidi) + لا نسخ مضاعف على الموبايل."""
-    brain = _read(BRAIN_PATH)  # D-163: تعريف _fmt_comb في العقل المستخرَج
+    brain = _read_brain()  # D-163: تعريف _fmt_comb في العقل المستخرَج
     css = _read("frontend/app/globals.css")
     ok = True
     if "C_{{{c}}}^{{{k}}}" not in brain:
@@ -343,7 +375,7 @@ def check_probability_tutor_port() -> None:
 
 def check_numeric_answer_verification() -> None:
     """ISS-122 (D-155): الحقيقة الرمزية تحكم إجابة الطالب الرقمية («هل هي 14 من 165»)."""
-    brain = _read(BRAIN_PATH)  # D-163: دوال التحقق الرمزي في العقل المستخرَج
+    brain = _read_brain()  # D-163: دوال التحقق الرمزي في العقل المستخرَج
     tutor = _read_monolith_tutor()
     ok = True
     if "def _verify_numeric_answer(" not in brain:
@@ -407,7 +439,7 @@ def check_structured_kc_progress() -> None:
         if symbol not in schema:
             _fail(f"kc_progress_schema is missing {symbol!r} (D-159 WP-A)")
             ok = False
-    brain = _read(BRAIN_PATH)  # D-163: _cognitive_turn في العقل المستخرَج
+    brain = _read_brain()  # D-163: _cognitive_turn في العقل المستخرَج
     turn = brain.split("def _cognitive_turn(", 1)
     body = turn[1][:9000] if len(turn) == 2 else ""
     if "parse_kc_entry" not in body or "make_pending" not in body:
@@ -466,7 +498,7 @@ def check_misconception_graph_edges() -> None:
 def check_multi_kc_engine() -> None:
     """D-159 (WP-E): محرّك الدور متعدد العُقد — عقدة الحادثة B فوق الحالة الدائمة."""
     ok = True
-    brain = _read(BRAIN_PATH)  # D-163: محرّك الدور متعدد العُقد في العقل المستخرَج
+    brain = _read_brain()  # D-163: محرّك الدور متعدد العُقد في العقل المستخرَج
     for symbol in ("_KC_PROB_B", "def _cognitive_turn_event_b", "def _load_canonical_parity"):
         if symbol not in brain:
             _fail(f"multi-KC engine is missing {symbol!r} (D-159 WP-E)")
@@ -488,7 +520,7 @@ def check_step_explanation_teaches() -> None:
     العالق يتعلّم جزئية ملموسة لم تُعرَض (لا كشف P(A) — M6/M8).
     """
     ok = True
-    brain = _read(BRAIN_PATH)  # D-163: كاشف الاشتقاق + _cognitive_turn في العقل المستخرَج
+    brain = _read_brain()  # D-163: كاشف الاشتقاق + _cognitive_turn في العقل المستخرَج
     if "def _detect_step_explanation(" not in brain:
         _fail("missing data-driven _detect_step_explanation (D-160 ISS-126)")
         ok = False
@@ -519,7 +551,7 @@ def check_exercise_purpose_answered() -> None:
     (أ) purpose قبل probe في العقلين، (ب) question-escape قبل probe في العقلين.
     """
     ok = True
-    brain = _read(BRAIN_PATH)
+    brain = _read_brain()
     port = _read("microservices/orchestrator_service/src/services/overmind/probability_tutor.py")
 
     turn = brain.split("def _cognitive_turn(", 1)
@@ -567,7 +599,7 @@ def check_question_never_verified_as_answer() -> None:
     قبل S2 + مفهوم `combinations` في السجلّ، (د) السؤال وسط الحوار يهرب من S1.
     """
     ok = True
-    brain = _read(BRAIN_PATH)  # D-163: بوّابة الفعل الكلامي + _cognitive_turn في العقل
+    brain = _read_brain()  # D-163: بوّابة الفعل الكلامي + _cognitive_turn في العقل
     if "def _is_question_not_answer(" not in brain:
         _fail("missing speech-act gate _is_question_not_answer (D-162 ISS-128)")
         ok = False
@@ -612,7 +644,7 @@ def check_split_brain_parity() -> None:
     """
     ok = True
     client = _read(CLIENT_PATH)
-    brain = _read(BRAIN_PATH)
+    brain = _read_brain()
     port = _read("microservices/orchestrator_service/src/services/overmind/probability_tutor.py")
     # D-163: العقل مستهلَك حياً بالوراثة — إزالتها تجعله ZOMBIE فوراً.
     # D-164: قائمة الـ bases قد تُلَفّ على أسطر (ruff) — regex يتسامح مع المسافات/الأسطر
@@ -684,6 +716,7 @@ def main() -> None:
         "D-155/ISS-122 + D-160/ISS-126 + D-162/ISS-128) ==="
     )
     check_constitution_document()
+    check_brain_manifest_subset_of_tutor()
     check_core_components_exist()
     check_questions_only_extraction()
     check_latex_aware_denominator_gate()

@@ -77,6 +77,7 @@ jobs:
           _tutor_files = [
               _base / "orchestrator_client.py",
               pathlib.Path("app/services/skills/probability_tutor_brain.py"),
+              *sorted(pathlib.Path("app/services/skills/probability_brain").glob("*.py")),
               *sorted((_base / "orchestrator").glob("*.py")),
           ]
           src = "\n".join(p.read_text() for p in _tutor_files)

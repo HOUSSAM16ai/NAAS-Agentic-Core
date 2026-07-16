@@ -140,5 +140,7 @@ class TestProbabilityConfusionReEmitsVisual:
     def test_generic_confusion_reextracts_from_history(self):
         # D-117 Fix 4: حيرة عامة + history احتمالات ⇒ إعادة تحليل بنص الـ history
         # D-164: هذا المنطق يعيش داخل `_build_calculated_ui` في ProbabilityUIMixin الآن.
-        assert "_is_deep_pedagogy and history_messages" in TUTOR_SRC
+        # ISS-131 (D-169 — قاعدة D-102): الاستخراج صار من حوار الطالب/المساعد حصراً
+        # (`_dialogue_history` — رسائل system لا تدخل الكاشف).
+        assert "_is_deep_pedagogy and _dialogue_history" in TUTOR_SRC
         assert "ProbabilityInput(question=_history_context" in TUTOR_SRC

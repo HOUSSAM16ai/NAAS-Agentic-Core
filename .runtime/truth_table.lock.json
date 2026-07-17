@@ -1,5 +1,5 @@
 {
-  "branch": "claude/code-complexity-refactor-paxhds",
+  "branch": "claude/project-refactor-microservices-a9unyi",
   "components": [
     {
       "agreed": true,
@@ -11,8 +11,8 @@
       "id": "local_graph",
       "importer_count": 8,
       "importers_sample": [
-        "app/infrastructure/clients/orchestrator/chat_turn.py",
         "app/infrastructure/clients/orchestrator/local_fallback.py",
+        "app/infrastructure/clients/orchestrator/turn_preempts_deterministic.py",
         "app/kernel.py",
         "app/services/skills/bac_exercise_skill.py",
         "scripts/gitpod_live_debug.py",
@@ -322,6 +322,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-07-14T14:07:12.267421+00:00",
+  "generated_at_utc": "2026-07-17T23:20:29.467523+00:00",
   "schema_version": 1
 }

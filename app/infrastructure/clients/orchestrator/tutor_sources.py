@@ -35,7 +35,18 @@ TUTOR_SOURCE_FILES: tuple[str, ...] = (
     "app/infrastructure/clients/orchestrator/probability_ui.py",  # D-164 Slice 3
     "app/infrastructure/clients/orchestrator/local_fallback.py",  # D-166 Slice 4
     "app/infrastructure/clients/orchestrator/socratic_evaluation.py",  # D-166 Slice 5
-    "app/infrastructure/clients/orchestrator/chat_turn.py",  # D-166 Slice 6
+    # D-170: تفكيك chat_with_agent إلى مراحل sub-generator — ملفات المراحل تسبق
+    # chat_turn.py بترتيب التنفيذ نفسه. الترتيب هو العقد: اختبارات الترتيب النصّي
+    # تقارن مواقع أولى الظهورات عبر المصدر المُركَّب — مراحل الـ preempt يجب أن
+    # تظهر قبل سلك HTTP/الـ payload الذي بقي في chat_turn.py.
+    # تنبيه D-164: ممنوع أقواس داخل هذه الـ tuple — قارئ البوّابة النصي يتوقف عند أول قوس إغلاق.
+    "app/infrastructure/clients/orchestrator/turn_context.py",  # D-170 TurnContext
+    "app/infrastructure/clients/orchestrator/turn_preempts_deterministic.py",  # D-170 A1
+    "app/infrastructure/clients/orchestrator/turn_preempts_concept.py",  # D-170 A2
+    "app/infrastructure/clients/orchestrator/turn_preempts_cognitive.py",  # D-170 A2
+    "app/infrastructure/clients/orchestrator/turn_preempts_delivery.py",  # D-170 A3
+    "app/infrastructure/clients/orchestrator/turn_fallback.py",  # D-170 A3
+    "app/infrastructure/clients/orchestrator/chat_turn.py",  # D-166 Slice 6 → D-170 مُنسِّق
 )
 
 

@@ -46,19 +46,28 @@ class TestPreemptionOrder:
     """RC-2: الاسترجاع المُفهرَس يجب أن يسبق الواجهة المحسوبة في chat_with_agent."""
 
     def test_indexed_match_precedes_calculated_ui_in_source(self) -> None:
+        # D-170: chat_with_agent صار مُنسِّقاً يمشي مراحل sub-generator بالترتيب —
+        # عقد ISS-110 يعيش الآن في ترتيب tuple المراحل + محتوى كل مرحلة.
         source = inspect.getsource(OrchestratorClient.chat_with_agent)
-        # نبحث عن مواقع الاستدعاء الفعلية (self._...) لا ذكر الأسماء في التعليقات.
-        idx_indexed = source.find("self._has_indexed_match(")
-        idx_calculated = source.find("self._build_calculated_ui(")
-        assert idx_indexed != -1, "indexed retrieval preempt missing from chat_with_agent"
-        assert idx_calculated != -1, "calculated UI block missing from chat_with_agent"
+        idx_indexed = source.find("self._stage_indexed_retrieval")
+        idx_calculated = source.find("self._stage_calculated_ui")
+        assert idx_indexed != -1, "indexed retrieval stage missing from chat_with_agent dispatch"
+        assert idx_calculated != -1, "calculated UI stage missing from chat_with_agent dispatch"
         assert idx_indexed < idx_calculated, (
-            "ISS-110 REGRESSION: _build_calculated_ui runs before _has_indexed_match — "
-            "explicit exercise requests will be hijacked by the probability UI again."
+            "ISS-110 REGRESSION: _stage_calculated_ui dispatched before "
+            "_stage_indexed_retrieval — explicit exercise requests will be "
+            "hijacked by the probability UI again."
         )
+        # الاستدعاءات الفعلية تعيش داخل المرحلتين (لا في التعليقات).
+        assert "self._has_indexed_match(" in inspect.getsource(
+            OrchestratorClient._stage_indexed_retrieval
+        ), "indexed retrieval call missing from its stage"
+        assert "self._build_calculated_ui(" in inspect.getsource(
+            OrchestratorClient._stage_calculated_ui
+        ), "calculated UI call missing from its stage"
 
     def test_iss110_comment_anchor_present(self) -> None:
-        source = inspect.getsource(OrchestratorClient.chat_with_agent)
+        source = inspect.getsource(OrchestratorClient._stage_indexed_retrieval)
         assert "ISS-110" in source
 
 

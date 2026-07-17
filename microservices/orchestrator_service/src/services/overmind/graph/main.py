@@ -115,6 +115,13 @@ class AgentState(TypedDict):
     # D-115: درجة سُلّم الدعم (1..5، افتراض 5/محجوب) — تحكم عمق التلميح السقراطي
     # في SynthesizerNode (لا كشف، لا مثال موازٍ). يَعكِس D-114 (worked_example_directive مُزال).
     support_level: int
+    # D-171 (ISS-132): هوية الإدمن المشتقة من JWT الموقَّع عبر `_coerce_admin_state`
+    # (least-privilege + fail-closed — تُحقن فقط حين `_is_admin_payload`). LangGraph
+    # يُسقط المفاتيح غير المُصرَّحة، فبدون تصريحها هنا كانت تسقط قبل وصول
+    # `AdminAgentNode` → `ValidateAccessNode` ⇒ الأداة تُنفَّذ ثم تُرفض ADMIN_ACCESS_DENIED.
+    is_admin: bool
+    user_role: str
+    scope: str
 
 
 ADMIN_METRIC_TRIGGERS = {

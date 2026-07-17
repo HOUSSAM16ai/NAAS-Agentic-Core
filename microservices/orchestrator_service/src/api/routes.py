@@ -489,6 +489,11 @@ async def chat_messages_endpoint(
     user_id, _jwt_payload = _decode_auth_payload_or_401(authorization)
     context["user_id"] = user_id
 
+    # D-171 (ISS-132): حمولة الإدمن تُمرَّر للمحرك **فقط** حين تحمل الـ JWT الموقَّعة
+    # claim إدارياً (fail-closed — المستخدم العادي يبقى بلا أي مفاتيح إدارة في الحالة).
+    # كانت `_jwt_payload` تُتجاهَل هنا فتُنفَّذ الأداة ثم يرفضها ValidateAccessNode.
+    _admin_payload = _jwt_payload if _is_admin_payload(_jwt_payload) else None
+
     chat_scope = "customer"
 
     requested_conversation_id = _safe_conversation_id(payload.get("conversation_id"))
@@ -520,6 +525,7 @@ async def chat_messages_endpoint(
             objective,
             context,
             app_graph=getattr(request.app.state, "app_graph", None),
+            admin_payload=_admin_payload,  # D-171 (ISS-132)
             history_messages=history_messages,
         )
         # ISS-STREAM-001: تجميع كل الـ deltas للحفظ الصحيح.

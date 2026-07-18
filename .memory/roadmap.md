@@ -227,3 +227,10 @@ Formalized `PedagogicalPolicyEngine` orchestrating `DialogueManagerSkill` throug
   `probability_tutor_brain.py` **2,441 → جذر تركيب ~55 سطراً + 5 mixins متجاورة** خلف
   مانيفست `brain_sources.BRAIN_SOURCE_FILES` (فحص CI: `BRAIN ⊆ TUTOR`). قاعدة
   **monkeypatch late-binding** (رقِّع وحدة المستدعي) صارت عقداً دائماً — §6.141.
+- **تفكيك التعقيد اكتمل (2026-07-18 — D-170، §6.143)**: آخر الملفات الضخمة فُكِّكت —
+  `chat_with_agent` **1,926 → 440 سطراً** (13 مرحلة sub-generator فوق `TurnContext`،
+  6 وحدات turn_* مُضافة لـ `TUTOR_SOURCE_FILES`)، `local_graph.py` **1,769 → 1,193**
+  (مُطهِّرات + شرح مُستخرَجان + re-export خلفي)، `probability_skill.py` **1,685 → 1,462**
+  (نماذج Pydantic → `probability_models.py`). النقل حرفي، سلوك مطابق بالبايت.
+  **ISS-132 مُغلَقة (D-171)**: هوية الإدمن تُصرَّح في `AgentState` + تُمرَّر مُسوَّرةً بـ
+  `_is_admin_payload` فتعبر الرسم الـ13-node — أدوات الإدمن تعمل عبر `/api/chat/messages`.

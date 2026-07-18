@@ -14,10 +14,10 @@
         "app/infrastructure/clients/orchestrator/local_fallback.py",
         "app/infrastructure/clients/orchestrator/turn_preempts_deterministic.py",
         "app/kernel.py",
+        "app/services/chat/local_graph_explanation.py",
         "app/services/skills/bac_exercise_skill.py",
         "scripts/gitpod_live_debug.py",
         "tests/services/test_iss081_answer_quality_wiring.py",
-        "tests/services/test_skills_doctrine_d071.py",
         "tests/telemetry/test_distributed_tracing.py"
       ],
       "name": "LangGraph local engine",
@@ -59,7 +59,7 @@
         "app/middleware/observability/observability_middleware.py",
         "app/services/boundaries/observability_boundary_service.py",
         "app/services/chat/local_graph.py",
-        "app/services/skills/answer_redaction_skill.py"
+        "app/services/chat/local_graph_explanation.py"
       ],
       "name": "Unified Observability service",
       "notes": "Wired into kernel startup; consumed by every HTTP request.",
@@ -322,6 +322,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-07-17T23:20:29.467523+00:00",
+  "generated_at_utc": "2026-07-18T13:59:59.518276+00:00",
   "schema_version": 1
 }

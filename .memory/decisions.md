@@ -5,6 +5,45 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-170/D-171 · تفكيك الملفات الضخمة الأخيرة + إغلاق ISS-132 (2026-07-18)
+**السياق:** بعد سلسلة D-163→D-168 (تفكيك God-files عبر مانيفستات + mixins حرفية)، بقيت
+أربعة ملفات ضخمة تُمثّل «كارثة التعقيد» المتبقية، وبقيت ISS-132 مفتوحة (أدوات الإدمن عبر
+الرسم الـ13-node مرفوضة رغم تنفيذها). قرار المالك: تطبيق SOLID/KISS/DRY/YAGNI بعمق +
+الانتقال العميق للخدمات المصغرة + حل split-brain + CI أخضر + E2E حي كامل.
+
+**D-170 — تفكيك التعقيد (النقل حرفي، سلوك مطابق بالبايت):**
+1. **`chat_with_agent` God-method: 1,926→440 سطراً.** الدالة async-generator (~1,030 سطراً)
+   صارت مُنسِّقاً رقيقاً يمشي **13 مرحلة sub-generator** فوق `TurnContext` مشترك (عقد صريح
+   `turn_complete` — الترتيب محفوظ، الكتل منقولة سليمة): `turn_preempts_deterministic`
+   (بوابة السياسة D-144/D-145/D-158 + تحية + سؤال مرقّم + حسابي D-143) + `turn_preempts_concept`
+   (مصفوفة تصعيدية D-138 + تعريفي D-132 + مثال D-136 + إصغاء سقراطي D-130 + استرجاع مُفهرَس D-101)
+   + `turn_preempts_cognitive` (مخرج طوارئ + محركات معرفية D-124→D-135/D-155/D-160) +
+   `turn_preempts_delivery` (واجهة محسوبة MODE_A/B V38.0 + شرح بسياق D-052/D-103) + `turn_fallback`
+   (سلسلة fallback محلية محروسة — REQUIRE_ORCHESTRATOR=0 فقط). **6 ملفات + turn_context مُضافة
+   لـ `TUTOR_SOURCE_FILES` قبل chat_turn.py** (الترتيب = العقد: اختبارات الترتيب النصّي تقارن
+   مواقع أولى الظهورات عبر المصدر المُركَّب). **إصلاح بق مرافق:** ظلّ `obs = PolicyObservation(...)`
+   كان يقتل كل `obs.end_span` اللاحقة صامتاً — أُعيد تسميته `policy_obs` فاستُعيد الـ telemetry.
+2. **`local_graph.py`: 1,769→1,193 سطراً.** استخراج حرفي لقسمين متماسكين: `local_graph_sanitizers.py`
+   (مُطهِّرات الردّ — string ops نقية، صفر تبعية) + `local_graph_explanation.py` (شرح التمرين
+   بسياق + ميزانيات الأسئلة D-053، `_format_history` عبر late-binding D-168). re-export خلفي كامل —
+   كل مستدعٍ داخلي + خارجي (local_fallback / bac_exercise_skill) بلا تغيير. قيود البوّابات
+   (D-071 doctrine anchor + D-073 answer_quality + D-013 greeting patterns) بقيت في local_graph.py.
+3. **`probability_skill.py`: 1,685→1,462 سطراً.** الفئات الـ11 (ProbabilityInput→ProbabilityFailure)
+   + `DOCTRINE_VERSION` → `probability_models.py` (فصل العقد عن المحرك، SRP) + re-export خلفي.
+
+**D-171 (يُغلق ISS-132) — هوية الإدمن تعبر الرسم:** جذران بنيويان منذ D-025 (كُشِفا بـ ISS-131):
+(1) `AgentState` لم يُصرّح `is_admin/user_role/scope` — LangGraph يُسقط المفاتيح غير المُصرَّحة فلا
+تصل عبر `AdminAgentNode`؛ (2) handler `/api/chat/messages` تجاهل `_jwt_payload` ولم يُمرّر
+`admin_payload`. الإصلاح: تصريح الحقول الثلاثة + تمرير الحمولة **مُسوَّرةً بـ `_is_admin_payload`**
+(least-privilege + fail-closed — نمط D-169: نقل حقيقة من JWT موقَّع، لا تصعيد). آلية الدمج
+(`_coerce_admin_state`/`_merge_admin_inputs`) كانت موجودة لكن غير مُستدعاة على HTTP. الأداة تعبر
+`ValidateAccessNode` الآن (كانت تُنفَّذ ثم تُرفض ADMIN_ACCESS_DENIED). المستخدم العادي يبقى بلا أي
+مفتاح إدارة في الحالة.
+
+**التحقق:** كل بوّابات fitness خضراء (pedagogical_os 24 فحصاً + skills_doctrine + runtime_truth
+lock مُحدَّث) · اختبارات services (1,585) + microservices + 10 اختبارات D-171 جديدة · مواءمة
+اختبار ISS-110 للعقد الجديد (tuple order + call-sites داخل المراحل) — لا تعطيل (D-105). CLAUDE.md §6.143.
+
 ## D-142 · Stateful Pedagogical Progression via TutorState (2026-06-27)
 **السياق:** المستخدم أبلغ عن سلوك الكارثة حيث يقوم مساعد الذكاء الاصطناعي بتكرار نفس الأسئلة وإعادة الشرح الحرفي والضياع بين المفاهيم والانجراف في نوايا التوجيه. كان مسار `local_graph.py` يستند إلى التوجيه الساذج (regex intent) وإعادة بناء الحالة من نافذة السجل.
 **التغييرات:**

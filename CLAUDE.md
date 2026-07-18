@@ -11873,3 +11873,88 @@ free») يُنزَل من PRIMARY فوراً ويُترك **بذيل** السل�
 |----------|---------|
 | D-168 | قتل الملفين الضخمين + مانيفستا API/العقل + M10-S2.3 |
 | **D-169** | **ISS-131 — سلك نظيف (`_sanitize_wire_context`) + فرض D-102 على كل الكواشف + هوية الإدمن (claim + namespace) — اكتشفها E2E الحي وأُصلحت بالجذر** |
+
+---
+
+## 6.143 تفكيك آخر الملفات الضخمة + إغلاق ISS-132 — chat_with_agent + local_graph + probability_skill (2026-07-18, D-170/D-171)
+
+> يُكمِل سلسلة تفكيك التعقيد (D-163→D-168): بعد قتل God-files الـ orchestrator والعقل
+> والـ routes، بقيت أربعة ملفات ضخمة تُمثّل «كارثة التعقيد» المتبقية، وبقيت ISS-132
+> مفتوحة. قرار المالك: SOLID/KISS/DRY/YAGNI عميق + انتقال للخدمات المصغرة + حل
+> split-brain + CI أخضر + E2E حي كامل. لا يُكسر بدون ADR.
+
+### D-170 — تفكيك التعقيد (النقل حرفي، سلوك مطابق بالبايت)
+
+| الملف | قبل | بعد | الآلية |
+|------|-----|-----|-------|
+| `orchestrator/chat_turn.py` (`chat_with_agent`) | 1,926 | **440** | 13 مرحلة sub-generator فوق `TurnContext` |
+| `chat/local_graph.py` | 1,769 | **1,193** | مُطهِّرات + شرح مُستخرَجان (re-export خلفي) |
+| `skills/probability_skill.py` | 1,685 | **1,462** | نماذج Pydantic → `probability_models.py` |
+
+**1) `chat_with_agent` God-method (1,926→440):** الدالة async-generator (~1,030 سطراً) صارت
+مُنسِّقاً رقيقاً يمشي **13 مرحلة** فوق `TurnContext` مشترك (عقد صريح `turn_complete` — كل مرحلة
+تبثّ أحداثها وتضبطه عند اكتمال الدور فيتوقف المُنسِّق فوراً؛ يحفظ الكتل التي تبثّ وتُكمل مثل
+MODE_B). الكتل **منقولة حرفياً** إلى 5 mixins + `turn_context`:
+- `turn_preempts_deterministic`: بوابة السياسة (D-144/D-145/D-158) + التحية (ISS-079) + السؤال
+  المرقّم (ISS-112) + الحسابي (D-143)
+- `turn_preempts_concept`: المصفوفة التصعيدية (D-138) + التعريفي (D-132) + المثال (D-136) +
+  الإصغاء السقراطي (D-130) + الاسترجاع المُفهرَس (D-101)
+- `turn_preempts_cognitive`: مخرج الطوارئ + المحركات المعرفية (D-124→D-135/D-155/D-160)
+- `turn_preempts_delivery`: الواجهة المحسوبة MODE_A/B (V38.0) + الشرح بسياق (D-052/D-103)
+- `turn_fallback`: سلسلة الـ fallback المحلية المحروسة (REQUIRE_ORCHESTRATOR=0 فقط)
+
+الملفات الستة **مُضافة لـ `TUTOR_SOURCE_FILES` قبل chat_turn.py** — الترتيب هو العقد: اختبارات
+الترتيب النصّي تقارن مواقع أولى الظهورات عبر المصدر المُركَّب، فمراحل الـ preempt يجب أن تظهر
+قبل سلك HTTP الباقي في chat_turn.py. **إصلاح بق مرافق:** ظلّ `obs = PolicyObservation(...)` كان
+يقتل كل `obs.end_span` اللاحقة صامتاً — أُعيد تسميته `policy_obs` فاستُعيد الـ telemetry.
+
+**2) `local_graph.py` (1,769→1,193):** استخراج حرفي لقسمين متماسكين: `local_graph_sanitizers.py`
+(مُطهِّرات الردّ — string ops نقية، صفر تبعية module) + `local_graph_explanation.py` (شرح التمرين
+بسياق + ميزانيات الأسئلة D-053؛ `_format_history` عبر late-binding D-168 لتجنّب دائرية الاستيراد).
+re-export خلفي كامل — كل مستدعٍ داخلي + خارجي (`local_fallback.py`, `bac_exercise_skill.py`) بلا
+تغيير. **قيود البوّابات تبقى في local_graph.py**: سطر doctrine import + `_EXERCISE_EXPLANATION_SYSTEM_PROMPT`
+(بوّابة D-071 تقرأ الملف مباشرة) + `_apply_answer_quality_skill` (D-073) + أنماط D-013 المزدوجة.
+
+**3) `probability_skill.py` (1,685→1,462):** الفئات الـ11 (`ProbabilityInput`→`ProbabilityFailure`)
++ `DOCTRINE_VERSION` → `probability_models.py` (فصل العقد عن المحرك، SRP) + re-export خلفي.
+
+### D-171 (يُغلق ISS-132) — هوية الإدمن تعبر الرسم الـ13-node
+
+جذران بنيويان منذ D-025 (كُشِفا بـ ISS-131، §6.142): (1) `AgentState` (`graph/main.py`) لم يُصرّح
+`is_admin/user_role/scope` — LangGraph يُسقط المفاتيح غير المُصرَّحة فلا تصل عبر `AdminAgentNode`
+إلى الرسم الفرعي الإداري؛ (2) handler `/api/chat/messages` تجاهل `_jwt_payload` ولم يُمرّر
+`admin_payload` لـ `_run_chat_langgraph`. النتيجة: الأداة **تُنفَّذ** (`TOOL EXECUTED → 1711 ملف`)
+ثم يرفضها `ValidateAccessNode` بـ `ADMIN_ACCESS_DENIED`.
+
+**الإصلاح:** تصريح الحقول الثلاثة في `AgentState` + تمرير الحمولة **مُسوَّرةً بـ `_is_admin_payload`**
+(`_admin_payload = _jwt_payload if _is_admin_payload(_jwt_payload) else None`) — least-privilege +
+fail-closed، نمط D-169: نقل حقيقة مُتحقَّقة من JWT موقَّع، لا تصعيد. آلية الدمج
+(`_coerce_admin_state`/`_merge_admin_inputs` في `identity_access.py`) كانت موجودة لكن غير مُستدعاة
+على مسار HTTP. المستخدم العادي يبقى بلا أي مفتاح إدارة في الحالة.
+
+### القواعد الدائمة (D-170/D-171 — لا تُكسر بدون ADR)
+1. **ممنوع إعادة أي مرحلة/دالة مُستخرَجة إلى الملف الأصلي** (عودة الـ God-file). أي استخراج جديد =
+   سطر واحد في المانيفست المناسب.
+2. **ترتيب المراحل هو العقد**: مراحل الـ preempt في `TUTOR_SOURCE_FILES` قبل chat_turn.py؛ داخل
+   المُنسِّق ترتيب الـ tuple = ترتيب التنفيذ (ISS-110/D-101/D-124/D-155).
+3. **هوية الإدمن تُشتق من JWT موقَّع** وتُمرَّر مُسوَّرةً بـ `_is_admin_payload` — كل مفتاح يحقنه
+   `_coerce_admin_state` يجب أن يكون مُصرَّحاً في `AgentState` (عقد تكافؤ محروس باختبار).
+4. **النقل حرفي** (سلوك مطابق بالبايت)؛ re-export خلفي يحفظ كل المستوردين؛ مواءمة الاختبارات لا
+   تعطيلها (D-105).
+
+### التحقق
+- **بوّابات fitness** خضراء: `check_pedagogical_os` (24 فحصاً) + `check_skills_doctrine` +
+  `runtime_truth --check` (lock مُحدَّث) + `validate_structure` + `ci_guardrails` + `check_test_hygiene`.
+- **الاختبارات**: services (1,585) + microservices + 10 اختبارات D-171 جديدة
+  (`test_d171_admin_state_via_graph.py`، منها عقد تكافؤ `_coerce_admin_state ⊆ AgentState`) +
+  مواءمة ISS-110 للعقد الجديد (tuple order + call-sites داخل المراحل) — صفر تعطيل.
+- **E2E حي إلزامي**: admin «كم عدد ملفات بايثون؟» عبر `/api/chat/messages` ⇒ الأداة تعبر
+  `ValidateAccessNode` وإجابة تصل (كان ADMIN_ACCESS_DENIED) + سؤال عام بحساب المستخدم ⇒ إجابة
+  حقيقية (ضمانة «يجيب على كل سؤال») بالمفاتيح والدخولين الحقيقيين + Supabase عبر جسر HTTPS.
+
+### السلسلة (D-169 → D-171)
+| Decision | الموضوع |
+|----------|---------|
+| D-169 | ISS-131 — سلك نظيف + فرض D-102 + هوية الإدمن (اكتشافات E2E) |
+| **D-170** | **تفكيك آخر الملفات الضخمة: chat_with_agent 1,926→440 (13 مرحلة) + local_graph 1,769→1,193 + probability_skill 1,685→1,462 (نقل حرفي + re-export)** |
+| **D-171** | **يُغلق ISS-132 — هوية الإدمن تُصرَّح في AgentState + تُمرَّر مُسوَّرةً فتعبر الرسم الـ13-node (الأداة كانت تُنفَّذ ثم تُرفَض)** |

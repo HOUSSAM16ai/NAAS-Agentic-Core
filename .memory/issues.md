@@ -4731,9 +4731,18 @@ D-163) كان يفتقر الكاشف والبانى ⇒ «كيف حسبنا 4»
 تدخل كواشف الاحتمالات — 3 مواقع) + عبور معرّف فضاء admin لفضاء العميل + service JWT بلا
 claim إداري. **الإصلاح:** D-169 (5 إصلاحات جذرية + 11 اختباراً). التفصيل: CLAUDE.md §6.142.
 
-## ISS-132 (2026-07-16) — أدوات الإدمن عبر /api/chat/messages: الحالة لا تعبر الرسم — مفتوح (يتطلب ADR)
+## ISS-132 (2026-07-16) — أدوات الإدمن عبر /api/chat/messages: الحالة لا تعبر الرسم — ✅ مُغلَق (D-171، 2026-07-18)
 
-**التشخيص الكامل (حي):** الأداة تُنفَّذ (`TOOL EXECUTED → عدد ملفات بايثون: 1711`) لكن
+**الحل (D-171 — §6.143):** نُفِّذ الإصلاح المطلوب أدناه بالضبط: (1) تصريح
+`is_admin/user_role/scope` في `AgentState` (`graph/main.py`) فلا تُسقطها LangGraph؛
+(2) تمرير `admin_payload=_admin_payload` في handler `/api/chat/messages` **مُسوَّراً بـ
+`_is_admin_payload(_jwt_payload)`** (least-privilege + fail-closed — نمط D-169). آلية الدمج
+`_coerce_admin_state`/`_merge_admin_inputs` كانت موجودة لكن غير مُستدعاة على HTTP. الأداة تعبر
+`ValidateAccessNode` الآن؛ المستخدم العادي بلا أي مفتاح إدارة. 10 اختبارات regression في
+`test_d171_admin_state_via_graph.py` (منها عقد تكافؤ `_coerce_admin_state ⊆ AgentState`).
+
+---
+**التشخيص الأصلي (حي):** الأداة تُنفَّذ (`TOOL EXECUTED → عدد ملفات بايثون: 1711`) لكن
 `ValidateAccessNode` يرفض (`ADMIN_ACCESS_DENIED`) لأن: (1) `AgentState` (الرسم الـ13-node)
 لا يُصرّح `is_admin/user_role/scope` — LangGraph يُسقط المفاتيح غير المُصرَّحة فلا تصل
 للـ sub-graph؛ (2) handler `/api/chat/messages` يتجاهل `_jwt_payload` ولا يمرّر

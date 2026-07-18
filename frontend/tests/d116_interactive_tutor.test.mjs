@@ -19,10 +19,14 @@ const read = (...p) => readFileSync(resolve(__dirname, '..', ...p), 'utf-8');
 
 const fes = read('app', 'components', 'generative', 'FullExerciseStory.jsx');
 const css = read('app', 'globals.css');
-const skill = readFileSync(
-    resolve(__dirname, '..', '..', 'app', 'services', 'skills', 'probability_skill.py'),
-    'utf-8',
-);
+// D-170 Stage C: عقود Pydantic (ExerciseStep…) انتقلت إلى probability_models.py
+// (فصل العقد عن المحرك، SRP + re-export خلفي). نقرأ المصدر المُركَّب — المحرك
+// (`_build_full_exercise_story`) في probability_skill والنماذج في probability_models.
+const skillRoot = resolve(__dirname, '..', '..', 'app', 'services', 'skills');
+const skill =
+    readFileSync(resolve(skillRoot, 'probability_skill.py'), 'utf-8') +
+    '\n' +
+    readFileSync(resolve(skillRoot, 'probability_models.py'), 'utf-8');
 
 let failed = 0;
 const check = (name, cond) => {

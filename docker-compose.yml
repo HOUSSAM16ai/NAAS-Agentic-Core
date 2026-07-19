@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ==========================================
   # Infrastructure Services
@@ -210,6 +208,10 @@ services:
       - "8000:8000"  # Takes over the primary port
     environment:
       - ENVIRONMENT=production
+      # R0.1 (D-172): production config must be explicit — '*' is rejected by the
+      # settings validators under ENVIRONMENT=production (a real fail-on-first-run).
+      - BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:8000
+      - ALLOWED_HOSTS=localhost,127.0.0.1,api-gateway,orchestrator-service,frontend,planning-agent,research-agent,reasoning-agent,conversation-service
       - SECRET_KEY=${SECRET_KEY:-super_secret_key_change_in_production}
       - PLANNING_AGENT_URL=http://planning-agent:8001
       - MEMORY_AGENT_URL=http://memory-agent:8002
@@ -248,8 +250,12 @@ services:
       - SERVICE_NAME=planning-agent
       - SERVICE_VERSION=1.0.0
       - SECRET_KEY=${SECRET_KEY:-super_secret_key_change_in_production}
-      - PLANNING_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-planning:5432/planning_db?options=-c%20search_path%3Dplanning
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-planning:5432/planning_db?options=-c%20search_path%3Dplanning
+      # R0.1 (D-172): planning-agent uses create_async_engine → requires the
+      # asyncpg driver. Bare postgresql:// loads psycopg2 (sync) and crashes at
+      # boot ("asyncio extension requires an async driver"). Documented pattern
+      # (ISS-038-B) — the compose URLs were still on the sync scheme.
+      - PLANNING_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-planning:5432/planning_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-planning:5432/planning_db
     command: uvicorn microservices.planning_agent.main:app --host 0.0.0.0 --port 8001
     networks:
       - cogniforge-network
@@ -352,10 +358,25 @@ services:
       - "8006:8006"
     environment:
       - SERVICE_NAME=orchestrator-service
+      # R0.1 (D-172): the image runs as non-root `appuser` with no writable home,
+      # so DSPy/llama-index cache writes to $HOME crash graph compile
+      # ("Permission denied: '/home/appuser'"). Point HOME/caches at /tmp.
+      - HOME=/tmp
+      - XDG_CACHE_HOME=/tmp/.cache
+      - ENVIRONMENT=production
+      # R0.1 (D-172): explicit production CORS/hosts (validators reject '*') +
+      # a strong ADMIN_TOOL_API_KEY (required in production/staging).
+      - BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:8000
+      - ALLOWED_HOSTS=localhost,127.0.0.1,api-gateway,orchestrator-service,frontend,planning-agent,research-agent,reasoning-agent,conversation-service
+      - ADMIN_TOOL_API_KEY=${ADMIN_TOOL_API_KEY:-cogniforge-admin-tool-key-change-me-in-real-prod}
       - SECRET_KEY=${SECRET_KEY:-super_secret_key_change_in_production}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
-      - ORCHESTRATOR_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-orchestrator:5432/orchestrator_db
+      # R0.1/R0.2 (D-172): asyncpg for the async engine (bare postgresql:// loads
+      # psycopg2, which isn't installed → SQLModel init fails → checkpointer
+      # silently degrades to MemorySaver). sslmode=disable for the local no-SSL
+      # Postgres; _build_psycopg_conninfo converts this to psycopg for the checkpointer.
+      - ORCHESTRATOR_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-orchestrator:5432/orchestrator_db?sslmode=disable
       - REDIS_URL=redis://redis-orchestrator:6379
       - PLANNING_AGENT_URL=http://planning-agent:8001
       - MEMORY_AGENT_URL=http://memory-agent:8002
@@ -431,6 +452,8 @@ services:
       - "8008:8008"
     environment:
       - SERVICE_NAME=reasoning-agent
+      - ENVIRONMENT=production
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres-reasoning:5432/reasoning_db
     command: uvicorn microservices.reasoning_agent.main:app --host 0.0.0.0 --port 8008
     networks:
@@ -464,9 +487,64 @@ services:
       timeout: 10s
       retries: 3
 
+  # ==========================================
+  # Observability (R0.1 closure gate — real Prometheus + Grafana, D-172)
+  # ==========================================
+
+  # Prometheus — scrapes every /metrics-exposing service over the compose network
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: cogniforge-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/compose/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    networks:
+      - cogniforge-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # Grafana — provisioned Prometheus datasource + 20 dashboards; anonymous viewer
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: cogniforge-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_USERS_DEFAULT_THEME=dark
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - cogniforge-network
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 networks:
+  # R0.1 (D-172): compose-managed with a stable name so `docker compose up`
+  # self-creates it — no manual `docker network create` pre-step. The fixed
+  # `name:` preserves the `cogniforge-network` identity that the sibling compose
+  # files (step3/step6/host) reference as external.
   cogniforge-network:
-    external: true
+    name: cogniforge-network
+    driver: bridge
 
 volumes:
   postgres-planning-data:
@@ -476,3 +554,5 @@ volumes:
   postgres-reasoning-data:
   postgres-observability-data:
   postgres-orchestrator-data:
+  prometheus-data:
+  grafana-data:

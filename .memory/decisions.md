@@ -5801,3 +5801,36 @@ JWT بلا claim إداري ⇒ ADMIN_ACCESS_DENIED (درس D-162 غير مطب�
 **تحقق حي بعد الإصلاح:** سؤال عام محادثة جديدة ⇒ إجابة عبر الرسم (كان error) · admin
 قانون أوم ⇒ إجابة حقيقية · إعادة كامل الحزمة: d162 9/9 + iss129 + d158 + m10s2 7/7 +
 stage-c خضراء · Supabase الإنتاجي عبر الجسر (PG 17.6). CLAUDE.md §6.142.
+
+---
+
+## D-172 (2026-07-19) — Reproducible Docker Full-Stack: R0.1/R0.2 Closure
+
+Closes the Codex "Existential Risks" audit: **R0.1 Runtime Reproducibility Collapse**
+(no proven full-stack; silent SQLite/mock → health lies) + **R0.2 Dependency Contract
+Collapse** (orchestrator loses Postgres checkpointer → MemorySaver fallback).
+
+Running `docker compose up` for real surfaced the exact "fails-on-first-run" defects
+the audit predicted — the stack had never booted end-to-end. Fixes (all committed):
+compose network compose-managed (was `external: true`); Prometheus+Grafana added
+(`observability/compose/prometheus.yml`); auto secret bridge
+(`scripts/compose_env_from_secrets.sh` → `.env`, Tavily MCP-URL sanitized); R0.2
+pins (langgraph-checkpoint-postgres + psycopg[pool]) into orchestrator requirements +
+`AsyncConnectionPool(kwargs={autocommit:True,row_factory:dict_row})` (CREATE INDEX
+CONCURRENTLY needs autocommit); fail-loud health guards (production-gated); real boot
+defects — frontend node:18→20, planning `postgresql+asyncpg://`+pyjwt, orchestrator
+CORS/HOSTS/ADMIN_TOOL_API_KEY/HOME=/tmp/asyncpg-url. CI gate
+`.github/workflows/docker-fullstack-gate.yml`; automated closure gate
+`scripts/verify_full_stack_docker.py`.
+
+**Live E2E (2026-07-19, real Docker + real OpenRouter in sandbox): 16 passed, 0 failed.**
+`checkpointer_backend=postgres` + `/checkpointer/status{backend:postgres,tables_ready:true}`
++ 4 checkpoint tables in real Postgres; planning `database=postgresql`; Redis×2 PONG;
+Prometheus targets UP; Grafana `database=ok`; reasoning `llm_backend=openrouter`;
+`/compose` real 1370-char Arabic answer (`pipeline_mode=partial` — honest, not false full).
+Fail-loud proven: orchestrator reported `degraded` (not false ok) before fixes.
+
+**Honest env limits:** 5 torch-heavy/deeper-defect services (memory/user/observability/
+research/conversation) excluded from the 30GB sandbox proof (build in Codespaces/CI);
+not on the R0.1/R0.2 `/compose` path. Left as R0.1 findings (research sentence_transformers,
+conversation module path). See CLAUDE.md §6.144.

@@ -23,6 +23,7 @@ import ssl
 import time
 from collections.abc import AsyncGenerator
 
+from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.asyncio import (
@@ -387,11 +388,17 @@ async def init_db() -> None:
 
     try:
         conninfo = _build_psycopg_conninfo(settings.DATABASE_URL)
+        # R0.2 (D-172): AsyncPostgresSaver.setup() runs CREATE INDEX CONCURRENTLY,
+        # which cannot run inside a transaction block — so the pool MUST use
+        # autocommit connections, or setup() fails and the `checkpoints` table is
+        # never created (checkpointer degrades). row_factory=dict_row is required
+        # by AsyncPostgresSaver's queries. This mirrors LangGraph's documented usage.
         _postgres_pool = AsyncConnectionPool(
             conninfo=conninfo,
             min_size=1,
             max_size=_POOL_SIZE,
             open=False,
+            kwargs={"autocommit": True, "row_factory": dict_row},
         )
         await _postgres_pool.open()
         logger.info("[CHECKPOINTER] psycopg pool opened (max_size=%d).", _POOL_SIZE)

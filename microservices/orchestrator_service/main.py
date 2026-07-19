@@ -281,11 +281,30 @@ async def health_check():
     errors = getattr(app.state, "startup_errors", [])
     graph_ready = getattr(app.state, "app_graph", None) is not None
 
+    # checkpointer backend: postgres | memory | none  [Step 10 / R0.2]
+    _ckpt = get_checkpointer()
+    checkpointer_backend = (
+        "postgres" if _ckpt is not None else ("memory" if _memory_saver is not None else "none")
+    )
+
+    status = "ok" if startup_state == "ready" else startup_state
+    # R0.1 (D-172): fail-loud. Under production, a checkpointer that silently fell
+    # back to MemorySaver (R0.2 hidden fallback) is a real degradation — surface
+    # it so a green /health cannot mask a non-durable, downgraded state. Strictly
+    # production-gated: dev/test keep MemorySaver and stay "ok".
+    if (
+        status == "ok"
+        and str(settings.ENVIRONMENT).lower() in ("production", "prod")
+        and checkpointer_backend != "postgres"
+    ):
+        status = "degraded"
+
     return {
-        "status": "ok" if startup_state == "ready" else startup_state,
+        "status": status,
         "service": "orchestrator-service",
         "graph_ready": graph_ready,
         "startup_state": startup_state,
+        "checkpointer_backend": checkpointer_backend,
         **({"startup_errors": errors} if errors else {}),
     }
 

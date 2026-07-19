@@ -1,25 +1,5 @@
 """جسر إعدادات الاختبار وتطبيق سياسات جودة نتائج الاختبارات على مستوى المستودع."""
 
-# D-172 follow-up: langgraph-checkpoint 2.x (pinned for R0.2) emits a one-time
-# `allowed_objects` LangChainPendingDeprecationWarning at import of
-# langgraph.checkpoint.base. pytest.ini's filterwarnings do NOT catch this
-# import/collection-time emission (same reason the repo added a conftest
-# pre-import for conversation_service — D-042). This is the earliest user code
-# loaded in every pytest session (both `test-monolith` and `test-microservices`
-# resolve this repo-root conftest before any test-module collection), so consume
-# the once-per-process warning here under suppression. That keeps the strict
-# zero-warnings policy (pytest_sessionfinish below) green without touching the
-# R0.2 pins. Guarded so jobs that don't install langgraph (e.g. contracts) skip it.
-import warnings as _warnings
-
-with _warnings.catch_warnings():
-    _warnings.simplefilter("ignore")
-    try:
-        import langgraph.checkpoint.base
-        import langgraph.checkpoint.postgres.aio  # noqa: F401
-    except Exception:  # pragma: no cover - optional dep in some CI jobs
-        pass
-
 from collections.abc import Sequence
 
 from _pytest.config import Config
@@ -27,12 +7,37 @@ from _pytest.terminal import TerminalReporter
 
 from tests.conftest import *  # noqa: F403
 
+# D-172 follow-up — known-benign upstream warnings excluded from the strict
+# zero-warnings gate below. `langgraph-checkpoint` 2.x (pinned for R0.2 — the
+# Postgres checkpointer) emits a one-time `allowed_objects`
+# LangChainPendingDeprecationWarning at import of `langgraph.checkpoint.base`.
+# It is an upstream default-change notice we cannot fix, appears only because
+# R0.2 requires `langgraph-checkpoint-postgres`, and — being emitted at
+# import/collection time before pytest installs its ini `filterwarnings` — is
+# not reliably caught by `pytest.ini` (nor by a conftest pre-import). Match it by
+# message substring so it is dropped from the failing count without weakening the
+# policy for any other warning. Keep this list tiny and specific.
+_ALLOWED_WARNING_SUBSTRINGS: tuple[str, ...] = ("allowed_objects",)
+
 
 def _count_report_items(reporter: TerminalReporter, key: str) -> int:
     """تُعيد عدد العناصر المسجلة ضمن فئة معيّنة في تقرير pytest النهائي."""
 
     items: Sequence[object] = reporter.stats.get(key, ())
     return len(items)
+
+
+def _count_enforced_warnings(reporter: TerminalReporter) -> int:
+    """عدد التحذيرات المفروضة، باستثناء تحذيرات upstream المعروفة (allowlist)."""
+
+    items: Sequence[object] = reporter.stats.get("warnings", ())
+    enforced = 0
+    for item in items:
+        message = str(getattr(item, "message", item))
+        if any(allowed in message for allowed in _ALLOWED_WARNING_SUBSTRINGS):
+            continue
+        enforced += 1
+    return enforced
 
 
 def pytest_sessionfinish(session: object, exitstatus: int) -> None:
@@ -48,7 +53,7 @@ def pytest_sessionfinish(session: object, exitstatus: int) -> None:
         return
 
     skipped_count = _count_report_items(reporter_obj, "skipped")
-    warning_count = _count_report_items(reporter_obj, "warnings")
+    warning_count = _count_enforced_warnings(reporter_obj)
     if skipped_count == 0 and warning_count == 0:
         return
 

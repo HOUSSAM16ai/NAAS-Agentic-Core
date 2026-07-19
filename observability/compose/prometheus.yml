@@ -1,0 +1,98 @@
+# =============================================================================
+# Prometheus — DOCKER-COMPOSE config for the microservices full stack (D-172)
+# =============================================================================
+# Source of truth for `docker compose up` (docker-compose.yml). Unlike the
+# native-binary variant (observability/native/prometheus.yml → localhost) and
+# the legacy OTel/Tempo/Loki variant (observability/prometheus/prometheus.yml →
+# host.docker.internal), this file scrapes services by their COMPOSE
+# service-name over the internal `cogniforge-network` bridge.
+#
+# Only the services that actually expose a Prometheus /metrics endpoint are
+# scraped here, so every target comes UP once the stack boots — which is
+# exactly what the R0.1 closure gate asserts. Services without /metrics
+# (api-gateway, memory-agent, auditor-service) are proven live via their
+# /health checks in scripts/verify_full_stack_docker.py, not here.
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: cogniforge-compose
+    namespace: cogniforge
+    mode: compose
+
+scrape_configs:
+
+  # ---- Prometheus self-metrics ------------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          tier: stack
+
+  # ---- Grafana self-metrics (internal port 3000) ------------------------
+  - job_name: grafana
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["grafana:3000"]
+        labels:
+          tier: stack
+
+  # ---- Microservices exposing a real /metrics endpoint ------------------
+  # Compose service-name : container-port (NOT the host-published port).
+  - job_name: orchestrator-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["orchestrator-service:8006"]
+        labels:
+          tier: microservice
+          service: orchestrator-service
+
+  - job_name: planning-agent
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["planning-agent:8001"]
+        labels:
+          tier: microservice
+          service: planning-agent
+
+  - job_name: user-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["user-service:8003"]
+        labels:
+          tier: microservice
+          service: user-service
+
+  - job_name: observability-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["observability-service:8005"]
+        labels:
+          tier: microservice
+          service: observability-service
+
+  - job_name: research-agent
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["research-agent:8007"]
+        labels:
+          tier: microservice
+          service: research-agent
+
+  - job_name: reasoning-agent
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["reasoning-agent:8008"]
+        labels:
+          tier: microservice
+          service: reasoning-agent
+
+  - job_name: conversation-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["conversation-service:8010"]
+        labels:
+          tier: microservice
+          service: conversation-service

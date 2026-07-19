@@ -12,7 +12,14 @@ pyjwt>=2.8.0
 passlib[bcrypt]>=1.7.4
 dspy==2.5.7
 openai>=1.12.0
-langgraph
+# R0.2 (D-172): the Postgres checkpointer stack MUST be installed and pinned to
+# a mutually-compatible set, or `from langgraph.checkpoint.postgres.aio import
+# AsyncPostgresSaver` fails → the guard silently degrades to MemorySaver (a
+# hidden fallback). langgraph range mirrors root requirements.txt (CI-proven).
+langgraph>=0.2.39,<2.0.0
+langgraph-checkpoint>=2.0.0,<3.0.0
+langgraph-checkpoint-postgres>=2.0.0,<3.0.0
+psycopg[binary,pool]>=3.1,<4.0
 llama-index-core==0.14.13
 python-json-logger>=4.0.0
 opentelemetry-api

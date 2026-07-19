@@ -113,8 +113,16 @@ def create_app() -> FastAPI:
         يُعيد: status + service + step + llm_backend + mcts_enabled
         """
         llm_backend = _detect_llm_backend()
+        environment = os.environ.get("ENVIRONMENT", settings.ENVIRONMENT)
+        # R0.1 (D-172): fail-loud. A mock LLM backend under production is a hidden
+        # degradation — report "degraded" instead of a green "healthy" so the
+        # collapse chain (mock → health OK → false confidence) cannot form.
+        # Strictly production-gated: pytest/dev (ENVIRONMENT=testing) is unaffected.
+        status = "healthy"
+        if str(environment).lower() in ("production", "prod") and llm_backend == "mock":
+            status = "degraded"
         return {
-            "status": "healthy",
+            "status": status,
             "service": "reasoning-agent",
             "step": "8",
             "llm_backend": llm_backend,

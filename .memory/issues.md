@@ -4751,3 +4751,27 @@ claim إداري. **الإصلاح:** D-169 (5 إصلاحات جذرية + 11 ا
 تصريح حقول الإدمن في `AgentState` + تمرير `admin_payload=_jwt_payload` عند
 `_is_admin_payload` — تغيير مخطط حالة الرسم (قلب النظام) فيُرحَّل لقرار مستقل.
 **غير حاجب:** قناة الإدمن تجيب الأسئلة العامة حياً عبر الرسم (مُثبَت 2026-07-16).
+
+---
+
+## R0.1 / R0.2 (Codex "Existential Risks" audit) — RESOLVED 2026-07-19 (D-172, §6.144)
+
+**R0.1 Runtime Reproducibility Collapse** (was: no proven full-stack; services fall to
+SQLite/mock while /health says ok). RESOLVED: `docker compose up --build` is now
+reproducible & automatic (compose-managed network, Prometheus+Grafana, secret bridge),
+with fail-loud health (production-gated: sqlite/mock → degraded, never ok) and an
+automated closure gate `scripts/verify_full_stack_docker.py`. Live E2E 16/16 with real
+Postgres/Redis/Prometheus/Grafana + real OpenRouter answer.
+
+**R0.2 Dependency Contract Collapse** (was: orchestrator's own requirements omitted
+langgraph-checkpoint-postgres + psycopg → AsyncPostgresSaver → None → MemorySaver).
+RESOLVED: pinned the checkpointer stack into orchestrator requirements + import smoke
+test + `autocommit`/`dict_row` pool fix. Live: `checkpointer_backend=postgres`,
+`tables_ready=true`, 4 checkpoint tables in Postgres.
+
+Real boot defects found+fixed while running it: frontend node:18→20; planning
+`postgresql://`→asyncpg + missing pyjwt; orchestrator production config
+(CORS/HOSTS/ADMIN_TOOL_API_KEY/HOME) + asyncpg URL + checkpointer autocommit.
+Open R0.1 findings (documented, out of "Close R0.1+R0.2"): research-agent imports
+sentence_transformers not in requirements; conversation-service main:app module path;
+memory/user/observability torch-heavy images.

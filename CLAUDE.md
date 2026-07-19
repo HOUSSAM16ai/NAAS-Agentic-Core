@@ -11958,3 +11958,125 @@ fail-closed، نمط D-169: نقل حقيقة مُتحقَّقة من JWT موق
 | D-169 | ISS-131 — سلك نظيف + فرض D-102 + هوية الإدمن (اكتشافات E2E) |
 | **D-170** | **تفكيك آخر الملفات الضخمة: chat_with_agent 1,926→440 (13 مرحلة) + local_graph 1,769→1,193 + probability_skill 1,685→1,462 (نقل حرفي + re-export)** |
 | **D-171** | **يُغلق ISS-132 — هوية الإدمن تُصرَّح في AgentState + تُمرَّر مُسوَّرةً فتعبر الرسم الـ13-node (الأداة كانت تُنفَّذ ثم تُرفَض)** |
+
+---
+
+## 6.144 Reproducible Docker Full-Stack — R0.1/R0.2 Closure (2026-07-19, D-172)
+
+> يُغلق خطرَي «Existential Risks» في تدقيق Codex: **R0.1 — Runtime Reproducibility
+> Collapse** و**R0.2 — Dependency Contract Collapse**. القاعدة الحاكمة: **الصحة
+> لا تكذب أبداً** — خدمة على SQLite/mock تحت الإنتاج تُبلِّغ `degraded` لا `ok`.
+> لا تُكسر بدون ADR.
+
+### الكارثتان (تدقيق Codex)
+- **R0.1**: لا مسار full-stack مُثبَت واحد. سلسلة الانهيار: *لا Docker → لا
+  Postgres/Redis/Prometheus حقيقي → الخدمات تسقط صامتةً إلى SQLite/mock/fallback →
+  `/health` يقول ok → `/compose` يقول pipeline_mode=full → الفريق يظنه «كامل» →
+  الإنتاج يفشل في أول تشغيل حقيقي.* بوّابة الإغلاق الصارمة: `docker compose up
+  --build` ثم فحص صحة كل منفذ **بإثبات Postgres/Redis/Prometheus/Grafana حقيقي — لا mock**.
+- **R0.2**: `orchestrator-service` يفقد checkpointer الـ Postgres صامتاً لأن
+  `from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver` يفشل والحارس
+  يتدهور إلى MemorySaver (fallback مخفي).
+
+### الجذر الأعمق (كُشف بالتشغيل الحي — الـ stack لم يُقلع end-to-end من قبل قط)
+تشغيل `docker compose up` فعلياً كشف **بالضبط** أعطال «fails-on-first-run» التي حذّر
+منها التدقيق:
+1. **الشبكة external** (`external: true`) → `up` يفشل بلا `docker network create` يدوي.
+2. **لا Prometheus/Grafana** في compose (التدقيق يطلبهما).
+3. **langgraph-checkpoint-postgres + psycopg غائبان تماماً** من requirements الـ
+   orchestrator → AsyncPostgresSaver لا يُستورَد أبداً → memory fallback.
+4. **frontend `node:18`** بينما Next.js يتطلب Node ≥20.9 → `next build` يفشل.
+5. **planning-agent `postgresql://`** (sync psycopg2) + **`pyjwt` غائب** → crash عند الإقلاع.
+6. **orchestrator** تحت production: `BACKEND_CORS_ORIGINS='*'`/`ALLOWED_HOSTS='*'`
+   مرفوضان + `ADMIN_TOOL_API_KEY` مطلوب + `HOME=/home/appuser` غير قابل للكتابة
+   (المستخدم غير الجذر) يُفشل graph compile + `ORCHESTRATOR_DATABASE_URL` bare
+   `postgresql://` يحمّل psycopg2 المفقود + `AsyncConnectionPool` بلا `autocommit`
+   يُفشل `CREATE INDEX CONCURRENTLY` في setup().
+7. **research-agent** يستورد `sentence_transformers` غير المثبَّت؛ **conversation-service**
+   مسار وحدة `main:app` مكسور؛ **api-gateway** يفشل بصلابة إن سقط orchestrator.
+
+### الإصلاح (D-172 — كلها committed ما لم يُذكر خلاف ذلك)
+- **إقلاع تلقائي**: `cogniforge-network` صار compose-managed (اسم ثابت + bridge)؛
+  حذف `version:` المهجور؛ إضافة خدمتَي **prometheus (9090) + grafana (3001)** مع
+  `observability/compose/prometheus.yml` (أهداف service-name، تُفحَص الخدمات المصدِّرة
+  لـ /metrics فقط) + إعادة استخدام grafana provisioning.
+- **جسر الأسرار 100% تلقائي**: `scripts/compose_env_from_secrets.sh` يكتب `.env`
+  من (1) بيئة العملية (Codespaces Secrets) ثم (2) `.devcontainer/secrets.env` —
+  مرآة `supervisor.sh:_inject_env_secrets` — ويُطهِّر صيغة Tavily MCP-URL → `tvly-…`
+  المجرَّد. + `.env.example`. `.env` git-ignored.
+- **R0.2**: تثبيت `langgraph-checkpoint>=2.0.0,<3.0.0` + `langgraph-checkpoint-postgres>=2.0.0,<3.0.0`
+  + `psycopg[binary,pool]>=3.1,<4.0` في requirements الـ orchestrator (كانت غائبة)
+  + تثبيت النطاقات في root/ci/test requirements + اختبار import smoke
+  (`tests/microservices/orchestrator_service/test_r02_checkpointer_import.py`).
+  + **إصلاح setup()**: `AsyncConnectionPool(kwargs={"autocommit": True, "row_factory": dict_row})`
+  في `database.py` (CREATE INDEX CONCURRENTLY لا يعمل داخل transaction).
+- **fail-loud (قلب R0.1)**: تحت `ENVIRONMENT=production` فقط، reasoning-agent يُبلِّغ
+  `degraded` عند `llm_backend=mock`، و orchestrator يُبلِّغ `degraded` +
+  `checkpointer_backend` عند تدهور الـ checkpointer إلى memory. مُقيَّد بالإنتاج
+  حصراً فلا يكسر pytest (SQLite memory + mock).
+- **أعطال إقلاع حقيقية أُصلحت**: frontend→`node:20-alpine`؛ planning
+  →`postgresql+asyncpg://` + `pyjwt`؛ orchestrator: CORS/HOSTS/ADMIN_TOOL_API_KEY
+  + `HOME=/tmp` + `ORCHESTRATOR_DATABASE_URL`→asyncpg `?sslmode=disable`.
+- **بوّابة CI خفيفة**: `.github/workflows/docker-fullstack-gate.yml` (compose config
+  validate + شبكة غير-external + وجود prometheus/grafana + صحة prometheus.yml +
+  R0.2 requirements). لا `up` كامل في CI (ثقيل)؛ الإثبات الحي عبر verify script.
+- **الإثبات الآلي**: `scripts/verify_full_stack_docker.py` — بوّابة الإغلاق fail-loud
+  (تفشل فوراً على أي mock/sqlite)، تدعم `VERIFY_SKIP` للخدمات المستبعَدة الموثَّقة.
+
+### التحقق الحي (2026-07-19 — Docker حقيقي + OpenRouter حقيقي في هذا الـ sandbox)
+`bash scripts/compose_env_from_secrets.sh` → build → `python scripts/verify_full_stack_docker.py`
+⇒ **16 passed, 0 failed**:
+- ✅ **R0.2**: `checkpointer_backend=postgres` + `/checkpointer/status → {backend:postgres,
+  active:true, tables_ready:true, pool_size:5}` + 4 جداول checkpoint (`checkpoints`,
+  `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`) موجودة في Postgres الحقيقي.
+- ✅ **R0.1**: planning `database=postgresql`، Redis×2 PONG، Prometheus صحي + كل الأهداف
+  المطلوبة UP، Grafana `database=ok`، frontend HTTP 200، صفر sqlite/mock.
+- ✅ **LLM حقيقي**: reasoning `llm_backend=openrouter`؛ `/compose → pipeline_mode=partial,
+  skills_active=['planning','reasoning']`، إجابة عربية حقيقية 1370 حرفاً.
+- ✅ **fail-loud مُثبَت**: قبل الإصلاحات، orchestrator أبلغ `degraded` (checkpointer=memory
+  ثم graph غير جاهز) بدل `ok` كاذب — الحارس التقط سيناريو R0.1 حياً.
+
+### القيود البيئية الصادقة (لا تُخفَى — نمط §6.55)
+- **5 خدمات مستبعَدة من إثبات هذا الـ sandbox** (30GB): memory/user/observability-service
+  تُثبِّت `sentence-transformers`→torch+CUDA (~20GB ذروة بناء لكلٍّ — غير قابل في 30GB)؛
+  research-agent يستورد `sentence_transformers` غير المثبَّت (crash إقلاع)؛
+  conversation-service مسار وحدة مكسور. **تبني جميعها في Codespaces/CI** (قرص أكبر).
+  ليست على مسار إثبات R0.1/R0.2 (`/compose` = planning+research+reasoning).
+- api-gateway يُقلع ويُبلِّغ `degraded` بصدق (deps المستبعَدة DOWN) — fail-loud يعمل، لا يكذب.
+- **متروك كـ R0.1 findings** (خارج «Close R0.1+R0.2» — إصلاحات مستقبلية): research
+  sentence_transformers، conversation module path، وزن torch في الخدمات الثلاث.
+
+### القواعد الـ 7 الدائمة (D-172 — لا تُكسر بدون ADR)
+1. **الصحة لا تكذب**: تحت production، أي backend sqlite/mock ⇒ `/health` degraded لا ok.
+2. **الشبكة compose-managed** (لا `external: true`) — `up` يُقلع من checkout نظيف بلا خطوة يدوية.
+3. **R0.2 مغلق**: requirements الـ orchestrator تُثبِّت langgraph-checkpoint-postgres +
+   psycopg[pool] المثبَّتة؛ الـ pool يستخدم `autocommit=True, row_factory=dict_row`؛
+   `checkpointer_backend=postgres` مُتحقَّق في الـ E2E.
+- 4. **DB URLs**: الخدمات التي تستخدم `create_async_engine` تُمرَّر `postgresql+asyncpg://`؛
+   للـ Postgres المحلي بلا SSL: `?sslmode=disable`. الـ checkpointer يحوّل داخلياً لـ psycopg.
+5. **جسر الأسرار = المصدر الوحيد**: `compose_env_from_secrets.sh` يكتب `.env`؛ أولوية
+   process-env ثم secrets.env؛ Tavily MCP-URL يُطهَّر. لا Supabase في هذا الـ stack (محلي مكتفٍ ذاتياً).
+6. **`VERIFY_SKIP` للاستبعاد الموثَّق فقط** — لا لإخفاء عطل حقيقي؛ الافتراضي (فارغ) يطلب الـ stack الكامل.
+7. **overrides CA للـ base images sandbox-only** (غير committed) — تجعل pip يثق بـ MITM
+   proxy؛ بيئة المستخدم الحقيقية (Codespaces/CI) لا تحتاجها.
+
+### الملفات (D-172)
+| File | Change |
+|------|--------|
+| `docker-compose.yml` | network managed + prometheus/grafana + production config + asyncpg URLs + HOME |
+| `observability/compose/prometheus.yml` | **جديد** — أهداف service-name |
+| `.env.example` + `scripts/compose_env_from_secrets.sh` | **جديد** — جسر الأسرار |
+| `scripts/verify_full_stack_docker.py` | **جديد** — بوّابة الإغلاق الآلية fail-loud |
+| `microservices/orchestrator_service/{requirements.txt, main.py, src/core/database.py}` | R0.2 pins + health guard + autocommit checkpointer |
+| `microservices/reasoning_agent/main.py` | fail-loud mock guard |
+| `microservices/planning_agent/requirements.txt` | + pyjwt |
+| `frontend/Dockerfile` | node:18→node:20 |
+| `requirements{,-ci,-test}.txt` | R0.2 pins |
+| `.github/workflows/docker-fullstack-gate.yml` | **جديد** — بوّابة CI خفيفة |
+| `tests/microservices/orchestrator_service/test_r02_checkpointer_import.py` | **جديد** — R0.2 import smoke |
+
+### السلسلة (D-171 → D-172)
+| Decision | الموضوع |
+|----------|---------|
+| D-171 | يُغلق ISS-132 — هوية الإدمن تعبر الرسم الـ13-node |
+| **D-172** | **إغلاق R0.1/R0.2: Docker full-stack قابل لإعادة الإنتاج + جسر أسرار تلقائي + fail-loud health + checkpointer=postgres مُثبَت حياً (16/16) + إصلاح 7 أعطال إقلاع حقيقية** |

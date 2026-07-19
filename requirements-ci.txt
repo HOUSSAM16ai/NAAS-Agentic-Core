@@ -78,5 +78,7 @@ Faker==38.2.0
 hypothesis==6.148.7
 sortedcontainers==2.4.0
 attrs==25.4.0
-langgraph-checkpoint-postgres
+# R0.2 (D-172): pinned range (was unpinned) — reproducible checkpointer stack.
+langgraph-checkpoint>=2.0.0,<3.0.0
+langgraph-checkpoint-postgres>=2.0.0,<3.0.0
 psycopg-binary

@@ -187,6 +187,32 @@ def pytest_collection_modifyitems(
     items.sort(key=_priority)
 
 
+# D-172 follow-up — benign upstream warnings excluded from the strict
+# zero-warnings gate below. `langgraph-checkpoint` 2.x (pinned for R0.2 — the
+# Postgres checkpointer) emits a one-time `allowed_objects`
+# LangChainPendingDeprecationWarning at import of `langgraph.checkpoint.base`. It
+# is not a `PendingDeprecationWarning` subclass (so the module-level filter above
+# and pytest.ini do not catch it) and fires at import/collection time before
+# pytest applies its ini filters. Match by message substring so it is dropped
+# from the failing count without weakening the policy for any other warning. Kept
+# in sync with the same allowlist in the repo-root ``conftest.py``.
+_ALLOWED_WARNING_SUBSTRINGS: tuple[str, ...] = ("allowed_objects",)
+
+
+def _count_enforced_warnings(terminal_reporter: object) -> int:
+    """عدد التحذيرات المفروضة، باستثناء تحذيرات upstream المعروفة (allowlist)."""
+
+    items = terminal_reporter.stats.get("warnings", ())
+    return sum(
+        1
+        for item in items
+        if not any(
+            allowed in str(getattr(item, "message", item))
+            for allowed in _ALLOWED_WARNING_SUBSTRINGS
+        )
+    )
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """يفرض نجاحًا كاملًا عبر فشل الجلسة عند وجود تخطٍ أو تحذيرات اختبارية."""
     terminal_reporter = session.config.pluginmanager.get_plugin("terminalreporter")
@@ -197,12 +223,14 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         "skipped": "توجد اختبارات مُتخطاة",
         "xfailed": "توجد اختبارات xfailed",
         "xpassed": "توجد اختبارات xpassed",
-        "warnings": "توجد تحذيرات أثناء التشغيل",
     }
 
     violations = [
         message for key, message in forbidden_outcomes.items() if terminal_reporter.stats.get(key)
     ]
+
+    if _count_enforced_warnings(terminal_reporter):
+        violations.append("توجد تحذيرات أثناء التشغيل")
 
     if violations:
         joined_violations = "، ".join(violations)

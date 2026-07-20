@@ -66,6 +66,5 @@ redis-om
 asgi-lifespan
 argon2_cffi
 docker
-langgraph-checkpoint>=2.0.0,<3.0.0
-langgraph-checkpoint-postgres>=2.0.0,<3.0.0
+langgraph-checkpoint-postgres
 psycopg-binary

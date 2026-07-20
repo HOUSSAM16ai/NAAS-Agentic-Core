@@ -99,9 +99,7 @@ firecrawl-py
 redis>=5.0.0
 langgraph-sdk==0.3.6
 argon2-cffi
-# R0.2 (D-172): pinned range (was unpinned) — reproducible checkpointer stack.
-langgraph-checkpoint>=2.0.0,<3.0.0
-langgraph-checkpoint-postgres>=2.0.0,<3.0.0
+langgraph-checkpoint-postgres
 psycopg-binary
 aiosqlite==0.17.0
 alembic==1.13.1

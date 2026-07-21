@@ -21,7 +21,6 @@ def mcp():
         patch("app.drivers.LlamaIndexDriver"),
         patch("app.drivers.DSPyDriver"),
         patch("app.drivers.RerankerDriver"),
-        patch("app.drivers.KagentDriver"),
     ):
         return MCPIntegrations()
 

@@ -116,20 +116,8 @@ CATALOG: list[TrackedComponent] = [
         expected_status="ACTIVE",
         notes="Sole entrypoint to chat from customer_chat.py and admin.py.",
     ),
-    TrackedComponent(
-        id="multi_agent_workflow",
-        name="LangGraph multi-agent workflow",
-        files=["app/services/chat/graph/workflow.py"],
-        expected_status="ZOMBIE",
-        notes="Only importer is tests/verify_graph_manual.py.",
-    ),
-    TrackedComponent(
-        id="kagent_mesh",
-        name="KAgent mesh",
-        files=["app/services/kagent/registry.py"],
-        expected_status="ZOMBIE",
-        notes="DI-registered; only consumer is the dead workflow.",
-    ),
+    # D-173 (Stage 5): multi_agent_workflow + kagent_mesh removed — the ZOMBIE
+    # cluster (KAgent mesh + multi-agent workflow + graph/nodes) was deleted.
     TrackedComponent(
         id="mcp_integrations",
         name="MCP integrations",

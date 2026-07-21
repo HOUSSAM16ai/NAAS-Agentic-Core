@@ -26,7 +26,6 @@ from app.core.integration_kernel import (
 from app.core.logging import get_logger
 from app.drivers import (
     DSPyDriver,
-    KagentDriver,
     LangGraphDriver,
     LlamaIndexDriver,
     RerankerDriver,
@@ -55,7 +54,9 @@ class MCPIntegrations:
             self.kernel.register_driver("retrieval", "llamaindex", LlamaIndexDriver())
             self.kernel.register_driver("prompt", "dspy", DSPyDriver())
             self.kernel.register_driver("ranking", "reranker", RerankerDriver())
-            self.kernel.register_driver("action", "kagent", KagentDriver())
+            # D-173 (Stage 5): KAgent driver removed (ZOMBIE, security-blocked). The
+            # "action" engine is no longer registered; execute_action degrades to
+            # unavailable via the kernel's try/except (no live consumer).
         except Exception as e:
             logger.error(f"Failed to register drivers: {e}")
 

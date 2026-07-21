@@ -38,6 +38,7 @@
 | [`architecture/adr/`](architecture/adr/) + [`adr/`](adr/) + [`adrs/`](adrs/) | سجلّات ADR (القرارات الحيّة في `.memory/decisions.md`) |
 | [`architecture/`](architecture/) (runbooks: `MASTER_CUTOVER_RUNBOOK` · `PR1..PR5` · `LEGACY_*`) | كتيّبات هجرة الـ strangler-fig |
 | [`API_FIRST_ARCHITECTURE.md`](API_FIRST_ARCHITECTURE.md) | عقيدة API-First |
+| [`architecture/EXTENSION_SEAMS.md`](architecture/EXTENSION_SEAMS.md) | مقاعد التوسّع (Kafka/VectorDB/RAG/Skill-flags) + الرؤية الثورية (D-173) |
 | [`contracts/`](contracts/) | عقود الـ API وقواعد الإصدار |
 | [`OVERMIND_ARCHITECTURE.md`](OVERMIND_ARCHITECTURE.md) · [`architecture_map.md`](architecture_map.md) | خرائط الـ orchestrator |
 | [`TYPE_SYSTEM.md`](TYPE_SYSTEM.md) · [`config/SETTINGS_LAYER.md`](config/SETTINGS_LAYER.md) · [`db/SESSION_FACTORY.md`](db/SESSION_FACTORY.md) · [`core/DEPENDENCY_LAYER.md`](core/DEPENDENCY_LAYER.md) · [`gateways/AI_GATEWAY.md`](gateways/AI_GATEWAY.md) | مراجع الطبقات |

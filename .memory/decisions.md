@@ -5,6 +5,39 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-176 · التجريد الصادق المفروض (Superhuman Abstraction — Enforce + Honesty Gate) (2026-07-21)
+**السياق:** طلب المالك ضمان أن المشروع يطبّق تجريداً بمستوى الأنظمة العملاقة. تدقيق بوكيلين
+(محكوم بـ§6.6: وجود الكود ≠ استعماله) كشف أن **البنية التجريدية متطوّرة أصلاً** (kernel سداسي
+`integration_kernel` بخمسة ABC engines + drivers + `PolicyManager`؛ Protocols: `LLMClient`،
+`EventBusProtocol`، واجهات الدردشة عبر DI `Container`؛ أنماط Strategy/Builder/Repository؛ حدّ
+`app ↛ microservices` مفروض آلياً + تكافؤ OpenAPI). **لكن العيب الحقيقي تجريد غير مُستهلَك/غير
+مفروض** (دَين تعقيد لا نقص تجريد): ~8 من 26 بوّابة fitness موصولة بـCI فقط؛ تجريدات خامدة
+(`LangGraphDriver.run()` يرفع ImportError، `Container` بمستهلك حي واحد، بروتوكولات
+Planner/Strategy/Agent/Mission/Repository/plugin/domain_events مستهلَكة من الاختبارات أو نسخة
+الأوركستريتور المُكرَّرة `src/core/`، وطرف `ActionEngine.act()` بلا driver مُسجَّل)؛ اقتران بالخرسانة
+على المسار الحيّ (الموجّهات تستورد singleton `orchestrator_client` الخرساني بلا port)؛ موجّهات سمينة
+(`content.py` بـSQL خام).
+
+**القانون:** التجريد الخارق = كل تجريد **مُستهلَك + مفروض + يُعتمَد عليه عبر واجهة**. لا تُضاف طبقات؛
+يُجعَل الموجود صادقاً ومفروضاً. برنامج من 4 مراحل، كل مرحلة خضراء قبل التالية:
+
+- **P1 (هذه — آمنة إضافية):** (1a) تحويل البوّابات الاصطلاحية إلى مفروضة في `ci.yml` guardrails:
+  `check_no_cross_service_imports` (AST — يمنع `microservices.<other>`)، `check_ports_consistency`،
+  `check_single_brain_control_plane`، `check_core_kernel_acl` (الثلاثة الأخيرة خضراء محلياً؛ الأولى
+  تُثبَّت بدورة CI على 3.12). (1b) بوّابة جديدة `check_abstraction_consumed.py` (AST، stdlib):
+  كل port سداسي إمّا ACTIVE (driver مُسجَّل في `mcp/integrations.py`) أو ضمن `KNOWN_DORMANT`
+  المُجمَّدة (**تتقلّص فقط** — D-105)؛ port جديد بلا driver ولا allowlist ⇒ فشل. اليوم: 4 ACTIVE
+  (workflow/retrieval/prompt/ranking) + `ActionEngine` dormant موثَّق. (1c) الخريطة الصادقة هنا +
+  `.memory/architecture.md`.
+- **P2:** عكس التبعية على المسار الحيّ — `OrchestrationPort` Protocol تعتمد عليه الموجّهات بدل
+  الـsingleton الخرساني (dependency inversion حيث يهمّ).
+- **P3:** حسم التجريد الخامد (ترقية أو حذف) — طرف `ActionEngine`، نسخة `DIContainer` المُكرَّرة،
+  بروتوكولات الاختبارات-فقط — بقانون مكافحة ZOMBIE (نظير حذف Kagent).
+- **P4:** تنحيف `content.py` (SQL خام → `ContentRepository`) كبرهان طبقات.
+
+**الحالة:** P1 مُنفَّذة ومُتحقَّقة محلياً (البوّابة الجديدة + اختبارها موجب/سالب، ruff نظيف، كل البوّابات
+المحلية خضراء). P2–P4 لاحقة، كل واحدة بدورة CI مستقلة تحفظ ثبات «CI أخضر 100%».
+
 ## D-175 · طبقة الأسس النظرية (Foundational Reasoning Layer) — `app/core/foundations` (2026-07-21)
 **السياق:** طلب المالك تطوير «العقل والمنطق والعلوم الأساسية» — منطق الحوسبة، الخوارزميات وهياكل
 البيانات، الرياضيات المتقطعة، الاحتمالات والإحصاء، ونظرية المعلومات — كطبقة تُزوّد المشروع بالأسس

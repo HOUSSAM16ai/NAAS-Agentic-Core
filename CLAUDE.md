@@ -906,6 +906,11 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
   (`upload-artifact@v6+`)؛ `push:` مُقيَّد على `[main]` للفروع الميزة.
 - **صدق runtime (§6.6)**: لا تُعلَن قدرة ACTIVE قبل البرهان الثلاثي (import + call chain + runtime
   evidence)؛ حتى ذلك FLAGGED/DORMANT. `runtime_truth.py --update` بعد أي تغيير قدرة.
+- **التجريد الصادق المفروض (D-176)**: كل port سداسي (`integration_kernel/contracts.py`) إمّا ACTIVE
+  (driver مُسجَّل في `mcp/integrations.py`) أو ضمن `KNOWN_DORMANT` المُجمَّدة — تفرضه بوّابة
+  `check_abstraction_consumed.py` (port جديد بلا مستهلك ⇒ فشل CI). حدود الخدمات مفروضة آلياً في
+  guardrails (`check_no_cross_service_imports` · `check_ports_consistency` ·
+  `check_single_brain_control_plane` · `check_core_kernel_acl`). الخريطة الصادقة: `.memory/architecture.md §10`.
 
 ### ز) جسر قاعدة البيانات + الأسرار + compose (D-DB-BRIDGE-001 · D-172)
 - **جسر Supabase** (`scripts/db_bridge.py`): SQL عبر HTTPS:443 حين تُحجَب منافذ Postgres (5432/6543).

@@ -87,7 +87,13 @@ const port = readFileSync(
     'utf-8',
 );
 check('port emits LaTeX fmt_comb', port.includes('\\\\dfrac'));
-check('port never prints the final ratio', !port.includes('من كل {'));
+// D-173 (M10-S2.4): يُبان **الكشف النهائي** (reveal dump «فاحتمال الحادثة A هو ...»)
+// لا العبارة العلائقية للشارح المفاهيمي D-125 («{same} من كل {total}» = نسبة
+// البسط/المقام، doctrine-parity مع العقل) — نظير حارس Python سطر 297/369.
+check(
+    'port never prints the P(A) reveal dump',
+    !port.includes('فاحتمال الحادثة A هو {same} من كل {total}'),
+);
 
 if (failed > 0) {
     console.error(`\n${failed} ISS-121 check(s) failed`);

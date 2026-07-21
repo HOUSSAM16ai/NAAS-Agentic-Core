@@ -437,3 +437,22 @@ If a doc here ever says a ZOMBIE/DORMANT component is "the primary handler", tha
 - **Abstraction Ban (Zero Cognitive Overload)**: generative-UI node labels are concrete human-readable Arabic (e.g., "كرة حمراء"), never abstract symbols (A/B|A/Ā). Hybrid extraction in `OrchestratorClient` (deterministic → LLM → concrete fallback).
 - **Honest status**: BKT engine/persistence/emit = ACTIVE; the `bkt_hint_display` frontend portal = PARTIAL (stub renders fallback text; rich visualization pending).
 - **DB egress**: Codespaces blocks Postgres ports 6543/5432 — schema changes via boot auto-creation (`validate_schema_on_startup`), not sandbox SQL.
+
+## 10. Abstraction Map — ACTIVE vs DORMANT (D-176, honest per §6.6)
+
+**The hexagonal micro-kernel** (`app/core/integration_kernel/`) is the primary abstraction boundary. Five `ABC` ports in `contracts.py`; drivers in `app/drivers/`; registered in `app/services/mcp/integrations.py`; enforced by `scripts/fitness/check_abstraction_consumed.py`:
+
+| Port (contracts.py) | Driver (app/drivers/) | Registered? | Status |
+|---|---|---|---|
+| `WorkflowEngine` | `LangGraphDriver` | yes (`workflow`) | ACTIVE (driver hollow in monolith — real exec in orchestrator microservice) |
+| `RetrievalEngine` | `LlamaIndexDriver` | yes (`retrieval`) | ACTIVE (backs `retrieval_rerank` skill, flag-gated) |
+| `PromptEngine` | `DSPyDriver` | yes (`prompt`) | ACTIVE |
+| `RankingEngine` | `RerankerDriver` | yes (`ranking`) | ACTIVE (backs `retrieval_rerank` skill) |
+| `ActionEngine` | — (Kagent deleted D-173) | **no** | **DORMANT** — documented seam; `act()` unreachable; in `KNOWN_DORMANT` |
+
+**Other abstractions (honest status):**
+- **ACTIVE:** DI facades (`di.py` `get_db`/`get_logger`/…, FastAPI `Depends`); `Container` SOLID-DI (one live consumer — chat `writer` node); `LLMClient` / `EventBusProtocol` protocols; Strategy/Builder patterns; `BaseService` (1 subclass: `AuthService`); ORM domain entities (`app/core/domain/`).
+- **DORMANT (defined, no live monolith consumer):** `PlannerProtocol`/`StrategyProtocol`/`Agent`/`Mission*`/`RepositoryProtocol` in `protocols.py` (consumed only by tests or the **duplicated** `microservices/orchestrator_service/src/core/` copy); plugin registry (`app/core/registry/`); `domain_events/`; the duplicate `app/infrastructure/patterns/dependency_injection.py:DIContainer`.
+- **Coupling debt:** routers depend on the **concrete** `orchestrator_client` singleton (no port — DIP gap on the hot path, addressed in D-176 Phase 2); `app/api/routers/content.py` runs inline raw SQL (fat router — Phase 4).
+
+**Enforcement (D-176 Phase 1):** the `app ↛ microservices` boundary (`test_boundaries.py`), `check_no_cross_service_imports`, `check_ports_consistency`, `check_single_brain_control_plane`, `check_core_kernel_acl`, and `check_abstraction_consumed` all run in CI `guardrails`. New unconsumed ports fail the build.

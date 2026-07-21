@@ -132,6 +132,15 @@ jobs:
           # (shared/ai_models/model_chain.py). Turns the D-013 prose mirror rule
           # into a machine-enforced single source of truth.
           python scripts/fitness/check_model_chain_parity.py
+          # D-176: superhuman abstraction — turn convention-only boundary gates into
+          # machine enforcement (were present but wired nowhere), plus the new
+          # anti-ZOMBIE-for-abstraction gate (every hexagonal port is driver-backed
+          # or explicitly dormant-allowlisted).
+          python scripts/fitness/check_no_cross_service_imports.py
+          python scripts/fitness/check_ports_consistency.py
+          python scripts/fitness/check_single_brain_control_plane.py
+          python scripts/fitness/check_core_kernel_acl.py
+          python scripts/fitness/check_abstraction_consumed.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

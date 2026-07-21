@@ -113,10 +113,12 @@ def resolve_chain_from_source(rel_path: str) -> list[str]:
     return chain
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    # `argv=None` parses sys.argv when run as a script; callers (tests) pass an
+    # explicit list (e.g. []) so pytest's own argv never leaks into argparse.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="CI alias (default behavior).")
-    parser.parse_args()
+    parser.parse_args(argv)
 
     canonical = list(MODEL_CHAIN)
     print("=== Model-Chain Parity Gate (D-013 → machine-enforced) ===")

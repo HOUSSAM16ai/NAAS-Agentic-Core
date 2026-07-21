@@ -43,4 +43,5 @@ def test_both_brains_match_canonical_chain():
 
 def test_gate_main_passes():
     gate = _load_gate()
-    assert gate.main() == 0
+    # Pass an explicit empty argv so pytest's own sys.argv doesn't reach argparse.
+    assert gate.main([]) == 0

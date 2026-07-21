@@ -76,6 +76,7 @@ LEGACY_EXEMPTIONS = {
     "app/tooling/repository_map.py": ["print"],
     "app/api/routers/security.py": ["db_import"],
     "app/api/routers/customer_chat.py": ["db_import"],
+    "app/api/routers/customer_chat_support/pedagogy.py": ["db_import"],
     "app/api/routers/admin.py": ["db_import"],
     "app/api/routers/ums.py": ["db_import"],
     "app/api/routers/system/__init__.py": [ANY_TOKEN],

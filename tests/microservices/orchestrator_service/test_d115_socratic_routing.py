@@ -15,9 +15,13 @@ import importlib.util
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-GRAPH_MAIN = (
-    REPO_ROOT / "microservices/orchestrator_service/src/services/overmind/graph/main.py"
-).read_text(encoding="utf-8")
+# D-173 Stage 2c: graph/main.py فُكِّك إلى شرائح (dspy_compat/state/nodes) —
+# نقرأ المصدر المُركَّب عبر المانيفست فتصمد التأكيدات النصية بعد النقل الحرفي.
+from microservices.orchestrator_service.src.services.overmind.graph.graph_sources import (
+    read_graph_source,
+)
+
+GRAPH_MAIN = read_graph_source()
 GRAPH_SEARCH = (
     REPO_ROOT / "microservices/orchestrator_service/src/services/overmind/graph/search.py"
 ).read_text(encoding="utf-8")

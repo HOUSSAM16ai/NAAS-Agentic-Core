@@ -38,6 +38,24 @@ def _read_tutor_source() -> str:
     return read_tutor_source()
 
 
+def _read_customer_chat_source() -> str:
+    """مصدر مسار WS للعميل المُركَّب (router + customer_chat_support/*) عبر manifest.
+
+    D-173 Stage 2b: الأشرطة المساعدة (BKT/pedagogy/frames/transport) استُخرجت إلى
+    `customer_chat_support/` — الفحوص التي تبحث عن رموز مُستهلَكة يجب أن تمسح
+    المصدر المُركَّب وإلا فقدت قيمتها بعد الاستخراج الحرفي. تحميل مباشر بـ
+    importlib (يتجاوز أي استيراد pydantic) — يحفظ خاصية البيئات المتدهورة.
+    """
+    import importlib.util
+
+    manifest_path = ROOT / "app/api/routers/customer_chat_support/_sources.py"
+    spec = importlib.util.spec_from_file_location("cc_sources_gate", manifest_path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    return mod.read_customer_chat_source()
+
+
 def _read_brain_source() -> str:
     """مصدر العقل المُركَّب (composition root + mixins) عبر manifest D-168.
 
@@ -317,9 +335,8 @@ def check_bkt_baseline_integrated() -> None:
         _fail("bkt_engine.py: BKT_COGNITIVE_DOCTRINE_VERSION not referenced (D-074).")
     _pass("bkt_engine.py consumes BKT_COGNITIVE_DOCTRINE (D-074)")
 
-    chat = ROOT / "app" / "api" / "routers" / "customer_chat.py"
-    if chat.is_file():
-        chat_src = chat.read_text(encoding="utf-8")
+    chat_src = _read_customer_chat_source()
+    if chat_src:
         # D-119: التقييم موصول عبر `_evaluate_bkt_cards` (تحليلات append-only خلف
         # الكواليس، يُرجِع None — لا بطاقة طالب)، ويُنتظَر بعد الإطار النهائي لضمان
         # اكتمال الكتابة قبل إنهاء الدور. نتحقّق من كليهما.
@@ -414,7 +431,7 @@ def check_adaptive_pedagogy_wiring() -> None:
     حرفياً فيرى الطالب لغة النظام الداخلية. العمق يصل الآن عبر `support_level`
     (مُمرَّر في context → يستهلكه SynthesizerNode). البوّابة تفرض غياب الـ prepend.
     """
-    router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+    router_src = _read_customer_chat_source()
     client_src = _read_tutor_source()  # D-166: chat_with_agent في mixin — المصدر المُركَّب
     if "_build_pedagogy_directive" not in router_src:
         _fail("customer_chat lost _build_pedagogy_directive (D-104 ZOMBIE).")
@@ -481,7 +498,7 @@ def check_learning_path_wired() -> None:
     if entry["rules_count"] != len(LEARNING_PATH_DOCTRINE):
         _fail("Manifest rules_count mismatch for learning_path (D-111).")
 
-    router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+    router_src = _read_customer_chat_source()
     # D-119: يكفي استدعاء الـ Skill (مُستهلَك خلف الكواليس) — لا اشتراط بطاقة طالب.
     if "get_learning_path_skill" not in router_src:
         _fail("customer_chat no longer derives learning_path (D-111/D-119 ZOMBIE).")
@@ -545,7 +562,7 @@ def check_socratic_protocol_wired() -> None:
     # D-115: المثال المكشوف مُزال — لا skill/card/wiring تعليمي في المونوليث.
     if (ROOT / "app/services/skills/worked_example_skill.py").exists():
         _fail("worked_example_skill.py must be removed (D-115 reverses the reveal).")
-    router_src = (ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+    router_src = _read_customer_chat_source()
     if "_maybe_emit_worked_example" in router_src:
         _fail("customer_chat still emits worked_example reveal (D-115 must remove it).")
     if "worked_example_card" in KNOWN_UI_COMPONENTS:

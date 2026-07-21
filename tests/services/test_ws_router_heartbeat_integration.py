@@ -125,7 +125,16 @@ class TestConversationServiceWiring:
 
 class TestDoctrineRegistration:
     def test_realtime_protocol_doctrine_registered(self) -> None:
-        source = _read_file("app/services/skills/doctrine.py")
+        # D-173 Stage 2a: doctrine صار حزمة — نقرأ المصدر المُركَّب عبر المانيفست.
+        import importlib.util as _ilu
+
+        _spec = _ilu.spec_from_file_location(
+            "_doctrine_sources", PROJECT_ROOT / "app/services/skills/doctrine/_sources.py"
+        )
+        _dsrc = _ilu.module_from_spec(_spec)
+        assert _spec.loader is not None
+        _spec.loader.exec_module(_dsrc)
+        source = _dsrc.read_doctrine_source()
         assert "REALTIME_PROTOCOL_DOCTRINE" in source
         assert "REALTIME_PROTOCOL_DOCTRINE_VERSION" in source
         assert '"realtime_protocol"' in source, "doctrine manifest must register realtime_protocol"

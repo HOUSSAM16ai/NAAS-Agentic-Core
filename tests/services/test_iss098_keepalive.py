@@ -145,9 +145,11 @@ def _make_connected_ws(sent: list[dict]) -> MagicMock:
 
 def test_customer_keepalive_emits_pong_periodically(monkeypatch) -> None:
     from app.api.routers import customer_chat
+    from app.api.routers.customer_chat_support import transport
 
-    # Shrink the interval so the test is fast and deterministic.
-    monkeypatch.setattr(customer_chat, "_TURN_KEEPALIVE_INTERVAL_SECONDS", 0.02)
+    # Shrink the interval so the test is fast and deterministic. D-173 Stage 2b:
+    # `_run_turn_keepalive` moved to transport.py — patch it there (late-binding).
+    monkeypatch.setattr(transport, "_TURN_KEEPALIVE_INTERVAL_SECONDS", 0.02)
 
     async def run() -> None:
         sent: list[dict] = []
@@ -169,8 +171,9 @@ def test_keepalive_stops_when_ws_disconnected(monkeypatch) -> None:
     from starlette.websockets import WebSocketState
 
     from app.api.routers import customer_chat
+    from app.api.routers.customer_chat_support import transport
 
-    monkeypatch.setattr(customer_chat, "_TURN_KEEPALIVE_INTERVAL_SECONDS", 0.02)
+    monkeypatch.setattr(transport, "_TURN_KEEPALIVE_INTERVAL_SECONDS", 0.02)
 
     async def run() -> None:
         sent: list[dict] = []

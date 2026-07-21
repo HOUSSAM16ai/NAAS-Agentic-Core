@@ -38,6 +38,8 @@ SERVICES: tuple[tuple[str, str, str], ...] = (
     ("reasoning_agent", "microservices.reasoning_agent.main", "app"),
     ("research_agent", "microservices.research_agent.main", "app"),
     ("api_gateway", "microservices.api_gateway.main", "app"),
+    # D-174: API-first 11/11 — auditor_service brought under the parity gate.
+    ("auditor_service", "microservices.auditor_service.src.main", "app"),
 )
 
 

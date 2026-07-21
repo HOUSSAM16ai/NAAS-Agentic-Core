@@ -127,6 +127,11 @@ jobs:
           # D-173: table-driven replacement for the deleted single-issue/step
           # workflows — every fatal grep assertion they carried lives here.
           python scripts/fitness/check_legacy_invariants.py
+          # D-174: cross-brain model-chain parity — proves the monolith brain and
+          # the orchestrator brain both match the canonical shared model chain
+          # (shared/ai_models/model_chain.py). Turns the D-013 prose mirror rule
+          # into a machine-enforced single source of truth.
+          python scripts/fitness/check_model_chain_parity.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

@@ -39,14 +39,17 @@
 
 ## 3. مقعد سجل النماذج (Model Registry Seam) — أي مزوّد LLM
 
-- **الحالة الآن:** سلسلة النماذج في `app/core/ai_config.py` +
-  `microservices/orchestrator_service/src/core/ai_config.py` (مرآة D-013): PRIMARY + fallback chain
-  من نماذج `:free` على OpenRouter، مع حُرّاس (تجاوز 404/429 آلياً — D-167).
-- **المقعد:** `ActiveModels`/سلسلة الـ fallback. إضافة مزوّد جديد = مدخل في السلسلة (اسم النموذج +
-  مفتاح البيئة). النماذج المحظورة (reasoning-only، D-067) موثّقة صراحةً.
+- **الحالة الآن (D-174):** المصدر القانوني الوحيد للسلسلة هو `shared/ai_models/model_chain.py`
+  (dep-free): PRIMARY + fallback chain من نماذج `:free` على OpenRouter، مع حُرّاس (تجاوز 404/429
+  آلياً — D-167). العقلان (`app/core/ai_config.py` + `microservices/orchestrator_service/src/core/
+  ai_config.py`) يُبقيان حرفياتهما المُثبَّتة أمنياً (دفاع عميق ISS-079)، وبوّابة AST
+  `scripts/fitness/check_model_chain_parity.py` تُثبت أن العقلين == المصدر القانوني (تكافؤ محروس آلياً
+  بدل مرآة D-013 اليدوية).
+- **المقعد:** `shared/ai_models/model_chain.py` + `ActiveModels` في كل عقل. إضافة مزوّد جديد = مدخل في
+  السلسلة القانونية (اسم النموذج + مفتاح البيئة). النماذج المحظورة (reasoning-only، D-067) موثّقة صراحةً.
 - **شرط التبنّي:** بنشمارك حي قانوني (نفس system prompt + سؤال رياضي) قبل ترقية أي نموذج إلى PRIMARY.
-- **خطوة التركيب:** أضف النموذج إلى السلسلة في **العقلين** (monolith + orchestrator)؛ حدّث سكربتات
-  التحقق؛ شغّل البنشمارك الحي. لا تغيير في مسار الاستدعاء.
+- **خطوة التركيب:** حدّث السلسلة القانونية في `shared/ai_models/model_chain.py`، ثم اعكس الحرفيات
+  المُثبَّتة في **العقلين**؛ بوّابة parity تفشل CI عند أي انحراف؛ شغّل البنشمارك الحي. لا تغيير في مسار الاستدعاء.
 
 ## 4. مقعد أعلام المهارات (Skill Flags Seam) — آلية تبنّي التقنيات المُتحقَّقة
 
@@ -54,6 +57,13 @@
   **FLAGGED** = القدرة موصولة لكنها خلف علم بيئة (تُفعَّل عند رفع العلم). مثالان حيّان:
   `RetrievalRerankSkill` (LlamaIndex + Reranker، `ENABLE_RETRIEVAL_RERANK_SKILL`) و
   `MCPToolSkill` (MCP، `ENABLE_MCP_TOOL_SKILL`) — قدرات كانت DORMANT، فُعِّلت كمهارات اختيارية (D-100).
+- **D-174 (لا تُحذَف مقاعد RAG/rerank):** `app/drivers/llamaindex_driver.py` + `reranker_driver.py`
+  هما backing الفعلي لـ `RetrievalRerankSkill` (استيراد كسول داخل الدوال + إعادة تصدير في
+  `app/drivers/__init__.py`؛ مُسجَّلة في `registry.py` وتُخدَم عبر `/api/v1/skills`). تصنيف
+  runtime «ZOMBIE» يعني «غير مُستدعى بعد runtime» لا «بلا مستهلك» — الرسم البياني للاستيراد **حيّ**.
+  حذفها يكسر إقلاع المونوليث ويُلغي مقعد RAG/Reranker. كذلك `education_council.py` مُستورَد من
+  `app/services/chat/agents/orchestrator.py` (مقعد المجلس، حي بالاستيراد). القاعدة: هذه **مقاعد**
+  تُرقّى بالبرهان الثلاثي، لا كود ميت يُحذَف.
 - **المقعد:** نمط FLAGGED **هو** آلية تبنّي التقنيات: LlamaIndex/DSPy/Reranker/MCP تُركَّب كمهارة
   بعقد Pydantic + مقاييس Prometheus + اختبارات + علم، ثم تُرقّى إلى ACTIVE بعد الإثبات الثلاثي
   (import + call chain + runtime evidence).
@@ -81,8 +91,8 @@
 > مصدر الحقيقة الحيّ لخارطة الطريق: `.memory/roadmap.md` (ملخّص CLAUDE.md §0.6). هذا القسم يوثّق
 > **الأهداف المعمارية** التي وجّهت D-173.
 
-- **API-first 100%:** كل خدمة مصغرة (10/10) لها عقد OpenAPI ملتزَم يغطّي مساراتها الفعلية، مفروض
-  ببوّابة تكافؤ دلالية (`scripts/fitness/check_openapi_parity.py`). العقود = الحدود الصريحة بين الخدمات.
+- **API-first 100%:** كل خدمة مصغرة (11/11 — D-174 أدرج `auditor_service`) لها عقد OpenAPI ملتزَم يغطّي
+  مساراتها الفعلية، مفروض ببوّابة تكافؤ دلالية (`scripts/fitness/check_openapi_parity.py`). العقود = الحدود الصريحة بين الخدمات.
 - **منظومة وكيلة قابلة للاستبدال:** العقل الحتمي وحدة واحدة (`probability_tutor_brain.py`)، والـ port
   المستقل (`probability_tutor.py`) يخدم الخدمة المصغرة — تكافؤ محروس بـ20 عقداً (split-brain gate).
   الرسمان (12-node chat + 9-node missions) كلاهما حي، والانتقال التدريجي للخدمات المصغرة محكوم

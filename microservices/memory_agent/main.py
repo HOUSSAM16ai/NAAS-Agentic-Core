@@ -12,9 +12,10 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, Depends, FastAPI, Query
+from fastapi import APIRouter, Depends, FastAPI, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from microservices.memory_agent import prom_metrics
 from microservices.memory_agent.database import get_session, init_db
 from microservices.memory_agent.errors import setup_exception_handlers
 from microservices.memory_agent.health import HealthResponse, build_health_payload
@@ -46,6 +47,12 @@ def _build_public_router(settings: MemoryAgentSettings) -> APIRouter:
         """يفحص جاهزية الوكيل دون اعتماد خارجي."""
 
         return build_health_payload(settings)
+
+    @router.get("/metrics", include_in_schema=False)
+    def prometheus_metrics() -> Response:
+        """Prometheus scrape endpoint (cogniforge_memory_*). Hidden from OpenAPI."""
+        content, content_type = prom_metrics.export_prometheus_text()
+        return Response(content=content, media_type=content_type)
 
     return router
 
@@ -132,6 +139,7 @@ def create_app(settings: MemoryAgentSettings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     setup_exception_handlers(app)
+    prom_metrics.set_startup_info(version=effective_settings.SERVICE_VERSION)
 
     # تطبيق Zero Trust: التحقق من الهوية عند البوابة
     app.include_router(_build_public_router(effective_settings))

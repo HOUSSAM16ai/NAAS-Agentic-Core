@@ -1,0 +1,261 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Auditor Microservice",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/review": {
+      "post": {
+        "summary": "Review Work",
+        "description": "Review the work result or plan.",
+        "operationId": "review_work_review_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/consult": {
+      "post": {
+        "summary": "Consult",
+        "description": "Provide consultation.",
+        "operationId": "consult_consult_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsultRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsultResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ConsultRequest": {
+        "properties": {
+          "situation": {
+            "type": "string",
+            "title": "Situation",
+            "description": "Description of the situation."
+          },
+          "analysis": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Analysis",
+            "description": "Analysis data."
+          }
+        },
+        "type": "object",
+        "required": [
+          "situation",
+          "analysis"
+        ],
+        "title": "ConsultRequest",
+        "description": "Request payload for safety/strategic consultation."
+      },
+      "ConsultResponse": {
+        "properties": {
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation",
+            "description": "Safety recommendation (English)."
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Confidence score (0-100)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "recommendation",
+          "confidence"
+        ],
+        "title": "ConsultResponse",
+        "description": "Consultation recommendation."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ReviewRequest": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result",
+            "description": "The execution result or proposed plan to review."
+          },
+          "original_objective": {
+            "type": "string",
+            "title": "Original Objective",
+            "description": "The original objective of the mission."
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context",
+            "description": "Contextual information (shared memory)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "result",
+          "original_objective"
+        ],
+        "title": "ReviewRequest",
+        "description": "Request payload for reviewing work or plans."
+      },
+      "ReviewResponse": {
+        "properties": {
+          "approved": {
+            "type": "boolean",
+            "title": "Approved",
+            "description": "Whether the work is approved."
+          },
+          "feedback": {
+            "type": "string",
+            "title": "Feedback",
+            "description": "Detailed feedback in Arabic."
+          },
+          "score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "description": "Quality score between 0.0 and 1.0."
+          },
+          "final_response": {
+            "type": "string",
+            "title": "Final Response",
+            "description": "A professional markdown-formatted response for the user."
+          }
+        },
+        "type": "object",
+        "required": [
+          "approved",
+          "feedback",
+          "score",
+          "final_response"
+        ],
+        "title": "ReviewResponse",
+        "description": "Structured review feedback from the Auditor."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

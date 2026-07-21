@@ -27,7 +27,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from db_bridge import run_sql
 
-_TABLE = "bac_exercises"
+# عمود ``embedding`` (pgvector) يعيش على ``bac_exercise_questions`` (الأسئلة المُفهرَسة
+# دلالياً)؛ ``bac_exercises`` metadata فقط (توليد مرشّحين بـ SQL — bac_db_retriever).
+_TABLE = "bac_exercise_questions"
 _EMBED_MODEL = "BAAI/bge-m3"
 
 

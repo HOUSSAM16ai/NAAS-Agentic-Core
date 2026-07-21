@@ -23,7 +23,16 @@ SKILL_SRC = (REPO_ROOT / "app/services/skills/concept_diagnosis_skill.py").read_
 CLIENT_SRC = (
     read_tutor_source()
 )  # D-163: عقل الاحتمالات استُخرج للوحدة المستقلة — نضمّ الاثنين ليصمد أي pin
-DOCTRINE_SRC = (REPO_ROOT / "app/services/skills/doctrine.py").read_text(encoding="utf-8")
+import importlib.util as _ilu
+
+_spec = _ilu.spec_from_file_location(
+    "_doctrine_sources", REPO_ROOT / "app/services/skills/doctrine/_sources.py"
+)
+_dsrc = _ilu.module_from_spec(_spec)
+assert _spec.loader is not None
+_spec.loader.exec_module(_dsrc)
+# D-173 Stage 2a: doctrine.py صار حزمة — البوّابات تقرأ المصدر المُركَّب عبر المانيفست.
+DOCTRINE_SRC = _dsrc.read_doctrine_source()
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 

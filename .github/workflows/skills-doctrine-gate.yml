@@ -142,6 +142,6 @@ jobs:
           echo "════════════════════════════════════════════════════════════"
           echo "  Doctrines: retrieval | explanation | model_answer_reliance"
           echo "             | detailed_explanation"
-          echo "  Single source of truth: app/services/skills/doctrine.py"
+          echo "  Single source of truth: app/services/skills/doctrine/ (package)"
           echo "  EXPLANATION_DOCTRINE_VERSION ≥ 2.0.0 (post-D-069)"
           echo "════════════════════════════════════════════════════════════"

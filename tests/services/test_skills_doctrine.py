@@ -1,7 +1,7 @@
 """
 D-069 / ISS-CI-GREEN-001 (2026-05-18) — Skills Doctrine Invariants.
 
-هذه الاختبارات تثبت أن الـ doctrine الموحَّد في `app/services/skills/doctrine.py`:
+هذه الاختبارات تثبت أن الـ doctrine الموحَّد في حزمة `app/services/skills/doctrine/`:
 1. يُصدِّر كل القواعد المتوقعة بأسماء stable.
 2. كل caller يحترم الـ doctrine (drift detection).
 3. الـ versioning monotonic — لا تراجع في الـ version.

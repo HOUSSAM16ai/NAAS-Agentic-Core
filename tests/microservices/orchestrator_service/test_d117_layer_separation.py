@@ -74,6 +74,8 @@ class TestNoDirectivePrepend:
             *API_SOURCE_FILES,
             "microservices/orchestrator_service/src/services/overmind/graph/main.py",
             "microservices/orchestrator_service/src/services/overmind/graph/search.py",
+            "microservices/orchestrator_service/src/services/overmind/graph/nodes.py",
+            "microservices/orchestrator_service/src/services/overmind/graph/state.py",
         ):
             src = (REPO_ROOT / f).read_text(encoding="utf-8")
             assert "pedagogy_directive" not in src, f

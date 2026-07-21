@@ -145,7 +145,17 @@ class TestDirectiveSafety:
 class TestWiringInvariants:
     """no-ZOMBIE (نمط D-073): الـ skill مُستهلَك فعلاً على المسار الحي."""
 
-    ROUTER_SRC = (REPO_ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+    # D-173 Stage 2b: customer_chat helpers extracted to customer_chat_support/* —
+    # read the composed source via the manifest so structural asserts survive.
+    import importlib.util as _ilu
+
+    _spec = _ilu.spec_from_file_location(
+        "_cc_sources", REPO_ROOT / "app/api/routers/customer_chat_support/_sources.py"
+    )
+    _ccsrc = _ilu.module_from_spec(_spec)
+    assert _spec.loader is not None
+    _spec.loader.exec_module(_ccsrc)
+    ROUTER_SRC = _ccsrc.read_customer_chat_source()
     CLIENT_SRC = read_tutor_source()
 
     def test_router_builds_directive_with_isolated_session(self):

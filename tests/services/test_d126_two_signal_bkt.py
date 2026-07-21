@@ -272,9 +272,28 @@ class TestEngineWiring:
 _SCHEMA_SRC = (REPO_ROOT / "app/core/db_schema_config.py").read_text(encoding="utf-8")
 _PERSIST_SRC = (REPO_ROOT / "app/services/analytics/bkt_persistence.py").read_text(encoding="utf-8")
 _ORM_SRC = (REPO_ROOT / "app/core/domain/bkt_analytics.py").read_text(encoding="utf-8")
-_CHAT_SRC = (REPO_ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+# D-173 Stage 2b: customer_chat helpers extracted to customer_chat_support/* —
+# read the composed source via the manifest so structural asserts survive.
+import importlib.util as _ilu
+
+_spec = _ilu.spec_from_file_location(
+    "_cc_sources", REPO_ROOT / "app/api/routers/customer_chat_support/_sources.py"
+)
+_ccsrc = _ilu.module_from_spec(_spec)
+assert _spec.loader is not None
+_spec.loader.exec_module(_ccsrc)
+_CHAT_SRC = _ccsrc.read_customer_chat_source()
 _METRICS_SRC = (REPO_ROOT / "app/services/skills/tutor_metrics.py").read_text(encoding="utf-8")
-_DOCTRINE_SRC = (REPO_ROOT / "app/services/skills/doctrine.py").read_text(encoding="utf-8")
+import importlib.util as _ilu
+
+_spec = _ilu.spec_from_file_location(
+    "_doctrine_sources", REPO_ROOT / "app/services/skills/doctrine/_sources.py"
+)
+_dsrc = _ilu.module_from_spec(_spec)
+assert _spec.loader is not None
+_spec.loader.exec_module(_dsrc)
+# D-173 Stage 2a: doctrine.py صار حزمة — البوّابات تقرأ المصدر المُركَّب عبر المانيفست.
+_DOCTRINE_SRC = _dsrc.read_doctrine_source()
 
 
 class TestStorageWiring:

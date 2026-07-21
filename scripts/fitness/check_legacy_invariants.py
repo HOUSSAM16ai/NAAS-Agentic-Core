@@ -289,7 +289,8 @@ REQUIRED: dict[str, list[str]] = {
     "microservices/orchestrator_service/src/services/overmind/graph/general_knowledge.py": [
         "LatexStreamNormalizer\\|normalize_latex",  # iss-074-latex-stream-normalizer-gate.yml
     ],
-    "microservices/orchestrator_service/src/services/overmind/graph/main.py": [
+    "microservices/orchestrator_service/src/services/overmind/graph/nodes.py": [
+        # D-173 Stage 2c: node classes (ChatFallbackNode, …) moved main.py → nodes.py
         "get_greeting_fastpath_response",  # iss-076 (ChatFallbackNode)
         "LatexStreamNormalizer\\|normalize_latex",  # iss-074-latex-stream-normalizer-gate.yml
     ],
@@ -445,9 +446,9 @@ ANY_OF: list[tuple[str, list[str]]] = [
         ["LatexStreamNormalizer", "normalize_latex"],
     ),
     (
-        "microservices/orchestrator_service/src/services/overmind/graph/main.py",
+        "microservices/orchestrator_service/src/services/overmind/graph/nodes.py",
         ["LatexStreamNormalizer", "normalize_latex"],
-    ),
+    ),  # D-173 Stage 2c: node classes moved to nodes.py
 ]
 
 # Dead/banned models must not appear outside full-line comments (iss-070 +

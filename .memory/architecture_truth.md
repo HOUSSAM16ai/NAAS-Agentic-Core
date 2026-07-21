@@ -16,7 +16,7 @@ The system is in a "strangler fig" migration phase from monolith to microservice
 | **MCP** (`app/services/mcp/`) | **DORMANT** | Not referenced by live APIs or kernel. Lazy-imported only in dormant agents. |
 | **Reranker / LlamaIndex / DSPy** | **DORMANT** | Implemented in `microservices/research_agent` and `orchestrator_service`. Blocked by microservice boundaries that are inactive by default. |
 | **Tavily (WebSearchFallbackNode)** | **DORMANT** | `tavily-python==0.7.24` installed. `TavilyClient` importable. Live search confirmed. Only called from `orchestrator_service/graph/search.py:WebSearchFallbackNode` — DORMANT. `TAVILY_API_KEY` absent from `docker-compose.yml`. Silent skip when key missing. |
-| **Advanced orchestrator StateGraph** | **DORMANT** | 13-node graph compiles and runs in isolation with `OPENROUTER_API_KEY`. NOT on live call chain. Requires full Docker Compose stack. `cognitive_engine.memorize` bug (non-blocking). `FlagEmbeddingReranker` not installed. |
+| **Advanced orchestrator StateGraph** | **DORMANT** | 12-node graph compiles and runs in isolation with `OPENROUTER_API_KEY`. NOT on live call chain. Requires full Docker Compose stack. `cognitive_engine.memorize` bug (non-blocking). `FlagEmbeddingReranker` not installed. |
 | **Database** (`app/core/database.py`) | **ACTIVE** | Monolith directly accesses DB via `async_session_factory`. PostgreSQL 17.6 Supabase. PgBouncer transaction mode. |
 | **Cache** (`app/caching/factory.py`) | **ACTIVE (InMemoryCache)** | `REDIS_URL` not set → `get_cache()` returns `InMemoryCache`. Redis process runs on 6379 but unused. |
 | **AI Gateway** (`app/core/gateway/simple_client.py`) | **ACTIVE** | `SimpleAIClient` with OpenRouter. Primary: `nvidia/nemotron-3-super-120b-a12b:free`. 5 fallback models. |
@@ -85,20 +85,20 @@ To move from "transitional/zombie" to "production-grade multi-service":
 - [ ] Verify `curl http://localhost:8006/health` returns healthy
 - [ ] Verify orchestrator warmup passes (admin tool invocation in lifespan)
 - [ ] Set `ORCHESTRATOR_SERVICE_URL=http://localhost:8006` in monolith env
-- [ ] **Change `ChatRoutingPolicy.candidate_urls()` to return `/api/chat/messages` instead of `/agent/chat`** — required to route through the 13-node StateGraph instead of `OrchestratorAgent`
+- [ ] **Change `ChatRoutingPolicy.candidate_urls()` to return `/api/chat/messages` instead of `/agent/chat`** — required to route through the 12-node StateGraph instead of `OrchestratorAgent`
 - [ ] Send educational query → verify `retrieval_source="web"` in telemetry (not `"web_skipped_missing_tavily"`)
 - [ ] Update `.memory/runtime_truth.md` rows 24, 24a, 24b to ACTIVE
 
 ## Critical Finding Added 2026-05-09 (fourth pass forensic audit)
 
-**The monolith's `/agent/chat` call does NOT invoke the 13-node StateGraph.**
+**The monolith's `/agent/chat` call does NOT invoke the 12-node StateGraph.**
 
-`ChatRoutingPolicy.candidate_urls()` returns `[f"{base}/agent/chat"]`. The `/agent/chat` endpoint routes to `OrchestratorAgent.run()` — an intent-based dispatch system with its own 13-intent taxonomy. The 13-node StateGraph (`create_unified_graph()`) is only invoked by `/api/chat/messages` (HTTP) and `/api/chat/ws` (WS) on the orchestrator service.
+`ChatRoutingPolicy.candidate_urls()` returns `[f"{base}/agent/chat"]`. The `/agent/chat` endpoint routes to `OrchestratorAgent.run()` — an intent-based dispatch system with its own 13-intent taxonomy. The 12-node StateGraph (`create_unified_graph()`) is only invoked by `/api/chat/messages` (HTTP) and `/api/chat/ws` (WS) on the orchestrator service.
 
 **Implication**: Even when the orchestrator microservice is running, the advanced StateGraph is NOT on the monolith's chat path. To route through the StateGraph, `ChatRoutingPolicy.candidate_urls()` must return `/api/chat/messages` instead of `/agent/chat`.
 
 **thread_id format mismatch**: Local fallback graph uses `str(conversation_id)` (e.g. `"394"`). Orchestrator StateGraph uses `f"u{user_id}:c{conversation_id}"` (e.g. `"u7:c394"`). These namespaces are incompatible — no shared checkpoint state between the two stacks (ISS-019).
 
-**AdminAgentNode stateless**: Inside the 13-node StateGraph, `AdminAgentNode` invokes the admin sub-graph with `thread_id=str(uuid.uuid4())` — a fresh UUID per invocation. Stateless by design.
+**AdminAgentNode stateless**: Inside the 12-node StateGraph, `AdminAgentNode` invokes the admin sub-graph with `thread_id=str(uuid.uuid4())` — a fresh UUID per invocation. Stateless by design.
 
 **Full forensic details**: `.memory/langgraph_advanced_forensics.md`

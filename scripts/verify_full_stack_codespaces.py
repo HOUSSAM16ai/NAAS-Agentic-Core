@@ -6,7 +6,7 @@ verify_full_stack_codespaces.py — تحقّق حيّ كامل للمنظومة 
   1. المونوليث :8000 /health.
   2. الخدمات الـ 8 المصغرة /health (8001–8009).
   3. Skills Pipeline /compose → pipeline_mode (full/partial/fallback).
-  4. منصّة الـ Skills /api/v1/skills (الـ 14 Skill + الحالة).
+  4. منصّة الـ Skills /api/v1/skills (كل الـ Skills المسجَّلة + الحالة).
   5. (اختياري) دور WebSocket حيّ عبر :8000/api/chat/ws إن توفّرت بيانات الدخول.
 
 يُشغَّل في Codespaces حيث الـ egress مفتوح (الـ sandbox يحجب pip + منافذ Postgres).

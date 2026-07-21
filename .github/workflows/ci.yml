@@ -395,5 +395,5 @@ jobs:
           echo "✅ All required checks passed"
           echo ""
           echo "Skills Architecture: ✅ Verified"
-          echo "Frontend: 8 node regression suites ✅"
+          echo "Frontend: all node regression suites (frontend/tests/*.test.mjs) ✅"
           echo "Microservices: 8 services | Prometheus: ≥12 targets | Grafana: ≥16 dashboards"

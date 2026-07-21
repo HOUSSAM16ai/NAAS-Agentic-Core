@@ -46,7 +46,7 @@ chain from any production entrypoint).
 | 5 | Memory | `.memory/` + BKT `student_bkt_analytics` + `tutor_state` + InMemoryCache | **ACTIVE** | D-074, D-142; `db_schema_config.py` |
 | 6 | Knowledge / Retrieval | `knowledge_base/` + `knowledge_index` + Supabase `bac_exercises` (vector) | **PARTIAL** | retrieval ACTIVE; true *graph* only in DORMANT microservices (`*_retriever.py`) |
 | 7 | Planner | `PedagogicalPolicyEngine` + `LearningPathSkill` (ACTIVE); planning-agent DSPy (DORMANT by default) | **PARTIAL** | D-111, D-144 |
-| 8 | Reasoning | orchestrator 13-node graph + Socratic policy (ACTIVE when orchestrator up); reasoning-agent MCTS (DORMANT default) | **PARTIAL** | D-112, D-129 |
+| 8 | Reasoning | orchestrator 12-node graph + Socratic policy (ACTIVE when orchestrator up); reasoning-agent MCTS (DORMANT default) | **PARTIAL** | D-112, D-129 |
 | 9 | Verification / Guardrails | `AnswerRedactionSkill` · `OutputFirewall` · `ContentIntegritySkill` · `arabic_stream_guard` · `TopicLock` | **ACTIVE** | D-086, D-113; CritiqueNode (D-109) = **PLANNED** |
 | 10 | Observability | UnifiedObservability + Prometheus + Grafana + `tutor_metrics` | **ACTIVE** (in-process); OTEL export **NO-OP** | `context.md`; `observability_truth.md` |
 | 11 | Context engine | harness compaction + question-aware budget (D-053) + history guards | **PARTIAL** | D-053; D-102/D-137 history guards |

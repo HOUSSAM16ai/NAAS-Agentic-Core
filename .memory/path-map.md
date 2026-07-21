@@ -58,19 +58,19 @@ POST /agent/chat → chat_with_agent_endpoint(ChatRequest)
   → OrchestratorAgent.run(question, context)
     → IntentDetector.detect() → 13-intent taxonomy
     → dispatch: AdminAgent | AnalyticsAgent | CurriculumAgent | chat_fallback | ...
-    → NOT the 13-node StateGraph
+    → NOT the 12-node StateGraph
 ```
 
-### `/api/chat/messages` — 13-node StateGraph (HTTP)
+### `/api/chat/messages` — 12-node StateGraph (HTTP)
 NOT called by the monolith. Only reachable directly or via orchestrator's own clients.
 ```
 POST /api/chat/messages → chat_messages_endpoint(payload)
   → context["thread_id"] = f"u{user_id}:c{conversation_id}"
   → _run_chat_langgraph() → app_graph.astream_events(inputs, config, version="v2")
-    → 13-node StateGraph: supervisor → [routing] → ... → validator → END
+    → 12-node StateGraph: supervisor → [routing] → ... → validator → END
 ```
 
-### `/api/chat/ws` — 13-node StateGraph (WebSocket)
+### `/api/chat/ws` — 12-node StateGraph (WebSocket)
 NOT called by the monolith. Direct WebSocket connection to orchestrator.
 ```
 WS /api/chat/ws → chat_ws_stategraph(websocket)

@@ -139,7 +139,7 @@ live traces · routing checks · tutor behavior tests · **no-dump tests** ·
 | # | الطبقة | المكوّنات ↔ الملفات | الحالة |
 |---|--------|---------------------|--------|
 | 1 | Core Doctrine | هذا الملف + CLAUDE.md §0/§0.8 + `EXPLANATION_DOCTRINE` v3+ (Socratic no-answer) | **ACTIVE** |
-| 2 | Routing / Intent | `IntentDetector` (`app/services/chat/ports.py` — تحفّظ D-014)، `SupervisorNode`، `OrchestratorClient`، `local_graph`، exercise/content retrieval، query_rewriter/retriever/reranker/synthesizer (الرسم 13-node) | **ACTIVE** |
+| 2 | Routing / Intent | `IntentDetector` (`app/services/chat/ports.py` — تحفّظ D-014)، `SupervisorNode`، `OrchestratorClient`، `local_graph`، exercise/content retrieval، query_rewriter/retriever/reranker/synthesizer (الرسم 12-node) | **ACTIVE** |
 | 3 | TutorState / Learning State | `TutorState` ORM (`app/core/domain/tutor_state.py`) + `TutorStateService` + `UnderstandingStateSkill` (D-135) | **ACTIVE** |
 | 4 | Diagnosis | `ConceptDiagnosisSkill` + `MISCONCEPTION_GRAPH` (`semantic_property_skill`) + `StudentStateSkill` (نيّة+إحباط، D-133) + `SocraticEvaluatorSkill` (D-130) | **ACTIVE** |
 | 5 | Pedagogical Policy | `PedagogicalPolicyEngine` (D-144) + `PedagogicalPolicySkill` (D-129) + `PedagogicalEscalationSkill` (D-138) + `DialogueManagerSkill` (D-142) + `AdaptivePedagogySkill` (D-104، سُلّم الدعم الخماسي) | **ACTIVE** |
@@ -148,7 +148,7 @@ live traces · routing checks · tutor behavior tests · **no-dump tests** ·
 | 8 | Guards / Response Guard | `AnswerRedactionSkill` + `ContentIntegritySkill` (+`StreamIntegrityFilter`) + `OutputFirewall` + `TopicLock` + `arabic_stream_guard` + `_recently_emitted`/`last_step_emitted` | **ACTIVE** |
 | 9 | LLM Roles (Listener/Classifier/Definer/Narrator — لا سلطة) | `concept_diagnosis` (Listener) + `semantic_property.define_concept` (Definer) + `_generate_socratic_narrative` (Narrator المحروس، D-128) + RAG-grounded explainer (D-145) | **ACTIVE (محروس)** |
 | 10 | Runtime Shell / Extensibility | Skills registry (26 skill) + MCP (`MCPToolSkill` FLAGGED) + hooks (Claude Code layer) + subagents + compaction + append-oriented storage + permissions | **ACTIVE/PARTIAL** (تفاصيل `.memory/agentic_runtime_doctrine.md`) |
-| 11 | Orchestration | `orchestrator-service` LangGraph 13-node (D-112 العمود الإلزامي) + streaming path + trace continuity (W3C traceparent) + **بذرة M10-S2.1**: `overmind/probability_tutor.py` (port حتمي مستقل، خلف `ORCHESTRATOR_PROB_TUTOR_ENABLED` افتراضه "1" — D-154/D-163) | **ACTIVE** (الـ port: **ACTIVE default-on** — أُثبت حياً 7/7) |
+| 11 | Orchestration | `orchestrator-service` LangGraph 12-node (D-112 العمود الإلزامي) + streaming path + trace continuity (W3C traceparent) + **بذرة M10-S2.1**: `overmind/probability_tutor.py` (port حتمي مستقل، خلف `ORCHESTRATOR_PROB_TUTOR_ENABLED` افتراضه "1" — D-154/D-163) | **ACTIVE** (الـ port: **ACTIVE default-on** — أُثبت حياً 7/7) |
 | 12 | Learning Analytics | BKT ثنائي القناة (`bkt_engine`, D-126) + `illusion_gap` + `LearningPathSkill` (D-111) + `tutor_metrics` | **ACTIVE** · **DKT: PLANNED** (roadmap) |
 | 13 | Documentation / Memory | `CLAUDE.md` + `.memory/{decisions,issues,roadmap,routing_philosophy,pedagogical_os,agentic_runtime_doctrine,runtime_truth}.md` | **ACTIVE** |
 | 14 | Verification | pytest + fitness gates (`check_skills_doctrine`, `check_pedagogical_os`, …) + `runtime_truth.py --check` + CI workflows + live-trace scripts | **ACTIVE** |

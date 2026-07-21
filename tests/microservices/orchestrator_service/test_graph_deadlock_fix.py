@@ -73,16 +73,19 @@ async def test_supervisor_classification_is_timeout_bounded():
     async def _fast_wait_for(awaitable, timeout):
         return await real_wait_for(awaitable, timeout=0.2)
 
-    import microservices.orchestrator_service.src.services.overmind.graph.main as graph_main
+    # D-173 Stage 2c (D-168 late-binding): the timeout guard's caller moved from
+    # graph.main into the extracted graph.nodes module. Patch where the call
+    # site lives — graph.main only re-exports SupervisorNode (noqa F401).
+    import microservices.orchestrator_service.src.services.overmind.graph.nodes as graph_nodes
 
-    original = graph_main.asyncio.wait_for
-    graph_main.asyncio.wait_for = _fast_wait_for
+    original = graph_nodes.asyncio.wait_for
+    graph_nodes.asyncio.wait_for = _fast_wait_for
     try:
         started = asyncio.get_event_loop().time()
         result = await node({"query": "اشرح نظرية النسبية بالتفصيل", "messages": []})
         elapsed = asyncio.get_event_loop().time() - started
     finally:
-        graph_main.asyncio.wait_for = original
+        graph_nodes.asyncio.wait_for = original
 
     assert result.get("intent") in _VALID_BRANCHES
     assert elapsed < 1.5, f"entry node was not timeout-bounded: {elapsed:.2f}s"

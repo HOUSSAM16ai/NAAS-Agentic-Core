@@ -10,17 +10,16 @@
   C6: Grafana dashboard (5 اختبار)
   C7: supervisor.sh — STEP 4J (4 اختبار)
   C8: automations.yaml — service + tasks (5 اختبار)
-  C9: GitHub Actions workflow (4 اختبار)
+  C9: step-12 CI invariants — consolidated into legacy gate (3 اختبار, D-173 Stage 1)
   C10: Skill isolation — no cross-service imports (4 اختبار)
 
-إجمالي: 94 اختبار
+إجمالي: 93 اختبار
 """
 
 from __future__ import annotations
 
 import json
 import os
-import re
 from pathlib import Path
 from typing import ClassVar
 
@@ -638,23 +637,32 @@ class TestAutomationsYaml:
 
 
 class TestGitHubActionsWorkflow:
-    """C9: GitHub Actions workflow للخطوة 12."""
+    """C9: step-12 CI invariants — consolidated into the legacy gate (D-173 Stage 1).
 
-    def test_workflow_file_exists(self):
-        assert WORKFLOW.exists()
+    The standalone ``microservices-step12-conversation-service.yml`` workflow was
+    merged away in the CI consolidation (38→~18 workflows). Its ``grep -q``
+    assertions were transcribed verbatim into
+    ``scripts/fitness/check_legacy_invariants.py`` (the single legacy-invariant
+    gate). Per D-105 (align to reality, never disable), these tests now assert the
+    invariants survive in the consolidation target rather than in a deleted file.
+    """
 
-    def test_workflow_has_7_jobs(self):
-        content = WORKFLOW.read_text()
-        jobs = re.findall(r"^\s{2}\w[\w-]+:\s*$", content, re.MULTILINE)
-        assert len(jobs) >= 6
+    LEGACY_GATE: ClassVar = ROOT / "scripts" / "fitness" / "check_legacy_invariants.py"
 
-    def test_workflow_triggers_on_conversation_service(self):
-        content = WORKFLOW.read_text()
-        assert "microservices/conversation_service/**" in content
+    def test_standalone_workflow_was_consolidated(self):
+        # The per-step workflow no longer exists; the legacy gate replaces it.
+        assert not WORKFLOW.exists(), "step-12 workflow should be consolidated away (D-173 Stage 1)"
+        assert self.LEGACY_GATE.exists()
 
-    def test_workflow_has_regression_job(self):
-        content = WORKFLOW.read_text()
-        assert "regression" in content
+    def test_step12_invariants_survive_in_legacy_gate(self):
+        content = self.LEGACY_GATE.read_text(encoding="utf-8")
+        # Core step-12 contracts (metrics endpoints + graph nodes + timeout guard).
+        for invariant in ('"/chat/message"', '"/chat/ws"', "StateGraph", "asyncio.wait_for"):
+            assert invariant in content, f"step-12 invariant dropped from legacy gate: {invariant}"
+
+    def test_legacy_gate_covers_conversation_service(self):
+        content = self.LEGACY_GATE.read_text(encoding="utf-8")
+        assert "conversation-service" in content or "conversation_service" in content
 
 
 # ══════════════════════════════════════════════════════════════════════════════

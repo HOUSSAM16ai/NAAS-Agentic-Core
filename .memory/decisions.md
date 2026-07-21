@@ -5,6 +5,34 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-174 · إغلاق الفجوات الحقيقية — API-First 11/11 + تكافؤ نماذج محروس + ملاحظية + مقاعد RAG (2026-07-21)
+**السياق:** بعد D-173 (التنظيم الثوري)، طلب المالك جولة عميقة تُكمل الثورة (خدمات مصغرة + API-first 100%،
+حل split-brain، DRY، ملاحظية كاملة، جاهزية إضافة التقنيات، CI أخضر، E2E حي). الاستكشاف أثبت أن معظم ذلك
+أُنجِز في D-163→D-173؛ هذه الجولة تُغلق **الفجوات الملموسة المتبقية** بتغييرات إضافية محروسة (اختيار المالك:
+«Gaps + DRY، مخاطرة دنيا على CI»).
+
+- **تكافؤ سلسلة النماذج (split-brain) — مصدر واحد + بوّابة حتمية:** حرفيات النماذج مُثبَّتة أمنياً في العقلين
+  بـ`check_legacy_invariants.py` **و** `test_iss079_catastrophic_fixes.py` (دفاع عميق ISS-079) — إخراجها إلى
+  `shared/` يُضعِف بوّابة أمان (ممنوع دستورياً)، ولا خدمة مصغرة تستورد `shared/` اليوم. لذا **لم تُلمَس داخليات
+  `ai_config.py`**. أُضيف بدلاً منها: `shared/ai_models/model_chain.py` (المصدر القانوني dep-free) +
+  `scripts/fitness/check_model_chain_parity.py` (بوّابة AST تُثبت أن العقلين == السلسلة القانونية — تحوّل مرآة
+  D-013 النثرية إلى تكافؤ محروس آلياً، يكشف انحراف cross-brain لم يكن يُفحَص) + `tests/config/test_model_chain_parity.py`
+  (3 اختبارات تمرّ) موصولة في guardrails. صفر تغيير سلوكي؛ الاختبارات/البوّابات الخمس الحارسة تبقى خضراء.
+- **API-first 11/11:** `auditor_service` (كان خارج البوّابة) أُدرِج في `SERVICES` SSOT (`export_openapi.py`) +
+  `tests/contracts/test_openapi_contracts.py`، مع عقد `docs/contracts/openapi/auditor_service-openapi.json`
+  (3.1.0). البوّابة الوحيدة في CI دلالية (`check_openapi_parity` — لا byte-exact)؛ مجموعة مسارات العقد
+  `{POST /review, POST /consult, GET /health}` تطابق المسارات الظاهرة، والاستيراد نظيف (constructors بلا آثار).
+- **ملاحظية (parity):** `prom_metrics.py` (CollectorRegistry مستقل، 7 مقاييس `cogniforge_*`، استيراد دفاعي) +
+  `/metrics` (`include_in_schema=False` ⇒ صفر أثر على العقود) لـ `api_gateway` + `auditor_service` + `memory_agent`
+  (الثلاثة كانت بلا `/metrics`؛ ليست ضمن مصفوفة SKILLS gate — بنية تحتية لا Skill).
+- **مقاعد RAG/rerank (حذف مرفوض بالدليل):** «الـ3 ZOMBIE» (llamaindex_driver + reranker_driver + education_council)
+  **ليست قابلة للحذف** — الأوّلان backing لـ`RetrievalRerankSkill` المُسجَّلة على `/api/v1/skills` (خلف علم)،
+  والثالث مُستورَد من agent orchestrator (4 اختبارات). «ZOMBIE» = غير مُستدعى runtime، لا «بلا مستهلك»؛ الرسم
+  البياني للاستيراد حيّ. وُثِّقت كمقاعد امتداد (`EXTENSION_SEAMS.md` §3/§4) بدل الحذف. lock بلا تغيير
+  (`runtime_truth.py --check` يمرّ).
+- **تحقق حي (E2E):** OpenRouter PRIMARY (`gpt-oss-20b:free`) → عربي + LaTeX، `finish=stop`؛ جسر Supabase
+  HTTPS (`select 1` + 34 جدولاً حاضراً). البوّابات dep-free محلياً خضراء (`ruff`, parity gate, runtime_truth).
+
 ## D-173 · التنظيم الثوري الشامل — API-First + قتل التعقيد المتبقي + جراحة التوثيق (2026-07-21)
 **السياق:** بعد سلسلة التفكيك (D-163→D-172: God-files قُتلت، docker full-stack مُثبَت 16/16،
 split-brain محروس بـ17 عقد)، طلب المالك عملية ضخمة تُكمل الثورة: قتل بقايا التعقيد

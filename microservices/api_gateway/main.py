@@ -8,9 +8,10 @@ from urllib.parse import urlparse
 
 import uvicorn
 from fastapi import Depends, FastAPI, Request, WebSocket
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 # Local imports
+from microservices.api_gateway import prom_metrics
 from microservices.api_gateway.config import settings
 from microservices.api_gateway.middleware import (
     RequestIdMiddleware,
@@ -280,6 +281,7 @@ app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 app.add_middleware(StructuredLoggingMiddleware)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(TraceContextMiddleware)
+prom_metrics.set_startup_info(environment=os.getenv("ENVIRONMENT", "development"))
 
 
 # --- WebSocket Routes MUST BE FIRST to avoid being shadowed by wildcard API routes ---
@@ -358,6 +360,13 @@ async def admin_chat_ws_proxy(websocket: WebSocket):
                     }
                 )
                 await websocket.close()
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics() -> Response:
+    """Prometheus scrape endpoint (cogniforge_gateway_*). Hidden from OpenAPI."""
+    content, content_type = prom_metrics.export_prometheus_text()
+    return Response(content=content, media_type=content_type)
 
 
 @app.get("/health")

@@ -1,6 +1,6 @@
 """API-first (D-173 Stage 4): كل خدمة مصغرة لها عقد OpenAPI ملتزَم وصالح.
 
-تغطية خفيفة بلا تبعيات ثقيلة — تتحقق من وجود العقود العشرة وصلاحيتها بنيوياً.
+تغطية خفيفة بلا تبعيات ثقيلة — تتحقق من وجود العقود الإحدى عشرة وصلاحيتها بنيوياً.
 التكافؤ الدلالي الحيّ (endpoints التطبيق ↔ العقد) يفرضه
 ``scripts/fitness/check_openapi_parity.py`` في job test-microservices (حيث كل
 تبعيات requirements-ci.txt موجودة لاستيراد التطبيقات).
@@ -16,7 +16,7 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _OPENAPI_DIR = _REPO_ROOT / "docs" / "contracts" / "openapi"
 
-# الخدمات العشر — SSOT في المولِّد؛ هنا نُثبّتها كعقد اختبار مستقل عن التبعيات.
+# الخدمات الإحدى عشرة — SSOT في المولِّد؛ هنا نُثبّتها كعقد اختبار مستقل عن التبعيات.
 _SERVICES = (
     "orchestrator_service",
     "user_service",
@@ -28,6 +28,8 @@ _SERVICES = (
     "reasoning_agent",
     "research_agent",
     "api_gateway",
+    # D-174: API-first 11/11 — auditor_service now carries a committed contract.
+    "auditor_service",
 )
 
 

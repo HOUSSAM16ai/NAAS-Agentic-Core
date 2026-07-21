@@ -856,8 +856,12 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 
 ### ج) قاعدة المرآة D-013 + فلتر D-102
 - **D-013 (المرآة الثنائية)**: `_GREETING_PATTERNS`/`_EDUCATIONAL_PATTERNS` مُكرَّرة في
-  `local_graph.py` **و** `path_observer.py`؛ سلسلة النماذج مُكرَّرة في العقلين (monolith + orchestrator).
-  أي تعديل يُطبَّق في النسختين في نفس الـ PR.
+  `local_graph.py` **و** `path_observer.py`؛ أي تعديل يُطبَّق في النسختين في نفس الـ PR.
+- **D-013 لسلسلة النماذج (D-174 — مصدر واحد + بوّابة حتمية)**: المصدر القانوني الوحيد للسلسلة هو
+  `shared/ai_models/model_chain.py` (dep-free، مشترك بين العقلين). الحرفيات المُثبَّتة أمنياً تبقى
+  في `app/core/ai_config.py` + `microservices/orchestrator_service/src/core/ai_config.py`
+  (دفاع عميق ISS-079)، وبوّابة `scripts/fitness/check_model_chain_parity.py` (AST، تُشغَّل في
+  guardrails) تُثبت أن العقلين == السلسلة القانونية — تكافؤ محروس آلياً بدل «حرّر النسختين يدوياً».
 - **D-102 (فلتر التاريخ)**: أي كاشف يقرأ `history` يُرشِّح `role in (user, assistant)` — رسالة
   system (برومبت النظام) ليست دليلاً من المحادثة أبداً (وإلا تسمّم التوجيه).
 
@@ -913,10 +917,11 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 - **حُرّاس المخرَج**: `arabic_stream_guard` (عربي فقط على البثّ)؛ `content_integrity`/`response_sanitizer`
   (حذف garbage لاتيني/CJK/⟦⟧/تعليمات مُسرَّبة)؛ `output_firewall`+`topic_lock` (V46) — كلها fail-open.
 
-### ط) API-first + المهارات (D-100 · D-173 Stage 4/5)
-- **كل خدمة (10/10) لها عقد OpenAPI** يغطّي مساراتها الفعلية، مفروض ببوّابة **دلالية**
+### ط) API-first + المهارات (D-100 · D-173 Stage 4/5 · D-174)
+- **كل خدمة (11/11) لها عقد OpenAPI** يغطّي مساراتها الفعلية، مفروض ببوّابة **دلالية**
   (`check_openapi_parity` — endpoints لا bytes، robust عبر إصدارات pydantic). المولِّد
-  `scripts/contracts/export_openapi.py` هو SSOT.
+  `scripts/contracts/export_openapi.py` هو SSOT. **D-174:** `auditor_service` أُدرِج تحت البوّابة
+  (كان 10/11) → API-first 11/11 حقيقي.
 - **منصّة Skills موحَّدة** (D-100): registry + `compose_text_refinement` + `/api/v1/skills`؛
   كل مهارة `import + call chain + runtime evidence` أو FLAGGED؛ لا ZOMBIE (بوّابة).
 - **Kagent محذوف** (D-173 Stage 5): كان ZOMBIE محظوراً أمنياً — القدرة بلا مستهلك حي تُحذَف لا تُترَك stub.
@@ -929,7 +934,7 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 > التقنيات: `docs/architecture/EXTENSION_SEAMS.md`.
 
 النظام **مختبر معرفي / محرّك تفكير** لا مُجيب — يُنمذج تفكير الطالب ويشخّصه ويحسّنه. أهداف D-173:
-- **API-first 100%** — عقود صريحة تحكم حدود الخدمات (10/10)، مفروضة ببوّابة تكافؤ دلالية.
+- **API-first 100%** — عقود صريحة تحكم حدود الخدمات (11/11 — D-174 أدرج auditor_service)، مفروضة ببوّابة تكافؤ دلالية.
 - **قتل التعقيد** (SOLID/KISS/DRY/YAGNI) — God-files قُتلت، الملفات الضخمة فُكِّكت عبر مانيفستات DRY
   (استخراج = سطر واحد، البوّابات تقرأ المصدر المُركَّب، النقل verbatim).
 - **إغلاق split-brain** — عقل حتمي واحد + port مستقل محروس بـ20 عقد تكافؤ؛ الانتقال التدريجي للخدمات

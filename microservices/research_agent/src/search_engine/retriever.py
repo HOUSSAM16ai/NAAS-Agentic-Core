@@ -3,8 +3,9 @@ import functools
 from llama_index.core import VectorStoreIndex
 from llama_index.core.schema import NodeWithScore
 from llama_index.core.vector_stores import ExactMatchFilter, MetadataFilters
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.vector_stores.supabase import SupabaseVectorStore
+
+# D-173: الاستيرادات الثقيلة (HuggingFaceEmbedding → torch، SupabaseVectorStore → vecs)
+# مؤجَّلة داخل دوالها — الوحدة تُستورَد لوصف الـ API بلا تحميل مكدس ML (fail-open).
 
 # Using functools.lru_cache to manage singletons in a thread-safe way
 # instead of global mutable variables.
@@ -16,6 +17,8 @@ def get_embedding_model():
     Get the embedding model (Cached).
     Uses BAAI/bge-m3 for high-performance multilingual support.
     """
+    from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
     return HuggingFaceEmbedding(model_name="BAAI/bge-m3")
 
 
@@ -27,6 +30,8 @@ class LlamaIndexRetriever:
 
         # Ensure compatibility with 'vecs' (psycopg2)
         postgres_url = db_url.replace("+asyncpg", "")
+
+        from llama_index.vector_stores.supabase import SupabaseVectorStore
 
         self.vector_store = SupabaseVectorStore(
             postgres_connection_string=postgres_url, collection_name=collection_name

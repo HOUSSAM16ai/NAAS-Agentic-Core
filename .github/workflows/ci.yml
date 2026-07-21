@@ -258,6 +258,11 @@ jobs:
             --durations=10 \
             --tb=short \
             "${MICROSERVICES_DESELECTS[@]}"
+      - name: OpenAPI parity (API-first — every service has a committed contract, D-173)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/fitness/check_openapi_parity.py
 
   # ── Frontend regression tests (D-105) ─────────────────────────────────────
   # Deterministic node test files (zero npm dependencies — pure source

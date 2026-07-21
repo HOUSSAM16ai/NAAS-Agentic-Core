@@ -1,0 +1,590 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "content-retrieval-skill",
+    "description": "Skill \u0645\u0633\u062a\u0642\u0644\u0629 \u0644\u0627\u0633\u062a\u0631\u062c\u0627\u0639 \u0627\u0644\u0645\u062d\u062a\u0648\u0649 \u0627\u0644\u062a\u0639\u0644\u064a\u0645\u064a \u2014 \u0627\u0644\u062e\u0637\u0648\u0629 11",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/retrieve": {
+      "post": {
+        "summary": "Retrieve Content",
+        "description": "\u064a\u064f\u0635\u0646\u0650\u0651\u0641 \u0646\u064a\u0629 \u0627\u0644\u0637\u0644\u0628 \u0648\u064a\u0633\u062a\u0631\u062c\u0639 \u0627\u0644\u0645\u062d\u062a\u0648\u0649 \u0627\u0644\u0645\u0646\u0627\u0633\u0628.\n\n\u0627\u0644\u0645\u0633\u0627\u0631:\n  1. classify_intent(question) \u2192 intent\n  2. \u0625\u0630\u0627 intent == \"explanation\" \u2192 \u0625\u0639\u0627\u062f\u0629 \u0642\u0627\u0626\u0645\u0629 \u0641\u0627\u0631\u063a\u0629 \u0641\u0648\u0631\u0627\u064b\n  3. \u0625\u0630\u0627 intent == \"retrieval\" \u2192 retrieve(query, kb_root)\n  4. \u0625\u0630\u0627 intent == \"unknown\" \u2192 retrieve \u0645\u0639 \u062f\u0631\u062c\u0629 \u062b\u0642\u0629 \u0645\u0646\u062e\u0641\u0636\u0629",
+        "operationId": "retrieve_content_retrieve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrieveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrieveResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/impossible-case": {
+      "post": {
+        "summary": "Check Impossible Case",
+        "description": "\u064a\u064f\u062d\u0644\u0650\u0651\u0644 \u0645\u0627 \u0625\u0630\u0627 \u0643\u0627\u0646\u062a \u0639\u0645\u0644\u064a\u0629 \u0627\u0644\u0633\u062d\u0628 \u0645\u0633\u062a\u062d\u064a\u0644\u0629 \u0631\u064a\u0627\u0636\u064a\u0627\u064b.\n\n\u0627\u0644\u0645\u0628\u062f\u0623 \u0627\u0644\u062a\u0631\u0628\u0648\u064a (D-082):\n  - \u064a\u064f\u0633\u062a\u062f\u0639\u0649 \u0642\u0628\u0644 \u0623\u064a \u062d\u0633\u0627\u0628 \u0627\u062d\u062a\u0645\u0627\u0644\u064a\n  - \u0625\u0630\u0627 is_impossible=True \u2192 frontend \u064a\u0639\u0631\u0636 4 \u0645\u0631\u0627\u062d\u0644 \u0628\u0635\u0631\u064a\u0629 \u0641\u0642\u0637\n  - \u0644\u0627 \u0634\u062c\u0631\u0629 \u0627\u062d\u062a\u0645\u0627\u0644\u0627\u062a\u060c \u0644\u0627 \u0645\u0639\u0627\u062f\u0644\u0627\u062a\u060c \u0644\u0627 \u0627\u0632\u062f\u062d\u0627\u0645 \u0628\u0635\u0631\u064a\n  - deep_dive \u064a\u064f\u0639\u0631\u0636 \u0641\u0642\u0637 \u0639\u0646\u062f \u0637\u0644\u0628 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 (\"\u0627\u0634\u0631\u062d \u0644\u064a \u0623\u0643\u062b\u0631\")\n\n\u0645\u062b\u0627\u0644:\n  bag_count=2, requested=3 \u2192 is_impossible=True\n  bag_count=5, requested=3 \u2192 is_impossible=False",
+        "operationId": "check_impossible_case_impossible_case_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImpossibleCaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpossibleCaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "description": "\u0641\u062d\u0635 \u0635\u062d\u0629 \u0627\u0644\u0640 Skill.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Metrics",
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ContentItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "year": {
+            "type": "string",
+            "title": "Year"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "content_preview": {
+            "type": "string",
+            "title": "Content Preview"
+          },
+          "file_path": {
+            "type": "string",
+            "title": "File Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "subject",
+          "year",
+          "tags",
+          "content_preview",
+          "file_path"
+        ],
+        "title": "ContentItemResponse",
+        "description": "\u0648\u062d\u062f\u0629 \u0645\u062d\u062a\u0648\u0649 \u0641\u064a \u0627\u0644\u0627\u0633\u062a\u062c\u0627\u0628\u0629."
+      },
+      "DeepDiveResponse": {
+        "properties": {
+          "formula": {
+            "type": "string",
+            "title": "Formula"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "why_zero": {
+            "type": "string",
+            "title": "Why Zero"
+          }
+        },
+        "type": "object",
+        "required": [
+          "formula",
+          "explanation",
+          "why_zero"
+        ],
+        "title": "DeepDiveResponse",
+        "description": "\u0627\u0644\u0634\u0631\u062d \u0627\u0644\u0631\u064a\u0627\u0636\u064a \u0627\u0644\u0639\u0645\u064a\u0642 \u2014 \u064a\u064f\u0639\u0631\u0636 \u0639\u0646\u062f \u0637\u0644\u0628 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0641\u0642\u0637."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "step": {
+            "type": "string",
+            "title": "Step"
+          },
+          "kb_path": {
+            "type": "string",
+            "title": "Kb Path"
+          },
+          "kb_files": {
+            "type": "integer",
+            "title": "Kb Files"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "service",
+          "step",
+          "kb_path",
+          "kb_files",
+          "version"
+        ],
+        "title": "HealthResponse",
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0641\u062d\u0635 \u0627\u0644\u0635\u062d\u0629."
+      },
+      "ImpossibleCaseRequest": {
+        "properties": {
+          "bag_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Bag Count",
+            "description": "\u0639\u062f\u062f \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0641\u064a \u0627\u0644\u0643\u064a\u0633"
+          },
+          "requested": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Requested",
+            "description": "\u0639\u062f\u062f \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0633\u062d\u0628\u0647\u0627"
+          },
+          "item_name": {
+            "type": "string",
+            "title": "Item Name",
+            "description": "\u0627\u0633\u0645 \u0627\u0644\u0639\u0646\u0635\u0631 (\u0643\u0631\u0629\u060c \u0642\u0644\u0645\u060c \u0648\u0631\u0642\u0629...)",
+            "default": "\u0643\u0631\u0629"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bag_count",
+          "requested"
+        ],
+        "title": "ImpossibleCaseRequest",
+        "description": "\u0637\u0644\u0628 \u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u062d\u0627\u0644\u0629 \u0627\u0644\u0645\u0633\u062a\u062d\u064a\u0644\u0629.\n\n\u064a\u064f\u0631\u0633\u064e\u0644 \u0645\u0646 \u0627\u0644\u0640 frontend \u0639\u0646\u062f \u0628\u0646\u0627\u0621 \u0645\u0633\u0623\u0644\u0629 \u0627\u062d\u062a\u0645\u0627\u0644\u0627\u062a\n\u0642\u0628\u0644 \u0623\u064a \u062d\u0633\u0627\u0628 \u2014 \u0644\u062a\u062c\u0646\u0628 \u0639\u0631\u0636 \u0646\u062a\u0627\u0626\u062c \u0645\u0633\u062a\u062d\u064a\u0644\u0629 \u0644\u0644\u0637\u0627\u0644\u0628."
+      },
+      "ImpossibleCaseResponse": {
+        "properties": {
+          "is_impossible": {
+            "type": "boolean",
+            "title": "Is Impossible"
+          },
+          "case_type": {
+            "type": "string",
+            "title": "Case Type"
+          },
+          "stage_1": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Stage1SceneResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stage_2": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Stage2QuestionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stage_3": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Stage3AnimationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stage_4": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Stage4MessageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deep_dive": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeepDiveResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_impossible",
+          "case_type"
+        ],
+        "title": "ImpossibleCaseResponse",
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u062d\u0627\u0644\u0629 \u0627\u0644\u0645\u0633\u062a\u062d\u064a\u0644\u0629 \u2014 contract \u0643\u0627\u0645\u0644 \u0644\u0644\u0640 frontend.\n\nis_impossible=True:\n  frontend \u064a\u0639\u0631\u0636 4 \u0645\u0631\u0627\u062d\u0644 \u0628\u0635\u0631\u064a\u0629 \u0641\u0642\u0637\u060c \u0628\u062f\u0648\u0646 \u0634\u062c\u0631\u0629 \u0627\u062d\u062a\u0645\u0627\u0644\u0627\u062a.\nis_impossible=False:\n  frontend \u064a\u0643\u0645\u0644 \u0627\u0644\u062d\u0633\u0627\u0628 \u0627\u0644\u0637\u0628\u064a\u0639\u064a.\ndeep_dive:\n  null \u062d\u062a\u0649 \u064a\u0636\u063a\u0637 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \"\u0627\u0634\u0631\u062d \u0644\u064a \u0623\u0643\u062b\u0631\"."
+      },
+      "RetrieveRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Question",
+            "description": "\u0633\u0624\u0627\u0644 \u0627\u0644\u0637\u0627\u0644\u0628"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject",
+            "description": "\u0627\u0644\u0645\u0627\u062f\u0629 (math/physics/chemistry)"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "\u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u062f\u0631\u0627\u0633\u064a\u0629 (2020-2030)"
+          },
+          "max_results": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Results",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "RetrieveRequest",
+        "description": "\u0637\u0644\u0628 \u0627\u0644\u0627\u0633\u062a\u0631\u062c\u0627\u0639 \u2014 contract \u062b\u0627\u0628\u062a."
+      },
+      "RetrieveResponse": {
+        "properties": {
+          "intent": {
+            "type": "string",
+            "title": "Intent"
+          },
+          "intent_confidence": {
+            "type": "number",
+            "title": "Intent Confidence"
+          },
+          "intent_reason": {
+            "type": "string",
+            "title": "Intent Reason"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContentItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "duration_ms": {
+            "type": "number",
+            "title": "Duration Ms"
+          },
+          "kb_path": {
+            "type": "string",
+            "title": "Kb Path"
+          },
+          "query_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Subject"
+          },
+          "query_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Year"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent",
+          "intent_confidence",
+          "intent_reason",
+          "items",
+          "total",
+          "duration_ms",
+          "kb_path",
+          "query_subject",
+          "query_year"
+        ],
+        "title": "RetrieveResponse",
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0627\u0644\u0627\u0633\u062a\u0631\u062c\u0627\u0639 \u2014 contract \u062b\u0627\u0628\u062a."
+      },
+      "Stage1SceneResponse": {
+        "properties": {
+          "bag_count": {
+            "type": "integer",
+            "title": "Bag Count"
+          },
+          "requested": {
+            "type": "integer",
+            "title": "Requested"
+          },
+          "bag_label": {
+            "type": "string",
+            "title": "Bag Label"
+          },
+          "request_label": {
+            "type": "string",
+            "title": "Request Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bag_count",
+          "requested",
+          "bag_label",
+          "request_label"
+        ],
+        "title": "Stage1SceneResponse",
+        "description": "\u0627\u0644\u0645\u0631\u062d\u0644\u0629 1: \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0634\u0647\u062f \u0627\u0644\u0628\u0635\u0631\u064a."
+      },
+      "Stage2QuestionResponse": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "Stage2QuestionResponse",
+        "description": "\u0627\u0644\u0645\u0631\u062d\u0644\u0629 2: \u0627\u0644\u0633\u0624\u0627\u0644 \u0627\u0644\u062d\u062f\u0633\u064a."
+      },
+      "Stage3AnimationResponse": {
+        "properties": {
+          "animation": {
+            "type": "string",
+            "title": "Animation"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "animation",
+          "duration_ms"
+        ],
+        "title": "Stage3AnimationResponse",
+        "description": "\u0627\u0644\u0645\u0631\u062d\u0644\u0629 3: \u0645\u0648\u0627\u0635\u0641\u0627\u062a \u0627\u0644\u062d\u0631\u0643\u0629 \u0627\u0644\u0628\u0635\u0631\u064a\u0629."
+      },
+      "Stage4MessageResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "tone": {
+            "type": "string",
+            "title": "Tone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "tone"
+        ],
+        "title": "Stage4MessageResponse",
+        "description": "\u0627\u0644\u0645\u0631\u062d\u0644\u0629 4: \u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u062a\u0631\u0628\u0648\u064a\u0629."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

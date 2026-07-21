@@ -1,7 +1,6 @@
 import asyncio
 import logging
 
-from sentence_transformers import SentenceTransformer
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,8 +18,12 @@ _EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-small"
 
 
 def _get_model():
+    # D-172/D-173: استيراد كسول لـ sentence-transformers — الوحدة تُستورَد بلا التبعية
+    # الثقيلة (fail-open)؛ النموذج يُحمَّل فقط عند أول استخدام فعلي للتضمين.
     global _EMBEDDING_MODEL
     if _EMBEDDING_MODEL is None:
+        from sentence_transformers import SentenceTransformer
+
         logger.info(f"Loading Semantic Model: {_EMBEDDING_MODEL_NAME}")
         _EMBEDDING_MODEL = SentenceTransformer(_EMBEDDING_MODEL_NAME)
     return _EMBEDDING_MODEL

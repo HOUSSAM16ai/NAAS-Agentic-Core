@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Observability Service",
-    "description": "خدمة مستقلة لتحليل القياسات",
+    "description": "\u062e\u062f\u0645\u0629 \u0645\u0633\u062a\u0642\u0644\u0629 \u0644\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u0642\u064a\u0627\u0633\u0627\u062a",
     "version": "1.0.0"
   },
   "paths": {
@@ -192,7 +192,7 @@
           "System"
         ],
         "summary": "Health Check",
-        "description": "يفحص جاهزية خدمة المراقبة.",
+        "description": "\u064a\u0641\u062d\u0635 \u062c\u0627\u0647\u0632\u064a\u0629 \u062e\u062f\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629.",
         "operationId": "health_check_health_get",
         "responses": {
           "200": {
@@ -214,7 +214,7 @@
           "System"
         ],
         "summary": "Root",
-        "description": "رسالة الجذر لخدمة المراقبة.",
+        "description": "\u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u062c\u0630\u0631 \u0644\u062e\u062f\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629.",
         "operationId": "root__get",
         "responses": {
           "200": {
@@ -235,8 +235,8 @@
         "tags": [
           "Telemetry"
         ],
-        "summary": "استقبال قياس جديد",
-        "description": "تجميع قياسات واردة من الخدمات الأخرى.",
+        "summary": "\u0627\u0633\u062a\u0642\u0628\u0627\u0644 \u0642\u064a\u0627\u0633 \u062c\u062f\u064a\u062f",
+        "description": "\u062a\u062c\u0645\u064a\u0639 \u0642\u064a\u0627\u0633\u0627\u062a \u0648\u0627\u0631\u062f\u0629 \u0645\u0646 \u0627\u0644\u062e\u062f\u0645\u0627\u062a \u0627\u0644\u0623\u062e\u0631\u0649.",
         "operationId": "collect_telemetry_telemetry_post",
         "parameters": [
           {
@@ -295,8 +295,8 @@
         "tags": [
           "Telemetry"
         ],
-        "summary": "عرض مؤشرات الخدمة",
-        "description": "إرجاع مؤشرات المراقبة الإجمالية.",
+        "summary": "\u0639\u0631\u0636 \u0645\u0624\u0634\u0631\u0627\u062a \u0627\u0644\u062e\u062f\u0645\u0629",
+        "description": "\u0625\u0631\u062c\u0627\u0639 \u0645\u0624\u0634\u0631\u0627\u062a \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a\u0629.",
         "operationId": "get_metrics_metrics_get",
         "parameters": [
           {
@@ -345,8 +345,8 @@
         "tags": [
           "Telemetry"
         ],
-        "summary": "عرض التنبيهات النشطة",
-        "description": "إرجاع قائمة التنبيهات النشطة (الشذوذ).",
+        "summary": "\u0639\u0631\u0636 \u0627\u0644\u062a\u0646\u0628\u064a\u0647\u0627\u062a \u0627\u0644\u0646\u0634\u0637\u0629",
+        "description": "\u0625\u0631\u062c\u0627\u0639 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062a\u0646\u0628\u064a\u0647\u0627\u062a \u0627\u0644\u0646\u0634\u0637\u0629 (\u0627\u0644\u0634\u0630\u0648\u0630).",
         "operationId": "get_alerts_alerts_get",
         "parameters": [
           {
@@ -395,8 +395,8 @@
         "tags": [
           "Telemetry"
         ],
-        "summary": "فحص صحة خدمة محددة",
-        "description": "قياس صحة خدمة محددة.",
+        "summary": "\u0641\u062d\u0635 \u0635\u062d\u0629 \u062e\u062f\u0645\u0629 \u0645\u062d\u062f\u062f\u0629",
+        "description": "\u0642\u064a\u0627\u0633 \u0635\u062d\u0629 \u062e\u062f\u0645\u0629 \u0645\u062d\u062f\u062f\u0629.",
         "operationId": "get_service_health_health__service_name__get",
         "parameters": [
           {
@@ -456,8 +456,8 @@
         "tags": [
           "Forecast"
         ],
-        "summary": "توليد توقعات الحمل",
-        "description": "توليد توقع للحمل المستقبلي.",
+        "summary": "\u062a\u0648\u0644\u064a\u062f \u062a\u0648\u0642\u0639\u0627\u062a \u0627\u0644\u062d\u0645\u0644",
+        "description": "\u062a\u0648\u0644\u064a\u062f \u062a\u0648\u0642\u0639 \u0644\u0644\u062d\u0645\u0644 \u0627\u0644\u0645\u0633\u062a\u0642\u0628\u0644\u064a.",
         "operationId": "forecast_load_forecast_post",
         "parameters": [
           {
@@ -516,8 +516,8 @@
         "tags": [
           "Forecast"
         ],
-        "summary": "توليد خطة السعة",
-        "description": "إنشاء خطة سعة بناءً على التوقعات.",
+        "summary": "\u062a\u0648\u0644\u064a\u062f \u062e\u0637\u0629 \u0627\u0644\u0633\u0639\u0629",
+        "description": "\u0625\u0646\u0634\u0627\u0621 \u062e\u0637\u0629 \u0633\u0639\u0629 \u0628\u0646\u0627\u0621\u064b \u0639\u0644\u0649 \u0627\u0644\u062a\u0648\u0642\u0639\u0627\u062a.",
         "operationId": "generate_capacity_plan_capacity_post",
         "parameters": [
           {
@@ -576,8 +576,8 @@
         "tags": [
           "Anomalies"
         ],
-        "summary": "تحليل السبب الجذري للشذوذ",
-        "description": "تحليل السبب الجذري لشذوذ محدد.",
+        "summary": "\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u0633\u0628\u0628 \u0627\u0644\u062c\u0630\u0631\u064a \u0644\u0644\u0634\u0630\u0648\u0630",
+        "description": "\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u0633\u0628\u0628 \u0627\u0644\u062c\u0630\u0631\u064a \u0644\u0634\u0630\u0648\u0630 \u0645\u062d\u062f\u062f.",
         "operationId": "analyze_root_cause_anomalies__anomaly_id__root_cause_get",
         "parameters": [
           {
@@ -634,8 +634,11 @@
     },
     "/golden-signals": {
       "get": {
-        "summary": "إشارات ذهبية (SRE)",
-        "description": "استرجاع الإشارات الذهبية للتوافق مع المونوليث.",
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "\u0625\u0634\u0627\u0631\u0627\u062a \u0630\u0647\u0628\u064a\u0629 (SRE)",
+        "description": "\u0627\u0633\u062a\u0631\u062c\u0627\u0639 \u0627\u0644\u0625\u0634\u0627\u0631\u0627\u062a \u0627\u0644\u0630\u0647\u0628\u064a\u0629 \u0644\u0644\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0648\u0646\u0648\u0644\u064a\u062b.",
         "operationId": "get_golden_signals_golden_signals_get",
         "parameters": [
           {
@@ -665,17 +668,27 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "tags": [
-          "Telemetry"
-        ]
+        }
       }
     },
     "/performance": {
       "get": {
-        "summary": "لقطة الأداء",
-        "description": "استرجاع لقطة الأداء الحالية.",
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "\u0644\u0642\u0637\u0629 \u0627\u0644\u0623\u062f\u0627\u0621",
+        "description": "\u0627\u0633\u062a\u0631\u062c\u0627\u0639 \u0644\u0642\u0637\u0629 \u0627\u0644\u0623\u062f\u0627\u0621 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
         "operationId": "get_performance_snapshot_performance_get",
         "parameters": [
           {
@@ -705,17 +718,27 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "tags": [
-          "Telemetry"
-        ]
+        }
       }
     },
     "/analytics/{path}": {
       "get": {
-        "summary": "تحليلات نقطة النهاية",
-        "description": "استرجاع تحليلات لنقطة نهاية محددة.",
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "\u062a\u062d\u0644\u064a\u0644\u0627\u062a \u0646\u0642\u0637\u0629 \u0627\u0644\u0646\u0647\u0627\u064a\u0629",
+        "description": "\u0627\u0633\u062a\u0631\u062c\u0627\u0639 \u062a\u062d\u0644\u064a\u0644\u0627\u062a \u0644\u0646\u0642\u0637\u0629 \u0646\u0647\u0627\u064a\u0629 \u0645\u062d\u062f\u062f\u0629.",
         "operationId": "get_endpoint_analytics_analytics__path__get",
         "parameters": [
           {
@@ -769,10 +792,7 @@
               }
             }
           }
-        },
-        "tags": [
-          "Telemetry"
-        ]
+        }
       }
     }
   },
@@ -823,228 +843,7 @@
           "metrics"
         ],
         "title": "AlertItem",
-        "description": "عنصر تنبيه واحد."
-      },
-      "LatencyMetrics": {
-        "properties": {
-          "p50": {
-            "type": "number",
-            "title": "P50",
-            "description": "الوسيط"
-          },
-          "p95": {
-            "type": "number",
-            "title": "P95",
-            "description": "النسبة المئوية 95"
-          },
-          "p99": {
-            "type": "number",
-            "title": "P99",
-            "description": "النسبة المئوية 99"
-          },
-          "p99.9": {
-            "type": "number",
-            "title": "P99.9",
-            "description": "النسبة المئوية 99.9"
-          },
-          "avg": {
-            "type": "number",
-            "title": "Avg",
-            "description": "المتوسط العام"
-          }
-        },
-        "type": "object",
-        "required": [
-          "p50",
-          "p95",
-          "p99",
-          "p99.9",
-          "avg"
-        ],
-        "title": "LatencyMetrics",
-        "description": "مقاييس زمن الاستجابة للمسارات الساخنة."
-      },
-      "TrafficMetrics": {
-        "properties": {
-          "requests_per_second": {
-            "type": "number",
-            "title": "Requests Per Second",
-            "description": "عدد الطلبات في الثانية"
-          },
-          "total_requests": {
-            "type": "integer",
-            "title": "Total Requests",
-            "description": "إجمالي الطلبات في النافذة الزمنية"
-          }
-        },
-        "type": "object",
-        "required": [
-          "requests_per_second",
-          "total_requests"
-        ],
-        "title": "TrafficMetrics",
-        "description": "إحصاءات حركة المرور على مستوى الخدمة."
-      },
-      "ErrorMetrics": {
-        "properties": {
-          "error_rate": {
-            "type": "number",
-            "title": "Error Rate",
-            "description": "معدل الأخطاء بالنسبة المئوية"
-          },
-          "error_count": {
-            "type": "integer",
-            "title": "Error Count",
-            "description": "عدد الأخطاء الملاحظة"
-          }
-        },
-        "type": "object",
-        "required": [
-          "error_rate",
-          "error_count"
-        ],
-        "title": "ErrorMetrics",
-        "description": "مقاييس الأخطاء ونسبة فشل الطلبات."
-      },
-      "SaturationMetrics": {
-        "properties": {
-          "active_requests": {
-            "type": "integer",
-            "title": "Active Requests",
-            "description": "عدد الطلبات النشطة"
-          },
-          "queue_depth": {
-            "type": "integer",
-            "title": "Queue Depth",
-            "description": "عمق طابور التنفيذ"
-          },
-          "active_spans": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Spans",
-            "description": "عدد المقاطع التتبعية الفعّالة"
-          },
-          "resource_utilization": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resource Utilization",
-            "description": "نسبة استهلاك الموارد"
-          }
-        },
-        "type": "object",
-        "required": [
-          "active_requests",
-          "queue_depth"
-        ],
-        "title": "SaturationMetrics",
-        "description": "مؤشرات التشبع واستهلاك الموارد."
-      },
-      "GoldenSignalsResponse": {
-        "properties": {
-          "latency": {
-            "$ref": "#/components/schemas/LatencyMetrics",
-            "description": "مقاييس زمن الاستجابة"
-          },
-          "traffic": {
-            "$ref": "#/components/schemas/TrafficMetrics",
-            "description": "حركة المرور"
-          },
-          "errors": {
-            "$ref": "#/components/schemas/ErrorMetrics",
-            "description": "نسبة الأخطاء"
-          },
-          "saturation": {
-            "$ref": "#/components/schemas/SaturationMetrics",
-            "description": "مؤشرات التشبع"
-          }
-        },
-        "type": "object",
-        "required": [
-          "latency",
-          "traffic",
-          "errors",
-          "saturation"
-        ],
-        "title": "GoldenSignalsResponse",
-        "description": "نموذج الإشارات الذهبية (SRE Golden Signals)."
-      },
-      "PerformanceSnapshotResponse": {
-        "properties": {
-          "cpu_usage": {
-            "type": "number",
-            "title": "Cpu Usage",
-            "description": "استهلاك المعالج (%)"
-          },
-          "memory_usage": {
-            "type": "number",
-            "title": "Memory Usage",
-            "description": "استهلاك الذاكرة (%)"
-          },
-          "active_requests": {
-            "type": "integer",
-            "title": "Active Requests",
-            "description": "عدد الطلبات النشطة"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cpu_usage",
-          "memory_usage",
-          "active_requests"
-        ],
-        "title": "PerformanceSnapshotResponse",
-        "description": "نموذج لقطة الأداء."
-      },
-      "EndpointAnalyticsResponse": {
-        "properties": {
-          "path": {
-            "type": "string",
-            "title": "Path",
-            "description": "مسار نقطة النهاية"
-          },
-          "avg_latency": {
-            "type": "number",
-            "title": "Avg Latency",
-            "description": "متوسط زمن الاستجابة"
-          },
-          "p95_latency": {
-            "type": "number",
-            "title": "P95 Latency",
-            "description": "P95 Latency"
-          },
-          "error_count": {
-            "type": "integer",
-            "title": "Error Count",
-            "description": "عدد الأخطاء",
-            "default": 0
-          },
-          "total_calls": {
-            "type": "integer",
-            "title": "Total Calls",
-            "description": "إجمالي الاستدعاءات",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "required": [
-          "path",
-          "avg_latency",
-          "p95_latency"
-        ],
-        "title": "EndpointAnalyticsResponse",
-        "description": "نموذج تحليلات نقطة النهاية."
+        "description": "\u0639\u0646\u0635\u0631 \u062a\u0646\u0628\u064a\u0647 \u0648\u0627\u062d\u062f."
       },
       "AlertsResponse": {
         "properties": {
@@ -1061,7 +860,7 @@
           "alerts"
         ],
         "title": "AlertsResponse",
-        "description": "استجابة قائمة التنبيهات."
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062a\u0646\u0628\u064a\u0647\u0627\u062a."
       },
       "CalculateMetricsRequest": {
         "properties": {
@@ -1182,7 +981,7 @@
           "created_at"
         ],
         "title": "CapacityPlanPayload",
-        "description": "تفاصيل خطة السعة الناتجة عن التحليل."
+        "description": "\u062a\u0641\u0627\u0635\u064a\u0644 \u062e\u0637\u0629 \u0627\u0644\u0633\u0639\u0629 \u0627\u0644\u0646\u0627\u062a\u062c\u0629 \u0639\u0646 \u0627\u0644\u062a\u062d\u0644\u064a\u0644."
       },
       "CapacityPlanRequest": {
         "properties": {
@@ -1201,7 +1000,7 @@
           "service_name"
         ],
         "title": "CapacityPlanRequest",
-        "description": "طلب إنشاء خطة سعة مستقبلية."
+        "description": "\u0637\u0644\u0628 \u0625\u0646\u0634\u0627\u0621 \u062e\u0637\u0629 \u0633\u0639\u0629 \u0645\u0633\u062a\u0642\u0628\u0644\u064a\u0629."
       },
       "CapacityPlanResponse": {
         "properties": {
@@ -1214,7 +1013,67 @@
           "plan"
         ],
         "title": "CapacityPlanResponse",
-        "description": "استجابة خطة السعة بعد التوليد."
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u062e\u0637\u0629 \u0627\u0644\u0633\u0639\u0629 \u0628\u0639\u062f \u0627\u0644\u062a\u0648\u0644\u064a\u062f."
+      },
+      "EndpointAnalyticsResponse": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "\u0645\u0633\u0627\u0631 \u0646\u0642\u0637\u0629 \u0627\u0644\u0646\u0647\u0627\u064a\u0629"
+          },
+          "avg_latency": {
+            "type": "number",
+            "title": "Avg Latency",
+            "description": "\u0645\u062a\u0648\u0633\u0637 \u0632\u0645\u0646 \u0627\u0644\u0627\u0633\u062a\u062c\u0627\u0628\u0629"
+          },
+          "p95_latency": {
+            "type": "number",
+            "title": "P95 Latency",
+            "description": "P95 Latency"
+          },
+          "error_count": {
+            "type": "integer",
+            "title": "Error Count",
+            "description": "\u0639\u062f\u062f \u0627\u0644\u0623\u062e\u0637\u0627\u0621",
+            "default": 0
+          },
+          "total_calls": {
+            "type": "integer",
+            "title": "Total Calls",
+            "description": "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0627\u0633\u062a\u062f\u0639\u0627\u0621\u0627\u062a",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "avg_latency",
+          "p95_latency"
+        ],
+        "title": "EndpointAnalyticsResponse",
+        "description": "\u0646\u0645\u0648\u0630\u062c \u062a\u062d\u0644\u064a\u0644\u0627\u062a \u0646\u0642\u0637\u0629 \u0627\u0644\u0646\u0647\u0627\u064a\u0629."
+      },
+      "ErrorMetrics": {
+        "properties": {
+          "error_rate": {
+            "type": "number",
+            "title": "Error Rate",
+            "description": "\u0645\u0639\u062f\u0644 \u0627\u0644\u0623\u062e\u0637\u0627\u0621 \u0628\u0627\u0644\u0646\u0633\u0628\u0629 \u0627\u0644\u0645\u0626\u0648\u064a\u0629"
+          },
+          "error_count": {
+            "type": "integer",
+            "title": "Error Count",
+            "description": "\u0639\u062f\u062f \u0627\u0644\u0623\u062e\u0637\u0627\u0621 \u0627\u0644\u0645\u0644\u0627\u062d\u0638\u0629"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error_rate",
+          "error_count"
+        ],
+        "title": "ErrorMetrics",
+        "description": "\u0645\u0642\u0627\u064a\u064a\u0633 \u0627\u0644\u0623\u062e\u0637\u0627\u0621 \u0648\u0646\u0633\u0628\u0629 \u0641\u0634\u0644 \u0627\u0644\u0637\u0644\u0628\u0627\u062a."
       },
       "ForecastRequest": {
         "properties": {
@@ -1237,7 +1096,7 @@
           "metric_type"
         ],
         "title": "ForecastRequest",
-        "description": "طلب توقع الحمل المستقبلي."
+        "description": "\u0637\u0644\u0628 \u062a\u0648\u0642\u0639 \u0627\u0644\u062d\u0645\u0644 \u0627\u0644\u0645\u0633\u062a\u0642\u0628\u0644\u064a."
       },
       "ForecastResponse": {
         "properties": {
@@ -1271,7 +1130,36 @@
           "confidence_interval"
         ],
         "title": "ForecastResponse",
-        "description": "استجابة توقع الحمل مع فاصل الثقة."
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u062a\u0648\u0642\u0639 \u0627\u0644\u062d\u0645\u0644 \u0645\u0639 \u0641\u0627\u0635\u0644 \u0627\u0644\u062b\u0642\u0629."
+      },
+      "GoldenSignalsResponse": {
+        "properties": {
+          "latency": {
+            "$ref": "#/components/schemas/LatencyMetrics",
+            "description": "\u0645\u0642\u0627\u064a\u064a\u0633 \u0632\u0645\u0646 \u0627\u0644\u0627\u0633\u062a\u062c\u0627\u0628\u0629"
+          },
+          "traffic": {
+            "$ref": "#/components/schemas/TrafficMetrics",
+            "description": "\u062d\u0631\u0643\u0629 \u0627\u0644\u0645\u0631\u0648\u0631"
+          },
+          "errors": {
+            "$ref": "#/components/schemas/ErrorMetrics",
+            "description": "\u0646\u0633\u0628\u0629 \u0627\u0644\u0623\u062e\u0637\u0627\u0621"
+          },
+          "saturation": {
+            "$ref": "#/components/schemas/SaturationMetrics",
+            "description": "\u0645\u0624\u0634\u0631\u0627\u062a \u0627\u0644\u062a\u0634\u0628\u0639"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latency",
+          "traffic",
+          "errors",
+          "saturation"
+        ],
+        "title": "GoldenSignalsResponse",
+        "description": "\u0646\u0645\u0648\u0630\u062c \u0627\u0644\u0625\u0634\u0627\u0631\u0627\u062a \u0627\u0644\u0630\u0647\u0628\u064a\u0629 (SRE Golden Signals)."
       },
       "HTTPValidationError": {
         "properties": {
@@ -1314,7 +1202,46 @@
           "status"
         ],
         "title": "HealthResponse",
-        "description": "استجابة صحة قياسية لخدمة المراقبة."
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0635\u062d\u0629 \u0642\u064a\u0627\u0633\u064a\u0629 \u0644\u062e\u062f\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629."
+      },
+      "LatencyMetrics": {
+        "properties": {
+          "p50": {
+            "type": "number",
+            "title": "P50",
+            "description": "\u0627\u0644\u0648\u0633\u064a\u0637"
+          },
+          "p95": {
+            "type": "number",
+            "title": "P95",
+            "description": "\u0627\u0644\u0646\u0633\u0628\u0629 \u0627\u0644\u0645\u0626\u0648\u064a\u0629 95"
+          },
+          "p99": {
+            "type": "number",
+            "title": "P99",
+            "description": "\u0627\u0644\u0646\u0633\u0628\u0629 \u0627\u0644\u0645\u0626\u0648\u064a\u0629 99"
+          },
+          "p99.9": {
+            "type": "number",
+            "title": "P99.9",
+            "description": "\u0627\u0644\u0646\u0633\u0628\u0629 \u0627\u0644\u0645\u0626\u0648\u064a\u0629 99.9"
+          },
+          "avg": {
+            "type": "number",
+            "title": "Avg",
+            "description": "\u0627\u0644\u0645\u062a\u0648\u0633\u0637 \u0627\u0644\u0639\u0627\u0645"
+          }
+        },
+        "type": "object",
+        "required": [
+          "p50",
+          "p95",
+          "p99",
+          "p99.9",
+          "avg"
+        ],
+        "title": "LatencyMetrics",
+        "description": "\u0645\u0642\u0627\u064a\u064a\u0633 \u0632\u0645\u0646 \u0627\u0644\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0644\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0633\u0627\u062e\u0646\u0629."
       },
       "MetricType": {
         "type": "string",
@@ -1328,7 +1255,7 @@
           "network_io"
         ],
         "title": "MetricType",
-        "description": "أنواع المقاييس المستخدمة في نقاط القياس التشغيلية."
+        "description": "\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0645\u0642\u0627\u064a\u064a\u0633 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u0629 \u0641\u064a \u0646\u0642\u0627\u0637 \u0627\u0644\u0642\u064a\u0627\u0633 \u0627\u0644\u062a\u0634\u063a\u064a\u0644\u064a\u0629."
       },
       "MetricsResponse": {
         "properties": {
@@ -1352,7 +1279,34 @@
           "metrics"
         ],
         "title": "MetricsResponse",
-        "description": "استجابة المقاييس الإجمالية."
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0627\u0644\u0645\u0642\u0627\u064a\u064a\u0633 \u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a\u0629."
+      },
+      "PerformanceSnapshotResponse": {
+        "properties": {
+          "cpu_usage": {
+            "type": "number",
+            "title": "Cpu Usage",
+            "description": "\u0627\u0633\u062a\u0647\u0644\u0627\u0643 \u0627\u0644\u0645\u0639\u0627\u0644\u062c (%)"
+          },
+          "memory_usage": {
+            "type": "number",
+            "title": "Memory Usage",
+            "description": "\u0627\u0633\u062a\u0647\u0644\u0627\u0643 \u0627\u0644\u0630\u0627\u0643\u0631\u0629 (%)"
+          },
+          "active_requests": {
+            "type": "integer",
+            "title": "Active Requests",
+            "description": "\u0639\u062f\u062f \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0646\u0634\u0637\u0629"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cpu_usage",
+          "memory_usage",
+          "active_requests"
+        ],
+        "title": "PerformanceSnapshotResponse",
+        "description": "\u0646\u0645\u0648\u0630\u062c \u0644\u0642\u0637\u0629 \u0627\u0644\u0623\u062f\u0627\u0621."
       },
       "RiskPredictionRequest": {
         "properties": {
@@ -1422,7 +1376,52 @@
           "message"
         ],
         "title": "RootResponse",
-        "description": "رسالة الجذر لخدمة المراقبة."
+        "description": "\u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u062c\u0630\u0631 \u0644\u062e\u062f\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629."
+      },
+      "SaturationMetrics": {
+        "properties": {
+          "active_requests": {
+            "type": "integer",
+            "title": "Active Requests",
+            "description": "\u0639\u062f\u062f \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0646\u0634\u0637\u0629"
+          },
+          "queue_depth": {
+            "type": "integer",
+            "title": "Queue Depth",
+            "description": "\u0639\u0645\u0642 \u0637\u0627\u0628\u0648\u0631 \u0627\u0644\u062a\u0646\u0641\u064a\u0630"
+          },
+          "active_spans": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Spans",
+            "description": "\u0639\u062f\u062f \u0627\u0644\u0645\u0642\u0627\u0637\u0639 \u0627\u0644\u062a\u062a\u0628\u0639\u064a\u0629 \u0627\u0644\u0641\u0639\u0651\u0627\u0644\u0629"
+          },
+          "resource_utilization": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Utilization",
+            "description": "\u0646\u0633\u0628\u0629 \u0627\u0633\u062a\u0647\u0644\u0627\u0643 \u0627\u0644\u0645\u0648\u0627\u0631\u062f"
+          }
+        },
+        "type": "object",
+        "required": [
+          "active_requests",
+          "queue_depth"
+        ],
+        "title": "SaturationMetrics",
+        "description": "\u0645\u0624\u0634\u0631\u0627\u062a \u0627\u0644\u062a\u0634\u0628\u0639 \u0648\u0627\u0633\u062a\u0647\u0644\u0627\u0643 \u0627\u0644\u0645\u0648\u0627\u0631\u062f."
       },
       "SecurityFindingSchema": {
         "properties": {
@@ -1696,7 +1695,7 @@
           "value"
         ],
         "title": "TelemetryRequest",
-        "description": "حمولة قياس قادمة من خدمة مراقبة."
+        "description": "\u062d\u0645\u0648\u0644\u0629 \u0642\u064a\u0627\u0633 \u0642\u0627\u062f\u0645\u0629 \u0645\u0646 \u062e\u062f\u0645\u0629 \u0645\u0631\u0627\u0642\u0628\u0629."
       },
       "TelemetryResponse": {
         "properties": {
@@ -1715,7 +1714,28 @@
           "metric_id"
         ],
         "title": "TelemetryResponse",
-        "description": "استجابة استقبال القياس."
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0627\u0633\u062a\u0642\u0628\u0627\u0644 \u0627\u0644\u0642\u064a\u0627\u0633."
+      },
+      "TrafficMetrics": {
+        "properties": {
+          "requests_per_second": {
+            "type": "number",
+            "title": "Requests Per Second",
+            "description": "\u0639\u062f\u062f \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0641\u064a \u0627\u0644\u062b\u0627\u0646\u064a\u0629"
+          },
+          "total_requests": {
+            "type": "integer",
+            "title": "Total Requests",
+            "description": "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0641\u064a \u0627\u0644\u0646\u0627\u0641\u0630\u0629 \u0627\u0644\u0632\u0645\u0646\u064a\u0629"
+          }
+        },
+        "type": "object",
+        "required": [
+          "requests_per_second",
+          "total_requests"
+        ],
+        "title": "TrafficMetrics",
+        "description": "\u0625\u062d\u0635\u0627\u0621\u0627\u062a \u062d\u0631\u0643\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0639\u0644\u0649 \u0645\u0633\u062a\u0648\u0649 \u0627\u0644\u062e\u062f\u0645\u0629."
       },
       "ValidationError": {
         "properties": {
@@ -1740,6 +1760,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

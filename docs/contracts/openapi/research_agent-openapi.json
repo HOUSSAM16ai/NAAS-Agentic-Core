@@ -1,0 +1,379 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Research Agent",
+    "description": "\u062e\u062f\u0645\u0629 \u0645\u062e\u0635\u0635\u0629 \u0644\u0644\u0628\u062d\u062b \u0648\u0627\u0633\u062a\u0631\u062c\u0627\u0639 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062a (Microservice)",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "description": "\u0641\u062d\u0635 \u0627\u0644\u062d\u0627\u0644\u0629.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Check Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/content/curriculum": {
+      "get": {
+        "tags": [
+          "Content"
+        ],
+        "summary": "Get Curriculum",
+        "description": "Fetch curriculum structure.",
+        "operationId": "get_curriculum_content_curriculum_get",
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Curriculum Content Curriculum Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/content/{content_id}": {
+      "get": {
+        "tags": [
+          "Content"
+        ],
+        "summary": "Get Content",
+        "description": "Fetch raw content markdown.",
+        "operationId": "get_content_content__content_id__get",
+        "parameters": [
+          {
+            "name": "content_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Content Id"
+            }
+          },
+          {
+            "name": "include_solution",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Solution"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Get Content Content  Content Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/content/{content_id}/solution": {
+      "get": {
+        "tags": [
+          "Content"
+        ],
+        "summary": "Get Solution",
+        "description": "Fetch solution markdown.",
+        "operationId": "get_solution_content__content_id__solution_get",
+        "parameters": [
+          {
+            "name": "content_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Content Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Get Solution Content  Content Id  Solution Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/execute": {
+      "post": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Execute",
+        "description": "\u0646\u0642\u0637\u0629 \u0627\u0644\u062f\u062e\u0648\u0644 \u0627\u0644\u0645\u0648\u062d\u062f\u0629 \u0644\u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 (Unified Execution Endpoint).",
+        "operationId": "execute_execute_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AgentRequest": {
+        "properties": {
+          "caller_id": {
+            "type": "string",
+            "title": "Caller Id",
+            "description": "Entity requesting the action"
+          },
+          "target_service": {
+            "type": "string",
+            "title": "Target Service",
+            "description": "Target service name",
+            "default": "research_agent"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action",
+            "description": "Action to perform (e.g., 'search')"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload",
+            "description": "Action arguments"
+          },
+          "security_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Security Token",
+            "description": "Auth token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "caller_id",
+          "action"
+        ],
+        "title": "AgentRequest",
+        "description": "\u0637\u0644\u0628 \u062a\u0646\u0641\u064a\u0630 \u0625\u062c\u0631\u0627\u0621 \u0645\u0648\u062d\u062f."
+      },
+      "AgentResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "'success' or 'error'"
+          },
+          "data": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data",
+            "description": "Result data"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metrics",
+            "description": "Performance metrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "AgentResponse",
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0645\u0648\u062d\u062f\u0629 \u0644\u0644\u0648\u0643\u064a\u0644."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

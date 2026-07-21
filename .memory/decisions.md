@@ -5,6 +5,31 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-175 · طبقة الأسس النظرية (Foundational Reasoning Layer) — `app/core/foundations` (2026-07-21)
+**السياق:** طلب المالك تطوير «العقل والمنطق والعلوم الأساسية» — منطق الحوسبة، الخوارزميات وهياكل
+البيانات، الرياضيات المتقطعة، الاحتمالات والإحصاء، ونظرية المعلومات — كطبقة تُزوّد المشروع بالأسس
+النظرية لحل المشاكل. يتوافق مع دستور §0 («الحقيقة الرمزية قبل اللغة»: الأرقام من محرّكات حتمية لا LLM)
+وفلسفة CS50/SICP.
+
+- **الطبقة:** حزمة **dep-free (stdlib فقط)** في `app/core/foundations/` — **خارج** `app/services/skills/`
+  عمداً (فحص الـdoctrine يمسح skills فقط)، لأنها **مكتبة حسابية** لا Skill تربوي. ستّة نطاقات:
+  `combinatorics` (nPr/nCr/multinomial/Catalan/Stirling — أعداد صحيحة دقيقة) ·
+  `number_theory` (gcd/lcm · Miller–Rabin حتمي لكل مدخلات BAC · تحليل أوّلي · φ · حساب معياري) ·
+  `logic` (جداول حقيقة · tautology/SAT · تكافؤ · استلزام) ·
+  `probability` (binomial/hypergeometric بـ`Fraction` دقيق · توقّع/تباين · Bayes · إحصاء وصفي) ·
+  `information_theory` (Shannon entropy · KL · معلومات متبادلة — bits) ·
+  `algorithms` (بحث ثنائي · BFS/DFS/أقصر مسار · مصنِّف big-O تجريبي).
+- **قاعدة الخطأ الموحّدة:** كل بدائية ترفع `FoundationsError` عند خرق المجال (k>n، توزيع لا يجمع 1،
+  عقدة غير موجودة) — لا `0` مضلِّل ولا `ZeroDivisionError` عارٍ. نفس قاعدة V30.0 (الاستحالة حقيقة تُعلَّم
+  لا تُخفى بـ`C(2,3)=0`).
+- **DRY:** المشروع كان يستخدم `math.comb` مبعثراً؛ هذه الطبقة المصدر الموحّد للأعداد المُتحقَّقة —
+  المهارات التي تحتاج أرقاماً تستورد من هنا بدل إعادة التنفيذ.
+- **التحقق:** 50 فحص صحّة محلي (happy + error لكل نطاق) + `tests/core/test_foundations.py` (pytest،
+  stdlib فقط). `ruff` نظيف؛ كل البوّابات المحلية خضراء (runtime_truth، legacy_invariants، parity).
+- **الحالة:** مكتبة أساس **جاهزة للاستهلاك** (call chain من الاختبارات) — التوصيل الحيّ في مسار الحلّ
+  (probability/math skills → foundations) خطوة تالية محروسة بدورة CI مستقلة (لا يُعلَن ACTIVE قبل
+  البرهان الثلاثي — §6.6).
+
 ## D-174 · إغلاق الفجوات الحقيقية — API-First 11/11 + تكافؤ نماذج محروس + ملاحظية + مقاعد RAG (2026-07-21)
 **السياق:** بعد D-173 (التنظيم الثوري)، طلب المالك جولة عميقة تُكمل الثورة (خدمات مصغرة + API-first 100%،
 حل split-brain، DRY، ملاحظية كاملة، جاهزية إضافة التقنيات، CI أخضر، E2E حي). الاستكشاف أثبت أن معظم ذلك

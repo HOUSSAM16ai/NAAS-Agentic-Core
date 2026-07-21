@@ -870,6 +870,10 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
   صريح، صفر سقوط صامت للتوليد المحلي (`REQUIRE_ORCHESTRATOR=1` افتراضي، `=0` rollback).
 - **صفر LLM في مسار الأرقام**: كل الأرقام/الصحّة الاحتمالية من المحرك الرمزي الحتمي حصراً
   (`probability_skill` + `probability_tutor_brain`) — الـ LLM يُنتج **الفهم** (السرد السقراطي) لا **الحقيقة**.
+- **طبقة الأسس النظرية (D-175)**: `app/core/foundations/` (dep-free، stdlib فقط) هي الركيزة الحسابية
+  المُتحقَّقة — combinatorics · number_theory · logic · probability · information_theory · algorithms.
+  كل بدائية ترفع `FoundationsError` عند خرق المجال (لا `0` مضلِّل). المصدر الموحّد للأعداد المُتحقَّقة
+  (بدل `math.comb` المبعثر)؛ مكتبة خارج `skills/` جاهزة للاستهلاك — تُرقّى ACTIVE بالتوصيل الحيّ + البرهان الثلاثي.
 - **القاعدة الذهبية السقراطية (D-113→D-155)**: لا تكشف نتيجةً أو خطوةً يستطيع الطالب توليدها؛ الشرح
   يستقبل **أسئلة-فقط** (`display_content`)؛ الإجابة النموذجية لوضع التحقق حصراً؛ كل مخرَج نهائي يمرّ
   عبر `sanitize_final_text`/`redact_final_answers`. «لم أفهم» = تشخيص + أدنى تلميح، لا إعادة اشتقاق.

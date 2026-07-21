@@ -24,8 +24,8 @@
 
 ## 2. مقعد المتجهات (Vector Seam) — Vector DB / RAG fine-tuning
 
-- **الحالة الآن:** **pgvector ACTIVE** — عمود `embedding` في `bac_exercises` (Supabase)،
-  مُسجَّل في `app/core/db_schema_config.py`. الاسترجاع الحي عبر
+- **الحالة الآن:** **pgvector ACTIVE** — عمود `embedding` في `bac_exercise_questions` (Supabase؛
+  `bac_exercises` metadata فقط لتوليد المرشّحين بـ SQL). الاسترجاع الحي عبر
   `app/services/capabilities/bac_db_retriever.py` (D-099) + fallback نصّي على `knowledge_base/`.
   التضمينات موجودة لعيّنة من التمارين؛ التوسّع = backfill (`scripts/backfill_exercise_embeddings.py`).
 - **المقعد:** `bac_db_retriever` هو طبقة candidate-gen-then-rerank المستقلة عن مصدر المتجهات.

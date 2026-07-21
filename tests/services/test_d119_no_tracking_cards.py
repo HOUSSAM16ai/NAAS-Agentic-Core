@@ -14,10 +14,19 @@ stdlib + source-inspection — يعمل في الـ sandbox بلا pydantic/DB.
 
 from __future__ import annotations
 
+import importlib.util as _ilu
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CHAT_SRC = (REPO_ROOT / "app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+
+# D-173 Stage 2: customer_chat.py فُكِّك إلى حزمة customer_chat_support/ — نقرأ المصدر
+# **المُركَّب** عبر المانيفست (`_evaluate_bkt_cards` انتقل إلى pedagogy.py).
+_spec = _ilu.spec_from_file_location(
+    "_cc_sources_d119", REPO_ROOT / "app/api/routers/customer_chat_support/_sources.py"
+)
+_ccsrc = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_ccsrc)
+CHAT_SRC = _ccsrc.read_customer_chat_source()
 
 
 def _eval_body() -> str:

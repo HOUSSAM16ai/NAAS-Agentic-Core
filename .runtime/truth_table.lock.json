@@ -90,38 +90,6 @@
     },
     {
       "agreed": true,
-      "derived_status": "ZOMBIE",
-      "expected_status": "ZOMBIE",
-      "files": [
-        "app/services/chat/graph/workflow.py"
-      ],
-      "id": "multi_agent_workflow",
-      "importer_count": 1,
-      "importers_sample": [
-        "tests/verify_graph_manual.py"
-      ],
-      "name": "LangGraph multi-agent workflow",
-      "notes": "Only importer is tests/verify_graph_manual.py.",
-      "on_live_chain": false
-    },
-    {
-      "agreed": true,
-      "derived_status": "ZOMBIE",
-      "expected_status": "ZOMBIE",
-      "files": [
-        "app/services/kagent/registry.py"
-      ],
-      "id": "kagent_mesh",
-      "importer_count": 1,
-      "importers_sample": [
-        "app/services/kagent/interface.py"
-      ],
-      "name": "KAgent mesh",
-      "notes": "DI-registered; only consumer is the dead workflow.",
-      "on_live_chain": false
-    },
-    {
-      "agreed": true,
       "derived_status": "DORMANT",
       "expected_status": "DORMANT",
       "files": [
@@ -323,6 +291,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-07-21T01:11:12.956649+00:00",
+  "generated_at_utc": "2026-07-21T08:05:39.562773+00:00",
   "schema_version": 1
 }

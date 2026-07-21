@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from app.application.services import DefaultHealthCheckService
-    from app.services.kagent.interface import KagentMesh
     from app.services.system.system_service import SystemService
 
 # --- Legacy / Core Re-exports ---
@@ -117,29 +116,12 @@ __all__ = [
     "Container",
     "get_db",
     "get_health_check_service",
-    "get_kagent_mesh",
     "get_logger",
     "get_session",
     "get_settings",
     "get_system_service",
 ]
-
-
-def get_kagent_mesh() -> KagentMesh:
-    """جلب شبكة الوكيل الذكي عبر الحاوية."""
-    from app.services.kagent.interface import KagentMesh
-
-    return Container.resolve(KagentMesh)
-
-
-# Bootstrap Kagent as a Lazy Singleton
-def _create_kagent_mesh() -> KagentMesh:
-    """إنشاء نسخة جديدة من شبكة الوكيل الذكي."""
-    from app.services.kagent.interface import KagentMesh
-
-    return KagentMesh()
-
-
-from app.services.kagent.interface import KagentMesh
-
-Container.register_singleton_factory(KagentMesh, _create_kagent_mesh)
+# D-173 (Stage 5): KAgent mesh deleted — it was ZOMBIE (DI-registered singleton
+# whose only consumer was the dead multi-agent workflow, itself imported only by a
+# manual verify script). Security-blocked («Invalid token») with no live chat-path
+# edge. See CLAUDE.md §6 closing rule + .memory/decisions.md D-173.

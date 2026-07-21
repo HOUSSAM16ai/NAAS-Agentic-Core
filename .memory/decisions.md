@@ -5,6 +5,56 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-173 · التنظيم الثوري الشامل — API-First + قتل التعقيد المتبقي + جراحة التوثيق (2026-07-21)
+**السياق:** بعد سلسلة التفكيك (D-163→D-172: God-files قُتلت، docker full-stack مُثبَت 16/16،
+split-brain محروس بـ17 عقد)، طلب المالك عملية ضخمة تُكمل الثورة: قتل بقايا التعقيد
+(SOLID/KISS/DRY/YAGNI)، إغلاق بقايا split-brain، API-first 100%، جاهزية إضافة التقنيات
+(Kafka/VectorDB/RAG/…)، حذف Kagent، دمج workflows، جراحة CLAUDE.md، CI أخضر 100%، E2E حي.
+نُفِّذ في 8 مراحل (كل مرحلة commit مستقل بنقطة تفتيش خضراء).
+
+- **Stage 0 — تحديث الحقيقة:** regenerate runtime lock؛ إصلاح docstrings العدّادات (registry الـ27)؛
+  تصحيح خطأ توثيقي «13-node»→«12-node unified chat graph + 9-node overmind missions engine»
+  (الرسمان كلاهما حي، لا zombie).
+- **Stage 1 — دمج CI:** 39→10 workflow. بوّابة جديدة `check_legacy_invariants.py` (stdlib، **349
+  تأكيد grep منقول حرفياً** من 20 workflow قبل حذفها — صفر فقدان تغطية) موصولة في job guardrails.
+- **Stage 2 — تفكيك 3 God-files (verbatim + manifests):** `doctrine.py` 1600→حزمة (6 شرائح +
+  `DOCTRINE_SOURCE_FILES`، 68 اسماً عاماً محفوظاً)؛ `customer_chat.py` 1412→834 (حزمة
+  `customer_chat_support/` transport/pedagogy/frames + `CUSTOMER_CHAT_SOURCE_FILES`، handlers
+  تبقى D-168)؛ `graph/main.py` 1300→214 (dspy_compat/state/nodes + `GRAPH_SOURCE_FILES`). حذف
+  `superhuman-framework.js` الميت. Lockstep: 19 اختباراً + قرّاء البوّابات على المصدر المُركَّب.
+- **Stage 3 — إغلاق split-brain (M10-S2.4):** port الشارح المفاهيمي D-125
+  (`detect_conceptual_question`/`build_conceptual_relationship`) + تصعيد الحيرة F3 إلى
+  `probability_tutor.py` — يُفحَص المفاهيمي **قبل** step-explanation (نظير عقل المونوليث). بوّابة
+  التكافؤ 17→20 عقداً. حكم الرسمين: كلاهما حي (توثيقي فقط).
+- **Stage 4 — API-first 100%:** عقود OpenAPI للخدمات الـ10 (كانت 5) عبر `export_openapi.py`
+  (SSOT)؛ بوّابة **دلالية** `check_openapi_parity.py` (endpoints لا bytes — robust عبر pydantic)
+  في job test-microservices. إغلاق فجوتَي D-172: research-agent lazy imports
+  (sentence_transformers + llama_index.embeddings + vector_stores.supabase + search_engine
+  `__getattr__` كسول)؛ conversation-service Dockerfile يحاكي planning (python:3.12 + package path
+  + PYTHONPATH + `microservices.conversation_service.main:app`).
+- **Stage 5 — Kagent محذوف + مقاعد التوسّع:** حذف ZOMBIE cluster (kagent mesh + kagent_driver +
+  multi-agent workflow + 3 عُقد coupled؛ supervisor/writer/reviewer/procedural_auditor محفوظة —
+  constitution Core بلا kagent import). rewire: di.py/drivers/mcp.integrations (degrade graceful)
+  + runtime_truth catalog. `docs/architecture/EXTENSION_SEAMS.md` (المقعد الحقيقي لكل تقنية — outbox
+  relay→Kafka، pgvector→متجر مخصّص، ai_config chain، skill flags؛ Kafka/TLM ABSENT-by-YAGNI) +
+  `scripts/backfill_exercise_embeddings.py` (RAG حيّ، idempotent، عبر db_bridge).
+- **Stage 6 — جراحة التوثيق:** CLAUDE.md **12,082→966 سطراً (−92%)**. §0 constitution + §1-§6.4
+  reference + §6.5/§6.6 truth-tables + closing rule محفوظة حرفياً (متطلبات doc_integrity)؛ §6.7-§6.144
+  (السرد الكامل D-006→D-172) نُقلت حرفياً إلى `docs/archive/constitution-history/CLAUDE-SECTIONS-6x-FULL.md`
+  ووُحِّدت في 9 أقسام قواعد-دائمة مصنّفة بالمجال + خريطة إحالة + قسم الرؤية الثورية. لا إعادة ترقيم
+  (تعليقات الكود تستشهد بـ§6.xx). doc_integrity anchors كلها محفوظة (مُتحقَّق محلياً).
+
+**حكم الرسمين (Stage 3):** 12-node `graph/main.py` = مسار الدردشة؛ 9-node
+`overmind/langgraph/engine.py` = مسار المهام. كلاهما حي (import + call chain + runtime evidence)
+— توحيدهما مرشّح milestone مستقبلي، لا فعل الآن. **حكم Kagent (Stage 5):** ZOMBIE محظور أمنياً
+(«Invalid token»)، مستهلكه الوحيد رسمٌ ميت — القدرة بلا مستهلك حي تُحذَف لا تُترَك stub.
+
+**القواعد الدائمة:** كل نقل verbatim + كل استخراج = سطر مانيفست + البوّابات تقرأ المصدر المُركَّب؛
+مواءمة الاختبارات لا تعطيلها (deselect shrink-only)؛ API-first مفروض بوّابةً دلالية؛ أي قدرة تُضاف
+تُثبَّت بالبرهان الثلاثي قبل ACTIVE (FLAGGED/مقعد وإلا). الملفات: `scripts/{contracts/export_openapi,
+fitness/{check_openapi_parity,check_legacy_invariants},backfill_exercise_embeddings}.py` ·
+`docs/architecture/EXTENSION_SEAMS.md` · `docs/archive/constitution-history/CLAUDE-SECTIONS-6x-FULL.md`.
+
 ## D-170/D-171 · تفكيك الملفات الضخمة الأخيرة + إغلاق ISS-132 (2026-07-18)
 **السياق:** بعد سلسلة D-163→D-168 (تفكيك God-files عبر مانيفستات + mixins حرفية)، بقيت
 أربعة ملفات ضخمة تُمثّل «كارثة التعقيد» المتبقية، وبقيت ISS-132 مفتوحة (أدوات الإدمن عبر

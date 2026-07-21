@@ -576,8 +576,8 @@ Test: `question="كيف أحل معادلة من الدرجة الثانية؟"`
 | 6 | LangGraph local engine (2 nodes) | `app/services/chat/local_graph.py` | **PARTIAL** | Fallback tier 3. Live confirmed. |
 | 7 | LangGraph metrics emission | `app/services/chat/local_graph.py` → `unified_observability` | **ACTIVE** | `cogniforge_langgraph_*` emitted per turn (NEW this branch) |
 | 8 | OrchestratorClient fallback chain | `app/infrastructure/clients/orchestrator_client.py` | **ACTIVE** | 4-tier fallback. Tier 3 (LangGraph) is primary handler. |
-| 9 | LangGraph multi-agent workflow | `app/services/chat/graph/workflow.py` | **ZOMBIE** | Only test file imports it |
-| 10 | KAgent Mesh | `app/services/kagent/` | **ZOMBIE** | DI-registered, only consumer is dead workflow |
+| 9 | LangGraph multi-agent workflow | ~~`app/services/chat/graph/workflow.py`~~ | **DELETED (D-173)** | ZOMBIE removed — was imported only by a manual verify script |
+| 10 | KAgent Mesh | ~~`app/services/kagent/`~~ | **DELETED (D-173)** | ZOMBIE removed — security-blocked, only consumer was the dead workflow |
 | 11 | MCP | `app/services/mcp/` | **DORMANT** | Lazy-imported by side-path agents not on WS path |
 | 12 | Reranker / LlamaIndex / DSPy | `microservices/research_agent`, `orchestrator_service` | **DORMANT** | Blocked by dormant microservices |
 | 13 | Tavily | `orchestrator_service/src/services/overmind/graph/search.py` | **DORMANT** | Key in .env, orchestrator not running |

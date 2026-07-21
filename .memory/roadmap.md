@@ -163,6 +163,11 @@ runtime evidence). دَيْن موثَّق: `DOC-DEBT-001` (CLAUDE.md موسوع
     parse_composition محصَّن ضد نثر الحل + بوّابة مقامات LaTeX-aware + سُلّم كشف تدريجي صفر-نتيجة
     بحارس dedup) موصول في `SynthesizerNode` خلف `ORCHESTRATOR_PROB_TUTOR_ENABLED` (افتراضه "1" — **ACTIVE default-on منذ D-163 Stage 3**؛ رافعة الرجوع `=0`).
     الحالة الصادقة (§6.6): **FLAGGED** — يُقلب العلم بعد التحقق الحيّ في Codespaces.
+  - **S2.4 ✅ الشارح المفاهيمي + تصعيد الحيرة على الـ port (D-173، 2026-07-21)**:
+    `detect_conceptual_question` + `build_conceptual_relationship` (D-125: «ما الفرق بين 165 و 14»
+    ⇒ العلاقة لا الحساب) — يُفحَص **قبل** step-explanation (نظير عقل المونوليث الذي يفحص المفاهيمي
+    داخل `_build_probability_direct_explanation` قبل احترام forced_subpart) + تصعيد الحيرة F3
+    (الطالب العالق يتعلّم اشتقاق جزئية لا يدور). بوّابة التكافؤ صارت **20 عقداً**.
   - **S2.3 ✅ «كيف حسبنا 4» تُعلَّم على الـ port (D-168، 2026-07-16)**: `detect_subpart_question`
     + `detect_step_explanation` + `build_step_explanation` (data-driven من `parse_composition`،
     صفر كشف للنسبة — يَنجو من حجب D-113) موصولة في `deterministic_turn` قبل بوّابة هروب

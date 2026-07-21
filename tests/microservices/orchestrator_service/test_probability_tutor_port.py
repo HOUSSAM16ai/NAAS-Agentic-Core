@@ -266,5 +266,69 @@ class TestStepExplanationTeaches:
             '"def detect_subpart_question("',
             '"def detect_step_explanation("',
             '"def build_step_explanation("',
+            # D-125 (M10-S2.4): الشارح المفاهيمي + F3 في العقلين.
+            '"def detect_conceptual_question("',
+            '"def build_conceptual_relationship("',
+            '\'[*comp["groups"], "total", "sum"]\'',
         ):
             assert marker in gate, f"parity contract missing: {marker}"
+
+
+class TestConceptualExplainerMirror:
+    """D-125 (M10-S2.4): «ما الفرق بين 165 و 14» يُجاب بالعلاقة لا الحساب — port."""
+
+    def test_detector_strong_vs_procedural(self):
+        from microservices.orchestrator_service.src.services.overmind.probability_tutor import (
+            detect_conceptual_question,
+        )
+
+        # علامة قوية ⇒ مفاهيمي (الهجين).
+        assert detect_conceptual_question("ما الفرق بين 165 و 14") is True
+        assert detect_conceptual_question("ما الهدف من 14") is True
+        assert detect_conceptual_question("ما العلاقة بين البسط والمقام") is True
+        # «لماذا» + فعل إجرائي ⇒ ليس مفاهيمياً (تحفّظ 3).
+        assert detect_conceptual_question("لماذا نجمع 14") is False
+        # «ليش 14» (بلا فعل إجرائي) ⇒ مفاهيمي.
+        assert detect_conceptual_question("ليش 14؟") is True
+        # طلب تمرين/شرح إجرائي ⇒ ليس مفاهيمياً.
+        assert detect_conceptual_question("كيف نحسب 14") is False
+        assert detect_conceptual_question("اعطني تمرين") is False
+
+    def test_relationship_answer_states_ratio_not_pa_dump(self):
+        from microservices.orchestrator_service.src.services.overmind.probability_tutor import (
+            build_conceptual_relationship,
+        )
+
+        comp = parse_composition(_OFFICIAL)
+        rel = build_conceptual_relationship("ما الفرق بين 165 و 14", comp)
+        # العلاقة تذكر المقام والبسط (doctrine-parity مع العقل).
+        assert "العلاقة" in rel and "المقام" in rel and "البسط" in rel
+        assert str(comp["total"]) in rel and str(comp["same"]) in rel
+        # ليست dump لـ P(A) (نظير حارس المونوليث سطر 297).
+        assert "فاحتمال الحادثة A هو" not in rel and "\\boxed" not in rel
+
+    def test_deterministic_turn_routes_conceptual_before_step_explanation(self):
+        # «ما الفرق **بين** 165 و 14» يطابق علامة الشرح «بين» — لكن المفاهيمي يسبق.
+        t = deterministic_turn("ما الفرق بين 165 و 14", _OFFICIAL, history=[])
+        assert t and "العلاقة" in t, "conceptual must win over the «بين» step marker"
+        # سؤال غاية مفاهيمي بلا علامة شرح ⇒ يُجاب (كان يهرب للـ LLM سابقاً).
+        t2 = deterministic_turn("ما الهدف من 14", _OFFICIAL, history=[])
+        assert t2 and "العلاقة" in t2
+
+
+class TestConfusionEscalationMirror:
+    """D-160 F3 (M10-S2.4): الطالب العالق يتعلّم اشتقاق جزئية لا يدور — port."""
+
+    def test_f3_teaches_subpart_after_ladder_exhausted(self):
+        from microservices.orchestrator_service.src.services.overmind.probability_tutor import (
+            _ladder_for_support,
+        )
+
+        comp = parse_composition(_OFFICIAL)
+        # التاريخ يستنفد **كل** رُتب السُّلّم ⇒ F3 يُعلّم أصغر جزئية غير مكرَّرة.
+        prior = list(_ladder_for_support(comp, 2))
+        f3 = deterministic_turn("لم أفهم", _OFFICIAL, history=prior, support_level=2)
+        assert f3 is not None, "stuck student must learn a sub-part, not loop"
+        # جزئية ملموسة (توافيق لممكن أو تعليل الاستحالة) لا كشف نهائي.
+        assert ("C_{" in f3 or "مستحيلة" in f3) and "\\boxed" not in f3
+        assert "فاحتمال الحادثة A هو" not in f3, "F3 must not reveal P(A)"

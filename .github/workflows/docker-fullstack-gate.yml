@@ -8,7 +8,7 @@ name: "Docker Full-Stack Gate (R0.1/R0.2 — D-172)"
 
 on:
   push:
-    branches: ["claude/docker-runtime-microservices-upo8jg", "main"]
+    branches: ["main"]
     paths:
       - "docker-compose.yml"
       - "observability/compose/**"

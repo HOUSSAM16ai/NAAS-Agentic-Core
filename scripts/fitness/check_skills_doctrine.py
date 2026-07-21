@@ -339,7 +339,7 @@ def check_bkt_baseline_integrated() -> None:
 def check_skills_platform() -> None:
     """D-100: منصّة الـ Skills الموحَّدة يجب أن تكون:
     (1) manifest entry 'skills_platform' متّسق (version + rules_count)،
-    (2) registry مكتمل (كل الـ 14 Skills مُسجَّلة) وبلا ZOMBIE (consumed_by غير فارغ)،
+    (2) registry مكتمل (كل الـ Skills مُسجَّلة) وبلا ZOMBIE (consumed_by غير فارغ)،
     (3) موجِّه `/api/v1/skills` يستهلك الـ registry ومُركَّب في base_router_registry.
     """
     from app.services.skills.doctrine import (

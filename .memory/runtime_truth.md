@@ -27,14 +27,20 @@
 
 ## Orchestrator `routes.py` Re-Activation (2026-06-04, D-098) — SQLite-Mode Full-Stack E2E
 
-**Status: orchestrator-service StateGraph (13-node) → ✅ ACTIVE (re-verified live on SQLite + real OpenRouter).**
+**Status: orchestrator-service StateGraph (12-node) → ✅ ACTIVE (re-verified live on SQLite + real OpenRouter).**
+
+> **Two-engines truth (D-173, verified 2026-07-20):** the orchestrator hosts TWO live LangGraph engines —
+> the **12-node unified chat graph** (`overmind/graph/main.py:1231-1242`, built at boot via `create_unified_graph`,
+> serves `/api/chat/messages` + WS) and the **9-node overmind missions engine** (`overmind/langgraph/engine.py:258-266`,
+> reached via `routes.py` → `start_mission` → `factory.create_overmind`, serves `/missions`). Historic docs said
+> "13-node" — that figure matched neither and was a pure doc bug; both engines are ACTIVE for their own surface.
 
 Live evidence (sandbox: Postgres TCP blocked → shared SQLite + real OpenRouter/Tavily; Supabase read via HTTPS bridge):
 - `:8006/health → {"status":"ok","graph_ready":true,"startup_state":"ready"}`; warmup ran the graph
   (`admin.count_python_files → 1584`); `startup_info{checkpointer_backend="memory",graph_ready="true",pipeline_enabled="true"}`.
 - **Direct** `POST :8006/api/chat/messages` → real Arabic+LaTeX answers (Newton 24Δ `$$\vec F=m\vec a$$`, gravity 27Δ,
   speed/accel 46Δ).
-- **Monolith WS** `:8000/api/chat/ws` → full 13-node graph executed (Supervisor→QueryRewriter→QueryAnalyzer→
+- **Monolith WS** `:8000/api/chat/ws` → full 12-node graph executed (Supervisor→QueryRewriter→QueryAnalyzer→
   InternalRetriever→Reranker→WebSearchFallback→Synthesizer→Validator); batch 4/5 routed through orchestrator.
 - **Frontend proxy** `:5000/api/chat/ws` (query-param) → server.js queue→flush→orchestrator hit (200) → 21Δ `$$K=½mv²$$`.
 - Live node counts: Supervisor×11, Validator×11, educational-pipeline×6, GeneralKnowledge×5, ExecuteTool×1; **11 answers (200)**.
@@ -360,7 +366,7 @@ User WebSocket (jwt subprotocol)
   → Monolith :8000/api/chat/ws
   → OrchestratorClient.chat_with_agent()
   → http://localhost:8006/api/chat/messages  (StateGraph mode)
-  → LangGraph 13-node StateGraph
+  → LangGraph 12-node StateGraph
   → Planning :8002 + Research :8007 + Reasoning :8008
   → Streaming NDJSON response to user
 ```
@@ -430,7 +436,7 @@ Missing any one → DORMANT, ZOMBIE, or UNKNOWN. No exceptions.
 ```
 monolith → OrchestratorClient._build_service_jwt(user_id=1) → JWT
          → POST http://localhost:8006/api/chat/messages (Authorization: Bearer <JWT>)
-         → orchestrator StateGraph (13 nodes: SupervisorNode → GeneralKnowledgeNode/SynthesizerNode)
+         → orchestrator StateGraph (12 nodes: SupervisorNode → GeneralKnowledgeNode/SynthesizerNode)
          → OpenRouter LLM → Arabic response
 ```
 Test: `question="كيف أحل معادلة من الدرجة الثانية؟"` → full LaTeX-formatted Arabic response from microservice.
@@ -575,7 +581,7 @@ Test: `question="كيف أحل معادلة من الدرجة الثانية؟"`
 | 11 | MCP | `app/services/mcp/` | **DORMANT** | Lazy-imported by side-path agents not on WS path |
 | 12 | Reranker / LlamaIndex / DSPy | `microservices/research_agent`, `orchestrator_service` | **DORMANT** | Blocked by dormant microservices |
 | 13 | Tavily | `orchestrator_service/src/services/overmind/graph/search.py` | **DORMANT** | Key in .env, orchestrator not running |
-| 14 | Advanced orchestrator StateGraph (13 nodes) | `orchestrator_service/src/services/overmind/graph/main.py` | **DORMANT→PARTIAL** | Compiles in isolation (verified live 2026-05-10 with real OPENROUTER_API_KEY). 3 blockers removed (H1/H2/H3). Needs `docker compose up orchestrator-service` to reach ACTIVE. |
+| 14 | Advanced orchestrator StateGraph (12 nodes) | `orchestrator_service/src/services/overmind/graph/main.py` | **DORMANT→PARTIAL** | Compiles in isolation (verified live 2026-05-10 with real OPENROUTER_API_KEY). 3 blockers removed (H1/H2/H3). Needs `docker compose up orchestrator-service` to reach ACTIVE. |
 | 27 | ChatRoutingPolicy — endpoint_mode | `app/infrastructure/clients/routing_policy.py` | **ACTIVE** | Default: `state_graph` → `/api/chat/messages`. Rollback: `ORCHESTRATOR_CHAT_ENDPOINT=agent` → `/agent/chat`. D-021 implemented 2026-05-10. |
 | 28 | Routing metrics | `app/infrastructure/clients/orchestrator_client.py` | **ACTIVE** | `cogniforge_routing_mode_state_graph` gauge + `cogniforge_routing_target_total{target=...}` counter emitted per chat request. |
 | 29 | Microservices Transition Dashboard (Step 2) | `observability/grafana/dashboards/50-microservices-transition.json` | **ACTIVE** | 15 panels on Grafana :3001. UID: cogniforge-ms-transition-step2. Shows routing mode, StateGraph metrics, Tavily, microservices health matrix, fallback chain progress. |
@@ -642,7 +648,7 @@ Test: `question="كيف أحل معادلة من الدرجة الثانية؟"`
 8. **Warmup must be timeout-guarded.** Any `ainvoke()` in a lifespan context must use `asyncio.wait_for(..., timeout=N)`.
 9. **Supervisor must not trust stale state.** On every boot, re-verify uvicorn is actually serving (PID alive AND port responding).
 10. **Grafana :3001 requires process env at boot.** `GF_SERVER_HTTP_PORT=3001` set by supervisor.sh before launching grafana-server.
-11. **Orchestrator StateGraph NOT on monolith chat path.** `ChatRoutingPolicy` returns `/agent/chat` → `OrchestratorAgent.run()`, NOT the 13-node StateGraph.
+11. **Orchestrator StateGraph NOT on monolith chat path.** `ChatRoutingPolicy` returns `/agent/chat` → `OrchestratorAgent.run()`, NOT the 12-node StateGraph.
 12. **thread_id namespaces incompatible.** Local graph: `str(conversation_id)`. Orchestrator: `f"u{user_id}:c{conversation_id}"`. Never mix.
 13. **LangGraph metrics now ACTIVE for local graph.** `cogniforge_langgraph_intent_total`, `cogniforge_langgraph_node_count_total`, `cogniforge_langgraph_node_duration_seconds_bucket` emitted per WS turn.
 14. **Lock file staleness is a finding.** Always check `generated_at_utc` in `.runtime/truth_table.lock.json` before trusting it.
@@ -651,14 +657,14 @@ Test: `question="كيف أحل معادلة من الدرجة الثانية؟"`
 17. **`.devcontainer/secrets.env` is the Codespaces fallback.** When Codespaces Secrets are not configured, `supervisor.sh` reads `.devcontainer/secrets.env` (git-ignored) before falling back to SQLite. Copy `.devcontainer/secrets.env.example` and fill in real values. Never commit `secrets.env`.
 19. **`cognitive_engine.memorize` يتطلب حارس None (H3 — 2026-05-10).** `get_cognitive_engine()` يُرجع `None` دائماً. أي استدعاء لـ `self.cognitive_engine.memorize(...)` بدون `if self.cognitive_engine is not None` يرفع `AttributeError` في كل استجابة ناجحة للنموذج. الإصلاح مُطبَّق في `simple_client.py:116`.
 20. **`postgresql://` يُفشل `create_async_engine` — يجب `postgresql+asyncpg://` (ISS-038-B — مكتشف حياً 2026-05-10).** `DATABASE_URL` من Supabase يستخدم `postgresql://` الذي يُعيَّن إلى psycopg2 المتزامن. `create_async_engine` يرفعه بـ `InvalidRequestError`. الإصلاح في `supervisor.sh` و `automations.yaml`: تحويل inline بـ bash substitution + إزالة `sslmode` من query string (asyncpg يتعامل مع SSL عبر `connect_args`). **القاعدة:** أي microservice يستخدم SQLAlchemy async يجب أن يستقبل `postgresql+asyncpg://` وليس `postgresql://`.
-21. **orchestrator-service يبدأ في وضع `degraded` مع `graph_ready:true` — هذا طبيعي.** `startup_state: degraded` يعني warmup probe فشل بسبب PgBouncer prepared statement conflict (`prepared statement "_pg3_0" already exists`). لكن `graph_ready: true` يعني الـ StateGraph 13 عقدة يعمل. الخدمة تستجيب وتعالج الطلبات. هذا سلوك متوقع مع PgBouncer transaction mode — ليس خطأً مميتاً.
+21. **orchestrator-service يبدأ في وضع `degraded` مع `graph_ready:true` — هذا طبيعي.** `startup_state: degraded` يعني warmup probe فشل بسبب PgBouncer prepared statement conflict (`prepared statement "_pg3_0" already exists`). لكن `graph_ready: true` يعني الـ StateGraph 12 عقدة يعمل. الخدمة تستجيب وتعالج الطلبات. هذا سلوك متوقع مع PgBouncer transaction mode — ليس خطأً مميتاً.
 23. **planning-agent يعمل في وضع fallback بدون OPENROUTER_API_KEY.** `_dspy_dependencies_available()` تتحقق من DSPy قبل التهيئة. عند غياب المفتاح أو فشل DSPy، `_get_fallback_plan()` تُولِّد خطة احتياطية بدلاً من رفع استثناء. `cogniforge_planning_fallback_plans_total{reason=...}` يُسجِّل السبب. هذا سلوك مقصود — الخدمة لا تتعطل بدون DSPy.
 24. **docker-compose.step6.yml مخصص لبيئات Docker فقط.** في Codespaces: `supervisor.sh:launch_planning_agent()` هو المسار الوحيد. `docker-compose.step6.yml` للتطوير المحلي وCI فقط. لا تحاول تشغيل Docker Compose في Codespaces devcontainer — Docker-in-Docker غير مدعوم.
 25. **PLANNING_* env vars prefix.** `PlanningAgentSettings` تستخدم `env_prefix="PLANNING_"`. لذا `OPENROUTER_API_KEY` في البيئة يُقرأ كـ `PLANNING_OPENROUTER_API_KEY`. في supervisor.sh: `PLANNING_OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}"` يُحوِّل المفتاح العام إلى المتغير المُقيَّد بالـ prefix.
 20. **`TAVILY_API_KEY` يجب أن يكون في `docker-compose.yml` لكلا الخدمتين (H1 — 2026-05-10).** `WebSearchFallbackNode` في `orchestrator_service` و`SuperSearchOrchestrator` في `research_agent` تتجاهلان البحث صامتتين عند غياب المفتاح. القيمة الآمنة: `${TAVILY_API_KEY:-}`.
 21. **`ddgs>=6.0` مطلوب في `research_agent/requirements.txt` (H2 — 2026-05-10).** بدونه، `SuperSearchOrchestrator` ترفع `ImportError` عند غياب `TAVILY_API_KEY` — وهو الوضع الافتراضي في بيئة التطوير.
 18. **Exercise retrieval requires intent classification, not keyword matching (ISS-038).** `detect_exercise_retrieval()` must use a two-phase classifier: (1) explanation-intent patterns cancel retrieval at highest priority; (2) only explicit retrieval patterns trigger it. A flat keyword list on "تمرين"/"احتمالات" causes context blindness — every explanation request returns the same static knowledge-base file. When in doubt, do NOT trigger retrieval; LangGraph handles ambiguous questions better. The `knowledge_base/` directory currently contains exactly one file — any retrieval trigger without explicit context returns that file unconditionally.
-22. **`ORCHESTRATOR_CHAT_ENDPOINT` controls routing target (Step 2 — 2026-05-10).** Default: `"state_graph"` → `/api/chat/messages` (StateGraph 13 nodes). Rollback: `"agent"` → `/agent/chat` (OrchestratorAgent). Unknown values fall back to `"state_graph"` with a warning. Do NOT change the default without an ADR (D-021).
+22. **`ORCHESTRATOR_CHAT_ENDPOINT` controls routing target (Step 2 — 2026-05-10).** Default: `"state_graph"` → `/api/chat/messages` (StateGraph 12 nodes). Rollback: `"agent"` → `/agent/chat` (OrchestratorAgent). Unknown values fall back to `"state_graph"` with a warning. Do NOT change the default without an ADR (D-021).
 23. **Routing metrics are emitted per chat request.** `cogniforge_routing_mode_state_graph` (gauge: 1=StateGraph, 0=Agent) and `cogniforge_routing_target_total{target=...}` (counter) are emitted by `orchestrator_client.py` on every `chat_with_agent` call. These feed the `50-microservices-transition.json` dashboard on Grafana :3001.
 24. **Microservices Prometheus targets are DOWN by default.** `orchestrator-service`, `research-agent`, `user-service`, `planning-agent` scrape targets added to `prometheus.yml`. They show as DOWN until `docker compose -f docker-compose.yml up -d` is run. DOWN is the expected state in the default devcontainer — it is not an error.
 25. **Grafana :3001 has 6 dashboards after Step 2.** `50-microservices-transition.json` (UID: `cogniforge-ms-transition-step2`) added. 15 panels covering routing mode, StateGraph execution, Tavily, microservices health matrix, and fallback chain transition progress.

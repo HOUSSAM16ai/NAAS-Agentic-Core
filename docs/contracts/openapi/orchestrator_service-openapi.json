@@ -2,75 +2,49 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Orchestrator Service",
-    "description": "\u062e\u062f\u0645\u0629 \u0645\u0633\u062a\u0642\u0644\u0629 \u0644\u062a\u0646\u0633\u064a\u0642 \u0627\u0644\u0648\u0643\u0644\u0627\u0621 \u0639\u0628\u0631 \u0648\u0627\u062c\u0647\u0627\u062a API",
-    "version": "1.0.0"
+    "version": "0.1.0"
   },
   "paths": {
-    "/health": {
+    "/api/v1/system/outbox/status": {
       "get": {
-        "summary": "Health Check",
-        "description": "\u064a\u0641\u062d\u0635 \u062c\u0627\u0647\u0632\u064a\u0629 \u0627\u0644\u062e\u062f\u0645\u0629 \u062f\u0648\u0646 \u0623\u064a \u0627\u0639\u062a\u0645\u0627\u062f \u062e\u0627\u0631\u062c\u064a.",
-        "operationId": "health_check_health_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object",
-                  "title": "Response Health Check Health Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/orchestrator/agents": {
-      "get": {
-        "summary": "List Agents",
-        "description": "\u064a\u0639\u0631\u0636 \u0633\u062c\u0644 \u0627\u0644\u0648\u0643\u0644\u0627\u0621 \u0643\u0628\u064a\u0627\u0646\u0627\u062a \u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u0627\u0633\u062a\u0647\u0644\u0627\u0643 \u0639\u0628\u0631 \u0627\u0644\u0640 API.",
-        "operationId": "list_agents_orchestrator_agents_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "items": {
-                      "additionalProperties": {
-                        "type": "string"
-                      },
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "type": "object",
-                  "title": "Response List Agents Orchestrator Agents Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/orchestrator/tasks": {
-      "post": {
-        "summary": "Create Task",
-        "description": "Create a new task.",
-        "operationId": "create_task_orchestrator_tasks_post",
+        "tags": [
+          "Overmind (Super Agent)",
+          "System"
+        ],
+        "summary": "Outbox Status",
+        "description": "\u064a\u0639\u0631\u0636 \u0644\u0642\u0637\u0629 \u062a\u0634\u063a\u064a\u0644\u064a\u0629 \u0622\u0645\u0646\u0629 \u0639\u0646 outbox \u062f\u0648\u0646 \u062a\u0639\u062f\u064a\u0644 \u0623\u064a \u0628\u064a\u0627\u0646\u0627\u062a.",
+        "operationId": "outbox_status_api_v1_system_outbox_status_get",
         "parameters": [
           {
-            "name": "description",
-            "in": "query",
-            "required": true,
+            "name": "authorization",
+            "in": "header",
+            "required": false,
             "schema": {
-              "type": "string",
-              "title": "Description"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
             }
           }
         ],
@@ -80,7 +54,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskResponse"
+                  "$ref": "#/components/schemas/OutboxStatusResponse"
                 }
               }
             }
@@ -97,10 +71,1940 @@
           }
         }
       }
+    },
+    "/api/v1/system/outbox/relay": {
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "System"
+        ],
+        "summary": "Trigger Outbox Relay",
+        "description": "\u064a\u0634\u063a\u0644 relay \u064a\u062f\u0648\u064a\u064b\u0627 \u0628\u0634\u0643\u0644 \u0622\u0645\u0646 \u0645\u0639 \u062d\u062f\u0648\u062f \u0648\u0627\u0636\u062d\u0629 \u0644\u0644\u062f\u0641\u0639\u0629 \u0648\u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0627\u062a.",
+        "operationId": "trigger_outbox_relay_api_v1_system_outbox_relay_post",
+        "parameters": [
+          {
+            "name": "batch_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Batch Size"
+            }
+          },
+          {
+            "name": "max_failed_attempts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "title": "Max Failed Attempts"
+            }
+          },
+          {
+            "name": "processing_timeout_seconds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 300,
+              "title": "Processing Timeout Seconds"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxRelayResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.count_python_files/invoke": {
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Invoke Admin Tool Admin Count Python Files",
+        "operationId": "invoke_tool_admin_count_python_files",
+        "parameters": [
+          {
+            "name": "payload",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JsonObject"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Payload"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.count_python_files/schema": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Schema Admin Count Python Files",
+        "operationId": "get_schema_tool_admin_count_python_files",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.count_python_files/health": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Health Admin Count Python Files",
+        "operationId": "get_health_tool_admin_count_python_files",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.count_database_tables/invoke": {
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Invoke Admin Tool Admin Count Database Tables",
+        "operationId": "invoke_tool_admin_count_database_tables",
+        "parameters": [
+          {
+            "name": "payload",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JsonObject"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Payload"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.count_database_tables/schema": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Schema Admin Count Database Tables",
+        "operationId": "get_schema_tool_admin_count_database_tables",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.count_database_tables/health": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Health Admin Count Database Tables",
+        "operationId": "get_health_tool_admin_count_database_tables",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.get_user_count/invoke": {
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Invoke Admin Tool Admin Get User Count",
+        "operationId": "invoke_tool_admin_get_user_count",
+        "parameters": [
+          {
+            "name": "payload",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JsonObject"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Payload"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.get_user_count/schema": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Schema Admin Get User Count",
+        "operationId": "get_schema_tool_admin_get_user_count",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.get_user_count/health": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Health Admin Get User Count",
+        "operationId": "get_health_tool_admin_get_user_count",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.list_microservices/invoke": {
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Invoke Admin Tool Admin List Microservices",
+        "operationId": "invoke_tool_admin_list_microservices",
+        "parameters": [
+          {
+            "name": "payload",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JsonObject"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Payload"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.list_microservices/schema": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Schema Admin List Microservices",
+        "operationId": "get_schema_tool_admin_list_microservices",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.list_microservices/health": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Health Admin List Microservices",
+        "operationId": "get_health_tool_admin_list_microservices",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.calculate_full_stats/invoke": {
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Invoke Admin Tool Admin Calculate Full Stats",
+        "operationId": "invoke_tool_admin_calculate_full_stats",
+        "parameters": [
+          {
+            "name": "payload",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JsonObject"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Payload"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.calculate_full_stats/schema": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Schema Admin Calculate Full Stats",
+        "operationId": "get_schema_tool_admin_calculate_full_stats",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/admin.calculate_full_stats/health": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Admin MCP Tools"
+        ],
+        "summary": "Get Admin Tool Health Admin Calculate Full Stats",
+        "operationId": "get_health_tool_admin_calculate_full_stats",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-internal-admin-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Admin-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/messages": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "Chat Health Endpoint",
+        "description": "\u064a\u0648\u0641\u0631 \u0646\u0642\u0637\u0629 \u0635\u062d\u0629 \u062a\u0648\u0627\u0641\u0642\u064a\u0629 \u0644\u0645\u0633\u0627\u0631 chat \u0636\u0645\u0646 \u0633\u0644\u0637\u0629 orchestrator \u0627\u0644\u0645\u0648\u062d\u062f\u0629.",
+        "operationId": "chat_messages_health_endpoint_api_chat_messages_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Chat Messages Health Endpoint Api Chat Messages Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "StateGraph Chat Endpoint",
+        "description": "\u064a\u0646\u0641\u0651\u0630 \u0631\u0633\u0627\u0644\u0629 chat \u0639\u0628\u0631 \u062e\u062f\u0645\u0629 LangGraph \u0648\u064a\u0639\u064a\u062f \u0646\u062a\u064a\u062c\u0629 \u062a\u0634\u063a\u064a\u0644 \u0645\u0648\u062d\u062f\u0629 \u0639\u0628\u0631 Stream.",
+        "operationId": "chat_messages_endpoint_api_chat_messages_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/conversations": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "List customer conversations",
+        "description": "\u064a\u0639\u0631\u0636 \u0642\u0627\u0626\u0645\u0629 \u0645\u062d\u0627\u062f\u062b\u0627\u062a \u0627\u0644\u0639\u0645\u064a\u0644 \u0627\u0644\u062d\u0627\u0644\u064a \u0645\u0646 \u0642\u0627\u0639\u062f\u0629 orchestrator.",
+        "operationId": "list_customer_conversations_api_chat_conversations_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response List Customer Conversations Api Chat Conversations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/conversations/{conversation_id}": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "Customer conversation details",
+        "description": "\u064a\u0639\u064a\u062f \u062a\u0641\u0627\u0635\u064a\u0644 \u0645\u062d\u0627\u062f\u062b\u0629 \u0639\u0645\u064a\u0644 \u0648\u0631\u0633\u0627\u0626\u0644\u0647\u0627 \u0628\u062a\u0631\u062a\u064a\u0628 \u0632\u0645\u0646\u064a.",
+        "operationId": "get_customer_conversation_api_chat_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Customer Conversation Api Chat Conversations  Conversation Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/api/conversations": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "List admin conversations",
+        "description": "\u064a\u0639\u0631\u0636 \u0642\u0627\u0626\u0645\u0629 \u0645\u062d\u0627\u062f\u062b\u0627\u062a \u0627\u0644\u0623\u062f\u0645\u0646 \u0627\u0644\u062d\u0627\u0644\u064a.",
+        "operationId": "list_admin_conversations_admin_api_conversations_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response List Admin Conversations Admin Api Conversations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/api/conversations/{conversation_id}": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "Admin conversation details",
+        "description": "\u064a\u0639\u064a\u062f \u062a\u0641\u0627\u0635\u064a\u0644 \u0645\u062d\u0627\u062f\u062b\u0629 \u0627\u0644\u0623\u062f\u0645\u0646 \u0648\u0631\u0633\u0627\u0626\u0644\u0647\u0627.",
+        "operationId": "get_admin_conversation_admin_api_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Admin Conversation Admin Api Conversations  Conversation Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/chat": {
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "Chat with Orchestrator Agent",
+        "description": "Direct chat endpoint for the Orchestrator Agent (Microservice).\nStreams the response chunk by chunk.",
+        "operationId": "chat_with_agent_endpoint_agent_chat_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/missions": {
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "Launch Mission",
+        "operationId": "create_mission_endpoint_missions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MissionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/missions/{mission_id}": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "Get Mission",
+        "operationId": "get_mission_endpoint_missions__mission_id__get",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/missions/{mission_id}/events": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)"
+        ],
+        "summary": "Get Mission Events",
+        "description": "Retrieve historical events for a mission.",
+        "operationId": "get_mission_events_endpoint_missions__mission_id__events_get",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MissionEventResponse"
+                  },
+                  "title": "Response Get Mission Events Endpoint Missions  Mission Id  Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compose": {
+      "post": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "Skills Pipeline"
+        ],
+        "summary": "Skills Composition Pipeline",
+        "description": "\u064a\u064f\u0634\u063a\u0650\u0651\u0644 Skills Composition Pipeline \u0627\u0644\u0643\u0627\u0645\u0644:\n1. PlanningSkill \u2192 \u062e\u0637\u0629 \u0627\u0633\u062a\u0631\u0627\u062a\u064a\u062c\u064a\u0629\n2. ResearchSkill \u2192 \u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0630\u0627\u062a \u0635\u0644\u0629 (\u0628\u0627\u0644\u062a\u0648\u0627\u0632\u064a \u0645\u0639 Planning)\n3. ReasoningSkill \u2192 \u062a\u0641\u0643\u064a\u0631 \u0639\u0645\u064a\u0642 MCTS + LLM\n4. Compose \u2192 \u0625\u062c\u0627\u0628\u0629 \u0645\u064f\u0631\u0643\u064e\u0651\u0628\u0629 \u0645\u0646 \u0627\u0644\u0640 3 Skills\n\nFallback mode \u062a\u0644\u0642\u0627\u0626\u064a \u0639\u0646\u062f \u062a\u0639\u0630\u0631 \u0627\u0644\u0648\u0635\u0648\u0644 \u0644\u0623\u064a Skill.",
+        "operationId": "compose_skills_compose_post",
+        "parameters": [
+          {
+            "name": "X-Correlation-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComposeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComposeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkpointer/status": {
+      "get": {
+        "tags": [
+          "Overmind (Super Agent)",
+          "observability"
+        ],
+        "summary": "Postgres Checkpointer Status",
+        "description": "\u064a\u064f\u0639\u064a\u062f \u062d\u0627\u0644\u0629 Postgres Checkpointer \u0627\u0644\u062d\u064a.\n\nStep 10: runtime evidence \u0644\u0644\u0640 checkpointer.\nbackend: postgres | memory | none",
+        "operationId": "checkpointer_status_checkpointer_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Checkpointer Status Checkpointer Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "\u0641\u062d\u0635 \u0635\u062d\u0629 \u0627\u0644\u062e\u062f\u0645\u0629 \u0645\u0639 \u0627\u0644\u0643\u0634\u0641 \u0639\u0646 \u062d\u0627\u0644\u0629 \u0627\u0644\u0625\u0642\u0644\u0627\u0639 \u0627\u0644\u0641\u0639\u0644\u064a\u0629.\n\n\u064a\u064f\u0645\u064a\u0650\u0651\u0632 \u0628\u064a\u0646 \u062b\u0644\u0627\u062b \u062d\u0627\u0644\u0627\u062a:\n  ok       \u2014 \u0627\u0644\u062e\u062f\u0645\u0629 \u062c\u0627\u0647\u0632\u0629 \u0628\u0627\u0644\u0643\u0627\u0645\u0644 (graph + warmup \u0646\u062c\u062d\u0627)\n  degraded \u2014 \u0627\u0644\u062e\u062f\u0645\u0629 \u062a\u0639\u0645\u0644 \u0644\u0643\u0646 graph \u0623\u0648 warmup \u0641\u0634\u0644\u0627\n  starting \u2014 \u0627\u0644\u062e\u062f\u0645\u0629 \u0644\u0627 \u062a\u0632\u0627\u0644 \u0641\u064a \u0645\u0631\u062d\u0644\u0629 \u0627\u0644\u0625\u0642\u0644\u0627\u0639",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "ChatRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "history_messages": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "History Messages"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "user_id"
+        ],
+        "title": "ChatRequest"
+      },
+      "ComposeRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Query",
+            "description": "\u0633\u0624\u0627\u0644 \u0627\u0644\u0637\u0627\u0644\u0628 \u0623\u0648 \u0627\u0644\u0645\u0647\u0645\u0629"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "\u0645\u0639\u0631\u0641 \u0627\u0644\u062a\u062a\u0628\u0639 \u0627\u0644\u0645\u0648\u0632\u0639 (\u064a\u064f\u0648\u0644\u064e\u0651\u062f \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b \u0625\u0630\u0627 \u0644\u0645 \u064a\u064f\u0639\u0637\u064e)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "ComposeRequest",
+        "description": "\u0637\u0644\u0628 \u062a\u0634\u063a\u064a\u0644 Skills Composition Pipeline."
+      },
+      "ComposeResponse": {
+        "properties": {
+          "correlation_id": {
+            "type": "string",
+            "title": "Correlation Id"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "composed_answer": {
+            "type": "string",
+            "title": "Composed Answer"
+          },
+          "pipeline_mode": {
+            "type": "string",
+            "title": "Pipeline Mode"
+          },
+          "skills_active": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills Active"
+          },
+          "total_duration_ms": {
+            "type": "number",
+            "title": "Total Duration Ms"
+          },
+          "composition_confidence": {
+            "type": "number",
+            "title": "Composition Confidence",
+            "default": 0.0
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SkillResultSchema"
+          },
+          "research": {
+            "$ref": "#/components/schemas/SkillResultSchema"
+          },
+          "reasoning": {
+            "$ref": "#/components/schemas/SkillResultSchema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "correlation_id",
+          "query",
+          "composed_answer",
+          "pipeline_mode",
+          "skills_active",
+          "total_duration_ms",
+          "plan",
+          "research",
+          "reasoning"
+        ],
+        "title": "ComposeResponse",
+        "description": "\u0627\u0644\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u0629 \u0645\u0646 Skills Composition Pipeline."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -114,29 +2018,462 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "TaskResponse": {
+      "JsonObject": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "MissionCreate": {
+        "properties": {
+          "objective": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 5,
+            "title": "Objective",
+            "description": "\u0627\u0644\u0647\u062f\u0641 \u0627\u0644\u0631\u0626\u064a\u0633\u064a \u0644\u0644\u0645\u0647\u0645\u0629"
+          },
+          "context": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Context",
+            "description": "\u0633\u064a\u0627\u0642 \u0625\u0636\u0627\u0641\u064a \u0644\u0644\u0645\u0647\u0645\u0629 (\u0645\u062b\u0644 \u0628\u064a\u0626\u0629 \u0627\u0644\u0639\u0645\u0644\u060c \u0642\u064a\u0648\u062f)"
+          },
+          "priority": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "description": "\u0623\u0648\u0644\u0648\u064a\u0629 \u0627\u0644\u0645\u0647\u0645\u0629 (1-5)",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "objective"
+        ],
+        "title": "MissionCreate",
+        "description": "\u0646\u0645\u0648\u0630\u062c \u0625\u0646\u0634\u0627\u0621 \u0645\u0647\u0645\u0629 \u062c\u062f\u064a\u062f\u0629.\n\u064a\u0637\u0644\u0628 \u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062c \u0627\u0644\u0647\u062f\u0641 \u0627\u0644\u0623\u0633\u0627\u0633\u064a \u0648\u0627\u0644\u0633\u064a\u0627\u0642 \u0627\u0644\u0627\u062e\u062a\u064a\u0627\u0631\u064a.",
+        "examples": [
+          {
+            "_comment": "Extra fields are ignored by design (Postel's Law)."
+          }
+        ]
+      },
+      "MissionEventResponse": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "title": "Event Type",
+            "description": "\u0646\u0648\u0639 \u0627\u0644\u062d\u062f\u062b (\u0645\u062b\u0644\u0627\u064b: step_start, log, completion)"
+          },
+          "mission_id": {
+            "type": "integer",
+            "title": "Mission Id",
+            "description": "\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0647\u0645\u0629"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "\u062a\u0648\u0642\u064a\u062a \u0627\u0644\u062d\u062f\u062b"
+          },
+          "payload": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "items": {},
+                  "type": "array"
+                },
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Payload",
+            "description": "\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062d\u062f\u062b \u0627\u0644\u062a\u0641\u0635\u064a\u0644\u064a\u0629"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_type",
+          "mission_id"
+        ],
+        "title": "MissionEventResponse",
+        "description": "\u0646\u0645\u0648\u0630\u062c \u0644\u062d\u062f\u062b \u0648\u0627\u062d\u062f \u0641\u064a \u062a\u062f\u0641\u0642 \u0627\u0644\u0628\u062b (SSE).",
+        "examples": [
+          {
+            "_comment": "Extra fields are ignored by design (Postel's Law)."
+          }
+        ]
+      },
+      "MissionResponse": {
         "properties": {
           "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
+            "type": "integer",
+            "title": "Id",
+            "description": "\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0647\u0645\u0629 \u0627\u0644\u0641\u0631\u064a\u062f"
           },
-          "description": {
+          "objective": {
             "type": "string",
-            "title": "Description"
+            "title": "Objective",
+            "description": "\u0627\u0644\u0647\u062f\u0641 \u0627\u0644\u0631\u0626\u064a\u0633\u064a"
           },
           "status": {
+            "$ref": "#/components/schemas/MissionStatusEnum",
+            "description": "\u0627\u0644\u062d\u0627\u0644\u0629 \u0627\u0644\u0639\u0627\u0645\u0629 \u0644\u0644\u0645\u0647\u0645\u0629"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome",
+            "description": "\u0646\u062a\u064a\u062c\u0629 \u0627\u0644\u0645\u0647\u0645\u0629 \u0627\u0644\u062f\u0644\u0627\u0644\u064a\u0629 (outcome)"
+          },
+          "created_at": {
             "type": "string",
-            "title": "Status"
+            "format": "date-time",
+            "title": "Created At",
+            "description": "\u062a\u0648\u0642\u064a\u062a \u0627\u0644\u0625\u0646\u0634\u0627\u0621"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "\u0622\u062e\u0631 \u062a\u062d\u062f\u064a\u062b"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "\u0627\u0644\u0646\u062a\u064a\u062c\u0629 \u0627\u0644\u0646\u0647\u0627\u0626\u064a\u0629 \u0644\u0644\u0645\u0647\u0645\u0629"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/MissionStepResponse"
+            },
+            "type": "array",
+            "title": "Steps",
+            "description": "\u0642\u0627\u0626\u0645\u0629 \u062e\u0637\u0648\u0627\u062a \u0627\u0644\u062a\u0646\u0641\u064a\u0630"
           }
         },
         "type": "object",
         "required": [
           "id",
-          "description",
-          "status"
+          "objective",
+          "status",
+          "created_at",
+          "updated_at"
         ],
-        "title": "TaskResponse"
+        "title": "MissionResponse",
+        "description": "\u0646\u0645\u0648\u0630\u062c \u0627\u0644\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u0629 \u0644\u0644\u0645\u0647\u0645\u0629.",
+        "examples": [
+          {
+            "_comment": "Extra fields are ignored by design (Postel's Law)."
+          }
+        ]
+      },
+      "MissionStatusEnum": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "planning",
+          "planned",
+          "running",
+          "paused",
+          "adapting",
+          "success",
+          "failed",
+          "canceled"
+        ],
+        "title": "MissionStatusEnum",
+        "description": "\u062d\u0627\u0644\u0627\u062a \u0627\u0644\u0645\u0647\u0645\u0629 \u0627\u0644\u0645\u0645\u0643\u0646\u0629."
+      },
+      "MissionStepResponse": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "\u0645\u0639\u0631\u0641 \u0627\u0644\u062e\u0637\u0648\u0629"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "\u0627\u0633\u0645 \u0627\u0644\u062e\u0637\u0648\u0629 \u0623\u0648 \u0627\u0644\u0625\u062c\u0631\u0627\u0621"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "\u0648\u0635\u0641 \u062a\u0641\u0635\u064a\u0644\u064a \u0644\u0644\u062e\u0637\u0648\u0629"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StepStatusEnum",
+            "description": "\u062d\u0627\u0644\u0629 \u0627\u0644\u062e\u0637\u0648\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629",
+            "default": "pending"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "\u0646\u062a\u064a\u062c\u0629 \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u062e\u0637\u0648\u0629"
+          },
+          "tool_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Used",
+            "description": "\u0627\u0633\u0645 \u0627\u0644\u0623\u062f\u0627\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u0629 \u0625\u0646 \u0648\u062c\u062f"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "\u062a\u0648\u0642\u064a\u062a \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u062e\u0637\u0648\u0629"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At",
+            "description": "\u062a\u0648\u0642\u064a\u062a \u0627\u0643\u062a\u0645\u0627\u0644 \u0627\u0644\u062e\u0637\u0648\u0629"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "created_at"
+        ],
+        "title": "MissionStepResponse",
+        "description": "\u0646\u0645\u0648\u0630\u062c \u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0644\u062e\u0637\u0648\u0629 \u0648\u0627\u062d\u062f\u0629 \u062f\u0627\u062e\u0644 \u0627\u0644\u0645\u0647\u0645\u0629 (Task).",
+        "examples": [
+          {
+            "_comment": "Extra fields are ignored by design (Postel's Law)."
+          }
+        ]
+      },
+      "OutboxRelayResponse": {
+        "properties": {
+          "processed": {
+            "type": "integer",
+            "title": "Processed"
+          },
+          "published": {
+            "type": "integer",
+            "title": "Published"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "processed",
+          "published",
+          "failed",
+          "skipped"
+        ],
+        "title": "OutboxRelayResponse",
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u062a\u0634\u063a\u064a\u0644 relay \u0627\u0644\u064a\u062f\u0648\u064a \u0644\u0633\u062c\u0644\u0627\u062a outbox."
+      },
+      "OutboxStatusResponse": {
+        "properties": {
+          "pending": {
+            "type": "integer",
+            "title": "Pending"
+          },
+          "processing": {
+            "type": "integer",
+            "title": "Processing"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "published": {
+            "type": "integer",
+            "title": "Published"
+          },
+          "oldest_pending_age_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Pending Age Seconds"
+          },
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pending",
+          "processing",
+          "failed",
+          "published",
+          "oldest_pending_age_seconds",
+          "generated_at"
+        ],
+        "title": "OutboxStatusResponse",
+        "description": "\u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u062a\u0644\u062e\u0635 \u0627\u0644\u062d\u0627\u0644\u0629 \u0627\u0644\u062a\u0634\u063a\u064a\u0644\u064a\u0629 \u0644\u0637\u0627\u0628\u0648\u0631 outbox."
+      },
+      "SkillResultSchema": {
+        "properties": {
+          "skill": {
+            "type": "string",
+            "title": "Skill"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "duration_ms": {
+            "type": "number",
+            "title": "Duration Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "skill",
+          "status",
+          "data",
+          "duration_ms"
+        ],
+        "title": "SkillResultSchema",
+        "description": "\u0646\u062a\u064a\u062c\u0629 Skill \u0648\u0627\u062d\u062f\u0629 \u0641\u064a \u0627\u0644\u0640 Pipeline."
+      },
+      "StepStatusEnum": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "success",
+          "success",
+          "failed",
+          "skipped",
+          "retry"
+        ],
+        "title": "StepStatusEnum",
+        "description": "\u062d\u0627\u0644\u0627\u062a \u062e\u0637\u0648\u0629 \u0627\u0644\u062a\u0646\u0641\u064a\u0630."
       },
       "ValidationError": {
         "properties": {
@@ -161,6 +2498,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

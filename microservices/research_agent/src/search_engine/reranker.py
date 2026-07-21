@@ -1,5 +1,4 @@
 from llama_index.core.schema import NodeWithScore
-from sentence_transformers import CrossEncoder
 
 from microservices.research_agent.src.logging import get_logger
 
@@ -18,6 +17,10 @@ class Reranker:
     def __init__(self, model_name: str = "BAAI/bge-reranker-base"):
         self.model_name = model_name
         try:
+            # D-172/D-173: استيراد كسول (fail-open) — الوحدة تُستورَد بلا sentence-transformers؛
+            # النموذج يُحمَّل عند الإنشاء فقط، وأي فشل يُبقي self.model = None بأمان.
+            from sentence_transformers import CrossEncoder
+
             # We trust the environment to have the model cached or download it.
             self.model = CrossEncoder(model_name)
             logger.info(f"Reranker model {model_name} loaded successfully.")

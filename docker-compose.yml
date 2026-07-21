@@ -478,7 +478,7 @@ services:
     environment:
       - SERVICE_NAME=conversation-service
       - PORT=8010
-    command: uvicorn main:app --host 0.0.0.0 --port 8010
+    command: uvicorn microservices.conversation_service.main:app --host 0.0.0.0 --port 8010
     networks:
       - cogniforge-network
     healthcheck:

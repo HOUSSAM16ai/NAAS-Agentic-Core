@@ -124,6 +124,9 @@ jobs:
           # D-105 (ISS-113): بوابة نظافة الاختبارات — تمنع تسميم sys.modules/os.environ
           # على مستوى الوحدة في أي ملف يجمعه pytest (فئة البق التي أسقطت CI).
           python scripts/fitness/check_test_hygiene.py
+          # D-173: table-driven replacement for the deleted single-issue/step
+          # workflows — every fatal grep assertion they carried lives here.
+          python scripts/fitness/check_legacy_invariants.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders
@@ -257,8 +260,8 @@ jobs:
             "${MICROSERVICES_DESELECTS[@]}"
 
   # ── Frontend regression tests (D-105) ─────────────────────────────────────
-  # 8 deterministic node test files (zero npm dependencies — pure source
-  # inspection + behavior replicas). Previously they only ran inside 3
+  # Deterministic node test files (zero npm dependencies — pure source
+  # inspection + behavior replicas). Previously they only ran inside
   # issue-specific gates; now they gate every PR.
   frontend-tests:
     name: frontend-tests
@@ -282,6 +285,16 @@ jobs:
             fi
           done
           exit "$failed"
+      # D-173: folded from iss-102-ws-double-handshake-gate.yml —
+      # server.js must parse and the lockfile must stay in sync (`ws` dep
+      # missing from package-lock broke npm ci in D-WS-PROXY-004).
+      - name: server.js syntax + lockfile sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check frontend/server.js
+          npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+          echo "✅ server.js parses + package-lock.json in sync"
 
   # ── Microservices Skills Structural Check ─────────────────────────────────
   skills-structural:

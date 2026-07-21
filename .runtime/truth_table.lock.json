@@ -218,8 +218,8 @@
         "tests/api/test_chat_event_protocol_error_contract_integration.py",
         "tests/api/test_chat_event_protocol_flag_integration.py",
         "tests/api/test_final_router_gaps.py",
-        "tests/services/test_d142_phase2_dialogue_manager.py",
-        "tests/services/test_iss098_keepalive.py"
+        "tests/architecture/test_persistence_authority.py",
+        "tests/services/test_d142_phase2_dialogue_manager.py"
       ],
       "name": "Customer chat WS router",
       "notes": "Live WS endpoint /api/chat/ws.",
@@ -291,6 +291,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-07-21T08:05:39.562773+00:00",
+  "generated_at_utc": "2026-07-21T13:21:28.441539+00:00",
   "schema_version": 1
 }

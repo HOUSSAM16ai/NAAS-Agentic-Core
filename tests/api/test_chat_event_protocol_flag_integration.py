@@ -300,8 +300,14 @@ async def test_customer_ws_forwards_recent_history_messages_to_orchestrator(test
                         with TestClient(test_app) as client:
                             with client.websocket_connect("/api/chat/ws") as websocket:
                                 websocket.send_json({"question": "اشرح الإجابة السابقة"})
-                                _conversation_init = websocket.receive_json()
-                                _delta_event = websocket.receive_json()
+                                # D-173 Stage 2b: skip the session_ready primer (D-WS-FLAP-003),
+                                # then read the delta. Receiving the delta proves chat_with_agent
+                                # was invoked (its call_args are set before it yields). The added
+                                # pedagogy/BKT async work now sits between conversation_init and
+                                # the call, so reading raw frames twice (as before) closed the WS
+                                # too early. _recv mirrors the robust reads used by the tests below.
+                                _conversation_init = _recv(websocket)
+                                _delta_event = _recv(websocket)
 
     forwarded_history = chat_with_agent_mock.call_args.kwargs["history_messages"]
     assert forwarded_history == customer_service.get_chat_history.return_value
@@ -349,8 +355,11 @@ async def test_admin_ws_forwards_recent_history_messages_to_orchestrator(test_ap
                         with TestClient(test_app) as client:
                             with client.websocket_connect("/admin/api/chat/ws") as websocket:
                                 websocket.send_json({"question": "explain previous answer"})
-                                _conversation_init = websocket.receive_json()
-                                _delta_event = websocket.receive_json()
+                                # D-173 Stage 2b: skip session_ready primer, then read the delta
+                                # so chat_with_agent is invoked before the WS closes (robust read,
+                                # mirrors the behavioral tests below).
+                                _conversation_init = _recv(websocket)
+                                _delta_event = _recv(websocket)
 
     forwarded_history = chat_with_agent_mock.call_args.kwargs["history_messages"]
     assert forwarded_history == admin_service.get_chat_history.return_value

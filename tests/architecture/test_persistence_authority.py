@@ -61,7 +61,14 @@ def test_orchestrator_client_preserves_persisted_flag() -> None:
 
 def test_terminal_frame_emitter_is_single_source() -> None:
     """Each WS chat router must funnel terminal frames through _emit_terminal_frames."""
-    customer = _read("app/api/routers/customer_chat.py")
+    # D-173 Stage 2b: customer_chat.py was decomposed into customer_chat_support/. The
+    # `async def _emit_terminal_frames` now lives in frames.py while the WS finally block
+    # in customer_chat.py still `await`s it. Read the composed source (main router + all
+    # support slices) via the manifest so the "single emitter" invariant holds across the
+    # package. admin.py is undecomposed — read it directly.
+    from app.api.routers.customer_chat_support._sources import read_customer_chat_source
+
+    customer = read_customer_chat_source()
     admin = _read("app/api/routers/admin.py")
 
     for source, label in ((customer, "customer_chat"), (admin, "admin")):

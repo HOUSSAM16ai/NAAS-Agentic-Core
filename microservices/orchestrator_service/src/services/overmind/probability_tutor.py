@@ -698,6 +698,112 @@ def _ladder_for_support(comp: dict, support_level: int) -> tuple[str, ...]:
     return base
 
 
+#: D-125: أفعال إجرائية — «لماذا/ليش» معها تبقى سؤالاً حسابياً (قوالب D-124)،
+#: لا مفاهيمياً («لماذا نجمع»، «لماذا لا نحسب الأبيض»). تحفّظ المالك رقم 3.
+_PROCEDURAL_VERBS: tuple[str, ...] = (
+    "نجمع",
+    "نحسب",
+    "نحسبها",
+    "نضرب",
+    "نستخرج",
+    "نستخدم",
+    "لا نحسب",
+    "كيف وجدنا",
+    "كيف حصلنا",
+    "كيف نحسب",
+)
+
+
+def detect_conceptual_question(question: str) -> bool:
+    """D-125 (M10-S2.4): هل السؤال مفاهيمي/مقارنة (يطلب المعنى/العلاقة لا الحساب)؟
+
+    port متكافئ مع monolith ``_detect_conceptual_question`` — يحل «متلازمة الردود
+    المعلبة»: «ما الفرق بين 165 و 14» يطلب العلاقة (البسط مقابل المقام) لا حساب 165.
+    علامة قوية ⇒ مفاهيمي دائماً (الهجين، تحفّظ 2)؛ «لماذا/ليش» + فعل إجرائي ⇒ ليس
+    مفاهيمياً (تحفّظ 3). النية «نسمي/ما اسم» يلتقطها ``detect_naming_question`` أولاً.
+    """
+    q = (question or "").lower()
+    strong = (
+        "الفرق",
+        "الاختلاف",
+        "العلاقة",
+        "الرابط",
+        "مقارنة",
+        "قارن",
+        "ما يميز",
+        "الهدف",
+        "الغرض",
+        "الغاية",
+        "الفائدة",
+        "ما فائدة",
+        "فائدة",
+        "ما معنى",
+        "معنى",
+        "ماذا يعني",
+        "ماذا تعني",
+        "المقصود",
+        "ما المقصود",
+        "نفسر",
+        "التفسير",
+        "كيف نفسر",
+        "النسبة",
+        "نقسم",
+        "القسمة",
+        "البسط والمقام",
+        "بسط ومقام",
+        "نسمي",
+        "ما اسم",
+        "تسمية",
+    )
+    if any(m in q for m in strong):
+        return True
+    why = ("ليش", "لماذا", "علاش", "وعلاش", "علاه")
+    if any(w in q for w in why):
+        if any(p in q for p in _PROCEDURAL_VERBS):
+            return False
+        concept_ref = ("14", "165", "الناتج", "البسط", "المقام")
+        if any(c in q for c in concept_ref):
+            return True
+    return False
+
+
+def build_conceptual_relationship(question: str, comp: dict) -> str:
+    """D-125 (M10-S2.4): شرح العلاقة الحواري القصير (المقام مقابل البسط) — لا حساب.
+
+    port متكافئ مع monolith ``_format_conceptual_relationship`` — المخرج ≤3 أسطر
+    جوهرية (تحفّظ 4)؛ الهجين (فعل حسابي) ⇒ سطر حسابي **واحد** عبر ``fmt_comb`` (يَنجو
+    من حجب D-113). redaction-safe: لا «P(...)=عدد»/«\\boxed»/«خلاصة … = عدد».
+    """
+    total, same = comp["total"], comp["same"]
+    k, n = comp["k"], comp["n"]
+    groups = comp["groups"]
+
+    def _bare(label: str) -> str:
+        return label.replace("كرة ", "", 1).strip() or label
+
+    possible = [g for g in groups if g.get("possible", True)]
+    impossible = [g for g in groups if not g.get("possible", True)]
+    favs_parts = " + ".join(f"{g['fav']} لل{_bare(g['label'])}" for g in possible)
+    imp_note = ""
+    if impossible:
+        names = " و".join(f"ال{_bare(g['label'])}" for g in impossible)
+        imp_note = f"؛ و{names} مستحيلة (عددها أقل من {k})"
+
+    body = (
+        f"## العلاقة بين {total} و {same} (المقام والبسط)\n\n"
+        f"**{total}** هو عدد كل الطرق الممكنة لسحب {k} كرات مهما كان لونها — "
+        f"هذا هو **المقام** (ساحة كل ما يمكن أن يحدث).\n\n"
+        f"**{same}** هو عدد الطرق التي تحقق «{k} من نفس اللون» فقط "
+        f"({favs_parts}{imp_note}) — هذا هو **البسط** (الحالات التي تنجح).\n\n"
+        f"فالاحتمال هو نسبة البسط إلى المقام: {same} من كل {total}."
+    )
+    ql = (question or "").lower()
+    if any(v in ql for v in ("كيف حصلنا", "كيف نحسب", "كيف وجدنا", "احسب", "الحساب")):
+        favs_sum = " + ".join(str(g["fav"]) for g in possible)
+        body += f"\n\nوللتذكير بالحساب فقط: {fmt_comb(n, k, total)}، و {favs_sum} = {same}."
+    return body
+
+
 def _is_tutoring_turn(question: str) -> bool:
     """دور تدريسي: حيرة مجرّدة، «كيف»، أو إجابة قصيرة — لا طلب شرح غني (للـ LLM)."""
     q = _norm(question)
@@ -741,6 +847,15 @@ def deterministic_turn(
         if detect_purpose_question(question):
             _purpose = build_purpose_answer(comp)
             return _purpose if not _dup(_purpose) else None
+        # D-125 (M10-S2.4): السؤال المفاهيمي/المقارنة («ما الفرق بين 165 و 14») يطلب
+        # العلاقة لا الحساب ⇒ شرح البسط/المقام. يُفحَص **قبل** step-explanation لأن
+        # عقل المونوليث يفحص المفاهيمي داخل `_build_probability_direct_explanation`
+        # **قبل** احترام forced_subpart — «ما الفرق **بين** 165 و 14» يطابق علامة
+        # الشرح «بين» (=بيّن) فيسقط لقالب الحساب لولا أسبقية المفاهيمي هنا.
+        if detect_conceptual_question(question):
+            _concept = build_conceptual_relationship(question, comp)
+            if not _dup(_concept):
+                return _concept
         # D-168 (M10-S2.3 — mirror D-160 F2): طلب الشرح الصريح («كيف حسبنا 4»)
         # يُعلّم اشتقاق الجزئية المطلوبة — يسبق بوّابة هروب الأسئلة لأن «اشرح»
         # طلب تعليم لا إجابة، ويهزم السُّلّم الأعمى (كان يسقط له فيتكرر).
@@ -783,12 +898,21 @@ def deterministic_turn(
         for text in _ladder_for_support(comp, support_level):
             if not _dup(text):
                 return text
+
+        # F3 (D-160 — M10-S2.4): الإنقاذ مكرَّر ⇒ الطالب العالق يتعلّم لا يدور: علّم
+        # اشتقاق أصغر جزئية ملموسة لم تُعرَض بعد (لا كشف P(A) — يحترم M6/M8). port
+        # متكافئ مع F3 في عقل المونوليث (`for _part in ("red", "green", "white"...`).
+        for _part in [*comp["groups"], "total", "sum"]:
+            _t = build_step_explanation(comp, _part)
+            if _t and not _dup(_t):
+                return _t
         return None
     except Exception:
         return None
 
 
 __all__ = [
+    "build_conceptual_relationship",
     "build_diagnostic_probe",
     "build_naming_answer",
     "build_purpose_answer",
@@ -796,6 +920,7 @@ __all__ = [
     "build_step",
     "build_step_explanation",
     "build_symbolic_step",
+    "detect_conceptual_question",
     "detect_naming_question",
     "detect_purpose_question",
     "detect_step_explanation",

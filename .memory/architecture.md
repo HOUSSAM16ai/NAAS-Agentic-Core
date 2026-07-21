@@ -42,20 +42,31 @@ port الخدمة المصغرة (الهجرة M10-S2، ACTIVE default-on منذ
     parse_composition · fmt_comb · build_step/rescue · deterministic_turn +
     (D-163) verify_numeric_answer · build_diagnostic_probe · build_symbolic_step ·
     pending_focus_from_history · _ladder_for_support +
-    (D-168 M10-S2.3) detect_subpart_question · detect_step_explanation · build_step_explanation
+    (D-168 M10-S2.3) detect_subpart_question · detect_step_explanation · build_step_explanation +
+    (D-173 M10-S2.4) detect_conceptual_question · build_conceptual_relationship + F3 subpart-escalation
     ▲ hook في SynthesizerNode (graph/search.py) خلف ORCHESTRATOR_PROB_TUTOR_ENABLED (افتراضه "1").
 
 بوّابة التكافؤ (CI): scripts/fitness/check_pedagogical_os.py:check_split_brain_parity
-  17 عقداً يجب وجودها في العقلين (monolith brain ↔ port) — أي تعديل على واحدة دون
+  20 عقداً يجب وجودها في العقلين (monolith brain ↔ port) — أي تعديل على واحدة دون
   الأخرى يُفشل CI (نمط D-013 الثنائي) + حارس الوراثة + فحص BRAIN ⊆ TUTOR.
 ```
+
+**الرسمان كلاهما حي (لا zombie — تصحيح توثيقي D-173 Stage 0)**: مسار الدردشة =
+**12-node unified chat graph** (`overmind/graph/main.py` — `create_unified_graph`، يخدم
+`/api/chat/messages` + WS)؛ مسار المهام = **9-node overmind missions engine**
+(`overmind/langgraph/engine.py`). «13-node» في التوثيق القديم خطأ محض. التفصيل:
+`.memory/runtime_truth.md` (السطران 33-34).
 
 **القاعدة الدائمة**: العقل وحدة واحدة — **ممنوع** إعادة أي دالة مُستخرَجة إلى
 `orchestrator_client.py` أو `routes.py` (عودة الـ God-file)؛ المانيفستات الثلاثة
 (`TUTOR/BRAIN/API_SOURCE_FILES`) هي مصدر الحقيقة للبوّابات (استخراج جديد = سطر واحد)؛
 قاعدة monkeypatch late-binding: رقِّع الوحدة التي يعيش فيها المستدعي؛ التكافؤ عقل↔port
 مفروض CI؛ العلم الافتراضي ON ورافعة الرجوع `ORCHESTRATOR_PROB_TUTOR_ENABLED=0` بلا
-deploy (D-025). التفصيل: CLAUDE.md §6.138 + §6.139 + §6.141.
+deploy (D-025). **D-173 Stage 3 (M10-S2.4)**: أُغلقت جولة split-brain — port
+اكتسب الشارح المفاهيمي (D-125: «ما الفرق بين 165 و 14» ⇒ العلاقة لا الحساب، يُفحَص
+**قبل** step-explanation لأن عقل المونوليث يفحص المفاهيمي داخل `_build_probability_direct_explanation`
+قبل احترام forced_subpart) + تصعيد الحيرة F3 (الطالب العالق يتعلّم اشتقاق جزئية لا يدور).
+التفصيل: CLAUDE.md §6.138 + §6.139 + §6.141.
 > 🏗️ **Agentic Runtime layer map:** `.memory/agentic_runtime_doctrine.md` (D-146 · CLAUDE.md §0.7) — every layer graded ACTIVE/PARTIAL/PLANNED/DORMANT per §6.6.
 
 ---

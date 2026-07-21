@@ -366,8 +366,12 @@ def check_probability_tutor_port() -> None:
     if "ORCHESTRATOR_PROB_TUTOR_ENABLED" not in search:
         _fail("SynthesizerNode hook for probability_tutor missing / not flag-gated")
         ok = False
-    if "من كل {" in port:
-        _fail("orchestrator port leaks the final ratio")
+    # D-125 (M10-S2.4): يُبان **الكشف النهائي** (reveal dump «فاحتمال الحادثة A هو
+    # {same} من كل {total}» — نظير حارس المونوليث سطر 297)، لا العبارة العلائقية.
+    # الشارح المفاهيمي (D-125) يذكر «{same} من كل {total}» كـ *علاقة* البسط/المقام
+    # — doctrine-parity مع العقل (يَنجو من حجب D-113: علاقة لا P(A)= مُعلَّبة).
+    if "فاحتمال الحادثة A هو {same} من كل {total}" in port:
+        _fail("orchestrator port leaks the final ratio (P(A) reveal dump)")
         ok = False
     if ok:
         _pass("M10-S2.1 probability_tutor port independent + flag-gated in SynthesizerNode")
@@ -701,6 +705,25 @@ def check_split_brain_parity() -> None:
             "step-explanation teacher",
             "def _build_probability_direct_explanation(",
             "def build_step_explanation(",
+        ),
+        # D-125 (M10-S2.4 — Stage 3): الشارح المفاهيمي («ما الفرق بين 165 و 14»)
+        # يُجاب بشرح العلاقة (البسط/المقام) لا الحساب — في العقلين.
+        (
+            "conceptual detector",
+            "def _detect_conceptual_question(",
+            "def detect_conceptual_question(",
+        ),
+        (
+            "conceptual relationship",
+            "def _format_conceptual_relationship(",
+            "def build_conceptual_relationship(",
+        ),
+        # D-160 F3 (M10-S2.4): الطالب العالق يتعلّم اشتقاق أصغر جزئية لم تُعرَض بعد
+        # (لا كشف P(A)) — تصعيد الحيرة/البدائل الحسابية في العقلين.
+        (
+            "confusion escalation (F3)",
+            'for _part in ("red", "green", "white"',
+            '[*comp["groups"], "total", "sum"]',
         ),
     )
     for name, mono_marker, port_marker in contracts:

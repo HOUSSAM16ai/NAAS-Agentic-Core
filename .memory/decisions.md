@@ -5,6 +5,27 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-178 · خط الوكلاء المتعددين يصل full — إصلاح مهلة reasoning (2026-07-22)
+**السياق:** تجريب حي للخدمات المصغرة (بالمفاتيح الحقيقية + postgres محلي) كشف أن `POST /compose`
+يعطي `pipeline_mode="partial"` (planning+research فقط، **reasoning غائب**) وإجابة خطأ 53 حرفاً.
+السبب الجذري من السجلات: `reasoning-agent` ينهار بـ `WorkflowTimeoutError: 45.0 seconds` —
+`ReasoningWorkflow(timeout=45)` (خُفِّض من 300s في ISS-068 لكبح MCTS عند depth>1). لكن depth
+مُثبَّت الآن على 1، والتوقيت الحي = MCTS(~27s) + التركيب(~18s) ≈ 45s، فالسقف يبتر التركيب النهائي
+دائماً → reasoning يُعيد timeout → الأوركستريتور يعتبره غير نشط → `partial` أبدياً. وبوّابة الأوركستريتور
+`_SKILL_TIMEOUT_SECONDS=55s` أطول من مهلة reasoning، فالمشكلة في reasoning لا الأوركستريتور.
+
+**القرار:** (depth يبقى 1 — حماية ISS-068 قائمة) رفع مهلتين متناسقتين، env-overridable:
+- `reasoning_service.py`: `_REASONING_TIMEOUT_SECONDS = env("REASONING_TIMEOUT_SECONDS", 75)` — depth-1
+  يكتمل بأريحية دون دخول نطاق runaway.
+- `skills_pipeline.py`: `_SKILL_TIMEOUT_SECONDS = env("SKILL_TIMEOUT_SECONDS", 95)` — يتجاوز مهلة
+  reasoning الجديدة فلا يُلغي استدعاءها قبل اكتماله. الـ Skills متوازية (gather) فالزمن الكلي محكوم بالأبطأ.
+
+**التحقق الحي:** بعد الإصلاح `POST /compose` → `pipeline_mode="full"`,
+`skills_active=['planning','research','reasoning']`, `total=28.5s`, إجابة حقيقية 1733 حرفاً
+(عربي+LaTeX: «مبدأ العد… \(P(E)=|E|/|Ω|\)»). 166 اختبار microservices (reasoning + step9) أخضر.
+**ملاحظة صدق:** هذا مسار «التفكير العميق» المُنسَّق (orchestrator)، لا مسار الدردشة السريع للطالب
+(المونوليث). 28-70s مقبول للتفكير العميق؛ مفتاح مدفوع أسرع يسمح بتضييق المهلتين عبر env.
+
 ## D-177 · صمود الـ Rate-Limit — «يجيب على كل سؤال» (Answer-Every-Question Resilience) (2026-07-22)
 **السياق:** طلب المالك ضمان أن النظام «يجيب على كل الأسئلة مهما كانت». تجريب حيّ E2E (postgres محلي
 لأن منافذ Supabase 5432/6543 محجوبة في الـsandbox — جسر HTTPS يعمل؛ WS بـJWT مستخدم حقيقي) كشف

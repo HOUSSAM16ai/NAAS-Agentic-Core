@@ -1,3 +1,5 @@
+import os
+
 from microservices.reasoning_agent.src.compat import (
     Context,
     Event,
@@ -12,6 +14,14 @@ from microservices.reasoning_agent.src.services.strategies.mcts import mcts_stra
 
 logger = get_logger("reasoning-workflow")
 
+# D-178: ISS-068 cut this 300s→45s to stop MCTS runaway at depth>1. Depth is now
+# pinned to 1 (see `reason` step), where live timing is MCTS(~27s) + synthesis(~18s)
+# ≈ 45s — i.e. the old cap truncated the final synthesis, so reasoning always
+# returned a timeout and the orchestrator marked the pipeline `partial`. 75s gives
+# depth-1 comfortable headroom while staying well under the runaway regime.
+# Env-overridable so a paid/faster key can tighten it back down.
+_REASONING_TIMEOUT_SECONDS = int(os.getenv("REASONING_TIMEOUT_SECONDS", "75"))
+
 
 class RetrievalEvent(Event):
     query: str
@@ -19,8 +29,9 @@ class RetrievalEvent(Event):
 
 
 class ReasoningWorkflow(Workflow):
-    # ISS-068: timeout مُخفَّض من 300s إلى 45s — MCTS مع نماذج مجانية يتجاوز rate limits عند depth>1
-    def __init__(self, timeout: int = 45, verbose: bool = True):
+    # D-178: default lifted 45s→75s (see _REASONING_TIMEOUT_SECONDS) so depth-1
+    # MCTS + synthesis completes instead of being truncated into a timeout.
+    def __init__(self, timeout: int = _REASONING_TIMEOUT_SECONDS, verbose: bool = True):
         super().__init__(timeout=timeout, verbose=verbose)
         self.strategy = mcts_strategy
 

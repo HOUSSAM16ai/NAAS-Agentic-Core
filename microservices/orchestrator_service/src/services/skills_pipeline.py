@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -37,9 +38,12 @@ from microservices.orchestrator_service.src.core.config import get_settings
 logger = logging.getLogger("skills_pipeline")
 
 # ── ثوابت الـ Pipeline ────────────────────────────────────────────────────────
-# ISS-042 (Step 11): رُفع إلى 55s — planning (DSPy 3x LLM) و reasoning (MCTS+LLM) يحتاجان ~30-45s
-# جميع الـ Skills تعمل بالتوازي الكامل لتقليل الزمن الإجمالي
-_SKILL_TIMEOUT_SECONDS: float = 55.0
+# ISS-042 (Step 11): رُفع إلى 55s — planning (DSPy 3x LLM) و reasoning (MCTS+LLM).
+# D-178: رُفع إلى 95s ليتجاوز مهلة reasoning الجديدة (75s، D-178) — كان 55s < مهلة
+# reasoning الفعلية فيُلغى استدعاء reasoning قبل اكتماله ⇒ pipeline_mode="partial"
+# دائماً. الـ Skills متوازية (asyncio.gather) فالزمن الكلي محكوم بالأبطأ (reasoning).
+# Env-overridable لضبطه مع مفتاح مدفوع أسرع.
+_SKILL_TIMEOUT_SECONDS: float = float(os.getenv("SKILL_TIMEOUT_SECONDS", "95"))
 _CALLER_ID: str = "orchestrator-service"
 
 

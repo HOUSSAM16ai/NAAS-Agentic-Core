@@ -60,6 +60,7 @@ from app.services.capabilities.exercise_retrieval import (
     format_exercise_for_display,
     load_exercise_content,
 )
+from app.services.skills.base import BaseSkill
 
 # ─────────────────────────────────────────────────────────────────────────────
 # D-069 (2026-05-18): Single Source of Truth = `app.services.skills.doctrine`
@@ -193,7 +194,7 @@ def _record_metric(mode: str, status: str, duration_s: float) -> None:
         pass
 
 
-class BACExerciseSkill:
+class BACExerciseSkill(BaseSkill[BACSkillInput, SkillOutput]):
     """Skill رسمي يستبدل Prompt Spaghetti بـ contract محدَّد ومستقل.
 
     Usage:
@@ -215,8 +216,12 @@ class BACExerciseSkill:
     أو `_stream_exercise_explanation_response` التي تستهلك المخرج.
     """
 
-    name: str = "bac_exercise"
-    version: str = "1.0.0"
+    name: ClassVar[str] = "bac_exercise"
+    version: ClassVar[str] = "1.0.0"
+
+    def run(self, payload: BACSkillInput) -> SkillOutput:
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`invoke`."""
+        return self.invoke(payload)
 
     # ─────────────────────────────────────────────────────────────────────
     # واجهة الاستدعاء المتزامنة

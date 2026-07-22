@@ -20,6 +20,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 
 logger = logging.getLogger("cogniforge.skills.mcp_tool")
 
@@ -78,8 +79,14 @@ class MCPToolOutput(RobustBaseModel):
     error: str | None = None
 
 
-class MCPToolSkill:
+class MCPToolSkill(BaseSkill[MCPToolInput, MCPToolOutput | None]):
     """Skill جسر أدوات MCP — list + call عبر MCPServer."""
+
+    name = "mcp_tool"
+
+    def run(self, payload: MCPToolInput):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`call` (async)."""
+        return self.call(payload)
 
     @staticmethod
     def is_enabled() -> bool:
@@ -133,12 +140,6 @@ class MCPToolSkill:
             return None
 
 
-_skill_singleton: MCPToolSkill | None = None
-
-
 def get_mcp_tool_skill() -> MCPToolSkill:
-    """يُعيد Singleton لمهارة جسر MCP."""
-    global _skill_singleton
-    if _skill_singleton is None:
-        _skill_singleton = MCPToolSkill()
-    return _skill_singleton
+    """يُعيد Singleton لمهارة جسر MCP (BaseSkill.instance)."""
+    return MCPToolSkill.instance()

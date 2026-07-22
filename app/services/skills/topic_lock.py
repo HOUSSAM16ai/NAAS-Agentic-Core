@@ -32,6 +32,7 @@ from typing import ClassVar
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 
 logger = logging.getLogger(__name__)
 
@@ -319,7 +320,7 @@ class TopicLockOutput(RobustBaseModel):
 # ── TopicLock Skill ───────────────────────────────────────────────────────────
 
 
-class TopicLock:
+class TopicLock(BaseSkill[TopicLockInput, TopicLockOutput]):
     """
     Skill قفل الموضوع وحماية نقاء السياق — V46.0.
 
@@ -332,6 +333,12 @@ class TopicLock:
 
     VERSION: ClassVar[str] = "1.0.0"
     SKILL_NAME: ClassVar[str] = "topic_lock"
+    name: ClassVar[str] = "topic_lock"
+    version: ClassVar[str] = "1.0.0"
+
+    def run(self, inp: TopicLockInput) -> TopicLockOutput:
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`check`."""
+        return self.check(inp)
 
     def check(self, inp: TopicLockInput) -> TopicLockOutput:
         """
@@ -387,15 +394,9 @@ class TopicLock:
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
-_topic_lock: TopicLock | None = None
-
-
 def get_topic_lock() -> TopicLock:
-    """يُعيد singleton من TopicLock."""
-    global _topic_lock
-    if _topic_lock is None:
-        _topic_lock = TopicLock()
-    return _topic_lock
+    """يُعيد singleton من TopicLock (BaseSkill.instance)."""
+    return TopicLock.instance()
 
 
 __all__ = [

@@ -13,6 +13,7 @@ from typing import ClassVar, Literal
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 
 
 class ExerciseAlignmentInput(RobustBaseModel):
@@ -31,8 +32,10 @@ class ExerciseAlignmentOutput(RobustBaseModel):
     applied: bool = False
 
 
-class ExerciseAlignmentSkill:
+class ExerciseAlignmentSkill(BaseSkill[ExerciseAlignmentInput, ExerciseAlignmentOutput]):
     """مهارة حتمية لمحاذاة الإجابة مع معطيات السؤال."""
+
+    name: ClassVar[str] = "exercise_alignment"
 
     _COLOR_ALIASES: ClassVar[dict[str, tuple[str, ...]]] = {
         "white": ("بيضاء", "أبيض", "ابيض"),
@@ -45,6 +48,10 @@ class ExerciseAlignmentSkill:
     _COLOR_TOKENS: ClassVar[tuple[str, ...]] = tuple(
         token for aliases in _COLOR_ALIASES.values() for token in aliases
     )
+
+    def run(self, payload: ExerciseAlignmentInput) -> ExerciseAlignmentOutput:
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`align`."""
+        return self.align(payload)
 
     def align(self, payload: ExerciseAlignmentInput) -> ExerciseAlignmentOutput:
         """ينفّذ محاذاة ألوان الاحتمالات ويُعيد نصاً منقحاً."""
@@ -87,12 +94,6 @@ class ExerciseAlignmentSkill:
         )
 
 
-_exercise_alignment_skill: ExerciseAlignmentSkill | None = None
-
-
 def get_exercise_alignment_skill() -> ExerciseAlignmentSkill:
-    """يُعيد Singleton لمهارة المحاذاة."""
-    global _exercise_alignment_skill
-    if _exercise_alignment_skill is None:
-        _exercise_alignment_skill = ExerciseAlignmentSkill()
-    return _exercise_alignment_skill
+    """يُعيد Singleton لمهارة المحاذاة (BaseSkill.instance)."""
+    return ExerciseAlignmentSkill.instance()

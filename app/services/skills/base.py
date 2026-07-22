@@ -31,7 +31,7 @@ Design rules (kept deliberately narrow so the skills-layer stays clean):
 from __future__ import annotations
 
 import abc
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 __all__ = ["BaseSkill", "skill_counter", "skill_histogram"]
 
@@ -122,7 +122,7 @@ class BaseSkill[InT, OutT](abc.ABC):
     version: ClassVar[str] = "1.0.0"
 
     @classmethod
-    def instance(cls) -> BaseSkill:
+    def instance(cls) -> Self:
         """Return a process-wide singleton of the concrete skill class.
 
         The cache lives on the concrete class (``cls.__dict__``), so each subclass

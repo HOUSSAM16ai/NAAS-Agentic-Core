@@ -2,9 +2,10 @@
 D-100 — Skills Platform regression tests (registry + composition).
 
 يثبت:
-  • الـ registry يبني 27 Skill (24 ACTIVE + 3 FLAGGED) بلا ZOMBIE.
+  • الـ registry يبني 34 Skill (32 ACTIVE + 2 FLAGGED) بلا ZOMBIE.
     (D-138 أضاف micro_simulation + pedagogical_escalation كـ ACTIVE؛
-     D-142 Phase 2 أضاف dialogue_manager كـ FLAGGED.)
+     D-142 Phase 2 أضاف dialogue_manager كـ ACTIVE-FLAGGED؛
+     D-181 أضاف النواة المعرفية للتفكير: 6 مهارات + reasoning_compose كـ ACTIVE.)
   • الـ FLAGGED مُعطَّلة افتراضياً ومُفعَّلة عبر علم البيئة.
   • `compose_text_refinement` يحافظ على الترتيب، يعزل الفشل، ويتدهور رشيقاً.
   • الـ manifest يصف skills_platform باتّساق.
@@ -50,6 +51,14 @@ EXPECTED = {
     "pedagogical_escalation",
     # D-142 Phase 2: مدير الحوار الموحَّد (FLAGGED — SEMANTIC_TUTOR_ENABLED).
     "dialogue_manager",
+    # D-181: النواة المعرفية للتفكير (Cognitive Reasoning Core) — 6 مهارات + مُركِّب.
+    "logic_reasoning",
+    "critical_thinking",
+    "problem_decomposition",
+    "causal_reasoning",
+    "abstraction",
+    "mental_model",
+    "reasoning_compose",
 }
 
 
@@ -57,11 +66,11 @@ class TestRegistry:
     def test_registry_complete(self) -> None:
         reg = get_skill_registry()
         assert set(reg.names()) == EXPECTED
-        assert len(reg.list()) == 27
+        assert len(reg.list()) == 34
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 25
+        assert len(reg.by_status("ACTIVE")) == 32
         assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:

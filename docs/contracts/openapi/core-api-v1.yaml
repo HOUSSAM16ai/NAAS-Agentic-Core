@@ -1523,6 +1523,19 @@ paths:
         '200':
           description: Refined text with applied/failed steps
       description: Run Answer Refinement Pipeline
+  /api/v1/skills/reason:
+    post:
+      tags:
+      - Skills Platform
+      summary: Cognitive Reasoning Core
+      operationId: reasonSkill
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Structured reasoning trace (modes + results + narrative)
+      description: Cognitive reasoning core — logic, critical thinking, problem decomposition,
+        causal reasoning, abstraction, mental models (D-181)
   /api/v1/skills/retrieve:
     post:
       tags:

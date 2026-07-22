@@ -1,6 +1,16 @@
 # Runtime Truth Lock
-> Last updated: **2026-07-11** | Branch: `claude/post-incident-docs-testing-rl5dy5`
-> Previous: `main` (D-162)
+> Last updated: **2026-07-22** | Branch: `claude/logic-skills-system-dev-li4y27`
+> Previous: `main` (D-180)
+
+## Cognitive Reasoning Core + Foundations Activation (2026-07-22, D-181)
+
+| المكوّن | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`app/core/foundations/`** (منطق قضوي + خوارزميات + بايز) | **ACTIVE** (كان DORMANT) | يُستورَد الآن من `app/core/reasoning/{arguments,causal}` على سلسلة حيّة تنتهي بـ `POST /api/v1/skills/reason` + `compose_reasoning`؛ ركيزة `reasoning` مُختبَرة حياً (`tests/core/test_reasoning.py`). |
+| **`app/core/reasoning/`** (arguments/causal/decomposition/abstraction/mental_model) | **ACTIVE** | dep-free مُتحقَّق؛ كل الحالات + مسارات الخطأ مُختبَرة محلياً؛ تستهلكه ٦ مهارات. |
+| **٦ مهارات التفكير** (logic/critical/decompose/causal/abstraction/mental_model) على `BaseSkill` | **ACTIVE** | مُسجَّلة في `registry` (34 مهارة، بلا ZOMBIE) + doctrine + `compose_reasoning` + `/api/v1/skills/reason` (import + call chain + tests). |
+
+---
 
 ## Split-Brain Decomposition + Port Activation (2026-07-11, D-163) — Verified Live
 

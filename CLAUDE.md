@@ -111,6 +111,23 @@ polymorphic `run()` تُفوِّض لطريقة المهارة الأصلية (`
 الاحتمالي الحتمي (`probability_brain/*`) + `gateway`/model-chain **مُستثناة عمداً** (حماية مسار
 الإجابة). أي مهارة جديدة يجب أن تَرِث `BaseSkill`.
 
+### النواة المعرفية للتفكير (D-181 — 2026-07-22)
+
+طبقة الاستدلال العامة المُتحقَّقة هي **`app/core/reasoning/`** (dep-free، stdlib، تستهلك
+`app/core/foundations` فترفعها من DORMANT إلى ACTIVE بالبرهان الثلاثي): `arguments` (شجرة قضوية +
+استلزام مُتحقَّق عبر `foundations.logic.entails` + كشف المغالطة الشكلية + مثال مضادّ + parser نصّي) ·
+`causal` (رسم سبب→أثر + **سببية مقابل ارتباط** + مضادّ للواقع + كشف الدورة) · `decomposition` (بوليا +
+فرز طوبولوجي) · `abstraction` (نمط + قاعدة متتالية بـ `Fraction` + تماثل بنيوي) · `mental_model`
+(كيانات/علاقات/ديناميات + فحص تماسك). كل بدائية ترفع `ReasoningError` (لا صفر مضلِّل — §0).
+
+فوقها **٦ مهارات على `BaseSkill`** (حتمية 100%، بلا LLM في المسار الأساسي، مقاييس + doctrine +
+اختبارات): `LogicReasoningSkill` (المنطق/الاستدلال) · `CriticalThinkingSkill` (التفكير النقدي) ·
+`ProblemDecompositionSkill` (حل المشكلات) · `CausalReasoningSkill` (فهم العلاقات السببية) ·
+`AbstractionSkill` (التجريد) · `MentalModelSkill` (بناء النماذج الذهنية). المُوحِّد `compose_reasoning`
+(registry، مرآة `compose_text_refinement`) يُركِّب مسار تفكير مُهيكَل لأي سؤال حرّ (تدهور رشيق).
+مكشوفة API-first عبر `POST /api/v1/skills/reason`. **قاعدة دائمة:** الحقيقة (صحّة الاستدلال، السببية،
+الترتيب، النمط) من `app/core/reasoning` + `foundations` حصراً — لا يُقرّرها الـ LLM؛ الـ LLM للسرد فقط.
+
 ### قواعد إلزامية لكل Skill جديد
 
 1. **Skill يجب أن يرث `BaseSkill`** ويملك `/metrics` (أو `skill_counter`) — بدونه لا يُعتبر Skill حقيقياً
@@ -1025,6 +1042,7 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 | تفكيك التعقيد | D-163 → D-172 |
 | النماذج | D-060 · D-067 · D-088 · D-167 · D-177 · D-178 |
 | الكاش (Cache) | D-180 (كاش معرفي عربيّ-أولاً + استرجاع صمود · ISS-133) |
-| Skills / OOP | §0.5 · D-069 · D-100 · **D-179** (`BaseSkill` قاعدة موحَّدة عبر ٢٣ مهارة) |
+| Skills / OOP | §0.5 · D-069 · D-100 · **D-179** (`BaseSkill` قاعدة موحَّدة) · **D-181** (النواة المعرفية للتفكير — `app/core/reasoning` + ٦ مهارات + `compose_reasoning`) |
+| الاستدلال العام (Reasoning) | **D-181** (`app/core/reasoning`: arguments/causal/decomposition/abstraction/mental_model · يرفع `foundations` ACTIVE) |
 | التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 |

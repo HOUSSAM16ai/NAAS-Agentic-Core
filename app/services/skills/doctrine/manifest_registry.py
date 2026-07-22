@@ -74,6 +74,22 @@ from app.services.skills.doctrine.probability import (
     PROBABILITY_CALCULATION_DOCTRINE,
     PROBABILITY_CALCULATION_DOCTRINE_VERSION,
 )
+from app.services.skills.doctrine.reasoning import (
+    ABSTRACTION_DOCTRINE,
+    ABSTRACTION_DOCTRINE_VERSION,
+    CAUSAL_REASONING_DOCTRINE,
+    CAUSAL_REASONING_DOCTRINE_VERSION,
+    CRITICAL_THINKING_DOCTRINE,
+    CRITICAL_THINKING_DOCTRINE_VERSION,
+    LOGIC_REASONING_DOCTRINE,
+    LOGIC_REASONING_DOCTRINE_VERSION,
+    MENTAL_MODEL_DOCTRINE,
+    MENTAL_MODEL_DOCTRINE_VERSION,
+    PROBLEM_DECOMPOSITION_DOCTRINE,
+    PROBLEM_DECOMPOSITION_DOCTRINE_VERSION,
+    REASONING_CORE_DOCTRINE,
+    REASONING_CORE_DOCTRINE_VERSION,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -348,6 +364,64 @@ SKILL_DOCTRINE_MANIFEST: Final[dict[str, dict[str, object]]] = {
             "orchestrator_client.chat_with_agent",
         ),
     },
+    # ── D-181: النواة المعرفية للتفكير (Cognitive Reasoning Core) ──────────────
+    "reasoning_core": {
+        "version": REASONING_CORE_DOCTRINE_VERSION,
+        "rules_count": len(REASONING_CORE_DOCTRINE),
+        "consumed_by": (
+            # D-181: القاعدة الجامعة لمهارات التفكير الستّ فوق app/core/reasoning.
+            "registry.compose_reasoning",
+            "api.routers.skills.reason_endpoint",
+        ),
+    },
+    "logic_reasoning": {
+        "version": LOGIC_REASONING_DOCTRINE_VERSION,
+        "rules_count": len(LOGIC_REASONING_DOCTRINE),
+        "consumed_by": (
+            "LogicReasoningSkill.analyze",
+            "registry.compose_reasoning",
+        ),
+    },
+    "critical_thinking": {
+        "version": CRITICAL_THINKING_DOCTRINE_VERSION,
+        "rules_count": len(CRITICAL_THINKING_DOCTRINE),
+        "consumed_by": (
+            "CriticalThinkingSkill.analyze",
+            "registry.compose_reasoning",
+        ),
+    },
+    "problem_decomposition": {
+        "version": PROBLEM_DECOMPOSITION_DOCTRINE_VERSION,
+        "rules_count": len(PROBLEM_DECOMPOSITION_DOCTRINE),
+        "consumed_by": (
+            "ProblemDecompositionSkill.decompose",
+            "registry.compose_reasoning",
+        ),
+    },
+    "causal_reasoning": {
+        "version": CAUSAL_REASONING_DOCTRINE_VERSION,
+        "rules_count": len(CAUSAL_REASONING_DOCTRINE),
+        "consumed_by": (
+            "CausalReasoningSkill.analyze",
+            "registry.compose_reasoning",
+        ),
+    },
+    "abstraction": {
+        "version": ABSTRACTION_DOCTRINE_VERSION,
+        "rules_count": len(ABSTRACTION_DOCTRINE),
+        "consumed_by": (
+            "AbstractionSkill.generalize",
+            "registry.compose_reasoning",
+        ),
+    },
+    "mental_model": {
+        "version": MENTAL_MODEL_DOCTRINE_VERSION,
+        "rules_count": len(MENTAL_MODEL_DOCTRINE),
+        "consumed_by": (
+            "MentalModelSkill.build",
+            "registry.compose_reasoning",
+        ),
+    },
 }
 
 
@@ -466,6 +540,11 @@ def build_exercise_explanation_prompt() -> str:
 #: الـ prompt المُبنى من الـ doctrine — يُستخدم في local_graph و conversation_graph.
 #: D-071: هذا الثابت هو المرجع الوحيد — لا تعريف prompt محلي في أي ملف آخر.
 EXERCISE_EXPLANATION_SYSTEM_PROMPT: Final[str] = build_exercise_explanation_prompt()
+
+
+def get_reasoning_core_summary() -> str:
+    """يُرجِع القاعدة الجامعة للنواة المعرفية للتفكير كنص قصير (D-181، للـ prompts)."""
+    return " | ".join(REASONING_CORE_DOCTRINE)
 
 
 def list_all_doctrines() -> dict[str, dict[str, object]]:

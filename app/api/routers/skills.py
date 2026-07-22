@@ -5,6 +5,7 @@ CLAUDE.md §0.5 + §6.21 (عقد المقياس-المُصدِر): كل ما ي�
   • `GET  /api/v1/skills`          — قائمة الـ Skills + عقودها + consumed_by (رصد، عام).
   • `GET  /api/v1/skills/{name}`   — تفاصيل Skill واحد.
   • `POST /api/v1/skills/refine`   — خط تنقية الإجابة المُركَّب (auth).
+  • `POST /api/v1/skills/reason`   — النواة المعرفية للتفكير المُركَّبة (auth — D-181).
   • `POST /api/v1/skills/retrieve` — RetrievalRerankSkill (auth، خلف علم — 503 عند التعطيل).
   • `POST /api/v1/skills/mcp`      — MCPToolSkill (auth، خلف علم — 503 عند التعطيل).
 
@@ -19,7 +20,11 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.schemas import RobustBaseModel
 from app.deps.auth import CurrentUser, get_current_user
-from app.services.skills.registry import compose_text_refinement, get_skill_registry
+from app.services.skills.registry import (
+    compose_reasoning,
+    compose_text_refinement,
+    get_skill_registry,
+)
 
 router = APIRouter(prefix="/api/v1/skills", tags=["Skills Platform"])
 
@@ -41,6 +46,33 @@ class RefineResponse(RobustBaseModel):
     text: str
     applied_steps: list[str]
     failed_steps: list[str]
+
+
+class ReasonRequest(RobustBaseModel):
+    """طلب النواة المعرفية للتفكير (D-181) — سؤال حرّ + مدخلات مُهيكَلة اختيارية."""
+
+    question: str = ""
+    premises: list[str] | None = None
+    conclusion: str | None = None
+    edges: list[list[str]] | None = None
+    classify_pair: list[str] | None = None
+    counterfactual_node: str | None = None
+    instances: list[dict[str, Any]] | None = None
+    sequence: list[float] | None = None
+    source: dict[str, Any] | None = None
+    target: dict[str, Any] | None = None
+    relations: list[list[str]] | None = None
+    dynamics: list[list[str]] | None = None
+    concept_name: str | None = None
+
+
+class ReasonResponse(RobustBaseModel):
+    """أثر تفكير مُركَّب — الأنماط المُفعَّلة + نتائج المهارات + سرد حتمي."""
+
+    question: str
+    modes: list[str]
+    results: dict[str, Any]
+    narrative: str
 
 
 class RetrieveRequest(RobustBaseModel):
@@ -93,6 +125,42 @@ async def refine_endpoint(
         text=result.text,
         applied_steps=list(result.applied_steps),
         failed_steps=list(result.failed_steps),
+    )
+
+
+@router.post("/reason", response_model=ReasonResponse, summary="Cognitive reasoning core (D-181)")
+async def reason_endpoint(
+    payload: ReasonRequest,
+    _: CurrentUser = Depends(get_current_user),
+) -> ReasonResponse:
+    """يُشغِّل النواة المعرفية للتفكير المُركَّبة (تفكيك + نقد + منطق/سببية/تجريد/نموذج).
+
+    كلّ المهارات حتمية (fail-open) — يُرجِع دائماً مسار تفكير مُهيكَل لأي سؤال.
+    """
+    context: dict[str, Any] = {
+        k: v
+        for k, v in {
+            "premises": payload.premises,
+            "conclusion": payload.conclusion,
+            "edges": payload.edges,
+            "classify_pair": payload.classify_pair,
+            "counterfactual_node": payload.counterfactual_node,
+            "instances": payload.instances,
+            "sequence": payload.sequence,
+            "source": payload.source,
+            "target": payload.target,
+            "relations": payload.relations,
+            "dynamics": payload.dynamics,
+            "model_name": payload.concept_name,
+        }.items()
+        if v is not None
+    }
+    composition = compose_reasoning(payload.question, context)
+    return ReasonResponse(
+        question=composition.question,
+        modes=list(composition.modes),
+        results=composition.results,
+        narrative=composition.narrative,
     )
 
 

@@ -5,6 +5,44 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-181 · النواة المعرفية للتفكير — طبقة استدلال عامة مُتحقَّقة (2026-07-22)
+**السياق:** طلب المالك تطويراً ثورياً لملكات **التفكير** عبر كامل المشروع — المنطق، التفكير
+النقدي، حل المشكلات، التجريد، الاستدلال، بناء النماذج الذهنية، وفهم العلاقات السببية — مع تعزيز
+مبدأ API-first ومنظومة Skills، وبقاء GitHub Actions أخضر 100% وتجريب حي E2E.
+
+**الكارثة المكتشفة (بأدلة file:line):**
+1. **الركيزة الرمزية المُتحقَّقة نائمة:** `app/core/foundations/` (منطق قضوي `logic.entails`/
+   `is_tautology`، خوارزميات رسم، بايز مضبوط) **DORMANT** — لا مستورد إلا اختبارها الخاص، رغم أن
+   docstring يَعِد «المهارات تستورد الأرقام المُتحقَّقة من هنا».
+2. **لا محرّك استدلال عام:** صفر قدرة على التفكير النقدي/السببي/التجريد/التفكيك/النماذج الذهنية.
+   كل الآلات المعرفية الناضجة (BKT، الرسوم الدلالية، العقل الاحتمالي) محبوسة على احتمالات البكالوريا.
+
+**القرار (نواة معرفية للتفكير — deterministic-first، رمزي قبل اللغة §0):**
+- **ركيزة جديدة `app/core/reasoning/`** (dep-free، stdlib، تستهلك `foundations` فترفعها
+  DORMANT→ACTIVE بالبرهان الثلاثي): `arguments` (شجرة قضوية + استلزام مُتحقَّق + كشف مغالطة شكلية +
+  مثال مضادّ + parser نصّي) · `causal` (رسم سبب→أثر + سببية مقابل ارتباط + مضادّ للواقع + كشف دورة) ·
+  `decomposition` (بوليا + فرز طوبولوجي) · `abstraction` (نمط + قاعدة متتالية بـ Fraction + تماثل
+  بنيوي) · `mental_model` (كيانات/علاقات/ديناميات + فحص تماسك). كل بدائية ترفع `ReasoningError`.
+- **٦ مهارات جديدة على `BaseSkill`** (حتمية 100%، بلا LLM في المسار الأساسي، مقاييس Prometheus،
+  doctrine، اختبارات): `LogicReasoningSkill` · `CriticalThinkingSkill` · `ProblemDecompositionSkill`
+  · `CausalReasoningSkill` · `AbstractionSkill` · `MentalModelSkill`. مُسجَّلة في `registry`
+  (34 مهارة الآن، بلا ZOMBIE) + doctrine `doctrine/reasoning.py` (٧ قواعد + manifest).
+- **الموحِّد الثوري `compose_reasoning`** (registry، مرآة `compose_text_refinement`): يُركِّب مسار
+  تفكير مُهيكَل لأي سؤال حرّ (تفكيك دائم + نقد دائم + المهارة المتخصّصة عند توفّر مدخلها) — تدهور
+  رشيق، يخدم «يجيب على كل سؤال» ببنية.
+- **API-first خارق:** `POST /api/v1/skills/reason` (typed `ReasonRequest`/`ReasonResponse`) +
+  إدراجه في عقد `docs/contracts/openapi/core-api-v1.yaml` (إضافي، صادق).
+
+**الملفات:** `app/core/reasoning/*` (7) · `app/services/skills/{logic_reasoning,critical_thinking,
+problem_decomposition,causal_reasoning,abstraction,mental_model}_skill.py` ·
+`app/services/skills/doctrine/reasoning.py` · `registry.py` · `doctrine/{__init__,manifest_registry}.py`
+· `app/api/routers/skills.py` · `docs/contracts/openapi/core-api-v1.yaml` ·
+`tests/core/test_reasoning.py` · `tests/services/test_reasoning_skills.py` ·
+`tests/services/test_skills_registry.py` · `CLAUDE.md` · `.memory/{runtime_truth,README}.md`.
+
+**التحقق:** ركيزة `reasoning` مُختبَرة حياً محلياً (كل الحالات + مسارات الخطأ) · ruff نظيف ·
+runtime_truth `--check` أخضر · بقيّة البوّابات + التجريب الحي E2E عبر GitHub Actions (انظر التذييل).
+
 ## D-180 · الكاش المعرفي الثوري: عربيّ-أولاً + استرجاع الصمود (2026-07-22 · ISS-133)
 **السياق:** طلب المالك تطوير التخزين المؤقت (cache) بشكل ثوري وضمان أن النظام «يجيب على كل
 سؤال»، مع بقاء GitHub Actions أخضر 100% وتجريب حي E2E. تدقيق للطبقة كشف كارثة حقيقية مركّبة.

@@ -308,6 +308,161 @@ def compose_text_refinement(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# النواة المعرفية للتفكير — Composition (D-181)
+# ─────────────────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class ReasoningComposition:
+    """أثر تفكير مُركَّب — مسار تفكيك دائم + نتائج مهارات التفكير المُفعَّلة."""
+
+    question: str
+    modes: tuple[str, ...]
+    results: dict[str, dict[str, object]]
+    narrative: str
+
+
+def compose_reasoning(
+    question: str, context: dict[str, object] | None = None
+) -> ReasoningComposition:
+    """يُركِّب النواة المعرفية للتفكير على سؤال حرّ (D-181) — الموحِّد الثوري.
+
+    حتمي 100% ولا يكسر المسار أبداً (كل مهارة معزولة بـ try/except، تدهور رشيق):
+      • **دائماً** يُفكّك السؤال بسقالة بوليا (ProblemDecomposition) — مسار تفكير لأي سؤال
+        مهما كان، فيخدم «يجيب على كل سؤال» ببنية بدل نصّ فارغ.
+      • **دائماً** يفحص التفكير النقدي (CriticalThinking) على نصّ السؤال (كشف مغالطات + أسئلة).
+      • يُفعِّل المهارة المتخصّصة عند توفّر مدخلها المُهيكَل في `context`:
+        premises+conclusion → LogicReasoning | edges → CausalReasoning |
+        instances/sequence/source+target → Abstraction | relations/dynamics → MentalModel.
+
+    يُرجِع `ReasoningComposition` (أثر مُهيكَل + سرد حتمي مختصر) مع مقاييس لكل استدعاء.
+    """
+    ctx = context or {}
+    q = (question or "").strip()
+    results: dict[str, dict[str, object]] = {}
+    modes: list[str] = []
+
+    def _run(mode: str, fn: Callable[[], dict[str, object]]) -> None:
+        try:
+            results[mode] = fn()
+            modes.append(mode)
+            _record_step(f"reasoning_{mode}", "applied")
+        except Exception as exc:  # graceful degradation — لا يكسر المسار
+            _record_step(f"reasoning_{mode}", "error")
+            logger.debug("compose_reasoning %s non-fatal failure: %s", mode, exc)
+
+    # 1) تفكيك دائم — مسار تفكير لأي سؤال.
+    def _decompose() -> dict[str, object]:
+        from app.services.skills.problem_decomposition_skill import (
+            ProblemDecompositionInput,
+            get_problem_decomposition_skill,
+        )
+
+        out = get_problem_decomposition_skill().decompose(
+            ProblemDecompositionInput(problem=q or "سؤال")
+        )
+        return out.model_dump()
+
+    _run("decomposition", _decompose)
+
+    # 2) تفكير نقدي دائم على نصّ السؤال.
+    def _critical() -> dict[str, object]:
+        from app.services.skills.critical_thinking_skill import (
+            CriticalThinkingInput,
+            get_critical_thinking_skill,
+        )
+
+        out = get_critical_thinking_skill().analyze(CriticalThinkingInput(text=q))
+        return out.model_dump()
+
+    _run("critical_thinking", _critical)
+
+    # 3) المنطق — عند توفّر مقدّمات + نتيجة.
+    if ctx.get("premises") and ctx.get("conclusion"):
+
+        def _logic() -> dict[str, object]:
+            from app.services.skills.logic_reasoning_skill import (
+                LogicReasoningInput,
+                get_logic_reasoning_skill,
+            )
+
+            out = get_logic_reasoning_skill().analyze(
+                LogicReasoningInput(
+                    premises=list(ctx.get("premises", [])),  # type: ignore[arg-type]
+                    conclusion=str(ctx.get("conclusion", "")),
+                )
+            )
+            return out.model_dump()
+
+        _run("logic", _logic)
+
+    # 4) السببية — عند توفّر أضلاع.
+    if ctx.get("edges"):
+
+        def _causal() -> dict[str, object]:
+            from app.services.skills.causal_reasoning_skill import (
+                CausalReasoningInput,
+                get_causal_reasoning_skill,
+            )
+
+            out = get_causal_reasoning_skill().analyze(
+                CausalReasoningInput(
+                    edges=list(ctx.get("edges", [])),  # type: ignore[arg-type]
+                    classify_pair=ctx.get("classify_pair"),  # type: ignore[arg-type]
+                    counterfactual_node=ctx.get("counterfactual_node"),  # type: ignore[arg-type]
+                )
+            )
+            return out.model_dump()
+
+        _run("causal", _causal)
+
+    # 5) التجريد — عند توفّر أمثلة/متتالية/زوج تماثل.
+    if ctx.get("instances") or ctx.get("sequence") or (ctx.get("source") and ctx.get("target")):
+
+        def _abstraction() -> dict[str, object]:
+            from app.services.skills.abstraction_skill import (
+                AbstractionInput,
+                get_abstraction_skill,
+            )
+
+            out = get_abstraction_skill().generalize(
+                AbstractionInput(
+                    instances=list(ctx.get("instances", [])),  # type: ignore[arg-type]
+                    sequence=list(ctx.get("sequence", [])),  # type: ignore[arg-type]
+                    source=ctx.get("source"),  # type: ignore[arg-type]
+                    target=ctx.get("target"),  # type: ignore[arg-type]
+                )
+            )
+            return out.model_dump()
+
+        _run("abstraction", _abstraction)
+
+    # 6) النموذج الذهني — عند توفّر علاقات/ديناميات.
+    if ctx.get("relations") or ctx.get("dynamics"):
+
+        def _mental() -> dict[str, object]:
+            from app.services.skills.mental_model_skill import (
+                MentalModelInput,
+                get_mental_model_skill,
+            )
+
+            out = get_mental_model_skill().build(
+                MentalModelInput(
+                    name=str(ctx.get("model_name", q or "نموذج")),
+                    relations=list(ctx.get("relations", [])),  # type: ignore[arg-type]
+                    dynamics=list(ctx.get("dynamics", [])),  # type: ignore[arg-type]
+                )
+            )
+            return out.model_dump()
+
+        _run("mental_model", _mental)
+
+    _record_compose("reasoning", "ok" if modes else "empty")
+    narrative = "مسار تفكير مُهيكَل عبر: " + ("، ".join(modes) if modes else "لا مهارة")
+    return ReasoningComposition(
+        question=q, modes=tuple(modes), results=results, narrative=narrative
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Bootstrap — تسجيل كل الـ Skills (المصدر الوحيد للعدد/الحالة = قائمة descriptors أدناه)
 # ─────────────────────────────────────────────────────────────────────────────
 def _build_registry() -> SkillRegistry:
@@ -580,6 +735,70 @@ def _build_registry() -> SkillRegistry:
             consumed_by=("api.routers.skills.mcp_endpoint",),
             status="FLAGGED",
             feature_flag="ENABLE_MCP_TOOL_SKILL",
+        ),
+        # ── D-181: النواة المعرفية للتفكير (Cognitive Reasoning Core) ──────────
+        SkillDescriptor(
+            name="logic_reasoning",
+            summary="المنطق والاستدلال — صحّة الحجّة + كشف المغالطة الشكلية + مثال مضادّ (D-181).",
+            input_contract="LogicReasoningInput",
+            output_contract="LogicReasoningOutput",
+            primary_method="analyze",
+            metrics_prefix="cogniforge_skill_logic_reasoning",
+            consumed_by=("registry.compose_reasoning", "api.routers.skills.reason_endpoint"),
+        ),
+        SkillDescriptor(
+            name="critical_thinking",
+            summary="التفكير النقدي — تفكيك الحجّة + كشف المغالطات غير الشكلية + أسئلة سقراطية (D-181).",
+            input_contract="CriticalThinkingInput",
+            output_contract="CriticalThinkingOutput",
+            primary_method="analyze",
+            metrics_prefix="cogniforge_skill_critical_thinking",
+            consumed_by=("registry.compose_reasoning", "api.routers.skills.reason_endpoint"),
+        ),
+        SkillDescriptor(
+            name="problem_decomposition",
+            summary="حل المشكلات — تفكيك بوليا + ترتيب تنفيذ حتمي على التبعيّات (D-181).",
+            input_contract="ProblemDecompositionInput",
+            output_contract="ProblemDecompositionOutput",
+            primary_method="decompose",
+            metrics_prefix="cogniforge_skill_problem_decomposition",
+            consumed_by=("registry.compose_reasoning", "api.routers.skills.reason_endpoint"),
+        ),
+        SkillDescriptor(
+            name="causal_reasoning",
+            summary="الاستدلال السببي — سببية مقابل ارتباط + مضادّ للواقع + كشف الدورة (D-181).",
+            input_contract="CausalReasoningInput",
+            output_contract="CausalReasoningOutput",
+            primary_method="analyze",
+            metrics_prefix="cogniforge_skill_causal_reasoning",
+            consumed_by=("registry.compose_reasoning", "api.routers.skills.reason_endpoint"),
+        ),
+        SkillDescriptor(
+            name="abstraction",
+            summary="التجريد والتماثل — استخراج النمط + قاعدة المتتالية + مطابقة بنيوية (D-181).",
+            input_contract="AbstractionInput",
+            output_contract="AbstractionOutput",
+            primary_method="generalize",
+            metrics_prefix="cogniforge_skill_abstraction",
+            consumed_by=("registry.compose_reasoning", "api.routers.skills.reason_endpoint"),
+        ),
+        SkillDescriptor(
+            name="mental_model",
+            summary="بناء النماذج الذهنية — كيانات/علاقات/ديناميات + فحص التماسك (D-181).",
+            input_contract="MentalModelInput",
+            output_contract="MentalModelOutput",
+            primary_method="build",
+            metrics_prefix="cogniforge_skill_mental_model",
+            consumed_by=("registry.compose_reasoning", "api.routers.skills.reason_endpoint"),
+        ),
+        SkillDescriptor(
+            name="reasoning_compose",
+            summary="النواة المعرفية للتفكير المُركَّبة — مسار تفكير مُهيكَل لأي سؤال (D-181).",
+            input_contract="question+context",
+            output_contract="ReasoningComposition",
+            primary_method="compose_reasoning",
+            metrics_prefix="cogniforge_skill_compose",
+            consumed_by=("api.routers.skills.reason_endpoint",),
         ),
     ]
     for d in descriptors:

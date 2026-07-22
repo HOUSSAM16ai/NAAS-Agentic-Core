@@ -1,4 +1,28 @@
 # Open Issues & Bugs
+## 🧭 Coherence log — decisions wave D-172 → D-179 (2026-07-18 → 07-22)
+
+هذا السجلّ يوثّق موجة القرارات التي لم تُسجَّل لها إدخالات issue أثناء تسارع العمل (جولة تماسك D-179):
+
+- **D-172** (07-18) — Docker full-stack قابل لإعادة الإنتاج: شبكة compose-managed + جسر أسرار تلقائي
+  + «الصحة لا تكذب» (sqlite/mock تحت الإنتاج ⇒ `degraded`) + checkpointer=postgres مُثبَت.
+- **D-173** (07-21) — ثورة التوثيق: `CLAUDE.md` 12,082→966 سطراً + توحيد `.memory/` + حذف عنقود KAgent
+  الميت + API-first 100% (عقود OpenAPI لكل الخدمات + بوّابة تكافؤ).
+- **D-174** (07-21) — إغلاق الفجوات الحقيقية: API-first 11/11، بوّابة تكافؤ سلسلة النماذج، تكافؤ الرصد.
+- **D-175** (07-21) — طبقة الأسس النظرية `app/core/foundations/` (dep-free): combinatorics · number_theory
+  · logic · probability · information_theory · algorithms — بدائيات مُتحقَّقة ترفع `FoundationsError`.
+- **D-176** (07-21) — فرض حدود التجريد + بوّابة anti-ZOMBIE للـ ports السداسية.
+- **D-177** (07-22) — صمود الـ rate-limit «يجيب على كل سؤال»: تصنيف 429 + مرور ثانٍ محدود +
+  `FIRST_TOKEN_TIMEOUT=30s` + حارس تسرّب reasoning. (يُغلق طلب المالك «يجيب على كل الأسئلة».)
+- **D-178** (07-22) — خط الوكلاء المتعددين يصل `full`: رفع مهلتي reasoning/skills المتناسقتين (env-overridable).
+- **D-179** (07-22) — BaseSkill OOP عبر 23 مهارة + تحقّق حيّ E2E من ضمان الإجابة + إصلاح تماسك الذاكرة
+  (backfill عناوين D-035/037/044/045/109/152 + هذا السجلّ). لا issue جديد — عمل بنيوي/توثيقي، صفر كسر بوّابة.
+
+**تحقّق حيّ D-179 (2026-07-22):** 4 أسئلة تعليمية أُجيبت في المرور الأول بـ PRIMARY
+`openai/gpt-oss-20b:free` عربي+LaTeX (`ALL_ANSWERED=True`)؛ fastpath التحية حتمي <1ms؛ جسر DB
+HTTPS/443 `SELECT 1→{"ok":1}`. كل البوّابات خضراء (ruff/doctrine/pedagogical-os/guardrails/runtime-truth).
+
+---
+
 ## ✅ Resolved 2026-06-27 (ISS-117 — Repetitive loops and context drift due to stateless graph)
 **Symptom:** AI tutor repeats same definitions, ignores correct answers, and gets hijacked by intent detector regexes.
 **Root:** Lack of stateful pedagogical progression. local_graph ignored TutorState and PedagogicalPolicyEngine.

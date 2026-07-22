@@ -1,7 +1,19 @@
 # Tasks — What Comes Next
 > 🧭 **خارطة الطريق الثورية الكاملة (المراحل M0→M11):** **`.memory/roadmap.md`** — المصدر الحيّ الوحيد. المخطّط التالي: M6 صدق BKT · M7 واجهات بلا أرقام · M8 وضع التحقق · M9 فجوة الوهم · M10 هجرة الرسم.
-> Last updated: 2026-05-23 | Branch: `feat/math-explanation-generative-ui`
+> Last updated: 2026-07-22 | Branch: `claude/oop-claude-md-update-e2ziez`
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## ✅ Resolved — D-179: BaseSkill OOP + live answer-guarantee + memory coherence (2026-07-22)
+- طبقة `app/services/skills/` الآن على قاعدة `BaseSkill` موحَّدة (23 مهارة): هوية + singleton +
+  `run()` polymorphic + `skill_counter` (حارس Prometheus DRY). تحقّق حيّ E2E أثبت «يجيب على كل سؤال»
+  (4/4 عربي+LaTeX عبر PRIMARY). تماسك `.memory` مُصلَح (backfill 6 عناوين + D-179).
+
+### 🟡 التالي المقترح (بعد D-179)
+- **إكمال تبنّي BaseSkill (اختياري)**: `probability_brain/*` + `probability_tutor_brain` مُستثناة عمداً
+  (محرك حتمي محروس بمانيفستات/legacy-invariants) — أي تبنٍّ لاحق يتطلّب حذراً مماثلاً.
+- **M6 صدق BKT** — المقياس الوحيد: فجوة الوهم (المدعوم − المؤجَّل غير المدعوم). راجع `roadmap.md`.
 
 ---
 

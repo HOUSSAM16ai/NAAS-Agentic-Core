@@ -7,6 +7,13 @@
 > **لماذا Codespaces لا الـ sandbox:** الـ sandbox يحجب منافذ Postgres (5432/6543) ويفتقد
 > تبعيات التطبيق + `frontend/node_modules`، فلا يستطيع الـ uvicorn الوصول إلى Supabase.
 > Codespaces يفتح egress ويثبّت التبعيات. (نمط موثّق: CLAUDE.md §6.55 / §6.83 / §6.98.)
+>
+> **D-179 (2026-07-22):** «يجيب على كل سؤال» مُتحقَّق منه حيّاً في الـ sandbox عبر مسار الإجابة
+> المباشر (المفتاح الحقيقي + `MODEL_CHAIN` القانونية + منطق D-177 rate-limit): 4/4 أسئلة تعليمية
+> عربي+LaTeX عبر PRIMARY `openai/gpt-oss-20b:free`. المكدس الكامل full-Postgres + WebSocket
+> يُشغَّل هنا في Codespaces: `.devcontainer/supervisor.sh` (8 خدمات + Grafana:3001 + Prometheus:9090)
+> ثم `python scripts/verify_full_stack_codespaces.py` (المونوليث:8000 + خدمات 8001-8009 `/health`
+> + `/compose` pipeline_mode + دور WS حيّ). المنافذ: 8000 مونوليث · 5000 واجهة · 8001-8009 خدمات.
 
 ---
 

@@ -5,6 +5,41 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-179 · BaseSkill OOP + تحقّق حيّ من ضمان الإجابة + إصلاح تماسك الذاكرة (2026-07-22)
+**السياق:** طلب المالك (١) تطبيق OOP متقدّم على طبقة المهارات، (٢) التأكّد حياً أن النظام «يجيب على
+كل الأسئلة»، (٣) إصلاح انحراف تماسك `.memory/` + `CLAUDE.md`، مع بقاء GitHub Actions أخضر 100%.
+كشف الفحص أن طبقة `app/services/skills/` بلا **قاعدة موحَّدة**: كل مهارة تُعيد كتابة نفس البنية
+الثلاثية يدوياً (هوية `name`/`version`، singleton كسول `_x_singleton`+`get_x_skill()` في ~16 ملفاً،
+وحارس Prometheus المُعاد `try: from prometheus_client…` في ~13 ملفاً). كما أن `.memory` يحمل انحراف
+تنظيم: `issues.md` متأخّر عن `decisions.md`، وستّة قرارات مُشار إليها في `CLAUDE.md`/البوّابات بلا
+عناوين (D-035/037/044/045/109/152).
+
+**القرار (OOP — بلا تغيير سلوك، صفر كسر بوّابة):**
+- وحدة جديدة `app/services/skills/base.py`: `BaseSkill[InT, OutT]` (ABC، PEP-695 generics) تُوحِّد
+  الهوية + singleton كسول لكل-صنف (`instance()` يُعيد `Self`) + نقطة دخول polymorphic `run()`؛
+  ومساعدان `skill_counter`/`skill_histogram` يُوحِّدان حارس Prometheus (على `REGISTRY` العام
+  الافتراضي — **لا CollectorRegistry جديد**؛ no-op عند غياب prometheus). dep-free، بلا استيراد
+  عابر للخدمات. مُعاد التصدير من جذر الحزمة.
+- **تبنٍّ عبر 23 مهارة**: Wave 1 (9 مهارات بلا بوّابة token) توحّد أيضاً الـ accessor عبر
+  `instance()`؛ Wave 2 (14 مهارة محروسة بـ`check_*_wired`) تُبقي accessor كما هو (تحفُّظاً) وتضيف
+  `run` المُفوِّض للطريقة الأصلية (invoke/align/check/decide/redact/read/interpret/…). **كل token
+  محروس مُصان حرفياً**، و`dialogue_manager` يبقى خالياً من `async def decide`/`get_ai_client`/
+  `send_message` المحظورة. المحرك الاحتمالي + gateway/model-chain **لم تُمسّ** (حماية مسار الإجابة).
+- اختبارات `tests/services/test_skills_base.py` (7) تُثبت: ABC حقيقي، singleton مُخبَّأ، `invoke`
+  يلتقط الاستثناء، `skill_counter` آمن لإعادة الاستيراد — دليل تشغيلي (ضد ZOMBIE §6.6).
+
+**التحقق الحي E2E (2026-07-22، sandbox — منافذ Postgres 5432/6543 محجوبة، HTTPS عبر الوكيل يعمل):**
+- **مسار الإجابة الحيّ** (المفتاح الحقيقي + `MODEL_CHAIN` القانونية + منطق D-177): 4 أسئلة تعليمية
+  (تكامل/قانون أوم/احتمالات/نهاية sin x/x الصعبة) كلها أُجيبت في المرور الأول بـ PRIMARY
+  `openai/gpt-oss-20b:free` عربي+LaTeX، TTFT 1.75–17s → `ALL_ANSWERED=True` (صفر safety-net).
+- **fastpath التحية** حتمي <1ms يفصل «السلام عليكم»→ردّ فوري عن «اشرح لي التكامل»→LLM.
+- **جسر DB HTTPS/443** (`scripts/db_bridge.py`): `SELECT 1 → {"ok":1}` HTTP 200. البوّابة الكاملة
+  full-Postgres + WS مؤجَّلة لـ Codespaces (`.memory/runbooks/e2e-codespaces.md`).
+
+**البوّابات الخضراء بعد التبنّي:** `ruff check+format`، `check_skills_doctrine`، `check_pedagogical_os`،
+`ci_guardrails`، `check_legacy_invariants` (349)، `check_no_cross_service_imports`،
+`check_single_brain_control_plane`، `check_abstraction_consumed`، `runtime_truth --check` (بلا `--update`).
+
 ## D-178 · خط الوكلاء المتعددين يصل full — إصلاح مهلة reasoning (2026-07-22)
 **السياق:** تجريب حي للخدمات المصغرة (بالمفاتيح الحقيقية + postgres محلي) كشف أن `POST /compose`
 يعطي `pipeline_mode="partial"` (planning+research فقط، **reasoning غائب**) وإجابة خطأ 53 حرفاً.
@@ -1597,6 +1632,18 @@ start" — this is the right hook.
 **Status**: IMPLEMENTED 2026-05-07 — see branch `claude/fix-monitoring-port-hQ7JL` and CLAUDE.md §6.12.
 
 
+## D-035 · Planning Agent Live Activation + Docker Compose Stack — Step 6 (2026-05-10)
+`planning-agent` activated as a uvicorn process on `:8002` (third microservice ACTIVE), DSPy +
+LangGraph with a fallback chain when `OPENROUTER_API_KEY` is absent; independent `CollectorRegistry`
+(11 `cogniforge_planning_*` metrics), supervisor STEP 4F, `docker-compose.step6.yml`.
+Full narrative: `CLAUDE.md` (Microservices Step 6 entry). Backfilled header (D-179 coherence sweep).
+
+## D-037 · Reasoning Agent Live Activation — Step 8 (2026-05-11)
+`reasoning-agent` activated as a uvicorn process on `:8008` (fifth microservice ACTIVE), MCTS always
+enabled, LLM via OpenRouter when keyed else mock; lazy `AIService` (ISS-039-B) so startup never
+raises without a key. 11 `cogniforge_reasoning_*` metrics, supervisor STEP 4H.
+Full narrative: `CLAUDE.md` (Microservices Step 8 entry). Backfilled header (D-179 coherence sweep).
+
 ## D-034 · User Service Activated as uvicorn Process on :8001 — Step 5 (2026-05-10)
 **Decision**: `user-service` is activated as a uvicorn process on `:8001` in Codespaces (no Docker). It is the second microservice to go ACTIVE alongside `orchestrator-service` (:8006). Starts automatically via `supervisor.sh:launch_user_service()` (STEP 4E) when `DATABASE_URL` is set.
 **Reason**: Step 4 proved the uvicorn-process pattern for microservice activation in Codespaces (no Docker-in-Docker). `user-service` is the natural next candidate: it has a complete FastAPI app, its own DB schema, auth routes, and UMS routes. Adding `/metrics` (prometheus_client) makes it fully observable.
@@ -1661,6 +1708,20 @@ debugging misclassifications. Backward-compatible: callers only read `.recognize
 - `_build_psycopg_conninfo` — يجب أن يُزيل `+asyncpg` ويُضيف `sslmode=require`.
 - `checkpointer_backend` label في `STARTUP_INFO` — يُستخدم في CI gate و Grafana.
 **Status**: IMPLEMENTED 2026-05-11 — branch `feat/microservices-step10-postgres-checkpointer`.
+
+## D-044 · Full-Stack Live Surgical Verification with Real Secrets (2026-05-11)
+All 8 microservices started with real `OPENROUTER_API_KEY` + `TAVILY_API_KEY` + `DATABASE_URL`
+(Supabase); Skills Pipeline confirmed `pipeline_mode="full"` with real LLM. Fixes: ISS-047
+(`gpt-4o-mini` + `MAX_TOKENS=1024` for reasoning-agent 402), content-retrieval-skill `:8009` DOWN→UP,
+113 ruff errors, 10 test failures. Full narrative: `CLAUDE.md` (Live Surgical Verification entry).
+Backfilled header (D-179 coherence sweep).
+
+## D-045 · Microservices Answer Users End-to-End (2026-05-11)
+Full WebSocket chat path verified live: `User WS → :8000 → OrchestratorClient.chat_with_agent() →
+:8006 StateGraph (13 nodes) → Planning:8002 + Research:8007 + Reasoning:8008 → streaming NDJSON`.
+Fixes ISS-048 (`ALLOW_CONTAINER_LOCALHOST_ORCHESTRATOR`), ISS-049 (conversation-service
+`prometheus_client`), ISS-050 (E2E WS with real JWT). Full narrative: `CLAUDE.md` (End-to-End User
+Routing entry). Backfilled header (D-179 coherence sweep).
 
 ## D-043 · Live Runtime Audit — Full Stack Verified (2026-05-11)
 **Decision**: تحديث جميع ملفات الذاكرة (`CLAUDE.md`, `.memory/`) بناءً على تشخيص حي مباشر لجميع الخدمات.
@@ -4520,6 +4581,12 @@ LearningPathCard.jsx + CSS (theme-law). LEARNING_PATH_DOCTRINE v1.0.0 + manifest
 gate. **القواعد:** يُبنى فوق student_mastery_probability لا يُعيد اختراعه؛ حتمي
 بلا I/O؛ تسلسل المنهج خريطة ثابتة (لا overfitting)؛ fail-open.
 
+## D-109 · CritiqueNode (PLANNED — لم يُنفَّذ بعد)
+عنوان مستقل يحلّ الإشارات المعلّقة في `CLAUDE.md` §0.7 و`check_pedagogical_os.py`. لا كود بعد —
+CritiqueNode مرحلة نقد ذاتي مُصمَّمة (تُقيِّم مخرج المُركِّب قبل بثّه) ضمن الحزمة المشتركة أدناه.
+التفصيل الكامل في الرأس المُجمَّع `## D-108/D-109/D-110` مباشرةً بعد هذا السطر. عنوان مُستكمَل
+(جولة تماسك D-179).
+
 ## D-108/D-109/D-110 — Mastery-Aware Orchestrator / CritiqueNode / Real Synthesis (مُصمَّمة)
 تطوير ثوري للـ orchestrator: P1 يثبّت cognitive_context في AgentState ويُقرأ في
 SupervisorNode/SynthesizerNode (D-104 يثبّت الموجِّه في السؤال الآن)؛ P2 عقدة
@@ -5332,6 +5399,11 @@ change for uncovered concepts. Verification: `scripts/verify_iss119_live.py` (AL
 - **Context:** The `FullExerciseStory` UI component for probability combinatorics suffered from "historical pollution" (e.g. `C(23,3)=1771`) where elements like `بطاقة رقم 0 اضغط للكشف` passed in the `history_text` were mistakenly extracted as real entities by `_extract_count_entities`.
 - **Action:** Implemented a Strict Validation Gate inside `ProbabilityCalculatorSkill._strategy_composition`. We extract explicitly stated probability fractions from the problem `source` using regex `r'(\d+)\s*/\s*(\d+)'`. We reject the generation path (returning `None`) if the dynamically computed `total_combinations` does not have a clean modular relationship with any of the stated denominators.
 - **Result:** Invalid entities injected via user chat history can no longer override explicitly stated values and mathematical facts in the problem itself, successfully forcing fallback to deep generative text without corrupting the visual state.
+
+## D-152 · بوّابة كشف المقام «slash-only» — الاحتمال الحتمي (2026-07-02)
+عنوان مستقل يحلّ الإشارة المعلّقة في `CLAUDE.md` §0.8 و`check_pedagogical_os.py:215`. البوّابة
+الحتمية لكشف المقام كانت تعتمد الشرطة «/» فقط فعميت عن `\frac` في LaTeX (انحدار مُحصَّن الآن في
+`check_pedagogical_os.py`). أُدمج ضمن عمل D-153 (ISS-120) أدناه. عنوان مُستكمَل (جولة تماسك D-179).
 
 ## D-153 (2026-07-02) — ISS-120: أسئلة-فقط للمحرك الرمزي + الحيرة ليست إجابة + دستور Pedagogical OS
 **Context:** live transcript on BAC-2024: phantom «بطاقة رقم 0 (العدد 3)» + C(14,3)=364 emitted to a

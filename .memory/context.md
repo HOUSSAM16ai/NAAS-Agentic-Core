@@ -5,6 +5,9 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # CogniForge — Project Context
+> 🟢 **آخر تحديث تشغيلي: 2026-07-22 · Branch `claude/oop-claude-md-update-e2ziez` (D-179):** طبقة
+> المهارات موحَّدة على قاعدة `BaseSkill` (OOP، 23 مهارة)؛ تحقّق حيّ E2E أثبت «يجيب على كل سؤال»
+> (4/4 عربي+LaTeX عبر PRIMARY `openai/gpt-oss-20b:free`)؛ تماسك `.memory` مُصلَح (backfill 6 عناوين).
 > 🧭 **الرؤية الثورية وخارطة الطريق:** المصدر الحيّ الوحيد هو **`.memory/roadmap.md`** (ملخّص في CLAUDE.md §0.6).
 > 🏗️ **العدسة المعمارية (Agentic Runtime):** `.memory/agentic_runtime_doctrine.md` (D-146 · CLAUDE.md §0.7) — خريطة الطبقات مُقيَّمة بصدق حسب §6.6.
 > Last updated: **2026-07-18** | Branch: `claude/project-refactor-microservices-a9unyi` (D-170: تفكيك آخر ملفَّين ضخمَين — `chat_with_agent` **1,926→440 سطراً** عبر 13 مرحلة sub-generator (`TurnContext` + 6 وحدات turn_* مُضافة لـ `TUTOR_SOURCE_FILES`)، `local_graph.py` **1,769→1,193 سطراً** (مُطهِّرات + شرح مُستخرَجان + re-export خلفي)، `probability_skill.py` **1,685→1,462** (نماذج Pydantic → `probability_models.py`) · **D-171 يُغلق ISS-132**: هوية الإدمن (`is_admin/user_role/scope`) تُصرَّح في `AgentState` + تُمرَّر مُسوَّرةً بـ `_is_admin_payload` فتعبر الرسم الـ12-node (كانت الأداة تُنفَّذ ثم تُرفَض ADMIN_ACCESS_DENIED) — §6.143. سبقه D-168 §6.141 · D-169 §6.142 · D-165/D-166/D-167 §6.140).

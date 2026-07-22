@@ -19,6 +19,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,147 @@ logger = logging.getLogger(__name__)
 RESONANCE_THRESHOLD = 0.60  # Tuned for high-recall in V1 (Caveman-speak compatibility)
 CACHE_TTL = 3600  # 1 Hour
 MAX_MEMORY_SLOTS = 1000  # Max number of semantic patterns to hold
+
+# --- Arabic normalization (D-180 / ISS-133) ---
+# The V1 engine normalized with ``[^a-z0-9\s]`` which strips EVERY Arabic
+# character — on an Arabic BAC platform that made recall/memorize a silent
+# no-op. We now normalize Unicode-aware: strip tashkeel + tatweel, unify the
+# alef / teh-marbuta / alef-maqsura variants, then keep word chars via ``\w``
+# (Python ``re`` is Unicode-aware for ``str``) so Arabic, French and English
+# all tokenize correctly.
+_ARABIC_DIACRITICS = re.compile(r"[ً-ٰٟـ]")  # tashkeel + tatweel
+_ARABIC_NORMALIZE_MAP = str.maketrans(
+    {
+        "آ": "ا",  # آ → ا
+        "أ": "ا",  # أ → ا
+        "إ": "ا",  # إ → ا
+        "ٱ": "ا",  # ٱ → ا
+        "ة": "ه",  # ة → ه
+        "ى": "ي",  # ى → ي
+    }
+)
+_NON_WORD = re.compile(r"[^\w\s]", re.UNICODE)
+
+# Bilingual stop-word set. Kept modest so we never over-normalize distinct
+# questions into the same token bag.
+_STOP_WORDS = frozenset(
+    {
+        # English
+        "the",
+        "is",
+        "at",
+        "which",
+        "on",
+        "a",
+        "an",
+        "and",
+        "or",
+        "of",
+        "to",
+        # Arabic function words
+        "من",
+        "في",
+        "على",
+        "الى",
+        "إلى",
+        "عن",
+        "ما",
+        "هل",
+        "هذا",
+        "هذه",
+        "ذلك",
+        "التي",
+        "الذي",
+        "مع",
+        "كل",
+        "عند",
+        "او",
+        "أو",
+        "ثم",
+        "قد",
+        "كان",
+        "هو",
+        "هي",
+        "ان",
+        "أن",
+        "إن",
+    }
+)
+
+
+def _cache_counter(name: str, documentation: str, labelnames: tuple[str, ...] = ()) -> Any:
+    """Re-import-safe Prometheus ``Counter`` on the default REGISTRY (D-180).
+
+    Mirrors ``app/services/skills/base.py:skill_counter`` but is inlined here so
+    ``app/core`` stays self-contained (no core→services import) and never raises
+    when ``prometheus_client`` is absent (returns a no-op).
+    """
+    return _metric_factory("Counter", name, documentation, labelnames)
+
+
+def _cache_histogram(name: str, documentation: str, labelnames: tuple[str, ...] = ()) -> Any:
+    """Re-import-safe Prometheus ``Histogram`` on the default REGISTRY (D-180)."""
+    return _metric_factory("Histogram", name, documentation, labelnames)
+
+
+def _cache_gauge(name: str, documentation: str, labelnames: tuple[str, ...] = ()) -> Any:
+    """Re-import-safe Prometheus ``Gauge`` on the default REGISTRY (D-180)."""
+    return _metric_factory("Gauge", name, documentation, labelnames)
+
+
+class _NoopMetric:
+    """No-op metric used when prometheus is unavailable or registration fails."""
+
+    def labels(self, *args: Any, **kwargs: Any) -> "_NoopMetric":
+        return self
+
+    def inc(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+    def observe(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+    def set(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+def _metric_factory(kind: str, name: str, documentation: str, labelnames: tuple[str, ...]) -> Any:
+    try:
+        import prometheus_client
+        from prometheus_client import REGISTRY
+    except Exception:  # pragma: no cover - prometheus not installed
+        return _NoopMetric()
+    try:
+        cls = getattr(prometheus_client, kind)
+        return cls(name, documentation, list(labelnames))
+    except ValueError:
+        # Already registered (common under test re-import): reuse the collector.
+        mapping = getattr(REGISTRY, "_names_to_collectors", {})
+        for key in (name, f"{name}_total", name.removesuffix("_total")):
+            collector = mapping.get(key)
+            if collector is not None:
+                return collector
+        return _NoopMetric()
+
+
+# Module-level singletons (registered once; re-import safe).
+_RECALL_TOTAL = _cache_counter(
+    "cogniforge_cognitive_cache_recall_total",
+    "Cognitive cache recall attempts by result (hit|miss).",
+    ("result",),
+)
+_MEMORIZE_TOTAL = _cache_counter(
+    "cogniforge_cognitive_cache_memorize_total",
+    "Cognitive cache memorize (store) operations.",
+)
+_RESONANCE_SCORE = _cache_histogram(
+    "cogniforge_cognitive_cache_resonance_score",
+    "Best resonance score observed per recall attempt.",
+)
+_CACHE_SIZE = _cache_gauge(
+    "cogniforge_cognitive_cache_size",
+    "Number of semantic engrams currently held in the cognitive cache.",
+)
 
 
 @dataclass
@@ -58,18 +200,23 @@ class CognitiveResonanceEngine:
 
     def _normalize(self, text: str) -> set[str]:
         """
-        Reduces text to its atomic semantic tokens.
-        - Lowercase
-        - Remove punctuation
-        - Stop word filtering (basic)
+        Reduces text to its atomic semantic tokens — Arabic-first (D-180 / ISS-133).
+
+        Pipeline:
+        1. Lowercase (safe for Latin; a no-op for Arabic letters).
+        2. Strip Arabic tashkeel (diacritics) and tatweel.
+        3. Unify alef / teh-marbuta / alef-maqsura variants.
+        4. Drop punctuation while KEEPING word chars via ``\\w`` (Unicode-aware),
+           so Arabic/French/English all survive.
+        5. Bilingual stop-word filtering.
         """
         text = text.lower()
-        # Remove non-alphanumeric (keep spaces)
-        text = re.sub(r"[^a-z0-9\s]", "", text)
+        text = _ARABIC_DIACRITICS.sub("", text)
+        text = text.translate(_ARABIC_NORMALIZE_MAP)
+        # Keep letters/digits/underscore + whitespace; strip punctuation only.
+        text = _NON_WORD.sub(" ", text)
         tokens = set(text.split())
-        # Basic stop words (can be expanded)
-        stop_words = {"the", "is", "at", "which", "on", "a", "an", "and", "or", "of", "to"}
-        return tokens - stop_words
+        return tokens - _STOP_WORDS
 
     def _calculate_resonance(
         self, tokens_a: set[str], tokens_b: set[str], text_a: str, text_b: str
@@ -137,9 +284,11 @@ class CognitiveResonanceEngine:
         """
         input_tokens = self._normalize(prompt)
         if not input_tokens:
+            _RECALL_TOTAL.labels(result="miss").inc()
             return None
 
         best_engram, best_score = self._find_best_match(input_tokens, prompt, context_hash)
+        _RESONANCE_SCORE.observe(best_score)
 
         if best_score >= RESONANCE_THRESHOLD and best_engram:
             logger.info(
@@ -148,9 +297,11 @@ class CognitiveResonanceEngine:
             )
             best_engram.access_count += 1
             self._stats["hits"] += 1
+            _RECALL_TOTAL.labels(result="hit").inc()
             return best_engram.response_payload
 
         self._stats["misses"] += 1
+        _RECALL_TOTAL.labels(result="miss").inc()
         return None
 
     def memorize(self, prompt: str, context_hash: str, response: list[dict]) -> None:
@@ -168,9 +319,11 @@ class CognitiveResonanceEngine:
             response_payload=response,
         )
         self.memory.appendleft(engram)  # MRU (Most Recently Used) logic via appendleft + maxlen
+        _MEMORIZE_TOTAL.inc()
+        _CACHE_SIZE.set(len(self.memory))
         logger.debug(f"Memorized new pattern: '{prompt[:30]}...'")
 
-    def get_stats(self) -> None:
+    def get_stats(self) -> dict[str, int]:
         return {**self._stats, "memory_usage": len(self.memory), "capacity": MAX_MEMORY_SLOTS}
 
 

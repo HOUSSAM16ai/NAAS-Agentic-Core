@@ -56,4 +56,24 @@ def cognitive_turn_enabled() -> bool:
     return _flag("COGNITIVE_TURN_ENABLED", "COGNITIVE_TURN_ENABLED", True)
 
 
-__all__ = ["cognitive_turn_enabled", "semantic_tutor_enabled"]
+def cognitive_cache_resilience_enabled() -> bool:
+    """D-180: استرجاع الكاش المعرفي كطبقة صمود عند استنفاد سلسلة النماذج.
+
+    عند فشل/تقييد كل النماذج المجانية (429) عبر المرورين، يُستدعى
+    `CognitiveResonanceEngine.recall` قبل شبكة الأمان: إجابة سابقة عالية الرنين
+    بنفس السياق (`context_hash` مطابق) أفضل من رسالة «لا يجيب». افتراض **True**
+    (مقيَّد حصراً بمسار الاستنفاد — لا يلتفّ على المسار العادي أبداً). الرجوع
+    الفوري: `COGNITIVE_CACHE_RESILIENCE_ENABLED=0` (env يتقدّم على الإعدادات).
+    """
+    return _flag(
+        "COGNITIVE_CACHE_RESILIENCE_ENABLED",
+        "COGNITIVE_CACHE_RESILIENCE_ENABLED",
+        True,
+    )
+
+
+__all__ = [
+    "cognitive_cache_resilience_enabled",
+    "cognitive_turn_enabled",
+    "semantic_tutor_enabled",
+]

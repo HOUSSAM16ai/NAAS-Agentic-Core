@@ -170,7 +170,7 @@ class ActiveModels:
     GATEWAY_FALLBACK_2 = "google/gemma-4-31b-it:free"  # ✅ GOOD حياً (2026-07-14) — عربي+LaTeX
     GATEWAY_FALLBACK_3 = "nvidia/nemotron-3-nano-30b-a3b:free"  # سريع؛ محميّ بـ content==0 guard
     GATEWAY_FALLBACK_4 = "openai/gpt-oss-120b:free"  # ميت 404 (2026-07-14) — فتحة تعافٍ آلي
-    GATEWAY_FALLBACK_5 = "nvidia/nemotron-nano-9b-v2:free"  # ملاذ أخير؛ محميّ بالحُرّاس
+    GATEWAY_FALLBACK_5 = "nvidia/nemotron-nano-9b-v2:free"  # ملاذ أخير؛ محميّ بالحُرّاس (D-177: FIRST_TOKEN_TIMEOUT يحدّ تعليقه 62s؛ nemotron-3-super-120b يبقى محظوراً ISS-107 — تسرّب إنجليزي)
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY
     TIER_SMART = PRIMARY
@@ -205,14 +205,28 @@ class AIConfig:
         return get_settings().OPENROUTER_API_KEY
 
     def get_fallback_models(self) -> list[str]:
-        """Get list of fallback models."""
-        return [
+        """Get list of fallback models.
+
+        D-177: the five pinned constants stay first (safety order, ISS-079). Any
+        models named in ``OPENROUTER_EXTRA_MODELS`` (comma-separated) are appended
+        as an *additional* tail — this is the zero-code path to plug a paid /
+        higher-tier OpenRouter model (which accumulates its own rate limits) so
+        the chain keeps answering even when the whole free tier is 429. The
+        env-extras are runtime-only and never alter the parity-gated literals.
+        """
+        chain = [
             self.gateway_fallback_1,
             self.gateway_fallback_2,
             self.gateway_fallback_3,
             self.gateway_fallback_4,
             self.gateway_fallback_5,
         ]
+        extra = os.getenv("OPENROUTER_EXTRA_MODELS", "").strip()
+        if extra:
+            for model in (m.strip() for m in extra.split(",")):
+                if model and model not in chain and model != self.primary_model:
+                    chain.append(model)
+        return chain
 
     def to_dict(self) -> dict:
         """Export configuration as dictionary."""

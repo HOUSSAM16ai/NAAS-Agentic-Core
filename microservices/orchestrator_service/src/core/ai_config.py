@@ -130,7 +130,7 @@ class ActiveModels:
     GATEWAY_FALLBACK_2 = "google/gemma-4-31b-it:free"  # GOOD حياً 2026-07-14 — عربي+LaTeX
     GATEWAY_FALLBACK_3 = AvailableModels.NEMOTRON_3_NANO  # works on short prompts (guarded)
     GATEWAY_FALLBACK_4 = AvailableModels.GPT_OSS_120B_FREE  # ميت 404 — فتحة تعافٍ آلي
-    GATEWAY_FALLBACK_5 = "nvidia/nemotron-nano-9b-v2:free"  # ملاذ أخير؛ محميّ بالحُرّاس
+    GATEWAY_FALLBACK_5 = "nvidia/nemotron-nano-9b-v2:free"  # ملاذ أخير؛ محميّ بالحُرّاس (D-177: FIRST_TOKEN_TIMEOUT يحدّ تعليقه 62s؛ nemotron-3-super-120b يبقى محظوراً ISS-107)
     TIER_NANO = PRIMARY
     TIER_FAST = PRIMARY
     TIER_SMART = PRIMARY

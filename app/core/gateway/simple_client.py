@@ -4,9 +4,11 @@
 ينفّذ بروتوكول LLMClient مع حقن تبعيات واضح وقابل للاختبار.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
+import time
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
@@ -15,16 +17,66 @@ import httpx
 from app.core.ai_config import get_ai_config, get_openrouter_site_url
 from app.core.cognitive_cache import CognitiveResonanceEngine, get_cognitive_engine
 from app.core.gateway.connection import BASE_TIMEOUT, ConnectionManager
+from app.core.gateway.exceptions import AIRateLimitError
 from app.core.interfaces.llm import LLMClient
 from app.core.types import JSONDict
 from app.services.llm.safety_net import SafetyNetService
 
 logger = logging.getLogger(__name__)
 
+# D-177 — "answer every question" under free-tier rate limits.
+# Soft deadline for the FIRST content chunk from a model. A model that streams
+# only reasoning/keepalives (e.g. nvidia/nemotron-nano-9b measured at 62s,
+# content=0) must not hold the turn hostage — abandon it and fail over fast.
+# Set above the safety-pinned gemma models' legitimate first-token latency
+# (~12-18s live) so a slow-but-working model is never wrongly abandoned, yet
+# well below BASE_TIMEOUT (45s) so a truly dead model fails over quickly.
+FIRST_TOKEN_TIMEOUT = 30.0
+# Max wall-clock to wait before the bounded SECOND pass over models that returned
+# 429 on the first pass. Kept short so interactive latency stays acceptable even
+# when the provider advertises a longer Retry-After.
+RATE_LIMIT_BACKOFF_MAX = 5.0
+
+
+def _parse_retry_after(response: httpx.Response) -> float | None:
+    """Best-effort ``retry_after`` (seconds) from a 429 response.
+
+    OpenRouter advertises the hint either in the ``Retry-After`` header or in the
+    JSON body under ``error.metadata.retry_after_seconds`` — try both, never raise.
+    """
+    header = response.headers.get("Retry-After")
+    if header:
+        try:
+            return float(header)
+        except ValueError:
+            pass
+    try:
+        meta = response.json().get("error", {}).get("metadata", {})
+        raw = meta.get("retry_after_seconds") or meta.get("retry_after_seconds_raw")
+        if raw is not None:
+            return float(raw)
+    except (ValueError, json.JSONDecodeError, AttributeError):
+        pass
+    return None
+
 
 @dataclass
 class SimpleResponse:
     content: str
+
+
+@dataclass
+class _ModelOutcome:
+    """Terminal sentinel yielded by ``_attempt_model`` after a model's chunks.
+
+    ``emitted_content`` is True only if at least one real ``delta.content`` chunk
+    reached the client; ``error`` classifies the failure (notably
+    ``AIRateLimitError`` for 429) so the caller can schedule a second pass.
+    """
+
+    emitted_content: bool
+    error: Exception | None
+    chunks: list[JSONDict] | None = None
 
 
 class OpenRouterClient(LLMClient):
@@ -95,36 +147,105 @@ class OpenRouterClient(LLMClient):
         # 2. Prepare Model List
         models_to_try = [self.primary_model, *self.fallback_models]
 
-        # 3. Try each model
+        # 3. Try each model.
+        # D-177: a single linear pass drops to the safety net ("لا يجيب") whenever
+        # every free model is *transiently* 429 at the same instant — which the
+        # live probe (2026-07-22) showed is common. We instead run a bounded
+        # SECOND pass over just the rate-limited models after a short backoff, so
+        # a momentary global rate-limit self-heals before we ever give up.
         client = ConnectionManager.get_client()
-        full_response_chunks: list[JSONDict] = []
-        success = False
+
+        rate_limited: list[str] = []  # models that returned 429 on pass 1
+        max_retry_after = 0.0
+
+        def _memorize(outcome: _ModelOutcome) -> None:
+            # cognitive_engine is a stub that may be None (CLAUDE.md pitfall) —
+            # guard is mandatory; without it every successful turn raised.
+            if last_message.get("role") == "user" and self.cognitive_engine is not None:
+                self.cognitive_engine.memorize(prompt, context_hash, outcome.chunks or [])
 
         for model_id in models_to_try:
-            try:
-                logger.info(f"Attempting model: {model_id}")
-                async for chunk in self._stream_model(
-                    client, model_id, messages, max_tokens=max_tokens
-                ):
-                    full_response_chunks.append(chunk)
-                    yield chunk
-
-                success = True
-                # Memorize success
-                if last_message.get("role") == "user":
-                    self.cognitive_engine.memorize(prompt, context_hash, full_response_chunks)
+            outcome: _ModelOutcome | None = None
+            async for item in self._attempt_model(client, model_id, messages, max_tokens):
+                if isinstance(item, _ModelOutcome):
+                    outcome = item
+                    break
+                yield item
+            if outcome and outcome.emitted_content:
+                _memorize(outcome)
                 return
+            if outcome and isinstance(outcome.error, AIRateLimitError):
+                rate_limited.append(model_id)
+                if outcome.error.retry_after:
+                    max_retry_after = max(max_retry_after, outcome.error.retry_after)
 
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPStatusError, ValueError) as e:
-                logger.warning(f"Model {model_id} failed: {e}. Trying next...")
-            except Exception as e:
-                logger.error(f"Unexpected error with {model_id}: {e}", exc_info=True)
+        # 3b. Bounded second pass — retry ONLY the rate-limited models.
+        if rate_limited:
+            backoff = min(max_retry_after or 1.0, RATE_LIMIT_BACKOFF_MAX)
+            logger.warning(
+                "all_models_pass1_failed rate_limited=%d backoff=%.1fs — second pass",
+                len(rate_limited),
+                backoff,
+            )
+            await asyncio.sleep(backoff)
+            for model_id in rate_limited:
+                outcome = None
+                async for item in self._attempt_model(client, model_id, messages, max_tokens):
+                    if isinstance(item, _ModelOutcome):
+                        outcome = item
+                        break
+                    yield item
+                if outcome and outcome.emitted_content:
+                    _memorize(outcome)
+                    return
 
-        # 4. Safety Net (All models failed)
-        if not success:
-            logger.critical("All models exhausted. Engaging Safety Net.")
-            async for chunk in self.safety_net.stream_safety_response():
+        # 4. Safety Net (all models failed across both passes).
+        logger.critical("All models exhausted. Engaging Safety Net.")
+        async for chunk in self.safety_net.stream_safety_response():
+            yield chunk
+
+    async def _attempt_model(
+        self,
+        client: httpx.AsyncClient,
+        model_id: str,
+        messages: list[JSONDict],
+        max_tokens: int | None,
+    ) -> "AsyncGenerator[JSONDict | _ModelOutcome, None]":
+        """Stream one model, yielding its chunks then a terminal ``_ModelOutcome``.
+
+        Isolating a single model attempt keeps ``stream_chat`` readable and lets
+        both the first and second pass share identical failover semantics. The
+        outcome carries whether any real content was emitted and, on failure, the
+        exception (so the caller can classify 429 vs hard-fail).
+        """
+        emitted = False
+        collected: list[JSONDict] = []
+        try:
+            logger.info("Attempting model: %s", model_id)
+            async for chunk in self._stream_model(
+                client, model_id, messages, max_tokens=max_tokens
+            ):
+                collected.append(chunk)
+                choices = chunk.get("choices", [])  # type: ignore[union-attr]
+                if choices and (choices[0].get("delta", {}) or {}).get("content"):
+                    emitted = True
                 yield chunk
+            yield _ModelOutcome(emitted_content=emitted, error=None, chunks=collected)
+        except AIRateLimitError as e:
+            logger.warning("model_rate_limited model=%s retry_after=%s", model_id, e.retry_after)
+            yield _ModelOutcome(emitted_content=emitted, error=e, chunks=collected)
+        except (
+            httpx.ConnectError,
+            httpx.ReadTimeout,
+            httpx.HTTPStatusError,
+            ValueError,
+            TimeoutError,
+        ) as e:
+            logger.warning("Model %s failed: %s. Trying next...", model_id, e)
+            yield _ModelOutcome(emitted_content=emitted, error=e, chunks=collected)
+        except Exception as e:  # never let one model kill the turn
+            logger.error("Unexpected error with %s: %s", model_id, e, exc_info=True)
+            yield _ModelOutcome(emitted_content=emitted, error=e, chunks=collected)
 
     async def _stream_model(
         self,
@@ -139,9 +260,11 @@ class OpenRouterClient(LLMClient):
         ISS-STREAM-004: يُضيف asyncio.sleep(0) بعد كل chunk لإعطاء
         event loop فرصة معالجة أحداث أخرى — يمنع machine-gun effect
         حيث تصل 100+ chunk في أقل من 10ms مما يُجمِّد الواجهة.
-        """
-        import asyncio
 
+        D-177: 429 يُصنَّف كـ AIRateLimitError (مع retry_after) ليُشغِّل المرور
+        الثاني؛ ونحرس زمن أول محتوى (FIRST_TOKEN_TIMEOUT) حتى لا يُجمِّد نموذجٌ
+        بطيء/فارغ الدور (nvidia/nemotron-nano-9b قِيس 62s بمحتوى=0).
+        """
         payload: dict[str, object] = {
             "model": model_id,
             "messages": messages,
@@ -151,6 +274,7 @@ class OpenRouterClient(LLMClient):
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
 
+        started = time.monotonic()
         try:
             async with client.stream(
                 "POST",
@@ -161,6 +285,11 @@ class OpenRouterClient(LLMClient):
             ) as response:
                 if response.status_code != 200:
                     await response.aread()
+                    if response.status_code == 429:
+                        raise AIRateLimitError(
+                            f"rate_limited model={model_id}",
+                            retry_after=_parse_retry_after(response),
+                        )
                     raise httpx.HTTPStatusError(
                         f"Status {response.status_code}",
                         request=response.request,
@@ -176,6 +305,13 @@ class OpenRouterClient(LLMClient):
                 content_chunks = 0
                 reasoning_chunks = 0
                 async for line in response.aiter_lines():
+                    # D-177: abandon a model that has not produced ANY real content
+                    # within FIRST_TOKEN_TIMEOUT so a slow/empty model fails over
+                    # fast instead of holding the turn for the full BASE_TIMEOUT.
+                    if content_chunks == 0 and (time.monotonic() - started) > FIRST_TOKEN_TIMEOUT:
+                        raise TimeoutError(
+                            f"first_token_timeout model={model_id} after={FIRST_TOKEN_TIMEOUT:.0f}s"
+                        )
                     if line.startswith("data: "):
                         data_str = line[6:]
                         if data_str.strip() == "[DONE]":

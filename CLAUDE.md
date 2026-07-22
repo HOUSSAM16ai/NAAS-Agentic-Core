@@ -925,6 +925,16 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
   (content=None) محظورة كـ PRIMARY. system prompts < 1500 حرف؛ box-drawing ممنوع.
 - **حُرّاس المخرَج**: `arabic_stream_guard` (عربي فقط على البثّ)؛ `content_integrity`/`response_sanitizer`
   (حذف garbage لاتيني/CJK/⟦⟧/تعليمات مُسرَّبة)؛ `output_firewall`+`topic_lock` (V46) — كلها fail-open.
+- **صمود الـ rate-limit — «يجيب على كل سؤال» (D-177 — 2026-07-22)**: عند 429 من الطبقة المجانية،
+  `SimpleAIClient.stream_chat` لا يسقط فوراً إلى `safety_net`. البوّابة تُصنِّف 429 كـ `AIRateLimitError`
+  (مع `retry_after`)، وتُشغِّل **مروراً ثانياً محدوداً** على النماذج المحدودة فقط بعد backoff قصير
+  (`RATE_LIMIT_BACKOFF_MAX=5s`) — فالحدّ اللحظي العام يتعافى قبل الاستسلام. حارس **زمن أول محتوى**
+  (`FIRST_TOKEN_TIMEOUT=30s`) يتخلّى عن نموذج بطيء/فارغ (قِيس `nemotron-nano-9b` 62s بمحتوى=0) بدل
+  تجميد الدور. `cognitive_engine.memorize` محروس بـ None (بند CLAUDE.md). السلسلة المُثبَّتة أمنياً
+  **لا تتغيّر** (ISS-107 يُبقي `nemotron-3-super-120b` محظوراً — تسرّب إنجليزي). جاهزية مفتاح مدفوع:
+  `OPENROUTER_EXTRA_MODELS` (CSV) يُلحِق نماذج إضافية بذيل السلسلة runtime بلا مسّ الحرفيات المحروسة
+  بالتكافؤ. مُتحقَّق حياً E2E (postgres محلي + WS): سؤال رياضي يفشل فيه PRIMARY (reasoning-only) ثم
+  يجيب gemma بعربي+LaTeX سليم، والرسالة تُحفَظ. الحارس مشترك عبر `get_ai_client()` فيفيد **كل** وكيل ومهارة.
 
 ### ط) API-first + المهارات (D-100 · D-173 Stage 4/5 · D-174)
 - **كل خدمة (11/11) لها عقد OpenAPI** يغطّي مساراتها الفعلية، مفروض ببوّابة **دلالية**

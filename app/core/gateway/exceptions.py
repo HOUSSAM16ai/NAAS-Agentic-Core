@@ -25,7 +25,16 @@ class AIAllModelsExhaustedError(AIError):
 
 
 class AIRateLimitError(AIConnectionError):
-    """Specific error for rate limits (429) to trigger distinct handling."""
+    """Specific error for rate limits (429) to trigger distinct handling.
+
+    Carries the provider-advertised ``retry_after`` (seconds) so the fallback
+    loop can schedule a bounded second pass over rate-limited models instead of
+    dropping straight to the safety net (D-177 — "answer every question").
+    """
+
+    def __init__(self, message: str = "", retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 class StreamInterruptedError(AIError):

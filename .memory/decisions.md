@@ -5,6 +5,37 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-177 · صمود الـ Rate-Limit — «يجيب على كل سؤال» (Answer-Every-Question Resilience) (2026-07-22)
+**السياق:** طلب المالك ضمان أن النظام «يجيب على كل الأسئلة مهما كانت». تجريب حيّ E2E (postgres محلي
+لأن منافذ Supabase 5432/6543 محجوبة في الـsandbox — جسر HTTPS يعمل؛ WS بـJWT مستخدم حقيقي) كشف
+الحاجز الحقيقي: **الطبقة المجانية على OpenRouter تُرجع 429**. بروب حيّ 2026-07-22 على السلسلة السداسية:
+`gpt-oss-20b(PRIMARY)=429` · `gemma-4-26b=200 لكن 12.4s` · `gemma-4-31b=429` · `nemotron-3-nano-30b=200/0.7s`
+· `gpt-oss-120b=404` · `nemotron-nano-9b=200 لكن 62.5s بمحتوى=0`. الـgateway القديم (`SimpleAIClient.stream_chat`)
+كان يمرّ خطياً مرّة واحدة ثم يسقط إلى `safety_net` (رد معلَّب = «لا يجيب») عند تزامن 429 على الكل،
+ونموذجٌ فارغ (nemotron-nano-9b) يُجمِّد الدور 62s.
+
+**القرار (تصليب جراحي في `app/core/gateway/simple_client.py` — يفيد كل وكيل/مهارة عبر `get_ai_client()`):**
+- **تصنيف 429**: `_stream_model` يرفع `AIRateLimitError` (مع `retry_after` مُستخرَج من الرأس أو
+  `metadata.retry_after_seconds`) بدل `HTTPStatusError` عام. (`exceptions.py`: أضيف `retry_after` للاستثناء.)
+- **مرور ثانٍ محدود**: عند فشل كل المرور الأول والبعض 429، backoff قصير (`RATE_LIMIT_BACKOFF_MAX=5s`)
+  ثم إعادة المحاولة على **النماذج المحدودة فقط** — الحدّ اللحظي العام يتعافى قبل الاستسلام. `safety_net`
+  لا يُستدعى إلا بعد استنفاد المرورين.
+- **حارس زمن أول محتوى** (`FIRST_TOKEN_TIMEOUT=30s`): نموذج لم يُنتج أي `delta.content` خلال 30s
+  يُهجَر ويُفشَل عليه (يحدّ تعليق nemotron-nano-9b من 62s؛ فوق زمن gemma الشرعي ~12-18s، تحت `BASE_TIMEOUT=45s`).
+- **حارس None على `cognitive_engine.memorize`** (بند CLAUDE.md — كان يُستدعى بلا حارس).
+- **جاهزية مفتاح مدفوع/BYOK**: `get_fallback_models()` يُلحِق `OPENROUTER_EXTRA_MODELS` (CSV) بذيل السلسلة
+  runtime — مسار صفر-كود لإضافة نموذج مدفوع (يُراكم حدوده) بلا مسّ الحرفيات المحروسة بالتكافؤ.
+
+**قاعدة السلامة (احترام قرار سابق):** السلسلة السداسية المُثبَّتة **لا تتغيّر**. جُرِّب `nemotron-3-super-120b`
+حياً (عربي+LaTeX جيّد، 5.5s) كبديل لـFB5، لكن `tests/services/test_iss107_model_chain.py` يحظره صراحةً
+(ISS-107 — تسرّب إنجليزي في content). البنشمارك أحادي لا يُبطِل كارثة موثّقة → **رُوجِع** (الحرفيات كما هي؛
+التصليب كلّه في الـgateway). «Unknown is better than fake certainty».
+
+**التحقق:** 7 اختبارات جديدة `tests/core/test_d177_rate_limit_resilience.py` (مرور ثانٍ يتعافى · safety-net
+بعد المرورين فقط · أول نموذج عامل يفوز · فشل صلب لا يُعاد · parse retry-after) + 73 اختبار مسّت الوحدات
+المتغيّرة خضراء + parity/iss079/iss107/legacy-invariants خضراء. حيّ E2E: PRIMARY فشل (reasoning-only) →
+gemma أجاب بعربي+LaTeX سليم → حُفِظ في `customer_messages`.
+
 ## D-176 · التجريد الصادق المفروض (Superhuman Abstraction — Enforce + Honesty Gate) (2026-07-21)
 **السياق:** طلب المالك ضمان أن المشروع يطبّق تجريداً بمستوى الأنظمة العملاقة. تدقيق بوكيلين
 (محكوم بـ§6.6: وجود الكود ≠ استعماله) كشف أن **البنية التجريدية متطوّرة أصلاً** (kernel سداسي

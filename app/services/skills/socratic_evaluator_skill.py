@@ -41,6 +41,7 @@ import time
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import SOCRATIC_EVALUATOR_DOCTRINE_VERSION
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
@@ -229,7 +230,7 @@ except Exception:  # pragma: no cover
 _DEFAULT_ENCOURAGEMENT = "أحسنت — استنتاجك في محله. لنُكمل معاً خطوةً بخطوة."
 
 
-class SocraticEvaluatorSkill:
+class SocraticEvaluatorSkill(BaseSkill):
     """
     Skill الإصغاء النشط (الطبقة 1 — D-130).
 
@@ -240,6 +241,12 @@ class SocraticEvaluatorSkill:
     """
 
     _skill_name: str = "socratic_evaluator"
+    name = "socratic_evaluator"
+
+    def run(self, payload):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`evaluate` (async)."""
+        return self.evaluate(payload)
+
     doctrine_version: str = SOCRATIC_EVALUATOR_DOCTRINE_VERSION
     _LLM_TIMEOUT_S: float = 12.0
 

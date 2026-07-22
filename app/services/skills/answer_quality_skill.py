@@ -36,6 +36,7 @@ from typing import ClassVar, Literal
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import (
     EXPLANATION_DOCTRINE,
     MODEL_ANSWER_RELIANCE_RULES,
@@ -279,7 +280,7 @@ def _build_improvement_header(issues: list[QualityIssue], answer: str) -> str:
 # ── AnswerQualitySkill ────────────────────────────────────────────────────────
 
 
-class AnswerQualitySkill:
+class AnswerQualitySkill(BaseSkill):
     """
     Skill تقييم جودة الإجابة وتحسينها وفق الـ doctrines الرسمية.
 
@@ -300,6 +301,11 @@ class AnswerQualitySkill:
     # نسخة الـ Skill — تُستخدم في Prometheus و CI gate
     VERSION: ClassVar[str] = "1.0.0"
     SKILL_NAME: ClassVar[str] = "answer_quality"
+    name: ClassVar[str] = "answer_quality"
+
+    def run(self, inp: AnswerQualityInput):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`evaluate`."""
+        return self.evaluate(inp)
 
     def evaluate(self, inp: AnswerQualityInput) -> AnswerQualityOutput | AnswerQualityFailure:
         """

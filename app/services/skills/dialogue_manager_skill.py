@@ -33,6 +33,7 @@ import re
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import DIALOGUE_MANAGER_DOCTRINE_VERSION
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
@@ -154,7 +155,7 @@ except Exception:  # pragma: no cover
         pass
 
 
-class DialogueManagerSkill:
+class DialogueManagerSkill(BaseSkill):
     """مدير الحوار — المُنفّذ لقرارات السياسة التربوية (D-142 Phase 2 / Phase 3).
 
     عقد دائم (لا يُكسر بدون ADR):
@@ -164,6 +165,12 @@ class DialogueManagerSkill:
     """
 
     _skill_name: str = "dialogue_manager"
+    name = "dialogue_manager"
+
+    def run(self, payload):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`decide`."""
+        return self.decide(payload)
+
     doctrine_version: str = DIALOGUE_MANAGER_DOCTRINE_VERSION
 
     def decide(self, payload: DialogueInput) -> DialogueDecision:

@@ -31,6 +31,7 @@ import contextlib
 from dataclasses import dataclass
 from typing import Literal
 
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import UNDERSTANDING_STATE_DOCTRINE_VERSION
 
 KCState = Literal["not_addressed", "explained", "understood"]
@@ -122,7 +123,7 @@ except Exception:  # pragma: no cover
         pass
 
 
-class UnderstandingStateSkill:
+class UnderstandingStateSkill(BaseSkill):
     """
     محرّك حالة الفهم (Learning State — D-135).
 
@@ -136,6 +137,12 @@ class UnderstandingStateSkill:
     """
 
     _skill_name: str = "understanding_state"
+    name = "understanding_state"
+
+    def run(self, *args, **kwargs):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`decide`."""
+        return self.decide(*args, **kwargs)
+
     doctrine_version: str = UNDERSTANDING_STATE_DOCTRINE_VERSION
     _MAX_LEVEL: int = 3
 

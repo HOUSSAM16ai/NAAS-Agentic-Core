@@ -36,6 +36,7 @@ from typing import Literal
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import CONTENT_INTEGRITY_DOCTRINE_VERSION
 
 logger = logging.getLogger("cogniforge.skills.content_integrity")
@@ -425,7 +426,7 @@ def sanitize_final_text(text: str, support_level: int | None = None) -> str:
         return cleaned
 
 
-class ContentIntegritySkill:
+class ContentIntegritySkill(BaseSkill):
     """واجهة Skill رسمية للـ registry + القياس (D-100).
 
     عقد دائم (لا يُكسر بدون ADR):
@@ -439,6 +440,11 @@ class ContentIntegritySkill:
 
     VERSION = DOCTRINE_VERSION
     SKILL_NAME = "content_integrity"
+    name = "content_integrity"
+
+    def run(self, payload: ContentIntegrityInput | str) -> ContentIntegrityOutput:
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`check`."""
+        return self.check(payload)
 
     def check(self, payload: ContentIntegrityInput | str) -> ContentIntegrityOutput:
         t0 = time.perf_counter()

@@ -16,6 +16,7 @@ CLAUDE.md §0.5: «كل قدرة ذكاء اصطناعي يجب أن تكون Sk
 
 from __future__ import annotations
 
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import MICRO_SIMULATION_DOCTRINE_VERSION
 
 #: قيد صارم على الطول (نقد المالك #2): محاكاة مصغّرة لا «شرح جديد كامل».
@@ -108,7 +109,7 @@ APPLY_STEPS: dict[str, str] = {
 }
 
 
-class MicroSimulationSkill:
+class MicroSimulationSkill(BaseSkill):
     """
     خادم المحاكيات المصغّرة الحتمي (D-138 — خادم محتوى L3).
 
@@ -119,6 +120,12 @@ class MicroSimulationSkill:
     """
 
     _skill_name: str = "micro_simulation"
+    name = "micro_simulation"
+
+    def run(self, concept_id):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`get_micro_simulation`."""
+        return self.get_micro_simulation(concept_id)
+
     doctrine_version: str = MICRO_SIMULATION_DOCTRINE_VERSION
 
     def get_micro_simulation(self, concept_id: str) -> str | None:

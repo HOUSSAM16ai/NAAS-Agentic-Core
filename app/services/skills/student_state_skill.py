@@ -38,6 +38,7 @@ from typing import Literal
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import STUDENT_STATE_DOCTRINE_VERSION
 
 #: نيّات الطالب — ماذا يريد (لا «ما المفهوم»).
@@ -274,7 +275,7 @@ def _assess_frustration(question: str, history: list[dict[str, str]] | None) -> 
     return "low"
 
 
-class StudentStateSkill:
+class StudentStateSkill(BaseSkill):
     """
     قراءة حالة الطالب كإشارة قرار (D-133).
 
@@ -286,6 +287,12 @@ class StudentStateSkill:
     """
 
     _skill_name: str = "student_state"
+    name = "student_state"
+
+    def run(self, payload):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`read`."""
+        return self.read(payload)
+
     doctrine_version: str = STUDENT_STATE_DOCTRINE_VERSION
     _LLM_TIMEOUT_S: float = 8.0
 

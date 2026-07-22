@@ -49,6 +49,7 @@ import time
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import BKT_COGNITIVE_DOCTRINE_VERSION
 
 # ── معاملات BKT الافتراضية ───────────────────────────────────────────────────────
@@ -535,7 +536,7 @@ class BKTEvaluation(RobustBaseModel):
 
 
 # ── Skill ─────────────────────────────────────────────────────────────────────────
-class BKTEngine:
+class BKTEngine(BaseSkill):
     """
     Skill حتمي لتتبّع المعرفة البايزي.
 
@@ -548,6 +549,12 @@ class BKTEngine:
     """
 
     _skill_name: str = "bkt"
+    name = "bkt"
+
+    def run(self, payload):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`evaluate`."""
+        return self.evaluate(payload)
+
     #: إصدار الـ doctrine الذي يلتزم به هذا الـ Skill (D-074). يُربط بـ
     #: doctrine.BKT_COGNITIVE_DOCTRINE_VERSION — single source of truth.
     doctrine_version: str = BKT_COGNITIVE_DOCTRINE_VERSION

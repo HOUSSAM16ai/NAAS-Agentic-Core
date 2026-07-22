@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import SEMANTIC_PROPERTY_DOCTRINE_VERSION
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
@@ -676,7 +677,7 @@ _EXERCISE_DUMP_MARKERS: tuple[str, ...] = (
 )
 
 
-class SemanticPropertySkill:
+class SemanticPropertySkill(BaseSkill):
     """
     الطبقة الدلالية + Misconception Graph (الطبقة 2 — D-131).
 
@@ -687,6 +688,12 @@ class SemanticPropertySkill:
     """
 
     _skill_name: str = "semantic_property"
+    name = "semantic_property"
+
+    def run(self, question):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`interpret`."""
+        return self.interpret(question)
+
     doctrine_version: str = SEMANTIC_PROPERTY_DOCTRINE_VERSION
     _LLM_TIMEOUT_S: float = 8.0
 

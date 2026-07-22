@@ -25,6 +25,7 @@ from typing import Literal
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import LEARNING_PATH_DOCTRINE_VERSION
 
 logger = logging.getLogger("cogniforge.skills.learning_path")
@@ -120,7 +121,7 @@ def _record_metric(status: str, difficulty: str, duration_s: float) -> None:
 # ── الـ Skill ──────────────────────────────────────────────────────────────────
 
 
-class LearningPathSkill:
+class LearningPathSkill(BaseSkill):
     """محرّك المسار التعلّمي الحتمي.
 
     عقد دائم (لا يُكسر بدون ADR):
@@ -132,6 +133,11 @@ class LearningPathSkill:
 
     VERSION = DOCTRINE_VERSION
     SKILL_NAME = "learning_path"
+    name = "learning_path"
+
+    def run(self, payload: LearningPathInput) -> LearningPathOutput:
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`derive`."""
+        return self.derive(payload)
 
     def derive(self, payload: LearningPathInput) -> LearningPathOutput:
         t0 = time.perf_counter()

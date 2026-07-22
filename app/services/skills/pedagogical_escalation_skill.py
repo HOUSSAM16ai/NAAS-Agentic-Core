@@ -28,6 +28,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
@@ -85,7 +86,7 @@ class EscalationDecision(RobustBaseModel):
     rationale: str = ""
 
 
-class PedagogicalEscalationSkill:
+class PedagogicalEscalationSkill(BaseSkill):
     """
     المصفوفة التصعيدية التكيّفية (D-138).
 
@@ -98,6 +99,12 @@ class PedagogicalEscalationSkill:
     """
 
     _skill_name: str = "pedagogical_escalation"
+    name = "pedagogical_escalation"
+
+    def run(self, payload):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`decide`."""
+        return self.decide(payload)
+
     doctrine_version: str = PEDAGOGICAL_ESCALATION_DOCTRINE_VERSION
 
     # ── إشارات الدخل ──────────────────────────────────────────────────────────

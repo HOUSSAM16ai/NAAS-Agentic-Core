@@ -26,6 +26,7 @@ import time
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import (
     ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION,
 )
@@ -199,11 +200,15 @@ def _classify_support_level(mastery: float | None, cognitive_load: str) -> int:
     return level
 
 
-class AdaptivePedagogySkill:
+class AdaptivePedagogySkill(BaseSkill):
     """Skill رسمي (§0.5): مسؤولية واحدة — تحويل صورة المتعلم إلى توجيه تدريسي."""
 
     name = "adaptive_pedagogy"
     doctrine_version = ADAPTIVE_PEDAGOGY_DOCTRINE_VERSION
+
+    def run(self, payload: PedagogyInput) -> PedagogyDirective:
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`derive`."""
+        return self.derive(payload)
 
     def derive(self, payload: PedagogyInput) -> PedagogyDirective:
         """يشتق التوجيه التربوي حتمياً — لا يرفع أبداً نحو المسار الحي."""

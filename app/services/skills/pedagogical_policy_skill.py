@@ -34,6 +34,7 @@ from typing import Literal
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import PEDAGOGICAL_POLICY_DOCTRINE_VERSION
 
 #: ميزانية الأسئلة السقراطية لكل مسار — بعدها ⇒ حلّ رمزي (لا استجواب لا نهائي).
@@ -412,7 +413,7 @@ except Exception:  # pragma: no cover
         pass
 
 
-class PedagogicalPolicySkill:
+class PedagogicalPolicySkill(BaseSkill):
     """
     Skill حتمي لاختيار التدخّل التربوي (الطبقة 4 — D-129/D-130).
 
@@ -425,6 +426,12 @@ class PedagogicalPolicySkill:
     """
 
     _skill_name: str = "pedagogical_policy"
+    name = "pedagogical_policy"
+
+    def run(self, payload):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`decide`."""
+        return self.decide(payload)
+
     doctrine_version: str = PEDAGOGICAL_POLICY_DOCTRINE_VERSION
 
     def decide(self, payload: PolicyInput) -> PolicyOutput:

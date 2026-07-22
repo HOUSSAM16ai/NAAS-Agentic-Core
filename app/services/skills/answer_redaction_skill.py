@@ -27,6 +27,7 @@ import time
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import (
     ANSWER_REDACTION_DOCTRINE_VERSION,
     WORKED_EXAMPLE_CLOSE,
@@ -279,7 +280,7 @@ def _record_metric(status: str, redactions: int, duration_s: float) -> None:
         obs.record_metric("skill.answer_redaction.duration_seconds", duration_s)
 
 
-class AnswerRedactionSkill:
+class AnswerRedactionSkill(BaseSkill):
     """واجهة Skill رسمية للـ registry + القياس (D-113).
 
     عقد دائم (لا يُكسر بدون ADR):
@@ -292,6 +293,11 @@ class AnswerRedactionSkill:
 
     VERSION = DOCTRINE_VERSION
     SKILL_NAME = "answer_redaction"
+    name = "answer_redaction"
+
+    def run(self, payload: AnswerRedactionInput | str) -> AnswerRedactionOutput:
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`redact`."""
+        return self.redact(payload)
 
     def redact(self, payload: AnswerRedactionInput | str) -> AnswerRedactionOutput:
         t0 = time.perf_counter()

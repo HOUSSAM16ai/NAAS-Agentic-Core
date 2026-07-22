@@ -4799,3 +4799,26 @@ Real boot defects found+fixed while running it: frontend node:18→20; planning
 Open R0.1 findings (documented, out of "Close R0.1+R0.2"): research-agent imports
 sentence_transformers not in requirements; conversation-service main:app module path;
 memory/user/observability torch-heavy images.
+
+## ISS-133 (2026-07-22) — الكاش المعرفي أعمى عن العربية + `recall()` زومبي — ✅ مُغلَق (D-180)
+
+**العَرَض:** «المحرك الدلالي» (`CognitiveResonanceEngine`, `app/core/cognitive_cache.py`) لا
+يُقدّم أي فائدة لمستخدمي المنصّة العربية، ونقطة استنفاد النماذج تسقط دائماً إلى شبكة الأمان
+(«لا يجيب») حتى حين توجد إجابة سابقة مطابقة.
+
+**السبب الجذري (ثلاثي):**
+1. `_normalize` استخدم `re.sub(r"[^a-z0-9\s]", "", text)` → يمسح **كل** حرف عربي → الرموز
+   فارغة دائماً → `recall`/`memorize` لا-عملية صامتة.
+2. `recall()` بلا أي مستدعٍ في `app/` (زومبي يكتب ولا يقرأ).
+3. توثيق كاذب ادّعى أن `get_cognitive_engine()` يُرجع `None` (بينما يُرجع نسخة حقيقية).
+
+**الإصلاح (D-180):** تطبيع يونيكود عربيّ-أولاً (تجريد التشكيل/التطويل + توحيد
+الألف/التاء-المربوطة/الألف-المقصورة + `\w` + stop-words ثنائية) · توصيل `recall()` كطبقة صمود
+عند نقطة الاستنفاد في `simple_client.stream_chat` قبل `SafetyNet` (تطابق `context_hash` صارم،
+علم `COGNITIVE_CACHE_RESILIENCE_ENABLED`) · تصحيح التوثيق · مقاييس Prometheus · تمييز الدور عن
+`SemanticCache`.
+
+**التحقق:** 15/15 اختبار (`tests/unit/caching/test_cognitive_cache_arabic.py` +
+`test_cache_resilience_fallback.py`) · ruff نظيف · تحقّق حي: مثال «كيف أحسب مُشتقة الدالة
+sin(x)» بتشكيل/ألف مختلفة يُطابق «كيف أحسب مشتقة الدالة sin(x)» في نفس السياق → recall hit،
+وسياق مختلف → miss. (التفاصيل: D-180 + تذييل التحقق الحي.)

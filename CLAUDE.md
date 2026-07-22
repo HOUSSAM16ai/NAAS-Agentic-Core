@@ -543,16 +543,20 @@ user_id = result.scalar()
 ### NEVER call `cognitive_engine.memorize()` without a None guard
 
 ```python
-# ❌ Wrong — ISS-H3: get_cognitive_engine() returns None by default.
-# Raises AttributeError on every successful LLM response.
+# ❌ Wrong — a test / DI seam may inject cognitive_engine=None.
 self.cognitive_engine.memorize(prompt, context_hash, chunks)
 
-# ✅ Correct — null guard required (simple_client.py:116)
+# ✅ Correct — defensive null guard (simple_client.py)
 if last_message.get("role") == "user" and self.cognitive_engine is not None:
     self.cognitive_engine.memorize(prompt, context_hash, chunks)
 ```
 
-**Rule**: `CognitiveResonanceEngine` is a stub (`cognitive_cache.py` returns `None`). Until a real implementation is wired, every call site must guard against `None`. Do not remove the guard when implementing the real engine — make `get_cognitive_engine()` return a real instance instead.
+**Rule (corrected D-180 — the old "stub returns None" claim was false):**
+`get_cognitive_engine()` returns a **real Arabic-aware `CognitiveResonanceEngine`
+singleton** (`cognitive_cache.py`), not `None`. The None-guard stays as **defensive
+code** (a test or DI seam may inject `None`) — do not remove it. The engine is now
+ACTIVE: `memorize()` stores every successful user turn and `recall()` is wired as a
+resilience fallback in the gateway (see the D-180 cache rule in §6.7).
 
 ### NEVER pass `postgresql://` to `create_async_engine` — use `postgresql+asyncpg://`
 
@@ -946,6 +950,18 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
   `OPENROUTER_EXTRA_MODELS` (CSV) يُلحِق نماذج إضافية بذيل السلسلة runtime بلا مسّ الحرفيات المحروسة
   بالتكافؤ. مُتحقَّق حياً E2E (postgres محلي + WS): سؤال رياضي يفشل فيه PRIMARY (reasoning-only) ثم
   يجيب gemma بعربي+LaTeX سليم، والرسالة تُحفَظ. الحارس مشترك عبر `get_ai_client()` فيفيد **كل** وكيل ومهارة.
+- **الكاش المعرفي عربيّ-أولاً + استرجاع الصمود (D-180 — 2026-07-22 · ISS-133)**: `CognitiveResonanceEngine`
+  (`app/core/cognitive_cache.py`) هو كاش دلالي ضبابي. `_normalize` **يجب** أن يبقى مُدرِكاً لليونيكود
+  (تجريد التشكيل + التطويل، توحيد الألف/التاء المربوطة/الألف المقصورة، `\w`) — النسخة القديمة
+  `[^a-z0-9\s]` كانت تمسح **كل** حرف عربي فتُحوِّل recall/memorize إلى لا-عملية صامتة لكل مستخدمي
+  المنصّة (ممنوع الرجوع إليها). `get_cognitive_engine()` يُعيد نسخة حقيقية (لا `None`). `recall()`
+  مُفعَّل كطبقة **صمود** عند نقطة استنفاد سلسلة النماذج فقط في `simple_client.stream_chat` (قبل
+  `SafetyNetService`): إجابة سابقة عالية الرنين بنفس `context_hash` أفضل من «لا يجيب» — يخدم
+  «يجيب على كل سؤال» بلا التفاف على المسار العادي ولا على المحرك الرمزي. مقيَّد بعلم
+  `COGNITIVE_CACHE_RESILIENCE_ENABLED` (افتراض on، رجوع فوري `=0`). مقاييس Prometheus:
+  `cogniforge_cognitive_cache_{recall_total{result},memorize_total,resonance_score,size}` (بلا labels
+  عالية الكاردينالية). ملاحظة: `SemanticCache` (`app/caching/semantic.py`، تطابق-hash عربيّ-آمن،
+  ACTIVE في `ChatOrchestrator`) و`CognitiveResonanceEngine` (ضبابي، صمود gateway) دوران متمايزان.
 
 ### ط) API-first + المهارات (D-100 · D-173 Stage 4/5 · D-174)
 - **كل خدمة (11/11) لها عقد OpenAPI** يغطّي مساراتها الفعلية، مفروض ببوّابة **دلالية**
@@ -1008,6 +1024,7 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 | الواجهة/الثيم | D-049 → D-059 |
 | تفكيك التعقيد | D-163 → D-172 |
 | النماذج | D-060 · D-067 · D-088 · D-167 · D-177 · D-178 |
+| الكاش (Cache) | D-180 (كاش معرفي عربيّ-أولاً + استرجاع صمود · ISS-133) |
 | Skills / OOP | §0.5 · D-069 · D-100 · **D-179** (`BaseSkill` قاعدة موحَّدة عبر ٢٣ مهارة) |
 | التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 |

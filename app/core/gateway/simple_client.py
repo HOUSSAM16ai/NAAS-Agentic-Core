@@ -16,6 +16,7 @@ import httpx
 
 from app.core.ai_config import get_ai_config, get_openrouter_site_url
 from app.core.cognitive_cache import CognitiveResonanceEngine, get_cognitive_engine
+from app.core.feature_flags import cognitive_cache_resilience_enabled
 from app.core.gateway.connection import BASE_TIMEOUT, ConnectionManager
 from app.core.gateway.exceptions import AIRateLimitError
 from app.core.interfaces.llm import LLMClient
@@ -159,8 +160,10 @@ class OpenRouterClient(LLMClient):
         max_retry_after = 0.0
 
         def _memorize(outcome: _ModelOutcome) -> None:
-            # cognitive_engine is a stub that may be None (CLAUDE.md pitfall) —
-            # guard is mandatory; without it every successful turn raised.
+            # D-180: get_cognitive_engine() returns a REAL Arabic-aware singleton
+            # (not None). The None-guard is kept as defensive code (a test may inject
+            # None, and CLAUDE.md forbids removing it). Every successful user turn is
+            # memorized so the resilience recall (step 4 below) has content to serve.
             if last_message.get("role") == "user" and self.cognitive_engine is not None:
                 self.cognitive_engine.memorize(prompt, context_hash, outcome.chunks or [])
 
@@ -199,7 +202,29 @@ class OpenRouterClient(LLMClient):
                     _memorize(outcome)
                     return
 
-        # 4. Safety Net (all models failed across both passes).
+        # 4. Cognitive-cache resilience recall (D-180 / ISS-133) — BEFORE the safety net.
+        # Every model is exhausted (typically a transient global 429). A high-resonance
+        # prior answer to the SAME question in the SAME context is strictly better than
+        # the "لا يجيب" safety-net stub — this is what makes the system "answer every
+        # question". Pedagogy is preserved: recall() enforces an exact context_hash
+        # match, and this path fires ONLY after the full model chain has failed, never
+        # short-circuiting a live model. Reversible via COGNITIVE_CACHE_RESILIENCE_ENABLED=0.
+        if (
+            cognitive_cache_resilience_enabled()
+            and self.cognitive_engine is not None
+            and last_message.get("role") == "user"
+        ):
+            recalled = self.cognitive_engine.recall(prompt, context_hash)
+            if recalled:
+                logger.warning(
+                    "cognitive_cache_resilience_hit — replaying prior answer (%d chunks)",
+                    len(recalled),
+                )
+                for chunk in recalled:
+                    yield chunk
+                return
+
+        # 5. Safety Net (all models failed AND no cache resonance).
         logger.critical("All models exhausted. Engaging Safety Net.")
         async for chunk in self.safety_net.stream_safety_response():
             yield chunk

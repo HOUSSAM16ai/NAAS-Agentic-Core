@@ -5,6 +5,46 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-180 · الكاش المعرفي الثوري: عربيّ-أولاً + استرجاع الصمود (2026-07-22 · ISS-133)
+**السياق:** طلب المالك تطوير التخزين المؤقت (cache) بشكل ثوري وضمان أن النظام «يجيب على كل
+سؤال»، مع بقاء GitHub Actions أخضر 100% وتجريب حي E2E. تدقيق للطبقة كشف كارثة حقيقية مركّبة.
+
+**الكارثة (بأدلة file:line):**
+1. **الكاش الدلالي أعمى عن العربية:** `cognitive_cache.py:_normalize` كان يستخدم
+   `re.sub(r"[^a-z0-9\s]", ...)` فيمسح **كل** حرف عربي → مجموعة الرموز فارغة دائماً →
+   `recall()`/`memorize()` لا-عملية صامتة لكل مستخدمي منصّة عربية.
+2. **`recall()` زومبي يكتب ولا يقرأ:** `memorize()` يُستدعى كل دور ناجح لكن `recall()` بلا أي
+   مستدعٍ في `app/` → نموّ ذاكرة بلا فائدة.
+3. **توثيق كاذب:** CLAUDE.md + تعليق `simple_client.py:162` + `runtime_truth.md:19` ادّعت أن
+   `get_cognitive_engine()` يُرجع `None` (stub) — بينما يُرجع نسخة حقيقية (`cognitive_cache.py:178`).
+4. **تكرار (DRY):** حزمة `app/caching/` + `gateway/cache.py:InMemoryCacheProvider` +
+   `semantic.py:SemanticCache` + `CognitiveResonanceEngine`.
+
+**القرار (إصلاح + توحيد + تفعيل — جراحي، CI-أخضر):**
+- `_normalize` أصبح مُدرِكاً لليونيكود: تجريد التشكيل (`U+064B–U+0652`,`U+0670`) + التطويل،
+  توحيد الألف (`أإآٱ→ا`)/التاء المربوطة (`ة→ه`)/الألف المقصورة (`ى→ي`)، ثم `\w` (يحفظ العربية
+  والفرنسية والإنجليزية)، مع stop-words ثنائية اللغة. **قاعدة دائمة:** ممنوع الرجوع إلى تطبيع
+  لاتيني-فقط.
+- `recall()` مُفعَّل كطبقة **صمود** حصراً عند نقطة استنفاد سلسلة النماذج في
+  `simple_client.stream_chat` (قبل `SafetyNetService`): إجابة سابقة عالية الرنين بنفس
+  `context_hash` بدل «لا يجيب». آمن تربوياً (تطابق `context_hash` مفروض داخل `recall`، لا يلتفّ
+  على مسار حي ولا على المحرك الرمزي). علم `COGNITIVE_CACHE_RESILIENCE_ENABLED` (افتراض on،
+  رجوع `=0`).
+- تصحيح التوثيق الكاذب (CLAUDE.md §6 pitfall + §6.7 قاعدة D-180 + `runtime_truth.md` #19 + صف
+  الكاش المعرفي ACTIVE).
+- مقاييس Prometheus (بلا labels عالية الكاردينالية):
+  `cogniforge_cognitive_cache_{recall_total{result},memorize_total,resonance_score,size}`.
+- تمييز الدورين: `SemanticCache` (تطابق-hash عربيّ-آمن، ACTIVE في `ChatOrchestrator`) مقابل
+  `CognitiveResonanceEngine` (ضبابي، صمود gateway).
+
+**الملفات:** `app/core/cognitive_cache.py` · `app/core/gateway/simple_client.py` ·
+`app/core/feature_flags.py` · `tests/unit/caching/test_cognitive_cache_arabic.py` (11) ·
+`tests/unit/caching/test_cache_resilience_fallback.py` (4) ·
+`scripts/verify_cache_revolution_live.py` · `CLAUDE.md` · `.memory/{runtime_truth,issues}.md` ·
+`.runtime/truth_table.lock.json` · `.memory/runbooks/supabase-bridge.md`.
+
+**التحقق:** 15/15 اختبار جديد أخضر · ruff check/format نظيف · تحقّق حي (انظر ISS-133 + التذييل).
+
 ## D-179 · BaseSkill OOP + تحقّق حيّ من ضمان الإجابة + إصلاح تماسك الذاكرة (2026-07-22)
 **السياق:** طلب المالك (١) تطبيق OOP متقدّم على طبقة المهارات، (٢) التأكّد حياً أن النظام «يجيب على
 كل الأسئلة»، (٣) إصلاح انحراف تماسك `.memory/` + `CLAUDE.md`، مع بقاء GitHub Actions أخضر 100%.

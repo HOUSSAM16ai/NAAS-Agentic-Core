@@ -100,9 +100,20 @@ user-service          :8001  ← Skill: إدارة المستخدمين (Identit
   ]) → إجابة مُركَّبة من skills متخصصة
 ```
 
+### القاعدة الموحَّدة `BaseSkill` (D-179 — 2026-07-22)
+
+المصدر الكائني الموحَّد لكل مهارة في المونوليث هو `app/services/skills/base.py:BaseSkill[InT, OutT]`
+(ABC). كل مهارة (٢٣ مهارة اليوم) تَرِث منه فتحصل على: هوية موحَّدة (`name`/`version`)، singleton كسول
+لكل-صنف (`instance()` يُعيد `Self` — يستبدل نمط `_x_singleton` + `get_x_skill()`)، ونقطة دخول
+polymorphic `run()` تُفوِّض لطريقة المهارة الأصلية (`invoke`/`align`/`decide`/`evaluate`/…). ومساعدا
+`skill_counter`/`skill_histogram` يُوحِّدان حارس Prometheus المُعاد على `REGISTRY` العام (**بلا
+`CollectorRegistry` جديد** — القاعدة «لا تشارك registry» تخصّ الخدمات المصغرة لا المونوليث). المحرك
+الاحتمالي الحتمي (`probability_brain/*`) + `gateway`/model-chain **مُستثناة عمداً** (حماية مسار
+الإجابة). أي مهارة جديدة يجب أن تَرِث `BaseSkill`.
+
 ### قواعد إلزامية لكل Skill جديد
 
-1. **Skill يجب أن يملك `/metrics` endpoint** — بدونه لا يُعتبر Skill حقيقياً
+1. **Skill يجب أن يرث `BaseSkill`** ويملك `/metrics` (أو `skill_counter`) — بدونه لا يُعتبر Skill حقيقياً
 2. **Skill يجب أن يملك اختبارات** — minimum: happy path + error path
 3. **Skill لا يستدعي Skill آخر مباشرة** — يمر عبر orchestrator فقط
 4. **Skill يُسجِّل كل invocation** — `record_{skill}_invocation(action, status, duration)`
@@ -996,6 +1007,7 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 | WebSocket | D-WS-001 → D-WS-PROXY-004 · D-096 · ISS-092→101 |
 | الواجهة/الثيم | D-049 → D-059 |
 | تفكيك التعقيد | D-163 → D-172 |
-| النماذج | D-060 · D-067 · D-088 · D-167 |
-| التوثيق/CI | D-105 · D-141 · D-156 · **D-173** |
+| النماذج | D-060 · D-067 · D-088 · D-167 · D-177 · D-178 |
+| Skills / OOP | §0.5 · D-069 · D-100 · **D-179** (`BaseSkill` قاعدة موحَّدة عبر ٢٣ مهارة) |
+| التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 |

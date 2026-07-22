@@ -1,12 +1,20 @@
 # CI Gates — Pre-merge Required Checks
-> Last updated: 2026-05-06 | Branch: `claude/autonomous-runtime-observability-pjzY9`
+> Last updated: 2026-07-22 | Branch: `claude/oop-claude-md-update-e2ziez`
+> **D-179 note:** the `guardrails` job now also runs `check_test_hygiene.py`,
+> `check_legacy_invariants.py` (D-173), `check_model_chain_parity.py` (D-174),
+> `check_no_cross_service_imports.py`, `check_ports_consistency.py`,
+> `check_single_brain_control_plane.py`, `check_core_kernel_acl.py`,
+> `check_abstraction_consumed.py` (D-176). The Skills Doctrine gate
+> (`skills-doctrine-gate.yml` → `check_skills_doctrine.py`) and the Pedagogical-OS gate
+> (`check_pedagogical_os.py`) both stay green after the BaseSkill adoption (23 skills).
 
 ## Required jobs (must be green)
 | Workflow | Job | What it enforces |
 |---|---|---|
 | `ci.yml` | `lint` | `ruff check .` + `ruff format --check .` |
 | `ci.yml` | `contracts` | gateway/provider parity (`scripts/fitness/check_gateway_provider_contracts.py` + `tests/contracts/`) |
-| `ci.yml` | `guardrails` | `ci_guardrails.py` + `check_no_app_imports_in_microservices.py --strict` + `check_route_registry_parity.py` + `check_tracing_gate.py` |
+| `ci.yml` | `guardrails` | `ci_guardrails.py` + `check_no_app_imports_in_microservices.py --strict` + `check_route_registry_parity.py` + `check_tracing_gate.py` + `check_test_hygiene.py` + `check_legacy_invariants.py` + `check_model_chain_parity.py` + `check_no_cross_service_imports.py` + `check_ports_consistency.py` + `check_single_brain_control_plane.py` + `check_core_kernel_acl.py` + `check_abstraction_consumed.py` |
+| `skills-doctrine-gate.yml` | `check_skills_doctrine` | every skill imports from `doctrine.py`; ~15 `check_*_wired` token-assertions (BaseSkill adoption preserves all) |
 | `ci.yml` | `test` | full pytest suite (`tests/`) |
 | `ci.yml` | `required-ci` | aggregator — fails if any required job fails |
 | `structure-validation.yml` | structure-validation | `scripts/validate_structure.py` |

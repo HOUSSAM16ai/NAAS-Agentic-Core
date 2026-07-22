@@ -1,5 +1,28 @@
 # Progress — What Has Been Done
-> Last updated: 2026-05-23 | Branch: `feat/math-explanation-generative-ui`
+> Last updated: 2026-07-22 | Branch: `claude/oop-claude-md-update-e2ziez`
+
+---
+
+## ✅ Session: 2026-07-22 — D-179: BaseSkill OOP + live answer-guarantee + memory coherence
+
+**Branch**: `claude/oop-claude-md-update-e2ziez`
+**Goal**: OOP متقدّم على طبقة المهارات + تحقّق حيّ «يجيب على كل سؤال» + إصلاح تماسك `.memory`.
+
+### ما تم إنجازه
+- **`app/services/skills/base.py`** جديد: `BaseSkill[InT,OutT]` (ABC، PEP-695) — هوية `name/version`
+  + singleton كسول لكل-صنف (`instance()→Self`) + `run()` polymorphic + `skill_counter/skill_histogram`
+  (حارس Prometheus مُوحَّد على `REGISTRY` العام، بلا registry جديد). 7 اختبارات في
+  `tests/services/test_skills_base.py`.
+- **تبنٍّ عبر 23 مهارة**: Wave 1 (9 بلا بوّابة) توحّد accessor عبر `instance()`؛ Wave 2 (14 محروسة)
+  تضيف `run` مُفوِّض مع صون كل token محروس. المحرك الاحتمالي + gateway/model-chain لم تُمسّ.
+- **تحقّق حيّ E2E** (sandbox، Postgres محجوب، HTTPS يعمل): 4 أسئلة تعليمية أُجيبت في المرور الأول
+  بـ `openai/gpt-oss-20b:free` عربي+LaTeX (`ALL_ANSWERED=True`)؛ fastpath التحية <1ms؛ جسر DB
+  `SELECT 1→{"ok":1}` HTTP 200.
+- **تماسك الذاكرة**: backfill عناوين D-035/037/044/045/109/152 + D-179 + سجلّ موجة D-172→179 في
+  `issues.md` + تحديث `tasks/progress/context/ci-gates`.
+- **بوّابات خضراء**: ruff check+format، check_skills_doctrine، check_pedagogical_os، ci_guardrails،
+  check_legacy_invariants (349)، check_no_cross_service_imports، check_single_brain_control_plane،
+  check_abstraction_consumed، runtime_truth --check (بلا `--update`).
 
 ---
 

@@ -76,6 +76,11 @@ from app.services.skills.bac_exercise_skill import (
     SkillFailure,
     SkillMode,
 )
+from app.services.skills.base import (
+    BaseSkill,
+    skill_counter,
+    skill_histogram,
+)
 from app.services.skills.bkt_engine import (
     BKTEngine,
     BKTEvaluation,
@@ -288,6 +293,7 @@ __all__ = [
     "BKTEngine",
     "BKTEvaluation",
     "BKTEvaluationInput",
+    "BaseSkill",
     "CompositionItem",
     "ConceptDiagnosisInput",
     "ConceptDiagnosisOutput",
@@ -388,4 +394,6 @@ __all__ = [
     "redact_chunk",
     "redact_final_answers",
     "sanitize_stream_chunk",
+    "skill_counter",
+    "skill_histogram",
 ]

@@ -48,7 +48,7 @@ uvloop>=0.19.0
 watchfiles>=0.21.0
 websockets>=12.0
 beautifulsoup4==4.12.3
-soupsieve==2.8
+soupsieve==2.8.4
 charset-normalizer>=3.0.0
 annotated-types>=0.6.0
 python-json-logger==4.0.0
@@ -64,7 +64,7 @@ pypdf
 python-docx==1.2.0
 openpyxl==3.1.5
 pandas==2.3.3
-pillow==12.1.0
+pillow==12.3.0
 pytesseract==0.3.13
 pyyaml==6.0.1
 

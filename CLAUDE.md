@@ -945,6 +945,17 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
   كل مهارة `import + call chain + runtime evidence` أو FLAGGED؛ لا ZOMBIE (بوّابة).
 - **Kagent محذوف** (D-173 Stage 5): كان ZOMBIE محظوراً أمنياً — القدرة بلا مستهلك حي تُحذَف لا تُترَك stub.
 
+### ي) Observability and Runtime Governance (الرصد وحوكمة التشغيل)
+> **المصدر الحيّ الكامل:** `.memory/observability-topology.md` (طوبولوجيا الرصد + العقود الدلالية).
+> بوّابة CI `observability-validation` تفرض بقاء هذا القسم + ذاك الملف (documentation lock).
+- **Grafana Observability Stack** (منفذ 3001) + Prometheus (9090) هما لوحة الرصد؛ لكن **الأجهزة قبل
+  التصوير** (Instrumentation before visualization): كل مقياس له عقد دلالي ومُصدِر مُتحقَّق في المصدر
+  (D-016)، لا لوحات zombie تعرض صفراً دائماً. **الرصد للتشخيص لا الزينة**.
+- **صدق runtime فوق اليقين الاصطناعي** (§6.6): لا قدرة تُعلَن ACTIVE قبل البرهان الثلاثي
+  (import + call chain + runtime evidence)؛ حتى ذلك DORMANT/FLAGGED. `runtime_truth.py --check` بوّابة.
+- **Degraded ≠ Dead**: خدمة تمرّ `/health` لكن warmup الرسم فشل = DEGRADED؛ يجب أن يكشفه `startup_state`.
+  الأثر والمقاييس تخصّصان منفصلان؛ labels عالية الكاردينالية ممنوعة؛ الكتابة المزدوجة للـ DB ممنوعة.
+
 ---
 
 ## 6.8 الرؤية الثورية (أهداف جلسة D-173)

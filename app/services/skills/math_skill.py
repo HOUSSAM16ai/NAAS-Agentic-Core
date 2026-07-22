@@ -60,6 +60,7 @@ except ImportError:  # pragma: no cover
 
 from app.core.schemas import RobustBaseModel
 from app.services.skills.bac_exercise_skill import SkillFailure
+from app.services.skills.base import BaseSkill
 
 logger = get_logger("skill.math")
 
@@ -143,7 +144,7 @@ class MathSkillOutput(RobustBaseModel):
 # ── Skill ───────────────────────────────────────────────────────────────────────
 
 
-class MathSkill:
+class MathSkill(BaseSkill[MathSkillInput, MathSkillOutput]):
     """
     Skill رسمي لحل وشرح أسئلة الرياضيات.
 
@@ -156,6 +157,11 @@ class MathSkill:
     """
 
     _skill_name: str = "math"
+    name = "math"
+
+    def run(self, payload: MathSkillInput):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`invoke` (async)."""
+        return self.invoke(payload)
 
     # Dynamic resolution path to keep `app/` free of AST-level
     # `from microservices.*` imports (enforced by tests/architecture/test_boundaries.py).

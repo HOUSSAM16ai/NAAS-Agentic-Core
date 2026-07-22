@@ -40,6 +40,7 @@ from typing import Literal
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import CONCEPT_DIAGNOSIS_DOCTRINE_VERSION
 
 # ── الـ enum الثابت (الطبقة 1 تُصنّف إليه حصراً) ──────────────────────────────────
@@ -258,7 +259,7 @@ def _infer_misconception(concept: str, normalized: str) -> Misconception:
     return "none"
 
 
-class ConceptDiagnosisSkill:
+class ConceptDiagnosisSkill(BaseSkill[ConceptDiagnosisInput, ConceptDiagnosisOutput]):
     """
     Skill عصبي-رمزي لتشخيص المفهوم + المفهوم الخاطئ (الطبقتان 1 و 5 — D-127).
 
@@ -269,8 +270,13 @@ class ConceptDiagnosisSkill:
     """
 
     _skill_name: str = "concept_diagnosis"
+    name = "concept_diagnosis"
     doctrine_version: str = CONCEPT_DIAGNOSIS_DOCTRINE_VERSION
     _LLM_TIMEOUT_S: float = 8.0
+
+    def run(self, payload: ConceptDiagnosisInput):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`diagnose` (async)."""
+        return self.diagnose(payload)
 
     @staticmethod
     def diagnose_deterministic(question: str) -> ConceptDiagnosisOutput:
@@ -360,15 +366,9 @@ class ConceptDiagnosisSkill:
             return None
 
 
-_concept_diagnosis_singleton: ConceptDiagnosisSkill | None = None
-
-
 def get_concept_diagnosis_skill() -> ConceptDiagnosisSkill:
-    """يُرجع نسخة مفردة (lazy singleton)."""
-    global _concept_diagnosis_singleton
-    if _concept_diagnosis_singleton is None:
-        _concept_diagnosis_singleton = ConceptDiagnosisSkill()
-    return _concept_diagnosis_singleton
+    """يُرجع نسخة مفردة (BaseSkill.instance)."""
+    return ConceptDiagnosisSkill.instance()
 
 
 __all__ = [

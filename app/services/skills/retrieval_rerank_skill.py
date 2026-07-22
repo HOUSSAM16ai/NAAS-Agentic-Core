@@ -20,6 +20,7 @@ from typing import Any
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 
 logger = logging.getLogger("cogniforge.skills.retrieval_rerank")
 
@@ -82,8 +83,14 @@ class RetrievalRerankOutput(RobustBaseModel):
     degraded: bool = False
 
 
-class RetrievalRerankSkill:
+class RetrievalRerankSkill(BaseSkill[RetrievalRerankInput, RetrievalRerankOutput]):
     """Skill استرجاع دلالي + إعادة ترتيب — مُغلَّف فوق LlamaIndex/Reranker drivers."""
+
+    name = "retrieval_rerank"
+
+    def run(self, payload: RetrievalRerankInput):
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`retrieve` (async)."""
+        return self.retrieve(payload)
 
     @staticmethod
     def is_enabled() -> bool:
@@ -189,12 +196,6 @@ def _as_doc(item: Any) -> dict[str, Any]:
     return {"text": str(item), "score": None}
 
 
-_skill_singleton: RetrievalRerankSkill | None = None
-
-
 def get_retrieval_rerank_skill() -> RetrievalRerankSkill:
-    """يُعيد Singleton لمهارة الاسترجاع + إعادة الترتيب."""
-    global _skill_singleton
-    if _skill_singleton is None:
-        _skill_singleton = RetrievalRerankSkill()
-    return _skill_singleton
+    """يُعيد Singleton لمهارة الاسترجاع + إعادة الترتيب (BaseSkill.instance)."""
+    return RetrievalRerankSkill.instance()

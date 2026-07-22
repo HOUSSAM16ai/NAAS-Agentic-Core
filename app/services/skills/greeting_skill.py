@@ -25,6 +25,8 @@ import re
 import time
 from typing import ClassVar, Literal
 
+from app.services.skills.base import BaseSkill
+
 try:
     from pydantic import BaseModel, Field
 except ImportError:  # pragma: no cover
@@ -185,7 +187,7 @@ def _record_metric(status: str, duration_s: float) -> None:
         pass
 
 
-class GreetingSkill:
+class GreetingSkill(BaseSkill[GreetingSkillInput, GreetingSkillResult]):
     """Skill رسمي للتحيات — يعيد ردود deterministic بدون LLM.
 
     Usage:
@@ -202,8 +204,12 @@ class GreetingSkill:
     4. مقاييس Prometheus — `cogniforge_skill_greeting_invocations_total{status}`.
     """
 
-    name: str = "greeting"
-    version: str = "1.0.0"
+    name: ClassVar[str] = "greeting"
+    version: ClassVar[str] = "1.0.0"
+
+    def run(self, payload: GreetingSkillInput) -> GreetingSkillResult:
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`invoke`."""
+        return self.invoke(payload)
 
     def invoke(self, payload: GreetingSkillInput) -> GreetingSkillResult:
         """نقطة الدخول — يُرجع GreetingSkillOutput أو GreetingSkillFailure."""

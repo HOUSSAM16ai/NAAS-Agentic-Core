@@ -39,6 +39,7 @@ from typing import ClassVar, Literal
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
+from app.services.skills.base import BaseSkill
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +256,7 @@ def _clean_channel_b(text: str) -> str:
 # ── OutputFirewall Skill ──────────────────────────────────────────────────────
 
 
-class OutputFirewall:
+class OutputFirewall(BaseSkill[FirewallInput, FirewallOutput]):
     """
     جدار الحماية المزدوج للقنوات — V46.0.
 
@@ -274,6 +275,12 @@ class OutputFirewall:
 
     VERSION: ClassVar[str] = "1.0.0"
     SKILL_NAME: ClassVar[str] = "output_firewall"
+    name: ClassVar[str] = "output_firewall"
+    version: ClassVar[str] = "1.0.0"
+
+    def run(self, inp: FirewallInput) -> FirewallOutput:
+        """Polymorphic entry point (BaseSkill) — delegates to :meth:`check`."""
+        return self.check(inp)
 
     def check(self, inp: FirewallInput) -> FirewallOutput:
         """
@@ -428,15 +435,9 @@ class OutputFirewall:
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 # Singleton: مُهيَّأ مرة واحدة — لا state داخلي، آمن للاستخدام المتزامن.
-_output_firewall: OutputFirewall | None = None
-
-
 def get_output_firewall() -> OutputFirewall:
-    """يُعيد singleton من OutputFirewall."""
-    global _output_firewall
-    if _output_firewall is None:
-        _output_firewall = OutputFirewall()
-    return _output_firewall
+    """يُعيد singleton من OutputFirewall (BaseSkill.instance)."""
+    return OutputFirewall.instance()
 
 
 def apply_channel_b_firewall(

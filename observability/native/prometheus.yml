@@ -233,3 +233,27 @@ scrape_configs:
           service: conversation-service
           step: "12"
     honor_labels: false
+
+  # ── D-183: foundations-service (:8010) ───────────────────────────────────
+  # النواة الحاسوبية للأسس "first roots" — API-first deterministic compute Skill.
+  # لا LLM ولا DB — محرّكات stdlib حتمية (جبر خطّي/تفاضل/إحصاء/تحسين/رسوم/لغات/تعقيد).
+  # المقاييس: cogniforge_foundations_requests_total +
+  #           cogniforge_foundations_request_duration_seconds +
+  #           cogniforge_foundations_active_connections +
+  #           cogniforge_foundations_compute_invocations_total{domain,status} +
+  #           cogniforge_foundations_compute_duration_seconds{domain} +
+  #           cogniforge_foundations_compute_errors_total{domain,error} +
+  #           cogniforge_foundations_domain_operations_total{domain,operation} +
+  #           cogniforge_foundations_startup_info{step="13",version,domains}
+  # يبدأ تلقائياً عبر supervisor.sh STEP 4K. DOWN حتى يُقلع الـ process.
+  - job_name: foundations-service
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    static_configs:
+      - targets: ["localhost:8010"]
+        labels:
+          tier: microservice
+          service: foundations-service
+          step: "13"
+    honor_labels: false

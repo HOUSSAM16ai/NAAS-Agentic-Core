@@ -203,15 +203,16 @@ jobs:
             # strict no-skip policy in conftest would fail the session.
             --ignore=tests/integration/test_bac_exercise_websocket.py
           )
-          # D-105/D-182: أرضية التغطية — قياس محلي 2026-07-23: 71.18% على app/
-          # (3363 اختباراً، 0 فشل). الأرضية رُفعت 67→70 (هامش أمان ~1.2pt). ratchet
-          # أحادي الاتجاه نحو 100% (خارطة الطريق: .memory/coverage-roadmap.md) — لا تخفّضها.
+          # D-105/D-182/D-183: أرضية التغطية — قياس محلي 2026-07-23: 71.83% على app/
+          # (3426 اختباراً بعد D-183، 0 فشل). الأرضية رُفعت 70→71 (D-183 أضاف كوداً
+          # جديداً مُغطّى 100% فرفع الرقم الكلّي). ratchet أحادي الاتجاه نحو 100%
+          # (خارطة الطريق: .memory/coverage-roadmap.md) — لا تخفّضها.
           python -m pytest tests scripts/ci -v \
             --ignore=tests/microservices \
             --cov=app \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
-            --cov-fail-under=70 \
+            --cov-fail-under=71 \
             --durations=10 \
             --tb=short \
             "${MONOLITH_DESELECTS[@]}"

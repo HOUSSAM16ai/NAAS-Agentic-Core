@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
 from app.deps.auth import CurrentUser, get_current_user
@@ -64,6 +65,8 @@ class ReasonRequest(RobustBaseModel):
     relations: list[list[str]] | None = None
     dynamics: list[list[str]] | None = None
     concept_name: str | None = None
+    # D-183: طلب حساب حتمي اختياري يُوجَّه إلى FoundationsComputeSkill عبر compose_reasoning.
+    compute: dict[str, Any] | None = None
 
 
 class ReasonResponse(RobustBaseModel):
@@ -73,6 +76,24 @@ class ReasonResponse(RobustBaseModel):
     modes: list[str]
     results: dict[str, Any]
     narrative: str
+
+
+class ComputeRequest(RobustBaseModel):
+    """طلب النواة الحاسوبية للأسس (D-183) — مجال + عملية + وسائط مُهيكَلة."""
+
+    domain: str
+    operation: str
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
+class ComputeResponse(RobustBaseModel):
+    """مخرج حساب حتمي — النتيجة أو رسالة الخطأ (لا يرفع استثناءً)."""
+
+    domain: str
+    operation: str
+    ok: bool
+    result: Any = None
+    error: str | None = None
 
 
 class RetrieveRequest(RobustBaseModel):
@@ -152,6 +173,7 @@ async def reason_endpoint(
             "relations": payload.relations,
             "dynamics": payload.dynamics,
             "model_name": payload.concept_name,
+            "compute": payload.compute,
         }.items()
         if v is not None
     }
@@ -161,6 +183,35 @@ async def reason_endpoint(
         modes=list(composition.modes),
         results=composition.results,
         narrative=composition.narrative,
+    )
+
+
+@router.post("/compute", response_model=ComputeResponse, summary="Foundations compute core (D-183)")
+async def compute_endpoint(
+    payload: ComputeRequest,
+    _: CurrentUser = Depends(get_current_user),
+) -> ComputeResponse:
+    """يُشغِّل النواة الحاسوبية للأسس (D-183) — جبر خطّي/تفاضل/إحصاء/تحسين/رسوم/لغات صورية/تعقيد.
+
+    حتمي 100% وبلا LLM — الأرقام والبنى من محرّكات `app/core/foundations` المُتحقَّقة.
+    fail-open: خطأ المجال يُبلَّغ في `error` ولا يرفع استثناءً.
+    """
+    from app.services.skills.foundations_compute_skill import (
+        FoundationsComputeInput,
+        get_foundations_compute_skill,
+    )
+
+    out = get_foundations_compute_skill().compute(
+        FoundationsComputeInput(
+            domain=payload.domain, operation=payload.operation, args=payload.args
+        )
+    )
+    return ComputeResponse(
+        domain=out.domain,
+        operation=out.operation,
+        ok=out.ok,
+        result=out.result,
+        error=out.error,
     )
 
 

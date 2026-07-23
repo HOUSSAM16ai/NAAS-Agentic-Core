@@ -455,6 +455,28 @@ def compose_reasoning(
 
         _run("mental_model", _mental)
 
+    # 7) الأسس الحاسوبية — عند توفّر طلب حساب حتمي مُهيكَل (D-183).
+    #    context["compute"] = {"domain": ..., "operation": ..., "args": {...}}
+    compute_req = ctx.get("compute")
+    if isinstance(compute_req, dict) and compute_req.get("domain"):
+
+        def _foundations() -> dict[str, object]:
+            from app.services.skills.foundations_compute_skill import (
+                FoundationsComputeInput,
+                get_foundations_compute_skill,
+            )
+
+            out = get_foundations_compute_skill().compute(
+                FoundationsComputeInput(
+                    domain=str(compute_req.get("domain", "")),
+                    operation=str(compute_req.get("operation", "")),
+                    args=dict(compute_req.get("args", {})),  # type: ignore[arg-type]
+                )
+            )
+            return out.model_dump()
+
+        _run("foundations_compute", _foundations)
+
     _record_compose("reasoning", "ok" if modes else "empty")
     narrative = "مسار تفكير مُهيكَل عبر: " + ("، ".join(modes) if modes else "لا مهارة")
     return ReasoningComposition(
@@ -799,6 +821,16 @@ def _build_registry() -> SkillRegistry:
             primary_method="compose_reasoning",
             metrics_prefix="cogniforge_skill_compose",
             consumed_by=("api.routers.skills.reason_endpoint",),
+        ),
+        # ── D-183: النواة الحاسوبية للأسس (First-Roots Compute) ────────────────
+        SkillDescriptor(
+            name="foundations_compute",
+            summary="النواة الحاسوبية للأسس — جبر خطّي/تفاضل/إحصاء/تحسين/رسوم/لغات صورية/تعقيد حتمي (D-183).",
+            input_contract="FoundationsComputeInput",
+            output_contract="FoundationsComputeOutput",
+            primary_method="compute",
+            metrics_prefix="cogniforge_skill_foundations_compute",
+            consumed_by=("api.routers.skills.compute_endpoint", "registry.compose_reasoning"),
         ),
     ]
     for d in descriptors:

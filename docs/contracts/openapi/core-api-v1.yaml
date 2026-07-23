@@ -1536,6 +1536,19 @@ paths:
           description: Structured reasoning trace (modes + results + narrative)
       description: Cognitive reasoning core — logic, critical thinking, problem decomposition,
         causal reasoning, abstraction, mental models (D-181)
+  /api/v1/skills/compute:
+    post:
+      tags:
+      - Skills Platform
+      summary: Foundations Compute Core
+      operationId: computeSkill
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Deterministic foundations compute result (ok + result/error)
+      description: Foundations compute core — linear algebra, calculus, statistics,
+        optimization, graph theory, formal languages, computability, complexity (D-183)
   /api/v1/skills/retrieve:
     post:
       tags:

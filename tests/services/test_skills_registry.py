@@ -59,6 +59,8 @@ EXPECTED = {
     "abstraction",
     "mental_model",
     "reasoning_compose",
+    # D-183: النواة الحاسوبية للأسس (First-Roots Compute).
+    "foundations_compute",
 }
 
 
@@ -66,11 +68,11 @@ class TestRegistry:
     def test_registry_complete(self) -> None:
         reg = get_skill_registry()
         assert set(reg.names()) == EXPECTED
-        assert len(reg.list()) == 34
+        assert len(reg.list()) == 35
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 32
+        assert len(reg.by_status("ACTIVE")) == 33
         assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:

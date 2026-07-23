@@ -1,6 +1,14 @@
 # Runtime Truth Lock
-> Last updated: **2026-07-22** | Branch: `claude/logic-skills-system-dev-li4y27`
-> Previous: `main` (D-180)
+> Last updated: **2026-07-23** | Branch: `claude/revolutionary-humanity-system-q62gjg`
+> Previous: `claude/logic-skills-system-dev-li4y27` (D-181)
+
+## First-Roots Completion + Foundations Compute (2026-07-23, D-183)
+
+| المكوّن | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **٩ وحدات أسس جديدة** (`linear_algebra`/`calculus`/`statistics`/`optimization`/`graph_theory`/`data_structures`/`formal_languages`/`computability`/`complexity`) | **ACTIVE** | dep-free مُتحقَّقة، مُعاد تصديرها من `foundations/__init__.py`؛ مُستهلَكة من `FoundationsComputeSkill` + `foundations-service`؛ 100% تغطية سطر+فرع (`tests/core/test_foundations_first_roots.py`، 46 اختبار). |
+| **`FoundationsComputeSkill`** (`foundations_compute`) على `BaseSkill` | **ACTIVE** | مُسجَّلة في `registry` (`consumed_by` = `compute_endpoint` + `compose_reasoning`، بلا ZOMBIE)؛ سلسلة حيّة `POST /api/v1/skills/compute` + فرع `compose_reasoning`؛ مقاييس `cogniforge_skill_foundations_compute_*`؛ 100% تغطية (`tests/services/test_foundations_compute_skill.py`، 17 اختبار). |
+| **`foundations-service`** (:8010، API-first) | **ACTIVE (uvicorn عند الإقلاع)** | خدمة مصغّرة مستقلّة (بلا استيراد `app`/sibling)؛ عقد OpenAPI ملتزَم (`check_openapi_parity` → 12/12)؛ `CollectorRegistry` مستقل بـ ٨ مقاييس `cogniforge_foundations_*`؛ `supervisor.sh` STEP 4K + Prometheus job (step="13") + لوحة Grafana؛ منطق الخدمة (main/dispatch/prom_metrics) 100% تغطية (`tests/microservices/foundations_service/`، 12 اختبار). DOWN حتى يُقلع الـ process (ليس خطأ في devcontainer الافتراضي). |
 
 ## Cognitive Reasoning Core + Foundations Activation (2026-07-22, D-181)
 

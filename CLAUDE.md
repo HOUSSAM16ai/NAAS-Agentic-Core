@@ -103,7 +103,7 @@ user-service          :8001  ← Skill: إدارة المستخدمين (Identit
 ### القاعدة الموحَّدة `BaseSkill` (D-179 — 2026-07-22)
 
 المصدر الكائني الموحَّد لكل مهارة في المونوليث هو `app/services/skills/base.py:BaseSkill[InT, OutT]`
-(ABC). كل مهارة (٢٣ مهارة اليوم) تَرِث منه فتحصل على: هوية موحَّدة (`name`/`version`)، singleton كسول
+(ABC). كل مهارة (٢٤ مهارة اليوم — أُضيف `FoundationsComputeSkill` في D-183) تَرِث منه فتحصل على: هوية موحَّدة (`name`/`version`)، singleton كسول
 لكل-صنف (`instance()` يُعيد `Self` — يستبدل نمط `_x_singleton` + `get_x_skill()`)، ونقطة دخول
 polymorphic `run()` تُفوِّض لطريقة المهارة الأصلية (`invoke`/`align`/`decide`/`evaluate`/…). ومساعدا
 `skill_counter`/`skill_histogram` يُوحِّدان حارس Prometheus المُعاد على `REGISTRY` العام (**بلا
@@ -127,6 +127,25 @@ polymorphic `run()` تُفوِّض لطريقة المهارة الأصلية (`
 (registry، مرآة `compose_text_refinement`) يُركِّب مسار تفكير مُهيكَل لأي سؤال حرّ (تدهور رشيق).
 مكشوفة API-first عبر `POST /api/v1/skills/reason`. **قاعدة دائمة:** الحقيقة (صحّة الاستدلال، السببية،
 الترتيب، النمط) من `app/core/reasoning` + `foundations` حصراً — لا يُقرّرها الـ LLM؛ الـ LLM للسرد فقط.
+
+### إكمال الجذور الأولى + النواة الحاسوبية (D-183 — 2026-07-23)
+
+طبقة `app/core/foundations/` اكتملت لتغطّي **الجذور الأولى ما قبل البرمجة** الثلاث (المنطق/الفكر ·
+الرياضيات · نظرية الحساب). أُضيفت ٩ وحدات حتمية dep-free (stdlib، ترفع `FoundationsError` لا صفراً
+مضلِّلاً): **رياضيات** — `linear_algebra` (حلّ `Ax=b` بحذف غاوس + محدّد + رتبة) · `calculus` (اشتقاق
+مركزي + تكامل سيمبسون + نهاية + جذر نيوتن + تايلور) · `statistics` (ارتباط + انحدار OLS + مجال ثقة +
+t-stat + مئين) · `optimization` (نزول متدرّج + قطع ذهبي + تنصيف + برمجة خطّية ثنائية) · `graph_theory`
+(مركّبات + دورات + فرز طوبولوجي + MST كروسكال + ثنائية التلوين + شجرة) · **نظرية الحساب** —
+`data_structures` (Stack/Queue/MinHeap/LinkedList/BST) · `formal_languages` (DFA + محرّك regex مصغّر +
+Dyck + اشتقاق نحوي) · `computability` (أكرمان + قابلية تقرير منتهية + اختزال + حدود Halting/Busy-Beaver
+مُوثَّقة) · `complexity` (ترتيب النموّ + كتالوج P/NP/NP-complete + «P مقابل NP» بصدق).
+
+مكشوفة كـ **Skill** (`FoundationsComputeSkill` على `BaseSkill` — `foundations_compute`) عبر
+`POST /api/v1/skills/compute` (المونوليث) وفرع `compute` في `compose_reasoning`، و**كخدمة مصغّرة
+API-first** `foundations-service` على `:8010` (contract ملتزَم → **API-first 12/12**؛ محرّكات مُوَرَّدة،
+بلا استيراد `app`). دوالّ التفاضل/التحسين تُمرَّر كمعاملات كثير حدود (`[c0,c1,c2] → c0+c1x+c2x²`)
+فيبقى السطح آمناً على JSON بلا `eval`. كل الكود الجديد مُغطّى اختبارياً 100%. **قاعدة دائمة:** الأرقام
+والبنى من محرّكات `foundations` الحتمية حصراً — لا يُقرّرها الـ LLM (§0: الحقيقة الرمزية قبل اللغة).
 
 ### قواعد إلزامية لكل Skill جديد
 
@@ -1044,5 +1063,6 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 | الكاش (Cache) | D-180 (كاش معرفي عربيّ-أولاً + استرجاع صمود · ISS-133) |
 | Skills / OOP | §0.5 · D-069 · D-100 · **D-179** (`BaseSkill` قاعدة موحَّدة) · **D-181** (النواة المعرفية للتفكير — `app/core/reasoning` + ٦ مهارات + `compose_reasoning`) |
 | الاستدلال العام (Reasoning) | **D-181** (`app/core/reasoning`: arguments/causal/decomposition/abstraction/mental_model · يرفع `foundations` ACTIVE) |
+| الجذور الأولى + النواة الحاسوبية | **D-183** (إكمال `app/core/foundations`: linear_algebra/calculus/statistics/optimization/graph_theory + data_structures/formal_languages/computability/complexity · `FoundationsComputeSkill` + `foundations-service` :8010 → API-first 12/12 · تغطية 100% للكود الجديد) |
 | التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** (تقلّص deselect + ratchet التغطية 67→70، القياس 71.18% · `.memory/coverage-roadmap.md`) |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 · **D-182** (إثبات حيّ: `docker-compose.yml` الحقيقي = 12 حاوية صحّية، 7 Postgres مستقلّة + 3 خدمات تُجيب `/health` — يدحض «حاوية web واحدة» · ISS-134) |

@@ -1,0 +1,97 @@
+{
+  "uid": "cogniforge-foundations-service",
+  "title": "D-183 — Foundations Service (First Roots Compute)",
+  "description": "API-first deterministic 'first roots' compute Skill (:8010). Logic, mathematics, theory of computation — no LLM, no DB. Metrics: cogniforge_foundations_*.",
+  "tags": ["cogniforge", "microservice", "foundations", "d-183"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Service Up (startup_info)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "cogniforge_foundations_startup_info", "legendFormat": "step {{step}} v{{version}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "In-flight Requests",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "cogniforge_foundations_active_connections" }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total Compute Invocations",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(cogniforge_foundations_compute_invocations_total)" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Compute Error Total",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(cogniforge_foundations_compute_errors_total)" }]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Compute Invocations by Domain",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "sum by (domain) (rate(cogniforge_foundations_compute_invocations_total[5m]))", "legendFormat": "{{domain}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Compute Status (ok vs error)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "sum by (status) (rate(cogniforge_foundations_compute_invocations_total[5m]))", "legendFormat": "{{status}}" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Compute Latency p95 by Domain (s)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (domain, le) (rate(cogniforge_foundations_compute_duration_seconds_bucket[5m])))", "legendFormat": "{{domain}}" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Operations per (domain, operation)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "sum by (domain, operation) (rate(cogniforge_foundations_domain_operations_total[5m]))", "legendFormat": "{{domain}}.{{operation}}" }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "HTTP Request Rate by Endpoint/Status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "sum by (endpoint, status) (rate(cogniforge_foundations_requests_total[5m]))", "legendFormat": "{{endpoint}} {{status}}" }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Compute Errors by Type",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        { "expr": "sum by (error) (rate(cogniforge_foundations_compute_errors_total[5m]))", "legendFormat": "{{error}}" }
+      ]
+    }
+  ]
+}

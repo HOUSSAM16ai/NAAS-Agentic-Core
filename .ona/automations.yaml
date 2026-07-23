@@ -273,6 +273,46 @@ services:
         pkill -f "uvicorn microservices.conversation_service" 2>/dev/null || true
         echo "✅ conversation-service stopped."
 
+  foundations-service:
+    name: "Foundations Service (D-183 — First Roots deterministic compute + /metrics)"
+    description: |
+      يُشغِّل foundations-service كـ uvicorn process مباشر على :8010.
+      D-183: النواة الحاسوبية للأسس (جبر خطّي/تفاضل/إحصاء/تحسين/رسوم/لغات صورية/تعقيد).
+      لا يتطلب Docker ولا DB ولا مفاتيح — محرّكات stdlib حتمية. يبدأ تلقائياً عبر supervisor.sh STEP 4K.
+      التحقق: curl http://localhost:8010/health
+               curl http://localhost:8010/metrics | grep cogniforge_foundations_startup_info
+    commands:
+      start: |
+        set -euo pipefail
+        FOUNDATIONS_PORT="8010"
+        LOG_FILE="/app/.observability/foundations_service.log"
+
+        pkill -f "uvicorn microservices.foundations_service" 2>/dev/null || true
+        sleep 1
+        mkdir -p /app/.observability
+
+        echo "🚀 Starting foundations-service (D-183) on :${FOUNDATIONS_PORT}..."
+        echo "   Domains: linear_algebra, calculus, statistics, optimization, graph_theory,"
+        echo "            formal_languages, computability, complexity"
+        echo "   No LLM, no DB — deterministic stdlib engines | cogniforge_foundations_*"
+
+        ENVIRONMENT="${ENVIRONMENT:-development}" \
+        PYTHONPATH="/app" \
+        python -m uvicorn microservices.foundations_service.main:app \
+          --host 0.0.0.0 \
+          --port "$FOUNDATIONS_PORT" \
+          --workers 1 \
+          --log-level info \
+          2>&1 | tee -a "$LOG_FILE"
+
+      ready: |
+        curl -sf http://localhost:8010/health &&
+        curl -sf http://localhost:8010/metrics | grep -q "cogniforge_foundations_startup_info"
+
+      stop: |
+        pkill -f "uvicorn microservices.foundations_service" 2>/dev/null || true
+        echo "✅ foundations-service stopped."
+
   user-service:
     name: "User Service (Step 5 — Prometheus /metrics)"
     description: |
@@ -363,7 +403,7 @@ tasks:
     command: |
       echo "=== CogniForge — Microservices Health Check ==="
       echo ""
-      for port in 8000 8001 8002 8003 8006 8007 8008 8009; do
+      for port in 8000 8001 8002 8003 8006 8007 8008 8009 8010; do
         echo -n ":$port  "
         curl -s --max-time 5 http://localhost:$port/health 2>/dev/null || echo "DEAD"
         echo ""
@@ -378,6 +418,7 @@ tasks:
       echo ":8007 research         — يجب: tavily_available=true (مع TAVILY_API_KEY)"
       echo ":8008 reasoning        — يجب: llm_backend=openrouter (مع OPENROUTER_API_KEY)"
       echo ":8009 content-retrieval — يجب: status=healthy + kb_files >= 2"
+      echo ":8010 foundations       — يجب: status=healthy + domains>=8 (D-183)"
       echo ""
       echo "💡 لفحص أعمق + اختبار pipeline حقيقي:"
       echo "   bash scripts/verify_microservices_live.sh"

@@ -1243,6 +1243,48 @@ launch_conversation_service >> "$APP_ROOT/.observability/conversation_service.lo
 lifecycle_info "✅ Conversation Service initialization offloaded to background"
 
 # ==============================================================================
+# STEP 4K: Foundations Service (D-183 — "first roots" deterministic compute Skill)
+# ==============================================================================
+# يُشغِّل foundations-service كـ uvicorn process مستقل على المنفذ 8010.
+# D-183: النواة الحاسوبية للأسس (جبر خطّي/تفاضل/إحصاء/تحسين/رسوم/لغات صورية/تعقيد).
+# لا يتطلب DB ولا مفاتيح — محرّكات stdlib حتمية بحتة (/metrics: cogniforge_foundations_*).
+# ==============================================================================
+
+launch_foundations_service() {
+    local FOUNDATIONS_PORT="8010"
+    local FOUNDATIONS_HEALTH="http://localhost:${FOUNDATIONS_PORT}/health"
+    local FOUNDATIONS_LOG_DIR="$APP_ROOT/.observability"
+    local FOUNDATIONS_LOG="$FOUNDATIONS_LOG_DIR/foundations_service.log"
+
+    mkdir -p "$FOUNDATIONS_LOG_DIR"
+
+    # ── idempotent: تجنب إطلاق نسخة ثانية ───────────────────────────────────
+    if pgrep -f "foundations_service.main:app" > /dev/null 2>&1; then
+        lifecycle_info "Foundations Service: already running on :${FOUNDATIONS_PORT} — skipping"
+        return 0
+    fi
+
+    lifecycle_info "Foundations Service: launching uvicorn on :${FOUNDATIONS_PORT} (D-183)..."
+
+    ENVIRONMENT="${ENVIRONMENT:-development}" \
+    PYTHONPATH="$APP_ROOT" \
+    python -m uvicorn microservices.foundations_service.main:app \
+        --host 0.0.0.0 \
+        --port "$FOUNDATIONS_PORT" \
+        --log-level info \
+        --no-access-log \
+        >> "$FOUNDATIONS_LOG" 2>&1 &
+
+    local foundations_pid=$!
+    lifecycle_info "Foundations Service: launched (PID=$foundations_pid) — health at $FOUNDATIONS_HEALTH"
+    lifecycle_info "             Logs: $FOUNDATIONS_LOG"
+}
+
+# تشغيل في الخلفية — لا يحجب الـ supervisor
+launch_foundations_service >> "$APP_ROOT/.observability/foundations_service.log" 2>&1 &
+lifecycle_info "✅ Foundations Service initialization offloaded to background"
+
+# ==============================================================================
 # STEP 5: Health Check & Readiness (فحص الصحة والجاهزية)
 # ==============================================================================
 

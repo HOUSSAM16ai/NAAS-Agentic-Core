@@ -5,6 +5,53 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-183 · إكمال الجذور الأولى (ما قبل البرمجة) + النواة الحاسوبية API-first (2026-07-23)
+**السياق:** طلب المالك بناء نظام «يطبّق الجذور الأولى ما قبل البرمجة» — المنطق/الفكر، الرياضيات،
+نظرية الحساب — مع أهداف قائمة: خدمات مصغرة + **API-first 100%** وتغطية اختبارات نحو 100%، وضمان أن
+النظام «يجيب على كل سؤال» وأن GitHub Actions أخضر 100% مع تجريب حيّ E2E.
+
+**التشخيص (لا كارثة، بل فجوة قدرة):** الاستكشاف أثبت أن المنصّة سليمة (قوس D-177→D-182). طبقة الأسس
+`app/core/foundations` كانت تغطّي combinatorics/number_theory/logic/probability/information_theory/
+algorithms، و`app/core/reasoning` + ٦ مهارات تغطّي الاستدلال. لكن قائمة «الجذور الأولى» كشفت **فجوات
+ملموسة**: الجبر الخطّي، التفاضل والتكامل، الإحصاء الاستدلالي، التحسين، نظرية الرسوم (رياضيات)؛ وهياكل
+البيانات، اللغات الصورية/الآلات المنتهية، القابلية للحساب، أصناف التعقيد (نظرية الحساب) — غائبة كوحدات.
+
+**القرار:**
+1. **٩ وحدات أسس dep-free** (stdlib، ترفع `FoundationsError`، 100% تغطية): `linear_algebra` ·
+   `calculus` · `statistics` · `optimization` · `graph_theory` · `data_structures` ·
+   `formal_languages` · `computability` · `complexity`. مُعاد تصديرها من `foundations/__init__.py`.
+2. **توصيل حيّ (لا DORMANT)**: `FoundationsComputeSkill` على `BaseSkill` (`foundations_compute`،
+   `skill_counter`/`skill_histogram` على REGISTRY العام)، مُسجَّلة في registry بـ `consumed_by` غير
+   فارغ؛ `POST /api/v1/skills/compute` (المونوليث، auth، fail-open)؛ فرع `compute` في
+   `compose_reasoning` (سلسلة نداء ثانية). الأرقام كلّها من المحرّكات الحتمية — صفر LLM في المسار.
+3. **خدمة مصغّرة API-first** `foundations-service` :8010 (محرّكات مُوَرَّدة، بلا استيراد `app`؛
+   `CollectorRegistry` مستقل بـ ٨ مقاييس `cogniforge_foundations_*`؛ `/compute` + `/health` +
+   `/metrics`). عقد OpenAPI ملتزَم → **API-first 12/12** (`check_openapi_parity`). دوالّ
+   التفاضل/التحسين تُمرَّر كمعاملات كثير حدود (JSON-safe، بلا `eval`).
+4. **البنية التحتية**: `supervisor.sh` STEP 4K + `.ona/automations.yaml` (service + verify) +
+   `observability/native/prometheus.yml` (job `foundations-service` :8010، step="13" → 13 jobs) +
+   لوحة Grafana `190-foundations-service.json` (uid `cogniforge-foundations-service`).
+5. **التغطية**: كل الكود الجديد 100% (وحدات + skill + route + service). سقف `--cov-fail-under` مُرفَّع؛
+   خارطة ratchet في `.memory/coverage-roadmap.md` نحو 100% عبر جولات متتالية.
+
+**الملفات:** `app/core/foundations/{linear_algebra,calculus,statistics,optimization,graph_theory,
+data_structures,formal_languages,computability,complexity}.py` + `__init__.py` ·
+`app/services/skills/foundations_compute_skill.py` · `app/services/skills/registry.py` (descriptor +
+`compose_reasoning` فرع) · `app/api/routers/skills.py` (`/compute`) ·
+`microservices/foundations_service/**` · `scripts/contracts/export_openapi.py` (SERVICES +1) ·
+`docs/contracts/openapi/foundations_service-openapi.json` · `.devcontainer/supervisor.sh` ·
+`.ona/automations.yaml` · `observability/native/prometheus.yml` ·
+`observability/grafana/dashboards/190-foundations-service.json` · اختبارات:
+`tests/core/test_foundations_first_roots.py` · `tests/services/test_foundations_compute_skill.py` ·
+`tests/microservices/foundations_service/test_foundations_service.py`.
+
+**التحقق:** ruff ✅ · ruff format ✅ · guardrails ✅ · no-app-imports/no-cross-service ✅ ·
+skills-doctrine ✅ · pedagogical_os ✅ · openapi_parity 12/12 ✅ · runtime_truth ✅ ·
+75 اختبار جديد أخضر بتغطية 100% للكود الجديد · تجريب حيّ E2E (محلّي sqlite + OpenRouter حقيقي):
+`/health` :8000 و:8010 ✅ · إجابة LLM عربية حيّة عبر WS ✅ · `/skills/compute` + `:8010/compute`
+حتمي (حلّ جملة خطّية، تكامل، DFA، فرز طوبولوجي) ✅. (ملاحظة: Postgres TCP محجوب في الـ sandbox —
+الاستمرارية على sqlite؛ Supabase عبر جسر HTTPS للقراءة/المخطط فقط، D-006 لا كتابة مزدوجة.)
+
 ## D-182 · إصلاح الانحراف السقراطي + تفكيك المفردات + واقع الخدمات المصغرة بالحاويات + ratchet التغطية (2026-07-23)
 **السياق:** طلب المالك جولة إعادة هيكلة ثورية: تفكيك الملفات الضخمة، CI أخضر بصدق، إصلاح كارثة
 تعليمية في المحادثة الحيّة، جاهزية مقاعد الإضافة، **وإثبات أن Docker والخدمات المصغرة حقيقية لا

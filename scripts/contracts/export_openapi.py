@@ -40,6 +40,8 @@ SERVICES: tuple[tuple[str, str, str], ...] = (
     ("api_gateway", "microservices.api_gateway.main", "app"),
     # D-174: API-first 11/11 — auditor_service brought under the parity gate.
     ("auditor_service", "microservices.auditor_service.src.main", "app"),
+    # D-183: API-first 12/12 — foundations-service (the "first roots" compute Skill).
+    ("foundations_service", "microservices.foundations_service.main", "app"),
 )
 
 

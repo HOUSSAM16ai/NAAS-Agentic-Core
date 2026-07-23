@@ -1,4 +1,19 @@
 # Open Issues & Bugs
+## ✅ ISS-133b · الانحراف السقراطي عن سؤال الطالب الفعلي (D-182 — 2026-07-23)
+**الكارثة (transcript حيّ):** «لم أفهم لماذا نضرب ثلاثة أرقام تنازلياً؟» (طريقة الجزء II) ⇒ المعلّم
+انحرف إلى «أيّ الألوان تعطي 3 كرات من نفس اللون؟» (الحدث الافتتاحي A). **الجذر:** `_detect_focus_step`
+(`probability_ui.py`) بلا نمط للتنازل/التوالي/بدون-إرجاع ⇒ السقوط للافتراض `same_color_event`.
+**الإصلاح (D-182 WS-C):** كشف تلك الإشارات ⇒ `sequential_zero_product` قبل الافتراض + نص مرافق يخاطب
+المفهوم. اختبار: `tests/services/test_d182_sequential_focus_routing.py` (7/7). **مُغلَق.**
+
+## ✅ ISS-134 · research-agent يتعطّل بالحاويات: llama_index مفقود من requirements (D-182 — 2026-07-23)
+**الكارثة (تجريب حيّ بالحاوية):** `cogniforge-research-agent` يفشل الإقلاع بـ `ModuleNotFoundError:
+No module named 'llama_index'`. **الجذر:** `retriever.py` (VectorStoreIndex) + `llama_retriever.py`
+(بناء `NodeWithScore`) يستوردان llama_index فوراً عبر `strategies.py`، لكن `requirements.txt` يفتقده.
+**الإصلاح (D-182):** إضافة `llama-index-core/-embeddings-huggingface/-vector-stores-supabase` (مطابقة
+حزم المونوليث). مُتحقَّق بالفحص لا بإعادة البناء (نفاد قرص في الـ sandbox). **درس:** تجريب الحاويات
+الحيّ كشف ثغرة يُخفيها مسار uvicorn (حيث llama_index مُثبَّت في `.venv`). **مُغلَق (يحتاج rebuild-verify).**
+
 ## 🧭 Coherence log — decisions wave D-172 → D-179 (2026-07-18 → 07-22)
 
 هذا السجلّ يوثّق موجة القرارات التي لم تُسجَّل لها إدخالات issue أثناء تسارع العمل (جولة تماسك D-179):

@@ -193,7 +193,7 @@ jobs:
             --deselect tests/integration/test_import_conversation.py::test_import_new_conversation_returns_imported
             --deselect tests/integration/test_import_conversation.py::test_import_twice_returns_already_exists
             --deselect tests/integration/test_import_conversation.py::test_import_wrong_user_id_returns_not_found
-            --deselect tests/services/chat/agents/test_socratic_tutor_comprehensive.py::test_assess_understanding_success
+            # D-182: test_assess_understanding_success re-enabled (green again; list shrank).
             # Teardown-only failure: the test itself PASSES but the
             # SQLAlchemy/aiosqlite connection cleanup races with a daemon
             # thread on test exit. Tracked as follow-up.
@@ -203,14 +203,15 @@ jobs:
             # strict no-skip policy in conftest would fail the session.
             --ignore=tests/integration/test_bac_exercise_websocket.py
           )
-          # D-105: أرضية التغطية — قياس محلي 2026-06-12: 68.68% على app/.
-          # الأرضية 67% (هامش أمان 1.7pt لتباين البيئات). ratchet فقط — لا تخفّضها.
+          # D-105/D-182: أرضية التغطية — قياس محلي 2026-07-23: 71.18% على app/
+          # (3363 اختباراً، 0 فشل). الأرضية رُفعت 67→70 (هامش أمان ~1.2pt). ratchet
+          # أحادي الاتجاه نحو 100% (خارطة الطريق: .memory/coverage-roadmap.md) — لا تخفّضها.
           python -m pytest tests scripts/ci -v \
             --ignore=tests/microservices \
             --cov=app \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
-            --cov-fail-under=67 \
+            --cov-fail-under=70 \
             --durations=10 \
             --tb=short \
             "${MONOLITH_DESELECTS[@]}"
@@ -254,8 +255,10 @@ jobs:
             # Contract-drift rewrites tracked as follow-up (red on main).
             --deselect tests/microservices/orchestrator_service/test_routing.py::test_general_knowledge_node_uses_resolved_state_query
             --deselect tests/microservices/test_agent_chat_contract.py::test_agent_chat_admin_path_forwards_aligned_admin_state
-            --deselect tests/microservices/test_conversation_service_capabilities.py::test_conversation_health_declares_stub_by_default
-            --deselect tests/microservices/test_conversation_service_capabilities.py::test_conversation_health_can_declare_parity_ready
+            # D-182: the 2 test_conversation_service_capabilities deselects were removed —
+            # the stub `capability_level`/`parity_ready` health fields were dropped when the
+            # service was promoted to a full Skill (D-042); the tests now assert the current
+            # promoted contract and are green (deselect list shrank).
             --deselect tests/microservices/test_conversation_service_journey.py::test_conversation_ws_synthetic_journey_customer
             --deselect tests/microservices/test_exercise_visibility_regression.py::test_exercise_request_is_visible_on_stream
             # D-168: the 3 test_orchestrator_chat_stategraph deselects were removed —

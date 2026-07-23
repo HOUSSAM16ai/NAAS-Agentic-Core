@@ -1036,13 +1036,13 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 |--------|------------------------------------------------------|
 | الاستمرارية والبثّ | D-006 · D-047 · D-048 · ISS-016/017 |
 | العقل التربوي السقراطي | D-074 · D-104 · D-113 → D-160 |
-| الاحتمالات الحتمية | D-075 → D-085 · D-116 · D-152/153 |
+| الاحتمالات الحتمية | D-075 → D-085 · D-116 · D-152/153 · **D-182** (`_detect_focus_step` يستهدف السحب المتتالي «تنازلي/على التوالي» بدل الافتراض — إصلاح الانحراف السقراطي · ISS-133b) |
 | WebSocket | D-WS-001 → D-WS-PROXY-004 · D-096 · ISS-092→101 |
 | الواجهة/الثيم | D-049 → D-059 |
-| تفكيك التعقيد | D-163 → D-172 |
+| تفكيك التعقيد | D-163 → D-172 · **D-182** (مفردات `probability_skill` → `probability_vocab.py`؛ 1459→1256) |
 | النماذج | D-060 · D-067 · D-088 · D-167 · D-177 · D-178 |
 | الكاش (Cache) | D-180 (كاش معرفي عربيّ-أولاً + استرجاع صمود · ISS-133) |
 | Skills / OOP | §0.5 · D-069 · D-100 · **D-179** (`BaseSkill` قاعدة موحَّدة) · **D-181** (النواة المعرفية للتفكير — `app/core/reasoning` + ٦ مهارات + `compose_reasoning`) |
 | الاستدلال العام (Reasoning) | **D-181** (`app/core/reasoning`: arguments/causal/decomposition/abstraction/mental_model · يرفع `foundations` ACTIVE) |
-| التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** |
-| البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 |
+| التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** (تقلّص deselect + ratchet التغطية 67→70، القياس 71.18% · `.memory/coverage-roadmap.md`) |
+| البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 · **D-182** (إثبات حيّ: `docker-compose.yml` الحقيقي = 12 حاوية صحّية، 7 Postgres مستقلّة + 3 خدمات تُجيب `/health` — يدحض «حاوية web واحدة» · ISS-134) |

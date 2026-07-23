@@ -351,6 +351,22 @@ class ProbabilityUIMixin:
                     return "random_variable"
                 if "جداء" in q and ("معدوم" in q or "صفر" in q):
                     return "sequential_zero_product"
+                # D-182: حيرة حول *طريقة* السحب المتتالي (الجزء II: «على التوالي وبدون
+                # إرجاع») — «لماذا نضرب تنازلياً»، «على التوالي»، «بدون إرجاع»، «الترتيب» —
+                # يجب أن تستهدف خطوة السحب المتتالي لا خطوة الحدث الافتتاحية. قبل هذا،
+                # لأنّ الكاشف لم يملك نمطاً للتنازل/التوالي كانت الحيرة تسقط للافتراضي
+                # same_color_event فينحرف المعلّم إلى سؤال الألوان بدل سؤال الطالب الفعلي.
+                if (
+                    "تنازلي" in q
+                    or "على التوالي" in q
+                    or "بالتوالي" in q
+                    or "بدون إرجاع" in q
+                    or "بدون ارجاع" in q
+                    or "دون إرجاع" in q
+                    or "دون ارجاع" in q
+                    or "ترتيب" in q
+                ):
+                    return "sequential_zero_product"
                 if "فضاء" in q or "c(" in q or "تأليف" in q:
                     return "sample_space"
                 return None
@@ -462,7 +478,10 @@ class ProbabilityUIMixin:
                 if _focus_step_id == "sample_space":
                     return "سنبدأ من فضاء العينة C(n,k) ثم نبني باقي النتائج عليه بصرياً."
                 if _focus_step_id == "sequential_zero_product":
-                    return "سنشرح خطوة الجداء المعدوم في السحب المتتالي مع منطق المتمم."
+                    return (
+                        "سنركّز على السحب المتتالي بدون إرجاع: لماذا يتغيّر عدد "
+                        "الاختيارات المتاحة في كل سحبة."
+                    )
                 return default_text
 
             # V44.0 — AEK: استدعاء النواة التعليمية التكيّفية لإثراء الحمولة

@@ -16,6 +16,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_SRC = (REPO_ROOT / "app/services/skills/probability_skill.py").read_text(encoding="utf-8")
+# D-182: جداول المفردات (ومنها _FOLLOWUP_PROBABILITY_INTENT) استُخرجت إلى probability_vocab.
+VOCAB_SRC = (REPO_ROOT / "app/services/skills/probability_vocab.py").read_text(encoding="utf-8")
 
 # تطبيع مطابق لـ ProbabilityCalculatorSkill._normalize (sandbox-safe replica).
 _TASHKEEL_RE = re.compile("[ؐ-ًؚ-ٰٟۖ-ۭ࣓-ࣿ]")
@@ -102,5 +104,6 @@ class TestSourceFix:
 
     def test_followup_markers_unchanged(self) -> None:
         # قائمة المتابعة لا تزال تغطّي رموز الخطوات (مرآة _detect_focus_step).
+        # D-182: القائمة تعيش في probability_vocab بعد الاستخراج — نفتّش المصدر الصحيح.
         for marker in ('"p("', '"e(x"', '"المتغير"', '"الأمل"', '"نفس اللون"'):
-            assert marker in SKILL_SRC, f"follow-up marker dropped: {marker}"
+            assert marker in VOCAB_SRC, f"follow-up marker dropped: {marker}"

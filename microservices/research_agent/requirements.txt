@@ -13,3 +13,12 @@ dspy-ai==2.5.43
 litellm==1.50.0
 prometheus-client>=0.20.0
 tavily-python>=0.3.0
+# D-182 (ISS-134): the search engine imports llama_index eagerly at startup
+# (retriever.py: VectorStoreIndex; llama_retriever.py: NodeWithScore construction),
+# but these packages were absent → container crashed with ModuleNotFoundError:
+# 'llama_index' before serving. Package names mirror the monolith's proven set
+# (requirements-ci.txt). The reranker MODEL (sentence-transformers) stays optional
+# via reranker.py's existing fail-open guard; the llama_index FRAMEWORK is structural.
+llama-index-core>=0.14.13
+llama-index-embeddings-huggingface
+llama-index-vector-stores-supabase

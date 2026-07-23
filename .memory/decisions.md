@@ -5,6 +5,52 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-182 · إصلاح الانحراف السقراطي + تفكيك المفردات + واقع الخدمات المصغرة بالحاويات + ratchet التغطية (2026-07-23)
+**السياق:** طلب المالك جولة إعادة هيكلة ثورية: تفكيك الملفات الضخمة، CI أخضر بصدق، إصلاح كارثة
+تعليمية في المحادثة الحيّة، جاهزية مقاعد الإضافة، **وإثبات أن Docker والخدمات المصغرة حقيقية لا
+وهمية (ليست حاوية `web` واحدة)**، مع طموح تغطية اختبارات نحو 100%.
+
+**الكوارث المكتشفة (بأدلة file:line + تجريب حيّ):**
+1. **انحراف سقراطي:** الطالب سأل «لماذا نضرب ثلاثة أرقام تنازلياً؟» (طريقة الجزء II — السحب على
+   التوالي بدون إرجاع) فانحرف المعلّم إلى سؤال الحدث الافتتاحي. السبب: `_detect_focus_step`
+   (`probability_ui.py`) بلا نمط للتنازل/التوالي/بدون-إرجاع ⇒ سقوط للافتراض `same_color_event`.
+2. **ملفات ضخمة متبقية:** `probability_skill.py` 1459 سطراً (جداول مفردات مضمَّنة).
+3. **قوائم deselect قديمة:** اختباران في `test_conversation_service_capabilities` يؤكّدان حقل
+   `capability_level="stub"` الذي أُزيل في D-042 (KeyError، red-on-main مُستبعَد).
+4. **واقع الحاويات (ISS-134):** حاوية `web` واحدة في devcontainer تُجمِّع الخدمات كـ uvicorn — لا
+   عزل. كما أن `research_agent/requirements.txt` يفتقد `llama_index` رغم استيراده الفوري (تعطّل الحاوية).
+
+**القرار (deterministic-first، رمزي قبل اللغة §0):**
+- **WS-C — إصلاح الانحراف (additive، monolith-only):** `_detect_focus_step` يكشف الآن «تنازلي/على
+  التوالي/بالتوالي/بدون إرجاع/ترتيب» ⇒ `sequential_zero_product` **قبل** الافتراض؛ النص المرافق يخاطب
+  المفهوم («لماذا يتغيّر عدد الاختيارات في كل سحبة»). البورت لا يملك `_detect_focus_step` ⇒ التكافؤ سليم.
+- **WS-B — تفكيك المفردات:** جداول الكيانات/الأنماط (~220 سطراً) → `probability_vocab.py` جديد،
+  مُعاد استيرادها (كلها مُستهلَكة داخلياً + re-export). `probability_skill.py` **1459→1256**. نمط D-170.
+- **WS-A — CI أخضر بصدق:** تقلّصت قوائم deselect بثلاثة (D-105): إعادة تفعيل
+  `test_assess_understanding_success` + إعادة كتابة اختباري conversation-service للعقد الحالي
+  (v2.0.0/step 12). البقية أحمر-حقيقي مُوثَّق (لا إخفاء).
+- **WS-D — مقاعد الإضافة:** مُتحقَّقة نظيفة (`check_abstraction_consumed` 4 ports ACTIVE بلا ZOMBIE،
+  تكافؤ سلسلة النماذج، drivers + FLAGGED skills). لا إصلاح لازم.
+- **INC2-D — إثبات الحاويات الحقيقي (تجريب حيّ):** تشغيل `docker-compose.yml` الحقيقي في هذه البيئة
+  (dockerd + root): **12 حاوية صحّية** — 7 Postgres مستقلّة (planning_db/memory_db/user_db/…، منافذ
+  5435-5441) + 2 Redis + 3 خدمات حقيقية تُجيب `/health` (reasoning-agent `llm_backend=openrouter`،
+  conversation-service `graph_ready=true`، auditor `ok`). عزل فعلي (لكلٍّ حاوية + قاعدة بيانات). هذا
+  يدحض «حاوية web واحدة». حدود صادقة: 5 خدمات لم تُبنَ (نفاد قرص، لا كود)؛ حقن CA البروكسي داخل البناء
+  ضروري في هذه البيئة (عُكِس بعد الإثبات)؛ real-LLM `/compose` داخل الحاوية يحتاج وصول البروكسي.
+- **INC2-C — ratchet التغطية نحو 100%:** قياس حقيقي **71.18%** على `app/` (3363 اختباراً، 0 فشل)؛
+  الأرضية رُفعت 67→70 (`ci.yml`)؛ خارطة الطريق `.memory/coverage-roadmap.md` (سُلّم درجات + قواعد لا-حشو).
+- **ISS-134 — إصلاح research-agent:** إضافة `llama-index-core/-embeddings-huggingface/-vector-stores-supabase`
+  إلى `requirements.txt` (مطابقة حزم المونوليث المُثبَتة). مُتحقَّق بالفحص لا بإعادة البناء (قرص).
+
+**الملفات:** `app/infrastructure/clients/orchestrator/probability_ui.py` · `app/services/skills/
+probability_vocab.py` (جديد) · `app/services/skills/probability_skill.py` · `.github/workflows/ci.yml`
+· `tests/microservices/test_conversation_service_capabilities.py` · `tests/services/test_d120_…py` ·
+`tests/services/test_d182_sequential_focus_routing.py` (جديد) · `microservices/research_agent/requirements.txt`
+· `.memory/coverage-roadmap.md` (جديد) · `.memory/decisions.md` · `.memory/issues.md` · `CLAUDE.md`.
+
+**التحقق:** ruff ✅ · guardrails ✅ · runtime_truth ✅ · openapi_parity ✅ · pedagogical_os ✅ ·
+skills_doctrine ✅ · monolith 3363 passed (cov 71.18%) ✅ · microservices suite أخضر ✅ · Docker 12 حاوية حيّة ✅.
+
 ## D-181 · النواة المعرفية للتفكير — طبقة استدلال عامة مُتحقَّقة (2026-07-22)
 **السياق:** طلب المالك تطويراً ثورياً لملكات **التفكير** عبر كامل المشروع — المنطق، التفكير
 النقدي، حل المشكلات، التجريد، الاستدلال، بناء النماذج الذهنية، وفهم العلاقات السببية — مع تعزيز

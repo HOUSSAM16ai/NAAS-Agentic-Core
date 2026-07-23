@@ -45,7 +45,7 @@ uvloop==0.22.1
 watchfiles==1.1.1
 websockets==15.0.1
 beautifulsoup4==4.12.3
-soupsieve==2.8
+soupsieve==2.8.4
 charset-normalizer==3.4.4
 annotated-types==0.7.0
 python-json-logger==4.0.0

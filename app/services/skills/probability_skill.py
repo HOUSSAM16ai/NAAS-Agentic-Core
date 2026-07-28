@@ -161,24 +161,43 @@ class ProbabilityCalculatorSkill:
         return round(num / den, 6) if den > 0 else 0.0
 
     @staticmethod
-    def number_parity_counts(content: str) -> dict[str, int] | None:
+    def number_parity_groups(content: str) -> list[list[int]] | None:
+        """D-184: أرقام الكرات **مجموعةً بمجموعة** بترتيب ورودها في النصّ (حتمي، صفر LLM).
+
+        نفس مسح ``number_parity_counts`` لكن **بلا تسطيح** — فيبقى انتماء كل رقم
+        إلى مجموعته (لونه) محفوظاً. لازمٌ للحوادث التي تجمع اللون والرقم معاً،
+        وأوّلها الاحتمال الشرطي P_A(B) («من نفس اللون **و** جداء أرقامها فردي»)
+        الذي يستحيل حسابه من المجاميع الكلّية وحدها. يُرجِع ``None`` إن لم توجد
+        كرات مرقّمة.
+        """
+        if not content or not isinstance(content, str):
+            return None
+        # توحيد الأرقام العربية-الهندية إلى ASCII قبل الاستخراج.
+        text = content.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+        groups: list[list[int]] = []
+        # كل مجموعة مرقّمة: «... مرقم<...> ب<ـ>: <أرقام مفصولة بفواصل>».
+        for match in re.finditer(r"مرقم\S*\s+ب[ـ\s]*[:：]?\s*([\d،,\s\(\)\\$]+)", text):
+            digits = [int(d) for d in re.findall(r"\d", match.group(1))]
+            if digits:
+                groups.append(digits)
+        return groups or None
+
+    @classmethod
+    def number_parity_counts(cls, content: str) -> dict[str, int] | None:
         """D-143: يستخرج أرقام الكرات المرقّمة من نصّ التمرين ويحسب توزيعها (حتمي، صفر LLM).
 
         يدعم تمارين الكرات المرقّمة («... مرقمة بـ: 0، 1، 1، 3»). يُرجِع
         ``{"odd","even","zero","total"}`` أو ``None`` إن لم توجد كرات مرقّمة. يُمكّن
         حساب الحوادث المعتمدة على أرقام الكرات (جداء فردي/زوجي/معدوم) **دون أيّ تقدير
         من LLM** — الأرقام من نصّ التمرين الرسمي حصراً.
+
+        D-184: صار مبنياً على ``number_parity_groups`` (مصدر مسح واحد — DRY) فلا
+        يفترق المجموع الكلّي عن التفصيل لكل مجموعة أبداً.
         """
-        if not content or not isinstance(content, str):
+        groups = cls.number_parity_groups(content)
+        if not groups:
             return None
-        # توحيد الأرقام العربية-الهندية إلى ASCII قبل الاستخراج.
-        text = content.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
-        nums: list[int] = []
-        # كل مجموعة مرقّمة: «... مرقم<...> ب<ـ>: <أرقام مفصولة بفواصل>».
-        for match in re.finditer(r"مرقم\S*\s+ب[ـ\s]*[:：]?\s*([\d،,\s\(\)\\$]+)", text):
-            nums.extend(int(d) for d in re.findall(r"\d", match.group(1)))
-        if not nums:
-            return None
+        nums = [value for group in groups for value in group]
         odd = sum(1 for x in nums if x % 2 == 1)
         return {
             "odd": odd,
@@ -1012,10 +1031,172 @@ class ProbabilityCalculatorSkill:
             )
         )
 
-        # ── الخطوة 3: المتغيّر العشوائي X (distribution) — حتمي بـ math.comb ─────
-        if len(comp_raw) >= 2:
-            focal_label, _focal_neg, focal_raw = comp_raw[0]
-            m = min(focal_raw, total)
+        # ── D-184: الحوادث المبنيّة على **أرقام** الكرات لا على ألوانها ─────────
+        # تُنبَعث **فقط** لتمارين الكرات المرقّمة (`number_parity_*` تُرجِع قيمة)؛
+        # البنّاء يبقى عامّاً لكل تمرين آخر فلا ينكسر أيٌّ منها (D-076).
+        parity = cls.number_parity_counts(combined)
+        parity_groups = cls.number_parity_groups(combined)
+        # الأرقام المُستخرَجة يجب أن تُغطّي الكيس كلّه، وإلا فالنصّ غير مفهوم
+        # بثقة كافية ⇒ نتخطّى بصمت بدل بثّ أرقام مضلِّلة (§0).
+        parity_ok = bool(parity) and int(parity.get("total", 0)) == total
+
+        # الحادثتان B وC: جداء الأرقام فردي ثم المتمّم (زوجي).
+        if parity_ok and parity is not None and int(parity["odd"]) >= k:
+            odd_n = int(parity["odd"])
+            fav_odd = math.comb(odd_n, k)
+            fav_even = total_comb - fav_odd
+            steps.append(
+                ExerciseStep(
+                    step_index=len(steps),
+                    step_id="product_parity_event",
+                    title="الحدث: جداء الأرقام فردي (ومنه الزوجي)",
+                    render_kind="event_breakdown",
+                    visual_directives={
+                        "animation_hint": "highlight_groups",
+                        "render_kind": "event_breakdown",
+                    },
+                    numerical_state={
+                        "groups": [
+                            {
+                                "label": "كرات تحمل رقماً فردياً",
+                                "count": odd_n,
+                                "favorable": fav_odd,
+                                "is_possible": True,
+                                "pedagogical_string": f"C({odd_n},{k}) = {fav_odd}",
+                                "color": "warning",
+                            }
+                        ],
+                        "same_group_favorable": fav_odd,
+                        "total_combinations": total_comb,
+                        "p_num": fav_odd,
+                        "p_den": total_comb,
+                        "complement_favorable": fav_even,
+                    },
+                    pedagogical_message=(
+                        "جداء عدّة أعداد يكون فردياً فقط إذا كان **كل** عامل فيه فردياً — "
+                        "يكفي رقم زوجي واحد ليصير الجداء كلّه زوجياً. لذلك نختار الكرات "
+                        f"الـ{k} من بين الكرات ذات الأرقام الفردية وعددها {odd_n}: "
+                        f"C({odd_n},{k}) = {fav_odd}. والحادثة المتمّمة (جداء زوجي) = "
+                        f"{total_comb} − {fav_odd} = {fav_even}."
+                    ),
+                    interactive={
+                        "question": f"متى يكون جداء {k} أعداد فردياً؟",
+                        "answer_kind": "choice",
+                        "choices": [
+                            "إذا كان أحدها فردياً",
+                            "إذا كانت كلّها فردية",
+                            "إذا كان أحدها زوجياً",
+                        ],
+                        "expected_index": 1,
+                        "hint": "جرّب 3×2×5 — رقم زوجي واحد يكفي ليصير الجداء زوجياً.",
+                    },
+                )
+            )
+
+        # الاحتمال الشرطي P_A(B): «من نفس اللون **و** جداء أرقامها فردي». يحتاج
+        # انتماء كل رقم إلى لونه — ولهذا وُجدت `number_parity_groups` (D-184).
+        # المحاذاة تُتحقَّق بطول كل مجموعة مقابل عدد لونها؛ أي اختلاف ⇒ تخطٍّ صامت.
+        # المحاذاة بالعدد لا بالترتيب: `comp_raw` قد يُعاد ترتيبه بينما
+        # `parity_groups` تتبع ترتيب النصّ. تصحّ المطابقة فقط حين تكون أعداد
+        # المجموعات **فريدة** (لا لبس)؛ أي غموض ⇒ تخطٍّ صامت بلا أرقام مضلِّلة.
+        _aligned: list[tuple[str, list[int]]] | None = None
+        if parity_ok and parity_groups is not None and len(parity_groups) == len(comp_raw):
+            _by_size: dict[int, list[list[int]]] = {}
+            for _g in parity_groups:
+                _by_size.setdefault(len(_g), []).append(_g)
+            if all(len(v) == 1 for v in _by_size.values()):
+                _aligned = []
+                for _lp, _neg, _c in comp_raw:
+                    _match = _by_size.get(min(_c, total))
+                    if not _match:
+                        _aligned = None
+                        break
+                    _aligned.append((_lp, _match[0]))
+
+        if _aligned is not None and same_group > 0:
+            cond_groups: list[dict[str, object]] = []
+            cond_fav = 0
+            for lp, nums_g in _aligned:
+                odd_in = sum(1 for x in nums_g if x % 2 == 1)
+                color = cls._color_for(lp) or "muted"
+                if k > odd_in:
+                    cond_groups.append(
+                        {
+                            "label": lp,
+                            "count": odd_in,
+                            "favorable": 0,
+                            "is_possible": False,
+                            "pedagogical_string": (
+                                f"«{lp}»: أرقامها الفردية {odd_in} فقط — لا تكفي لسحب {k}."
+                            ),
+                            "color": color,
+                        }
+                    )
+                    continue
+                fav_c = math.comb(odd_in, k)
+                cond_fav += fav_c
+                cond_groups.append(
+                    {
+                        "label": lp,
+                        "count": odd_in,
+                        "favorable": fav_c,
+                        "is_possible": True,
+                        "pedagogical_string": f"C({odd_in},{k}) = {fav_c}",
+                        "color": color,
+                    }
+                )
+            if cond_fav > 0:
+                steps.append(
+                    ExerciseStep(
+                        step_index=len(steps),
+                        step_id="conditional_event",
+                        title="الاحتمال الشرطي: علمنا أنها من نفس اللون",
+                        render_kind="event_breakdown",
+                        visual_directives={
+                            "animation_hint": "highlight_groups",
+                            "render_kind": "event_breakdown",
+                        },
+                        numerical_state={
+                            "groups": cond_groups,
+                            "same_group_favorable": cond_fav,
+                            "total_combinations": same_group,
+                            "p_num": cond_fav,
+                            "p_den": same_group,
+                        },
+                        pedagogical_message=(
+                            "الشرط يُغيّر الفضاء لا الحدث: بما أننا **نعلم** أن الكرات من "
+                            f"نفس اللون، لم يعد المقام {total_comb} بل حالات هذا الشرط وعددها "
+                            f"{same_group}. نبحث ضمنها فقط عن الحالات ذات الجداء الفردي — "
+                            f"لكل لون نختار من كراته الفردية — فنجد {cond_fav}."
+                        ),
+                        interactive={
+                            "question": "عند حساب احتمال شرطي، ما الذي يتغيّر أولاً؟",
+                            "answer_kind": "choice",
+                            "choices": [
+                                "البسط (الحالات الملائمة)",
+                                "المقام (فضاء الحالات الممكنة)",
+                                "لا شيء يتغيّر",
+                            ],
+                            "expected_index": 1,
+                            "hint": "المعلومة المؤكَّدة تحذف كل الحالات المخالفة لها من الفضاء.",
+                        },
+                    )
+                )
+
+        # ── الخطوة: المتغيّر العشوائي X (distribution) — حتمي بـ math.comb ─────
+        # D-184: X قد يُعرَّف بتكافؤ **الأرقام** («يمثل عدد الكرات التي تحمل رقماً
+        # زوجياً») لا بلون الكرة. قبل هذا كان يُنمذَج دائماً على أول لون، فيُعرَض
+        # على الطالب توزيع متغيّر عشوائي **آخر** — خطأ رياضي صريح لا انحراف تربوي.
+        _even_variable = parity_ok and bool(
+            re.search(r"(?:ت|ي)حمل\s*\S*\s*رقم\S*\s*زوجي", combined)
+        )
+        _focal: tuple[str, int] | None = None
+        if _even_variable and parity is not None:
+            _focal = ("رقم زوجي", int(parity["even"]))
+        elif len(comp_raw) >= 2:
+            _focal = (comp_raw[0][0], min(comp_raw[0][2], total))
+        if _focal is not None:
+            focal_label, m = _focal
             others = total - m
             distribution: list[dict[str, object]] = []
             for i in range(0, k + 1):
@@ -1033,11 +1214,14 @@ class ProbabilityCalculatorSkill:
                     }
                 )
             if distribution:
+                # D-184: الأمل الرياضي و P(X>1) حتميّان من التوزيع نفسه (لا LLM).
+                exp_num = sum(int(d["value"]) * int(d["p_num"]) for d in distribution)
+                gt1_num = sum(int(d["p_num"]) for d in distribution if int(d["value"]) > 1)
                 steps.append(
                     ExerciseStep(
-                        step_index=3,
+                        step_index=len(steps),
                         step_id="random_variable",
-                        title=f"④ المتغيّر العشوائي X: عدد «{focal_label}» المسحوبة",
+                        title=f"المتغيّر العشوائي X: عدد «{focal_label}» المسحوبة",
                         render_kind="distribution",
                         visual_directives={
                             "animation_hint": "build_distribution",
@@ -1048,14 +1232,79 @@ class ProbabilityCalculatorSkill:
                             "focal_label": focal_label,
                             "total": total_comb,
                             "distribution": distribution,
+                            "expectation_num": exp_num,
+                            "expectation_den": total_comb,
+                            "p_gt1_num": gt1_num,
+                            "p_gt1_den": total_comb,
                         },
                         pedagogical_message=(
                             f"نعرّف X = عدد «{focal_label}» في السحب. لكل قيمة i نحسب "
                             f"P(X=i) = C({m},i)·C({others},{k}−i) / C({total},{k}). "
-                            "مجموع الاحتمالات يساوي 1 دائماً."
+                            "مجموع الاحتمالات يساوي 1 دائماً. والأمل الرياضي هو مجموع "
+                            f"i·P(X=i) = {exp_num}/{total_comb}؛ و P(X>1) يجمع القيم "
+                            f"الأكبر من 1 فقط = {gt1_num}/{total_comb}."
                         ),
                     )
                 )
+
+        # الحادثة الأخيرة: سحب **على التوالي وبدون إرجاع** وجداء الأرقام معدوم.
+        # هنا يهمّ الترتيب (ترتيبات لا تأليفات) — ولهذا المقام n×(n−1)×… لا C(n,k).
+        # نحسب بالمتمّم: «لا يظهر أي صفر» أسهل من «يظهر صفر واحد على الأقل».
+        if parity_ok and parity is not None and 0 < int(parity["zero"]) <= total - k:
+            zeros = int(parity["zero"])
+            nonzero = total - zeros
+            ordered_total = math.perm(total, k)
+            ordered_nonzero = math.perm(nonzero, k)
+            fav_zero = ordered_total - ordered_nonzero
+            _prod_all = " × ".join(str(total - i) for i in range(k))
+            _prod_non = " × ".join(str(nonzero - i) for i in range(k))
+            steps.append(
+                ExerciseStep(
+                    step_index=len(steps),
+                    step_id="sequential_zero_product",
+                    title="السحب على التوالي بدون إرجاع: جداء الأرقام معدوم",
+                    render_kind="event_breakdown",
+                    visual_directives={
+                        "animation_hint": "highlight_groups",
+                        "render_kind": "event_breakdown",
+                    },
+                    numerical_state={
+                        "groups": [
+                            {
+                                "label": "سحبات لا تحوي الرقم 0 (المتمّم)",
+                                "count": nonzero,
+                                "favorable": ordered_nonzero,
+                                "is_possible": True,
+                                "pedagogical_string": f"{_prod_non} = {ordered_nonzero}",
+                                "color": "muted",
+                            }
+                        ],
+                        "same_group_favorable": fav_zero,
+                        "total_combinations": ordered_total,
+                        "p_num": fav_zero,
+                        "p_den": ordered_total,
+                        "ordered": True,
+                    },
+                    pedagogical_message=(
+                        "هنا نسحب واحدةً تلو الأخرى بدون إرجاع، فالترتيب يهمّ: عدد كل "
+                        f"السحبات = {_prod_all} = {ordered_total}. والجداء يكون معدوماً إذا "
+                        "ظهر الرقم 0 مرّةً واحدة على الأقل — وحسابه بالمتمّم أسهل: سحبات "
+                        f"بلا صفر = {_prod_non} = {ordered_nonzero}، إذن الملائمة = "
+                        f"{ordered_total} − {ordered_nonzero} = {fav_zero}."
+                    ),
+                    interactive={
+                        "question": "لماذا نضرب أعداداً متناقصة هنا بدل استعمال التأليفات؟",
+                        "answer_kind": "choice",
+                        "choices": [
+                            "لأن الترتيب يهمّ ولا نُرجع الكرة",
+                            "لأن الكرات متماثلة",
+                            "لأن الترتيب لا يهمّ",
+                        ],
+                        "expected_index": 0,
+                        "hint": "بعد كل سحبة يَنقص عدد الكرات المتاحة بواحدة.",
+                    },
+                )
+            )
 
         return FullExerciseStoryOutput(
             n=total,

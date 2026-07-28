@@ -20,33 +20,29 @@ from app.infrastructure.clients.orchestrator.tutor_sources import read_tutor_sou
 CLIENT_SRC = read_tutor_source()
 
 
-# نسخة standalone مطابقة لمنطق `_detect_focus_step` بعد D-182 (sandbox-safe replica).
-def _detect_focus_step(user_question: str) -> str | None:
-    q = user_question.lower()
-    if "p(a" in q or "نفس اللون" in q or "same color" in q:
-        return "same_color_event"
-    if "p(b" in q or "p(c" in q or "فردي" in q or "زوجي" in q:
-        return "same_color_event"
-    if "شرطي" in q or "p_a" in q or "p a" in q:
-        return "same_color_event"
-    if "x>1" in q or "e(x" in q or "الأمل" in q or "المتغير" in q:
-        return "random_variable"
-    if "جداء" in q and ("معدوم" in q or "صفر" in q):
-        return "sequential_zero_product"
-    if (
-        "تنازلي" in q
-        or "على التوالي" in q
-        or "بالتوالي" in q
-        or "بدون إرجاع" in q
-        or "بدون ارجاع" in q
-        or "دون إرجاع" in q
-        or "دون ارجاع" in q
-        or "ترتيب" in q
-    ):
-        return "sequential_zero_product"
-    if "فضاء" in q or "c(" in q or "تأليف" in q:
-        return "sample_space"
-    return None
+# D-184: كانت هنا نسخة standalone مكتوبة يدوياً. النسخة اليدوية تكذب صامتاً عند أي
+# تعديل لاحق للكاشف — وقد كذبت فعلاً: بعد D-184 صارت «فردي/زوجي» تُرجِع
+# `product_parity_event` و«شرطي» تُرجِع `conditional_event`، بينما بقيت المرآة تؤكّد
+# `same_color_event`. نُصرِّف الآن الدالة **من مصدرها الحقيقي** عبر `ast` — stdlib
+# فقط (يبقى الاختبار sandbox-safe) وبلا أي احتمال انحراف بين المرآة والأصل.
+def _load_detect_focus_step():
+    import ast
+    from pathlib import Path
+
+    source_path = (
+        Path(__file__).resolve().parents[2]
+        / "app/infrastructure/clients/orchestrator/probability_ui.py"
+    )
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_detect_focus_step":
+            namespace: dict[str, object] = {}
+            exec(compile(ast.Module([node], []), str(source_path), "exec"), namespace)
+            return namespace["_detect_focus_step"]
+    raise AssertionError("_detect_focus_step not found in probability_ui.py")
+
+
+_detect_focus_step = _load_detect_focus_step()
 
 
 # ── 1. سؤال الطالب الفعلي لم يعد ينحرف ────────────────────────────────────────

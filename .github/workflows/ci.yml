@@ -43,8 +43,14 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          # Keep lint setup resilient when an exact pinned Ruff build is unavailable
-          pip install "ruff>=0.6,<1"
+          # D-184: Ruff MUST be pinned. The old floating range ("ruff>=0.6,<1")
+          # silently upgraded the linter on every run, so a new stable rule turned
+          # `main` red without a single line of code changing: ruff 0.16 promoted
+          # PLR0917 (too-many-positional-arguments) and flagged 69 pre-existing
+          # signatures, which is why `required-ci` has been failing since 2026-07-23
+          # while every other job stayed green. A lint tool that changes underneath
+          # the repo is not a gate, it is a coin flip — pin it and bump on purpose.
+          pip install "ruff==0.14.0"
       - name: Ruff lint
         shell: bash
         run: |

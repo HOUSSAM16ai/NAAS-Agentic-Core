@@ -936,6 +936,13 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
   (assisted − durable) هي مقياس النجاح الوحيد (D-126/D-157).
 - **البصري الحتمي للاحتمالات** (D-116): كل مكوّنات الاحتمالات `terminate_pipeline=True` (صفر سرد LLM)؛
   الكيانات من `parsed_entities` لا نثر الحل (ISS-120)؛ ممنوع `C_n^k=0` مضلِّل (رسالة تربوية بدله).
+- **البؤرة لاصقة، والتغطية كاملة، ولا بؤرة معلّقة (D-184 — 2026-07-28)**: «لم أفهم» تعني «لم أفهم ما
+  شرحتَه للتوّ» ⇒ `_recover_recent_focus` يسترجع بؤرة الحوار **قبل** أي سقوط افتراضي؛ إعادة الضبط
+  القسرية إلى `same_color_event` (التي جعلت المعلّم يقفز للألوان مهما سأل الطالب) **ممنوعة** كسلوك أوّل.
+  وكل مُعرَّف تُرجعه `_detect_focus_step` **يجب** أن يقابل `step_id` حقيقياً في القصّة المُولَّدة
+  (بوّابة في `tests/services/test_d184_full_exercise_coverage.py` — تمنع البؤر المعلّقة كصنف).
+  ومتغيّر عشوائي يُعرّفه التمرين بتكافؤ الأرقام لا يجوز نمذجته على اللون (كان يعرض توزيعاً لمتغيّر
+  آخر). الخطوات المعتمدة على الأرقام تُنبَعث فقط حين تُرجِع `number_parity_*` قيمةً — التعميم محفوظ (D-076).
 
 ### هـ) قانون WebSocket (D-WS-* — من التأرجح إلى الاستقرار)
 - **الاتصال خالٍ من قاعدة البيانات** (D-WS-CONN-001): الهوية من الـ JWT (`WsActor` +
@@ -1055,7 +1062,7 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 |--------|------------------------------------------------------|
 | الاستمرارية والبثّ | D-006 · D-047 · D-048 · ISS-016/017 |
 | العقل التربوي السقراطي | D-074 · D-104 · D-113 → D-160 |
-| الاحتمالات الحتمية | D-075 → D-085 · D-116 · D-152/153 · **D-182** (`_detect_focus_step` يستهدف السحب المتتالي «تنازلي/على التوالي» بدل الافتراض — إصلاح الانحراف السقراطي · ISS-133b) |
+| الاحتمالات الحتمية | D-075 → D-085 · D-116 · D-152/153 · **D-182** (`_detect_focus_step` يستهدف السحب المتتالي «تنازلي/على التوالي» بدل الافتراض — إصلاح الانحراف السقراطي · ISS-133b) · **D-184** (تغطية التمرين ١٠٠٪: خطوات B/C + الشرطي + D · **البؤرة اللاصقة** — «لم أفهم» تحفظ الموضوع ولا تُصفّره · تصحيح X من اللون إلى تكافؤ الأرقام · بوّابة بنيوية ضد البؤر المعلّقة · ISS-135) |
 | WebSocket | D-WS-001 → D-WS-PROXY-004 · D-096 · ISS-092→101 |
 | الواجهة/الثيم | D-049 → D-059 |
 | تفكيك التعقيد | D-163 → D-172 · **D-182** (مفردات `probability_skill` → `probability_vocab.py`؛ 1459→1256) |
@@ -1064,5 +1071,5 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 | Skills / OOP | §0.5 · D-069 · D-100 · **D-179** (`BaseSkill` قاعدة موحَّدة) · **D-181** (النواة المعرفية للتفكير — `app/core/reasoning` + ٦ مهارات + `compose_reasoning`) |
 | الاستدلال العام (Reasoning) | **D-181** (`app/core/reasoning`: arguments/causal/decomposition/abstraction/mental_model · يرفع `foundations` ACTIVE) |
 | الجذور الأولى + النواة الحاسوبية | **D-183** (إكمال `app/core/foundations`: linear_algebra/calculus/statistics/optimization/graph_theory + data_structures/formal_languages/computability/complexity · `FoundationsComputeSkill` + `foundations-service` :8010 → API-first 12/12 · تغطية 100% للكود الجديد) |
-| التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** (تقلّص deselect + ratchet التغطية 67→70، القياس 71.18% · `.memory/coverage-roadmap.md`) |
+| التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** (تقلّص deselect + ratchet التغطية 67→70، القياس 71.18% · `.memory/coverage-roadmap.md`) · **D-184** (تثبيت `ruff==0.14.0` — المدى العائم `>=0.6,<1` رقّى الـ linter تلقائياً فجعل `required-ci` أحمر على main بلا تغيير كود · ISS-136) |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 · **D-182** (إثبات حيّ: `docker-compose.yml` الحقيقي = 12 حاوية صحّية، 7 Postgres مستقلّة + 3 خدمات تُجيب `/health` — يدحض «حاوية web واحدة» · ISS-134) |

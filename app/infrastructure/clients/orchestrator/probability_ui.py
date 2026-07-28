@@ -343,11 +343,21 @@ class ProbabilityUIMixin:
                 q = user_question.lower()
                 if "p(a" in q or "نفس اللون" in q or "same color" in q:
                     return "same_color_event"
-                if "p(b" in q or "p(c" in q or "فردي" in q or "زوجي" in q:
-                    return "same_color_event"
+                # D-184: الاحتمال الشرطي صار خطوةً قائمةً بذاتها (كان يُطوى في
+                # `same_color_event` فيُسأل الطالب عن الألوان بدل تغيّر الفضاء).
                 if "شرطي" in q or "p_a" in q or "p a" in q:
-                    return "same_color_event"
-                if "x>1" in q or "e(x" in q or "الأمل" in q or "المتغير" in q:
+                    return "conditional_event"
+                # المتغيّر العشوائي **قبل** تكافؤ الجداء: تعريف X نفسه يحوي «زوجي»
+                # («يمثل عدد الكرات التي تحمل رقماً زوجياً») فلا يُختطَف لخطوة B/C.
+                if (
+                    "x>1" in q
+                    or "e(x" in q
+                    or "الأمل" in q
+                    or "المتغير" in q
+                    # صياغة تعريف X نفسها («عدد الكرات التي تحمل رقماً زوجياً»).
+                    # مميِّزة عن الحادثة C («جداء أرقامها عدد زوجي») بـ«عدد الكرات».
+                    or ("عدد الكرات" in q and "زوجي" in q)
+                ):
                     return "random_variable"
                 if "جداء" in q and ("معدوم" in q or "صفر" in q):
                     return "sequential_zero_product"
@@ -367,6 +377,20 @@ class ProbabilityUIMixin:
                     or "ترتيب" in q
                 ):
                     return "sequential_zero_product"
+                # D-184: الحادثتان B وC (تكافؤ **جداء الأرقام**) لهما خطوتهما الآن.
+                # كانتا تُوجَّهان إلى `same_color_event` فيُسأل الطالب عن الألوان
+                # بينما سؤاله عن أرقام الكرات — انحراف موضوعي كامل. تأتي **بعد**
+                # إشارات الطريقة (D-182) كي لا تُختطَف حيرة السحب المتتالي.
+                if "p(b" in q or "p(c" in q or "فردي" in q or "زوجي" in q:
+                    return "product_parity_event"
+                # صياغة الطالب الطبيعية لجداء أرقام الكرات: «لماذا نضرب ثلاثة أرقام
+                # في بعضها». إشارات الطريقة (D-182: تنازلي/على التوالي/الترتيب) تُفحص
+                # **قبلها** فتفوز — فسؤال «نضرب تنازلياً» يبقى على السحب المتتالي كما
+                # قرّر D-182، بينما «نضرب الأرقام» بلا إشارة طريقة يستهدف الحادثتين B وC.
+                if ("جداء" in q or "نضرب" in q or "ضرب" in q or "حاصل" in q) and (
+                    "أرقام" in q or "ارقام" in q or "رقم" in q
+                ):
+                    return "product_parity_event"
                 if "فضاء" in q or "c(" in q or "تأليف" in q:
                     return "sample_space"
                 return None
@@ -401,13 +425,42 @@ class ProbabilityUIMixin:
                     return "same_color_event"
                 return None
 
+            def _recover_recent_focus() -> str | None:
+                """D-184: يسترجع بؤرة الحوار الجارية من الأدوار السابقة.
+
+                «لم أفهم» تعني «لم أفهم ما شرحتَه للتوّ» — لا «ابدأ التمرين من
+                أوّله». قبل D-184 كان غياب إشارة صريحة في السؤال الحالي يُصفّر
+                البؤرة إلى الحدث الافتتاحي، فينحرف المعلّم إلى سؤال الألوان مهما
+                كان الطالب يسأل عنه (كارثة الترانسكريبت الحي: «لم أفهم» بعد سؤال
+                عن جداء الأرقام ⇒ «أيّ الألوان تعطينا 3 كرات من نفس اللون؟»).
+
+                نمسح رسائل **الطالب وحده** من الأحدث للأقدم. استثناء رسائل المساعد
+                مقصود ومُثبَت حياً: ردّ المساعد الأول يحوي نصّ التمرين كاملاً — وفيه
+                «نفس اللون» و«فردي» و«زوجي» و«جداء» معاً — فلو قرأناه لعاد الكاشف
+                دائماً بأول فرع (`same_color_event`) مهما سأل الطالب، أي إعادة إنتاج
+                الكارثة نفسها من باب آخر. البؤرة نيّة **الطالب**، لا نثر المساعد
+                (نفس منطق ISS-120: لا استخراج من النثر المُولَّد).
+                """
+                for _msg in reversed(_dialogue_history):
+                    if _msg.get("role") != "user":
+                        continue
+                    _content = str(_msg.get("content", ""))
+                    if not _content:
+                        continue
+                    _recovered = _detect_focus_step(_content) or _detect_part_reference(_content)
+                    if _recovered:
+                        return _recovered
+                return None
+
             # D-122: حارس سياق الاحتمالات مُعرَّف مبكراً أعلاه (D-123) — يُعاد استخدامه هنا.
             _focus_step_id = _detect_focus_step(question)
             # D-122: لو لم يُطابق رمز صريح، جرّب الإشارة الطبيعية لجزء التمرين —
             # فقط ضمن سياق احتمالات (history) كي لا تُحمَّل احتمالات في موضوع آخر.
-            # «لم أفهم» في سياق احتمالات بلا جزء محدّد ⇒ خطوة الحدث (السؤال الرئيسي).
+            # D-184: ثم البؤرة اللاصقة من الحوار — **قبل** السقوط الافتراضي.
             if _focus_step_id is None and _is_probability_context(_combined_text):
                 _focus_step_id = _detect_part_reference(question)
+                if _focus_step_id is None:
+                    _focus_step_id = _recover_recent_focus()
                 if _focus_step_id is None and _is_deep_pedagogy:
                     _focus_step_id = "same_color_event"
 
@@ -481,6 +534,18 @@ class ProbabilityUIMixin:
                     return (
                         "سنركّز على السحب المتتالي بدون إرجاع: لماذا يتغيّر عدد "
                         "الاختيارات المتاحة في كل سحبة."
+                    )
+                # D-184: بؤرتان جديدتان — نصّهما يتكلّم عن سؤال الطالب فعلاً
+                # (أرقام الكرات / تغيّر الفضاء) لا عن الألوان.
+                if _focus_step_id == "product_parity_event":
+                    return (
+                        "سنركّز على جداء أرقام الكرات: متى يكون فردياً ومتى يصير "
+                        "زوجياً — لا على ألوانها."
+                    )
+                if _focus_step_id == "conditional_event":
+                    return (
+                        "سنركّز على الاحتمال الشرطي: كيف تُغيّر المعلومة المؤكَّدة "
+                        "فضاء الحالات الممكنة قبل أي حساب."
                     )
                 return default_text
 

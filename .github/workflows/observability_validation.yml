@@ -91,7 +91,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install "ruff>=0.6,<1"
+          # D-184: pinned in lockstep with ci.yml — a floating linter is not a gate.
+          pip install "ruff==0.14.0"
           ruff check app/telemetry/otel_setup.py app/telemetry/path_observer.py
           python -m py_compile app/telemetry/otel_setup.py app/telemetry/path_observer.py
           echo "✅ Observability Python is lint-clean and compiles"

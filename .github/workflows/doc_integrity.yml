@@ -22,6 +22,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # D-188: existence is not coherence. This gate catches the drift class that
+      # went unnoticed for two months — a stale sovereign index, a decision filed
+      # out of order, a constitution growing back into an encyclopedia, and a
+      # runtime-truth lock older than the newest decision.
+      - name: Memory coherence (D-188)
+        run: python scripts/fitness/check_memory_coherence.py
+
       - name: CLAUDE.md exists and is non-empty
         run: |
           test -f CLAUDE.md || { echo "::error::CLAUDE.md is missing"; exit 1; }

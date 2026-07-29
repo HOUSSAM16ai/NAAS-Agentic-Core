@@ -14,7 +14,7 @@
     python scripts/contracts/generate_frontend_types.py            # يكتب الملف
     python scripts/contracts/generate_frontend_types.py --check    # يفشل عند الانحراف
 
-المخرَج: `frontend/app/types/api.d.ts` (مُولَّد — لا يُحرَّر يدوياً).
+المخرَج: `frontend/types/api.d.ts` (مُولَّد — لا يُحرَّر يدوياً).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS_DIR = REPO_ROOT / "docs/contracts/openapi"
-OUTPUT = REPO_ROOT / "frontend/app/types/api.d.ts"
+OUTPUT = REPO_ROOT / "frontend/types/api.d.ts"
 
 #: عمق تعشيش أقصى — يمنع الانفجار على المخططات العَودية.
 _MAX_DEPTH = 6
@@ -44,30 +44,40 @@ _PRIMITIVES: dict[str, str] = {
 }
 
 
-def ts_type(schema: dict[str, Any], depth: int = 0) -> str:
-    """يحوّل مخطط JSON Schema واحداً إلى تعبير نوع TypeScript."""
+def ts_type(schema: dict[str, Any], depth: int = 0, prefix: str = "") -> str:
+    """يحوّل مخطط JSON Schema واحداً إلى تعبير نوع TypeScript.
+
+    ``prefix`` هو بادئة الخدمة. الإحالات (``$ref``) **يجب** أن تحمل البادئة نفسها التي
+    تحملها التصريحات، وإلّا أشارت إلى اسم غير موجود — وهو ما التقطه `tsc` فعلاً
+    (`Cannot find name 'Stage1SceneResponse'`).
+    """
     if depth > _MAX_DEPTH or not isinstance(schema, dict):
         return "unknown"
     if "$ref" in schema:
-        return schema["$ref"].rsplit("/", 1)[-1].replace("-", "_")
+        return _ident(prefix, schema["$ref"].rsplit("/", 1)[-1])
     union = schema.get("anyOf") or schema.get("oneOf")
     if union:
-        parts = [ts_type(item, depth + 1) for item in union]
+        parts = [ts_type(item, depth + 1, prefix) for item in union]
         return " | ".join(dict.fromkeys(parts)) or "unknown"
     schema_type = schema.get("type")
     if schema_type == "array":
-        return f"{ts_type(schema.get('items', {}), depth + 1)}[]"
+        return f"{ts_type(schema.get('items', {}), depth + 1, prefix)}[]"
     if schema_type == "object" or "properties" in schema:
         properties = schema.get("properties") or {}
         if not properties:
             return "Record<string, unknown>"
         required = set(schema.get("required") or ())
         body = "; ".join(
-            f"{_prop_key(key)}{'' if key in required else '?'}: {ts_type(value, depth + 1)}"
+            f"{_prop_key(key)}{'' if key in required else '?'}: {ts_type(value, depth + 1, prefix)}"
             for key, value in properties.items()
         )
         return "{ " + body + " }"
     return _PRIMITIVES.get(str(schema_type), "unknown")
+
+
+def _ident(prefix: str, name: str) -> str:
+    """الاسم القانوني لنوعٍ داخل خدمة — بادئة الخدمة + اسم المخطط."""
+    return f"{prefix}{name.replace('-', '_')}"
 
 
 def _prop_key(key: str) -> str:
@@ -139,13 +149,14 @@ def render() -> str:
         if not picked:
             continue
         title = (spec.get("info") or {}).get("title", service)
+        prefix = service.title().replace("_", "")
         lines.append(f"// ── {service} ({title}) ─────────")
         for name, schema in sorted(picked.items()):
-            ident = f"{service.title().replace('_', '')}{name.replace('-', '_')}"
+            ident = _ident(prefix, name)
             if ident in emitted:
                 continue
             emitted.add(ident)
-            lines.append(_declaration(ident, ts_type(schema)))
+            lines.append(_declaration(ident, ts_type(schema, prefix=prefix)))
         lines.append("")
     lines += _footer()
     return "\n".join(lines)

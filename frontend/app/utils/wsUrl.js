@@ -1,5 +1,5 @@
 /**
- * wsUrl.ts — WebSocket URL generation utility (TypeScript — D-185)
+ * wsUrl.js — WebSocket URL generation utility
  *
  * ## لماذا هذا الملف موجود؟
  *
@@ -24,13 +24,12 @@
 
 const isBrowser = typeof window !== 'undefined';
 
-/** بروتوكول WebSocket المسموح — لا سلسلة حرّة. */
-export type WsProtocol = 'wss:' | 'ws:';
-
 /**
  * يحوِّل بروتوكول HTTP إلى WebSocket المقابل.
+ * @param {string} protocol - window.location.protocol
+ * @returns {'wss:' | 'ws:'}
  */
-export const httpToWsProtocol = (protocol: string): WsProtocol => {
+export const httpToWsProtocol = (protocol) => {
     if (protocol === 'https:') return 'wss:';
     if (protocol === 'http:') return 'ws:';
     // إذا كان البروتوكول مجهولاً → افترض wss للأمان
@@ -45,8 +44,9 @@ export const httpToWsProtocol = (protocol: string): WsProtocol => {
  * D-WS-GITPOD-001: Gitpod Flex يستخدم نطاق *.gitpod.dev (ليس *.gitpod.io)
  * مثال: 5000--019e6245-7448-7aac-964e-e9290606bc52.eu-central-1-01.gitpod.dev
  *
+ * @returns {boolean}
  */
-export const isCloudWorkspace = (): boolean => {
+export const isCloudWorkspace = () => {
     if (!isBrowser) return false;
     const host = window.location.hostname;
     return (
@@ -79,9 +79,9 @@ export const isCloudWorkspace = (): boolean => {
  * الحل: استخدام window.location.host (port 5000) — server.js يُمرِّر WS إلى localhost:8000.
  * لا نُعيد كتابة الـ port لـ *.app.github.dev.
  *
- * يُعيد host الـ backend، أو null فيُستخدم window.location.host.
+ * @returns {string | null} host للـ backend، أو null للاستخدام window.location.host
  */
-export const getCloudBackendHost = (): string | null => {
+export const getCloudBackendHost = () => {
     if (!isBrowser) return null;
     const host = window.location.host;
 
@@ -139,9 +139,9 @@ export const getCloudBackendHost = (): string | null => {
  * 3. Cloud workspace port mapping (Gitpod/Ona/Codespaces)
  * 4. window.location.host (local dev — Next.js proxy يُمرِّر HTTP لكن ليس WS)
  *
- * يُعيد WebSocket base URL (مثل: wss://host أو ws://host:8000).
+ * @returns {string} WebSocket base URL (مثل: wss://host أو ws://host:8000)
  */
-export const getWsBase = (): string => {
+export const getWsBase = () => {
     if (!isBrowser) return '';
 
     // 1. تهيئة صريحة عبر env var
@@ -208,15 +208,12 @@ export const getWsBase = (): string => {
  * ISS-WS-001: token يُضاف كـ query param هنا إذا مُرِّر.
  * هذا يضمن وصوله حتى عندما يحذف proxy الـ sec-websocket-protocol header.
  *
- * @param endpoint المسار النسبي (مثل /api/chat/ws)
- * @param sessionId معرف الجلسة للـ session affinity
- * @param token رمز JWT للمصادقة (اختياري — يُضاف كـ ?token=)
+ * @param {string} endpoint - المسار النسبي (مثل /api/chat/ws)
+ * @param {string} [sessionId] - معرف الجلسة للـ session affinity
+ * @param {string} [token] - JWT token للمصادقة (اختياري — يُضاف كـ ?token=)
+ * @returns {string} WebSocket URL كامل
  */
-export const buildWsUrl = (
-    endpoint: string,
-    sessionId?: string,
-    token?: string,
-): string => {
+export const buildWsUrl = (endpoint, sessionId, token) => {
     if (!isBrowser || !endpoint) return '';
 
     const base = getWsBase();
@@ -254,12 +251,13 @@ export const buildWsUrl = (
  * يُعيد أو يُنشئ session ID ثابت للمتصفح.
  * يُستخدم لـ session affinity في WebSocket connections.
  *
+ * @returns {string}
  */
-export const getOrCreateSessionId = (): string => {
+export const getOrCreateSessionId = () => {
     if (!isBrowser) return `ssr-${Date.now()}`;
 
     try {
-        let sessionId: string | null = sessionStorage.getItem('cogniforge_ws_session_id');
+        let sessionId = sessionStorage.getItem('cogniforge_ws_session_id');
         if (!sessionId) {
             sessionId =
                 typeof crypto !== 'undefined' && crypto.randomUUID

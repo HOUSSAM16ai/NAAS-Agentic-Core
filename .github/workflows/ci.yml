@@ -151,6 +151,11 @@ jobs:
           # and the notation registry must have exactly one canonical source.
           python scripts/fitness/check_notation_definable.py
           python scripts/fitness/check_notation_parity.py
+          # D-186 (ISS-139): student intent has exactly one canonical source. Three
+          # consecutive catastrophes shared one root — several marker lists for the
+          # same intent drifting apart — so a sixth list must be impossible, not
+          # merely discouraged. The remaining duplicates are frozen and shrink-only.
+          python scripts/fitness/check_intent_single_source.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

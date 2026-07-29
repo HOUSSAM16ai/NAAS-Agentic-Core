@@ -40,6 +40,7 @@ from pydantic import Field
 from app.core.schemas import RobustBaseModel
 from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import STUDENT_STATE_DOCTRINE_VERSION
+from shared.intent import markers_for
 
 #: نيّات الطالب — ماذا يريد (لا «ما المفهوم»).
 Intent = Literal[
@@ -62,96 +63,27 @@ def _normalize(text: str) -> str:
     return (text or "").translate(_AR_DIGITS).strip().lower()
 
 
-# ── markers محلية (§0.5: استقلال — لا استيراد من Skills أخرى) ─────────────────────────
+# ── markers من المصدر القانوني الواحد (D-186) ─────────────────────────────────────────
+# §0.5 يمنع استيراد **مهارة** من مهارة أخرى؛ و`shared/intent` ليست مهارة بل مكتبة
+# حتمية بلا تبعيات (نظير `shared/notation` الذي تستهلكه `NotationSkill`). الاستقلال محفوظ:
+# لا حالة ولا شبكة ولا استيراد من `app/`.
+#
+# **لماذا لم تعد محلّية (ISS-139):** كانت `_DEFINITION_MARKERS` هنا (13 علامة) تُخالف
+# `_DEFINITIONAL_MARKERS` في `semantic_property` (23) و`_DEFINITIONAL_INTENT` في
+# `shared/notation` (27) — بلا اتّفاق بين أيّ اثنتين. فـ«ماذا يقصد بالحرف C» صُنِّفت
+# `unknown` هنا، فتخطّى الدورُ المرحلةَ التعريفية وأُجيب الطالب بمثالٍ عارٍ.
 #: حيرة صريحة («لم أفهم/مش فاهم»). أولوية عالية: الحيرة تطغى على بقية النيّات.
-_CONFUSION_MARKERS: tuple[str, ...] = (
-    "لم افهم",
-    "لم أفهم",
-    "مش فاهم",
-    "ما فهمت",
-    "مافهمت",
-    "لا افهم",
-    "لا أفهم",
-    "مفهمتش",
-    "مازلت لا",
-    "ما زلت لا افهم",
-    "صعب",
-    "صعبة",
-    "ما فهمتش",
-    "حاير",
-    "محتار",
-    "لا اعرف",
-    "لا أعرف",
-    "معرفتش",
-)
+_CONFUSION_MARKERS: tuple[str, ...] = markers_for("confusion")
 #: طلب مثال صريح («أعطني مثالاً»).
-_EXAMPLE_MARKERS: tuple[str, ...] = (
-    "اعطني مثال",
-    "أعطني مثال",
-    "اعطيني مثال",
-    "مثالا",
-    "مثالاً",
-    "مثال على",
-    "مثال عن",
-    "هات مثال",
-    "اعطني مثل",
-    "example",
-)
+_EXAMPLE_MARKERS: tuple[str, ...] = markers_for("example_request")
 #: طلب إجراء/طريقة حساب («كيف نحسب»).
-_PROCEDURE_MARKERS: tuple[str, ...] = (
-    "كيف نحسب",
-    "كيف احسب",
-    "كيف أحسب",
-    "كيفاش نحسب",
-    "كيف نوجد",
-    "كيف نجد",
-    "ما هي الخطوات",
-    "ماهي الخطوات",
-    "خطوات الحل",
-    "طريقة الحساب",
-    "كيف نحل",
-    "كيفاش نحل",
-)
+_PROCEDURE_MARKERS: tuple[str, ...] = markers_for("procedure")
 #: نيّة تعريفية («ما معنى/ماذا نقصد»).
-_DEFINITION_MARKERS: tuple[str, ...] = (
-    "ماذا نقصد",
-    "ما معنى",
-    "ما المقصود",
-    "ما هو معنى",
-    "ماذا يعني",
-    "ماذا تعني",
-    "ما هو",
-    "ما هي",
-    "عرف",
-    "عرّف",
-    "شنو يقصد",
-    "واش راه",
-    "ما تعريف",
-)
-#: مقارنة/علاقة (يُعيد استخدام منطق D-125 محلياً — استقلال).
-_COMPARISON_MARKERS: tuple[str, ...] = (
-    "الفرق بين",
-    "ما الفرق",
-    "الفرق",
-    "قارن",
-    "العلاقة بين",
-    "ما العلاقة",
-    "الهدف من",
-    "ما الهدف",
-    "لماذا نستخدم",
-    "vs",
-)
+_DEFINITION_MARKERS: tuple[str, ...] = markers_for("definition")
+#: مقارنة/علاقة (D-125).
+_COMPARISON_MARKERS: tuple[str, ...] = markers_for("comparison")
 #: طلب تلميح/مساعدة («تلميح/ساعدني»).
-_HINT_MARKERS: tuple[str, ...] = (
-    "تلميح",
-    "ساعدني",
-    "اعطني تلميح",
-    "ساعديني",
-    "hint",
-    "دلني",
-    "وجهني",
-    "ارشدني",
-)
+_HINT_MARKERS: tuple[str, ...] = markers_for("hint_request")
 #: أدوات استفهام (الرسالة التي تبدأ بها = ليست إجابة قصيرة).
 _QUESTION_STARTERS: tuple[str, ...] = (
     "ما",

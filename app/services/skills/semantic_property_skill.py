@@ -39,6 +39,7 @@ from pydantic import Field
 from app.core.schemas import RobustBaseModel
 from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import SEMANTIC_PROPERTY_DOCTRINE_VERSION
+from shared.intent import markers_for
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
@@ -615,48 +616,18 @@ except Exception:  # pragma: no cover
 #: نية تعريفية صريحة («ماذا نقصد / ما معنى / ما المقصود / كيف أفهم / ما هو X / عرّف»).
 #: D-137: «ما هو X» المجرّدة كانت مفقودة ⇒ «ما هو الاحتمال الشرطي» لم تُعدّ تعريفية ⇒ سقطت
 #: لـ D-135 فبثّ «14 من 165». أي سؤال «ما هو/ما هي/عرّف» نيّته تعريف.
-_DEFINITIONAL_MARKERS: tuple[str, ...] = (
-    "ماذا نقصد",
-    "ما معنى",
-    "ما المقصود",
-    "ما هو معنى",
-    "ما هو ",
-    "ما هي ",
-    "ماهو ",
-    "ماهي ",
-    "عرف ",
-    "عرّف ",
-    "كيف افهم",
-    "ماذا يعني",
-    "ماذا تعني",
-    "شنو يقصد",
-    "واش راه",
-    "علاش قال",
-    # D-162 (ISS-128): نية التسمية — «ماذا نسمي حساب 4 و 10؟» سؤال تعريفي يطلب
-    # **اسم** العملية (التوافيق)، كان أعمى عنه كل هذا السجلّ.
-    "ماذا نسمي",
-    "ما نسمي",
-    "ما اسم",
-    "ما إسم",
-    "ماذا يسمى",
-    "ما يسمى",
-    "ما تسمية",
-)
+#:
+#: **D-186 (ISS-139):** لم تعد قائمةً محلّية. كانت ثلاث قوائم للنيّة التعريفية (هنا 23،
+#: و`student_state` 13، و`shared/notation` 27) **لا تتّفق أيّ اثنتين منها** — فـ«ماذا يقصد
+#: بالحرف C» عرفتها واحدة فقط، فسقطت المرحلة التعريفية وأُجيب الطالب بمثالٍ عارٍ.
+#: المصدر الآن `shared/intent` وحده، وبوّابة CI تمنع عودة النسخ.
+_DEFINITIONAL_MARKERS: tuple[str, ...] = markers_for("definition")
 #: enum مُقيَّد لمخرج الـ LLM Listener (الطبقة 1 الآمنة).
 _VALID_PROPERTIES: frozenset[str] = frozenset(PROPERTY_REGISTRY)
 
 #: D-142 (1D): علامات الحيرة — حيرة بلا تسمية مفهوم جديد تُبقي المفهوم النشط (لا تنجرف).
-_CONFUSION_MARKERS: tuple[str, ...] = (
-    "لم أفهم",
-    "لم افهم",
-    "مفهمتش",
-    "ما فهمت",
-    "لا أفهم",
-    "لا افهم",
-    "ما فهمتش",
-    "صعب",
-    "مش فاهم",
-)
+#: D-186: من المصدر القانوني الواحد.
+_CONFUSION_MARKERS: tuple[str, ...] = markers_for("confusion")
 #: D-142 (1D): كلمات وظيفية تُهمَل عند فحص «هل سمّى السؤال مفهوماً جديداً؟».
 _STOPWORDS_FOR_CONCEPT_NAMING: frozenset[str] = frozenset(
     {"بكلمة", "كلمة", "في", "عن", "ال", "هذا", "هذه", "ذلك", "هنا", "ب", "بـ"}
@@ -740,7 +711,11 @@ class SemanticPropertySkill(BaseSkill):
         return SemanticPropertyOutput(
             property_id=property_id,
             title=entry.title,
-            definition=f"{entry.definition}\n\n{entry.example}",
+            # D-186 (ISS-139): الحقلان **منفصلان**. كان `definition` يحشو المثال داخله
+            # **و** يُعاد في `example` — فيرى `_levels_delivered` المثالَ «مُسلَّماً» بمجرّد
+            # عرض التعريف، فيقفز سُلّم التصعيد فوق الرُّتبتين معاً. الازدواج كان يُسمّم
+            # كشف الرُّتب المُسلَّمة لا مجرّد تكرارٍ تجميلي.
+            definition=entry.definition,
             concept_id=entry.concept_id or "event_meaning",
             domain="mathematical_notation",
             source="deterministic",

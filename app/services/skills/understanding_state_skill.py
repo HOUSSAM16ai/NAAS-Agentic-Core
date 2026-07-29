@@ -33,6 +33,7 @@ from typing import Literal
 
 from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import UNDERSTANDING_STATE_DOCTRINE_VERSION
+from shared.intent import markers_for
 
 KCState = Literal["not_addressed", "explained", "understood"]
 DecisionAction = Literal["explain", "re_represent", "advance", "mastered"]
@@ -40,17 +41,10 @@ DecisionAction = Literal["explain", "re_represent", "advance", "mastered"]
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
 #: علامات حيرة/شكوى تكرار — «لم أفهم *هذا*» تُصعّد التركيز الحالي لا تقفز للجبهة (نقد 4).
+#: D-186: الحيرة من المصدر القانوني الواحد؛ وشكوى **التكرار** تبقى محلّية لأنها ليست
+#: حيرة («كررت نفس الجواب» شكوى من سلوك النظام لا عجزٌ عن الفهم).
 _CONFUSION_MARKERS: tuple[str, ...] = (
-    "لم افهم",
-    "لم أفهم",
-    "مش فاهم",
-    "ما فهمت",
-    "مافهمت",
-    "لا افهم",
-    "لا أفهم",
-    "مفهمتش",
-    "مازلت لا",
-    "صعب",
+    *markers_for("confusion"),
     "تكرر",
     "كررت",
     "نفس الجواب",

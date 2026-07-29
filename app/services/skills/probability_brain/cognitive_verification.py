@@ -293,6 +293,33 @@ class CognitiveVerificationMixin:
         return False
 
     @classmethod
+    def _has_live_concept_focus(
+        cls, question: str, history_messages: list[dict[str, str]] | None
+    ) -> bool:
+        """D-186 (ISS-139): هل للحوار بؤرة مفهومية حيّة يجب ألّا يُصفّرها probe الافتتاح؟
+
+        شرطان معاً: (1) الدور الحالي **حيرة مجرّدة** («لم أفهم») — لا سؤال جديد ولا
+        إجابة؛ (2) هناك مفهوم نشط طرحه **الطالب** نفسه في أدوار سابقة
+        (`detect_active_concept` — D-137: نيّة الطالب لا نثر المساعد).
+
+        عندها يُسلَّم الدور لمصفوفة التصعيد (حيرة + مفهوم نشط ⇒ الرُّتبة التالية) بدل
+        السؤال الافتتاحي عن الألوان. `fail-open`: أي خطأ ⇒ `False` فيبقى السلوك القديم.
+        """
+        try:
+            from shared.intent import classify
+
+            if classify(question) != "confusion":
+                return False
+            from app.services.skills.semantic_property_skill import get_semantic_property_skill
+
+            return (
+                get_semantic_property_skill().detect_active_concept(question, history_messages)
+                is not None
+            )
+        except Exception:  # pragma: no cover - fail-open: لا نكسر الدور أبداً
+            return False
+
+    @classmethod
     def _build_diagnostic_probe(cls, combo) -> str:
         """ISS-122 (D-155): سؤال تشخيصي واحد قبل أي محتوى محسوب — «التشخيص قبل الشرح».
 

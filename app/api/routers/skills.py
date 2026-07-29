@@ -186,6 +186,49 @@ async def reason_endpoint(
     )
 
 
+class NotationRequest(RobustBaseModel):
+    """سؤال الطالب الحرّ عن رمز رياضي («ماذا نقصد بحرف C»)."""
+
+    question: str = Field(..., min_length=1, max_length=2000)
+
+
+class NotationResponse(RobustBaseModel):
+    """الرمز المُعرَّف — `found=false` جواب مشروع لا خطأ."""
+
+    found: bool
+    symbol: str | None = None
+    title: str | None = None
+    definition: str | None = None
+    example: str | None = None
+    concept_id: str | None = None
+
+
+@router.post("/notation", response_model=NotationResponse, summary="Notation layer (D-185)")
+async def notation_endpoint(
+    payload: NotationRequest,
+    _: CurrentUser = Depends(get_current_user),
+) -> NotationResponse:
+    """يُعرِّف رمزاً رياضياً من سؤال الطالب الحرّ — «النظام يعرّف كل رمز يطبعه» (D-185).
+
+    حتمي 100% وبلا LLM (CLAUDE.md §0: الحقيقة الرمزية قبل اللغة). يعكس عقد
+    `notation-service :8011`، ويعمل كاملاً بدونها (تدهور رشيق — قانون المهارات ٥).
+    التعريف **ليس إجابة**: الأمثلة محايدة فلا تسريب لأرقام التمرين الجاري (D-113).
+    """
+    from app.services.skills.notation_skill import get_notation_skill
+
+    entry = get_notation_skill().resolve(payload.question)
+    if entry is None:
+        return NotationResponse(found=False)
+    return NotationResponse(
+        found=True,
+        symbol=entry.symbol,
+        title=entry.title,
+        definition=entry.definition,
+        example=entry.example,
+        concept_id=entry.concept_id,
+    )
+
+
 @router.post("/compute", response_model=ComputeResponse, summary="Foundations compute core (D-183)")
 async def compute_endpoint(
     payload: ComputeRequest,

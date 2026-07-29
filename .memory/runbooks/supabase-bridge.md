@@ -50,3 +50,23 @@ Exit codes: `0` = HTTP 2xx · `1` = HTTP/network error · `2` = bad usage / miss
 - **Cache work (D-180):** the cognitive cache is in-process (per-worker `deque`) and does
   not touch Postgres, so the bridge is only needed to verify *persisted chat rows* during
   a live E2E run — not the cache itself.
+
+---
+
+## مُتحقَّق حيّاً (2026-07-28، D-185)
+
+```
+set -a && . .devcontainer/secrets.env && set +a
+python3 scripts/db_bridge.py --version
+→ {"success": true, "data": [{"version": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu ..."}]}
+   [HTTP 200 · 1834ms]
+```
+
+الجسر هو **المسار الوحيد** الذي يصل قاعدة البيانات من هذا الصندوق: منفذا Postgres (5432/6543)
+محجوبان على مستوى الشبكة (مُقاس بـ`socket.connect` مباشرةً، لا استنتاجاً)، بينما HTTPS:443 مفتوح.
+
+**حدوده — تُحترَم ولا تُتجاوَز:**
+- مسار **تشخيص/قراءة/DDL يدوي** فقط. **ليس مسار كتابة للتطبيق** (D-006: كاتب واحد).
+- التطبيق نفسه لا يستعمله إطلاقاً؛ يبقى على `DATABASE_URL` عبر SQLAlchemy.
+- الرمز من البيئة حصراً (`SUPABASE_EDGE_FUNCTION_KEY`)، ولا يُطبَع ولا يُلتزَم في git.
+

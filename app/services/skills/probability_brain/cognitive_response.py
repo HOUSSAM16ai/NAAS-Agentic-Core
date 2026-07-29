@@ -173,6 +173,26 @@ class CognitiveResponseMixin:
                 "«نجحت» وحقّقت A، ومتى تقول إنها فشلت؟ أعطني مثالاً من عندك."
             )
 
+        # ── combinations (معنى الرمز C نفسه) — D-185 (ISS-138) ────────────────
+        # القيمة `combinations` موجودة في enum المفاهيم و`PROPERTY_REGISTRY` منذ D-162،
+        # لكن لم يكن لها فرع هنا إطلاقاً ⇒ `return None` صامتة (قيمة enum ميتة) ⇒ الدور
+        # يسقط إلى إفراغ الحل الكامل. التعريف **ليس إجابة**: نشرح الرمز بمثال محايد
+        # ولا نكشف أرقام التمرين الجاري (D-113).
+        if concept == "combinations":
+            from app.services.skills.notation_skill import get_notation_skill
+            from app.services.skills.tutor_metrics import record_definitional_answer
+
+            _entry = get_notation_skill().define("C(n,k)")
+            if _entry is not None:
+                record_definitional_answer("combinations", resolved=True)
+                if level == 0:
+                    return f"## {_entry.title}\n\n{_entry.definition}\n\n{_entry.example}"
+                return (
+                    f"{_entry.example}\n\nسؤال لك حتى نتأكّد أنّ الفكرة رسخت: لو كان "
+                    "الترتيب **يهمّ** (سحبنا الكرات واحدةً تلو الأخرى)، هل تتوقّع عدد "
+                    "الطرق أكبر أم أصغر؟ ولماذا؟"
+                )
+
         # ── full_solution / حيرة عامة ─────────────────────────────────────────
         if concept == "full_solution":
             if level == 0:

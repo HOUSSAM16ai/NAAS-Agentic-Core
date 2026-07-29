@@ -442,6 +442,26 @@ services:
       timeout: 10s
       retries: 3
 
+  # Notation Service (D-185) - "the system defines every symbol it prints" (ISS-138)
+  # No DB, no API keys, no LLM: a stdlib-only symbol registry, so it always boots.
+  notation-service:
+    build:
+      context: .
+      dockerfile: microservices/notation_service/Dockerfile
+    container_name: cogniforge-notation-service
+    restart: always
+    ports:
+      - "8011:8011"
+    environment:
+      - SERVICE_NAME=notation-service
+    networks:
+      - cogniforge-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8011/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Reasoning Agent - Handles deep thinking requests
   reasoning-agent:
     build:

@@ -257,3 +257,27 @@ scrape_configs:
           service: foundations-service
           step: "13"
     honor_labels: false
+
+  # ── D-185: notation-service (:8011) ──────────────────────────────────────
+  # طبقة الرموز الرياضية — «النظام يعرّف كل رمز يطبعه» (ISS-138).
+  # لا LLM ولا DB — سجلّ stdlib حتمي (C, A, n!, P, P_A(B), X, E(X), Ω, ∩, ∪, Ā).
+  # المقاييس: cogniforge_notation_requests_total{endpoint,status} +
+  #           cogniforge_notation_request_duration_seconds{endpoint} +
+  #           cogniforge_notation_active_connections +
+  #           cogniforge_notation_resolutions_total{result} +
+  #           cogniforge_notation_definitions_total{result} +
+  #           cogniforge_notation_symbol_hits_total{symbol} +
+  #           cogniforge_notation_unknown_total +
+  #           cogniforge_notation_startup_info{step="14",version,registry_version,symbols}
+  # يبدأ تلقائياً عبر supervisor.sh STEP 4L. DOWN حتى يُقلع الـ process.
+  - job_name: notation-service
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    static_configs:
+      - targets: ["localhost:8011"]
+        labels:
+          tier: microservice
+          service: notation-service
+          step: "14"
+    honor_labels: false

@@ -142,10 +142,22 @@ Dyck + اشتقاق نحوي) · `computability` (أكرمان + قابلية ت
 
 مكشوفة كـ **Skill** (`FoundationsComputeSkill` على `BaseSkill` — `foundations_compute`) عبر
 `POST /api/v1/skills/compute` (المونوليث) وفرع `compute` في `compose_reasoning`، و**كخدمة مصغّرة
-API-first** `foundations-service` على `:8010` (contract ملتزَم → **API-first 12/12**؛ محرّكات مُوَرَّدة،
+API-first** `foundations-service` على `:8010` (contract ملتزَم؛ محرّكات مُوَرَّدة،
 بلا استيراد `app`). دوالّ التفاضل/التحسين تُمرَّر كمعاملات كثير حدود (`[c0,c1,c2] → c0+c1x+c2x²`)
 فيبقى السطح آمناً على JSON بلا `eval`. كل الكود الجديد مُغطّى اختبارياً 100%. **قاعدة دائمة:** الأرقام
 والبنى من محرّكات `foundations` الحتمية حصراً — لا يُقرّرها الـ LLM (§0: الحقيقة الرمزية قبل اللغة).
+
+### طبقة الرموز الرياضية (D-185 — 2026-07-28)
+
+`shared/notation/registry.py` (dep-free، stdlib) هو **المصدر القانوني الوحيد** لمعنى كل رمز
+يطبعه النظام (`C(n,k)` · `A(n,k)` · `n!` · `P(A)` · `P_A(B)` · `X` · `E(X)` · `Ω` · `∩` · `∪` ·
+`Ā`)، بعلامات تُغطّي صيغ الطالب الحقيقية (فصحى/دارجة/فرنسية) وحارسَي التباس: الحروف المفردة
+تتطلّب إشارة «حرف/رمز» صريحة ولا تُطابَق في سياق «الحادثة C»، والنيّة الحسابية تُلغي التعريف
+فلا يُخطَف دورٌ حسابي. مكشوف كـ **Skill** (`NotationSkill` على `BaseSkill` — `notation`) عبر
+`POST /api/v1/skills/notation` وفرع `notation` في `compose_reasoning`، و**كخدمة مصغّرة API-first**
+`notation-service` على `:8011` (contract ملتزَم → **API-first 13/13**؛ نسخة مُوَرَّدة محروسة
+بـ`check_notation_parity`، بلا استيراد `app`). الدور التعليمي يستعمل الفرع الحتمي **المحلّي**
+(بلا شبكة، صفر زمن إضافي على الطالب) والخدمة للـAPI والوكلاء بتدهور رشيق. القواعد الدائمة في §6.7 (د).
 
 ### قواعد إلزامية لكل Skill جديد
 
@@ -934,6 +946,17 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 - **صفر تكرار حرفي** (`_recently_emitted` + مرساة `last_step_emitted`)؛ **لا تسرّب تفكير النظام**
   للطالب (D-117: ممنوع prepend «[توجيه تربوي]»، العمق يصل عبر `support_level`)؛ **فجوة الوهم**
   (assisted − durable) هي مقياس النجاح الوحيد (D-126/D-157).
+- **النظام يعرّف كل رمز يطبعه (D-185 — 2026-07-28 · ISS-138)**: طالب سأل «ماذا نقصد بحرف C» عن
+  رمزٍ طبعه المعلّم نفسه، فتُجوهِل سؤاله وأُعيد عليه الاشتقاق مع تسريب `14`/`165` — لأن كل نقاط
+  المطابقة كانت مفتاحها **اسم المفهوم** لا **الرمز** (دائرة مغلقة: من لا يعرف الاسم لا يسأل).
+  المصدر القانوني للرموز هو `shared/notation/registry.py` (dep-free)، مكشوفاً كخدمة **API-first**
+  `notation-service :8011` وكمهارة `NotationSkill` بتدهور رشيق (الدور التعليمي يستعمل الفرع
+  الحتمي المحلّي — بلا شبكة). **القواعد الدائمة:** (1) رمز يُبَثّ بلا إدخال في السجلّ ⇒ CI أحمر
+  (`check_notation_definable`)؛ (2) **التعريف ليس إجابة** — أمثلة السجلّ محايدة وممنوع أن تحمل
+  أرقام التمرين الجاري؛ (3) **الرمز قبل الكاشفات** — أي مسار شرح احتمالي يفحص طبقة الرموز أولاً،
+  والتباس «الحرف C» بـ«الحادثة C» تسريبٌ كارثي؛ (4) حارس التكرار **متماثل** (القسمة على الأصغر)
+  فـ«تكرار + إضافة» تكرارٌ حقاً؛ (5) نسخة الخدمة مُوَرَّدة ومحروسة بـ`check_notation_parity`
+  (مصدر واحد + مرآة، لا نسخة ثالثة).
 - **البصري الحتمي للاحتمالات** (D-116): كل مكوّنات الاحتمالات `terminate_pipeline=True` (صفر سرد LLM)؛
   الكيانات من `parsed_entities` لا نثر الحل (ISS-120)؛ ممنوع `C_n^k=0` مضلِّل (رسالة تربوية بدله).
 - **البؤرة لاصقة، والتغطية كاملة، ولا بؤرة معلّقة (D-184 — 2026-07-28)**: «لم أفهم» تعني «لم أفهم ما
@@ -1070,6 +1093,8 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
 | الكاش (Cache) | D-180 (كاش معرفي عربيّ-أولاً + استرجاع صمود · ISS-133) |
 | Skills / OOP | §0.5 · D-069 · D-100 · **D-179** (`BaseSkill` قاعدة موحَّدة) · **D-181** (النواة المعرفية للتفكير — `app/core/reasoning` + ٦ مهارات + `compose_reasoning`) |
 | الاستدلال العام (Reasoning) | **D-181** (`app/core/reasoning`: arguments/causal/decomposition/abstraction/mental_model · يرفع `foundations` ACTIVE) |
-| الجذور الأولى + النواة الحاسوبية | **D-183** (إكمال `app/core/foundations`: linear_algebra/calculus/statistics/optimization/graph_theory + data_structures/formal_languages/computability/complexity · `FoundationsComputeSkill` + `foundations-service` :8010 → API-first 12/12 · تغطية 100% للكود الجديد) |
+| الجذور الأولى + النواة الحاسوبية | **D-183** (إكمال `app/core/foundations`: linear_algebra/calculus/statistics/optimization/graph_theory + data_structures/formal_languages/computability/complexity · `FoundationsComputeSkill` + `foundations-service` :8010 · تغطية 100% للكود الجديد) |
+| طبقة الرموز الرياضية | **D-185** (`shared/notation` مصدر قانوني + `notation-service` :8011 → **API-first 13/13** + `NotationSkill` بتدهور رشيق · «النظام يعرّف كل رمز يطبعه» · الرمز قبل الكاشفات · حارس تكرار متماثل · بوّابتا «لا رمز يتيم» والتكافؤ · ISS-138) |
+| تعدّد اللغات (Polyglot) | **D-185/ADR-006** (TypeScript مُتبنّىً فعلاً: `tsconfig` + أنواع مُولَّدة من عقود OpenAPI + `wsUrl.ts` + `typecheck` في CI؛ التسع الباقيات مقاعد موثّقة بشرط تبنٍّ في `EXTENSION_SEAMS.md §7` — **الحدّ هو العقد لا اللغة**) |
 | التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** (تقلّص deselect + ratchet التغطية 67→70، القياس 71.18% · `.memory/coverage-roadmap.md`) · **D-184** (تثبيت `ruff==0.14.0` — المدى العائم `>=0.6,<1` رقّى الـ linter تلقائياً فجعل `required-ci` أحمر على main بلا تغيير كود · ISS-136) |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 · **D-182** (إثبات حيّ: `docker-compose.yml` الحقيقي = 12 حاوية صحّية، 7 Postgres مستقلّة + 3 خدمات تُجيب `/health` — يدحض «حاوية web واحدة» · ISS-134) |

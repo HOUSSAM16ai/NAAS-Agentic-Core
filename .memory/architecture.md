@@ -456,3 +456,25 @@ If a doc here ever says a ZOMBIE/DORMANT component is "the primary handler", tha
 - **Coupling debt:** routers depend on the **concrete** `orchestrator_client` singleton (no port — DIP gap on the hot path, addressed in D-176 Phase 2); `app/api/routers/content.py` runs inline raw SQL (fat router — Phase 4).
 
 **Enforcement (D-176 Phase 1):** the `app ↛ microservices` boundary (`test_boundaries.py`), `check_no_cross_service_imports`, `check_ports_consistency`, `check_single_brain_control_plane`, `check_core_kernel_acl`, and `check_abstraction_consumed` all run in CI `guardrails`. New unconsumed ports fail the build.
+
+
+## Update 2026-07-28 — Notation Layer + service boundary by contract (D-185, closes ISS-138)
+
+- **New boundary:** `notation-service` (`:8011`) is the 13th service under the contract gate
+  (`check_openapi_parity` → **13/13**). It owns one thing: what a mathematical symbol means.
+  No DB, no keys, no LLM — a stdlib registry, so it always boots.
+- **Canonical-source pattern (reused, not invented):** the registry lives once in
+  `shared/notation/registry.py` and is **vendored** into the service, with
+  `check_notation_parity.py` proving byte-equality. This is the `shared/ai_models/model_chain.py`
+  pattern (D-174): service independence (Constitution 97/98) *plus* a machine guard against the
+  silent drift that duplication otherwise invites.
+- **Latency boundary:** a student's turn resolves symbols through the **in-process deterministic
+  path** (`NotationSkill.resolve`) — never an HTTP hop. The service exists for API consumers and
+  future agents; `resolve_via_service` degrades to the local registry when it is down.
+- **Ordering law:** notation resolution runs **before** every probability explanation detector.
+  Live verification (not unit tests) caught this: the explanation path was answering a symbol
+  question with a colour sub-part or the "165 vs 14" relationship — a leak either way.
+- **Language is not a boundary (ADR-006):** the service gates inspect an OpenAPI contract plus
+  `/health` and `/metrics`. `notation-service` is deliberately the reference example — a Rust or
+  Go reimplementation honouring its contract replaces it without touching the tutoring brain.
+

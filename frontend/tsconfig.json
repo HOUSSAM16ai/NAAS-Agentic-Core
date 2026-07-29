@@ -1,0 +1,46 @@
+{
+  "//": "D-185 — تبنٍّ تدريجي لـ TypeScript. allowJs+checkJs=false: كل ملفات .js القائمة تبقى كما هي بلا أي كسر، والفحص الصارم يسري على ملفات .ts/.tsx وحدها. الهدف أن تُستهلَك عقود OpenAPI في الواجهة بدل قراءة الحقول نصّياً.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "ES2022"
+    ],
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": [],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "public/js"
+  ]
+}

@@ -303,6 +303,12 @@ class EscapeHatchMixin:
             "نسمي",
             "ما اسم",
             "تسمية",
+            # D-185 (ISS-138): صيغة الفعل «نقصد» كانت مفقودة بينما «معنى»/«المقصود»
+            # حاضرتان — فسؤال الطالب الحرفي «ماذا نقصد بحرف C» لم يُعدّ مفاهيمياً هنا
+            # بينما عدّته `_DEFINITIONAL_MARKERS` كذلك. اختلاف القوائم هو ما أسقط الدور.
+            "نقصد",
+            "ماذا نقصد",
+            "يقصد",
         )
         if any(m in q for m in strong):
             return True
@@ -417,6 +423,20 @@ class EscapeHatchMixin:
         احتمالات معروفاً (topic-safe) أو تعذّر الحساب. النصّ مُصمَّم لِيَنجو من حجب
         الإجابة (D-113): يتجنّب ``P(...)=عدد``/``\\boxed``/«النتيجة/إذن … = عدد».
         """
+        # D-185 (ISS-138): **الرمز قبل كل شيء.** «ماذا نقصد بحرف C» سؤال عن معنى رمز،
+        # فلا يجوز أن يُجاب باشتقاق ولا بعلاقة «165 و 14» ولا بشرح لونٍ مستحيل. التحقّق
+        # الحيّ أثبت أنّ هذا المسار كان يُجيب عنه بجزئية اللون تارةً وبعلاقة الأرقام تارة
+        # (وكلتاهما تسريب). الفحص هنا **قبل** تحميل التمرين وقبل كل الكاشفات، وحتمي بلا
+        # أرقام التمرين إطلاقاً — فيبقى العقد السقراطي سليماً (D-113).
+        try:
+            from app.services.skills.notation_skill import get_notation_skill
+
+            _symbol = get_notation_skill().resolve(question)
+            if _symbol is not None:
+                return f"## {_symbol.title}\n\n{_symbol.definition}\n\n{_symbol.example}"
+        except Exception:  # pragma: no cover - fail-open: الرموز لا تكسر الدور
+            pass
+
         try:
             from app.services.capabilities.arabic_normalize import primary_canonical_topic
             from app.services.capabilities.exercise_retrieval import (

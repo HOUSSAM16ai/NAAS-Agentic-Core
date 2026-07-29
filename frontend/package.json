@@ -7,7 +7,9 @@
     "dev:next": "next dev --hostname 0.0.0.0 --port 5000",
     "build": "next build",
     "start": "node server.js",
-    "lint": "next lint"
+    "lint": "next lint",
+    "//typecheck": "D-185: TypeScript is fetched on demand (npx) instead of added as a devDependency, so package-lock.json stays byte-stable and `npm ci` cannot drift. tsconfig sets types:[] and app/types/env.d.ts declares the little we need, so no @types package is required. CI runs this exact command.",
+    "typecheck": "npx -y -p typescript@5.6.3 tsc --noEmit"
   },
   "dependencies": {
     "axios": "^1.13.2",

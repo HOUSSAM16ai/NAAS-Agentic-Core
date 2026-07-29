@@ -161,6 +161,43 @@ Each new or migrated skill must define:
 
 The monolith `BaseSkill` pattern can remain for in-process transitional skills, but production composition must be through the orchestrator and service APIs.
 
+## 9b. Notation Layer Requirement (D-185 — implemented, live-verified)
+
+A tutoring system must be able to **define every symbol it prints**. ISS-138 proved the
+inverse is catastrophic: a student asked what `C` meant — a symbol the tutor itself had just
+printed — and the system re-emitted the derivation the student had not understood, leaking
+results the student was supposed to derive.
+
+Requirements now enforced:
+
+- One canonical symbol source: `shared/notation/registry.py` (dependency-free), mirrored by a
+  vendored copy in the service and guarded byte-for-byte by `check_notation_parity.py`.
+- Exposed as an API-first microservice (`notation-service`, port 8011) with a committed
+  OpenAPI contract, readiness-bearing `/health`, a service-owned `/metrics` registry, and
+  structured errors — bringing the platform to **13/13 services under the contract gate**.
+- Exposed in-process as `NotationSkill` with a deterministic local path (no network on a
+  student's turn) and graceful degradation when the service is down.
+- CI enforces that no symbol the tutor can emit is undefinable, and that every stored example
+  is **neutral** — a definition must never become a back door that leaks the current exercise.
+- Notation resolution runs **before** any explanation detector: confusing "the letter C" with
+  "event C" is a leak, not a nuance.
+
+## 9c. Polyglot Requirement (ADR-006)
+
+The service boundary is the **contract, not the language**. Every gate that governs services
+(`check_openapi_parity`, `check_ports_consistency`, `check_service_catalog_parity`) inspects an
+OpenAPI contract plus `/health` and `/metrics` — never the implementation language. A service
+written in any language that honours those four things enters the system without modifying a
+single gate.
+
+Adoption requires all three: a **measured** workload Python/TypeScript cannot carry, a committed
+contract before the first line of logic, and live three-leg proof before being called ACTIVE.
+TypeScript is adopted (it had a real gap: the frontend consumed none of the 13 contracts). The
+other nine languages are documented as seams in `docs/architecture/EXTENSION_SEAMS.md` §7 with
+**zero code** until their condition is met — adding ten "Hello World" services would be ten
+toolchains and ten drift sources with no consumer, which is precisely what the Kagent lesson
+(D-173) forbids.
+
 ## 10. AI Extensibility Requirements
 
 The architecture must support these capabilities through replaceable adapters and contracts:

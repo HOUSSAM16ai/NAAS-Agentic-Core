@@ -30,6 +30,7 @@ from app.services.analytics.bkt_persistence import BKTAnalyticsService
 from app.services.boundaries.customer_chat_boundary_service import (
     CustomerChatBoundaryService,
 )
+from shared.intent import markers_for
 
 logger = get_logger(__name__)
 
@@ -236,19 +237,9 @@ async def _evaluate_bkt_cards(
 _PEDAGOGY_DIRECTIVE_TIMEOUT_S = 2.0
 
 #: D-114: علامات الحيرة — تكرارها (2+) يفرض المثال المحلول (support_level=1).
-_CONFUSION_MARKERS: tuple[str, ...] = (
-    "لم أفهم",
-    "لم افهم",
-    "مفهمتش",
-    "ما فهمت",
-    "مافهمت",
-    "ما افهم",
-    "لا أفهم",
-    "لا افهم",
-    "صعب",
-    "ماقدرت",
-    "ما قدرت",
-)
+#: D-186: الأساس من المصدر القانوني الواحد، وتُضاف إليه صيغتا العجز الخاصّتان بهذا
+#: المسار («ماقدرت») — إضافةٌ فوق المصدر لا نسخةٌ منه.
+_CONFUSION_MARKERS: tuple[str, ...] = (*markers_for("confusion"), "ماقدرت", "ما قدرت")
 
 
 class _PedagogySnapshot(NamedTuple):

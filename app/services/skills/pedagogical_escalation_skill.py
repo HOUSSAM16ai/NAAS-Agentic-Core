@@ -25,6 +25,8 @@ CLAUDE.md §0.5: «كل قدرة ذكاء اصطناعي يجب أن تكون Sk
 
 from __future__ import annotations
 
+import re
+
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
@@ -50,7 +52,30 @@ _FRAGMENT_LEN: int = 22
 
 
 def _norm(text: str) -> str:
-    return (text or "").translate(_AR_DIGITS).strip().lower()
+    """تطبيع للمقارنة — **يطوي المسافات** (D-186).
+
+    كان يكتفي بـ`strip()`، فيقارن نصّ الرُّتبة كما هو في السجلّ بنصّها كما بُثّ فعلاً.
+    لكن البثّ يمرّ بمُنسِّق الكتابة (typing effect) الذي يُغيّر المسافات
+    (`$C_{n}^{k}$ (ويُكتب` ⇒ `$C_{n}^{k}$(ويُكتب`)، فيفشل مقطع الـ22 حرفاً في
+    المطابقة ⇒ `_levels_delivered` ترى الرُّتبة **غير مُسلَّمة** فتُعيدها حرفياً، ثم
+    يلتقط حارسُ التكرار الإعادةَ فيستبدلها بـ«الحل الكامل» — أي أن فشل مطابقة مسافة
+    واحدة كان ينتهي بتسريب حلّ التمرين كاملاً للطالب (ISS-139، الدور الرابع).
+    """
+    return re.sub(r"\s+", " ", (text or "").translate(_AR_DIGITS)).strip().lower()
+
+
+def _squash(text: str) -> str:
+    """تطبيع **بلا أي مسافة** — لمقارنة «هل بُثّت هذه الرُّتبة؟» حصراً.
+
+    مُنسِّق الكتابة (typing effect) لا يكتفي بطيّ المسافات بل **يحذفها** أحياناً
+    (`$C_{n}^{k}$ (ويُكتب` ⇒ `$C_{n}^{k}$(ويُكتب`)، فأي مقارنة تحترم المسافات تفشل.
+    وفشلها ليس تجميلياً: الرُّتبة تبدو غير مُسلَّمة ⇒ تُعاد حرفياً ⇒ يلتقطها حارس
+    التكرار ⇒ يستبدلها بـ«الحل الكامل» فيتسرّب حلّ التمرين (ISS-139).
+
+    مقصور على كشف التسليم عمداً — تعميمه على مطابقة العلامات يخلق مطابقات كاذبة
+    عبر حدود الكلمات.
+    """
+    return re.sub(r"\s+", "", (text or "").translate(_AR_DIGITS)).lower()
 
 
 class EscalationInput(RobustBaseModel):
@@ -141,18 +166,19 @@ class PedagogicalEscalationSkill(BaseSkill):
         for lvl in payload.delivered_levels or []:
             if isinstance(lvl, int) and L1_DEFINITION <= lvl <= L4_VISUAL:
                 delivered.add(lvl)
-        assistant_text = " ".join(
-            _norm(str(m.get("content", "")))
+        # D-186: المقارنة بلا مسافات — مُنسِّق الكتابة يحذف مسافات فتفشل المطابقة الحرفية.
+        assistant_text = "".join(
+            _squash(str(m.get("content", "")))
             for m in (payload.history or [])
             if isinstance(m, dict) and m.get("role") == "assistant"
         )
         if not assistant_text:
             return delivered
-        if payload.definition and _norm(payload.definition)[:_FRAGMENT_LEN] in assistant_text:
+        if payload.definition and _squash(payload.definition)[:_FRAGMENT_LEN] in assistant_text:
             delivered.add(L1_DEFINITION)
-        if payload.example and _norm(payload.example)[:_FRAGMENT_LEN] in assistant_text:
+        if payload.example and _squash(payload.example)[:_FRAGMENT_LEN] in assistant_text:
             delivered.add(L2_ANALOGY)
-        if payload.micro_sim and _norm(payload.micro_sim)[:_FRAGMENT_LEN] in assistant_text:
+        if payload.micro_sim and _squash(payload.micro_sim)[:_FRAGMENT_LEN] in assistant_text:
             delivered.add(L3_MICRO_SIMULATION)
         return delivered
 
@@ -190,9 +216,23 @@ class PedagogicalEscalationSkill(BaseSkill):
             target += 1
         return min(target, L4_VISUAL)
 
-    def _render(self, level: int, payload: EscalationInput) -> tuple[str, str]:
-        """يبني نصّ الرُّتبة الحتمي. يُنزِّل الرُّتبة إن غاب محتواها."""
+    def _render(
+        self, level: int, payload: EscalationInput, delivered: set[int] | None = None
+    ) -> tuple[str, str]:
+        """يبني نصّ الرُّتبة الحتمي. يُنزِّل الرُّتبة إن غاب محتواها — **وليس** إن سُلِّمت.
+
+        D-186 (ISS-139): كان التنزّل أعمى، فرُتبة عليا بلا محتوى (لا محاكاة مصغّرة
+        لهذا المفهوم) تنزل إلى المثال **المُسلَّم أصلاً** فيُعاد حرفياً. عندها يلتقط
+        حارسُ التكرار الإعادةَ ويستبدلها بـ«الحل الكامل خطوة بخطوة» — فينتهي «لم أفهم»
+        بتسريب حلّ التمرين كاملاً (165 · 4 · 10 · 14) للطالب.
+
+        الآن: ما سُلِّم لا يُعاد. وإن لم يبقَ جديد ⇒ `("", "")` فيتولّاها
+        `_exhausted_decision` بسؤال تطبيق على التمرين (D-147) — تقدّمٌ بلا كشف.
+        """
+        done = delivered or set()
         for lvl in (level, level - 1, level - 2):
+            if lvl in done:
+                continue
             if lvl == L3_MICRO_SIMULATION and payload.micro_sim:
                 return f"## محاكاة مصغّرة\n\n{payload.micro_sim}", "micro_simulation"
             if lvl == L2_ANALOGY and payload.example:
@@ -247,7 +287,37 @@ class PedagogicalEscalationSkill(BaseSkill):
                 text=payload.misconception_intervention,
                 rationale=f"misconception:{payload.misconception_mtype or 'unknown'}",
             )
-        # (3) التصعيد المُعايَر (ذاكرة + قدرة + صعوبة).
+        # (3) قانون «التعريف قبل المثال» (D-186 — ISS-139).
+        #
+        # سؤال تعريفي صريح («ماذا يقصد بالحرف C») لا يُجاب **أبداً** بمثالٍ عارٍ. كان
+        # حارس التكرار في `_calibrate` يتخطّى الرُّتبة المُسلَّمة دائماً، فسؤالٌ تعريفي
+        # مُعاد يقفز فوق L1 ويُرجع «## مثال ملموس» وحده — أي أن الطالب لم يُخبَر أصلاً
+        # بما يعنيه الرمز الذي سأل عنه. (يقع هذا **حتى مع** تصنيف نيّة صحيح، فتوحيد
+        # قوائم العلامات وحده ما كان ليكفي.)
+        #
+        # وإعادة السؤال ليست إشارة «تقدَّم في السُّلّم» بل إشارة **أن التعريف لم يصل**:
+        # فنُعيده مُثرًى بالمثال معاً — لا نتخطّاه.
+        if payload.intent == "definition" and payload.definition:
+            head = f"## {payload.title}\n\n" if payload.title else ""
+            text = f"{head}{payload.definition}"
+            level = L1_DEFINITION
+            # التعريف يُعاد دائماً (هو ما سُئل عنه)، **مع الرُّتبة التالية غير المُسلَّمة**
+            # — فالسؤال المُعاد لا يُجاب بنسخةٍ حرفية من الدور السابق («صفر تكرار حرفي»).
+            delivered_now = self._levels_delivered(payload)
+            if L1_DEFINITION in delivered_now:
+                extra, kind = self._render(L3_MICRO_SIMULATION, payload, delivered_now)
+                if extra:
+                    text += f"\n\n{extra}"
+                    level = L3_MICRO_SIMULATION if kind == "micro_simulation" else L2_ANALOGY
+            self._record(payload.concept_id, f"L{level}")
+            return EscalationDecision(
+                action="teach",
+                strategy_level=level,
+                text_kind="definition",
+                text=text,
+                rationale="definition_before_example",
+            )
+        # (4) التصعيد المُعايَر (ذاكرة + قدرة + صعوبة).
         delivered = self._levels_delivered(payload)
         target = self._calibrate(self._base_level(payload, delivered), payload, delivered)
         if target > L3_MICRO_SIMULATION:
@@ -260,7 +330,7 @@ class PedagogicalEscalationSkill(BaseSkill):
                 ),
                 fallback_rationale="ladder_exhausted",
             )
-        text, kind = self._render(target, payload)
+        text, kind = self._render(target, payload, delivered)
         if not text:  # لا محتوى (نادر) ⇒ تسليم لطيف بدل فراغ.
             self._record(payload.concept_id, "exhausted")
             return self._exhausted_decision(

@@ -215,6 +215,17 @@ class CognitiveTurnEngineMixin:
 
             entry.attempts += 1
 
+            # ── D-186 (ISS-139): البؤرة اللاصقة تسبق probe الافتتاح ──
+            # «لم أفهم» تعني «لم أفهم ما شرحتَه للتوّ» (قانون D-184)، لا «ابدأ التمرين
+            # من أوّله». كان الطالب يسأل عن الرمز `C` فيُعرَّف له، ثم يقول «لم أفهم»
+            # فيُقذَف إلى السؤال الافتتاحي عن الألوان — تصفيرٌ كامل للموضوع.
+            #
+            # حين تكون هناك بؤرة مفهومية حيّة (مفهومٌ طرحه **الطالب** نفسه في أدوار
+            # سابقة) نُسلّم الدور لمصفوفة التصعيد: هي المصمَّمة لـ«حيرة + مفهوم نشط ⇒
+            # الرُّتبة التالية». الـ probe يبقى لما هو له: أول تفاعل مع التمرين.
+            if cls._has_live_concept_focus(question, history_messages):
+                return None, None
+
             # ── S3: أول تفاعل ⇒ التشخيص قبل الشرح ──
             if "diagnostic_probe" not in entry.representations_delivered:
                 text = cls._build_diagnostic_probe(combo)

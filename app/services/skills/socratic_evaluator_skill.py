@@ -43,6 +43,7 @@ from pydantic import Field
 from app.core.schemas import RobustBaseModel
 from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import SOCRATIC_EVALUATOR_DOCTRINE_VERSION
+from shared.intent import markers_for
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 #: D-142 (1A): توحيد الهمزات/الألف المقصورة/التاء المربوطة لمطابقة الإشارات بمتانة
@@ -127,23 +128,9 @@ def deterministically_correct(student_answer: str, concept: str) -> bool:
 
 
 #: ISS-120 (D-153): إشارات الحيرة المجرّدة — «لم أفهم» ليست دلالة فهم أبداً.
-#: نسخة محلية مصغّرة (استقلالية الـ Skills — §0.5، نمط D-013؛ المرآة في
-#: pedagogical_policy_skill._BARE_CONFUSION_MARKERS).
-_BARE_CONFUSION_MARKERS: tuple[str, ...] = (
-    "لم افهم",
-    "لم أفهم",
-    "ما فهمت",
-    "مافهمت",
-    "مفهمتش",
-    "ما فهمتش",
-    "لا افهم",
-    "لا أفهم",
-    "لست افهم",
-    "مش فاهم",
-    "لم استوعب",
-    "je ne comprends pas",
-    "i don't understand",
-)
+#: D-186: من المصدر القانوني الواحد (`shared/intent`). كانت «نسخة محلية مصغّرة
+#: (نمط D-013)» — وتعدّد النسخ المصغّرة هو جذر ISS-128/138/139 بعينه.
+_BARE_CONFUSION_MARKERS: tuple[str, ...] = markers_for("confusion")
 
 
 def _is_bare_confusion(text: str) -> bool:

@@ -426,6 +426,17 @@ def _letter_is_present(norm: str, letter: str) -> bool:
     return re.search(rf"(?<![a-z0-9]){re.escape(letter)}(?![a-z0-9])", norm) is not None
 
 
+def _sole_isolated_letter(norm: str) -> str | None:
+    """الحرف اللاتيني المفرد **الوحيد** في النصّ — أو ``None`` عند غيابه أو تعدّده.
+
+    شرط الوحدانية مقصود: «شنو يقصد بـ C» فيها حرف واحد فالمقصود بيّن، أمّا «ما معنى
+    P(A)» ففيها حرفان معزولان فالاختيار بينهما تخمين — تُترَك لمطابقة العلامات التي
+    تملك دليلاً بنيوياً (`p(a`). لا نُخمّن على طالب.
+    """
+    letters = set(re.findall(r"(?<![a-z0-9])([a-z])(?![a-z0-9])", norm))
+    return letters.pop() if len(letters) == 1 else None
+
+
 def resolve(text: str) -> NotationEntry | None:
     """يُحوّل سؤال الطالب الحرّ إلى إدخال رمزٍ مُعرَّف — أو `None` إن لم يكن سؤالاً عن رمز.
 
@@ -460,4 +471,17 @@ def resolve(text: str) -> NotationEntry | None:
         for marker in markers:
             if marker in norm and len(marker) > best_len:
                 best, best_len = entry, len(marker)
-    return best
+    if best is not None:
+        return best
+
+    # (3) D-186 (ISS-139): سؤال تعريفي عن حرفٍ مفردٍ **بلا** كلمة «حرف/رمز» —
+    # «شنو يقصد بـ C». كان يُرجِع None فيسقط الدور إلى مسار عام يطبع أرقام التمرين
+    # (تسريب 165/14 عبر باب سؤالٍ تعريفي). حارس الحادثة يبقى نافذاً، وشرط وحدانية
+    # الحرف يمنع التخمين — فلا يُخطَف «ما هي الحادثة C» ولا يُخمَّن في «P(A)».
+    if not in_event_context:
+        letter = _sole_isolated_letter(norm)
+        if letter:
+            for entry in NOTATION_REGISTRY:
+                if normalize(entry.symbol)[:1] == letter:
+                    return entry
+    return None

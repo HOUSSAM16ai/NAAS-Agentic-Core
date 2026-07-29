@@ -36,6 +36,7 @@ from pydantic import Field
 from app.core.schemas import RobustBaseModel
 from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import PEDAGOGICAL_POLICY_DOCTRINE_VERSION
+from shared.intent import markers_for
 
 #: ميزانية الأسئلة السقراطية لكل مسار — بعدها ⇒ حلّ رمزي (لا استجواب لا نهائي).
 MAX_SOCRATIC: int = 2
@@ -218,22 +219,10 @@ def _is_topic_switch(message: str) -> bool:
 #: ISS-120 (D-153): إشارات الحيرة المجرّدة — «لم أفهم» **ليست إجابة** على سؤال
 #: سقراطي؛ هي حيرة تُوجَّه لمسارات الحيرة. معاملتها كإجابة كانت تُنتج
 #: «إجابتك في الطريق الصحيح —» رداً على «لم أفهم» (خيانة بيداغوجية).
-#: نسخة محلية مصغّرة (استقلالية الـ Skills — §0.5، نمط D-013).
-_BARE_CONFUSION_MARKERS: tuple[str, ...] = (
-    "لم افهم",
-    "لم أفهم",
-    "ما فهمت",
-    "مافهمت",
-    "مفهمتش",
-    "ما فهمتش",
-    "لا افهم",
-    "لا أفهم",
-    "لست افهم",
-    "مش فاهم",
-    "لم استوعب",
-    "je ne comprends pas",
-    "i don't understand",
-)
+#: D-186: من المصدر القانوني الواحد (`shared/intent`) بدل النسخة المحلّية — النسخ
+#: المحلّية «نمط D-013» هي ما تفرّق فأنتج ISS-128/138/139. `shared/intent` مكتبة
+#: حتمية بلا تبعيات لا مهارة، فاستقلالية §0.5 محفوظة.
+_BARE_CONFUSION_MARKERS: tuple[str, ...] = markers_for("confusion")
 
 
 def _is_bare_confusion(normalized: str) -> bool:
@@ -287,16 +276,8 @@ def student_answered(question: str, history: list[dict[str, str]] | None) -> boo
 _QUICK_INSIGHT_CONCEPTS: frozenset[str] = frozenset(
     {"color_white", "color_red", "color_green", "combinations"}
 )
-#: علامات الحيرة (لرفع وتيرة التصعيد للرمزي).
-_CONFUSION_MARKERS: tuple[str, ...] = (
-    "لم افهم",
-    "لم أفهم",
-    "مفهمتش",
-    "ما فهمت",
-    "لا افهم",
-    "لا أفهم",
-    "مازلت لا",
-)
+#: علامات الحيرة (لرفع وتيرة التصعيد للرمزي). D-186: المصدر القانوني الواحد.
+_CONFUSION_MARKERS: tuple[str, ...] = markers_for("confusion")
 
 
 def _count_confusion(history: list[dict[str, str]] | None) -> int:

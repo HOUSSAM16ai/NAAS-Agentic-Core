@@ -23,6 +23,8 @@ from app.services.skills.registry import (
 )
 
 EXPECTED = {
+    # D-185: طبقة الرموز — «النظام يعرّف كل رمز يطبعه» (ISS-138).
+    "notation",
     "greeting",
     "bac_exercise",
     "math",
@@ -68,11 +70,11 @@ class TestRegistry:
     def test_registry_complete(self) -> None:
         reg = get_skill_registry()
         assert set(reg.names()) == EXPECTED
-        assert len(reg.list()) == 35
+        assert len(reg.list()) == 36
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 33
+        assert len(reg.by_status("ACTIVE")) == 34
         assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:

@@ -1285,6 +1285,46 @@ launch_foundations_service >> "$APP_ROOT/.observability/foundations_service.log"
 lifecycle_info "✅ Foundations Service initialization offloaded to background"
 
 # ==============================================================================
+# STEP 4L: Notation Service (D-185 — "the system defines every symbol it prints")
+# ==============================================================================
+# بلا قاعدة بيانات وبلا مفاتيح: السجلّ stdlib خالص، فالخدمة تُقلع دائماً.
+# المونوليث لا يعتمد عليها في دور الطالب (سقوط حتمي محلّي) — هي للـAPI والوكلاء.
+
+launch_notation_service() {
+    local NOTATION_PORT="8011"
+    local NOTATION_HEALTH="http://localhost:${NOTATION_PORT}/health"
+    local NOTATION_LOG_DIR="$APP_ROOT/.observability"
+    local NOTATION_LOG="$NOTATION_LOG_DIR/notation_service.log"
+
+    mkdir -p "$NOTATION_LOG_DIR"
+
+    # ── idempotent: تجنب إطلاق نسخة ثانية ───────────────────────────────────
+    if pgrep -f "notation_service.main:app" > /dev/null 2>&1; then
+        lifecycle_info "Notation Service: already running on :${NOTATION_PORT} — skipping"
+        return 0
+    fi
+
+    lifecycle_info "Notation Service: launching uvicorn on :${NOTATION_PORT} (D-185)..."
+
+    ENVIRONMENT="${ENVIRONMENT:-development}" \
+    PYTHONPATH="$APP_ROOT" \
+    python -m uvicorn microservices.notation_service.main:app \
+        --host 0.0.0.0 \
+        --port "$NOTATION_PORT" \
+        --log-level info \
+        --no-access-log \
+        >> "$NOTATION_LOG" 2>&1 &
+
+    local notation_pid=$!
+    lifecycle_info "Notation Service: launched (PID=$notation_pid) — health at $NOTATION_HEALTH"
+    lifecycle_info "             Logs: $NOTATION_LOG"
+}
+
+# تشغيل في الخلفية — لا يحجب الـ supervisor
+launch_notation_service >> "$APP_ROOT/.observability/notation_service.log" 2>&1 &
+lifecycle_info "✅ Notation Service initialization offloaded to background"
+
+# ==============================================================================
 # STEP 5: Health Check & Readiness (فحص الصحة والجاهزية)
 # ==============================================================================
 

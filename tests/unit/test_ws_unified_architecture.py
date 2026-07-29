@@ -3,7 +3,7 @@
 
 تمنع هذه الاختبارات رجوع الأخطاء التالية:
 - admin_chat.js يتصل بـ /ws/chat (endpoint غير موجود) بدون token
-- wsUrl.js يستخدم port hardcoded بدلاً من NEXT_PUBLIC_BACKEND_PORT
+- wsUrl.ts يستخدم port hardcoded بدلاً من NEXT_PUBLIC_BACKEND_PORT
 - supervisor.sh يتجاهل secrets.env عندما devcontainer يُعيّن empty strings
 - ws_proxy.py يُرجع token كـ selected_protocol بدلاً من "jwt"
 - auth_error state لا يُطلق agent:auth_error event
@@ -237,12 +237,12 @@ class TestAdminChatJsContract:
         )
 
 
-# ─── اختبارات wsUrl.js — static analysis ─────────────────────────────────────
+# ─── اختبارات wsUrl.ts — static analysis ─────────────────────────────────────
 
 
 class TestWsUrlJsContract:
     """
-    D-WS-004: wsUrl.js يجب أن:
+    D-WS-004: wsUrl.ts يجب أن:
     1. يدعم NEXT_PUBLIC_BACKEND_PORT بدلاً من port 8000 hardcoded
     2. يكتشف Gitpod/Ona تلقائياً
     3. يُعيد backend host الصحيح في cloud workspaces
@@ -252,7 +252,7 @@ class TestWsUrlJsContract:
         import os
 
         path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "frontend", "app", "utils", "wsUrl.js"
+            os.path.dirname(__file__), "..", "..", "frontend", "app", "utils", "wsUrl.ts"
         )
         with open(os.path.abspath(path)) as f:
             return f.read()
@@ -261,19 +261,19 @@ class TestWsUrlJsContract:
         """يجب استخدام NEXT_PUBLIC_BACKEND_PORT بدلاً من hardcoded 8000."""
         content = self._read_wsurl_js()
         assert "NEXT_PUBLIC_BACKEND_PORT" in content, (
-            "wsUrl.js must use NEXT_PUBLIC_BACKEND_PORT env var"
+            "wsUrl.ts must use NEXT_PUBLIC_BACKEND_PORT env var"
         )
 
     def test_gitpod_cloud_detection(self):
         """يجب اكتشاف Gitpod/Ona تلقائياً."""
         content = self._read_wsurl_js()
-        assert "gitpod" in content.lower(), "wsUrl.js must detect Gitpod environment"
+        assert "gitpod" in content.lower(), "wsUrl.ts must detect Gitpod environment"
 
     def test_cloud_backend_host_rewrite(self):
         """يجب إعادة كتابة port prefix في Gitpod subdomain."""
         content = self._read_wsurl_js()
         assert "8000-" in content or "replace" in content, (
-            "wsUrl.js must rewrite port prefix for cloud workspaces"
+            "wsUrl.ts must rewrite port prefix for cloud workspaces"
         )
 
     def test_no_hardcoded_localhost_port(self):
@@ -281,7 +281,7 @@ class TestWsUrlJsContract:
         content = self._read_wsurl_js()
         # يجب أن يكون محاطاً بـ env var check
         assert "NEXT_PUBLIC_BACKEND_PORT" in content, (
-            "wsUrl.js must not hardcode port 8000 without env var override"
+            "wsUrl.ts must not hardcode port 8000 without env var override"
         )
 
 

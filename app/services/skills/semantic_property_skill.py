@@ -714,7 +714,38 @@ class SemanticPropertySkill(BaseSkill):
                     source="deterministic",
                     example=spec.example,
                 )
-        return None
+        # D-185 (ISS-138): سجلّ الخصائص مفتاحه **اسم المفهوم** («التوافيق»)، فطالبٌ لا
+        # يعرف الاسم ويسأل عن **الرمز** الذي يراه («ماذا نقصد بحرف C») كان يسقط من كل
+        # الطبقات الحتمية إلى إفراغ الحل. طبقة الرموز **تُكمِل** السجلّ ولا تُظلِّله:
+        # تُستشار بعد إخفاقه حصراً، فتعريفات المفاهيم القائمة تبقى هي الجواب الأول.
+        return self._interpret_notation(question)
+
+    @staticmethod
+    def _interpret_notation(question: str) -> SemanticPropertyOutput | None:
+        """D-185: يسأل مهارة الرموز — «ما معنى الرمز X» جوابه تعريفٌ لا إعادة اشتقاق.
+
+        حتمي بالكامل (بلا شبكة وبلا LLM) فلا يزيد زمن الدور. والتعريف **ليس إجابة**:
+        أمثلة السجلّ محايدة، فلا تسريب لأرقام التمرين الجاري عبر هذا الباب.
+        """
+        try:
+            from app.services.skills.notation_skill import get_notation_skill
+
+            entry = get_notation_skill().resolve(question)
+        except Exception:  # pragma: no cover - fail-open: الرموز لا تكسر الدور أبداً
+            return None
+        if entry is None:
+            return None
+        property_id = entry.property_id or f"notation:{entry.symbol}"
+        _record(property_id, "deterministic")
+        return SemanticPropertyOutput(
+            property_id=property_id,
+            title=entry.title,
+            definition=f"{entry.definition}\n\n{entry.example}",
+            concept_id=entry.concept_id or "event_meaning",
+            domain="mathematical_notation",
+            source="deterministic",
+            example=entry.example,
+        )
 
     def detect_active_concept(
         self, question: str, history: list[dict[str, str]] | None = None

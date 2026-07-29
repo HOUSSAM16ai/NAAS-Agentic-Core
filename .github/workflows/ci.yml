@@ -147,6 +147,10 @@ jobs:
           python scripts/fitness/check_single_brain_control_plane.py
           python scripts/fitness/check_core_kernel_acl.py
           python scripts/fitness/check_abstraction_consumed.py
+          # D-185 (ISS-138): the system must be able to define every symbol it prints,
+          # and the notation registry must have exactly one canonical source.
+          python scripts/fitness/check_notation_definable.py
+          python scripts/fitness/check_notation_parity.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders
@@ -323,6 +327,16 @@ jobs:
           set -euo pipefail
           node --check frontend/server.js
           npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+      # D-185: the frontend now consumes the committed OpenAPI contracts as generated
+      # TypeScript types. Two gates: the generated file must match the contracts, and
+      # the TS sources must type-check. A contract drift becomes a compile error here
+      # instead of a runtime surprise in a student's browser.
+      - name: OpenAPI-generated frontend types are current
+        shell: bash
+        run: python scripts/contracts/generate_frontend_types.py --check
+      - name: TypeScript typecheck
+        shell: bash
+        run: npm run typecheck --prefix frontend
           echo "✅ server.js parses + package-lock.json in sync"
 
   # ── Microservices Skills Structural Check ─────────────────────────────────

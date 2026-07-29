@@ -70,6 +70,13 @@
       "owner": "audit-team",
       "dockerfile_required": false,
       "expected_in_default_compose": true
+    },
+    {
+      "service_dir": "notation_service",
+      "compose_service": "notation-service",
+      "owner": "pedagogy-team",
+      "dockerfile_required": true,
+      "expected_in_default_compose": true
     }
   ]
 }

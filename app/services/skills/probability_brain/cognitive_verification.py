@@ -92,8 +92,8 @@ class CognitiveVerificationMixin:
                 continue
             if cand in prev or prev in cand:
                 return True
-            prev_tokens = set(prev.split())
-            if prev_tokens and len(cand_tokens & prev_tokens) / len(cand_tokens) >= threshold:
+            # D-185 (ISS-138): نسبة متماثلة — «تكرار + إضافة» كان يهرب من العتبة.
+            if cls._overlap_ratio(cand_tokens, set(prev.split())) >= threshold:
                 return True
         return False
 
@@ -332,16 +332,30 @@ class CognitiveVerificationMixin:
 
     @classmethod
     def _near_dup(cls, a: str, b: str, *, threshold: float = 0.8) -> bool:
-        """D-142 (1B/Phase2): تداخل رموز/احتواء بين نصّين (حارس التكرار ضد مرساة الحالة)."""
+        """D-142 (1B/Phase2): تداخل رموز/احتواء بين نصّين (حارس التكرار ضد مرساة الحالة).
+
+        D-185 (ISS-138): النسبة **متماثلة** — انظر :meth:`_overlap_ratio`.
+        """
         na, nb = cls._norm_for_dedup(a), cls._norm_for_dedup(b)
         if not na or not nb:
             return False
         if na in nb or nb in na:
             return True
-        ta = set(na.split())
-        if not ta:
-            return False
-        return len(ta & set(nb.split())) / len(ta) >= threshold
+        return cls._overlap_ratio(set(na.split()), set(nb.split())) >= threshold
+
+    @staticmethod
+    def _overlap_ratio(cand_tokens: set[str], prev_tokens: set[str]) -> float:
+        """D-185 (ISS-138): نسبة تداخل **متماثلة** — القسمة على الأصغر لا على المرشَّح.
+
+        الكارثة: الدور الثالث بثّ كتلة قصيرة (`C(4,3)=4` · `C(5,3)=10` · المجموع)، ثم
+        رشّح الدور الرابع نصّاً **مجموعةً فائقة** منها (نفس الأسطر + فضاء العينة + خاتمة
+        مختلفة). القسمة القديمة على `len(cand_tokens)` جعلت المقام يكبر بالنصّ المضاف
+        فتهبط النسبة تحت العتبة ⇒ الحارس يعمى ⇒ يُعاد على الطالب اشتقاقٌ لم يفهمه
+        **مع تسريب النتائج**. القسمة على الأصغر تجعل «تكرار + إضافة» تكراراً كما هو حقاً.
+        """
+        if not cand_tokens or not prev_tokens:
+            return 0.0
+        return len(cand_tokens & prev_tokens) / min(len(cand_tokens), len(prev_tokens))
 
     @staticmethod
     def _semantic_tutor_enabled() -> bool:

@@ -1549,6 +1549,21 @@ paths:
           description: Deterministic foundations compute result (ok + result/error)
       description: Foundations compute core — linear algebra, calculus, statistics,
         optimization, graph theory, formal languages, computability, complexity (D-183)
+  /api/v1/skills/notation:
+    post:
+      tags:
+      - Skills Platform
+      summary: Notation Layer
+      operationId: notationSkill
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Resolved mathematical symbol (found + title/definition/example)
+            or found=false when the question is not about a symbol
+      description: Mathematical-notation layer — resolves a student's free-text question
+        about a symbol (C, n!, P_A(B), E(X), Omega, ...) to a deterministic definition.
+        Mirrors the notation-service contract and works without it (D-185)
   /api/v1/skills/retrieve:
     post:
       tags:

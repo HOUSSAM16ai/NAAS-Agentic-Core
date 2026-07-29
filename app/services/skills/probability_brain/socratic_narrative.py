@@ -422,6 +422,13 @@ class SocraticNarrativeMixin:
                 )
             ):
                 return False  # طلب محتوى/تمرين جديد صريح — ليس إجابة
+            # D-185 (ISS-138): **السؤال ليس إجابة.** «ماذا نقصد بحرف C؟» أربع كلمات، فكان
+            # يمرّ من هنا كـ«إجابة قصيرة تُقيَّم» فيُوجَّه إلى محرّك حالة الفهم/التصعيد بدل
+            # أن يُجاب — فيُعاد على الطالب الاشتقاق نفسه. نُعيد استخدام البوّابة اللفظية
+            # القائمة (`_is_question_not_answer`) لا قائمة علامات خامسة؛ واستثناء «هل»
+            # محفوظ داخلها (D-155: «هل هي 14 من 165» إجابة تطلب تأكيداً).
+            if cls._is_question_not_answer(question):
+                return False
             last_assistant = None
             for msg in reversed(history_messages or []):
                 if isinstance(msg, dict) and msg.get("role") == "assistant":

@@ -42,6 +42,8 @@ SERVICES: tuple[tuple[str, str, str], ...] = (
     ("auditor_service", "microservices.auditor_service.src.main", "app"),
     # D-183: API-first 12/12 — foundations-service (the "first roots" compute Skill).
     ("foundations_service", "microservices.foundations_service.main", "app"),
+    # D-185: API-first 13/13 — notation-service (the mathematical-notation Skill).
+    ("notation_service", "microservices.notation_service.main", "app"),
 )
 
 

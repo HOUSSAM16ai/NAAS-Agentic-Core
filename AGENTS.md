@@ -78,6 +78,8 @@ _service_instance: MyService | None = None
 | Artefact | Canonical location |
 |----------|--------------------|
 | New microservice | `microservices/<service_name>/` |
+| Microservice in a non-Python language (ADR-006) | `microservices/<service_name>/` — same folder, same contract. The gates inspect OpenAPI + `/health` + `/metrics`, never the language. Adoption conditions: `docs/architecture/EXTENSION_SEAMS.md` §7 |
+| Canonical data shared by monolith + a service | `shared/<domain>/` + a vendored copy in the service, proven equal by a parity gate (no shared business-logic library — Constitution 97/98) |
 | Shared gateway logic | `app/` (never `microservices/`) |
 | Alembic migrations | `microservices/<service_name>/migrations/` |
 | Integration tests | `tests/integration/` |

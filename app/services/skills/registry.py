@@ -477,6 +477,25 @@ def compose_reasoning(
 
         _run("foundations_compute", _foundations)
 
+    # 8) الرموز الرياضية — «ما معنى C؟» جزء من التفكير لا استثناء منه (D-185).
+    #    حتمي بالكامل، ويُضاف للمسار فقط حين يكون السؤال فعلاً عن رمز.
+    def _notation() -> dict[str, object] | None:
+        from app.services.skills.notation_skill import get_notation_skill
+
+        entry = get_notation_skill().resolve(q)
+        if entry is None:
+            return None
+        return {
+            "symbol": entry.symbol,
+            "title": entry.title,
+            "definition": entry.definition,
+            "example": entry.example,
+            "concept_id": entry.concept_id,
+        }
+
+    if _notation() is not None:
+        _run("notation", _notation)
+
     _record_compose("reasoning", "ok" if modes else "empty")
     narrative = "مسار تفكير مُهيكَل عبر: " + ("، ".join(modes) if modes else "لا مهارة")
     return ReasoningComposition(
@@ -831,6 +850,21 @@ def _build_registry() -> SkillRegistry:
             primary_method="compute",
             metrics_prefix="cogniforge_skill_foundations_compute",
             consumed_by=("api.routers.skills.compute_endpoint", "registry.compose_reasoning"),
+        ),
+        # ── D-185: طبقة الرموز — «النظام يعرّف كل رمز يطبعه» (ISS-138) ──────────
+        SkillDescriptor(
+            name="notation",
+            summary="تعريف الرموز الرياضية (C, n!, P_A(B), E(X), Ω…) — حتمي، بعقد، بتدهور رشيق (D-185).",
+            input_contract="str",
+            output_contract="NotationEntry",
+            primary_method="resolve",
+            metrics_prefix="cogniforge_skill_notation",
+            consumed_by=(
+                "semantic_property_skill.interpret",
+                "probability_brain.cognitive_response",
+                "api.routers.skills.notation_endpoint",
+                "registry.compose_reasoning",
+            ),
         ),
     ]
     for d in descriptors:

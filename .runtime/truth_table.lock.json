@@ -1,5 +1,5 @@
 {
-  "branch": "claude/ai-agentic-systems-roadmap-zpj934",
+  "branch": "claude/documentation-system-update-i0td9p",
   "components": [
     {
       "agreed": true,
@@ -291,6 +291,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-07-21T13:21:28.441539+00:00",
+  "generated_at_utc": "2026-07-29T17:08:52.839514+00:00",
   "schema_version": 1
 }

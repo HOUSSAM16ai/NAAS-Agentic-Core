@@ -12,7 +12,7 @@
 > CLAUDE.md §0.6 يُلخّصه ويشير إليه. القرارات التفصيلية في `.memory/decisions.md`
 > (D-104→D-113)؛ الكوارث المُصلَحة في `.memory/issues.md`؛ السرد الكامل في CLAUDE.md §6.91→§6.97.
 >
-> آخر تحديث: **2026-06-29** | الفرع: `claude/claude-memory-architecture-review-mjwkxm`
+> آخر تحديث: **2026-07-29** | الفرع: `claude/documentation-system-update-i0td9p` (D-188/D-189)
 > 🏗️ **العدسة المعمارية المُكمِّلة:** `agentic_runtime_doctrine.md` (D-146) — خريطة طبقات
 > الـ Agentic Runtime مُقيَّمة بصدق حسب §6.6 (ACTIVE/PARTIAL/PLANNED/DORMANT).
 

@@ -36,9 +36,25 @@ def _check_sql_injection(code: str, file_path: str) -> list[SecurityIssue]:
     return issues
 
 
+#: يرصد إنشاء صدفة فعليّاً (M0). النمط السابق كان
+#: `os\.system\(|subprocess\.call\(.*shell=True` وله عَمَيان:
+#:   1. يعرف `subprocess.call` وحدها، والمستودع يستعمل `subprocess.run`.
+#:   2. `.` لا تُطابق سطراً جديداً افتراضاً، والاستدعاءات متعدّدة الأسطر فـ`shell=True`
+#:      يقع على سطر تالٍ.
+#: فالنتيجة أن كاشف حقن الأوامر في المشروع كان **أعمى عن مواضعه الثلاثة** — كاشفٌ لا
+#: يرى ما وُجد لأجله ليس كاشفاً. البوّابة الحتمية `check_no_shell_true.py` هي الفارض؛
+#: وهذا الماسح يبقى للتقارير على كود خارجي.
+_COMMAND_INJECTION_RE = re.compile(
+    r"os\.(system|popen)\s*\(|"
+    r"asyncio\.create_subprocess_shell\s*\(|"
+    r"subprocess\.(run|call|check_call|check_output|Popen)\s*\((?:[^()]|\([^()]*\))*?shell\s*=\s*True",
+    re.DOTALL,
+)
+
+
 def _check_command_injection(code: str, file_path: str) -> list[SecurityIssue]:
     """يرصد مؤشرات حقن الأوامر عبر النظام."""
-    if re.search("os\\.system\\(|subprocess\\.call\\(.*shell=True", code):
+    if _COMMAND_INJECTION_RE.search(code):
         return [
             SecurityIssue(
                 category=OWASPCategory.A03_INJECTION,

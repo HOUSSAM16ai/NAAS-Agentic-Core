@@ -12,6 +12,7 @@ byte-identical to the pre-extraction God-file (D-164 pattern: verbatim move, zer
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 
@@ -27,7 +28,7 @@ from app.services.capabilities.exercise_retrieval import (
     make_result as make_exercise_result,
 )
 from app.services.capabilities.file_intelligence import (
-    build_file_count_command,
+    count_project_files,
     default_project_root,
 )
 from app.services.capabilities.file_intelligence import (
@@ -41,39 +42,24 @@ logger = logging.getLogger("orchestrator-client")
 class LocalFallbackMixin:
     """Deterministic local fallback chain — file-count / retrieval / explanation / general chat."""
 
-    async def _execute_shell_tool(
-        self,
-        command: str,
-        cwd: str,
-        timeout: int = 30,
-    ) -> dict[str, object]:
-        """ينفذ أداة shell عبر طبقة الأدوات لضمان حساب حقيقي قائم على التنفيذ الفعلي."""
-        from app.services.agent_tools.shell_tool import execute_shell
-
-        return await execute_shell(command=command, cwd=cwd, timeout=timeout)
+    # M0: `_execute_shell_tool` حُذِف — كان الجسر الوحيد من مسار الدردشة الحيّ إلى
+    # `execute_shell`، وقد زال مبرّره حين صار عدّ الملفات بايثون خالصة. قدرة بلا
+    # مستهلك حيّ تُحذَف لا تُترَك stub (درس Kagent، D-173). الأداة نفسها تبقى في
+    # سجلّ الأدوات للوكيل المستقبلي — **لكن لا يبلغها مسار الطالب**.
 
     async def _count_files_in_project(self, extension: str | None = None) -> int | None:
-        """يحسب عدد الملفات فعلياً عبر shell ويعيد None عند فشل التنفيذ أو التحليل."""
-        project_root = default_project_root()
-        command = build_file_count_command(extension=extension)
-        shell_result = await self._execute_shell_tool(command=command, cwd=project_root, timeout=45)
+        """يحسب عدد الملفات فعلياً — **بلا عملية فرعية** (M0).
 
-        if not shell_result.get("success"):
-            logger.warning("Local shell file-count command failed", extra={"result": shell_result})
+        كان يُنفِّذ أنبوب `find … | wc -l` عبر `execute_shell`، فكان المستهلكَ الحيَّ
+        **الوحيد** لمُنفِّذ الأوامر في المونوليث. الدلالة مطابقة رقميّاً (انظر
+        `count_project_files`)، والمكسب أمني لا وظيفي: يسقط آخر سبب لبقاء
+        `shell=True` على مسارٍ حيّ. `None` عند الفشل — نفس العقد السابق.
+        """
+        try:
+            return await asyncio.to_thread(count_project_files, default_project_root(), extension)
+        except OSError:  # قراءة شجرة الملفات قد تفشل (صلاحيات/سباق) — لا نكسر الدور.
+            logger.warning("Local file-count walk failed", exc_info=True)
             return None
-
-        stdout_value = str(shell_result.get("stdout", "")).strip()
-        if not stdout_value:
-            return None
-
-        first_line = stdout_value.splitlines()[0].strip()
-        if not first_line.isdigit():
-            logger.warning(
-                "Shell output is not a numeric file count", extra={"stdout": stdout_value}
-            )
-            return None
-
-        return int(first_line)
 
     async def _build_local_file_count_response(self, question: str) -> str | None:
         """ينشئ رداً محلياً بعد تنفيذ عدّ احترافي حقيقي عبر القدرة الرسمية لذكاء الملفات."""

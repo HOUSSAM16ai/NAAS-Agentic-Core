@@ -11,9 +11,9 @@
 
 import asyncio
 import logging
-import os
-import subprocess
 from pathlib import Path
+
+from app.services.agent_tools.sandbox import SandboxDeniedError, run_sandboxed, split_command
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +50,19 @@ async def execute_git(
     args: str = "",
     cwd: str | None = None,
     timeout: int = 30,
+    args_list: list[str] | None = None,
 ) -> dict[str, object]:
     """
     تنفيذ أمر Git.
 
     Args:
         subcommand: الأمر الفرعي (status, log, commit, etc.)
-        args: الوسائط الإضافية
+        args: الوسائط الإضافية كنصّ (تُحلَّل بـ`shlex`؛ الميتاحروف مرفوضة)
         cwd: مسار العمل (المستودع)
         timeout: المهلة الزمنية
+        args_list: وسائط **جاهزة** تتخطّى التحليل النصّي — للمحتوى الحرّ الذي قد
+            يحوي ميتاحروف مشروعة (رسالة commit مثلاً). آمنة لأنها تصل كوسائط
+            حرفية في `argv` ولا تُفسَّر أبداً.
 
     Returns:
         dict: {success, stdout, stderr, return_code, error}
@@ -99,15 +103,31 @@ async def execute_git(
             "error": f"Not a git repository: {work_dir}",
         }
 
-    # 4. بناء الأمر
-    command = f"git {subcommand}"
-    if args:
-        command += f" {args}"
+    # 4. بناء الأمر كـ argv (M0)
+    #
+    # كان يُبنى بـf-string ثم يُنفَّذ بـ`shell=True`، و`args` **لم يكن مُتحقَّقاً منه
+    # إطلاقاً** — بينما `subcommand` وحده يمرّ بقائمة السماح. فـ`execute_git("status",
+    # "; rm -rf ~")` حقنٌ كامل من الباب الخلفي. الآن تُحلَّل الوسائط إلى قائمة، ولا
+    # تُفسَّر الميتاحروف لأن الصدفة غير موجودة أصلاً.
+    try:
+        if args_list is not None:
+            extra = [str(part) for part in args_list]
+        else:
+            extra = split_command(args) if args.strip() else []
+        argv = ["git", subcommand, *extra]
+    except SandboxDeniedError as exc:
+        return {
+            "success": False,
+            "stdout": "",
+            "stderr": "",
+            "return_code": -1,
+            "error": f"Git arguments rejected: {exc}",
+        }
 
     # 5. تنفيذ الأمر
     try:
         return await asyncio.wait_for(
-            _run_git_command(command, work_dir),
+            _run_git_command(argv, work_dir, timeout),
             timeout=timeout,
         )
 
@@ -132,32 +152,9 @@ async def execute_git(
         }
 
 
-async def _run_git_command(command: str, cwd: Path) -> dict[str, object]:
-    """
-    تشغيل أمر Git.
-    """
-    loop = asyncio.get_running_loop()
-
-    def _execute():
-        process = subprocess.run(
-            command,
-            shell=True,
-            check=False,
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            timeout=60,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-        )
-        return {
-            "success": process.returncode == 0,
-            "stdout": process.stdout[:10000],
-            "stderr": process.stderr[:5000],
-            "return_code": process.returncode,
-            "error": None if process.returncode == 0 else process.stderr[:500],
-        }
-
-    return await loop.run_in_executor(None, _execute)
+async def _run_git_command(argv: list[str], cwd: Path, timeout: int) -> dict[str, object]:
+    """تشغيل أمر Git داخل الصندوق الرملي (M0) — `argv` بلا صدفة."""
+    return await asyncio.to_thread(run_sandboxed, argv, cwd=str(cwd), timeout=timeout)
 
 
 # أدوات مختصرة للأوامر الشائعة
@@ -187,10 +184,13 @@ async def git_add(files: str = ".", cwd: str | None = None) -> dict[str, object]
 
 
 async def git_commit(message: str, cwd: str | None = None) -> dict[str, object]:
-    """إنشاء commit."""
-    # تنظيف الرسالة من الأقواس
-    safe_message = message.replace('"', '\\"')
-    return await execute_git("commit", f'-m "{safe_message}"', cwd)
+    """إنشاء commit.
+
+    M0: الرسالة تُمرَّر **وسيطاً حرفياً** في `argv` بدل حشوها في سلسلة أوامر. الهروب
+    اليدوي السابق (`message.replace('"', '\\"')`) كان يغطّي علامة الاقتباس وحدها
+    ويترك `` ` `` و`$(...)` — أي أن رسالة commit كانت متجهاً للحقن.
+    """
+    return await execute_git("commit", cwd=cwd, args_list=["-m", message])
 
 
 # تسجيل الأدوات

@@ -1,0 +1,29 @@
+{
+  "//": "D-185 — عقد الأنواع المُولَّدة من OpenAPI. الاسم **ليس** tsconfig.json عمداً: Next.js يُفعِّل مسار TypeScript تلقائياً حين يرى tsconfig.json أو ملفّات .ts في app/، ويشترط عندها typescript + @types/* كتبعيات حقيقية — وهو ما يغيّر package-lock.json. هذا الملف يُشغَّل صراحةً عبر `tsc -p` في CI فقط، فيبقى القفل ثابتاً بايتاً ببايت ولا يمكن أن ينحرف `npm ci`.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "ES2022"
+    ],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "isolatedModules": false,
+    "forceConsistentCasingInFileNames": true,
+    "types": []
+  },
+  "include": [
+    "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "public/js",
+    "app",
+    "tests"
+  ]
+}

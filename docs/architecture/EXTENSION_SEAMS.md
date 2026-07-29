@@ -126,15 +126,19 @@
 2. عقد مُلتزَم في `docs/contracts/openapi/` **قبل** أول سطر منطق.
 3. برهان ثلاثي حيّ (import + call chain + runtime evidence) قبل ACTIVE — وإلا DORMANT بالاسم.
 
-### 7.1 TypeScript — **مُتبنّىً (ACTIVE، D-185)**
+### 7.1 TypeScript — **المرحلة الأولى مُتبنّاة (ACTIVE): العقود أنواعاً مُتحقَّقة**
 
-- **الحالة الآن:** الواجهة كانت JavaScript صرفاً؛ العقود الـ13 غير مُستهلَكة منها إطلاقاً.
-- **المقعد:** `frontend/tsconfig.json` (تدريجي: `allowJs`, `checkJs:false`, `strict`).
-- **العقد جاهز:** نعم — `scripts/contracts/generate_frontend_types.py` يولّد
-  `frontend/app/types/api.d.ts` من `docs/contracts/openapi/*`.
-- **المستهلك الحيّ:** `frontend/app/utils/wsUrl.ts` (أول وحدة مُحوَّلة فعلاً).
-- **البوّابة:** خطوتان في وظيفة `frontend-tests`: تطابق الأنواع مع العقود (`--check`) +
-  `npm run typecheck`. سلسلة الأدوات عبر `npx` فلا يتغيّر `package-lock.json`.
+- **الحالة الآن:** الواجهة JavaScript؛ العقود الـ13 صارت **أنواعاً مُولَّدة ومُتحقَّقة في CI**،
+  لكن **كود الواجهة لم يُحوَّل بعد** (بيان صريح، لا ادّعاء).
+- **المقعد:** `frontend/tsconfig.check.json` — الاسم غير الافتراضي **مقصود**: `next build`
+  يشترط `typescript` + `@types/*` كتبعيات حقيقية حالما يرى `tsconfig.json` أو `.ts` في `app/`،
+  وذلك يُعدِّل `package-lock.json` (تحقّق حيّ: فشل «Please install @types/node»).
+- **العقد جاهز:** `scripts/contracts/generate_frontend_types.py` → `frontend/types/api.d.ts`.
+- **البوّابة:** خطوتان في `frontend-tests` — تطابق المُولَّد مع العقود (`--check`) +
+  `tsc -p tsconfig.check.json` بـ`strict`/`skipLibCheck:false`. أثبتت قيمتها فوراً بكشف عطب
+  `$ref` بلا بادئة خدمة في المولِّد.
+- **شرط إكمال التبنّي:** `npm i -D typescript @types/node @types/react` + التزام القفل، ثم
+  إعادة التسمية إلى `tsconfig.json` والتحويل ملفاً ملفاً.
 
 ### 7.2 التسع الباقيات — مقاعد موثَّقة، **صفر كود** حتى يتحقّق الشرط
 

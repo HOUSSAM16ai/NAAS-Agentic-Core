@@ -25,7 +25,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WS_HOOK = REPO_ROOT / "frontend" / "app" / "hooks" / "useRealtimeConnection.js"
-WS_URL_UTIL = REPO_ROOT / "frontend" / "app" / "utils" / "wsUrl.ts"
+WS_URL_UTIL = REPO_ROOT / "frontend" / "app" / "utils" / "wsUrl.js"
 
 
 def _src() -> str:
@@ -130,7 +130,7 @@ class TestISS096GitpodProxyFix:
     """D-WS-GITPOD-002: Gitpod Flex يجب أن يستخدم same-host proxy لا port 8000 مباشرة.
 
     الجذر: Gitpod proxy يُغلق WebSocket على port 8000 بعد ~10s idle.
-    الحل: wsUrl.ts يُعيد null لـ *.gitpod.dev → getWsBase يستخدم window.location.host
+    الحل: wsUrl.js يُعيد null لـ *.gitpod.dev → getWsBase يستخدم window.location.host
     (port 5000) → server.js يُمرِّر WS إلى localhost:8000 داخلياً.
     """
 
@@ -138,17 +138,17 @@ class TestISS096GitpodProxyFix:
         """*.gitpod.dev يجب أن يُعيد null (same-host) لا 8000-- host."""
         src = _wsurl_src()
         # يجب أن يكون هناك شرط يُعيد null لـ gitpod.dev
-        assert "gitpod.dev" in src, "wsUrl.ts يجب أن يتعامل مع *.gitpod.dev"
+        assert "gitpod.dev" in src, "wsUrl.js يجب أن يتعامل مع *.gitpod.dev"
         # يجب ألا يكون هناك rewrite من 5000-- إلى 8000-- لـ gitpod.dev
         # (الـ rewrite القديم كان: host.match(/^5000-/) → replace 5000- بـ 8000-)
         # الآن يجب أن يكون محصوراً في Replit فقط
-        assert "replit" in src.lower(), "wsUrl.ts يجب أن يحصر port rewrite في Replit فقط."
+        assert "replit" in src.lower(), "wsUrl.js يجب أن يحصر port rewrite في Replit فقط."
 
     def test_gitpod_io_returns_null(self) -> None:
         """*.gitpod.io (Classic) يجب أن يُعيد null أيضاً."""
         src = _wsurl_src()
         assert "gitpod.io" in src, (
-            "D-WS-GITPOD-002: wsUrl.ts يجب أن يتعامل مع *.gitpod.io (Gitpod Classic)."
+            "D-WS-GITPOD-002: wsUrl.js يجب أن يتعامل مع *.gitpod.io (Gitpod Classic)."
         )
 
     def test_replit_still_gets_port_rewrite(self) -> None:
@@ -162,7 +162,7 @@ class TestISS096GitpodProxyFix:
     def test_same_host_comment_documents_reason(self) -> None:
         """يجب أن يكون هناك تعليق يوضح سبب استخدام same-host لـ Gitpod."""
         src = _wsurl_src()
-        assert "server.js" in src, "wsUrl.ts يجب أن يوثق أن server.js يُمرِّر WS داخلياً."
+        assert "server.js" in src, "wsUrl.js يجب أن يوثق أن server.js يُمرِّر WS داخلياً."
         assert "idle" in src.lower() or "proxy" in src.lower(), (
-            "wsUrl.ts يجب أن يوثق سبب تجنب الاتصال المباشر بـ port 8000."
+            "wsUrl.js يجب أن يوثق سبب تجنب الاتصال المباشر بـ port 8000."
         )

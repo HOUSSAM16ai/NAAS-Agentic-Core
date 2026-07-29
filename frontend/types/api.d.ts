@@ -25,9 +25,9 @@ export interface ContentRetrievalSkillContentItemResponse { id: string; title: s
 export interface ContentRetrievalSkillDeepDiveResponse { formula: string; explanation: string; why_zero: string }
 export interface ContentRetrievalSkillHealthResponse { status: string; service: string; step: string; kb_path: string; kb_files: number; version: string }
 export interface ContentRetrievalSkillImpossibleCaseRequest { bag_count: number; requested: number; item_name?: string }
-export interface ContentRetrievalSkillImpossibleCaseResponse { is_impossible: boolean; case_type: string; stage_1?: Stage1SceneResponse | null; stage_2?: Stage2QuestionResponse | null; stage_3?: Stage3AnimationResponse | null; stage_4?: Stage4MessageResponse | null; deep_dive?: DeepDiveResponse | null }
+export interface ContentRetrievalSkillImpossibleCaseResponse { is_impossible: boolean; case_type: string; stage_1?: ContentRetrievalSkillStage1SceneResponse | null; stage_2?: ContentRetrievalSkillStage2QuestionResponse | null; stage_3?: ContentRetrievalSkillStage3AnimationResponse | null; stage_4?: ContentRetrievalSkillStage4MessageResponse | null; deep_dive?: ContentRetrievalSkillDeepDiveResponse | null }
 export interface ContentRetrievalSkillRetrieveRequest { question: string; subject?: string | null; year?: string | null; max_results?: number }
-export interface ContentRetrievalSkillRetrieveResponse { intent: string; intent_confidence: number; intent_reason: string; items: ContentItemResponse[]; total: number; duration_ms: number; kb_path: string; query_subject: string | null; query_year: string | null }
+export interface ContentRetrievalSkillRetrieveResponse { intent: string; intent_confidence: number; intent_reason: string; items: ContentRetrievalSkillContentItemResponse[]; total: number; duration_ms: number; kb_path: string; query_subject: string | null; query_year: string | null }
 export interface ContentRetrievalSkillStage1SceneResponse { bag_count: number; requested: number; bag_label: string; request_label: string }
 export interface ContentRetrievalSkillStage2QuestionResponse { question: string }
 export interface ContentRetrievalSkillStage3AnimationResponse { animation: string; duration_ms: number }
@@ -52,7 +52,7 @@ export interface MemoryAgentHealthResponse { service: string; status: string; da
 export interface MemoryAgentMemoryCreateRequest { content: string; tags?: string[] }
 export interface MemoryAgentMemoryResponse { entry_id: string; content: string; tags: string[] }
 export interface MemoryAgentMemorySearchFilters { tags?: string[] }
-export interface MemoryAgentMemorySearchRequest { query?: string; filters?: MemorySearchFilters; limit?: number }
+export interface MemoryAgentMemorySearchRequest { query?: string; filters?: MemoryAgentMemorySearchFilters; limit?: number }
 export interface MemoryAgentPathRequest { from_concept: string; to_concept: string }
 export interface MemoryAgentReadinessRequest { concept_id: string; mastery_levels: Record<string, unknown> }
 export interface MemoryAgentReadinessResponse { concept_id: string; concept_name: string; is_ready: boolean; readiness_score: number; missing_prerequisites: string[]; weak_prerequisites: string[]; recommendation: string }
@@ -60,41 +60,41 @@ export interface MemoryAgentValidationError { loc: string | number[]; msg: strin
 
 // ── notation_service (notation-service) ─────────
 export interface NotationServiceDefineRequest { symbol: string }
-export interface NotationServiceDefineResponse { found: boolean; symbol?: SymbolPayload | null; error?: Record<string, unknown> | null; registry_version: string; duration_ms: number; trace_id: string }
+export interface NotationServiceDefineResponse { found: boolean; symbol?: NotationServiceSymbolPayload | null; error?: Record<string, unknown> | null; registry_version: string; duration_ms: number; trace_id: string }
 export interface NotationServiceHealthResponse { status: string; service: string; step: string; version: string; registry_version: string; symbols_loaded: number; startup_state: string; llm_backend: string }
 export interface NotationServiceResolveRequest { text: string }
-export interface NotationServiceResolveResponse { found: boolean; symbol?: SymbolPayload | null; registry_version: string; duration_ms: number; trace_id: string }
+export interface NotationServiceResolveResponse { found: boolean; symbol?: NotationServiceSymbolPayload | null; registry_version: string; duration_ms: number; trace_id: string }
 export interface NotationServiceSymbolPayload { symbol: string; title: string; definition: string; example: string; concept_id?: string | null; property_id?: string | null }
-export interface NotationServiceSymbolsResponse { symbols: SymbolPayload[]; count: number; registry_version: string }
+export interface NotationServiceSymbolsResponse { symbols: NotationServiceSymbolPayload[]; count: number; registry_version: string }
 export interface NotationServiceValidationError { loc: string | number[]; msg: string; type: string }
 
 // ── observability_service (Observability Service) ─────────
 export interface ObservabilityServiceAlertItem { id: string; severity: string; message: string; timestamp: string; status: string; service_name: string; metrics: Record<string, unknown> }
-export interface ObservabilityServiceAlertsResponse { alerts: AlertItem[] }
-export interface ObservabilityServiceCalculateMetricsRequest { findings: SecurityFindingSchema[]; code_metrics?: Record<string, unknown> | null }
-export interface ObservabilityServiceCalculateRiskRequest { findings: SecurityFindingSchema[]; code_metrics?: Record<string, unknown> | null }
+export interface ObservabilityServiceAlertsResponse { alerts: ObservabilityServiceAlertItem[] }
+export interface ObservabilityServiceCalculateMetricsRequest { findings: ObservabilityServiceSecurityFindingSchema[]; code_metrics?: Record<string, unknown> | null }
+export interface ObservabilityServiceCalculateRiskRequest { findings: ObservabilityServiceSecurityFindingSchema[]; code_metrics?: Record<string, unknown> | null }
 export interface ObservabilityServiceCalculateRiskResponse { risk_score: number }
 export interface ObservabilityServiceCapacityPlanPayload { plan_id: string; service_name: string; current_capacity: number; recommended_capacity: number; forecast_horizon_hours: number; expected_peak_load: number; confidence: number; created_at: string }
 export interface ObservabilityServiceCapacityPlanRequest { service_name: string; forecast_horizon_hours?: number }
-export interface ObservabilityServiceCapacityPlanResponse { plan: CapacityPlanPayload }
+export interface ObservabilityServiceCapacityPlanResponse { plan: ObservabilityServiceCapacityPlanPayload }
 export interface ObservabilityServiceEndpointAnalyticsResponse { path: string; avg_latency: number; p95_latency: number; error_count?: number; total_calls?: number }
 export interface ObservabilityServiceErrorMetrics { error_rate: number; error_count: number }
-export interface ObservabilityServiceForecastRequest { service_name: string; metric_type: MetricType; hours_ahead?: number }
+export interface ObservabilityServiceForecastRequest { service_name: string; metric_type: ObservabilityServiceMetricType; hours_ahead?: number }
 export interface ObservabilityServiceForecastResponse { forecast_id: string; predicted_load: number; confidence_interval: unknown[] }
-export interface ObservabilityServiceGoldenSignalsResponse { latency: LatencyMetrics; traffic: TrafficMetrics; errors: ErrorMetrics; saturation: SaturationMetrics }
+export interface ObservabilityServiceGoldenSignalsResponse { latency: ObservabilityServiceLatencyMetrics; traffic: ObservabilityServiceTrafficMetrics; errors: ObservabilityServiceErrorMetrics; saturation: ObservabilityServiceSaturationMetrics }
 export interface ObservabilityServiceHealthResponse { service: string; status: string; database?: string | null }
 export interface ObservabilityServiceLatencyMetrics { p50: number; p95: number; p99: number; "p99.9": number; avg: number }
 export type ObservabilityServiceMetricType = string;
 export interface ObservabilityServiceMetricsResponse { metrics: Record<string, unknown> }
 export interface ObservabilityServicePerformanceSnapshotResponse { cpu_usage: number; memory_usage: number; active_requests: number }
-export interface ObservabilityServiceRiskPredictionRequest { historical_metrics: SecurityMetricsResponse[]; days_ahead?: number }
+export interface ObservabilityServiceRiskPredictionRequest { historical_metrics: ObservabilityServiceSecurityMetricsResponse[]; days_ahead?: number }
 export interface ObservabilityServiceRiskPredictionResponse { predicted_risk: number; confidence: number; trend: string; slope: number; current_risk: number }
 export interface ObservabilityServiceRootResponse { message: string }
 export interface ObservabilityServiceSaturationMetrics { active_requests: number; queue_depth: number; active_spans?: number | null; resource_utilization?: number | null }
-export interface ObservabilityServiceSecurityFindingSchema { id: string; severity: Severity; rule_id: string; file_path: string; line_number: number; message: string; cwe_id?: string | null; owasp_category?: string | null; first_seen?: string | null; last_seen?: string | null; false_positive?: boolean; fixed?: boolean; fix_time_hours?: number | null; developer_id?: string | null }
+export interface ObservabilityServiceSecurityFindingSchema { id: string; severity: ObservabilityServiceSeverity; rule_id: string; file_path: string; line_number: number; message: string; cwe_id?: string | null; owasp_category?: string | null; first_seen?: string | null; last_seen?: string | null; false_positive?: boolean; fixed?: boolean; fix_time_hours?: number | null; developer_id?: string | null }
 export interface ObservabilityServiceSecurityMetricsResponse { total_findings: number; critical_count: number; high_count: number; medium_count: number; low_count: number; findings_per_1000_loc: number; new_findings_last_24h: number; fixed_findings_last_24h: number; false_positive_rate: number; mean_time_to_detect: number; mean_time_to_fix: number; overall_risk_score: number; security_debt_score: number; trend_direction: string; findings_per_developer: Record<string, unknown>; fix_rate_per_developer: Record<string, unknown>; timestamp: string }
 export type ObservabilityServiceSeverity = string;
-export interface ObservabilityServiceTelemetryRequest { metric_id: string; service_name: string; metric_type: MetricType; value: number; timestamp?: string; labels?: Record<string, unknown>; unit?: string }
+export interface ObservabilityServiceTelemetryRequest { metric_id: string; service_name: string; metric_type: ObservabilityServiceMetricType; value: number; timestamp?: string; labels?: Record<string, unknown>; unit?: string }
 export interface ObservabilityServiceTelemetryResponse { status: string; metric_id: string }
 export interface ObservabilityServiceTrafficMetrics { requests_per_second: number; total_requests: number }
 export interface ObservabilityServiceValidationError { loc: string | number[]; msg: string; type: string; input?: unknown; ctx?: Record<string, unknown> }
@@ -102,13 +102,13 @@ export interface ObservabilityServiceValidationError { loc: string | number[]; m
 // ── orchestrator_service (Orchestrator Service) ─────────
 export interface OrchestratorServiceChatRequest { question: string; user_id: number; conversation_id?: number | null; history_messages?: Record<string, unknown>[]; context?: Record<string, unknown> }
 export interface OrchestratorServiceComposeRequest { query: string; correlation_id?: string | null }
-export interface OrchestratorServiceComposeResponse { correlation_id: string; query: string; composed_answer: string; pipeline_mode: string; skills_active: string[]; total_duration_ms: number; composition_confidence?: number; plan: SkillResultSchema; research: SkillResultSchema; reasoning: SkillResultSchema }
+export interface OrchestratorServiceComposeResponse { correlation_id: string; query: string; composed_answer: string; pipeline_mode: string; skills_active: string[]; total_duration_ms: number; composition_confidence?: number; plan: OrchestratorServiceSkillResultSchema; research: OrchestratorServiceSkillResultSchema; reasoning: OrchestratorServiceSkillResultSchema }
 export type OrchestratorServiceJsonObject = Record<string, unknown>;
 export interface OrchestratorServiceMissionCreate { objective: string; context?: Record<string, unknown>; priority?: number }
 export interface OrchestratorServiceMissionEventResponse { event_type: string; mission_id: number; timestamp?: string; payload?: Record<string, unknown> }
-export interface OrchestratorServiceMissionResponse { id: number; objective: string; status: MissionStatusEnum; outcome?: string | null; created_at: string; updated_at: string; result?: Record<string, unknown> | null; steps?: MissionStepResponse[] }
+export interface OrchestratorServiceMissionResponse { id: number; objective: string; status: OrchestratorServiceMissionStatusEnum; outcome?: string | null; created_at: string; updated_at: string; result?: Record<string, unknown> | null; steps?: OrchestratorServiceMissionStepResponse[] }
 export type OrchestratorServiceMissionStatusEnum = string;
-export interface OrchestratorServiceMissionStepResponse { id?: number | null; name: string; description?: string | null; status?: StepStatusEnum; result?: string | null; tool_used?: string | null; created_at: string; completed_at?: string | null }
+export interface OrchestratorServiceMissionStepResponse { id?: number | null; name: string; description?: string | null; status?: OrchestratorServiceStepStatusEnum; result?: string | null; tool_used?: string | null; created_at: string; completed_at?: string | null }
 export interface OrchestratorServiceOutboxRelayResponse { processed: number; published: number; failed: number; skipped: number }
 export interface OrchestratorServiceOutboxStatusResponse { pending: number; processing: number; failed: number; published: number; oldest_pending_age_seconds: number | null; generated_at: string }
 export interface OrchestratorServiceSkillResultSchema { skill: string; status: string; data: Record<string, unknown>; duration_ms: number; error?: string | null }
@@ -118,7 +118,7 @@ export interface OrchestratorServiceValidationError { loc: string | number[]; ms
 // ── planning_agent (Planning Agent) ─────────
 export interface PlanningAgentHealthResponse { service: string; status: string; database?: string | null }
 export interface PlanningAgentPlanRequest { objective: string; context?: Record<string, unknown> | unknown[] }
-export interface PlanningAgentPlanResponse { plan_id: string; goal: string; strategy_name: string; reasoning: string; steps: PlanStep[] }
+export interface PlanningAgentPlanResponse { plan_id: string; goal: string; strategy_name: string; reasoning: string; steps: PlanningAgentPlanStep[] }
 export interface PlanningAgentPlanStep { name: string; description: string; tool_hint?: string | null }
 export interface PlanningAgentValidationError { loc: string | number[]; msg: string; type: string; input?: unknown; ctx?: Record<string, unknown> }
 
@@ -134,7 +134,7 @@ export interface ResearchAgentValidationError { loc: string | number[]; msg: str
 
 // ── user_service (user-service) ─────────
 export interface UserServiceAdminCreateUserRequest { full_name: string; email: string; password: string; is_admin?: boolean }
-export interface UserServiceAuthResponse { access_token: string; token_type?: string; user: UserResponse; status?: string; landing_path?: string }
+export interface UserServiceAuthResponse { access_token: string; token_type?: string; user: UserServiceUserResponse; status?: string; landing_path?: string }
 export interface UserServiceChangePasswordRequest { current_password: string; new_password: string }
 export interface UserServiceHealthResponse { service: string; status: string; environment?: string | null }
 export interface UserServiceLoginRequest { email: string; password: string }
@@ -147,13 +147,13 @@ export interface UserServiceReauthRequest { password: string }
 export interface UserServiceReauthResponse { reauth_token: string; expires_in: number }
 export interface UserServiceRefreshRequest { refresh_token: string }
 export interface UserServiceRegisterRequest { full_name: string; email: string; password: string }
-export interface UserServiceRegisterResponse { status?: string; message: string; user: UserResponse }
+export interface UserServiceRegisterResponse { status?: string; message: string; user: UserServiceUserResponse }
 export interface UserServiceRoleAssignmentRequest { role_name: string; reauth_password?: string | null; reauth_token?: string | null; justification?: string | null }
-export interface UserServiceStatusUpdateRequest { status: UserStatus }
+export interface UserServiceStatusUpdateRequest { status: UserServiceUserStatus }
 export interface UserServiceTokenGenerateResponse { access_token: string; refresh_token: string; token_type?: string }
 export interface UserServiceTokenVerifyRequest { token?: string | null }
 export interface UserServiceTokenVerifyResponse { status: string; data: Record<string, unknown> }
-export interface UserServiceUserOut { id: number; email: string; full_name: string; is_active: boolean; status: UserStatus; roles?: string[] }
+export interface UserServiceUserOut { id: number; email: string; full_name: string; is_active: boolean; status: UserServiceUserStatus; roles?: string[] }
 export interface UserServiceUserResponse { id: number; name: string; full_name?: string | null; email: string; is_admin?: boolean }
 export type UserServiceUserStatus = string;
 export interface UserServiceValidationError { loc: string | number[]; msg: string; type: string; input?: unknown; ctx?: Record<string, unknown> }

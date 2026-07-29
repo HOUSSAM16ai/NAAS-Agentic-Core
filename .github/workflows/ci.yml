@@ -327,6 +327,7 @@ jobs:
           set -euo pipefail
           node --check frontend/server.js
           npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+          echo "✅ server.js parses + package-lock.json in sync"
       # D-185: the frontend now consumes the committed OpenAPI contracts as generated
       # TypeScript types. Two gates: the generated file must match the contracts, and
       # the TS sources must type-check. A contract drift becomes a compile error here
@@ -337,7 +338,6 @@ jobs:
       - name: TypeScript typecheck
         shell: bash
         run: npm run typecheck --prefix frontend
-          echo "✅ server.js parses + package-lock.json in sync"
 
   # ── Microservices Skills Structural Check ─────────────────────────────────
   skills-structural:

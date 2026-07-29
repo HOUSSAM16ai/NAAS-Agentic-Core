@@ -10,11 +10,19 @@
 
 import asyncio
 import logging
-import os
-import subprocess
+import re
+from dataclasses import replace
 from pathlib import Path
 
+from app.services.agent_tools.sandbox import DEFAULT_LIMITS, SandboxDeniedError, run_sandboxed
+from app.services.agent_tools.sandbox import split_command as _split
+
 logger = logging.getLogger(__name__)
+
+
+def split_command(text: str) -> list[str]:
+    """يحلّل وسائط pytest — إعادة تصدير موضعية تُبقي الاستدعاءات مقروءة."""
+    return _split(text)
 
 
 async def run_tests(
@@ -50,20 +58,31 @@ async def run_tests(
             "error": f"Directory does not exist: {work_dir}",
         }
 
-    # بناء الأمر
-    command = "python -m pytest"
-    if path:
-        command += f" {path}"
-    if options:
-        command += f" {options}"
-    # إضافة خيارات افتراضية
-    if "-v" not in options:
-        command += " -v"
-    command += " --tb=short"
+    # بناء الأمر كـ argv (M0) — كان يُبنى بـf-string ثم يُنفَّذ بـ`shell=True`،
+    # فـ`path`/`options` كانا متجهَي حقن مباشرَين.
+    try:
+        argv = ["python", "-m", "pytest"]
+        if path:
+            argv += split_command(path)
+        if options:
+            argv += split_command(options)
+        if "-v" not in options:
+            argv.append("-v")
+        argv.append("--tb=short")
+    except SandboxDeniedError as exc:
+        return {
+            "success": False,
+            "stdout": "",
+            "stderr": "",
+            "return_code": -1,
+            "passed": 0,
+            "failed": 0,
+            "error": f"pytest arguments rejected: {exc}",
+        }
 
     try:
         return await asyncio.wait_for(
-            _run_pytest(command, work_dir),
+            _run_pytest(argv, work_dir, timeout),
             timeout=timeout,
         )
 
@@ -92,54 +111,36 @@ async def run_tests(
         }
 
 
-async def _run_pytest(command: str, cwd: Path) -> dict[str, object]:
+async def _run_pytest(argv: list[str], cwd: Path, timeout: int) -> dict[str, object]:
+    """تشغيل pytest داخل الصندوق الرملي (M0) — `argv` بلا صدفة.
+
+    مهلة الاختبارات أطول من الافتراضية، وحدّ المعالج يُرفَع بما يناسبها: سلسلة
+    اختبارات مشروعة تستهلك دقائق معالج، فحدّ عشر ثوانٍ كان سيقتلها ظلماً.
     """
-    تشغيل pytest.
-    """
-    loop = asyncio.get_running_loop()
+    limits = replace(
+        DEFAULT_LIMITS,
+        cpu_seconds=max(DEFAULT_LIMITS.cpu_seconds, timeout),
+        max_stdout_bytes=20_000,
+    )
+    result = await asyncio.to_thread(
+        run_sandboxed, argv, cwd=str(cwd), timeout=timeout, limits=limits
+    )
 
-    def _execute():
-        process = subprocess.run(
-            command,
-            shell=True,
-            check=False,
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            timeout=180,  # حد داخلي 3 دقائق
-            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
-        )
+    stdout = str(result.get("stdout", ""))
+    passed = failed = 0
+    match = re.search(r"(\d+) passed", stdout)
+    if match:
+        passed = int(match.group(1))
+    match = re.search(r"(\d+) failed", stdout)
+    if match:
+        failed = int(match.group(1))
 
-        stdout = process.stdout[:20000]  # حد 20KB
-        stderr = process.stderr[:5000]
-
-        # استخراج عدد الاختبارات
-        passed = 0
-        failed = 0
-        try:
-            # البحث عن نمط مثل "5 passed, 2 failed"
-            import re
-
-            match = re.search(r"(\d+) passed", stdout)
-            if match:
-                passed = int(match.group(1))
-            match = re.search(r"(\d+) failed", stdout)
-            if match:
-                failed = int(match.group(1))
-        except Exception:
-            pass
-
-        return {
-            "success": process.returncode == 0,
-            "stdout": stdout,
-            "stderr": stderr,
-            "return_code": process.returncode,
-            "passed": passed,
-            "failed": failed,
-            "error": None if process.returncode == 0 else f"Tests failed: {failed} failures",
-        }
-
-    return await loop.run_in_executor(None, _execute)
+    return {
+        **result,
+        "passed": passed,
+        "failed": failed,
+        "error": result.get("error") if not result.get("success") else None,
+    }
 
 
 async def run_specific_test(test_name: str, cwd: str | None = None) -> dict[str, object]:

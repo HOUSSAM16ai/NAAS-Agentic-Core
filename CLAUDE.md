@@ -1006,6 +1006,18 @@ Typical latency: 6–18s (OpenRouter free tier). `persisted` event only when orc
   `check_abstraction_consumed.py` (port جديد بلا مستهلك ⇒ فشل CI). حدود الخدمات مفروضة آلياً في
   guardrails (`check_no_cross_service_imports` · `check_ports_consistency` ·
   `check_single_brain_control_plane` · `check_core_kernel_acl`). الخريطة الصادقة: `.memory/architecture.md §10`.
+- **تنفيذ الأوامر بـ`argv` لا بصدفة (D-187 · M0)**: كان `agent_tools` ينفّذ
+  `subprocess.run(..., shell=True)` في ثلاثة مواضع خلف **قائمة منع**، بينما `ALLOWED_COMMANDS`
+  مُعرَّفة **ولا يُشير إليها شيء** — قائمة سماح ميتة. مسبار حيّ أثبت مرور الثمانية، و`echo
+  $(id -u)` **أعاد `0`**. **القواعد الدائمة:** (1) كل تنفيذ عملية فرعية في `app/`·
+  `microservices/`·`shared/` يمرّ من `agent_tools/sandbox.run_sandboxed(argv, …)` — تفرضه
+  بوّابة `check_no_shell_true` (دَينها المُجمَّد **فارغ**، ويتقلّص فقط). (2) **قائمة سماح
+  مفروضة لا مُعلَنة**: قائمة المنع ناقصة دائماً بطبيعتها؛ الأمان بأن يكون الحقن **غير
+  مُمثَّل** (`shell=False`) لا مُرشَّحاً. (3) **بلا شبكة افتراضاً** — `curl`/`wget` خارج
+  القائمة؛ الشبكة قدرة تُمنَح صراحةً. (4) **سجن مسارات بـ`resolve()`** (يتبع الروابط) على
+  `cwd` **ووسائط المسارات**. (5) **محتوى حرّ مشروع** (رسالة commit) يُمرَّر وسيطاً حرفياً
+  (`args_list`) لا يُحشى في سلسلة. (6) **ممنوع توصيل أي مُخطِّط/LLM بالأدوات** قبل استكمال
+  M1→M4 — القدرة ≠ الأمان.
 
 ### ز) جسر قاعدة البيانات + الأسرار + compose (D-DB-BRIDGE-001 · D-172)
 - **جسر Supabase** (`scripts/db_bridge.py`): SQL عبر HTTPS:443 حين تُحجَب منافذ Postgres (5432/6543).

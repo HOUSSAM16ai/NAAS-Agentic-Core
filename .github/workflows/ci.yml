@@ -156,6 +156,12 @@ jobs:
           # same intent drifting apart — so a sixth list must be impossible, not
           # merely discouraged. The remaining duplicates are frozen and shrink-only.
           python scripts/fitness/check_intent_single_source.py
+          # M0 (roadmap §6.5.ب): application code executes an argv list, never a shell.
+          # The old guard was a denylist next to a never-referenced allowlist, and a live
+          # probe showed every attack passing — including `echo $(id -u)` returning 0.
+          # A denylist is structurally wrong here: it can never enumerate every dangerous
+          # form. argv + shell=False makes injection unrepresentable instead of filtered.
+          python scripts/fitness/check_no_shell_true.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

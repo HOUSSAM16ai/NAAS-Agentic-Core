@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -112,8 +113,52 @@ def detect_file_intelligence(request: FileIntelligenceRequest) -> FileIntelligen
     return FileIntelligenceDecision(recognized=True, extension=_extract_extension(normalized))
 
 
+#: تُقلَّم **عند الجذر فقط** — أنماط `find` لها تبدأ بـ`./` فلا تُطابق التداخل.
+#: (نتيجةً لذلك `node_modules` المتداخل **يُعَدّ** — سلوكٌ قائم يُحافَظ عليه حرفيّاً.)
+_ROOT_PRUNED_DIRS: frozenset[str] = frozenset({".git", ".venv", "venv", "node_modules"})
+
+#: تُقلَّم **في أي عمق** — أنماط `find` لها تبدأ بـ`*/`.
+_ANY_DEPTH_PRUNED_DIRS: frozenset[str] = frozenset({"__pycache__", ".pytest_cache", ".mypy_cache"})
+
+
+def count_project_files(root: str | Path, extension: str | None = None) -> int:
+    """يعدّ ملفات المشروع **بلا أي عملية فرعية** (M0).
+
+    كان العدّ يُنفَّذ بأنبوب shell (`find … | wc -l`) عبر `execute_shell`، وكان ذلك
+    المستهلكَ الحيَّ **الوحيد** لمُنفِّذ الأوامر في المونوليث. وعدّ الملفات لا يحتاج
+    shell أصلاً؛ فإزالة الحاجة تسبق تحصين القدرة، ويُغلَق باب التنفيذ بلا خطر انحدار.
+
+    **دلالة العدّ مطابقة للأمر السابق بالضبط** (مُتحقَّق رقميّاً على هذا المستودع):
+    التقليم غير متجانس (جذري مقابل أي-عمق، انظر الثابتَين أعلاه)، و`-type f` تستثني
+    الروابط الرمزية، و`-name '*.ext'` مطابقة لاحقة.
+    """
+    root_path = Path(root)
+    suffix = f".{extension}" if extension else None
+    total = 0
+    for dirpath, dirnames, filenames in os.walk(root_path, followlinks=False):
+        at_root = os.path.relpath(dirpath, root_path) == "."
+        dirnames[:] = [
+            name
+            for name in dirnames
+            if name not in _ANY_DEPTH_PRUNED_DIRS and not (at_root and name in _ROOT_PRUNED_DIRS)
+        ]
+        for name in filenames:
+            if suffix is not None and not name.endswith(suffix):
+                continue
+            candidate = os.path.join(dirpath, name)
+            # `-type f`: ملف عادي لا رابط رمزي.
+            if os.path.islink(candidate) or not os.path.isfile(candidate):
+                continue
+            total += 1
+    return total
+
+
 def build_file_count_command(extension: str | None = None) -> str:
-    """يبني أمرًا موحدًا وآمنًا لعدّ الملفات مع استبعاد المسارات الثقيلة."""
+    """يبني أمر عدّ الملفات — **مهجور (M0)، بلا مستهلك تنفيذي**.
+
+    يبقى مُصدَّراً لأن اختبارات قائمة تقرأ نصّه، لكن مسار التشغيل يستعمل
+    `count_project_files` بايثون الخالصة. لا تُعِد توصيله بـ`execute_shell`.
+    """
     extension_filter = f" -name '*.{extension}'" if extension else ""
     return (
         "find . "

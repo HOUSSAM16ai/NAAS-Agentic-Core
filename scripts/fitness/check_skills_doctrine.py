@@ -780,9 +780,22 @@ def check_semantic_property_wired() -> None:
         )
     # D-137: «ما هو X» تعريف موثوق — _DEFINITIONAL_MARKERS يشمل «ما هو»؛ _wants_def يستخدم
     # نيّة StudentState؛ «الحالات الملائمة» مفهوم مُسجَّل؛ معالج المثال يَفعل على الحيرة+مفهوم نشط.
-    if '"ما هو "' not in skill:
+    # D-186: يُفحَص **السلوك** لا نصّ ملفٍ بعينه. كان الفحص يبحث عن السلسلة الحرفية
+    # `"ما هو "` داخل `semantic_property_skill.py`؛ وبعد توحيد العلامات في
+    # `shared/intent` صار الحرف غائباً عن ذلك الملف والقاعدة قائمة — أي أن الفحص كان
+    # يقيس موضع التصريح لا الثابتة نفسها. الآن نستورد السجلّ القانوني ونتحقّق أن
+    # «ما هو» علامةُ تعريفٍ فعلاً، فيبقى الحارس صالحاً أينما عاش التصريح.
+    try:
+        from shared.intent import markers_for as _markers_for
+
+        _definition_markers = {m.strip() for m in _markers_for("definition")}
+    except Exception as exc:  # pragma: no cover - سجلّ النيّة مفقود = فشل صريح
+        _definition_markers = set()
+        _fail(f"shared.intent definition markers unreadable — {exc} (D-186).")
+    if "ما هو" not in _definition_markers:
         _fail(
-            "_DEFINITIONAL_MARKERS missing bare 'ما هو' — 'ما هو X' not treated as definition (D-137)."
+            "shared/intent definition markers missing bare 'ما هو' — "
+            "'ما هو X' not treated as definition (D-137)."
         )
     if '"favorable_cases"' not in skill or "الحالات الملائمة" not in skill:
         _fail("PROPERTY_REGISTRY missing the 'favorable_cases' concept (D-137).")

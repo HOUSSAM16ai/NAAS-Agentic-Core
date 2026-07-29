@@ -439,15 +439,18 @@ class CognitiveVerificationMixin:
 
     @staticmethod
     def _concept_of_text(text: str) -> str:
-        """D-127: المفهوم الحتمي لرسالة طالب (incl. confusion→full_solution)."""
+        """D-127: المفهوم الحتمي لرسالة طالب (incl. confusion→full_solution).
+
+        D-186: كشف الحيرة من `shared/intent` لا من قائمة محلّية سادسة — كانت هذه
+        القائمة تجهل «مش فاهم» و«حاير» و«لا أعرف» فتُصنَّف `unknown`.
+        """
         from app.services.skills.concept_diagnosis_skill import ConceptDiagnosisSkill
+        from shared.intent import matches
 
         c = ConceptDiagnosisSkill.diagnose_deterministic(text).concept
         if c == "unknown":
             low = (text or "").strip().lower()
-            if any(
-                m in low for m in ("لم أفهم", "لم افهم", "مفهمتش", "ما فهمت", "لا أفهم", "لا افهم")
-            ) or low in ("؟", "?"):
+            if matches(low, "confusion") or low in ("؟", "?"):
                 return "full_solution"
         return c
 

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.core.logging import get_logger
 from app.core.settings.base import get_settings
+from shared.http_client import correlated_client
 
 logger = get_logger(__name__)
 
@@ -55,8 +56,8 @@ class MemoryClient:
         self.timeout = httpx.Timeout(10.0, connect=5.0)
 
     async def _get(self, path: str, params: dict | None = None) -> dict | list | None:
-        """تنفيذ طلب GET."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        """تنفيذ طلب GET (مُصحَّح بالتتبّع — D-189)."""
+        async with correlated_client(timeout=self.timeout) as client:
             try:
                 # التأكد من صحة الرابط
                 url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
@@ -81,8 +82,8 @@ class MemoryClient:
                 return None
 
     async def _post(self, path: str, payload: dict) -> dict | list | None:
-        """تنفيذ طلب POST."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        """تنفيذ طلب POST (مُصحَّح بالتتبّع — D-189)."""
+        async with correlated_client(timeout=self.timeout) as client:
             try:
                 url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
                 response = await client.post(

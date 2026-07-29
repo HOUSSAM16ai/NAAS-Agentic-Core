@@ -1,6 +1,17 @@
 # Runtime Truth Lock
-> Last updated: **2026-07-28** | Branch: `claude/probability-exercise-2024-v7agr3` (D-185)
-> Previous: `claude/revolutionary-humanity-system-q62gjg` (D-183)
+> Last updated: **2026-07-29** | Branch: `claude/documentation-system-update-i0td9p` (D-188/D-189)
+> Previous: `claude/probability-exercise-2024-v7agr3` (D-185)
+
+## Outbound Trace Layer + Memory Coherence Gate (2026-07-29, D-188/D-189)
+
+| المكوّن | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`shared/http_client/correlated.py`** (المصدر القانوني للنداء الصادر) | **ACTIVE** | dep-free عدا `httpx`، **بلا استيراد `app` أو خدمة شقيقة**؛ مُستهلَك من `app/core/http_client_factory.py` (يُسجِّل `correlation_id` ContextVar كمُزوِّد) ومن `memory_client` · `auditor_client` · `notation_skill`؛ برهان حيّ طرف-إلى-طرف عبر `httpx.MockTransport`: `X-Correlation-ID` + `traceparent` يصلان فعلاً إلى الطلب المُرسَل، والمُعرَّف المحيط **يُمَدّ** لا يُستبدَل (`ambient honored: abc123def456`). 17 اختباراً. |
+| **حقن التتبّع في المونوليث** (5 مواضع مُهاجَرة) | **ACTIVE** | `memory_client._get/_post` · `auditor_client` (نداءان) · `notation_skill.resolve_via_service` — الأخير كان يُولِّد `uuid4()` جديداً لكل نداء فيقطع السلسلة؛ صار يمدّها. 96 اختباراً قائماً يمرّ بلا انحدار. |
+| **بوّابة `check_correlated_http`** | **ACTIVE (CI · guardrails)** | AST لا grep؛ 3 مصانع مصرَّح بها؛ دَين مُجمَّد **24** بـratchet **ثنائي الاتجاه**؛ تجربتان سلبيتان مُثبَتتان حياً (بناء جديد ⇒ 1 · دَين تقلّص بلا تحديث ⇒ 1). |
+| **بوّابة `check_memory_coherence`** | **ACTIVE (CI · doc-integrity)** | 4 فحوص (فهرس سيادي · ترتيب النافذة الحديثة · سقف الدستور ratchet · تقادم قفل الحقيقة)؛ 4 تجارب سلبية مُثبَتة؛ 10 اختبارات. كشفت عطبين حقيقيين عند أول تشغيل (الفهرس المتقادم + القفل من 2026-07-21). |
+| **الخدمات المصغّرة على الغلاف** | **ABSENT-by-design (دَين مُجمَّد، لا ZOMBIE)** | صفر خدمة تستورد `shared` (قانون D-185: توريد محروس بتكافؤ لا استيراد). 19 بناءً مباشراً مُسجَّلاً صراحةً في `FROZEN_DEBT` — مرئي ومحصور، يتقلّص فقط. إغلاقه يتطلّب نسخةً مُوَرَّدة + بوّابة تكافؤ لكل خدمة. |
+| **العملاء طويلو العمر** (`observability_client` · `gateway/registry`) | **PARTIAL (دَين مُجمَّد)** | يُبنى العميل مرّة، فحقن الترويسة وقت البناء **يُجمِّد** المُعرَّف على أوّل دور — خطأ أسوأ من غيابه. يحتاج حقناً لكل-طلب لا لكل-عميل (شوط مستقلّ). |
 
 ## Mathematical Notation Layer (2026-07-28, D-185 — closes ISS-138)
 

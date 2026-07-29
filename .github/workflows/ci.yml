@@ -156,6 +156,13 @@ jobs:
           # same intent drifting apart — so a sixth list must be impossible, not
           # merely discouraged. The remaining duplicates are frozen and shrink-only.
           python scripts/fitness/check_intent_single_source.py
+          # D-189 (roadmap §6.5.د D4): outbound HTTP carries a correlation id. The
+          # roadmap measured 31 direct httpx.AsyncClient constructions against 21
+          # header injections in 9 files — two thirds of cross-service calls crossed
+          # a boundary untraceable. Worse, some injection sites minted a *fresh*
+          # uuid4 per call, cutting the trace chain instead of extending it. The
+          # remaining direct constructions are frozen and shrink-only.
+          python scripts/fitness/check_correlated_http.py
           # M0 (roadmap §6.5.ب): application code executes an argv list, never a shell.
           # The old guard was a denylist next to a never-referenced allowlist, and a live
           # probe showed every attack passing — including `echo $(id -u)` returning 0.

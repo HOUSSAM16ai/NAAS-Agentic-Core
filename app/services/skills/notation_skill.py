@@ -99,16 +99,16 @@ class NotationSkill(BaseSkill[str, NotationEntry | None]):
         مُخصَّص لمستهلكي الـAPI والوكلاء لا لدور الطالب — فالدور التعليمي يستعمل
         :meth:`resolve` المحلّي حفظاً لزمن الاستجابة.
         """
-        import uuid
-
         try:
-            import httpx
+            # D-189: كان هذا الموضع يُولِّد `uuid4()` **جديداً** لكل نداء، فيقطع سلسلة
+            # الأثر بدل أن يمدّها — الدور يحمل مُعرَّفاً والنداء الصادر عنه يحمل آخر لا
+            # صلة له به. `correlated_client` يمدّ المُعرَّف المحيط ولا يولّد إلا كملاذ أخير.
+            from shared.http_client import correlated_client
 
-            async with httpx.AsyncClient(timeout=_SERVICE_TIMEOUT_S) as client:
+            async with correlated_client(timeout=_SERVICE_TIMEOUT_S) as client:
                 response = await client.post(
                     f"{self.service_url}/resolve",
                     json={"text": question},
-                    headers={"X-Correlation-ID": str(uuid.uuid4())},
                 )
                 response.raise_for_status()
                 payload = response.json()

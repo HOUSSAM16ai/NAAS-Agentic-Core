@@ -32,11 +32,29 @@ import logging
 import threading
 from dataclasses import dataclass
 
+from shared.http_client import correlated_client, set_correlation_provider
+
 logger = logging.getLogger(__name__)
 
 # Thread-safe singleton management
 _CLIENT_LOCK = threading.Lock()
 _HTTP_CLIENTS: dict[str, object] = {}
+
+
+def _register_correlation_provider() -> None:
+    """يُسجِّل ``correlation_id`` ContextVar القائم كمصدر المُعرَّف المحيط للمونوليث.
+
+    الاستيراد داخل الدالة مقصود: ``app.core.logging`` يستورد الإعدادات، فالاستيراد على
+    مستوى الوحدة يخلق حلقة استيراد عند الإقلاع.
+    """
+    try:
+        from app.core.logging import correlation_id
+
+        set_correlation_provider(correlation_id.get)
+    except Exception as exc:  # pragma: no cover - إقلاع مبكر جداً
+        # التتبّع ليس شرطاً للإجابة: بلا مُزوِّد يُولَّد مُعرَّف جديد لكل نداء
+        # (تدهور رشيق) — لكن نُبقي الأثر مرئياً بدل ابتلاعه بصمت (§0: لا فشل صامت).
+        logger.warning("correlation provider not registered (%s) — outbound IDs will be fresh", exc)
 
 
 @dataclass
@@ -281,6 +299,14 @@ def get_http_client_stats() -> dict[str, object]:
     return HTTPClientFactory.get_cached_clients()
 
 
+# ── D-189 (دَين D4): ربط المونوليث بمصدر التتبّع القانوني ──────────────────────────
+# الترويسة `X-Correlation-ID` كانت غائبة عن أكثر من ثلثي النداءات الصادرة (31 بناءً
+# مباشراً مقابل 21 حقناً). المصدر القانوني `shared/http_client` لا يستورد `app` (قانون
+# حدود الخدمات)، فالربط يحدث هنا: نُسجِّل `ContextVar` القائم أصلاً في
+# `app/core/logging.py` كمُزوِّد للمُعرَّف المحيط — بلا ContextVar سادس وبلا تكرار.
+_register_correlation_provider()
+
+
 __all__ = [
     "HTTPClientConfig",
     # Classes
@@ -288,6 +314,7 @@ __all__ = [
     # Functions
     "close_all_http_clients",
     "close_http_client",
+    "correlated_client",
     "get_http_client",
     "get_http_client_stats",
 ]

@@ -4,6 +4,7 @@ import os
 import httpx
 
 from app.core.protocols import AgentReflector, CollaborationContext
+from shared.http_client import correlated_client
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ class AuditorClient(AgentReflector):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with correlated_client(timeout=self.timeout) as client:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
                 # The service returns strict schema: approved, feedback, score, final_response
@@ -69,7 +70,7 @@ class AuditorClient(AgentReflector):
         payload = {"situation": situation, "analysis": analysis}
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with correlated_client(timeout=self.timeout) as client:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
                 return response.json()

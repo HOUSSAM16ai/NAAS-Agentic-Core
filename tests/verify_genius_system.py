@@ -7,10 +7,13 @@ from pathlib import Path
 sys.path.append(str(Path.cwd()))
 
 # إعداد المتغيرات البيئية
-os.environ["DATABASE_URL"] = (
-    "postgresql://postgres.aocnuqhxrhxgbfcgbxfy:199720242025%40HOUSSAMbenmerah@aws-1-eu-west-3.pooler.supabase.com:6543/postgres?sslmode=require"
-)
-os.environ["OPENAI_API_KEY"] = "sk-placeholder"  # سأعتمد على البيئة الموجودة أو Mock إذا لزم الأمر
+# ISS-141: بيانات الاعتماد من البيئة حصراً — كان الرابط الإنتاجي مكتوباً هنا حرفياً.
+# فشلٌ صريح خير من رابطٍ مدسوس (§0: لا فشل صامت، ولا أسرار في المستودع).
+if not (os.environ.get("DATABASE_URL") or os.environ.get("APP_DATABASE_URL")):
+    raise SystemExit(
+        "DATABASE_URL (or APP_DATABASE_URL) must be exported before running this live check."
+    )
+os.environ.setdefault("OPENAI_API_KEY", "sk-placeholder")
 
 from app.core.logging import get_logger
 from app.services.mcp.integrations import MCPIntegrations

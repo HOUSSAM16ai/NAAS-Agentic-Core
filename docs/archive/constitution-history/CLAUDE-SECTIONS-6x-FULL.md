@@ -917,7 +917,7 @@ orchestrator-service: WebSearchFallbackNode (search.py:300)
 
 **Revival prerequisites for Tavily:**
 1. Advanced LangGraph (orchestrator microservice) must be running — see above
-2. `TAVILY_API_KEY=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` (or production key) must be added to `docker-compose.yml` under both `orchestrator-service` and `research-agent`
+2. `TAVILY_API_KEY=tvly-dev-<REDACTED — see ISS-141>` (or production key) must be added to `docker-compose.yml` under both `orchestrator-service` and `research-agent`
 3. `research-agent` service must be running (port 8007) — it is the actual Tavily caller
 4. `ddgs` package must be installed if DuckDuckGo fallback is needed: `pip install ddgs`
 5. `FIRECRAWL_API_KEY` is optional — `SimpleWebScraper` (httpx + BeautifulSoup) is the fallback scraper

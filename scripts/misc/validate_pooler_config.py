@@ -167,10 +167,13 @@ def show_recommendations():
         f"{C}postgresql://postgres:PASSWORD@PROJECT-REF.pooler.supabase.com:6543/postgres?sslmode=require{E}"
     )
 
-    print("\nFor the current project (aocnuqhxrhxgbfcgbxfy):")
-    print(
-        f"{C}postgresql://postgres:199720242025%40HOUSSAMbenmerah@aocnuqhxrhxgbfcgbxfy.pooler.supabase.com:6543/postgres?sslmode=require{E}"
-    )
+    # ISS-141: لا تُطبَع بيانات اعتماد حقيقية. الرابط الفعلي يُقرأ من البيئة حصراً
+    # (قاعدة CLAUDE.md: الأسرار في بيئة العملية لا في المستودع).
+    _current = os.environ.get("DATABASE_URL") or os.environ.get("APP_DATABASE_URL")
+    if _current:
+        print("\nCurrent DATABASE_URL is set in the environment (value not printed).")
+    else:
+        print("\nDATABASE_URL is not set — export it before running the live checks.")
 
     print("\nBenefits of Pooler:")
     print("  ✅ Resolves IPv6 compatibility issues")

@@ -93,3 +93,81 @@ def test_explicit_retrieval_intent_triggers_retrieval(question: str) -> None:
     assert decision.recognized is True, (
         f"طلب جلب صريح لم يُطلق الاسترجاع: '{question}' — reason={decision.reason}"
     )
+
+
+# ── ISS-140: تدوين الدوال ليس نيّة استرجاع، وطلب العمل المباشر يُلغيه ────────────────
+#
+# البرهان الحيّ (2026-07-29، مونوليث حقيقي + OpenRouter حقيقي عبر WebSocket): الطالب سأل
+# «احسب تكامل الدالة f(x) = x^2 + 3x من 0 إلى 2» فتلقّى **تمرين «الدوال العددية» المخزَّن**
+# (2,328 حرفاً عن g(x)=1+(x²+x−1)e^−x) — أي إجابةً عن سؤالٍ لم يطرحه. الجذر: `f(x)` و
+# `الدالة f` كانت **أنماط استرجاع مستقلّة**، وهي تظهر في كل سؤال تفاضل/تكامل تقريباً.
+# هذا صنف ISS-038 عائداً بمفتاحٍ آخر: علامةٌ مسطَّحة تتجاهل النيّة.
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "احسب تكامل الدالة f(x) = x^2 + 3x من 0 إلى 2",
+        "أوجد مشتقة f(x) = sin(x)",
+        "احسب نهاية f(x) عند 0",
+        "برهن أن الدالة f متزايدة",
+        "بيّن أن g(x) موجبة",
+        "حل المعادلة f(x) = 0",
+        "ادرس تغيّرات الدالة h",
+    ],
+)
+def test_direct_work_on_student_expression_never_fetches_a_stored_exercise(
+    question: str,
+) -> None:
+    """طلب عملٍ مباشر على تعبير الطالب لا يُرجِع تمريناً مخزَّناً (ISS-140)."""
+    decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+    assert decision.recognized is False, (
+        f"طلب عمل مباشر أطلق الاسترجاع خطأً: '{question}' — reason={decision.reason}"
+    )
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "ما هي نهاية الدالة f عند اللانهاية؟",
+        "f(x) تساوي كم عندما x=1؟",
+        "ماذا يعني g(x) هنا؟",
+    ],
+)
+def test_bare_function_notation_alone_is_not_retrieval_intent(question: str) -> None:
+    """تدوين الدالة وحده تدوينٌ لا نيّة — لا يُطلق استرجاعاً بلا قرينة (ISS-140)."""
+    decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+    assert decision.recognized is False, (
+        f"تدوين دالة وحده أطلق الاسترجاع: '{question}' — reason={decision.reason}"
+    )
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "هات تمرين الدالة f",
+        "أعطني تمرين f(x) من بكالوريا 2024",
+        "تمرين الدوال العددية 2024",
+    ],
+)
+def test_function_notation_with_a_retrieval_cue_still_retrieves(question: str) -> None:
+    """التدوين **مع** قرينة استرجاع (تمرين/سنة/بكالوريا) يبقى استرجاعاً — لا تراجع."""
+    decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+    assert decision.recognized is True, (
+        f"تدوين + قرينة استرجاع لم يُطلق الاسترجاع: '{question}' — reason={decision.reason}"
+    )
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "احسب تمرين البكالوريا 2024",
+        "أوجد حل التمرين الأول",
+    ],
+)
+def test_explicit_stored_exercise_request_outranks_direct_work(question: str) -> None:
+    """طلبٌ صريح لتمرينٍ مخزَّن يتقدّم على فعل الحساب — لا نُفرِط في الإلغاء."""
+    decision = detect_exercise_retrieval(ExerciseRetrievalRequest(question=question))
+    assert decision.recognized is True, (
+        f"طلب تمرين مخزَّن صريح أُلغي خطأً: '{question}' — reason={decision.reason}"
+    )

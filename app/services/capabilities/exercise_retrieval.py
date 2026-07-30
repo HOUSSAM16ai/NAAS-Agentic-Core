@@ -143,16 +143,6 @@ _RETRIEVAL_INTENT_PATTERNS: tuple[str, ...] = (
     "دورة ثانية",
     "session 1",
     "session 2",
-    # أنماط دلالية — الطالب يصف ما يريد بدون كلمة "تمرين" صريحة
-    "g(x)",
-    "f(x)",
-    "h(x)",
-    "دالة g",
-    "دالة f",
-    "دالة h",
-    "الدالة g",
-    "الدالة f",
-    "الدالة h",
     # طلب بالسنة فقط مع موضوع رياضي
     "2016 دوال",
     "دوال 2016",
@@ -210,6 +200,44 @@ _TOPIC_KEYWORDS: dict[str, list[str]] = {
     "derivative": ["المشتقة", "derivative"],
 }
 
+# تدوين الدوال — **تدوينٌ لا نيّة استرجاع** (ISS-140). يُحتسَب فقط مع قرينة استرجاع.
+_FUNCTION_NOTATION_PATTERNS: tuple[str, ...] = (
+    "g(x)",
+    "f(x)",
+    "h(x)",
+    "دالة g",
+    "دالة f",
+    "دالة h",
+    "الدالة g",
+    "الدالة f",
+    "الدالة h",
+)
+
+# طلب عمل مباشر على تعبير الطالب — يُلغي الاسترجاع (ISS-140).
+_DIRECT_WORK_PATTERNS: tuple[str, ...] = (
+    "احسب",
+    "أحسب",
+    "احسبي",
+    "calcule",
+    "calculate",
+    "compute",
+    "أوجد",
+    "اوجد",
+    "جد ",
+    "استنتج",
+    "برهن",
+    "أثبت",
+    "اثبت",
+    "بيّن أن",
+    "بين أن",
+    "حل المعادلة",
+    "حل المتراجحة",
+    "بسّط",
+    "بسط ",
+    "ادرس",
+    "أدرس",
+)
+
 # "تمرين" أو "exercise" متبوعاً برقم مباشرة
 _EXERCISE_WITH_NUMBER_RE = re.compile(r"(تمرين|تمارين|exercise)\s*\d+", re.IGNORECASE)
 
@@ -248,10 +276,57 @@ def _has_explanation_intent(normalized: str) -> bool:
     return any(pattern in normalized for pattern in _EXPLANATION_INTENT_PATTERNS)
 
 
+def _has_function_notation(normalized: str) -> bool:
+    """يكشف تدوين الدوال (``f(x)`` · ``الدالة g`` …) — **تدوينٌ لا نيّة**.
+
+    كانت هذه الرموز مُدرَجة كأنماط استرجاع مستقلّة، فصار كل سؤال تفاضل/تكامل يذكر دالةً
+    مُصنَّفاً «اجلب تمريناً مخزَّناً». وهذا هو صنف ISS-038 عائداً بمِفتاحٍ آخر: علامةٌ مسطَّحة
+    تتجاهل النيّة. `f(x)` تظهر في كل سؤال رياضي تقريباً، فلا تصلح دليلاً على شيء وحدها.
+    """
+    return any(pattern in normalized for pattern in _FUNCTION_NOTATION_PATTERNS)
+
+
+def _has_direct_work_intent(normalized: str) -> bool:
+    """يكشف طلب **عملٍ مباشر** على تعبير الطالب (احسب · أوجد · برهن …).
+
+    الطالب الذي يقول «احسب تكامل f(x)=x²+3x من 0 إلى 2» يطلب عملاً على تعبيره **هو**؛
+    إرجاع تمرين بكالوريا مخزَّن بدل ذلك ليس إجابةً ناقصة بل إجابةً عن سؤالٍ آخر.
+    """
+    return any(pattern in normalized for pattern in _DIRECT_WORK_PATTERNS)
+
+
+def _wants_stored_exercise(normalized: str) -> bool:
+    """يكشف طلباً صريحاً لتمرينٍ **مخزَّن** (فيتقدّم على نيّة العمل المباشر).
+
+    «احسب تمرين البكالوريا 2024» طلبُ استرجاعٍ حقيقي حتى لو بدأ بفعل حساب.
+    """
+    return (
+        "تمرين" in normalized
+        or "تمارين" in normalized
+        or "exercise" in normalized
+        or "بكالوريا" in normalized
+        or "bac" in normalized
+        or _YEAR_RE.search(normalized) is not None
+    )
+
+
 def _has_retrieval_intent(normalized: str) -> bool:
     """يكشف عن نية جلب محتوى من قاعدة المعرفة بشكل صريح أو دلالي."""
     if any(pattern in normalized for pattern in _RETRIEVAL_INTENT_PATTERNS):
         return True
+    # تدوين الدوال يُحتسَب **فقط** مع قرينة استرجاع حقيقية (كلمة «تمرين» أو سنة أو
+    # بكالوريا أو فعل جلب) — لا وحده. «هات تمرين الدالة f» استرجاع، و«احسب f(x)» ليس كذلك.
+    if _has_function_notation(normalized):
+        corroborated = (
+            "تمرين" in normalized
+            or "تمارين" in normalized
+            or "exercise" in normalized
+            or _YEAR_RE.search(normalized) is not None
+            or "بكالوريا" in normalized
+            or "bac" in normalized
+        )
+        if corroborated:
+            return True
     if _EXERCISE_WITH_NUMBER_RE.search(normalized):
         return True
     # "تمرين" + سنة = طلب تمرين من سنة محددة
@@ -423,6 +498,16 @@ def detect_exercise_retrieval(
         return ExerciseRetrievalDecision(
             recognized=False,
             reason="explanation_intent_detected",
+        )
+
+    # الأولوية الأولى-ب (ISS-140): طلب عمل مباشر على تعبير الطالب يُلغي الاسترجاع، إلّا
+    # إذا طلب صراحةً تمريناً مخزَّناً («احسب تمرين البكالوريا 2024»). الطالب الذي يقول
+    # «احسب تكامل f(x)=x²+3x من 0 إلى 2» كان يتلقّى تمرين «الدوال العددية» المخزَّن —
+    # أي إجابةً عن سؤالٍ لم يطرحه.
+    if _has_direct_work_intent(normalized) and not _wants_stored_exercise(normalized):
+        return ExerciseRetrievalDecision(
+            recognized=False,
+            reason="direct_work_intent_detected",
         )
 
     # الأولوية الثانية: نية الجلب الصريحة

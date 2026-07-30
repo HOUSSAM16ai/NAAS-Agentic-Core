@@ -62,6 +62,22 @@ class TurnPreemptsCognitiveMixin:
             for m in (history_messages or [])
             if isinstance(m, dict) and m.get("role") in ("user", "assistant")
         )
+        # ── ISS-140: «اشرح» وحده لا يملك الموضوع ─────────────────────────────
+        # `diagnose_deterministic` تُرجِع المفهوم العامّ `full_solution` لأي فعل شرح،
+        # بلا أي فحص موضوع. فسؤال «اشرح لي قانون أوم» (فيزياء) كان يعبر بوّابة الدخول
+        # `_concept != "unknown"` فيتلقّى الطالب **قائمة تشخيص الاحتمالات** («فضاء
+        # العينة / الحالات الملائمة») — بُرهن حياً على حسابٍ جديد بصفر حالة سابقة.
+        #
+        # القاعدة: المفهوم العامّ يحتاج سياق احتمالات؛ المفاهيم **المحدَّدة**
+        # (combinations · numerator · ratio …) تحمل موضوعها في اسمها فتبقى كما هي.
+        # هذا نظير الحُرّاس القائمة في هذا الملف نفسه: طبقة الـ LLM محروسة بـ
+        # `_is_prob_context` («لا هدر على غير الاحتمالات») و
+        # `_build_probability_direct_explanation` موصوفة بأنها topic-safe.
+        if _concept == "full_solution" and not self._is_prob_context(
+            question + " " + _history_text
+        ):
+            _concept, _misconception = "unknown", "none"
+
         # الطبقة 1 LLM فقط عند unknown + سياق احتمالات (لا هدر على غير الاحتمالات).
         if _concept == "unknown" and self._is_prob_context(question + " " + _history_text):
             with contextlib.suppress(Exception):

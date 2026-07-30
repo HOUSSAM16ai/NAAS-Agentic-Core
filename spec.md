@@ -522,6 +522,29 @@ Minimum pre-merge checks for implementation PRs:
 - Frontend build/test when frontend files change
 - E2E full-stack verification for route/control-plane changes
 
+## 17b. Implementation Trace (which phases have actually landed)
+
+This section exists so the spec cannot drift into aspiration. It records only what
+is backed by evidence; anything absent here is **not** claimed.
+
+| Phase | Status | Evidence |
+|-------|--------|----------|
+| **0 — Safety and baseline** | ✅ | Secrets live only in the process environment; none in the repo. Baseline recorded as-is, including pre-existing failures. |
+| **1 — Truth audit and catalog** | ✅ (partial) | `config/microservice_catalog.json` + `docs/architecture/PORTS_SOURCE_OF_TRUTH.json` under `check_ports_consistency` / `check_service_catalog_parity`; drift checkable in CI via `runtime_truth.py --check`. |
+| **2 — Documentation coherence** | ✅ **D-188** | `CLAUDE.md` 1,127 → 943 lines, dated narrative archived verbatim; the contradicting 2026-05-09 truth table replaced by a pointer to `.memory/runtime_truth.md`; `spec.md` registered in both indexes as the *program spec*, not a third constitution. Enforced by `check_memory_coherence.py` in `doc-integrity`. |
+| **3 — Single chat control plane** | 🚧 | Orchestrator is the mandatory generation core (D-112, `REQUIRE_ORCHESTRATOR`); local fallbacks measured, not silent. Full S2–S4 migration outstanding (`.memory/roadmap.md` M10). |
+| **4 — Large file decomposition** | ✅ | D-163→D-172 manifests; verbatim moves; gates read the composed source. |
+| **5–6 — Contracts and skills** | ✅ | 13 committed OpenAPI contracts under `check_openapi_parity`; unified `BaseSkill` (D-179); no ZOMBIE skills (gate). |
+| **9 — Observability and failure** | 🚧 | Outbound correlation now single-sourced (**D-189**, `check_correlated_http`, shrink-only debt). Per-request injection for long-lived clients and vendored copies for services remain. |
+| **11 — Full-stack runtime verification** | 🚧 | Live E2E on 2026-07-30 (`docs/archive/e2e/`): monolith + orchestrator + foundations + notation + real OpenRouter over WebSocket, 9/10 categories answered relevantly (**D-190** closed two hijack defects). **Not** exercised: Postgres/Supabase, the container path, the frontend — environment limits, recorded as limits. |
+| **7, 8, 10, 12** | 📋 | Not started. RAG/events/Temporal/decommission remain ADR-gated per §19. |
+
+**Rule for this table:** a phase is marked ✅ only with the three-leg proof (import +
+call chain + runtime evidence). A green test suite alone is not sufficient, and a
+structural pass that does not check output *relevance* is not evidence at all — the
+2026-07-30 verification proved a structure-only battery reports 8/8 while a physics
+question is being answered with a probability menu.
+
 ## 18. Success Criteria
 
 The program is successful when all are true:

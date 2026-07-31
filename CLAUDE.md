@@ -43,11 +43,14 @@ The system must preserve the following principles permanently. Every future agen
 - **BKT is the foundational cognitive layer (D-074)**: Bayesian Knowledge Tracing (`app/services/skills/bkt_engine.py:BKTEngine`) is the cognitive substrate for ALL future autonomous pedagogical skills (adaptive difficulty, hints, learning paths). Any adaptive capability MUST build on `student_mastery_probability`, never re-invent mastery tracking. Governed by `BKT_COGNITIVE_DOCTRINE` (versioned in `app/services/skills/doctrine.py`, CI-validated by `scripts/fitness/check_skills_doctrine.py`).
 - **BKT is append-only (D-074)**: `student_bkt_analytics` is strictly an **append-only interaction log** for time-series analytics. Each evaluation inserts ONE new row; prior mastery is read from the most-recent row per `(user_id, concept_id)`. No in-place updates, no upserts — the full temporal sequence is preserved. Mandatory schema: `concept_id`, `cognitive_load_estimate` (low/medium/high), `student_mastery_probability ∈ [0,1]`, `interaction_timestamp`.
 - **BKT never breaks chat (D-074)**: Every BKT evaluation/persist/emit call (`customer_chat._evaluate_and_emit_bkt`) is isolated in `try/except` with its own DB session. A BKT failure is logged and swallowed — it must NEVER abort a student's chat turn.
-- **Dual-Mode Routing is immutable (D-085 — 2026-05-23)**: `_build_calculated_ui` stamps every UI event with `routing_mode: "MODE_A" | "MODE_B"`. MODE_A (direct question) → `terminate_pipeline=True`, companion_text only. MODE_B (confusion: «لم أفهم», «مفهمتش», «كيفاش», «اشرح لي») → `terminate_pipeline=False`, LLM narrative continues after UI. The routing decision is made **inside** `_build_calculated_ui` — never re-computed in `chat_with_agent`. `_effective_question` in MODE_B prepends the Socratic instruction before reaching LangGraph/fallback. V28.0/V30.0 Text-Wall Muzzle contracts remain valid for MODE_A. Removing `routing_mode` or collapsing the two modes breaks deep pedagogy for confused students.
+- **Dual-Mode Routing is immutable (D-085 — 2026-05-23 · معدَّل بـD-116)**: `_build_calculated_ui` stamps every UI event with `routing_mode: "MODE_A" | "MODE_B"`. MODE_A = direct question, MODE_B = confusion («لم أفهم», «مفهمتش», «كيفاش», «اشرح لي»). The routing decision is made **inside** `_build_calculated_ui` — never re-computed in `chat_with_agent`; `routing_mode` is consumed downstream as `ctx.is_mode_b` (`turn_preempts_delivery.py`) to steer the fallback chain, and `_effective_question` in MODE_B prepends the Socratic instruction. ⚠️ **شرط `terminate_pipeline=False` لـMODE_B ألغاه D-116 (2026-06-16 · ISS-116)**: كل مكوّنات الاحتمالات تُنهي المسار (`True` في البُناة الأربعة) لأن سرد الـLLM بعد البصري كان مصدر غارباج حيّ. المُلغى لا يُعاد بلا ADR — وكان الدستور يحمل القاعدتين معاً حتى 2026-07-31 (D-192).
+- **التمرين قيد النقاش مصدره واحد، وأوّلُه نصّ الطالب (D-191 — 2026-07-31 · ISS-140 د/د-2)**: `app/services/skills/exercise_context.py:ExerciseContextSkill` هو **الحاسم الوحيد**؛ ترتيبه: نصّ الطالب الحاضر ⇒ تمرينه في التاريخ (رسائل `user` فقط، D-102) ⇒ التمرين المرجعي **بتصريح منطوق** ⇒ `None`. الحرفية `CANONICAL_EXERCISE_QUERY` لها **موطن واحد** (كانت مكرَّرة في ٧ مواضع تُغذّي ١٢ موضع استدعاء، و`_load_canonical_combinations` تستقبل `question` و**ترميه** — فتعلّم الطالبُ مسألةً ليست مسألته). ⛔ **لا يُطبَع رقمٌ ولا كيانٌ لم يذكره الطالب دون تصريح** — ويشمل ذلك النصوص التعليمية الثابتة (`semantic_property_skill` · `understanding_state_skill` كانت تحمل تركيبة التمرين المرجعي حرفياً). السقوط إلى المرجعي يتطلّب **إشارة احتمالية موجبة**؛ «غياب موضوعٍ آخر» ليس دليلاً (ISS-140 أ). تحرسه `check_exercise_context_single_source` بدَينٍ مُجمَّد **فارغ**.
+- **الكيانات المهيكلة نوعٌ لا شعار (D-191)**: `ParsedEntities`/`ParsedEntityComponent` (`probability_models.py`) هي عملة التركيبة، تُنتَج مرّةً واحدة (`extract_parsed_entities` من نصّ الطالب · `from_mapping` من بيانات مهيكلة مُلتزَمة في `knowledge_base/entities/*.json` — نفس شكل عمود `parsed_entities`) وتُستهلَك في كل مكان. **عمود `parsed_entities` في قاعدة البيانات ما زال بلا قارئ حيّ** ويُوثَّق كذلك (`.memory/runtime_truth.md`) — لا يُدَّعى وصلُه.
+- **الكمّامة يبرّرها المكوّن المُسلَّم (D-191 · ISS-140 ج)**: `_stage_calculated_ui` يقرأ **حكم** `_normalize_stream_event`؛ سقوط الحمولة إلى `noop` (props > 16KB أو رفض تحقّق) ⇒ **لا `companion_text` ولا إطار نهائي**، وسجلّ `ui_component_dropped_promise_suppressed`، والمسار يبقى حيّاً. وعدٌ بشرحٍ لا يصل أسوأ من خطأ صريح (§0).
+- **الدستور يساوي الواقع ولا يناقض نفسه (D-192 — 2026-07-31)**: أيّ عددٍ قابل للتغيّر (المهارات · العقود) **يُشتَقّ** من مصدره ولا يُكتب في النثر؛ والكمّية الواحدة لا تحمل قيمتين في قسمين؛ وكل قاعدة تسمّي رمزاً تُختبَر على المصدر. تحرسه `check_constitution_reality` (بوّابة `doc-integrity`) — وُلِد من تناقضَين حقيقيَّين في هذا الملفّ نفسه: عددُ المهارات مكتوباً بقيمتين مختلفتين في §0.5 و§0.7، ونسبةُ API-first بقيمتين في §3 و§6.7.ط — وكل القيم الأربع كانت خاطئة. تفصيلها في `.memory/decisions.md` D-192.
 - **Math Pipeline is 4 nodes, not 3 (D-080 — 2026-05-23)**: `enrich_node` (Node 4 — deterministic, no LLM) was added after `normalize_node`. It builds `ui_component` payload from the completed solution text. Topology: `classify → solve → normalize → enrich → END`. `MathPipelineState` and `invoke_math_pipeline` now return `ui_component: dict | None`. Removing `enrich_node` breaks Generative UI for all math questions.
-- **ui_component flows through the full stack (D-080)**: `ConversationState` carries `ui_component`. `invoke_graph` returns it. `ChatResponse` (HTTP) and WebSocket payload both include it. `_try_build_math_ui_component` in `customer_chat.py` injects it into `assistant_final` for the monolith path. `useAgentSocket.js` extracts it from `assistant_final` payload and attaches it to the message. `ChatInterface.jsx` renders `GenerativeUIRenderer` **after** the text, only on `isComplete` — never during streaming.
-- **MathExplanationCard is the canonical math Generative UI component (D-080)**: Registered as `math_explanation_card` in `GenerativeUIRenderer` whitelist. Props contract: `{ math_type, label, intuition, steps[], hint, visual_metaphor }`. 11 math types supported, each with a distinct color and visual metaphor. Any new math type must be added to `_MATH_TYPES` (math_pipeline.py), `_TYPE_LABELS`, `_MATH_HINTS`, `visual_metaphors` dict inside `_build_ui_component`, and `TYPE_COLORS` in `MathExplanationCard.jsx`.
-- **_try_build_math_ui_component is non-breaking (D-080)**: Wrapped in `try/except` in `customer_chat.py`. Returns `None` for non-math responses (`general_math` type). Never raises — a failure produces `ui_component=None` and only text is shown. Do not remove the guard.
+- **ui_component flows through the full stack (D-080)**: `ConversationState` carries `ui_component`. `invoke_graph` returns it. `ChatResponse` (HTTP) and WebSocket payload both include it. `useAgentSocket.js` extracts it from the `assistant_final` payload and attaches it to the message; `ChatInterface.jsx` renders `GenerativeUIRenderer` **after** the text, only on `isComplete` — never during streaming. ⚠️ **المصدر المشروع للبطاقة هو المخرَج المُهيكَل وحده**: `_try_build_math_ui_component` (المونوليث) **مُعطَّلة دائماً** (`return None` — D-097/ISS-108) لأنها كانت تُقطّع نثر LLM حرّاً إلى «خطوات» بلا معنى؛ فموضعا الحقن في `_emit_terminal_frames` كودٌ ميت مقصود. المسار الحيّ هو `enrich_node` الحتمي (Node 4).
+- **MathExplanationCard is the canonical math Generative UI component (D-080)**: مُسجَّلة في **الطرفين** — `GenerativeUIRenderer` (الواجهة) و`KNOWN_UI_COMPONENTS` (`app/contracts/streaming.py`). كانت في الواجهة فقط حتى 2026-07-31، فكان المُطبِّع يرفضها ولا تصل الطالب أبداً — **عقدٌ مُعلَن بنصفه** (D-192). Props: `{ math_type, label, intuition, steps[], hint, visual_metaphor }`. Any new math type must be added to `_MATH_TYPES` (math_pipeline.py), `_TYPE_LABELS`, `_MATH_HINTS`, `visual_metaphors` in `_build_ui_component`, and `TYPE_COLORS` in `MathExplanationCard.jsx`.
 - **Supabase schema = boot auto-creation, not sandbox migrations (D-074)**: The Codespaces/sandbox network firewall blocks Postgres egress (ports **6543/5432**). Schema changes are applied by the boot hook `app/kernel.py:233 → validate_schema_on_startup() → validate_and_fix_schema(auto_fix=True)`, driven by `app/core/db_schema_config.py:REQUIRED_SCHEMA`. Agents MUST register new tables there (never rely on running SQL from the sandbox). The standalone `.sql` under `scripts/migrations/` is for manual operator use only.
 
 ---
@@ -86,7 +89,8 @@ Skill = microservice يملك:
 ### القاعدة الموحَّدة `BaseSkill` (D-179 — 2026-07-22)
 
 المصدر الكائني الموحَّد لكل مهارة في المونوليث هو `app/services/skills/base.py:BaseSkill[InT, OutT]`
-(ABC). كل مهارة (٢٤ مهارة اليوم — أُضيف `FoundationsComputeSkill` في D-183) تَرِث منه فتحصل على: هوية موحَّدة (`name`/`version`)، singleton كسول
+(ABC). كل مهارة (العدد **مُشتَقّ** من `app/services/skills/registry.py` — لا يُكتب هنا يدوياً،
+D-192) تَرِث منه فتحصل على: هوية موحَّدة (`name`/`version`)، singleton كسول
 لكل-صنف (`instance()` يُعيد `Self` — يستبدل نمط `_x_singleton` + `get_x_skill()`)، ونقطة دخول
 polymorphic `run()` تُفوِّض لطريقة المهارة الأصلية (`invoke`/`align`/`decide`/`evaluate`/…). ومساعدا
 `skill_counter`/`skill_histogram` يُوحِّدان حارس Prometheus المُعاد على `REGISTRY` العام (**بلا
@@ -222,7 +226,7 @@ the *layers around it*. Four principles govern every architectural decision:
   distinct; a writer never silently grades its own work.
 
 **13 runtime layers, each graded by §6.6** (ACTIVE only with import + call chain + runtime
-evidence). ACTIVE: Configuration, Skills Engine (27 skills, D-100), Hooks/Policy
+evidence). ACTIVE: Configuration, Skills Engine (D-100 — count derived from the registry), Hooks/Policy
 (`PedagogicalPolicyEngine`, D-144), Memory (BKT + `tutor_state`, D-074/D-142),
 Verification (redaction/firewall/integrity, D-086/D-113), Observability (in-process).
 PARTIAL: Subagents, Knowledge/Retrieval, Planner, Reasoning, Context engine.
@@ -874,10 +878,11 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
   ACTIVE في `ChatOrchestrator`) و`CognitiveResonanceEngine` (ضبابي، صمود gateway) دوران متمايزان.
 
 ### ط) API-first + المهارات (D-100 · D-173 Stage 4/5 · D-174)
-- **كل خدمة (11/11) لها عقد OpenAPI** يغطّي مساراتها الفعلية، مفروض ببوّابة **دلالية**
+- **كل خدمة لها عقد OpenAPI** يغطّي مساراتها الفعلية، مفروض ببوّابة **دلالية**
   (`check_openapi_parity` — endpoints لا bytes، robust عبر إصدارات pydantic). المولِّد
-  `scripts/contracts/export_openapi.py` هو SSOT. **D-174:** `auditor_service` أُدرِج تحت البوّابة
-  (كان 10/11) → API-first 11/11 حقيقي.
+  `scripts/contracts/export_openapi.py` هو SSOT. **العدد مُشتَقّ** من
+  `docs/contracts/openapi/*-openapi.json` — كان مكتوباً هنا يدوياً «11/11» بينما §3 يقول
+  «13/13»، فناقض الدستورُ نفسه حتى 2026-07-31 (D-192).
 - **منصّة Skills موحَّدة** (D-100): registry + `compose_text_refinement` + `/api/v1/skills`؛
   كل مهارة `import + call chain + runtime evidence` أو FLAGGED؛ لا ZOMBIE (بوّابة).
 - **Kagent محذوف** (D-173 Stage 5): كان ZOMBIE محظوراً أمنياً — القدرة بلا مستهلك حي تُحذَف لا تُترَك stub.
@@ -931,13 +936,8 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 | تفكيك التعقيد | D-163 → D-172 · **D-182** |
 | النماذج | D-060 · D-067 · D-088 · D-167 · D-177 · D-178 |
 | الكاش (Cache) | D-180 |
-| Skills / OOP | §0.5 · D-069 · D-100 · **D-179** · **D-181** |
-| الاستدلال العام (Reasoning) | **D-181** |
-| الجذور الأولى + النواة الحاسوبية | **D-183** |
-| طبقة الرموز الرياضية | **D-185** |
-| نيّة الطالب (Intent) | **D-186** |
-| تعدّد اللغات (Polyglot) | **D-185/ADR-006** |
-| التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** · **D-184** |
+| Skills / OOP / الاستدلال | §0.5 · D-069 · D-100 · **D-179** · **D-181** · **D-183** |
+| الرموز والنيّة واللغات | **D-185** · **D-186** · **ADR-006** |
+| التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** · **D-184** · **D-192** |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 · **D-182** |
-| الأثر الصادر + تماسك الذاكرة | **D-188** · **D-189** |
-| اختطاف الموضوع (Subject hijack) | **D-190** |
+| الأثر · الذاكرة · الموضوع · التمرين | **D-188** · **D-189** · **D-190** · **D-191** |

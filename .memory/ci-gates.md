@@ -61,3 +61,14 @@ python scripts/runtime_truth.py --update   # rewrites .runtime/truth_table.lock.
 git add .runtime/truth_table.lock.json scripts/runtime_truth.py
 git commit -m "runtime-truth: <reason>"
 ```
+
+## بوّابات D-191/D-192 (2026-07-31)
+
+| البوّابة | الوظيفة | الدَّين المُجمَّد |
+|----------|---------|------------------|
+| `check_exercise_context_single_source.py` | التمرين قيد النقاش مصدره واحد؛ الاستخراج لا يرى نثر الحلّ؛ الوعد البصري يتبع حمولةً مُسلَّمة | **فارغ** |
+| `check_constitution_reality.py` (doc-integrity) | الأرقام مشتقّة لا مكتوبة؛ لا تناقض ذاتي في CLAUDE.md؛ ادّعاءات الرموز تُختبَر على المصدر | — |
+| `check_no_committed_secrets.py` | مسح أنماط الأسرار على الشجرة المُتتبَّعة (ISS-141 البند 4) | **فارغ** |
+| `check_no_new_any.py` | صفر `Any` على `app/integration/`؛ الباقي يتقلّص فقط | 141 |
+| `check_router_domain_logic.py` | منطق النطاق لا ينمو في `app/api/routers/` | 13 |
+| `check_docs_runtime_parity.py` | **وُصِلت أخيراً** — كانت بوّابةً لا تحرس شيئاً (غير مُشغَّلة في أيّ workflow) | — |

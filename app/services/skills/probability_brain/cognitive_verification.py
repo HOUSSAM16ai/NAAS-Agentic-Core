@@ -470,45 +470,36 @@ class CognitiveVerificationMixin:
         return count
 
     @classmethod
+    def _resolve_exercise_context(
+        cls, question: str, history_messages: list[dict[str, str]] | None
+    ):
+        """يحسم التمرين قيد النقاش — **نصّ الطالب أولاً** (D-191 · ISS-140 د/د-2).
+
+        هذه هي نقطة الاستهلاك الوحيدة لـ``ExerciseContextSkill`` داخل العقل. كل
+        مرحلة تُنتج نصّاً للطالب تستعملها لتعرف **مصدر** الأرقام، فتنطق التصريح
+        حين تكون من تمرين مرجعي (لا تُطبَع أرقامٌ لم يذكرها الطالب بلا تصريح).
+        """
+        try:
+            from app.services.skills.exercise_context import resolve_exercise_context
+
+            return resolve_exercise_context(question, history_messages)
+        except Exception:
+            logger.warning("_resolve_exercise_context_failed", exc_info=True)
+            return None
+
+    @classmethod
     def _load_canonical_combinations(
         cls, question: str, history_messages: list[dict[str, str]] | None
     ):
-        """D-127: يحمّل تركيبة التمرين الرسمي (CombinationsModelOutput) — مناعة D-123.
+        """تركيبة التمرين قيد النقاش (``CombinationsModelOutput``) أو ``None``.
 
-        يُرجِع None لغير الاحتمالات (topic-safe) أو عند تعذّر الحساب.
-        ISS-120 (D-153): يقرأ **أسئلة-فقط** — تغذية الملف الكامل (مع الحل النموذجي)
-        كانت تولِّد كياناً وهمياً «بطاقة رقم 0 (العدد 3)» من نثر الحل («…لا تحمل
-        الرقم 0 … سحب 3 كرات») ⇒ n=14 و C(14,3)=364 بدل 11/165 — كارثة الطالب.
+        **مُحوِّل رفيع** فوق :meth:`_resolve_exercise_context` — الاسم والتوقيع
+        محفوظان لأن ١٢ موضع استدعاء يقرأان التركيبة وحدها. كان هذا التابع يستقبل
+        ``question`` و**يرميه** فيُمرِّر حرفيةً مُثبَّتة إلى الاسترجاع، فيتعلّم
+        الطالبُ مسألةً ليست مسألته (ISS-140 د). الآن ``question`` مُحترَم فعلاً.
+
+        ISS-120 (D-153) محفوظ: مسار التمرين المرجعي يقرأ كياناتٍ مهيكلة، أو
+        **أسئلة-فقط** عند غيابها — ولا يرى نثر الحلّ النموذجي أبداً.
         """
-        try:
-            from app.services.capabilities.arabic_normalize import primary_canonical_topic
-            from app.services.capabilities.exercise_retrieval import (
-                ExerciseRetrievalRequest,
-                detect_exercise_retrieval,
-                load_exercise_questions_only,
-            )
-            from app.services.skills.probability_skill import (
-                CombinationsModelOutput,
-                ProbabilityCalculatorSkill,
-                ProbabilityInput,
-            )
-
-            _canonical = primary_canonical_topic(question)
-            if _canonical is not None and _canonical.canonical_id != "probability":
-                return None
-            _decision = detect_exercise_retrieval(
-                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
-                history_messages=history_messages,
-            )
-            if not (_decision.recognized and _decision.matched_entry):
-                return None
-            _official = load_exercise_questions_only(_decision.matched_entry)
-            if not _official:
-                return None
-            result = ProbabilityCalculatorSkill().analyze(
-                ProbabilityInput(question=_official, history=None)
-            )
-            return result if isinstance(result, CombinationsModelOutput) else None
-        except Exception:
-            logger.warning("_load_canonical_combinations_failed", exc_info=True)
-            return None
+        resolved = cls._resolve_exercise_context(question, history_messages)
+        return resolved.combo if resolved is not None else None

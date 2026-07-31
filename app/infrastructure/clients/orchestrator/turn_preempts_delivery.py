@@ -52,6 +52,9 @@ class TurnPreemptsDeliveryMixin:
         try:
             _ui_event = self._build_calculated_ui(question, history_messages=history_messages)
         except Exception:
+            # §0: لا فشل صامت. ابتلاعُ هذا الاستثناء بلا أثر هو ما جعل سقوط
+            # المكوّن البصري غير قابل للتشخيص في التحقّق الحيّ (ISS-140 ج).
+            logger.warning("calculated_ui_build_failed", exc_info=True)
             _ui_event = None
 
         if _ui_event is not None:
@@ -79,7 +82,32 @@ class TurnPreemptsDeliveryMixin:
                     "question_len": len(question),
                 },
             )
-            yield self._normalize_stream_event({"type": "ui_component", "payload": _ui_event})
+            # ── D-191 (ISS-140 ج): الكمّامة يبرّرها المكوّن **المُسلَّم** ────────
+            # كان الحكم على المُطبِّع يُرمى: `_normalize_stream_event` يُسقط الحمولة
+            # إلى `noop` (props > 16KB أو رفض تحقّق — `stream_normalization.py:129`)،
+            # ثمّ يُبَثّ الوعدُ «إليك الشرح البصري المفصل…» وإطارٌ نهائي فارغ. الطالب
+            # يقرأ 45 حرفاً ولا يصل شيء — وهو أسوأ من خطأ صريح (§0: لا فشل صامت).
+            _normalized_ui = self._normalize_stream_event(
+                {"type": "ui_component", "payload": _ui_event}
+            )
+            _ui_delivered = (
+                isinstance(_normalized_ui, dict) and _normalized_ui.get("type") == "ui_component"
+            )
+            yield _normalized_ui
+
+            if _is_impossible and not _ui_delivered:
+                # لا حمولة ⇒ لا كمّامة ولا وعد. نترك المسار حياً ليصل الطالبَ شرحٌ
+                # نصّي حقيقي بدل جملةٍ تَعِد بما لا يأتي.
+                _props = _ui_event.get("props")
+                logger.warning(
+                    "ui_component_dropped_promise_suppressed",
+                    extra={
+                        "component": str(_ui_event.get("component", "")),
+                        "props_keys": len(_props) if isinstance(_props, dict) else 0,
+                        "question_len": len(question),
+                    },
+                )
+                _is_impossible = False
 
             # MODE_A — Text-Wall Muzzle: terminate immediately after UI component.
             # Emit companion_text (≤ 120 chars) as the sole text output, then return.

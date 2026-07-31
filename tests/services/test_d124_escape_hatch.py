@@ -233,10 +233,15 @@ class TestSourceWiring:
         # D-163: نهاية slice = الدالة التالية داخل العقل المستخرَج (_build_probability_tree_props
         # بقيت في الـ client كبانية UI فلم تعد تلي هذه الدالة في السلسلة المضمومة).
         seg = seg[: seg.index("\n    async def _build_probability_computational_answer")]
-        assert "skill.analyze(ProbabilityInput(question=_official, history=None))" in seg
-        # ISS-120 (D-153): أسئلة-فقط — نثر الحل النموذجي ممنوع على استخراج الكيانات.
-        assert "load_exercise_questions_only(" in seg
-        assert 'canonical_id != "probability"' in seg  # topic-safe
+        # D-137/D-191: الآلية انتقلت إلى المُحلّ الواحد. القاعدة الباقية: الشرح
+        # المباشر يأخذ أرقامه من `exercise_context` — الذي يحمل مناعة D-123
+        # (history=None) وحارس ISS-120 (أسئلة-فقط) وحارس الموضوع، مجتمعةً في مكان
+        # واحد بدل ثلاث نسخ متفرّقة.
+        assert "resolve_exercise_context(" in seg
+        resolver = CLIENT_SRC[CLIENT_SRC.index("class ExerciseContextSkill") :]
+        assert "ProbabilityInput(question=candidate_text, history=None)" in resolver
+        assert "load_exercise_questions_only(" in resolver
+        assert 'canonical_id != "probability"' in resolver  # topic-safe
 
     def test_direct_explanation_returns_and_breaks_loop(self) -> None:
         # عند نجاح البثّ ⇒ assistant_final + return (كسر الكاروسيل).

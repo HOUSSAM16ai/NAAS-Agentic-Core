@@ -169,9 +169,26 @@ class TestSourceWiring:
         return read_tutor_source()
 
     def test_canonical_loaders_use_questions_only(self):
+        """القاعدة: **لا مسار استخراج يقرأ نثر الحلّ النموذجي** — الملف الكامل لمرجع RAG وحده.
+
+        D-137 (assert the invariant, not the line): كان هنا عدّ (``>= 6``) يقيس
+        **عدد النسخ** لا القاعدة. وD-191 وحّد مواضع الاسترجاع في مُحلٍّ واحد، فهبط
+        العدّ بينما القاعدة صارت **أقوى** (موضع واحد يستحيل أن يتفرّق). العدّ كان
+        يُعاقب التوحيد — فنؤكّد القاعدة نفسها بدله.
+        """
+        from pathlib import Path
+
         src = self._orch_src()
-        # كل مسارات الاستخراج تستخدم أسئلة-فقط (يبقى الملف الكامل لمرجع RAG فقط).
-        assert src.count("load_exercise_questions_only(") >= 6
+        # مسار الاستخراج **الوحيد** (D-191) لا يلمس الملف الكامل إطلاقاً.
+        resolver = (
+            Path(__file__).resolve().parents[2] / "app/services/skills/exercise_context.py"
+        ).read_text(encoding="utf-8")
+        assert "load_exercise_questions_only(" in resolver
+        assert "load_exercise_content(" not in resolver, (
+            "نثر الحلّ النموذجي ممنوع على مسار استخراج الكيانات (ISS-120)"
+        )
+        # ويبقى الملف الكامل مقروءاً خارج الاستخراج فقط (مرجع RAG — D-145).
+        assert "load_exercise_content(_decision.matched_entry)" in src
 
     def test_rag_reference_keeps_full_content(self):
         # D-145: مرجع الـ RAG-Grounded LLM يبقى الملف الكامل (الحل النموذجي مقصود هناك).

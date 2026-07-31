@@ -512,10 +512,14 @@ class SocraticNarrativeMixin:
                 detect_exercise_retrieval,
                 load_exercise_questions_only,
             )
+            from app.services.skills.exercise_context import CANONICAL_EXERCISE_QUERY
             from app.services.skills.probability_skill import ProbabilityCalculatorSkill
 
+            # D-191: الحرفية من مصدرها الوحيد. هذا المسار **مرجعيٌّ بطبيعته** —
+            # أرقامُ الكرات (فردي/زوجي) خاصّية للتمرين المخزَّن ولا مقابل لها في
+            # تمرين يكتبه الطالب، ومستهلكه يحرس التكافؤ مع `n` قبل أي طباعة.
             _decision = detect_exercise_retrieval(
-                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                ExerciseRetrievalRequest(question=CANONICAL_EXERCISE_QUERY),
                 history_messages=history_messages,
             )
             if not (_decision.recognized and _decision.matched_entry):

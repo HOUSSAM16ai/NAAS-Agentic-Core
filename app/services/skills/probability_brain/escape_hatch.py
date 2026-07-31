@@ -11,6 +11,10 @@ import logging
 import re
 from typing import ClassVar
 
+from app.services.skills.exercise_context import (
+    CANONICAL_EXERCISE_QUERY,
+    resolve_exercise_context,
+)
 from shared.intent import markers_for
 
 # نفس اسم الـ logger القديم عمداً — استمرارية السجلات وصفر تغيير رصدي (D-163/D-168).
@@ -437,42 +441,22 @@ class EscapeHatchMixin:
             pass
 
         try:
-            from app.services.capabilities.arabic_normalize import primary_canonical_topic
-            from app.services.capabilities.exercise_retrieval import (
-                ExerciseRetrievalRequest,
-                detect_exercise_retrieval,
-                load_exercise_questions_only,
+            # D-191 (ISS-140 د): التمرين قيد النقاش **نصّ الطالب أولاً**. المُحلّ
+            # يحمل بنفسه حارس الموضوع (topic-safe) وحارس ISS-120 (كيانات مهيكلة
+            # أو أسئلة-فقط — لا نثر حلٍّ نموذجي أبداً).
+            #
+            # ``forced_subpart`` دليلٌ **خارج النصّ**: كاشف الجزئية المدفوع بالبيانات
+            # (D-160/ISS-126) طابق قيمةً من التمرين نفسه قبل أن نصل هنا، فسؤالٌ مثل
+            # «كيف حسبنا 4» — الذي لا يحمل أيّ كلمة احتمالية — سياقُه مُثبَت فعلاً.
+            # هذا تصريحٌ صريح لا التفافٌ على الحارس: «قانون أوم» لا يملك مثل هذا الدليل.
+            _resolved = resolve_exercise_context(
+                question,
+                history_messages,
+                probability_context_established=forced_subpart is not None,
             )
-            from app.services.skills.probability_skill import (
-                CombinationsModelOutput,
-                ProbabilityCalculatorSkill,
-                ProbabilityInput,
-            )
-
-            # topic-safe: طلب موضوع آخر صريح (دوال/أعداد مركبة) ⇒ لا شرح احتمالات.
-            _canonical = primary_canonical_topic(question)
-            if _canonical is not None and _canonical.canonical_id != "probability":
+            if _resolved is None:
                 return None
-
-            # تحميل التمرين الرسمي المُفهرَس (history-immune — D-123).
-            # ISS-120 (D-153): أسئلة-فقط — نثر الحل النموذجي («تحمل الرقم 0 …
-            # وعددها 3 كرات») يولِّد كياناً وهمياً يُفسد فضاء العينة (14 بدل 11).
-            _decision = detect_exercise_retrieval(
-                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
-                history_messages=history_messages,
-            )
-            if not (_decision.recognized and _decision.matched_entry):
-                return None
-            _official = load_exercise_questions_only(_decision.matched_entry)
-            if not _official:
-                return None
-
-            # تحليل حتمي من المحتوى الرسمي وحده (بلا سؤال الطالب ⇒ غير حائر ⇒
-            # CombinationsModelOutput بالمجموعات، لا قصة بصرية deep_dive).
-            skill = ProbabilityCalculatorSkill()
-            result = skill.analyze(ProbabilityInput(question=_official, history=None))
-            if not isinstance(result, CombinationsModelOutput):
-                return None
+            result = _resolved.combo
 
             n = result.n
             k = result.k
@@ -595,11 +579,7 @@ class EscapeHatchMixin:
                 load_exercise_content,
                 load_exercise_questions_only,
             )
-            from app.services.skills.probability_skill import (
-                CombinationsModelOutput,
-                ProbabilityCalculatorSkill,
-                ProbabilityInput,
-            )
+            from app.services.skills.probability_skill import ProbabilityCalculatorSkill
 
             raw = (question or "").strip()
             # حارس اللصق/الاسترجاع: سؤال الطالب قصير؛ لصق التمرين كامل (يحوي «56/فردي/زوجي»)
@@ -709,9 +689,23 @@ class EscapeHatchMixin:
             if not (is_event_b or is_combinations or uncovered is not None):
                 return None
 
-            # تحميل التمرين الرسمي المُفهرَس (history-immune — D-123).
+            # D-191 (ISS-140 د): التركيبة من التمرين قيد النقاش — نصّ الطالب أولاً.
+            # الحارس أعلاه (`is_event_b or is_combinations or uncovered`) أثبت سلفاً
+            # أننا داخل حدثٍ احتمالي مُصنَّف — دليلٌ خارج-نصّي يُغني عن كلماتٍ
+            # احتمالية في سؤالٍ مثل «لماذا نضرب 11×10×9».
+            _resolved = resolve_exercise_context(
+                question, history_messages, probability_context_established=True
+            )
+            if _resolved is None:
+                return None
+            _combo = _resolved.combo
+            n, k, total = _combo.n, _combo.k, _combo.total_combinations
+
+            # الأرقام المحمولة على الكرات خاصّة بالتمرين المرجعي وحده. تُحمَّل من
+            # نصّه، وحارس التكافؤ أدناه (`parity["total"] != n`) يُسقط الفرع تلقائياً
+            # حين يكون التمرين للطالب — فلا تُخلَط أرقام تمرينٍ بأرقام آخر.
             _decision = detect_exercise_retrieval(
-                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                ExerciseRetrievalRequest(question=CANONICAL_EXERCISE_QUERY),
                 history_messages=history_messages,
             )
             if not (_decision.recognized and _decision.matched_entry):
@@ -722,12 +716,6 @@ class EscapeHatchMixin:
             _official_qonly = load_exercise_questions_only(_decision.matched_entry)
             if not _official or not _official_qonly:
                 return None
-            _combo = ProbabilityCalculatorSkill().analyze(
-                ProbabilityInput(question=_official_qonly, history=None)
-            )
-            if not isinstance(_combo, CombinationsModelOutput):
-                return None
-            n, k, total = _combo.n, _combo.k, _combo.total_combinations
 
             # (1) الحادثة B — حتمي من أرقام الكرات الرسمية (Stage 1).
             if is_event_b:
@@ -845,28 +833,31 @@ class EscapeHatchMixin:
                 detect_exercise_retrieval,
                 load_exercise_questions_only,
             )
-            from app.services.skills.probability_skill import (
-                CombinationsModelOutput,
-                ProbabilityCalculatorSkill,
-                ProbabilityInput,
-            )
+            from app.services.skills.probability_skill import ProbabilityCalculatorSkill
 
+            # D-191 (ISS-140 د): المثال الملموس يُبنى على تمرين **الطالب** حين يملك
+            # واحداً — لا على أرقام تمرينٍ مرجعي لم يذكرها. لا نصّ سؤالٍ هنا (هذه
+            # صياغةٌ بديلة لحدثٍ **مُصنَّف سلفاً** — `event ∈ {combinations, event_b}`
+            # وهو الدليل الخارج-نصّي)، فالتمرين يأتي من تاريخ الطالب ثمّ من المرجعي.
+            _resolved = resolve_exercise_context(
+                "", history_messages, probability_context_established=True
+            )
+            if _resolved is None:
+                return None
+            combo = _resolved.combo
+            n, k, total = combo.n, combo.k, combo.total_combinations
+
+            # أرقام الكرات (فردي/زوجي) من نصّ التمرين المرجعي — أسئلة-فقط (ISS-120).
+            # حارس التكافؤ أدناه يُسقط الفرع إن لم يكن التمرين هو المرجعي.
             _decision = detect_exercise_retrieval(
-                ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
+                ExerciseRetrievalRequest(question=CANONICAL_EXERCISE_QUERY),
                 history_messages=history_messages,
             )
-            if not (_decision.recognized and _decision.matched_entry):
-                return None
-            # ISS-120 (D-153): أسئلة-فقط قبل استخراج الكيانات.
-            official = load_exercise_questions_only(_decision.matched_entry)
-            if not official:
-                return None
-            combo = ProbabilityCalculatorSkill().analyze(
-                ProbabilityInput(question=official, history=None)
+            official = (
+                load_exercise_questions_only(_decision.matched_entry)
+                if (_decision.recognized and _decision.matched_entry)
+                else ""
             )
-            if not isinstance(combo, CombinationsModelOutput):
-                return None
-            n, k, total = combo.n, combo.k, combo.total_combinations
 
             if event == "combinations":
                 return (

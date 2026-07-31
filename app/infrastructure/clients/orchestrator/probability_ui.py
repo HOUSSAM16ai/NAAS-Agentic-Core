@@ -294,30 +294,26 @@ class ProbabilityUIMixin:
             # (1) السؤال وحده — يلتقط التركيبة الـ inline بلا تلوّث history.
             result = skill.analyze(ProbabilityInput(question=question, history=None))
 
-            # (2) محادثة التمرين المُفهرَس: المحتوى الرسمي + نية السؤال، history=None.
+            # (2) D-191 (ISS-140 د): التمرين قيد النقاش من مُحلٍّ واحد — **تمرين
+            # الطالب في تاريخ المحادثة قبل التمرين المرجعي**. كان هنا حقنٌ مباشر
+            # للمحتوى الرسمي (`f"{_official} {question}"`) يجعل أرقام التمرين
+            # المخزَّن تفوز بالاستخراج، فيرى الطالب كيساً ليس كيسَه.
             if not _result_ok(result) and _is_probability_context(_combined_text):
                 with contextlib.suppress(Exception):
-                    from app.services.capabilities.exercise_retrieval import (
-                        ExerciseRetrievalRequest,
-                        detect_exercise_retrieval,
-                        load_exercise_questions_only,
-                    )
+                    from app.services.skills.exercise_context import resolve_exercise_context
 
-                    _canon = detect_exercise_retrieval(
-                        ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
-                        history_messages=history_messages,
-                    )
-                    if _canon.recognized and _canon.matched_entry:
-                        # ISS-120 (D-153): أسئلة-فقط — نثر الحل النموذجي يولِّد كياناً
-                        # وهمياً («بطاقة رقم 0») يُفسد فضاء العينة (n=14 بدل 11).
-                        _official = load_exercise_questions_only(_canon.matched_entry)
-                        # المحتوى الرسمي (التركيبة) + السؤال الحالي (نية الحيرة/التركيز)؛
-                        # السؤال الحالي نظيف — التلوّث كان في الـ history (مُسقَط بـ None).
-                        _canon_result = skill.analyze(
-                            ProbabilityInput(question=f"{_official} {question}", history=None)
+                    _resolved = resolve_exercise_context(question, history_messages)
+                    if _resolved is not None:
+                        # **التركيبة** من التمرين المحسوم، و**النيّة** من سؤال الطالب
+                        # الحاضر: الحيرة تُنتج قصّةً بصرية شاملة، والسؤال المباشر
+                        # يُنتج مُصوِّر تأليفات. history=None ⇒ مناعة D-123 محفوظة.
+                        _ctx_result = skill.analyze(
+                            ProbabilityInput(
+                                question=f"{_resolved.composition_text} {question}".strip(),
+                                history=None,
+                            )
                         )
-                        if _result_ok(_canon_result):
-                            result = _canon_result
+                        result = _ctx_result if _result_ok(_ctx_result) else _resolved.combo
 
             # (3) آخر ملاذ — السلوك الأصلي (history). نادر بعد التحصين.
             if not _result_ok(result):
@@ -484,20 +480,14 @@ class ProbabilityUIMixin:
             ) in ("no_model_extracted", "no_probability_intent_in_question")
             if (result is None or _is_no_model) and _focus_step_id:
                 with contextlib.suppress(Exception):
-                    from app.services.capabilities.exercise_retrieval import (
-                        ExerciseRetrievalRequest,
-                        detect_exercise_retrieval,
-                        load_exercise_questions_only,
-                    )
+                    # D-191 (ISS-140 د): إعادة تحليل خطوة التركيز تمرّ بالمُحلّ
+                    # الواحد أيضاً. الحقن المباشر للنصّ الرسمي هنا كان يُعيد إدخال
+                    # أرقام التمرين المخزَّن حتى بعد أن نجح مسار الطالب أعلاه.
+                    from app.services.skills.exercise_context import resolve_exercise_context
 
-                    _decision = detect_exercise_retrieval(
-                        ExerciseRetrievalRequest(question="اعطني تمرين الاحتمالات 2024"),
-                        history_messages=history_messages,
-                    )
-                    if _decision.recognized and _decision.matched_entry:
-                        # ISS-120 (D-153): أسئلة-فقط قبل استخراج الكيانات.
-                        _full = load_exercise_questions_only(_decision.matched_entry)
-                        _contextual_question = f"{_full} {question}".strip()
+                    _resolved = resolve_exercise_context(question, history_messages)
+                    if _resolved is not None:
+                        _contextual_question = f"{_resolved.composition_text} {question}".strip()
                         result = skill.analyze(
                             ProbabilityInput(
                                 question=_contextual_question, history=history_messages

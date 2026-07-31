@@ -47,22 +47,29 @@ class TestImmunizationWiring:
             "result = skill.analyze(ProbabilityInput(question=question, history=None))" in _BUILD_UI
         )
 
-    def test_step2_canonical_official_content_history_none(self) -> None:
-        # الخطوة 2: المحتوى الرسمي + نية السؤال، history=None (مناعة من التلوّث).
-        # ISS-120 (D-153): أسئلة-فقط — نثر الحل النموذجي ممنوع على استخراج الكيانات.
-        assert "load_exercise_questions_only(" in _BUILD_UI
-        assert 'ProbabilityInput(question=f"{_official} {question}", history=None)' in _BUILD_UI
-        assert "detect_exercise_retrieval(" in _BUILD_UI
+    def test_step2_canonical_resolution_is_delegated_not_inlined(self) -> None:
+        """D-191: الخطوة 2 صارت نداءً للمُحلّ الواحد بدل حقن النصّ الرسمي هنا.
+
+        D-137 (assert the invariant, not the line): كان هذا الاختبار يؤكّد وجود
+        ``ProbabilityInput(question=f"{_official} {question}")`` حرفياً — أي أنه
+        كان يحرس **آليةً** لا **قاعدة**. وتلك الآلية نفسها كانت الخطأ: حقن نصّ
+        التمرين المرجعي يجعل أرقامه تفوز بالاستخراج فيرى الطالبُ كيساً ليس كيسَه
+        (ISS-140 د). القاعدة الباقية هي مناعة D-123: الاستخراج لا يُبنى على
+        history مُلوَّث — وهي الآن مسؤولية ``exercise_context``.
+        """
+        assert "resolve_exercise_context(question, history_messages)" in _BUILD_UI
+        # والآلية القديمة ممنوعة من العودة.
+        assert 'ProbabilityInput(question=f"{_official} {question}", history=None)' not in _BUILD_UI
 
     def test_step2_gated_by_probability_context(self) -> None:
         assert "not _result_ok(result) and _is_probability_context(_combined_text)" in _BUILD_UI
 
     def test_step3_last_resort_after_immunization(self) -> None:
-        # آخر ملاذ بالـ history — يقع بعد الخطوتين 1 و 2.
+        # الترتيب هو العقد: inline (بلا history) → المُحلّ الواحد → آخر ملاذ بالـ history.
         pos1 = _BUILD_UI.index("question=question, history=None")
-        pos2 = _BUILD_UI.index('question=f"{_official} {question}", history=None')
+        pos2 = _BUILD_UI.index("resolve_exercise_context(question, history_messages)")
         pos3 = _BUILD_UI.index("question=question, history=history_messages")
-        assert pos1 < pos2 < pos3, "order must be: inline → canonical → last-resort"
+        assert pos1 < pos2 < pos3, "order must be: inline → resolver → last-resort"
 
     def test_is_probability_context_defined_before_first_analyze(self) -> None:
         def_pos = _BUILD_UI.index("def _is_probability_context(")
@@ -105,7 +112,15 @@ class TestGuards:
 # ── 4. مبدأ المناعة: history=None يُسقط نص الـ history المُهلوَس ────────────────
 class TestContaminationImmunity:
     def test_canonical_uses_history_none_not_messages(self) -> None:
-        # في الخطوة 2، نص الـ history (المُلوَّث بهلوسة «زرقاء/2 من 11») لا يُمرَّر.
-        seg = _BUILD_UI[_BUILD_UI.index('question=f"{_official} {question}"') :][:120]
-        assert "history=None" in seg
-        assert "history_messages" not in seg
+        """مناعة D-123: استخراج التركيبة لا يرى history مُلوَّثاً — أينما سكن.
+
+        D-137: الآلية انتقلت إلى ``exercise_context`` (D-191)، فالقاعدة تُؤكَّد على
+        المُحلّ نفسه: كل نداء ``analyze`` فيه يمرّر ``history=None``. هلوسة المساعد
+        في الـ history («2 برتقالية + 3 زرقاء») هي ما سمّم التركيبة أصلاً.
+        """
+        resolver = (REPO_ROOT / "app/services/skills/exercise_context.py").read_text(
+            encoding="utf-8"
+        )
+        assert "ProbabilityInput(question=candidate_text, history=None)" in resolver
+        # ولا يوجد في المُحلّ أيّ تمرير لـ history إلى المحرّك.
+        assert "history=history_messages" not in resolver

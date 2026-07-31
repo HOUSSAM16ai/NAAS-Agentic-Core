@@ -1,0 +1,14 @@
+{
+  "_doc": "D-191 — الكيانات المهيكلة للتمرين المرجعي (بكالوريا 2024، علوم تجريبية، الموضوع 1، التمرين 1). شكل هذا الملف مطابق حرفياً لعمود parsed_entities (JSONB) في bac_exercises، فيبقى القارئ واحداً (ParsedEntities.from_mapping) حين يُوصَل مسار قاعدة البيانات. القاعدة: التركيبة تُقرأ من هنا — لا تُستخرَج من نثر الحل النموذجي (ISS-120).",
+  "_source": "knowledge_base/bac2024_math_experimental_subject1_ex1_ex2.md",
+  "container": "كيس",
+  "total_items": 11,
+  "draw_count": 3,
+  "draw_type": "simultaneous",
+  "with_replacement": false,
+  "components": [
+    { "entity": "كرة بيضاء", "color": "white", "count": 2, "numbers": [1, 3] },
+    { "entity": "كرة حمراء", "color": "red", "count": 4, "numbers": [0, 1, 1, 3] },
+    { "entity": "كرة خضراء", "color": "green", "count": 5, "numbers": [0, 1, 1, 3, 4] }
+  ]
+}

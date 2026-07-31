@@ -210,10 +210,17 @@ class TestSourceWiring:
         assert "self._build_cognitive_response(" in CLIENT_SRC
 
     def test_numbers_from_symbolic_engine(self) -> None:
-        # الطبقة 3: الأرقام من ProbabilityCalculatorSkill (المحرك الرمزي)، صفر LLM.
+        """الطبقة 3: الأرقام من المحرّك الرمزي وحده — صفر LLM.
+
+        D-137: كان الفحص يقرأ 1500 حرف بعد ``def _load_canonical_combinations(``،
+        وقد صارت (D-191) مُحوِّلاً من ثلاثة أسطر فوق ``ExerciseContextSkill``.
+        القاعدة لم تتغيّر — موضعُها فقط — فنؤكّدها على المُحلّ.
+        """
         seg = CLIENT_SRC[CLIENT_SRC.index("def _load_canonical_combinations(") :][:1500]
-        assert "ProbabilityCalculatorSkill" in seg
-        assert "CombinationsModelOutput" in seg
+        assert "_resolve_exercise_context" in seg, "المُحوِّل يمرّ بالمُحلّ الواحد"
+        resolver_seg = CLIENT_SRC[CLIENT_SRC.index("class ExerciseContextSkill") :]
+        assert "ProbabilityCalculatorSkill" in resolver_seg
+        assert "CombinationsModelOutput" in resolver_seg
 
     def test_redaction_safe_ratio_line(self) -> None:
         import re

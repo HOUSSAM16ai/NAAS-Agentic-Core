@@ -1,4 +1,8 @@
-from typing import Any, Protocol, runtime_checkable
+"""عقد بوّابة البحث (ACL) — مُصنَّف بلا `Any` (D-192 · roadmap D1)."""
+
+from typing import Protocol, runtime_checkable
+
+from app.integration.models import GatewayStatus, RefinedQuery, RerankedDocument, SearchHit
 
 
 @runtime_checkable
@@ -12,45 +16,36 @@ class ResearchGatewayProtocol(Protocol):
         self,
         query: str,
         top_k: int = 5,
-        filters: dict[str, Any] | None = None,
-    ) -> list[Any]:
-        """
-        Perform semantic search.
-        Returns a list of result nodes/documents.
-        """
+        filters: dict[str, object] | None = None,
+    ) -> list[SearchHit]:
+        """Perform semantic search. Returns typed result hits."""
         ...
 
     async def refine_query(
         self,
         query: str,
         api_key: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Refine a user query using DSPy/LLM.
-        Returns a dictionary with refined query and filters.
-        """
+    ) -> RefinedQuery:
+        """Refine a user query using DSPy/LLM. Returns the refined query + filters."""
         ...
 
     async def rerank_results(
         self,
         query: str,
-        documents: list[str] | list[Any],
+        documents: list[str] | list[dict[str, object]],
         top_n: int = 5,
-    ) -> list[Any]:
-        """
-        Rerank a list of documents based on the query.
-        Returns the reranked list.
-        """
+    ) -> list[RerankedDocument]:
+        """Rerank documents against the query. Returns the reranked list."""
         ...
 
-    def get_llamaindex_status(self) -> dict[str, Any]:
+    def get_llamaindex_status(self) -> GatewayStatus:
         """Check LlamaIndex availability."""
         ...
 
-    def get_dspy_status(self) -> dict[str, Any]:
+    def get_dspy_status(self) -> GatewayStatus:
         """Check DSPy availability."""
         ...
 
-    def get_reranker_status(self) -> dict[str, Any]:
+    def get_reranker_status(self) -> GatewayStatus:
         """Check Reranker availability."""
         ...

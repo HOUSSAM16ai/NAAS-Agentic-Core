@@ -1,4 +1,8 @@
-from typing import Any, Protocol, runtime_checkable
+"""عقد بوّابة التخطيط (ACL) — مُصنَّف بلا `Any` (D-192 · roadmap D1)."""
+
+from typing import Protocol, runtime_checkable
+
+from app.integration.models import PlanResult
 
 
 @runtime_checkable
@@ -12,9 +16,6 @@ class PlanningGatewayProtocol(Protocol):
         self,
         goal: str,
         context: str = "",
-    ) -> Any:
-        """
-        Generate a cognitive plan for a goal.
-        Returns a PlanResult object (or similar structure).
-        """
+    ) -> PlanResult:
+        """Generate a cognitive plan for a goal. Returns a typed :class:`PlanResult`."""
         ...

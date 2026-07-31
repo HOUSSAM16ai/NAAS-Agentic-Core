@@ -33,6 +33,14 @@ jobs:
       - name: Memory coherence (D-188)
         run: python scripts/fitness/check_memory_coherence.py
 
+      # D-192: coherence is not truth. This gate catches the class D-188 could not
+      # see — a hand-typed number in prose. CLAUDE.md contradicted *itself* in two
+      # places (24 vs 27 skills; API-first 13/13 vs 11/11) and both values were
+      # wrong. Numbers are now derived from the source, and every constitutional
+      # rule that names a symbol is tested against the code.
+      - name: Constitution equals reality (D-192)
+        run: python scripts/fitness/check_constitution_reality.py
+
       - name: CLAUDE.md exists and is non-empty
         run: |
           test -f CLAUDE.md || { echo "::error::CLAUDE.md is missing"; exit 1; }

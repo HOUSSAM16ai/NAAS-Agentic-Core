@@ -20,7 +20,13 @@ def main() -> int:
         rel = path.relative_to(REPO_ROOT).as_posix()
         if rel.split("/", 1)[0] in EXCLUDED_TOP_LEVEL:
             continue
-        text = path.read_text(encoding="utf-8")
+        # D-192: تجاهُل المجلّدات المخفيّة (`.venv/` · `.git/` …). كانت البوّابة تمشي
+        # عليها فتنهار بـUnicodeDecodeError على fixture غير UTF-8 داخل بيئة افتراضية
+        # محلّية — تمرّ في CI (بلا venv) وتنكسر عند المطوّر. بوّابة لا تعمل محلياً
+        # تُشغَّل في CI وحده، فيتأخّر اكتشاف خرقها إلى ما بعد الدفع.
+        if any(part.startswith(".") for part in rel.split("/")[:-1]):
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
         if "CORE_KERNEL_URL" in text and rel not in ALLOWED:
             violations.append(rel)
     if violations:

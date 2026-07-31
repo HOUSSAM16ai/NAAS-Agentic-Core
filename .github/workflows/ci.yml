@@ -51,6 +51,11 @@ jobs:
           # while every other job stayed green. A lint tool that changes underneath
           # the repo is not a gate, it is a coin flip — pin it and bump on purpose.
           pip install "ruff==0.14.0"
+          # D-192 (roadmap §6.5.د D2): mypy was configured near-strict in mypy.ini,
+          # listed in requirements-dev.txt, wired into pre-commit — and absent from
+          # all 10 workflows, with `Makefile` running it behind `|| true`. A type
+          # checker that cannot fail is a slogan. Pinned for the same reason ruff is.
+          pip install "mypy==1.8.0" "types-PyYAML" "types-requests"
       - name: Ruff lint
         shell: bash
         run: |
@@ -61,6 +66,17 @@ jobs:
         run: |
           set -euo pipefail
           ruff format --check .
+      # Scoped deliberately: `shared/` (zero Any) and `app/integration/` (the ACL
+      # boundary, typed to zero Any in D-192) are the clean beachhead. The scope
+      # grows by shrinking debt, never by loosening mypy.ini. `--follow-imports=silent`
+      # keeps errors attributable to the checked trees instead of their dependencies.
+      # First run already paid for itself: it caught `planning_client.generate_plan`,
+      # a method that does not exist, called on every planning-gateway invocation.
+      - name: Mypy (shared/ + app/integration/)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mypy --config-file mypy.ini --follow-imports=silent shared/ app/integration/
 
   contracts:
     name: contracts
@@ -169,6 +185,28 @@ jobs:
           # A denylist is structurally wrong here: it can never enumerate every dangerous
           # form. argv + shell=False makes injection unrepresentable instead of filtered.
           python scripts/fitness/check_no_shell_true.py
+          # D-191 (ISS-140 ج/د/د-2): the exercise under discussion has exactly one
+          # source, and it is the student's own text first. The canonical retrieval
+          # literal was copy-pasted at 7 sites feeding 12 call sites, and
+          # `_load_canonical_combinations` threw away the `question` it was given —
+          # so a student who wrote their own bag was taught someone else's numbers.
+          # The gate also asserts that a visual promise follows a *delivered* payload.
+          python scripts/fitness/check_exercise_context_single_source.py
+          # ISS-141 item 4: "secrets come from the environment only" was prose with no
+          # enforcement — exactly the class of rule that drifts silently (D-188). The
+          # tree was cleaned in d3fa566; this keeps it clean. Frozen debt is empty.
+          python scripts/fitness/check_no_committed_secrets.py
+          # C9 (D-192): a fitness gate that gated nothing — present in scripts/fitness
+          # but wired into no workflow. Documentation that cannot fail is decoration.
+          python scripts/fitness/check_docs_runtime_parity.py
+          # D-192 (roadmap §6.5.د D1): integration boundaries carry no `Any`, and the
+          # remaining debt shrinks only. The boundary is the last place to lose contract
+          # safety — and the gateway layer was *widening* types the client had narrowed.
+          python scripts/fitness/check_no_new_any.py
+          # D-192 (roadmap §6.5.د D6): `app/` is a gateway, not a second brain. The
+          # 662-line WS handler is frozen at its current domain-call count, not rewritten
+          # — decomposing the live student path does not belong in this round.
+          python scripts/fitness/check_router_domain_logic.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

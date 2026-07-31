@@ -1,5 +1,5 @@
 {
-  "branch": "claude/documentation-system-update-i0td9p",
+  "branch": "claude/solid-documentation-refactor-vnadtw",
   "components": [
     {
       "agreed": true,
@@ -291,6 +291,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-07-30T03:03:33.608418+00:00",
+  "generated_at_utc": "2026-07-31T17:41:25.108644+00:00",
   "schema_version": 1
 }

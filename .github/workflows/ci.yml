@@ -60,8 +60,13 @@ jobs:
           # checking a single file. Caught by CI on the first run; the local venv
           # had pydantic already, which is exactly the drift a pinned, explicit
           # install prevents.
+          # `httpx` is needed too: `shared/http_client/correlated.py` imports it, and
+          # without the real package mypy reports both an unresolved import and a
+          # spurious "unused type: ignore" on the line that exists precisely because
+          # the import *does* resolve. Checking a module means installing what it uses —
+          # the alternative (--ignore-missing-imports) would hide real errors.
           pip install "mypy==1.8.0" "types-PyYAML" "types-requests" \
-            "pydantic>=2.11.5,<3.0.0" "pydantic-settings>=2.4.0,<3.0.0"
+            "pydantic>=2.11.5,<3.0.0" "pydantic-settings>=2.4.0,<3.0.0" "httpx==0.27.0"
       - name: Ruff lint
         shell: bash
         run: |

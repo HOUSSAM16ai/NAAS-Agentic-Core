@@ -55,7 +55,13 @@ jobs:
           # listed in requirements-dev.txt, wired into pre-commit — and absent from
           # all 10 workflows, with `Makefile` running it behind `|| true`. A type
           # checker that cannot fail is a slogan. Pinned for the same reason ruff is.
-          pip install "mypy==1.8.0" "types-PyYAML" "types-requests"
+          # `mypy.ini` enables the pydantic plugin, which mypy imports at startup —
+          # so pydantic must be present in the lint job or mypy exits 2 before
+          # checking a single file. Caught by CI on the first run; the local venv
+          # had pydantic already, which is exactly the drift a pinned, explicit
+          # install prevents.
+          pip install "mypy==1.8.0" "types-PyYAML" "types-requests" \
+            "pydantic>=2.11.5,<3.0.0" "pydantic-settings>=2.4.0,<3.0.0"
       - name: Ruff lint
         shell: bash
         run: |

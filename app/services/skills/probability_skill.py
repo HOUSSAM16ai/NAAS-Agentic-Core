@@ -57,6 +57,8 @@ from app.services.skills.probability_models import (
     ImpossibleCaseOutput,
     ImpossibleNumericalState,
     ImpossibleVisualDirectives,
+    ParsedEntities,
+    ParsedEntityComponent,
     ProbabilityFailure,
     ProbabilityInput,
     ProbabilityModelOutput,
@@ -353,6 +355,41 @@ class ProbabilityCalculatorSkill:
                 return color_results
 
         return color_results + numbered_results
+
+    # ── D-191: المُنتِج الوحيد للكيانات المهيكلة من نصّ حرّ ──────────────────────
+    @classmethod
+    def extract_parsed_entities(cls, text: str) -> ParsedEntities | None:
+        """يبني ``ParsedEntities`` من نصٍّ حرّ — المُنتِج الحتمي الوحيد (D-191).
+
+        كان كل موضع استدعاء يُعيد استخراج التركيبة من النثر بنفسه (12 موضعاً)،
+        فتفرّقت النتائج وصارت أرقام تمرين مخزَّن تُزيح أرقام الطالب (ISS-140 د).
+        هنا يُستخرَج **مرّة واحدة** إلى نوعٍ صريح يستهلكه الجميع.
+
+        يُرجِع ``None`` حين لا تُوجد تركيبة صالحة (مكوّنان موجبان فأكثر) — الصمت
+        هنا مقصود: «لا تركيبة» قرارٌ صريح يتيح للمُحلّ الأعلى أن يختار مصدراً آخر،
+        لا صفرٌ مضلِّل (§0).
+        """
+        if not text or not text.strip():
+            return None
+        raw = cls._extract_count_entities(text)
+        components = [
+            ParsedEntityComponent(
+                entity=label_pos,
+                count=count,
+                color=_COLOR_CSS_TOKEN.get(label_pos, ""),
+            )
+            for label_pos, _label_neg, count in raw
+            if count > 0
+        ]
+        if len(components) < 2:
+            return None
+        component_sum = sum(component.count for component in components)
+        entities = ParsedEntities(
+            total_items=max(cls._detect_total(text, fallback=component_sum), component_sum),
+            draw_count=max(1, cls._detect_draw_count(text)),
+            components=components,
+        )
+        return entities if entities.is_usable else None
 
     @classmethod
     def _stated_denominators(cls, text: str) -> set[int]:
@@ -1498,6 +1535,8 @@ __all__ = [
     "ImpossibleCaseOutput",
     "ImpossibleNumericalState",
     "ImpossibleVisualDirectives",
+    "ParsedEntities",
+    "ParsedEntityComponent",
     "ProbabilityCalculatorSkill",
     "ProbabilityFailure",
     "ProbabilityInput",

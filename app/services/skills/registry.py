@@ -665,6 +665,23 @@ def _build_registry() -> SkillRegistry:
             metrics_prefix="cogniforge_skill_probability",
             consumed_by=("orchestrator_client._build_calculated_ui",),
         ),
+        # ── D-191: «أيّ تمرين نُدرّس الآن؟» بمصدرٍ واحد (ISS-140 د/د-2) ──────────
+        SkillDescriptor(
+            name="exercise_context",
+            summary=(
+                "يحسم التمرين قيد النقاش — نصّ الطالب أوّلاً، ثمّ تاريخه، ثمّ "
+                "التمرين المرجعي بتصريح منطوق (D-191)."
+            ),
+            input_contract="str + history",
+            output_contract="ResolvedExercise",
+            primary_method="resolve",
+            metrics_prefix="cogniforge_exercise_context",
+            consumed_by=(
+                "probability_brain.cognitive_verification._load_canonical_combinations",
+                "probability_brain.escape_hatch._build_probability_direct_explanation",
+                "orchestrator_client._build_calculated_ui",
+            ),
+        ),
         SkillDescriptor(
             name="exercise_alignment",
             summary="محاذاة الإجابة مع معطيات تمرين الاحتمالات (D-090/D-092).",

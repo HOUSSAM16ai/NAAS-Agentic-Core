@@ -30,6 +30,7 @@ TUTOR_SOURCE_FILES: tuple[str, ...] = (
     "app/services/skills/probability_brain/cognitive_response.py",  # D-168 Slice B3
     "app/services/skills/probability_brain/socratic_narrative.py",  # D-168 Slice B4
     "app/services/skills/probability_brain/turn_engine.py",  # D-168 Slice B5
+    "app/services/skills/exercise_context.py",  # D-191 — مُحلّ التمرين قيد النقاش
     "app/infrastructure/clients/orchestrator/stream_normalization.py",  # D-164 Slice 1
     "app/infrastructure/clients/orchestrator/text_streaming.py",  # D-164 Slice 2
     "app/infrastructure/clients/orchestrator/probability_ui.py",  # D-164 Slice 3

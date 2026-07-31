@@ -191,18 +191,25 @@ def check_questions_only_extraction() -> None:
         _fail("load_exercise_questions_only missing from exercise_retrieval.py")
         return
     tutor = _read_monolith_tutor()  # D-163: مواقع الاستدعاء موزّعة بين client + brain
-    calls = tutor.count("load_exercise_questions_only(")
-    if calls < 6:
-        _fail(
-            f"monolith tutor uses load_exercise_questions_only only {calls}×"
-            " (expected ≥ 6 — solution prose must never feed entity extraction)"
-        )
+    # D-191/D-137: كان هنا عدّ (`>= 6`) يقيس **عدد النسخ** لا القاعدة. وحّد D-191
+    # مواضع الاسترجاع في مُحلٍّ واحد (`exercise_context`) فهبط العدّ بينما صارت
+    # القاعدة أقوى: موضعٌ واحد يستحيل أن يتفرّق. العدّ كان يُعاقب التوحيد — والقاعدة
+    # الحقيقية هي «مسار الاستخراج لا يرى نثر الحلّ»، فنؤكّدها مباشرةً.
+    resolver = _read("app/services/skills/exercise_context.py")
+    if "load_exercise_questions_only(" not in resolver:
+        _fail("exercise_context resolver lost the questions-only read (ISS-120 guard missing)")
+        return
+    if "load_exercise_content(" in resolver:
+        _fail("exercise_context resolver reads full solution prose — forbidden (ISS-120 · D-153)")
+        return
+    if "load_exercise_questions_only(" not in tutor:
+        _fail("monolith tutor no longer reads questions-only anywhere")
         return
     # مرجع RAG-Grounded (D-145) يبقى بالمحتوى الكامل — مقصود.
     if "load_exercise_content(_decision.matched_entry)" not in tutor:
         _fail("D-145 RAG reference no longer loads full official content (should stay full)")
         return
-    _pass(f"entity extraction is solution-free ({calls} questions-only call sites; RAG keeps full)")
+    _pass("entity extraction is solution-free (single resolver, questions-only; RAG keeps full)")
 
 
 # ── 3b) بوّابة المقامات تقرأ LaTeX ───────────────────────────────────────────

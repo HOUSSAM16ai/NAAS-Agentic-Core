@@ -252,3 +252,101 @@ class ProbabilityFailure(RobustBaseModel):
     skill: Literal["probability_calculation"] = "probability_calculation"
     success: Literal[False] = False
     reason: str
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# D-191 — الكيانات المهيكلة (`parsed_entities`) عملةً حقيقية لا شعاراً
+# ─────────────────────────────────────────────────────────────────────────────
+# CLAUDE.md §0.8 «قاعدة المليارات» تنصّ: تركيبة التمرين من **الكيانات المهيكلة**
+# (`parsed_entities`) لا من استخراج النثر. كان ذلك ادّعاءً: العمود موجود في
+# `db_schema_config.py` + `0002_bac_exercises.sql` وبلا **أيّ** قارئ بايثون، بينما
+# التركيبة الحقيقية تُستخرَج بـregex من نصّ ملف markdown عند **كل** موضع استدعاء.
+#
+# النموذجان أدناه يجعلان القاعدة صحيحة حرفياً: الكيانات تصير **نوعاً** يُنتَج
+# مرّةً واحدة ويُستهلَك في كل مكان، وشكلُه مطابق لعمود `parsed_entities` نفسه
+# (انظر `live_db_restructure.py:113` — نفس المفاتيح) فيبقى القارئ واحداً حين
+# يُوصَل مسار قاعدة البيانات لاحقاً.
+
+
+class ParsedEntityComponent(RobustBaseModel):
+    """مكوّن واحد من تركيبة التمرين: كيان ملموس + عدده (+ لونه/أرقامه إن وُجدت)."""
+
+    entity: str = Field(..., min_length=1, max_length=80, description="التسمية الملموسة")
+    count: int = Field(..., ge=0, description="عدد عناصر هذا المكوّن")
+    color: str = Field(default="", description="رمز CSS للون (red/white/green/…) إن وُجد")
+    numbers: list[int] = Field(default_factory=list, description="الأرقام المحمولة إن وُجدت")
+
+
+class ParsedEntities(RobustBaseModel):
+    """تركيبة التمرين **مهيكلة** — المصدر الوحيد المشروع للأعداد (D-191).
+
+    تُنتَج بطريقتين حتميّتين لا ثالث لهما:
+
+    * **نصّ الطالب** — `ProbabilityCalculatorSkill.extract_parsed_entities()`؛
+    * **تمرين مخزَّن** — `from_mapping()` على بيانات مهيكلة مُلتزَمة
+      (`knowledge_base/entities/*.json`، نفس شكل عمود `parsed_entities`).
+
+    وفي الحالتين **لا تُقرأ نثر الحلّ النموذجي أبداً** (ISS-120): المسار المخزَّن
+    يقرأ بيانات مهيكلة، والمسار النصّي يقرأ أسئلة-فقط.
+    """
+
+    container: str = Field(default="كيس", max_length=40, description="الوعاء (كيس/صندوق/علبة)")
+    total_items: int = Field(..., ge=1, description="حجم الفضاء n")
+    draw_count: int = Field(..., ge=1, description="عدد المسحوبات k")
+    draw_type: str = Field(default="simultaneous", description="simultaneous | sequential")
+    with_replacement: bool = Field(default=False)
+    components: list[ParsedEntityComponent] = Field(default_factory=list)
+
+    @property
+    def is_usable(self) -> bool:
+        """تركيبة صالحة للتدريس: مكوّنان فأكثر بأعداد موجبة."""
+        positive = [c for c in self.components if c.count > 0]
+        return len(positive) >= 2
+
+    def as_text(self) -> str:
+        """يُعيد صياغة التركيبة نصّاً عربياً — مدخلاً حتمياً للمحرّك الرمزي.
+
+        هذا هو الجسر الوحيد من «الكيانات» إلى المحرّك: النصّ المُركَّب هنا يحمل
+        **أرقام الكيانات فقط** — لا نثر حلّ ولا سرد نموذج.
+        """
+        parts = ", ".join(f"{c.count} {c.entity}" for c in self.components if c.count > 0)
+        return (
+            f"{self.container} يحتوي على {self.total_items} عنصراً: {parts}. "
+            f"نسحب {self.draw_count} عناصر في آن واحد."
+        )
+
+    @classmethod
+    def from_mapping(cls, mapping: object) -> ParsedEntities | None:
+        """يقرأ شكل عمود ``parsed_entities`` (JSONB) أو ملفّ الكيانات المُلتزَم.
+
+        متسامح عمداً: مفتاح ناقص أو نوع خاطئ ⇒ ``None`` (لا استثناء يُسقط دور
+        الطالب)، ومصدرٌ بلا مكوّنات موجبة ⇒ ``None`` كذلك.
+        """
+        if not isinstance(mapping, dict):
+            return None
+        raw_components = mapping.get("components")
+        if not isinstance(raw_components, list):
+            return None
+        components: list[ParsedEntityComponent] = []
+        for item in raw_components:
+            if not isinstance(item, dict):
+                continue
+            try:
+                components.append(ParsedEntityComponent.model_validate(item))
+            except Exception:
+                continue
+        if not components:
+            return None
+        payload = {
+            "container": mapping.get("container") or "كيس",
+            "total_items": mapping.get("total_items")
+            or sum(component.count for component in components),
+            "draw_count": mapping.get("draw_count") or 1,
+            "draw_type": mapping.get("draw_type") or "simultaneous",
+            "with_replacement": bool(mapping.get("with_replacement", False)),
+            "components": [component.model_dump() for component in components],
+        }
+        try:
+            return cls.model_validate(payload)
+        except Exception:
+            return None

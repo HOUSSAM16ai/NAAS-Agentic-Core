@@ -104,8 +104,10 @@ class TestMCPIntegrationsLlamaIndex:
 
     def test_get_llamaindex_status(self, integrations):
         """حالة LlamaIndex."""
+        # D-192 (roadmap D1): البوّابة تُرجِع الآن نوعاً مُصرَّحاً (`GatewayStatus`)
+        # بدل `dict[str, Any]` — حدّ التكامل هو آخر مكان يُقبل فيه فقدان أمان العقد.
         status = integrations.get_llamaindex_status()
-        assert "status" in status
+        assert status.status
 
 
 class TestMCPIntegrationsDSPy:
@@ -138,7 +140,7 @@ class TestMCPIntegrationsDSPy:
         # DSPy is mocked at module level
         status = integrations.get_dspy_status()
         # Since dspy is installed in the test environment, it should be active
-        assert status["status"] == "active"
+        assert status.status == "active"
 
 
 class TestMCPIntegrationsReranker:
@@ -164,7 +166,7 @@ class TestMCPIntegrationsReranker:
     def test_get_reranker_status(self, integrations):
         """حالة Reranker."""
         status = integrations.get_reranker_status()
-        assert "status" in status
+        assert status.status
 
 
 class TestMCPIntegrationsKagent:

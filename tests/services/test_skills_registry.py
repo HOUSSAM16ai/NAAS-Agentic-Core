@@ -33,6 +33,7 @@ EXPECTED = {
     "adaptive_pedagogy",
     "probability",
     "exercise_alignment",
+    "exercise_context",
     "output_firewall",
     "topic_lock",
     "arabic_stream_guard",
@@ -70,11 +71,11 @@ class TestRegistry:
     def test_registry_complete(self) -> None:
         reg = get_skill_registry()
         assert set(reg.names()) == EXPECTED
-        assert len(reg.list()) == 36
+        assert len(reg.list()) == 37
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 34
+        assert len(reg.by_status("ACTIVE")) == 35
         assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:

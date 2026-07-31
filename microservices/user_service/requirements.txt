@@ -15,7 +15,7 @@ aiosqlite==0.17.0
 psycopg2-binary==2.9.9
 pydantic>=2.11.5,<3.0.0
 pydantic-settings==2.3.0
-PyJWT==2.8.0
+PyJWT==2.13.0
 passlib==1.7.4
 bcrypt==3.2.0
 argon2-cffi==23.1.0
@@ -64,7 +64,7 @@ pypdf
 python-docx==1.2.0
 openpyxl==3.1.5
 pandas==2.3.3
-pillow==12.1.0
+pillow==12.3.0
 pytesseract==0.3.13
 pyyaml==6.0.1
 
@@ -86,7 +86,7 @@ passlib
 argon2-cffi
 vecs==0.4.5
 flupy==1.2.3
-litellm==1.50.0
+litellm==1.84.0
 prometheus-client>=0.20.0
 dspy==2.5.7
 llama-index-workflows==2.14.0

@@ -19,6 +19,7 @@ from app.api.routers import (
     system,
     ums,
     visual_pedagogy,
+    vouchers,
 )
 
 type RouterSpec = tuple[APIRouter, str]
@@ -52,4 +53,6 @@ def base_router_registry() -> list[RouterSpec]:
         (guardian.router, ""),
         # D-197: تحليلات المنتج (إدارة) — الاحتفاظ والقُمع.
         (analytics.router, ""),
+        # D-198: القسائم المدفوعة مسبقاً + حقوق الوصول.
+        (vouchers.router, ""),
     ]

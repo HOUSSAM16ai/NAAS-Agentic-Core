@@ -41,6 +41,8 @@ EXPECTED = {
     "text_refinement_compose",
     "content_integrity",
     "learning_path",
+    # D-194: التكرار المتباعد (FSRS) فوق BKT — القياس يصير جدولاً.
+    "review_scheduler",
     "answer_redaction",
     "retrieval_rerank",
     "mcp_tool",
@@ -71,11 +73,11 @@ class TestRegistry:
     def test_registry_complete(self) -> None:
         reg = get_skill_registry()
         assert set(reg.names()) == EXPECTED
-        assert len(reg.list()) == 37
+        assert len(reg.list()) == 38
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 35
+        assert len(reg.by_status("ACTIVE")) == 36
         assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:

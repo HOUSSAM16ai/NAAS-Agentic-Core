@@ -67,6 +67,10 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "guardian_links",
         # D-197: سجلّ أحداث المنتج — مُلحَق-فقط، أساس الاحتفاظ والأفواج.
         "product_events",
+        # D-198: القسائم المدفوعة مسبقاً + حقوق الوصول.
+        "vouchers",
+        "voucher_redemptions",
+        "entitlements",
     }
 )
 
@@ -291,6 +295,80 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"due_at" TIMESTAMPTZ NOT NULL,'
             '"interval_days" DOUBLE PRECISION NOT NULL,'
             '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            ")"
+        ),
+    },
+    # D-198: القسائم المدفوعة مسبقاً. الرمز **مُجزَّأ** (سندٌ لحامله)، والاستبدال الواحد
+    # مفروضٌ بقيد فريد على `voucher_redemptions.voucher_id` — لا بفحصٍ في التطبيق، لأنّ
+    # «افحص ثمّ اكتب» نافذةُ سباق يعبرها طلبان متزامنان.
+    "vouchers": {
+        "columns": [
+            "id",
+            "code_hash",
+            "plan",
+            "duration_days",
+            "status",
+            "created_at",
+            "expires_at",
+        ],
+        "auto_fix": {},
+        "indexes": {
+            "code_hash": 'CREATE UNIQUE INDEX IF NOT EXISTS "ix_vouchers_code_hash" ON "vouchers"("code_hash")',
+        },
+        "index_names": {"code_hash": "ix_vouchers_code_hash"},
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "vouchers"('
+            '"id" SERIAL PRIMARY KEY,'
+            '"code_hash" VARCHAR(64) NOT NULL,'
+            "\"plan\" VARCHAR(32) NOT NULL DEFAULT 'standard',"
+            '"duration_days" INTEGER NOT NULL DEFAULT 30 CHECK ("duration_days" > 0),'
+            "\"status\" VARCHAR(16) NOT NULL DEFAULT 'issued' "
+            "CHECK (\"status\" IN ('issued','redeemed','void')),"
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
+            '"expires_at" TIMESTAMPTZ'
+            ")"
+        ),
+    },
+    "voucher_redemptions": {
+        "columns": ["id", "voucher_id", "user_id", "redeemed_at"],
+        "auto_fix": {},
+        "indexes": {
+            # القيد الفريد هو الحَكَم: استبدالٌ واحد لكلّ قسيمة، مهما تزامنت الطلبات.
+            "voucher_id": 'CREATE UNIQUE INDEX IF NOT EXISTS "ix_voucher_redemptions_voucher" ON "voucher_redemptions"("voucher_id")',
+            "user_id": 'CREATE INDEX IF NOT EXISTS "ix_voucher_redemptions_user" ON "voucher_redemptions"("user_id")',
+        },
+        "index_names": {
+            "voucher_id": "ix_voucher_redemptions_voucher",
+            "user_id": "ix_voucher_redemptions_user",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "voucher_redemptions"('
+            '"id" SERIAL PRIMARY KEY,'
+            '"voucher_id" INTEGER NOT NULL UNIQUE REFERENCES "vouchers"("id") ON DELETE CASCADE,'
+            '"user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,'
+            '"redeemed_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            ")"
+        ),
+    },
+    "entitlements": {
+        "columns": ["id", "user_id", "plan", "source", "granted_at", "expires_at"],
+        "auto_fix": {},
+        "indexes": {
+            "user_id": 'CREATE INDEX IF NOT EXISTS "ix_entitlements_user_id" ON "entitlements"("user_id")',
+            "expires_at": 'CREATE INDEX IF NOT EXISTS "ix_entitlements_expires_at" ON "entitlements"("user_id","expires_at")',
+        },
+        "index_names": {
+            "user_id": "ix_entitlements_user_id",
+            "expires_at": "ix_entitlements_expires_at",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "entitlements"('
+            '"id" SERIAL PRIMARY KEY,'
+            '"user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,'
+            "\"plan\" VARCHAR(32) NOT NULL DEFAULT 'standard',"
+            "\"source\" VARCHAR(32) NOT NULL DEFAULT 'voucher',"
+            '"granted_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
+            '"expires_at" TIMESTAMPTZ NOT NULL'
             ")"
         ),
     },

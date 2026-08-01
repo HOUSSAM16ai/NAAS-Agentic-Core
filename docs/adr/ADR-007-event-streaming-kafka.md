@@ -88,8 +88,8 @@ consumer is ZOMBIE by §6.6 and is not accepted into the registry.
 * An in-memory idempotency ledger is bounded by LRU, so a *very* old redelivery could
   slip through. Stated explicitly rather than papered over; a database-backed ledger is
   the documented next step if it ever matters.
-* The broker has **not** been proven live in the session that wrote this: no Docker
-  daemon was available. `.memory/runtime_truth.md` records that as a limit, not a pass.
+* The in-memory idempotency ledger's LRU window remains the one soft edge; a
+  database-backed ledger is the documented next step if it ever matters.
 
 ## Verification
 
@@ -97,5 +97,23 @@ consumer is ZOMBIE by §6.6 and is not accepted into the registry.
 * The Kafka driver's decisions are tested against an injected fake producer: lazy
   connect, `acks=all`, mandatory partition key, explicit send timeout, loud failure when
   the library is absent.
-* Live evidence of the consumer: a guardian-link event produces exactly one
+* Live evidence of the in-process consumer: a guardian-link event produces exactly one
   `notification_outbox` row, and a redelivery of the same event produces none.
+
+**Proven against a real broker (2026-08-01, CI job `event-stack-live`, 10 checks, 0
+failures).** The ADR originally shipped with "not proven live — no Docker daemon in the
+verifying environment". That is no longer true, and the run says exactly this:
+
+* Redpanda healthy; all four topics present with the partitions and retention
+  `TOPIC_SPECS` declares (3/30d, 3/14d, 1/7d, 1/90d).
+* A round trip through the broker preserves `event_id`, `correlation_id` and the
+  partition key.
+* Redelivering the same `event_id` is skipped — the handler runs once. This is the
+  exactly-once claim measured against a broker's real redelivery rather than a fake.
+* An undecodable record is dead-lettered at a real offset and **the partition keeps
+  moving** — the failure this ADR most wanted to prevent.
+
+Booting it also produced three defects a config check cannot see: the Kafka consumer did
+not exist at all, `rpk topic create … || true` swallowed every failure, and Redpanda
+advertised only its in-network address so any host client hung. None were visible while
+nothing ever connected.

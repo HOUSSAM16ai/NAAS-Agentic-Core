@@ -47,6 +47,11 @@ The system must preserve the following principles permanently. Every future agen
 - **التمرين قيد النقاش مصدره واحد، وأوّلُه نصّ الطالب (D-191 — 2026-07-31 · ISS-140 د/د-2)**: `app/services/skills/exercise_context.py:ExerciseContextSkill` هو **الحاسم الوحيد**؛ ترتيبه: نصّ الطالب الحاضر ⇒ تمرينه في التاريخ (رسائل `user` فقط، D-102) ⇒ التمرين المرجعي **بتصريح منطوق** ⇒ `None`. الحرفية `CANONICAL_EXERCISE_QUERY` لها **موطن واحد** (كانت مكرَّرة في ٧ مواضع تُغذّي ١٢ موضع استدعاء، و`_load_canonical_combinations` تستقبل `question` و**ترميه** — فتعلّم الطالبُ مسألةً ليست مسألته). ⛔ **لا يُطبَع رقمٌ ولا كيانٌ لم يذكره الطالب دون تصريح** — ويشمل ذلك النصوص التعليمية الثابتة (`semantic_property_skill` · `understanding_state_skill` كانت تحمل تركيبة التمرين المرجعي حرفياً). السقوط إلى المرجعي يتطلّب **إشارة احتمالية موجبة**؛ «غياب موضوعٍ آخر» ليس دليلاً (ISS-140 أ). تحرسه `check_exercise_context_single_source` بدَينٍ مُجمَّد **فارغ**.
 - **الكيانات المهيكلة نوعٌ لا شعار (D-191)**: `ParsedEntities`/`ParsedEntityComponent` (`probability_models.py`) هي عملة التركيبة، تُنتَج مرّةً واحدة (`extract_parsed_entities` من نصّ الطالب · `from_mapping` من بيانات مهيكلة مُلتزَمة في `knowledge_base/entities/*.json` — نفس شكل عمود `parsed_entities`) وتُستهلَك في كل مكان. **عمود `parsed_entities` في قاعدة البيانات ما زال بلا قارئ حيّ** ويُوثَّق كذلك (`.memory/runtime_truth.md`) — لا يُدَّعى وصلُه.
 - **الكمّامة يبرّرها المكوّن المُسلَّم (D-191 · ISS-140 ج)**: `_stage_calculated_ui` يقرأ **حكم** `_normalize_stream_event`؛ سقوط الحمولة إلى `noop` (props > 16KB أو رفض تحقّق) ⇒ **لا `companion_text` ولا إطار نهائي**، وسجلّ `ui_component_dropped_promise_suppressed`، والمسار يبقى حيّاً. وعدٌ بشرحٍ لا يصل أسوأ من خطأ صريح (§0).
+- **تعريف المفهوم واحد (D-193 — 2026-08-01)**: `shared/curriculum/registry.py` هو المصدر القانوني الوحيد لكل `concept_id` يُخزَّن أو يُصنَّف أو يُعرَض (٣٧ مفهوماً · رياضيات + فيزياء + علوم الطبيعة). كانت ثلاثة تعاريف متنافرة لا تتّفق أيّ اثنين (BKT · learning_path · memory_agent بمُعرَّفات مختلفة)، ونتيجتها أنّ أسئلة الفيزياء والعلوم كلّها تسقط إلى `"general"` — أي أنّ الطبقة المعرفية لا تقيس شيئاً في مادة معاملها **٦**. ⛔ **المُعرَّفات لا تُغيَّر** (مُخزَّنة في `student_bkt_analytics`)؛ الصيغ الأخرى `aliases`. `classify` تُرجِع `None` لا `"general"`. أداة التعريف تكسر العلامات المركّبة (ISS-109/112/114) فتُجرَّب صورة بلا أدوات تعريف؛ والعلامة القصيرة تختبئ داخل كلمة أخرى («شعاع» خطفت «الإشعاعي») فيحرسها اختبار بنيوي؛ والأولوية تُصرَّح بـ`specificity` لا تُصادَف.
+- **القياس يصير جدولاً، والدعمُ يُقصِّر الفاصل (D-194 — 2026-08-01)**: `shared/scheduling/fsrs.py` (FSRS-5 حتمي، يرفع `SchedulingError` لا صفراً مضلِّلاً) + `ReviewSchedulerSkill` + `student_review_schedule` **مُلحَق-فقط**. إجابةٌ صحيحة بسقالةٍ كاملة ⇒ `HARD` لا `GOOD`، و`EASY` تتطلّب `support_level ≥ 5` **و** `durable ≥ 0.85` معاً — وإلّا أتمتنا وَهْم الطلاقة بدل محاربته (§0.6). غياب `support_level` = دعمٌ ثقيل (الغياب ليس دليل استقلال)، و`correctness_signal="unknown"` ⇒ **لا صفّ**. الجدولة معزولة ولا تكسر دور طالب.
+- **الوليّ يرى ولا يقرأ الحلّ (D-195/D-196 — 2026-08-01)**: الربط **برضا الطالب بنيوياً** (`guardian_user_id` يبدأ `NULL`؛ لا مسار يربط حساب قاصر بلا فعلٍ منه)، ورمزٌ عشوائي تعمويّاً يُستبدَل مرّة، و`is_linked` بوّابة كلّ قراءة (مُعرَّف المسار ليس تفويضاً)، وغير المرتبط **404 لا 403**. ⛔ **تقرير الوليّ لا يستعلم عن `content` إطلاقاً** — حمايةٌ بنيوية لا مُرشِّح: مقتطفٌ واحد يجعله باباً خلفياً إلى الحلّ الممنوع (D-113). وفجوة الوهم تُعرَض له لا تُخفى. والمواظبة تُحسَب بتقويم الطالب (`Africa/Algiers`) لا UTC — ٠٠:٣٠ محلّياً هي اليوم السابق في UTC، فالحساب على UTC يكسر مواظبة كلّ من يدرس ليلاً.
+- **الأرقام تعترف بجهلها (D-197/D-198 — 2026-08-01)**: أسماء أحداث المنتج قائمة مغلقة (`shared/analytics/events.py`) تُرفَض خارجها **عند الكتابة**؛ وتعريف الاحتفاظ يعيش في `shared/analytics/retention.py` لا في SQL (المحرّكان يختلفان، ونسختان = رقمان لنفس السؤال)؛ و**الفوج غير الناضج يُرجِع `null` لا صفراً** (صفرٌ يقرأ «فقدناهم» والحقيقة «لم يحن الوقت»)؛ والقُمع يتقاطع فلا يتجاوز ١٠٠٪. التحليلات لا تكسر دوراً أبداً. وفي التحصيل: **الحقّ (`entitlements`) هو العملة والقسيمة مصدر**، وبوّابة الاشتراك **اعتمادٌ واحد** (`app/deps/billing.py`)، والرمز يُخزَّن مُجزَّأً (سندٌ لحامله)، و**الحَكَم قيدٌ فريد في قاعدة البيانات لا فحصٌ في التطبيق** («افحص ثمّ اكتب» نافذة سباق تمنح شهرين بقسيمة). لا بوّابة دفع: SATIM مقعد موثَّق بصفر كود (`EXTENSION_SEAMS.md §8`).
+- **الواجهة تُحكَم كما يُحكَم الخادم (D-199 — 2026-08-01)**: كلّ قيمة بصرية من `frontend/app/styles/tokens.css` (مدّتان وتسهيلٌ واحد)، تحرسها `check_design_tokens` بدَينٍ يتقلّص فقط + **حساب** تباين WCAG AA لكل زوج (رقمٌ في تعليق ليس تحقّقاً — تقديراتي الأولى كانت خاطئة). ⛔ **لا `@import` من نطاقٍ ثالث** (يحجب أوّل رسم؛ الخطّ عبر `next/font` مُستضافاً ذاتياً). ورقٌ دافئ لا أبيض صرف (القراءة ساعات). تقليل الحركة **شامل** (`*`) لا قائمة تنسى المُضاف غداً. أوّل رسمٍ ليس فارغاً. وميزانية حجم (`check_bundle_budget`) تُترجَم إلى ثوانٍ على 3G — والبناء الغائب **يُفشِل** البوّابة لا يمرّ بصفر.
 - **الدستور يساوي الواقع ولا يناقض نفسه (D-192 — 2026-07-31)**: أيّ عددٍ قابل للتغيّر (المهارات · العقود) **يُشتَقّ** من مصدره ولا يُكتب في النثر؛ والكمّية الواحدة لا تحمل قيمتين في قسمين؛ وكل قاعدة تسمّي رمزاً تُختبَر على المصدر. تحرسه `check_constitution_reality` (بوّابة `doc-integrity`) — وُلِد من تناقضَين حقيقيَّين في هذا الملفّ نفسه: عددُ المهارات مكتوباً بقيمتين مختلفتين في §0.5 و§0.7، ونسبةُ API-first بقيمتين في §3 و§6.7.ط — وكل القيم الأربع كانت خاطئة. تفصيلها في `.memory/decisions.md` D-192.
 - **Math Pipeline is 4 nodes, not 3 (D-080 — 2026-05-23)**: `enrich_node` (Node 4 — deterministic, no LLM) was added after `normalize_node`. It builds `ui_component` payload from the completed solution text. Topology: `classify → solve → normalize → enrich → END`. `MathPipelineState` and `invoke_math_pipeline` now return `ui_component: dict | None`. Removing `enrich_node` breaks Generative UI for all math questions.
 - **ui_component flows through the full stack (D-080)**: `ConversationState` carries `ui_component`. `invoke_graph` returns it. `ChatResponse` (HTTP) and WebSocket payload both include it. `useAgentSocket.js` extracts it from the `assistant_final` payload and attaches it to the message; `ChatInterface.jsx` renders `GenerativeUIRenderer` **after** the text, only on `isComplete` — never during streaming. ⚠️ **المصدر المشروع للبطاقة هو المخرَج المُهيكَل وحده**: `_try_build_math_ui_component` (المونوليث) **مُعطَّلة دائماً** (`return None` — D-097/ISS-108) لأنها كانت تُقطّع نثر LLM حرّاً إلى «خطوات» بلا معنى؛ فموضعا الحقن في `_emit_terminal_frames` كودٌ ميت مقصود. المسار الحيّ هو `enrich_node` الحتمي (Node 4).
@@ -169,33 +174,17 @@ Skill حقيقي = **import + call chain + runtime evidence + metrics + tests**
 
 ### 7-Phase Cognitive Lab Architecture
 
-**Phase 1: Interactive Object UI (World Building)**
-- **Concept:** Students do not read a text wall. They interact with a canvas.
-- **Mapping:** `ExerciseRenderer` (or equivalent generative UI layer) creates a manipulable object map (e.g., a bag, balls, colors) instead of text. The student drags, drops, and interacts.
+السرد الكامل لكل مرحلة في `.memory/cognitive_lab_philosophy.md` — هنا العقد فقط:
 
-**Phase 2: Cognitive Modeling (The AI doesn't know the answer, it knows the mind)**
-- **Concept:** The system measures *how* the student thinks (e.g., What did they click first? Did they ignore numbers? How many seconds did it take?).
-- **Mapping:** `TutorStateService` stores the "Digital Twin of the Mind," capturing interaction latency, choice patterns, and cognitive focus.
-
-**Phase 3: Building the Mind (Diagnostic Socratic Feedback)**
-- **Concept:** Instead of "wrong answer," the system identifies the cognitive flaw (e.g., "You think order matters").
-- **Mapping:** `SocraticEvaluatorSkill` and `ConceptDiagnosisSkill` explain mental errors, not just calculation errors.
-
-**Phase 4: Digital Twin of the Mind**
-- **Concept:** Every student has a dynamic cognitive map covering Logic, Probability, Deduction, and Model Selection.
-- **Mapping:** `BKTEngine` (Bayesian Knowledge Tracing) evolves into tracking specific cognitive vulnerabilities and conceptual fragility rather than static scores.
-
-**Phase 5: Dynamic Generation Engine**
-- **Concept:** No static question bank. The system generates new exercises targeting the exact cognitive weakness (e.g., confusing arrangements vs. combinations) with 85% similarity but a different context.
-- **Mapping:** `PedagogicalPolicyEngine` orchestrates the generation of adaptive exercises based on the digital twin's error memory.
-
-**Phase 6: Simulation Engine**
-- **Concept:** The student can run "Million Trials" inside the canvas to see empirical convergence towards theoretical probability.
-- **Mapping:** The platform provides a `SimulationEngine` capability (to be implemented as a dedicated microservice/tool) allowing "what if" constraint modification and behavioral observation.
-
-**Phase 7: Error Memory & Predictive Tutoring**
-- **Concept:** The system remembers mastered concepts, fragile understandings, and frequent errors to predict mistakes before they happen.
-- **Mapping:** Extended `TutorStateService` and `BKTAnalyticsService` track and predict conceptual fragility.
+| المرحلة | القانون | الحامل اليوم |
+|---------|---------|--------------|
+| 1 · Interactive Object UI | الطالب يتفاعل مع كائنات لا يقرأ جداراً نصّياً | طبقة الـGenerative UI |
+| 2 · Cognitive Modeling | النظام يقيس **كيف** يفكّر الطالب لا ماذا أجاب | `TutorStateService` |
+| 3 · Diagnostic Socratic Feedback | «خطأ» ليست إجابة — يُسمّى العطب الذهني | `SocraticEvaluatorSkill` · `ConceptDiagnosisSkill` |
+| 4 · Digital Twin of the Mind | خريطة معرفية حيّة لا درجة ساكنة | `BKTEngine` (قناتان + فجوة الوهم) |
+| 5 · Dynamic Generation | لا بنك أسئلة ثابت — تمرين يستهدف الضعف بعينه | `PedagogicalPolicyEngine` |
+| 6 · Simulation Engine | «مليون تجربة» داخل الكانفس (مقعد موثّق، لا كود) | `.memory/simulation_engine.md` |
+| 7 · Error Memory | يتذكّر الهشّ ويتوقّع الخطأ قبل وقوعه | `TutorState` + `BKTAnalyticsService` + **جدولة FSRS (D-194)** |
 
 **Execution Rule:** Any PR that degrades this vision into a standard text-based Q&A bot must be rejected.
 

@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 
+from app.services.messaging.driver_protocols import KafkaProducerLike
 from shared.messaging import EventEnvelope, EventPublisher, MessagingError, spec_for
 
 logger = logging.getLogger("cogniforge.messaging.kafka")
@@ -35,10 +35,10 @@ class KafkaEventPublisher(EventPublisher):
     def __init__(self, *, bootstrap_servers: str, client_id: str = "cogniforge") -> None:
         self._bootstrap_servers = bootstrap_servers
         self._client_id = client_id
-        self._producer: Any | None = None
+        self._producer: KafkaProducerLike | None = None
         self._lock = asyncio.Lock()
 
-    async def _ensure_producer(self) -> Any:
+    async def _ensure_producer(self) -> KafkaProducerLike:
         """يبني المُنتِج ويبدؤه مرّةً واحدة — تحت قفلٍ كي لا يتسابق دوران متزامنان."""
         if self._producer is not None:
             return self._producer

@@ -29,8 +29,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Any
 
+from app.services.messaging.driver_protocols import ConsumerRecordLike, KafkaConsumerLike
 from shared.messaging import (
     ConsumeOutcome,
     Disposition,
@@ -81,14 +81,14 @@ class KafkaEventConsumer:
         self._ledger = ledger or IdempotencyLedger()
         self._dlq_publisher = dlq_publisher
         self._policy = policy
-        self._consumer: Any | None = None
+        self._consumer: KafkaConsumerLike | None = None
         self._lock = asyncio.Lock()
 
     @property
     def group_id(self) -> str:
         return self._group_id
 
-    async def _ensure_consumer(self) -> Any:
+    async def _ensure_consumer(self) -> KafkaConsumerLike:
         """يبني المستهلك ويبدؤه مرّةً واحدة — تحت قفلٍ كي لا يتسابق نداءان."""
         if self._consumer is not None:
             return self._consumer
@@ -138,7 +138,9 @@ class KafkaEventConsumer:
             await consumer.commit()
         return outcomes
 
-    async def _handle_record(self, record: Any, handler: EventHandler) -> ConsumeOutcome:
+    async def _handle_record(
+        self, record: ConsumerRecordLike, handler: EventHandler
+    ) -> ConsumeOutcome:
         """
         يفكّ سجلّاً واحداً ويُمرّره لحلقة الانضباط المشتركة.
 

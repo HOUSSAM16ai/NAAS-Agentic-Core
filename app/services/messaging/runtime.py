@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
 
 from shared.messaging import (
     EventEnvelope,
@@ -82,7 +81,7 @@ def build_envelope(
     *,
     topic: Topic,
     event_name: str,
-    payload: dict[str, Any],
+    payload: dict[str, object],
     partition_key: str | None = None,
     correlation_id: str | None = None,
     occurred_at: datetime | None = None,

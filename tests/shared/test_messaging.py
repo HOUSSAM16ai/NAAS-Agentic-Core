@@ -383,3 +383,65 @@ async def test_a_custom_policy_shortens_the_road_to_the_dead_letter_queue() -> N
         policy=RetryPolicy(max_attempts=2),
     )
     assert outcome.disposition is Disposition.DEAD_LETTER
+
+
+# ── التحقّق عند الحافة (D-204) ──────────────────────────────────────────────────
+
+
+def test_a_non_string_partition_key_is_rejected_rather_than_coerced() -> None:
+    """
+    `str(value)` كان سيقبل `partition_key: 5` ويحوّله إلى `"5"` بصمت، فيبدو المفتاح
+    سليماً وهو ليس ما أرسله المُنتِج — والترتيب يُبنى على مفتاحٍ مخترَع.
+    """
+    with pytest.raises(MessagingError, match="partition_key must be a string"):
+        EventEnvelope.from_json(
+            '{"event_id":"a","event_name":"n","topic":"t",'
+            '"occurred_at":"2026-08-01T00:00:00+00:00","partition_key":5}'
+        )
+
+
+def test_a_non_string_correlation_id_is_rejected() -> None:
+    with pytest.raises(MessagingError, match="correlation_id must be a string"):
+        EventEnvelope.from_json(
+            '{"event_id":"a","event_name":"n","topic":"t",'
+            '"occurred_at":"2026-08-01T00:00:00+00:00","correlation_id":{"a":1}}'
+        )
+
+
+def test_a_null_partition_key_is_still_allowed() -> None:
+    """الغياب مشروع؛ النوع الخاطئ ليس كذلك."""
+    restored = EventEnvelope.from_json(
+        '{"event_id":"a","event_name":"n","topic":"t",'
+        '"occurred_at":"2026-08-01T00:00:00+00:00","partition_key":null}'
+    )
+    assert restored.partition_key is None
+
+
+@pytest.mark.parametrize("field", ["schema_version", "delivery_attempt"])
+def test_a_boolean_is_not_accepted_as_an_integer(field: str) -> None:
+    """
+    `isinstance(True, int)` صحيحة في بايثون — فبلا حارسٍ صريح تمرّ `true` كـ`1`
+    و`delivery_attempt` يبدو سليماً بينما المُنتِج أرسل قيمة منطقية.
+    """
+    with pytest.raises(MessagingError, match=f"{field} must be an integer"):
+        EventEnvelope.from_json(
+            '{"event_id":"a","event_name":"n","topic":"t",'
+            f'"occurred_at":"2026-08-01T00:00:00+00:00","{field}":true}}'
+        )
+
+
+def test_a_string_integer_is_rejected_rather_than_parsed() -> None:
+    """`"3"` ليست `3` على السلك — والتحويل الصامت يُخفي مُنتِجاً يكتب النوع الخطأ."""
+    with pytest.raises(MessagingError, match="schema_version must be an integer"):
+        EventEnvelope.from_json(
+            '{"event_id":"a","event_name":"n","topic":"t",'
+            '"occurred_at":"2026-08-01T00:00:00+00:00","schema_version":"3"}'
+        )
+
+
+def test_the_backoff_never_returns_more_than_its_ceiling() -> None:
+    """حارسٌ على إعادة الصياغة: `min` استُبدل بشرطٍ صريح لأجل التحقّق من النوع."""
+    policy = RetryPolicy(base_delay_seconds=2.0, max_delay_seconds=5.0)
+    assert policy.delay_for(1) == 2.0
+    assert policy.delay_for(10) == 5.0
+    assert isinstance(policy.delay_for(3), float)

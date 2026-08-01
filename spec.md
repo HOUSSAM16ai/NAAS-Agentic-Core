@@ -537,7 +537,22 @@ is backed by evidence; anything absent here is **not** claimed.
 | **5–6 — Contracts and skills** | ✅ | 13 committed OpenAPI contracts under `check_openapi_parity`; unified `BaseSkill` (D-179); no ZOMBIE skills (gate). |
 | **9 — Observability and failure** | 🚧 | Outbound correlation now single-sourced (**D-189**, `check_correlated_http`, shrink-only debt). Per-request injection for long-lived clients and vendored copies for services remain. |
 | **11 — Full-stack runtime verification** | 🚧 | Live E2E on 2026-07-30 (`docs/archive/e2e/`): monolith + orchestrator + foundations + notation + real OpenRouter over WebSocket, 9/10 categories answered relevantly (**D-190** closed two hijack defects). **Not** exercised: Postgres/Supabase, the container path, the frontend — environment limits, recorded as limits. |
-| **7, 8, 10, 12** | 📋 | Not started. RAG/events/Temporal/decommission remain ADR-gated per §19. |
+| **10 — Frontend** | 🚧 **D-199** | Token layer (`frontend/app/styles/tokens.css`) is the single source; warm-paper palette with WCAG AA **computed** by `check_design_tokens`; both render-blocking `@import`s removed (fonts via `next/font`, verified zero external refs in built CSS); reduced-motion universal; PWA shell + offline page; `next build` and a shrink-only bundle budget now run in CI (1007KB JS). **Not** done: 43 Font Awesome icons → SVG (`docs/frontend/ICON_MIGRATION.md`), `globals.css` decomposition, message-list virtualization, Lighthouse on a throttled profile. |
+| **7, 8, 12** | 📋 | Not started. RAG/events/Temporal/decommission remain ADR-gated per §19. |
+
+### Product layer (outside the original 0–12 phases)
+
+The spec was written for an API-first simplification program; the learner-lifecycle product
+did not exist in it. Recorded here so the trace stays complete:
+
+| Capability | Status | Evidence |
+|---|---|---|
+| **Curriculum single source** | ✅ **D-193** | `shared/curriculum/` — 37 concepts across maths/physics/natural sciences replacing three incompatible taxonomies. Physics and sciences questions now classify instead of falling to `"general"`. 100% line+branch. |
+| **Spaced repetition** | ✅ **D-194** | `shared/scheduling/fsrs.py` + `ReviewSchedulerSkill` + `student_review_schedule` (append-only) + live wiring from the BKT outcome + `GET /api/v1/review/due`. Support shortens the interval (1.2d scaffolded vs 15.7d unaided). 100%. |
+| **Streaks** | ✅ **D-195** | `shared/habit/streak.py`, local-day computation in `Africa/Algiers` (naive UTC breaks a late-night student's streak — proven in test). 100%. |
+| **Guardian dashboard** | ✅ **D-196** | Consent-based linking, `is_linked` on every read, deterministic weekly report that never queries message `content`. 100% on services. |
+| **Product analytics** | ✅ **D-197** | `product_events` + closed event registry + deterministic retention/funnel, wired at signup, login, chat turn, review queue and guardian invite/accept/report. Admin-only endpoints. 100%. |
+| **Prepaid vouchers** | ✅ **D-198** | Hashed codes, DB-constraint-enforced single redemption, idempotent for the same actor, entitlement as a single dependency. No payment gateway (SATIM documented as a seam with zero code). 100%. |
 
 **Rule for this table:** a phase is marked ✅ only with the three-leg proof (import +
 call chain + runtime evidence). A green test suite alone is not sufficient, and a

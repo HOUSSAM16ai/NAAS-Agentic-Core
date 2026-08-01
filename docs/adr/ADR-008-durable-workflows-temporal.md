@@ -81,9 +81,12 @@ possible moment to discover a spelling mistake.
 * Temporal plus its Postgres is real operational weight: two containers and a schema.
 * `temporalio` is an optional dependency; the worker raises a clear error when it or
   `TEMPORAL_ADDRESS` is missing rather than pretending to run.
-* **The worker has not been proven against a live server** — no Docker daemon existed in
-  the session that wrote this. `.memory/runtime_truth.md` records the worker as DORMANT
-  and the plans as ACTIVE. That distinction is the point of §6.6.
+* **The server is proven reachable; the worker is not proven at all.** Since 2026-08-01
+  CI boots Temporal on every PR and `temporal operator cluster health` reports SERVING
+  (job `event-stack-live`). No workflow has ever been executed, and `run_worker` has
+  never connected. Booting a server is not running a workflow, and `.memory/runtime_truth
+  .md` keeps the worker DORMANT for exactly that reason — the distinction is the point
+  of §6.6.
 
 ## Verification
 
@@ -91,4 +94,5 @@ possible moment to discover a spelling mistake.
 * 10 tests on the worker's activities as plain functions against a real database,
   including the "one failing student must not deny the rest their report" path.
 * Compose brings up `temporal` + `postgres-temporal` + `temporal-ui`, each with a real
-  health check (`temporal operator cluster health`, not a port probe).
+  health check (`temporal operator cluster health`, not a port probe) — and CI now runs
+  that check on every PR rather than trusting the compose file.

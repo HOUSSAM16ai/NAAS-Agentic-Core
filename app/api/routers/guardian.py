@@ -23,8 +23,10 @@ from pydantic import Field
 from app.core.schemas import RobustBaseModel
 from app.deps.auth import CurrentUser, get_current_user
 from app.deps.guardian import get_guardian_link_service, get_guardian_report_service
+from app.services.analytics.product_events import record_product_event
 from app.services.guardian import GuardianLinkService, GuardianReportService
 from app.services.guardian.linking import GuardianLinkError
+from shared.analytics import EventName
 
 router = APIRouter(prefix="/api/v1/guardian", tags=["Guardian"])
 
@@ -82,7 +84,10 @@ async def issue_link_code(
     service: GuardianLinkService = Depends(get_guardian_link_service),
 ) -> LinkCodeResponse:
     """الطالب يُولِّد رمزاً يسلّمه لوليّه. الربط يبدأ من الطالب دائماً."""
-    return LinkCodeResponse(link_code=await service.issue_code(current.user.id))
+    code = await service.issue_code(current.user.id)
+    # D-197: خطوة القُمع الحاسمة تجارياً — كم طالباً يدعو وليّه فعلاً؟
+    await record_product_event(event_name=EventName.GUARDIAN_LINK_ISSUED, user_id=current.user.id)
+    return LinkCodeResponse(link_code=code)
 
 
 @router.post("/link", response_model=LinkedStudentItem, summary="Redeem a guardian link code")
@@ -96,6 +101,7 @@ async def redeem_link_code(
         linked = await service.redeem_code(current.user.id, payload.link_code)
     except GuardianLinkError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await record_product_event(event_name=EventName.GUARDIAN_LINK_ACCEPTED, user_id=current.user.id)
     return LinkedStudentItem(
         student_user_id=linked.student_user_id, linked_since=linked.linked_since
     )
@@ -128,6 +134,7 @@ async def weekly_report(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No linked student")
 
     report = await reports.build(student_user_id)
+    await record_product_event(event_name=EventName.GUARDIAN_REPORT_VIEWED, user_id=current.user.id)
     return WeeklyReportResponse(
         student_user_id=report.student_user_id,
         period_start=report.period_start,

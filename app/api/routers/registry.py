@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from app.api.routers import (
     admin,
     aek,
+    analytics,
     content,
     customer_chat,
     data_mesh,
@@ -49,4 +50,6 @@ def base_router_registry() -> list[RouterSpec]:
         (review.router, ""),
         # D-196: لوحة وليّ الأمر — الربط بالرضا + التقرير الأسبوعي المُجمَّع.
         (guardian.router, ""),
+        # D-197: تحليلات المنتج (إدارة) — الاحتفاظ والقُمع.
+        (analytics.router, ""),
     ]

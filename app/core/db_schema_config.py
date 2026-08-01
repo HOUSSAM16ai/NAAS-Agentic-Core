@@ -65,6 +65,8 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "student_review_schedule",
         # D-196: ربط وليّ الأمر بالطالب — برضا الطالب حصراً.
         "guardian_links",
+        # D-197: سجلّ أحداث المنتج — مُلحَق-فقط، أساس الاحتفاظ والأفواج.
+        "product_events",
     }
 )
 
@@ -289,6 +291,40 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"due_at" TIMESTAMPTZ NOT NULL,'
             '"interval_days" DOUBLE PRECISION NOT NULL,'
             '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            ")"
+        ),
+    },
+    # D-197: أحداث المنتج — مُلحَق-فقط. أساس الاحتفاظ والأفواج والقُمع. `user_id` يقبل
+    # NULL لأنّ بعض الأحداث تسبق المصادقة. `props` سياق صغير — ممنوع أن يحمل نصّ محادثة.
+    "product_events": {
+        "columns": [
+            "id",
+            "user_id",
+            "event_name",
+            "session_id",
+            "props",
+            "occurred_at",
+        ],
+        "auto_fix": {},
+        "indexes": {
+            "user_id": 'CREATE INDEX IF NOT EXISTS "ix_product_events_user_id" ON "product_events"("user_id")',
+            "event_name": 'CREATE INDEX IF NOT EXISTS "ix_product_events_event_name" ON "product_events"("event_name")',
+            # الاستعلام الحارّ: أحداثُ نوعٍ ما ضمن نافذة زمنية.
+            "occurred_at": 'CREATE INDEX IF NOT EXISTS "ix_product_events_occurred_at" ON "product_events"("event_name","occurred_at")',
+        },
+        "index_names": {
+            "user_id": "ix_product_events_user_id",
+            "event_name": "ix_product_events_event_name",
+            "occurred_at": "ix_product_events_occurred_at",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "product_events"('
+            '"id" SERIAL PRIMARY KEY,'
+            '"user_id" INTEGER REFERENCES "users"("id") ON DELETE CASCADE,'
+            '"event_name" VARCHAR(64) NOT NULL,'
+            '"session_id" INTEGER,'
+            '"props" TEXT,'
+            '"occurred_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
             ")"
         ),
     },

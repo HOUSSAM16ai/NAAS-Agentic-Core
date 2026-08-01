@@ -30,6 +30,7 @@ from app.core.domain.audit import AuditLog
 from app.core.domain.user import Role, User, UserRole, UserStatus
 from app.deps.auth import CurrentUser, get_auth_service, get_current_user, require_permissions
 from app.middleware.rate_limiter_middleware import rate_limit
+from app.services.analytics.product_events import record_product_event
 from app.services.audit import AuditService
 from app.services.auth import AuthService
 from app.services.policy import PolicyService
@@ -44,6 +45,7 @@ from app.services.rbac import (
     USERS_READ,
     USERS_WRITE,
 )
+from shared.analytics import EventName
 
 router = APIRouter(tags=["User Management"])
 
@@ -101,6 +103,8 @@ async def register_user(
         user_agent=user_agent,
     )
     tokens = await auth_service.issue_tokens(user, ip=client_ip, user_agent=user_agent)
+    # D-197: أوّل نقطة في كلّ فوج احتفاظ. الكتابة معزولة ولا ترفع.
+    await record_product_event(event_name=EventName.USER_SIGNED_UP, user_id=user.id)
     return TokenPair(**tokens)
 
 
@@ -185,6 +189,7 @@ async def login(
         user_agent=user_agent,
     )
     tokens = await auth_service.issue_tokens(user, ip=client_ip, user_agent=user_agent)
+    await record_product_event(event_name=EventName.USER_SIGNED_IN, user_id=user.id)
     return TokenPair(**tokens)
 
 

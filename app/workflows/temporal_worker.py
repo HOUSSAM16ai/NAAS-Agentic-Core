@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable, Coroutine
 from datetime import timedelta
-from typing import Any
 
 from shared.workflows import WorkflowName, plan_for, total_timeout_seconds
 
@@ -85,7 +85,7 @@ async def queue_guardian_notifications(guardian_ids: list[int]) -> int:
 
 #: الأنشطة المُعلَنة. الاسم هو العقد بين الخطّة والتنفيذ — خطوةٌ تسمّي نشاطاً غير
 #: موجود يجب أن تفشل عند الإقلاع لا عند التشغيل الأسبوعي بعد ستّة أيام.
-ACTIVITIES: dict[str, Any] = {
+ACTIVITIES: dict[str, Callable[..., Coroutine[object, object, object]]] = {
     "collect_linked_guardians": collect_linked_guardians,
     "build_weekly_reports": build_weekly_reports,
     "queue_guardian_notifications": queue_guardian_notifications,

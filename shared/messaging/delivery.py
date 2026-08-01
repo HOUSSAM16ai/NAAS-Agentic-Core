@@ -69,8 +69,10 @@ class RetryPolicy:
         """
         if attempt < 1:
             raise MessagingError("attempt must be >= 1")
-        delay = self.base_delay_seconds * (2 ** (attempt - 1))
-        return min(delay, self.max_delay_seconds)
+        # `2 ** n` is `Any` to the type checker (int/float overloads), which leaks
+        # through `min` and defeats the return annotation. Keep it explicitly float.
+        delay = self.base_delay_seconds * float(2 ** (attempt - 1))
+        return delay if delay < self.max_delay_seconds else self.max_delay_seconds
 
 
 def decide_disposition(

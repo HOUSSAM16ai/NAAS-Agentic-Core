@@ -152,6 +152,31 @@ class EventEnvelope:
             raise MessagingError("envelope must be a JSON object")
         return cls.from_mapping(data)
 
+    @staticmethod
+    def _optional_str(data: dict[str, object], key: str) -> str | None:
+        """
+        حقلٌ نصّي اختياري — **يُتحقَّق** ولا يُحوَّل.
+
+        `str(value)` كان سيقبل `partition_key: 5` ويحوّله إلى `"5"` بصمت، فيبدو
+        المفتاح سليماً وهو ليس ما أرسله المُنتِج. الرفض عند الحافة أصدق.
+        """
+        value = data.get(key)
+        if value is None or isinstance(value, str):
+            return value
+        raise MessagingError(f"{key} must be a string when present, got {type(value).__name__}")
+
+    @staticmethod
+    def _required_int(data: dict[str, object], key: str, default: int) -> int:
+        """
+        عددٌ صحيح — مع رفض `bool` صراحةً.
+
+        `isinstance(True, int)` صحيحة في بايثون، فبلا هذا الحارس تمرّ `true` كـ`1`.
+        """
+        value = data.get(key, default)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise MessagingError(f"{key} must be an integer, got {type(value).__name__}")
+        return value
+
     @classmethod
     def from_mapping(cls, data: dict[str, object]) -> EventEnvelope:
         """يبني ظرفاً من قاموس — مسار مشترك بين السلك والاختبارات."""
@@ -179,9 +204,9 @@ class EventEnvelope:
             topic=str(data.get("topic") or ""),
             payload=payload,
             occurred_at=occurred_at,
-            partition_key=data.get("partition_key"),
-            correlation_id=data.get("correlation_id"),
-            schema_version=int(data.get("schema_version", SCHEMA_VERSION)),
-            delivery_attempt=int(data.get("delivery_attempt", 1)),
+            partition_key=cls._optional_str(data, "partition_key"),
+            correlation_id=cls._optional_str(data, "correlation_id"),
+            schema_version=cls._required_int(data, "schema_version", SCHEMA_VERSION),
+            delivery_attempt=cls._required_int(data, "delivery_attempt", 1),
             headers={str(key): str(value) for key, value in headers.items()},
         )

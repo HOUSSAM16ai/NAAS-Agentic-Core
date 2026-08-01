@@ -79,10 +79,52 @@ async def record_product_event(
                 )
             )
             await db.commit()
+        await _fan_out_to_event_bus(
+            event_name=event_name,
+            user_id=user_id,
+            session_id=session_id,
+            props=props,
+            occurred_at=occurred_at,
+        )
         return True
     except Exception as exc:
         logger.warning("product_event_write_failed name=%s: %s", event_name, exc)
         return False
+
+
+async def _fan_out_to_event_bus(
+    *,
+    event_name: str,
+    user_id: int | None,
+    session_id: int | None,
+    props: dict | None,
+    occurred_at: datetime | None,
+) -> None:
+    """
+    ينشر الحدث على الناقل **بعد** كتابة الصفّ (D-201).
+
+    الترتيب مقصود: الصفّ هو مصدر الحقيقة للتحليلات، والنشر فان-آوت للمستهلكين
+    (الإشعارات اليوم). النشر أوّلاً كان سيعني مستهلكاً يتصرّف بناءً على حدثٍ لم
+    يُكتَب — وهو بالضبط سبب وجود صندوق الصادر المعاملاتي.
+
+    ولا يرفع: هذه الدالّة على مسار دور الطالب، والقاعدة أنّ الناقل لا يُسقِط دوراً.
+    """
+    try:
+        from app.services.messaging.runtime import build_envelope, publish_event
+        from shared.messaging import Topic
+
+        await publish_event(
+            build_envelope(
+                topic=Topic.PRODUCT_EVENTS,
+                event_name=event_name,
+                payload={"user_id": user_id, "session_id": session_id, "props": props or {}},
+                # المفتاح هو الطالب فيبقى ترتيب أحداثه محفوظاً داخل القسم.
+                partition_key=f"user:{user_id}" if user_id is not None else "anonymous",
+                occurred_at=occurred_at,
+            )
+        )
+    except Exception as exc:
+        logger.warning("product_event_fanout_failed name=%s: %s", event_name, exc)
 
 
 def _as_utc(moment: datetime) -> datetime:

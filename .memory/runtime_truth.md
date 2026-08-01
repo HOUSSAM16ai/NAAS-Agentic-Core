@@ -17,7 +17,22 @@
 | **`shared/retrieval/ranking.py`** (D-200) | **ACTIVE** | dep-free (stdlib + `textnorm`)؛ موصول في `app/api/routers/content.py:search_content` بديلاً عن `LIKE '%q%'`؛ ١٠ اختبارات على قاعدة بيانات حقيقية تُثبت الترتيب والتطبيع وحدود الكلمات؛ **100% سطراً وتفرّعاً**. |
 | **جدولا `content_items` / `content_solutions`** | **ACTIVE (كانا غائبين عن كل مسار إقلاع)** | عطبٌ كامن حقيقي: مُستعلَمان في ٤ مواضع، وغير مُسجَّلين في `REQUIRED_SCHEMA`، ونموذج ORM بلا مستورِد ⇒ خارج `SQLModel.metadata`. كانت `/v1/content/search` تُرجِع **500** على قاعدة نظيفة. مُسجَّلان الآن. |
 | **الاسترجاع المتّجهي** (`embedding` · HNSW · `CrossEncoder`) | **DORMANT (بلا ادّعاء)** | موجود في المستودع، **صفر نداء وقت الطلب**. D-200 يُصلح المُرشِّح المعجمي فقط؛ دمج المتّجهات مُرشِّح ثانٍ فوق نفس الواجهة — لا يُعلَن ACTIVE قبل البرهان الثلاثي. |
-| **Kafka · Temporal · خدمة استرجاع مستقلّة** | **PLANNED (صفر كود)** | لم تبدأ. لا تُذكر كقدرة. |
+| **خدمة استرجاع مستقلّة (:8013)** | **PLANNED (صفر كود)** | لم تبدأ. لا تُذكر كقدرة. |
+
+## Event Bus + Durable Workflows (2026-08-01, D-201 — ADR-007/008)
+
+| المكوّن | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`shared/messaging/`** (ظرف · مواضيع · تسليم · ناقل) | **ACTIVE** | dep-free (stdlib فقط)؛ مُستهلَك من `app/services/messaging/*` ومن `product_events._fan_out_to_event_bus` على مسار الدور؛ **100% سطراً وتفرّعاً** (47 اختباراً). |
+| **`InMemoryEventBus`** (السائق الافتراضي) | **ACTIVE** | يُختار حين لا يُضبَط `KAFKA_BOOTSTRAP_SERVERS`؛ يمرّ بنفس حلقة `consume_once` التي سيمرّ بها مستهلك Kafka — الانضباط مُشغَّل اليوم لا مؤجَّل. |
+| **المستهلك + `notification_outbox`** | **ACTIVE** | سلسلة حيّة مُبرهَنة: حدث `guardian_link_accepted` ⇒ الناقل ⇒ `handle_product_event` ⇒ **صفٌّ واحد**؛ وإعادة تسليم الحدث ⇒ **صفر** صفوف إضافية (قيد فريد على `event_id`). يُقلَع من `app/kernel.py` عبر `RelayHandle`. |
+| **`check_topic_contract_parity`** | **ACTIVE (CI · guardrails)** | AST + قراءة نصّية؛ يحرس الاتجاهين بين `topics.py` وعقد AsyncAPI وbootstrap الـcompose. |
+| **`KafkaEventPublisher`** (aiokafka) | **DORMANT بلا `KAFKA_BOOTSTRAP_SERVERS` + وسيط** | الكود موصول ومُغطّى 100% بمُنتِجٍ مزيّف (اتصال كسول · `acks=all` · مفتاح إلزامي · مهلة صريحة · فشل واضح بلا المكتبة)، لكن **لا وسيط شُغِّل في هذه البيئة** (لا Docker daemon). لا يُدَّعى ACTIVE. |
+| **Redpanda + إنشاء المواضيع** (compose) | **DECLARED — غير مُثبَت حياً** | `docker-compose.yml` يضيف `redpanda` + `redpanda-topics` بفحص `rpk cluster health` (لا مسبار منفذ). لم يُشغَّل هنا. |
+| **`shared/workflows/plans.py`** (٣ خطط) | **ACTIVE** | بيانات حتمية dep-free؛ **100% سطراً وتفرّعاً** (15 اختباراً)؛ الجداول بتقويم `Africa/Algiers` مُؤكَّدة باختبار. |
+| **`app/workflows/temporal_worker.py`** | **PARTIAL — الأنشطة ACTIVE، العامل DORMANT** | الأنشطة الثلاثة مُختبَرة كدوالّ عادية على قاعدة بيانات حقيقية (100%)، ومنها المسار «طالبٌ فاشل لا يُسقِط البقيّة». `run_worker` يتطلّب `TEMPORAL_ADDRESS` + `temporalio` + خادماً — **لم يُشغَّل**. |
+| **`corpus_ingestion` · `streak_reminder_fanout`** | **PLANNED (خطّة بلا أنشطة)** | الفجوة **مؤكَّدة باختبار** (`missing_activities` غير فارغة) — خطّة تبدو جاهزة وتسقط عند أوّل تشغيل ممنوعة. |
+| **`shared/ai_models/registry.py`** (D-202) | **ACTIVE (CI)** | سجلّ قدرات بدليلٍ مؤرَّخ؛ `check_model_registry` في guardrails تُثبت أنّ كل نموذج في السلسلة مُسجَّل، ولا محظور كلّياً فيها، والصدارة مؤهّلة. 13 اختباراً · 100% سطراً وتفرّعاً. **ليس مُستهلَكاً وقت التشغيل عمداً** — السلسلة تبقى حرفيات مُثبَّتة أمنياً (ISS-079)، والسجلّ يحرسها في CI لا يستبدلها. |
 
 ## Outbound Trace Layer + Memory Coherence Gate (2026-07-29, D-188/D-189)
 

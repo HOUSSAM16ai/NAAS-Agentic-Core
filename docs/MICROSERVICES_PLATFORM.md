@@ -368,7 +368,7 @@ curl -X POST https://api.cogniforge.ai/v1/guardrails/check \
 
 ## 📖 Documentation
 
-- [Architecture Decision Records](docs/adrs/)
+- [Architecture Decision Records](docs/adr/)
 - [API Documentation](docs/api/)
 - [Runbooks](docs/runbooks/)
 - [SLO Definitions](docs/slos/)

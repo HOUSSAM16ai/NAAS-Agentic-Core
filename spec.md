@@ -538,7 +538,9 @@ is backed by evidence; anything absent here is **not** claimed.
 | **9 — Observability and failure** | 🚧 | Outbound correlation now single-sourced (**D-189**, `check_correlated_http`, shrink-only debt). Per-request injection for long-lived clients and vendored copies for services remain. |
 | **11 — Full-stack runtime verification** | 🚧 | Live E2E on 2026-07-30 (`docs/archive/e2e/`): monolith + orchestrator + foundations + notation + real OpenRouter over WebSocket, 9/10 categories answered relevantly (**D-190** closed two hijack defects). **Not** exercised: Postgres/Supabase, the container path, the frontend — environment limits, recorded as limits. |
 | **10 — Frontend** | 🚧 **D-199** | Token layer (`frontend/app/styles/tokens.css`) is the single source; warm-paper palette with WCAG AA **computed** by `check_design_tokens`; both render-blocking `@import`s removed (fonts via `next/font`, verified zero external refs in built CSS); reduced-motion universal; PWA shell + offline page; `next build` and a shrink-only bundle budget now run in CI (1007KB JS). **Not** done: 43 Font Awesome icons → SVG (`docs/frontend/ICON_MIGRATION.md`), `globals.css` decomposition, message-list virtualization, Lighthouse on a throttled profile. |
-| **7, 8, 12** | 📋 | Not started. RAG/events/Temporal/decommission remain ADR-gated per §19. |
+| **7 — Retrieval** | 🚧 **D-200** | Live search stopped being `LIKE '%q%'`: ranking is deterministic and explained (`shared/retrieval`, 100%), word-boundary matching kills the D-193 defect class, Arabic normalization applied both sides, and every result carries `relevance` + `matched_terms`. Wiring it exposed that `content_items` was queried in four places with **no boot path creating it** — a clean database returned 500. **Not** done: vector recall at request time (`embedding`/HNSW/CrossEncoder stay DORMANT, honestly marked) and the standalone retrieval service on :8013. |
+| **8 — Events and workflows** | 🚧 **D-201** (ADR-007, ADR-008) | Delivery discipline shipped and fully tested **without a broker**: envelope, closed topic registry, idempotency ledger, retry policy, immediate dead-lettering of poison messages. `InMemoryEventBus` is the live default running the same `consume_once` loop the Kafka consumer will run; the live chain is proven by a guardian-link event producing exactly one `notification_outbox` row and a redelivery producing none. Redpanda + Temporal are in `docker-compose.yml` with real health checks. **Not** proven: the brokers themselves — no Docker daemon in the verifying environment, so `KafkaEventPublisher` and the Temporal worker are recorded DORMANT, and two of three workflow plans have no activities yet (asserted by test, not hidden). |
+| **12 — Decommission** | 📋 | Not started. |
 
 ### Product layer (outside the original 0–12 phases)
 
@@ -552,6 +554,9 @@ did not exist in it. Recorded here so the trace stays complete:
 | **Streaks** | ✅ **D-195** | `shared/habit/streak.py`, local-day computation in `Africa/Algiers` (naive UTC breaks a late-night student's streak — proven in test). 100%. |
 | **Guardian dashboard** | ✅ **D-196** | Consent-based linking, `is_linked` on every read, deterministic weekly report that never queries message `content`. 100% on services. |
 | **Product analytics** | ✅ **D-197** | `product_events` + closed event registry + deterministic retention/funnel, wired at signup, login, chat turn, review queue and guardian invite/accept/report. Admin-only endpoints. 100%. |
+| **Ranked content search** | ✅ **D-200** | Deterministic lexical ranking with word-boundary matching and Arabic normalization; results carry their reason; browsing declares itself `unranked`. Both content tables registered in `REQUIRED_SCHEMA` after the endpoint was found to query a table nothing created. 100%. |
+| **Event bus + durable workflow plans** | ✅ **D-201** | `shared/messaging` + `shared/workflows` + the in-process consumer and its database effect, all at 100% line+branch. Broker-dependent drivers honestly DORMANT. |
+| **Model capability registry** | ✅ **D-202** | ISS-079's "no reasoning-only PRIMARY" rule moved from a comment to a CI gate: capabilities are declared data with dated live evidence, outright bans are distinguished from PRIMARY bans, and eligibility is a checked precondition. 100%. |
 | **Prepaid vouchers** | ✅ **D-198** | Hashed codes, DB-constraint-enforced single redemption, idempotent for the same actor, entitlement as a single dependency. No payment gateway (SATIM documented as a seam with zero code). 100%. |
 
 **Rule for this table:** a phase is marked ✅ only with the three-leg proof (import +
@@ -578,8 +583,8 @@ The program is successful when all are true:
 
 ## 19. ADRs Required Before Specific Technology Adoption
 
-- Kafka/event streaming production adoption.
-- Temporal workflow adoption.
+- ~~Kafka/event streaming production adoption.~~ **ADR-007 (accepted, D-201).**
+- ~~Temporal workflow adoption.~~ **ADR-008 (accepted, D-201 — worker DORMANT until a server exists).**
 - Vector DB choice beyond pgvector.
 - GraphQL public or internal API surface.
 - MCP production tool gateway.

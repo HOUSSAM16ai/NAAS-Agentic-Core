@@ -1,10 +1,24 @@
 {
-  "status_version": 1,
+  "status_version": 2,
+  "status": "not_measured",
   "window_days": 30,
-  "legacy_request_total_30d": 0,
-  "legacy_ws_sessions_total_30d": 0,
-  "legacy_traffic_ratio_30d": 0.0,
-  "verified_by": "ops-placeholder",
-  "verified_at": "2026-02-26T00:00:00Z",
-  "notes": "Placeholder evidence file for Phase 4 gate; replace with telemetry-backed values per release window."
+  "legacy_request_total_30d": null,
+  "legacy_ws_sessions_total_30d": null,
+  "legacy_traffic_ratio_30d": null,
+  "verified_by": null,
+  "verified_at": null,
+  "notes": [
+    "D-205 (2026-08-01): this file used to carry zeros with verified_by=ops-placeholder,",
+    "and check_legacy_traffic_zero_window.py read them and printed",
+    "'Legacy traffic hard-zero verified for >=30 days'. Nothing had ever been measured.",
+    "The zeros are now null, because null reads as 'not counted' while 0 reads as",
+    "'counted, found none' — and only one of those was true (§0: unknown beats fake",
+    "certainty; the same rule that makes an immature analytics cohort return null).",
+    "Reality as of this date: the monolith serves 100% of student traffic",
+    "(.devcontainer/supervisor.sh launches uvicorn app.main:app on :8000), the",
+    "conversation-service rollout is 0% and its capability level is 'stub'.",
+    "To fill this in: export the gateway's legacy_acl request/WS counters over a real",
+    "30-day window, set status='measured' and verified_by to whoever ran it, then run",
+    "the gate with --require-measured before any Phase 5 decommission."
+  ]
 }

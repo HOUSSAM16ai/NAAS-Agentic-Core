@@ -311,8 +311,8 @@ Runtime topology — **طوبولوجيتان حقيقيتان، لا واحدة
       orchestrator :8006 · research :8007 · reasoning :8008 · content-retrieval :8009
       foundations :8010 · notation :8011 · Prometheus :9090 · Grafana :3001
 
-  (ب) Docker Compose (`docker-compose.yml` — الهدف المعماري؛ **28 خدمة**، منها حزمة
-      الأحداث وحدها محروسة حياً في CI — D-204)
+  (ب) Docker Compose (`docker-compose.yml` — **وجهةُ** الهجرة لا ما يخدم؛ **28 خدمة**،
+      حزمة الأحداث وحدها محروسة حياً — D-204؛ وكل الصور مبنيّة ومُثبَتة الاستيراد — D-205)
       api-gateway :8000 · planning :8001 · memory :8002 · user :8003 · observability :8005
       orchestrator :8006 · research :8007 · reasoning :8008 · auditor :8009
       conversation :8010 · notation :8011 · frontend :3000 · Postgres مستقلّة لكل خدمة
@@ -320,6 +320,9 @@ Runtime topology — **طوبولوجيتان حقيقيتان، لا واحدة
   ⚠️ المنافذ تختلف بين (أ) و(ب) لخمس خدمات (planning · memory · user · conversation ·
      auditor). المصدر القانوني للمنافذ المحكومة ببوّابة:
      `docs/architecture/PORTS_SOURCE_OF_TRUTH.json` + `config/microservice_catalog.json`.
+  ⛔ **المونوليث غائبٌ عن (ب) عن قصد** (Strangler المرحلة 3 — D-205): `api-gateway`
+     بروكسي بلا مسارٍ إليه، وثلاث بوّابات تمنع إضافته، وبيته `legacy.yml:8004`. وطرح
+     بديله **0%** فما يخدم اليوم هو (أ). **البناء ليس تشغيلاً**: لا حاوية تطبيقية في CI.
 
 مسار دور الطالب (كلتا الطوبولوجيتين):
 

@@ -243,6 +243,13 @@ jobs:
           # 662-line WS handler is frozen at its current domain-call count, not rewritten
           # — decomposing the live student path does not belong in this round.
           python scripts/fitness/check_router_domain_logic.py
+          # D-205: every image this repo can build is declared in
+          # config/image_build_matrix.json, and `images-build` builds all of them.
+          # Before this, nothing in CI ever ran `docker build` — production day would
+          # have been the first one. A build gate only covers what it knows about, so
+          # a compose build context or a microservices/*/Dockerfile with no entry
+          # fails here rather than quietly falling out of coverage.
+          python scripts/fitness/check_image_matrix_parity.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders
@@ -511,6 +518,69 @@ jobs:
           exit $FAILED
 
 
+  images-plan:
+    name: "images — read the declared matrix"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      names: ${{ steps.plan.outputs.names }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - id: plan
+        run: echo "names=$(python scripts/ci/image_matrix.py --names)" >> "$GITHUB_OUTPUT"
+
+  images-build:
+    name: "image: ${{ matrix.name }}"
+    needs: images-plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # D-205: until this job existed, no container image in this repository was ever
+    # built by CI — 15 of them, including the one that serves students. The first
+    # `docker build` would have happened on production day. One runner per image so
+    # disk and layer cache stay per-image (three of these used to pull torch).
+    strategy:
+      fail-fast: false
+      matrix:
+        name: ${{ fromJSON(needs.images-plan.outputs.names) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - id: img
+        name: "Resolve the image's context and dockerfile"
+        run: python scripts/ci/image_matrix.py --resolve "${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: "Build"
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.img.outputs.context }}
+          file: ${{ steps.img.outputs.dockerfile }}
+          push: false
+          load: true
+          tags: cogniforge-smoke/${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: "Smoke: the application actually imports"
+        if: steps.img.outputs.smoke != ''
+        # Building is not importing. A dependency missing from requirements.txt links
+        # fine and fails on the first import — which, without this step, would happen
+        # for the first time in front of a student. Env values come from the declared
+        # matrix via --env-file, never through a shell (D-187).
+        run: |
+          set -euo pipefail
+          python scripts/ci/image_matrix.py --env-file "${{ matrix.name }}" /tmp/smoke.env
+          docker run --rm --env-file /tmp/smoke.env \
+            --entrypoint python cogniforge-smoke/${{ matrix.name }}:ci \
+            -c "import importlib, sys; importlib.import_module('${{ steps.img.outputs.smoke }}'); print('import ok')"
+
   event-stack-live:
     name: "Event stack — a REAL boot, not a config check"
     runs-on: ubuntu-latest
@@ -583,6 +653,11 @@ jobs:
         frontend-tests,
         skills-structural,
         event-stack-live,
+        # Both, deliberately. `images-build` is skipped when `images-plan` fails, and
+        # skipped counts as success below — so listing only the build job would let a
+        # broken matrix pass as green.
+        images-plan,
+        images-build,
       ]
     if: always() && !cancelled()
     steps:
@@ -598,6 +673,8 @@ jobs:
           echo "frontend-tests=${{ needs.frontend-tests.result }}"
           echo "skills-structural=${{ needs.skills-structural.result }}"
           echo "event-stack-live=${{ needs.event-stack-live.result }}"
+          echo "images-plan=${{ needs.images-plan.result }}"
+          echo "images-build=${{ needs.images-build.result }}"
 
           # Allow skipped as a valid success state alongside success
           isValid() {
@@ -611,7 +688,9 @@ jobs:
              ! isValid "${{ needs.test-microservices.result }}" || \
              ! isValid "${{ needs.frontend-tests.result }}" || \
              ! isValid "${{ needs.skills-structural.result }}" || \
-             ! isValid "${{ needs.event-stack-live.result }}"; then
+             ! isValid "${{ needs.event-stack-live.result }}" || \
+             ! isValid "${{ needs.images-plan.result }}" || \
+             ! isValid "${{ needs.images-build.result }}"; then
             echo "❌ One or more required checks failed"
             exit 1
           fi

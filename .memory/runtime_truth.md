@@ -37,6 +37,18 @@
 | **`corpus_ingestion` · `streak_reminder_fanout`** | **PLANNED (خطّة بلا أنشطة)** | الفجوة **مؤكَّدة باختبار** (`missing_activities` غير فارغة) — خطّة تبدو جاهزة وتسقط عند أوّل تشغيل ممنوعة. |
 | **`shared/ai_models/registry.py`** (D-202) | **ACTIVE (CI)** | سجلّ قدرات بدليلٍ مؤرَّخ؛ `check_model_registry` في guardrails تُثبت أنّ كل نموذج في السلسلة مُسجَّل، ولا محظور كلّياً فيها، والصدارة مؤهّلة. 13 اختباراً · 100% سطراً وتفرّعاً. **ليس مُستهلَكاً وقت التشغيل عمداً** — السلسلة تبقى حرفيات مُثبَّتة أمنياً (ISS-079)، والسجلّ يحرسها في CI لا يستبدلها. |
 
+## Container Images + Deployment Topology (2026-08-01, D-205)
+
+| المكوّن | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **صور الحاويات الخمس عشرة** | **BUILT + IMPORT-PROVEN (CI)** — وليست RUNNING | `images-build` تبني كلّ صورة على كلّ PR ثمّ تُنفّذ `python -c "import <module>"` داخلها. قبل هذا التاريخ **لم يُشغَّل `docker build` في CI قطّ**. ⛔ البناء ليس تشغيلاً: لا حاوية تطبيقية تُقلَع، ولا طلبٌ يمرّ. |
+| **`config/image_build_matrix.json` + `check_image_matrix_parity`** | **ACTIVE (guardrails)** | الاتجاهان محروسان: سياق بناء في compose أو `microservices/*/Dockerfile` بلا إدخال ⇒ فشل؛ وإدخالٌ بلا ملفّ ⇒ فشل. 10 اختبارات، منها تجارب سلبية. |
+| **`Dockerfile.prod`** (صورة المونوليث الإنتاجية) | **BUILT + IMPORT-PROVEN — لم تُشغَّل قطّ** | كان الـ`Dockerfile` الوحيد الذي يُشغّل `app.main:app` هو صورة **بيئة التطوير** (Grafana + Prometheus + Node + torch)، وlegacy compose يبنيها كنواة الطوارئ. الجديدة `requirements-prod.txt` + أربع شجرات مصدر + غير جذرية. لا مسار إقلاعٍ يستدعيها اليوم. |
+| **المونوليث في `docker-compose.yml`** | **غائبٌ عن قصد (Strangler المرحلة 3)** | `api-gateway` بروكسي عكسي بلا مسارٍ واحد إلى المونوليث؛ ثلاث بوّابات تمنع إضافته (`check_core_kernel_env_profile` · `check_ports_consistency` · `test_gateway_structure`). بيته `docker-compose.legacy.yml` خلف `profiles: ["legacy","emergency"]`. |
+| **طوبولوجيا `docker-compose.yml`** | **وجهة الهجرة — لا ما يخدم الطلبة** | طرح `conversation-service` عند **0%** و`CONVERSATION_CAPABILITY_LEVEL="stub"`. ما يخدم كلّ دور طالب اليوم هو المونوليث على :8000 عبر `.devcontainer/supervisor.sh`. |
+| **حركة legacy (نافذة 30 يوماً)** | **NOT MEASURED** | كان الملفّ يحمل أصفاراً بـ`verified_by: "ops-placeholder"` والبوّابة تطبع «✅ مُتحقَّق». صارت `null` والبوّابة تُبلّغ `NOT MEASURED` وترفض المرحلة 5. صفرٌ لم يُقَس ليس صفراً. |
+| **`content_retrieval_skill` (:8009) · `foundations_service` (:8010)** | **خارج compose — غيابٌ مُعلَن الآن** | لهما Dockerfile وعقد OpenAPI ويعملان في طوبولوجيا Codespaces؛ لم يكونا في أيّ compose **ولا في الكتالوج**، فلم يفحصهما أحد. سُجّلا `expected_in_default_compose: false` ويُبنيان في `images-build`. |
+
 ## Outbound Trace Layer + Memory Coherence Gate (2026-07-29, D-188/D-189)
 
 | المكوّن | الحالة | الدليل (import + call chain + runtime) |

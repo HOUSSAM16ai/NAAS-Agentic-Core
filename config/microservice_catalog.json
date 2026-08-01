@@ -77,6 +77,22 @@
       "owner": "pedagogy-team",
       "dockerfile_required": true,
       "expected_in_default_compose": true
+    },
+    {
+      "service_dir": "content_retrieval_skill",
+      "compose_service": "content-retrieval-skill",
+      "owner": "pedagogy-team",
+      "dockerfile_required": true,
+      "expected_in_default_compose": false,
+      "note": "D-205: has a Dockerfile and an OpenAPI contract, runs as a uvicorn process at :8009 in the Codespaces topology, and appears in no compose file. It was also in no catalog — so the parity gate, which only iterates entries, never noticed. Declared absent so the gap is counted rather than invisible."
+    },
+    {
+      "service_dir": "foundations_service",
+      "compose_service": "foundations-service",
+      "owner": "pedagogy-team",
+      "dockerfile_required": true,
+      "expected_in_default_compose": false,
+      "note": "D-205: same as content_retrieval_skill (:8010). Its sibling notation-service IS in compose though both were built by the same D-183/D-185 API-first work — the asymmetry is real, recorded here, and not resolved by this change."
     }
   ]
 }

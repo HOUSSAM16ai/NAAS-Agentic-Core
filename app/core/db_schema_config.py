@@ -61,6 +61,8 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "tutor_state",
         "bac_exercises",
         "bac_exercise_questions",
+        # D-194: سجلّ المراجعة المتباعدة (FSRS) — مُلحَق-فقط فوق BKT.
+        "student_review_schedule",
     }
 )
 
@@ -233,6 +235,58 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"support_level" INTEGER,'
             '"delay_hours" DOUBLE PRECISION,'
             '"novel_item" BOOLEAN NOT NULL DEFAULT FALSE'
+            ")"
+        ),
+    },
+    # D-194: سجلّ المراجعة المتباعدة (FSRS) — **مُلحَق-فقط**، بنفس انضباط
+    # `student_bkt_analytics`: كل مراجعة صفٌّ جديد، والحالة الحيّة هي أحدث صفّ لكل
+    # (user_id, concept_id). لا تحديث في المكان، فتبقى السلسلة الزمنية كاملة للتحليل
+    # ولإعادة تدريب معاملات FSRS على بيانات المنصّة نفسها لاحقاً.
+    "student_review_schedule": {
+        "columns": [
+            "id",
+            "user_id",
+            "concept_id",
+            "rating",
+            "stability",
+            "difficulty",
+            "reps",
+            "lapses",
+            "state",
+            "reviewed_at",
+            "due_at",
+            "interval_days",
+            "created_at",
+        ],
+        "auto_fix": {},
+        "indexes": {
+            "user_id": 'CREATE INDEX IF NOT EXISTS "ix_student_review_schedule_user_id" ON "student_review_schedule"("user_id")',
+            "concept_id": 'CREATE INDEX IF NOT EXISTS "ix_student_review_schedule_concept_id" ON "student_review_schedule"("concept_id")',
+            # الاستعلام الحارّ: «ما المستحقّ لهذا الطالب الآن» ⇒ فهرس مركّب.
+            "due_at": 'CREATE INDEX IF NOT EXISTS "ix_student_review_schedule_due_at" ON "student_review_schedule"("user_id","due_at")',
+        },
+        "index_names": {
+            "user_id": "ix_student_review_schedule_user_id",
+            "concept_id": "ix_student_review_schedule_concept_id",
+            "due_at": "ix_student_review_schedule_due_at",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "student_review_schedule"('
+            '"id" SERIAL PRIMARY KEY,'
+            '"user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,'
+            '"concept_id" VARCHAR(120) NOT NULL,'
+            '"rating" INTEGER NOT NULL CHECK ("rating" BETWEEN 1 AND 4),'
+            '"stability" DOUBLE PRECISION NOT NULL CHECK ("stability" > 0),'
+            '"difficulty" DOUBLE PRECISION NOT NULL '
+            'CHECK ("difficulty" >= 1.0 AND "difficulty" <= 10.0),'
+            '"reps" INTEGER NOT NULL DEFAULT 1,'
+            '"lapses" INTEGER NOT NULL DEFAULT 0,'
+            "\"state\" VARCHAR(16) NOT NULL DEFAULT 'review' "
+            "CHECK (\"state\" IN ('learning','review','relearning')),"
+            '"reviewed_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
+            '"due_at" TIMESTAMPTZ NOT NULL,'
+            '"interval_days" DOUBLE PRECISION NOT NULL,'
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
             ")"
         ),
     },

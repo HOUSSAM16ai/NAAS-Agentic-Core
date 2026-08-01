@@ -760,6 +760,21 @@ def _build_registry() -> SkillRegistry:
             metrics_prefix="cogniforge_skill_learning_path",
             consumed_by=("customer_chat._evaluate_bkt_cards",),
         ),
+        SkillDescriptor(
+            name="review_scheduler",
+            summary=(
+                "التكرار المتباعد (FSRS) فوق BKT — يحوّل إشارات الإتقان الدائم ومستوى "
+                "الدعم إلى موعد المراجعة التالي. إجابةٌ مدعومة لا تُكافَأ بفاصلٍ طويل (D-194)."
+            ),
+            input_contract="ReviewSchedulerInput",
+            output_contract="ReviewDecision",
+            primary_method="decide",
+            metrics_prefix="cogniforge_skill_review_scheduler",
+            consumed_by=(
+                "customer_chat._evaluate_bkt_cards",
+                "api.routers.review.due_reviews",
+            ),
+        ),
         # ── FLAGGED (مُعطَّلة افتراضياً — تفعيل اختياري عبر علم) ──
         SkillDescriptor(
             name="dialogue_manager",

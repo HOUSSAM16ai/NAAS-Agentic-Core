@@ -1,41 +1,58 @@
+"""
+استيعاب أصول المعرفة إلى رسم المعرفة والمتّجهات وجداول المحتوى القديمة.
+
+⚠️ **استيرادات `app.*` كسولة عمداً.** `app/core/database.py:137-139` يبني المحرّك وقت
+الاستيراد، فيتطلّب `DATABASE_URL` لمجرّد استيراد هذه الوحدة. وبذلك كان مسار التحقّق
+(`--dry-run`) — الذي لا يمسّ قاعدة بيانات ولا نموذجاً — يموت قبل أن يقرأ ملفّاً واحداً.
+التحقّق من أصل معرفة يجب ألّا يحتاج قاعدة بيانات.
+"""
+
+from __future__ import annotations
+
+import argparse
 import asyncio
 import hashlib
 import json
+import logging
 import os
+import sys
 import uuid
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
-from sqlalchemy import text
 
-from app.core.ai_config import get_ai_config
-from app.core.database import async_session_factory
-from app.core.db_schema import validate_schema_on_startup
-from app.core.gateway.simple_client import SimpleAIClient
-from app.core.logging import get_logger
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from app.core.gateway.simple_client import SimpleAIClient
 
-try:
-    from llama_index.core import Document, VectorStoreIndex
-    from llama_index.vector_stores.supabase import SupabaseVectorStore
 
-    from microservices.research_agent.src.search_engine.retriever import get_embedding_model
-except ImportError:
-    # Fallback for environments without heavy ML dependencies
-    class DummyEmbedding:
-        def get_text_embedding(self, text):
-            return [0.1] * 1024  # aligned with DB schema (1024)
+def _load_vector_stack() -> tuple[type | None, type | None, type | None]:
+    """يُحمِّل حزمة الفهرسة المتّجهية، ويُرجِع ثلاثتها `None` حين تغيب حزم LlamaIndex."""
+    try:
+        from llama_index.core import Document, VectorStoreIndex
+        from llama_index.vector_stores.supabase import SupabaseVectorStore
+    except ImportError:
+        return None, None, None
+    return Document, VectorStoreIndex, SupabaseVectorStore
 
-    def get_embedding_model():
+
+def _load_embedding_model():
+    """يُحمِّل نموذج التضمين الحقيقي، ويسقط إلى بديل ثابت حين تغيب حزم ML الثقيلة."""
+    try:
+        from microservices.research_agent.src.search_engine.retriever import get_embedding_model
+
+        return get_embedding_model()
+    except ImportError:
+
+        class DummyEmbedding:
+            def get_text_embedding(self, text: str) -> list[float]:
+                return [0.1] * 1024  # aligned with DB schema (1024)
+
         return DummyEmbedding()
 
-    # Mock classes if missing
-    Document = None
-    VectorStoreIndex = None
-    SupabaseVectorStore = None
 
-
-# Configure logger
-logger = get_logger("knowledge-ingestion")
+# Configure logger — stdlib, so importing this module never pulls in app settings.
+logger = logging.getLogger("knowledge-ingestion")
 
 
 async def ingest_legacy_content(filepath: Path, metadata: dict, content: str, session):
@@ -43,6 +60,8 @@ async def ingest_legacy_content(filepath: Path, metadata: dict, content: str, se
     Heuristically ingests the file into content_items and content_solutions
     to ensure backward compatibility with the existing API.
     """
+    from sqlalchemy import text
+
     logger.info(f"Syncing {filepath} to legacy content tables...")
 
     # 1. Derive ID
@@ -139,6 +158,12 @@ async def ingest_legacy_content(filepath: Path, metadata: dict, content: str, se
 
 
 async def ingest_file(filepath: Path, client: SimpleAIClient, embed_model):
+    from sqlalchemy import text
+
+    from app.core.database import async_session_factory
+
+    document_cls, index_cls, vector_store_cls = _load_vector_stack()
+
     logger.info(f"Processing {filepath}...")
     content = filepath.read_text()
 
@@ -436,7 +461,7 @@ async def ingest_file(filepath: Path, client: SimpleAIClient, embed_model):
         logger.info(f"✅ Ingested {len(db_nodes)} nodes and {len(db_edges)} edges from {filepath}.")
 
     # 5. Sync to Vectors (Semantic Search)
-    if SupabaseVectorStore and VectorStoreIndex:
+    if vector_store_cls and index_cls and document_cls:
         try:
             logger.info("Indexing to Supabase Vectors...")
             db_url = os.environ.get("DATABASE_URL")
@@ -460,9 +485,9 @@ async def ingest_file(filepath: Path, client: SimpleAIClient, embed_model):
                 # Remove None values
                 vector_metadata = {k: v for k, v in vector_metadata.items() if v is not None}
 
-                doc = Document(text=content, metadata=vector_metadata)
+                doc = document_cls(text=content, metadata=vector_metadata)
 
-                vector_store = SupabaseVectorStore(
+                vector_store = vector_store_cls(
                     postgres_connection_string=pg_url,
                     collection_name="vectors",
                     dimension=1024,  # Enforce 1024 for BAAI/bge-m3
@@ -470,32 +495,164 @@ async def ingest_file(filepath: Path, client: SimpleAIClient, embed_model):
 
                 # Create index (inserts into DB)
                 # We use the same embed_model
-                VectorStoreIndex.from_documents(
-                    [doc], vector_store=vector_store, embed_model=embed_model
-                )
+                index_cls.from_documents([doc], vector_store=vector_store, embed_model=embed_model)
                 logger.info("✅ Indexed to Vectors.")
         except Exception as e:
             logger.error(f"Failed to index vectors: {e}")
 
 
-async def main():
+def build_arg_parser() -> argparse.ArgumentParser:
+    """
+    واجهة سطر الأوامر لسكربت الاستيعاب.
+
+    كانت `main()` لا تقرأ `sys.argv` إطلاقاً بينما `knowledge_ingestion.yml` يستدعيها
+    بمسار ملف و`--url` و`--dry-run`. فالعقد المُعلَن في الـ workflow لم يكن له وجود في
+    السكربت: المسار المُمرَّر يُهمَل بصمت ويُعاد استيعاب `data/knowledge/*.md` بدلاً منه.
+    """
+    parser = argparse.ArgumentParser(
+        prog="ingest_knowledge",
+        description="Ingest knowledge assets into the graph, vectors and legacy content tables.",
+    )
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        type=Path,
+        help="Files to ingest. When omitted, every *.md under data/knowledge/ is used.",
+    )
+    parser.add_argument(
+        "--url",
+        default=None,
+        help="Memory-agent API URL. Informational: ingestion writes through the app database.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate the assets (frontmatter/JSON parse) without touching the database or any model.",
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help=(
+            "DESTRUCTIVE: empty knowledge_nodes/knowledge_edges and drop the vectors table "
+            "before ingesting. Never enable this in CI."
+        ),
+    )
+    return parser
+
+
+def _preview_json(filepath: Path, raw: str) -> bool:
+    """يتحقّق من أنّ ملفّ الكيانات JSON صالح."""
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.error(f"❌ {filepath} is not valid JSON: {exc}")
+        return False
+    keys = sorted(payload) if isinstance(payload, dict) else []
+    print(f"✅ {filepath} — valid JSON, top-level keys: {keys or '(not an object)'}")
+    return True
+
+
+def _preview_frontmatter(filepath: Path, raw: str) -> bool:
+    """يتحقّق من أنّ كتلة الـfrontmatter مغلقة وصالحة وتُمثِّل قاموساً."""
+    parts = raw.split("---", 2)
+    if len(parts) < 3:
+        logger.error(f"❌ {filepath} opens a frontmatter block that is never closed.")
+        return False
+    try:
+        frontmatter = yaml.safe_load(parts[1])
+    except yaml.YAMLError as exc:
+        logger.error(f"❌ {filepath} has invalid frontmatter: {exc}")
+        return False
+    if not isinstance(frontmatter, dict):
+        logger.error(f"❌ {filepath} frontmatter is not a mapping.")
+        return False
+    print(f"✅ {filepath} — frontmatter keys: {sorted(frontmatter)}")
+    return True
+
+
+def preview_file(filepath: Path) -> bool:
+    """
+    يتحقّق من أنّ أصل المعرفة قابل للقراءة والتحليل — بلا قاعدة بيانات وبلا نموذج.
+
+    هذا هو مسار `--dry-run`: بوّابة حقيقية على صحّة الملفّ (frontmatter صالح لملفّات
+    Markdown، JSON صالح لملفّات الكيانات) بدل تشغيلٍ يعبر أخضر بلا أن يقرأ شيئاً.
+    """
+    if not filepath.exists():
+        logger.error(f"❌ {filepath} does not exist.")
+        return False
+
+    try:
+        raw = filepath.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.error(f"❌ {filepath} is unreadable: {exc}")
+        return False
+
+    if filepath.suffix == ".json":
+        return _preview_json(filepath, raw)
+    if raw.startswith("---"):
+        return _preview_frontmatter(filepath, raw)
+
+    print(f"✅ {filepath} — plain document, {len(raw)} characters, no frontmatter.")
+    return True
+
+
+def resolve_paths(requested: list[Path]) -> list[Path]:
+    """يُرجِع الملفّات المطلوبة صراحةً، وإلّا كلّ `*.md` تحت `data/knowledge/`."""
+    if requested:
+        return requested
+    data_dir = Path("data/knowledge")
+    if not data_dir.exists():
+        logger.warning(f"{data_dir} does not exist.")
+        return []
+    return sorted(data_dir.glob("*.md"))
+
+
+def run_dry_run(files: list[Path]) -> int:
+    """يتحقّق من الأصول بلا قاعدة بيانات وبلا نموذج. يُرجِع رمز خروج الصدفة."""
+    print("🔎 Dry run — validating knowledge assets only (no database, no model).")
+    if not files:
+        print("ℹ️ Nothing to validate.")
+        return 0
+    results = [preview_file(path) for path in files]
+    failed = results.count(False)
+    print(f"✨ Validated {len(results)} file(s), {failed} failed.")
+    return 1 if failed else 0
+
+
+async def main() -> int:
+    args = build_arg_parser().parse_args()
+    files = resolve_paths(args.paths)
+
+    if args.dry_run:
+        return run_dry_run(files)
+
+    # الاستيرادات الثقيلة تبدأ هنا — بعد أن ثبت أنّ التشغيل ليس تحقّقاً جافّاً.
+    from sqlalchemy import text
+
+    from app.core.ai_config import get_ai_config
+    from app.core.database import async_session_factory
+    from app.core.db_schema import validate_schema_on_startup
+    from app.core.gateway.simple_client import SimpleAIClient
+
     print("🚀 Starting Knowledge Ingestion (The Ultimate Super Stack)...")
     # Ensure Schema
     await validate_schema_on_startup()
 
-    # Clear existing data to prevent duplicates (since we are force-ingesting demo data)
-    async with async_session_factory() as session:
-        print("🧹 Clearing existing Knowledge Graph & Vectors...")
-        await session.execute(text("DELETE FROM knowledge_edges"))
-        await session.execute(text("DELETE FROM knowledge_nodes"))
-        # Clear vectors completely to reset dimensions if needed
-        try:
-            await session.execute(text("DROP TABLE IF EXISTS vecs.vectors CASCADE"))
-            await session.execute(text("DROP TABLE IF EXISTS vectors CASCADE"))
-        except Exception as e:
-            logger.warning(f"Failed to drop vectors table: {e}")
+    if args.reset:
+        # ⚠️ حذفٌ شامل — يعمل تحت `--reset` وحده. كان يعمل بلا شرط في كل تشغيل، فأيّ
+        # استدعاء من CI على قاعدة بيانات حقيقية كان يمحو رسم المعرفة كاملاً.
+        async with async_session_factory() as session:
+            print("🧹 Clearing existing Knowledge Graph & Vectors...")
+            await session.execute(text("DELETE FROM knowledge_edges"))
+            await session.execute(text("DELETE FROM knowledge_nodes"))
+            # Clear vectors completely to reset dimensions if needed
+            try:
+                await session.execute(text("DROP TABLE IF EXISTS vecs.vectors CASCADE"))
+                await session.execute(text("DROP TABLE IF EXISTS vectors CASCADE"))
+            except Exception as e:
+                logger.warning(f"Failed to drop vectors table: {e}")
 
-        await session.commit()
+            await session.commit()
 
     # Configure AI (The Utilities)
     api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -538,24 +695,25 @@ async def main():
 
         client.generate_text = generate_with_model_override
 
-        embed_model = get_embedding_model()
+        embed_model = _load_embedding_model()
     except Exception as e:
+        # فشل تهيئة النموذج ليس نجاحاً. كان يُرجِع `return` فينتهي التشغيل بـ0 وكأن
+        # الاستيعاب تمّ — «لا فشل صامت» (§0).
         logger.error(f"Failed to initialize AI components: {e}")
-        return
+        return 1
 
-    data_dir = Path("data/knowledge")
-    if not data_dir.exists():
-        logger.warning(f"{data_dir} does not exist.")
-        return
+    if not files:
+        print("ℹ️ Nothing to ingest.")
+        return 0
 
-    files = list(data_dir.glob("*.md"))
     print(f"📂 Found {len(files)} files.")
 
     for md_file in files:
         await ingest_file(md_file, client, embed_model)
 
     print("✨ Ingestion Complete.")
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(main()))

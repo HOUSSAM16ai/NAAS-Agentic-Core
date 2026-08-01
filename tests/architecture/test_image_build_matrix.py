@@ -59,9 +59,7 @@ def test_every_smoke_module_exists_on_disk() -> None:
             continue
         parts = str(smoke).split(".")
         root = (
-            REPO_ROOT
-            if parts[0] in {"microservices", "app"}
-            else REPO_ROOT / str(entry["context"])
+            REPO_ROOT if parts[0] in {"microservices", "app"} else REPO_ROOT / str(entry["context"])
         )
         module = root.joinpath(*parts).with_suffix(".py")
         assert module.is_file(), f"{entry['name']}: smoke module {smoke} → {module} not found"

@@ -510,6 +510,62 @@ jobs:
 
           exit $FAILED
 
+
+  event-stack-live:
+    name: "Event stack — a REAL boot, not a config check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # docker-fullstack-gate.yml validates YAML and never creates a container — cheap,
+    # worth keeping, and not evidence. D-201 shipped Redpanda and Temporal into compose
+    # and nothing ever started them, so the whole event stack sat DORMANT while a
+    # workflow named "full-stack gate" reported green. GitHub runners have Docker; this
+    # job uses it. Images are pull-only — no builds — so it stays fast.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: "Boot the event stack"
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.yml up -d \
+            redpanda redpanda-topics postgres-temporal temporal
+
+      - name: "Topic bootstrap succeeded (it may no longer swallow failures)"
+        run: |
+          set -euo pipefail
+          # `redpanda-topics` is a one-shot container. A non-zero exit now means a
+          # topic could not be created — which used to pass silently behind `|| true`
+          # and left messages disappearing until retention expired.
+          docker wait cogniforge-redpanda-topics > /tmp/topics_exit || true
+          code=$(cat /tmp/topics_exit)
+          docker logs cogniforge-redpanda-topics
+          test "$code" = "0" || { echo "❌ topic bootstrap exited $code"; exit 1; }
+
+      - name: "Install the messaging drivers"
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements-messaging.txt
+
+      - name: "Verify: cluster health, topic shape, round trip, redelivery, DLQ"
+        env:
+          # 19092 is the EXTERNAL listener — see the advertised-address note in
+          # docker-compose.yml. Dialling 9092 from the host would hand back an
+          # unresolvable `redpanda:9092` and hang.
+          KAFKA_BOOTSTRAP_SERVERS: "127.0.0.1:19092"
+          VERIFY_TIMEOUT: "180"
+        run: python scripts/verify_event_stack_docker.py
+
+      - name: "Logs on failure"
+        if: failure()
+        run: docker compose -f docker-compose.yml logs --tail=200 redpanda redpanda-topics temporal
+
+      - name: "Tear down"
+        if: always()
+        run: docker compose -f docker-compose.yml down -v --remove-orphans
+
   required-ci:
     name: required-ci
     runs-on: ubuntu-latest
@@ -522,6 +578,7 @@ jobs:
         test-microservices,
         frontend-tests,
         skills-structural,
+        event-stack-live,
       ]
     if: always() && !cancelled()
     steps:
@@ -536,6 +593,7 @@ jobs:
           echo "test-microservices=${{ needs.test-microservices.result }}"
           echo "frontend-tests=${{ needs.frontend-tests.result }}"
           echo "skills-structural=${{ needs.skills-structural.result }}"
+          echo "event-stack-live=${{ needs.event-stack-live.result }}"
 
           # Allow skipped as a valid success state alongside success
           isValid() {
@@ -548,7 +606,8 @@ jobs:
              ! isValid "${{ needs.test-monolith.result }}" || \
              ! isValid "${{ needs.test-microservices.result }}" || \
              ! isValid "${{ needs.frontend-tests.result }}" || \
-             ! isValid "${{ needs.skills-structural.result }}"; then
+             ! isValid "${{ needs.skills-structural.result }}" || \
+             ! isValid "${{ needs.event-stack-live.result }}"; then
             echo "❌ One or more required checks failed"
             exit 1
           fi

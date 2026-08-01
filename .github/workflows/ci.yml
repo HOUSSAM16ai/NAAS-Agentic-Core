@@ -196,6 +196,11 @@ jobs:
           # A denylist is structurally wrong here: it can never enumerate every dangerous
           # form. argv + shell=False makes injection unrepresentable instead of filtered.
           python scripts/fitness/check_no_shell_true.py
+          # D-199: أوّل بوّابة في هذا المستودع تلمس CSS/JSX. من ٤١ بوّابة لم تكن واحدة
+          # تحرس الواجهة، فبلغت `globals.css` ٣٥٨٤ سطراً بـ٣٨ قيمة مسافة و٣٠ حجم خطّ —
+          # لا بقرار بل لأنّ لا شيء منع التراكم. تفحص أيضاً تباين WCAG AA حسابياً، فلا
+          # ينزلق التباين خلسةً إلى ما دون العتبة.
+          python scripts/fitness/check_design_tokens.py
           # D-191 (ISS-140 ج/د/د-2): the exercise under discussion has exactly one
           # source, and it is the student's own text first. The canonical retrieval
           # literal was copy-pasted at 7 sites feeding 12 call sites, and
@@ -405,6 +410,15 @@ jobs:
       - name: TypeScript typecheck
         shell: bash
         run: npm run typecheck --prefix frontend
+      # D-199: البناء نفسه لم يكن في CI إطلاقاً — أي خطأ يظهر أوّل مرّة في متصفّح
+      # طالب. ومعه ميزانية حجم: الحزمة تنمو بهدوء حتى تصير غير قابلة للتحميل على 3G،
+      # وهي شبكة معظم مستخدمينا. الميزانية تجعل النموّ قراراً لا مفاجأة.
+      - name: Frontend production build + bundle budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build --prefix frontend
+          python scripts/fitness/check_bundle_budget.py
 
   # ── Microservices Skills Structural Check ─────────────────────────────────
   skills-structural:

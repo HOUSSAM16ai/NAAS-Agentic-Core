@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CogniForge">
+  <rect width="512" height="512" rx="96" fill="#fbfaf7"/>
+  <path d="M256 108c-70 0-127 50-127 112 0 38 21 71 54 91v45c0 13 11 24 24 24h98c13 0 24-11 24-24v-45c33-20 54-53 54-91 0-62-57-112-127-112z" fill="none" stroke="#1f5fa8" stroke-width="26" stroke-linejoin="round"/>
+  <path d="M204 356h104M216 396h80" stroke="#24211c" stroke-width="22" stroke-linecap="round"/>
+  <path d="M256 148v112M212 200l44-52 44 52" fill="none" stroke="#24211c" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

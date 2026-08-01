@@ -10,6 +10,7 @@ from app.api.routers import (
     content,
     customer_chat,
     data_mesh,
+    guardian,
     observability,
     review,
     security,
@@ -46,4 +47,6 @@ def base_router_registry() -> list[RouterSpec]:
         (skills.router, ""),
         # D-194: طابور المراجعة المتباعدة — «ماذا أراجع اليوم؟».
         (review.router, ""),
+        # D-196: لوحة وليّ الأمر — الربط بالرضا + التقرير الأسبوعي المُجمَّع.
+        (guardian.router, ""),
     ]

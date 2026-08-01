@@ -213,17 +213,16 @@ async def _evaluate_bkt_cards(
         # تنتهي عند `logger.info`؛ هنا تصير **موعد مراجعة**. جلسة مستقلّة وعزل تامّ:
         # الجدولة لا تكسر دور الطالب أبداً (نفس عقد BKT — D-074).
         with contextlib.suppress(Exception):
-            from app.services.review import ReviewScheduleService
+            from app.services.review import schedule_review_after_evaluation
 
-            async with async_session_factory() as review_db:
-                await ReviewScheduleService(review_db).schedule_from_evaluation(
-                    user_id=user_id,
-                    concept_id=evaluation.concept_id,
-                    evidence_correct=evaluation.evidence_correct,
-                    correctness_signal=evaluation.correctness_signal,
-                    durable_mastery=evaluation.durable_mastery,
-                    support_level=support_level,
-                )
+            await schedule_review_after_evaluation(
+                user_id=user_id,
+                concept_id=evaluation.concept_id,
+                evidence_correct=evaluation.evidence_correct,
+                correctness_signal=evaluation.correctness_signal,
+                durable_mastery=evaluation.durable_mastery,
+                support_level=support_level,
+            )
 
         # D-111: المسار التعلّمي التكيفي — يُشتقّ فوق إتقان BKT ويُسجَّل (telemetry).
         # مُستهلَك خلف الكواليس (لا بطاقة طالب — D-119)؛ معزول داخل suppress.

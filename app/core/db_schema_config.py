@@ -63,6 +63,8 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "bac_exercise_questions",
         # D-194: سجلّ المراجعة المتباعدة (FSRS) — مُلحَق-فقط فوق BKT.
         "student_review_schedule",
+        # D-196: ربط وليّ الأمر بالطالب — برضا الطالب حصراً.
+        "guardian_links",
     }
 )
 
@@ -287,6 +289,46 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"due_at" TIMESTAMPTZ NOT NULL,'
             '"interval_days" DOUBLE PRECISION NOT NULL,'
             '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            ")"
+        ),
+    },
+    # D-196: ربط وليّ الأمر بالطالب. **الرضا شرط بنيوي لا سياسة**: الطالب يُولِّد رمزاً
+    # ويسلّمه لوليّه، والوليّ يستبدله. لا يوجد مسارٌ يربط حساب قاصر بحساب آخر دون فعلٍ
+    # صريح من الطالب نفسه — ولا يوجد عمود يسمح بذلك.
+    "guardian_links": {
+        "columns": [
+            "id",
+            "guardian_user_id",
+            "student_user_id",
+            "link_code",
+            "status",
+            "created_at",
+            "accepted_at",
+            "revoked_at",
+        ],
+        "auto_fix": {},
+        "indexes": {
+            "guardian_user_id": 'CREATE INDEX IF NOT EXISTS "ix_guardian_links_guardian" ON "guardian_links"("guardian_user_id")',
+            "student_user_id": 'CREATE INDEX IF NOT EXISTS "ix_guardian_links_student" ON "guardian_links"("student_user_id")',
+            "link_code": 'CREATE UNIQUE INDEX IF NOT EXISTS "ix_guardian_links_code" ON "guardian_links"("link_code")',
+        },
+        "index_names": {
+            "guardian_user_id": "ix_guardian_links_guardian",
+            "student_user_id": "ix_guardian_links_student",
+            "link_code": "ix_guardian_links_code",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "guardian_links"('
+            '"id" SERIAL PRIMARY KEY,'
+            # فارغ حتى يستبدل الوليُّ الرمز — الرابط يبدأ من الطالب دائماً.
+            '"guardian_user_id" INTEGER REFERENCES "users"("id") ON DELETE CASCADE,'
+            '"student_user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,'
+            '"link_code" VARCHAR(32) NOT NULL,'
+            "\"status\" VARCHAR(16) NOT NULL DEFAULT 'pending' "
+            "CHECK (\"status\" IN ('pending','active','revoked')),"
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
+            '"accepted_at" TIMESTAMPTZ,'
+            '"revoked_at" TIMESTAMPTZ'
             ")"
         ),
     },

@@ -217,4 +217,44 @@ class ReviewScheduleService:
         return due[:limit]
 
 
-__all__ = ["DEFAULT_STREAM", "DueReview", "ReviewScheduleService"]
+async def schedule_review_after_evaluation(
+    *,
+    user_id: int,
+    concept_id: str,
+    evidence_correct: bool,
+    correctness_signal: str,
+    durable_mastery: float,
+    support_level: int | None,
+    now: datetime | None = None,
+) -> ReviewDecision | None:
+    """
+    نقطة الدخول من مسار الدردشة — **تملك جلستها بنفسها**.
+
+    الجلسة تُفتَح هنا لا في المُوجِّه: المُوجِّه طبقة نقل، وإدارة الجلسات منطق نطاق
+    (تفرضه بوّابة `check_router_domain_logic` بدَينٍ مُجمَّد يتقلّص فقط). وهي جلسة
+    **مستقلّة** عن جلسة الدور كي لا يتلوّث دور الطالب بفشل جدولة (D-074).
+    """
+    from app.core.database import async_session_factory
+
+    try:
+        async with async_session_factory() as db:
+            return await ReviewScheduleService(db).schedule_from_evaluation(
+                user_id=user_id,
+                concept_id=concept_id,
+                evidence_correct=evidence_correct,
+                correctness_signal=correctness_signal,
+                durable_mastery=durable_mastery,
+                support_level=support_level,
+                now=now,
+            )
+    except Exception as exc:
+        logger.warning("review_scheduling_session_failed: %s", exc, exc_info=True)
+        return None
+
+
+__all__ = [
+    "DEFAULT_STREAM",
+    "DueReview",
+    "ReviewScheduleService",
+    "schedule_review_after_evaluation",
+]

@@ -334,6 +334,67 @@ def test_a_corrupt_row_does_not_freeze_the_schedule_forever(event_loop, db_sessi
     _run(event_loop, scenario())
 
 
+def test_the_chat_entry_point_owns_its_session(event_loop, db_session) -> None:
+    """
+    `schedule_review_after_evaluation` تفتح جلستها بنفسها.
+
+    الجلسة لا تُدار في المُوجِّه: إدارة الجلسات منطق نطاق، وتفرض ذلك بوّابة
+    `check_router_domain_logic` بدَينٍ مُجمَّد **يتقلّص فقط** — فرفعُه لتمرير وصلةٍ
+    جديدة كان سيحوّل الحدّ المعماري إلى شعار.
+    """
+    from app.services.review import schedule_review_after_evaluation
+
+    async def scenario() -> None:
+        user_id = await _make_user(db_session, "owns-session@example.com")
+        decision = await schedule_review_after_evaluation(
+            user_id=user_id,
+            concept_id="probability",
+            evidence_correct=True,
+            correctness_signal="correct",
+            durable_mastery=0.9,
+            support_level=5,
+            now=NOW,
+        )
+        assert decision is not None and decision.scheduled is True
+
+        # الصفّ كُتب في جلسةٍ أخرى — نراه من هذه الجلسة.
+        count = await db_session.scalar(
+            text(
+                "SELECT COUNT(*) FROM student_review_schedule "
+                "WHERE user_id = :u AND concept_id = 'probability'"
+            ),
+            {"u": user_id},
+        )
+        assert count == 1
+
+    _run(event_loop, scenario())
+
+
+def test_the_chat_entry_point_swallows_a_broken_session(event_loop, monkeypatch) -> None:
+    """فشل فتح الجلسة يُبتلَع — دورُ الطالب لا يسقط بسبب جدوله."""
+    from app.services.review import persistence, schedule_review_after_evaluation
+
+    def boom() -> None:
+        raise RuntimeError("no database today")
+
+    monkeypatch.setattr("app.core.database.async_session_factory", boom)
+
+    result = _run(
+        event_loop,
+        schedule_review_after_evaluation(
+            user_id=1,
+            concept_id="probability",
+            evidence_correct=True,
+            correctness_signal="correct",
+            durable_mastery=0.9,
+            support_level=5,
+            now=NOW,
+        ),
+    )
+    assert result is None
+    assert persistence.schedule_review_after_evaluation is schedule_review_after_evaluation
+
+
 def test_naive_timestamps_from_sqlite_are_normalised_to_utc() -> None:
     """
     SQLite يُعيد أزمنةً عارية وFSRS يرفضها عمداً.

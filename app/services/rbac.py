@@ -19,6 +19,8 @@ from app.core.domain.user import Permission, Role, RolePermission, User, UserRol
 
 STANDARD_ROLE: Final[str] = "STANDARD_USER"
 ADMIN_ROLE: Final[str] = "ADMIN"
+#: D-196: وليّ الأمر — يقرأ تقدّم أبنائه المرتبطين برضاهم، ولا يملك شيئاً غير ذلك.
+GUARDIAN_ROLE: Final[str] = "GUARDIAN"
 
 USERS_READ: Final[str] = "USERS_READ"
 USERS_WRITE: Final[str] = "USERS_WRITE"
@@ -28,9 +30,14 @@ AI_CONFIG_READ: Final[str] = "AI_CONFIG_READ"
 AI_CONFIG_WRITE: Final[str] = "AI_CONFIG_WRITE"
 ACCOUNT_SELF: Final[str] = "ACCOUNT_SELF"
 QA_SUBMIT: Final[str] = "QA_SUBMIT"
+#: D-196: قراءة تقرير تقدّم طالبٍ مرتبط. **قراءة مُجمَّعة فقط** — لا وصول إلى المحادثات.
+GUARDIAN_READ: Final[str] = "GUARDIAN_READ"
 
 DEFAULT_ROLE_PERMISSIONS: Final[dict[str, set[str]]] = {
     STANDARD_ROLE: {QA_SUBMIT, ACCOUNT_SELF},
+    # وليّ الأمر لا يرث `QA_SUBMIT`: حسابه للمتابعة لا للدراسة، وخلطهما يُلوِّث
+    # قياس الطالب بنشاطٍ ليس نشاطه.
+    GUARDIAN_ROLE: {ACCOUNT_SELF, GUARDIAN_READ},
     ADMIN_ROLE: {
         USERS_READ,
         USERS_WRITE,
@@ -52,6 +59,7 @@ PERMISSION_DESCRIPTIONS: Final[dict[str, str]] = {
     AI_CONFIG_WRITE: "تعديل إعدادات الذكاء الاصطناعي",
     ACCOUNT_SELF: "إدارة الحساب الشخصي وتحديث كلمة المرور",
     QA_SUBMIT: "إرسال أسئلة تعليمية",
+    GUARDIAN_READ: "قراءة تقرير تقدّم طالب مرتبط (مُجمَّع فقط — لا محادثات ولا إجابات)",
 }
 
 

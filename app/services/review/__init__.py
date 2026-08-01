@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from .persistence import DueReview, ReviewScheduleService
+from .persistence import DueReview, ReviewScheduleService, schedule_review_after_evaluation
 
-__all__ = ["DueReview", "ReviewScheduleService"]
+__all__ = ["DueReview", "ReviewScheduleService", "schedule_review_after_evaluation"]

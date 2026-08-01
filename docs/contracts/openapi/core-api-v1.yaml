@@ -1592,3 +1592,226 @@ paths:
         '503':
           description: MCPToolSkill disabled
       description: MCP Tool Bridge (flagged)
+  /api/v1/review/due:
+    get:
+      tags:
+      - Spaced Repetition
+      summary: Today's review queue
+      description: >-
+        D-194 — المفاهيم المستحقّة للمراجعة، مرتّبة بوزن الامتحان (معامل المادة ×
+        تواتر الظهور) ثمّ بالتأخّر. وقت الطالب محدود، فالترتيب قرارٌ تربوي لا عرض.
+      operationId: reviewDue
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: stream
+        in: query
+        required: false
+        schema:
+          type: string
+        description: شعبة البكالوريا — تحدّد ترتيب الأولوية. غير المعروفة تسقط للافتراضي.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      responses:
+        '200':
+          description: طابور المراجعة
+        '401':
+          description: غير مُصادَق
+  /api/v1/guardian/link-code:
+    post:
+      tags:
+      - Guardian
+      summary: Issue a guardian link code
+      description: >-
+        D-196 — الطالب يُولِّد رمزاً يسلّمه لوليّه. الربط يبدأ من الطالب دائماً:
+        لا مسار يربط حساب قاصر بحساب آخر دون فعلٍ صريح منه.
+      operationId: guardianIssueLinkCode
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: رمز ربط صالح للاستبدال مرّة واحدة
+        '401':
+          description: غير مُصادَق
+  /api/v1/guardian/link:
+    post:
+      tags:
+      - Guardian
+      summary: Redeem a guardian link code
+      operationId: guardianRedeemLinkCode
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: تمّ الربط
+        '400':
+          description: رمز مجهول أو مُستهلَك أو ربطٌ ذاتي
+        '401':
+          description: غير مُصادَق
+  /api/v1/guardian/students:
+    get:
+      tags:
+      - Guardian
+      summary: Linked students
+      operationId: guardianLinkedStudents
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: الطلاب المرتبطون فعلياً
+        '401':
+          description: غير مُصادَق
+  /api/v1/guardian/students/{student_user_id}/weekly:
+    get:
+      tags:
+      - Guardian
+      summary: Weekly progress report
+      description: >-
+        D-196 — تقريرٌ بالمقادير والمفاهيم فقط. **لا يحمل أيّ نصّ محادثة**: مقتطفٌ
+        واحد يجعله باباً خلفياً إلى الحلّ الذي مُنع منه الطالب (D-113). الحماية
+        بنيوية — الخدمة لا تستعلم عن عمود `content` إطلاقاً.
+      operationId: guardianWeeklyReport
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: student_user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: تقرير الأسبوع
+        '401':
+          description: غير مُصادَق
+        '404':
+          description: >-
+            لا طالب مرتبط. **404 لا 403** عمداً — 403 يؤكّد وجود الحساب.
+  /api/v1/guardian/students/{student_user_id}:
+    delete:
+      tags:
+      - Guardian
+      summary: Revoke a guardian link
+      description: يُعلِّم الصفّ `revoked` ولا يحذفه — أثر من رأى بيانات مَن يبقى.
+      operationId: guardianRevokeLink
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: student_user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: فُكّ الرابط
+        '401':
+          description: غير مُصادَق
+        '404':
+          description: لا طالب مرتبط
+  /api/v1/analytics/retention:
+    get:
+      tags:
+      - Product Analytics
+      summary: Cohort retention
+      description: >-
+        D-197 — احتفاظ الأفواج D1/D7/D30. الفوج يوم التسجيل بتقويم الطالب المحلّي.
+        **الفوج غير الناضج يُرجِع `null` لا صفراً**: صفرٌ يقرأ «فقدناهم» بينما
+        الحقيقة «لم يحن الوقت».
+      operationId: analyticsRetention
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: window_days
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 365
+      responses:
+        '200':
+          description: تقرير الاحتفاظ
+        '401':
+          description: غير مُصادَق
+        '403':
+          description: يتطلّب دور الإدارة
+  /api/v1/analytics/funnel:
+    get:
+      tags:
+      - Product Analytics
+      summary: Conversion funnel
+      description: >-
+        تسجيل ⇒ دور ⇒ مراجعة ⇒ دعوة الوليّ ⇒ قبول الوليّ. كلّ خطوة تتقاطع مع سابقتها
+        فلا يتجاوز التحويل ١٠٠٪.
+      operationId: analyticsFunnel
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: window_days
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 365
+      responses:
+        '200':
+          description: خطوات القُمع
+        '401':
+          description: غير مُصادَق
+        '403':
+          description: يتطلّب دور الإدارة
+  /api/v1/vouchers/redeem:
+    post:
+      tags:
+      - Vouchers
+      summary: Redeem a prepaid voucher
+      description: >-
+        D-198 — idempotent للفاعل نفسه: إعادة الإرسال تُرجِع نفس الحقّ بلا تمديد
+        مزدوج. مستخدمٌ آخر يجرّب رمزاً مُستهلَكاً يُرفَض. الحَكَم قيدٌ فريد في قاعدة
+        البيانات لا فحصٌ في التطبيق.
+      operationId: vouchersRedeem
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: تمّ الاستبدال (أو إعادة إرسالٍ لنفس الفاعل)
+        '400':
+          description: رمز مشوّه أو مجهول أو مُستهلَك أو منتهٍ
+        '401':
+          description: غير مُصادَق
+  /api/v1/vouchers/entitlement:
+    get:
+      tags:
+      - Vouchers
+      summary: Subscription status
+      operationId: vouchersEntitlement
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: حالة الاشتراك
+        '401':
+          description: غير مُصادَق
+  /api/v1/vouchers/issue:
+    post:
+      tags:
+      - Vouchers
+      summary: Issue vouchers (admin)
+      description: الرموز تُعرَض **مرّة واحدة** — لا تُخزَّن إلّا مُجزَّأة (سندٌ لحامله).
+      operationId: vouchersIssue
+      security:
+      - bearerAuth: []
+      responses:
+        '201':
+          description: القسائم المُصدَرة
+        '401':
+          description: غير مُصادَق
+        '403':
+          description: يتطلّب دور الإدارة

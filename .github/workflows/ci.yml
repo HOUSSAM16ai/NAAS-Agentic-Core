@@ -556,11 +556,15 @@ jobs:
           # unresolvable `redpanda:9092` and hang.
           KAFKA_BOOTSTRAP_SERVERS: "127.0.0.1:19092"
           VERIFY_TIMEOUT: "180"
+          VERIFY_HEALTH_TIMEOUT: "60"
         run: python scripts/verify_event_stack_docker.py
 
       - name: "Logs on failure"
         if: failure()
-        run: docker compose -f docker-compose.yml logs --tail=200 redpanda redpanda-topics temporal
+        # --tail=40, not 200. The first failing run dumped ~600 lines of broker chatter
+        # after the verifier's own output, so the actual diagnosis scrolled out of reach
+        # and the cause had to be guessed. Keep the signal near the end of the log.
+        run: docker compose -f docker-compose.yml logs --tail=40 redpanda redpanda-topics temporal
 
       - name: "Tear down"
         if: always()

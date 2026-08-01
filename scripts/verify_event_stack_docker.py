@@ -68,6 +68,10 @@ TEMPORAL_ADDRESS = os.environ.get("TEMPORAL_ADDRESS", "127.0.0.1:7233")
 REDPANDA_CONTAINER = os.environ.get("REDPANDA_CONTAINER", "cogniforge-redpanda")
 TEMPORAL_CONTAINER = os.environ.get("TEMPORAL_CONTAINER", "cogniforge-temporal")
 TOTAL_TIMEOUT = int(os.environ.get("VERIFY_TIMEOUT", "180"))
+#: مهلة انتظار الصحّة لكل خدمة. أقصر من الإجمالية عمداً: compose يكون قد أبلغ
+#: الصحّة أصلاً قبل أن يبدأ هذا السكربت، فالانتظار الطويل هنا يخفي عطب قراءةٍ
+#: خلف مهلةٍ صامتة بدل أن يكشفه بسرعة.
+HEALTH_TIMEOUT = int(os.environ.get("VERIFY_HEALTH_TIMEOUT", "60"))
 MS_PER_DAY = 86_400_000
 
 _PASS: list[str] = []
@@ -106,18 +110,49 @@ def docker_exec(container: str, *args: str, timeout: float = 30.0) -> tuple[int,
 # ── 1. صحّة العنقود ─────────────────────────────────────────────────────────────
 
 
+def _field_says(out: str, label: str, expected: str) -> bool:
+    """
+    هل يقول الحقل `label` القيمةَ `expected` على **سطره**؟
+
+    القراءة سطريّة لا بشريحة ثابتة. المحاولة الأولى كانت
+    `out.split("Healthy:")[1][:20]`، و`rpk` يُبطِّن عمود القيمة بأكثر من عشرين مسافة —
+    فكانت النافذة فراغاً خالصاً، و«صحيح» لا تظهر فيها أبداً. النتيجة: انتظارٌ كامل
+    حتى المهلة على عنقودٍ صحيح تماماً. تنسيقُ أداةٍ خارجية لا يُفترَض، يُقرأ.
+    """
+    for line in out.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith(label.lower()):
+            return expected.lower() in stripped.lower()
+    return False
+
+
+def _await_health(container: str, args: tuple[str, ...], check, label: str) -> None:
+    """ينتظر صحّة خدمة ويُبلِّغ **المخرَج الخام** عند الفشل — لا رسالةً بلا دليل."""
+    deadline = time.time() + HEALTH_TIMEOUT
+    last = "(no output)"
+    while True:
+        code, out = docker_exec(container, *args)
+        last = out.strip() or last
+        if code == 0 and check(out):
+            ok(f"{label} reports healthy")
+            return
+        # حلقة do-while: **تُجرَّب مرّةً على الأقلّ** مهما كانت المهلة. الشرط المُقدَّم
+        # كان يعني أنّ مهلةً منتهية تُنتِج فشلاً بلا أيّ مخرَج خام — أي رسالةَ فشلٍ
+        # بلا دليل، وهي أسوأ ما يمكن أن تُعطيه بوّابة.
+        if time.time() >= deadline:
+            break
+        time.sleep(3)
+    fail(f"{label} never reported healthy within {HEALTH_TIMEOUT}s. Raw output:\n{last[:900]}")
+
+
 def assert_redpanda_healthy() -> None:
     """`cluster health`، لا مجرّد منفذٍ مفتوح."""
-    deadline = time.time() + TOTAL_TIMEOUT
-    last = ""
-    while time.time() < deadline:
-        code, out = docker_exec(REDPANDA_CONTAINER, "rpk", "cluster", "health")
-        last = out.strip()
-        if code == 0 and "Healthy:" in out and "true" in out.split("Healthy:", 1)[1][:20]:
-            ok("Redpanda cluster reports Healthy: true")
-            return
-        time.sleep(3)
-    fail(f"Redpanda never reported healthy within {TOTAL_TIMEOUT}s: {last[:300]}")
+    _await_health(
+        REDPANDA_CONTAINER,
+        ("rpk", "cluster", "health"),
+        lambda out: _field_says(out, "Healthy:", "true"),
+        "Redpanda cluster",
+    )
 
 
 # ── 2. شكل المواضيع كما هو في الواقع ────────────────────────────────────────────
@@ -206,24 +241,12 @@ def _compare(described: object) -> None:
 
 
 def assert_temporal_healthy() -> None:
-    deadline = time.time() + TOTAL_TIMEOUT
-    last = ""
-    while time.time() < deadline:
-        code, out = docker_exec(
-            TEMPORAL_CONTAINER,
-            "temporal",
-            "operator",
-            "cluster",
-            "health",
-            "--address",
-            "temporal:7233",
-        )
-        last = out.strip()
-        if code == 0 and "SERVING" in out.upper():
-            ok("Temporal frontend reports SERVING")
-            return
-        time.sleep(3)
-    fail(f"Temporal never reported healthy within {TOTAL_TIMEOUT}s: {last[:300]}")
+    _await_health(
+        TEMPORAL_CONTAINER,
+        ("temporal", "operator", "cluster", "health", "--address", "temporal:7233"),
+        lambda out: "SERVING" in out.upper(),
+        "Temporal frontend",
+    )
 
 
 # ── 4/5/6. الرحلة الحقيقية عبر الوسيط ───────────────────────────────────────────

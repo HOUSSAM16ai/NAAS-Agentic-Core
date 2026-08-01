@@ -58,6 +58,15 @@ D-204 أثبت حزمة الأحداث حيّاً وترك سؤالاً مفتو
    للصرامة قبل أيّ إنهاء فعلي). واختبارُها كان سطراً واحداً يؤكّد النجاح — أي لا يفحص
    شيئاً؛ صار يفحص **أن يبقى النائب غير مُعتَرَفٍ به**.
 
+**وأوّل تشغيلٍ للبوّابة أخرج عطباً كامناً حقيقياً:** `foundations-service` و
+`content-retrieval-skill` **لا يستطيعان الإقلاع أصلاً**. الاثنان `COPY . .` مسطّح
+و`CMD uvicorn main:app`، بينما `main.py` فيهما يستورد `microservices.<svc>.*`
+مطلقاً ⇒ `ModuleNotFoundError: No module named 'microservices'` عند أوّل استيراد.
+وهو نفس عطب D-173 المُصلَح لـ`conversation-service` — لم يصل هاتين لأنّهما في لا
+compose ولا كتالوج ولم يبنهما شيء قطّ. أُصلحا بنمط `notation-service` المُثبَت،
+و`content-retrieval-skill` كان أيضاً يقرأ `KB_ROOT` بمسار Codespaces مطلق لا وجود
+له داخل صورة. **هذا هو الفرق بين «الكود موجود» و«الكود يعمل».**
+
 **وما جعلته مرئياً بلا تغيير سلوك:** `content_retrieval_skill` (:8009) و
 `foundations_service` (:8010) لهما Dockerfile وعقد OpenAPI، ويعملان في طوبولوجيا
 Codespaces، ولا يظهران في أيّ compose **ولا في الكتالوج** — و`check_service_catalog

@@ -46,7 +46,9 @@
       "context": "./microservices/planning_agent",
       "dockerfile": "Dockerfile",
       "smoke": "microservices.planning_agent.main",
-      "smoke_env": { "SERVICE_NAME": "planning-agent" }
+      "smoke_env": {
+        "SERVICE_NAME": "planning-agent"
+      }
     },
     {
       "name": "memory-agent",
@@ -107,14 +109,18 @@
       "context": "./microservices/reasoning_agent",
       "dockerfile": "Dockerfile",
       "smoke": "microservices.reasoning_agent.main",
-      "smoke_env": { "OPENROUTER_API_KEY": "smoke-not-a-real-key" }
+      "smoke_env": {
+        "OPENROUTER_API_KEY": "smoke-not-a-real-key"
+      }
     },
     {
       "name": "auditor-service",
       "context": "./microservices/auditor_service",
       "dockerfile": "Dockerfile",
       "smoke": "microservices.auditor_service.src.main",
-      "smoke_env": { "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db" }
+      "smoke_env": {
+        "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db"
+      }
     },
     {
       "name": "conversation-service",
@@ -132,17 +138,17 @@
     },
     {
       "name": "content-retrieval-skill",
-      "context": "./microservices/content_retrieval_skill",
-      "dockerfile": "Dockerfile",
-      "smoke": "main",
+      "context": ".",
+      "dockerfile": "microservices/content_retrieval_skill/Dockerfile",
+      "smoke": "microservices.content_retrieval_skill.main",
       "smoke_env": {},
       "not_in_default_compose": "Runs as a uvicorn process in the Codespaces topology (:8009); never added to docker-compose.yml. Built here so the gap is a declared one."
     },
     {
       "name": "foundations-service",
-      "context": "./microservices/foundations_service",
-      "dockerfile": "Dockerfile",
-      "smoke": "main",
+      "context": ".",
+      "dockerfile": "microservices/foundations_service/Dockerfile",
+      "smoke": "microservices.foundations_service.main",
       "smoke_env": {},
       "not_in_default_compose": "Same as content-retrieval-skill (:8010). Its sibling notation-service IS in compose — that asymmetry is real and recorded, not fixed here."
     }

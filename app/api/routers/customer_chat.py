@@ -33,6 +33,7 @@ from app.core.domain.chat import MessageRole
 from app.core.domain.user import User
 from app.deps.auth import CurrentUser, require_permissions
 from app.infrastructure.clients.orchestrator_client import orchestrator_client
+from app.services.analytics.product_events import record_product_event
 from app.services.analytics.tutor_state_service import TutorStateService
 from app.services.auth.token_decoder import decode_token_payload
 from app.services.boundaries.customer_chat_boundary_service import (
@@ -41,6 +42,7 @@ from app.services.boundaries.customer_chat_boundary_service import (
 from app.services.rbac import ADMIN_ROLE, QA_SUBMIT
 from app.services.skills.ws_heartbeat_skill import handle_control_message
 from app.telemetry.path_observer import close_ws_turn, open_ws_turn
+from shared.analytics import EventName
 from shared.chat_protocol.event_protocol import normalize_streaming_event
 
 logger = get_logger(__name__)
@@ -319,6 +321,13 @@ async def chat_stream_ws(
                         local_conversation_id,
                         MessageRole.USER,
                         question,
+                    )
+                    # D-197: تعريف «طالبٌ نشِط» — دورُه. هذا الحدث هو أساس كلّ رقم
+                    # احتفاظ. الكتابة معزولة ولا ترفع (التحليلات لا تكسر دوراً).
+                    await record_product_event(
+                        event_name=EventName.CHAT_TURN_STARTED,
+                        user_id=actor.id,
+                        session_id=local_conversation_id,
                     )
                     history_messages = await persistence_service.get_chat_history(
                         local_conversation_id,

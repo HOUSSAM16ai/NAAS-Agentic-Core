@@ -19,8 +19,10 @@ from pydantic import Field
 from app.core.schemas import RobustBaseModel
 from app.deps.auth import CurrentUser, get_current_user
 from app.deps.review import get_review_schedule_service
+from app.services.analytics.product_events import record_product_event
 from app.services.review import ReviewScheduleService
 from app.services.review.persistence import DEFAULT_STREAM
+from shared.analytics import EventName
 from shared.curriculum import CANONICAL_STREAMS
 
 router = APIRouter(prefix="/api/v1/review", tags=["Spaced Repetition"])
@@ -57,6 +59,12 @@ async def due_reviews(
     selected = stream if stream in CANONICAL_STREAMS else DEFAULT_STREAM
     now = datetime.now(tz=None).astimezone()
     items = await service.due_reviews(current.user.id, now=now, stream=selected, limit=limit)
+    # D-197: خطوة القُمع — هل يصل الطالب فعلاً إلى حلقة المراجعة التي بنيناها؟
+    await record_product_event(
+        event_name=EventName.REVIEW_QUEUE_VIEWED,
+        user_id=current.user.id,
+        props={"due_count": len(items)},
+    )
     return DueReviewResponse(
         total=len(items),
         stream=selected,

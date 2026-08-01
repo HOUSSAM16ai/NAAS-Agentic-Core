@@ -41,7 +41,6 @@ Deps: stdlib + `aiokafka` (requirements-messaging.txt), mirroring the style of
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import subprocess
 import sys
@@ -158,83 +157,82 @@ def assert_redpanda_healthy() -> None:
 # ── 2. شكل المواضيع كما هو في الواقع ────────────────────────────────────────────
 
 
+def parse_topic_list(out: str) -> dict[str, int]:
+    """
+    يقرأ `rpk topic list`: اسم ⇒ عدد الأقسام.
+
+    الجدول ثابت الشكل (`NAME  PARTITIONS  REPLICAS`)، وأبسط بكثير من مسار JSON الذي
+    يختلف بين الإصدارات. البساطة هنا ليست ترفاً: كل صيغة إضافية موضعُ خطأ قراءةٍ آخر،
+    وقد كلّفنا واحدٌ منها تشغيلاً كاملاً بالفعل.
+    """
+    topics: dict[str, int] = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].startswith("cogniforge.") and parts[1].isdigit():
+            topics[parts[0]] = int(parts[1])
+    return topics
+
+
+def parse_retention_ms(out: str) -> int | None:
+    """يقرأ `retention.ms` من مخرَج `rpk topic describe -c`. `None` = غير مذكور."""
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] == "retention.ms" and parts[1].lstrip("-").isdigit():
+            return int(parts[1])
+    return None
+
+
 def assert_topics_match_the_registry() -> None:
     """
     كل موضوع موجود بالأقسام والاحتفاظ اللذين يُعلنهما السجلّ.
 
-    البوّابة الساكنة تقارن الملفّات ببعضها؛ هذه تقارن الملفّات بما أُنشئ فعلاً — والفرق
-    بينهما هو الفرق بين نيّةٍ وواقع.
+    البوّابة الساكنة تقارن الملفّات ببعضها؛ هذه تقارن الملفّات **بما أُنشئ فعلاً** —
+    والفرق بينهما هو الفرق بين نيّةٍ وواقع.
     """
-    code, out = docker_exec(
-        REDPANDA_CONTAINER, "rpk", "topic", "describe", "-p", "--format", "json"
-    )
+    code, out = docker_exec(REDPANDA_CONTAINER, "rpk", "topic", "list")
     if code != 0:
-        # `-p --format json` غير متاح في كل الإصدارات؛ نسقط إلى الوصف النصّي لكل موضوع.
-        _assert_topics_via_text()
+        fail(f"could not list topics. Raw output:\n{out.strip()[:900]}")
         return
-    try:
-        described = json.loads(out)
-    except ValueError:
-        _assert_topics_via_text()
+    live = parse_topic_list(out)
+    if not live:
+        fail(f"`rpk topic list` returned no cogniforge topics. Raw output:\n{out.strip()[:900]}")
         return
-    _compare(described)
 
-
-def _assert_topics_via_text() -> None:
     for topic, spec in TOPIC_SPECS.items():
-        code, out = docker_exec(REDPANDA_CONTAINER, "rpk", "topic", "describe", topic.value)
-        if code != 0:
-            fail(f"topic {topic.value} is missing from the broker: {out.strip()[:200]}")
+        partitions = live.get(topic.value)
+        if partitions is None:
+            fail(f"topic {topic.value} is missing from the broker (listed: {sorted(live)})")
             continue
-        partitions = out.lower().count("partition:") or _partition_rows(out)
-        if partitions and partitions != spec.partitions:
+        if partitions != spec.partitions:
             fail(
                 f"topic {topic.value}: registry declares {spec.partitions} partitions, "
                 f"broker has {partitions} — per-entity ordering is broken"
             )
             continue
-        expected_ms = spec.retention_days * MS_PER_DAY
-        if f"{expected_ms}" not in out:
-            fail(
-                f"topic {topic.value}: retention.ms {expected_ms} "
-                f"({spec.retention_days}d) not reported by the broker"
-            )
-            continue
-        ok(f"topic {topic.value}: {spec.partitions} partitions, {spec.retention_days}d retention")
+        _assert_retention(topic, spec)
 
 
-def _partition_rows(out: str) -> int:
-    """عدّ صفوف الأقسام في الوصف النصّي (السطور التي تبدأ برقم قسم)."""
-    rows = 0
-    for line in out.splitlines():
-        head = line.strip().split(" ", 1)[0]
-        if head.isdigit():
-            rows += 1
-    return rows
-
-
-def _compare(described: object) -> None:
-    """يقارن مخرَج JSON — الشكل يختلف بين الإصدارات فنقرأ دفاعياً."""
-    by_name: dict[str, dict] = {}
-    entries = described if isinstance(described, list) else [described]
-    for entry in entries:
-        if isinstance(entry, dict) and isinstance(entry.get("name"), str):
-            by_name[entry["name"]] = entry
-
-    for topic, spec in TOPIC_SPECS.items():
-        entry = by_name.get(topic.value)
-        if entry is None:
-            fail(f"topic {topic.value} is missing from the broker")
-            continue
-        partitions = entry.get("partitions")
-        count = len(partitions) if isinstance(partitions, list) else partitions
-        if isinstance(count, int) and count != spec.partitions:
-            fail(
-                f"topic {topic.value}: registry declares {spec.partitions} partitions, "
-                f"broker has {count}"
-            )
-            continue
-        ok(f"topic {topic.value}: {spec.partitions} partitions as declared")
+def _assert_retention(topic: Topic, spec) -> None:
+    """يتحقّق من `retention.ms` — ويُبلِّغ المخرَج الخام إن لم يُعثَر عليه."""
+    expected_ms = spec.retention_days * MS_PER_DAY
+    code, out = docker_exec(REDPANDA_CONTAINER, "rpk", "topic", "describe", "-c", topic.value)
+    if code != 0:
+        fail(f"could not describe {topic.value}. Raw output:\n{out.strip()[:600]}")
+        return
+    actual = parse_retention_ms(out)
+    if actual is None:
+        fail(
+            f"topic {topic.value}: retention.ms not reported by the broker. "
+            f"Raw output:\n{out.strip()[:600]}"
+        )
+        return
+    if actual != expected_ms:
+        fail(
+            f"topic {topic.value}: registry declares {spec.retention_days}d ({expected_ms}ms), "
+            f"broker has {actual}ms"
+        )
+        return
+    ok(f"topic {topic.value}: {spec.partitions} partitions, {spec.retention_days}d retention")
 
 
 # ── 3. Temporal ─────────────────────────────────────────────────────────────────

@@ -265,8 +265,11 @@ CogniForge is an educational AI platform for Algerian high-school students prepa
 
 في الحالتين الواجهةُ الخلفية على **8000**. أمّا الخدمات المصغّرة فلها **مساران حقيقيان**:
 `.devcontainer/supervisor.sh` يُقلعها كعمليات uvicorn (STEP 4D→4L) عند توفّر الأسرار،
-و`docker compose -f docker-compose.yml up -d` يُقلع الحزمة الكاملة (12 حاوية صحّية —
-إثبات حيّ في D-182). **ليست dormant افتراضياً** — هذا ادّعاء مؤرَّخ سقط.
+و`docker compose -f docker-compose.yml up -d` يصف **28 خدمة**. ⚠️ **مسار uvicorn هو
+المُثبَت باستمرار** (الخدمات تُقلَع فيه، واختبارات العقود تبني تطبيقاتها الحقيقية في كل
+PR)؛ أمّا Docker فآخر تشغيلٍ كامل له كان **2026-07-19 بخمس خدمات مستثناة** (D-172)،
+ولا يُقلِع CI حاويةً إلّا في وظيفة `event-stack-live` (D-204 — Redpanda وTemporal فقط).
+الثماني خدمات التطبيقية **غير مُقلَعة في CI** — لا تُقرأ الطوبولوجيا (ب) كأنّها محروسة.
 
 **البنية التحتية المصاحبة:** Grafana :3001 · Prometheus :9090 · Redis :6379 (العملية تعمل
 لكن التطبيق يستعمل `InMemoryCache` ما لم يُضبَط `REDIS_URL`) · PostgreSQL عبر Supabase
@@ -308,7 +311,8 @@ Runtime topology — **طوبولوجيتان حقيقيتان، لا واحدة
       orchestrator :8006 · research :8007 · reasoning :8008 · content-retrieval :8009
       foundations :8010 · notation :8011 · Prometheus :9090 · Grafana :3001
 
-  (ب) Docker Compose (`docker-compose.yml` — الهدف المعماري؛ 12 حاوية، D-182)
+  (ب) Docker Compose (`docker-compose.yml` — الهدف المعماري؛ **28 خدمة**، منها حزمة
+      الأحداث وحدها محروسة حياً في CI — D-204)
       api-gateway :8000 · planning :8001 · memory :8002 · user :8003 · observability :8005
       orchestrator :8006 · research :8007 · reasoning :8008 · auditor :8009
       conversation :8010 · notation :8011 · frontend :3000 · Postgres مستقلّة لكل خدمة

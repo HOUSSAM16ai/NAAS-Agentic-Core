@@ -119,3 +119,63 @@ def test_container_commands_are_argv_never_a_shell(command: str) -> None:
     source = SCRIPT.read_text(encoding="utf-8")
     assert "shell=True" not in source
     assert 'subprocess.run(\n            ["docker", "exec", container, *args]' in source
+
+
+# ── قراءة جداول rpk ─────────────────────────────────────────────────────────────
+
+RPK_TOPIC_LIST = """NAME                                    PARTITIONS  REPLICAS
+cogniforge.dead-letter.v1               1           1
+cogniforge.learning.evaluated.v1        3           1
+cogniforge.notifications.requested.v1   1           1
+cogniforge.product.events.v1            3           1
+"""
+
+RPK_DESCRIBE_CONFIGS = """CONFIGS
+=======
+cleanup.policy      delete       DEFAULT_CONFIG
+retention.ms        2592000000   DYNAMIC_TOPIC_CONFIG
+segment.bytes       134217728    DEFAULT_CONFIG
+"""
+
+
+def test_the_topic_table_is_parsed_into_partition_counts() -> None:
+    parsed = _load().parse_topic_list(RPK_TOPIC_LIST)
+    assert parsed == {
+        "cogniforge.dead-letter.v1": 1,
+        "cogniforge.learning.evaluated.v1": 3,
+        "cogniforge.notifications.requested.v1": 1,
+        "cogniforge.product.events.v1": 3,
+    }
+
+
+def test_the_header_row_is_not_mistaken_for_a_topic() -> None:
+    """`NAME PARTITIONS REPLICAS` ليس موضوعاً — والعمود الثاني ليس رقماً فيه."""
+    assert "NAME" not in _load().parse_topic_list(RPK_TOPIC_LIST)
+
+
+def test_topics_from_other_projects_are_ignored() -> None:
+    """الوسيط قد يحمل مواضيع أخرى؛ نحن نتحقّق من مواضيعنا فقط."""
+    mixed = RPK_TOPIC_LIST + "some.other.topic   9   1\n"
+    assert "some.other.topic" not in _load().parse_topic_list(mixed)
+
+
+def test_retention_is_read_from_the_config_table() -> None:
+    assert _load().parse_retention_ms(RPK_DESCRIBE_CONFIGS) == 2_592_000_000
+
+
+def test_a_missing_retention_line_returns_none_rather_than_zero() -> None:
+    """
+    صفرٌ هنا يعني «احتفاظ صفر» — أي كذبة. الغياب يُبلَّغ غياباً (§0).
+    """
+    assert _load().parse_retention_ms("CONFIGS\n=======\ncleanup.policy delete DEFAULT\n") is None
+
+
+def test_the_registry_and_the_parsed_table_agree_on_every_topic() -> None:
+    """
+    عقدُ هذا الاختبار: تركيبة `TOPIC_SPECS` هي ما يبحث عنه المُتحقِّق حياً — فلو أُضيف
+    موضوع بلا تحديث الحزمة، ظهر هنا لا في الإنتاج.
+    """
+    module = _load()
+    live = module.parse_topic_list(RPK_TOPIC_LIST)
+    for topic, spec in module.TOPIC_SPECS.items():
+        assert live[topic.value] == spec.partitions

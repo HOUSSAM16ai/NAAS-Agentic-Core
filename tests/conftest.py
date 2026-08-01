@@ -38,7 +38,7 @@ from contextlib import suppress
 import pytest
 
 with suppress(ImportError):
-    from app.core.domain import audit, chat, mission, user  # noqa: F401
+    from app.core.domain import audit, chat, content, mission, user  # noqa: F401
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -332,7 +332,7 @@ def db_lifecycle(event_loop: asyncio.AbstractEventLoop, request: pytest.FixtureR
                 import microservices.user_service.models  # noqa: F401
         else:
             # Ensure monolith models are loaded
-            from app.core.domain import audit, user  # noqa: F401
+            from app.core.domain import audit, content, user  # noqa: F401
 
         # Deduplicate indexes to handle potential accumulation from multiple test runs
         # or conflicts between Monolith and Microservice models extending the same table

@@ -61,6 +61,10 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "tutor_state",
         "bac_exercises",
         "bac_exercise_questions",
+        # D-200: مخزن المحتوى الذي تستعلمه `/v1/content/*` — كان مُعرَّفاً في ORM
+        # لا يستورده أحد، فلم يُنشئه مسار الإقلاع أبداً (انظر تعليق REQUIRED_SCHEMA).
+        "content_items",
+        "content_solutions",
         # D-194: سجلّ المراجعة المتباعدة (FSRS) — مُلحَق-فقط فوق BKT.
         "student_review_schedule",
         # D-196: ربط وليّ الأمر بالطالب — برضا الطالب حصراً.
@@ -243,6 +247,81 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"support_level" INTEGER,'
             '"delay_hours" DOUBLE PRECISION,'
             '"novel_item" BOOLEAN NOT NULL DEFAULT FALSE'
+            ")"
+        ),
+    },
+    # D-200: مخزن المحتوى. **عطبٌ كامن حقيقي كُشِف عند توصيل الترتيب:**
+    # `app/api/routers/content.py` يستعلم `content_items` في ثلاثة مسارات (والأداة
+    # `services/chat/tools/curriculum.py` في رابع)، بينما الجدول لم يكن مُسجَّلاً هنا،
+    # ونموذج SQLModel في `app/core/domain/content.py` **لا يستورده أيّ ملفّ** فلا يدخل
+    # `SQLModel.metadata` أصلاً. أي أنّ الجدول لم يكن يُنشَأ بأيّ مسار إقلاع: على قاعدة
+    # بيانات نظيفة كانت `/v1/content/search` تُرجِع 500. التسجيل هنا هو مسار المخطط
+    # الوحيد (شبكة الساندبوكس تحجب منافذ Postgres — CLAUDE.md §0).
+    "content_items": {
+        "columns": [
+            "id",
+            "type",
+            "title",
+            "level",
+            "subject",
+            "set_name",
+            "year",
+            "lang",
+            "md_content",
+            "source_path",
+            "sha256",
+            "updated_at",
+        ],
+        "auto_fix": {},
+        "indexes": {
+            # الاستعلام الحارّ للبحث: تصفية بالحقلين معاً قبل الترتيب الحتمي.
+            "subject": 'CREATE INDEX IF NOT EXISTS "ix_content_items_subject_level" ON "content_items"("subject","level")',
+            "year": 'CREATE INDEX IF NOT EXISTS "ix_content_items_year" ON "content_items"("year")',
+        },
+        "index_names": {
+            "subject": "ix_content_items_subject_level",
+            "year": "ix_content_items_year",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "content_items"('
+            '"id" VARCHAR(100) PRIMARY KEY,'
+            "\"type\" VARCHAR(50) NOT NULL DEFAULT 'exercise',"
+            '"title" TEXT,'
+            '"level" VARCHAR(50),'
+            '"subject" VARCHAR(100),'
+            '"set_name" VARCHAR(100),'
+            '"year" INTEGER,'
+            "\"lang\" VARCHAR(10) NOT NULL DEFAULT 'ar',"
+            '"md_content" TEXT NOT NULL,'
+            '"source_path" VARCHAR(255),'
+            '"sha256" VARCHAR(64),'
+            '"updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            ")"
+        ),
+    },
+    # الحلّ النموذجي منفصلٌ عن التمرين بنيوياً — لأنّ D-113 يمنع تسليمه للطالب، وفصل
+    # الجدول يجعل «سلّمنا الحلّ بالخطأ» غير مُمثَّل في استعلام البحث بدل أن يكون
+    # مُرشَّحاً يعتمد على انتقاء الأعمدة.
+    "content_solutions": {
+        "columns": [
+            "content_id",
+            "solution_md",
+            "steps_json",
+            "final_answer",
+            "verified_by",
+            "updated_at",
+        ],
+        "auto_fix": {},
+        "indexes": {},
+        "index_names": {},
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "content_solutions"('
+            '"content_id" VARCHAR(100) PRIMARY KEY,'
+            '"solution_md" TEXT NOT NULL,'
+            '"steps_json" TEXT,'
+            '"final_answer" TEXT,'
+            '"verified_by" VARCHAR(100),'
+            '"updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
             ")"
         ),
     },

@@ -1,6 +1,23 @@
 # Runtime Truth Lock
-> Last updated: **2026-07-29** | Branch: `claude/documentation-system-update-i0td9p` (D-188/D-189)
-> Previous: `claude/probability-exercise-2024-v7agr3` (D-185)
+> Last updated: **2026-08-01** | Branch: `claude/smart-education-platform-s2of5b` (D-193→D-200)
+> Previous: `claude/documentation-system-update-i0td9p` (D-188/D-189)
+
+## Product Layer + Design System + Ranked Retrieval (2026-08-01, D-193→D-200)
+
+| المكوّن | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`shared/curriculum/registry.py`** (D-193 — ٣٧ مفهوماً) | **ACTIVE** | dep-free؛ `bkt_engine.classify_concept` يُفوِّض إليه حصراً (حُذِفت `_CONCEPT_PATTERNS`)؛ برهان حيّ: سؤال فيزياء/علوم صار يُصنَّف بدل السقوط إلى `"general"`. `classify` تُرجِع `None` لا `"general"`. |
+| **`shared/textnorm.py`** (المُطبِّع الموحّد) | **ACTIVE** | مُستهلَك من `shared/curriculum` و`shared/retrieval`؛ NFKD + حذف `Mn` + طيّ صريح للألف/التاء المربوطة/الألف المقصورة. |
+| **`shared/scheduling/fsrs.py` + `ReviewSchedulerSkill`** (D-194) | **ACTIVE** | FSRS-5 حتمي (يرفع `SchedulingError`)؛ موصول حياً من نتيجة BKT في `customer_chat_support/pedagogy.py` داخل `try/except` معزول؛ `GET /api/v1/review/due`؛ جدول `student_review_schedule` مُلحَق-فقط. برهان: إجابة صحيحة بسقالة ⇒ ١٫٢ يوم، وبلا سقالة ⇒ ١٥٫٧. |
+| **`shared/habit/streak.py`** (D-195) | **ACTIVE** | حسابٌ بتقويم `Africa/Algiers`؛ اختبار يُثبت أنّ الحساب على UTC يكسر مواظبة من يدرس بعد منتصف الليل محلّياً. |
+| **`app/services/guardian/`** (D-196) | **ACTIVE** | ربطٌ برضا الطالب (`guardian_user_id` يبدأ `NULL`)؛ `is_linked` بوّابة كلّ قراءة؛ غير المرتبط **404**. اختبار **بنيوي** يقرأ المصدر ويُثبت أنّ التقرير لا يستعلم `content` إطلاقاً. |
+| **`shared/analytics/{events,retention}.py`** (D-197) | **ACTIVE** | قائمة أحداث مغلقة تُرفَض خارجها **عند الكتابة**؛ الفوج غير الناضج يُرجِع `null` لا صفراً؛ القُمع يتقاطع فلا يتجاوز ١٠٠٪. |
+| **`shared/voucher/` + `app/services/billing/`** (D-198) | **ACTIVE** | الرمز مُخزَّن **مُجزَّأً**؛ الاستبدال الواحد مفروضٌ بقيد فريد في قاعدة البيانات لا بفحصٍ في التطبيق؛ اختبار تزاحمٍ يُثبت أنّ الاستبدال المزدوج يفشل بـ`VoucherRedemptionError`. **لا بوّابة دفع** — SATIM مقعد موثَّق بصفر كود. |
+| **`frontend/app/styles/tokens.css` + بوّابتاها** (D-199) | **ACTIVE (CI · frontend-tests)** | `check_design_tokens` **تحسب** تباين WCAG AA لكل زوج (لا تقرأ رقماً من تعليق)؛ `check_bundle_budget` تُفشِل عند غياب البناء لا تمرّ بصفر؛ صفر `@import` من نطاق ثالث. |
+| **`shared/retrieval/ranking.py`** (D-200) | **ACTIVE** | dep-free (stdlib + `textnorm`)؛ موصول في `app/api/routers/content.py:search_content` بديلاً عن `LIKE '%q%'`؛ ١٠ اختبارات على قاعدة بيانات حقيقية تُثبت الترتيب والتطبيع وحدود الكلمات؛ **100% سطراً وتفرّعاً**. |
+| **جدولا `content_items` / `content_solutions`** | **ACTIVE (كانا غائبين عن كل مسار إقلاع)** | عطبٌ كامن حقيقي: مُستعلَمان في ٤ مواضع، وغير مُسجَّلين في `REQUIRED_SCHEMA`، ونموذج ORM بلا مستورِد ⇒ خارج `SQLModel.metadata`. كانت `/v1/content/search` تُرجِع **500** على قاعدة نظيفة. مُسجَّلان الآن. |
+| **الاسترجاع المتّجهي** (`embedding` · HNSW · `CrossEncoder`) | **DORMANT (بلا ادّعاء)** | موجود في المستودع، **صفر نداء وقت الطلب**. D-200 يُصلح المُرشِّح المعجمي فقط؛ دمج المتّجهات مُرشِّح ثانٍ فوق نفس الواجهة — لا يُعلَن ACTIVE قبل البرهان الثلاثي. |
+| **Kafka · Temporal · خدمة استرجاع مستقلّة** | **PLANNED (صفر كود)** | لم تبدأ. لا تُذكر كقدرة. |
 
 ## Outbound Trace Layer + Memory Coherence Gate (2026-07-29, D-188/D-189)
 

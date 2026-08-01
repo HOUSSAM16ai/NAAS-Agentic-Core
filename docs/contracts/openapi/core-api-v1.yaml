@@ -1427,9 +1427,62 @@ paths:
       - CRUD
       summary: Search Content
       operationId: contentSearch
+      parameters:
+      - name: q
+        in: query
+        required: false
+        description: Search query. Absent means browse — results are declared unranked.
+        schema:
+          type: string
+      - name: level
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: subject
+        in: query
+        required: false
+        schema:
+          type: string
       responses:
         '200':
-          description: Content search results
+          description: Content search results, ranked by deterministic lexical relevance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, ranking]
+                properties:
+                  ranking:
+                    type: string
+                    enum: [deterministic_lexical, unranked]
+                    description: >-
+                      How the results were ordered. Declared in the contract so a
+                      consumer never has to guess whether relevance was computed.
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, type]
+                      properties:
+                        id: {type: string}
+                        type: {type: string}
+                        title: {type: string, nullable: true}
+                        level: {type: string, nullable: true}
+                        subject: {type: string, nullable: true}
+                        year: {type: integer, nullable: true}
+                        lang: {type: string, nullable: true}
+                        relevance:
+                          type: number
+                          format: float
+                          nullable: true
+                          minimum: 0.0
+                          maximum: 1.0
+                          description: Null when browsing without a query.
+                        matched_terms:
+                          type: array
+                          items: {type: string}
+                          description: Why this result appeared — makes a bad hit diagnosable.
       description: Search Content
   /v1/content/{id}:
     get:

@@ -13,7 +13,7 @@
 |---|---|---|
 | `ci.yml` | `lint` | `ruff check .` + `ruff format --check .` |
 | `ci.yml` | `contracts` | gateway/provider parity (`scripts/fitness/check_gateway_provider_contracts.py` + `tests/contracts/`) |
-| `ci.yml` | `guardrails` | `ci_guardrails.py` + `check_no_app_imports_in_microservices.py --strict` + `check_route_registry_parity.py` + `check_tracing_gate.py` + `check_test_hygiene.py` + `check_legacy_invariants.py` + `check_model_chain_parity.py` + `check_no_cross_service_imports.py` + `check_ports_consistency.py` + `check_single_brain_control_plane.py` + `check_core_kernel_acl.py` + `check_abstraction_consumed.py` + `check_notation_definable.py` + `check_notation_parity.py` + `check_intent_single_source.py` + `check_no_shell_true.py` + `check_correlated_http.py` |
+| `ci.yml` | `guardrails` | `ci_guardrails.py` + `check_no_app_imports_in_microservices.py --strict` + `check_route_registry_parity.py` + `check_tracing_gate.py` + `check_test_hygiene.py` + `check_legacy_invariants.py` + `check_model_chain_parity.py` + `check_no_cross_service_imports.py` + `check_ports_consistency.py` + `check_single_brain_control_plane.py` + `check_core_kernel_acl.py` + `check_abstraction_consumed.py` + `check_notation_definable.py` + `check_notation_parity.py` + `check_intent_single_source.py` + `check_no_shell_true.py` + `check_correlated_http.py` + `check_design_tokens.py` + `check_topic_contract_parity.py` + `check_model_registry.py` + `check_redaction_parity.py` |
 | `ci.yml` | `frontend-tests` | node tests + `server.js` syntax + lockfile sync + **D-185:** OpenAPI-generated TS types are current (`generate_frontend_types.py --check`) + `npm run typecheck` |
 | `skills-doctrine-gate.yml` | `check_skills_doctrine` | every skill imports from `doctrine.py`; ~15 `check_*_wired` token-assertions (BaseSkill adoption preserves all) |
 | `ci.yml` | `test` | full pytest suite (`tests/`) |
@@ -72,3 +72,12 @@ git commit -m "runtime-truth: <reason>"
 | `check_no_new_any.py` | صفر `Any` على `app/integration/`؛ الباقي يتقلّص فقط | 141 |
 | `check_router_domain_logic.py` | منطق النطاق لا ينمو في `app/api/routers/` | 13 |
 | `check_docs_runtime_parity.py` | **وُصِلت أخيراً** — كانت بوّابةً لا تحرس شيئاً (غير مُشغَّلة في أيّ workflow) | — |
+
+
+## D-201/D-202 — البوّابتان الجديدتان (2026-08-01)
+
+| البوّابة | ما تفرضه | لماذا |
+|---------|----------|-------|
+| `check_topic_contract_parity.py` | سجلّ المواضيع (`shared/messaging/topics.py`) == قنوات عقد AsyncAPI == المواضيع المُنشأة في `docker-compose.yml`. الاتجاهان محروسان. | ثلاث نسخٍ من حقيقةٍ واحدة تتباعد حتماً (D-192). موضوعٌ في الكود بلا قناة لا يعرفه مستهلكٌ خارجي؛ وقناةٌ بلا موضوع عقدٌ يعِد بما لا يُنشَر. وموضوعٌ غير مُنشأ صراحةً يعتمد على `auto.create.topics` — حيث يُنشئ خطأٌ مطبعي واحد موضوعاً بلا مستهلك يبتلع الرسائل بصمتٍ حتى ينتهي الاحتفاظ. |
+| `check_redaction_parity.py` | الحرفيات التي تُعرِّف «الجواب النهائي» متطابقة بين عقل المونوليث وعقل الأوركستريتور. | D-113 يفرضه عقلان بنسختين. انحرافُ تعبيرٍ نمطي واحد يعني مساراً يحجب ومساراً **يسرّب**، والطالب لا يعرف أيّ عقلٍ أجابه. قاعدة D-013 النثرية مُثبَتُ الخرق — لذلك أُتمِتت في D-174 لسلسلة النماذج، وهنا للحجب (D-203). |
+| `check_model_registry.py` | كل نموذج في `MODEL_CHAIN` مُسجَّل بقدراتٍ ودليلٍ مؤرَّخ؛ لا نموذج محظورٍ كلّياً في السلسلة؛ الصدارة تستوفي `REQUIRED_FOR_PRIMARY`. | قاعدة «لا نموذج تفكير-فقط في الصدارة» كانت تعليقاً في رأس ملفّ. التعليق لم يمنع ISS-079: نموذجٌ يُرجِع `content=None` تصدّر السلسلة، فقرأ طالبٌ حقيقي «pepepe aaaa». |

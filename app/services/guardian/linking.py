@@ -123,6 +123,18 @@ class GuardianLinkService:
             for link in rows.scalars().all()
         ]
 
+    async def linked_guardian_ids(self) -> list[int]:
+        """
+        كلّ وليٍّ له رابطٌ نشط — مدخل سير العمل الأسبوعي (D-201).
+
+        مرتّبة ومُزالة التكرار كي يكون السير **حتمياً**: ترتيبٌ يتغيّر بين تشغيلين
+        يجعل «أين توقّف» سؤالاً بلا إجابة عند استئنافٍ بعد عطب.
+        """
+        rows = await self.db.execute(
+            select(GuardianLink.guardian_user_id).where(GuardianLink.status == "active")
+        )
+        return sorted({int(guardian_id) for guardian_id in rows.scalars().all()})
+
     async def is_linked(self, guardian_user_id: int, student_user_id: int) -> bool:
         """
         بوّابة التفويض الوحيدة لكلّ قراءة تخصّ طالباً.

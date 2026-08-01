@@ -259,7 +259,7 @@ After running `docker compose -f docker-compose.yml up -d`:
 
 **Proper fix** (requires ADR):
 - Replace lexical classifier with embedding-based or LLM-based classification.
-- Write ADR in `docs/architecture/adr/` before implementation.
+- Write ADR in `docs/adr/` before implementation.
 
 ### G2 — Fix Hidden DOM Leakage (ISS-028)
 1. Add `inert={!isSidebarOpen || undefined}` to the `.sidebar` div in `CogniForgeApp.jsx`.

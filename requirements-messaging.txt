@@ -1,0 +1,16 @@
+# Optional runtime dependencies for the event bus and durable workflows (D-201).
+#
+# Deliberately NOT in requirements.txt. Neither driver is needed to run CogniForge:
+# without KAFKA_BOOTSTRAP_SERVERS the in-memory bus carries every product event, and
+# without TEMPORAL_ADDRESS the worker refuses to start with a clear message rather than
+# pretending. Installing a broker client into every environment — CI included — would
+# buy nothing and slow every build.
+#
+# Install when you actually run the brokers:
+#     pip install -r requirements-messaging.txt
+#
+# See docs/adr/ADR-007-event-streaming-kafka.md and
+#     docs/adr/ADR-008-durable-workflows-temporal.md
+
+aiokafka>=0.12,<0.13
+temporalio>=1.8,<2.0

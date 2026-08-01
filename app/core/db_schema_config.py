@@ -75,6 +75,8 @@ _ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "vouchers",
         "voucher_redemptions",
         "entitlements",
+        # D-201: صندوق صادر الإشعارات — المستهلك الحيّ لناقل الأحداث.
+        "notification_outbox",
     }
 )
 
@@ -247,6 +249,45 @@ REQUIRED_SCHEMA: Final[dict[str, TableSchemaConfig]] = {
             '"support_level" INTEGER,'
             '"delay_hours" DOUBLE PRECISION,'
             '"novel_item" BOOLEAN NOT NULL DEFAULT FALSE'
+            ")"
+        ),
+    },
+    # D-201: صندوق صادر الإشعارات. `event_id` **فريد** — وهو ما يجعل إعادة تسليم
+    # الحدث من الناقل لا تُنتِج إشعاراً ثانياً. الحَكَم قيدٌ في قاعدة البيانات لا فحصٌ
+    # في التطبيق (نفس درس D-198: «افحص ثمّ اكتب» نافذة سباق).
+    "notification_outbox": {
+        "columns": [
+            "id",
+            "event_id",
+            "user_id",
+            "channel",
+            "template",
+            "payload_json",
+            "status",
+            "created_at",
+            "sent_at",
+        ],
+        "auto_fix": {},
+        "indexes": {
+            "event_id": 'CREATE UNIQUE INDEX IF NOT EXISTS "ix_notification_outbox_event_id" ON "notification_outbox"("event_id")',
+            "status": 'CREATE INDEX IF NOT EXISTS "ix_notification_outbox_status" ON "notification_outbox"("status","created_at")',
+        },
+        "index_names": {
+            "event_id": "ix_notification_outbox_event_id",
+            "status": "ix_notification_outbox_status",
+        },
+        "create_table": (
+            'CREATE TABLE IF NOT EXISTS "notification_outbox"('
+            '"id" SERIAL PRIMARY KEY,'
+            '"event_id" VARCHAR(64) NOT NULL,'
+            '"user_id" INTEGER,'
+            "\"channel\" VARCHAR(32) NOT NULL DEFAULT 'in_app',"
+            '"template" VARCHAR(64) NOT NULL,'
+            '"payload_json" TEXT,'
+            "\"status\" VARCHAR(16) NOT NULL DEFAULT 'pending' "
+            "CHECK (\"status\" IN ('pending','sent','failed')),"
+            '"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),'
+            '"sent_at" TIMESTAMPTZ'
             ")"
         ),
     },

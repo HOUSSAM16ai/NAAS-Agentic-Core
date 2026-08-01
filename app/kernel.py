@@ -21,9 +21,12 @@ import logging
 import weakref
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from fastapi import FastAPI
+
+if TYPE_CHECKING:
+    from app.services.messaging.relay import RelayHandle
 
 from app.core.agents.system_principles import (
     validate_architecture_system_principles,
@@ -255,6 +258,10 @@ class RealityKernel:
         except Exception:
             logger.warning("⚠️ Failed to start Redis Event Bridge", exc_info=True)
 
+        # D-201 — ناقل الأحداث: تسجيل المشتركين ثمّ إطلاق حلقة الاستهلاك.
+        # الترتيب مقصود: حلقةٌ تبدأ قبل التسجيل تسحب أحداثاً بلا مستهلك فتُسقِطها.
+        messaging_relay = await _start_messaging_relay()
+
         # Pre-warm LangGraph local engine (catches import errors at startup)
         try:
             from app.services.chat.local_graph import get_local_graph
@@ -268,6 +275,10 @@ class RealityKernel:
         try:
             yield
         finally:
+            # Stop the messaging relay first: a consumer still draining while the
+            # database session factory is torn down logs failures that mean nothing.
+            await _stop_messaging_relay(messaging_relay)
+
             # Shutdown Redis Event Bridge
             try:
                 await redis_bridge.stop()
@@ -282,6 +293,35 @@ class RealityKernel:
                 logger.warning("⚠️ Failed to stop observability sync", exc_info=True)
 
             logger.info("👋 CogniForge System Shutting Down...")
+
+
+async def _start_messaging_relay() -> "RelayHandle | None":
+    """
+    يُقلع حلقة الرسائل (D-201) — استيرادٌ كسول فلا تتحمّل النواة تبعية الناقل.
+
+    الفشل هنا لا يمنع الإقلاع: الناقل تابعٌ لا أصل، ودورُ الطالب يعمل بدونه.
+    """
+    try:
+        from app.services.messaging.relay import RelayHandle
+
+        relay = RelayHandle()
+        await relay.start()
+        logger.info("✅ Messaging relay started")
+        return relay
+    except Exception:
+        logger.warning("⚠️ Failed to start messaging relay", exc_info=True)
+        return None
+
+
+async def _stop_messaging_relay(relay: "RelayHandle | None") -> None:
+    """يوقف حلقة الرسائل. آمنٌ إن لم تُقلع."""
+    if relay is None:
+        return
+    try:
+        await relay.stop()
+        logger.info("✅ Messaging relay stopped")
+    except Exception:
+        logger.warning("⚠️ Failed to stop messaging relay", exc_info=True)
 
 
 def _validate_contract_alignment(app: FastAPI) -> None:

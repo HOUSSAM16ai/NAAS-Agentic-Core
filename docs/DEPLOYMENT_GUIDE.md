@@ -418,7 +418,7 @@ Access: http://localhost:9090/alerts
 ## 📚 Additional Resources
 
 - [Platform Documentation](../docs/MICROSERVICES_PLATFORM.md)
-- [Architecture Decision Records](../docs/adrs/)
+- [Architecture Decision Records](../docs/adr/)
 - [API Documentation](../docs/api/)
 - [Runbooks](../docs/runbooks/)
 

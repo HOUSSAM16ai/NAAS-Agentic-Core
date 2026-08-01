@@ -1,0 +1,168 @@
+asyncapi: 3.1.0
+info:
+  title: CogniForge Learning Event Stream
+  version: '1.0.0'
+  description: |
+    # مواضيع الأحداث القانونية (D-201)
+
+    المصدر القانوني الوحيد لهذه المواضيع هو `shared/messaging/topics.py`. هذا الملفّ
+    يعرضها كعقدٍ خارجي؛ أيّ اختلاف بينهما عطبٌ في العقد لا في الكود.
+
+    ## قواعد دائمة
+
+    - **موضوعٌ بلا مستهلك مُعلَن ZOMBIE** (§6.6) فلا يُقبَل في السجلّ.
+    - **`event_id` هو مفتاح المُعالَجة-مرّة-واحدة.** Kafka يضمن «مرّة على الأقلّ»،
+      وإعادةُ التسليم هي الوضع الطبيعي لا الاستثناء.
+    - **`correlation_id` يُمَدّ ولا يُخترَع** (D-189): مُعرَّفٌ جديد لكل قفزة يقطع
+      السلسلة بدل مدّها.
+    - **المفتاح إلزامي** على كلّ موضوعٍ عدا DLQ: بلا مفتاح تتوزّع أحداث الطالب الواحد
+      على أقسام فتصل بترتيبٍ غير ترتيب وقوعها.
+    - **DLQ لا يُستهلَك آلياً**: إعادة تشغيله تُعيد الرسالة المسمومة إلى المستهلك
+      الذي عجز عنها — حلقةٌ مضمونة.
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  redpanda:
+    host: redpanda:9092
+    protocol: kafka
+    description: |
+      Redpanda (بروتوكول Kafka). حين لا يُضبَط `KAFKA_BOOTSTRAP_SERVERS` يعمل السائق
+      في الذاكرة — افتراضٌ حيّ لا نموذج أوّلي.
+
+channels:
+  productEvents:
+    address: cogniforge.product.events.v1
+    description: أحداث المنتج القانونية (D-197) — تُكتَب في `product_events`.
+    messages:
+      productEvent:
+        $ref: '#/components/messages/Envelope'
+
+  learningEvaluated:
+    address: cogniforge.learning.evaluated.v1
+    description: نتيجة تقييم BKT ⇒ جدولة مراجعة FSRS (D-194).
+    messages:
+      learningEvaluated:
+        $ref: '#/components/messages/Envelope'
+
+  notificationsRequested:
+    address: cogniforge.notifications.requested.v1
+    description: طلبات إشعار — الناقل الحيّ هو `notification_outbox`.
+    messages:
+      notificationRequested:
+        $ref: '#/components/messages/Envelope'
+
+  deadLetter:
+    address: cogniforge.dead-letter.v1
+    description: رسائلُ استُنفدت محاولاتها أو تعذّر تفكيكها. تُفحَص بشرياً.
+    messages:
+      deadLetter:
+        $ref: '#/components/messages/DeadLetterEnvelope'
+
+operations:
+  publishProductEvent:
+    action: send
+    channel:
+      $ref: '#/channels/productEvents'
+
+  consumeProductEvent:
+    action: receive
+    channel:
+      $ref: '#/channels/productEvents'
+
+  publishLearningEvaluated:
+    action: send
+    channel:
+      $ref: '#/channels/learningEvaluated'
+
+  consumeLearningEvaluated:
+    action: receive
+    channel:
+      $ref: '#/channels/learningEvaluated'
+
+  publishNotificationRequested:
+    action: send
+    channel:
+      $ref: '#/channels/notificationsRequested'
+
+  consumeNotificationRequested:
+    action: receive
+    channel:
+      $ref: '#/channels/notificationsRequested'
+
+  publishDeadLetter:
+    action: send
+    channel:
+      $ref: '#/channels/deadLetter'
+
+components:
+  messages:
+    Envelope:
+      name: EventEnvelope
+      title: ظرف الحدث القانوني
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/Envelope'
+
+    DeadLetterEnvelope:
+      name: DeadLetterEnvelope
+      title: ظرفٌ ميت مع سبب موته
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/DeadLetterEnvelope'
+
+  schemas:
+    Envelope:
+      type: object
+      required: [event_id, event_name, topic, payload, occurred_at, schema_version]
+      properties:
+        event_id:
+          type: string
+          description: مفتاح المُعالَجة-مرّة-واحدة. يُولَّد مرّة ويبقى عبر كل إعادة تسليم.
+        event_name:
+          type: string
+          description: اسمٌ من `shared/analytics/events.py` بصيغة الماضي.
+        topic:
+          type: string
+        payload:
+          type: object
+        occurred_at:
+          type: string
+          format: date-time
+          description: مُدرِكٌ للمنطقة الزمنية دائماً — وقتٌ بلا منطقة يُقرأ بمنطقة كل خدمة.
+        partition_key:
+          type: [string, 'null']
+          description: عادةً `user:<id>` — يحفظ ترتيب أحداث الطالب الواحد.
+        correlation_id:
+          type: [string, 'null']
+        schema_version:
+          type: integer
+          minimum: 1
+        delivery_attempt:
+          type: integer
+          minimum: 1
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    DeadLetterEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            payload:
+              type: object
+              required: [original_topic, error, error_type]
+              properties:
+                original_topic:
+                  type: string
+                original_payload:
+                  type: object
+                error:
+                  type: string
+                error_type:
+                  type: string
+                delivery_attempt:
+                  type: integer

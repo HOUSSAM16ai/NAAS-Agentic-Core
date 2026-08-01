@@ -189,6 +189,17 @@ class AppSettings(BaseServiceSettings):
 
     # Infra
     REDIS_URL: str | None = None
+    # D-201 — ناقل الأحداث. الغياب ليس عطباً: بلا عنوان يعمل السائق في الذاكرة، فيبقى
+    # مسار الأحداث كاملاً حيّاً بدل أن يكون قدرةً معلّقة على بنية تحتية غائبة (§6.6).
+    KAFKA_BOOTSTRAP_SERVERS: str | None = Field(
+        None, description="Kafka/Redpanda bootstrap servers; empty means the in-memory driver"
+    )
+    KAFKA_CLIENT_ID: str = Field("cogniforge-monolith", description="Kafka client id")
+    TEMPORAL_ADDRESS: str | None = Field(
+        None, description="Temporal frontend address; empty means workflows run inline"
+    )
+    TEMPORAL_NAMESPACE: str = Field("default", description="Temporal namespace")
+    TEMPORAL_TASK_QUEUE: str = Field("cogniforge", description="Temporal task queue")
     DB_POOL_SIZE: int = Field(40, description="DB Pool Size")
     DB_MAX_OVERFLOW: int = Field(60, description="DB Max Overflow")
 

@@ -116,7 +116,7 @@ ruff check .
 ## Architecture
 
 Brief description of the service's responsibility and its place in the system.
-Link to relevant ADR: `docs/architecture/adr/`.
+Link to relevant ADR: `docs/adr/`.
 ```
 
 ### Config / Tooling Folder

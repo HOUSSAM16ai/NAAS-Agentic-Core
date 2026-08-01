@@ -196,6 +196,26 @@ jobs:
           # A denylist is structurally wrong here: it can never enumerate every dangerous
           # form. argv + shell=False makes injection unrepresentable instead of filtered.
           python scripts/fitness/check_no_shell_true.py
+          # D-201: the topic registry, the AsyncAPI contract and the compose bootstrap
+          # are three views of one truth, and three views drift. A topic in code with
+          # no channel is invisible to external consumers; a channel with no topic is a
+          # contract promising something nobody publishes. Both directions are guarded,
+          # and every topic must be created explicitly — `auto.create.topics.enable`
+          # lets one typo mint a topic nobody consumes, which then swallows messages in
+          # silence until retention expires.
+          python scripts/fitness/check_topic_contract_parity.py
+          # D-202: the "no reasoning-only model as PRIMARY" rule was a comment at the top
+          # of a file, and a comment stopped nothing — ISS-079 put a model returning
+          # content=None at the head of the chain and a real student read "pepepe aaaa".
+          # Capability is now declared data with dated live evidence, and eligibility is
+          # a checked precondition rather than a remembered convention.
+          python scripts/fitness/check_model_registry.py
+          # D-203: the Socratic redaction policy (D-113) is enforced by TWO brains with
+          # two implementations of the same D-114 decision. If one regex drifts, one path
+          # redacts the final answer and the other leaks it — and the student has no idea
+          # which brain answered. D-013's "edit both copies" rule has already been proven
+          # breakable; this is the automated version of it.
+          python scripts/fitness/check_redaction_parity.py
           # D-199: أوّل بوّابة في هذا المستودع تلمس CSS/JSX. من ٤١ بوّابة لم تكن واحدة
           # تحرس الواجهة، فبلغت `globals.css` ٣٥٨٤ سطراً بـ٣٨ قيمة مسافة و٣٠ حجم خطّ —
           # لا بقرار بل لأنّ لا شيء منع التراكم. تفحص أيضاً تباين WCAG AA حسابياً، فلا

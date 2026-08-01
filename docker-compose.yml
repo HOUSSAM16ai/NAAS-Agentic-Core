@@ -557,6 +557,131 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==========================================
+  # Event streaming + durable workflows (D-201)
+  # ==========================================
+
+  # Redpanda speaks the Kafka protocol from a single binary: no ZooKeeper, no
+  # KRaft controller quorum to operate, and roughly a tenth of the memory of a
+  # JVM broker. At this traffic level that is the honest weight — the platform
+  # gets Kafka semantics without an operations team to run Kafka.
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: cogniforge-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    networks:
+      - cogniforge-network
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      # `cluster health` is the real readiness signal. A listening port only
+      # proves the process booted, not that the cluster can accept writes —
+      # exactly the "process alive, service dead" state the constitution bans.
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Topics are created explicitly, once. `auto.create.topics.enable` would let a
+  # single typo mint a topic nobody consumes, which then swallows messages in
+  # silence until retention expires — the worst class of failure this project has.
+  redpanda-topics:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: cogniforge-redpanda-topics
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - cogniforge-network
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for spec in \
+          "cogniforge.product.events.v1 3 2592000000" \
+          "cogniforge.learning.evaluated.v1 3 1209600000" \
+          "cogniforge.notifications.requested.v1 1 604800000" \
+          "cogniforge.dead-letter.v1 1 7776000000"; do
+          set -- $$spec
+          rpk topic create "$$1" --brokers redpanda:9092 \
+            --partitions "$$2" --topic-config retention.ms="$$3" || true
+        done
+        rpk topic list --brokers redpanda:9092
+    restart: "no"
+
+  postgres-temporal:
+    image: postgres:16-alpine
+    container_name: cogniforge-postgres-temporal
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    networks:
+      - cogniforge-network
+    volumes:
+      - postgres-temporal-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Temporal owns the workflows that must survive a restart: the weekly guardian
+  # report, corpus ingestion, and reminder fan-out. Those are long, resumable and
+  # cancellable — precisely what a cron job plus a retry loop gets wrong.
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    container_name: cogniforge-temporal
+    restart: unless-stopped
+    depends_on:
+      postgres-temporal:
+        condition: service_healthy
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postgres-temporal
+    ports:
+      - "7233:7233"
+    networks:
+      - cogniforge-network
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    container_name: cogniforge-temporal-ui
+    restart: unless-stopped
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    ports:
+      - "8233:8080"
+    networks:
+      - cogniforge-network
+
 networks:
   # R0.1 (D-172): compose-managed with a stable name so `docker compose up`
   # self-creates it — no manual `docker network create` pre-step. The fixed
@@ -567,6 +692,8 @@ networks:
     driver: bridge
 
 volumes:
+  redpanda-data:
+  postgres-temporal-data:
   postgres-planning-data:
   postgres-memory-data:
   postgres-user-data:

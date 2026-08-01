@@ -85,7 +85,7 @@ _service_instance: MyService | None = None
 | Integration tests | `tests/integration/` |
 | Unit tests | `tests/unit/` |
 | OpenAPI contracts | `docs/contracts/<service_name>.yaml` |
-| ADRs | `docs/architecture/adr/` |
+| ADRs | `docs/adr/` |
 
 Rules:
 - Never place business logic in `app/api/` route handlers — use the service layer.
@@ -94,7 +94,7 @@ Rules:
 
 ### When to write an ADR
 
-Write an ADR in `docs/architecture/adr/` when:
+Write an ADR in `docs/adr/` when:
 - Choosing between two or more viable technical approaches
 - Adopting a new library or framework
 - Changing a cross-service communication pattern

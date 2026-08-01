@@ -117,9 +117,7 @@ def test_no_match_returns_an_empty_list_rather_than_noise(
     assert body["ranking"] == "deterministic_lexical"
 
 
-def test_a_query_of_only_punctuation_returns_nothing(
-    event_loop, async_client, db_session
-) -> None:
+def test_a_query_of_only_punctuation_returns_nothing(event_loop, async_client, db_session) -> None:
     _run(event_loop, _seed(db_session, CORPUS))
 
     assert _search(event_loop, async_client, q="؟؟؟")["items"] == []

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CogniForge — لا يوجد اتصال</title>
+    <style>
+      :root {
+        --paper: #fbfaf7;
+        --ink: #24211c;
+        --ink-muted: #5c564c;
+        --accent: #1f5fa8;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #1a1815;
+          --ink: #ede9e1;
+          --ink-muted: #a49c8f;
+          --accent: #7fb0e8;
+        }
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1.5rem;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: system-ui, -apple-system, sans-serif;
+        text-align: center;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+      }
+      p {
+        margin: 0;
+        max-width: 42ch;
+        line-height: 1.85;
+        color: var(--ink-muted);
+        font-size: 0.9375rem;
+      }
+      button {
+        margin-top: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        border: 1px solid var(--accent);
+        border-radius: 0.5rem;
+        background: transparent;
+        color: var(--accent);
+        font: inherit;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>لا يوجد اتصال بالإنترنت</h1>
+    <!-- الصراحة قبل الطمأنة: نقول ما حدث وما لم يضِع، بلا وعدٍ لا نملكه. -->
+    <p>
+      انقطع الاتصال، فلا يمكن إرسال سؤالك الآن. محادثاتك السابقة محفوظة على الخادم
+      وستجدها كما هي فور عودة الشبكة.
+    </p>
+    <button type="button" onclick="location.reload()">إعادة المحاولة</button>
+  </body>
+</html>

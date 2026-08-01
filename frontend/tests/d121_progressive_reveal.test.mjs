@@ -68,8 +68,9 @@ check('CSS: hero ball entrance keyframe', css.includes('@keyframes genui-ball-in
     && css.includes('.genui-fes-urn.is-hero .genui-fes-ball'));
 check('CSS: layer + result keyframes', css.includes('@keyframes genui-layer-in')
     && css.includes('@keyframes genui-result-pop'));
+// D-199: الإعلان الشامل يغطّي هذه الحركات وكلّ ما يُضاف لاحقاً — تغطيةٌ أوسع لا أضيق.
 check('CSS: reduced-motion covers new animations',
-    /prefers-reduced-motion[\s\S]*genui-fes-result-reveal/.test(css));
+    /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\*,[\s\S]*?animation-duration/.test(css));
 check('CSS: uses existing tokens (no invented colors)',
     css.includes('color-mix(in srgb, var(--primary-color)') && css.includes('var(--success-color)'));
 

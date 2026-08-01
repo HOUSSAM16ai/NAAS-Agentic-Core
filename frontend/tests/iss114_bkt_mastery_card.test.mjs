@@ -56,7 +56,11 @@ check('CSS: --genui-mastery-high var defined', css.includes('--genui-mastery-hig
 check('CSS: --genui-mastery-low var defined', css.includes('--genui-mastery-low'));
 check('CSS: .genui-bkt-card class', css.includes('.genui-bkt-card'));
 check('CSS: genui-ring-fill keyframe', css.includes('@keyframes genui-ring-fill'));
-check('CSS: reduced-motion covers ring fill', /prefers-reduced-motion[\s\S]*?genui-bkt-ring-fill/.test(css));
+// D-199: القائمة الصريحة استُبدلت بإعلانٍ شامل (`*`) يغطّي كلّ حركة، ومنها هذه.
+// الصيغة القديمة كانت تطلب اسم المحدِّد نصّاً، وهي تفشل مع تغطيةٍ **أوسع** لا أضيق —
+// فنختبر الضمان نفسه: هل تُوقَف هذه الحركة عند طلب تقليل الحركة؟
+check('CSS: reduced-motion covers ring fill',
+    /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\*,[\s\S]*?animation-duration/.test(css));
 
 console.log(failed === 0 ? `\n🎉 All BktMasteryCard checks passed` : `\n💥 ${failed} check(s) failed`);
 process.exit(failed === 0 ? 0 : 1);

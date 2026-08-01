@@ -578,10 +578,17 @@ services:
       - --reserve-memory=0M
       - --node-id=0
       - --check=false
-      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
-      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+      # TWO listeners, deliberately. A Kafka client is told where to reconnect by the
+      # broker's *advertised* address, not by the address it dialled. With only
+      # `advertise-kafka-addr=redpanda:9092`, a client on the host connects to
+      # 127.0.0.1:9092, is handed back `redpanda:9092`, cannot resolve it, and hangs —
+      # which is precisely the failure a stack that is declared but never booted hides.
+      - --kafka-addr=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092
+      - --advertise-kafka-addr=INTERNAL://redpanda:9092,EXTERNAL://127.0.0.1:19092
     ports:
+      # 9092 for containers on the compose network, 19092 for the host (CI verifier).
       - "9092:9092"
+      - "19092:19092"
       - "9644:9644"
     networks:
       - cogniforge-network
@@ -611,14 +618,25 @@ services:
     command:
       - |
         set -e
+        # `|| true` used to swallow EVERY failure here, so a topic that could not be
+        # created left the stack looking healthy and its messages vanished until
+        # retention expired. Only "already exists" is tolerated now — that is the
+        # idempotent re-run; anything else stops the bootstrap loudly (§0).
         for spec in \
           "cogniforge.product.events.v1 3 2592000000" \
           "cogniforge.learning.evaluated.v1 3 1209600000" \
           "cogniforge.notifications.requested.v1 1 604800000" \
           "cogniforge.dead-letter.v1 1 7776000000"; do
           set -- $$spec
-          rpk topic create "$$1" --brokers redpanda:9092 \
-            --partitions "$$2" --topic-config retention.ms="$$3" || true
+          if out=$$(rpk topic create "$$1" --brokers redpanda:9092 \
+              --partitions "$$2" --topic-config retention.ms="$$3" 2>&1); then
+            echo "created $$1"
+          elif echo "$$out" | grep -qi "already exists"; then
+            echo "exists  $$1"
+          else
+            echo "FAILED to create $$1: $$out" >&2
+            exit 1
+          fi
         done
         rpk topic list --brokers redpanda:9092
     restart: "no"

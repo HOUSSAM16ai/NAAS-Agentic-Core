@@ -15,6 +15,10 @@ on:
       - "scripts/compose_env_from_secrets.sh"
       - "scripts/verify_full_stack_docker.py"
       - ".env.example"
+      - "shared/messaging/**"
+      - "app/services/messaging/**"
+      - "scripts/verify_event_stack_docker.py"
+      - "requirements-messaging.txt"
       - "microservices/orchestrator_service/requirements.txt"
       - ".github/workflows/docker-fullstack-gate.yml"
   pull_request:
@@ -25,6 +29,10 @@ on:
       - "scripts/compose_env_from_secrets.sh"
       - "scripts/verify_full_stack_docker.py"
       - ".env.example"
+      - "shared/messaging/**"
+      - "app/services/messaging/**"
+      - "scripts/verify_event_stack_docker.py"
+      - "requirements-messaging.txt"
       - "microservices/orchestrator_service/requirements.txt"
       - ".github/workflows/docker-fullstack-gate.yml"
 

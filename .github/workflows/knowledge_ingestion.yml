@@ -61,6 +61,11 @@ jobs:
         env:
           MEMORY_API_URL: ${{ secrets.MEMORY_AGENT_API_URL }}
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          # `scripts/ingest_knowledge.py` imports `app.core.*`, and the repository is
+          # not pip-installed in this job. Without the workspace on the import path
+          # every run died on `ModuleNotFoundError: No module named 'app'` before it
+          # read a single file — the ingestion gate has never actually ingested.
+          PYTHONPATH: ${{ github.workspace }}
         shell: bash
         run: |
           set -euo pipefail

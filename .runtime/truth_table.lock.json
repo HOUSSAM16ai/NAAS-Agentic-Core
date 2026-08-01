@@ -1,5 +1,5 @@
 {
-  "branch": "claude/solid-documentation-refactor-vnadtw",
+  "branch": "claude/smart-education-platform-s2of5b",
   "components": [
     {
       "agreed": true,
@@ -291,6 +291,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-07-31T17:41:25.108644+00:00",
+  "generated_at_utc": "2026-08-01T02:58:37.060499+00:00",
   "schema_version": 1
 }

@@ -45,12 +45,14 @@ from __future__ import annotations
 import contextlib
 import re
 import time
+from typing import Final
 
 from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
 from app.services.skills.base import BaseSkill
 from app.services.skills.doctrine import BKT_COGNITIVE_DOCTRINE_VERSION
+from shared.curriculum import classify as curriculum_classify
 
 # ── معاملات BKT الافتراضية ───────────────────────────────────────────────────────
 DEFAULT_P_L0: float = 0.25  # الإتقان المسبق الأولي
@@ -62,70 +64,31 @@ CognitiveLoad = str  # "low" | "medium" | "high"
 
 
 # ── تصنيف المفاهيم (concept_id) ────────────────────────────────────────────────────
-# ترتيب القائمة مهم: الأكثر تحديداً أولاً.
-_CONCEPT_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
-    (
-        "conditional_probability",
-        ("احتمال شرط", "احتمال مشروط", "شجرة الاحتمال", "شجرة احتمال", "بشرط", "conditional"),
-    ),
-    # D-131: مفاهيم خصائص الجداء الدقيقة (Misconception Graph → BKT). الأكثر تحديداً أولاً.
-    ("product_zero", ("جداء معدوم", "حاصل الضرب معدوم", "ارقامها معدوم", "جداء صفر", "معدوم")),
-    ("product_odd", ("جداء فردي", "حاصل الضرب فردي", "ارقامها فردي")),
-    ("product_even", ("جداء زوجي", "حاصل الضرب زوجي", "ارقامها زوجي")),
-    ("probability", ("احتمال", "احتمالات", "عشوائي", "حادثة", "probabilit", "variable aléatoire")),
-    (
-        "integration",
-        ("تكامل", "بالتجزئة", "intégrale", "integral", "primitive", "دالة أصلية", "أصلية"),
-    ),
-    ("derivatives", ("مشتق", "اشتقاق", "dérivée", "derivative", "نهاية المشتق")),
-    ("limits", ("نهاية", "نهايات", "limite", "limit", "لوبيتال", "l'hopital", "lhopital")),
-    (
-        "complex_numbers",
-        (
-            "عقدي",
-            "عقدية",
-            "complexe",
-            "complex number",
-            "عدد مركب",
-            # ISS-112: الصيغ المعرَّفة/الجمع — «الأعداد المركبة» ليست سلسلة فرعية
-            # من «عدد مركب» (درس ISS-109: أداة التعريف تكسر مطابقة ثنائية الكلمات)
-            "أعداد مركبة",
-            "اعداد مركبة",
-            "الأعداد المركبة",
-            "الاعداد المركبة",
-            "العدد المركب",
-            # ISS-114 (D-106): «الدوال المركبة» صياغة طلابية للأعداد المركبة —
-            # تُصنَّف complex_numbers لا numerical_functions (BKT header الخاطئ).
-            "دوال مركبة",
-            "الدوال المركبة",
-            "دالة مركبة",
-            "الدالة المركبة",
-            "z =",
-        ),
-    ),
-    (
-        "numerical_functions",
-        ("دالة", "دوال", "fonction", "function", "تغيرات", "مجال التعريف", "اتجاه التغير"),
-    ),
-    (
-        "sequences",
-        ("متتالية", "متتاليات", "suite", "sequence", "حسابية", "هندسية", "متتالية حسابية"),
-    ),
-    ("trigonometry", ("مثلثات", "جيب", "جيب التمام", "trigonom", "sin", "cos", "tan")),
-    ("logarithm", ("لوغاريتم", "logarithme", "logarithm", "ln", "log")),
-    ("exponential", ("أسية", "exponentielle", "exponential", "e^", "نشر أسي")),
-]
+# D-193: قائمة `_CONCEPT_PATTERNS` (١٤ مفهوماً، رياضيات فقط) حُذفت من هنا. المصدر
+# القانوني الوحيد صار `shared/curriculum/registry.py`، الذي يغطّي الرياضيات والفيزياء
+# وعلوم الطبيعة معاً ويحمل المتطلّبات والمعاملات وتواتر الظهور — وتحرسه بوّابة
+# `check_curriculum_single_source.py` فلا تعود قائمةٌ ثانية للظهور.
+#
+# **المُعرَّفات لم تتغيّر**: هي نفسها المُخزَّنة في `student_bkt_analytics.concept_id`
+# منذ D-074، لأنّ تغييرها يتيّم تاريخ الطلاب.
+
+
+#: القيمة الحارسة عند تعذّر التصنيف. السجلّ نفسه يُرجِع `None` (الغياب يُعبَّر عنه
+#: بالغياب)، وهذه الحدود تُبقي `"general"` لأنّ القيمة **مُخزَّنة** في
+#: `student_bkt_analytics.concept_id` منذ D-074؛ تغييرها يتيّم تاريخ الطلاب.
+GENERAL_CONCEPT: Final = "general"
 
 
 def classify_concept(question: str) -> str:
-    """يصنّف المفهوم التعليمي من نص السؤال. الافتراضي 'general' لغير الرياضي."""
+    """يصنّف المفهوم التعليمي من نص السؤال. الافتراضي 'general' لغير المصنَّف.
+
+    D-193: المصدر صار `shared/curriculum` — سجلّاً واحداً يغطّي الرياضيات **والفيزياء
+    وعلوم الطبيعة**. قبله كان كل سؤال فيزياء أو علوم يسقط إلى `"general"`، أي أنّ
+    الطبقة المعرفية الأساس لا تقيس شيئاً في مادةٍ معاملها **٦** في العلوم التجريبية.
+    """
     if not question:
-        return "general"
-    normalized = question.strip().lower()
-    for concept_id, keywords in _CONCEPT_PATTERNS:
-        if any(kw in normalized for kw in keywords):
-            return concept_id
-    return "general"
+        return GENERAL_CONCEPT
+    return curriculum_classify(question) or GENERAL_CONCEPT
 
 
 def classify_concept_with_context(

@@ -11,6 +11,7 @@ from app.api.routers import (
     customer_chat,
     data_mesh,
     observability,
+    review,
     security,
     skills,
     system,
@@ -43,4 +44,6 @@ def base_router_registry() -> list[RouterSpec]:
         (visual_pedagogy.router, ""),
         (aek.router, ""),
         (skills.router, ""),
+        # D-194: طابور المراجعة المتباعدة — «ماذا أراجع اليوم؟».
+        (review.router, ""),
     ]

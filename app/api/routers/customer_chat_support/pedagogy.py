@@ -208,6 +208,23 @@ async def _evaluate_bkt_cards(
             evaluation.illusion_gap,
             evaluation.cognitive_load_estimate,
         )
+        # D-194: التكرار المتباعد — الطرف المستقبِل لإشارات BKT التي كانت تُرمى.
+        # `durable_mastery` و`support_level` و`evidence_correct` تُحسَب أعلاه ثم كانت
+        # تنتهي عند `logger.info`؛ هنا تصير **موعد مراجعة**. جلسة مستقلّة وعزل تامّ:
+        # الجدولة لا تكسر دور الطالب أبداً (نفس عقد BKT — D-074).
+        with contextlib.suppress(Exception):
+            from app.services.review import ReviewScheduleService
+
+            async with async_session_factory() as review_db:
+                await ReviewScheduleService(review_db).schedule_from_evaluation(
+                    user_id=user_id,
+                    concept_id=evaluation.concept_id,
+                    evidence_correct=evaluation.evidence_correct,
+                    correctness_signal=evaluation.correctness_signal,
+                    durable_mastery=evaluation.durable_mastery,
+                    support_level=support_level,
+                )
+
         # D-111: المسار التعلّمي التكيفي — يُشتقّ فوق إتقان BKT ويُسجَّل (telemetry).
         # مُستهلَك خلف الكواليس (لا بطاقة طالب — D-119)؛ معزول داخل suppress.
         with contextlib.suppress(Exception):

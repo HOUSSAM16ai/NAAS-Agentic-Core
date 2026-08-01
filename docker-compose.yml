@@ -1,3 +1,26 @@
+# ==============================================================================
+# The monolith is missing from this file ON PURPOSE — do not "fix" it (D-205).
+# ==============================================================================
+# Strangler Fig, phase 3 (docs/architecture/PR5_CORE_KERNEL_RETIREMENT_PHASE3.md).
+# `api-gateway` is a pure reverse proxy with no route to the monolith at all; the
+# only path to it is the anti-corruption layer in
+# microservices/api_gateway/legacy_acl/. The monolith's compose home is
+# docker-compose.legacy.yml, port 8004, behind profiles: ["legacy","emergency"]
+# with a required approval ticket and expiry.
+#
+# Three gates enforce this, so adding it here fails CI:
+#   scripts/fitness/check_core_kernel_env_profile.py  — forbidden tokens
+#   scripts/fitness/check_ports_consistency.py        — port 8004 must not appear
+#   tests/governance/test_gateway_structure.py        — empty legacy allowlist
+#
+# READ THIS PART TOO: this topology is the migration DESTINATION, not what serves
+# students. Chat rollout to conversation-service is 0% and its capability level is
+# "stub" (microservices/api_gateway/config.py). What actually serves every student
+# today is the monolith on :8000, launched by .devcontainer/supervisor.sh. The
+# file describes where we are going; `.memory/runtime_truth.md` describes where we
+# are.
+# ==============================================================================
+
 services:
   # ==========================================
   # Infrastructure Services

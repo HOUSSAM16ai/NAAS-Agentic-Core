@@ -27,6 +27,12 @@ tenacity==8.2.3
 langgraph>=0.2.39,<2.0.0
 langchain-core>=0.3.0
 redis>=5.0.0
+# D-205: `app.main` imports prometheus_client at runtime (app/telemetry) and NOTHING
+# else in the tree pulls it transitively — so a production image built from this file
+# would link fine and die on the first import. Found by resolving app.main's real
+# module graph against this file's dependency closure before CI ever ran. Building
+# is not importing; this line is the difference.
+prometheus-client>=0.20.0
 
 # Supporting Libraries
 click==8.3.1
@@ -56,7 +62,12 @@ Deprecated==1.2.18
 filelock==3.20.3
 platformdirs==4.5.1
 typing_extensions==4.15.0
-sentence-transformers
+# sentence-transformers removed 2026-08-01 (D-205): nothing under `app/` or
+# `shared/` imports it — the monolith delegates reranking to research-agent over
+# HTTP (app/integration/gateways/research.py:66). It survives in the root
+# requirements.txt, which is what the offline ingestion scripts install
+# (.github/workflows/knowledge_ingestion.yml:48), and in requirements-ci.txt.
+# Dropping it here is what makes Dockerfile.prod a server image and not a 4GB one.
 openai
 
 # LlamaIndex Stack
@@ -66,6 +77,12 @@ llama-index-instrumentation==0.4.2
 llama-index-workflows
 llama-index-readers-file
 llama-index-vector-stores-supabase
-llama-index-embeddings-huggingface
+# llama-index-embeddings-huggingface removed 2026-08-01 (D-205) for the same
+# reason and with the same evidence: it is imported only by
+# microservices/research_agent/src/search_engine/retriever.py:20 (own
+# requirements) and by the offline scripts/ingest_knowledge.py. Leaving it here
+# re-drags sentence-transformers → torch transitively, which would have made the
+# line above a comment that changed nothing. app/services/chat/memory_engine.py
+# uses llama_index.core without ever setting Settings.embed_model.
 langgraph-sdk==0.3.6
 dspy

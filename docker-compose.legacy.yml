@@ -44,9 +44,12 @@ services:
   # Core Kernel - The Monolith Core (Reality Kernel)
   core-kernel:
     profiles: ["legacy", "emergency"]
+    # D-205: was `Dockerfile` — the devcontainer image (Grafana + Prometheus +
+    # Node + torch). Break-glass is not the moment to discover you deployed a
+    # workstation. Dockerfile.prod is the server build of the same application.
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: cogniforge-core-kernel
     restart: unless-stopped
     ports:

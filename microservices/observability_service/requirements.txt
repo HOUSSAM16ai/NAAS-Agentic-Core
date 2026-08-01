@@ -72,7 +72,9 @@ pyyaml==6.0.1
 # Pin huggingface-hub to a stable version compatible with the ecosystem
 # Note: Do not use [inference] extra as it is missing in 1.x versions and causes backtracking
 huggingface-hub>=0.23.0
-sentence-transformers
+# sentence-transformers removed 2026-08-01 (D-205): zero `sentence_transformers`
+# imports anywhere under microservices/observability_service/. It pulled torch (~2GB) into an
+# image that never used it. research_agent is the only real consumer.
 dspy-ai==2.5.43
 openai==1.55.0
 # llama-index meta-package removed to reduce bloat/conflicts

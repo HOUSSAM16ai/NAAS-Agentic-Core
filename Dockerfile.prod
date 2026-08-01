@@ -1,0 +1,75 @@
+# The monolith, as a server — D-205.
+#
+# The root `Dockerfile` is the DEVCONTAINER image: it bakes in Grafana 11.3
+# (~270MB), Prometheus 2.55 (~80MB), Node 20 and CPU torch, then `COPY . .`.
+# That is exactly right for Codespaces (.devcontainer/docker-compose.host.yml)
+# and exactly wrong as a deployment artifact — yet it was the only image that
+# ran `app.main:app`, so break-glass would have shipped a workstation.
+#
+# This file is that missing artifact: requirements-prod.txt only, four source
+# trees instead of the whole repository, non-root, no observability binaries,
+# no Node. It is built and import-proven on every PR by the `images-build` job;
+# it has never been RUN (see .memory/runtime_truth.md — building is not running).
+
+# ── Stage 1: build the dependency tree ───────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_DEFAULT_TIMEOUT=100
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-prod.txt constraints.txt ./
+RUN pip install --no-cache-dir -r requirements-prod.txt -c constraints.txt
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+FROM python:3.12-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH="/app:$PYTHONPATH"
+
+# curl is here for the container healthcheck, libpq5 for asyncpg/psycopg.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
+
+# Only what the application reads at runtime. Named explicitly rather than
+# `COPY . .` so a new runtime file dependency fails the import smoke here
+# instead of failing on a student's turn:
+#   app/, shared/          — the code
+#   knowledge_base/        — app/services/skills/exercise_context.py:75
+#   docs/contracts/        — app/core/{openapi,asyncapi}_contracts.py
+COPY app/ ./app/
+COPY shared/ ./shared/
+COPY knowledge_base/ ./knowledge_base/
+COPY docs/contracts/ ./docs/contracts/
+
+# MEMORY_STORE_DIR defaults to ./data/memory_store (app/services/chat/memory_engine.py:28)
+# and the process runs non-root, so the directory must exist and be writable.
+RUN mkdir -p /app/data/memory_store && chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -fsS http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

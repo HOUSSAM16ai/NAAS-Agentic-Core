@@ -22,3 +22,14 @@ tavily-python>=0.3.0
 llama-index-core>=0.14.13
 llama-index-embeddings-huggingface
 llama-index-vector-stores-supabase
+# D-205: the same defect class as the D-182 comment above, found the same way it
+# should have been found then — by building the image and importing the app.
+# `main.py:21` imports super_search.py, whose module-level imports include
+# BeautifulSoup, DuckDuckGoSearchAPIWrapper and ChatOpenAI. None of the three
+# packages were declared, so the container built green and died on startup with
+# `ModuleNotFoundError: No module named 'bs4'`. Fixing D-182 one package at a
+# time did not work; nothing was building the image, so the next missing import
+# just waited. langchain-core is already pulled in by langgraph.
+beautifulsoup4>=4.12.3
+langchain-community>=0.3.0
+langchain-openai>=0.2.0

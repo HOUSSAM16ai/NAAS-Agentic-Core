@@ -29,6 +29,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAP_DOC = REPO_ROOT / "docs/architecture/CS_KNOWLEDGE_MAP.md"
+DOCTRINE_DOC = REPO_ROOT / "docs/architecture/ENGINEERING_DOCTRINE.md"
 
 #: سُلَّم الحالة القانوني — نفس §6.6 زائد `SEAM`/`ABSENT` للصدق عن الغياب.
 VALID_STATUSES = frozenset({"ACTIVE", "PARTIAL", "DORMANT", "SEAM", "ABSENT"})
@@ -41,6 +42,38 @@ _ROW = re.compile(r"^\|\s*(\d+)\s*\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\
 
 #: الدليل مكتوبٌ داخل `backticks` — نستخرجه كي لا نُطابِق نثراً.
 _EVIDENCE = re.compile(r"`([^`]+)`")
+
+
+#: كل بوّابة تُسمّى في عقيدة الهندسة يجب أن توجد فعلاً في `scripts/fitness/`.
+#: قانونٌ يستشهد ببوّابة محذوفة أسوأ من قانونٍ بلا فارض: الأوّل يَعِد بحراسةٍ غير قائمة.
+_GATE_MENTION = re.compile(r"`(check_[a-z0-9_]+)`")
+
+
+def _check_doctrine() -> list[str]:
+    """يفرض أن عقيدة الهندسة تُسمّي فوارضَ **موجودة**، وأنها تغطّي المجالات."""
+    problems: list[str] = []
+    if not DOCTRINE_DOC.is_file():
+        return [f"{DOCTRINE_DOC.name} غير موجودة — القانون جزء من العقد لا ملحقاً."]
+
+    text = DOCTRINE_DOC.read_text(encoding="utf-8")
+    fitness_dir = REPO_ROOT / "scripts/fitness"
+    for gate in sorted(set(_GATE_MENTION.findall(text))):
+        if not (fitness_dir / f"{gate}.py").is_file():
+            problems.append(
+                f"عقيدة الهندسة تستشهد بالبوّابة {gate!r} وهي غير موجودة في "
+                f"scripts/fitness/ — قانونٌ يَعِد بحراسةٍ غير قائمة."
+            )
+
+    # كل مجالٍ في الوثيقة يجب أن يُسمّي فارضاً أو يُعلن غيابه صراحةً (L11).
+    sections = re.split(r"^## \d+\) ", text, flags=re.MULTILINE)[1:]
+    for section in sections:
+        title = section.splitlines()[0].strip()
+        if "**الفارض:**" not in section and "بلا فارض" not in section:
+            problems.append(
+                f"المجال «{title}» بلا سطر «**الفارض:**» ولا إعلانِ «بلا فارض» — "
+                f"الصمت يُقرأ انضباطاً وهو ليس كذلك."
+            )
+    return problems
 
 
 def _check_row(number: int, domain: str, evidence: str, status: str, gap: str) -> list[str]:
@@ -106,8 +139,10 @@ def main() -> int:
         seen_numbers.add(number)
         failures.extend(_check_row(number, domain, evidence, status, gap))
 
+    failures.extend(_check_doctrine())
+
     if failures:
-        print("❌ خريطة علوم الحاسوب مخروقة:\n")
+        print("❌ خريطة علوم الحاسوب / عقيدة الهندسة مخروقة:\n")
         for failure in failures:
             print(f"  • {failure}")
         return 1

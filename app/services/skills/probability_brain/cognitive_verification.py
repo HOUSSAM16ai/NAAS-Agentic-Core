@@ -9,6 +9,12 @@ from __future__ import annotations
 import logging
 import re
 
+from shared.pedagogy import (
+    FIRST_HELP_MARKERS,
+    STEP_QUESTION_MARKERS,
+    TUTORING_STEP_MARKERS,
+)
+
 # نفس اسم الـ logger القديم عمداً — استمرارية السجلات وصفر تغيير رصدي (D-163/D-168).
 logger = logging.getLogger("orchestrator-client")
 
@@ -128,25 +134,12 @@ class CognitiveVerificationMixin:
     #: ISS-122 (D-155): قوالب أسئلة الخطوات التي نطرحها نحن — تُعرِّف «السؤال
     #: المعلّق» المشتق من أحدث رسالة مساعد (لا حالة دائمة جديدة). أي قالب سؤال
     #: جديد في البُناة الحتمية يجب أن يُسجَّل هنا وإلا صار سؤاله غير مرئي للتحقّق.
-    _STEP_QUESTION_MARKERS: tuple[tuple[str, str], ...] = (
-        ("كم عدد **كل** الطرق الممكنة", "denominator"),
-        ("كم عدد كل الطرق الممكنة", "denominator"),
-        ("كيف تُكوّن منهما الاحتمال", "ratio"),
-        ("فما قيمة P(A)", "ratio"),
-        ("ما قيمة P(A) التي حصلت عليها", "ratio"),
-        ("أيّ الألوان يمكن أن تعطينا", "colors"),
-    )
-
-    #: ISS-122 (D-155): علامات «خطوة تدريس سابقة» — وجود أيٍّ منها في رسائل
-    #: المساعد يعني أن الحوار التدريسي بدأ (فلا يُعاد probe التشخيص الأول).
-    _TUTORING_STEP_MARKERS: tuple[str, ...] = (
-        "الحالات الملائمة",
-        "كم عدد **كل** الطرق",
-        "كيف تُكوّن منهما الاحتمال",
-        "أيّ الألوان يمكن أن تعطينا",
-        "لنُكمل معاً خطوة بخطوة",
-        "فما قيمة P(A)",
-    )
+    #: D-206 (L5): **من المصدر القانوني** `shared/pedagogy` — كانت منسوخةً حرفياً هنا
+    #: وفي `overmind/probability_tutor.py`. انظر رأس ذلك الملفّ: النسختان **انحرفتا
+    #: فعلاً** (نسخة الخدمة وحدها كانت تعرف probe الافتتاح كخطوة تدريس)، فكان هذا
+    #: العقل قد يُعيد probe بثّه هو — صنفُ التكرار الذي وُلدت D-155 لقتله.
+    _STEP_QUESTION_MARKERS: tuple[tuple[str, str], ...] = STEP_QUESTION_MARKERS
+    _TUTORING_STEP_MARKERS: tuple[str, ...] = TUTORING_STEP_MARKERS
 
     #: ISS-122 (D-155) + ISS-128 (D-162): بادئات استفهامية تجعل الرسالة سؤالاً لا
     #: إجابةً تُقيَّم — تسقط لطبقات الإجابة (F2/التسمية/D-124/D-125). «هل» ليست هنا
@@ -345,17 +338,10 @@ class CognitiveVerificationMixin:
             norm = normalize_ar(question or "")
         except Exception:  # pragma: no cover - fail-safe
             norm = (question or "").strip()
-        markers = (
-            "كيف افهم",
-            "كيف نفهم",
-            "كيف احل",
-            "كيف نحل",
-            "من اين ابدا",
-            "من اين نبدا",
-            "كيف ابدا",
-            "كيف نبدا",
-        )
-        return any(m in norm for m in markers)
+        # D-206 (L5): من المصدر القانوني — كانت نسخةً ثالثة مخبّأة **داخل دالّة**،
+        # فلا تراها بوّابةُ AST التي تفحص مستوى الوحدة. الازدواج المخفيّ أخطر من
+        # الظاهر: لا شيء كان ليُنبّه لو انحرفت.
+        return any(m in norm for m in FIRST_HELP_MARKERS)
 
     @classmethod
     def _near_dup(cls, a: str, b: str, *, threshold: float = 0.8) -> bool:

@@ -133,6 +133,10 @@ _DEFINITION: tuple[str, ...] = (
     "veut dire",
     "c est quoi",
     "what is",
+    # D-206: من `exercise_retrieval._EXPLANATION_INTENT_PATTERNS` عند تفكيكها.
+    "ما مفهوم",
+    "what are",
+    "what does",
 )
 
 #: نيّة الحيرة — اتحاد خمس قوائم (semantic_property · student_state · policy ×2 ·
@@ -220,6 +224,10 @@ _HINT_REQUEST: tuple[str, ...] = (
     "وجهني",
     "ارشدني",
     "hint",
+    # D-206: من `exercise_retrieval._EXPLANATION_INTENT_PATTERNS` عند تفكيكها (قاعدة
+    # الاتحاد D-186#2 — صيغةٌ يعرفها كاشفٌ واحد تصير معروفةً للجميع).
+    "help me",
+    "help with",
 )
 
 #: مقارنة/علاقة — من `_COMPARISON_MARKERS` (student_state).

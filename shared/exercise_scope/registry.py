@@ -245,6 +245,24 @@ _QUESTION_NOUNS: Final[tuple[str, ...]] = (
 
 #: الأسماء المُطبَّعة — تُستعمل بالاحتواء لا بالحدود: هي **قرينة سياق** («الكلام عن بند»)
 #: لا علامةَ نيّة، وحذفُ الهمزة يجعل «الجزء» ⇒ «الجز» فتفشل حدودُ الكلمة بلا ذنب.
+#: مرشِّح رخيص على النصّ الخام — **أوسع من `_QUESTION_NOUNS` عمداً**: يشمل كلّ صور
+#: الهمزة والتاء المربوطة، لأنه يعمل قبل التطبيع. استبعادُ المستحيل، لا الحسم.
+_CHEAP_ITEM_HINTS: Final[tuple[str, ...]] = (
+    "سؤال",
+    "سوال",
+    "سؤ",
+    "بند",
+    "طلب",
+    "جزء",
+    "جز",
+    "فرع",
+    "قسم",
+    "question",
+    "part",
+    "partie",
+    "exercice",
+)
+
 _NORM_NOUNS: Final[tuple[str, ...]] = tuple(
     dict.fromkeys(filter(None, (normalize(noun) for noun in _QUESTION_NOUNS)))
 )
@@ -433,6 +451,19 @@ def resolve_scope(text: str, history: list[dict[str, str]] | None = None) -> Exe
     """
     if not text or not text.strip():
         return ExerciseScope(reason="empty_text")
+
+    # ── مرشِّح رخيص قبل العمل الغالي (قياسٌ لا حدس) ────────────────────────────
+    # `shared.intent.classify` تستشير هذه الدالّة في **كل** دور، والغالبية العظمى من
+    # الأدوار لا تحمل نيّة نطاق أصلاً. فالتطبيع (NFKD على النصّ كلّه) + تجريد أدوات
+    # التعريف + عشرات التعابير النمطية كانت تُدفَع ثمناً لسؤالٍ جوابه «لا» سلفاً —
+    # وهو ما أخرج `test-monolith` عن مهلتها (13م50ث على main ⇒ >18م هنا).
+    #
+    # الفحص أدناه على النصّ **الخام** ويجب أن يبقى **أوسع** ممّا يقبله المسار الكامل:
+    # مهمّته استبعاد المستحيل لا الحسم. أيّ صيغة يقبلها المسار الكامل ولا يمرّرها هذا
+    # المرشِّح تصير عمياء — وهو **نفس** صنف ISS-144. لذلك يحمل كلّ صور اسم البند
+    # (بالهمزة وبدونها) لا صورةً واحدة.
+    if not any(hint in text for hint in _CHEAP_ITEM_HINTS):
+        return ExerciseScope(reason="no_scope_intent")
 
     norm = normalize(text)
     stripped = strip_articles(norm)

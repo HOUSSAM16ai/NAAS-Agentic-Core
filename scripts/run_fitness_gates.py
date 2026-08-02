@@ -69,7 +69,8 @@ def main() -> int:
     print(f"🚦 {len(gates)} بوّابة، مقروءةً من {CI_WORKFLOW.name}\n")
     failed: list[str] = []
     for gate in gates:
-        result = subprocess.run(  # noqa: S603 — argv ثابتة من ملفّ المستودع، بلا صدفة
+        # argv ثابتة مقروءة من ملفّ المستودع، و`shell=False` — لا حقن (D-187).
+        result = subprocess.run(
             [sys.executable, gate],
             cwd=REPO_ROOT,
             capture_output=True,

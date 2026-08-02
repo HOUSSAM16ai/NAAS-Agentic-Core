@@ -10,10 +10,20 @@ sqlalchemy>=2.0.25
 asyncpg>=0.29.0
 psycopg2-binary>=2.9.9
 aiosqlite>=0.17.0
-openai==1.55.0
+# D-205: was pinned ==1.55.0, which every current langchain-openai rejects
+# (0.2.12+ needs openai>=1.55.3). The image's resolver enumerated 0.2.12 → 0.3.2,
+# found none installable, and gave up — while a newer local pip happened to reach
+# back to 0.2.11 and "succeeded". Relying on a resolver finding one old compatible
+# corner is not a dependency set; removing the contradiction is. Unpinned upward
+# to match the monolith, whose requirements leave `openai` free and whose test
+# suite runs against the resulting set.
+openai>=1.58.1
 langgraph
 dspy-ai==2.5.43
-litellm==1.50.0
+# D-205: `litellm==1.50.0` removed — zero imports anywhere in this service, and
+# the pin was a second brake on `openai` (1.50.0 predates the langchain-openai
+# range above). dspy-ai depends on litellm and brings a version consistent with
+# whatever else resolves, which is the only reason it was ever present.
 prometheus-client>=0.20.0
 tavily-python>=0.3.0
 # D-182 (ISS-134): the search engine imports llama_index eagerly at startup

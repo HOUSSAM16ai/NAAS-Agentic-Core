@@ -122,6 +122,11 @@ NAMING_MARKERS: tuple[str, ...] = (
 #: D-155/D-163 (WP: parity): علامات قوالب الأسئلة التي نطرحها نحن — تُستنبط منها
 #: بؤرة السؤال المعلّق (بلا أرقام ⇒ تَنجو من حجب D-113 في النسخة المحفوظة). port
 #: متكافئ مع monolith ``_STEP_QUESTION_MARKERS`` (بوّابة تكافؤ split-brain).
+# D-206 (L5): هذه العلامات **مرآةٌ محروسة** لـ`shared/pedagogy/probability_steps.py`.
+# الملفّ مستقلّ بذاته عمداً (يُحمَّل بلا حزمة في اختبارات المنفذ)، فلا يستورد شيئاً —
+# والتكافؤ تفرضه `scripts/fitness/check_probability_brain_parity.py` بمقارنة القيم لا
+# النصّ. كانت النسختان **منحرفتين فعلاً**: هذه وحدها عرفت probe الافتتاح خطوةَ تدريس،
+# فاختلف العقلان في «هل بدأ التدريس؟». أيّ تعديل هنا يُطبَّق في المصدر أيضاً وإلا احمرّ CI.
 STEP_QUESTION_MARKERS: tuple[tuple[str, str], ...] = (
     ("كم عدد **كل** الطرق الممكنة", "denominator"),
     ("كم عدد كل الطرق الممكنة", "denominator"),
@@ -131,8 +136,6 @@ STEP_QUESTION_MARKERS: tuple[tuple[str, str], ...] = (
     ("أيّ الألوان يمكن أن تعطينا", "colors"),
 )
 
-#: D-155/D-163: علامات أي خطوة تدريس بُثّت سابقاً (probe/سُلّم/إنقاذ) — تحكم
-#: «التشخيص قبل الشرح» (لا probe مكرَّر بعد بدء التدريس).
 TUTORING_STEP_MARKERS: tuple[str, ...] = (
     "الحالات الملائمة",
     "كم عدد **كل** الطرق",
@@ -143,8 +146,7 @@ TUTORING_STEP_MARKERS: tuple[str, ...] = (
     "لنبدأ من فهمك أنت",
 )
 
-#: D-155: أول طلب مساعدة عام يستحق probe التشخيص قبل أي محتوى محسوب.
-_FIRST_HELP_MARKERS: tuple[str, ...] = (
+FIRST_HELP_MARKERS: tuple[str, ...] = (
     "كيف افهم",
     "كيف نفهم",
     "كيف احل",
@@ -154,6 +156,7 @@ _FIRST_HELP_MARKERS: tuple[str, ...] = (
     "كيف ابدا",
     "كيف نبدا",
 )
+_FIRST_HELP_MARKERS = FIRST_HELP_MARKERS
 
 
 def is_question_not_answer(message: str) -> bool:

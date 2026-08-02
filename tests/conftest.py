@@ -441,6 +441,7 @@ def register_and_login_test_user():
                 status
             )
             VALUES (:external_id, :full_name, :email, :password_hash, :is_admin, :is_active, :status)
+            RETURNING id
             """
         )
         result = await db_session.execute(
@@ -455,8 +456,16 @@ def register_and_login_test_user():
                 "status": "active",
             },
         )
+        # ── `RETURNING id` لا `lastrowid` ─────────────────────────────────────
+        # هذا هو النمط الذي يفرضه CLAUDE.md على `auth_persistence.py` حرفياً
+        # («lastrowid لا يعمل بموثوقية»)، وكانت هذه التركيبة الاختبارية تخرقه.
+        # الأثر **مقيس**: `test_guardian_dashboard::test_redeeming_a_bad_code_over_http`
+        # يفشل بـ401 في **١ من كل ٥** تشغيلات حين يسبقه ملفٌّ آخر يستعمل التركيبة
+        # نفسها — لأنّ `lastrowid` يُعيد صفَّ عبارةٍ أخرى على الاتصال المُجمَّع، فيشير
+        # `sub` إلى مستخدمٍ غير موجود فيُرفض الرمز. القراءة **قبل** الـcommit لأنّ
+        # `RETURNING` تُستهلَك من نتيجة العبارة نفسها.
+        user_id = result.scalar_one()
         await db_session.commit()
-        user_id = result.lastrowid
 
         payload = {
             "sub": str(user_id),

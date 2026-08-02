@@ -140,18 +140,35 @@ def test_cognitive_turn_fail_open_on_no_state(combo):
 
 
 # ── _build_symbolic_reveal(delivered=) hardening ─────────────────────────────
-def test_reveal_default_byte_identical_contains_pins(combo):
-    out = OrchestratorClient._build_symbolic_reveal("س", [], acknowledge=False)
+def test_reveal_empty_ledger_contains_pins(combo):
+    # ISS-148: `delivered` صار إلزامياً — سجلٌّ فارغ يُمرَّر **صراحةً**. كان
+    # اختيارياً، فنسيه سبعةٌ من ثمانية مواضع نداء وأعادوا تفريغ ما رآه الطالب.
+    out = OrchestratorClient._build_symbolic_reveal("س", [], acknowledge=False, delivered=set())
     assert "ركّب الاحتمال **بنفسك**" in out  # ذيل التوليد المُثبَّت (gate)
-    assert "الحالات الملائمة" in out and "كل الطرق الممكنة" in out  # كل الكتل (افتراضي)
+    assert "الحالات الملائمة" in out and "كل الطرق الممكنة" in out  # كل الكتل (سجلّ فارغ)
     assert "من كل" not in out  # لا كشف نسبة نهائية
 
 
 def test_reveal_delivered_drops_shown_blocks(combo):
-    out = OrchestratorClient._build_symbolic_reveal("س", [], delivered={"numerator", "ratio"})
+    # كتلةٌ واحدة مُسلَّمة ⇒ تُحذف هي وحدها، ويبقى ما لم يُسلَّم + الذيل.
+    out = OrchestratorClient._build_symbolic_reveal("س", [], delivered={"numerator"})
     assert "الحالات الملائمة" not in out  # البسط مُسلَّم ⇒ محذوف
-    assert "كل الطرق الممكنة" not in out  # المقام مُسلَّم ⇒ محذوف
-    assert "ركّب الاحتمال **بنفسك**" in out  # الذيل يبقى دائماً
+    assert "كل الطرق الممكنة" in out  # المقام لم يُسلَّم ⇒ يبقى
+    assert "ركّب الاحتمال **بنفسك**" in out
+
+
+def test_reveal_returns_none_when_every_block_was_already_delivered(combo):
+    """ISS-148 — وعدٌ بشرحٍ لا يصل أسوأ من خطأ صريح (§0).
+
+    كان هذا الاختبار نفسه يضمن العطب: يمرّر `{numerator, ratio}` ثمّ يؤكّد أن
+    الناتج نصٌّ فيه الذيل وحده. وهو **بالحرف** ما تلقّاه طالبٌ في الإنتاج
+    (المحادثة 837، الرسالة 4613): «لنُكمل معاً خطوة بخطوة حتى النهاية:» ثمّ ولا
+    خطوة — ١٣٦ حرفاً من العدم. العطب لم يكن سهواً؛ كان **محروساً باختبار**.
+
+    القانون الآن: لا شيء ليُقال ⇒ `None`، فيُصعِّد المُنادي إلى خطوةٍ حقيقية.
+    """
+    out = OrchestratorClient._build_symbolic_reveal("س", [], delivered={"numerator", "ratio"})
+    assert out is None
 
 
 # ── record_turn deep-merges kc_progress (was loaded-never-written) ────────────

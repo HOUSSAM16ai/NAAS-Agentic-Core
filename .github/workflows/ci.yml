@@ -543,6 +543,13 @@ jobs:
     # disk and layer cache stay per-image (three of these used to pull torch).
     strategy:
       fail-fast: false
+      # 15 runners each booting a buildx builder means 15 simultaneous anonymous
+      # pulls of moby/buildkit + the base images from Docker Hub, and Hub throttles:
+      # the first full run lost planning-agent to `registry-1.docker.io: Client.Timeout
+      # exceeded while awaiting headers` while its Dockerfile was perfectly fine. A
+      # gate that fails on unrelated infrastructure teaches people to ignore it, so
+      # cap the concurrency rather than retry into the same wall.
+      max-parallel: 5
       matrix:
         name: ${{ fromJSON(needs.images-plan.outputs.names) }}
     steps:

@@ -322,6 +322,24 @@ jobs:
           set -euo pipefail
           MONOLITH_DESELECTS=(
             # Contract-drift rewrites tracked as follow-up (red on main).
+            # ISS-147 — flaky, NOT a new break. test_redeeming_a_bad_code_over_http
+            # asserts 400 and intermittently gets 401. D-105 permits a new deselect
+            # only with proof of "red on main" plus a root-cause note, so here is the
+            # proof: the same two files in the same order, ten runs on untouched main
+            # (b770289), fail 1/10 — identical to the rate on this branch. It predates
+            # this work and fails the whole 4161-test job on a coin flip.
+            #
+            # Root cause honestly unknown. Four hypotheses were tested and all four
+            # were wrong: lastrowid in the fixture (switched to RETURNING id anyway,
+            # since CLAUDE.md mandates it — rate unchanged), settings-cache clearing,
+            # session/connection visibility, and releasing the shared StaticPool
+            # connection after commit. It also refuses to reproduce under -s, which
+            # points at interleaving rather than logic.
+            #
+            # Scoped to the single test, not the file: the other 22 guardian tests
+            # keep guarding D-195/D-196. This line is debt — it comes out when
+            # ISS-147 is diagnosed, and the list only shrinks.
+            --deselect tests/services/test_guardian_dashboard.py::test_redeeming_a_bad_code_over_http_is_a_400
             --deselect tests/architecture/test_governance.py::test_governance_contracts_any
             --deselect tests/integration/test_import_conversation.py::test_import_new_conversation_returns_imported
             --deselect tests/integration/test_import_conversation.py::test_import_twice_returns_already_exists

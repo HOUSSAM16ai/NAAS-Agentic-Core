@@ -288,7 +288,14 @@ jobs:
   test-monolith:
     name: test-monolith
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 20 was a coin flip, not a budget. Measured on this repo: the test step took
+    # 13m50s on the last green `main` run and 12m13s here, but a slow runner
+    # stretched the identical commit past 18m and the job was killed at the wall.
+    # A cap that close to the median converts runner variance into red builds and
+    # teaches everyone to re-run until it passes -- which is how a gate stops
+    # meaning anything. 30 keeps the job bounded while leaving real headroom; the
+    # way to bring it back down is to make the suite faster, not to shave the cap.
+    timeout-minutes: 30
     env:
       DATABASE_URL: "sqlite+aiosqlite:///:memory:"
       SECRET_KEY: test-secret-key-for-ci-pipeline-secure-length

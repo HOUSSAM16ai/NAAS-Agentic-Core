@@ -86,8 +86,9 @@ class EscapeHatchMixin:
                 count += 1
         return count
 
-    @staticmethod
-    def _detect_subpart_question(question: str) -> str | None:
+    # ISS-148: صار `classmethod` ليَصِل إلى `_detect_part_by_name` (البسط/المقام).
+    @classmethod
+    def _detect_subpart_question(cls, question: str) -> str | None:
         """يكشف سؤالاً محدّداً عن جزئية حسابية في تمرين الاحتمالات.
 
         يُرجِع: ``"red"``/``"green"``/``"white"`` (لون) | ``"total"`` (فضاء العينة
@@ -107,6 +108,40 @@ class EscapeHatchMixin:
             m in q for m in ("14", "الملائمة", "الملاءمة", "نجمع", "لماذا نجمع", "الحالات الملائمة")
         ):
             return "sum"
+        # ── ISS-148: الطالب يسمّي **دور** الجزئية لا قيمتها ────────────────────
+        # «كيف نحسب البسط» لم تكن مُمثَّلة إطلاقاً: الكاشف يعرف الألوان و165 و14
+        # ولا يعرف «البسط»، بينما `_build_naming_answer` يتفرّع أصلاً على
+        # `pending_focus == "denominator"` — مفردتان لنيّة واحدة (D-186/D-206·L6).
+        # النتيجة الحيّة: الرسالة 4613 ردّت بوعدٍ فارغ ثمّ بالـ probe الافتتاحي.
+        #
+        # تسميةُ الدور تطلب **الطريقة**؛ ذكرُ القيمة (165/14 أعلاه) يطلب اشتقاقها.
+        # ولهذا يأتي هذا الفحص **بعد** فحصَي القيمة: الأخصّ يفوز.
+        _named = cls._detect_part_by_name(question)
+        if _named is not None:
+            return _named
+        return None
+
+    #: ISS-148 — أدوار أجزاء الكسر كما يسمّيها الطالب. حدود الكلمات إلزامية:
+    #: «بسط» تختبئ داخل «مبسط»، و`lower()` لا تفعل شيئاً بالعربية (D-206·L4).
+    _PART_NAME_PATTERNS: ClassVar[tuple[tuple[str, str], ...]] = (
+        ("numerator_method", r"(?:^|[^\w])(?:ال)?بسط(?:[^\w]|$)"),
+        ("denominator_method", r"(?:^|[^\w])(?:ال)?مقام(?:[^\w]|$)"),
+    )
+
+    @classmethod
+    def _detect_part_by_name(cls, question: str) -> str | None:
+        """هل سمّى الطالبُ دورَ الجزئية (البسط/المقام) دون ذكر قيمتها؟"""
+        try:
+            from shared.intent import normalize
+
+            norm = normalize(question or "")
+        except Exception:  # pragma: no cover - fail-safe
+            norm = (question or "").strip()
+        if not norm:
+            return None
+        for part, pattern in cls._PART_NAME_PATTERNS:
+            if re.search(pattern, norm):
+                return part
         return None
 
     #: D-160 (ISS-126): علامات طلب شرح اشتقاق قيمة/خطوة («كيف حسبنا 4»، «اشرح كيف
@@ -405,6 +440,40 @@ class EscapeHatchMixin:
         den = r"\times ".join(str(k - i) for i in range(k))
         return f"$C_{{{c}}}^{{{k}}} = \\dfrac{{{num}}}{{{den}}} = {fav}$"
 
+    #: ISS-148 — مرادفات الخطوة الواحدة عبر البُناة. `_build_symbolic_step(focus=
+    #: "ratio")` و`_build_probability_direct_explanation(subpart="total")` يكشفان
+    #: **القيمة نفسها** (المقام) بصياغتين، فسجلٌّ بمفتاحٍ واحد لا يرى التكرار.
+    _STEP_ALIASES: ClassVar[dict[str, tuple[str, ...]]] = {
+        "denominator": ("denominator", "ratio", "total"),
+        "numerator": ("numerator", "sum"),
+    }
+
+    @classmethod
+    def _already_delivered(cls, delivered: set[str] | None, step: str) -> bool:
+        """هل سبق أن رأى الطالب هذه الخطوة — بأيّ من صياغاتها؟"""
+        if not delivered:
+            return False
+        return any(alias in delivered for alias in cls._STEP_ALIASES.get(step, (step,)))
+
+    @staticmethod
+    def _justify_combination_choice(n: int, k: int, total: int) -> str:
+        """ISS-148 — «لماذا توافيق لا ترتيبات»: يُجيب «كيف حسبنا» بما لم يُقَل بعد.
+
+        يُستدعى حين يكون المقام مكشوفاً سلفاً. لا يُعيد القسمة (تلك قيلت)، بل يُبرّر
+        اختيار الأداة — وهو **جوهر** ما يفوت الطالب حين يحفظ القانون ولا يعرف متى
+        يُطبَّق. ممنوع ذكر ناتج الاحتمال النهائي (D-113).
+        """
+        return (
+            f"## لماذا توافيق لا ترتيبات\n\n"
+            f"سحبُ {k} كرات **دفعةً واحدة** يعني أن الترتيب لا يُغيّر شيئاً: الكرات "
+            f"(أ، ب، ج) هي نفسها (ج، أ، ب). لو كان الترتيب مهمّاً لَعَدَدْنا كل ترتيب "
+            f"على حدة، وهذا هو الفرق بين $A_{{{n}}}^{{{k}}}$ و$C_{{{n}}}^{{{k}}}$.\n\n"
+            f"ولهذا قسمنا على $\\;{k}!\\;$: كل مجموعة من {k} كرات تُرتَّب بـ{k}! طريقة، "
+            f"وكلها تمثّل **السحبة نفسها**، فنعدّها مرّة واحدة.\n\n"
+            f"سؤالٌ يختبر الفكرة: لو كان السحب **على التوالي وبدون إرجاع** بدل «دفعة "
+            f"واحدة» — هل يبقى العدد {total}؟ ولماذا؟"
+        )
+
     @classmethod
     def _build_probability_direct_explanation(
         cls,
@@ -412,8 +481,14 @@ class EscapeHatchMixin:
         history_messages: list[dict[str, str]] | None,
         *,
         forced_subpart: str | None = None,
+        delivered: set[str] | None = None,
     ) -> str | None:
         """D-124: شرح رياضي مباشر حتمي لتمرين الاحتمالات (يكسر حلقة الكاروسيل).
+
+        ISS-148: ``delivered`` — الخطوات التي رآها الطالب أصلاً. حين تكون الجزئية
+        المطلوبة مكشوفةً سلفاً، **لا يُعاد الاشتقاق نفسه**؛ يُقدَّم التبرير المفاهيمي
+        (لماذا توافيق لا ترتيبات) — زاويةٌ جديدة تُجيب «كيف حسبنا» بما لم يُقَل بعد.
+        الافتراضي ``None`` = لا سجلّ (السلوك السابق).
 
         D-160 (ISS-126): ``forced_subpart`` (اختياري) — يتجاوز `_detect_subpart_question`
         فيسمح لِـ `_cognitive_turn` بتوجيه الشرح لجزئية كشفها كاشف data-driven من قيمة
@@ -498,8 +573,41 @@ class EscapeHatchMixin:
                         f"لذلك عدد تأليفاته صفر، وهذا اللون لا يساهم في الحالات الملائمة."
                     )
 
+            # ── ISS-148: سُئلنا عن **الطريقة** باسم الدور ⇒ نُعلّم الطريقة ────
+            # «كيف نحسب البسط» يطلب الإجراء لا الناتج. تسليمُ `4 + 10 = 14` هنا
+            # يحوّل المنصّة إلى محرّك إجابات (§0)، ويقتل أثر التوليد الذي هو كلّ
+            # الفائدة. نُعطي الخطوات وشرطَ الاختيار، ونترك الحساب للطالب.
+            if subpart == "numerator_method":
+                _possible_labels = "، ".join(g.label for g in groups if g.is_possible)
+                return (
+                    f"## طريقة حساب البسط\n\n"
+                    f"البسط = عدد الحالات التي **يتحقّق فيها الحدث**. وخطواته ثلاث:\n\n"
+                    f"1. استبعِد كل لونٍ عدده أصغر من {k} — لا يمكن سحب {k} كرات منه أصلاً.\n"
+                    f"2. لكل لونٍ باقٍ عدده $m$، احسب $C_{{m}}^{{{k}}}$ (اختيار غير مرتّب).\n"
+                    f"3. اجمع النواتج، لأن الألوان حالات **متنافية**: السحبة الواحدة "
+                    f"لا تكون بلونين معاً.\n\n"
+                    f"في تمرينك الألوان الباقية بعد الخطوة 1 هي: {_possible_labels}.\n\n"
+                    f"طبّق الخطوتين 2 و3 وأخبرني بالمجموع الذي تحصل عليه."
+                )
+            if subpart == "denominator_method":
+                return (
+                    f"## طريقة حساب المقام\n\n"
+                    f"المقام = عدد **كل** السحبات الممكنة، دون أي شرط. وبما أننا نسحب "
+                    f"{k} كرات **دفعةً واحدة**، فالترتيب لا يُغيّر السحبة — أي أننا نختار "
+                    f"ولا نرتّب.\n\n"
+                    f"فالقانون هو $C_{{n}}^{{{k}}}$ حيث $n$ **العدد الكلّي** للكرات في "
+                    f"الكيس (لا عدد لونٍ بعينه).\n\n"
+                    f"كم يساوي $n$ في تمرينك؟ احسب $C_{{n}}^{{{k}}}$ وأخبرني بالناتج."
+                )
+
             # ── فضاء العينة C(n,k) ────────────────────────────────────────────
             if subpart == "total":
+                # ISS-148: المقام مكشوفٌ سلفاً ⇒ التبرير لا الاشتقاق. في الإنتاج
+                # (المحادثة 837) كُشِف `165` في الرسالة 4611 ثمّ أُعيد اشتقاقه حرفياً
+                # في 4615 لأن حارس التكرار يُقنّع الأرقام فلا يرى القيمة أصلاً.
+                # سؤال «كيف حسبنا 165» بعد رؤيته يطلب **لماذا هكذا**، لا إعادة القسمة.
+                if cls._already_delivered(delivered, "denominator"):
+                    return cls._justify_combination_choice(n, k, total)
                 return (
                     f"## فضاء العينة C({n},{k})\n\n"
                     f"نسحب {k} كرات من {n} دفعةً واحدة. السحب الآني = اختيار غير مرتّب، "

@@ -103,3 +103,79 @@ Skill A → Skill B مباشرة           ❌ محظور (Constitution §5)
 - `cogniforge_{skill}_request_duration_seconds{method,endpoint}`
 - `cogniforge_{skill}_invocations_total{action,status}`
 - `cogniforge_{skill}_startup_info{step,version,environment,...}`
+
+---
+
+## قواعد بيئية مُرحَّلة من الدستور (D-188 · ISS-148 — 2026-08-02)
+
+الأقسام الثلاثة أدناه كانت في `CLAUDE.md` §6، وهي **قواعد بيئية/مرحلية** لا قوانين
+دائمة: واحدة تخصّ مُخطَّط أتمتة Ona، وواحدة تصف غياب Docker في devcontainer بعينه،
+وثالثة تبدأ حرفياً بـ«after Step 4» — وهو الشكل الذي تمنعه قاعدة D-188 من العيش في
+عقدٍ دائم، لأنه يتقادم ثمّ يكذب. نُقلت **حرفياً** بلا تعديل، ويشير إليها الدستور.
+
+### NEVER add `dependsOn` to Ona automation services
+
+```yaml
+# ❌ Wrong — schema rejects it: additionalProperties: false
+services:
+  orchestrator-stack:
+    dependsOn:
+      - some-other-service  # FORBIDDEN in services
+
+# ✅ Correct — use `ready` command to gate startup
+services:
+  orchestrator-stack:
+    commands:
+      ready: curl -sf http://localhost:8006/health
+```
+
+**Rule**: Only `tasks` support `dependsOn`. Services use the `ready` command as a readiness gate. A service stays in "Starting" phase until `ready` passes — this naturally gates any dependent workflow.
+
+### NEVER try to use Docker in the default Codespaces devcontainer
+
+```bash
+# ❌ Wrong — Docker CLI not available in this devcontainer
+docker compose -f docker-compose.step3.yml up -d
+# Error: docker: not found
+
+# ✅ Correct — orchestrator-service runs as a uvicorn process (Step 3)
+# supervisor.sh starts it automatically at boot when OPENROUTER_API_KEY is set
+# Manual restart:
+gitpod automations service start orchestrator-service
+# Or:
+gitpod automations task start restart-orchestrator
+```
+
+**Why no Docker**: `devcontainer.json` intentionally omits `docker-in-docker` — it fails on `python:3.12-slim` + `network_mode: host` (Codespaces error 1302). The `docker-compose.step3.yml` file exists for future environments that support Docker (local dev, CI with DinD). In Codespaces, `supervisor.sh:launch_orchestrator_service()` is the canonical activation path.
+
+### NEVER use a shared prometheus_client REGISTRY across monolith and orchestrator
+
+```python
+# ❌ Wrong — Step 4 lesson: using the default REGISTRY causes metric name collisions
+# when both monolith and orchestrator run in the same process (tests, CI).
+from prometheus_client import Counter
+REQUESTS = Counter("cogniforge_requests_total", "...")  # registers in default REGISTRY
+
+# ✅ Correct — use an independent CollectorRegistry per service
+from prometheus_client import Counter, CollectorRegistry
+_REGISTRY = CollectorRegistry()
+REQUESTS = Counter("cogniforge_orchestrator_requests_total", "...", registry=_REGISTRY)
+```
+
+**Rule**: Every microservice that exposes `/metrics` must use its own `CollectorRegistry()`. Never import from `prometheus_client` without passing `registry=`. The monolith uses its own registry in `app/telemetry/`. The orchestrator uses `prom_metrics._REGISTRY`. They must never share.
+
+### NEVER set OUTBOX_RELAY_ENABLED=false in production supervisor.sh after Step 4
+
+```bash
+# ❌ Wrong — Step 3 default, now obsolete after D-031 fulfilled in Step 4
+OUTBOX_RELAY_ENABLED="false" \
+nohup python -m uvicorn microservices.orchestrator_service.main:app ...
+
+# ✅ Correct — Step 4 default (supervisor.sh and .ona/automations.yaml)
+OUTBOX_RELAY_ENABLED="true" \
+OUTBOX_RELAY_INTERVAL_SECONDS="15" \
+OUTBOX_RELAY_BATCH_SIZE="50" \
+nohup python -m uvicorn microservices.orchestrator_service.main:app ...
+```
+
+**Rule**: `OUTBOX_RELAY_ENABLED=false` was a Step 3 safety guard (D-031). Step 4 verified the persistence path — relay is now the default. Reverting to `false` silently disables event propagation without any error.

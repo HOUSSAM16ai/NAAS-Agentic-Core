@@ -149,6 +149,10 @@ class SocraticEvaluationMixin:
             _dm_reason = ""
             _ts = tutor_state if isinstance(tutor_state, dict) else {}
             _last_step = str(_ts.get("last_step_emitted") or "")
+            # ISS-148: دفتر ما سُلِّم للطالب — يُمرَّر لكل تفريغ رمزي في هذه الدالّة.
+            from app.services.skills.kc_progress_schema import delivered_steps
+
+            _delivered = delivered_steps(_ts)
             # ISS-122 (D-155): الحكم الرقمي الحتمي نهائي — لا يُعاد تشكيله بالـ DM.
             if self._semantic_tutor_enabled() and _numeric is None and result is not None:
                 _dm = self._dialogue_decision(
@@ -168,7 +172,7 @@ class SocraticEvaluationMixin:
                         text = self._build_symbolic_step(combo, "numerator", acknowledge=True)
                     elif _action == "symbolic_reveal":
                         _rv = self._build_symbolic_reveal(
-                            question, history_messages, acknowledge=True
+                            question, history_messages, acknowledge=True, delivered=_delivered
                         )
                         if _rv:
                             text = _rv
@@ -195,7 +199,9 @@ class SocraticEvaluationMixin:
                     self._build_symbolic_step(combo, _second, acknowledge=True),
                     "أنت تملك الآن كل المعطيات — جرّب بنفسك: ركّب البسط على المقام، "
                     "وأخبرني ما قيمة P(A) التي حصلت عليها، وسأخبرك إن أصبت.",
-                    self._build_symbolic_reveal(question, history_messages, acknowledge=True),
+                    self._build_symbolic_reveal(
+                        question, history_messages, acknowledge=True, delivered=_delivered
+                    ),
                 )
                 for _cand in _alternatives:
                     if _cand and not _is_dup(_cand):

@@ -144,6 +144,14 @@ guardrails:
 	python scripts/ci_guardrails.py
 	@echo "$(GREEN)✅ Guardrails passed!$(NC)"
 
+# ISS-148: `guardrails` above runs ONE of the ~29 checks the CI job of the same
+# name runs. That gap is how a contributor ends up "locally clean" and red on
+# push. `gates` runs the real set, read from ci.yml itself so it cannot drift.
+gates:
+	@echo "$(BLUE)🚦 Running every fitness gate the CI guardrails job runs...$(NC)"
+	python scripts/run_fitness_gates.py
+	@echo "$(GREEN)✅ All fitness gates passed!$(NC)"
+
 compose-isolation:
 	@echo "$(BLUE)🧩 Validating compose isolation rules...$(NC)"
 	python scripts/validate_compose_isolation.py
@@ -187,7 +195,10 @@ test:
 	ENVIRONMENT=testing TESTING=1 SECRET_KEY=test-key \
 	pytest --verbose --cov=app --cov-report=term-missing:skip-covered \
 	       --cov-report=html:htmlcov --cov-report=xml:coverage.xml \
-	       --cov-fail-under=100
+	       --cov-fail-under=73
+#      ^^ ISS-148: was 100, while `ci.yml` gates on 73 (measured, with a
+#      deliberate margin below the real 73.41%). A local target that fails where
+#      CI passes trains people to ignore it — the worst possible state for a gate.
 	@echo "$(GREEN)✅ Tests passed with coverage!$(NC)"
 
 test-fast:

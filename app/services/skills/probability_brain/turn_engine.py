@@ -76,6 +76,7 @@ class CognitiveTurnEngineMixin:
 
             from app.services.skills.kc_progress_schema import (
                 PENDING_KEY,
+                delivered_steps,
                 make_pending,
                 parse_kc_entry,
                 pending_of,
@@ -150,8 +151,16 @@ class CognitiveTurnEngineMixin:
             #    حسبنا 14» شرحٌ لا إجابةَ «14» (لا اختطاف). الإجابة بلا علامة تبقى لـ S2.
             _explain_part = cls._detect_step_explanation(question, combo)
             if _explain_part is not None:
+                # ISS-148: هذا هو المسار الذي أنتج الرسالة 4615 في الإنتاج —
+                # «كيف حسبنا 165» ⇒ `forced_subpart="total"` ⇒ إعادة اشتقاق ما
+                # كُشِف في الدور السابق تحت الاسم `ratio`. الاسمان **فكرة واحدة**
+                # (المقام)، وحارس التكرار النصّي لا يراها لأنه يُقنّع الأرقام.
+                # الدفتر يحوّل الإعادة إلى تبريرٍ مفاهيمي — زاويةٌ جديدة لا نسخة.
                 _teach = cls._build_probability_direct_explanation(
-                    question, history_messages, forced_subpart=_explain_part
+                    question,
+                    history_messages,
+                    forced_subpart=_explain_part,
+                    delivered=delivered_steps(kc_progress),
                 )
                 if _teach and not cls._recently_emitted(_teach, history_messages):
                     entry.attempts += 1
@@ -240,7 +249,9 @@ class CognitiveTurnEngineMixin:
             for step in ("numerator", "ratio"):
                 if step in entry.representations_delivered:
                     continue
-                text = cls._build_symbolic_step(combo, step)
+                # ISS-148: سؤالُ الطالب عن الإجراء («كيف نحسب الحادثة A») يستحقّ
+                # الإجراء لا ناتجه. التسليم الرمزي الكامل يبقى للمحاولة المُعترَف بها.
+                text = cls._build_symbolic_step(combo, step, method_only=_is_q)
                 if cls._recently_emitted(text, history_messages):
                     continue
                 # D-162 (ISS-128): pending = بؤرة **السؤال المطروح فعلاً** في نصّ
@@ -270,7 +281,10 @@ class CognitiveTurnEngineMixin:
                 if _part in entry.representations_delivered:
                     continue
                 _t = cls._build_probability_direct_explanation(
-                    question, history_messages, forced_subpart=_part
+                    question,
+                    history_messages,
+                    forced_subpart=_part,
+                    delivered=delivered_steps(kc_progress),  # ISS-148
                 )
                 if _t and not cls._recently_emitted(_t, history_messages):
                     return _finish(_t, add_step=_part)

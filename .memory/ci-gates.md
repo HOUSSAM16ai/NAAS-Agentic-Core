@@ -1,31 +1,42 @@
 # CI Gates — Pre-merge Required Checks
-> Last updated: 2026-07-22 | Branch: `claude/oop-claude-md-update-e2ziez`
-> **D-179 note:** the `guardrails` job now also runs `check_test_hygiene.py`,
-> `check_legacy_invariants.py` (D-173), `check_model_chain_parity.py` (D-174),
-> `check_no_cross_service_imports.py`, `check_ports_consistency.py`,
-> `check_single_brain_control_plane.py`, `check_core_kernel_acl.py`,
-> `check_abstraction_consumed.py` (D-176). The Skills Doctrine gate
-> (`skills-doctrine-gate.yml` → `check_skills_doctrine.py`) and the Pedagogical-OS gate
-> (`check_pedagogical_os.py`) both stay green after the BaseSkill adoption (23 skills).
+> Last updated: **2026-08-02** | Branch: `claude/probability-exercise-2024-pm8z7d`
+> **ISS-148 note:** this table used to name **five workflow files that no longer
+> exist** (`microservices-step6…step12`) while omitting five that do, and listed 8
+> of the ~31 checks the `guardrails` job actually runs. A gate inventory that lies
+> is worse than none: it is read precisely by the people trying to be careful.
+> **The source of truth is `.github/workflows/ci.yml` itself** — run
+> `make gates` (`scripts/run_fitness_gates.py`) to execute the real set locally;
+> it reads the workflow, so it cannot drift from it.
 
 ## Required jobs (must be green)
+
+`required-ci` in `ci.yml` aggregates **nine** jobs; its `needs:` list is the truth.
+
 | Workflow | Job | What it enforces |
 |---|---|---|
-| `ci.yml` | `lint` | `ruff check .` + `ruff format --check .` |
-| `ci.yml` | `contracts` | gateway/provider parity (`scripts/fitness/check_gateway_provider_contracts.py` + `tests/contracts/`) |
-| `ci.yml` | `guardrails` | `ci_guardrails.py` + `check_no_app_imports_in_microservices.py --strict` + `check_route_registry_parity.py` + `check_tracing_gate.py` + `check_test_hygiene.py` + `check_legacy_invariants.py` + `check_model_chain_parity.py` + `check_no_cross_service_imports.py` + `check_ports_consistency.py` + `check_single_brain_control_plane.py` + `check_core_kernel_acl.py` + `check_abstraction_consumed.py` + `check_notation_definable.py` + `check_notation_parity.py` + `check_intent_single_source.py` + `check_no_shell_true.py` + `check_correlated_http.py` + `check_design_tokens.py` + `check_topic_contract_parity.py` + `check_model_registry.py` + `check_redaction_parity.py` |
-| `ci.yml` | `frontend-tests` | node tests + `server.js` syntax + lockfile sync + **D-185:** OpenAPI-generated TS types are current (`generate_frontend_types.py --check`) + `npm run typecheck` |
-| `skills-doctrine-gate.yml` | `check_skills_doctrine` | every skill imports from `doctrine.py`; ~15 `check_*_wired` token-assertions (BaseSkill adoption preserves all) |
-| `ci.yml` | `test` | full pytest suite (`tests/`) |
-| `ci.yml` | `required-ci` | aggregator — fails if any required job fails |
-| `structure-validation.yml` | structure-validation | `scripts/validate_structure.py` |
-| `doc_integrity.yml` | doc-integrity | `CLAUDE.md` + `.memory/*` integrity, root scratch artifacts |
-| **`runtime_truth.yml`** | **runtime-truth-drift-check** | `scripts/runtime_truth.py --check` matches `.runtime/truth_table.lock.json` |
-| `microservices-step6-planning-agent.yml` | step6-gate | prometheus-client + prom_metrics.py + /metrics + supervisor.sh + automations.yaml + prometheus.yml + dashboard + 61 tests |
-| `microservices-step7-research-agent.yml` | step7-gate | prometheus-client + tavily-python + prom_metrics.py + /metrics + supervisor.sh + automations.yaml + prometheus.yml + dashboard + 68 tests |
-| `microservices-step8-reasoning-agent.yml` | `step8-gate` | prometheus-client + prom_metrics.py (11 metrics) + /metrics + ISS-039-B check + supervisor.sh (STEP 4H) + automations.yaml + prometheus.yml (step=8) + dashboard (UID cogniforge-ms-step8-reasoning-agent) + 79 tests |
-| **`microservices-step11-full-skills.yml`** | **step11-gate** | **7 jobs: lint + 63 content-retrieval-skill tests + ISS-038 regression (13 cases) + intent classifier contract + 7 Prometheus metrics + ISS-042 Service Token JWT + DSPy 3.x fix (dspy.LM) (NEW — 2026-05-11)** |
-| **`microservices-step12-conversation-service.yml`** | **step12-gate** | **7 jobs: static-checks (Skill contract + isolation) + metrics-gate (11 metrics) + graph-gate (LangGraph StateGraph) + lint + step12-tests (117 tests) + regression-steps-4-11 + pr-summary (NEW — 2026-05-11)** |
+| `ci.yml` | `lint` | `ruff check .` + `ruff format --check .` + `mypy` |
+| `ci.yml` | `contracts` | gateway/provider parity + `tests/contracts/` |
+| `ci.yml` | `guardrails` | **~31 fitness gates** — enumerated in the workflow, run locally with `make gates` |
+| `ci.yml` | `test-monolith` | `tests` + `scripts/ci` minus microservices, `--cov-fail-under=73` |
+| `ci.yml` | `test-microservices` | `tests/microservices` + `microservices/*/tests` + OpenAPI parity |
+| `ci.yml` | `frontend-tests` | node tests + lockfile sync + generated TS types + `npm run typecheck` + bundle budget |
+| `ci.yml` | `skills-structural` | skills registry/structure assertions |
+| `ci.yml` | `event-stack-live` | **D-204** — boots Redpanda + Temporal, proves delivery/skip/DLQ |
+| `ci.yml` | `images-plan` + `images-build` | **D-205** — every buildable image declared and built |
+| `ci.yml` | `required-ci` | aggregator over the nine above (skipped counts as success — D-141#4) |
+
+### Workflows with no aggregator (blocking depends on branch protection)
+
+| Workflow | Job | What it enforces |
+|---|---|---|
+| `doc_integrity.yml` | `doc-integrity` | `check_memory_coherence` + `check_constitution_reality` + CLAUDE.md anchors + no dated diagnostics outside `docs/archive/` |
+| `runtime_truth.yml` | `runtime-truth-drift-check` | `scripts/runtime_truth.py --check` vs `.runtime/truth_table.lock.json` |
+| `skills-doctrine-gate.yml` | `doctrine-drift` · `doctrine-invariants` | `check_skills_doctrine.py` + `check_pedagogical_os.py` |
+| `skills-architecture-gate.yml` | 7 jobs + `skills-gate-required` | API contracts · metrics inventory · skill isolation · health · dashboards · targets · pipeline |
+| `structure-validation.yml` | `validate-structure` · `validate-integration` | `scripts/validate_structure.py` + E2E chat check |
+| `frontend-theme-ci.yml` | 6 jobs + summary | theme contracts · anti-flash · build · lint · regression |
+| `observability_validation.yml` | `static-validation` | compose config · telemetry wiring · documentation lock |
+| `docker-fullstack-gate.yml` | `compose-validate` | compose config validation only — **does not run `up`** |
 
 ## D-185 — the two notation gates (added 2026-07-28)
 

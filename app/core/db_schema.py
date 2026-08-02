@@ -4,8 +4,11 @@
 مبدأ المسؤولية الواحدة ودعم تعدد محركات قواعد البيانات.
 """
 
+import contextlib
 import logging
 import re
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -117,6 +120,34 @@ async def _table_exists(conn: AsyncConnection, table_name: str) -> bool:
     return bool(result.scalar())
 
 
+@asynccontextmanager
+async def _ddl_savepoint(conn: AsyncConnection) -> AsyncIterator[None]:
+    """ISS-148 — يعزل عبارة DDL واحدة داخل SAVEPOINT فلا يُسمّم فشلُها البقيّة.
+
+    PostgreSQL يُجهض **المعاملة كاملة** عند أول عبارة فاشلة: كل ما بعدها يرتدّ
+    بـ`InFailedSQLTransactionError`. فكانت حلقة `validate_and_fix_schema` تلتقط
+    الاستثناء و`continue` ظنّاً أن الضرر محصور — والحقيقة أن الجدول **الأوّل**
+    الفاشل يُسقِط كل الجداول بعده.
+
+    مُبرهَن حياً (2026-08-02): على PostgreSQL 16 نظيف بلا امتداد `pgvector`، فشلت
+    `bac_exercise_questions` على `type "vector" does not exist`، فلم يُنشَأ **ولا
+    جدول واحد** من الـ33 — و`/health` أعلن `database: ok` على قاعدة فارغة تماماً.
+    قاعدة §0: الصحّة لا تكذب، والفشل الجزئي لا يتنكّر في هيئة نجاح.
+
+    مع SAVEPOINT يُلغى أثرُ الجدول الفاشل وحده وتُكمل البقيّة — تدهورٌ رشيق حقيقي.
+    """
+    nested = await conn.begin_nested()
+    try:
+        yield
+    except Exception:
+        with contextlib.suppress(Exception):
+            await nested.rollback()
+        raise
+    else:
+        with contextlib.suppress(Exception):
+            await nested.commit()
+
+
 async def _fix_missing_column(
     conn: AsyncConnection,
     table_name: str,
@@ -131,12 +162,15 @@ async def _fix_missing_column(
     query = _apply_dialect_ddl(conn, auto_fix_queries[col])
 
     try:
-        await conn.execute(text(query))
+        # ISS-148: SAVEPOINT — عمودٌ أو فهرسٌ فاشل لا يُجهض المعاملة كاملة.
+        async with _ddl_savepoint(conn):
+            await conn.execute(text(query))
         logger.info(f"✅ Added missing column: {table_name}.{col}")
 
         if col in index_queries:
             idx_query = _apply_dialect_ddl(conn, index_queries[col])
-            await conn.execute(text(idx_query))
+            async with _ddl_savepoint(conn):
+                await conn.execute(text(idx_query))
             logger.info(f"✅ Created index for: {table_name}.{col}")
 
         return True
@@ -212,7 +246,9 @@ async def _ensure_missing_indexes(
             continue
 
         try:
-            await conn.execute(text(_apply_dialect_ddl(conn, index_query)))
+            # ISS-148: SAVEPOINT — فهرس pgvector غائب الامتداد لا يُسقط الباقي.
+            async with _ddl_savepoint(conn):
+                await conn.execute(text(_apply_dialect_ddl(conn, index_query)))
             fixed_indexes.append(f"{table_name}.{index_name}")
             logger.info(f"✅ Created missing index: {table_name}.{index_name}")
         except Exception as exc:
@@ -220,6 +256,51 @@ async def _ensure_missing_indexes(
             missing_indexes.append(f"{table_name}.{index_name}")
 
     return missing_indexes, fixed_indexes, errors
+
+
+async def _create_missing_tables_by_fixpoint(
+    conn: AsyncConnection, auto_fix: bool
+) -> dict[str, str]:
+    """ISS-148 — يُنشئ الجداول الناقصة بتمريراتٍ متكرّرة حتى يتوقّف التقدّم.
+
+    `REQUIRED_SCHEMA` قاموسٌ يُقرَأ **بترتيب الإدراج**، وترتيبه ليس ترتيباً طوبولوجياً
+    لمفاتيح الأجانب. فعلى قاعدة بيانات نظيفة كان `customer_conversations` يُنشَأ قبل
+    `users` فيفشل على `relation "users" does not exist` — ثمّ يفشل `customer_messages`
+    لاعتماده عليه. أي أنّ **جدول رسائل الطالب لم يكن لِيُنشَأ أبداً** على قاعدة جديدة.
+
+    بُرهن حياً (2026-08-02، PostgreSQL 16 نظيف): 18 جدولاً من 33 فقط، والساقطُ منها
+    `customer_conversations` · `customer_messages` · `tutor_state` · `student_bkt_analytics`
+    — أي قلبُ دور الطالب كلّه. كان الخلل مُقنَّعاً لأن قاعدة الإنتاج تحتوي الجداول أصلاً،
+    فلا يظهر إلّا عند إقلاعٍ نظيف (وهو بالضبط ما يفعله مطوّرٌ جديد أو بيئة اختبار).
+
+    الحلّ نقطةٌ ثابتة لا إعلان تبعيات: أعِد المحاولة ما دام كل تمرير يُنشئ جدولاً
+    جديداً. تُنشَأ الجذور أوّلاً، ثمّ ما يعتمد عليها، بلا خريطة تبعيات تتقادم.
+    """
+    pending = [
+        (name, info)
+        for name, info in REQUIRED_SCHEMA.items()
+        if name in _ALLOWED_TABLES and info.get("create_table")
+    ]
+    errors: dict[str, str] = {}
+    while pending and auto_fix:
+        errors = {}
+        remaining: list[tuple[str, dict]] = []
+        for table_name, schema_info in pending:
+            if await _table_exists(conn, table_name):
+                continue
+            try:
+                async with _ddl_savepoint(conn):
+                    await conn.execute(text(_apply_dialect_ddl(conn, schema_info["create_table"])))
+                logger.info("✅ Created missing table: %s", table_name)
+            except Exception as exc:
+                errors[table_name] = str(exc)
+                remaining.append((table_name, schema_info))
+        # لا تقدّم في هذا التمرير ⇒ ما بقي فاشلٌ لسببٍ حقيقي (امتداد ناقص مثلاً)،
+        # لا لترتيبٍ سيّئ. نتوقّف بدل الدوران — والأخطاء تُبلَّغ ولا تُبتلَع (§0).
+        if len(remaining) == len(pending):
+            break
+        pending = remaining
+    return errors
 
 
 async def validate_and_fix_schema(auto_fix: bool = True) -> SchemaValidationResult:
@@ -236,6 +317,12 @@ async def validate_and_fix_schema(auto_fix: bool = True) -> SchemaValidationResu
 
     try:
         async with engine.connect() as conn:
+            # ISS-148: تمرير الإنشاء بالنقطة الثابتة **قبل** الحلقة — يحلّ ترتيب
+            # مفاتيح الأجانب فيصير الإقلاع على قاعدة نظيفة ممكناً فعلاً.
+            _create_errors = await _create_missing_tables_by_fixpoint(conn, auto_fix)
+            for _failed_table, _reason in _create_errors.items():
+                results["errors"].append(f"Failed to create table {_failed_table}: {_reason}")
+
             for table_name, schema_info in REQUIRED_SCHEMA.items():
                 if table_name not in _ALLOWED_TABLES:
                     continue
@@ -249,7 +336,9 @@ async def validate_and_fix_schema(auto_fix: bool = True) -> SchemaValidationResu
 
                     if create_query and auto_fix:
                         try:
-                            await conn.execute(text(_apply_dialect_ddl(conn, create_query)))
+                            # ISS-148: SAVEPOINT — فشلُ جدولٍ واحد لا يُسقط البقيّة.
+                            async with _ddl_savepoint(conn):
+                                await conn.execute(text(_apply_dialect_ddl(conn, create_query)))
                             logger.info(f"✅ Created missing table: {table_name}")
                             existing_columns = set(schema_info.get("columns", []))
                             results["fixed_columns"].extend(

@@ -291,8 +291,14 @@ class TurnPreemptsCognitiveMixin:
                 _ack = "إجابتك في الطريق الصحيح — " if _policy.acknowledge else ""
                 if _policy.action == "symbolic_reveal":
                     # D-129: الإنقاذ التربوي الحتمي بعد استنفاد السقراطية.
+                    # ISS-148: دفتر ما سُلِّم — بدونه إعادة تفريغ كاملة كل دور.
+                    from app.services.skills.kc_progress_schema import delivered_steps
+
                     _direct = self._build_symbolic_reveal(
-                        question, history_messages, acknowledge=_policy.acknowledge
+                        question,
+                        history_messages,
+                        acknowledge=_policy.acknowledge,
+                        delivered=delivered_steps(tutor_state),
                     )
                 elif _policy.action == "socratic":
                     # D-128: سرد سقراطي مُولَّد فريد (محروس)؛ اعتراف بإجابة الطالب.
@@ -337,8 +343,16 @@ class TurnPreemptsCognitiveMixin:
                         else None
                     )
                     if _sc_part is not None:
+                        # ISS-148: هذا هو المسار الذي أنتج الرسالة 4615 («كيف حسبنا
+                        # 165» ⇒ subpart="total" ⇒ إعادة اشتقاق ما كُشِف في 4611).
+                        # الدفتر يحوّل الإعادة إلى تبريرٍ مفاهيمي.
+                        from app.services.skills.kc_progress_schema import delivered_steps
+
                         _direct = self._build_probability_direct_explanation(
-                            question, history_messages, forced_subpart=_sc_part
+                            question,
+                            history_messages,
+                            forced_subpart=_sc_part,
+                            delivered=delivered_steps(tutor_state),
                         )
             if not _direct:
                 _direct = self._build_probability_direct_explanation(question, history_messages)
@@ -357,6 +371,11 @@ class TurnPreemptsCognitiveMixin:
                         if isinstance(_d153_ts, dict)
                         else ""
                     )
+                    # ISS-148: دفتر ما سُلِّم — `last_step_emitted` مرساةٌ **واحدة**،
+                    # لا ذاكرةَ كل ما رآه الطالب.
+                    from app.services.skills.kc_progress_schema import delivered_steps
+
+                    _d153_delivered = delivered_steps(_d153_ts)
 
                     def _d153_dup(t: str) -> bool:
                         return self._recently_emitted(t, history_messages) or (
@@ -388,7 +407,11 @@ class TurnPreemptsCognitiveMixin:
                             ),
                             "أنت تملك الآن كل المعطيات — جرّب بنفسك: ركّب البسط على "
                             "المقام، وأخبرني ما قيمة P(A) التي حصلت عليها، وسأخبرك إن أصبت.",
-                            self._build_symbolic_reveal(question, history_messages),
+                            self._build_symbolic_reveal(
+                                question,
+                                history_messages,
+                                delivered=_d153_delivered,  # ISS-148
+                            ),
                         )
                         _direct = None
                         for _cand in _alts:

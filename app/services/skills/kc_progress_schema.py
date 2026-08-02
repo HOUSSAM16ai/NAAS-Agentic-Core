@@ -126,6 +126,34 @@ def make_pending(kc_id: str, step_key: str) -> dict:
     return {"kc_id": kc_id, "step_key": step_key}
 
 
+def delivered_steps(tutor_state: object) -> set[str]:
+    """ISS-148 — كل خطوة سبق تسليمها للطالب، من **كل** مفاتيح `kc_progress`.
+
+    القراءة الموحَّدة التي تُغذّي `_build_symbolic_reveal(delivered=…)`. كان ذلك
+    المعامل اختيارياً بقيمة `None` تعني «لا تحذف شيئاً»، فمن ثمانية مواضع نداء
+    مرّره **واحد** — وأعاد الباقون تفريغ ما رآه الطالب أصلاً (المحادثة 837:
+    كُشِفت `165` في الرسالة 4611 ثمّ أُعيدت في 4615).
+
+    الاتحاد عبر كل المفاتيح مقصود: خطوةٌ سُلِّمت تحت `prob_event_a` هي خطوةٌ **رآها
+    الطالب**، فلا يجوز إعادتها لأن الدور الحالي يعمل على `prob_event_b`. مفتاحُ
+    التخزين تفصيلٌ داخلي؛ ذاكرةُ الطالب ليست كذلك.
+
+    fail-open: حالةٌ فاسدة تُرجِع مجموعةً فارغة ولا تُسقط دور الطالب أبداً.
+    """
+    if not isinstance(tutor_state, dict):
+        return set()
+    kc_progress = tutor_state.get("kc_progress")
+    if not isinstance(kc_progress, dict):
+        # نقبل تمرير `kc_progress` نفسه — بعض مواضع النداء تملكه دون الحالة الكاملة.
+        kc_progress = tutor_state
+    out: set[str] = set()
+    for key, raw in kc_progress.items():
+        if key == PENDING_KEY or not isinstance(raw, dict):
+            continue
+        out.update(parse_kc_entry(raw).representations_delivered)
+    return out
+
+
 def escalation_levels_of(kc_progress: object, concept_id: str) -> list[int]:
     """رُتب التصعيد الدائمة لمفهومٍ ما كأعداد صحيحة (["L1","L3"] ⇒ [1, 3]) — fail-open.
 

@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Final, Literal
 
 from shared.textnorm import normalize
@@ -69,6 +70,7 @@ ScopeSource = Literal["text", "history", "none"]
 _MAX_QUESTION_NUMBER: Final[int] = 20
 
 
+@lru_cache(maxsize=4096)
 def strip_articles(text: str) -> str:
     """يحذف أداة التعريف «ال» من بداية كل كلمة (مرآة `shared/curriculum`).
 
@@ -266,12 +268,34 @@ def _matches_word(haystack_words: frozenset[str], marker: str) -> bool:
     return marker in haystack_words
 
 
+def _boundary_pattern(markers: tuple[str, ...]) -> re.Pattern[str] | None:
+    """تعبيرٌ واحد مُصرَّف لكل مجموعة علامات — بديلٌ عن تصريفٍ لكلّ علامة لكلّ نداء.
+
+    **قياسٌ لا حدس:** النسخة الأولى بَنَت regex لكلّ علامة في كلّ نداء، فصارت
+    `resolve_scope` 53µs و`classify` 68µs — وهي في مسارٍ ساخن يُستدعى كلّ دور،
+    فتجاوزت `test-monolith` مهلتها في CI. الأطول أوّلاً كي لا تخطف علامةٌ قصيرة
+    أطولَ منها داخل البديل (`اول` قبل `اولي` تُفسد الترتيب).
+    """
+    cleaned = sorted((m for m in markers if m), key=len, reverse=True)
+    if not cleaned:
+        return None
+    joined = "|".join(re.escape(m) for m in cleaned)
+    return re.compile(r"(?<!\w)(?:" + joined + r")(?!\w)")
+
+
 def _contains_boundary(text: str, marker: str) -> bool:
     """وجود العلامة كوحدة مستقلّة (كلمة أو عبارة) لا كجزءٍ من كلمة أطول."""
     if not marker:
         return False
-    pattern = r"(?<!\w)" + re.escape(marker) + r"(?!\w)"
-    return re.search(pattern, text) is not None
+    pattern = _MARKER_RE_CACHE.get(marker)
+    if pattern is None:
+        pattern = re.compile(r"(?<!\w)" + re.escape(marker) + r"(?!\w)")
+        _MARKER_RE_CACHE[marker] = pattern
+    return pattern.search(text) is not None
+
+
+#: تصريفٌ كسول لكل علامة مفردة (يُستعمل عند المطابقة الفردية).
+_MARKER_RE_CACHE: dict[str, re.Pattern[str]] = {}
 
 
 #: الصور المُطبَّعة، مرتّبةً بالأطول أوّلاً — الأخصّ يفوز **بالبناء** لا بترتيب الكتابة.
@@ -285,6 +309,11 @@ _NORM_ONLY: Final[tuple[str, ...]] = _norm_all(SCOPE_ONLY_MARKERS)
 _NORM_VERBS: Final[tuple[str, ...]] = _norm_all(SCOPE_REQUEST_VERBS)
 _NORM_PART_LABELS: Final[tuple[str, ...]] = _norm_all(PART_LABEL_MARKERS)
 _NORM_CANCEL: Final[tuple[str, ...]] = _norm_all(EXPLANATION_CANCEL_MARKERS)
+_CANCEL_RE: Final[re.Pattern[str] | None] = _boundary_pattern(_NORM_CANCEL)
+_ORDINAL_RE_BY_VALUE: Final[tuple[tuple[re.Pattern[str], int], ...]] = tuple(
+    (_boundary_pattern((form,)), value)  # type: ignore[misc]
+    for form, value in _NORM_ORDINALS
+)
 
 
 def ordinal_value(text: str) -> int | None:
@@ -299,8 +328,8 @@ def ordinal_value(text: str) -> int | None:
     الأخصّ يفوز بالبناء لا بترتيب الكتابة اليدوي).
     """
     haystack = strip_articles(normalize(text))
-    for form, value in _NORM_ORDINALS:
-        if _contains_boundary(haystack, form):
+    for pattern, value in _ORDINAL_RE_BY_VALUE:
+        if pattern is not None and pattern.search(haystack):
             return value
     return None
 
@@ -329,8 +358,15 @@ class ExerciseScope:
 _EMPTY: Final[ExerciseScope] = ExerciseScope()
 
 
+@lru_cache(maxsize=2048)
 def _scan(text: str) -> tuple[int | None, str | None]:
-    """يستخرج (رقم السؤال، الجزء) من نصٍّ واحد — بلا تاريخ ولا سياق."""
+    """يستخرج (رقم السؤال، الجزء) من نصٍّ واحد — بلا تاريخ ولا سياق.
+
+    **مُذاكِرة عمداً (لا تحسين مبكّر):** دالّة خالصة على نصٍّ قصير، وتُستدعى في مسارٍ
+    ساخن — `shared.intent.classify` تستشيرها في **كل** دور. القياس: `classify` صارت
+    68µs/نداء (منها 53µs هنا) بعد وصلها، فتجاوزت وظيفةُ `test-monolith` مهلتها
+    (13م50ث من أصل 20 على `main` ⇒ >20م). الذاكرة تُعيدها إلى تكلفة البحث في قاموس.
+    """
     norm = normalize(text)
     if not norm:
         return None, None
@@ -401,7 +437,7 @@ def resolve_scope(text: str, history: list[dict[str, str]] | None = None) -> Exe
     norm = normalize(text)
     stripped = strip_articles(norm)
 
-    if any(_contains_boundary(stripped, m) for m in _NORM_CANCEL):
+    if _CANCEL_RE is not None and _CANCEL_RE.search(stripped):
         return ExerciseScope(reason="explanation_intent_wins")
 
     words = frozenset(stripped.split())

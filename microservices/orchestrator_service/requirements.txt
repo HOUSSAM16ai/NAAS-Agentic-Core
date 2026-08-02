@@ -25,3 +25,8 @@ python-json-logger>=4.0.0
 opentelemetry-api
 opentelemetry-sdk
 prometheus-client>=0.20.0
+# D-205: migrations/env.py imports alembic at module level, and alembic was in
+# no service requirements file — so `alembic upgrade` could never run inside this
+# image. Not a startup blocker (the app does not import it), which is exactly why
+# it went unnoticed while no image was ever built.
+alembic>=1.13.1

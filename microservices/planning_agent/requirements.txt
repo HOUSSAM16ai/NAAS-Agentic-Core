@@ -17,3 +17,8 @@ psycopg2-binary>=2.9.9
 
 # R0.1 (D-172): security.py imports jwt (PyJWT) — was missing from requirements.
 pyjwt>=2.8.0
+# D-205: migrations/env.py imports alembic at module level, and alembic was in
+# no service requirements file — so `alembic upgrade` could never run inside this
+# image. Not a startup blocker (the app does not import it), which is exactly why
+# it went unnoticed while no image was ever built.
+alembic>=1.13.1

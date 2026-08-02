@@ -2,7 +2,10 @@ fastapi==0.109.2
 ddgs>=6.0
 uvicorn==0.27.1
 pydantic>=2.8.0,<3.0.0
-pydantic-settings==2.2.1
+# D-205: was pinned ==2.2.1, which made the file unresolvable once
+# langchain-community (>=2.4.0) was declared. Loosened to match the range the
+# monolith already uses rather than dropping the package the code imports.
+pydantic-settings>=2.4.0,<3.0.0
 sqlalchemy>=2.0.25
 asyncpg>=0.29.0
 psycopg2-binary>=2.9.9

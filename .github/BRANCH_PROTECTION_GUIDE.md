@@ -20,8 +20,35 @@ This repository uses a **single mergeability truth**: `required-ci`.
 Exactly one required check:
 - `required-ci`
 
-`required-ci` already aggregates `lint`, `contracts`, `guardrails`, and `test`.
+`required-ci` aggregates **nine** jobs — the live `needs:` list in
+`.github/workflows/ci.yml` is the truth, and this list mirrors it:
+
+`lint` · `contracts` · `guardrails` · `test-monolith` · `test-microservices` ·
+`frontend-tests` · `skills-structural` · `event-stack-live` · `images-plan` +
+`images-build`.
+
 Do **not** require both aggregate and underlying jobs in branch protection.
+
+> **ISS-148 — why this paragraph is spelled out.** It used to say `required-ci`
+> aggregates "`lint`, `contracts`, `guardrails`, and `test`" — four jobs, one of
+> which (`test`) no longer exists; it was split into `test-monolith` and
+> `test-microservices`. Meanwhile `.memory/ci-gates.md` listed a *third*,
+> different set as merge-blocking. Three governance documents disagreed about
+> the single thing they exist to state. A contributor reading any one of them
+> would have been wrong.
+
+### Workflows that are **not** aggregated by `required-ci`
+
+These run on every PR and have no aggregator job, so whether they block a merge
+depends on branch-protection settings in GitHub, not on anything in this repo:
+
+`doc-integrity` · `runtime-truth` · `skills-doctrine-gate` ·
+`skills-architecture-gate` · `structure-validation` · `frontend-theme-ci` ·
+`observability-validation` · `docker-fullstack-gate`.
+
+They are listed here so their status is a **known** unknown rather than an
+assumption. Treat them as required in practice: they guard the constitution,
+the truth table, and the pedagogical doctrine.
 
 ## Why this model
 

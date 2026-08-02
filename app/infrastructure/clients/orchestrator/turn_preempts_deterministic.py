@@ -123,8 +123,14 @@ class TurnPreemptsDeterministicMixin:
         # In D-144, if the policy engine mandates a specific pedagogical action (e.g. symbolic reveal or intermediate scaffold)
         # we bypass the standard generative fallbacks and directly emit that action.
         if policy_decision.next_action == "symbolic_reveal" and not _scope_defers:
+            # ISS-148: دفتر ما سُلِّم — بدونه يُعاد تفريغ ما رآه الطالب أصلاً.
+            from app.services.skills.kc_progress_schema import delivered_steps
+
             _reveal_text = self._build_symbolic_reveal(
-                question, history_messages, acknowledge=policy_obs.is_correct
+                question,
+                history_messages,
+                acknowledge=policy_obs.is_correct,
+                delivered=delivered_steps(tutor_state),
             )
             if _reveal_text:
                 yield self._normalize_stream_event(

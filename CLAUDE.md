@@ -57,6 +57,8 @@ The system must preserve the following principles permanently. Every future agen
 - **الواجهة تُحكَم كما يُحكَم الخادم (D-199 — 2026-08-01)**: كلّ قيمة بصرية من `frontend/app/styles/tokens.css` (مدّتان وتسهيلٌ واحد)، تحرسها `check_design_tokens` بدَينٍ يتقلّص فقط + **حساب** تباين WCAG AA لكل زوج (رقمٌ في تعليق ليس تحقّقاً — تقديراتي الأولى كانت خاطئة). ⛔ **لا `@import` من نطاقٍ ثالث** (يحجب أوّل رسم؛ الخطّ عبر `next/font` مُستضافاً ذاتياً). ورقٌ دافئ لا أبيض صرف (القراءة ساعات). تقليل الحركة **شامل** (`*`) لا قائمة تنسى المُضاف غداً. أوّل رسمٍ ليس فارغاً. وميزانية حجم (`check_bundle_budget`) تُترجَم إلى ثوانٍ على 3G — والبناء الغائب **يُفشِل** البوّابة لا يمرّ بصفر.
 - **الدستور يساوي الواقع ولا يناقض نفسه (D-192 — 2026-07-31)**: أيّ عددٍ قابل للتغيّر (المهارات · العقود) **يُشتَقّ** من مصدره ولا يُكتب في النثر؛ والكمّية الواحدة لا تحمل قيمتين في قسمين؛ وكل قاعدة تسمّي رمزاً تُختبَر على المصدر. تحرسه `check_constitution_reality` (بوّابة `doc-integrity`) — وُلِد من تناقضَين حقيقيَّين في هذا الملفّ نفسه: عددُ المهارات مكتوباً بقيمتين مختلفتين في §0.5 و§0.7، ونسبةُ API-first بقيمتين في §3 و§6.7.ط — وكل القيم الأربع كانت خاطئة. تفصيلها في `.memory/decisions.md` D-192.
 - **نطاق الطالب عقدٌ لا اقتراح — اثنا عشر قانوناً لكلٍّ فارضٌ آلي (D-206 — 2026-08-02 · ISS-144)**: طالبٌ طلب «السؤال الأول فقط» **ثلاث مرّات** فلم يحصل عليه. والجذر — **بالتعقّب الحيّ لا بالتحليل الساكن** — أنّ الكشف **نجح** لكنّ `_stage_policy_gate` أنهت الدور قبل `_stage_question_only`: العطب في **الأسبقيّة**. **L1** الفشل يُقصِّر ولا يُوسِّع · **L2** طلبُ النطاق يُخدَم أو يُسأل عنه سؤالٌ واحد، ولا تُلحِق مرحلةٌ أجندتها، والتنحّي **مشروطٌ بضمان مُجيبٍ لاحق** (وإلّا دورٌ صامت، وهو أسوأ) · **L3** الشكوى ليست بداية درس · **L4** العلامة العربية مُطبَّعةً وبلا أداة تعريف وعلى حدود الكلمات واتحاداً (`lower()` لا تفعل شيئاً بالعربية، و«اول» تختبئ في «تناول») · **L5** لا عقلان بلا تكافؤ محروس · **L6** نيّة الطالب مصدرٌ واحد · **L7** كارثةٌ بلا عقد ترانسكريبت **مُثبَتٍ أحمر قبل الإصلاح** ليست مُغلَقة · **L8** الوسيط لا يعلن عن نفسه · **L9** **قانون التحكيم**: يُمحى الاحتكاك بين الطالب و**طلبه** ويُصان بينه وبين **الجواب** (نصّ السؤال ملكه، والجواب ليس ملكه بعد) — يحسم كلّ نزاعٍ بين L1/L2 وD-113 · **L10** الصمت انضباط (`max_chars`) · **L11** الغياب لا يعني الغموض (`reason` مُصرَّح) · **L12** القيم تُصرَّح لا تُذاب. فوارضها `check_exercise_scope_single_source` · `check_probability_brain_parity` · `check_no_self_announcement`؛ وL8→L12 من `.memory/aesthetics_of_absence.md` («الثمن الثالث»: ما لا يُرى لا يُساءَل — فقانونٌ بلا فارضٍ آلي مرفوضٌ مرّتين). التفصيل: `.memory/decisions.md` D-206.
+- **السؤالُ يستحقّ طريقةً، والمحاولةُ تستحقّ تصحيحاً — وما سُلِّم لا يُعاد (D-207 — 2026-08-02 · ISS-148)**: طالبٌ سأل «كيف نحسب الحادثة A» فتسلّم `C(4,3)=4` و`C(5,3)=10` و`= 14`، ثمّ «كيف نحسب A» فتسلّم `165`، ثمّ «كيف نحسب البسط» فتلقّى **١٣٦ حرفاً من العدم** («لنُكمل معاً خطوة بخطوة حتى النهاية:» ثمّ ولا خطوة)، ثمّ «كيف حسبنا 165» فأُعيد عليه الاشتقاق نفسه بصياغةٍ أخرى (المحادثة 837 · الرسائل 4604→4615 · مقروءةً من قاعدة الإنتاج). **القوانين:** (1) **سؤالٌ عن الإجراء يُجاب بالإجراء** — التسليم الرمزي الكامل (D-129) لِمحاولةٍ يُعترَف بها، لا لسؤال؛ وإلّا دُرِّب الطالب على السؤال بدل الحساب. (2) **الدفتر يقيس القيمة لا الصياغة** — حارس التكرار يُقنّع الأرقام (`_norm_for_dedup`) فلا يرى `165` أصلاً، و«المقام» يُكشَف باسمَين (`ratio` · `total`)؛ فالمرادفات تُعلَن (`_STEP_ALIASES`) وإعادةُ الكشف تتحوّل إلى **زاويةٍ جديدة** لا نسخة. (3) **وعدٌ بشرحٍ يجب أن يصل** — بناءٌ حُذفت كلّ كتله يُرجِع `None` ليُصعِّد المُنادي، ولا يبثّ عنواناً وخاتمة. (4) **المعامل الذي ينساه سبعةٌ من ثمانية ليس صمّام أمان** — `delivered` إلزامي وتحرسه `check_symbolic_reveal_ledger` بدَينٍ **فارغ**. (5) **شبكةُ أمانٍ لا يُعرَف ثقبها أسوأ من غيابها** — عقود الترانسكريبت كانت تقف عند المرحلة السابعة من اثنتي عشرة، فبقيت `_stage_escape_hatch` (موطن التسريب) خارج مرمى كل عقد وعقدُ ISS-144 أخضر؛ تحرس التغطيةَ `check_transcript_stage_coverage`، والمُستثنى يُصرَّح بسببه (L11). (6) **«احتمالُ س» يجعل «س» حادثةً بالبناء اللغوي** — لا يُؤخَذ احتمالُ عاملٍ حسابي، فـ«ما هو احتمال A» لا يُجاب بتعريف الترتيبات (تمديد حارس D-185). (7) **الحالة الدائمة جزءٌ من العقد** — مُشغِّلٌ عديم الذاكرة يُخضِّر أعطاباً حيّة، فعقود الترانسكريبت تحمل `tutor_state` عبر الأدوار بنفس دلالة `TutorStateService.record_turn`. (8) **الفشل الجزئي لا يتنكّر نجاحاً** — عبارة DDL واحدة فاشلة كانت تُجهض المعاملة فلا يُنشَأ **ولا جدول** بينما `/health` يقول `ok`؛ فكلّ DDL في SAVEPOINT، والإنشاء بنقطةٍ ثابتة تحلّ ترتيب المفاتيح الأجنبية (قاعدةٌ نظيفة كانت تعجز عن إقلاع نفسها). التفصيل: `.memory/decisions.md` D-207.
+- **خريطة علوم الحاسوب عقدٌ مفروض لا ملصق (D-207)**: `docs/architecture/CS_KNOWLEDGE_MAP.md` تُصرِّح لكلٍّ من **٢٠** مجالاً حالتَه بسُلَّم §6.6 (+`SEAM`/`ABSENT` للصدق عن الغياب) **ودليلاً ملفّياً يجب أن يوجد**. تحرسها `check_cs_knowledge_map`: `ACTIVE` أمام ملفٍّ محذوف ⇒ CI أحمر، وخانةُ فجوةٍ فارغة ⇒ CI أحمر (الفراغ يُقرأ نجاحاً)، وحذفُ مجالٍ بصمت ⇒ CI أحمر. ⛔ **لا سُلَّم حالاتٍ ثانٍ** — سُلَّمٌ موازٍ يُفرِّغ الأوّل من معناه.
 - **Math Pipeline is 4 nodes, not 3 (D-080 — 2026-05-23)**: `enrich_node` (Node 4 — deterministic, no LLM) was added after `normalize_node`. It builds `ui_component` payload from the completed solution text. Topology: `classify → solve → normalize → enrich → END`. `MathPipelineState` and `invoke_math_pipeline` now return `ui_component: dict | None`. Removing `enrich_node` breaks Generative UI for all math questions.
 - **ui_component flows through the full stack (D-080)**: `ConversationState` carries `ui_component`. `invoke_graph` returns it. `ChatResponse` (HTTP) and WebSocket payload both include it. `useAgentSocket.js` extracts it from the `assistant_final` payload and attaches it to the message; `ChatInterface.jsx` renders `GenerativeUIRenderer` **after** the text, only on `isComplete` — never during streaming. ⚠️ **المصدر المشروع للبطاقة هو المخرَج المُهيكَل وحده**: `_try_build_math_ui_component` (المونوليث) **مُعطَّلة دائماً** (`return None` — D-097/ISS-108) لأنها كانت تُقطّع نثر LLM حرّاً إلى «خطوات» بلا معنى؛ فموضعا الحقن في `_emit_terminal_frames` كودٌ ميت مقصود. المسار الحيّ هو `enrich_node` الحتمي (Node 4).
 - **MathExplanationCard is the canonical math Generative UI component (D-080)**: مُسجَّلة في **الطرفين** — `GenerativeUIRenderer` (الواجهة) و`KNOWN_UI_COMPONENTS` (`app/contracts/streaming.py`). كانت في الواجهة فقط حتى 2026-07-31، فكان المُطبِّع يرفضها ولا تصل الطالب أبداً — **عقدٌ مُعلَن بنصفه** (D-192). Props: `{ math_type, label, intuition, steps[], hint, visual_metaphor }`. Any new math type must be added to `_MATH_TYPES` (math_pipeline.py), `_TYPE_LABELS`, `_MATH_HINTS`, `visual_metaphors` in `_build_ui_component`, and `TYPE_COLORS` in `MathExplanationCard.jsx`.
@@ -505,72 +507,14 @@ requests = Counter("cogniforge_user_requests_total", "...", registry=_REGISTRY)
 
 **Rule**: كل microservice يجب أن يستخدم `CollectorRegistry()` مستقلاً. استخدام `REGISTRY` الافتراضي يُسبب `ValueError: Duplicated timeseries` عند تشغيل اختبارات متعددة في نفس الـ process.
 
-### NEVER add `dependsOn` to Ona automation services
+### قواعد البيئة المرحلية — موطنها `.memory/`
 
-```yaml
-# ❌ Wrong — schema rejects it: additionalProperties: false
-services:
-  orchestrator-stack:
-    dependsOn:
-      - some-other-service  # FORBIDDEN in services
+ثلاث قواعد كانت هنا (`dependsOn` في أتمتة Ona · غياب Docker في devcontainer · علم
+`OUTBOX_RELAY_ENABLED` بعد المرحلة 4) نُقلت حرفياً إلى
+[`.memory/runtime-rules.md`](.memory/runtime-rules.md). سببُ النقل هو قاعدة D-188
+نفسها: قاعدةٌ تبدأ بـ«after Step N» أو تصف بيئةً بعينها ليست قانوناً دائماً — تتقادم
+ثمّ تكذب على كل وكيل يقرأ العقد. الدستور يحمل ما لا يتقادم.
 
-# ✅ Correct — use `ready` command to gate startup
-services:
-  orchestrator-stack:
-    commands:
-      ready: curl -sf http://localhost:8006/health
-```
-
-**Rule**: Only `tasks` support `dependsOn`. Services use the `ready` command as a readiness gate. A service stays in "Starting" phase until `ready` passes — this naturally gates any dependent workflow.
-
-### NEVER try to use Docker in the default Codespaces devcontainer
-
-```bash
-# ❌ Wrong — Docker CLI not available in this devcontainer
-docker compose -f docker-compose.step3.yml up -d
-# Error: docker: not found
-
-# ✅ Correct — orchestrator-service runs as a uvicorn process (Step 3)
-# supervisor.sh starts it automatically at boot when OPENROUTER_API_KEY is set
-# Manual restart:
-gitpod automations service start orchestrator-service
-# Or:
-gitpod automations task start restart-orchestrator
-```
-
-**Why no Docker**: `devcontainer.json` intentionally omits `docker-in-docker` — it fails on `python:3.12-slim` + `network_mode: host` (Codespaces error 1302). The `docker-compose.step3.yml` file exists for future environments that support Docker (local dev, CI with DinD). In Codespaces, `supervisor.sh:launch_orchestrator_service()` is the canonical activation path.
-
-### NEVER use a shared prometheus_client REGISTRY across monolith and orchestrator
-
-```python
-# ❌ Wrong — Step 4 lesson: using the default REGISTRY causes metric name collisions
-# when both monolith and orchestrator run in the same process (tests, CI).
-from prometheus_client import Counter
-REQUESTS = Counter("cogniforge_requests_total", "...")  # registers in default REGISTRY
-
-# ✅ Correct — use an independent CollectorRegistry per service
-from prometheus_client import Counter, CollectorRegistry
-_REGISTRY = CollectorRegistry()
-REQUESTS = Counter("cogniforge_orchestrator_requests_total", "...", registry=_REGISTRY)
-```
-
-**Rule**: Every microservice that exposes `/metrics` must use its own `CollectorRegistry()`. Never import from `prometheus_client` without passing `registry=`. The monolith uses its own registry in `app/telemetry/`. The orchestrator uses `prom_metrics._REGISTRY`. They must never share.
-
-### NEVER set OUTBOX_RELAY_ENABLED=false in production supervisor.sh after Step 4
-
-```bash
-# ❌ Wrong — Step 3 default, now obsolete after D-031 fulfilled in Step 4
-OUTBOX_RELAY_ENABLED="false" \
-nohup python -m uvicorn microservices.orchestrator_service.main:app ...
-
-# ✅ Correct — Step 4 default (supervisor.sh and .ona/automations.yaml)
-OUTBOX_RELAY_ENABLED="true" \
-OUTBOX_RELAY_INTERVAL_SECONDS="15" \
-OUTBOX_RELAY_BATCH_SIZE="50" \
-nohup python -m uvicorn microservices.orchestrator_service.main:app ...
-```
-
-**Rule**: `OUTBOX_RELAY_ENABLED=false` was a Step 3 safety guard (D-031). Step 4 verified the persistence path — relay is now the default. Reverting to `false` silently disables event propagation without any error.
 
 ### NEVER use flat keyword matching for exercise retrieval intent detection
 

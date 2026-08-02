@@ -267,6 +267,22 @@ jobs:
           # a compose build context or a microservices/*/Dockerfile with no entry
           # fails here rather than quietly falling out of coverage.
           python scripts/fitness/check_image_matrix_parity.py
+          # ISS-148: every deterministic turn stage must be reachable by a
+          # transcript contract. The ISS-144 contract passed green while a
+          # student was being handed the whole solution, because the leaking
+          # builders lived in `_stage_escape_hatch` — four stages past where
+          # the harness stopped. A safety net nobody can see the hole in is
+          # worse than none: it buys confidence without coverage.
+          python scripts/fitness/check_transcript_stage_coverage.py
+          # ISS-148: `_build_symbolic_reveal` skips what the student was
+          # already shown — but only if `delivered` is passed, and 7 of its 8
+          # call sites forgot. A parameter seven callers forget is not a
+          # safeguard; it is a defect spread across call sites.
+          python scripts/fitness/check_symbolic_reveal_ledger.py
+          # ISS-148: the CS knowledge map is a contract, not a poster. Every
+          # claimed status must point at a file that actually exists, so an
+          # aspirational ACTIVE cannot survive a rename or a deletion.
+          python scripts/fitness/check_cs_knowledge_map.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

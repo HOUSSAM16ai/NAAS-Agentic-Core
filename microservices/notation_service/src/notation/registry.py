@@ -411,9 +411,18 @@ def _has_compute_intent(norm: str) -> bool:
     return any(marker in norm for marker in _NORM_COMPUTE)
 
 
+#: ISS-148 — «احتمالُ س» يجعل «س» **حادثةً** بالبناء اللغوي، لا رمزاً رياضياً.
+#: لا يُؤخَذ احتمالُ عاملٍ حسابي؛ ما يُؤخَذ احتماله حادثة. فسؤال «ما هو احتمال A»
+#: كان يُرجِع تعريف **الترتيبات** $A_{n}^{k}$ لأن الحارس يطلب كلمة «الحادثة» حرفياً
+#: بينما الطالب لم يقلها — قالها الفعلُ نيابةً عنه. مُبرهَن حياً على تمرين 2024.
+_EVENT_BY_PROBABILITY_OF = re.compile(r"احتمال\s*(?:ال)?\(?\s*([a-z])\s*\)?(?:\W|$)")
+
+
 def _mentions_event_context(norm: str) -> bool:
     """هل يتكلّم النصّ عن **حادثة** التمرين (A/B/C/D) لا عن **الحرف** بذاته؟"""
-    return any(marker in norm for marker in _NORM_EVENT)
+    if any(marker in norm for marker in _NORM_EVENT):
+        return True
+    return _EVENT_BY_PROBABILITY_OF.search(norm) is not None
 
 
 def _has_symbol_cue(norm: str) -> bool:

@@ -182,9 +182,17 @@ class TurnPreemptsConceptMixin:
                 if _esc_decision.text and self._recently_emitted(
                     _esc_decision.text, history_messages
                 ):
+                    # ISS-148: دفتر ما سُلِّم (كان غائباً ⇒ إعادة تفريغ كاملة).
+                    from app.services.skills.kc_progress_schema import delivered_steps
+
                     _esc_alt = self._build_probability_direct_explanation(
                         question, history_messages
-                    ) or self._build_symbolic_reveal(question, history_messages, acknowledge=True)
+                    ) or self._build_symbolic_reveal(
+                        question,
+                        history_messages,
+                        acknowledge=True,
+                        delivered=delivered_steps(tutor_state),
+                    )
                     if _esc_alt and not self._recently_emitted(_esc_alt, history_messages):
                         _esc_decision = _esc_decision.model_copy(update={"text": _esc_alt})
                 if _esc_decision.text:

@@ -38,6 +38,7 @@
 | [`architecture/PRINCIPLES.md`](architecture/PRINCIPLES.md) | المبادئ المعمارية |
 | [`architecture/adr/`](architecture/adr/) + [`adr/`](adr/) + [`adrs/`](adrs/) | سجلّات ADR (القرارات الحيّة في `.memory/decisions.md`) |
 | [`architecture/`](architecture/) (runbooks: `MASTER_CUTOVER_RUNBOOK` · `PR1..PR5` · `LEGACY_*`) | كتيّبات هجرة الـ strangler-fig |
+| [`architecture/CS_KNOWLEDGE_MAP.md`](architecture/CS_KNOWLEDGE_MAP.md) | 🗺️ خريطة علوم الحاسوب ↔ المشروع — عشرون مجالاً بحالةٍ ودليلٍ ملفّي، تحرسها `check_cs_knowledge_map` (D-207) |
 | [`API_FIRST_ARCHITECTURE.md`](API_FIRST_ARCHITECTURE.md) | عقيدة API-First |
 | [`architecture/EXTENSION_SEAMS.md`](architecture/EXTENSION_SEAMS.md) | مقاعد التوسّع (Kafka/VectorDB/RAG/Skill-flags) + الرؤية الثورية (D-173) |
 | [`architecture/adr/006_polyglot_language_adoption.md`](architecture/adr/006_polyglot_language_adoption.md) | قرار تبنّي اللغات متعدّدة — **الحدّ هو العقد لا اللغة**؛ TypeScript مُتبنّىً، والتسع الباقيات مقاعد بشرط تبنٍّ (D-185) |

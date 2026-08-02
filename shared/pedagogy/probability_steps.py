@@ -87,9 +87,7 @@ FIRST_HELP_MARKERS: Final[tuple[str, ...]] = (
 
 def started_tutoring(assistant_texts: tuple[str, ...]) -> bool:
     """هل بُثّت أيّ خطوة تدريس سابقاً؟ (منطقٌ واحد للعقلين، لا مطابقةٌ مُعادة)."""
-    return any(
-        marker in text for text in assistant_texts for marker in TUTORING_STEP_MARKERS
-    )
+    return any(marker in text for text in assistant_texts for marker in TUTORING_STEP_MARKERS)
 
 
 def pending_step_for(assistant_text: str) -> str | None:

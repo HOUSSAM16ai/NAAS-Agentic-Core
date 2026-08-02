@@ -73,7 +73,7 @@ class TurnPreemptsDeterministicMixin:
         if isinstance(tutor_state, dict):
             tutor_state["policy_decision"] = policy_decision
 
-        # ── L2 (D-206 · ISS-141): نطاق الطالب عقد لا اقتراح ────────────────────
+        # ── L2 (D-206 · ISS-144): نطاق الطالب عقد لا اقتراح ────────────────────
         # الجذر الحقيقي للكارثة، مُتحقَّقاً وقت التشغيل: الطالب قال «لقد طلبت السؤال
         # الأول فقط»، و`detect_question_only_request` **كشفته صحيحاً** (n=1)، لكنّ هذه
         # البوّابة — وهي المرحلة الأولى — بثّت probe الألوان وأنهت الدور، فلم تُشغَّل
@@ -138,9 +138,7 @@ class TurnPreemptsDeterministicMixin:
         ctx.tutor_state = tutor_state
 
     @staticmethod
-    def _scope_request_defers(
-        question: str, history_messages: list[dict[str, str]] | None
-    ) -> bool:
+    def _scope_request_defers(question: str, history_messages: list[dict[str, str]] | None) -> bool:
         """هل يتنحّى بثُّ بوّابة السياسة لطلب نطاقٍ صريح من الطالب؟ (L2 · D-206)
 
         **الشرط مزدوج عمداً**: نيّة نطاقٍ صريحة **و** مرحلةٌ لاحقة تستطيع خدمتها فعلاً

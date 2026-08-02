@@ -1,6 +1,6 @@
 """سجلّ نطاق التمرين — المصدر القانوني الوحيد لِـ«أيّ جزءٍ طلب الطالب؟» (D-206).
 
-## الكارثة التي يُغلقها هذا الملفّ (ISS-141)
+## الكارثة التي يُغلقها هذا الملفّ (ISS-144)
 
 طالب حقيقي طلب نطاقاً صريحاً **ثلاث مرّات** فلم يحصل عليه ولا مرّة:
 
@@ -86,7 +86,7 @@ def strip_articles(text: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 #: صور الترتيبيات بعد التطبيع **وحذف أداة التعريف**. صورةٌ واحدة تُغطّي المُعرَّف
-#: والنكرة معاً («الأول» ⇒ «اول» = «اول»)، وهو ما يقتل صنفَ ISS-141 لا عَرَضه.
+#: والنكرة معاً («الأول» ⇒ «اول» = «اول»)، وهو ما يقتل صنفَ ISS-144 لا عَرَضه.
 ORDINAL_FORMS: Final[tuple[tuple[str, int], ...]] = (
     # ١ — «اول» هي الصيغة التي كسرت حرفياً؛ «اولي» = الأولى؛ «لول» دارجة.
     ("اول", 1),
@@ -254,7 +254,7 @@ def _norm_all(markers: tuple[str, ...]) -> tuple[str, ...]:
     **بندٌ غير قابل للتفاوض (L4):** العلامة تُقارَن بنصٍّ مُطبَّع، فيجب أن تكون مُطبَّعةً
     مثله. `shared/textnorm` يحذف الهمزة المفردة (ء) فتصير «جزء» ⇒ «جز» في النصّ؛ علامةٌ
     غير مُطبَّعة تبحث عن «جزء» في نصٍّ لم يعد يحويها — فتفشل صامتةً. هذا هو **نفس** صنف
-    ISS-141 (مقارنة صيغةٍ بصيغةٍ أخرى) وقد وقعتُ فيه هنا أوّل مرّة.
+    ISS-144 (مقارنة صيغةٍ بصيغةٍ أخرى) وقد وقعتُ فيه هنا أوّل مرّة.
     """
     return tuple(dict.fromkeys(filter(None, (normalize(m) for m in markers))))
 
@@ -291,7 +291,7 @@ def ordinal_value(text: str) -> int | None:
     """قيمة الترتيبي في النصّ، أو ``None``.
 
     **تُطبِّع وتحذف أداة التعريف بنفسها** (L4): العلامات هنا مُطبَّعة، فمقارنتها بنصٍّ
-    خام تفشل على «الأول» بالهمزة — وهو نفس عطب ISS-141 لو أنّ المستدعي نسي التطبيع.
+    خام تفشل على «الأول» بالهمزة — وهو نفس عطب ISS-144 لو أنّ المستدعي نسي التطبيع.
     الدالّة التي تملك العلامات المُطبَّعة تملك مسؤولية تطبيع مدخلها؛ تركُها للمستدعي
     يجعل كلّ نقطة استدعاء موضعَ كارثةٍ محتملة. التطبيع خاملٌ فتكراره آمن.
 
@@ -353,7 +353,9 @@ def _scan(text: str) -> tuple[int | None, str | None]:
         ordinal = ordinal_value(stripped)
         if ordinal is not None:
             # ترتيبيّ ملتصق بكلمة «جزء» يُعبّر عن الجزء لا عن رقم السؤال.
-            if part is None and any(label in stripped or label in norm for label in _NORM_PART_LABELS):
+            if part is None and any(
+                label in stripped or label in norm for label in _NORM_PART_LABELS
+            ):
                 part = _ROMAN_BY_TOKEN.get(str(ordinal))
             else:
                 number = ordinal
@@ -403,12 +405,8 @@ def resolve_scope(text: str, history: list[dict[str, str]] | None = None) -> Exe
         return ExerciseScope(reason="explanation_intent_wins")
 
     words = frozenset(stripped.split())
-    has_only = any(
-        _matches_word(words, m) if " " not in m else m in stripped for m in _NORM_ONLY
-    )
-    has_verb = any(
-        _matches_word(words, m) if " " not in m else m in stripped for m in _NORM_VERBS
-    )
+    has_only = any(_matches_word(words, m) if " " not in m else m in stripped for m in _NORM_ONLY)
+    has_verb = any(_matches_word(words, m) if " " not in m else m in stripped for m in _NORM_VERBS)
     mentions_item = any(noun in stripped or noun in norm for noun in _NORM_NOUNS)
 
     if not mentions_item or not (has_only or has_verb):
@@ -420,7 +418,9 @@ def resolve_scope(text: str, history: list[dict[str, str]] | None = None) -> Exe
         number, part = _scan_history(history)
         source = "history" if (number is not None or part is not None) else "none"
 
-    reason = "scope_resolved" if (number is not None or part is not None) else "scope_target_unknown"
+    reason = (
+        "scope_resolved" if (number is not None or part is not None) else "scope_target_unknown"
+    )
     return ExerciseScope(
         question_number=number,
         part=part,

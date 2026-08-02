@@ -283,6 +283,7 @@ _NORM_MARKERS: dict[str, tuple[str, ...]] = {
     entry.name: tuple(normalize(m) for m in entry.markers if m.strip()) for entry in INTENT_REGISTRY
 }
 
+
 #: نيّات سلطتُها سجلٌّ آخر — تُحسَم بمُسنَدٍ لا بقائمة علامات هنا.
 #:
 #: **لماذا لا نُكرّر العلامات (D-206 · L6):** نيّة النطاق تحتاج تحليلاً بنيوياً (ترتيبيّ +
@@ -297,7 +298,7 @@ def _is_part_selection(text: str) -> bool:
     return resolve_scope(text).explicit
 
 
-_PREDICATES: dict[str, "Callable[[str], bool]"] = {
+_PREDICATES: dict[str, Callable[[str], bool]] = {
     "part_selection": _is_part_selection,
 }
 

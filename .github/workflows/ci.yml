@@ -194,6 +194,12 @@ jobs:
           # only the service recognised the opening probe as a tutoring step, so the
           # monolith could re-emit a probe it had just sent. Values, not bytes.
           python scripts/fitness/check_probability_brain_parity.py
+          # D-206 (L8): the mediator does not announce itself. Production showed
+          # «سنشرح الآن …» followed by an EMPTY assistant row -- an agenda announced
+          # and then nothing delivered. Generalises D-117 from one banned phrase to
+          # the class. AST over string literals only: the first, text-based version
+          # rejected the very comment explaining the ban.
+          python scripts/fitness/check_no_self_announcement.py
           # D-189 (roadmap §6.5.د D4): outbound HTTP carries a correlation id. The
           # roadmap measured 31 direct httpx.AsyncClient constructions against 21
           # header injections in 9 files — two thirds of cross-service calls crossed

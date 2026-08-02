@@ -75,8 +75,6 @@ _ALLOWLIST: dict[str, str] = {
 #: القاعدة: هذه الخريطة **لا تكبر أبداً**. أي قائمة جديدة تُفشِل CI، وكل هجرة تحذف
 #: سطراً. فالدَّين مرئي ومحصور بدل أن يكون خفيّاً ومتكاثراً.
 _FROZEN_DEBT: dict[str, str] = {
-    # نيّة مختلفة تماماً: استرجاع تمرين (regex) لا نيّة مفهومية — ISS-038.
-    "app/services/capabilities/exercise_retrieval.py": "استرجاع التمارين — نطاق آخر (ISS-038).",
     "app/services/chat/local_graph_explanation.py": "أنماط شرح للمسار المحلّي — نطاق آخر.",
     # نصوص doctrine (توثيق مُقتبَس) لا كاشفات — تُطابَق نصّياً لا وظيفياً.
     "app/services/skills/doctrine/exercise_core.py": "نصّ doctrine مُقتبَس لا كاشف.",

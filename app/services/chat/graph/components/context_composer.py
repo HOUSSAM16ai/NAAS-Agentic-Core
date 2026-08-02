@@ -3,6 +3,7 @@ from typing import ClassVar
 
 from app.core.interfaces import IContextComposer
 from app.services.chat.graph.domain import WriterIntent
+from shared.exercise_scope import ordinal_value
 
 
 class FirewallContextComposer(IContextComposer):
@@ -246,31 +247,13 @@ def _normalize_index_token(token: str | None) -> int | None:
     if numeric_candidate.isdigit():
         return int(numeric_candidate)
 
-    arabic_ordinals = {
-        "الأول": 1,
-        "اول": 1,
-        "أول": 1,
-        "الثاني": 2,
-        "ثاني": 2,
-        "الثالث": 3,
-        "ثالث": 3,
-        "الرابع": 4,
-        "رابع": 4,
-        "الخامس": 5,
-        "خامس": 5,
-        "السادس": 6,
-        "سادس": 6,
-        "السابع": 7,
-        "سابع": 7,
-        "الثامن": 8,
-        "ثامن": 8,
-        "التاسع": 9,
-        "تاسع": 9,
-        "العاشر": 10,
-        "عاشر": 10,
-    }
-    if normalized in arabic_ordinals:
-        return arabic_ordinals[normalized]
+    # D-206 (L6): الترتيبيّات من المصدر القانوني — كانت هنا خريطةٌ محلّية من ٢٠ صيغة.
+    # المفارقة التي تُلخّص ISS-141: هذه الخريطة **كانت تعرف** النكرة («اول» · «ثاني»)
+    # بينما جهلتها خريطةُ `exercise_retrieval` — كاشفان لنيّةٍ واحدة، كلٌّ يعرف ما
+    # يجهله الآخر، والطالب يدفع الثمن حين يقع طلبُه على الكاشف الأعمى.
+    arabic_ordinal = ordinal_value(normalized)
+    if arabic_ordinal is not None:
+        return arabic_ordinal
 
     english_ordinals = {
         "first": 1,

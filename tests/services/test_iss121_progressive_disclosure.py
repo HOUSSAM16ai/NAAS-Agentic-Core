@@ -69,7 +69,8 @@ class TestZeroFinalAnswer:
             "_load_canonical_combinations",
             classmethod(lambda *_args, **_kw: _combo()),
         )
-        text = OrchestratorClient._build_symbolic_reveal("كيف", None)
+        # ISS-148: السجلّ إلزامي — فارغٌ هنا صراحةً (الطالب لم يُسلَّم شيئاً بعد).
+        text = OrchestratorClient._build_symbolic_reveal("كيف", None, delivered=set())
         assert text is not None
         assert "من كل 165" not in text and "14/165" not in text
         assert "بنفسك" in text

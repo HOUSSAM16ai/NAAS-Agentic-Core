@@ -73,12 +73,36 @@ def test_iss128_answer_is_not_a_definition_question() -> None:
     assert classify("هل هي 14 من 165") is None
 
 
-def test_registry_markers_are_normalized_and_nonempty() -> None:
-    """كل علامة قابلة للمطابقة فعلاً (تطبيعها لا يُفرغها)."""
+def test_every_intent_is_actually_matchable() -> None:
+    """كل نيّة قابلة للحسم فعلاً — بعلاماتٍ **أو** بمُسنَدٍ مُصرَّح (D-206).
+
+    الثابت المحمي هو «لا نيّةَ ميتة في السجلّ»، لا «لكل نيّةٍ قائمةُ سلاسل». نيّة
+    `part_selection` سلطتُها `shared/exercise_scope` لأنها تحتاج تحليلاً بنيوياً
+    (ترتيبيّ + أداة تعريف + حدود كلمات) لا قائمة؛ ونسخُ علاماتها هنا يخلق **القائمة
+    الثامنة** — الكارثة نفسها التي وُلد منها هذا الملفّ. فالاختبار يقبل التفويض
+    ويشترط في المقابل أن يكون المُسنَد **حيّاً**: نيّةٌ بلا علامات وبلا مُسنَد تفشل.
+    """
+    from shared.intent.registry import _PREDICATES
+
     for intent in all_intents():
         markers = markers_for(intent)
-        assert markers, f"intent {intent!r} بلا علامات"
+        predicate = _PREDICATES.get(intent)
+        assert markers or predicate is not None, f"intent {intent!r} بلا علامات وبلا مُسنَد"
         assert all(normalize(m) for m in markers), f"intent {intent!r} فيه علامة تُطبَّع لفراغ"
+
+
+def test_predicate_backed_intents_classify_a_real_sample() -> None:
+    """المُسنَد ليس إعفاءً: كل نيّةٍ مُفوَّضة تُثبت أنها تُصنِّف عيّنةً حقيقية.
+
+    بدون هذا يصير التفويض باباً خلفياً لتسجيل نيّةٍ لا تُطابق شيئاً أبداً.
+    """
+    from shared.intent.registry import _PREDICATES
+
+    samples = {"part_selection": "اعطني اول سؤال من التمرين فقط"}
+    for intent in _PREDICATES:
+        sample = samples.get(intent)
+        assert sample is not None, f"نيّة مُفوَّضة {intent!r} بلا عيّنة في الاختبار"
+        assert classify(sample) == intent
 
 
 def test_unknown_intent_raises_not_silently_false() -> None:

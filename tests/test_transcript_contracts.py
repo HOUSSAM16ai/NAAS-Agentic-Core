@@ -107,6 +107,17 @@ def test_transcript_contract(contract: dict[str, Any]) -> None:
                 f"{where}: ظهر الممنوع {needle!r}.\n--- الجواب ---\n{answer}"
             )
 
+        # ── L10 (D-206): الصمت انضباط لا فراغ ─────────────────────────────────
+        # جدار النصّ عطبٌ لا وفرة. في ISS-141 كان الردّ على «أعطني السؤال الأول
+        # **فقط**» هو التمرين كاملاً — بنيةٌ «صحيحة» وضررٌ حقيقي. الميزانية تجعل
+        # الطول جزءاً من **عقد** الكارثة بدل أن يبقى اجتهاداً يتآكل.
+        max_chars = turn.get("max_chars")
+        if max_chars:
+            assert len(answer) <= int(max_chars), (
+                f"{where}: الجواب {len(answer)} حرفاً > الميزانية {max_chars} — "
+                f"جدار نصّ.\n--- الجواب ---\n{answer[:400]}…"
+            )
+
         if turn.get("must_differ_from_previous") and previous_answer:
             assert answer.strip() != previous_answer.strip(), (
                 f"{where}: الجواب نسخة حرفية من الدور السابق — «صفر تكرار حرفي»."

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 _TATWEEL = "ـ"
@@ -252,6 +253,11 @@ _COMPUTATION: tuple[str, ...] = (
 )
 
 INTENT_REGISTRY: tuple[IntentEntry, ...] = (
+    IntentEntry(
+        "part_selection",
+        "الطالب يطلب جزءاً بعينه من التمرين («اعطني اول سؤال فقط»)",
+        (),  # بلا علامات هنا عمداً — انظر `_PREDICATES` أدناه.
+    ),
     IntentEntry("definition", "الطالب يسأل عن معنى مفهوم أو رمز", _DEFINITION),
     IntentEntry("confusion", "الطالب يعبّر عن عدم الفهم", _CONFUSION),
     IntentEntry("explanation_request", "الطالب يطلب شرحاً صريحاً", _EXPLANATION_REQUEST),
@@ -269,9 +275,32 @@ _NORM_MARKERS: dict[str, tuple[str, ...]] = {
     entry.name: tuple(normalize(m) for m in entry.markers if m.strip()) for entry in INTENT_REGISTRY
 }
 
+#: نيّات سلطتُها سجلٌّ آخر — تُحسَم بمُسنَدٍ لا بقائمة علامات هنا.
+#:
+#: **لماذا لا نُكرّر العلامات (D-206 · L6):** نيّة النطاق تحتاج تحليلاً بنيوياً (ترتيبيّ +
+#: أداة تعريف + حدود كلمات + رقم عربي-هندي) لا مجرّد قائمة. نسخُ علاماتها هنا يخلق
+#: **القائمة الثامنة** — وهي بالضبط الكارثة التي وُلد منها هذا الملفّ. فالسلطة تبقى في
+#: `shared/exercise_scope` وهذا الملفّ يستشيرها. الاستيراد كسول لأنّ `shared.exercise_scope`
+#: يستورد `shared.textnorm` لا `shared.intent` (فلا دورة)، والتأجيل يُبقي الاستيراد رخيصاً.
+def _is_part_selection(text: str) -> bool:
+    """هل يطلب الطالب جزءاً بعينه من التمرين؟ السلطة: `shared/exercise_scope`."""
+    from shared.exercise_scope import resolve_scope
+
+    return resolve_scope(text).explicit
+
+
+_PREDICATES: dict[str, "Callable[[str], bool]"] = {
+    "part_selection": _is_part_selection,
+}
+
 #: ترتيب الحسم عند تطابق أكثر من نيّة — الأخصّ أولاً.
 #: الحساب يسبق التعريف («احسب ما هو C» طلب حساب)، والمثال/التلميح يسبقان الحيرة العامة.
+#:
+#: **`part_selection` تسبق `computation` (D-206):** الطالب يلصق نصّ التمرين — وهو مليء
+#: بـ«احسب» و«بيّن أن» — ثمّ يكتب «اعطني اول سؤال فقط». بالترتيب المعاكس تخطف النيّةُ
+#: الحسابيةُ طلبَ النطاق، وهو ما قِيس حيّاً: `classify` أعادت `'computation'` للدور الثاني.
 _PRECEDENCE: tuple[str, ...] = (
+    "part_selection",
     "computation",
     "example_request",
     "hint_request",
@@ -316,6 +345,11 @@ def classify(text: str) -> str | None:
     if not norm:
         return None
     for name in _PRECEDENCE:
+        predicate = _PREDICATES.get(name)
+        if predicate is not None:
+            if predicate(text):
+                return name
+            continue
         if any(marker in norm for marker in _NORM_MARKERS[name]):
             return name
     return None

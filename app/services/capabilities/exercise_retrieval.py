@@ -26,6 +26,7 @@ from app.services.capabilities.knowledge_index import (
     find_best_match,
     search_exercises,
 )
+from shared.exercise_scope import extract_target, resolve_scope
 
 # ─────────────────────────────────────────────────────────────────────────────
 # أنماط النية السلبية — تشير إلى أن المستخدم يريد شرحاً أو مساعدة وليس جلب محتوى.
@@ -1208,21 +1209,22 @@ class QuestionOnlyDecision(RobustBaseModel):
 
 
 def _extract_question_number(normalized: str) -> int | None:
-    """يستخرج رقم السؤال المطلوب («السؤال رقم 2» / «السؤال الثاني»)."""
-    text = normalized.translate(_ARABIC_INDIC_DIGITS)
-    m = _QUESTION_NUMBER_RE.search(text)
-    if m:
-        try:
-            n = int(m.group(1))
-            if 1 <= n <= 20:
-                return n
-        except ValueError:
-            pass
-    if "السؤال" in text or "سؤال" in text:
-        for word, n in _ORDINAL_QUESTION_NUMBERS:
-            if word in text:
-                return n
-    return None
+    """يستخرج رقم السؤال المطلوب — **يُفوِّض للمصدر القانوني** (D-206 · L6).
+
+    كانت هنا قائمةُ ترتيبيّاتٍ محلّية بستّ صيغ **مُعرَّفة فقط** (`"الأول"` · `"الاول"` …)
+    تُطابَق على `text.strip().lower()` — و`lower()` لا تفعل شيئاً بالعربية. فالطالب الذي
+    كتب «**اول** سؤال» نكرةً لم يكن مُمثَّلاً، ومعه الدارجة («لول») والفرنسية. وهذا هو
+    ISS-141 حرفياً: قدرةٌ سليمة عمياء عن صيغةِ طالبٍ حقيقي.
+
+    السلطة الآن `shared/exercise_scope` (تُطبّع + تحذف أداة التعريف + تُطابق على حدود
+    الكلمات)، فتُغطّي الصيغ الأربع بصورةٍ واحدة بدل قائمةٍ تُرقَّع بعد كل كارثة.
+
+    نستعمل `extract_target` (استخراجٌ محض) لا `resolve_scope` (التي تشترط نيّةً صريحة):
+    هذه الدالّة تُستدعى أيضاً على رسائل التاريخ حيث النيّة محسومة سلفاً، فاشتراطُها هنا
+    كان سيُسقِط «السؤال الثاني» المجرّدة — انحدارٌ صامت.
+    """
+    number, _part = extract_target(normalized)
+    return number
 
 
 def _resolve_question_number_from_history(
@@ -1283,7 +1285,27 @@ def _extract_numbered_question(display_content: str, question_number: int) -> st
 
     if not matches:
         return None
-    return "\n\n---\n\n".join(matches)
+    if len(matches) == 1:
+        return matches[0]
+    # ── L1 (D-206): البند الواحد لا يُسلَّم مرّتين ────────────────────────────
+    # كان يُرجِع **كلّ** المطابقات مجموعةً: «البند 1» في الجزء (1) و«البند 1» في
+    # الجزء (2) معاً. فردُّ «أعطني السؤال الأول فقط» كان جزأين — أوسع من الطلب.
+    # نُسلِّم الأوّل ونُخبر بوجود غيره (L11: الاقتضاب لا يعني الإخفاء).
+    return f"{matches[0]}\n\n_(البند {question_number} يتكرّر في جزء آخر — قل لي إن أردته.)_"
+
+
+def _available_question_numbers(display_content: str) -> list[int]:
+    """أرقام البنود الموجودة فعلاً في نصّ التمرين — لسؤال التوضيح (L1/L11).
+
+    نعرض للطالب ما نملكه بصدق بدل تخمين ما يقصد. مرتّبة وبلا تكرار.
+    """
+    found: set[int] = set()
+    numbered_re = re.compile(r"^\s*(?:\*\*)?(\d{1,2})[.)ـ-]\s*")
+    for raw_line in display_content.splitlines():
+        match = numbered_re.match(raw_line.translate(_ARABIC_INDIC_DIGITS))
+        if match:
+            found.add(int(match.group(1)))
+    return sorted(found)
 
 
 def detect_question_only_request(
@@ -1292,14 +1314,15 @@ def detect_question_only_request(
 ) -> QuestionOnlyDecision:
     """يكشف طلب «السؤال رقم N فقط / بدون حل» ويُجهِّز الاقتطاع الحتمي.
 
-    قواعد (ISS-112):
+    قواعد (ISS-112، مُحدَّثة بـD-206):
     1. نية الشرح تُلغي — «اشرح السؤال 2» طلبُ شرحٍ لا استرجاع.
-    2. wants_only = marker صريح («فقط»/«بدون حل»/«نص السؤال») أو
-       (رقم سؤال + فعل طلب «اعطني/اريد/هات»).
+    2. **نيّة النطاق سلطتُها `shared/exercise_scope`** — لا قوائم علامات محلّية (L6).
     3. الكيان: من السؤال (detect_exercise_retrieval) ثم من history
        (الربط البنيوي D-102 — رسائل user/assistant فقط).
-    4. الرقم الغائب يُستكمل من آخر طلب مرقَّم في الحوار.
+    4. الرقم الغائب يُستكمل من آخر طلب مرقَّم في الحوار (داخل `resolve_scope`).
     5. صفر LLM — المحتوى من النص الرسمي فقط (display = بدون حل أصلاً).
+    6. **الفشل يُقصِّر ولا يُوسِّع (L1)** — تعذُّر الاقتطاع مع «فقط» يُنتج سؤالاً
+       توضيحياً واحداً، **لا** التمرين كاملاً. انظر أسفل الدالّة.
     """
     normalized = request.question.strip().lower()
     if not normalized:
@@ -1308,17 +1331,11 @@ def detect_question_only_request(
     if _has_explanation_intent(normalized):
         return QuestionOnlyDecision(reason="explanation_intent_wins")
 
-    question_number = _extract_question_number(normalized)
-    has_marker = any(marker in normalized for marker in _QUESTION_ONLY_MARKERS)
-    has_verb = any(verb in normalized for verb in _QUESTION_REQUEST_VERBS)
-    mentions_question = "سؤال" in normalized or "question" in normalized
-
-    wants_only = (has_marker and mentions_question) or (question_number is not None and has_verb)
-    if not wants_only:
+    scope = resolve_scope(request.question, history_messages)
+    if not scope.explicit:
         return QuestionOnlyDecision(reason="no_question_only_intent")
 
-    if question_number is None:
-        question_number = _resolve_question_number_from_history(history_messages)
+    question_number = scope.question_number
 
     retrieval = detect_exercise_retrieval(request)
     matched_entry = retrieval.matched_entry
@@ -1348,8 +1365,23 @@ def detect_question_only_request(
         if title_line:
             sliced = f"{title_line}\n\n{sliced}"
         reason = "question_only_sliced"
+    elif scope.only:
+        # ── L1 (D-206 · ISS-141): الفشل يُقصِّر ولا يُوسِّع ────────────────────
+        # كان هنا `sliced = display_content` — أي أنّ الردّ على «أعطني السؤال الأول
+        # **فقط**» هو التمرين **كاملاً**. مُثبَتٌ في الإنتاج (customer_messages 4590):
+        # الطالب طلب بنداً واحداً فتلقّى الجدار كلّه، فأعاد طلبه فتلقّى شيئاً ثالثاً.
+        # الردّ الأوسع من الطلب ليس «تساهلاً» بل نقضٌ صريح لِما قاله الطالب.
+        # البديل: سؤالٌ توضيحيّ واحد قصير (L10: الصمت انضباط لا فراغ).
+        numbers = _available_question_numbers(display_content)
+        choices = "، ".join(str(n) for n in numbers[:6]) if numbers else ""
+        sliced = (
+            f"أيّ سؤال بالضبط؟ البنود المتاحة: {choices}."
+            if choices
+            else "أيّ سؤال من التمرين تريد؟ اذكر رقمه."
+        )
+        reason = "question_only_clarify"
     else:
-        # لا رقم (أو فشل الاقتطاع) → النص الرسمي للأسئلة فقط (بدون حل)
+        # بلا حصرٍ صريح («أعطني أسئلة التمرين») ⇒ النصّ الرسمي بلا حلّ مشروع.
         sliced = display_content
         reason = "question_only_full_display"
 

@@ -73,8 +73,23 @@ class TurnPreemptsDeterministicMixin:
         if isinstance(tutor_state, dict):
             tutor_state["policy_decision"] = policy_decision
 
+        # ── L2 (D-206 · ISS-141): نطاق الطالب عقد لا اقتراح ────────────────────
+        # الجذر الحقيقي للكارثة، مُتحقَّقاً وقت التشغيل: الطالب قال «لقد طلبت السؤال
+        # الأول فقط»، و`detect_question_only_request` **كشفته صحيحاً** (n=1)، لكنّ هذه
+        # البوّابة — وهي المرحلة الأولى — بثّت probe الألوان وأنهت الدور، فلم تُشغَّل
+        # `_stage_question_only` (المرحلة الثالثة) أبداً. أي أنّ العطب لم يكن في الكشف
+        # بل في **الأسبقيّة**: أجندةُ النظام سبقت طلبَ الطالب الصريح.
+        #
+        # الحالة تُحسَب بعد `policy_decision` عمداً: الحالة التربوية تُحدَّث دائماً
+        # (فلا نفقد `tutor_state`)، ولا نتنحّى إلّا عن **البثّ**.
+        _scope_defers = self._scope_request_defers(question, history_messages)
+
         # Enforce Symbolic Truth explicitly: if question targets unmodeled mathematical event, force drift prevention
-        _comp = await self._build_probability_computational_answer(question, history_messages)
+        _comp = (
+            None
+            if _scope_defers
+            else await self._build_probability_computational_answer(question, history_messages)
+        )
         if _comp:
             _comp_text, _comp_event = _comp
             if _comp_event.startswith("defer_"):
@@ -91,7 +106,7 @@ class TurnPreemptsDeterministicMixin:
         # D-158: طبقة القرار الموحَّدة فوق tutor_state المُخزَّن (خلف COGNITIVE_TURN_ENABLED،
         # افتراض OFF ⇒ سلوك اليوم دون تغيير). عند التفعيل تعترض دور الاحتمالات وتُصدِر خطوة
         # واحدة تدريجية (تقتل التفريغ + التكرار + سجن 600-حرف بنيوياً). fail-open ⇒ تسليم للكتل.
-        if self._cognitive_turn_enabled():
+        if self._cognitive_turn_enabled() and not _scope_defers:
             _ct_text, _ct_delta = self._cognitive_turn(
                 question, history_messages, tutor_state, policy_decision
             )
@@ -107,7 +122,7 @@ class TurnPreemptsDeterministicMixin:
 
         # In D-144, if the policy engine mandates a specific pedagogical action (e.g. symbolic reveal or intermediate scaffold)
         # we bypass the standard generative fallbacks and directly emit that action.
-        if policy_decision.next_action == "symbolic_reveal":
+        if policy_decision.next_action == "symbolic_reveal" and not _scope_defers:
             _reveal_text = self._build_symbolic_reveal(
                 question, history_messages, acknowledge=policy_obs.is_correct
             )
@@ -121,6 +136,43 @@ class TurnPreemptsDeterministicMixin:
                 ctx.turn_complete = True
                 return
         ctx.tutor_state = tutor_state
+
+    @staticmethod
+    def _scope_request_defers(
+        question: str, history_messages: list[dict[str, str]] | None
+    ) -> bool:
+        """هل يتنحّى بثُّ بوّابة السياسة لطلب نطاقٍ صريح من الطالب؟ (L2 · D-206)
+
+        **الشرط مزدوج عمداً**: نيّة نطاقٍ صريحة **و** مرحلةٌ لاحقة تستطيع خدمتها فعلاً
+        (`detect_question_only_request(...).recognized`). التنحّي بالشرط الأوّل وحده
+        يُنتج **دوراً صامتاً** حين لا يوجد تمرينٌ في السياق — وهو استبدالُ كارثةٍ
+        بأخرى أسوأ (§0: «لا فشل صامت»؛ L1: الفشل يُقصِّر ولا يُلغي الردّ).
+
+        `fail-closed` عمداً: أيّ استثناء ⇒ `False` ⇒ يبقى سلوك البوّابة كما كان.
+        الخطأ هنا يجب أن يُعيد النظامَ إلى حالته السابقة لا أن يُسكِته.
+        """
+        try:
+            from app.services.capabilities.exercise_retrieval import (
+                ExerciseRetrievalRequest,
+                detect_question_only_request,
+            )
+            from shared.exercise_scope import resolve_scope
+
+            if not resolve_scope(question, history_messages).explicit:
+                return False
+            decision = detect_question_only_request(
+                ExerciseRetrievalRequest(question=question), history_messages
+            )
+            if decision.recognized:
+                logger.info(
+                    "scope_request_preempts_policy_gate",
+                    extra={"reason": decision.reason, "n": decision.question_number},
+                )
+                return True
+            return False
+        except Exception:  # pragma: no cover - fail-closed
+            logger.warning("scope_defer_check_failed", exc_info=True)
+            return False
 
     async def _stage_greeting(self, ctx: TurnContext) -> AsyncGenerator[dict | str, None]:
         """التحية الحتمية (ISS-079/D-067) — أعلى أولوية، صفر LLM."""

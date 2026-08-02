@@ -73,17 +73,41 @@ class TestScandalTranscripts:
         )
         assert d.recognized and d.question_number == 2
 
-    def test_probability_question_2_returns_all_part_matches(self):
-        """البند 2 موجود في جزأين — الصدق: نُرجِع كليهما مع عنوان جزئه."""
+    def test_probability_question_2_returns_one_match_and_says_so(self):
+        """البند 2 موجود في جزأين — نُسلّم **الأوّل** ونُخبر بوجود غيره (L1 · D-206).
+
+        **تغيير سلوك مقصود.** كان هذا الاختبار يفرض إرجاع **كل** المطابقات مجموعةً،
+        باسم «الصدق». وقد أثبت الإنتاج أنّ ذلك يُنتج الضرر الذي وُلدت منه ISS-141:
+        الطالب سأل «اعطني اول سؤال **فقط**» فتلقّى الجزء (1) والجزء (2) معاً — أوسع
+        ممّا طلب. الصدق لا يقتضي التوسيع: التسليم الضيّق **مع ذكر وجود بندٍ آخر**
+        صادقٌ وأضيَق معاً. القانون: الفشل والالتباس يُقصِّران ولا يُوسِّعان.
+        """
         d = detect_question_only_request(
             ExerciseRetrievalRequest(question="اعطني السؤال رقم 2 من تمرين الاحتمالات بدون حل"),
             history_messages=None,
         )
         assert d.recognized and d.question_number == 2
-        assert "الاحتمال الشرطي" in d.sliced_content  # (1) بند 2
-        assert "P(X > 1)" in d.sliced_content or "X > 1" in d.sliced_content  # (2) بند 2
+        assert "الاحتمال الشرطي" in d.sliced_content  # (1) بند 2 — المُسلَّم
+        # البند الثاني لا يُبَثّ، لكنّ وجوده يُذكَر صراحةً (L11: الاقتضاب ≠ الإخفاء)
+        assert "P(X > 1)" not in d.sliced_content
+        assert "يتكرّر في جزء آخر" in d.sliced_content
         # نص المعطيات الكامل (الكيس/الكرات) لا يُغرق الطالب
         assert "كرتان بيضاوان" not in d.sliced_content
+
+    def test_only_request_never_dumps_the_whole_exercise(self):
+        """ISS-141 (L1): «فقط» + تعذُّر الاقتطاع ⇒ سؤال توضيحي، لا جدار نصّ.
+
+        الفرع المحذوف (`question_only_full_display` عند `only=True`) هو ما بثّ التمرين
+        كاملاً في الإنتاج (`customer_messages` 4590) رداً على «أعطني السؤال الأول فقط».
+        """
+        d = detect_question_only_request(
+            ExerciseRetrievalRequest(question="اعطني السؤال رقم 19 من تمرين الاحتمالات فقط"),
+            history_messages=None,
+        )
+        assert d.recognized
+        assert d.reason == "question_only_clarify"
+        assert "كرتان بيضاوان" not in d.sliced_content
+        assert len(d.sliced_content) < 200
 
 
 class TestNonHijacking:

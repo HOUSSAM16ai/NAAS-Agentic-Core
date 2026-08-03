@@ -10,7 +10,9 @@
 
 ## Required jobs (must be green)
 
-`required-ci` in `ci.yml` aggregates **nine** jobs; its `needs:` list is the truth.
+`required-ci` in `ci.yml` aggregates **ten** jobs; its `needs:` list is the truth
+(and is now derived by `check_constitution_reality` — the count said *nine* for as long
+as the list said ten, in the very file that names `needs:` as the arbiter).
 
 | Workflow | Job | What it enforces |
 |---|---|---|
@@ -23,7 +25,7 @@
 | `ci.yml` | `skills-structural` | skills registry/structure assertions |
 | `ci.yml` | `event-stack-live` | **D-204** — boots Redpanda + Temporal, proves delivery/skip/DLQ |
 | `ci.yml` | `images-plan` + `images-build` | **D-205** — every buildable image declared and built |
-| `ci.yml` | `required-ci` | aggregator over the nine above (skipped counts as success — D-141#4) |
+| `ci.yml` | `required-ci` | aggregator over the ten above (skipped counts as success — D-141#4) |
 
 ### Workflows with no aggregator (blocking depends on branch protection)
 

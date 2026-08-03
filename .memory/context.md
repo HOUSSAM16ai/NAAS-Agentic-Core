@@ -6,7 +6,7 @@
 
 # CogniForge — Project Context
 > 🟢 **آخر تحديث تشغيلي: 2026-07-22 · Branch `claude/oop-claude-md-update-e2ziez` (D-179):** طبقة
-> المهارات موحَّدة على قاعدة `BaseSkill` (OOP، 23 مهارة)؛ تحقّق حيّ E2E أثبت «يجيب على كل سؤال»
+> المهارات موحَّدة على قاعدة `BaseSkill` (OOP — العدد **مُشتَقّ** من `app/services/skills/registry.py`)؛ تحقّق حيّ E2E أثبت «يجيب على كل سؤال»
 > (4/4 عربي+LaTeX عبر PRIMARY `openai/gpt-oss-20b:free`)؛ تماسك `.memory` مُصلَح (backfill 6 عناوين).
 > 🧭 **الرؤية الثورية وخارطة الطريق:** المصدر الحيّ الوحيد هو **`.memory/roadmap.md`** (ملخّص في CLAUDE.md §0.6).
 > 🏗️ **العدسة المعمارية (Agentic Runtime):** `.memory/agentic_runtime_doctrine.md` (D-146 · CLAUDE.md §0.7) — خريطة الطبقات مُقيَّمة بصدق حسب §6.6.
@@ -196,7 +196,7 @@ System:      alembic_version
 - `PLANNING_DATABASE_URL` — not set → planning-agent uses `sqlite+aiosqlite:///:memory:` (ISS-043-C)
 
 ## Live Service Status (verified 2026-05-11)
-All 8 microservices ACTIVE. Skills Pipeline in `fallback` mode (LLM keys not in process env at startup).
+All 13 microservices declared in `config/microservice_catalog.json` (count derived, never hand-written — D-209). Skills Pipeline in `fallback` mode (LLM keys not in process env at startup).
 To activate full pipeline: export `OPENROUTER_API_KEY` + `TAVILY_API_KEY` before supervisor.sh runs.
 
 ## API Contract Quick Reference

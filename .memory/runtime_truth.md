@@ -78,7 +78,7 @@
 |---------|--------|----------------------------------------|
 | **٩ وحدات أسس جديدة** (`linear_algebra`/`calculus`/`statistics`/`optimization`/`graph_theory`/`data_structures`/`formal_languages`/`computability`/`complexity`) | **ACTIVE** | dep-free مُتحقَّقة، مُعاد تصديرها من `foundations/__init__.py`؛ مُستهلَكة من `FoundationsComputeSkill` + `foundations-service`؛ 100% تغطية سطر+فرع (`tests/core/test_foundations_first_roots.py`، 46 اختبار). |
 | **`FoundationsComputeSkill`** (`foundations_compute`) على `BaseSkill` | **ACTIVE** | مُسجَّلة في `registry` (`consumed_by` = `compute_endpoint` + `compose_reasoning`، بلا ZOMBIE)؛ سلسلة حيّة `POST /api/v1/skills/compute` + فرع `compose_reasoning`؛ مقاييس `cogniforge_skill_foundations_compute_*`؛ 100% تغطية (`tests/services/test_foundations_compute_skill.py`، 17 اختبار). |
-| **`foundations-service`** (:8010، API-first) | **ACTIVE (uvicorn عند الإقلاع)** | خدمة مصغّرة مستقلّة (بلا استيراد `app`/sibling)؛ عقد OpenAPI ملتزَم (`check_openapi_parity` → 12/12)؛ `CollectorRegistry` مستقل بـ ٨ مقاييس `cogniforge_foundations_*`؛ `supervisor.sh` STEP 4K + Prometheus job (step="13") + لوحة Grafana؛ منطق الخدمة (main/dispatch/prom_metrics) 100% تغطية (`tests/microservices/foundations_service/`، 12 اختبار). DOWN حتى يُقلع الـ process (ليس خطأ في devcontainer الافتراضي). |
+| **`foundations-service`** (:8010، API-first) | **ACTIVE (uvicorn عند الإقلاع)** | خدمة مصغّرة مستقلّة (بلا استيراد `app`/sibling)؛ عقد OpenAPI ملتزَم (`check_openapi_parity` → 13/13)؛ `CollectorRegistry` مستقل بـ ٨ مقاييس `cogniforge_foundations_*`؛ `supervisor.sh` STEP 4K + Prometheus job (step="13") + لوحة Grafana؛ منطق الخدمة (main/dispatch/prom_metrics) 100% تغطية (`tests/microservices/foundations_service/`، 12 اختبار). DOWN حتى يُقلع الـ process (ليس خطأ في devcontainer الافتراضي). |
 
 ## Cognitive Reasoning Core + Foundations Activation (2026-07-22, D-181)
 
@@ -86,7 +86,7 @@
 |---------|--------|----------------------------------------|
 | **`app/core/foundations/`** (منطق قضوي + خوارزميات + بايز) | **ACTIVE** (كان DORMANT) | يُستورَد الآن من `app/core/reasoning/{arguments,causal}` على سلسلة حيّة تنتهي بـ `POST /api/v1/skills/reason` + `compose_reasoning`؛ ركيزة `reasoning` مُختبَرة حياً (`tests/core/test_reasoning.py`). |
 | **`app/core/reasoning/`** (arguments/causal/decomposition/abstraction/mental_model) | **ACTIVE** | dep-free مُتحقَّق؛ كل الحالات + مسارات الخطأ مُختبَرة محلياً؛ تستهلكه ٦ مهارات. |
-| **٦ مهارات التفكير** (logic/critical/decompose/causal/abstraction/mental_model) على `BaseSkill` | **ACTIVE** | مُسجَّلة في `registry` (34 مهارة، بلا ZOMBIE) + doctrine + `compose_reasoning` + `/api/v1/skills/reason` (import + call chain + tests). |
+| **٦ مهارات التفكير** (logic/critical/decompose/causal/abstraction/mental_model) على `BaseSkill` | **ACTIVE** | مُسجَّلة في `registry` (العدد مُشتَقّ من `registry.py`، بلا ZOMBIE) + doctrine + `compose_reasoning` + `/api/v1/skills/reason` (import + call chain + tests). |
 
 ---
 

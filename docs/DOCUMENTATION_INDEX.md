@@ -10,7 +10,7 @@
 
 | المستوى | المصدر | الدور |
 |---------|--------|------|
-| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-189**). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) |
+| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-209**). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) |
 | 📐 مواصفة البرنامج | [`../spec.md`](../spec.md) | برنامج التبسيط API-first (Phases 0→12) — **الهدف** المعماري لا الحقيقة الجارية. ليست دستوراً ثالثاً: §4 تُحيل إلى الدستور القائم |
 | 🧠 الذاكرة | `.memory/` → [`README.md`](../.memory/README.md) | roadmap · decisions · issues · runtime_truth · pedagogical_os |
 | ⚖️ الدستور المعماري | [`architecture/MICROSERVICES_CONSTITUTION.md`](architecture/MICROSERVICES_CONSTITUTION.md) + [`ARCH_MICROSERVICES_CONSTITUTION.md`](ARCH_MICROSERVICES_CONSTITUTION.md) | حدود الخدمات |
@@ -40,6 +40,7 @@
 | [`architecture/`](architecture/) (runbooks: `MASTER_CUTOVER_RUNBOOK` · `PR1..PR5` · `LEGACY_*`) | كتيّبات هجرة الـ strangler-fig |
 | [`architecture/ENGINEERING_DOCTRINE.md`](architecture/ENGINEERING_DOCTRINE.md) | ⚖️ عقيدة الهندسة — البحر الكامل مربوطاً بفارضٍ آلي؛ كل قانون يُسمّي بوّابته (محروسة: بوّابة غير موجودة ⇒ CI أحمر) |
 | [`architecture/CS_KNOWLEDGE_MAP.md`](architecture/CS_KNOWLEDGE_MAP.md) | 🗺️ خريطة علوم الحاسوب ↔ المشروع — عشرون مجالاً بحالةٍ ودليلٍ ملفّي، تحرسها `check_cs_knowledge_map` (D-207) |
+| [`architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md`](architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md) | 🎼 **عقيدة تنسيق الوكلاء (D-209)** — القانون لطبقات التنسيق التسع (Knowledge→…→Humans)، كلٌّ بفارضه. **الحالة** في [`../.memory/agentic_runtime_doctrine.md`](../.memory/agentic_runtime_doctrine.md)؛ تحرسهما `check_agentic_orchestration` (⛔ القانون لا يحمل حالة، ولا سُلَّم ثانٍ) |
 | [`API_FIRST_ARCHITECTURE.md`](API_FIRST_ARCHITECTURE.md) | عقيدة API-First |
 | [`architecture/EXTENSION_SEAMS.md`](architecture/EXTENSION_SEAMS.md) | مقاعد التوسّع (Kafka/VectorDB/RAG/Skill-flags) + الرؤية الثورية (D-173) |
 | [`adr/ADR-006-polyglot-language-adoption.md`](adr/ADR-006-polyglot-language-adoption.md) | قرار تبنّي اللغات متعدّدة — **الحدّ هو العقد لا اللغة**؛ TypeScript مُتبنّىً، والتسع الباقيات مقاعد بشرط تبنٍّ (D-185) |

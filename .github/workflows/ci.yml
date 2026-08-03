@@ -300,6 +300,14 @@ jobs:
           # claimed status must point at a file that actually exists, so an
           # aspirational ACTIVE cannot survive a rename or a deletion.
           python scripts/fitness/check_cs_knowledge_map.py
+          # D-209: the same contract applied to the agentic orchestration
+          # layers. The map it guards had drifted for five weeks and carried a
+          # hand-written count of a moving quantity — the D-192 defect class,
+          # in the one document an agent reads to learn the system's shape.
+          # It also forbids a second status ladder: the law document fails if
+          # it carries a status column, because two maps of one system is how
+          # ISS-139 happened (three lists for one intent, agreeing on nothing).
+          python scripts/fitness/check_agentic_orchestration.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

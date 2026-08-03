@@ -57,7 +57,7 @@
   },
   "model": "claude-sonnet-4-5",
   "env": {
-    "PYTHONPATH": "/home/runner/workspace",
+    "PYTHONPATH": "/home/user/NAAS-Agentic-Core",
     "ENVIRONMENT": "development"
   },
   "hooks": {
@@ -66,8 +66,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"systemMessage\": \"📚 Loading project memory...\n\"}' && printf '\\n=== CONTEXT ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/context.md 2>/dev/null && printf '\\n=== PROGRESS ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/progress.md 2>/dev/null && printf '\\n=== TASKS ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/tasks.md 2>/dev/null && printf '\\n=== DECISIONS ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/decisions.md 2>/dev/null && printf '\\n=== ISSUES ===\\n' && cat /home/user/NAAS-Agentic-Core/.memory/issues.md 2>/dev/null",
-            "timeout": 10
+            "command": "M=/home/user/NAAS-Agentic-Core/.memory; echo '{\"systemMessage\": \"📚 Loading project memory (index + runtime truth + recent log windows)...\n\"}' && printf '\\n=== INDEX (authority map) ===\\n' && cat \"$M/README.md\" 2>/dev/null && printf '\\n=== RUNTIME TRUTH (the tiebreaker) ===\\n' && head -c 60000 \"$M/runtime_truth.md\" 2>/dev/null && printf '\\n=== CONTEXT ===\\n' && cat \"$M/context.md\" 2>/dev/null && printf '\\n=== TASKS ===\\n' && cat \"$M/tasks.md\" 2>/dev/null && printf '\\n=== DECISIONS (newest ~15; full log: .memory/decisions.md) ===\\n' && head -c 120000 \"$M/decisions.md\" 2>/dev/null && printf '\\n=== ISSUES (newest ~15; full log: .memory/issues.md) ===\\n' && head -c 120000 \"$M/issues.md\" 2>/dev/null && printf '\\n=== progress.md not injected (125KB); read on demand ===\\n'",
+            "timeout": 15
           }
         ]
       }

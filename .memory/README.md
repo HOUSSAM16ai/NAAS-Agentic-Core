@@ -25,6 +25,9 @@
 | `cognitive_lab_philosophy.md` | فلسفة المختبر المعرفي (ليس Chat Tutor) |
 | `routing_philosophy.md` | عقيدة التوجيه (intent gates محدودة النطاق) |
 | `runtime-rules.md` | قواعد runtime الدائمة |
+| `aesthetics_of_absence.md` | جماليات الغياب — مصدر القوانين L8→L12 (D-206). كان موجوداً وغير مفهرَس حتى D-209 |
+| `agentic_runtime_doctrine.md` | **حالة** طبقات التنسيق التسع + الثلاث عشرة (D-146/D-209). القانون في `docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md` |
+| `coverage-roadmap.md` | خارطة التغطية (D-182). كان موجوداً وغير مفهرَس حتى D-209 |
 
 ## 3) الحقائق المتخصصة (Truth files)
 
@@ -48,6 +51,7 @@
 |-------|-----|
 | `runbooks/e2e-codespaces.md` | التحقق الحيّ الكامل في Codespaces |
 | `runbooks/realtime-recovery.md` | استعادة الزمن الحقيقي (WS) |
+| `runbooks/supabase-bridge.md` | جسر SQL عبر HTTPS حين تُحجَب منافذ Postgres. كان موجوداً وغير مفهرَس حتى D-209 |
 
 ## 6) السجلات التاريخية المُجمَّدة (تُقرأ ولا تُحدَّث)
 

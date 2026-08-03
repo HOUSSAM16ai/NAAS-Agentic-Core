@@ -31,7 +31,7 @@ as the list said ten, in the very file that names `needs:` as the arbiter).
 
 | Workflow | Job | What it enforces |
 |---|---|---|
-| `doc_integrity.yml` | `doc-integrity` | `check_memory_coherence` + `check_constitution_reality` + CLAUDE.md anchors + no dated diagnostics outside `docs/archive/` |
+| `doc_integrity.yml` | `doc-integrity` | `check_memory_coherence` + `check_constitution_reality` + **`check_authority_links`** + CLAUDE.md anchors + no dated diagnostics outside `docs/archive/` |
 | `runtime_truth.yml` | `runtime-truth-drift-check` | `scripts/runtime_truth.py --check` vs `.runtime/truth_table.lock.json` |
 | `skills-doctrine-gate.yml` | `doctrine-drift` · `doctrine-invariants` | `check_skills_doctrine.py` + `check_pedagogical_os.py` |
 | `skills-architecture-gate.yml` | 7 jobs + `skills-gate-required` | API contracts · metrics inventory · skill isolation · health · dashboards · targets · pipeline |

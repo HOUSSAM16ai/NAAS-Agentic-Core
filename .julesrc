@@ -22,7 +22,12 @@ limits:
 # --------------------------------------------------------------------------------------
 quality_gates:
   cyclomatic_complexity_threshold: 15  # Fail if any function > 15
-  test_coverage_minimum: 80.0          # Target percentage
+  # 73 is the ENFORCED floor: `ci.yml::test-monolith` runs --cov-fail-under=73, and that
+  # is the number that actually blocks a merge. 80 was written here as an aspiration and
+  # read by contributors as a rule, so one repo carried two coverage floors with nothing
+  # reconciling them (D-209). The ambition is not dropped — it lives as a tracked target
+  # in `.memory/roadmap.md`; this file states what is enforced today.
+  test_coverage_minimum: 73.0          # enforced floor — mirrors ci.yml (one-way ratchet)
   coverage_delta_allowed: -1.0         # Max allowed drop in coverage per PR
 
 # --------------------------------------------------------------------------------------

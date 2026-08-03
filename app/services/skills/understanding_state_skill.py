@@ -241,11 +241,13 @@ class UnderstandingStateSkill(BaseSkill):
                     "مضروب",
                 ),
                 explain_markers=("نقسم على", "الترتيب لا يهم", "المقام", "تُعدّ مرة واحدة"),
+                # ISS-149: «مكررة» وحدها كلمةٌ شائعة — «هل لأن الحالات مكررة؟» سؤالٌ
+                # لا برهان. البرهان عبارةٌ تصف الآلية.
                 evidence_markers=(
                     "الترتيب لا يهم",
                     "نفس المجموعة",
                     "تُعدّ مرة",
-                    "مكررة",
+                    "لا نعدها مكررة",
                     "بدون ترتيب",
                 ),
                 representations=(
@@ -291,7 +293,10 @@ class UnderstandingStateSkill(BaseSkill):
                     "مجموع الطرق",
                 ),
                 explain_markers=("كل الطرق", "فضاء العينة", "العدد الكلي"),
-                evidence_markers=("كل الطرق", "c(11", "اختيار 3 من 11", "الفضاء الكلي"),
+                # ISS-149: حُذف `"c(11"` — رمزٌ **يطبعه المعلّم نفسه**، وترديدُ الطالب
+                # له ليس برهان فهم (D-185: النظام يُعرّف كل رمز يبثّه). «ما معنى
+                # c(11,3)؟» كانت تُطابقه فتُقرأ إتقاناً. الثلاثة الباقية عباراتُ آلية.
+                evidence_markers=("كل الطرق", "اختيار 3 من 11", "الفضاء الكلي"),
                 representations=(
                     f"فضاء العيّنة = **كل طرق سحب {k} من {n}** دون ترتيب: {_expand_comb(n, k, total)}.",
                     f"هذا المقام في الاحتمال: مجموع كل النتائج الممكنة المتساوية الإمكان = {_expand_comb(n, k, total)}.",
@@ -365,12 +370,41 @@ class UnderstandingStateSkill(BaseSkill):
                 best_hits, best = hits, kc
         return best if best_hits > 0 else None
 
+    @staticmethod
+    def _is_confusion_or_question(message: str) -> bool:
+        """حيرةٌ مُعلَنة أو سؤال ⇒ ليس برهان فهم (ISS-149).
+
+        المصدران قانونيّان: علامات الحيرة من `shared/intent` (D-186)، وبوّابة الفعل
+        الكلامي من المحرّك الرمزي (D-162) — لا كاشف جديد.
+        """
+        try:
+            from shared.intent import matches
+
+            if matches(message, "confusion"):
+                return True
+            from app.services.skills.probability_brain.cognitive_verification import (
+                CognitiveVerificationMixin,
+            )
+
+            return CognitiveVerificationMixin._is_question_not_answer(message)
+        except Exception:  # pragma: no cover - fail-safe
+            return False
+
     def _evidence_kc(
         self, message: str, kcs: list[KnowledgeComponent]
     ) -> KnowledgeComponent | None:
-        """أي مكوّن يُظهر هذا النصّ برهان فهمه؟ (إظهار مرتبط، لا «فهمت» مجرّدة)."""
+        """أي مكوّن يُظهر هذا النصّ برهان فهمه؟ (إظهار مرتبط، لا «فهمت» مجرّدة).
+
+        ISS-149 — **الحيرة والسؤال يُبطلان البرهان**. هذه الدالّة تقرأ رسالة الدور
+        وحدها (فلا يصيبها انحرافُ «الأثر البائت» الذي أنتج الكارثة في مصفوفة
+        التصعيد)، لكنّها كانت تطابق المؤشّر داخل **سؤالٍ** عنه: «ماذا يعني البسط
+        على المقام؟» تحمل المؤشّر حرفياً وهي طلبُ تعريفٍ لا برهانُ إتقان. القانون
+        واحد في كل عقلٍ يقرّر، وإلّا صحّ في موضعٍ وسقط في آخر.
+        """
         norm = _normalize(message)
         if not norm:
+            return None
+        if self._is_confusion_or_question(message):
             return None
         for kc in kcs:
             if any(_normalize(e) in norm for e in kc.evidence_markers):

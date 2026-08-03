@@ -436,3 +436,73 @@ secrets → `DATABASE_URL`/`OPENROUTER_API_KEY` not injected → uvicorn starts 
 **Prevention**: Always ensure `.devcontainer/secrets.env` exists before running
 supervisor. The file is git-ignored; recreate it from the template after each
 environment rebuild.
+
+---
+
+## Pattern 6 — Stale-Evidence Precedence Inversion (ISS-149 / D-208)
+
+**Trigger**: A decision branch reads *evidence* from a window of past student
+messages and runs **before** any check of the current turn's intent.
+
+**Symptom**: The student says «لم أفهم؟» and is answered «أحسنت ✅ — يبدو أنك أمسكت
+الفكرة», while the persistent cognitive model records `state="understood"`,
+`evidence="verified"`.
+
+**Why it hides**: the intent classifier is *correct* — `shared/intent` returns
+`confusion`. Nothing is broken in detection, so detection-level tests stay green.
+The defect lives entirely in **ordering**: branch (1) fires before intent is
+consulted. This is the same root as ISS-144, where a scope request was detected
+and then discarded by an earlier stage.
+
+**Detection**: replay the real transcript through the actual turn stages and assert
+on the persisted state, not only on the emitted text (`final_kc_state_not`).
+
+**Prevention**: a present-turn signal outranks any historical trace. Cross-turn
+memory belongs in explicit persistent state (`delivered_levels`), never in
+re-judging an old message.
+
+---
+
+## Pattern 7 — Silent-Parse Gate Blindness (ISS-149 / D-208)
+
+**Trigger**: `except SyntaxError: return []` (or `return 0` / `continue`) around a
+**file** parse inside a CI gate.
+
+**Symptom**: the gate reports zero violations for a file it never read. Observed
+live: on Python 3.11, `check_no_new_any` reported `base.py` as `0× Any` against a
+frozen debt of 12 — because PEP 695 syntax could not be parsed, not because anyone
+cleaned it. Thirteen gates carried the pattern, including the shell-injection guard
+whose frozen debt is zero.
+
+**Why it hides**: gates that count violations upward return *green* on an
+unparsable file. Only a bidirectional (shrink-only) debt screams — and that was
+luck, not design.
+
+**Detection**: plant an unparsable `.py` file in the scanned tree and re-run the
+gate. Green means blind.
+
+**Prevention**: `scripts/fitness/_ast_util.parse_source` raises; `run_gate` turns it
+into an explicit failure. Enforced by `check_gate_parse_honesty`.
+
+---
+
+## Pattern 8 — Unguarded Vendored Intent (ISS-149 / D-208)
+
+**Trigger**: a microservice legitimately vendors a marker list (service constitution
+forbids a shared business-logic library) and the exemption is recorded **without
+naming a parity gate**.
+
+**Symptom**: the vendored `_CONFUSION` drifted to **7 markers against 27** canonical.
+A differential probe over both brains diverged on 4 of 5 realistic confusion
+phrasings — including the Darija «ماعرفتش» and the French «je ne comprends pas» on a
+platform whose constitution promises Arabic / French / Darija.
+
+**Why it hides**: an incidental fallback (`≤ 6 words`) masked most cases, so the
+system was correct *by accident* rather than by contract.
+
+**Detection**: compare the vendored set against the canonical one under the canonical
+normalizer, in both directions.
+
+**Prevention**: intentional vendoring must name an existing parity gate, or declare
+`«بلا بوّابة تكافؤ»` with a stated reason. Enforced by `check_intent_single_source`
+and `check_probability_brain_parity`.

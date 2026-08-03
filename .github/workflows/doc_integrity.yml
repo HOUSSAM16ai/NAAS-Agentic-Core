@@ -41,6 +41,16 @@ jobs:
       - name: Constitution equals reality (D-192)
         run: python scripts/fitness/check_constitution_reality.py
 
+      # ISS-149 (F3): truth is not reachability. DOCUMENTATION_INDEX.md calls
+      # itself the complete authority map, and three of its links pointed at
+      # paths that do not exist — including ADR-006 itself, filed under
+      # `docs/adr/` while the map sent readers to `docs/architecture/adr/`.
+      # Nothing caught it; a question about languages did. A map that lies is
+      # worse than no map: it is read closely by exactly the people trying to
+      # be careful.
+      - name: Authority links resolve (ISS-149)
+        run: python scripts/fitness/check_authority_links.py
+
       - name: CLAUDE.md exists and is non-empty
         run: |
           test -f CLAUDE.md || { echo "::error::CLAUDE.md is missing"; exit 1; }

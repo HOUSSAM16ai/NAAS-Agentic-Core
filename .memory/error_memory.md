@@ -4,6 +4,13 @@
 Defines the taxonomy and tracking of student errors. The system studies the student's mistakes as closely as it studies their correct answers, using this data to drive diagnostic feedback and dynamic generation.
 
 ## Core Invariant
+**Claimed understanding is not demonstrated understanding (D-208 · ISS-149).** A bare
+«فهمت» is an assertion, not proof, and it must be *tested* — never rewarded with the
+derivation. Rewarding it trains the student to claim comprehension in order to obtain
+the answer, which is the fastest way to widen the illusion gap. Evidence of
+understanding is a phrase describing the mechanism; it is never the concept's own name
+and never a symbol the tutor itself printed.
+
 Errors must be differentiated and classified. A computational error is not the same as a conceptual fragility. Each error class must map to a different pedagogical intervention.
 
 ## Runtime Implications

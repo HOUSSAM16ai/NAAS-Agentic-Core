@@ -226,6 +226,19 @@ def test_transcript_contract(contract: dict[str, Any]) -> None:
             prior_answers.append((index, answer))
             previous_answer = answer
 
+    # ── ISS-149: النموذج المعرفي المحفوظ جزءٌ من العقد ────────────────────────
+    # نصّ الدور ليس كلّ الضرر. في ISS-149 كتب فرعُ `mastered` في الحالة الدائمة
+    # `state="understood"`/`evidence="verified"` لمفهومٍ أعلن الطالبُ للتوّ أنه لم
+    # يفهمه — فتُصنَّع «فجوة الوهم» التي يقول §0.6 إننا نُحسّن على تقليصها. عقدٌ
+    # يفحص النصّ وحده كان ليُخضِّر ذلك حتى بعد إسكات الجملة.
+    for concept, forbidden in (contract.get("final_kc_state_not") or {}).items():
+        entry = (tutor_state.get("kc_progress") or {}).get(concept) or {}
+        assert entry.get("state") != forbidden, (
+            f"[{contract['id']}] الحالة الدائمة للمفهوم {concept!r} صارت "
+            f"{forbidden!r} — النموذج المعرفي سجّل إتقاناً لم يحدث.\n"
+            f"--- kc_progress ---\n{tutor_state.get('kc_progress')}"
+        )
+
 
 def test_every_contract_declares_an_issue() -> None:
     """القاعدة الدائمة: كل عقد يُشير إلى بلاغه — لا عقود يتيمة بلا أثر."""

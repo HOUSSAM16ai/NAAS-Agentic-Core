@@ -279,6 +279,23 @@ jobs:
           # call sites forgot. A parameter seven callers forget is not a
           # safeguard; it is a defect spread across call sites.
           python scripts/fitness/check_symbolic_reveal_ledger.py
+          # ISS-149: an understanding marker must be a phrase describing the
+          # mechanism, never the concept's own name. `favorable_cases` declared
+          # "البسط" as proof of understanding, so a student *asking* "كيف نفرق
+          # بين البسط و المقام؟" matched it, was scored as having mastered the
+          # concept, and the next "لم أفهم؟" was answered with "أحسنت ✅ — يبدو
+          # أنك أمسكت الفكرة" while the cognitive model recorded understood.
+          # Whoever asks about a thing necessarily names it: the name is the
+          # worst possible evidence of understanding it.
+          python scripts/fitness/check_understanding_evidence.py
+          # ISS-149: thirteen gates returned "zero violations" for a file they
+          # could not parse — `except SyntaxError: return []`. Among them the
+          # shell-injection guard whose frozen debt is zero, the single-intent
+          # source, and the outbound-trace gate: the checks the constitution
+          # leans on hardest could pass green over a tree they never read. The
+          # doctrine names this the third price — silence read as success — and
+          # it was living inside the enforcers themselves.
+          python scripts/fitness/check_gate_parse_honesty.py
           # ISS-148: the CS knowledge map is a contract, not a poster. Every
           # claimed status must point at a file that actually exists, so an
           # aspirational ACTIVE cannot survive a rename or a deletion.

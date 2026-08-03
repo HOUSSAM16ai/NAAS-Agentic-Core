@@ -20,7 +20,11 @@
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -63,10 +67,9 @@ def _shell_kwarg_is_true(call: ast.Call) -> bool:
 
 def _scan(path: Path) -> list[tuple[int, str]]:
     """يُرجع (السطر، الوصف) لكل استدعاء يُنشئ صدفة في الملف."""
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
-    except SyntaxError:
-        return []
+    # ISS-149 (F1): يرفع. أخطرُ المواضع: دَين هذه البوّابة **صفر** (D-187)، وملفٌّ
+    # غير مقروء كان يُبلَّغ عنه بصفر حقن صدفة — أي شهادةُ أمانٍ بلا فحص.
+    tree = parse_source(path)
 
     findings: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -128,4 +131,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_gate(main))

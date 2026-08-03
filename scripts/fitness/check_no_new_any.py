@@ -27,6 +27,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEBT_FILE = Path(__file__).with_name("no_new_any_debt.json")
 
@@ -44,10 +47,9 @@ def _count_any(path: Path) -> int:
     العدّ النصّي يحسب كلمة `Any` في تعليقٍ عربي أو docstring يشرح القاعدة نفسها،
     فتُعاقَب الوثيقة التي تحرس القاعدة. الأنواع وحدها تُعَدّ.
     """
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except SyntaxError:  # pragma: no cover
-        return 0
+    # ISS-149 (F1): يرفع. هنا وقع الدليل الحيّ: على 3.11 أُبلِغ أن `base.py` صار
+    # `0× Any` بينما الدَّين 12 — لأن الملفّ لم يُحلَّل أصلاً، لا لأنه نُظِّف.
+    tree = parse_source(path)
     return sum(
         1
         for node in ast.walk(tree)
@@ -120,4 +122,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_gate(main))

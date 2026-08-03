@@ -60,7 +60,48 @@ def _gates_from_ci() -> list[str]:
     return seen
 
 
+#: ISS-149 (F2) — أدنى إصدار Python **مُشتَقّاً** من `pyproject.toml`، لا مكتوباً هنا.
+#: المشروع يستعمل صيغة PEP 695 (`class BaseSkill[InT, OutT]`) وهي 3.12+، و`ruff`
+#: يُصرِّح ذلك بـ`target-version`. فالقيمة موجودة ومصدرُها واحد — الناقص كان **فرضها**.
+_PYPROJECT = REPO_ROOT / "pyproject.toml"
+_TARGET_VERSION = re.compile(r'^target-version\s*=\s*"py(\d)(\d+)"', re.MULTILINE)
+
+
+def _required_python() -> tuple[int, int] | None:
+    """أدنى إصدار مدعوم كما يُصرِّحه `pyproject.toml` — لا رقمٌ ثانٍ يتقادم (D-192)."""
+    match = _TARGET_VERSION.search(_PYPROJECT.read_text(encoding="utf-8"))
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _check_interpreter() -> int:
+    """يرفض التشغيل على مفسّرٍ أقدم من المُصرَّح — بدل عطبٍ صامت.
+
+    ISS-149 (F2): على Python 3.11 لا يُحلَّل ملفٌّ يستعمل PEP 695. أربعُ بوّابات
+    تسقط عندها بـ`SyntaxError` غامض، و**ثمانٍ** تبتلع الخطأ وتُبلِّغ صفر انتهاكات —
+    أي أنها تمرّ **خضراءَ كاذبة** على شجرةٍ لم تقرأها (F1). فمساهمٌ على 3.11 يرى
+    مشروعاً «سليماً» وهو أعمى تماماً. رسالةٌ صريحة أنفع من خمسين نتيجةً كاذبة.
+    """
+    required = _required_python()
+    if required is None:
+        print("❌ pyproject.toml بلا `target-version` — أدنى إصدار Python غير مُصرَّح.")
+        return 1
+    if sys.version_info[:2] < required:
+        current = ".".join(str(part) for part in sys.version_info[:2])
+        wanted = ".".join(str(part) for part in required)
+        print(
+            f"❌ Python {current} أقدم من المطلوب {wanted}+ (pyproject.toml:target-version).\n"
+            f"   المشروع يستعمل صيغة PEP 695، فالملفّات التي تحملها **لا تُحلَّل** على\n"
+            f"   {current}: بوّابات تسقط بخطأ غامض وأخرى تُبلِّغ صفر انتهاكات عن شجرةٍ\n"
+            f"   لم تقرأها. شغّل البوّابات بمفسّر {wanted} أو أحدث."
+        )
+        return 1
+    return 0
+
+
 def main() -> int:
+    if _check_interpreter():
+        return 1
+
     gates = _gates_from_ci()
     if not gates:
         print("❌ لم تُقرأ أي بوّابة من ci.yml — تغيّر شكل الوظيفة؟")

@@ -28,7 +28,11 @@
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -74,6 +78,20 @@ _ALLOWLIST: dict[str, str] = {
 #: قوائم الحيرة/التعريف في المسار التعليمي الحيّ؛ وما بقي مُجمَّد هنا **بسببه المكتوب**.
 #: القاعدة: هذه الخريطة **لا تكبر أبداً**. أي قائمة جديدة تُفشِل CI، وكل هجرة تحذف
 #: سطراً. فالدَّين مرئي ومحصور بدل أن يكون خفيّاً ومتكاثراً.
+
+#: ISS-149 — بوّابات التكافؤ المقبولة كفارضٍ لإعفاء «توريد مقصود».
+_PARITY_GATES: frozenset[str] = frozenset(
+    {
+        "check_probability_brain_parity",
+        "check_notation_parity",
+        "check_redaction_parity",
+        "check_model_chain_parity",
+    }
+)
+
+#: صيغة الاعتراف الصريح بغياب الحراسة — العقيدة تقبلها، وترفض الصمت.
+_NO_GATE_DECLARATION = "بلا بوّابة تكافؤ"
+
 _FROZEN_DEBT: dict[str, str] = {
     "app/services/chat/local_graph_explanation.py": "أنماط شرح للمسار المحلّي — نطاق آخر.",
     # نصوص doctrine (توثيق مُقتبَس) لا كاشفات — تُطابَق نصّياً لا وظيفياً.
@@ -91,9 +109,16 @@ _FROZEN_DEBT: dict[str, str] = {
     "app/services/skills/concept_diagnosis_skill.py": "علامات حوادث التمرين لا نيّة الطالب.",
     "app/services/skills/probability_vocab.py": "كاشف الإحباط (D-078) — مرشَّح للهجرة.",
     # خدمات مصغّرة: دستورها يمنع مكتبة منطق مشتركة (القاعدتان 97/98) ⇒ التوريد مقصود.
-    "microservices/content_retrieval_skill/src/intent_classifier.py": "خدمة مصغّرة — توريد مقصود.",
+    # ISS-149: ليست مرآةً لقائمةٍ قانونية بل **مُصنِّف محلّي** لنيّة الاسترجاع
+    # مقابل الشرح، بنطاقٍ خاصّ بالخدمة. لا نظير له في `shared/intent` يُقارَن به،
+    # فلا بوّابة تكافؤ ممكنة اليوم — والاعتراف بذلك أنفع من ادّعاء حراسة.
+    # الفجوة مُسجَّلة في `.memory/issues.md` تحت ISS-149.
+    "microservices/content_retrieval_skill/src/intent_classifier.py": (
+        "خدمة مصغّرة — توريد مقصود، بلا بوّابة تكافؤ: مُصنِّف محلّي لا مرآة لقائمة قانونية."
+    ),
+    # ISS-149: صار التوريد محروساً — `_CONFUSION` تُقارَن قيمةً بـ`shared/intent`.
     "microservices/orchestrator_service/src/services/overmind/probability_tutor.py": (
-        "خدمة مصغّرة — توريد مقصود (port العقل الحتمي)."
+        "خدمة مصغّرة — توريد مقصود (port العقل الحتمي)، يحرسه check_probability_brain_parity."
     ),
     "scripts/verify_d139_live.py": "سكربت تحقّق حيّ — ليس مسار تشغيل.",
 }
@@ -135,10 +160,8 @@ def _string_items(node: ast.AST) -> list[str]:
 
 def _scan(path: Path) -> list[tuple[str, int, list[str]]]:
     """يُرجع (اسم المتغيّر، السطر، العبارات المُلتقَطة) لكل قائمة نيّة في الملف."""
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
-    except SyntaxError:  # ملف ليس بايثون صالحاً (عيّنة/قالب) — ليس مصدراً.
-        return []
+    # ISS-149 (F1): يرفع — قائمةٌ فارغة عن ملفٍّ لم يُحلَّل تعني «لا نيّات مكرّرة» زوراً.
+    tree = parse_source(path)
 
     findings: list[tuple[str, int, list[str]]] = []
     for node in ast.walk(tree):
@@ -180,6 +203,44 @@ def _mirror_is_contained() -> list[str]:
     return sorted(mirrored - canonical)
 
 
+#: ISS-149 — «توريد مقصود» يحتاج فارضاً مُسمّى، وإلّا صار إعفاءً دائماً.
+#:
+#: كانت `probability_tutor.py` مُعفاةً بسبب «خدمة مصغّرة — توريد مقصود». والتوريد
+#: نفسه مشروع (دستور الخدمات 97/98 يمنع مكتبة منطق مشتركة)، لكنّ الدستور يشترط
+#: اقترانه **ببوّابة تكافؤ**: `check_notation_parity` (D-185) ·
+#: `check_redaction_parity` (D-203) · `check_model_chain_parity` (D-174) ·
+#: `check_probability_brain_parity` (D-206·L5). وهذه وحدها كانت بلا بوّابة، فانحرفت
+#: علاماتُ الحيرة إلى **٧ مقابل ٢٧** بلا أن يلاحظ أحد — أي طالبٌ حائر يُسلَّم إلى
+#: الـLLM بدل التشخيص، في أربع صيغ من كل خمس.
+def _check_vendoring_has_an_enforcer() -> int:
+    """كل إدخالٍ يذكر «توريد» يُسمّي بوّابته الموجودة، أو يُصرّح بغيابها."""
+    failures = 0
+    for rel, reason in sorted(_FROZEN_DEBT.items()):
+        if "توريد" not in reason:
+            continue
+        named = [g for g in _PARITY_GATES if g in reason]
+        if not named:
+            # العقيدة تقبل «بلا فارض» **منطوقاً** (ENGINEERING_DOCTRINE، قاعدة
+            # الإغلاق): الاعتراف بغياب الحراسة أنفع من ادّعائها. ما ترفضه هو
+            # الصمت — إعفاءٌ يبدو محروساً وليس كذلك.
+            if _NO_GATE_DECLARATION in reason:
+                continue
+            failures += 1
+            print(
+                f"\u274c إعفاء «توريد» بلا فارضٍ مُسمّى: {rel}\n"
+                f"   السبب المكتوب: {reason!r}\n"
+                f"   التوريد مشروع، لكنّ نسختين بلا بوّابة تكافؤ تنحرفان — سمِّ البوّابة\n"
+                f"   في نصّ السبب (مثل: {sorted(_PARITY_GATES)[0]})، أو صرّح\n"
+                f"   {_NO_GATE_DECLARATION!r} مع سببٍ منطوق."
+            )
+            continue
+        for gate in named:
+            if not (REPO_ROOT / "scripts/fitness" / f"{gate}.py").is_file():
+                failures += 1
+                print(f"\u274c {rel}: يستشهد بـ{gate} وهي غير موجودة — فارضٌ وهمي.")
+    return failures
+
+
 def main() -> int:
     """يُرجع 0 عند وجود مصدر واحد فقط، و1 عند أي نسخة أو انجراف."""
     if not CANONICAL.is_file():
@@ -202,6 +263,8 @@ def main() -> int:
                 f"        from shared.intent import markers_for\n"
                 f'        {name} = markers_for("<intent>")'
             )
+
+    failures += _check_vendoring_has_an_enforcer()
 
     # الدَّين يتقلّص فقط: مدخلٌ لم يعد فيه ازدواج **يجب** أن يُحذف من الخريطة، وإلّا
     # تراكمت استثناءات ميتة تُخفي عودة الازدواج لاحقاً تحت غطاء «مُجمَّد سابقاً».
@@ -231,4 +294,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_gate(main))

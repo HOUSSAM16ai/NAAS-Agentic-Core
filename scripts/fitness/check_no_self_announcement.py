@@ -51,6 +51,9 @@ import ast
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -110,10 +113,8 @@ def _student_strings() -> list[tuple[str, int, str]]:
         path = REPO_ROOT / rel
         if not path.exists():
             continue
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError):
-            continue
+        # ISS-149 (F1): يرفع — تخطّي الملفّ صمتاً يُخرجه من مرمى حظر إعلان الوسيط.
+        tree = parse_source(path)
         docstrings = {
             id(node.body[0].value)
             for node in ast.walk(tree)
@@ -172,4 +173,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_gate(main))

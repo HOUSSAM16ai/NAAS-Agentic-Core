@@ -35,6 +35,9 @@ import ast
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 CANONICAL = REPO_ROOT / "shared/pedagogy/probability_steps.py"
@@ -53,10 +56,9 @@ _GUARDED_NAMES: tuple[str, ...] = (
 
 def _literal_values(path: Path) -> dict[str, object]:
     """قيم الأسماء المحروسة المُعرَّفة **حرفياً** على مستوى الوحدة."""
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (SyntaxError, UnicodeDecodeError, FileNotFoundError):
-        return {}
+    # ISS-149 (F1): يرفع — قاموسٌ فارغ عن ملفٍّ لم يُقرأ يجعل تكافؤ العقلين
+    # «مُتحقَّقاً» على لا شيء، وهو أخطر ما يمكن أن تكذب فيه بوّابة تكافؤ.
+    tree = parse_source(path)
 
     values: dict[str, object] = {}
     for node in tree.body:
@@ -78,10 +80,8 @@ def _literal_values(path: Path) -> dict[str, object]:
 
 def _defines_literal_markers(path: Path) -> list[tuple[str, int]]:
     """أسماء محروسة مُعرَّفة بقيمة حرفية — يُستعمل على المونوليث حيث الاستيراد واجب."""
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (SyntaxError, UnicodeDecodeError, FileNotFoundError):
-        return []
+    # ISS-149 (F1): يرفع — «صفر مخالفين» عن ملفٍّ لم يُحلَّل شهادةٌ بلا فحص.
+    tree = parse_source(path)
 
     offenders: list[tuple[str, int]] = []
     for node in ast.walk(tree):
@@ -95,6 +95,53 @@ def _defines_literal_markers(path: Path) -> list[tuple[str, int]]:
             if name and name.lstrip("_") in _GUARDED_NAMES:
                 offenders.append((name, node.lineno))
     return offenders
+
+
+def _check_confusion_mirror(mirror: dict[str, object]) -> int:
+    """ISS-149 — علامات الحيرة في الخدمة مرآةٌ لـ`shared/intent`، لا قائمةٌ ثانية.
+
+    **الكارثة التي يُغلقها هذا الفحص:** كانت `_CONFUSION` في الخدمة **٧** علامات
+    مقابل **٢٧** قانونية، وهي تحكم `_is_tutoring_turn` — أي هل يدخل الدور المسارَ
+    التربوي الحتمي أصلاً أم يسقط إلى الـLLM. مسبارٌ تفاضلي على العقلين بخمس صيغ
+    حيرة واقعية أعطى **٤ انحرافات من ٥**: «لم استوعب» · «محتار» · «ماعرفتش» ·
+    «je ne comprends pas» — كلّها حيرةٌ عند المونوليث وسقوطٌ إلى الـLLM عند الخدمة.
+
+    التوريد نفسه مشروع (دستور الخدمات 97/98)، لكنّ الدستور يشترط اقترانه ببوّابة
+    تكافؤ (D-206·L5: «لا عقلان بلا تكافؤ محروس»)، على سابقة `check_notation_parity`
+    (D-185) و`check_redaction_parity` (D-203) و`check_model_chain_parity` (D-174).
+    وهذه القائمة وحدها كانت **بلا بوّابة**، فبقي الانحراف حيّاً بلا أن يلاحظه شيء.
+
+    المقارنة على النصّ **المُطبَّع** بالمُطبِّع القانوني: الشكل قد يختلف، والمعنى لا.
+    """
+    sys.path.insert(0, str(REPO_ROOT))
+    from shared.intent import markers_for, normalize
+
+    canonical = {normalize(m) for m in markers_for("confusion")}
+    # يُقرأ مباشرةً لا عبر `_GUARDED_NAMES`: مصدرُ هذه القائمة `shared/intent`
+    # لا `shared/pedagogy`، فلا مكان لها في مرآة الخطوات.
+    raw: tuple | None = None
+    tree = parse_source(SERVICE_MIRROR)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Tuple):
+            continue
+        if any(isinstance(t, ast.Name) and t.id == "_CONFUSION" for t in node.targets):
+            raw = ast.literal_eval(node.value)
+    if raw is None:
+        print(
+            f"❌ المرآة لا تُعرّف `_CONFUSION` — {SERVICE_MIRROR.relative_to(REPO_ROOT)} (ISS-149)."
+        )
+        return 1
+    vendored = {normalize(m) for m in raw}  # type: ignore[union-attr]
+    if vendored == canonical:
+        return 0
+    print("❌ انحراف علامات الحيرة بين `shared/intent` والخدمة المصغّرة (ISS-149):")
+    if canonical - vendored:
+        print(f"   يعرفها المونوليث وتجهلها الخدمة: {sorted(canonical - vendored)}")
+    if vendored - canonical:
+        print(f"   في الخدمة وليست قانونية: {sorted(vendored - canonical)}")
+    print("   وهي تحكم دخولَ الدور المسارَ التربوي — فانحرافها يعني طالباً حائراً")
+    print("   يُسلَّم إلى الـLLM بدل التشخيص. المصدر: `shared/intent/registry.py`.")
+    return 1
 
 
 def main() -> int:
@@ -124,6 +171,8 @@ def main() -> int:
                 print(f"   في المرآة وحدها: {only_mir}")
             print("   الإصلاح: طابِق القيمتين — علامةٌ يعرفها عقلٌ واحد تصير للعقلين.")
 
+    violations += _check_confusion_mirror(mirror)
+
     for name, lineno in _defines_literal_markers(MONOLITH_BRAIN):
         violations += 1
         rel = MONOLITH_BRAIN.relative_to(REPO_ROOT).as_posix()
@@ -139,4 +188,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_gate(main))

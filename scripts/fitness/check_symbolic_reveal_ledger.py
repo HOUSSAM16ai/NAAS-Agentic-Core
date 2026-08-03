@@ -29,6 +29,9 @@ import ast
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEARCH_ROOTS = ("app", "microservices", "shared")
 
@@ -62,10 +65,8 @@ def _guarded_calls() -> list[tuple[str, bool]]:
     """كل مواضع نداء الدالّة المحروسة: ``(موضع، هل يُمرِّر الدفتر؟)``."""
     found: list[tuple[str, bool]] = []
     for path in _iter_python_files():
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except SyntaxError:  # pragma: no cover — ملفّ غير صالح يلتقطه lint
-            continue
+        # ISS-149 (F1): يرفع — تخطّي الملفّ صمتاً يُخرجه من مرمى دفتر الكشف.
+        tree = parse_source(path)
         rel = path.relative_to(REPO_ROOT).as_posix()
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or _call_name(node) != GUARDED_CALL:
@@ -113,4 +114,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_gate(main))

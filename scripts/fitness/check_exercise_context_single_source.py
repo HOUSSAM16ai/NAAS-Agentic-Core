@@ -29,6 +29,9 @@ import ast
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 RESOLVER = "app/services/skills/exercise_context.py"
@@ -61,10 +64,8 @@ def _has_literal(path: Path) -> bool:
     الحقيقي») ليس مصدراً ثانياً — والبوّابة التي تخلط الشرح بالكود تُعاقب التوثيق.
     وثوابت الـ docstring مستثناة لنفس السبب.
     """
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except SyntaxError:  # pragma: no cover — ملفّ غير قابل للتحليل
-        return False
+    # ISS-149 (F1): يرفع — «لم أقرأه» ليست «نظيف».
+    tree = parse_source(path)
     docstrings = {
         node.body[0].value
         for node in ast.walk(tree)
@@ -187,4 +188,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_gate(main))

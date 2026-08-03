@@ -26,6 +26,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROUTERS_DIR = REPO_ROOT / "app/api/routers"
 DEBT_FILE = Path(__file__).with_name("router_domain_debt.json")
@@ -35,10 +38,8 @@ DOMAIN_CALLS = ("async_session_factory", "TutorStateService", "select")
 
 
 def _count_domain_calls(path: Path) -> int:
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except SyntaxError:  # pragma: no cover
-        return 0
+    # ISS-149 (F1): يرفع — صفرُ نداءات عن ملفٍّ لم يُقرأ يُقلّص الدَّين زوراً.
+    tree = parse_source(path)
     total = 0
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -110,4 +111,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_gate(main))

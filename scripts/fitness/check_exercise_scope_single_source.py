@@ -32,6 +32,9 @@ import ast
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL = REPO_ROOT / "shared/exercise_scope/registry.py"
 
@@ -126,10 +129,8 @@ def _dict_keys(node: ast.AST) -> list[str]:
 
 def _scan(path: Path) -> list[tuple[str, int, list[str]]]:
     """(اسم المتغيّر، السطر، العبارات المُلتقَطة) لكل قائمة نطاق في الملفّ."""
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (SyntaxError, UnicodeDecodeError):
-        return []
+    # ISS-149 (F1): يرفع — قائمةٌ فارغة عن ملفٍّ لم يُحلَّل تعني «لا قائمة نطاق» زوراً.
+    tree = parse_source(path)
 
     findings: list[tuple[str, int, list[str]]] = []
     for node in ast.walk(tree):
@@ -198,4 +199,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_gate(main))

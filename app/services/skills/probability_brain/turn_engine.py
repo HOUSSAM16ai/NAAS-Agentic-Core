@@ -14,6 +14,25 @@ logger = logging.getLogger("orchestrator-client")
 
 
 class CognitiveTurnEngineMixin:
+    #: ISS-149 — سقف كلمات «الإقرار المجرّد». على سابقة `_is_bare_confusion`
+    #: (D-153): العلامة وحدها لا تكفي، لأن «اها فهمت، تقلص الفضاء فنقسم على عدد
+    #: اقل» تحمل العلامة **وهي برهان آلية** لا ادّعاء. القِصَر هو ما يُميّز
+    #: الإقرارَ الفارغ من الإقرار المُسنَد.
+    _BARE_ACK_MAX_WORDS: int = 4
+
+    @classmethod
+    def _is_bare_acknowledgement(cls, question: str) -> bool:
+        """هل الرسالة إقرارٌ بالفهم بلا برهان؟ (علامة من `shared/intent` + قِصَر)."""
+        try:
+            from shared.intent import matches, normalize
+
+            norm = normalize(question or "")
+            if not norm or len(norm.split()) > cls._BARE_ACK_MAX_WORDS:
+                return False
+            return matches(norm, "acknowledgement")
+        except Exception:  # pragma: no cover - fail-safe
+            return False
+
     @classmethod
     def _cognitive_turn(
         cls,
@@ -251,7 +270,15 @@ class CognitiveTurnEngineMixin:
                     continue
                 # ISS-148: سؤالُ الطالب عن الإجراء («كيف نحسب الحادثة A») يستحقّ
                 # الإجراء لا ناتجه. التسليم الرمزي الكامل يبقى للمحاولة المُعترَف بها.
-                text = cls._build_symbolic_step(combo, step, method_only=_is_q)
+                #
+                # ISS-149: و«فهمت» المجرّدة ليست محاولةً أيضاً — هي **ادّعاء** فهم.
+                # كانت تستنفد الميزانية فتُسلّم `4 + 10 = 14` كاملاً، أي أنّ قولَ
+                # «فهمت» يشتري الحلّ. فيتعلّم الطالب أن يدّعي الفهم بدل أن يحسب،
+                # وتُصنَّع فجوة الوهم التي نُحسّن على تقليصها (§0.6). الادّعاء
+                # يُختبَر بالطريقة: خذ الخطوات واحسب أنت.
+                text = cls._build_symbolic_step(
+                    combo, step, method_only=_is_q or cls._is_bare_acknowledgement(question)
+                )
                 if cls._recently_emitted(text, history_messages):
                     continue
                 # D-162 (ISS-128): pending = بؤرة **السؤال المطروح فعلاً** في نصّ

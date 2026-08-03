@@ -29,7 +29,11 @@ D-189). ولذلك لا تكفي بوّابة تبحث عن نصّ التروي�
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ast_util import parse_source, run_gate
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCAN_ROOTS = ("app", "microservices", "shared")
@@ -87,10 +91,8 @@ def _is_async_client_call(node: ast.AST) -> bool:
 
 def _count_constructions(path: Path) -> int:
     """يعدّ بناءات ``AsyncClient`` في ملفٍّ عبر AST (لا grep — التعليقات لا تُحتسب)."""
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.as_posix())
-    except SyntaxError:
-        return 0
+    # ISS-149 (F1): يرفع — ملفٌّ لم يُقرأ لا يُبلَّغ عنه بصفر بناءات.
+    tree = parse_source(path)
     return sum(1 for node in ast.walk(tree) if _is_async_client_call(node))
 
 
@@ -148,4 +150,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_gate(main))

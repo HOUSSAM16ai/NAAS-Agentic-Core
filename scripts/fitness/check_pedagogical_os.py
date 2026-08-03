@@ -241,8 +241,22 @@ def check_phantom_entity_guard() -> None:
 
 # ── 3d) الحيرة المجرّدة ليست إجابة ───────────────────────────────────────────
 def check_confusion_never_an_answer() -> None:
+    """الحيرة ليست إجابةً — في **كل** عقلٍ يقرّر، لا في بعضها (D-153 · ISS-149).
+
+    ISS-149 — **لماذا اتّسع مرمى هذه البوّابة.** كانت تفحص عقلين من أربعة
+    (`pedagogical_policy_skill` و`socratic_evaluator_skill`) وتمرّ خضراء، بينما
+    طالبٌ في الإنتاج يقول «لم أفهم؟» فيتلقّى «أحسنت ✅ — يبدو أنك أمسكت الفكرة»
+    ويُسجَّل في نموذجه المعرفي `state="understood"` / `evidence="verified"`. مصدرُ
+    الجملة `pedagogical_escalation_skill` — العقل الوحيد الذي لم تكن تراه.
+
+    **بوّابة بلا مرمى ليست بوّابة** (ENGINEERING_DOCTRINE، «الثمن الثاني») — وهو
+    نفس صنف ISS-148 حيث وقفت عقود الترانسكريبت عند المرحلة السابعة من اثنتي عشرة.
+    فالعلاج ليس بوّابةً خامسة تتفرّق عن هذه، بل **توسيع مرمى القائمة**.
+    """
     policy = _read("app/services/skills/pedagogical_policy_skill.py")
     evaluator = _read("app/services/skills/socratic_evaluator_skill.py")
+    escalation = _read("app/services/skills/pedagogical_escalation_skill.py")
+    understanding = _read("app/services/skills/understanding_state_skill.py")
     ok = True
     if "_is_bare_confusion" not in policy or "_BARE_CONFUSION_MARKERS" not in policy:
         _fail("pedagogical_policy_skill: bare-confusion guard missing")
@@ -253,8 +267,32 @@ def check_confusion_never_an_answer() -> None:
     if "_is_bare_confusion" not in evaluator:
         _fail("socratic_evaluator_skill: bare-confusion guard missing")
         ok = False
+
+    # ── ISS-149: العقل الثالث — مصفوفة التصعيد (موطن الكارثة) ────────────────
+    # `mastered` هو الفرع الذي يُهنّئ ويكتب «understood» في الحالة الدائمة. لا
+    # يجوز أن يُتَّخذ إلّا من برهانٍ في رسالة الطالب **الحاضرة**، وليست حيرةً
+    # ولا سؤالاً. نفحص الدالّة نفسها لا الملفّ كلّه: وجودُ الرمز في مكانٍ آخر
+    # لا يعني أنّ مسار القرار يستشيره.
+    _evidence_fn = escalation.split("def _has_understanding_evidence", 1)[-1].split("def _levels")[
+        0
+    ]
+    for _symbol, _why in (
+        ("_is_confusion_signal", "الحيرة المُعلَنة تُبطل البرهان"),
+        ("_is_question_not_answer", "السؤال عن مصطلح ليس برهان إتقانه"),
+        ("_current_student_text", "البرهان من رسالة الحاضر لا من نافذة الماضي"),
+    ):
+        if _symbol not in _evidence_fn:
+            _fail(f"pedagogical_escalation_skill._has_understanding_evidence: {_why} ({_symbol})")
+            ok = False
+
+    # ── ISS-149: العقل الرابع — محرّك حالة الفهم ─────────────────────────────
+    _kc_fn = understanding.split("def _evidence_kc", 1)[-1].split("def ", 1)[0]
+    if "_is_confusion_or_question" not in _kc_fn:
+        _fail("understanding_state_skill._evidence_kc: الحيرة/السؤال لا يُبطلان البرهان")
+        ok = False
+
     if ok:
-        _pass("bare confusion is never an answer (policy + evaluator both guarded)")
+        _pass("bare confusion is never an answer (policy · evaluator · escalation · understanding)")
 
 
 # ── 3e) حارس التكرار على مسار محرّك حالة الفهم ────────────────────────────────

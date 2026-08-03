@@ -96,6 +96,13 @@ class EscalationInput(RobustBaseModel):
     #: D-159 (WP-B): الرُّتب المُسلَّمة من الحالة الدائمة (tutor_state.kc_progress.escalation_levels)
     #: — FSM حقيقي يَنجو من نافذة الـ50 رسالة وإعادة تشغيل العملية. None ⇒ مسح النصّ وحده.
     delivered_levels: list[int] | None = None
+    #: ISS-149: نصّ الطالب **في هذا الدور**، صريحاً لا مُستنتَجاً من ذيل التاريخ.
+    #:
+    #: المونوليث يحفظ رسالة الطالب **قبل** بناء الدور (§6.5)، فذيل `history` في
+    #: الإنتاج هو الرسالة الحاضرة بينما هو الرسالة **السابقة** في مُشغِّل العقود.
+    #: أي أن «الحاضر» المُستنتَج يعني شيئين مختلفين في بيئتين — وقرارُ الإتقان
+    #: أخطرُ من أن يُبنى على استنتاج. الصريح يحسم، والذيل يبقى تدهوراً رشيقاً.
+    question: str = ""
 
 
 class EscalationDecision(RobustBaseModel):
@@ -137,19 +144,64 @@ class PedagogicalEscalationSkill(BaseSkill):
                 return str(msg.get("content", ""))
         return ""
 
-    def _has_understanding_evidence(
-        self, evidence_markers: tuple[str, ...], history: list[dict[str, str]] | None
-    ) -> bool:
-        """Understanding Signal: هل أظهر الطالب **آلية فهم المفهوم** (لا «فهمت» المجرّدة)؟"""
-        if not evidence_markers:
+    @staticmethod
+    def _is_confusion_signal(text: str) -> bool:
+        """هل النصّ إشارة حيرة؟ — من `shared/intent` حصراً (D-186: مصدرٌ واحد)."""
+        try:
+            from shared.intent import matches
+
+            return matches(text, "confusion")
+        except Exception:  # pragma: no cover - fail-safe
             return False
-        for msg in reversed((history or [])[-6:]):
-            if not isinstance(msg, dict) or msg.get("role") != "user":
-                continue
-            low = _norm(str(msg.get("content", "")))
-            if any(_norm(m) in low for m in evidence_markers):
-                return True
-        return False
+
+    @staticmethod
+    def _is_question_not_answer(text: str) -> bool:
+        """هل النصّ سؤالٌ لا تقرير؟ — بوّابة الفعل الكلامي القائمة (D-162).
+
+        يُعاد استعمال المُصنِّف نفسه الذي يميّز السؤال من الإجابة في المحرّك الرمزي،
+        لا نسخةٌ سادسة تتفرّق عنه بأوّل تعديل (D-186·L6 / D-206·L6).
+        """
+        try:
+            from app.services.skills.probability_brain.cognitive_verification import (
+                CognitiveVerificationMixin,
+            )
+
+            return CognitiveVerificationMixin._is_question_not_answer(text)
+        except Exception:  # pragma: no cover - fail-safe
+            return False
+
+    def _current_student_text(self, payload: EscalationInput) -> str:
+        """نصّ الطالب في هذا الدور: الصريح أوّلاً، ثمّ ذيل التاريخ تدهوراً رشيقاً."""
+        return (payload.question or "").strip() or self._last_student_text(payload.history)
+
+    def _has_understanding_evidence(self, payload: EscalationInput) -> bool:
+        """Understanding Signal: هل أظهر الطالب **آلية فهم المفهوم** الآن؟
+
+        ISS-149 — ثلاثة قيود، كلٌّ منها وحده كان يكفي لمنع الكارثة:
+
+        1. **الحاضر لا الماضي.** كان المسح يشمل آخر ٦ رسائل طالب، فأثرٌ من دورٍ
+           سابق يهزم إشارةَ هذا الدور. أثرُ الماضي عُمِل به حين وقع؛ وذاكرةُ ما
+           بين الأدوار موطنها `delivered_levels` الدائمة (D-159) لا إعادةُ الحكم.
+        2. **الحيرة المُعلَنة تُبطِل البرهان.** طالبٌ يقول «لم أفهم» لا يُهنَّأ
+           مهما قال قبل قليل — وإلّا هُنِّئ على حيرته وسُجِّل إتقانٌ لم يحدث.
+        3. **السؤال ليس برهاناً.** «كيف نفرق بين **البسط** و المقام؟» كانت تُطابِق
+           المؤشّر «البسط» فتُقرأ برهانَ فهمه: الطالبُ سأل عن المصطلح فحُسِب أنّه
+           أتقنه. بوّابة الفعل الكلامي (D-158/D-162) كانت مطبَّقة على الإجابات
+           وحدها ولم تُطبَّق قطّ على مؤشّرات الفهم.
+
+        القيد الثاني لا يُلغي القيد الأول من عقد D-138: رسالةٌ تُظهر الآلية فعلاً
+        («اها فهمت، تقلص الفضاء فنقسم على عدد اقل») تبقى برهاناً — العبرة بما
+        **قاله الطالب الآن**، لا بلافتة النيّة ولا بما قاله قبل ثلاثة أدوار.
+        """
+        if not payload.evidence_markers:
+            return False
+        text = self._current_student_text(payload)
+        if not text:
+            return False
+        if self._is_confusion_signal(text) or self._is_question_not_answer(text):
+            return False
+        low = _norm(text)
+        return any(_norm(m) in low for m in payload.evidence_markers)
 
     def _levels_delivered(self, payload: EscalationInput) -> set[int]:
         """الرُّتب المُسلَّمة لهذا المفهوم — الحالة الدائمة (D-159) ∪ مسح النصّ (شبكة أمان).
@@ -267,7 +319,7 @@ class PedagogicalEscalationSkill(BaseSkill):
     def decide(self, payload: EscalationInput) -> EscalationDecision:
         """يقرّر أقل تدخّل مفيد الآن (mastered/target_misconception/teach/exhausted)."""
         # (1) Understanding Signal — أثر فهم ⇒ توقّف + اعتراف (لا تصعيد).
-        if self._has_understanding_evidence(payload.evidence_markers, payload.history):
+        if self._has_understanding_evidence(payload):
             self._record(payload.concept_id, "mastered")
             return EscalationDecision(
                 action="mastered",

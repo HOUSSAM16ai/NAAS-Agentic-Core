@@ -168,6 +168,9 @@ class TurnPreemptsConceptMixin:
                         frustration=_esc_state.frustration,
                         support_level=_esc_sup,
                         history=history_messages or [],
+                        # ISS-149: نصّ الطالب الحاضر صريحاً — ذيل `history` يعني
+                        # الرسالة الحاضرة في الإنتاج والسابقة في مُشغِّل العقود.
+                        question=question,
                         evidence_markers=(_esc_spec.evidence_markers if _esc_spec else ()),
                         misconception_intervention=_esc_intervention,
                         misconception_mtype=(_esc_mis.mtype if _esc_mis else None),

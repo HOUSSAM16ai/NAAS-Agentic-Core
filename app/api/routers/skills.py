@@ -21,6 +21,10 @@ from pydantic import Field
 
 from app.core.schemas import RobustBaseModel
 from app.deps.auth import CurrentUser, get_current_user
+
+# عقد فجوة الوهم يُستورَد ولا يُكرَّر (D-212). حزمة `app.services.skills` تُحمَّل أصلاً
+# عبر `registry` أدناه، فالاستيراد هنا لا يضيف كلفةً — ونسخةٌ ثانية من العقد كانت ستنحرف.
+from app.services.skills.illusion_gap_skill import IllusionGapInput, IllusionGapReport
 from app.services.skills.registry import (
     compose_reasoning,
     compose_text_refinement,
@@ -229,11 +233,11 @@ async def notation_endpoint(
     )
 
 
-@router.post("/illusion", summary="Illusion-gap map (D-212)")
+@router.post("/illusion", response_model=IllusionGapReport, summary="Illusion-gap map (D-212)")
 async def illusion_endpoint(
-    payload: dict[str, Any],
+    payload: IllusionGapInput,
     _: CurrentUser = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> IllusionGapReport:
     """يبني خريطة فجوة الوهم من قياسات BKT/FSRS — حتمي 100% وبلا LLM (D-212).
 
     فجوة الوهم هي مقياس النجاح الوحيد المُعتمَد (§0.6)، وهذه هي نقطة تحويلها من إشارةٍ
@@ -241,14 +245,14 @@ async def illusion_endpoint(
     يُعَدّ في `immature_suppressed` ويُعرَض — تقريرٌ يلوّن المنهاج بعد جلستين تقريرٌ كاذب.
 
     ⛔ لا يُعيد حلاًّ ولا خطوةَ اشتقاق: الخريطة تصف **الحالة المعرفية** لا الجواب (D-113).
-    """
-    from app.services.skills.illusion_gap_skill import IllusionGapInput, get_illusion_gap_skill
 
-    try:
-        request = IllusionGapInput.model_validate(payload)
-    except Exception as exc:  # عقدٌ مخروق يُقال صراحةً، لا يُبتلع
-        raise HTTPException(status_code=422, detail=f"invalid illusion payload: {exc}") from exc
-    return get_illusion_gap_skill().build(request).model_dump()
+    العقد **مُستورَد لا مُكرَّر**: `IllusionGapInput`/`IllusionGapReport` هما نفسهما عقد
+    المهارة، فلا تنحرف نسخةٌ ثانية عن الأولى — والاستيراد هنا مجّاني لأن
+    `app.services.skills.registry` أعلى الملفّ يُحمِّل الحزمة أصلاً.
+    """
+    from app.services.skills.illusion_gap_skill import get_illusion_gap_skill
+
+    return get_illusion_gap_skill().build(payload)
 
 
 @router.post("/compute", response_model=ComputeResponse, summary="Foundations compute core (D-183)")

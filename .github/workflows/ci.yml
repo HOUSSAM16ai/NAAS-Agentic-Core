@@ -316,6 +316,15 @@ jobs:
           # list honest in both directions: a gate named "future" that now exists is
           # a document understating its own guarding, so that fails as well.
           python scripts/fitness/check_revenue_doctrine.py
+          # D-224: the cognitive execution engine's 13 layers, plus the one clause
+          # that is not documentation at all -- the D-187 interlock. The sandbox is
+          # built and runs python/pip/git/npm; the distance between "capability" and
+          # "security incident" is a single import line an enthusiastic agent adds
+          # months from now, on a platform serving minors. Every prose rule in this
+          # repo has been broken at least once (D-013 is the documented case), so
+          # the lock is enforced by AST: any module importing both the sandbox
+          # executor and an LLM client fails, and exemptions must state a reason.
+          python scripts/fitness/check_cognitive_execution.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

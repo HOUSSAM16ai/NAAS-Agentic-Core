@@ -10,7 +10,7 @@
 
 | المستوى | المصدر | الدور |
 |---------|--------|------|
-| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-223**). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) |
+| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-225**). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) |
 | 📐 مواصفة البرنامج | [`../spec.md`](../spec.md) | برنامج التبسيط API-first (Phases 0→12) — **الهدف** المعماري لا الحقيقة الجارية. ليست دستوراً ثالثاً: §4 تُحيل إلى الدستور القائم |
 | 🧠 الذاكرة | `.memory/` → [`README.md`](../.memory/README.md) | roadmap · decisions · issues · runtime_truth · pedagogical_os |
 | ⚖️ الدستور المعماري | [`architecture/MICROSERVICES_CONSTITUTION.md`](architecture/MICROSERVICES_CONSTITUTION.md) + [`ARCH_MICROSERVICES_CONSTITUTION.md`](ARCH_MICROSERVICES_CONSTITUTION.md) | حدود الخدمات |
@@ -43,6 +43,7 @@
 | [`architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md`](architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md) | 🎼 **عقيدة تنسيق الوكلاء (D-209)** — القانون لطبقات التنسيق التسع (Knowledge→…→Humans)، كلٌّ بفارضه. **الحالة** في [`../.memory/agentic_runtime_doctrine.md`](../.memory/agentic_runtime_doctrine.md)؛ تحرسهما `check_agentic_orchestration` (⛔ القانون لا يحمل حالة، ولا سُلَّم ثانٍ) |
 | [`VALUE_DOCTRINE.md`](VALUE_DOCTRINE.md) | 💰 **قانون القيمة (D-210)** — لماذا يدفع أحدٌ في سوقٍ كلّ شيء فيه مجّاني: الوظائف الأربع + اختبار الحذف + الطبقات الاثنتا عشرة + **المحرَّمات التسعة** + 32 مرجعاً. **الحالة** في [`../.memory/revenue_engine_truth.md`](../.memory/revenue_engine_truth.md) |
 | [`REVENUE_ENGINE_SPEC.md`](REVENUE_ENGINE_SPEC.md) | 💰 **قانون محرّك الإيراد (D-210→D-223)** — العقود والنماذج الرياضية والبوّابات لأربع عشرة وحدة. تحرسهما `check_revenue_doctrine` (⛔ القانون لا يحمل حالة، ووحدةٌ `ABSENT` لها كودٌ ⇒ CI أحمر) |
+| [`architecture/COGNITIVE_EXECUTION_ENGINE.md`](architecture/COGNITIVE_EXECUTION_ENGINE.md) | 🧠⚙️ **قانون محرّك التنفيذ المعرفي (D-224/D-225)** — ١٣ طبقة من الفهم اللغوي إلى المعرفة المُتحقَّقة + تسلسل السوق. **الحالة** في [`../.memory/cognitive_execution_truth.md`](../.memory/cognitive_execution_truth.md)؛ تحرسهما `check_cognitive_execution` (⛔ فيها **قفل D-187**: توصيل نموذجٍ لغوي بمُنفِّذ الصندوق ⇒ CI أحمر) |
 | [`API_FIRST_ARCHITECTURE.md`](API_FIRST_ARCHITECTURE.md) | عقيدة API-First |
 | [`architecture/EXTENSION_SEAMS.md`](architecture/EXTENSION_SEAMS.md) | مقاعد التوسّع (Kafka/VectorDB/RAG/Skill-flags) + الرؤية الثورية (D-173) |
 | [`adr/ADR-006-polyglot-language-adoption.md`](adr/ADR-006-polyglot-language-adoption.md) | قرار تبنّي اللغات متعدّدة — **الحدّ هو العقد لا اللغة**؛ TypeScript مُتبنّىً، والتسع الباقيات مقاعد بشرط تبنٍّ (D-185) |

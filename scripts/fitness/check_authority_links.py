@@ -33,10 +33,17 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: ملفّات السلطة — من يقرأها يبني عليها قراراً.
+#: ⚠️ `README.md` و`README.ar.md` أُضيفا بعد أن تبيّن أن الواجهة الأولى للمستودع كانت
+#: تُحيل إلى **ثلاثة مسارات لا وجود لها** (`docs/EVALUATION_PROTOCOL.md` ·
+#: `docs/IMPACT_MEASUREMENT_PLAN.md` · `toolkit/START_HERE.md`) وتعرض في خريطتها
+#: مجلّداً غير موجود — أي نفس صنف ISS-149 بالضبط، في **أوّل ملفّ يفتحه كل قادمٍ من
+#: خارج المستودع**. البوّابة كانت تحرس ما يقرأه المطوّرون وتترك ما يقرأه العالَم.
 _AUTHORITY_DOCS: tuple[str, ...] = (
     "docs/DOCUMENTATION_INDEX.md",
     ".memory/README.md",
     "CLAUDE.md",
+    "README.md",
+    "README.ar.md",
 )
 
 _LINK = re.compile(r"\]\((?!https?:|mailto:)([^)\s#]+)")

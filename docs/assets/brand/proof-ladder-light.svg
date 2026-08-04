@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 376" width="1200" height="376" role="img" aria-label="The proof ladder: a capability is ACTIVE only with import, call chain and runtime evidence; anything less is PARTIAL, DORMANT or ZOMBIE">
+  <title>The proof ladder — code presence is not runtime usage</title>
+  <defs>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E08A66"/><stop offset="100%" stop-color="#5A3E96"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="376" rx="16" fill="#FBFAF7"/>
+  <rect x="0.75" y="0.75" width="1198.5" height="374.5" rx="15.25" fill="none" stroke="#E2DED4" stroke-width="1.5"/>
+
+  <text x="32" y="36" font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#24211C">Code presence is not runtime usage.</text>
+  <text x="32" y="62" font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#5C564C">A capability is real only when all three legs hold. Anything less is labelled honestly — live table: <tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#6B4FB0">.memory/runtime_truth.md</tspan></text>
+  <rect x="32" y="76" width="1136" height="2" rx="1" fill="url(#hdr)" opacity="0.5"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" letter-spacing="1.4" fill="#5C564C">
+    <text x="32" y="106">STATUS</text>
+    <text x="342" y="106" text-anchor="middle">IMPORT</text>
+    <text x="472" y="106" text-anchor="middle">CALL CHAIN</text>
+    <text x="612" y="106" text-anchor="middle">RUNTIME EVIDENCE</text>
+    <text x="700" y="106">WHAT IT MEANS</text>
+  </g>
+
+  <g font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif">
+    <!-- ACTIVE -->
+    <g transform="translate(0 118)">
+      <rect x="32" y="0" width="1136" height="44" rx="9" fill="#1F6B46" fill-opacity="0.07"/>
+      <rect x="32" y="0" width="4" height="44" rx="2" fill="#1F6B46"/>
+      <text x="52" y="28" font-size="15" font-weight="700" fill="#1F6B46">ACTIVE</text>
+      <circle cx="342" cy="22" r="8" fill="#1F6B46"/>
+      <circle cx="472" cy="22" r="8" fill="#1F6B46"/>
+      <circle cx="612" cy="22" r="8" fill="#1F6B46"/>
+      <text x="700" y="27" font-size="13.5" fill="#24211C">Proven on a live path — the only status claimable as capability.</text>
+    </g>
+    <!-- ACTIVE (no-op) -->
+    <g transform="translate(0 168)">
+      <rect x="32" y="0" width="1136" height="44" rx="9" fill="#8A5A12" fill-opacity="0.07"/>
+      <rect x="32" y="0" width="4" height="44" rx="2" fill="#8A5A12"/>
+      <text x="52" y="27" font-size="15" font-weight="700" fill="#8A5A12">ACTIVE (no-op)</text>
+      <circle cx="342" cy="22" r="8" fill="#8A5A12"/>
+      <circle cx="472" cy="22" r="8" fill="#8A5A12"/>
+      <path d="M604 22 a8 8 0 0 1 16 0 a8 8 0 0 1 -16 0" fill="none" stroke="#8A5A12" stroke-width="2"/>
+      <path d="M612 14 a8 8 0 0 1 0 16 z" fill="#8A5A12"/>
+      <text x="700" y="27" font-size="13.5" fill="#24211C">Called, but inert without a specific env var. Said out loud.</text>
+    </g>
+    <!-- PARTIAL -->
+    <g transform="translate(0 218)">
+      <rect x="32" y="0" width="1136" height="44" rx="9" fill="#7C5CBF" fill-opacity="0.07"/>
+      <rect x="32" y="0" width="4" height="44" rx="2" fill="#7C5CBF"/>
+      <text x="52" y="27" font-size="15" font-weight="700" fill="#5A3E96">PARTIAL</text>
+      <circle cx="342" cy="22" r="8" fill="#7C5CBF"/>
+      <path d="M464 22 a8 8 0 0 1 16 0 a8 8 0 0 1 -16 0" fill="none" stroke="#7C5CBF" stroke-width="2"/>
+      <path d="M472 14 a8 8 0 0 1 0 16 z" fill="#7C5CBF"/>
+      <circle cx="612" cy="22" r="8" fill="none" stroke="#7C5CBF" stroke-width="2"/>
+      <text x="700" y="27" font-size="13.5" fill="#24211C">Fallback-only. “Loaded but never invoked” lives here.</text>
+    </g>
+    <!-- DORMANT -->
+    <g transform="translate(0 268)">
+      <rect x="32" y="0" width="1136" height="44" rx="9" fill="#5C564C" fill-opacity="0.07"/>
+      <rect x="32" y="0" width="4" height="44" rx="2" fill="#5C564C"/>
+      <text x="52" y="27" font-size="15" font-weight="700" fill="#5C564C">DORMANT</text>
+      <circle cx="342" cy="22" r="8" fill="#5C564C"/>
+      <circle cx="472" cy="22" r="8" fill="none" stroke="#5C564C" stroke-width="2"/>
+      <circle cx="612" cy="22" r="8" fill="none" stroke="#5C564C" stroke-width="2"/>
+      <text x="700" y="27" font-size="13.5" fill="#24211C">Real code behind a service nobody starts. Declared absent.</text>
+    </g>
+    <!-- ZOMBIE -->
+    <g transform="translate(0 318)">
+      <rect x="32" y="0" width="1136" height="44" rx="9" fill="#A8332A" fill-opacity="0.07"/>
+      <rect x="32" y="0" width="4" height="44" rx="2" fill="#A8332A"/>
+      <text x="52" y="28" font-size="15" font-weight="700" fill="#A8332A">ZOMBIE</text>
+      <circle cx="342" cy="22" r="8" fill="none" stroke="#A8332A" stroke-width="2"/>
+      <circle cx="472" cy="22" r="8" fill="none" stroke="#A8332A" stroke-width="2"/>
+      <circle cx="612" cy="22" r="8" fill="none" stroke="#A8332A" stroke-width="2"/>
+      <text x="700" y="28" font-size="13.5" fill="#24211C">No live call chain anywhere. Deleted, never left as a stub.</text>
+    </g>
+  </g>
+</svg>

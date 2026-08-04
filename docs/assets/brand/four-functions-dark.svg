@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="The four functions: measure honestly, sequence the time, force generation, prove it to the payer — and the deletion test">
+  <title>The value spine — four functions and the deletion test</title>
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FFC9B4"/><stop offset="100%" stop-color="#F4A98A"/></linearGradient>
+    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F0B0BE"/><stop offset="100%" stop-color="#D79BC8"/></linearGradient>
+    <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#C9B6F0"/><stop offset="100%" stop-color="#A78BE0"/></linearGradient>
+    <linearGradient id="g4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#A78BE0"/><stop offset="100%" stop-color="#8E76CC"/></linearGradient>
+    <linearGradient id="spine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFC9B4"/><stop offset="100%" stop-color="#A78BE0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="300" rx="16" fill="#1A1815"/>
+  <rect x="0.75" y="0.75" width="1198.5" height="298.5" rx="15.25" fill="none" stroke="#3A352E" stroke-width="1.5"/>
+
+  <text x="32" y="34" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="#A49C8F">THE VALUE SPINE — FOUR FUNCTIONS · docs/VALUE_DOCTRINE.md</text>
+  <rect x="32" y="46" width="1136" height="2" rx="1" fill="url(#spine)" opacity="0.5"/>
+
+  <g font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif">
+    <g transform="translate(32 68)">
+      <rect width="272" height="146" rx="12" fill="#221F1B" stroke="#3A352E"/>
+      <rect width="4" height="146" rx="2" fill="url(#g1)"/>
+      <circle cx="38" cy="40" r="16" fill="url(#g1)"/>
+      <text x="38" y="46" text-anchor="middle" font-size="16" font-weight="700" fill="#1A1815">1</text>
+      <text x="68" y="46" font-size="19" font-weight="700" fill="#EDE9E1">Measure honestly</text>
+      <text x="24" y="82" font-size="13.5" fill="#A49C8F">What the student actually masters —</text>
+      <text x="24" y="103" font-size="13.5" fill="#A49C8F">not what they believe they master.</text>
+      <text x="24" y="128" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#FFC9B4">BKTEngine · shared/illusion</text>
+    </g>
+
+    <g transform="translate(328 68)">
+      <rect width="272" height="146" rx="12" fill="#221F1B" stroke="#3A352E"/>
+      <rect width="4" height="146" rx="2" fill="url(#g2)"/>
+      <circle cx="38" cy="40" r="16" fill="url(#g2)"/>
+      <text x="38" y="46" text-anchor="middle" font-size="16" font-weight="700" fill="#1A1815">2</text>
+      <text x="68" y="46" font-size="19" font-weight="700" fill="#EDE9E1">Sequence the time</text>
+      <text x="24" y="82" font-size="13.5" fill="#A49C8F">Most exam points per remaining</text>
+      <text x="24" y="103" font-size="13.5" fill="#A49C8F">hour — by coefficient, not by mood.</text>
+      <text x="24" y="128" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#F0B0BE">shared/scheduling · curriculum</text>
+    </g>
+
+    <g transform="translate(624 68)">
+      <rect width="272" height="146" rx="12" fill="#221F1B" stroke="#3A352E"/>
+      <rect width="4" height="146" rx="2" fill="url(#g3)"/>
+      <circle cx="38" cy="40" r="16" fill="url(#g3)"/>
+      <text x="38" y="46" text-anchor="middle" font-size="16" font-weight="700" fill="#1A1815">3</text>
+      <text x="68" y="46" font-size="19" font-weight="700" fill="#EDE9E1">Force generation</text>
+      <text x="24" y="82" font-size="13.5" fill="#A49C8F">Never hand over a step the student</text>
+      <text x="24" y="103" font-size="13.5" fill="#A49C8F">could still produce themselves.</text>
+      <text x="24" y="128" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#C9B6F0">answer_redaction · D-113</text>
+    </g>
+
+    <g transform="translate(920 68)">
+      <rect width="272" height="146" rx="12" fill="#221F1B" stroke="#3A352E"/>
+      <rect width="4" height="146" rx="2" fill="url(#g4)"/>
+      <circle cx="38" cy="40" r="16" fill="url(#g4)"/>
+      <text x="38" y="46" text-anchor="middle" font-size="16" font-weight="700" fill="#1A1815">4</text>
+      <text x="68" y="46" font-size="19" font-weight="700" fill="#EDE9E1">Prove it to the payer</text>
+      <text x="24" y="82" font-size="13.5" fill="#A49C8F">The guardian sees the trend and the</text>
+      <text x="24" y="103" font-size="13.5" fill="#A49C8F">return — and never sees the answer.</text>
+      <text x="24" y="128" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#A78BE0">guardian/ · D-196</text>
+    </g>
+  </g>
+
+  <g transform="translate(32 234)">
+    <rect width="1136" height="46" rx="10" fill="#A78BE0" fill-opacity="0.10" stroke="#A78BE0" stroke-opacity="0.30"/>
+    <text x="20" y="29" font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" fill="#EDE9E1"><tspan font-weight="700" fill="#C9B6F0">The deletion test —</tspan> if this feature were removed, which of the four stops? If the answer is “none, but it looks advanced” — it gets deleted.</text>
+  </g>
+</svg>

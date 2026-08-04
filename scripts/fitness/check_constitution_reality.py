@@ -69,6 +69,9 @@ _AUTHORITY_DOCS: tuple[str, ...] = (
     "spec.md",
     "AGENTS.md",
     "README.md",
+    # المرآة العربية للواجهة الأولى: الأرقام فيها مكتوبة بالخانات نفسها، والبوّابة
+    # تُترجم الأرقام العربية-الهندية — فلا تصير النسخة الثانية موطناً لرقمٍ بائت.
+    "README.ar.md",
     "replit.md",
     ".memory/README.md",
     ".memory/context.md",

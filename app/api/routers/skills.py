@@ -229,6 +229,28 @@ async def notation_endpoint(
     )
 
 
+@router.post("/illusion", summary="Illusion-gap map (D-212)")
+async def illusion_endpoint(
+    payload: dict[str, Any],
+    _: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """يبني خريطة فجوة الوهم من قياسات BKT/FSRS — حتمي 100% وبلا LLM (D-212).
+
+    فجوة الوهم هي مقياس النجاح الوحيد المُعتمَد (§0.6)، وهذه هي نقطة تحويلها من إشارةٍ
+    داخلية إلى مخرَجٍ قابل للعرض. **دون `MIN_OBS` ملاحظةً غير مدعومة لا يُصنَّف مفهوم**:
+    يُعَدّ في `immature_suppressed` ويُعرَض — تقريرٌ يلوّن المنهاج بعد جلستين تقريرٌ كاذب.
+
+    ⛔ لا يُعيد حلاًّ ولا خطوةَ اشتقاق: الخريطة تصف **الحالة المعرفية** لا الجواب (D-113).
+    """
+    from app.services.skills.illusion_gap_skill import IllusionGapInput, get_illusion_gap_skill
+
+    try:
+        request = IllusionGapInput.model_validate(payload)
+    except Exception as exc:  # عقدٌ مخروق يُقال صراحةً، لا يُبتلع
+        raise HTTPException(status_code=422, detail=f"invalid illusion payload: {exc}") from exc
+    return get_illusion_gap_skill().build(request).model_dump()
+
+
 @router.post("/compute", response_model=ComputeResponse, summary="Foundations compute core (D-183)")
 async def compute_endpoint(
     payload: ComputeRequest,

@@ -66,6 +66,8 @@ EXPECTED = {
     "reasoning_compose",
     # D-183: النواة الحاسوبية للأسس (First-Roots Compute).
     "foundations_compute",
+    # D-212: فجوة الوهم كمخرَج — المقياس الوحيد المُعتمَد يصير خريطةً تُعرَض.
+    "illusion_gap",
 }
 
 
@@ -73,11 +75,11 @@ class TestRegistry:
     def test_registry_complete(self) -> None:
         reg = get_skill_registry()
         assert set(reg.names()) == EXPECTED
-        assert len(reg.list()) == 38
+        assert len(reg.list()) == 39
 
     def test_status_split(self) -> None:
         reg = get_skill_registry()
-        assert len(reg.by_status("ACTIVE")) == 36
+        assert len(reg.by_status("ACTIVE")) == 37
         assert len(reg.by_status("FLAGGED")) == 2
 
     def test_no_zombie(self) -> None:

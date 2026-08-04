@@ -2,6 +2,14 @@
 > Last updated: **2026-08-01** | Branch: `claude/smart-education-platform-s2of5b` (D-193→D-200)
 > Previous: `claude/documentation-system-update-i0td9p` (D-188/D-189)
 
+## Value & Revenue Layer (2026-08-04, D-210→D-223)
+
+| المكوّن | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`shared/illusion/` + `IllusionGapSkill`** (D-212) | **ACTIVE** | dep-free (stdlib)؛ يستهلك `shared/scheduling/fsrs.retrievability` و`shared/curriculum.exam_weight` ولا يستورد `app`. سلسلة النداء: `app/api/routers/skills.py:illusion_endpoint` → `get_illusion_gap_skill().build()` → `shared.illusion.classify`، والمهارة مُسجَّلة `name="illusion_gap"` بـ`consumed_by` غير فارغة (لا ZOMBIE). برهان: قياسٌ بملاحظتين يُرجِع `None` ويُعَدّ في `immature_suppressed`؛ ومفهومٌ 🟢 بعد 42 يوماً بلا مراجعة يصير 🔴 بمنحنى النسيان وحده. 35 اختباراً + بوّابة AST تفرض `MIN_OBS` على **كل** مسارٍ يبني تصنيفاً. |
+| **`docs/VALUE_DOCTRINE.md` + `docs/REVENUE_ENGINE_SPEC.md` + `.memory/revenue_engine_truth.md`** (D-210/D-223) | **ACTIVE (CI · guardrails)** | فصلُ القانون عن الحالة مفروضٌ بـ`check_revenue_doctrine` (7 بنود · دَينٌ فارغ · 11 تجربة سلبية). تحرس أيضاً الاتجاه المعاكس: وحدةٌ `ABSENT` لها كودٌ ⇒ أحمر. |
+| **ثلاث عشرة وحدة إيراد** (D-211 · D-213→D-222) | **SEAM / PARTIAL / ABSENT** | مُصنَّفةٌ صفّاً صفّاً في `.memory/revenue_engine_truth.md` بدليلٍ ملفّي وفجوةٍ منطوقة وشرط ترقية (`roadmap.md §4.6` — M18→M30). ⛔ **لا بوّابة دفع**: Chargily وSATIM مقعدان بصفر كود (`EXTENSION_SEAMS.md §8/§9`). |
+
 ## Product Layer + Design System + Ranked Retrieval (2026-08-01, D-193→D-200)
 
 | المكوّن | الحالة | الدليل (import + call chain + runtime) |

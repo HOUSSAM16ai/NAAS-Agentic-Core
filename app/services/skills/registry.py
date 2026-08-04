@@ -775,6 +775,18 @@ def _build_registry() -> SkillRegistry:
                 "api.routers.review.due_reviews",
             ),
         ),
+        SkillDescriptor(
+            name="illusion_gap",
+            summary=(
+                "خريطة فجوة الوهم — الثقة المُعلَنة مقابل الإتقان الدائم بعد منحنى النسيان. "
+                "دون MIN_OBS ملاحظةً غير مدعومة: لا تصنيف ولا لون (D-212)."
+            ),
+            input_contract="IllusionGapInput",
+            output_contract="IllusionGapReport",
+            primary_method="build",
+            metrics_prefix="cogniforge_skill_illusion_gap",
+            consumed_by=("api.routers.skills.illusion_endpoint",),
+        ),
         # ── FLAGGED (مُعطَّلة افتراضياً — تفعيل اختياري عبر علم) ──
         SkillDescriptor(
             name="dialogue_manager",

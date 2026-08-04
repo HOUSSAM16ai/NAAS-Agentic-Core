@@ -52,7 +52,7 @@
 | 17 | DevOps و CI/CD | عشر وظائف GitHub Actions + ~30 بوّابة لياقة | `.github/workflows/ci.yml` | `ACTIVE` | `required-ci` يجمع عشر وظائف؛ الباقي محكومٌ بحماية الفرع |
 | 18 | الرصد و SRE | Prometheus + Grafana + عقود دلالية للمقاييس | `.memory/observability-topology.md` | `PARTIAL` | داخل-العملية `ACTIVE`؛ OTLP بلا `OTEL_EXPORTER_OTLP_ENDPOINT` = بلا أثر |
 | 19 | الذكاء الاصطناعي الحديث (سلسلة · استرجاع · وكلاء · حُرّاس) | سجلّ قدرات النماذج بدليلٍ مؤرَّخ + سلسلة سقوط مقيسة | `shared/ai_models/registry.py` | `ACTIVE` | ⛔ **الأرقام لا يُقرّرها LLM أبداً** — المحرك الرمزي حصراً؛ حظر نماذج بدليلٍ حيّ لا برأي |
-| 20 | هندسة المنتج والتحليلات | أحداث مغلقة + احتفاظ مُعرَّف بالكود + فجوة الوهم | `shared/analytics/events.py` | `PARTIAL` | الفوج غير الناضج يُرجِع `null` لا صفراً؛ لا بوّابة دفع (SATIM مقعد) |
+| 20 | هندسة المنتج والتحليلات | أحداث مغلقة + احتفاظ مُعرَّف بالكود + **فجوة الوهم كمخرَج** (`shared/illusion`) | `shared/analytics/events.py` | `PARTIAL` | الفوج غير الناضج يُرجِع `null` لا صفراً؛ **لا بوّابة دفع** (SATIM وChargily مقعدان — D-211)؛ وثلاث عشرة وحدة إيرادٍ من أربع عشرة غير مبنيّة، مُصنَّفةً بشرط ترقية في `.memory/revenue_engine_truth.md` |
 
 ---
 

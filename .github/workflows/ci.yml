@@ -308,6 +308,14 @@ jobs:
           # it carries a status column, because two maps of one system is how
           # ISS-139 happened (three lists for one intent, agreeing on nothing).
           python scripts/fitness/check_agentic_orchestration.py
+          # D-210: the same law/state contract applied to the value & revenue layer.
+          # This one adds the direction no other gate covers: a unit declared ABSENT
+          # that HAS code fails too. Every existing gate guards "claimed present but
+          # missing"; the reverse means live code with no guard, no test and no
+          # review — worse than the declared absence. It also keeps the planned-gate
+          # list honest in both directions: a gate named "future" that now exists is
+          # a document understating its own guarding, so that fails as well.
+          python scripts/fitness/check_revenue_doctrine.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

@@ -325,6 +325,20 @@ jobs:
           # the lock is enforced by AST: any module importing both the sandbox
           # executor and an LLM client fails, and exemptions must state a reason.
           python scripts/fitness/check_cognitive_execution.py
+          # D-226: root-cause diagnosis must read the canonical prerequisite graph.
+          # Measured at discovery: 26 curriculum prerequisite edges, 10 misconception
+          # edges, intersection ZERO -- and diagnose_root read only the second. The
+          # chain limits -> derivatives -> ... -> logarithm was structurally
+          # invisible. Worse than a misclassification: reading the wrong graph makes
+          # the engine SILENT, and None reads as "no root" rather than "did not look".
+          python scripts/fitness/check_prerequisite_single_graph.py
+          # D-227: the credibility limit. "reads minds", "100% accuracy", "zero
+          # errors", "will change humanity" are banned in published docs -- an
+          # unfalsifiable claim is a debt, not ambition: believed once, discovered,
+          # and everything true falls with it. Also blocks temporal claims while the
+          # curriculum registry has no term/month field (the ban lifts by itself when
+          # the field lands, because the gate checks data rather than opinion).
+          python scripts/fitness/check_cognitive_twin.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

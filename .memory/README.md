@@ -9,7 +9,7 @@
 | الملف | الدور | السلطة |
 |-------|------|--------|
 | `roadmap.md` | 🧭 الرؤية الثورية وخارطة الطريق (M0→M11) — **المصدر الحيّ الوحيد** | دستوري |
-| `decisions.md` | سجلّ القرارات المعمارية D-001→**D-225** (ADR log) | سجلّ ملزِم |
+| `decisions.md` | سجلّ القرارات المعمارية D-001→**D-227** (ADR log) | سجلّ ملزِم |
 | `issues.md` | سجلّ الكوارث المُشخَّصة والمُصلَحة ISS-001→**ISS-150** (**ISS-150 (تسريب شظايا لاتينية — مفتوح، D-209)**؛ (ISS-149 أُغلق في D-208؛ ISS-148 في D-207؛ ISS-144 في D-206؛ **ISS-145 أُغلق بالتفنيد في D-209** — الـ212 صفّاً تحمل `ui_component` كلّها، و`truly_silent = 0` على كامل الإنتاج؛ يبقى ISS-137 · **ISS-141 (تدوير مفاتيح — إجراء المالك)** · ISS-142 · **ISS-146 (توجيه تربوي بدور user)** · **ISS-147 (تذبذب 401)** مفتوحة) | سجلّ ملزِم |
 | `runtime_truth.md` | جدول الحقيقة التشغيلية (ACTIVE/PARTIAL/DORMANT/ZOMBIE) | **الحقيقة المرجعية** |
 | `context.md` | السياق التشغيلي المُلخَّص (يُحمَّل آلياً عند بدء الجلسات) | مرجع سريع |
@@ -38,6 +38,7 @@
 | `observability-topology.md` · `dashboard-inventory.md` · `path-map.md` | خرائط الرصد واللوحات والمسارات |
 | `revenue_engine_truth.md` | **حالة** طبقات القيمة والإيراد (D-210→D-223) — 12 طبقة · 14 وحدة · 4 خطوط إيراد. القانون في `docs/VALUE_DOCTRINE.md` + `docs/REVENUE_ENGINE_SPEC.md`، وتحرسها `check_revenue_doctrine` |
 | `cognitive_execution_truth.md` | **حالة** محرّك التنفيذ المعرفي (D-224/D-225) — ١٣ طبقة + ٤ آفاق سوق. القانون في `docs/architecture/COGNITIVE_EXECUTION_ENGINE.md`، وتحرسها `check_cognitive_execution` (بها **قفل D-187**: نموذجٌ لغوي موصولٌ بمُنفِّذ الصندوق ⇒ CI أحمر) |
+| `cognitive_twin_truth.md` | **حالة** التوأم الرقمي المعرفي (D-226/D-227) — ٨ محرّكات + ٣ آفاق. القانون في `docs/architecture/COGNITIVE_DIGITAL_TWIN.md`، وتحرسها `check_cognitive_twin` + `check_prerequisite_single_graph` |
 | `ci-gates.md` | فهرس بوّابات CI |
 | `fragility-patterns.md` | أنماط الهشاشة المُوثَّقة (Patterns 1-4) |
 | `architecture/websocket-topology.md` | طوبولوجيا WebSocket (سلسلة D-WS-*) |
@@ -74,6 +75,7 @@
 | `docs/VALUE_DOCTRINE.md` | 💰 **قانون** القيمة (D-210): لماذا يدفع أحدٌ في سوقٍ مجّاني — الوظائف الأربع + اختبار الحذف + المحرَّمات التسعة | الحالة في `revenue_engine_truth.md` — ⛔ لا يحمل حالات |
 | `docs/REVENUE_ENGINE_SPEC.md` | 💰 **قانون** محرّك الإيراد (D-210→D-223): ماذا يُكتب بالضبط — العقود والنماذج والبوّابات | نفس القاعدة: القانون بلا حالة |
 | `docs/architecture/COGNITIVE_EXECUTION_ENGINE.md` | 🧠⚙️ **قانون** محرّك التنفيذ المعرفي (D-224) — الحقيقة تُنفَّذ واللغة تصفها؛ والحتمي قبل التوليد البرمجي | الحالة في `cognitive_execution_truth.md` — ⛔ لا يحمل حالات |
+| `docs/architecture/COGNITIVE_DIGITAL_TWIN.md` | 👤🧠 **قانون** التوأم الرقمي المعرفي (D-226/D-227) — الطالب قصّة مستمرّة؛ رسمٌ واحد للعلاقة؛ وحدّ المصداقية | الحالة في `cognitive_twin_truth.md` — ⛔ لا يحمل حالات |
 | `docs/DOCUMENTATION_INDEX.md` | خريطة السلطة الكاملة لـ`docs/` | مرجع مساند |
 
 ## القواعد الملزِمة

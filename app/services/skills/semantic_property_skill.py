@@ -504,16 +504,47 @@ class RootDiagnosis:
 
 
 def _prerequisites_of(concept_id: str) -> tuple[str, ...]:
-    """المصادر التي هي شرط مسبق لهذا المفهوم (اجتياز الحواف الواردة)."""
-    return tuple(
+    """المصادر التي هي شرط مسبق لهذا المفهوم — من **الرسمين معاً** (D-226).
+
+    كان هذا يقرأ `MISCONCEPTION_EDGES` وحدها، فيرى **عشر** حوافّ من طبقة الاحتمالات
+    الدقيقة، ولا يرى **ستّاً وعشرين** حافّةً في `shared/curriculum` — والتقاطع بينهما
+    كان **صفراً**. أي أنّ `diagnose_root`، وهو محرّك «التدخّل يستهدف الجذر لا العرَض»،
+    كان أعمى تماماً عن الشروط المسبقة الحقيقية للمنهاج:
+    `limits → derivatives` · `exponential → logarithm` ·
+    `chemical_equilibrium → acid_base` · `mechanics_newton → electric_field_motion`.
+
+    وهذا بالضبط السيناريو الذي وُجد المحرّك له: طالبٌ يتعثّر في «المشتقّات» وجذرُ عطبه
+    في «الدوال العددية» التي درسها قبل شهور — فكان الجذر غير قابل للرؤية بنيويّاً.
+
+    الرسمان **يعملان على حبيبتين مختلفتين** ولا يتنافسان: `shared/curriculum` يحمل
+    الوحدات (`kind="unit"`)، و`MISCONCEPTION_EDGES` تحمل المفاهيم الدقيقة داخل الوحدة
+    (`kind="micro"`). فالاتّحاد هو الصحيح، والمصدر الأوّل هو **القانوني** (D-193).
+    """
+    from shared.curriculum import CurriculumError
+    from shared.curriculum import prerequisites_of as _canonical_prerequisites
+
+    try:
+        canonical = _canonical_prerequisites(concept_id)
+    except CurriculumError:
+        # مفهومٌ دقيق (micro) لا يعرفه سجلّ المنهاج — مشروعٌ تماماً، لا خطأ.
+        canonical = ()
+
+    micro = tuple(
         e.source
         for e in MISCONCEPTION_EDGES
         if e.relation == "prerequisite_of" and e.target == concept_id
     )
+    seen: set[str] = set()
+    return tuple(c for c in (*canonical, *micro) if not (c in seen or seen.add(c)))
 
 
 def _concept_definition(concept_id: str) -> tuple[str, str] | None:
-    """(عنوان، تعريف/تدخّل) لمفهومٍ ما — من سجلّ الخصائص أو عقد الاعتقادات. None إن غاب."""
+    """(عنوان، تعريف/تدخّل) لمفهومٍ ما. `None` إن لم يُعرَف المفهوم أصلاً.
+
+    التعريف قد يعود **فارغاً** لمفهوم منهاجٍ معروفٍ بلا نصّ تدخّل مكتوب — وهذا ليس
+    فشلاً: نعرف اسمه ولا نعرف شرحه. ⛔ ولا نخترع الشرح (§0: المجهول أفضل من يقين زائف)،
+    بل يتغيّر شكل التدخّل إلى سؤالٍ سقراطي يُسمّي الجذر (D-226).
+    """
     for spec in PROPERTY_REGISTRY.values():
         if spec.concept_id == concept_id and spec.definition:
             return spec.title, spec.definition
@@ -521,7 +552,15 @@ def _concept_definition(concept_id: str) -> tuple[str, str] | None:
         for node in nodes:
             if node.bkt_concept == concept_id and node.intervention:
                 return concept_id, node.intervention
-    return None
+
+    # مفهوم منهاجٍ قانوني بلا نصّ تدخّل: نعرف عنوانه بالعربية ولا نخترع تعريفاً.
+    from shared.curriculum import CurriculumError
+    from shared.curriculum import label as _curriculum_label
+
+    try:
+        return _curriculum_label(concept_id), ""
+    except CurriculumError:
+        return None
 
 
 def _kc_is_weak(kc_progress: dict, concept_id: str) -> bool:
@@ -561,10 +600,18 @@ def diagnose_root(concept_id: str, kc_progress: object) -> RootDiagnosis | None:
     if found is None:
         return None
     title, definition = found
-    text = (
-        f"جذر الصعوبة أعمق قليلاً — لنُثبّت أولاً **{title}**:\n\n{definition}\n\n"
-        "حين تتضح هذه النقطة، يصير سؤالك الحالي خطوة طبيعية — أخبرني بما فهمت منها."
-    )
+    if definition:
+        text = (
+            f"جذر الصعوبة أعمق قليلاً — لنُثبّت أولاً **{title}**:\n\n{definition}\n\n"
+            "حين تتضح هذه النقطة، يصير سؤالك الحالي خطوة طبيعية — أخبرني بما فهمت منها."
+        )
+    else:
+        # جذرٌ معروف الاسم بلا نصّ تدخّل مكتوب: نُسمّيه ونسأل، ولا نخترع شرحاً (D-226).
+        text = (
+            f"جذر الصعوبة أعمق قليلاً — يبدو أنّ **{title}** هو ما يشدّنا إلى الوراء.\n\n"
+            "قبل أن نُكمل سؤالك الحالي: ما الذي تتذكّره عن هذه النقطة؟ اكتب ما تعرفه "
+            "ولو كان ناقصاً، ومن هناك نبني."
+        )
     return RootDiagnosis(root_concept_id=root, intervention_text=text)
 
 

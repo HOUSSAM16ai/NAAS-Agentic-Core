@@ -1617,6 +1617,22 @@ paths:
       description: Mathematical-notation layer — resolves a student's free-text question
         about a symbol (C, n!, P_A(B), E(X), Omega, ...) to a deterministic definition.
         Mirrors the notation-service contract and works without it (D-185)
+  /api/v1/skills/illusion:
+    post:
+      tags:
+      - Skills Platform
+      summary: Illusion-Gap Map
+      operationId: illusionGapSkill
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Illusion-gap map — per-concept quadrant, weighted index (null
+            when nothing matured), the dangerous set, and the suppressed-immature count
+      description: Illusion-gap engine — turns declared confidence plus unaided durable
+        mastery (decayed by the FSRS forgetting curve) into a four-quadrant map. Below
+        MIN_OBS unaided observations a concept is NOT classified — no colour and no
+        claim, counted in immature_suppressed instead. Deterministic, zero LLM (D-212)
   /api/v1/skills/retrieve:
     post:
       tags:

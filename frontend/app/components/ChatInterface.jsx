@@ -147,6 +147,42 @@ const useTypewriter = (fullContent, isStreaming) => {
 };
 
 // ─── شارة بطاقة الامتحان ─────────────────────────────────────────────────────
+/**
+ * أيقونة الإرسال — مضمّنة عمداً (D-232).
+ *
+ * زرّ الإرسال هو الضابط الوحيد الذي يستعمله الطالب في **كل** دور، وهو بلا نصّ. وبقيّة
+ * أيقونات المشروع تُحمَّل من نطاقٍ ثالث؛ ورُصد حيّاً أن فشل ذلك التحميل يترك الزرّ
+ * مربّعاً رمادياً فارغاً. ‏`currentColor` يجعلها تتبع السمة تلقائياً، فلا لون خامّ هنا
+ * (D-199)، و`aria-hidden` لأن الزرّ نفسه يحمل `aria-label`.
+ *
+ * ⚠️ ليست بداية هجرةٍ عشوائية: بقيّة الأيقونات (٣٥) تبقى على مسارها الموثَّق في
+ * `docs/frontend/ICON_MIGRATION.md` — تدهورُها يُشوِّه ولا يُعطِّل.
+ */
+const SendGlyph = memo(({ spinning }) => (
+    <svg
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className={spinning ? 'send-glyph is-busy' : 'send-glyph'}
+    >
+        {spinning ? (
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        ) : (
+            <>
+                <path d="M12 19V5" />
+                <path d="M5 12l7-7 7 7" />
+            </>
+        )}
+    </svg>
+));
+SendGlyph.displayName = 'SendGlyph';
+
 const ExamBadge = memo(() => (
     <div className="exam-badge">
         <i className="fas fa-scroll exam-badge-icon" />
@@ -442,10 +478,14 @@ export const ChatInterface = ({ messages, onSendMessage, status, user }) => {
                         disabled={!input.trim() || isConnecting}
                         aria-label="إرسال"
                     >
-                        {hasStreamingMessage
-                            ? <i className="fas fa-circle-notch fa-spin" />
-                            : <i className="fas fa-arrow-up" />
-                        }
+                        {/* D-232: زرّ الإرسال **لا يحمل نصّاً** — أيقونته هي الزرّ كلّه.
+                            وأيقونات المشروع تأتي من نطاقٍ ثالث (CDN)، وقد رُصد حيّاً في
+                            هذه الجلسة أن فشل تحميلها يُصيّر الزرّ **مربّعاً رمادياً
+                            فارغاً**. التعليق القائم يقول «الأيقونات زينة والنصّ يبقى
+                            مقروءاً» — وهو صحيحٌ لكل أيقونةٍ إلّا هذه.
+                            فالضوابط التي لا بديل نصّي لها تُرسَم مضمّنةً: صفر رحلة شبكة،
+                            وصفر اعتماد على نطاقٍ ثالث، ولا تختفي على شبكةٍ ضعيفة. */}
+                        <SendGlyph spinning={hasStreamingMessage} />
                     </button>
                 </div>
                 <div className="input-footer">

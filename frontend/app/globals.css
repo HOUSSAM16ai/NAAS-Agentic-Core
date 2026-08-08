@@ -500,6 +500,18 @@ body {
    حين يحمل الدور كائناً تفاعلياً فالكائن هو الردّ، والنصّ يصير حاشيةً مساعدة:
    أصغر قليلاً، بحبرٍ أهدأ، وبفاصلٍ رفيع يقول «هذا شرحٌ للأعلى» لا «هذا هو الجواب».
    والقيم كلّها من `tokens.css` (D-199) — لا رقم خامّ هنا.                     */
+/* D-232: أيقونة الإرسال المضمّنة — دورانٌ يحترم تفضيل تقليل الحركة (المحدِّد `*`
+   في tokens.css يُبطِله تلقائياً، فلا استثناء يُنسى هنا). */
+.send-glyph.is-busy {
+    animation: send-glyph-spin 900ms linear infinite;
+}
+
+@keyframes send-glyph-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .message-bubble.object-first > .message-aside {
     margin-top: var(--space-sm);
     padding-top: var(--space-xs);

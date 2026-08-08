@@ -156,7 +156,7 @@ API-first** `foundations-service` على `:8010` (contract ملتزَم؛ محر
 تتطلّب إشارة «حرف/رمز» صريحة ولا تُطابَق في سياق «الحادثة C»، والنيّة الحسابية تُلغي التعريف
 فلا يُخطَف دورٌ حسابي. مكشوف كـ **Skill** (`NotationSkill` على `BaseSkill` — `notation`) عبر
 `POST /api/v1/skills/notation` وفرع `notation` في `compose_reasoning`، و**كخدمة مصغّرة API-first**
-`notation-service` على `:8011` (contract ملتزَم → **API-first 13/13**؛ نسخة مُوَرَّدة محروسة
+`notation-service` على `:8011` (contract ملتزَم → **API-first 14/14** مع المونوليث، D-231؛ نسخة مُوَرَّدة محروسة
 بـ`check_notation_parity`، بلا استيراد `app`). الدور التعليمي يستعمل الفرع الحتمي **المحلّي**
 (بلا شبكة، صفر زمن إضافي على الطالب) والخدمة للـAPI والوكلاء بتدهور رشيق. القواعد الدائمة في §6.7 (د).
 
@@ -462,7 +462,7 @@ Runtime topology — **طوبولوجيتان حقيقيتان، لا واحدة
                 ├── orchestrator-service :8006  ← القلب الإلزامي للتوليد (D-112)
                 └── سلسلة سقوط محلية (تُقاس، لا تُخفى)
 
-العقود: 13 عقد OpenAPI في `docs/contracts/openapi/` تحرسها `check_openapi_parity` (13/13).
+العقود: 14 عقد OpenAPI في `docs/contracts/openapi/` تحرسها `check_openapi_parity` (14/14 — يشمل المونوليث، D-231).
 التفصيل الحيّ: `.memory/architecture.md` · `.memory/runtime_truth.md`.
 الطوبولوجيا المؤرَّخة 2026-05-11: `docs/archive/constitution-history/CLAUDE-SECTIONS-1-3-6.6-FULL.md §ب`.
 ```

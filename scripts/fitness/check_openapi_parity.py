@@ -24,7 +24,7 @@ CONTRACTS_DIR = REPO_ROOT / "docs" / "contracts" / "openapi"
 _HTTP_METHODS = frozenset({"get", "post", "put", "delete", "patch", "options", "head"})
 
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "contracts"))
-from export_openapi import SERVICES, render_spec
+from export_openapi import SERVICES, render_spec_isolated
 
 
 def _operations(spec: dict) -> set[tuple[str, str]]:
@@ -48,7 +48,9 @@ def main() -> int:
             failures.append(f"{name}: عقد OpenAPI مفقود ({contract.relative_to(REPO_ROOT)})")
             continue
         try:
-            live = json.loads(render_spec(module_path, app_attr))
+            # D-231: عملية منفصلة لكل تطبيق — استيراد أكثر من تطبيقٍ في عمليةٍ
+            # واحدة يرفع تصادم `MetaData` في SQLAlchemy (نفس منطق عزل D-105).
+            live = json.loads(render_spec_isolated(module_path, app_attr))
         except Exception as exc:  # pragma: no cover - CI يملك كل التبعيات
             failures.append(f"{name}: تعذّر الاستيراد — {type(exc).__name__}: {exc}")
             continue

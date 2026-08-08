@@ -339,6 +339,19 @@ jobs:
           # curriculum registry has no term/month field (the ban lifts by itself when
           # the field lands, because the gate checks data rather than opinion).
           python scripts/fitness/check_cognitive_twin.py
+          # D-228/D-229: two research doctrines entered the constitution (Harness
+          # Engineering; memory in ultra-complex systems). Law lives in
+          # docs/architecture/*_DOCTRINE.md, state in .memory/*_truth.md -- a status
+          # token inside a law doc is red, an empty gap cell is red (blank reads as
+          # success), a cited gate that does not exist is red (ISS-148's class).
+          python scripts/fitness/check_research_doctrines.py
+          # D-229 (ISS-146): the platform poisoned its own episodic memory --
+          # "[pedagogical directive] ..." was written to production with role=user
+          # 28 times, so system instructions were stored as if the STUDENT said them
+          # and re-read for weeks as conversation evidence (MINJA's delayed-trigger
+          # shape). One home for the marker list, and every message write passes the
+          # guard. Frozen debt is EMPTY and shrinks in both directions.
+          python scripts/fitness/check_no_system_text_as_user.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

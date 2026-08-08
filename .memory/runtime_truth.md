@@ -1,6 +1,19 @@
 # Runtime Truth Lock
-> Last updated: **2026-08-01** | Branch: `claude/smart-education-platform-s2of5b` (D-193→D-200)
-> Previous: `claude/documentation-system-update-i0td9p` (D-188/D-189)
+> Last updated: **2026-08-08** | Branch: `claude/project-international-markets-ws5pwz` (D-228→D-232)
+> Previous: `claude/smart-education-platform-s2of5b` (D-193→D-200)
+
+## Delivery Surface + Memory Authorship + Live E2E (2026-08-08, D-228→D-232)
+
+| المكوّن | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`shared/memory/authorship.py`** (D-229 · ISS-146) | **ACTIVE** | dep-free (stdlib)، لا يستورد `app`. سلسلة النداء الحيّة: `customer/chat_persistence.save_message` و`admin/chat_persistence.save_message` → `assert_student_authored(...)` عند `role == USER`. برهان: نصّ الإنتاج «[توجيه تربوي]…» (٢٨ صفّاً بدور `user`) يرفع `MemoryAuthorshipError`؛ ٢٢ اختباراً. الفارض `check_no_system_text_as_user` (مصدرٌ واحد + الحارس موصول، دَينٌ **فارغ**). |
+| **`shared/ux/budgets.py`** (D-230) | **ACTIVE (مكتبة مُستهلَكة)** | مصدرٌ واحد لحدود Doherty/Nielsen. يُستهلَك في `scripts/reports/turn_latency.py` و`scripts/e2e/live_student_journey.py`. ⚠️ **الفجوة الصادقة:** لا مقياس Prometheus يبثّ `first_paint` بعد — الحدود مُعلَنة ومُستعمَلة في القياس والتقرير، لا في المسار الحيّ. |
+| **`check_ui_component_parity`** (D-230 · ISS-145) | **ACTIVE (CI · guardrails)** | يشدّ ثلاثة سجلّات: `KNOWN_UI_COMPONENTS` ⇄ `COMPONENT_REGISTRY` ⇄ الحرفيات المبثوثة. النتيجة المقيسة: **٧ مُعلَنة في الطرفين · ٥ بباعثٍ حيّ · ٢ دَينٌ منطوق · ١ محظور**. ٧ تجارب سلبية. |
+| **`bkt_hint_display` · `learning_path_card`** | **ZOMBIE (إعلانٌ بلا باعث)** | مُعلَنان في العقد ومُسجَّلان في المُصيِّر، و**لا سطر في المستودع يبثّهما** (`_evaluate_and_emit_bkt` لم يبقَ منها إلّا ذكرٌ في تعليق `transport.py`). ١٤٤ صفّاً إنتاجياً من باعثٍ محذوف. مُسجَّلان في `_EMITTER_DEBT` — يتقلّص فقط. |
+| **تسليم الكائن التفاعلي** (§0.6 المرحلة ١) | **PARTIAL (منحدر)** | مقيسٌ على الإنتاج: **218/2250 = 9.7٪**، والاتجاه 36.6٪ (يونيو) ← 6.2٪ (يوليو) ← **3.4٪** (أغسطس). وE2E حيّ على HEAD: **صفر كائنات في ٤ أدوار**. الفجوة: لا طور حتمي يُلوّن كائناً قبل السرد (الجزء ب من D-230، غير مبنيّ). |
+| **الواجهة: الكائن سطحٌ أوّل + لوحة أرجوانية/خوخية** (D-230) | **ACTIVE** | `ChatInterface.jsx` يعكس التبعية (`hasObject` ⇒ الكائن أوّلاً والنصّ `message-aside`). لوحة `tokens.css` مُتحقَّقة حسابياً AA في السمتين بـ`check_design_tokens`. مُثبَتٌ بلقطات Chromium على الحزمة المبنيّة (نهاراً وليلاً). حُذف: زرّ الروبوت · شارتا «متصل» · لوحة الوكلاء وخطّافها (globals.css −158 سطراً، الألوان الخامّة 178→172). |
+| **`monolith_api` تحت بوّابة العقود** (D-231) | **ACTIVE (CI)** | `app.main` أُدخِل في `export_openapi.SERVICES` ⇒ **API-first 14/14**. العزل بعمليةٍ فرعية (`render_spec_isolated`) يحلّ تصادم `MetaData`. ⚠️ **فجوة صادقة:** `core-api-v1.yaml` المكتوب يدوياً ما زال يُعلن **١٣ مساراً لا يخدمها التشغيل**، ومُتحقِّق الإقلاع **يُحذِّر ولا يُفشِل**. |
+| **تجريب E2E حيّ** (D-232) | **ACTIVE (يدوي)** | `scripts/e2e/live_student_journey.py` + `capture_ui.py`. مُشغَّلان على Postgres 16 محلّي حقيقي + WebSocket حقيقي + Chromium حقيقي: أربعة أدوار، **إطارٌ نهائي واحد لكل دور**، صفر تسريب نثرٍ لاتيني، صفر دورٍ صامت. الأزمنة: 0.06s · 1.88s · 4.91s · 8.07s. ⚠️ غير مُدرَجَين في CI (يتطلّبان حزمةً مبنيّة وقاعدةً حيّة). |
 
 ## Value & Revenue Layer (2026-08-04, D-210→D-223)
 

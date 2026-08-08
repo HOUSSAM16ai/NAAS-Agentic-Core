@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { errorTracker } from '../utils/errorTracker';
 import { useAgentSocket } from '../hooks/useAgentSocket';
 import { ChatInterface } from './ChatInterface';
-import { AgentTimeline } from './AgentTimeline';
 import { BUILD_VERSION } from '../buildVersion';
 import { clientLog } from '../utils/clientLog';
 import { markdownToPlainText } from '../utils/preprocessMath';
@@ -133,7 +132,6 @@ const AuthScreen = ({ onLogin }) => {
 
 const DashboardLayout = ({ user, token, onLogout }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     // ISS-066 (D-058): lazy initializer يقرأ localStorage مباشرة عند أول render
     // لتجنب flash: لا نبدأ بـ 'dark' ثم نُحدِّث — نبدأ بالقيمة الصحيحة فوراً.
@@ -303,6 +301,9 @@ const DashboardLayout = ({ user, token, onLogout }) => {
         setIsMenuOpen(false);
     };
 
+    // D-230: «متصل» و«تعافى» حالتان صحّيتان — لا تُعلَنان. ما عداهما يُعلَن.
+    const isHealthyConnection = status === 'connected' || status === 'recovered';
+
     const getStatusText = (st) => {
         switch (st) {
             case 'connected':    return 'متصل';
@@ -322,22 +323,17 @@ const DashboardLayout = ({ user, token, onLogout }) => {
         <div className="app-container">
             <div className="header">
                 <div className="header-title">
-                     <button
-                        className="header-menu-btn"
-                        onClick={() => setIsAgentSidebarOpen(prev => !prev)}
-                        title="فريق العملاء"
-                        style={{ marginLeft: '0.5rem', background: isAgentSidebarOpen ? 'var(--bg-color)' : 'transparent' }}
-                    >
-                        <i className="fas fa-robot"></i>
-                    </button>
                     <h2>
-                        {user.is_admin ? 'OVERMIND CLI' : 'Overmind Education'}
-                        <span className="header-status">
-                            {status === 'connected' ?
-                                <span className="status-online">● {getStatusText(status)}</span> :
-                                <span className="status-offline">● {getStatusText(status)}</span>
-                            }
-                        </span>
+                        {user.is_admin ? 'ETAALIM · CLI' : 'ETAALIM'}
+                        {/* D-230: النجاح صامت. شارةُ «● متصل» الخضراء كانت تشغل انتباهاً
+                            دائماً لتقول «لا شيء يحدث» — والانتباه أندر ما يملكه طالبٌ
+                            قبل البكالوريا. يبقى الإعلان **عند العطل وحده**، فلا يُخفى
+                            فشلٌ (§6.5: لا فشل صامت) ولا يُحتفى بالعادي. */}
+                        {!isHealthyConnection && (
+                            <span className="header-status" role="status">
+                                <span className="status-offline">{getStatusText(status)}</span>
+                            </span>
+                        )}
                     </h2>
                 </div>
                 <div className="header-actions" ref={menuRef}>
@@ -381,24 +377,10 @@ const DashboardLayout = ({ user, token, onLogout }) => {
             </div>
 
             <div className="dashboard-layout">
-                {/* Agent Sidebar (Left in RTL) */}
-                {/* ISS-120 (D-153): `inert` سمة boolean في React 19 — تمرير السلسلة
-                    "true" يُطلق خطأ console («Received the string `true`…») ويُظهر
-                    الـ Next.js error overlay للطالب. النمط الصحيح: `cond || undefined`. */}
-                <div
-                    className={`agent-sidebar ${isAgentSidebarOpen ? 'open' : ''}`}
-                    inert={!isAgentSidebarOpen || undefined}
-                >
-                     <div className="agent-sidebar-header">
-                        <h3>فريق العملاء</h3>
-                        <button onClick={() => setIsAgentSidebarOpen(false)} style={{background:'none', border:'none', fontSize:'1.2rem', cursor:'pointer'}}>
-                            <i className="fas fa-times"></i>
-                        </button>
-                     </div>
-                     <div style={{ padding: '0.5rem' }}>
-                        <AgentTimeline />
-                     </div>
-                </div>
+                {/* D-230: «فريق العملاء» (لوحة مراحل الوكلاء) حُذف بالكامل مع خطّافه
+                    ومكوّنه — لا كود ميت (سابقة D-173 Stage 5: القدرة بلا مستهلكٍ حيّ
+                    تُحذَف لا تُترَك stub). وهو داخليّ الطبيعة: الطالب يتعلّم الاحتمالات،
+                    ولا يعنيه أيّ وكيلٍ يعمل الآن — عرضُه تسريبٌ لهندسة التعليم (D-117). */}
 
                 <div className={`sidebar-overlay ${isSidebarOpen ? 'visible' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
                 <div

@@ -262,25 +262,37 @@ const MessageBubble = memo(({ msg, idx }) => {
         });
     }, [msg.content]);
 
+    // ─────────────────────────────────────────────────────────────────
+    // D-230: الكائن سطحٌ أوّل، لا ذيلٌ في فقاعة
+    // ─────────────────────────────────────────────────────────────────
+    // ‏CLAUDE.md §0.6 المرحلة ١: «الطالب **يتفاعل مع كائنات** لا يقرأ جداراً نصّياً»،
+    // والدردشة «سطح تسليم فقط». وكان الكود يقول العكس بنيوياً: الكائن يُصيَّر **داخل**
+    // فقاعة الدردشة **بعد** النصّ، فيقرأ الطالب الجدار ثمّ يرى البطاقة إن بقي انتباه.
+    // فحصٌ حيّ على الإنتاج قال إن ٩٫٧٪ فقط من الردود تحمل كائناً أصلاً.
+    //
+    // القلب: حين يحمل الدور كائناً فالكائن **هو** الردّ، والنصّ يصير تعليقاً مساعداً
+    // تحته. وحين لا يحمل، يبقى النصّ كما هو تماماً — بلا انحدار لأيّ دورٍ نصّي.
+    const hasObject = msg.role === 'assistant' && msg.isComplete && Boolean(msg.uiComponent);
+
     return (
         <div className={`message ${msg.role}`}>
             <div
-                className={`message-bubble${isStreaming ? ' streaming' : ''}${msg.isError ? ' error' : ''}`}
+                className={`message-bubble${isStreaming ? ' streaming' : ''}${msg.isError ? ' error' : ''}${hasObject ? ' object-first' : ''}`}
                 style={{ position: 'relative', paddingBottom: msg.role === 'assistant' ? '28px' : undefined }}
             >
+                {/* الكائن أوّلاً حين يوجد — هو الردّ لا زينتُه. */}
+                {hasObject && <GenerativeUIRenderer uiComponent={msg.uiComponent} />}
+
                 {msg.role === 'assistant' ? (
                     isEmpty && isStreaming
                         ? <TypingIndicator />
-                        : <Markdown content={contentToShow} isStreaming={isStreaming} />
+                        : !isEmpty && (
+                            <div className={hasObject ? 'message-aside' : undefined}>
+                                <Markdown content={contentToShow} isStreaming={isStreaming} />
+                            </div>
+                        )
                 ) : (
                     <span className="user-message-text">{msg.content}</span>
-                )}
-
-                {/* الواجهة التوليدية — تظهر بعد اكتمال النص، تحته مباشرة.
-                    النص هو صوت المعلم الداخلي. البطاقة هي المسرح البصري.
-                    لا تظهر أثناء الـ streaming لتجنب layout shift. */}
-                {msg.role === 'assistant' && msg.isComplete && msg.uiComponent && (
-                    <GenerativeUIRenderer uiComponent={msg.uiComponent} />
                 )}
 
                 {msg.role === 'assistant' && msg.isComplete && !isEmpty && (
@@ -437,10 +449,19 @@ export const ChatInterface = ({ messages, onSendMessage, status, user }) => {
                     </button>
                 </div>
                 <div className="input-footer">
-                    <span className={`connection-status ${isConnected ? 'online' : isConnecting ? 'connecting' : 'offline'}`}>
-                        <span className="status-dot" />
-                        {isConnected ? 'متصل' : isConnecting ? 'جاري الاتصال...' : 'غير متصل'}
-                    </span>
+                    {/* D-230: النجاح صامت. شارة «● متصل» كانت تُعلَن دائماً لتقول «لا
+                        شيء يحدث» — وهي النسخة **الثانية** من نفس الشارة (الأولى كانت في
+                        الترويسة). يبقى الإعلان عند العطل وحده: لا فشلٌ صامت (§6.5)،
+                        ولا احتفاءٌ بالعادي. */}
+                    {!isConnected && (
+                        <span
+                            className={`connection-status ${isConnecting ? 'connecting' : 'offline'}`}
+                            role="status"
+                        >
+                            <span className="status-dot" />
+                            {isConnecting ? 'جاري الاتصال...' : 'غير متصل'}
+                        </span>
+                    )}
                     <span className="input-hint">Enter للإرسال · Shift+Enter لسطر جديد</span>
                 </div>
             </div>

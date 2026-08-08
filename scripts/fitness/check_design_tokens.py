@@ -33,7 +33,7 @@ FRONTEND = REPO_ROOT / "frontend" / "app"
 TOKENS_FILE = FRONTEND / "styles" / "tokens.css"
 
 #: الدَّين المُجمَّد: عدد الألوان الخامّة الباقية في `globals.css`. **يتقلّص فقط.**
-FROZEN_RAW_COLOURS = 178
+FROZEN_RAW_COLOURS = 172
 
 #: عدد إعلانات `style={{…}}` بقيم بكسل حرفية في JSX. **يتقلّص فقط.**
 FROZEN_INLINE_PX = 26

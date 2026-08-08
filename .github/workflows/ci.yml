@@ -352,6 +352,17 @@ jobs:
           # shape). One home for the marker list, and every message write passes the
           # guard. Frozen debt is EMPTY and shrinks in both directions.
           python scripts/fitness/check_no_system_text_as_user.py
+          # D-230 (ISS-145): the constitution's FIRST pillar -- "the student
+          # manipulates objects, does not read a wall of text" -- was the only law
+          # with no enforcer, and it decayed unseen: 9.7% of production replies carry
+          # an interactive object, trending 36.6% (June) -> 6.2% -> 3.4% (August).
+          # Three registries must agree: the server contract, the renderer registry,
+          # and what the builders actually emit. A name on one side only is a
+          # half-declared contract (D-192's bug). A declared name with no emitter
+          # anywhere is a zombie declaration and must be spoken as debt -- that is
+          # bkt_hint_display (105 production rows) and learning_path_card (39), whose
+          # emitters were removed while the declarations stayed.
+          python scripts/fitness/check_ui_component_parity.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

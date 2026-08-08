@@ -109,12 +109,39 @@ async def _persist_ui_component_cards(
 
     غير حرج: أي فشل يُسجَّل ولا يكسر الدور. كل بطاقة صف مستقل يحمل ui_component
     بالشكل السلكي ({component, props, fallback_text}) فتُصيَّر من التاريخ بعد إعادة الدخول.
+
+    ─────────────────────────────────────────────────────────────────
+    ISS-145 (D-230): **الإرفاق ليس تسليماً**
+    ─────────────────────────────────────────────────────────────────
+    كان الفلتر يقبل أيّ سلسلةٍ غير فارغة اسماً للمكوّن. ونتيجته في الإنتاج: **٧ صفوف**
+    بـ`content=""` تحمل `worked_example_card` — وهو اسمٌ لا يعرفه سجلّ التصيير، فرأى
+    الطالب «تعذّر عرض المكوّن التفاعلي» **ولا شيء غيره**. سبعةُ أدوارٍ صامتة فعلاً.
+
+    وISS-145 أُغلق حينها «بالتفنيد» بادّعاء `truly_silent = 0`، لأن الفحص تحقّق من أنّ
+    مكوّناً **مُرفَق** لا من أنه **قابل للرسم**. صفٌّ فارغ + مكوّنٌ لا يُرسَم = دورٌ صامت.
+
+    فالمصدر الوحيد لـ«قابل للرسم» هو ``KNOWN_UI_COMPONENTS`` (يحرس تطابقه مع سجلّ
+    التصيير `scripts/fitness/check_ui_component_parity.py`)، والصفّ الفارغ الذي لا
+    يجتازه **لا يُكتب** — دورٌ نصّيٌّ صادق أفضل من وعدٍ بصريٍّ لا يصل (D-191 ج).
     """
-    valid = [
-        c
-        for c in cards
-        if isinstance(c, dict) and isinstance(c.get("component"), str) and c["component"]
-    ]
+    from app.contracts.streaming import KNOWN_UI_COMPONENTS
+
+    valid: list[dict[str, object]] = []
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        name = card.get("component")
+        if not isinstance(name, str) or not name:
+            continue
+        if name not in KNOWN_UI_COMPONENTS:
+            # لا صفَّ فارغاً بوعدٍ لا يصل. يُسجَّل كي يُشخَّص، ولا يُخزَّن كي لا يَصمت.
+            logger.warning(
+                "ui_component_card_dropped_unrenderable",
+                extra={"component": name, "conversation_id": conversation_id},
+            )
+            continue
+        valid.append(card)
+
     if not valid:
         return
     try:

@@ -249,6 +249,14 @@ jobs:
           # enforcement — exactly the class of rule that drifts silently (D-188). The
           # tree was cleaned in d3fa566; this keeps it clean. Frozen debt is empty.
           python scripts/fitness/check_no_committed_secrets.py
+          # D-235: CI plumbing is code, and the wizard PRs that overwrite it are not
+          # reviewed like code. Qodana Cloud's generated template reverted the D-234
+          # hardening THREE times (2cbab01 · 065b13f · f4b3b40), restoring checkout@v3,
+          # `contents: write` and the missing token guard on each merge. Meanwhile
+          # `codescene-coverage` skipped its upload on every run since it was written
+          # and still reported success. Both rules were already written, in comments,
+          # inside the very files that lost them.
+          python scripts/fitness/check_ci_workflow_hygiene.py
           # C9 (D-192): a fitness gate that gated nothing — present in scripts/fitness
           # but wired into no workflow. Documentation that cannot fail is decoration.
           python scripts/fitness/check_docs_runtime_parity.py
@@ -527,10 +535,50 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0 # cs-coverage reads git to identify repo + commit
       - uses: actions/download-artifact@v6
+        id: coverage
+        # `test-monolith` runs with `if: always()`, so a collection error there leaves no
+        # artifact at all (measured on 08f0568: "No files were found with the provided
+        # path: coverage.xml"). A hard failure here would paint this job red for someone
+        # else's problem, so the miss is tolerated and then reported below.
+        continue-on-error: true
         with:
           name: coverage-report # produced above — no second test run, no second number
+
+      # D-235: a skipped upload and a successful upload were indistinguishable — both left
+      # this job green. It skipped on every single run from the day it was written, because
+      # the secret did not exist yet, and nothing said so. Green is not allowed to mean
+      # "did nothing" (§0 — no silent failure; L11 — absence declares its reason).
+      - name: Report a missing token instead of skipping in silence
+        if: env.CS_ACCESS_TOKEN == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::warning title=CodeScene upload skipped::CS_ACCESS_TOKEN is empty — nothing uploaded."
+          {
+            echo "### CodeScene coverage — skipped, not uploaded"
+            echo
+            echo "\`secrets.CS_ACCESS_TOKEN\` resolved to an empty value."
+            echo "Expected on pull requests from forks, which receive no secrets."
+            echo "On a same-repo run it means the secret is missing — and the"
+            echo "\`CodeScene Code Coverage\` check will sit pending until it times out."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report a missing coverage report
+        if: steps.coverage.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::warning title=No coverage artifact::test-monolith produced no coverage.xml — nothing to upload."
+          {
+            echo "### CodeScene coverage — no report to send"
+            echo
+            echo "The \`coverage-report\` artifact is missing, which means \`test-monolith\`"
+            echo "failed before pytest could write \`coverage.xml\` (a dependency-resolution"
+            echo "or collection error, not a test failure). Fix that job first."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload coverage to CodeScene
-        if: env.CS_ACCESS_TOKEN != ''
+        if: env.CS_ACCESS_TOKEN != '' && steps.coverage.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -542,6 +590,18 @@ jobs:
           sh install-cs-coverage-tool.sh -y
           "$HOME/.local/bin/cs-coverage" upload \
             --format cobertura --metric line-coverage coverage.xml
+          # Say it landed. The whole point of this job is that "green" now carries
+          # information, and a reader should not have to expand a step to learn which.
+          {
+            echo "### CodeScene coverage — uploaded"
+            echo
+            echo "Sent \`coverage.xml\` (cobertura, line-coverage) for commit"
+            echo "\`${{ github.event.pull_request.head.sha || github.sha }}\`."
+            echo
+            echo "Scope note: coverage is measured with \`--cov=app\` only. \`microservices/\`"
+            echo "and \`shared/\` are NOT measured — if CodeScene shows them as 0% rather than"
+            echo "as absent, the number is lying and the scope must be narrowed (D-197)."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   test-microservices:
     name: test-microservices

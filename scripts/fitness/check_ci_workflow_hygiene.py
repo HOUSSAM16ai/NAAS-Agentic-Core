@@ -47,7 +47,7 @@ MIN_ACTION_MAJOR: dict[str, int] = {
     "actions/setup-python": 6,
     "actions/setup-node": 5,
     "actions/upload-artifact": 6,
-    "actions/download-artifact": 6,
+    "actions/download-artifact": 8,
 }
 
 #: رموز خدمات خارجية. كل واحدٍ منها **يجب** أن يُقرأ عبر ``env`` على مستوى الوظيفة

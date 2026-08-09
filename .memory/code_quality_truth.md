@@ -38,7 +38,9 @@
 تمرّ بدَينٍ مُجمَّد **فارغ**، وهي تبحث عن أنماط الأسرار **الحقيقية** (`sk-or-v1-` ·
 `tvly-` · JWT · كلمة سرّ فعلية في رابط قاعدة بيانات).
 
-### العالية (320) وما فُحص منها
+### العالية (320) — **تفصيلٌ جزئي**: الصفوف أدناه تُغطّي **293**، والباقي **27** موزّعة
+على فئاتٍ صغيرة (regex متفرّقة · `Invalid protocol` · `Invalid TypedDict` · `Stub packages`…).
+
 
 | العدد | النتيجة | الحالة |
 |------|---------|--------|
@@ -51,7 +53,7 @@
 | 6 | كود غير قابل للوصول | ⚠️ **لم تُفحَص** |
 | **1** | جملة بلا أثر — `app/services/analytics/predictive_analyzer.py:174` | ✅ **حقيقي · أُصلح** — استيعاب يُحسَب ويُرمى؛ `low_risk` لا وجود له في المستودع كلّه |
 
-### المتوسطة (2,078) — أسلوبية
+### المتوسطة (2,078) — أسلوبية · **تفصيلٌ جزئي**: الأسطر أدناه تُغطّي **1,886**، والباقي **192** فئاتٌ صغيرة
 `Method is not declared static` 658 · `Unclear exception clauses` 315 ·
 `Unused local symbols` 265 · `Duplicated code fragment` 237 ·
 `String conversion without dunder method` 236 · `Protected member access` 175.
@@ -60,7 +62,7 @@
 
 **صحّة الكود (delta):** على `457205b` **أفشل الـPR** ببندين في ملفّ البوّابة الجديد:
 
-```
+```text
 _check_token_guard         cyclomatic complexity 9, threshold 9
 _check_third_party_write   5 arguments, max 4
 ```
@@ -88,6 +90,22 @@ _check_third_party_write   5 arguments, max 4
 محلّي (D-192)، ولا محلِّل تجاري يعرفه. ولذلك ⛔ **لا يُستبدَل حارسٌ محلّي بأداةٍ خارجية** —
 تُضاف إليه.
 
+### وفي الاتجاه المعاكس: المراجعة أثبتت أنّ **المِسنَن نفسه كان بلا أسنان**
+
+كُتب `fail-threshold: 2405` مفتاحاً مستقلاً تحت `with:` — و`JetBrains/qodana-action@v2026.1`
+**لا تُعلن مُدخَلاً بهذا الاسم**، وGitHub يُسقِط المفاتيح غير المُعلَنة **بصمت**. فبقي
+الفحص أخضر بينما البوّابة **غير موجودة**، طوال commitين.
+
+| | |
+|---|---|
+| المُدخَلات المُعلَنة فعلياً | `args` · `pr-mode` · `upload-result` · `use-caches` · `primary-cache-key` · `additional-cache-key` · `artifact-name` · `cache-dir` · `results-dir` · `post-pr-comment` · `use-annotations` · `push-fixes` · `commit-message` · `github-token` · `nightly-version` · `cache-default-branch-only` |
+| المكان الصحيح | داخل `args`: `--fail-threshold,2405` |
+| مرجع الـCLI | «Set the number of problems that will serve as a quality gate. If this number is **reached**, the inspection run is terminated with a non-zero exit code» |
+
+⛔ **القاعدة:** تُتحقَّق راية الإجراء من **`action.yaml` الخاص به**، لا من README ولا من
+ملخّصٍ عنه — وهذا بالضبط مصدر الخطأ هنا. و**بوّابةٌ لم تُشاهَد وهي تفشل ليست مُثبَتة**:
+الأخضر الدائم مظهرُ البوّابة العاملة ومظهرُ الغائبة معاً.
+
 **تذكيرٌ بصنفٍ لا تجده أيّ أداة ساكنة:** كوارث `.memory/issues.md` الكبرى (ISS-144 ·
 ISS-148 · ISS-149) كان **الكشف فيها سليماً والعطب في الأسبقيّة** — ترتيبُ مراحل تُنهي
 دور الطالب قبل التي تخدمه. هذه أخطاء **دلالة وترتيب**، تجدها عقود الترانسكريبت وبوّابات
@@ -101,7 +119,7 @@ ISS-148 · ISS-149) كان **الكشف فيها سليماً والعطب في 
 | المِسنَن **عددي** لا لكل نتيجة | إصلاحُ مشكلة وإدخالُ أخرى في نفس الـPR **يمرّ** |
 | CodeScene يحلّل **`main` وحده** | تغطية فروع الـPR تصل ثمّ **تُهمَل** حتى تُضاف الفروع في إعداداته |
 | التغطية `--cov=app` فقط | `microservices/` و`shared/` **غير مقيسة**؛ إن عرضها CodeScene **0٪** بدل «بلا بيانات» فالرقم كاذب ⇒ يُضيَّق النطاق أو يُطفَأ الفحص (D-197) |
-| `actions/download-artifact@v6` على Node 20 | تحذير D-141 باقٍ — **لا إصدار أحدث اليوم** |
+| ~~`actions/download-artifact@v6` على Node 20~~ | ✅ **أُصلح** — رُقِّي إلى `@v8` (node24). ⚠️ وكان مكتوباً هنا «لا إصدار أحدث اليوم» وهو **خطأ**: v7 صدر 2025-12 وv8 في 2026-02. ادّعاءُ غيابٍ لم يُفحَص، رصدته المراجعة. |
 | رمز Qodana مُعرَّف بمشروع Cloud | إعادة إنشاء المشروع تُبطِل السرّ وتُنتج `403`؛ الـrunbook في خطوة `Explain the failure` |
 
 ## 5) المفتوح

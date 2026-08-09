@@ -99,7 +99,7 @@ jobs:
           # Naming the interpreter is what stops the analyzer from applying a pre-3.10
           # language level and calling every `X | None` in the repo a broken annotation
           # (2,500 of 4,956 findings). See the long note in qodana.yaml.
-          args: "-e,QODANA_PYTHON_PATH=/opt/miniconda3/bin/python"
+          args: "-e,QODANA_PYTHON_PATH=/opt/miniconda3/bin/python,--fail-threshold,2405"
           # ── Cache key namespace, and why it carries a version ─────────────────────
           # The default key is `qodana-<version>-<ref>`, and the branch-level restore-key
           # made every run inherit the index built by the FIRST run — the one that had no
@@ -120,23 +120,26 @@ jobs:
           primary-cache-key: qodana-py312-${{ github.ref }}-${{ github.sha }}
           additional-cache-key: qodana-py312-${{ github.ref }}
           # ── Teeth: the count may fall, never rise ─────────────────────────────────
-          # 2,411 was the measured honest count on 238633a; six verified defects were
-          # fixed since (5 × `dict[str, any]`, 1 discarded comprehension), so the ratchet
-          # follows the code down to 2,405. Below it the scan passes; above it — one
-          # net-new problem — the scan fails. It is not in `required-ci`, so a red Qodana
-          # never blocks a merge (D-234).
+          # ⚠️ This lives in `args`, not as its own key, and that distinction is the
+          # whole point. `fail-threshold:` was written as a top-level `with:` input for
+          # two commits — and `JetBrains/qodana-action@v2026.1` declares no such input,
+          # so GitHub silently dropped it. The scan reported green while the gate did
+          # not exist. A ratchet documented as having teeth and having none is the exact
+          # failure this workflow was rewritten to end (D-235); it was caught in review,
+          # not by a run, because a gate that never fires looks identical to one that
+          # passes. ⛔ Verify a flag against the action's `action.yaml`, never a README.
           #
-          # A ratchet, not a committed `--baseline` SARIF, and that is deliberate: the
-          # baseline file is 7 MB, and a frozen analysis artifact going stale is exactly
-          # the failure this run just diagnosed. A single integer is reviewable in a diff,
-          # cannot drift, and matches the frozen-debt rule the rest of this repo runs on
-          # (D-105). ⛔ Lower it when problems are fixed; raising it needs a written
-          # decision in `.memory/decisions.md` naming the reason (D-209, layer 9).
+          # The CLI defines it: "--fail-threshold string  Set the number of problems
+          # that will serve as a quality gate. If this number is reached, the inspection
+          # run is terminated with a non-zero exit code."
+          #
+          # 2,405 is the measured count on 42f8876 (2,411 before six verified fixes).
+          # ⛔ Lower it when problems are fixed; raising it needs a written decision in
+          # `.memory/decisions.md` naming the reason (D-209, layer 9).
           #
           # ⚠️ The count is not a quality score: 8 of the 13 Critical findings were
           # verified false positives. `.memory/code_quality_truth.md` holds the verdict
           # on each — read it before treating a number here as a defect count.
-          fail-threshold: 2405
         env:
           QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'

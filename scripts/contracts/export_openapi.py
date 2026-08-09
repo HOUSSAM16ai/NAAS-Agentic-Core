@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -73,13 +74,27 @@ def render_spec_isolated(module_path: str, app_attr: str) -> str:
     جديدة، لا ترتيبٌ ذكيّ داخل عمليةٍ واحدة (والترتيب الذكيّ ينكسر مع أوّل تطبيقٍ يُضاف).
 
     ⛔ ولا يُبتلَع فشل العملية الفرعية: `stderr` يُرفَع كما هو ليُشخَّص.
+
+    ## ولماذا `PYTHONHASHSEED=0`
+
+    مسارٌ واحد مُسجَّل بعدّة طرائق HTTP (بروكسي البوّابة مثلاً) تُشتَقّ ترتيبُ طرائقه من
+    **تكرار مجموعة**، وترتيبُ المجموعة في بايثون يتغيّر مع بذرة التجزئة العشوائية لكل
+    عملية. فينقلب `delete` و`post` بين تشغيلٍ وآخر، ويتبدّل معهما `operationId` —
+    ٢٦٦ سطراً من «انحراف» لا يعكس تغييراً واحداً في الكود.
+
+    وهذا عطبٌ **كامنٌ من قبل**: كانت كل الخدمات تُولَّد في عمليةٍ واحدة ببذرةٍ واحدة،
+    فبدا الملفّ مستقرّاً داخل التشغيل الواحد وغير مستقرّ بين التشغيلات. والعزل بعمليةٍ
+    فرعية جعل لكلّ خدمةٍ بذرةً جديدة، فصار الاحتمال يومياً بدل أن يكون نادراً.
+    تثبيتُ البذرة يجعل المخرَج دالّةً في الكود وحده — وهو شرط أن يعني «انحراف» شيئاً.
     """
+    env = {**os.environ, "PYTHONHASHSEED": "0"}
     result = subprocess.run(
         [sys.executable, str(Path(__file__).resolve()), "--emit", f"{module_path}:{app_attr}"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip()[-800:] or "subprocess failed with no stderr")

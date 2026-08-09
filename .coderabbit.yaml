@@ -42,6 +42,15 @@ reviews:
     drafts: false
 
   path_filters:
+    # ⚠️ The leading "**" is deliberate and is NOT redundant. The published reference
+    # documents these patterns as "include or exclude" and gives `!dist/**` as an example,
+    # but it does not say what an exclusion-ONLY list means: everything-minus-these, or
+    # nothing-at-all because no include pattern matched. Under the second reading a review
+    # would silently cover no files — the exact silent-green failure this repository spent
+    # a day removing. An explicit include is a no-op under the first reading and the fix
+    # under the second, so it is correct either way. ⛔ Do not "simplify" it away without
+    # a documented answer.
+    - "**"
     # Frozen history: reading it wastes review budget and invites suggestions to edit
     # snapshots that must not change (D-173 archive · D-188).
     - "!docs/archive/**"

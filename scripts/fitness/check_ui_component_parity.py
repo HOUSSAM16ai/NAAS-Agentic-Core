@@ -93,6 +93,28 @@ def _read(path: Path) -> str:
         raise ParityReadError(f"تعذّرت قراءة {path}: {exc}") from exc
 
 
+def _assigns_to(node: ast.AST, name: str) -> bool:
+    """هل هذه العقدة إسنادٌ إلى الاسم المطلوب؟ (يغطّي `x = …` و`x: T = …`)."""
+    if isinstance(node, ast.Assign):
+        targets: list[ast.expr] = list(node.targets)
+    elif isinstance(node, ast.AnnAssign):
+        targets = [node.target]
+    else:
+        return False
+    return any(isinstance(t, ast.Name) and t.id == name for t in targets)
+
+
+def _string_literals(value: ast.expr | None) -> set[str] | None:
+    """حرفيات السلاسل داخل مجموعة/قائمة/صفّ — أو داخل `frozenset({…})`."""
+    if isinstance(value, ast.Call) and value.args:
+        value = value.args[0]
+    if not isinstance(value, ast.Set | ast.List | ast.Tuple):
+        return None
+    return {
+        el.value for el in value.elts if isinstance(el, ast.Constant) and isinstance(el.value, str)
+    }
+
+
 def _backend_components() -> set[str]:
     """يقرأ `KNOWN_UI_COMPONENTS` بـAST لا بـgrep — النصّ يكذب، الشجرة لا."""
     source = _read(BACKEND_CONTRACT)
@@ -102,25 +124,11 @@ def _backend_components() -> set[str]:
         raise ParityReadError(f"{BACKEND_CONTRACT.name}: تعذّر التحليل — {exc}") from exc
 
     for node in ast.walk(tree):
-        targets = (
-            list(node.targets)
-            if isinstance(node, ast.Assign)
-            else [node.target]
-            if isinstance(node, ast.AnnAssign)
-            else []
-        )
-        if not any(isinstance(t, ast.Name) and t.id == "KNOWN_UI_COMPONENTS" for t in targets):
+        if not _assigns_to(node, "KNOWN_UI_COMPONENTS"):
             continue
-        value = node.value
-        # frozenset({...}) — الوسيط الأوّل مجموعة حرفيات.
-        if isinstance(value, ast.Call) and value.args:
-            value = value.args[0]
-        if isinstance(value, ast.Set | ast.List | ast.Tuple):
-            return {
-                el.value
-                for el in value.elts
-                if isinstance(el, ast.Constant) and isinstance(el.value, str)
-            }
+        names = _string_literals(node.value)
+        if names is not None:
+            return names
     raise ParityReadError("KNOWN_UI_COMPONENTS غير موجودة أو غير قابلة للقراءة الثابتة")
 
 
@@ -139,20 +147,26 @@ def _frontend_components() -> tuple[set[str], dict[str, str]]:
     return keys, imports
 
 
+def _scanned_python_files() -> list[Path]:
+    """ملفّات بايثون في الشجرات المفحوصة، بترتيبٍ ثابت."""
+    files: list[Path] = []
+    for root in _SCAN_ROOTS:
+        base = REPO_ROOT / root
+        if base.is_dir():
+            files.extend(sorted(base.rglob("*.py")))
+    return files
+
+
 def _emitted_components() -> dict[str, str]:
     """كل حرفية `"component": "<name>"` في شيفرة الخادم ← أوّل موضعٍ يبثّها."""
     found: dict[str, str] = {}
-    for root in _SCAN_ROOTS:
-        base = REPO_ROOT / root
-        if not base.is_dir():
-            continue
-        for path in sorted(base.rglob("*.py")):
-            try:
-                text = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError) as exc:
-                raise ParityReadError(f"{path}: تعذّرت القراءة — {exc}") from exc
-            for name in _EMITTED.findall(text):
-                found.setdefault(name, str(path.relative_to(REPO_ROOT)))
+    for path in _scanned_python_files():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise ParityReadError(f"{path}: تعذّرت القراءة — {exc}") from exc
+        for name in _EMITTED.findall(text):
+            found.setdefault(name, str(path.relative_to(REPO_ROOT)))
     return found
 
 

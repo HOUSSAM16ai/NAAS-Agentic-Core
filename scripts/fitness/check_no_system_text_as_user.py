@@ -88,34 +88,37 @@ def _parse(path: Path) -> ast.Module:
         ) from exc
 
 
+def _assignment_targets(node: ast.AST) -> list[ast.expr]:
+    """أهداف الإسناد لعقدةٍ واحدة (`x = …` أو `x: T = …`)، وإلّا فارغة."""
+    if isinstance(node, ast.Assign):
+        return list(node.targets)
+    if isinstance(node, ast.AnnAssign):
+        return [node.target]
+    return []
+
+
 def _assigns_markers(tree: ast.Module) -> bool:
-    for node in ast.walk(tree):
-        targets: list[ast.expr] = []
-        if isinstance(node, ast.Assign):
-            targets = list(node.targets)
-        elif isinstance(node, ast.AnnAssign):
-            targets = [node.target]
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id == MARKERS_NAME:
-                return True
-    return False
+    return any(
+        isinstance(target, ast.Name) and target.id == MARKERS_NAME
+        for node in ast.walk(tree)
+        for target in _assignment_targets(node)
+    )
+
+
+def _called_name(node: ast.Call) -> str | None:
+    """اسم المُستدعَى: `f(...)` أو `obj.f(...)`."""
+    callee = node.func
+    if isinstance(callee, ast.Name):
+        return callee.id
+    if isinstance(callee, ast.Attribute):
+        return callee.attr
+    return None
 
 
 def _calls_guard(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    for node in ast.walk(func):
-        if not isinstance(node, ast.Call):
-            continue
-        callee = node.func
-        name = (
-            callee.id
-            if isinstance(callee, ast.Name)
-            else callee.attr
-            if isinstance(callee, ast.Attribute)
-            else None
-        )
-        if name == GUARD_NAME:
-            return True
-    return False
+    return any(
+        _called_name(node) == GUARD_NAME for node in ast.walk(func) if isinstance(node, ast.Call)
+    )
 
 
 def _check_single_source(files: list[Path]) -> list[str]:
@@ -141,22 +144,36 @@ def _check_single_source(files: list[Path]) -> list[str]:
     return problems
 
 
+def _unguarded_writers(path: Path) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """تعريفات الكتابة في ملفٍّ واحد التي لا تنادي الحارس."""
+    return [
+        node
+        for node in ast.walk(_parse(path))
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        and node.name in _PERSIST_FUNCTIONS
+        and not _calls_guard(node)
+    ]
+
+
+def _stale_debt_entries(seen_debt: set[str]) -> list[str]:
+    """الدَّين يتقلّص في الاتجاهين: مدخلٌ لم يعد مخالفاً يجب أن يُحذف."""
+    return [
+        f"{rel}: مُدرَجٌ في _FROZEN_DEBT ولم يعد مخالفاً.\n"
+        f"     احذف السطر — دَينٌ أُغلق وبقي مكتوباً كذبٌ صامت (D-189)."
+        for rel in sorted(_FROZEN_DEBT)
+        if rel not in seen_debt
+    ]
+
+
 def _check_guard_wired(files: list[Path]) -> list[str]:
     problems: list[str] = []
     seen_debt: set[str] = set()
 
     for path in files:
         rel = str(path.relative_to(REPO_ROOT))
-        tree = _parse(path)
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-                continue
-            if node.name not in _PERSIST_FUNCTIONS:
-                continue
-            if rel in _DELEGATING_ONLY:
-                continue
-            if _calls_guard(node):
-                continue
+        if rel in _DELEGATING_ONLY:
+            continue
+        for node in _unguarded_writers(path):
             if rel in _FROZEN_DEBT:
                 seen_debt.add(rel)
                 continue
@@ -166,14 +183,7 @@ def _check_guard_wired(files: list[Path]) -> list[str]:
                 f"(٢٨ صفّاً من نصّ النظام مُخزَّنةً كأنها كلام الطالب)."
             )
 
-    # الدَّين يتقلّص في الاتجاهين: مدخلٌ لم يعد مخالفاً يجب أن يُحذف من الخريطة.
-    for rel in sorted(_FROZEN_DEBT):
-        if rel not in seen_debt:
-            problems.append(
-                f"{rel}: مُدرَجٌ في _FROZEN_DEBT ولم يعد مخالفاً.\n"
-                f"     احذف السطر — دَينٌ أُغلق وبقي مكتوباً كذبٌ صامت (D-189)."
-            )
-    return problems
+    return problems + _stale_debt_entries(seen_debt)
 
 
 def main() -> int:

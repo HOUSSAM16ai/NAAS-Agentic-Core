@@ -95,58 +95,71 @@ def _table_rows(text: str) -> list[tuple[int, list[str]]]:
     return rows
 
 
-def _check_state_doc(rel: str, expected_rows: int) -> list[str]:
-    problems: list[str] = []
-    text = _read(rel)
-    rows = _table_rows(text)
+def _check_row_status(where: str, cells: list[str]) -> list[str]:
+    """الحالة من السُّلَّم القانوني وحده — لا سُلَّم ثانٍ (§6.6)."""
+    if any(cell.strip("`* ") in VALID_STATUSES for cell in cells):
+        return []
+    return [
+        f"{where}: بلا حالةٍ من السُّلَّم القانوني "
+        f"({' · '.join(sorted(VALID_STATUSES))}) — لا سُلَّم ثانٍ (§6.6)."
+    ]
 
-    if len(rows) != expected_rows:
-        problems.append(
-            f"{rel}: عدد الصفوف {len(rows)} والمتوقَّع {expected_rows}.\n"
-            f"     إضافةُ صفٍّ أو حذفه قرارٌ يُعلَن: حدِّث DOCTRINES في هذه البوّابة "
-            f"ودوِّن السبب في .memory/decisions.md. ⛔ لا حذف صامت."
-        )
+
+def _check_row_gap(where: str, cells: list[str]) -> list[str]:
+    """الفراغ يُقرأ نجاحاً — «لا فجوة معروفة» جوابٌ مشروع، والفراغ ليس كذلك."""
+    gap = cells[-1]
+    if gap and gap not in {"-", "—", "–"}:
+        return []
+    return [f"{where}: خانة الفجوة فارغة. الفراغ يُقرأ نجاحاً."]
+
+
+def _check_row_evidence(where: str, cells: list[str]) -> list[str]:
+    """كل المرشَّحين في الصفّ، لا الأوّل وحده.
+
+    خانة «الحامل» تذكر أحياناً مساراً اصطلاحياً (`/metrics`) ليس ملفّاً، والدليل الحقيقي
+    في خانةٍ تالية. يكفي أن **يوجد واحد** — وحذفُ الدليل يبقى أحمر لأنّ أحداً لن يوجد.
+    """
+    candidates = [
+        candidate
+        for cell in cells
+        for candidate in _BACKTICKED.findall(cell)
+        if _looks_like_path(candidate)
+    ]
+    if not candidates:
+        return [f"{where}: بلا دليلٍ ملفّي داخل `backticks`."]
+    if any((REPO_ROOT / candidate).exists() for candidate in candidates):
+        return []
+    return [
+        f"{where}: لا واحد من الأدلّة المذكورة موجود ({' · '.join(candidates)}).\n"
+        f"     حالةٌ أمام دليلٍ محذوف هي ادّعاءٌ لا حقيقة (§6.6)."
+    ]
+
+
+def _check_row_count(rel: str, actual: int, expected: int) -> list[str]:
+    if actual == expected:
+        return []
+    return [
+        f"{rel}: عدد الصفوف {actual} والمتوقَّع {expected}.\n"
+        f"     إضافةُ صفٍّ أو حذفه قرارٌ يُعلَن: حدِّث DOCTRINES في هذه البوّابة "
+        f"ودوِّن السبب في .memory/decisions.md. ⛔ لا حذف صامت."
+    ]
+
+
+def _check_state_doc(rel: str, expected_rows: int) -> list[str]:
+    rows = _table_rows(_read(rel))
+    problems = _check_row_count(rel, len(rows), expected_rows)
 
     seen: set[int] = set()
     for line_no, cells in rows:
         number = int(cells[0])
         where = f"{rel}:{line_no} (الصفّ {number})"
-
         if number in seen:
             problems.append(f"{where}: رقم صفٍّ مكرَّر — الترقيم مُعرِّف لا زينة.")
         seen.add(number)
 
-        statuses = [c.strip("`* ") for c in cells if c.strip("`* ") in VALID_STATUSES]
-        if not statuses:
-            problems.append(
-                f"{where}: بلا حالةٍ من السُّلَّم القانوني "
-                f"({' · '.join(sorted(VALID_STATUSES))}) — لا سُلَّم ثانٍ (§6.6)."
-            )
-
-        gap = cells[-1]
-        if not gap or gap in {"-", "—", "–"}:
-            problems.append(
-                f"{where}: خانة الفجوة فارغة. الفراغ يُقرأ نجاحاً — "
-                f"«لا فجوة معروفة» جوابٌ مشروع، والفراغ ليس كذلك."
-            )
-
-        # كل المرشَّحين في الصفّ، لا الأوّل وحده: خانة «الحامل» تذكر أحياناً مساراً
-        # اصطلاحياً (`/metrics`) ليس ملفّاً، والدليل الحقيقي في خانةٍ تالية. يكفي أن
-        # **يوجد واحد** — وحذفُ الدليل يبقى أحمر لأنّ أحداً لن يوجد عندها.
-        candidates = [
-            candidate
-            for cell in cells
-            for candidate in _BACKTICKED.findall(cell)
-            if _looks_like_path(candidate)
-        ]
-
-        if not candidates:
-            problems.append(f"{where}: بلا دليلٍ ملفّي داخل `backticks`.")
-        elif not any((REPO_ROOT / candidate).exists() for candidate in candidates):
-            problems.append(
-                f"{where}: لا واحد من الأدلّة المذكورة موجود ({' · '.join(candidates)}).\n"
-                f"     حالةٌ أمام دليلٍ محذوف هي ادّعاءٌ لا حقيقة (§6.6)."
-            )
+        problems += _check_row_status(where, cells)
+        problems += _check_row_gap(where, cells)
+        problems += _check_row_evidence(where, cells)
 
     return problems
 

@@ -100,6 +100,39 @@ def _apply_final_answer_redaction(text: str, support_level: int | None) -> str:
         return text
 
 
+def _card_component_name(card: object) -> str | None:
+    """اسم المكوّن إن كانت البطاقة بالشكل السلكي، وإلّا ``None``."""
+    if not isinstance(card, dict):
+        return None
+    name = card.get("component")
+    return name if isinstance(name, str) and name else None
+
+
+def _renderable_cards(
+    cards: list[dict[str, object]], *, conversation_id: int
+) -> list[dict[str, object]]:
+    """البطاقات التي **تعرف الواجهة رسمها** وحدها (ISS-145).
+
+    ما لا يجتاز ``KNOWN_UI_COMPONENTS`` يُسجَّل كي يُشخَّص ولا يُخزَّن كي لا يَصمت:
+    صفٌّ فارغ يحمل مكوّناً لا يُرسَم هو دورٌ صامت لا بطاقة.
+    """
+    from app.contracts.streaming import KNOWN_UI_COMPONENTS
+
+    renderable: list[dict[str, object]] = []
+    for card in cards:
+        name = _card_component_name(card)
+        if name is None:
+            continue
+        if name in KNOWN_UI_COMPONENTS:
+            renderable.append(card)
+        else:
+            logger.warning(
+                "ui_component_card_dropped_unrenderable",
+                extra={"component": name, "conversation_id": conversation_id},
+            )
+    return renderable
+
+
 async def _persist_ui_component_cards(
     *,
     conversation_id: int,
@@ -124,30 +157,13 @@ async def _persist_ui_component_cards(
     التصيير `scripts/fitness/check_ui_component_parity.py`)، والصفّ الفارغ الذي لا
     يجتازه **لا يُكتب** — دورٌ نصّيٌّ صادق أفضل من وعدٍ بصريٍّ لا يصل (D-191 ج).
     """
-    from app.contracts.streaming import KNOWN_UI_COMPONENTS
-
-    valid: list[dict[str, object]] = []
-    for card in cards:
-        if not isinstance(card, dict):
-            continue
-        name = card.get("component")
-        if not isinstance(name, str) or not name:
-            continue
-        if name not in KNOWN_UI_COMPONENTS:
-            # لا صفَّ فارغاً بوعدٍ لا يصل. يُسجَّل كي يُشخَّص، ولا يُخزَّن كي لا يَصمت.
-            logger.warning(
-                "ui_component_card_dropped_unrenderable",
-                extra={"component": name, "conversation_id": conversation_id},
-            )
-            continue
-        valid.append(card)
-
-    if not valid:
+    renderable = _renderable_cards(cards, conversation_id=conversation_id)
+    if not renderable:
         return
     try:
         async with async_session_factory() as db:
             persistence_service = CustomerChatBoundaryService(db)
-            for card in valid:
+            for card in renderable:
                 await persistence_service.save_message(
                     conversation_id=conversation_id,
                     role=MessageRole.ASSISTANT,

@@ -96,32 +96,39 @@ async def _login(base: str, email: str, password: str) -> str:
         return str(response.json()["access_token"])
 
 
+def _absorb_delta(result: TurnResult, payload: dict[str, Any], now: float) -> None:
+    if result.first_content_s is None:
+        result.first_content_s = now
+    result.content += str(payload["content"])
+
+
+def _absorb_object(result: TurnResult, payload: dict[str, Any], now: float) -> None:
+    name = str(payload.get("component", ""))
+    result.components.append(name)
+    if result.first_object_s is None:
+        result.first_object_s = now
+    if name not in KNOWN_UI_COMPONENTS:
+        result.problems.append(f"مكوّنٌ لا تعرف الواجهة رسمه: {name!r} (ISS-145)")
+
+
+def _absorb_terminal(result: TurnResult, payload: dict[str, Any]) -> None:
+    result.terminal_frames += 1
+    if payload.get("content"):
+        result.content = result.content or str(payload["content"])
+
+
 def _absorb_frame(result: TurnResult, event: dict[str, Any], now: float) -> bool:
     """يستوعب إطاراً واحداً في نتيجة الدور. يُرجِع True حين يكون الإطار نهائياً."""
     etype = event.get("type", "")
     payload = event.get("payload") or {}
 
     if etype == "assistant_delta" and payload.get("content"):
-        if result.first_content_s is None:
-            result.first_content_s = now
-        result.content += str(payload["content"])
-        return False
-
-    if etype == "ui_component":
-        name = str(payload.get("component", ""))
-        result.components.append(name)
-        if result.first_object_s is None:
-            result.first_object_s = now
-        if name not in KNOWN_UI_COMPONENTS:
-            result.problems.append(f"مكوّنٌ لا تعرف الواجهة رسمه: {name!r} (ISS-145)")
-        return False
-
-    if etype in _TERMINAL:
-        result.terminal_frames += 1
-        if payload.get("content"):
-            result.content = result.content or str(payload["content"])
+        _absorb_delta(result, payload, now)
+    elif etype == "ui_component":
+        _absorb_object(result, payload, now)
+    elif etype in _TERMINAL:
+        _absorb_terminal(result, payload)
         return True
-
     return False
 
 
@@ -154,20 +161,23 @@ async def _run_turn(ws_url: str, token: str, question: str) -> TurnResult:
                 break
 
     result.total_s = time.perf_counter() - started
+    result.problems.extend(_turn_violations(result))
+    return result
 
+
+def _turn_violations(result: TurnResult) -> list[str]:
+    """القواعد التي يجب أن يحترمها كل دور — مُجمَّعةً في موضعٍ واحد."""
+    problems: list[str] = []
     if result.terminal_frames != 1:
-        result.problems.append(
-            f"إطاراتٌ نهائية = {result.terminal_frames} والعقد يوجب **واحداً** (§6.5)"
-        )
+        problems.append(f"إطاراتٌ نهائية = {result.terminal_frames} والعقد يوجب **واحداً** (§6.5)")
     leak = _latin_leak(result.content)
     if leak:
-        result.problems.append(f"شظيّة لاتينية في ردٍّ عربي: {leak!r} (ISS-150)")
+        problems.append(f"شظيّة لاتينية في ردٍّ عربي: {leak!r} (ISS-150)")
     if is_system_authored(result.content):
-        result.problems.append("نصُّ نظامٍ وصل الطالب (D-117/D-229)")
+        problems.append("نصُّ نظامٍ وصل الطالب (D-117/D-229)")
     if not result.content.strip() and not result.components:
-        result.problems.append("دورٌ صامت: لا نصَّ ولا كائن")
-
-    return result
+        problems.append("دورٌ صامت: لا نصَّ ولا كائن")
+    return problems
 
 
 async def main() -> int:

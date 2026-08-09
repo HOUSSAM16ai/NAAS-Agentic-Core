@@ -23,7 +23,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Final
+from collections.abc import Mapping, Sequence
+from typing import Any, Final
 
 from shared.ux import ATTENTION_LIMIT_S, FLOW_LIMIT_S, classify_latency
 
@@ -109,45 +110,51 @@ def main() -> int:
         )
         return 2
 
+    _print_latency(row, args.since)
+    _print_object_delivery(months)
+    return 0
+
+
+def _print_latency(row: Mapping[str, Any], since: str) -> None:
     turns = row["turns"] or 0
-    print(f"\n══ زمن الوصول إلى أوّل ردٍّ (منذ {args.since}) ══")
+    print(f"\n══ زمن الوصول إلى أوّل ردٍّ (منذ {since}) ══")
     if not turns:
         print("  لا أدوار في النافذة — لا رقمَ يُدَّعى.")
-    else:
-        for label, key in (("p50", "p50"), ("p75", "p75"), ("p95", "p95")):
-            value = row[key]
-            if value is None:
-                print(f"  {label:<4} —  (لا بيانات كافية)")
-                continue
-            print(f"  {label:<4} {value:8.2f}s   {classify_latency(float(value)).value}")
-        never = row["never_answered"] or 0
-        over = row["over_attention"] or 0
-        flow = row["within_flow"] or 0
-        print(
-            f"  ضمن التدفّق (≤{FLOW_LIMIT_S:g}s)   {flow:5d} / {turns}  ({100 * flow / turns:.1f}٪)"
-        )
-        print(
-            f"  فوق حدّ الانتباه (>{ATTENTION_LIMIT_S:g}s) {over:5d} / {turns}  ({100 * over / turns:.1f}٪)"
-        )
-        print(f"  بلا ردٍّ إطلاقاً        {never:5d} / {turns}  ({100 * never / turns:.1f}٪)")
+        return
 
+    for label in ("p50", "p75", "p95"):
+        value = row[label]
+        if value is None:
+            print(f"  {label:<4} —  (لا بيانات كافية)")
+        else:
+            print(f"  {label:<4} {value:8.2f}s   {classify_latency(float(value)).value}")
+
+    for caption, key in (
+        (f"ضمن التدفّق (≤{FLOW_LIMIT_S:g}s)", "within_flow"),
+        (f"فوق حدّ الانتباه (>{ATTENTION_LIMIT_S:g}s)", "over_attention"),
+        ("بلا ردٍّ إطلاقاً", "never_answered"),
+    ):
+        count = row[key] or 0
+        print(f"  {caption:<26} {count:5d} / {turns}  ({100 * count / turns:.1f}٪)")
+
+
+def _print_object_delivery(months: Sequence[Mapping[str, Any]]) -> None:
     print("\n══ تسليم الكائن التفاعلي (شهراً بشهر) ══")
     print("  الشهر        ردود   بكائن   النسبة")
     total_replies = total_objects = 0
-    for m in months:
-        replies = m["replies"] or 0
-        objects = m["with_object"] or 0
+    for month in months:
+        replies = month["replies"] or 0
+        objects = month["with_object"] or 0
         total_replies += replies
         total_objects += objects
         pct = (100 * objects / replies) if replies else 0.0
-        print(f"  {m['month']}  {replies:5d}  {objects:5d}   {pct:5.1f}٪")
+        print(f"  {month['month']}  {replies:5d}  {objects:5d}   {pct:5.1f}٪")
     if total_replies:
         print(
             f"  {'الإجمالي':<11} {total_replies:5d}  {total_objects:5d}   "
             f"{100 * total_objects / total_replies:5.1f}٪"
         )
     print()
-    return 0
 
 
 if __name__ == "__main__":

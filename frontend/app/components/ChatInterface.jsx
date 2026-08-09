@@ -261,42 +261,68 @@ const TypingIndicator = memo(() => (
 ));
 TypingIndicator.displayName = 'TypingIndicator';
 
-// ─── مكوّن رسالة واحدة ───────────────────────────────────────────────────────
-const MessageBubble = memo(({ msg, idx }) => {
+// ─── زرّ نسخ الردّ ───────────────────────────────────────────────────────────
+const CopyButton = memo(({ content }) => {
     const [copied, setCopied] = useState(false);
-
-    const isStreaming = msg.role === 'assistant' && !msg.isComplete;
-    const isEmpty = !msg.content || msg.content.trim() === '';
-
-    // ISS-078 D-066: حماية ضد فقاعة user فارغة (سبب blue-bar flicker).
-    // لو رسالة المستخدم فارغة (race condition قبل send)، تُعرَض كشريط أزرق ضخم.
-    // الحل: لا تعرض bubble للـ user الفارغة.
-    if (msg.role === 'user' && isEmpty) {
-        return null;
-    }
-
-    // ISS-076 (2026-05-15) D-064: تجاوز useTypewriter بالكامل لمنع flicker.
-    //
-    // السبب: عند انتقال `isStreaming` من true → false، useTypewriter كان
-    // يبدأ بـ displayed='' (initial state) ثم يستدعي setDisplayed(full)
-    // في useEffect → 2 render cycles → الـ DOM يعرض "" ثم "full content"
-    // → الواجهة "ترمش" + "خطوط تظهر وتختفي".
-    //
-    // الحل: عرض المحتوى الكامل مباشرة بعد streaming. لا typewriter effect
-    // إضافي (الـ streaming نفسه يُولِّد typewriter طبيعي).
-    //
-    // ISS-073 (سابق): أثناء streaming → الـ Markdown يعرض raw text (لا ReactMarkdown
-    // re-render مكلف، لا KaTeX flicker).
-    const contentToShow = msg.role === 'assistant' ? (msg.content || '') : '';
 
     const handleCopy = useCallback(() => {
         // ننسخ النص الكامل كنصّ نظيف قابل للقراءة — لا markdown/LaTeX خام.
         // (كارثة «النسخ يُظهر أكواد برمجية»: كان ينسخ msg.content الخام.)
-        navigator.clipboard.writeText(markdownToPlainText(msg.content)).then(() => {
+        navigator.clipboard.writeText(markdownToPlainText(content)).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         });
-    }, [msg.content]);
+    }, [content]);
+
+    return (
+        <button
+            className={`copy-button${copied ? ' copied' : ''}`}
+            onClick={handleCopy}
+            title={copied ? 'تم النسخ!' : 'نسخ النص'}
+            aria-label={copied ? 'تم النسخ' : 'نسخ'}
+        >
+            <i className={copied ? 'fas fa-check' : 'far fa-copy'} />
+        </button>
+    );
+});
+CopyButton.displayName = 'CopyButton';
+
+// ─── جسم الرسالة: نصّ الطالب، أو ردّ المعلّم، أو مؤشّر الكتابة ────────────────
+//
+// ISS-076 (2026-05-15) D-064: تجاوز useTypewriter بالكامل لمنع flicker.
+//
+// السبب: عند انتقال `isStreaming` من true → false، useTypewriter كان
+// يبدأ بـ displayed='' (initial state) ثم يستدعي setDisplayed(full)
+// في useEffect → 2 render cycles → الـ DOM يعرض "" ثم "full content"
+// → الواجهة "ترمش" + "خطوط تظهر وتختفي".
+//
+// الحل: عرض المحتوى الكامل مباشرة بعد streaming. لا typewriter effect
+// إضافي (الـ streaming نفسه يُولِّد typewriter طبيعي).
+//
+// ISS-073 (سابق): أثناء streaming → الـ Markdown يعرض raw text (لا ReactMarkdown
+// re-render مكلف، لا KaTeX flicker).
+const MessageBody = memo(({ msg, isStreaming, hasObject }) => {
+    if (msg.role !== 'assistant') {
+        return <span className="user-message-text">{msg.content}</span>;
+    }
+
+    const content = msg.content || '';
+    if (!content.trim()) {
+        return isStreaming ? <TypingIndicator /> : null;
+    }
+
+    return (
+        <div className={hasObject ? 'message-aside' : undefined}>
+            <Markdown content={content} isStreaming={isStreaming} />
+        </div>
+    );
+});
+MessageBody.displayName = 'MessageBody';
+
+// ─── مكوّن رسالة واحدة ───────────────────────────────────────────────────────
+const MessageBubble = memo(({ msg }) => {
+    const isStreaming = msg.role === 'assistant' && !msg.isComplete;
+    const isEmpty = !msg.content || msg.content.trim() === '';
 
     // ─────────────────────────────────────────────────────────────────
     // D-230: الكائن سطحٌ أوّل، لا ذيلٌ في فقاعة
@@ -309,6 +335,14 @@ const MessageBubble = memo(({ msg, idx }) => {
     // القلب: حين يحمل الدور كائناً فالكائن **هو** الردّ، والنصّ يصير تعليقاً مساعداً
     // تحته. وحين لا يحمل، يبقى النصّ كما هو تماماً — بلا انحدار لأيّ دورٍ نصّي.
     const hasObject = msg.role === 'assistant' && msg.isComplete && Boolean(msg.uiComponent);
+    const showCopy = msg.role === 'assistant' && msg.isComplete && !isEmpty;
+
+    // ISS-078 D-066: حماية ضد فقاعة user فارغة (سبب blue-bar flicker).
+    // لو رسالة المستخدم فارغة (race condition قبل send)، تُعرَض كشريط أزرق ضخم.
+    // الحل: لا تعرض bubble للـ user الفارغة.
+    if (msg.role === 'user' && isEmpty) {
+        return null;
+    }
 
     return (
         <div className={`message ${msg.role}`}>
@@ -319,28 +353,9 @@ const MessageBubble = memo(({ msg, idx }) => {
                 {/* الكائن أوّلاً حين يوجد — هو الردّ لا زينتُه. */}
                 {hasObject && <GenerativeUIRenderer uiComponent={msg.uiComponent} />}
 
-                {msg.role === 'assistant' ? (
-                    isEmpty && isStreaming
-                        ? <TypingIndicator />
-                        : !isEmpty && (
-                            <div className={hasObject ? 'message-aside' : undefined}>
-                                <Markdown content={contentToShow} isStreaming={isStreaming} />
-                            </div>
-                        )
-                ) : (
-                    <span className="user-message-text">{msg.content}</span>
-                )}
+                <MessageBody msg={msg} isStreaming={isStreaming} hasObject={hasObject} />
 
-                {msg.role === 'assistant' && msg.isComplete && !isEmpty && (
-                    <button
-                        className={`copy-button${copied ? ' copied' : ''}`}
-                        onClick={handleCopy}
-                        title={copied ? 'تم النسخ!' : 'نسخ النص'}
-                        aria-label={copied ? 'تم النسخ' : 'نسخ'}
-                    >
-                        <i className={copied ? 'fas fa-check' : 'far fa-copy'} />
-                    </button>
-                )}
+                {showCopy && <CopyButton content={msg.content} />}
             </div>
         </div>
     );
@@ -439,7 +454,7 @@ export const ChatInterface = ({ messages, onSendMessage, status, user }) => {
                     </div>
                 ) : (
                     messages.map((msg, idx) => (
-                        <MessageBubble key={msg.id || idx} msg={msg} idx={idx} />
+                        <MessageBubble key={msg.id || idx} msg={msg} />
                     ))
                 )}
                 <div ref={messagesEndRef} />

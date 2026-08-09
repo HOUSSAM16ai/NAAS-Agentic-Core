@@ -297,44 +297,56 @@ def _check_single_qodana_secret(files: list[Path], errors: list[str]) -> None:
         )
 
 
+def _pattern_entry(entry: object) -> list[str]:
+    """إدخالٌ واحد في ``filePatterns``: سلسلةٌ صريحة أو كائن ``{files, applyTo}``."""
+    if isinstance(entry, str):
+        return [entry]
+    if isinstance(entry, dict) and isinstance(entry.get("files"), str):
+        return [part.strip() for part in entry["files"].split(",")]
+    return []
+
+
 def _guideline_patterns(knowledge: dict[str, Any]) -> list[str]:
-    """أنماط ملفّات الدستور المُعلَنة — تقبل السلسلة والكائن ``{files, applyTo}`` معاً."""
+    """أنماط ملفّات الدستور المُعلَنة، مسطَّحةً."""
     guidelines = knowledge.get("code_guidelines")
-    if not isinstance(guidelines, dict) or guidelines.get("enabled") is False:
+    if not isinstance(guidelines, dict):
+        return []
+    if guidelines.get("enabled") is False:
         return []
     declared = guidelines.get("filePatterns")
     # ⚠️ سلسلةٌ مفردة بدل قائمة تُكرَّر حرفاً حرفاً فتُنتج أنماطاً بلا معنى **وتمرّ**.
     # نوعٌ غير متوقَّع يُعامَل «لا أنماط» فيُبلَّغ عنه أدناه، ولا يُبتلَع (D-208 §6).
     if not isinstance(declared, list):
         return []
-    patterns: list[str] = []
-    for entry in declared:
-        if isinstance(entry, str):
-            patterns.append(entry)
-        elif isinstance(entry, dict) and isinstance(entry.get("files"), str):
-            patterns.extend(part.strip() for part in entry["files"].split(","))
-    return patterns
+    return [pattern for entry in declared for pattern in _pattern_entry(entry)]
 
 
-def _check_coderabbit_law(config: dict[str, Any], errors: list[str]) -> None:
-    """المُراجِع الخارجي يقرأ الدستور — وإلّا عرف اللغةَ وجهل القانون."""
-    patterns = _guideline_patterns(config.get("knowledge_base") or {})
-    for required in CODERABBIT_REQUIRED_GUIDELINES:
-        if required in patterns:
-            continue
+def _check_required_guidelines(patterns: list[str], errors: list[str]) -> None:
+    """الدستور نفسه ضمن ما يقرأه المُراجِع — وإلّا عرف اللغةَ وجهل القانون."""
+    for required in sorted(set(CODERABBIT_REQUIRED_GUIDELINES) - set(patterns)):
         errors.append(
             f"❌ .coderabbit.yaml: `{required}` غائب عن "
             f"`knowledge_base.code_guidelines.filePatterns`.\n"
             f"   مُراجِعٌ لا يقرأ الدستور يوافق على ما ترفضه بوّابات المستودع — مقيساً:\n"
             f"   `dict[str, Any]` مرّ على الأدوات الخارجية الثلاث ورفضته `check_no_new_any`."
         )
-    for pattern in patterns:
-        if "*" not in pattern and not (REPO_ROOT / pattern).exists():
-            errors.append(
-                f"❌ .coderabbit.yaml: نمط الدستور `{pattern}` لا يقابل ملفّاً موجوداً.\n"
-                f"   إحالةٌ إلى العدم تُخفِّض المُراجِع إلى الافتراضات **بلا أيّ إشارة**\n"
-                f"   (D-208 §8: خريطة السلطة لا تُحيل إلى العدم)."
-            )
+
+
+def _check_guideline_targets(patterns: list[str], errors: list[str]) -> None:
+    """⛔ D-208 §8: خريطة السلطة لا تُحيل إلى العدم."""
+    missing = [p for p in patterns if "*" not in p and not (REPO_ROOT / p).exists()]
+    for pattern in missing:
+        errors.append(
+            f"❌ .coderabbit.yaml: نمط الدستور `{pattern}` لا يقابل ملفّاً موجوداً.\n"
+            f"   إحالةٌ إلى العدم تُخفِّض المُراجِع إلى الافتراضات **بلا أيّ إشارة**\n"
+            f"   (D-208 §8: خريطة السلطة لا تُحيل إلى العدم)."
+        )
+
+
+def _check_coderabbit_law(config: dict[str, Any], errors: list[str]) -> None:
+    patterns = _guideline_patterns(config.get("knowledge_base") or {})
+    _check_required_guidelines(patterns, errors)
+    _check_guideline_targets(patterns, errors)
 
 
 def _check_coderabbit_advisory(config: dict[str, Any], errors: list[str]) -> None:

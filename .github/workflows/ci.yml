@@ -534,6 +534,20 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0 # cs-coverage reads git to identify repo + commit
+      # Checking out a raw SHA leaves a detached HEAD, and `cs-coverage` reads the branch
+      # from git. The first successful upload proved it, in CodeScene's own words:
+      #
+      #   Usage error: It seems you upload for repo '...' and branch: 'HEAD' but CodeScene
+      #   only analyse the following branches: ("main") of this repo!
+      #
+      # The data was accepted (691 files parsed) but attributed to a branch that does not
+      # exist. Naming the local branch after the real one costs one command.
+      - name: Restore the branch name lost by the detached checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B "${{ github.head_ref || github.ref_name }}"
+          echo "branch: $(git rev-parse --abbrev-ref HEAD)"
       - uses: actions/download-artifact@v6
         id: coverage
         # `test-monolith` runs with `if: always()`, so a collection error there leaves no

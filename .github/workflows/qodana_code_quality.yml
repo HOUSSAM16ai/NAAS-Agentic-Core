@@ -96,23 +96,37 @@ jobs:
           # language level and calling every `X | None` in the repo a broken annotation
           # (2,500 of 4,956 findings). See the long note in qodana.yaml.
           args: "-e,QODANA_PYTHON_PATH=/opt/miniconda3/bin/python"
-          # Cache off, deliberately, until the false-positive class is gone.
-          #
-          # The interpreter is now attached — the report's idea.log says
-          # "Setting PythonSDK Python 3.12 Version:Python 3.12.4" — and 2,598 valid
-          # PEP 604 annotations are STILL reported as "Invalid type annotation". The
-          # same log shows why the fix did not take effect:
+          # ── Cache key namespace, and why it carries a version ─────────────────────
+          # The default key is `qodana-<version>-<ref>`, and the branch-level restore-key
+          # made every run inherit the index built by the FIRST run — the one that had no
+          # interpreter attached. That stale index silently overrode both the `-e` fix and
+          # the language-level pass:
           #
           #     Running task: PythonLanguageLevelPusher$MyDumbModeTask
           #     Task canceled (PCE)
           #
-          # The language level is never pushed onto the files, because the index is
-          # restored from a cache built by the very first run, which had no interpreter
-          # at all. A stale index outlives the configuration that produced it.
+          # Measured on 238633a with caching off: 4,957 -> 2,411 problems, and
+          # PyTypeHintsInspection 2,607 -> 12. The 2,595 that vanished were valid PEP 604
+          # annotations reported as syntax errors.
           #
-          # This run rebuilds from scratch to test that. Caching is re-enabled once the
-          # count confirms it — a hypothesis is not a fact until a run says so (D-233).
-          use-caches: false
+          # Caching is back on (20 min -> 7 min) under a NEW namespace, so the poisoned
+          # entries can never be restored again. ⛔ Bump `-py312-` whenever a change to
+          # the interpreter or language level must invalidate the index — the analysis
+          # environment and the cache belong to the same generation.
+          primary-cache-key: qodana-py312-${{ github.ref }}-${{ github.sha }}
+          additional-cache-key: qodana-py312-${{ github.ref }}
+          # ── Teeth: the count may fall, never rise ─────────────────────────────────
+          # 2,411 is the measured honest count on 238633a. Below it the scan passes;
+          # above it — one net-new problem — the scan fails. It is not in `required-ci`,
+          # so a red Qodana never blocks a merge (D-234).
+          #
+          # A ratchet, not a committed `--baseline` SARIF, and that is deliberate: the
+          # baseline file is 7 MB, and a frozen analysis artifact going stale is exactly
+          # the failure this run just diagnosed. A single integer is reviewable in a diff,
+          # cannot drift, and matches the frozen-debt rule the rest of this repo runs on
+          # (D-105). ⛔ Lower it when problems are fixed; raising it needs a written
+          # decision in `.memory/decisions.md` naming the reason (D-209, layer 9).
+          fail-threshold: 2411
         env:
           QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'

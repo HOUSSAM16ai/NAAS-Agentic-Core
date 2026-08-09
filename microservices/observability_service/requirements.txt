@@ -48,7 +48,7 @@ uvloop>=0.19.0
 watchfiles>=0.21.0
 websockets>=12.0
 beautifulsoup4==4.12.3
-soupsieve==2.8
+soupsieve==2.8.4
 charset-normalizer>=3.0.0
 annotated-types>=0.6.0
 python-json-logger==4.0.0
@@ -88,6 +88,12 @@ passlib
 argon2-cffi
 vecs==0.4.5
 flupy==1.2.3
-litellm==1.84.0
+# ⛔ COUPLED TO `openai` IN THIS SAME FILE — never raise litellm alone.
+# litellm >= 1.8x requires openai>=2.20.0, but this service pins openai==1.55.0,
+# so pip cannot resolve and the Docker image dies at `pip install` (proven in CI
+# on 66a3e50). Dependabot raised it twice: 4b0db53 → 1.84.0, 91509a0 → 1.96.0.
+# 1.50.0 is the version proven green on b1db497. Raising the pair means migrating
+# to the openai 2.x SDK across six services — an ADR, not a dependency bump.
+litellm==1.50.0
 dspy==2.5.7
 llama-index-workflows==2.14.0

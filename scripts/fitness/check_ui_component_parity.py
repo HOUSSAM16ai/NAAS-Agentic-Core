@@ -183,29 +183,43 @@ def _check_both_sides_agree(backend: set[str], frontend: set[str]) -> list[str]:
     ]
 
 
+def _banned_sightings(
+    name: str, backend: set[str], frontend: set[str], emitted: dict[str, str]
+) -> list[str]:
+    """كل موضعٍ يظهر فيه اسمٌ محظور: السجلّان، ثمّ البثّ."""
+    places = [
+        f"{name!r} محظور وموجودٌ في {where}."
+        for where, registry in (("عقد الخادم", backend), ("سجلّ التصيير", frontend))
+        if name in registry
+    ]
+    if name in emitted:
+        places.append(f"{name!r} محظورٌ ويُبَثّ من {emitted[name]}.")
+    return places
+
+
 def _check_banned(backend: set[str], frontend: set[str], emitted: dict[str, str]) -> list[str]:
     """② المحظور محظورٌ في الطرفين وفي البثّ."""
-    problems: list[str] = []
-    for name, reason in BANNED_COMPONENTS.items():
-        for where, registry in (("عقد الخادم", backend), ("سجلّ التصيير", frontend)):
-            if name in registry:
-                problems.append(f"{name!r} محظور وموجودٌ في {where}.\n     {reason}")
-        if name in emitted:
-            problems.append(f"{name!r} محظورٌ ويُبَثّ من {emitted[name]}.\n     {reason}")
-    return problems
+    return [
+        f"{sighting}\n     {reason}"
+        for name, reason in BANNED_COMPONENTS.items()
+        for sighting in _banned_sightings(name, backend, frontend, emitted)
+    ]
 
 
-def _check_no_zombie_declaration(backend: set[str], emitted: dict[str, str]) -> list[str]:
-    """③ لا إعلان بلا باعث — والدَّين يتقلّص في الاتجاهين (D-189)."""
+def _zombie_declarations(backend: set[str], emitted: dict[str, str]) -> list[str]:
+    """أسماءٌ مُعلَنة في العقد بلا باعثٍ حيّ ولا دَينٍ منطوق."""
+    accounted = emitted.keys() | BANNED_COMPONENTS.keys() | _EMITTER_DEBT.keys()
+    return [
+        f"{name!r}: مُعلَنٌ في العقد بلا أيّ باعثٍ في المستودع (إعلانٌ زومبي).\n"
+        f"     إمّا يُوصَل باعثه، أو يُسجَّل في _EMITTER_DEBT بسببٍ منطوق. "
+        f"الإعلان بلا باعث يُقرأ قدرةً قائمة وهو ليس كذلك (§6.6 · D-016)."
+        for name in sorted(backend - accounted)
+    ]
+
+
+def _stale_emitter_debt(backend: set[str], emitted: dict[str, str]) -> list[str]:
+    """مدخلُ دَينٍ لم يعد مخالفاً — الدَّين يتقلّص في الاتجاهين (D-189)."""
     problems: list[str] = []
-    for name in sorted(backend):
-        if name in emitted or name in BANNED_COMPONENTS or name in _EMITTER_DEBT:
-            continue
-        problems.append(
-            f"{name!r}: مُعلَنٌ في العقد بلا أيّ باعثٍ في المستودع (إعلانٌ زومبي).\n"
-            f"     إمّا يُوصَل باعثه، أو يُسجَّل في _EMITTER_DEBT بسببٍ منطوق. "
-            f"الإعلان بلا باعث يُقرأ قدرةً قائمة وهو ليس كذلك (§6.6 · D-016)."
-        )
     for name, reason in sorted(_EMITTER_DEBT.items()):
         if name in emitted:
             problems.append(
@@ -215,6 +229,11 @@ def _check_no_zombie_declaration(backend: set[str], emitted: dict[str, str]) -> 
         elif name not in backend:
             problems.append(f"{name!r}: في _EMITTER_DEBT ولم يعد مُعلَناً في العقد — احذف السطر.")
     return problems
+
+
+def _check_no_zombie_declaration(backend: set[str], emitted: dict[str, str]) -> list[str]:
+    """③ لا إعلان بلا باعث — والدَّين يتقلّص في الاتجاهين (D-189)."""
+    return _zombie_declarations(backend, emitted) + _stale_emitter_debt(backend, emitted)
 
 
 def _check_emitted_is_declared(

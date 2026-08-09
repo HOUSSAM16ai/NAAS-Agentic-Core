@@ -180,6 +180,40 @@ def _turn_violations(result: TurnResult) -> list[str]:
     return problems
 
 
+def _seconds(value: float | None) -> str:
+    return f"{value:6.2f}s" if value is not None else "     —"
+
+
+def _print_turn(turn: TurnResult) -> None:
+    components = f"  ({', '.join(turn.components)})" if turn.components else ""
+    print(f"   أوّل إطار    {_seconds(turn.first_frame_s)}")
+    print(f"   أوّل محتوى   {_seconds(turn.first_content_s)}")
+    print(f"   أوّل كائن    {_seconds(turn.first_object_s)}{components}")
+    print(f"   الدور كاملاً {_seconds(turn.total_s)}  → {classify_latency(turn.total_s).value}")
+    print(f"   نصّ: {len(turn.content)} حرفاً · أطر نهائية: {turn.terminal_frames}")
+    for problem in turn.problems:
+        print(f"   ❌ {problem}")
+
+
+def _print_verdict(results: list[TurnResult]) -> int:
+    """الحكم النهائي على الرحلة — رمز الخروج هو ما تقرأه CI."""
+    budget_s = FIRST_OBJECT_PAINT_MS / 1000
+    with_object = [turn for turn in results if turn.components]
+    fast = [t for t in with_object if t.first_object_s is not None and t.first_object_s <= budget_s]
+    failures = [problem for turn in results for problem in turn.problems]
+
+    print("\n" + "═" * 62)
+    print(
+        f"أدوار: {len(results)} · تحمل كائناً: {len(with_object)} · "
+        f"منها تحت ميزانية {FIRST_OBJECT_PAINT_MS}ms: {len(fast)}"
+    )
+    if failures:
+        print(f"❌ مخالفات: {len(failures)}")
+        return 1
+    print("✅ كل دورٍ أنهى بإطارٍ نهائيٍّ واحد، بلا تسريبٍ لاتيني، وبلا دورٍ صامت.")
+    return 0
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="http://localhost:8000")
@@ -196,37 +230,9 @@ async def main() -> int:
         print(f"\n▶ «{question}»", flush=True)
         turn = await _run_turn(ws_url, token, question)
         results.append(turn)
+        _print_turn(turn)
 
-        def fmt(value: float | None) -> str:
-            return f"{value:6.2f}s" if value is not None else "     —"
-
-        print(f"   أوّل إطار    {fmt(turn.first_frame_s)}")
-        print(f"   أوّل محتوى   {fmt(turn.first_content_s)}")
-        print(
-            f"   أوّل كائن    {fmt(turn.first_object_s)}"
-            + (f"  ({', '.join(turn.components)})" if turn.components else "")
-        )
-        print(f"   الدور كاملاً {fmt(turn.total_s)}  → {classify_latency(turn.total_s).value}")
-        print(f"   نصّ: {len(turn.content)} حرفاً · أطر نهائية: {turn.terminal_frames}")
-        for problem in turn.problems:
-            print(f"   ❌ {problem}")
-
-    print("\n" + "═" * 62)
-    failures = [p for t in results for p in t.problems]
-    objects = sum(1 for t in results if t.components)
-    budget_s = FIRST_OBJECT_PAINT_MS / 1000
-    fast_objects = sum(
-        1 for t in results if t.first_object_s is not None and t.first_object_s <= budget_s
-    )
-    print(
-        f"أدوار: {len(results)} · تحمل كائناً: {objects} · "
-        f"منها تحت ميزانية {FIRST_OBJECT_PAINT_MS}ms: {fast_objects}"
-    )
-    if failures:
-        print(f"❌ مخالفات: {len(failures)}")
-        return 1
-    print("✅ كل دورٍ أنهى بإطارٍ نهائيٍّ واحد، بلا تسريبٍ لاتيني، وبلا دورٍ صامت.")
-    return 0
+    return _print_verdict(results)
 
 
 if __name__ == "__main__":

@@ -121,27 +121,34 @@ def _calls_guard(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     )
 
 
-def _check_single_source(files: list[Path]) -> list[str]:
-    problems: list[str] = []
-    definers: list[str] = []
-    for path in files:
-        rel = str(path.relative_to(REPO_ROOT))
-        if _assigns_markers(_parse(path)):
-            definers.append(rel)
+def _marker_definers(files: list[Path]) -> list[str]:
+    """كل ملفٍّ يُسنِد إلى `SYSTEM_AUTHORED_MARKERS`، بمسارٍ نسبيّ."""
+    return [str(path.relative_to(REPO_ROOT)) for path in files if _assigns_markers(_parse(path))]
 
-    if MARKERS_HOME not in definers:
-        problems.append(
-            f"{MARKERS_NAME} غير مُعرَّفة في موطنها {MARKERS_HOME}.\n"
-            f"     المصدر الواحد شرطُ ألّا تتفرّق النسختان (D-013/D-193)."
-        )
-    for rel in definers:
-        if rel != MARKERS_HOME:
-            problems.append(
-                f"{rel}: تعريفٌ مُنافس لـ{MARKERS_NAME}.\n"
-                f"     الموطن الوحيد {MARKERS_HOME} — نسختان تعنيان مساراً يمنع "
-                f"ومساراً يسمح، والطالب لا يعرف أيّهما خزّن كلامه."
-            )
-    return problems
+
+def _missing_home(definers: list[str]) -> list[str]:
+    if MARKERS_HOME in definers:
+        return []
+    return [
+        f"{MARKERS_NAME} غير مُعرَّفة في موطنها {MARKERS_HOME}.\n"
+        f"     المصدر الواحد شرطُ ألّا تتفرّق النسختان (D-013/D-193)."
+    ]
+
+
+def _rival_definitions(definers: list[str]) -> list[str]:
+    return [
+        f"{rel}: تعريفٌ مُنافس لـ{MARKERS_NAME}.\n"
+        f"     الموطن الوحيد {MARKERS_HOME} — نسختان تعنيان مساراً يمنع "
+        f"ومساراً يسمح، والطالب لا يعرف أيّهما خزّن كلامه."
+        for rel in definers
+        if rel != MARKERS_HOME
+    ]
+
+
+def _check_single_source(files: list[Path]) -> list[str]:
+    """① العلامات بموطنٍ واحد: موجودةٌ فيه، وغائبةٌ عن كل ما عداه."""
+    definers = _marker_definers(files)
+    return _missing_home(definers) + _rival_definitions(definers)
 
 
 def _unguarded_writers(path: Path) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
@@ -165,25 +172,25 @@ def _stale_debt_entries(seen_debt: set[str]) -> list[str]:
     ]
 
 
+def _guard_message(rel: str, node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    return (
+        f"{rel}:{node.lineno}: {node.name}() تكتب رسالةً بلا نداء {GUARD_NAME}().\n"
+        f"     كل كتابةٍ بدور المستخدم تمرّ بالحارس — وإلّا عاد ISS-146 صامتاً "
+        f"(٢٨ صفّاً من نصّ النظام مُخزَّنةً كأنها كلام الطالب)."
+    )
+
+
 def _check_guard_wired(files: list[Path]) -> list[str]:
-    problems: list[str] = []
-    seen_debt: set[str] = set()
-
-    for path in files:
-        rel = str(path.relative_to(REPO_ROOT))
-        if rel in _DELEGATING_ONLY:
-            continue
-        for node in _unguarded_writers(path):
-            if rel in _FROZEN_DEBT:
-                seen_debt.add(rel)
-                continue
-            problems.append(
-                f"{rel}:{node.lineno}: {node.name}() تكتب رسالةً بلا نداء {GUARD_NAME}().\n"
-                f"     كل كتابةٍ بدور المستخدم تمرّ بالحارس — وإلّا عاد ISS-146 صامتاً "
-                f"(٢٨ صفّاً من نصّ النظام مُخزَّنةً كأنها كلام الطالب)."
-            )
-
-    return problems + _stale_debt_entries(seen_debt)
+    """② كل كاتبِ رسالةٍ ينادي الحارس — والمُصرَّح تفويضاً محضاً وحده يُستثنى."""
+    offenders = [
+        (str(path.relative_to(REPO_ROOT)), node)
+        for path in files
+        if str(path.relative_to(REPO_ROOT)) not in _DELEGATING_ONLY
+        for node in _unguarded_writers(path)
+    ]
+    seen_debt = {rel for rel, _ in offenders if rel in _FROZEN_DEBT}
+    live = [_guard_message(rel, node) for rel, node in offenders if rel not in _FROZEN_DEBT]
+    return live + _stale_debt_entries(seen_debt)
 
 
 def main() -> int:

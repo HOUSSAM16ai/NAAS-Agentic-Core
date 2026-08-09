@@ -80,5 +80,14 @@ sortedcontainers==2.4.0
 attrs==25.4.0
 # R0.2 (D-172): pinned range (was unpinned) — reproducible checkpointer stack.
 langgraph-checkpoint>=2.0.0,<3.0.0
-langgraph-checkpoint-postgres>=3.1.2,<4.0.0
+# ⛔ Pinned to 2.x on purpose — do NOT let Dependabot raise this alone (reverted from
+# >=3.1.2,<4.0.0, bumped by 4b0db53 on main). `langgraph-checkpoint-postgres` 3.x
+# requires `langgraph-checkpoint>=3`, which contradicts the line above and the
+# `langgraph<2.0.0` pin at line 36 — the resolver fails outright with
+# ResolutionImpossible, so `pip install -r requirements-ci.txt` cannot run and
+# test-monolith dies at the install step before a single test executes.
+# These two move together or not at all; `microservices/orchestrator_service/
+# requirements.txt` keeps the same coupled pair. Raising them means moving to
+# langgraph 2.x, which is an engine upgrade with an ADR, not a dependency bump.
+langgraph-checkpoint-postgres>=2.0.0,<3.0.0
 psycopg-binary

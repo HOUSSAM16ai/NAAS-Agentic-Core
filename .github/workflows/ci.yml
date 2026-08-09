@@ -490,6 +490,59 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
+  # D-234: deliver the coverage report that already exists.
+  #
+  # The CodeScene GitHub App opens a `CodeScene Code Coverage` check on every commit
+  # and waits for a report. Nothing in this repository ever sent one, so the check sat
+  # queued for hours and then concluded `timed_out` — a FAILED check — with CodeScene's
+  # own words: "No valid coverage report found in the build pipeline." Meanwhile
+  # `test-monolith` above has been producing a perfectly good cobertura report the whole
+  # time and parking it in an artifact nobody consumed. The data existed; only the
+  # delivery was missing.
+  #
+  # A check that can only ever time out is the CI form of a zombie metric (D-016):
+  # worse than absent, because it reads as a real signal.
+  #
+  # Why a separate job instead of a step in `test-monolith`: on `pull_request`,
+  # actions/checkout gives you the MERGE commit, but the CodeScene check is registered
+  # against the PR HEAD (visible in its own details URL: `...&commit-sha=<head>`).
+  # `cs-coverage` infers the commit from git HEAD and has no documented SHA flag, so
+  # uploading from the merge commit delivers data CodeScene cannot match to the pending
+  # check — the same failure with extra steps.
+  #
+  # ⛔ Deliberately absent from `required-ci`: a third-party outage must not block merges.
+  codescene-coverage:
+    name: codescene-coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test-monolith
+    if: always() && needs.test-monolith.result != 'cancelled'
+    env:
+      # `secrets` is not available in `if:`; surfacing it as env is the supported way to
+      # branch on presence, so fork PRs skip instead of failing.
+      CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0 # cs-coverage reads git to identify repo + commit
+      - uses: actions/download-artifact@v6
+        with:
+          name: coverage-report # produced above — no second test run, no second number
+      - name: Upload coverage to CodeScene
+        if: env.CS_ACCESS_TOKEN != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Not `curl | sh`: fetch the installer to a file first so a download failure is
+          # loud and the script is readable in the log (the spirit of D-187 — no implicit
+          # network, no blind execution).
+          curl -fsSL -o install-cs-coverage-tool.sh \
+            https://downloads.codescene.io/enterprise/cli/install-cs-coverage-tool.sh
+          sh install-cs-coverage-tool.sh -y
+          "$HOME/.local/bin/cs-coverage" upload \
+            --format cobertura --metric line-coverage coverage.xml
+
   test-microservices:
     name: test-microservices
     runs-on: ubuntu-latest

@@ -5,6 +5,59 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-234 · `main` مكسورٌ بترقية تبعيات، وفحصُ تغطيةٍ لا يمكن أن ينجح (2026-08-09)
+
+**العطب الأوّل — Dependabot رفع **نصف** زوجٍ مقترن، فسقط `main` كلّه.**
+`4b0db53` رفع في `requirements-ci.txt` سطراً واحداً:
+`langgraph-checkpoint-postgres` من `>=2.0.0,<3.0.0` إلى `>=3.1.2,<4.0.0`. وإصدارُ 3.x
+يتطلّب `langgraph-checkpoint>=3`، بينما السطر **الذي قبله مباشرةً** يثبّت
+`langgraph-checkpoint>=2.0.0,<3.0.0`. تناقضٌ مباشر ⇒ `pip install -r requirements-ci.txt`
+**يفشل في الحلّ أصلاً**، قبل تشغيل اختبارٍ واحد.
+
+الدليل من CI على `main` (`08f0568`) لا من التحليل:
+```
+langgraph 1.2.0 depends on langgraph-checkpoint<5.0.0 and >=4.1.0
+ERROR: ResolutionImpossible
+guardrails=failure · test-monolith=failure · test-microservices=failure · images-build=failure
+##[warning]No files were found with the provided path: coverage.xml
+```
+آخر أخضر على `main` كان `b1db497`. **العلاج: إرجاع السطر إلى `2.x`** — وهو نفس الزوج
+المقترن في `microservices/orchestrator_service/requirements.txt` الذي لم يُمَسّ. وهذا
+يفسّر أيضاً لماذا يعمل المشروع على LangGraph 1.1.10: قيدُ `postgres 2.x` هو ما يحفظه هناك.
+⛔ **القاعدة: هذان السطران يتحرّكان معاً أو لا يتحرّكان.** رفعُهما يعني الانتقال إلى
+langgraph 2.x — ترقيةُ محرّكٍ بـADR، لا ترقيةَ تبعية. مكتوبٌ تعليقاً فوق السطر نفسه كي
+يقرأه من يرفعه لاحقاً (بشرٌ أو Dependabot).
+
+**العطب الثاني — فحصُ تغطيةٍ لا يستطيع النجاح ولا الفشل.** تطبيق CodeScene يفتح
+`CodeScene Code Coverage` على كل دفعة وينتظر تقريراً، و**لا شيء في المستودع كلّه يرسله**
+(بحثُ `codescene` يُرجِع لا شيء). فيبقى معلَّقاً ساعات ثمّ ينتهي `timed_out` — أي **فاشلاً**
+— بكلمات CodeScene: «No valid coverage report found in the build pipeline».
+والبيانات موجودة أصلاً: `ci.yml` يُنتج `coverage.xml` (cobertura) ويرفعه **أثراً في
+GitHub فقط**. الموجود إنتاجٌ بلا تسليم. وهذا هو المقياس الزومبي بصيغة CI (D-016):
+أسوأ من الغياب لأنه يُقرأ إشارةً حقيقية.
+
+**العلاج:** وظيفة `codescene-coverage` تستهلك الأثر القائم وترفعه. **منفصلةٌ عن
+`test-monolith` عمداً**: في `pull_request` يعطي `checkout` **commit الدمج**، بينما الفحص
+مُسجَّل على **رأس الـPR** (ظاهرٌ في رابطه `…&commit-sha=<head>`)، و`cs-coverage` يستنتج
+الـcommit من `git HEAD` بلا رايةِ SHA — فالرفع من commit الدمج يُسلِّم بياناتٍ لا تُطابَق.
+
+**العطب الثالث — قالبُ Qodana الجاهز خرق قانوناً مُعلَناً.** `b1db497` أضاف
+`qodana_code_quality.yml` بـ`actions/checkout@v3` (وD-141 يوجب node24 وصفر warning)،
+وبلا حارسٍ للسرّ (فتفشل كل PR من fork بدل أن تتخطّى)، وبـ`contents: write` لإجراءٍ من
+طرفٍ ثالث لا يحتاج إلا `checks: write`.
+
+**قاعدةٌ تشمل الثلاثة:** ⛔ **لا Qodana ولا CodeScene في `required-ci`.** تعطُّلُ خدمةٍ
+خارجية أو غيابُ سرٍّ يجب ألّا يُحمِّر المستودع. والسرّان يُقرآن عبر `env` ثمّ `if:` لأن
+سياق `secrets` غير متاح في `if:` — فالغياب يُسكِت الوظيفة ولا يُفشِلها.
+
+**حدُّ الرقم (D-197):** `--cov=app` وحده؛ تغطية الخدمات المصغّرة **صفر**. يُفحَص بعد أوّل
+رفع: إن عرض CodeScene الملفّات الغائبة **0٪** بدل «بلا بيانات» فالرقم كاذب ⇒ يُضيَّق
+النطاق أو يُطفَأ الفحص.
+
+**ملاحظة أمنية:** رمزا CodeScene وQodana وصلا عبر المحادثة، فيجب **تدويرهما** ويُضافان
+سرَّين في GitHub (`CS_ACCESS_TOKEN` · `QODANA_TOKEN`) — لا في ملفّ ولا في الشيفرة
+(يمدّد ISS-141).
+
 ## D-233 · اللوحة المرجانية + «أخضر محلّي» ليس أخضر CI (2026-08-09)
 
 **العطب الأوّل — ادّعيتُ الخُضرة بلا دليلها.** أعلنتُ «61/61 بوّابة خضراء» وعاملتُه

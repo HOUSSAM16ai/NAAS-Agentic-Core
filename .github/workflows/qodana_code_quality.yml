@@ -1,28 +1,46 @@
+# Qodana — static analysis (JetBrains Cloud).
+#
+# ⛔ NOT part of `required-ci`, on purpose. An outage or a missing secret at a
+# third-party SaaS must never make this repository un-mergeable. Same rule as the
+# CodeScene jobs (D-234).
+#
+# The generated template this replaces had four defects, each fixed below with the
+# repo law it broke named next to it.
 name: Qodana
 on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: # Specify your branches here
-      - main # The 'main' branch
-      - 'releases/*' # The release branches
+    branches:
+      - main
+      - 'releases/*'
 
 jobs:
   qodana:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
-      contents: write
+      # `contents: write` was in the template. A static scan reads code and writes
+      # checks — it has no reason to be able to push to the repository, and handing
+      # write access to a third-party action is exactly the posture D-187 rejects.
+      contents: read
       pull-requests: write
       checks: write
+    env:
+      # The `secrets` context is not available inside `if:`. Surfacing the token as an
+      # env var is the supported way to branch on its presence — without this, every
+      # fork PR (which gets no secrets) FAILS instead of skipping.
+      QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5 # was @v3: D-141 requires node24 actions, zero warnings
         with:
-          ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
-          fetch-depth: 0  # a full history is required for pull request analysis
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0 # full history is required for pull-request analysis
       - name: 'Qodana Scan'
+        if: env.QODANA_TOKEN != ''
         uses: JetBrains/qodana-action@v2026.1
         with:
           pr-mode: false
         env:
-          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_335615010 }}
+          QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'

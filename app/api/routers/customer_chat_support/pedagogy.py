@@ -100,6 +100,39 @@ def _apply_final_answer_redaction(text: str, support_level: int | None) -> str:
         return text
 
 
+def _card_component_name(card: object) -> str | None:
+    """اسم المكوّن إن كانت البطاقة بالشكل السلكي، وإلّا ``None``."""
+    if not isinstance(card, dict):
+        return None
+    name = card.get("component")
+    return name if isinstance(name, str) and name else None
+
+
+def _renderable_cards(
+    cards: list[dict[str, object]], *, conversation_id: int
+) -> list[dict[str, object]]:
+    """البطاقات التي **تعرف الواجهة رسمها** وحدها (ISS-145).
+
+    ما لا يجتاز ``KNOWN_UI_COMPONENTS`` يُسجَّل كي يُشخَّص ولا يُخزَّن كي لا يَصمت:
+    صفٌّ فارغ يحمل مكوّناً لا يُرسَم هو دورٌ صامت لا بطاقة.
+    """
+    from app.contracts.streaming import KNOWN_UI_COMPONENTS
+
+    renderable: list[dict[str, object]] = []
+    for card in cards:
+        name = _card_component_name(card)
+        if name is None:
+            continue
+        if name in KNOWN_UI_COMPONENTS:
+            renderable.append(card)
+        else:
+            logger.warning(
+                "ui_component_card_dropped_unrenderable",
+                extra={"component": name, "conversation_id": conversation_id},
+            )
+    return renderable
+
+
 async def _persist_ui_component_cards(
     *,
     conversation_id: int,
@@ -109,18 +142,28 @@ async def _persist_ui_component_cards(
 
     غير حرج: أي فشل يُسجَّل ولا يكسر الدور. كل بطاقة صف مستقل يحمل ui_component
     بالشكل السلكي ({component, props, fallback_text}) فتُصيَّر من التاريخ بعد إعادة الدخول.
+
+    ─────────────────────────────────────────────────────────────────
+    ISS-145 (D-230): **الإرفاق ليس تسليماً**
+    ─────────────────────────────────────────────────────────────────
+    كان الفلتر يقبل أيّ سلسلةٍ غير فارغة اسماً للمكوّن. ونتيجته في الإنتاج: **٧ صفوف**
+    بـ`content=""` تحمل `worked_example_card` — وهو اسمٌ لا يعرفه سجلّ التصيير، فرأى
+    الطالب «تعذّر عرض المكوّن التفاعلي» **ولا شيء غيره**. سبعةُ أدوارٍ صامتة فعلاً.
+
+    وISS-145 أُغلق حينها «بالتفنيد» بادّعاء `truly_silent = 0`، لأن الفحص تحقّق من أنّ
+    مكوّناً **مُرفَق** لا من أنه **قابل للرسم**. صفٌّ فارغ + مكوّنٌ لا يُرسَم = دورٌ صامت.
+
+    فالمصدر الوحيد لـ«قابل للرسم» هو ``KNOWN_UI_COMPONENTS`` (يحرس تطابقه مع سجلّ
+    التصيير `scripts/fitness/check_ui_component_parity.py`)، والصفّ الفارغ الذي لا
+    يجتازه **لا يُكتب** — دورٌ نصّيٌّ صادق أفضل من وعدٍ بصريٍّ لا يصل (D-191 ج).
     """
-    valid = [
-        c
-        for c in cards
-        if isinstance(c, dict) and isinstance(c.get("component"), str) and c["component"]
-    ]
-    if not valid:
+    renderable = _renderable_cards(cards, conversation_id=conversation_id)
+    if not renderable:
         return
     try:
         async with async_session_factory() as db:
             persistence_service = CustomerChatBoundaryService(db)
-            for card in valid:
+            for card in renderable:
                 await persistence_service.save_message(
                     conversation_id=conversation_id,
                     role=MessageRole.ASSISTANT,

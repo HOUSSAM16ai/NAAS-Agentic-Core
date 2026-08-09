@@ -147,6 +147,42 @@ const useTypewriter = (fullContent, isStreaming) => {
 };
 
 // ─── شارة بطاقة الامتحان ─────────────────────────────────────────────────────
+/**
+ * أيقونة الإرسال — مضمّنة عمداً (D-232).
+ *
+ * زرّ الإرسال هو الضابط الوحيد الذي يستعمله الطالب في **كل** دور، وهو بلا نصّ. وبقيّة
+ * أيقونات المشروع تُحمَّل من نطاقٍ ثالث؛ ورُصد حيّاً أن فشل ذلك التحميل يترك الزرّ
+ * مربّعاً رمادياً فارغاً. ‏`currentColor` يجعلها تتبع السمة تلقائياً، فلا لون خامّ هنا
+ * (D-199)، و`aria-hidden` لأن الزرّ نفسه يحمل `aria-label`.
+ *
+ * ⚠️ ليست بداية هجرةٍ عشوائية: بقيّة الأيقونات (٣٥) تبقى على مسارها الموثَّق في
+ * `docs/frontend/ICON_MIGRATION.md` — تدهورُها يُشوِّه ولا يُعطِّل.
+ */
+const SendGlyph = memo(({ spinning }) => (
+    <svg
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className={spinning ? 'send-glyph is-busy' : 'send-glyph'}
+    >
+        {spinning ? (
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        ) : (
+            <>
+                <path d="M12 19V5" />
+                <path d="M5 12l7-7 7 7" />
+            </>
+        )}
+    </svg>
+));
+SendGlyph.displayName = 'SendGlyph';
+
 const ExamBadge = memo(() => (
     <div className="exam-badge">
         <i className="fas fa-scroll exam-badge-icon" />
@@ -225,12 +261,81 @@ const TypingIndicator = memo(() => (
 ));
 TypingIndicator.displayName = 'TypingIndicator';
 
-// ─── مكوّن رسالة واحدة ───────────────────────────────────────────────────────
-const MessageBubble = memo(({ msg, idx }) => {
+// ─── زرّ نسخ الردّ ───────────────────────────────────────────────────────────
+const CopyButton = memo(({ content }) => {
     const [copied, setCopied] = useState(false);
 
+    const handleCopy = useCallback(() => {
+        // ننسخ النص الكامل كنصّ نظيف قابل للقراءة — لا markdown/LaTeX خام.
+        // (كارثة «النسخ يُظهر أكواد برمجية»: كان ينسخ msg.content الخام.)
+        navigator.clipboard.writeText(markdownToPlainText(content)).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    }, [content]);
+
+    return (
+        <button
+            className={`copy-button${copied ? ' copied' : ''}`}
+            onClick={handleCopy}
+            title={copied ? 'تم النسخ!' : 'نسخ النص'}
+            aria-label={copied ? 'تم النسخ' : 'نسخ'}
+        >
+            <i className={copied ? 'fas fa-check' : 'far fa-copy'} />
+        </button>
+    );
+});
+CopyButton.displayName = 'CopyButton';
+
+// ─── جسم الرسالة: نصّ الطالب، أو ردّ المعلّم، أو مؤشّر الكتابة ────────────────
+//
+// ISS-076 (2026-05-15) D-064: تجاوز useTypewriter بالكامل لمنع flicker.
+//
+// السبب: عند انتقال `isStreaming` من true → false، useTypewriter كان
+// يبدأ بـ displayed='' (initial state) ثم يستدعي setDisplayed(full)
+// في useEffect → 2 render cycles → الـ DOM يعرض "" ثم "full content"
+// → الواجهة "ترمش" + "خطوط تظهر وتختفي".
+//
+// الحل: عرض المحتوى الكامل مباشرة بعد streaming. لا typewriter effect
+// إضافي (الـ streaming نفسه يُولِّد typewriter طبيعي).
+//
+// ISS-073 (سابق): أثناء streaming → الـ Markdown يعرض raw text (لا ReactMarkdown
+// re-render مكلف، لا KaTeX flicker).
+const MessageBody = memo(({ msg, isStreaming, hasObject }) => {
+    if (msg.role !== 'assistant') {
+        return <span className="user-message-text">{msg.content}</span>;
+    }
+
+    const content = msg.content || '';
+    if (!content.trim()) {
+        return isStreaming ? <TypingIndicator /> : null;
+    }
+
+    return (
+        <div className={hasObject ? 'message-aside' : undefined}>
+            <Markdown content={content} isStreaming={isStreaming} />
+        </div>
+    );
+});
+MessageBody.displayName = 'MessageBody';
+
+// ─── مكوّن رسالة واحدة ───────────────────────────────────────────────────────
+const MessageBubble = memo(({ msg }) => {
     const isStreaming = msg.role === 'assistant' && !msg.isComplete;
     const isEmpty = !msg.content || msg.content.trim() === '';
+
+    // ─────────────────────────────────────────────────────────────────
+    // D-230: الكائن سطحٌ أوّل، لا ذيلٌ في فقاعة
+    // ─────────────────────────────────────────────────────────────────
+    // ‏CLAUDE.md §0.6 المرحلة ١: «الطالب **يتفاعل مع كائنات** لا يقرأ جداراً نصّياً»،
+    // والدردشة «سطح تسليم فقط». وكان الكود يقول العكس بنيوياً: الكائن يُصيَّر **داخل**
+    // فقاعة الدردشة **بعد** النصّ، فيقرأ الطالب الجدار ثمّ يرى البطاقة إن بقي انتباه.
+    // فحصٌ حيّ على الإنتاج قال إن ٩٫٧٪ فقط من الردود تحمل كائناً أصلاً.
+    //
+    // القلب: حين يحمل الدور كائناً فالكائن **هو** الردّ، والنصّ يصير تعليقاً مساعداً
+    // تحته. وحين لا يحمل، يبقى النصّ كما هو تماماً — بلا انحدار لأيّ دورٍ نصّي.
+    const hasObject = msg.role === 'assistant' && msg.isComplete && Boolean(msg.uiComponent);
+    const showCopy = msg.role === 'assistant' && msg.isComplete && !isEmpty;
 
     // ISS-078 D-066: حماية ضد فقاعة user فارغة (سبب blue-bar flicker).
     // لو رسالة المستخدم فارغة (race condition قبل send)، تُعرَض كشريط أزرق ضخم.
@@ -239,60 +344,18 @@ const MessageBubble = memo(({ msg, idx }) => {
         return null;
     }
 
-    // ISS-076 (2026-05-15) D-064: تجاوز useTypewriter بالكامل لمنع flicker.
-    //
-    // السبب: عند انتقال `isStreaming` من true → false، useTypewriter كان
-    // يبدأ بـ displayed='' (initial state) ثم يستدعي setDisplayed(full)
-    // في useEffect → 2 render cycles → الـ DOM يعرض "" ثم "full content"
-    // → الواجهة "ترمش" + "خطوط تظهر وتختفي".
-    //
-    // الحل: عرض المحتوى الكامل مباشرة بعد streaming. لا typewriter effect
-    // إضافي (الـ streaming نفسه يُولِّد typewriter طبيعي).
-    //
-    // ISS-073 (سابق): أثناء streaming → الـ Markdown يعرض raw text (لا ReactMarkdown
-    // re-render مكلف، لا KaTeX flicker).
-    const contentToShow = msg.role === 'assistant' ? (msg.content || '') : '';
-
-    const handleCopy = useCallback(() => {
-        // ننسخ النص الكامل كنصّ نظيف قابل للقراءة — لا markdown/LaTeX خام.
-        // (كارثة «النسخ يُظهر أكواد برمجية»: كان ينسخ msg.content الخام.)
-        navigator.clipboard.writeText(markdownToPlainText(msg.content)).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        });
-    }, [msg.content]);
-
     return (
         <div className={`message ${msg.role}`}>
             <div
-                className={`message-bubble${isStreaming ? ' streaming' : ''}${msg.isError ? ' error' : ''}`}
+                className={`message-bubble${isStreaming ? ' streaming' : ''}${msg.isError ? ' error' : ''}${hasObject ? ' object-first' : ''}`}
                 style={{ position: 'relative', paddingBottom: msg.role === 'assistant' ? '28px' : undefined }}
             >
-                {msg.role === 'assistant' ? (
-                    isEmpty && isStreaming
-                        ? <TypingIndicator />
-                        : <Markdown content={contentToShow} isStreaming={isStreaming} />
-                ) : (
-                    <span className="user-message-text">{msg.content}</span>
-                )}
+                {/* الكائن أوّلاً حين يوجد — هو الردّ لا زينتُه. */}
+                {hasObject && <GenerativeUIRenderer uiComponent={msg.uiComponent} />}
 
-                {/* الواجهة التوليدية — تظهر بعد اكتمال النص، تحته مباشرة.
-                    النص هو صوت المعلم الداخلي. البطاقة هي المسرح البصري.
-                    لا تظهر أثناء الـ streaming لتجنب layout shift. */}
-                {msg.role === 'assistant' && msg.isComplete && msg.uiComponent && (
-                    <GenerativeUIRenderer uiComponent={msg.uiComponent} />
-                )}
+                <MessageBody msg={msg} isStreaming={isStreaming} hasObject={hasObject} />
 
-                {msg.role === 'assistant' && msg.isComplete && !isEmpty && (
-                    <button
-                        className={`copy-button${copied ? ' copied' : ''}`}
-                        onClick={handleCopy}
-                        title={copied ? 'تم النسخ!' : 'نسخ النص'}
-                        aria-label={copied ? 'تم النسخ' : 'نسخ'}
-                    >
-                        <i className={copied ? 'fas fa-check' : 'far fa-copy'} />
-                    </button>
-                )}
+                {showCopy && <CopyButton content={msg.content} />}
             </div>
         </div>
     );
@@ -391,7 +454,7 @@ export const ChatInterface = ({ messages, onSendMessage, status, user }) => {
                     </div>
                 ) : (
                     messages.map((msg, idx) => (
-                        <MessageBubble key={msg.id || idx} msg={msg} idx={idx} />
+                        <MessageBubble key={msg.id || idx} msg={msg} />
                     ))
                 )}
                 <div ref={messagesEndRef} />
@@ -430,17 +493,30 @@ export const ChatInterface = ({ messages, onSendMessage, status, user }) => {
                         disabled={!input.trim() || isConnecting}
                         aria-label="إرسال"
                     >
-                        {hasStreamingMessage
-                            ? <i className="fas fa-circle-notch fa-spin" />
-                            : <i className="fas fa-arrow-up" />
-                        }
+                        {/* D-232: زرّ الإرسال **لا يحمل نصّاً** — أيقونته هي الزرّ كلّه.
+                            وأيقونات المشروع تأتي من نطاقٍ ثالث (CDN)، وقد رُصد حيّاً في
+                            هذه الجلسة أن فشل تحميلها يُصيّر الزرّ **مربّعاً رمادياً
+                            فارغاً**. التعليق القائم يقول «الأيقونات زينة والنصّ يبقى
+                            مقروءاً» — وهو صحيحٌ لكل أيقونةٍ إلّا هذه.
+                            فالضوابط التي لا بديل نصّي لها تُرسَم مضمّنةً: صفر رحلة شبكة،
+                            وصفر اعتماد على نطاقٍ ثالث، ولا تختفي على شبكةٍ ضعيفة. */}
+                        <SendGlyph spinning={hasStreamingMessage} />
                     </button>
                 </div>
                 <div className="input-footer">
-                    <span className={`connection-status ${isConnected ? 'online' : isConnecting ? 'connecting' : 'offline'}`}>
-                        <span className="status-dot" />
-                        {isConnected ? 'متصل' : isConnecting ? 'جاري الاتصال...' : 'غير متصل'}
-                    </span>
+                    {/* D-230: النجاح صامت. شارة «● متصل» كانت تُعلَن دائماً لتقول «لا
+                        شيء يحدث» — وهي النسخة **الثانية** من نفس الشارة (الأولى كانت في
+                        الترويسة). يبقى الإعلان عند العطل وحده: لا فشلٌ صامت (§6.5)،
+                        ولا احتفاءٌ بالعادي. */}
+                    {!isConnected && (
+                        <span
+                            className={`connection-status ${isConnecting ? 'connecting' : 'offline'}`}
+                            role="status"
+                        >
+                            <span className="status-dot" />
+                            {isConnecting ? 'جاري الاتصال...' : 'غير متصل'}
+                        </span>
+                    )}
                     <span className="input-hint">Enter للإرسال · Shift+Enter لسطر جديد</span>
                 </div>
             </div>

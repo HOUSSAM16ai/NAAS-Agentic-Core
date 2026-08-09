@@ -339,6 +339,30 @@ jobs:
           # curriculum registry has no term/month field (the ban lifts by itself when
           # the field lands, because the gate checks data rather than opinion).
           python scripts/fitness/check_cognitive_twin.py
+          # D-228/D-229: two research doctrines entered the constitution (Harness
+          # Engineering; memory in ultra-complex systems). Law lives in
+          # docs/architecture/*_DOCTRINE.md, state in .memory/*_truth.md -- a status
+          # token inside a law doc is red, an empty gap cell is red (blank reads as
+          # success), a cited gate that does not exist is red (ISS-148's class).
+          python scripts/fitness/check_research_doctrines.py
+          # D-229 (ISS-146): the platform poisoned its own episodic memory --
+          # "[pedagogical directive] ..." was written to production with role=user
+          # 28 times, so system instructions were stored as if the STUDENT said them
+          # and re-read for weeks as conversation evidence (MINJA's delayed-trigger
+          # shape). One home for the marker list, and every message write passes the
+          # guard. Frozen debt is EMPTY and shrinks in both directions.
+          python scripts/fitness/check_no_system_text_as_user.py
+          # D-230 (ISS-145): the constitution's FIRST pillar -- "the student
+          # manipulates objects, does not read a wall of text" -- was the only law
+          # with no enforcer, and it decayed unseen: 9.7% of production replies carry
+          # an interactive object, trending 36.6% (June) -> 6.2% -> 3.4% (August).
+          # Three registries must agree: the server contract, the renderer registry,
+          # and what the builders actually emit. A name on one side only is a
+          # half-declared contract (D-192's bug). A declared name with no emitter
+          # anywhere is a zombie declaration and must be spoken as debt -- that is
+          # bkt_hint_display (105 production rows) and learning_path_card (39), whose
+          # emitters were removed while the declarations stayed.
+          python scripts/fitness/check_ui_component_parity.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders
@@ -465,6 +489,59 @@ jobs:
           name: coverage-report
           path: coverage.xml
           retention-days: 7
+
+  # D-234: deliver the coverage report that already exists.
+  #
+  # The CodeScene GitHub App opens a `CodeScene Code Coverage` check on every commit
+  # and waits for a report. Nothing in this repository ever sent one, so the check sat
+  # queued for hours and then concluded `timed_out` — a FAILED check — with CodeScene's
+  # own words: "No valid coverage report found in the build pipeline." Meanwhile
+  # `test-monolith` above has been producing a perfectly good cobertura report the whole
+  # time and parking it in an artifact nobody consumed. The data existed; only the
+  # delivery was missing.
+  #
+  # A check that can only ever time out is the CI form of a zombie metric (D-016):
+  # worse than absent, because it reads as a real signal.
+  #
+  # Why a separate job instead of a step in `test-monolith`: on `pull_request`,
+  # actions/checkout gives you the MERGE commit, but the CodeScene check is registered
+  # against the PR HEAD (visible in its own details URL: `...&commit-sha=<head>`).
+  # `cs-coverage` infers the commit from git HEAD and has no documented SHA flag, so
+  # uploading from the merge commit delivers data CodeScene cannot match to the pending
+  # check — the same failure with extra steps.
+  #
+  # ⛔ Deliberately absent from `required-ci`: a third-party outage must not block merges.
+  codescene-coverage:
+    name: codescene-coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test-monolith
+    if: always() && needs.test-monolith.result != 'cancelled'
+    env:
+      # `secrets` is not available in `if:`; surfacing it as env is the supported way to
+      # branch on presence, so fork PRs skip instead of failing.
+      CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0 # cs-coverage reads git to identify repo + commit
+      - uses: actions/download-artifact@v6
+        with:
+          name: coverage-report # produced above — no second test run, no second number
+      - name: Upload coverage to CodeScene
+        if: env.CS_ACCESS_TOKEN != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Not `curl | sh`: fetch the installer to a file first so a download failure is
+          # loud and the script is readable in the log (the spirit of D-187 — no implicit
+          # network, no blind execution).
+          curl -fsSL -o install-cs-coverage-tool.sh \
+            https://downloads.codescene.io/enterprise/cli/install-cs-coverage-tool.sh
+          sh install-cs-coverage-tool.sh -y
+          "$HOME/.local/bin/cs-coverage" upload \
+            --format cobertura --metric line-coverage coverage.xml
 
   test-microservices:
     name: test-microservices

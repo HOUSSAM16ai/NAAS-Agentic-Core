@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.domain.chat import CustomerConversation, CustomerMessage, MessageRole
 from app.core.domain.user import User
 from app.core.prompts import get_customer_system_prompt
+from shared.memory import assert_student_authored
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +81,17 @@ class CustomerChatPersistence:
         ISS-106 (D-WS-CARD-PERSIST-001): ``ui_component`` يحفظ بطاقة الـ Generative UI
         لتبقى بعد إعادة الدخول. صفوف البطاقات المستقلة (content="") تتجاوز حارس التكرار
         المعتمد على المحتوى — وإلا فإن بطاقتين فارغتين في نفس الدور تُسقط الثانية.
+
+        D-229 (ISS-146): الذاكرة الحلقية تحفظ ما قاله الطالب **فعلاً**. تخزينُ نصٍّ من
+        تأليف النظام بدور الطالب تسميمُ ذاكرةٍ مؤجَّل الأثر — يُقرأ بعد أسابيع كنيّةٍ
+        للطالب (خرق D-102) ويُعيد هندسة التعليم إلى عينيه (خرق D-117).
         """
         from datetime import datetime, timedelta
 
         from sqlalchemy import and_
+
+        if role == MessageRole.USER:
+            assert_student_authored(content, where="customer.save_message")
 
         # --- DUPLICATE DETECTION GUARD ---
         # يُطبَّق فقط على الرسائل النصية. صفوف البطاقات المستقلة (content="") مقصودة

@@ -33,7 +33,7 @@ FRONTEND = REPO_ROOT / "frontend" / "app"
 TOKENS_FILE = FRONTEND / "styles" / "tokens.css"
 
 #: الدَّين المُجمَّد: عدد الألوان الخامّة الباقية في `globals.css`. **يتقلّص فقط.**
-FROZEN_RAW_COLOURS = 178
+FROZEN_RAW_COLOURS = 126
 
 #: عدد إعلانات `style={{…}}` بقيم بكسل حرفية في JSX. **يتقلّص فقط.**
 FROZEN_INLINE_PX = 26
@@ -71,36 +71,43 @@ def _theme_blocks(css: str) -> list[dict[str, str]]:
     return blocks
 
 
+#: الرموز التي تُقاس فوق ورقها. زوجٌ ينزلق تحت العتبة يجب أن يُوقِف الدمج.
+_GRADED_TOKENS: tuple[str, ...] = (
+    "--ink",
+    "--ink-muted",
+    "--accent",
+    "--accent-hover",
+    "--success",
+    "--warning",
+    "--danger",
+)
+
+#: عتبة WCAG AA للنصّ العادي.
+_AA_RATIO = 4.5
+
+
+def _block_contrast_failures(index: int, block: dict[str, str]) -> list[str]:
+    """أزواج (رمز، ورق) الساقطة تحت AA داخل كتلة سمةٍ واحدة."""
+    paper = block["--paper"]
+    graded = ((name, block[name]) for name in _GRADED_TOKENS if name in block)
+    return [
+        f"theme block #{index}: {name} ({colour}) on --paper ({paper}) "
+        f"is {contrast_ratio(colour, paper):.2f}:1 — below WCAG AA ({_AA_RATIO}:1)"
+        for name, colour in graded
+        if contrast_ratio(colour, paper) < _AA_RATIO
+    ]
+
+
 def check_contrast() -> list[str]:
     """كلّ لون نصّ/دلالة في كلّ سمة يجب أن يبلغ AA فوق ورقها."""
-    failures: list[str] = []
-    css = TOKENS_FILE.read_text(encoding="utf-8")
-    blocks = _theme_blocks(css)
+    blocks = _theme_blocks(TOKENS_FILE.read_text(encoding="utf-8"))
     if not blocks:
         return ["tokens.css declares no theme block containing --paper"]
-
-    graded = (
-        "--ink",
-        "--ink-muted",
-        "--accent",
-        "--accent-hover",
-        "--success",
-        "--warning",
-        "--danger",
-    )
-    for index, block in enumerate(blocks):
-        paper = block["--paper"]
-        for name in graded:
-            colour = block.get(name)
-            if colour is None:
-                continue
-            ratio = contrast_ratio(colour, paper)
-            if ratio < 4.5:
-                failures.append(
-                    f"theme block #{index}: {name} ({colour}) on --paper ({paper}) "
-                    f"is {ratio:.2f}:1 — below WCAG AA (4.5:1)"
-                )
-    return failures
+    return [
+        failure
+        for index, block in enumerate(blocks)
+        for failure in _block_contrast_failures(index, block)
+    ]
 
 
 def check_raw_colours() -> list[str]:
@@ -164,12 +171,67 @@ def check_tokens_exist() -> list[str]:
     return [f"tokens.css is missing {name}" for name in required if f"{name}:" not in css]
 
 
+_ACCENT_RE = re.compile(r"--accent:\s*(#[0-9a-fA-F]{6})")
+_RGB_TRIPLET_RE = re.compile(r"--primary-color-rgb:\s*([0-9]{1,3},\s*[0-9]{1,3},\s*[0-9]{1,3})")
+
+_Triplet = tuple[int, ...]
+
+
+def _hex_to_triplet(hex_colour: str) -> _Triplet:
+    value = hex_colour.lstrip("#")
+    return tuple(int(value[index : index + 2], 16) for index in (0, 2, 4))
+
+
+def _accent_triplets(tokens_css: str) -> set[_Triplet]:
+    """كل `--accent` مُعرَّف في `tokens.css` (نهاري وليلي) كثلاثيّة أعداد."""
+    return {_hex_to_triplet(hex_colour) for hex_colour in _ACCENT_RE.findall(tokens_css)}
+
+
+def _parse_triplet(raw: str) -> _Triplet:
+    return tuple(int(part.strip()) for part in raw.split(","))
+
+
+def _drift_message(raw: str, allowed: set[_Triplet]) -> str:
+    expected = " or ".join(", ".join(str(channel) for channel in a) for a in sorted(allowed))
+    return (
+        f"--primary-color-rgb is ({raw}) but no --accent in tokens.css matches it. "
+        f"Expected one of: {expected}. A second copy of the accent that drifts "
+        f"gives one colour to the shape and another to its glow (D-192/D-233)."
+    )
+
+
+def check_primary_rgb_matches_accent() -> list[str]:
+    """`--primary-color-rgb` نسخةٌ ثانية من `--accent` — تُفرَض مطابقتها (D-233).
+
+    CSS لا يفكّك اللون السداسي إلى ثلاثيّة، فـ`rgba(var(--primary-color-rgb), .1)`
+    تحتاج الأرقام مكتوبة. والنتيجة أنّ الرمز تغيّر مرّةً وبقيت الثلاثيّة على اللون
+    القديم: فقاعةٌ مرجانية وهالةٌ زرقاء. ولم تلتقطها بوّابة الألوان الخامّة لأنها
+    ليست لوناً سداسياً — وهي بالضبط «الكمّية الواحدة بقيمتين» التي يمنعها D-192.
+    """
+    globals_css = FRONTEND / "globals.css"
+    if not globals_css.exists():
+        return ["globals.css is missing"]
+
+    allowed = _accent_triplets(_strip_comments(TOKENS_FILE.read_text(encoding="utf-8")))
+    declared = _RGB_TRIPLET_RE.findall(_strip_comments(globals_css.read_text(encoding="utf-8")))
+    if not allowed or not declared:
+        return ["cannot locate --accent or --primary-color-rgb to compare"]
+
+    return [_drift_message(raw, allowed) for raw in declared if _parse_triplet(raw) not in allowed]
+
+
 def main() -> int:
     if not TOKENS_FILE.exists():
         print(f"❌ design tokens: {TOKENS_FILE.relative_to(REPO_ROOT)} is missing")
         return 1
 
-    failures = check_tokens_exist() + check_contrast() + check_raw_colours() + check_inline_px()
+    failures = (
+        check_tokens_exist()
+        + check_contrast()
+        + check_raw_colours()
+        + check_inline_px()
+        + check_primary_rgb_matches_accent()
+    )
 
     if failures:
         print("❌ بوّابة رموز التصميم مخروقة (D-199):")

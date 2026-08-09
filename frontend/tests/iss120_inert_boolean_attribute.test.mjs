@@ -57,22 +57,30 @@ for (const file of walk(appDir)) {
 }
 check('no string-form inert anywhere in frontend/app', offenders.length === 0, offenders.join(', '));
 
-// ─── الملف المُصاب تحديداً: النمط الصحيح موجود ───────────────────────────────
+// ─── القاعدة على كل ورودٍ لـinert — لا على مكوّنٍ بالاسم ─────────────────────
+//
+// ⚠️ كان هنا فحصان يُثبِّتان **الشريط الجانبي للوكلاء بالاسم** ويشترطان عدداً ثابتاً
+// (`>= 2`). فلمّا حُذفت لوحة الوكلاء (D-230) احمرّ الاختبار رغم أن القاعدة لم تُخرَق
+// إطلاقاً — واختبارٌ يفشل عند إعادة التنظيم **ويسكت عند المستهلك الذي يُضاف غداً** هو
+// «فارضٌ بلا مرمى» بعينه (ISS-148). القاعدة تُفحَص على كل ورود، فتنجو من الحذف وتغطّي
+// الإضافة. (نفس الإصلاح طُبِّق على التوأم البايثوني `test_iss120_canonical_combo_poisoning`.)
 const cogniforge = readFileSync(
     resolve(appDir, 'components', 'CogniForgeApp.jsx'),
     'utf-8',
 );
+const inertUsages = cogniforge.match(/inert=\{[^}]*\}/g) || [];
+
 check(
-    'agent sidebar uses boolean inert (cond || undefined)',
-    cogniforge.includes('inert={!isAgentSidebarOpen || undefined}'),
+    'inert is still used for DOM exclusion (rendering integrity)',
+    inertUsages.length >= 1,
+    'no inert usage left — if every sidebar is gone, delete this contract deliberately',
 );
+
+const badPattern = inertUsages.filter((u) => !u.endsWith('|| undefined}'));
 check(
-    'conversations sidebar uses boolean inert (cond || undefined)',
-    cogniforge.includes('inert={!isSidebarOpen || undefined}'),
-);
-check(
-    'DOM-exclusion (rendering integrity) preserved — inert still present on both sidebars',
-    (cogniforge.match(/inert=\{/g) || []).length >= 2,
+    'every inert usage is boolean (cond || undefined)',
+    badPattern.length === 0,
+    badPattern.join(', '),
 );
 
 if (failed > 0) {

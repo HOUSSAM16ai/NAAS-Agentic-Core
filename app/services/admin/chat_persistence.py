@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.domain.chat import AdminConversation, AdminMessage, MessageRole
 from app.core.domain.user import User
 from app.core.prompts import get_system_prompt
+from shared.memory import assert_student_authored
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,14 @@ class AdminChatPersistence:
 
         Returns:
             AdminMessage: كائن الرسالة المحفوظة.
+
+        Raises:
+            MemoryAuthorshipError: نصٌّ من تأليف النظام حاول التخزين بدور المستخدم
+                (D-229/ISS-146) — تسميمُ ذاكرةٍ مؤجَّل الأثر.
         """
+        if role == MessageRole.USER:
+            assert_student_authored(content, where="admin.save_message")
+
         message = AdminMessage(conversation_id=conversation_id, role=role, content=content)
         self.db.add(message)
         await self.db.commit()

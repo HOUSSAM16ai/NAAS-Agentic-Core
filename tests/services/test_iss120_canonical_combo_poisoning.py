@@ -212,12 +212,27 @@ class TestSourceWiring:
         assert "rep_snippets" in src
 
     def test_no_string_inert_in_frontend_component(self):
+        """ISS-120 (D-153): `inert` سمة boolean في React 19.
+
+        تمريرُ السلسلة `"true"` يُطلق خطأ console ويُظهر overlay الخطأ **للطالب**.
+
+        ⚠️ كانت هذه الحالة تُثبِّت **مستهلكَين بعينهما** بالاسم، فانكسرت حين حُذفت لوحة
+        الوكلاء (D-230) رغم أن القاعدة لم تُخرَق. واختبارٌ يُثبِّت مستهلكاً بدل قاعدة
+        يفشل عند إعادة التنظيم ويسكت عند المستهلك الجديد — وهو نفس عطب «الفارض بلا
+        مرمى» (ISS-148). فالفحص الآن على **كل** ورودٍ لـ`inert`، ويشمل ما يُضاف غداً.
+        """
         jsx = (_REPO_ROOT / "frontend" / "app" / "components" / "CogniForgeApp.jsx").read_text(
             encoding="utf-8"
         )
         assert not re.search(r"inert=\{[^}]*\?\s*[\"']true[\"']", jsx)
-        assert "inert={!isAgentSidebarOpen || undefined}" in jsx
-        assert "inert={!isSidebarOpen || undefined}" in jsx
+
+        usages = re.findall(r"inert=\{[^}]*\}", jsx)
+        assert usages, "لا ورود لـ`inert` — إن أُزيلت الأشرطة الجانبية فاحذف الحالة"
+        for usage in usages:
+            assert usage.endswith("|| undefined}"), (
+                f"{usage!r}: النمط الصحيح `cond || undefined` — "
+                "أيّ قيمةٍ غير boolean تُظهر overlay الخطأ للطالب (ISS-120)."
+            )
 
 
 class TestQuestionsOnlyLoaderFunctional:

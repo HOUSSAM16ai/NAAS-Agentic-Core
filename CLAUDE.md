@@ -156,7 +156,7 @@ API-first** `foundations-service` على `:8010` (contract ملتزَم؛ محر
 تتطلّب إشارة «حرف/رمز» صريحة ولا تُطابَق في سياق «الحادثة C»، والنيّة الحسابية تُلغي التعريف
 فلا يُخطَف دورٌ حسابي. مكشوف كـ **Skill** (`NotationSkill` على `BaseSkill` — `notation`) عبر
 `POST /api/v1/skills/notation` وفرع `notation` في `compose_reasoning`، و**كخدمة مصغّرة API-first**
-`notation-service` على `:8011` (contract ملتزَم → **API-first 13/13**؛ نسخة مُوَرَّدة محروسة
+`notation-service` على `:8011` (contract ملتزَم → **API-first 14/14** مع المونوليث، D-231؛ نسخة مُوَرَّدة محروسة
 بـ`check_notation_parity`، بلا استيراد `app`). الدور التعليمي يستعمل الفرع الحتمي **المحلّي**
 (بلا شبكة، صفر زمن إضافي على الطالب) والخدمة للـAPI والوكلاء بتدهور رشيق. القواعد الدائمة في §6.7 (د).
 
@@ -353,6 +353,34 @@ Evaluation → Governance → Infrastructure → Humans`. المعرفةُ ما 
 
 ---
 
+## 0.13. Harness Engineering Constitution (D-228)
+
+> **القانون:** [`docs/architecture/HARNESS_ENGINEERING_DOCTRINE.md`](docs/architecture/HARNESS_ENGINEERING_DOCTRINE.md) · **الحالة:** [`.memory/harness_truth.md`](.memory/harness_truth.md). تحرسهما `scripts/fitness/check_research_doctrines.py`. المصدر: Weng, Lil'Log، يوليو 2026.
+
+**الجملة الدستورية:** «**الفرق بين نموذجٍ يُجيب ونظامٍ يُنجز هو الطبقة المحيطة به**» — حلقةُ `خطّط ← نفّذ ← راقب ← حسّن`، لا صياغةُ أمرٍ أذكى. ⛔ ولا سُلَّم ثالث: الحلقة **تستوعب** الطبقات التسع (D-209) والثلاث عشرة (D-146).
+
+- **الترتيب جزءٌ من العقد** — ISS-144 وISS-149 كان كشفُهما سليماً وعطبُهما في **الأسبقيّة** وحدها.
+- **المُقيِّم خارج الحلقة التي تتطوّر** (خداع المكافأة، يمتدّ D-224 P4): ⛔ تعديل بوّابةٍ ذاتياً ⇒ CI أحمر، ورفعُ أيّ مِسنَنٍ مُعلَن يتطلّب قراراً مكتوباً.
+- **النتيجة السلبية تُسجَّل** — و**ISS-145 سابقةٌ حيّة**: أُغلق «بالتفنيد» على معيارٍ خطأ (فحصَ أنّ مكوّناً **مُرفَق** لا أنه **قابل للرسم**)؛ والإغلاق على معيارٍ خطأ أسوأ من عدم الإغلاق.
+- **القدرة ≠ الاستفادة** (وتحذير STOP: التحسين الذاتي **تراجع** مع النماذج الأضعف) ⇒ ⛔ **قفل D-187 يُشدَّد لا يُخفَّف**.
+- **انهيار التنوّع**: مسارٌ مكرَّر ليس تحسيناً (D-207). **والإنسان يُرفَع طبقةً لا يُزال** (الطبقة ٩)؛ وما لا تفرضه آلة يُقال: **جودة الحكم الهندسي بلا فارضٍ آلي**.
+
+---
+
+## 0.14. Memory Architecture Constitution (D-229)
+
+> **القانون:** [`docs/architecture/MEMORY_ARCHITECTURE_DOCTRINE.md`](docs/architecture/MEMORY_ARCHITECTURE_DOCTRINE.md) · **الحالة:** [`.memory/memory_architecture_truth.md`](.memory/memory_architecture_truth.md). تحرسهما `check_research_doctrines` + `check_no_system_text_as_user`.
+
+**الجملة الدستورية:** «**الأنظمة المعقّدة نادراً ما تفشل لنقص الذكاء. تفشل لأنها لا تتذكّر — أو تتذكّر الشيء الخطأ، في اللحظة الخطأ، بالثقة الخطأ.**» وهو توصيفٌ حرفيّ لكوارث هذا المستودع (ISS-139/140/144/146/149): التصنيف سليمٌ والعطب في الذاكرة والأسبقيّة.
+
+- **أربع طبقات، لكلٍّ مالكٌ واحد** (عاملة · حلقية · دلالية · إجرائية). ⛔ طبقةٌ بمالكَين = كتابةٌ مزدوجة (§6.5) — **مقيسة**: ٢٦ انفجاراً/٥٢ صفّاً في يونيو 2026.
+- ⛔ **تسميم الذاكرة (MINJA · نجاح >95٪ · أثرٌ مؤجَّل): لا نصٍّ يُولِّده النظام يُكتب بدورٍ يخصّ الطالب.** المنصّة نفّذت الهجوم على نفسها — «[توجيه تربوي]» **٢٨ مرّة بدور `user`** (ISS-146): تسمّم التوجيه (D-102) وتسرّبت هندسة التعليم (D-117). العلامات بموطنٍ واحد وكل كتابةٍ تمرّ بالحارس.
+- **التقادم الصامت** (يمتدّ D-188): لكل حقيقةٍ مخزَّنة **زمنُ تحقّقٍ يُقرأ قبل الثقة بها**، وملفّ حالةٍ قديم ليس دليلاً.
+- **النسيان الكارثي** (EWC · Kirkpatrick 2017: 12.62٪ → 6.85٪): مقابله الطلابي منحنى النسيان، وحامله FSRS-5 (D-194). ⛔ لا تتبّع عميق قبل بياناتٍ ضخمة.
+- **الاتساق**: اختير **مصدرٌ واحد + بوّابة تكافؤ** لا CRDT — التعارض هنا بين **تعاريف**، وثلاث قوائم لنيّةٍ واحدة لا «تتقارب» بل تُنتج ISS-139. **ونقطة التفتيش عقدٌ مُعلَن** لا تفصيلَ تشغيل.
+
+---
+
 ## 1. What This Project Does
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.
@@ -434,7 +462,7 @@ Runtime topology — **طوبولوجيتان حقيقيتان، لا واحدة
                 ├── orchestrator-service :8006  ← القلب الإلزامي للتوليد (D-112)
                 └── سلسلة سقوط محلية (تُقاس، لا تُخفى)
 
-العقود: 13 عقد OpenAPI في `docs/contracts/openapi/` تحرسها `check_openapi_parity` (13/13).
+العقود: 14 عقد OpenAPI في `docs/contracts/openapi/` تحرسها `check_openapi_parity` (14/14 — يشمل المونوليث، D-231).
 التفصيل الحيّ: `.memory/architecture.md` · `.memory/runtime_truth.md`.
 الطوبولوجيا المؤرَّخة 2026-05-11: `docs/archive/constitution-history/CLAUDE-SECTIONS-1-3-6.6-FULL.md §ب`.
 ```

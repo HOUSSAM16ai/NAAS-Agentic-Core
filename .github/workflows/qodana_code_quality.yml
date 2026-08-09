@@ -1,28 +1,62 @@
+# Qodana — static analysis (JetBrains Cloud).
+#
+# ⛔ NOT part of `required-ci`, on purpose. An outage or a missing secret at a
+# third-party SaaS must never make this repository un-mergeable. Same rule as the
+# CodeScene jobs (D-234).
+#
+# The generated template this replaces had four defects, each fixed below with the
+# repo law it broke named next to it.
 name: Qodana
 on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: # Specify your branches here
-      - main # The 'main' branch
-      - 'releases/*' # The release branches
+    branches:
+      - main
+      - 'releases/*'
 
 jobs:
   qodana:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
-      contents: write
+      # `contents: write` was in the template. A static scan reads code and writes
+      # checks — it has no reason to be able to push to the repository, and handing
+      # write access to a third-party action is exactly the posture D-187 rejects.
+      contents: read
       pull-requests: write
       checks: write
+    env:
+      # The `secrets` context is not available inside `if:`. Surfacing the token as an
+      # env var is the supported way to branch on its presence — without this, every
+      # fork PR (which gets no secrets) FAILS instead of skipping.
+      #
+      # Read the secret whose name Qodana Cloud's own setup wizard generated for the
+      # CURRENT project: QODANA_TOKEN_<projectId>. That trailing number is the project
+      # id, and it is the whole reason four runs died on "QODANA_TOKEN is invalid" —
+      # the valid token was always sitting in a secret nobody was reading. The id moved
+      # from 335615010 to 1439809274 when the Cloud project was recreated, so a plain
+      # `QODANA_TOKEN` never held the live value.
+      #
+      # ⚠️ If the Qodana Cloud project is ever recreated again, this id changes and the
+      # scan starts skipping (not failing — see the guard below). Re-copy the name from
+      # the workflow Qodana Cloud generates and update this one line.
+      #
+      # Exactly one secret, no `secrets.A || secrets.B` fallback: a fallback reaches for
+      # a stale value whenever the first is empty, and stale values are what cost the
+      # four red runs. One name, one source (D-192). The now-dead QODANA_TOKEN and
+      # QODANA_CONFIGURATIONS_TOKEN secrets should be deleted from repository settings.
+      QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_1439809274 }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5 # was @v3: D-141 requires node24 actions, zero warnings
         with:
-          ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
-          fetch-depth: 0  # a full history is required for pull request analysis
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0 # full history is required for pull-request analysis
       - name: 'Qodana Scan'
+        if: env.QODANA_TOKEN != ''
         uses: JetBrains/qodana-action@v2026.1
         with:
           pr-mode: false
         env:
-          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_1439809274 }}
+          QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'

@@ -1,5 +1,5 @@
 {
-  "branch": "main",
+  "branch": "claude/project-international-markets-ws5pwz",
   "components": [
     {
       "agreed": true,
@@ -219,7 +219,7 @@
         "tests/api/test_chat_event_protocol_flag_integration.py",
         "tests/api/test_final_router_gaps.py",
         "tests/architecture/test_persistence_authority.py",
-        "tests/services/test_d142_phase2_dialogue_manager.py"
+        "tests/regressions/test_iss145_silent_turn.py"
       ],
       "name": "Customer chat WS router",
       "notes": "Live WS endpoint /api/chat/ws.",
@@ -291,6 +291,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-04T05:50:04.363930+00:00",
+  "generated_at_utc": "2026-08-09T00:53:51.442488+00:00",
   "schema_version": 1
 }

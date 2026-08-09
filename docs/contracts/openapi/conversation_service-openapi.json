@@ -82,10 +82,52 @@
       }
     },
     "/api/chat/{path}": {
+      "get": {
+        "summary": "Legacy Chat Http",
+        "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
+        "operationId": "legacy_chat_http_api_chat__path__get",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Legacy Chat Http Api Chat  Path  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "summary": "Legacy Chat Http",
         "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
-        "operationId": "legacy_chat_http_api_chat__path__delete",
+        "operationId": "legacy_chat_http_api_chat__path__get",
         "parameters": [
           {
             "name": "path",
@@ -107,133 +149,7 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "title": "Response Legacy Chat Http Api Chat  Path  Delete"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "options": {
-        "summary": "Legacy Chat Http",
-        "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
-        "operationId": "legacy_chat_http_api_chat__path__delete",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Legacy Chat Http Api Chat  Path  Delete"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Legacy Chat Http",
-        "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
-        "operationId": "legacy_chat_http_api_chat__path__delete",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Legacy Chat Http Api Chat  Path  Delete"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "head": {
-        "summary": "Legacy Chat Http",
-        "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
-        "operationId": "legacy_chat_http_api_chat__path__delete",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Legacy Chat Http Api Chat  Path  Delete"
+                  "title": "Response Legacy Chat Http Api Chat  Path  Get"
                 }
               }
             }
@@ -253,7 +169,7 @@
       "put": {
         "summary": "Legacy Chat Http",
         "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
-        "operationId": "legacy_chat_http_api_chat__path__delete",
+        "operationId": "legacy_chat_http_api_chat__path__get",
         "parameters": [
           {
             "name": "path",
@@ -275,7 +191,91 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "title": "Response Legacy Chat Http Api Chat  Path  Delete"
+                  "title": "Response Legacy Chat Http Api Chat  Path  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "summary": "Legacy Chat Http",
+        "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
+        "operationId": "legacy_chat_http_api_chat__path__get",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Legacy Chat Http Api Chat  Path  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Legacy Chat Http",
+        "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
+        "operationId": "legacy_chat_http_api_chat__path__get",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Legacy Chat Http Api Chat  Path  Get"
                 }
               }
             }
@@ -295,7 +295,7 @@
       "patch": {
         "summary": "Legacy Chat Http",
         "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
-        "operationId": "legacy_chat_http_api_chat__path__delete",
+        "operationId": "legacy_chat_http_api_chat__path__get",
         "parameters": [
           {
             "name": "path",
@@ -317,7 +317,7 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "title": "Response Legacy Chat Http Api Chat  Path  Delete"
+                  "title": "Response Legacy Chat Http Api Chat  Path  Get"
                 }
               }
             }
@@ -334,10 +334,10 @@
           }
         }
       },
-      "get": {
+      "options": {
         "summary": "Legacy Chat Http",
         "description": "\u062a\u0648\u0627\u0641\u0642 \u0645\u0639 \u0627\u0644\u0645\u0633\u0627\u0631\u0627\u062a \u0627\u0644\u0642\u062f\u064a\u0645\u0629 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u062a\u062f\u0631\u064a\u062c\u064a.\n\n\u064a\u064f\u0639\u064a\u062f 200 \u0645\u0639 \u0625\u0634\u0627\u0631\u0629 \u0644\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u062c\u062f\u064a\u062f.",
-        "operationId": "legacy_chat_http_api_chat__path__delete",
+        "operationId": "legacy_chat_http_api_chat__path__get",
         "parameters": [
           {
             "name": "path",
@@ -359,7 +359,7 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "title": "Response Legacy Chat Http Api Chat  Path  Delete"
+                  "title": "Response Legacy Chat Http Api Chat  Path  Get"
                 }
               }
             }
@@ -560,13 +560,6 @@
           "type": {
             "type": "string",
             "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
           }
         },
         "type": "object",

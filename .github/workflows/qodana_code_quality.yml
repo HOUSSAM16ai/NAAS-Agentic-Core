@@ -86,13 +86,19 @@ jobs:
           # Publishes qodana.sarif.json as a job artifact — the file the baseline is cut
           # from, and the only way to inspect findings without a Cloud login.
           upload-result: true
+          # `-e` is the ONLY way to get a variable into the container: "CLI is not
+          # reading full host environment variables and does not pass it to the Qodana
+          # container for security reasons." Setting QODANA_PYTHON_PATH as a step `env:`
+          # looks right and does nothing — verified on 1b585c2, whose idea.log contains
+          # zero occurrences of the name and still reports an empty interpreter list.
+          #
+          # Naming the interpreter is what stops the analyzer from applying a pre-3.10
+          # language level and calling every `X | None` in the repo a broken annotation
+          # (2,500 of 4,956 findings). See the long note in qodana.yaml.
+          args: "-e,QODANA_PYTHON_PATH=/opt/miniconda3/bin/python"
         env:
           QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'
-          # Names the interpreter the analyzer must use. Without it Qodana attaches
-          # none at all and reports every `X | None` in the repo as a broken
-          # annotation — 2,500 of 4,956 problems on 92409be. See qodana.yaml.
-          QODANA_PYTHON_PATH: /opt/miniconda3/bin/python
 
       # The runbook for the failure mode that has already cost four red runs, written where
       # the person looking at the red X will actually see it.

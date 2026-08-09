@@ -30,7 +30,14 @@ jobs:
       # The `secrets` context is not available inside `if:`. Surfacing the token as an
       # env var is the supported way to branch on its presence — without this, every
       # fork PR (which gets no secrets) FAILS instead of skipping.
-      QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+      #
+      # The repository secret is QODANA_CONFIGURATIONS_TOKEN; the *env var* the CLI
+      # reads is QODANA_TOKEN, and those are two different things. Read from one secret
+      # only — a `secrets.A || secrets.B` fallback would silently reach for a stale
+      # value whenever the first is empty, which is the failure this project already
+      # paid for once (an invalid token rejected at authentication, before Qodana read
+      # a single line of code). One name, one source (D-192).
+      QODANA_TOKEN: ${{ secrets.QODANA_CONFIGURATIONS_TOKEN }}
     steps:
       - uses: actions/checkout@v5 # was @v3: D-141 requires node24 actions, zero warnings
         with:

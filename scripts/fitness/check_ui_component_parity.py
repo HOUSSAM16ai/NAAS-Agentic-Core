@@ -85,11 +85,12 @@ class ParityReadError(RuntimeError):
 
 
 def _read(path: Path) -> str:
+    """القارئ الوحيد في هذه البوّابة — يُعلن فشله ولا يبتلعه (D-208 بند ٦)."""
     if not path.is_file():
         raise ParityReadError(f"ملفٌّ مفقود: {path.relative_to(REPO_ROOT)}")
     try:
         return path.read_text(encoding="utf-8")
-    except OSError as exc:  # pragma: no cover
+    except (OSError, UnicodeDecodeError) as exc:  # pragma: no cover
         raise ParityReadError(f"تعذّرت قراءة {path}: {exc}") from exc
 
 
@@ -161,11 +162,7 @@ def _emitted_components() -> dict[str, str]:
     """كل حرفية `"component": "<name>"` في شيفرة الخادم ← أوّل موضعٍ يبثّها."""
     found: dict[str, str] = {}
     for path in _scanned_python_files():
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
-            raise ParityReadError(f"{path}: تعذّرت القراءة — {exc}") from exc
-        for name in _EMITTED.findall(text):
+        for name in _EMITTED.findall(_read(path)):
             found.setdefault(name, str(path.relative_to(REPO_ROOT)))
     return found
 

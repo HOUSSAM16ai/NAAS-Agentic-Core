@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import random
 import time
+from typing import Any
 
 from app.services.serving.domain.models import (
     ModelRequest,
@@ -162,7 +163,7 @@ class MockModelInvoker:
         self,
         model: ModelVersion,
         request: ModelRequest,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         إنشاء مخرجات محاكاة واقعية
         Generate realistic mock output based on model type.
@@ -180,7 +181,7 @@ class MockModelInvoker:
 
     def _generate_language_model_output(
         self, model: ModelVersion, request: ModelRequest
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         إنشاء استجابة نموذج لغوي
         Generate language model response.
@@ -192,7 +193,7 @@ class MockModelInvoker:
             "model": model.model_name,
         }
 
-    def _generate_embedding_output(self, model: ModelVersion) -> dict[str, any]:
+    def _generate_embedding_output(self, model: ModelVersion) -> dict[str, Any]:
         """
         إنشاء استجابة تضمين
         Generate embedding response.
@@ -202,7 +203,7 @@ class MockModelInvoker:
             "model": model.model_name,
         }
 
-    def _generate_vision_output(self, model: ModelVersion) -> dict[str, any]:
+    def _generate_vision_output(self, model: ModelVersion) -> dict[str, Any]:
         """
         إنشاء استجابة نموذج رؤية
         Generate vision model response.
@@ -218,7 +219,7 @@ class MockModelInvoker:
 
     def _generate_generic_output(
         self, model: ModelVersion, request: ModelRequest
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         إنشاء استجابة عامة
         Generate generic response.

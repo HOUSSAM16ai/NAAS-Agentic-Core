@@ -120,9 +120,11 @@ jobs:
           primary-cache-key: qodana-py312-${{ github.ref }}-${{ github.sha }}
           additional-cache-key: qodana-py312-${{ github.ref }}
           # ── Teeth: the count may fall, never rise ─────────────────────────────────
-          # 2,411 is the measured honest count on 238633a. Below it the scan passes;
-          # above it — one net-new problem — the scan fails. It is not in `required-ci`,
-          # so a red Qodana never blocks a merge (D-234).
+          # 2,411 was the measured honest count on 238633a; six verified defects were
+          # fixed since (5 × `dict[str, any]`, 1 discarded comprehension), so the ratchet
+          # follows the code down to 2,405. Below it the scan passes; above it — one
+          # net-new problem — the scan fails. It is not in `required-ci`, so a red Qodana
+          # never blocks a merge (D-234).
           #
           # A ratchet, not a committed `--baseline` SARIF, and that is deliberate: the
           # baseline file is 7 MB, and a frozen analysis artifact going stale is exactly
@@ -130,7 +132,11 @@ jobs:
           # cannot drift, and matches the frozen-debt rule the rest of this repo runs on
           # (D-105). ⛔ Lower it when problems are fixed; raising it needs a written
           # decision in `.memory/decisions.md` naming the reason (D-209, layer 9).
-          fail-threshold: 2411
+          #
+          # ⚠️ The count is not a quality score: 8 of the 13 Critical findings were
+          # verified false positives. `.memory/code_quality_truth.md` holds the verdict
+          # on each — read it before treating a number here as a defect count.
+          fail-threshold: 2405
         env:
           QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'

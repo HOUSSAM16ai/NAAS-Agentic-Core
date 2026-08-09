@@ -171,7 +171,6 @@ class PredictiveAnalyzer:
 
         high_risk = [p for p in predictions if p.probability >= 0.7]
         medium_risk = [p for p in predictions if 0.4 <= p.probability < 0.7]
-        [p for p in predictions if p.probability < 0.4]
 
         return {
             "student_id": student_id,

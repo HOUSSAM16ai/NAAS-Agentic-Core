@@ -18,6 +18,13 @@
 ومع ذلك مُحيتا مرّتين. وهذا هو «الثمن الأول» في العقيدة الهندسية: **قانونٌ بلا فارضٍ آلي
 يُنسى في أوّل PR عاجل** (``ENGINEERING_DOCTRINE.md``). فهذه هي الفارض.
 
+**والأداة الثالثة محكومة بنفس القانون:** ``.coderabbit.yaml`` يجب أن يوجد، وأن يُوجِّه
+المُراجِع إلى ``CLAUDE.md`` بأنماطٍ **تقابل ملفّات موجودة**، وألّا يحجب الدمج. السبب
+مقيسٌ لا مُفترَض: ``dict[str, Any]`` مرّ على Qodana وCodeScene وCodeRabbit ثلاثتهم
+ورفضته ``check_no_new_any`` — فالمُراجِع الخارجي يعرف **اللغة** ويجهل **قانون هذا
+المستودع** ما لم يُعطَه. وإحالةٌ إلى ملفٍّ أُعيدت تسميته تُخفِّضه إلى الافتراضات بلا
+أيّ إشارة (D-208 §8).
+
 **الدَّين المُجمَّد فارغ ويتقلّص فقط.** الشجرة نظيفة بعد D-235، فتبقى كذلك.
 
 **صدق البوّابة (D-208 §6):** ملفٌّ لا يُحلَّل **يُبلَّغ عنه فشلاً** ولا يُعَدّ نظيفاً —
@@ -47,7 +54,7 @@ MIN_ACTION_MAJOR: dict[str, int] = {
     "actions/setup-python": 6,
     "actions/setup-node": 5,
     "actions/upload-artifact": 6,
-    "actions/download-artifact": 6,
+    "actions/download-artifact": 8,
 }
 
 #: رموز خدمات خارجية. كل واحدٍ منها **يجب** أن يُقرأ عبر ``env`` على مستوى الوظيفة
@@ -58,6 +65,12 @@ SAAS_TOKEN_ENV: tuple[str, ...] = ("QODANA_TOKEN", "CS_ACCESS_TOKEN")
 #: ⛔ D-234: لا Qodana ولا CodeScene في ``required-ci``. تعطُّلُ خدمةٍ خارجية أو انتهاءُ
 #: صلاحية رمزٍ يجب ألّا يجعل المستودع غير قابل للدمج.
 FORBIDDEN_IN_REQUIRED_CI: tuple[str, ...] = ("codescene-coverage", "qodana")
+
+#: إعدادات المُراجِع الخارجي. ⛔ **الدستور نفسه يجب أن يكون ضمن ما يقرأه** — وإلّا وافق
+#: على كودٍ ترفضه بوّابات المستودع، وهو ما حدث **مقيساً** لا افتراضاً: `dict[str, Any]`
+#: مرّ على Qodana وCodeScene وCodeRabbit ثلاثتهم، ورفضته `check_no_new_any` (D-192).
+CODERABBIT_CONFIG = REPO_ROOT / ".coderabbit.yaml"
+CODERABBIT_REQUIRED_GUIDELINES: tuple[str, ...] = ("CLAUDE.md",)
 
 #: الدَّين المُجمَّد — **فارغ**، ويتقلّص فقط (سابقة D-105).
 FROZEN_DEBT: frozenset[str] = frozenset()
@@ -284,6 +297,94 @@ def _check_single_qodana_secret(files: list[Path], errors: list[str]) -> None:
         )
 
 
+def _pattern_entry(entry: object) -> list[str]:
+    """إدخالٌ واحد في ``filePatterns``: سلسلةٌ صريحة أو كائن ``{files, applyTo}``."""
+    if isinstance(entry, str):
+        return [entry]
+    if isinstance(entry, dict) and isinstance(entry.get("files"), str):
+        return [part.strip() for part in entry["files"].split(",")]
+    return []
+
+
+def _guideline_patterns(knowledge: dict[str, Any]) -> list[str]:
+    """أنماط ملفّات الدستور المُعلَنة، مسطَّحةً."""
+    guidelines = knowledge.get("code_guidelines")
+    if not isinstance(guidelines, dict):
+        return []
+    if guidelines.get("enabled") is False:
+        return []
+    declared = guidelines.get("filePatterns")
+    # ⚠️ سلسلةٌ مفردة بدل قائمة تُكرَّر حرفاً حرفاً فتُنتج أنماطاً بلا معنى **وتمرّ**.
+    # نوعٌ غير متوقَّع يُعامَل «لا أنماط» فيُبلَّغ عنه أدناه، ولا يُبتلَع (D-208 §6).
+    if not isinstance(declared, list):
+        return []
+    return [pattern for entry in declared for pattern in _pattern_entry(entry)]
+
+
+def _check_required_guidelines(patterns: list[str], errors: list[str]) -> None:
+    """الدستور نفسه ضمن ما يقرأه المُراجِع — وإلّا عرف اللغةَ وجهل القانون."""
+    for required in sorted(set(CODERABBIT_REQUIRED_GUIDELINES) - set(patterns)):
+        errors.append(
+            f"❌ .coderabbit.yaml: `{required}` غائب عن "
+            f"`knowledge_base.code_guidelines.filePatterns`.\n"
+            f"   مُراجِعٌ لا يقرأ الدستور يوافق على ما ترفضه بوّابات المستودع — مقيساً:\n"
+            f"   `dict[str, Any]` مرّ على الأدوات الخارجية الثلاث ورفضته `check_no_new_any`."
+        )
+
+
+def _check_guideline_targets(patterns: list[str], errors: list[str]) -> None:
+    """⛔ D-208 §8: خريطة السلطة لا تُحيل إلى العدم."""
+    missing = [p for p in patterns if "*" not in p and not (REPO_ROOT / p).exists()]
+    for pattern in missing:
+        errors.append(
+            f"❌ .coderabbit.yaml: نمط الدستور `{pattern}` لا يقابل ملفّاً موجوداً.\n"
+            f"   إحالةٌ إلى العدم تُخفِّض المُراجِع إلى الافتراضات **بلا أيّ إشارة**\n"
+            f"   (D-208 §8: خريطة السلطة لا تُحيل إلى العدم)."
+        )
+
+
+def _check_coderabbit_law(config: dict[str, Any], errors: list[str]) -> None:
+    patterns = _guideline_patterns(config.get("knowledge_base") or {})
+    _check_required_guidelines(patterns, errors)
+    _check_guideline_targets(patterns, errors)
+
+
+def _check_coderabbit_advisory(config: dict[str, Any], errors: list[str]) -> None:
+    """⛔ D-234: لا يجعل تكاملٌ خارجي المستودعَ غير قابل للدمج."""
+    reviews = config.get("reviews")
+    reviews = reviews if isinstance(reviews, dict) else {}
+    blocking = [
+        key
+        for key in ("fail_commit_status", "request_changes_workflow")
+        if reviews.get(key) is True
+    ]
+    if "pre_merge_checks" in reviews:
+        blocking.append("pre_merge_checks")
+    if blocking:
+        errors.append(
+            f"❌ .coderabbit.yaml: {', '.join(blocking)} يجعل المُراجِع الخارجي حاجزَ دمج.\n"
+            f"   ⛔ D-234 — نفس القانون الذي يُبقي Qodana وCodeScene خارج `required-ci`:\n"
+            f"   تعطُّلُ خدمةٍ خارجية يجب ألّا يجعل المستودع غير قابل للدمج. المراجعة نصيحةٌ\n"
+            f"   بدليل، والفارض هو `scripts/fitness/`."
+        )
+
+
+def _check_coderabbit(errors: list[str]) -> None:
+    if not CODERABBIT_CONFIG.exists():
+        errors.append(
+            "❌ `.coderabbit.yaml` غير موجود.\n"
+            "   بلا إعداد يعمل المُراجِع بالافتراضات: يعرف **اللغة** ويجهل **قانون هذا\n"
+            "   المستودع**، فيوافق على ما ترفضه البوّابات. القياس في\n"
+            "   `.memory/code_quality_truth.md` §3.5."
+        )
+        return
+    config = _load(CODERABBIT_CONFIG, errors)
+    if config is None:
+        return
+    _check_coderabbit_law(config, errors)
+    _check_coderabbit_advisory(config, errors)
+
+
 def main() -> int:
     errors: list[str] = []
     files = _yaml_files()
@@ -311,6 +412,7 @@ def main() -> int:
             _check_qodana_diagnostic(ctx, name, job)
 
     _check_single_qodana_secret(files, errors)
+    _check_coderabbit(errors)
 
     if errors:
         print("\n".join(errors))
@@ -319,7 +421,7 @@ def main() -> int:
     print(
         f"✅ ci workflow hygiene: {len(files)} ملفّاً — الإصدارات فوق الأرضية، "
         "ورموز الخدمات محروسة ومنطوقة الغياب، ولا صلاحية كتابة لطرفٍ ثالث، "
-        "ولا تكامل خارجي في required-ci."
+        "ولا تكامل خارجي في required-ci، والمُراجِع الخارجي يقرأ الدستور ولا يحجب الدمج."
     )
     return 0
 

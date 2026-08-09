@@ -34,7 +34,19 @@ jobs:
   qodana:
     name: qodana
     runs-on: ubuntu-latest
-    timeout-minutes: 30 # measured: 4.5 min without bootstrap, ~7 with it
+    # ⚠️ Measured from the runs that actually COMPLETED, not from the broken ones. The
+    # "4.5 min" that stood here was a scan with no interpreter attached — it was fast
+    # because it was wrong. Real durations of successful scans:
+    #
+    #     a814655  pull_request       16.7 min
+    #     62ce4c2  push               19.9 min
+    #     42f8876  workflow_dispatch  22.4 min
+    #
+    # 30 minutes left ~7 minutes of headroom over the slowest observed run, and a timeout
+    # renders as a red X indistinguishable from a real analysis failure. 45 gives 2x the
+    # slowest measurement. ⛔ Do not lower this to make a slow scan "fail fast": the scan
+    # taking longer is not a defect signal, and a false red teaches readers to ignore it.
+    timeout-minutes: 45
     permissions:
       # `contents: write` was in the template. A static scan reads code and writes checks —
       # it has no reason to be able to push, and handing write access to a third-party
@@ -99,7 +111,19 @@ jobs:
           # Naming the interpreter is what stops the analyzer from applying a pre-3.10
           # language level and calling every `X | None` in the repo a broken annotation
           # (2,500 of 4,956 findings). See the long note in qodana.yaml.
-          args: "-e,QODANA_PYTHON_PATH=/opt/miniconda3/bin/python"
+          #
+          # ⚠️ SPACE-separated, not comma-separated. The comma form worked but the action
+          # printed, on 1b8cd82:
+          #
+          #     ##[warning]Comma-separated args format is deprecated and will be removed
+          #     in a future version.
+          #
+          # "Removed" is the dangerous word: the day it goes, the whole string is one
+          # mangled argument, and the most likely outcome is the threshold quietly not
+          # applying again — the exact failure this ratchet was rewritten to end. Take the
+          # supported form now, while the warning still tells us which one it is. (D-141
+          # also requires zero warnings.)
+          args: "-e QODANA_PYTHON_PATH=/opt/miniconda3/bin/python --fail-threshold 2405"
           # ── Cache key namespace, and why it carries a version ─────────────────────
           # The default key is `qodana-<version>-<ref>`, and the branch-level restore-key
           # made every run inherit the index built by the FIRST run — the one that had no
@@ -113,24 +137,53 @@ jobs:
           # PyTypeHintsInspection 2,607 -> 12. The 2,595 that vanished were valid PEP 604
           # annotations reported as syntax errors.
           #
-          # Caching is back on (20 min -> 7 min) under a NEW namespace, so the poisoned
-          # entries can never be restored again. ⛔ Bump `-py312-` whenever a change to
-          # the interpreter or language level must invalidate the index — the analysis
-          # environment and the cache belong to the same generation.
+          # Caching is back on under a NEW namespace, so the poisoned entries can never be
+          # restored again. ⛔ Bump `-py312-` whenever a change to the interpreter or
+          # language level must invalidate the index — the analysis environment and the
+          # cache belong to the same generation.
+          #
+          # ⚠️ Do not read "caching is on" as "caching hits". The action prefixes the key,
+          # and 1b8cd82 logged:
+          #
+          #     No cache found for input keys:
+          #       native-false-qodana-py312-refs/pull/6/merge-<sha>,
+          #       native-false-qodana-py312-refs/pull/6/merge
+          #
+          # A miss is normal on a PR whose earlier runs were cancelled before the save
+          # step — cancelled runs write nothing. It is only a defect if a run that
+          # COMPLETED on the same ref still misses.
           primary-cache-key: qodana-py312-${{ github.ref }}-${{ github.sha }}
           additional-cache-key: qodana-py312-${{ github.ref }}
           # ── Teeth: the count may fall, never rise ─────────────────────────────────
-          # 2,411 is the measured honest count on 238633a. Below it the scan passes;
-          # above it — one net-new problem — the scan fails. It is not in `required-ci`,
-          # so a red Qodana never blocks a merge (D-234).
+          # ⚠️ The threshold lives inside `args`, not as its own key, and that distinction
+          # is the whole point. `fail-threshold:` was written as a top-level `with:` input
+          # for two commits — and `JetBrains/qodana-action@v2026.1` declares no such input,
+          # so GitHub silently dropped it. The scan reported green while the gate did not
+          # exist. ⛔ Verify a flag against the action's `action.yaml`, never a README.
           #
-          # A ratchet, not a committed `--baseline` SARIF, and that is deliberate: the
-          # baseline file is 7 MB, and a frozen analysis artifact going stale is exactly
-          # the failure this run just diagnosed. A single integer is reviewable in a diff,
-          # cannot drift, and matches the frozen-debt rule the rest of this repo runs on
-          # (D-105). ⛔ Lower it when problems are fixed; raising it needs a written
-          # decision in `.memory/decisions.md` naming the reason (D-209, layer 9).
-          fail-threshold: 2411
+          # PROOF IT NOW REACHES THE CLI — from the run log of 1b8cd82, not from reasoning:
+          #
+          #     [command]…/qodana/2026.1.3/x64/qodana scan --cache-dir … --skip-pull \
+          #       -e QODANA_PYTHON_PATH=/opt/miniconda3/bin/python --fail-threshold 2405
+          #
+          # PROOF OF THE COMPARISON: that same run reported exactly 2405 problems against
+          # a threshold of 2405 and concluded SUCCESS. So the gate fires on count > N, not
+          # count >= N — the CLI help says "if this number is reached", which is looser
+          # than the behaviour. 2405 is therefore the correct value: it permits today's
+          # tree and reddens on a single new problem.
+          #
+          # ⚠️ Still unobserved: a run that actually FAILS. Argument delivery and the
+          # boundary are measured; the failing branch is JetBrains' documented contract.
+          # Proving it costs one deliberate red scan (drop this to 2404 on a throwaway
+          # branch) — worth doing the next time this file is touched for another reason.
+          #
+          # 2,405 measured on 42f8876 and reproduced on 1b8cd82 (2,411 before six verified
+          # fixes). ⛔ Lower it when problems are fixed; raising it needs a written decision
+          # in `.memory/decisions.md` naming the reason (D-209, layer 9).
+          #
+          # ⚠️ The count is not a quality score: 8 of the 13 Critical findings were
+          # verified false positives. `.memory/code_quality_truth.md` holds the verdict
+          # on each — read it before treating a number here as a defect count.
         env:
           QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'

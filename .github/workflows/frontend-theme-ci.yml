@@ -333,9 +333,34 @@ jobs:
         working-directory: frontend
         run: npm ci --prefer-offline
 
+      # ── This step could not fail, and said "lint" while doing so (D-235) ──────────
+      # It was `npx eslint app/ --ext .js,.jsx --max-warnings 0 || true`. The `|| true`
+      # swallowed the exit code, so `--max-warnings 0` was decorative and a job named
+      # `lint-frontend` reported green no matter what ESLint said. Reproduced locally on
+      # 1b8cd82 with the exact CI command: **exit 1**, `✖ 3 problems (0 errors, 3 warnings)`
+      # — react-hooks/exhaustive-deps in CogniForgeApp.jsx (×2) and
+      # CombinationsVisualizer.jsx (×1). CI had been hiding all three.
+      #
+      # Same defect class as the `codescene-coverage` step that sat `skipped` under a green
+      # job for a month, and the `fail-threshold:` key GitHub dropped in silence: a check
+      # that cannot fail is indistinguishable from one that passes (§0 — no silent failure).
+      #
+      # ⛔ The number is a ratchet, not a target: it is the MEASURED count, it goes down when
+      # a warning is fixed, and it never goes up (D-105 precedent). Fixing the three requires
+      # changing hook dependency arrays in the main student-facing component — a behavioural
+      # change that belongs in its own PR, not in a CI-hygiene one. Freezing it here means a
+      # FOURTH warning turns this job red today, instead of joining a silent pile.
       - name: ESLint
         working-directory: frontend
-        run: npx eslint app/ --ext .js,.jsx --max-warnings 0 || true
+        env:
+          # Measured on 1b8cd82. ⛔ Lower this when a warning is fixed; raising it needs a
+          # written reason in `.memory/decisions.md` (D-209, layer 9).
+          MAX_WARNINGS: "3"
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ESLint ratchet: at most $MAX_WARNINGS warning(s) allowed."
+          npx eslint app/ --ext .js,.jsx --max-warnings "$MAX_WARNINGS"
 
       - name: console.log audit
         shell: bash

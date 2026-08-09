@@ -1,0 +1,175 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+#
+# CodeRabbit — the third quality tool, and the only one that reads intent (D-235).
+#
+# ── Why this file exists ──────────────────────────────────────────────────────────────
+# On 2026-08-09 a wrong fix passed ALL THREE external tools. `dict[str, any]` (the
+# builtin, not a type) was correctly flagged Critical by Qodana; the obvious repair is
+# `dict[str, Any]`; Qodana went green, CodeScene approved, CodeRabbit approved. The repo's
+# own gate `check_no_new_any` then rejected it: D-192 bans `Any` outright — "classify the
+# type, do not widen it". The correct fix was `dict[str, object]`.
+#
+# An external reviewer knows the LANGUAGE. It does not know THIS REPOSITORY'S LAW, and
+# no amount of profile tuning teaches it. `knowledge_base.code_guidelines` does: it points
+# the reviewer at the constitution the gates already enforce, so the review and the gates
+# argue from the same text instead of two different ones.
+#
+# ⛔ This does not replace a single gate. `scripts/fitness/` stays the enforcer; a SaaS
+# reviewer is advisory by construction (see `fail_commit_status` below).
+#
+# ⚠️ Every key here was verified against the published schema linked above, not against a
+# README. That distinction is not pedantry: `fail-threshold` was written as a `with:` input
+# of `qodana-action` for two commits, the action declares no such input, GitHub dropped it
+# silently, and the ratchet documented as having teeth had none. Verify flags at the source.
+
+language: en-US
+
+reviews:
+  # "assertive" over the default "chill". The measured failure above was a review that
+  # said nothing when it should have objected; a reviewer tuned to stay quiet is worse
+  # than no reviewer, because its silence reads as approval (§0 — no silent failure).
+  profile: assertive
+
+  # ⛔ D-234, same law that keeps Qodana and CodeScene out of `required-ci`: a third-party
+  # outage or an expired token must never make this repository un-mergeable. The review is
+  # advice with evidence, and a human merges. `pre_merge_checks` is deliberately unset for
+  # the same reason — it is the one knob here that could block a merge.
+  fail_commit_status: false
+  request_changes_workflow: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_filters:
+    # ⚠️ The leading "**" is deliberate and is NOT redundant. The published reference
+    # documents these patterns as "include or exclude" and gives `!dist/**` as an example,
+    # but it does not say what an exclusion-ONLY list means: everything-minus-these, or
+    # nothing-at-all because no include pattern matched. Under the second reading a review
+    # would silently cover no files — the exact silent-green failure this repository spent
+    # a day removing. An explicit include is a no-op under the first reading and the fix
+    # under the second, so it is correct either way. ⛔ Do not "simplify" it away without
+    # a documented answer.
+    - "**"
+    # Frozen history: reading it wastes review budget and invites suggestions to edit
+    # snapshots that must not change (D-173 archive · D-188).
+    - "!docs/archive/**"
+    # Curriculum data and fixtures, not code under review.
+    - "!knowledge_base/**"
+    - "!migrations_archive/**"
+    # Generated or vendored — a diff here is an output, not a decision.
+    - "!**/package-lock.json"
+    - "!**/*.lock"
+    - "!.runtime/**"
+
+  path_instructions:
+    - path: "**/*.py"
+      instructions: |
+        This repository bans `typing.Any` (D-192). A gate named `check_no_new_any` fails CI
+        on it with a frozen debt that only shrinks. When a signature needs widening, prefer
+        a precise union, a Protocol, a TypedDict, or `object` — in that order. Flag any new
+        `Any`, including `dict[str, Any]`, and say which alternative fits.
+
+        Never `os.environ[...]` inside `app/`, `microservices/`, or `shared/` — read
+        settings through `app.core.config.get_settings()`. Never synchronous SQLAlchemy
+        (`db.query(...)`); this codebase is fully async and a sync call blocks the event
+        loop. Async engines require the `postgresql+asyncpg://` scheme, never `postgresql://`.
+
+        Every subprocess call must go through `agent_tools.sandbox.run_sandboxed(argv, ...)`
+        with an argv list. `shell=True` is forbidden (D-187) and its gate's frozen debt is
+        empty: security here is that injection is UNREPRESENTABLE, not filtered.
+
+        Outbound HTTP goes through `shared/http_client.correlated_client` so the correlation
+        id is EXTENDED, not minted per call (D-189) — a fresh `uuid4()` per request breaks
+        the trace while looking correct. Always pass an explicit timeout.
+
+        A function that swallows an exception and returns a falsy value is a defect here,
+        not defensive style: "unknown is better than fake certainty" (§0). Raise, or return
+        an explicit `None` the caller is documented to handle.
+
+    - path: ".github/workflows/**"
+      instructions: |
+        Never interpolate `${{ github.head_ref }}`, `${{ github.event.* }}`, or any other
+        attacker-controllable expression directly into a `run:` block — that is shell
+        injection into a job that holds secrets. Pass it through `env:` and reference the
+        environment variable instead.
+
+        Official actions have a version floor enforced by
+        `scripts/fitness/check_ci_workflow_hygiene.py` (D-141 requires node24 and zero
+        deprecation warnings). Moving refs (`@main`, bare SHAs) are rejected: a floor that a
+        moving ref can cross is not a floor.
+
+        A job that calls a third-party action must not hold `contents: write`, and
+        permissions inherit from the workflow when the job is silent about them.
+
+        A green job that did nothing must SAY it did nothing. Any step skipped because a
+        secret is absent needs a companion step writing a `::warning` and a
+        `$GITHUB_STEP_SUMMARY` line — `codescene-coverage` sat green for a month having
+        uploaded zero bytes, and nothing said so.
+
+        Verify every action input against that action's own `action.yaml`. GitHub silently
+        drops undeclared `with:` keys, so a misspelled or imagined input produces a green
+        run and no gate.
+
+    - path: "app/services/skills/**"
+      instructions: |
+        A Skill must inherit `BaseSkill`, own exactly one responsibility, expose Prometheus
+        metrics, ship tests, and never call another Skill directly (it goes through the
+        orchestrator). Numbers and symbolic truth come from the deterministic engines in
+        `app/core/foundations/` and the probability brain — never from an LLM. The LLM
+        narrates a result; it does not decide one.
+
+    - path: "app/services/chat/**"
+      instructions: |
+        Student-facing paths are governed by the pedagogical constitution. Never reveal a
+        result or a step the student could derive (D-113). Exactly one terminal frame per
+        turn. The monolith is the single writer of `customer_messages`. Never write
+        system-generated text under a `user` role — that is memory poisoning, and this
+        repository already did it to itself 28 times (ISS-146).
+
+    - path: ".memory/**/*.md"
+      instructions: |
+        These files carry STATE, and every number must name the run or commit that produced
+        it — an undated number goes stale and then lies (D-188). Flag any claim of absence
+        ("no newer version exists", "nothing else uses this") that no visible check
+        supports. Law belongs in `docs/architecture/` and `CLAUDE.md`; state belongs here.
+        The two must not mix.
+
+  tools:
+    ruff:
+      enabled: true
+    actionlint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    checkov:
+      enabled: true
+    semgrep:
+      enabled: true
+      # The repository ships its own ruleset; reviewing against it keeps CodeRabbit and the
+      # `security` CI job arguing from one source instead of two (D-192 — one definition).
+      config_file: .semgrep.yml
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    # ⛔ The whole point of this file. Without these patterns the reviewer approves code
+    # the repository's own gates reject — measured, not hypothetical
+    # (`.memory/code_quality_truth.md` §3.5).
+    filePatterns:
+      - CLAUDE.md
+      - AGENTS.md
+      - CONTRIBUTING.md
+      - docs/architecture/ENGINEERING_DOCTRINE.md
+      - docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md
+      - docs/architecture/COGNITIVE_EXECUTION_ENGINE.md
+      - docs/VALUE_DOCTRINE.md
+
+chat:
+  auto_reply: true

@@ -89,6 +89,10 @@ jobs:
         env:
           QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'
+          # Names the interpreter the analyzer must use. Without it Qodana attaches
+          # none at all and reports every `X | None` in the repo as a broken
+          # annotation — 2,500 of 4,956 problems on 92409be. See qodana.yaml.
+          QODANA_PYTHON_PATH: /opt/miniconda3/bin/python
 
       # The runbook for the failure mode that has already cost four red runs, written where
       # the person looking at the red X will actually see it.

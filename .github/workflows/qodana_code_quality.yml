@@ -96,6 +96,23 @@ jobs:
           # language level and calling every `X | None` in the repo a broken annotation
           # (2,500 of 4,956 findings). See the long note in qodana.yaml.
           args: "-e,QODANA_PYTHON_PATH=/opt/miniconda3/bin/python"
+          # Cache off, deliberately, until the false-positive class is gone.
+          #
+          # The interpreter is now attached — the report's idea.log says
+          # "Setting PythonSDK Python 3.12 Version:Python 3.12.4" — and 2,598 valid
+          # PEP 604 annotations are STILL reported as "Invalid type annotation". The
+          # same log shows why the fix did not take effect:
+          #
+          #     Running task: PythonLanguageLevelPusher$MyDumbModeTask
+          #     Task canceled (PCE)
+          #
+          # The language level is never pushed onto the files, because the index is
+          # restored from a cache built by the very first run, which had no interpreter
+          # at all. A stale index outlives the configuration that produced it.
+          #
+          # This run rebuilds from scratch to test that. Caching is re-enabled once the
+          # count confirms it — a hypothesis is not a fact until a run says so (D-233).
+          use-caches: false
         env:
           QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'

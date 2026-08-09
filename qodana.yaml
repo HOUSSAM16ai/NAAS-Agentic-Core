@@ -4,7 +4,44 @@
 
 version: "1.0"
 linter: qodana-python
+
+# Attach a Python interpreter, then install the project's dependencies into it.
+#
+# Measured on 92409be, from the run's own idea.log:
+#
+#     Found no suitable interpreter to run pycodestyle.py. Available interpreters are: [ ]
+#
+# With no interpreter attached, the analyzer applies a pre-3.10 language level, so every
+# PEP 604 annotation in the repository is reported as broken. That is 2,500 of the 4,956
+# problems — `number: int | None = None` and its kind, flagged as "Invalid type annotation"
+# at High severity. The code is correct; the analysis environment was not.
+#
+# QODANA_PYTHON_PATH (set in the workflow) is the documented way to name the interpreter.
+# The `test -x` guard makes an image change fail the scan loudly instead of silently
+# restoring the 2,500 false positives — a wrong number is worse than a red run (§0).
+#
+# ⛔ Do not cut a `--baseline` before this is fixed: it would freeze the false positives
+# into the baseline and then redden every PR that adds a single `X | None` annotation.
+bootstrap: |
+  test -x /opt/miniconda3/bin/python || {
+    echo "QODANA_PYTHON_PATH target /opt/miniconda3/bin/python is missing in this image."
+    echo "Find the interpreter (\`which python3\`) and update both qodana.yaml and the workflow."
+    exit 1
+  }
+  /opt/miniconda3/bin/python -m pip install --no-cache-dir -r requirements-ci.txt
+
 profile:
   name: qodana.recommended
+
+# Frozen snapshots and data, not live source. `docs/archive/` is explicitly append-only
+# history (D-173), and reporting on it can never lead to a fix.
+exclude:
+  - name: All
+    paths:
+      - docs/archive
+      - migrations_archive
+      - knowledge_base
+      - data
+
 include:
   - name: CheckDependencyLicenses

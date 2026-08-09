@@ -1,28 +1,158 @@
+# Qodana — static analysis (JetBrains Cloud).
+#
+# ⛔ NOT part of `required-ci`, on purpose. An outage or an expired token at a third-party
+# SaaS must never make this repository un-mergeable. Same rule as `codescene-coverage`
+# in ci.yml (D-234).
+#
+# ── Why this file keeps getting rewritten, and why it is written this way (D-235) ──────
+# Qodana Cloud's setup wizard opens a PR that overwrites this workflow with its generated
+# template. That has now happened three times, and each time the merge silently reverted
+# the hardening below — `checkout@v3`, `contents: write`, no token guard, no timeout.
+# `scripts/fitness/check_ci_workflow_hygiene.py` now fails CI when any of them come back,
+# so the fourth wizard PR is caught by a gate instead of by a reader.
+#
+# When that PR arrives: keep ONLY its `QODANA_TOKEN_<projectId>` line and discard the rest.
 name: Qodana
+
 on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: # Specify your branches here
-      - main # The 'main' branch
-      - 'releases/*' # The release branches
+    branches:
+      - main
+      - 'releases/*'
+
+# Least privilege at the top of the file: nothing here needs to write to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: qodana-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   qodana:
+    name: qodana
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # measured: 4.5 min without bootstrap, ~7 with it
     permissions:
-      contents: write
+      # `contents: write` was in the template. A static scan reads code and writes checks —
+      # it has no reason to be able to push, and handing write access to a third-party
+      # action is exactly the posture D-187 rejects.
+      contents: read
       pull-requests: write
       checks: write
+    env:
+      # The `secrets` context is not available inside `if:`. Surfacing the token as an env
+      # var is the supported way to branch on its presence — without this, every fork PR
+      # (which gets no secrets) FAILS instead of skipping.
+      #
+      # The trailing number is the Qodana Cloud project id. It changed twice already
+      # (335615010 → 1439809274 → 118820581) and each change silently invalidated the old
+      # secret, producing `403 no_permission` for four runs. Exactly one reference, no
+      # `secrets.A || secrets.B` fallback: a fallback reaches for a stale value the moment
+      # the first is empty, and stale values are what cost those runs (D-192 — one name,
+      # one source). The diagnostic step at the bottom names the fix when it happens again.
+      QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_118820581 }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5 # was @v3: D-141 requires node24 actions, zero warnings
         with:
-          ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
-          fetch-depth: 0  # a full history is required for pull request analysis
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0 # full history is required for pull-request analysis
+          # Nothing here pushes, so the checkout has no reason to leave GITHUB_TOKEN in
+          # .git/config for a third-party action to inherit (zizmor: artipacked). Same
+          # least-privilege posture as `contents: read` above.
+          persist-credentials: false
+
+      # A skipped scan and a clean scan look identical from the outside — both green. Say
+      # which one this is (L11: absence declares its reason).
+      - name: Report a missing token instead of skipping in silence
+        if: env.QODANA_TOKEN == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::warning title=Qodana skipped::secrets.QODANA_TOKEN_118820581 is empty — no scan ran."
+          {
+            echo "### Qodana — skipped, not clean"
+            echo
+            echo "\`secrets.QODANA_TOKEN_118820581\` resolved to an empty value, so no analysis ran."
+            echo "This is expected on pull requests from forks, which receive no secrets."
+            echo "On a same-repo run it means the secret is missing or was renamed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: 'Qodana Scan'
+        if: env.QODANA_TOKEN != ''
         uses: JetBrains/qodana-action@v2026.1
         with:
+          # The action defaults to `true` (changed files only). A full scan is what the
+          # committed baseline is comparable against, and it costs ~4.5 min.
           pr-mode: false
+          # Publishes qodana.sarif.json as a job artifact — the file the baseline is cut
+          # from, and the only way to inspect findings without a Cloud login.
+          upload-result: true
+          # `-e` is the ONLY way to get a variable into the container: "CLI is not
+          # reading full host environment variables and does not pass it to the Qodana
+          # container for security reasons." Setting QODANA_PYTHON_PATH as a step `env:`
+          # looks right and does nothing — verified on 1b585c2, whose idea.log contains
+          # zero occurrences of the name and still reports an empty interpreter list.
+          #
+          # Naming the interpreter is what stops the analyzer from applying a pre-3.10
+          # language level and calling every `X | None` in the repo a broken annotation
+          # (2,500 of 4,956 findings). See the long note in qodana.yaml.
+          args: "-e,QODANA_PYTHON_PATH=/opt/miniconda3/bin/python"
+          # ── Cache key namespace, and why it carries a version ─────────────────────
+          # The default key is `qodana-<version>-<ref>`, and the branch-level restore-key
+          # made every run inherit the index built by the FIRST run — the one that had no
+          # interpreter attached. That stale index silently overrode both the `-e` fix and
+          # the language-level pass:
+          #
+          #     Running task: PythonLanguageLevelPusher$MyDumbModeTask
+          #     Task canceled (PCE)
+          #
+          # Measured on 238633a with caching off: 4,957 -> 2,411 problems, and
+          # PyTypeHintsInspection 2,607 -> 12. The 2,595 that vanished were valid PEP 604
+          # annotations reported as syntax errors.
+          #
+          # Caching is back on (20 min -> 7 min) under a NEW namespace, so the poisoned
+          # entries can never be restored again. ⛔ Bump `-py312-` whenever a change to
+          # the interpreter or language level must invalidate the index — the analysis
+          # environment and the cache belong to the same generation.
+          primary-cache-key: qodana-py312-${{ github.ref }}-${{ github.sha }}
+          additional-cache-key: qodana-py312-${{ github.ref }}
+          # ── Teeth: the count may fall, never rise ─────────────────────────────────
+          # 2,411 is the measured honest count on 238633a. Below it the scan passes;
+          # above it — one net-new problem — the scan fails. It is not in `required-ci`,
+          # so a red Qodana never blocks a merge (D-234).
+          #
+          # A ratchet, not a committed `--baseline` SARIF, and that is deliberate: the
+          # baseline file is 7 MB, and a frozen analysis artifact going stale is exactly
+          # the failure this run just diagnosed. A single integer is reviewable in a diff,
+          # cannot drift, and matches the frozen-debt rule the rest of this repo runs on
+          # (D-105). ⛔ Lower it when problems are fixed; raising it needs a written
+          # decision in `.memory/decisions.md` naming the reason (D-209, layer 9).
+          fail-threshold: 2411
         env:
-          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_118820581 }}
+          QODANA_TOKEN: ${{ env.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'
+
+      # The runbook for the failure mode that has already cost four red runs, written where
+      # the person looking at the red X will actually see it.
+      - name: Explain the failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "### Qodana failed — read the scan log first"
+            echo
+            echo "If the log says \`QODANA_TOKEN is invalid\` (HTTP 403 \`no_permission\`),"
+            echo "the Qodana Cloud project was recreated and its id changed. The live token"
+            echo "then sits in a NEW secret named \`QODANA_TOKEN_<newProjectId>\`, and this"
+            echo "workflow is still reading the old name."
+            echo
+            echo "Fix: copy the secret name from the workflow Qodana Cloud generates into"
+            echo "the single \`QODANA_TOKEN:\` line in \`.github/workflows/qodana_code_quality.yml\`,"
+            echo "then delete the dead secret from repository settings."
+            echo
+            echo "Any other failure is a real analysis failure — read the log, not this box."
+          } >> "$GITHUB_STEP_SUMMARY"

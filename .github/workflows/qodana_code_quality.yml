@@ -59,6 +59,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0 # full history is required for pull-request analysis
+          # Nothing here pushes, so the checkout has no reason to leave GITHUB_TOKEN in
+          # .git/config for a third-party action to inherit (zizmor: artipacked). Same
+          # least-privilege posture as `contents: read` above.
+          persist-credentials: false
 
       # A skipped scan and a clean scan look identical from the outside — both green. Say
       # which one this is (L11: absence declares its reason).

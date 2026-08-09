@@ -11,7 +11,7 @@
 كانت تنتهي `success` في كل تشغيل بينما خطوتها الوحيدة ذات المعنى **`skipped`**. الدليل
 من CI لا من التحليل — `run 31308376947` على `f4b3b40`:
 
-```
+```text
 Upload coverage to CodeScene → skipped
 codescene-coverage           → success
 ```

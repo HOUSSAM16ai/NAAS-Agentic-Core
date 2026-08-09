@@ -61,7 +61,11 @@ FORBIDDEN_IN_REQUIRED_CI: tuple[str, ...] = ("codescene-coverage", "qodana")
 #: الدَّين المُجمَّد — **فارغ**، ويتقلّص فقط (سابقة D-105).
 FROZEN_DEBT: frozenset[str] = frozenset()
 
-_ACTION_REF = re.compile(r"uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@v(\d+)")
+#: كل مرجع ``uses:`` مهما كان شكله. الالتقاط على ``@vN`` وحده كان يترك
+#: ``actions/checkout@main`` و``@<sha>`` يمرّان فوق الأرضية بلا فحص — أرضيةٌ
+#: تُتجاوَز بمرجعٍ متحرّك ليست أرضية.
+_ACTION_REF = re.compile(r"uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@(\S+)")
+_MAJOR_TAG = re.compile(r"^v(\d+)(?:\.\d+)*$")
 _QODANA_SECRET = re.compile(r"secrets\.QODANA_TOKEN[A-Za-z0-9_]*")
 
 
@@ -86,7 +90,14 @@ def _load(path: Path, errors: list[str]) -> dict[str, Any] | None:
             f"   البوّابة **لا تشهد** بنظافة ملفٍّ لم تقرأه — أصلِح الملفّ أو احذفه."
         )
         return None
-    return data if isinstance(data, dict) else None
+    if isinstance(data, dict):
+        return data
+    errors.append(
+        f"❌ {_rel(path)}: جذر YAML ليس تخطيطاً (mapping) بل {type(data).__name__}.\n"
+        f"   البوّابة تتخطّى كل الفحوص البنيوية لمثل هذا الملفّ — والتخطّي الصامت\n"
+        f"   يُقرأ نظافةً، وهو بالضبط ما وُجدت هذه البوّابة لتمنعه."
+    )
+    return None
 
 
 def _jobs(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -105,13 +116,23 @@ def _steps(job: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _check_action_versions(path: Path, text: str, errors: list[str]) -> None:
     for match in _ACTION_REF.finditer(text):
-        action, major = match.group(1), int(match.group(2))
+        action, ref = match.group(1), match.group(2).strip("\"'")
         floor = MIN_ACTION_MAJOR.get(action)
-        if floor is None or major >= floor:
+        if floor is None:
             continue
         line_no = text[: match.start()].count("\n") + 1
+        tag = _MAJOR_TAG.match(ref)
+        if tag is None:
+            errors.append(
+                f"❌ {_rel(path)}:{line_no}: `{action}@{ref}` ليس وسماً بإصدارٍ رئيسي.\n"
+                f"   الأرضية تُفرَض على `v<major>` وحده — ومرجعٌ متحرّك (`@main`) أو\n"
+                f"   `@<sha>` يعبر الفحص بلا أن يُقاس، فتصير الأرضية إعلاناً لا حَكَماً."
+            )
+            continue
+        if int(tag.group(1)) >= floor:
+            continue
         errors.append(
-            f"❌ {_rel(path)}:{line_no}: `{action}@v{major}` أقدم من الأرضية `v{floor}`.\n"
+            f"❌ {_rel(path)}:{line_no}: `{action}@{ref}` أقدم من الأرضية `v{floor}`.\n"
             f"   D-141 يوجب إجراءات node24 وصفر warning — و`checkout@v3` كان يطبع\n"
             f"   `Node.js 20 is deprecated` في كل تشغيل. رفِّع الإصدار، ولا تُخفِّض الأرضية."
         )
@@ -124,41 +145,57 @@ def _token_envs(scope: dict[str, Any]) -> set[str]:
     return {key for key in env if key in SAAS_TOKEN_ENV}
 
 
+def _report_step_scoped_token(path: Path, name: str, token: str, errors: list[str]) -> None:
+    """رمزٌ يُقرأ داخل خطوةٍ فقط لا يمكن أن يحرسه ``if:`` — سياق ``env`` الخاصّ بالخطوة
+    غير مرئيّ لشرطها، فمكانه مستوى الوظيفة."""
+    errors.append(
+        f"❌ {_rel(path)} · job `{name}`: `{token}` مُعرَّف على مستوى الخطوة فقط.\n"
+        f"   انقله إلى `env:` على مستوى الوظيفة — شرطُ الخطوة لا يرى `env` الخاصّ بها،\n"
+        f"   فبدون ذلك يستحيل الحارس وتفشل كل PR من fork."
+    )
+
+
+def _report_missing_run_guard(path: Path, name: str, token: str, errors: list[str]) -> None:
+    errors.append(
+        f"❌ {_rel(path)} · job `{name}`: لا خطوة محروسة بـ`if: env.{token} != ''`.\n"
+        f"   بلا الحارس تفشل كل PR من fork (لا أسرار لها) بدل أن تتخطّى — D-234."
+    )
+
+
+def _report_silent_skip(path: Path, name: str, token: str, errors: list[str]) -> None:
+    errors.append(
+        f"❌ {_rel(path)} · job `{name}`: التخطّي عند غياب `{token}` **صامت**.\n"
+        f"   أضف خطوة `if: env.{token} == ''` تكتب `::warning` + سطراً في\n"
+        f"   `$GITHUB_STEP_SUMMARY`. وظيفةٌ خضراء لم تفعل شيئاً يجب أن تقول ذلك\n"
+        f"   (§0 «لا فشل صامت» · L11 «الغياب لا يعني الغموض») — وهذا حرفياً ما\n"
+        f"   أخفى أن CodeScene لم يرفع تقريراً واحداً منذ كُتبت الوظيفة."
+    )
+
+
 def _check_token_guard(path: Path, name: str, job: dict[str, Any], errors: list[str]) -> None:
     job_tokens = _token_envs(job)
     step_tokens: set[str] = set()
     for step in _steps(job):
         step_tokens |= _token_envs(step)
 
-    # رمزٌ يُقرأ داخل خطوةٍ فقط لا يمكن أن يحرسه ``if:`` — سياق ``env`` الخاصّ بالخطوة
-    # غير مرئيّ لشرطها. فمكانه مستوى الوظيفة.
     for token in sorted(step_tokens - job_tokens):
-        errors.append(
-            f"❌ {_rel(path)} · job `{name}`: `{token}` مُعرَّف على مستوى الخطوة فقط.\n"
-            f"   انقله إلى `env:` على مستوى الوظيفة — شرطُ الخطوة لا يرى `env` الخاصّ بها،\n"
-            f"   فبدون ذلك يستحيل الحارس وتفشل كل PR من fork."
-        )
+        _report_step_scoped_token(path, name, token, errors)
 
+    conditions = [str(step.get("if", "")) for step in _steps(job)]
     for token in sorted(job_tokens):
-        conditions = [str(step.get("if", "")) for step in _steps(job)]
-        has_run_guard = any(f"env.{token} != ''" in cond for cond in conditions)
-        has_absence_report = any(f"env.{token} == ''" in cond for cond in conditions)
-        if not has_run_guard:
-            errors.append(
-                f"❌ {_rel(path)} · job `{name}`: لا خطوة محروسة بـ`if: env.{token} != ''`.\n"
-                f"   بلا الحارس تفشل كل PR من fork (لا أسرار لها) بدل أن تتخطّى — D-234."
-            )
-        if not has_absence_report:
-            errors.append(
-                f"❌ {_rel(path)} · job `{name}`: التخطّي عند غياب `{token}` **صامت**.\n"
-                f"   أضف خطوة `if: env.{token} == ''` تكتب `::warning` + سطراً في\n"
-                f"   `$GITHUB_STEP_SUMMARY`. وظيفةٌ خضراء لم تفعل شيئاً يجب أن تقول ذلك\n"
-                f"   (§0 «لا فشل صامت» · L11 «الغياب لا يعني الغموض») — وهذا حرفياً ما\n"
-                f"   أخفى أن CodeScene لم يرفع تقريراً واحداً منذ كُتبت الوظيفة."
-            )
+        if not any(f"env.{token} != ''" in cond for cond in conditions):
+            _report_missing_run_guard(path, name, token, errors)
+        if not any(f"env.{token} == ''" in cond for cond in conditions):
+            _report_silent_skip(path, name, token, errors)
 
 
-def _check_third_party_write(path: Path, name: str, job: dict[str, Any], errors: list[str]) -> None:
+def _check_third_party_write(
+    path: Path,
+    name: str,
+    job: dict[str, Any],
+    workflow_permissions: Any,
+    errors: list[str],
+) -> None:
     third_party = [
         str(step["uses"])
         for step in _steps(job)
@@ -167,7 +204,9 @@ def _check_third_party_write(path: Path, name: str, job: dict[str, Any], errors:
     ]
     if not third_party:
         return
-    permissions = job.get("permissions")
+    # صلاحيات الوظيفة تَرِث صلاحيات الملفّ حين لا تُصرِّح بنفسها. قراءةُ الوظيفة وحدها
+    # كانت تُمرِّر `contents: write` معلَناً على مستوى الملفّ — وهو نفس المنح بالضبط.
+    permissions = job.get("permissions", workflow_permissions)
     if isinstance(permissions, dict) and permissions.get("contents") == "write":
         errors.append(
             f"❌ {_rel(path)} · job `{name}`: `contents: write` في وظيفةٍ تستدعي إجراءً من\n"
@@ -240,7 +279,7 @@ def main() -> int:
         _check_required_ci(path, jobs, errors)
         for name, job in jobs.items():
             _check_token_guard(path, name, job, errors)
-            _check_third_party_write(path, name, job, errors)
+            _check_third_party_write(path, name, job, doc.get("permissions"), errors)
             _check_qodana_diagnostic(path, name, job, errors)
 
     _check_single_qodana_secret(files, errors)

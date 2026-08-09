@@ -543,10 +543,17 @@ jobs:
       # The data was accepted (691 files parsed) but attributed to a branch that does not
       # exist. Naming the local branch after the real one costs one command.
       - name: Restore the branch name lost by the detached checkout
+        # The branch name goes through `env`, never into the `run` template. A PR head
+        # ref is attacker-controlled metadata, `${{ }}` is expanded before bash starts,
+        # and this job carries CS_ACCESS_TOKEN — so a branch named with shell
+        # metacharacters would run as code with the token in scope. Same law as D-187:
+        # make the injection unrepresentable instead of filtering for it.
+        env:
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
-          git checkout -B "${{ github.head_ref || github.ref_name }}"
+          git checkout -B "$BRANCH_NAME"
           echo "branch: $(git rev-parse --abbrev-ref HEAD)"
       - uses: actions/download-artifact@v6
         id: coverage

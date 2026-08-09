@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +68,20 @@ FROZEN_DEBT: frozenset[str] = frozenset()
 _ACTION_REF = re.compile(r"uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@(\S+)")
 _MAJOR_TAG = re.compile(r"^v(\d+)(?:\.\d+)*$")
 _QODANA_SECRET = re.compile(r"secrets\.QODANA_TOKEN[A-Za-z0-9_]*")
+
+
+@dataclass(frozen=True)
+class _FileCtx:
+    """ما يخصّ الملفّ الواحد، مُمرَّراً كوحدة.
+
+    كل فاحص كان يأخذ ``path`` و``errors`` وصلاحيات الملفّ منفصلةً، فبلغت التواقيع
+    خمسة وسائط — وهو ما رصدته CodeScene على هذا الملفّ نفسه. تجميعها يُبقي التوقيع
+    ثلاثة ويجعل «سياق الملفّ» شيئاً مُسمّى بدل قائمة معاملات تنمو مع كل قاعدة.
+    """
+
+    path: Path
+    workflow_permissions: Any
+    errors: list[str]
 
 
 def _rel(path: Path) -> str:
@@ -114,7 +129,7 @@ def _steps(job: dict[str, Any]) -> list[dict[str, Any]]:
     return [s for s in steps if isinstance(s, dict)]
 
 
-def _check_action_versions(path: Path, text: str, errors: list[str]) -> None:
+def _check_action_versions(ctx: _FileCtx, text: str) -> None:
     for match in _ACTION_REF.finditer(text):
         action, ref = match.group(1), match.group(2).strip("\"'")
         floor = MIN_ACTION_MAJOR.get(action)
@@ -123,16 +138,16 @@ def _check_action_versions(path: Path, text: str, errors: list[str]) -> None:
         line_no = text[: match.start()].count("\n") + 1
         tag = _MAJOR_TAG.match(ref)
         if tag is None:
-            errors.append(
-                f"❌ {_rel(path)}:{line_no}: `{action}@{ref}` ليس وسماً بإصدارٍ رئيسي.\n"
+            ctx.errors.append(
+                f"❌ {_rel(ctx.path)}:{line_no}: `{action}@{ref}` ليس وسماً بإصدارٍ رئيسي.\n"
                 f"   الأرضية تُفرَض على `v<major>` وحده — ومرجعٌ متحرّك (`@main`) أو\n"
                 f"   `@<sha>` يعبر الفحص بلا أن يُقاس، فتصير الأرضية إعلاناً لا حَكَماً."
             )
             continue
         if int(tag.group(1)) >= floor:
             continue
-        errors.append(
-            f"❌ {_rel(path)}:{line_no}: `{action}@{ref}` أقدم من الأرضية `v{floor}`.\n"
+        ctx.errors.append(
+            f"❌ {_rel(ctx.path)}:{line_no}: `{action}@{ref}` أقدم من الأرضية `v{floor}`.\n"
             f"   D-141 يوجب إجراءات node24 وصفر warning — و`checkout@v3` كان يطبع\n"
             f"   `Node.js 20 is deprecated` في كل تشغيل. رفِّع الإصدار، ولا تُخفِّض الأرضية."
         )
@@ -145,26 +160,33 @@ def _token_envs(scope: dict[str, Any]) -> set[str]:
     return {key for key in env if key in SAAS_TOKEN_ENV}
 
 
-def _report_step_scoped_token(path: Path, name: str, token: str, errors: list[str]) -> None:
+def _step_scoped_tokens(job: dict[str, Any]) -> set[str]:
+    tokens: set[str] = set()
+    for step in _steps(job):
+        tokens |= _token_envs(step)
+    return tokens
+
+
+def _report_step_scoped_token(ctx: _FileCtx, name: str, token: str) -> None:
     """رمزٌ يُقرأ داخل خطوةٍ فقط لا يمكن أن يحرسه ``if:`` — سياق ``env`` الخاصّ بالخطوة
     غير مرئيّ لشرطها، فمكانه مستوى الوظيفة."""
-    errors.append(
-        f"❌ {_rel(path)} · job `{name}`: `{token}` مُعرَّف على مستوى الخطوة فقط.\n"
+    ctx.errors.append(
+        f"❌ {_rel(ctx.path)} · job `{name}`: `{token}` مُعرَّف على مستوى الخطوة فقط.\n"
         f"   انقله إلى `env:` على مستوى الوظيفة — شرطُ الخطوة لا يرى `env` الخاصّ بها،\n"
         f"   فبدون ذلك يستحيل الحارس وتفشل كل PR من fork."
     )
 
 
-def _report_missing_run_guard(path: Path, name: str, token: str, errors: list[str]) -> None:
-    errors.append(
-        f"❌ {_rel(path)} · job `{name}`: لا خطوة محروسة بـ`if: env.{token} != ''`.\n"
+def _report_missing_run_guard(ctx: _FileCtx, name: str, token: str) -> None:
+    ctx.errors.append(
+        f"❌ {_rel(ctx.path)} · job `{name}`: لا خطوة محروسة بـ`if: env.{token} != ''`.\n"
         f"   بلا الحارس تفشل كل PR من fork (لا أسرار لها) بدل أن تتخطّى — D-234."
     )
 
 
-def _report_silent_skip(path: Path, name: str, token: str, errors: list[str]) -> None:
-    errors.append(
-        f"❌ {_rel(path)} · job `{name}`: التخطّي عند غياب `{token}` **صامت**.\n"
+def _report_silent_skip(ctx: _FileCtx, name: str, token: str) -> None:
+    ctx.errors.append(
+        f"❌ {_rel(ctx.path)} · job `{name}`: التخطّي عند غياب `{token}` **صامت**.\n"
         f"   أضف خطوة `if: env.{token} == ''` تكتب `::warning` + سطراً في\n"
         f"   `$GITHUB_STEP_SUMMARY`. وظيفةٌ خضراء لم تفعل شيئاً يجب أن تقول ذلك\n"
         f"   (§0 «لا فشل صامت» · L11 «الغياب لا يعني الغموض») — وهذا حرفياً ما\n"
@@ -172,50 +194,52 @@ def _report_silent_skip(path: Path, name: str, token: str, errors: list[str]) ->
     )
 
 
-def _check_token_guard(path: Path, name: str, job: dict[str, Any], errors: list[str]) -> None:
-    job_tokens = _token_envs(job)
-    step_tokens: set[str] = set()
-    for step in _steps(job):
-        step_tokens |= _token_envs(step)
+def _guarded_tokens(conditions: list[str], operator: str) -> set[str]:
+    """الرموز التي يذكرها شرطُ خطوةٍ ما بالمقارنة المطلوبة (``!=`` أو ``==``)."""
+    return {
+        token
+        for token in SAAS_TOKEN_ENV
+        if any(f"env.{token} {operator} ''" in cond for cond in conditions)
+    }
 
-    for token in sorted(step_tokens - job_tokens):
-        _report_step_scoped_token(path, name, token, errors)
+
+def _check_token_guard(ctx: _FileCtx, name: str, job: dict[str, Any]) -> None:
+    job_tokens = _token_envs(job)
+    for token in sorted(_step_scoped_tokens(job) - job_tokens):
+        _report_step_scoped_token(ctx, name, token)
 
     conditions = [str(step.get("if", "")) for step in _steps(job)]
-    for token in sorted(job_tokens):
-        if not any(f"env.{token} != ''" in cond for cond in conditions):
-            _report_missing_run_guard(path, name, token, errors)
-        if not any(f"env.{token} == ''" in cond for cond in conditions):
-            _report_silent_skip(path, name, token, errors)
+    for token in sorted(job_tokens - _guarded_tokens(conditions, "!=")):
+        _report_missing_run_guard(ctx, name, token)
+    for token in sorted(job_tokens - _guarded_tokens(conditions, "==")):
+        _report_silent_skip(ctx, name, token)
 
 
-def _check_third_party_write(
-    path: Path,
-    name: str,
-    job: dict[str, Any],
-    workflow_permissions: Any,
-    errors: list[str],
-) -> None:
-    third_party = [
+def _third_party_uses(job: dict[str, Any]) -> list[str]:
+    return [
         str(step["uses"])
         for step in _steps(job)
         if isinstance(step.get("uses"), str)
         and not str(step["uses"]).startswith(("actions/", "./", "docker/"))
     ]
+
+
+def _check_third_party_write(ctx: _FileCtx, name: str, job: dict[str, Any]) -> None:
+    third_party = _third_party_uses(job)
     if not third_party:
         return
     # صلاحيات الوظيفة تَرِث صلاحيات الملفّ حين لا تُصرِّح بنفسها. قراءةُ الوظيفة وحدها
     # كانت تُمرِّر `contents: write` معلَناً على مستوى الملفّ — وهو نفس المنح بالضبط.
-    permissions = job.get("permissions", workflow_permissions)
+    permissions = job.get("permissions", ctx.workflow_permissions)
     if isinstance(permissions, dict) and permissions.get("contents") == "write":
-        errors.append(
-            f"❌ {_rel(path)} · job `{name}`: `contents: write` في وظيفةٍ تستدعي إجراءً من\n"
+        ctx.errors.append(
+            f"❌ {_rel(ctx.path)} · job `{name}`: `contents: write` في وظيفةٍ تستدعي إجراءً من\n"
             f"   طرفٍ ثالث ({third_party[0]}). الفحص الساكن يقرأ الشيفرة ويكتب checks — لا\n"
             f"   سبب لمنحه دفعاً إلى المستودع (D-187: القدرة ≠ الأمان)."
         )
 
 
-def _check_qodana_diagnostic(path: Path, name: str, job: dict[str, Any], errors: list[str]) -> None:
+def _check_qodana_diagnostic(ctx: _FileCtx, name: str, job: dict[str, Any]) -> None:
     uses_qodana = any(
         isinstance(step.get("uses"), str) and "qodana-action" in str(step["uses"])
         for step in _steps(job)
@@ -223,15 +247,15 @@ def _check_qodana_diagnostic(path: Path, name: str, job: dict[str, Any], errors:
     if not uses_qodana:
         return
     if not any("failure()" in str(step.get("if", "")) for step in _steps(job)):
-        errors.append(
-            f"❌ {_rel(path)} · job `{name}`: لا خطوة تشخيص `if: failure()`.\n"
+        ctx.errors.append(
+            f"❌ {_rel(ctx.path)} · job `{name}`: لا خطوة تشخيص `if: failure()`.\n"
             f"   مُعرَّف مشروع Qodana Cloud تغيّر مرّتين (335615010 → 1439809274 →\n"
             f"   118820581)، وكل مرّة أبطلت السرّ القديم وأنتجت `403` مبهماً. الخطوة\n"
             f"   تكتب الـrunbook حيث يراه من ينظر إلى العلامة الحمراء."
         )
 
 
-def _check_required_ci(path: Path, jobs: dict[str, dict[str, Any]], errors: list[str]) -> None:
+def _check_required_ci(ctx: _FileCtx, jobs: dict[str, dict[str, Any]]) -> None:
     required = jobs.get("required-ci")
     if required is None:
         return
@@ -239,8 +263,8 @@ def _check_required_ci(path: Path, jobs: dict[str, dict[str, Any]], errors: list
     declared = [needs] if isinstance(needs, str) else list(needs or [])
     for job_name in declared:
         if any(token in str(job_name) for token in FORBIDDEN_IN_REQUIRED_CI):
-            errors.append(
-                f"❌ {_rel(path)} · `required-ci` يعتمد على `{job_name}`.\n"
+            ctx.errors.append(
+                f"❌ {_rel(ctx.path)} · `required-ci` يعتمد على `{job_name}`.\n"
                 f"   ⛔ D-234: تعطُّلُ خدمةٍ خارجية أو انتهاءُ صلاحية رمزٍ يجب ألّا يجعل\n"
                 f"   المستودع غير قابل للدمج."
             )
@@ -269,18 +293,22 @@ def main() -> int:
 
     for path in files:
         text = path.read_text(encoding="utf-8")
-        _check_action_versions(path, text, errors)
-
         doc = _load(path, errors)
+        ctx = _FileCtx(
+            path=path,
+            workflow_permissions=None if doc is None else doc.get("permissions"),
+            errors=errors,
+        )
+        _check_action_versions(ctx, text)
         if doc is None:
             continue
 
         jobs = _jobs(doc)
-        _check_required_ci(path, jobs, errors)
+        _check_required_ci(ctx, jobs)
         for name, job in jobs.items():
-            _check_token_guard(path, name, job, errors)
-            _check_third_party_write(path, name, job, doc.get("permissions"), errors)
-            _check_qodana_diagnostic(path, name, job, errors)
+            _check_token_guard(ctx, name, job)
+            _check_third_party_write(ctx, name, job)
+            _check_qodana_diagnostic(ctx, name, job)
 
     _check_single_qodana_secret(files, errors)
 

@@ -47,9 +47,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 BACKEND_CONTRACT = REPO_ROOT / "app/contracts/streaming.py"
-FRONTEND_RENDERER = (
-    REPO_ROOT / "frontend/app/components/generative/GenerativeUIRenderer.jsx"
-)
+FRONTEND_RENDERER = REPO_ROOT / "frontend/app/components/generative/GenerativeUIRenderer.jsx"
 GENERATIVE_DIR = REPO_ROOT / "frontend/app/components/generative"
 
 #: أسماء محظورة في **الطرفين**. المفتاح الاسم، والقيمة القرار الذي حظره.
@@ -71,8 +69,7 @@ _EMITTER_DEBT: dict[str, str] = {
         "في تعليقٍ بـtransport.py. المُصيِّر `BktMasteryCard.jsx` سليم"
     ),
     "learning_path_card": (
-        "٣٩ صفّاً إنتاجياً؛ بلا باعثٍ في المستودع كلّه. "
-        "المُصيِّر `LearningPathCard.jsx` سليم"
+        "٣٩ صفّاً إنتاجياً؛ بلا باعثٍ في المستودع كلّه. المُصيِّر `LearningPathCard.jsx` سليم"
     ),
 }
 
@@ -112,9 +109,7 @@ def _backend_components() -> set[str]:
             if isinstance(node, ast.AnnAssign)
             else []
         )
-        if not any(
-            isinstance(t, ast.Name) and t.id == "KNOWN_UI_COMPONENTS" for t in targets
-        ):
+        if not any(isinstance(t, ast.Name) and t.id == "KNOWN_UI_COMPONENTS" for t in targets):
             continue
         value = node.value
         # frozenset({...}) — الوسيط الأوّل مجموعة حرفيات.
@@ -140,7 +135,7 @@ def _frontend_components() -> tuple[set[str], dict[str, str]]:
         raise ParityReadError("تعذّر تحديد نهاية COMPONENT_REGISTRY")
 
     keys = set(_REGISTRY_KEY.findall(source[start:end]))
-    imports = {name: rel for name, rel in _IMPORTED.findall(source)}
+    imports = dict(_IMPORTED.findall(source))
     return keys, imports
 
 
@@ -161,44 +156,36 @@ def _emitted_components() -> dict[str, str]:
     return found
 
 
-def main() -> int:  # noqa: C901 - بنود مستقلّة، فصلُها يُبعثر الرسالة
+def _check_both_sides_agree(backend: set[str], frontend: set[str]) -> list[str]:
+    """① الطرفان يتطابقان — لا عقدٌ مُعلَنٌ بنصفه (D-192)."""
+    return [
+        f"{name!r}: في عقد الخادم وغائبٌ عن سجلّ التصيير.\n"
+        f"     سيصل الطالبَ نصٌّ بديل بدل الكائن — عقدٌ مُعلَنٌ بنصفه."
+        for name in sorted(backend - frontend)
+    ] + [
+        f"{name!r}: في سجلّ التصيير وغائبٌ عن عقد الخادم.\n"
+        f"     سيرفضه المُطبِّع فلا يصل أبداً (نفس عطب D-192)."
+        for name in sorted(frontend - backend)
+    ]
+
+
+def _check_banned(backend: set[str], frontend: set[str], emitted: dict[str, str]) -> list[str]:
+    """② المحظور محظورٌ في الطرفين وفي البثّ."""
     problems: list[str] = []
-    try:
-        backend = _backend_components()
-        frontend, imports = _frontend_components()
-        emitted = _emitted_components()
-    except ParityReadError as exc:
-        print(f"❌ تكافؤ الواجهة التوليدية: {exc}")
-        print("   بوّابةٌ لا تقرأ ملفاً لا تُبلِّغ أنه نظيف (D-208 بند ٦).")
-        return 1
-
-    # ① الطرفان يتطابقان — لا عقدٌ مُعلَنٌ بنصفه (D-192).
-    for name in sorted(backend - frontend):
-        problems.append(
-            f"{name!r}: في عقد الخادم وغائبٌ عن سجلّ التصيير.\n"
-            f"     سيصل الطالبَ نصٌّ بديل بدل الكائن — عقدٌ مُعلَنٌ بنصفه."
-        )
-    for name in sorted(frontend - backend):
-        problems.append(
-            f"{name!r}: في سجلّ التصيير وغائبٌ عن عقد الخادم.\n"
-            f"     سيرفضه المُطبِّع فلا يصل أبداً (نفس عطب D-192)."
-        )
-
-    # ② المحظور محظورٌ في الطرفين.
     for name, reason in BANNED_COMPONENTS.items():
         for where, registry in (("عقد الخادم", backend), ("سجلّ التصيير", frontend)):
             if name in registry:
                 problems.append(f"{name!r} محظور وموجودٌ في {where}.\n     {reason}")
         if name in emitted:
-            problems.append(
-                f"{name!r} محظورٌ ويُبَثّ من {emitted[name]}.\n     {reason}"
-            )
+            problems.append(f"{name!r} محظورٌ ويُبَثّ من {emitted[name]}.\n     {reason}")
+    return problems
 
-    # ③ لا إعلان بلا باعث — والدَّين يتقلّص في الاتجاهين.
+
+def _check_no_zombie_declaration(backend: set[str], emitted: dict[str, str]) -> list[str]:
+    """③ لا إعلان بلا باعث — والدَّين يتقلّص في الاتجاهين (D-189)."""
+    problems: list[str] = []
     for name in sorted(backend):
-        if name in emitted or name in BANNED_COMPONENTS:
-            continue
-        if name in _EMITTER_DEBT:
+        if name in emitted or name in BANNED_COMPONENTS or name in _EMITTER_DEBT:
             continue
         problems.append(
             f"{name!r}: مُعلَنٌ في العقد بلا أيّ باعثٍ في المستودع (إعلانٌ زومبي).\n"
@@ -212,25 +199,50 @@ def main() -> int:  # noqa: C901 - بنود مستقلّة، فصلُها يُب
                 f"     احذف السطر — دَينٌ أُغلق وبقي مكتوباً كذبٌ صامت (D-189). [{reason}]"
             )
         elif name not in backend:
-            problems.append(
-                f"{name!r}: في _EMITTER_DEBT ولم يعد مُعلَناً في العقد — احذف السطر."
-            )
+            problems.append(f"{name!r}: في _EMITTER_DEBT ولم يعد مُعلَناً في العقد — احذف السطر.")
+    return problems
 
-    # ④ كل ما يُبَثّ مُعلَنٌ في الطرفين.
+
+def _check_emitted_is_declared(
+    backend: set[str], frontend: set[str], emitted: dict[str, str]
+) -> list[str]:
+    """④ كل ما يُبَثّ مُعلَنٌ في الطرفين."""
+    problems: list[str] = []
     for name, where in sorted(emitted.items()):
         if name not in backend:
             problems.append(f"{name!r} يُبَثّ من {where} وهو غير مُعلَنٍ في عقد الخادم.")
         if name not in frontend:
             problems.append(f"{name!r} يُبَثّ من {where} وهو غير مُسجَّلٍ في المُصيِّر.")
+    return problems
 
-    # ⑤ كل مكوّنٍ مستورَدٍ في المُصيِّر له ملفّ.
-    for symbol, rel in sorted(imports.items()):
-        candidate = GENERATIVE_DIR / f"{rel}.jsx"
-        if not candidate.is_file():
-            problems.append(
-                f"المُصيِّر يستورد {symbol!r} من './{rel}' والملفّ غير موجود.\n"
-                f"     استيرادٌ مكسور يُسقِط الحزمة كلّها لا مكوّناً واحداً."
-            )
+
+def _check_imports_resolve(imports: dict[str, str]) -> list[str]:
+    """⑤ كل مكوّنٍ مستورَدٍ في المُصيِّر له ملفّ."""
+    return [
+        f"المُصيِّر يستورد {symbol!r} من './{rel}' والملفّ غير موجود.\n"
+        f"     استيرادٌ مكسور يُسقِط الحزمة كلّها لا مكوّناً واحداً."
+        for symbol, rel in sorted(imports.items())
+        if not (GENERATIVE_DIR / f"{rel}.jsx").is_file()
+    ]
+
+
+def main() -> int:
+    try:
+        backend = _backend_components()
+        frontend, imports = _frontend_components()
+        emitted = _emitted_components()
+    except ParityReadError as exc:
+        print(f"❌ تكافؤ الواجهة التوليدية: {exc}")
+        print("   بوّابةٌ لا تقرأ ملفاً لا تُبلِّغ أنه نظيف (D-208 بند ٦).")
+        return 1
+
+    problems = (
+        _check_both_sides_agree(backend, frontend)
+        + _check_banned(backend, frontend, emitted)
+        + _check_no_zombie_declaration(backend, emitted)
+        + _check_emitted_is_declared(backend, frontend, emitted)
+        + _check_imports_resolve(imports)
+    )
 
     if problems:
         print("❌ تكافؤ الواجهة التوليدية (D-230 · ISS-145) — مخالفات:\n")

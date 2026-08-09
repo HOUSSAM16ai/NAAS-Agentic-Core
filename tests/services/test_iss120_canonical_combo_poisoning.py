@@ -212,7 +212,7 @@ class TestSourceWiring:
         assert "rep_snippets" in src
 
     def test_no_string_inert_in_frontend_component(self):
-        """‏ISS-120 (D-153): `inert` سمة boolean في React 19.
+        """ISS-120 (D-153): `inert` سمة boolean في React 19.
 
         تمريرُ السلسلة `"true"` يُطلق خطأ console ويُظهر overlay الخطأ **للطالب**.
 

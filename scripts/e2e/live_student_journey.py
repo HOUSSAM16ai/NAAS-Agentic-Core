@@ -3,7 +3,7 @@
 
 يُقلِع مقابل خادمٍ **يعمل فعلاً** ويقيس ما وُضعت له الميزانيات (D-230):
 
-  • زمن أوّل إطار (‏`conversation_init`) وأوّل محتوى وأوّل **كائنٍ تفاعلي**
+  • زمن أوّل إطار (`conversation_init`) وأوّل محتوى وأوّل **كائنٍ تفاعلي**
   • إطارٌ نهائيّ **واحد** لكل دور (§6.5) — لا صفر ولا اثنان
   • ⛔ صفر تسريبٍ لاتيني في ردٍّ عربي (ISS-150)
   • ⛔ صفر نصّ نظامٍ مخزَّنٍ بدور الطالب (D-229 · ISS-146)
@@ -28,11 +28,10 @@ from typing import Any
 import httpx
 import websockets
 
+#: أسماء المكوّنات التي تعرف الواجهة رسمها — المصدر الوحيد هو عقد الخادم.
+from app.contracts.streaming import KNOWN_UI_COMPONENTS
 from shared.memory import is_system_authored
 from shared.ux import FIRST_OBJECT_PAINT_MS, classify_latency
-
-#: أسماء المكوّنات التي تعرف الواجهة رسمها — المصدر الوحيد هو عقد الخادم.
-from app.contracts.streaming import KNOWN_UI_COMPONENTS  # noqa: E402
 
 #: رحلة طالبٍ حقيقية — منسوخةٌ من المحادثة 763 في الإنتاج (الأسئلة نفسها).
 JOURNEY: tuple[str, ...] = (
@@ -44,7 +43,7 @@ JOURNEY: tuple[str, ...] = (
 
 _TERMINAL = {"assistant_final", "error", "assistant_error"}
 
-#: ‏ISS-150 هو تسرّبُ **نثرٍ إنجليزي** إلى ردٍّ عربي («WARM-UP: The instruction must be
+#: ISS-150 هو تسرّبُ **نثرٍ إنجليزي** إلى ردٍّ عربي («WARM-UP: The instruction must be
 #: rendered in a coalesced English form…» — ١٩٠٢ حرفاً وصلت طالباً في ضائقة). وليس
 #: كلَّ حرفٍ لاتيني: الرياضيات تكتب `\dfrac`، والمحتوى المؤلَّف يحمل تسميةً ثنائية
 #: («الاحتمالات (Exercise 1)») — وكلاهما مقصود.
@@ -70,7 +69,7 @@ class TurnResult:
 def _latin_leak(text: str) -> str | None:
     """نثرٌ إنجليزي داخل ردٍّ عربي — ISS-150.
 
-    تُنزَع الرياضيات أوّلاً (‏`$…$` · `\\(…\\)` · `\\command`) لأن `\\dfrac` تدوينٌ لا
+    تُنزَع الرياضيات أوّلاً (`$…$` · `\\(…\\)` · `\\command`) لأن `\\dfrac` تدوينٌ لا
     تسريب، ثمّ يُبحَث عن **تتابع كلماتٍ** لا عن حرفٍ مفرد.
     """
     import re
@@ -82,7 +81,9 @@ def _latin_leak(text: str) -> str | None:
     stripped = re.sub(r"\\\(.*?\\\)|\\\[.*?\\\]", " ", stripped, flags=re.DOTALL)
     stripped = re.sub(r"\\[A-Za-z]+", " ", stripped)  # أوامر LaTeX العارية
 
-    match = re.search(rf"(?:\b[A-Za-z]{{2,}}\b[\s,:;-]+){{{_LATIN_PROSE_WORDS - 1},}}\b[A-Za-z]{{2,}}\b", stripped)
+    match = re.search(
+        rf"(?:\b[A-Za-z]{{2,}}\b[\s,:;-]+){{{_LATIN_PROSE_WORDS - 1},}}\b[A-Za-z]{{2,}}\b", stripped
+    )
     return match.group(0).strip() if match else None
 
 
@@ -93,6 +94,35 @@ async def _login(base: str, email: str, password: str) -> str:
         )
         response.raise_for_status()
         return str(response.json()["access_token"])
+
+
+def _absorb_frame(result: TurnResult, event: dict[str, Any], now: float) -> bool:
+    """يستوعب إطاراً واحداً في نتيجة الدور. يُرجِع True حين يكون الإطار نهائياً."""
+    etype = event.get("type", "")
+    payload = event.get("payload") or {}
+
+    if etype == "assistant_delta" and payload.get("content"):
+        if result.first_content_s is None:
+            result.first_content_s = now
+        result.content += str(payload["content"])
+        return False
+
+    if etype == "ui_component":
+        name = str(payload.get("component", ""))
+        result.components.append(name)
+        if result.first_object_s is None:
+            result.first_object_s = now
+        if name not in KNOWN_UI_COMPONENTS:
+            result.problems.append(f"مكوّنٌ لا تعرف الواجهة رسمه: {name!r} (ISS-145)")
+        return False
+
+    if etype in _TERMINAL:
+        result.terminal_frames += 1
+        if payload.get("content"):
+            result.content = result.content or str(payload["content"])
+        return True
+
+    return False
 
 
 async def _run_turn(ws_url: str, token: str, question: str) -> TurnResult:
@@ -120,28 +150,7 @@ async def _run_turn(ws_url: str, token: str, question: str) -> TurnResult:
                 result.problems.append("إطارٌ ليس JSON — تسريبُ بنية إلى الدردشة")
                 continue
 
-            etype = event.get("type", "")
-            payload = event.get("payload") or {}
-
-            if etype == "assistant_delta" and payload.get("content"):
-                if result.first_content_s is None:
-                    result.first_content_s = now
-                result.content += str(payload["content"])
-
-            elif etype == "ui_component":
-                name = str(payload.get("component", ""))
-                result.components.append(name)
-                if result.first_object_s is None:
-                    result.first_object_s = now
-                if name not in KNOWN_UI_COMPONENTS:
-                    result.problems.append(
-                        f"مكوّنٌ لا تعرف الواجهة رسمه: {name!r} (ISS-145)"
-                    )
-
-            elif etype in _TERMINAL:
-                result.terminal_frames += 1
-                if payload.get("content"):
-                    result.content = result.content or str(payload["content"])
+            if _absorb_frame(result, event, now):
                 break
 
     result.total_s = time.perf_counter() - started
@@ -183,8 +192,10 @@ async def main() -> int:
 
         print(f"   أوّل إطار    {fmt(turn.first_frame_s)}")
         print(f"   أوّل محتوى   {fmt(turn.first_content_s)}")
-        print(f"   أوّل كائن    {fmt(turn.first_object_s)}"
-              + (f"  ({', '.join(turn.components)})" if turn.components else ""))
+        print(
+            f"   أوّل كائن    {fmt(turn.first_object_s)}"
+            + (f"  ({', '.join(turn.components)})" if turn.components else "")
+        )
         print(f"   الدور كاملاً {fmt(turn.total_s)}  → {classify_latency(turn.total_s).value}")
         print(f"   نصّ: {len(turn.content)} حرفاً · أطر نهائية: {turn.terminal_frames}")
         for problem in turn.problems:
@@ -197,8 +208,10 @@ async def main() -> int:
     fast_objects = sum(
         1 for t in results if t.first_object_s is not None and t.first_object_s <= budget_s
     )
-    print(f"أدوار: {len(results)} · تحمل كائناً: {objects} · "
-          f"منها تحت ميزانية {FIRST_OBJECT_PAINT_MS}ms: {fast_objects}")
+    print(
+        f"أدوار: {len(results)} · تحمل كائناً: {objects} · "
+        f"منها تحت ميزانية {FIRST_OBJECT_PAINT_MS}ms: {fast_objects}"
+    )
     if failures:
         print(f"❌ مخالفات: {len(failures)}")
         return 1

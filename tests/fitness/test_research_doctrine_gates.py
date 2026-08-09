@@ -124,9 +124,7 @@ class TestPoisonGateFailsWhenItShould:
     def test_competing_marker_definition_is_red(self, restore) -> None:
         """مصدرٌ واحد للعلامات — نسختان تعنيان مساراً يمنع ومساراً يسمح."""
         rival = REPO_ROOT / "shared/memory/_rival_markers.py"
-        rival.write_text(
-            'SYSTEM_AUTHORED_MARKERS = ("[توجيه تربوي]",)\n', encoding="utf-8"
-        )
+        rival.write_text('SYSTEM_AUTHORED_MARKERS = ("[توجيه تربوي]",)\n', encoding="utf-8")
         try:
             result = _run(POISON_GATE)
             assert result.returncode == 1

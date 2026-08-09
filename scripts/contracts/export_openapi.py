@@ -74,7 +74,7 @@ def render_spec_isolated(module_path: str, app_attr: str) -> str:
 
     ⛔ ولا يُبتلَع فشل العملية الفرعية: `stderr` يُرفَع كما هو ليُشخَّص.
     """
-    result = subprocess.run(  # noqa: S603 - argv ثابت، بلا صدفة (D-187)
+    result = subprocess.run(
         [sys.executable, str(Path(__file__).resolve()), "--emit", f"{module_path}:{app_attr}"],
         cwd=REPO_ROOT,
         capture_output=True,

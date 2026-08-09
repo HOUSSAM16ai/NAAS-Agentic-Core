@@ -33,9 +33,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: سُلَّم الحالة القانوني الوحيد (§6.6). لا سُلَّم ثانٍ.
-VALID_STATUSES = frozenset(
-    {"ACTIVE", "PARTIAL", "DORMANT", "ZOMBIE", "PLANNED", "SEAM", "ABSENT"}
-)
+VALID_STATUSES = frozenset({"ACTIVE", "PARTIAL", "DORMANT", "ZOMBIE", "PLANNED", "SEAM", "ABSENT"})
 
 #: (وثيقة القانون، وثيقة الحالة، عدد الصفوف المتوقَّع).
 #:
@@ -57,9 +55,7 @@ DOCTRINES: tuple[tuple[str, str, int], ...] = (
 #: دليلٌ داخل `backticks`. أوّل مسارٍ يبدو كمسار مستودع هو الدليل.
 _BACKTICKED = re.compile(r"`([^`]+)`")
 _GATE_NAME = re.compile(r"\bcheck_[a-z0-9_]+\b")
-_STATUS_TOKEN = re.compile(
-    r"\b(ACTIVE|PARTIAL|DORMANT|ZOMBIE|PLANNED|SEAM|ABSENT)\b"
-)
+_STATUS_TOKEN = re.compile(r"\b(ACTIVE|PARTIAL|DORMANT|ZOMBIE|PLANNED|SEAM|ABSENT)\b")
 
 
 class DoctrineGateError(RuntimeError):

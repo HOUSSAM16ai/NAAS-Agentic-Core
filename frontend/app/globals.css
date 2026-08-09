@@ -23,7 +23,10 @@
     /* ISS-067 (D-059): :root = light mode values كـ fallback آمن.
        جميع المتغيرات موجودة هنا لضمان عمل الـ CSS حتى قبل تطبيق html[data-theme]. */
     --primary-color: var(--accent);
-    --primary-color-rgb: 31, 95, 168;
+    /* D-233: مُشتقّة من `--accent` يدوياً لأن CSS لا يفكّك اللون السداسي إلى
+       ثلاثيّة. كانت تحمل الأزرق القديم بعد تغيير الرمز — فقاعةٌ بلونٍ وهالةٌ
+       بلونٍ آخر. يحرس تطابقها `check_design_tokens` (D-192: لا كمّية بقيمتين). */
+    --primary-color-rgb: 194, 65, 12;
     --primary-hover: var(--accent-hover);
     --secondary-color: var(--ink-muted);
     --bg-color: var(--paper);
@@ -62,7 +65,10 @@ body[data-theme='light'],
 [data-theme='light'] {
     /* ISS-067 (D-059): Light mode — صفحة بيضاء نقية فاخرة + خط أسود رهيب */
     --primary-color: var(--accent);
-    --primary-color-rgb: 31, 95, 168;
+    /* D-233: مُشتقّة من `--accent` يدوياً لأن CSS لا يفكّك اللون السداسي إلى
+       ثلاثيّة. كانت تحمل الأزرق القديم بعد تغيير الرمز — فقاعةٌ بلونٍ وهالةٌ
+       بلونٍ آخر. يحرس تطابقها `check_design_tokens` (D-192: لا كمّية بقيمتين). */
+    --primary-color-rgb: 194, 65, 12;
     --primary-hover: var(--accent-hover);
     --secondary-color: var(--ink-muted);
     --bg-color: var(--paper);
@@ -91,7 +97,10 @@ body[data-theme='dark'],
 [data-theme='dark'] {
     /* Dark mode — أسود غني فاخر + خط أبيض راقٍ */
     --primary-color: var(--accent);
-    --primary-color-rgb: 127, 176, 232;
+    /* D-233: مُشتقّة من `--accent` يدوياً لأن CSS لا يفكّك اللون السداسي إلى
+       ثلاثيّة. كانت تحمل الأزرق القديم بعد تغيير الرمز — فقاعةٌ بلونٍ وهالةٌ
+       بلونٍ آخر. يحرس تطابقها `check_design_tokens` (D-192: لا كمّية بقيمتين). */
+    --primary-color-rgb: 255, 160, 122;
     --primary-hover: var(--accent-hover);
     --secondary-color: var(--ink-muted);
     --bg-color: var(--paper);
@@ -474,8 +483,12 @@ body {
 
 /* ISS-064: رسالة المستخدم — bubble مُحدَّد على اليمين، أزرق فاخر */
 .message.user .message-bubble {
-    background-color: var(--primary-color);
-    color: #ffffff;
+    /* D-233: تعبئةٌ مرجانية **فاتحة** بحبرٍ داكن، لا مرجانيٌّ مُشبَع بنصٍّ أبيض.
+       سببان: المالك طلب «خوخيّاً مرجانياً خفيفاً»، والتباين أعلى فعلاً —
+       12.47:1 (حبر على خوخيّ فاتح) مقابل 5.18:1 (أبيض على مرجانيٍّ داكن).
+       الفاتح هنا ليس تنازلاً عن الوضوح؛ هو الأوضح. */
+    background-color: var(--peach);
+    color: var(--ink);
     border-radius: 18px 18px 6px 18px;
     padding: 0.85rem 1.15rem;
     max-width: min(85%, 600px);
@@ -1558,14 +1571,14 @@ body {
 /* ── الجذر: html و body في الـ light mode ── */
 html[data-theme='light'],
 body[data-theme='light'] {
-    background: #ffffff;
-    color: #0a0a0a;
+    background: var(--paper-raised);
+    color: var(--ink);
 }
 
 /* Header — light mode: حد سفلي أنيق + ظل خفيف */
 html[data-theme='light'] .header,
 body[data-theme='light'] .header {
-    background: #ffffff;
+    background: var(--paper-raised);
     border-bottom: 1px solid #e2e2e2;
     box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.06);
 }
@@ -1579,20 +1592,20 @@ body[data-theme='light'] .header-theme-btn {
 html[data-theme='light'] .header-theme-btn:hover,
 body[data-theme='light'] .header-theme-btn:hover {
     background-color: #f5f5f5;
-    color: #0a0a0a;
+    color: var(--ink);
 }
 
 /* Header menu — light mode: ظل واضح + حد أنيق */
 html[data-theme='light'] .header-menu,
 body[data-theme='light'] .header-menu {
-    background: #ffffff;
+    background: var(--paper-raised);
     border: 1px solid #e2e2e2;
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.10), 0 2px 6px rgb(0 0 0 / 0.06);
 }
 
 html[data-theme='light'] .header-menu-item,
 body[data-theme='light'] .header-menu-item {
-    color: #0a0a0a;
+    color: var(--ink);
 }
 
 html[data-theme='light'] .header-menu-item:hover,
@@ -1603,19 +1616,19 @@ body[data-theme='light'] .header-menu-item:hover {
 /* Chat area — light mode: خلفية بيضاء نقية */
 html[data-theme='light'] .chat-area,
 body[data-theme='light'] .chat-area {
-    background: #ffffff;
+    background: var(--paper-raised);
 }
 
 /* Messages — light mode: نص أسود عميق */
 html[data-theme='light'] .message.assistant .message-bubble,
 body[data-theme='light'] .message.assistant .message-bubble {
-    color: #0a0a0a;
+    color: var(--ink);
 }
 
 /* Markdown content — light mode */
 html[data-theme='light'] .markdown-content,
 body[data-theme='light'] .markdown-content {
-    color: #0a0a0a;
+    color: var(--ink);
 }
 
 html[data-theme='light'] .markdown-content h1,
@@ -1626,13 +1639,13 @@ body[data-theme='light'] .markdown-content h1,
 body[data-theme='light'] .markdown-content h2,
 body[data-theme='light'] .markdown-content h3,
 body[data-theme='light'] .markdown-content h4 {
-    color: #0a0a0a;
+    color: var(--ink);
     border-bottom-color: #e2e2e2;
 }
 
 html[data-theme='light'] .markdown-content strong,
 body[data-theme='light'] .markdown-content strong {
-    color: #0a0a0a;
+    color: var(--ink);
     font-weight: 700;
 }
 
@@ -1660,7 +1673,7 @@ body[data-theme='light'] .markdown-content pre code {
 /* Input area — light mode: حد واضح + ظل خفيف */
 html[data-theme='light'] .input-area,
 body[data-theme='light'] .input-area {
-    background: #ffffff;
+    background: var(--paper-raised);
     border: 1.5px solid #e2e2e2;
     box-shadow: 0 2px 8px rgb(0 0 0 / 0.04);
 }
@@ -1668,7 +1681,7 @@ body[data-theme='light'] .input-area {
 html[data-theme='light'] .input-area textarea,
 body[data-theme='light'] .input-area textarea {
     background: transparent;
-    color: #0a0a0a;
+    color: var(--ink);
 }
 
 html[data-theme='light'] .input-area textarea::placeholder,
@@ -1678,7 +1691,7 @@ body[data-theme='light'] .input-area textarea::placeholder {
 
 html[data-theme='light'] .input-area:focus-within,
 body[data-theme='light'] .input-area:focus-within {
-    border-color: #2563eb;
+    border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10), 0 2px 8px rgb(0 0 0 / 0.04);
 }
 
@@ -1691,7 +1704,7 @@ body[data-theme='light'] .message.user .message-bubble {
 /* Sidebar — light mode: خلفية بيضاء + حد أنيق */
 html[data-theme='light'] .sidebar,
 body[data-theme='light'] .sidebar {
-    background: #ffffff;
+    background: var(--paper-raised);
     border-left: 1px solid #e2e2e2;
     box-shadow: -4px 0 20px rgb(0 0 0 / 0.08);
 }
@@ -1709,7 +1722,7 @@ body[data-theme='light'] .conversation-item {
 html[data-theme='light'] .conversation-item.active,
 body[data-theme='light'] .conversation-item.active {
     background: #f0f5ff;
-    color: #2563eb;
+    color: var(--accent);
 }
 
 /* Login form — light mode: بطاقة بيضاء فاخرة */
@@ -1717,7 +1730,7 @@ html[data-theme='light'] .login-form,
 html[data-theme='light'] .register-form,
 body[data-theme='light'] .login-form,
 body[data-theme='light'] .register-form {
-    background: #ffffff;
+    background: var(--paper-raised);
     border: 1px solid #e2e2e2;
     box-shadow: 0 8px 32px rgb(0 0 0 / 0.08), 0 2px 8px rgb(0 0 0 / 0.04);
 }
@@ -1726,19 +1739,19 @@ html[data-theme='light'] .login-form h2,
 html[data-theme='light'] .register-form h2,
 body[data-theme='light'] .login-form h2,
 body[data-theme='light'] .register-form h2 {
-    color: #0a0a0a;
+    color: var(--ink);
 }
 
 html[data-theme='light'] .input-group input,
 body[data-theme='light'] .input-group input {
     background: #fafafa;
     border: 1px solid #e2e2e2;
-    color: #0a0a0a;
+    color: var(--ink);
 }
 
 html[data-theme='light'] .input-group input:focus,
 body[data-theme='light'] .input-group input:focus {
-    border-color: #2563eb;
+    border-color: var(--accent);
     outline: none;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
 }
@@ -1805,14 +1818,14 @@ body[data-theme='light'] .header-menu-btn {
 html[data-theme='light'] .header-menu-btn:hover,
 body[data-theme='light'] .header-menu-btn:hover {
     background-color: #f5f5f5;
-    color: #0a0a0a;
+    color: var(--ink);
 }
 
 /* Loading screen — light mode */
 html[data-theme='light'] .loading-screen,
 body[data-theme='light'] .loading-screen {
-    background: #ffffff;
-    color: #0a0a0a;
+    background: var(--paper-raised);
+    color: var(--ink);
 }
 
 /* Status indicators — light mode */
@@ -1829,7 +1842,7 @@ body[data-theme='light'] .status-offline {
 /* Scroll to bottom button — light mode */
 html[data-theme='light'] .scroll-to-bottom-btn,
 body[data-theme='light'] .scroll-to-bottom-btn {
-    background: #ffffff;
+    background: var(--paper-raised);
     border: 1px solid #e2e2e2;
     color: #525252;
     box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
@@ -1838,7 +1851,7 @@ body[data-theme='light'] .scroll-to-bottom-btn {
 html[data-theme='light'] .scroll-to-bottom-btn:hover,
 body[data-theme='light'] .scroll-to-bottom-btn:hover {
     background: #f5f5f5;
-    color: #0a0a0a;
+    color: var(--ink);
 }
 
 /* Exam badge — light mode: أزرق فاخر */
@@ -1997,7 +2010,7 @@ body[data-theme='light'] .exam-badge {
     border-color: color-mix(in srgb, #ef4444 38%, var(--border-color));
 }
 .genui-glass-node[data-outcome='failure'] {
-    border-color: color-mix(in srgb, #6366f1 38%, var(--border-color));
+    border-color: color-mix(in srgb, var(--accent) 38%, var(--border-color));
 }
 
 @keyframes genui-node-spawn {
@@ -2025,7 +2038,7 @@ body[data-theme='light'] .exam-badge {
 }
 .genui-glass-node[data-outcome='failure']:hover,
 .genui-glass-node[data-outcome='failure']:focus-visible {
-    border-color: #6366f1;
+    border-color: var(--accent);
     box-shadow:
         0 10px 30px rgba(99, 102, 241, 0.32),
         0 0 0 3px rgba(99, 102, 241, 0.22);
@@ -2063,7 +2076,7 @@ body[data-theme='light'] .exam-badge {
     box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
 }
 .genui-node-prob[data-outcome='failure'] {
-    background: linear-gradient(135deg, #38bdf8, #6366f1);
+    background: linear-gradient(135deg, var(--accent-hover), var(--accent));
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
 }
 .genui-node-prob[data-outcome='root'] {
@@ -2134,7 +2147,7 @@ body[data-theme='light'] .exam-badge {
     border-top-color: #ef4444;
 }
 .genui-tip-portal[data-outcome='failure'] {
-    border-top-color: #6366f1;
+    border-top-color: var(--accent);
 }
 
 @keyframes genui-tip-pop {
@@ -2411,7 +2424,7 @@ body[data-theme='light'] .exam-badge {
 .genui-we-mastery-fill {
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(90deg, #6366f1, #10b981);
+    background: linear-gradient(90deg, var(--accent), var(--success));
     transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -2433,10 +2446,10 @@ body[data-theme='light'] .exam-badge {
 }
 
 .genui-we-step {
-    border-inline-start: 3px solid var(--we-accent, #6366f1);
+    border-inline-start: 3px solid var(--we-accent, var(--accent));
     padding: 0.5rem 0.75rem;
     border-radius: 0 12px 12px 0;
-    background: color-mix(in srgb, var(--we-accent, #6366f1) 6%, transparent);
+    background: color-mix(in srgb, var(--we-accent, var(--accent)) 6%, transparent);
     animation: genui-we-fade 0.32s ease both;
 }
 
@@ -2491,7 +2504,7 @@ body[data-theme='light'] .exam-badge {
     padding: 0.5rem 1rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
     color: #fff;
     font-weight: 700;
     cursor: pointer;
@@ -2876,7 +2889,7 @@ body[data-theme='light'] .exam-badge {
 .genui-fes-progress-fill {
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(90deg, #6366f1, #10b981);
+    background: linear-gradient(90deg, var(--accent), var(--success));
     transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .genui-fes-interact {
@@ -2892,7 +2905,7 @@ body[data-theme='light'] .exam-badge {
     color: var(--text-color);
 }
 .genui-fes-question i {
-    color: #6366f1;
+    color: var(--accent);
 }
 .genui-fes-choices {
     display: flex;
@@ -2912,7 +2925,7 @@ body[data-theme='light'] .exam-badge {
 }
 .genui-fes-choice:hover {
     transform: translateY(-1px);
-    border-color: #6366f1;
+    border-color: var(--accent);
 }
 .genui-fes-numrow {
     display: flex;
@@ -2933,7 +2946,7 @@ body[data-theme='light'] .exam-badge {
     padding: 0.55rem 1.1rem;
     border: none;
     border-radius: 10px;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
     color: #fff;
     font-weight: 700;
     cursor: pointer;
@@ -2968,7 +2981,7 @@ body[data-theme='light'] .exam-badge {
 }
 .genui-fes-reveal-btn:hover {
     opacity: 1;
-    border-color: #6366f1;
+    border-color: var(--accent);
 }
 
 .genui-fes-step-title {
@@ -3335,7 +3348,7 @@ body[data-theme='light'] .exam-badge {
     padding: 0.55rem 1.3rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
     color: #fff;
     font-weight: 700;
     cursor: pointer;

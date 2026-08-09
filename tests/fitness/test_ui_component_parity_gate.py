@@ -73,7 +73,7 @@ def test_frontend_only_component_is_red(restore) -> None:
 
 
 def test_banned_component_is_red_on_either_side(restore) -> None:
-    """‏D-115: المثال المكشوف يخرق القاعدة الذهبية (D-113) — محظورٌ في الطرفين."""
+    """D-115: المثال المكشوف يخرق القاعدة الذهبية (D-113) — محظورٌ في الطرفين."""
     restore(BACKEND)
     text = BACKEND.read_text(encoding="utf-8")
     BACKEND.write_text(

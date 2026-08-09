@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from shared.memory import (
@@ -68,7 +70,7 @@ class TestSystemTextBlocked:
             assert_student_authored(ISS_150_ROW, where="test")
 
     def test_internal_sentinel_is_rejected(self) -> None:
-        """‏⟦…⟧ سُرِّبت ١٣ مرّة في نافذة يونيو."""
+        """⟦…⟧ سُرِّبت ١٣ مرّة في نافذة يونيو."""
         assert is_system_authored("⟦مثال_محلول⟧ حدد المعطى") is True
 
     def test_deep_pedagogy_prefix_is_rejected(self) -> None:
@@ -85,7 +87,7 @@ class TestSystemTextBlocked:
         assert is_system_authored("سؤال الطالب\n\n[توجيه تربوي] اشرح") is True
 
     def test_error_message_names_the_call_site(self) -> None:
-        with pytest.raises(MemoryAuthorshipError, match="customer.save_message"):
+        with pytest.raises(MemoryAuthorshipError, match=re.escape("customer.save_message")):
             assert_student_authored(ISS_146_ROW, where="customer.save_message")
 
 

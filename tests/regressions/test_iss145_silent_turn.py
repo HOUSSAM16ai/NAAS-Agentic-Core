@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -41,7 +41,7 @@ RENDERABLE_CARD: dict[str, Any] = {
 class _SpyService:
     """يلتقط كل نداء حفظ — لا قاعدة بيانات، فالسلوك المُختبَر هو القرار لا التخزين."""
 
-    instances: list["_SpyService"] = []
+    instances: ClassVar[list[_SpyService]] = []
 
     def __init__(self, _db: object) -> None:
         self.saved: list[dict[str, Any]] = []
@@ -95,9 +95,7 @@ class TestUnrenderableCardIsNeverPersisted:
         assert saved[0]["content"] == ""
 
     async def test_mixed_batch_keeps_only_the_renderable(self, spy) -> None:
-        await _persist_ui_component_cards(
-            conversation_id=9, cards=[ISS_145_CARD, RENDERABLE_CARD]
-        )
+        await _persist_ui_component_cards(conversation_id=9, cards=[ISS_145_CARD, RENDERABLE_CARD])
         saved = spy.instances[0].saved
         assert [s["ui_component"]["component"] for s in saved] == ["probability_tree"]
 
@@ -109,7 +107,7 @@ class TestUnrenderableCardIsNeverPersisted:
 
 class TestTheBannedNameStaysBanned:
     def test_worked_example_card_is_not_renderable(self) -> None:
-        """‏D-115 عكسَ الكشف: المثال المكشوف يخرق القاعدة الذهبية (D-113)."""
+        """D-115 عكسَ الكشف: المثال المكشوف يخرق القاعدة الذهبية (D-113)."""
         assert "worked_example_card" not in KNOWN_UI_COMPONENTS
 
     def test_every_persisted_name_must_be_declared(self) -> None:

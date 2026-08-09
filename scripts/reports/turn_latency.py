@@ -65,9 +65,7 @@ GROUP BY 1 ORDER BY 1
 def _database_url() -> str:
     url = os.environ.get("DATABASE_URL") or os.environ.get("APP_DATABASE_URL")
     if not url:
-        raise SystemExit(
-            "❌ DATABASE_URL غير مضبوط. التقرير يقرأ من البيئة — لا أسرار في الشيفرة."
-        )
+        raise SystemExit("❌ DATABASE_URL غير مضبوط. التقرير يقرأ من البيئة — لا أسرار في الشيفرة.")
     # SQLAlchemy يُوجِّه `postgresql://` إلى psycopg2 المتزامن (بند CLAUDE.md).
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
@@ -82,9 +80,7 @@ def main() -> int:
     from sqlalchemy import create_engine, text
     from sqlalchemy.exc import OperationalError
 
-    engine = create_engine(
-        _database_url(), connect_args={"connect_timeout": int(_TIMEOUT_S)}
-    )
+    engine = create_engine(_database_url(), connect_args={"connect_timeout": int(_TIMEOUT_S)})
     try:
         with engine.connect() as conn:
             row = (
@@ -127,9 +123,13 @@ def main() -> int:
         never = row["never_answered"] or 0
         over = row["over_attention"] or 0
         flow = row["within_flow"] or 0
-        print(f"  ضمن التدفّق (≤{FLOW_LIMIT_S:g}s)   {flow:5d} / {turns}  ({100*flow/turns:.1f}٪)")
-        print(f"  فوق حدّ الانتباه (>{ATTENTION_LIMIT_S:g}s) {over:5d} / {turns}  ({100*over/turns:.1f}٪)")
-        print(f"  بلا ردٍّ إطلاقاً        {never:5d} / {turns}  ({100*never/turns:.1f}٪)")
+        print(
+            f"  ضمن التدفّق (≤{FLOW_LIMIT_S:g}s)   {flow:5d} / {turns}  ({100 * flow / turns:.1f}٪)"
+        )
+        print(
+            f"  فوق حدّ الانتباه (>{ATTENTION_LIMIT_S:g}s) {over:5d} / {turns}  ({100 * over / turns:.1f}٪)"
+        )
+        print(f"  بلا ردٍّ إطلاقاً        {never:5d} / {turns}  ({100 * never / turns:.1f}٪)")
 
     print("\n══ تسليم الكائن التفاعلي (شهراً بشهر) ══")
     print("  الشهر        ردود   بكائن   النسبة")
@@ -142,8 +142,10 @@ def main() -> int:
         pct = (100 * objects / replies) if replies else 0.0
         print(f"  {m['month']}  {replies:5d}  {objects:5d}   {pct:5.1f}٪")
     if total_replies:
-        print(f"  {'الإجمالي':<11} {total_replies:5d}  {total_objects:5d}   "
-              f"{100*total_objects/total_replies:5.1f}٪")
+        print(
+            f"  {'الإجمالي':<11} {total_replies:5d}  {total_objects:5d}   "
+            f"{100 * total_objects / total_replies:5.1f}٪"
+        )
     print()
     return 0
 

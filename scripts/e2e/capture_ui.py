@@ -54,7 +54,7 @@ async def main() -> int:
         # تسجيل دخولٍ حقيقي — لا حقن توكِن في التخزين المحلّي.
         await page.fill('input[type="email"]', args.email)
         await page.fill('input[type="password"]', args.password)
-        await page.click('form button')
+        await page.click("form button")
         await page.wait_for_selector(".app-container", timeout=60_000)
         await page.wait_for_timeout(1200)
 

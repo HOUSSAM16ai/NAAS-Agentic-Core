@@ -74,85 +74,94 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   الألوان — أرجوانٌ وخوخيّ على ورقٍ دافئ
+   الألوان — مرجانيٌّ خوخيّ على ورقٍ دافئ
 
    لماذا هذه اللوحة
    ────────────────
    الطالب الجزائري يقرأ هنا ساعاتٍ قبل البكالوريا، تحت ضغطِ امتحانٍ مصيري. فاللوحة
-   تُختار للقراءة الطويلة لا للقطة شاشة: **ورقٌ دافئ لا أبيض صرف**، و**حبرٌ داكن دافئ
-   لا أسود صرف** — أعلى تباينٍ ممكن يُجهِد العين بعد الساعة الأولى.
+   تُختار للقراءة الطويلة لا للقطة شاشة: **ورقٌ خوخيٌّ فاتح لا أبيض صرف**، و**حبرٌ داكن
+   دافئ لا أسود صرف** — أعلى تباينٍ ممكن يُجهِد العين بعد الساعة الأولى.
 
-   **الأرجواني (Amethyst) لونُ الانتباه**، ويُستعمل نادراً: لونٌ يظهر في كلّ زرٍّ وحدٍّ
-   ورابط يفقد معناه، فلا يعود يعني «انتبه». و**الخوخيّ (Peach) لونُ الأسطح الدافئة**
-   والترحيب — لا لونُ نصٍّ أساسي.
+   **المرجانيّ لونُ الانتباه**، ويُستعمل نادراً: لونٌ يظهر في كلّ زرٍّ وحدٍّ ورابط يفقد
+   معناه، فلا يعود يعني «انتبه». و**الخوخيّ لونُ الأسطح الدافئة** والترحيب — لا لونُ
+   نصٍّ أساسي.
 
    ⛔ **النسب محسوبة لا مُقدَّرة.** كل رقمٍ أدناه ناتجُ `contrast_ratio()` في
-   `scripts/fitness/check_design_tokens.py` نفسها، والبوّابة تُعيد حسابه في كل PR —
-   فلا ينزلق التباين خلسةً. (تقديرات العين خاطئة بانتظام؛ ولهذا يحسب الحارس.)
+   `scripts/fitness/check_design_tokens.py` نفسها، والبوّابة تُعيد حسابه في كل PR.
+
+   ⚠️ **ولا يُنقَل معنى باللون وحده.** الفصل بين `accent` (مرجاني، صبغة ≈17°) و`danger`
+   (قرمزي، ≈343°) أربعٌ وثلاثون درجة — كافٍ للعين السليمة، وغيرُ كافٍ لعمى الألوان
+   الأحمر-الأخضر. فكلّ حالة خطأ تحمل **نصّاً وأيقونة** بجانب اللون، دائماً.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── الوضع النهاري — نسبٌ محسوبة مقابل `--paper` (#fdf9f6) ──────────────────
-     ink         #2a2430 → 14.39:1  AAA
-     ink-muted   #5f5568 →  6.72:1  AA
-     accent      #6d3a9e →  7.30:1  AA   (أرجواني)
-     accent-hover#572b80 →  9.72:1  AAA
-     peach-ink   #8a4a2c →  6.48:1  AA   (نصٌّ على سطحٍ خوخي)
-     success     #1f6b46 →  6.17:1  AA
-     warning     #8a5a12 →  5.65:1  AA
-     danger      #a8332a →  6.32:1  AA                                        */
+/* ── الوضع النهاري — نسبٌ محسوبة مقابل `--paper` (#fff8f4) ──────────────────
+     ink          #2e2320 → 14.51:1  AAA
+     ink-muted    #6b5750 →  6.44:1  AA
+     accent       #c2410c →  4.93:1  AA   (مرجاني)
+     accent-hover #9a3412 →  6.95:1  AA
+     peach-ink    #8a4a2c →  6.42:1  AA   (نصٌّ على سطحٍ خوخي)
+     success      #15653f →  6.74:1  AA
+     warning      #8a5a12 →  5.63:1  AA
+     danger       #9f1239 →  7.63:1  AAA                                      */
 :root,
 :root[data-theme="light"] {
-  --paper: #fdf9f6;
-  --paper-raised: #fffcfa;
-  --paper-sunken: #f6efea;
-  --ink: #2a2430;
-  --ink-muted: #5f5568;
-  --rule: #e6dcd6;
-  --rule-subtle: #f1e9e4;
-  --accent: #6d3a9e;
-  --accent-hover: #572b80;
-  --accent-wash: rgba(109, 58, 158, 0.07);
+  --paper: #fff8f4;
+  --paper-raised: #fffdfb;
+  --paper-sunken: #fdeee5;
+  --ink: #2e2320;
+  --ink-muted: #6b5750;
+  --rule: #f0ded2;
+  --rule-subtle: #f7ebe3;
+  --accent: #c2410c;
+  --accent-hover: #9a3412;
+  --accent-wash: rgba(194, 65, 12, 0.07);
+  /* نصٌّ فوق سطحٍ ممتلئ بالمرجاني. ⚠️ لا يجوز تثبيت الأبيض: في الوضع الليلي
+     المرجانيّ **فاتح**، والأبيض فوقه 1.99:1 — أي فقاعةٌ لا تُقرأ. فالرمز
+     ينقلب مع السمة: ورقٌ فوق مرجانيٍّ داكن (4.93:1)، وحبرٌ فوق مرجانيٍّ
+     فاتح (9.19:1). */
+  --on-accent: #fff8f4;
   /* الخوخيّ: سطحٌ دافئ يُرحِّب، ونصُّه الخاصّ حين يُكتب فوقه. */
-  --peach: #f7d9c6;
-  --peach-wash: rgba(232, 150, 106, 0.11);
+  --peach: #ffe3d3;
+  --peach-wash: rgba(255, 138, 92, 0.10);
   --peach-ink: #8a4a2c;
-  --success: #1f6b46;
+  --success: #15653f;
   --warning: #8a5a12;
-  --danger: #a8332a;
+  --danger: #9f1239;
   /* الظلّ دافئ لا رمادي — ظلٌّ محايد فوق ورقٍ دافئ يقرأ كبقعة. */
-  --shadow-raised: 0 1px 2px rgba(74, 52, 60, 0.06);
-  --shadow-float: 0 4px 16px -4px rgba(74, 52, 60, 0.13);
+  --shadow-raised: 0 1px 2px rgba(90, 52, 38, 0.06);
+  --shadow-float: 0 4px 16px -4px rgba(90, 52, 38, 0.13);
 }
 
-/* ── الوضع الليلي — نسبٌ محسوبة مقابل `--paper` (#17141a) ───────────────────
-     ink         #ede7f0 → 15.02:1  AAA
-     ink-muted   #a79fb0 →  7.15:1  AA
-     accent      #c4a2f0 →  8.49:1  AAA
-     accent-hover#d7bef7 → 10.94:1  AAA
-     peach-ink   #f2b79c → 10.45:1  AAA
-     success     #7fc4a0 →  8.95:1  AAA
-     warning     #d9a441 →  8.11:1  AAA
-     danger      #e8938a →  7.79:1  AAA
+/* ── الوضع الليلي — نسبٌ محسوبة مقابل `--paper` (#191411) ───────────────────
+     ink          #f6e9e2 → 15.37:1  AAA
+     ink-muted    #b0a099 →  7.25:1  AAA
+     accent       #ffa07a →  9.19:1  AAA
+     accent-hover #ffbb9c → 11.17:1  AAA
+     peach-ink    #ffb99f → 10.62:1  AAA
+     success      #6ee7b7 → 11.99:1  AAA
+     warning      #fcd34d → 12.67:1  AAA
+     danger       #fda4af →  9.66:1  AAA
 
-   ⚠️ الليل ليس عكسَ النهار: الأرجواني المُشبَع يهتزّ على خلفيةٍ داكنة (chromatic
-   aberration)، فيُفتَح ويُخفَّض تشبّعه بدل قلبه آلياً.                          */
+   ⚠️ الليل ليس عكسَ النهار: المرجانيّ المُشبَع يهتزّ على خلفيةٍ داكنة، فيُفتَح
+   ويُخفَّض تشبّعه بدل قلبه آلياً.                                              */
 :root[data-theme="dark"] {
-  --paper: #17141a;
-  --paper-raised: #201c26;
-  --paper-sunken: #110f14;
-  --ink: #ede7f0;
-  --ink-muted: #a79fb0;
-  --rule: #332d3a;
-  --rule-subtle: #26212c;
-  --accent: #c4a2f0;
-  --accent-hover: #d7bef7;
-  --accent-wash: rgba(196, 162, 240, 0.13);
-  --peach: #3d2a24;
-  --peach-wash: rgba(242, 183, 156, 0.10);
-  --peach-ink: #f2b79c;
-  --success: #7fc4a0;
-  --warning: #d9a441;
-  --danger: #e8938a;
+  --paper: #191411;
+  --paper-raised: #221b17;
+  --paper-sunken: #120e0c;
+  --ink: #f6e9e2;
+  --ink-muted: #b0a099;
+  --rule: #3a2e28;
+  --rule-subtle: #2a211d;
+  --accent: #ffa07a;
+  --accent-hover: #ffbb9c;
+  --accent-wash: rgba(255, 160, 122, 0.13);
+  --on-accent: #191411;
+  --peach: #3d2a22;
+  --peach-wash: rgba(255, 185, 159, 0.10);
+  --peach-ink: #ffb99f;
+  --success: #6ee7b7;
+  --warning: #fcd34d;
+  --danger: #fda4af;
   --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.42);
   --shadow-float: 0 4px 16px -4px rgba(0, 0, 0, 0.58);
 }
@@ -160,22 +169,24 @@
 /* يتبع تفضيل النظام ما لم يُصرِّح المستخدم باختيارٍ (`data-theme` يفوز دائماً). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #17141a;
-    --paper-raised: #201c26;
-    --paper-sunken: #110f14;
-    --ink: #ede7f0;
-    --ink-muted: #a79fb0;
-    --rule: #332d3a;
-    --rule-subtle: #26212c;
-    --accent: #c4a2f0;
-    --accent-hover: #d7bef7;
-    --accent-wash: rgba(196, 162, 240, 0.13);
-    --peach: #3d2a24;
-    --peach-wash: rgba(242, 183, 156, 0.10);
-    --peach-ink: #f2b79c;
-    --success: #7fc4a0;
-    --warning: #d9a441;
-    --danger: #e8938a;
+    --paper: #191411;
+    --paper-raised: #221b17;
+    --paper-sunken: #120e0c;
+    --ink: #f6e9e2;
+    --ink-muted: #b0a099;
+    --rule: #3a2e28;
+    --rule-subtle: #2a211d;
+    --accent: #ffa07a;
+    --accent-hover: #ffbb9c;
+    --accent-wash: rgba(255, 160, 122, 0.13);
+    --on-accent: #191411;
+  --on-accent: #191411;
+    --peach: #3d2a22;
+    --peach-wash: rgba(255, 185, 159, 0.10);
+    --peach-ink: #ffb99f;
+    --success: #6ee7b7;
+    --warning: #fcd34d;
+    --danger: #fda4af;
     --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.42);
     --shadow-float: 0 4px 16px -4px rgba(0, 0, 0, 0.58);
   }

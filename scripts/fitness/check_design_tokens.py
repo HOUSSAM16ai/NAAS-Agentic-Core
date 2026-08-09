@@ -33,7 +33,7 @@ FRONTEND = REPO_ROOT / "frontend" / "app"
 TOKENS_FILE = FRONTEND / "styles" / "tokens.css"
 
 #: الدَّين المُجمَّد: عدد الألوان الخامّة الباقية في `globals.css`. **يتقلّص فقط.**
-FROZEN_RAW_COLOURS = 172
+FROZEN_RAW_COLOURS = 126
 
 #: عدد إعلانات `style={{…}}` بقيم بكسل حرفية في JSX. **يتقلّص فقط.**
 FROZEN_INLINE_PX = 26
@@ -164,12 +164,57 @@ def check_tokens_exist() -> list[str]:
     return [f"tokens.css is missing {name}" for name in required if f"{name}:" not in css]
 
 
+def check_primary_rgb_matches_accent() -> list[str]:
+    """`--primary-color-rgb` نسخةٌ ثانية من `--accent` — تُفرَض مطابقتها (D-233).
+
+    CSS لا يفكّك اللون السداسي إلى ثلاثيّة، فـ`rgba(var(--primary-color-rgb), .1)`
+    تحتاج الأرقام مكتوبة. والنتيجة أنّ الرمز تغيّر مرّةً وبقيت الثلاثيّة على اللون
+    القديم: فقاعةٌ مرجانية وهالةٌ زرقاء. ولم تلتقطها بوّابة الألوان الخامّة لأنها
+    ليست لوناً سداسياً — وهي بالضبط «الكمّية الواحدة بقيمتين» التي يمنعها D-192.
+    """
+    globals_css = FRONTEND / "globals.css"
+    if not globals_css.exists():
+        return ["globals.css is missing"]
+
+    tokens = _strip_comments(TOKENS_FILE.read_text(encoding="utf-8"))
+    css = _strip_comments(globals_css.read_text(encoding="utf-8"))
+
+    # آخر `--accent` مُعرَّف في كل كتلة سمة، بترتيب ورودها (نهاري ثمّ ليلي).
+    accents = re.findall(r"--accent:\s*(#[0-9a-fA-F]{6})", tokens)
+    triplets = re.findall(r"--primary-color-rgb:\s*([0-9]{1,3},\s*[0-9]{1,3},\s*[0-9]{1,3})", css)
+    if not accents or not triplets:
+        return ["cannot locate --accent or --primary-color-rgb to compare"]
+
+    allowed = set()
+    for hex_colour in accents:
+        value = hex_colour.lstrip("#")
+        allowed.add(tuple(int(value[i : i + 2], 16) for i in (0, 2, 4)))
+
+    failures: list[str] = []
+    for raw in triplets:
+        parsed = tuple(int(part.strip()) for part in raw.split(","))
+        if parsed not in allowed:
+            expected = " or ".join(", ".join(str(c) for c in a) for a in sorted(allowed))
+            failures.append(
+                f"--primary-color-rgb is ({raw}) but no --accent in tokens.css matches it. "
+                f"Expected one of: {expected}. A second copy of the accent that drifts "
+                f"gives one colour to the shape and another to its glow (D-192/D-233)."
+            )
+    return failures
+
+
 def main() -> int:
     if not TOKENS_FILE.exists():
         print(f"❌ design tokens: {TOKENS_FILE.relative_to(REPO_ROOT)} is missing")
         return 1
 
-    failures = check_tokens_exist() + check_contrast() + check_raw_colours() + check_inline_px()
+    failures = (
+        check_tokens_exist()
+        + check_contrast()
+        + check_raw_colours()
+        + check_inline_px()
+        + check_primary_rgb_matches_accent()
+    )
 
     if failures:
         print("❌ بوّابة رموز التصميم مخروقة (D-199):")

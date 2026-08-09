@@ -22,7 +22,7 @@ class TestDeclaredLimits:
         assert FIRST_OBJECT_PAINT_MS / 1000 < FLOW_LIMIT_S < ATTENTION_LIMIT_S
 
     def test_doherty_threshold_is_400ms(self) -> None:
-        """‏Brady, IBM Systems Journal 1982 — الرقم مرجعٌ لا تفضيل."""
+        """Brady, IBM Systems Journal 1982 — الرقم مرجعٌ لا تفضيل."""
         assert FIRST_OBJECT_PAINT_MS == 400
 
     def test_nielsen_limits(self) -> None:
@@ -50,11 +50,11 @@ class TestClassification:
         assert classify_latency(seconds) is expected
 
     def test_measured_production_p50_loses_flow(self) -> None:
-        """‏p50 المقيس = 7.57s — داخل الانتباه، وخارج التدفّق تماماً."""
+        """p50 المقيس = 7.57s — داخل الانتباه، وخارج التدفّق تماماً."""
         assert classify_latency(7.57) is LatencyVerdict.NOTICEABLE
 
     def test_measured_production_p95_loses_attention(self) -> None:
-        """‏p95 المقيس = 72.57s — الطالب ذهب."""
+        """p95 المقيس = 72.57s — الطالب ذهب."""
         assert classify_latency(72.57) is LatencyVerdict.ATTENTION_LOST
 
     def test_negative_is_an_error_not_an_optimistic_verdict(self) -> None:

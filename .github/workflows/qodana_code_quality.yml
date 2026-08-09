@@ -31,15 +31,22 @@ jobs:
       # env var is the supported way to branch on its presence — without this, every
       # fork PR (which gets no secrets) FAILS instead of skipping.
       #
-      # QODANA_TOKEN is the name JetBrains' own documentation specifies, so it is the
-      # canonical one — the workflow should not chase whatever the secret was last
-      # called. Read from exactly one secret: a `secrets.A || secrets.B` fallback
-      # silently reaches for the stale value whenever the first is empty, and a stale
-      # value is precisely what produced three red runs here ("QODANA_TOKEN is
-      # invalid", rejected at authentication before Qodana read a single line of code).
-      # One name, one source (D-192). Delete any other Qodana secret so nothing else
-      # can be picked up later.
-      QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+      # Read the secret whose name Qodana Cloud's own setup wizard generated for the
+      # CURRENT project: QODANA_TOKEN_<projectId>. That trailing number is the project
+      # id, and it is the whole reason four runs died on "QODANA_TOKEN is invalid" —
+      # the valid token was always sitting in a secret nobody was reading. The id moved
+      # from 335615010 to 1439809274 when the Cloud project was recreated, so a plain
+      # `QODANA_TOKEN` never held the live value.
+      #
+      # ⚠️ If the Qodana Cloud project is ever recreated again, this id changes and the
+      # scan starts skipping (not failing — see the guard below). Re-copy the name from
+      # the workflow Qodana Cloud generates and update this one line.
+      #
+      # Exactly one secret, no `secrets.A || secrets.B` fallback: a fallback reaches for
+      # a stale value whenever the first is empty, and stale values are what cost the
+      # four red runs. One name, one source (D-192). The now-dead QODANA_TOKEN and
+      # QODANA_CONFIGURATIONS_TOKEN secrets should be deleted from repository settings.
+      QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_1439809274 }}
     steps:
       - uses: actions/checkout@v5 # was @v3: D-141 requires node24 actions, zero warnings
         with:

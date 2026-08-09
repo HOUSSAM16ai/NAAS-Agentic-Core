@@ -39,7 +39,7 @@
 | `revenue_engine_truth.md` | **حالة** طبقات القيمة والإيراد (D-210→D-223) — 12 طبقة · 14 وحدة · 4 خطوط إيراد. القانون في `docs/VALUE_DOCTRINE.md` + `docs/REVENUE_ENGINE_SPEC.md`، وتحرسها `check_revenue_doctrine` |
 | `cognitive_execution_truth.md` | **حالة** محرّك التنفيذ المعرفي (D-224/D-225) — ١٣ طبقة + ٤ آفاق سوق. القانون في `docs/architecture/COGNITIVE_EXECUTION_ENGINE.md`، وتحرسها `check_cognitive_execution` (بها **قفل D-187**: نموذجٌ لغوي موصولٌ بمُنفِّذ الصندوق ⇒ CI أحمر) |
 | `cognitive_twin_truth.md` | **حالة** التوأم الرقمي المعرفي (D-226/D-227) — ٨ محرّكات + ٣ آفاق. القانون في `docs/architecture/COGNITIVE_DIGITAL_TWIN.md`، وتحرسها `check_cognitive_twin` + `check_prerequisite_single_graph` |
-| `code_quality_truth.md` | **حالة** أداتَي جودة الكود (D-235) — ماذا وجد Qodana وCodeScene، وحكمٌ لكل نتيجة حرجة (5 حقيقية · 8 كاذبة)، والحدود المُعلَنة. ⚠️ عدد Qodana **ليس درجة جودة** |
+| `code_quality_truth.md` | **حالة** أدوات جودة الكود الثلاث (D-235) — ماذا وجد Qodana وCodeScene وCodeRabbit، وحكمٌ لكل نتيجة حرجة (5 حقيقية · 8 كاذبة)، والحدود المُعلَنة، و**البرهان من سجلّ التشغيل** على أنّ للمِسنَن أسناناً. ⚠️ عدد Qodana **ليس درجة جودة**، و`.coderabbit.yaml` **PARTIAL** حتى تُبلِّغ مراجعةٌ إعداداً غير الافتراضي |
 | `ci-gates.md` | فهرس بوّابات CI |
 | `fragility-patterns.md` | أنماط الهشاشة المُوثَّقة (Patterns 1-4) |
 | `architecture/websocket-topology.md` | طوبولوجيا WebSocket (سلسلة D-WS-*) |

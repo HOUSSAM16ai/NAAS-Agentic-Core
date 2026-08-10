@@ -119,7 +119,11 @@ def _split_forwarded_chain(raw_header: str) -> list[str]:
 def _valid_ip(candidate: str) -> str | None:
     """يعيد العنوان إن كان صالحاً، وإلّا ``None``."""
     try:
-        return str(ipaddress.ip_address(candidate))
+        # `.compressed` لا `str()`: كلاهما يُخرج النصّ نفسه بالضبط، لكنّ
+        # `compressed` خاصيّةٌ **مُصرَّح نوعها `str`** في كلا الصنفين وتُسمّي
+        # الشكل القانوني الذي نريده صراحةً (المُصغَّر لـIPv6). التحويل الضمني
+        # كان يعتمد على `__str__` غير المُصرَّح في التلميحات النوعية.
+        return ipaddress.ip_address(candidate).compressed
     except ValueError:
         return None
 

@@ -172,7 +172,12 @@ def _json_error(context: ErrorContext, headers: dict[str, str] | None = None) ->
     payload = build_error_payload(context)
     response_headers = dict(headers or {})
     response_headers[REQUEST_ID_HEADER] = context.request_id
-    response_headers[ERROR_CODE_HEADER] = str(payload["error_code"])
+    # الرمز يُقرأ من `context` لا من القاموس المبنيّ: `payload` مُعلَن
+    # `dict[str, object]` فيُجبِر تحويلاً وقت التشغيل على قيمةٍ **نعرف نوعها
+    # أصلاً**، ويفتح احتمال أن تختلف الترويسة عن الجسم لو تغيّر المفتاح يوماً.
+    # مصدرٌ واحد للرمز، والترويسة والجسم لا يفترقان بنيوياً. (Qodana:
+    # PyStringConversionWithoutDunderMethodInspection على `object`.)
+    response_headers[ERROR_CODE_HEADER] = context.resolved_error_code()
     return JSONResponse(status_code=context.status_code, content=payload, headers=response_headers)
 
 

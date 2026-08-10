@@ -195,16 +195,32 @@ async def test_jwt_token_contains_correct_claims(async_client: AsyncClient):
     )
     decoded = jwt.decode(token, secret_key, algorithms=["HS256"])
 
-    # Verify claims
+    # D-236 · ISS-152 — عقد المطالبات تغيّر عمداً.
+    #
+    # كان هذا المسار يسكّ رمزاً بيده يحمل `email` و`role` نصّيتين، بلا `jti` ولا
+    # `iat` ولا نوع، وعمره ٢٤ ساعة. صار يُفوَّض إلى `AuthService` — المحرّك
+    # القانوني — فحلّت `roles[]`/`permissions[]` (من RBAC) محلّ `role` النصّية،
+    # وأُضيفت `type` التي تُغلق التباس أنواع الرموز.
+    #
+    # ⛔ `email` حُذفت عمداً: مُعرِّف الحساب في `sub`، وحملُ البريد داخل رمزٍ
+    # يُمرَّر في روابط WebSocket (`?token=`) يسرّب بيانات شخصية إلى سجلّات
+    # الوسطاء بلا مقابل.
+    #
+    # لا مستهلك فقد شيئاً: مصادقة WebSocket تشتقّ الإدارة من `is_admin` أو من
+    # `ADMIN` داخل `roles` (`customer_chat.py:196`)، و`/api/v1` يقرأ الصلاحيات
+    # من قاعدة البيانات لا من الرمز (`app/deps/auth.py:get_current_user`).
     assert "sub" in decoded, "Missing 'sub' claim"
-    assert "email" in decoded, "Missing 'email' claim"
-    assert "role" in decoded, "Missing 'role' claim"
+    assert "roles" in decoded, "Missing 'roles' claim"
+    assert "permissions" in decoded, "Missing 'permissions' claim"
     assert "is_admin" in decoded, "Missing 'is_admin' claim"
+    assert "type" in decoded, "Missing 'type' claim"
+    assert "jti" in decoded, "Missing 'jti' claim"
+    assert "iat" in decoded, "Missing 'iat' claim"
     assert "exp" in decoded, "Missing 'exp' claim"
 
-    assert decoded["email"] == "jwttest@example.com"
-    assert decoded["role"] == "user"
+    assert decoded["type"] == "access"
     assert decoded["is_admin"] is False
+    assert isinstance(decoded["roles"], list)
 
 
 @pytest.mark.asyncio

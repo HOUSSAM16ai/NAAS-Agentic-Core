@@ -13,7 +13,6 @@
 
 from __future__ import annotations
 
-import datetime
 import logging
 
 import httpx
@@ -24,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.infrastructure.clients.user_client import user_service_client
 from app.security.chrono_shield import chrono_shield
+from app.services.auth import AuthService
 from app.services.rbac import STANDARD_ROLE, RBACService
 from app.services.security.auth_persistence import AuthPersistence
 
@@ -53,6 +53,15 @@ class AuthBoundaryService:
         self.db = db
         self.persistence = AuthPersistence(db)
         self.settings = get_settings()
+
+    def _build_auth_service(self) -> AuthService:
+        """يبني محرّك المصادقة القانوني على نفس الجلسة.
+
+        يُبنى عند الطلب لا في `__init__`: هذه الواجهة تُنشأ لكل طلب عبر
+        `Depends`، وبناء `AuthService` يجرّ RBAC والتدقيق والتشفير — فلا داعي
+        لدفع ثمنها في مسارات لا تصادِق (مثل `extract_token_from_request`).
+        """
+        return AuthService(self.db, self.settings)
 
     async def register_user(self, full_name: str, email: str, password: str) -> dict[str, object]:
         """
@@ -184,48 +193,42 @@ class AuthBoundaryService:
             logger.error(f"User Service unreachable for login ({e}), using local fallback.")
 
         # ==============================================================================
-        # Local Fallback (Monolith Logic with ChronoShield)
+        # Local path — واجهة رقيقة فوق AuthService (D-236 · ISS-152)
         # ==============================================================================
-        # 0. تفعيل درع الدفاع الزمني
+        # كان هنا **عقلٌ ثانٍ للمصادقة**: يسكّ JWT بيده لمدّة ٢٤ ساعة، بلا `jti`
+        # ولا `iat` ولا نوع، وبلا رمز تحديث، وبلا سجلّ تدقيق — والأخطر أنه **لا
+        # يفحص حالة الحساب إطلاقاً**، فكان حسابٌ موقوف (`is_active=False` أو
+        # `status=SUSPENDED/DISABLED`) يدخل من هذا الباب ويُرفَض من `/api/v1`.
+        # بابان بحكمين على نفس الحساب ليسا ميزةً بل ثغرة.
+        #
+        # الآن يُفوَّض إلى `AuthService` — المحرّك القائم المختبَر — فتُكتسَب دفعةً
+        # واحدة: فحص الحالة · التدقيق · تدوير رمز التحديث بعائلة · RBAC · مطالبات
+        # موقّعة بنوع. والدرع الزمني يبقى **أمام** كل ذلك.
         await chrono_shield.check_allowance(request, email)
 
-        # 1. جلب بيانات المستخدم
-        user = await self.persistence.get_user_by_email(email)
-
-        # 2. التحقق من كلمة المرور
-        is_valid = False
-        if user:
-            try:
-                is_valid = user.verify_password(password)
-            except Exception as e:
-                logger.error(f"Password verification error for user {user.id}: {e}")
-                is_valid = False
-        else:
-            chrono_shield.phantom_verify(password)
-            is_valid = False
-
-        if not is_valid:
+        auth_service = self._build_auth_service()
+        try:
+            user = await auth_service.authenticate(
+                email=email, password=password, ip=ip, user_agent=user_agent
+            )
+        except HTTPException as exc:
+            # 401 (بيانات خاطئة) و403 (حساب معطَّل) كلاهما محاولة فاشلة يعتدّ بها
+            # الدرع. ⛔ لا تُميَّز الرسالة بينهما: «الحساب معطَّل» تُخبر المهاجم أن
+            # البريد موجود — وهو تعداد حسابات مجّاني.
             chrono_shield.record_failure(request, email)
-            logger.warning(f"Failed login attempt for {email}")
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+            logger.warning("Failed login attempt for %s (status=%s)", email, exc.status_code)
+            if exc.status_code in (401, 403):
+                raise HTTPException(status_code=401, detail="Invalid email or password") from exc
+            raise
 
-        chrono_shield.reset_target(email)
+        chrono_shield.reset_target(email, request)
 
-        # 3. توليد رمز JWT
-        role = "admin" if user.is_admin else "user"
-        payload = {
-            "sub": str(user.id),
-            "email": user.email,
-            "role": role,
-            "is_admin": user.is_admin,
-            "exp": datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=24),
-        }
-
-        token = jwt.encode(payload, self.settings.SECRET_KEY, algorithm="HS256")
+        tokens = await auth_service.issue_tokens(user, ip=ip, user_agent=user_agent)
 
         landing_path = "/admin" if user.is_admin else "/app/chat"
         return {
-            "access_token": token,
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
             "token_type": "Bearer",
             "user": {
                 "id": user.id,

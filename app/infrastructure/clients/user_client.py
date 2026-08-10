@@ -7,7 +7,7 @@ Decouples the Monolith from the Identity Provider.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 
 import httpx
@@ -15,6 +15,7 @@ import jwt
 
 from app.core.http_client_factory import HTTPClientConfig, get_http_client
 from app.core.settings.base import get_settings
+from app.services.auth.crypto import SERVICE_TOKEN_TYPE
 
 logger = logging.getLogger("user-service-client")
 
@@ -43,12 +44,20 @@ class UserServiceClient:
         return get_http_client(self.config)
 
     def _generate_service_token(self) -> str:
-        """Generate a short-lived service token for internal communication."""
+        """Generate a short-lived service token for internal communication.
+
+        D-236 · ISS-152: كان السطر `datetime.now(datetime.UTC)` بينما الاسم
+        `datetime` مربوط بـ**الصنف** لا بالوحدة (`from datetime import datetime`)،
+        والصنف لا يملك `UTC` — فكان كل نداء يرفع `AttributeError`. عطبٌ حيّ لم
+        يكشفه شيء لأن المسار الوحيد الذي يستدعيه (`get_me`، س148) يُلتقَط استثناؤه
+        ويُبتلَع في سقوطٍ صامت.
+        """
         payload = {
             "sub": "service-account",
             "role": "ADMIN",  # Service account has admin privileges
-            "type": "service",
-            "exp": datetime.now(datetime.UTC) + timedelta(minutes=5),
+            "type": SERVICE_TOKEN_TYPE,
+            "iat": datetime.now(UTC),
+            "exp": datetime.now(UTC) + timedelta(minutes=5),
         }
         return jwt.encode(payload, self.secret_key, algorithm="HS256")
 

@@ -111,15 +111,24 @@ async def test_chrono_shield_ip_persistence(fresh_shield, mock_request):
     # IP history remains
     assert len(fresh_shield._failures[f"ip:{ip}"]) == 1
 
-    # Check allowance should still see the IP threat
-    # One failure is not enough to trigger anything, but let's verify count logic
-    # Add more failures to IP with DIFFERENT identifier
-    identifier2 = "user2@example.com"
-    for _ in range(fresh_shield.MAX_FREE_ATTEMPTS):
-        fresh_shield.record_failure(mock_request, identifier2)
+    # D-236 · ISS-152 — القصد الدفاعي محفوظ، والمعايرة صُحِّحت.
+    #
+    # هذا الاختبار هو ما حمى مضادّ التدوير: أوّل صياغة للإصلاح حذفت متّجه العنوان
+    # من الإبطاء بالكامل، فأسقطه الاختبار — وكان مُحقّاً. العطب كان في **القفل
+    # الصلب** (429) لا في الإبطاء: الإبطاء يُكلِّف ثوانيَ ولا يمنع أحداً.
+    #
+    # ما تغيّر: عتبة الإبطاء على العنوان صارت `IP_MAX_FREE_ATTEMPTS` (20) بدل
+    # مشاركة عتبة الهوية (5). القديمة كانت تفترض «عنوان = مستخدم واحد»، وهو
+    # افتراض خاطئ خلف بروكسي Next.js وcarrier-NAT الجزائري — وهو أصل قفل المنصّة.
+    #
+    # ⚠️ الإخفاقات تُوزَّع على **هويات مختلفة** عمداً: هذا هو معنى «التدوير»
+    # حرفياً، ويُبقي كل متّجه هوية تحت عتبته فيُقاس متّجه العنوان وحده.
+    for index in range(fresh_shield.IP_MAX_FREE_ATTEMPTS):
+        fresh_shield.record_failure(mock_request, f"rotated-{index}@example.com")
 
-    # Total IP failures: 1 (from user1) + 5 (from user2) = 6
-    # Should trigger delay
+    # Total IP failures: 1 (user1) + 20 (rotated) = 21 → تجاوزٌ قدره 1 فوق عتبة
+    # العنوان، وكل هوية منفردة عند إخفاق واحد فقط.
+    probe_identity = "rotated-0@example.com"
 
     with patch("asyncio.sleep", new_callable=MagicMock) as mock_sleep:
 
@@ -128,7 +137,8 @@ async def test_chrono_shield_ip_persistence(fresh_shield, mock_request):
 
         mock_sleep.side_effect = async_sleep_mock
 
-        await fresh_shield.check_allowance(mock_request, identifier2)
+        await fresh_shield.check_allowance(mock_request, probe_identity)
 
-        # Threat level 6 -> delay 0.2s
+        # تجاوزٌ قدره 1 ⇒ 0.1 * 2^1 = 0.2s — نفس زمن الإبطاء الذي كان يفرضه
+        # الاختبار الأصلي، على العتبة المُصحَّحة.
         mock_sleep.assert_called_with(0.2)

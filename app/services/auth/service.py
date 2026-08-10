@@ -16,7 +16,7 @@ from app.core.config import AppSettings, get_settings
 from app.core.domain.user import RefreshToken, User, UserStatus
 from app.security.passwords import pwd_context
 from app.services.audit import AuditService
-from app.services.auth.crypto import AuthCrypto
+from app.services.auth.crypto import ACCESS_TOKEN_TYPE, REAUTH_TOKEN_TYPE, AuthCrypto
 from app.services.auth.password_manager import PasswordManager
 from app.services.auth.registration import RegistrationManager
 from app.services.auth.schema import TokenBundle
@@ -238,7 +238,7 @@ class AuthService(BaseService):
     ) -> None:
         """التحقق من رمز إعادة المصادقة."""
         try:
-            payload = self.crypto.verify_jwt(token)
+            payload = self.crypto.verify_jwt(token, expected_type=REAUTH_TOKEN_TYPE)
         except HTTPException as exc:
             await self.audit.record(
                 actor_user_id=user.id,
@@ -548,4 +548,9 @@ class AuthService(BaseService):
         return self.crypto.hash_identifier(value)
 
     def verify_access_token(self, token: str) -> dict[str, object]:
-        return self.crypto.verify_jwt(token)
+        """يتحقّق من رمز وصول — **توقيعاً ونوعاً** (D-236 · ISS-152).
+
+        كان يمرّر أي رمز موقّع، فكان رمز إعادة المصادقة ورمز الخدمة الداخلي
+        يُقبَلان هنا كوصولٍ كامل.
+        """
+        return self.crypto.verify_jwt(token, expected_type=ACCESS_TOKEN_TYPE)

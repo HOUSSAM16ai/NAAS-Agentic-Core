@@ -40,6 +40,31 @@ _IS_DEV_LIKE = _ENV in ("development", "dev", "local") or _ALLOW_LONG
 ACCESS_EXPIRE_MINUTES: Final[int] = 480 if _IS_DEV_LIKE else 30
 REAUTH_EXPIRE_MINUTES: Final[int] = 60 if _IS_DEV_LIKE else 10
 
+# ─────────────────────────────────────────────────────────────────────────────
+# أنواع الرموز (D-236 · ISS-152) — المصدر الوحيد لهذه الحرفيات.
+# ⛔ لا تُكرَّر السلاسل في مواضع الاستدعاء: قيمتان لنفس المعنى في موضعين هما
+# بالضبط صنف العطب الذي أنتج «Login failed» (D-192).
+# ─────────────────────────────────────────────────────────────────────────────
+ACCESS_TOKEN_TYPE: Final[str] = "access"
+REAUTH_TOKEN_TYPE: Final[str] = "reauth"
+SERVICE_TOKEN_TYPE: Final[str] = "service"
+
+# ⛔ **`iss`/`aud` غير مُضافتين — نتيجةٌ سلبية مُسجَّلة، لا سهوٌ** (D-236 · ISS-152).
+#
+# جُرِّبتا فعلاً ثمّ رُوجِعتا بالقياس: PyJWT يرفع `InvalidAudienceError` متى حمل
+# الرمز `aud` ولم يُمرِّر المُنادي `audience=` — وفي المستودع **١٦ موضع
+# `jwt.decode`** بينها مُفكِّك رموز الـWebSocket وكل مُتحقِّقي الخدمات المصغّرة.
+# فإضافتها تعني إمّا كسر ستّة عشر مساراً، أو إضافة مطالبةٍ **لا يتحقّق منها أحد**.
+#
+# والثانية أسوأ: مطالبةٌ موجودة وغير مفحوصة تشتري مظهر الأمان بلا أمان — نفس
+# صنف العطب الذي رصده D-189 («الوجود ليس صحّة»: ترويسة أثرٍ موجودة بمُعرَّف
+# مُخترَع تجتاز أي بوّابة تبحث عن النصّ). و`type` وحده يُغلق ثغرة التباس الأنواع
+# التي كانت حقيقية هنا، أمّا `iss`/`aud` فتحرسان ضدّ نظامٍ **آخر** يتقاسم المفتاح
+# — وهو ليس واقع هذا النشر.
+#
+# شرط الترقية: توحيد فكّ الترميز في مصدرٍ واحد يمرّ منه الستّة عشر موضعاً، ثمّ
+# تُضاف المطالبتان **مع التحقّق** في نفس الـPR.
+
 
 class AuthCrypto:
     """
@@ -66,6 +91,14 @@ class AuthCrypto:
             "sub": str(user.id),
             "roles": roles,
             "permissions": sorted(permissions),
+            # D-236 · ISS-152: نوع الرمز مطالبةٌ صريحة. بدونه كان أي رمز موقّع
+            # بالمفتاح نفسه يُقبَل في كل مكان — رمز إعادة المصادقة القصير ورمز
+            # الخدمة الداخلي الحامل `role: ADMIN` كلاهما كان يمرّ كرمز وصول.
+            "type": ACCESS_TOKEN_TYPE,
+            # `is_admin` تُنقل داخل الرمز لأن مصادقة WebSocket تشتقّ الهوية من
+            # الـJWT وحده بلا استعلام قاعدة بيانات (D-WS-CONN-001). كانت غائبة
+            # عن رموز هذا المسار، فكان الإداري يفقد صفته على القناة.
+            "is_admin": bool(user.is_admin),
             "jti": secrets.token_urlsafe(8),
             "iat": datetime.now(UTC),
             "exp": datetime.now(UTC) + expires_delta,
@@ -80,6 +113,7 @@ class AuthCrypto:
         payload = {
             "sub": str(user.id),
             "purpose": "reauth",
+            "type": REAUTH_TOKEN_TYPE,
             "jti": secrets.token_urlsafe(8),
             "iat": datetime.now(UTC),
             "exp": datetime.now(UTC) + expires_delta,
@@ -97,12 +131,44 @@ class AuthCrypto:
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token format"
             ) from exc
 
-    def verify_jwt(self, token: str) -> dict[str, object]:
-        """التحقق من صحة توقيع JWT."""
+    def verify_jwt(self, token: str, *, expected_type: str | None = None) -> dict[str, object]:
+        """التحقق من صحة توقيع JWT — ومن **نوعه** حين يُطلَب.
+
+        D-236 · ISS-152 — **قانون دائم: التوقيع ليس تفويضاً.**
+
+        كانت هذه الدالّة `jwt.decode` عاريةً، فكان **كل** رمز موقّع بالمفتاح نفسه
+        مقبولاً في **كل** موضع: رمز إعادة المصادقة (عمره دقائق ودوره إثبات حضور)
+        ورمز الخدمة الداخلي (`role: ADMIN`) كلاهما يمرّ كرمز وصول كامل. الرمز
+        يقول من أصدره، ويجب أن يقول أيضاً **لماذا** أُصدر.
+
+        الرموز المُصدَرة قبل هذا التغيير لا تحمل `type`. تُقبَل عمداً حين يكون
+        النوع المتوقَّع هو الوصول (تدهور رشيق: لا نطرد جلسات قائمة)، وتُرفَض حين
+        يُطلَب نوعٌ آخر — فلا يُشترى التوافق بثقبٍ في الاتجاه الخطير.
+
+        Args:
+            token: الرمز الخام.
+            expected_type: النوع المطلوب، أو ``None`` لفكّ الترميز بلا فحص نوع.
+
+        Raises:
+            HTTPException: 401 عند فشل التوقيع أو عدم مطابقة النوع.
+        """
         try:
-            # Note: The original code casts the result of jwt.decode (which is object) to dict.
-            return jwt.decode(token, self.settings.SECRET_KEY, algorithms=["HS256"])
+            payload: dict[str, object] = jwt.decode(
+                token, self.settings.SECRET_KEY, algorithms=["HS256"]
+            )
         except jwt.PyJWTError as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
             ) from exc
+
+        if expected_type is None:
+            return payload
+
+        actual = payload.get("type")
+        if actual is None and expected_type == ACCESS_TOKEN_TYPE:
+            return payload  # رمز قديم سابق لهذا العقد — يُقبَل للوصول فقط.
+
+        if actual != expected_type:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+        return payload

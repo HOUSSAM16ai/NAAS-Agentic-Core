@@ -7,6 +7,7 @@ import { ChatInterface } from './ChatInterface';
 import { BUILD_VERSION } from '../buildVersion';
 import { clientLog } from '../utils/clientLog';
 import { markdownToPlainText } from '../utils/preprocessMath';
+import { readApiError } from '../utils/apiError';
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL ?? '';
 const apiUrl = (path) => `${API_ORIGIN}${path}`;
@@ -50,9 +51,9 @@ const LoginForm = ({ onLogin, onToggle }) => {
                 const data = await res.json();
                 onLogin(data.access_token, data.user);
             } else {
-                setError((await res.json()).detail || 'Login failed');
+                setError(await readApiError(res, 'تعذّر تسجيل الدخول.'));
             }
-        } catch (e) { setError('Connection failed'); }
+        } catch (e) { setError('تعذّر الاتصال بالخادم. تحقّق من الشبكة وحاول مرّة أخرى.'); }
         finally { setLoading(false); }
     };
 
@@ -99,10 +100,9 @@ const RegisterForm = ({ onToggle, onLogin }) => {
                     onToggle();
                 }
             } else {
-                const body = await res.json();
-                setError(body.detail || body.message || 'فشل إنشاء الحساب');
+                setError(await readApiError(res, 'فشل إنشاء الحساب.'));
             }
-        } catch (e) { setError('خطأ في الاتصال'); }
+        } catch (e) { setError('تعذّر الاتصال بالخادم. تحقّق من الشبكة وحاول مرّة أخرى.'); }
         finally { setLoading(false); }
     };
 

@@ -171,6 +171,72 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         // Helper to generate unique IDs
         const generateId = () => Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
 
+        // ══════════════════════════════════════════════════════════════════════
+        // API ERROR CONTRACT | عقد أخطاء الـAPI (D-236 · ISS-152)
+        // ══════════════════════════════════════════════════════════════════════
+        // هذا الملفّ مرآةٌ لـ`app/static/js/legacy-app.jsx` (قاعدة D-013): أي
+        // تعديل هنا يُطبَّق في النسختين في نفس الـPR.
+        //
+        // كان الكود يقرأ `errorData.detail` بينما الخادم يُخرج `message` وحده،
+        // فكان `.detail` يساوي `undefined` **دائماً** ويُعرَض `'Login failed'`.
+        // مُبرهَنٌ حيّاً: `HAS 'detail' KEY: False` على 401 حقيقي.
+        // المنطق مطابق لـ`frontend/app/utils/apiError.js` — هذا الملفّ يُحمَّل
+        // كسكربت عام في المتصفّح فلا يستطيع الاستيراد.
+        const ARABIC_BY_ERROR_CODE = {
+            unauthorized: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+            forbidden: 'لا تملك صلاحية الوصول إلى هذه الصفحة.',
+            not_found: 'الصفحة أو المورد غير موجود.',
+            conflict: 'هذا البريد الإلكتروني مسجَّل بالفعل.',
+            validation_error: 'تحقّق من البيانات المُدخَلة ثمّ أعد المحاولة.',
+            account_locked: 'الحساب مقفل مؤقّتاً. حاول بعد قليل.',
+            rate_limited: 'محاولات كثيرة في وقت قصير. انتظر قليلاً ثمّ أعد المحاولة.',
+            internal_error: 'حدث خطأ في الخادم. حاول مرّة أخرى بعد قليل.',
+            upstream_error: 'الخدمة غير متاحة مؤقّتاً. حاول بعد قليل.',
+            service_unavailable: 'الخدمة غير متاحة مؤقّتاً. حاول بعد قليل.',
+            upstream_timeout: 'استغرق الخادم وقتاً أطول من المتوقّع. حاول مرّة أخرى.',
+        };
+
+        const ARABIC_BY_STATUS = {
+            400: 'طلب غير صالح. تحقّق من البيانات المُدخَلة.',
+            401: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+            403: 'لا تملك صلاحية الوصول إلى هذه الصفحة.',
+            404: 'الصفحة أو المورد غير موجود.',
+            409: 'هذا البريد الإلكتروني مسجَّل بالفعل.',
+            422: 'تحقّق من البيانات المُدخَلة ثمّ أعد المحاولة.',
+            429: 'محاولات كثيرة في وقت قصير. انتظر قليلاً ثمّ أعد المحاولة.',
+            500: 'حدث خطأ في الخادم. حاول مرّة أخرى بعد قليل.',
+            502: 'الخدمة غير متاحة مؤقّتاً. حاول بعد قليل.',
+            503: 'الخدمة غير متاحة مؤقّتاً. حاول بعد قليل.',
+            504: 'استغرق الخادم وقتاً أطول من المتوقّع. حاول مرّة أخرى.',
+        };
+
+        const isPresentableApiMessage = (value) => {
+            if (typeof value !== 'string') return false;
+            const trimmed = value.trim();
+            if (!trimmed) return false;
+            if (/^internal server error$/i.test(trimmed)) return false;
+            if (/^validation error$/i.test(trimmed)) return false;
+            return true;
+        };
+
+        const readApiError = async (res, fallback) => {
+            const safeFallback = fallback || 'حدث خطأ غير متوقّع.';
+            let body = null;
+            try {
+                body = await res.json();
+            } catch (_) {
+                return ARABIC_BY_STATUS[res.status] || safeFallback;
+            }
+            if (!body || typeof body !== 'object') {
+                return ARABIC_BY_STATUS[res.status] || safeFallback;
+            }
+            const byCode = ARABIC_BY_ERROR_CODE[body.error_code];
+            if (byCode) return byCode;
+            if (isPresentableApiMessage(body.detail)) return body.detail;
+            if (isPresentableApiMessage(body.message)) return body.message;
+            return ARABIC_BY_STATUS[res.status] || safeFallback;
+        };
+
         const buildClientContextMessages = (messages, currentQuestion, maxItems = 30) => {
             const safeMessages = Array.isArray(messages) ? messages : [];
             const normalizedHistory = safeMessages
@@ -380,11 +446,10 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         const data = await response.json();
                         onLogin(data.access_token, data.user);
                     } else {
-                        const errorData = await response.json();
-                        setError(errorData.detail || 'Login failed');
+                        setError(await readApiError(response, 'تعذّر تسجيل الدخول.'));
                     }
                 } catch (err) {
-                    setError('An error occurred. Please try again.');
+                    setError('تعذّر الاتصال بالخادم. تحقّق من الشبكة وحاول مرّة أخرى.');
                 } finally {
                     setIsSubmitting(false);
                 }
@@ -435,11 +500,10 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         setSuccess('Registration successful! Please login.');
                         setTimeout(onToggle, 2000);
                     } else {
-                        const errorData = await response.json();
-                        setError(errorData.detail || 'Registration failed');
+                        setError(await readApiError(response, 'فشل إنشاء الحساب.'));
                     }
                 } catch (err) {
-                    setError('An error occurred. Please try again.');
+                    setError('تعذّر الاتصال بالخادم. تحقّق من الشبكة وحاول مرّة أخرى.');
                 } finally {
                     setIsSubmitting(false);
                 }
@@ -576,13 +640,12 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         safeSetMessages(data.messages || []);
                         setConversationId(data.conversation_id);
                     } else {
-                        const errorData = await res.json().catch(() => ({}));
-                        const errorMessage = errorData.detail || 'Failed to load conversation';
-                        safeSetMessages([{ id: generateId(), role: 'assistant', content: `Error: ${errorMessage}` }]);
+                        const errorMessage = await readApiError(res, 'تعذّر تحميل المحادثة.');
+                        safeSetMessages([{ id: generateId(), role: 'assistant', content: errorMessage }]);
                     }
                 } catch (e) {
                     console.error("Failed to load conversation", e);
-                    safeSetMessages([{ id: generateId(), role: 'assistant', content: 'Error: Failed to load conversation. Please try again.' }]);
+                    safeSetMessages([{ id: generateId(), role: 'assistant', content: 'تعذّر تحميل المحادثة. حاول مرّة أخرى.' }]);
                 } finally {
                     setIsLoadingConversation(false);
                 }
@@ -913,13 +976,12 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         safeSetMessages(data.messages || []);
                         setConversationId(data.conversation_id);
                     } else {
-                        const errorData = await res.json().catch(() => ({}));
-                        const errorMessage = errorData.detail || 'Failed to load conversation';
-                        safeSetMessages([{ id: generateId(), role: 'assistant', content: `Error: ${errorMessage}` }]);
+                        const errorMessage = await readApiError(res, 'تعذّر تحميل المحادثة.');
+                        safeSetMessages([{ id: generateId(), role: 'assistant', content: errorMessage }]);
                     }
                 } catch (e) {
                     console.error("Failed to load conversation", e);
-                    safeSetMessages([{ id: generateId(), role: 'assistant', content: 'Error: Failed to load conversation. Please try again.' }]);
+                    safeSetMessages([{ id: generateId(), role: 'assistant', content: 'تعذّر تحميل المحادثة. حاول مرّة أخرى.' }]);
                 } finally {
                     setIsLoadingConversation(false);
                 }

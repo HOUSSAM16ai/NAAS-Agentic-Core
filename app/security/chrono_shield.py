@@ -6,6 +6,7 @@ from collections import defaultdict
 
 from fastapi import HTTPException, Request, status
 
+from app.security.client_identity import client_ip_or_unknown
 from app.security.passwords import pwd_context
 
 # Use standard logging as per project convention in security module
@@ -43,7 +44,23 @@ class ChronoShield:
         # Configuration - "The Physics Constants of the Shield"
         self.WINDOW = 300.0  # 5 minutes memory horizon
         self.MAX_FREE_ATTEMPTS = 5  # Attempts before Temporal Dilation begins
-        self.LOCKOUT_THRESHOLD = 20  # Attempts before Event Horizon (Hard Block)
+        self.LOCKOUT_THRESHOLD = 20  # Attempts (per IDENTITY) before Event Horizon
+        # D-236 · ISS-152: سقف العنوان منفصل وأعلى بكثير. الشبكات الجزائرية خلف
+        # carrier-NAT تجعل آلاف الطلاب يتقاسمون عنواناً واحداً، ومقهى إنترنت أو
+        # مدرسة تُخرج عشرات الطلاب من عنوان واحد. سقفٌ مشترك بقيمة ٢٠ حوّل الدرع
+        # إلى قاطعٍ عالمي (مُبرهَن حيّاً). هذا الرقم يوقف حشو بيانات الاعتماد
+        # الآلي دون أن يمسّ صفّاً دراسياً يسجّل دخوله في آنٍ واحد.
+        self.IP_LOCKOUT_THRESHOLD = 200
+        # عتبة الإبطاء على العنوان — **٢٠ لا ٥**.
+        #
+        # كانت القيمة الضمنية ٥ (نفس عتبة الهوية عبر `max()`)، وهي معايَرة لعالمٍ
+        # يكون فيه العنوان = مستخدماً واحداً. هذا الافتراض **خاطئ في نشرنا**:
+        # بروكسي Next.js يجعل الجميع عنواناً واحداً، وcarrier-NAT الجزائري يجمع
+        # آلاف الطلاب خلف عنوان واحد. المعايرة على افتراضٍ خاطئ هي أصل الانقطاع.
+        #
+        # ٢٠ تمرّ فوق ضجيج صفٍّ دراسي كامل يُخطئ الكتابة، وتصطدم بالتدوير الآلي
+        # (مئات المحاولات) خلال ثوانٍ.
+        self.IP_MAX_FREE_ATTEMPTS = 20
         self.MAX_DELAY = 5.0  # Maximum time dilation in seconds
 
         # Memory Management
@@ -79,58 +96,123 @@ class ChronoShield:
             logger.warning("ChronoShield: ENTROPY LIMIT REACHED. Initiating Emergency Purge.")
             self._failures.clear()
 
+    def _live_failures(self, key: str) -> int:
+        """يعدّ الإخفاقات **داخل النافذة** لهذا المفتاح.
+
+        D-236 · ISS-152: كانت القراءة `len(self._failures[key])` بلا ترشيح، والترشيح
+        يحدث في `_manage_entropy` كل ٦٠ ثانية فقط — فإخفاقاتٌ عمرها ساعة كانت تُحتسَب
+        تهديداً حاضراً حتى تمرّ دورة التنظيف. النافذة تعني النافذة.
+        """
+        now = time.time()
+        recent = [stamp for stamp in self._failures.get(key, ()) if now - stamp < self.WINDOW]
+        if recent:
+            self._failures[key] = recent
+        elif key in self._failures:
+            del self._failures[key]
+        return len(recent)
+
     async def check_allowance(self, request: Request, identifier: str) -> None:
         """
         Verifies if the request is allowed to proceed through the Chrono-Shield.
         Raises 429 if blocked, or sleeps if dilated.
+
+        ⚠️ D-236 · ISS-152 — **القفل على الهوية، والعنوان إشارة ثانوية.**
+
+        قِيس حيّاً قبل الإصلاح: ١٩ محاولة فاشلة بعناوين بريد **مختلفة وغير موجودة**
+        جعلت الضحيّة تتلقّى **429 بكلمة سرّها الصحيحة**. السبب أن المفتاح `ip:` كان
+        `127.0.0.1` لكل المستخدمين خلف بروكسي Next.js، فصار عدّاداً عالمياً: عشرون
+        خطأً من أي أحد ⇒ المنصّة كلّها مقفلة.
+
+        الآن: `ip:` يحمل العنوان الحقيقي (`client_identity`)، وسقفه **أعلى بكثير**
+        لأن carrier-NAT الجزائري يجعل آلافاً يتقاسمون عنواناً واحداً — والقفل الحادّ
+        على الهوية وحدها، فخطأ طالبٍ لا يمسّ جاره.
         """
         # Maintenance cycle
         self._manage_entropy()
 
-        ip = request.client.host if request.client else "unknown"
+        ip = client_ip_or_unknown(request)
 
         # Dual-Vector keys
         ip_key = f"ip:{ip}"
         target_key = f"target:{identifier}"
 
-        ip_fails = len(self._failures[ip_key])
-        target_fails = len(self._failures[target_key])
+        ip_fails = self._live_failures(ip_key)
+        target_fails = self._live_failures(target_key)
 
-        # Calculate Threat Level (Max of vectors)
-        threat_level = max(ip_fails, target_fails)
-
-        # Phase 1: Event Horizon (Hard Lockout)
-        if threat_level >= self.LOCKOUT_THRESHOLD:
-            logger.warning(f"ChronoShield: EVENT HORIZON REACHED for IP={ip} Target={identifier}")
+        # Phase 1: Event Horizon (Hard Lockout) — الهوية وحدها تُقفِل قفلاً حادّاً.
+        if target_fails >= self.LOCKOUT_THRESHOLD:
+            logger.warning("ChronoShield: EVENT HORIZON REACHED for target=%s", identifier)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Security protocol activated. Access suspended due to anomalous kinetic energy.",
+                headers={"Retry-After": str(int(self.WINDOW))},
             )
 
-        # Phase 2: Temporal Dilation (Exponential Backoff)
-        if threat_level > self.MAX_FREE_ATTEMPTS:
-            # Formula: 0.1 * 2^(overage)
-            exponent = threat_level - self.MAX_FREE_ATTEMPTS
-            delay = 0.1 * (2**exponent)
-            delay = min(delay, self.MAX_DELAY)
+        # العنوان يُقفِل فقط عند حجمٍ لا يفسّره استعمالٌ مشترك مشروع.
+        if ip_fails >= self.IP_LOCKOUT_THRESHOLD:
+            logger.warning("ChronoShield: EVENT HORIZON REACHED for ip=%s", ip)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Security protocol activated. Access suspended due to anomalous kinetic energy.",
+                headers={"Retry-After": str(int(self.WINDOW))},
+            )
 
-            logger.info(f"ChronoShield: Dilating time by {delay:.2f}s for IP={ip}")
+        # Phase 2: Temporal Dilation (Exponential Backoff).
+        #
+        # ⚠️ يُحسَب على **المتّجهين** عمداً — الإبطاء المتدرّج هو مضادّ التدوير
+        # (Anti-Rotation): مهاجمٌ يجرّب مئة بريد من عنوان واحد لا تُلام أيّ هوية
+        # منفردة، فبلا متّجه العنوان يمرّ بلا أي مقاومة. حُذف هذا المتّجه في أول
+        # صياغة للإصلاح فأسقط `test_chrono_shield_ip_persistence` — والاختبار كان
+        # مُحقّاً: القصد الدفاعي حقيقي، والعطب كان في **القفل الصلب** لا في الإبطاء.
+        #
+        # الفرق الجوهري: الإبطاء يُكلِّف ثوانيَ ولا يمنع أحداً، والقفل الصلب (429)
+        # يمنع الخدمة تماماً — لذلك بقي الإبطاء على العنوان، وانتقل القفل الصلب
+        # إلى الهوية وحدها.
+        delay = self._dilation_delay(target_fails=target_fails, ip_fails=ip_fails)
+        if delay > 0:
+            logger.info(
+                "ChronoShield: Dilating time by %.2fs (target_fails=%d ip_fails=%d)",
+                delay,
+                target_fails,
+                ip_fails,
+            )
             await asyncio.sleep(delay)
+
+    def _dilation_delay(self, *, target_fails: int, ip_fails: int) -> float:
+        """يحسب زمن الإبطاء من أقوى المتّجهين، كلٌّ مقابل عتبته.
+
+        العتبتان مختلفتان لأن الكمّيتين مختلفتان: هويةٌ واحدة تخفق خمس مرّات
+        مؤشّرٌ قوي، وعنوانٌ واحد يخفق خمس مرّات لا يعني شيئاً حين يجلس خلفه صفٌّ
+        دراسي كامل خلف carrier-NAT.
+        """
+        overages = [
+            target_fails - self.MAX_FREE_ATTEMPTS,
+            ip_fails - self.IP_MAX_FREE_ATTEMPTS,
+        ]
+        worst = max(overages)
+        if worst <= 0:
+            return 0.0
+        return min(0.1 * (2**worst), self.MAX_DELAY)
 
     def record_failure(self, request: Request, identifier: str) -> None:
         """Records a failed authentication attempt (Kinetic Impact)."""
-        ip = request.client.host if request.client else "unknown"
+        ip = client_ip_or_unknown(request)
         now = time.time()
         self._failures[f"ip:{ip}"].append(now)
         self._failures[f"target:{identifier}"].append(now)
 
-    def reset_target(self, identifier: str) -> None:
+    def reset_target(self, identifier: str, request: Request | None = None) -> None:
         """
         Resets the threat level for a specific target upon success.
+
+        D-236 · ISS-152: يُمرَّر ``request`` كي يُطهَّر **عدّاد العنوان أيضاً**. كان
+        النجاح يمسح `target:` وحده ويترك `ip:` ينمو أبداً، فكان الدخول الناجح لا
+        يشتري شيئاً: العدّاد الذي يقفل المنصّة لا ينخفض إلّا بانقضاء النافذة.
+        نجاحُ مصادقةٍ كاملة هو أقوى دليل على أن حركة هذا العنوان ليست هجوماً.
         """
-        target_key = f"target:{identifier}"
-        if target_key in self._failures:
-            del self._failures[target_key]
+        self._failures.pop(f"target:{identifier}", None)
+        if request is not None:
+            self._failures.pop(f"ip:{client_ip_or_unknown(request)}", None)
 
     def phantom_verify(self, password: str) -> bool:
         """

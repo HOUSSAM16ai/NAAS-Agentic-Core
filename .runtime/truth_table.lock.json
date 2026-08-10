@@ -1,5 +1,5 @@
 {
-  "branch": "claude/project-international-markets-ws5pwz",
+  "branch": "claude/login-failed-fix-trc2aw",
   "components": [
     {
       "agreed": true,
@@ -291,6 +291,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-09T00:53:51.442488+00:00",
+  "generated_at_utc": "2026-08-10T01:37:29.276863+00:00",
   "schema_version": 1
 }

@@ -213,6 +213,15 @@ jobs:
           # A denylist is structurally wrong here: it can never enumerate every dangerous
           # form. argv + shell=False makes injection unrepresentable instead of filtered.
           python scripts/fitness/check_no_shell_true.py
+          # D-236 (ISS-152): the backend emitted `message`, every login screen read
+          # `detail`, and nothing noticed. So `.detail` was `undefined` on every error
+          # and the student saw the literal English string 'Login failed' — 401, 429,
+          # 422 and 500 all rendered identically, with the real reason discarded.
+          # Measured live before the fix: `HAS 'detail' KEY: False` on a real 401.
+          # A contract declared by one half and read by the other needs a gate, not a
+          # convention; this one also bans English fallback strings from reaching an
+          # Arabic-speaking student.
+          python scripts/fitness/check_error_contract_parity.py
           # D-201: the topic registry, the AsyncAPI contract and the compose bootstrap
           # are three views of one truth, and three views drift. A topic in code with
           # no channel is invisible to external consumers; a channel with no topic is a

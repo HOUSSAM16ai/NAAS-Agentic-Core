@@ -169,6 +169,21 @@ console.log('\nD-236 — silent session rotation');
     check("الرمز يُحفَظ", /localStorage\.setItem\('refresh_token'/.test(src));
     check("والخروج يمحوه — لا يبقى سندٌ لحامله بعد الخروج",
         /localStorage\.removeItem\('refresh_token'\)/.test(src));
+
+    // ⛔ التدوير لا يكتب هوية الطالب.
+    //
+    // كان مسار النجاح يمرّر `user` المقروء من إغلاق التأثير إلى `handleLogin`.
+    // ولو دار الرمز قبل وصول `/me` لكان `null`، فتُستبدَل الجلسة بشاشة الدخول —
+    // أي أنّ آلية منع الطرد تطرد. الحارس مربوطٌ بموضع النداء لا بوجود اسمٍ في
+    // الملفّ (درسُ فحوص المرآة في `iss152_api_error_contract.test.mjs`).
+    check(
+        'التدوير يستعمل مُحدِّثاً للرموز وحدها',
+        /applyRotatedTokens\(\s*result\.tokens\.access_token\s*,\s*result\.tokens\.refresh_token\s*\)/.test(src),
+    );
+    check(
+        'ولا يمرّ عبر handleLogin (الذي يكتب `user`)',
+        !/handleLogin\([^)]*result\.tokens/.test(src),
+    );
 }
 
 console.log(failed === 0 ? '\n✅ D-236 session rotation: all passed\n' : `\n❌ ${failed} failed\n`);

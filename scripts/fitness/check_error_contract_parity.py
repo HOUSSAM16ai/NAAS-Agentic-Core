@@ -233,35 +233,53 @@ def _table_diff(name: str, source: dict[str, str], mirror: dict[str, str]) -> li
 #: لا يوازن الأقواس، فلا يُسأل أن يفعل.**
 _SET_ERROR_OPEN = re.compile(r"\bsetError\s*\(")
 
+#: علامات الاقتباس الثلاث في JS.
+_QUOTES: str = "'\"`"
 
-def _call_arguments(source: str, open_paren: int) -> tuple[str, int]:
-    """يقتطع وسائط استدعاءٍ يبدأ قوسه عند ``open_paren`` بموازنة الأقواس.
 
-    يتجاهل الأقواس داخل السلاسل النصّية (مفردة · مزدوجة · قالبية) وداخل
-    التعليقات المُحيَّدة مسبقاً. يعيد ``(الوسائط, موضع القوس المُغلِق)``؛ وعند
-    عدم الاتّزان يعيد ما تبقّى من النصّ — فيُفحَص ولا يُتخطّى بصمت.
-    """
-    depth = 0
-    quote: str | None = None
-    i = open_paren
+def _skip_string(source: str, index: int, quote: str) -> int:
+    """يعيد موضع ما بعد نهاية سلسلةٍ نصّية فُتحت للتوّ، متجاوزاً المهروب."""
+    i = index
     while i < len(source):
         ch = source[i]
-        if quote is not None:
-            if ch == "\\":
-                i += 2
-                continue
-            if ch == quote:
-                quote = None
-        elif ch in "'\"`":
-            quote = ch
-        elif ch == "(":
+        if ch == "\\":
+            i += 2
+            continue
+        if ch == quote:
+            return i + 1
+        i += 1
+    return i
+
+
+def _balanced_span(source: str, start: int, opener: str, closer: str) -> tuple[str, int]:
+    """محتوى أوّل كتلةٍ متوازنة عند ``start`` أو بعده، وموضع مُغلِقها.
+
+    ماسحٌ **واحد** للأقواس والأقواس المعقوفة معاً: كانت الدالّتان `_call_arguments`
+    و`_brace_block` نسختين من الخوارزمية نفسها بمحدِّدَين مختلفَين، فقاست CodeScene
+    التعقيد مرّتين وأصابت — والتكرار هنا أسوأ من مجرّد إطالة: خوارزميتان متطابقتان
+    تنحرفان عند أوّل إصلاح يُطبَّق على إحداهما (نفس منطق قاعدة المرآة D-013).
+
+    ⚠️ السلاسل النصّية تُتجاوَز فلا يُحسَب قوسٌ داخل نصّ. وعند عدم الاتّزان يُعاد ما
+    تبقّى — فيُفحَص ولا يُتخطّى بصمت.
+    """
+    open_at = source.find(opener, start)
+    if open_at == -1:
+        return "", -1
+    depth = 0
+    i = open_at
+    while i < len(source):
+        ch = source[i]
+        if ch in _QUOTES:
+            i = _skip_string(source, i + 1, ch)
+            continue
+        if ch == opener:
             depth += 1
-        elif ch == ")":
+        elif ch == closer:
             depth -= 1
             if depth == 0:
-                return source[open_paren + 1 : i], i
+                return source[open_at + 1 : i], i
         i += 1
-    return source[open_paren + 1 :], len(source)
+    return source[open_at + 1 :], len(source)
 
 
 #: تعليقات JS — سطرية وكتلية. تُحيَّد قبل الفحص مع **الحفاظ على أرقام الأسطر**
@@ -295,7 +313,7 @@ def _english_fallbacks(path: Path) -> list[tuple[str, int]]:
     offences: list[tuple[str, int]] = []
     position = 0
     while (match := _SET_ERROR_OPEN.search(source, position)) is not None:
-        argument, close = _call_arguments(source, match.end() - 1)
+        argument, close = _balanced_span(source, match.end() - 1, "(", ")")
         line = source[: match.start()].count("\n") + 1
         offences.extend(
             (f"{rel}: setError(... '{banned}')", line)
@@ -326,34 +344,6 @@ def _check_handler_keys(emitted: set[str]) -> list[str]:
     ]
 
 
-def _brace_block(source: str, start: int) -> str:
-    """جسم أوّل كتلة ``{…}`` بعد ``start``، بموازنة الأقواس وتجاهل السلاسل."""
-    open_brace = source.find("{", start)
-    if open_brace == -1:
-        return ""
-    depth = 0
-    quote: str | None = None
-    i = open_brace
-    while i < len(source):
-        ch = source[i]
-        if quote is not None:
-            if ch == "\\":
-                i += 2
-                continue
-            if ch == quote:
-                quote = None
-        elif ch in "'\"`":
-            quote = ch
-        elif ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return source[open_brace + 1 : i]
-        i += 1
-    return source[open_brace + 1 :]
-
-
 def _client_body_keys(path: Path) -> set[str]:
     """المفاتيح التي يقرؤها هذا العميل من **جسم الخطأ**.
 
@@ -370,7 +360,7 @@ def _client_body_keys(path: Path) -> set[str]:
     if match is None:
         return set()
     param = match.group(1) or match.group(2)
-    block = _brace_block(source, match.end())
+    block, _ = _balanced_span(source, match.end(), "{", "}")
     reader = re.compile(rf"\b{re.escape(param)}\s*\??\.\s*([A-Za-z_$][\w$]*)")
     return {
         hit.group(1)

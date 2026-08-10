@@ -109,40 +109,71 @@ export function isTerminalAuthFailure(status) {
  *   | {ok: false, terminal: boolean, status: number|null}>}
  */
 export async function rotateSession({ refreshToken, apiUrl, fetchImpl }) {
-    const doFetch = fetchImpl || (typeof fetch === 'function' ? fetch : null);
-    if (!doFetch || typeof refreshToken !== 'string' || refreshToken.length === 0) {
+    const doFetch = resolveFetch(fetchImpl);
+    if (doFetch === null || !isUsableToken(refreshToken)) {
         return { ok: false, terminal: true, status: null };
     }
 
-    // مهلة صريحة: `AbortController` حيث توفّر، وإلّا نمضي بلا مهلة بدل السقوط.
-    let signal;
-    let timer = null;
-    if (typeof AbortController === 'function') {
-        const controller = new AbortController();
-        signal = controller.signal;
-        timer = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
-    }
-
+    const deadline = timeoutSignal(REFRESH_TIMEOUT_MS);
     try {
-        const res = await doFetch(apiUrl('/api/v1/auth/refresh'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refreshToken }),
-            ...(signal ? { signal } : {}),
-        });
+        const res = await doFetch(apiUrl('/api/v1/auth/refresh'), refreshRequest(refreshToken, deadline.signal));
         if (!res.ok) {
             return { ok: false, terminal: isTerminalAuthFailure(res.status), status: res.status };
         }
-        const tokens = await res.json();
-        if (!tokens || typeof tokens.access_token !== 'string' || tokens.access_token === '') {
-            // 200 بجسمٍ لا يحمل رمزاً: عطبٌ في الخادم لا انتهاءُ جلسة.
-            return { ok: false, terminal: false, status: res.status };
-        }
-        return { ok: true, tokens };
+        return tokensOrTransient(await res.json(), res.status);
     } catch (_e) {
         // شبكة · إلغاءٌ بالمهلة · جسمٌ غير JSON — كلّها عابرة بحكم التصنيف.
         return { ok: false, terminal: false, status: null };
     } finally {
-        if (timer !== null) clearTimeout(timer);
+        deadline.clear();
     }
+}
+
+/** التنفيذ المحقون، وإلّا `fetch` العام، وإلّا `null` (بيئة بلا شبكة). */
+function resolveFetch(explicit) {
+    if (typeof explicit === 'function') return explicit;
+    return typeof fetch === 'function' ? fetch : null;
+}
+
+/** سلسلةٌ غير فارغة — الشرط الوحيد الذي نستطيع فحصه قبل أن يبتّ الخادم. */
+function isUsableToken(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+/**
+ * مهلة صريحة حيث يتوفّر `AbortController`، وإلّا نمضي بلا مهلة بدل السقوط.
+ *
+ * يُعيد `clear` دائماً — حتى في الفرع بلا مؤقّت — فلا يحتاج المُنادي أن يتذكّر
+ * فحص `null` في `finally`، وهو بالضبط الشرط الذي يُنسى.
+ */
+function timeoutSignal(ms) {
+    if (typeof AbortController !== 'function') {
+        return { signal: undefined, clear: () => {} };
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    return { signal: controller.signal, clear: () => clearTimeout(timer) };
+}
+
+/** جسم طلب التدوير — `signal` يُضاف فقط حين يوجد. */
+function refreshRequest(refreshToken, signal) {
+    const init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+    };
+    return signal ? { ...init, signal } : init;
+}
+
+/**
+ * 200 لا يعني نجاحاً بذاته.
+ *
+ * ⚠️ جسمٌ بلا `access_token` **عطبُ خادم لا انتهاءُ جلسة** — فيُصنَّف عابراً ولا
+ * يُطرَد الطالب. هذه الحالة تسهل رؤيتها بعد وقوعها وتسهل نسيانها قبله.
+ */
+function tokensOrTransient(tokens, status) {
+    if (tokens && isUsableToken(tokens.access_token)) {
+        return { ok: true, tokens };
+    }
+    return { ok: false, terminal: false, status };
 }

@@ -594,6 +594,21 @@ const App = () => {
         setUser(userData);
     };
 
+    // تحديثٌ للرموز **وحدها** — لا يمسّ `user`.
+    //
+    // ⚠️ كان مسار التدوير يستدعي `handleLogin(token, user, refresh)`، و`user`
+    // مقروءٌ من إغلاق التأثير. فلو دار الرمز **قبل** أن يصل `/me` (رمزٌ ينتهي
+    // خلال دقيقتين من فتح الصفحة) لمُرِّر `null` فيُستبدَل الطالبُ بشاشة الدخول
+    // — أي أنّ الآلية التي وُجدت لمنع الطرد تطرده هي نفسها. والتدوير لا يغيّر
+    // هوية الطالب أصلاً، فلا سبب لأن يكتبها.
+    const applyRotatedTokens = (newToken, newRefreshToken) => {
+        localStorage.setItem('token', newToken);
+        try {
+            if (newRefreshToken) localStorage.setItem('refresh_token', newRefreshToken);
+        } catch (_e) { /* غير قاتل */ }
+        setToken(newToken);
+    };
+
     const logout = () => {
         // D-WS-AUTH-001 (2026-05-26): استخدام React state بدلاً من window.location.reload().
         // قبل: reload() كان يكسر React tree و يُسبب cycle مع auto-fill المتصفح.
@@ -640,7 +655,7 @@ const App = () => {
                 if (cancelled) return;
                 if (result.ok) {
                     clientLog('session_rotated', { status: 'ok' });
-                    handleLogin(result.tokens.access_token, user, result.tokens.refresh_token);
+                    applyRotatedTokens(result.tokens.access_token, result.tokens.refresh_token);
                     return;
                 }
                 if (result.terminal) {

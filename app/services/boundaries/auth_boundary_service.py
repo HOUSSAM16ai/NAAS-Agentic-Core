@@ -186,6 +186,12 @@ class AuthBoundaryService:
 
             return {
                 "access_token": response.get("access_token"),
+                # ⛔ رمز التحديث يُمَرَّر من الخدمة المصغّرة. كان هذا الفرع يُسقطه،
+                # فكانت جلسةُ من دخل عبرها **بلا تدوير**: عمرُ رمز الوصول هو عمر
+                # الجلسة، والطالب يُطرَد عند انتهائه — أي العطب نفسه الذي عولج في
+                # المسار المحلّي، باقياً في المسار الآخر. رصدته مراجعة CodeRabbit.
+                # (`None` حين لا ترسله الخدمة؛ والواجهة تتدهّور رشيقاً ولا تُجدول.)
+                "refresh_token": response.get("refresh_token"),
                 "token_type": "Bearer",
                 "user": {
                     "id": user_data.get("id"),

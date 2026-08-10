@@ -149,6 +149,17 @@ console.log('\nD-236 — silent session rotation');
     check('200 بلا access_token ⇒ عابر لا طرد', r.ok === false && r.terminal === false);
 }
 {
+    // ⛔ ردٌّ **ناقص**: رمز وصولٍ بلا رمز تحديث. الرمز المُخزَّن صار مُستهلَكاً،
+    // فقبولُ هذا الردّ يعني تقديمَ رمزٍ مُبطَل في الدورة التالية ⇒ إبطالُ العائلة
+    // وطردُ الطالب بعد تأخيرٍ يُخفي السبب. رصدته مراجعة CodeRabbit.
+    const fetchImpl = async () => ({
+        ok: true, status: 200, json: async () => ({ access_token: 'new-access' }),
+    });
+    const r = await rotateSession({ refreshToken: 'ok', apiUrl, fetchImpl });
+    check('200 بلا refresh_token ⇒ لا يُقبَل كتدوير', r.ok === false);
+    check('وهو عابرٌ لا نهائي — عطبُ خادمٍ لا انتهاءُ جلسة', r.terminal === false);
+}
+{
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('x'); } });
     const r = await rotateSession({ refreshToken: 'ok', apiUrl, fetchImpl });
     check('جسمٌ غير JSON ⇒ عابر لا طرد', r.ok === false && r.terminal === false);

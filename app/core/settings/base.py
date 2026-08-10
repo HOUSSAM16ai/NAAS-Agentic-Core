@@ -95,6 +95,26 @@ class BaseServiceSettings(BaseSettings):
         description="Comma-separated CIDRs whose X-Forwarded-For header is trusted",
     )
 
+    @field_validator("TRUSTED_PROXY_IPS")
+    @classmethod
+    def validate_trusted_proxy_ips(cls, v: str) -> str:
+        """قائمةُ سماحٍ خاطئة تُضيَّق **بصمت** — فتُرفَض عند الإقلاع لا عند الطلب.
+
+        بلا هذا كان مُدخَلٌ مكتوبٌ خطأً يُتجاهَل بتحذيرٍ وقت الطلب، فينكمش نطاق
+        الثقة دون أن يلاحظ المُشغِّل — وإعدادٌ أمنيٌّ يفشل صامتاً أسوأ من غيابه.
+        رصدته مراجعة CodeRabbit.
+        """
+        import ipaddress
+
+        for entry in (part.strip() for part in (v or "").split(",")):
+            if not entry:
+                continue
+            try:
+                ipaddress.ip_network(entry, strict=False)
+            except ValueError as exc:
+                raise ValueError(f"TRUSTED_PROXY_IPS: invalid CIDR {entry!r}") from exc
+        return v
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

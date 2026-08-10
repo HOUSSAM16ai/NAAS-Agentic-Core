@@ -197,6 +197,15 @@ async def test_authenticate_user_fallback_on_401(service):
 
             mock_request = MagicMock()
 
+            # ⚠️ ترتيبُ النداءَين يُفحَص بمُسجِّلٍ مشترك. رصدت مراجعة CodeRabbit أنّ
+            # `assert_awaited_once()` على كائنين منفصلين **لا يقول شيئاً عن الترتيب**:
+            # واجهةٌ تستدعي الدرع **بعد** المصادقة كانت تمرّ. والترتيب هنا هو العقد
+            # نفسه — درعٌ بعد المصادقة درعٌ لا يحمي (وسلسلة D-206/D-208 كلّها كانت
+            # أعطاب أسبقيّة لا أعطاب كشف).
+            order = MagicMock()
+            order.attach_mock(mock_shield.check_allowance, "shield")
+            order.attach_mock(mock_auth_service.authenticate, "auth")
+
             result = await service.authenticate_user(
                 "local_only@test.com", "password", mock_request
             )
@@ -224,6 +233,9 @@ async def test_authenticate_user_fallback_on_401(service):
 
             # الدرع الزمني **أمام** المصادقة — وهو ما يقوله تعليق الإنتاج.
             mock_shield.check_allowance.assert_awaited_once()
+            assert [call[0] for call in order.mock_calls] == ["shield", "auth"], (
+                f"الدرع يجب أن يسبق المصادقة — الترتيب المُسجَّل: {order.mock_calls}"
+            )
 
             # النجاح يُطهّر متّجهَي الدرع معاً (الهوية **و** العنوان).
             mock_shield.reset_target.assert_called_once_with("local_only@test.com", mock_request)

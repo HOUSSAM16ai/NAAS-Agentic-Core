@@ -38,63 +38,88 @@ export ADMIN_EMAIL="<admin>"     ADMIN_PASSWORD="<pass>"
 
 ## القياسات الأربعة — أوامرُ تُنفَّذ لا خطواتٌ تُقرأ
 
-> ⚠️ **صفِّر الدرع قبل كل قياس.** الدرع يتذكّر إخفاقات الجلسة، فقياسٌ يتبع قياساً
-> يبدأ من عدّادٍ غير صفري ويعطي نتيجةً لا تعني ما تظنّه. أعد إقلاع الخادم أو
-> استعمل حساباً جديداً في كل قياس. رصدت مراجعة CodeRabbit أنّ النسخة الأولى من
-> هذا الملفّ أعطت **نتائج متوقَّعة بلا أوامر** — وإجراءٌ لا يُنفَّذ ليس إجراءً.
+> ⚠️ **كل قياسٍ يبدأ من حالةٍ نظيفة، والفشلُ يُوقِف الإجراء.** رصدت مراجعة
+> CodeRabbit عطبين متتاليين هنا: النسخة الأولى أعطت **نتائج متوقَّعة بلا أوامر**
+> (إجراءٌ لا يُنفَّذ ليس إجراءً)، والثانية أعطت أوامرَ **تطبع ولا تؤكّد** — فكان
+> خادمٌ معطوب يُنتِج تشغيلاً يبدو مكتملاً. الآن: `set -euo pipefail`، وتأكيدٌ
+> صريح لكل حالة ومفتاح ومطالبة، وحسابٌ جديد لكل سيناريو (`fresh`) فلا يرث
+> قياسٌ عدّادات ما قبله.
 
 ```bash
+set -euo pipefail
 API=http://127.0.0.1:8000
-NEW=$(date +%s)                      # لاحقة تجعل كل تشغيل مستقلاً
 PW='Pw-verify-Aa1!'
 
+# ⚠️ **كل قياسٍ بحسابٍ جديد.** الدرع يقفل على الهوية، فحسابٌ جديد لكل سيناريو
+# يعني عدّاداً صفرياً بالبناء — بلا إعادة إقلاع وبلا مسٍّ لحالةٍ داخلية.
+# (متّجه العنوان مشترك، وسقفه 200، والسيناريوهات أدناه لا تقترب منه.)
+fresh() { echo "$1-$(date +%s%N)@example.com"; }
+expect() { # expect <المتوقَّع> <الفعلي> <الوصف>
+  [ "$1" = "$2" ] || { echo "❌ $3: متوقَّع=$1 فعلي=$2" >&2; exit 1; }
+  echo "✅ $3 ($2)"
+}
+register() { curl -sS -o /dev/null -X POST "$API/api/security/register" \
+  -H 'Content-Type: application/json' \
+  -d "{\"full_name\":\"V\",\"email\":\"$1\",\"password\":\"$PW\"}"; }
+login() { curl -sS -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$1\",\"password\":\"$2\"}"; }
+code() { curl -sS -o /dev/null -w '%{http_code}' "$@"; }
+
 # ── 1) عقد الأخطاء: الجسم الخام لا رمز الحالة ────────────────────────────────
-curl -s -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
-  -d '{"email":"ghost-'"$NEW"'@example.com","password":"wrong"}' \
-| python3 -c 'import json,sys; b=json.load(sys.stdin); print(sorted(b)); \
-print("detail==message:", b.get("detail")==b.get("message")); \
-print("error_code:", b.get("error_code"), "| request_id:", bool(b.get("request_id")))'
-# متوقَّع: المفاتيح السبعة · detail==message: True · error_code: unauthorized
+GHOST=$(fresh ghost)
+login "$GHOST" wrong | python3 -c '
+import json,sys
+b=json.load(sys.stdin)
+need={"status","detail","message","error_code","data","request_id","timestamp"}
+missing=need-set(b)
+assert not missing, f"مفاتيح ناقصة: {sorted(missing)}"
+assert b["detail"]==b["message"], "detail != message"
+assert b["error_code"]=="unauthorized", b["error_code"]
+assert b["request_id"], "request_id فارغ"
+print("✅ عقد الأخطاء: المفاتيح السبعة · detail==message · unauthorized")'
 # قبل الإصلاح: ['data','message','status','timestamp'] — بلا `detail` إطلاقاً.
 
 # ── 2) القفل لا يعاقب البريء ────────────────────────────────────────────────
-curl -s -X POST "$API/api/security/register" -H 'Content-Type: application/json' \
-  -d '{"full_name":"Victim","email":"victim-'"$NEW"'@example.com","password":"'"$PW"'"}' >/dev/null
-for i in $(seq 1 25); do                    # غرباء، كلٌّ ببريد مختلف
-  curl -s -o /dev/null -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
-    -d '{"email":"stranger-'"$NEW"'-'"$i"'@example.com","password":"wrong"}'
-done
-curl -s -o /dev/null -w 'الضحيّة بكلمة سرّها الصحيحة: %{http_code}\n' \
-  -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
-  -d '{"email":"victim-'"$NEW"'@example.com","password":"'"$PW"'"}'
-# متوقَّع: 200 — قبل الإصلاح: 429.
+VICTIM=$(fresh victim); register "$VICTIM"
+for i in $(seq 1 25); do login "$(fresh stranger)" wrong >/dev/null; done
+expect 200 "$(code -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$VICTIM\",\"password\":\"$PW\"}")" "الضحيّة بكلمة سرّها الصحيحة"
+# قبل الإصلاح: 429.
 
 # ── 3) الرمز يقول نوعه ──────────────────────────────────────────────────────
-TOKEN=$(curl -s -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
-  -d '{"email":"victim-'"$NEW"'@example.com","password":"'"$PW"'"}' \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
-python3 -c 'import base64,json,sys
+CLAIMS=$(fresh claims); register "$CLAIMS"
+TOKEN=$(login "$CLAIMS" "$PW" | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+python3 -c '
+import base64,json,sys
 s=sys.argv[1].split(".")[1]; s+="="*(-len(s)%4)
 c=json.loads(base64.urlsafe_b64decode(s))
-print({k:c.get(k) for k in ("type","jti","iat","roles","permissions")})' "$TOKEN"
-# متوقَّع: type=access · jti و iat موجودان.
+assert c.get("type")=="access", c.get("type")
+assert c.get("jti") and c.get("iat"), "jti/iat مفقودان"
+print("✅ المطالبات: type=access · jti · iat")' "$TOKEN"
 
-REAUTH=$(curl -s -X POST "$API/api/v1/auth/reauth" -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' -d '{"password":"'"$PW"'"}' \
+REAUTH=$(curl -sS -X POST "$API/api/v1/auth/reauth" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d "{\"password\":\"$PW\"}" \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["reauth_token"])')
-curl -s -o /dev/null -w 'رمز reauth كرمز وصول: %{http_code}\n' \
-  "$API/api/v1/users/me" -H "Authorization: Bearer $REAUTH"
-# متوقَّع: 401 — قبل الإصلاح كان يُقبَل (التوقيع ليس تفويضاً).
+expect 401 "$(code "$API/api/v1/users/me" -H "Authorization: Bearer $REAUTH")" \
+  "رمز reauth مرفوضٌ كرمز وصول"
+# قبل الإصلاح كان يُقبَل — التوقيع ليس تفويضاً.
 
-# ── 4) تدوير رمز التحديث وكشف السرقة ────────────────────────────────────────
-REFRESH=$(curl -s -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
-  -d '{"email":"victim-'"$NEW"'@example.com","password":"'"$PW"'"}' \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
-curl -s -o /dev/null -w 'تدوير أوّل: %{http_code}\n' -X POST "$API/api/v1/auth/refresh" \
-  -H 'Content-Type: application/json' -d '{"refresh_token":"'"$REFRESH"'"}'
-curl -s -o /dev/null -w 'إعادة استعمال الرمز نفسه: %{http_code}\n' -X POST "$API/api/v1/auth/refresh" \
-  -H 'Content-Type: application/json' -d '{"refresh_token":"'"$REFRESH"'"}'
-# متوقَّع: 200 ثمّ 401 — إعادة الاستعمال تُبطل العائلة كلّها (كشف السرقة).
+# ── 4) التدوير يُبدِل الرمز، وإعادةُ الاستعمال تُبطِل العائلة ────────────────
+ROT=$(fresh rot); register "$ROT"
+R1=$(login "$ROT" "$PW" | python3 -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
+R2=$(curl -sS -X POST "$API/api/v1/auth/refresh" -H 'Content-Type: application/json' \
+  -d "{\"refresh_token\":\"$R1\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
+[ -n "$R2" ] && [ "$R1" != "$R2" ] \
+  || { echo "❌ التدوير لم يُصدر رمزاً بديلاً مختلفاً" >&2; exit 1; }
+echo "✅ التدوير أصدر رمزاً بديلاً مختلفاً"
+
+# إعادةُ استعمال الرمز **المُستهلَك** = كشف سرقة.
+expect 401 "$(code -X POST "$API/api/v1/auth/refresh" -H 'Content-Type: application/json' \
+  -d "{\"refresh_token\":\"$R1\"}")" "إعادة استعمال الرمز القديم مرفوضة"
+
+# ⛔ والأهمّ: البديل نفسه يسقط معه — العائلة كلّها أُبطلت، لا الرمز وحده.
+expect 401 "$(code -X POST "$API/api/v1/auth/refresh" -H 'Content-Type: application/json' \
+  -d "{\"refresh_token\":\"$R2\"}")" "البديل أُبطل أيضاً (إبطال العائلة)"
 ```
 
 ## التشغيل الآلي

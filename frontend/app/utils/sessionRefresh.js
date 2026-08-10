@@ -170,9 +170,16 @@ function refreshRequest(refreshToken, signal) {
  *
  * ⚠️ جسمٌ بلا `access_token` **عطبُ خادم لا انتهاءُ جلسة** — فيُصنَّف عابراً ولا
  * يُطرَد الطالب. هذه الحالة تسهل رؤيتها بعد وقوعها وتسهل نسيانها قبله.
+ *
+ * ⛔ **والرمزان مطلوبان معاً.** كان الفحص على `access_token` وحده، ورصدت مراجعة
+ * CodeRabbit ما يترتّب على ذلك: ردٌّ ناقص يُقبَل، والمُنادي يحفظ رمز التحديث
+ * «إن وُجد» فيبقى **الرمز القديم المُستهلَك** في مخزن المتصفّح. والدورة التالية
+ * تُقدِّمه، فيقرؤه الخادم إعادةَ استعمال ويُبطِل **العائلة كلّها** — أي أنّ
+ * الطالب يُطرَد بفعل الآلية التي وُجدت لتمنع طرده، وبعد تأخيرٍ يُخفي السبب.
  */
 function tokensOrTransient(tokens, status) {
-    if (tokens && isUsableToken(tokens.access_token)) {
+    const pair = tokens || {};
+    if (isUsableToken(pair.access_token) && isUsableToken(pair.refresh_token)) {
         return { ok: true, tokens };
     }
     return { ok: false, terminal: false, status };

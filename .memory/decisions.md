@@ -91,7 +91,7 @@ D-208).
 
 **الفوارض:** `check_error_contract_parity` (بتجربتين سلبيتين مُثبَتتين) ·
 `tests/security/test_login_failed_regression.py` (٢١ عقداً، **مُثبَتةٌ حمراء على الكود
-القديم**: 9 فشل + 12 خطأ) · `frontend/tests/d236_session_refresh.test.mjs` (٤٥ عقداً، خضراء على `d333c4d`؛
+القديم**: 9 فشل + 12 خطأ) · `frontend/tests/d236_session_refresh.test.mjs` (**51 عقداً** — مَعدودة بالتشغيل لا مكتوبة؛ خضراء؛
 و`762bf52` **شاهدٌ سالب مقصود** — 3 إخفاقات على الشجرة قبل الوصل). **الحالة الحيّة:** `.memory/auth_runtime_truth.md`.
 
 ---

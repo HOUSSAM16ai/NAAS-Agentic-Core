@@ -108,7 +108,7 @@ CLAIMS: ['exp','iat','is_admin','jti','permissions','roles','sub','type']
 | بابٌ واحد فوق `AuthService` | **ACTIVE** | `app/services/boundaries/auth_boundary_service.py` |
 | نوع الرمز مفروض | **ACTIVE** | `app/services/auth/crypto.py` (`verify_jwt(expected_type=…)`) |
 | رمز التحديث يصل الواجهة | **ACTIVE** | `app/api/schemas/security.py` (`AuthResponse.refresh_token`) |
-| تدوير الرمز في الواجهة | **ACTIVE** | `frontend/app/utils/sessionRefresh.js` + مُجدوِلٌ في `CogniForgeApp.jsx` يستهلك `/api/v1/auth/refresh` · **43 عقداً** في `frontend/tests/d236_session_refresh.test.mjs` (الحالة **مُثبَتة خضراء** على `d333c4d`؛ و`762bf52` **شاهدٌ سالب مقصود** — الشجرة قبل الوصل، 3 إخفاقات، تُثبت أن العقود تقيس شيئاً) |
+| تدوير الرمز في الواجهة | **ACTIVE** | `frontend/app/utils/sessionRefresh.js` + مُجدوِلٌ في `CogniForgeApp.jsx` يستهلك `/api/v1/auth/refresh` · **51 عقداً** (مَعدودة بالتشغيل: `node … | grep -c ✅`) في `frontend/tests/d236_session_refresh.test.mjs` (الحالة **مُثبَتة خضراء** على `d333c4d`؛ و`762bf52` **شاهدٌ سالب مقصود** — الشجرة قبل الوصل، 3 إخفاقات، تُثبت أن العقود تقيس شيئاً) |
 | `iss`/`aud` | **ABSENT (مُعلَن)** | نتيجة سلبية مُسجَّلة — العقيدة §1.هـ.22 |
 | `audit_logs` (الجمع) اليتيم | **UNKNOWN** | صفرُ صفوفٍ **مقيس**، وغيابُ الكاتب **غير مُثبَت** (بحثٌ نصّي لا يُغطّي SQL المُركَّب وقت التشغيل) — و«UNKNOWN» أصدق من «ZOMBIE» هنا (§6.6: دليلٌ غير كافٍ). لم يُحذَف في هذا الـPR |
 

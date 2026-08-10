@@ -233,8 +233,61 @@ def _table_diff(name: str, source: dict[str, str], mirror: dict[str, str]) -> li
 #: لا يوازن الأقواس، فلا يُسأل أن يفعل.**
 _SET_ERROR_OPEN = re.compile(r"\bsetError\s*\(")
 
+
+class _ParseError(ValueError):
+    """نصٌّ تعذّر فهمه — تفشل البوّابة صراحةً بدل أن تمرّ عليه بصمت."""
+
+
 #: علامات الاقتباس الثلاث في JS.
 _QUOTES: str = "'\"`"
+
+#: محارف تسبق `/` فتجعلها **بداية تعبير نمطي** لا قسمةً.
+#: JS لا يُميَّز فيها الاثنان إلّا بالسياق؛ وهذه القائمة تغطّي مواضع التعبير النمطي
+#: الواقعية داخل استدعاء (`setError(/x/.test(v) ? … )`). ⚠️ تقريبٌ مُعلَن لا
+#: مُحلِّل كامل — ولذلك يُكمِّله **الفشل المُغلَق** أدناه.
+_REGEX_PRECEDERS: str = "(,=:[!&|?{};+-*%~^<>"
+
+
+def _starts_regex(source: str, index: int) -> bool:
+    """هل الشرطة المائلة عند ``index`` تبدأ تعبيراً نمطياً؟
+
+    تُقرأ آخر محرفٍ غير فراغيّ قبلها: بعد مُعامِلٍ أو فاصلةٍ أو قوسٍ مفتوح تكون
+    تعبيراً نمطياً، وبعد قيمةٍ تكون قسمة. ويُستثنى التعليق (`//` و`/*`).
+    """
+    if index + 1 < len(source) and source[index + 1] in "/*":
+        return False
+    j = index - 1
+    while j >= 0 and source[j] in " \t\n\r":
+        j -= 1
+    return j < 0 or source[j] in _REGEX_PRECEDERS
+
+
+def _skip_regex(source: str, index: int) -> int:
+    """يعيد موضع ما بعد نهاية تعبيرٍ نمطي فُتح عند ``index``.
+
+    ⛔ وُجدت هذه الدالّة لأن `/\\)/` كان **يُغلِق الاستدعاء مبكّراً**: تنتهي
+    الوسائط عند القوس الذي بداخل التعبير النمطي، فتُقتطَع البقية — وفيها قد تكون
+    السلسلة الممنوعة. أي أنّ البوّابة تُبلِّغ النظافة عن نصٍّ **قرأت نصفه**.
+    رصدته مراجعة CodeRabbit بمسبارٍ مُشغَّل، وهو نفس صنف الثقب الصامت مرّتين قبله.
+    الصنف داخل ``[...]`` قد يحوي `/` غير مُنهية، فيُتتبَّع.
+    """
+    i = index + 1
+    in_class = False
+    while i < len(source):
+        ch = source[i]
+        if ch == "\\":
+            i += 2
+            continue
+        if ch == "[":
+            in_class = True
+        elif ch == "]":
+            in_class = False
+        elif ch == "/" and not in_class:
+            return i + 1
+        elif ch == "\n":
+            return i  # تعبيرٌ نمطي لا يعبر السطر — نتوقّف بلا ابتلاع
+        i += 1
+    return i
 
 
 def _skip_string(source: str, index: int, quote: str) -> int:
@@ -260,6 +313,8 @@ def _scan_step(source: str, index: int, opener: str, closer: str) -> tuple[int, 
     ch = source[index]
     if ch in _QUOTES:
         return _skip_string(source, index + 1, ch), 0
+    if ch == "/" and _starts_regex(source, index):
+        return _skip_regex(source, index), 0
     if ch == opener:
         return index + 1, 1
     if ch == closer:
@@ -275,8 +330,13 @@ def _balanced_span(source: str, start: int, opener: str, closer: str) -> tuple[s
     التعقيد مرّتين وأصابت — والتكرار هنا أسوأ من مجرّد إطالة: خوارزميتان متطابقتان
     تنحرفان عند أوّل إصلاح يُطبَّق على إحداهما (نفس منطق قاعدة المرآة D-013).
 
-    ⚠️ السلاسل النصّية تُتجاوَز فلا يُحسَب قوسٌ داخل نصّ. وعند عدم الاتّزان يُعاد ما
-    تبقّى — فيُفحَص ولا يُتخطّى بصمت.
+    ⚠️ السلاسل النصّية **والتعابير النمطية** تُتجاوَز فلا يُحسَب محدِّدٌ بداخلها.
+
+    ⛔ **وعدم الاتّزان يرفع خطأً — لا يُعيد نصفاً.** كانت الدالّة تُرجع ما تبقّى
+    كأنّه وسائط كاملة، فتُفحَص قطعةٌ مبتورة ويُبلَّغ عنها بالنظافة. والبوّابة التي
+    تشهد على نصٍّ قرأت بعضه هي العطب الذي وُجدت لتمنعه (D-208). رصدته مراجعة
+    CodeRabbit، والفشل المُغلَق هنا يُكمِّل تقريب `_starts_regex`: ما لا يُفهَم
+    **يُعلَن** بدل أن يمرّ.
 
     قرارُ المحرف الواحد مُستخرَجٌ في :func:`_scan_step` فتبقى الحلقة **مسطّحة**:
     قياسُ CodeScene («Bumpy Road») كان مُحقّاً — تفرّعٌ داخل تفرّعٍ داخل حلقةٍ يجعل
@@ -293,7 +353,11 @@ def _balanced_span(source: str, start: int, opener: str, closer: str) -> tuple[s
         if depth == 0:
             return source[open_at + 1 : i], i
         i = nxt
-    return source[open_at + 1 :], len(source)
+    line = source[:open_at].count("\n") + 1
+    raise _ParseError(
+        f"محدِّد {opener!r} عند السطر {line} لم يُغلَق — تعذّر تحديد نطاقه. "
+        "البوّابة تفشل بدل أن تشهد على نصٍّ لم تقرأه كاملاً."
+    )
 
 
 #: تعليقات JS — سطرية وكتلية. تُحيَّد قبل الفحص مع **الحفاظ على أرقام الأسطر**
@@ -402,7 +466,11 @@ def _check_client_keys(emitted: set[str]) -> list[str]:
         rel = client.relative_to(REPO_ROOT)
         if not client.exists():
             continue  # الوجود يفحصه `_check_clients`
-        keys = _client_body_keys(client)
+        try:
+            keys = _client_body_keys(client)
+        except _ParseError as exc:
+            failures.append(f"{rel}: {exc}")
+            continue
         if not keys:
             failures.append(
                 f"{rel}: لم تُقرأ منه أي مفاتيح جسمٍ — إمّا غابت `messageFromBody` "
@@ -426,10 +494,15 @@ def _check_clients() -> list[str]:
         if not client.exists():
             failures.append(f"عميلٌ مُعلَن غير موجود: {client.relative_to(REPO_ROOT)}")
             continue
+        try:
+            offences = _english_fallbacks(client)
+        except _ParseError as exc:
+            failures.append(f"{client.relative_to(REPO_ROOT)}: {exc}")
+            continue
         failures.extend(
             f"{offence} (سطر {line}) — سلسلة إنجليزية تصل الطالب في مسار خطأ. "
             "استعمل `readApiError(res, '<رسالة عربية>')`."
-            for offence, line in _english_fallbacks(client)
+            for offence, line in offences
             if offence not in _FROZEN_DEBT
         )
     return failures

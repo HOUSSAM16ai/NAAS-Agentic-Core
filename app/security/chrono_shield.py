@@ -247,7 +247,14 @@ class ChronoShield:
         if request is None:
             return
         ip_key = f"ip:{client_ip_or_unknown(request)}"
-        remaining = self._failures.get(ip_key, [])[: -self.IP_MAX_FREE_ATTEMPTS or None]
+        # ⚠️ **الأقدم يُحذَف لا الأحدث.** `record_failure` يُلحِق، فالقائمة مرتّبة
+        # من الأقدم إلى الأحدث، وشريحتي الأولى (`[:-N]`) كانت تُبقي **الأقدم**
+        # وتُسقط **الأحدث** — أي عكس المقصود تماماً: تُرمى الأدلّة الطازجة ويُحتفَظ
+        # بما يوشك أن ينتهي بانقضاء النافذة، فيهبط العدّاد أسرع مما صُمِّم له.
+        # رصدته مراجعة CodeRabbit. والترشيح أوّلاً كي يُحسَب الخصم على **الحيّ**
+        # لا على المنتهي (نفس قاعدة «النافذة تعني النافذة» في `_live_failures`).
+        self._live_failures(ip_key)
+        remaining = self._failures.get(ip_key, [])[self.IP_MAX_FREE_ATTEMPTS :]
         if remaining:
             self._failures[ip_key] = remaining
         else:

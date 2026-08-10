@@ -49,6 +49,9 @@ export ADMIN_EMAIL="<admin>"     ADMIN_PASSWORD="<pass>"
 set -euo pipefail
 API=http://127.0.0.1:8000
 PW='Pw-verify-Aa1!'
+# ⚠️ المفسّر **مُثبَّت** لا `python3` المسار: المستودع يستعمل PEP 695، و`python3`
+# العام قد يكون 3.11 فيعطي نتيجةً غير قابلة لإعادة الإنتاج (رصدته مراجعة CodeRabbit).
+PY=/tmp/venv312/bin/python
 
 # ⚠️ **كل قياسٍ بحسابٍ جديد.** الدرع يقفل على الهوية، فحسابٌ جديد لكل سيناريو
 # يعني عدّاداً صفرياً بالبناء — بلا إعادة إقلاع وبلا مسٍّ لحالةٍ داخلية.
@@ -67,7 +70,9 @@ code() { curl -sS -o /dev/null -w '%{http_code}' "$@"; }
 
 # ── 1) عقد الأخطاء: الجسم الخام لا رمز الحالة ────────────────────────────────
 GHOST=$(fresh ghost)
-login "$GHOST" wrong | python3 -c '
+expect 401 "$(code -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$GHOST\",\"password\":\"wrong\"}")" "كلمة سرّ خاطئة تُرجع 401"
+login "$GHOST" wrong | $PY -c '
 import json,sys
 b=json.load(sys.stdin)
 need={"status","detail","message","error_code","data","request_id","timestamp"}
@@ -76,20 +81,24 @@ assert not missing, f"مفاتيح ناقصة: {sorted(missing)}"
 assert b["detail"]==b["message"], "detail != message"
 assert b["error_code"]=="unauthorized", b["error_code"]
 assert b["request_id"], "request_id فارغ"
+assert not b["timestamp"].startswith("2024-01-01"), "طابعٌ زمني مُثبَّت — عاد عطب المعالج القديم"
 print("✅ عقد الأخطاء: المفاتيح السبعة · detail==message · unauthorized")'
 # قبل الإصلاح: ['data','message','status','timestamp'] — بلا `detail` إطلاقاً.
 
 # ── 2) القفل لا يعاقب البريء ────────────────────────────────────────────────
 VICTIM=$(fresh victim); register "$VICTIM"
-for i in $(seq 1 25); do login "$(fresh stranger)" wrong >/dev/null; done
+for i in $(seq 1 25); do
+  expect 401 "$(code -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
+    -d "{\"email\":\"$(fresh stranger)\",\"password\":\"wrong\"}")" "غريب #$i مرفوض" >/dev/null
+done
 expect 200 "$(code -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
   -d "{\"email\":\"$VICTIM\",\"password\":\"$PW\"}")" "الضحيّة بكلمة سرّها الصحيحة"
 # قبل الإصلاح: 429.
 
 # ── 3) الرمز يقول نوعه ──────────────────────────────────────────────────────
 CLAIMS=$(fresh claims); register "$CLAIMS"
-TOKEN=$(login "$CLAIMS" "$PW" | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
-python3 -c '
+TOKEN=$(login "$CLAIMS" "$PW" | $PY -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+$PY -c '
 import base64,json,sys
 s=sys.argv[1].split(".")[1]; s+="="*(-len(s)%4)
 c=json.loads(base64.urlsafe_b64decode(s))
@@ -99,16 +108,16 @@ print("✅ المطالبات: type=access · jti · iat")' "$TOKEN"
 
 REAUTH=$(curl -sS -X POST "$API/api/v1/auth/reauth" -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d "{\"password\":\"$PW\"}" \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["reauth_token"])')
+  | $PY -c 'import json,sys; print(json.load(sys.stdin)["reauth_token"])')
 expect 401 "$(code "$API/api/v1/users/me" -H "Authorization: Bearer $REAUTH")" \
   "رمز reauth مرفوضٌ كرمز وصول"
 # قبل الإصلاح كان يُقبَل — التوقيع ليس تفويضاً.
 
 # ── 4) التدوير يُبدِل الرمز، وإعادةُ الاستعمال تُبطِل العائلة ────────────────
 ROT=$(fresh rot); register "$ROT"
-R1=$(login "$ROT" "$PW" | python3 -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
+R1=$(login "$ROT" "$PW" | $PY -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
 R2=$(curl -sS -X POST "$API/api/v1/auth/refresh" -H 'Content-Type: application/json' \
-  -d "{\"refresh_token\":\"$R1\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
+  -d "{\"refresh_token\":\"$R1\"}" | $PY -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
 [ -n "$R2" ] && [ "$R1" != "$R2" ] \
   || { echo "❌ التدوير لم يُصدر رمزاً بديلاً مختلفاً" >&2; exit 1; }
 echo "✅ التدوير أصدر رمزاً بديلاً مختلفاً"

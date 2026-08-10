@@ -241,6 +241,9 @@ class _ParseError(ValueError):
 #: علامات الاقتباس الثلاث في JS.
 _QUOTES: str = "'\"`"
 
+#: جسم تعبيرٍ نمطي كامل: مهروب · صنف محارف · محرف عادي — ثمّ الشرطة الختامية.
+_REGEX_LITERAL = re.compile(r"/(?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\\\n\[])*/")
+
 #: محارف تسبق `/` فتجعلها **بداية تعبير نمطي** لا قسمةً.
 #: JS لا يُميَّز فيها الاثنان إلّا بالسياق؛ وهذه القائمة تغطّي مواضع التعبير النمطي
 #: الواقعية داخل استدعاء (`setError(/x/.test(v) ? … )`). ⚠️ تقريبٌ مُعلَن لا
@@ -251,43 +254,29 @@ _REGEX_PRECEDERS: str = "(,=:[!&|?{};+-*%~^<>"
 def _starts_regex(source: str, index: int) -> bool:
     """هل الشرطة المائلة عند ``index`` تبدأ تعبيراً نمطياً؟
 
-    تُقرأ آخر محرفٍ غير فراغيّ قبلها: بعد مُعامِلٍ أو فاصلةٍ أو قوسٍ مفتوح تكون
+    يُقرأ آخر محرفٍ غير فراغيّ قبلها: بعد مُعامِلٍ أو فاصلةٍ أو قوسٍ مفتوح تكون
     تعبيراً نمطياً، وبعد قيمةٍ تكون قسمة. ويُستثنى التعليق (`//` و`/*`).
     """
-    if index + 1 < len(source) and source[index + 1] in "/*":
+    if source[index + 1 : index + 2] in ("/", "*"):
         return False
-    j = index - 1
-    while j >= 0 and source[j] in " \t\n\r":
-        j -= 1
-    return j < 0 or source[j] in _REGEX_PRECEDERS
+    before = source[:index].rstrip(" \t\n\r")
+    return not before or before[-1] in _REGEX_PRECEDERS
 
 
 def _skip_regex(source: str, index: int) -> int:
     """يعيد موضع ما بعد نهاية تعبيرٍ نمطي فُتح عند ``index``.
 
-    ⛔ وُجدت هذه الدالّة لأن `/\\)/` كان **يُغلِق الاستدعاء مبكّراً**: تنتهي
+    ⛔ وُجدت هذه الدالّة لأن ``/\\)/`` كان **يُغلِق الاستدعاء مبكّراً**: تنتهي
     الوسائط عند القوس الذي بداخل التعبير النمطي، فتُقتطَع البقية — وفيها قد تكون
     السلسلة الممنوعة. أي أنّ البوّابة تُبلِّغ النظافة عن نصٍّ **قرأت نصفه**.
     رصدته مراجعة CodeRabbit بمسبارٍ مُشغَّل، وهو نفس صنف الثقب الصامت مرّتين قبله.
-    الصنف داخل ``[...]`` قد يحوي `/` غير مُنهية، فيُتتبَّع.
+
+    النمط يُغطّي المهروب وصنف المحارف (فـ``/[/]/`` لا ينتهي عند الشرطة بداخله)،
+    وما لا يُطابِق يُعامَل محرفاً عادياً — فيختلّ الاتّزان ويُرفَع الخطأ لاحقاً
+    بدل أن يُبتَر النصّ بصمت.
     """
-    i = index + 1
-    in_class = False
-    while i < len(source):
-        ch = source[i]
-        if ch == "\\":
-            i += 2
-            continue
-        if ch == "[":
-            in_class = True
-        elif ch == "]":
-            in_class = False
-        elif ch == "/" and not in_class:
-            return i + 1
-        elif ch == "\n":
-            return i  # تعبيرٌ نمطي لا يعبر السطر — نتوقّف بلا ابتلاع
-        i += 1
-    return i
+    match = _REGEX_LITERAL.match(source, index)
+    return match.end() if match else index + 1
 
 
 def _skip_string(source: str, index: int, quote: str) -> int:
@@ -315,11 +304,7 @@ def _scan_step(source: str, index: int, opener: str, closer: str) -> tuple[int, 
         return _skip_string(source, index + 1, ch), 0
     if ch == "/" and _starts_regex(source, index):
         return _skip_regex(source, index), 0
-    if ch == opener:
-        return index + 1, 1
-    if ch == closer:
-        return index + 1, -1
-    return index + 1, 0
+    return index + 1, {opener: 1, closer: -1}.get(ch, 0)
 
 
 def _balanced_span(source: str, start: int, opener: str, closer: str) -> tuple[str, int]:

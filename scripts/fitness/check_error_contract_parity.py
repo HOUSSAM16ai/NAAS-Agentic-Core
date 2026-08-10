@@ -94,25 +94,35 @@ def _handler_emitted_keys() -> set[str]:
     return set()
 
 
-def _detail_mirrors_message() -> bool:
-    """هل `detail` و`message` يُسنَدان من نفس الاسم في باني الحمولة؟"""
+def _payload_dict() -> ast.Dict | None:
+    """يعيد قاموس الإرجاع من `build_error_payload`، أو ``None`` إن لم يوجد."""
     tree = parse_source(HANDLER_PATH)
     for node in ast.walk(tree):
         if not (isinstance(node, ast.FunctionDef) and node.name == "build_error_payload"):
             continue
         for sub in ast.walk(node):
-            if not (isinstance(sub, ast.Return) and isinstance(sub.value, ast.Dict)):
-                continue
-            found: dict[str, str] = {}
-            for key, value in zip(sub.value.keys, sub.value.values, strict=False):
-                if (
-                    isinstance(key, ast.Constant)
-                    and key.value in ("detail", "message")
-                    and isinstance(value, ast.Name)
-                ):
-                    found[key.value] = value.id
-            return found.get("detail") is not None and found.get("detail") == found.get("message")
-    return False
+            if isinstance(sub, ast.Return) and isinstance(sub.value, ast.Dict):
+                return sub.value
+    return None
+
+
+def _named_sources(payload: ast.Dict, wanted: tuple[str, ...]) -> dict[str, str]:
+    """يربط كل مفتاح مطلوب بالمتغيّر الذي يُسنَد منه (إن كان متغيّراً)."""
+    sources: dict[str, str] = {}
+    for key, value in zip(payload.keys, payload.values, strict=False):
+        if isinstance(key, ast.Constant) and key.value in wanted and isinstance(value, ast.Name):
+            sources[key.value] = value.id
+    return sources
+
+
+def _detail_mirrors_message() -> bool:
+    """هل `detail` و`message` يُسنَدان من نفس الاسم في باني الحمولة؟"""
+    payload = _payload_dict()
+    if payload is None:
+        return False
+    sources = _named_sources(payload, ("detail", "message"))
+    detail = sources.get("detail")
+    return detail is not None and detail == sources.get("message")
 
 
 #: `setError(...)` أو `setError(await readApiError(...))` — نلتقط الوسائط كاملةً.
@@ -149,53 +159,61 @@ def _english_fallbacks(path: Path) -> list[str]:
     return offences
 
 
-def main() -> int:
-    failures: list[str] = []
-
-    emitted = _handler_emitted_keys()
+def _check_handler_keys(emitted: set[str]) -> list[str]:
+    """يتحقّق من أن المعالج يُخرج كل مفتاحٍ إلزامي."""
     if not emitted:
-        failures.append(
+        return [
             "لم يُعثر على `build_error_payload` أو على قاموس إرجاعه في "
             f"{HANDLER_PATH.relative_to(REPO_ROOT)} — العقد بلا مصدر."
-        )
-    else:
-        missing = REQUIRED_KEYS - emitted
-        if missing:
-            failures.append(
-                "المعالج لا يُخرج مفاتيح إلزامية: "
-                + ", ".join(sorted(missing))
-                + " — كل مفتاحٍ يقرؤه عميلٌ يجب أن يُخرجه المعالج (ISS-152)."
-            )
+        ]
+    missing = REQUIRED_KEYS - emitted
+    if missing:
+        return [
+            "المعالج لا يُخرج مفاتيح إلزامية: "
+            + ", ".join(sorted(missing))
+            + " — كل مفتاحٍ يقرؤه عميلٌ يجب أن يُخرجه المعالج (ISS-152)."
+        ]
+    return []
 
+
+def _check_clients() -> list[str]:
+    """يتحقّق من وجود كل عميل مُعلَن ومن خلوّه من الإنجليزية في مسارات الخطأ."""
+    failures: list[str] = []
+    for client in CLIENT_PATHS:
+        if not client.exists():
+            failures.append(f"عميلٌ مُعلَن غير موجود: {client.relative_to(REPO_ROOT)}")
+            continue
+        failures.extend(
+            f"{offence} — سلسلة إنجليزية تصل الطالب في مسار خطأ. "
+            "استعمل `readApiError(res, '<رسالة عربية>')`."
+            for offence in _english_fallbacks(client)
+            if offence not in _FROZEN_DEBT
+        )
+    return failures
+
+
+def _check_stale_debt() -> list[str]:
+    """الدَّين يتقلّص فقط: مدخلٌ لم يعد فيه خرق يجب أن يُحذَف."""
+    live = {offence for client in CLIENT_PATHS for offence in _english_fallbacks(client)}
+    return [
+        f"دَين مُجمَّد لم يعد موجوداً: {entry} — احذفه من `_FROZEN_DEBT` "
+        "(الدَّين يتقلّص فقط، والاستثناء الميت يُخفي عودة العطب)."
+        for entry in _FROZEN_DEBT
+        if entry not in live
+    ]
+
+
+def main() -> int:
+    emitted = _handler_emitted_keys()
+
+    failures = _check_handler_keys(emitted)
     if not _detail_mirrors_message():
         failures.append(
             "`detail` و`message` لا يُسنَدان من نفس القيمة في `build_error_payload` — "
             "قيمتان لنفس المعنى تعيدان إنتاج عطب «Login failed» (D-192)."
         )
-
-    for client in CLIENT_PATHS:
-        if not client.exists():
-            failures.append(f"عميلٌ مُعلَن غير موجود: {client.relative_to(REPO_ROOT)}")
-            continue
-        for offence in _english_fallbacks(client):
-            if offence in _FROZEN_DEBT:
-                continue
-            failures.append(
-                f"{offence} — سلسلة إنجليزية تصل الطالب في مسار خطأ. "
-                "استعمل `readApiError(res, '<رسالة عربية>')`."
-            )
-
-    stale = [
-        entry
-        for entry in _FROZEN_DEBT
-        if entry
-        not in {offence for client in CLIENT_PATHS for offence in _english_fallbacks(client)}
-    ]
-    for entry in stale:
-        failures.append(
-            f"دَين مُجمَّد لم يعد موجوداً: {entry} — احذفه من `_FROZEN_DEBT` "
-            "(الدَّين يتقلّص فقط، والاستثناء الميت يُخفي عودة العطب)."
-        )
+    failures += _check_clients()
+    failures += _check_stale_debt()
 
     for failure in failures:
         print(f"❌ {failure}")

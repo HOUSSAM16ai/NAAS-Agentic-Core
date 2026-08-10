@@ -168,39 +168,48 @@ async def test_authenticate_user_fallback_on_401(service):
             "401 Unauthorized", request=None, response=response
         )
 
-        # Mock Local Persistence (SHOULD be called for fallback)
+        # D-236 · ISS-152: المسار المحلّي صار **تفويضاً** إلى `AuthService` بدل
+        # منطقٍ مكتوب داخل هذه الواجهة (سكّ JWT بيده، وبلا فحص حالة الحساب).
+        # فالمُتعاوِن الذي يُحاكى هنا هو المحرّك القانوني لا `persistence` + `jwt`.
+        # نيّة الاختبار لم تتغيّر: **401 من الخدمة المصغّرة لا ينهي المحاولة** —
+        # قد يكون المستخدم موجوداً محلّياً ولم يُرحَّل بعد.
         mock_user = MagicMock()
         mock_user.id = 2
         mock_user.email = "local_only@test.com"
+        mock_user.full_name = "Local Only"
         mock_user.is_admin = False
-        mock_user.verify_password.return_value = True
 
-        service.persistence.get_user_by_email = AsyncMock(return_value=mock_user)
+        mock_auth_service = MagicMock()
+        mock_auth_service.authenticate = AsyncMock(return_value=mock_user)
+        mock_auth_service.issue_tokens = AsyncMock(
+            return_value={
+                "access_token": "local_token",
+                "refresh_token": "local_refresh",
+                "token_type": "Bearer",
+            }
+        )
+        service._build_auth_service = MagicMock(return_value=mock_auth_service)
 
         # Mock ChronoShield
         with patch("app.services.boundaries.auth_boundary_service.chrono_shield") as mock_shield:
             mock_shield.check_allowance = AsyncMock()
             mock_shield.reset_target = MagicMock()
 
-            # Mock JWT
-            with patch("app.services.boundaries.auth_boundary_service.jwt") as mock_jwt:
-                mock_jwt.encode.return_value = "local_token"
+            mock_request = MagicMock()
 
-                # Mock Settings
-                service.settings = MagicMock()
-                service.settings.SECRET_KEY = "secret"
+            result = await service.authenticate_user(
+                "local_only@test.com", "password", mock_request
+            )
 
-                mock_request = MagicMock()
+            assert result["access_token"] == "local_token"
+            assert result["user"]["id"] == 2
+            # رمز التحديث يصل الواجهة الآن — كان غائباً تماماً عن هذا المسار.
+            assert result["refresh_token"] == "local_refresh"
 
-                result = await service.authenticate_user(
-                    "local_only@test.com", "password", mock_request
-                )
-
-                assert result["access_token"] == "local_token"
-                assert result["user"]["id"] == 2
-
-                mock_client.login_user.assert_called_once()
-                service.persistence.get_user_by_email.assert_called_once()
+            mock_client.login_user.assert_called_once()
+            mock_auth_service.authenticate.assert_awaited_once()
+            # النجاح يُطهّر متّجهَي الدرع معاً (الهوية **و** العنوان).
+            mock_shield.reset_target.assert_called_once_with("local_only@test.com", mock_request)
 
 
 @pytest.mark.asyncio

@@ -29,6 +29,16 @@ from httpx import AsyncClient
 pytestmark = pytest.mark.security
 
 
+def _fresh_password() -> str:
+    """كلمة مرور اختبارية مُولَّدة لكل استدعاء.
+
+    ليست تجميلاً لأداة تحليل: قيمةٌ ثابتة مكتوبة في المصدر تُغري بالنسخ إلى بيئة
+    حقيقية، وتجعل اختبارين متجاورين يتقاسمان السرّ نفسه فيخفي أحدهما تسرّب
+    الآخر. التوليد يجعل كل اختبار مستقلاً بالبناء.
+    """
+    return f"Pw-{uuid.uuid4().hex}-Aa1!"
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 1) عقد الأخطاء — الجذر المباشر لسلسلة «Login failed»
 # ═══════════════════════════════════════════════════════════════════════════
@@ -132,7 +142,7 @@ async def test_strangers_failures_do_not_lock_out_an_innocent_user(
     chrono_shield._failures.clear()
 
     email = f"victim-{uuid.uuid4().hex[:8]}@example.com"
-    password = "VictimPassword123!"
+    password = _fresh_password()
     registration = await async_client.post(
         "/api/security/register",
         json={"full_name": "Victim Student", "email": email, "password": password},
@@ -295,7 +305,7 @@ async def test_access_token_declares_its_type(async_client: AsyncClient):
     import json
 
     email = f"claims-{uuid.uuid4().hex[:8]}@example.com"
-    password = "ClaimsPassword123!"
+    password = _fresh_password()
     await async_client.post(
         "/api/security/register",
         json={"full_name": "Claims User", "email": email, "password": password},
@@ -369,7 +379,7 @@ async def test_login_issues_a_refresh_token(async_client: AsyncClient):
     الدخول» كان إطالة عمر الرمز، وهي المقايضة المعكوسة.
     """
     email = f"refresh-{uuid.uuid4().hex[:8]}@example.com"
-    password = "RefreshPassword123!"
+    password = _fresh_password()
     await async_client.post(
         "/api/security/register",
         json={"full_name": "Refresh User", "email": email, "password": password},
@@ -398,7 +408,7 @@ async def test_a_disabled_account_cannot_log_in(async_client: AsyncClient, db_se
     chrono_shield._failures.clear()
 
     email = f"disabled-{uuid.uuid4().hex[:8]}@example.com"
-    password = "DisabledPassword123!"
+    password = _fresh_password()
     await async_client.post(
         "/api/security/register",
         json={"full_name": "Disabled User", "email": email, "password": password},
@@ -435,7 +445,7 @@ async def test_disabled_and_wrong_password_are_indistinguishable(
     chrono_shield._failures.clear()
 
     email = f"enum-{uuid.uuid4().hex[:8]}@example.com"
-    password = "EnumPassword123!"
+    password = _fresh_password()
     await async_client.post(
         "/api/security/register",
         json={"full_name": "Enum User", "email": email, "password": password},

@@ -218,22 +218,27 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
             return true;
         };
 
-        const readApiError = async (res, fallback) => {
-            const safeFallback = fallback || 'حدث خطأ غير متوقّع.';
-            let body = null;
+        const parseJsonBody = async (res) => {
             try {
-                body = await res.json();
+                const body = await res.json();
+                return body && typeof body === 'object' ? body : null;
             } catch (_) {
-                return ARABIC_BY_STATUS[res.status] || safeFallback;
+                return null;
             }
-            if (!body || typeof body !== 'object') {
-                return ARABIC_BY_STATUS[res.status] || safeFallback;
-            }
+        };
+
+        const messageFromBody = (body) => {
             const byCode = ARABIC_BY_ERROR_CODE[body.error_code];
             if (byCode) return byCode;
             if (isPresentableApiMessage(body.detail)) return body.detail;
             if (isPresentableApiMessage(body.message)) return body.message;
-            return ARABIC_BY_STATUS[res.status] || safeFallback;
+            return null;
+        };
+
+        const readApiError = async (res, fallback) => {
+            const body = await parseJsonBody(res);
+            const fromBody = body ? messageFromBody(body) : null;
+            return fromBody || ARABIC_BY_STATUS[res.status] || fallback || 'حدث خطأ غير متوقّع.';
         };
 
         const App = () => {

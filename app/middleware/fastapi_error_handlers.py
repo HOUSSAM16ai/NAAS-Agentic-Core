@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
 
@@ -54,6 +55,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "ERROR_CODE_HEADER",
     "REQUEST_ID_HEADER",
+    "ErrorContext",
     "add_error_handlers",
     "build_error_payload",
     "general_exception_handler",
@@ -126,52 +128,52 @@ def _is_debug_environment() -> bool:
         return False
 
 
-def build_error_payload(
-    *,
-    message: str,
-    status_code: int,
-    request_id: str,
-    data: object | None = None,
-    error_code: str | None = None,
-) -> dict[str, object]:
+@dataclass(frozen=True, slots=True)
+class ErrorContext:
+    """كل ما يلزم لبناء جسم خطأ — كائنٌ واحد بدل خمسة وسائط.
+
+    وُلد من قياس CodeScene («Excess Number of Function Arguments» على
+    `build_error_payload`): خمسة وسائط مفتاحية تصف **شيئاً واحداً** هو الخطأ
+    الجاري، فالأنسب تسميته نوعاً بدل تفريقه في توقيع.
+    """
+
+    message: str
+    status_code: int
+    request_id: str
+    data: object | None = None
+    error_code: str | None = None
+
+    def resolved_error_code(self) -> str:
+        """رمز الخطأ الصريح، أو المُشتَقّ من رمز الحالة."""
+        return self.error_code or _error_code_for(self.status_code)
+
+
+def build_error_payload(context: ErrorContext) -> dict[str, object]:
     """يبني جسم الخطأ الموحَّد.
 
     ``detail`` و``message`` يحملان **نفس القيمة** عمداً: الأوّل عقد FastAPI الذي
     يقرأه كل عميل، والثاني توافقٌ تاريخي تعتمده اختبارات قائمة. قيمتان مختلفتان
     لنفس المعنى هي بالضبط العطب الذي أنتج «Login failed».
     """
+    message = context.message
     return {
         "status": "error",
         "detail": message,
         "message": message,
-        "error_code": error_code or _error_code_for(status_code),
-        "data": data,
-        "request_id": request_id,
+        "error_code": context.resolved_error_code(),
+        "data": context.data,
+        "request_id": context.request_id,
         "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
-def _json_error(
-    *,
-    message: str,
-    status_code: int,
-    request_id: str,
-    data: object | None = None,
-    error_code: str | None = None,
-    headers: dict[str, str] | None = None,
-) -> JSONResponse:
+def _json_error(context: ErrorContext, headers: dict[str, str] | None = None) -> JSONResponse:
     """يغلّف جسم الخطأ في استجابة JSON مع ترويسات التشخيص."""
-    payload = build_error_payload(
-        message=message,
-        status_code=status_code,
-        request_id=request_id,
-        data=data,
-        error_code=error_code,
-    )
+    payload = build_error_payload(context)
     response_headers = dict(headers or {})
-    response_headers[REQUEST_ID_HEADER] = request_id
+    response_headers[REQUEST_ID_HEADER] = context.request_id
     response_headers[ERROR_CODE_HEADER] = str(payload["error_code"])
-    return JSONResponse(status_code=status_code, content=payload, headers=response_headers)
+    return JSONResponse(status_code=context.status_code, content=payload, headers=response_headers)
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -180,13 +182,12 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
     ⚠️ ترويسات الاستثناء تُمَرَّر (``Retry-After`` · ``WWW-Authenticate``): كانت
     تُسقَط صامتةً، فكان العميل يتلقّى 429 بلا أي إشارة إلى متى يعيد المحاولة.
     """
-    request_id = _request_id(request)
-    return _json_error(
+    context = ErrorContext(
         message=str(exc.detail),
         status_code=exc.status_code,
-        request_id=request_id,
-        headers=dict(getattr(exc, "headers", None) or {}),
+        request_id=_request_id(request),
     )
+    return _json_error(context, headers=dict(getattr(exc, "headers", None) or {}))
 
 
 async def validation_exception_handler(
@@ -198,13 +199,13 @@ async def validation_exception_handler(
     كائنات تُصيّر كـ``[object Object]`` أو تُسقِط الواجهة. التفاصيل البنيوية
     تعيش في ``data.errors`` لمن يحتاجها.
     """
-    request_id = _request_id(request)
-    errors = exc.errors()
     return _json_error(
-        message="Validation Error",
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        request_id=request_id,
-        data={"errors": jsonable_errors(errors)},
+        ErrorContext(
+            message="Validation Error",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            request_id=_request_id(request),
+            data={"errors": jsonable_errors(exc.errors())},
+        )
     )
 
 
@@ -236,10 +237,12 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         request.method,
     )
     return _json_error(
-        message="Internal Server Error",
-        status_code=500,
-        request_id=request_id,
-        data={"exception": str(exc)} if _is_debug_environment() else None,
+        ErrorContext(
+            message="Internal Server Error",
+            status_code=500,
+            request_id=request_id,
+            data={"exception": str(exc)} if _is_debug_environment() else None,
+        )
     )
 
 

@@ -73,29 +73,36 @@ function isPresentable(value) {
  * @param {string} fallback رسالة عربية تُعرَض حين لا يقول الخادم شيئاً مفهوماً.
  * @returns {Promise<string>} رسالة جاهزة للعرض — عربية دائماً.
  */
-export async function readApiError(res, fallback = 'حدث خطأ غير متوقّع.') {
-  let body = null;
+/** يقرأ جسم الاستجابة كـJSON، أو `null` إن لم يكن JSON. */
+async function parseJsonBody(res) {
   try {
-    body = await res.json();
+    const body = await res.json();
+    return body && typeof body === 'object' ? body : null;
   } catch (_) {
-    // جسمٌ غير JSON (صفحة خطأ من وسيط مثلاً) — نسقط إلى رمز الحالة.
-    return ARABIC_BY_STATUS[res.status] || fallback;
+    // جسمٌ غير JSON (صفحة خطأ من وسيط مثلاً).
+    return null;
   }
+}
 
-  if (!body || typeof body !== 'object') {
-    return ARABIC_BY_STATUS[res.status] || fallback;
-  }
-
+/**
+ * يختار الرسالة من جسمٍ مُحلَّل: الرمز أوّلاً، ثمّ نصّ الخادم إن كان مفهوماً.
+ *
+ * `detail` هو العقد القياسي و`message` توافقٌ تاريخي — كلاهما يُقرأ لأن نسخة
+ * خادم أقدم قد تُرسل واحداً دون الآخر، والواجهة لا تُسقِط الطالب لأن الخادم
+ * لم يُحدَّث بعد.
+ */
+function messageFromBody(body) {
   const byCode = ARABIC_BY_ERROR_CODE[body.error_code];
   if (byCode) return byCode;
-
-  // `detail` هو العقد القياسي؛ `message` توافقٌ تاريخي. كلاهما يُقرأ لأن
-  // نسخة خادم أقدم قد تُرسل واحداً دون الآخر — والواجهة لا تُسقِط الطالب
-  // لأن الخادم لم يُحدَّث بعد.
   if (isPresentable(body.detail)) return body.detail;
   if (isPresentable(body.message)) return body.message;
+  return null;
+}
 
-  return ARABIC_BY_STATUS[res.status] || fallback;
+export async function readApiError(res, fallback = 'حدث خطأ غير متوقّع.') {
+  const body = await parseJsonBody(res);
+  const fromBody = body ? messageFromBody(body) : null;
+  return fromBody || ARABIC_BY_STATUS[res.status] || fallback;
 }
 
 export default readApiError;

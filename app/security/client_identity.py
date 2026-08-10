@@ -124,6 +124,51 @@ def _valid_ip(candidate: str) -> str | None:
         return None
 
 
+def _first_untrusted_from_right(chain: list[str]) -> str | None:
+    """أوّل عنوان **غير موثوق** مشياً من اليمين — أي العميل الحقيقي.
+
+    السلسلة يكتبها العميل من اليسار، فأوّل قيمة فيها هي **ما زعمه هو**. نتجاوز
+    الوسطاء الموثوقين من الطرف الذي أضفناه نحن، وأوّل ما ليس وسيطاً موثوقاً هو
+    آخر طرفٍ لم نتحقّق منه — وهو العميل.
+    """
+    for candidate in reversed(chain):
+        normalized = _valid_ip(candidate)
+        if normalized is not None and not is_trusted_proxy(normalized):
+            return normalized
+    return None
+
+
+def _leftmost_valid(chain: list[str]) -> str | None:
+    """أقصى اليسار الصالح — يُستعمل حين تكون السلسلة كلّها وسطاء موثوقين."""
+    for candidate in chain:
+        normalized = _valid_ip(candidate)
+        if normalized is not None:
+            return normalized
+    return None
+
+
+def _from_forwarded_headers(headers: object) -> str | None:
+    """يستخرج العنوان من ترويسات الوسيط، أو ``None`` إن لم تُفد شيئاً.
+
+    ⚠️ لا يُستدعى إلّا بعد التثبّت من أن النظير وسيطٌ موثوق — الثقة قرارُ
+    :func:`resolve_client_ip`، وهذه الدالّة تقرأ فقط.
+    """
+    get = getattr(headers, "get", None)
+    if get is None:
+        return None
+
+    forwarded = (get(_FORWARDED_FOR) or "").strip()
+    if forwarded:
+        chain = _split_forwarded_chain(forwarded)
+        return _first_untrusted_from_right(chain) or _leftmost_valid(chain)
+
+    real_ip = (get(_REAL_IP) or "").strip()
+    if real_ip:
+        return _valid_ip(real_ip)
+
+    return None
+
+
 def resolve_client_ip(request: object) -> str | None:
     """يعيد عنوان العميل الحقيقي، أو ``None`` إن تعذّر.
 
@@ -139,37 +184,13 @@ def resolve_client_ip(request: object) -> str | None:
     peer = getattr(client, "host", None) if client is not None else None
 
     headers = getattr(request, "headers", None)
-    if headers is None:
-        return peer
 
     # ⛔ الترويسة لا تُصدَّق إلّا من وسيطٍ موثوق. النظير المجهول يعني أننا لا نعرف
     # من سلّمنا الطلب — والغياب ليس تفويضاً.
-    if not is_trusted_proxy(peer):
+    if headers is None or not is_trusted_proxy(peer):
         return peer
 
-    forwarded = (headers.get(_FORWARDED_FOR) or "").strip()
-    if forwarded:
-        chain = _split_forwarded_chain(forwarded)
-        # من اليمين إلى اليسار: نتجاوز الوسطاء الموثوقين، وأوّل غير موثوق هو العميل.
-        for candidate in reversed(chain):
-            normalized = _valid_ip(candidate)
-            if normalized is None:
-                continue
-            if not is_trusted_proxy(normalized):
-                return normalized
-        # كل السلسلة وسطاء موثوقون ⇒ أقصى اليسار أفضل تقدير متاح.
-        for candidate in chain:
-            normalized = _valid_ip(candidate)
-            if normalized is not None:
-                return normalized
-
-    real_ip = (headers.get(_REAL_IP) or "").strip()
-    if real_ip:
-        normalized = _valid_ip(real_ip)
-        if normalized is not None:
-            return normalized
-
-    return peer
+    return _from_forwarded_headers(headers) or peer
 
 
 def client_ip_or_unknown(request: object) -> str:

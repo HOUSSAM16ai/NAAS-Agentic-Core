@@ -251,6 +251,22 @@ def _skip_string(source: str, index: int, quote: str) -> int:
     return i
 
 
+def _scan_step(source: str, index: int, opener: str, closer: str) -> tuple[int, int]:
+    """قرارُ محرفٍ واحد: ``(الموضع التالي, تغيّر العمق)``.
+
+    السلسلة النصّية تُقفَز كاملةً فلا يُحسَب محدِّدٌ داخل نصّ، وما عداها يُغيّر
+    العمق بـ``+1``/``-1``/``0``. فروعٌ متجاورة لا متداخلة — وهذا هو الغرض.
+    """
+    ch = source[index]
+    if ch in _QUOTES:
+        return _skip_string(source, index + 1, ch), 0
+    if ch == opener:
+        return index + 1, 1
+    if ch == closer:
+        return index + 1, -1
+    return index + 1, 0
+
+
 def _balanced_span(source: str, start: int, opener: str, closer: str) -> tuple[str, int]:
     """محتوى أوّل كتلةٍ متوازنة عند ``start`` أو بعده، وموضع مُغلِقها.
 
@@ -261,6 +277,10 @@ def _balanced_span(source: str, start: int, opener: str, closer: str) -> tuple[s
 
     ⚠️ السلاسل النصّية تُتجاوَز فلا يُحسَب قوسٌ داخل نصّ. وعند عدم الاتّزان يُعاد ما
     تبقّى — فيُفحَص ولا يُتخطّى بصمت.
+
+    قرارُ المحرف الواحد مُستخرَجٌ في :func:`_scan_step` فتبقى الحلقة **مسطّحة**:
+    قياسُ CodeScene («Bumpy Road») كان مُحقّاً — تفرّعٌ داخل تفرّعٍ داخل حلقةٍ يجعل
+    الشرط الحاسم (`depth == 0`) مدفوناً في الطبقة الثالثة، وهو أسوأ موضعٍ لأهمّ سطر.
     """
     open_at = source.find(opener, start)
     if open_at == -1:
@@ -268,17 +288,11 @@ def _balanced_span(source: str, start: int, opener: str, closer: str) -> tuple[s
     depth = 0
     i = open_at
     while i < len(source):
-        ch = source[i]
-        if ch in _QUOTES:
-            i = _skip_string(source, i + 1, ch)
-            continue
-        if ch == opener:
-            depth += 1
-        elif ch == closer:
-            depth -= 1
-            if depth == 0:
-                return source[open_at + 1 : i], i
-        i += 1
+        nxt, delta = _scan_step(source, i, opener, closer)
+        depth += delta
+        if depth == 0:
+            return source[open_at + 1 : i], i
+        i = nxt
     return source[open_at + 1 :], len(source)
 
 

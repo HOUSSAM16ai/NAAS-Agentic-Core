@@ -152,17 +152,45 @@ def _detail_mirrors_message() -> bool:
 #: `const NAME = { ... };` — يشمل صيغة `export const` وصيغة السكربت العام.
 _JS_TABLE = re.compile(r"(?:export\s+)?const\s+(\w+)\s*=\s*{(.*?)\n\s*};", re.DOTALL)
 
-#: `key: 'value',` — المفتاح عاريًا أو مقتبَساً، والقيمة بعلامة اقتباس مفردة.
-_JS_ENTRY = re.compile(r"^\s*['\"]?(\w+)['\"]?\s*:\s*'((?:[^'\\]|\\.)*)'", re.MULTILINE)
+#: `key: 'value',` — المفتاح عاريًا أو مقتبَساً، والقيمة بأي علامة اقتباس
+#: (مفردة · مزدوجة · قالبية). ⚠️ كانت تقبل المفردة وحدها، وهو **ثقبٌ صامت**
+#: رصدته مراجعة CodeRabbit: لو كتبت النسخُ الثلاث قيمها بعلامة أخرى لسقط كل
+#: مفتاح من كل قاموس، فقارن `_table_diff` فراغاً بفراغ وطبعت البوّابة سطر
+#: النجاح. أي أنها تشهد بنصٍّ لم تقرأه — نفس عطب D-208 الذي يحذّر منه توثيقها.
+_JS_ENTRY = re.compile(
+    r"^\s*['\"]?(\w+)['\"]?\s*:\s*"
+    r"(?:'((?:[^'\\]|\\.)*)'|\"((?:[^\"\\]|\\.)*)\"|`((?:[^`\\]|\\.)*)`)",
+    re.MULTILINE,
+)
+
+#: كل سطرٍ **يبدو** مدخلاً. يُقارَن بعدد ما التُقط فعلاً، فيصير السقوط الصامت
+#: مستحيلاً: ما لم يُفهَم يُعلَن بدل أن يُحذَف.
+_JS_ENTRY_SHAPE = re.compile(r"^\s*['\"]?\w+['\"]?\s*:", re.MULTILINE)
 
 
 def _js_tables(path: Path) -> dict[str, dict[str, str]]:
-    """يستخرج جداول الترجمة من ملفّ JS كقواميس بايثون."""
+    """يستخرج جداول الترجمة من ملفّ JS كقواميس بايثون.
+
+    Raises:
+        ValueError: حين يتعذّر تحليل مدخلٍ واحد — البوّابة تتوقّف بدل أن تشهد
+            على نصٍّ لم تفهمه.
+    """
     source = _strip_comments(path.read_text(encoding="utf-8"))
     tables: dict[str, dict[str, str]] = {}
     for name, body in _JS_TABLE.findall(source):
-        if name in TABLE_NAMES:
-            tables[name] = dict(_JS_ENTRY.findall(body))
+        if name not in TABLE_NAMES:
+            continue
+        entries = {
+            key: single or double or template
+            for key, single, double, template in _JS_ENTRY.findall(body)
+        }
+        expected = len(_JS_ENTRY_SHAPE.findall(body))
+        if len(entries) != expected:
+            raise ValueError(
+                f"{path.relative_to(REPO_ROOT)}: {name} — قُرئ {len(entries)} من {expected} مدخلاً. "
+                "بوّابةٌ تقرأ بعض النصّ تشهد بما لم تقرأ (D-208)."
+            )
+        tables[name] = entries
     return tables
 
 
@@ -255,7 +283,19 @@ def _check_clients() -> list[str]:
 
 
 def _check_tables() -> list[str]:
-    """يتحقّق من تطابق جداول الترجمة عبر النسخ الثلاث."""
+    """يتحقّق من تطابق جداول الترجمة عبر النسخ الثلاث.
+
+    ``ValueError`` من :func:`_js_tables` (مدخلٌ لم يُفهَم) يُحوَّل إلى فشلٍ
+    مقروء بدل traceback: البوّابة تفشل بوضوح، لا بصخب.
+    """
+    try:
+        return _compare_tables()
+    except ValueError as exc:
+        return [str(exc)]
+
+
+def _compare_tables() -> list[str]:
+    """يقارن جداول المصدر بجداول المرآتين."""
     source_tables = _js_tables(TABLE_SOURCE)
     missing_here = [name for name in TABLE_NAMES if name not in source_tables]
     if missing_here:

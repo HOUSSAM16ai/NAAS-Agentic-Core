@@ -105,16 +105,28 @@ for (const poisoned of ['constructor', 'toString', 'valueOf', 'hasOwnProperty'])
     );
 }
 
-// ── 6) المرآتان تحملان نفس الجدولين ────────────────────────────────────────
-// النسخة الكاملة من هذا الفحص في `scripts/fitness/check_error_contract_parity.py`
-// (تقارن المفاتيح والقيم). هنا نتحقّق فقط من أنّ البحث الآمن موجود في المرآتين،
-// فالعطب أعلاه كان مكرَّراً ثلاث مرّات لأنه نُسخ ثلاث مرّات.
+// ── 6) المرآتان تقرآن الجدولين بالبحث الآمن ────────────────────────────────
+// ⚠️ كان هذا الفحص **لا يُثبت شيئاً**: يبحث عن `hasOwnProperty.call` في أيّ
+// موضع من الملفّ، ويمنع تهجئةً واحدة بعينها. فكان
+// `ARABIC_BY_ERROR_CODE[body?.error_code]` يمرّ، وجدول الحالة لم يُذكَر أصلاً.
+// رصدته مراجعة CodeRabbit، والفحص الآن **مربوط بموضع البحث نفسه**.
+//
+// وتطابقُ محتوى الجدولين تفرضه `scripts/fitness/check_error_contract_parity.py`
+// (مفاتيح وقيم) — هنا نفرض **كيف تُقرأ**، وهما شرطان مختلفان.
 for (const mirror of ['frontend/public/js/legacy-app.jsx', 'app/static/js/legacy-app.jsx']) {
     const src = readFileSync(resolve(repoRoot, mirror), 'utf8');
-    check(`${mirror}: يستعمل البحث الآمن`, src.includes('hasOwnProperty.call'));
     check(
-        `${mirror}: لا بحث مباشر غير محروس`,
-        !src.includes('ARABIC_BY_ERROR_CODE[body.error_code]'),
+        `${mirror}: البحث الآمن مربوط بالجدولين`,
+        /lookupApiTable\(\s*ARABIC_BY_ERROR_CODE/.test(src) &&
+            /lookupApiTable\(\s*ARABIC_BY_STATUS/.test(src) &&
+            src.includes('hasOwnProperty.call'),
+    );
+    // ⛔ أي فهرسة مباشرة على أيٍّ من الجدولين — بأي تهجئة للمفتاح.
+    const hits = src.match(/ARABIC_BY_(?:ERROR_CODE|STATUS)\s*\[/g) || [];
+    check(
+        `${mirror}: لا فهرسة مباشرة على جداول الترجمة`,
+        hits.length === 0,
+        `hits: ${hits.length}`,
     );
 }
 

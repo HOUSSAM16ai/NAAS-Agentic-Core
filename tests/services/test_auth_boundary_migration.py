@@ -207,7 +207,24 @@ async def test_authenticate_user_fallback_on_401(service):
             assert result["refresh_token"] == "local_refresh"
 
             mock_client.login_user.assert_called_once()
+
+            # ⚠️ التفويض نفسه يُفحَص، لا مخرَجه فقط. رصدته مراجعة CodeRabbit:
+            # بالاكتفاء بفحص القاموس المُعاد كانت **ثلاثة تراجعات تمرّ** — أن
+            # تسكّ الواجهة رمزاً بيدها وتتجاهل `issue_tokens` (وهو AsyncMock لا
+            # يُفحَص)، وأن تمرّر بريداً أو كلمة سرّ خاطئة (`assert_awaited_once`
+            # لا ينظر في الوسائط)، وأن يأتي الدرع **بعد** المصادقة لا قبلها.
             mock_auth_service.authenticate.assert_awaited_once()
+            assert mock_auth_service.authenticate.await_args.kwargs["email"] == (
+                "local_only@test.com"
+            )
+            assert mock_auth_service.authenticate.await_args.kwargs["password"] == "password"
+
+            mock_auth_service.issue_tokens.assert_awaited_once()
+            assert mock_auth_service.issue_tokens.await_args.args[0] is mock_user
+
+            # الدرع الزمني **أمام** المصادقة — وهو ما يقوله تعليق الإنتاج.
+            mock_shield.check_allowance.assert_awaited_once()
+
             # النجاح يُطهّر متّجهَي الدرع معاً (الهوية **و** العنوان).
             mock_shield.reset_target.assert_called_once_with("local_only@test.com", mock_request)
 

@@ -150,10 +150,10 @@ def _detail_mirrors_message() -> bool:
 # ─── قراءة الجداول من ملفّات JS ──────────────────────────────────────────────
 
 #: `const NAME = { ... };` — يشمل صيغة `export const` وصيغة السكربت العام.
-_JS_TABLE = re.compile(r"(?:export\s+)?const\s+(\w+)\s*=\s*\{(.*?)\n\s*\};", re.DOTALL)
+_JS_TABLE = re.compile(r"(?:export\s+)?const\s+(\w+)\s*=\s*{(.*?)\n\s*};", re.DOTALL)
 
 #: `key: 'value',` — المفتاح عاريًا أو مقتبَساً، والقيمة بعلامة اقتباس مفردة.
-_JS_ENTRY = re.compile(r"^\s*['\"]?([\w]+)['\"]?\s*:\s*'((?:[^'\\]|\\.)*)'", re.MULTILINE)
+_JS_ENTRY = re.compile(r"^\s*['\"]?(\w+)['\"]?\s*:\s*'((?:[^'\\]|\\.)*)'", re.MULTILINE)
 
 
 def _js_tables(path: Path) -> dict[str, dict[str, str]]:

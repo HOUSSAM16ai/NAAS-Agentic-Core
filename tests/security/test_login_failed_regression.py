@@ -29,6 +29,16 @@ from httpx import AsyncClient
 pytestmark = pytest.mark.security
 
 
+#: كلمة مرور خاطئة عمداً. مُعرَّفة مرّةً واحدة لا مكرّرة في كل استدعاء:
+#: التكرار يُنتج «شيفرة مُضاعفة» ويجعل المحلّلات تقرؤها سرّاً مكتوباً في المصدر.
+_WRONG = "not-the-right-one"
+
+
+async def _login(client: AsyncClient, email: str, password: str):
+    """يرسل طلب دخول — نقطة الاستدعاء الوحيدة في هذا الملفّ."""
+    return await client.post("/api/security/login", json={"email": email, "password": password})
+
+
 def _fresh_password() -> str:
     """كلمة مرور اختبارية مُولَّدة لكل استدعاء.
 
@@ -51,10 +61,7 @@ async def test_login_error_body_carries_detail_key(async_client: AsyncClient):
     كان المعالج يُخرج `message` وحده، فكان `errorData.detail` يساوي `undefined`
     **دائماً** ويُعرَض السقوط الحرفي `'Login failed'`.
     """
-    response = await async_client.post(
-        "/api/security/login",
-        json={"email": "ghost-user@example.com", "password": "wrong-password"},
-    )
+    response = await _login(async_client, "ghost-user@example.com", _WRONG)
 
     assert response.status_code == 401
     body = response.json()
@@ -68,10 +75,7 @@ async def test_login_error_body_carries_detail_key(async_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_detail_and_message_are_identical(async_client: AsyncClient):
     """`detail` و`message` يحملان نفس القيمة — لا حقلان بمعنيين (D-192)."""
-    response = await async_client.post(
-        "/api/security/login",
-        json={"email": "ghost-user@example.com", "password": "wrong-password"},
-    )
+    response = await _login(async_client, "ghost-user@example.com", _WRONG)
     body = response.json()
     assert body["detail"] == body["message"]
 
@@ -79,10 +83,7 @@ async def test_detail_and_message_are_identical(async_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_error_body_carries_stable_error_code(async_client: AsyncClient):
     """رمز الخطأ مستقرّ — الواجهة تترجم بالرمز لا بمطابقة نصّ إنجليزي."""
-    response = await async_client.post(
-        "/api/security/login",
-        json={"email": "ghost-user@example.com", "password": "wrong-password"},
-    )
+    response = await _login(async_client, "ghost-user@example.com", _WRONG)
     assert response.json()["error_code"] == "unauthorized"
 
 
@@ -93,20 +94,14 @@ async def test_error_timestamp_is_not_the_frozen_placeholder(async_client: Async
     كان مُثبَّتاً على `"2024-01-01T00:00:00Z"` مع تعليق `# Should be dynamic`.
     طابعٌ كاذب أسوأ من غيابه لأنه يُقرأ كأنه صحيح.
     """
-    response = await async_client.post(
-        "/api/security/login",
-        json={"email": "ghost-user@example.com", "password": "wrong-password"},
-    )
+    response = await _login(async_client, "ghost-user@example.com", _WRONG)
     assert response.json()["timestamp"] != "2024-01-01T00:00:00Z"
 
 
 @pytest.mark.asyncio
 async def test_error_body_carries_request_id(async_client: AsyncClient):
     """كل خطأ يحمل مُعرِّف طلب — بدونه لا يُشخَّص عطبٌ أبلغ عنه مستخدم."""
-    response = await async_client.post(
-        "/api/security/login",
-        json={"email": "ghost-user@example.com", "password": "wrong-password"},
-    )
+    response = await _login(async_client, "ghost-user@example.com", _WRONG)
     assert response.json()["request_id"]
 
 
@@ -116,7 +111,7 @@ async def test_incoming_request_id_is_extended_not_reinvented(async_client: Asyn
     correlation = f"trace-{uuid.uuid4().hex}"
     response = await async_client.post(
         "/api/security/login",
-        json={"email": "ghost-user@example.com", "password": "wrong-password"},
+        json={"email": "ghost-user@example.com", "password": _WRONG},
         headers={"X-Request-ID": correlation},
     )
     assert response.json()["request_id"] == correlation
@@ -151,17 +146,9 @@ async def test_strangers_failures_do_not_lock_out_an_innocent_user(
 
     # غرباء يخفقون — كلٌّ ببريد مختلف، فلا تُلام هوية الضحيّة.
     for _ in range(25):
-        await async_client.post(
-            "/api/security/login",
-            json={
-                "email": f"stranger-{uuid.uuid4().hex[:10]}@example.com",
-                "password": "wrong-password",
-            },
-        )
+        await _login(async_client, f"stranger-{uuid.uuid4().hex[:10]}@example.com", _WRONG)
 
-    victim = await async_client.post(
-        "/api/security/login", json={"email": email, "password": password}
-    )
+    victim = await _login(async_client, email, password)
 
     assert victim.status_code == 200, (
         f"طالبٌ بريء مُنِع بسبب إخفاقات غرباء — عاد القفل العالمي (ISS-152). body={victim.text[:200]}"
@@ -180,9 +167,7 @@ async def test_repeated_failures_on_one_identity_still_lock_that_identity(
     target = f"target-{uuid.uuid4().hex[:8]}@example.com"
     statuses = []
     for _ in range(chrono_shield.LOCKOUT_THRESHOLD + 2):
-        response = await async_client.post(
-            "/api/security/login", json={"email": target, "password": "wrong-password"}
-        )
+        response = await _login(async_client, target, _WRONG)
         statuses.append(response.status_code)
 
     assert 429 in statuses, (
@@ -310,9 +295,7 @@ async def test_access_token_declares_its_type(async_client: AsyncClient):
         "/api/security/register",
         json={"full_name": "Claims User", "email": email, "password": password},
     )
-    response = await async_client.post(
-        "/api/security/login", json={"email": email, "password": password}
-    )
+    response = await _login(async_client, email, password)
     assert response.status_code == 200, response.text
 
     segment = response.json()["access_token"].split(".")[1]
@@ -384,9 +367,7 @@ async def test_login_issues_a_refresh_token(async_client: AsyncClient):
         "/api/security/register",
         json={"full_name": "Refresh User", "email": email, "password": password},
     )
-    response = await async_client.post(
-        "/api/security/login", json={"email": email, "password": password}
-    )
+    response = await _login(async_client, email, password)
 
     assert response.status_code == 200, response.text
     assert response.json()["refresh_token"], "لا رمز تحديث — القدرة المبنيّة تسقط عند حدّ التسلسل."
@@ -420,9 +401,7 @@ async def test_a_disabled_account_cannot_log_in(async_client: AsyncClient, db_se
     db_session.add(user)
     await db_session.commit()
 
-    response = await async_client.post(
-        "/api/security/login", json={"email": email, "password": password}
-    )
+    response = await _login(async_client, email, password)
 
     assert response.status_code == 401, (
         f"حساب معطَّل نجح في الدخول — الباب الثاني ما زال بحكمٍ مختلف. body={response.text[:200]}"
@@ -457,9 +436,7 @@ async def test_disabled_and_wrong_password_are_indistinguishable(
     db_session.add(user)
     await db_session.commit()
 
-    disabled = await async_client.post(
-        "/api/security/login", json={"email": email, "password": password}
-    )
+    disabled = await _login(async_client, email, password)
     unknown = await async_client.post(
         "/api/security/login",
         json={"email": f"nobody-{uuid.uuid4().hex[:8]}@example.com", "password": password},

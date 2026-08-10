@@ -119,7 +119,7 @@ CLAIMS: ['exp','iat','is_admin','jti','permissions','roles','sub','type']
 | الفارض | ما يمنعه |
 |--------|----------|
 | `scripts/fitness/check_error_contract_parity.py` | عقدٌ يُعلنه طرفٌ ولا يقرؤه الآخر · إنجليزيةٌ تصل الطالب |
-| `tests/security/test_login_failed_regression.py` | ٢١ عقداً — **مُثبَتةٌ حمراء على الكود القديم** (9 فشل + 12 خطأ) |
+| `tests/security/test_login_failed_regression.py` | ٢٣ عقداً — **مُثبَتةٌ حمراء على الكود القديم** (9 فشل + 12 خطأ) |
 | `tests/security/test_hyper_defense.py` | مضادّ التدوير (هو ما أسقط أوّل صياغة للإصلاح حين حذفت متّجه العنوان) |
 | `frontend/tests/d236_session_refresh.test.mjs` | رمزُ تحديثٍ يُهمَل مرّةً أخرى · و**تعميمُ الفشل**: أنّ 5xx أو انقطاعَ شبكةٍ يطرد الطالب (يُفحَص على ٩ حالات) |
 

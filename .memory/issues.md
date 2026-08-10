@@ -59,7 +59,7 @@ HAS 'detail' KEY: False
 `datetime.now(datetime.UTC)` والاسم مربوط بالصنف لا بالوحدة ⇒ `AttributeError` مبتلَع ·
 `general_exception_handler` يُسرِّب `str(exc)` في كل البيئات.
 
-**الإصلاح:** D-236. **الفوارض:** `check_error_contract_parity` + ٢١ عقداً في
+**الإصلاح:** D-236. **الفوارض:** `check_error_contract_parity` + ٢٣ عقداً في
 `tests/security/test_login_failed_regression.py` **مُثبَتةٌ حمراء على الكود القديم**
 (9 فشل + 12 خطأ) — شرط الإغلاق (D-186 §6).
 

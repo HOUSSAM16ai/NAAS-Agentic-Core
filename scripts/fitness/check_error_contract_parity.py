@@ -78,8 +78,8 @@ _BODY_READING_CLIENTS: tuple[Path, ...] = (TABLE_SOURCE, *TABLE_MIRRORS)
 #: الدالّة التي تقرأ جسم الخطأ في النسخ الثلاث — بالصيغتين (تصريح · سهمية).
 #: اسم المعامل يُلتقَط منها **ولا يُفترَض**: الفحص يتبع الكود لا العكس.
 _BODY_READER = re.compile(
-    r"(?:function\s+messageFromBody\s*\(\s*([A-Za-z_$][\w$]*)\s*\)"
-    r"|const\s+messageFromBody\s*=\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>)"
+    r"function\s+messageFromBody\s*\(\s*([A-Za-z_$][\w$]*)\s*\)"
+    r"|const\s+messageFromBody\s*=\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>"
 )
 
 #: أسماء الجداول التي يجب أن تتطابق عبر النسخ الثلاث.
@@ -242,7 +242,7 @@ class _ParseError(ValueError):
 _QUOTES: str = "'\"`"
 
 #: جسم تعبيرٍ نمطي كامل: مهروب · صنف محارف · محرف عادي — ثمّ الشرطة الختامية.
-_REGEX_LITERAL = re.compile(r"/(?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\\\n\[])*/")
+_REGEX_LITERAL = re.compile(r"/(?:\\.|\[(?:\\.|[^\]\\])*]|[^/\\\n[])*/")
 
 #: محارف تسبق `/` فتجعلها **بداية تعبير نمطي** لا قسمةً.
 #: JS لا يُميَّز فيها الاثنان إلّا بالسياق؛ وهذه القائمة تغطّي مواضع التعبير النمطي

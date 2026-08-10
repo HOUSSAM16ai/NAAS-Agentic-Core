@@ -209,6 +209,14 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
             504: 'استغرق الخادم وقتاً أطول من المتوقّع. حاول مرّة أخرى.',
         };
 
+        // ⚠️ بحثٌ آمن: `TABLE[key]` وحدها معطوبة لأن مفاتيح سلسلة النماذج
+        // الأولية موجودة على كل كائن — `error_code: "constructor"` يُرجع دالّة
+        // لا نصّاً، وتمرّ فحص الصدق فتصل شاشة الطالب. (مرآة `apiError.js`.)
+        const lookupApiTable = (table, key) => {
+            if (typeof key !== 'string') return undefined;
+            return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined;
+        };
+
         const isPresentableApiMessage = (value) => {
             if (typeof value !== 'string') return false;
             const trimmed = value.trim();
@@ -228,7 +236,7 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         };
 
         const messageFromBody = (body) => {
-            const byCode = ARABIC_BY_ERROR_CODE[body.error_code];
+            const byCode = lookupApiTable(ARABIC_BY_ERROR_CODE, body.error_code);
             if (byCode) return byCode;
             if (isPresentableApiMessage(body.detail)) return body.detail;
             if (isPresentableApiMessage(body.message)) return body.message;
@@ -238,7 +246,7 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         const readApiError = async (res, fallback) => {
             const body = await parseJsonBody(res);
             const fromBody = body ? messageFromBody(body) : null;
-            return fromBody || ARABIC_BY_STATUS[res.status] || fallback || 'حدث خطأ غير متوقّع.';
+            return fromBody || lookupApiTable(ARABIC_BY_STATUS, String(res.status)) || fallback || 'حدث خطأ غير متوقّع.';
         };
 
         const App = () => {

@@ -25,6 +25,11 @@ HAS 'detail' KEY: False
    سلسلة إنجليزية في `setError(... || '...')` عطبٌ لغويّ وتشخيصيّ معاً.
 3. **`detail` و`message` يحملان نفس القيمة** في باني الحمولة — حقلان بقيمتين
    مختلفتين يعيدان إنتاج العطب بصيغة أخرى (D-192).
+4. **جداول الترجمة الثلاثة متطابقة.** رصدته مراجعة CodeRabbit وكانت مُحقّة:
+   `ARABIC_BY_ERROR_CODE` و`ARABIC_BY_STATUS` مكرّران حرفياً في ثلاثة ملفّات
+   (الملفّان القديمان يُحمَّلان كسكربتات عامة فلا يستطيعان الاستيراد)، والقاعدة
+   كانت **مكتوبة في تعليق**. وهذا الـPR نفسه حجّته أنّ قاعدةً بلا فارضٍ آلي ليست
+   قاعدة — فكان لزاماً أن يُطبَّق الحكم على الشيفرة التي يقدّمها.
 
 **قاعدة الدَّين:** `_FROZEN_DEBT` **يتقلّص فقط** (سابقة D-105 · D-186): مدخل جديد
 يُفشِل CI، ومدخلٌ صار نظيفاً يُفشِل CI أيضاً حتى يُحذَف — فلا تتراكم استثناءات ميتة.
@@ -45,18 +50,29 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #: مصدر عقد الأخطاء — المعالج الذي يبني كل جسم خطأ.
 HANDLER_PATH = REPO_ROOT / "app" / "middleware" / "fastapi_error_handlers.py"
 
-#: عملاء الواجهة الذين يقرؤون أجسام الأخطاء.
-CLIENT_PATHS: tuple[Path, ...] = (
-    REPO_ROOT / "frontend" / "app" / "utils" / "apiError.js",
-    REPO_ROOT / "frontend" / "app" / "components" / "CogniForgeApp.jsx",
+#: المصدر القانوني لجداول الترجمة العربية.
+TABLE_SOURCE = REPO_ROOT / "frontend" / "app" / "utils" / "apiError.js"
+
+#: المرآتان — تُحمَّلان كسكربتات عامة في المتصفّح فلا تستطيعان الاستيراد.
+TABLE_MIRRORS: tuple[Path, ...] = (
     REPO_ROOT / "frontend" / "public" / "js" / "legacy-app.jsx",
     REPO_ROOT / "app" / "static" / "js" / "legacy-app.jsx",
+)
+
+#: عملاء الواجهة الذين يقرؤون أجسام الأخطاء.
+CLIENT_PATHS: tuple[Path, ...] = (
+    TABLE_SOURCE,
+    REPO_ROOT / "frontend" / "app" / "components" / "CogniForgeApp.jsx",
+    *TABLE_MIRRORS,
 )
 
 #: المفاتيح التي يجب أن يُخرجها المعالج دائماً.
 REQUIRED_KEYS: frozenset[str] = frozenset(
     {"status", "detail", "message", "error_code", "data", "request_id", "timestamp"}
 )
+
+#: أسماء الجداول التي يجب أن تتطابق عبر النسخ الثلاث.
+TABLE_NAMES: tuple[str, ...] = ("ARABIC_BY_ERROR_CODE", "ARABIC_BY_STATUS")
 
 #: سلاسل سقوط إنجليزية ممنوعة في مسارات الخطأ المرئية للطالب.
 #: ⚠️ تُطابَق داخل `setError(...)` فقط — لا في التعليقات ولا في `console.*`،
@@ -74,45 +90,51 @@ _BANNED_FALLBACKS: tuple[str, ...] = (
 _FROZEN_DEBT: dict[str, str] = {}
 
 
-def _handler_emitted_keys() -> set[str]:
-    """يستخرج مفاتيح جسم الخطأ من `build_error_payload` بـAST.
+# ─── قراءة المعالج بـAST ─────────────────────────────────────────────────────
+
+
+def _function_named(tree: ast.Module, name: str) -> ast.FunctionDef | None:
+    """يعيد أوّل دالّة بهذا الاسم في الشجرة."""
+    return next(
+        (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name),
+        None,
+    )
+
+
+def _payload_dict() -> ast.Dict | None:
+    """قاموس الإرجاع من `build_error_payload`.
 
     يُقرأ من الشجرة لا بالنصّ: `grep` عن `"detail"` يطابق تعليقاً يشرح غيابها،
     وهو بالضبط الفخّ الذي يجعل البوّابة تشهد بما لم تقرأ (D-208).
     """
-    tree = parse_source(HANDLER_PATH)
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.FunctionDef) and node.name == "build_error_payload"):
-            continue
-        for sub in ast.walk(node):
-            if isinstance(sub, ast.Return) and isinstance(sub.value, ast.Dict):
-                return {
-                    key.value
-                    for key in sub.value.keys
-                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
-                }
-    return set()
+    builder = _function_named(parse_source(HANDLER_PATH), "build_error_payload")
+    if builder is None:
+        return None
+    returns = (n for n in ast.walk(builder) if isinstance(n, ast.Return))
+    return next((n.value for n in returns if isinstance(n.value, ast.Dict)), None)
 
 
-def _payload_dict() -> ast.Dict | None:
-    """يعيد قاموس الإرجاع من `build_error_payload`، أو ``None`` إن لم يوجد."""
-    tree = parse_source(HANDLER_PATH)
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.FunctionDef) and node.name == "build_error_payload"):
-            continue
-        for sub in ast.walk(node):
-            if isinstance(sub, ast.Return) and isinstance(sub.value, ast.Dict):
-                return sub.value
-    return None
+def _handler_emitted_keys() -> set[str]:
+    """مفاتيح جسم الخطأ التي يُخرجها المعالج فعلاً."""
+    payload = _payload_dict()
+    if payload is None:
+        return set()
+    keys = (k for k in payload.keys if isinstance(k, ast.Constant))
+    return {k.value for k in keys if isinstance(k.value, str)}
+
+
+def _entry_variable(key: ast.expr | None, value: ast.expr, wanted: tuple[str, ...]) -> str | None:
+    """اسم المتغيّر المُسنَد لمفتاحٍ مطلوب، أو ``None``."""
+    if not isinstance(key, ast.Constant) or key.value not in wanted:
+        return None
+    return value.id if isinstance(value, ast.Name) else None
 
 
 def _named_sources(payload: ast.Dict, wanted: tuple[str, ...]) -> dict[str, str]:
-    """يربط كل مفتاح مطلوب بالمتغيّر الذي يُسنَد منه (إن كان متغيّراً)."""
-    sources: dict[str, str] = {}
-    for key, value in zip(payload.keys, payload.values, strict=False):
-        if isinstance(key, ast.Constant) and key.value in wanted and isinstance(value, ast.Name):
-            sources[key.value] = value.id
-    return sources
+    """يربط كل مفتاح مطلوب بالمتغيّر الذي يُسنَد منه."""
+    pairs = zip(payload.keys, payload.values, strict=False)
+    found = ((k, _entry_variable(k, v, wanted)) for k, v in pairs)
+    return {k.value: name for k, name in found if name is not None and isinstance(k, ast.Constant)}
 
 
 def _detail_mirrors_message() -> bool:
@@ -125,9 +147,44 @@ def _detail_mirrors_message() -> bool:
     return detail is not None and detail == sources.get("message")
 
 
+# ─── قراءة الجداول من ملفّات JS ──────────────────────────────────────────────
+
+#: `const NAME = { ... };` — يشمل صيغة `export const` وصيغة السكربت العام.
+_JS_TABLE = re.compile(r"(?:export\s+)?const\s+(\w+)\s*=\s*\{(.*?)\n\s*\};", re.DOTALL)
+
+#: `key: 'value',` — المفتاح عاريًا أو مقتبَساً، والقيمة بعلامة اقتباس مفردة.
+_JS_ENTRY = re.compile(r"^\s*['\"]?([\w]+)['\"]?\s*:\s*'((?:[^'\\]|\\.)*)'", re.MULTILINE)
+
+
+def _js_tables(path: Path) -> dict[str, dict[str, str]]:
+    """يستخرج جداول الترجمة من ملفّ JS كقواميس بايثون."""
+    source = _strip_comments(path.read_text(encoding="utf-8"))
+    tables: dict[str, dict[str, str]] = {}
+    for name, body in _JS_TABLE.findall(source):
+        if name in TABLE_NAMES:
+            tables[name] = dict(_JS_ENTRY.findall(body))
+    return tables
+
+
+def _table_diff(name: str, source: dict[str, str], mirror: dict[str, str]) -> list[str]:
+    """يصف الفروق بين جدول المصدر وجدول المرآة."""
+    problems: list[str] = []
+    missing = sorted(set(source) - set(mirror))
+    extra = sorted(set(mirror) - set(source))
+    changed = sorted(k for k in set(source) & set(mirror) if source[k] != mirror[k])
+    if missing:
+        problems.append(f"{name}: مفاتيح ناقصة في المرآة {missing}")
+    if extra:
+        problems.append(f"{name}: مفاتيح زائدة في المرآة {extra}")
+    if changed:
+        problems.append(f"{name}: قيم مختلفة لنفس المفتاح {changed}")
+    return problems
+
+
+# ─── قراءة سلاسل السقوط ──────────────────────────────────────────────────────
+
 #: `setError(...)` أو `setError(await readApiError(...))` — نلتقط الوسائط كاملةً.
 _SET_ERROR = re.compile(r"setError\s*\(([^;]*?)\)\s*;", re.DOTALL)
-
 
 #: تعليقات JS — سطرية وكتلية. تُحيَّد قبل الفحص مع **الحفاظ على أرقام الأسطر**
 #: (يُستبدَل كل محرف بمسافة، وتبقى الأسطر الجديدة) كي يظلّ الموضع المُبلَّغ صحيحاً.
@@ -152,11 +209,16 @@ def _english_fallbacks(path: Path) -> list[str]:
     offences: list[str] = []
     for match in _SET_ERROR.finditer(source):
         argument = match.group(1)
-        for banned in _BANNED_FALLBACKS:
-            if banned in argument:
-                line = source[: match.start()].count("\n") + 1
-                offences.append(f"{path.relative_to(REPO_ROOT)}:{line}: setError(... '{banned}')")
+        line = source[: match.start()].count("\n") + 1
+        offences.extend(
+            f"{path.relative_to(REPO_ROOT)}:{line}: setError(... '{banned}')"
+            for banned in _BANNED_FALLBACKS
+            if banned in argument
+        )
     return offences
+
+
+# ─── الفحوص ──────────────────────────────────────────────────────────────────
 
 
 def _check_handler_keys(emitted: set[str]) -> list[str]:
@@ -167,13 +229,13 @@ def _check_handler_keys(emitted: set[str]) -> list[str]:
             f"{HANDLER_PATH.relative_to(REPO_ROOT)} — العقد بلا مصدر."
         ]
     missing = REQUIRED_KEYS - emitted
-    if missing:
-        return [
-            "المعالج لا يُخرج مفاتيح إلزامية: "
-            + ", ".join(sorted(missing))
-            + " — كل مفتاحٍ يقرؤه عميلٌ يجب أن يُخرجه المعالج (ISS-152)."
-        ]
-    return []
+    if not missing:
+        return []
+    return [
+        "المعالج لا يُخرج مفاتيح إلزامية: "
+        + ", ".join(sorted(missing))
+        + " — كل مفتاحٍ يقرؤه عميلٌ يجب أن يُخرجه المعالج (ISS-152)."
+    ]
 
 
 def _check_clients() -> list[str]:
@@ -192,6 +254,32 @@ def _check_clients() -> list[str]:
     return failures
 
 
+def _check_tables() -> list[str]:
+    """يتحقّق من تطابق جداول الترجمة عبر النسخ الثلاث."""
+    source_tables = _js_tables(TABLE_SOURCE)
+    missing_here = [name for name in TABLE_NAMES if name not in source_tables]
+    if missing_here:
+        return [
+            f"{TABLE_SOURCE.relative_to(REPO_ROOT)}: جدولٌ قانوني مفقود {missing_here} — "
+            "المصدر بلا جدول يعني بوّابةً تقارن العدم."
+        ]
+
+    failures: list[str] = []
+    for mirror in TABLE_MIRRORS:
+        mirror_tables = _js_tables(mirror)
+        rel = mirror.relative_to(REPO_ROOT)
+        for name in TABLE_NAMES:
+            if name not in mirror_tables:
+                failures.append(f"{rel}: الجدول `{name}` مفقود في المرآة.")
+                continue
+            failures.extend(
+                f"{rel}: {problem} — المرآة تخالف "
+                f"{TABLE_SOURCE.relative_to(REPO_ROOT)} (قاعدة D-013)."
+                for problem in _table_diff(name, source_tables[name], mirror_tables[name])
+            )
+    return failures
+
+
 def _check_stale_debt() -> list[str]:
     """الدَّين يتقلّص فقط: مدخلٌ لم يعد فيه خرق يجب أن يُحذَف."""
     live = {offence for client in CLIENT_PATHS for offence in _english_fallbacks(client)}
@@ -203,17 +291,25 @@ def _check_stale_debt() -> list[str]:
     ]
 
 
+def _mirror_check() -> list[str]:
+    """`detail` و`message` يجب أن يُسنَدا من نفس القيمة."""
+    if _detail_mirrors_message():
+        return []
+    return [
+        "`detail` و`message` لا يُسنَدان من نفس القيمة في `build_error_payload` — "
+        "قيمتان لنفس المعنى تعيدان إنتاج عطب «Login failed» (D-192)."
+    ]
+
+
 def main() -> int:
     emitted = _handler_emitted_keys()
-
-    failures = _check_handler_keys(emitted)
-    if not _detail_mirrors_message():
-        failures.append(
-            "`detail` و`message` لا يُسنَدان من نفس القيمة في `build_error_payload` — "
-            "قيمتان لنفس المعنى تعيدان إنتاج عطب «Login failed» (D-192)."
-        )
-    failures += _check_clients()
-    failures += _check_stale_debt()
+    failures = (
+        _check_handler_keys(emitted)
+        + _mirror_check()
+        + _check_clients()
+        + _check_tables()
+        + _check_stale_debt()
+    )
 
     for failure in failures:
         print(f"❌ {failure}")
@@ -224,7 +320,8 @@ def main() -> int:
 
     print(
         f"✅ check_error_contract_parity: المعالج يُخرج {len(emitted)} مفتاحاً، "
-        f"و{len(CLIENT_PATHS)} عملاء يقرؤونه، وصفر سلسلة إنجليزية في مسارات الخطأ."
+        f"و{len(CLIENT_PATHS)} عملاء يقرؤونه، وجداول الترجمة متطابقة عبر "
+        f"{len(TABLE_MIRRORS) + 1} نسخ، وصفر سلسلة إنجليزية في مسارات الخطأ."
     )
     return 0
 

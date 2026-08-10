@@ -27,7 +27,7 @@
  * 3. ⛔ **لا سلسلة إنجليزية تصل الطالب.** الغياب يُعلَن بالعربية.
  */
 
-const ARABIC_BY_ERROR_CODE = {
+export const ARABIC_BY_ERROR_CODE = {
   unauthorized: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
   forbidden: 'لا تملك صلاحية الوصول إلى هذه الصفحة.',
   not_found: 'الصفحة أو المورد غير موجود.',
@@ -41,7 +41,7 @@ const ARABIC_BY_ERROR_CODE = {
   upstream_timeout: 'استغرق الخادم وقتاً أطول من المتوقّع. حاول مرّة أخرى.',
 };
 
-const ARABIC_BY_STATUS = {
+export const ARABIC_BY_STATUS = {
   400: 'طلب غير صالح. تحقّق من البيانات المُدخَلة.',
   401: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
   403: 'لا تملك صلاحية الوصول إلى هذه الصفحة.',
@@ -54,6 +54,21 @@ const ARABIC_BY_STATUS = {
   503: 'الخدمة غير متاحة مؤقّتاً. حاول بعد قليل.',
   504: 'استغرق الخادم وقتاً أطول من المتوقّع. حاول مرّة أخرى.',
 };
+
+/**
+ * بحثٌ آمن في جدول ترجمة.
+ *
+ * ⚠️ `TABLE[key]` وحدها **معطوبة**: مفاتيح سلسلة النماذج الأولية موجودة على كل
+ * كائن، فـ`error_code: "constructor"` يُرجع **دالّة** لا نصّاً، و`"toString"`
+ * كذلك. القيمة تمرّ فحص `if (byCode)` لأنها صادقة، فتصل طبقة العرض كائناً —
+ * وتُسقِط شاشة الطالب أو تعرض `function Object() { [native code] }`.
+ *
+ * وهذا بالضبط صنف العطب الذي يعالجه هذا الـPR: مسار خطأ يفشل أمام الطالب.
+ */
+function lookup(table, key) {
+  if (typeof key !== 'string') return undefined;
+  return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined;
+}
 
 /** هل النصّ صالح للعرض على طالب عربي؟ */
 function isPresentable(value) {
@@ -92,7 +107,7 @@ async function parseJsonBody(res) {
  * لم يُحدَّث بعد.
  */
 function messageFromBody(body) {
-  const byCode = ARABIC_BY_ERROR_CODE[body.error_code];
+  const byCode = lookup(ARABIC_BY_ERROR_CODE, body.error_code);
   if (byCode) return byCode;
   if (isPresentable(body.detail)) return body.detail;
   if (isPresentable(body.message)) return body.message;
@@ -102,7 +117,7 @@ function messageFromBody(body) {
 export async function readApiError(res, fallback = 'حدث خطأ غير متوقّع.') {
   const body = await parseJsonBody(res);
   const fromBody = body ? messageFromBody(body) : null;
-  return fromBody || ARABIC_BY_STATUS[res.status] || fallback;
+  return fromBody || lookup(ARABIC_BY_STATUS, String(res.status)) || fallback;
 }
 
 export default readApiError;

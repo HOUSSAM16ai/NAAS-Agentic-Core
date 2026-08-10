@@ -86,6 +86,15 @@ class BaseServiceSettings(BaseSettings):
         description="Master secret key",
     )
 
+    # D-236 · ISS-152 — الوسطاء الذين يُصدَّق منهم `X-Forwarded-For` (CIDR مفصولة
+    # بفواصل). فارغةً تعني الافتراض في `app/security/client_identity.py`: الحلقة
+    # المحلّية وحدها. ⛔ قائمة سماح لا قائمة منع — الترويسة يزوّرها العميل بحرّية،
+    # فالثقة بها بلا شرطٍ تُحوِّل حدّ المعدّل إلى زينة.
+    TRUSTED_PROXY_IPS: str = Field(
+        "",
+        description="Comma-separated CIDRs whose X-Forwarded-For header is trusted",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -8,6 +8,7 @@ import { BUILD_VERSION } from '../buildVersion';
 import { clientLog } from '../utils/clientLog';
 import { markdownToPlainText } from '../utils/preprocessMath';
 import { readApiError } from '../utils/apiError';
+import { computeRefreshDelay, rotateSession } from '../utils/sessionRefresh';
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL ?? '';
 const apiUrl = (path) => `${API_ORIGIN}${path}`;
@@ -49,7 +50,7 @@ const LoginForm = ({ onLogin, onToggle }) => {
             });
             if (res.ok) {
                 const data = await res.json();
-                onLogin(data.access_token, data.user);
+                onLogin(data.access_token, data.user, data.refresh_token);
             } else {
                 setError(await readApiError(res, 'تعذّر تسجيل الدخول.'));
             }
@@ -95,7 +96,7 @@ const RegisterForm = ({ onToggle, onLogin }) => {
                 });
                 if (loginRes.ok) {
                     const data = await loginRes.json();
-                    onLogin(data.access_token, data.user);
+                    onLogin(data.access_token, data.user, data.refresh_token);
                 } else {
                     onToggle();
                 }
@@ -581,10 +582,13 @@ const App = () => {
         };
     }, [token]);
 
-    const handleLogin = (newToken, userData) => {
+    const handleLogin = (newToken, userData, newRefreshToken) => {
         localStorage.setItem('token', newToken);
         try {
             if (userData) localStorage.setItem('cogniforge_user', JSON.stringify(userData));
+            // D-236: رمز التحديث كان يصل الواجهة ويُرمى. قاعدة الإنتاج قالت ذلك
+            // بالأرقام: 135 رمزاً و135 عائلة — أي صفر تدوير.
+            if (newRefreshToken) localStorage.setItem('refresh_token', newRefreshToken);
         } catch (_e) { /* غير قاتل */ }
         setToken(newToken);
         setUser(userData);
@@ -599,11 +603,63 @@ const App = () => {
         localStorage.removeItem('token');
         try {
             localStorage.removeItem('cogniforge_user');
+            localStorage.removeItem('refresh_token');
         } catch (_e) { /* غير قاتل */ }
         setToken(null);
         setUser(null);
         // لا reload — التغيير في state يكفي لإظهار AuthScreen.
     };
+
+    // ── D-236 · التدوير الصامت ────────────────────────────────────────────────
+    //
+    // قبل هذا: عمرُ رمز الوصول **هو** عمر الجلسة. ينتهي فيُطرَد الطالب إلى صفحة
+    // الدخول في منتصف تمرين، والعلاج المُطبَّق سابقاً كان **إطالة العمر** — وهو
+    // علاجٌ يزيد المرض: رمزٌ مسروق يبقى صالحاً أطول. الصحيح رمزٌ قصير **يُجدَّد
+    // قبل موته**، وهو ما يفعله `/api/v1/auth/refresh` بتدوير العائلة وكشف
+    // إعادة الاستعمال (`TokenManager.revoke_family`).
+    //
+    // ⚠️ الفشل يُميَّز ولا يُعمَّم: 401/403 ⇒ الجلسة انتهت قطعاً ⇒ خروج. أمّا
+    // الشبكة و5xx فعابرةٌ ⇒ إعادةُ محاولة — وطردُ طالبٍ بسبب انقطاعٍ لحظي هو
+    // عطب D-WS-KICK-001 نفسه في ثوبٍ جديد.
+    useEffect(() => {
+        if (!token) return undefined;
+
+        let cancelled = false;
+        let timer = null;
+
+        const schedule = (currentToken, attempt = 0) => {
+            const base = computeRefreshDelay(currentToken);
+            if (base === null) return; // بلا `exp` لا نُجدول — ولا نخمّن.
+            // تراجعٌ أُسّي على الأعطاب العابرة، بسقفٍ يمنع الانتظار الأبدي.
+            const delay = attempt === 0 ? base : Math.min(30000 * 2 ** (attempt - 1), 300000);
+            timer = setTimeout(async () => {
+                if (cancelled) return;
+                const stored = localStorage.getItem('refresh_token');
+                if (!stored) return; // جلسةٌ قديمة سبقت التدوير — تُترك لعمرها.
+                const result = await rotateSession({ refreshToken: stored, apiUrl });
+                if (cancelled) return;
+                if (result.ok) {
+                    clientLog('session_rotated', { status: 'ok' });
+                    handleLogin(result.tokens.access_token, user, result.tokens.refresh_token);
+                    return;
+                }
+                if (result.terminal) {
+                    clientLog('session_rotation_terminal', { status: String(result.status) });
+                    logout();
+                    return;
+                }
+                clientLog('session_rotation_retry', { status: String(result.status), attempt });
+                schedule(currentToken, attempt + 1);
+            }, delay);
+        };
+
+        schedule(token);
+        return () => {
+            cancelled = true;
+            if (timer) clearTimeout(timer);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [token]);
 
     if (isLoading) return <div className="loading-screen"><i className="fas fa-circle-notch fa-spin"></i><h2>جاري تهيئة النظام...</h2></div>;
     if (!token || !user) return <AuthScreen onLogin={handleLogin} />;

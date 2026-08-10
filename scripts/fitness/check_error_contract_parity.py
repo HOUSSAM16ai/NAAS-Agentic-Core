@@ -71,6 +71,17 @@ REQUIRED_KEYS: frozenset[str] = frozenset(
     {"status", "detail", "message", "error_code", "data", "request_id", "timestamp"}
 )
 
+#: العملاء الذين يقرؤون مفاتيح **جسم** الخطأ (لا مجرّد `setError`).
+#: `CogniForgeApp.jsx` يفوّض القراءة إلى `readApiError` فلا يقرأ الجسم بنفسه.
+_BODY_READING_CLIENTS: tuple[Path, ...] = (TABLE_SOURCE, *TABLE_MIRRORS)
+
+#: الدالّة التي تقرأ جسم الخطأ في النسخ الثلاث — بالصيغتين (تصريح · سهمية).
+#: اسم المعامل يُلتقَط منها **ولا يُفترَض**: الفحص يتبع الكود لا العكس.
+_BODY_READER = re.compile(
+    r"(?:function\s+messageFromBody\s*\(\s*([A-Za-z_$][\w$]*)\s*\)"
+    r"|const\s+messageFromBody\s*=\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>)"
+)
+
 #: أسماء الجداول التي يجب أن تتطابق عبر النسخ الثلاث.
 TABLE_NAMES: tuple[str, ...] = ("ARABIC_BY_ERROR_CODE", "ARABIC_BY_STATUS")
 
@@ -211,8 +222,47 @@ def _table_diff(name: str, source: dict[str, str], mirror: dict[str, str]) -> li
 
 # ─── قراءة سلاسل السقوط ──────────────────────────────────────────────────────
 
-#: `setError(...)` أو `setError(await readApiError(...))` — نلتقط الوسائط كاملةً.
-_SET_ERROR = re.compile(r"setError\s*\(([^;]*?)\)\s*;", re.DOTALL)
+#: بداية استدعاء `setError(` — الوسائط تُقتطَع **بموازنة الأقواس** لا بتعبير نمطي.
+#:
+#: ⛔ كان النمط `setError\s*\(([^;]*?)\)\s*;`، وهو يفترض شيئين غير صحيحين: أن
+#: الاستدعاء ينتهي بفاصلة منقوطة **ملاصقة**، وأنّ وسائطه **لا تحوي** فاصلة
+#: منقوطة. فكان `setError(x)` بلا `;` (آخر عبارة في كتلة سهمية) و`setError(f(a);
+#: b)` وكل استدعاءٍ يتبعه سطرٌ جديد قبل `;` **يمرّ بلا فحص** — أي أنّ البوّابة
+#: تُبلِّغ النظافة عن نصٍّ لم تقرأه. رصدته مراجعة CodeRabbit، وهو نفس صنف عطب
+#: `_JS_ENTRY` (الاقتباس المفرد) الذي رصدته قبله — والدرس واحد: **التعبير النمطي
+#: لا يوازن الأقواس، فلا يُسأل أن يفعل.**
+_SET_ERROR_OPEN = re.compile(r"\bsetError\s*\(")
+
+
+def _call_arguments(source: str, open_paren: int) -> tuple[str, int]:
+    """يقتطع وسائط استدعاءٍ يبدأ قوسه عند ``open_paren`` بموازنة الأقواس.
+
+    يتجاهل الأقواس داخل السلاسل النصّية (مفردة · مزدوجة · قالبية) وداخل
+    التعليقات المُحيَّدة مسبقاً. يعيد ``(الوسائط, موضع القوس المُغلِق)``؛ وعند
+    عدم الاتّزان يعيد ما تبقّى من النصّ — فيُفحَص ولا يُتخطّى بصمت.
+    """
+    depth = 0
+    quote: str | None = None
+    i = open_paren
+    while i < len(source):
+        ch = source[i]
+        if quote is not None:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+        elif ch in "'\"`":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return source[open_paren + 1 : i], i
+        i += 1
+    return source[open_paren + 1 :], len(source)
+
 
 #: تعليقات JS — سطرية وكتلية. تُحيَّد قبل الفحص مع **الحفاظ على أرقام الأسطر**
 #: (يُستبدَل كل محرف بمسافة، وتبقى الأسطر الجديدة) كي يظلّ الموضع المُبلَّغ صحيحاً.
@@ -229,20 +279,30 @@ def _strip_comments(source: str) -> str:
     return _JS_COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), source)
 
 
-def _english_fallbacks(path: Path) -> list[str]:
-    """يعيد سلاسل السقوط الإنجليزية الممنوعة داخل استدعاءات `setError`."""
+def _english_fallbacks(path: Path) -> list[tuple[str, int]]:
+    """يعيد ``(مفتاح الموضع, رقم السطر)`` لكل سقوطٍ إنجليزي ممنوع.
+
+    ⚠️ **المفتاح بلا رقم سطر عمداً.** كان الدَّين المُجمَّد يُفهرَس بـ
+    ``path:line: …``، فكان يكفي أن يُضاف سطرٌ أعلى الملفّ ليصير المفتاح غير
+    مطابق — فيُبلَّغ الدَّينُ المعروف **مخالفةً جديدة** ويُبلَّغ في نفس الوقت
+    **دَيناً قديماً لم يعد موجوداً**. رصدته مراجعة CodeRabbit. رقم السطر يبقى
+    للتشخيص، ولا يدخل في الهوية.
+    """
     if not path.exists():
         return []
     source = _strip_comments(path.read_text(encoding="utf-8"))
-    offences: list[str] = []
-    for match in _SET_ERROR.finditer(source):
-        argument = match.group(1)
+    rel = path.relative_to(REPO_ROOT)
+    offences: list[tuple[str, int]] = []
+    position = 0
+    while (match := _SET_ERROR_OPEN.search(source, position)) is not None:
+        argument, close = _call_arguments(source, match.end() - 1)
         line = source[: match.start()].count("\n") + 1
         offences.extend(
-            f"{path.relative_to(REPO_ROOT)}:{line}: setError(... '{banned}')"
+            (f"{rel}: setError(... '{banned}')", line)
             for banned in _BANNED_FALLBACKS
             if banned in argument
         )
+        position = max(close + 1, match.end())
     return offences
 
 
@@ -266,6 +326,95 @@ def _check_handler_keys(emitted: set[str]) -> list[str]:
     ]
 
 
+def _brace_block(source: str, start: int) -> str:
+    """جسم أوّل كتلة ``{…}`` بعد ``start``، بموازنة الأقواس وتجاهل السلاسل."""
+    open_brace = source.find("{", start)
+    if open_brace == -1:
+        return ""
+    depth = 0
+    quote: str | None = None
+    i = open_brace
+    while i < len(source):
+        ch = source[i]
+        if quote is not None:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+        elif ch in "'\"`":
+            quote = ch
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return source[open_brace + 1 : i]
+        i += 1
+    return source[open_brace + 1 :]
+
+
+def _client_body_keys(path: Path) -> set[str]:
+    """المفاتيح التي يقرؤها هذا العميل من **جسم الخطأ**.
+
+    ⚠️ النطاق هو جسم ``messageFromBody`` وحده، واسم المعامل يُلتقَط من التوقيع.
+    أوّل صياغةٍ لهذا الفحص مسحت الملفّ كلّه بحثاً عن ``body.*``، فأبلغت
+    ``content`` و``conversation_id`` مخالفاتٍ — وهي حمولاتُ WebSocket لا أجسام
+    أخطاء. أي أنّ الفحص نفسه كاد يصير مصدر ضجيجٍ يُطفَأ لاحقاً، وبوّابةٌ تُطفَأ
+    أسوأ من بوّابةٍ لا تُكتَب.
+    """
+    if not path.exists():
+        return set()
+    source = _strip_comments(path.read_text(encoding="utf-8"))
+    match = _BODY_READER.search(source)
+    if match is None:
+        return set()
+    param = match.group(1) or match.group(2)
+    block = _brace_block(source, match.end())
+    reader = re.compile(rf"\b{re.escape(param)}\s*\??\.\s*([A-Za-z_$][\w$]*)")
+    return {
+        hit.group(1)
+        for hit in reader.finditer(block)
+        if not block[hit.end() :].lstrip().startswith("(")
+    }
+
+
+def _check_client_keys(emitted: set[str]) -> list[str]:
+    """⛔ **كل مفتاحٍ يقرؤه عميل يجب أن يُخرجه المعالج.**
+
+    هذا هو العقد الذي وُلدت منه البوّابة، وهو **لم يكن مُنفَّذاً**: كان
+    :func:`_check_handler_keys` يقارن المعالج بقائمة ثابتة مكتوبة هنا
+    (``REQUIRED_KEYS``)، بينما يعد التوثيق بمقارنته **بما تقرؤه الواجهات فعلاً**.
+    فبوّابةٌ تشهد بما لم تقرأ — نفس عطب D-208 الذي يستشهد به هذا الـPR نفسه.
+    رصدته مراجعة CodeRabbit، وهو الآن مُنفَّذ: تُقرأ المفاتيح من الواجهات وتُقارَن
+    بمخرَج المعالج، فلو أضاف أحدهم قراءة `body.reason` غداً بلا مُصدِرٍ لها
+    لاحمرّت CI — وهذا بالضبط شكل عطب «Login failed» الأصلي.
+
+    ولأن **الصمت يُقرأ نجاحاً** (D-207/D-208): عميلٌ لا تُقرأ منه مفاتيح البتّة
+    يُبلَّغ مخالفةً، وإلّا لمرّ تغييرُ اسم متغيّر الجسم بلا فحص.
+    """
+    failures: list[str] = []
+    for client in _BODY_READING_CLIENTS:
+        rel = client.relative_to(REPO_ROOT)
+        if not client.exists():
+            continue  # الوجود يفحصه `_check_clients`
+        keys = _client_body_keys(client)
+        if not keys:
+            failures.append(
+                f"{rel}: لم تُقرأ منه أي مفاتيح جسمٍ — إمّا غابت `messageFromBody` "
+                "أو تغيّر شكلها فتعطّل الفحص. "
+                "بوّابةٌ لا تقرأ ملفاً لا تُبلِّغ أنه نظيف."
+            )
+            continue
+        unknown = sorted(keys - emitted)
+        if unknown:
+            failures.append(
+                f"{rel}: يقرأ مفاتيح لا يُخرجها المعالج: {', '.join(unknown)} — "
+                "هذا هو عطب «Login failed» بعينه (عقدٌ مُعلَن بنصفه)."
+            )
+    return failures
+
+
 def _check_clients() -> list[str]:
     """يتحقّق من وجود كل عميل مُعلَن ومن خلوّه من الإنجليزية في مسارات الخطأ."""
     failures: list[str] = []
@@ -274,9 +423,9 @@ def _check_clients() -> list[str]:
             failures.append(f"عميلٌ مُعلَن غير موجود: {client.relative_to(REPO_ROOT)}")
             continue
         failures.extend(
-            f"{offence} — سلسلة إنجليزية تصل الطالب في مسار خطأ. "
+            f"{offence} (سطر {line}) — سلسلة إنجليزية تصل الطالب في مسار خطأ. "
             "استعمل `readApiError(res, '<رسالة عربية>')`."
-            for offence in _english_fallbacks(client)
+            for offence, line in _english_fallbacks(client)
             if offence not in _FROZEN_DEBT
         )
     return failures
@@ -345,6 +494,7 @@ def main() -> int:
     emitted = _handler_emitted_keys()
     failures = (
         _check_handler_keys(emitted)
+        + _check_client_keys(emitted)
         + _mirror_check()
         + _check_clients()
         + _check_tables()

@@ -24,6 +24,22 @@ else:
         DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$QaH8hQ"
 
 
+def _target_key(identifier: str) -> str:
+    """مفتاح متّجه الهوية — **مُطبَّعاً** كما تُطبِّعه `AuthService.authenticate`.
+
+    ⛔ رصدت مراجعة CodeRabbit تفاوتاً حقيقياً: المصادقة تُطبِّع البريد
+    (``email.lower().strip()``) بينما الدرع كان يُفهرس النصّ الخام. فكان
+    ``Victim@x.com`` و``victim@x.com`` و`` victim@x.com `` **ثلاثة عدّادات**
+    لحسابٍ واحد — وكلٌّ منها يبدأ من الصفر. أي أنّ القفل الذي نُقل إلى الهوية
+    عمداً (لئلّا يُعاقَب الجار) كان يُتجاوَز **بحرف كبير**، والحساب المستهدَف
+    يُهاجَم بلا حدٍّ فعلي.
+
+    والتطبيع هنا ليس تجميلاً بل **شرط أن يكون العدّاد عن الشيء الذي يحميه**:
+    مفتاحٌ لا يطابق ما تراه المصادقة يَعُدّ كياناً آخر.
+    """
+    return identifier.strip().lower()
+
+
 class ChronoShield:
     """
     The Chrono-Kinetic Defense Shield (Advanced Authentication Protection).
@@ -134,7 +150,7 @@ class ChronoShield:
 
         # Dual-Vector keys
         ip_key = f"ip:{ip}"
-        target_key = f"target:{identifier}"
+        target_key = f"target:{_target_key(identifier)}"
 
         ip_fails = self._live_failures(ip_key)
         target_fails = self._live_failures(target_key)
@@ -199,7 +215,7 @@ class ChronoShield:
         ip = client_ip_or_unknown(request)
         now = time.time()
         self._failures[f"ip:{ip}"].append(now)
-        self._failures[f"target:{identifier}"].append(now)
+        self._failures[f"target:{_target_key(identifier)}"].append(now)
 
     def reset_target(self, identifier: str, request: Request | None = None) -> None:
         """
@@ -210,7 +226,7 @@ class ChronoShield:
         يشتري شيئاً: العدّاد الذي يقفل المنصّة لا ينخفض إلّا بانقضاء النافذة.
         نجاحُ مصادقةٍ كاملة هو أقوى دليل على أن حركة هذا العنوان ليست هجوماً.
         """
-        self._failures.pop(f"target:{identifier}", None)
+        self._failures.pop(f"target:{_target_key(identifier)}", None)
         if request is not None:
             self._failures.pop(f"ip:{client_ip_or_unknown(request)}", None)
 

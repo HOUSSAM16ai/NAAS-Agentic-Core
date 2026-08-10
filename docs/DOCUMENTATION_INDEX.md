@@ -66,6 +66,7 @@
 
 | ملف | الدور |
 |-----|------|
+| [`architecture/AUTHENTICATION_DOCTRINE.md`](architecture/AUTHENTICATION_DOCTRINE.md) | **قانون المصادقة** (D-236) — بابٌ واحد · عقد أخطاء واحد · هوية عميل واحدة · أنواع رموز مُصرَّحة. الحالة الحيّة في [`../.memory/auth_runtime_truth.md`](../.memory/auth_runtime_truth.md)، وإجراء التحقّق في [`../.memory/runbooks/login_e2e_verification.md`](../.memory/runbooks/login_e2e_verification.md) |
 | [`iam_architecture.md`](iam_architecture.md) · [`permission_matrix.md`](permission_matrix.md) · [`policy_gate.md`](policy_gate.md) · [`roles_and_boundaries.md`](roles_and_boundaries.md) · [`audit_and_privacy.md`](audit_and_privacy.md) · [`customer_chat_access.md`](customer_chat_access.md) | الهوية والصلاحيات |
 | [`quality/standards.md`](quality/standards.md) · [`quality/testing.md`](quality/testing.md) · [`guides/TESTING_GUIDE.md`](guides/TESTING_GUIDE.md) | الجودة والاختبار |
 | [`governance/REPOSITORY_GOVERNANCE_MODEL.md`](governance/REPOSITORY_GOVERNANCE_MODEL.md) | حوكمة المستودع |

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.infrastructure.clients.user_client import user_service_client
 from app.security.chrono_shield import chrono_shield
+from app.security.client_identity import resolve_client_ip
 from app.services.auth import AuthService
 from app.services.rbac import STANDARD_ROLE, RBACService
 from app.services.security.auth_persistence import AuthPersistence
@@ -157,8 +158,18 @@ class AuthBoundaryService:
         Returns:
             dict[str, object]: رمز الدخول (Access Token) وتفاصيل المستخدم.
         """
-        ip = request.client.host if request.client else None
+        # ⛔ العنوان من `client_identity` لا من `request.client.host`. رصدت مراجعة
+        # CodeRabbit أنّ هذا الموضع بالذات بقي على النظير المباشر رغم أنّ الوحدة
+        # وُجدت لهذا — فكان سجلّ التدقيق ونشاط الرمز يُسجّلان `127.0.0.1` لكل
+        # الطلاب. مصدرٌ واحد للعنوان يعني **كل** مواضع الاستعمال، وإلّا فوحدةٌ
+        # تحلّ المشكلة في مكانٍ وتتركها في آخر.
+        ip = resolve_client_ip(request)
         user_agent = request.headers.get("User-Agent")
+
+        # الدرع **أمام البابين** لا أمام المحلّي وحده. كان المسار البعيد يعود قبل
+        # الوصول إليه، فلا يُحسب له حساب ولا يُطهِّر نجاحُه العدّادات — ومسارٌ
+        # يلتفّ على الحدّ يُبطِل الحدّ (نفس منطق «بابان بحكمين» أدناه).
+        await chrono_shield.check_allowance(request, email)
 
         # محاولة المصادقة عبر الخدمة المصغرة
         try:
@@ -169,6 +180,9 @@ class AuthBoundaryService:
             user_data = response.get("user", {})
             is_admin = user_data.get("is_admin", False)
             landing_path = "/admin" if is_admin else "/app/chat"
+
+            # نجاحٌ كامل — يُطهّر المتّجهين كما يفعل المسار المحلّي تماماً.
+            chrono_shield.reset_target(email, request)
 
             return {
                 "access_token": response.get("access_token"),
@@ -203,9 +217,9 @@ class AuthBoundaryService:
         #
         # الآن يُفوَّض إلى `AuthService` — المحرّك القائم المختبَر — فتُكتسَب دفعةً
         # واحدة: فحص الحالة · التدقيق · تدوير رمز التحديث بعائلة · RBAC · مطالبات
-        # موقّعة بنوع. والدرع الزمني يبقى **أمام** كل ذلك.
-        await chrono_shield.check_allowance(request, email)
-
+        # موقّعة بنوع. والدرع الزمني مُطبَّق **قبل البابين معاً** في أعلى الدالّة —
+        # لا يُعاد هنا: نداءان في الدور الواحد يُحمِّلان الطالب إبطاءَين متتاليين
+        # على محاولةٍ واحدة (الإبطاء `await asyncio.sleep`، فالكلفة مضاعفة حقيقةً).
         auth_service = self._build_auth_service()
         try:
             user = await auth_service.authenticate(

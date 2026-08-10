@@ -26,6 +26,9 @@ from typing import ClassVar
 import pytest
 from httpx import AsyncClient
 
+from app.security.chrono_shield import chrono_shield
+from app.services.auth.crypto import ACCESS_TOKEN_TYPE
+
 pytestmark = pytest.mark.security
 
 
@@ -47,6 +50,23 @@ def _fresh_password() -> str:
     الآخر. التوليد يجعل كل اختبار مستقلاً بالبناء.
     """
     return f"Pw-{uuid.uuid4().hex}-Aa1!"
+
+
+@pytest.fixture(autouse=True)
+def _clean_shield():
+    """كل اختبارٍ يبدأ بدرعٍ نظيف — استقلالٌ بالبناء لا بالانضباط.
+
+    ⚠️ رصدت مراجعة CodeRabbit أنّ ستّة اختبارات في هذا الملفّ تُخفِق على **نفس
+    الهوية** (`ghost-user@example.com`)، وكلٌّ منها يمرّ بـ`check_allowance`.
+    فالعدّاد يتراكم عبر الاختبارات في نفس العملية، ويقترب من `LOCKOUT_THRESHOLD`
+    بينما يبدأ الإبطاء المتدرّج بإضافة انتظارٍ حقيقي. أي أنّ إضافة اختبارٍ سابعٍ
+    غداً كانت ستُحمِّر ملفّاً لم يتغيّر — وهو أسوأ أصناف الهشاشة: فشلٌ يبدو
+    عشوائياً فيُطفَأ الملفّ كلّه.
+
+    والتنظيف هنا يُغني عن `chrono_shield._failures.clear()` المتناثر داخل ستّة
+    اختبارات (مصدرٌ واحد بدل ستّة مواضع تُنسى إحداها).
+    """
+    yield
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -132,9 +152,6 @@ async def test_strangers_failures_do_not_lock_out_an_innocent_user(
     موجودة** جعلت الضحيّة تتلقّى **429 بكلمة سرّها الصحيحة**، لأن مفتاح الدرع
     كان `ip:127.0.0.1` لكل المستخدمين خلف بروكسي Next.js.
     """
-    from app.security.chrono_shield import chrono_shield
-
-    chrono_shield._failures.clear()
 
     email = f"victim-{uuid.uuid4().hex[:8]}@example.com"
     password = _fresh_password()
@@ -144,8 +161,17 @@ async def test_strangers_failures_do_not_lock_out_an_innocent_user(
     )
     assert registration.status_code == 200, registration.text
 
+    # عددُ الغرباء **مشتقٌّ لا مكتوب**: يتجاوز عتبة الهوية (وهي التي كانت
+    # مُطبَّقة على `ip:` المشترك فأقفلت المنصّة) ويبقى دون عتبة العنوان — فلو
+    # غُيِّرت أيّ عتبة غداً بقي الاختبار يختبر ما يدّعيه. الرقم المكتوب `25`
+    # كان يصير بلا معنى بأوّل تعديل، ورصدته مراجعة CodeRabbit.
+    strangers = chrono_shield.LOCKOUT_THRESHOLD + 5
+    assert strangers < chrono_shield.IP_LOCKOUT_THRESHOLD, (
+        "الاختبار يقيس القفل العالمي القديم، لا القفل الحادّ على العنوان — "
+        f"strangers={strangers} يجب أن يبقى دون {chrono_shield.IP_LOCKOUT_THRESHOLD}."
+    )
     # غرباء يخفقون — كلٌّ ببريد مختلف، فلا تُلام هوية الضحيّة.
-    for _ in range(25):
+    for _ in range(strangers):
         await _login(async_client, f"stranger-{uuid.uuid4().hex[:10]}@example.com", _WRONG)
 
     victim = await _login(async_client, email, password)
@@ -160,9 +186,6 @@ async def test_repeated_failures_on_one_identity_still_lock_that_identity(
     async_client: AsyncClient,
 ):
     """القفل يبقى فعّالاً على الهوية المستهدَفة — لم نُلغِ الحماية، نقلناها."""
-    from app.security.chrono_shield import chrono_shield
-
-    chrono_shield._failures.clear()
 
     target = f"target-{uuid.uuid4().hex[:8]}@example.com"
     statuses = []
@@ -181,7 +204,6 @@ def test_successful_login_clears_the_ip_counter_too():
     كان `reset_target` يمسح `target:` وحده ويترك `ip:` ينمو أبداً — فكان الدخول
     الناجح لا يخفّض العدّاد الذي يقفل المنصّة.
     """
-    from app.security.chrono_shield import chrono_shield
 
     class _Client:
         host = "203.0.113.9"
@@ -191,7 +213,6 @@ def test_successful_login_clears_the_ip_counter_too():
         headers: ClassVar[dict[str, str]] = {}
 
     request = _Request()
-    chrono_shield._failures.clear()
     chrono_shield.record_failure(request, "learner@example.com")
 
     assert chrono_shield._failures.get("ip:203.0.113.9")
@@ -210,9 +231,6 @@ def test_stale_failures_fall_out_of_the_window():
     كانت القراءة `len(...)` بلا ترشيح، والترشيح كل ٦٠ ثانية فقط — فإخفاقاتٌ
     عمرها ساعة كانت تُحتسَب حتى تمرّ دورة التنظيف.
     """
-    from app.security.chrono_shield import chrono_shield
-
-    chrono_shield._failures.clear()
     ancient = time.time() - (chrono_shield.WINDOW + 60)
     chrono_shield._failures["target:old@example.com"] = [ancient] * 50
 
@@ -302,7 +320,7 @@ async def test_access_token_declares_its_type(async_client: AsyncClient):
     segment += "=" * (-len(segment) % 4)
     claims = json.loads(base64.urlsafe_b64decode(segment))
 
-    assert claims["type"] == "access"
+    assert claims["type"] == ACCESS_TOKEN_TYPE
     assert claims["jti"]
     assert claims["iat"]
 
@@ -325,7 +343,7 @@ def test_a_reauth_token_is_rejected_as_an_access_token():
     reauth_token, _ = crypto.encode_reauth_token(user)
 
     with pytest.raises(HTTPException) as caught:
-        crypto.verify_jwt(reauth_token, expected_type="access")
+        crypto.verify_jwt(reauth_token, expected_type=ACCESS_TOKEN_TYPE)
     assert caught.value.status_code == 401
 
 
@@ -346,7 +364,7 @@ def test_legacy_tokens_without_a_type_still_authenticate():
         {"sub": "1", "exp": int(time.time()) + 600}, settings.SECRET_KEY, algorithm="HS256"
     )
 
-    assert crypto.verify_jwt(legacy, expected_type="access")["sub"] == "1"
+    assert crypto.verify_jwt(legacy, expected_type=ACCESS_TOKEN_TYPE)["sub"] == "1"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -384,9 +402,6 @@ async def test_a_disabled_account_cannot_log_in(async_client: AsyncClient, db_se
     from sqlalchemy import select
 
     from app.core.domain.user import User
-    from app.security.chrono_shield import chrono_shield
-
-    chrono_shield._failures.clear()
 
     email = f"disabled-{uuid.uuid4().hex[:8]}@example.com"
     password = _fresh_password()
@@ -419,9 +434,6 @@ async def test_disabled_and_wrong_password_are_indistinguishable(
     from sqlalchemy import select
 
     from app.core.domain.user import User
-    from app.security.chrono_shield import chrono_shield
-
-    chrono_shield._failures.clear()
 
     email = f"enum-{uuid.uuid4().hex[:8]}@example.com"
     password = _fresh_password()

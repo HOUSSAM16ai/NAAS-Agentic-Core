@@ -40,6 +40,7 @@ HAS 'detail' KEY: False        ← المعالج لم يُخرج `detail` قط�
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -65,6 +66,10 @@ __all__ = [
 
 REQUEST_ID_HEADER: Final[str] = "X-Request-ID"
 ERROR_CODE_HEADER: Final[str] = "X-Error-Code"
+
+# مُعرِّف الطلب المقبول: حروف/أرقام/`-`/`_` فقط — يُغطّي `uuid4().hex` وصيغة
+# UUID المُنقَّطة وما تُصدره بوّابات التتبّع، ويجعل حقن الترويسات غير مُمثَّل.
+_REQUEST_ID_SAFE: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
 # رموز الأخطاء المستقرّة — الواجهة تترجمها، ولا تطابق النصّ الإنجليزي.
 # ⛔ لا يُحذَف رمزٌ ولا يُعاد استعماله بمعنى آخر: الواجهة القديمة تبقى تقرؤه.
@@ -93,18 +98,41 @@ def _error_code_for(status_code: int) -> str:
     return "server_error"
 
 
+def _sanitized_request_id(raw: object) -> str:
+    """يُصفّي مُعرِّف الطلب الوارد — قائمةُ سماحٍ لا قائمة منع.
+
+    ⛔ رصدت مراجعة CodeRabbit أنّ القيمة كانت تُقصّ طولاً **ولا تُصفّى محرفياً**،
+    ثمّ تذهب إلى ثلاثة مصارف: سجلّ نصّي · جسم JSON · **ترويسة استجابة**. والثالث
+    هو الخطر: محرف سطرٍ جديد داخل قيمة ترويسة هو حقن ترويسات (CRLF) بتعريفه،
+    والأوّل يسمح بتلويث السجلّ بأسطر مُلفَّقة تُقرأ لاحقاً كأحداث حقيقية.
+
+    القائمة المسموحة هي ما يُنتِجه مولِّدونا فعلاً وما تستعمله الأنظمة المُتعارَف
+    عليها: حروف وأرقام و``-`` و``_``. وما خرج عنها **يُرفَض بالكامل** فيُولَّد
+    مُعرِّفٌ جديد — لا يُنظَّف جزئياً، لأن قيمةً مُشوَّهة نصفَ تنظيف تبقى قيمةً لا
+    نعرف مصدرها. نفس منطق D-187: الأمان بأن يكون الحقن **غير مُمثَّل**.
+    """
+    if not isinstance(raw, str):
+        return ""
+    candidate = raw.strip()[:128]
+    if not candidate or not _REQUEST_ID_SAFE.fullmatch(candidate):
+        return ""
+    return candidate
+
+
 def _request_id(request: Request) -> str:
     """يستخرج مُعرِّف الطلب من الترويسة الواردة أو يولّده.
 
     يُمَدّ ولا يُخترَع متى وُجد (نفس قاعدة D-189 للأثر الصادر): مُعرِّفٌ جديد لكل
     طبقة يقطع السلسلة بدل مدّها، فتصير الترويسة موجودةً وبلا قيمة تشخيصية.
     """
-    incoming = (request.headers.get(REQUEST_ID_HEADER) or "").strip()
+    incoming = _sanitized_request_id(request.headers.get(REQUEST_ID_HEADER))
     if incoming:
-        return incoming[:128]
+        return incoming
     existing = getattr(request.state, "request_id", None)
-    if isinstance(existing, str) and existing.strip():
-        return existing.strip()[:128]
+    if isinstance(existing, str):
+        sanitized = _sanitized_request_id(existing)
+        if sanitized:
+            return sanitized
     return uuid.uuid4().hex
 
 

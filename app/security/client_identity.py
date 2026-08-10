@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
-import os
+from functools import lru_cache
 from typing import Final
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ _REAL_IP: Final[str] = "x-real-ip"
 # مقصود داخلها يصير قادراً على انتحال أي عنوان.
 _DEFAULT_TRUSTED: Final[tuple[str, ...]] = ("127.0.0.0/8", "::1/128")
 
+# اسم الإعداد — يُذكر في التحذيرات كي يعرف المُشغِّل أين يُصلح.
 _ENV_VAR: Final[str] = "TRUSTED_PROXY_IPS"
 
 
@@ -76,16 +77,31 @@ def _parse_networks(raw: str) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Net
     return tuple(networks)
 
 
-def trusted_proxy_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
-    """يعيد شبكات الوسطاء الموثوقين.
+@lru_cache(maxsize=8)
+def _networks_for(raw: str) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """يحلّل قيمة إعدادٍ بعينها مرّةً واحدة.
 
-    تُقرأ من البيئة عند كل نداء عمداً: الاختبارات تحتاج تغييرها، والكلفة نداء
-    ``os.environ`` واحد — أرخص بكثير من ذاكرة مؤقّتة تُخفي إعداداً خاطئاً.
+    مفتاح الذاكرة المؤقّتة هو **القيمة الخام** لا غيابُها، فتغيُّر الإعداد يُنتِج
+    مدخلاً جديداً ولا يُخفيه شيء. رصدت مراجعة CodeRabbit أن التحليل كان يُعاد
+    **لكل قفزة** في السلسلة: ``is_trusted_proxy`` يُنادى مرّةً لكل عنصر، وكلٌّ
+    منها كان يُعيد تحليل كل CIDR من جديد.
     """
-    raw = (os.environ.get(_ENV_VAR) or "").strip()
     if not raw:
         return _parse_networks(",".join(_DEFAULT_TRUSTED))
     return _parse_networks(raw)
+
+
+def trusted_proxy_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """يعيد شبكات الوسطاء الموثوقين، من الإعدادات لا من البيئة مباشرةً.
+
+    ⛔ ``os.environ`` ممنوعة في كود التطبيق (CLAUDE.md §6) — وكانت هنا. رصدته
+    مراجعة CodeRabbit، والقاعدة موجودة لأن مصدرَي إعدادٍ متوازيين ينحرفان: قيمةٌ
+    في ``.env`` لا يراها هذا المسار، أو العكس. الاستيراد **داخل الدالّة** يمنع
+    دورةَ استيراد بين طبقة الأمان وطبقة الإعدادات.
+    """
+    from app.core.settings.base import get_settings
+
+    return _networks_for((get_settings().TRUSTED_PROXY_IPS or "").strip())
 
 
 def is_trusted_proxy(candidate: str | None) -> bool:
@@ -142,20 +158,20 @@ def _first_untrusted_from_right(chain: list[str]) -> str | None:
     return None
 
 
-def _leftmost_valid(chain: list[str]) -> str | None:
-    """أقصى اليسار الصالح — يُستعمل حين تكون السلسلة كلّها وسطاء موثوقين."""
-    for candidate in chain:
-        normalized = _valid_ip(candidate)
-        if normalized is not None:
-            return normalized
-    return None
-
-
 def _from_forwarded_headers(headers: object) -> str | None:
     """يستخرج العنوان من ترويسات الوسيط، أو ``None`` إن لم تُفد شيئاً.
 
     ⚠️ لا يُستدعى إلّا بعد التثبّت من أن النظير وسيطٌ موثوق — الثقة قرارُ
     :func:`resolve_client_ip`، وهذه الدالّة تقرأ فقط.
+
+    ⛔ **سلسلةٌ كلّها موثوقة تُرجِع ``None``** فيسقط المُنادي إلى النظير. رصدت
+    مراجعةُ CodeRabbit أن السقوط السابق («أقصى اليسار الصالح») كان **عطباً
+    حقيقياً**: أقصى اليسار قيمةٌ **يكتبها العميل**، والافتراض `127.0.0.0/8`
+    شبكةٌ فيها ١٦ مليون عنوان — فكان يكفي إرسال ``X-Forwarded-For: 127.5.5.5``
+    ثمّ تدويرُ الرقم للحصول على هويةٍ جديدة في كل طلب، أي **إلغاء متّجه العنوان
+    في الدرع وحدّ المعدّل معاً**. وهو نفس صنف العطب الذي وُلدت منه هذه الوحدة،
+    مقلوباً: هناك التصق الجميع بعنوانٍ واحد، وهنا يتملّص الواحد إلى ملايين.
+    والنظير معلومٌ يقيناً ولا يُزوَّر — فهو الجواب الصادق حين لا تُفِد السلسلة.
     """
     get = getattr(headers, "get", None)
     if get is None:
@@ -163,8 +179,7 @@ def _from_forwarded_headers(headers: object) -> str | None:
 
     forwarded = (get(_FORWARDED_FOR) or "").strip()
     if forwarded:
-        chain = _split_forwarded_chain(forwarded)
-        return _first_untrusted_from_right(chain) or _leftmost_valid(chain)
+        return _first_untrusted_from_right(_split_forwarded_chain(forwarded))
 
     real_ip = (get(_REAL_IP) or "").strip()
     if real_ip:

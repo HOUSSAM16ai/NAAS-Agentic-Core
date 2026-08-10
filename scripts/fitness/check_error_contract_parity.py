@@ -250,17 +250,56 @@ _REGEX_LITERAL = re.compile(r"/(?:\\.|\[(?:\\.|[^\]\\])*]|[^/\\\n[])*/")
 #: مُحلِّل كامل — ولذلك يُكمِّله **الفشل المُغلَق** أدناه.
 _REGEX_PRECEDERS: str = "(,=:[!&|?{};+-*%~^<>"
 
+#: كلماتٌ مفتاحية تُنهي سياقاً **يتوقّع قيمة**، فـ`/` بعدها تعبيرٌ نمطي لا قسمة.
+#:
+#: ⛔ `return /\)/.test(v)` هو الشكل الواقعي الذي أسقط التقريب الأوّل: آخر محرفٍ
+#: قبل الشرطة هو `n` — حرفُ هوية — فقُرئت **قسمةً**، فمُسِح جسم التعبير كنصٍّ عادي
+#: و`)` الذي بداخله أغلق الاستدعاء مبكّراً، فاختفت السلسلة الممنوعة بعده. رصدته
+#: مراجعة CodeRabbit بمثالٍ مُشغَّل، وهو الثقب الصامت الرابع من نفس الصنف: الماسح
+#: يقرأ أقلّ ممّا يدّعي ثمّ يُبلِّغ النظافة.
+_REGEX_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "return",
+        "typeof",
+        "instanceof",
+        "in",
+        "of",
+        "new",
+        "delete",
+        "void",
+        "throw",
+        "case",
+        "do",
+        "else",
+        "yield",
+        "await",
+    }
+)
+
+#: آخر كلمةٍ متّصلة قبل موضعٍ ما — لتمييز الكلمة المفتاحية عن اسمٍ ينتهي بها
+#: (`myreturn / 2` قسمةٌ، و`return / 2` ليست تعبيراً صالحاً أصلاً).
+_TRAILING_WORD = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*$")
+
 
 def _starts_regex(source: str, index: int) -> bool:
     """هل الشرطة المائلة عند ``index`` تبدأ تعبيراً نمطياً؟
 
     يُقرأ آخر محرفٍ غير فراغيّ قبلها: بعد مُعامِلٍ أو فاصلةٍ أو قوسٍ مفتوح تكون
-    تعبيراً نمطياً، وبعد قيمةٍ تكون قسمة. ويُستثنى التعليق (`//` و`/*`).
+    تعبيراً نمطياً، وبعد قيمةٍ تكون قسمة.
+
+    وتُقرأ **الكلمة** لا المحرف وحده: `return` تنتهي بحرف هوية، فالقراءة المحرفية
+    وحدها كانت تصنّف `return /x/` قسمةً — وهو ثقبٌ صامت لا حدٌّ معروف.
+
+    ⚠️ التعليقات ليست من شأن هذه الدالّة — يملكها `_scan_step` ويقفزها قبل أن
+    تُسأل أصلاً (مصدرٌ واحد لقرار التعليق، لا فحصان يفترقان).
     """
-    if source[index + 1 : index + 2] in ("/", "*"):
-        return False
     before = source[:index].rstrip(" \t\n\r")
-    return not before or before[-1] in _REGEX_PRECEDERS
+    if not before:
+        return True
+    if before[-1] in _REGEX_PRECEDERS:
+        return True
+    word = _TRAILING_WORD.search(before)
+    return word is not None and word.group() in _REGEX_KEYWORDS
 
 
 def _skip_regex(source: str, index: int) -> int:
@@ -271,12 +310,37 @@ def _skip_regex(source: str, index: int) -> int:
     السلسلة الممنوعة. أي أنّ البوّابة تُبلِّغ النظافة عن نصٍّ **قرأت نصفه**.
     رصدته مراجعة CodeRabbit بمسبارٍ مُشغَّل، وهو نفس صنف الثقب الصامت مرّتين قبله.
 
-    النمط يُغطّي المهروب وصنف المحارف (فـ``/[/]/`` لا ينتهي عند الشرطة بداخله)،
-    وما لا يُطابِق يُعامَل محرفاً عادياً — فيختلّ الاتّزان ويُرفَع الخطأ لاحقاً
-    بدل أن يُبتَر النصّ بصمت.
+    النمط يُغطّي المهروب وصنف المحارف (فـ``/[/]/`` لا ينتهي عند الشرطة بداخله).
+
+    ⛔ **وما لا يُطابِق يرفع `_ParseError` فوراً.** كانت الدالّة تُعيد ``index + 1``
+    اتّكالاً على أنّ الاتّزان سيختلّ لاحقاً — وهو **رهانٌ يخسر**: تعبيرٌ نمطي غير
+    مُنتهٍ يحتوي ``)`` يُغلِق الاستدعاء بالضبط ويجعل الاتّزان **سليماً ظاهرياً**،
+    فيُبتَر النصّ بصمت وتُبلَّغ النظافة. رصدته مراجعة CodeRabbit، والفشل المُغلَق
+    هو الفرق بين حدٍّ معروف وثقبٍ صامت (D-208).
     """
     match = _REGEX_LITERAL.match(source, index)
-    return match.end() if match else index + 1
+    if match is None:
+        raise _ParseError(f"تعبيرٌ نمطي غير مُنتهٍ عند الموضع {index}: {source[index : index + 40]!r}")
+    return match.end()
+
+
+def _skip_comment(source: str, index: int) -> int:
+    """يعيد موضع ما بعد تعليقٍ يبدأ عند ``index`` (``//`` أو ``/*``).
+
+    ⛔ وُجدت لأنّ الماسح **لم يكن يفهم التعليقات إطلاقاً**: كان يمرّ على `/*` ثمّ
+    يقرأ `*/` الختامية بدايةَ تعبيرٍ نمطي (لأن `*` من سوابق التعبير النمطي).
+    عاش ذلك صامتاً ما دام `_skip_regex` يتقدّم محرفاً عند الفشل — وظهر لحظة صار
+    الفشل مُغلَقاً. أي أنّ الصمت كان **يُخفي عطبين** لا واحداً.
+
+    والتعليق غير المُنتهي يرفع خطأً كغيره: ما لا يُفهَم يُعلَن.
+    """
+    if source[index + 1 : index + 2] == "/":
+        end = source.find("\n", index + 2)
+        return len(source) if end == -1 else end + 1
+    end = source.find("*/", index + 2)
+    if end == -1:
+        raise _ParseError(f"تعليقٌ كتليّ غير مُنتهٍ عند الموضع {index}")
+    return end + 2
 
 
 def _skip_string(source: str, index: int, quote: str) -> int:
@@ -302,8 +366,11 @@ def _scan_step(source: str, index: int, opener: str, closer: str) -> tuple[int, 
     ch = source[index]
     if ch in _QUOTES:
         return _skip_string(source, index + 1, ch), 0
-    if ch == "/" and _starts_regex(source, index):
-        return _skip_regex(source, index), 0
+    if ch == "/":
+        if source[index + 1 : index + 2] in ("/", "*"):
+            return _skip_comment(source, index), 0
+        if _starts_regex(source, index):
+            return _skip_regex(source, index), 0
     return index + 1, {opener: 1, closer: -1}.get(ch, 0)
 
 

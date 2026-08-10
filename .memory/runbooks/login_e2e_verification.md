@@ -64,16 +64,31 @@ expect() { # expect <المتوقَّع> <الفعلي> <الوصف>
 register() { curl -sS -o /dev/null -X POST "$API/api/security/register" \
   -H 'Content-Type: application/json' \
   -d "{\"full_name\":\"V\",\"email\":\"$1\",\"password\":\"$PW\"}"; }
-login() { curl -sS -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$1\",\"password\":\"$2\"}"; }
 code() { curl -sS -o /dev/null -w '%{http_code}' "$@"; }
 
+# ⚠️ **الحالة تُؤكَّد قبل قراءة الجسم، وفي الطلب نفسه.** كان الإجراء يُمرِّر الجسم
+# إلى بايثون بلا فحص رمز الحالة، فردٌّ فاشل يحمل حقلاً يشبه الرمز كان يمرّ. ولا
+# يجوز إصلاحه بطلبٍ ثانٍ «للتأكّد»: التدوير يغيّر حالة الخادم، فالطلب الثاني
+# يستهلك رمزاً ويُفسد ما يقيسه. رصدته مراجعة CodeRabbit.
+req() { # req <الحالة المتوقَّعة> <وسائط curl…> → يطبع الجسم عند المطابقة
+  local want="$1"; shift
+  local out status body
+  out=$(curl -sS -w $'\n%{http_code}' "$@") || { echo "❌ فشل النداء الشبكي" >&2; exit 1; }
+  status=${out##*$'\n'}
+  body=${out%$'\n'*}
+  [ "$status" = "$want" ] || {
+    echo "❌ حالة غير متوقَّعة: متوقَّع=$want فعلي=$status جسم=${body:0:200}" >&2; exit 1; }
+  printf '%s' "$body"
+}
+login() { req "$3" -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$1\",\"password\":\"$2\"}"; }
+
 # ── 1) عقد الأخطاء: الجسم الخام لا رمز الحالة ────────────────────────────────
+# طلبٌ **واحد** يؤكّد 401 ويُسلِّم الجسم — لا نداءان لنفس القياس.
 GHOST=$(fresh ghost)
-expect 401 "$(code -X POST "$API/api/security/login" -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$GHOST\",\"password\":\"wrong\"}")" "كلمة سرّ خاطئة تُرجع 401"
-login "$GHOST" wrong | $PY -c '
+login "$GHOST" wrong 401 | $PY -c '
 import json,sys
+from datetime import datetime, timedelta, timezone
 b=json.load(sys.stdin)
 need={"status","detail","message","error_code","data","request_id","timestamp"}
 missing=need-set(b)
@@ -81,8 +96,16 @@ assert not missing, f"مفاتيح ناقصة: {sorted(missing)}"
 assert b["detail"]==b["message"], "detail != message"
 assert b["error_code"]=="unauthorized", b["error_code"]
 assert b["request_id"], "request_id فارغ"
-assert not b["timestamp"].startswith("2024-01-01"), "طابعٌ زمني مُثبَّت — عاد عطب المعالج القديم"
-print("✅ عقد الأخطاء: المفاتيح السبعة · detail==message · unauthorized")'
+# ⚠️ الطابع الزمني **يُحلَّل ويُقارَن**، لا يُقارَن بتاريخٍ واحد مُثبَّت. الصيغة
+# القديمة (`startswith("2024-01-01")`) كانت تقبل كل تاريخٍ قديمٍ آخر وكل قيمةٍ
+# محلّية أو مشوّهة — أي أنها تحرس الحرفية التي رأيناها لا **الخاصيّة** المطلوبة.
+# رصدته مراجعة CodeRabbit. السماحية ١٢٠ ثانية: انحراف ساعةٍ معلَنٌ لا مفتوح.
+SKEW = timedelta(seconds=120)
+ts = datetime.fromisoformat(b["timestamp"].replace("Z", "+00:00"))
+assert ts.utcoffset() == timedelta(0), f"الطابع ليس UTC: {b[\"timestamp\"]}"
+drift = abs(datetime.now(timezone.utc) - ts)
+assert drift <= SKEW, f"طابعٌ زمني ليس حاضراً (انحراف {drift}) — عاد عطب المعالج القديم"
+print("✅ عقد الأخطاء: المفاتيح السبعة · detail==message · unauthorized · طابعٌ UTC حاضر")'
 # قبل الإصلاح: ['data','message','status','timestamp'] — بلا `detail` إطلاقاً.
 
 # ── 2) القفل لا يعاقب البريء ────────────────────────────────────────────────
@@ -97,7 +120,7 @@ expect 200 "$(code -X POST "$API/api/security/login" -H 'Content-Type: applicati
 
 # ── 3) الرمز يقول نوعه ──────────────────────────────────────────────────────
 CLAIMS=$(fresh claims); register "$CLAIMS"
-TOKEN=$(login "$CLAIMS" "$PW" | $PY -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+TOKEN=$(login "$CLAIMS" "$PW" 200 | $PY -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
 $PY -c '
 import base64,json,sys
 s=sys.argv[1].split(".")[1]; s+="="*(-len(s)%4)
@@ -106,7 +129,7 @@ assert c.get("type")=="access", c.get("type")
 assert c.get("jti") and c.get("iat"), "jti/iat مفقودان"
 print("✅ المطالبات: type=access · jti · iat")' "$TOKEN"
 
-REAUTH=$(curl -sS -X POST "$API/api/v1/auth/reauth" -H "Authorization: Bearer $TOKEN" \
+REAUTH=$(req 200 -X POST "$API/api/v1/auth/reauth" -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d "{\"password\":\"$PW\"}" \
   | $PY -c 'import json,sys; print(json.load(sys.stdin)["reauth_token"])')
 expect 401 "$(code "$API/api/v1/users/me" -H "Authorization: Bearer $REAUTH")" \
@@ -115,8 +138,10 @@ expect 401 "$(code "$API/api/v1/users/me" -H "Authorization: Bearer $REAUTH")" \
 
 # ── 4) التدوير يُبدِل الرمز، وإعادةُ الاستعمال تُبطِل العائلة ────────────────
 ROT=$(fresh rot); register "$ROT"
-R1=$(login "$ROT" "$PW" | $PY -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
-R2=$(curl -sS -X POST "$API/api/v1/auth/refresh" -H 'Content-Type: application/json' \
+R1=$(login "$ROT" "$PW" 200 | $PY -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
+# ⚠️ نداءٌ **واحد** يؤكّد 200 ويُسلِّم الجسم: التدوير يستهلك `R1` بنجاحه، فطلبٌ
+# ثانٍ للتأكّد من الحالة كان سيُبطِل العائلة قبل أن نقيسها.
+R2=$(req 200 -X POST "$API/api/v1/auth/refresh" -H 'Content-Type: application/json' \
   -d "{\"refresh_token\":\"$R1\"}" | $PY -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')
 [ -n "$R2" ] && [ "$R1" != "$R2" ] \
   || { echo "❌ التدوير لم يُصدر رمزاً بديلاً مختلفاً" >&2; exit 1; }

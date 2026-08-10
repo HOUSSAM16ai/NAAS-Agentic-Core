@@ -57,6 +57,13 @@ def _argument(source: str) -> str:
         (r"setError(a /* ملاحظة */ + 'Login failed')", "تعليق كتلي لا تعبير نمطي"),
         (r'setError(cond ? "Login failed" : null)', "اقتباس مزدوج"),
         (r"setError(`Login failed`)", "قالب نصّي"),
+        # ⛔ `return` تنتهي بحرف هوية، فالقراءة المحرفية وحدها كانت تصنّف الشرطة
+        # **قسمةً**، فيُمسَح جسم التعبير كنصّ عادي و`)` بداخله يُغلِق الاستدعاء.
+        (
+            r"setError(function(){ return /\)/.test(v) ? 'Login failed' : null }())",
+            "تعبير نمطي بعد return",
+        ),
+        (r"setError(typeof x === 'string' && /\)/.test(x) ? 'Login failed' : null)", "بعد typeof"),
     ],
 )
 def test_banned_string_stays_visible_to_the_scanner(source: str, why: str) -> None:
@@ -76,6 +83,11 @@ def test_banned_string_stays_visible_to_the_scanner(source: str, why: str) -> No
         r"setError(+ 'hello)",
         r"setError((/hello)",  # تعبير نمطي غير مُغلَق ⇒ قوسٌ لا يُغلَق
         r"setError(nested(",
+        # ⛔ الحالة الخبيثة: تعبيرٌ نمطي غير مُنتهٍ **يحتوي `)`** فيُغلِق الاستدعاء
+        # بالضبط ويجعل الاتّزان سليماً ظاهرياً — الرهان على «الاتّزان سيختلّ لاحقاً»
+        # يخسر هنا تحديداً، والسلسلة الممنوعة بعده تختفي بصمت.
+        r"setError(a, /x\) + 'Login failed')",
+        r"setError(a /* تعليقٌ لا يُغلَق + 'Login failed')",
     ],
 )
 def test_unparseable_input_fails_closed(source: str) -> None:

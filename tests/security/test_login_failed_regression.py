@@ -19,11 +19,13 @@ HAS 'detail' KEY: False                    ← العقد المكسور
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from typing import ClassVar
 
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
 
 from app.security.chrono_shield import chrono_shield
@@ -169,15 +171,11 @@ async def test_strangers_failures_do_not_lock_out_an_innocent_user(
     )
     assert registration.status_code == 200, registration.text
 
-    # عددُ الغرباء **مشتقٌّ لا مكتوب**: يتجاوز عتبة الهوية (وهي التي كانت
-    # مُطبَّقة على `ip:` المشترك فأقفلت المنصّة) ويبقى دون عتبة العنوان — فلو
-    # غُيِّرت أيّ عتبة غداً بقي الاختبار يختبر ما يدّعيه. الرقم المكتوب `25`
-    # كان يصير بلا معنى بأوّل تعديل، ورصدته مراجعة CodeRabbit.
+    # عددُ الغرباء **مشتقٌّ لا مكتوب**: يتجاوز عتبة الهوية — وهي التي كانت
+    # مُطبَّقة على `ip:` المشترك فأقفلت المنصّة — فلو غُيِّرت العتبة غداً بقي
+    # الاختبار يختبر ما يدّعيه. الرقم المكتوب `25` كان يصير بلا معنى بأوّل
+    # تعديل، ورصدته مراجعة CodeRabbit.
     strangers = chrono_shield.LOCKOUT_THRESHOLD + 5
-    assert strangers < chrono_shield.IP_LOCKOUT_THRESHOLD, (
-        "الاختبار يقيس القفل العالمي القديم، لا القفل الحادّ على العنوان — "
-        f"strangers={strangers} يجب أن يبقى دون {chrono_shield.IP_LOCKOUT_THRESHOLD}."
-    )
     # غرباء يخفقون — كلٌّ ببريد مختلف، فلا تُلام هوية الضحيّة.
     for _ in range(strangers):
         await _login(async_client, f"stranger-{uuid.uuid4().hex[:10]}@example.com", _WRONG)
@@ -204,6 +202,78 @@ async def test_repeated_failures_on_one_identity_still_lock_that_identity(
     assert 429 in statuses, (
         f"هوية واحدة تحت هجوم لم تُقفَل — الحماية ضاعت بدل أن تُنقَل. statuses={statuses}"
     )
+
+
+@pytest.mark.asyncio
+async def test_the_ip_vector_never_hard_locks_however_many_failures(monkeypatch):
+    """⛔ العنوان يُبطِئ ولا يقفل — **مهما بلغ عدد إخفاقاته**.
+
+    القاعدة 10 في `AUTHENTICATION_DOCTRINE.md` تقول «القفل الصلب (429) على الهوية
+    وحدها»، وكان الكود يحمل فرعاً يقفل على العنوان عند `200`. أي أنّ القانون كان
+    **بلا فارضٍ آلي**، فبقي مناقِضاً لكوده وCI خضراء — وهو صنف عطب D-208 نفسه.
+
+    ومئتان لم تكن رقماً آمناً بل **مؤجِّلاً**: 200 إخفاق في نافذة ٥ دقائق من عنوان
+    carrier-NAT جزائري واحد عاديٌّ في ذروة المساء، والنتيجة 429 لكل طالبٍ خلفه
+    بكلمة سرّه الصحيحة — أي ISS-152 حرفياً. رصدته مراجعة CodeRabbit.
+
+    الاختبار يحقن إخفاقاتٍ أكثر من أيّ عتبةٍ معقولة ويطالب بمرور هويةٍ نظيفة.
+    """
+
+    class _Client:
+        host = "197.200.0.7"  # عنوانٌ عام — يحاكي مخرَج carrier-NAT
+
+    class _Request:
+        client = _Client()
+        headers: ClassVar[dict[str, str]] = {}
+
+    request = _Request()
+    now = time.time()
+    # أكبر بكثير من العتبة المحذوفة (200) ومن أي عتبةٍ قد تُستحدث.
+    chrono_shield._failures["ip:197.200.0.7"] = [now] * 5_000
+
+    # المتّجه العنواني يبقى **مُكلِّفاً**: الحماية نُقلت من المنع إلى الإبطاء
+    # ولم تُلغَ. تُقاس على الدالّة الحتمية لا على مدّة نومٍ حقيقية.
+    assert chrono_shield._dilation_delay(target_fails=0, ip_fails=5_000) > 0, (
+        "الإبطاء اختفى مع القفل — المتّجه العنواني يجب أن يبقى مُكلِّفاً."
+    )
+
+    # الإبطاء يُعطَّل زمنياً لا منطقياً: نقيس **القفل** لا مدّة النوم.
+    async def _no_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+    # هويةٌ نظيفة خلف نفس العنوان: يجب أن تمرّ بلا استثناء.
+    await chrono_shield.check_allowance(request, "innocent@example.com")
+
+    # وفي المقابل: الهوية **تُقفَل** — الحماية نُقلت ولم تُلغَ.
+    chrono_shield._failures["target:hunted@example.com"] = [now] * (
+        chrono_shield.LOCKOUT_THRESHOLD + 1
+    )
+    with pytest.raises(HTTPException) as raised:
+        await chrono_shield.check_allowance(request, "hunted@example.com")
+    assert raised.value.status_code == 429
+
+
+def test_dilation_saturates_instead_of_overflowing():
+    """⛔ الإبطاء يتشبّع ولا يطفح — مهما بلغ عدد الإخفاقات.
+
+    `min(0.1 * 2**worst, MAX_DELAY)` تبدو مسقوفة وهي ليست كذلك: القوس الداخلي
+    يُحسَب أوّلاً، فـ`2 ** 4980` يرفع `OverflowError` — أي **500 على كل محاولة
+    دخول من ذلك العنوان**، بمن فيهم الأبرياء. كان الفرع محجوباً خلف القفل
+    العنواني؛ ولمّا حُذف القفل صار بلوغه مسألة وقت.
+
+    ⚠️ لم تكشفه مراجعةٌ ولا بوّابة — كشفه **الاختبار الذي كُتب لحراسة الحذف**،
+    وهذا هو الفرق بين حذفٍ محروس وحذفٍ متفائل.
+    """
+    for fails in (100, 1_000, 100_000):
+        delay = chrono_shield._dilation_delay(target_fails=0, ip_fails=fails)
+        assert delay == chrono_shield.MAX_DELAY, f"إبطاءٌ غير مُتشبِّع عند {fails} إخفاقاً: {delay}"
+    # والتدرّج ما دون التشبّع يبقى تدرّجاً حقيقياً لا ثابتاً.
+    gentle = chrono_shield._dilation_delay(
+        target_fails=0, ip_fails=chrono_shield.IP_MAX_FREE_ATTEMPTS + 1
+    )
+    assert 0 < gentle < chrono_shield.MAX_DELAY
 
 
 def test_successful_login_clears_the_ip_counter_too():

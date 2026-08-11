@@ -335,7 +335,7 @@
     "nesting": 1
   },
   "routes.py": {
-    "loc": 1268
+    "loc": 1265
   },
   "routes.py::_extract_chat_objective": {
     "loc": 9,
@@ -373,7 +373,7 @@
     "nesting": 1
   },
   "routes.py::chat_ws_stategraph": {
-    "loc": 148,
+    "loc": 145,
     "cc": 20,
     "nesting": 5
   },

@@ -581,9 +581,6 @@ async def chat_messages_endpoint(
 
 @router.websocket("/api/chat/ws")
 async def chat_ws_stategraph(websocket: WebSocket) -> None:
-    from microservices.orchestrator_service.src.core.logging import get_logger
-
-    logger = get_logger("routes")
     """يشغّل WebSocket chat فوق LangGraph لضمان توحيد مسار التنفيذ مع mission."""
     token, selected_protocol = extract_websocket_auth(websocket)
     if not token:

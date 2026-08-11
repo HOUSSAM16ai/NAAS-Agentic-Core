@@ -37,48 +37,20 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncGenerator, Iterator
 from pathlib import Path
-from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 from microservices.orchestrator_service.main import app
-from microservices.orchestrator_service.src.api import (
-    agent_chat_admin_stream,
-    agent_chat_customer_stream,
-    chat_stream_engine,
-    routes,
-)
+from microservices.orchestrator_service.src.api import routes
+from tests.microservices.caller_modules import CALLER_MODULES, PATCHED_NAMES, patch_caller
 
 GOLDEN_FILE = Path(__file__).parent / "fixtures" / "agent_chat_golden.json"
 
-#: الوحدات التي تُحَلّ منها أسماء المُستدعي. عند استخراج المولّدات (D-168) تُضاف
-#: الوحدة الجديدة هنا — **سطر واحد، موضع واحد**. لا تحذف `routes`: الغلاف الرفيع
-#: يبقى فيه ويستدعي المصادقة و`OrchestratorAgent`.
-#: تكامل هذه القائمة مفروضٌ آلياً — راجع
-#: `test_caller_modules_covers_every_module_that_calls_a_patched_name`.
-CALLER_MODULES: tuple[Any, ...] = (
-    routes,
-    agent_chat_admin_stream,
-    agent_chat_customer_stream,
-    # مسار WS لا يمرّ به `/agent/chat`، لكنّه يستدعي `_persist_assistant_message`
-    # فيدخل القائمة كي يبقى الثابت البنيوي صادقاً بالكامل. ترقيعه لا-عمليةٌ هنا.
-    chat_stream_engine,
-)
-
-
-def _patch_caller(monkeypatch: pytest.MonkeyPatch, name: str, value: object) -> None:
-    """يُرقّع الاسم في كلّ وحدةٍ تملكه — ويرفع إن لم تملكه أيّ وحدة."""
-    patched = [module for module in CALLER_MODULES if hasattr(module, name)]
-    if not patched:
-        raise AssertionError(
-            f"لا وحدة في CALLER_MODULES تملك {name!r}.\n"
-            f"   إن نُقل المُستدعي إلى وحدةٍ جديدة فأضِفها إلى CALLER_MODULES "
-            f"(D-168 · قاعدة late-binding). الترقيع على وحدةٍ لا تملك الاسم "
-            f"لا-عمليةٌ صامتة، والاختبار عندها يمسّ قاعدة بيانات حقيقية."
-        )
-    for module in patched:
-        monkeypatch.setattr(module, name, value)
+# D-168 · قاعدة late-binding: `CALLER_MODULES` و`PATCHED_NAMES` و`patch_caller`
+# انتقلت إلى `tests/microservices/caller_modules.py` حين صار ملفّان يحتاجانها
+# (ISS-155). الآلية والوثيقة الكاملة هناك — موطنٌ واحد لا نسختان.
+_patch_caller = patch_caller
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -603,16 +575,6 @@ def test_every_scenario_ends_with_exactly_one_terminal_frame(
         finals = [frame for frame in terminal if frame["type"] == "assistant_final"]
         assert len(finals) <= 1, f"{scenario}: أكثر من إطار نهائي واحد"
         assert terminal, f"{scenario}: دورٌ بلا إطار نهائي — فشلٌ صامت"
-
-
-#: الأسماء التي يُرقّعها هذا الملفّ لعزل قاعدة البيانات والشبكة.
-PATCHED_NAMES = (
-    "_ensure_conversation",
-    "_persist_assistant_message",
-    "_decode_auth_payload_or_401",
-    "get_ai_client",
-    "OrchestratorAgent",
-)
 
 
 def test_caller_modules_covers_every_module_that_calls_a_patched_name() -> None:

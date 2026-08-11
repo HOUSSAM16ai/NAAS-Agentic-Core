@@ -426,6 +426,49 @@ def test_admin_custom_event_streaming_is_forwarded(
     _assert_golden("admin_custom_event", frames)
 
 
+def test_admin_never_leaks_the_json_envelope_to_the_client(
+    monkeypatch: pytest.MonkeyPatch,
+    persistence: dict[str, list[dict[str, object]]],
+    preserved_admin_app: None,
+) -> None:
+    """ISS-056 (D-049): `final_response` قد يصل **مظروفاً** لا نصّاً.
+
+    `SynthesizerNode` يُرجِع dict بحقول (`المصدر` · `مستوى_الثقة` · `التمرين` …)؛
+    وتسليمه خاماً هو الكارثة التي وُجدت `_extract_human_readable_response` لمنعها.
+    كلّ سيناريوهات الإدارة الأخرى هنا تُغذّي نصّاً بسيطاً، فيتساوى المُستخرِج مع
+    `str()` ولا يُختبَر شيء — وهي فجوةٌ **كشفها اختبار الطفرات** لا التخطيط:
+    طفرةُ استبدال المُستخرِج بـ`str()` نجت حيّةً.
+    """
+    _authenticate(monkeypatch, user_id=11, role="admin")
+    app.state.admin_app = _FakeAdminApp(
+        [
+            {
+                "event": "on_chain_end",
+                "name": "LangGraph",
+                "data": {
+                    "output": {
+                        "final_response": {
+                            "المصدر": "معرفة مادة",
+                            "مستوى_الثقة": 0.91,
+                            "التمرين": "الجواب البشري الوحيد",
+                            "السنة": 2024,
+                        }
+                    }
+                },
+            }
+        ]
+    )
+
+    frames = _drive(ADMIN_BODY)
+
+    final = next(frame for frame in frames if frame["type"] == "assistant_final")
+    assert final["payload"]["content"] == "الجواب البشري الوحيد"
+    wire = json.dumps(frames, ensure_ascii=False)
+    for envelope_key in ("المصدر", "مستوى_الثقة", "السنة"):
+        assert envelope_key not in wire, f"تسرّب مفتاح المظروف {envelope_key} إلى العميل"
+    assert persistence["persist"][0]["content"] == "الجواب البشري الوحيد"
+
+
 def test_admin_without_a_graph_emits_a_single_safe_error(
     monkeypatch: pytest.MonkeyPatch,
     persistence: dict[str, list[dict[str, object]]],

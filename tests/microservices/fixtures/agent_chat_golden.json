@@ -1,0 +1,167 @@
+{
+  "customer_string_chunks": [
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "مرحبا "
+      }
+    },
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "بك"
+      }
+    },
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "\n\n✅ [DB SAVED]"
+      }
+    },
+    {
+      "type": "assistant_final",
+      "payload": {
+        "content": "مرحبا بك"
+      }
+    }
+  ],
+  "customer_dict_chunks": [
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "جزء"
+      }
+    },
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "\n\n✅ [DB SAVED]"
+      }
+    },
+    {
+      "type": "assistant_final",
+      "payload": {
+        "content": "جزء-تمام"
+      }
+    }
+  ],
+  "customer_empty": [],
+  "customer_persist_failure": [
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "نص"
+      }
+    },
+    {
+      "type": "assistant_error",
+      "payload": {
+        "content": "\n\n🚨 **SYSTEM DB ERROR:** db down"
+      }
+    },
+    {
+      "type": "assistant_final",
+      "payload": {
+        "content": "نص"
+      }
+    }
+  ],
+  "customer_agent_failure": [
+    {
+      "type": "assistant_error",
+      "payload": {
+        "content": "تعذر معالجة طلب الدردشة حالياً. رقم المتابعة: <uuid>"
+      }
+    }
+  ],
+  "admin_no_token_stream": [
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "\n\n✅ [DB SAVED]"
+      }
+    },
+    {
+      "type": "assistant_final",
+      "payload": {
+        "content": "أربعة ملفات"
+      }
+    }
+  ],
+  "admin_token_stream": [
+    {
+      "type": "phase_start",
+      "payload": {
+        "phase": "planner",
+        "agent": "admin"
+      }
+    },
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "جزء"
+      }
+    },
+    {
+      "type": "phase_completed",
+      "payload": {
+        "phase": "planner",
+        "agent": "admin"
+      }
+    },
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "\n\n✅ [DB SAVED]"
+      }
+    },
+    {
+      "type": "assistant_final",
+      "payload": {
+        "content": ""
+      }
+    }
+  ],
+  "admin_custom_event": [
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "مخصّص"
+      }
+    },
+    {
+      "type": "assistant_delta",
+      "payload": {
+        "content": "\n\n✅ [DB SAVED]"
+      }
+    },
+    {
+      "type": "assistant_final",
+      "payload": {
+        "content": ""
+      }
+    }
+  ],
+  "admin_missing_graph": [
+    {
+      "type": "assistant_error",
+      "payload": {
+        "content": "تعذر معالجة طلب الدردشة حالياً. رقم المتابعة: <uuid>"
+      }
+    }
+  ],
+  "admin_persist_failure": [
+    {
+      "type": "assistant_error",
+      "payload": {
+        "content": "\n\n🚨 **SYSTEM DB ERROR:** db down"
+      }
+    },
+    {
+      "type": "assistant_final",
+      "payload": {
+        "content": "أربعة ملفات"
+      }
+    }
+  ]
+}

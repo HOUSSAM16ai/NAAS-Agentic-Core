@@ -137,9 +137,7 @@ def _scan() -> dict[str, dict[str, int]]:
     return measured
 
 
-def _violations(
-    key: str, actual: dict[str, int], budget: dict[str, int], why: str
-) -> list[str]:
+def _violations(key: str, actual: dict[str, int], budget: dict[str, int], why: str) -> list[str]:
     out: list[str] = []
     for metric, limit in budget.items():
         value = actual.get(metric)
@@ -174,9 +172,7 @@ def main() -> int:
 
         # (3) وافدٌ جديد: يُحاكَم بالميزانية الافتراضية فوراً.
         if key not in frozen:
-            budget = (
-                {"loc": DEFAULT_MODULE_LOC} if "::" not in key else DEFAULT_FUNCTION_BUDGET
-            )
+            budget = {"loc": DEFAULT_MODULE_LOC} if "::" not in key else DEFAULT_FUNCTION_BUDGET
             errors += _violations(key, actual, budget, "وافدٌ جديد — الميزانية الافتراضية")
             continue
 

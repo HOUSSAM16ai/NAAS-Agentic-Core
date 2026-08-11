@@ -5,6 +5,22 @@
 > 336 lines is assigned to a responsibility and a layer below — no orphan line.
 > **Rule this document serves:** §6.6 — code presence ≠ runtime usage. A capability is real
 > only with import + call chain + runtime evidence.
+>
+> **Status: this is the pre-surgery snapshot, kept as the record of what was measured.**
+> All line numbers below refer to the code *before* D-237. The outcome:
+
+| | before | after | budget |
+|---|---|---|---|
+| endpoint LOC | 336 | **39** | ≤ 40 |
+| endpoint CC | 51 | **2** | ≤ 6 |
+| endpoint nesting | 13 | **1** | ≤ 2 |
+| `routes.py` LOC | 1,566 | **1,272** | — |
+
+> Decision: `.memory/decisions.md` D-237 · ADR: `docs/adr/ADR-009-agent-chat-endpoint-decomposition.md`
+> Enforced by: `scripts/fitness/check_endpoint_complexity.py` (guardrails job).
+> Of the defects in §4: **4.1 fixed** (dead probes removed) · **4.3 fixed** (admin `query`)
+> · **4.2 → ISS-153** · the empty-turn and raw-exception leaks → **ISS-154** · the WS twins
+> → **ISS-155**. None were silently dropped.
 
 ---
 

@@ -100,13 +100,14 @@ persistence-failure arms, the empty turn, and fail-closed authorization.
 
 **Negative / accepted.** `routes.py` gained eight `# noqa: F401` re-exports, kept because
 `tests/unit/test_chat_context_seed_strategy.py:165` calls `routes._detect_checkpoint_state`.
-The endpoint sits at 39 of its 40-line budget — deliberate: growth now requires an
-explicit, reviewable decision.
+The endpoint sits at 32 of its 40-line budget — the headroom is deliberate, and growth into
+it still requires an explicit, reviewable decision.
 
 **Enforced by.** `scripts/fitness/check_endpoint_complexity.py` in the `guardrails` CI
-job, with eight negative tests in `tests/fitness/test_check_endpoint_complexity.py`
-proving each mechanism can actually fail. Raising any budget requires a written decision
-(D-209, layer 9).
+job, with 12 tests in `tests/fitness/test_check_endpoint_complexity.py` — six of them
+seeded violations, one per gate mechanism, plus a clean tree that must pass, because a
+gate that fails on everything gets switched off in a week. Raising any budget requires a
+written decision (D-209, layer 9).
 
 **Left open, deliberately.** ISS-153 (`persisted` stripped by `StreamFrame`) is
 documented and characterised by a test that freezes the broken behaviour, not fixed —

@@ -183,6 +183,17 @@ jobs:
           # same intent drifting apart — so a sixth list must be impossible, not
           # merely discouraged. The remaining duplicates are frozen and shrink-only.
           python scripts/fitness/check_intent_single_source.py
+          # Complexity budgets for the orchestrator API layer. CodeScene measured
+          # `chat_with_agent_endpoint` at 336 LOC / complexity 48 / change frequency 43
+          # — the repo's worst hotspot, and 21% of routes.py in one function. But an
+          # external SaaS reports after the merge and cannot fail a PR, so the number
+          # that no machine guards IN the merge path comes back with the first urgent
+          # PR. Three mechanisms: explicit budgets for named functions, a bidirectional
+          # shrink-only frozen debt (which also freezes the two WS twins so they cannot
+          # grow), and a default budget for anything NOT in the debt — so trading a
+          # God-function for a God-module is measured, not assumed away. It caught
+          # exactly that during the extraction itself.
+          python scripts/fitness/check_endpoint_complexity.py
           # D-206 (ISS-141 · L6): the scope a student asks for ("the first question
           # only") has exactly one canonical source. It was spread across seven lists
           # in six files, and not one of them knew the indefinite «اول» — so a student

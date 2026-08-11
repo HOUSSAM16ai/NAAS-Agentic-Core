@@ -91,10 +91,10 @@
     "nesting": 3
   },
   "agent_chat_request.py": {
-    "loc": 84
+    "loc": 90
   },
   "agent_chat_request.py::build_agent_chat_turn": {
-    "loc": 24,
+    "loc": 26,
     "cc": 2,
     "nesting": 1
   },
@@ -203,7 +203,7 @@
     "nesting": 10
   },
   "chat_types.py": {
-    "loc": 72
+    "loc": 92
   },
   "chat_types.py::_extract_injected_exercise": {
     "loc": 8,
@@ -335,7 +335,7 @@
     "nesting": 1
   },
   "routes.py": {
-    "loc": 1270
+    "loc": 1268
   },
   "routes.py::_extract_chat_objective": {
     "loc": 9,

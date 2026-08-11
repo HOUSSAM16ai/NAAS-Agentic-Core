@@ -172,10 +172,12 @@ jobs:
           # than the behaviour. 2405 is therefore the correct value: it permits today's
           # tree and reddens on a single new problem.
           #
-          # ⚠️ Still unobserved: a run that actually FAILS. Argument delivery and the
-          # boundary are measured; the failing branch is JetBrains' documented contract.
-          # Proving it costs one deliberate red scan (drop this to 2404 on a throwaway
-          # branch) — worth doing the next time this file is touched for another reason.
+          # ✅ NO LONGER UNOBSERVED — the failing branch fired for real on 2026-08-11.
+          # PR #8 (D-237/D-238) scored 2407 against this threshold and the job went red,
+          # so `count > N` is now measured on both sides, not just the passing one. The
+          # 4 net-new problems were 4 undeclared `ChatRunContext` keys and 1 dead import;
+          # they were FIXED, and the threshold was not touched. That is the only response
+          # this line permits — raising it needs a written decision naming the reason.
           #
           # 2,405 measured on 42f8876 and reproduced on 1b8cd82 (2,411 before six verified
           # fixes). ⛔ Lower it when problems are fixed; raising it needs a written decision

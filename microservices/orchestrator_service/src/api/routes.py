@@ -129,14 +129,12 @@ from .identity_access import (
     _safe_thread_id,
     require_internal_admin_access,
 )
-from .stream_serialization import (
-    _HUMAN_RESPONSE_FIELDS,  # noqa: F401
-    _append_telemetry_line,  # noqa: F401
-    _extract_human_readable_response,  # noqa: F401 — re-export (D-168)
-    _serialize_json_async,  # noqa: F401
-    _serialize_stream_frame,  # noqa: F401 — re-export (D-168)
-    _serialize_stream_frame_sync,  # noqa: F401
-)
+
+# ⛔ كتلة إعادة تصديرٍ من `stream_serialization` كانت هنا وحُذفت: بعد استخراج البثّ
+# (D-237) لم يبقَ في `routes.py` مستعملٌ لأيٍّ من أسمائها الستّة، ولا مُستورِدٌ ولا
+# مُرقِّعٌ يصل إليها عبر `routes` (فُحص الأمر: صفر إصابة في المستودع كلّه — والاختبار
+# الوحيد الذي يستعمل `_serialize_stream_frame_sync` يستورده من موطنه مباشرةً).
+# §6.8: القدرة بلا مستهلكٍ حيّ تُحذَف ولا تُترَك stub. أعِدها بالسطر الذي يحتاجها فقط.
 from .trace_utils import extract_trace_context
 
 logger = logging.getLogger(__name__)

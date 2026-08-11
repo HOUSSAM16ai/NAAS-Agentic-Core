@@ -1,14 +1,19 @@
 """أنواع وثوابت مسار الدردشة — الوحدة الورقية (leaf) لطبقات D-168.
 
-مستخرَجة حرفياً من ``routes.py`` (D-168 Slice A1): لا تستورد من أي وحدة شقيقة —
-كل وحدات ``chat_support`` و ``routes.py`` تستورد منها (طبقات باتجاه واحد، درء الدورات).
+مستخرَجة حرفياً من ``routes.py`` (D-168 Slice A1): لا تستورد من أي وحدة شقيقة **وقت
+التشغيل** — كل وحدات ``chat_support`` و ``routes.py`` تستورد منها (طبقات باتجاه واحد،
+درء الدورات). استيرادُ نوعٍ تحت ``TYPE_CHECKING`` لا يُنشئ اقتراناً وقت التشغيل ولا
+يُغيّر رسم الاستيراد، فهو مسموح — والبديل عنه أن يُعلَن مفتاحٌ حقيقي بنوعٍ كاذب.
 """
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:  # لا استيراد وقت التشغيل — النوع للتحقّق الساكن وحده.
+    from .trace_utils import OrchestratorTraceContext
 
 MAX_HISTORY_MESSAGES = 24
 MAX_CHECKPOINT_ANCHOR_MESSAGES = 4
@@ -18,13 +23,28 @@ MAX_HISTORY_SUMMARY_ITEMS = 18
 
 
 class ChatRunContext(TypedDict, total=False):
-    """غلاف سياقي محدود لمسار تشغيل الدردشة لتجنّب القواميس المفتوحة في الحدود الحرجة."""
+    """غلاف سياقي محدود لمسار تشغيل الدردشة لتجنّب القواميس المفتوحة في الحدود الحرجة.
+
+    ⚠️ **العقد يُعلَن كاملاً أو لا يكون عقداً** (صنف ISS-152): كانت ثلاثة مفاتيح
+    تُكتَب وتُقرأ وقت التشغيل بلا إعلان هنا — ``trace_context`` (يكتبها
+    ``agent_chat_request`` و``chat_stream_engine``، وتقرأها ``agent_chat_admin_stream``
+    بـ``tc.trace_id``) · ``history_messages`` (يقرأها الوكيل في أربعة مواضع) ·
+    ``compatibility_facade`` (مصافحة §6.5). وكان ``conversation_id`` مُعلَناً
+    ``int | str`` بينما ``ChatRequest`` يُصرّح ``int | None`` — فالقيمة الحقيقية لم
+    تكن ضمن النوع المُعلَن أصلاً. غلافٌ «محدود» لا يذكر ما يحمله ليس حدّاً بل إيهامُ حدّ.
+    """
 
     mission_type: str
-    conversation_id: int | str
+    conversation_id: int | str | None
     thread_id: int | str
     session_id: int | str
     user_id: int
+    #: تاريخ المحادثة المُمرَّر مع الدور — يقرأه الوكيل (`overmind/agents/orchestrator`).
+    history_messages: list[dict[str, str]]
+    #: أثر التتبّع الصادر — يُقرأ بـ`tc.trace_id` عند بناء `config`.
+    trace_context: OrchestratorTraceContext
+    #: مصافحة §6.5: المونوليث يملك رسالة المستخدم فلا يكتبها الأوركستريتور.
+    compatibility_facade: bool
     # D-103: محتوى تمرين محقون من الـ monolith (شرح-بسياق عبر الرسم الـ13-node)
     exercise_content: str
     exercise_ref: str

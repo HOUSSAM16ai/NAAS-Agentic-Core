@@ -13,9 +13,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, cast
 
 from .chat_types import ChatRunContext
 from .identity_access import _is_admin_payload
+
+if TYPE_CHECKING:  # لا استيراد وقت التشغيل — النوع للتحقّق الساكن وحده.
+    from .trace_utils import OrchestratorTraceContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,11 +66,13 @@ def build_agent_chat_turn(
     *,
     request_context: dict[str, object],
     identity: TurnIdentity,
-    trace_context: object,
+    trace_context: OrchestratorTraceContext | None,
     auth_payload: dict[str, object],
 ) -> AgentChatTurn:
     """يبني سياق الدور بنفس ترتيب `routes.py:923-938` وبنفس أثره الجانبي."""
-    context: ChatRunContext = request_context.copy()  # type: ignore[assignment]
+    # الحدّ الذي يصير عنده جسمُ طلبٍ غير مُصنَّف سياقاً مُصرَّحاً. `cast` تُصرّح هذا
+    # التبنّي في سطرٍ يُقرأ، بخلاف `# type: ignore` التي تُسكت المُدقِّق بلا أن تقول عمّاذا.
+    context = cast(ChatRunContext, request_context.copy())
     if trace_context:
         context["trace_context"] = trace_context
         request_context["trace_context"] = trace_context

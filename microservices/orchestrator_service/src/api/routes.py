@@ -61,16 +61,19 @@ from microservices.orchestrator_service.src.services.tools.registry import get_r
 # D-168: decomposed API helpers — re-exported so runtime imports and monkeypatch
 # targets on `routes.<name>` keep working (manifest: api_sources.API_SOURCE_FILES).
 # Plain imports (no wrappers) preserve monkeypatch semantics for handler-resolved names.
+from .agent_chat_admin_stream import stream_admin_agent_chat
+from .agent_chat_customer_stream import stream_customer_agent_chat
+from .agent_chat_request import AgentChatTurn, build_agent_chat_turn  # noqa: F401
 from .chat_context import (
-    _augment_ambiguous_objective,
+    _augment_ambiguous_objective,  # noqa: F401 — re-export (D-168)
     _build_graph_messages_graph,  # noqa: F401
-    _build_graph_messages_manual,
+    _build_graph_messages_manual,  # noqa: F401 — re-export (D-168)
     _build_langchain_messages,  # noqa: F401
     _build_older_history_digest,  # noqa: F401
     _canonicalize_mission_event,
     _compress_text_for_context,  # noqa: F401
     _context_gap_reason_for_followup,  # noqa: F401
-    _detect_checkpoint_state,
+    _detect_checkpoint_state,  # noqa: F401 — re-export (D-168)
     _extract_checkpoint_history,  # noqa: F401
     _extract_recent_entity_anchor,  # noqa: F401
     _is_ambiguous_followup,  # noqa: F401
@@ -112,11 +115,11 @@ from .identity_access import (
     _decode_auth_payload_or_401,
     _emit_identity_diagnostic_log,
     _is_admin_payload,
-    _merge_admin_inputs,
+    _merge_admin_inputs,  # noqa: F401 — re-export (D-168)
     _resolve_effective_conversation_id,
     _resolve_session_id_from_incoming,
-    _resolve_thread_id,
-    _safe_assistant_error,
+    _resolve_thread_id,  # noqa: F401 — re-export (D-168)
+    _safe_assistant_error,  # noqa: F401 — re-export (D-168)
     _safe_conversation_id,
     _safe_thread_id,
     require_internal_admin_access,
@@ -124,9 +127,9 @@ from .identity_access import (
 from .stream_serialization import (
     _HUMAN_RESPONSE_FIELDS,  # noqa: F401
     _append_telemetry_line,  # noqa: F401
-    _extract_human_readable_response,
+    _extract_human_readable_response,  # noqa: F401 — re-export (D-168)
     _serialize_json_async,  # noqa: F401
-    _serialize_stream_frame,
+    _serialize_stream_frame,  # noqa: F401 — re-export (D-168)
     _serialize_stream_frame_sync,  # noqa: F401
 )
 from .trace_utils import extract_trace_context
@@ -906,345 +909,40 @@ async def chat_with_agent_endpoint(
     fastapi_req: Request,
     authorization: str | None = Header(default=None),
 ) -> StreamingResponse:
-    """
-    Direct chat endpoint for the Orchestrator Agent (Microservice).
-    Streams the response chunk by chunk.
-    """
-
-    # Extract trace context
+    """Direct chat endpoint for the Orchestrator Agent (Microservice).
+    Streams the response chunk by chunk."""
     trace_context = extract_trace_context(fastapi_req)
-
     user_id, auth_payload = _decode_auth_payload_or_401(authorization)
     request.user_id = user_id  # Override body user_id with JWT user_id
-
     logger.info(f"Agent Chat Request: {request.question[:50]}... User: {request.user_id}")
 
-    # Prepare context
-    context = request.context.copy()
-    if trace_context:
-        context["trace_context"] = trace_context
-        request.context["trace_context"] = trace_context
-    context.update(
-        {
-            "user_id": request.user_id,
-            "conversation_id": request.conversation_id,
-            "history_messages": request.history_messages,
-        }
+    turn = build_agent_chat_turn(
+        request_context=request.context,
+        user_id=request.user_id,
+        conversation_id=request.conversation_id,
+        history_messages=request.history_messages,
+        trace_context=trace_context,
+        auth_payload=auth_payload,
     )
 
-    # Validate admin explicitly from JWT payload
-    is_admin = _is_admin_payload(auth_payload)
-    # Detect if request comes from Monolith compatibility facade
-    is_compatibility_facade = bool(context.get("compatibility_facade"))
-
-    if is_admin:
-
-        async def _admin_stream() -> AsyncGenerator[str, None]:
-            try:
-                admin_app = getattr(fastapi_req.app.state, "admin_app", None)
-                if admin_app is None:
-                    raise RuntimeError(
-                        "LangGraph admin_app is required but was not found on app.state"
-                    )
-
-                if isinstance(request.context, dict):
-                    request.context["is_admin"] = True
-                    request.context["role"] = "admin"
-                    admin_payload = request.context
-                else:
-                    admin_payload = {"is_admin": True, "role": "admin"}
-
-                # Augment the objective for explicit context before sending to LangGraph
-                prepared_objective = _augment_ambiguous_objective(
-                    request.question, request.history_messages
-                )
-
-                # Use _build_graph_messages to safely build context avoiding context blindness
-                conversation_id_fallback = (
-                    request.conversation_id
-                    if getattr(request, "conversation_id", None)
-                    else str(uuid.uuid4())
-                )
-                thread_id = _resolve_thread_id(
-                    {"user_id": request.user_id, "conversation_id": request.conversation_id},
-                    fallback_conversation_id=str(conversation_id_fallback),
-                )
-                _checkpointer_available, _checkpoint_has_state = await _detect_checkpoint_state(
-                    thread_id
-                )
-                # `query` هو ما تقرأه عقدة الإدارة لاختيار الأداة:
-                # graph/admin.py:128 `resolve_tool_deterministic(state.get("query", ""))`.
-                # كان غائباً هنا وحده، فكان كلّ سؤالٍ إداري على هذا المسار يُحلّ أداته
-                # على سلسلةٍ فارغة. مسار StateGraph يضعه صراحةً
-                # (chat_stream_engine.py:491)، فالغياب إغفالٌ لا تصميم.
-                admin_inputs = _merge_admin_inputs(
-                    {
-                        "messages": [{"role": "user", "content": prepared_objective}],
-                        "query": prepared_objective,
-                    },
-                    admin_payload,
-                )
-
-                conversation_id = (
-                    request.conversation_id
-                    if getattr(request, "conversation_id", None)
-                    else str(uuid.uuid4())
-                )
-
-                thread_id = _resolve_thread_id(
-                    {"user_id": request.user_id, "conversation_id": request.conversation_id},
-                    fallback_conversation_id=str(conversation_id),
-                )
-
-                final_resp = None
-                admin_streamed_chars = 0  # D-047
-                config = {"configurable": {"thread_id": thread_id}}
-                if "trace_context" in request.context:
-                    tc = request.context["trace_context"]
-                    config["metadata"] = config.get("metadata", {})
-                    config["metadata"]["langsmith-trace"] = tc.trace_id
-
-                async for event in admin_app.astream_events(
-                    admin_inputs, config=config, version="v2"
-                ):
-                    _evt_type = event["event"]
-                    if _evt_type == "on_chain_start":
-                        node_name = event.get("name", "")
-                        if (
-                            node_name
-                            and not node_name.startswith("__")
-                            and node_name != "LangGraph"
-                        ):
-                            yield await _serialize_stream_frame(
-                                {
-                                    "type": "phase_start",
-                                    "payload": {"phase": node_name, "agent": "admin"},
-                                }
-                            )
-                    elif _evt_type == "on_chat_model_stream":
-                        # D-047: token-level streaming when nodes use LangChain ChatOpenAI
-                        _chunk = event.get("data", {}).get("chunk")
-                        if _chunk is not None:
-                            _content = getattr(_chunk, "content", None)
-                            if isinstance(_content, str) and _content:
-                                admin_streamed_chars += len(_content)
-                                yield await _serialize_stream_frame(
-                                    {
-                                        "type": "assistant_delta",
-                                        "payload": {"content": _content},
-                                    }
-                                )
-                    elif _evt_type == "on_custom_event":
-                        # D-048: token-level streaming from DSPy/raw-OpenAI nodes via stream_writer
-                        _data = event.get("data")
-                        if isinstance(_data, dict) and _data.get("chunk_type") == "assistant_delta":
-                            _content = _data.get("content")
-                            if isinstance(_content, str) and _content:
-                                admin_streamed_chars += len(_content)
-                                yield await _serialize_stream_frame(
-                                    {
-                                        "type": "assistant_delta",
-                                        "payload": {"content": _content},
-                                    }
-                                )
-                    elif _evt_type == "on_chain_end":
-                        node_name = event.get("name", "")
-                        if (
-                            node_name
-                            and not node_name.startswith("__")
-                            and node_name != "LangGraph"
-                        ):
-                            yield await _serialize_stream_frame(
-                                {
-                                    "type": "phase_completed",
-                                    "payload": {"phase": node_name, "agent": "admin"},
-                                }
-                            )
-                        if not node_name or node_name == "LangGraph":
-                            output_data = event["data"].get("output", {})
-                            if output_data and isinstance(output_data, dict):
-                                if "final_response" in output_data:
-                                    final_resp = output_data["final_response"]
-                                elif output_data.get("messages"):
-                                    last_msg = output_data["messages"][-1]
-                                    if hasattr(last_msg, "content"):
-                                        final_resp = last_msg.content
-
-                # ISS-056: extract human-readable text only — never leak JSON envelope
-                response_text = _extract_human_readable_response(final_resp)
-
-                full_user_message = request.question
-                full_ai_response = response_text
-                try:
-                    async with async_session_factory() as db_session:
-                        conv_id, _ = await _ensure_conversation(
-                            session=db_session,
-                            chat_scope="admin",
-                            user_id=request.user_id,
-                            question=full_user_message,
-                            requested_conversation_id=request.conversation_id,
-                            skip_user_message=is_compatibility_facade,
-                        )
-                        await _persist_assistant_message(
-                            session=db_session,
-                            chat_scope="admin",
-                            conversation_id=conv_id,
-                            content=full_ai_response,
-                        )
-                    yield await _serialize_stream_frame(
-                        {"type": "assistant_delta", "payload": {"content": "\n\n✅ [DB SAVED]"}}
-                    )
-                    # D-047: لا تُكرِّر response_text إذا تم بث القطع بالفعل token-by-token،
-                    # لأن المتصفح يجمعها عبر mergeAssistantContent.
-                    _final_payload_content = "" if admin_streamed_chars > 0 else response_text
-                    # Signal Monolith that Orchestrator already persisted both messages
-                    yield await _serialize_stream_frame(
-                        {
-                            "type": "assistant_final",
-                            "payload": {"content": _final_payload_content},
-                            "persisted": True,
-                        }
-                    )
-                except Exception as e:
-                    error_msg = str(e)
-                    yield await _serialize_stream_frame(
-                        {
-                            "type": "assistant_error",
-                            "payload": {"content": f"\n\n🚨 **SYSTEM DB ERROR:** {error_msg}"},
-                        }
-                    )
-                    # DB write failed — Monolith must handle persistence
-                    yield await _serialize_stream_frame(
-                        {
-                            "type": "assistant_final",
-                            "payload": {"content": response_text},
-                            "persisted": False,
-                        }
-                    )
-            except Exception:
-                request_id = str(uuid.uuid4())
-                logger.error(
-                    "Admin Chat Error",
-                    exc_info=True,
-                    extra={"request_id": request_id},
-                )
-                yield await _serialize_stream_frame(
-                    {
-                        "type": "assistant_error",
-                        "payload": {"content": _safe_assistant_error(request_id)},
-                    }
-                )
-
-        return StreamingResponse(_admin_stream(), media_type="text/plain")
-
-    ai_client = get_ai_client()
-    agent = OrchestratorAgent(ai_client, tool_registry)
-
-    async def _stream_generator():
-        try:
-            prepared_objective = _augment_ambiguous_objective(
-                request.question, request.history_messages
-            )
-
-            # Use _build_graph_messages to properly seed history for the agent context
-            conversation_id_fallback = (
-                request.conversation_id
-                if getattr(request, "conversation_id", None)
-                else str(uuid.uuid4())
-            )
-            thread_id = _resolve_thread_id(
-                {"user_id": request.user_id, "conversation_id": request.conversation_id},
-                fallback_conversation_id=str(conversation_id_fallback),
-            )
-            _checkpointer_available, _checkpoint_has_state = await _detect_checkpoint_state(
-                thread_id
-            )
-            langchain_msgs = _build_graph_messages_manual(
-                objective=prepared_objective,
-                history_messages=request.history_messages,
-            )
-
-            run_result = agent.run(
-                prepared_objective, context=context, history_messages=langchain_msgs
-            )
-            ai_chunks = []
-            final_chunk = None
-            async for chunk in run_result:
-                if isinstance(chunk, str):
-                    ai_chunks.append(chunk)
-                    yield await _serialize_stream_frame(chunk)
-                elif isinstance(chunk, dict) and chunk.get("type") == "assistant_delta":
-                    delta_content = chunk.get("payload", {}).get("content", "")
-                    if delta_content:
-                        ai_chunks.append(str(delta_content))
-                    yield await _serialize_stream_frame(chunk)
-                elif isinstance(chunk, dict) and chunk.get("type") == "assistant_final":
-                    final_content = chunk.get("payload", {}).get("content", "")
-                    if final_content:
-                        ai_chunks.append(str(final_content))
-                    final_chunk = chunk
-                else:
-                    yield await _serialize_stream_frame(chunk)
-
-            # The run completed successfully, trigger persistence
-            full_user_message = request.question
-            full_ai_response = "".join(ai_chunks)
-            if full_ai_response:
-                orchestrator_persisted = False
-                try:
-                    async with async_session_factory() as db_session:
-                        conv_id, _ = await _ensure_conversation(
-                            session=db_session,
-                            chat_scope="customer",
-                            user_id=request.user_id,
-                            question=full_user_message,
-                            requested_conversation_id=request.conversation_id,
-                            skip_user_message=is_compatibility_facade,
-                        )
-                        await _persist_assistant_message(
-                            session=db_session,
-                            chat_scope="customer",
-                            conversation_id=conv_id,
-                            content=full_ai_response,
-                        )
-                    orchestrator_persisted = True
-                    yield await _serialize_stream_frame(
-                        {"type": "assistant_delta", "payload": {"content": "\n\n✅ [DB SAVED]"}}
-                    )
-                except Exception as e:
-                    error_msg = str(e)
-                    yield await _serialize_stream_frame(
-                        {
-                            "type": "assistant_error",
-                            "payload": {"content": f"\n\n🚨 **SYSTEM DB ERROR:** {error_msg}"},
-                        }
-                    )
-                # Signal Monolith whether Orchestrator handled persistence
-                final_frame = {
-                    "type": "assistant_final",
-                    "payload": {"content": full_ai_response},
-                    "persisted": orchestrator_persisted,
-                }
-                yield await _serialize_stream_frame(final_frame)
-            elif final_chunk:
-                # No AI response to persist — forward original final_chunk without persistence flag
-                yield await _serialize_stream_frame(final_chunk)
-
-        except Exception:
-            request_id = str(uuid.uuid4())
-            logger.error(
-                "Agent Chat Error",
-                exc_info=True,
-                extra={"request_id": request_id},
-            )
-            yield await _serialize_stream_frame(
-                {
-                    "type": "assistant_error",
-                    "payload": {"content": _safe_assistant_error(request_id)},
-                }
-            )
-
-    return StreamingResponse(_stream_generator(), media_type="text/plain")
+    common = {
+        "question": request.question,
+        "user_id": request.user_id,
+        "conversation_id": request.conversation_id,
+        "history_messages": request.history_messages,
+        "is_compatibility_facade": turn.is_compatibility_facade,
+    }
+    if turn.is_admin:
+        stream = stream_admin_agent_chat(
+            app_state=fastapi_req.app.state, request_context=request.context, **common
+        )
+    else:
+        stream = stream_customer_agent_chat(
+            agent=OrchestratorAgent(get_ai_client(), tool_registry),
+            context=turn.context,
+            **common,
+        )
+    return StreamingResponse(stream, media_type="text/plain")
 
 
 @router.post("/missions", response_model=MissionResponse, summary="Launch Mission")

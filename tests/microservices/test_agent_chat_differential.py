@@ -43,14 +43,28 @@ import pytest
 from fastapi.testclient import TestClient
 
 from microservices.orchestrator_service.main import app
-from microservices.orchestrator_service.src.api import routes
+from microservices.orchestrator_service.src.api import (
+    agent_chat_admin_stream,
+    agent_chat_customer_stream,
+    chat_stream_engine,
+    routes,
+)
 
 GOLDEN_FILE = Path(__file__).parent / "fixtures" / "agent_chat_golden.json"
 
 #: الوحدات التي تُحَلّ منها أسماء المُستدعي. عند استخراج المولّدات (D-168) تُضاف
 #: الوحدة الجديدة هنا — **سطر واحد، موضع واحد**. لا تحذف `routes`: الغلاف الرفيع
-#: يبقى فيه ويستدعي المصادقة.
-CALLER_MODULES: tuple[Any, ...] = (routes,)
+#: يبقى فيه ويستدعي المصادقة و`OrchestratorAgent`.
+#: تكامل هذه القائمة مفروضٌ آلياً — راجع
+#: `test_caller_modules_covers_every_module_that_calls_a_patched_name`.
+CALLER_MODULES: tuple[Any, ...] = (
+    routes,
+    agent_chat_admin_stream,
+    agent_chat_customer_stream,
+    # مسار WS لا يمرّ به `/agent/chat`، لكنّه يستدعي `_persist_assistant_message`
+    # فيدخل القائمة كي يبقى الثابت البنيوي صادقاً بالكامل. ترقيعه لا-عمليةٌ هنا.
+    chat_stream_engine,
+)
 
 
 def _patch_caller(monkeypatch: pytest.MonkeyPatch, name: str, value: object) -> None:
@@ -485,6 +499,57 @@ def test_every_scenario_ends_with_exactly_one_terminal_frame(
         finals = [frame for frame in terminal if frame["type"] == "assistant_final"]
         assert len(finals) <= 1, f"{scenario}: أكثر من إطار نهائي واحد"
         assert terminal, f"{scenario}: دورٌ بلا إطار نهائي — فشلٌ صامت"
+
+
+#: الأسماء التي يُرقّعها هذا الملفّ لعزل قاعدة البيانات والشبكة.
+PATCHED_NAMES = (
+    "_ensure_conversation",
+    "_persist_assistant_message",
+    "_decode_auth_payload_or_401",
+    "get_ai_client",
+    "OrchestratorAgent",
+)
+
+
+def test_caller_modules_covers_every_module_that_calls_a_patched_name() -> None:
+    """يسدّ الثقب المتبقّي في `_patch_caller` — بنيويّاً لا بالثقة.
+
+    `_patch_caller` ترفع حين **لا وحدة** تملك الاسم. لكنّ `routes` يُعيد تصدير
+    المنقولات (`noqa: F401`)، فلو انتقل مُستدعٍ إلى وحدةٍ جديدة نُسي إدراجها،
+    لوجدت الدالّةُ الاسمَ في `routes` ورقّعته هناك و**نجحت صامتةً** بينما المُستدعي
+    الحقيقي بلا ترقيع.
+
+    فالمِلكية تُقاس على شجرة الصياغة: كلّ وحدة في الحزمة **تستدعي** اسماً مُرقَّعاً
+    يجب أن تكون في `CALLER_MODULES`. (D-208 · البند ٦: `parse_source` ترفع بدل أن
+    تشهد بنظافة ملفٍّ لم تُقرأ.)
+    """
+    import ast
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "fitness"))
+    from _ast_util import parse_source
+
+    api_dir = Path(routes.__file__).parent
+    listed = {Path(module.__file__).name for module in CALLER_MODULES}
+
+    missing: list[str] = []
+    for path in sorted(api_dir.glob("*.py")):
+        tree = parse_source(path)
+        called = {
+            node.func.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        hits = called & set(PATCHED_NAMES)
+        if hits and path.name not in listed:
+            missing.append(f"{path.name} تستدعي {sorted(hits)}")
+
+    assert not missing, (
+        "وحداتٌ تستدعي أسماءً مُرقَّعة وهي خارج CALLER_MODULES:\n  "
+        + "\n  ".join(missing)
+        + "\n   الترقيع سيجدها في إعادة تصدير `routes` وينجح صامتاً بينما المُستدعي "
+        "الحقيقي يمسّ قاعدة بيانات حقيقية (D-168 · قاعدة late-binding)."
+    )
 
 
 def test_the_late_binding_guard_raises_instead_of_patching_nothing(

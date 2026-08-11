@@ -1,6 +1,80 @@
 {
+  "agent_chat_admin_stream.py": {
+    "loc": 291
+  },
+  "agent_chat_admin_stream.py::_admin_payload_from": {
+    "loc": 7,
+    "cc": 2,
+    "nesting": 1
+  },
+  "agent_chat_admin_stream.py::_final_response_from_chain_end": {
+    "loc": 15,
+    "cc": 8,
+    "nesting": 2
+  },
+  "agent_chat_admin_stream.py::_finalise_admin_turn": {
+    "loc": 55,
+    "cc": 4,
+    "nesting": 2
+  },
+  "agent_chat_admin_stream.py::_is_reportable_node": {
+    "loc": 3,
+    "cc": 3,
+    "nesting": 0
+  },
+  "agent_chat_admin_stream.py::_prepare_admin_run": {
+    "loc": 47,
+    "cc": 4,
+    "nesting": 1
+  },
+  "agent_chat_admin_stream.py::_stream_delta_content": {
+    "loc": 14,
+    "cc": 8,
+    "nesting": 2
+  },
+  "agent_chat_admin_stream.py::_translate_graph_events": {
+    "loc": 26,
+    "cc": 6,
+    "nesting": 2
+  },
+  "agent_chat_admin_stream.py::stream_admin_agent_chat": {
+    "loc": 54,
+    "cc": 5,
+    "nesting": 2
+  },
+  "agent_chat_customer_stream.py": {
+    "loc": 193
+  },
+  "agent_chat_customer_stream.py::_classify_agent_chunk": {
+    "loc": 15,
+    "cc": 8,
+    "nesting": 1
+  },
+  "agent_chat_customer_stream.py::_finalise_customer_turn": {
+    "loc": 46,
+    "cc": 3,
+    "nesting": 2
+  },
+  "agent_chat_customer_stream.py::_prepare_customer_run": {
+    "loc": 26,
+    "cc": 2,
+    "nesting": 0
+  },
+  "agent_chat_customer_stream.py::stream_customer_agent_chat": {
+    "loc": 58,
+    "cc": 9,
+    "nesting": 3
+  },
+  "agent_chat_request.py": {
+    "loc": 58
+  },
+  "agent_chat_request.py::build_agent_chat_turn": {
+    "loc": 26,
+    "cc": 2,
+    "nesting": 1
+  },
   "api_sources.py": {
-    "loc": 41
+    "loc": 44
   },
   "api_sources.py::read_api_source": {
     "loc": 8,
@@ -236,7 +310,7 @@
     "nesting": 1
   },
   "routes.py": {
-    "loc": 1566
+    "loc": 1272
   },
   "routes.py::_extract_chat_objective": {
     "loc": 9,
@@ -269,9 +343,9 @@
     "nesting": 0
   },
   "routes.py::chat_with_agent_endpoint": {
-    "loc": 336,
-    "cc": 51,
-    "nesting": 13
+    "loc": 39,
+    "cc": 2,
+    "nesting": 1
   },
   "routes.py::chat_ws_stategraph": {
     "loc": 148,

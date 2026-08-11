@@ -55,23 +55,17 @@ BOUNDARY_GUARD = "_already_a_frame"
 
 
 def _is_json_dumps(node: ast.AST) -> bool:
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "dumps"
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "json"
-    )
+    """`json.dumps(...)` — مطابقةٌ على الاسم المنقوط."""
+    if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+        return False
+    return node.func.attr == "dumps" and getattr(node.func.value, "id", None) == "json"
 
 
 def _builds_a_frame(call: ast.Call) -> bool:
     """صحيحٌ إن كان أوّل وسيطٍ قاموساً حرفياً يحمل مفتاح `type` — أي إطاراً."""
-    if not call.args:
-        return False
-    first = call.args[0]
-    if not isinstance(first, ast.Dict):
-        return False
-    return any(isinstance(key, ast.Constant) and key.value == "type" for key in first.keys if key)
+    first = call.args[0] if call.args else None
+    keys = first.keys if isinstance(first, ast.Dict) else []
+    return any(getattr(key, "value", None) == "type" for key in keys if key)
 
 
 def _serializes_a_frame(value: ast.expr) -> bool:
@@ -107,33 +101,38 @@ def _serialized_frame_violations() -> list[str]:
     return out
 
 
-def _boundary_guard_violations() -> list[str]:
-    """القانون 2: حارس الحدود لم يُحذَف."""
-    tree = parse_source(BOUNDARY_FILE)
-    rel = BOUNDARY_FILE.relative_to(REPO_ROOT).as_posix()
-    classifier = next(
+def _find_function(tree: ast.Module, name: str) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    return next(
         (
             node
             for node in ast.walk(tree)
-            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
-            and node.name == BOUNDARY_CALLER
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == name
         ),
         None,
     )
+
+
+def _called_names(node: ast.AST) -> set[str]:
+    return {
+        call.func.id
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+    }
+
+
+def _boundary_guard_violations() -> list[str]:
+    """القانون 2: حارس الحدود لم يُحذَف."""
+    rel = BOUNDARY_FILE.relative_to(REPO_ROOT).as_posix()
+    classifier = _find_function(parse_source(BOUNDARY_FILE), BOUNDARY_CALLER)
     if classifier is None:
         return [f"❌ {rel}: لم تُعثَر الدالّة {BOUNDARY_CALLER!r} — حارس الحدود مفقود."]
-    calls = {
-        node.func.id
-        for node in ast.walk(classifier)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    }
-    if BOUNDARY_GUARD not in calls:
-        return [
-            f"❌ {rel}: {BOUNDARY_CALLER} لم يعد يستدعي {BOUNDARY_GUARD!r}.\n"
-            f"   الدفاع في العمق لا يُحذَف بصمت — مُنتِجٌ يُسلسل قبل التسليم يجب أن\n"
-            f"   يُكتشَف عند الحدّ لا أن يصل الطالب (ISS-156)."
-        ]
-    return []
+    if BOUNDARY_GUARD in _called_names(classifier):
+        return []
+    return [
+        f"❌ {rel}: {BOUNDARY_CALLER} لم يعد يستدعي {BOUNDARY_GUARD!r}.\n"
+        f"   الدفاع في العمق لا يُحذَف بصمت — مُنتِجٌ يُسلسل قبل التسليم يجب أن\n"
+        f"   يُكتشَف عند الحدّ لا أن يصل الطالب (ISS-156)."
+    ]
 
 
 def main() -> int:

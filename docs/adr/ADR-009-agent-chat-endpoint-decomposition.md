@@ -139,6 +139,6 @@ turns a green suite into a measurement of itself.** The fake now calls the real
 `_make_json_event`, so it cannot drift again.
 
 Both are fixed, both are enforced by gates that need no credentials
-(`check_no_double_encoded_frames`, and `check_model_chain_parity` widened), and the live
+(`check_no_double_encoded_frames` and `check_model_client_literals`), and the live
 before/after is recorded verbatim in
 [`E2E_LIVE_EVIDENCE_D238.md`](../architecture/E2E_LIVE_EVIDENCE_D238.md).

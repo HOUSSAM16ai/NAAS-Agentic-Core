@@ -184,5 +184,5 @@ psql -c "SELECT role, left(content,120) FROM customer_messages ORDER BY id DESC 
 **Why this is not a CI job.** It needs a real OpenRouter key and outbound network. Forcing
 it into CI imports exactly the rate-limit flakiness that fails `test_routing.py` locally, and
 an amber pipeline gets ignored. The laws it proved are instead enforced by
-`check_no_double_encoded_frames` and `check_model_chain_parity`, which need neither
+`check_no_double_encoded_frames` and `check_model_client_literals`, which need neither
 credentials nor network. Same split as D-172/D-204.

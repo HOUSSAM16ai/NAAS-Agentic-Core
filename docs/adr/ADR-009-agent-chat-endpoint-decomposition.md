@@ -111,3 +111,34 @@ proving each mechanism can actually fail. Raising any budget requires a written 
 **Left open, deliberately.** ISS-153 (`persisted` stripped by `StreamFrame`) is
 documented and characterised by a test that freezes the broken behaviour, not fixed —
 the fix touches every frame on every path and belongs in its own PR.
+
+---
+
+## Outcome — what running it found that the tests could not (D-238)
+
+After this ADR's work closed with 1,296 green tests, 100% differential equivalence and a
+byte-identical OpenAPI contract, the full stack was booted (real PostgreSQL 16, real
+OpenRouter, 11 processes) and **one** student question was sent. Two further defects
+surfaced immediately.
+
+**ISS-156 — every frame encoded twice.** `_make_json_event` returned an already-serialized
+frame and the endpoint serialized it again: 32 of 34 frames carried a whole frame inside
+`payload.content`, and `customer_messages` stored the envelope instead of the answer —
+permanent poisoning of the student's history, proven by SQL. Pre-existing and byte-identical
+on `origin/main`, so the decomposition carried it faithfully, exactly as "verbatim" promised.
+
+**ISS-157 — the orchestrator's only model was the one D-067 bans as PRIMARY**, with no
+fallback chain, and outside `check_model_chain_parity`'s scope.
+
+**The lesson this ADR should carry, because it is the uncomfortable one:** the safety net
+built in Phase 1 was *correct about equivalence and wrong about coverage*. `_FakeAgent`
+emitted plain text where the real agent emits frames, so the golden master faithfully froze a
+shape the agent never produces. Every claim made about equivalence still holds; none of them
+could have caught this. **A test double that does not follow the real producer's contract
+turns a green suite into a measurement of itself.** The fake now calls the real
+`_make_json_event`, so it cannot drift again.
+
+Both are fixed, both are enforced by gates that need no credentials
+(`check_no_double_encoded_frames`, and `check_model_chain_parity` widened), and the live
+before/after is recorded verbatim in
+[`E2E_LIVE_EVIDENCE_D238.md`](../architecture/E2E_LIVE_EVIDENCE_D238.md).

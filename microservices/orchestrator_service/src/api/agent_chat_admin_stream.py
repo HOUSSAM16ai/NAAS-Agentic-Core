@@ -36,7 +36,7 @@ from dataclasses import dataclass
 
 from microservices.orchestrator_service.src.core.database import async_session_factory
 
-from .chat_context import _augment_ambiguous_objective, _detect_checkpoint_state
+from .chat_context import _augment_ambiguous_objective
 from .conversation_store import _ensure_conversation, _persist_assistant_message
 from .identity_access import _merge_admin_inputs, _resolve_thread_id, _safe_assistant_error
 from .stream_serialization import _extract_human_readable_response, _serialize_stream_frame
@@ -96,16 +96,6 @@ async def _prepare_admin_run(
     """يبني مدخلات الرسم الإداري وإعداد التشغيل (`thread_id` + أثر التتبّع)."""
     # Augment the objective for explicit context before sending to LangGraph
     prepared_objective = _augment_ambiguous_objective(question, history_messages)
-
-    # ⚠️ شريحةٌ ميتة مُبقاةٌ عمداً في هذه الخطوة (كانت `routes.py:963-974`): النتيجة
-    # لا يقرأها أحد، لكنّ حذفها تغييرُ سلوكٍ (جولة قاعدة بيانات أقلّ لكلّ طلب) فيُفرَد
-    # بالتزامٍ مستقلّ قابل للتراجع بعد إثبات التكافؤ. النقل يبقى حرفياً.
-    conversation_id_fallback = conversation_id if conversation_id else str(uuid.uuid4())
-    _dead_thread_id = _resolve_thread_id(
-        {"user_id": user_id, "conversation_id": conversation_id},
-        fallback_conversation_id=str(conversation_id_fallback),
-    )
-    _checkpointer_available, _checkpoint_has_state = await _detect_checkpoint_state(_dead_thread_id)
 
     # `query` هو ما تقرأه عقدة الإدارة لاختيار الأداة:
     # graph/admin.py:128 `resolve_tool_deterministic(state.get("query", ""))`.

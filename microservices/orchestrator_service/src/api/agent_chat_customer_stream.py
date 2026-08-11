@@ -24,14 +24,10 @@ from collections.abc import AsyncGenerator
 
 from microservices.orchestrator_service.src.core.database import async_session_factory
 
-from .chat_context import (
-    _augment_ambiguous_objective,
-    _build_graph_messages_manual,
-    _detect_checkpoint_state,
-)
+from .chat_context import _augment_ambiguous_objective, _build_graph_messages_manual
 from .chat_types import ChatRunContext
 from .conversation_store import _ensure_conversation, _persist_assistant_message
-from .identity_access import _resolve_thread_id, _safe_assistant_error
+from .identity_access import _safe_assistant_error
 from .stream_serialization import _serialize_stream_frame
 
 logger = logging.getLogger(__name__)
@@ -57,25 +53,13 @@ def _classify_agent_chunk(chunk: object) -> tuple[str | None, object, bool]:
     return None, chunk, False
 
 
-async def _prepare_customer_run(
+def _prepare_customer_run(
     *,
     question: str,
-    user_id: int,
-    conversation_id: int | None,
     history_messages: list[dict[str, str]],
 ) -> tuple[str, list[object]]:
     """يبني الهدف المُثرى ورسائل السياق التي يستقبلها الوكيل."""
     prepared_objective = _augment_ambiguous_objective(question, history_messages)
-
-    # ⚠️ شريحةٌ ميتة مُبقاةٌ عمداً في هذه الخطوة (كانت `routes.py:1142-1153`): النتيجة
-    # لا يقرأها أحد، لكنّ حذفها تغييرُ سلوكٍ (جولة قاعدة بيانات أقلّ لكلّ طلب) فيُفرَد
-    # بالتزامٍ مستقلّ قابل للتراجع بعد إثبات التكافؤ. النقل يبقى حرفياً.
-    conversation_id_fallback = conversation_id if conversation_id else str(uuid.uuid4())
-    _dead_thread_id = _resolve_thread_id(
-        {"user_id": user_id, "conversation_id": conversation_id},
-        fallback_conversation_id=str(conversation_id_fallback),
-    )
-    _checkpointer_available, _checkpoint_has_state = await _detect_checkpoint_state(_dead_thread_id)
 
     # Use _build_graph_messages to properly seed history for the agent context
     langchain_msgs = _build_graph_messages_manual(
@@ -145,11 +129,8 @@ async def stream_customer_agent_chat(
 ) -> AsyncGenerator[str, None]:
     """يبثّ دور الزبون عبر `OrchestratorAgent` ويحفظ الدور عند وجود محتوى."""
     try:
-        prepared_objective, langchain_msgs = await _prepare_customer_run(
-            question=question,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            history_messages=history_messages,
+        prepared_objective, langchain_msgs = _prepare_customer_run(
+            question=question, history_messages=history_messages
         )
         run_result = agent.run(prepared_objective, context=context, history_messages=langchain_msgs)
         ai_chunks: list[str] = []

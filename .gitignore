@@ -206,3 +206,4 @@ actionlint*
 # Auto-generated documentation
 docs/generated/
 
+.venv312/

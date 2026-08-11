@@ -1,0 +1,395 @@
+{
+  "api_sources.py": {
+    "loc": 41
+  },
+  "api_sources.py::read_api_source": {
+    "loc": 8,
+    "cc": 2,
+    "nesting": 0
+  },
+  "chat_context.py": {
+    "loc": 559
+  },
+  "chat_context.py::_augment_ambiguous_objective": {
+    "loc": 29,
+    "cc": 11,
+    "nesting": 1
+  },
+  "chat_context.py::_build_graph_messages_graph": {
+    "loc": 50,
+    "cc": 8,
+    "nesting": 4
+  },
+  "chat_context.py::_build_graph_messages_manual": {
+    "loc": 20,
+    "cc": 7,
+    "nesting": 3
+  },
+  "chat_context.py::_build_langchain_messages": {
+    "loc": 25,
+    "cc": 8,
+    "nesting": 3
+  },
+  "chat_context.py::_build_older_history_digest": {
+    "loc": 30,
+    "cc": 9,
+    "nesting": 2
+  },
+  "chat_context.py::_canonicalize_mission_event": {
+    "loc": 17,
+    "cc": 6,
+    "nesting": 1
+  },
+  "chat_context.py::_compress_text_for_context": {
+    "loc": 7,
+    "cc": 2,
+    "nesting": 1
+  },
+  "chat_context.py::_context_gap_reason_for_followup": {
+    "loc": 17,
+    "cc": 5,
+    "nesting": 1
+  },
+  "chat_context.py::_detect_checkpoint_state": {
+    "loc": 18,
+    "cc": 4,
+    "nesting": 2
+  },
+  "chat_context.py::_extract_checkpoint_history": {
+    "loc": 38,
+    "cc": 9,
+    "nesting": 2
+  },
+  "chat_context.py::_extract_recent_entity_anchor": {
+    "loc": 83,
+    "cc": 16,
+    "nesting": 2
+  },
+  "chat_context.py::_is_ambiguous_followup": {
+    "loc": 68,
+    "cc": 12,
+    "nesting": 1
+  },
+  "chat_context.py::_normalize_checkpoint_content": {
+    "loc": 20,
+    "cc": 9,
+    "nesting": 5
+  },
+  "chat_context.py::_normalize_checkpoint_message": {
+    "loc": 17,
+    "cc": 8,
+    "nesting": 1
+  },
+  "chat_context.py::_normalize_checkpoint_role": {
+    "loc": 12,
+    "cc": 5,
+    "nesting": 1
+  },
+  "chat_context.py::_question_contains_explicit_entity": {
+    "loc": 52,
+    "cc": 8,
+    "nesting": 1
+  },
+  "chat_stream_engine.py": {
+    "loc": 602
+  },
+  "chat_stream_engine.py::_run_chat_langgraph": {
+    "loc": 151,
+    "cc": 27,
+    "nesting": 8
+  },
+  "chat_stream_engine.py::_stream_chat_langgraph": {
+    "loc": 390,
+    "cc": 60,
+    "nesting": 10
+  },
+  "chat_types.py": {
+    "loc": 72
+  },
+  "chat_types.py::_extract_injected_exercise": {
+    "loc": 8,
+    "cc": 3,
+    "nesting": 1
+  },
+  "chat_types.py::_extract_support_level": {
+    "loc": 10,
+    "cc": 4,
+    "nesting": 1
+  },
+  "context_utils.py": {
+    "loc": 64
+  },
+  "context_utils.py::_extract_client_context_messages": {
+    "loc": 23,
+    "cc": 8,
+    "nesting": 2
+  },
+  "context_utils.py::_merge_history_with_client_context": {
+    "loc": 32,
+    "cc": 10,
+    "nesting": 2
+  },
+  "conversation_store.py": {
+    "loc": 388
+  },
+  "conversation_store.py::_create_new_conversation": {
+    "loc": 24,
+    "cc": 6,
+    "nesting": 2
+  },
+  "conversation_store.py::_ensure_conversation": {
+    "loc": 211,
+    "cc": 26,
+    "nesting": 4
+  },
+  "conversation_store.py::_lazy_import_history_with_retry": {
+    "loc": 52,
+    "cc": 6,
+    "nesting": 3
+  },
+  "conversation_store.py::_persist_assistant_message": {
+    "loc": 53,
+    "cc": 8,
+    "nesting": 3
+  },
+  "conversation_store.py::close_conv_service_client": {
+    "loc": 3,
+    "cc": 3,
+    "nesting": 1
+  },
+  "conversation_store.py::get_conv_service_client": {
+    "loc": 9,
+    "cc": 3,
+    "nesting": 1
+  },
+  "identity_access.py": {
+    "loc": 228
+  },
+  "identity_access.py::_build_conversation_thread_id": {
+    "loc": 3,
+    "cc": 1,
+    "nesting": 0
+  },
+  "identity_access.py::_coerce_admin_state": {
+    "loc": 12,
+    "cc": 2,
+    "nesting": 0
+  },
+  "identity_access.py::_conversation_id_from_scoped_thread": {
+    "loc": 10,
+    "cc": 3,
+    "nesting": 1
+  },
+  "identity_access.py::_decode_auth_payload_or_401": {
+    "loc": 12,
+    "cc": 4,
+    "nesting": 1
+  },
+  "identity_access.py::_emit_identity_diagnostic_log": {
+    "loc": 22,
+    "cc": 5,
+    "nesting": 0
+  },
+  "identity_access.py::_is_admin_payload": {
+    "loc": 8,
+    "cc": 4,
+    "nesting": 0
+  },
+  "identity_access.py::_merge_admin_inputs": {
+    "loc": 8,
+    "cc": 2,
+    "nesting": 1
+  },
+  "identity_access.py::_resolve_effective_conversation_id": {
+    "loc": 8,
+    "cc": 2,
+    "nesting": 1
+  },
+  "identity_access.py::_resolve_session_id_from_incoming": {
+    "loc": 12,
+    "cc": 6,
+    "nesting": 2
+  },
+  "identity_access.py::_resolve_thread_id": {
+    "loc": 13,
+    "cc": 3,
+    "nesting": 1
+  },
+  "identity_access.py::_safe_assistant_error": {
+    "loc": 3,
+    "cc": 1,
+    "nesting": 0
+  },
+  "identity_access.py::_safe_conversation_id": {
+    "loc": 30,
+    "cc": 6,
+    "nesting": 2
+  },
+  "identity_access.py::_safe_thread_id": {
+    "loc": 11,
+    "cc": 5,
+    "nesting": 2
+  },
+  "identity_access.py::require_internal_admin_access": {
+    "loc": 27,
+    "cc": 8,
+    "nesting": 1
+  },
+  "routes.py": {
+    "loc": 1566
+  },
+  "routes.py::_extract_chat_objective": {
+    "loc": 9,
+    "cc": 5,
+    "nesting": 1
+  },
+  "routes.py::_get_mission_status_payload": {
+    "loc": 4,
+    "cc": 2,
+    "nesting": 1
+  },
+  "routes.py::_serialize_mission": {
+    "loc": 12,
+    "cc": 2,
+    "nesting": 0
+  },
+  "routes.py::admin_chat_ws_stategraph": {
+    "loc": 153,
+    "cc": 23,
+    "nesting": 5
+  },
+  "routes.py::chat_messages_endpoint": {
+    "loc": 103,
+    "cc": 22,
+    "nesting": 7
+  },
+  "routes.py::chat_messages_health_endpoint": {
+    "loc": 7,
+    "cc": 1,
+    "nesting": 0
+  },
+  "routes.py::chat_with_agent_endpoint": {
+    "loc": 336,
+    "cc": 51,
+    "nesting": 13
+  },
+  "routes.py::chat_ws_stategraph": {
+    "loc": 148,
+    "cc": 20,
+    "nesting": 5
+  },
+  "routes.py::checkpointer_status": {
+    "loc": 30,
+    "cc": 2,
+    "nesting": 1
+  },
+  "routes.py::compose_skills": {
+    "loc": 65,
+    "cc": 4,
+    "nesting": 1
+  },
+  "routes.py::create_mission_endpoint": {
+    "loc": 32,
+    "cc": 3,
+    "nesting": 1
+  },
+  "routes.py::get_admin_conversation": {
+    "loc": 48,
+    "cc": 8,
+    "nesting": 2
+  },
+  "routes.py::get_customer_conversation": {
+    "loc": 46,
+    "cc": 7,
+    "nesting": 2
+  },
+  "routes.py::get_mission_endpoint": {
+    "loc": 10,
+    "cc": 2,
+    "nesting": 1
+  },
+  "routes.py::get_mission_events_endpoint": {
+    "loc": 20,
+    "cc": 4,
+    "nesting": 0
+  },
+  "routes.py::list_admin_conversations": {
+    "loc": 27,
+    "cc": 6,
+    "nesting": 1
+  },
+  "routes.py::list_customer_conversations": {
+    "loc": 25,
+    "cc": 5,
+    "nesting": 1
+  },
+  "routes.py::outbox_status": {
+    "loc": 6,
+    "cc": 1,
+    "nesting": 0
+  },
+  "routes.py::stream_mission_ws": {
+    "loc": 88,
+    "cc": 20,
+    "nesting": 5
+  },
+  "routes.py::trigger_outbox_relay": {
+    "loc": 19,
+    "cc": 1,
+    "nesting": 0
+  },
+  "stream_serialization.py": {
+    "loc": 110
+  },
+  "stream_serialization.py::_append_telemetry_line": {
+    "loc": 12,
+    "cc": 2,
+    "nesting": 2
+  },
+  "stream_serialization.py::_extract_human_readable_response": {
+    "loc": 38,
+    "cc": 13,
+    "nesting": 4
+  },
+  "stream_serialization.py::_serialize_json_async": {
+    "loc": 3,
+    "cc": 1,
+    "nesting": 0
+  },
+  "stream_serialization.py::_serialize_stream_frame": {
+    "loc": 3,
+    "cc": 1,
+    "nesting": 0
+  },
+  "stream_serialization.py::_serialize_stream_frame_sync": {
+    "loc": 7,
+    "cc": 2,
+    "nesting": 1
+  },
+  "tools.py": {
+    "loc": 50
+  },
+  "tools.py::get_tool_schema": {
+    "loc": 9,
+    "cc": 4,
+    "nesting": 2
+  },
+  "tools.py::invoke_tool": {
+    "loc": 14,
+    "cc": 6,
+    "nesting": 4
+  },
+  "tools.py::tool_health": {
+    "loc": 5,
+    "cc": 3,
+    "nesting": 2
+  },
+  "trace_utils.py": {
+    "loc": 33
+  },
+  "trace_utils.py::extract_trace_context": {
+    "loc": 15,
+    "cc": 3,
+    "nesting": 1
+  }
+}

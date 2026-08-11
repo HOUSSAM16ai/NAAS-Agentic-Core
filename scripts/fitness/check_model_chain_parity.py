@@ -50,53 +50,20 @@ _CHAIN_ATTRS: tuple[str, ...] = (
     "GATEWAY_FALLBACK_5",
 )
 
-#: عملاء النماذج التي يجب ألّا تحمل حرفية نموذجٍ إطلاقاً (ISS-157).
-#:
-#: البوّابة كانت تفحص ملفَّي `ai_config.py` وحدهما، بينما
-#: `services/llm/client.py` يحمل **نفس القرار** خارج مرماها: كان يُصلِّب
-#: `nvidia/nemotron-3-nano-30b-a3b:free` — النموذج الذي يمنعه D-067 أن يكون
-#: PRIMARY — بلا سلسلة سقوط، ولا نشرةَ تضبط `ORCHESTRATOR_LLM_MODEL`، فكان
-#: المحظور هو ما يعمل فعلاً. صنفُ العطب نفسه الذي كلّف المستودع ISS-148:
-#: **فارضٌ بمرمىً أضيق من القاعدة التي يحرسها.**
-MODEL_CLIENTS: tuple[str, ...] = ("microservices/orchestrator_service/src/services/llm/client.py",)
-
-
-def _looks_like_model_id(value: str) -> bool:
-    """مُعرِّف نموذج OpenRouter: `provider/name:free` — بلا مسافات وقصير."""
-    return "/" in value and ":free" in value and " " not in value and len(value) < 120
-
-
-def _hardcoded_model_literals(rel_path: str) -> list[tuple[int, str]]:
-    """يُعيد كل حرفية تبدو مُعرِّف نموذجٍ (`provider/name`) في الملفّ."""
-    path = REPO_ROOT / rel_path
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    return [
-        (node.lineno, node.value)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and _looks_like_model_id(node.value)
-    ]
-
-
-def _assignments(class_node: ast.ClassDef) -> dict[str, ast.expr]:
-    """Map every ``NAME = <expr>`` in a class body to its right-hand side."""
-    return {
-        target.id: stmt.value
-        for stmt in class_node.body
-        if isinstance(stmt, ast.Assign)
-        for target in stmt.targets
-        if isinstance(target, ast.Name)
-    }
-
 
 def _string_constants(class_node: ast.ClassDef) -> dict[str, str]:
     """Map ``NAME = "literal"`` assignments in a class body to their string values."""
-    return {
-        name: value.value
-        for name, value in _assignments(class_node).items()
-        if isinstance(value, ast.Constant) and isinstance(value.value, str)
-    }
+    out: dict[str, str] = {}
+    for stmt in class_node.body:
+        if (
+            isinstance(stmt, ast.Assign)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            for tgt in stmt.targets:
+                if isinstance(tgt, ast.Name):
+                    out[tgt.id] = stmt.value.value
+    return out
 
 
 def _resolve_value(node: ast.expr, available: dict[str, str]) -> str | None:
@@ -128,61 +95,22 @@ def resolve_chain_from_source(rel_path: str) -> list[str]:
     if active is None:
         raise ValueError(f"{rel_path}: no `ActiveModels` class found")
 
-    assigned = _assignments(active)
-    return [_resolve_attr(rel_path, attr, assigned, available) for attr in _CHAIN_ATTRS]
+    assigned: dict[str, ast.expr] = {}
+    for stmt in active.body:
+        if isinstance(stmt, ast.Assign):
+            for tgt in stmt.targets:
+                if isinstance(tgt, ast.Name):
+                    assigned[tgt.id] = stmt.value
 
-
-def _resolve_attr(
-    rel_path: str, attr: str, assigned: dict[str, ast.expr], available: dict[str, str]
-) -> str:
-    """Resolve one chain slot, naming the file and the slot when it cannot."""
-    if attr not in assigned:
-        raise ValueError(f"{rel_path}: ActiveModels is missing `{attr}`")
-    value = _resolve_value(assigned[attr], available)
-    if value is None:
-        raise ValueError(f"{rel_path}: could not statically resolve `{attr}`")
-    return value
-
-
-def _check_brains(canonical: list[str]) -> bool:
-    """كل عقلٍ يُعلن نفس السلسلة القانونية — وإلّا فهو split-brain."""
-    ok = True
-    for label, rel_path in BRAINS:
-        try:
-            chain = resolve_chain_from_source(rel_path)
-        except Exception as exc:  # surface a clear gate failure
-            print(f"❌ {label} ({rel_path}): {type(exc).__name__}: {exc}")
-            ok = False
-            continue
-        if chain != canonical:
-            print(f"❌ {label} ({rel_path}) drifts from canonical:\n     {chain}")
-            ok = False
-        else:
-            print(f"✅ {label} ({rel_path}) matches canonical chain")
-    return ok
-
-
-def _check_model_clients() -> bool:
-    """ISS-157: عميل النماذج لا يحمل حرفية — يقرأ من `ai_config.py` المحروس."""
-    ok = True
-    for rel_path in MODEL_CLIENTS:
-        try:
-            literals = _hardcoded_model_literals(rel_path)
-        except Exception as exc:
-            print(f"❌ model-client ({rel_path}): {type(exc).__name__}: {exc}")
-            ok = False
-            continue
-        if not literals:
-            print(f"✅ model-client ({rel_path}) carries no hardcoded model literal")
-            continue
-        for lineno, value in literals:
-            print(f"❌ model-client ({rel_path}:{lineno}) hardcodes a model: {value!r}")
-        print(
-            "   اقرأ من `ActiveModels` بدل الحرفية — القرار الواحد له موطنٌ واحد.\n"
-            "   (ISS-157: حرفيةٌ هنا جعلت النموذج المحظور بـD-067 هو الافتراضي الحيّ.)"
-        )
-        ok = False
-    return ok
+    chain: list[str] = []
+    for attr in _CHAIN_ATTRS:
+        if attr not in assigned:
+            raise ValueError(f"{rel_path}: ActiveModels is missing `{attr}`")
+        value = _resolve_value(assigned[attr], available)
+        if value is None:
+            raise ValueError(f"{rel_path}: could not statically resolve `{attr}`")
+        chain.append(value)
+    return chain
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -196,7 +124,19 @@ def main(argv: list[str] | None = None) -> int:
     print("=== Model-Chain Parity Gate (D-013 → machine-enforced) ===")
     print(f"canonical (shared/ai_models/model_chain.py): {canonical}")
 
-    ok = all([_check_brains(canonical), _check_model_clients()])
+    ok = True
+    for label, rel_path in BRAINS:
+        try:
+            chain = resolve_chain_from_source(rel_path)
+        except Exception as exc:  # surface a clear gate failure
+            print(f"❌ {label} ({rel_path}): {type(exc).__name__}: {exc}")
+            ok = False
+            continue
+        if chain != canonical:
+            print(f"❌ {label} ({rel_path}) drifts from canonical:\n     {chain}")
+            ok = False
+        else:
+            print(f"✅ {label} ({rel_path}) matches canonical chain")
 
     if not ok:
         print(

@@ -203,6 +203,12 @@ jobs:
           # produces. Two laws, both structural: producers don't serialize, and the
           # boundary guard cannot be deleted in silence.
           python scripts/fitness/check_no_double_encoded_frames.py
+          # ISS-157: the orchestrator's LLM client hardcoded the model D-067 bans as
+          # PRIMARY (ISS-079), with no fallback chain, and no deployment overrides it —
+          # so the banned model was what actually ran. check_model_chain_parity scanned
+          # only the two ai_config.py files while a third held the same decision: an
+          # enforcer aimed narrower than its rule, the defect class of ISS-148.
+          python scripts/fitness/check_model_client_literals.py
           # D-206 (ISS-141 · L6): the scope a student asks for ("the first question
           # only") has exactly one canonical source. It was spread across seven lists
           # in six files, and not one of them knew the indefinite «اول» — so a student

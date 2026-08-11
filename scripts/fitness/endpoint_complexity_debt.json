@@ -43,12 +43,17 @@
     "nesting": 2
   },
   "agent_chat_customer_stream.py": {
-    "loc": 174
+    "loc": 199
+  },
+  "agent_chat_customer_stream.py::_already_a_frame": {
+    "loc": 15,
+    "cc": 5,
+    "nesting": 1
   },
   "agent_chat_customer_stream.py::_classify_agent_chunk": {
-    "loc": 15,
-    "cc": 8,
-    "nesting": 1
+    "loc": 22,
+    "cc": 9,
+    "nesting": 2
   },
   "agent_chat_customer_stream.py::_finalise_customer_turn": {
     "loc": 46,

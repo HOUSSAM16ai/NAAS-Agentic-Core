@@ -50,6 +50,31 @@ _CHAIN_ATTRS: tuple[str, ...] = (
     "GATEWAY_FALLBACK_5",
 )
 
+#: عملاء النماذج التي يجب ألّا تحمل حرفية نموذجٍ إطلاقاً (ISS-157).
+#:
+#: البوّابة كانت تفحص ملفَّي `ai_config.py` وحدهما، بينما
+#: `services/llm/client.py` يحمل **نفس القرار** خارج مرماها: كان يُصلِّب
+#: `nvidia/nemotron-3-nano-30b-a3b:free` — النموذج الذي يمنعه D-067 أن يكون
+#: PRIMARY — بلا سلسلة سقوط، ولا نشرةَ تضبط `ORCHESTRATOR_LLM_MODEL`، فكان
+#: المحظور هو ما يعمل فعلاً. صنفُ العطب نفسه الذي كلّف المستودع ISS-148:
+#: **فارضٌ بمرمىً أضيق من القاعدة التي يحرسها.**
+MODEL_CLIENTS: tuple[str, ...] = ("microservices/orchestrator_service/src/services/llm/client.py",)
+
+
+def _hardcoded_model_literals(rel_path: str) -> list[tuple[int, str]]:
+    """يُعيد كل حرفية تبدو مُعرِّف نموذجٍ (`provider/name`) في الملفّ."""
+    path = REPO_ROOT / rel_path
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+            continue
+        value = node.value
+        # مُعرِّف نموذج OpenRouter: "provider/name" وغالباً ":free" — ولا مسافات.
+        if "/" in value and " " not in value and len(value) < 120 and ":free" in value:
+            found.append((node.lineno, value))
+    return found
+
 
 def _string_constants(class_node: ast.ClassDef) -> dict[str, str]:
     """Map ``NAME = "literal"`` assignments in a class body to their string values."""
@@ -137,6 +162,25 @@ def main(argv: list[str] | None = None) -> int:
             ok = False
         else:
             print(f"✅ {label} ({rel_path}) matches canonical chain")
+
+    # ISS-157: عميل النماذج لا يحمل حرفية — يقرأ من `ai_config.py` المحروس أعلاه.
+    for rel_path in MODEL_CLIENTS:
+        try:
+            literals = _hardcoded_model_literals(rel_path)
+        except Exception as exc:
+            print(f"❌ model-client ({rel_path}): {type(exc).__name__}: {exc}")
+            ok = False
+            continue
+        if literals:
+            for lineno, value in literals:
+                print(f"❌ model-client ({rel_path}:{lineno}) hardcodes a model: {value!r}")
+            print(
+                "   اقرأ من `ActiveModels` بدل الحرفية — القرار الواحد له موطنٌ واحد.\n"
+                "   (ISS-157: حرفيةٌ هنا جعلت النموذج المحظور بـD-067 هو الافتراضي الحيّ.)"
+            )
+            ok = False
+        else:
+            print(f"✅ model-client ({rel_path}) carries no hardcoded model literal")
 
     if not ok:
         print(

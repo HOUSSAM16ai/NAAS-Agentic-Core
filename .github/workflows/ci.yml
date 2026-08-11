@@ -194,6 +194,15 @@ jobs:
           # God-function for a God-module is measured, not assumed away. It caught
           # exactly that during the extraction itself.
           python scripts/fitness/check_endpoint_complexity.py
+          # ISS-156: the producer must not serialize what the transport serializes.
+          # `_make_json_event` returned `json.dumps({...}) + "\n"` and the endpoint
+          # wrapped it again — 32 of 34 frames on a live full stack carried a whole
+          # frame inside `payload.content`, and `customer_messages` stored the
+          # envelope instead of the student's answer. 1296 green tests missed it
+          # because the test double emitted raw text, a shape the agent never
+          # produces. Two laws, both structural: producers don't serialize, and the
+          # boundary guard cannot be deleted in silence.
+          python scripts/fitness/check_no_double_encoded_frames.py
           # D-206 (ISS-141 · L6): the scope a student asks for ("the first question
           # only") has exactly one canonical source. It was spread across seven lists
           # in six files, and not one of them knew the indefinite «اول» — so a student

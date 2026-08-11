@@ -86,6 +86,23 @@ def _patch_caller(monkeypatch: pytest.MonkeyPatch, name: str, value: object) -> 
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def agent_text_event(text: str) -> object:
+    """يُنتج ما يُنتجه الوكيل الحقيقي لقطعةٍ نصّية — **بالدالّة نفسها لا بنسخةٍ منها**.
+
+    ISS-156: كان البديل هنا يُنتج نصّاً خاماً (`"مرحبا "`)، بينما
+    `OrchestratorAgent._make_json_event` تُنتج إطاراً. فجمّد المرجعُ شكلاً لا يُنتجه
+    الوكيل أبداً، ومرّ الترميز المزدوج تحت 1296 اختباراً أخضر حتى شُغِّل المكدّس حيّاً.
+
+    الاستدعاء المباشر للدالّة الحقيقية مقصود: نسخةٌ يدوية هنا كانت ستتفرّق مرّةً
+    أخرى بالضبط كما تفرّقت. البديل يتبع عقد الأصل بالبناء لا بالنيّة.
+    """
+    from microservices.orchestrator_service.src.services.overmind.agents.orchestrator import (
+        OrchestratorAgent,
+    )
+
+    return OrchestratorAgent._make_json_event(None, text)  # type: ignore[arg-type]
+
+
 class _FakeAgent:
     """يستبدل `OrchestratorAgent` فيتحكّم الاختبار بأشكال الـchunks الأربعة."""
 
@@ -223,10 +240,14 @@ CUSTOMER_BODY: dict[str, object] = {"question": "ما هو الاحتمال؟", 
 def test_customer_string_chunks_stream_persist_and_finalise(
     monkeypatch: pytest.MonkeyPatch, persistence: dict[str, list[dict[str, object]]]
 ) -> None:
-    """أبسط مسار حيّ: chunks نصّية ⇒ deltas + حفظ + إطار نهائي واحد."""
+    """أبسط مسار حيّ: قطع الوكيل الحقيقية ⇒ deltas + حفظ + إطار نهائي واحد."""
     _authenticate(monkeypatch, user_id=7, role="customer")
     _patch_caller(monkeypatch, "get_ai_client", lambda: object())
-    _patch_caller(monkeypatch, "OrchestratorAgent", _FakeAgent(["مرحبا ", "بك"]))
+    _patch_caller(
+        monkeypatch,
+        "OrchestratorAgent",
+        _FakeAgent([agent_text_event("مرحبا "), agent_text_event("بك")]),
+    )
 
     frames = _drive(CUSTOMER_BODY)
 
@@ -234,6 +255,46 @@ def test_customer_string_chunks_stream_persist_and_finalise(
     assert len(persistence["persist"]) == 1
     assert persistence["persist"][0]["content"] == "مرحبا بك"
     assert persistence["persist"][0]["chat_scope"] == "customer"
+
+
+def test_no_frame_is_encoded_twice_and_no_envelope_is_persisted(
+    monkeypatch: pytest.MonkeyPatch, persistence: dict[str, list[dict[str, object]]]
+) -> None:
+    """ISS-156 — الإطار يُرمَّز مرّةً واحدة، والمحفوظ نصُّ الطالب لا المظروف.
+
+    مُثبَت حيّاً قبل الإصلاح على مكدّسٍ كامل بـPostgres حقيقي: **32 إطاراً من 34**
+    كانت تحمل إطاراً مُسلسَلاً داخل `payload.content`، والصفّ المحفوظ في
+    `customer_messages` كان حرفياً `{"type": "assistant_delta", ...}`.
+
+    السبب: `_make_json_event` تُنتج إطاراً جاهزاً، وفرع `str` كان يلفّه ثانيةً عبر
+    `_serialize_stream_frame`. والمُراكِم كان يجمع المظروف فيتسمّم الصفّ المحفوظ.
+    """
+    _authenticate(monkeypatch, user_id=7, role="customer")
+    _patch_caller(monkeypatch, "get_ai_client", lambda: object())
+    _patch_caller(
+        monkeypatch,
+        "OrchestratorAgent",
+        _FakeAgent([agent_text_event("الاحتمال "), agent_text_event("هو النسبة.")]),
+    )
+
+    frames = _drive(CUSTOMER_BODY)
+
+    for frame in frames:
+        content = frame.get("payload", {}).get("content")
+        if not isinstance(content, str) or not content.lstrip().startswith("{"):
+            continue
+        try:
+            inner = json.loads(content)
+        except json.JSONDecodeError:
+            continue
+        raise AssertionError(
+            f"إطارٌ مُرمَّز مرّتين: `payload.content` يحمل إطاراً كاملاً {inner!r}.\n"
+            f"   الطالب يرى JSON خاماً بدل جوابه."
+        )
+
+    assert persistence["persist"][0]["content"] == "الاحتمال هو النسبة.", (
+        "المحفوظ ليس نصّ الطالب — تسمّم `customer_messages` بمظروف JSON (ISS-156)."
+    )
 
 
 def test_customer_dict_delta_and_final_chunks(

@@ -10,6 +10,7 @@ from collections.abc import AsyncGenerator
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionChunk
 
+from microservices.orchestrator_service.src.core.ai_config import ActiveModels
 from microservices.orchestrator_service.src.core.config import get_settings
 
 logger = logging.getLogger("ai-client")
@@ -49,12 +50,15 @@ class AIClient:
             base_url=base_url,
             timeout=45.0,
         )
-        # ISS-069 (2026-05-15): nemotron-3-nano-omni-30b-a3b-reasoning:free يضع الإجابة
-        # في message.reasoning لا message.content → content=None مع system prompt.
-        # nemotron-3-nano-30b-a3b:free: جودة 4/4، TTFT=3.1s، content مضمون دائماً.
-        self.default_model = os.getenv(
-            "ORCHESTRATOR_LLM_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free"
-        )
+        # ISS-157: كان هنا `nvidia/nemotron-3-nano-30b-a3b:free` مُصلَّباً — وهو النموذج
+        # الذي يمنعه D-067 صراحةً أن يكون PRIMARY (ISS-079: كارثة «pepepe aaaa»، محتوى
+        # إنجليزي/فارغ مع موجّهات النظام الطويلة). التعليق القديم كان يستشهد بـISS-069
+        # (2026-05-15)، و**D-067 نقضه بعد يومين** (2026-05-17) ولم يُحدَّث هذا الملفّ.
+        #
+        # لا حرفية هنا بعد اليوم: المصدر هو `ActiveModels.PRIMARY` — الملفّ الذي تحرسه
+        # `check_model_chain_parity` بالفعل. فالقرار الواحد له موطنٌ واحد (D-186).
+        # `ORCHESTRATOR_LLM_MODEL` يبقى تجاوزاً صريحاً للمُشغِّل.
+        self.default_model = os.getenv("ORCHESTRATOR_LLM_MODEL", ActiveModels.PRIMARY)
 
     async def generate(
         self,

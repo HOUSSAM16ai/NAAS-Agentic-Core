@@ -80,17 +80,27 @@ class OrchestratorRunResult:
     Orchestrator run result that supports async iteration and awaitable string.
     """
 
-    def __init__(self, stream: AsyncGenerator[str, None]) -> None:
+    def __init__(self, stream: AsyncGenerator[dict[str, object], None]) -> None:
         self._stream = stream
 
-    def __aiter__(self) -> AsyncGenerator[str, None]:
+    def __aiter__(self) -> AsyncGenerator[dict[str, object], None]:
         return self._stream
 
     def __await__(self):
         async def _collect() -> str:
+            """يجمع **نصّ** الإطارات — لا مظاريفها (ISS-156).
+
+            بعد أن صار المجرى إطارات، كان `"".join(chunks)` سيرفع على dict. العقد
+            المُعلَن هنا سلسلةٌ نصّية، فيُستخرَج `payload.content` صراحةً.
+            """
             chunks: list[str] = []
             async for chunk in self._stream:
-                chunks.append(chunk)
+                if isinstance(chunk, dict):
+                    content = chunk.get("payload", {}).get("content", "")
+                    if isinstance(content, str) and content:
+                        chunks.append(content)
+                else:
+                    chunks.append(str(chunk))
             return "".join(chunks)
 
         return _collect().__await__()
@@ -151,7 +161,7 @@ class OrchestratorAgent:
         question: str,
         context: dict[str, object] | None = None,
         history_messages: list | None = None,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[dict[str, object], None]:
         logger.info(f"Orchestrator received: {question}")
         normalized = question.strip()
         context = context or {}
@@ -224,18 +234,27 @@ class OrchestratorAgent:
             logger.error(f"Orchestrator dispatch failed: {e}", exc_info=True)
             yield self._make_json_event("عذرًا، حدث خطأ غير متوقع أثناء معالجة طلبك.")
 
-    def _make_json_event(self, text: str) -> str:
-        return json.dumps({"type": "assistant_delta", "payload": {"content": text}}) + "\n"
+    def _make_json_event(self, text: str) -> dict[str, object]:
+        """يبني **إطاراً** لا سلسلة — التسلسل مسؤولية طبقة النقل وحدها (ISS-156).
 
-    def _serialize_mission_chunk(self, chunk: dict[str, object] | str) -> str:
-        """يضمن أن مخرجات mission_complex تُبث كسلاسل نصية قابلة للترميز عبر StreamingResponse."""
+        كانت تُعيد `json.dumps(...) + "\\n"`، فيلفّها المُستهلِك الوحيد
+        (`agent_chat_customer_stream`) مرّةً ثانية عبر `_serialize_stream_frame`.
+        النتيجة الحيّة على مكدّسٍ كامل: **32 إطاراً من 34** تحمل إطاراً مُسلسَلاً
+        داخل `payload.content`، و`customer_messages` تُخزِّن المظروف بدل جواب الطالب.
+
+        المُنتِج لا يُسلسل والمُستهلِك يُسلسل — وإلّا فُقد المعنى بين الطبقتين.
+        """
+        return {"type": "assistant_delta", "payload": {"content": text}}
+
+    def _serialize_mission_chunk(self, chunk: dict[str, object] | str) -> dict[str, object]:
+        """يوحّد مخرجات mission_complex إلى **إطار** واحد الشكل (ISS-156)."""
         if isinstance(chunk, str):
-            return chunk if chunk.endswith("\n") else f"{chunk}\n"
-        return json.dumps(chunk, ensure_ascii=False) + "\n"
+            return {"type": "assistant_delta", "payload": {"content": chunk}}
+        return chunk
 
     async def _as_json_event(
         self, generator: AsyncGenerator[str, None]
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[dict[str, object], None]:
         async for chunk in generator:
             yield self._make_json_event(chunk)
 

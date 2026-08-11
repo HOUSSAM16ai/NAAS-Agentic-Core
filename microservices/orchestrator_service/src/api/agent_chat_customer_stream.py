@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
@@ -36,13 +37,37 @@ logger = logging.getLogger(__name__)
 _NO_FRAME = object()
 
 
+def _already_a_frame(chunk: str) -> dict[str, object] | None:
+    """يكشف سلسلةً هي في الحقيقة إطارٌ مُسلسَل — دفاعٌ في العمق ضدّ ISS-156.
+
+    الكشف **دقيق لا تخميني**: يشترط `json.loads` ناجحاً **و**قاموساً يحمل مفتاح
+    `type`. فنثرُ الطالب أو المعلّم لا يمكن أن يُقرأ إطاراً بالخطأ، ومُنتِجٌ يعود
+    غداً فيُسلسل قبل أن يُسلّم لا يستطيع إعادة العطب.
+    """
+    text = chunk.lstrip()
+    if not text.startswith("{"):
+        return None
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, dict) and "type" in parsed else None
+
+
 def _classify_agent_chunk(chunk: object) -> tuple[str | None, object, bool]:
     """يصنّف قطعة الوكيل إلى (نصٌّ يُراكَم، إطارٌ يُبَثّ، أهي النهائية).
 
     الأشكال الأربعة التي يُنتجها `OrchestratorAgent.run` — والنهائية **تُلتقط ولا
     تُبَثّ** لأن الإطار النهائي يُبنى لاحقاً حاملاً راية `persisted` (§6.5).
+
+    ⚠️ **المُراكَم نصُّ الطالب لا المظروف**: `full_ai_response` هو ما يُكتب في
+    `customer_messages`، فتراكُم المظروف يُسمّم الصفّ المحفوظ إلى الأبد (ISS-156 —
+    مُثبَتٌ حيّاً بـSQL على قاعدة حقيقية قبل الإصلاح).
     """
     if isinstance(chunk, str):
+        framed = _already_a_frame(chunk)
+        if framed is not None:
+            return _classify_agent_chunk(framed)
         return chunk, chunk, False
     if isinstance(chunk, dict) and chunk.get("type") == "assistant_delta":
         content = chunk.get("payload", {}).get("content", "")

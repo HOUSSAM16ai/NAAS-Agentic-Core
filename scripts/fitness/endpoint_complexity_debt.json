@@ -1,6 +1,6 @@
 {
   "agent_chat_admin_stream.py": {
-    "loc": 291
+    "loc": 283
   },
   "agent_chat_admin_stream.py::_admin_payload_from": {
     "loc": 7,
@@ -18,7 +18,7 @@
     "nesting": 2
   },
   "agent_chat_admin_stream.py::_finalise_admin_turn": {
-    "loc": 54,
+    "loc": 52,
     "cc": 4,
     "nesting": 2
   },
@@ -38,7 +38,7 @@
     "nesting": 0
   },
   "agent_chat_admin_stream.py::_prepare_admin_run": {
-    "loc": 36,
+    "loc": 35,
     "cc": 3,
     "nesting": 1
   },
@@ -53,12 +53,12 @@
     "nesting": 2
   },
   "agent_chat_admin_stream.py::stream_admin_agent_chat": {
-    "loc": 49,
+    "loc": 44,
     "cc": 5,
     "nesting": 2
   },
   "agent_chat_customer_stream.py": {
-    "loc": 215
+    "loc": 209
   },
   "agent_chat_customer_stream.py::_already_a_frame": {
     "loc": 15,
@@ -71,7 +71,7 @@
     "nesting": 2
   },
   "agent_chat_customer_stream.py::_finalise_customer_turn": {
-    "loc": 45,
+    "loc": 43,
     "cc": 3,
     "nesting": 2
   },
@@ -86,12 +86,12 @@
     "nesting": 2
   },
   "agent_chat_customer_stream.py::stream_customer_agent_chat": {
-    "loc": 45,
+    "loc": 41,
     "cc": 6,
     "nesting": 3
   },
   "agent_chat_request.py": {
-    "loc": 70
+    "loc": 84
   },
   "agent_chat_request.py::build_agent_chat_turn": {
     "loc": 24,
@@ -335,7 +335,7 @@
     "nesting": 1
   },
   "routes.py": {
-    "loc": 1273
+    "loc": 1270
   },
   "routes.py::_extract_chat_objective": {
     "loc": 9,
@@ -368,7 +368,7 @@
     "nesting": 0
   },
   "routes.py::chat_with_agent_endpoint": {
-    "loc": 36,
+    "loc": 32,
     "cc": 2,
     "nesting": 1
   },

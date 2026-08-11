@@ -20,6 +20,7 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
@@ -98,6 +99,17 @@ FAT = "def fat():\n" + "".join(f"    x{i} = {i}\n" for i in range(80))
 
 SMALL = "def small():\n    pass\n"
 
+
+class GateCase(NamedTuple):
+    """حالة بوّابة واحدة — تُمرَّر ككائنٍ واحد بدل خمسة وسائط متلازمة."""
+
+    source: str
+    debt: str
+    budgets: dict[str, dict[str, int]]
+    expected_rc: int
+    expected_text: str
+
+
 #: (اسم الحالة، المصدر، الدَّين، الميزانيات، الرمز المتوقَّع، شظية الرسالة)
 #:
 #: مُجدوَلة لا مكرَّرة: ستّ حالاتٍ كانت ستّ دوالّ متطابقة البنية تختلف في أربع قيم —
@@ -105,67 +117,71 @@ SMALL = "def small():\n    pass\n"
 #: مقروءةً بسطرٍ واحد ويجعل إضافة السابعة سطراً لا دالّة.
 GATE_CASES = [
     pytest.param(
-        FAT,
-        '{"sample.py": {"loc": 81}, "sample.py::fat": {"loc": 81, "cc": 1, "nesting": 0}}',
-        {"sample.py::fat": {"loc": 40}},
-        1,
-        "يتجاوز 40",
+        GateCase(
+            FAT,
+            '{"sample.py": {"loc": 81}, "sample.py::fat": {"loc": 81, "cc": 1, "nesting": 0}}',
+            {"sample.py::fat": {"loc": 40}},
+            1,
+            "يتجاوز 40",
+        ),
         id="explicit-budget-overrun",
     ),
     pytest.param(
-        FAT,
-        '{"sample.py": {"loc": 81}, "sample.py::fat": {"loc": 10, "cc": 1, "nesting": 0}}',
-        {},
-        1,
-        "نموّ ممنوع",
+        GateCase(
+            FAT,
+            '{"sample.py": {"loc": 81}, "sample.py::fat": {"loc": 10, "cc": 1, "nesting": 0}}',
+            {},
+            1,
+            "نموّ ممنوع",
+        ),
         id="growth-beyond-frozen-debt",
     ),
     pytest.param(
-        SMALL,
-        '{"sample.py": {"loc": 2}, "sample.py::small": {"loc": 99, "cc": 1, "nesting": 0}}',
-        {},
-        1,
-        "حدِّث الرقم",
+        GateCase(
+            SMALL,
+            '{"sample.py": {"loc": 2}, "sample.py::small": {"loc": 99, "cc": 1, "nesting": 0}}',
+            {},
+            1,
+            "حدِّث الرقم",
+        ),
         id="shrink-without-updating-the-number",
     ),
     pytest.param(
-        FAT,
-        '{"sample.py": {"loc": 81}}',
-        {},
-        1,
-        "وافدٌ جديد",
+        GateCase(FAT, '{"sample.py": {"loc": 81}}', {}, 1, "وافدٌ جديد"),
         id="new-oversized-function",
     ),
     pytest.param(
-        SMALL,
-        '{"sample.py": {"loc": 2}, "sample.py::gone": {"loc": 5, "cc": 1, "nesting": 0}}',
-        {},
-        1,
-        "واختفى",
+        GateCase(
+            SMALL,
+            '{"sample.py": {"loc": 2}, "sample.py::gone": {"loc": 5, "cc": 1, "nesting": 0}}',
+            {},
+            1,
+            "واختفى",
+        ),
         id="vanished-debt-entry",
     ),
     pytest.param(
-        SMALL,
-        '{"sample.py": {"loc": 2}, "sample.py::small": {"loc": 2, "cc": 1, "nesting": 0}}',
-        {},
-        0,
-        "✅",
+        GateCase(
+            SMALL,
+            '{"sample.py": {"loc": 2}, "sample.py::small": {"loc": 2, "cc": 1, "nesting": 0}}',
+            {},
+            0,
+            "✅",
+        ),
         id="clean-tree-passes",
     ),
 ]
 
 
-@pytest.mark.parametrize(("source", "debt", "budgets", "expected_rc", "expected_text"), GATE_CASES)
-def test_each_gate_mechanism_behaves_as_declared(
-    monkeypatch, tmp_path, capsys, source, debt, budgets, expected_rc, expected_text
-) -> None:
+@pytest.mark.parametrize("case", GATE_CASES)
+def test_each_gate_mechanism_behaves_as_declared(monkeypatch, tmp_path, capsys, case) -> None:
     """كل آليةٍ مُثبَتة: ثلاث تفشل بالنموّ/التجاوز/الوافد، واثنتان بالصمت، وواحدة تنجح.
 
     الحالة الأخيرة ليست زينة: بوّابةٌ تفشل دائماً تُطفَأ بعد أوّل أسبوع.
     """
-    _api_dir(monkeypatch, tmp_path, source)
-    assert _run(monkeypatch, tmp_path, debt=debt, budgets=budgets) == expected_rc
-    assert expected_text in capsys.readouterr().out
+    _api_dir(monkeypatch, tmp_path, case.source)
+    assert _run(monkeypatch, tmp_path, debt=case.debt, budgets=case.budgets) == case.expected_rc
+    assert case.expected_text in capsys.readouterr().out
 
 
 def test_an_unparsable_file_raises_instead_of_reporting_clean(tmp_path: Path) -> None:

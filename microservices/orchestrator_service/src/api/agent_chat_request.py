@@ -33,6 +33,20 @@ class TurnIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class AgentChatCall:
+    """ما يصف الدور بأكمله: سؤال الطالب · هويّته · مصافحة الحفظ.
+
+    الثلاثة تُمرَّر معاً إلى كل مرحلةٍ في البثّ، فتفكيكها كان يُنفخ خمسةَ توقيعات
+    بلا فائدة — وهو ما رصدته CodeScene بـ«Excess Number of Function Arguments».
+    """
+
+    question: str
+    identity: TurnIdentity
+    #: مصافحة §6.5: المونوليث يملك رسالة المستخدم فلا يكتبها الأوركستريتور.
+    is_compatibility_facade: bool
+
+
+@dataclass(frozen=True, slots=True)
 class AgentChatTurn:
     """السياق المُجمَّع + قرارا التوجيه لدورٍ واحد."""
 

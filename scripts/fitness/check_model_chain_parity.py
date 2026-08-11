@@ -61,19 +61,22 @@ _CHAIN_ATTRS: tuple[str, ...] = (
 MODEL_CLIENTS: tuple[str, ...] = ("microservices/orchestrator_service/src/services/llm/client.py",)
 
 
+def _looks_like_model_id(value: str) -> bool:
+    """مُعرِّف نموذج OpenRouter: `provider/name:free` — بلا مسافات وقصير."""
+    return "/" in value and ":free" in value and " " not in value and len(value) < 120
+
+
 def _hardcoded_model_literals(rel_path: str) -> list[tuple[int, str]]:
     """يُعيد كل حرفية تبدو مُعرِّف نموذجٍ (`provider/name`) في الملفّ."""
     path = REPO_ROOT / rel_path
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    found: list[tuple[int, str]] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
-            continue
-        value = node.value
-        # مُعرِّف نموذج OpenRouter: "provider/name" وغالباً ":free" — ولا مسافات.
-        if "/" in value and " " not in value and len(value) < 120 and ":free" in value:
-            found.append((node.lineno, value))
-    return found
+    return [
+        (node.lineno, node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and _looks_like_model_id(node.value)
+    ]
 
 
 def _string_constants(class_node: ast.ClassDef) -> dict[str, str]:

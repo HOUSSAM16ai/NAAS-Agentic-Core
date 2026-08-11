@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 from microservices.orchestrator_service.src.core.database import async_session_factory
 
-from .agent_chat_request import TurnIdentity
+from .agent_chat_request import AgentChatCall
 from .chat_context import _augment_ambiguous_objective, _build_graph_messages_manual
 from .chat_types import ChatRunContext
 from .conversation_store import _ensure_conversation, _persist_assistant_message
@@ -123,9 +123,7 @@ def _prepare_customer_run(
 
 async def _finalise_customer_turn(
     *,
-    question: str,
-    identity: TurnIdentity,
-    is_compatibility_facade: bool,
+    call: AgentChatCall,
     full_ai_response: str,
 ) -> AsyncGenerator[str, None]:
     """يحفظ الدور ثمّ يبثّ الإطار النهائي حاملاً ما إذا كان الأوركستريتور قد حفظ."""
@@ -135,10 +133,10 @@ async def _finalise_customer_turn(
             conv_id, _ = await _ensure_conversation(
                 session=db_session,
                 chat_scope="customer",
-                user_id=identity.user_id,
-                question=question,
-                requested_conversation_id=identity.conversation_id,
-                skip_user_message=is_compatibility_facade,
+                user_id=call.identity.user_id,
+                question=call.question,
+                requested_conversation_id=call.identity.conversation_id,
+                skip_user_message=call.is_compatibility_facade,
             )
             await _persist_assistant_message(
                 session=db_session,
@@ -171,15 +169,13 @@ async def _finalise_customer_turn(
 async def stream_customer_agent_chat(
     *,
     agent: object,
-    question: str,
-    identity: TurnIdentity,
+    call: AgentChatCall,
     context: ChatRunContext,
-    is_compatibility_facade: bool,
 ) -> AsyncGenerator[str, None]:
     """يبثّ دور الزبون عبر `OrchestratorAgent` ويحفظ الدور عند وجود محتوى."""
     try:
         prepared_objective, langchain_msgs = _prepare_customer_run(
-            question=question, history_messages=identity.history_messages
+            question=call.question, history_messages=call.identity.history_messages
         )
         run_result = agent.run(prepared_objective, context=context, history_messages=langchain_msgs)
         collected = _CollectedRun()
@@ -190,9 +186,7 @@ async def stream_customer_agent_chat(
         full_ai_response = collected.text()
         if full_ai_response:
             async for frame in _finalise_customer_turn(
-                question=question,
-                identity=identity,
-                is_compatibility_facade=is_compatibility_facade,
+                call=call,
                 full_ai_response=full_ai_response,
             ):
                 yield frame

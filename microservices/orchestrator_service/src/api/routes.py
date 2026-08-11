@@ -64,6 +64,7 @@ from microservices.orchestrator_service.src.services.tools.registry import get_r
 from .agent_chat_admin_stream import stream_admin_agent_chat
 from .agent_chat_customer_stream import stream_customer_agent_chat
 from .agent_chat_request import (  # noqa: F401
+    AgentChatCall,
     AgentChatTurn,
     TurnIdentity,
     build_agent_chat_turn,
@@ -928,20 +929,16 @@ async def chat_with_agent_endpoint(
         auth_payload=auth_payload,
     )
 
-    common = {
-        "question": request.question,
-        "identity": identity,
-        "is_compatibility_facade": turn.is_compatibility_facade,
-    }
+    call = AgentChatCall(request.question, identity, turn.is_compatibility_facade)
     if turn.is_admin:
         stream = stream_admin_agent_chat(
-            app_state=fastapi_req.app.state, request_context=request.context, **common
+            app_state=fastapi_req.app.state, call=call, request_context=request.context
         )
     else:
         stream = stream_customer_agent_chat(
             agent=OrchestratorAgent(get_ai_client(), tool_registry),
+            call=call,
             context=turn.context,
-            **common,
         )
     return StreamingResponse(stream, media_type="text/plain")
 

@@ -36,7 +36,7 @@ from dataclasses import dataclass
 
 from microservices.orchestrator_service.src.core.database import async_session_factory
 
-from .agent_chat_request import TurnIdentity
+from .agent_chat_request import AgentChatCall
 from .chat_context import _augment_ambiguous_objective
 from .conversation_store import _ensure_conversation, _persist_assistant_message
 from .identity_access import _merge_admin_inputs, _resolve_thread_id, _safe_assistant_error
@@ -103,14 +103,13 @@ def _final_response_from_chain_end(event: dict[str, object], current: object) ->
 
 async def _prepare_admin_run(
     *,
-    question: str,
-    identity: TurnIdentity,
+    call: AgentChatCall,
     admin_payload: dict[str, object],
     request_context: dict[str, object],
 ) -> tuple[dict[str, object], dict[str, object]]:
     """يبني مدخلات الرسم الإداري وإعداد التشغيل (`thread_id` + أثر التتبّع)."""
     # Augment the objective for explicit context before sending to LangGraph
-    prepared_objective = _augment_ambiguous_objective(question, identity.history_messages)
+    prepared_objective = _augment_ambiguous_objective(call.question, call.identity.history_messages)
 
     # `query` هو ما تقرأه عقدة الإدارة لاختيار الأداة:
     # graph/admin.py:128 `resolve_tool_deterministic(state.get("query", ""))`.
@@ -124,10 +123,10 @@ async def _prepare_admin_run(
         admin_payload,
     )
 
-    conversation_id = identity.conversation_id
+    conversation_id = call.identity.conversation_id
     effective_conversation_id = conversation_id if conversation_id else str(uuid.uuid4())
     thread_id = _resolve_thread_id(
-        {"user_id": identity.user_id, "conversation_id": conversation_id},
+        {"user_id": call.identity.user_id, "conversation_id": conversation_id},
         fallback_conversation_id=str(effective_conversation_id),
     )
 
@@ -141,9 +140,7 @@ async def _prepare_admin_run(
 
 async def _finalise_admin_turn(
     *,
-    question: str,
-    identity: TurnIdentity,
-    is_compatibility_facade: bool,
+    call: AgentChatCall,
     response_text: str,
     streamed_chars: int,
 ) -> AsyncGenerator[str, None]:
@@ -153,10 +150,10 @@ async def _finalise_admin_turn(
             conv_id, _ = await _ensure_conversation(
                 session=db_session,
                 chat_scope="admin",
-                user_id=identity.user_id,
-                question=question,
-                requested_conversation_id=identity.conversation_id,
-                skip_user_message=is_compatibility_facade,
+                user_id=call.identity.user_id,
+                question=call.question,
+                requested_conversation_id=call.identity.conversation_id,
+                skip_user_message=call.is_compatibility_facade,
             )
             await _persist_assistant_message(
                 session=db_session,
@@ -243,10 +240,8 @@ def _admin_payload_from(request_context: dict[str, object]) -> dict[str, object]
 async def stream_admin_agent_chat(
     *,
     app_state: object,
-    question: str,
-    identity: TurnIdentity,
+    call: AgentChatCall,
     request_context: dict[str, object],
-    is_compatibility_facade: bool,
 ) -> AsyncGenerator[str, None]:
     """يبثّ دور الإدارة عبر رسم LangGraph الإداري ويحفظ الدور عند نجاحه."""
     try:
@@ -255,8 +250,7 @@ async def stream_admin_agent_chat(
             raise RuntimeError("LangGraph admin_app is required but was not found on app.state")
 
         admin_inputs, config = await _prepare_admin_run(
-            question=question,
-            identity=identity,
+            call=call,
             admin_payload=_admin_payload_from(request_context),
             request_context=request_context,
         )
@@ -269,9 +263,7 @@ async def stream_admin_agent_chat(
 
         # ISS-056: extract human-readable text only — never leak JSON envelope
         async for frame in _finalise_admin_turn(
-            question=question,
-            identity=identity,
-            is_compatibility_facade=is_compatibility_facade,
+            call=call,
             response_text=_extract_human_readable_response(state.final_resp),
             streamed_chars=state.streamed_chars,
         ):

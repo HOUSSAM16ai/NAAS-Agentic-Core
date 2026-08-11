@@ -972,8 +972,16 @@ async def chat_with_agent_endpoint(
                 _checkpointer_available, _checkpoint_has_state = await _detect_checkpoint_state(
                     thread_id
                 )
+                # `query` هو ما تقرأه عقدة الإدارة لاختيار الأداة:
+                # graph/admin.py:128 `resolve_tool_deterministic(state.get("query", ""))`.
+                # كان غائباً هنا وحده، فكان كلّ سؤالٍ إداري على هذا المسار يُحلّ أداته
+                # على سلسلةٍ فارغة. مسار StateGraph يضعه صراحةً
+                # (chat_stream_engine.py:491)، فالغياب إغفالٌ لا تصميم.
                 admin_inputs = _merge_admin_inputs(
-                    {"messages": [{"role": "user", "content": prepared_objective}]},
+                    {
+                        "messages": [{"role": "user", "content": prepared_objective}],
+                        "query": prepared_objective,
+                    },
                     admin_payload,
                 )
 

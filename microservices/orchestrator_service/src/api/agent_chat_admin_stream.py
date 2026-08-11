@@ -36,6 +36,7 @@ from dataclasses import dataclass
 
 from microservices.orchestrator_service.src.core.database import async_session_factory
 
+from .agent_chat_request import TurnIdentity
 from .chat_context import _augment_ambiguous_objective
 from .conversation_store import _ensure_conversation, _persist_assistant_message
 from .identity_access import _merge_admin_inputs, _resolve_thread_id, _safe_assistant_error
@@ -51,20 +52,36 @@ def _is_reportable_node(node_name: str) -> bool:
     return bool(node_name) and not node_name.startswith("__") and node_name != "LangGraph"
 
 
+def _nonempty_text(value: object) -> str | None:
+    """نصٌّ غير فارغ أو `None` — الشرط المشترك لكلّ مسارات البثّ."""
+    return value if isinstance(value, str) and value else None
+
+
+def _langchain_delta(event: dict[str, object]) -> str | None:
+    """D-047: token-level streaming when nodes use LangChain ChatOpenAI."""
+    chunk = event.get("data", {}).get("chunk")
+    return None if chunk is None else _nonempty_text(getattr(chunk, "content", None))
+
+
+def _custom_event_delta(event: dict[str, object]) -> str | None:
+    """D-048: token-level streaming from DSPy/raw-OpenAI nodes via stream_writer."""
+    data = event.get("data")
+    if not isinstance(data, dict) or data.get("chunk_type") != "assistant_delta":
+        return None
+    return _nonempty_text(data.get("content"))
+
+
+#: مُستخرِج لكل نوع حدثِ بثّ — الإرسال ببحثٍ في جدول، لا بسلسلة `elif`.
+_DELTA_EXTRACTORS = {
+    "on_chat_model_stream": _langchain_delta,
+    "on_custom_event": _custom_event_delta,
+}
+
+
 def _stream_delta_content(event: dict[str, object], evt_type: str) -> str | None:
     """يستخرج القطعة النصّية من مساري البثّ الرمزي — D-047 و D-048."""
-    if evt_type == "on_chat_model_stream":
-        # D-047: token-level streaming when nodes use LangChain ChatOpenAI
-        chunk = event.get("data", {}).get("chunk")
-        content = None if chunk is None else getattr(chunk, "content", None)
-    elif evt_type == "on_custom_event":
-        # D-048: token-level streaming from DSPy/raw-OpenAI nodes via stream_writer
-        data = event.get("data")
-        is_delta = isinstance(data, dict) and data.get("chunk_type") == "assistant_delta"
-        content = data.get("content") if is_delta else None
-    else:
-        return None
-    return content if isinstance(content, str) and content else None
+    extractor = _DELTA_EXTRACTORS.get(evt_type)
+    return extractor(event) if extractor else None
 
 
 def _final_response_from_chain_end(event: dict[str, object], current: object) -> object:
@@ -87,15 +104,13 @@ def _final_response_from_chain_end(event: dict[str, object], current: object) ->
 async def _prepare_admin_run(
     *,
     question: str,
-    user_id: int,
-    conversation_id: int | None,
-    history_messages: list[dict[str, str]],
+    identity: TurnIdentity,
     admin_payload: dict[str, object],
     request_context: dict[str, object],
 ) -> tuple[dict[str, object], dict[str, object]]:
     """يبني مدخلات الرسم الإداري وإعداد التشغيل (`thread_id` + أثر التتبّع)."""
     # Augment the objective for explicit context before sending to LangGraph
-    prepared_objective = _augment_ambiguous_objective(question, history_messages)
+    prepared_objective = _augment_ambiguous_objective(question, identity.history_messages)
 
     # `query` هو ما تقرأه عقدة الإدارة لاختيار الأداة:
     # graph/admin.py:128 `resolve_tool_deterministic(state.get("query", ""))`.
@@ -109,9 +124,10 @@ async def _prepare_admin_run(
         admin_payload,
     )
 
+    conversation_id = identity.conversation_id
     effective_conversation_id = conversation_id if conversation_id else str(uuid.uuid4())
     thread_id = _resolve_thread_id(
-        {"user_id": user_id, "conversation_id": conversation_id},
+        {"user_id": identity.user_id, "conversation_id": conversation_id},
         fallback_conversation_id=str(effective_conversation_id),
     )
 
@@ -126,8 +142,7 @@ async def _prepare_admin_run(
 async def _finalise_admin_turn(
     *,
     question: str,
-    user_id: int,
-    conversation_id: int | None,
+    identity: TurnIdentity,
     is_compatibility_facade: bool,
     response_text: str,
     streamed_chars: int,
@@ -138,9 +153,9 @@ async def _finalise_admin_turn(
             conv_id, _ = await _ensure_conversation(
                 session=db_session,
                 chat_scope="admin",
-                user_id=user_id,
+                user_id=identity.user_id,
                 question=question,
-                requested_conversation_id=conversation_id,
+                requested_conversation_id=identity.conversation_id,
                 skip_user_message=is_compatibility_facade,
             )
             await _persist_assistant_message(
@@ -229,9 +244,7 @@ async def stream_admin_agent_chat(
     *,
     app_state: object,
     question: str,
-    user_id: int,
-    conversation_id: int | None,
-    history_messages: list[dict[str, str]],
+    identity: TurnIdentity,
     request_context: dict[str, object],
     is_compatibility_facade: bool,
 ) -> AsyncGenerator[str, None]:
@@ -243,9 +256,7 @@ async def stream_admin_agent_chat(
 
         admin_inputs, config = await _prepare_admin_run(
             question=question,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            history_messages=history_messages,
+            identity=identity,
             admin_payload=_admin_payload_from(request_context),
             request_context=request_context,
         )
@@ -259,8 +270,7 @@ async def stream_admin_agent_chat(
         # ISS-056: extract human-readable text only — never leak JSON envelope
         async for frame in _finalise_admin_turn(
             question=question,
-            user_id=user_id,
-            conversation_id=conversation_id,
+            identity=identity,
             is_compatibility_facade=is_compatibility_facade,
             response_text=_extract_human_readable_response(state.final_resp),
             streamed_chars=state.streamed_chars,

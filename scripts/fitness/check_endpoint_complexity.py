@@ -146,16 +146,59 @@ def _violations(key: str, actual: dict[str, int], budget: dict[str, int], why: s
     return out
 
 
+def _write_baseline(current: dict[str, dict[str, int]]) -> int:
+    DEBT_FILE.write_text(
+        json.dumps(dict(sorted(current.items())), indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(f"✅ baseline written: {len(current)} entries → {DEBT_FILE.name}")
+    return 0
+
+
+def _ratchet_violations(key: str, actual: dict[str, int], allowed: dict[str, int]) -> list[str]:
+    """الدَّين المُجمَّد ثنائي الاتجاه: لا ينمو، ولا يتقلّص بلا تحديثٍ صريح."""
+    out: list[str] = []
+    for metric, limit in allowed.items():
+        value = actual.get(metric)
+        if value is None or value == limit:
+            continue
+        if value > limit:
+            out.append(f"❌ {key}: {metric}={value} بينما الدَّين المُجمَّد {limit} — نموّ ممنوع.")
+        else:
+            out.append(
+                f"❌ {key}: {metric}={value} بينما الدَّين المُجمَّد {limit}.\n"
+                f"   حدِّث الرقم (`--update`) — الخريطة تتبع الواقع أو تتقادم بصمت (D-188)."
+            )
+    return out
+
+
+def _key_violations(
+    key: str, actual: dict[str, int], frozen: dict[str, dict[str, int]]
+) -> list[str]:
+    """الآليات الثلاث بترتيب أسبقيّتها: صريحة ⇒ وافدٌ جديد ⇒ دَينٌ مُجمَّد."""
+    if key in BUDGETS:
+        return _violations(key, actual, BUDGETS[key], "ميزانية صريحة")
+    if key not in frozen:
+        budget = {"loc": DEFAULT_MODULE_LOC} if "::" not in key else DEFAULT_FUNCTION_BUDGET
+        return _violations(key, actual, budget, "وافدٌ جديد — الميزانية الافتراضية")
+    return _ratchet_violations(key, actual, frozen[key])
+
+
+def _vanished_entries(current: dict[str, dict[str, int]], frozen: dict[str, object]) -> list[str]:
+    """إدخالٌ مُجمَّد اختفى: يُحدَّث صراحةً لا بصمت."""
+    return [
+        f"❌ {key}: كان في الدَّين المُجمَّد واختفى.\n"
+        f"   إن حُذف أو أُعيدت تسميته فحدِّث الرقم (`--update`) بقرارٍ مكتوب."
+        for key in sorted(frozen)
+        if key not in current
+    ]
+
+
 def main() -> int:
     current = _scan()
 
     if "--update" in sys.argv:
-        DEBT_FILE.write_text(
-            json.dumps(dict(sorted(current.items())), indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-        print(f"✅ baseline written: {len(current)} entries → {DEBT_FILE.name}")
-        return 0
+        return _write_baseline(current)
 
     if not DEBT_FILE.is_file():
         print(f"❌ ملفّ الدَّين مفقود: {DEBT_FILE.name}. شغّل `--update` مرّة لتثبيت الأساس.")
@@ -163,41 +206,9 @@ def main() -> int:
     frozen: dict[str, dict[str, int]] = json.loads(DEBT_FILE.read_text(encoding="utf-8"))
 
     errors: list[str] = []
-
     for key, actual in sorted(current.items()):
-        # (1) الميزانية الصريحة تتفوّق على كلّ شيء.
-        if key in BUDGETS:
-            errors += _violations(key, actual, BUDGETS[key], "ميزانية صريحة")
-            continue
-
-        # (3) وافدٌ جديد: يُحاكَم بالميزانية الافتراضية فوراً.
-        if key not in frozen:
-            budget = {"loc": DEFAULT_MODULE_LOC} if "::" not in key else DEFAULT_FUNCTION_BUDGET
-            errors += _violations(key, actual, budget, "وافدٌ جديد — الميزانية الافتراضية")
-            continue
-
-        # (2) دَينٌ مُجمَّد: يتقلّص فقط.
-        for metric, allowed in frozen[key].items():
-            value = actual.get(metric)
-            if value is None:
-                continue
-            if value > allowed:
-                errors.append(
-                    f"❌ {key}: {metric}={value} بينما الدَّين المُجمَّد {allowed} — نموّ ممنوع."
-                )
-            elif value < allowed:
-                errors.append(
-                    f"❌ {key}: {metric}={value} بينما الدَّين المُجمَّد {allowed}.\n"
-                    f"   حدِّث الرقم (`--update`) — الخريطة تتبع الواقع أو تتقادم بصمت (D-188)."
-                )
-
-    # (2ب) إدخالٌ مُجمَّد اختفى: يُحدَّث صراحةً لا بصمت.
-    for key in sorted(frozen):
-        if key not in current:
-            errors.append(
-                f"❌ {key}: كان في الدَّين المُجمَّد واختفى.\n"
-                f"   إن حُذف أو أُعيدت تسميته فحدِّث الرقم (`--update`) بقرارٍ مكتوب."
-            )
+        errors += _key_violations(key, actual, frozen)
+    errors += _vanished_entries(current, frozen)
 
     if errors:
         print("\n".join(errors))

@@ -63,7 +63,11 @@ from microservices.orchestrator_service.src.services.tools.registry import get_r
 # Plain imports (no wrappers) preserve monkeypatch semantics for handler-resolved names.
 from .agent_chat_admin_stream import stream_admin_agent_chat
 from .agent_chat_customer_stream import stream_customer_agent_chat
-from .agent_chat_request import AgentChatTurn, build_agent_chat_turn  # noqa: F401
+from .agent_chat_request import (  # noqa: F401
+    AgentChatTurn,
+    TurnIdentity,
+    build_agent_chat_turn,
+)
 from .chat_context import (
     _augment_ambiguous_objective,  # noqa: F401 — re-export (D-168)
     _build_graph_messages_graph,  # noqa: F401
@@ -916,20 +920,17 @@ async def chat_with_agent_endpoint(
     request.user_id = user_id  # Override body user_id with JWT user_id
     logger.info(f"Agent Chat Request: {request.question[:50]}... User: {request.user_id}")
 
+    identity = TurnIdentity(request.user_id, request.conversation_id, request.history_messages)
     turn = build_agent_chat_turn(
         request_context=request.context,
-        user_id=request.user_id,
-        conversation_id=request.conversation_id,
-        history_messages=request.history_messages,
+        identity=identity,
         trace_context=trace_context,
         auth_payload=auth_payload,
     )
 
     common = {
         "question": request.question,
-        "user_id": request.user_id,
-        "conversation_id": request.conversation_id,
-        "history_messages": request.history_messages,
+        "identity": identity,
         "is_compatibility_facade": turn.is_compatibility_facade,
     }
     if turn.is_admin:

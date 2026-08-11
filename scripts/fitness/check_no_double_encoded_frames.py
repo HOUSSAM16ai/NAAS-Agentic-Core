@@ -74,32 +74,36 @@ def _builds_a_frame(call: ast.Call) -> bool:
     return any(isinstance(key, ast.Constant) and key.value == "type" for key in first.keys if key)
 
 
+def _serializes_a_frame(value: ast.expr) -> bool:
+    """صحيحٌ إن كانت القيمة `json.dumps({...type...})` — وحدها أو مع `+ "\\n"`."""
+    candidates: list[ast.AST] = [value]
+    if isinstance(value, ast.BinOp):
+        candidates += [value.left, value.right]
+    return any(
+        _is_json_dumps(node) and _builds_a_frame(node)  # type: ignore[arg-type]
+        for node in candidates
+    )
+
+
+def _file_violations(path: Path) -> list[str]:
+    rel = path.relative_to(REPO_ROOT).as_posix()
+    return [
+        f"❌ {rel}:{node.lineno} يُعيد/يُنتِج إطاراً **مُسلسَلاً**.\n"
+        f"   أعِد القاموس نفسه — التسلسل مسؤولية `stream_serialization.py` وحدها.\n"
+        f"   (ISS-156: هذا بالضبط ما جعل الطالب يرى JSON خاماً وسمّم `customer_messages`.)"
+        for node in ast.walk(parse_source(path))
+        if isinstance(node, ast.Return | ast.Yield)
+        and node.value is not None
+        and _serializes_a_frame(node.value)
+    ]
+
+
 def _serialized_frame_violations() -> list[str]:
     """القانون 1: مُنتِجٌ يُسلسل إطاراً = انتهاك."""
     out: list[str] = []
     for path in sorted(SERVICE_DIR.rglob("*.py")):
-        if path.name in TRANSPORT_ALLOWED:
-            continue
-        tree = parse_source(path)
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Return | ast.Yield):
-                continue
-            value = node.value
-            if value is None:
-                continue
-            # يشمل `json.dumps(...)` و`json.dumps(...) + "\n"`.
-            candidates: list[ast.AST] = [value]
-            if isinstance(value, ast.BinOp):
-                candidates += [value.left, value.right]
-            for candidate in candidates:
-                if _is_json_dumps(candidate) and _builds_a_frame(candidate):  # type: ignore[arg-type]
-                    rel = path.relative_to(REPO_ROOT).as_posix()
-                    out.append(
-                        f"❌ {rel}:{node.lineno} يُعيد/يُنتِج إطاراً **مُسلسَلاً**.\n"
-                        f"   أعِد القاموس نفسه — التسلسل مسؤولية `stream_serialization.py` وحدها.\n"
-                        f"   (ISS-156: هذا بالضبط ما جعل الطالب يرى JSON خاماً وسمّم "
-                        f"`customer_messages`.)"
-                    )
+        if path.name not in TRANSPORT_ALLOWED:
+            out += _file_violations(path)
     return out
 
 

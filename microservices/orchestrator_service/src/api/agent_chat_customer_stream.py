@@ -22,9 +22,11 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass, field
 
 from microservices.orchestrator_service.src.core.database import async_session_factory
 
+from .agent_chat_request import TurnIdentity
 from .chat_context import _augment_ambiguous_objective, _build_graph_messages_manual
 from .chat_types import ChatRunContext
 from .conversation_store import _ensure_conversation, _persist_assistant_message
@@ -78,6 +80,31 @@ def _classify_agent_chunk(chunk: object) -> tuple[str | None, object, bool]:
     return None, chunk, False
 
 
+@dataclass
+class _CollectedRun:
+    """ما يتراكم عبر قطع الوكيل: نصّ الطالب + الإطار النهائي إن وصل."""
+
+    chunks: list[str] = field(default_factory=list)
+    final_chunk: object | None = None
+
+    def text(self) -> str:
+        return "".join(self.chunks)
+
+
+async def _stream_agent_chunks(
+    run_result: object, collected: _CollectedRun
+) -> AsyncGenerator[str, None]:
+    """يبثّ إطارات الوكيل ويُراكم نصّها في `collected` — تصنيفٌ واحد لكل قطعة."""
+    async for chunk in run_result:
+        text, frame, is_final = _classify_agent_chunk(chunk)
+        if text:
+            collected.chunks.append(text)
+        if frame is not _NO_FRAME:
+            yield await _serialize_stream_frame(frame)
+        if is_final:
+            collected.final_chunk = chunk
+
+
 def _prepare_customer_run(
     *,
     question: str,
@@ -97,8 +124,7 @@ def _prepare_customer_run(
 async def _finalise_customer_turn(
     *,
     question: str,
-    user_id: int,
-    conversation_id: int | None,
+    identity: TurnIdentity,
     is_compatibility_facade: bool,
     full_ai_response: str,
 ) -> AsyncGenerator[str, None]:
@@ -109,9 +135,9 @@ async def _finalise_customer_turn(
             conv_id, _ = await _ensure_conversation(
                 session=db_session,
                 chat_scope="customer",
-                user_id=user_id,
+                user_id=identity.user_id,
                 question=question,
-                requested_conversation_id=conversation_id,
+                requested_conversation_id=identity.conversation_id,
                 skip_user_message=is_compatibility_facade,
             )
             await _persist_assistant_message(
@@ -146,43 +172,33 @@ async def stream_customer_agent_chat(
     *,
     agent: object,
     question: str,
-    user_id: int,
-    conversation_id: int | None,
-    history_messages: list[dict[str, str]],
+    identity: TurnIdentity,
     context: ChatRunContext,
     is_compatibility_facade: bool,
 ) -> AsyncGenerator[str, None]:
     """يبثّ دور الزبون عبر `OrchestratorAgent` ويحفظ الدور عند وجود محتوى."""
     try:
         prepared_objective, langchain_msgs = _prepare_customer_run(
-            question=question, history_messages=history_messages
+            question=question, history_messages=identity.history_messages
         )
         run_result = agent.run(prepared_objective, context=context, history_messages=langchain_msgs)
-        ai_chunks: list[str] = []
-        final_chunk = None
-        async for chunk in run_result:
-            text, frame, is_final = _classify_agent_chunk(chunk)
-            if text:
-                ai_chunks.append(text)
-            if frame is not _NO_FRAME:
-                yield await _serialize_stream_frame(frame)
-            if is_final:
-                final_chunk = chunk
+        collected = _CollectedRun()
+        async for frame in _stream_agent_chunks(run_result, collected):
+            yield frame
 
         # The run completed successfully, trigger persistence
-        full_ai_response = "".join(ai_chunks)
+        full_ai_response = collected.text()
         if full_ai_response:
             async for frame in _finalise_customer_turn(
                 question=question,
-                user_id=user_id,
-                conversation_id=conversation_id,
+                identity=identity,
                 is_compatibility_facade=is_compatibility_facade,
                 full_ai_response=full_ai_response,
             ):
                 yield frame
-        elif final_chunk:
+        elif collected.final_chunk is not None:
             # No AI response to persist — forward original final_chunk without persistence flag
-            yield await _serialize_stream_frame(final_chunk)
+            yield await _serialize_stream_frame(collected.final_chunk)
 
     except Exception:
         request_id = str(uuid.uuid4())

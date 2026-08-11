@@ -19,6 +19,20 @@ from .identity_access import _is_admin_payload
 
 
 @dataclass(frozen=True, slots=True)
+class TurnIdentity:
+    """هوية الدور ومحادثته — تُمرَّر ككائنٍ واحد بدل ثلاثة وسائط متلازمة.
+
+    الثلاثة تتحرّك معاً دائماً (هوية الطالب · محادثته · تاريخها)، فتمريرها مفكّكة
+    يُوسّع كل توقيعٍ تمرّ به بلا فائدة — وهو ما رصدته CodeScene بـ
+    «Excess Number of Function Arguments» على هذه الدالّة.
+    """
+
+    user_id: int
+    conversation_id: int | None
+    history_messages: list[dict[str, str]]
+
+
+@dataclass(frozen=True, slots=True)
 class AgentChatTurn:
     """السياق المُجمَّع + قرارا التوجيه لدورٍ واحد."""
 
@@ -33,9 +47,7 @@ class AgentChatTurn:
 def build_agent_chat_turn(
     *,
     request_context: dict[str, object],
-    user_id: int,
-    conversation_id: int | None,
-    history_messages: list[dict[str, str]],
+    identity: TurnIdentity,
     trace_context: object,
     auth_payload: dict[str, object],
 ) -> AgentChatTurn:
@@ -46,9 +58,9 @@ def build_agent_chat_turn(
         request_context["trace_context"] = trace_context
     context.update(
         {
-            "user_id": user_id,
-            "conversation_id": conversation_id,
-            "history_messages": history_messages,
+            "user_id": identity.user_id,
+            "conversation_id": identity.conversation_id,
+            "history_messages": identity.history_messages,
         }
     )
     return AgentChatTurn(

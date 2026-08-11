@@ -138,17 +138,8 @@ def resolve_chain_from_source(rel_path: str) -> list[str]:
     return chain
 
 
-def main(argv: list[str] | None = None) -> int:
-    # `argv=None` parses sys.argv when run as a script; callers (tests) pass an
-    # explicit list (e.g. []) so pytest's own argv never leaks into argparse.
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="CI alias (default behavior).")
-    parser.parse_args(argv)
-
-    canonical = list(MODEL_CHAIN)
-    print("=== Model-Chain Parity Gate (D-013 → machine-enforced) ===")
-    print(f"canonical (shared/ai_models/model_chain.py): {canonical}")
-
+def _check_brains(canonical: list[str]) -> bool:
+    """كل عقلٍ يُعلن نفس السلسلة القانونية — وإلّا فهو split-brain."""
     ok = True
     for label, rel_path in BRAINS:
         try:
@@ -162,8 +153,12 @@ def main(argv: list[str] | None = None) -> int:
             ok = False
         else:
             print(f"✅ {label} ({rel_path}) matches canonical chain")
+    return ok
 
-    # ISS-157: عميل النماذج لا يحمل حرفية — يقرأ من `ai_config.py` المحروس أعلاه.
+
+def _check_model_clients() -> bool:
+    """ISS-157: عميل النماذج لا يحمل حرفية — يقرأ من `ai_config.py` المحروس."""
+    ok = True
     for rel_path in MODEL_CLIENTS:
         try:
             literals = _hardcoded_model_literals(rel_path)
@@ -171,16 +166,31 @@ def main(argv: list[str] | None = None) -> int:
             print(f"❌ model-client ({rel_path}): {type(exc).__name__}: {exc}")
             ok = False
             continue
-        if literals:
-            for lineno, value in literals:
-                print(f"❌ model-client ({rel_path}:{lineno}) hardcodes a model: {value!r}")
-            print(
-                "   اقرأ من `ActiveModels` بدل الحرفية — القرار الواحد له موطنٌ واحد.\n"
-                "   (ISS-157: حرفيةٌ هنا جعلت النموذج المحظور بـD-067 هو الافتراضي الحيّ.)"
-            )
-            ok = False
-        else:
+        if not literals:
             print(f"✅ model-client ({rel_path}) carries no hardcoded model literal")
+            continue
+        for lineno, value in literals:
+            print(f"❌ model-client ({rel_path}:{lineno}) hardcodes a model: {value!r}")
+        print(
+            "   اقرأ من `ActiveModels` بدل الحرفية — القرار الواحد له موطنٌ واحد.\n"
+            "   (ISS-157: حرفيةٌ هنا جعلت النموذج المحظور بـD-067 هو الافتراضي الحيّ.)"
+        )
+        ok = False
+    return ok
+
+
+def main(argv: list[str] | None = None) -> int:
+    # `argv=None` parses sys.argv when run as a script; callers (tests) pass an
+    # explicit list (e.g. []) so pytest's own argv never leaks into argparse.
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="CI alias (default behavior).")
+    parser.parse_args(argv)
+
+    canonical = list(MODEL_CHAIN)
+    print("=== Model-Chain Parity Gate (D-013 → machine-enforced) ===")
+    print(f"canonical (shared/ai_models/model_chain.py): {canonical}")
+
+    ok = all([_check_brains(canonical), _check_model_clients()])
 
     if not ok:
         print(

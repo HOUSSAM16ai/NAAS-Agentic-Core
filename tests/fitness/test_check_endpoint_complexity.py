@@ -96,81 +96,76 @@ def _api_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str) -> No
 FAT = "def fat():\n" + "".join(f"    x{i} = {i}\n" for i in range(80))
 
 
-def test_an_explicit_budget_overrun_fails(monkeypatch, tmp_path, capsys) -> None:
-    """الآلية 1 — هذه هي التي تمنع عودة النقطة الساخنة."""
-    _api_dir(monkeypatch, tmp_path, FAT)
-    rc = _run(
-        monkeypatch,
-        tmp_path,
-        debt='{"sample.py": {"loc": 81}, "sample.py::fat": {"loc": 81, "cc": 1, "nesting": 0}}',
-        budgets={"sample.py::fat": {"loc": 40}},
-    )
-    assert rc == 1
-    assert "يتجاوز 40" in capsys.readouterr().out
+SMALL = "def small():\n    pass\n"
+
+#: (اسم الحالة، المصدر، الدَّين، الميزانيات، الرمز المتوقَّع، شظية الرسالة)
+#:
+#: مُجدوَلة لا مكرَّرة: ستّ حالاتٍ كانت ستّ دوالّ متطابقة البنية تختلف في أربع قيم —
+#: وهو ما رصدته CodeScene بـ«Code Duplication» على هذا الملفّ. الجدول يُبقي كل حالةٍ
+#: مقروءةً بسطرٍ واحد ويجعل إضافة السابعة سطراً لا دالّة.
+GATE_CASES = [
+    pytest.param(
+        FAT,
+        '{"sample.py": {"loc": 81}, "sample.py::fat": {"loc": 81, "cc": 1, "nesting": 0}}',
+        {"sample.py::fat": {"loc": 40}},
+        1,
+        "يتجاوز 40",
+        id="explicit-budget-overrun",
+    ),
+    pytest.param(
+        FAT,
+        '{"sample.py": {"loc": 81}, "sample.py::fat": {"loc": 10, "cc": 1, "nesting": 0}}',
+        {},
+        1,
+        "نموّ ممنوع",
+        id="growth-beyond-frozen-debt",
+    ),
+    pytest.param(
+        SMALL,
+        '{"sample.py": {"loc": 2}, "sample.py::small": {"loc": 99, "cc": 1, "nesting": 0}}',
+        {},
+        1,
+        "حدِّث الرقم",
+        id="shrink-without-updating-the-number",
+    ),
+    pytest.param(
+        FAT,
+        '{"sample.py": {"loc": 81}}',
+        {},
+        1,
+        "وافدٌ جديد",
+        id="new-oversized-function",
+    ),
+    pytest.param(
+        SMALL,
+        '{"sample.py": {"loc": 2}, "sample.py::gone": {"loc": 5, "cc": 1, "nesting": 0}}',
+        {},
+        1,
+        "واختفى",
+        id="vanished-debt-entry",
+    ),
+    pytest.param(
+        SMALL,
+        '{"sample.py": {"loc": 2}, "sample.py::small": {"loc": 2, "cc": 1, "nesting": 0}}',
+        {},
+        0,
+        "✅",
+        id="clean-tree-passes",
+    ),
+]
 
 
-def test_growth_beyond_frozen_debt_fails(monkeypatch, tmp_path, capsys) -> None:
-    """الآلية 2 (اتجاه النموّ) — الدَّين لا يكبر."""
-    _api_dir(monkeypatch, tmp_path, FAT)
-    rc = _run(
-        monkeypatch,
-        tmp_path,
-        debt='{"sample.py": {"loc": 81}, "sample.py::fat": {"loc": 10, "cc": 1, "nesting": 0}}',
-        budgets={},
-    )
-    assert rc == 1
-    assert "نموّ ممنوع" in capsys.readouterr().out
-
-
-def test_shrinking_without_updating_the_number_also_fails(monkeypatch, tmp_path, capsys) -> None:
-    """الآلية 2 (الاتجاه المعاكس) — دَينٌ أُغلق بلا تحديث الرقم يُخفي الحقيقة (D-189)."""
-    _api_dir(monkeypatch, tmp_path, "def small():\n    pass\n")
-    rc = _run(
-        monkeypatch,
-        tmp_path,
-        debt='{"sample.py": {"loc": 2}, "sample.py::small": {"loc": 99, "cc": 1, "nesting": 0}}',
-        budgets={},
-    )
-    assert rc == 1
-    assert "حدِّث الرقم" in capsys.readouterr().out
-
-
-def test_a_new_oversized_function_fails_without_being_in_the_debt(
-    monkeypatch, tmp_path, capsys
+@pytest.mark.parametrize(("source", "debt", "budgets", "expected_rc", "expected_text"), GATE_CASES)
+def test_each_gate_mechanism_behaves_as_declared(
+    monkeypatch, tmp_path, capsys, source, debt, budgets, expected_rc, expected_text
 ) -> None:
-    """الآلية 3 — استبدال دالّةٍ إلهية بوحدةٍ إلهية ليس تحسيناً، ويُقاس فوراً."""
-    _api_dir(monkeypatch, tmp_path, FAT)
-    rc = _run(monkeypatch, tmp_path, debt='{"sample.py": {"loc": 81}}', budgets={})
-    assert rc == 1
-    assert "وافدٌ جديد" in capsys.readouterr().out
+    """كل آليةٍ مُثبَتة: ثلاث تفشل بالنموّ/التجاوز/الوافد، واثنتان بالصمت، وواحدة تنجح.
 
-
-def test_a_vanished_debt_entry_fails_instead_of_passing_quietly(
-    monkeypatch, tmp_path, capsys
-) -> None:
-    """حذفٌ بصمت يُقرأ نجاحاً — فيُطلَب تحديثٌ صريح."""
-    _api_dir(monkeypatch, tmp_path, "def small():\n    pass\n")
-    rc = _run(
-        monkeypatch,
-        tmp_path,
-        debt='{"sample.py": {"loc": 2}, "sample.py::gone": {"loc": 5, "cc": 1, "nesting": 0}}',
-        budgets={},
-    )
-    assert rc == 1
-    assert "واختفى" in capsys.readouterr().out
-
-
-def test_a_clean_tree_passes(monkeypatch, tmp_path, capsys) -> None:
-    """وإلّا كانت بوّابةً تفشل دائماً — وهي تُطفَأ بعد أوّل أسبوع."""
-    _api_dir(monkeypatch, tmp_path, "def small():\n    pass\n")
-    rc = _run(
-        monkeypatch,
-        tmp_path,
-        debt='{"sample.py": {"loc": 2}, "sample.py::small": {"loc": 2, "cc": 1, "nesting": 0}}',
-        budgets={},
-    )
-    assert rc == 0
-    assert "✅" in capsys.readouterr().out
+    الحالة الأخيرة ليست زينة: بوّابةٌ تفشل دائماً تُطفَأ بعد أوّل أسبوع.
+    """
+    _api_dir(monkeypatch, tmp_path, source)
+    assert _run(monkeypatch, tmp_path, debt=debt, budgets=budgets) == expected_rc
+    assert expected_text in capsys.readouterr().out
 
 
 def test_an_unparsable_file_raises_instead_of_reporting_clean(tmp_path: Path) -> None:

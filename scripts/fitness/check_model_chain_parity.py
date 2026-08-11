@@ -79,19 +79,24 @@ def _hardcoded_model_literals(rel_path: str) -> list[tuple[int, str]]:
     ]
 
 
+def _assignments(class_node: ast.ClassDef) -> dict[str, ast.expr]:
+    """Map every ``NAME = <expr>`` in a class body to its right-hand side."""
+    return {
+        target.id: stmt.value
+        for stmt in class_node.body
+        if isinstance(stmt, ast.Assign)
+        for target in stmt.targets
+        if isinstance(target, ast.Name)
+    }
+
+
 def _string_constants(class_node: ast.ClassDef) -> dict[str, str]:
     """Map ``NAME = "literal"`` assignments in a class body to their string values."""
-    out: dict[str, str] = {}
-    for stmt in class_node.body:
-        if (
-            isinstance(stmt, ast.Assign)
-            and isinstance(stmt.value, ast.Constant)
-            and isinstance(stmt.value.value, str)
-        ):
-            for tgt in stmt.targets:
-                if isinstance(tgt, ast.Name):
-                    out[tgt.id] = stmt.value.value
-    return out
+    return {
+        name: value.value
+        for name, value in _assignments(class_node).items()
+        if isinstance(value, ast.Constant) and isinstance(value.value, str)
+    }
 
 
 def _resolve_value(node: ast.expr, available: dict[str, str]) -> str | None:
@@ -123,22 +128,20 @@ def resolve_chain_from_source(rel_path: str) -> list[str]:
     if active is None:
         raise ValueError(f"{rel_path}: no `ActiveModels` class found")
 
-    assigned: dict[str, ast.expr] = {}
-    for stmt in active.body:
-        if isinstance(stmt, ast.Assign):
-            for tgt in stmt.targets:
-                if isinstance(tgt, ast.Name):
-                    assigned[tgt.id] = stmt.value
+    assigned = _assignments(active)
+    return [_resolve_attr(rel_path, attr, assigned, available) for attr in _CHAIN_ATTRS]
 
-    chain: list[str] = []
-    for attr in _CHAIN_ATTRS:
-        if attr not in assigned:
-            raise ValueError(f"{rel_path}: ActiveModels is missing `{attr}`")
-        value = _resolve_value(assigned[attr], available)
-        if value is None:
-            raise ValueError(f"{rel_path}: could not statically resolve `{attr}`")
-        chain.append(value)
-    return chain
+
+def _resolve_attr(
+    rel_path: str, attr: str, assigned: dict[str, ast.expr], available: dict[str, str]
+) -> str:
+    """Resolve one chain slot, naming the file and the slot when it cannot."""
+    if attr not in assigned:
+        raise ValueError(f"{rel_path}: ActiveModels is missing `{attr}`")
+    value = _resolve_value(assigned[attr], available)
+    if value is None:
+        raise ValueError(f"{rel_path}: could not statically resolve `{attr}`")
+    return value
 
 
 def _check_brains(canonical: list[str]) -> bool:

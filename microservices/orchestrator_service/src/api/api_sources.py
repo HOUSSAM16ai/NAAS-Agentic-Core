@@ -31,6 +31,9 @@ API_SOURCE_FILES: tuple[str, ...] = (
     "microservices/orchestrator_service/src/api/agent_chat_request.py",  # D-168 Slice A5
     "microservices/orchestrator_service/src/api/agent_chat_admin_stream.py",  # D-168 Slice A6
     "microservices/orchestrator_service/src/api/agent_chat_customer_stream.py",  # D-168 Slice A7
+    "microservices/orchestrator_service/src/api/chat_ws_scope.py",  # ISS-155 (leaf)
+    "microservices/orchestrator_service/src/api/chat_turn_context.py",  # ISS-155 (leaf)
+    "microservices/orchestrator_service/src/api/chat_ws_turn.py",  # ISS-155
 )
 
 

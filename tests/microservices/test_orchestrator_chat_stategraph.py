@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from microservices.orchestrator_service.main import app
-from microservices.orchestrator_service.src.api import chat_stream_engine, routes
+from tests.microservices.caller_modules import patch_caller
 
 
 class _FakeTimelineEvent:
@@ -87,7 +87,7 @@ def test_chat_http_messages_uses_stategraph(monkeypatch, tmp_path) -> None:
     async def fake_ensure_conversation(**kwargs):
         return 123, []
 
-    monkeypatch.setattr(routes, "_ensure_conversation", fake_ensure_conversation)
+    patch_caller(monkeypatch, "_ensure_conversation", fake_ensure_conversation)
 
     response = client.post(
         "/api/chat/messages",
@@ -136,14 +136,12 @@ def test_chat_ws_customer_uses_stategraph(monkeypatch, tmp_path) -> None:
     async def fake_ensure_conversation(**kwargs):
         return 123, []
 
-    monkeypatch.setattr(routes, "_ensure_conversation", fake_ensure_conversation)
+    patch_caller(monkeypatch, "_ensure_conversation", fake_ensure_conversation)
 
     async def fake_persist_assistant_message(**kwargs):
         pass
 
-    monkeypatch.setattr(
-        chat_stream_engine, "_persist_assistant_message", fake_persist_assistant_message
-    )
+    patch_caller(monkeypatch, "_persist_assistant_message", fake_persist_assistant_message)
 
     token = jwt.encode({"sub": "1", "user_id": 1}, get_settings().SECRET_KEY, algorithm="HS256")
     with TestClient(app).websocket_connect(f"/api/chat/ws?token={token}") as ws:
@@ -191,14 +189,12 @@ def test_chat_ws_admin_uses_stategraph(monkeypatch, tmp_path) -> None:
     async def fake_ensure_conversation(**kwargs):
         return 456, []
 
-    monkeypatch.setattr(routes, "_ensure_conversation", fake_ensure_conversation)
+    patch_caller(monkeypatch, "_ensure_conversation", fake_ensure_conversation)
 
     async def fake_persist_assistant_message(**kwargs):
         pass
 
-    monkeypatch.setattr(
-        chat_stream_engine, "_persist_assistant_message", fake_persist_assistant_message
-    )
+    patch_caller(monkeypatch, "_persist_assistant_message", fake_persist_assistant_message)
 
     token = jwt.encode(
         {"sub": "1", "user_id": 1, "role": "admin", "is_admin": True},
@@ -254,10 +250,8 @@ def test_chat_ws_admin_sanitizes_streaming_errors(monkeypatch) -> None:
     async def fake_persist_assistant_message(**kwargs):
         return None
 
-    monkeypatch.setattr(routes, "_ensure_conversation", fake_ensure_conversation)
-    monkeypatch.setattr(
-        chat_stream_engine, "_persist_assistant_message", fake_persist_assistant_message
-    )
+    patch_caller(monkeypatch, "_ensure_conversation", fake_ensure_conversation)
+    patch_caller(monkeypatch, "_persist_assistant_message", fake_persist_assistant_message)
 
     token = jwt.encode(
         {"sub": "1", "user_id": 1, "role": "admin", "is_admin": True},

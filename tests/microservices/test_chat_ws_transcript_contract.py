@@ -111,7 +111,12 @@ class _Recorder:
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def _fake_stream(_websocket: object, **kwargs: Any) -> None:
             self.raw_stream_calls.append(kwargs)
-            self.stream_calls.append(_canonical(kwargs))  # type: ignore[arg-type]
+            # `_stream_chat_langgraph` يفترض `admin_payload=None`، فالمُستقبِل **لا
+            # يستطيع** التمييز بين غياب الوسيط وتمريره `None`. تسجيلُ الفرق كان
+            # سيجعل العقد يقيس أدقّ من السلوك، فيصرخ على تكافؤٍ حقيقي — وهو بالضبط
+            # ما حدث حين صار الغلافان يمرّرانه صراحةً. التطبيع هنا لا في الإنتاج:
+            # ⛔ لا يُلوى كودُ الإنتاج ليوافق أداة قياس.
+            self.stream_calls.append(_canonical({"admin_payload": None} | kwargs))  # type: ignore[arg-type]
 
         def _fake_identity(**kwargs: Any) -> None:
             self.identity_calls.append(_canonical(kwargs))  # type: ignore[arg-type]

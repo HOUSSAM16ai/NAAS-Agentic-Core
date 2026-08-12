@@ -99,7 +99,7 @@
     "nesting": 1
   },
   "api_sources.py": {
-    "loc": 44
+    "loc": 47
   },
   "api_sources.py::read_api_source": {
     "loc": 8,
@@ -202,6 +202,29 @@
     "cc": 60,
     "nesting": 10
   },
+  "chat_turn_context.py": {
+    "loc": 92
+  },
+  "chat_turn_context.py::_apply_mission_type": {
+    "loc": 14,
+    "cc": 5,
+    "nesting": 2
+  },
+  "chat_turn_context.py::_coerce_client_context": {
+    "loc": 13,
+    "cc": 4,
+    "nesting": 3
+  },
+  "chat_turn_context.py::_extract_chat_objective": {
+    "loc": 14,
+    "cc": 5,
+    "nesting": 1
+  },
+  "chat_turn_context.py::_hydrate_history": {
+    "loc": 18,
+    "cc": 2,
+    "nesting": 1
+  },
   "chat_types.py": {
     "loc": 92
   },
@@ -214,6 +237,42 @@
     "loc": 10,
     "cc": 4,
     "nesting": 1
+  },
+  "chat_ws_scope.py": {
+    "loc": 80
+  },
+  "chat_ws_turn.py": {
+    "loc": 251
+  },
+  "chat_ws_turn.py::_build_turn_context": {
+    "loc": 22,
+    "cc": 2,
+    "nesting": 1
+  },
+  "chat_ws_turn.py::_ensure_turn_conversation": {
+    "loc": 39,
+    "cc": 3,
+    "nesting": 2
+  },
+  "chat_ws_turn.py::_read_turn": {
+    "loc": 15,
+    "cc": 3,
+    "nesting": 1
+  },
+  "chat_ws_turn.py::_resolve_turn_conversation_id": {
+    "loc": 30,
+    "cc": 3,
+    "nesting": 1
+  },
+  "chat_ws_turn.py::_run_turn": {
+    "loc": 57,
+    "cc": 3,
+    "nesting": 1
+  },
+  "chat_ws_turn.py::serve_chat_ws": {
+    "loc": 25,
+    "cc": 3,
+    "nesting": 2
   },
   "context_utils.py": {
     "loc": 64
@@ -335,12 +394,7 @@
     "nesting": 1
   },
   "routes.py": {
-    "loc": 1265
-  },
-  "routes.py::_extract_chat_objective": {
-    "loc": 9,
-    "cc": 5,
-    "nesting": 1
+    "loc": 1008
   },
   "routes.py::_get_mission_status_payload": {
     "loc": 4,
@@ -353,9 +407,9 @@
     "nesting": 0
   },
   "routes.py::admin_chat_ws_stategraph": {
-    "loc": 153,
-    "cc": 23,
-    "nesting": 5
+    "loc": 24,
+    "cc": 6,
+    "nesting": 2
   },
   "routes.py::chat_messages_endpoint": {
     "loc": 103,
@@ -373,9 +427,9 @@
     "nesting": 1
   },
   "routes.py::chat_ws_stategraph": {
-    "loc": 145,
-    "cc": 20,
-    "nesting": 5
+    "loc": 15,
+    "cc": 3,
+    "nesting": 1
   },
   "routes.py::checkpointer_status": {
     "loc": 30,

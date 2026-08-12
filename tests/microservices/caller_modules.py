@@ -33,6 +33,8 @@ from microservices.orchestrator_service.src.api import (
     agent_chat_admin_stream,
     agent_chat_customer_stream,
     chat_stream_engine,
+    chat_turn_context,
+    chat_ws_turn,
     routes,
 )
 
@@ -48,6 +50,11 @@ CALLER_MODULES: tuple[Any, ...] = (
     # مسار WS لا يمرّ به `/agent/chat`، لكنّه يستدعي `_persist_assistant_message`
     # فيدخل القائمة كي يبقى الثابت البنيوي صادقاً بالكامل. ترقيعه لا-عمليةٌ هناك.
     chat_stream_engine,
+    # ISS-155: بعد استخراج التوأمين صارت هاتان تملكان المُستدعين الحقيقيين.
+    # الحارس البنيوي هو الذي طلبهما بالاسم — لم تُضافا استباقاً، فبقي مُثبَتاً حيّاً
+    # أنّ الآلية تصرخ فعلاً (D-207 · حارسٌ لا يُثبَت أنه يصرخ ليس حارساً).
+    chat_ws_turn,
+    chat_turn_context,
 )
 
 #: الأسماء التي تُرقّعها اختبارات هذه الحزمة لعزل قاعدة البيانات والشبكة والبثّ.

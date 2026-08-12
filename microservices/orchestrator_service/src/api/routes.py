@@ -22,8 +22,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from microservices.orchestrator_service.src.api.context_utils import (
-    _extract_client_context_messages,
-    _merge_history_with_client_context,
+    _extract_client_context_messages,  # noqa: F401 — re-export (D-168)
+    _merge_history_with_client_context,  # noqa: F401 — re-export (D-168)
 )
 from microservices.orchestrator_service.src.contracts.admin_tools import ADMIN_TOOL_CONTRACT
 from microservices.orchestrator_service.src.core.config import get_settings
@@ -89,8 +89,14 @@ from .chat_context import (
 )
 from .chat_stream_engine import (
     _run_chat_langgraph,
-    _stream_chat_langgraph,
+    _stream_chat_langgraph,  # noqa: F401 — re-export (D-168)
     active_background_tasks,  # noqa: F401
+)
+from .chat_turn_context import (
+    _apply_mission_type,  # noqa: F401 — re-export (D-168)
+    _coerce_client_context,  # noqa: F401 — re-export (D-168)
+    _extract_chat_objective,
+    _hydrate_history,  # noqa: F401 — re-export (D-168)
 )
 from .chat_types import (
     _INJECTED_EXERCISE_MAX_CHARS,  # noqa: F401
@@ -105,6 +111,13 @@ from .chat_types import (
     _extract_injected_exercise,  # noqa: F401
     _extract_support_level,  # noqa: F401
 )
+from .chat_ws_scope import (
+    ADMIN_WS_SCOPE,
+    CUSTOMER_WS_SCOPE,
+    ChatWsScope,  # noqa: F401 — re-export (D-168)
+    WsTurnState,  # noqa: F401 — re-export (D-168)
+)
+from .chat_ws_turn import serve_chat_ws
 from .conversation_store import (
     _create_new_conversation,  # noqa: F401
     _ensure_conversation,
@@ -118,11 +131,11 @@ from .identity_access import (
     _coerce_admin_state,  # noqa: F401
     _conversation_id_from_scoped_thread,
     _decode_auth_payload_or_401,
-    _emit_identity_diagnostic_log,
+    _emit_identity_diagnostic_log,  # noqa: F401 — re-export (D-168)
     _is_admin_payload,
     _merge_admin_inputs,  # noqa: F401 — re-export (D-168)
-    _resolve_effective_conversation_id,
-    _resolve_session_id_from_incoming,
+    _resolve_effective_conversation_id,  # noqa: F401 — re-export (D-168)
+    _resolve_session_id_from_incoming,  # noqa: F401 — re-export (D-168)
     _resolve_thread_id,  # noqa: F401 — re-export (D-168)
     _safe_assistant_error,  # noqa: F401 — re-export (D-168)
     _safe_conversation_id,
@@ -292,17 +305,6 @@ class ChatRequest(BaseModel):
     conversation_id: int | None = None
     history_messages: list[dict[str, str]] = Field(default_factory=list)
     context: dict[str, object] = Field(default_factory=dict)
-
-
-def _extract_chat_objective(payload: dict[str, object]) -> str | None:
-    """يستخلص الهدف النصي للدردشة من حمولة عامة بشكل صريح وآمن."""
-    question = payload.get("question")
-    if isinstance(question, str) and question.strip():
-        return question.strip()
-    objective = payload.get("objective")
-    if isinstance(objective, str) and objective.strip():
-        return objective.strip()
-    return None
 
 
 @router.get("/api/chat/messages", summary="Chat Health Endpoint")
@@ -594,137 +596,7 @@ async def chat_ws_stategraph(websocket: WebSocket) -> None:
         return
 
     await websocket.accept(subprotocol=selected_protocol)
-    sticky_conversation_id: int | None = None
-    sticky_thread_id: str | None = None
-    try:
-        while True:
-            incoming = await websocket.receive_json()
-            if not isinstance(incoming, dict):
-                await websocket.send_json({"status": "error", "message": "invalid payload"})
-                continue
-            objective = _extract_chat_objective(incoming)
-            if objective is None:
-                await websocket.send_json(
-                    {"status": "error", "message": "question/objective required"}
-                )
-                continue
-
-            requested_conversation_id = incoming.get("conversation_id")
-
-            logger.info(
-                "[CONV_LIFECYCLE] stage=ws_received role=customer user=%s conv_id=%s type=%s",
-                user_id,
-                requested_conversation_id,
-                type(requested_conversation_id).__name__,
-            )
-            conversation_id = _resolve_effective_conversation_id(
-                incoming_value=requested_conversation_id,
-                sticky_value=sticky_conversation_id,
-            )
-            if (
-                requested_conversation_id is not None
-                and requested_conversation_id != sticky_conversation_id
-            ):
-                sticky_thread_id = None
-            logger.info(
-                "[CONV_LIFECYCLE] stage=parsed role=customer user=%s conv_id=%s type=%s",
-                user_id,
-                conversation_id,
-                type(conversation_id).__name__,
-            )
-            try:
-                logger.info(f"ORCHESTRATOR received | chat_scope=customer | role={user_id}")
-                logger.info(
-                    "[CONV_LIFECYCLE] stage=ensure_entry role=customer user=%s conv_id=%s",
-                    user_id,
-                    conversation_id,
-                )
-                async with async_session_factory() as session:
-                    conversation_id, history_messages = await _ensure_conversation(
-                        session=session,
-                        chat_scope="customer",
-                        user_id=user_id,
-                        question=objective,
-                        requested_conversation_id=conversation_id,
-                    )
-                logger.info(
-                    "[CONV_LIFECYCLE] stage=ensure_exit role=customer user=%s conv_id=%s msg_count=%s",
-                    user_id,
-                    conversation_id,
-                    len(history_messages),
-                )
-                sticky_conversation_id = conversation_id
-                sticky_thread_id = _build_conversation_thread_id(user_id, conversation_id)
-            except HTTPException as error:
-                await websocket.send_json(
-                    {"type": "assistant_error", "payload": {"content": error.detail}}
-                )
-                continue
-
-            await websocket.send_json(
-                {
-                    "type": "conversation_init",
-                    "payload": {"conversation_id": conversation_id},
-                }
-            )
-
-            context_payload = incoming.get("context")
-            context: ChatRunContext = {}
-            if isinstance(context_payload, dict):
-                for key, value in context_payload.items():
-                    if not isinstance(key, str):
-                        continue
-                    context[key] = value
-
-            if "mission_type" in incoming:
-                context["mission_type"] = incoming["mission_type"]
-            elif (
-                "metadata" in incoming
-                and isinstance(incoming["metadata"], dict)
-                and "mission_type" in incoming["metadata"]
-            ):
-                context["mission_type"] = incoming["metadata"]["mission_type"]
-            context["conversation_id"] = conversation_id
-            context["user_id"] = user_id
-            if sticky_thread_id:
-                context["thread_id"] = sticky_thread_id
-            _emit_identity_diagnostic_log(
-                route_name="orchestrator_ws_customer",
-                conversation_id=conversation_id,
-                thread_id=sticky_thread_id,
-                session_id=_resolve_session_id_from_incoming(incoming),
-            )
-
-            try:
-                client_context = _extract_client_context_messages(incoming)
-                hydrated_messages = _merge_history_with_client_context(
-                    history_messages, client_context
-                )
-            except Exception as e:
-                logger.error(
-                    "[HYDRATION_GUARD] Context hydration failed — "
-                    f"falling back to DB history only. "
-                    f"Error: {type(e).__name__}: {e}"
-                )
-                hydrated_messages = history_messages
-
-            await _stream_chat_langgraph(
-                websocket,
-                objective=objective,
-                context=context,
-                chat_scope="customer",
-                conversation_id=conversation_id,
-                app_graph=getattr(websocket.app.state, "app_graph", None),
-                history_messages=hydrated_messages,
-            )
-            logger.info(
-                "[CONV_LIFECYCLE] stage=response_sent role=customer user=%s conv_id=%s",
-                user_id,
-                conversation_id,
-            )
-
-    except WebSocketDisconnect:
-        logger.info("Customer chat websocket disconnected")
+    await serve_chat_ws(websocket, scope=CUSTOMER_WS_SCOPE, user_id=user_id)
 
 
 @router.websocket("/admin/api/chat/ws")
@@ -749,138 +621,9 @@ async def admin_chat_ws_stategraph(websocket: WebSocket) -> None:
         return
 
     await websocket.accept(subprotocol=selected_protocol)
-    sticky_conversation_id: int | None = None
-    sticky_thread_id: str | None = None
-    try:
-        while True:
-            incoming = await websocket.receive_json()
-            if not isinstance(incoming, dict):
-                await websocket.send_json({"status": "error", "message": "invalid payload"})
-                continue
-            objective = _extract_chat_objective(incoming)
-            if objective is None:
-                await websocket.send_json(
-                    {"status": "error", "message": "question/objective required"}
-                )
-                continue
-
-            requested_conversation_id = incoming.get("conversation_id")
-
-            logger.info(
-                "[CONV_LIFECYCLE] stage=ws_received role=admin user=%s conv_id=%s type=%s",
-                user_id,
-                requested_conversation_id,
-                type(requested_conversation_id).__name__,
-            )
-            conversation_id = _resolve_effective_conversation_id(
-                incoming_value=requested_conversation_id,
-                sticky_value=sticky_conversation_id,
-            )
-            if (
-                requested_conversation_id is not None
-                and requested_conversation_id != sticky_conversation_id
-            ):
-                sticky_thread_id = None
-            logger.info(
-                "[CONV_LIFECYCLE] stage=parsed role=admin user=%s conv_id=%s type=%s",
-                user_id,
-                conversation_id,
-                type(conversation_id).__name__,
-            )
-            try:
-                logger.info(f"ORCHESTRATOR received | chat_scope=admin | role={user_id}")
-                logger.info(
-                    "[CONV_LIFECYCLE] stage=ensure_entry role=admin user=%s conv_id=%s",
-                    user_id,
-                    conversation_id,
-                )
-                async with async_session_factory() as session:
-                    conversation_id, history_messages = await _ensure_conversation(
-                        session=session,
-                        chat_scope="admin",
-                        user_id=user_id,
-                        question=objective,
-                        requested_conversation_id=conversation_id,
-                    )
-                logger.info(
-                    "[CONV_LIFECYCLE] stage=ensure_exit role=admin user=%s conv_id=%s msg_count=%s",
-                    user_id,
-                    conversation_id,
-                    len(history_messages),
-                )
-                sticky_conversation_id = conversation_id
-                sticky_thread_id = _build_conversation_thread_id(user_id, conversation_id)
-            except HTTPException as error:
-                await websocket.send_json(
-                    {"type": "assistant_error", "payload": {"content": error.detail}}
-                )
-                continue
-
-            await websocket.send_json(
-                {
-                    "type": "conversation_init",
-                    "payload": {"conversation_id": conversation_id},
-                }
-            )
-
-            context_payload = incoming.get("context")
-            context: ChatRunContext = {}
-            if isinstance(context_payload, dict):
-                for key, value in context_payload.items():
-                    if not isinstance(key, str):
-                        continue
-                    context[key] = value
-
-            if "mission_type" in incoming:
-                context["mission_type"] = incoming["mission_type"]
-            elif (
-                "metadata" in incoming
-                and isinstance(incoming["metadata"], dict)
-                and "mission_type" in incoming["metadata"]
-            ):
-                context["mission_type"] = incoming["metadata"]["mission_type"]
-            context["conversation_id"] = conversation_id
-            context["user_id"] = user_id
-            if sticky_thread_id:
-                context["thread_id"] = sticky_thread_id
-            _emit_identity_diagnostic_log(
-                route_name="orchestrator_ws_admin",
-                conversation_id=conversation_id,
-                thread_id=sticky_thread_id,
-                session_id=_resolve_session_id_from_incoming(incoming),
-            )
-
-            try:
-                client_context = _extract_client_context_messages(incoming)
-                hydrated_messages = _merge_history_with_client_context(
-                    history_messages, client_context
-                )
-            except Exception as e:
-                logger.error(
-                    "[HYDRATION_GUARD] Context hydration failed — "
-                    f"falling back to DB history only. "
-                    f"Error: {type(e).__name__}: {e}"
-                )
-                hydrated_messages = history_messages
-
-            await _stream_chat_langgraph(
-                websocket,
-                objective=objective,
-                context=context,
-                chat_scope="admin",
-                conversation_id=conversation_id,
-                app_graph=getattr(websocket.app.state, "app_graph", None),
-                admin_payload=auth_payload,
-                history_messages=hydrated_messages,
-            )
-            logger.info(
-                "[CONV_LIFECYCLE] stage=response_sent role=admin user=%s conv_id=%s",
-                user_id,
-                conversation_id,
-            )
-
-    except WebSocketDisconnect:
-        logger.info("Admin chat websocket disconnected")
+    await serve_chat_ws(
+        websocket, scope=ADMIN_WS_SCOPE, user_id=user_id, admin_payload=auth_payload
+    )
 
 
 def _get_mission_status_payload(status: str) -> dict[str, str | None]:

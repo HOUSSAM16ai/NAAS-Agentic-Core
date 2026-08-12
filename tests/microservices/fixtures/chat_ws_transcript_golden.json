@@ -635,6 +635,7 @@
     ],
     "stream_calls": [
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -697,6 +698,7 @@
     ],
     "stream_calls": [
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -718,6 +720,7 @@
         "objective": "الأوّل"
       },
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -793,6 +796,7 @@
     ],
     "stream_calls": [
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -846,6 +850,7 @@
     ],
     "stream_calls": [
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -899,6 +904,7 @@
     ],
     "stream_calls": [
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -948,6 +954,7 @@
     ],
     "stream_calls": [
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -998,6 +1005,7 @@
     ],
     "stream_calls": [
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -1048,6 +1056,7 @@
     ],
     "stream_calls": [
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -1110,6 +1119,7 @@
     ],
     "stream_calls": [
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {
@@ -1131,6 +1141,7 @@
         "objective": "الأوّل"
       },
       {
+        "admin_payload": null,
         "app_graph": null,
         "chat_scope": "customer",
         "context": {

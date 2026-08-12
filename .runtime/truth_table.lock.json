@@ -1,5 +1,5 @@
 {
-  "branch": "claude/chat-agent-endpoint-refactor-xmgynm",
+  "branch": "claude/routes-complexity-refactor-21olgq",
   "components": [
     {
       "agreed": true,
@@ -291,6 +291,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-11T01:49:50.150077+00:00",
+  "generated_at_utc": "2026-08-12T00:08:07.506177+00:00",
   "schema_version": 1
 }

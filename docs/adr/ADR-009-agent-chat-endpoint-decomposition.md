@@ -143,3 +143,38 @@ Both are fixed, both are enforced by gates that need no credentials
 (`check_no_double_encoded_frames` and `check_model_client_literals`), and the live
 before/after is recorded verbatim in
 [`E2E_LIVE_EVIDENCE_D238.md`](../architecture/E2E_LIVE_EVIDENCE_D238.md).
+
+---
+
+## Note 4 — the same trap, avoided by measuring first (D-239 · ISS-155)
+
+The WS twins were decomposed on 2026-08-12. Two things from this ADR were re-tested in
+anger and both held.
+
+**Note 3's trap is real and recurs.** The first extraction moved the scope vocabulary and
+the turn machine into one module. Run bare, before `--update`, the gate reported
+`chat_ws_turn.py: loc=302` against the 300-line newcomer budget. The response was to split
+a responsibility out (`chat_ws_scope.py`), not to shorten a docstring by two lines — note 9's
+rule that the number comes down through structure or it is Goodhart. The lesson generalises:
+*run the gate bare and read it before you let `--update` write anything.*
+
+**Which exposed a hole in the gate itself.** `check_endpoint_complexity.main()` handles
+`--update` before any evaluation and `_write_baseline` never calls `_key_violations`. A
+module that blows the newcomer budget and is frozen in the same run is judged by the ratchet
+forever after — the amnesty lands precisely during a decomposition campaign, the only time
+`--update` is ever run. Filed as **ISS-160**; the manual discipline until it is fixed is
+bare → read → `--update` → verify → review the diff.
+
+**Note 5's late-binding guard fired for real.** After the move the transcript contract went
+23-red with `ConnectionRefusedError` on port 5432: patches were resolving against `routes`'
+re-exports while the real callers had moved. The structural AST check named both new modules
+and exactly which patched names they called. They were added to `CALLER_MODULES` only after
+the gate asked, so the mechanism stayed proven live rather than assumed.
+
+**Note 6's golden-master choice paid off again**, with one correction worth recording. The
+customer shell now passes `admin_payload=None` explicitly where it previously omitted the
+kwarg; since `_stream_chat_langgraph` defaults it to `None`, the callee cannot tell the two
+apart. The recorder was measuring finer than the behaviour and screamed at a real
+equivalence. The fix belonged in the test — production code is never bent to satisfy a
+measuring instrument — and the golden was re-baselined against the pre-move source so the
+proof survived.

@@ -357,3 +357,40 @@ Every path the map above proves reachable:
 | 13 | disconnect mid-stream | generator closed, no leaked tasks |
 
 Cases 1, 6 and 10 are the only ones the existing 3 tests touch.
+
+---
+
+## 7. `src/api/` module map after ISS-155 (D-239 · 2026-08-12)
+
+D-237 decomposed `/agent/chat`. ISS-155 decomposed the **WebSocket twins**, which the §1
+baseline already measured at 153 and 148 lines. The result, in dependency-layer order —
+the same order as `api_sources.API_SOURCE_FILES`:
+
+| Module | Layer | Owns |
+|---|---|---|
+| `chat_types.py` | leaf | `ChatRunContext`, `StreamFrame`, history limits |
+| `chat_ws_scope.py` | leaf | **the six differences between the twins**, as `ChatWsScope` + `WsTurnState` |
+| `chat_turn_context.py` | leaf | reading the incoming payload: objective, client context, `mission_type`, hydration guard |
+| `chat_ws_turn.py` | machine | the turn sequence — one copy for both sockets (`serve_chat_ws`) |
+| `routes.py` | shells | `@router` handlers: auth, the 4403 gate, `accept()`, delegation |
+
+Measured outcome:
+
+| | before | after |
+|---|---|---|
+| `chat_ws_stategraph` | 148 loc / cc 20 / depth 5 | **15 / 3 / 1** |
+| `admin_chat_ws_stategraph` | 153 loc / cc 23 / depth 5 | **24 / 6 / 2** |
+| `routes.py` LOC | 1,265 | **1,008** |
+
+**Why three modules and not one.** The first extraction put the scope vocabulary and the
+turn machine together and the gate measured `302 > 300` lines against the newcomer budget —
+the same God-function-to-God-module trap as ADR-009 note 3, caught by measurement. The fix
+was to split a responsibility out, not to compress a docstring.
+
+**Equivalence proof.** `tests/microservices/fixtures/chat_ws_transcript_golden.json` — ten
+scenarios × two scopes, generated from the pre-move source and byte-identical after the
+move. Proven non-vacuous by three planted mutations. A **seventh** difference between the
+twins is caught by `test_the_twins_differ_only_in_the_six_measured_things`.
+
+**Still open, classified not hidden:** ISS-153 (`persisted` stripped) · ISS-154 (empty turn,
+raw exception leak) · ISS-160 (`--update` amnesty in the complexity gate itself).

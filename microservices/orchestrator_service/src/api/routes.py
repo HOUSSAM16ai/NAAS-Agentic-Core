@@ -28,7 +28,7 @@ from microservices.orchestrator_service.src.api.context_utils import (
 from microservices.orchestrator_service.src.contracts.admin_tools import ADMIN_TOOL_CONTRACT
 from microservices.orchestrator_service.src.core.config import get_settings
 from microservices.orchestrator_service.src.core.database import (
-    async_session_factory,
+    _psycopg_session_factory_proxy,
     get_checkpointer,
     get_db,
 )
@@ -333,7 +333,7 @@ async def list_customer_conversations(
         LIMIT :limit
         """
     )
-    async with async_session_factory() as session:
+    async with _psycopg_session_factory_proxy() as session:
         rows = (await session.execute(query, {"user_id": user_id, "limit": limit})).fetchall()
     return [
         {
@@ -367,7 +367,7 @@ async def get_customer_conversation(
         ORDER BY id ASC
         """
     )
-    async with async_session_factory() as session:
+    async with _psycopg_session_factory_proxy() as session:
         conv_row = (
             await session.execute(
                 check_query, {"conversation_id": conversation_id, "user_id": user_id}
@@ -412,7 +412,7 @@ async def list_admin_conversations(
         LIMIT :limit
         """
     )
-    async with async_session_factory() as session:
+    async with _psycopg_session_factory_proxy() as session:
         rows = (await session.execute(query, {"user_id": user_id, "limit": limit})).fetchall()
     return [
         {
@@ -448,7 +448,7 @@ async def get_admin_conversation(
         ORDER BY id ASC
         """
     )
-    async with async_session_factory() as session:
+    async with _psycopg_session_factory_proxy() as session:
         conv_row = (
             await session.execute(
                 check_query, {"conversation_id": conversation_id, "user_id": user_id}
@@ -515,7 +515,7 @@ async def chat_messages_endpoint(
                 user_id=user_id,
             )
 
-    async with async_session_factory() as session:
+    async with _psycopg_session_factory_proxy() as session:
         conversation_id, history_messages = await _ensure_conversation(
             session=session,
             chat_scope=chat_scope,
@@ -568,7 +568,7 @@ async def chat_messages_endpoint(
 
         if final_content:
             try:
-                async with async_session_factory() as db_session:
+                async with _psycopg_session_factory_proxy() as db_session:
                     await _persist_assistant_message(
                         session=db_session,
                         chat_scope=chat_scope,
@@ -633,7 +633,8 @@ def _get_mission_status_payload(status: str) -> dict[str, str | None]:
 
 
 def _serialize_mission(mission: Mission) -> MissionResponse:
-    status_payload = _get_mission_status_payload(mission.status.value)
+    raw_status = getattr(mission.status, "value", mission.status)  # D-184: str أو enum
+    status_payload = _get_mission_status_payload(raw_status)
     return MissionResponse(
         id=mission.id,
         objective=mission.objective,
@@ -750,7 +751,11 @@ async def get_mission_events_endpoint(
             ),
             mission_id=evt.mission_id,
             timestamp=evt.created_at,
-            payload=evt.payload_json or {},
+            payload=(
+                evt.payload_json
+                if isinstance(evt.payload_json, dict)
+                else (json.loads(evt.payload_json) if isinstance(evt.payload_json, str) else {})
+            ),
         )
         for evt in events
     ]
@@ -781,7 +786,7 @@ async def stream_mission_ws(
     subscription = event_bus.subscribe(channel)
 
     try:
-        async with async_session_factory() as session:
+        async with _psycopg_session_factory_proxy() as session:
             state_manager = MissionStateManager(session)
             mission = await state_manager.get_mission(mission_id)
             if not mission:
@@ -827,7 +832,7 @@ async def stream_mission_ws(
 
             if canonical_event["event_type"] in ("mission_completed", "mission_failed"):
                 # Fetch final status
-                async with async_session_factory() as final_session:
+                async with _psycopg_session_factory_proxy() as final_session:
                     sm = MissionStateManager(final_session)
                     m = await sm.get_mission(mission_id)
                     if m:
@@ -984,7 +989,6 @@ async def checkpointer_status() -> dict:
     backend: postgres | memory | none
     """
     ckpt = get_checkpointer()
-
     if ckpt is None:
         return {
             "backend": "memory",
@@ -994,9 +998,7 @@ async def checkpointer_status() -> dict:
             "active_threads": 0,
             "message": "AsyncPostgresSaver not initialised — using MemorySaver fallback",
         }
-
     active_threads = len(getattr(ckpt, "_active_threads", set()))
-
     return {
         "backend": "postgres",
         "step": "10",

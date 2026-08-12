@@ -18,7 +18,6 @@ from contextlib import suppress
 from fastapi import WebSocket
 
 from microservices.orchestrator_service.src.core.database import (
-    async_session_factory,
     get_checkpointer,
 )
 from microservices.orchestrator_service.src.core.prom_metrics import (
@@ -421,7 +420,7 @@ async def _stream_chat_langgraph(
 
         if final_content.strip():
             try:
-                async with async_session_factory() as db_session:
+                async with _psycopg_session_factory_proxy() as db_session:
                     await _persist_assistant_message(
                         session=db_session,
                         chat_scope=chat_scope,

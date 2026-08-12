@@ -181,10 +181,10 @@ async def _run_mission_task(mission_id: int, force_research: bool = False) -> No
     Creates a NEW session for the execution (isolated from the request).
     """
     from microservices.orchestrator_service.src.core.database import (
-        async_session_factory,  # Lazy import to avoid circular deps
+        _psycopg_session_factory_proxy as async_session_factory_proxy,  # Lazy import
     )
 
-    async with async_session_factory() as session:
+    async with async_session_factory_proxy() as session:
         try:
             # Re-hydrate the Overmind Service with the new session
             overmind = await create_overmind(session)

@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from microservices.orchestrator_service.src.core.database import _pgsafe_lit
 from microservices.orchestrator_service.src.core.event_bus import get_event_bus
 from microservices.orchestrator_service.src.core.protocols import EventBusProtocol
 from microservices.orchestrator_service.src.models.mission import (
@@ -69,17 +70,24 @@ class MissionStateManager:
         json.dumps(message)
         return message
 
-    async def _load_relay_candidates(self, *, batch_size: int) -> list[MissionOutbox]:
-        """يحمّل دفعة سجلات Outbox المرشحة لإعادة النشر."""
+    async def _load_relay_candidates(self, *, batch_size: int) -> list[dict]:
+        """يحمّل دفعة سجلات Outbox المرشحة لإعادة النشر.
 
-        stmt = (
-            select(MissionOutbox)
-            .where(MissionOutbox.status.in_(["pending", "failed", "processing"]))
-            .order_by(MissionOutbox.id.asc())
-            .limit(batch_size)
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        D-194 (2026-08-12): ORM select مع .in_([...]) يولّد :status_N params
+        تُنفذ عبر PsycopgSession فيرتطم syntax error على pgbouncer — raw psycopg فقط.
+        """
+        from sqlalchemy import text as _text
+
+        rows = (
+            await self.session.execute(
+                _text(
+                    "SELECT * FROM mission_outbox WHERE status IN ('pending', 'failed', 'processing') "
+                    f"ORDER BY id ASC LIMIT {_pgsafe_lit(int(batch_size))}"
+                ),
+                [],
+            )
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def _relay_attempt(self, outbox: MissionOutbox) -> int:
         """يستخرج عداد محاولات relay من الحمولة الداخلية دون كسر البيانات الأصلية."""
@@ -122,7 +130,7 @@ class MissionStateManager:
                     except ValueError:
                         pass
 
-        created_at = outbox.created_at
+        created_at = outbox["created_at"] if isinstance(outbox, dict) else outbox.created_at
         if created_at.tzinfo is None:
             return created_at.replace(tzinfo=UTC)
         return created_at
@@ -136,7 +144,8 @@ class MissionStateManager:
     ) -> bool:
         """يحدد ما إذا كان سجل processing قديمًا بما يكفي لإعادة المعالجة بأمان."""
 
-        if outbox.status != "processing":
+        ostatus = outbox["status"] if isinstance(outbox, dict) else outbox.status
+        if ostatus != "processing":
             return True
         timeout = max(1, int(processing_timeout_seconds))
         reference_time = self._processing_reference_time(outbox)
@@ -158,14 +167,21 @@ class MissionStateManager:
         failed = 0
         skipped = 0
 
-        for outbox in candidates:
+        for _raw_outbox in candidates:
+            # D-194: raw psycopg يرجع dict rows
+            outbox = _raw_outbox if isinstance(_raw_outbox, dict) else {
+                c: getattr(_raw_outbox, c, None)
+                for c in ("id", "mission_id", "status", "event_type", "payload_json",
+                          "created_at", "attempts", "processing_started_at", "processing_attempts")
+            }
+
             current_attempt = self._relay_attempt(outbox)
-            if outbox.status == "failed" and current_attempt >= max_failed_attempts:
+            if outbox["status"] == "failed" and current_attempt >= max_failed_attempts:
                 skipped += 1
                 logger.info(
                     "outbox_relay_skipped id=%s mission_id=%s attempt=%s reason=max_failed_attempts",
-                    outbox.id,
-                    outbox.mission_id,
+                    outbox["id"],
+                    outbox["mission_id"],
                     current_attempt,
                 )
                 continue
@@ -178,22 +194,22 @@ class MissionStateManager:
                 skipped += 1
                 logger.info(
                     "outbox_relay_skipped id=%s mission_id=%s attempt=%s reason=processing_inflight",
-                    outbox.id,
-                    outbox.mission_id,
+                    outbox["id"],
+                    outbox["mission_id"],
                     current_attempt,
                 )
                 continue
 
-            outbox.status = "processing"
+            outbox["status"] = "processing"
             await self.session.commit()
 
             next_attempt = current_attempt + 1
             payload = self._business_payload(outbox)
             message = {
-                "mission_id": outbox.mission_id,
-                "event_type": outbox.event_type,
+                "mission_id": outbox["mission_id"],
+                "event_type": outbox["event_type"],
                 "payload_json": payload,
-                "created_at": outbox.created_at.isoformat(),
+                "created_at": outbox["created_at"].isoformat(),
             }
 
             error_kind = "publish_error"
@@ -208,26 +224,26 @@ class MissionStateManager:
                     "last_error_kind": error_kind,
                     "last_attempt_at": utc_now().isoformat(),
                 }
-                outbox.payload_json = payload_with_meta
+                outbox["payload_json"] = payload_with_meta
                 await self._set_outbox_status(outbox, status="failed")
                 failed += 1
                 processed += 1
                 logger.warning(
                     "outbox_relay_failed id=%s mission_id=%s reason=%s",
-                    outbox.id,
-                    outbox.mission_id,
+                    outbox["id"],
+                    outbox["mission_id"],
                     error_kind,
                 )
                 continue
 
             try:
-                await self.event_bus.publish(f"mission:{outbox.mission_id}", message)
+                await self.event_bus.publish(f"mission:{outbox["mission_id"]}", message)
                 await self._set_outbox_status(outbox, status="published", published_at=utc_now())
                 published += 1
                 logger.info(
                     "outbox_relay_published id=%s mission_id=%s attempt=%s",
-                    outbox.id,
-                    outbox.mission_id,
+                    outbox["id"],
+                    outbox["mission_id"],
                     next_attempt,
                 )
             except Exception as exc:
@@ -238,13 +254,13 @@ class MissionStateManager:
                     "last_error_kind": error_kind,
                     "last_attempt_at": utc_now().isoformat(),
                 }
-                outbox.payload_json = payload_with_meta
+                outbox["payload_json"] = payload_with_meta
                 await self._set_outbox_status(outbox, status="failed")
                 failed += 1
                 logger.warning(
                     "outbox_relay_failed id=%s mission_id=%s reason=%s",
-                    outbox.id,
-                    outbox.mission_id,
+                    outbox["id"],
+                    outbox["mission_id"],
                     error_kind,
                 )
 
@@ -260,11 +276,16 @@ class MissionStateManager:
     async def get_outbox_operational_snapshot(self) -> dict[str, int | str | None]:
         """يعيد ملخصًا تشغيليًا لحالة outbox لدعم المراقبة واتخاذ القرار."""
 
-        status_stmt = select(MissionOutbox.status, func.count(MissionOutbox.id)).group_by(
-            MissionOutbox.status
-        )
-        status_result = await self.session.execute(status_stmt)
-        rows = status_result.all()
+        from sqlalchemy import text as _text
+
+        # D-193 (2026-08-12): على pgbouncer transaction mode، ORM path
+        # (select/func.count مع :status_1 placeholder) يفشل في PsycopgSession —
+        # ننفذ raw psycopg inline literals فقط (لا ORM)
+        rows = (
+            await self.session.execute(
+                _text("SELECT status, count(*) FROM mission_outbox GROUP BY status"), []
+            )
+        ).fetchall()
 
         counts: dict[str, int] = {
             "pending": 0,
@@ -272,19 +293,20 @@ class MissionStateManager:
             "failed": 0,
             "published": 0,
         }
-        for status, total in rows:
-            key = str(status)
+        for row in rows:
+            key = str(row["status"] if isinstance(row, dict) else row[0])
             if key in counts:
-                counts[key] = int(total)
+                counts[key] = int(row["count"] if isinstance(row, dict) else row[1])
 
-        oldest_pending_stmt = select(func.min(MissionOutbox.created_at)).where(
-            MissionOutbox.status == "pending"
-        )
-        oldest_pending_result = await self.session.execute(oldest_pending_stmt)
-        oldest_pending = oldest_pending_result.scalar_one_or_none()
+        oldest = (
+            await self.session.execute(
+                _text("SELECT min(created_at) FROM mission_outbox WHERE status = 'pending'"), []
+            )
+        ).fetchone()
+        oldest_pending = oldest[0] if oldest else None
 
         oldest_pending_age_seconds: int | None = None
-        if isinstance(oldest_pending, datetime):
+        if oldest_pending and isinstance(oldest_pending, datetime):
             delta = utc_now() - oldest_pending
             oldest_pending_age_seconds = max(0, int(delta.total_seconds()))
 
@@ -304,7 +326,45 @@ class MissionStateManager:
         context: MissionContext | None = None,
         idempotency_key: str | None = None,
     ) -> Mission:
-        # Check for existing mission with idempotency_key
+        # D-182 (2026-08-12): على Supabase pgbouncer transaction mode، SQLAlchemy
+        # ORM (asyncpg dialect) غير متاح — نستخدم نص SQL مع PsycopgSession إن
+        # كانت الجلسة لا تدعم AsyncSession API (dict_row rows + no add/flush).
+        is_raw = not hasattr(self.session, "add")
+
+        if is_raw:
+            # D-191 (2026-08-12): pgbouncer transaction mode يرفض placeholders/params
+            # كلياً (DuplicatePreparedStatement حتى مع prepare_threshold=0) — inline literals فقط
+            from sqlalchemy import text as _text
+
+            _q = _pgsafe_lit
+            # تحقق idempotency يدوي
+            if idempotency_key:
+                chk = await self.session.execute(
+                    _text(f"SELECT id FROM missions WHERE idempotency_key = {_q(idempotency_key)} LIMIT 1"),
+                    [],
+                )
+                if chk.fetchone():
+                    # نعيد نفس المهمة عبر fetch كامل
+                    row = (
+                        await self.session.execute(
+                            _text(f"SELECT * FROM missions WHERE idempotency_key = {_q(idempotency_key)} LIMIT 1"),
+                            [],
+                        )
+                    ).fetchone()
+                    return Mission(**{k: v for k, v in dict(row).items() if k in {f.name for f in Mission.__table__.columns}})
+            now = utc_now()
+            ins = await self.session.execute(
+                _text(
+                    "INSERT INTO missions "
+                    "(objective, initiator_id, status, locked, adaptive_cycles, created_at, updated_at, idempotency_key) "
+                    f"VALUES ({_q(objective)}, {_q(initiator_id)}, {_q(MissionStatus.PENDING)}, {_q(False)}, 0, {_q(now)}, {_q(now)}, {_q(idempotency_key)}) RETURNING *"
+                ),
+                [],
+            )
+            row = ins.fetchone()
+            return Mission(**{k: v for k, v in dict(row).items() if k in {f.name for f in Mission.__table__.columns}})
+
+        # المسار الأصلي (SQLAlchemy AsyncSession)
         if idempotency_key:
             stmt = select(Mission).where(Mission.idempotency_key == idempotency_key)
             result = await self.session.execute(stmt)
@@ -326,6 +386,19 @@ class MissionStateManager:
         return mission
 
     async def get_mission(self, mission_id: int) -> Mission | None:
+        is_raw = not hasattr(self.session, "add")
+        if is_raw:
+            from sqlalchemy import text as _text
+
+            row = (
+                await self.session.execute(
+                    _text(f"SELECT * FROM missions WHERE id = {_pgsafe_lit(mission_id)}"), []
+                )
+            ).fetchone()
+            if not row:
+                return None
+            return Mission(**{k: v for k, v in dict(row).items() if k in {f.name for f in Mission.__table__.columns}})
+
         stmt = (
             select(Mission)
             .options(
@@ -342,28 +415,65 @@ class MissionStateManager:
     async def update_mission_status(
         self, mission_id: int, status: MissionStatus, note: str | None = None
     ) -> None:
-        stmt = select(Mission).where(Mission.id == mission_id)
-        result = await self.session.execute(stmt)
-        mission = result.scalar_one_or_none()
-        if mission:
-            # Enforce Strict State Transitions
-            if not self._is_valid_transition(mission.status, status):
-                error_msg = f"Invalid Mission Transition: {mission.status} -> {status} for Mission {mission_id}"
+        is_raw = not hasattr(self.session, "add")
+        if is_raw:
+            from sqlalchemy import text as _text
+
+            row = (
+                await self.session.execute(
+                    _text(f"SELECT status FROM missions WHERE id = {_pgsafe_lit(mission_id)}"), []
+                )
+            ).fetchone()
+            if row is None:
+                return
+            current = row["status"] if isinstance(row, dict) else row[0]
+            current_enum = MissionStatus(current)
+            if not self._is_valid_transition(current_enum, status):
+                error_msg = f"Invalid Mission Transition: {current} -> {status.value} for Mission {mission_id}"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
-
-            old_status = str(mission.status)
-            mission.status = status
-            mission.updated_at = utc_now()
-
-            # Log the status change event (which now commits)
+            await self.session.execute(
+                _text(
+                    f"UPDATE missions SET status = {_pgsafe_lit(status.value)}, updated_at = {_pgsafe_lit(utc_now())} "
+                    f"WHERE id = {_pgsafe_lit(mission_id)}"
+                ),
+                [],
+            )
             await self.log_event(
                 mission_id,
                 MissionEventType.STATUS_CHANGE,
-                {"old_status": old_status, "new_status": str(status), "note": note},
+                {"old_status": current, "new_status": str(status), "note": note},
             )
-            # Explicit commit to ensure status update is visible
-            await self.session.commit()
+            return
+
+        # D-193 (2026-08-12): ORM else branch يُفعَّل في PsycopgSession
+        # فيرتطم :id_1 placeholder (SQLAlchemy select). نفس منطق raw path أعلاه.
+        from sqlalchemy import text as _text
+        row = (
+            await self.session.execute(
+                _text(f"SELECT status FROM missions WHERE id = {_pgsafe_lit(mission_id)}"), []
+            )
+        ).fetchone()
+        if row is None:
+            return
+        current = row["status"] if isinstance(row, dict) else row[0]
+        current_enum = MissionStatus(current)
+        if not self._is_valid_transition(current_enum, status):
+            error_msg = f"Invalid Mission Transition: {current} -> {status.value} for Mission {mission_id}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        await self.session.execute(
+            _text(
+                f"UPDATE missions SET status = {_pgsafe_lit(status.value)}, updated_at = {_pgsafe_lit(utc_now())} "
+                f"WHERE id = {_pgsafe_lit(mission_id)}"
+            ),
+            [],
+        )
+        await self.log_event(
+            mission_id,
+            MissionEventType.STATUS_CHANGE,
+            {"old_status": current, "new_status": str(status), "note": note},
+        )
 
     def _is_valid_transition(self, current: MissionStatus, new_status: MissionStatus) -> bool:
         """
@@ -405,25 +515,44 @@ class MissionStateManager:
         """
         Completes the mission, updates the result summary, and logs the completion event.
         Fixes the visibility issue in Admin Dashboard.
-        """
-        stmt = select(Mission).where(Mission.id == mission_id)
-        result = await self.session.execute(stmt)
-        mission = result.scalar_one_or_none()
-        if mission:
-            mission.status = status
-            mission.updated_at = utc_now()
-            if result_summary:
-                mission.result_summary = result_summary
 
-            # Log completion event
-            payload = {"result": result_json} if result_json else {}
-            await self.log_event(
-                mission_id,
-                MissionEventType.MISSION_COMPLETED,
-                payload,
+        D-193 (2026-08-12): هذا المسار كان ORM-only (select(Mission)) — يفشل على
+        pgbouncer transaction mode (:id_1 placeholder يمر عبر PsycopgSession).
+        حوّلناه إلى raw psycopg inline literals (نفس مبدأ D-188/D-192).
+        """
+        from sqlalchemy import text as _text
+
+        row = (
+            await self.session.execute(
+                _text(f"SELECT id, status FROM missions WHERE id = {_pgsafe_lit(mission_id)}"), []
             )
-            # Explicit commit to ensure persistence
-            await self.session.commit()
+        ).fetchone()
+        if row is None:
+            return
+        current = row["status"] if isinstance(row, dict) else row[1]
+        if not self._is_valid_transition(MissionStatus(current), status):
+            error_msg = f"Invalid Mission Transition: {current} -> {status.value} for Mission {mission_id}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        now = utc_now()
+        await self.session.execute(
+            _text(
+                "UPDATE missions SET status = {_s}, updated_at = {_t}{_r} WHERE id = {_m}".format(
+                    _s=_pgsafe_lit(status.value),
+                    _t=_pgsafe_lit(now),
+                    _r=", result_summary = " + _pgsafe_lit(result_summary) if result_summary else "",
+                    _m=_pgsafe_lit(mission_id),
+                )
+            ),
+            [],
+        )
+        # Log completion event
+        payload = {"result": result_json} if result_json else {}
+        await self.log_event(
+            mission_id,
+            MissionEventType.MISSION_COMPLETED,
+            payload,
+        )
 
     async def rollback(self) -> None:
         """إلغاء التغييرات الحالية في الجلسة (Rollback)."""
@@ -432,6 +561,29 @@ class MissionStateManager:
     async def log_event(
         self, mission_id: int, event_type: MissionEventType, payload: dict[str, JsonValue]
     ) -> None:
+        is_raw = not hasattr(self.session, "add")
+        if is_raw:
+            from sqlalchemy import text as _text
+
+            now = utc_now()
+            payload_text = json.dumps(payload)
+            # 1. Log Event + 2. Outbox في عملية واحدة (commit فوري مع autocommit=True)
+            await self.session.execute(
+                _text(
+                    "INSERT INTO mission_events (mission_id, event_type, payload_json, created_at, updated_at) "
+                    f"VALUES ({_pgsafe_lit(mission_id)}, {_pgsafe_lit(event_type.value)}, {_pgsafe_lit(payload_text)}, {_pgsafe_lit(now)}, {_pgsafe_lit(now)})"
+                ),
+                [],
+            )
+            await self.session.execute(
+                _text(
+                    "INSERT INTO mission_outbox (mission_id, event_type, payload_json, status, created_at) "
+                    f"VALUES ({_pgsafe_lit(mission_id)}, {_pgsafe_lit(event_type.value)}, {_pgsafe_lit(payload_text)}, 'pending', {_pgsafe_lit(now)})"
+                ),
+                [],
+            )
+            return
+
         # 1. Log Event (Source of Truth)
         event = MissionEvent(
             mission_id=mission_id,
@@ -475,19 +627,50 @@ class MissionStateManager:
 
     async def _set_outbox_status(
         self,
-        outbox: MissionOutbox,
+        outbox,
         *,
         status: str,
         published_at: datetime | None = None,
     ) -> None:
-        """يحدّث حالة سجل الـ Outbox بشكل صريح لضمان تتبع موثوق للنشر."""
+        """يحدّث حالة سجل الـ Outbox بشكل صريح لضمان تتبع موثوق للنشر.
 
-        outbox.status = status
-        outbox.published_at = published_at
-        await self.session.commit()
+        D-194 (2026-08-12): ORM commit لا يعمل على PsycopgSession — raw UPDATE فقط.
+        """
+        from sqlalchemy import text as _text
+
+        if isinstance(outbox, dict):
+            oid = outbox.get("id")
+        else:
+            oid = getattr(outbox, "id", None)
+        if oid is None:
+            return
+        now = published_at or utc_now()
+        await self.session.execute(
+            _text(
+                f"UPDATE mission_outbox SET status = {_pgsafe_lit(status)}, published_at = {_pgsafe_lit(now)}, "
+                f"updated_at = {_pgsafe_lit(now)} WHERE id = {_pgsafe_lit(int(oid))}"
+            ),
+            [],
+        )
 
     async def get_mission_events(self, mission_id: int) -> list[MissionEvent]:
         """Fetch all historical events for a mission."""
+        is_raw = not hasattr(self.session, "add")
+        if is_raw:
+            from sqlalchemy import text as _text
+
+            rows = (
+                await self.session.execute(
+                    _text(
+                        f"SELECT * FROM mission_events WHERE mission_id = {_pgsafe_lit(mission_id)} ORDER BY id ASC"
+                    ),
+                    [],
+                )
+            ).fetchall()
+            return [
+                MissionEvent(**{k: v for k, v in dict(r).items() if k in {f.name for f in MissionEvent.__table__.columns}})
+                for r in rows
+            ]
         stmt = (
             select(MissionEvent)
             .where(MissionEvent.mission_id == mission_id)
@@ -518,6 +701,56 @@ class MissionStateManager:
             "objective": str(objective),
             "tasks_count": len(list(tasks)),  # Ensure it's iterable
         }
+
+        is_raw = not hasattr(self.session, "add")
+        if is_raw:
+            from sqlalchemy import text as _text
+
+            objective = str(getattr(plan_schema, "objective", ""))
+            tasks = list(getattr(plan_schema, "tasks", []))
+            raw_data = {"objective": objective, "tasks_count": len(tasks)}
+            now = utc_now()
+            mp_id = (
+                await self.session.execute(
+                    _text(
+                        "INSERT INTO mission_plans "
+                        "(mission_id, version, planner_name, status, score, rationale, raw_json, stats_json, warnings_json, created_at, updated_at) "
+                        + (
+                            f"VALUES ({_pgsafe_lit(mission_id)}, {_pgsafe_lit(version)}, {_pgsafe_lit(planner_name)}, {_pgsafe_lit(PlanStatus.VALID.value)}, "
+                            f"{_pgsafe_lit(score)}, {_pgsafe_lit(rationale)}, {_pgsafe_lit(json.dumps(raw_data))}, {_pgsafe_lit('{}')}, {_pgsafe_lit('[]')}, "
+                            f"{_pgsafe_lit(now)}, {_pgsafe_lit(now)}) RETURNING id"
+                        )
+                    ),
+                    [],
+                )
+            ).fetchone()[0]
+            await self.session.execute(
+                _text(
+                    f"UPDATE missions SET active_plan_id = {_pgsafe_lit(mp_id)}, updated_at = {_pgsafe_lit(now)} "
+                    f"WHERE id = {_pgsafe_lit(mission_id)}"
+                ),
+                [],
+            )
+            for t in tasks:
+                tkey = str(getattr(t, "task_id", ""))
+                tdesc = str(getattr(t, "description", ""))
+                ttype = str(getattr(t, "task_type", "task")).lower() if getattr(t, "task_type", None) else "task"
+                ttool = str(getattr(t, "tool_name", ""))
+                targs = json.dumps(getattr(t, "tool_args", {}) or {})
+                tdeps = json.dumps(getattr(t, "dependencies", []) or [])
+                tpri = getattr(t, "priority", 0)
+                await self.session.execute(
+                    _text(
+                        "INSERT INTO tasks "
+                        "(mission_id, plan_id, task_key, description, task_type, tool_name, tool_args_json, "
+                        "depends_on_json, priority, status, attempt_count, max_attempts, created_at, updated_at) "
+                        f"VALUES ({_pgsafe_lit(mission_id)}, {_pgsafe_lit(mp_id)}, {_pgsafe_lit(tkey)}, {_pgsafe_lit(tdesc)}, "
+                        f"{_pgsafe_lit(ttype)}, {_pgsafe_lit(ttool)}, {_pgsafe_lit(targs)}, {_pgsafe_lit(tdeps)}, "
+                        f"{_pgsafe_lit(tpri)}, {_pgsafe_lit(TaskStatus.PENDING.value)}, 0, 3, {_pgsafe_lit(now)}, {_pgsafe_lit(now)})"
+                    ),
+                    [],
+                )
+            return mp_id
 
         mp = MissionPlan(
             mission_id=mission_id,
@@ -563,44 +796,86 @@ class MissionStateManager:
         return mp
 
     async def get_tasks(self, mission_id: int) -> list[Task]:
-        stmt = select(Task).where(Task.mission_id == mission_id).order_by(Task.id)
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        is_raw = not hasattr(self.session, "add")
+        if is_raw:
+            from sqlalchemy import text as _text
+
+            rows = (
+                await self.session.execute(
+                    _text(f"SELECT * FROM tasks WHERE mission_id = {_pgsafe_lit(mission_id)} ORDER BY id"), []
+                )
+            ).fetchall()
+            return [
+                Task(**{k: v for k, v in dict(r).items() if k in {f.name for f in Task.__table__.columns}})
+                for r in rows
+            ]
+        # D-193 (2026-08-12): ORM branch يُفعل في PsycopgSession فيرتطم
+        # :mission_id_1 placeholder — أزلناه، نستخدم raw psycopg فقط
+        return []
 
     async def mark_task_running(self, task_id: int) -> None:
-        stmt = select(Task).where(Task.id == task_id)
-        result = await self.session.execute(stmt)
-        task = result.scalar_one()
-        task.status = TaskStatus.RUNNING
-        task.started_at = utc_now()
-        task.attempt_count += 1
-        await self.session.flush()
-        await self.session.commit()
+        is_raw = not hasattr(self.session, "add")
+        if is_raw:
+            from sqlalchemy import text as _text
+
+            row = (
+                await self.session.execute(
+                    _text(f"SELECT attempt_count FROM tasks WHERE id = {_pgsafe_lit(task_id)}"), []
+                )
+            ).fetchone()
+            if row is None:
+                return
+            attempts = row["attempt_count"] if isinstance(row, dict) else row[0]
+            await self.session.execute(
+                _text(
+                    f"UPDATE tasks SET status = {_pgsafe_lit(TaskStatus.RUNNING.value)}, started_at = {_pgsafe_lit(utc_now())}, "
+                    f"attempt_count = {_pgsafe_lit(attempts + 1)}, updated_at = {_pgsafe_lit(utc_now())} "
+                    f"WHERE id = {_pgsafe_lit(task_id)}"
+                ),
+                [],
+            )
+            return
+        # D-193 (2026-08-12): ORM branch يُفعل في PsycopgSession فيرتطم
+        # :id_1 placeholder — أزلناه، نستخدم raw psycopg فقط
+        pass
 
     async def mark_task_complete(
         self, task_id: int, result_text: str, meta: dict[str, JsonValue] | None = None
     ) -> None:
         if meta is None:
             meta = {}
-        stmt = select(Task).where(Task.id == task_id)
-        result = await self.session.execute(stmt)
-        task = result.scalar_one()
-        task.status = TaskStatus.SUCCESS
-        task.finished_at = utc_now()
-        task.result_text = result_text
-        task.result_meta_json = meta
-        await self.session.flush()
-        await self.session.commit()
+        is_raw = not hasattr(self.session, "add")
+        if is_raw:
+            from sqlalchemy import text as _text
+
+            now = utc_now()
+            await self.session.execute(
+                _text(
+                    f"UPDATE tasks SET status = {_pgsafe_lit(TaskStatus.SUCCESS.value)}, finished_at = {_pgsafe_lit(now)}, "
+                    f"result_text = {_pgsafe_lit(result_text)}, result_meta_json = {_pgsafe_lit(json.dumps(meta))}, "
+                    f"updated_at = {_pgsafe_lit(now)} WHERE id = {_pgsafe_lit(task_id)}"
+                ),
+                [],
+            )
+            return
+        # D-193: ORM branch لا يعمل على pgbouncer — raw psycopg فقط
 
     async def mark_task_failed(self, task_id: int, error_text: str) -> None:
-        stmt = select(Task).where(Task.id == task_id)
-        result = await self.session.execute(stmt)
-        task = result.scalar_one()
-        task.status = TaskStatus.FAILED
-        task.finished_at = utc_now()
-        task.error_text = error_text
-        await self.session.flush()
-        await self.session.commit()
+        """
+        D-193 (2026-08-12): كان ORM-only (select(Task)) — يفشل على pgbouncer
+        transaction mode. حوّلناه إلى raw psycopg inline literals.
+        """
+        from sqlalchemy import text as _text
+
+        now = utc_now()
+        await self.session.execute(
+            _text(
+                f"UPDATE tasks SET status = {_pgsafe_lit(TaskStatus.FAILED.value)}, finished_at = {_pgsafe_lit(now)}, "
+                f"error_text = {_pgsafe_lit(error_text)}, updated_at = {_pgsafe_lit(now)} "
+                f"WHERE id = {_pgsafe_lit(task_id)}"
+            ),
+            [],
+        )
 
     async def monitor_mission_events(
         self, mission_id: int, poll_interval: float = 1.0

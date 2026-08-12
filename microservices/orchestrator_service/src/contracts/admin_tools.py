@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 
-from microservices.orchestrator_service.src.core.database import async_session_factory
+from microservices.orchestrator_service.src.core.database import _psycopg_session_factory_proxy
 from microservices.orchestrator_service.src.infrastructure.clients.user_client import user_client
 from microservices.orchestrator_service.src.services.overmind.graph.mcp_mock import kagent_tool
 
@@ -70,7 +70,7 @@ async def count_python_files() -> str:
 async def count_database_tables() -> str:
     """Count all DB tables via SQL"""
     validate_tool_name("admin.count_database_tables")
-    async with async_session_factory() as session:
+    async with _psycopg_session_factory_proxy() as session:
         result = await session.execute(
             text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'")
         )

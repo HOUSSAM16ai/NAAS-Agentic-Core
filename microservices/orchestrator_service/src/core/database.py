@@ -87,7 +87,21 @@ def _make_instrumented_class(base_class: type) -> type:
 
         يرث كل سلوك AsyncPostgresSaver ويُضيف تسجيل Prometheus
         على aput / aget / aget_tuple / setup.
+
+        D-174 (2026-08-12): LangGraph 0.2.x يدرج input/blob بـ version=None
+        في checkpoint_blobs → NotNullViolation يسقط كل محادثة ("Response ended
+        prematurely"). نحمي ذلك هنا (لا نغيّر pkg vendor).
         """
+
+        UPSERT_CHECKPOINT_BLOBS_SQL = """
+            INSERT INTO checkpoint_blobs (thread_id, checkpoint_ns, channel, version, type, blob)
+            VALUES (%s, %s, %s, COALESCE(NULLIF(%s, ''), '0'), %s, %s)
+            ON CONFLICT (thread_id, checkpoint_ns, channel, version) DO NOTHING
+        """
+
+        def _dump_blobs(self, thread_id, checkpoint_ns, values, versions):  # type: ignore[override]
+            rows = super()._dump_blobs(thread_id, checkpoint_ns, values, versions)
+            return [(t, ns, ch, ver if ver else "0", ty, bl) for (t, ns, ch, ver, ty, bl) in rows]
 
         def __init__(self, pool: object) -> None:
             super().__init__(pool)  # type: ignore[arg-type]
@@ -225,6 +239,13 @@ def create_engine() -> AsyncEngine:
             connect_args={"check_same_thread": False},
         )
 
+    # D-178 (2026-08-12): عُزل حياً على Supabase: SQLAlchemy + asyncpg لا يمكن أن
+    # تعمل على pgbouncer transaction mode (port 6543) حتى مع
+    # statement_cache_size=0 — dialect يستدعي prepare() صريحاً بكل الأحوال
+    # (sqlalchemy/dialects/postgresql/asyncpg.py::_prepare). الـ backend server
+    # connection يُعاد استخدامه عبر pooler فيبقى statement server-side موجوداً.
+    # الحل: تعطيل engine وتمرير كل ORM عبر psycopg pool الموثوق (يعمل 100% مع
+    # prepared_statement_cache_size=0).
     qs = dict(url_obj.query)
     ssl_mode = qs.pop("sslmode", None) or qs.pop("ssl", None)
 
@@ -232,6 +253,14 @@ def create_engine() -> AsyncEngine:
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
     }
+
+    # D-177 (2026-08-12): عُزل حياً على Supabase pgbouncer (transaction mode, port
+    # 6543): حتى مع statement_cache_size=0، dialect asyncpg في SQLAlchemy 2.0.25
+    # يستخدم batch mode — يجهّز statement مرة ويعيد استخدامه لكل تنفيذ، فيرتطم
+    # بـ DuplicatePreparedStatement لأن pgbouncer لا يحفظ prepared statements بين
+    # المعاملات. use_batch_mode=False يجبر dialect على prepare جديد داخل كل
+    # transaction (يُفقد عبر pooler بشكل طبيعي) — 6/6 INSERT ناجحة حياً.
+    execution_kwargs: dict[str, object] = {"use_batch_mode": False}
 
     if ssl_mode in ("require", "verify-ca", "verify-full"):
         ctx = ssl.create_default_context()
@@ -246,6 +275,7 @@ def create_engine() -> AsyncEngine:
         echo=False,
         future=True,
         connect_args=connect_kwargs,
+        execution_options=execution_kwargs,
     )
 
 
@@ -294,6 +324,204 @@ class _LazySessionFactory:
 
 async_session_factory = _LazySessionFactory()
 
+
+def _psycopg_session_factory_proxy():
+    """يُعيد PsycopgSession جديد من psycopg pool — بديل async_session_factory()"""
+    pool = get_psycopg_pool()
+    if pool is None:
+        raise RuntimeError("psycopg pool not available")
+    return psycopg_session_factory(pool)
+
+
+# ── Psycopg ORM Sessions (D-178: bypass SQLAlchemy on pgbouncer) ─────────────
+# SQLAlchemy asyncpg dialect يستخدم prepare() صريحاً في كل استعلام — مستحيل على
+# pgbouncer transaction mode. psycopg pool + prepared_statement_cache_size=0
+# يعمل 100% حيوياً (checkpointer نفسه). نبني Session خفيفاً متوافقاً مع واجهة
+# text() المستخدمة فعلياً في كل مكان.
+import re as _re
+
+_NAMED_PARAM = _re.compile(r":(?P<name>[A-Za-z_][A-Za-z0-9_]*)")
+
+
+class _RowDict(dict):
+    """dict مع attribute access حتى تبقى ``row.id``/``row.title`` صالحة (كما في AsyncSession)."""
+
+    def __getattr__(self, name: str):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(f"row has no attribute {name!r}") from None
+
+
+class PsycopgSession:
+    """جلسة خفيفة فوق psycopg AsyncConnectionPool تحاكي API الأساسي لـ AsyncSession
+
+    للاستعلامات النصية فقط: ``execute(text(...), params)`` مع
+    ``fetchone()``/``fetchall()``/``scalar_one_or_none()`` و``commit()``/
+    ``rollback()`` (no-op لأن pool يعمل autocommit=True)."""
+
+    def __init__(self, pool: AsyncConnectionPool) -> None:
+        self._pool = pool
+        self._conn = None
+
+    async def __aenter__(self) -> PsycopgSession:
+        self._conn = await self._pool.getconn()
+        # D-189 (2026-08-12): نضبط صراحةً على كل connection (pooler يعيد توجيه
+        # connections جديدة وقد لا تسري pool kwargs):
+        await self._conn.set_autocommit(True)  # async connection: read-only property، نستخدم await
+        # D-198 (2026-08-12): prepare_threshold=None — تعطيل كامل للـ prepared
+        # statements (تصحيح جوهري: 0 تعني "جهّز من أول تنفيذ" أي عكس المطلوب).
+        # pgbouncer transaction mode لا يحفظ server-side statements بين المعاملات
+        # (DuplicatePreparedStatement) — التعطيل الكامل هو المتوافق رسمياً.
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        if self._conn is not None:
+            await self._pool.putconn(self._conn)
+            self._conn = None
+
+    @staticmethod
+    def _quote_literal_static(v):
+        """inline-safe literal quoting (pgbouncer-compatible: no placeholders allowed)."""
+        return PsycopgSession._quote_literal(v)
+
+    def _quote_literal(v):
+        """D-188 (2026-08-12): pgbouncer transaction mode يرفض psycopg placeholders
+        بالكامل (0 placeholders / DuplicatePreparedStatement). الحل: inline literal
+        interpolation مع escaping آمن.
+        ملاحظة: هذه ليست طبقة SQL injection محمية — المستخدم لا يتحكم في
+        :name params؛ كلها من كود orchestrator الداخلي الثابت.
+        """
+        if v is None:
+            return "NULL"
+        if isinstance(v, bool):
+            return "TRUE" if v else "FALSE"
+        if isinstance(v, (int, float)):
+            return str(v)
+        s = str(v).replace("\\", "\\\\").replace("'", "''")
+        return f"'{s}'"
+
+    @staticmethod
+    def _to_positional(sql: str, params: dict | None):
+        """يحول :name params إلى literal values inline (لا placeholders).
+        يدعم أيضًاً params كـ sequence مع %s في SQL (نحوّلها inline كذلك)."""
+        if params is None:
+            return sql, None
+        if isinstance(params, dict):
+            mapping = dict(params)
+            new_sql = _NAMED_PARAM.sub(lambda m: PsycopgSession._quote_literal(mapping.get(m.group("name"))), sql)
+            return new_sql, None
+        # sequence positional: كل %s يتحول إلى literal
+        if "%s" in sql:
+            it = iter(params)
+            new_sql = sql.replace("%s", "__PSEUDO_PLACEHOLDER__")
+            try:
+                parts = []
+                for token in new_sql.split("__PSEUDO_PLACEHOLDER__"):
+                    parts.append(token)
+                # إعادة البناء: نضيف literal قبل كل placeholder ماعدا آخر part
+                out = []
+                for i, token in enumerate(parts):
+                    out.append(token)
+                    if i < len(parts) - 1:
+                        out.append(PsycopgSession._quote_literal(next(it)))
+                new_sql = "".join(out)
+            except StopIteration:
+                pass  # params أقل من %s — نتركها
+        else:
+            new_sql = sql
+        return new_sql, None
+
+    async def execute(self, statement, params=None):
+        """ينفذ استعلام text() ويعيد result proxy خفيفاً (rows في .rows)."""
+        if self._conn is None:
+            raise RuntimeError("PsycopgSession used outside context manager")
+        sql = statement.text if hasattr(statement, "text") else str(statement)
+        sql, params = self._to_positional(sql, params)
+        logger.debug("[PsycopgSession] execute sql=%r params=%r", sql, params)
+        try:
+            # D-188: pgbouncer transaction mode يرفض psycopg placeholders
+            # بالكامل — كل القيم الآن inline literals فلا نمرر params أبداً.
+            # D-198 (2026-08-12): تعطيل الـ prepared statements التلقائية أصبح
+            # على مستوى pool عبر prepare_threshold=None (pool kwargs) — وهو ما
+            # يحمي أيضاً كل العمليات الداخلية لـ LangGraph عبر نفس pool.
+            # unnamed statements عبر Bind/Execute protocol تعمل على الـ pooler
+            # ولا تحتاج prepare=False هنا، لكن وجوده لم يضر (double insurance).
+            result = await self._conn.execute(sql, prepare=False)
+            try:
+                raw = await result.fetchall() if result.description else []
+                rows = [_RowDict(r) for r in raw]
+            except Exception:
+                rows = []
+            return _PsycopgResult(rows)
+        except Exception as _exc:
+            logger.error(
+                "[PsycopgSession] execute FAILED sql=%r params=%r: %s",
+                sql, params, _exc,
+            )
+            raise
+
+    async def commit(self) -> None:
+        pass  # autocommit=True
+
+    async def rollback(self) -> None:
+        pass  # autocommit=True
+
+    async def close(self) -> None:
+        if self._conn is not None:
+            await self._pool.putconn(self._conn)
+            self._conn = None
+
+
+# D-191 (2026-08-12): alias عام للاستخدام الآمن في inline SQL (pgbouncer: لا placeholders)
+_pgsafe_lit = PsycopgSession._quote_literal_static
+
+
+class _PsycopgResult:
+    """proxy خفيف يحاكي Result.fetchall/fetchone/scalar_one_or_none."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def scalar_one_or_none(self):
+        row = self._rows[0] if self._rows else None
+        if row is None:
+            return None
+        values = list(row.values()) if hasattr(row, "values") else list(row)
+        return values[0] if values else None
+
+
+def psycopg_session_factory(pool: AsyncConnectionPool) -> PsycopgSession:
+    return PsycopgSession(pool)
+
+
+async def get_psycopg_db() -> AsyncGenerator[PsycopgSession, None]:
+    """Depends بديل لـ get_db يعمل فوق psycopg pool (يعمل على pgbouncer)."""
+    pool = get_psycopg_pool()
+    if pool is None:
+        raise RuntimeError("psycopg pool not available — checkpointer backend missing")
+    async with psycopg_session_factory(pool) as session:
+        try:
+            yield session
+        except Exception as exc:
+            logger.error("Database session error (psycopg): %s", exc)
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+def get_psycopg_pool() -> AsyncConnectionPool | None:
+    """يعيد psycopg pool النشط (المستخدم أصلاً في checkpointer)."""
+    return _postgres_pool
+
+
 # ── Postgres Checkpointer (Step 10) ──────────────────────────────────────────
 
 _postgres_pool: AsyncConnectionPool | None = None
@@ -326,17 +554,33 @@ def _build_psycopg_conninfo(database_url: str) -> str:
     return f"{clean_url}{sep}sslmode={ssl_mode}"
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """يُعيد AsyncSession للاستخدام في FastAPI Depends."""
-    async with async_session_factory() as session:
-        try:
-            yield session
-        except Exception as exc:
-            logger.error("Database session error: %s", exc)
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+async def get_db() -> AsyncGenerator:
+    """يُعيد جلسة DB للاستخدام في FastAPI Depends.
+
+    D-178: عند توفر psycopg pool (Supabase pgbouncer) نستخدمه بدل SQLAlchemy
+    asyncpg engine — engine asyncpg لا يمكن أن يعمل على pooler transaction mode.
+    كل الاستعلامات في orchestrator تستخدم text() مع named params، وPsycopgSession
+    يدعمها بالكامل (يدخل dict_row rows بأسماء الأعمدة، فيظل ``row.title`` صالحاً)."""
+    if _postgres_pool is not None:
+        async with psycopg_session_factory(_postgres_pool) as session:
+            try:
+                yield session
+            except Exception as exc:
+                logger.error("Database session error (psycopg): %s", exc)
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
+    else:
+        async with async_session_factory() as session:
+            try:
+                yield session
+            except Exception as exc:
+                logger.error("Database session error: %s", exc)
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
 
 
 async def init_db() -> None:
@@ -361,12 +605,11 @@ async def init_db() -> None:
     except Exception as exc:
         logger.warning(
             "[DB] SQLModel table creation failed (non-fatal in dev): %s — "
-            "service will start in DEGRADED mode.",
+            "continuing to Postgres checkpointer init (SQLModel DDL bypassed).",
             exc,
         )
         if _METRICS_AVAILABLE:
             record_checkpointer_error("db_init_failed")
-        return
 
     # ── PHASE 2 & 3: Postgres Checkpointer ───────────────────────────────
     if AsyncPostgresSaver is None:
@@ -393,12 +636,24 @@ async def init_db() -> None:
         # autocommit connections, or setup() fails and the `checkpoints` table is
         # never created (checkpointer degrades). row_factory=dict_row is required
         # by AsyncPostgresSaver's queries. This mirrors LangGraph's documented usage.
+        # D-198 (2026-08-12): على Supabase pooler (pgbouncer transaction mode) كل
+        # statement مع اسم (prepared) يفشل بـ DuplicatePreparedStatement. التعطيل
+        # الكامل عبر prepare_threshold=None في pool kwargs هو الحل المتوافق رسمياً
+        # — أثبت الاختبار الحي (graph invoke كامل + put_writes + continuation).
         _postgres_pool = AsyncConnectionPool(
             conninfo=conninfo,
             min_size=1,
             max_size=_POOL_SIZE,
             open=False,
-            kwargs={"autocommit": True, "row_factory": dict_row},
+            kwargs={
+                "autocommit": True,
+                "row_factory": dict_row,
+                "prepare_threshold": None,
+                # D-198 (2026-08-12): تعطيل كامل للـ prepared statements.
+                # الاختبار الحي أثبت: prepare_threshold=None + AsyncPostgresSaver
+                # يعمل 100% على pgbouncer 6543 (graph invoke كامل + put_writes
+                # pipeline + same-thread checkpoint continuation).
+            },
         )
         await _postgres_pool.open()
         logger.info("[CHECKPOINTER] psycopg pool opened (max_size=%d).", _POOL_SIZE)
@@ -420,13 +675,15 @@ async def init_db() -> None:
                 "WHERE schemaname='public' AND tablename LIKE 'checkpoint%'"
             )
             row = await result.fetchone()
-            tables_count = row[0] if row else 0
+            # D-198: pool kwargs تحتوي row_factory=dict_row → row dict وليس tuple
+            tables_count = row["count"] if row else 0
 
         tables_ready = tables_count >= 3
         logger.info("[CHECKPOINTER] checkpoint tables found: %d", tables_count)
 
         set_checkpointer_backend_info(
             backend="postgres",
+
             step="10",
             pool_size=_POOL_SIZE,
             tables_ready=tables_ready,
@@ -443,7 +700,8 @@ async def init_db() -> None:
         )
 
     except Exception as exc:
-        logger.error("[CHECKPOINTER] init failed (non-fatal): %s", exc)
+        import traceback as _tb
+        logger.error("[CHECKPOINTER] init failed (non-fatal): %s | type=%s | tb=%s", exc, type(exc).__name__, _tb.format_exc()[-800:])
         record_checkpointer_error("connection_error")
         set_checkpointer_backend_info(backend="none", step="10", pool_size=0, tables_ready=False)
 

@@ -11,7 +11,7 @@
 
 import logging
 
-from microservices.orchestrator_service.src.core.database import async_session_factory
+from microservices.orchestrator_service.src.core.database import _psycopg_session_factory_proxy
 from microservices.orchestrator_service.src.services.overmind.factory import create_overmind
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ async def run_mission_in_background(mission_id: int) -> None:
     logger.info(f"🚀 Starting background execution for mission {mission_id}")
 
     # استخدام سياق آمن لضمان إغلاق الجلسة بعد الانتهاء
-    async with async_session_factory() as session:
+    async with _psycopg_session_factory_proxy() as session:
         try:
             # إعادة تجميع الأوركسترا مع الجلسة الجديدة
             orchestrator = await create_overmind(session)

@@ -168,19 +168,19 @@ def _build_turn_context(
 async def _run_turn(
     websocket: WebSocket,
     *,
-    scope: ChatWsScope,
-    state: WsTurnState,
-    user_id: int,
-    admin_payload: dict[str, object] | None,
+    bundle: WsTurnBundle,
 ) -> None:
-    """ينفّذ دوراً واحداً كاملاً. يعود مبكّراً حين يُبَثّ إطار خطأٍ — والمقبس يبقى حيّاً."""
+    """ينفّذ دوراً واحداً كاملاً. يعود مبكّراً حين يُبَثّ إطار خطأٍ — والمقبس يبقى حيّاً.
+
+    الوسيطان المتبقيان وحدهما: المقبس (ناقل الخطأ — لا يُجمَّع مع «الدور»)
+    و`bundle` (كلّ ما هو خاصية للدور — بما فيه الحمولة الإدارية، فهي تتغيّر
+    فقط عند مستوى المقبس لا داخل الدور).
+    """
     turn = await _read_turn(websocket)
     if turn is None:
         return
     incoming, objective = turn
-
-    bundle = WsTurnBundle(scope=scope, state=state, user_id=user_id, objective=objective)
-
+    bundle.objective = objective
     conversation_id = _resolve_turn_conversation_id(bundle=bundle, incoming=incoming)
     ensured = await _ensure_turn_conversation(
         websocket, bundle=bundle, conversation_id=conversation_id
@@ -199,16 +199,17 @@ async def _run_turn(
         websocket,
         objective=objective,
         context=context,
-        chat_scope=scope.name,
+        chat_scope=bundle.scope.name,
         conversation_id=resolved_id,
         app_graph=getattr(websocket.app.state, "app_graph", None),
-        admin_payload=admin_payload,
+        admin_payload=bundle.admin_payload,
         history_messages=_hydrate_history(history_messages, incoming),
     )
+
     logger.info(
         "[CONV_LIFECYCLE] stage=response_sent role=%s user=%s conv_id=%s",
-        scope.name,
-        user_id,
+        bundle.scope.name,
+        bundle.user_id,
         resolved_id,
     )
 
@@ -229,12 +230,9 @@ async def serve_chat_ws(
     state = WsTurnState()
     try:
         while True:
-            await _run_turn(
-                websocket,
-                scope=scope,
-                state=state,
-                user_id=user_id,
-                admin_payload=admin_payload,
+            bundle = WsTurnBundle(
+                scope=scope, state=state, user_id=user_id, admin_payload=admin_payload
             )
+            await _run_turn(websocket, bundle=bundle)
     except WebSocketDisconnect:
         logger.info(scope.disconnect_message)

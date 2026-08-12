@@ -83,6 +83,7 @@ class WsTurnBundle:
     state: WsTurnState
     user_id: int
     objective: str = field(default="")
+    admin_payload: dict[str, object] | None = field(default=None)
 
 
 CUSTOMER_WS_SCOPE = ChatWsScope(

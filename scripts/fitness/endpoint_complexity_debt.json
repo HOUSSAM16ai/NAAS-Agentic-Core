@@ -244,10 +244,10 @@
     "nesting": 1
   },
   "chat_ws_scope.py": {
-    "loc": 98
+    "loc": 99
   },
   "chat_ws_turn.py": {
-    "loc": 240
+    "loc": 238
   },
   "chat_ws_turn.py::_build_turn_context": {
     "loc": 20,
@@ -270,12 +270,12 @@
     "nesting": 1
   },
   "chat_ws_turn.py::_run_turn": {
-    "loc": 46,
+    "loc": 47,
     "cc": 3,
     "nesting": 1
   },
   "chat_ws_turn.py::serve_chat_ws": {
-    "loc": 25,
+    "loc": 22,
     "cc": 3,
     "nesting": 2
   },

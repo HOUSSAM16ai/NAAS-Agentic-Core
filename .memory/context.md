@@ -8,6 +8,7 @@
 > 🟢 **آخر تحديث تشغيلي: 2026-07-22 · Branch `claude/oop-claude-md-update-e2ziez` (D-179):** طبقة
 > المهارات موحَّدة على قاعدة `BaseSkill` (OOP — العدد **مُشتَقّ** من `app/services/skills/registry.py`)؛ تحقّق حيّ E2E أثبت «يجيب على كل سؤال»
 > (4/4 عربي+LaTeX عبر PRIMARY `openai/gpt-oss-20b:free`)؛ تماسك `.memory` مُصلَح (backfill 6 عناوين).
+> 🟢 **K-ROOT موثَّق دستوريًا** (CLAUDE.md §6.7 — بند جديد؛ D-241): لا مفتاح توقيع من قرصٍ متقلب؛ ولا إعادة ضبط كلمة مرور الأدمن إلا بـ`ADMIN_FORCE_PASSWORD_SYNC=1`.
 > 🧭 **الرؤية الثورية وخارطة الطريق:** المصدر الحيّ الوحيد هو **`.memory/roadmap.md`** (ملخّص في CLAUDE.md §0.6).
 > 🏗️ **العدسة المعمارية (Agentic Runtime):** `.memory/agentic_runtime_doctrine.md` (D-146 · CLAUDE.md §0.7) — خريطة الطبقات مُقيَّمة بصدق حسب §6.6.
 > 💰 **طبقة القيمة والإيراد (D-210→D-223 · CLAUDE.md §0.10):** القانون في `docs/VALUE_DOCTRINE.md` + `docs/REVENUE_ENGINE_SPEC.md`، و**الحالة** في `.memory/revenue_engine_truth.md` وحدها، وتحرسها `check_revenue_doctrine`. القاعدة: «المجّاني يبيع الإجابة؛ ونحن نبيع المعرفة بما لا يعرفه الطالب». المبنيّ اليوم: `shared/illusion` + `IllusionGapSkill` (D-212)؛ والثلاث عشرة الباقية مُصنَّفة بشرط ترقية (`roadmap.md §4.6` — M17→M30). ⛔ **لا بوّابة دفع** — Chargily وSATIM مقعدان بصفر كود.

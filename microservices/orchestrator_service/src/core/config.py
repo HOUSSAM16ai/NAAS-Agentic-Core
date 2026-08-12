@@ -117,11 +117,16 @@ class Settings(BaseSettings):
         # host: اسم الخدمة في Docker Compose
         # docker_port: منفذ Docker الداخلي
         service_map = {
-            "USER_SERVICE_URL": ("8001", "user-service", "8001"),
+            # ⛔ (K-003) ports الحقيقية في docker-compose: user-service=8003،
+            # planning-agent=8001، memory-agent=8002، research=8007، reasoning=8008،
+            # orchestrator=8006، observability=8005. كانت USER_SERVICE_URL تُحل إلى
+            # 8001 — أي اتصالٍ للأوركستريتور بخدمة المستخدمين كان يستهدف منفذًا خاطئًا
+            # بلا أيّ إنذار.
+            "USER_SERVICE_URL": ("8003", "user-service", "8003"),
             "RESEARCH_AGENT_URL": ("8007", "research-agent", "8007"),
-            "PLANNING_AGENT_URL": ("8002", "planning-agent", "8002"),
+            "PLANNING_AGENT_URL": ("8001", "planning-agent", "8001"),
             "REASONING_AGENT_URL": ("8008", "reasoning-agent", "8008"),
-            "MEMORY_AGENT_URL": ("8009", "memory-agent", "8009"),
+            "MEMORY_AGENT_URL": ("8002", "memory-agent", "8002"),
         }
 
         if field_name not in service_map:

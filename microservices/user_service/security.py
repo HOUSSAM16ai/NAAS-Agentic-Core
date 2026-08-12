@@ -25,9 +25,15 @@ def verify_service_token(
             return {"sub": "debug-mode"}
         raise HTTPException(status_code=401, detail="Missing X-Service-Token header")
 
+    # ⛔ سياسة هويات الخدمة (K-002): التوكن الداخلي تُوقّعه أيّ جهة موثوقة في
+    # المنظومة (البوابة، المونوليث، أو أيّ حساب خدمة آخر)، وتُقبل الأنواع
+    # المعروفة عبر مطالبة `type` المشتركة لا عبر موضوعٍ واحدٍ ثابت. كان
+    # القبول الحرفي `api-gateway` فقط يرفض كل نداءات المونوليث (sub=service-account)
+    # فيسقط مسار الـ login عبر الخدمة المصغّرة صامتًا.
+    trusted_subjects = {"api-gateway", "monolith", "service-account"}
     try:
         payload = jwt.decode(x_service_token, settings.SECRET_KEY, algorithms=["HS256"])
-        if payload.get("sub") != "api-gateway":
+        if payload.get("sub") not in trusted_subjects:
             raise HTTPException(status_code=403, detail="Invalid token subject")
         return payload
     except jwt.ExpiredSignatureError:

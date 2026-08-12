@@ -399,10 +399,35 @@
     "nesting": 1
   },
   "routes.py": {
-    "loc": 1010
+    "loc": 1064
+  },
+  "routes.py::_build_chat_turn": {
+    "loc": 14,
+    "cc": 1,
+    "nesting": 0
+  },
+  "routes.py::_extract_initiator_id_from_authorization": {
+    "loc": 6,
+    "cc": 2,
+    "nesting": 1
+  },
+  "routes.py::_fetch_conversation_messages": {
+    "loc": 57,
+    "cc": 10,
+    "nesting": 2
   },
   "routes.py::_get_mission_status_payload": {
     "loc": 4,
+    "cc": 2,
+    "nesting": 1
+  },
+  "routes.py::_row_to_conversation_summary": {
+    "loc": 7,
+    "cc": 3,
+    "nesting": 0
+  },
+  "routes.py::_select_chat_stream": {
+    "loc": 17,
     "cc": 2,
     "nesting": 1
   },
@@ -427,9 +452,9 @@
     "nesting": 0
   },
   "routes.py::chat_with_agent_endpoint": {
-    "loc": 32,
-    "cc": 2,
-    "nesting": 1
+    "loc": 26,
+    "cc": 1,
+    "nesting": 0
   },
   "routes.py::chat_ws_stategraph": {
     "loc": 15,
@@ -447,29 +472,29 @@
     "nesting": 1
   },
   "routes.py::create_mission_endpoint": {
-    "loc": 32,
+    "loc": 37,
     "cc": 3,
     "nesting": 1
   },
   "routes.py::get_admin_conversation": {
-    "loc": 48,
-    "cc": 8,
-    "nesting": 2
+    "loc": 14,
+    "cc": 1,
+    "nesting": 0
   },
   "routes.py::get_customer_conversation": {
-    "loc": 46,
-    "cc": 7,
-    "nesting": 2
+    "loc": 12,
+    "cc": 1,
+    "nesting": 0
   },
   "routes.py::get_mission_endpoint": {
-    "loc": 10,
-    "cc": 2,
+    "loc": 16,
+    "cc": 3,
     "nesting": 1
   },
   "routes.py::get_mission_events_endpoint": {
-    "loc": 20,
-    "cc": 4,
-    "nesting": 0
+    "loc": 26,
+    "cc": 5,
+    "nesting": 1
   },
   "routes.py::list_admin_conversations": {
     "loc": 27,

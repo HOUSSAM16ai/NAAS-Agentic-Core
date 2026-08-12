@@ -2,10 +2,23 @@ import asyncio
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import jwt as pyjwt
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from microservices.orchestrator_service.src.models.mission import OrchestratorSQLModel
+
+
+def _ci_test_token(sub: str = "7") -> str:
+    """رمز JWT صالح موقَّع بمفتاح الاختبار (`SECRET_KEY` من البيئة) —
+    البوابة تُغلق بلا مُبدأ (D-242)، فالاختبار الأخضر بلا رمزٍ كان يغطي سلوكًا معطَّلًا
+    (نمط D-237: المقياس لا يُفسَّر إلا بالمعنى)."""
+    from microservices.orchestrator_service.src.core.config import get_settings
+
+    return pyjwt.encode(
+        {"sub": sub, "user_id": int(sub)}, get_settings().SECRET_KEY, algorithm="HS256"
+    )
+
 
 # Force SQLite before any imports
 os.environ["ORCHESTRATOR_DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
@@ -96,7 +109,10 @@ def test_create_mission_endpoint():
                     "context": {"env": "test"},
                     "priority": 1,
                 }
-                headers = {"X-Correlation-ID": "test-idempotency-key-123"}
+                headers = {
+                    "X-Correlation-ID": "test-idempotency-key-123",
+                    "Authorization": f"Bearer {_ci_test_token()}",
+                }
 
                 response = client.post("/missions", json=payload, headers=headers)
                 if response.status_code != 200:
@@ -110,7 +126,10 @@ def test_create_mission_endpoint():
                 assert "id" in data
 
                 mission_id = data["id"]
-                response_get = client.get(f"/missions/{mission_id}")
+                response_get = client.get(
+                    f"/missions/{mission_id}",
+                    headers={"Authorization": f"Bearer {_ci_test_token()}"},
+                )
                 assert response_get.status_code == 200
                 data_get = response_get.json()
                 assert data_get["id"] == mission_id
@@ -158,7 +177,7 @@ def test_create_mission_endpoint_sanitizes_internal_errors() -> None:
         response = client.post(
             "/missions",
             json={"objective": "will fail", "context": {}, "priority": 1},
-            headers={"X-Correlation-ID": "cid-1"},
+            headers={"X-Correlation-ID": "cid-1", "Authorization": f"Bearer {_ci_test_token()}"},
         )
 
     assert response.status_code == 500

@@ -35,10 +35,11 @@ class UserServiceClient:
         self.base_url = resolved_url.rstrip("/")
         self.config = HTTPClientConfig(
             name="user-service-client",
-            timeout=1.0,  # Fail fast for auth
+            timeout=5.0,
             max_connections=50,
         )
         self.secret_key = settings.SECRET_KEY
+        self.max_retries = 1
 
     async def _get_client(self) -> httpx.AsyncClient:
         return get_http_client(self.config)
@@ -53,8 +54,7 @@ class UserServiceClient:
         ويُبتلَع في سقوطٍ صامت.
         """
         payload = {
-            "sub": "service-account",
-            "role": "ADMIN",  # Service account has admin privileges
+            "sub": "monolith",
             "type": SERVICE_TOKEN_TYPE,
             "iat": datetime.now(UTC),
             "exp": datetime.now(UTC) + timedelta(minutes=5),
@@ -65,26 +65,46 @@ class UserServiceClient:
         """
         Register a new user via the User Service.
         """
-        url = f"{self.base_url}/auth/register"
+        url = f"{self.base_url}/api/v1/auth/register"
         payload = {
             "full_name": full_name,
             "email": email,
             "password": password,
         }
+        headers = {"X-Service-Token": self._generate_service_token()}
 
         client = await self._get_client()
-        try:
-            logger.info(f"Dispatching registration to User Service: {email}")
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            # Re-raise status errors (400, 401, etc.)
-            logger.warning(f"User Service returned error for registration: {e.response.text}")
-            raise
-        except Exception as e:
-            logger.error(f"Failed to register user via service: {e}", exc_info=True)
-            raise
+        for attempt in range(self.max_retries + 1):
+            try:
+                logger.info(
+                    f"Dispatching registration to User Service (attempt {attempt + 1}): {email}"
+                )
+                response = await client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                # Re-raise 4xx status errors (400 duplicate email, 401 gateway, etc.)
+                if e.response.status_code < 500:
+                    logger.warning(
+                        f"User Service rejected registration: {e.response.status_code} "
+                        f"{e.response.text[:200]}"
+                    )
+                    raise
+                if attempt < self.max_retries:
+                    logger.warning(
+                        "User Service returned %s for registration — retrying",
+                        e.response.status_code,
+                    )
+                    continue
+                logger.error(f"User Service returned {e.response.status_code} after retries")
+                raise
+            except (httpx.RequestError, httpx.TimeoutException) as e:
+                if attempt < self.max_retries:
+                    logger.warning("User Service network error — retrying: %s", e)
+                    continue
+                logger.error(f"Failed to register user via service: {e}", exc_info=True)
+                raise
+        return {}
 
     async def login_user(
         self, email: str, password: str, user_agent: str | None = None, ip: str | None = None
@@ -92,33 +112,57 @@ class UserServiceClient:
         """
         Authenticate user via the User Service.
         """
-        url = f"{self.base_url}/auth/login"
+        url = f"{self.base_url}/api/v1/auth/login"
         payload = {
             "email": email,
             "password": password,
         }
-        headers = {}
+        headers = {"X-Service-Token": self._generate_service_token()}
         if user_agent:
             headers["User-Agent"] = user_agent
 
         client = await self._get_client()
-        try:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.warning(f"User Service returned error for login: {e.response.status_code}")
-            raise
-        except Exception as e:
-            logger.error(f"Failed to login user via service: {e}", exc_info=True)
-            raise
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                # Re-raise 4xx immediately: wrong credentials, disabled account, etc.
+                if e.response.status_code < 500:
+                    logger.warning(
+                        "User Service rejected login: %s %s",
+                        e.response.status_code,
+                        e.response.text[:200],
+                    )
+                    raise
+                if attempt < self.max_retries:
+                    logger.warning(
+                        "User Service returned %s for login — retrying", e.response.status_code
+                    )
+                    continue
+                logger.error(
+                    "User Service login failed with %s after retries",
+                    e.response.status_code,
+                )
+                raise
+            except (httpx.RequestError, httpx.TimeoutException) as e:
+                if attempt < self.max_retries:
+                    logger.warning("User Service network error during login — retrying: %s", e)
+                    continue
+                logger.error(f"Failed to login user via service: {e}", exc_info=True)
+                raise
+        return {}
 
     async def get_me(self, token: str) -> dict[str, Any]:
         """
         Get current user details using the token.
         """
-        url = f"{self.base_url}/user/me"
-        headers = {"Authorization": f"Bearer {token}"}
+        url = f"{self.base_url}/api/v1/users/me"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-Service-Token": self._generate_service_token(),
+        }
 
         client = await self._get_client()
         try:
@@ -136,12 +180,13 @@ class UserServiceClient:
         """
         Verify if a token is valid.
         """
-        url = f"{self.base_url}/token/verify"
+        url = f"{self.base_url}/api/v1/auth/token/verify"
         payload = {"token": token}
+        headers = {"X-Service-Token": self._generate_service_token()}
 
         client = await self._get_client()
         try:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
             return data.get("data", {}).get("valid", False)
@@ -153,18 +198,36 @@ class UserServiceClient:
         """
         Get list of users (Admin only).
         """
-        url = f"{self.base_url}/admin/users"
+        url = f"{self.base_url}/api/v1/admin/users"
         token = self._generate_service_token()
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-Service-Token": token,
+        }
 
         client = await self._get_client()
-        try:
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            logger.error(f"Failed to get users: {e}")
-            raise
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code < 500:
+                    logger.error(
+                        "User Service rejected admin/users: %s %s",
+                        e.response.status_code,
+                        e.response.text[:200],
+                    )
+                    raise
+                if attempt < self.max_retries:
+                    continue
+                raise
+            except (httpx.RequestError, httpx.TimeoutException) as e:
+                if attempt < self.max_retries:
+                    continue
+                logger.error(f"Failed to get users: {e}")
+                raise
+        return {}
 
     async def get_user_count(self) -> int:
         """

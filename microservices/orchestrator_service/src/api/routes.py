@@ -64,7 +64,7 @@ from microservices.orchestrator_service.src.services.tools.registry import get_r
 # Plain imports (no wrappers) preserve monkeypatch semantics for handler-resolved names.
 from .agent_chat_admin_stream import stream_admin_agent_chat
 from .agent_chat_customer_stream import stream_customer_agent_chat
-from .agent_chat_request import (  # noqa: F401
+from .agent_chat_request import (
     AgentChatCall,
     AgentChatTurn,
     TurnIdentity,
@@ -353,46 +353,12 @@ async def get_customer_conversation(
 ) -> dict[str, object]:
     """يعيد تفاصيل محادثة عميل ورسائلها بترتيب زمني."""
     user_id, _payload = _decode_auth_payload_or_401(authorization)
-    check_query = text(
-        """
-        SELECT id, title, created_at
-        FROM customer_conversations
-        WHERE id = :conversation_id AND user_id = :user_id
-        """
+    return await _fetch_conversation_messages(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        conversation_table="customer_conversations",
+        messages_table="customer_messages",
     )
-    messages_query = text(
-        """
-        SELECT role, content, created_at
-        FROM customer_messages
-        WHERE conversation_id = :conversation_id
-        ORDER BY id ASC
-        """
-    )
-    async with _psycopg_session_factory_proxy(default_factory=async_session_factory) as session:
-        conv_row = (
-            await session.execute(
-                check_query, {"conversation_id": conversation_id, "user_id": user_id}
-            )
-        ).fetchone()
-        if conv_row is None:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        message_rows = (
-            await session.execute(messages_query, {"conversation_id": conversation_id})
-        ).fetchall()
-
-    return {
-        "conversation_id": int(conv_row.id),
-        "title": str(conv_row.title or ""),
-        "created_at": conv_row.created_at.isoformat() if conv_row.created_at is not None else None,
-        "messages": [
-            {
-                "role": str(msg.role),
-                "content": str(msg.content),
-                "created_at": msg.created_at.isoformat() if msg.created_at is not None else None,
-            }
-            for msg in message_rows
-        ],
-    }
 
 
 @router.get("/admin/api/conversations", summary="List admin conversations")
@@ -431,20 +397,54 @@ async def get_admin_conversation(
     authorization: str | None = Header(default=None),
 ) -> dict[str, object]:
     """يعيد تفاصيل محادثة الأدمن ورسائلها."""
-    user_id, payload = _decode_auth_payload_or_401(authorization)
-    if not _is_admin_payload(payload):
+    user_id, jwt_payload = _decode_auth_payload_or_401(authorization)
+    return await _fetch_conversation_messages(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        conversation_table="admin_conversations",
+        messages_table="admin_messages",
+        require_admin_payload=True,
+        jwt_payload=jwt_payload,
+    )
+
+
+def _row_to_conversation_summary(row: object) -> dict[str, object]:
+    """يوحّد تحويل صفّ المحادثة إلى صيغة ملخّص متّسقة عبر نطاقَي العميل والإدارة."""
+    return {
+        "conversation_id": int(row.id),
+        "title": str(row.title or ""),
+        "created_at": row.created_at.isoformat() if row.created_at is not None else None,
+    }
+
+
+async def _fetch_conversation_messages(
+    *,
+    conversation_id: int,
+    user_id: int,
+    conversation_table: str,
+    messages_table: str,
+    require_admin_payload: bool = False,
+    jwt_payload: dict | None = None,
+) -> dict[str, object]:
+    """يسترد محادثةً واحدة ورسائلها بترتيبٍ زمني من جدوليَن ممرَّرَين.
+
+    ⛔ كان منطق جلب المحادثات مكرَّرًا حرفيًا بين مسارَي العميل والإدارة
+    (CodeScene: Code Duplication). هذا الموحّد يغلق الثغرة التي تُنسى فيها
+    أيّ إعادة صياغة في أحد المسارين فقط.
+    """
+    if require_admin_payload and jwt_payload is not None and not _is_admin_payload(jwt_payload):
         raise HTTPException(status_code=403, detail="forbidden")
     check_query = text(
-        """
+        f"""
         SELECT id, title, created_at
-        FROM admin_conversations
+        FROM {conversation_table}
         WHERE id = :conversation_id AND user_id = :user_id
         """
     )
     messages_query = text(
-        """
+        f"""
         SELECT role, content, created_at
-        FROM admin_messages
+        FROM {messages_table}
         WHERE conversation_id = :conversation_id
         ORDER BY id ASC
         """
@@ -649,6 +649,41 @@ def _serialize_mission(mission: Mission) -> MissionResponse:
     )
 
 
+def _build_chat_turn(
+    request: ChatRequest,
+    user_id: int,
+    auth_payload: dict | None,
+    trace_context: dict[str, object],
+) -> "AgentChatTurn":
+    """يبني دورة محادثة الوكيل من طلبٍ مصادَق عليه — مستخرج من نقطة الدخول."""
+    identity = TurnIdentity(user_id, request.conversation_id, request.history_messages)
+    return build_agent_chat_turn(
+        request_context=request.context,
+        identity=identity,
+        trace_context=trace_context,
+        auth_payload=auth_payload,
+    )
+
+
+def _select_chat_stream(
+    *,
+    turn,
+    call: "AgentChatCall",
+    app_state: object,
+    request_context: dict[str, object],
+) -> AsyncGenerator:
+    """ينتقي مسار البثّ المناسب (إداري أم عميل) بقرارٍ واحدٍ معزول."""
+    if turn.is_admin:
+        return stream_admin_agent_chat(
+            app_state=app_state, call=call, request_context=request_context
+        )
+    return stream_customer_agent_chat(
+        agent=OrchestratorAgent(get_ai_client(), tool_registry),
+        call=call,
+        context=turn.context,
+    )
+
+
 @router.post("/agent/chat", summary="Chat with Orchestrator Agent")
 async def chat_with_agent_endpoint(
     request: ChatRequest,
@@ -662,26 +697,28 @@ async def chat_with_agent_endpoint(
     request.user_id = user_id  # Override body user_id with JWT user_id
     logger.info(f"Agent Chat Request: {request.question[:50]}... User: {request.user_id}")
 
-    identity = TurnIdentity(request.user_id, request.conversation_id, request.history_messages)
-    turn = build_agent_chat_turn(
-        request_context=request.context,
-        identity=identity,
-        trace_context=trace_context,
-        auth_payload=auth_payload,
-    )
-
+    turn = _build_chat_turn(request, user_id, auth_payload, trace_context)
+    # ⛔ كان هذا السطر يستخدم `turn.identity` — وهو غير موجود في AgentChatTurn
+    # (بياناتها: context · is_admin · is_compatibility_facade فقط) فيسقط كل
+    # استدعاءٍ مباشرٍ لـ POST /agent/chat بـ 500 AttributeError. تُبنى الهوية من
+    # الطلب المصادَق عليه مباشرةً، كما يفترضها تصميم agent_chat_request.
+    identity = TurnIdentity(user_id, request.conversation_id, request.history_messages)
     call = AgentChatCall(request.question, identity, turn.is_compatibility_facade)
-    if turn.is_admin:
-        stream = stream_admin_agent_chat(
-            app_state=fastapi_req.app.state, call=call, request_context=request.context
-        )
-    else:
-        stream = stream_customer_agent_chat(
-            agent=OrchestratorAgent(get_ai_client(), tool_registry),
-            call=call,
-            context=turn.context,
-        )
+    stream = _select_chat_stream(
+        turn=turn,
+        call=call,
+        app_state=fastapi_req.app.state,
+        request_context=request.context,
+    )
     return StreamingResponse(stream, media_type="text/plain")
+
+
+def _extract_initiator_id_from_authorization(authorization: str | None) -> int:
+    """يستخرج معرف مطلق المهمة من رمز JWT الموقّع — كان 1 مُثبَّتًا في الشفرة."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header required")
+    user_id, _payload = _decode_auth_payload_or_401(authorization)
+    return user_id
 
 
 @router.post("/missions", response_model=MissionResponse, summary="Launch Mission")
@@ -689,16 +726,21 @@ async def create_mission_endpoint(
     request: MissionCreate,
     background_tasks: BackgroundTasks,
     req: Request,
+    authorization: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> MissionResponse:
+    initiator_id = _extract_initiator_id_from_authorization(authorization)
     correlation_id = req.headers.get("X-Correlation-ID") or str(uuid.uuid4())
-    logger.info(f"Orchestrator: Creating mission with Correlation ID: {correlation_id}")
+    logger.info(
+        f"Orchestrator: Creating mission with Correlation ID: {correlation_id} "
+        f"initiator={initiator_id}"
+    )
 
     try:
         mission = await start_mission(
             session=db,
             objective=request.objective,
-            initiator_id=1,  # Default system user for now, or extract from token if forwarded
+            initiator_id=initiator_id,
             context=request.context,
             force_research=False,
             idempotency_key=correlation_id,
@@ -721,8 +763,14 @@ async def create_mission_endpoint(
 
 @router.get("/missions/{mission_id}", response_model=MissionResponse, summary="Get Mission")
 async def get_mission_endpoint(
-    mission_id: int, req: Request, db: AsyncSession = Depends(get_db)
+    mission_id: int,
+    req: Request,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
 ) -> MissionResponse:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header required")
+    _decode_auth_payload_or_401(authorization)
     state_manager = MissionStateManager(db)
     mission = await state_manager.get_mission(mission_id)
 
@@ -738,9 +786,15 @@ async def get_mission_endpoint(
     summary="Get Mission Events",
 )
 async def get_mission_events_endpoint(
-    mission_id: int, req: Request, db: AsyncSession = Depends(get_db)
+    mission_id: int,
+    req: Request,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
 ) -> list[MissionEventResponse]:
     """يسرد أحداث مهمة معيّنة بتسلسلها الزمني."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header required")
+    _decode_auth_payload_or_401(authorization)
     state_manager = MissionStateManager(db)
     events = await state_manager.get_mission_events(mission_id)
 

@@ -16,7 +16,35 @@ import secrets
 
 logger = logging.getLogger("app.core.settings")
 
+
 _DEV_SECRET_KEY_CACHE: str | None = None
+
+
+def _sync_db_url() -> str | None:
+    """يعيد DATABASE_URL بصيغة psycopg متزامنة (postgresql:// عادية).
+
+    ينزَّع `+asyncpg` إن وجدت — لا قراءة من unit database (تجنب circular
+    import أثناء تهيئة Pydantic settings)."""
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if not url:
+        return None
+    return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+
+# ── (K-ROOT) مفتاح سري ثابت عبر البيئات العابرة — Codespaces / replit ──────
+# الجذر الحقيقي لتقرير "login failed عند دخول Codespace جديدة بنفس الحساب":
+# كان المفتاح يُولَّد عشوائياً ويُحفظ في `.devcontainer/state/dev_secret_key` —
+# وهذا المسار **يُمسح مع بيئة Codespace المحذوفة**، فتتولد بيئةٌ جديدة بمفتاحٍ
+# جديد، وتُرفض كل JWTs السابقة (401) وتُعطل تدوير refresh token عبر البيئات.
+# الحل: طبقة دائمة واحدة عبر كل البيئات — قاعدة البيانات (Supabase) نفسها.
+# المنطق الآن:
+#   1. SECRET_KEY في process env (التزام صريح من المشغِّل)              ✓
+#   2. قرص محلي (يبقى عبر restarts داخل البيئة نفسها)                  ✓
+#   3. **المفتاح المخزَّن في `app_state` بجدول دائم في DB** ← جديد       ✓
+#   4. توليد جديد + حفظه في DB + قرص معًا (مفتاحٌ واحد دائم عبر البيئات) ✓
+#
+# هذا يعني: Codespace محذوفة أو جديدة أو معاد بناؤها تستعيد **نفس المفتاح**
+# الذي وقَّع جلسات المستخدمين، فلا يظهر "login failed" مجدداً.
 
 
 def _resolve_state_key_path() -> pathlib.Path:
@@ -48,62 +76,162 @@ def _resolve_state_key_path() -> pathlib.Path:
     return repo_root / ".devcontainer" / "state" / "dev_secret_key"
 
 
-def _get_or_create_dev_secret_key() -> str:
-    """يُعيد مفتاحاً ثابتاً للتطوير محفوظاً على القرص.
+def _read_state_from_db(key: str) -> str | None:
+    """قراءة قيمة `app_state` عبر psycopg متزامن مباشر (لا AsyncEngine pool).
 
-    يمنع إبطال جلسات المستخدمين عند إعادة تشغيل uvicorn.
-    الأولوية: SECRET_KEY في process env → ملف على القرص → إنشاء جديد وحفظه.
+    ⛔ `engine.pool.connect()` يرفع `MissingGreenlet` لأن pool asyncpg غير
+    قابل للاستخدام من سياق متزامن — فنفتح اتصال psycopg قصيراً من نفس
+    DATABASE_URL دون أي اعتماد على unit database (تجنب circular import
+    أثناء تهيئة Pydantic settings).
+    """
+    try:
+        _psql_url = _sync_db_url()
+        if not _psql_url:
+            return None
+        import psycopg
+
+        with psycopg.connect(_psql_url, autocommit=True) as conn:
+            row = conn.execute(
+                "SELECT value FROM app_state WHERE key = %(k)s",
+                {"k": key},
+            ).fetchone()
+            if row and isinstance(row[0], str) and len(row[0]) >= 32:
+                logger.info("dev_secret_key restored from app_state (DB)")
+                return row[0]
+        return None
+    except Exception as exc:
+        logger.debug("dev_secret_key DB restore failed (%s)", exc)
+        return None
+
+
+def _get_or_create_dev_secret_key() -> str:
+    """يُعيد مفتاحاً ثابتاً عبر كل البيئات — env → القرص → DB → توليد جديد.
+
+    انظر أعلى هذا الملف (K-ROOT) لفلسفة الطبقات الأربع.
     """
     global _DEV_SECRET_KEY_CACHE
 
-    # 1. إذا كان في process env مباشرة → استخدمه (يشمل ما يُحقنه supervisor.sh)
     env_key = os.environ.get("SECRET_KEY", "").strip()
     if env_key and env_key not in ("dev-secret-change-me", "changeme"):
         _DEV_SECRET_KEY_CACHE = env_key
         return env_key
 
-    # 2. cache في الذاكرة (نفس process)
     if _DEV_SECRET_KEY_CACHE is not None:
         return _DEV_SECRET_KEY_CACHE
 
-    # 3. ملف ثابت على القرص (يبقى عبر restarts) — مسار يُكتشف ديناميكياً
+    # 3. قرص محلي (يبقى عبر restarts داخل البيئة نفسها).
+    disk_key = _try_disk()
+    if disk_key:
+        _DEV_SECRET_KEY_CACHE = disk_key
+        # مزامنة مع الطبقة الدائمة (في حال كانت الأولى في هذه البيئة)
+        _persist_to_database(disk_key)
+        return disk_key
+
+    db_key = _try_database()
+    if db_key:
+        _DEV_SECRET_KEY_CACHE = db_key
+        _persist_to_disk(db_key)
+        return db_key
+
+    # لم يوجد مفتاح سابق في أي طبقة — أول إقلاع مطلق: توليد + حفظ في الطبقتين.
+    new_key = secrets.token_urlsafe(64)
+    _DEV_SECRET_KEY_CACHE = new_key
+    _persist_to_disk(new_key)
+    _persist_to_database(new_key)
+    logger.warning(
+        "dev_secret_key GENERATED (first absolute boot) — persisted to disk + DB "
+        "so every future Codespace/instance shares the SAME key",
+    )
+    return new_key
+
+
+def _persist_to_disk(new_key: str) -> None:
+    """يحفظ المفتاح على القرص بعد ضبط الصلاحيات على 600."""
+    try:
+        key_path = _resolve_state_key_path()
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        key_path.write_text(new_key)
+        with contextlib.suppress(OSError):
+            key_path.chmod(0o600)
+    except Exception as exc:
+        logger.debug("dev_secret_key disk persist failed (%s)", exc)
+
+
+def _try_disk() -> str | None:
+    """يقرأ المفتاح من القرص المحلي إن وُجد."""
     try:
         key_path = _resolve_state_key_path()
         key_path.parent.mkdir(parents=True, exist_ok=True)
         if key_path.exists():
             stored = key_path.read_text().strip()
             if len(stored) >= 32:
-                _DEV_SECRET_KEY_CACHE = stored
                 logger.info(
                     "dev_secret_key loaded from disk path=%s len=%d",
                     key_path,
                     len(stored),
                 )
                 return stored
-        # إنشاء مفتاح جديد وحفظه
-        new_key = secrets.token_urlsafe(64)
-        key_path.write_text(new_key)
-        # نضبط الصلاحيات على 600 لمنع قراءة المفتاح من قِبل مستخدمين آخرين
-        with contextlib.suppress(OSError):
-            key_path.chmod(0o600)
-        _DEV_SECRET_KEY_CACHE = new_key
-        logger.warning(
-            "dev_secret_key GENERATED + saved to disk path=%s — "
-            "first boot or state file was missing",
-            key_path,
-        )
-        return new_key
+        return None
+    except Exception as exc:
+        logger.debug("dev_secret_key disk read failed (%s)", exc)
+        return None
+
+
+def _try_database() -> str | None:
+    """(K-ROOT) يقرأ المفتاح من `app_state` في DB — الطبقة الدائمة عبر البيئات."""
+    return _read_state_from_db("dev_secret_key")
+
+
+def _persist_to_database(new_key: str) -> None:
+    """يحفظ المفتاح في `app_state` (Upsert عبر INSERT ON CONFLICT DO UPDATE).
+
+    هذه هي الطبقة الدائمة الوحيدة عبر بيئات Codespaces المحذوفة.
+    فشلها غير قاتل (يُحذَّر ويُحفظ فقط على القرص)، لكن نجاحها يمنع
+    توليد مفتاح جديد في كل Codespace جديدة — أي منع "login failed" الدائم.
+
+    ⛔ استيراد `app.core.database.engine` هنا يُطلق import مبكّرًا أثناء
+    تهيئة Pydantic settings (قبل اكتمال وحدة database) فيفشل بح circular
+    import. لذلك نلتقي المحرّك من خلال `get_db_engine()` المتأخر — وهو نفس
+    المحرّك الذي يستخدمه كل التطبيق، دون أي import مباشر للموديول.
+    """
+    try:
+        # psycopg 3 متزامن مباشر من DATABASE_URL —AsyncEngine pool يرفع
+        # `MissingGreenlet` من سياق متزامن، فلا نستخدم `engine.pool.connect()`.
+        _psql_url = _sync_db_url()
+        if not _psql_url:
+            logger.debug("dev_secret_key: no DATABASE_URL — persist skipped")
+            return
+
+        # إنشاء الجدول إن لم يكن موجوداً (أول إقلاع على DB نظيفة)
+        _create_stmt = """
+            CREATE TABLE IF NOT EXISTS app_state (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+        """
+        _upsert_stmt = """
+            INSERT INTO app_state (key, value, updated_at)
+            VALUES (%(k)s, %(v)s, now())
+            ON CONFLICT (key)
+            DO UPDATE SET value = %(v)s, updated_at = now()
+        """
+        with contextlib.suppress(Exception):
+            import psycopg
+
+            with psycopg.connect(_psql_url, autocommit=True) as conn:
+                conn.execute(_create_stmt)
+                conn.execute(
+                    _upsert_stmt,
+                    {"k": "dev_secret_key", "v": new_key},
+                )
+            logger.info("dev_secret_key persisted to app_state (DB)")
     except Exception as exc:
         logger.error(
-            "dev_secret_key disk persistence failed (%s) — using in-memory key. "
-            "JWTs will be invalidated on every restart!",
+            "dev_secret_key DB persistence failed (%s) — key lives on disk only, "
+            "sessions WILL be invalidated in new Codespaces!",
             exc,
         )
-        # fallback آمن إذا فشل القرص — هذا هو السبب الجذري لـ "kick → re-enter"
-        # إذا وصل التنفيذ هنا، تعقَّب الخطأ في os env DEV_SECRET_KEY_FILE.
-        if _DEV_SECRET_KEY_CACHE is None:
-            _DEV_SECRET_KEY_CACHE = secrets.token_urlsafe(64)
-        return _DEV_SECRET_KEY_CACHE
 
 
 def _ensure_database_url(value: str | None, environment: str) -> str:

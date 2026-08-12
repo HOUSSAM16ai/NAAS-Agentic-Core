@@ -76,6 +76,13 @@ This plan must extend those assets rather than creating a competing third archit
 - No cross-service database joins.
 - No shared business-logic library across services. Shared generated API clients and schema artifacts are allowed only if generated from contracts and do not contain domain logic.
 
+### Signing Key Persistence (D-241 · K-ROOT — verified live 2026-08-12)
+
+- The JWT signing key must never derive solely from a volatile ephemeral disk (codespace/workspace). Root of trust: environment → a durable `app_state` table in the production database → secure generation and persistence (`token_urlsafe(64)`).
+- A codespace rebuild must never break existing logins: the restored key re-validates all previously issued JWTs and previously hashed passwords.
+- Admin password must never be rewritten at boot unless the explicit `ADMIN_FORCE_PASSWORD_SYNC=1` flag is set.
+- Verified live: monolith booting with no `SECRET_KEY` restores an 86-character key from `app_state` and logs in admin + user with 24/24 E2E on production Supabase.
+
 ### Delivery Constraints
 
 - No big-bang rewrite.

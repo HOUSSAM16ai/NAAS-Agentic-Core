@@ -915,6 +915,16 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 - **Docker full-stack قابل لإعادة الإنتاج** (D-172): الشبكة compose-managed؛ جسر أسرار تلقائي
   (`compose_env_from_secrets.sh`)؛ **الصحة لا تكذب** — خدمة على sqlite/mock تحت الإنتاج تُبلِّغ
   `degraded`؛ checkpointer=postgres مُثبَت (`verify_full_stack_docker.py`).
+- **K-ROOT — استمرارية مفتاح التوقيع (D-241 · D-242 — 2026-08-12 · Supabase · PR #11)**: كان
+  `dev_secret_key` من `SECRET_KEY` في البيئة فحسب — قرصٌ متقلب يعيد إنتاج «Login failed» عند
+  كل Codespace جديدة (ISS-152/158 من زاوية أخرى). الحل: `app/core/settings/helpers.py` طبقة
+  `app_state` في Supabase — الأسبقية **env → جدول الإنتاج → توليد آمن + حفظ**، لا ملف قرص،
+  ولا إعادة ضبط كلمة مرور الأدمن إلا بـ`ADMIN_FORCE_PASSWORD_SYNC=1`. البينات: monolith بلا
+  `SECRET_KEY` يستعيد مفتاح 86 حرفًا من `app_state`؛ E2E حيّ على Supabase (24/24 — login 200 ·
+  كلمة خاطئة 401 · orchestrator chat 200 · `POST /agent/chat` 200 بعد إصلاح band
+  `turn.identity` · `POST /missions` بمُبدأ JWT — كان initiator=1 مفتوحًا · user_client URLs
+  صحيحة + `X-Service-Token` · ports user:8003/planning:8001/memory:8002 — الحالة
+  `.memory/auth_runtime_truth.md`.
 
 ### ح) قانون التوليد الآمن (النماذج + الحُرّاس)
 - **سلسلة النماذج** (D-067/D-167): PRIMARY = `openai/gpt-oss-20b:free`؛ نموذج أزاله OpenRouter من
@@ -1007,6 +1017,7 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 | Skills / OOP / الاستدلال | §0.5 · D-069 · D-100 · **D-179** · **D-181** · **D-183** |
 | الرموز والنيّة واللغات | **D-185** · **D-186** · **ADR-006** |
 | التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** · **D-184** · **D-192** |
+| K-ROOT · استمرارية المفاتيح + تحصين الأوركستريتور | **D-241 · D-242** (`app/core/settings/helpers.py` طبقة `app_state` · `app/services/bootstrap.py` · `app/infrastructure/clients/user_client.py` · `microservices/user_service/security.py` · `microservices/orchestrator_service/src/api/routes.py` — تحرسها `doc-integrity` · 24/24 E2E حي على Supabase 2026-08-12) |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 · **D-182** |
 | الأثر · الذاكرة · الموضوع · التمرين | **D-188** · **D-189** · **D-190** · **D-191** |
 | صدق الفوارض · الحيرة لا تُهنَّأ | **D-208** (ISS-149 — الأسبقيّة · الفعل الكلامي على المؤشّرات · بوّابة لا تشهد بما لم تقرأ) |

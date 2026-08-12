@@ -178,3 +178,32 @@ apart. The recorder was measuring finer than the behaviour and screamed at a rea
 equivalence. The fix belonged in the test — production code is never bent to satisfy a
 measuring instrument — and the golden was re-baselined against the pre-move source so the
 proof survived.
+
+---
+
+## Note 7 — the residual CodeScene violations closed structurally, suppression refused (D-240)
+
+The final delta review on the extracted modules left two open gates, both on
+`chat_ws_turn.py` at Code Health 9.69 (< 10): **Excess Number of Function Arguments** on
+`_run_turn` (five keyword args), and the bundled **New code is healthy** gate that rode on
+the same file. Suppression links shipped with the report; both were rejected — the
+repository's own rule (D-237 §9) forbids lowering the number by goodwill rather than
+structure, and Note 4 of this ADR already proved what happens when the structure and the
+gate drift.
+
+**The fix reused the established bundle precedent.** `admin_payload` — the only argument
+that did not already live in `WsTurnBundle` — joined it, set once per socket in
+`serve_chat_ws` instead of threading through every turn. The socket stayed separate
+because it is the error broadcaster, not a property of the turn. Result: `_run_turn` now
+takes **two arguments**, and the whole turn chain (`_resolve_turn_conversation_id` ·
+`_ensure_turn_conversation` · `_build_turn_context`) is bundle-threaded. The four earlier
+violations on the same modules had been closed by the same philosophy — an extracted
+predicate (`_mission_type_in_metadata`, cc 5→3) and restructured test helpers
+(`_binds_logger`, cc 9→2 · `_route_handlers`, cc 7→5) — measured with the same stdlib-AST
+methodology the external reviewer uses.
+
+**Verified, not declared:** the external review returned **all gates green** — including
+«Code Health Improved» for `routes.py` (4.91 → 6.19) — while 128 tests in the affected
+suites passed and the byte-identical golden transcript held. The debt map was re-baselined
+explicitly (D-188 ratchet, both directions): wrapper reformatting moved `_run_turn` from 46
+to 47 lines and `chat_ws_turn.py` from 240 to 238 — net direction still downward.

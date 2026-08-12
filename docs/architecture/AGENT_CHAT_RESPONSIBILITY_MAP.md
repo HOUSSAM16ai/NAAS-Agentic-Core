@@ -369,7 +369,8 @@ the same order as `api_sources.API_SOURCE_FILES`:
 | Module | Layer | Owns |
 |---|---|---|
 | `chat_types.py` | leaf | `ChatRunContext`, `StreamFrame`, history limits |
-| `chat_ws_scope.py` | leaf | **the six differences between the twins**, as `ChatWsScope` + `WsTurnState` |
+| `chat_ws_scope.py` | leaf | **the six differences between the twins**, as `ChatWsScope` + `WsTurnState` + `WsTurnBundle` (D-240) |
+| `WsTurnBundle` | bundled | what travels together per turn — `scope`, `state`, `user_id`, `objective`, `admin_payload` — set **once per socket** in `serve_chat_ws` |
 | `chat_turn_context.py` | leaf | reading the incoming payload: objective, client context, `mission_type`, hydration guard |
 | `chat_ws_turn.py` | machine | the turn sequence — one copy for both sockets (`serve_chat_ws`) |
 | `routes.py` | shells | `@router` handlers: auth, the 4403 gate, `accept()`, delegation |
@@ -381,6 +382,8 @@ Measured outcome:
 | `chat_ws_stategraph` | 148 loc / cc 20 / depth 5 | **15 / 3 / 1** |
 | `admin_chat_ws_stategraph` | 153 loc / cc 23 / depth 5 | **24 / 6 / 2** |
 | `routes.py` LOC | 1,265 | **1,008** |
+| `_run_turn` kwargs | 5 | **2** (`websocket` + `bundle`) — D-240 · CodeScene «Excess Function Arguments» closed |
+| CodeScene review | residual failures | **all gates green** · «Code Health Improved»: `routes.py` `4.91 → 6.19` |
 
 **Why three modules and not one.** The first extraction put the scope vocabulary and the
 turn machine together and the gate measured `302 > 300` lines against the newcomer budget —
@@ -391,6 +394,13 @@ was to split a responsibility out, not to compress a docstring.
 scenarios × two scopes, generated from the pre-move source and byte-identical after the
 move. Proven non-vacuous by three planted mutations. A **seventh** difference between the
 twins is caught by `test_the_twins_differ_only_in_the_six_measured_things`.
+
+**Closed on the PR's own branch (D-240):** the five CodeScene violations on the new
+modules — complex conditional, complex method, excess arguments (×2), and the
+residual advisory on `_run_turn` — were all resolved **structurally** (extracted
+predicate · `WsTurnBundle`) with suppression links rejected. Measured internally
+(`cc`/`nesting` via stdlib AST) and verified externally green, with 128 tests and
+the byte-identical golden transcript intact.
 
 **Still open, classified not hidden:** ISS-153 (`persisted` stripped) · ISS-154 (empty turn,
 raw exception leak) · ISS-160 (`--update` amnesty in the complexity gate itself).

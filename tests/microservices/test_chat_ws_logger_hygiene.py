@@ -96,9 +96,7 @@ def _handler_ids() -> list[str]:
 def _target_names(node: ast.AST) -> list[str]:
     """أسماء الأهداف في إسنادٍ — فارغةٌ لما ليس إسناداً."""
     if isinstance(node, ast.Assign):
-        return [
-            target.id for target in node.targets if isinstance(target, ast.Name)
-        ]
+        return [target.id for target in node.targets if isinstance(target, ast.Name)]
     if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
         return [node.target.id]
     return []

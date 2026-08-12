@@ -68,9 +68,7 @@ async def _read_turn(websocket: WebSocket) -> tuple[dict[str, object], str] | No
     return incoming, objective
 
 
-def _resolve_turn_conversation_id(
-    *, bundle: WsTurnBundle, incoming: dict[str, object]
-) -> object:
+def _resolve_turn_conversation_id(*, bundle: WsTurnBundle, incoming: dict[str, object]) -> object:
     """يحسم مُعرّف المحادثة لهذا الدور، ويُبطِل الخيط اللاصق عند تبديل المحادثة."""
     requested_conversation_id = incoming.get("conversation_id")
 
@@ -113,7 +111,9 @@ async def _ensure_turn_conversation(
     منفصلاً لأنه نتيجة مرحلة التحليل لا خاصية الدور.
     """
     try:
-        logger.info(f"ORCHESTRATOR received | chat_scope={bundle.scope.name} | role={bundle.user_id}")
+        logger.info(
+            f"ORCHESTRATOR received | chat_scope={bundle.scope.name} | role={bundle.user_id}"
+        )
         logger.info(
             "[CONV_LIFECYCLE] stage=ensure_entry role=%s user=%s conv_id=%s",
             bundle.scope.name,
@@ -182,7 +182,9 @@ async def _run_turn(
     bundle = WsTurnBundle(scope=scope, state=state, user_id=user_id, objective=objective)
 
     conversation_id = _resolve_turn_conversation_id(bundle=bundle, incoming=incoming)
-    ensured = await _ensure_turn_conversation(websocket, bundle=bundle, conversation_id=conversation_id)
+    ensured = await _ensure_turn_conversation(
+        websocket, bundle=bundle, conversation_id=conversation_id
+    )
     if ensured is None:
         return
     resolved_id, history_messages = ensured
@@ -191,9 +193,7 @@ async def _run_turn(
         {"type": "conversation_init", "payload": {"conversation_id": resolved_id}}
     )
 
-    context = _build_turn_context(
-        bundle=bundle, incoming=incoming, conversation_id=resolved_id
-    )
+    context = _build_turn_context(bundle=bundle, incoming=incoming, conversation_id=resolved_id)
 
     await _stream_chat_langgraph(
         websocket,

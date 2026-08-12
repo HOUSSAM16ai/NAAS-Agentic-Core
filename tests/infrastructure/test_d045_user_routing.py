@@ -194,9 +194,7 @@ class TestOrchestratorChatEndpoint:
     ROUTES = pathlib.Path("microservices/orchestrator_service/src/api/routes.py")
     # D-239: بعد استخراج التوأمين أصبحت الملكية كالتالي — الاختبار يثبت العقد في
     # مكان الملكية، لا في غلاف routes.py الذي يعيد التصدير فقط (D-168).
-    TURN_CONTEXT = pathlib.Path(
-        "microservices/orchestrator_service/src/api/chat_turn_context.py"
-    )
+    TURN_CONTEXT = pathlib.Path("microservices/orchestrator_service/src/api/chat_turn_context.py")
     WS_TURN = pathlib.Path("microservices/orchestrator_service/src/api/chat_ws_turn.py")
 
     def _read(self) -> str:

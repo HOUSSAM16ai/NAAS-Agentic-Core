@@ -192,6 +192,12 @@ class TestOrchestratorChatEndpoint:
     """يتحقق من عقد /api/chat/messages في orchestrator."""
 
     ROUTES = pathlib.Path("microservices/orchestrator_service/src/api/routes.py")
+    # D-239: بعد استخراج التوأمين أصبحت الملكية كالتالي — الاختبار يثبت العقد في
+    # مكان الملكية، لا في غلاف routes.py الذي يعيد التصدير فقط (D-168).
+    TURN_CONTEXT = pathlib.Path(
+        "microservices/orchestrator_service/src/api/chat_turn_context.py"
+    )
+    WS_TURN = pathlib.Path("microservices/orchestrator_service/src/api/chat_ws_turn.py")
 
     def _read(self) -> str:
         return self.ROUTES.read_text()
@@ -206,15 +212,21 @@ class TestOrchestratorChatEndpoint:
         assert '@router.websocket("/api/chat/ws")' in self._read()
 
     def test_extract_chat_objective_handles_question(self) -> None:
-        src = self._read()
+        # D-239: الملكية في chat_turn_context.py؛ والغلاف يبقى مستورداً لها.
+        src = self.TURN_CONTEXT.read_text()
         start = src.find("def _extract_chat_objective")
         assert start != -1
         func = src[start : start + 400]
         assert "question" in func
+        assert "_extract_chat_objective" in self._read(), (
+            "routes.py يجب أن يبقى مستورداً للدالّة (D-168 · إعادة تصدير)"
+        )
 
     def test_extract_chat_objective_handles_objective(self) -> None:
-        src = self._read()
+        # D-239: الملكية في chat_turn_context.py؛ لا في routes.py.
+        src = self.TURN_CONTEXT.read_text()
         start = src.find("def _extract_chat_objective")
+        assert start != -1
         func = src[start : start + 400]
         assert "objective" in func
 
@@ -222,7 +234,9 @@ class TestOrchestratorChatEndpoint:
         assert "StreamingResponse" in self._read()
 
     def test_emits_conversation_init_event(self) -> None:
-        assert "conversation_init" in self._read()
+        # D-239: بثّ الحدث أصبح في آلة الدور chat_ws_turn.py — العقد يُثبت
+        # في مكان الملكية لا في الغلاف.
+        assert "conversation_init" in self.WS_TURN.read_text()
 
     def test_emits_assistant_final_event(self) -> None:
         assert "assistant_final" in self._read()

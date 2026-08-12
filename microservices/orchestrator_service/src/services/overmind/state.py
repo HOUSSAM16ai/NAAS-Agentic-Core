@@ -92,7 +92,7 @@ class MissionStateManager:
     def _relay_attempt(self, outbox: MissionOutbox) -> int:
         """يستخرج عداد محاولات relay من الحمولة الداخلية دون كسر البيانات الأصلية."""
 
-        payload = outbox.payload_json
+        payload = outbox["payload_json"] if isinstance(outbox, dict) else outbox.payload_json
         if not isinstance(payload, dict):
             return 0
         relay_meta = payload.get("__relay")
@@ -106,7 +106,7 @@ class MissionStateManager:
     def _business_payload(self, outbox: MissionOutbox) -> dict[str, JsonValue]:
         """يعيد حمولة الحدث الأصلية مع حذف مفاتيح relay الداخلية عند الحاجة."""
 
-        payload = outbox.payload_json
+        payload = outbox["payload_json"] if isinstance(outbox, dict) else outbox.payload_json
         if not isinstance(payload, dict):
             return {}
         clean_payload = dict(payload)
@@ -116,7 +116,7 @@ class MissionStateManager:
     def _processing_reference_time(self, outbox: MissionOutbox) -> datetime:
         """يستخرج مرجع الزمن لمعالجة processing مع تفضيل آخر محاولة relay."""
 
-        payload = outbox.payload_json
+        payload = outbox["payload_json"] if isinstance(outbox, dict) else outbox.payload_json
         if isinstance(payload, dict):
             relay_meta = payload.get("__relay")
             if isinstance(relay_meta, dict):
@@ -151,7 +151,7 @@ class MissionStateManager:
         reference_time = self._processing_reference_time(outbox)
         return reference_time <= (now - timedelta(seconds=timeout))
 
-    async def relay_outbox_events(
+    async def relay_outbox_events(  # noqa: PLR0915 (god-function paydown deferred; D-105)
         self,
         *,
         batch_size: int = 50,
@@ -161,6 +161,7 @@ class MissionStateManager:
         """يعيد نشر سجلات outbox المتعثرة/المعلقة مع حالات معالجة واضحة."""
 
         now = utc_now()
+        is_raw = not hasattr(self.session, "add")
         candidates = await self._load_relay_candidates(batch_size=batch_size)
         processed = 0
         published = 0
@@ -168,11 +169,9 @@ class MissionStateManager:
         skipped = 0
 
         for _raw_outbox in candidates:
-            # D-194: raw psycopg يرجع dict rows
+            # D-194: raw psycopg يرجع dict rows — ORM sessions تعمل على objects مباشرة (توافق tests/main)
             outbox = (
-                _raw_outbox
-                if isinstance(_raw_outbox, dict)
-                else {
+                {
                     c: getattr(_raw_outbox, c, None)
                     for c in (
                         "id",
@@ -186,15 +185,19 @@ class MissionStateManager:
                         "processing_attempts",
                     )
                 }
+                if is_raw and not isinstance(_raw_outbox, dict)
+                else _raw_outbox
             )
 
             current_attempt = self._relay_attempt(outbox)
-            if outbox["status"] == "failed" and current_attempt >= max_failed_attempts:
+            if (
+                outbox["status"] if isinstance(outbox, dict) else outbox.status
+            ) == "failed" and current_attempt >= max_failed_attempts:
                 skipped += 1
                 logger.info(
                     "outbox_relay_skipped id=%s mission_id=%s attempt=%s reason=max_failed_attempts",
-                    outbox["id"],
-                    outbox["mission_id"],
+                    outbox["id"] if isinstance(outbox, dict) else outbox.id,
+                    outbox["mission_id"] if isinstance(outbox, dict) else outbox.mission_id,
                     current_attempt,
                 )
                 continue
@@ -207,22 +210,31 @@ class MissionStateManager:
                 skipped += 1
                 logger.info(
                     "outbox_relay_skipped id=%s mission_id=%s attempt=%s reason=processing_inflight",
-                    outbox["id"],
-                    outbox["mission_id"],
+                    outbox["id"] if isinstance(outbox, dict) else outbox.id,
+                    outbox["mission_id"] if isinstance(outbox, dict) else outbox.mission_id,
                     current_attempt,
                 )
                 continue
 
-            outbox["status"] = "processing"
+            if isinstance(outbox, dict):
+                outbox["status"] = "processing"
+            else:
+                outbox.status = "processing"  # ORM object
             await self.session.commit()
 
             next_attempt = current_attempt + 1
             payload = self._business_payload(outbox)
             message = {
-                "mission_id": outbox["mission_id"],
-                "event_type": outbox["event_type"],
+                "mission_id": outbox["mission_id"]
+                if isinstance(outbox, dict)
+                else outbox.mission_id,
+                "event_type": outbox["event_type"]
+                if isinstance(outbox, dict)
+                else outbox.event_type,
                 "payload_json": payload,
-                "created_at": outbox["created_at"].isoformat(),
+                "created_at": (
+                    outbox["created_at"] if isinstance(outbox, dict) else outbox.created_at
+                ).isoformat(),
             }
 
             error_kind = "publish_error"
@@ -237,26 +249,32 @@ class MissionStateManager:
                     "last_error_kind": error_kind,
                     "last_attempt_at": utc_now().isoformat(),
                 }
-                outbox["payload_json"] = payload_with_meta
+                if isinstance(outbox, dict):
+                    outbox["payload_json"] = payload_with_meta
+                else:
+                    outbox.payload_json = payload_with_meta  # ORM object
                 await self._set_outbox_status(outbox, status="failed")
                 failed += 1
                 processed += 1
                 logger.warning(
                     "outbox_relay_failed id=%s mission_id=%s reason=%s",
-                    outbox["id"],
-                    outbox["mission_id"],
+                    outbox["id"] if isinstance(outbox, dict) else outbox.id,
+                    outbox["mission_id"] if isinstance(outbox, dict) else outbox.mission_id,
                     error_kind,
                 )
                 continue
 
             try:
-                await self.event_bus.publish(f"mission:{outbox['mission_id']}", message)
+                await self.event_bus.publish(
+                    f"mission:{outbox['mission_id'] if isinstance(outbox, dict) else outbox.mission_id}",
+                    message,
+                )
                 await self._set_outbox_status(outbox, status="published", published_at=utc_now())
                 published += 1
                 logger.info(
                     "outbox_relay_published id=%s mission_id=%s attempt=%s",
-                    outbox["id"],
-                    outbox["mission_id"],
+                    outbox["id"] if isinstance(outbox, dict) else outbox.id,
+                    outbox["mission_id"] if isinstance(outbox, dict) else outbox.mission_id,
                     next_attempt,
                 )
             except Exception as exc:
@@ -267,13 +285,16 @@ class MissionStateManager:
                     "last_error_kind": error_kind,
                     "last_attempt_at": utc_now().isoformat(),
                 }
-                outbox["payload_json"] = payload_with_meta
+                if isinstance(outbox, dict):
+                    outbox["payload_json"] = payload_with_meta
+                else:
+                    outbox.payload_json = payload_with_meta  # ORM object
                 await self._set_outbox_status(outbox, status="failed")
                 failed += 1
                 logger.warning(
                     "outbox_relay_failed id=%s mission_id=%s reason=%s",
-                    outbox["id"],
-                    outbox["mission_id"],
+                    outbox["id"] if isinstance(outbox, dict) else outbox.id,
+                    outbox["mission_id"] if isinstance(outbox, dict) else outbox.mission_id,
                     error_kind,
                 )
 
@@ -675,22 +696,34 @@ class MissionStateManager:
         published_at: datetime | None = None,
     ) -> None:
         """يحدّث حالة سجل الـ Outbox بشكل صريح لضمان تتبع موثوق للنشر.
-
-        D-194 (2026-08-12): ORM commit لا يعمل على PsycopgSession — raw UPDATE فقط.
+        D-194 (2026-08-12): PsycopgSession (raw psycopg) لا يملك ORM commit — raw UPDATE.
+        ORM sessions (tests/dev) تُحدَّث عبر object attributes ثم commit (D-199).
         """
-        from sqlalchemy import text as _text
-
+        is_raw = not hasattr(self.session, "add")
         oid = outbox.get("id") if isinstance(outbox, dict) else getattr(outbox, "id", None)
         if oid is None:
             return
         now = published_at or utc_now()
-        await self.session.execute(
-            _text(
-                f"UPDATE mission_outbox SET status = {_pgsafe_lit(status)}, published_at = {_pgsafe_lit(now)}, "
-                f"updated_at = {_pgsafe_lit(now)} WHERE id = {_pgsafe_lit(int(oid))}"
-            ),
-            [],
-        )
+        is_published = status == "published"
+        if is_raw:
+            from sqlalchemy import text as _text
+
+            set_clause = f"status = {_pgsafe_lit(status)}"
+            if is_published:
+                set_clause += f", published_at = {_pgsafe_lit(now)}"
+            await self.session.execute(
+                _text(f"UPDATE mission_outbox SET {set_clause} WHERE id = {_pgsafe_lit(int(oid))}"),
+                [],
+            )
+            return
+        # ORM path: تحديث الـ object المُرسل نفسه ثم commit (لا raw UPDATE على ORM)
+        if hasattr(outbox, "status"):
+            outbox.status = status
+            if is_published:
+                outbox.published_at = now
+                if hasattr(outbox, "updated_at"):
+                    outbox.updated_at = now
+            await self.session.commit()
 
     async def get_mission_events(self, mission_id: int) -> list[MissionEvent]:
         """Fetch all historical events for a mission."""

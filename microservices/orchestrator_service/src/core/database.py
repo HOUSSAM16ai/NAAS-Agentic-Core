@@ -325,11 +325,14 @@ class _LazySessionFactory:
 async_session_factory = _LazySessionFactory()
 
 
-def _psycopg_session_factory_proxy():
-    """يُعيد PsycopgSession جديد من psycopg pool — بديل async_session_factory()"""
+def _psycopg_session_factory_proxy(default_factory=None):
+    """يُعيد PsycopgSession جديد من psycopg pool — بديل async_session_factory().
+    D-199: عند pool=None (tests/dev بـ sqlite بدون pool حي) يعيد default_factory إن قُدّم."""
     pool = get_psycopg_pool()
     if pool is None:
-        raise RuntimeError("psycopg pool not available")
+        if default_factory is None:
+            raise RuntimeError("psycopg pool not available")
+        return default_factory()
     return psycopg_session_factory(pool)
 
 

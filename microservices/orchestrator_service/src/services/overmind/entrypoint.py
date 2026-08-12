@@ -183,8 +183,11 @@ async def _run_mission_task(mission_id: int, force_research: bool = False) -> No
     from microservices.orchestrator_service.src.core.database import (
         _psycopg_session_factory_proxy as async_session_factory_proxy,  # Lazy import
     )
+    from microservices.orchestrator_service.src.core.database import (
+        async_session_factory,
+    )
 
-    async with async_session_factory_proxy() as session:
+    async with async_session_factory_proxy(default_factory=async_session_factory) as session:
         try:
             # Re-hydrate the Overmind Service with the new session
             overmind = await create_overmind(session)

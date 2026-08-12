@@ -34,7 +34,10 @@ import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
-from microservices.orchestrator_service.src.core.database import _psycopg_session_factory_proxy
+from microservices.orchestrator_service.src.core.database import (
+    _psycopg_session_factory_proxy,
+    async_session_factory,
+)
 
 from .agent_chat_request import AgentChatCall
 from .chat_context import _augment_ambiguous_objective
@@ -146,7 +149,9 @@ async def _finalise_admin_turn(
 ) -> AsyncGenerator[str, None]:
     """يحفظ الدور ويبثّ الإطار النهائي — ذراعا النجاح والفشل كلتاهما تُنهيان (§6.5)."""
     try:
-        async with _psycopg_session_factory_proxy() as db_session:
+        async with _psycopg_session_factory_proxy(
+            default_factory=async_session_factory
+        ) as db_session:
             conv_id, _ = await _ensure_conversation(
                 session=db_session,
                 chat_scope="admin",

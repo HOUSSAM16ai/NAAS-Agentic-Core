@@ -29,7 +29,10 @@ import logging
 
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 
-from microservices.orchestrator_service.src.core.database import _psycopg_session_factory_proxy
+from microservices.orchestrator_service.src.core.database import (
+    _psycopg_session_factory_proxy,
+    async_session_factory,
+)
 
 from .chat_stream_engine import _stream_chat_langgraph
 from .chat_turn_context import (
@@ -120,7 +123,7 @@ async def _ensure_turn_conversation(
             bundle.user_id,
             conversation_id,
         )
-        async with _psycopg_session_factory_proxy() as session:
+        async with _psycopg_session_factory_proxy(default_factory=async_session_factory) as session:
             resolved_id, history_messages = await _ensure_conversation(
                 session=session,
                 chat_scope=bundle.scope.name,

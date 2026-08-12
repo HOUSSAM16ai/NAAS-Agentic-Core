@@ -39,7 +39,7 @@ from .chat_turn_context import (
     _hydrate_history,
 )
 from .chat_types import ChatRunContext
-from .chat_ws_scope import ChatWsScope, WsTurnState
+from .chat_ws_scope import ChatWsScope, WsTurnBundle, WsTurnState
 from .conversation_store import _ensure_conversation
 from .identity_access import (
     _build_conversation_thread_id,
@@ -69,31 +69,31 @@ async def _read_turn(websocket: WebSocket) -> tuple[dict[str, object], str] | No
 
 
 def _resolve_turn_conversation_id(
-    *, scope: ChatWsScope, state: WsTurnState, user_id: int, incoming: dict[str, object]
+    *, bundle: WsTurnBundle, incoming: dict[str, object]
 ) -> object:
     """يحسم مُعرّف المحادثة لهذا الدور، ويُبطِل الخيط اللاصق عند تبديل المحادثة."""
     requested_conversation_id = incoming.get("conversation_id")
 
     logger.info(
         "[CONV_LIFECYCLE] stage=ws_received role=%s user=%s conv_id=%s type=%s",
-        scope.name,
-        user_id,
+        bundle.scope.name,
+        bundle.user_id,
         requested_conversation_id,
         type(requested_conversation_id).__name__,
     )
     conversation_id = _resolve_effective_conversation_id(
         incoming_value=requested_conversation_id,
-        sticky_value=state.sticky_conversation_id,
+        sticky_value=bundle.state.sticky_conversation_id,
     )
     if (
         requested_conversation_id is not None
-        and requested_conversation_id != state.sticky_conversation_id
+        and requested_conversation_id != bundle.state.sticky_conversation_id
     ):
-        state.sticky_thread_id = None
+        bundle.state.sticky_thread_id = None
     logger.info(
         "[CONV_LIFECYCLE] stage=parsed role=%s user=%s conv_id=%s type=%s",
-        scope.name,
-        user_id,
+        bundle.scope.name,
+        bundle.user_id,
         conversation_id,
         type(conversation_id).__name__,
     )
@@ -103,38 +103,40 @@ def _resolve_turn_conversation_id(
 async def _ensure_turn_conversation(
     websocket: WebSocket,
     *,
-    scope: ChatWsScope,
-    state: WsTurnState,
-    user_id: int,
-    objective: str,
+    bundle: WsTurnBundle,
     conversation_id: object,
 ) -> tuple[int, list[dict[str, str]]] | None:
-    """يضمن المحادثة ويحدّث الحالة اللاصقة — أو يبثّ خطأً صريحاً ويعيد `None`."""
+    """يضمن المحادثة ويحدّث الحالة اللاصقة — أو يبثّ خطأً صريحاً ويعيد `None`.
+
+    `bundle` يجمّع ما يسافر معاً في كلّ نداءات الآلة (سابقة D-237 ·
+    `TurnIdentity`)، ويبقى المقبس منفصلاً لأنه ناقل الخطأ، و`conversation_id`
+    منفصلاً لأنه نتيجة مرحلة التحليل لا خاصية الدور.
+    """
     try:
-        logger.info(f"ORCHESTRATOR received | chat_scope={scope.name} | role={user_id}")
+        logger.info(f"ORCHESTRATOR received | chat_scope={bundle.scope.name} | role={bundle.user_id}")
         logger.info(
             "[CONV_LIFECYCLE] stage=ensure_entry role=%s user=%s conv_id=%s",
-            scope.name,
-            user_id,
+            bundle.scope.name,
+            bundle.user_id,
             conversation_id,
         )
         async with async_session_factory() as session:
             resolved_id, history_messages = await _ensure_conversation(
                 session=session,
-                chat_scope=scope.name,
-                user_id=user_id,
-                question=objective,
+                chat_scope=bundle.scope.name,
+                user_id=bundle.user_id,
+                question=bundle.objective,
                 requested_conversation_id=conversation_id,
             )
         logger.info(
             "[CONV_LIFECYCLE] stage=ensure_exit role=%s user=%s conv_id=%s msg_count=%s",
-            scope.name,
-            user_id,
+            bundle.scope.name,
+            bundle.user_id,
             resolved_id,
             len(history_messages),
         )
-        state.sticky_conversation_id = resolved_id
-        state.sticky_thread_id = _build_conversation_thread_id(user_id, resolved_id)
+        bundle.state.sticky_conversation_id = resolved_id
+        bundle.state.sticky_thread_id = _build_conversation_thread_id(bundle.user_id, resolved_id)
     except HTTPException as error:
         await websocket.send_json({"type": "assistant_error", "payload": {"content": error.detail}})
         return None
@@ -143,9 +145,7 @@ async def _ensure_turn_conversation(
 
 def _build_turn_context(
     *,
-    scope: ChatWsScope,
-    state: WsTurnState,
-    user_id: int,
+    bundle: WsTurnBundle,
     incoming: dict[str, object],
     conversation_id: int,
 ) -> ChatRunContext:
@@ -153,13 +153,13 @@ def _build_turn_context(
     context: ChatRunContext = _coerce_client_context(incoming.get("context"))
     _apply_mission_type(context, incoming)
     context["conversation_id"] = conversation_id
-    context["user_id"] = user_id
-    if state.sticky_thread_id:
-        context["thread_id"] = state.sticky_thread_id
+    context["user_id"] = bundle.user_id
+    if bundle.state.sticky_thread_id:
+        context["thread_id"] = bundle.state.sticky_thread_id
     _emit_identity_diagnostic_log(
-        route_name=scope.route_name,
+        route_name=bundle.scope.route_name,
         conversation_id=conversation_id,
-        thread_id=state.sticky_thread_id,
+        thread_id=bundle.state.sticky_thread_id,
         session_id=_resolve_session_id_from_incoming(incoming),
     )
     return context
@@ -179,17 +179,10 @@ async def _run_turn(
         return
     incoming, objective = turn
 
-    conversation_id = _resolve_turn_conversation_id(
-        scope=scope, state=state, user_id=user_id, incoming=incoming
-    )
-    ensured = await _ensure_turn_conversation(
-        websocket,
-        scope=scope,
-        state=state,
-        user_id=user_id,
-        objective=objective,
-        conversation_id=conversation_id,
-    )
+    bundle = WsTurnBundle(scope=scope, state=state, user_id=user_id, objective=objective)
+
+    conversation_id = _resolve_turn_conversation_id(bundle=bundle, incoming=incoming)
+    ensured = await _ensure_turn_conversation(websocket, bundle=bundle, conversation_id=conversation_id)
     if ensured is None:
         return
     resolved_id, history_messages = ensured
@@ -199,11 +192,7 @@ async def _run_turn(
     )
 
     context = _build_turn_context(
-        scope=scope,
-        state=state,
-        user_id=user_id,
-        incoming=incoming,
-        conversation_id=resolved_id,
+        bundle=bundle, incoming=incoming, conversation_id=resolved_id
     )
 
     await _stream_chat_langgraph(

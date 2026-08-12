@@ -40,7 +40,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +65,24 @@ class WsTurnState:
 
     sticky_conversation_id: int | None = None
     sticky_thread_id: str | None = None
+
+
+@dataclass(slots=True)
+class WsTurnBundle:
+    """ما يسافر معاً في نداءات آلة الدور — النطاق والحالة اللاصقة والمُعرِّف.
+
+    يُجمَّع (سابقة D-237 · `TurnIdentity`/`AgentChatCall`): هذه الحقول الثلاثة
+    تظهر معاً في `_resolve_turn_conversation_id` و`_ensure_turn_conversation`
+    و`_build_turn_context` و`_run_turn`، فتنزّل العدد البيني للوسائط ويصير
+    «الدور» قيمةً واحدة تُقرأ في سطر. والهدف (`objective`) فيه لأنّه يلتحق
+    به عند اكتمال قراءة الدور — والقيمة الفارغة **تُحظر** (يُبنى الكائن بعد
+    نجاح `_read_turn` فقط).
+    """
+
+    scope: ChatWsScope
+    state: WsTurnState
+    user_id: int
+    objective: str = field(default="")
 
 
 CUSTOMER_WS_SCOPE = ChatWsScope(

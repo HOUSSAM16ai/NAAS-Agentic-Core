@@ -56,6 +56,12 @@ def _coerce_client_context(raw: object) -> ChatRunContext:
     return context
 
 
+def _mission_type_in_metadata(incoming: dict[str, object]) -> bool:
+    """هل تحمل الحمولة `mission_type` داخل `metadata` القاموسي؟"""
+    metadata = incoming.get("metadata")
+    return isinstance(metadata, dict) and "mission_type" in metadata
+
+
 def _apply_mission_type(context: ChatRunContext, incoming: dict[str, object]) -> None:
     """ينقل `mission_type` من الحمولة إلى السياق — العلويّ يسبق المُعشَّش.
 
@@ -64,11 +70,7 @@ def _apply_mission_type(context: ChatRunContext, incoming: dict[str, object]) ->
     """
     if "mission_type" in incoming:
         context["mission_type"] = incoming["mission_type"]
-    elif (
-        "metadata" in incoming
-        and isinstance(incoming["metadata"], dict)
-        and "mission_type" in incoming["metadata"]
-    ):
+    elif _mission_type_in_metadata(incoming):
         context["mission_type"] = incoming["metadata"]["mission_type"]
 
 

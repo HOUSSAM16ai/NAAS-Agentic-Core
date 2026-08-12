@@ -69,6 +69,14 @@ _DOCSTRING_DEBT: frozenset[str] = frozenset(
 )
 
 
+def _is_route_decorator(deco: ast.expr) -> bool:
+    """هل هذا الديكوريتر يُعرِّف دالّته معالِج مسارٍ؟"""
+    func = deco.func if isinstance(deco, ast.Call) else deco
+    if not isinstance(func, ast.Attribute):
+        return False
+    return func.attr in _ROUTE_DECORATORS
+
+
 def _route_handlers() -> list[ast.AsyncFunctionDef | ast.FunctionDef]:
     """يعيد كلّ معالِج مسار على المستوى الأعلى في `routes.py`."""
     tree = ast.parse(ROUTES.read_text(encoding="utf-8"))
@@ -76,11 +84,8 @@ def _route_handlers() -> list[ast.AsyncFunctionDef | ast.FunctionDef]:
     for node in tree.body:
         if not isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
             continue
-        for deco in node.decorator_list:
-            func = deco.func if isinstance(deco, ast.Call) else deco
-            if isinstance(func, ast.Attribute) and func.attr in _ROUTE_DECORATORS:
-                handlers.append(node)
-                break
+        if any(_is_route_decorator(deco) for deco in node.decorator_list):
+            handlers.append(node)
     return handlers
 
 
@@ -88,17 +93,27 @@ def _handler_ids() -> list[str]:
     return [handler.name for handler in _route_handlers()]
 
 
+def _target_names(node: ast.AST) -> list[str]:
+    """أسماء الأهداف في إسنادٍ — فارغةٌ لما ليس إسناداً."""
+    if isinstance(node, ast.Assign):
+        return [
+            target.id for target in node.targets if isinstance(target, ast.Name)
+        ]
+    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+        return [node.target.id]
+    return []
+
+
+def _imported_names(node: ast.AST) -> list[str]:
+    """الأسماء التي يُدخِلها سطر استيراد — بعد `as` إن وُجد."""
+    if isinstance(node, ast.ImportFrom | ast.Import):
+        return [alias.asname or alias.name.split(".")[-1] for alias in node.names]
+    return []
+
+
 def _binds_logger(node: ast.AST) -> bool:
     """هل تربط هذه العقدة الاسم `logger` — إسناداً عادياً أو مُعَنوَناً أو استيراداً؟"""
-    if isinstance(node, ast.Assign):
-        return any(
-            isinstance(target, ast.Name) and target.id == "logger" for target in node.targets
-        )
-    if isinstance(node, ast.AnnAssign):
-        return isinstance(node.target, ast.Name) and node.target.id == "logger"
-    if isinstance(node, ast.ImportFrom | ast.Import):
-        return any((alias.asname or alias.name.split(".")[-1]) == "logger" for alias in node.names)
-    return False
+    return "logger" in _target_names(node) or "logger" in _imported_names(node)
 
 
 def _rebinds_logger(handler: ast.AsyncFunctionDef | ast.FunctionDef) -> bool:

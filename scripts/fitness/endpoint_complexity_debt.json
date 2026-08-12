@@ -203,11 +203,11 @@
     "nesting": 10
   },
   "chat_turn_context.py": {
-    "loc": 92
+    "loc": 94
   },
   "chat_turn_context.py::_apply_mission_type": {
-    "loc": 14,
-    "cc": 5,
+    "loc": 10,
+    "cc": 3,
     "nesting": 2
   },
   "chat_turn_context.py::_coerce_client_context": {
@@ -225,6 +225,11 @@
     "cc": 2,
     "nesting": 1
   },
+  "chat_turn_context.py::_mission_type_in_metadata": {
+    "loc": 4,
+    "cc": 2,
+    "nesting": 0
+  },
   "chat_types.py": {
     "loc": 92
   },
@@ -239,18 +244,18 @@
     "nesting": 1
   },
   "chat_ws_scope.py": {
-    "loc": 80
+    "loc": 98
   },
   "chat_ws_turn.py": {
-    "loc": 251
+    "loc": 240
   },
   "chat_ws_turn.py::_build_turn_context": {
-    "loc": 22,
+    "loc": 20,
     "cc": 2,
     "nesting": 1
   },
   "chat_ws_turn.py::_ensure_turn_conversation": {
-    "loc": 39,
+    "loc": 41,
     "cc": 3,
     "nesting": 2
   },
@@ -265,7 +270,7 @@
     "nesting": 1
   },
   "chat_ws_turn.py::_run_turn": {
-    "loc": 57,
+    "loc": 46,
     "cc": 3,
     "nesting": 1
   },

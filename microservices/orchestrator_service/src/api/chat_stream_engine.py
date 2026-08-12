@@ -18,6 +18,7 @@ from contextlib import suppress
 from fastapi import WebSocket
 
 from microservices.orchestrator_service.src.core.database import (
+    _psycopg_session_factory_proxy,
     get_checkpointer,
 )
 from microservices.orchestrator_service.src.core.prom_metrics import (

@@ -385,6 +385,7 @@ class PsycopgSession:
         """inline-safe literal quoting (pgbouncer-compatible: no placeholders allowed)."""
         return PsycopgSession._quote_literal(v)
 
+    @staticmethod
     def _quote_literal(v):
         """D-188 (2026-08-12): pgbouncer transaction mode يرفض psycopg placeholders
         بالكامل (0 placeholders / DuplicatePreparedStatement). الحل: inline literal
@@ -409,7 +410,9 @@ class PsycopgSession:
             return sql, None
         if isinstance(params, dict):
             mapping = dict(params)
-            new_sql = _NAMED_PARAM.sub(lambda m: PsycopgSession._quote_literal(mapping.get(m.group("name"))), sql)
+            new_sql = _NAMED_PARAM.sub(
+                lambda m: PsycopgSession._quote_literal(mapping.get(m.group("name"))), sql
+            )
             return new_sql, None
         # sequence positional: كل %s يتحول إلى literal
         if "%s" in sql:
@@ -457,7 +460,9 @@ class PsycopgSession:
         except Exception as _exc:
             logger.error(
                 "[PsycopgSession] execute FAILED sql=%r params=%r: %s",
-                sql, params, _exc,
+                sql,
+                params,
+                _exc,
             )
             raise
 
@@ -683,7 +688,6 @@ async def init_db() -> None:
 
         set_checkpointer_backend_info(
             backend="postgres",
-
             step="10",
             pool_size=_POOL_SIZE,
             tables_ready=tables_ready,
@@ -701,7 +705,13 @@ async def init_db() -> None:
 
     except Exception as exc:
         import traceback as _tb
-        logger.error("[CHECKPOINTER] init failed (non-fatal): %s | type=%s | tb=%s", exc, type(exc).__name__, _tb.format_exc()[-800:])
+
+        logger.error(
+            "[CHECKPOINTER] init failed (non-fatal): %s | type=%s | tb=%s",
+            exc,
+            type(exc).__name__,
+            _tb.format_exc()[-800:],
+        )
         record_checkpointer_error("connection_error")
         set_checkpointer_backend_info(backend="none", step="10", pool_size=0, tables_ready=False)
 

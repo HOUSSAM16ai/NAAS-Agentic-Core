@@ -169,11 +169,24 @@ class MissionStateManager:
 
         for _raw_outbox in candidates:
             # D-194: raw psycopg يرجع dict rows
-            outbox = _raw_outbox if isinstance(_raw_outbox, dict) else {
-                c: getattr(_raw_outbox, c, None)
-                for c in ("id", "mission_id", "status", "event_type", "payload_json",
-                          "created_at", "attempts", "processing_started_at", "processing_attempts")
-            }
+            outbox = (
+                _raw_outbox
+                if isinstance(_raw_outbox, dict)
+                else {
+                    c: getattr(_raw_outbox, c, None)
+                    for c in (
+                        "id",
+                        "mission_id",
+                        "status",
+                        "event_type",
+                        "payload_json",
+                        "created_at",
+                        "attempts",
+                        "processing_started_at",
+                        "processing_attempts",
+                    )
+                }
+            )
 
             current_attempt = self._relay_attempt(outbox)
             if outbox["status"] == "failed" and current_attempt >= max_failed_attempts:
@@ -237,7 +250,7 @@ class MissionStateManager:
                 continue
 
             try:
-                await self.event_bus.publish(f"mission:{outbox["mission_id"]}", message)
+                await self.event_bus.publish(f"mission:{outbox['mission_id']}", message)
                 await self._set_outbox_status(outbox, status="published", published_at=utc_now())
                 published += 1
                 logger.info(
@@ -340,18 +353,28 @@ class MissionStateManager:
             # تحقق idempotency يدوي
             if idempotency_key:
                 chk = await self.session.execute(
-                    _text(f"SELECT id FROM missions WHERE idempotency_key = {_q(idempotency_key)} LIMIT 1"),
+                    _text(
+                        f"SELECT id FROM missions WHERE idempotency_key = {_q(idempotency_key)} LIMIT 1"
+                    ),
                     [],
                 )
                 if chk.fetchone():
                     # نعيد نفس المهمة عبر fetch كامل
                     row = (
                         await self.session.execute(
-                            _text(f"SELECT * FROM missions WHERE idempotency_key = {_q(idempotency_key)} LIMIT 1"),
+                            _text(
+                                f"SELECT * FROM missions WHERE idempotency_key = {_q(idempotency_key)} LIMIT 1"
+                            ),
                             [],
                         )
                     ).fetchone()
-                    return Mission(**{k: v for k, v in dict(row).items() if k in {f.name for f in Mission.__table__.columns}})
+                    return Mission(
+                        **{
+                            k: v
+                            for k, v in dict(row).items()
+                            if k in {f.name for f in Mission.__table__.columns}
+                        }
+                    )
             now = utc_now()
             ins = await self.session.execute(
                 _text(
@@ -362,7 +385,13 @@ class MissionStateManager:
                 [],
             )
             row = ins.fetchone()
-            return Mission(**{k: v for k, v in dict(row).items() if k in {f.name for f in Mission.__table__.columns}})
+            return Mission(
+                **{
+                    k: v
+                    for k, v in dict(row).items()
+                    if k in {f.name for f in Mission.__table__.columns}
+                }
+            )
 
         # المسار الأصلي (SQLAlchemy AsyncSession)
         if idempotency_key:
@@ -397,7 +426,13 @@ class MissionStateManager:
             ).fetchone()
             if not row:
                 return None
-            return Mission(**{k: v for k, v in dict(row).items() if k in {f.name for f in Mission.__table__.columns}})
+            return Mission(
+                **{
+                    k: v
+                    for k, v in dict(row).items()
+                    if k in {f.name for f in Mission.__table__.columns}
+                }
+            )
 
         stmt = (
             select(Mission)
@@ -449,6 +484,7 @@ class MissionStateManager:
         # D-193 (2026-08-12): ORM else branch يُفعَّل في PsycopgSession
         # فيرتطم :id_1 placeholder (SQLAlchemy select). نفس منطق raw path أعلاه.
         from sqlalchemy import text as _text
+
         row = (
             await self.session.execute(
                 _text(f"SELECT status FROM missions WHERE id = {_pgsafe_lit(mission_id)}"), []
@@ -459,7 +495,9 @@ class MissionStateManager:
         current = row["status"] if isinstance(row, dict) else row[0]
         current_enum = MissionStatus(current)
         if not self._is_valid_transition(current_enum, status):
-            error_msg = f"Invalid Mission Transition: {current} -> {status.value} for Mission {mission_id}"
+            error_msg = (
+                f"Invalid Mission Transition: {current} -> {status.value} for Mission {mission_id}"
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
         await self.session.execute(
@@ -531,7 +569,9 @@ class MissionStateManager:
             return
         current = row["status"] if isinstance(row, dict) else row[1]
         if not self._is_valid_transition(MissionStatus(current), status):
-            error_msg = f"Invalid Mission Transition: {current} -> {status.value} for Mission {mission_id}"
+            error_msg = (
+                f"Invalid Mission Transition: {current} -> {status.value} for Mission {mission_id}"
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
         now = utc_now()
@@ -540,7 +580,9 @@ class MissionStateManager:
                 "UPDATE missions SET status = {_s}, updated_at = {_t}{_r} WHERE id = {_m}".format(
                     _s=_pgsafe_lit(status.value),
                     _t=_pgsafe_lit(now),
-                    _r=", result_summary = " + _pgsafe_lit(result_summary) if result_summary else "",
+                    _r=", result_summary = " + _pgsafe_lit(result_summary)
+                    if result_summary
+                    else "",
                     _m=_pgsafe_lit(mission_id),
                 )
             ),
@@ -638,10 +680,7 @@ class MissionStateManager:
         """
         from sqlalchemy import text as _text
 
-        if isinstance(outbox, dict):
-            oid = outbox.get("id")
-        else:
-            oid = getattr(outbox, "id", None)
+        oid = outbox.get("id") if isinstance(outbox, dict) else getattr(outbox, "id", None)
         if oid is None:
             return
         now = published_at or utc_now()
@@ -668,7 +707,13 @@ class MissionStateManager:
                 )
             ).fetchall()
             return [
-                MissionEvent(**{k: v for k, v in dict(r).items() if k in {f.name for f in MissionEvent.__table__.columns}})
+                MissionEvent(
+                    **{
+                        k: v
+                        for k, v in dict(r).items()
+                        if k in {f.name for f in MissionEvent.__table__.columns}
+                    }
+                )
                 for r in rows
             ]
         stmt = (
@@ -734,7 +779,11 @@ class MissionStateManager:
             for t in tasks:
                 tkey = str(getattr(t, "task_id", ""))
                 tdesc = str(getattr(t, "description", ""))
-                ttype = str(getattr(t, "task_type", "task")).lower() if getattr(t, "task_type", None) else "task"
+                ttype = (
+                    str(getattr(t, "task_type", "task")).lower()
+                    if getattr(t, "task_type", None)
+                    else "task"
+                )
                 ttool = str(getattr(t, "tool_name", ""))
                 targs = json.dumps(getattr(t, "tool_args", {}) or {})
                 tdeps = json.dumps(getattr(t, "dependencies", []) or [])
@@ -802,11 +851,20 @@ class MissionStateManager:
 
             rows = (
                 await self.session.execute(
-                    _text(f"SELECT * FROM tasks WHERE mission_id = {_pgsafe_lit(mission_id)} ORDER BY id"), []
+                    _text(
+                        f"SELECT * FROM tasks WHERE mission_id = {_pgsafe_lit(mission_id)} ORDER BY id"
+                    ),
+                    [],
                 )
             ).fetchall()
             return [
-                Task(**{k: v for k, v in dict(r).items() if k in {f.name for f in Task.__table__.columns}})
+                Task(
+                    **{
+                        k: v
+                        for k, v in dict(r).items()
+                        if k in {f.name for f in Task.__table__.columns}
+                    }
+                )
                 for r in rows
             ]
         # D-193 (2026-08-12): ORM branch يُفعل في PsycopgSession فيرتطم

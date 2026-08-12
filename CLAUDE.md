@@ -997,6 +997,7 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 | المجال | القرارات (تفصيلها في الأرشيف + `.memory/decisions.md`) |
 |--------|------------------------------------------------------|
 | الاستمرارية والبثّ | D-006 · D-047 · D-048 · ISS-016/017 |
+| LangGraph checkpointer فوق Supabase PgBouncer | **D-198** · **D-199** (`docs/architecture/D-198-PGBOUNCER-FIX.md` · PR #10 مفتوح للمراجعة، ⛔ لا دمج) |
 | العقل التربوي السقراطي | D-074 · D-104 · D-113 → D-160 |
 | الاحتمالات الحتمية | D-075 → D-085 · D-116 · D-152/153 · **D-182** · **D-184** |
 | WebSocket | D-WS-001 → D-WS-PROXY-004 · D-096 · ISS-092→101 |

@@ -5,6 +5,55 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+## D-198 · `prepare_threshold=None` هو الحل الإنتاجي المدعوم لـ LangGraph + Supabase PgBouncer، وD-199 يُثبّت CI عليه (2026-08-12 · Supabase · PR #10)
+
+**الحادثة:** `AsyncPostgresSaver` (langgraph-checkpoint-postgres) مع Supabase عبر
+pgbouncer transaction mode (:6543) كان ينهار بـ `DuplicatePreparedStatement:
+"_pg3_0" already exists` عند الـ startup — لأن psycopg 3 يُنشئ prepared
+statements تلقائياً، وpgbouncer في وضع transaction يوزّع الاتصال على اتصالات
+خلفية متعددة، فتصطدم الجُمل المحضّرة المتكررة بين الجلسات.
+
+**الاستبعاد المنهجي:** ⛔ لم يُعتمد `MemorySaver` بديلاً نهائياً ولم تُغيَّر
+الهندسة (لا pgcat، لا SSH tunnel، لا SQLite للتشيكبوينت الإنتاجي). الفرضية
+المختبرة أولاً: هل المشكلة محصورة في psycopg + PgBouncer؟ نعم، والحل الإنتاجي
+المدعوم هو تعطيل prepared statements: `prepare_threshold=None` في
+`AsyncConnectionPool` kwargs (`database.py` ~651). الإثبات E2E حيّ كامل (A–H):
+`/health` startup_state=ready + checkpointer_backend=postgres · إنشاء/جلب مهمة
+· Compose (200) · Checkpoint read (200) · WebSocket · Restart persistence.
+
+**D-199 · تثبيت CI:** الاختبارات المحلية تعيد بناء `DATABASE_URL=sqlite+aiosqlite:///:memory:`
+(لا psycopg pool في CI)، فتعثر `test-microservices` بـ `RuntimeError: psycopg
+pool not available` من `_psycopg_session_factory_proxy()`، وتسبّبت تحويلات
+D-198 في regressions للتعقيد (debt budget) ولمس relay (ORM objects في tests
+مقابل raw psycopg dict rows في الإنتاج). الحل في 3 حزم:
+
+1. **database.py:** proxy يقبل `default_factory=None` اختيارياً؛ عند pool=None
+   يُعيد `default_factory()` (ORM async_session_factory) بدل رمي الخطأ —
+   الاختبارات تستخدم مسار ORM القياسي، والإنتاج يستخدم psycopg pool بدون
+   أي تغيّر سلوك.
+2. **كلّ الاستدعاءات** (routes · chat_stream_engine · chat_ws_turn ·
+   agent_chat_admin_stream · agent_chat_customer_stream · runner · entrypoint ·
+   admin_tools) تمرر `default_factory=async_session_factory` صراحةً.
+3. **state.py:** `relay_outbox_events` يستخدم وصولاً شرطياً dict/object
+   (`is_raw` conditional) لتوافق ORM/psycopg معًا، و`_set_outbox_status` يتعامل
+   مع ORM objects مباشرةً وinline SQL للـ raw rows.
+
+**النتيجة:** CI أخضر كاملاً: test-microservices 1146/0 · test-monolith ·
+lint · guardrails · doc-integrity · Skills Gates · Structure Validation ·
+runtime-truth · Event stack · images. الرatchet ثنائي الاتجاه:
+`endpoint_complexity_debt.json` أعيد ضبطه بعد انخفاض LOC (ratchet shrink-only).
+
+**القانون الدائم:** ⛔ لا MemorySaver بديلاً نهائياً ولا تغيير معماري لتجاوز
+مشكلة اتصال — تشخيص الطبقة أولاً ثم الحل المدعوم. و⛔ لا `raise` من proxy
+التشيكبوينت في بيئات بدون pool؛ الـ fallback يُمرَّر صراحةً من مواقع
+الاستدعاء.
+
+**التحقّق:** 1146 اختباراً محلياً (0 فشل · 7 مستبعدة live-network كما في CI)
+· `ruff check`/`format` أخضر · بوابة التعقيد خضراء (100 دالة في 17 ملفاً ضمن
+الميزانية) · secrets grep على الـ diff = 0 · `ratchet` ثنائي الاتجاه.
+
+---
+
 ## D-240 · البواباتُ الخارجة تُغلَق بالبنية لا بالعفو، والبندُ المتبقّي يصير حزمةً (2026-08-12 · CodeScene 83416 · PR #9)
 
 **الحادثة:** تقييم CodeScene النهائي على التوأمَين أبقى **انتهاكين** مفتوحَين على

@@ -5,6 +5,46 @@
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.
 
 # Architectural Decisions
+
+## D-245 · نقطة الصحة صادقة لا خضراء كاذبة: مجسّ DB حيّ + إعلان مزوّدين + أوركستريتور معلَن (2026-08-13 · Codespaces outage · E2E sandbox)
+
+**الحادثة:** شكوى «Login failed» مستمرة للأدمن والمستخدم + «لا رسائل محفوظة» +
+«النظام لا يجيب» في GitHub Codespaces — بعد أن كان يعمل. القياس الحي كشف أن الأربعة
+**الأصول الحقيقية** لعطب المنصة (لا الأصل الواحد):
+
+1. **نشر Replit `static` فقط** (`deploymentTarget = "static"` في `.replit`): الرابط
+   المنشور `*.janeway.replit.dev` بلا Backend حي وراءه إطلاقًا — كل `POST
+   /api/security/login` عليه = اتصال مرفوض/404.
+2. **`/health` يكذب** (healthy دائم حتى وDB ميت كليًا) — موتُ المنصة يُخفى بعلامةٍ
+   خضراء كاذبة في أي بيئة.
+3. **DNS/DB فشل عند الإقلاع بلا إعلان**: الإقلاع كان يطبع «✅ System Ready» حتى حين
+   تسقط كل خطوات DB بصمت، وحالة `unreachable` تُجمَّد للأبد دون إعادة قياس.
+4. **D-112 (عمود فقري إلزامي)**: لا إجابة على الأسئلة إلا من `orchestrator-service`
+   — بلا docker-compose كامل تبقى الأسئلة مرفوضة بـ `ORCHESTRATOR_REQUIRED`، وكان
+   السبب يُعلَن فقط عند أول سؤالٍ فاشل.
+
+**القياسات الحيّة (ضد Supabase الإنتاج `aocnuqhxrhxgbfcgbxfy` — E2E كامل):**
+login admin 200 · login user 200 · كلمة خاطئة 401 · WebSocket +
+`session_ready`/`conversation_init` · المحادثات المحفوظة موجودة (810 للمستخدم ·
+41 للأدمن) · JWT موقع صحيحًا.
+
+**النتيجة:** `app/core/db_health.py` — مجسّ حيّ (`SELECT 1`) مع **retry×3** عند
+الإقلاع + **إعادة قياس تلقائية** عند طلب الصحة إذا كانت الحالة `unreachable` +
+`detail` بنوع الاستثناء دائمًا (حتى `TimeoutError` الصامت). `app/core/providers_health.py`
+— إعلان LLM/Search/Orchestrator عند الإقلاع (`check_orchestrator_reachable`).
+`kernel.py` — lifespan يفصح بالعربية ✅/❌ لكل مزوّدٍ حرج. `security.py` — `/health`
+صادق: `degraded` إذا DB غير ok أو LLM مفقود أو orchestrator unreachable. وأُضيف
+فحص `test_d245_db_health_probe.py` (محجوب في subprocess بـ DB مزيفة).
+
+**القانون الدائم:** ⛔ **لا إقلاعٌ بلا إعلانٍ صريحٍ لحالة كل مزوّدٍ حرج** (DB · LLM ·
+بحث · أوركستريتور)؛ ولا علامةٌ خضراءٌ لا يصدقها مجسٌّ حيّ؛ ومن ولد بلا معرفة ما
+ينقصه سيموت باسمٍ خاطئ (إكمال D-241 + D-112).
+
+**التحقق:** `test_d245_db_health_probe.py` 2/2 أخضر (حالة الحيّ + حالة المحجوب
+subprocess) · E2E sandbox 200/200/401/401 + WebSocket persistence (2026-08-13).
+
+---
+
 ## D-198 · `prepare_threshold=None` هو الحل الإنتاجي المدعوم لـ LangGraph + Supabase PgBouncer، وD-199 يُثبّت CI عليه (2026-08-12 · Supabase · PR #10)
 
 **الحادثة:** `AsyncPostgresSaver` (langgraph-checkpoint-postgres) مع Supabase عبر

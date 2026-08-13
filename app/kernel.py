@@ -47,6 +47,7 @@ from app.core.asyncapi_contracts import (
 )
 from app.core.config import AppSettings
 from app.core.database import async_session_factory
+from app.core.db_health import probe_database_connection
 from app.core.db_schema import validate_schema_on_startup
 from app.core.kernel_state import apply_app_state, build_app_state
 from app.core.openapi_contracts import (
@@ -54,6 +55,7 @@ from app.core.openapi_contracts import (
     default_contract_path,
     load_contract_operations,
 )
+from app.core.providers_health import probe_providers_health
 from app.core.redis_bus import get_redis_bridge
 from app.middleware.fastapi_error_handlers import add_error_handlers
 from app.middleware.static_files_middleware import StaticFilesConfig, setup_static_files_middleware
@@ -232,6 +234,12 @@ class RealityKernel:
         observability = get_unified_observability()
         redis_bridge = get_redis_bridge()
 
+        # D-245 (2026-08-13): مجسّات صادقة عند الإقلاع — بلاها، بيئةٌ محجوبةٌ
+        # عنها قاعدة البيانات (GitHub Codespaces — منفذا Supabase محجوبان) تبدأ
+        # بكلّ شيءٍ أخضر بينما تموت كل عمليةٍ تعتمد على DB: "login failed" ·
+        # لا رسائل · لا إجابات. يُضغط في دالةٍ واحدةٍ لتجنّب PLR0915.
+        await _announce_startup_health()
+
         try:
             await validate_schema_on_startup()
             logger.info("✅ Database Schema Validated")
@@ -359,3 +367,32 @@ def _validate_contract_alignment(app: FastAPI) -> None:
         raise ValueError(
             "AsyncAPI contract validation failed: " + "; ".join(asyncapi_report.errors)
         )
+
+
+async def _announce_startup_health() -> None:
+    """D-245 (2026-08-13): إعلانٌ صادقٌ لصحة قاعدة البيانات والمزودين عند الإقلاع.
+
+    بدون هذا الإعلان كانت بيئةٌ محجوبةٌ عن قاعدة البيانات (GitHub Codespaces —
+    منفذا Supabase 6543/5432 محجوبان حسب CLAUDE.md) تبدأ بكلّ شيءٍ أخضر
+    بينما تموت كل عمليةٍ تعتمد على DB: "login failed" · لا رسائل محفوظة ·
+    لا إجابات — ولا أي إشارةٍ معلنةٍ تسبق أول فشلٍ (ISS-163).
+    """
+    db_status = await probe_database_connection()
+    if db_status == "ok":
+        logger.info("✅ Database connectivity live at startup")
+    else:
+        logger.error(
+            "❌ DATABASE UNREACHABLE AT STARTUP — health endpoints MUST NOT "
+            "claim healthy; every DB operation (login / persistence / chat "
+            "answers) will fail until connectivity is restored. See D-245."
+        )
+    providers = probe_providers_health()
+    if providers.llm_provider == "missing":
+        logger.error(
+            "❌ LLM PROVIDER MISSING AT STARTUP — the chat engine will refuse "
+            "every question with «🛑 خطأ في التكوين: مفتاح الذكاء الاصطناعي "
+            "مفقود». اضبط OPENROUTER_API_KEY أو OPENAI_API_KEY في Secrets "
+            "البيئة. See D-245."
+        )
+    else:
+        logger.info("✅ LLM provider configured (%s)", providers.llm_detail)

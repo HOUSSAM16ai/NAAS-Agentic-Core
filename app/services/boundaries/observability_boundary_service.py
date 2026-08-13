@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from app.core.db_health import get_db_health_state
 from app.services.boundaries.observability_client import ObservabilityServiceClient
 
 if TYPE_CHECKING:
@@ -36,14 +37,19 @@ class ObservabilityBoundaryService:
         """
         golden_signals = self.telemetry.get_golden_signals()
 
-        # We can also fetch health from the microservice if needed,
-        # but for now we keep the existing behavior augmented with microservice check if possible,
-        # or just return the local view as the "system" health.
-
+        # D-245 (2026-08-13): حالة النظام تُبنى على مجسّ DB الحيّ — لا
+        # "ok" ثابتة بلا قياس (كانت تُخفي موت قاعدة البيانات في Codespaces).
+        db_state = get_db_health_state()
+        overall = "ok" if db_state.status == "ok" else "degraded"
         return {
-            "status": "ok",
+            "status": overall,
             "system": "superhuman",
             "timestamp": golden_signals.get("timestamp"),
+            "database": {
+                "status": db_state.status,
+                "checked_at": db_state.checked_at,
+                "detail": db_state.detail,
+            },
         }
 
     async def get_golden_signals(self) -> dict[str, object]:

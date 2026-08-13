@@ -1017,7 +1017,7 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 | Skills / OOP / الاستدلال | §0.5 · D-069 · D-100 · **D-179** · **D-181** · **D-183** |
 | الرموز والنيّة واللغات | **D-185** · **D-186** · **ADR-006** |
 | التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** · **D-184** · **D-192** |
-| K-ROOT · استمرارية المفاتيح + تحصين الأوركستريتور | **D-241 · D-242** (`app/core/settings/helpers.py` طبقة `app_state` · `app/services/bootstrap.py` · `app/infrastructure/clients/user_client.py` · `microservices/user_service/security.py` · `microservices/orchestrator_service/src/api/routes.py` — تحرسها `doc-integrity` · 24/24 E2E حي على Supabase 2026-08-12) |
+| K-ROOT · استمرارية المفاتيح + تحصين الأوركستريتور | **D-241 · D-242** (`app/core/settings/helpers.py` طبقة `app_state` · `app/services/bootstrap.py` · `app/infrastructure/clients/user_client.py` · `microservices/user_service/security.py` · `microservices/orchestrator_service/src/api/routes.py` — تحرسها `doc-integrity` · 24/24 E2E حي على Supabase 2026-08-12) · **D-244** (برهان D-241 المباشر + أصول العطب الثلاثة — 2026-08-13) · **D-245** (مجسّات حيّة صادقة: DB probe · إعلان المزوّدين · /health صادق — 2026-08-13) |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 · **D-182** |
 | الأثر · الذاكرة · الموضوع · التمرين | **D-188** · **D-189** · **D-190** · **D-191** |
 | صدق الفوارض · الحيرة لا تُهنَّأ | **D-208** (ISS-149 — الأسبقيّة · الفعل الكلامي على المؤشّرات · بوّابة لا تشهد بما لم تقرأ) |

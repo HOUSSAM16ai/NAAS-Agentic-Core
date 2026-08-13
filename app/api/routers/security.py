@@ -21,6 +21,8 @@ from app.api.schemas.security import (
     UserResponse,
 )
 from app.core.database import AsyncSession, get_db
+from app.core.db_health import get_db_health_state
+from app.core.providers_health import get_providers_health_state
 from app.core.settings.base import get_settings
 from app.services.boundaries.auth_boundary_service import AuthBoundaryService
 
@@ -57,8 +59,26 @@ def _ensure_mock_tokens_allowed() -> None:
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
+    # D-245 (2026-08-13): صحةٌ صادقة لا خضراء كاذبة — /health كان يردّ
+    # "healthy" دائماً حتى والـDB محجوب كلياً (Codespaces)، فكانت كل عمليات
+    # المصادقة/التخزين/الإجابات تموت بصمت تحت غطاء أخضر.
+    db_state = get_db_health_state()
+    providers = get_providers_health_state()
+    overall = (
+        "healthy" if db_state.status == "ok" and providers.llm_provider != "missing" else "degraded"
+    )
     return HealthResponse(
-        status="success", data={"status": "healthy", "features": ["jwt", "argon2"]}
+        status="success",
+        data={
+            "status": overall,
+            "features": ["jwt", "argon2"],
+            "database": {
+                "status": db_state.status,
+                "checked_at": db_state.checked_at,
+                "detail": db_state.detail,
+            },
+            "providers": providers.summarize(),
+        },
     )
 
 

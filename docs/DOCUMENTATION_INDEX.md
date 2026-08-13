@@ -10,7 +10,7 @@
 
 | المستوى | المصدر | الدور |
 |---------|--------|------|
-| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-244**). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) |
+| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-245**). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) |
 | 📐 مواصفة البرنامج | [`../spec.md`](../spec.md) | برنامج التبسيط API-first (Phases 0→12) — **الهدف** المعماري لا الحقيقة الجارية. ليست دستوراً ثالثاً: §4 تُحيل إلى الدستور القائم |
 | 🧠 الذاكرة | `.memory/` → [`README.md`](../.memory/README.md) | roadmap · decisions · issues · runtime_truth · pedagogical_os |
 | ⚖️ الدستور المعماري | [`architecture/MICROSERVICES_CONSTITUTION.md`](architecture/MICROSERVICES_CONSTITUTION.md) + [`ARCH_MICROSERVICES_CONSTITUTION.md`](ARCH_MICROSERVICES_CONSTITUTION.md) | حدود الخدمات |

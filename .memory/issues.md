@@ -1,5 +1,41 @@
 # Open Issues & Bugs
 
+## ISS-163 (2026-08-13) — المنصة ميتة والأخضر كاذب: login failed + لا رسائل + لا إجابات — ✅ مُغلَق (D-245)
+
+**البلاغ (بكلمات المالك):** في GitHub Codespaces وبعد نشر Replit: «Login failed» دائم
+للأدمن والمستخدم حتى بكلمات سرّ صحيحة، «لا أجد رسائلي المحفوظة»، و«النظام لا يجيب عن
+الأسئلة» — بعد أن كان يعمل.
+
+**القياس الحيّ (2026-08-13 · Supabase الإنتاج مباشرة + E2E sandbox):** بيانات الإنتاج
+سليمة تمامًا — `check_password('1111')` Argon2id = True للادمن والمستخدم، `app_state`
+يحمل المفتاح (D-241/K-ROOT)، RBAC سليم، E2E login 200/200/401/401، WebSocket +
+`session_ready`/`conversation_init` + persistence يعملان (810 محادثة مستخدم · 41 أدمن).
+**الكارثة ليست في البيانات ولا في الكود الأساسي** — بل في الإخفاء.
+
+**السبب الجذري (أربعة أصول، D-245):**
+1. **نشر Replit static فقط** (`deploymentTarget = "static"` في `.replit`) — الرابط المنشور
+   `*.janeway.replit.dev` بلا Backend حيّ إطلاقًا: كل POST login عليه 404/اتصال مرفوض
+   (مؤكد بالـcurl الحي).
+2. **`/health` أخضر كاذب دائمًا** — لا يختبر قاعدة البيانات أصلًا، فيُخفي موتَ المنصة
+   بعلامة «healthy».
+3. **إقلاع لا يصرخ عند حجب Supabase** (6543/5432 محجوبان في Codespaces أحيانًا) — كل
+   كتابة DB تموت صمتًا: المصادقة + الحفظ + الإجابات تسقط دفعة واحدة، و«✅ System Ready»
+   مطبوع، وحالة `unreachable` تُجمَّد للأبد.
+4. **D-112 عمود فقري إلزامي**: لا إجابة إلا من `orchestrator-service` — بلا docker-compose
+   كامل تبقى الأسئلة مرفوضة بـ`ORCHESTRATOR_REQUIRED`، والسبب كان يُعلَن فقط عند أول
+   سؤالٍ فاشل.
+
+**الإصلاح:** مجسّات حيّة صادقة معلَنة: `app/core/db_health.py` (probe حيّ `SELECT 1`،
+retry×3، إعادة قياس تلقائية، detail بنوع الخطأ) · `app/core/providers_health.py` (إعلان
+LLM/Search/Orchestrator) · `kernel.py` lifespan يفصح بالعربية ✅/❌ · `/health` صادق
+(`degraded` إذا DB غير ok أو LLM مفقود أو orchestrator unreachable) ·
+`test_d245_db_health_probe.py` 2/2.
+
+**القانون:** ⛔ لا إقلاع بلا إعلانٍ صريحٍ لحالة كل مزوّدٍ حرج، ولا علامة خضراء بلا مجسٍّ
+حيّ (D-188: القياس لا التخمين).
+
+---
+
 ## ISS-162 (2026-08-12) — بوابتان خضراوان كاذبتان غطّتا ثغرةً حقيقية — ✅ مُغلَق (D-244)
 
 **البلاغ:** بعد إصلاح D-242 انهارت بوابة `guardrails` (check_endpoint_complexity) واختبارا

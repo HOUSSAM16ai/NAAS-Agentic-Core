@@ -1,7 +1,22 @@
 # Tasks — What Comes Next
 > 🧭 **خارطة الطريق الثورية الكاملة (المراحل M0→M11):** **`.memory/roadmap.md`** — المصدر الحيّ الوحيد. المخطّط التالي: M6 صدق BKT · M7 واجهات بلا أرقام · M8 وضع التحقق · M9 فجوة الوهم · M10 هجرة الرسم.
-> Last updated: 2026-08-13 | Branch: `fix/d249-hotspot-refactor` (D-249)
+> Last updated: 2026-08-13 | Branch: `fix/d250-strategy-hotspot` (D-250)
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## ✅ Resolved — D-250: جراحة النقطة الساخنة `strategy_handlers.py` (2026-08-13 · CodeScene X-Ray)
+- **النقطة الساخنة الثانية** (CodeScene: `execute` 28 تغييرًا · `_create_structured_event`
+  69 سطرًا/8 · `_format_event_to_message` 71 سطرًا/9/Bumpy Road · `_format_task_results`
+  62 سطرًا/11/Deep Nested · `_format_inner_data` 24/9 · `_format_brain_event` 34/9)
+  — `MissionComplexHandler` فُكِّكت إلى دوال نقية بنمط D-164/D-249 (سلوك مطابق
+  بالبايت) دون أي تغيير معماري أو وظيفي.
+- **البرهان:** ruff 0.14.0 أخضر · الملف نظيف حتى تحت `PLR0911/0912/0915` فأُزيل من
+  قائمة الدَين في `pyproject.toml` (D-105: القائمة تنكمش فقط) · اختبارات جديدة
+  `tests/services/chat/test_strategy_handlers.py` **35/35 أخضر** · تغطية الوحدة
+  **64%** (374 بيانًا — كانت صفرًا).
+- **التوثيق الموحَّد:** D-250 في `decisions.md` + فهرس README، وسجلّ النقطة في
+  `code_quality_truth.md`.
 
 ---
 

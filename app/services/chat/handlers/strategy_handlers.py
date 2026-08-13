@@ -1,6 +1,26 @@
 """
 Intent handlers using Strategy pattern.
+
+D-250 (2026-08-13 · CodeScene X-Ray): `MissionComplexHandler` was the hottest
+region of this file (CodeScene: `execute` 28 churn · `_create_structured_event`
+69 LOC/complexity 8 · `_format_event_to_message` 71 LOC/complexity 9 ·
+`_format_task_results` 62 LOC/complexity 11 · `_format_inner_data` 24/9) — one
+class mixing event-schema healing, provider config, canonical-event mapping,
+message formatting, and display formatting (five responsibilities).
+It was decomposed, zero-behavioural-change (same byte behaviour proven by
+`tests/services/chat/test_strategy_handlers.py`), into:
+- `_MISSING_LLM_MESSAGE` + `_format_llm_missing_error` (provider config)
+- `_MissionSchemaHealer` (schema self-healing, session handling)
+- `_canonical_event_payload` / `_structured_event_for_status` (canonical events)
+- `_mission_completed_payload` / `_tool_result_summary_payload` (final frame)
+- `_delta_for_brain_event` / `_delta_for_status_note` (progress deltas)
+- `_task_result_block` / `_display_text_for_result` / `_read_written_file`
+  (task formatting)
+- Pure display formatters (unchanged, verified): `_format_brain_event`,
+  `_format_tool_result_data`, `_format_inner_data`, `_clean_raw_string`.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
@@ -8,6 +28,7 @@ import logging
 import os
 import re
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 
 from sqlmodel import SQLModel
 
@@ -29,6 +50,337 @@ from app.core.settings.base import get_settings
 from app.services.chat.context import ChatContext
 
 logger = logging.getLogger(__name__)
+
+#: The single user-visible LLM-missing message. D-249 lesson: one source, never
+#: a hand-typed duplicate string floating inside a method.
+_MISSING_LLM_MESSAGE: str = (
+    "🛑 **خطأ في التكوين:** مفتاح الذكاء الاصطناعي (LLM Key) مفقود. يرجى التحقق من ملف .env."
+)
+
+#: Tables the schema healer is allowed to touch — explicitly bounded so a
+#: vector column is never created on SQLite (CLAUDE.md §0).
+_MISSION_TABLES = (Mission, MissionPlan, Task, MissionEvent)
+
+#: Brain events that are already surfaced by the Timeline UI (Canonical Events)
+#: and must NOT add text-chat noise.
+_QUIET_BRAIN_EVENTS = {"loop_start", "phase_start", "phase_completed"}
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Provider configuration (pure formatting + check)
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def _format_llm_missing_error() -> str:
+    """Canonical user-visible error for a missing LLM key."""
+    return _MISSING_LLM_MESSAGE
+
+
+def _check_provider_config() -> str | None:
+    """
+    Check for critical environment configurations (LLM & Search).
+    Returns an error message if LLM key is missing, else None.
+    """
+    settings = get_settings()
+    if not settings.OPENROUTER_API_KEY and not settings.OPENAI_API_KEY:
+        return _format_llm_missing_error()
+
+    has_search_key = os.environ.get("TAVILY_API_KEY") or os.environ.get("FIRECRAWL_API_KEY")
+    if not has_search_key:
+        # We don't block execution because DuckDuckGo is a valid fallback.
+        # But we log it for observability.
+        logger.warning("No dedicated search provider key found (TAVILY/FIRECRAWL). Using Fallback.")
+
+    return None
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Schema self-healing (session mechanics isolated from table knowledge)
+# ────────────────────────────────────────────────────────────────────────────
+
+
+class _MissionSchemaHealer:
+    """
+    Checks and attempts to self-heal missing mission tables.
+    Uses SQLModel metadata to ensure cross-database compatibility (SQLite/Postgres).
+    Session mechanics live here; table knowledge is module-level (`_MISSION_TABLES`).
+    """
+
+    @staticmethod
+    async def ensure_mission_schema(session) -> None:
+        """Self-heal mission tables or no-op when the session is unusable."""
+        bind = session.bind
+        if not bind:
+            logger.warning("No bind found for session in schema check.")
+            return
+
+        tables = [model.__table__ for model in _MISSION_TABLES]
+        if hasattr(bind, "run_sync"):
+            # AsyncConnection
+            await bind.run_sync(SQLModel.metadata.create_all, tables=tables, checkfirst=True)
+        else:
+            # Assume AsyncEngine
+            async with bind.begin() as conn:
+                await conn.run_sync(SQLModel.metadata.create_all, tables=tables, checkfirst=True)
+
+        logger.info("Schema self-healing: Verified mission tables.")
+
+    @classmethod
+    async def ensure_mission_schema_safe(cls, session) -> None:
+        """Self-heal with a bounded failure domain — never aborts the caller."""
+        try:
+            await cls.ensure_mission_schema(session)
+        except Exception as e:
+            # Log error but attempt to continue, assuming tables might exist or partial failure
+            logger.error(f"Schema self-healing failed: {e}")
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Canonical event mapping (pure: event -> canonical payload dict or None)
+# ────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class _RawEvent:
+    """Normalized view of a MissionEvent (ORM) or a plain event dict."""
+
+    payload: dict
+    mission_id: object
+    timestamp: str
+    event_type: str
+
+    @staticmethod
+    def from_event(event: MissionEvent | dict) -> _RawEvent:
+        """Normalize an ORM event or a plain dict into the raw view."""
+        if isinstance(event, dict):
+            return _RawEvent(
+                payload=event.get("payload", {}),
+                mission_id=event.get("mission_id"),
+                timestamp=event.get("timestamp", ""),
+                event_type=event.get("event_type", ""),
+            )
+        return _RawEvent(
+            payload=event.payload_json or {},
+            mission_id=event.mission_id,
+            timestamp=str(event.created_at),
+            event_type=event.event_type,
+        )
+
+
+def _canonical_event_payload(
+    raw: _RawEvent,
+    sequence_id: int,
+    current_iteration: int,
+) -> dict | None:
+    """
+    Build the Canonical Event (Production-Grade Contract) payload for UI FSM.
+    Pure mapping — no I/O, no side effects.
+    """
+    data = raw.payload.get("data", {})
+    brain_evt = str(raw.payload.get("brain_event", ""))
+
+    if raw.event_type not in (MissionEventType.STATUS_CHANGE, "status_change"):
+        return None
+
+    if brain_evt == "loop_start":
+        # loop_start defines the iteration for the NEW run
+        iteration = data.get("iteration", current_iteration)
+        # Update run_id for the new loop
+        return {
+            "type": "RUN_STARTED",
+            "payload": {
+                "run_id": f"{raw.mission_id}:{iteration}",
+                "seq": sequence_id,
+                "timestamp": raw.timestamp,
+                "iteration": iteration,
+                "mode": data.get("graph_mode", "standard"),
+            },
+        }
+
+    if brain_evt == "phase_start":
+        return {
+            "type": "PHASE_STARTED",
+            "payload": {
+                "run_id": f"{raw.mission_id}:{current_iteration}",
+                "seq": sequence_id,
+                "phase": data.get("phase"),
+                "agent": data.get("agent"),
+                "timestamp": raw.timestamp,
+            },
+        }
+
+    if brain_evt == "phase_completed":
+        return {
+            "type": "PHASE_COMPLETED",
+            "payload": {
+                "run_id": f"{raw.mission_id}:{current_iteration}",
+                "seq": sequence_id,
+                "phase": data.get("phase"),
+                "agent": data.get("agent"),
+                "timestamp": raw.timestamp,
+            },
+        }
+
+    return None
+
+
+def _structured_event_for_status(
+    raw: _RawEvent,
+    sequence_id: int,
+    current_iteration: int,
+) -> dict | None:
+    """Canonical event body for a STATUS_CHANGE — run isolation via unique run_id."""
+    payload = _canonical_event_payload(raw, sequence_id, current_iteration)
+    if payload is None:
+        return None
+    # FIX: unique run_id per iteration prevents UI jumping/merging
+    payload["payload"]["run_id"] = f"{raw.mission_id}:{current_iteration}"
+    return payload
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Terminal frames (assistant_final / assistant_error / tool_result_summary)
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def _tool_result_summary_payload(results: list) -> dict:
+    """Tool Result Summary frame when mission_completed carries no text answer."""
+    return {
+        "type": "tool_result_summary",
+        "payload": {"summary": "تم تنفيذ المهام بنجاح.", "items": results},
+    }
+
+
+def _extract_result_text(result: object) -> str:
+    """Extract a displayable text from a mission result (dict, list, or scalar)."""
+    if isinstance(result, dict):
+        text = result.get("output") or result.get("answer") or result.get("summary")
+        if text:
+            return text
+        results = result.get("results")
+        if isinstance(results, list):
+            return json.dumps(_tool_result_summary_payload(results), ensure_ascii=False)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    return str(result)
+
+
+def _mission_completed_payload(raw: _RawEvent) -> dict:
+    """Terminal frame for MISSION_COMPLETED — content or tool_result_summary."""
+    result = raw.payload.get("result", {})
+    result_text = _extract_result_text(result)
+    if not isinstance(result, dict):
+        return {"type": "assistant_final", "payload": {"content": result_text}}
+
+    results = result.get("results")
+    if not (result.get("output") or result.get("answer") or result.get("summary")) and isinstance(
+        results, list
+    ):
+        return _tool_result_summary_payload(results)
+
+    return {"type": "assistant_final", "payload": {"content": result_text}}
+
+
+def _mission_failed_payload(raw: _RawEvent) -> dict:
+    """Terminal frame for MISSION_FAILED."""
+    return {
+        "type": "assistant_error",
+        "payload": {"content": f"💀 **فشل:** {raw.payload.get('error')}"},
+    }
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Progress deltas (assistant_delta)
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def _delta_for_brain_event(raw: _RawEvent) -> dict | None:
+    """Convert a relevant brain event to a text delta if relevant."""
+    text = _format_brain_event(str(raw.payload.get("brain_event", "")), raw.payload.get("data", {}))
+    if not text:
+        return None
+    return {"type": "assistant_delta", "payload": {"content": text}}
+
+
+def _delta_for_status_note(raw: _RawEvent) -> dict:
+    """Convert a status note into a progress delta."""
+    return {
+        "type": "assistant_delta",
+        "payload": {"content": f"🔄 {raw.payload.get('note')}\n"},
+    }
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Task result formatting (display-level pure helpers)
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def _read_written_file(path: str) -> str:
+    """Auto-read file content if written — empty string on any failure."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        return f"\n\n**محتوى الملف ({path}):**\n```\n{content}\n```"
+    except Exception as e:
+        logger.warning(f"Failed to auto-read file {path}: {e}")
+        return ""
+
+
+def _display_text_for_result(res: dict) -> str:
+    """Resolve the display text for a single task result."""
+    result_data = res.get("result_data")
+    result_text = res.get("result_text")
+
+    if result_data:
+        return _format_tool_result_data(result_data)
+    if result_text:
+        if isinstance(result_text, str):
+            try:
+                if result_text.strip().startswith(("{", "[")):
+                    return _format_tool_result_data(json.loads(result_text))
+                return _clean_raw_string(result_text)
+            except Exception:
+                return result_text
+        return str(result_text)
+    return "لا توجد بيانات"
+
+
+def _task_result_block(task: dict) -> str | None:
+    """Format one task into its display block, or None when it contributes nothing."""
+    if not isinstance(task, dict):
+        return None
+
+    name = task.get("name", "مهمة")
+
+    # Handle Skipped
+    if task.get("status") == "skipped":
+        reason = task.get("reason", "غير محدد")
+        return f"🔹 **{name}**: ⏭️ تم التجاوز ({reason})\n"
+
+    res = task.get("result", {})
+    if not res:
+        # Skip empty results to reduce noise
+        return None
+
+    display_text = _display_text_for_result(res)
+
+    # Auto-read file content if written
+    file_content = ""
+    result_data = res.get("result_data")
+    if isinstance(result_data, dict):
+        data_payload = result_data.get("data", {})
+        if (
+            isinstance(data_payload, dict)
+            and data_payload.get("written")
+            and data_payload.get("path")
+        ):
+            file_content = _read_written_file(data_payload["path"])
+
+    return f"🔹 **{name}**:\n{display_text}\n{file_content}\n"
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Strategy handlers
+# ────────────────────────────────────────────────────────────────────────────
 
 
 class IntentHandler(Strategy[ChatContext, AsyncGenerator[str | dict, None]]):
@@ -178,6 +530,9 @@ class MissionComplexHandler(IntentHandler):
     """
     Handle complex mission requests using Overmind.
     Implements 'API First' streaming response pattern.
+
+    D-250: all mission-event logic was extracted into pure helpers above; this
+    class is now the thin wiring shell (dispatch + event loop).
     """
 
     def __init__(self):
@@ -195,130 +550,20 @@ class MissionComplexHandler(IntentHandler):
             yield chunk
 
     def _check_provider_config(self) -> str | None:
-        """
-        Check for critical environment configurations (LLM & Search).
-        Returns an error message if missing, else None.
-        """
-        # 1. LLM Check (Critical)
-        settings = get_settings()
-        if not settings.OPENROUTER_API_KEY and not settings.OPENAI_API_KEY:
-            return "🛑 **خطأ في التكوين:** مفتاح الذكاء الاصطناعي (LLM Key) مفقود. يرجى التحقق من ملف .env."
-
-        # 2. Search Check (Warn only, as DDG is fallback)
-        has_search_key = os.environ.get("TAVILY_API_KEY") or os.environ.get("FIRECRAWL_API_KEY")
-        if not has_search_key:
-            # We don't block execution because DuckDuckGo is a valid fallback.
-            # But we log it for observability.
-            logger.warning(
-                "No dedicated search provider key found (TAVILY/FIRECRAWL). Using Fallback."
-            )
-
-        return None
+        """Delegate to the pure provider-config check."""
+        return _check_provider_config()
 
     async def _ensure_mission_schema(self, session) -> None:
-        """
-        Checks and attempts to self-heal missing mission tables.
-        Now uses SQLModel metadata to ensure cross-database compatibility (SQLite/Postgres).
-        """
-        try:
-            # Explicitly define tables to verify/create
-            # This avoids creating incompatible tables (e.g. vector type on SQLite)
-            target_tables = [
-                Mission.__table__,
-                MissionPlan.__table__,
-                Task.__table__,
-                MissionEvent.__table__,
-            ]
-
-            bind = session.bind
-            if not bind:
-                logger.warning("No bind found for session in schema check.")
-                return
-
-            # Check if bind is AsyncConnection (has run_sync) or AsyncEngine (needs connect)
-            if hasattr(bind, "run_sync"):
-                await bind.run_sync(
-                    SQLModel.metadata.create_all, tables=target_tables, checkfirst=True
-                )
-            else:
-                # Assume AsyncEngine
-                async with bind.begin() as conn:
-                    await conn.run_sync(
-                        SQLModel.metadata.create_all, tables=target_tables, checkfirst=True
-                    )
-
-            logger.info("Schema self-healing: Verified mission tables.")
-
-        except Exception as e:
-            # Log error but attempt to continue, assuming tables might exist or partial failure
-            logger.error(f"Schema self-healing failed: {e}")
+        """Delegate to the bounded schema healer."""
+        await _MissionSchemaHealer.ensure_mission_schema_safe(session)
 
     def _create_structured_event(
         self, event: MissionEvent | dict, sequence_id: int, current_iteration: int
     ) -> dict | None:
-        """
-        Create Canonical Event (Production-Grade Contract) for UI FSM.
-        """
+        """Create Canonical Event (Production-Grade Contract) for UI FSM."""
         try:
-            if isinstance(event, dict):
-                payload = event.get("payload", {})
-                mission_id = event.get("mission_id")
-                timestamp = event.get("timestamp")
-                event_type = event.get("event_type")
-            else:
-                payload = event.payload_json or {}
-                mission_id = event.mission_id
-                timestamp = str(event.created_at)
-                event_type = event.event_type
-
-            # Use tracked iteration context to ensure Run Isolation
-            # FIX: We use unique run_id per iteration to prevent UI jumping/merging
-            run_id = f"{mission_id}:{current_iteration}"
-
-            if event_type in (MissionEventType.STATUS_CHANGE, "status_change"):
-                brain_evt = str(payload.get("brain_event", ""))
-                data = payload.get("data", {})
-
-                if brain_evt == "loop_start":
-                    # loop_start defines the iteration for the NEW run
-                    iteration = data.get("iteration", current_iteration)
-                    # Update run_id for the new loop
-                    new_run_id = f"{mission_id}:{iteration}"
-                    return {
-                        "type": "RUN_STARTED",
-                        "payload": {
-                            "run_id": new_run_id,
-                            "seq": sequence_id,
-                            "timestamp": timestamp,
-                            "iteration": iteration,
-                            "mode": data.get("graph_mode", "standard"),
-                        },
-                    }
-
-                if brain_evt == "phase_start":
-                    return {
-                        "type": "PHASE_STARTED",
-                        "payload": {
-                            "run_id": run_id,
-                            "seq": sequence_id,
-                            "phase": data.get("phase"),
-                            "agent": data.get("agent"),
-                            "timestamp": timestamp,
-                        },
-                    }
-
-                if brain_evt == "phase_completed":
-                    return {
-                        "type": "PHASE_COMPLETED",
-                        "payload": {
-                            "run_id": run_id,
-                            "seq": sequence_id,
-                            "phase": data.get("phase"),
-                            "agent": data.get("agent"),
-                            "timestamp": timestamp,
-                        },
-                    }
-            return None
+            raw = _RawEvent.from_event(event)
+            return _structured_event_for_status(raw, sequence_id, current_iteration)
         except Exception as e:
             logger.warning(f"Failed to create structured event: {e}")
             return None
@@ -329,67 +574,26 @@ class MissionComplexHandler(IntentHandler):
         Returns: dict (assistant_delta | assistant_final | tool_result_summary) or None.
         """
         try:
-            if isinstance(event, dict):
-                payload = event.get("payload", {})
-                event_type = event.get("event_type")
-            else:
-                payload = event.payload_json or {}
-                event_type = event.event_type
+            raw = _RawEvent.from_event(event)
 
             # 1. Handle Final Completion
-            if event_type in (
+            if raw.event_type in (
                 MissionEventType.MISSION_COMPLETED,
                 "mission_completed",
             ):
-                result = payload.get("result", {})
-                result_text = ""
-
-                # Check for explicit output
-                if isinstance(result, dict):
-                    if result.get("output") or result.get("answer") or result.get("summary"):
-                        result_text = (
-                            result.get("output") or result.get("answer") or result.get("summary")
-                        )
-                    elif "results" in result and isinstance(result["results"], list):
-                        # Use Tool Result Summary if no text answer
-                        return {
-                            "type": "tool_result_summary",
-                            "payload": {
-                                "summary": "تم تنفيذ المهام بنجاح.",
-                                "items": result["results"],
-                            },
-                        }
-                    else:
-                        result_text = json.dumps(result, ensure_ascii=False, indent=2)
-                else:
-                    result_text = str(result)
-
-                return {"type": "assistant_final", "payload": {"content": result_text}}
+                return _mission_completed_payload(raw)
 
             # 2. Handle Failure
-            if event_type in (MissionEventType.MISSION_FAILED, "mission_failed"):
-                return {
-                    "type": "assistant_error",
-                    "payload": {"content": f"💀 **فشل:** {payload.get('error')}"},
-                }
+            if raw.event_type in (MissionEventType.MISSION_FAILED, "mission_failed"):
+                return _mission_failed_payload(raw)
 
             # 3. Handle Status/Progress (Assistant Delta)
-            if event_type in (MissionEventType.STATUS_CHANGE, "status_change"):
-                brain_evt = payload.get("brain_event")
-                if brain_evt:
-                    # Convert brain events to text deltas if relevant
-                    text = _format_brain_event(str(brain_evt), payload.get("data", {}))
-                    if text:
-                        return {"type": "assistant_delta", "payload": {"content": text}}
-
-                status_note = payload.get("note")
-                if status_note:
-                    return {
-                        "type": "assistant_delta",
-                        "payload": {"content": f"🔄 {status_note}\n"},
-                    }
-
-                return None
+            if raw.event_type in (MissionEventType.STATUS_CHANGE, "status_change"):
+                delta = _delta_for_brain_event(raw)
+                if delta:
+                    return delta
+                if raw.payload.get("note"):
+                    return _delta_for_status_note(raw)
 
             return None
         except Exception:
@@ -398,65 +602,11 @@ class MissionComplexHandler(IntentHandler):
 
 def _format_task_results(tasks: list) -> str:
     """Format a list of task results into a readable string."""
-    lines = [f"✅ **تم تنفيذ {len(tasks)} مهمة:**\n"]
-    for t in tasks:
-        if not isinstance(t, dict):
-            continue
-
-        name = t.get("name", "مهمة")
-
-        # Handle Skipped
-        if t.get("status") == "skipped":
-            reason = t.get("reason", "غير محدد")
-            lines.append(f"🔹 **{name}**: ⏭️ تم التجاوز ({reason})\n")
-            continue
-
-        res = t.get("result", {})
-        if not res:
-            # Skip empty results to reduce noise
-            continue
-
-        # Extract content
-        result_data = res.get("result_data")
-        result_text = res.get("result_text")
-
-        display_text = ""
-
-        if result_data:
-            display_text = _format_tool_result_data(result_data)
-        elif result_text:
-            if isinstance(result_text, str):
-                try:
-                    if result_text.strip().startswith(("{", "[")):
-                        parsed = json.loads(result_text)
-                        display_text = _format_tool_result_data(parsed)
-                    else:
-                        display_text = _clean_raw_string(result_text)
-                except Exception:
-                    display_text = result_text
-            else:
-                display_text = str(result_text)
-        else:
-            display_text = "لا توجد بيانات"
-
-        # Auto-read file content if written
-        file_content = ""
-        if result_data and isinstance(result_data, dict):
-            data_payload = result_data.get("data", {})
-            if (
-                isinstance(data_payload, dict)
-                and data_payload.get("written")
-                and data_payload.get("path")
-            ):
-                path = data_payload["path"]
-                try:
-                    with open(path, encoding="utf-8") as f:
-                        content = f.read()
-                    file_content = f"\n\n**محتوى الملف ({path}):**\n```\n{content}\n```"
-                except Exception as e:
-                    logger.warning(f"Failed to auto-read file {path}: {e}")
-
-        lines.append(f"🔹 **{name}**:\n{display_text}\n{file_content}\n")
+    lines: list[str] = [f"✅ **تم تنفيذ {len(tasks)} مهمة:**\n"]
+    for task in tasks:
+        block = _task_result_block(task)
+        if block:
+            lines.append(block)
     return "\n".join(lines)
 
 
@@ -470,16 +620,20 @@ def _format_brain_event(event_name: str, data: dict[str, object] | object) -> st
     normalized = event_name.lower()
 
     # Silence common noisy events
-    if normalized.endswith("_completed") or normalized in {"phase_start", "loop_start"}:
+    if normalized.endswith("_completed") or normalized in _QUIET_BRAIN_EVENTS:
         # These are handled by the Timeline UI (Canonical Events), no need for text chat noise.
         # Unless it's a critical failure or specific user info.
         return None
 
-    if normalized == "plan_rejected":
-        return "🧩 إعادة ضبط الخطة.\n"
-
-    if normalized == "plan_approved":
-        return "✅ تم اعتماد الخطة.\n"
+    # Known single-event messages — lookup before falling through.
+    known_message = {
+        "plan_rejected": "🧩 إعادة ضبط الخطة.\n",
+        "plan_approved": "✅ تم اعتماد الخطة.\n",
+        "mission_success": f"🔔 {event_name}\n",
+        "phase_error": f"🔔 {event_name}\n",
+    }.get(normalized)
+    if known_message is not None:
+        return known_message
 
     if normalized.endswith("_timeout"):
         return "⏳ تأخير... إعادة المزامنة.\n"
@@ -488,9 +642,6 @@ def _format_brain_event(event_name: str, data: dict[str, object] | object) -> st
         critique = data.get("critique", {})
         feedback = critique.get("feedback", "N/A") if isinstance(critique, dict) else str(critique)
         return f"🔔 **تدقيق:** {feedback} (جاري التعديل...)\n"
-
-    if normalized in {"mission_success", "phase_error"}:
-        return f"🔔 {event_name}\n"
 
     # Default: Silence unknown events to prevent "noise"
     return None

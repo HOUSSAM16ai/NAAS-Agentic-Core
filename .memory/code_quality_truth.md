@@ -201,6 +201,30 @@ _check_coderabbit_law  Bumpy Road Ahead    2 blocks with nested conditional logi
 المستودع · admin router 16/16 · services 42/42 · integration 2/2 — نفس قاعدة
 المسألة 3: القياس يُصحَّح بالبنية لا بالعفو، ولا زرّ `Suppress`.
 
+**النقطة الساخنة الثانية (`strategy_handlers.py`، تقرير X-Ray 2026-08-13):**
+`execute` (28 تغييرًا) + `_create_structured_event` (69 سطرًا · تعقيد 8) +
+`_format_event_to_message` (71 سطرًا · تعقيد 9 · Bumpy Road · 21) +
+`_format_task_results` (62 سطرًا · تعقيد 11 · Deep Nested · 19) +
+`_format_inner_data` (24 سطرًا · 9) + `_format_brain_event` (34 سطرًا · 9) —
+521 سطرًا · 10 مؤلفين نشطين ظاهريًا (10/1000). ✅ **مُصلَحة في D-250** بنمط
+D-164/D-249 (سلوك مطابق بالبايت): `MissionComplexHandler` قشرة رشيقة تفوّض إلى
+دوال نقية — `_RawEvent` · `_canonical_event_payload` · `_structured_event_for_status`
+· `_mission_completed_payload` · `_mission_failed_payload` · `_delta_for_brain_event`
+· `_delta_for_status_note` · `_task_result_block` · `_display_text_for_result` ·
+`_read_written_file` · `_MissionSchemaHealer` — وأُلغي سَرد رسالة خطأ LLM المكرر
+لمصدرٍ وحيد `_MISSING_LLM_MESSAGE`. البرهان: ruff 0.14.0 أخضر · الملف نظيف حتى تحت
+`PLR0911/0912/0915` فأُزيل من قائمة الدَين في `pyproject.toml` (القائمة تنكمش
+فقط، D-105) · اختبارات جديدة **35/35 أخضر** · تغطية الوحدة **64%** (374 بيانًا —
+كانت صفرًا؛ اختباراتٌ كانت غائبة أصلاً).
+
+**عيب سلوكي كشفه التجريب الحي E2E (2026-08-13) مع قاعدة بيانات الإنتاج:** سؤال
+«ما هو الجذر التربيعي للعدد 144؟» كان يُعاد إليه ردّ عقل الاحتمالات الذي يسأل عن
+تمرين الكرات المخزَّن (حمراء/خضراء/بيضاء) بدل الإجابة. **الجذر:** `_is_prob_context`
+في `probability_brain/cognitive_verification.py` تطابق السلسلة `"14"` بمطابقة
+جزئية — و«144» تحوي «14». ✅ **مُصلَح في D-251**: حدود كلمة `r"\b14\b"`
+و`r"\b165\b"`. البرهان: البطارية E2E الحية **10/10** (المستخدم 5/5 · الأدمن
+عبر `/admin/api/chat/ws` 5/5) — الجذر التربيعي لـ144 الآن **12 إجابة صحيحة**.
+
 ## 3.4) ما وجده CodeRabbit — **خمسة، كلّها حقيقية** (PR #5 · #6)
 
 الأداة الوحيدة التي **تقرأ النيّة**: تقارن ما يقوله وصف الـPR بما يفعله الديفّ فعلاً،

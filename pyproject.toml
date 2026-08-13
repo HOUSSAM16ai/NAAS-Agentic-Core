@@ -77,7 +77,6 @@ section-order = ["future", "standard-library", "third-party", "first-party", "lo
 "app/services/chat/agents/orchestrator.py" = ["PLR0912"]
 "app/services/chat/event_protocol.py" = ["PLR0911"]
 "app/services/chat/handlers/search_handler.py" = ["PLR0911", "PLR0912"]
-"app/services/chat/handlers/strategy_handlers.py" = ["PLR0911", "PLR0912"]
 "app/services/chat/local_graph.py" = ["PLR0911", "PLR0912", "PLR0915"]
 "app/services/chat/local_graph_explanation.py" = ["PLR0912", "PLR0915"]
 "app/services/chat/orchestration_rollout.py" = ["PLR0911"]

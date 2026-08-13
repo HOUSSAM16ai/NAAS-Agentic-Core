@@ -304,10 +304,12 @@ class CustomerChatBoundaryService:
         if not conversation:
             return None
 
-        # D-247 (ISS-158 item 3): 20-message cap silently truncated real
-        # conversations ("رسائلي القديمة اختفت"). 2000 keeps payloads bounded
-        # (50KB/content cap above) while showing real history.
-        messages = await self.persistence.get_conversation_messages(conversation.id, limit=2000)
+        # D-247 (ISS-158 item 3): the silent 20-message cap truncated real
+        # conversations ("رسائلي القديمة اختفت"). A 2000 ceiling (rejected in
+        # post-push review) would freeze the UI on open; a sane cap of 100
+        # keeps each fetch bounded (50KB/content cap above) and the declared
+        # has_more/next_before_id cursor lets the UI page older history.
+        messages = await self.persistence.get_conversation_messages(conversation.id, limit=100)
         return {
             "conversation_id": conversation.id,
             "title": conversation.title,
@@ -322,6 +324,11 @@ class CustomerChatBoundaryService:
                 }
                 for msg in messages
             ],
+            # D-247 (debt ledger): declared ceiling + cursor — the cap is
+            # visible to callers and older messages stay reachable via
+            # before_id pagination (frontend "load older" not yet wired).
+            "has_more": len(messages) >= 100,
+            "next_before_id": (str(messages[-1].id) if messages and len(messages) >= 100 else None),
         }
 
     async def list_user_conversations(self, user: User) -> list[dict[str, object]]:
@@ -348,8 +355,9 @@ class CustomerChatBoundaryService:
         استرجاع تفاصيل محادثة محددة مع التحقق من الملكية.
         """
         conversation = await self.verify_conversation_access(user, conversation_id)
-        # D-247 (ISS-158 item 3): 20-message cap silently truncated history.
-        messages = await self.persistence.get_conversation_messages(conversation.id, limit=2000)
+        # D-247 (ISS-158 item 3): silent 20-message cap truncated history;
+        # raised to a sane 100 with a declared has_more/next_before_id cursor.
+        messages = await self.persistence.get_conversation_messages(conversation.id, limit=100)
         return {
             "conversation_id": conversation.id,
             "title": conversation.title,
@@ -364,4 +372,6 @@ class CustomerChatBoundaryService:
                 }
                 for msg in messages
             ],
+            "has_more": len(messages) >= 100,
+            "next_before_id": (str(messages[-1].id) if messages and len(messages) >= 100 else None),
         }

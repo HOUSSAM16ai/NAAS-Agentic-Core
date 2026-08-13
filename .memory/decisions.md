@@ -6,6 +6,36 @@
 
 # Architectural Decisions
 
+
+## D-249 · جراحة النقطة الساخنة: تفكيك `chat_stream_ws` إلى دوال نقية دون تغيير سلوكي (2026-08-13 · CodeScene X-Ray)
+**الحادثة:** تقرير CodeScene X-Ray أشار `admin.py` كنقطة ساخنة أولى للمشروع —
+`chat_stream_ws` بتعقيد **440** و**32** تغييراً و**51** churn في دالة واحدة تمزج
+11 مسؤولية (auth · connection · persistence · streaming · keepalive · terminal
+frames · tracing)، و`_emit_terminal_frames` بتعقيد **71** و**9 وسائط** (يخالف
+PLR0917 النشط في CI منذ ruff 0.16 — نفس كارثة D-184: أداة lint تغير تحتنا)،
+و`_merge_history_with_client_context` بتعقيد **33** ومسار «Bumpy Road Ahead»
+(725 سطراً إجمالاً).
+**القرار:** تفكيك معماري بنمط D-164 (zero-behavioural-change):
+`chat_stream_ws` أصبحت قشرة رشيقة تفوّض إلى دوال نقية — `_send_ws_error`
+(D-WS-002: قبوُل أولاً ثم خطأ JSON ثم إغلاق، subprotocol-aware، منعت
+إعادة قبوُل مزدوج كان يرمي RuntimeError في الاختبارات)، `_decode_ws_actor`
+(ISS-100 / D-WS-CONN-001: هوية JWT بلا استعلام DB)، `_PersistedTurn`
++ `_persist_user_turn` (جلسة DB خاصة لكل دور — فشل الحفظ لا يسقط الاتصال)،
+`_persist_error_event`، `_StreamOutcome` + `_stream_and_forward` +
+`_run_stream_with_keepalive` (ISS-098 / D-WS-FLAP-005)، `_decide_persistence`
+(قانون الكاتب الواحد + [WRITE_DECISION]/[DATA_LOSS_PREVENTED]/
+[CRITICAL_DATA_LOSS] مطابقة حرفياً)، `_TurnFinalizationContext` +
+`_emit_terminal_frames` (9 وسائط → كائن سياق واحد يقتل PLR0917 مع الحفاظ على
+نفس ترتيب الأُطر الزمني)، و`_find_tail_overlap_index` (خفض تعقيد الدمج 33→أقل).
+**البرهان الحي:** ruff 0.14.0 (المقيّدة في CI): `All checks passed` +
+`1983 files already formatted` على كامل المستودع · اختبارات admin router
+16/16 · services 42/42 · integration 2/2 خضراء — والسلوك مطابق بالبايت
+(كل حدث خطأ، توقيت، وترتيب إطار نهائي كما قبل الجراحة). الخطأ الوحيد في
+teardown (`aiosqlite CancelledError`) وُجد في HEAD قبل الجراحة — ليس انحداراً.
+**القانون:** تعقيد الدالة فوق 60 أو الوسائط فوق 4 ⇒ تفكيك بنمط D-164: سلوك
+مطابق بالبايت أولاً، ووثّق القرار في `decisions.md` مع البرهان الحي.
+----
+
 ## D-247 · ما بعد D-246: إصلاح خطأ تشخيص (ERR trap)، تعزيز استباقي، وتصحيح حد الرسائل (2026-08-13 · مراجعةٌ صحّحت مراجعة)
 **الحادثة:** بعد دفع D-246 (1602daf) ادّعَت مراجعةٌ (Claude Code) أن `return 1`
 داخل `_inject_env_secrets` لا يوقف الإقلاع، و**قبلنا الادعاء واختلقنا له تبريرًا

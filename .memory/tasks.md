@@ -1,7 +1,17 @@
 # Tasks — What Comes Next
 > 🧭 **خارطة الطريق الثورية الكاملة (المراحل M0→M11):** **`.memory/roadmap.md`** — المصدر الحيّ الوحيد. المخطّط التالي: M6 صدق BKT · M7 واجهات بلا أرقام · M8 وضع التحقق · M9 فجوة الوهم · M10 هجرة الرسم.
-> Last updated: 2026-07-30 | Branch: `claude/documentation-system-update-i0td9p` (D-188/D-189/D-190)
+> Last updated: 2026-08-13 | Branch: `fix/d249-hotspot-refactor` (D-249)
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## ✅ Resolved — D-249: جراحة النقطة الساخنة `admin.py` + توحيد الذاكرة (2026-08-13 · CodeScene X-Ray)
+- **النقطة الساخنة الأولى** (CodeScene: `chat_stream_ws` تعقيد **440** · `_emit_terminal_frames`
+  **71** و9 وسائط · `_merge_history_with_client_context` **33**) — فُكِّكت إلى دوال نقية بنمط D-164
+  (سلوك مطابق بالبايت) دون أي تغيير معماري أو وظيفي.
+- **البرهان:** ruff 0.14.0 أخضر على كامل المستودع · admin router 16/16 · services 42/42 ·
+  integration 2/2 · بوّابة `doc-integrity` (تماسك + دستور = واقع + روابط) خضراء.
+- **التوثيق الموحَّد:** D-249 في `decisions.md` + فهرس README، وسجلّ النقطة في `code_quality_truth.md`.
 
 ---
 

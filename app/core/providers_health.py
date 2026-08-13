@@ -62,9 +62,11 @@ async def check_orchestrator_reachable() -> None:
     try:
         url = get_settings().ORCHESTRATOR_SERVICE_URL
         async with asyncio.timeout(5):
-            import httpx
+            from shared.http_client import (
+                correlated_client,  # D-189: outgoing probes go through the correlated client (X-Correlation-ID), never a raw AsyncClient
+            )
 
-            async with httpx.AsyncClient(timeout=5) as client:
+            async with correlated_client(timeout=5.0) as client:
                 resp = await client.get(f"{url}/health")
         if resp.status_code < 500:
             _STATE.orchestrator = "reachable"

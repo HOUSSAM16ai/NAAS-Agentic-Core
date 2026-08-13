@@ -304,7 +304,10 @@ class CustomerChatBoundaryService:
         if not conversation:
             return None
 
-        messages = await self.persistence.get_conversation_messages(conversation.id, limit=20)
+        # D-247 (ISS-158 item 3): 20-message cap silently truncated real
+        # conversations ("رسائلي القديمة اختفت"). 2000 keeps payloads bounded
+        # (50KB/content cap above) while showing real history.
+        messages = await self.persistence.get_conversation_messages(conversation.id, limit=2000)
         return {
             "conversation_id": conversation.id,
             "title": conversation.title,
@@ -345,7 +348,8 @@ class CustomerChatBoundaryService:
         استرجاع تفاصيل محادثة محددة مع التحقق من الملكية.
         """
         conversation = await self.verify_conversation_access(user, conversation_id)
-        messages = await self.persistence.get_conversation_messages(conversation.id, limit=20)
+        # D-247 (ISS-158 item 3): 20-message cap silently truncated history.
+        messages = await self.persistence.get_conversation_messages(conversation.id, limit=2000)
         return {
             "conversation_id": conversation.id,
             "title": conversation.title,

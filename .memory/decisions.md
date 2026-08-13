@@ -6,6 +6,34 @@
 
 # Architectural Decisions
 
+## D-247 · الرفضُ المُعلنُ يجب أن يرفضَ فعلًا: `exit 1` لا `return 1`، منفذ `ALLOW_EPHEMERAL_DB`، محلّل DSN موثوق، رفع سقف الرسائل (2026-08-13 · مراجعة ما بعد دفع D-246)
+
+**الحادثة:** بعد دفع D-246، كشفت مراجعة ما بعد الدفع (Claude Code) أن `return 1`
+داخل `_inject_env_secrets` **لا يوقف الإقلاع**: ERR trap في `supervisor.sh:54`
+يلتقط الفشل ويمنع set -e من الإنهاء، و`lifecycle_error` مجرد echo — فتظهر
+«✅ System ready» بعد رسالة FATAL مباشرة (رفضٌ مُعلنٌ لا يرفض شيئًا — صنف ISS-162).
+
+| الخيار | الحكم |
+|---|---|
+| `return 1` مع ERR trap | ❌ trap يلتقط ويمنع set -e: إقلاعٌ يستمر بعد FATAL |
+| `exit 1` صريح | ✅ اعتُمد — يقتل السكربت فعلًا، $? ≠ 0، لا «System ready» |
+| `ALLOW_EPHEMERAL_DB=1` كمنفذٍ وحيد | ✅ CI/e2e-up وCodespaces بلا أسرار تمر بتحذيرٍ أصفرٍ صاخب (لا silent ok) |
+| sed لاستخراج host/port | ❌ معطوب — غير المطابق يعيد السلسلة كاملةً فيرفض إقلاع DB سليمة بلا منفذ صريح |
+| Python `urlparse` | ✅ اعتُمد — موثوق لكل DSN قانوني (default 5432) وmalformed ⇒ `exit 1` |
+| سقف `limit=20` للرسائل | ❌ كان يقصّ المحادثات الفعلية (ISS-158 البند ٣) — رُفع إلى 2000 مع سقف 50KB/رسالة |
+
+**النتيجة:** (١) مواضع الرفض الثلاثة في `_inject_env_secrets` (غياب DB · probe
+فاشل · DSN معطوب) أصبحت `exit 1`. (٢) `ALLOW_EPHEMERAL_DB=1` يتخطى الفحصين مع WARN
+صاخب. (٣) محلّل DSN بـ Python `urlparse` في `supervisor.sh`. (٤) `limit=20` →
+`limit=2000` في `customer_chat_boundary_service.py` (307، 348).
+
+**التحقق العملي (4 حالات سلوكية، سكربت مستقل خارج المستودع):** بلا DB → EXIT=1
+بلا «System ready» ✓ · منفذ محجوب → EXIT=1 ✓ · منفذ حيّ → «System ready» EXIT=0 ✓
+· `ALLOW_EPHEMERAL_DB=1` بلا DB → يمر مع WARN صاخب ✓ · `bash -n` + `shellcheck`
+أخضران · لا تغيّر في CLAUDE.md (السقف 1025 سطرًا محفوظ).
+
+---
+
 ## D-246 · لا إقلاع بلا قاعدة بياناتٍ حقيقية: fail-hard بدل السقوط الصامت إلى SQLite :memory: (2026-08-13 · ISS-158 · E2E sandbox)
 
 **الحادثة:** «أفتح حسابًا جديدًا بنفس البيانات ولا أجد رسائلي» — الآلية الوحيدة

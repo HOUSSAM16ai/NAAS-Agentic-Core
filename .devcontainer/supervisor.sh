@@ -184,13 +184,20 @@ ENVEOF
         existing_db=$(grep "^DATABASE_URL=" "$env_file" 2>/dev/null | cut -d= -f2- || true)
         if [ -z "$existing_db" ] || echo "$existing_db" | grep -q "sqlite"; then
             # ─────────────────────────────────────────────────────────────────
-            # ISS-158 / D-246 (2026-08-13): NO MORE SILENT FALLBACK TO SQLITE.
+            # ISS-158 / D-246+D-247 (2026-08-13): NO MORE SILENT FALLBACK TO SQLITE.
             #
             # السبب الجذري لـ "أفتح حسابًا جديدًا ولا أجد رسائلي" (ISS-158):
             #   1. secrets.env مفقود أو Codespaces Secrets غير مُهيَّأة
             #   2. الكود القديم كان يضبط sqlite+aiosqlite:///:memory: ويُقلع عاديًا
             #   3. /health يرجع ok بينما كل حسابٍ ومحادثةٍ يعيش في ذاكرة العملية
             #   4. كل إقلاع يمسح كل شيء — يبدو النظام «يفقد البيانات» باستمرار
+            #
+            # D-247 (post-push review): `return 1` inside this function did NOT stop
+            # the boot — the ERR trap catches the failure and suppresses set -e,
+            # so the script continued and printed "✅ System ready" anyway: an
+            # announced refusal that refuses nothing (ISS-162). Replaced by exit 1.
+            # ALLOW_EPHEMERAL_DB=1 is the ONLY approved escape hatch (CI/e2e-up and
+            # Codespaces without secrets — loud yellow WARN, never silent ok).
             #
             # القاعدة (لا حلول مؤقتة بديلة للتخزين): التطبيق بلا قاعدة بياناتٍ
             # حقيقية = مِيت. لا نُقلِعه في وضعٍ يكذب عليه بأنه سليم.
@@ -217,20 +224,50 @@ ENVEOF
             lifecycle_error "   3. If Supabase ports (6543/5432) are blocked in your"
             lifecycle_error "      environment, run a local Postgres with docker and"
             lifecycle_error "      point DATABASE_URL at it."
+            lifecycle_error ""
+            lifecycle_error "   4. CI/e2e-up without secrets: ALLOW_EPHEMERAL_DB=1 lets"
+            lifecycle_error "      this step pass with a loud yellow WARN."
             lifecycle_error "═══════════════════════════════════════════════════════════════"
             # FAIL HARD — do NOT write a sqlite URL, do NOT boot the app.
-            return 1
+            if [ "${ALLOW_EPHEMERAL_DB:-0}" = "1" ]; then
+                lifecycle_warn "ALLOW_EPHEMERAL_DB=1 — ephemeral fallback ALLOWED (CI/e2e-up)."
+                lifecycle_warn "This is NEVER acceptable for a real user environment (ISS-158)."
+            else
+                exit 1
+            fi
         fi
     fi
-    # ── D-246 (2026-08-13): فحصٌ حيّ لـ DATABASE_URL قبل الإقلاع ────────────
+    # ── D-246/D-247 (2026-08-13): فحصٌ حيّ لـ DATABASE_URL قبل الإقلاع ─────
     # وجود المتغير كافٍ نظريًا غير كافٍ عمليًا: المنافذ قد تكون محجوبة أو
     # متقطعة (Supabase pooler انقطع مؤقتًا عدة مرات في هذه الجلسة). /dev/tcp
     # يُعلن الانقطاع عند الإقلاع بدل أن يبدأ التطبيق ثم يُموت كل شيءٍ بصمت.
+    # محلل العنوان مضاد للكسر (D-247): sed غير المطابق يعيد السلسلة كاملةً —
+    # كان العطب يجعل _db_port = العنوان كله فيرْفَض إقلاع DB سليمة بلا منفذ
+    # صريح (postgresql://u:p@h/db). الافتراضي 5432 للعنوان بلا منفذ صريح.
     {
         local _db_host _db_port _live_ok=0 _attempt
-        _db_host=$(echo "$real_db_url" | sed -E 's|^.*@([^@/:]+).*|\1|')
-        _db_port=$(echo "$real_db_url" | sed -E 's|^.*:([0-9]+)/.*|\1|')
-        if [ -n "$_db_host" ] && [ -n "$_db_port" ]; then
+        # Parse host:port with Python's urlparse — robust for every legal DSN
+        # (postgresql://u:p@h/db defaults to 5432; postgresql+asyncpg:// etc.).
+        # A malformed DSN leaves _db_host empty → refuse to probe garbage.
+        read -r _db_host _db_port < <(
+            python3 -c "
+from urllib.parse import urlparse
+try:
+    p = urlparse('$real_db_url')
+    print(p.hostname or '', p.port or '')
+except Exception:
+    print('', '')
+" 2>/dev/null
+        ) || true
+        if [ -z "$_db_host" ]; then
+            lifecycle_error "FATAL: DATABASE_URL malformed — host cannot be parsed."
+            exit 1
+        fi
+        [ -z "$_db_port" ] && _db_port="5432"
+        if [ "${ALLOW_EPHEMERAL_DB:-0}" = "1" ]; then
+            lifecycle_warn "ALLOW_EPHEMERAL_DB=1 — live DB probe SKIPPED (CI/e2e-up)."
+            _live_ok=1
+        else
             for _attempt in 1 2 3; do
                 if timeout 5 bash -c "echo >/dev/tcp/$_db_host/$_db_port" 2>/dev/null; then
                     _live_ok=1
@@ -245,10 +282,12 @@ ENVEOF
             lifecycle_error "═══════════════════════════════════════════════════════════════"
             lifecycle_error "🛑 FATAL: DATABASE_URL set but NOT reachable live"
             lifecycle_error "   ($_db_host:$_db_port blocked or dead) after 3 probes."
-            lifecycle_error "   See D-246 — the app would otherwise boot green and"
-            lifecycle_error "   fail every login / message / answer silently (ISS-163)."
+            lifecycle_error "   See D-246/D-247 — the app would otherwise boot green"
+            lifecycle_error "   and fail every login / message / answer silently."
             lifecycle_error "═══════════════════════════════════════════════════════════════"
-            return 1
+            # exit 1, not return 1 — an ERR trap would catch `return 1` and let
+            # the boot continue (announced refusal that refuses nothing).
+            exit 1
         fi
     }
 

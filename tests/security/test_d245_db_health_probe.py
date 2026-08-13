@@ -17,7 +17,7 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-ENV_LOCK = ("ENVIRONMENT", "LLM_MOCK_MODE", "ENABLE_STATIC_FILES")
+ENV_LOCK = ("ENVIRONMENT", "LLM_MOCK_MODE", "ENABLE_STATIC_FILES", "OPENROUTER_API_KEY", "TAVILY_API_KEY")
 
 
 @pytest.fixture()
@@ -27,6 +27,11 @@ def _env_lock():
     os.environ["ENVIRONMENT"] = "testing"
     os.environ["LLM_MOCK_MODE"] = "1"
     os.environ["ENABLE_STATIC_FILES"] = "0"
+    # مزوّد LLM/بحث مُعلَن حتى يُقاس مجسّ قاعدة البيانات منفردًا — وجود
+    # مفتاح هنا لا يُنتج أخضرًا كاذبًا: honesty gate (D-245) يُقيِّم كل
+    # مجسٍّ على حدة (database.status، providers.llm، providers.search).
+    os.environ["OPENROUTER_API_KEY"] = "ci-dummy-key"
+    os.environ["TAVILY_API_KEY"] = "ci-dummy-key"
     yield
     for k, v in snapshot.items():
         if v is None:
@@ -64,6 +69,8 @@ def test_health_declares_degraded_when_db_is_blocked(_env_lock):
         'import os, json; os.environ["ENVIRONMENT"]="testing"; '
         'os.environ["LLM_MOCK_MODE"]="1"; '
         'os.environ["ENABLE_STATIC_FILES"]="0"; '
+        'os.environ["OPENROUTER_API_KEY"]="ci-dummy-key"; '
+        'os.environ["TAVILY_API_KEY"]="ci-dummy-key"; '
         'os.environ["DATABASE_URL"]='
         '"postgresql://x:x@10.255.255.1:5432/x?connect_timeout=2&sslmode=disable"; '
         "import asyncio; "

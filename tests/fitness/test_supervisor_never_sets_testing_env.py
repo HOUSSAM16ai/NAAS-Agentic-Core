@@ -86,52 +86,74 @@ def test_supervisor_never_auto_sets_environment_testing() -> None:
     )
 
 
-def test_supervisor_keeps_development_in_sqlite_fallback() -> None:
-    """When DB falls back to SQLite, ENVIRONMENT must remain 'development' (D-095).
+def test_supervisor_refuses_to_boot_without_real_database() -> None:
+    """D-246 (2026-08-13): NO silent SQLite fallback — boot REFUSES without a
+    real DATABASE_URL, and the refusal dies for real (not inside an `if`/`||`).
 
-    Locates the SQLite fallback block (must contain
-    'sqlite+aiosqlite:///:memory:') and verifies the adjacent `_set_env_key
-    "ENVIRONMENT" "..."` call sets it to "development", not "testing".
+    The OLD behaviour (write sqlite+aiosqlite:///:memory: and boot normally,
+    with /health lying green) was the root cause of ISS-158: "new account,
+    no saved messages" — everything lived only in process memory and vanished
+    on every restart.
+
+    After D-246 the script must:
+    1. never `_set_env_key "DATABASE_URL" "sqlite+aiosqlite:///:memory:"`;
+    2. print a loud FATAL message + `return 1` when no real URL is present;
+    3. be invoked as a bare statement — `set -Eeuo pipefail` + ERR trap turn
+       the `return 1` into a real process exit (measured: EXIT=1). Guarding
+       the call with if/|| would silently disarm it.
     """
     src = SUPERVISOR_SH.read_text()
     lines = src.splitlines()
 
-    # Find the SQLite fallback line
-    sqlite_line_idx: int | None = None
-    for i, line in enumerate(lines):
-        if "sqlite+aiosqlite:///:memory:" in line and "_set_env_key" in line:
-            sqlite_line_idx = i
-            break
-
-    assert sqlite_line_idx is not None, (
-        "Could not find SQLite fallback in supervisor.sh — test logic broken or "
-        "code structure changed"
-    )
-
-    # Look for ENVIRONMENT setting within 15 lines after sqlite line
-    env_set_lines = [
-        (i, line)
-        for i, line in enumerate(
-            lines[sqlite_line_idx : sqlite_line_idx + 15], start=sqlite_line_idx
-        )
-        if re.search(r'_set_env_key\s+"ENVIRONMENT"', line) and not line.strip().startswith("#")
+    # 1) No silent fallback URL ever written to .env
+    fallback_lines = [
+        i
+        for i, line in enumerate(lines)
+        if "sqlite+aiosqlite:///:memory:" in line
+        and "_set_env_key" in line
+        and "DATABASE_URL" in line
+        and not line.strip().startswith("#")
     ]
-
-    assert env_set_lines, (
-        "After SQLite fallback line, no _set_env_key 'ENVIRONMENT' found within "
-        "15 lines — supervisor structure unexpected"
+    assert not fallback_lines, (
+        f"D-246 VIOLATION at line(s) {fallback_lines}: supervisor.sh must never\n"
+        f"write sqlite+aiosqlite:///:memory: as the DATABASE_URL — the app\n"
+        f"then boots green while every account and message lives only in the\n"
+        f"process memory and vanishes on every restart (ISS-158)."
     )
 
-    # All ENVIRONMENT settings in this region must be "development"
-    for idx, line in env_set_lines:
-        # Extract the value
-        m = re.search(r'_set_env_key\s+"ENVIRONMENT"\s+"([^"]+)"', line)
-        if m:
-            value = m.group(1)
-            assert value == "development", (
-                f"D-095 VIOLATION at line {idx + 1}: ENVIRONMENT must be 'development' "
-                f"in SQLite fallback block (found {value!r}).\n"
-                f"Line: {line.rstrip()}\n\n"
-                f"Setting ENVIRONMENT to anything other than 'development' (e.g. 'testing')\n"
-                f"causes JWT lifetime to drop to 30 minutes → kick-to-login catastrophe."
-            )
+    # 2) Loud FATAL refusal exists when no real DB URL is available
+    fatal_idx: int | None = None
+    for i, line in enumerate(lines):
+        if re.search(r"FATAL: no real DATABASE_URL", line):
+            fatal_idx = i
+            break
+    assert fatal_idx is not None, (
+        "Could not find 'FATAL: no real DATABASE_URL' refusal in supervisor.sh —\n"
+        "D-246 requires a loud refusal (lifecycle_error + return 1), never a\n"
+        "silent boot with /health lying that everything is healthy."
+    )
+
+    # 3) The refusal returns 1 within the next 60 lines
+    after = lines[fatal_idx : fatal_idx + 60]
+    assert any(
+        re.search(r"\breturn 1\b", ln) and not ln.strip().startswith("#") for ln in after
+    ), (
+        "After the FATAL refusal, no 'return 1' found within 60 lines — the\n"
+        "script would fall through to booting instead of refusing."
+    )
+
+    # 4) The call site is a bare statement, never guarded by if/||/&/;
+    call_site = re.search(r"^_inject_env_secrets\s*$", src, re.M)
+    assert call_site is not None, "Call site '_inject_env_secrets' as a bare statement not found"
+    cs_line_no = src[: call_site.start()].count("\n") + 1
+    prev = lines[cs_line_no - 2].strip() if cs_line_no >= 2 else ""
+    nxt = lines[cs_line_no].strip() if cs_line_no < len(lines) else ""
+    assert not prev.endswith((";", "&&", "||")), (
+        f"Line before the _inject_env_secrets call (line {cs_line_no - 1}: {prev})\n"
+        f"ends with a command-chain operator — a `return 1` inside if/||/&&/;\n"
+        f"would NOT exit the process (D-246 requires an unguarded bare call)."
+    )
+    assert not nxt.startswith(("if ", "then", "&&", "||")), (
+        f"Line after the _inject_env_secrets call (line {cs_line_no + 1}: {nxt})\n"
+        f"guards the invocation — this would silently disarm the fail-hard exit."
+    )

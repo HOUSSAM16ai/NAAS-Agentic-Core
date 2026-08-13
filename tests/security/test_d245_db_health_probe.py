@@ -17,7 +17,13 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-ENV_LOCK = ("ENVIRONMENT", "LLM_MOCK_MODE", "ENABLE_STATIC_FILES", "OPENROUTER_API_KEY", "TAVILY_API_KEY")
+ENV_LOCK = (
+    "ENVIRONMENT",
+    "LLM_MOCK_MODE",
+    "ENABLE_STATIC_FILES",
+    "OPENROUTER_API_KEY",
+    "TAVILY_API_KEY",
+)
 
 
 @pytest.fixture()

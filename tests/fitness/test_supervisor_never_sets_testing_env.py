@@ -135,9 +135,7 @@ def test_supervisor_refuses_to_boot_without_real_database() -> None:
 
     # 3) The refusal returns 1 within the next 60 lines
     after = lines[fatal_idx : fatal_idx + 60]
-    assert any(
-        re.search(r"\breturn 1\b", ln) and not ln.strip().startswith("#") for ln in after
-    ), (
+    assert any(re.search(r"\breturn 1\b", ln) and not ln.strip().startswith("#") for ln in after), (
         "After the FATAL refusal, no 'return 1' found within 60 lines — the\n"
         "script would fall through to booting instead of refusing."
     )

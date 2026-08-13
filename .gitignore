@@ -207,3 +207,4 @@ actionlint*
 docs/generated/
 
 .venv312/
+.env

@@ -184,23 +184,28 @@ ENVEOF
         existing_db=$(grep "^DATABASE_URL=" "$env_file" 2>/dev/null | cut -d= -f2- || true)
         if [ -z "$existing_db" ] || echo "$existing_db" | grep -q "sqlite"; then
             # ─────────────────────────────────────────────────────────────────
-            # ISS-094 round 2 (D-095 — 2026-05-28): NEVER auto-set ENVIRONMENT=testing.
+            # ISS-158 / D-246 (2026-08-13): NO MORE SILENT FALLBACK TO SQLITE.
             #
-            # السبب الجذري لـ "kick-to-login" المستمر بعد ISS-092/ISS-093/ISS-094:
+            # السبب الجذري لـ "أفتح حسابًا جديدًا ولا أجد رسائلي" (ISS-158):
             #   1. secrets.env مفقود أو Codespaces Secrets غير مُهيَّأة
-            #   2. real_db_url فارغ → supervisor يضبط ENVIRONMENT=testing
-            #   3. crypto.py يقرأ ENVIRONMENT=testing → ACCESS_EXPIRE_MINUTES=30
-            #   4. بعد 30 دقيقة من الجلسة، كل token ينتهي → 4401 → kick
+            #   2. الكود القديم كان يضبط sqlite+aiosqlite:///:memory: ويُقلع عاديًا
+            #   3. /health يرجع ok بينما كل حسابٍ ومحادثةٍ يعيش في ذاكرة العملية
+            #   4. كل إقلاع يمسح كل شيء — يبدو النظام «يفقد البيانات» باستمرار
             #
-            # الحل: حتى لو وقعنا في SQLite mode (degraded LLM)، نُبقي
-            # ENVIRONMENT=development لضمان tokens لـ 480 دقيقة.
-            # TESTING=1 يبقى كإشارة منفصلة للـ code paths التي تحتاجها.
+            # القاعدة (لا حلول مؤقتة بديلة للتخزين): التطبيق بلا قاعدة بياناتٍ
+            # حقيقية = مِيت. لا نُقلِعه في وضعٍ يكذب عليه بأنه سليم.
+            #
+            # ملاحظة D-095 (kick-to-login): تظل محفوظة — لو كان DATABASE_URL
+            # الحقيقي موجودًا لكان ENVIRONMENT=development كما قبل. لكن غياب
+            # DB الحقيقية ليس «degraded mode»: هو فشلٌ تامٌ يُعلن نفسه.
             # ─────────────────────────────────────────────────────────────────
             lifecycle_error "═══════════════════════════════════════════════════════════════"
-            lifecycle_error "🚨 CRITICAL: DATABASE_URL not configured — DEGRADED MODE"
-            lifecycle_error "   Falling back to in-memory SQLite (data will be LOST on restart)"
+            lifecycle_error "🛑 FATAL: no real DATABASE_URL — refusing to boot."
+            lifecycle_error "   In-memory SQLite was REMOVED as a fallback (D-246):"
+            lifecycle_error "   it silently erased all accounts and messages on"
+            lifecycle_error "   every restart (ISS-158)."
             lifecycle_error ""
-            lifecycle_error "   To fix permanently, do ONE of the following:"
+            lifecycle_error "   To fix, do ONE of the following:"
             lifecycle_error "   1. Configure Codespaces Secrets at:"
             lifecycle_error "      https://github.com/settings/codespaces"
             lifecycle_error "      Add: APP_DATABASE_URL, OPENROUTER_API_KEY"
@@ -208,16 +213,44 @@ ENVEOF
             lifecycle_error "   2. Or create .devcontainer/secrets.env:"
             lifecycle_error "      cp .devcontainer/secrets.env.example .devcontainer/secrets.env"
             lifecycle_error "      # then edit and fill in real values"
+            lifecycle_error ""
+            lifecycle_error "   3. If Supabase ports (6543/5432) are blocked in your"
+            lifecycle_error "      environment, run a local Postgres with docker and"
+            lifecycle_error "      point DATABASE_URL at it."
             lifecycle_error "═══════════════════════════════════════════════════════════════"
-            _set_env_key "DATABASE_URL" "sqlite+aiosqlite:///:memory:"
-            # D-095: do NOT set ENVIRONMENT=testing here — keeps JWT lifetime at 480 min
-            #        (development mode). Otherwise users get kicked to login after 30 min.
-            _set_env_key "ENVIRONMENT" "development"
-            # TESTING=1 is a separate flag for code paths that need it (LLM mocking, etc.)
-            _set_env_key "TESTING" "1"
-            changed=1
+            # FAIL HARD — do NOT write a sqlite URL, do NOT boot the app.
+            return 1
         fi
     fi
+    # ── D-246 (2026-08-13): فحصٌ حيّ لـ DATABASE_URL قبل الإقلاع ────────────
+    # وجود المتغير كافٍ نظريًا غير كافٍ عمليًا: المنافذ قد تكون محجوبة أو
+    # متقطعة (Supabase pooler انقطع مؤقتًا عدة مرات في هذه الجلسة). /dev/tcp
+    # يُعلن الانقطاع عند الإقلاع بدل أن يبدأ التطبيق ثم يُموت كل شيءٍ بصمت.
+    {
+        local _db_host _db_port _live_ok=0 _attempt
+        _db_host=$(echo "$real_db_url" | sed -E 's|^.*@([^@/:]+).*|\1|')
+        _db_port=$(echo "$real_db_url" | sed -E 's|^.*:([0-9]+)/.*|\1|')
+        if [ -n "$_db_host" ] && [ -n "$_db_port" ]; then
+            for _attempt in 1 2 3; do
+                if timeout 5 bash -c "echo >/dev/tcp/$_db_host/$_db_port" 2>/dev/null; then
+                    _live_ok=1
+                    break
+                fi
+                sleep 2
+            done
+        fi
+        if [ "$_live_ok" = "1" ]; then
+            lifecycle_info "Live DB probe OK ($_db_host:$_db_port) — booting."
+        else
+            lifecycle_error "═══════════════════════════════════════════════════════════════"
+            lifecycle_error "🛑 FATAL: DATABASE_URL set but NOT reachable live"
+            lifecycle_error "   ($_db_host:$_db_port blocked or dead) after 3 probes."
+            lifecycle_error "   See D-246 — the app would otherwise boot green and"
+            lifecycle_error "   fail every login / message / answer silently (ISS-163)."
+            lifecycle_error "═══════════════════════════════════════════════════════════════"
+            return 1
+        fi
+    }
 
     # ── ENVIRONMENT (D-ISS-092 — 2026-05-28): ضمان development عند وجود DB حقيقي ──
     # إذا كان DATABASE_URL حقيقياً (ليس sqlite)، يجب أن يكون ENVIRONMENT=development

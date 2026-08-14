@@ -1,4 +1,18 @@
 # Open Issues & Bugs
+## ISS-167 (2026-08-14) — كارثة الـ hotspot المدمّر `tools/content.py` (CodeScene job 72): 173 سطرًا · `search_content` C(14) · 112 سطرًا · 9 وسائط · تردد تغيير 40 — ✅ مُغلق (D-255)
+**البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots):** ملف `app/services/chat/tools/content.py`
+· `search_content` تعقيد C(14) · 112 سطرًا · 9 وسائط موضعية (Complex Method + Excess Number of Function Arguments)
+· تردد تغيير 40 — ودالتان ثانويتان `_normalize_branch` و`_scan_for_error` Bumpy Road Ahead تردد 26 و18.
+**السبب الجذري:** كل منطق البحث العميق (فلاتر · سياق · ترميز شعبة · كشف Error-as-Data) معبَّأ في دالة واحدة،
+وكل تعديل على أي مرحلة يلمس الدالة نفسها — تجمّع حراري واحد يزداد تعقيدًا مع كل سؤال.
+**الإصلاح (D-255):** قشرة استقبال A(1) تفوّض كاملًا صفر تغيير سلوكي (قشور late-binding للأسماء القديمة تحرس
+الاختبارات القائمة) + حزمة شرائح `content_support/` ست شرائح نقية [`search.py`: normalize_branch · scan_for_error
+بثلاث مراحل · SearchFilters بيانات معلنة (يقتل PLR0917) · build_search_context · build_search_report] · مانيفست
+مركّب `_sources.py` · `ContentSearchArgs` dataclass — ruff 0.14.0 أخضر على كامل المستودع · pytest 10/10 · E2E ToolRegistry أخضر
+· runtime truth + القفل محدّثان · CI أخضر 100%.
+**التدوير المُلزم:** كارثة الـ hotspot الخامسة في سلسلة CodeScene (ISS-163 → D-252 · ISS-165 → D-253 · ISS-166 → D-254 ·
+ISS-167 → D-255) — منهجية «القشرة + الشرائح + المانيفست المركّب» صارت الآن نمطًا موثقًا في الدستور (D-255).
+
 ## ISS-166 (2026-08-14) — كارثة الـ hotspot المدمّر `api_gateway/main.py`: 586 سطرًا · ازدواج داخلي 4 · تردد تغيير 10 على دوال البروكسي — ✅ مُغلق (D-254)
 
 **البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots):** ملف `microservices/api_gateway/main.py`

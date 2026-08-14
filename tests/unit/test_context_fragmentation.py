@@ -12,7 +12,9 @@
 
 import pytest
 
-from app.api.routers.customer_chat import (
+# D-252: الرمز انتقل مع تفكيك الـ hotspot (D-173 Stage 3) — الحزمة المركّبة
+# `customer_chat_support/_sources.py` تبقى مصدر الحقيقة للحراس النصية.
+from app.api.routers.customer_chat_support.frames import (
     _merge_history_with_client_context as monolith_merge,
 )
 

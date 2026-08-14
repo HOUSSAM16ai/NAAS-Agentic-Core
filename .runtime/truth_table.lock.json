@@ -1,5 +1,5 @@
 {
-  "branch": "fix/d245-honest-health-probes",
+  "branch": "hotfix/codescene-hotspot-chat-stream-ws-decomposition",
   "components": [
     {
       "agreed": true,
@@ -35,7 +35,7 @@
       "importer_count": 3,
       "importers_sample": [
         "app/api/routers/admin.py",
-        "app/api/routers/customer_chat.py",
+        "app/api/routers/customer_chat_support/turn_lifecycle.py",
         "app/infrastructure/clients/orchestrator/local_fallback.py"
       ],
       "name": "WS chat path observer",
@@ -78,11 +78,11 @@
         "app/api/routers/admin.py",
         "app/api/routers/customer_chat.py",
         "app/api/routers/customer_chat_support/pedagogy.py",
+        "app/api/routers/customer_chat_support/turn_lifecycle.py",
         "app/services/chat/orchestrator.py",
         "app/services/skills/bac_exercise_skill.py",
         "scripts/gitpod_live_debug.py",
-        "scripts/gitpod_ui_test.py",
-        "scripts/omni_live_test.py"
+        "scripts/gitpod_ui_test.py"
       ],
       "name": "Orchestrator HTTP client + fallback chain",
       "notes": "Sole entrypoint to chat from customer_chat.py and admin.py.",
@@ -169,10 +169,11 @@
         "app/services/boundaries/customer_chat_boundary_service.py"
       ],
       "id": "boundary_customer",
-      "importer_count": 4,
+      "importer_count": 5,
       "importers_sample": [
         "app/api/routers/customer_chat.py",
         "app/api/routers/customer_chat_support/pedagogy.py",
+        "app/api/routers/customer_chat_support/turn_lifecycle.py",
         "app/services/boundaries/__init__.py",
         "app/services/chat/dispatcher.py"
       ],
@@ -214,12 +215,12 @@
       "importer_count": 7,
       "importers_sample": [
         "app/api/routers/customer_chat_support/frames.py",
+        "app/api/routers/customer_chat_support/turn_lifecycle.py",
         "microservices/orchestrator_service/src/api/context_utils.py",
         "tests/api/test_chat_event_protocol_error_contract_integration.py",
         "tests/api/test_chat_event_protocol_flag_integration.py",
         "tests/api/test_final_router_gaps.py",
-        "tests/architecture/test_persistence_authority.py",
-        "tests/regressions/test_iss145_silent_turn.py"
+        "tests/architecture/test_persistence_authority.py"
       ],
       "name": "Customer chat WS router",
       "notes": "Live WS endpoint /api/chat/ws.",
@@ -291,6 +292,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-13T02:10:25.754783+00:00",
+  "generated_at_utc": "2026-08-13T22:53:03.349351+00:00",
   "schema_version": 1
 }

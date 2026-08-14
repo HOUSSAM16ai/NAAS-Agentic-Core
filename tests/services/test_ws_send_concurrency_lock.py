@@ -24,6 +24,13 @@ than D-096 for BKT — zero concurrent BKT send. The send_lock invariant
 still holds: every websocket send (stream deltas, keepalive, terminal
 frames, post-content card emission) goes through `_locked_send_json`.
 
+D-252 UPDATE (2026-08-13): the 669-line `chat_stream_ws` hotspot was
+decomposed (D-173 Stage 3) — the logic now lives in
+`customer_chat_support/` (transport.py / pedagogy.py / frames.py /
+turn_lifecycle.py) and every text guard here reads the COMPOUND source via
+`read_customer_chat_source()` so invariants stay enforced on the
+decomposed artifact.
+
 INVARIANT (enforced by these tests):
 1. `_evaluate_bkt_cards` must NOT send (no websocket/send_lock param, no
    `_locked_send_json`/`websocket.send_json` in body) — D-118.
@@ -52,16 +59,25 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "x" * 64)
 
 
+def _compound_source() -> str:
+    # D-252: المصدر المركّب لمسار WS العميل — الحراس تُقرأ من الحزمة المفككة.
+    from app.api.routers.customer_chat_support._sources import (
+        read_customer_chat_source,
+    )
+
+    return read_customer_chat_source()
+
+
 def test_locked_send_json_exists() -> None:
     """The `_locked_send_json` helper must exist and use a lock."""
-    from app.api.routers import customer_chat
+    from app.api.routers.customer_chat_support import transport
 
-    assert hasattr(customer_chat, "_locked_send_json"), (
-        "D-096: `_locked_send_json` helper is missing from customer_chat.py. "
+    assert hasattr(transport, "_locked_send_json"), (
+        "D-096: `_locked_send_json` helper is missing from the customer_chat compound source. "
         "This is required to prevent concurrent send_json on the WebSocket."
     )
 
-    fn = customer_chat._locked_send_json
+    fn = transport._locked_send_json
     sig = inspect.signature(fn)
     params = list(sig.parameters.keys())
     assert params == ["websocket", "lock", "payload"], (
@@ -78,15 +94,15 @@ def test_bkt_eval_does_not_send() -> None:
     has no `websocket`/`send_lock` param and never calls send. This is the
     structural guarantee that BKT cards cannot land mid-stream.
     """
-    from app.api.routers import customer_chat
+    from app.api.routers.customer_chat_support import pedagogy
 
-    assert not hasattr(customer_chat, "_evaluate_and_emit_bkt"), (
+    assert not hasattr(pedagogy, "_evaluate_and_emit_bkt"), (
         "D-118: old `_evaluate_and_emit_bkt` (which emitted mid-stream) must be gone."
     )
-    assert hasattr(customer_chat, "_evaluate_bkt_cards"), (
+    assert hasattr(pedagogy, "_evaluate_bkt_cards"), (
         "D-118: `_evaluate_bkt_cards` (eval-only, returns payloads) is missing."
     )
-    sig = inspect.signature(customer_chat._evaluate_bkt_cards)
+    sig = inspect.signature(pedagogy._evaluate_bkt_cards)
     params = list(sig.parameters.keys())
     assert "websocket" not in params and "send_lock" not in params, (
         f"D-118: `_evaluate_bkt_cards` must not take websocket/send_lock "
@@ -96,9 +112,9 @@ def test_bkt_eval_does_not_send() -> None:
 
 def test_emit_terminal_frames_requires_send_lock() -> None:
     """`_emit_terminal_frames` must accept a `send_lock` parameter."""
-    from app.api.routers import customer_chat
+    from app.api.routers.customer_chat_support import frames
 
-    sig = inspect.signature(customer_chat._emit_terminal_frames)
+    sig = inspect.signature(frames._emit_terminal_frames)
     params = list(sig.parameters.keys())
     assert "send_lock" in params, (
         f"D-096: `_emit_terminal_frames` does NOT accept send_lock. Got params: {params}."
@@ -118,7 +134,7 @@ def test_handle_control_message_accepts_send_lock() -> None:
 
 def test_locked_send_json_serializes_concurrent_sends() -> None:
     """Verify the lock actually serializes concurrent send attempts."""
-    from app.api.routers import customer_chat
+    from app.api.routers.customer_chat_support import transport
 
     async def run() -> None:
         # Mock websocket
@@ -137,8 +153,7 @@ def test_locked_send_json_serializes_concurrent_sends() -> None:
 
         # Fire 5 concurrent sends
         tasks = [
-            asyncio.create_task(customer_chat._locked_send_json(ws, lock, {"n": i}))
-            for i in range(5)
+            asyncio.create_task(transport._locked_send_json(ws, lock, {"n": i})) for i in range(5)
         ]
         await asyncio.gather(*tasks)
 
@@ -159,9 +174,9 @@ def test_locked_send_json_serializes_concurrent_sends() -> None:
 
 def test_bkt_eval_body_has_no_send() -> None:
     """D-118: `_evaluate_bkt_cards` body must contain NO send at all."""
-    from app.api.routers import customer_chat
+    from app.api.routers.customer_chat_support import pedagogy
 
-    source = inspect.getsource(customer_chat._evaluate_bkt_cards)
+    source = inspect.getsource(pedagogy._evaluate_bkt_cards)
     lines = source.splitlines()
     code_lines = [
         line
@@ -183,18 +198,17 @@ def test_bkt_analytics_awaited_after_terminal_no_card_emit() -> None:
     student (owner decision). The send_lock invariant (D-096) still holds for the
     stream deltas, keepalive, and terminal frames.
     """
-    from app.api.routers import customer_chat
-
-    src = inspect.getsource(customer_chat)
+    # D-252: الحارس يُقرأ من المصدر المركّب للحزمة المفككة (D-173 Stage 3).
+    src = _compound_source()
     # The handler awaits the BKT eval task AFTER the terminal frame (analytics completes).
-    assert "await _bkt_task" in src, "D-119: handler must await the BKT analytics task."
+    assert "await bkt_task" in src, "D-119: handler must await the BKT analytics task."
     term_idx = src.index("await _emit_terminal_frames(")
-    bkt_await_idx = src.index("await _bkt_task")
+    bkt_await_idx = src.index("await bkt_task")
     assert bkt_await_idx > term_idx, (
         "D-119: BKT analytics await must come AFTER the content terminal frame."
     )
     # D-119: NO tracking-card emission after the terminal frame.
-    post = src[term_idx : src.index("# Close path-aware span")]
+    post = src[term_idx : src.index("# إغلاق span path-aware")]
     assert '"type": "ui_component", "payload": _card' not in post, (
         "D-119: tracking cards must NOT be emitted to the student (behind-the-scenes)."
     )

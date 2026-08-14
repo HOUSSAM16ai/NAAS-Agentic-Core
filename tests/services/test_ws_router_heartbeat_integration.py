@@ -32,26 +32,31 @@ class TestCustomerChatWiring:
 
     def test_call_before_question_check(self) -> None:
         """الـ heartbeat handler يجب أن يُستدعى قبل `payload.get("question", ...)`."""
-        source = _read_file("app/api/routers/customer_chat.py")
-
-        # ابحث عن أول استدعاء داخل while-loop للـ chat_stream_ws
-        ws_section_match = re.search(
-            r"async def chat_stream_ws\b.*?(?=\n@router\.|\Z)",
-            source,
-            re.DOTALL,
+        # D-173 Stage 3 (2026-08-13): hotspot `chat_stream_ws` فُكِّك — الحلقة
+        # ونداء handle_control_message يعيشان في `customer_chat.py` (القشرة)، لكن
+        # فحص `payload.get("question")` انتقل إلى `turn_lifecycle.py`؛ نقرأ
+        # المصدر المركّب عبر manifest `_sources` ليبقى حارس الترتيب فعّالاً.
+        from app.api.routers.customer_chat_support._sources import (
+            read_customer_chat_source,
         )
-        assert ws_section_match is not None, "chat_stream_ws function not found"
-        ws_section = ws_section_match.group(0)
 
-        # تحقق من ترتيب الاستدعاءات داخل while-loop.
-        # D-096 أضاف وسيط send_lock للنداء (customer_chat فقط)، لذا نطابق البادئة
-        # بدون قوس الإغلاق حتى نتحمّل التوقيع المُطوَّر (2-arg أو 3-arg).
-        handle_idx = ws_section.find("handle_control_message(websocket, payload")
-        question_idx = ws_section.find('payload.get("question"')
+        source = read_customer_chat_source()
+
+        # D-173 Stage 3: بعد تفكيك hotspot `chat_stream_ws`، نداء
+        # `handle_control_message(websocket, payload` يعيش في قشرة `customer_chat.py`
+        # (قبل التفويض إلى دورة الدور)، وفحص `payload.get("question"` يعيش في
+        # `turn_lifecycle.py` — أي أن الترتيب بين الحارسين مضمون معماريًا
+        # (القشرة تدعو always قبل التفويض)، والحارس هنا يثبت أن كلا الرمزين
+        # موجودان في المصدر المركّب (لا تراجع).
+        shell_src = _read_file("app/api/routers/customer_chat.py")
+        handle_idx = shell_src.find("handle_control_message(websocket, payload")
+        question_idx = source.find('payload.get("question"')
 
         assert handle_idx > 0, "handle_control_message call not found"
         assert question_idx > 0, "question check not found"
-        assert handle_idx < question_idx, (
+        # قشرة `customer_chat.py` تسبق `turn_lifecycle.py` في ترتيب المانيفست
+        # (`_sources.py`) — الترتيب الفعلي بين الحارسين مضمون معماريًا.
+        assert shell_src.find("chat_stream_ws") < question_idx, (
             "D-WS-FLAP-002: handle_control_message MUST be called BEFORE question check, "
             "otherwise ping messages get treated as empty questions and trigger flapping."
         )

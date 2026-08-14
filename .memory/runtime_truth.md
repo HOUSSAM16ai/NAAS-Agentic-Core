@@ -1,6 +1,17 @@
 # Runtime Truth Lock
-> Last updated: **2026-08-08** | Branch: `claude/project-international-markets-ws5pwz` (D-228→D-232)
-> Previous: `claude/smart-education-platform-s2of5b` (D-193→D-200)
+> Last updated: **2026-08-13** | Branch: hotfix/codescene-hotspot-chat-stream-ws-decomposition (D-252)
+> Previous: `claude/project-international-markets-ws5pwz` (D-228→D-232)
+
+## D-252 Hotspot Decomposition — `chat_stream_ws` «القشرة + دورة الدور» (2026-08-13 · CodeScene X-Ray job 72)
+
+| المسار الحيّ | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`app/api/routers/customer_chat.py`** (Entry-point لا يتغير) | **ACTIVE (قشرة استقبال ~60 سطرًا حية)** | `chat_stream_ws` ما زال الدالة الحية على `/api/chat/ws` بالسلوك runtime نفسه تمامًا — برهان حيّ: 349/349 حارسًا محليًا + pytest 34/34 + CI أخضر 100%. القشرة: JWT-only auth (ISS-100) · accept-before-close (D-WS-002) · isAdmin guard · primer `session_ready` · حلقة receive مع حارس ترتيب `handle_control_message(websocket, payload, send_lock)` · تفويض وحيد `await handle_turn(...)` |
+| **`app/api/routers/customer_chat_support/turn_lifecycle.py`** (D-252 — جديد) | **ACTIVE** | منطق الدور كاملًا: `handle_turn` (إنشاء/مراجعة + بيداغوجيا + stream_and_forward) · `_stream_and_wait` (بثّ + forward للأدمن) · `_close_turn` (كتلة حتمية: بطاقة رياضية · بطاقات UI · إطار terminal + mirroring · `await bkt_task` D-119 · tutor_state) · `_run_turn_keepalive` (ISS-098). radon: handle_turn C(12) · _stream_and_wait B(8) · _close_turn D(23 — ratchet منطوق per-file-ignores: أقصى تفكيك سلوكي دون إعادة إنتاج الكارثة). |
+| **`customer_chat_support/_sources.py`** (مانيفست المركّب) | **ACTIVE (guardrails)** | يركّب القشرة + الحزمة في مصدر واحد؛ كل حارس نصي (skills_doctrine D-119/D-114 · legacy noop · persistence fences · canonical/ownership) يتغذى منه عبر `read_customer_chat_source()` — لا تراجع صامت للحرس النصي. |
+| **`router_domain_debt.json`** | **ACTIVE** | customer_chat.py → 0؛ turn_lifecycle.py يحمل 6 نداءات نطاق (كلها قائمة مسبقًا — المجموع المجمّد 13 نداءً في 4 موجّهات، بوابة `check_router_domain_logic` خضراء). |
+
+**مسارات الإقلاع الحية (دون تغيير — مطلب doc_integrity):** `app/api/routers/customer_chat.py` · `app/api/routers/admin.py` · `app/services/chat/local_graph.py` · `app/infrastructure/clients/orchestrator_client.py` · `app/kernel.py` · `_emit_terminal_frames`.
 
 ## Delivery Surface + Memory Authorship + Live E2E (2026-08-08, D-228→D-232)
 

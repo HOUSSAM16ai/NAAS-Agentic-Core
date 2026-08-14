@@ -414,8 +414,11 @@ REQUIRED: dict[str, list[str]] = {
     ],
 }
 ANY_OF: list[tuple[str, list[str]]] = [
-    # streaming-fix-gate.yml — noop filter present (either quote style)
-    ("app/api/routers/customer_chat.py", ['"noop"', "'noop'"]),
+    # streaming-fix-gate.yml — noop filter present (either quote style).
+    # D-173 Stage 3 (2026-08-13): hotspot `chat_stream_ws` فُكِّك — تصفية noop
+    # انتقلت إلى `customer_chat_support/turn_lifecycle.py` (دورة الدور الواحدة)،
+    # والحاجز يقرأها من هناك.
+    ("app/api/routers/customer_chat_support/turn_lifecycle.py", ['"noop"', "'noop'"]),
     ("app/api/routers/admin.py", ['"noop"', "'noop'"]),
     # streaming-fix-002 — configurable orchestrator model
     (

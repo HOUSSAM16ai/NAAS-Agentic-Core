@@ -208,3 +208,5 @@ docs/generated/
 
 .venv312/
 .env
+.memory/task_progress_state.md
+.memory/task_progress_state.md

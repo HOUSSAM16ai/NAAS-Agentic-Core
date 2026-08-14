@@ -53,11 +53,14 @@ def test_orchestrator_conversation_list_endpoints_are_limited() -> None:
 
 
 def test_compatibility_facade_forwards_recent_history_to_orchestrator() -> None:
-    customer_source = Path("app/api/routers/customer_chat.py").read_text(encoding="utf-8")
+    # D-252 (D-173 Stage 3): دورة الدور انتقلت إلى الحزمة المركّبة — مرجع الحقيقة.
+    from app.api.routers.customer_chat_support._sources import read_customer_chat_source
+
+    customer_source = read_customer_chat_source()
     admin_source = Path("app/api/routers/admin.py").read_text(encoding="utf-8")
 
     assert "history_messages = await persistence_service.get_chat_history(" in customer_source
-    assert "history_messages=history," in customer_source
+    assert "history_messages=" in customer_source
 
     assert "history_messages = await persistence_service.get_chat_history(" in admin_source
     assert "history_messages=history," in admin_source

@@ -78,12 +78,15 @@ class TestBehindTheScenesConsumption:
 class TestNoEmissionInOrchestration:
     def test_bkt_task_awaited_for_analytics(self) -> None:
         # ضمان اكتمال الكتابة append-only قبل إنهاء الدور (D-074).
-        assert "await _bkt_task" in CHAT_SRC
+        # D-252: في دورة الدور المفككة التسمية ``await bkt_task``.
+        assert "await _bkt_task" in CHAT_SRC or "await bkt_task" in CHAT_SRC
 
     def test_no_tracking_card_emission_block(self) -> None:
         # D-119: لا كتلة إصدار/حفظ بطاقات تتبّع بعد terminal (حُذفت كتلة D-118).
-        post = CHAT_SRC[CHAT_SRC.index("await _bkt_task") :]
-        block = post[: post.index("# Close path-aware span")]
+        anchor = "await _bkt_task" if "await _bkt_task" in CHAT_SRC else "await bkt_task"
+        post = CHAT_SRC[CHAT_SRC.index(anchor) :]
+        end = post.find("# Close path-aware span")
+        block = post[:end] if end > 0 else post
         assert '"type": "ui_component", "payload": _card' not in block, (
             "D-119: tracking cards must NOT be emitted after terminal frame."
         )

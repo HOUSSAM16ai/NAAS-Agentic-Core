@@ -180,7 +180,8 @@ async def test_customer_ws_dispatch_http_exception_emits_assistant_error_when_fl
                     return_value=mock_session_cm,
                 ):
                     with patch(
-                        "app.api.routers.customer_chat.orchestrator_client.chat_with_agent",
+                        # D-252: الاستدعاء الحقيقي يحدث في دورة الدور المفككة
+                        "app.api.routers.customer_chat_support.turn_lifecycle.orchestrator_client.chat_with_agent",
                         side_effect=HTTPException(status_code=422, detail="dispatch failed"),
                     ):
                         with TestClient(test_app) as client:

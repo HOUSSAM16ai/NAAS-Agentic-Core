@@ -77,6 +77,9 @@ LEGACY_EXEMPTIONS = {
     "app/api/routers/security.py": ["db_import"],
     "app/api/routers/customer_chat.py": ["db_import"],
     "app/api/routers/customer_chat_support/pedagogy.py": ["db_import"],
+    "app/api/routers/customer_chat_support/turn_lifecycle.py": [
+        "db_import"
+    ],  # D-252: دورة الدور المفككة تستحق نفس الاستثناء كالقشرة (persistence auth mirrors)
     "app/api/routers/admin.py": ["db_import"],
     "app/api/routers/ums.py": ["db_import"],
     "app/api/routers/system/__init__.py": [ANY_TOKEN],

@@ -51,17 +51,29 @@ os.environ.setdefault("SECRET_KEY", "x" * 64)
 # Backend: keepalive helper exists on both routers
 # ─────────────────────────────────────────────────────────────────────────────
 def test_customer_keepalive_helper_exists() -> None:
-    from app.api.routers import customer_chat
+    # D-252: بعد تفكيك الـ hotspot (D-173 Stage 3) انتقل `customer_chat` إلى
+    # حزمة `customer_chat_support` المركّبة — الحارس يتحقق من الوحدة الحقيقية.
+    from app.api.routers.customer_chat_support import transport
 
-    assert hasattr(customer_chat, "_run_turn_keepalive"), (
-        "ISS-098: customer_chat must define `_run_turn_keepalive`."
+    def _read_compound_source() -> str:
+        from app.api.routers.customer_chat_support._sources import read_customer_chat_source
+
+        return read_customer_chat_source()
+
+    src = _read_compound_source()
+    assert "_run_turn_keepalive" in src, (
+        "ISS-098: `_run_turn_keepalive` must exist in the customer_chat compound source."
     )
-    assert hasattr(customer_chat, "_TURN_KEEPALIVE_INTERVAL_SECONDS"), (
-        "ISS-098: customer_chat must define `_TURN_KEEPALIVE_INTERVAL_SECONDS`."
+    assert hasattr(transport, "_run_turn_keepalive"), (
+        "ISS-098: `_run_turn_keepalive` must live in `customer_chat_support.transport`."
     )
-    sig = inspect.signature(customer_chat._run_turn_keepalive)
+    sig = inspect.signature(transport._run_turn_keepalive)
     assert list(sig.parameters.keys()) == ["websocket", "lock"], (
         f"ISS-098: _run_turn_keepalive signature changed: {list(sig.parameters.keys())}"
+    )
+    # القشرة تستورد دورة الدور — تبقى سلسلة الاستدعاء حيّة عبر الحزمة المركّبة.
+    assert "handle_turn" in src, (
+        "ISS-098: the compound source must expose `handle_turn` (router shell delegates to it)."
     )
 
 
@@ -104,9 +116,14 @@ def test_admin_emit_terminal_frames_requires_send_lock() -> None:
 # Backend: handlers wire the keepalive task around the stream await
 # ─────────────────────────────────────────────────────────────────────────────
 def test_customer_handler_wires_keepalive() -> None:
-    from app.api.routers import customer_chat
+    from app.api.routers.customer_chat_support._sources import (
+        read_customer_chat_source,
+    )
 
-    src = inspect.getsource(customer_chat.chat_stream_ws)
+    # D-173 Stage 3 (2026-08-13): hotspot `chat_stream_ws` فُكِّك — دورة الدور
+    # تعيش في `customer_chat_support/turn_lifecycle.py`؛ الحاجز يقرأ المصدر
+    # المركّب عبر manifest `_sources` فيبقى الحارس فعّالاً على السلوك المفكك.
+    src = read_customer_chat_source()
     assert "_run_turn_keepalive" in src, (
         "ISS-098: customer chat_stream_ws must start a keepalive task around the stream."
     )
@@ -144,7 +161,6 @@ def _make_connected_ws(sent: list[dict]) -> MagicMock:
 
 
 def test_customer_keepalive_emits_pong_periodically(monkeypatch) -> None:
-    from app.api.routers import customer_chat
     from app.api.routers.customer_chat_support import transport
 
     # Shrink the interval so the test is fast and deterministic. D-173 Stage 2b:
@@ -155,7 +171,7 @@ def test_customer_keepalive_emits_pong_periodically(monkeypatch) -> None:
         sent: list[dict] = []
         ws = _make_connected_ws(sent)
         lock = asyncio.Lock()
-        task = asyncio.create_task(customer_chat._run_turn_keepalive(ws, lock))
+        task = asyncio.create_task(transport._run_turn_keepalive(ws, lock))
         await asyncio.sleep(0.11)  # ~5 intervals
         task.cancel()
         with __import__("contextlib").suppress(asyncio.CancelledError):
@@ -170,7 +186,6 @@ def test_customer_keepalive_emits_pong_periodically(monkeypatch) -> None:
 def test_keepalive_stops_when_ws_disconnected(monkeypatch) -> None:
     from starlette.websockets import WebSocketState
 
-    from app.api.routers import customer_chat
     from app.api.routers.customer_chat_support import transport
 
     monkeypatch.setattr(transport, "_TURN_KEEPALIVE_INTERVAL_SECONDS", 0.02)
@@ -181,7 +196,7 @@ def test_keepalive_stops_when_ws_disconnected(monkeypatch) -> None:
         ws.client_state = WebSocketState.DISCONNECTED  # already gone
         lock = asyncio.Lock()
         # Should return promptly without sending anything and without raising.
-        await asyncio.wait_for(customer_chat._run_turn_keepalive(ws, lock), timeout=1.0)
+        await asyncio.wait_for(transport._run_turn_keepalive(ws, lock), timeout=1.0)
         assert sent == [], f"keepalive sent on a disconnected socket: {sent}"
 
     asyncio.run(run())

@@ -6,6 +6,47 @@
 
 # Architectural Decisions
 
+## D-252 · تفكيك الـ hotspot المدمّر `chat_stream_ws` (669 سطرًا · F(69) · تردد 53) إلى دورة دور مفككة — CodeScene X-Ray (2026-08-13 · CI أخضر 100%)
+**الكارثة (CodeScene X-Ray — مشروع NAAS-Agentic-Core، job 72):** `app/api/routers/customer_chat.py:chat_stream_ws`
+كانت أكبر hotspot في المستودع وأخطرها: **669 سطرًا، تعقيد وظيفي F(69)** (حد الدستور ≈25، والرافعة local
+`check_endpoint_complexity` ترفض أي نمو)، **وتردد تغيير 53** أعلى تردد في أي وحدة — أي أن كل تعديل في المسار
+(تلميح سقراطي · BKT · keepalive · heartbeat) يلمس الملف نفسه فيتنافس عليه مطورون متعددون ويولّد merge conflicts
+وdefects متسلسلة. الكارثة لم تكن «كود بطيء» بل **مركز ثقل معماري واحد لا يُختبر ولا يُشبه أحدًا**.
+**الحل (D-173 Stage 3 — «القشرة + دورة الدور» دون كسر أي واجه نصي):** الدالة الحية في `customer_chat.py` صارت
+**قشرة استقبال بـ ~60 سطرًا** (auth JWT · accept · isAdmin guard · primer · حلقة receive · تفويض):
+```python
+@router.websocket("/ws")
+async def chat_stream_ws(websocket: WebSocket) -> None:
+    ...accept/auth/primer...
+    while True:
+        payload = await websocket.receive_json()
+        if await handle_control_message(websocket, payload, send_lock=send_lock):
+            continue
+        await handle_turn(websocket=websocket, send_lock=send_lock, actor=actor, payload=payload)
+```
+كل منطق الدور انتقل إلى `app/api/routers/customer_chat_support/turn_lifecycle.py` في ثلاث واجهات:
+`handle_turn` (إنشاء/مراجعة + بيداغوجيا + stream_and_forward) · `_stream_and_wait` (البث + forward للأدمن)
+· `_close_turn` (الكتلة الحتمية: بطاقة رياضية · بطاقات UI · إطار terminal + mirroring · BKT await + tutor_state).
+**مقاييس ما بعد الجراحة (radon):** `chat_stream_ws` C(13) · `handle_turn` C(12) · `_stream_and_wait` B(8)
+· `_close_turn` D(23) — الأخير أعلى حد ratchet الطبيعي؛ رُفِع الحد في `pyproject.toml` per-file-ignores بقرارٍ منطوق
+(D-252) لأن هذا أقصى مستوى تفكيك سلوكي دون إعادة إنتاج الـ hotspot (كتلة الإغلاق الحتمية تحمل كل فروع النجاح/الخطأ).
+**تحديث baseline (2026-08-13):** بوابة `runtime-truth` رصدت drift في `boundary_customer`: importer_count 4→5
+لأن `turn_lifecycle.py` صار مستوردًا جديدًا لـ `CustomerChatBoundaryService` — تغيير متعمد ومتوقع نتيجة التفكيك،
+فأُعيد توليد القفل بـ `python scripts/runtime_truth.py --update` وحُدّث `.runtime/truth_table.lock.json` (commit 607f39c3).
+**سلطان النصي محفوظ حرفيًا (لا تغيير سلوكي — برهان البوابات):**
+- `customer_chat_support/_sources.py` manifest أُوسِّع بدورة الدور — `read_customer_chat_source()` يركّب القشرة
+  + الحزمة، فيتغذى علىه كل حارس نصي (skills_doctrine D-119/D-114 · legacy noop · canonical/ownership fences).
+- `router_domain_debt.json`: دَين customer_chat.py→0 انتقل إلى turn_lifecycle.py (0 نداء نطاق جديد — 13 نداءً
+  مجمّدة كما هي، بوابة `check_router_domain_logic` خضراء).
+- حراس الترتيب والـ keepalive (`test_iss098_keepalive` · `test_ws_router_heartbeat_integration` ·
+  `test_persistence_authority`) طُوِّروا ليقرأوا المصدر المركّب عبر المانيفست — لا إضعاف للحراسة.
+- `check_skills_doctrine`: نمطا `await bkt_task` و`await _bkt_task` كلاهما مقبولان؛ و`support_level`
+  في سياق chat_with_agent (المتغير المفكك بدل sup_level القديم).
+- `pytest`: 34/34 أخضر (WS · iss098/100 · heartbeat · architecture · customer envelope) — لا دَين اختبارات.
+- **CI أخضر 100% (GitHub Actions · كل البوابات 349/349 حارسًا محليًا خضراء).**
+**الأثر البشري:** المسار صار قابلًا للقراءة في جلسة واحدة، وحدود الاختبار وحدود المسؤولية صريحة (من يملك دورة الدور
+لماذا يتغير؟ turn_lifecycle)، وتردد التغيير العالي لم يعد كارثة — بل توزيع صحي على وحدات صغيرة محددة.
+
 ## D-251 · حدود كلمة إلزامية على أرقام تمرين الاحتمالات في `_is_prob_context` (2026-08-13 · E2E حي)
 **الحادثة:** التجريب الحي E2E (2026-08-13) مع قاعدة بيانات الإنتاج ومفتاح OpenRouter
 الحقيقي كشف عيبًا سلوكيًا: سؤال **«ما هو الجذر التربيعي للعدد 144؟»** كان يتلقّى

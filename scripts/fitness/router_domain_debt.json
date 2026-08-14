@@ -1,6 +1,6 @@
 {
   "app/api/routers/admin.py": 2,
-  "app/api/routers/customer_chat.py": 6,
+  "app/api/routers/customer_chat_support/turn_lifecycle.py": 6,
   "app/api/routers/customer_chat_support/pedagogy.py": 3,
   "app/api/routers/ums.py": 2
 }

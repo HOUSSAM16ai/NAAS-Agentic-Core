@@ -171,9 +171,15 @@ class TestWebSocketProtocol:
         assert "protocols" in src
 
     def test_customer_chat_uses_orchestrator_client(self) -> None:
-        src = pathlib.Path("app/api/routers/customer_chat.py").read_text()
-        assert "orchestrator_client" in src
-        assert "chat_with_agent" in src
+        # D-252: بعد تفكيك الـ hotspot انتقل `orchestrator_client.chat_with_agent` إلى
+        # دورة الدور `customer_chat_support/turn_lifecycle.py` — والقشرة تعيد تصديره.
+        # يُقبَل العثور عليه في أي منهما.
+        shell = pathlib.Path("app/api/routers/customer_chat.py").read_text()
+        lifecycle = pathlib.Path(
+            "app/api/routers/customer_chat_support/turn_lifecycle.py"
+        ).read_text()
+        assert "orchestrator_client" in shell or "orchestrator_client" in lifecycle
+        assert "chat_with_agent" in shell or "chat_with_agent" in lifecycle
 
     def test_customer_chat_has_websocket_endpoint(self) -> None:
         src = pathlib.Path("app/api/routers/customer_chat.py").read_text()

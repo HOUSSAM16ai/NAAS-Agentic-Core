@@ -24,7 +24,7 @@ def _isolate_bkt_runtime_injection():
     هنا تماماً كما تُحيّد خدمة حفظ المحادثة.
     """
     with patch(
-        "app.api.routers.customer_chat._evaluate_bkt_cards",
+        "app.api.routers.customer_chat_support.turn_lifecycle._evaluate_bkt_cards",
         new=AsyncMock(return_value=[]),
     ):
         yield
@@ -104,15 +104,15 @@ async def test_customer_ws_legacy_protocol_when_flag_disabled(test_app) -> None:
                 return_value={"sub": "1", "is_admin": False},
             ):
                 with patch(
-                    "app.api.routers.customer_chat.async_session_factory",
+                    "app.api.routers.customer_chat_support.turn_lifecycle.async_session_factory",
                     return_value=_mock_async_session_context(mock_actor),
                 ):
                     with patch(
-                        "app.api.routers.customer_chat.CustomerChatBoundaryService",
+                        "app.api.routers.customer_chat_support.turn_lifecycle.CustomerChatBoundaryService",
                         return_value=customer_service,
                     ):
                         with patch(
-                            "app.api.routers.customer_chat.orchestrator_client.chat_with_agent",
+                            "app.api.routers.customer_chat_support.turn_lifecycle.orchestrator_client.chat_with_agent",
                             return_value=_stream_single_delta(),
                         ):
                             with TestClient(test_app) as client:
@@ -148,15 +148,15 @@ async def test_customer_ws_unified_protocol_when_flag_enabled(test_app) -> None:
                 return_value={"sub": "1", "is_admin": False},
             ):
                 with patch(
-                    "app.api.routers.customer_chat.async_session_factory",
+                    "app.api.routers.customer_chat_support.turn_lifecycle.async_session_factory",
                     return_value=_mock_async_session_context(mock_actor),
                 ):
                     with patch(
-                        "app.api.routers.customer_chat.CustomerChatBoundaryService",
+                        "app.api.routers.customer_chat_support.turn_lifecycle.CustomerChatBoundaryService",
                         return_value=customer_service,
                     ):
                         with patch(
-                            "app.api.routers.customer_chat.orchestrator_client.chat_with_agent",
+                            "app.api.routers.customer_chat_support.turn_lifecycle.orchestrator_client.chat_with_agent",
                             return_value=_stream_single_delta(),
                         ):
                             with TestClient(test_app) as client:
@@ -286,15 +286,15 @@ async def test_customer_ws_forwards_recent_history_messages_to_orchestrator(test
             return_value={"sub": "1", "is_admin": False},
         ):
             with patch(
-                "app.api.routers.customer_chat.async_session_factory",
+                "app.api.routers.customer_chat_support.turn_lifecycle.async_session_factory",
                 return_value=_mock_async_session_context(mock_actor),
             ):
                 with patch(
-                    "app.api.routers.customer_chat.CustomerChatBoundaryService",
+                    "app.api.routers.customer_chat_support.turn_lifecycle.CustomerChatBoundaryService",
                     return_value=customer_service,
                 ):
                     with patch(
-                        "app.api.routers.customer_chat.orchestrator_client.chat_with_agent",
+                        "app.api.routers.customer_chat_support.turn_lifecycle.orchestrator_client.chat_with_agent",
                         chat_with_agent_mock,
                     ):
                         with TestClient(test_app) as client:
@@ -399,15 +399,15 @@ async def test_customer_ws_followup_uses_previous_answer_context_behaviorally(te
             return_value={"sub": "1", "is_admin": False},
         ):
             with patch(
-                "app.api.routers.customer_chat.async_session_factory",
+                "app.api.routers.customer_chat_support.turn_lifecycle.async_session_factory",
                 return_value=_mock_async_session_context(mock_actor),
             ):
                 with patch(
-                    "app.api.routers.customer_chat.CustomerChatBoundaryService",
+                    "app.api.routers.customer_chat_support.turn_lifecycle.CustomerChatBoundaryService",
                     return_value=customer_service,
                 ):
                     with patch(
-                        "app.api.routers.customer_chat.orchestrator_client.chat_with_agent",
+                        "app.api.routers.customer_chat_support.turn_lifecycle.orchestrator_client.chat_with_agent",
                         chat_with_agent_mock,
                     ):
                         with TestClient(test_app) as client:

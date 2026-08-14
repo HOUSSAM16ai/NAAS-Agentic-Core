@@ -93,7 +93,8 @@ class TestContinuationMarkersBindContext:
 # ── Fix 2: لا تقطيع لنثر LLM إلى بطاقة خطوات وهمية ────────────────────────────
 class TestNoProseChopping:
     def test_try_build_math_ui_component_disabled(self) -> None:
-        from app.api.routers.customer_chat import _try_build_math_ui_component
+        # D-252: الرمز انتقل مع تفكيك الـ hotspot (D-173 Stage 3) إلى وحدة frames الحقيقية.
+        from app.api.routers.customer_chat_support.frames import _try_build_math_ui_component
 
         prose = (
             "## احتمال شرطي\n\nبالعربي: نقسم الحالات.\n"

@@ -19,7 +19,11 @@ def _read(path: str) -> str:
 
 def test_monolith_routers_use_compatibility_facade_handshake() -> None:
     """The handshake that makes Monolith the sole user-message writer must remain."""
-    customer = _read("app/api/routers/customer_chat.py")
+    from app.api.routers.customer_chat_support._sources import (
+        read_customer_chat_source,
+    )
+
+    customer = read_customer_chat_source()
     admin = _read("app/api/routers/admin.py")
 
     assert '"compatibility_facade": True' in customer, (
@@ -34,7 +38,11 @@ def test_monolith_routers_use_compatibility_facade_handshake() -> None:
 
 def test_monolith_routers_read_persisted_signal() -> None:
     """Monolith must read `persisted: true` to skip duplicate assistant writes."""
-    customer = _read("app/api/routers/customer_chat.py")
+    from app.api.routers.customer_chat_support._sources import (
+        read_customer_chat_source,
+    )
+
+    customer = read_customer_chat_source()
     admin = _read("app/api/routers/admin.py")
 
     for source, label in ((customer, "customer_chat"), (admin, "admin")):
@@ -92,7 +100,11 @@ def test_event_protocol_normalizer_passes_through_control_events() -> None:
 
 def test_critical_data_loss_logging_present_in_both_routers() -> None:
     """Fail-safe write failure must be loud, not silent."""
-    customer = _read("app/api/routers/customer_chat.py")
+    from app.api.routers.customer_chat_support._sources import (
+        read_customer_chat_source,
+    )
+
+    customer = read_customer_chat_source()
     admin = _read("app/api/routers/admin.py")
 
     for source, label in ((customer, "customer_chat"), (admin, "admin")):

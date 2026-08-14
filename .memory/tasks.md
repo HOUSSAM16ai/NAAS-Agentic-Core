@@ -1,7 +1,21 @@
 # Tasks — What Comes Next
 > 🧭 **خارطة الطريق الثورية الكاملة (المراحل M0→M11):** **`.memory/roadmap.md`** — المصدر الحيّ الوحيد. المخطّط التالي: M6 صدق BKT · M7 واجهات بلا أرقام · M8 وضع التحقق · M9 فجوة الوهم · M10 هجرة الرسم.
-> Last updated: 2026-08-13 | Branch: `fix/d250-strategy-hotspot` (D-250)
+> Last updated: 2026-08-14 | Branch: `fix/d253-orchestrator-hotspot` (D-253)
 > Priority: 🔴 Critical → 🟡 Medium → 🟢 Nice-to-have
+
+---
+
+## ✅ Resolved — D-253: جراحة النقطة الساخنة `agents/orchestrator.py` (2026-08-14 · CodeScene X-Ray)
+- **النقطة الساخنة الثالثة** (CodeScene: `_handle_content_retrieval` C(14)/B(16) ·
+  `_build_recent_history_brief` C(12) · `_handle_chat_fallback` B(10) · `_extract_context_anchor` B(10) ·
+  `_looks_like_pronoun_followup` C(7) · `_ai_extract_search_params` A(4) · 552 سطرًا) — `orchestrator.py` صار
+  قشرة استقبال تفوض + حزمة `orchestrator_support/` خمس شرائح نقية (search_params · explanation · chat_fallback ·
+  content_retrieval · history_context) بنمط D-173 Stage 3 «القشرة + دورة الدور» صفر تغيير سلوكي.
+- **البرهان:** ruff أخضر على القشرة والحزمة · `PLR0912` أُزيل من قائمة الدَين نصًا (ratchet يتقلص — الفروع ≤12)
+  · مانيفست مركّب `_sources.py` يغذي الحراس النصية · `runtime_truth` + القفل محدّثان · pytest 14/14 · CI أخضر 100%.
+- **التوثيق الموحَّد:** D-253 في `decisions.md` + ISS-165 في `issues.md` + الفهرس السيادي + §6.9 في `CLAUDE.md`
+  + README/README.ar.md + DOCUMENTATION_INDEX.md (كل الأرقام المشتقة محدَّثة — بوّابة `check_constitution_reality`
+  خضراء).
 
 ---
 

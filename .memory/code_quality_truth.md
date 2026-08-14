@@ -217,6 +217,21 @@ D-164/D-249 (سلوك مطابق بالبايت): `MissionComplexHandler` قشر
 فقط، D-105) · اختبارات جديدة **35/35 أخضر** · تغطية الوحدة **64%** (374 بيانًا —
 كانت صفرًا؛ اختباراتٌ كانت غائبة أصلاً).
 
+**النقطة الساخنة الثالثة (`agents/orchestrator.py`، تقرير X-Ray 2026-08-14):**
+`_handle_content_retrieval` (C14/B16 · Complex Method) + `_build_recent_history_brief`
+(C12) + `_handle_chat_fallback` (B10 · Complex Method) + `_extract_context_anchor`
+(B10 · Complex Method · Complex Conditional) + `_looks_like_pronoun_followup` (C7) +
+`_ai_extract_search_params` (A4) — 552 سطرًا · تردد تغيير عالٍ — مركز ثقل واحد
+(استخراج فلاتر البحث · الشرح · المحادثة الاحتياطية · سياق التاريخ · استرجاع المحتوى).
+✅ **مُصلَحة في D-253** بنمط D-173 Stage 3 «القشرة + دورة الدور» (صفر تغيير سلوكي):
+قشرة استقبال تفوض عبر التوقيعات نفسها (العامة والخاصة — قانون late-binding) + حزمة
+`orchestrator_support/` خمس شرائح نقية (`search_params` · `explanation` · `chat_fallback`
+· `content_retrieval` · `history_context`) ومانيفست مركّب `_sources.py` يغذي كل حارسٍ نصي.
+مقاييس ما بعد الجراحة (radon): `_run_stream` C(6) · `_handle_content_retrieval` B(9) ·
+`_deliver_retrieved_content` B(9) · `_handle_chat_fallback` B(7). البرهان: ruff أخضر
+· `PLR0912` أُزيل من قائمة الدَين نصًا (ratchet يتقلص — الفروع ≤12) · `runtime_truth` +
+القفل محدّثان بقرارٍ مُرقَّم لا صمتًا · pytest 14/14 · CI أخضر 100%.
+
 **عيب سلوكي كشفه التجريب الحي E2E (2026-08-13) مع قاعدة بيانات الإنتاج:** سؤال
 «ما هو الجذر التربيعي للعدد 144؟» كان يُعاد إليه ردّ عقل الاحتمالات الذي يسأل عن
 تمرين الكرات المخزَّن (حمراء/خضراء/بيضاء) بدل الإجابة. **الجذر:** `_is_prob_context`

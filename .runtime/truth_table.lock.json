@@ -1,5 +1,5 @@
 {
-  "branch": "hotfix/codescene-hotspot-chat-stream-ws-decomposition",
+  "branch": "feat/D-253-orchestrator-hotspot-surgery",
   "components": [
     {
       "agreed": true,
@@ -162,6 +162,26 @@
       "on_live_chain": false
     },
     {
+      "agreed": false,
+      "derived_status": "ZOMBIE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/services/chat/agents/orchestrator_support/__init__.py",
+        "app/services/chat/agents/orchestrator_support/_sources.py",
+        "app/services/chat/agents/orchestrator_support/explanation.py",
+        "app/services/chat/agents/orchestrator_support/search_params.py",
+        "app/services/chat/agents/orchestrator_support/chat_fallback.py",
+        "app/services/chat/agents/orchestrator_support/content_retrieval.py",
+        "app/services/chat/agents/orchestrator_support/history_context.py"
+      ],
+      "id": "orchestrator_support",
+      "importer_count": 0,
+      "importers_sample": [],
+      "name": "OrchestratorSupport shards (D-253)",
+      "notes": "D-253: turn-lifecycle shards extracted from agents/orchestrator.py; consumed by the orchestrator shell itself and its own test suite.",
+      "on_live_chain": false
+    },
+    {
       "agreed": true,
       "derived_status": "PARTIAL",
       "expected_status": "PARTIAL",
@@ -292,6 +312,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-13T22:53:03.349351+00:00",
+  "generated_at_utc": "2026-08-14T03:27:51.725630+00:00",
   "schema_version": 1
 }

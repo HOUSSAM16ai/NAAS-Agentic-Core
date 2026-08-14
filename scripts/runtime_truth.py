@@ -147,6 +147,24 @@ CATALOG: list[TrackedComponent] = [
         notes="Only consumer is agents/orchestrator.py (also ZOMBIE).",
     ),
     TrackedComponent(
+        id="orchestrator_support",
+        name="OrchestratorSupport shards (D-253)",
+        files=[
+            "app/services/chat/agents/orchestrator_support/__init__.py",
+            "app/services/chat/agents/orchestrator_support/_sources.py",
+            "app/services/chat/agents/orchestrator_support/explanation.py",
+            "app/services/chat/agents/orchestrator_support/search_params.py",
+            "app/services/chat/agents/orchestrator_support/chat_fallback.py",
+            "app/services/chat/agents/orchestrator_support/content_retrieval.py",
+            "app/services/chat/agents/orchestrator_support/history_context.py",
+        ],
+        expected_status="ACTIVE",
+        notes=(
+            "D-253: turn-lifecycle shards extracted from agents/orchestrator.py; "
+            "consumed by the orchestrator shell itself and its own test suite."
+        ),
+    ),
+    TrackedComponent(
         id="boundary_customer",
         name="CustomerChatBoundaryService",
         files=["app/services/boundaries/customer_chat_boundary_service.py"],

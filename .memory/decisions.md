@@ -6,6 +6,37 @@
 
 # Architectural Decisions
 
+## D-253 · تفكيك hotspot وكيل التنسيق `orchestrator.py` (خمس دوال B/C · تردد تغيير عالٍ) إلى قشرة استقبال + حزمة شرائح دورة الدور `orchestrator_support` — CodeScene X-Ray (2026-08-14 · CI أخضر 100%)
+**الكارثة (CodeScene X-Ray — مشروع NAAS-Agentic-Core، تقرير Hotspots):** `app/services/chat/agents/orchestrator.py`
+بـ **552 سطرًا** كان hotspotًا حيًا يحمل خمس دوال بتعقيد متجاوز حد الدستور: `_handle_content_retrieval` C(14)/B(16)
+· `_build_recent_history_brief` C(12) · `_handle_chat_fallback` B(10) · `_extract_context_anchor` B(10) ·
+`_looks_like_pronoun_followup` C(7) · `_ai_extract_search_params` A(4) — **مركز ثقل معماري واحد** يحمل استخراج
+فلاتر البحث والشرح التربوي والمحادثة الاحتياطية وسياق التاريخ واسترجاع المحتوى معًا، دون حدود مسؤولية واضحة.
+**الحل (نمط D-252 «القشرة + دورة الدور» — صفر تغيير سلوكي):** `orchestrator.py` صار **قشرة استقبال وتفويض** (~480
+سطرًا، أُزيل منها كل منطق الدور) تفوض عبر التوقيعات العامة نفسها (`run` · `__init__` · `data_agent` ·
+`refactor_agent`) والتوقيعات الخاصة القديمة (كـ`_handle_chat_fallback` · `_ai_extract_search_params` ·
+`_looks_like_pronoun_followup`) — تبقى قشور تفويض حرفية ليبقى كل monkeypatch واختبار على الأسماء القديمة فعالًا
+(قانون late-binding من D-252). كل منطق الدور انتقل إلى حزمة جديدة
+`app/services/chat/agents/orchestrator_support/` في خمس شرائح نقية بلا حالة:
+`search_params.py` (استخلاص فلاتر البحث AI + تراجع حتمي — النص التوجيهي وخريطة المواضيع مطابقة حرفًا) ·
+`explanation.py` (شرح Smart Tutor على الحل الرسمي + رسائل الاحتياطية) · `chat_fallback.py` (التعليمات الصارمة
++ كتل سلم التنقيط) · `content_retrieval.py` (دلتات التسليم + اختيار المرشح + قرارات الحل) ·
+`history_context.py` (المرجعية الضمنية · الموجز · الحقن). **مقاييس ما بعد الجراحة (radon):** القشرة
+`_run_stream` C(6) · `_handle_content_retrieval` B(9) · `_deliver_retrieved_content` B(9) ·
+`_handle_chat_fallback` B(7) · الشرائح F/A بالكامل؛ المتوسط الكلي A(3.5).
+**رُفِع التجميد نصيًا (ratchet يتقلص):** أُزيل `orchestrator.py` من قائمة `PLR0912` في
+`pyproject.toml` per-file-ignores — لم تعد الدالة تحتاج تجميدًا لأن فروعها صارت ≤12 (حد الدستور) بعد التفكيك،
+و`ruff` أخضر على الملف والحزمة بلا أي إغفال جديد (PLR0917 أُغلق بـ`_ContentDeliveryPlan` مُجمِّعة للصلاحيات الثلاث).
+**تحديث baseline:** أُضيف `orchestrator_support` (ACTIVE) إلى `scripts/runtime_truth.py` وأُعيد توليد القفل
+بـ`python scripts/runtime_truth.py --update` — `.runtime/truth_table.lock.json` يُمثّل الجراحة.
+**سلطان النصي محفوظ حرفيًا (لا تغيير سلوكي — برهان البوابات):** `orchestrator_support/_sources.py` مانيفست
+(نمط D-164/D-173/D-252) يركّب القشرة + الشرائح الخمس عبر `read_orchestrator_agent_source()` — كل حارسٍ نصي
+يقرأ السلوك المفكك كاملًا لا القشرة فقط. `pytest`: 14/14 أخضر على اختبارات الوكيل (agent lifecycle · حقن
+الحل الرسمي في الـprompt · دقة المرجعية الضمنية) — لا دَين اختبارات.
+**الأثر البشري:** دورة الدور الواحدة صارت خمس ملفات مسماة بمسؤوليتها، وكل تعديل مستقبلي في الشرح أو البحث أو
+التاريخ يلمس شريحة واحدة محددة، وتردد التغيير العالي لم يعد كارثة — بل توزيع صحي. القشرة تبقى مرجع التفويض
+الوحيد فيبقى الفهم من ملف واحد.
+
 ## D-252 · تفكيك الـ hotspot المدمّر `chat_stream_ws` (669 سطرًا · F(69) · تردد 53) إلى دورة دور مفككة — CodeScene X-Ray (2026-08-13 · CI أخضر 100%)
 **الكارثة (CodeScene X-Ray — مشروع NAAS-Agentic-Core، job 72):** `app/api/routers/customer_chat.py:chat_stream_ws`
 كانت أكبر hotspot في المستودع وأخطرها: **669 سطرًا، تعقيد وظيفي F(69)** (حد الدستور ≈25، والرافعة local

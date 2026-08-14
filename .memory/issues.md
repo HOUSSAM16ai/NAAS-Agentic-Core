@@ -1,4 +1,26 @@
 # Open Issues & Bugs
+## ISS-165 (2026-08-14) — كارثة الـ hotspot المدمّر `agents/orchestrator.py`: خمس دوال B/C تعقيد متجاوز الحد · تردد تغيير عالٍ — ✅ مُغلق (D-253)
+
+**البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots):** ملف `app/services/chat/agents/orchestrator.py`
+bـ **552 سطرًا** كان hotspotًا حيًا مركز ثقل معماري واحد: `_handle_content_retrieval` C(14)/B(16) ·
+`_build_recent_history_brief` C(12) · `_handle_chat_fallback` B(10) · `_extract_context_anchor` B(10) ·
+`_looks_like_pronoun_followup` C(7) · `_ai_extract_search_params` A(4) — يحمل استخراج فلاتر البحث والشرح
+التربوي والمحادثة الاحتياطية وسياق التاريخ واسترجاع المحتوى معًا دون حدود مسؤولية.
+
+**السبب الجذري:** نفس سبب ISS-164 تمامًا — كل منطق الدور في وكيل واحد متراكم، والقشرة لا تفصل الاستقبال عن التنفيذ،
+فكل تحسين في أي ناحية من نواحي الرد التربوي يلمس الملف نفسه.
+
+**العلاج (D-253 — جراحة «القشرة + دورة الدور» صفر تغيير سلوكي):** القشرة بقت تفوض التوقيعات نفسها (العامة
+والخاصة — قانون late-binding)؛ منطق الدور انتقل إلى `app/services/chat/agents/orchestrator_support/` في خمس
+شرائح نقية: search_params · explanation · chat_fallback · content_retrieval · history_context. مقاييس ما بعد
+الجراحة (radon): `_run_stream` C(6) · `_handle_content_retrieval` B(9) · `_deliver_retrieved_content` B(9) ·
+`_handle_chat_fallback` B(7). رُفِع تجميد `PLR0912` عن الملف نصًا (ratchet يتقلص — الفروع ≤12 الآن). المانيفست
+`orchestrator_support/_sources.py` يركّب المصدر المركّب لكل الحراس النصية، وتحديث `runtime_truth` + القفل
+بقرارٍ مُرقَّم لا صمتًا. **pytest 14/14 أخضر · CI GitHub Actions أخضر 100%.**
+
+**الدرس المعماري:** نمط D-252 («قشرة ثابتة + شرائح متغيرة مفصولة عبر تفويضٍ وحيد») أثبت تكراره صالحًا — hotspot
+الثاني في المستودع عولج بالمنهجية نفسها خلال يوم واحد، والفهرس والمقياس والحراس كلها مُحدَّثة.
+
 ## ISS-164 (2026-08-13) — كارثة الـ hotspot: `chat_stream_ws` 669 سطرًا · تعقيد F(69) · تردد تغيير 53 — ✅ مُغلق (D-252)
 
 **البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، job 72):** ملف `app/api/routers/customer_chat.py`

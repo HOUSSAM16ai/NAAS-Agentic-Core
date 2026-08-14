@@ -102,8 +102,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Customer + Admin routers must import + call open_ws_turn / close_ws_turn
-          for router in app/api/routers/customer_chat.py app/api/routers/admin.py; do
+          # Admin router must import + call open_ws_turn / close_ws_turn.
+          # D-252: the customer chat turn lifecycle moved to
+          # app/api/routers/customer_chat_support/turn_lifecycle.py (customer_chat.py
+          # is now a thin auth shell that delegates to handle_turn). Verify the
+          # composed entry point (shell + lifecycle) still carries the wiring.
+          for router in app/api/routers/admin.py app/api/routers/customer_chat_support/turn_lifecycle.py; do
             grep -q "from app.telemetry.path_observer import .*open_ws_turn" "$router" \
               || { echo "::error::$router missing open_ws_turn import"; exit 1; }
             grep -q "open_ws_turn(" "$router" \
@@ -111,6 +115,13 @@ jobs:
             grep -q "close_ws_turn(" "$router" \
               || { echo "::error::$router missing close_ws_turn() call"; exit 1; }
           done
+          # D-252: the shell (customer_chat.py) delegates to
+          # customer_chat_support.turn_lifecycle.handle_turn, which carries the
+          # open/close wiring; the composed source (_sources.py) must reference
+          # it so the entry point keeps path-observer telemetry.
+          grep -q "customer_chat_support/turn_lifecycle.py" \
+             app/api/routers/customer_chat_support/_sources.py \
+            || { echo "::error::_sources.py missing turn_lifecycle.py entry"; exit 1; }
           # OTel setup must be wired into kernel
           grep -q "setup_otel" app/kernel.py \
             || { echo "::error::app/kernel.py missing setup_otel wiring"; exit 1; }

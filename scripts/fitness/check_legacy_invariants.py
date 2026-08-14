@@ -626,6 +626,7 @@ COMPOSED_REQUIRED: list[tuple[str, list[str], list[str]]] = [
         "tutor sources (client + brain + orchestrator mixins)",
         [
             "app/infrastructure/clients/orchestrator_client.py",
+            "app/infrastructure/clients/orchestrator_client_support/*.py",  # D-256
             "app/services/skills/probability_tutor_brain.py",
             "app/services/skills/probability_brain/*.py",
             "app/infrastructure/clients/orchestrator/*.py",

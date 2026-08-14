@@ -56,6 +56,25 @@ def _read_customer_chat_source() -> str:
     return mod.read_customer_chat_source()
 
 
+def _read_orchestrator_client_source() -> str:
+    """مصدر العميل المُركَّب (قشرة `orchestrator_client.py` + شرائح `orchestrator_client_support/*`).
+
+    D-256: بعد تفكيك hotspot العميل (CodeScene X-Ray job 72) انتقل القلب النقي
+    (طلب الـ missions الموحد + payload الـ JWT + قرار الاسترجاع المفهرَس عالي التردد)
+    إلى حزمة الشرائح — الفحوص التي تبحث عن رموز مستهلَكة يجب أن تمسح المصدر
+    المُركَّب وإلا فقدت قيمتها بعد التفكيك. تحميل مباشر بـ importlib (يتجاوز
+    استيرادات pydantic) — يحفظ خاصية البيئات المتدهورة.
+    """
+    import importlib.util
+
+    manifest_path = ROOT / "app/infrastructure/clients/orchestrator_client_support/_sources.py"
+    spec = importlib.util.spec_from_file_location("occ_sources_gate", manifest_path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    return mod.read_orchestrator_client_source()
+
+
 def _read_brain_source() -> str:
     """مصدر العقل المُركَّب (composition root + mixins) عبر manifest D-168.
 

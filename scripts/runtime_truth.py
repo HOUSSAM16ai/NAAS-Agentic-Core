@@ -180,6 +180,23 @@ CATALOG: list[TrackedComponent] = [
         ),
     ),
     TrackedComponent(
+        id="orchestrator_client_support",
+        name="OrchestratorClient shards (D-256)",
+        files=[
+            "app/infrastructure/clients/orchestrator_client_support/__init__.py",
+            "app/infrastructure/clients/orchestrator_client_support/_sources.py",
+            "app/infrastructure/clients/orchestrator_client_support/missions.py",
+            "app/infrastructure/clients/orchestrator_client_support/preempts.py",
+        ],
+        expected_status="ACTIVE",
+        notes=(
+            "D-256: mission-client shards extracted from orchestrator_client.py "
+            "(238 lines · Code Duplication on get_mission/get_mission_events · "
+            "_has_indexed_match top churn); consumed by the orchestration shell and "
+            "its own test suite."
+        ),
+    ),
+    TrackedComponent(
         id="boundary_customer",
         name="CustomerChatBoundaryService",
         files=["app/services/boundaries/customer_chat_boundary_service.py"],

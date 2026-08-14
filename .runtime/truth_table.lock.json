@@ -1,5 +1,5 @@
 {
-  "branch": "main",
+  "branch": "feat/d256-orchestrator-client-hotspot",
   "components": [
     {
       "agreed": true,
@@ -73,16 +73,15 @@
         "app/infrastructure/clients/orchestrator_client.py"
       ],
       "id": "orchestrator_client",
-      "importer_count": 8,
+      "importer_count": 7,
       "importers_sample": [
         "app/api/routers/admin.py",
         "app/api/routers/customer_chat.py",
         "app/api/routers/customer_chat_support/pedagogy.py",
         "app/api/routers/customer_chat_support/turn_lifecycle.py",
+        "app/infrastructure/clients/orchestrator_client_support/__init__.py",
         "app/services/chat/orchestrator.py",
-        "app/services/skills/bac_exercise_skill.py",
-        "scripts/gitpod_live_debug.py",
-        "scripts/gitpod_ui_test.py"
+        "app/services/skills/bac_exercise_skill.py"
       ],
       "name": "Orchestrator HTTP client + fallback chain",
       "notes": "Sole entrypoint to chat from customer_chat.py and admin.py.",
@@ -197,6 +196,27 @@
       ],
       "name": "ContentTools shards (D-255)",
       "notes": "D-255: research-content shards extracted from tools/content.py (search_content hotspot C(14) · 112 lines · churn 40); consumed by the content shell and its own test suite.",
+      "on_live_chain": false
+    },
+    {
+      "agreed": false,
+      "derived_status": "ZOMBIE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/infrastructure/clients/orchestrator_client_support/__init__.py",
+        "app/infrastructure/clients/orchestrator_client_support/_sources.py",
+        "app/infrastructure/clients/orchestrator_client_support/missions.py",
+        "app/infrastructure/clients/orchestrator_client_support/preempts.py"
+      ],
+      "id": "orchestrator_client_support",
+      "importer_count": 3,
+      "importers_sample": [
+        "app/infrastructure/clients/orchestrator_client.py",
+        "app/infrastructure/clients/orchestrator_client_support/__init__.py",
+        "tests/microservices/test_orchestrator_client_missions.py"
+      ],
+      "name": "OrchestratorClient shards (D-256)",
+      "notes": "D-256: mission-client shards extracted from orchestrator_client.py (238 lines · Code Duplication on get_mission/get_mission_events · _has_indexed_match top churn); consumed by the orchestration shell and its own test suite.",
       "on_live_chain": false
     },
     {
@@ -330,6 +350,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-14T14:58:26.042951+00:00",
+  "generated_at_utc": "2026-08-14T22:02:35.623448+00:00",
   "schema_version": 1
 }

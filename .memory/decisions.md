@@ -3,6 +3,33 @@
 > This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
 > The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.# Architectural Decisions
+## D-257 · إصلاح `InvalidRequestError: name 'Mission' is not defined` — علاقة `User.missions` كانت تُجمّد mapper عند أول جلسةٍ لم تستورد `domain.mission` فيتعطل حفظ رسائل الطالب — (E2E حيّ 2026-08-14 · ISS-169)
+**البلاغ (E2E runtime حيّ على Supabase):** login أخضر للأدمن والمستخدم · `/health` صادق (`database=ok`) · لكن أول رسالة طالب عبر `WS /api/chat/ws` تسقط عند `save_message` برسالة `Failed to persist customer user message locally:` — استثناءٌ بلا نص يُبتلع.
+**السبب الجذري:** `User.missions` عرّفت `foreign_keys="[Mission.initiator_id]"` كسلسلة حرفية مع إبقاء `Mission` داخل `TYPE_CHECKING` فقط — أول جلسة DB لم تستورد `app.core.domain.mission` بعد تتعطل عند أول `commit` لأن mapper يرمي `InvalidRequestError`.
+**القرار:** تحميل `Mission` صراحةً خارج `TYPE_CHECKING` في `app/core/domain/user.py` وتحويل `foreign_keys` إلى المرجع الكائني `[Mission.initiator_id]` — بلا دائرة استيراد (`.future__ annotations` + `mission.py` يستخدم سلسلة في `back_populates`)، وسلسلة `"app.core.domain.mission.Mission"` في العلاقة استُبدلت بالكائن نفسه.
+**التدوير المُلزم:** الفشل أُعيد إنتاجه قبل الإصلاح (traceback كامل) ونُفي بعده (رسالة `id=4915` محفوظة في الإنتاج الفعلي دون أي preloading للنماذج — مسار kernel الحقيقي) + `ruff check` أخضر.
+
+## D-256 · تفكيك hotspot العميل `orchestrator_client.py` (238 سطرًا · Code Duplication على `get_mission`/`get_mission_events` · `_has_indexed_match` أعلى تردد churn=2) إلى قشرة تفويض + حزمة شرائح `orchestrator_client_support` — CodeScene X-Ray (2026-08-14 · صفر تغيير سلوكي · اختبارات خضراء)
+**الكارثة (CodeScene X-Ray — NAAS-Agentic-Core، job 72):** `app/infrastructure/clients/orchestrator_client.py` بـ **238 سطرًا**
+حمل Code Duplication على دالتَي missions (`get_mission` 16 سطرًا · `get_mission_events` 15 سطرًا) — نمط `client +
+try/except + raise_for_status + 404-handling + json` مكرر حرفًا — و`create_mission` (30 سطرًا) يكرر القلب نفسه،
+و`_build_service_jwt` (26 سطرًا) يبني payload مكررًا، و`_has_indexed_match` (38 سطرًا · churn=2) أعلى دالة ترددًا
+مع embedded import و`try/except` واسع يلتقط كل شيء، و`_has_explanation_with_context_match` (22 سطرًا).
+**الحل (نمط D-252/D-253/D-254/D-255 «القشرة + الشرائح + المانيفست المركّب» — صفر تغيير سلوكي):** `orchestrator_client.py`
+صار **قشرة تفويضٍ حرفية**: كل التوقيعات العامة (`get_mission` · `get_mission_events` · `create_mission`) والخاصة
+القديمة (`_has_indexed_match` · `_build_service_jwt` · `_has_explanation_with_context_match`) بقيت قشورًا نصّية
+تفوّض إلى الشرائح ليبقى كل اختبار وmonkeypatch فعالًا (قانون late-binding من D-252). كل منطق الدور انتقل إلى حزمة
+`app/infrastructure/clients/orchestrator_client_support/` بشريحتين نقيّتين بلا حالة: `missions.py` (القلب الموحد
+`_request_mission` لكل طلبات missions الثلاث — يقتل الازدواج — مع `ServiceJwtPayload` بياناتٌ معلنة للـ JWT
+و`MissionRequestArgs`) و`preempts.py` (`resolve_indexed_anchor` يعزل قرار استعلام Supabase عن الطبقة المعرفية
+المحلية · `resolve_explanation_with_context`) · مانيفست مركّب `_sources.py` (نمط D-164/D-173/D-252/D-255) يتغذى
+منه حارسا `check_legacy_invariants` و`check_skills_doctrine` الموسّعان نصًا.
+**الأثر البشري:** إضافة مهمة أو مزوّدٍ جديد تلمس شريحة واحدة معرّفة؛ والتردد العالي على `_has_indexed_match`
+لم يعد كارثة — بل توزيع صحي على القشرة الثابتة والشرائح، والازدواج الذي كان يتكاثر مع كل طلبٍ جديد صارت له قناةٌ
+وحيدة لا قالبٌ جديد.
+**الأدلة:** 11 اختبارًا سلوكًا جديدًا أخضر (مطابقة حرفية للأصل: 404 ⇒ None/[] · خطأ HTTP ≥400 غير 404 يُرمى كما
+هو · JWT يحوي claim الإدمن `admin`) + القديمة 13/13 · ruff 0.14.0 (All checks passed) · الحراس الموسّعة خضراء.
+
 ## D-255 · تفكيك hotspot أدوات المحتوى `tools/content.py` (173 سطرًا · `search_content` C(14) · تردد تغيير 40) إلى قشرة استقبال + حزمة شرائح `content_support` — CodeScene X-Ray (2026-08-14 · صفر تغيير سلوكي · اختبارات خضراء)
 **الكارثة (CodeScene X-Ray — NAAS-Agentic-Core، job 72):** `app/services/chat/tools/content.py` كان hotspotًا حيًا بتردد تغيير 40
 (أعلى ترددٍ في الملف) ودالتين فاشلتين حدود الدستور: `search_content` **112 سطرًا · C(14) · 9 وسائط موضعية + kwargs**

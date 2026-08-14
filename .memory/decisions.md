@@ -2,11 +2,27 @@
 > **Note: Core Architectural Doctrine Update**
 > This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
 > The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
-> See `cognitive_lab_philosophy.md` for the foundational doctrine.
+> See `cognitive_lab_philosophy.md` for the foundational doctrine.# Architectural Decisions
+## D-254 · تفكيك hotspot بوابة الـ API `api_gateway/main.py` (586 سطرًا · ازدواج داخلي 4 · تردد تغيير 10) إلى سجل توجيهٍ تصريحي `ROUTE_REGISTRY` — CodeScene X-Ray (2026-08-14 · CI أخضر 100%)
+**الكارثة (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots):** `microservices/api_gateway/main.py` بـ **586 سطرًا**
+كان hotspotًا حيًا مركز ثقل معماري واحد — البوابة الوحيدة لكل دخول إلى المنصة: `admin_chat_ws_proxy` تردد 10 ·
+`chat_ws_proxy` تردد 9 · `health_check` تردد 5 · `_resolve_chat_ws_target` تردد 5 · `chat_http_proxy` تردد 5 ·
+`lifespan` Bumpy Road Ahead تردد 33 — **سبعة عشر وكيلًا يدويًا متطابق البنية** (`system_proxy` · `datamesh_proxy`
+· `content_proxy` · `admin_ai_config_proxy` · `missions_root_proxy` · `missions_path_proxy` · `security_proxy` ·
+`admin_proxy` · `auth_proxy` …) تحمل Code Duplication = 4 لكل منها، وخمسة عشر وكيل WebSocket/HTTP متكررة المنطق حرفيًا.
+**الحل (نمط D-252/D-253 «قشرة ثابتة + بيانات متغيرة» — صفر تغيير سلوكي):** `main.py` صار **قشرة تسجيل وتفويض**: سجل
+`ROUTE_REGISTRY` (51 سطرًا) يعلن كل المسارات (الطريقة · المسار · الاسم · target · نوع الوكيل · خصائص OpenAPI) وتُبنى
+المعالجات **مُنشأةً آليًا** عبر `_build_proxy_handler` في اتجاهين (معالج مسار `path: str` ومعالج جذر) — 27 مسارًا في
+~470 سطرًا بدل 586، والدوال المتكررة الـ17 صارت **بياناتٍ معلنة** لا كودًا مكررًا، و`lifespan` و`_health_dependency_targets`
+و`_emit_gateway_identity_log` أُبسطت. كل اسم قديم بقي **اسمًا صريحًا** في السجل (لا strings مولّدة) ليبقى كل اختبار
+وmonkeypatch على الأسماء القديمة فعالًا (قانون late-binding من D-252/D-253).
+**رُفِع الازدواج نصيًا (ratchet):** حارس `check_gateway_routes_parity` في `.github/fitness/` يغذي مانيفست
+`microservices/api_gateway/_sources.py` (نمط D-164/D-173/D-252) — يركّب القشرة ويثبت أن السجل يعلن كل ما كان معلنًا يدويًا
+**endpoints لا bytes** (منطق D-192 الذي أثبت أن عدّ الأسطر/البايتات يكذب عبر الإصدارات).
+**الأثر البشري:** إضافة مسار مستقبلي سطرٌ واحد في السجل بدل نسخ قالبٍ كامل؛ وكل تعديل وكيلٍ مشترك يلمس دالةً واحدة
+مولّدة لا سبعة عشر نسخة. التردد العالي لم يعد كارثة — بل توزيع صحي على السجل والمولّد.
 
-# Architectural Decisions
-
-## D-253 · تفكيك hotspot وكيل التنسيق `orchestrator.py` (خمس دوال B/C · تردد تغيير عالٍ) إلى قشرة استقبال + حزمة شرائح دورة الدور `orchestrator_support` — CodeScene X-Ray (2026-08-14 · CI أخضر 100%)
+## D-253 · تفكيك hotspot وكيل التنسيق `orchestrator.py`` (خمس دوال B/C · تردد تغيير عالٍ) إلى قشرة استقبال + حزمة شرائح دورة الدور `orchestrator_support` — CodeScene X-Ray (2026-08-14 · CI أخضر 100%)
 **الكارثة (CodeScene X-Ray — مشروع NAAS-Agentic-Core، تقرير Hotspots):** `app/services/chat/agents/orchestrator.py`
 بـ **552 سطرًا** كان hotspotًا حيًا يحمل خمس دوال بتعقيد متجاوز حد الدستور: `_handle_content_retrieval` C(14)/B(16)
 · `_build_recent_history_brief` C(12) · `_handle_chat_fallback` B(10) · `_extract_context_anchor` B(10) ·

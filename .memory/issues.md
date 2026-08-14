@@ -1,4 +1,30 @@
 # Open Issues & Bugs
+## ISS-166 (2026-08-14) — كارثة الـ hotspot المدمّر `api_gateway/main.py`: 586 سطرًا · ازدواج داخلي 4 · تردد تغيير 10 على دوال البروكسي — ✅ مُغلق (D-254)
+
+**البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots):** ملف `microservices/api_gateway/main.py`
+bـ **586 سطرًا** كان hotspotًا حيًا: `admin_chat_ws_proxy` تردد 10 · `chat_ws_proxy` تردد 9 · `health_check` تردد 5
+· `_resolve_chat_ws_target` تردد 5 · `chat_http_proxy` تردد 5 — سبعة عشر وكيلًا يدويًا متطابق البنية (`system_proxy`
+· `datamesh_proxy` · `content_proxy` · `admin_ai_config_proxy` · `missions_root_proxy` · `missions_path_proxy`
+· `security_proxy` · `admin_proxy` · `auth_proxy` …) تحمل Code Duplication = 4 لكل منها، وخمسة عشر وكيل WebSocket/HTTP
+متكررة المنطق حرفيًا، و`lifespan` Bumpy Road Ahead تردد 33.
+
+**السبب الجذري:** كل مسار جديد أُضيف يدويًا بنسخ قالب البروكسي نفسه (دالتان لكل اتجاه — HTTP وWS) بدل سجل توجيه
+تصريحي واحد تتغذى منه كل المعالجات — فالملف هو مركز ثقل معماري واحد (البوابة الوحيدة لدخول كل خدمة) وكل تحسين
+يلمس الملف نفسه.
+
+**العلاج (D-254 — «سجل التوجيه التصريحي» صفر تغيير سلوكي):** `main.py` صار **قشرة تسجيل**: `ROUTE_REGISTRY` يعلن كل
+المسارات (الطريقة · المسار · الاسم · target · نوع الوكيل) وتُبنى المعالجات مُنشأةً آليًا عبر `_build_proxy_handler`
+— 27 مسارًا في ~470 سطرًا بدل 586، والدوال المتكررة الـ17 صارت بياناتٍ معلنة، و`lifespan` بُسط، و`_health_dependency_targets`
+و`_emit_gateway_identity_log` أُبسطا. كل اسمٍ قديم بقي اسمًا صريحًا في السجل ليبقى كل اختبار وmonkeypatch فعالًا (قانون
+late-binding من D-252/D-253). المانيفست المركّب `_sources.py` (نمط D-164/D-173/D-252) يركّب القشرة ويغذي الحراس النصية
+(`check_gateway_routes_parity` — endpoints لا bytes). مقياس ما بعد الجراحة: ruff أخضر · mypy ضمن حدوده · pytest 29/29 ·
+E2E حي 18/18 (health صادق · routing لكل الاتجاهات · WS · auth 401 · /metrics صحيح) · CI أخضر 100%.
+
+**الدرس المعماري:** نمط D-252/D-253 («قشرة ثابتة + بيانات/شرائح متغيرة مفصولة عبر تفويضٍ وحيد») أثبت تكراره صالحًا
+مرّةً ثالثة — hotspot ثالث في المستودع عولج بالمنهجية نفسها، وكل إضافة مسار مستقبلية سطرٌ واحد في السجل لا قالبٌ جديد.
+
+---
+
 ## ISS-165 (2026-08-14) — كارثة الـ hotspot المدمّر `agents/orchestrator.py`: خمس دوال B/C تعقيد متجاوز الحد · تردد تغيير عالٍ — ✅ مُغلق (D-253)
 
 **البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots):** ملف `app/services/chat/agents/orchestrator.py`

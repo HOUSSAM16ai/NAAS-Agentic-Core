@@ -12,22 +12,33 @@ OWNERSHIP_REGISTRY = REPO_ROOT / "config/route_ownership_registry.json"
 
 
 def _extract_gateway_paths() -> set[str]:
-    """يستخرج مسارات API المعرفة عبر decorators في بوابة FastAPI."""
+    """يستخرج مسارات API من البوابة: decorators المباشرة على الدوال (WebSocket) وإدخالات
+    السجل التصريحي `ROUTE_REGISTRY` (D-254 — استدعاءات `_HttpRoute(path, ...)` و`_WsRoute`)
+    — المسار هو أول آرجيومنت ثابت نصي في كل منهما، و`application.api_route(path, ...)`
+    داخل `_register_http_routes`.
+    """
     tree = ast.parse(GATEWAY_MAIN.read_text(encoding="utf-8"), filename=GATEWAY_MAIN.as_posix())
     paths: set[str] = set()
     for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-            continue
-        for deco in node.decorator_list:
-            if not isinstance(deco, ast.Call):
+        candidates: list[ast.Call] = []
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for deco in node.decorator_list:
+                if (
+                    isinstance(deco, ast.Call)
+                    and isinstance(deco.func, ast.Attribute)
+                    and deco.func.attr in {"api_route", "websocket"}
+                ):
+                    candidates.append(deco)
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if (isinstance(func, ast.Attribute) and func.attr == "api_route") or (
+                isinstance(func, ast.Name) and func.id in {"_HttpRoute", "_WsRoute"}
+            ):
+                candidates.append(node)
+        for call in candidates:
+            if not call.args:
                 continue
-            if not isinstance(deco.func, ast.Attribute):
-                continue
-            if deco.func.attr not in {"api_route", "websocket"}:
-                continue
-            if not deco.args:
-                continue
-            first_arg = deco.args[0]
+            first_arg = call.args[0]
             if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
                 paths.add(first_arg.value.strip())
     return paths

@@ -25,21 +25,28 @@ def _collect_route_paths() -> tuple[set[str], set[str]]:
     ws_routes: set[str] = set()
 
     for node in ast.walk(tree):
-        if not isinstance(node, ast.AsyncFunctionDef):
-            continue
-        for decorator in node.decorator_list:
-            if not isinstance(decorator, ast.Call) or not isinstance(decorator.func, ast.Attribute):
-                continue
-            if not decorator.args:
-                continue
-            first_arg = decorator.args[0]
-            if not isinstance(first_arg, ast.Constant) or not isinstance(first_arg.value, str):
-                continue
-            route = first_arg.value
-            if decorator.func.attr == "api_route":
-                http_routes.add(route)
-            if decorator.func.attr == "websocket":
-                ws_routes.add(route)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for decorator in node.decorator_list:
+                if not isinstance(decorator, ast.Call) or not isinstance(
+                    decorator.func, ast.Attribute
+                ):
+                    continue
+                if not decorator.args:
+                    continue
+                first_arg = decorator.args[0]
+                if not isinstance(first_arg, ast.Constant) or not isinstance(first_arg.value, str):
+                    continue
+                route = first_arg.value
+                if decorator.func.attr == "api_route":
+                    http_routes.add(route)
+                if decorator.func.attr == "websocket":
+                    ws_routes.add(route)
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name) and func.id == "_HttpRoute" and node.args:
+                first_arg = node.args[0]
+                if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                    http_routes.add(first_arg.value)
 
     return http_routes, ws_routes
 

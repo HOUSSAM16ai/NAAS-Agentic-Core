@@ -1,5 +1,5 @@
 {
-  "branch": "feat/D-253-orchestrator-hotspot-surgery",
+  "branch": "main",
   "components": [
     {
       "agreed": true,
@@ -312,6 +312,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-14T03:27:51.725630+00:00",
+  "generated_at_utc": "2026-08-14T06:02:06.739360+00:00",
   "schema_version": 1
 }

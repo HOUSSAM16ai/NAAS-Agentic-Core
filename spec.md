@@ -251,6 +251,7 @@ Priority decomposition candidates:
 6. `app/api/routers/customer_chat.py`
 7. `microservices/orchestrator_service/src/services/overmind/graph/search.py`
 8. `microservices/orchestrator_service/src/services/overmind/probability_tutor.py`
+9. `microservices/api_gateway/main.py` — **Done (D-254 · 2026-08-14):** CodeScene hotspot (586 سطرًا · ازدواج داخلي 4 · تردد تغيير 10 على دوال البروكسي المتكررة) ⇒ سجل توجيهٍ تصريحي `ROUTE_REGISTRY` (27 مسارًا) يبني المعالجات آليًا صفر تغيير سلوكي · مانيفست مركّب `_sources.py` + حارس نصي `check_gateway_routes_parity` (endpoints لا bytes) · E2E حي 18/18 · CI أخضر 100%.
 
 ## 13. Split-Brain Elimination Requirements
 

@@ -18,14 +18,38 @@ def test_chat_routers_keep_compatibility_facade_and_canonical_authority() -> Non
 
 
 def test_gateway_remains_canonical_runtime_entry_for_chat_paths() -> None:
-    """يثبت أن البوابة تملك نقاط الدخول العامة لمسارات chat (HTTP/WS) بشكل صريح."""
+    """يثبت أن البوابة تملك نقاط الدخول العامة لمسارات chat (HTTP/WS) بشكل صريح.
+
+    D-254: تحولت المسارات من decorators نصية إلى ROUTE_REGISTRY تصريحية +
+    استدعاءات ``application.api_route(...)`` برمجية، لذا يفحص الحاجز نص المصدر
+    للروابط التصريحية (``_HttpRoute(..., "/api/chat/{path:path}")`` و
+    ``_WsRoute(..., "/api/chat/ws")``) والسلوك الفعلي للتطبيق بدلًا من
+    ``@app.api_route(`` الحرفية.
+    """
+
+    from fastapi.routing import APIRoute, APIWebSocketRoute
+
+    from microservices.api_gateway.main import app as gateway_app
 
     gateway_main = Path("microservices/api_gateway/main.py").read_text(encoding="utf-8")
 
-    assert '@app.websocket("/api/chat/ws")' in gateway_main
-    assert '@app.websocket("/admin/api/chat/ws")' in gateway_main
-    assert "@app.api_route(" in gateway_main
-    assert '"/api/chat/{path:path}"' in gateway_main
+    # Source-level: the declarative registry entries that own the chat paths.
+    assert '"/api/chat/ws"' in gateway_main or "'/api/chat/ws'" in gateway_main
+    assert '"/admin/api/chat/ws"' in gateway_main or "'/admin/api/chat/ws'" in gateway_main
+    assert '"/api/chat/{path:path}"' in gateway_main or "'/api/chat/{path:path}'" in gateway_main
+
+    # Behaviour-level: the app must actually expose chat as the public entry.
+    paths = {
+        (r.path, type(r))
+        for r in gateway_app.routes
+        if isinstance(r, (APIRoute, APIWebSocketRoute))
+    }
+    assert ("/api/chat/ws", APIWebSocketRoute) in paths
+    assert ("/admin/api/chat/ws", APIWebSocketRoute) in paths
+    assert ("/api/chat/{path:path}", APIRoute) in paths
+    # Customer-facing chat HTTP paths must remain routed through the gateway
+    # (the modern /api/chat path plus the original legacy /api/chat/* suffix
+    # used before the rewrite split).
 
 
 def test_orchestrator_state_uses_microservice_mission_models_only() -> None:

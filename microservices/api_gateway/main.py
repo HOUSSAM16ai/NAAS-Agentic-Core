@@ -3,7 +3,9 @@ import hashlib
 import importlib
 import logging
 import os
+import uuid
 from contextlib import asynccontextmanager
+from typing import Any
 from urllib.parse import urlparse
 
 import uvicorn
@@ -29,6 +31,16 @@ logger = logging.getLogger("api_gateway")
 # Initialize the proxy handler
 proxy_handler = GatewayProxy()
 legacy_ws_sessions_total: dict[str, int] = {}
+
+ALL_HTTP_METHODS = [
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+    "OPTIONS",
+    "HEAD",
+]
 
 
 def _record_ws_session_metric(route_id: str) -> None:
@@ -133,7 +145,9 @@ def _resolve_chat_ws_target(route_id: str, upstream_path: str, websocket: WebSoc
         rollout_percent=settings.ROUTE_CHAT_WS_CONVERSATION_ROLLOUT_PERCENT,
     )
     logger.info(
-        f"ws_routing session_id={'present' if session_id else 'absent'} bucket={_rollout_bucket(identity)}"
+        "ws_routing session_id=%s bucket=%s",
+        "present" if session_id else "absent",
+        _rollout_bucket(identity),
     )
     normalized_conversation_base = settings.CONVERSATION_SERVICE_URL.rstrip("/")
     if target_base.rstrip("/") == normalized_conversation_base:
@@ -148,7 +162,7 @@ def _resolve_chat_ws_target(route_id: str, upstream_path: str, websocket: WebSoc
 
 
 def _chat_route_uses_conversation() -> bool:
-    """يحدد ما إذا كانت مسارات chat الإنتاجية قد تُوجَّه فعليًا نحو conversation-service."""
+    """يحدد ما إذا كانت مسارات chat الإنتاجية قد تُوجَّه فعليًا نحو conversation-service."""
 
     return (
         settings.ROUTE_CHAT_HTTP_CONVERSATION_ROLLOUT_PERCENT > 0
@@ -173,9 +187,6 @@ def _health_dependency_targets() -> dict[str, str]:
         services["conversation_service"] = settings.CONVERSATION_SERVICE_URL
 
     return services
-
-
-import uuid
 
 
 class _NoOpSpan:
@@ -222,8 +233,9 @@ def _inject_trace_context(headers: dict[str, str]) -> None:
 tracer = _build_tracer()
 
 
-def log_telemetry(event_name: str, trace_id: str):
-    logger.info(f"TELEMETRY: {event_name} [trace_id: {trace_id}]")
+def log_telemetry(event_name: str, trace_id: str) -> None:
+    """يسجل حدث قياس عن بعد بتشخيص الحدث ومعرف التتبع."""
+    logger.info("TELEMETRY: %s [trace_id: %s]", event_name, trace_id)
 
 
 def _should_probe_startup_dependencies() -> bool:
@@ -239,6 +251,26 @@ def _should_probe_startup_dependencies() -> bool:
     return os.getenv("SKIP_GATEWAY_STARTUP_PROBE") != "1"
 
 
+async def _probe_startup_dependencies() -> None:
+    """يفحص جاهزية orchestrator-service عند الإقلاع بتراجع أسي حتى ثلاث محاولات."""
+    orchestrator_url = settings.ORCHESTRATOR_SERVICE_URL
+    if not orchestrator_url:
+        raise RuntimeError("ORCHESTRATOR_SERVICE_URL is missing")
+
+    for attempt in range(3):
+        try:
+            # Short timeout for health checks
+            resp = await proxy_handler.client.get(f"{orchestrator_url}/health", timeout=2.0)
+            if resp.status_code == 200:
+                log_telemetry("gateway.ready", trace_id=str(uuid.uuid4()))
+                return
+        except Exception:
+            pass
+        if attempt == 2:
+            raise RuntimeError("orchestrator-service is down")
+        await asyncio.sleep(2**attempt)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -249,23 +281,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting API Gateway...")
     try:
         if _should_probe_startup_dependencies():
-            orchestrator_url = settings.ORCHESTRATOR_SERVICE_URL
-            if not orchestrator_url:
-                raise RuntimeError("ORCHESTRATOR_SERVICE_URL is missing")
-
-            # Check orchestrator health
-            for attempt in range(3):
-                try:
-                    # Short timeout for health checks
-                    resp = await proxy_handler.client.get(f"{orchestrator_url}/health", timeout=2.0)
-                    if resp.status_code == 200:
-                        log_telemetry("gateway.ready", trace_id=str(uuid.uuid4()))
-                        break
-                except Exception:
-                    pass
-                if attempt == 2:
-                    raise RuntimeError("orchestrator-service is down")
-                await asyncio.sleep(2**attempt)
+            await _probe_startup_dependencies()
         else:
             logger.info("Skipping startup dependency probe in testing/override mode.")
 
@@ -284,82 +300,81 @@ app.add_middleware(TraceContextMiddleware)
 prom_metrics.set_startup_info(environment=os.getenv("ENVIRONMENT", "development"))
 
 
+# --- Shared health check logic ---
+
+
+async def _check_service_health(name: str, url: str) -> tuple[str, str]:
+    """يفحص صحة خدمة downstream واحدة ويعيد (اسم_الخدمة، الحالة)."""
+    try:
+        # Short timeout for health checks
+        resp = await proxy_handler.client.get(f"{url}/health", timeout=2.0)
+        status = "UP" if resp.status_code == 200 else f"DOWN ({resp.status_code})"
+        return name, status
+    except Exception as exc:
+        return name, f"DOWN ({exc!s})"
+
+
 # --- WebSocket Routes MUST BE FIRST to avoid being shadowed by wildcard API routes ---
 
 
+async def _handle_chat_ws(
+    websocket: WebSocket, route_id: str, upstream_path: str, error_message: str
+) -> None:
+    """ينفّذ منطق وكيل دردشة WS المشترك (تتبع · هوية · توجيه · معالجة الأخطاء)."""
+    from starlette.websockets import WebSocketState
+
+    with tracer.start_as_current_span("ws.proxy", attributes={"agent": "orchestrator"}):
+        headers: dict[str, str] = {}
+        _inject_trace_context(headers)
+        logger.info(
+            "Chat WebSocket route_id=%s legacy_flag=false traceparent=%s",
+            route_id,
+            headers.get("traceparent", "unknown"),
+        )
+        _emit_gateway_identity_log(f"gateway_ws_{route_id.split('_')[-1]}", websocket)
+        session_id = _extract_session_id(websocket)
+        logger.info(
+            "session_id presence: %s in %s",
+            "present" if session_id else "absent",
+            route_id,
+        )
+
+        _record_ws_session_metric(route_id)
+        target_url = _resolve_chat_ws_target(route_id, upstream_path, websocket)
+        try:
+            await websocket_proxy(websocket, target_url)
+        except Exception:
+            log_telemetry("ws.proxy.failed", trace_id=str(uuid.uuid4()))
+            if websocket.client_state == WebSocketState.UNCONNECTED:
+                await websocket.accept()
+            if websocket.client_state == WebSocketState.CONNECTED:
+                await websocket.send_json({"error": error_message, "request_id": str(uuid.uuid4())})
+                await websocket.close()
+
+
 @app.websocket("/api/chat/ws")
-async def chat_ws_proxy(websocket: WebSocket):
+async def chat_ws_proxy(websocket: WebSocket) -> None:
     """
     Customer Chat WebSocket (Modern Target).
     TARGET: Orchestrator Service / Conversation Service
     """
-    from starlette.websockets import WebSocketState
-
-    route_id = "chat_ws_customer"
-    with tracer.start_as_current_span("ws.proxy", attributes={"agent": "orchestrator"}):
-        headers = {}
-        _inject_trace_context(headers)
-        logger.info(
-            f"Chat WebSocket route_id={route_id} legacy_flag=false traceparent={headers.get('traceparent', 'unknown')}"
-        )
-        _emit_gateway_identity_log("gateway_ws_customer", websocket)
-        session_id = _extract_session_id(websocket)
-        logger.info(
-            f"session_id presence: {'present' if session_id else 'absent'} in chat_ws_proxy"
-        )
-
-        _record_ws_session_metric(route_id)
-        target_url = _resolve_chat_ws_target(route_id, "api/chat/ws", websocket)
-        try:
-            await websocket_proxy(websocket, target_url)
-        except Exception:
-            log_telemetry("ws.proxy.failed", trace_id=str(uuid.uuid4()))
-            if websocket.client_state == WebSocketState.UNCONNECTED:
-                await websocket.accept()
-            if websocket.client_state == WebSocketState.CONNECTED:
-                await websocket.send_json(
-                    {"error": "تعذر فتح جلسة الدردشة حالياً.", "request_id": str(uuid.uuid4())}
-                )
-                await websocket.close()
+    await _handle_chat_ws(
+        websocket, "chat_ws_customer", "api/chat/ws", "تعذر فتح جلسة الدردشة حالياً."
+    )
 
 
 @app.websocket("/admin/api/chat/ws")
-async def admin_chat_ws_proxy(websocket: WebSocket):
+async def admin_chat_ws_proxy(websocket: WebSocket) -> None:
     """
     Admin Chat WebSocket (Modern Target).
     TARGET: Orchestrator Service / Conversation Service
     """
-    from starlette.websockets import WebSocketState
-
-    route_id = "chat_ws_admin"
-    with tracer.start_as_current_span("ws.proxy", attributes={"agent": "orchestrator"}):
-        headers = {}
-        _inject_trace_context(headers)
-        logger.info(
-            f"Chat WebSocket route_id={route_id} legacy_flag=false traceparent={headers.get('traceparent', 'unknown')}"
-        )
-        _emit_gateway_identity_log("gateway_ws_admin", websocket)
-        session_id = _extract_session_id(websocket)
-        logger.info(
-            f"session_id presence: {'present' if session_id else 'absent'} in admin_chat_ws_proxy"
-        )
-
-        _record_ws_session_metric(route_id)
-        target_url = _resolve_chat_ws_target(route_id, "admin/api/chat/ws", websocket)
-        try:
-            await websocket_proxy(websocket, target_url)
-        except Exception:
-            log_telemetry("ws.proxy.failed", trace_id=str(uuid.uuid4()))
-            if websocket.client_state == WebSocketState.UNCONNECTED:
-                await websocket.accept()
-            if websocket.client_state == WebSocketState.CONNECTED:
-                await websocket.send_json(
-                    {
-                        "error": "تعذر فتح جلسة الدردشة الإدارية حالياً.",
-                        "request_id": str(uuid.uuid4()),
-                    }
-                )
-                await websocket.close()
+    await _handle_chat_ws(
+        websocket,
+        "chat_ws_admin",
+        "admin/api/chat/ws",
+        "تعذر فتح جلسة الدردشة الإدارية حالياً.",
+    )
 
 
 @app.get("/metrics", include_in_schema=False)
@@ -370,29 +385,22 @@ async def prometheus_metrics() -> Response:
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> dict[str, object]:
     """
     Health check endpoint that verifies connectivity to downstream services.
     Returns a detailed status report.
     """
     services = _health_dependency_targets()
 
-    async def check_service(name: str, url: str):
-        try:
-            # Short timeout for health checks
-            resp = await proxy_handler.client.get(f"{url}/health", timeout=2.0)
-            status = "UP" if resp.status_code == 200 else f"DOWN ({resp.status_code})"
-            return name, status
-        except Exception as e:
-            return name, f"DOWN ({e!s})"
-
     # Run checks concurrently
-    results = await asyncio.gather(*(check_service(name, url) for name, url in services.items()))
+    results = await asyncio.gather(
+        *(_check_service_health(name, url) for name, url in services.items())
+    )
     dependencies = dict(results)
 
     # Determine overall status
     overall_status = "ok"
-    if any(s.startswith("DOWN") for s in dependencies.values()):
+    if any(str(status).startswith("DOWN") for status in dependencies.values()):
         overall_status = "degraded"
 
     return {
@@ -404,7 +412,7 @@ async def health_check():
 
 
 @app.get("/gateway/health")
-async def gateway_health_check():
+async def gateway_health_check() -> dict[str, object]:
     """
     Alias for /health.
     Matches legacy documentation expectations.
@@ -412,323 +420,269 @@ async def gateway_health_check():
     return await health_check()
 
 
-# --- Smart Routing ---
+# --- Declarative HTTP route registry (Data as Code — SICP abstraction barrier) ---
 
 
-@app.api_route(
-    "/api/v1/planning/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def planning_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(
-        request, settings.PLANNING_AGENT_URL, path, service_token=create_service_token()
-    )
+class _HttpRoute:
+    """وصف تصريحي لمسار وكيل HTTP واحد في البوابة."""
+
+    def __init__(
+        self,
+        path: str,
+        target: str,
+        rewrite: str | None = None,
+        methods: list[str] | None = None,
+        name: str = "",
+        include_in_schema: bool = True,
+        deprecated: bool = False,
+        auth: bool = True,
+        log: str | None = None,
+    ):
+        self.path = path
+        self.target = target
+        self.rewrite = rewrite
+        self.methods = methods or ALL_HTTP_METHODS
+        self.name = name
+        self.include_in_schema = include_in_schema
+        self.deprecated = deprecated
+        self.auth = auth
+        self.log = log
 
 
-@app.api_route(
-    "/api/v1/memory/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def memory_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(
-        request, settings.MEMORY_AGENT_URL, path, service_token=create_service_token()
-    )
+# Registry: each entry is data, interpreted by `_build_proxy_handler` below.
+# Never hard-code a route handler — add a row here instead.
+HTTP_ROUTES: list[_HttpRoute] = [
+    _HttpRoute(
+        "/api/v1/planning/{path:path}",
+        target=settings.PLANNING_AGENT_URL,
+        name="planning_proxy",
+    ),
+    _HttpRoute(
+        "/api/v1/memory/{path:path}",
+        target=settings.MEMORY_AGENT_URL,
+        name="memory_proxy",
+    ),
+    _HttpRoute(
+        "/api/v1/users/{path:path}",
+        target=settings.USER_SERVICE_URL,
+        name="user_proxy",
+    ),
+    _HttpRoute(
+        "/api/v1/auth/{path:path}",
+        target=settings.USER_SERVICE_URL,
+        rewrite="api/v1/auth/{path}",
+        name="auth_proxy",
+    ),
+    _HttpRoute(
+        "/api/v1/observability/{path:path}",
+        target=settings.OBSERVABILITY_SERVICE_URL,
+        name="observability_proxy",
+    ),
+    _HttpRoute(
+        "/api/v1/research/{path:path}",
+        target=settings.RESEARCH_AGENT_URL,
+        name="research_proxy",
+    ),
+    _HttpRoute(
+        "/api/v1/reasoning/{path:path}",
+        target=settings.REASONING_AGENT_URL,
+        name="reasoning_proxy",
+    ),
+    _HttpRoute(
+        "/api/v1/overmind/{path:path}",
+        target=settings.ORCHESTRATOR_SERVICE_URL,
+        name="orchestrator_proxy",
+    ),
+    _HttpRoute(
+        "/api/v1/missions",
+        target=settings.ORCHESTRATOR_SERVICE_URL,
+        rewrite="missions",
+        name="missions_root_proxy",
+    ),
+    _HttpRoute(
+        "/api/v1/missions/{path:path}",
+        target=settings.ORCHESTRATOR_SERVICE_URL,
+        rewrite="missions/{path}",
+        name="missions_path_proxy",
+    ),
+    # --- COMPATIBILITY ROUTES (MICROSERVICES TARGETS) ---
+    _HttpRoute(
+        "/admin/ai-config",
+        target=settings.USER_SERVICE_URL,
+        rewrite="api/v1/admin/ai-config",
+        methods=["GET", "PUT", "OPTIONS", "HEAD"],
+        name="admin_ai_config_proxy",
+        include_in_schema=False,
+        deprecated=True,
+        auth=False,
+        log="Route accessed: /admin/ai-config -> user-service",
+    ),
+    _HttpRoute(
+        "/admin/api/conversations",
+        target=settings.ORCHESTRATOR_SERVICE_URL,
+        rewrite="admin/api/conversations",
+        methods=["GET", "OPTIONS", "HEAD"],
+        name="admin_conversations_proxy",
+        include_in_schema=False,
+        auth=False,
+    ),
+    _HttpRoute(
+        "/admin/api/conversations/{conversation_id}",
+        target=settings.ORCHESTRATOR_SERVICE_URL,
+        rewrite="admin/api/conversations/{conversation_id}",
+        methods=["GET", "OPTIONS", "HEAD"],
+        name="admin_conversation_details_proxy",
+        include_in_schema=False,
+        auth=False,
+    ),
+    _HttpRoute(
+        "/admin/{path:path}",
+        target=settings.USER_SERVICE_URL,
+        rewrite="api/v1/admin/{path}",
+        name="admin_proxy",
+        include_in_schema=False,
+        auth=False,
+    ),
+    _HttpRoute(
+        "/api/security/{path:path}",
+        target=settings.USER_SERVICE_URL,
+        rewrite="api/v1/auth/{path}",
+        name="security_proxy",
+        include_in_schema=False,
+        auth=False,
+        log="Proxy Security routes to User Service (Auth). Rewrite: /api/security/{path} -> /api/v1/auth/{path}",
+    ),
+    _HttpRoute(
+        "/api/chat/{path:path}",
+        target=settings,
+        rewrite="api/chat/{path}",
+        name="chat_http_proxy",
+        include_in_schema=False,
+        deprecated=True,
+        auth=False,
+        log="Route accessed: /api/chat/%s (modern routing)",
+    ),
+    _HttpRoute(
+        "/v1/content/{path:path}",
+        target=settings.RESEARCH_AGENT_URL,
+        rewrite="v1/content/{path}",
+        name="content_proxy",
+        include_in_schema=False,
+        deprecated=True,
+        auth=False,
+        log="Route accessed: /v1/content/%s -> research-agent",
+    ),
+    _HttpRoute(
+        "/api/v1/data-mesh/{path:path}",
+        target=settings.OBSERVABILITY_SERVICE_URL,
+        rewrite="api/v1/data-mesh/{path}",
+        name="datamesh_proxy",
+        include_in_schema=False,
+        deprecated=True,
+        auth=False,
+        log="Route accessed: /api/v1/data-mesh/%s -> observability-service",
+    ),
+    _HttpRoute(
+        "/system/{path:path}",
+        target=settings.ORCHESTRATOR_SERVICE_URL,
+        rewrite="system/{path}",
+        name="system_proxy",
+        include_in_schema=False,
+        deprecated=True,
+        auth=False,
+        log="Route accessed: /system/%s -> orchestrator-service",
+    ),
+]
 
 
-@app.api_route(
-    "/api/v1/users/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def user_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(
-        request, settings.USER_SERVICE_URL, path, service_token=create_service_token()
-    )
-
-
-@app.api_route(
-    "/api/v1/auth/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def auth_proxy(path: str, request: Request) -> StreamingResponse:
-    """
-    Proxy Auth routes (Login/Register) to User Service.
-    Resolves ambiguity between Monolith UMS and Microservice.
-    """
-    return await proxy_handler.forward(
-        request,
-        settings.USER_SERVICE_URL,
-        f"api/v1/auth/{path}",
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/api/v1/observability/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def observability_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(
-        request,
-        settings.OBSERVABILITY_SERVICE_URL,
-        path,
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/api/v1/research/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def research_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(
-        request, settings.RESEARCH_AGENT_URL, path, service_token=create_service_token()
-    )
-
-
-@app.api_route(
-    "/api/v1/reasoning/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def reasoning_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(
-        request, settings.REASONING_AGENT_URL, path, service_token=create_service_token()
-    )
-
-
-@app.api_route(
-    "/api/v1/overmind/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def orchestrator_proxy(path: str, request: Request) -> StreamingResponse:
-    return await proxy_handler.forward(
-        request,
-        settings.ORCHESTRATOR_SERVICE_URL,
-        path,
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/api/v1/missions",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def missions_root_proxy(request: Request) -> StreamingResponse:
-    """
-    Strangler Fig: Route missions root to Orchestrator Service.
-    Decouples mission control from the Monolith.
-    """
-    return await proxy_handler.forward(
-        request,
-        settings.ORCHESTRATOR_SERVICE_URL,
-        "missions",
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/api/v1/missions/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    dependencies=[Depends(verify_gateway_request)],
-)
-async def missions_path_proxy(path: str, request: Request) -> StreamingResponse:
-    """
-    Strangler Fig: Route missions paths to Orchestrator Service.
-    """
-    return await proxy_handler.forward(
-        request,
-        settings.ORCHESTRATOR_SERVICE_URL,
-        f"missions/{path}",
-        service_token=create_service_token(),
-    )
-
-
-# --- COMPATIBILITY ROUTES (MICROSERVICES TARGETS) ---
-
-
-@app.api_route(
-    "/admin/ai-config",
-    methods=["GET", "PUT", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-    deprecated=True,
-)
-async def admin_ai_config_proxy(request: Request) -> StreamingResponse:
-    """
-    [LEGACY] Strangler Fig: Route AI Config to Monolith.
-    TARGET: User Service (Pending Migration)
-    """
-    logger.info("Route accessed: /admin/ai-config -> user-service")
-    return await proxy_handler.forward(
-        request,
-        settings.USER_SERVICE_URL,
-        "api/v1/admin/ai-config",
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/admin/api/conversations",
-    methods=["GET", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-)
-async def admin_conversations_proxy(request: Request) -> StreamingResponse:
-    """توجيه صريح لتاريخ محادثات الأدمن نحو orchestrator-service قبل مسار admin الشامل."""
-    return await proxy_handler.forward(
-        request,
-        settings.ORCHESTRATOR_SERVICE_URL,
-        "admin/api/conversations",
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/admin/api/conversations/{conversation_id}",
-    methods=["GET", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-)
-async def admin_conversation_details_proxy(
-    conversation_id: int, request: Request
-) -> StreamingResponse:
-    """توجيه صريح لتفاصيل محادثة الأدمن نحو orchestrator-service."""
-    return await proxy_handler.forward(
-        request,
-        settings.ORCHESTRATOR_SERVICE_URL,
-        f"admin/api/conversations/{conversation_id}",
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/admin/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-)
-async def admin_proxy(path: str, request: Request) -> StreamingResponse:
-    """
-    Proxy Admin routes to User Service (UMS).
-    Rewrite: /admin/{path} -> /api/v1/admin/{path}
-    """
-    # This is NOT legacy monolith, it points to USER_SERVICE.
-    return await proxy_handler.forward(
-        request,
-        settings.USER_SERVICE_URL,
-        f"api/v1/admin/{path}",
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/api/security/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-)
-async def security_proxy(path: str, request: Request) -> StreamingResponse:
-    """
-    Proxy Security routes to User Service (Auth).
-    Rewrite: /api/security/{path} -> /api/v1/auth/{path}
-    """
-    # This is NOT legacy monolith, it points to USER_SERVICE.
-    return await proxy_handler.forward(
-        request,
-        settings.USER_SERVICE_URL,
-        f"api/v1/auth/{path}",
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/api/chat/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-    deprecated=True,
-)
-async def chat_http_proxy(path: str, request: Request) -> StreamingResponse:
-    """
-    HTTP Chat Proxy (Modern Target).
-    TARGET: Orchestrator Service / Conversation Service
-    """
-    logger.info("Route accessed: /api/chat/%s (modern routing)", path)
+def _resolve_chat_target(path: str, request: Request) -> str:
+    """يحدد وجهة مسار chat الحديث وفق محرك القرار المشترك مع WS."""
     identity = request.headers.get("x-request-id", request.url.path)
-    target_url = _resolve_chat_target_base(
+    target_base = _resolve_chat_target_base(
         route_id="chat_http",
         identity=identity,
         rollout_percent=settings.ROUTE_CHAT_HTTP_CONVERSATION_ROLLOUT_PERCENT,
     )
+    return f"{target_base}/{path}"
+
+
+def _build_proxy_handler(route: _HttpRoute):
+    """يولّد معالج وكيل HTTP بمسار ديناميكي من وصف تصريحي دون تكرار منطق proxy_handler.forward."""
+
+    async def proxy_handler_endpoint(path: str, request: Request) -> StreamingResponse:
+        return await _forward_for_route(route, path, request)
+
+    proxy_handler_endpoint.__name__ = route.name or "proxy_handler_endpoint"
+    return proxy_handler_endpoint
+
+
+async def _forward_for_route(
+    route: _HttpRoute, path: str | None, request: Request | None
+) -> StreamingResponse:
+    """يعيد توجيه طلب HTTP إلى الوجهة المحددة في السجل مع إعادة كتابة المسار عند الحاجة."""
+    if route.log is not None and request is not None:
+        logger.info(route.log, path)
+
+    if route.target is settings:
+        # Chat modern target: target resolved at request time (canary rollout).
+        target = _resolve_chat_target_base(
+            route_id="chat_http",
+            identity=request.headers.get("x-request-id", request.url.path),
+            rollout_percent=settings.ROUTE_CHAT_HTTP_CONVERSATION_ROLLOUT_PERCENT,
+        )
+        rewritten = f"api/chat/{path}" if path else "api/chat"
+        return await proxy_handler.forward(
+            request, target, rewritten, service_token=create_service_token()
+        )
+
+    if route.rewrite is None:
+        rewritten = path or ""
+    else:
+        rewritten = route.rewrite.format(path=path) if path else route.rewrite
 
     return await proxy_handler.forward(
         request,
-        target_url,
-        f"api/chat/{path}",
+        route.target,
+        rewritten,
         service_token=create_service_token(),
     )
 
 
-@app.api_route(
-    "/v1/content/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-    deprecated=True,
-)
-async def content_proxy(path: str, request: Request) -> StreamingResponse:
-    """
-    [LEGACY] Content Service Proxy.
-    TARGET: Content Service (To Be Extracted)
-    """
-    logger.info("Route accessed: /v1/content/%s -> research-agent", path)
-    return await proxy_handler.forward(
-        request,
-        settings.RESEARCH_AGENT_URL,
-        f"v1/content/{path}",
-        service_token=create_service_token(),
-    )
+def _register_http_routes(application: FastAPI) -> None:
+    """يسجل كل مسارات وكيل HTTP التصريحية على التطبيق وفق الترتيب في السجل."""
+    for route in HTTP_ROUTES:
+        kwargs: dict[str, Any] = {
+            "methods": route.methods,
+            "name": route.name,
+        }
+        if not route.include_in_schema:
+            kwargs["include_in_schema"] = False
+        if route.deprecated:
+            kwargs["deprecated"] = True
+        if route.auth:
+            kwargs["dependencies"] = [Depends(verify_gateway_request)]
+
+        path = route.path
+        has_path_param = "{path:path}" in path
+
+        if has_path_param:
+            handler = _build_proxy_handler(route)
+            application.api_route(path, **kwargs)(handler)
+        else:
+            # Root-path routes (e.g. /api/v1/missions, /admin/api/conversations).
+
+            def _make_root_handler(current_route: _HttpRoute):
+                async def _root_proxy(request: Request) -> StreamingResponse:
+                    return await _forward_for_route(current_route, None, request)
+
+                _root_proxy.__name__ = current_route.name
+                return _root_proxy
+
+            root_handler = _make_root_handler(route)
+            application.api_route(path, **kwargs)(root_handler)
 
 
-@app.api_route(
-    "/api/v1/data-mesh/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-    deprecated=True,
-)
-async def datamesh_proxy(path: str, request: Request) -> StreamingResponse:
-    """
-    [LEGACY] Data Mesh Proxy.
-    TARGET: Data Mesh Service
-    """
-    logger.info("Route accessed: /api/v1/data-mesh/%s -> observability-service", path)
-    return await proxy_handler.forward(
-        request,
-        settings.OBSERVABILITY_SERVICE_URL,
-        f"api/v1/data-mesh/{path}",
-        service_token=create_service_token(),
-    )
-
-
-@app.api_route(
-    "/system/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    include_in_schema=False,
-    deprecated=True,
-)
-async def system_proxy(path: str, request: Request) -> StreamingResponse:
-    """
-    [LEGACY] System Routes Proxy.
-    TARGET: System Service
-    """
-    logger.info("Route accessed: /system/%s -> orchestrator-service", path)
-    return await proxy_handler.forward(
-        request,
-        settings.ORCHESTRATOR_SERVICE_URL,
-        f"system/{path}",
-        service_token=create_service_token(),
-    )
+_register_http_routes(app)
 
 
 if __name__ == "__main__":

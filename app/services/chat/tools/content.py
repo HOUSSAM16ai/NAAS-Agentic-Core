@@ -1,21 +1,69 @@
-"""
-أدوات إدارة المحتوى التعليمي (Content Tools).
+"""قشرة استقبال أدوات المحتوى (D-255).
 
-تتيح للوكلاء:
-1. استكشاف هيكلة المنهج (Subject -> Branch -> Topic).
-2. البحث عن تمارين ومحتوى باستخدام الفلاتر.
-3. استرجاع المحتوى الخام (Raw Content) والحلول الرسمية.
+فُكِّك hotspot هذا الملف (173 سطرًا · `search_content` C(14) · 112 سطرًا ·
+تردد تغيير 40) إلى قشرة استقبال + حزمة شرائح `content_support/` (نمط D-252):
+
+- القشرة هنا: استقبال الوسائط · التحقق من المخطط (Fail-Fast — RFC 001) ·
+  التفويض النصي الحرفي إلى الشرائح — **صفر منطق دور**.
+- الشرائح في `content_support/search.py` تحمل: توحيد الشعبة · كشف «الفشل
+  اللين» (Error-as-Data) · بناء سياق الاستعلام · صياغة التقرير.
+
+**صفر تغيير سلوكي على المستوى العام**: كل التوقيعات العامة (`search_content`
+بتسعة الوسائط + `**kwargs`) والأسماء الخاصة القديمة (`_normalize_branch` ·
+`_scan_for_error` · `_BRANCH_LABELS`) باقية حرفيًا كقشور تفويض ليبقى كل
+اختبار وmonkeypatch فعالًا (قانون late-binding من D-252).
 """
 
-import difflib
-import json
+import dataclasses
 
 from app.core.logging import get_logger
-from app.domain.constants import BRANCH_MAP
 from app.infrastructure.clients.research_client import research_client
+from app.services.chat.tools import content_support as _content_support_shard
 from app.services.chat.tools.schemas import SearchContentSchema
 
 logger = get_logger("content-tools")
+
+
+@dataclasses.dataclass(frozen=True)
+class ContentSearchArgs:
+    """وسائط البحث التسعة المجمّعة في كائن سياق واحد (D-255 — يقتل PLR0917
+    مع الحفاظ على التوقيع العام `search_content` كما هو — نمط D-249).
+
+    تبقى جميع الحقول public بنفس الأسماء الأصلية حتى لا يُكسر أي استدعاء
+    مباشر أو monkeypatch على الوسائط الأصلية.
+    """
+
+    q: str | None = None
+    level: str | None = None
+    subject: str | None = None
+    branch: str | None = None
+    set_name: str | None = None
+    year: int | None = None
+    type: str | None = None
+    lang: str | None = None
+    limit: int = 10
+
+
+# ---------------------------------------------------------------------------
+# Late-binding للأسماء القديمة (D-252 · صفر تغيير سلوكي):
+# الاختبارات القائمة (tests/unit/test_content_branch_logic.py ·
+# test_content_tool_logic.py) تستورد `_normalize_branch` و`_scan_for_error`
+# و`_BRANCH_LABELS` من هذه القشرة — تبقى قشور تفويض حرفية ليبقى كل
+# monkeypatch واختبار على الأسماء القديمة فعالًا.
+# ---------------------------------------------------------------------------
+
+normalize_branch = _content_support_shard.normalize_branch
+
+
+def _normalize_branch(value: str | None) -> str | None:
+    """قشرة late-binding للأصل المفكك (لا تُلمس — تحفظ الاختبارات القديمة)."""
+    return normalize_branch(value)
+
+
+def _scan_for_error(data: object) -> str | None:
+    """قشرة late-binding للأصل المفكك (لا تُلمس — تحفظ الاختبارات القديمة)."""
+    return _content_support_shard.scan_for_error(data)
+
 
 _BRANCH_LABELS: dict[str, str] = {
     "experimental_sciences": "علوم تجريبية",
@@ -26,64 +74,57 @@ _BRANCH_LABELS: dict[str, str] = {
 }
 
 
-def _scan_for_error(data: object) -> str | None:
-    """يبحث بشكل عميق عن أي مفاتيح خطأ."""
-    if isinstance(data, dict):
-        if data.get("type") == "error":
-            return str(data.get("content") or data.get("error") or "Unknown Error")
-        return next((err for v in data.values() if (err := _scan_for_error(v))), None)
-
-    if isinstance(data, list):
-        return next((err for item in data if (err := _scan_for_error(item))), None)
-
-    if isinstance(data, str) and '"type": "error"' in data:
-        try:
-            if data.strip().startswith("{"):
-                return _scan_for_error(json.loads(data))
-        except json.JSONDecodeError:
-            pass
-
-    return None
-
-
-def _normalize_branch(value: str | None) -> str | None:
-    """توحيد اسم الشعبة باستخدام منطق الخدمة الموحد."""
-    if not value:
-        return None
-
-    normalized = value.strip().lower()
-    for key, variants in BRANCH_MAP.items():
-        if normalized in variants:
-            return _BRANCH_LABELS.get(key, key)
-
-    reverse_map: dict[str, str] = {}
-    all_variants: list[str] = []
-    for key, variants in BRANCH_MAP.items():
-        for variant in variants:
-            reverse_map[variant] = key
-            all_variants.append(variant)
-
-    matches = difflib.get_close_matches(normalized, all_variants, n=1, cutoff=0.6)
-    if matches:
-        return _BRANCH_LABELS.get(reverse_map[matches[0]], reverse_map[matches[0]])
-
-    for variant in all_variants:
-        if len(variant) > 3 and variant in normalized:
-            return _BRANCH_LABELS.get(reverse_map[variant], reverse_map[variant])
-
-    return value
-
-
 async def get_curriculum_structure(
     level: str | None = None,
-    lang: str = "ar",
 ) -> dict[str, object]:
-    """جلب شجرة المنهج الدراسي بالكامل أو لمستوى محدد."""
+    """Get curriculum structure for a level."""
     try:
         return await research_client.get_curriculum_structure(level)
     except Exception as e:
         logger.error(f"Failed to fetch curriculum structure: {e}")
         return {}
+
+
+# ---------------------------------------------------------------------------
+# قلب الأدوات الناقلة (Cognitive Research Infrastructure)
+# ---------------------------------------------------------------------------
+
+
+async def _execute_search(validated: SearchContentSchema) -> list[dict[str, object]]:
+    """قلب التنفيذ النصي (Layers B..D — السلالة الأصلية حرفًا).
+
+    Branch normalization + query context + deep research + error scanning +
+    report building — كلها شرائح نقية في content_support:
+    """
+    # Normalize branch if provided (التفويض للشريحة — نفس المنطق حرفًا)
+    normalized_branch = (
+        _content_support_shard.normalize_branch(validated.branch)
+        if validated.branch
+        else validated.branch
+    )
+
+    # Build query context (التفويض للشريحة — فلاتر معلنة)
+    full_query = _content_support_shard.build_search_context(
+        _content_support_shard.SearchFilters(
+            q=validated.q,
+            subject=validated.subject,
+            branch=normalized_branch,
+            year=validated.year,
+            level=validated.level,
+            type=validated.type,
+        )
+    )
+
+    # Direct execution to enforce Fail-Fast (Fixes Root Cause D)
+    # Exceptions propagate to TaskExecutor -> Mission Status FAILED
+    report = await research_client.deep_research(full_query)
+
+    # Scan for nested error payloads (Anti-Pattern: Error-as-Data / Soft Failures)
+    error_msg = _content_support_shard.scan_for_error(report)
+    if error_msg:
+        raise ValueError(f"Research Tool Error: {error_msg}")
+
+    return _content_support_shard.build_search_report(validated.q, full_query, report)
 
 
 async def search_content(
@@ -105,27 +146,32 @@ async def search_content(
     autonomous agents (Tavily/Firecrawl).
     Returns a detailed research report.
     """
+    return await _search_pipeline(
+        ContentSearchArgs(
+            q=q,
+            level=level,
+            subject=subject,
+            branch=branch,
+            set_name=set_name,
+            year=year,
+            type=type,
+            lang=lang,
+            limit=limit,
+        ),
+        kwargs,
+    )
 
-    # --- Layer A: Schema Adapter & Validation ---
+
+async def _search_pipeline(args: ContentSearchArgs, kwargs: dict) -> list[dict[str, object]]:
+    """قشرة Layers A..D (السلالة الأصلية حرفًا) — تفويضٌ نصي للشريحة.
+
+    - Layer A: Schema Adapter & Validation (Fail-Fast — RFC 001)
+    - Layers B..D: Branch · Context · Execution · Error-scan · Report
+    """
+    # --- Layer A: Schema Adapter & Validation (نفس السلالة الأصلية حرفًا) ---
     try:
-        # Create a dictionary of all arguments provided
-        # Filter out None values so Pydantic can use aliases (e.g. 'query') from kwargs
-        # without conflict from the default 'q=None'
-        explicit_args = {
-            "q": q,
-            "level": level,
-            "subject": subject,
-            "branch": branch,
-            "set_name": set_name,
-            "year": year,
-            "type": type,
-            "lang": lang,
-            "limit": limit,
-        }
+        explicit_args = dataclasses.asdict(args)
         filtered_args = {k: v for k, v in explicit_args.items() if v is not None}
-
-        # Merge with kwargs (kwargs take precedence if conflict, though usually they fill gaps)
-        # CRITICAL FIX: Gracefully absorb unknown args from LLM hallucination
         raw_args = {**filtered_args, **kwargs}
 
         # Log unexpected args for debugging but don't crash
@@ -137,97 +183,60 @@ async def search_content(
         # Validate against the Pydantic Schema (Adapts aliases like 'query' -> 'q')
         validated_data = SearchContentSchema(**raw_args)
 
-        # Use validated data
-        q = validated_data.q
-        level = validated_data.level
-        subject = validated_data.subject
-        branch = validated_data.branch
-        set_name = validated_data.set_name
-        year = validated_data.year
-        type = validated_data.type
-        lang = validated_data.lang
-        limit = validated_data.limit
-
     except Exception as e:
         logger.error(f"Schema Validation Failed in search_content: {e}")
         # Strict Fail-Fast Policy (RFC 001)
         # We must propagate exceptions to the TaskExecutor to ensure honest outcome reporting.
-        raise e
+        raise
 
-    # ---------------------------------------------
-
-    if not q:
-        return []
-
-    # Normalize branch if provided
-    normalized_branch = _normalize_branch(branch) if branch else branch
-
-    # Build query context
-    context_parts = []
-    if subject:
-        context_parts.append(f"Subject: {subject}")
-    if normalized_branch:
-        context_parts.append(f"Branch: {normalized_branch}")
-    if year:
-        context_parts.append(f"Year: {year}")
-    if level:
-        context_parts.append(f"Level: {level}")
-    if type:
-        context_parts.append(f"Type: {type}")
-
-    full_query = q
-    if context_parts:
-        full_query += f" ({', '.join(context_parts)})"
-
-    # Direct execution to enforce Fail-Fast (Fixes Root Cause D)
-    # Exceptions propagate to TaskExecutor -> Mission Status FAILED
-    report = await research_client.deep_research(full_query)
-
-    # 🛑 Strict Validation: Detect "Soft Failures" (Error-as-Data Anti-Pattern)
-    # recursive check for error objects inside list/dict structures
-    error_found = _scan_for_error(report)
-    if error_found:
-        raise ValueError(f"Research Tool Error: {error_found}")
-
-    return [
-        {
-            "id": "research_report",
-            "title": f"Research Report: {q}",
-            "content": report,
-            "type": "report",
-            "metadata": {"query": full_query, "source": "SuperSearchOrchestrator"},
-        }
-    ]
+    # --- Layers B..D: Branch · Context · Execution · Error-scan · Report
+    # (نفس السلالة الأصلية حرفًا — كل الدوال هنا نصية تفويضٌ للشريحة) ---
+    return await _execute_search(validated_data)
 
 
 async def get_content_raw(
-    content_id: str, *, include_solution: bool = True
-) -> dict[str, str] | None:
-    """جلب النص الخام (Markdown) لتمرين أو درس معين مع خيار الحل."""
+    exercise_id: str, include_solution: bool = False
+) -> dict[str, object] | None:
+    """Get raw content for an exercise."""
     try:
-        return await research_client.get_content_raw(content_id, include_solution=include_solution)
+        return await research_client.get_content_raw(exercise_id, include_solution=include_solution)
     except Exception as e:
-        logger.error(f"Get content raw failed: {e}")
+        logger.error(f"Failed to fetch raw content: {e}")
         return None
 
 
-async def get_solution_raw(content_id: str) -> dict[str, object] | None:
-    """جلب الحل الرسمي (Official Solution) لتمرين."""
-    data = await research_client.get_content_raw(content_id, include_solution=True)
-    if data and "solution" in data:
-        return {
-            "solution_md": data["solution"],
-        }
-    return None
+async def get_solution_raw(exercise_id: str) -> dict[str, object] | None:
+    """Get solution for an exercise."""
+    try:
+        raw = await research_client.get_content_raw(exercise_id, include_solution=True)
+        if not raw:
+            return None
+        return {"exercise_id": exercise_id, "solution_md": raw.get("solution")}
+    except Exception as e:
+        logger.error(f"Failed to fetch solution: {e}")
+        return None
 
 
-def register_content_tools(registry: dict) -> None:
-    """
-    Register content tools into the provided registry.
-    """
-    registry["search_content"] = search_content
-    registry["get_content_raw"] = get_content_raw
-    registry["get_solution_raw"] = get_solution_raw
-    registry["get_curriculum_structure"] = get_curriculum_structure
-
-    logger.info("Content tools registered successfully in agent registry")
+def register_content_tools(tool_registry) -> None:
+    """Register all content tools with the given registry."""
+    tool_registry.register_tool(
+        name="search_content",
+        description="Cognitive Research Infrastructure (CRI): Advanced deep-research engine",
+        schema=SearchContentSchema,
+        fn=search_content,
+    )
+    tool_registry.register_tool(
+        name="get_curriculum_structure",
+        description="Get curriculum structure",
+        fn=get_curriculum_structure,
+    )
+    tool_registry.register_tool(
+        name="get_content_raw",
+        description="Get raw content for an exercise",
+        fn=get_content_raw,
+    )
+    tool_registry.register_tool(
+        name="get_solution_raw",
+        description="Get solution for an exercise",
+        fn=get_solution_raw,
+    )

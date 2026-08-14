@@ -165,6 +165,21 @@ CATALOG: list[TrackedComponent] = [
         ),
     ),
     TrackedComponent(
+        id="content_support",
+        name="ContentTools shards (D-255)",
+        files=[
+            "app/services/chat/tools/content_support/__init__.py",
+            "app/services/chat/tools/content_support/_sources.py",
+            "app/services/chat/tools/content_support/search.py",
+        ],
+        expected_status="ACTIVE",
+        notes=(
+            "D-255: research-content shards extracted from tools/content.py "
+            "(search_content hotspot C(14) · 112 lines · churn 40); consumed by the "
+            "content shell and its own test suite."
+        ),
+    ),
+    TrackedComponent(
         id="boundary_customer",
         name="CustomerChatBoundaryService",
         files=["app/services/boundaries/customer_chat_boundary_service.py"],

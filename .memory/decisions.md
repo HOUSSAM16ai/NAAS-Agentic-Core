@@ -3,6 +3,26 @@
 > This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
 > The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.# Architectural Decisions
+## D-255 · تفكيك hotspot أدوات المحتوى `tools/content.py` (173 سطرًا · `search_content` C(14) · تردد تغيير 40) إلى قشرة استقبال + حزمة شرائح `content_support` — CodeScene X-Ray (2026-08-14 · صفر تغيير سلوكي · اختبارات خضراء)
+**الكارثة (CodeScene X-Ray — NAAS-Agentic-Core، job 72):** `app/services/chat/tools/content.py` كان hotspotًا حيًا بتردد تغيير 40
+(أعلى ترددٍ في الملف) ودالتين فاشلتين حدود الدستور: `search_content` **112 سطرًا · C(14) · 9 وسائط موضعية + kwargs**
+(Complex Method + Excess Number of Function Arguments) و`_normalize_branch` (26 سطرًا · B(10)) و`_scan_for_error`
+(18 سطرًا) بعلامة **Bumpy Road Ahead** — كثرة مسارات العودة المبكرة المتناثرة، وقلب البحث العميق (Fail-Fast — RFC 001)
+والمنطق الجغرافي للشعب الخمس في ملفٍ واحدٍ بلا حدود مسؤولية.
+**الحل (نمط D-252/D-253/D-254 «قشرة ثابتة + شرائح نقية» — صفر تغيير سلوكي):** `content.py` صار **قشرة استقبال وتحقق وتفويض**:
+يظل كل التوقيع العام (`search_content` بتسعة الوسائط + `**kwargs`) والتوقيع الخاص القديم (`_normalize_branch` · `_scan_for_error`)
+قشور تفويضٍ حرفية ليبقى كل اختبار وmonkeypatch فعالًا (قانون late-binding من D-252). كل منطق الدور انتقل إلى حزمة
+`app/services/chat/tools/content_support/` في شرائح نقية بلا حالة: `search.py` (القلب البحثي · كشف «الفشل اللين»
+Error-as-Data عبر ثلاث مراحل نقية `_scan_dict_error` · `_scan_iter_error` · `_scan_json_string_error` · توحيد الشعبة ·
+بناء سياق الاستعلام · صياغة التقرير) و`_sources.py` مانيفست المركّب (نمط D-164/D-173/D-252) الذي يتغذى عليه كل حارسٍ نصي،
+وفلاتر البحث صارت **بياناتٍ معلنة** `SearchFilters` (dataclass مجمّدة) — فالوسائط التسعة المتناثرة صارت حقلًا واحدًا معرّفًا.
+**مقاييس ما بعد الجراحة (radon):** القشرة `search_content` **B(8) بدل C(14)** · `get_curriculum_structure` A(2) ·
+`get_content_raw` A(2) · `get_solution_raw` A(3) · `register_content_tools` A(1) — ولا دالة واحدة تتجاوز B في الشريحة
+(`_scan_dict_error` B(6) · `scan_for_error` B(6) · `_resolve_branch_by_value` A(5) · الباقي A) — **Bumpy Road Ahead أُغلق**:
+كل دالة مسار خروج واحد لا فروع متناثرة.
+**الأثر البشري:** إضافة فلتر أو قاعدة شعبةٍ جديدة تلمس شريحة واحدة معرّفة؛ والتردد العالي لم يعد كارثة — بل توزيع صحي
+على الشرائح والقشرة، ومركز الثقل الذي كان يُغري كل تعديلٍ جديد بالتكدّس صار حدود مسؤولية صريحة.
+
 ## D-254 · تفكيك hotspot بوابة الـ API `api_gateway/main.py` (586 سطرًا · ازدواج داخلي 4 · تردد تغيير 10) إلى سجل توجيهٍ تصريحي `ROUTE_REGISTRY` — CodeScene X-Ray (2026-08-14 · CI أخضر 100%)
 **الكارثة (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots):** `microservices/api_gateway/main.py` بـ **586 سطرًا**
 كان hotspotًا حيًا مركز ثقل معماري واحد — البوابة الوحيدة لكل دخول إلى المنصة: `admin_chat_ws_proxy` تردد 10 ·

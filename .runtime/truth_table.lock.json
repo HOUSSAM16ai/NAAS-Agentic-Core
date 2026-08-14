@@ -182,6 +182,24 @@
       "on_live_chain": false
     },
     {
+      "agreed": false,
+      "derived_status": "ZOMBIE",
+      "expected_status": "ACTIVE",
+      "files": [
+        "app/services/chat/tools/content_support/__init__.py",
+        "app/services/chat/tools/content_support/_sources.py",
+        "app/services/chat/tools/content_support/search.py"
+      ],
+      "id": "content_support",
+      "importer_count": 1,
+      "importers_sample": [
+        "app/services/chat/tools/content_support/__init__.py"
+      ],
+      "name": "ContentTools shards (D-255)",
+      "notes": "D-255: research-content shards extracted from tools/content.py (search_content hotspot C(14) · 112 lines · churn 40); consumed by the content shell and its own test suite.",
+      "on_live_chain": false
+    },
+    {
       "agreed": true,
       "derived_status": "PARTIAL",
       "expected_status": "PARTIAL",
@@ -312,6 +330,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-14T06:02:06.739360+00:00",
+  "generated_at_utc": "2026-08-14T14:58:26.042951+00:00",
   "schema_version": 1
 }

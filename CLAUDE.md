@@ -112,53 +112,17 @@ polymorphic `run()` تُفوِّض لطريقة المهارة الأصلية (`
 الاحتمالي الحتمي (`probability_brain/*`) + `gateway`/model-chain **مُستثناة عمداً** (حماية مسار
 الإجابة). أي مهارة جديدة يجب أن تَرِث `BaseSkill`.
 
-### النواة المعرفية للتفكير (D-181 — 2026-07-22)
+### النواة المعرفية للتفكير + الأسس الحتمية + الرموز (D-181 · D-183 · D-185 — الموجز، والتفصيل الحيّ في §6.7 (د/ط) والأرشيف)
 
-طبقة الاستدلال العامة المُتحقَّقة هي **`app/core/reasoning/`** (dep-free، stdlib، تستهلك
-`app/core/foundations` فترفعها من DORMANT إلى ACTIVE بالبرهان الثلاثي): `arguments` (شجرة قضوية +
-استلزام مُتحقَّق عبر `foundations.logic.entails` + كشف المغالطة الشكلية + مثال مضادّ + parser نصّي) ·
-`causal` (رسم سبب→أثر + **سببية مقابل ارتباط** + مضادّ للواقع + كشف الدورة) · `decomposition` (بوليا +
-فرز طوبولوجي) · `abstraction` (نمط + قاعدة متتالية بـ `Fraction` + تماثل بنيوي) · `mental_model`
-(كيانات/علاقات/ديناميات + فحص تماسك). كل بدائية ترفع `ReasoningError` (لا صفر مضلِّل — §0).
+ثلاث طبقات حتمية dep-free فوق `BaseSkill` (D-179) — **الحقيقة من المحرّكات الرمزية لا من الـ LLM** (الـ LLM للسرد فقط — §0):
 
-فوقها **٦ مهارات على `BaseSkill`** (حتمية 100%، بلا LLM في المسار الأساسي، مقاييس + doctrine +
-اختبارات): `LogicReasoningSkill` (المنطق/الاستدلال) · `CriticalThinkingSkill` (التفكير النقدي) ·
-`ProblemDecompositionSkill` (حل المشكلات) · `CausalReasoningSkill` (فهم العلاقات السببية) ·
-`AbstractionSkill` (التجريد) · `MentalModelSkill` (بناء النماذج الذهنية). المُوحِّد `compose_reasoning`
-(registry، مرآة `compose_text_refinement`) يُركِّب مسار تفكير مُهيكَل لأي سؤال حرّ (تدهور رشيق).
-مكشوفة API-first عبر `POST /api/v1/skills/reason`. **قاعدة دائمة:** الحقيقة (صحّة الاستدلال، السببية،
-الترتيب، النمط) من `app/core/reasoning` + `foundations` حصراً — لا يُقرّرها الـ LLM؛ الـ LLM للسرد فقط.
+| الطبقة | الجوهر | الفتح |
+|---|---|---|
+| **D-181 · `app/core/reasoning/`** | استدلال عام: `arguments`/`causal`/`decomposition`/`abstraction`/`mental_model` + ٦ مهارات سقراطية حتمية على `BaseSkill` (`compose_reasoning`) | `POST /api/v1/skills/reason` |
+| **D-183 · `app/core/foundations/`** | ٩ وحدات جذور أولى (جبر خطي · تفاضل · إحصاء · تحسين · نظرية رسوم · بنى بيانات · لغات صورية · قابلية تقرير · تعقيد) — بلا `eval` | `POST /api/v1/skills/compute` + `foundations-service :8010` |
+| **D-185 · `shared/notation/registry.py`** | المصدر القانوني الوحيد لكل رمز يُطبَع؛ تعريفٌ قبل مثال؛ حراس التباس؛ تكافؤ مونوليث↔خدمة (`check_notation_parity`) | `POST /api/v1/skills/notation` + `notation-service :8011` |
 
-### إكمال الجذور الأولى + النواة الحاسوبية (D-183 — 2026-07-23)
-
-طبقة `app/core/foundations/` اكتملت لتغطّي **الجذور الأولى ما قبل البرمجة** الثلاث (المنطق/الفكر ·
-الرياضيات · نظرية الحساب). أُضيفت ٩ وحدات حتمية dep-free (stdlib، ترفع `FoundationsError` لا صفراً
-مضلِّلاً): **رياضيات** — `linear_algebra` (حلّ `Ax=b` بحذف غاوس + محدّد + رتبة) · `calculus` (اشتقاق
-مركزي + تكامل سيمبسون + نهاية + جذر نيوتن + تايلور) · `statistics` (ارتباط + انحدار OLS + مجال ثقة +
-t-stat + مئين) · `optimization` (نزول متدرّج + قطع ذهبي + تنصيف + برمجة خطّية ثنائية) · `graph_theory`
-(مركّبات + دورات + فرز طوبولوجي + MST كروسكال + ثنائية التلوين + شجرة) · **نظرية الحساب** —
-`data_structures` (Stack/Queue/MinHeap/LinkedList/BST) · `formal_languages` (DFA + محرّك regex مصغّر +
-Dyck + اشتقاق نحوي) · `computability` (أكرمان + قابلية تقرير منتهية + اختزال + حدود Halting/Busy-Beaver
-مُوثَّقة) · `complexity` (ترتيب النموّ + كتالوج P/NP/NP-complete + «P مقابل NP» بصدق).
-
-مكشوفة كـ **Skill** (`FoundationsComputeSkill` على `BaseSkill` — `foundations_compute`) عبر
-`POST /api/v1/skills/compute` (المونوليث) وفرع `compute` في `compose_reasoning`، و**كخدمة مصغّرة
-API-first** `foundations-service` على `:8010` (contract ملتزَم؛ محرّكات مُوَرَّدة،
-بلا استيراد `app`). دوالّ التفاضل/التحسين تُمرَّر كمعاملات كثير حدود (`[c0,c1,c2] → c0+c1x+c2x²`)
-فيبقى السطح آمناً على JSON بلا `eval`. كل الكود الجديد مُغطّى اختبارياً 100%. **قاعدة دائمة:** الأرقام
-والبنى من محرّكات `foundations` الحتمية حصراً — لا يُقرّرها الـ LLM (§0: الحقيقة الرمزية قبل اللغة).
-
-### طبقة الرموز الرياضية (D-185 — 2026-07-28)
-
-`shared/notation/registry.py` (dep-free، stdlib) هو **المصدر القانوني الوحيد** لمعنى كل رمز
-يطبعه النظام (`C(n,k)` · `A(n,k)` · `n!` · `P(A)` · `P_A(B)` · `X` · `E(X)` · `Ω` · `∩` · `∪` ·
-`Ā`)، بعلامات تُغطّي صيغ الطالب الحقيقية (فصحى/دارجة/فرنسية) وحارسَي التباس: الحروف المفردة
-تتطلّب إشارة «حرف/رمز» صريحة ولا تُطابَق في سياق «الحادثة C»، والنيّة الحسابية تُلغي التعريف
-فلا يُخطَف دورٌ حسابي. مكشوف كـ **Skill** (`NotationSkill` على `BaseSkill` — `notation`) عبر
-`POST /api/v1/skills/notation` وفرع `notation` في `compose_reasoning`، و**كخدمة مصغّرة API-first**
-`notation-service` على `:8011` (contract ملتزَم → **API-first 14/14** مع المونوليث، D-231؛ نسخة مُوَرَّدة محروسة
-بـ`check_notation_parity`، بلا استيراد `app`). الدور التعليمي يستعمل الفرع الحتمي **المحلّي**
-(بلا شبكة، صفر زمن إضافي على الطالب) والخدمة للـAPI والوكلاء بتدهور رشيق. القواعد الدائمة في §6.7 (د).
+القواعد الدائمة لـ D-185 الخمس (الرمز قبل الكاشفات · التعريف ليس إجابة · رموز غير مسجَّلة ⇒ CI أحمر · حارس تكرار متماثل · لا نسخة ثالثة) محروسة نصيًا في §6.7 (د) ولا تُكرَّر هنا (DOC-DEBT-001).
 
 ### قواعد إلزامية لكل Skill جديد
 
@@ -808,9 +772,11 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
   يستقبل **أسئلة-فقط** (`display_content`)؛ الإجابة النموذجية لوضع التحقق حصراً؛ كل مخرَج نهائي يمرّ
   عبر `sanitize_final_text`/`redact_final_answers`. «لم أفهم» = تشخيص + أدنى تلميح، لا إعادة اشتقاق.
 - **الاعتراف والتقدّم (D-155/D-158/D-162)**: إجابة الطالب الصحيحة تُحكَم بالمحرك الرمزي وتُعترَف
-  صراحةً وتُقدِّم؛ السؤال ليس إجابةً (بوّابة الفعل الكلامي، «هل» مستثناة)؛ `tutor_state.kc_progress`
-  هو المصدر الوحيد لقرار الدور (evidence×ability×difficulty) — لا مسح نصّ التاريخ.
-- **صفر تكرار حرفي** (`_recently_emitted` + مرساة `last_step_emitted`)؛ **لا تسرّب تفكير النظام**
+  (`probability_tutor_brain.py` جذر تركيب + 5 mixins)؛ الملفات المُفكَّكة لا تستورد أصلها أبداً؛
+ إعادة التصدير بـ `# noqa: F401` — **D-260** (2026-08-15 · `kernel.py` 272 سطرًا · churn=9): النمط
+ نفسه على النواة نفسها — `kernel.py` قشرة تفويض (`RealityKernel` كل واجهاتها القديمة أعيد تصديرها بالاسم)
+ + حزمة `app/core/kernel_support/` (`_sources.py` مانيفست مركّب · `lifecycle.py` · `contracts.py` ·
+ `otel.py` · `compose.py` شرائح نقية) — radon A · ruff نظيف · E2E D-259 أخضر قبل/بعد (صفر تراجع).- **صفر تكرار حرفي** (`_recently_emitted` + مرساة `last_step_emitted`)؛ **لا تسرّب تفكير النظام**
   للطالب (D-117: ممنوع prepend «[توجيه تربوي]»، العمق يصل عبر `support_level`)؛ **فجوة الوهم**
   (assisted − durable) هي مقياس النجاح الوحيد (D-126/D-157).
 - **النظام يعرّف كل رمز يطبعه (D-185 — 2026-07-28 · ISS-138)**: طالب سأل «ماذا نقصد بحرف C» عن
@@ -997,29 +963,43 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 ---
 
 ## 6.9 خريطة الإحالة إلى الأرشيف (§6.x → التاريخ الكامل)
-
 كل قرار D-XXX له سرده الحرفي الكامل (النطاق، الأدلة، الملفات، التحقق الحي) في
-**`docs/archive/constitution-history/CLAUDE-SECTIONS-6x-FULL.md`** (لقطة CLAUDE.md قبل جراحة D-173).
-للتفاصيل التشغيلية الحيّة: `.memory/` (فهرسها `.memory/README.md` — `decisions.md` · `issues.md` ·
-`runtime_truth.md` · `roadmap.md` · `architecture.md` · `pedagogical_os.md`). خريطة السلطة الكاملة:
-`docs/DOCUMENTATION_INDEX.md`.
+**`docs/archive/constitution-history/CLAUDE-SECTIONS-6x-FULL.md`** (لقطة CLAUDE.md قبل جراحة D-173)
+**و`.memory/decisions.md`** (سجل القرارات الحيّ — **المصدر الأول لأي D-XXX جديد**) · وخريطة السلطة
+الكاملة: `docs/DOCUMENTATION_INDEX.md`.
 
-| المجال | القرارات (تفصيلها في الأرشيف + `.memory/decisions.md`) |
-|--------|------------------------------------------------------|
+### سلسلة تفكيك التعقيد — CodeScene X-Ray (D-252 → D-260)
+نمط واحد قاطع للكل: **قشرة معمارية تفوِّض + حزمة شرائح نقية + مانيفست مركّب `_sources.py`** تتغذى
+منه الحراس النصية — **صفر تغيير سلوكي** في كل قرار (مطابقة كاملة قبل/بعد أو بوابات AST تحرس الأثر).
+
+| القرار | الملف الساخن | التفكيك |
+|---|---|---|
+| **D-252** | `chat_stream_ws` 669 سطرًا F(69) churn=53 | قشرة استقبال ~60 سطرًا C(13) + `customer_chat_support/turn_lifecycle.py` [`handle_turn` C(12) · `_stream_and_wait` B(8) · `_close_turn` D(23)] — Stage 3 من جراحة D-173، حراس تتغذى من المانيفست |
+| **D-253** | `agents/orchestrator.py` 552 سطرًا · خمس دوال B/C | قشرة استقبال + حزمة `orchestrator_support/` خمس شرائح نقية · مانيفست مركّب · رُفِع تجميد `PLR0912` |
+| **D-254** | `api_gateway/main.py` 586 سطرًا · ازدواج 4 · تردد 10 | **سجل توجيه تصريحي** `ROUTE_REGISTRY` — 27 مسارًا تبني المعالجات آليًا · حارس `check_gateway_routes_parity` endpoints لا bytes |
+| **D-255 + D-259** | `tools/content.py` 173 سطرًا · `search_content` C(14) churn=40 | قشرة استقبال + حزمة `content_support/` [`search.py` + `branch.py` مستقلة مصدرٌ واحد للشعبة + كشف الأخطاء جدولُ تحويلٍ واحد إلى ثلاث شرائح] · B(8) بدل C(14) · Bumpy Road مغلق نهائيًا · ruff 0.14.0 + radon A(5) |
+| **D-256** | `orchestrator_client.py` 238 سطرًا · ازدواج `get_mission*` · churn=2 | قشرة تفويض حرفية + حزمة `orchestrator_client_support/` [`missions.py` قلب موحد + `ServiceJwtPayload` · `preempts.py` قرار Supabase معزول] · 11 اختبارًا جديدًا، حراس legacy_invariants وskills_doctrine الموسّعان |
+| **D-258** | `tests/conftest.py` 416 سطرًا · `db_lifecycle` 63 LOC churn=12 Bumpy Road | قشرة تسجيلٍ وتفويضٍ + حزمة `conftest_support/` (helpers/registry/schema/lifecycle/auth_shards/policy/_sources) — اكتُشف: pytest لا يفعّل autouse لfixtures مستوردة فبقيت قشور التسجيل |
+| **D-260** (الآن) | `app/kernel.py` 272 سطرًا · `_validate_contract_alignment` churn=2 + `_handle_lifespan_events` churn=9 · Complex Method/Bumpy Road | قشرة تفويض نقية + حزمة `app/core/kernel_support/` [`_sources.py` مانيفست مركّب · `lifecycle.py` دورة حياة مفككة · `contracts.py` مطابقة OpenAPI/AsyncAPI نقية · `otel.py` bootstrap · `compose.py` combinators] · **أسماء الواجهة القديمة كلها أعيد تصديرها** (لا كاسر لأي مستورد) · radon B(8)/B(7)→A · ruff نظيف · E2E D-259 أخضر قبل/بعد |
+
+### بقية المجالات (السرد الحيّ في `.memory/decisions.md` + الأرشيف)
+| المجال | القرارات |
+|---|---|
 | الاستمرارية والبثّ | D-006 · D-047 · D-048 · **D-198** · **D-199** · ISS-016/017 |
 | العقل التربوي السقراطي | D-074 · D-104 · D-113 → D-160 |
 | الاحتمالات الحتمية | D-075 → D-085 · D-116 · D-152/153 · **D-182** · **D-184** |
 | WebSocket | D-WS-001 → D-WS-PROXY-004 · D-096 · ISS-092→101 |
 | الواجهة/الثيم | D-049 → D-059 |
-| تفكيك التعقيد | D-163 → D-172 · **D-182** · **D-237** · **D-239** · **D-240** (النقطة الساخنة + ميزانيات التعقيد + التوأمان + إغلاق CodeScene — `ADR-009` · تحرسها `check_endpoint_complexity`) · **D-252** (CodeScene X-Ray job 72: `chat_stream_ws` 669 سطرًا F(69) تردد 53 ⇒ قشرة استقبال ~60 سطرًا C(13) + `customer_chat_support/turn_lifecycle.py` [`handle_turn` C(12) · `_stream_and_wait` B(8) · `_close_turn` D(23)] عبر د-173 Stage 3 «القشرة + دورة الدور» — صفر تغيير سلوكي، حراس نصية تتغذى من مانيفست المركّب `_sources.py`، CI أخضر 100%) · **D-253** (CodeScene X-Ray: `agents/orchestrator.py` 552 سطرًا · خمس دوال B/C ⇒ قشرة استقبال + حزمة `orchestrator_support/` خمس شرائح نقية صفر تغيير سلوكي · مانيفست مركّب `_sources.py` · رُفِع تجميد `PLR0912` نصًا · CI أخضر 100%) · **D-254** (CodeScene X-Ray: `api_gateway/main.py` 586 سطرًا · ازدواج داخلي 4 · تردد 10 ⇒ **سجل توجيهٍ تصريحي** `ROUTE_REGISTRY` — 27 مسارًا يبني المعالجات آليًا صفر تغيير سلوكي · مانيفست مركّب `_sources.py` + حارس `check_gateway_routes_parity` endpoints لا bytes · CI أخضر 100%) · **D-255** (CodeScene X-Ray: `tools/content.py` 173 سطرًا · `search_content` C(14) · 9 وسائط · تردد تغيير 40 ⇒ قشرة استقبال + حزمة شرائح `content_support/` [`search.py` قلب البحث العميق + كشف Error-as-Data بثلاث مراحل نقية · `_sources.py` مانيفست مركّب] · فلاتر `SearchFilters` بياناتٌ معلنة · `search_content` B(8) بدل C(14) وبumpy Road Ahead أُغلق · اختبارات خضراء 10/10) · **D-256** (CodeScene X-Ray job 72: `orchestrator_client.py` 238 سطرًا · Code Duplication على `get_mission`/`get_mission_events` · `_has_indexed_match` أعلى تردد churn=2 ⇒ قشرة تفويض حرفية + حزمة شرائح `orchestrator_client_support/` [`missions.py` قلب `_request_mission` الموحد + `ServiceJwtPayload` · `preempts.py` قرار Supabase معزول · `_sources.py` مانيفست مركّب يتغذى منه حراسا legacy_invariants وskills_doctrine الموسّعان] · 11 اختبارًا سلوكًا جديدًا + القديمة خضراء · ruff أخضر) · **D-257** (E2E حيّ 2026-08-14 · ISS-169: `InvalidRequestError: name 'Mission' is not defined` عند أول `save_message` لمسار customer chat ⇒ استيراد `Mission` حرفيًا + `foreign_keys=[Mission.initiator_id]` مرجع كائني صفر تغيير سلوكي — رسالة `id=4915` محفوظة فعليًا · E2E على Supabase أخضر) · **D-258** (CodeScene X-Ray 2026-08-15 · ISS-170: بنية الاختبارات `tests/conftest.py` 416 سطرًا · `db_lifecycle` 63 LOC churn=12 Bumpy Road ⇒ قشرة معمارية + حزمة شرائح نقية `tests/conftest_support/` — اكتشاف معماري: pytest لا يفعّل autouse لfixtures مستوردة فبقيت قشور التسجيل في الconftest · صفر تغيير سلوكي · الحزمة الكاملة مطابقة · CI أخضر 100%) · **D-259** (CodeScene X-Ray 2026-08-15: إكمال تفكيك `tools/content.py` — شريحة `content_support/branch.py` مستقلة مصدرٌ واحد لتوحيد الشعبة وأسمائها وعتباتها بعد أن كانت مزدوجة في `search.py` + إصلاح خلل حقيقي: المانيفست كان يشير إلى `branch.py` غير موجود ⇒ FileNotFoundError صامت لأي قارئ نصي + كشف الأخطاء صار جدول تحويل واحد إلى ثلاث شرائح نقية — Bumpy Road مغلق نهائيًا · ruff 0.14.0 + radon A(5) كحد أقصى · 13/13 وحدة + E2E D-255 أخضر · صفر تغيير سلوكي) |
+| كوارث التسليم الحيّ | **D-257** (E2E حيّ 2026-08-14 · ISS-169: `Mission` غير مستورد ⇒ استيراد حرفي + مرجع كائني — رسالة id=4915 حُفظت فعليًا · Supabase أخضر) |
 | النماذج | D-060 · D-067 · D-088 · D-167 · D-177 · D-178 |
 | الكاش (Cache) | D-180 |
 | Skills / OOP / الاستدلال | §0.5 · D-069 · D-100 · **D-179** · **D-181** · **D-183** |
 | الرموز والنيّة واللغات | **D-185** · **D-186** · **ADR-006** |
 | التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** · **D-184** · **D-192** |
-| K-ROOT · استمرارية المفاتيح + تحصين الأوركستريتور | **D-241 · D-242** (`app/core/settings/helpers.py` طبقة `app_state` · `app/services/bootstrap.py` · `app/infrastructure/clients/user_client.py` · `microservices/user_service/security.py` · `microservices/orchestrator_service/src/api/routes.py` — تحرسها `doc-integrity` · 24/24 E2E حي على Supabase 2026-08-12) · **D-244** (برهان D-241 المباشر + أصول العطب الثلاثة — 2026-08-13) · **D-245** (مجسّات حيّة صادقة: DB probe · إعلان المزوّدين · /health صادق — 2026-08-13) |
+| K-ROOT · استمرارية المفاتيح + تحصين الأوركستريتور | **D-241 · D-242** (`app/core/settings/helpers.py` طبقة `app_state` · `bootstrap.py` · `user_client.py` · orchestrator `security.py`/`routes.py` — تحرسها `doc-integrity` · 24/24 E2E حي 2026-08-12) · **D-244** (برهان D-241 + أصول العطب الثلاثة) · **D-245** (مجسّات حيّة صادقة: DB probe · إعلان المزوّدين · /health صادق) |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 · **D-182** |
 | الأثر · الذاكرة · الموضوع · التمرين | **D-188** · **D-189** · **D-190** · **D-191** |
-| صدق الفوارض · الحيرة لا تُهنَّأ | **D-208** (ISS-149 — الأسبقيّة · الفعل الكلامي على المؤشّرات · بوّابة لا تشهد بما لم تقرأ) |
+| صدق الفوارض · الحيرة لا تُهنَّأ | **D-208** (ISS-149 — الأسبقية · الفعل الكلامي على المؤشّرات · بوّابة لا تشهد بما لم تقرأ) |
 | التنسيق · الطبقات التسع | **D-209** (`AGENTIC_ORCHESTRATION_DOCTRINE.md` + `.memory/agentic_runtime_doctrine.md`) |
 | القيمة والإيراد (§0.10) | **D-210 → D-223** (`docs/VALUE_DOCTRINE.md` · `docs/REVENUE_ENGINE_SPEC.md` · `.memory/revenue_engine_truth.md` — تحرسها `check_revenue_doctrine`) |
+

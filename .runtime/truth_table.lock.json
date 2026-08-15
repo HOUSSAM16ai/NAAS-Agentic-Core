@@ -1,9 +1,9 @@
 {
-  "branch": "feat/d256-orchestrator-client-hotspot",
+  "branch": "main",
   "components": [
     {
-      "agreed": true,
-      "derived_status": "PARTIAL",
+      "agreed": false,
+      "derived_status": "ZOMBIE",
       "expected_status": "PARTIAL",
       "files": [
         "app/services/chat/local_graph.py"
@@ -11,9 +11,9 @@
       "id": "local_graph",
       "importer_count": 8,
       "importers_sample": [
+        "app/core/kernel_support/lifecycle.py",
         "app/infrastructure/clients/orchestrator/local_fallback.py",
         "app/infrastructure/clients/orchestrator/turn_preempts_deterministic.py",
-        "app/kernel.py",
         "app/services/chat/local_graph_explanation.py",
         "app/services/skills/bac_exercise_skill.py",
         "scripts/gitpod_live_debug.py",
@@ -22,7 +22,7 @@
       ],
       "name": "LangGraph local engine",
       "notes": "Pre-warmed at app/kernel.py; invoked by orchestrator_client fallback tier 3. Runs every turn in default Codespaces.",
-      "on_live_chain": true
+      "on_live_chain": false
     },
     {
       "agreed": true,
@@ -53,8 +53,8 @@
       "importer_count": 9,
       "importers_sample": [
         "app/api/routers/observability.py",
+        "app/core/kernel_support/lifecycle.py",
         "app/infrastructure/clients/orchestrator/chat_turn.py",
-        "app/kernel.py",
         "app/middleware/fastapi_observability.py",
         "app/middleware/observability/observability_middleware.py",
         "app/services/boundaries/observability_boundary_service.py",
@@ -304,8 +304,8 @@
       "on_live_chain": true
     },
     {
-      "agreed": true,
-      "derived_status": "ACTIVE",
+      "agreed": false,
+      "derived_status": "ZOMBIE",
       "expected_status": "ACTIVE",
       "files": [
         "app/telemetry/otel_setup.py"
@@ -313,11 +313,11 @@
       "id": "otel_setup",
       "importer_count": 1,
       "importers_sample": [
-        "app/kernel.py"
+        "app/core/kernel_support/otel.py"
       ],
       "name": "OpenTelemetry SDK bootstrap",
       "notes": "Imported by app/kernel.py at boot (setup_otel + instrument_fastapi_app). Hard no-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset, so default Codespaces without the stack still boot. ACTIVE under §6.6 because the import + call chain are present at kernel startup; runtime evidence depends on the stack being up (validated separately by observability_validation CI).",
-      "on_live_chain": true
+      "on_live_chain": false
     },
     {
       "agreed": true,
@@ -350,6 +350,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-15T00:55:00.588114+00:00",
+  "generated_at_utc": "2026-08-15T18:05:56.549789+00:00",
   "schema_version": 1
 }

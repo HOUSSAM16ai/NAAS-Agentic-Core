@@ -1,4 +1,37 @@
 # Open Issues & Bugs
+
+## ISS-169 (2026-08-14) — `InvalidRequestError: name 'Mission' is not defined` يعطّل حفظ رسائل الطالب في المحادثة (E2E حيّ) — ✅ مُغلق (D-257)
+
+**البلاغ (E2E runtime حيّ على Supabase، 2026-08-14):** تسجيل الدخول للأدمن والمستخدم ينجح، و`/health` صادق (`database=ok`)، لكن أي رسالة طالب عبر `WS /api/chat/ws` تسقط عند أول حفظ برسالة `Failed to persist customer user message locally:` (استثناءٌ بلا نص يُبتلع).
+
+**السبب الجذري:** علاقة `User.missions` في `app/core/domain/user.py` عرّفت `foreign_keys="[Mission.initiator_id]"` كسلسلة حرفية مع إبقاء `Mission` داخل `TYPE_CHECKING` فقط — عند تهيئة mapper أول جلسة DB لم تستورد `app.core.domain.mission` بعد (مسار customer chat المستقل عن أي سلسلة تستورده)، يرمي SQLAlchemy `InvalidRequestError` عند أول `commit`.
+
+**الإصلاح (D-257):** تحميل `Mission` صراحةً خارج `TYPE_CHECKING` وتحويل `foreign_keys` إلى المرجع الكائني `[Mission.initiator_id]` — بلا دائرة استيراد لأن `mission.py` يستخدم سلسلة `"app.core.domain.user.User"` في `back_populates`، و`__future__ annotations` يُبقي tiphint التقييم لاحقًا.
+
+**التدوير المُلزم:** الفشل أعيد إنتاجه قبل الإصلاح (traceback كامل من REPL) ونُفي بعده (رسالة `id=4915` محفوظة في الإنتاج الفعلي دون أي preloading للنماذج — مسار kernel الحقيقي) + `ruff check` أخضر.
+
+## ISS-168 (2026-08-14) — كارثة الـ hotspot المدمّر `orchestrator_client.py` (CodeScene job 72): 238 سطرًا · ازدواج كود `get_mission`/`get_mission_events` · `_has_indexed_match` أعلى تردد (38 سطرًا · churn=2) — ✅ مُغلق (D-256)
+
+**البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots على `app/infrastructure/clients/orchestrator_client.py`):**
+`get_mission` و`get_mission_events` يحملان علامة **Code Duplication** (15/16 سطرًا) — نمط `client + try/except +
+raise_for_status + 404-handling + json` مكرر حرفًا لكل طلب missions — و`create_mission` (30 سطرًا) يكرر القلب نفسه،
+و`_build_service_jwt` (26 سطرًا) يبني payload مكررًا، و`_has_indexed_match` (38 سطرًا · churn=2) أعلى دالة ترددًا
+مع embedded import و`try/except` واسع يلتقط كل شيء.
+
+**السبب الجذري:** القلب المشترك (جلب مهمة/أحداث، بناء JWT، قرار الاسترجاع المفهرَس) معبَّأ داخل قشرة العميل نفسها،
+فكل تعديل على أي مرحلة يلمس الملف كله — تجمّع حراري واحد يزداد ازدواجًا مع كل سؤال.
+
+**الإصلاح (D-256):** قشرة استقبال تفوّض حرفًا صفر تغيير سلوكي (كل التوقيعات العامة والخاصة السابقة قشور late-binding
+تحرس الاختبارات القائمة) + حزمة شرائح نقية `orchestrator_client_support/` بشريحتين [`missions.py`: `_request_mission`
+قلب موحد للطلبات الثلاثة · `ServiceJwtPayload` بيانات معلنة للـ JWT · `MissionRequestArgs`] و`preempts.py`
+[`resolve_indexed_anchor` يعزل قرار Supabase · `resolve_explanation_with_context`] · مانيفست مركّب `_sources.py` (نمط
+D-164/D-173/D-252/D-255) يتغذى عليه حارسا `check_legacy_invariants` و`check_skills_doctrine` الموسّعان — 11 اختبارًا
+سلوكًا جديدًا أخضر (مطابقة حرفية: 404 ⇒ None/[] · خطأ HTTP يُرمى حرفًا · JWT بـ claim الإدمن) مع القديمة 13/13،
+وruff 0.14.0 أخضر.
+
+**التدوير المُلزم:** كارثة الـ hotspot السادسة في سلسلة CodeScene (ISS-163 → D-252 · ISS-165 → D-253 · ISS-166 →
+D-254 · ISS-167 → D-255 · ISS-168 → D-256) — المنهجية المعمّمة الآن تشمل ملفات الـ clients وruntime truth محدّث.
+
 ## ISS-167 (2026-08-14) — كارثة الـ hotspot المدمّر `tools/content.py` (CodeScene job 72): 173 سطرًا · `search_content` C(14) · 112 سطرًا · 9 وسائط · تردد تغيير 40 — ✅ مُغلق (D-255)
 **البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots):** ملف `app/services/chat/tools/content.py`
 · `search_content` تعقيد C(14) · 112 سطرًا · 9 وسائط موضعية (Complex Method + Excess Number of Function Arguments)

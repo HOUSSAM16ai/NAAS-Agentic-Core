@@ -1,6 +1,19 @@
 # Runtime Truth Lock
-> Last updated: **2026-08-13** | Branch: hotfix/codescene-hotspot-chat-stream-ws-decomposition (D-252)
+> Last updated: **2026-08-14** | Branch: feat/d256-orchestrator-client-hotspot (D-256)
+> Previous: hotfix/codescene-hotspot-chat-stream-ws-decomposition (D-252→D-255)
 > Previous: `claude/project-international-markets-ws5pwz` (D-228→D-232)
+
+## D-256 Hotspot Decomposition — `orchestrator_client.py` «القشرة + شرائح missions/preempts» (2026-08-14 · CodeScene X-Ray job 72)
+
+| المسار الحيّ | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`app/infrastructure/clients/orchestrator_client.py`** (Entry-points لا تتغير) | **ACTIVE (قشرة تفويض حرفية)** | كل التوقيعات العامة (`get_mission` · `get_mission_events` · `create_mission`) والخاصة القديمة (`_has_indexed_match` · `_build_service_jwt` · `_has_explanation_with_context_match`) قشور تفويض نصّية — برهان حيّ: ruff 0.14.0 + pytest 24/24 (11 جديدًا سلوكًا مكافئًا + 13 قديمة) + الحراس الموسّعة خضراء · لا تغيير سلوكي على أيّ مسار مستهلِك |
+| **`orchestrator_client_support/missions.py`** (D-256 — جديد) | **ACTIVE** | القلب الموحد `_request_mission` للطلبات الثلاثة (يقتل Code Duplication على `get_mission`/`get_mission_events`/`create_mission`) · `ServiceJwtPayload` بياناتٌ معلنة للـ JWT · `MissionRequestArgs` · المطابقة الحرفية للأصل: 404 ⇒ `None`/`[]` · خطأ HTTP ≥400 غير 404 يُرمى كما هو |
+| **`orchestrator_client_support/preempts.py`** (D-256 — جديد) | **ACTIVE** | `resolve_indexed_anchor` يعزل قرار استعلام Supabase عن الطبقة المعرفية المحلية (يفتحه `_has_indexed_match` أعلى تردد churn=2) · `resolve_explanation_with_context` — السلوك مطابق الأصل حرفًا |
+| **`orchestrator_client_support/_sources.py`** (مانيفست المركّب) | **ACTIVE (guardrails)** | يركّب القشرة + الشرائح في مصدر واحد؛ حارسا `check_legacy_invariants` و`check_skills_doctrine` الموسّعان نصًا يتغذّيان منه — لا تراجع صامت للحرس النصي |
+| **دليل حيّ (2026-08-15 · CI run 31854691052)** — الشرائح لا تُستدعى منفصلةً: مسار الإنتاج يمر عبر القشرة `orchestrator_client.py` (ACTIVE في القفل، 7 مستوردين من routers الحية `customer_chat.py`/`admin.py`) وتلك القشرة تفوّض للشرائح حرفيًا؛ عُيِّن المسار كاملًا حيًّا على Supabase الحقيقي: تسجيلان (roles=[ADMIN]/[STANDARD_USER,USER]) · 317 حدث WebSocket بينها `assistant_delta` بثّ مباشر · `persist` رسالة id=4915 · `health` database=ok — و`--check` أخضر على القفل المجدَّد (lock sha يغطي 4 ملفات الشرائح). |
+
+**مسارات الإقلاع الحية (دون تغيير — مطلب doc_integrity):** `app/api/routers/customer_chat.py` · `app/api/routers/admin.py` · `app/services/chat/local_graph.py` · `app/infrastructure/clients/orchestrator_client.py` · `app/kernel.py` · `_emit_terminal_frames`.
 
 ## D-252 Hotspot Decomposition — `chat_stream_ws` «القشرة + دورة الدور» (2026-08-13 · CodeScene X-Ray job 72)
 

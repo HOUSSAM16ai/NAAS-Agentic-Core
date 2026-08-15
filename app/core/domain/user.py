@@ -19,7 +19,14 @@ from app.security.passwords import pwd_context
 if TYPE_CHECKING:
     from app.core.domain.audit import AuditLog
     from app.core.domain.chat import AdminConversation, CustomerConversation
-    from app.core.domain.mission import Mission
+
+# D-257 (ISS-169): يُحمَّل Mission صراحةً قبل تعريف العلاقة أدناه —
+# foreign_keys="[Mission.initiator_id]" (سلسلة حرفية) كان يفشل عند تهيئة
+# mapper أول وصولٍ لجلسةٍ لم تستورد domain.mission بعد (InvalidRequestError:
+# name 'Mission' is not defined) فيتعطل حفظ رسائل الطالب في المحادثة. التحميل
+# الصريح يضمن أن registry يعرف Mission قبل بناء العلاقة، بلا دائرة استيراد
+# لأن mission.py يستخدم سلسلة "app.core.domain.user.User" في back_populates.
+from app.core.domain.mission import Mission
 
 
 class UserStatus(CaseInsensitiveEnum):
@@ -73,9 +80,9 @@ class User(SQLModel, table=True):
     )
     missions: list[Mission] = Relationship(
         sa_relationship=relationship(
-            "app.core.domain.mission.Mission",
+            Mission,
             back_populates="initiator",
-            foreign_keys="[Mission.initiator_id]",
+            foreign_keys=[Mission.initiator_id],
             viewonly=True,
         )
     )

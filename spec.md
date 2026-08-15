@@ -252,6 +252,7 @@ Priority decomposition candidates:
 7. `microservices/orchestrator_service/src/services/overmind/graph/search.py`
 8. `microservices/orchestrator_service/src/services/overmind/probability_tutor.py`
 9. `microservices/api_gateway/main.py` — **Done (D-254 · 2026-08-14):** CodeScene hotspot (586 سطرًا · ازدواج داخلي 4 · تردد تغيير 10 على دوال البروكسي المتكررة) ⇒ سجل توجيهٍ تصريحي `ROUTE_REGISTRY` (27 مسارًا) يبني المعالجات آليًا صفر تغيير سلوكي · مانيفست مركّب `_sources.py` + حارس نصي `check_gateway_routes_parity` (endpoints لا bytes) · E2E حي 18/18 · CI أخضر 100%.
+10. `app/infrastructure/clients/orchestrator_client.py` — **Done (D-256 · 2026-08-14):** CodeScene hotspot (238 سطرًا · Code Duplication على `get_mission`/`get_mission_events` · `_has_indexed_match` أعلى تردد churn=2 · embedded import + try/except واسع) ⇒ قشرة تفويض حرفية + حزمة شرائح نقية `orchestrator_client_support/` [`missions.py`: قلب `_request_mission` الموحد للطلبات الثلاثة + `ServiceJwtPayload` بياناتٌ معلنة للـ JWT · `preempts.py`: `resolve_indexed_anchor` يعزل قرار Supabase · `_sources.py` مانيفست مركّب يتغذى منه حراسا legacy_invariants وskills_doctrine الموسّعان] · 11 اختبارًا سلوكًا جديدًا (مطابقة حرفية: 404 ⇒ None/[] · خطأ HTTP يُرمى حرفًا · JWT بـ claim الإدمن) + القديمة 13/13 خضراء · ruff 0.14.0 أخضر · سجلّ السلسلة كاملة: D-252 (`chat_stream_ws` F(69) تردد 53) · D-253 (`orchestrator.py` خمس دوال B/C) · D-254 · D-255 (`content.py` C(14) churn 40) · D-256 — كلٌ بنمط «القشرة + الشرائح + المانيفست المركّب» صفر تغيير سلوكي.
 
 ## 13. Split-Brain Elimination Requirements
 

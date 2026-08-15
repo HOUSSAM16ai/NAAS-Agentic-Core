@@ -9,6 +9,14 @@
 **اكتشاف معماري حاسم:** pytest لا يفعّل autouse لfixtures معرَّفة في وحداتٍ عاديةٍ تُستورد إلى namespace الـconftest (اختبارٌ تجريبي مثبت — `_arg2fixturedefs` لا تُفعَّل) — لذلك بقيت قشور التسجيل في الـconftest نفسه والمنطق النقي في الشرائح.
 **الأدلة:** الحزمة الكاملة (tests/ minus microservices + scripts/ci) قبل/بعد — نتيجة مطابقة (4431/4431) · ruff 0.14.0 + formatter أخضر · بوّابتا `check_memory_coherence` و`check_constitution_reality` خضراء بعد تحديث الفهرس.
 
+
+## D-259 · إزالة ازدواجية منطق توحيد الشعبة + إكمال تفكيك `content_support` (CodeScene X-Ray 2026-08-15): شريحة `branch.py` مستقلة + تنظيف كشف الأخطاء — صفر تغيير سلوكي
+
+**الملاحظة (CodeScene X-Ray job 72x · `tools/content.py`):** رغم تفكيك D-255، بقيت ازدواجية كود (Code Duplication — CodeScene): منطق `normalize_branch` وتسمياته `_BRANCH_LABELS` وعتباته معرَّفٌ حرفيًا في شريحتين (`content_support/search.py` + القشرة)، وشريحة `_scan_for_error` ما زالت مصحوفة بـ Bumpy Road (فروع `and` متسلسلة في سطر واحد). كما وُجد خللٌ حقيقي: مانيفست `CONTENT_TOOLS_SOURCE_FILES` يشير إلى `"tools/content_support/branch.py"` غير موجود — أي قارئ نصي للمصدر المركّب (حراس عقيدة · ownership fences) كان يحصل على `FileNotFoundError` (خطأ صامت لأن الاستيراد في `__init__` لا يقرأ الملف إلا عند الاستدعاء).
+
+**الحل — صفر تغيير سلوكي (نمط D-164/D-173/D-252):** شريحة `content_support/branch.py` مستقلة تحمل `normalize_branch` + `_BRANCH_LABELS` + العتبات (`_CLOSE_MATCH_CUTOFF = 0.6` · `_MIN_VARIANT_LENGTH = 3`)، و`search.py` يستوردها ولا يعيد تعريفها، والقشور القديمة في `content.py` تفوض عبر `content_support.normalize_branch` (مصدر واحد الآن). كشف الأخطاء صار **جدول تحويل واحد** (`_lookup_scan_shard`) إلى ثلاث شرائح حتمية نقية (`_scan_dict_error` · `_scan_iter_error` · `_scan_json_string_error`)، كلٌّ بمسار خروج واحد — مع شريحة مساعدة `_is_error_json_string` حتمية تحوّل الشرط المركّب إلى فحوصات متسلسلة (no chained `and`).
+
+**الأدلة:** `ruff check` أخضر (0.14.0 — نسخة CI) · radon: أعلى دالة في `content.py` الآن A(5) (`_search_pipeline`) والقشرة `search_content` A(1) · كشف الأخطاء A(4) بدل B(6)/C(12) التي رصدها CodeScene في `_scan_for_error` · 13/13 وحدة `test_content_*` خضراء · E2E D-255 حيّ (ToolRegistry + alias `query` + kwargs زائدة + Fail-Fast على soft failure) أخضر.
 ## D-257 · إصلاح `InvalidRequestError: name 'Mission' is not defined` — علاقة `User.missions` كانت تُجمّد mapper عند أول جلسةٍ لم تستورد `domain.mission` فيتعطل حفظ رسائل الطالب — (E2E حيّ 2026-08-14 · ISS-169)
 **البلاغ (E2E runtime حيّ على Supabase):** login أخضر للأدمن والمستخدم · `/health` صادق (`database=ok`) · لكن أول رسالة طالب عبر `WS /api/chat/ws` تسقط عند `save_message` برسالة `Failed to persist customer user message locally:` — استثناءٌ بلا نص يُبتلع.
 **السبب الجذري:** `User.missions` عرّفت `foreign_keys="[Mission.initiator_id]"` كسلسلة حرفية مع إبقاء `Mission` داخل `TYPE_CHECKING` فقط — أول جلسة DB لم تستورد `app.core.domain.mission` بعد تتعطل عند أول `commit` لأن mapper يرمي `InvalidRequestError`.
@@ -9537,10 +9545,3 @@ conversation module path). See CLAUDE.md §6.144.
 ---
 
 
-## D-259 · إزالة ازدواجية منطق توحيد الشعبة + إكمال تفكيك `content_support` (CodeScene X-Ray 2026-08-15): شريحة `branch.py` مستقلة + تنظيف كشف الأخطاء — صفر تغيير سلوكي
-
-**الملاحظة (CodeScene X-Ray job 72x · `tools/content.py`):** رغم تفكيك D-255، بقيت ازدواجية كود (Code Duplication — CodeScene): منطق `normalize_branch` وتسمياته `_BRANCH_LABELS` وعتباته معرَّفٌ حرفيًا في شريحتين (`content_support/search.py` + القشرة)، وشريحة `_scan_for_error` ما زالت مصحوفة بـ Bumpy Road (فروع `and` متسلسلة في سطر واحد). كما وُجد خللٌ حقيقي: مانيفست `CONTENT_TOOLS_SOURCE_FILES` يشير إلى `"tools/content_support/branch.py"` غير موجود — أي قارئ نصي للمصدر المركّب (حراس عقيدة · ownership fences) كان يحصل على `FileNotFoundError` (خطأ صامت لأن الاستيراد في `__init__` لا يقرأ الملف إلا عند الاستدعاء).
-
-**الحل — صفر تغيير سلوكي (نمط D-164/D-173/D-252):** شريحة `content_support/branch.py` مستقلة تحمل `normalize_branch` + `_BRANCH_LABELS` + العتبات (`_CLOSE_MATCH_CUTOFF = 0.6` · `_MIN_VARIANT_LENGTH = 3`)، و`search.py` يستوردها ولا يعيد تعريفها، والقشور القديمة في `content.py` تفوض عبر `content_support.normalize_branch` (مصدر واحد الآن). كشف الأخطاء صار **جدول تحويل واحد** (`_lookup_scan_shard`) إلى ثلاث شرائح حتمية نقية (`_scan_dict_error` · `_scan_iter_error` · `_scan_json_string_error`)، كلٌّ بمسار خروج واحد — مع شريحة مساعدة `_is_error_json_string` حتمية تحوّل الشرط المركّب إلى فحوصات متسلسلة (no chained `and`).
-
-**الأدلة:** `ruff check` أخضر (0.14.0 — نسخة CI) · radon: أعلى دالة في `content.py` الآن A(5) (`_search_pipeline`) والقشرة `search_content` A(1) · كشف الأخطاء A(4) بدل B(6)/C(12) التي رصدها CodeScene في `_scan_for_error` · 13/13 وحدة `test_content_*` خضراء · E2E D-255 حيّ (ToolRegistry + alias `query` + kwargs زائدة + Fail-Fast على soft failure) أخضر.

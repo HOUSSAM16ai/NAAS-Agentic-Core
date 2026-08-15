@@ -260,3 +260,32 @@ def test_resolve_indexed_anchor_supabase_failure_returns_false(
     decision = resolve_indexed_anchor(_NO_MATCH_QUESTION)
     assert decision.recognized
     assert not decision.db_anchored
+
+
+def test_resolve_indexed_anchor_local_match_returns_true_without_supabase(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """المطابقة المحلية ⇒ True فوري بلا محاولة Supabase (سلوك D-049 الأصلي).
+
+    (CodeRabbit PR #19 — اختُبر مسار `matched_entry is not None`)
+    """
+    from app.services.capabilities import exercise_retrieval
+
+    call_args: list = []
+    real_detect = exercise_retrieval.detect_exercise_retrieval
+
+    def _spying_detect(req, **kw):
+        call_args.append((req.question, kw))
+        return real_detect(req, **kw)
+
+    monkeypatch.setattr(
+        "app.infrastructure.clients.orchestrator_client_support.preempts.detect_exercise_retrieval",
+        _spying_detect,
+    )
+    # سؤال يطابق تمرين الاحتمالات 2024 في الفهرس المنسق (مطابقة محلية حقيقية).
+    decision = resolve_indexed_anchor("اعطني تمرين الاحتمالات 2024")
+    assert decision.recognized
+    assert decision.matched_entry is not None
+    assert decision.matched_entry.exercise_number == 1
+    assert decision.db_anchored
+    assert call_args, "detect_exercise_retrieval لم يُستدعَ"

@@ -15,6 +15,7 @@ from __future__ import annotations
 import dataclasses
 import time
 from collections.abc import Awaitable, Callable
+from typing import Literal
 
 import httpx
 import jwt as pyjwt
@@ -78,6 +79,7 @@ async def _request_mission(
     *,
     json_body: dict[str, object] | None = None,
     headers: dict[str, str] | None = None,
+    on_404: Literal["empty"] | None = None,
     empty_value: _JSON_VALUE,
     log_prefix: str,
     log_detail: str = "",

@@ -190,10 +190,7 @@ CATALOG: list[TrackedComponent] = [
         ],
         expected_status="ACTIVE",
         notes=(
-            "D-256: mission-client shards extracted from orchestrator_client.py "
-            "(238 lines · Code Duplication on get_mission/get_mission_events · "
-            "_has_indexed_match top churn); consumed by the orchestration shell and "
-            "its own test suite."
+            "D-256: mission-client shards extracted from orchestrator_client.py (238 lines · Code Duplication on get_mission/get_mission_events · _has_indexed_match top churn); consumed by the orchestration shell (orchestrator_client.py — on live chain, 7 importers from customer_chat/admin routers, ACTIVE per lock) and its own test suite. Live proof 2026-08-15: E2E on real Supabase — login×2 · WS 317 events (assistant_delta live) · persist id=4915 · health=ok (CI run 31854691052)."
         ),
     ),
     TrackedComponent(

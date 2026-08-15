@@ -14,6 +14,7 @@ import pytest
 from app.infrastructure.clients.orchestrator_client_support.missions import (
     MissionRequestArgs,
     ServiceJwtPayload,
+    _MissionRequest,
     _request_mission,
 )
 from app.infrastructure.clients.orchestrator_client_support.preempts import (
@@ -89,11 +90,13 @@ async def test_request_mission_404_returns_empty_value() -> None:
     fake, calls = _make_fake_client([{"status": 404, "body": None}])
     result = await _request_mission(
         fake,  # type: ignore[arg-type]
-        "http://x",
-        "GET",
-        "/missions/7",
-        empty_value=None,
-        log_prefix="Fetching mission",
+        _MissionRequest(
+            base_url="http://x",
+            method="GET",
+            path="/missions/7",
+            empty_value=None,
+            log_prefix="Fetching mission",
+        ),
     )
     assert result is None
     assert calls[0]["url"] == "http://x/missions/7"
@@ -105,11 +108,13 @@ async def test_request_mission_events_404_returns_empty_list() -> None:
     fake, _ = _make_fake_client([{"status": 404, "body": None}])
     result = await _request_mission(
         fake,  # type: ignore[arg-type]
-        "http://x",
-        "GET",
-        "/missions/7/events",
-        empty_value=[],
-        log_prefix="Fetching mission events",
+        _MissionRequest(
+            base_url="http://x",
+            method="GET",
+            path="/missions/7/events",
+            empty_value=[],
+            log_prefix="Fetching mission events",
+        ),
     )
     assert result == []
 
@@ -125,11 +130,13 @@ async def test_request_mission_http_error_raises() -> None:
     with pytest.raises(httpx.HTTPStatusError):
         await _request_mission(
             fake,  # type: ignore[arg-type]
-            "http://x",
-            "GET",
-            "/missions/7",
-            empty_value=None,
-            log_prefix="Fetching mission",
+            _MissionRequest(
+                base_url="http://x",
+                method="GET",
+                path="/missions/7",
+                empty_value=None,
+                log_prefix="Fetching mission",
+            ),
         )
 
 
@@ -139,13 +146,15 @@ async def test_request_mission_post_sends_payload_and_headers() -> None:
     fake, calls = _make_post_client({"status": 200, "body": {"id": 1, "status": "created"}})
     result = await _request_mission(
         fake,  # type: ignore[arg-type]
-        "http://x",
-        "POST",
-        "/missions",
-        json_body={"objective": "O", "context": {}, "priority": 1},
-        headers={"X-Correlation-ID": "k1"},
-        empty_value=None,
-        log_prefix="Dispatching mission to Orchestrator",
+        _MissionRequest(
+            base_url="http://x",
+            method="POST",
+            path="/missions",
+            json_body={"objective": "O", "context": {}, "priority": 1},
+            headers={"X-Correlation-ID": "k1"},
+            empty_value=None,
+            log_prefix="Dispatching mission to Orchestrator",
+        ),
     )
     assert result == {"id": 1, "status": "created"}
     assert calls[0]["headers"] == {"X-Correlation-ID": "k1"}

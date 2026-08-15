@@ -71,18 +71,27 @@ def build_service_jwt(
 _JSON_VALUE = dict[str, object] | list[object] | str | int | float | bool | None
 
 
+@dataclasses.dataclass(frozen=True)
+class _MissionRequest:
+    """عقد طلب المهمة الموحد (يعزل ثوابت المسار عن جسم الدالة — D-192).
+
+    لا يغيّر السلوك: كل حقل يطابق معاملًا سابقًا حرفًا.
+    """
+
+    base_url: str
+    method: str
+    path: str
+    json_body: dict[str, object] | None = None
+    headers: dict[str, str] | None = None
+    empty_value: _JSON_VALUE = None
+    log_prefix: str = ""
+    log_detail: str = ""
+    on_404: Literal["empty"] | None = None
+
+
 async def _request_mission(
     get_client: Callable[[], Awaitable[httpx.AsyncClient]],
-    base_url: str,
-    method: str,
-    path: str,
-    *,
-    json_body: dict[str, object] | None = None,
-    headers: dict[str, str] | None = None,
-    on_404: Literal["empty"] | None = None,
-    empty_value: _JSON_VALUE,
-    log_prefix: str,
-    log_detail: str = "",
+    req: _MissionRequest,
 ) -> _JSON_VALUE:
     """القلب الموحد لكل طلبات missions (يقتل ازدواج get_mission/get_mission_events/create_mission).
 
@@ -95,17 +104,17 @@ async def _request_mission(
     import logging
 
     logger = logging.getLogger("orchestrator-client.missions")
-    url = f"{base_url}{path}"
+    url = f"{req.base_url}{req.path}"
     # D-256: القلب النقي بلا try — يرمي حُرفيًا حتى تبقى رسائل `raise_for_status`
     # الأصلية مطابقة للحرف؛ والالتقاط/التسجيل مسؤولية قشرة التفويض.
     client = await get_client()
-    logger.info(f"{log_prefix}: {log_detail or path}")
+    logger.info(f"{req.log_prefix}: {req.log_detail or req.path}")
     response = (
-        await client.post(url, json=json_body, headers=headers)
-        if method == "POST"
+        await client.post(url, json=req.json_body, headers=req.headers)
+        if req.method == "POST"
         else await client.get(url)
     )
     if response.status_code == 404:
-        return empty_value  # مطابقة حرفية: 404 ⇒ None للمهمة / [] للأحداث
+        return req.empty_value  # مطابقة حرفية: 404 ⇒ None للمهمة / [] للأحداث
     response.raise_for_status()
     return response.json()

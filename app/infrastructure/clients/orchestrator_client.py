@@ -30,6 +30,7 @@ from app.infrastructure.clients.orchestrator.stream_normalization import StreamN
 from app.infrastructure.clients.orchestrator.text_streaming import TextStreamingMixin
 from app.infrastructure.clients.orchestrator_client_support.missions import (
     ServiceJwtPayload,
+    _MissionRequest,
     _request_mission,
 )
 from app.infrastructure.clients.orchestrator_client_support.preempts import (
@@ -230,15 +231,17 @@ class OrchestratorClient(
             logger.info(f"Dispatching mission to Orchestrator: {objective[:50]}...")
             data = await _request_mission(
                 self._get_client,
-                self.base_url,
-                "POST",
-                "/missions",
-                json_body=payload,
-                headers=headers,
-                on_404=None,
-                empty_value=None,
-                log_prefix="Dispatching mission to Orchestrator",
-                log_detail=f"{objective[:50]}...",
+                _MissionRequest(
+                    base_url=self.base_url,
+                    method="POST",
+                    path="/missions",
+                    json_body=payload,
+                    headers=headers,
+                    on_404=None,
+                    empty_value=None,
+                    log_prefix="Dispatching mission to Orchestrator",
+                    log_detail=f"{objective[:50]}...",
+                ),
             )
         except Exception as e:
             logger.error(f"Failed to create mission: {e}", exc_info=True)
@@ -252,13 +255,15 @@ class OrchestratorClient(
         # D-256: القلب الموحد `_request_mission` يقتل ازدواج get_mission/get_mission_events.
         data = await _request_mission(
             self._get_client,
-            self.base_url,
-            "GET",
-            f"/missions/{mission_id}",
-            on_404="empty",
-            empty_value=None,
-            log_prefix="Fetching mission",
-            log_detail=str(mission_id),
+            _MissionRequest(
+                base_url=self.base_url,
+                method="GET",
+                path=f"/missions/{mission_id}",
+                on_404="empty",
+                empty_value=None,
+                log_prefix="Fetching mission",
+                log_detail=str(mission_id),
+            ),
         )
         return MissionResponse(**data) if data is not None else None
 
@@ -270,13 +275,15 @@ class OrchestratorClient(
         try:
             data = await _request_mission(
                 self._get_client,
-                self.base_url,
-                "GET",
-                f"/missions/{mission_id}/events",
-                on_404="empty",
-                empty_value=[],
-                log_prefix="Fetching mission events",
-                log_detail=str(mission_id),
+                _MissionRequest(
+                    base_url=self.base_url,
+                    method="GET",
+                    path=f"/missions/{mission_id}/events",
+                    on_404="empty",
+                    empty_value=[],
+                    log_prefix="Fetching mission events",
+                    log_detail=str(mission_id),
+                ),
             )
             return list(data) if isinstance(data, list) else []
         except Exception as e:

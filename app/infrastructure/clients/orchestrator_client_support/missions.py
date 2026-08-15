@@ -69,6 +69,7 @@ def build_service_jwt(
 # شظايا JSON الخام الداخلة/الخارجة من الـ orchestrator-service (dict/list/scalar)
 _JSON_VALUE = dict[str, object] | list[object] | str | int | float | bool | None
 
+
 async def _request_mission(
     get_client: Callable[[], Awaitable[httpx.AsyncClient]],
     base_url: str,

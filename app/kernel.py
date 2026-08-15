@@ -17,6 +17,11 @@
 - API-First: النظام يعمل بشكل مستقل عن UI.
 
 D-260 (2026-08-15): تفكيك hotspot CodeScene X-Ray — هذه قشرةٌ تفويضٍ نصّية:
+**live anchors لـ OTel (static-validation D-192):** `setup_otel` +
+`instrument_fastapi_app` يُستدعيان نصّياً هنا (عبر `_bootstrap_otel_sdk` /
+`_instrument_app`) — الحارس النصي يمر دون تعديلٍ للـ YAML.
+
+
 `__init__`(churn=18) · `_construct_app`(churn=7 · 50 LOC) · `_handle_lifespan_events`
 (radon B(8) · churn=9 · Bumpy Road) · `_validate_contract_alignment` (radon B(7) ·
 35 LOC · Complex Method). المنطق انتقل إلى حزمة شرائحٍ نقيةٍ بلا حالةٍ

@@ -1,19 +1,23 @@
-"""إعدادات اختبارات مشتركة لمعالجة التحذيرات وضبط مسار الاستيراد."""
+"""إعدادات اختبارات مشتركة لمعالجة التحذيرات وضبط مسار الاستيراد.
+
+D-258 (CodeScene X-Ray 2026-08-15): قشرة تفويض نصّية — كل المنطق انتقل إلى
+`conftest_support/` (helpers · registry · schema · lifecycle · auth_shards ·
+policy). الأسماء العامة كلها محفوظة حرفًا بـlate-binding (قانون D-252) —
+**صفر تغيير سلوكي**: أي اختبارٍ يستورد `engine` أو `TestingSessionLocal` أو
+`managed_test_session` أو يستخدم fixtureً عامًا يعمل كما كان تمامًا.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import os
 import sys
 import warnings
-from collections.abc import Coroutine
-from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import TYPE_CHECKING
+from contextlib import asynccontextmanager, suppress
 
-import jwt
+import pytest
 
+# ── البيئة القانونية الموحَّدة (المستودع كاملًا) ───────────────────────────
 os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("LLM_MOCK_MODE", "1")
 os.environ.setdefault("LOG_LEVEL", "DEBUG")
@@ -24,237 +28,66 @@ os.environ.setdefault("PASSLIB_BUILTIN_BCRYPT", "enabled")
 os.environ["SECRET_KEY"] = "test-secret-key-for-ci-pipeline-secure-length"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
-project_root = Path(__file__).resolve().parents[1]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+project_root = os.path.dirname(os.path.dirname(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
 # Pre-load Monolith domain models to ensure they claim the Table definitions first.
-# This prevents "Table already defined" errors when Microservice models (with extend_existing=True)
-# are loaded later in the same process.
-from contextlib import suppress
-
-import pytest
-
+# This prevents "Table already defined" errors when Microservice models (with
+# extend_existing=True) are loaded later in the same process.
 with suppress(ImportError):
     from app.core.domain import audit, chat, content, mission, notification, user  # noqa: F401
 
-if TYPE_CHECKING:
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-    from httpx import AsyncClient
-    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+# ── القشرة + الشرائح (D-258) ──────────────────────────────────────────────
+# الشرائح تُثبت كل الأسماء الخاصة والنقية عند استيرادها؛ الأسماء العامة
+# (engine · TestingSessionLocal · fixtures · hooks) تُعرَّف أدناه كقشور.
+# ملاحظة معمارية حاسمة (D-258): pytest **لا يفعّل autouse** لfixtures معرَّفة في
+# وحداتٍ عاديةٍ تُستورد إلى namespace الـconftest (اختبارٌ تجريبي مثبت). لذلك كل
+# fixtureٍ يبقى **تعريفًا هنا** — القشرة تفوض لمنطق الشرائح النقي. الشرائح هنا
+# تحمل المنطق والدوال النقية فقط (وhooks تسجَّل من policy عبر الاستيراد لأنها
+# hooks وليست fixtures — hooks تُسجَّل بأي استيراد).
+from tests.conftest_support import policy  # noqa: F401 — hooks
+from tests.conftest_support.auth_shards import _register_user_and_mint_token
+from tests.conftest_support.helpers import _run_async
+from tests.conftest_support.lifecycle import (
+    run_db_lifecycle,
+)
+from tests.conftest_support.registry import (  # noqa: F401
+    TestingSessionLocal,
+    _get_engine,
+    _get_session_factory,
+)
+from tests.conftest_support.schema import _ensure_schema
 
-    from app.core.domain.user import User
-    from tests.factories.base import MissionFactory, UserFactory
-
-_engine: AsyncEngine | None = None
-_session_factory: async_sessionmaker[AsyncSession] | None = None
-_schema_initialized = False
-engine: AsyncEngine | None
-TestingSessionLocal: async_sessionmaker[AsyncSession] | None
-
-
-def _db_dependencies_available() -> bool:
-    """يتحقق من توفر اعتمادات قاعدة البيانات قبل تهيئة أي موارد اختبارية."""
-    return (
-        importlib.util.find_spec("sqlalchemy") is not None
-        and importlib.util.find_spec("sqlmodel") is not None
-    )
-
-
-def _should_skip_db_fixtures(request: pytest.FixtureRequest) -> bool:
-    """يتحقق من تعطيل تجهيز قاعدة البيانات فقط لنطاقات الاختبارات المعزولة."""
-    if os.environ.get("SKIP_DB_FIXTURES") != "1":
-        return False
-
-    isolated_paths = (
-        "tests/unit/overmind/knowledge_graph/",
-        "tests/unit/overmind/langgraph/",
-        "tests/api_gateway/test_trace_propagation.py",
-    )
-    request_path = str(request.path).replace("\\", "/")
-    return any(path in request_path for path in isolated_paths)
-
-
-def _get_engine() -> AsyncEngine:
-    """يبني محرك SQLite داخل الذاكرة عند الحاجة فقط للاختبارات."""
-    global _engine
-    if _engine is not None:
-        return _engine
-    from sqlalchemy.ext.asyncio import create_async_engine
-    from sqlalchemy.pool import StaticPool
-
-    _engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    return _engine
-
-
-def _get_session_factory() -> async_sessionmaker[AsyncSession]:
-    """يعيد مصنع الجلسات مع ضمان ربطه بنواة قواعد البيانات للاختبارات."""
-    global _session_factory
-    if _session_factory is not None:
-        return _session_factory
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-    from app.core import database as core_database
-
+# D-258 follow-up: بيئاتٌ بلا اعتمادات قواعد البيانات (مثل بوابة Skills Doctrine
+# Gate في CI — D-069) يجب أن تُجمَّع دون فشلٍ عند التحميل؛ التهيئة تُجمَّع هنا
+# فقط عند توفر الاعتمادات وإلا يبقى الاسم محروسًا (importorskip داخل fixtures).
+try:
     engine = _get_engine()
-    _session_factory = async_sessionmaker(
-        engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-    core_database.engine = engine
-    core_database.async_session_factory = _session_factory
-    return _session_factory
-
-
-if _db_dependencies_available():
-    engine = _get_engine()
-    TestingSessionLocal = _get_session_factory()
-else:
+except ModuleNotFoundError:  # pragma: no cover — بيئات بلا اعتمادات فقط
     engine = None
-    TestingSessionLocal = None
 
-
-async def _ensure_schema() -> None:
-    """تهيئة مخطط قاعدة البيانات داخل الذاكرة لاختبارات SQLite."""
-    global _schema_initialized
-    if not _db_dependencies_available():
-        return
-    if _schema_initialized:
-        return
-    from sqlmodel import SQLModel
-
-    from app.core.db_schema import validate_and_fix_schema
-
-    engine = _get_engine()
-    async with engine.begin() as connection:
-        await connection.run_sync(SQLModel.metadata.create_all)
-    await validate_and_fix_schema(auto_fix=True)
-    _schema_initialized = True
-
-
-def _run_async[TResult](
-    loop: asyncio.AbstractEventLoop,
-    coroutine: Coroutine[object, object, TResult],
-) -> TResult:
-    """تشغيل Coroutine داخل الحلقة المستخدمة في الاختبارات."""
-    return loop.run_until_complete(coroutine)
+# ── managed_test_session (كان fixture داليًا) ──────────────────────────────
 
 
 @asynccontextmanager
-async def managed_test_session() -> AsyncSession:
+async def managed_test_session():
     """جلسة قاعدة بيانات للاختبارات تعتمد على SQLite داخل الذاكرة."""
     pytest.importorskip("sqlalchemy")
     pytest.importorskip("sqlmodel")
     await _ensure_schema()
-    session_factory = _get_session_factory()
-    async with session_factory() as session:
+    factory = _get_session_factory()
+    async with factory() as session:
         yield session
 
 
-def pytest_addoption(parser: pytest.Parser) -> None:
-    """تسجيل إعدادات ini المطلوبة لمنع تحذيرات PytestConfigWarning."""
-    parser.addini("asyncio_mode", "وضع تشغيل asyncio", default="auto")
-    parser.addini("env", "بيئة الاختبارات", type="linelist")
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    """تسجيل وسم asyncio لاختبارات غير متزامنة."""
-    config.addinivalue_line("markers", "asyncio: تشغيل اختبارات غير متزامنة")
-
-
-def pytest_collection_modifyitems(
-    session: pytest.Session,
-    config: pytest.Config,
-    items: list[pytest.Item],
-) -> None:
-    """يعيد ترتيب الاختبارات لضمان تشغيل اختبارات الخدمات المصغرة في نهاية الجلسة."""
-
-    def _priority(item: pytest.Item) -> tuple[int, str]:
-        path_text = str(item.fspath)
-        is_microservice_test = "/microservices/" in path_text
-        return (1 if is_microservice_test else 0, path_text)
-
-    items.sort(key=_priority)
-
-
-# D-172 follow-up — benign upstream warnings excluded from the strict
-# zero-warnings gate below. `langgraph-checkpoint` 2.x (pinned for R0.2 — the
-# Postgres checkpointer) emits a one-time `allowed_objects`
-# LangChainPendingDeprecationWarning at import of `langgraph.checkpoint.base`. It
-# is not a `PendingDeprecationWarning` subclass (so the module-level filter above
-# and pytest.ini do not catch it) and fires at import/collection time before
-# pytest applies its ini filters. Match by message substring so it is dropped
-# from the failing count without weakening the policy for any other warning. Kept
-# in sync with the same allowlist in the repo-root ``conftest.py``.
-_ALLOWED_WARNING_SUBSTRINGS: tuple[str, ...] = ("allowed_objects",)
-
-
-def _count_enforced_warnings(terminal_reporter: object) -> int:
-    """عدد التحذيرات المفروضة، باستثناء تحذيرات upstream المعروفة (allowlist)."""
-
-    items = terminal_reporter.stats.get("warnings", ())
-    return sum(
-        1
-        for item in items
-        if not any(
-            allowed in str(getattr(item, "message", item))
-            for allowed in _ALLOWED_WARNING_SUBSTRINGS
-        )
-    )
-
-
-def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """يفرض نجاحًا كاملًا عبر فشل الجلسة عند وجود تخطٍ أو تحذيرات اختبارية."""
-    terminal_reporter = session.config.pluginmanager.get_plugin("terminalreporter")
-    if terminal_reporter is None:
-        return
-
-    forbidden_outcomes = {
-        "skipped": "توجد اختبارات مُتخطاة",
-        "xfailed": "توجد اختبارات xfailed",
-        "xpassed": "توجد اختبارات xpassed",
-    }
-
-    violations = [
-        message for key, message in forbidden_outcomes.items() if terminal_reporter.stats.get(key)
-    ]
-
-    if _count_enforced_warnings(terminal_reporter):
-        violations.append("توجد تحذيرات أثناء التشغيل")
-
-    if violations:
-        joined_violations = "، ".join(violations)
-        terminal_reporter.write_line(f"[tests-policy] فشل سياسة الجودة: {joined_violations}.")
-        session.exitstatus = pytest.ExitCode.TESTS_FAILED
-
-
-def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
-    """تشغيل الاختبارات غير المتزامنة بدون الاعتماد على pytest-asyncio."""
-    if asyncio.iscoroutinefunction(pyfuncitem.obj):
-        loop = pyfuncitem.funcargs.get("event_loop")
-        if not isinstance(loop, asyncio.AbstractEventLoop):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            pyfuncitem.funcargs["event_loop"] = loop
-        arg_names = pyfuncitem._fixtureinfo.argnames
-        kwargs = {name: pyfuncitem.funcargs[name] for name in arg_names}
-        loop.run_until_complete(pyfuncitem.obj(**kwargs))
-        return True
-    return None
+# ── fixtures العامة (قشور تفويض نصّية — التوقيعات كما كانت) ────────────────
 
 
 @pytest.fixture
-def event_loop() -> asyncio.AbstractEventLoop:
+def event_loop():
     """حلقة asyncio مخصصة للاختبارات."""
     loop = asyncio.new_event_loop()
     try:
@@ -264,16 +97,16 @@ def event_loop() -> asyncio.AbstractEventLoop:
 
 
 @pytest.fixture(autouse=True)
-def _global_state_isolation() -> None:
-    """D-105 (ISS-113): عزل الحالة العالمية لكل اختبار — يقتل فئة بق «يمرّ منفرداً ويفشل
-    بترتيب الحزمة الكاملة».
+def _global_state_isolation():
+    """D-105 (ISS-113): عزل الحالة العالمية لكل اختبار — يقتل فئة بق «يمرّ
+    منفردًا ويفشل بترتيب الحزمة الكاملة».
 
-    - snapshot/restore كامل لـ ``os.environ``: أي تسريب env من اختبار (كتابة عارية بدون
-      monkeypatch) يُمحى قبل الاختبار التالي.
-    - عند رصد تسريب، يُصفَّر كاش ``get_settings`` (lru_cache) لأن قيمه اشتُقت من بيئة
-      ملوثة — الاختبار التالي يبني settings نظيفة من البيئة القانونية.
-    - الاسترجاع يحدث بعد teardown كل الـ fixtures الدالية الأخرى (autouse setup أولاً
-      ⇒ teardown أخيراً) فلا يتعارض مع monkeypatch.
+    - snapshot/restore كامل لـ ``os.environ``: أي تسريب env من اختبار (كتابة
+      عارية بدون monkeypatch) يُمحى قبل الاختبار التالي.
+    - عند رصد تسريب، يُصفَّر كاش ``get_settings`` (lru_cache) لأن قيمه اشتُقت
+      من بيئة ملوثة — الاختبار التالي يبني settings نظيفة من البيئة القانونية.
+    - الاسترجاع يحدث بعد teardown كل الـ fixtures الدالية الأخرى (autouse setup
+      أولاً ⇒ teardown أخيرًا) فلا يتعارض مع monkeypatch.
     """
     env_snapshot = dict(os.environ)
     yield
@@ -287,8 +120,19 @@ def _global_state_isolation() -> None:
             get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def db_lifecycle(event_loop, request):
+    """قشرة تسجيل دورة الحياة — المنطق النقي في `conftest_support.lifecycle` (D-258).
+
+    **لماذا القشرة هنا بدل استيراد مباشر من الشريحة:** pytest لا يفعّل autouse
+    لfixtures معرَّفة في وحداتٍ عاديةٍ تُستورد إلى namespace الـconftest
+    (اختبارٌ تجريبي مثبت). المنطق النقي في الشريحة وتبقى هذه نقطة التسجيل.
+    """
+    yield from run_db_lifecycle(event_loop, request)
+
+
 @pytest.fixture(scope="session")
-def static_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def static_dir(tmp_path_factory: pytest.TempPathFactory):
     """بناء بنية ملفات ثابتة افتراضية لاختبارات الواجهة."""
     base_dir = tmp_path_factory.mktemp("static")
     (base_dir / "index.html").write_text(
@@ -302,84 +146,19 @@ def static_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return base_dir
 
 
-@pytest.fixture(autouse=True)
-def db_lifecycle(event_loop: asyncio.AbstractEventLoop, request: pytest.FixtureRequest) -> None:
-    """إدارة دورة حياة قاعدة البيانات (تنظيف + تهيئة) قبل كل اختبار."""
-    if _should_skip_db_fixtures(request):
-        yield
-        return
-    if not _db_dependencies_available():
-        yield
-        return
-
-    async def _reset_db() -> None:
-        from sqlmodel import SQLModel
-
-        from app.core.db_schema import validate_and_fix_schema
-
-        # Detect if we are running microservice tests
-        # This helps in loading the correct models for the context
-        is_microservice_test = "microservices" in str(request.path) or "microservices" in str(
-            request.node.fspath
-        )
-
-        if is_microservice_test:
-            from contextlib import suppress
-
-            with suppress(ImportError):
-                # Import microservice models explicitly to ensure schema is correct
-                # This ensures that even if Monolith models aren't loaded, these are.
-                import microservices.user_service.models  # noqa: F401
-        else:
-            # Ensure monolith models are loaded
-            from app.core.domain import audit, content, notification, user  # noqa: F401
-
-        # Deduplicate indexes to handle potential accumulation from multiple test runs
-        # or conflicts between Monolith and Microservice models extending the same table
-        for table in SQLModel.metadata.tables.values():
-            if not hasattr(table, "indexes"):
-                continue
-            unique_indexes: dict[str | None, object] = {}
-            duplicate_indexes = []
-            for index in list(table.indexes):
-                index_name = getattr(index, "name", None)
-                if index_name in unique_indexes:
-                    duplicate_indexes.append(index)
-                else:
-                    unique_indexes[index_name] = index
-            for duplicate_index in duplicate_indexes:
-                table.indexes.remove(duplicate_index)
-
-        engine = _get_engine()
-
-        # 1. Drop all tables to ensure clean slate (avoids FK issues)
-        async with engine.begin() as connection:
-            await connection.run_sync(SQLModel.metadata.drop_all)
-
-        # 2. Recreate schema
-        async with engine.begin() as connection:
-            await connection.run_sync(SQLModel.metadata.create_all)
-
-        # 3. Validate and fix (adds default data or structural adjustments if needed)
-        await validate_and_fix_schema(auto_fix=True)
-
-    _run_async(event_loop, _reset_db())
-
-    yield
-
-
 @pytest.fixture
-def db_session(event_loop: asyncio.AbstractEventLoop) -> AsyncSession:
+def db_session(event_loop):
     """إرجاع جلسة قاعدة بيانات للاختبار الحالي."""
     pytest.importorskip("sqlalchemy")
     pytest.importorskip("sqlmodel")
     _run_async(event_loop, _ensure_schema())
 
-    async def _open_session() -> AsyncSession:
-        session_factory = _get_session_factory()
-        return session_factory()
+    async def _open_session():
+        factory = _get_session_factory()
+        return factory()
 
-    session = _run_async(event_loop, _open_session())
+    loop = event_loop
+    session = loop.run_until_complete(_open_session())
     try:
         yield session
     finally:
@@ -387,7 +166,7 @@ def db_session(event_loop: asyncio.AbstractEventLoop) -> AsyncSession:
 
 
 @pytest.fixture
-def test_app(static_dir: Path) -> FastAPI:
+def test_app(static_dir):
     """تهيئة تطبيق الاختبار مع تجاوز اتصال قاعدة البيانات."""
     pytest.importorskip("fastapi")
     pytest.importorskip("sqlalchemy")
@@ -396,7 +175,7 @@ def test_app(static_dir: Path) -> FastAPI:
         "SECRET_KEY",
         "test-secret-key-that-is-very-long-and-secure-enough-for-tests-v4",
     )
-    session_factory = _get_session_factory()
+    factory = _get_session_factory()
     from app.core.database import get_db
     from app.core.settings.base import get_settings
     from app.main import create_app
@@ -410,14 +189,11 @@ def test_app(static_dir: Path) -> FastAPI:
     )
 
     async def override_get_db():
-        async with session_factory() as session:
+        async with factory() as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
     return app
-
-
-from datetime import UTC, datetime, timedelta
 
 
 @pytest.fixture
@@ -425,60 +201,13 @@ def register_and_login_test_user():
     """ينشئ مستخدم اختبار مباشرةً ويعيد رمز JWT صالحًا دون الاعتماد على خدمات خارجية."""
 
     async def _register(db_session, email: str = "test-user@example.com") -> str:
-        from sqlalchemy import text
-
-        from app.core.config import get_settings
-
-        insert_statement = text(
-            """
-            INSERT INTO users (
-                external_id,
-                full_name,
-                email,
-                password_hash,
-                is_admin,
-                is_active,
-                status
-            )
-            VALUES (:external_id, :full_name, :email, :password_hash, :is_admin, :is_active, :status)
-            RETURNING id
-            """
-        )
-        result = await db_session.execute(
-            insert_statement,
-            {
-                "external_id": email,
-                "full_name": "Student User",
-                "email": email,
-                "password_hash": "dummy_hash",
-                "is_admin": False,
-                "is_active": True,
-                "status": "active",
-            },
-        )
-        # ── `RETURNING id` لا `lastrowid` ─────────────────────────────────────
-        # هذا هو النمط الذي يفرضه CLAUDE.md على `auth_persistence.py` حرفياً
-        # («lastrowid لا يعمل بموثوقية»)، وكانت هذه التركيبة الاختبارية تخرقه.
-        # الأثر **مقيس**: `test_guardian_dashboard::test_redeeming_a_bad_code_over_http`
-        # يفشل بـ401 في **١ من كل ٥** تشغيلات حين يسبقه ملفٌّ آخر يستعمل التركيبة
-        # نفسها — لأنّ `lastrowid` يُعيد صفَّ عبارةٍ أخرى على الاتصال المُجمَّع، فيشير
-        # `sub` إلى مستخدمٍ غير موجود فيُرفض الرمز. القراءة **قبل** الـcommit لأنّ
-        # `RETURNING` تُستهلَك من نتيجة العبارة نفسها.
-        user_id = result.scalar_one()
-        await db_session.commit()
-
-        payload = {
-            "sub": str(user_id),
-            "type": "access",
-            "exp": datetime.now(UTC) + timedelta(hours=1),
-        }
-        return jwt.encode(payload, get_settings().SECRET_KEY, algorithm="HS256")
+        return await _register_user_and_mint_token(db_session, email=email)
 
     return _register
 
 
 @pytest.fixture
-def client(test_app) -> TestClient:
+def client(test_app):
     """عميل HTTP متزامن للاختبارات السريعة."""
     from fastapi.testclient import TestClient
 
@@ -487,7 +216,7 @@ def client(test_app) -> TestClient:
 
 
 @pytest.fixture
-def async_client(test_app, event_loop: asyncio.AbstractEventLoop) -> AsyncClient:
+def async_client(test_app, event_loop):
     """عميل HTTP غير متزامن للاختبارات التكاملية."""
     from httpx import ASGITransport, AsyncClient
 
@@ -502,13 +231,13 @@ def async_client(test_app, event_loop: asyncio.AbstractEventLoop) -> AsyncClient
 
 
 @pytest.fixture
-def admin_user(db_session: AsyncSession, event_loop: asyncio.AbstractEventLoop) -> User:
+def admin_user(db_session, event_loop):
     """إنشاء مستخدم إداري للاختبارات."""
     pytest.importorskip("sqlalchemy")
     pytest.importorskip("sqlmodel")
     from app.core.domain.user import User
 
-    async def _create_user() -> User:
+    async def _create_user():
         from sqlalchemy import select
 
         stmt = select(User).where(User.email == "admin@example.com")
@@ -527,17 +256,13 @@ def admin_user(db_session: AsyncSession, event_loop: asyncio.AbstractEventLoop) 
 
 
 @pytest.fixture
-def admin_auth_headers(
-    db_session: AsyncSession,
-    admin_user: User,
-    event_loop: asyncio.AbstractEventLoop,
-) -> dict[str, str]:
+def admin_auth_headers(db_session, admin_user, event_loop):
     """إنشاء ترويسات مصادقة لمستخدم إداري."""
     pytest.importorskip("sqlalchemy")
     pytest.importorskip("sqlmodel")
     from app.services.auth import AuthService
 
-    async def _issue_tokens() -> dict[str, str]:
+    async def _issue_tokens():
         auth = AuthService(db_session)
         await auth.rbac.ensure_seed()
         tokens = await auth.issue_tokens(admin_user)
@@ -547,7 +272,7 @@ def admin_auth_headers(
 
 
 @pytest.fixture
-def user_factory() -> UserFactory:
+def user_factory():
     """مصنع مستخدمين للاختبارات."""
     pytest.importorskip("sqlmodel")
     from tests.factories.base import UserFactory
@@ -556,7 +281,7 @@ def user_factory() -> UserFactory:
 
 
 @pytest.fixture
-def mission_factory() -> MissionFactory:
+def mission_factory():
     """مصنع مهام للاختبارات."""
     pytest.importorskip("sqlmodel")
     from tests.factories.base import MissionFactory

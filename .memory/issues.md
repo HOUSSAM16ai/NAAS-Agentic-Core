@@ -1,5 +1,15 @@
 # Open Issues & Bugs
 
+## ISS-170 (2026-08-15) — كارثة الـ hotspot الثامنة: `tests/conftest.py` (CodeScene X-Ray 2026-08-15): 416 سطرًا · `db_lifecycle` أعلى تجمّع حراري (63 LOC · churn=12 · Bumpy Road) · `register_and_login_test_user` 54 LOC · `_should_skip_db_fixtures` churn=2×3 — ✅ مُغلق (D-258)
+
+**البلاغ (CodeScene X-Ray — Hotspots على `tests/conftest.py`):** أعلى تجمّع حراري في الاختبارات: `client` (22 LOC · churn=6) · `user_factory` (13 LOC · churn=6) · `db_lifecycle` (63 LOC · churn=12 · Bumpy Road Ahead) · `test_app` (12 LOC · churn=28) · `register_and_login_test_user` (54 LOC · churn=1) — ملف monolith واحد يحمل التهيئة الكاملة والسياسة ودورة الحياة، وكل تغيّير في أيٍّ منها يعيد تدفئة الباقي.
+
+**السبب الجذري:** بنية monolith في ملفٍ واحد — fixture الدورة يحمل دالةً متداخلةً كاملة (كشف سياق · تحميل نماذج · dedupe indexes · drop · create · validate) في كتلةٍ واحدة 52 سطرًا، والسياسة (hooks) مخلوطة بالدوال النقية — نمط ISS-164 بعينه على أرض الاختبارات.
+
+**الإصلاح (D-258):** قشرة `tests/conftest.py` تحمّل fixtures/hooks كقشور تفويض بصيغها القديمة (zero breakage) + حزمة شرائح نقية `tests/conftest_support/` (helpers · registry بعزل حقيقي بدل globals — قفل متزامن على المحرك ISS-113 · schema يفكّ `_reset_db_steps` النقية · lifecycle يفكّ دورة الحياة إلى مراحل · auth_shards · policy · مانيفست مركّب `_sources.py`) · اكتشاف معماري حاسم: pytest لا يفعّل autouse لfixtures معرَّفة في وحداتٍ عاديةٍ تُستورد إلى namespace الـconftest (اختبارٌ تجريبي مثبت) — فبقيت قشور التسجيل في الـconftest نفسه والمنطق في الشرائح · صفر تغيير سلوكي · الحزمة الكاملة مطابقة قبل/بعد.
+
+**التدوير المُلزم:** الحزمة الكاملة (tests/ minus microservices + scripts/ci) أعيد تشغيلها قبل الإصلاح وبعده بنتيجة مطابقة؛ ruff 0.14.0 + formatter أخضر · الجذر والدليل الحي موثقان أعلاه.
+
 ## ISS-169 (2026-08-14) — `InvalidRequestError: name 'Mission' is not defined` يعطّل حفظ رسائل الطالب في المحادثة (E2E حيّ) — ✅ مُغلق (D-257)
 
 **البلاغ (E2E runtime حيّ على Supabase، 2026-08-14):** تسجيل الدخول للأدمن والمستخدم ينجح، و`/health` صادق (`database=ok`)، لكن أي رسالة طالب عبر `WS /api/chat/ws` تسقط عند أول حفظ برسالة `Failed to persist customer user message locally:` (استثناءٌ بلا نص يُبتلع).

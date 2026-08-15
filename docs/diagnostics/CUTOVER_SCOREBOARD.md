@@ -14,8 +14,8 @@
 | active_copy_coupling_overlap_metric | 0 |
 | stategraph_is_runtime_backbone | true |
 | docs_runtime_parity | true |
-| contract_gate | false |
-| tracing_gate | false |
+| contract_gate | true |
+| tracing_gate | true |
 
 ## Phase 0 forensic baseline inventory
 

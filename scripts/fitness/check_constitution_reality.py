@@ -243,7 +243,7 @@ def _check_authority_docs() -> list[str]:
                 continue
             text = path.read_text(encoding="utf-8")
             for line_no, raw in _claims(text, pattern):
-                value = _WORD_NUMBERS.get(raw.strip(), None)
+                value = _WORD_NUMBERS.get(raw.strip())
                 if value is None:
                     value = int(raw.translate(_AR_DIGITS))
                 if value == derived:

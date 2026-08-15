@@ -48,6 +48,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2026-08-15 - CodeScene X-Ray hotspots decommissioned (D-253/D-254/D-255/D-256/D-258/D-259 · zero behavior change)
+- `app/services/chat/tools/content.py` hotspot decommissioned (D-255 + D-259):
+  `search_content` is now an A(1) reception shell; role logic lives in pure shards
+  `app/services/chat/tools/content_support/` (`search.py`, `branch.py`, `_sources.py`).
+- **D-259**: removed residual `normalize_branch` code duplication — single authoritative
+  shard `content_support/branch.py` (labels + thresholds). Fixed real bug: manifest
+  referenced a nonexistent `branch.py` (silent `FileNotFoundError` for text-based
+  doctrine guardians). Error scanning is now one dispatch table into three pure shards
+  (`_scan_dict_error`, `_scan_iter_error`, `_scan_json_string_error`) — Bumpy Road closed.
+- Companion decommissionings: `agents/orchestrator.py` (D-253), `api_gateway/main.py` (D-254),
+  `infrastructure/clients/orchestrator_client.py` (D-256), `tests/conftest.py` (D-258).
+- Verified: ruff 0.14.0 green · radon max A(5) · unit 656 passed · fitness guards 114 passed ·
+  live E2E (Supabase + OpenRouter + Tavily MCP + FastAPI) ALL PASS.
+
+### Added - 2026-08-15 - Live E2E runtime proof
+- `tests/e2e_d259_live_runtime.py`: production DB (43 tables incl. `users`/`missions`),
+  OpenRouter PRIMARY model (`openai/gpt-oss-20b:free` Arabic response), live Tavily MCP
+  `tavily_search`, full content-tool delegation chain, FastAPI `/health` via full kernel.
+  Runs outside CI (never commits secrets — `spec.md` §3): `TAVILY_MCP_URL` + `DATABASE_URL` +
+  `OPENROUTER_API_KEY` from runtime environment.
+
 ### Added - 2026-01-03 - Phase 17: Comprehensive Review & Planning
 - **Documentation Enhancement**: Comprehensive Git history review and continuous simplification planning
   - Added Phase 17 section to `SIMPLIFICATION_PROGRESS_REPORT.md` (150+ lines of analysis)

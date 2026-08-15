@@ -7,8 +7,8 @@ import pytest
 from fastapi import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.app_blueprint import MiddlewareSpec, RouterSpec
 from app.core.domain.models import MessageRole, MissionStatus, utc_now
-from app.kernel import MiddlewareSpec, RouterSpec
 
 EXPECTED_MESSAGE_ROLES = 4
 EXPECTED_MISSION_STATUSES = 9

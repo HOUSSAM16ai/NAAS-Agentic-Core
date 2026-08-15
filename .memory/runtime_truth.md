@@ -1,7 +1,19 @@
 # Runtime Truth Lock
-> Last updated: **2026-08-14** | Branch: feat/d256-orchestrator-client-hotspot (D-256)
+> Last updated: **2026-08-15** | Branch: docs/d260-kernel-hotspot (D-260)
+> Previous: feat/d256-orchestrator-client-hotspot (D-256)
 > Previous: hotfix/codescene-hotspot-chat-stream-ws-decomposition (D-252→D-255)
 > Previous: `claude/project-international-markets-ws5pwz` (D-228→D-232)
+
+## D-260 Hotspot Decomposition — `kernel.py` «قشرة تفويض + شرائح `app/core/kernel_support/`» (2026-08-15 · CodeScene X-Ray job 72 · ISS-171)
+
+| المسار الحيّ | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`app/kernel.py`** (كل واجهاته القديمة كما كانت — **صفر كاسر**) | **ACTIVE (قشرة تفويض نقية)** | `RealityKernel` وواجهتها الكاملة (`get_app` · `create_base_app_instance` · `run_startup_phase` · `build_contract_violations` · `KERNEL_SOURCE_FILES` · `read_kernel_source`) أعيد تصديرها بالاسم نفسه (`# noqa: F401`) — برهان حيّ: الاستيراد بالاسم القديم يعمل · E2E D-259 (Supabase + OpenRouter + Tavily MCP + lifespan kernel كامل) أخضر قبل/بعد · ruff 0.14.0 نظيف · radon B(8)/B(7)→**A** |
+| **`app/core/kernel_support/_sources.py`** (مانيفست المركّب) | **ACTIVE (guardrails)** | يركّب القشرة + الشرائح في مصدر واحد؛ حارس توثيق `kernel` النصي يتغذى منه — لا تراجع صامت للحرس النصي |
+| **`app/core/kernel_support/lifecycle.py`** (D-260 — جديد) | **ACTIVE** | دوال دورة الحياة مفككة: مراحل البوتستراب + `_announce_startup_health` + مراحل lifespan |
+| **`app/core/kernel_support/contracts.py`** (D-260 — جديد) | **ACTIVE** | مطابقة OpenAPI/AsyncAPI نقية: `_validate_contract_alignment` (كانت أعلى تجمع حراري: 35 LOC · churn=2 · تعقيد 10 · Complex Method/Bumpy Road) + `build_contract_violations` — الآن دوال قصيرة ≤5 |
+| **`app/core/kernel_support/otel.py`** (D-260 — جديد) | **ACTIVE** | bootstrap وinstrumentation: `_start_messaging_relay`/`_stop_messaging_relay` |
+| **`app/core/kernel_support/compose.py`** (D-260 — جديد) | **ACTIVE** | combinators نقية لتركيب النواة |
 
 ## D-256 Hotspot Decomposition — `orchestrator_client.py` «القشرة + شرائح missions/preempts» (2026-08-14 · CodeScene X-Ray job 72)
 
@@ -13,7 +25,7 @@
 | **`orchestrator_client_support/_sources.py`** (مانيفست المركّب) | **ACTIVE (guardrails)** | يركّب القشرة + الشرائح في مصدر واحد؛ حارسا `check_legacy_invariants` و`check_skills_doctrine` الموسّعان نصًا يتغذّيان منه — لا تراجع صامت للحرس النصي |
 | **دليل حيّ (2026-08-15 · CI run 31854691052)** — الشرائح لا تُستدعى منفصلةً: مسار الإنتاج يمر عبر القشرة `orchestrator_client.py` (ACTIVE في القفل، 7 مستوردين من routers الحية `customer_chat.py`/`admin.py`) وتلك القشرة تفوّض للشرائح حرفيًا؛ عُيِّن المسار كاملًا حيًّا على Supabase الحقيقي: تسجيلان (roles=[ADMIN]/[STANDARD_USER,USER]) · 317 حدث WebSocket بينها `assistant_delta` بثّ مباشر · `persist` رسالة id=4915 · `health` database=ok — و`--check` أخضر على القفل المجدَّد (lock sha يغطي 4 ملفات الشرائح). |
 
-**مسارات الإقلاع الحية (دون تغيير — مطلب doc_integrity):** `app/api/routers/customer_chat.py` · `app/api/routers/admin.py` · `app/services/chat/local_graph.py` · `app/infrastructure/clients/orchestrator_client.py` · `app/kernel.py` · `_emit_terminal_frames`.
+**مسارات الإقلاع الحية (دون تغيير — مطلب doc_integrity):** `app/api/routers/customer_chat.py` · `app/api/routers/admin.py` · `app/services/chat/local_graph.py` · `app/infrastructure/clients/orchestrator_client.py` · `app/kernel.py` (قشرة تفويض D-260 — المنطق في `app/core/kernel_support/`) · `_emit_terminal_frames`.
 
 ## D-252 Hotspot Decomposition — `chat_stream_ws` «القشرة + دورة الدور» (2026-08-13 · CodeScene X-Ray job 72)
 
@@ -24,7 +36,7 @@
 | **`customer_chat_support/_sources.py`** (مانيفست المركّب) | **ACTIVE (guardrails)** | يركّب القشرة + الحزمة في مصدر واحد؛ كل حارس نصي (skills_doctrine D-119/D-114 · legacy noop · persistence fences · canonical/ownership) يتغذى منه عبر `read_customer_chat_source()` — لا تراجع صامت للحرس النصي. |
 | **`router_domain_debt.json`** | **ACTIVE** | customer_chat.py → 0؛ turn_lifecycle.py يحمل 6 نداءات نطاق (كلها قائمة مسبقًا — المجموع المجمّد 13 نداءً في 4 موجّهات، بوابة `check_router_domain_logic` خضراء). |
 
-**مسارات الإقلاع الحية (دون تغيير — مطلب doc_integrity):** `app/api/routers/customer_chat.py` · `app/api/routers/admin.py` · `app/services/chat/local_graph.py` · `app/infrastructure/clients/orchestrator_client.py` · `app/kernel.py` · `_emit_terminal_frames`.
+**مسارات الإقلاع الحية (دون تغيير — مطلب doc_integrity):** `app/api/routers/customer_chat.py` · `app/api/routers/admin.py` · `app/services/chat/local_graph.py` · `app/infrastructure/clients/orchestrator_client.py` · `app/kernel.py` (قشرة تفويض D-260 — المنطق في `app/core/kernel_support/`) · `_emit_terminal_frames`.
 
 ## Delivery Surface + Memory Authorship + Live E2E (2026-08-08, D-228→D-232)
 
@@ -704,7 +716,7 @@ Test: `question="كيف أحل معادلة من الدرجة الثانية؟"`
 | 1 | Monolith API — customer WS | `app/api/routers/customer_chat.py` | **ACTIVE** | `chat_stream_ws` is the live entrypoint. 62 routes registered. |
 | 2 | Monolith API — admin WS | `app/api/routers/admin.py` | **ACTIVE** | Admin WS entrypoint. `_emit_terminal_frames` guarantees exactly one terminal frame per turn. |
 | 3 | Terminal frame guarantee | `_emit_terminal_frames` in `customer_chat.py` + `admin.py` | **ACTIVE** | Single emitter for `assistant_final`/`error`. Exactly one frame per turn. |
-| 4 | RealityKernel / app composition | `app/kernel.py` | **ACTIVE** | Composition root. Loaded at startup via `app/main.py`. |
+| 4 | RealityKernel / app composition | `app/kernel.py` | **ACTIVE (قشرة تفويض — D-260)** | Composition root (قشرة تفويض نقية بعد D-260 — المنطق في `app/core/kernel_support/`). Loaded at startup via `app/main.py`. |
 | 5 | Frontend Next.js | `frontend/` | **ACTIVE** | Port 3000, HTML confirmed |
 | 6 | LangGraph local engine (2 nodes) | `app/services/chat/local_graph.py` | **PARTIAL** | Fallback tier 3. Live confirmed. |
 | 7 | LangGraph metrics emission | `app/services/chat/local_graph.py` → `unified_observability` | **ACTIVE** | `cogniforge_langgraph_*` emitted per turn (NEW this branch) |

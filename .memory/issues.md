@@ -1,5 +1,11 @@
 # Open Issues & Bugs
 
+## ISS-171 (2026-08-15) — كارثة الـ hotspot التاسعة: `app/kernel.py` (CodeScene X-Ray 2026-08-15): 272 سطرًا · `_validate_contract_alignment` أعلى تجمّع حراري نسبي (35 LOC · churn=2 · درجة تعقيد 10 · Complex Method + Bumpy Road Ahead) · `_handle_lifespan_events` churn=9 — ✅ مُغلق (D-260)
+
+**البلاغ (CodeScene X-Ray — Hotspots على `app/kernel.py`):** نواة الـ ASGI تحمل البوتستراب + دورة الحياة + مطابقة العقود + OpenTelemetry في وحدة واحدة: `_validate_contract_alignment` (35 LOC · churn=2 · Complex Method/Bumpy Road) · `_handle_lifespan_events` (churn=9) · `construct_app` (churn=7 · 50 LOC) — كل تعديل يعيد تدفئة الكل.
+
+**الإغلاق (D-260):** قشرة تفويض نقية + حزمة شرائح `app/core/kernel_support/` (`_sources.py` مانيفست مركّب · `lifecycle.py` · `contracts.py` · `otel.py` · `compose.py`) — كل واجهات `kernel.py` القديمة أعيد تصديرها بالاسم (صفر كاسر) · radon B(8)/B(7)→A · ruff نظيف · E2E D-259 الحيّ (Supabase + OpenRouter + Tavily MCP + lifespan kernel كامل) أخضر قبل/بعد — صفر تراجع سلوكي.
+
 ## ISS-170 (2026-08-15) — كارثة الـ hotspot الثامنة: `tests/conftest.py` (CodeScene X-Ray 2026-08-15): 416 سطرًا · `db_lifecycle` أعلى تجمّع حراري (63 LOC · churn=12 · Bumpy Road) · `register_and_login_test_user` 54 LOC · `_should_skip_db_fixtures` churn=2×3 — ✅ مُغلق (D-258)
 
 **البلاغ (CodeScene X-Ray — Hotspots على `tests/conftest.py`):** أعلى تجمّع حراري في الاختبارات: `client` (22 LOC · churn=6) · `user_factory` (13 LOC · churn=6) · `db_lifecycle` (63 LOC · churn=12 · Bumpy Road Ahead) · `test_app` (12 LOC · churn=28) · `register_and_login_test_user` (54 LOC · churn=1) — ملف monolith واحد يحمل التهيئة الكاملة والسياسة ودورة الحياة، وكل تغيّير في أيٍّ منها يعيد تدفئة الباقي.

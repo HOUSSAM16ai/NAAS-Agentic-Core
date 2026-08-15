@@ -46,17 +46,15 @@ async def check_database() -> str:
     from app.core.database import engine
 
     async with engine.connect() as conn:
-        tables = await conn.execute(text(
-            "SELECT table_name FROM information_schema.tables "
-            "WHERE table_schema='public'"
-        ))
+        tables = await conn.execute(
+            text("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
+        )
         public_tables = {row[0] for row in tables.fetchall()}
     # أسماء الجداول الجوهرية كما في مخطط الإنتاج الفعلي (D-074 · schema boot auto-fix):
     expected = {"users", "missions", "customer_conversations", "student_bkt_analytics"}
     missing = expected - public_tables
-    status = (
-        f"✅ DB connected — {len(public_tables)} public tables"
-        + (f" · core present: {sorted(expected & public_tables)}" if not missing else "")
+    status = f"✅ DB connected — {len(public_tables)} public tables" + (
+        f" · core present: {sorted(expected & public_tables)}" if not missing else ""
     )
     if missing:
         status += f" · ⚠️ core tables absent: {sorted(missing)} (schema boot auto-fix expected)"
@@ -71,7 +69,10 @@ async def check_llm_openrouter() -> str:
     payload = {
         "model": "openai/gpt-oss-20b:free",
         "messages": [
-            {"role": "system", "content": "You are a helpful Arabic tutor. Answer briefly in Arabic."},
+            {
+                "role": "system",
+                "content": "You are a helpful Arabic tutor. Answer briefly in Arabic.",
+            },
             {"role": "user", "content": "ما هو الجهد الكهربائي؟"},
         ],
         "max_tokens": 120,
@@ -98,8 +99,10 @@ async def check_llm_openrouter() -> str:
     n_chars = len(content)
     ok = n_chars > 20 and finish in {"stop", "length"}
     return (
-        ("✅ OpenRouter PRIMARY OK — "
-         f"{n_chars} chars Arabic, finish={finish}, model={body.get('model')}")
+        (
+            "✅ OpenRouter PRIMARY OK — "
+            f"{n_chars} chars Arabic, finish={finish}, model={body.get('model')}"
+        )
         if ok
         else f"❌ OpenRouter FAILED: finish={finish} chars={n_chars} body_keys={sorted(body.keys())}"
     )
@@ -116,7 +119,10 @@ async def check_tavily_mcp() -> str:
         "jsonrpc": "2.0",
         "id": 1,
         "method": "tools/call",
-        "params": {"name": "tavily_search", "arguments": {"query": "الجهد الكهربائي", "max_results": 2}},
+        "params": {
+            "name": "tavily_search",
+            "arguments": {"query": "الجهد الكهربائي", "max_results": 2},
+        },
     }
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(
@@ -126,8 +132,11 @@ async def check_tavily_mcp() -> str:
         )
     # الاستجابة قد تكون SSE (event: message) أو JSON عاديًا — نحلّل الأحداث أولًا
     text = resp.text.strip()
-    events = [line.removeprefix("data:").strip() for line in text.splitlines()
-              if line.startswith("data:") and line.removeprefix("data:").strip()]
+    events = [
+        line.removeprefix("data:").strip()
+        for line in text.splitlines()
+        if line.startswith("data:") and line.removeprefix("data:").strip()
+    ]
     if not events:
         events = [text] if text.startswith("{") else []
     is_error = True
@@ -162,7 +171,11 @@ async def check_content_tools() -> str:
     try:
         source = read_content_tools_source()
         has_branch = "branch.py" in source and "search.py" in source and "content.py" in source
-        manifest = "✅ content manifest composes (content.py + search.py + branch.py)" if has_branch else "❌ manifest missing shard"
+        manifest = (
+            "✅ content manifest composes (content.py + search.py + branch.py)"
+            if has_branch
+            else "❌ manifest missing shard"
+        )
     except FileNotFoundError as exc:
         return f"❌ manifest FileNotFoundError: {exc}"
 

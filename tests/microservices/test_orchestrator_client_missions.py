@@ -84,39 +84,36 @@ def _make_post_client(response: dict) -> tuple[object, list[dict]]:
 _NO_MATCH_QUESTION = "أريد ex_xyz تمرين غريب جداً"
 
 
-@pytest.mark.asyncio
-async def test_request_mission_404_returns_empty_value() -> None:
-    """404 ⇒ `empty_value` — مطابقة سلوك get_mission سابقًا (يعيد None)."""
-    fake, calls = _make_fake_client([{"status": 404, "body": None}])
-    result = await _request_mission(
-        fake,  # type: ignore[arg-type]
-        _MissionRequest(
-            base_url="http://x",
-            method="GET",
-            path="/missions/7",
-            empty_value=None,
-            log_prefix="Fetching mission",
-        ),
-    )
-    assert result is None
-    assert calls[0]["url"] == "http://x/missions/7"
-
-
-@pytest.mark.asyncio
-async def test_request_mission_events_404_returns_empty_list() -> None:
-    """404 ⇒ [] للأحداث — مطابقة حرفية للسلوك القديم `get_mission_events`."""
+async def _fetch_with_404_returns(
+    path: str,
+    empty_value: object,
+    expected: object,
+) -> None:
+    """العقد الواحد: 404 ⇒ `empty_value` — يتحقق عبر كل مسارات GET."""
     fake, _ = _make_fake_client([{"status": 404, "body": None}])
     result = await _request_mission(
         fake,  # type: ignore[arg-type]
         _MissionRequest(
             base_url="http://x",
             method="GET",
-            path="/missions/7/events",
-            empty_value=[],
-            log_prefix="Fetching mission events",
+            path=path,
+            empty_value=empty_value,
+            log_prefix="Fetching mission",
         ),
     )
-    assert result == []
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_request_mission_404_returns_empty_value() -> None:
+    """404 ⇒ `empty_value` — مطابقة سلوك get_mission سابقًا (يعيد None)."""
+    await _fetch_with_404_returns("/missions/7", empty_value=None, expected=None)
+
+
+@pytest.mark.asyncio
+async def test_request_mission_events_404_returns_empty_list() -> None:
+    """404 ⇒ [] للأحداث — مطابقة حرفية للسلوك القديم `get_mission_events`."""
+    await _fetch_with_404_returns("/missions/7/events", empty_value=[], expected=[])
 
 
 @pytest.mark.asyncio

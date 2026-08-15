@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import dataclasses
 import time
-from typing import Any
+from collections.abc import Awaitable, Callable
 
+import httpx
 import jwt as pyjwt
 
 
@@ -65,18 +66,21 @@ def build_service_jwt(
     return payload.encode(secret_key, now)
 
 
+# شظايا JSON الخام الداخلة/الخارجة من الـ orchestrator-service (dict/list/scalar)
+_JSON_VALUE = dict[str, object] | list[object] | str | int | float | bool | None
+
 async def _request_mission(
-    get_client: Any,
+    get_client: Callable[[], Awaitable[httpx.AsyncClient]],
     base_url: str,
     method: str,
     path: str,
     *,
-    json_body: Any = None,
-    headers: Any = None,
-    empty_value: Any,
+    json_body: dict[str, object] | None = None,
+    headers: dict[str, str] | None = None,
+    empty_value: _JSON_VALUE,
     log_prefix: str,
     log_detail: str = "",
-) -> Any:
+) -> _JSON_VALUE:
     """القلب الموحد لكل طلبات missions (يقتل ازدواج get_mission/get_mission_events/create_mission).
 
     العقد (مطابق حرفيًا للسلوك السابق — صفر تغيير سلوكي):

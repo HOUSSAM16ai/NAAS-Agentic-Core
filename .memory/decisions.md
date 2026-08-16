@@ -3,6 +3,20 @@
 > This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
 > The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.# Architectural Decisions
+## D-261 · تفكيك hotspot المصنع الكنسي `app/core/database.py` (106 سطور · CodeScene X-Ray job 72 · 2026-08-16 · ISS-172): `create_db_engine` أعلى تجمّع حراري مطلق (86 LOC · F(11) · radon C(12) · churn=8 · Complex Method) · `get_db` churn=12 — إلى قشرة تفويض + حزمة شرائح `app/core/database_support/` — صفر تغيير سلوكي (alias واحد موثّق: `get_db_session`)
+
+**الكارثة (CodeScene X-Ray job 72):** `app/core/database.py` hotspot بدرجة 9/10: `create_db_engine` (86 LOC · تعقيد F(11) · churn=8 · Complex Method) يجمع URL parsing · كشف Supabase · إعادة كتابة المنفذ (PgBouncer 6543→5432 · D-WS-FLAP-001) · سياق SSL · ثلاثة تكوينات pool · سِجلّات — خمس مسؤولياتٍ بمعدلات تغيير مختلفة في دالةٍ واحدةٍ. و`get_db` بـ churn=12 (أعلى الملف) رغم صغره (10 سطور) — وهذا تناقضٌ يفضح مصدر تدفئةٍ خارجيًا (ISS-172).
+
+**السبب الجذري (ثنائي):**
+1. **تكدّس المسؤوليات** في المصنع الكنسي — أي تعديل في SSL أو pool أو URL يعيد تدفئة الملف كاملًا.
+2. **ISS-172 — المسار التربوي الزومبي**: `app/services/chat/local_graph.py` يستورد `get_db_session` — اسمٌ **لم يُعرَّف قط** في `app/core/database.py` — داخل `contextlib.suppress(Exception)`؛ فيفشل تحميل `TutorState`/`PedagogicalPolicyEngine` صامتًا في كل دورة محادثة، وكان مصدر churn=12 على `get_db`.
+
+**الحل (نمط D-164/D-173/D-252→D-260 «القشرة + الشرائح + المانيفست المركّب»):** `database.py` صار قشرة تفويضٍ نقية (31 سطرًا · A(3))، والمنطق انتقل إلى حزمة `app/core/database_support/` نقية بلا حالة: `_url.py` (تحويلات URL الأربع) · `_ssl.py` (سياق SSL لكل نمط) · `_pools.py` (profiles الثلاثة + `connect_args` الحتمي بـ `statement_cache_size=0` — الشكل الذي تؤكده بوابتا الحراسة) · `_sources.py` (مانيفست `DATABASE_SOURCE_FILES` المركّب — نمط D-164/D-173/D-252/D-255/D-258/D-260). كل اسم واجهة قديم أعيد تصديره بالاسم نفسه (no shadowing — late-binding من D-252). **الاستثناء الوحيد الموثّق:** alias `get_db_session = get_db` يحوّل الفشل الصامت إلى اعتمادٍ متاحٍ يُفعَّل بقرارٍ مكتوبٍ (D-142) لا بإصلاحٍ صامت — لم يُستهلَك في مكانٍ جديد.
+
+**الأدلة:** radon C(12)→A(3) في القشرة وكل الشرائح ≤ A(3) · بوابتا الحراسة `test_db_factory_guardrails` (statement_cache_size=0 · ترميز كلمات المرور %40 · sslmode→SSLContext) خضراء كما كانت · ruff 0.14.0 (نسخة CI · D-184) أخضر على كامل المستودع · `tests/unit` + `tests/smoke`: **686/686 أخضر** (662 الأساسية + 24 جديدة على الشرائح) · `scripts/ci` 3/3 · runtime truth محدّث + القفل أخضر · مطابقة سلوكية حرفية مع الأصل.
+
+---
+
 ## D-260 · تفكيك hotspot النواة `app/kernel.py` (272 سطرًا · CodeScene X-Ray 2026-08-15 · ISS-171): `_validate_contract_alignment` churn=2 (35 LOC · Complex Method/Bumpy Road) · `_handle_lifespan_events` churn=9 — إلى قشرة تفويض + حزمة شرائح `app/core/kernel_support/` — صفر تغيير سلوكي
 
 **الكارثة (CodeScene X-Ray — Hotspots على `app/kernel.py`):** نقطة حرارية في نواة الـ ASGI نفسها: `_validate_contract_alignment` أعلى تجمّع حراري نسبيًا (churn=2 · 35 LOC · درجة تعقيد 10 · Complex Method + Bumpy Road Ahead) · `_handle_lifespan_events` (churn=9 · 13 LOC) · `construct_app` (churn=7 · 50 LOC) — الملف يحمل البوتستراب + دورة الحياة + المطابقة + OpenTelemetry في وحدة واحدة، وأي تعديل في أي منها يعيد تدفئة الكل.

@@ -776,7 +776,12 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
  إعادة التصدير بـ `# noqa: F401` — **D-260** (2026-08-15 · `kernel.py` 272 سطرًا · churn=9): النمط
  نفسه على النواة نفسها — `kernel.py` قشرة تفويض (`RealityKernel` كل واجهاتها القديمة أعيد تصديرها بالاسم)
  + حزمة `app/core/kernel_support/` (`_sources.py` مانيفست مركّب · `lifecycle.py` · `contracts.py` ·
- `otel.py` · `compose.py` شرائح نقية) — radon A · ruff نظيف · E2E D-259 أخضر قبل/بعد (صفر تراجع).- **صفر تكرار حرفي** (`_recently_emitted` + مرساة `last_step_emitted`)؛ **لا تسرّب تفكير النظام**
+ `otel.py` · `compose.py` شرائح نقية) — radon A · ruff نظيف · E2E D-259 أخضر قبل/بعد (صفر تراجع).
+ **D-261** (2026-08-16 · `app/core/database.py` hotspot 9/10 · `create_db_engine` 86 LOC · C(12) · churn=8):
+ النمط نفسه على المصنع الكنسي لقاعدة البيانات — قشرة تفويض (31 سطرًا · A(3)) + حزمة `app/core/database_support/`
+ (`_url.py` · `_ssl.py` · `_pools.py` · `_sources.py` مانيفست مركّب) — radon C(12)→A(3) في كل دالة · 686/686 أخضر.
+ **القانون المعمّم من السلسلة:** أي ملفٍ يعاد تفكيكه: قشرة تفويض تعيد تصدير كل الأسماء القديمة بالاسم، شرائح نقية بلا حالة،
+ مانيفست مركّب، اختبارات مطابقة حرفية للأصل، حراس نصية تتغذى من المانيفست — صفر تغيير سلوكي، صفر ZOMBIE.- **صفر تكرار حرفي** (`_recently_emitted` + مرساة `last_step_emitted`)؛ **لا تسرّب تفكير النظام**
   للطالب (D-117: ممنوع prepend «[توجيه تربوي]»، العمق يصل عبر `support_level`)؛ **فجوة الوهم**
   (assisted − durable) هي مقياس النجاح الوحيد (D-126/D-157).
 - **النظام يعرّف كل رمز يطبعه (D-185 — 2026-07-28 · ISS-138)**: طالب سأل «ماذا نقصد بحرف C» عن
@@ -968,7 +973,7 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 **و`.memory/decisions.md`** (سجل القرارات الحيّ — **المصدر الأول لأي D-XXX جديد**) · وخريطة السلطة
 الكاملة: `docs/DOCUMENTATION_INDEX.md`.
 
-### سلسلة تفكيك التعقيد — CodeScene X-Ray (D-252 → D-260)
+### سلسلة تفكيك التعقيد — CodeScene X-Ray (D-252 → D-261)
 نمط واحد قاطع للكل: **قشرة معمارية تفوِّض + حزمة شرائح نقية + مانيفست مركّب `_sources.py`** تتغذى
 منه الحراس النصية — **صفر تغيير سلوكي** في كل قرار (مطابقة كاملة قبل/بعد أو بوابات AST تحرس الأثر).
 
@@ -981,6 +986,7 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 | **D-256** | `orchestrator_client.py` 238 سطرًا · ازدواج `get_mission*` · churn=2 | قشرة تفويض حرفية + حزمة `orchestrator_client_support/` [`missions.py` قلب موحد + `ServiceJwtPayload` · `preempts.py` قرار Supabase معزول] · 11 اختبارًا جديدًا، حراس legacy_invariants وskills_doctrine الموسّعان |
 | **D-258** | `tests/conftest.py` 416 سطرًا · `db_lifecycle` 63 LOC churn=12 Bumpy Road | قشرة تسجيلٍ وتفويضٍ + حزمة `conftest_support/` (helpers/registry/schema/lifecycle/auth_shards/policy/_sources) — اكتُشف: pytest لا يفعّل autouse لfixtures مستوردة فبقيت قشور التسجيل |
 | **D-260** (الآن) | `app/kernel.py` 272 سطرًا · `_validate_contract_alignment` churn=2 + `_handle_lifespan_events` churn=9 · Complex Method/Bumpy Road | قشرة تفويض نقية + حزمة `app/core/kernel_support/` [`_sources.py` مانيفست مركّب · `lifecycle.py` دورة حياة مفككة · `contracts.py` مطابقة OpenAPI/AsyncAPI نقية · `otel.py` bootstrap · `compose.py` combinators] · **أسماء الواجهة القديمة كلها أعيد تصديرها** (لا كاسر لأي مستورد) · radon B(8)/B(7)→A · ruff نظيف · E2E D-259 أخضر قبل/بعد |
+| **D-261** (2026-08-16 · ISS-172) | `app/core/database.py` hotspot 9/10 · `create_db_engine` 86 LOC · F(11) · C(12) · churn=8 · Complex Method · `get_db` churn=12 (تناقض يفضح مصدرًا خارجيًا) | قشرة تفويض نقية (31 سطرًا · A(3)) + حزمة `app/core/database_support/` [`_url.py` تحويلات URL الأربع · `_ssl.py` سياق SSL لكل نمط · `_pools.py` profiles الثلاثة + `connect_args` الحتمي بـ `statement_cache_size=0` · `_sources.py` مانيفست مركّب] · **أسماء الواجهة القديمة كلها أعيد تصديرها** · alias وحيد موثّق `get_db_session = get_db` (المسار التربوي الزومبي: `local_graph.py` يستورد اسمًا لم يُعرَّف قط داخل `suppress` — صار اعتمادًا متاحًا لا فشلًا صامتًا) · radon C(12)→A(3) في كل دالة · بوابتا الحراسة خضراء · 686/686 · ruff 0.14.0 أخضر |
 
 ### بقية المجالات (السرد الحيّ في `.memory/decisions.md` + الأرشيف)
 | المجال | القرارات |

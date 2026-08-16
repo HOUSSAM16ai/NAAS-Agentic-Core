@@ -1,9 +1,15 @@
 """
 Canonical Database Factory for CogniForge.
+
+D-261 (2026-08-16 — CodeScene X-Ray job 72 · ISS-172): `create_db_engine` was a
+hotspot (86 LOC · complexity F(11) · churn 8 · Complex Method), and `get_db`
+carried churn 12 because of a zombie pedagogical import elsewhere (ISS-172).
+The factory was decomposed into a pure delegation shell over the
+`app.core.database_support` shard package — zero behavioral change. All legacy
+names are re-exported unchanged (no shadowing — late-binding law from D-252).
 """
 
 import logging
-import ssl
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.engine.url import make_url
@@ -15,6 +21,14 @@ from sqlalchemy.ext.asyncio import (
 )
 
 # NullPool removed: replaced by small pool (pool_size=5) for Supabase — D-WS-FLAP-001
+from app.core.database_support import (
+    _is_supabase_url,
+    _rewrite_supabase_port,
+    _strip_ssl_query,
+    _upgrade_drivername,
+    build_pool_kwargs,
+    build_ssl_connect_args,
+)
 from app.core.settings.base import BaseServiceSettings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -25,25 +39,18 @@ __all__ = [
     "create_session_factory",
     "engine",
     "get_db",
+    "get_db_session",  # D-261 (ISS-172): canonical alias for legacy pedagogical callers
 ]
 
 
-def _is_supabase_url(host: str | None, port: int | None) -> bool:
-    """Return True for any Supabase connection."""
-    if host and "supabase.com" in host:
-        return True
-    return port == 6543
-
-
 def create_db_engine(settings: BaseServiceSettings) -> AsyncEngine:
+    """Build the canonical async engine, delegating all logic to pure shards (D-261)."""
     db_url = settings.DATABASE_URL
     if not db_url:
         raise ValueError("DATABASE_URL is not set in settings.")
 
-    url_obj = make_url(db_url)
-
     # --- SQLite ---
-    if "sqlite" in url_obj.drivername:
+    if "sqlite" in db_url:
         logger.info(f"SQLite database: {settings.SERVICE_NAME}")
         return create_async_engine(
             db_url,
@@ -53,74 +60,22 @@ def create_db_engine(settings: BaseServiceSettings) -> AsyncEngine:
             connect_args={"check_same_thread": False},
         )
 
-    # --- PostgreSQL ---
-    if url_obj.drivername in ("postgresql", "postgres"):
-        url_obj = url_obj.set(drivername="postgresql+asyncpg")
-
-    # Strip ssl params from query string — we'll handle via SSL context
-    qs = dict(url_obj.query)
-    ssl_mode = qs.pop("sslmode", None) or qs.pop("ssl", None)
-
+    # --- PostgreSQL (all logic delegated to pure URL/SSL/pool shards) ---
+    url_obj = _upgrade_drivername(make_url(db_url))
+    url_obj, ssl_mode = _strip_ssl_query(url_obj)
     is_supabase = _is_supabase_url(url_obj.host, url_obj.port)
+    url_obj = _rewrite_supabase_port(url_obj, is_supabase)
 
-    if is_supabase and url_obj.port == 6543:
-        # Rewrite port 6543 (PgBouncer transaction mode) → 5432 (session mode).
-        # Port 6543 uses PgBouncer which keeps prepared statement names in its
-        # own cache across logical connections. This causes asyncpg to hit
-        # DuplicatePreparedStatementError even with statement_cache_size=0,
-        # because the collision happens at the PgBouncer protocol layer.
-        # Port 5432 connects directly to the Postgres session pool on Supabase,
-        # which correctly handles statement_cache_size=0.
-        url_obj = url_obj.set(port=5432)
-        logger.info("Rewrote Supabase port 6543 → 5432 (session mode)")
-
-    url_obj = url_obj.set(query=qs)
-    db_url = url_obj.render_as_string(hide_password=False)
-
-    connect_args: dict = {}
-    if ssl_mode in ("require", "verify-ca", "verify-full"):
-        ctx = ssl.create_default_context()
-        if ssl_mode == "require":
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-        connect_args["ssl"] = ctx
-        logger.info(f"SSL enabled (mode: {ssl_mode})")
-
-    # Disable prepared statement caches for asyncpg to avoid pooler incompatibilities.
-    connect_args["statement_cache_size"] = 0
-    connect_args["prepared_statement_cache_size"] = 0
-
-    if is_supabase:
-        # D-WS-FLAP-001: NullPool opens a new TCP connection per session.
-        # Under concurrent WS turns (3-4 DB sessions each), this exhausts
-        # Supabase's connection limit (~60) and causes DB errors mid-stream,
-        # which propagate as WebSocket flapping.
-        # Fix: use a small pool (5 connections) with statement_cache_size=0
-        # to avoid DuplicatePreparedStatementError at the asyncpg level.
-        logger.info(
-            f"Supabase database (pool_size=5, no prepared statements, port {url_obj.port}): {settings.SERVICE_NAME}"
-        )
-        return create_async_engine(
-            db_url,
-            echo=settings.DEBUG,
-            pool_size=5,
-            max_overflow=5,
-            pool_pre_ping=True,
-            pool_recycle=300,
-            connect_args=connect_args,
-        )
-
-    is_dev = settings.ENVIRONMENT in ("development", "testing")
-    logger.info(f"Postgres database: {settings.SERVICE_NAME}")
-    return create_async_engine(
-        db_url,
-        echo=settings.DEBUG,
-        pool_pre_ping=True,
-        pool_recycle=1800,
-        pool_size=5 if is_dev else 40,
-        max_overflow=10 if is_dev else 60,
-        connect_args=connect_args,
+    final_url = url_obj.render_as_string(hide_password=False)
+    ssl_args = build_ssl_connect_args(ssl_mode)
+    pool_kwargs = build_pool_kwargs(
+        debug=settings.DEBUG,
+        is_supabase=is_supabase,
+        environment=settings.ENVIRONMENT,
+        ssl_args=ssl_args,
+        port=url_obj.port,
     )
+    return create_async_engine(final_url, **pool_kwargs)
 
 
 def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
@@ -149,3 +104,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
+
+
+# D-261 (ISS-172): legacy pedagogical callers in `app/services/chat/local_graph.py`
+# imported `get_db_session` — a name that never existed in this module, so the
+# whole tutor-state path failed silently inside `contextlib.suppress(Exception)`
+# (zombie pedagogical state). The canonical alias is exported here so the path
+# can be re-enabled deliberately (D-142) or retired with a written decision —
+# never again by silent import failure. The alias is the ONLY behavioral change:
+# it turns a silent failure into an available dependency, consumed nowhere new.
+get_db_session = get_db

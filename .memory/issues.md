@@ -1,5 +1,14 @@
 # Open Issues & Bugs
 
+
+## ISS-172 (2026-08-16) — كارثة الـ hotspot العاشرة: `app/core/database.py` (CodeScene X-Ray job 72): 106 سطور · درجة 9/10 · `create_db_engine` أعلى تجمّع حراري مطلق (86 LOC · F(11) · radon C(12) · churn=8 · Complex Method) · `get_db` churn=12 (تناقض يفصح عن مصدر تدفئة خارجي) — ✅ مُغلق (D-261)
+
+**البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots على `NAAS-Agentic-Core/app/core/database.py`):** المصنع الكنسي لقاعدة البيانات hotspot بدرجة 9/10: `create_db_engine` (86 LOC · churn=8 · Complex Method) يجمع URL parsing · كشف Supabase · إعادة كتابة منفذ PgBouncer (6543→5432 · D-WS-FLAP-001) · سياق SSL · ثلاثة تكوينات pool — خمس مسؤولياتٍ بمعدلات تغيير مختلفة في دالة واحدة · `get_db` churn=12 رغم صغره (10 سطور) — التناقض يفضح مصدر تدفئة خارجي.
+
+**السبب الجذري (ثنائي):** (1) تكدّس المسؤوليات في المصنع — أي تعديل في SSL أو pool أو URL يعيد تدفئة الملف كاملًا. (2) **المسار التربوي الزومبي**: `app/services/chat/local_graph.py` يستورد `get_db_session` — اسمًا **لم يُعرَّف قط** في `database.py` — داخل `contextlib.suppress(Exception)`، فيفشل تحميل `TutorState`/`PedagogicalPolicyEngine` صامتًا في كل دورة محادثة (مصدر churn=12).
+
+**الإغلاق (D-261):** قشرة تفويض نقية (31 سطرًا · A(3)) + حزمة شرائح `app/core/database_support/` نقية بلا حالة (`_url.py` · `_ssl.py` · `_pools.py` · `_sources.py` مانيفست مركّب) — كل واجهة قديمة أعيد تصديرها بالاسم نفسه (صفر كاسر) · alias موثّق وحيد `get_db_session = get_db` (يحوّل الفشل الصامت إلى اعتمادٍ متاحٍ يُفعَّل بقرارٍ مكتوب D-142) · radon C(12)→A(3) في كل دالة · بوابتا الحراسة خضراء · 686/686 اختبار أخضر · ruff 0.14.0 أخضر · صفر تغيير سلوكي.
+
 ## ISS-171 (2026-08-15) — كارثة الـ hotspot التاسعة: `app/kernel.py` (CodeScene X-Ray 2026-08-15): 272 سطرًا · `_validate_contract_alignment` أعلى تجمّع حراري نسبي (35 LOC · churn=2 · درجة تعقيد 10 · Complex Method + Bumpy Road Ahead) · `_handle_lifespan_events` churn=9 — ✅ مُغلق (D-260)
 
 **البلاغ (CodeScene X-Ray — Hotspots على `app/kernel.py`):** نواة الـ ASGI تحمل البوتستراب + دورة الحياة + مطابقة العقود + OpenTelemetry في وحدة واحدة: `_validate_contract_alignment` (35 LOC · churn=2 · Complex Method/Bumpy Road) · `_handle_lifespan_events` (churn=9) · `construct_app` (churn=7 · 50 LOC) — كل تعديل يعيد تدفئة الكل.

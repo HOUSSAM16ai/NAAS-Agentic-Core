@@ -4,6 +4,18 @@
 > Previous: hotfix/codescene-hotspot-chat-stream-ws-decomposition (D-252→D-255)
 > Previous: `claude/project-international-markets-ws5pwz` (D-228→D-232)
 
+## D-261 Hotspot Decomposition — `app/core/database.py` «المصنع الكنسي: قشرة تفويض + شرائح `app/core/database_support/`» (2026-08-16 · CodeScene X-Ray job 72 · ISS-172)
+
+| المسار الحيّ | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`app/core/database.py`** (كل واجهاته القديمة كما كانت — **صفر كاسر**) | **ACTIVE (قشرة تفويض نقية · 31 سطرًا · A(3))** | `create_db_engine` (كان 86 LOC · F(11) · C(12) · churn=8 · Complex Method) صار قشرةً تفوِّز إلى الشرائح: URL parsing → `_upgrade_drivername` → `_strip_ssl_query` → `_is_supabase_url` → `_rewrite_supabase_port` → `build_ssl_connect_args` → `build_pool_kwargs` — برهان حيّ: بوابتا الحراسة `test_db_factory_guardrails` خضراء كما كانت (statement_cache_size=0 · ترميز %40 · sslmode→SSLContext) · alias موثّق وحيد `get_db_session = get_db` (المسار التربوي الزومبي ISS-172 صار اعتمادًا متاحًا لا فشلًا صامتًا) |
+| **`app/core/database_support/_sources.py`** (مانيفست المركّب) | **ACTIVE (guardrails)** | `DATABASE_SOURCE_FILES` + `read_database_source()` يركّبان القشرة + الشرائح الثلاث في مصدرٍ واحد؛ كل حارس نصي يقرأ سلوك المصنع يتغذى منه — لا تراجع صامت للحرس النصي |
+| **`app/core/database_support/_url.py`** (D-261 — جديد) | **ACTIVE** | تحويلات URL النقية الأربع: `_is_supabase_url` (كشف Supabase) · `_upgrade_drivername` (→asyncpg) · `_strip_ssl_query` (تجريد sslmode/ssl) · `_rewrite_supabase_port` (PgBouncer 6543→5432 · D-WS-FLAP-001) — جميعها A |
+| **`app/core/database_support/_ssl.py`** (D-261 — جديد) | **ACTIVE** | `build_ssl_connect_args`: سياق SSL لكل نمط (require/verify-ca/verify-full/None) — A |
+| **`app/core/database_support/_pools.py`** (D-261 — جديد) | **ACTIVE** | profiles الثلاثة: `supabase_pool_kwargs` (pool_size=5 · D-WS-FLAP-001) · `dev_pool_kwargs` (5/10) · `prod_pool_kwargs` (40/60) + `connect_args` الحتمي بـ `statement_cache_size=0`/`prepared_statement_cache_size=0` — جميعها A |
+| **`tests/unit/core/test_database_shards.py`** (D-261 — جديد) | **ACTIVE** | 24 اختبارًا يثبت المطابقة الحرفية مع السلوك الأصلي لكل شريحة + حفظ الأسماء القديمة (no shadowing · late-binding) |
+**الأدلة النهائية:** ruff 0.14.0 أخضر كامل المستودع · `tests/unit` + `tests/smoke`: **686/686** (662 الأساسية + 24 الجديدة) · `scripts/ci` 3/3 · `runtime_truth --check` أخضر على القفل المجدَّد · صفر تغيير سلوكي (مطابقة حرفية مع الأصل).
+
 ## D-260 Hotspot Decomposition — `kernel.py` «قشرة تفويض + شرائح `app/core/kernel_support/`» (2026-08-15 · CodeScene X-Ray job 72 · ISS-171)
 
 | المسار الحيّ | الحالة | الدليل (import + call chain + runtime) |

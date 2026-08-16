@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -77,9 +78,20 @@ def _service_lifecycle_drift() -> list[str]:
 
 
 def _run_gate(script_path: Path) -> bool:
-    """يشغّل بوابة لياقة منفصلة ويعيد حالة النجاح دون رفع استثناء."""
+    """يشغّل بوابة لياقة منفصلة ويعيد حالة النجاح دون رفع استثناء.
+
+    **D-266: `sys.executable` لا `"python"` العارية.** كانت تُنادي `python` من الـPATH،
+    وهو مفسِّرٌ قد يختلف عن الذي يشغّل هذا السكربت. والأثر مقيس: على مفسِّر 3.11 تعجز
+    البوّابات عن تحليل `type X = …` (PEP-695) فتُرجِع رمزاً غير صفري، فتُكتَب
+    `stategraph_is_runtime_backbone: false` و`contract_gate: false` و`tracing_gate: false`
+    في ملفَّي نتيجةٍ **مُتتبَّعَين في git** — بينما البوّابات الثلاث **خضراء فعلاً** على
+    3.12 (نسخة CI). أي أنّ وثيقةَ حالةٍ كانت تكتب عطباً لا وجود له.
+
+    وهي نفس قاعدة D-105 المفروضة على الاختبارات («subprocess يستخدم `sys.executable`»)
+    — كانت مفروضةً هناك ومُعفىً منها هنا، وهذا الملفّ يكتب **حالةً تُقرأ حقيقة**.
+    """
     result = subprocess.run(
-        ["python", str(script_path)], cwd=REPO_ROOT, check=False, capture_output=True
+        [sys.executable, str(script_path)], cwd=REPO_ROOT, check=False, capture_output=True
     )
     return result.returncode == 0
 

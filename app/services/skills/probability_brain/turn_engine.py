@@ -83,11 +83,11 @@ class CognitiveTurnEngineMixin:
             if any(m in _low for m in ("اعطني", "أعطني", "اعطيني", "هات", "اكتب", "ارسم", "درس")):
                 return None, None
             # حارس تبديل الموضوع (D-101): سؤال غير احتمالي ⇒ تسليم للكتل.
+            # D-266 (ISS-159): الحاسم الواحد — يقرأ المنهاج كلّه لا ثلاثة مواضيع.
             with contextlib.suppress(Exception):
-                from app.services.capabilities.arabic_normalize import primary_canonical_topic
+                from app.services.capabilities.topic_authority import is_foreign_to_probability
 
-                _topic = primary_canonical_topic(question)
-                if _topic is not None and _topic.canonical_id != "probability":
+                if is_foreign_to_probability(question):
                     return None, None
             combo = cls._load_canonical_combinations(question, history_messages)
             if combo is None:

@@ -1,12 +1,23 @@
 # CI Gates — Pre-merge Required Checks
-> Last updated: **2026-08-02** | Branch: `claude/probability-exercise-2024-pm8z7d`
 > **ISS-148 note:** this table used to name **five workflow files that no longer
 > exist** (`microservices-step6…step12`) while omitting five that do, and listed 8
-> of the ~31 checks the `guardrails` job actually runs. A gate inventory that lies
+> of the checks the `guardrails` job actually runs. A gate inventory that lies
 > is worse than none: it is read precisely by the people trying to be careful.
 > **The source of truth is `.github/workflows/ci.yml` itself** — run
 > `make gates` (`scripts/run_fitness_gates.py`) to execute the real set locally;
 > it reads the workflow, so it cannot drift from it.
+>
+> **D-266 note (ISS-186):** the count below is a *derived* marker, not prose. It
+> used to read "~31 fitness gates" — a hand-typed number in the very document
+> whose whole purpose is to stop inventories from lying. Worse, the sentence
+> above ("it reads the workflow, so it cannot drift") was true of `make gates`
+> and false of the repo: seven gates existed on disk that **no workflow and no
+> test ran**, so `make gates` could not drift from a set that never contained
+> them. All seven are wired now and `check_governance_registry.py` makes an
+> eighth impossible. Total gates on disk (derived, verified in CI):
+>
+> <!-- derived:gates_total=72 -->
+> **72** — in `scripts/fitness/` and `tools/ci/`, every one of them executed.
 
 ## Required jobs (must be green)
 
@@ -18,7 +29,7 @@ as the list said ten, in the very file that names `needs:` as the arbiter).
 |---|---|---|
 | `ci.yml` | `lint` | `ruff check .` + `ruff format --check .` + `mypy` |
 | `ci.yml` | `contracts` | gateway/provider parity + `tests/contracts/` |
-| `ci.yml` | `guardrails` | **~31 fitness gates** — enumerated in the workflow, run locally with `make gates` |
+| `ci.yml` | `guardrails` | fitness gates — enumerated in the workflow, run locally with `make gates` (count derived above, never typed) |
 | `ci.yml` | `test-monolith` | `tests` + `scripts/ci` minus microservices, `--cov-fail-under=73` |
 | `ci.yml` | `test-microservices` | `tests/microservices` + `microservices/*/tests` + OpenAPI parity |
 | `ci.yml` | `frontend-tests` | node tests + lockfile sync + generated TS types + `npm run typecheck` + bundle budget |

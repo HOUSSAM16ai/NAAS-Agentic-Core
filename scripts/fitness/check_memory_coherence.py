@@ -95,7 +95,17 @@ TRUTH_LOCK = REPO_ROOT / ".runtime/truth_table.lock.json"
 #      التمييز الذي وُجد المِسنَن ليحرسه.
 # والرفع **مضبوطٌ على المقيس بلا فسحة** (1014 لا رقمٌ مريح)، فيعود المِسنَن «يتقلّص فقط»
 # من هنا فوراً. القرار في `.memory/decisions.md` (D-228/D-229).
-CLAUDE_MD_MAX_LINES = 1060  # D-263 → D-265: رفعٌ معلَن (1028 → 1060) — دستوران جديدان من قرار المالك (D-264 مخطط الدراسة التكيفي §0.16 · D-265 حوكمة Spec Kit §0.17) لُقِّطت قاعدتهما في CLAUDE.md، ودستورٌ يعلو دستورٍ مكانُه العقد لا ملحقٌ (نفس منطق D-209/D-210/D-228/D-263: قانونٌ دائم جديد من قرار المالك، والسرد كله في .memory/adaptive_study_planner_constitution.md وspec_kit_governance_constitution.md). القرار في .memory/decisions.md (D-264/D-265)، والمِسنَن «يتقلّص فقط» من 1060 فورًا
+#
+# ── D-266: رُفِع 1060 → 1085 (§0.18 — دستور فرض الحوكمة) ────────────────────────
+# السبب المنطوق، ويُحكَم عليه لا يُقبَل مجاملةً: §0.18 وُلد من **قياسٍ** لا من عقيدةٍ
+# مُضافة — سبع بوّابات من سبعين لا يشغّلها أيّ workflow ولا أيّ اختبار، وكلّها خضراء
+# حين شُغِّلت يدوياً. وهو من صنف «قانونٌ يمنع عودة عطبٍ حيّ» (معيار D-226) لا من صنف
+# التضخّم السردي: كلّ السرد ذهب إلى `.memory/governance_enforcement_constitution.md`
+# و`docs/specs/001_governance_hardening_spec.md`، وأخذ الدستور **قاعدة الفرض** وحدها.
+# وهذا المِسنَن نفسه من صنف ما يحرسه §0.18 L9 («رفعُ مِسنَنٍ مُعلَن قرارُ إنسان»)، فلا
+# يُرفَع إلّا بقرارٍ مكتوب — وهو مكتوب في `.memory/decisions.md` (D-266).
+# والرفع **مضبوطٌ على المقيس بلا فسحة**، فيعود «يتقلّص فقط» من هنا فوراً.
+CLAUDE_MD_MAX_LINES = 1085  # D-266: رفعٌ معلَن (1060 → 1085) — §0.18 دستور فرض الحوكمة؛ والسابق D-263 → D-265: رفعٌ معلَن (1028 → 1060) — دستوران جديدان من قرار المالك (D-264 مخطط الدراسة التكيفي §0.16 · D-265 حوكمة Spec Kit §0.17) لُقِّطت قاعدتهما في CLAUDE.md، ودستورٌ يعلو دستورٍ مكانُه العقد لا ملحقٌ (نفس منطق D-209/D-210/D-228/D-263: قانونٌ دائم جديد من قرار المالك، والسرد كله في .memory/adaptive_study_planner_constitution.md وspec_kit_governance_constitution.md). القرار في .memory/decisions.md (D-264/D-265)، والمِسنَن «يتقلّص فقط» من 1060 فورًا
 # أزواج التواريخ غير المرتَّبة في ذيل السجلّات التاريخي (قبل النافذة الحديثة).
 FROZEN_ORDER_DEBT = {"decisions.md": 52, "issues.md": 46}
 # حجم النافذة الحديثة التي يجب أن تكون مرتَّبة ترتيباً صارماً.
@@ -167,6 +177,34 @@ def _check_index_freshness(failures: list[str]) -> None:
             )
 
 
+#: أقصى طولٍ لخليّة في الجدول السيادي. راتشيت **ينزل ولا يرتفع**.
+#:
+#: D-266: كان صفّ `decisions.md` **٣٧٢١ حرفاً** وصفّ `issues.md` **٥٠٠٨** — كتلتان
+#: تحملان سرد عشرات القرارات داخل خليّة جدول. والسبب بنيوي لا إهمال: هذه البوّابة
+#: تفرض ظهور أحدث `D-###`/`ISS-###` في الصفّ (D-188) ولا تحدّ حجمه، فكان كل قرارٍ
+#: جديد يُلحَق بالخليّة نفسها. وصفّ `issues.md` كان يحمل `|` غير مهروب فانكسر إلى
+#: خمس خلايا — أي أنّ الجدول لم يعد جدولاً.
+#:
+#: وفهرسٌ لا يُقرأ ليس فهرساً: موطن السرد `decisions.md`/`issues.md`، وموطن الفهرس
+#: سطرٌ واحد يدلّ عليه.
+INDEX_CELL_MAX_CHARS = 400
+
+
+def _check_index_cell_size(failures: list[str]) -> None:
+    """يمنع عودة الفهرس السيادي موسوعةً داخل خلايا جدول."""
+    for line in MEMORY_README.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("|"):
+            continue
+        for cell in line.split("|"):
+            if len(cell.strip()) > INDEX_CELL_MAX_CHARS:
+                head = cell.strip()[:60]
+                failures.append(
+                    f".memory/README.md: خليّة بطول {len(cell.strip())} > "
+                    f"{INDEX_CELL_MAX_CHARS} تبدأ بـ «{head}…». الفهرس دلالةٌ لا سرد — "
+                    "انقل السرد إلى `decisions.md`/`issues.md` (D-266)."
+                )
+
+
 def _check_recent_ordering(failures: list[str]) -> None:
     """يفرض ترتيب «الأحدث أولاً» على النافذة الحديثة، ويمنع تضخّم دَين الذيل."""
     for path in (DECISIONS, ISSUES):
@@ -226,6 +264,7 @@ def main() -> int:
     failures: list[str] = []
 
     _check_index_freshness(failures)
+    _check_index_cell_size(failures)
     _check_recent_ordering(failures)
     _check_constitution_size(failures)
     _check_truth_lock_freshness(failures)

@@ -460,10 +460,10 @@ class SocraticNarrativeMixin:
             )
             if not cls._is_prob_context(question + " " + _hist_text):
                 return False
-            from app.services.capabilities.arabic_normalize import primary_canonical_topic
+            # D-266 (ISS-159): الحاسم الواحد بدل الشرط الذي يسقط عند ساقه الأولى.
+            from app.services.capabilities.topic_authority import is_foreign_to_probability
 
-            _topic = primary_canonical_topic(question)
-            return not (_topic is not None and _topic.canonical_id != "probability")
+            return not is_foreign_to_probability(question)
         except Exception:  # pragma: no cover - fail-safe
             return False
 

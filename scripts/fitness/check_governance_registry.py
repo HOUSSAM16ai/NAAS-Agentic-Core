@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+"""بوّابة فرض الحوكمة — D-266 / ISS-186.
+
+## لماذا هذه البوّابة موجودة
+
+المستودع يفرض على **الكود** برهاناً ثلاثياً (§6.6): `import + call chain + runtime
+evidence`. ولم يكن يفرض شيئاً من ذلك على **الفوارض نفسها**.
+
+القياس الذي وُلدت منه (2026-08-16): من ٧٠ بوّابة على القرص، كانت **سبع** لا يشغّلها
+أيّ workflow ولا أيّ اختبار — موجودةٌ ومذكورةٌ دستورياً و**ميتة**:
+`check_contracts_verified` · `check_core_kernel_env_profile` · `check_import_boundaries` ·
+`check_legacy_routes_monotonic` · `check_legacy_traffic_zero_window` ·
+`check_secret_key_consistency` · `check_stategraph_runtime_backbone`.
+
+وهذا بالضبط **الثمن الثاني** في `ENGINEERING_DOCTRINE.md`: «فارضٌ بلا مرمى» — نفس صنف
+ISS-148 (عقودٌ خضراء ومسارُ التسريب خارج مرماها)، لكن على مستوى المنظومة كلّها. و
+`check_spec_kit_governance` (L3) كان يفحص **الذِّكر + الوجود** ولا يفحص **التنفيذ**؛
+فبوّابةٌ لا تعمل تجتاز فحص «لا بوّابة يتيمة» وهي ميتة.
+
+و`scripts/run_fitness_gates.py` يقرأ الـworkflow، فبوّابةٌ غير مُدرَجة فيه **ميتة محلياً
+أيضاً**: لا تحمي، ولا هي محايدة — تُعطي طمأنينةً كاذبة.
+
+## ما تفحصه
+
+1. **التنفيذ (الساق الثالثة):** كل `check_*.py` في `scripts/fitness/` و`tools/ci/` إمّا
+   يُنفَّذ (مذكور في `.github/workflows/*.yml` أو في اختبارٍ تحت `tests/`/`scripts/ci/`
+   يشغّله CI) وإمّا مُصرَّح في `unenforced_debt` بسببٍ منطوق. القائمة **تتقلّص فقط**:
+   بوّابةٌ في الدَّين صارت تُنفَّذ ⇒ فشل حتى تُحذَف من الدَّين (نمط `check_correlated_http`
+   ثنائي الاتجاه — دَينٌ أُغلق بلا تحديث الرقم كذبٌ أيضاً).
+2. **الوجود:** كل فارضٍ يسمّيه السجلّ موجودٌ على القرص؛ وكل بوّابةٍ على القرص يسمّيها
+   السجلّ (لا يتيمة ولا وهم).
+3. **التغطية:** كل قسم `## 0.N.` في `CLAUDE.md` له صفٌّ في السجلّ، والعكس.
+4. **الخريطة لا تكذب:** كل `law_docs`/`status_docs` موجودٌ فعلاً (ISS-149).
+5. **الغياب يُعلَن:** صفٌّ بلا فوارض يجب أن يحمل `no_enforcer_reason_ar` غير فارغ
+   (D-206 L11: الغياب لا يعني الغموض).
+6. **لا رقمَ يدوياً:** `.memory/ci-gates.md` لا يكتب عدد البوّابات نصّاً — يُشتَقّ
+   (يمدّد D-192).
+
+**لا تُستورد من `app/`** (نمط `check_pedagogical_os.py`) — نصّية خالصة تعمل في بيئة
+متدهورة. Exit 0 = نظيف · 1 = انتهاك.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REGISTRY = REPO_ROOT / "docs" / "governance" / "CONSTITUTION_REGISTRY.json"
+CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
+CI_GATES_DOC = REPO_ROOT / ".memory" / "ci-gates.md"
+
+#: مواطن البوّابات. أيّ موطنٍ ثالث يجب أن يُضاف هنا صراحةً — لا اكتشافَ ضمني.
+GATE_HOMES = ("scripts/fitness", "tools/ci")
+
+#: أين يُعتبر ذِكرُ البوّابة **تنفيذاً**. الاختبارات تحت `tests/` يشغّلها `test-monolith`،
+#: و`scripts/ci` يشغّلها نفس الوظيفة — فبوّابةٌ يستدعيها اختبار مُنفَّذة فعلاً.
+EXECUTION_SOURCES = (".github/workflows", "tests", "scripts/ci")
+
+_FAILURES: list[str] = []
+
+
+def _fail(msg: str) -> None:
+    _FAILURES.append(msg)
+    print(f"❌ {msg}")
+
+
+def _pass(msg: str) -> None:
+    print(f"✅ {msg}")
+
+
+def _gates_on_disk() -> dict[str, str]:
+    """اسم الملفّ ⇒ مساره النسبي. الاسم هو المفتاح لأنه ما يُكتب في الوثائق."""
+    found: dict[str, str] = {}
+    for home in GATE_HOMES:
+        directory = REPO_ROOT / home
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.glob("check_*.py")):
+            found[path.name] = f"{home}/{path.name}"
+    return found
+
+
+def _execution_text() -> str:
+    """نصّ كل ما قد يشغّل بوّابة — يُقرأ مرّة."""
+    chunks: list[str] = []
+    for source in EXECUTION_SOURCES:
+        root = REPO_ROOT / source
+        if not root.is_dir():
+            continue
+        patterns = ("*.yml", "*.yaml") if "workflows" in source else ("*.py",)
+        for pattern in patterns:
+            for path in root.rglob(pattern):
+                chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
+    return "\n".join(chunks)
+
+
+def _check_execution(gates: dict[str, str], registry: dict) -> None:
+    executed_in = _execution_text()
+    debt: dict = registry.get("unenforced_debt", {})
+    if not isinstance(debt, dict):
+        _fail("`unenforced_debt` يجب أن يكون كائناً {اسم البوّابة: السبب}")
+        return
+
+    dead = [name for name in gates if name not in executed_in and name not in debt]
+    if dead:
+        _fail(
+            "بوّابات على القرص لا يشغّلها أيّ workflow ولا أيّ اختبار ولا هي مُصرَّحة "
+            f"في `unenforced_debt`: {sorted(dead)} — فارضٌ بلا مرمى (D-207)"
+        )
+    else:
+        _pass(f"كل البوّابات الـ{len(gates)} مُنفَّذة فعلاً (workflow أو اختبار) — دَينٌ: {len(debt)}")
+
+    # الاتجاه الآخر: دَينٌ أُغلق بلا تحديث القائمة كذبٌ أيضاً (نمط check_correlated_http).
+    closed = [name for name in debt if name in executed_in]
+    if closed:
+        _fail(f"بوّابات في `unenforced_debt` صارت تُنفَّذ — احذفها من الدَّين: {sorted(closed)}")
+
+    ghost_debt = [name for name in debt if name not in gates]
+    if ghost_debt:
+        _fail(f"`unenforced_debt` يسمّي بوّابات غير موجودة: {sorted(ghost_debt)}")
+
+    empty_reason = [name for name, reason in debt.items() if not str(reason).strip()]
+    if empty_reason:
+        _fail(f"دَينٌ بلا سببٍ منطوق: {sorted(empty_reason)} — الخانة الفارغة تُقرأ نجاحاً")
+
+
+def _rows(registry: dict) -> list[dict]:
+    return list(registry.get("core_doctrines", [])) + list(registry.get("constitutions", []))
+
+
+def _check_enforcers_exist(gates: dict[str, str], registry: dict) -> None:
+    named: set[str] = set()
+    for row in _rows(registry):
+        for enforcer in row.get("enforcers", []):
+            named.add(enforcer)
+            if enforcer not in gates:
+                _fail(f"§{row.get('section')}: يسمّي فارضاً غير موجود `{enforcer}`")
+
+    unnamed = sorted(name for name in gates if name not in named)
+    if unnamed:
+        # ليست كل بوّابةٍ تحرس دستوراً بعينه (بوّابات بنيوية عامّة)، لكن يجب أن تكون
+        # مذكورةً في وثيقةٍ حاكمة — وهذا ما يفحصه `check_spec_kit_governance` (L3).
+        # هنا نكتفي بالإبلاغ كي لا تُنسَخ المسؤولية في بوّابتين.
+        print(f"ℹ️  {len(unnamed)} بوّابة بنيوية غير مربوطة بدستورٍ بعينه (يفحص ذِكرَها L3).")
+    _pass(f"كل الفوارض المسمّاة في السجلّ موجودة ({len(named)} فارضاً)")
+
+
+def _check_sections(registry: dict) -> None:
+    text = CLAUDE_MD.read_text(encoding="utf-8")
+    in_doc = {m.group(1) for m in re.finditer(r"^## (0(?:\.\d+)?)\.\s", text, flags=re.M)}
+    in_registry = {str(row.get("section")) for row in _rows(registry)}
+
+    missing = sorted(in_doc - in_registry, key=lambda s: [int(p) for p in s.split(".")])
+    if missing:
+        _fail(f"أقسام §0.x في CLAUDE.md بلا صفٍّ في السجلّ: {missing}")
+    ghost = sorted(in_registry - in_doc)
+    if ghost:
+        _fail(f"صفوف في السجلّ تشير إلى أقسامٍ غير موجودة في CLAUDE.md: {ghost}")
+    if not missing and not ghost:
+        _pass(f"تغطية كاملة: {len(in_doc)} قسماً دستورياً ⇄ {len(in_registry)} صفّاً")
+
+
+def _check_doc_paths(registry: dict) -> None:
+    broken: list[str] = []
+    counted = 0
+    for row in _rows(registry):
+        for key in ("law_docs", "status_docs"):
+            for rel in row.get(key, []):
+                counted += 1
+                if not (REPO_ROOT / rel).exists():
+                    broken.append(f"§{row.get('section')} → {rel}")
+    if broken:
+        _fail(f"مسارات وثائق غير موجودة (خريطةٌ تكذب — ISS-149): {broken}")
+    else:
+        _pass(f"كل مسارات الوثائق الـ{counted} تصل إلى ملفّات موجودة")
+
+
+def _check_declared_absence(registry: dict) -> None:
+    silent = [
+        str(row.get("section"))
+        for row in _rows(registry)
+        if not row.get("enforcers") and not str(row.get("no_enforcer_reason_ar", "")).strip()
+    ]
+    if silent:
+        _fail(f"صفوف بلا فارضٍ وبلا `no_enforcer_reason_ar`: {silent} — الغياب يُعلَن (D-206 L11)")
+    else:
+        _pass("كل صفٍّ بلا فارضٍ يُصرِّح سببه (L11)")
+
+
+#: استثناءات **منطوقة** لا صامتة (D-208 §7). تتقلّص فقط: كلّ إدخالٍ يحمل سببه.
+_PHANTOM_EXCEPTIONS = {
+    "check_confusion_never_an_answer.py": "دالّة داخل scripts/fitness/check_pedagogical_os.py لا ملفّ",
+    "check_db.py": "أداة تشخيصٍ مُصرَّح أنها محفوظة خارج المستودع (.memory/auth_runtime_truth.md)",
+}
+
+#: مواضع لا يُقرأ ذِكرُ البوّابة فيها **ادّعاءَ وجود**:
+#: `tests/` تبني ملفّات وهمية عمداً (تجارب سلبية) · `docs/archive/` مُجمَّد ·
+#: `tasks.md`/`roadmap.md` موطنا العمل المُخطَّط (D-209: الطموح يُصنَّف ولا يُكتَم) ·
+#: `infra/` خطوط ML لها مساراتها الخاصّة · `scripts/misc/` أدوات عابرة.
+_PHANTOM_SCAN_SKIP = (
+    "tests/",
+    "docs/archive/",
+    "scripts/misc/",
+    "node_modules/",
+    ".git/",
+    "infra/",
+    ".memory/tasks.md",
+    ".memory/roadmap.md",
+)
+
+
+def _check_no_phantom_enforcers(gates: dict[str, str]) -> None:
+    """بوّابةٌ تُذكَر ولا توجد — إحالةٌ وهمية تُقرأ حمايةً قائمة.
+
+    D-265 (L3) يفحص هذا في **قائمةٍ ثابتة من الوثائق** فقط. والقياس (D-266) أثبت أنّ
+    الوهم يعيش خارجها: `shared/curriculum/registry.py` كان يقول «تفرضه بوّابة
+    `check_curriculum_single_source`» — **وهي لم تُكتب قطّ**، أي أنّ قانون D-193
+    («تعريف المفهوم واحد») بقي بلا فارضٍ منذ إقراره، وهو بالضبط لماذا أمكن لثلاثة
+    تصنيفاتٍ للموضوع أن تتفرّق حتى وقعت ISS-159. المسح هنا على **المصدر والوثائق معاً**.
+    """
+    # مسبوقاً بمسارٍ **غير** موطن بوّابة (`/tmp/…` · `pipelines/steps/…`) فهو ملفٌّ آخر
+    # يحمل الاسم نفسه، لا إحالةٌ إلى بوّابةٍ في هذا المستودع.
+    pattern = re.compile(r"(?<![\w/.-])(?:scripts/fitness/|tools/ci/)?(check_[a-z0-9_]+\.py)")
+    phantom: dict[str, set[str]] = {}
+    for suffix in ("*.py", "*.md", "*.yml", "*.yaml"):
+        for path in REPO_ROOT.rglob(suffix):
+            rel = str(path.relative_to(REPO_ROOT))
+            if any(rel.startswith(skip) for skip in _PHANTOM_SCAN_SKIP):
+                continue
+            for match in pattern.finditer(path.read_text(encoding="utf-8", errors="ignore")):
+                name = match.group(1)
+                if name in gates or name in _PHANTOM_EXCEPTIONS:
+                    continue
+                phantom.setdefault(name, set()).add(rel)
+    if phantom:
+        detail = {name: sorted(where)[:3] for name, where in sorted(phantom.items())}
+        _fail(f"إحالات وهمية — بوّابات مذكورة بلا ملفّ: {detail}")
+    else:
+        _pass(f"صفر إحالة وهمية (استثناءات منطوقة: {len(_PHANTOM_EXCEPTIONS)})")
+
+
+def _check_no_hand_typed_counts(gates: dict[str, str]) -> None:
+    """`.memory/ci-gates.md` كان يقول «~31 فحصاً» — رقمٌ في نثرٍ يتقادم (D-192)."""
+    if not CI_GATES_DOC.is_file():
+        _fail("`.memory/ci-gates.md` مفقود")
+        return
+    text = CI_GATES_DOC.read_text(encoding="utf-8")
+    hand_typed = re.findall(r"[~≈]\s*\d+\s*(?:فحص|بوّابة|بوابة|gates?|checks?)", text)
+    if hand_typed:
+        _fail(f"`.memory/ci-gates.md`: عددٌ مكتوب يدوياً {hand_typed} — يُشتَقّ من الـworkflow (D-192)")
+        return
+    marker = f"<!-- derived:gates_total={len(gates)} -->"
+    if marker not in text:
+        _fail(f"`.memory/ci-gates.md`: علامة العدد المُشتَقّ مفقودة أو متقادمة — المتوقّع `{marker}`")
+        return
+    _pass(f"`.memory/ci-gates.md`: العدد مُشتَقّ ومطابق ({len(gates)} بوّابة)")
+
+
+def main() -> int:
+    if not REGISTRY.is_file():
+        print(f"❌ السجلّ الدستوري مفقود: {REGISTRY.relative_to(REPO_ROOT)}")
+        return 1
+    try:
+        registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"❌ السجلّ الدستوري ليس JSON صالحاً: {exc}")
+        return 1
+
+    gates = _gates_on_disk()
+    if not gates:
+        print("❌ لم يُعثر على أيّ بوّابة — مواطن البوّابات خاطئة أو المستودع مبتور")
+        return 1
+
+    _check_execution(gates, registry)
+    _check_enforcers_exist(gates, registry)
+    _check_sections(registry)
+    _check_doc_paths(registry)
+    _check_declared_absence(registry)
+    _check_no_phantom_enforcers(gates)
+    _check_no_hand_typed_counts(gates)
+
+    if _FAILURES:
+        print(f"\n❌ {len(_FAILURES)} انتهاك — الحوكمة ليست مفروضة:")
+        for failure in _FAILURES:
+            print(f"   - {failure}")
+        return 1
+    print("\n✅ governance-registry: كل فارضٍ له مرمى، وكل دستورٍ له فارض، والخريطة لا تكذب.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

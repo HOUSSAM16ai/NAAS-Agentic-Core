@@ -407,7 +407,11 @@ response = ai_service.chat(
 ### AI/LLM Errors (500 errors)
 1. Verify `OPENROUTER_API_KEY` is set correctly
 2. Check API key has sufficient credits
-3. Use `python check_api_config.py` to verify configuration
+3. Verify the model chain and readiness: `python scripts/fitness/check_model_registry.py`
+   and `python scripts/fitness/check_model_chain_parity.py`
+   (D-266: this line used to point at a `check_api_config` script that does not exist in
+   this repository. An instruction pointing at nothing wastes the time of the one person
+   careful enough to follow it.)
 4. Review logs: `docker-compose logs web`
 
 ### Platform-Specific Issues

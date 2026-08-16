@@ -231,14 +231,15 @@ class ExerciseContextSkill(BaseSkill[str, "ResolvedExercise | None"]):
                 ]
             )
         try:
-            from app.services.capabilities.arabic_normalize import primary_canonical_topic
+            from app.services.capabilities.topic_authority import is_foreign_to_probability
             from app.services.skills.probability_brain.cognitive_verification import (
                 CognitiveVerificationMixin,
             )
         except Exception:  # pragma: no cover — استيراد كسول واقٍ
             return False
-        canonical = primary_canonical_topic(question)
-        if canonical is not None and canonical.canonical_id != "probability":
+        # D-266 (ISS-159): الحاسم الواحد — سؤال فيزياء/علوم كان يمرّ لأنّ سجلّ
+        # الاسترجاع يصمت عنه، فيسقط الشرط القديم عند ساقه الأولى.
+        if is_foreign_to_probability(question):
             return False
         # نفس المُسنِد المستعمل في العقل — لا نسخة ثالثة من علامات السياق.
         return bool(CognitiveVerificationMixin._is_prob_context(with_history))

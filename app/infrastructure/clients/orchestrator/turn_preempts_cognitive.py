@@ -45,6 +45,28 @@ class TurnPreemptsCognitiveMixin:
         # ثم نبني استجابة مدفوعة بالمفهوم + تصعيد سقراطي مضاد للتكرار (الطبقة 4).
         # كل صياغات «البسط/14» → numerator → تعريف؛ نفس المفهوم مرّتين → سؤال سقراطي.
         # D-125: المفاهيمي/المقارنة لا يزال مدعوماً عبر concept=ratio.
+        # ── D-266 (ISS-159 · الجذر الثالث): حارس الموضوع **عند البوّابة** ───────
+        # بوّابة الدخول أدناه سبعةُ مُفكّكات، **خمسةٌ منها بلا أيّ حارس موضوع**
+        # (`_conceptual` · `_subpart` · `_confusion_count >= 2` · `primary_intent` ·
+        # `_is_short_answer_in_dialogue`). و`_detect_conceptual_question` قائمتُها
+        # القوية تحوي «الفرق» و«العلاقة» و«ما معنى» — فـ«ما الفرق بين الجهد
+        # والتيار» تفتح البوّابة وتُسلَّم إلى العقل الاحتمالي.
+        #
+        # ودرسُ ISS-144 وISS-149 واحد: **العطب في الأسبقيّة لا في الكشف**. حرسُ
+        # البُناة وحدَهم لا يكفي حين تكون البوّابة نفسها مفتوحة، فالحارس هنا —
+        # سطرٌ واحد قبل كلّ كشف — لا مكرَّراً في كلّ بانٍ.
+        #
+        # ⚠️ إشارةٌ موجبة فقط: «لم أفهم» و«نعم» تُرجِع `False` فلا يفقد الطالب
+        # موضوعه (D-184: البؤرة لاصقة).
+        with contextlib.suppress(Exception):
+            from app.services.capabilities.topic_authority import is_foreign_to_probability
+
+            if is_foreign_to_probability(question):
+                # `return` عارياً: هذه مولّدٌ لا-متزامن، فـ`return None` فيه خطأ
+                # صياغة. الخروج بلا `yield` يعني «هذه المرحلة لا تملك هذا الدور»
+                # وتُسلِّمه للمرحلة التالية — لا دورٌ صامت (L2 · D-206).
+                return
+
         _conceptual = self._detect_conceptual_question(question)
         _subpart = self._detect_subpart_question(question)
         _confusion_count = self._count_probability_confusion(question, history_messages)

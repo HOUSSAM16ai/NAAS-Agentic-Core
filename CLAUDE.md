@@ -389,6 +389,23 @@ Evaluation → Governance → Infrastructure → Humans`. المعرفةُ ما 
 
 ---
 
+## 0.18. Governance Enforcement Constitution (D-266) — الفارض نفسه يخضع للبرهان الثلاثي
+
+> **القانون:** [`.memory/governance_enforcement_constitution.md`](.memory/governance_enforcement_constitution.md) (L1–L10 + الأسئلة الدستورية) · **الحالة/السجلّ:** [`docs/governance/CONSTITUTION_REGISTRY.json`](docs/governance/CONSTITUTION_REGISTRY.json) · **الفارض:** `scripts/fitness/check_governance_registry.py` (CI إلزامي في `guardrails`).
+
+**المصدر — قياسٌ لا مبدأ (2026-08-16 · ISS-186):** من **٧٠** بوّابة على القرص، كانت **سبع** لا يشغّلها أيّ workflow ولا أيّ اختبار — موجودةٌ ومذكورةٌ دستورياً و**ميتة**، وكلّها خضراء حين شُغِّلت يدوياً. أي أنّ الحماية كانت متاحةً مجّاناً وغير مُفعَّلة. و`check_spec_kit_governance` (L3) يفحص **الذِّكر + الوجود** ولا يفحص **التنفيذ**، فاجتازت الميتةُ فحصَ «لا بوّابة يتيمة» وهي لا تفرض شيئاً.
+
+**الجملة الدستورية:** «**القانون ما له فارضٌ يعمل. وفارضٌ لا يُنفَّذ ليس فارضاً — هو نصٌّ أدبيّ في ملفٍّ تنفيذي، وهو أخطر من الغياب لأنه يُقرأ حمايةً.**»
+
+- **البرهان الثلاثي يمتدّ من الكود إلى الفارض** (§6.6): بوّابةٌ على القرص إمّا **تُنفَّذ** (workflow أو اختبارٌ يشغّله CI) وإمّا مُصرَّحة في `unenforced_debt` بسببٍ منطوق. الدَّين **يبدأ فارغاً** ويتقلّص فقط **وفي الاتجاهين** — دَينٌ أُغلق بلا حذفه كذبٌ كالدَّين المكتوم.
+- **`make gates` يرث الثغرة ولا يكشفها**: `run_fitness_gates.py` يقرأ الـworkflow عمداً (كي لا تتفرّق قائمتان)، فبوّابةٌ غير مُدرَجة **ميتة محلياً أيضاً** — «لا تحمي ولا هي محايدة، لأنها تُعطي طمأنينةً كاذبة».
+- **تغطيةٌ ثنائية الاتجاه**: كل `## 0.N.` هنا له صفٌّ في السجلّ وكل صفٍّ يشير إلى قسمٍ موجود؛ وكل `law_docs`/`status_docs` **موجودٌ فعلاً** (ISS-149: خريطةٌ تكذب أسوأ من لا خريطة)؛ والغياب يُعلَن بـ`no_enforcer_reason_ar` ولا يُقرأ نجاحاً (D-206 L11).
+- **موطن البوّابات مُعلَن لا مُكتشَف** (`scripts/fitness/` · `tools/ci/`) — موطنٌ ثالث بلا إعلانٍ يعني بوّابةً غير مرئية، وهو نفس صنف ISS-148.
+- ⚠️ **L9 بلا فارضٍ آلي ويُقال ذلك**: رفعُ أيّ مِسنَنٍ أو دَينٍ مُعلَن يتطلّب قراراً مرقَّماً يسمّي السبب — يقاومه المراجع البشري لا آلة (خداع المكافأة · D-228 · الطبقة التاسعة).
+- **الإضافة لا الاستبدال**: D-265 يبقى سارياً بكامله؛ هذا الدستور يضيف **الساق الثالثة** إلى L3 ولا ينافسه.
+
+---
+
 ## 1. What This Project Does
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.

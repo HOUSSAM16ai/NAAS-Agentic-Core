@@ -51,6 +51,23 @@ _NOTATION_DURATION = skill_histogram(
 _SERVICE_TIMEOUT_S = 3.0
 
 
+def _is_foreign_subject(question: str) -> bool:
+    """هل السؤال من مادةٍ لا يخدمها سجلّ الرموز؟ (D-266 · ISS-159).
+
+    ⚠️ **دَينٌ منطوق:** السجلّ لا يحمل رموز الفيزياء/العلوم بعد، فالصمت هو أقصى ما
+    يُقدَّم اليوم لطالبِ تلك المواد — وتوسعتُه شرطُ إغلاقٍ مسجَّل. والصمت هنا أصدق من
+    جوابٍ من المادة الخطأ (§0: المجهول أفضل من يقين زائف).
+
+    fail-open: أيّ عطبٍ في الاستيراد يُرجِع `False` فلا يُكسَر مسار الرموز القائم.
+    """
+    try:
+        from app.services.capabilities.topic_authority import is_foreign_to_probability
+
+        return is_foreign_to_probability(question)
+    except Exception:  # pragma: no cover - fail-open: الموضوع لا يكسر الدور
+        return False
+
+
 class NotationSkill(BaseSkill[str, NotationEntry | None]):
     """مهارة تعريف الرموز الرياضية — حتمية، بعقد، وبتدهور رشيق."""
 
@@ -67,9 +84,24 @@ class NotationSkill(BaseSkill[str, NotationEntry | None]):
         return os.environ.get("NOTATION_SERVICE_URL", "http://localhost:8011")
 
     def resolve(self, question: str) -> NotationEntry | None:
-        """يحوّل سؤال الطالب الحرّ إلى رمزٍ مُعرَّف — حتمي ومحلّي (مسار الدور التعليمي)."""
+        """يحوّل سؤال الطالب الحرّ إلى رمزٍ مُعرَّف — حتمي ومحلّي (مسار الدور التعليمي).
+
+        **D-266 (ISS-159 · الجذر الرابع): «الرمز قبل كل شيء» صحيحٌ داخل مادته.**
+
+        سجلّ الرموز (`shared/notation`) احتماليٌّ بحت: `Ω` فيه فضاء العيّنة، و`E` الأملُ
+        الرياضي. وطالبُ الفيزياء الذي يسأل «ما معنى الرمز Ω في الفيزياء» كان يتلقّى
+        «مجموعة كل النتائج الممكنة» — وهو خطأٌ **أسوأ من الصمت**، لأنه يُدرَّس ويُحفَظ.
+
+        والحارس هنا لا في المُنادين: أوّل إصلاحٍ وضعتُه في `escape_hatch` وحده فبقي
+        التسريب حيّاً عبر `semantic_property_skill` و`registry` و`/api/v1/skills/notation`
+        — **أربعةُ أبوابٍ لبابٍ واحد**. الحارس عند المصدر يُغلقها جميعاً، وهو نفس درس
+        D-186: مصدرٌ واحد لا خمسة كاشفات تتفرّق.
+        """
         started = time.monotonic()
         try:
+            if _is_foreign_subject(question):
+                _NOTATION_CALLS.labels(action="resolve", status="miss").inc()
+                return None
             entry = resolve(question)
         except Exception:  # pragma: no cover - السجلّ حتمي؛ حارس دفاعي فقط
             _NOTATION_CALLS.labels(action="resolve", status="error").inc()

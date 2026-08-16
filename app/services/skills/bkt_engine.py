@@ -67,7 +67,8 @@ CognitiveLoad = str  # "low" | "medium" | "high"
 # D-193: قائمة `_CONCEPT_PATTERNS` (١٤ مفهوماً، رياضيات فقط) حُذفت من هنا. المصدر
 # القانوني الوحيد صار `shared/curriculum/registry.py`، الذي يغطّي الرياضيات والفيزياء
 # وعلوم الطبيعة معاً ويحمل المتطلّبات والمعاملات وتواتر الظهور — وتحرسه بوّابة
-# `check_curriculum_single_source.py` فلا تعود قائمةٌ ثانية للظهور.
+# `check_topic_authority_single_source.py` فلا تعود قائمةٌ ثانية للظهور.
+# (D-266: كان هذا السطر يسمّي `check_curriculum_single_source` — بوّابةٌ لم تُكتب قطّ.)
 #
 # **المُعرَّفات لم تتغيّر**: هي نفسها المُخزَّنة في `student_bkt_analytics.concept_id`
 # منذ D-074، لأنّ تغييرها يتيّم تاريخ الطلاب.

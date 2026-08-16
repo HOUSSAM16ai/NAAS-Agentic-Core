@@ -37,7 +37,8 @@
 
 `scripts/fitness/check_pedagogy_engine.py` (قوانين L1–L10) ·
 `scripts/fitness/check_understanding_evidence.py` ·
-`scripts/fitness/check_confusion_never_an_answer.py` ·
+`scripts/fitness/check_pedagogical_os.py::check_confusion_never_an_answer` (دالّةٌ داخل
+بوّابة، لا ملفّ — كانت تُكتب بلاحقة `.py` فتُقرأ ملفّاً غير موجود · D-266) ·
 `scripts/fitness/check_symbolic_reveal_ledger.py` ·
 `scripts/fitness/check_ui_component_parity.py` ·
 `scripts/e2e/pedagogy_xproof.py` (L9 — التجربة الخارقة قبل الميزات المائة، مع مراجعة بشرية ملزمة).

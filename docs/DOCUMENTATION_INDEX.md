@@ -10,9 +10,9 @@
 
 | المستوى | المصدر | الدور |
 |---------|--------|------|
-| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-265** · آخرها **D-265**: دستور حوكمة Spec Kit — طبقة ضبط تنفيذ فوق الدستورية L1–L10 · و**D-264**: دستور المخطط الدراسي التكيفي Adaptive AI Study Planner L1–L10 · وD-263: دستور المحرك التربوي — العقل التربوي كـmoat + القوانين العشرة الصارمة L1–L10، وD-262: قشرة تفويض `services/overmind/graph/main.py` + شرائح `graph/graph_support/`). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) · **الإضافة لا الحذف:** كل دستورٍ يعلو السابق في نطاقه دون إلغاء قانونٍ قائم |
+| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-266** · آخرها **D-266**: دستور فرض الحوكمة — البرهان الثلاثي يمتدّ من الكود إلى الفارض §0.18 · و**D-265**: دستور حوكمة Spec Kit — طبقة ضبط تنفيذ فوق الدستورية L1–L10 · و**D-264**: دستور المخطط الدراسي التكيفي Adaptive AI Study Planner L1–L10 · وD-263: دستور المحرك التربوي — العقل التربوي كـmoat + القوانين العشرة الصارمة L1–L10، وD-262: قشرة تفويض `services/overmind/graph/main.py` + شرائح `graph/graph_support/`). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) · **الإضافة لا الحذف:** كل دستورٍ يعلو السابق في نطاقه دون إلغاء قانونٍ قائم |
 | 📐 مواصفة البرنامج | [`../spec.md`](../spec.md) | برنامج التبسيط API-first (Phases 0→12) — **الهدف** المعماري لا الحقيقة الجارية. ليست دستوراً ثالثاً: §4 تُحيل إلى الدستور القائم |
-| 🧠 الذاكرة | `.memory/` → [`README.md`](../.memory/README.md) | roadmap · decisions · issues · runtime_truth · pedagogical_os · pedagogy_engine_constitution · adaptive_study_planner_constitution · spec_kit_governance_constitution |
+| 🧠 الذاكرة | `.memory/` → [`README.md`](../.memory/README.md) | roadmap · decisions · issues · runtime_truth · pedagogical_os · pedagogy_engine_constitution · adaptive_study_planner_constitution · spec_kit_governance_constitution · governance_enforcement_constitution |
 | ⚖️ الدستور المعماري | [`architecture/MICROSERVICES_CONSTITUTION.md`](architecture/MICROSERVICES_CONSTITUTION.md) + [`ARCH_MICROSERVICES_CONSTITUTION.md`](ARCH_MICROSERVICES_CONSTITUTION.md) | حدود الخدمات |
 | 📖 قواعد الوكلاء | [`../AGENTS.md`](../AGENTS.md) | قواعد التطوير + مشغّلات `ai_skills/` |
 | 📄 مراجع مساندة | `docs/` (هذا الفهرس) | أدلة، عقود، ADRs |
@@ -69,6 +69,8 @@
 | [`architecture/AUTHENTICATION_DOCTRINE.md`](architecture/AUTHENTICATION_DOCTRINE.md) | **قانون المصادقة** (D-236) — بابٌ واحد · عقد أخطاء واحد · هوية عميل واحدة · أنواع رموز مُصرَّحة. الحالة الحيّة في [`../.memory/auth_runtime_truth.md`](../.memory/auth_runtime_truth.md)، وإجراء التحقّق في [`../.memory/runbooks/login_e2e_verification.md`](../.memory/runbooks/login_e2e_verification.md) |
 | [`iam_architecture.md`](iam_architecture.md) · [`permission_matrix.md`](permission_matrix.md) · [`policy_gate.md`](policy_gate.md) · [`roles_and_boundaries.md`](roles_and_boundaries.md) · [`audit_and_privacy.md`](audit_and_privacy.md) · [`customer_chat_access.md`](customer_chat_access.md) | الهوية والصلاحيات |
 | [`quality/standards.md`](quality/standards.md) · [`quality/testing.md`](quality/testing.md) · [`guides/TESTING_GUIDE.md`](guides/TESTING_GUIDE.md) | الجودة والاختبار |
+| [`governance/CONSTITUTION_REGISTRY.json`](governance/CONSTITUTION_REGISTRY.json) | 🔒 **السجلّ الدستوري** (D-266) — المصدر القانوني الوحيد الذي يربط كل دستور بوثيقة قانونه ووثيقة حالته وفوارضه. تحرسه `check_governance_registry.py`: بوّابةٌ على القرص لا يشغّلها شيء ⇒ CI أحمر |
+| [`specs/`](specs/README.md) | 📐 **المواصفات الحيّة** (D-265 §2 · أُنشئت في D-266) — دورة Spec-First: خطة → تصميم → مهام → مواصفة → تنفيذ → برهان. كان الموطن مُعلَناً في الدستور وغير موجودٍ على القرص |
 | [`governance/REPOSITORY_GOVERNANCE_MODEL.md`](governance/REPOSITORY_GOVERNANCE_MODEL.md) | حوكمة المستودع |
 | [`diagnostics/CUTOVER_SCOREBOARD.md`](diagnostics/CUTOVER_SCOREBOARD.md) | 🤖 لوحة القطع (مولَّدة آلياً — لا تُحرَّر يدوياً) |
 

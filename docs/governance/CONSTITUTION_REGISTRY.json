@@ -1,0 +1,150 @@
+{
+  "$schema_version": "1",
+  "decision": "D-266",
+  "purpose_ar": "المصدر القانوني الوحيد الذي يربط كل دستور بوثيقة قانونه ووثيقة حالته وفوارضه. تحرسه scripts/fitness/check_governance_registry.py.",
+  "purpose_en": "The single lawful source binding every constitution to its law document, its status document, and its enforcers. Guarded by scripts/fitness/check_governance_registry.py.",
+  "rules_ar": [
+    "لا يُكتب هنا شيء يمكن اشتقاقه. تنفيذُ البوّابة (أي workflow/اختبار يشغّلها) يُشتَقّ بالمسح ولا يُكتب — الرقم المكتوب يدوياً يتقادم ثم يكذب (D-192).",
+    "كل قسم `## 0.N.` في CLAUDE.md له صفٌّ هنا؛ وكل صفٍّ هنا يشير إلى قسمٍ موجود.",
+    "كل مسار وثيقةٍ هنا يجب أن يوجد على القرص — خريطةٌ تكذب أسوأ من غياب الخريطة (ISS-149).",
+    "دستورٌ بلا فارض يُصرِّح `no_enforcer_reason` ولا يُترك صامتاً — الغياب يُعلَن ولا يُقرأ نجاحاً (D-206 L11).",
+    "`unenforced_debt` قائمة تتقلّص فقط وتبدأ فارغة: بوّابةٌ على القرص لا يُشغّلها شيء ولا هي مُصرَّحة هنا ⇒ CI أحمر (D-207 الثمن الثاني)."
+  ],
+  "unenforced_debt": {},
+  "core_doctrines": [
+    {
+      "section": "0",
+      "title_en": "Core System Doctrine: The Cognitive Lab",
+      "decisions": ["D-016", "D-067", "D-074", "D-085", "D-191", "D-192"],
+      "law_docs": ["docs/architecture/ENGINEERING_DOCTRINE.md"],
+      "status_docs": [".memory/runtime_truth.md"],
+      "enforcers": ["check_constitution_reality.py", "check_memory_coherence.py", "check_authority_links.py"]
+    },
+    {
+      "section": "0.5",
+      "title_en": "Skills Philosophy — The Architectural North Star",
+      "decisions": ["D-100", "D-179", "D-181", "D-183", "D-185"],
+      "law_docs": ["docs/API_FIRST_ARCHITECTURE.md"],
+      "status_docs": [".memory/runtime_truth.md"],
+      "enforcers": ["check_skills_doctrine.py", "check_notation_definable.py", "check_notation_parity.py", "check_openapi_parity.py"]
+    },
+    {
+      "section": "0.6",
+      "title_en": "The Cognitive Lab Vision & Execution Roadmap",
+      "decisions": ["D-126", "D-157"],
+      "law_docs": [".memory/cognitive_lab_philosophy.md"],
+      "status_docs": [".memory/roadmap.md"],
+      "enforcers": [],
+      "no_enforcer_reason_ar": "رؤيةٌ ومقياسُ نجاح (فجوة الوهم) لا عقدٌ نصّي؛ فوارضها هي دساتير §0.8→§0.18 المشتقّة منها. لا بوّابة نصّية تفحص رؤيةً — وقولُ ذلك أصدق من اختراع فحصٍ شكلي."
+    },
+    {
+      "section": "0.7",
+      "title_en": "Agentic Cognitive Runtime Doctrine",
+      "decisions": ["D-146"],
+      "law_docs": ["docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md"],
+      "status_docs": [".memory/agentic_runtime_doctrine.md"],
+      "enforcers": ["check_agentic_orchestration.py"]
+    }
+  ],
+  "constitutions": [
+    {
+      "section": "0.8",
+      "id": "D-153",
+      "title_en": "Pedagogical OS Constitution",
+      "title_ar": "دستور نظام التشغيل التربوي",
+      "law_docs": [".memory/pedagogical_os.md"],
+      "status_docs": [],
+      "enforcers": ["check_pedagogical_os.py"]
+    },
+    {
+      "section": "0.9",
+      "id": "D-209",
+      "title_en": "Agentic Orchestration Constitution",
+      "title_ar": "دستور التنسيق الوكيلي",
+      "law_docs": ["docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md"],
+      "status_docs": [".memory/agentic_runtime_doctrine.md"],
+      "enforcers": ["check_agentic_orchestration.py"]
+    },
+    {
+      "section": "0.10",
+      "id": "D-210",
+      "title_en": "Value & Revenue Constitution",
+      "title_ar": "دستور القيمة والإيراد",
+      "law_docs": ["docs/VALUE_DOCTRINE.md", "docs/REVENUE_ENGINE_SPEC.md"],
+      "status_docs": [".memory/revenue_engine_truth.md"],
+      "enforcers": ["check_revenue_doctrine.py"]
+    },
+    {
+      "section": "0.11",
+      "id": "D-224",
+      "title_en": "Cognitive Execution Constitution",
+      "title_ar": "دستور التنفيذ المعرفي",
+      "law_docs": ["docs/architecture/COGNITIVE_EXECUTION_ENGINE.md"],
+      "status_docs": [".memory/cognitive_execution_truth.md"],
+      "enforcers": ["check_cognitive_execution.py"]
+    },
+    {
+      "section": "0.12",
+      "id": "D-226",
+      "title_en": "Cognitive Digital Twin Constitution",
+      "title_ar": "دستور التوأم الرقمي المعرفي",
+      "law_docs": ["docs/architecture/COGNITIVE_DIGITAL_TWIN.md"],
+      "status_docs": [".memory/cognitive_twin_truth.md"],
+      "enforcers": ["check_cognitive_twin.py", "check_prerequisite_single_graph.py"]
+    },
+    {
+      "section": "0.13",
+      "id": "D-228",
+      "title_en": "Harness Engineering Constitution",
+      "title_ar": "دستور هندسة الطبقة المحيطة",
+      "law_docs": ["docs/architecture/HARNESS_ENGINEERING_DOCTRINE.md"],
+      "status_docs": [".memory/harness_truth.md"],
+      "enforcers": ["check_research_doctrines.py"]
+    },
+    {
+      "section": "0.14",
+      "id": "D-229",
+      "title_en": "Memory Architecture Constitution",
+      "title_ar": "دستور معمارية الذاكرة",
+      "law_docs": ["docs/architecture/MEMORY_ARCHITECTURE_DOCTRINE.md"],
+      "status_docs": [".memory/memory_architecture_truth.md"],
+      "enforcers": ["check_research_doctrines.py", "check_no_system_text_as_user.py"]
+    },
+    {
+      "section": "0.15",
+      "id": "D-263",
+      "title_en": "Pedagogy Engine Constitution",
+      "title_ar": "دستور المحرك التربوي",
+      "law_docs": [".memory/pedagogy_engine_constitution.md"],
+      "status_docs": [".memory/pedagogy_engine_truth.md"],
+      "enforcers": ["check_pedagogy_engine.py"]
+    },
+    {
+      "section": "0.16",
+      "id": "D-264",
+      "title_en": "Adaptive AI Study Planner Constitution",
+      "title_ar": "دستور المخطط الدراسي التكيفي",
+      "law_docs": [".memory/adaptive_study_planner_constitution.md"],
+      "status_docs": [],
+      "enforcers": ["check_adaptive_study_planner.py"]
+    },
+    {
+      "section": "0.17",
+      "id": "D-265",
+      "title_en": "Spec Kit Governance Constitution",
+      "title_ar": "دستور حوكمة Spec Kit",
+      "law_docs": [".memory/spec_kit_governance_constitution.md"],
+      "status_docs": [],
+      "enforcers": ["check_spec_kit_governance.py"]
+    },
+    {
+      "section": "0.18",
+      "id": "D-266",
+      "title_en": "Governance Enforcement Constitution",
+      "title_ar": "دستور فرض الحوكمة",
+      "law_docs": [".memory/governance_enforcement_constitution.md"],
+      "status_docs": ["docs/governance/CONSTITUTION_REGISTRY.json"],
+      "enforcers": ["check_governance_registry.py"]
+    }
+  ]
+}

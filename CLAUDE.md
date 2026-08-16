@@ -345,6 +345,21 @@ Evaluation → Governance → Infrastructure → Humans`. المعرفةُ ما 
 
 ---
 
+## 0.15. Pedagogy Engine Constitution (D-263) — العقل التربوي كـmoat
+
+> **القانون:** [`.memory/pedagogy_engine_constitution.md`](.memory/pedagogy_engine_constitution.md) (العشرة القوانين + الأسئلة الدستورية) · **البوابة:** `scripts/fitness/check_pedagogy_engine.py` (CI إلزامي) · **الحالة:** [`.memory/pedagogy_engine_truth.md`](.memory/pedagogy_engine_truth.md) (مقاييس ISS-174→ISS-177).
+
+**المصدر (قرار المالك 2026-08-16):** بنية ليست ميزة — 8/10 هندسة مقابل 3.5/10 ميزةً مثبتة. **القانون:** «نستخدم أقوى النماذج كطبقة ذكاء ونبني فوقها نظامًا يقرّر التعلّم» — الـarchitecture (LangGraph/Agents/Services) ليست الـmoat.
+
+**الجملة الدستورية:** «**نمتلك شركةً حقيقيةً فقط حين يثبت مقيسًا أن النظام يكتشف خطأً معرفيًا لا يكتشفه Tutor عادي ويدخّل بما يُحسّن التعلّم فعلًا**» — تجربةٌ واحدةٌ خارقة (E2E حيّ، ISS-177) لا 100 ميزة.
+
+- ⛔ **الأعداء الثلاثة**: Prompt أذكى ليس قرارًا · الإجابة الصحيحة ≠ الإجابة التربوية · **وَهْم الطلاقة** (أداء لحظي ≠ تعلّم دائم، Bjork؛ يمتدّ roadmap §1). **الرضا اللحظي مقياسٌ مضلّل دستوريًا.**
+- ⛔ **قفل Learning Gain**: لا «+X%» يُعلَن على وليٍّ قبل منهجيةٍ منشورةٍ وفجوةِ وهمٍ — حدّ المصداقية (D-227) يمتدّ لكل مقياسٍ تربوي (§6 مقياس النجاح).
+- **L1–L10** (كلها تحرسها بواباتها في §4): قرارٌ تربوي في كل تدخّل · الحيرة لا تُهنَّأ · الحقيقة الرمزية قبل اللغة · التدخّل الأصغر أولًا · الأثر واجب في كل رسالة · القياس إحصائي/رمزي لا لغوي · الاستراتيجية بسببٍ مسجّل · الذاكرة تسبق الواجهة · البرهان الحيّ قبل الميزات · الأدلة قبل الادّعاء.
+- **الإضافة لا الاستبدال** (§7): كل دستورٍ قديم (D-153/D-144/D-208/§0.8–§0.14) يبقى ساريًا؛ التعارض الظاهري يُفسَّر في ضوء القوانين العشرة، والتعديل على هذا الدستور = ADR + بوابة خضراء.
+
+---
+
 ## 1. What This Project Does
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.
@@ -973,7 +988,7 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 **و`.memory/decisions.md`** (سجل القرارات الحيّ — **المصدر الأول لأي D-XXX جديد**) · وخريطة السلطة
 الكاملة: `docs/DOCUMENTATION_INDEX.md`.
 
-### سلسلة تفكيك التعقيد — CodeScene X-Ray (D-252 → D-262)
+### سلسلة تفكيك التعقيد — CodeScene X-Ray (D-252 → D-262) + سلسلة العقيدة التربوية (D-263)
 نمط واحد قاطع للكل: **قشرة معمارية تفوِّض + حزمة شرائح نقية + مانيفست مركّب `_sources.py`** تتغذى
 منه الحراس النصية — **صفر تغيير سلوكي** في كل قرار (مطابقة كاملة قبل/بعد أو بوابات AST تحرس الأثر).
 
@@ -1003,6 +1018,7 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 | Skills / OOP / الاستدلال | §0.5 · D-069 · D-100 · **D-179** · **D-181** · **D-183** |
 | الرموز والنيّة واللغات | **D-185** · **D-186** · **ADR-006** |
 | التوثيق/CI | D-105 · D-141 · D-156 · **D-173** · **D-179** · **D-182** · **D-184** · **D-192** |
+| دستور المحرك التربوي | **D-263** (2026-08-16 · قرار المالك: بنية ليست ميزة — العقل التربوي هو الـmoat — `.memory/pedagogy_engine_constitution.md` · L1–L10 · `check_pedagogy_engine.py` · ISS-174→177 · يمتدّ D-153/D-144/D-208 دون إلغاء) |
 | K-ROOT · استمرارية المفاتيح + تحصين الأوركستريتور | **D-241 · D-242** (`app/core/settings/helpers.py` طبقة `app_state` · `bootstrap.py` · `user_client.py` · orchestrator `security.py`/`routes.py` — تحرسها `doc-integrity` · 24/24 E2E حي 2026-08-12) · **D-244** (برهان D-241 + أصول العطب الثلاثة) · **D-245** (مجسّات حيّة صادقة: DB probe · إعلان المزوّدين · /health صادق) |
 | البنية التحتية (Docker/Observability) | §6.10 → §6.18 · D-172 · **D-182** |
 | الأثر · الذاكرة · الموضوع · التمرين | **D-188** · **D-189** · **D-190** · **D-191** |

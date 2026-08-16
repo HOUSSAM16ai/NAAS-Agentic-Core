@@ -3,6 +3,16 @@
 > This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
 > The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.# Architectural Decisions
+## D-263 · دستور المحرك التربوي — العقل التربوي كـmoat (قرار المالك 2026-08-16 · تقييم خارجي قاسٍ: 8/10 هندسة · 4.5/10 منتج عالمي · 3.5/10 ميزة مثبتة · ISS-174→ISS-177) — إضافة دساتير وقوانين صارمة فوق الدستور القائم بلا أيّ حذفٍ للقانون القديم
+
+**الكارثة المُشخَّصة:** «البنية ليست الميزة» — مئات الخدمات (LangGraph · Agents · Checkpointer · MCP · RAG · Planner) لم تجعل النظام Pedagogy Engine، والمنتج مقيسًا خلف الفكرة. **القرار:** دستورٌ جديد كامل [`.memory/pedagogy_engine_constitution.md`](.memory/pedagogy_engine_constitution.md) — التشخيص الدستوري · العقيدة (العقل التربوي يقرّر والـLLM طبقة ذكاء فقط) · الركائز الأربع (ISS-174 Learner Model · ISS-175 ذاكرة طويلة الأمد · ISS-176 محرك القرار التربوي · ISS-177 إثبات Learning Gain) · **القوانين العشرة الصارمة L1–L10** · الأسئلة الدستورية · مقياس النجاح (Diagnosis Accuracy · Intervention Effect · Retention · Illusion Gap · Control Baseline).
+
+**الإضافة لا الاستبدال (§7):** D-153 (Pedagogical OS) وD-144 وD-208 و§0.8–§0.14 كلها تبقى سارية كاملة؛ الدستور الجديد يعلوها في نطاق القرار التربوي والقياس، ويُفسَّر كل تعارض ظاهري في ضوء القوانين العشرة.
+
+**الفارض الجديد:** `scripts/fitness/check_pedagogy_engine.py` (static-text، لا يستورد app — نمط D-153) — يفرض اكتمال الدستور + صحة L3/L4 (المحرك الرمزي حيّ) + L2 (حراس الحيرة في العقول الثلاثة) + L5/L6 (BKT وillusion_gap إحصائيان) + L1 (لا حلقة تربوية خام على local_graph) + اكتمال L1–L10 وقفل Learning Gain (لا ادّعاء رقمي بلا مرجعٍ منشور).
+
+**التوحيد المرافِق:** Lُقِّطت قاعدته في [`CLAUDE.md §0.15`](CLAUDE.md) (عقدٌ لا موسوعة — DOC-DEBT-001) · رُفِع سقفُ `CLAUDE.md` المعلَن في `check_memory_coherence.py` من 1025 إلى 1028 بقرارٍ مرقّمٍ مكتوب هنا (نمط D-209/D-210/D-228) · قُيّدت السلسلة `D-252 → D-263` وأُضيف صفّ «دستور المحرك التربوي» لجدول المجالات. التعديل لاحقًا على الدستور = ADR جديد + بوابة خضراء.
+
 ## D-262 · تفكيك hotspot الراسم الموحد `services/overmind/graph/main.py` (174 سطرًا · CodeScene X-Ray job 72 · hotspot 10/10 · 2026-08-16): `create_unified_graph` 85 LOC · churn=14 (أعلى تجمّع حراري مطلق في الملف) · `route_intent` churn=5 — إلى قشرة تفويض + حزمة شرائح `graph/graph_support/` — صفر تغيير سلوكي
 
 **الكارثة (CodeScene X-Ray job 72):** `microservices/orchestrator_service/src/services/overmind/graph/main.py` hotspot بدرجة 10/10: `create_unified_graph` (85 LOC · churn=14 — أعلى دالة ترددًا في المستودع كله تقريبًا) تجمع تسجيل 14 عقدة + 15 حافة + سلسلة الـcompile/checkpointer في دالةٍ واحدة؛ و`route_intent` (churn=5 · 23 LOC) و`check_results` و`check_quality` و`_load_search_nodes` — الرسم الكامل بعقله التوجيهي وعقد البحث الخمس في وحدةٍ واحدة، وأي تعديلٍ على أي عقدة يعيد تدفئة الرسم كله.

@@ -406,6 +406,19 @@ jobs:
           # bkt_hint_display (105 production rows) and learning_path_card (39), whose
           # emitters were removed while the declarations stayed.
           python scripts/fitness/check_ui_component_parity.py
+          # D-263 (2026-08-16 · decision of the owner · ISS-174→ISS-177): the
+          # pedagogy-engine constitution. Not another law-of-the-constitution
+          # gate: this is the constitution OF the pedagogical mind — "the
+          # architecture is not the feature". It guards ten non-negotiable laws
+          # (L1–L10): the symbolic engine decides and the LLM only speaks;
+          # no raw tutorial loop over the local graph; the three minds carry a
+          # confusion guard; the student model is live (BKT + illusion gap,
+          # statistical); every intervention carries an auditable reason;
+          # long-term learning memory before UI features; and no Learning-Gain
+          # claim without a published pre/post/baseline methodology. Law in
+          # `.memory/pedagogy_engine_constitution.md`, state in the truth file;
+          # addition, never removal (L0: every pre-existing law stays in force).
+          python scripts/fitness/check_pedagogy_engine.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

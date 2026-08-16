@@ -1,6 +1,18 @@
 # Open Issues & Bugs
 
 
+## ISS-173 (2026-08-16) — كارثة الـ hotspot العاشرة: `services/overmind/graph/main.py` (CodeScene X-Ray job 72): 174 سطرًا · درجة 10/10 (الأسوأ مطلقًا) · `create_unified_graph` churn=14 (85 LOC) · `route_intent` churn=5 — ✅ مغلق (D-262)
+
+**البلاغ (CodeScene X-Ray — Hotspots على `NAAS-Agentic-Core/microservices/orchestrator_service/src/services/overmind/graph/main.py`):** الرسم الموحد بأكمله في وحدة واحدة: `create_unified_graph` (85 LOC · churn=14 — أعلى دالة ترددًا في المشروع) تجمع تسجيل 14 عقدة + أسلاك 15 حافة + سلسلة الـcompile/checkpointer · `route_intent` (churn=5 · 23 LOC) · `check_quality` (تعقيد 6 نسبي) · `_load_search_nodes` (31 LOC) — كل تعديل على أي عقدة يعيد تدفئة الملف كله.
+
+**الكشف الإضافي:** خريطة الحافة الشرطية لا تغطي النيات المجهولة ⇒ LangGraph يرمي «unknown branch» عند نية غريبة — deadlock صامت على الطالب.
+
+**الإغلاق (D-262):** قشرة تفويض نقية (24 LOC · A(2)) + حزمة شرائح `graph/graph_support/` نقية بلا حالة (`_graph.py`: العقد + الأسلاك الحتمية + compile · `_conditions.py`: شرائط route_intent/check_results/check_quality مع إغلاق المجهول إلى `educational` · `_search_shards.py`: شرائح البحث الخمس + `_PassthroughNode` · `_sources.py`: مانيفست `GRAPH_SOURCE_FILES` المركّب) — كل أسماء الواجهة القديمة أعيد تصديرها بالاسم نفسه (صفر كاسر لأي مستورد/monkeypatch) · **25 اختبارًا جديدًا** (`tests/unit/services/chat/test_graph_shards_d262.py`) يثبتون مطابقةً حرفية: كل شريحة منفردة + الرسم المجمّع عقدةً عقدة وحافةً حافة + كل ورقة عبر `validator` إلى `__end__` (إثبات انعدام الـdeadlock) · الاختبارات القائمة أخضر (7/7: `test_overmind_entrypoint` + `test_orchestrator_chat_stategraph`) · radon A(1-3) في كل الشرائح · ruff نظيف · بوابتا الحراسة خضراء · صفر تغيير سلوكي.
+
+**التدوير المُلزم:** كارثة الـ hotspot العاشرة في سلسلة CodeScene X-Ray (ISS-163 → D-252 · ISS-165 → D-253 · ISS-166 → D-254 · ISS-167 → D-255 · ISS-168 → D-256 · ISS-170 → D-258 · ISS-171 → D-260 · ISS-172 → D-261 · **ISS-173 → D-262**) — نمط «القشرة + الشرائح + المانيفست المركّب» صمد مرة أخرى على أرض LangGraph، مع إثباتٍ تجريبي إضافي: النيات المجهولة تُقفل حتمًا إلى `educational` بدل deadlock.
+
+---
+
 ## ISS-172 (2026-08-16) — كارثة الـ hotspot العاشرة: `app/core/database.py` (CodeScene X-Ray job 72): 106 سطور · درجة 9/10 · `create_db_engine` أعلى تجمّع حراري مطلق (86 LOC · F(11) · radon C(12) · churn=8 · Complex Method) · `get_db` churn=12 (تناقض يفصح عن مصدر تدفئة خارجي) — ✅ مُغلق (D-261)
 
 **البلاغ (CodeScene X-Ray — NAAS-Agentic-Core، تقرير Hotspots على `NAAS-Agentic-Core/app/core/database.py`):** المصنع الكنسي لقاعدة البيانات hotspot بدرجة 9/10: `create_db_engine` (86 LOC · churn=8 · Complex Method) يجمع URL parsing · كشف Supabase · إعادة كتابة منفذ PgBouncer (6543→5432 · D-WS-FLAP-001) · سياق SSL · ثلاثة تكوينات pool — خمس مسؤولياتٍ بمعدلات تغيير مختلفة في دالة واحدة · `get_db` churn=12 رغم صغره (10 سطور) — التناقض يفضح مصدر تدفئة خارجي.

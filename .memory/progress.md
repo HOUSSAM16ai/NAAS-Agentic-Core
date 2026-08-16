@@ -1,7 +1,39 @@
 # Progress — What Has Been Done
-> Last updated: 2026-07-22 | Branch: `claude/oop-claude-md-update-e2ziez`
+> Last updated: 2026-08-16 | Branch: `claude/documentation-system-review-5qqlzw`
 
 ---
+
+## ✅ Session: 2026-08-16 — D-266: الفارض يخضع للبرهان الثلاثي + سلطة الموضوع الواحدة
+
+**الطلب:** حوكمةٌ لا يمكن تجاوزها · «يجيب على كل الأسئلة مهما كانت» · CI أخضر 100% · E2E حيّ إجباري.
+
+### ما وُجد بالقياس (لا بالانطباع)
+- **٧ من ٧٠ بوّابة لا يشغّلها أيّ workflow ولا أيّ اختبار** — وكلّها خضراء يدوياً على
+  Python 3.12. الحماية متاحةٌ مجّاناً وغير مُفعَّلة (ISS-186).
+- **٤ إحالات وهمية** إلى فوارض غير موجودة — منها فارض D-193 (`check_curriculum_single_source`)
+  الذي **لم يُكتب قطّ**، وهو السبب الذي أتاح لتصنيفات الموضوع أن تتفرّق حتى وقعت ISS-159.
+- **الحارس المكسور في ٦ مواضع**: `_c is not None and _c.canonical_id != "probability"` فوق
+  سجلٍّ يعرف ٣ مواضيع رياضية وصفر فيزياء ⇒ سؤال الفيزياء يُرجِع `None` فيسقط الشرط عند
+  ساقه الأولى ولا يعمل الحارس أصلاً.
+- **خليّتان في فهرس `.memory/README.md` بـ٣٧٢١ و٥٠٠٨ حرفاً** (والثانية بـ`|` غير مهروب
+  فانكسر الجدول).
+- **`generate_cutover_scoreboard` + `check_contracts_verified` يُناديان `"python"` العارية**
+  فيكتبان `false` لبوّابات خضراء في ملفَّي حالةٍ مُتتبَّعَين.
+
+### ما أُنجز
+- `docs/governance/CONSTITUTION_REGISTRY.json` + `check_governance_registry.py` (الساق الثالثة ·
+  دَينٌ فارغ · تجربتان سلبيتان مُثبَتتان) + وصل السبع + `CLAUDE.md §0.18` + `docs/specs/`.
+- `topic_authority.py` (الحاسم الوحيد) + `classify_subject`/`SUBJECT_MARKERS` +
+  `check_topic_authority_single_source.py` + حارسٌ عند بوّابة الدخول + الرموز داخل مادتها.
+- `scripts/e2e/universal_answerability_live.py` + `.github/workflows/live-e2e.yml`.
+
+### البرهان
+- `make gates` **57/57** (كانت 48) · عقود الترانسكريبت **9/9** · `ruff` نظيف · قفل الحقيقة أخضر.
+- **E2E حيّ**: Postgres 16 + المونوليث :8000 + OpenRouter حقيقي + WS ⇒ **14/14 · صفر مخالفة**
+  عبر ٣ مواد و٣ لغات، و28 صفّاً محفوظاً (`docs/archive/e2e/D266_E2E_LIVE_2026-08-16.md`).
+- **أحمر قبل**: «اشرح لي قانون أوم» ⇒ «نسحب 3 كرات دفعة واحدة من كيس…».
+- CI على الفرع: `guardrails` · `lint` · `contracts` · `test-microservices` · `event-stack-live` ·
+  `doc-integrity` · `runtime-truth` · `observability-validation` · بوّابتا المهارات — كلّها خضراء.
 
 ## ✅ Session: 2026-07-22 — D-179: BaseSkill OOP + live answer-guarantee + memory coherence
 

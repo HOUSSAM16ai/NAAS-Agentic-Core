@@ -106,6 +106,8 @@ class TurnResult:
     content: str = ""
     components: list[str] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    #: نصّ خطأٍ **منطوق** للطالب (`error.payload.message`) — فشلٌ مُعلَن لا صمت.
+    spoken_error: str = ""
 
 
 def _latin_leak(text: str) -> str | None:
@@ -125,8 +127,19 @@ def _turn_violations(result: TurnResult) -> list[str]:
     problems: list[str] = []
     if result.terminal_frames != 1:
         problems.append(f"إطاراتٌ نهائية = {result.terminal_frames} والعقد يوجب **واحداً** (§6.5)")
-    if not result.content.strip() and not result.components:
-        problems.append("دورٌ صامت: لا نصَّ ولا كائن (ISS-145)")
+
+    # ── الصمت ليس الفشل، والفشل المنطوق ليس صمتاً ─────────────────────────────
+    # أوّل نسخةٍ من هذا الحارس قرأت `payload.content` وحده، فأبلغت عن **١٢ دوراً
+    # صامتاً** بينما كان الخادم يُرسل إطار `error` يحمل رسالةً عربية صريحة في
+    # `payload.message` («النظام يتطلب الخدمات الذكية المتقدمة…»). أي أنّ الطالب
+    # كان **يقرأ** الفشل، والحارس أعلن كارثةً لا وجود لها.
+    #
+    # وهذا نفس صنف ISS-145 الذي أُغلق **بالتفنيد**: فحصٌ على المعيار الخطأ. ومعيارٌ
+    # خطأ في أداة تحقّقٍ أسوأ من غيابها — يُنتج بلاغاتٍ كاذبة تستهلك ثقةَ من يقرؤها.
+    if result.spoken_error:
+        problems.append(f"لم يُجَب — خطأٌ منطوق: {result.spoken_error[:120]!r}")
+    elif not result.content.strip() and not result.components:
+        problems.append("دورٌ صامت: لا نصَّ ولا كائن ولا خطأٌ منطوق (ISS-145 · ISS-154)")
     leak = _latin_leak(result.content)
     if leak:
         problems.append(f"شظيّة لاتينية في ردٍّ عربي: {leak!r} (ISS-150)")
@@ -186,6 +199,11 @@ async def _run_turn(ws_url: str, token: str, probe: Probe) -> TurnResult:
                     result.terminal_frames += 1
                     if payload.get("content"):
                         result.content = result.content or str(payload["content"])
+                    # إطار الخطأ يحمل رسالته في `message` لا في `content` — قراءتُه
+                    # بمفتاحٍ واحد كانت تجعل فشلاً منطوقاً يُقرأ صمتاً (انظر
+                    # `_turn_violations`).
+                    if payload.get("message"):
+                        result.spoken_error = str(payload["message"])
                     break
     except Exception as exc:
         result.problems.append(f"انقطاع الاتصال: {exc.__class__.__name__}: {exc}")
@@ -195,7 +213,7 @@ async def _run_turn(ws_url: str, token: str, probe: Probe) -> TurnResult:
 
 
 def _print_turn(result: TurnResult) -> None:
-    head = result.content.strip().replace("\n", " ")[:90]
+    head = (result.content.strip() or result.spoken_error.strip()).replace("\n", " ")[:90]
     status = "❌" if result.problems else "✅"
     print(
         f"  {status} [{result.probe.subject:16s}] {result.total_s:6.2f}s · {len(result.content):5d} حرفاً"
@@ -209,7 +227,14 @@ def _verdict(results: list[TurnResult]) -> int:
     failures = [(r.probe.question, p) for r in results for p in r.problems]
     print("\n" + "═" * 70)
     answered = sum(1 for r in results if r.content.strip() or r.components)
-    print(f"أدوار: {len(results)} · أجابت: {answered} · مخالفات: {len(failures)}")
+    spoken = sum(1 for r in results if r.spoken_error and not r.content.strip())
+    silent = sum(
+        1 for r in results if not r.content.strip() and not r.components and not r.spoken_error
+    )
+    print(
+        f"أدوار: {len(results)} · أجابت: {answered} · "
+        f"فشلٌ منطوق: {spoken} · صمتٌ تام: {silent} · مخالفات: {len(failures)}"
+    )
     if failures:
         print("\n❌ المخالفات:")
         for question, problem in failures:

@@ -3,6 +3,26 @@
 > This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
 > The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.# Architectural Decisions
+## D-265 · دستور حوكمة Spec Kit — طبقة ضبط تنفيذ لا تُتجاوز (قرار المالك 2026-08-16 · ISS-182→ISS-185) — إضافة لا حذف لأي قانونٍ قائم
+
+**القرار:** اعتماد نمط **Spec Kit** ([github.com/spec-kit](https://github.com/spec-kit) · MIT · +120k نجمة) كطبقة **حوكمة تنفيذ فوق الدستورية**: Spec-Driven Development (`خطة → تصميم → مهام → مواصفة → تنفيذ → برهان`)، مع مبدأ التقرير نفسه: **Spec Kit كطبعةٍ لا بديلٍ** — طبقة حوكمة تُفعَّل فوق D-153/D-263/D-264 ولا تُلغي منها قانونًا واحدًا.
+
+**القانون:** دستورٌ كامل [`.memory/spec_kit_governance_constitution.md`](.memory/spec_kit_governance_constitution.md) — **القوانين العشرة L1–L10** (مواصفة محدّثة مع الدفع نفسها · العقد المقيس لا النثر · فارضٌ مسمّى موجود فعلًا لا يتيمة ولا وهم · البرهان قبل القبول · الهجرة تسبق الاستخدام · العقد الخارجي لا ينكسر صامتًا · التتبع شرط قبول · الأسرار خارج المستودد أبدًا · الأثر في القرارات · واقعية الأرقام) · الأسئلة الدستورية · مقياس النجاح.
+
+**الفارض الجديد:** `scripts/fitness/check_spec_kit_governance.py` — يفرض اكتمال الدستور + L1/L2 (مواصفات حيّة) + L3 (فارضون مسمّون موجودون بلا يتيمة/وهم) + L6 (check_openapi_parity) + L7 (check_tracing_gate) + الإضافة لا الاستبدال (§7).
+
+**الإضافة لا الاستبدال:** كل الدساتير القائمة (D-153 · D-263 · D-264) تبقى سارية؛ L9 هنا = L9 في D-263 (نفس الروح نفس البوابة). التعديل لاحقًا = ADR جديد + بوابة خضراء. **التوحيد المرافِق:** Lُقِّطت قاعدته في [`CLAUDE.md §0.17`](CLAUDE.md) · رُفِع سقف `CLAUDE.md` المعلَن 1028→1060 (نمط D-209/D-210/D-228/D-263، القرار مكتوب هنا).
+
+## D-264 · دستور مخطط الدراسة التكيفي — من المخطط الورقي إلى Adaptive AI Study Planner (قرار المالك 2026-08-16 · ISS-178→ISS-181) — إضافة لا حذف لأي قانونٍ قائم
+
+**القرار:** صفحة الملاحظات والمخطط الأسبوعي الورقي في دفتر الطالب ليست ورقةً — هي **Adaptive AI Study Planner**: الطالب يحدد أهدافه → النظام يشخّصها (BKT/FSRS) → يقسمها تلقائيًا على الأسبوع → يتابع الإنجاز → يعيد ضبط الخطة حسب الأداء. التقييم: 8/10 إذا رُبط فعلًا بمحرك التكيف، وليس To-Do List عادية.
+
+**القانون:** دستورٌ كامل [`.memory/adaptive_study_planner_constitution.md`](.memory/adaptive_study_planner_constitution.md) — **القوانين العشرة L1–L10** (أهدافٌ قابلة للقياس · تقسيمٌ زمني بمحركٍ صفر-LLM — FSRS/BKT لا عشوائية · امتحانٌ قادم يقفل التواريخ · المراجعة المتباعدة قبل أي وعدٍ جديد · الوعود بلا دليلٍ محظورة دستوريًا · البرهان الحيّ قبل الميزات — يمتدّ D-263 L9) · الأسئلة الدستورية · مقياس النجاح.
+
+**الفارض الجديد:** `scripts/fitness/check_adaptive_study_planner.py` — يفرض اكتمال الدستور + L1/L2 (محرك صفر-LLM حيّ: fsrs.py retention · bkt_engine update_mastery) + L3 (فجوات المنهاج curriculum/registry.py) + L5 (exam_ref في db_schema_config يقفل التواريخ) + L6 (student_review_schedule append-only في الإنتاج) + L8 (لا وعود) + L9 (البرهان الحيّ).
+
+**الإضافة لا الاستبدال:** D-263 يبقى ساريًا — الحلقة التربوية تحرس دورة المخطط نفسها. التعديل لاحقًا = ADR جديد + بوابة خضراء. **التوحيد المرافِق:** Lُقِّطت قاعدته في [`CLAUDE.md §0.16`](CLAUDE.md).
+
 ## D-263 · دستور المحرك التربوي — العقل التربوي كـmoat (قرار المالك 2026-08-16 · تقييم خارجي قاسٍ: 8/10 هندسة · 4.5/10 منتج عالمي · 3.5/10 ميزة مثبتة · ISS-174→ISS-177) — إضافة دساتير وقوانين صارمة فوق الدستور القائم بلا أيّ حذفٍ للقانون القديم
 
 **الكارثة المُشخَّصة:** «البنية ليست الميزة» — مئات الخدمات (LangGraph · Agents · Checkpointer · MCP · RAG · Planner) لم تجعل النظام Pedagogy Engine، والمنتج مقيسًا خلف الفكرة. **القرار:** دستورٌ جديد كامل [`.memory/pedagogy_engine_constitution.md`](.memory/pedagogy_engine_constitution.md) — التشخيص الدستوري · العقيدة (العقل التربوي يقرّر والـLLM طبقة ذكاء فقط) · الركائز الأربع (ISS-174 Learner Model · ISS-175 ذاكرة طويلة الأمد · ISS-176 محرك القرار التربوي · ISS-177 إثبات Learning Gain) · **القوانين العشرة الصارمة L1–L10** · الأسئلة الدستورية · مقياس النجاح (Diagnosis Accuracy · Intervention Effect · Retention · Illusion Gap · Control Baseline).

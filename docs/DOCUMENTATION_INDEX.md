@@ -10,9 +10,9 @@
 
 | المستوى | المصدر | الدور |
 |---------|--------|------|
-| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-263** · آخرها **D-263**: دستور المحرك التربوي — العقل التربوي كـmoat + القوانين العشرة الصارمة L1–L10، وD-262: قشرة تفويض `services/overmind/graph/main.py` + شرائح `graph/graph_support/`). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) |
+| 🏛️ الدستور | `CLAUDE.md` | القوانين التشغيلية الدائمة + سجلّ العقائد §6.x (D-001→**D-265** · آخرها **D-265**: دستور حوكمة Spec Kit — طبقة ضبط تنفيذ فوق الدستورية L1–L10 · و**D-264**: دستور المخطط الدراسي التكيفي Adaptive AI Study Planner L1–L10 · وD-263: دستور المحرك التربوي — العقل التربوي كـmoat + القوانين العشرة الصارمة L1–L10، وD-262: قشرة تفويض `services/overmind/graph/main.py` + شرائح `graph/graph_support/`). **لا يحمل حالات ولا سرداً مؤرَّخاً** (D-188) · **الإضافة لا الحذف:** كل دستورٍ يعلو السابق في نطاقه دون إلغاء قانونٍ قائم |
 | 📐 مواصفة البرنامج | [`../spec.md`](../spec.md) | برنامج التبسيط API-first (Phases 0→12) — **الهدف** المعماري لا الحقيقة الجارية. ليست دستوراً ثالثاً: §4 تُحيل إلى الدستور القائم |
-| 🧠 الذاكرة | `.memory/` → [`README.md`](../.memory/README.md) | roadmap · decisions · issues · runtime_truth · pedagogical_os |
+| 🧠 الذاكرة | `.memory/` → [`README.md`](../.memory/README.md) | roadmap · decisions · issues · runtime_truth · pedagogical_os · pedagogy_engine_constitution · adaptive_study_planner_constitution · spec_kit_governance_constitution |
 | ⚖️ الدستور المعماري | [`architecture/MICROSERVICES_CONSTITUTION.md`](architecture/MICROSERVICES_CONSTITUTION.md) + [`ARCH_MICROSERVICES_CONSTITUTION.md`](ARCH_MICROSERVICES_CONSTITUTION.md) | حدود الخدمات |
 | 📖 قواعد الوكلاء | [`../AGENTS.md`](../AGENTS.md) | قواعد التطوير + مشغّلات `ai_skills/` |
 | 📄 مراجع مساندة | `docs/` (هذا الفهرس) | أدلة، عقود، ADRs |

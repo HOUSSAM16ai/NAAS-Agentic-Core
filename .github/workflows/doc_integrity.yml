@@ -72,6 +72,9 @@ jobs:
         run: |
           required_files=(
             ".memory/runtime_truth.md"
+            ".memory/pedagogy_engine_constitution.md"
+            ".memory/adaptive_study_planner_constitution.md"
+            ".memory/spec_kit_governance_constitution.md"
             ".memory/architecture.md"
             ".memory/decisions.md"
             ".memory/issues.md"

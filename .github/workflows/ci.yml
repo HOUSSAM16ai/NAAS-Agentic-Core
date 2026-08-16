@@ -419,6 +419,32 @@ jobs:
           # `.memory/pedagogy_engine_constitution.md`, state in the truth file;
           # addition, never removal (L0: every pre-existing law stays in force).
           python scripts/fitness/check_pedagogy_engine.py
+          # D-264 (2026-08-16 · decision of the owner · ISS-178→ISS-181): the
+          # adaptive study planner constitution. A paper weekly planner (goals,
+          # seven day boxes, notes) is not a feature -- it is an Adaptive AI
+          # Study Planner: the student states goals, the system diagnoses them
+          # (BKT/FSRS), divides them across the week with a deterministic
+          # zero-LLM scheduler, tracks completion, and replans from the
+          # student's actual performance. Ten laws L1–L10: measurable goals,
+          # zero-LLM time division (FSRS retention, never randomness), upcoming
+          # exam closes the dates, spaced review before any new promise, no
+          # evidence-free promises, live E2E proof before the feature ships.
+          # Law in `.memory/adaptive_study_planner_constitution.md`; addition,
+          # never removal -- D-263's tutorial loop guards the planner cycle itself.
+          python scripts/fitness/check_adaptive_study_planner.py
+          # D-265 (2026-08-16 · decision of the owner · ISS-182→ISS-185): the
+          # Spec Kit governance constitution. Spec Kit (github.com/spec-kit,
+          # MIT, 120k+ stars) is adopted as an EXECUTION-GOVERNANCE LAYER above
+          # the existing constitutions, not a replacement: plan → design →
+          # tasks → spec → implement → prove. Ten laws L1–L10: spec updated
+          # with the push itself, measurable contract not prose, every named
+          # enforcer actually exists (no orphan, no phantom), proof before
+          # acceptance, migration before use, API contract never breaks
+          # silently, tracing as an acceptance condition, secrets outside the
+          # repo forever, impact in decisions, numbers never handwritten.
+          # Law in `.memory/spec_kit_governance_constitution.md`; addition,
+          # never removal -- D-153/D-263/D-264 all remain in force.
+          python scripts/fitness/check_spec_kit_governance.py
 
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -18,7 +19,11 @@ PROVIDER_SCRIPT = REPO_ROOT / "scripts/fitness/check_gateway_provider_contracts.
 
 
 def _run_command(command: list[str]) -> bool:
-    """يشغّل أمر تحقق ويعيد نجاحه مع طباعة التشخيص عند الفشل."""
+    """يشغّل أمر تحقق ويعيد نجاحه مع طباعة التشخيص عند الفشل.
+
+    D-266: المُنادى `sys.executable` لا `"python"` العارية — مفسِّرُ الـPATH قد يفتقد
+    الاعتماديات، فتُبلَّغ البوّابةُ فاشلةً وهي خضراء (نفس قاعدة D-105 على الاختبارات).
+    """
     result = subprocess.run(
         command,
         cwd=REPO_ROOT,
@@ -65,9 +70,9 @@ def main() -> int:
         print("❌ Contract baseline incomplete for cutover routes (phase1/phase2).")
         return 1
 
-    if not _run_command(["python", str(PROVIDER_SCRIPT)]):
+    if not _run_command([sys.executable, str(PROVIDER_SCRIPT)]):
         return 1
-    if not _run_command(["python", "-m", "pytest", "-q", str(PROVIDER_TEST_FILE)]):
+    if not _run_command([sys.executable, "-m", "pytest", "-q", str(PROVIDER_TEST_FILE)]):
         return 1
 
     print("✅ Contract baseline + provider verification runtime checks passed.")

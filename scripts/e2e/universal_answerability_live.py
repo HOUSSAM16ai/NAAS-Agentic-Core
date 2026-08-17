@@ -201,7 +201,55 @@ async def _login(base: str, email: str, password: str) -> str:
         return str(response.json()["access_token"])
 
 
+def _absorb_frame(result: TurnResult, event: dict[str, Any]) -> bool:
+    """يستوعب إطاراً واحداً. يُرجِع `True` حين يكون الإطار **نهائياً** فينتهي الدور."""
+    etype = event.get("type", "")
+    payload = event.get("payload") or {}
+    if etype == "assistant_delta" and payload.get("content"):
+        result.content += str(payload["content"])
+        return False
+    if etype == "ui_component":
+        result.components.append(str(payload.get("component", "")))
+        return False
+    if etype not in _TERMINAL:
+        return False
+    result.terminal_frames += 1
+    if payload.get("content"):
+        result.content = result.content or str(payload["content"])
+    # إطار الخطأ يحمل رسالته في `message` لا في `content` — قراءتُه بمفتاحٍ واحد كانت
+    # تجعل فشلاً منطوقاً يُقرأ صمتاً (انظر `_delivery_problems`).
+    if payload.get("message"):
+        result.spoken_error = str(payload["message"])
+    return True
+
+
+async def _next_event(ws: Any, result: TurnResult) -> dict[str, Any] | None:
+    """الإطار التالي مُحلَّلاً، أو `None` حين يتعذّر — والتعذّر **يُبلَّغ** ولا يُبتلع."""
+    try:
+        raw = await asyncio.wait_for(ws.recv(), timeout=150.0)
+    except TimeoutError:
+        result.problems.append("انتهت المهلة بلا إطارٍ نهائي — دورٌ معلَّق")
+        raise
+    try:
+        return dict(json.loads(raw))
+    except json.JSONDecodeError:
+        result.problems.append("إطارٌ ليس JSON — تسريبُ بنية إلى الدردشة")
+        return None
+
+
+async def _stream_turn(ws: Any, result: TurnResult) -> None:
+    """يقرأ الأطر حتى الإطار النهائي — حلقةٌ واحدة بلا قرارٍ داخلها."""
+    while True:
+        try:
+            event = await _next_event(ws, result)
+        except TimeoutError:
+            return
+        if event is not None and _absorb_frame(result, event):
+            return
+
+
 async def _run_turn(ws_url: str, token: str, probe: Probe) -> TurnResult:
+    """دورٌ واحد كامل: اتصال · إرسال · قراءةٌ حتى النهاية · حكم."""
     result = TurnResult(probe=probe)
     started = time.perf_counter()
     try:
@@ -209,34 +257,8 @@ async def _run_turn(ws_url: str, token: str, probe: Probe) -> TurnResult:
             ws_url, subprotocols=["jwt", token], open_timeout=30, close_timeout=10
         ) as ws:
             await ws.send(json.dumps({"question": probe.question}))
-            while True:
-                try:
-                    raw = await asyncio.wait_for(ws.recv(), timeout=150.0)
-                except TimeoutError:
-                    result.problems.append("انتهت المهلة بلا إطارٍ نهائي — دورٌ معلَّق")
-                    break
-                try:
-                    event: dict[str, Any] = json.loads(raw)
-                except json.JSONDecodeError:
-                    result.problems.append("إطارٌ ليس JSON — تسريبُ بنية إلى الدردشة")
-                    continue
-                etype = event.get("type", "")
-                payload = event.get("payload") or {}
-                if etype == "assistant_delta" and payload.get("content"):
-                    result.content += str(payload["content"])
-                elif etype == "ui_component":
-                    result.components.append(str(payload.get("component", "")))
-                elif etype in _TERMINAL:
-                    result.terminal_frames += 1
-                    if payload.get("content"):
-                        result.content = result.content or str(payload["content"])
-                    # إطار الخطأ يحمل رسالته في `message` لا في `content` — قراءتُه
-                    # بمفتاحٍ واحد كانت تجعل فشلاً منطوقاً يُقرأ صمتاً (انظر
-                    # `_turn_violations`).
-                    if payload.get("message"):
-                        result.spoken_error = str(payload["message"])
-                    break
-    except Exception as exc:
+            await _stream_turn(ws, result)
+    except Exception as exc:  # نُبلِّغ ولا نبتلع (§0)
         result.problems.append(f"انقطاع الاتصال: {exc.__class__.__name__}: {exc}")
     result.total_s = time.perf_counter() - started
     result.problems.extend(_turn_violations(result))

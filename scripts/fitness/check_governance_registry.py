@@ -230,6 +230,27 @@ _PHANTOM_SCAN_SKIP = (
 )
 
 
+#: إحالةٌ إلى بوّابة. مسبوقةً بمسارٍ **غير** موطن بوّابة (`/tmp/…` · `pipelines/steps/…`)
+#: فهي ملفٌّ آخر يحمل الاسم نفسه، لا إحالةٌ إلى بوّابةٍ في هذا المستودع.
+_GATE_REFERENCE = re.compile(r"(?<![\w/.-])(?:scripts/fitness/|tools/ci/)?(check_[a-z0-9_]+\.py)")
+
+
+def _scannable_files() -> list[Path]:
+    """كل ملفّ قد يحمل إحالةً إلى بوّابة، بعد استبعاد المواطن المُصرَّحة."""
+    return [
+        path
+        for suffix in ("*.py", "*.md", "*.yml", "*.yaml")
+        for path in REPO_ROOT.rglob(suffix)
+        if not any(str(path.relative_to(REPO_ROOT)).startswith(skip) for skip in _PHANTOM_SCAN_SKIP)
+    ]
+
+
+def _gate_names_in(path: Path) -> set[str]:
+    """أسماء البوّابات المذكورة في ملفٍّ واحد."""
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    return {match.group(1) for match in _GATE_REFERENCE.finditer(text)}
+
+
 def _check_no_phantom_enforcers(gates: dict[str, str]) -> None:
     """بوّابةٌ تُذكَر ولا توجد — إحالةٌ وهمية تُقرأ حمايةً قائمة.
 
@@ -239,25 +260,17 @@ def _check_no_phantom_enforcers(gates: dict[str, str]) -> None:
     («تعريف المفهوم واحد») بقي بلا فارضٍ منذ إقراره، وهو بالضبط لماذا أمكن لثلاثة
     تصنيفاتٍ للموضوع أن تتفرّق حتى وقعت ISS-159. المسح هنا على **المصدر والوثائق معاً**.
     """
-    # مسبوقاً بمسارٍ **غير** موطن بوّابة (`/tmp/…` · `pipelines/steps/…`) فهو ملفٌّ آخر
-    # يحمل الاسم نفسه، لا إحالةٌ إلى بوّابةٍ في هذا المستودع.
-    pattern = re.compile(r"(?<![\w/.-])(?:scripts/fitness/|tools/ci/)?(check_[a-z0-9_]+\.py)")
     phantom: dict[str, set[str]] = {}
-    for suffix in ("*.py", "*.md", "*.yml", "*.yaml"):
-        for path in REPO_ROOT.rglob(suffix):
-            rel = str(path.relative_to(REPO_ROOT))
-            if any(rel.startswith(skip) for skip in _PHANTOM_SCAN_SKIP):
-                continue
-            for match in pattern.finditer(path.read_text(encoding="utf-8", errors="ignore")):
-                name = match.group(1)
-                if name in gates or name in _PHANTOM_EXCEPTIONS:
-                    continue
+    for path in _scannable_files():
+        rel = str(path.relative_to(REPO_ROOT))
+        for name in _gate_names_in(path):
+            if name not in gates and name not in _PHANTOM_EXCEPTIONS:
                 phantom.setdefault(name, set()).add(rel)
     if phantom:
         detail = {name: sorted(where)[:3] for name, where in sorted(phantom.items())}
         _fail(f"إحالات وهمية — بوّابات مذكورة بلا ملفّ: {detail}")
-    else:
-        _pass(f"صفر إحالة وهمية (استثناءات منطوقة: {len(_PHANTOM_EXCEPTIONS)})")
+        return
+    _pass(f"صفر إحالة وهمية (استثناءات منطوقة: {len(_PHANTOM_EXCEPTIONS)})")
 
 
 def _check_no_hand_typed_counts(gates: dict[str, str]) -> None:

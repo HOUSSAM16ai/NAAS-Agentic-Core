@@ -218,47 +218,55 @@ def _check_subject_markers_single_home(files: list[Path]) -> None:
 _BARE_NUMBER_LITERAL = re.compile(r"\\b(?:165|14|56)\\b")
 
 
+def _docstring_id(node: ast.AST) -> int | None:
+    """مُعرَّف عقدة الـdocstring في حاملٍ واحد، أو `None` إن لم يكن حاملاً/بلا docstring."""
+    if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+        return None
+    body = node.body
+    if not body:
+        return None
+    first = body[0]
+    if (
+        isinstance(first, ast.Expr)
+        and isinstance(first.value, ast.Constant)
+        and isinstance(first.value.value, str)
+    ):
+        return id(first.value)
+    return None
+
+
 def _docstring_nodes(tree: ast.Module) -> set[int]:
     """مُعرَّفات عُقد النصوص التي هي docstrings — تُستثنى من فحص القيم."""
-    ids: set[int] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
-            continue
-        body = getattr(node, "body", [])
-        if (
-            body
-            and isinstance(body[0], ast.Expr)
-            and isinstance(body[0].value, ast.Constant)
-            and isinstance(body[0].value.value, str)
-        ):
-            ids.add(id(body[0].value))
-    return ids
+    found = (_docstring_id(node) for node in ast.walk(tree))
+    return {node_id for node_id in found if node_id is not None}
+
+
+def _has_bare_number_value(tree: ast.Module) -> bool:
+    """هل يحمل هذا الملفّ النمطَ المحظور **كقيمة** لا كشرح؟"""
+    skip = _docstring_nodes(tree)
+    return any(
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in skip
+        and _BARE_NUMBER_LITERAL.search(node.value)
+        for node in ast.walk(tree)
+    )
 
 
 def _check_no_bare_exercise_numbers(files: list[Path]) -> None:
     """أرقام تمرينٍ بعينه ليست تعريفاً لمادة — و`r"\\b165\\b"` داخل `in` لا تطابق شيئاً."""
-    offenders: list[str] = []
-    for path in files:
-        tree = _parse(path)
-        if tree is None:
-            continue
-        skip = _docstring_nodes(tree)
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Constant)
-                and isinstance(node.value, str)
-                and id(node) not in skip
-                and _BARE_NUMBER_LITERAL.search(node.value)
-            ):
-                offenders.append(str(path.relative_to(REPO_ROOT)))
-                break
+    offenders = sorted(
+        str(path.relative_to(REPO_ROOT))
+        for path in files
+        if (tree := _parse(path)) is not None and _has_bare_number_value(tree)
+    )
     if offenders:
         _fail(
-            f"أرقام تمرينٍ عارية كمفاتيح موضوع في: {sorted(set(offenders))} — "
+            f"أرقام تمرينٍ عارية كمفاتيح موضوع في: {offenders} — "
             "نمطٌ خام داخل `in` مطابقةُ سلسلة لا تعبيرٌ نمطي (ISS-159)"
         )
-    else:
-        _pass("صفر رقم تمرينٍ عارٍ كمفتاح موضوع")
+        return
+    _pass("صفر رقم تمرينٍ عارٍ كمفتاح موضوع")
 
 
 def main() -> int:

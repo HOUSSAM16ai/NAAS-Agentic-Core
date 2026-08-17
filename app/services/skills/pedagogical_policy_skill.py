@@ -206,12 +206,15 @@ def _is_explicit_request(normalized: str) -> bool:
 
 
 def _is_topic_switch(message: str) -> bool:
-    """D-130 (تحسين A): هل الرسالة تبديل موضوع صريح (≠ احتمالات)؟ (حارس D-101)."""
-    try:
-        from app.services.capabilities.arabic_normalize import primary_canonical_topic
+    """D-130 (تحسين A): هل الرسالة تبديل موضوع صريح (≠ احتمالات)؟ (حارس D-101).
 
-        topic = primary_canonical_topic(message)
-        return topic is not None and topic.canonical_id != "probability"
+    D-266 (ISS-159): كانت تقرأ سجلّ الاسترجاع وحده (ثلاثة مواضيع رياضية)، فـ«اشرح لي
+    قانون أوم» **ليس تبديل موضوع** في نظرها — والطالب يُجَرّ إلى الاحتمالات.
+    """
+    try:
+        from app.services.capabilities.topic_authority import is_foreign_to_probability
+
+        return is_foreign_to_probability(message)
     except Exception:  # pragma: no cover - fail-safe
         return False
 

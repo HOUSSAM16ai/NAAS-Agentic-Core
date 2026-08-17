@@ -240,7 +240,7 @@ class ProbabilityUIMixin:
         فوراً بعد بثّ المكوّن البصري و``companion_text`` — لا LLM، لا synthesizer.
         """
         try:
-            from app.services.capabilities.arabic_normalize import primary_canonical_topic
+            from app.services.capabilities.topic_authority import is_foreign_to_probability
             from app.services.skills.probability_skill import (
                 CombinationsModelOutput,
                 FullExerciseStoryOutput,
@@ -251,10 +251,14 @@ class ProbabilityUIMixin:
             )
 
             # ISS-110 (D-101): حاجب تبديل الموضوع — إذا كان السؤال الحالي يذكر
-            # صراحةً موضوعاً مرجعياً غير الاحتمالات (دوال عددية / أعداد مركبة)،
-            # فلا تُبنى أي واجهة احتمالات من سياق الـ history حتى مع وجود حيرة.
-            _canonical = primary_canonical_topic(question)
-            if _canonical is not None and _canonical.canonical_id != "probability":
+            # صراحةً موضوعاً غير الاحتمالات فلا تُبنى أيّ واجهة احتمالات من سياق
+            # الـ history حتى مع وجود حيرة.
+            #
+            # D-266 (ISS-159): كان الشرط `_c is not None and _c.canonical_id !=
+            # "probability"` — فسؤال الفيزياء يُرجِع `None` من سجلّ الاسترجاع (يعرف
+            # ثلاثة مواضيع رياضية لا غير)، فيسقط الشرط عند ساقه الأولى **ولا يعمل
+            # الحارس**. الحاسم الآن واحد ويقرأ المنهاج كلّه.
+            if is_foreign_to_probability(question):
                 return None
 
             skill = ProbabilityCalculatorSkill()
@@ -271,8 +275,19 @@ class ProbabilityUIMixin:
             )
 
             # D-122/D-123: حارس سياق الاحتمالات (مُعرَّف مبكراً — للتحصين والتركيز).
+            # D-266 (ISS-159): نفس نقض المادة الموجبة قبل قراءة أيّ مفردة — «كرة»
+            # تعني الكرة الفيزيائية أيضاً. النسخة الثانية من هذه المفاتيح تعيش في
+            # `CognitiveVerificationMixin._is_prob_context`؛ كلتاهما تسأل الحاسم
+            # الواحد أوّلاً، فلا تتفرّقان في القرار مهما تفرّقتا في المفاتيح.
             def _is_probability_context(text: str) -> bool:
                 t = text or ""
+                with contextlib.suppress(Exception):
+                    from app.services.capabilities.topic_authority import (
+                        is_foreign_to_probability,
+                    )
+
+                    if is_foreign_to_probability(t):
+                        return False
                 return any(
                     marker in t
                     for marker in ("كرات", "كرة", "كيس", "احتمال", "سحب", "نسحب", "p(a", "p(b")

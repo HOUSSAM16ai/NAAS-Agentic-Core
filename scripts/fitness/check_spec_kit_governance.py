@@ -175,25 +175,32 @@ def _check_living_specs() -> None:
     spec = _read("spec.md")
     _must(r"17b", spec, "spec.md: سجل البرهان §17b (L4)")
     _must(r"Live E2E|E2E", spec, "spec.md: أدلة حيّة E2E مسجّلة")
-    # مستودع المواصفات: نمط هذا المستودد المواصفات الحية = `docs/adr/` (9
-    # قرارات ADR) + `docs/contracts/` (عقود API · حدود سياقات) +
-    # `docs/specs/` (نمط Spec Kit المستقبلي) — البنية لا العدد.
-    has_adr = bool(list((REPO_ROOT / "docs" / "adr").glob("ADR-*.md")))
-    has_contracts = (REPO_ROOT / "docs" / "contracts").is_dir()
-    has_specs = (
-        bool(list((REPO_ROOT / "docs" / "specs").glob("*")))
-        if (REPO_ROOT / "docs" / "specs").is_dir()
-        else False
-    )
-    if not (has_adr or has_contracts or has_specs):
-        _fail("لا مستودع مواصفات حية (docs/adr · docs/contracts · docs/specs) (L1)")
+    # مستودع المواصفات الحية ثلاثة مواطن **مطلوبة معاً**، لا بدائل `OR`:
+    #   `docs/adr/`       — قرارات المعمار
+    #   `docs/contracts/` — عقود API وحدود السياقات
+    #   `docs/specs/`     — دورة Spec-First (خطة → تصميم → مهام → مواصفة)
+    #
+    # D-266 (ISS-186): كان هذا الفحص `or` بين الثلاثة، و`docs/specs/` — الموطن الذي
+    # **يسمّيه الدستور نفسه** في §5 السؤال 3 («أين تُخزَّن المواصفات؟ — `docs/specs/
+    # NN_*.md`») — **لم يكن موجوداً على القرص إطلاقاً**، والبوّابة تمرّ عبر `docs/adr`.
+    # موطنٌ مُعلَن في دستورٍ وغيرُ موجود هو «الغياب المُعلَن بلا فحصٍ في الاتجاهين»
+    # الذي يحظره §0.10. عولج بإنشاء الموطن وإلغاء البديل — لا بتخفيف الدستور.
+    homes = {
+        "docs/adr": bool(list((REPO_ROOT / "docs" / "adr").glob("ADR-*.md"))),
+        "docs/contracts": (REPO_ROOT / "docs" / "contracts").is_dir(),
+        "docs/specs": bool(list((REPO_ROOT / "docs" / "specs").glob("*.md"))),
+    }
+    missing = sorted(name for name, present in homes.items() if not present)
+    if missing:
+        _fail(f"مواطن المواصفات الحية الناقصة: {missing} — كلّها مطلوبة، لا بدائل (L1)")
     else:
-        parts = (
-            f"docs/adr ({'9' if has_adr else '0'})",
-            f"docs/contracts ({'نعم' if has_contracts else 'لا'})",
-            f"docs/specs ({'نعم' if has_specs else 'لا'})",
-        )
-        _pass(f"مستودع المواصفات حيّ: {', '.join(parts)} (L1)")
+        _pass(f"مستودع المواصفات حيّ في مواطنه الثلاثة: {', '.join(homes)} (L1)")
+
+    # L3 الساق الثالثة (D-266): الذِّكر والوجود لا يكفيان — التنفيذ يُفحَص هناك.
+    if not (REPO_ROOT / "scripts" / "fitness" / "check_governance_registry.py").is_file():
+        _fail("`check_governance_registry.py` مفقود — الساق الثالثة من L3 بلا فارض (D-266)")
+    else:
+        _pass("الساق الثالثة من L3 (التنفيذ) مفروضة بـ`check_governance_registry.py` (D-266)")
 
 
 def _check_decision_trail() -> None:

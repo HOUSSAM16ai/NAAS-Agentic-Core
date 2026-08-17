@@ -109,6 +109,12 @@ class TestSourceWiring:
 
     def test_topic_guard_precedes(self) -> None:
         # حاجب تبديل الموضوع (D-101) يبقى قبل منطق الإشارات الطبيعية.
-        guard_pos = CLIENT_SRC.index('_canonical.canonical_id != "probability"')
+        #
+        # D-266 (ISS-159): كان هذا الفحص يبحث عن حرفية الحارس القديم
+        # `_canonical.canonical_id != "probability"` — وهي الصيغة التي **لا تعمل**
+        # لسؤال فيزياء (سجلّ الاسترجاع يصمت فيسقط الشرط عند ساقه الأولى). فكان
+        # الاختبار يحرس **وجود الحارس** لا **عمله**. المُسنَد الواحد يستبدلها،
+        # والقاعدة المحروسة هي نفسها: الموضوع يُحسم قبل منطق الإشارات.
+        guard_pos = CLIENT_SRC.index("is_foreign_to_probability(question)")
         partref_pos = CLIENT_SRC.index("def _detect_part_reference(")
         assert guard_pos < partref_pos, "D-101 topic guard must precede D-122 part-ref logic."

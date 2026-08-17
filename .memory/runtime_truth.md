@@ -1,8 +1,24 @@
 # Runtime Truth Lock
-> Last updated: **2026-08-15** | Branch: docs/d260-kernel-hotspot (D-260)
+> Last updated: **2026-08-16** | Branch: claude/documentation-system-review-5qqlzw (D-266)
+> Previous: docs/d260-kernel-hotspot (D-260)
 > Previous: feat/d256-orchestrator-client-hotspot (D-256)
 > Previous: hotfix/codescene-hotspot-chat-stream-ws-decomposition (D-252→D-255)
 > Previous: `claude/project-international-markets-ws5pwz` (D-228→D-232)
+
+## D-266 — فرض الحوكمة + سلطة الموضوع الواحدة (2026-08-16 · ISS-186 · ISS-159)
+
+| المسار الحيّ | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`app/services/capabilities/topic_authority.py`** (D-266 — جديد) | **ACTIVE** | الحاسم الوحيد لسؤال «هل هذا احتمالات؟». سلسلة النداء الحيّة: ستّة مواضع تستدعي `is_foreign_to_probability` — `probability_ui._build_calculated_ui` · `exercise_context` · `socratic_narrative` · `turn_engine` · `escape_hatch` · `pedagogical_policy_skill._is_topic_switch` — زائد حارسٌ **عند بوّابة الدخول** `turn_preempts_cognitive._stage_escape_hatch` و`notation_skill.resolve`. برهان حيّ (E2E 2026-08-16): «اشرح لي قانون أوم» ⇒ جوابُ فيزياء (1919 حرفاً)، وقبل الإصلاح كان ⇒ «نسحب 3 كرات دفعة واحدة من كيس…». |
+| **`shared/curriculum.classify_subject` + `SUBJECT_MARKERS`** (D-266) | **ACTIVE** | dep-free؛ موطنٌ واحد لمفردات المادة (تفرضه `check_topic_authority_single_source`). العلامات **تُطبَّع عند الاستيراد** (`_SUBJECT_MARKER_INDEX`) لا اعتماداً على انضباط الكاتب — «فيزياء» تُطبَّع إلى «فيزيا» فعلامةٌ بالهمزة لا تطابق شيئاً، وهو عطبٌ وقع فعلاً في أوّل تشغيل. المطابقة على حدود الكلمات: `classify_subject("ما هو الشعاع") → None` بينما `("التناقص الإشعاعي") → physics`. |
+| **`scripts/fitness/check_governance_registry.py`** (D-266 — جديد) | **ACTIVE (CI · guardrails)** | الساق الثالثة على الفوارض: التنفيذ يُمسَح من `.github/workflows/**` و`tests/**` ولا يُكتب. الدَّين `unenforced_debt` **فارغ**. تجربتان سلبيتان مُثبَتتان: حذف بوّابة من الـworkflow ⇒ exit=1، وصفٌّ يشير إلى ملفٍّ محذوف ⇒ exit=1. |
+| **`scripts/fitness/check_topic_authority_single_source.py`** (D-266 — جديد) | **ACTIVE (CI · guardrails)** | AST؛ يمنع النسخة السابعة من الحارس المكسور (دَينٌ **فارغ**)، ويرث فرض D-193 الذي كان فارضُه المُسمّى (`check_curriculum_single_source`) **غير موجودٍ على القرص إطلاقاً**. |
+| **`docs/governance/CONSTITUTION_REGISTRY.json`** (D-266 — جديد) | **ACTIVE (حالة)** | ١٥ صفّاً دستورياً ⇄ ١٥ قسماً في `CLAUDE.md`؛ ٢٨ مسار وثيقةٍ كلّها موجودة؛ ١٩ فارضاً مسمّى. |
+| **البوّابات السبع الميتة** (`check_contracts_verified` · `check_core_kernel_env_profile` · `check_import_boundaries` · `check_legacy_routes_monotonic` · `check_legacy_traffic_zero_window` · `check_secret_key_consistency` · `check_stategraph_runtime_backbone`) | **ACTIVE** (كانت **ZOMBIE**) | كانت على القرص ومذكورةً دستورياً و**لا يشغّلها أيّ workflow ولا أيّ اختبار**. وُصِلت في `ci.yml:guardrails`؛ برهان: `make gates` ⇒ **57/57** (كانت 48). |
+| **`scripts/e2e/universal_answerability_live.py`** (D-266 — جديد) | **ACTIVE (تشغيلٌ بقرار)** | ١٤ زاوية عبر ٣ مواد و٣ لغات على خادمٍ حيّ. برهان 2026-08-16: **14/14 · صفر مخالفة** (Postgres محلي + OpenRouter حقيقي + WS)، و**28 صفّاً** محفوظاً. الدليل: `docs/archive/e2e/D266_E2E_LIVE_2026-08-16.md`. |
+| **`.github/workflows/live-e2e.yml`** (D-266 — جديد) | **DORMANT (بانتظار أسرار المستودع)** | `workflow_dispatch` فقط وخارج `required-ci` عمداً (انقطاع طرفٍ ثالث لا يحجب دمجاً). ⛔ **لا تمرّ بلا أسرار**: خطوة «Refuse to run blind» تفشل وتسمّي الناقص — الصمت لا يُقرأ نجاحاً. |
+| **`shared/notation` — رموز الفيزياء/العلوم** | **ABSENT (دَينٌ منطوق)** | السجلّ احتماليٌّ بحت. `notation_skill.resolve` يصمت الآن لسؤالٍ من مادةٍ أخرى بدل أن يُجيب بمعنى المادة الخطأ — والصمت أقصى ما يُقدَّم اليوم. التوسعة شرطُ إغلاقٍ لبندٍ لاحق. |
+
 
 ## D-261 Hotspot Decomposition — `app/core/database.py` «المصنع الكنسي: قشرة تفويض + شرائح `app/core/database_support/`» (2026-08-16 · CodeScene X-Ray job 72 · ISS-172)
 

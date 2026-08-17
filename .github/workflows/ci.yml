@@ -446,6 +446,53 @@ jobs:
           # never removal -- D-153/D-263/D-264 all remain in force.
           python scripts/fitness/check_spec_kit_governance.py
 
+          # D-266 (ISS-186): the repo demands a three-legged proof of every
+          # capability -- import + call chain + runtime evidence -- and demanded
+          # none of it from its own enforcers. Measured on 2026-08-16: seven of
+          # seventy gates were run by no workflow and no test. They existed, they
+          # were cited constitutionally, and they were dead. `check_spec_kit_
+          # governance` (L3) checks mention + existence, never execution, so a
+          # dead gate passed the "no orphan enforcer" check while enforcing
+          # nothing. `run_fitness_gates.py` reads this workflow, so an unlisted
+          # gate is dead locally too -- it does not protect, and it is not
+          # neutral either: it grants false confidence. The seven are wired
+          # immediately below; this gate makes an eighth impossible.
+          python scripts/fitness/check_governance_registry.py
+
+          # ── The seven that were dead (D-266) ─────────────────────────────
+          # Each was verified green on Python 3.12 (this job's version) before
+          # being wired. They are listed individually, not looped, so that a
+          # failure names the law it broke.
+          #
+          # Emergency legacy profile stays out of the default compose stack.
+          python scripts/fitness/check_core_kernel_env_profile.py
+          # Legacy route count is hard-zero and monotonic (Strangler phase 3).
+          python scripts/fitness/check_legacy_routes_monotonic.py
+          # Refuses phase-5 decommission while traffic is unmeasured -- a zero
+          # here would mean "nobody counted", not "nobody called".
+          python scripts/fitness/check_legacy_traffic_zero_window.py
+          # D-WS-SECRET-KEY-001: one signing key, one source (K-ROOT / D-241).
+          python scripts/fitness/check_secret_key_consistency.py
+          # Chat HTTP+WS really run through the StateGraph backbone.
+          python scripts/fitness/check_stategraph_runtime_backbone.py
+          # Consumer/provider contract baseline is complete and verified.
+          python scripts/fitness/check_contracts_verified.py
+          # D-266 (ISS-159): one authority decides "is this probability?".
+          # The old guard was `_c is not None and _c.canonical_id != "probability"`
+          # in SIX places, over a retrieval registry that knows three maths topics
+          # and zero physics -- so a physics question returned None, the condition
+          # collapsed at its first leg, and the guard never ran. This gate makes a
+          # seventh copy impossible rather than merely discouraged, and inherits
+          # D-193's enforcement, whose named gate (`check_curriculum_single_source`)
+          # was cited in the source for months and never written.
+          python scripts/fitness/check_topic_authority_single_source.py
+
+          # Third, strictest copy of the boundary rule (app ⇸ microservices).
+          # Kept because it is AST-strict where the other two are scoped; it
+          # reported 34 "violations" under 3.11 that were all PEP-695 parse
+          # failures, i.e. unreadable-reported-as-dirty. On 3.12 it is clean.
+          python tools/ci/check_import_boundaries.py
+
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders
   # microservices tests last *within one process* (SQLAlchemy table-registry

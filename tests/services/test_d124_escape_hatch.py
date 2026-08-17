@@ -241,7 +241,10 @@ class TestSourceWiring:
         resolver = CLIENT_SRC[CLIENT_SRC.index("class ExerciseContextSkill") :]
         assert "ProbabilityInput(question=candidate_text, history=None)" in resolver
         assert "load_exercise_questions_only(" in resolver
-        assert 'canonical_id != "probability"' in resolver  # topic-safe
+        # D-266 (ISS-159): topic-safe صار بالمُسنَد الواحد. الحرفية القديمة
+        # `canonical_id != "probability"` كانت تحرس **وجود** الحارس لا **عمله**:
+        # سؤال الفيزياء يُرجِع `None` فيسقط الشرط عند ساقه الأولى ولا يُنفَّذ أبداً.
+        assert "is_foreign_to_probability(question)" in resolver  # topic-safe
 
     def test_direct_explanation_returns_and_breaks_loop(self) -> None:
         # عند نجاح البثّ ⇒ assistant_final + return (كسر الكاروسيل).

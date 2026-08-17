@@ -513,12 +513,23 @@ class EscapeHatchMixin:
         # الحيّ أثبت أنّ هذا المسار كان يُجيب عنه بجزئية اللون تارةً وبعلاقة الأرقام تارة
         # (وكلتاهما تسريب). الفحص هنا **قبل** تحميل التمرين وقبل كل الكاشفات، وحتمي بلا
         # أرقام التمرين إطلاقاً — فيبقى العقد السقراطي سليماً (D-113).
+        # D-266 (ISS-159 · الجذر الرابع): «الرمز قبل كل شيء» صحيحٌ **داخل مادته**.
+        # سجلّ الرموز (`shared/notation`) احتماليٌّ بحت: `Ω` فيه فضاء العيّنة، و`E`
+        # الأملُ الرياضي. وكان يُحَلّ **قبل أيّ حارس موضوع**، فطالبُ الفيزياء الذي
+        # يسأل «ما معنى الرمز Ω» يتلقّى شرح فضاء العيّنة — وهو خطأٌ أسوأ من الصمت،
+        # لأنه يُدرَّس ويُحفَظ. حين تكون إشارة المادة غير احتمالية نصمت هنا ويمضي
+        # الدور إلى المسار العام (§0: المجهول أفضل من يقين زائف).
+        #
+        # ⚠️ دَينٌ منطوق: السجلّ لا يحمل رموز الفيزياء/العلوم بعد، فالصمت هو أقصى ما
+        # يُقدَّم اليوم. توسعتُه شرطُ إغلاق مسجَّل في ISS-159.
         try:
+            from app.services.capabilities.topic_authority import is_foreign_to_probability
             from app.services.skills.notation_skill import get_notation_skill
 
-            _symbol = get_notation_skill().resolve(question)
-            if _symbol is not None:
-                return f"## {_symbol.title}\n\n{_symbol.definition}\n\n{_symbol.example}"
+            if not is_foreign_to_probability(question):
+                _symbol = get_notation_skill().resolve(question)
+                if _symbol is not None:
+                    return f"## {_symbol.title}\n\n{_symbol.definition}\n\n{_symbol.example}"
         except Exception:  # pragma: no cover - fail-open: الرموز لا تكسر الدور
             pass
 
@@ -709,13 +720,13 @@ class EscapeHatchMixin:
         try:
             from math import comb
 
-            from app.services.capabilities.arabic_normalize import primary_canonical_topic
             from app.services.capabilities.exercise_retrieval import (
                 ExerciseRetrievalRequest,
                 detect_exercise_retrieval,
                 load_exercise_content,
                 load_exercise_questions_only,
             )
+            from app.services.capabilities.topic_authority import is_foreign_to_probability
             from app.services.skills.probability_skill import ProbabilityCalculatorSkill
 
             raw = (question or "").strip()
@@ -725,9 +736,10 @@ class EscapeHatchMixin:
                 return None
             q = raw.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")).lower()
 
-            # topic-safe: طلب موضوع آخر صريح (دوال/أعداد مركبة) ⇒ لا شرح احتمالات.
-            _canonical = primary_canonical_topic(question)
-            if _canonical is not None and _canonical.canonical_id != "probability":
+            # topic-safe: طلب موضوع آخر صريح ⇒ لا شرح احتمالات.
+            # D-266 (ISS-159): الحاسم الواحد يقرأ المنهاج كلّه — «قانون أوم» كان
+            # يمرّ من هنا لأنّ سجلّ الاسترجاع يصمت عن الفيزياء.
+            if is_foreign_to_probability(question):
                 return None
 
             # تصنيف السؤال الحسابي (حوادث الجداء قبل مبدأ العدّ لمنع التباس «نضرب»).

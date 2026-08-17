@@ -218,21 +218,23 @@ def _check_subject_markers_single_home(files: list[Path]) -> None:
 _BARE_NUMBER_LITERAL = re.compile(r"\\b(?:165|14|56)\\b")
 
 
+def _is_string_expr(node: ast.stmt) -> bool:
+    """هل هذه العبارة نصٌّ حرفيّ قائم بذاته؟ (شكل الـdocstring)."""
+    return (
+        isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    )
+
+
 def _docstring_id(node: ast.AST) -> int | None:
     """مُعرَّف عقدة الـdocstring في حاملٍ واحد، أو `None` إن لم يكن حاملاً/بلا docstring."""
     if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
         return None
     body = node.body
-    if not body:
+    if not body or not _is_string_expr(body[0]):
         return None
-    first = body[0]
-    if (
-        isinstance(first, ast.Expr)
-        and isinstance(first.value, ast.Constant)
-        and isinstance(first.value.value, str)
-    ):
-        return id(first.value)
-    return None
+    return id(body[0].value)  # type: ignore[attr-defined]
 
 
 def _docstring_nodes(tree: ast.Module) -> set[int]:

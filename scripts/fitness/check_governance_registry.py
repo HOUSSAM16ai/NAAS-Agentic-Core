@@ -181,19 +181,23 @@ def _check_sections(registry: dict) -> None:
         _pass(f"تغطية كاملة: {len(in_doc)} قسماً دستورياً ⇄ {len(in_registry)} صفّاً")
 
 
+def _declared_doc_paths(registry: dict) -> list[tuple[str, str]]:
+    """كل مسارٍ يعِد به السجلّ، مقروناً بقسمه: `(§0.x, path)` — مسحٌ نقيّ."""
+    return [
+        (str(row.get("section")), rel)
+        for row in _rows(registry)
+        for key in ("law_docs", "status_docs")
+        for rel in row.get(key, [])
+    ]
+
+
 def _check_doc_paths(registry: dict) -> None:
-    broken: list[str] = []
-    counted = 0
-    for row in _rows(registry):
-        for key in ("law_docs", "status_docs"):
-            for rel in row.get(key, []):
-                counted += 1
-                if not (REPO_ROOT / rel).exists():
-                    broken.append(f"§{row.get('section')} → {rel}")
+    declared = _declared_doc_paths(registry)
+    broken = [f"§{section} → {rel}" for section, rel in declared if not (REPO_ROOT / rel).exists()]
     if broken:
         _fail(f"مسارات وثائق غير موجودة (خريطةٌ تكذب — ISS-149): {broken}")
-    else:
-        _pass(f"كل مسارات الوثائق الـ{counted} تصل إلى ملفّات موجودة")
+        return
+    _pass(f"كل مسارات الوثائق الـ{len(declared)} تصل إلى ملفّات موجودة")
 
 
 def _check_declared_absence(registry: dict) -> None:

@@ -276,25 +276,35 @@ def _print_turn(result: TurnResult) -> None:
         print(f"     ❌ {problem}")
 
 
+def _answered(result: TurnResult) -> bool:
+    """وصل الطالبَ شيءٌ يُقرأ — نصّاً أو كائناً."""
+    return bool(result.content.strip() or result.components)
+
+
+def _tally(results: list[TurnResult]) -> str:
+    """سطر الحصيلة — ثلاث حالاتٍ لا اثنتان: أجاب · فشلٌ منطوق · صمتٌ تام."""
+    answered = sum(1 for r in results if _answered(r))
+    spoken = sum(1 for r in results if r.spoken_error and not _answered(r))
+    silent = sum(1 for r in results if not _answered(r) and not r.spoken_error)
+    failures = sum(len(r.problems) for r in results)
+    return (
+        f"أدوار: {len(results)} · أجابت: {answered} · "
+        f"فشلٌ منطوق: {spoken} · صمتٌ تام: {silent} · مخالفات: {failures}"
+    )
+
+
 def _verdict(results: list[TurnResult]) -> int:
+    """رمز الخروج هو ما تقرأه CI — والمخالفات تُطبَع بنصّها لا مُلخَّصة."""
     failures = [(r.probe.question, p) for r in results for p in r.problems]
     print("\n" + "═" * 70)
-    answered = sum(1 for r in results if r.content.strip() or r.components)
-    spoken = sum(1 for r in results if r.spoken_error and not r.content.strip())
-    silent = sum(
-        1 for r in results if not r.content.strip() and not r.components and not r.spoken_error
-    )
-    print(
-        f"أدوار: {len(results)} · أجابت: {answered} · "
-        f"فشلٌ منطوق: {spoken} · صمتٌ تام: {silent} · مخالفات: {len(failures)}"
-    )
-    if failures:
-        print("\n❌ المخالفات:")
-        for question, problem in failures:
-            print(f"   • «{question}» — {problem}")
-        return 1
-    print("✅ كل سؤالٍ أُجيب بإطارٍ نهائيٍّ واحد، من مادته، بلا تسريبٍ ولا دورٍ صامت.")
-    return 0
+    print(_tally(results))
+    if not failures:
+        print("✅ كل سؤالٍ أُجيب بإطارٍ نهائيٍّ واحد، من مادته، بلا تسريبٍ ولا دورٍ صامت.")
+        return 0
+    print("\n❌ المخالفات:")
+    for question, problem in failures:
+        print(f"   • «{question}» — {problem}")
+    return 1
 
 
 async def main() -> int:

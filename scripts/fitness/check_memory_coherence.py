@@ -190,19 +190,25 @@ def _check_index_freshness(failures: list[str]) -> None:
 INDEX_CELL_MAX_CHARS = 400
 
 
+def _oversized_cells(text: str) -> list[str]:
+    """كل خليّة جدولٍ تتجاوز السقف — مسحٌ نقيّ بلا أثرٍ جانبي."""
+    return [
+        cell.strip()
+        for line in text.splitlines()
+        if line.startswith("|")
+        for cell in line.split("|")
+        if len(cell.strip()) > INDEX_CELL_MAX_CHARS
+    ]
+
+
 def _check_index_cell_size(failures: list[str]) -> None:
     """يمنع عودة الفهرس السيادي موسوعةً داخل خلايا جدول."""
-    for line in MEMORY_README.read_text(encoding="utf-8").splitlines():
-        if not line.startswith("|"):
-            continue
-        for cell in line.split("|"):
-            if len(cell.strip()) > INDEX_CELL_MAX_CHARS:
-                head = cell.strip()[:60]
-                failures.append(
-                    f".memory/README.md: خليّة بطول {len(cell.strip())} > "
-                    f"{INDEX_CELL_MAX_CHARS} تبدأ بـ «{head}…». الفهرس دلالةٌ لا سرد — "
-                    "انقل السرد إلى `decisions.md`/`issues.md` (D-266)."
-                )
+    for cell in _oversized_cells(MEMORY_README.read_text(encoding="utf-8")):
+        failures.append(
+            f".memory/README.md: خليّة بطول {len(cell)} > {INDEX_CELL_MAX_CHARS} "
+            f"تبدأ بـ «{cell[:60]}…». الفهرس دلالةٌ لا سرد — "
+            "انقل السرد إلى `decisions.md`/`issues.md` (D-266)."
+        )
 
 
 def _check_recent_ordering(failures: list[str]) -> None:

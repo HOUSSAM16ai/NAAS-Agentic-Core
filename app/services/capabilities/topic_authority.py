@@ -92,6 +92,33 @@ class TurnTopic:
 _UNKNOWN = TurnTopic(subject=None, concept_id=None, canonical_id=None, source="none")
 
 
+def _retrieval_topic(text: str) -> str | None:
+    """المصدر الأوّل: سجلّ الاسترجاع (`CANONICAL_TOPICS`) — يقرّر أيّ تمرينٍ يُجلَب.
+
+    fail-open: عطبُ الاستيراد يُرجِع `None` فلا يُكسَر دور الطالب.
+    """
+    try:
+        from app.services.capabilities.arabic_normalize import primary_canonical_topic
+
+        canonical = primary_canonical_topic(text)
+        return getattr(canonical, "canonical_id", None)
+    except Exception:  # pragma: no cover - fail-open: الموضوع لا يكسر الدور
+        return None
+
+
+def _curriculum_topic(text: str) -> tuple[str | None, str | None]:
+    """المصدر الثاني: السجلّ القانوني (D-193) — يعرف الفيزياء والعلوم.
+
+    يُرجِع `(concept_id, subject)`؛ وكلاهما `None` عند تعذّر الاستيراد (fail-open).
+    """
+    try:
+        from shared.curriculum import classify, classify_subject
+
+        return classify(text), classify_subject(text)
+    except Exception:  # pragma: no cover - fail-open
+        return None, None
+
+
 def resolve_turn_topic(text: str) -> TurnTopic:
     """
     يحسم موضوع النصّ من **مصدرين مُرتَّبين**، ولا يخترع ثالثاً.
@@ -106,25 +133,8 @@ def resolve_turn_topic(text: str) -> TurnTopic:
     if not text or not text.strip():
         return _UNKNOWN
 
-    canonical_id: str | None = None
-    try:
-        from app.services.capabilities.arabic_normalize import primary_canonical_topic
-
-        canonical = primary_canonical_topic(text)
-        canonical_id = getattr(canonical, "canonical_id", None)
-    except Exception:  # pragma: no cover - fail-open: الموضوع لا يكسر الدور
-        canonical_id = None
-
-    concept_id: str | None = None
-    subject: str | None = None
-    try:
-        from shared.curriculum import classify, classify_subject
-
-        concept_id = classify(text)
-        subject = classify_subject(text)
-    except Exception:  # pragma: no cover - fail-open
-        concept_id = None
-        subject = None
+    canonical_id = _retrieval_topic(text)
+    concept_id, subject = _curriculum_topic(text)
 
     if canonical_id is not None:
         return TurnTopic(

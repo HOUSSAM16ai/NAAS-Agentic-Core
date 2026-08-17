@@ -88,8 +88,30 @@ def _parse(path: Path) -> ast.Module | None:
         return None
 
 
-def _check_broken_guard(files: list[Path]) -> None:
-    """أيّ مقارنة `... != "probability"` أو `== "probability"` خارج الحاسم الواحد."""
+def _is_broken_guard(node: ast.AST) -> bool:
+    """هل هذه العقدة هي **الصيغة المكسورة** بعينها؟ مُسنَدٌ نقيّ على عقدةٍ واحدة.
+
+    الصيغة: مقارنةٌ أحد أطرافها الحرفية `"probability"` والآخر سمةُ موضوع
+    (`canonical_id`/`concept_id`) — لا كلّ ورودٍ للحرفية، ولا كلّ مقارنةٍ على السمة.
+    """
+    if not isinstance(node, ast.Compare):
+        return False
+    operands = [node.left, *node.comparators]
+    has_literal = any(isinstance(op, ast.Constant) and op.value == "probability" for op in operands)
+    touches_topic = any(
+        isinstance(op, ast.Attribute) and op.attr in ("canonical_id", "concept_id")
+        for op in operands
+    )
+    return has_literal and touches_topic
+
+
+def _count_broken_guards(tree: ast.Module) -> int:
+    """عدد النسخ المكسورة في شجرةٍ واحدة."""
+    return sum(1 for node in ast.walk(tree) if _is_broken_guard(node))
+
+
+def _collect_broken_guards(files: list[Path]) -> dict[str, int]:
+    """مسحٌ نقيّ: مسارٌ نسبي ⇒ عدد النسخ المكسورة فيه (الحاسم الواحد مُستثنى)."""
     offenders: dict[str, int] = {}
     for path in files:
         rel = str(path.relative_to(REPO_ROOT))
@@ -98,25 +120,15 @@ def _check_broken_guard(files: list[Path]) -> None:
         tree = _parse(path)
         if tree is None:
             continue
-        hits = 0
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Compare):
-                continue
-            operands = [node.left, *node.comparators]
-            has_literal = any(
-                isinstance(op, ast.Constant) and op.value == "probability" for op in operands
-            )
-            if not has_literal:
-                continue
-            # نستهدف مقارنة على سمة `canonical_id`/`concept_id` — لا كل ورودٍ للحرفية.
-            touches_topic = any(
-                isinstance(op, ast.Attribute) and op.attr in ("canonical_id", "concept_id")
-                for op in operands
-            )
-            if touches_topic:
-                hits += 1
+        hits = _count_broken_guards(tree)
         if hits:
             offenders[rel] = hits
+    return offenders
+
+
+def _check_broken_guard(files: list[Path]) -> None:
+    """الراتشيت ثنائي الاتجاه على الصيغة المكسورة — الحكم وحده، والمسح في `_collect`."""
+    offenders = _collect_broken_guards(files)
 
     new = {rel: n for rel, n in offenders.items() if _FROZEN_DEBT.get(rel, 0) < n}
     if new:
@@ -131,15 +143,22 @@ def _check_broken_guard(files: list[Path]) -> None:
         _pass(f"صفر نسخة من الحارس المكسور (دَينٌ مُجمَّد: {len(_FROZEN_DEBT)})")
 
 
+def _defines_function(tree: ast.Module, name: str) -> bool:
+    """هل تُعرِّف هذه الشجرة دالّةً بهذا الاسم؟ — مُسنَدٌ نقيّ."""
+    return any(
+        isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == name
+        for node in ast.walk(tree)
+    )
+
+
 def _check_single_predicate(files: list[Path]) -> None:
     definitions: list[str] = []
     for path in files:
         tree = _parse(path)
         if tree is None:
             continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "is_foreign_to_probability":
-                definitions.append(str(path.relative_to(REPO_ROOT)))
+        if _defines_function(tree, "is_foreign_to_probability"):
+            definitions.append(str(path.relative_to(REPO_ROOT)))
     if definitions != [AUTHORITY]:
         _fail(
             f"`is_foreign_to_probability` يجب أن تُعرَّف في {AUTHORITY} وحده — وُجدت في {definitions}"
@@ -169,22 +188,25 @@ def _check_concept_ids_are_real() -> None:
         _pass(f"كل مُعرَّفات الاحتمالات الـ{len(ids)} مُنتقاة من السجلّ القانوني (D-193)")
 
 
+def _assigns_name(node: ast.AST, name: str) -> bool:
+    """هل تُسنِد هذه العقدة إلى اسمٍ بعينه؟ (`x = …` أو `x: T = …`) — مُسنَدٌ نقيّ."""
+    if isinstance(node, ast.Assign):
+        targets: list[ast.expr] = list(node.targets)
+    elif isinstance(node, ast.AnnAssign):
+        targets = [node.target]
+    else:
+        return False
+    return any(isinstance(target, ast.Name) and target.id == name for target in targets)
+
+
 def _check_subject_markers_single_home(files: list[Path]) -> None:
     homes: list[str] = []
     for path in files:
-        rel = str(path.relative_to(REPO_ROOT))
         tree = _parse(path)
         if tree is None:
             continue
-        for node in ast.walk(tree):
-            targets = (
-                node.targets
-                if isinstance(node, ast.Assign)
-                else ([node.target] if isinstance(node, ast.AnnAssign) else [])
-            )
-            for target in targets:
-                if isinstance(target, ast.Name) and target.id == "SUBJECT_MARKERS":
-                    homes.append(rel)
+        if any(_assigns_name(node, "SUBJECT_MARKERS") for node in ast.walk(tree)):
+            homes.append(str(path.relative_to(REPO_ROOT)))
     if homes != [CURRICULUM]:
         _fail(f"`SUBJECT_MARKERS` يجب أن تُعرَّف في {CURRICULUM} وحده — وُجدت في {homes}")
     else:

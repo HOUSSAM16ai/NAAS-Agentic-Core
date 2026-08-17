@@ -962,19 +962,29 @@ def classify_subject(text: str) -> str | None:
     if concept_id is not None:
         return _BY_ID[concept_id].subject
 
+    return _match_subject_marker(text)
+
+
+def _marker_hits(marker: str, haystack: str, stripped: str, words: set[str]) -> bool:
+    """هل تُطابِق هذه العلامة النصَّ؟ — عبارةٌ للمركَّبة، وحدُّ كلمةٍ للمفردة.
+
+    المفردة تُطابَق على **حدود الكلمة** وإلّا اختبأت «شعاع» داخل «الإشعاعي» و«جهد»
+    داخل «مجهود» — صنفُ عطبٍ حرسه D-193 صراحةً.
+    """
+    if " " in marker:
+        return marker in haystack or marker in stripped
+    return marker in words
+
+
+def _match_subject_marker(text: str) -> str | None:
+    """أوّل مادةٍ تُطابِق مفرداتها — الأطول يفوز (الأخصّ)، كقانون `_MARKER_INDEX`."""
     words = _word_markers(text)
     if not words:
         return None
     haystack = normalize(text or "")
     stripped = _strip_articles(haystack)
-    # الأطول يفوز (الأخصّ) — نفس قانون `_MARKER_INDEX`، فلا يسبق العامُّ الخاصَّ صدفةً.
     for marker, subject in _SUBJECT_MARKER_INDEX:
-        # علامةٌ من كلمتين تُطابَق كعبارة؛ ومن كلمةٍ واحدة على **حدود الكلمة** — وإلّا
-        # اختبأت «شعاع» داخل «الإشعاعي» و«جهد» داخل «مجهود» (صنفُ عطبٍ حرسه D-193).
-        if " " in marker:
-            if marker in haystack or marker in stripped:
-                return subject
-        elif marker in words:
+        if _marker_hits(marker, haystack, stripped, words):
             return subject
     return None
 

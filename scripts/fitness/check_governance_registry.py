@@ -83,17 +83,27 @@ def _gates_on_disk() -> dict[str, str]:
     return found
 
 
+def _patterns_for(source: str) -> tuple[str, ...]:
+    """أيّ لواحق تُقرأ في هذا الموطن — الـworkflows YAML وما عداها بايثون."""
+    return ("*.yml", "*.yaml") if "workflows" in source else ("*.py",)
+
+
+def _read_all(root: Path, patterns: tuple[str, ...]) -> list[str]:
+    """نصوص كل الملفّات المطابقة تحت جذرٍ واحد."""
+    return [
+        path.read_text(encoding="utf-8", errors="ignore")
+        for pattern in patterns
+        for path in root.rglob(pattern)
+    ]
+
+
 def _execution_text() -> str:
     """نصّ كل ما قد يشغّل بوّابة — يُقرأ مرّة."""
     chunks: list[str] = []
     for source in EXECUTION_SOURCES:
         root = REPO_ROOT / source
-        if not root.is_dir():
-            continue
-        patterns = ("*.yml", "*.yaml") if "workflows" in source else ("*.py",)
-        for pattern in patterns:
-            for path in root.rglob(pattern):
-                chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
+        if root.is_dir():
+            chunks.extend(_read_all(root, _patterns_for(source)))
     return "\n".join(chunks)
 
 
@@ -104,16 +114,24 @@ def _check_execution(gates: dict[str, str], registry: dict) -> None:
         _fail("`unenforced_debt` يجب أن يكون كائناً {اسم البوّابة: السبب}")
         return
 
+    _check_dead_gates(gates, debt, executed_in)
+    _check_debt_honesty(gates, debt, executed_in)
+
+
+def _check_dead_gates(gates: dict[str, str], debt: dict, executed_in: str) -> None:
+    """الاتجاه الأوّل: بوّابةٌ على القرص لا يشغّلها شيء ولا هي مُصرَّحة."""
     dead = [name for name in gates if name not in executed_in and name not in debt]
     if dead:
         _fail(
             "بوّابات على القرص لا يشغّلها أيّ workflow ولا أيّ اختبار ولا هي مُصرَّحة "
             f"في `unenforced_debt`: {sorted(dead)} — فارضٌ بلا مرمى (D-207)"
         )
-    else:
-        _pass(f"كل البوّابات الـ{len(gates)} مُنفَّذة فعلاً (workflow أو اختبار) — دَينٌ: {len(debt)}")
+        return
+    _pass(f"كل البوّابات الـ{len(gates)} مُنفَّذة فعلاً (workflow أو اختبار) — دَينٌ: {len(debt)}")
 
-    # الاتجاه الآخر: دَينٌ أُغلق بلا تحديث القائمة كذبٌ أيضاً (نمط check_correlated_http).
+
+def _check_debt_honesty(gates: dict[str, str], debt: dict, executed_in: str) -> None:
+    """الاتجاه الآخر: دَينٌ أُغلق بلا تحديث القائمة كذبٌ أيضاً (نمط `check_correlated_http`)."""
     closed = [name for name in debt if name in executed_in]
     if closed:
         _fail(f"بوّابات في `unenforced_debt` صارت تُنفَّذ — احذفها من الدَّين: {sorted(closed)}")

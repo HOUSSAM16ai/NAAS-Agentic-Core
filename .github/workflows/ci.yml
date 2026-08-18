@@ -487,6 +487,30 @@ jobs:
           # was cited in the source for months and never written.
           python scripts/fitness/check_topic_authority_single_source.py
 
+          # D-267 (2026-08-18 · decision of the owner · ISS-187→ISS-190): the
+          # NAAS Verification Layer constitution. The verifier is a PRODUCT with
+          # its own architectural boundary — the platform's barème, item bank and
+          # BKT/FSRS stay reusable technical assets, never a proven commercial
+          # moat. The investment report that founded this decision named its own
+          # weakest link honestly: NOT FOUND, an independent paid audit contract.
+          # The chain breaks at REAL PAYMENT, not at the problem or the budget.
+          # So the gate enforces a deterministic six-state machine (ABSENT →
+          # PENDING → CLEARED | BLOCKED → EXPIRED | REASSESS_REQUIRED; vague
+          # tokens like "probably-cleared" are red, and ABSENT → CLEARED is a
+          # refused jump), evidence schema conformance where `expires_at` is
+          # DERIVED from issued_at + validity_days, quantitative thresholds
+          # (Δ ≥ 15% over a pinned baseline with runs ≥ 3; ≥ 3 exploit classes
+          # with DISTINCT root causes — three variants of one root are not three
+          # classes; a settled transaction, never stars or an unpaid LOI), and
+          # the credibility limit: no unfalsifiable claim, no price without a
+          # PRICING HYPOTHESIS tag. Two structural rules matter most: CI verifies
+          # evidence and never decides law (a machine as `issuer` is a blank
+          # cheque signature), and the legal gate blocks EXTERNAL COMMERCIAL
+          # ACTIONS ONLY — local development, synthetic/open-data experiments and
+          # benchmark building stay green, because governance exists to stop us
+          # deceiving ourselves, not to stop the work.
+          python scripts/fitness/check_naas_verification.py
+
           # Third, strictest copy of the boundary rule (app ⇸ microservices).
           # Kept because it is AST-strict where the other two are scoped; it
           # reported 34 "violations" under 3.11 that were all PEP-695 parse

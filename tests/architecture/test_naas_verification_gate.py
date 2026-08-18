@@ -37,37 +37,93 @@ _MATERIALISED: tuple[str, ...] = (
 )
 
 
+#: القرارات الثلاثة الممكنة لكل ابنٍ في الشجرة — قائمةٌ مغلقة لا سلاسل متناثرة.
+_COPY, _DESCEND, _LINK = "copy", "descend", "link"
+
+_ROOT_REL = Path(".")
+
+
+def _materialised_paths() -> frozenset[Path]:
+    return frozenset(Path(rel) for rel in _MATERIALISED)
+
+
+def _parent_paths(materialised: frozenset[Path]) -> frozenset[Path]:
+    """الآباء الذين يجب النزول إليهم — لا يُنسَخون ولا يُربَطون."""
+    return frozenset(
+        parent for rel in materialised for parent in rel.parents if parent != _ROOT_REL
+    )
+
+
+def _placement(child_rel: Path, materialised: frozenset[Path], parents: frozenset[Path]) -> str:
+    """قرارٌ واحد لكل ابن — نقيّ، بلا أثرٍ جانبي وبلا تعشيش."""
+    if child_rel in materialised:
+        return _COPY
+    if child_rel in parents:
+        return _DESCEND
+    return _LINK
+
+
+def _copy_into(source: Path, target: Path) -> None:
+    """نسخٌ حقيقي: الحالة ستُعدّل هذا المسار، فلا يجوز أن يكون رابطاً إلى المستودع."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if source.is_dir():
+        shutil.copytree(source, target)
+    else:
+        shutil.copy2(source, target)
+
+
+def _link_into(source: Path, target: Path) -> None:
+    """رابطٌ رمزي: يبقى الاختبار سريعاً ولا يفشل لسببٍ غير الذي يقيسه."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.symlink_to(source)
+
+
+def _children_of(rel: Path) -> list[tuple[Path, Path]]:
+    """(المسار المطلق، المسار النسبي) لأبناء مستوىً واحد."""
+    source = REPO_ROOT / rel if rel != _ROOT_REL else REPO_ROOT
+    return [
+        (child, rel / child.name if rel != _ROOT_REL else Path(child.name))
+        for child in sorted(source.iterdir())
+    ]
+
+
+def _build_level(
+    root: Path, rel: Path, materialised: frozenset[Path], parents: frozenset[Path]
+) -> list[Path]:
+    """يبني مستوىً واحداً ويُرجع المستويات التي تحتاج نزولاً — بلا استدعاءٍ ذاتي."""
+    descend: list[Path] = []
+    for child, child_rel in _children_of(rel):
+        target = root / child_rel
+        placement = _placement(child_rel, materialised, parents)
+        if placement == _COPY:
+            _copy_into(child, target)
+        elif placement == _DESCEND:
+            target.mkdir(parents=True, exist_ok=True)
+            descend.append(child_rel)
+        else:
+            _link_into(child, target)
+    return descend
+
+
 def _mirror(tmp_path: Path) -> Path:
     """شجرةٌ قابلة للتعديل: نسخٌ حقيقي لما يُكسَر، وروابط رمزية لما عداه.
 
     ⚠️ `scripts/` يجب أن يكون مجلَّداً حقيقياً: البوّابة تشتقّ جذر المستودع من
     ``Path(__file__).resolve()``، و`resolve()` تتبع الروابط — فرابطٌ رمزي يعيدها إلى
     المستودع الحقيقي وتُصبح كل الحالات بلا أثر.
+
+    ⚠️ **وقائمةُ عملٍ تكرارية لا استدعاءٌ ذاتي**: النسخة الأولى نُقلت حرفياً من
+    `test_revenue_doctrine_gate` فورثت «طريق المطبّات» (حلقة ← ثلاث شُعَب ← شرطٌ ثانٍ
+    ← نزولٌ ذاتي)، وردّها CodeScene على ملفٍّ **جديد** بحقّ. والقرار كان الإصلاح لا
+    الإسكات (D-266 L9).
     """
     root = tmp_path / "repo"
     root.mkdir()
-    materialised = {Path(rel) for rel in _MATERIALISED}
-    parents = {parent for rel in materialised for parent in rel.parents if parent != Path(".")}
-
-    def build(rel: Path) -> None:
-        source = REPO_ROOT / rel if rel != Path(".") else REPO_ROOT
-        target = root / rel
-        for child in source.iterdir():
-            child_rel = rel / child.name if rel != Path(".") else Path(child.name)
-            if child_rel in materialised:
-                target.mkdir(parents=True, exist_ok=True)
-                if child.is_dir():
-                    shutil.copytree(child, root / child_rel)
-                else:
-                    shutil.copy2(child, root / child_rel)
-            elif child_rel in parents:
-                (root / child_rel).mkdir(parents=True, exist_ok=True)
-                build(child_rel)
-            else:
-                target.mkdir(parents=True, exist_ok=True)
-                (root / child_rel).symlink_to(child)
-
-    build(Path("."))
+    materialised = _materialised_paths()
+    parents = _parent_paths(materialised)
+    pending = [_ROOT_REL]
+    while pending:
+        pending.extend(_build_level(root, pending.pop(), materialised, parents))
     return root
 
 

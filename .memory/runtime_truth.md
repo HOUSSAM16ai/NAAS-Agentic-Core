@@ -1,5 +1,17 @@
 # Runtime Truth Lock
-> Last updated: **2026-08-16** | Branch: claude/documentation-system-review-5qqlzw (D-266)
+> Last updated: **2026-08-18** | Branch: claude/naas-bareme-verifier-7wvyk8 (D-267)
+> Previous: claude/documentation-system-review-5qqlzw (D-266)
+
+## D-267 — دستور طبقة التحقّق (2026-08-18 · ISS-187 → ISS-190)
+
+| المسار الحيّ | الحالة | الدليل (import + call chain + runtime) |
+|---------|--------|----------------------------------------|
+| **`scripts/fitness/check_naas_verification.py`** (D-267 — جديد) | **ACTIVE (CI · guardrails)** | مذكورٌ في `ci.yml` (وظيفة `guardrails`) فهو **مُنفَّذ** لا مُعلَن (D-266 L1). يفرض آلة الحالات الستّ + مخطّط الدليل + العتبات الكمّية + حدّ المصداقية + الحدود البنيوية. **٢٧ تجربة سلبية** مُثبَتة في `tests/architecture/test_naas_verification_gate.py` (28/28 خضراء)، ومنها واحدةٌ تُثبت أنّ الحجب **محدود**: عملٌ بحثيّ يبقى أخضر بينما `GATE_0_LEGAL = ABSENT`. |
+| **`docs/governance/GATE_LEDGER.json`** (D-267 — جديد) | **ACTIVE (حالة)** | أربع بوّابات قرار، كلّها `ABSENT` اليوم — حالةٌ ابتدائية صادقة لا فشل، ولكلٍّ `reason_ar` منطوق. صفر سجلّ دليلٍ مُسجَّل. |
+| **`naas_verifier/`** (مسار المنتج) | **ABSENT (مقصود)** | ⛔ لا كود بعد — وهذا مُعلَنٌ في `.memory/naas_verification_truth.md` بثماني وحدات، وتفرضه البوّابة في **الاتجاه المعاكس**: وحدةٌ مُعلَنة غير مبنيّة ولها كودٌ على القرص ⇒ CI أحمر. |
+| **قفل D-187 (تنفيذ الرقع العدائية)** | **ABSENT (قفلٌ لا نسيان)** | توليدُ رقعةٍ بنموذجٍ ثمّ تنفيذها هو بالضبط ما يمنعه القفل قبل `M1→M4`؛ يبقى `check_cognitive_execution::_check_llm_sandbox_interlock` هو الفارض ولم يُمَسّ. |
+
+> Previous: claude/documentation-system-review-5qqlzw (D-266)
 > Previous: docs/d260-kernel-hotspot (D-260)
 > Previous: feat/d256-orchestrator-client-hotspot (D-256)
 > Previous: hotfix/codescene-hotspot-chat-stream-ws-decomposition (D-252→D-255)

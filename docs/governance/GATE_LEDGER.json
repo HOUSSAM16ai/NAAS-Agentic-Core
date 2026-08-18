@@ -1,0 +1,45 @@
+{
+  "$schema_version": "1",
+  "decision": "D-267",
+  "purpose_ar": "الحالة الحيّة لبوّابات NAAS Verification Layer. القانون في docs/governance/GATE_STATE_MACHINE.md — وهذا الملفّ لا يحمل قانوناً. سجلّ الأدلّة مُلحَق-فقط: لا يُحذف سجلٌّ مُسجَّل.",
+  "purpose_en": "Live gate state for the NAAS Verification Layer. Law lives in GATE_STATE_MACHINE.md; evidence records are append-only.",
+  "rules_ar": [
+    "ABSENT ليست فشلاً — هي الحالة الابتدائية الصادقة قبل تسجيل أيّ دليل.",
+    "لا انتقال إلى CLEARED بلا سجلّ دليلٍ مطابقٍ للمخطّط ومراجعٍ بشريّ مؤهَّل.",
+    "reason_ar إلزامي لكل بوّابة — الخانة الفارغة تُقرأ نجاحاً (D-206 L11)."
+  ],
+  "gates": [
+    {
+      "gate_id": "GATE_0_LEGAL",
+      "title_ar": "الجاهزية القانونية",
+      "state": "ABSENT",
+      "reason_ar": "لا رأي قانوني مُسجَّل بعد. ⛔ الحجب يقتصر على الأفعال التجارية الخارجية؛ البحث والتطوير وبناء المعيار مسموحة بلا قيد (GATE_STATE_MACHINE §7).",
+      "blocks": "EXTERNAL_COMMERCIAL_ACTIONS",
+      "evidence": []
+    },
+    {
+      "gate_id": "GATE_A_TECHNICAL",
+      "title_ar": "التفوّق التقني المقيس",
+      "state": "ABSENT",
+      "reason_ar": "لا قياس بعد — قلب المُتحقِّق نفسه مُصنَّف PLANNED في .memory/naas_verification_truth.md. الادّعاء بالتفوّق ممنوع حتى تُسجَّل تجربةٌ قابلة لإعادة الإنتاج.",
+      "blocks": "SUPERIORITY_CLAIMS",
+      "evidence": []
+    },
+    {
+      "gate_id": "GATE_B_EXPLOIT_BREADTH",
+      "title_ar": "اتّساع أصناف الاختراق",
+      "state": "ABSENT",
+      "reason_ar": "لا ذخيرة أصنافٍ بعد. ⛔ ادّعاء وجود خندقٍ (moat) ممنوع قبل ثلاثة أصنافٍ متمايزة الجذر ومُعادة الإنتاج.",
+      "blocks": "MOAT_CLAIMS",
+      "evidence": []
+    },
+    {
+      "gate_id": "GATE_C_COMMERCIAL",
+      "title_ar": "التحقّق التجاري",
+      "state": "ABSENT",
+      "reason_ar": "لا معاملة مُسوّاة. ⛔ ادّعاء ملاءمة المنتج للسوق أو إيرادٍ متكرّر ممنوع؛ ونجومُ المستودع والاجتماعات وخطابات النيّة غير المدفوعة مرفوضةٌ كدليل.",
+      "blocks": "PMF_AND_REVENUE_CLAIMS",
+      "evidence": []
+    }
+  ]
+}

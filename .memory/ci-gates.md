@@ -16,8 +16,8 @@
 > them. All seven are wired now and `check_governance_registry.py` makes an
 > eighth impossible. Total gates on disk (derived, verified in CI):
 >
-> <!-- derived:gates_total=72 -->
-> **72** — in `scripts/fitness/` and `tools/ci/`, every one of them executed.
+> <!-- derived:gates_total=73 -->
+> **73** — in `scripts/fitness/` and `tools/ci/`, every one of them executed.
 
 ## Required jobs (must be green)
 
@@ -168,3 +168,13 @@ Redpanda يُعلن `redpanda:9092` فقط فيتعلّق أيّ عميل على
 مُثبَتة بـ**أربع عشرة** تجربة سلبية (`tests/architecture/test_cognitive_execution_gate.py`)،
 منها خمسٌ للقفل وحده: الجمع يُمنَع · الصندوق وحده يمرّ · النموذج وحده يمرّ (فالقفل يمنع
 **الجمع** لا القدرة) · إعفاءٌ بلا سبب أحمر · إعفاءٌ بائت أحمر.
+
+## D-267 — the verification-layer gate (added 2026-08-18)
+
+| Gate | What it enforces | Why it exists |
+|---|---|---|
+| `check_naas_verification.py` | The six-state gate machine (`ABSENT → PENDING → CLEARED \| BLOCKED → EXPIRED \| REASSESS_REQUIRED`) with **no vague token** and **no `ABSENT → CLEARED` jump**; evidence-schema conformance where `expires_at` is **derived** from `issued_at + validity_days`; quantitative thresholds (`Δ ≥ 15%` over a pinned baseline with `runs ≥ 3`; `≥ 3` exploit classes with **distinct root causes**; a **settled transaction** — never stars, meetings or an unpaid LOI); the credibility limit (no unfalsifiable claim, no price without a `PRICING HYPOTHESIS` tag); the three-path import boundary (product ⇸ student path, no domain inside the core); and the **bounded** commercial block. | The investment decision that founded D-267 named its own weakest link honestly: **NOT FOUND — an independent paid audit contract**. The chain breaks at REAL PAYMENT, not at the problem or the budget, so the danger is not failure but *unfalsifiable success*: a price hypothesis read as pricing evidence, three variants of one exploit read as three classes, a bounty read as a customer. Two structural rules carry the most weight: **CI verifies evidence and never decides law** (a machine as `issuer` is a blank-cheque signature), and the legal gate blocks **external commercial actions only** — local development, synthetic/open-data experiments and benchmark building stay green, because governance exists to stop us deceiving ourselves, not to stop the work. |
+
+Proven by **27 negative cases** plus a pristine baseline
+(`tests/architecture/test_naas_verification_gate.py`) — including the one that
+proves the block is bounded: R&D work stays green while the legal gate is `ABSENT`.

@@ -145,6 +145,23 @@
       "law_docs": [".memory/governance_enforcement_constitution.md"],
       "status_docs": ["docs/governance/CONSTITUTION_REGISTRY.json"],
       "enforcers": ["check_governance_registry.py"]
+    },
+    {
+      "section": "0.19",
+      "id": "D-267",
+      "title_en": "NAAS Verification Layer Constitution",
+      "title_ar": "دستور طبقة التحقّق",
+      "law_docs": [
+        ".memory/naas_verification_constitution.md",
+        "docs/architecture/NAAS_VERIFICATION_LAYER.md",
+        "docs/governance/GATE_STATE_MACHINE.md",
+        "docs/governance/evidence_schema.json"
+      ],
+      "status_docs": [
+        ".memory/naas_verification_truth.md",
+        "docs/governance/GATE_LEDGER.json"
+      ],
+      "enforcers": ["check_naas_verification.py"]
     }
   ]
 }

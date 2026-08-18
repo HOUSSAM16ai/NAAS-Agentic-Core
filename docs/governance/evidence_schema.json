@@ -1,0 +1,112 @@
+{
+  "$schema_version": "1",
+  "decision": "D-267",
+  "purpose_ar": "مخطّط سجلّ الدليل لبوّابات NAAS Verification Layer. يُتحقَّق منه بمكتبة قياسية فقط (بلا تبعية jsonschema) في scripts/fitness/check_naas_verification.py — نمط البوّابات القائمة: نصّية خالصة تعمل في بيئة متدهورة.",
+  "purpose_en": "Evidence-record schema for the NAAS Verification Layer gates. Validated with the standard library only, no third-party dependency.",
+  "rules_ar": [
+    "CI يتحقّق من وجود دليلٍ مطابقٍ للمخطّط — ولا يقرّر القانون ولا يُصدر رأياً.",
+    "الحقول الإلزامية العامّة مطلوبة لكل سجلّ دليل مهما كانت البوّابة.",
+    "حقول البوّابة الإضافية تُطلَب عند الانتقال إلى CLEARED فقط.",
+    "expires_at مُشتَقّ من issued_at + validity_days — كتابتُه مخالفاً للمُشتَقّ ⇒ CI أحمر (D-192).",
+    "issuer/reviewer لا يجوز أن يكونا آلة — آلةٌ تعتمد نفسها توقيعٌ على بياض."
+  ],
+  "gate_states": [
+    "ABSENT",
+    "PENDING",
+    "CLEARED",
+    "BLOCKED",
+    "EXPIRED",
+    "REASSESS_REQUIRED"
+  ],
+  "forbidden_state_tokens": [
+    "probably-cleared",
+    "assumed-cleared",
+    "temporary-ok",
+    "partial-ok",
+    "pending-ok",
+    "waived",
+    "self-cleared"
+  ],
+  "required_fields": [
+    "evidence_id",
+    "issuer",
+    "qualification",
+    "jurisdiction",
+    "scope",
+    "decision",
+    "issued_at",
+    "validity_days",
+    "expires_at",
+    "evidence_location",
+    "reviewer",
+    "review_status",
+    "evidence_kind"
+  ],
+  "review_status_values": ["pending", "passed", "failed"],
+  "forbidden_issuers": [
+    "ci",
+    "repository",
+    "repo",
+    "agent",
+    "claude",
+    "bot",
+    "automation",
+    "self"
+  ],
+  "allowed_evidence_kinds": [
+    "legal_opinion",
+    "regulatory_filing",
+    "benchmark_run",
+    "reproducible_experiment",
+    "exploit_reproduction",
+    "settled_transaction",
+    "signed_contract"
+  ],
+  "rejected_evidence_kinds": [
+    "github_stars",
+    "likes",
+    "meeting",
+    "positive_feedback",
+    "unpaid_loi",
+    "free_pilot",
+    "verbal_interest",
+    "waitlist_signup"
+  ],
+  "date_format": "YYYY-MM-DD",
+  "gate_extra_fields": {
+    "GATE_0_LEGAL": [],
+    "GATE_A_TECHNICAL": [
+      "baseline_id",
+      "dataset_id",
+      "protocol",
+      "delta_pct",
+      "runs",
+      "confidence",
+      "reproduction_command"
+    ],
+    "GATE_B_EXPLOIT_BREADTH": ["exploit_classes"],
+    "GATE_C_COMMERCIAL": ["transaction_id", "buyer", "amount_usd", "settled_at"]
+  },
+  "thresholds": {
+    "GATE_A_TECHNICAL": {
+      "delta_pct_min": 15,
+      "runs_min": 3,
+      "rationale_ar": "عرضٌ واحد ليس قياساً. العتبة والتكرار معاً هما ما يُقنع مهندس RL."
+    },
+    "GATE_B_EXPLOIT_BREADTH": {
+      "exploit_classes_min": 3,
+      "distinct_root_cause": true,
+      "rationale_ar": "ثلاث صيغٍ من جذرٍ واحد ليست ثلاثة أصناف — الاتّساع يُقاس بالجذور لا بالحالات."
+    },
+    "GATE_C_COMMERCIAL": {
+      "amount_usd_min_exclusive": 0,
+      "rationale_ar": "أعلى إشارةٍ ممكنة معاملةٌ مُسوّاة؛ وما دونها انطباع."
+    }
+  },
+  "exploit_class_required_fields": [
+    "class_id",
+    "root_cause",
+    "reproduction",
+    "spec_reference"
+  ]
+}

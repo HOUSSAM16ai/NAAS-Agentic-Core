@@ -47,6 +47,8 @@ import re
 import sys
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 REGISTRY = REPO_ROOT / "docs" / "governance" / "CONSTITUTION_REGISTRY.json"
 CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
@@ -294,6 +296,188 @@ def _check_no_hand_typed_counts(gates: dict[str, str]) -> None:
     _pass(f"`.memory/ci-gates.md`: العدد مُشتَقّ ومطابق ({len(gates)} بوّابة)")
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# الفارض المحلّي مطابقٌ لـCI أو مُعلَنٌ ميتاً (D-270 L7)
+#
+# D-266 أثبت أنّ بوّابةً على القرص لا يشغّلها شيء «تُقرأ حمايةً وهي ليست حماية».
+# والقياس في 2026-08-19 وجد النمط نفسه **خارج** `scripts/fitness/`:
+# `.pre-commit-config.yaml` — الفارض المحلّي الموثَّق في `Makefile` — لم يكن يُشغَّل
+# في أيّ workflow، **وكان يناقض CI مناقضةً مباشرة**:
+#
+#   ① `black` (بلا وسائط ⇒ عرض 88) بينما `pyproject.toml` يفرض 100 وCI يفحص
+#      بـ`ruff format --check`. القياس: **7917 سطراً في 1441 ملفّاً** طولها 89..100
+#      حرفاً — أي أنّ تشغيل الخطّافات الموثَّقة كان **يضمن** دفعةً حمراء.
+#   ② `isort` مُكرَّر أصلاً: قاعدة `I` مُفعَّلة داخل ruff بإعدادٍ مختلف.
+#   ③ خطّاف `mypy` بلا `pydantic` بينما `mypy.ini` يحمل `plugins = pydantic.mypy`
+#      ⇒ يخرج بالرمز 2 قبل فحص سطرٍ واحد. (CI واجه هذا وأصلحه؛ الفارض المحلّي لا.)
+#
+# فارضٌ يخالف CI أسوأ من غيابه: الغياب يُلاحَظ، والمخالفة **مصيدة** — من يتّبع
+# الوثائق يُحمِّر الـCI ولا يفهم لماذا. ولذلك تُشتَقّ النسخ من الطرفين ولا تُكتب ثالثةً.
+# ──────────────────────────────────────────────────────────────────────────────
+CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+
+
+def _ci_pin(tool: str) -> str | None:
+    """نسخة الأداة كما يُثبِّتها CI — مُشتَقّة من الـworkflow لا مكتوبة هنا (D-192)."""
+    if not CI_WORKFLOW.is_file():
+        return None
+    text = CI_WORKFLOW.read_text(encoding="utf-8")
+    match = re.search(rf"\b{re.escape(tool)}==([0-9][0-9A-Za-z.\-]*)", text)
+    return match.group(1) if match else None
+
+
+def _precommit_repos(config: dict) -> dict[str, str]:
+    """`owner/name` ⇒ `rev` بلا بادئة `v`."""
+    found: dict[str, str] = {}
+    for repo in config.get("repos", []):
+        url = str(repo.get("repo", ""))
+        slug = "/".join(url.rstrip("/").split("/")[-2:])
+        found[slug] = str(repo.get("rev", "")).lstrip("v")
+    return found
+
+
+def _precommit_hook_ids(config: dict) -> set[str]:
+    return {
+        str(hook.get("id", ""))
+        for repo in config.get("repos", [])
+        for hook in repo.get("hooks", [])
+    }
+
+
+def _check_mirror_pins(rel: str, repos: dict[str, str], contract: dict) -> set[str]:
+    """كل أداةٍ يفرضها CI لها مرآةٌ محلّية بنفس النسخة. تُعيد الـslugs المُصرَّحة."""
+    declared: set[str] = set()
+    for mirror in contract.get("mirrors", []):
+        slug, tool = mirror["repo"], mirror["tool"]
+        declared.add(slug)
+        if slug not in repos:
+            _fail(f"{rel}: مرآة `{tool}` مفقودة — CI يفرضها والفارض المحلّي لا")
+            continue
+        ci_version, local_version = _ci_pin(tool), repos[slug]
+        if ci_version is None:
+            _fail(f"{rel}: `{tool}` مُعلَنٌ مرآةً لكن CI لا يُثبِّته — مرآةٌ بلا أصل")
+        elif ci_version != local_version:
+            _fail(
+                f"{rel}: `{tool}` محلّياً {local_version} بينما CI يُثبِّت {ci_version} — "
+                "أداةٌ تختلف بين الفارضين ليست فارضاً بل مصيدة"
+            )
+    return declared
+
+
+def _load_config_yaml(rel: str, path: Path) -> dict | None:
+    """الإعداد مُحلَّلاً — أو `None` مع سببٍ مطبوع (⛔ ما لم يُحلَّل لا يُشهَد له، D-208 §6)."""
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        _fail(f"{rel}: تعذّر التحليل — لا يُعَدّ مطابقاً: {exc}")
+        return None
+
+
+def _check_forbidden_hooks(rel: str, config: dict, contract: dict) -> None:
+    hook_ids = _precommit_hook_ids(config)
+    for tool, reason in (contract.get("forbidden_tools") or {}).items():
+        if tool in hook_ids:
+            _fail(f"{rel}: الخطّاف `{tool}` ممنوع — {reason}")
+
+
+def _check_undeclared_repos(rel: str, repos: list[str], declared: set[str], contract: dict) -> None:
+    known = declared | set(contract.get("local_only_repos") or {})
+    if undeclared := sorted(set(repos) - known):
+        _fail(
+            f"{rel}: مستودعات خطّافات غير مُصرَّحة {undeclared} — كل فارضٍ محلّي "
+            "إمّا مرآةٌ لـCI وإمّا مُعلَنٌ محلّياً بسببه (D-206 L11)"
+        )
+
+
+def _check_config_contract(rel: str, contract: dict) -> None:
+    path = REPO_ROOT / rel
+    if not path.is_file():
+        _fail(f"`local_enforcers` يسمّي إعداداً غير موجود: {rel}")
+        return
+    config = _load_config_yaml(rel, path)
+    if config is None:
+        return
+
+    repos = _precommit_repos(config)
+    declared = _check_mirror_pins(rel, repos, contract)
+    _check_forbidden_hooks(rel, config, contract)
+    _check_undeclared_repos(rel, repos, declared, contract)
+
+
+def _check_local_enforcers(registry: dict) -> None:
+    spec = registry.get("local_enforcers")
+    if not isinstance(spec, dict) or not spec.get("configs"):
+        _fail("`local_enforcers.configs` مفقود — L7 قانونٌ بلا فارض")
+        return
+
+    for rel, contract in sorted(spec["configs"].items()):
+        _check_config_contract(rel, contract)
+
+    debt = spec.get("unenforced_local_debt", {})
+    if not isinstance(debt, dict):
+        _fail("`local_enforcers.unenforced_local_debt` يجب أن يكون كائناً")
+        return
+    if empty := [name for name, reason in debt.items() if not str(reason).strip()]:
+        _fail(f"دَينٌ محلّي بلا سببٍ منطوق: {sorted(empty)} — الخانة الفارغة تُقرأ نجاحاً")
+        return
+    _pass(f"الفوارض المحلّية مطابقةٌ لـCI عبر {len(spec['configs'])} إعداداً (دَينٌ مُعلَن: {len(debt)})")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# فوارض العملية مُعلَنة لا مُكتشَفة (D-270 L1/L2/L3)
+#
+# `GATE_HOMES` تغطّي فوارض **المستودع الساكن**. أمّا فوارض **العملية** (وصف الدفعة ·
+# جاهزية البلاغ) فتحتاج حمولة حدثٍ من GitHub، فلا تصلح لـ`run_fitness_gates`، ولا
+# يجوز في الوقت نفسه أن تعيش في موطنٍ لا يعرفه السجلّ: «موطنٌ ثالث بلا إعلانٍ يعني
+# بوّابةً غير مرئية» (D-266). فهي مُعلَنة هنا، ويُفحَص لكلٍّ منها **ملفّها** و**الـ
+# workflow الذي يشغّلها فعلاً** — نفس الساق الثالثة، بمرمى آخر.
+# ──────────────────────────────────────────────────────────────────────────────
+PROCESS_HOME = ".github/scripts"
+
+
+def _check_one_process_enforcer(name: str, contract: dict, home: Path) -> None:
+    """المُتحقِّق موجودٌ، والـworkflow المُصرَّح موجودٌ **ويستدعيه فعلاً**."""
+    if not (home / name).is_file():
+        _fail(f"`process_enforcers` يسمّي مُتحقِّقاً غير موجود: {name}")
+        return
+    workflow_rel = str(contract.get("workflow", ""))
+    workflow = REPO_ROOT / workflow_rel
+    if not workflow.is_file():
+        _fail(f"{name}: يُصرَّح أنّ `{workflow_rel}` يشغّله — والملفّ غير موجود")
+        return
+    if name not in workflow.read_text(encoding="utf-8"):
+        _fail(
+            f"{name}: `{workflow_rel}` لا يستدعيه — فارضٌ على القرص بلا مرمى "
+            "(نفس صنف ISS-186، بمرمى العملية)"
+        )
+
+
+def _process_home_matches(home: Path, declared: set[str]) -> bool:
+    """الموطن والسجلّ متطابقان في الاتجاهين — لا يتيمٌ على القرص ولا اسمٌ وهمي."""
+    on_disk = {path.name for path in home.glob("*.py")} if home.is_dir() else set()
+    if undeclared := sorted(on_disk - declared):
+        _fail(f"مُتحقِّقات عملية على القرص بلا إعلانٍ في السجلّ: {undeclared}")
+    if ghost := sorted(declared - on_disk):
+        _fail(f"`process_enforcers` يسمّي ملفّات غير موجودة: {ghost}")
+    return not undeclared and not ghost
+
+
+def _check_process_enforcers(registry: dict) -> None:
+    spec = registry.get("process_enforcers")
+    if not isinstance(spec, dict) or not spec.get("enforcers"):
+        _fail("`process_enforcers` مفقود — فوارض العملية بلا إعلان (موطنٌ غير مرئي)")
+        return
+
+    home = REPO_ROOT / str(spec.get("home", PROCESS_HOME))
+    declared: dict = spec["enforcers"]
+
+    for name, contract in sorted(declared.items()):
+        _check_one_process_enforcer(name, contract, home)
+
+    if _process_home_matches(home, set(declared)):
+        _pass(f"فوارض العملية مُعلَنة ومُنفَّذة: {len(declared)} مُتحقِّقاً")
+
+
 def main() -> int:
     if not REGISTRY.is_file():
         print(f"❌ السجلّ الدستوري مفقود: {REGISTRY.relative_to(REPO_ROOT)}")
@@ -316,6 +500,8 @@ def main() -> int:
     _check_declared_absence(registry)
     _check_no_phantom_enforcers(gates)
     _check_no_hand_typed_counts(gates)
+    _check_local_enforcers(registry)
+    _check_process_enforcers(registry)
 
     if _FAILURES:
         print(f"\n❌ {len(_FAILURES)} انتهاك — الحوكمة ليست مفروضة:")

@@ -1,5 +1,4 @@
-# Trivy Configuration for Superhuman Security Scanning
-# Surpassing enterprise standards for vulnerability detection
+# Trivy Configuration — container & dependency vulnerability scanning
 
 # Scan configuration
 scan:

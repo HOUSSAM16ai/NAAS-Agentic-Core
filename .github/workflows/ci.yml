@@ -165,7 +165,7 @@ jobs:
           # (shared/ai_models/model_chain.py). Turns the D-013 prose mirror rule
           # into a machine-enforced single source of truth.
           python scripts/fitness/check_model_chain_parity.py
-          # D-176: superhuman abstraction — turn convention-only boundary gates into
+          # D-176: turn convention-only boundary gates into
           # machine enforcement (were present but wired nowhere), plus the new
           # anti-ZOMBIE-for-abstraction gate (every hexagonal port is driver-backed
           # or explicitly dormant-allowlisted).
@@ -539,6 +539,56 @@ jobs:
           # declared SEAM that HAS code is red — because live code with no guard and
           # no test is worse than a declared absence.
           python scripts/fitness/check_ambient_identity.py
+
+          # ── D-270 (معايير التسليم — المصدر: OpenHands) ──────────────────────
+          # L6: سلسلة التوريد. القياس 2026-08-19 وجد `dependabot.yml` يخرق ثلاثة
+          # معايير معاً: بلا `cooldown` إطلاقاً (نسخةٌ رُفعت قبل ساعة تُدمَج آلياً —
+          # باب الحزمة المُختطَفة)، ويستهدف `/ai_service` وهو مجلّدٌ **غير موجود**،
+          # ويجمع `flask*`/`chromadb*` ولا حزمة منهما في أيّ `requirements*.txt`.
+          # وأخطرها الرابع: `frontend/package.json` (١٠ تبعيات) لم يكن مُغطّى
+          # إطلاقاً — والناقص يُلاحَظ، أمّا التغطية التي تبدو شاملة فلا يسألها أحد.
+          # ودَين التثبيت (١٦٠ تبعية بلا `==`) مُجمَّد ويتقلّص في الاتجاهين، لأن
+          # فرضه دفعةً واحدة ترقيةٌ جماعية غير مُختبَرة — وثمن الإهمال مُثبَتٌ حيّاً
+          # في D-184: نطاقٌ عائم لـruff أحمرَّ به `main` بلا تغيير سطرٍ واحد.
+          python scripts/fitness/check_supply_chain.py
+          # L8: حدّ المصداقية يمتدّ إلى ما يُشحَن. D-227 فرضه على الوثائق المُعلَنة
+          # وحدها، فبقيت ملفّات الإعداد خارج كل مرمى: أربعة ادّعاءات غير قابلة
+          # للتفنيد (صفة تفوّقٍ بشري · مقارنةٌ بمنافسين بلا قياس · استعارةُ سلطةٍ
+          # أمنية · ادّعاءُ ملكية نماذج) عاشت في ملفّين يُشحَنان مع كل نسخة —
+          # ومعها وعدٌ بتغطية مجلّدٍ غير موجود. النصّ الحرفي في السجلّ القانوني،
+          # ولا يُقتبَس هنا: تعليقٌ يقتبس العبارة يُفشِل بوّابته (اكتُشِف بالتشغيل).
+          # والأسوأ أن قائمة العبارات كانت **ثلاث نسخ في ثلاث بوّابات** لا تتّفق
+          # أيّ اثنتين منها (المشترك عبارتان فقط) — نفس صنف ISS-139 لكن داخل
+          # الفوارض نفسها. فالمصدر الآن `docs/governance/CREDIBILITY_LIMIT.json`،
+          # والبوّابة تُثبت تكافؤ الثلاث معه بلا تغيير سلوكها.
+          python scripts/fitness/check_config_credibility.py
+
+          # L4: البوّابة تُثبِت أنّها تحجب. ISS-148 هي الدرس المؤسِّس — عقودٌ خضراء
+          # ومسارُ التسريب خارج مرمى كلّ واحدٍ منها، فالخُضرة كانت دليل عمى لا سلامة.
+          # وD-266 فرض أن تُشغَّل البوّابات؛ وبقي السؤال الأصعب بلا فارض: هل تحجب حين
+          # يُخرَق قانونها؟ القياس 2026-08-19: من ٧٧ بوّابة، ٢٦ فقط لها اختبارٌ يؤكّد
+          # فشلاً، و٢٠ مذكورةٌ في اختبارٍ يتوقّع **نجاحها** (يُثبِت أنّها تعمل لا أنّها
+          # تحجب)، و٣١ بلا أيّ اختبار. الدَّين مُجمَّد ويتقلّص في الاتجاهين لأنّ كتابة
+          # ٥١ برهاناً في دفعةٍ واحدة أخطر من الدَّين المُعلَن.
+          python scripts/fitness/check_gate_negative_proof.py
+          # L5: الحرفية السحرية. دُفِع الثمن أربع مرّات (D-185 رمزٌ بلا تعريف · D-186
+          # ثلاث قوائم لنيّةٍ واحدة · D-191 حرفيةٌ في ٧ مواضع تُغذّي ١٢ نقطة استدعاء ·
+          # D-193 ثلاثة تعاريف لـconcept_id أسقطت الفيزياء كلّها إلى "general")، وفي
+          # كلّ مرّة كُتِبت بوّابةٌ للحادثة لا للصنف. هذه تُعمّم القاعدة قبل الخامسة.
+          python scripts/fitness/check_no_magic_strings.py
+
+          # ── D-271 (معايير الوكلاء المفتوحة — المصدر: anthropics/skills · adk-python) ──
+          # L9/L10/L11: كلمة «مهارة» تعني شيئين في هذا المستودع — BaseSkill يعمل في
+          # مسار الطالب، وAgent Skill مجلّدٌ يوجّه وكيلاً لغوياً. واسمٌ واحد لبنيتين هو
+          # ما يحذّر منه D-209 وما أنتج ISS-139. فالمسرد مُعلَن ومفروض، والمهارات على
+          # المعيار المفتوح (agentskills.io)، ولكلٍّ **حالة تقييمٍ مُصرَّحة**: الساق
+          # السادسة بعد الخمس في §0.5 — المهارة تُقاس ولا تُعلَن.
+          python scripts/fitness/check_agent_skills_spec.py
+          # L12: التبنّي بقرارٍ مكتوب لا بإعجاب. ISS-193 فُتِحت حرفياً على «تبنّي harness
+          # خارجي بلا قرارٍ مكتوب»؛ وقائمةٌ من عشرة مستودعاتٍ لامعة تُقرأ إعجاباً بدل
+          # عقدٍ تتحوّل إلى دَينٍ معماري. كل مصدرٍ صفٌّ بما اُستُعير وما رُفض ولماذا،
+          # وبفارضٍ مُسمّى أو إعلانِ غيابه — والفحص في الاتجاهين: ABSENT وله كود ⇒ أحمر.
+          python scripts/fitness/check_external_standards.py
 
           # Third, strictest copy of the boundary rule (app ⇸ microservices).
           # Kept because it is AST-strict where the other two are scoped; it

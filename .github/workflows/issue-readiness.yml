@@ -1,0 +1,114 @@
+---
+# D-270 L2 — البلاغ يُولَد جاهزاً أو لا يُطوَّر.
+#
+# الوسم `ready-for-dev` **تديره الآلة**: يُضاف حين تكتمل معايير القبول، ويُنزَع حين
+# تسقط. ولا يُمنَح يدوياً — وسمٌ يمنحه إنسانٌ بالنيّة الحسنة هو بالضبط ما جعل ISS-145
+# تُغلَق على معيارٍ خطأ.
+#
+# التعليق يُحدَّث ولا يتكرّر (علامة مخفية)، ويُنشَر في ثلاث حالات فقط: عند الفتح أو
+# إعادة الفتح · عند اكتمال الجاهزية · عند سقوطها. التحرير الذي لا يغيّر الحالة صامت
+# — إشعارٌ بلا معلومةٍ جديدة يُدرِّب الناس على تجاهل الإشعارات.
+
+name: issue-readiness
+
+on:
+    issues:
+        types: [opened, edited, reopened, labeled, unlabeled]
+
+permissions:
+    issues: write
+    contents: read
+
+concurrency:
+    group: issue-readiness-${{ github.event.issue.number }}
+    cancel-in-progress: false
+
+jobs:
+    evaluate:
+        name: جاهزية البلاغ (D-270 L2)
+        if: github.event.issue.state == 'open' && github.event.issue.pull_request == null
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - name: Checkout trusted scripts
+              uses: actions/checkout@v5
+              with:
+                  persist-credentials: false
+
+            - name: Set up Python
+              uses: actions/setup-python@v6
+              with:
+                  python-version: "3.12"
+
+            - name: Evaluate readiness
+              id: readiness
+              env:
+                  GITHUB_EVENT_PATH: ${{ github.event_path }}
+              run: |
+                  set -euo pipefail
+                  python .github/scripts/validate_issue_readiness.py --json > /tmp/readiness.json || true
+                  cat /tmp/readiness.json
+                  python - <<'PY' >> "$GITHUB_OUTPUT"
+                  import json, os, pathlib
+                  data = json.loads(pathlib.Path("/tmp/readiness.json").read_text(encoding="utf-8"))
+                  print(f"ready={str(data['ready']).lower()}")
+                  pathlib.Path("/tmp/reasons.txt").write_text(
+                      "\n".join(f"- {r}" for r in data["reasons"]), encoding="utf-8"
+                  )
+                  PY
+
+            - name: Apply or remove ready-for-dev
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  READY: ${{ steps.readiness.outputs.ready }}
+                  ISSUE: ${{ github.event.issue.number }}
+              run: |
+                  set -euo pipefail
+                  had=$(gh api "repos/${{ github.repository }}/issues/$ISSUE" \
+                        --jq '[.labels[].name] | index("ready-for-dev") != null')
+                  if [ "$READY" = "true" ] && [ "$had" != "true" ]; then
+                      gh issue edit "$ISSUE" --add-label ready-for-dev --repo "${{ github.repository }}"
+                      echo "changed=added" >> "$GITHUB_ENV"
+                  elif [ "$READY" != "true" ] && [ "$had" = "true" ]; then
+                      gh issue edit "$ISSUE" --remove-label ready-for-dev --repo "${{ github.repository }}"
+                      echo "changed=removed" >> "$GITHUB_ENV"
+                  else
+                      echo "changed=none" >> "$GITHUB_ENV"
+                  fi
+
+            - name: Upsert feedback comment
+              if: >-
+                  env.changed != 'none' ||
+                  github.event.action == 'opened' ||
+                  github.event.action == 'reopened'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  READY: ${{ steps.readiness.outputs.ready }}
+                  ISSUE: ${{ github.event.issue.number }}
+              run: |
+                  set -euo pipefail
+                  marker='<!-- naas:issue-readiness -->'
+                  if [ "$READY" = "true" ]; then
+                      body="$marker
+                  ✅ **البلاغ جاهز للتطوير** — معايير القبول مكتوبة، والدليل حاضر.
+                  الوسم \`ready-for-dev\` مُطبَّق، وأيّ دفعةٍ تعالجه يجب أن تربطه بـ\`Fixes #$ISSUE\`."
+                  else
+                      body="$marker
+                  🚧 **البلاغ ليس جاهزاً للتطوير بعد.** الناقص:
+
+                  $(cat /tmp/reasons.txt)
+
+                  > من لا يكتب شرط النجاح مُسبَقاً يخترعه بعد الإصلاح. الوسم
+                  > \`ready-for-dev\` تديره الآلة ويُضاف تلقائياً حين تكتمل هذه البنود."
+                  fi
+
+                  existing=$(gh api "repos/${{ github.repository }}/issues/$ISSUE/comments" \
+                             --jq "[.[] | select(.body | startswith(\"$marker\"))] | .[0].id // empty")
+                  printf '%s' "$body" > /tmp/comment.md
+                  if [ -n "$existing" ]; then
+                      gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$existing" \
+                          -F body=@/tmp/comment.md > /dev/null
+                  else
+                      gh api --method POST "repos/${{ github.repository }}/issues/$ISSUE/comments" \
+                          -F body=@/tmp/comment.md > /dev/null
+                  fi

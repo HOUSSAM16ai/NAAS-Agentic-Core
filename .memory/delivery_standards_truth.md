@@ -13,7 +13,7 @@
 | القانون | الحالة | الفارض | ما يبقى |
 |---|---|---|---|
 | L1 الدليل قبل الدمج | **ACTIVE** | `.github/scripts/validate_pr_description.py` | فحصُ وسم البلاغ يتطلّب `GITHUB_TOKEN`؛ محلياً يُبلَّغ ولا يُفشِل |
-| L2 جاهزية البلاغ | **ACTIVE** | `.github/scripts/validate_issue_readiness.py` | الوسم `ready-for-dev` يُنشَأ عند أوّل تشغيلٍ في المستودع |
+| L2 جاهزية البلاغ | **ABSENT (البلاغات مُعطَّلة)** | `.github/scripts/validate_issue_readiness.py` | ⚠️ **مقيس 2026-08-19**: البلاغات مُعطَّلة في المستودع (`410 Issues has been disabled`)، فلا `issue-readiness` يعمل ولا يجوز مطالبة أحدٍ بـ`Fixes #N`. القاعدة **مربوطة بالواقع**: `_issues_enabled` تُعطّلها وتعيدها تلقائياً لحظة تفعيل البلاغات — لا برأي. **شرط الترقية:** تفعيل Issues في إعدادات المستودع. |
 | L3 عنوان الدفع عقد | **ACTIVE** | بندٌ في `validate_pr_description.py` | — |
 | L4 البوّابة تُثبِت أنّها تحجب | **PARTIAL** | `scripts/fitness/check_gate_negative_proof.py` | دَينٌ مُعلَن يتقلّص — العدد في `NEGATIVE_PROOFS.json` |
 | L5 الحرفية السحرية | **PARTIAL** | `scripts/fitness/check_no_magic_strings.py` | دَينٌ مُجمَّد يتقلّص — القائمة في `MAGIC_STRINGS.json` |
@@ -32,6 +32,10 @@
   ادّعاءات غير قابلة للتفنيد → أُزيلت.
 
 ## دَينٌ مُعلَن (لا يُقرأ نجاحاً)
+
+- **البلاغات مُعطَّلة في المستودع** ⇒ L2 بلا مرمى فعلي، و`issue-readiness.yml` لا
+  يُستدعى أبداً. أُبقي الفارض ولم يُحذَف لأنّ الحذف يعني فقدان القانون عند تفعيل
+  البلاغات؛ والحالة **مُصرَّحة** هنا ولا تُقرأ نجاحاً (D-206 L11).
 
 - **`tools/simplicity_validator.py` غير موجود** بينما `make simplicity-validate`
   يستدعيه → الهدف يفشل. لم يُحذَف الهدف في هذه الدفعة لأنّ حذف أهداف `Makefile`

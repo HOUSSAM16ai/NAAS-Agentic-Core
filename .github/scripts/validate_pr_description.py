@@ -217,6 +217,32 @@ def _issue_labels(repo: str, number: int, token: str) -> set[str] | None:
     return {str(label.get("name", "")) for label in payload.get("labels", [])}
 
 
+def _issues_enabled(repo: str, token: str) -> bool | None:
+    """هل البلاغات مُفعَّلة في المستودع؟ `None` تعني «تعذّرت القراءة».
+
+    ⚠️ **قِيس على هذا المستودع في 2026-08-19**: البلاغات **مُعطَّلة** (`410 Issues has
+    been disabled`). فقاعدةُ «اربط بلاغاً يحمل `ready-for-dev`» كانت ستطالب كلّ دفعةٍ
+    بشيءٍ **يستحيل إنشاؤه** — وهو تعريف المصيدة التي يحظرها D-270 L7 نفسه: فارضٌ
+    يُحمِّر ما لا يستطيع أحدٌ إصلاحه يُدرَّب الناس على تجاوزه.
+
+    فالقاعدة مربوطةٌ بـ**الواقع لا بالرأي**: تُعطَّل ما دامت البلاغات مُعطَّلة، وتعود
+    من تلقاء نفسها لحظة تفعيلها (نفس تصميم D-227: منعٌ مربوطٌ بوجود الحقل).
+    """
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{repo}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "naas-pr-governance",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return bool(json.load(response).get("has_issues", False))
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+
 def _survey_readiness(issues: list[int], repo: str, token: str) -> tuple[bool, list[int]]:
     """(هل وُجد بلاغٌ جاهز؟، ما تعذّرت قراءته) — الفرق بين «لا» و«لا نعرف»."""
     unreadable: list[int] = []
@@ -230,6 +256,12 @@ def _survey_readiness(issues: list[int], repo: str, token: str) -> tuple[bool, l
 
 
 def _check_linked_issue(body: str, problems: list[str]) -> None:
+    token, repo = os.environ.get("GITHUB_TOKEN"), os.environ.get("GITHUB_REPOSITORY")
+    if token and repo and _issues_enabled(repo, token) is False:
+        # ⛔ لا يُطالَب أحدٌ بربط بلاغٍ في مستودعٍ بلا بلاغات (انظر `_issues_enabled`).
+        print("ℹ️  L2 مُعطَّل: البلاغات مُعطَّلة في هذا المستودع — القاعدة تعود بتفعيلها.")
+        return
+
     issues = _linked_issues(body)
     if not issues:
         problems.append(
@@ -238,7 +270,6 @@ def _check_linked_issue(body: str, problems: list[str]) -> None:
         )
         return
 
-    token, repo = os.environ.get("GITHUB_TOKEN"), os.environ.get("GITHUB_REPOSITORY")
     if not token or not repo:
         # ما لا يُقرأ لا يُشهَد عليه: غياب الرمز ليس فشلاً وليس نجاحاً (D-208 §6).
         print(f"ℹ️  ربط البلاغ {issues}: لم يُفحَص الوسم (لا GITHUB_TOKEN — تشغيلٌ محلّي).")

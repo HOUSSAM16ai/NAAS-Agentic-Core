@@ -423,6 +423,23 @@ def _check_local_enforcers(registry: dict) -> None:
 PROCESS_HOME = ".github/scripts"
 
 
+def _check_one_process_enforcer(name: str, contract: dict, home: Path) -> None:
+    """المُتحقِّق موجودٌ، والـworkflow المُصرَّح موجودٌ **ويستدعيه فعلاً**."""
+    if not (home / name).is_file():
+        _fail(f"`process_enforcers` يسمّي مُتحقِّقاً غير موجود: {name}")
+        return
+    workflow_rel = str(contract.get("workflow", ""))
+    workflow = REPO_ROOT / workflow_rel
+    if not workflow.is_file():
+        _fail(f"{name}: يُصرَّح أنّ `{workflow_rel}` يشغّله — والملفّ غير موجود")
+        return
+    if name not in workflow.read_text(encoding="utf-8"):
+        _fail(
+            f"{name}: `{workflow_rel}` لا يستدعيه — فارضٌ على القرص بلا مرمى "
+            "(نفس صنف ISS-186، بمرمى العملية)"
+        )
+
+
 def _check_process_enforcers(registry: dict) -> None:
     spec = registry.get("process_enforcers")
     if not isinstance(spec, dict) or not spec.get("enforcers"):
@@ -433,20 +450,7 @@ def _check_process_enforcers(registry: dict) -> None:
     declared: dict = spec["enforcers"]
 
     for name, contract in sorted(declared.items()):
-        script = home / name
-        if not script.is_file():
-            _fail(f"`process_enforcers` يسمّي مُتحقِّقاً غير موجود: {name}")
-            continue
-        workflow_rel = str(contract.get("workflow", ""))
-        workflow = REPO_ROOT / workflow_rel
-        if not workflow.is_file():
-            _fail(f"{name}: يُصرَّح أنّ `{workflow_rel}` يشغّله — والملفّ غير موجود")
-            continue
-        if name not in workflow.read_text(encoding="utf-8"):
-            _fail(
-                f"{name}: `{workflow_rel}` لا يستدعيه — فارضٌ على القرص بلا مرمى "
-                "(نفس صنف ISS-186، بمرمى العملية)"
-            )
+        _check_one_process_enforcer(name, contract, home)
 
     on_disk = {path.name for path in home.glob("*.py")} if home.is_dir() else set()
     if undeclared := sorted(on_disk - set(declared)):

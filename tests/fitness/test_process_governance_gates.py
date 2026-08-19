@@ -23,6 +23,27 @@ import check_governance_registry as governance_gate
 import validate_issue_readiness as issue_gate
 import validate_pr_description as pr_gate
 
+#: متغيّرات تُحقَن في **كل** وظيفة GitHub Actions، ويقرؤها المُتحقِّقان كمصدرٍ احتياطي.
+_ACTIONS_ENV = ("GITHUB_EVENT_PATH", "GITHUB_TOKEN", "GITHUB_REPOSITORY")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_actions_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """يعزل التجارب عن بيئة Actions.
+
+    ⚠️ **اكتُشِف بالتشغيل في CI لا بالتحليل** (PR #25): تجربة «لا عنوان مُتاحاً» كانت
+    خضراء محلياً وحمراء في CI، لأنّ ``GITHUB_EVENT_PATH`` مُعرَّفٌ دائماً داخل Actions —
+    فسقط المُتحقِّق إلى حمولة الحدث والتقط **عنوان الـPR الحقيقي**، وهو ليس Conventional
+    Commits. أي أنّ الاختبار كان يقيس بيئته لا سلوكه.
+
+    وهذا نفس صنف D-105 (نظافة الاختبارات): اختبارٌ يعتمد على بيئةٍ لا يُصرِّح بها ليس
+    اختباراً بل مقياسَ حظّ. العزل هنا بـ``monkeypatch`` لا بكتابةٍ وقت الجمع — تلك
+    تحرسها ``check_test_hygiene``.
+    """
+    for name in _ACTIONS_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # L1 · L3 — وصف الدفعة
 # ══════════════════════════════════════════════════════════════════════════════

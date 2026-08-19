@@ -91,20 +91,19 @@ def _check_coverage(policy: dict, gates: set[str]) -> tuple[dict, dict]:
     return proven, debt
 
 
+def _proof_defect(gate: str, test_files: list[str]) -> str | None:
+    """`"broken"` إن أحال إلى ملفٍّ محذوف · `"weak"` إن لم يؤكّد فشلاً · `None` إن سليم."""
+    paths = [REPO_ROOT / rel for rel in test_files]
+    if any(not path.is_file() for path in paths):
+        return "broken"
+    return None if any(_proves_blocking(path, gate[:-3]) for path in paths) else "weak"
+
+
 def _check_proven(proven: dict) -> None:
     """كل برهانٍ مُعلَن موجودٌ فعلاً ويؤكّد فشلاً — لا إحالةً إلى ملفٍّ محذوف."""
-    broken: list[str] = []
-    weak: list[str] = []
-    for gate, test_files in sorted(proven.items()):
-        stem = gate[:-3]
-        paths = [REPO_ROOT / rel for rel in test_files]
-        if missing := [
-            rel for rel, path in zip(test_files, paths, strict=True) if not path.is_file()
-        ]:
-            broken.append(f"{gate} → {missing}")
-            continue
-        if not any(_proves_blocking(path, stem) for path in paths):
-            weak.append(gate)
+    defects = {gate: _proof_defect(gate, files) for gate, files in sorted(proven.items())}
+    broken = [f"{gate} → {proven[gate]}" for gate, kind in defects.items() if kind == "broken"]
+    weak = [gate for gate, kind in defects.items() if kind == "weak"]
     if broken:
         _fail(f"براهين مُعلَنة تُحيل إلى ملفّات غير موجودة (خريطةٌ تكذب — ISS-149): {broken}")
     if weak:

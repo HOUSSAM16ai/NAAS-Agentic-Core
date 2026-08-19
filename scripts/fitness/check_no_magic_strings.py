@@ -47,6 +47,10 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _ast_util import parse_source, run_gate
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 POLICY = REPO_ROOT / "docs" / "governance" / "MAGIC_STRINGS.json"
 
@@ -69,32 +73,44 @@ def _is_identifier_literal(value: str) -> bool:
     return value.isupper() and len(value) >= 6 and "_" in value and value.replace("_", "").isalnum()
 
 
-def _duplicated(scopes: list[str]) -> tuple[dict[str, set[str]], list[str]]:
-    """المُعرِّفات الظاهرة في ملفّين+، ومعها الملفّات التي تعذّر تحليلها."""
-    seen: dict[str, set[str]] = collections.defaultdict(set)
-    unreadable: list[str] = []
+def _identifier_literals(path: Path) -> set[str]:
+    """مُعرِّفات ملفٍّ واحد.
+
+    ⛔ يستعمل ``_ast_util.parse_source`` عمداً: هي **ترفع** ولا تُعيد قيمةً ثالثة،
+    و``run_gate`` تحوّل الملفَّ غير المقروء إلى فشلٍ صريح. بوّابةٌ لا تقرأ ملفاً لا
+    تُبلِّغ أنه نظيف (ISS-149 F1 — كانت ``except SyntaxError: return []`` في ١٣ فارضاً،
+    منها أمنُ الصدفة بدَينٍ صفر). ولا نسخة ثانية من هذا المنطق هنا (D-185).
+    """
+    tree = parse_source(path)
+    return {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and _is_identifier_literal(node.value)
+    }
+
+
+def _scope_files(scopes: list[str]) -> list[Path]:
+    """ملفّات بايثون تحت النطاقات المُعلَنة — ونطاقٌ غير موجود انتهاك."""
+    files: list[Path] = []
     for scope in scopes:
         root = REPO_ROOT / scope
         if not root.is_dir():
             _fail(f"`scopes` يسمّي مجلّداً غير موجود: {scope}")
             continue
-        for path in root.rglob("*.py"):
-            rel = str(path.relative_to(REPO_ROOT))
-            try:
-                tree = ast.parse(path.read_text(encoding="utf-8"))
-            except (SyntaxError, OSError, UnicodeDecodeError) as exc:
-                # ⛔ ملفٌّ لم يُحلَّل يُبلَّغ عنه — بوّابةٌ لا تقرأ ملفاً لا تُبلِّغ أنه
-                #    نظيف (D-208 §6؛ كانت `except SyntaxError: return []` في ١٣ فارضاً).
-                unreadable.append(f"{rel}: {type(exc).__name__}")
-                continue
-            for node in ast.walk(tree):
-                if (
-                    isinstance(node, ast.Constant)
-                    and isinstance(node.value, str)
-                    and _is_identifier_literal(node.value)
-                ):
-                    seen[node.value].add(rel)
-    return {key: value for key, value in seen.items() if len(value) > 1}, unreadable
+        files.extend(root.rglob("*.py"))
+    return files
+
+
+def _duplicated(scopes: list[str]) -> dict[str, set[str]]:
+    """المُعرِّفات الظاهرة في ملفّين أو أكثر."""
+    seen: dict[str, set[str]] = collections.defaultdict(set)
+    for path in _scope_files(scopes):
+        rel = str(path.relative_to(REPO_ROOT))
+        for literal in _identifier_literals(path):
+            seen[literal].add(rel)
+    return {key: value for key, value in seen.items() if len(value) > 1}
 
 
 def main() -> int:
@@ -112,10 +128,7 @@ def main() -> int:
         print("❌ `scopes` فارغة — نطاقٌ خاطئ يُقرأ نجاحاً")
         return 1
 
-    duplicated, unreadable = _duplicated(scopes)
-    if unreadable:
-        _fail(f"ملفّات تعذّر تحليلها — لا تُعَدّ نظيفة (D-208 §6): {unreadable[:6]}")
-
+    duplicated = _duplicated(scopes)
     declared = set(policy.get("frozen_debt", []))
     actual = set(duplicated)
 
@@ -141,4 +154,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_gate(main))

@@ -94,34 +94,45 @@ def _check_agent_skills(policy: dict) -> list[str]:
     allowed = set(spec.get("allowed_frontmatter", ()))
     markers = tuple(spec.get("trigger_markers", ()))
 
-    names: list[str] = []
+    names = [p.name for p in sorted(home.iterdir()) if p.is_dir()]
     for directory in sorted(p for p in home.iterdir() if p.is_dir()):
-        label = directory.name
-        names.append(label)
-        skill_file = directory / "SKILL.md"
-        if not skill_file.is_file():
-            _fail(f"{label}: لا `SKILL.md` — المعيار المفتوح يشترطه")
-            continue
-        meta = _frontmatter(skill_file)
-        if meta is None:
-            # ⛔ ملفٌّ لم يُحلَّل لا يُشهَد له بالمطابقة (D-208 §6).
-            _fail(f"{label}: ترويسة YAML مفقودة أو غير صالحة — لا يُشهَد لها بالمطابقة")
-            continue
-        if missing := sorted(required - set(meta)):
-            _fail(f"{label}: حقولٌ إلزامية مفقودة من الترويسة: {missing}")
-        if extra := sorted(set(meta) - allowed):
-            _fail(f"{label}: حقولٌ خارج المواصفة: {extra} — القائمة مغلقة عمداً")
-        if str(meta.get("name", "")) != label:
-            _fail(f"{label}: `name` في الترويسة ({meta.get('name')!r}) لا يطابق اسم المجلّد")
-        description = str(meta.get("description", ""))
-        if not any(marker in description for marker in markers):
-            _fail(
-                f"{label}: الوصف بلا شرط تشغيلٍ صريح ({' · '.join(markers)}) — "
-                "الوصف هو سطح الاستدعاء كلّه؛ مهارةٌ لا يُعرَف متى تُستعمَل لا تُستعمَل"
-            )
+        _check_one_skill(directory, required, allowed, markers)
     if not _FAILURES:
         _pass(f"مطابقة Agent Skills: {len(names)} مهارة على المعيار المفتوح")
     return names
+
+
+def _check_frontmatter_fields(
+    label: str, meta: dict, required: set[str], allowed: set[str]
+) -> None:
+    if missing := sorted(required - set(meta)):
+        _fail(f"{label}: حقولٌ إلزامية مفقودة من الترويسة: {missing}")
+    if extra := sorted(set(meta) - allowed):
+        _fail(f"{label}: حقولٌ خارج المواصفة: {extra} — القائمة مغلقة عمداً")
+    if str(meta.get("name", "")) != label:
+        _fail(f"{label}: `name` في الترويسة ({meta.get('name')!r}) لا يطابق اسم المجلّد")
+
+
+def _check_one_skill(
+    directory: Path, required: set[str], allowed: set[str], markers: tuple[str, ...]
+) -> None:
+    label = directory.name
+    skill_file = directory / "SKILL.md"
+    if not skill_file.is_file():
+        _fail(f"{label}: لا `SKILL.md` — المعيار المفتوح يشترطه")
+        return
+    meta = _frontmatter(skill_file)
+    if meta is None:
+        # ⛔ ملفٌّ لم يُحلَّل لا يُشهَد له بالمطابقة (D-208 §6).
+        _fail(f"{label}: ترويسة YAML مفقودة أو غير صالحة — لا يُشهَد لها بالمطابقة")
+        return
+    _check_frontmatter_fields(label, meta, required, allowed)
+    description = str(meta.get("description", ""))
+    if not any(marker in description for marker in markers):
+        _fail(
+            f"{label}: الوصف بلا شرط تشغيلٍ صريح ({' · '.join(markers)}) — "
+            "الوصف هو سطح الاستدعاء كلّه؛ مهارةٌ لا يُعرَف متى تُستعمَل لا تُستعمَل"
+        )
 
 
 def _check_glossary(policy: dict) -> None:
@@ -145,14 +156,9 @@ def _base_skill_names() -> set[str]:
     return set(BASE_SKILL_NAME.findall(BASE_SKILL_REGISTRY.read_text(encoding="utf-8")))
 
 
-def _check_evaluation(policy: dict, agent_skills: list[str]) -> None:
-    spec = policy.get("skill_evaluation", {})
-    evaluated: dict = spec.get("evaluated", {})
-    unevaluated: dict = spec.get("unevaluated", {})
-
-    known = _base_skill_names() | set(agent_skills)
+def _check_evaluation_coverage(evaluated: dict, unevaluated: dict, known: set[str]) -> None:
+    """كل مهارةٍ لها حالةٌ واحدة مُصرَّحة — لا صفر ولا اثنتان."""
     covered = set(evaluated) | set(unevaluated)
-
     if missing := sorted(known - covered):
         _fail(
             f"مهارات بلا حالة تقييمٍ مُصرَّحة ({len(missing)}): {missing[:8]} — "
@@ -165,11 +171,23 @@ def _check_evaluation(policy: dict, agent_skills: list[str]) -> None:
     if empty := sorted(name for name, reason in unevaluated.items() if not str(reason).strip()):
         _fail(f"غير مُقيَّمة بلا سببٍ منطوق: {empty[:8]}")
 
+
+def _check_evaluation_record(name: str, record: object) -> None:
+    """دعوى القياس تحمل تاريخها ودليلها — أو ليست دعوى قياس."""
+    if not isinstance(record, dict) or not str(record.get("verified_on", "")).strip():
+        _fail(f"{name}: مُعلَنٌ مُقيَّماً بلا `verified_on` — دعوى قياسٍ بلا تاريخ")
+    elif not str(record.get("evidence", "")).strip():
+        _fail(f"{name}: مُعلَنٌ مُقيَّماً بلا `evidence` — الدليل قبل الادّعاء (D-266)")
+
+
+def _check_evaluation(policy: dict, agent_skills: list[str]) -> None:
+    spec = policy.get("skill_evaluation", {})
+    evaluated: dict = spec.get("evaluated", {})
+    unevaluated: dict = spec.get("unevaluated", {})
+
+    _check_evaluation_coverage(evaluated, unevaluated, _base_skill_names() | set(agent_skills))
     for name, record in sorted(evaluated.items()):
-        if not isinstance(record, dict) or not str(record.get("verified_on", "")).strip():
-            _fail(f"{name}: مُعلَنٌ مُقيَّماً بلا `verified_on` — دعوى قياسٍ بلا تاريخ")
-        elif not str(record.get("evidence", "")).strip():
-            _fail(f"{name}: مُعلَنٌ مُقيَّماً بلا `evidence` — الدليل قبل الادّعاء (D-266)")
+        _check_evaluation_record(name, record)
 
     if not _FAILURES:
         _pass(

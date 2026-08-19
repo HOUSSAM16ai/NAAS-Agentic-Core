@@ -81,22 +81,26 @@ def _pass(msg: str) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # ① نطاق المسح — مُعلَنٌ في السجلّ لا مُكتشَف هنا (نمط GATE_HOMES في D-266)
 # ──────────────────────────────────────────────────────────────────────────────
-def _scoped_files(policy: dict) -> list[Path]:
-    scopes = policy.get("config_scopes", {})
-    suffixes = tuple(scopes.get("directory_suffixes", ()))
-    skip = tuple(scopes.get("skip_fragments", ()))
-
+def _files_in_directories(directories: tuple[str, ...], suffixes: tuple[str, ...]) -> list[Path]:
+    """ملفّات المجلّدات المُعلَنة — ومجلّدٌ غير موجود انتهاكٌ لا تجاهُل."""
     found: list[Path] = []
-    for directory in scopes.get("directories", ()):
+    for directory in directories:
         root = REPO_ROOT / directory
         if not root.is_dir():
             _fail(f"`config_scopes.directories` يسمّي مجلّداً غير موجود: {directory}")
             continue
         found += [p for p in root.rglob("*") if p.is_file() and p.suffix in suffixes]
+    return found
 
+
+def _scoped_files(policy: dict) -> list[Path]:
+    scopes = policy.get("config_scopes", {})
+    skip = tuple(scopes.get("skip_fragments", ()))
+    found = _files_in_directories(
+        tuple(scopes.get("directories", ())), tuple(scopes.get("directory_suffixes", ()))
+    )
     for pattern in scopes.get("root_globs", ()):
         found += [p for p in REPO_ROOT.glob(pattern) if p.is_file()]
-
     unique = sorted({p.resolve() for p in found})
     return [p for p in unique if not any(s in str(p.relative_to(REPO_ROOT)) for s in skip)]
 
@@ -126,38 +130,53 @@ def _inside_identifier(text: str, start: int, end: int) -> bool:
     return before == "_" or after == "_"
 
 
+def _violations_in(
+    text: str, rel: str, compiled: list[tuple[str, re.Pattern[str]]], markers: tuple[str, ...]
+) -> list[str]:
+    """ادّعاءات ملفٍّ واحد، بعد استثناء سطور النهي والمطابقات داخل معرِّف."""
+    lines = text.splitlines()
+    found: list[str] = []
+    for claim_id, pattern in compiled:
+        for match in pattern.finditer(text):
+            index = text[: match.start()].count("\n")
+            if _is_prohibition_context(lines, index, markers) or _inside_identifier(
+                text, match.start(), match.end()
+            ):
+                continue
+            found.append(f"{rel}:{index + 1} [{claim_id}] {match.group(0)[:48]!r}")
+    return found
+
+
+def _read_scoped(files: list[Path]) -> tuple[dict[str, str], list[str]]:
+    """نصوص الملفّات المقروءة، ومعها ما تعذّرت قراءته — لا يُبتلَع الفشل."""
+    texts: dict[str, str] = {}
+    unreadable: list[str] = []
+    for path in files:
+        rel = str(path.relative_to(REPO_ROOT))
+        try:
+            texts[rel] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            # ⛔ لا `except: continue` — ملفٌّ لم يُقرأ ليس ملفّاً نظيفاً.
+            unreadable.append(f"{rel}: {exc}")
+    return texts, unreadable
+
+
 def _scan_configs(policy: dict) -> None:
     claims = policy.get("claims", [])
     if not claims:
         _fail("`claims` فارغة — سياسةٌ بلا محتوى تُقرأ حمايةً")
         return
-    markers = tuple(policy.get("prohibition_markers", ()))
-    compiled = [(c["id"], re.compile(c["pattern"])) for c in claims]
-
     files = _scoped_files(policy)
     if not files:
         _fail("نطاق المسح لم يُطابِق أيّ ملفّ — نطاقٌ خاطئ يُقرأ نجاحاً")
         return
 
-    violations: list[str] = []
-    unreadable: list[str] = []
-    for path in files:
-        rel = str(path.relative_to(REPO_ROOT))
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
-            # ⛔ لا `except: continue` — ملفٌّ لم يُقرأ ليس ملفّاً نظيفاً.
-            unreadable.append(f"{rel}: {exc}")
-            continue
-        lines = text.splitlines()
-        for claim_id, pattern in compiled:
-            for match in pattern.finditer(text):
-                index = text[: match.start()].count("\n")
-                if _is_prohibition_context(lines, index, markers):
-                    continue
-                if _inside_identifier(text, match.start(), match.end()):
-                    continue
-                violations.append(f"{rel}:{index + 1} [{claim_id}] {match.group(0)[:48]!r}")
+    compiled = [(claim["id"], re.compile(claim["pattern"])) for claim in claims]
+    markers = tuple(policy.get("prohibition_markers", ()))
+    texts, unreadable = _read_scoped(files)
+    violations = [
+        v for rel, text in texts.items() for v in _violations_in(text, rel, compiled, markers)
+    ]
 
     if unreadable:
         _fail(f"ملفّات إعدادٍ تعذّرت قراءتها — لا تُعَدّ نظيفة (D-208 §6): {unreadable}")
@@ -174,25 +193,31 @@ def _scan_configs(policy: dict) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # ② تكافؤ القوائم المرآة — بلا تغيير سلوك أيّ بوّابة قائمة (نمط D-185)
 # ──────────────────────────────────────────────────────────────────────────────
-def _literal_entries(module: ast.Module, symbol: str) -> list[str] | None:
-    """إدخالات إسنادٍ على مستوى الوحدة: tuple/list من نصوص، أو مفاتيح dict."""
-    for node in module.body:
-        targets = (
-            node.targets
-            if isinstance(node, ast.Assign)
-            else [node.target]
-            if isinstance(node, ast.AnnAssign)
-            else []
-        )
-        if not any(isinstance(t, ast.Name) and t.id == symbol for t in targets):
-            continue
-        value = node.value
-        if isinstance(value, ast.Dict):
-            keys = [k for k in value.keys if isinstance(k, ast.Constant)]
-            return [str(k.value) for k in keys]
-        if isinstance(value, ast.Tuple | ast.List):
-            return [e.value for e in value.elts if isinstance(e, ast.Constant)]
+def _assigned_names(node: ast.stmt) -> list[str]:
+    """أسماء ما يُسنَد إليه في عبارةٍ واحدة — `Assign` أو `AnnAssign`."""
+    if isinstance(node, ast.Assign):
+        targets: list[ast.expr] = list(node.targets)
+    elif isinstance(node, ast.AnnAssign):
+        targets = [node.target]
+    else:
         return []
+    return [t.id for t in targets if isinstance(t, ast.Name)]
+
+
+def _constant_entries(value: ast.expr | None) -> list[str]:
+    """مفاتيح dict أو عناصر tuple/list — نصوصاً حرفية فقط."""
+    if isinstance(value, ast.Dict):
+        return [str(k.value) for k in value.keys if isinstance(k, ast.Constant)]
+    if isinstance(value, ast.Tuple | ast.List):
+        return [e.value for e in value.elts if isinstance(e, ast.Constant)]
+    return []
+
+
+def _literal_entries(module: ast.Module, symbol: str) -> list[str] | None:
+    """إدخالات إسنادٍ على مستوى الوحدة. `None` تعني «الرمز غير موجود»."""
+    for node in module.body:
+        if symbol in _assigned_names(node):
+            return _constant_entries(getattr(node, "value", None))
     return None
 
 

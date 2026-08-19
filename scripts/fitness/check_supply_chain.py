@@ -143,6 +143,22 @@ def _check_group_patterns(update: dict, label: str, known: set[str]) -> None:
                 )
 
 
+def _check_one_update(
+    update: dict,
+    required_days: int,
+    deprecated: tuple[str, ...],
+    known_by_ecosystem: dict[str, set[str]],
+) -> None:
+    """كل قواعد L6 على منظومةٍ واحدة."""
+    ecosystem = str(update.get("package-ecosystem", "?"))
+    label = f"`{ecosystem}`"
+    _check_cooldown(update, label, required_days)
+    _check_deprecated_keys(update, label, deprecated)
+    _check_directories(update, label)
+    if (known := known_by_ecosystem.get(ecosystem)) is not None:
+        _check_group_patterns(update, label, known)
+
+
 def _load_dependabot(spec: dict) -> list[dict] | None:
     config_path = REPO_ROOT / spec.get("config_path", ".github/dependabot.yml")
     if not config_path.is_file():
@@ -174,16 +190,9 @@ def _check_dependabot(policy: dict) -> None:
         "npm": {name.lower() for name in _npm_dependencies()},
     }
 
-    seen: set[str] = set()
+    seen = {str(update.get("package-ecosystem", "?")) for update in updates}
     for update in updates:
-        ecosystem = str(update.get("package-ecosystem", "?"))
-        seen.add(ecosystem)
-        label = f"`{ecosystem}`"
-        _check_cooldown(update, label, required_days)
-        _check_deprecated_keys(update, label, deprecated)
-        _check_directories(update, label)
-        if (known := known_by_ecosystem.get(ecosystem)) is not None:
-            _check_group_patterns(update, label, known)
+        _check_one_update(update, required_days, deprecated, known_by_ecosystem)
 
     missing = sorted(set(spec.get("required_ecosystems", {})) - seen)
     if missing:

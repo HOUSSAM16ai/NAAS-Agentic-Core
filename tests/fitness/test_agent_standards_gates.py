@@ -185,11 +185,25 @@ def test_magic_strings_rejects_stale_closed_debt(magic_tree: Path) -> None:
 
 
 def test_magic_strings_reports_unparsable_file(magic_tree: Path) -> None:
-    """⛔ `except SyntaxError: return []` كانت في ١٣ فارضاً (D-208 §6)."""
+    """⛔ `except SyntaxError: return []` كانت في ١٣ فارضاً (ISS-149 F1).
+
+    العقد هنا هو عقد `_ast_util`: `parse_source` **ترفع** ولا تُعيد قيمةً ثالثة،
+    و`run_gate` تحوّل الرفع إلى فشلٍ صريح برمز 1. فالتجربة تقيس السلوك كما يعمل
+    في CI — لا `main()` عارية.
+    """
     (magic_tree / "app" / "broken.py").write_text("def (\n", encoding="utf-8")
-    code, out = _magic(magic_tree)
+    saved = (magic_gate.REPO_ROOT, magic_gate.POLICY)
+    magic_gate.REPO_ROOT = magic_tree
+    magic_gate.POLICY = magic_tree / "docs" / "governance" / "MAGIC_STRINGS.json"
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer):
+            code = magic_gate.run_gate(magic_gate.main)
+    finally:
+        magic_gate.REPO_ROOT, magic_gate.POLICY = saved
+        magic_gate._FAILURES.clear()
     assert code == 1
-    assert "تعذّر" in out
+    assert "تعذّر تحليل" in buffer.getvalue()
 
 
 def test_magic_strings_green_on_real_repository() -> None:

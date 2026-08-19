@@ -75,17 +75,13 @@ def _known_enforcers() -> set[str]:
     }
 
 
-def _check_row(row: dict, enforcers: set[str]) -> None:
-    label = row.get("id", "<بلا مُعرِّف>")
-
+def _check_required_fields(label: str, row: dict) -> None:
     for field in REQUIRED_FIELDS:
         if not str(row.get(field, "")).strip():
             _fail(f"{label}: الحقل `{field}` فارغ أو مفقود")
 
-    status = str(row.get("status", ""))
-    if status not in STATUSES:
-        _fail(f"{label}: حالةٌ خارج سُلَّم §6.6: {status!r} — ⛔ لا سُلَّم ثانٍ (D-209)")
 
+def _check_row_enforcers(label: str, row: dict, enforcers: set[str]) -> None:
     named = list(row.get("enforcers", []))
     for enforcer in named:
         if enforcer not in enforcers:
@@ -93,9 +89,16 @@ def _check_row(row: dict, enforcers: set[str]) -> None:
     if not named and not str(row.get("no_enforcer_reason_ar", "")).strip():
         _fail(f"{label}: بلا فارضٍ وبلا `no_enforcer_reason_ar` — الغياب يُعلَن (D-206 L11)")
 
+
+def _check_row_status(label: str, row: dict, status: str) -> None:
+    if status not in STATUSES:
+        _fail(f"{label}: حالةٌ خارج سُلَّم §6.6: {status!r} — ⛔ لا سُلَّم ثانٍ (D-209)")
     if status != "ACTIVE" and not str(row.get("upgrade_condition_ar", "")).strip():
         _fail(f"{label}: حالته `{status}` بلا شرط ترقية — الطموح يُصنَّف ولا يُكتَم (D-209)")
 
+
+def _check_row_code_paths(label: str, row: dict, status: str) -> None:
+    """⛔ الفحص في الاتجاهين: مُصنَّفٌ بلا كودٍ وله كود · وACTIVE يشير إلى العدم."""
     paths = list(row.get("code_paths", []))
     if status in CODELESS and (existing := [p for p in paths if (REPO_ROOT / p).exists()]):
         _fail(
@@ -104,6 +107,15 @@ def _check_row(row: dict, enforcers: set[str]) -> None:
         )
     if status == "ACTIVE" and (missing := [p for p in paths if not (REPO_ROOT / p).exists()]):
         _fail(f"{label}: مُصنَّف ACTIVE ويشير إلى مساراتٍ غير موجودة: {missing}")
+
+
+def _check_row(row: dict, enforcers: set[str]) -> None:
+    label = str(row.get("id", "<بلا مُعرِّف>"))
+    status = str(row.get("status", ""))
+    _check_required_fields(label, row)
+    _check_row_status(label, row, status)
+    _check_row_enforcers(label, row, enforcers)
+    _check_row_code_paths(label, row, status)
 
 
 def main() -> int:

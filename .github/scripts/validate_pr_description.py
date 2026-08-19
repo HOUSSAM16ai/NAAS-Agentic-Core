@@ -217,6 +217,18 @@ def _issue_labels(repo: str, number: int, token: str) -> set[str] | None:
     return {str(label.get("name", "")) for label in payload.get("labels", [])}
 
 
+def _survey_readiness(issues: list[int], repo: str, token: str) -> tuple[bool, list[int]]:
+    """(هل وُجد بلاغٌ جاهز؟، ما تعذّرت قراءته) — الفرق بين «لا» و«لا نعرف»."""
+    unreadable: list[int] = []
+    for number in issues:
+        labels = _issue_labels(repo, number, token)
+        if labels is None:
+            unreadable.append(number)
+        elif READY_LABEL in labels:
+            return True, unreadable
+    return False, unreadable
+
+
 def _check_linked_issue(body: str, problems: list[str]) -> None:
     issues = _linked_issues(body)
     if not issues:
@@ -232,17 +244,11 @@ def _check_linked_issue(body: str, problems: list[str]) -> None:
         print(f"ℹ️  ربط البلاغ {issues}: لم يُفحَص الوسم (لا GITHUB_TOKEN — تشغيلٌ محلّي).")
         return
 
-    unreadable: list[int] = []
-    for number in issues:
-        labels = _issue_labels(repo, number, token)
-        if labels is None:
-            unreadable.append(number)
-        elif READY_LABEL in labels:
-            return
+    ready, unreadable = _survey_readiness(issues, repo, token)
     if unreadable:
         print(f"ℹ️  بلاغات تعذّرت قراءتها ({unreadable}) — لم يُشهَد عليها بشيء.")
-        if len(unreadable) == len(issues):
-            return
+    if ready or len(unreadable) == len(issues):
+        return
     problems.append(
         f"L2: لا بلاغ من {issues} يحمل الوسم `{READY_LABEL}`. "
         "البلاغ يُولَد جاهزاً أو لا يُطوَّر — أكمل معايير القبول فيه أوّلاً."

@@ -57,23 +57,32 @@ def _catalog_patterns() -> tuple[tuple[str, str], ...]:
     ⛔ لا سقوطَ صامت إلى قائمةٍ فارغة: بوّابةٌ فقدت مصدرها تُبرِّئ شجرةً لم تفحصها،
     وهو أخطر من غيابها لأنه يُقرأ حماية.
     """
+    catalog = _load_catalog()
+    entries = (_pattern_entry(secret) for secret in catalog.get("secrets", []))
+    return tuple(entry for entry in entries if entry is not None)
+
+
+def _load_catalog() -> dict:
+    """يقرأ الكتالوج أو يرفع — ⛔ لا سقوطَ صامت."""
     import json
 
     if not CATALOG_PATH.is_file():
         raise CatalogUnreadableError(f"الكتالوج مفقود: {CATALOG_PATH}")
     try:
-        catalog = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+        return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:  # pragma: no cover - عطلٌ في الكتالوج
         raise CatalogUnreadableError(f"الكتالوج غير قابل للقراءة: {exc}") from exc
 
-    out: list[tuple[str, str]] = []
-    for secret in catalog.get("secrets", []):
-        pattern = secret.get("value_pattern")
-        if not pattern:
-            continue
-        label = secret.get("value_pattern_label_ar") or secret["name"]
-        out.append((pattern, label))
-    return tuple(out)
+
+def _pattern_entry(secret: dict) -> tuple[str, str] | None:
+    """(النمط، وسمُه) لسرٍّ يملك شكلاً مميّزاً، أو ``None``."""
+    pattern = secret.get("value_pattern")
+    if not pattern:
+        return None
+    label = secret.get("value_pattern_label_ar")
+    if not label:
+        label = secret["name"]
+    return (pattern, label)
 
 
 def _secret_patterns() -> tuple[tuple[str, str], ...]:
@@ -110,23 +119,42 @@ _PLACEHOLDER_TOKENS: tuple[str, ...] = (
 _PLACEHOLDER_HOSTS = frozenset({"host", "localhost", "db", "postgres", "127.0.0.1", "example.com"})
 
 
-def _is_placeholder(value: str, host: str = "") -> bool:
-    """هل القيمة قالبٌ توضيحي لا سرّاً حقيقياً؟"""
-    if host and host.lower() in _PLACEHOLDER_HOSTS:
+def _is_placeholder_host(host: str) -> bool:
+    """مُضيفٌ وهمي: رابطٌ إليه لا يصل نظاماً حقيقياً، فكلمة سرّه ليست سرّاً."""
+    if not host:
+        return False
+    lowered = host.lower()
+    if lowered in _PLACEHOLDER_HOSTS:
         return True
+    return any(token in lowered for token in _PLACEHOLDER_TOKENS)
+
+
+def _looks_like_template(value: str) -> bool:
+    """القيمة تحمل لفظَ قالب، أو تكراراً، أو حروفاً كبيرة كاملة."""
     lowered = value.lower()
     if any(token in lowered for token in _PLACEHOLDER_TOKENS):
-        return True
-    if any(token in host.lower() for token in _PLACEHOLDER_TOKENS):
         return True
     # سلسلة من حرفٍ واحد مكرَّر (xxxxxxxx / 00000000).
     if len(set(lowered)) <= 2:
         return True
     # قوالب الوثائق تُكتب بأحرفٍ كبيرة كاملة (PASSWORD, YOUR_TOKEN).
-    if value.isupper():
+    return value.isupper()
+
+
+def _mixes_digits_and_letters(value: str) -> bool:
+    """سرٌّ حقيقي يخلط الأرقام والحروف؛ كلمةٌ خالصة («pass%40word») قالبُ اختبار."""
+    if not any(char.isdigit() for char in value):
+        return False
+    return any(char.isalpha() for char in value)
+
+
+def _is_placeholder(value: str, host: str = "") -> bool:
+    """هل القيمة قالبٌ توضيحي لا سرّاً حقيقياً؟"""
+    if _is_placeholder_host(host):
         return True
-    # سرٌّ حقيقي يخلط الأرقام والحروف؛ كلمةٌ خالصة («pass%40word») قالبُ اختبار.
-    return not (any(c.isdigit() for c in value) and any(c.isalpha() for c in value))
+    if _looks_like_template(value):
+        return True
+    return not _mixes_digits_and_letters(value)
 
 
 #: امتدادات نصّية تُفحَص. الثنائيات (PDF/صور) خارج النطاق — لا تُقرأ أصلاً.
@@ -221,6 +249,24 @@ def _scan_text(
     return errors
 
 
+def _scan_tree(compiled: list[tuple[re.Pattern[str], str]], hit_files: set[str]) -> list[str]:
+    """أخطاءُ كلّ الملفّات المُتتبَّعة التي تستحقّ الفحص."""
+    errors: list[str] = []
+    for rel in _tracked_files():
+        text = _readable_text(rel)
+        if text is not None:
+            errors.extend(_scan_text(rel, text, compiled, hit_files))
+    return errors
+
+
+def _closed_debt_errors(hit_files: set[str]) -> list[str]:
+    """دَينٌ أُغلق بلا حذفه من القائمة كذبٌ كالدَّين المكتوم — الدَّين يتقلّص فقط."""
+    return [
+        f"❌ {rel} نظيف الآن — احذفه من FROZEN_DEBT (الدَّين يتقلّص فقط)."
+        for rel in sorted(FROZEN_DEBT - hit_files)
+    ]
+
+
 def main() -> int:
     try:
         patterns = _secret_patterns()
@@ -228,17 +274,9 @@ def main() -> int:
         print(f"❌ {exc}\n   بوّابةٌ بلا مصدرٍ لا تُبرِّئ الشجرة — أصلِح الكتالوج ثم أعِد التشغيل.")
         return 1
     compiled = [(re.compile(pattern), label) for pattern, label in patterns]
-    errors: list[str] = []
     hit_files: set[str] = set()
-
-    for rel in _tracked_files():
-        text = _readable_text(rel)
-        if text is None:
-            continue
-        errors.extend(_scan_text(rel, text, compiled, hit_files))
-
-    for rel in sorted(FROZEN_DEBT - hit_files):
-        errors.append(f"❌ {rel} نظيف الآن — احذفه من FROZEN_DEBT (الدَّين يتقلّص فقط).")
+    errors = _scan_tree(compiled, hit_files)
+    errors += _closed_debt_errors(hit_files)
 
     if errors:
         print("\n".join(errors))

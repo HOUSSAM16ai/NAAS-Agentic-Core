@@ -267,6 +267,46 @@ def _catalogued_names(catalog: dict) -> set[str]:
     return names
 
 
+def _is_os_environ_subscript(target: ast.expr) -> bool:
+    """هل الهدفُ هو ``os.environ`` بعينه؟ (شروطٌ متتابعة لا سلسلةَ `and`.)"""
+    if not isinstance(target, ast.Attribute):
+        return False
+    if target.attr != "environ":
+        return False
+    if not isinstance(target.value, ast.Name):
+        return False
+    return target.value.id == "os"
+
+
+def _is_os_getenv(func: ast.expr) -> bool:
+    """``os.getenv(...)``"""
+    if not isinstance(func, ast.Attribute):
+        return False
+    if func.attr != "getenv":
+        return False
+    if not isinstance(func.value, ast.Name):
+        return False
+    return func.value.id == "os"
+
+
+def _is_environ_get(func: ast.expr) -> bool:
+    """``os.environ.get(...)``"""
+    if not isinstance(func, ast.Attribute):
+        return False
+    if func.attr != "get":
+        return False
+    if not isinstance(func.value, ast.Attribute):
+        return False
+    return func.value.attr == "environ"
+
+
+def _is_env_lookup(func: ast.expr) -> bool:
+    """أيُّ الشكلَين النداءيَّين لقراءة البيئة."""
+    if _is_os_getenv(func):
+        return True
+    return _is_environ_get(func)
+
+
 class _EnvReadVisitor(ast.NodeVisitor):
     """يجمع أسماء المتغيّرات المقروءة بـ`os.environ[...]` / `os.environ.get` / `os.getenv`."""
 
@@ -278,30 +318,56 @@ class _EnvReadVisitor(ast.NodeVisitor):
             self.names.append((getattr(node, "lineno", 0), arg.value))
 
     def visit_Subscript(self, node: ast.Subscript) -> None:
-        target = node.value
-        if (
-            isinstance(target, ast.Attribute)
-            and target.attr == "environ"
-            and isinstance(target.value, ast.Name)
-            and target.value.id == "os"
-        ):
+        if _is_os_environ_subscript(node.value):
             self._record(node, node.slice)
         self.generic_visit(node)
 
+    def _maybe_record_call(self, node: ast.Call) -> None:
+        if not node.args:
+            return
+        if not _is_env_lookup(node.func):
+            return
+        self._record(node, node.args[0])
+
     def visit_Call(self, node: ast.Call) -> None:
-        func = node.func
-        if isinstance(func, ast.Attribute) and node.args:
-            is_getenv = (
-                func.attr == "getenv" and isinstance(func.value, ast.Name) and func.value.id == "os"
-            )
-            is_environ_get = (
-                func.attr == "get"
-                and isinstance(func.value, ast.Attribute)
-                and func.value.attr == "environ"
-            )
-            if is_getenv or is_environ_get:
-                self._record(node, node.args[0])
+        self._maybe_record_call(node)
         self.generic_visit(node)
+
+
+def _env_reads_in_source(rel: str, source: str) -> list[tuple[int, str]] | None:
+    """قراءاتُ البيئة في وحدةٍ واحدة، أو ``None`` إن تعذّر التحليل (يُبلَّغ عنه).
+
+    صدق التحليل (D-208): ملفٌّ لا يُقرأ يُبلَّغ عنه، ولا يُعَدّ نظيفاً.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        _fail(f"{rel}: تعذّر تحليله ({exc.msg}) — بوّابةٌ لا تقرأ ملفاً لا تشهد بنظافته.")
+        return None
+    visitor = _EnvReadVisitor()
+    visitor.visit(tree)
+    return visitor.names
+
+
+def _report_env_read(rel: str, line_no: int, var: str) -> None:
+    _fail(
+        f"{rel}:{line_no}: قراءةُ «{var}» بـ`os.environ` داخل `app/`.\n"
+        f"   القارئ القانوني الوحيد هو `get_settings()` (CLAUDE.md §6) — "
+        f"قراءةٌ موازية تعني إعدادين لقيمةٍ واحدة، ونسختان = رقمان لنفس السؤال."
+    )
+
+
+def _scan_env_reads(rel: str, source: str, catalogued: set[str], hits: set[str]) -> None:
+    """يفحص وحدةً واحدة ويُسجِّل إصابتها في ``hits`` حتى لو كانت ضمن الدَّين."""
+    reads = _env_reads_in_source(rel, source)
+    if reads is None:
+        return
+    for line_no, var in reads:
+        if var not in catalogued:
+            continue
+        hits.add(rel)
+        if rel not in FROZEN_ENV_READ_DEBT:
+            _report_env_read(rel, line_no, var)
 
 
 def _check_no_env_reads(catalog: dict) -> None:
@@ -313,26 +379,7 @@ def _check_no_env_reads(catalog: dict) -> None:
         rel = path.relative_to(REPO_ROOT).as_posix()
         if rel.startswith(LAWFUL_READER_PACKAGE):
             continue
-        source = path.read_text(encoding="utf-8", errors="ignore")
-        try:
-            tree = ast.parse(source)
-        except SyntaxError as exc:
-            # صدق التحليل (D-208): ملفٌّ لا يُقرأ يُبلَّغ عنه، ولا يُعَدّ نظيفاً.
-            _fail(f"{rel}: تعذّر تحليله ({exc.msg}) — بوّابةٌ لا تقرأ ملفاً لا تشهد بنظافته.")
-            continue
-        visitor = _EnvReadVisitor()
-        visitor.visit(tree)
-        for line_no, var in visitor.names:
-            if var not in catalogued:
-                continue
-            hits.add(rel)
-            if rel in FROZEN_ENV_READ_DEBT:
-                continue
-            _fail(
-                f"{rel}:{line_no}: قراءةُ «{var}» بـ`os.environ` داخل `app/`.\n"
-                f"   القارئ القانوني الوحيد هو `get_settings()` (CLAUDE.md §6) — "
-                f"قراءةٌ موازية تعني إعدادين لقيمةٍ واحدة، ونسختان = رقمان لنفس السؤال."
-            )
+        _scan_env_reads(rel, path.read_text(encoding="utf-8", errors="ignore"), catalogued, hits)
 
     for rel in sorted(FROZEN_ENV_READ_DEBT - hits):
         _fail(

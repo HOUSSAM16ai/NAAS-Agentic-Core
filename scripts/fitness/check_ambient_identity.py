@@ -106,29 +106,39 @@ def _read(rel: str) -> str | None:
 # ─────────────────────────────────────────────────────────────────────────────
 # 1 — فصل القانون عن الحالة
 # ─────────────────────────────────────────────────────────────────────────────
-def _status_tokens_in_law_line(line: str) -> list[str]:
-    """رموزُ الحالة في سطر جدولٍ داخل وثيقة قانون — وإلّا قائمةٌ فارغة.
+def _is_explanatory_line(line: str) -> bool:
+    """سطرٌ **يشرح** القاعدة لا يخرقها: ترويسةُ اقتباس (`>`) أو علامةُ منع (⛔)."""
+    if line.lstrip().startswith(">"):
+        return True
+    return "⛔" in line
 
-    تُستثنى الترويسة (`>`) وسطرُ المنع (⛔): كلاهما **يشرح** القاعدة لا يخرقها.
-    """
-    if line.lstrip().startswith(">") or "⛔" in line or "|" not in line:
+
+def _status_tokens_in_law_line(line: str) -> list[str]:
+    """رموزُ الحالة في سطر جدولٍ داخل وثيقة قانون — وإلّا قائمةٌ فارغة."""
+    if "|" not in line:
+        return []
+    if _is_explanatory_line(line):
         return []
     return _STATUS_TOKEN.findall(line)
+
+
+def _report_law_status_tokens(rel: str, text: str) -> None:
+    """يُبلِّغ عن كلّ سطر جدولٍ يحمل حالةً داخل وثيقة قانون."""
+    for line_no, line in enumerate(text.splitlines(), start=1):
+        found = _status_tokens_in_law_line(line)
+        if found:
+            _fail(
+                f"{rel}:{line_no}: وثيقة قانونٍ تحمل عمود حالة {sorted(set(found))}.\n"
+                f"   القانون بلا حالة (D-188/D-209) — الحالةُ في {STATE_DOC}، "
+                f"وخريطتان لنظامٍ واحد تعنيان وكيلَين يقرآن بناءَين مختلفين."
+            )
 
 
 def _check_law_docs() -> None:
     for rel in LAW_DOCS:
         text = _read(rel)
-        if text is None:
-            continue
-        for line_no, line in enumerate(text.splitlines(), start=1):
-            found = _status_tokens_in_law_line(line)
-            if found:
-                _fail(
-                    f"{rel}:{line_no}: وثيقة قانونٍ تحمل عمود حالة {sorted(set(found))}.\n"
-                    f"   القانون بلا حالة (D-188/D-209) — الحالةُ في {STATE_DOC}، "
-                    f"وخريطتان لنظامٍ واحد تعنيان وكيلَين يقرآن بناءَين مختلفين."
-                )
+        if text is not None:
+            _report_law_status_tokens(rel, text)
 
 
 def _table_rows(text: str) -> list[tuple[int, list[str]]]:
@@ -245,13 +255,22 @@ def _touched_content_name(node: ast.AST) -> str | None:
     return None
 
 
+def _is_app_import(node: ast.AST) -> bool:
+    """هل العقدةُ استيرادٌ من حزمة ``app``؟ (⛔ ممنوع في ``shared/`` — D-189 البند 5.)"""
+    if not isinstance(node, ast.ImportFrom):
+        return False
+    if not node.module:
+        return False
+    return "app." in node.module
+
+
 def _scan_layer_module(rel: str, tree: ast.AST) -> None:
     """يُبلِّغ عن كلّ ملامسةٍ للمحتوى وكلّ استيرادٍ من ``app`` داخل وحدةٍ واحدة."""
     for node in ast.walk(tree):
         touched = _touched_content_name(node)
         if touched is not None:
             _fail(_wall_message(rel, getattr(node, "lineno", 0), touched))
-        elif isinstance(node, ast.ImportFrom) and node.module and "app." in node.module:
+        elif _is_app_import(node):
             _fail(f"{rel}:{node.lineno}: `shared/` يستورد من `app` — ممنوع (D-189 البند 5).")
 
 
@@ -345,22 +364,28 @@ def _known_gate_names() -> set[str]:
     return on_disk | _check_prefixed_functions()
 
 
+def _report_unfalsifiable(rel: str, line_no: int, line: str) -> None:
+    """يُبلِّغ عن كلّ عبارةٍ غير قابلة للتفنيد في سطرٍ واحد."""
+    for phrase in _UNFALSIFIABLE:
+        if phrase in line:
+            _fail(
+                f"{rel}:{line_no}: عبارةٌ غير قابلة للتفنيد: «{phrase}» — "
+                f"حدّ المصداقية (D-227).\n"
+                f"   تُصدَّق مرّة، ثمّ تُكتشَف، ثمّ يسقط معها كلُّ ما هو صحيح."
+            )
+
+
 def _check_credibility(rel: str, text: str) -> None:
-    """حدّ المصداقية (D-227) على وثيقةٍ واحدة، سطراً سطراً."""
+    """حدّ المصداقية (D-227) على وثيقةٍ واحدة، سطراً سطراً.
+
+    سطرٌ يحمل علامة المنع ⛔ هو **حظرُ** العبارة لا ادّعاؤها. بلا هذا الاستثناء
+    ترفض البوّابةُ النصَّ الذي يشرح القاعدة نفسها — وهو عطبٌ وقع حرفياً في
+    `check_no_self_announcement` (D-206 L8) قبل أن يُصحَّح بفحصٍ يعي السياق.
+    """
     for line_no, line in enumerate(text.splitlines(), start=1):
-        # سطرٌ يحمل علامة المنع ⛔ هو **حظرُ** العبارة لا ادّعاؤها. بلا هذا
-        # الاستثناء ترفض البوّابةُ النصَّ الذي يشرح القاعدة نفسها — وهو عطبٌ
-        # وقع حرفياً في `check_no_self_announcement` (D-206 L8) قبل أن يُصحَّح
-        # بالانتقال إلى فحصٍ يعي السياق.
         if "⛔" in line:
             continue
-        for phrase in _UNFALSIFIABLE:
-            if phrase in line:
-                _fail(
-                    f"{rel}:{line_no}: عبارةٌ غير قابلة للتفنيد: «{phrase}» — "
-                    f"حدّ المصداقية (D-227).\n"
-                    f"   تُصدَّق مرّة، ثمّ تُكتشَف، ثمّ يسقط معها كلُّ ما هو صحيح."
-                )
+        _report_unfalsifiable(rel, line_no, line)
 
 
 def _check_cited_gates(rel: str, text: str, known: set[str]) -> None:

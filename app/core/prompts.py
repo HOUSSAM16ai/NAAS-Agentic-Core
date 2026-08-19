@@ -4,7 +4,6 @@ Optimized for Superhuman performance and low complexity.
 """
 
 import logging
-import os
 from datetime import datetime
 
 from app.core.agents.system_principles import (
@@ -161,10 +160,19 @@ def _get_agent_tools_status() -> str:
 
 
 def _get_system_health() -> str:
-    """Check vital signs."""
-    env = os.getenv("ENVIRONMENT", "unknown")
-    db = "PostgreSQL" if "postgresql" in os.getenv("DATABASE_URL", "") else "SQLite"
-    ai = "✅" if os.getenv("OPENROUTER_API_KEY") else "⚠️"
+    """Check vital signs.
+
+    D-268 (ISS-191): كانت الأسطر الثلاثة تقرأ `os.environ` مباشرةً — خرقاً لقاعدة
+    CLAUDE.md §6. والأسوأ من الخرق أثره هنا: هذا النصّ يدخل برومبت النظام، فقراءةٌ
+    من مصدرٍ غير `AppSettings` تعني أن الحالة المعروضة للنموذج قد تخالف الحالة التي
+    يعمل بها التطبيق فعلاً (الأسبقية `APP_DATABASE_URL` تُحسَم في الإعدادات وحدها).
+    """
+    from app.core.settings.base import get_settings
+
+    settings = get_settings()
+    env = settings.ENVIRONMENT
+    db = "PostgreSQL" if "postgresql" in (settings.DATABASE_URL or "") else "SQLite"
+    ai = "✅" if settings.OPENROUTER_API_KEY else "⚠️"
     return f"## 📊 STATUS\n- Env: {env}\n- DB: {db}\n- AI: {ai}"
 
 

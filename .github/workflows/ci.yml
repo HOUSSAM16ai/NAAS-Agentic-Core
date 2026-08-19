@@ -511,6 +511,35 @@ jobs:
           # deceiving ourselves, not to stop the work.
           python scripts/fitness/check_naas_verification.py
 
+          # D-268 (ISS-191): "capture the secret automatically, like Supabase and
+          # OpenRouter" turned out not to name one thing. A secret crosses TEN
+          # doors between a GitHub account and the process, and the doors did not
+          # agree. Measured 2026-08-19: SUPABASE_EDGE_FUNCTION_URL/KEY are injected
+          # by supervisor.sh and documented in secrets.env.example but MISSING from
+          # devcontainer.json:remoteEnv — so setting them as Codespaces secrets
+          # never reached the container at all. TAVILY_API_KEY crossed six doors
+          # with no AppSettings field, so app/ read it through os.environ in two
+          # places, breaking §6 ("never use os.environ in app code") — a rule that
+          # was prose with no enforcer, the D-188 defect class. FIRECRAWL_API_KEY is
+          # read in app/ and captured by no door at all, so it is always None.
+          # config/secret_catalog.json is now the single source, and this gate makes
+          # a forgotten door impossible rather than merely discouraged. It also
+          # feeds check_no_committed_secrets its patterns, so a new provider key
+          # (hch-v3-… was invisible to it) can no longer be committed.
+          python scripts/fitness/check_secret_capture_parity.py
+          # D-269 (ISS-192/193): a third-party user-modelling layer (Honcho) entered
+          # the repo, and it touches §0.12 and §0.14 at their core on a platform
+          # serving minors. The danger is not a wrong wiring but a GRADUAL one: a
+          # line sending an id, then a line sending a snippet "for context", then
+          # months later student conversations are crossing to a third party. That
+          # is exactly ISS-146's shape (system text written with role=user 28 times
+          # before anyone noticed). So the content wall is structural, not a filter:
+          # the layer's own types carry no field that could hold a message, and this
+          # gate proves it by AST. It also enforces the reverse direction — a unit
+          # declared SEAM that HAS code is red — because live code with no guard and
+          # no test is worse than a declared absence.
+          python scripts/fitness/check_ambient_identity.py
+
           # Third, strictest copy of the boundary rule (app ⇸ microservices).
           # Kept because it is AST-strict where the other two are scoped; it
           # reported 34 "violations" under 3.11 that were all PEP-695 parse

@@ -46,6 +46,11 @@ jobs:
       DIAG_EMAIL: ${{ secrets.E2E_STUDENT_EMAIL }}
       DIAG_PASSWORD: ${{ secrets.E2E_STUDENT_PASSWORD }}
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      # D-268/D-269 — طبقة الهوية المعرفية المحيطة. اختياريّ عمداً: غيابه يجعل
+      # المسبار يُبلِّغ `not_configured` ولا يُفشِل الرحلة، لأنه ليس على مسار
+      # إجابة الطالب. ولذلك هو **خارج** حارس «Refuse to run blind» أدناه —
+      # الحارس لأسرارٍ بلا واحدٍ منها تصير الوظيفة كذباً، لا لكل سرٍّ مُعلَن.
+      HONCHO_API_KEY: ${{ secrets.HONCHO_API_KEY }}
       ENVIRONMENT: development
       LLM_MOCK_MODE: "0"
       REQUIRE_ORCHESTRATOR: "0"
@@ -94,6 +99,12 @@ jobs:
           # `/health` صادقٌ أو لا شيء (D-245): نقرأ الجسم لا وجود العملية.
           cat /tmp/health.json
           python -c "import json,sys;h=json.load(open('/tmp/health.json'));bad=[k for k in ('application','database') if h.get(k)!='ok'];sys.exit('::error::/health غير صادق: '+str({k:h.get(k) for k in bad})) if bad else print('✅ /health صادق: application=ok database=ok')"
+
+      # D-269: الساق الثالثة من البرهان الثلاثي للطبقة الخامسة. `--require` عمداً:
+      # المالك ضبط السرّ بهذا الاسم، فغيابُه هنا يعني اسماً خاطئاً لا طبقةً اختيارية
+      # — والصمت لا يُقرأ نجاحاً (D-207). ⛔ ولا بيانات طالبٍ في هذا النداء.
+      - name: "Ambient identity layer live probe (D-269)"
+        run: python scripts/e2e/honcho_live_probe.py --require
 
       - name: "Universal answerability matrix (D-266 · ISS-159)"
         run: python scripts/e2e/universal_answerability_live.py --base http://127.0.0.1:8000

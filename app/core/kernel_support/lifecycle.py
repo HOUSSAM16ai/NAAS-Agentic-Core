@@ -32,7 +32,7 @@ async def _announce_startup_health() -> None:
     لا إجابات — ولا أي إشارةٍ معلنةٍ تسبق أول فشلٍ (ISS-163).
     """
     from app.core.db_health import probe_database_connection
-    from app.core.providers_health import probe_providers_health
+    from app.core.providers_health import check_ambient_memory_reachable, probe_providers_health
 
     db_status = await probe_database_connection()
     if db_status == "ok":
@@ -53,6 +53,15 @@ async def _announce_startup_health() -> None:
         )
     else:
         logger.info("✅ LLM provider configured (%s)", providers.llm_detail)
+
+    # D-269: الساق الثالثة من البرهان الثلاثي للطبقة الخامسة. مسبارٌ للقراءة فقط،
+    # مُقيَّدٌ بمهلة، ⛔ بلا أيّ بيانات طالب — وغيابُ المفتاح ليس عطلاً.
+    await check_ambient_memory_reachable()
+    logger.info(
+        "🧠 Ambient identity layer: %s (%s)",
+        providers.ambient_memory,
+        providers.ambient_memory_detail,
+    )
 
 
 async def _start_messaging_relay() -> RelayHandle | None:

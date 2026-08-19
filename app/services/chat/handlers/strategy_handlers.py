@@ -25,7 +25,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import re
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
@@ -85,7 +84,10 @@ def _check_provider_config() -> str | None:
     if not settings.OPENROUTER_API_KEY and not settings.OPENAI_API_KEY:
         return _format_llm_missing_error()
 
-    has_search_key = os.environ.get("TAVILY_API_KEY") or os.environ.get("FIRECRAWL_API_KEY")
+    # D-268 (ISS-191): كان هذا السطر يقرأ `os.environ` مباشرةً — خرقاً لقاعدة
+    # CLAUDE.md §6. القراءة الآن عبر القارئ القانوني الوحيد، وتحرسها بوّابة
+    # `check_secret_capture_parity` فلا تعود بصمت.
+    has_search_key = settings.TAVILY_API_KEY or settings.FIRECRAWL_API_KEY
     if not has_search_key:
         # We don't block execution because DuckDuckGo is a valid fallback.
         # But we log it for observability.

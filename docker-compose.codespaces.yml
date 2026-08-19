@@ -47,6 +47,11 @@ services:
       # --- LLM / Search providers ---
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      # --- Ambient cognitive identity (Honcho — D-268/D-269) ---
+      # This stack runs the monolith, so it is a real capture door. Empty
+      # default keeps `docker compose` working when the key is absent; the
+      # probe then reports `not_configured` instead of failing the boot.
+      HONCHO_API_KEY: ${HONCHO_API_KEY:-}
       # --- Optional Supabase metadata (kept for parity with the monolith) ---
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ROLE_KEY: ${SUPABASE_ROLE_KEY:-}

@@ -28,22 +28,67 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: أنماط الأسرار الحقيقية. كل نمط يستهدف **شكل المفتاح** لا اسم المتغيّر — فالاسم
-#: وحده (``OPENROUTER_API_KEY=``) مشروع في المثال والوثيقة، والقيمة هي التسريب.
-SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
-    (r"sk-or-v1-(?P<secret>[A-Za-z0-9]{32,})", "مفتاح OpenRouter حقيقي"),
-    (r"tvly-(?:dev-)?(?P<secret>[A-Za-z0-9]{16,})", "مفتاح Tavily حقيقي"),
-    (
-        r"postgres(?:ql)?://[A-Za-z0-9._%-]+:(?P<secret>[^@\s:/]{8,})@(?P<host>[A-Za-z0-9.-]+)",
-        "رابط قاعدة بيانات يحمل كلمة سرّ",
-    ),
+#: مصدر أنماط الأسرار المُكتلَجة — D-268.
+#:
+#: كانت الأنماط مكتوبةً هنا يدوياً، فكانت الشجرة تعرف شكلَ مفتاح OpenRouter وتجهل
+#: شكل أيّ مفتاحٍ يُضاف بعده: مفتاح Honcho (``hch-v3-…``) كان يمرّ من هذه البوّابة
+#: بلا اعتراض. وكمّيةٌ واحدة («ما شكلُ المفتاح الحقيقي؟») بمصدرين تتفرّق حتماً
+#: (D-192) — فالمصدر الآن واحد: ``config/secret_catalog.json``.
+CATALOG_PATH = REPO_ROOT / "config" / "secret_catalog.json"
+
+#: أنماطٌ **لا تخصّ سرّاً مُكتلَجاً**: أشكالٌ يجب ألّا تظهر في الشجرة أياً كان مصدرها،
+#: ولا يقابلها متغيّرُ بيئةٍ نلتقطه عند بابٍ ما — فلا موطنَ لها في الكتالوج.
+GENERIC_PATTERNS: tuple[tuple[str, str], ...] = (
     (
         r"(?P<secret>eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})",
         "توكن JWT مُوقَّع",
     ),
-    (r"sk-(?:proj-)?(?P<secret>[A-Za-z0-9]{40,})", "مفتاح OpenAI حقيقي"),
     (r"ghp_(?P<secret>[A-Za-z0-9]{30,})", "توكن GitHub شخصي"),
 )
+
+
+class CatalogUnreadableError(RuntimeError):
+    """يُرفَع حين يتعذّر قراءة الكتالوج — ⛔ الصمت ليس نجاحاً (D-208)."""
+
+
+def _catalog_patterns() -> tuple[tuple[str, str], ...]:
+    """أنماط الأسرار المُشتقّة من الكتالوج، بترتيب وروده.
+
+    ⛔ لا سقوطَ صامت إلى قائمةٍ فارغة: بوّابةٌ فقدت مصدرها تُبرِّئ شجرةً لم تفحصها،
+    وهو أخطر من غيابها لأنه يُقرأ حماية.
+    """
+    catalog = _load_catalog()
+    entries = (_pattern_entry(secret) for secret in catalog.get("secrets", []))
+    return tuple(entry for entry in entries if entry is not None)
+
+
+def _load_catalog() -> dict:
+    """يقرأ الكتالوج أو يرفع — ⛔ لا سقوطَ صامت."""
+    import json
+
+    if not CATALOG_PATH.is_file():
+        raise CatalogUnreadableError(f"الكتالوج مفقود: {CATALOG_PATH}")
+    try:
+        return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:  # pragma: no cover - عطلٌ في الكتالوج
+        raise CatalogUnreadableError(f"الكتالوج غير قابل للقراءة: {exc}") from exc
+
+
+def _pattern_entry(secret: dict) -> tuple[str, str] | None:
+    """(النمط، وسمُه) لسرٍّ يملك شكلاً مميّزاً، أو ``None``."""
+    pattern = secret.get("value_pattern")
+    if not pattern:
+        return None
+    label = secret.get("value_pattern_label_ar")
+    if not label:
+        label = secret["name"]
+    return (pattern, label)
+
+
+def _secret_patterns() -> tuple[tuple[str, str], ...]:
+    """كل الأنماط الفعّالة: المُشتقّة من الكتالوج + العامّة."""
+    return _catalog_patterns() + GENERIC_PATTERNS
+
 
 #: كلمات تدلّ على **قالب** لا سرّ. بوّابةٌ تصرخ على `ghp_xxxxxxxx` تُعطَّل بعد أسبوع،
 #: وبوّابةٌ مُعطَّلة أسوأ من غيابها — فالنائب يُستبعَد صراحةً.
@@ -74,23 +119,42 @@ _PLACEHOLDER_TOKENS: tuple[str, ...] = (
 _PLACEHOLDER_HOSTS = frozenset({"host", "localhost", "db", "postgres", "127.0.0.1", "example.com"})
 
 
-def _is_placeholder(value: str, host: str = "") -> bool:
-    """هل القيمة قالبٌ توضيحي لا سرّاً حقيقياً؟"""
-    if host and host.lower() in _PLACEHOLDER_HOSTS:
+def _is_placeholder_host(host: str) -> bool:
+    """مُضيفٌ وهمي: رابطٌ إليه لا يصل نظاماً حقيقياً، فكلمة سرّه ليست سرّاً."""
+    if not host:
+        return False
+    lowered = host.lower()
+    if lowered in _PLACEHOLDER_HOSTS:
         return True
+    return any(token in lowered for token in _PLACEHOLDER_TOKENS)
+
+
+def _looks_like_template(value: str) -> bool:
+    """القيمة تحمل لفظَ قالب، أو تكراراً، أو حروفاً كبيرة كاملة."""
     lowered = value.lower()
     if any(token in lowered for token in _PLACEHOLDER_TOKENS):
-        return True
-    if any(token in host.lower() for token in _PLACEHOLDER_TOKENS):
         return True
     # سلسلة من حرفٍ واحد مكرَّر (xxxxxxxx / 00000000).
     if len(set(lowered)) <= 2:
         return True
     # قوالب الوثائق تُكتب بأحرفٍ كبيرة كاملة (PASSWORD, YOUR_TOKEN).
-    if value.isupper():
+    return value.isupper()
+
+
+def _mixes_digits_and_letters(value: str) -> bool:
+    """سرٌّ حقيقي يخلط الأرقام والحروف؛ كلمةٌ خالصة («pass%40word») قالبُ اختبار."""
+    if not any(char.isdigit() for char in value):
+        return False
+    return any(char.isalpha() for char in value)
+
+
+def _is_placeholder(value: str, host: str = "") -> bool:
+    """هل القيمة قالبٌ توضيحي لا سرّاً حقيقياً؟"""
+    if _is_placeholder_host(host):
         return True
-    # سرٌّ حقيقي يخلط الأرقام والحروف؛ كلمةٌ خالصة («pass%40word») قالبُ اختبار.
-    return not (any(c.isdigit() for c in value) and any(c.isalpha() for c in value))
+    if _looks_like_template(value):
+        return True
+    return not _mixes_digits_and_letters(value)
 
 
 #: امتدادات نصّية تُفحَص. الثنائيات (PDF/صور) خارج النطاق — لا تُقرأ أصلاً.
@@ -135,48 +199,84 @@ def _tracked_files() -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-def main() -> int:
-    compiled = [(re.compile(pattern), label) for pattern, label in SECRET_PATTERNS]
+def _readable_text(rel: str) -> str | None:
+    """نصُّ ملفٍّ مُتتبَّع يستحقّ الفحص، أو ``None`` إن كان خارج النطاق."""
+    if rel == SELF:
+        return None
+    path = REPO_ROOT / rel
+    if path.suffix.lower() not in TEXT_SUFFIXES or not path.is_file():
+        return None
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:  # pragma: no cover - عطل نظام ملفّات
+        return None
+
+
+def _first_real_match(regex: re.Pattern[str], text: str) -> re.Match[str] | None:
+    """أوّل مطابقةٍ ليست قالباً توضيحياً."""
+    return next(
+        (
+            found
+            for found in regex.finditer(text)
+            if not _is_placeholder(found.group("secret"), found.groupdict().get("host") or "")
+        ),
+        None,
+    )
+
+
+def _scan_text(
+    rel: str,
+    text: str,
+    compiled: list[tuple[re.Pattern[str], str]],
+    hit_files: set[str],
+) -> list[str]:
+    """أخطاءُ ملفٍّ واحد. يُسجِّل الإصابة في ``hit_files`` حتى لو كانت ضمن الدَّين."""
     errors: list[str] = []
-    hit_files: set[str] = set()
+    for regex, label in compiled:
+        match = _first_real_match(regex, text)
+        if match is None:
+            continue
+        hit_files.add(rel)
+        if rel in FROZEN_DEBT:
+            continue
+        line_no = text[: match.start()].count("\n") + 1
+        errors.append(
+            f"❌ {rel}:{line_no}: {label} مُلتزَم في الشجرة.\n"
+            f"   الأسرار من **البيئة حصراً** (CLAUDE.md §6.7.ز). انقل القيمة إلى\n"
+            f"   `.devcontainer/secrets.env` (git-ignored) أو متغيّر بيئة، ثم **دوِّر\n"
+            f"   المفتاح** — الإزالة من الشجرة لا تُبطِل التسريب (ISS-141)."
+        )
+    return errors
 
+
+def _scan_tree(compiled: list[tuple[re.Pattern[str], str]], hit_files: set[str]) -> list[str]:
+    """أخطاءُ كلّ الملفّات المُتتبَّعة التي تستحقّ الفحص."""
+    errors: list[str] = []
     for rel in _tracked_files():
-        if rel == SELF:
-            continue
-        path = REPO_ROOT / rel
-        if path.suffix.lower() not in TEXT_SUFFIXES or not path.is_file():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:  # pragma: no cover
-            continue
-        for regex, label in compiled:
-            match = next(
-                (
-                    found
-                    for found in regex.finditer(text)
-                    if not _is_placeholder(
-                        found.group("secret"),
-                        (found.groupdict().get("host") or ""),
-                    )
-                ),
-                None,
-            )
-            if match is None:
-                continue
-            hit_files.add(rel)
-            if rel in FROZEN_DEBT:
-                continue
-            line_no = text[: match.start()].count("\n") + 1
-            errors.append(
-                f"❌ {rel}:{line_no}: {label} مُلتزَم في الشجرة.\n"
-                f"   الأسرار من **البيئة حصراً** (CLAUDE.md §6.7.ز). انقل القيمة إلى\n"
-                f"   `.devcontainer/secrets.env` (git-ignored) أو متغيّر بيئة، ثم **دوِّر\n"
-                f"   المفتاح** — الإزالة من الشجرة لا تُبطِل التسريب (ISS-141)."
-            )
+        text = _readable_text(rel)
+        if text is not None:
+            errors.extend(_scan_text(rel, text, compiled, hit_files))
+    return errors
 
-    for rel in sorted(FROZEN_DEBT - hit_files):
-        errors.append(f"❌ {rel} نظيف الآن — احذفه من FROZEN_DEBT (الدَّين يتقلّص فقط).")
+
+def _closed_debt_errors(hit_files: set[str]) -> list[str]:
+    """دَينٌ أُغلق بلا حذفه من القائمة كذبٌ كالدَّين المكتوم — الدَّين يتقلّص فقط."""
+    return [
+        f"❌ {rel} نظيف الآن — احذفه من FROZEN_DEBT (الدَّين يتقلّص فقط)."
+        for rel in sorted(FROZEN_DEBT - hit_files)
+    ]
+
+
+def main() -> int:
+    try:
+        patterns = _secret_patterns()
+    except CatalogUnreadableError as exc:
+        print(f"❌ {exc}\n   بوّابةٌ بلا مصدرٍ لا تُبرِّئ الشجرة — أصلِح الكتالوج ثم أعِد التشغيل.")
+        return 1
+    compiled = [(re.compile(pattern), label) for pattern, label in patterns]
+    hit_files: set[str] = set()
+    errors = _scan_tree(compiled, hit_files)
+    errors += _closed_debt_errors(hit_files)
 
     if errors:
         print("\n".join(errors))

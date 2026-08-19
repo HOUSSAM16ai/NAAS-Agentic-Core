@@ -271,6 +271,32 @@ def _check_no_new_dependency() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # 5 + 6 — حدّ المصداقية · الفوارض المُستشهَد بها موجودة
 # ─────────────────────────────────────────────────────────────────────────────
+#: أشجارُ الكود التي قد تُعرِّف دالّةً اسمها يبدأ بـ`check_`.
+_SOURCE_TREES = ("app", "shared", "scripts", "microservices", "tools")
+
+
+def _check_prefixed_functions() -> set[str]:
+    """أسماء الدوالّ التي تبدأ بـ`check_` والمُعرَّفة فعلاً في الكود.
+
+    وُلد هذا التمييز من **إنذارٍ كاذب أطلقته هذه البوّابة على نفسها**: وثيقةُ الحالة
+    تستشهد بسلسلة النداء `check_ambient_memory_reachable` — وهي **دالّة** لا بوّابة —
+    فرفضتها البوّابة بوصفها «فارضاً غير موجود». وبوّابةٌ تصرخ على استشهادٍ صحيح
+    تُعطَّل بعد أسبوع، وبوّابةٌ مُعطَّلة أسوأ من غيابها (نفس درس D-206 L8).
+
+    والتمييز **لا يُضعِف** حراسة ISS-148: اسمٌ لا يقابل بوّابةً على القرص **ولا**
+    دالّةً في الكود يبقى وهماً ⇒ أحمر.
+    """
+    found: set[str] = set()
+    pattern = re.compile(r"^\s*(?:async\s+)?def\s+(check_[a-z0-9_]+)\s*\(", re.MULTILINE)
+    for tree in _SOURCE_TREES:
+        root = REPO_ROOT / tree
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.py"):
+            found.update(pattern.findall(path.read_text(encoding="utf-8", errors="ignore")))
+    return found
+
+
 def _check_credibility_and_gates() -> None:
     gate_dirs = (REPO_ROOT / "scripts" / "fitness", REPO_ROOT / "tools" / "ci")
     on_disk = {
@@ -279,6 +305,7 @@ def _check_credibility_and_gates() -> None:
         if directory.is_dir()
         for path in directory.glob("check_*.py")
     }
+    on_disk |= _check_prefixed_functions()
 
     for rel in (*LAW_DOCS, STATE_DOC, ADR_DOC):
         text = _read(rel)

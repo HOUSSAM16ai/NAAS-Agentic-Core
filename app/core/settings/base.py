@@ -253,6 +253,39 @@ class AppSettings(BaseServiceSettings):
     OPENROUTER_API_KEY: str | None = Field(None, description="OpenRouter API Key")
     AI_SERVICE_URL: str | None = Field(None, description="AI Service URL")
 
+    # D-268 (ISS-191): `TAVILY_API_KEY` عبر ستّة أبواب ووصل العملية — ثم قرأه
+    # كودُ `app/` بـ`os.environ` في موضعين، خرقاً مباشراً لقاعدة CLAUDE.md §6
+    # («⛔ لا `os.environ` في كود التطبيق»). القاعدة كانت نثراً بلا فارض، وهو
+    # بالضبط صنف العطب الذي عالجه D-188. الحقلُ هنا يجعل القراءة القانونية ممكنة،
+    # وبوّابة `check_secret_capture_parity` تجعل غيرها مستحيلة.
+    TAVILY_API_KEY: str | None = Field(None, description="Tavily web-search API key")
+    # يُقرأ كإشارةِ توفّرٍ في `app/`، ومستهلكه الحيّ الوحيد `research_agent`.
+    # ⚠️ ولا مسارَ التقاطٍ له اليوم (مذكورٌ في `docker-compose.legacy.yml` وحده)
+    # — فجوةٌ **مُعلَنة** في `config/secret_catalog.json` لا مكتومة.
+    FIRECRAWL_API_KEY: str | None = Field(None, description="Firecrawl web-search API key")
+
+    # ── D-269: طبقة الهوية المعرفية المحيطة (Honcho) ─────────────────────────
+    # ⚠️ في هذه المرحلة: **التقاطٌ ومسبارُ توفّرٍ حيّ فقط**. ⛔ لا تُرسَل بيانات
+    # طالبٍ إلى أيّ طرفٍ ثالث — مسار الكتابة `SEAM` مُعلَنة بصفر كود، وشرط ترقيتها
+    # منطوق في `.memory/ambient_identity_truth.md`. غيابُ المفتاح ليس عطلاً.
+    HONCHO_API_KEY: str | None = Field(None, description="Honcho ambient-identity API key")
+    HONCHO_BASE_URL: str = Field(
+        "https://api.honcho.dev",
+        description="Honcho API host. Not a secret — configuration, kept overridable for self-hosting.",
+    )
+    HONCHO_API_VERSION: str = Field(
+        "v3",
+        description="Honcho API version prefix. Measured live 2026-08-19: v3 answers, v2/v1 return 404.",
+    )
+    HONCHO_WORKSPACE_ID: str = Field(
+        "ETAALIM",
+        description="Honcho workspace the platform owns. Not a secret.",
+    )
+    HONCHO_PROBE_TIMEOUT_SECONDS: float = Field(
+        5.0,
+        description="Explicit probe timeout — an open wait on a third party turns slowness into a hang (D-189).",
+    )
+
     # Codespaces / Dev Environment (Missing fields restored)
     CODESPACES: bool = Field(False, description="Is running in Codespaces")
     CODESPACE_NAME: str | None = Field(None, description="Codespace Name")

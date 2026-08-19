@@ -28,22 +28,58 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: أنماط الأسرار الحقيقية. كل نمط يستهدف **شكل المفتاح** لا اسم المتغيّر — فالاسم
-#: وحده (``OPENROUTER_API_KEY=``) مشروع في المثال والوثيقة، والقيمة هي التسريب.
-SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
-    (r"sk-or-v1-(?P<secret>[A-Za-z0-9]{32,})", "مفتاح OpenRouter حقيقي"),
-    (r"tvly-(?:dev-)?(?P<secret>[A-Za-z0-9]{16,})", "مفتاح Tavily حقيقي"),
-    (
-        r"postgres(?:ql)?://[A-Za-z0-9._%-]+:(?P<secret>[^@\s:/]{8,})@(?P<host>[A-Za-z0-9.-]+)",
-        "رابط قاعدة بيانات يحمل كلمة سرّ",
-    ),
+#: مصدر أنماط الأسرار المُكتلَجة — D-268.
+#:
+#: كانت الأنماط مكتوبةً هنا يدوياً، فكانت الشجرة تعرف شكلَ مفتاح OpenRouter وتجهل
+#: شكل أيّ مفتاحٍ يُضاف بعده: مفتاح Honcho (``hch-v3-…``) كان يمرّ من هذه البوّابة
+#: بلا اعتراض. وكمّيةٌ واحدة («ما شكلُ المفتاح الحقيقي؟») بمصدرين تتفرّق حتماً
+#: (D-192) — فالمصدر الآن واحد: ``config/secret_catalog.json``.
+CATALOG_PATH = REPO_ROOT / "config" / "secret_catalog.json"
+
+#: أنماطٌ **لا تخصّ سرّاً مُكتلَجاً**: أشكالٌ يجب ألّا تظهر في الشجرة أياً كان مصدرها،
+#: ولا يقابلها متغيّرُ بيئةٍ نلتقطه عند بابٍ ما — فلا موطنَ لها في الكتالوج.
+GENERIC_PATTERNS: tuple[tuple[str, str], ...] = (
     (
         r"(?P<secret>eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})",
         "توكن JWT مُوقَّع",
     ),
-    (r"sk-(?:proj-)?(?P<secret>[A-Za-z0-9]{40,})", "مفتاح OpenAI حقيقي"),
     (r"ghp_(?P<secret>[A-Za-z0-9]{30,})", "توكن GitHub شخصي"),
 )
+
+
+class CatalogUnreadableError(RuntimeError):
+    """يُرفَع حين يتعذّر قراءة الكتالوج — ⛔ الصمت ليس نجاحاً (D-208)."""
+
+
+def _catalog_patterns() -> tuple[tuple[str, str], ...]:
+    """أنماط الأسرار المُشتقّة من الكتالوج، بترتيب وروده.
+
+    ⛔ لا سقوطَ صامت إلى قائمةٍ فارغة: بوّابةٌ فقدت مصدرها تُبرِّئ شجرةً لم تفحصها،
+    وهو أخطر من غيابها لأنه يُقرأ حماية.
+    """
+    import json
+
+    if not CATALOG_PATH.is_file():
+        raise CatalogUnreadableError(f"الكتالوج مفقود: {CATALOG_PATH}")
+    try:
+        catalog = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:  # pragma: no cover - عطلٌ في الكتالوج
+        raise CatalogUnreadableError(f"الكتالوج غير قابل للقراءة: {exc}") from exc
+
+    out: list[tuple[str, str]] = []
+    for secret in catalog.get("secrets", []):
+        pattern = secret.get("value_pattern")
+        if not pattern:
+            continue
+        label = secret.get("value_pattern_label_ar") or secret["name"]
+        out.append((pattern, label))
+    return tuple(out)
+
+
+def _secret_patterns() -> tuple[tuple[str, str], ...]:
+    """كل الأنماط الفعّالة: المُشتقّة من الكتالوج + العامّة."""
+    return _catalog_patterns() + GENERIC_PATTERNS
+
 
 #: كلمات تدلّ على **قالب** لا سرّ. بوّابةٌ تصرخ على `ghp_xxxxxxxx` تُعطَّل بعد أسبوع،
 #: وبوّابةٌ مُعطَّلة أسوأ من غيابها — فالنائب يُستبعَد صراحةً.
@@ -136,7 +172,12 @@ def _tracked_files() -> list[str]:
 
 
 def main() -> int:
-    compiled = [(re.compile(pattern), label) for pattern, label in SECRET_PATTERNS]
+    try:
+        patterns = _secret_patterns()
+    except CatalogUnreadableError as exc:
+        print(f"❌ {exc}\n   بوّابةٌ بلا مصدرٍ لا تُبرِّئ الشجرة — أصلِح الكتالوج ثم أعِد التشغيل.")
+        return 1
+    compiled = [(re.compile(pattern), label) for pattern, label in patterns]
     errors: list[str] = []
     hit_files: set[str] = set()
 

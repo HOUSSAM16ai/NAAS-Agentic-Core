@@ -14,9 +14,10 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+
+from shared.ambient_memory import AmbientMemoryConfig
 
 
 def _utc_iso() -> str:
@@ -34,6 +35,10 @@ class ProvidersHealthState:
     search_detail: str = ""
     orchestrator: str = "unknown"  # "reachable" | "unreachable" (D-112 + D-245)
     orchestrator_detail: str = ""
+    # D-269: طبقة الهوية المعرفية المحيطة. الحالات من `ProbeState` — قائمة مغلقة،
+    # و`not_configured` **ليست** عطلاً: الطبقة اختيارية ولا تمسّ دور الطالب.
+    ambient_memory: str = "unknown"
+    ambient_memory_detail: str = ""
     checked_at: str = field(default_factory=_utc_iso)
 
     def summarize(self) -> dict[str, object]:
@@ -43,6 +48,12 @@ class ProvidersHealthState:
             "orchestrator": {
                 "status": self.orchestrator,
                 "detail": self.orchestrator_detail,
+            },
+            # الساق الثالثة من البرهان الثلاثي (§6.6): وجودُ مفتاحٍ ليس قدرة،
+            # ودليلُ التشغيل يُعرَض هنا كي يُسأل عنه لا كي يُفترَض.
+            "ambient_memory": {
+                "status": self.ambient_memory,
+                "detail": self.ambient_memory_detail,
             },
             "checked_at": self.checked_at,
         }
@@ -81,6 +92,38 @@ async def check_orchestrator_reachable() -> None:
         )
 
 
+def ambient_memory_config() -> AmbientMemoryConfig:
+    """يبني إعداد الطبقة من القارئ القانوني — `shared/` لا يقرأ البيئة بنفسه (D-189)."""
+    from app.core.settings.base import get_settings
+
+    settings = get_settings()
+    return AmbientMemoryConfig(
+        api_key=settings.HONCHO_API_KEY,
+        base_url=settings.HONCHO_BASE_URL,
+        api_version=settings.HONCHO_API_VERSION,
+        workspace_id=settings.HONCHO_WORKSPACE_ID,
+        timeout_seconds=settings.HONCHO_PROBE_TIMEOUT_SECONDS,
+    )
+
+
+async def check_ambient_memory_reachable() -> None:
+    """D-269: مسبارٌ حيٌّ للطبقة الخامسة — استعلامُ قراءةٍ فقط.
+
+    ⛔ لا يُرسَل أيّ نصّ محادثةٍ ولا مُعرَّف طالب: النداء الوحيد يسأل «هل تقبلني؟».
+    وفشلُه يُعلَن ولا يُرفَع — طرفٌ ثالثٌ لا يُسقط إقلاع المنصّة (نمط D-074).
+    """
+    from shared.ambient_memory import probe_ambient_memory
+
+    try:
+        result = await probe_ambient_memory(ambient_memory_config())
+    except Exception as exc:
+        _STATE.ambient_memory = "unreachable"
+        _STATE.ambient_memory_detail = f"مسبارٌ فشل بشكلٍ غير متوقَّع ({type(exc).__name__})."
+        return
+    _STATE.ambient_memory = result.state
+    _STATE.ambient_memory_detail = result.detail
+
+
 _STATE = ProvidersHealthState()
 
 
@@ -104,7 +147,8 @@ def probe_providers_health() -> ProvidersHealthState:
     _STATE.llm_provider = state
     _STATE.llm_detail = detail
 
-    if os.environ.get("TAVILY_API_KEY") or os.environ.get("FIRECRAWL_API_KEY"):
+    # D-268 (ISS-191): القراءة عبر القارئ القانوني لا `os.environ` (CLAUDE.md §6).
+    if settings.TAVILY_API_KEY or settings.FIRECRAWL_API_KEY:
         _STATE.search_provider = "configured"
         _STATE.search_detail = "TAVILY/FIRECRAWL key set"
     else:

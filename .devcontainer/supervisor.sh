@@ -285,6 +285,15 @@ ENVEOF
         changed=1
     fi
 
+    # ── HONCHO_API_KEY (D-268 · D-269) ───────────────────────────────────────
+    # طبقة الهوية المعرفية المحيطة. في هذه المرحلة: التقاطٌ ومسبارُ توفّرٍ حيّ فقط
+    # — ⛔ صفر بيانات طالبٍ تغادر المنصّة (الكتابة SEAM بشرطٍ منطوق، §0.21).
+    # غيابُ المفتاح ليس عطلاً: المسبار يُبلِّغ `not_configured` ولا يُوقف الإقلاع.
+    if [ -n "${HONCHO_API_KEY:-}" ]; then
+        _set_env_key "HONCHO_API_KEY" "$HONCHO_API_KEY"
+        changed=1
+    fi
+
     # ── SUPABASE_EDGE_FUNCTION_* (D-DB-BRIDGE-001) ──────────────────────────────
     # جسر HTTPS عبر منفذ 443 لتنفيذ SQL على Supabase حين تُحجَب منافذ Postgres
     # 5432/6543 في الـ sandbox/Codespaces. الـ URL ليس سرياً؛ الـ KEY سري ويُحقَن

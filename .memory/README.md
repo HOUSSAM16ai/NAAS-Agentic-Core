@@ -9,8 +9,8 @@
 | الملف | الدور | السلطة |
 |-------|------|--------|
 | `roadmap.md` | 🧭 الرؤية الثورية وخارطة الطريق (M0→M11) — **المصدر الحيّ الوحيد** | دستوري |
-| `decisions.md` | سجلّ القرارات المعمارية **D-001 → D-267** — كل قرار بسرده وجذره ودليله الحيّ. أحدثها: **D-267** (طبقة التحقّق منتجٌ بحدٍّ مستقلّ · الدليل قبل الادّعاء · ISS-187→ISS-190). | سجلّ ملزِم |
-| `issues.md` | سجلّ الكوارث المُشخَّصة والمُصلَحة **ISS-001 → ISS-190** — كلٌّ بجذرها ودليلها الحيّ وشرط إغلاقها. أحدثها: **ISS-187→ISS-190** (السلسلة تنكسر عند الدفع الحقيقي · العتبة النثرية · فرضية سعرٍ تُقرأ دليلاً · الحجب غير المحدود). | سجلّ ملزِم |
+| `decisions.md` | سجلّ القرارات المعمارية **D-001 → D-269** — كل قرار بسرده وجذره ودليله الحيّ. أحدثها: **D-268** (السرّ يُلتقط عند كل باب · ISS-191) و**D-269** (الطبقة الخامسة تُقرأ ولا تحكم · ISS-192→ISS-193). | سجلّ ملزِم |
+| `issues.md` | سجلّ الكوارث المُشخَّصة والمُصلَحة **ISS-001 → ISS-193** — كلٌّ بجذرها ودليلها الحيّ وشرط إغلاقها. أحدثها: **ISS-191→ISS-193** (أبوابُ الأسرار لا تتّفق · مفتاحُ طرفٍ ثالث بلا حدٍّ معماري · تبنٍّ بلا ADR). | سجلّ ملزِم |
 | `runtime_truth.md` | جدول الحقيقة التشغيلية (ACTIVE/PARTIAL/DORMANT/ZOMBIE) | **الحقيقة المرجعية** |
 | `context.md` | السياق التشغيلي المُلخَّص (يُحمَّل آلياً عند بدء الجلسات) | مرجع سريع |
 | `architecture.md` | الخريطة المعمارية المُختصرة | مرجع |
@@ -26,6 +26,8 @@
 | `spec_kit_governance_constitution.md` | 📜 دستور حوكمة Spec Kit (D-265) — طبقة ضبط تنفيذ فوق الدستورية · L1–L10 · ISS-182→ISS-185 · **الإضافة لا الاستبدال** |
 | `governance_enforcement_constitution.md` | 📜 دستور فرض الحوكمة (D-266) — الفارض نفسه يخضع للبرهان الثلاثي · L1–L10 (وL9 **بلا فارضٍ آلي** ويُقال ذلك) · ISS-186 · حالتُه `docs/governance/CONSTITUTION_REGISTRY.json` |
 | `naas_verification_constitution.md` | 📜 دستور طبقة التحقّق (D-267) — المُتحقِّق منتجٌ بحدٍّ مستقلّ والدليل قبل الادّعاء · L1–L10 · ISS-187→ISS-190 · **الإضافة لا الاستبدال** |
+| `secret_capture_constitution.md` | 📜 دستور التقاط السرّ (D-268) — السرّ يُلتقط عند كل بابٍ مُعلَن أو لا يُقال إنه ملتقَط · L1–L10 · ISS-191 · المصدر الواحد `config/secret_catalog.json` · **الإضافة لا الاستبدال** |
+| `ambient_identity_constitution.md` | 📜 دستور الهوية المعرفية المحيطة (D-269) — الطبقة الخامسة تُقرأ ولا تحكم، والقدرة تُثبَت بمسبارٍ لا بمفتاح · L1–L10 · ISS-192→ISS-193 · **الإضافة لا الاستبدال** |
 | `agentic_runtime_doctrine.md` | طبقات الـ Agentic Runtime الـ13 مُقيَّمة بصدق (D-146) |
 | `cognitive_lab_philosophy.md` | فلسفة المختبر المعرفي (ليس Chat Tutor) |
 | `routing_philosophy.md` | عقيدة التوجيه (intent gates محدودة النطاق) |
@@ -43,6 +45,8 @@
 | `observability-topology.md` · `dashboard-inventory.md` · `path-map.md` | خرائط الرصد واللوحات والمسارات |
 | `revenue_engine_truth.md` | **حالة** طبقات القيمة والإيراد (D-210→D-223) — 12 طبقة · 14 وحدة · 4 خطوط إيراد. القانون في `docs/VALUE_DOCTRINE.md` + `docs/REVENUE_ENGINE_SPEC.md`، وتحرسها `check_revenue_doctrine` |
 | `cognitive_execution_truth.md` | **حالة** محرّك التنفيذ المعرفي (D-224/D-225) — ١٣ طبقة + ٤ آفاق سوق. القانون في `docs/architecture/COGNITIVE_EXECUTION_ENGINE.md`، وتحرسها `check_cognitive_execution` (بها **قفل D-187**: نموذجٌ لغوي موصولٌ بمُنفِّذ الصندوق ⇒ CI أحمر) |
+| `secret_capture_truth.md` | **حالة** التقاط الأسرار (D-268) — ٧ وحدات + مصفوفة (سرّ × باب) كما قِيست قبل الإصلاح. القانون في `secret_capture_constitution.md`، وتحرسها `check_secret_capture_parity` |
+| `ambient_identity_truth.md` | **حالة** الطبقة الخامسة (D-269) — ٩ وحدات. القانون في `ambient_identity_constitution.md` + `docs/architecture/AMBIENT_COGNITIVE_IDENTITY.md`، وتحرسها `check_ambient_identity` |
 | `naas_verification_truth.md` | **حالة** طبقة التحقّق (D-267) — ٨ وحدات + ٤ بوّابات قرار. القانون في `naas_verification_constitution.md` + `docs/architecture/NAAS_VERIFICATION_LAYER.md` + `docs/governance/GATE_STATE_MACHINE.md`، وتحرسها `check_naas_verification`. سجلّ الحالة الحيّ للبوّابات: `docs/governance/GATE_LEDGER.json` |
 | `cognitive_twin_truth.md` | **حالة** التوأم الرقمي المعرفي (D-226/D-227) — ٨ محرّكات + ٣ آفاق. القانون في `docs/architecture/COGNITIVE_DIGITAL_TWIN.md`، وتحرسها `check_cognitive_twin` + `check_prerequisite_single_graph` |
 | `code_quality_truth.md` | **حالة** أدوات جودة الكود الثلاث (D-235) — ماذا وجد Qodana وCodeScene وCodeRabbit، وحكمٌ لكل نتيجة حرجة (5 حقيقية · 8 كاذبة)، والحدود المُعلَنة، و**البرهان من سجلّ التشغيل** على أنّ للمِسنَن أسناناً. ⚠️ عدد Qodana **ليس درجة جودة**، و`.coderabbit.yaml` **PARTIAL** حتى تُبلِّغ مراجعةٌ إعداداً غير الافتراضي |

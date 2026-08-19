@@ -162,6 +162,28 @@
         "docs/governance/GATE_LEDGER.json"
       ],
       "enforcers": ["check_naas_verification.py"]
+    },
+    {
+      "section": "0.20",
+      "id": "D-268",
+      "title_en": "Secret Capture Constitution",
+      "title_ar": "دستور التقاط السرّ",
+      "law_docs": [".memory/secret_capture_constitution.md", "config/secret_catalog.json"],
+      "status_docs": [".memory/secret_capture_truth.md"],
+      "enforcers": ["check_secret_capture_parity.py", "check_no_committed_secrets.py"]
+    },
+    {
+      "section": "0.21",
+      "id": "D-269",
+      "title_en": "Ambient Cognitive Identity Constitution",
+      "title_ar": "دستور الهوية المعرفية المحيطة",
+      "law_docs": [
+        ".memory/ambient_identity_constitution.md",
+        "docs/architecture/AMBIENT_COGNITIVE_IDENTITY.md",
+        "docs/adr/ADR-010-deepseek-harness-adoption.md"
+      ],
+      "status_docs": [".memory/ambient_identity_truth.md"],
+      "enforcers": ["check_ambient_identity.py"]
     }
   ]
 }

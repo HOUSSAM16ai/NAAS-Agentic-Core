@@ -16,6 +16,15 @@
     "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
     "TAVILY_API_KEY": "${localEnv:TAVILY_API_KEY}",
     "SECRET_KEY": "${localEnv:SECRET_KEY}",
+    // D-268 — الباب الأوّل. سرٌّ غائبٌ عن `remoteEnv` لا يدخل الحاوية مهما ضُبط في
+    // Codespaces Secrets: يبقى حاضراً في الحساب وغائباً عن العملية، وهو أسوأ من
+    // غيابه لأنه يُقرأ حضوراً. المصدر القانوني للقائمة: `config/secret_catalog.json`،
+    // ويحرس التطابقَ `scripts/fitness/check_secret_capture_parity.py`.
+    "HONCHO_API_KEY": "${localEnv:HONCHO_API_KEY}",
+    // كانا يُحقنان في supervisor.sh ويُوثَّقان في secrets.env.example — وغائبَين
+    // هنا. أي أنّ ضبطهما كسرَّي Codespaces لم يكن يصل الحاوية أبداً (ISS-191).
+    "SUPABASE_EDGE_FUNCTION_URL": "${localEnv:SUPABASE_EDGE_FUNCTION_URL}",
+    "SUPABASE_EDGE_FUNCTION_KEY": "${localEnv:SUPABASE_EDGE_FUNCTION_KEY}",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "${localEnv:OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}",
     "OTEL_EXPORTER_OTLP_INSECURE": "true",
     "OTEL_SERVICE_NAME": "cogniforge-monolith",

@@ -1,38 +1,31 @@
 # ======================================================================================
-# 🚀 SUPERHUMAN DEPENDABOT CONFIGURATION
+# Dependabot — D-270 L6 (سلسلة التوريد تُبرَّد وتَصِف الموجود)
 # ======================================================================================
-# This configuration enables LEGENDARY automated dependency management
-# with AI-powered review and GitHub MCP Server integration!
+# هذا الملفّ يصف **ما هو موجود في المستودع فعلاً**، وتحرسه
+# `scripts/fitness/check_supply_chain.py`:
 #
-# Features:
-#   ✅ Automated dependency updates (Python, Docker, GitHub Actions)
-#   ✅ AI-powered security analysis
-#   ✅ Intelligent update scheduling
-#   ✅ MCP Server integration for context-aware updates
-#   ✅ GitHub Copilot assistance for complex migrations
+#   1. كل `directory`/`directories` يجب أن يوجد على القرص.
+#   2. كل نمطٍ في `groups` يجب أن يطابق حزمةً حقيقية واحدة على الأقل
+#      (من `requirements*.txt` لـpip، ومن `frontend/package.json` لـnpm).
+#   3. كل ecosystem يجب أن يحمل `cooldown` — التبريد يمنع دمج نسخةٍ رُفعت للتوّ،
+#      وهو الحاجز العملي الوحيد أمام هجمات سلسلة التوريد على حزمةٍ مُختطَفة.
 #
-# Token: AI_AGENT_TOKEN (set in Dependabot secrets)
-#   Settings > Secrets and variables > Dependabot > New secret
-#   Name: AI_AGENT_TOKEN
+# لماذا أُعيدت كتابته (مقيس 2026-08-19): النسخة السابقة كانت تستهدف `/ai_service`
+# — مجلّد **غير موجود** — وتجمع `flask*` و`chromadb*` و`werkzeug` و`jinja2` تحت
+# مجموعات، ولا حزمة من الأولى ولا الثانية في أيّ `requirements*.txt`. وكانت
+# **لا تغطّي `frontend/` إطلاقاً** رغم وجود `package.json` حقيقي فيه. أي أنّ الملفّ
+# كان يَعِد بتغطيةٍ لا يقدّمها ويصف نظاماً ليس هذا النظام.
 #
-# This surpasses Renovate, Snyk, and WhiteSource in intelligence!
+# ⛔ `reviewers`/`assignees` مُهمَلان في Dependabot ويُتجاهَلان بصمت؛ المراجعة تأتي من
+# `.github/CODEOWNERS` (`* @HOUSSAM16ai`) — فذكرُهما هنا كان زخرفاً لا أثر له.
 # ======================================================================================
 
 version: 2
 
-# Global configuration for all ecosystems
-registries:
-  # Optional: Add private registries here if needed
-  # docker-private:
-  #   type: docker-registry
-  #   url: https://ghcr.io
-  #   username: ${{ secrets.DOCKER_USERNAME }}
-  #   password: ${{ secrets.AI_AGENT_TOKEN }}
-
 updates:
-  # ====================================================================================
-  # Python Dependencies (pip)
-  # ====================================================================================
+  # ────────────────────────────────────────────────────────────────────────────────
+  # Python — requirements*.txt في الجذر
+  # ────────────────────────────────────────────────────────────────────────────────
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -40,121 +33,149 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "UTC"
-    
-    # AI-powered review settings
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
-    
-    # Commit message configuration
+    versioning-strategy: increase
     commit-message:
-      prefix: "🔧"
-      prefix-development: "⚙️"
+      prefix: "chore"
+      prefix-development: "chore"
       include: "scope"
-    
-    # PR labels for AI categorization
     labels:
       - "dependencies"
       - "python"
-      - "ai-review-enabled"
-      - "mcp-server-ready"
-    
-    # Reviewers (can be AI bots or team members)
-    reviewers:
-      - "HOUSSAM16ai"
-    
-    # Assignees for complex updates
-    assignees:
-      - "HOUSSAM16ai"
-    
-    # Version updates strategy
-    versioning-strategy: increase
-    
-    # Allow both direct and indirect dependencies
-    allow:
-      - dependency-type: "all"
-    
-    # Group updates for related packages
     groups:
-      flask-ecosystem:
+      # fastapi + uvicorn + pydantic تتحرّك معاً؛ ترقية واحدة منها منفردةً تكسر الباقي.
+      web-stack:
         patterns:
-          - "flask*"
-          - "werkzeug"
-          - "jinja2"
-      
-      sqlalchemy-ecosystem:
+          - "fastapi"
+          - "uvicorn"
+          - "uvloop"
+          - "httptools"
+          - "watchfiles"
+          - "pydantic"
+          - "pydantic-settings"
+          - "python-multipart"
+          - "websockets"
+      database-stack:
         patterns:
-          - "sqlalchemy*"
+          - "SQLAlchemy"
+          - "sqlmodel"
           - "alembic"
-      
-      testing-tools:
+          - "asyncpg"
+          - "aiosqlite"
+          - "psycopg-binary"
+          - "psycopg2-binary"
+          - "greenlet"
+          - "vecs"
+      # سلسلة النماذج والاسترجاع. ⚠️ ترقيتها لا تُغيّر أبداً حرفيات السلسلة
+      # المحروسة أمنياً (D-174 · ISS-079/ISS-107) — تلك تُبدَّل بدليلٍ حيّ لا بترقية.
+      llm-stack:
+        patterns:
+          - "openai"
+          - "litellm"
+          - "langchain*"
+          - "langgraph*"
+          - "llama-index*"
+          - "dspy"
+          - "huggingface-hub"
+          - "sentence-transformers"
+          - "tavily-python"
+          - "firecrawl-py"
+          - "duckduckgo-search"
+      observability-stack:
+        patterns:
+          - "prometheus-client"
+          - "opentelemetry-*"
+          - "python-json-logger"
+      # ruff وmypy مُثبَّتان في `ci.yml` عمداً (D-184: أداةٌ تتغيّر تحت المستودع ليست
+      # بوّابة بل رمية عملة). ترقيتهما هنا تتطلّب تحديث التثبيت في الـworkflow معاً.
+      testing-and-lint:
         patterns:
           - "pytest*"
           - "coverage"
+          - "hypothesis"
+          - "factory-boy"
+          - "Faker"
+          - "ruff"
+          - "mypy"
+          - "mypy_extensions"
+          - "types-*"
+          - "bandit"
+          - "safety*"
           - "black"
-          - "flake8"
-      
-      ai-ml-packages:
+      security-stack:
         patterns:
-          - "openai*"
-          - "anthropic*"
-          - "langchain*"
-          - "chromadb*"
-    
-    # Ignore specific dependencies (if needed)
-    ignore:
-      # Example: ignore major version updates for stable packages
-      # - dependency-name: "flask"
-      #   update-types: ["version-update:semver-major"]
-      
-  # ====================================================================================
-  # Docker Dependencies
-  # ====================================================================================
+          - "cryptography"
+          - "PyJWT"
+          - "pyjwt"
+          - "Authlib"
+          - "passlib"
+          - "bcrypt"
+          - "argon2-cffi"
+          - "argon2-cffi-bindings"
+
+  # ────────────────────────────────────────────────────────────────────────────────
+  # npm — الواجهة (frontend/package.json). لم تكن مُغطّاة إطلاقاً قبل D-270.
+  # ────────────────────────────────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "frontend"
+    groups:
+      next-react:
+        patterns:
+          - "next"
+          - "react"
+          - "react-dom"
+          - "eslint-config-next"
+          - "eslint"
+      markdown-math:
+        patterns:
+          - "react-markdown"
+          - "rehype-katex"
+          - "remark-math"
+          - "katex"
+
+  # ────────────────────────────────────────────────────────────────────────────────
+  # Docker — الصور المبنيّة فعلاً (D-205: كل الصور مبنيّة ومُثبَتة الاستيراد).
+  # ────────────────────────────────────────────────────────────────────────────────
   - package-ecosystem: "docker"
-    directory: "/"
+    directories:
+      - "/"
+      - "/frontend"
+      - "/microservices/*"
     schedule:
       interval: "weekly"
       day: "tuesday"
       time: "06:00"
       timezone: "UTC"
-    
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
     commit-message:
-      prefix: "🐳"
-    
+      prefix: "chore"
+      include: "scope"
     labels:
       - "dependencies"
       - "docker"
-      - "ai-review-enabled"
-    
-    reviewers:
-      - "HOUSSAM16ai"
-    
-    # Monitor both Dockerfile and docker-compose.yml
-    
-  # ====================================================================================
-  # AI Service Docker (ai_service subdirectory)
-  # ====================================================================================
-  - package-ecosystem: "docker"
-    directory: "/ai_service"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "08:00"
-      timezone: "UTC"
-    
-    commit-message:
-      prefix: "🤖"
-    
-    labels:
-      - "dependencies"
-      - "docker"
-      - "ai-service"
-      - "ai-review-enabled"
-    
-    reviewers:
-      - "HOUSSAM16ai"
-  
-  # ====================================================================================
-  # GitHub Actions Workflows
-  # ====================================================================================
+
+  # ────────────────────────────────────────────────────────────────────────────────
+  # GitHub Actions — D-141 يشترط بقاء كل إجراء على node24 بلا تحذيرات.
+  # ────────────────────────────────────────────────────────────────────────────────
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -162,49 +183,16 @@ updates:
       day: "wednesday"
       time: "06:00"
       timezone: "UTC"
-    
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
     commit-message:
-      prefix: "⚡"
-    
+      prefix: "ci"
+      include: "scope"
     labels:
       - "dependencies"
       - "github-actions"
-      - "ci-cd"
-      - "ai-review-enabled"
-    
-    reviewers:
-      - "HOUSSAM16ai"
-    
-    # Group all GitHub Actions updates together
     groups:
-      github-actions:
+      actions:
         patterns:
           - "*"
-
-# ======================================================================================
-# 🤖 AI-POWERED FEATURES
-# ======================================================================================
-#
-# When Dependabot creates PRs with the "ai-review-enabled" label, our superhuman
-# MCP Server integration will automatically:
-#
-# 1. 🔍 Analyze the dependency update for breaking changes
-# 2. 🧪 Generate additional tests if needed
-# 3. 📝 Provide detailed migration guides
-# 4. 🔒 Perform security vulnerability scanning
-# 5. 🚀 Assess deployment impact
-# 6. 💬 Comment with AI-powered insights
-#
-# This is achieved through:
-#   - GitHub Actions workflow triggered on Dependabot PRs
-#   - MCP Server integration using AI_AGENT_TOKEN
-#   - GitHub Copilot for code analysis
-#   - Our proprietary AI models for decision making
-#
-# Configuration:
-#   1. Add AI_AGENT_TOKEN to Dependabot secrets
-#   2. Add AI_AGENT_TOKEN to Actions secrets
-#   3. Add AI_AGENT_TOKEN to Codespaces secrets
-#
-# Result: SUPERHUMAN dependency management surpassing all competitors! 🚀
-# ======================================================================================

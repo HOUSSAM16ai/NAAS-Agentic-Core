@@ -2,8 +2,7 @@
 # ==========================================
 # === Semgrep Custom Rules Configuration ===
 # ==========================================
-# Enterprise-grade security rules with smart severity levels
-# Following best practices from Google, Facebook, Microsoft, OpenAI
+# Custom security rules with per-rule severity levels.
 
 rules:
   # =========================================

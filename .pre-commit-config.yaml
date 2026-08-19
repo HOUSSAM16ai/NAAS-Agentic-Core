@@ -1,179 +1,120 @@
 # ======================================================================================
-# PRE-COMMIT HOOKS - Automated Code Quality (Superhuman Edition)
+# pre-commit — D-270 L7 (الفارض المحلّي مطابقٌ لـCI أو مُعلَنٌ ميتاً)
 # ======================================================================================
-# This configuration ensures code quality before commits
-# Install: pip install pre-commit && pre-commit install
-# Run manually: pre-commit run --all-files
-# Standards: Google, Microsoft, Meta (Facebook), OpenAI level
+# القاعدة: أدوات الفحص هنا **هي نفسها** أدوات `ci.yml` بنفس التثبيتات ونفس الإعداد.
+# فارضٌ محلّي يخالف CI ليس حمايةً — هو مصيدة: من يتّبع الوثائق يُحمِّر الـCI.
+# تحرس التطابق `scripts/fitness/check_governance_registry.py` (قسم `local_enforcers`).
+#
+# لماذا أُعيدت كتابته (مقيس 2026-08-19) — النسخة السابقة كانت **مصيدة بثلاثة أوجه**:
+#
+#   1. `black` (rev 24.10.0) بلا وسائط ⇒ عرض السطر الافتراضي **88**، بينما
+#      `pyproject.toml [tool.ruff] line-length = 100` وCI يفحص بـ`ruff format --check .`.
+#      القياس: **7917 سطراً في 1441 ملفّاً** طولها 89..100 حرفاً — كلّها يعيد `black`
+#      لفّها ثمّ يرفضها CI. أي أنّ تشغيل الخطّافات الموثَّقة كان يضمن دفعةً حمراء.
+#      (المفارقة: `isort` كان مُمرَّراً له `--line-length=100`؛ فالمحاذاة تمّت لأداةٍ
+#      ونُسِيت للأخرى — وهو بالضبط صنف «مصدرَين لكمّيةٍ واحدة»، D-192.)
+#
+#   2. `isort` **مُكرَّر أصلاً**: قاعدة `I` مُفعَّلة داخل `[tool.ruff.lint] select`
+#      مع `known-first-party = ["app", "microservices"]`. فكان في المستودع مُرتِّبا
+#      استيراداتٍ بإعدادَين مختلفين — نفس صنف العطب.
+#
+#   3. خطّاف `mypy` يُثبِّت `types-requests`/`types-PyYAML`/`sqlalchemy-stubs`
+#      و**لا يُثبِّت `pydantic`**، بينما `mypy.ini` يحمل `plugins = pydantic.mypy`
+#      — فmypy يستورد الإضافة عند الإقلاع ويخرج **2 قبل فحص سطرٍ واحد**. وهو العطب
+#      نفسه الذي واجهه CI ووثّقه وأصلحه في `ci.yml` (تعليق D-192) — فتعافى الـCI
+#      وبقي الفارض المحلّي مكسوراً.
+#
+# ⛔ ما حُذف ولماذا (لا يُعاد بلا قرارٍ مكتوب — D-266 L9):
+#   `black` · `isort`            → يتضاربان مع `ruff format` / قاعدة `I` (أعلاه).
+#   `pydocstyle --convention=google` → الدوكسترينغ في هذا المستودع **عربية** بأمر
+#                                   `AGENTS.md`، وCI لا يفرض أسلوب google إطلاقاً.
+#   `bandit` · `safety` · `prettier` · `yamllint` · `shellcheck`
+#                                → **لا يشغّلها أيّ workflow**. إبقاؤها هنا يجعلها
+#                                  فارضاً محلّياً بلا نظيرٍ في CI: يمرّ الكود محلياً
+#                                  أو يسقط بمعيارٍ لا يحاسَب عليه أحدٌ في المراجعة.
+#                                  إعادةُ أيٍّ منها تكون **بإضافته إلى `ci.yml` أوّلاً**.
+#   `ci:` (pre-commit.ci)        → خدمةٌ غير مُفعَّلة على هذا المستودع؛ إعدادٌ لمنصّةٍ
+#                                  لا تقرأه = نصٌّ يُقرأ حمايةً وليس حمايةً (ISS-186).
+# ======================================================================================
 
+minimum_pre_commit_version: "3.5.0"
+
+# مُستبعَدٌ من كل الخطّافات: مولَّد أو مؤرشَف أو تابعٌ لطرفٍ ثالث.
+# ⚠️ لا يُستبعَد هنا أيّ شجرةٍ يفحصها CI — الاستبعادُ الأوسع من CI يصنع فجوةً معاكسة.
 exclude: |
-    (?x)(
-        ^docs/|
-        ^reports/|
-        ^migrations/|
-        ^app/static/dist/|
-        .*\.md$|
-        .*\.json$|
-        .*\.lock$
+    (?x)^(
+        migrations_archive/|
+        frontend/node_modules/|
+        htmlcov/|
+        docs/archive/
     )
 
 repos:
-  # =============================================================================
-  # BUILT-IN HOOKS - Basic File Hygiene
-  # =============================================================================
+  # ====================================================================================
+  # نظافة الملفّات — محلّية بحتة، ولا يمكن أن تناقض CI
+  # ====================================================================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        name: 🧹 Trim trailing whitespace
         args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
-        name: 📝 Fix end of files
       - id: check-yaml
-        name: ✅ Check YAML syntax
-        args: [--safe]
+        args: [--allow-multiple-documents]
       - id: check-json
-        name: ✅ Check JSON syntax
       - id: check-toml
-        name: ✅ Check TOML syntax
       - id: check-added-large-files
-        name: 🚫 Block large files (>500KB)
         args: [--maxkb=500]
       - id: check-merge-conflict
-        name: 🚫 Block merge conflict markers
       - id: check-case-conflict
-        name: 🚫 Block case conflicts
       - id: mixed-line-ending
-        name: 🔧 Fix mixed line endings
         args: [--fix=lf]
+      # صدىً محلّي مبكّر لبوّابة `check_no_committed_secrets` في CI (D-268).
       - id: detect-private-key
-        name: 🔒 Detect private keys
       - id: debug-statements
-        name: 🐛 Detect debug statements
 
-  # =============================================================================
-  # BLACK - Code Formatter (Industry Standard)
-  # =============================================================================
-  - repo: https://github.com/psf/black
-    rev: 24.10.0
-    hooks:
-      - id: black
-        name: ⚫ Format with Black
-        language_version: python3.12
-
-  # =============================================================================
-  # ISORT - Import Sorter (Google/Meta Standard)
-  # =============================================================================
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        name: 📦 Sort imports with isort
-        args: [--profile=black, --line-length=100]
-
-  # =============================================================================
-  # RUFF - Ultra-Fast Linter (Rust-based, Replaces Flake8)
-  # =============================================================================
+  # ====================================================================================
+  # ruff — مرآة `ci.yml` خطوةً بخطوة
+  #   CI: `pip install "ruff==0.14.0"` ثمّ `ruff check .` ثمّ `ruff format --check .`
+  # ⛔ بلا `args` خاصّة: الإعداد كلّه من `pyproject.toml` — بما فيه ratchet
+  #    الـ`per-file-ignores` الذي **يتقلّص فقط** (D-192). وسيطٌ هنا يلتفّ عليه بصمت.
+  # ====================================================================================
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.14.0
     hooks:
       - id: ruff
-        name: ⚡ Lint with Ruff
         args: [--fix]
       - id: ruff-format
-        name: ⚡ Format with Ruff
 
-  # =============================================================================
-  # MYPY - Static Type Checker (Microsoft/Google Standard)
-  # =============================================================================
+  # ====================================================================================
+  # mypy — مرآة `ci.yml`: نفس النسخة، نفس النطاق، نفس الإعداد، نفس التثبيتات.
+  #   CI: mypy==1.8.0 + types-PyYAML + types-requests + pydantic + pydantic-settings + httpx
+  #       ثمّ: mypy --config-file mypy.ini --follow-imports=silent shared/ app/integration/
+  # النطاق مقصود (D-192): `shared/` و`app/integration/` هما رأس الجسر النظيف؛ يتّسع
+  # بتقليص الدَّين لا بتخفيف `mypy.ini`. ولذلك `pass_filenames: false` — النطاق ثابتٌ
+  # في الوسائط لا مُشتقٌّ ممّا صادف أن يكون في الـstaging.
+  # ====================================================================================
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
     hooks:
       - id: mypy
-        name: 🔍 Type check with mypy
-        additional_dependencies: 
-          - types-requests
-          - types-PyYAML
-          - sqlalchemy-stubs
-        args: [--ignore-missing-imports, --show-error-codes]
-        exclude: ^(tests/|migrations/)
-
-  # =============================================================================
-  # BANDIT - Security Linter (CIA/NSA Level)
-  # =============================================================================
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.6
-    hooks:
-      - id: bandit
-        name: 🔒 Security scan with Bandit
-        args: [-c, pyproject.toml]
-        additional_dependencies: ["bandit[toml]"]
-        exclude: ^tests/
-
-  # =============================================================================
-  # PYDOCSTYLE - Docstring Checker (Google/NumPy Standard)
-  # =============================================================================
-  - repo: https://github.com/PyCQA/pydocstyle
-    rev: 6.3.0
-    hooks:
-      - id: pydocstyle
-        name: 📚 Check docstrings
-        args: [--convention=google]
-        exclude: ^(tests/|migrations/)
-
-  # =============================================================================
-  # SHELLCHECK - Shell Script Linter
-  # =============================================================================
-  - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.9.0.6
-    hooks:
-      - id: shellcheck
-        name: 🐚 Lint shell scripts
-
-  # =============================================================================
-  # YAML LINT - YAML File Linter
-  # =============================================================================
-  - repo: https://github.com/adrienverge/yamllint
-    rev: v1.33.0
-    hooks:
-      - id: yamllint
-        name: 📋 Lint YAML files
-        args: [-d, '{extends: default, rules: {line-length: {max: 120}}}']
-
-  # =============================================================================
-  # PRETTIER - Multi-format Formatter (JSON, YAML, Markdown)
-  # =============================================================================
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
-    hooks:
-      - id: prettier
-        name: 💅 Format with Prettier
-        types_or: [yaml, markdown, json]
-        exclude: ^(migrations/|htmlcov/)
-
-  # =============================================================================
-  # SAFETY - Dependency Security Checker
-  # =============================================================================
-  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
-    rev: v1.3.3
-    hooks:
-      - id: python-safety-dependencies-check
-        name: 🛡️ Check dependencies security
-        files: requirements.txt
-
-# =============================================================================
-# CI CONFIGURATION - Run on GitHub Actions
-# =============================================================================
-ci:
-  autofix_commit_msg: |
-    🤖 [pre-commit.ci] Auto-fix code quality issues
-    
-    - Applied automatic formatting
-    - Fixed linting issues
-    - Updated imports
-  autofix_prs: true
-  autoupdate_branch: ''
-  autoupdate_commit_msg: '🤖 [pre-commit.ci] Auto-update pre-commit hooks'
-  autoupdate_schedule: weekly
-  skip: []
-  submodules: false
+        name: mypy (shared/ + app/integration/ — مرآة CI)
+        pass_filenames: false
+        files: ^(shared|app/integration)/.*\.py$
+        args:
+          - --config-file
+          - mypy.ini
+          - --follow-imports=silent
+          - shared/
+          - app/integration/
+        additional_dependencies:
+          # `mypy.ini` يحمل `plugins = pydantic.mypy` — بلا هذه الحزمة يخرج mypy
+          # بالرمز 2 قبل فحص سطرٍ واحد. هذا ليس تحسيناً: هو شرط تشغيلٍ أصلاً.
+          - "pydantic>=2.11.5,<3.0.0"
+          - "pydantic-settings>=2.4.0,<3.0.0"
+          # `shared/http_client/correlated.py` يستورد httpx؛ بلا الحزمة الحقيقية
+          # يُبلِّغ mypy عن استيرادٍ مجهول **و**عن `type: ignore` غير مستعمل على
+          # السطر الموجود تحديداً لأن الاستيراد **يُحَلّ**. فحصُ وحدةٍ يعني تثبيت ما تستعمله.
+          - "httpx==0.27.0"
+          - "types-PyYAML"
+          - "types-requests"

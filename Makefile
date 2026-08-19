@@ -1,5 +1,5 @@
 # ======================================================================================
-# MAKEFILE - CogniForge Development Commands (Superhuman Edition)
+# MAKEFILE - CogniForge Development Commands
 # ======================================================================================
 # One-command automation for all common tasks
 # Standards: Google, Meta, Microsoft, Netflix, Uber
@@ -37,7 +37,7 @@ NC := \033[0m # No Color
 # =============================================================================
 help:
 	@echo "$(BLUE)════════════════════════════════════════════════════════════════$(NC)"
-	@echo "$(BLUE)  🚀 CogniForge - Superhuman Development Commands$(NC)"
+	@echo "$(BLUE)  🚀 CogniForge - Development Commands$(NC)"
 	@echo "$(BLUE)════════════════════════════════════════════════════════════════$(NC)"
 	@echo ""
 	@echo "$(GREEN)📦 Installation:$(NC)"
@@ -117,11 +117,11 @@ install-pre-commit:
 	@echo "$(GREEN)✅ Pre-commit hooks installed!$(NC)"
 
 # =============================================================================
-# CODE QUALITY - The Superhuman Suite
+# CODE QUALITY - format · lint · type-check · security · complexity · test
 # =============================================================================
 quality: format lint type-check security complexity test
 	@echo "$(GREEN)════════════════════════════════════════════════════════════════$(NC)"
-	@echo "$(GREEN)  ✅ ALL QUALITY CHECKS PASSED - SUPERHUMAN LEVEL!$(NC)"
+	@echo "$(GREEN)  ✅ ALL QUALITY CHECKS PASSED$(NC)"
 	@echo "$(GREEN)════════════════════════════════════════════════════════════════$(NC)"
 
 format:
@@ -386,7 +386,7 @@ db-status:
 	python check_migrations_status.py
 
 # =============================================================================
-# SIMPLICITY - Superhuman Simplicity Implementation
+# SIMPLICITY - complexity-reduction helpers
 # =============================================================================
 simplicity-validate:
 	@echo "$(BLUE)🎯 Running simplicity validator...$(NC)"
@@ -405,7 +405,7 @@ simplicity-report:
 
 simplicity-help:
 	@echo "$(BLUE)════════════════════════════════════════════════════════════════$(NC)"
-	@echo "$(BLUE)  🎯 Superhuman Simplicity Commands$(NC)"
+	@echo "$(BLUE)  🎯 Simplicity Commands$(NC)"
 	@echo "$(BLUE)════════════════════════════════════════════════════════════════$(NC)"
 	@echo ""
 	@echo "$(GREEN)Available commands:$(NC)"
@@ -414,11 +414,7 @@ simplicity-help:
 	@echo "  make simplicity-report     - View current simplicity report"
 	@echo ""
 	@echo "$(GREEN)Documentation:$(NC)"
-	@echo "  • SIMPLICITY_PRINCIPLES_GUIDE_AR.md  - Full Arabic guide"
-	@echo "  • SIMPLICITY_PRINCIPLES_GUIDE_EN.md  - Full English guide"
-	@echo "  • SIMPLICITY_QUICK_REFERENCE.md      - Quick reference"
-	@echo "  • SUPERHUMAN_SIMPLICITY_ARCHITECTURE.md - 7 principles"
-	@echo "  • SUPERHUMAN_SIMPLICITY_FRAMEWORK.md - 72-hour plan"
+	@echo "  • docs/architecture/ENGINEERING_DOCTRINE.md - complexity law + its gates"
 	@echo ""
 	@echo "$(YELLOW)Philosophy: \"احذف، ادمج، ثم ابنِ\" - Delete, Merge, then Build$(NC)"
 	@echo "$(BLUE)════════════════════════════════════════════════════════════════$(NC)"
@@ -459,7 +455,7 @@ pre-commit-update:
 	@echo "$(GREEN)✅ Pre-commit hooks updated!$(NC)"
 
 # =============================================================================
-# ML OPERATIONS - DevOps/MLOps Superhuman Edition
+# ML OPERATIONS - DevOps / MLOps
 # =============================================================================
 
 # ML Installation

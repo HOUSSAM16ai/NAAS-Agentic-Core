@@ -1,0 +1,167 @@
+{
+  "$schema_version": "1",
+  "decision": "D-270",
+  "law": "L8 — حدّ المصداقية يمتدّ إلى ما يُشحَن",
+  "purpose_ar": "المصدر القانوني الوحيد لحدّ المصداقية (D-227). كان مُوزَّعاً على ثلاث قوائم في ثلاث بوّابات لا تتّفق أيّ اثنتين منها، ولا واحدة منها تقرأ ملفّات الإعداد — ولذلك مرّت «SUPERHUMAN» و«surpasses Renovate, Snyk, and WhiteSource» و«CIA/NSA Level» في ملفّات تُشحَن مع المستودع. تحرسه scripts/fitness/check_config_credibility.py.",
+  "purpose_en": "Single lawful source for the credibility limit (D-227). It used to live as three divergent lists inside three gates, none of which read configuration files — which is why unfalsifiable marketing prose survived in shipped config. Guarded by scripts/fitness/check_config_credibility.py.",
+  "rules_ar": [
+    "عبارةٌ غير قابلة للتفنيد دَينٌ لا طموح: تُصدَّق مرّة، ثمّ تُكتشَف، ثمّ يسقط معها كلُّ ما هو صحيح.",
+    "النطاق هنا ملفّات الإعداد التي تُشحَن مع المستودع. مصداقية الوثائق المُعلَنة يملكها check_cognitive_twin (D-227) وcheck_naas_verification (D-267 L10) — ولا تُنسَخ مسؤوليتهما هنا.",
+    "سطرٌ يَنهى عن عبارةٍ ليس ادّعاءً بها (درس D-206): علامات النهي تُستثنى منطوقاً.",
+    "مطابقةٌ داخل معرِّفٍ أطول (اسم ملفّ أو ثابت مثل SUPERHUMAN_X.md) ليست ادّعاءً — العلامة القصيرة لا تختبئ داخل كلمة أخرى (D-206 L4).",
+    "mirrored_gate_lists يُثبّت ما تحمله كلّ بوّابة قائمة اليوم. أيّ إدخالٍ يُضاف أو يُحذف فيها بلا تحديث هذا الملفّ ⇒ CI أحمر. القائمة تُوحَّد بتقليص التباين لا بإضافة نسخةٍ رابعة."
+  ],
+  "config_scopes": {
+    "directories": [
+      ".github"
+    ],
+    "directory_suffixes": [
+      ".yml",
+      ".yaml",
+      ".json",
+      ".md"
+    ],
+    "root_globs": [
+      "*.yml",
+      "*.yaml",
+      "*.toml",
+      "*.cfg",
+      "*.ini",
+      "Makefile",
+      ".trivy.yml"
+    ],
+    "skip_fragments": [
+      "node_modules",
+      ".git/",
+      "docs/archive/",
+      ".github/health-reports/"
+    ]
+  },
+  "claims": [
+    {
+      "id": "superhuman",
+      "pattern": "(?i)\\bsuperhuman\\b|خارق للبشر",
+      "why_ar": "ادّعاءٌ لا يقبل قياساً ولا تفنيداً.",
+      "instead_ar": "سمِّ ما يفعله الملفّ فعلاً."
+    },
+    {
+      "id": "legendary",
+      "pattern": "(?i)\\blegendary\\b|أسطوري",
+      "why_ar": "وصفٌ تسويقي لا معنى تشغيلياً له.",
+      "instead_ar": "سمِّ القدرة والقياس."
+    },
+    {
+      "id": "surpasses_competitors",
+      "pattern": "(?i)\\bsurpass(?:es|ing)?\\b|يتفوّق على|يتفوق على",
+      "why_ar": "مقارنةٌ بمنتجٍ آخر بلا معيارٍ ولا قياسٍ منشور — وهي بالضبط ما يحظره GATE_A (D-267 L9).",
+      "instead_ar": "أرفق قياساً بأساسٍ وبروتوكولٍ مثبَّتين، أو احذف المقارنة."
+    },
+    {
+      "id": "world_class",
+      "pattern": "(?i)\\bworld[- ]class\\b|\\bbest[- ]in[- ]class\\b|\\benterprise[- ]grade\\b",
+      "why_ar": "فئةٌ بلا حدٍّ يمكن اختباره.",
+      "instead_ar": "اذكر المعيار الذي تلتزم به بالاسم."
+    },
+    {
+      "id": "unbeatable",
+      "pattern": "(?i)\\bunbeatable\\b|\\bunmatched\\b|\\bunrivall?ed\\b|\\bflawless\\b",
+      "why_ar": "مطلقٌ لا يُفنَّد.",
+      "instead_ar": "اذكر الحدّ المعروف لما تفعله."
+    },
+    {
+      "id": "agency_grade",
+      "pattern": "(?i)\\b(?:CIA|NSA|FBI|military)[- ]?(?:level|grade)\\b",
+      "why_ar": "استعارةُ سلطةٍ أمنية لا علاقة لها بالإعداد، ولا سبيل إلى تفنيدها.",
+      "instead_ar": "سمِّ الأداة والقاعدة التي تُطبَّق."
+    },
+    {
+      "id": "proprietary_ai",
+      "pattern": "(?i)our proprietary AI|نماذجنا الخاصّة|نماذجنا الخاصة",
+      "why_ar": "ادّعاء ملكية نماذج غير موجودة — المنصّة تستهلك نماذج OpenRouter (D-202).",
+      "instead_ar": "سمِّ النموذج ومزوّده."
+    },
+    {
+      "id": "guaranteed",
+      "pattern": "(?i)\\bguaranteed\\b|\\bمضمون\\b",
+      "why_ar": "ضمانٌ مطلق لا يصمد أمام أوّل فشلٍ حيّ.",
+      "instead_ar": "اذكر شرط الصحّة ومداه."
+    },
+    {
+      "id": "zero_errors",
+      "pattern": "(?i)صفر أخطاء|\\bzero[- ]errors?\\b|\\bnever fails\\b",
+      "why_ar": "لا نظام بلا أخطاء، والادّعاء يُسقِط الثقة بكلّ ما هو صحيح.",
+      "instead_ar": "اذكر ما هو مُتحقَّقٌ منه حتمياً وما يبقى احتمالياً."
+    },
+    {
+      "id": "perfect_accuracy",
+      "pattern": "(?i)دقّة\\s*١٠٠|دقة\\s*100|100\\s*%\\s*(?:accuracy|دقة|دقّة)|دقّة تامّة",
+      "why_ar": "دقّةٌ تامّة ادّعاءٌ لا يُفنَّد ولا يُقاس.",
+      "instead_ar": "اذكر الفئة القابلة للتحقّق ونسبتها المقيسة."
+    },
+    {
+      "id": "changes_humanity",
+      "pattern": "(?i)يغيّر البشرية|\\bchanges? humanity\\b",
+      "why_ar": "هدفٌ غير قابل للقياس.",
+      "instead_ar": "اذكر هدفاً مقيساً يُنشَر رقمه."
+    }
+  ],
+  "prohibition_markers": [
+    "ممنوع",
+    "لا يجوز",
+    "لا يُقال",
+    "محظور",
+    "يحظر",
+    "تحظر",
+    "⛔",
+    "❌",
+    "بدل",
+    "لماذا أُعيدت كتابته",
+    "ما حُذف",
+    "why_ar",
+    "instead_ar",
+    "NOT",
+    "forbidden",
+    "banned"
+  ],
+  "mirrored_gate_lists": {
+    "purpose_ar": "ما تحمله كلّ بوّابة قائمة اليوم، مُثبَّتاً حرفياً. الهدف منع تفرّقٍ صامتٍ رابع — لا تغيير سلوك أيّ بوّابة. التوحيد الكامل يتطلّب قراراً مكتوباً لأنّ كلّ توسعةٍ في قائمةٍ قد تُفشِل وثيقةً قائمة.",
+    "known_divergence_ar": "«guaranteed» و«مضمون» في check_naas_verification وحدها؛ «ذاكرة دائمة للطالب» و«يفهم الطالب تماماً» في check_ambient_identity وحدها؛ وصيغ «دقّة ١٠٠» الأربع موزّعة على بوّابتين بإملاءٍ مختلف. المشترك بين الثلاث اثنتان فقط: «صفر أخطاء» و«يغيّر البشرية».",
+    "gates": {
+      "check_cognitive_twin.py": {
+        "symbol": "_UNFALSIFIABLE",
+        "entries": [
+          "يقرأ\\s+(?:أفكار|عقل|ذهن)",
+          "يغيّر\\s+البشرية",
+          "دقّة\\s*100\\s*٪",
+          "صفر\\s+أخطاء"
+        ]
+      },
+      "check_ambient_identity.py": {
+        "symbol": "_UNFALSIFIABLE",
+        "entries": [
+          "يقرأ الأفكار",
+          "يقرأ أفكار",
+          "دقّة ١٠٠",
+          "دقة 100",
+          "100% دقة",
+          "صفر أخطاء",
+          "يغيّر البشرية",
+          "ذاكرة دائمة للطالب",
+          "يفهم الطالب تماماً"
+        ]
+      },
+      "check_naas_verification.py": {
+        "symbol": "UNFALSIFIABLE_CLAIMS",
+        "entries": [
+          "مضمون",
+          "guaranteed",
+          "صفر أخطاء",
+          "يغيّر البشرية",
+          "دقّة تامّة",
+          "100%",
+          "١٠٠٪"
+        ]
+      }
+    }
+  }
+}

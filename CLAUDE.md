@@ -461,6 +461,68 @@ Evaluation → Governance → Infrastructure → Humans`. المعرفةُ ما 
 
 ---
 
+## 0.22. Delivery Standards Constitution (D-270) — الدليل قبل الدمج
+
+> **القانون:** [`docs/architecture/DELIVERY_STANDARDS.md`](docs/architecture/DELIVERY_STANDARDS.md) ·
+> **الحالة:** [`.memory/delivery_standards_truth.md`](.memory/delivery_standards_truth.md) ·
+> **السجلّات:** `docs/governance/{SUPPLY_CHAIN,CREDIBILITY_LIMIT,NEGATIVE_PROOFS,MAGIC_STRINGS}.json` ·
+> **الفوارض:** `check_supply_chain` · `check_config_credibility` · `check_gate_negative_proof` ·
+> `check_no_magic_strings` · `check_governance_registry` · `validate_pr_description` ·
+> `validate_issue_readiness`. مؤشِّر فقط — العقد لا الموسوعة.
+
+**المصدر (قرار المالك 2026-08-19 · ISS-194):** معايير `Houssam-lab/openhands` — **إضافةً
+لا حذفاً**. والقياس أظهر أنّ الفجوة ليست في الهندسة بل في **العملية**: كل بوّابةٍ على
+القرص مُنفَّذة (D-266)، وما يحكم **دخول** التغيير غائبٌ أو ميّت (صفر فارضٍ لوصف الدفعة
+في ١٢ workflow · فارضٌ محلّي يناقض CI في ٧٩١٧ سطراً · إعدادُ تبعياتٍ يصف نظاماً آخر).
+
+**الجملة الدستورية:** «**المستودع يفرض على الكود برهاناً ثلاثياً ولا يفرض شيئاً على ما
+يدخله. وبابٌ بلا حارسٍ يُبطل كلّ حراسةٍ خلفه.**»
+
+- **L1** الدليل قبل الدمج — أمرٌ ومخرَجه («اختبارات الوحدة لا تكفي») ودليل إعادة إنتاجٍ
+  لكل إصلاح عطب (رفعُ D-186 من الاختبار إلى الدفعة). ⛔ **قسم `HUMAN:` ملك الإنسان**.
+- **L2** البلاغ يُولَد جاهزاً أو لا يُطوَّر — `ready-for-dev` **تديره الآلة** (ISS-145
+  أُغلقت على معيارٍ خطأ لأنّ شرط النجاح لم يُكتب مُسبَقاً).
+- **L3** عنوان الدفع عقد — Conventional Commits بقائمةٍ مغلقة، بلا تبعيةٍ خارجية.
+- **L4** البوّابة تُثبِت أنّها **تحجب** — ⛔ اختبارٌ يتوقّع نجاحها يُثبِت أنّها تعمل
+  لا أنّها تحجب. ISS-148 مُحوَّلةً من حادثةٍ إلى صنف.
+- **L5** الحرفية السحرية ممنوعة — موطنٌ واحد لكلّ مُعرِّف؛ تعميمُ D-185/186/191/193.
+- **L6** سلسلة التوريد تُبرَّد وتَصِف الموجود — لا مجلّدٍ وهمي ولا منظومةٍ بلا تغطية.
+- **L7** الفارض المحلّي مطابقٌ لـCI أو مُعلَنٌ ميتاً — ⛔ المخالفة **أسوأ من الغياب**:
+  الغياب يُلاحَظ، والمخالفة مصيدة تُحمِّر دفعة من يتّبع الوثائق.
+- **L8** حدّ المصداقية يمتدّ إلى ما يُشحَن (تمديد D-227)، والمصدر **واحد** لا رابع.
+- **الإضافة لا الاستبدال**: كل دستورٍ قائم يبقى سارياً بكامله.
+
+---
+
+## 0.23. Open Agent Standards Constitution (D-271) — المهارة تُقاس، والتقنية تدخل بقرار
+
+> **القانون:** [`docs/architecture/OPEN_AGENT_STANDARDS.md`](docs/architecture/OPEN_AGENT_STANDARDS.md) ·
+> **الحالة:** [`.memory/agent_standards_truth.md`](.memory/agent_standards_truth.md) ·
+> **السجلّات:** `docs/governance/{AGENT_SKILLS,EXTERNAL_STANDARDS_REGISTRY}.json` ·
+> **الفوارض:** `check_agent_skills_spec` · `check_external_standards`.
+
+**المصدر (قرار المالك 2026-08-19 · ISS-195):** عشرة مستودعاتٍ من الشركات التي تقف وراء
+أشهر النماذج. وجودُ كلٍّ منها **مُتحقَّقٌ بـ`git ls-remote`** لا نقلاً عن منشور؛ وأكثرها
+**كتبُ أمثلةٍ لا معايير مستودع**، واثنان يحملان مواصفةً قابلة للفرض.
+
+**الجملة الدستورية:** «**المهارة وحدةٌ قابلة للقياس لا مجلّدٌ لطيف. والتقنية تدخل
+بقرارٍ مكتوب لا بإعجاب.**»
+
+- **L9** المعيار المفتوح (`agentskills.io`) لكلّ ما تحت `.claude/skills/`؛ ووصفٌ بلا
+  شرط تشغيلٍ = مهارةٌ لا تُستدعى.
+- **L10** «مهارة» كلمةٌ بمعنيين مُعلَنين: `BaseSkill` (D-179 · مسار الطالب) و
+  `Agent Skill` (توجيه وكيلٍ لغوي). ⛔ لا سُلَّم ثانٍ خفيّ (D-209 — أنتج ISS-139).
+- **L11** **الساق السادسة**: تقييمٌ مُصرَّح (`verified_on` + `evidence`) أو
+  `unevaluated` بسببٍ منطوق. ⛔ لا تقييم LLM في مسار الطالب (§0.5) ولا ادّعاء أثرٍ
+  تعليمي (قفل D-263).
+- **L12** التبنّي بقرارٍ مكتوب — **ما رُفض ولماذا** حقلٌ إلزامي كـ«ما اُستُعير»، والفحص
+  في الاتجاهين: `ABSENT`/`SEAM` وله كودٌ ⇒ CI أحمر. وُلد من **ISS-193** حرفياً.
+- ⛔ **قفل D-187 يُعاد تأكيده**: `deepseek-harness` و`grok-build` وكيلا تنفيذ أدوات —
+  لا توصيل قبل `M1→M4`؛ والمستخدمون قاصرون.
+- **الإضافة لا الاستبدال**: D-270 وكلّ ما سبقه يبقى سارياً.
+
+---
+
 ## 1. What This Project Does
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.

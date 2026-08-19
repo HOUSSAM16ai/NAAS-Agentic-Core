@@ -224,6 +224,30 @@
       ],
       "status_docs": [".memory/ambient_identity_truth.md"],
       "enforcers": ["check_ambient_identity.py"]
+    },
+    {
+      "section": "0.22",
+      "id": "D-270",
+      "title_en": "Delivery Standards Constitution",
+      "title_ar": "دستور معايير التسليم",
+      "law_docs": ["docs/architecture/DELIVERY_STANDARDS.md"],
+      "status_docs": [".memory/delivery_standards_truth.md"],
+      "enforcers": [
+        "check_supply_chain.py",
+        "check_config_credibility.py",
+        "check_gate_negative_proof.py",
+        "check_no_magic_strings.py",
+        "check_governance_registry.py"
+      ]
+    },
+    {
+      "section": "0.23",
+      "id": "D-271",
+      "title_en": "Open Agent Standards Constitution",
+      "title_ar": "دستور معايير الوكلاء المفتوحة",
+      "law_docs": ["docs/architecture/OPEN_AGENT_STANDARDS.md"],
+      "status_docs": [".memory/agent_standards_truth.md"],
+      "enforcers": ["check_agent_skills_spec.py", "check_external_standards.py"]
     }
   ]
 }

@@ -161,23 +161,15 @@ def _read_scoped(files: list[Path]) -> tuple[dict[str, str], list[str]]:
     return texts, unreadable
 
 
-def _scan_configs(policy: dict) -> None:
-    claims = policy.get("claims", [])
-    if not claims:
-        _fail("`claims` فارغة — سياسةٌ بلا محتوى تُقرأ حمايةً")
-        return
-    files = _scoped_files(policy)
-    if not files:
-        _fail("نطاق المسح لم يُطابِق أيّ ملفّ — نطاقٌ خاطئ يُقرأ نجاحاً")
-        return
-
-    compiled = [(claim["id"], re.compile(claim["pattern"])) for claim in claims]
+def _scan_texts(texts: dict[str, str], policy: dict) -> list[str]:
+    """ادّعاءات كل الملفّات المقروءة، بترتيبٍ حتمي."""
+    compiled = [(claim["id"], re.compile(claim["pattern"])) for claim in policy["claims"]]
     markers = tuple(policy.get("prohibition_markers", ()))
-    texts, unreadable = _read_scoped(files)
-    violations = [
-        v for rel, text in texts.items() for v in _violations_in(text, rel, compiled, markers)
-    ]
+    return [v for rel, text in texts.items() for v in _violations_in(text, rel, compiled, markers)]
 
+
+def _report_scan(violations: list[str], unreadable: list[str], scanned: int) -> None:
+    """⛔ ملفٌّ تعذّرت قراءته لا يُشهَد له بالنظافة (D-208 §6)."""
     if unreadable:
         _fail(f"ملفّات إعدادٍ تعذّرت قراءتها — لا تُعَدّ نظيفة (D-208 §6): {unreadable}")
     if violations:
@@ -185,9 +177,20 @@ def _scan_configs(policy: dict) -> None:
             "ادّعاءات غير قابلة للتفنيد في ملفّاتٍ تُشحَن مع المستودع "
             f"({len(violations)}): {violations[:10]}"
         )
+    elif not unreadable:
+        _pass(f"حدّ المصداقية سليم عبر {scanned} ملفّ إعدادٍ مُشحَن")
+
+
+def _scan_configs(policy: dict) -> None:
+    if not policy.get("claims"):
+        _fail("`claims` فارغة — سياسةٌ بلا محتوى تُقرأ حمايةً")
         return
-    if not unreadable:
-        _pass(f"حدّ المصداقية سليم عبر {len(files)} ملفّ إعدادٍ مُشحَن")
+    files = _scoped_files(policy)
+    if not files:
+        _fail("نطاق المسح لم يُطابِق أيّ ملفّ — نطاقٌ خاطئ يُقرأ نجاحاً")
+        return
+    texts, unreadable = _read_scoped(files)
+    _report_scan(_scan_texts(texts, policy), unreadable, len(files))
 
 
 # ──────────────────────────────────────────────────────────────────────────────

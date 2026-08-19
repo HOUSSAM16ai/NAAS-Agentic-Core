@@ -364,32 +364,44 @@ def _check_mirror_pins(rel: str, repos: dict[str, str], contract: dict) -> set[s
     return declared
 
 
-def _check_config_contract(rel: str, contract: dict) -> None:
-    path = REPO_ROOT / rel
-    if not path.is_file():
-        _fail(f"`local_enforcers` يسمّي إعداداً غير موجود: {rel}")
-        return
+def _load_config_yaml(rel: str, path: Path) -> dict | None:
+    """الإعداد مُحلَّلاً — أو `None` مع سببٍ مطبوع (⛔ ما لم يُحلَّل لا يُشهَد له، D-208 §6)."""
     try:
-        config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
-        # ⛔ إعدادٌ لم يُحلَّل لا يُشهَد له بالتطابق (D-208 §6).
         _fail(f"{rel}: تعذّر التحليل — لا يُعَدّ مطابقاً: {exc}")
-        return
+        return None
 
-    repos = _precommit_repos(config)
-    declared = _check_mirror_pins(rel, repos, contract)
 
+def _check_forbidden_hooks(rel: str, config: dict, contract: dict) -> None:
     hook_ids = _precommit_hook_ids(config)
     for tool, reason in (contract.get("forbidden_tools") or {}).items():
         if tool in hook_ids:
             _fail(f"{rel}: الخطّاف `{tool}` ممنوع — {reason}")
 
-    declared |= set(contract.get("local_only_repos") or {})
-    if undeclared := sorted(set(repos) - declared):
+
+def _check_undeclared_repos(rel: str, repos: list[str], declared: set[str], contract: dict) -> None:
+    known = declared | set(contract.get("local_only_repos") or {})
+    if undeclared := sorted(set(repos) - known):
         _fail(
             f"{rel}: مستودعات خطّافات غير مُصرَّحة {undeclared} — كل فارضٍ محلّي "
             "إمّا مرآةٌ لـCI وإمّا مُعلَنٌ محلّياً بسببه (D-206 L11)"
         )
+
+
+def _check_config_contract(rel: str, contract: dict) -> None:
+    path = REPO_ROOT / rel
+    if not path.is_file():
+        _fail(f"`local_enforcers` يسمّي إعداداً غير موجود: {rel}")
+        return
+    config = _load_config_yaml(rel, path)
+    if config is None:
+        return
+
+    repos = _precommit_repos(config)
+    declared = _check_mirror_pins(rel, repos, contract)
+    _check_forbidden_hooks(rel, config, contract)
+    _check_undeclared_repos(rel, repos, declared, contract)
 
 
 def _check_local_enforcers(registry: dict) -> None:

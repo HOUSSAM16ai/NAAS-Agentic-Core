@@ -211,17 +211,21 @@ def _check_dependabot(policy: dict) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # ② دَين التثبيت — مُجمَّد، يتقلّص فقط، وفي الاتجاهين
 # ──────────────────────────────────────────────────────────────────────────────
+def _unpinned_name(line: str) -> str | None:
+    """اسم الحزمة إن كان السطر متطلَّباً **غير مُثبَّت** — وإلّا `None`."""
+    stripped = line.split("#")[0].strip()
+    if not stripped or stripped.startswith("-"):
+        return None
+    if re.match(r"^[A-Za-z0-9_.\[\]-]+==[^,\s]+$", stripped):
+        return None
+    return _requirement_name(stripped)
+
+
 def _actual_python_debt() -> dict[str, list[str]]:
     debt: dict[str, list[str]] = {}
     for path in sorted(REPO_ROOT.glob("requirements*.txt")):
-        unpinned = [
-            _requirement_name(stripped)
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if (stripped := line.split("#")[0].strip())
-            and not stripped.startswith("-")
-            and not re.match(r"^[A-Za-z0-9_.\[\]-]+==[^,\s]+$", stripped)
-        ]
-        if unpinned:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if unpinned := [name for line in lines if (name := _unpinned_name(line))]:
             debt[path.name] = sorted(set(unpinned))
     return debt
 

@@ -267,10 +267,16 @@ def _check_readiness_via_api(issues: list[int], repo: str, token: str, problems:
     )
 
 
+def _l2_suspended(token: str | None, repo: str | None) -> bool:
+    """⛔ لا يُطالَب أحدٌ بربط بلاغٍ في مستودعٍ بلا بلاغات (انظر `_issues_enabled`)."""
+    if not token or not repo:
+        return False
+    return _issues_enabled(repo, token) is False
+
+
 def _check_linked_issue(body: str, problems: list[str]) -> None:
     token, repo = os.environ.get("GITHUB_TOKEN"), os.environ.get("GITHUB_REPOSITORY")
-    if token and repo and _issues_enabled(repo, token) is False:
-        # ⛔ لا يُطالَب أحدٌ بربط بلاغٍ في مستودعٍ بلا بلاغات (انظر `_issues_enabled`).
+    if _l2_suspended(token, repo):
         print("ℹ️  L2 مُعطَّل: البلاغات مُعطَّلة في هذا المستودع — القاعدة تعود بتفعيلها.")
         return
 

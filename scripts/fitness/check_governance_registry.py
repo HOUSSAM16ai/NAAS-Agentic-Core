@@ -440,6 +440,16 @@ def _check_one_process_enforcer(name: str, contract: dict, home: Path) -> None:
         )
 
 
+def _process_home_matches(home: Path, declared: set[str]) -> bool:
+    """الموطن والسجلّ متطابقان في الاتجاهين — لا يتيمٌ على القرص ولا اسمٌ وهمي."""
+    on_disk = {path.name for path in home.glob("*.py")} if home.is_dir() else set()
+    if undeclared := sorted(on_disk - declared):
+        _fail(f"مُتحقِّقات عملية على القرص بلا إعلانٍ في السجلّ: {undeclared}")
+    if ghost := sorted(declared - on_disk):
+        _fail(f"`process_enforcers` يسمّي ملفّات غير موجودة: {ghost}")
+    return not undeclared and not ghost
+
+
 def _check_process_enforcers(registry: dict) -> None:
     spec = registry.get("process_enforcers")
     if not isinstance(spec, dict) or not spec.get("enforcers"):
@@ -452,13 +462,7 @@ def _check_process_enforcers(registry: dict) -> None:
     for name, contract in sorted(declared.items()):
         _check_one_process_enforcer(name, contract, home)
 
-    on_disk = {path.name for path in home.glob("*.py")} if home.is_dir() else set()
-    if undeclared := sorted(on_disk - set(declared)):
-        _fail(f"مُتحقِّقات عملية على القرص بلا إعلانٍ في السجلّ: {undeclared}")
-    if ghost := sorted(set(declared) - on_disk):
-        _fail(f"`process_enforcers` يسمّي ملفّات غير موجودة: {ghost}")
-
-    if not ghost and not undeclared:
+    if _process_home_matches(home, set(declared)):
         _pass(f"فوارض العملية مُعلَنة ومُنفَّذة: {len(declared)} مُتحقِّقاً")
 
 

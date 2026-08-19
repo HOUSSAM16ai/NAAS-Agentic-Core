@@ -177,6 +177,14 @@ def _load_dependabot(spec: dict) -> list[dict] | None:
     return list(updates)
 
 
+def _known_packages() -> dict[str, set[str]]:
+    """الحزم الحقيقية لكل منظومةٍ يمكن التحقّق من أنماطها."""
+    return {
+        "pip": {name.lower() for names in _python_dependencies().values() for name in names},
+        "npm": {name.lower() for name in _npm_dependencies()},
+    }
+
+
 def _check_dependabot(policy: dict) -> None:
     spec = policy.get("dependabot", {})
     updates = _load_dependabot(spec)
@@ -185,17 +193,12 @@ def _check_dependabot(policy: dict) -> None:
 
     required_days = int(spec.get("required_cooldown_days", 7))
     deprecated = tuple(spec.get("deprecated_keys", ()))
-    known_by_ecosystem = {
-        "pip": {name.lower() for names in _python_dependencies().values() for name in names},
-        "npm": {name.lower() for name in _npm_dependencies()},
-    }
+    known = _known_packages()
+    for update in updates:
+        _check_one_update(update, required_days, deprecated, known)
 
     seen = {str(update.get("package-ecosystem", "?")) for update in updates}
-    for update in updates:
-        _check_one_update(update, required_days, deprecated, known_by_ecosystem)
-
-    missing = sorted(set(spec.get("required_ecosystems", {})) - seen)
-    if missing:
+    if missing := sorted(set(spec.get("required_ecosystems", {})) - seen):
         _fail(f"منظومات موجودة في المستودع وغير مُغطّاة: {missing} — فجوةٌ صامتة تُقرأ تغطية")
 
     if not _FAILURES:

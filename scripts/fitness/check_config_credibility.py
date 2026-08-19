@@ -221,36 +221,40 @@ def _literal_entries(module: ast.Module, symbol: str) -> list[str] | None:
     return None
 
 
+def _mirror_drift(gate_name: str, spec: dict) -> str | None:
+    """وصفُ التفرّق بين قائمة البوّابة والسجلّ — أو `None` إن تطابقا."""
+    path = GATE_HOME / gate_name
+    if not path.is_file():
+        _fail(f"`mirrored_gate_lists` يسمّي بوّابة غير موجودة: {gate_name}")
+        return None
+    try:
+        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError as exc:
+        # ⛔ نفس القاعدة: بوّابة لم تُقرأ لا يُشهَد لها بالتطابق (D-208 §6).
+        _fail(f"تعذّر تحليل {gate_name} — لا يُشهَد لها بالتكافؤ: {exc}")
+        return None
+
+    symbol = str(spec.get("symbol", ""))
+    actual = _literal_entries(module, symbol)
+    if actual is None:
+        _fail(f"{gate_name}: الرمز `{symbol}` غير موجود — السجلّ يصف بوّابةً أخرى")
+        return None
+
+    declared = list(spec.get("entries", []))
+    if actual == declared:
+        return None
+    added = sorted(set(actual) - set(declared))
+    removed = sorted(set(declared) - set(actual))
+    return f"{gate_name}: أُضيف {added} · حُذف {removed}"
+
+
 def _check_mirrors(policy: dict) -> None:
     mirrored = policy.get("mirrored_gate_lists", {}).get("gates", {})
     if not mirrored:
         _fail("`mirrored_gate_lists.gates` فارغ — تكافؤٌ مُعلَن بلا مضمون")
         return
 
-    drift: list[str] = []
-    for gate_name, spec in sorted(mirrored.items()):
-        path = GATE_HOME / gate_name
-        if not path.is_file():
-            _fail(f"`mirrored_gate_lists` يسمّي بوّابة غير موجودة: {gate_name}")
-            continue
-        try:
-            module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        except SyntaxError as exc:
-            # ⛔ نفس القاعدة: بوّابة لم تُقرأ لا يُشهَد لها بالتطابق (D-208 §6).
-            _fail(f"تعذّر تحليل {gate_name} — لا يُشهَد لها بالتكافؤ: {exc}")
-            continue
-
-        symbol = spec.get("symbol", "")
-        actual = _literal_entries(module, symbol)
-        if actual is None:
-            _fail(f"{gate_name}: الرمز `{symbol}` غير موجود — السجلّ يصف بوّابةً أخرى")
-            continue
-        declared = list(spec.get("entries", []))
-        if actual != declared:
-            added = sorted(set(actual) - set(declared))
-            removed = sorted(set(declared) - set(actual))
-            drift.append(f"{gate_name}: أُضيف {added} · حُذف {removed}")
-
+    drift = [d for name, spec in sorted(mirrored.items()) if (d := _mirror_drift(name, spec))]
     if drift:
         _fail(
             "تفرّقٌ صامت بين قوائم البوّابات والسجلّ القانوني — حدِّث "

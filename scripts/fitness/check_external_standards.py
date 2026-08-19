@@ -118,19 +118,26 @@ def _check_row(row: dict, enforcers: set[str]) -> None:
     _check_row_code_paths(label, row, status)
 
 
-def main() -> int:
+def _load_sources() -> list[dict] | None:
+    """صفوف السجلّ — أو `None` مع سببٍ مطبوع."""
     if not REGISTRY.is_file():
         print(f"❌ سجلّ المعايير الخارجية مفقود: {REGISTRY.relative_to(REPO_ROOT)}")
-        return 1
+        return None
     try:
         registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         print(f"❌ `EXTERNAL_STANDARDS_REGISTRY.json` ليس JSON صالحاً: {exc}")
-        return 1
-
+        return None
     sources = registry.get("sources", [])
     if not sources:
         print("❌ `sources` فارغة — سجلٌّ بلا صفوفٍ يُقرأ حمايةً")
+        return None
+    return list(sources)
+
+
+def main() -> int:
+    sources = _load_sources()
+    if sources is None:
         return 1
 
     identifiers = [str(row.get("id", "")) for row in sources]

@@ -255,6 +255,18 @@ def _survey_readiness(issues: list[int], repo: str, token: str) -> tuple[bool, l
     return False, unreadable
 
 
+def _check_readiness_via_api(issues: list[int], repo: str, token: str, problems: list[str]) -> None:
+    ready, unreadable = _survey_readiness(issues, repo, token)
+    if unreadable:
+        print(f"ℹ️  بلاغات تعذّرت قراءتها ({unreadable}) — لم يُشهَد عليها بشيء.")
+    if ready or len(unreadable) == len(issues):
+        return
+    problems.append(
+        f"L2: لا بلاغ من {issues} يحمل الوسم `{READY_LABEL}`. "
+        "البلاغ يُولَد جاهزاً أو لا يُطوَّر — أكمل معايير القبول فيه أوّلاً."
+    )
+
+
 def _check_linked_issue(body: str, problems: list[str]) -> None:
     token, repo = os.environ.get("GITHUB_TOKEN"), os.environ.get("GITHUB_REPOSITORY")
     if token and repo and _issues_enabled(repo, token) is False:
@@ -268,22 +280,11 @@ def _check_linked_issue(body: str, problems: list[str]) -> None:
             "L2: لا بلاغ مرتبط. أضف `Fixes #N` — والبلاغ يجب أن يحمل الوسم "
             f"`{READY_LABEL}` (معايير قبولٍ مكتوبة، ودليل إعادة إنتاجٍ للأعطاب)."
         )
-        return
-
-    if not token or not repo:
+    elif token and repo:
+        _check_readiness_via_api(issues, repo, token, problems)
+    else:
         # ما لا يُقرأ لا يُشهَد عليه: غياب الرمز ليس فشلاً وليس نجاحاً (D-208 §6).
         print(f"ℹ️  ربط البلاغ {issues}: لم يُفحَص الوسم (لا GITHUB_TOKEN — تشغيلٌ محلّي).")
-        return
-
-    ready, unreadable = _survey_readiness(issues, repo, token)
-    if unreadable:
-        print(f"ℹ️  بلاغات تعذّرت قراءتها ({unreadable}) — لم يُشهَد عليها بشيء.")
-    if ready or len(unreadable) == len(issues):
-        return
-    problems.append(
-        f"L2: لا بلاغ من {issues} يحمل الوسم `{READY_LABEL}`. "
-        "البلاغ يُولَد جاهزاً أو لا يُطوَّر — أكمل معايير القبول فيه أوّلاً."
-    )
 
 
 # ── المُدخَلات ────────────────────────────────────────────────────────────────

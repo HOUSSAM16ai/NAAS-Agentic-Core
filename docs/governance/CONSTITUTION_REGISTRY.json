@@ -11,6 +11,20 @@
     "`unenforced_debt` قائمة تتقلّص فقط وتبدأ فارغة: بوّابةٌ على القرص لا يُشغّلها شيء ولا هي مُصرَّحة هنا ⇒ CI أحمر (D-207 الثمن الثاني)."
   ],
   "unenforced_debt": {},
+  "process_enforcers": {
+    "purpose_ar": "فوارض العملية (D-270 L1/L2/L3): تحتاج حمولة حدثٍ من GitHub فلا تصلح لـrun_fitness_gates، ولا يجوز أن تعيش في موطنٍ لا يعرفه السجلّ — «موطنٌ ثالث بلا إعلانٍ يعني بوّابةً غير مرئية» (D-266). كلٌّ منها يُفحَص بملفّه وبالـworkflow الذي يشغّله فعلاً: نفس الساق الثالثة بمرمى العملية. تحرسه scripts/fitness/check_governance_registry.py.",
+    "home": ".github/scripts",
+    "enforcers": {
+      "validate_pr_description.py": {
+        "law": "D-270 L1 (الدليل قبل الدمج) + L3 (عنوان الدفع عقد)",
+        "workflow": ".github/workflows/pr-governance.yml"
+      },
+      "validate_issue_readiness.py": {
+        "law": "D-270 L2 (البلاغ يُولَد جاهزاً أو لا يُطوَّر)",
+        "workflow": ".github/workflows/issue-readiness.yml"
+      }
+    }
+  },
   "local_enforcers": {
     "purpose_ar": "الفوارض التي تعمل على جهاز المطوّر لا في CI. D-266 أثبت أنّ بوّابةً لا تُنفَّذ «تُقرأ حمايةً وهي ليست حماية»؛ وD-270 L7 يمدّ القاعدة إلى هنا: فارضٌ محلّي يخالف CI أسوأ من غيابه، لأنّ الغياب يُلاحَظ والمخالفة مصيدة — من يتّبع الوثائق يُحمِّر CI ولا يفهم لماذا. تحرسه scripts/fitness/check_governance_registry.py.",
     "measured_2026_08_19_ar": "‏.pre-commit-config.yaml كان يشغّل black بلا وسائط (عرض 88) بينما pyproject يفرض 100 وCI يفحص بـruff format --check: 7917 سطراً في 1441 ملفّاً تقع في المدى 89..100 — أي أنّ تشغيل الخطّافات الموثَّقة كان يضمن دفعةً حمراء. وisort كان مُكرَّراً (قاعدة I مُفعَّلة داخل ruff). وخطّاف mypy كان بلا pydantic بينما mypy.ini يحمل plugins = pydantic.mypy، فيخرج بالرمز 2 قبل فحص سطرٍ واحد.",

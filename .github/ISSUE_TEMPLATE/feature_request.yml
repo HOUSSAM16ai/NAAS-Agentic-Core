@@ -24,6 +24,19 @@ body:
       label: Alternatives considered
     validations:
       required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: >
+        متى نعتبر هذه الميزة مُنجَزة؟ شروطٌ قابلة للقياس لا أوصاف نيّة.
+      placeholder: |
+        - [ ] بوّابة `check_...` تفشل عند خرق القاعدة (برهانٌ سلبي مُثبَت)
+        - [ ] `scripts/run_fitness_gates.py` أخضر
+      value: |
+        - [ ] 
+    validations:
+      required: true
   - type: checkboxes
     id: governance
     attributes:

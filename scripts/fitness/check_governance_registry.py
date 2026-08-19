@@ -411,6 +411,53 @@ def _check_local_enforcers(registry: dict) -> None:
     _pass(f"الفوارض المحلّية مطابقةٌ لـCI عبر {len(spec['configs'])} إعداداً (دَينٌ مُعلَن: {len(debt)})")
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# فوارض العملية مُعلَنة لا مُكتشَفة (D-270 L1/L2/L3)
+#
+# `GATE_HOMES` تغطّي فوارض **المستودع الساكن**. أمّا فوارض **العملية** (وصف الدفعة ·
+# جاهزية البلاغ) فتحتاج حمولة حدثٍ من GitHub، فلا تصلح لـ`run_fitness_gates`، ولا
+# يجوز في الوقت نفسه أن تعيش في موطنٍ لا يعرفه السجلّ: «موطنٌ ثالث بلا إعلانٍ يعني
+# بوّابةً غير مرئية» (D-266). فهي مُعلَنة هنا، ويُفحَص لكلٍّ منها **ملفّها** و**الـ
+# workflow الذي يشغّلها فعلاً** — نفس الساق الثالثة، بمرمى آخر.
+# ──────────────────────────────────────────────────────────────────────────────
+PROCESS_HOME = ".github/scripts"
+
+
+def _check_process_enforcers(registry: dict) -> None:
+    spec = registry.get("process_enforcers")
+    if not isinstance(spec, dict) or not spec.get("enforcers"):
+        _fail("`process_enforcers` مفقود — فوارض العملية بلا إعلان (موطنٌ غير مرئي)")
+        return
+
+    home = REPO_ROOT / str(spec.get("home", PROCESS_HOME))
+    declared: dict = spec["enforcers"]
+
+    for name, contract in sorted(declared.items()):
+        script = home / name
+        if not script.is_file():
+            _fail(f"`process_enforcers` يسمّي مُتحقِّقاً غير موجود: {name}")
+            continue
+        workflow_rel = str(contract.get("workflow", ""))
+        workflow = REPO_ROOT / workflow_rel
+        if not workflow.is_file():
+            _fail(f"{name}: يُصرَّح أنّ `{workflow_rel}` يشغّله — والملفّ غير موجود")
+            continue
+        if name not in workflow.read_text(encoding="utf-8"):
+            _fail(
+                f"{name}: `{workflow_rel}` لا يستدعيه — فارضٌ على القرص بلا مرمى "
+                "(نفس صنف ISS-186، بمرمى العملية)"
+            )
+
+    on_disk = {path.name for path in home.glob("*.py")} if home.is_dir() else set()
+    if undeclared := sorted(on_disk - set(declared)):
+        _fail(f"مُتحقِّقات عملية على القرص بلا إعلانٍ في السجلّ: {undeclared}")
+    if ghost := sorted(set(declared) - on_disk):
+        _fail(f"`process_enforcers` يسمّي ملفّات غير موجودة: {ghost}")
+
+    if not ghost and not undeclared:
+        _pass(f"فوارض العملية مُعلَنة ومُنفَّذة: {len(declared)} مُتحقِّقاً")
+
+
 def main() -> int:
     if not REGISTRY.is_file():
         print(f"❌ السجلّ الدستوري مفقود: {REGISTRY.relative_to(REPO_ROOT)}")
@@ -434,6 +481,7 @@ def main() -> int:
     _check_no_phantom_enforcers(gates)
     _check_no_hand_typed_counts(gates)
     _check_local_enforcers(registry)
+    _check_process_enforcers(registry)
 
     if _FAILURES:
         print(f"\n❌ {len(_FAILURES)} انتهاك — الحوكمة ليست مفروضة:")

@@ -40,6 +40,20 @@ body:
       placeholder: main@<sha> or PR #
     validations:
       required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: >
+        متى نعتبر هذا البلاغ مُغلَقاً؟ اكتب الشرط **قبل** الإصلاح — من لا يكتبه
+        مُسبَقاً يخترعه بعده (ISS-145 أُغلقت على معيارٍ خطأ لهذا السبب).
+      placeholder: |
+        - [ ] `pytest tests/... -k ...` يمرّ بعد أن كان أحمر
+        - [ ] لا انحراف في `python scripts/runtime_truth.py --check`
+      value: |
+        - [ ] 
+    validations:
+      required: true
   - type: dropdown
     id: impact
     attributes:

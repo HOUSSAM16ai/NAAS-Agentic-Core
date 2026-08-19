@@ -106,17 +106,23 @@ def _read(rel: str) -> str | None:
 # ─────────────────────────────────────────────────────────────────────────────
 # 1 — فصل القانون عن الحالة
 # ─────────────────────────────────────────────────────────────────────────────
+def _status_tokens_in_law_line(line: str) -> list[str]:
+    """رموزُ الحالة في سطر جدولٍ داخل وثيقة قانون — وإلّا قائمةٌ فارغة.
+
+    تُستثنى الترويسة (`>`) وسطرُ المنع (⛔): كلاهما **يشرح** القاعدة لا يخرقها.
+    """
+    if line.lstrip().startswith(">") or "⛔" in line or "|" not in line:
+        return []
+    return _STATUS_TOKEN.findall(line)
+
+
 def _check_law_docs() -> None:
     for rel in LAW_DOCS:
         text = _read(rel)
         if text is None:
             continue
         for line_no, line in enumerate(text.splitlines(), start=1):
-            if line.lstrip().startswith(">") or "⛔" in line:
-                continue  # ترويسةٌ تشرح المنع، أو سطرٌ يستشهد بالقاعدة
-            if "|" not in line:
-                continue
-            found = _STATUS_TOKEN.findall(line)
+            found = _status_tokens_in_law_line(line)
             if found:
                 _fail(
                     f"{rel}:{line_no}: وثيقة قانونٍ تحمل عمود حالة {sorted(set(found))}.\n"
@@ -164,24 +170,34 @@ def _check_state_doc() -> list[tuple[str, str]]:
         if number in seen:
             _fail(f"{where}: رقم صفٍّ مكرَّر — الترقيم مُعرِّف لا زينة.")
         seen.add(number)
-
-        unit, evidence, status, gap = cells[1], cells[2], cells[3], cells[4]
-        status_clean = status.strip("`* ")
-        if status_clean not in VALID_STATUSES:
-            _fail(f"{where}: حالةٌ خارج السُّلَّم: {status!r}. ⛔ لا سُلَّم ثانٍ (§6.6).")
-        if not gap.strip():
-            _fail(f"{where}: خانةُ الفجوة فارغة — الفراغ يُقرأ نجاحاً (D-206 L11).")
-        if len(cells) < 6 or not cells[5].strip():
-            _fail(f"{where}: بلا شرط ترقيةٍ منطوق — الطموح يُصنَّف ولا يُكتَم (D-209).")
-
-        for candidate in _BACKTICKED.findall(evidence):
-            if _looks_like_path(candidate) and not (REPO_ROOT / candidate).exists():
-                _fail(
-                    f"{where}: الدليل «{candidate}» غير موجود على القرص.\n"
-                    f"   دليلٌ يجب أن يوجد (D-207) — وإلّا فالجدول يشهد بما لم يره."
-                )
-        units.append((unit, status_clean))
+        units.append((cells[1], _check_state_row(where, cells)))
     return units
+
+
+def _check_row_evidence(where: str, evidence: str) -> None:
+    """كلّ مسارٍ في خانة الدليل موجودٌ على القرص (D-207 · ISS-149)."""
+    for candidate in _BACKTICKED.findall(evidence):
+        if _looks_like_path(candidate) and not (REPO_ROOT / candidate).exists():
+            _fail(
+                f"{where}: الدليل «{candidate}» غير موجود على القرص.\n"
+                f"   دليلٌ يجب أن يوجد (D-207) — وإلّا فالجدول يشهد بما لم يره."
+            )
+
+
+def _check_state_row(where: str, cells: list[str]) -> str:
+    """يفحص صفّاً واحداً ويُعيد حالته المُنظَّفة — شريحةٌ بلا حلقةٍ خارجية."""
+    status = cells[3]
+    status_clean = status.strip("`* ")
+
+    if status_clean not in VALID_STATUSES:
+        _fail(f"{where}: حالةٌ خارج السُّلَّم: {status!r}. ⛔ لا سُلَّم ثانٍ (§6.6).")
+    if not cells[4].strip():
+        _fail(f"{where}: خانةُ الفجوة فارغة — الفراغ يُقرأ نجاحاً (D-206 L11).")
+    if len(cells) < 6 or not cells[5].strip():
+        _fail(f"{where}: بلا شرط ترقيةٍ منطوق — الطموح يُصنَّف ولا يُكتَم (D-209).")
+
+    _check_row_evidence(where, cells[2])
+    return status_clean
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -210,6 +226,35 @@ def _check_declared_absence(units: list[tuple[str, str]]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # 3 — جدار الحجب بنيويّ
 # ─────────────────────────────────────────────────────────────────────────────
+#: أين يعيش «الاسم» في كلّ شكلٍ نحويّ قد يلمس المحتوى. جدولُ تحويلٍ بدل سلسلة
+#: `elif`: إضافةُ شكلٍ خامس تصير سطر بيانات لا فرعَ منطق.
+_NAME_BEARING_NODES: tuple[tuple[type[ast.AST], str], ...] = (
+    (ast.Attribute, "attr"),  # x.content
+    (ast.Constant, "value"),  # x["content"]
+    (ast.arg, "arg"),  # def f(content)
+    (ast.Name, "id"),  # content
+)
+
+
+def _touched_content_name(node: ast.AST) -> str | None:
+    """اسمُ المحتوى الذي تلمسه العقدة، أو ``None``."""
+    for node_type, attribute in _NAME_BEARING_NODES:
+        if isinstance(node, node_type):
+            candidate = getattr(node, attribute)
+            return str(candidate) if candidate in _CONTENT_NAMES else None
+    return None
+
+
+def _scan_layer_module(rel: str, tree: ast.AST) -> None:
+    """يُبلِّغ عن كلّ ملامسةٍ للمحتوى وكلّ استيرادٍ من ``app`` داخل وحدةٍ واحدة."""
+    for node in ast.walk(tree):
+        touched = _touched_content_name(node)
+        if touched is not None:
+            _fail(_wall_message(rel, getattr(node, "lineno", 0), touched))
+        elif isinstance(node, ast.ImportFrom) and node.module and "app." in node.module:
+            _fail(f"{rel}:{node.lineno}: `shared/` يستورد من `app` — ممنوع (D-189 البند 5).")
+
+
 def _check_content_wall() -> None:
     if not LAYER_PACKAGE.is_dir():
         _fail(f"حزمة الطبقة مفقودة: {LAYER_PACKAGE.relative_to(REPO_ROOT)}.")
@@ -217,25 +262,12 @@ def _check_content_wall() -> None:
 
     for path in sorted(LAYER_PACKAGE.rglob("*.py")):
         rel = path.relative_to(REPO_ROOT).as_posix()
-        source = path.read_text(encoding="utf-8", errors="ignore")
         try:
-            tree = ast.parse(source)
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
         except SyntaxError as exc:
             _fail(f"{rel}: تعذّر تحليله ({exc.msg}) — بوّابةٌ لا تقرأ ملفاً لا تشهد بنظافته.")
             continue
-
-        for node in ast.walk(tree):
-            # `x.content` أو `x["content"]` أو تعريفُ حقلٍ اسمه content
-            if isinstance(node, ast.Attribute) and node.attr in _CONTENT_NAMES:
-                _fail(_wall_message(rel, node.lineno, node.attr))
-            elif isinstance(node, ast.Constant) and node.value in _CONTENT_NAMES:
-                _fail(_wall_message(rel, node.lineno, str(node.value)))
-            elif isinstance(node, ast.arg) and node.arg in _CONTENT_NAMES:
-                _fail(_wall_message(rel, node.lineno, node.arg))
-            elif isinstance(node, ast.Name) and node.id in _CONTENT_NAMES:
-                _fail(_wall_message(rel, node.lineno, node.id))
-            elif isinstance(node, ast.ImportFrom) and node.module and "app." in node.module:
-                _fail(f"{rel}:{node.lineno}: `shared/` يستورد من `app` — ممنوع (D-189 البند 5).")
+        _scan_layer_module(rel, tree)
 
 
 def _wall_message(rel: str, line_no: int, name: str) -> str:
@@ -252,14 +284,18 @@ def _wall_message(rel: str, line_no: int, name: str) -> str:
 _FORBIDDEN_PACKAGES = ("honcho-ai", "honcho_ai")
 
 
+def _is_forbidden_requirement(line: str) -> bool:
+    """هل سطرُ متطلّباتٍ يُدخِل حزمةً ممنوعة؟ (تُطرَح التعليقات أوّلاً.)"""
+    name = line.split("#", 1)[0].strip().lower()
+    if not name:
+        return False
+    return name.startswith("honcho") or any(pkg in name for pkg in _FORBIDDEN_PACKAGES)
+
+
 def _check_no_new_dependency() -> None:
     for path in sorted(REPO_ROOT.glob("requirements*.txt")):
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        for line in text.splitlines():
-            name = line.split("#", 1)[0].strip().lower()
-            if not name:
-                continue
-            if any(pkg in name for pkg in _FORBIDDEN_PACKAGES) or name.startswith("honcho"):
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if _is_forbidden_requirement(line):
                 _fail(
                     f"{path.name}: حزمة «{line.strip()}» ممنوعة (L8).\n"
                     f"   النداء عبر `shared/http_client` — وSDK يبني عميلَه فيقطع سلسلة "
@@ -297,7 +333,8 @@ def _check_prefixed_functions() -> set[str]:
     return found
 
 
-def _check_credibility_and_gates() -> None:
+def _known_gate_names() -> set[str]:
+    """كلّ اسمٍ يبدأ بـ`check_` ويقابل بوّابةً على القرص أو دالّةً في الكود."""
     gate_dirs = (REPO_ROOT / "scripts" / "fitness", REPO_ROOT / "tools" / "ci")
     on_disk = {
         path.stem
@@ -305,29 +342,42 @@ def _check_credibility_and_gates() -> None:
         if directory.is_dir()
         for path in directory.glob("check_*.py")
     }
-    on_disk |= _check_prefixed_functions()
+    return on_disk | _check_prefixed_functions()
 
+
+def _check_credibility(rel: str, text: str) -> None:
+    """حدّ المصداقية (D-227) على وثيقةٍ واحدة، سطراً سطراً."""
+    for line_no, line in enumerate(text.splitlines(), start=1):
+        # سطرٌ يحمل علامة المنع ⛔ هو **حظرُ** العبارة لا ادّعاؤها. بلا هذا
+        # الاستثناء ترفض البوّابةُ النصَّ الذي يشرح القاعدة نفسها — وهو عطبٌ
+        # وقع حرفياً في `check_no_self_announcement` (D-206 L8) قبل أن يُصحَّح
+        # بالانتقال إلى فحصٍ يعي السياق.
+        if "⛔" in line:
+            continue
+        for phrase in _UNFALSIFIABLE:
+            if phrase in line:
+                _fail(
+                    f"{rel}:{line_no}: عبارةٌ غير قابلة للتفنيد: «{phrase}» — "
+                    f"حدّ المصداقية (D-227).\n"
+                    f"   تُصدَّق مرّة، ثمّ تُكتشَف، ثمّ يسقط معها كلُّ ما هو صحيح."
+                )
+
+
+def _check_cited_gates(rel: str, text: str, known: set[str]) -> None:
+    """كلّ فارضٍ تستشهد به الوثيقة موجودٌ فعلاً (ISS-148)."""
+    for gate in sorted(set(_GATE_NAME.findall(text))):
+        if gate not in known:
+            _fail(f"{rel}: يستشهد بـ«{gate}» وهي غير موجودة على القرص (ISS-148).")
+
+
+def _check_credibility_and_gates() -> None:
+    known = _known_gate_names()
     for rel in (*LAW_DOCS, STATE_DOC, ADR_DOC):
         text = _read(rel)
         if text is None:
             continue
-        for line_no, line in enumerate(text.splitlines(), start=1):
-            # سطرٌ يحمل علامة المنع ⛔ هو **حظرُ** العبارة لا ادّعاؤها. بلا هذا
-            # الاستثناء ترفض البوّابةُ النصَّ الذي يشرح القاعدة نفسها — وهو عطبٌ
-            # وقع حرفياً في `check_no_self_announcement` (D-206 L8) قبل أن يُصحَّح
-            # بالانتقال إلى فحصٍ يعي السياق.
-            if "⛔" in line:
-                continue
-            for phrase in _UNFALSIFIABLE:
-                if phrase in line:
-                    _fail(
-                        f"{rel}:{line_no}: عبارةٌ غير قابلة للتفنيد: «{phrase}» — "
-                        f"حدّ المصداقية (D-227).\n"
-                        f"   تُصدَّق مرّة، ثمّ تُكتشَف، ثمّ يسقط معها كلُّ ما هو صحيح."
-                    )
-        for gate in sorted(set(_GATE_NAME.findall(text))):
-            if gate not in on_disk:
-                _fail(f"{rel}: يستشهد بـ«{gate}» وهي غير موجودة على القرص (ISS-148).")
+        _check_credibility(rel, text)
+        _check_cited_gates(rel, text, known)
 
 
 def _check_seam_recorded() -> None:

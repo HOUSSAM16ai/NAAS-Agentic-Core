@@ -172,40 +172,52 @@ def _door_texts(doors: dict) -> dict[str, str]:
 # ─────────────────────────────────────────────────────────────────────────────
 # البند 1 — التغطية
 # ─────────────────────────────────────────────────────────────────────────────
+def _check_secret_classification(secret: dict, all_ids: set[str]) -> None:
+    """كلّ خانةٍ (سرّ × باب) مُصنَّفة مرّةً واحدة وبلا تناقض — شريحةٌ نقيّة بلا قراءة ملفّات."""
+    name = secret["name"]
+    required = set(secret.get("doors", []))
+    skipped: dict = secret.get("doors_not_applicable", {})
+
+    unknown = (required | set(skipped)) - all_ids
+    if unknown:
+        _fail(f"{name}: بابٌ غير مُعلَن {sorted(unknown)} — الأبواب مُعلَنة لا مخترَعة.")
+
+    both = required & set(skipped)
+    if both:
+        _fail(f"{name}: بابٌ مطلوبٌ وغير منطبقٍ معاً {sorted(both)} — تصنيفٌ يناقض نفسه.")
+
+    unclassified = all_ids - required - set(skipped)
+    if unclassified:
+        _fail(
+            f"{name}: أبوابٌ بلا تصنيف {sorted(unclassified)}.\n"
+            f"   ⛔ الخانة الفارغة تُقرأ نجاحاً — صنِّفها مطلوبةً أو صرِّح سببَ عدم انطباقها."
+        )
+
+    for door_id, reason in skipped.items():
+        if not str(reason).strip():
+            _fail(f"{name}: الباب «{door_id}» غير منطبقٍ بلا سبب — الغياب يُعلَن (D-206 L11).")
+
+
+def _check_secret_presence(secret: dict, doors: dict, texts: dict[str, str]) -> None:
+    """السرّ مرتبطٌ فعلاً عند كلّ بابٍ يُصرِّحه، بالشكل الذي يُصرِّحه الباب."""
+    name = secret["name"]
+    for door_id in secret.get("doors", []):
+        text = texts.get(door_id)
+        if text is None:  # بابٌ فشل تحميله — أُبلِغ عنه في `_door_texts`
+            continue
+        if not _FORMS[doors[door_id]["form"]](text, name):
+            _fail(
+                f"{name} غائبٌ عن الباب «{door_id}» ({doors[door_id]['path']}).\n"
+                f"   سرٌّ يعبر بعض الأبواب لا كلَّها يصل في بيئةٍ ويختفي في أخرى بلا سببٍ ظاهر."
+            )
+
+
 def _check_coverage(catalog: dict, texts: dict[str, str]) -> None:
     doors: dict = catalog["doors"]
     all_ids = set(doors)
     for secret in catalog["secrets"]:
-        name = secret["name"]
-        required = list(secret.get("doors", []))
-        skipped: dict = secret.get("doors_not_applicable", {})
-
-        unknown = (set(required) | set(skipped)) - all_ids
-        if unknown:
-            _fail(f"{name}: بابٌ غير مُعلَن {sorted(unknown)} — الأبواب مُعلَنة لا مخترَعة.")
-        both = set(required) & set(skipped)
-        if both:
-            _fail(f"{name}: بابٌ مطلوبٌ وغير منطبقٍ معاً {sorted(both)} — تصنيفٌ يناقض نفسه.")
-        unclassified = all_ids - set(required) - set(skipped)
-        if unclassified:
-            _fail(
-                f"{name}: أبوابٌ بلا تصنيف {sorted(unclassified)}.\n"
-                f"   ⛔ الخانة الفارغة تُقرأ نجاحاً — صنِّفها مطلوبةً أو صرِّح سببَ عدم انطباقها."
-            )
-        for door_id, reason in skipped.items():
-            if not str(reason).strip():
-                _fail(f"{name}: الباب «{door_id}» غير منطبقٍ بلا سبب — الغياب يُعلَن (D-206 L11).")
-
-        for door_id in required:
-            text = texts.get(door_id)
-            if text is None:  # بابٌ فشل تحميله — أُبلِغ عنه أعلاه
-                continue
-            check = _FORMS[doors[door_id]["form"]]
-            if not check(text, name):
-                _fail(
-                    f"{name} غائبٌ عن الباب «{door_id}» ({doors[door_id]['path']}).\n"
-                    f"   سرٌّ يعبر بعض الأبواب لا كلَّها يصل في بيئةٍ ويختفي في أخرى بلا سببٍ ظاهر."
-                )
+        _check_secret_classification(secret, all_ids)
+        _check_secret_presence(secret, doors, texts)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

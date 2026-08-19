@@ -171,6 +171,56 @@ def _tracked_files() -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
+def _readable_text(rel: str) -> str | None:
+    """نصُّ ملفٍّ مُتتبَّع يستحقّ الفحص، أو ``None`` إن كان خارج النطاق."""
+    if rel == SELF:
+        return None
+    path = REPO_ROOT / rel
+    if path.suffix.lower() not in TEXT_SUFFIXES or not path.is_file():
+        return None
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:  # pragma: no cover - عطل نظام ملفّات
+        return None
+
+
+def _first_real_match(regex: re.Pattern[str], text: str) -> re.Match[str] | None:
+    """أوّل مطابقةٍ ليست قالباً توضيحياً."""
+    return next(
+        (
+            found
+            for found in regex.finditer(text)
+            if not _is_placeholder(found.group("secret"), found.groupdict().get("host") or "")
+        ),
+        None,
+    )
+
+
+def _scan_text(
+    rel: str,
+    text: str,
+    compiled: list[tuple[re.Pattern[str], str]],
+    hit_files: set[str],
+) -> list[str]:
+    """أخطاءُ ملفٍّ واحد. يُسجِّل الإصابة في ``hit_files`` حتى لو كانت ضمن الدَّين."""
+    errors: list[str] = []
+    for regex, label in compiled:
+        match = _first_real_match(regex, text)
+        if match is None:
+            continue
+        hit_files.add(rel)
+        if rel in FROZEN_DEBT:
+            continue
+        line_no = text[: match.start()].count("\n") + 1
+        errors.append(
+            f"❌ {rel}:{line_no}: {label} مُلتزَم في الشجرة.\n"
+            f"   الأسرار من **البيئة حصراً** (CLAUDE.md §6.7.ز). انقل القيمة إلى\n"
+            f"   `.devcontainer/secrets.env` (git-ignored) أو متغيّر بيئة، ثم **دوِّر\n"
+            f"   المفتاح** — الإزالة من الشجرة لا تُبطِل التسريب (ISS-141)."
+        )
+    return errors
+
+
 def main() -> int:
     try:
         patterns = _secret_patterns()
@@ -182,39 +232,10 @@ def main() -> int:
     hit_files: set[str] = set()
 
     for rel in _tracked_files():
-        if rel == SELF:
+        text = _readable_text(rel)
+        if text is None:
             continue
-        path = REPO_ROOT / rel
-        if path.suffix.lower() not in TEXT_SUFFIXES or not path.is_file():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:  # pragma: no cover
-            continue
-        for regex, label in compiled:
-            match = next(
-                (
-                    found
-                    for found in regex.finditer(text)
-                    if not _is_placeholder(
-                        found.group("secret"),
-                        (found.groupdict().get("host") or ""),
-                    )
-                ),
-                None,
-            )
-            if match is None:
-                continue
-            hit_files.add(rel)
-            if rel in FROZEN_DEBT:
-                continue
-            line_no = text[: match.start()].count("\n") + 1
-            errors.append(
-                f"❌ {rel}:{line_no}: {label} مُلتزَم في الشجرة.\n"
-                f"   الأسرار من **البيئة حصراً** (CLAUDE.md §6.7.ز). انقل القيمة إلى\n"
-                f"   `.devcontainer/secrets.env` (git-ignored) أو متغيّر بيئة، ثم **دوِّر\n"
-                f"   المفتاح** — الإزالة من الشجرة لا تُبطِل التسريب (ISS-141)."
-            )
+        errors.extend(_scan_text(rel, text, compiled, hit_files))
 
     for rel in sorted(FROZEN_DEBT - hit_files):
         errors.append(f"❌ {rel} نظيف الآن — احذفه من FROZEN_DEBT (الدَّين يتقلّص فقط).")

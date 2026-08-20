@@ -1,5 +1,5 @@
 # Stage 1: Builder
-FROM python:3.12-slim as builder
+FROM python:3.14-slim as builder
 
 WORKDIR /app
 
@@ -29,7 +29,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt -c constraints.txt
 
 # Stage 2: Final Runtime
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 

@@ -12,7 +12,7 @@
 # it has never been RUN (see .memory/runtime_truth.md — building is not running).
 
 # ── Stage 1: build the dependency tree ───────────────────────────────────────
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ COPY requirements-prod.txt constraints.txt ./
 RUN pip install --no-cache-dir -r requirements-prod.txt -c constraints.txt
 
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 

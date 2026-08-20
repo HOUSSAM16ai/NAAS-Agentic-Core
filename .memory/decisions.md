@@ -3,6 +3,30 @@
 > This platform is a **Cognitive Lab / Thinking Engine**, not a traditional Chat Tutor.
 > The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.# Architectural Decisions
+
+## D-272 (2026-08-20) — دستور مبادئ تصميم الأنظمة الوكيلية: رفع السقف 1194 → 1225
+
+**طلبُ المالك: «أضِفها إلى القوانين والدستور ولا تحذف أي شيء»** — نفس صيغة «إضافة لا
+حذف» التي اعتُمدت فيها §0.22/§0.23. أربعة اعتبارات تجعلها من صنف «قانونٌ دائم جديد» لا
+تضخّمًا سرديًا:
+
+1. **المصدر قياسٌ محكَم لا رأيٌ**: arXiv:2512.08296 (Google Research · DeepMind · MIT) —
+   260 تشكيلةً مع توحيدٍ حرفيٍّ للتلميحات والأدوات وميزانية الرموز لعزل أثر التنسيق وحده.
+2. **السرد كلّه خارج العقد**: `docs/architecture/AGENTIC_DESIGN_PRINCIPLES.md` (القانون
+   الكامل + YAML الامتثال)، `.memory/agentic_design_principles_{constitution,truth}.md`،
+   وفارضٌ تنفيذيٌّ جديد `scripts/fitness/check_agentic_design_principles.py` مسلوكةٌ في
+   `guardrails` بـ`ci.yml`. قسم §0.24 في العقد مؤشِّرٌ بثمانية أسطر قواعد + جملةٍ دستورية.
+3. **القسم ضُغِط قبل طلب الرفع**: حذفنا فقرة المصدر والقواعد المقاسة (4.4×/17.2×، 67:21)
+   من العقد إلى وثيقة القانون — 1238 → 1221.
+4. **فارضةٌ حقيقية**، لا نثر: خط أساس وكيلٍ واحد إلزامي (L1)، عتبة 45% (L2)، تصنيف المهمة
+   (L3)، منع تضخيم الأخطاء (L4)، إعادة معايرة بعد الترقية (L5) — وكل تعديلٍ للدستور يمر
+   ADR + بوابة خضراء.
+
+**التنفيذ:** `check_memory_coherence.py`: رُفِع `CLAUDE_MD_MAX_LINES` 1194 → 1225
+بكتلةِ سببٍ مكتوبةٍ (# ── D-272: رُفِع 1194 → 1225 ──) قبل ثوابت السقف. والمِسنَن
+يعود «يتقلّص فقط» من 1225 فورًا.
+
+---
 ## D-271 · المهارة تُقاس، والتقنية تدخل بقرارٍ لا بإعجاب (2026-08-19 · ISS-195)
 
 **الطلب:** تطبيق معايير عشرة مستودعاتٍ من الشركات التي تقف وراء أشهر النماذج.
@@ -29,6 +53,7 @@ ls-remote`. (أعدادُ النجوم في المنشور لم يُتحقَّق
 **الفوارض:** `check_agent_skills_spec.py` · `check_external_standards.py`
 (دَينُ كلٍّ **فارغ**) · **٣٠ برهاناً سلبياً** في `tests/fitness/test_agent_standards_gates.py`.
 **التفصيل:** `docs/architecture/OPEN_AGENT_STANDARDS.md` · ADR-012.
+
 
 ---
 

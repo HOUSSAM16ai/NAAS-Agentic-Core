@@ -248,6 +248,15 @@
       "law_docs": ["docs/architecture/OPEN_AGENT_STANDARDS.md"],
       "status_docs": [".memory/agent_standards_truth.md"],
       "enforcers": ["check_agent_skills_spec.py", "check_external_standards.py"]
+    },
+    {
+      "section": "0.24",
+      "id": "D-272",
+      "title_en": "Agentic Design Principles Constitution",
+      "title_ar": "دستور مبادئ تصميم الأنظمة الوكيلية",
+      "law_docs": ["docs/architecture/AGENTIC_DESIGN_PRINCIPLES.md"],
+      "status_docs": [".memory/agentic_design_principles_truth.md"],
+      "enforcers": ["check_agentic_design_principles.py"]
     }
   ]
 }

@@ -43,6 +43,9 @@ jobs:
       APP_DATABASE_URL: ${{ secrets.DATABASE_URL }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      # D-268: الأسماء الظاهرة هنا (DIAG_*) هي المفاتيح التي تقرأها سكربتات الاختبار
+      # الحيّ في عدة أماكن — تغييرها يخالف عقودها المكتوبة. المصدر الجذري في Secrets
+      # هو E2E_STUDENT_EMAIL/E2E_STUDENT_PASSWORD (انظر `aliases` في الكتالوج).
       DIAG_EMAIL: ${{ secrets.E2E_STUDENT_EMAIL }}
       DIAG_PASSWORD: ${{ secrets.E2E_STUDENT_PASSWORD }}
       SECRET_KEY: ${{ secrets.SECRET_KEY }}

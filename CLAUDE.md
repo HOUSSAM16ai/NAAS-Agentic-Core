@@ -523,6 +523,37 @@ Evaluation → Governance → Infrastructure → Humans`. المعرفةُ ما 
 
 ---
 
+## 0.24. Agentic Design Principles Constitution (D-272) — التنسيق يُختار لمطابقة بنية المهمة، لا لجماله
+
+> **القانون:** [`docs/architecture/AGENTIC_DESIGN_PRINCIPLES.md`](docs/architecture/AGENTIC_DESIGN_PRINCIPLES.md) ·
+> **الحالة:** [`.memory/agentic_design_principles_truth.md`](.memory/agentic_design_principles_truth.md) ·
+> **الفارض:** `check_agentic_design_principles` (سلكه `guardrails` في `ci.yml`).
+
+**المصدر (قرار المالك 2026-08-20):** قياسٌ مضبوطٌ لـ**260 تشكيلةً** عبر ستة معاييرٍ وخمسِ بنىً معماريةٍ
+وثلاثِ عائلاتِ نماذج، مع توحيدٍ حرفيٍّ للتلميحات والأدوات وميزانية الرموز لعزل أثر التنسيق وحده
+([arXiv:2512.08296](https://arxiv.org/abs/2512.08296) — Google Research · DeepMind · MIT).
+
+**الجملة الدستورية:** «**التنسيق يُختار لمطابقة بنية المهمة — لا لجماله. والوكيل الواحد هو
+النقطة المرجعية التي تُقاس عندها كل بنيةٍ أخرى، والأداء يُقاس بأقل تعقيدٍ وتكلفةٍ ممكنة.**»
+
+- **L1** الوكيل الواحد أولًا، ودائمًا كخط أساسٍ مُثبتٍ (**`single_agent_baseline`**) على نفس
+  المعيار الحيّ قبل أي تعددٍ. ⛔ لا بنيةٌ متعددةٌ بلا رقم خط أساس = CI أحمر.
+- **L2** **عتبة 45%**: فوقها التعدد تحسينٌ غير مثبتٍ يحتاج `justification_ar` مقاسًا؛ تحتها البنية
+  الأولى المسموحة **مركزيٌّ بمرجِّعٍ واحد** (تضخيم الأخطاء 4.4× مقابل 17.2× في المستقل).
+- **L3** تصنيفٌ إجباري لكل مهمةٍ: `decomposable` · `sequential` · `tool_count` — تسلسليةٌ شديدةُ
+  الاعتمادية تحظر البنيةَ المتعددة مبدئيًا (القياس: −39% إلى −70% لكل البنى على PlanCraft).
+- **L4** الأنظمة المستقلة لا تقرأ وكلاؤها مسودات بعضهم؛ أي مساراتٍ مستقلةٍ تمرّ عبر
+  `central_verifier` قبل الدمج.
+- **L5** إعادة معايرةٍ (`last_recalibration`) بعد كل ترقيةٍ جوهريةٍ للنموذج — تحسينُ الأساس
+  قد يجعل التعددَ أقل جدوى. ⛔ ترقيةٌ بلا إعادة قياسٍ = دفعةٌ مخالفةٌ.
+- **L6** النتيجة أفضلُ بأقل تعقيدٍ وتكلفةٍ: `tokens_per_task_ratio` إلزاميٌّ (المرجع: وكيلٌ واحد
+  67 مقابل 21 للمركزي، بمهامٍ لكل 1000 رمز)، وحدٌّ أقصى **3–4 وكلاءٍ** عند ضيق الميزانية.
+- **L7** البنية لا تُنسَخ بين النطاقات (`domain_measured`) — الأفضل في المالية (مركزيّ، +80.8%)
+  هو عينُه الذي تراجعت به المستقلةُ في التخطيط.
+- **الإضافة لا الاستبدال**: D-271 وكلّ ما سبقه يبقى سارياً. تعديل هذا الدستور = ADR + بوّابةٌ خضراء.
+
+---
+
 ## 1. What This Project Does
 
 CogniForge is an educational AI platform for Algerian high-school students preparing for the Baccalaureate exam. Students chat in Arabic, French, or Darija and receive tutoring in math, physics, and sciences. The backend is a FastAPI monolith.

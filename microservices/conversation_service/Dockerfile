@@ -2,7 +2,7 @@
 # `from microservices.conversation_service...` absolute imports resolve. The flat
 # `COPY . .` + `main:app` broke module resolution; python:3.11 also fails on the
 # PEP 695 `type X =` syntax the app uses (3.12-only).
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 

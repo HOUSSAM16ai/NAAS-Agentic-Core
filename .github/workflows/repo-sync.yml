@@ -18,12 +18,15 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out current repository
+      - name: Check out current repository with peer PAT
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Use the PAT that can push to the peer repository so the peer
+          # becomes our authenticated "origin", then push main there.
+          token: ${{ secrets.MIRROR_PAT }}
 
-      - name: Sync into the other repository
+      - name: Point origin at the peer and push main
         run: |
           set -euo pipefail
           if [ "$GITHUB_REPOSITORY" = "Houssam-lab/NAAS-Agentic-Core" ]; then
@@ -38,5 +41,6 @@ jobs:
 
           git config user.name "$IDENTITY"
           git config user.email "$IDENTITY@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${PAT}@github.com/${PEER}.git"
-          git push origin "HEAD:main" --force
+          git remote set-url origin "https://github.com/${PEER}.git"
+          # Use the peer PAT as the HTTPS credential for this push.
+          git push origin main --force

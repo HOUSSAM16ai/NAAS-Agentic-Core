@@ -1,0 +1,28 @@
+name: Sync to mirror repository
+
+# Whenever main is pushed in the source repo, replicate it into the mirror
+# repo (bakabala27-svg/NAAS-Agentic-Core) so both stay 100% identical.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: github.repository == 'Houssam-lab/NAAS-Agentic-Core'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to mirror
+        env:
+          MIRROR_PAT: ${{ secrets.MIRROR_PAT }}
+        run: |
+          git remote add mirror "https://x-access-token:${MIRROR_PAT}@github.com/bakabala27-svg/NAAS-Agentic-Core.git"
+          git push mirror main --force

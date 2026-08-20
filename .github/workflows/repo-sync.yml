@@ -4,8 +4,8 @@ name: Sync to other repository
 # content into the OTHER repository, keeping the two repos 100% identical.
 #
 # Direction is determined dynamically by which repository the run belongs to:
-#   Houssam-lab/NAAS-Agentic-Core  -> pushes to bakabala27-svg/NAAS-Agentic-Core
-#   bakabala27-svg/NAAS-Agentic-Core -> pushes to Houssam-lab/NAAS-Agentic-Core
+#   Houssam-lab/NAAS-Agentic-Core  -> pushes to bakabala27-svg/NAAS-Agentic-Core (uses secrets.MIRROR_PAT)
+#   bakabala27-svg/NAAS-Agentic-Core -> pushes to Houssam-lab/NAAS-Agentic-Core (uses secrets.UPSTREAM_PAT)
 
 on:
   push:
@@ -18,29 +18,32 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out current repository with peer PAT
+      - name: Check out current repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Use the PAT that can push to the peer repository so the peer
-          # becomes our authenticated "origin", then push main there.
-          token: ${{ secrets.MIRROR_PAT }}
 
-      - name: Point origin at the peer and push main
+      - name: Replicate main into the peer repository
+        env:
+          MIRROR_PAT: ${{ secrets.MIRROR_PAT }}
+          UPSTREAM_PAT: ${{ secrets.UPSTREAM_PAT }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_REPOSITORY" = "Houssam-lab/NAAS-Agentic-Core" ]; then
             PEER="bakabala27-svg/NAAS-Agentic-Core"
-            PAT="${{ secrets.MIRROR_PAT }}"
+            PAT="${MIRROR_PAT}"
             IDENTITY="bakabala27-svg"
           else
             PEER="Houssam-lab/NAAS-Agentic-Core"
-            PAT="${{ secrets.UPSTREAM_PAT }}"
+            PAT="${UPSTREAM_PAT}"
             IDENTITY="bakabala27-svg"
           fi
-
-          git config user.name "$IDENTITY"
-          git config user.email "$IDENTITY@users.noreply.github.com"
-          git remote set-url origin "https://github.com/${PEER}.git"
-          # Use the peer PAT as the HTTPS credential for this push.
-          git push origin main --force
+          if [ -z "$PAT" ]; then
+            echo "Error: peer authentication token is missing. Check repository secrets."
+            exit 1
+          fi
+          # Use the peer PAT as the HTTPS credential (x-access-token user).
+          git remote add peer "https://x-access-token:${PAT}@github.com/${PEER}.git"
+          git config user.name "${IDENTITY}"
+          git config user.email "${IDENTITY}@users.noreply.github.com"
+          git push peer HEAD:main --force

@@ -12,7 +12,7 @@
 # conversation-service; this copy just never got the fix.
 #
 # The pattern below is notation-service's, which is proven.
-FROM python:3.12-slim
+FROM python:3.14-slim
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \

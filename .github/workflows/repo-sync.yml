@@ -19,12 +19,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.MIRROR_PAT }}
 
       - name: Push to mirror
-        env:
-          MIRROR_PAT: ${{ secrets.MIRROR_PAT }}
         run: |
-          git config credential.helper "store --file=$HOME/.git-credentials"
-          echo "https://bakabala27-svg:${MIRROR_PAT}@github.com" > "$HOME/.git-credentials"
-          git remote set-url origin "https://bakabala27-svg:${MIRROR_PAT}@github.com/bakabala27-svg/NAAS-Agentic-Core.git"
+          git remote set-url origin "https://github.com/bakabala27-svg/NAAS-Agentic-Core.git"
           git push origin main --force

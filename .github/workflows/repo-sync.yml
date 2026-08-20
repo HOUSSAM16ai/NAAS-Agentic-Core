@@ -24,5 +24,7 @@ jobs:
         env:
           MIRROR_PAT: ${{ secrets.MIRROR_PAT }}
         run: |
-          git remote add mirror "https://x-access-token:${MIRROR_PAT}@github.com/bakabala27-svg/NAAS-Agentic-Core.git"
-          git push mirror main --force
+          git config credential.helper "store --file=$HOME/.git-credentials"
+          echo "https://bakabala27-svg:${MIRROR_PAT}@github.com" > "$HOME/.git-credentials"
+          git remote set-url origin "https://bakabala27-svg:${MIRROR_PAT}@github.com/bakabala27-svg/NAAS-Agentic-Core.git"
+          git push origin main --force

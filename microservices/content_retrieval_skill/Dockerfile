@@ -5,7 +5,7 @@
 # Never caught because this service is in no compose file and was never built.
 #
 # The pattern below is notation-service's, which is proven.
-FROM python:3.12-slim
+FROM python:3.14-slim
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \

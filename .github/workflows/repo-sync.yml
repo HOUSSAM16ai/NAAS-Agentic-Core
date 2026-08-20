@@ -1,7 +1,11 @@
-name: Sync to mirror repository
+name: Sync to other repository
 
-# Whenever main is pushed in the source repo, replicate it into the mirror
-# repo (bakabala27-svg/NAAS-Agentic-Core) so both stay 100% identical.
+# Runs on every push to main in BOTH repositories and replicates the pushed
+# content into the OTHER repository, keeping the two repos 100% identical.
+#
+# Direction is determined dynamically by which repository the run belongs to:
+#   Houssam-lab/NAAS-Agentic-Core  -> pushes to bakabala27-svg/NAAS-Agentic-Core
+#   bakabala27-svg/NAAS-Agentic-Core -> pushes to Houssam-lab/NAAS-Agentic-Core
 
 on:
   push:
@@ -12,16 +16,27 @@ permissions:
 
 jobs:
   sync:
-    if: github.repository == 'Houssam-lab/NAAS-Agentic-Core'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out source
+      - name: Check out current repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.MIRROR_PAT }}
 
-      - name: Push to mirror
+      - name: Sync into the other repository
         run: |
-          git remote set-url origin "https://github.com/bakabala27-svg/NAAS-Agentic-Core.git"
-          git push origin main --force
+          set -euo pipefail
+          if [ "$GITHUB_REPOSITORY" = "Houssam-lab/NAAS-Agentic-Core" ]; then
+            PEER="bakabala27-svg/NAAS-Agentic-Core"
+            PAT="${{ secrets.MIRROR_PAT }}"
+            IDENTITY="bakabala27-svg"
+          else
+            PEER="Houssam-lab/NAAS-Agentic-Core"
+            PAT="${{ secrets.UPSTREAM_PAT }}"
+            IDENTITY="bakabala27-svg"
+          fi
+
+          git config user.name "$IDENTITY"
+          git config user.email "$IDENTITY@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${PAT}@github.com/${PEER}.git"
+          git push origin "HEAD:main" --force

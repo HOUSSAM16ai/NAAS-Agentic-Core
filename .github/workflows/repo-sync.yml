@@ -24,16 +24,24 @@ jobs:
           fetch-depth: 0
 
       - name: Sync into the other repository
+        env:
+          MIRROR_PAT: ${{ secrets.MIRROR_PAT }}
+          UPSTREAM_PAT: ${{ secrets.UPSTREAM_PAT }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_REPOSITORY" = "Houssam-lab/NAAS-Agentic-Core" ]; then
             PEER="bakabala27-svg/NAAS-Agentic-Core"
-            PAT="${{ secrets.MIRROR_PAT }}"
+            PAT="${MIRROR_PAT}"
             IDENTITY="bakabala27-svg"
           else
             PEER="Houssam-lab/NAAS-Agentic-Core"
-            PAT="${{ secrets.UPSTREAM_PAT }}"
+            PAT="${UPSTREAM_PAT}"
             IDENTITY="bakabala27-svg"
+          fi
+
+          if [ -z "$PAT" ]; then
+            echo "Error: Authentication token (PAT) is missing or empty. Please check repository secrets."
+            exit 1
           fi
 
           git config user.name "$IDENTITY"

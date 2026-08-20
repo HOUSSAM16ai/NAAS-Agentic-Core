@@ -1,7 +1,7 @@
 # D-185 — notation-service. Build context is the REPO ROOT so the
 # `microservices.notation_service.*` package path the app imports actually exists
 # inside the image (a service-dir context would flatten it and crash on import).
-FROM python:3.12-slim
+FROM python:3.14-slim
 WORKDIR /app
 
 COPY microservices/notation_service/requirements.txt ./requirements.txt

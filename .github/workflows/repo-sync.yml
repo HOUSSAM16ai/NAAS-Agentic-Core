@@ -6,16 +6,13 @@ name: Sync to other repository
 #   Houssam-lab/NAAS-Agentic-Core  -> pushes to bakabala27-svg/NAAS-Agentic-Core (uses secrets.MIRROR_PAT)
 #   bakabala27-svg/NAAS-Agentic-Core -> pushes to Houssam-lab/NAAS-Agentic-Core (uses secrets.UPSTREAM_PAT)
 #
-# Auth strategy (v4): The checkout action with an explicit token is the ONLY
-# authentication method proven to pass GitHub Actions runner identity checks.
-# To push to the PEER repository from the same job, we rewrite origin's URL to
-# the peer's URL but KEEP the PAT in the checkout-provided Authorization
-# header (git applies the header to the remote named "origin" via the
-# http.<base>.extraheader config checkout sets), and point the header base at
-# the peer URL by re-issuing the header config against the peer URL. This is
-# achieved with url.insteadOf + an explicit credential helper: the PAT is
-# passed through git's credential system rather than via x-access-token URLs,
-# which is what the runner rejects for third-party PATs.
+# Auth strategy (v5): actions/checkout with the PAT as token is the ONLY
+# method proven to pass GitHub Actions runner identity checks (x-access-token
+# URLs are rejected by the runner). Each repository checks out with its OWN
+# push secret, then the sync step rewrites origin's URL to the peer and
+# re-attaches the same secret via a git credential helper so git sends Basic
+# auth as the real token owner (not the bot). A retry loop on the push avoids
+# transient "cannot lock ref" conflicts when both sides run simultaneously.
 on:
   push:
     branches: [main]
@@ -52,17 +49,22 @@ jobs:
           git config user.name "${IDENTITY}"
           git config user.email "${IDENTITY}@users.noreply.github.com"
 
-          # Point origin at the peer URL. The checkout action registered an
-          # Authorization header with the PAT for the base URL origin used;
-          # keep that header valid by clearing checkout's extraheader AFTER we
-          # change the URL, then attach the PAT via a plain credential helper
-          # so git sends Basic auth as the real token owner (not the bot).
+          # Point origin at the peer URL and authenticate with the PAT via a
+          # plain credential helper (Basic auth as the token owner).
           git remote set-url origin "https://github.com/${PEER}.git"
-          # Credential helper returns the PAT for any github.com push URL.
           git config --global "credential.helper" '!f() { echo username=x-access-token; echo password='"${PAT}"'; }; f'
-          # Remove the checkout-provided header for origin so git falls back
-          # to the credential helper for the new URL.
           git config --unset "http.https://github.com/.extraheader" || true
           git config --unset "http.https://github.com/${PEER}/.extraheader" || true
 
-          git push origin HEAD:main --force
+          # Retry the push to tolerate transient lock-ref races between the
+          # two simultaneous sync workflows.
+          for attempt in 1 2 3 4 5; do
+            if git fetch origin main --quiet && git push origin HEAD:main --force; then
+              echo "Push to ${PEER} succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Attempt ${attempt} failed; sleeping 10s before retry..."
+            sleep 10
+          done
+          echo "Error: push to ${PEER} failed after 5 attempts."
+          exit 1

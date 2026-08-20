@@ -45,6 +45,10 @@ ALLOWED_FACTORIES = frozenset(
         "shared/http_client/correlated.py",
         "app/core/http_client_factory.py",
         "microservices/orchestrator_service/src/core/http_client_factory.py",
+        # النسخ المُوَرَّدة المحروسة داخل الخدمات المصغّرة (نمط D-185):
+        # كل نسخة يجب أن تبقى مطابقةً للمصدر عبر بوابات تكافؤ؛ البناء المباشر
+        # هنا هو المصنع الوحيد المصرَّح داخل الخدمة — أي موضع آخر يُستعمل `correlated_client`.
+        "microservices/transition_service/src/core/correlated_http.py",
     }
 )
 

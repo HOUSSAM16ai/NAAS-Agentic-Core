@@ -604,7 +604,7 @@ Runtime topology — **طوبولوجيتان حقيقيتان، لا واحدة
                 ├── orchestrator-service :8006  ← القلب الإلزامي للتوليد (D-112)
                 └── سلسلة سقوط محلية (تُقاس، لا تُخفى)
 
-العقود: 14 عقد OpenAPI في `docs/contracts/openapi/` تحرسها `check_openapi_parity` (14/14 — يشمل المونوليث، D-231).
+العقود: 15 عقد OpenAPI في `docs/contracts/openapi/` تحرسها `check_openapi_parity` (15/15 — يشمل المونوليث، D-231).
 التفصيل الحيّ: `.memory/architecture.md` · `.memory/runtime_truth.md`.
 الطوبولوجيا المؤرَّخة 2026-05-11: `docs/archive/constitution-history/CLAUDE-SECTIONS-1-3-6.6-FULL.md §ب`.
 ```

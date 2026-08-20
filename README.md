@@ -164,7 +164,7 @@ Ports differ from (a) for five services. The gated source of truth is [`docs/arc
 
 ### Service boundaries are contracts, not languages
 
-Every service ships a committed OpenAPI contract, and a semantic parity gate compares declared endpoints against the live application — **API-first 14/14**, enforced by `check_openapi_parity` on every pull request. Cross-service imports are forbidden and checked by AST; shared logic is vendored with a parity gate rather than imported, so no service can reach into another's internals.
+Every service ships a committed OpenAPI contract, and a semantic parity gate compares declared endpoints against the live application — **API-first 15/15**, enforced by `check_openapi_parity` on every pull request. Cross-service imports are forbidden and checked by AST; shared logic is vendored with a parity gate rather than imported, so no service can reach into another's internals.
 
 ---
 

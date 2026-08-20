@@ -1644,15 +1644,33 @@
         ],
         "summary": "Launch Mission",
         "operationId": "create_mission_endpoint_missions_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/MissionCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1694,6 +1712,22 @@
               "type": "integer",
               "title": "Mission Id"
             }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
           }
         ],
         "responses": {
@@ -1726,7 +1760,7 @@
           "Overmind (Super Agent)"
         ],
         "summary": "Get Mission Events",
-        "description": "Retrieve historical events for a mission.",
+        "description": "\u064a\u0633\u0631\u062f \u0623\u062d\u062f\u0627\u062b \u0645\u0647\u0645\u0629 \u0645\u0639\u064a\u0651\u0646\u0629 \u0628\u062a\u0633\u0644\u0633\u0644\u0647\u0627 \u0627\u0644\u0632\u0645\u0646\u064a.",
         "operationId": "get_mission_events_endpoint_missions__mission_id__events_get",
         "parameters": [
           {
@@ -1736,6 +1770,22 @@
             "schema": {
               "type": "integer",
               "title": "Mission Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],

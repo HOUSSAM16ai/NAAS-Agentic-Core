@@ -67,7 +67,7 @@ export interface MonolithApiAIOpsMetricsResponse { anomaly_score: number; self_h
 export interface MonolithApiAdminCreateUserRequest { full_name: string; email: string; password: string; is_admin?: boolean }
 export interface MonolithApiAdminUserCountResponse { count: number }
 export interface MonolithApiAlertResponse { id: string; severity: string; message: string; timestamp: string; status: string }
-export interface MonolithApiAuthResponse { access_token: string; token_type?: string; user: MonolithApiUserResponse; status?: string; landing_path?: string }
+export interface MonolithApiAuthResponse { access_token: string; refresh_token?: string | null; token_type?: string; user: MonolithApiUserResponse; status?: string; landing_path?: string }
 export interface MonolithApiChangePasswordRequest { current_password: string; new_password: string }
 export type MonolithApiCognitiveIntent = string;
 export type MonolithApiCognitiveState = string;
@@ -230,6 +230,26 @@ export interface ReasoningAgentValidationError { loc: string | number[]; msg: st
 export interface ResearchAgentAgentRequest { caller_id: string; target_service?: string; action: string; payload?: Record<string, unknown>; security_token?: string | null }
 export interface ResearchAgentAgentResponse { status: string; data?: unknown | null; error?: string | null; metrics?: Record<string, unknown> }
 export interface ResearchAgentValidationError { loc: string | number[]; msg: string; type: string }
+
+// ── transition_service (Transition Service) ─────────
+export interface TransitionServiceDecisionResponse { allowed: boolean; decision_level: string; reason: string; human_action_description: string; decision_log: Record<string, unknown> }
+export interface TransitionServiceDialogueRequest { stakeholder: string; feedback_text: string }
+export interface TransitionServiceEarlyWarningRequest { scope?: string; occupation_codes?: string[]; worker?: TransitionServiceWorkerInput | null }
+export interface TransitionServiceEducationRequest { institution_type?: string; target_skills?: string[]; current_curriculum_skills?: string[]; for_occupation?: string | null }
+export interface TransitionServiceEquityRequest { population: TransitionServiceWorkerInput[] }
+export interface TransitionServiceEvaluationRequest { kpi_code: string; measured_value: number; target_value: number; period?: string }
+export interface TransitionServiceExposureRequest { occupation_code: string; task_breakdown?: Record<string, unknown>[] | null }
+export interface TransitionServiceGovernanceApprovalRequest { request_id: string; agent: string; action_key: string; description: string; duration_days?: number; budget?: number }
+export interface TransitionServiceGovernanceRequest { system_type: string; decision_description: string; affected_groups?: string[] }
+export interface TransitionServiceJobCreationRequest { region?: string; sectors?: string[] }
+export interface TransitionServiceRedTeamRequest { test_kind: string; payload?: Record<string, unknown> }
+export interface TransitionServiceSimulationRequest { policy_name: string; displacement_rate: number; reinstatement_rate: number; horizon_years?: number; sector_codes?: string[] }
+export interface TransitionServiceSkillsGapRequest { worker: TransitionServiceWorkerInput; target_occupation?: string | null }
+export interface TransitionServiceSocialProtectionRequest { worker: TransitionServiceWorkerInput; transition_horizon_months?: number }
+export interface TransitionServiceStandardResponse { status?: string; agent: string; result: Record<string, unknown>; governance?: Record<string, unknown> | null }
+export interface TransitionServiceTransitionRequest { worker: TransitionServiceWorkerInput; target_occupation?: string | null; max_paths?: number }
+export interface TransitionServiceValidationError { loc: string | number[]; msg: string; type: string }
+export interface TransitionServiceWorkerInput { worker_id: string; current_occupation: string; region?: string; age_band?: string; gender_band?: string; current_skills?: string[]; income_band?: string; disability_band?: string }
 
 // ── user_service (user-service) ─────────
 export interface UserServiceAdminCreateUserRequest { full_name: string; email: string; password: string; is_admin?: boolean }

@@ -51,6 +51,8 @@ SERVICES: tuple[tuple[str, str, str], ...] = (
     # لا يمرّ بها دورُ طالب. و«API-first 100٪» بلا الخدمة الوحيدة العاملة عبارةٌ
     # تقيس ما لا يُستعمَل. العقد يُولَّد من التشغيل فلا يستطيع الانحراف.
     ("monolith_api", "app.main", "app"),
+    # D-240: وكيل التحول — خدمة التحول في سوق العمل والتعليم والحوكمة (13 وكيلاً + بوابة حوكمة).
+    ("transition_service", "microservices.transition_service.src.main", "app"),
 )
 
 

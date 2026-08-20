@@ -464,7 +464,30 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
+  # Transition Service (D-240) — the 13-agent AI work-transition layer (early
+  # warning, exposure, skills gap, transition, education, job creation, social
+  # protection, governance, equity, simulation, dialogue, evaluation, red team)
+  # plus the four-level governance gate. Mock-mode-first by design: the core
+  # atlas/math engine is fully deterministic, so the service always boots even
+  # without any LLM credentials (LLM is narrative decoration only, §6).
+  transition-service:
+    build:
+      context: .
+      dockerfile: microservices/transition_service/Dockerfile
+    container_name: cogniforge-transition-service
+    ports:
+      - "8012:8012"
+    environment:
+      - SERVICE_NAME=transition-service
+      - LLM_MOCK_MODE=${LLM_MOCK_MODE:-1}
+    command: uvicorn microservices.transition_service.src.main:app --host 0.0.0.0 --port 8012
+    networks:
+      - cogniforge-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8012/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
   # Notation Service (D-185) - "the system defines every symbol it prints" (ISS-138)
   # No DB, no API keys, no LLM: a stdlib-only symbol registry, so it always boots.
   notation-service:

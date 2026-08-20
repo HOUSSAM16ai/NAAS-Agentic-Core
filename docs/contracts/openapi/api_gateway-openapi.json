@@ -15,7 +15,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Check Health Get"
+                }
               }
             }
           }
@@ -32,7 +36,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Gateway Health Check Gateway Health Get"
+                }
               }
             }
           }
@@ -888,7 +896,6 @@
     "/api/v1/auth/{path}": {
       "get": {
         "summary": "Auth Proxy",
-        "description": "Proxy Auth routes (Login/Register) to User Service.\nResolves ambiguity between Monolith UMS and Microservice.",
         "operationId": "auth_proxy_api_v1_auth__path__get",
         "security": [
           {
@@ -929,7 +936,6 @@
       },
       "delete": {
         "summary": "Auth Proxy",
-        "description": "Proxy Auth routes (Login/Register) to User Service.\nResolves ambiguity between Monolith UMS and Microservice.",
         "operationId": "auth_proxy_api_v1_auth__path__get",
         "security": [
           {
@@ -970,7 +976,6 @@
       },
       "put": {
         "summary": "Auth Proxy",
-        "description": "Proxy Auth routes (Login/Register) to User Service.\nResolves ambiguity between Monolith UMS and Microservice.",
         "operationId": "auth_proxy_api_v1_auth__path__get",
         "security": [
           {
@@ -1011,7 +1016,6 @@
       },
       "head": {
         "summary": "Auth Proxy",
-        "description": "Proxy Auth routes (Login/Register) to User Service.\nResolves ambiguity between Monolith UMS and Microservice.",
         "operationId": "auth_proxy_api_v1_auth__path__get",
         "security": [
           {
@@ -1052,7 +1056,6 @@
       },
       "post": {
         "summary": "Auth Proxy",
-        "description": "Proxy Auth routes (Login/Register) to User Service.\nResolves ambiguity between Monolith UMS and Microservice.",
         "operationId": "auth_proxy_api_v1_auth__path__get",
         "security": [
           {
@@ -1093,7 +1096,6 @@
       },
       "patch": {
         "summary": "Auth Proxy",
-        "description": "Proxy Auth routes (Login/Register) to User Service.\nResolves ambiguity between Monolith UMS and Microservice.",
         "operationId": "auth_proxy_api_v1_auth__path__get",
         "security": [
           {
@@ -1134,7 +1136,6 @@
       },
       "options": {
         "summary": "Auth Proxy",
-        "description": "Proxy Auth routes (Login/Register) to User Service.\nResolves ambiguity between Monolith UMS and Microservice.",
         "operationId": "auth_proxy_api_v1_auth__path__get",
         "security": [
           {
@@ -2305,7 +2306,6 @@
     "/api/v1/missions": {
       "get": {
         "summary": "Missions Root Proxy",
-        "description": "Strangler Fig: Route missions root to Orchestrator Service.\nDecouples mission control from the Monolith.",
         "operationId": "missions_root_proxy_api_v1_missions_get",
         "responses": {
           "200": {
@@ -2325,7 +2325,6 @@
       },
       "put": {
         "summary": "Missions Root Proxy",
-        "description": "Strangler Fig: Route missions root to Orchestrator Service.\nDecouples mission control from the Monolith.",
         "operationId": "missions_root_proxy_api_v1_missions_get",
         "responses": {
           "200": {
@@ -2345,7 +2344,6 @@
       },
       "post": {
         "summary": "Missions Root Proxy",
-        "description": "Strangler Fig: Route missions root to Orchestrator Service.\nDecouples mission control from the Monolith.",
         "operationId": "missions_root_proxy_api_v1_missions_get",
         "responses": {
           "200": {
@@ -2365,7 +2363,6 @@
       },
       "delete": {
         "summary": "Missions Root Proxy",
-        "description": "Strangler Fig: Route missions root to Orchestrator Service.\nDecouples mission control from the Monolith.",
         "operationId": "missions_root_proxy_api_v1_missions_get",
         "responses": {
           "200": {
@@ -2385,7 +2382,6 @@
       },
       "options": {
         "summary": "Missions Root Proxy",
-        "description": "Strangler Fig: Route missions root to Orchestrator Service.\nDecouples mission control from the Monolith.",
         "operationId": "missions_root_proxy_api_v1_missions_get",
         "responses": {
           "200": {
@@ -2405,7 +2401,6 @@
       },
       "head": {
         "summary": "Missions Root Proxy",
-        "description": "Strangler Fig: Route missions root to Orchestrator Service.\nDecouples mission control from the Monolith.",
         "operationId": "missions_root_proxy_api_v1_missions_get",
         "responses": {
           "200": {
@@ -2425,7 +2420,6 @@
       },
       "patch": {
         "summary": "Missions Root Proxy",
-        "description": "Strangler Fig: Route missions root to Orchestrator Service.\nDecouples mission control from the Monolith.",
         "operationId": "missions_root_proxy_api_v1_missions_get",
         "responses": {
           "200": {
@@ -2447,7 +2441,6 @@
     "/api/v1/missions/{path}": {
       "get": {
         "summary": "Missions Path Proxy",
-        "description": "Strangler Fig: Route missions paths to Orchestrator Service.",
         "operationId": "missions_path_proxy_api_v1_missions__path__get",
         "security": [
           {
@@ -2488,7 +2481,6 @@
       },
       "delete": {
         "summary": "Missions Path Proxy",
-        "description": "Strangler Fig: Route missions paths to Orchestrator Service.",
         "operationId": "missions_path_proxy_api_v1_missions__path__get",
         "security": [
           {
@@ -2529,7 +2521,6 @@
       },
       "put": {
         "summary": "Missions Path Proxy",
-        "description": "Strangler Fig: Route missions paths to Orchestrator Service.",
         "operationId": "missions_path_proxy_api_v1_missions__path__get",
         "security": [
           {
@@ -2570,7 +2561,6 @@
       },
       "head": {
         "summary": "Missions Path Proxy",
-        "description": "Strangler Fig: Route missions paths to Orchestrator Service.",
         "operationId": "missions_path_proxy_api_v1_missions__path__get",
         "security": [
           {
@@ -2611,7 +2601,6 @@
       },
       "post": {
         "summary": "Missions Path Proxy",
-        "description": "Strangler Fig: Route missions paths to Orchestrator Service.",
         "operationId": "missions_path_proxy_api_v1_missions__path__get",
         "security": [
           {
@@ -2652,7 +2641,6 @@
       },
       "patch": {
         "summary": "Missions Path Proxy",
-        "description": "Strangler Fig: Route missions paths to Orchestrator Service.",
         "operationId": "missions_path_proxy_api_v1_missions__path__get",
         "security": [
           {
@@ -2693,7 +2681,6 @@
       },
       "options": {
         "summary": "Missions Path Proxy",
-        "description": "Strangler Fig: Route missions paths to Orchestrator Service.",
         "operationId": "missions_path_proxy_api_v1_missions__path__get",
         "security": [
           {

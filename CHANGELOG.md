@@ -48,6 +48,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2026-08-20 - D-240: Transition Service (multi-agent AI work-transition layer)
+- `microservices/transition_service/` — 13 specialized agents (early warning, occupation
+  exposure, skills gap, career transition, education/curriculum, job creation, social
+  protection, governance classification, equity monitoring, policy simulation, social
+  dialogue, KPI evaluation, red team) plus a four-level human-oversight governance gate
+  with a full audit log (INFORMATIVE → REQUIRES_REVIEW → COMMITTEE_APPROVAL →
+  HIGH_RISK_REJECT).
+- Deterministic-first core: every number is computed from a documented atlas (occupations,
+  tasks, skills, training units) and pure math (Eloundou β-weighted exposure,
+  Acemoglu–Restrepo displacement/reinstatement simulation) — the LLM is narrative-only
+  and `LLM_MOCK_MODE=1` is the default.
+- 61 tests (unit + E2E on all 23 endpoints), registered in the OpenAPI parity gate
+  (15/15 API-first), the image build matrix (16 images), `docker-compose.yml` (:8012),
+  and all architectural guardrails.
+- Charter: `docs/charter/AI_TRANSITION_CHARTER.md` (Arabic, scientific references).
+
 ### Changed - 2026-08-15 - CodeScene X-Ray hotspots decommissioned (D-253/D-254/D-255/D-256/D-258/D-259 · zero behavior change)
 - `app/services/chat/tools/content.py` hotspot decommissioned (D-255 + D-259):
   `search_content` is now an A(1) reception shell; role logic lives in pure shards

@@ -1,0 +1,1243 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Transition Service",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Check Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents": {
+      "get": {
+        "summary": "List Agents",
+        "operationId": "list_agents_agents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Agents Agents Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/early-warning": {
+      "post": {
+        "summary": "Early Warning",
+        "operationId": "early_warning_early_warning_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EarlyWarningRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exposure": {
+      "post": {
+        "summary": "Occupation Exposure",
+        "operationId": "occupation_exposure_exposure_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExposureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skills-gap": {
+      "post": {
+        "summary": "Skills Gap",
+        "operationId": "skills_gap_skills_gap_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillsGapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transition": {
+      "post": {
+        "summary": "Career Transition",
+        "operationId": "career_transition_transition_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/education": {
+      "post": {
+        "summary": "Education",
+        "operationId": "education_education_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EducationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/job-creation": {
+      "post": {
+        "summary": "Job Creation",
+        "operationId": "job_creation_job_creation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/social-protection": {
+      "post": {
+        "summary": "Social Protection",
+        "operationId": "social_protection_social_protection_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocialProtectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/governance": {
+      "post": {
+        "summary": "Governance",
+        "operationId": "governance_governance_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/equity": {
+      "post": {
+        "summary": "Equity",
+        "operationId": "equity_equity_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EquityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulation": {
+      "post": {
+        "summary": "Simulation",
+        "operationId": "simulation_simulation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dialogue": {
+      "post": {
+        "summary": "Dialogue",
+        "operationId": "dialogue_dialogue_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DialogueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/evaluation": {
+      "post": {
+        "summary": "Evaluation",
+        "operationId": "evaluation_evaluation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/red-team": {
+      "post": {
+        "summary": "Red Team",
+        "operationId": "red_team_red_team_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedTeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/governance/decide": {
+      "post": {
+        "summary": "Governance Decide",
+        "description": "\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u062d\u0648\u0643\u0645\u0629 \u2014 \u0623\u064a \u0625\u062c\u0631\u0627\u0621 \u062a\u0646\u0641\u064a\u0630\u064a \u064a\u0645\u0631 \u0645\u0646 \u0647\u0646\u0627 \u0642\u0628\u0644 \u062a\u0646\u0641\u064a\u0630\u0647.",
+        "operationId": "governance_decide_governance_decide_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernanceApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/governance/log": {
+      "get": {
+        "summary": "Governance Log",
+        "operationId": "governance_log_governance_log_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Governance Log Governance Log Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dispatch/{agent_name}": {
+      "post": {
+        "summary": "Dispatch",
+        "description": "\u0645\u0648\u062c\u0651\u0647 \u0639\u0627\u0645 \u2014 \u0644\u0644\u0637\u0628\u0642\u0629 \u0627\u0644\u062a\u0646\u0633\u064a\u0642\u064a\u0629 (orchestration layer).",
+        "operationId": "dispatch_dispatch__agent_name__post",
+        "parameters": [
+          {
+            "name": "agent_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DecisionResponse": {
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          },
+          "decision_level": {
+            "type": "string",
+            "title": "Decision Level"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "human_action_description": {
+            "type": "string",
+            "title": "Human Action Description"
+          },
+          "decision_log": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Decision Log"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allowed",
+          "decision_level",
+          "reason",
+          "human_action_description",
+          "decision_log"
+        ],
+        "title": "DecisionResponse"
+      },
+      "DialogueRequest": {
+        "properties": {
+          "stakeholder": {
+            "type": "string",
+            "title": "Stakeholder",
+            "description": "employer | worker | union | government | educator | citizen"
+          },
+          "feedback_text": {
+            "type": "string",
+            "title": "Feedback Text",
+            "description": "\u0646\u0635 \u0627\u0644\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u0645\u0646 \u0627\u0644\u0623\u0637\u0631\u0627\u0641 \u0627\u0644\u0645\u0639\u0646\u064a\u0629"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stakeholder",
+          "feedback_text"
+        ],
+        "title": "DialogueRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u062d\u0648\u0627\u0631 \u0627\u0644\u0627\u062c\u062a\u0645\u0627\u0639\u064a \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-11."
+      },
+      "EarlyWarningRequest": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "description": "national | sector | individual",
+            "default": "national"
+          },
+          "occupation_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Occupation Codes",
+            "description": "\u0625\u0646 \u0644\u0645 \u064a\u064f\u0630\u0643\u0631: \u0643\u0644 \u0623\u0637\u0644\u0633 \u0627\u0644\u0645\u0647\u0646"
+          },
+          "worker": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkerInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\u0644\u062a\u062d\u0644\u064a\u0644 \u0641\u0631\u062f\u064a"
+          }
+        },
+        "type": "object",
+        "title": "EarlyWarningRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u0625\u0646\u0630\u0627\u0631 \u0627\u0644\u0645\u0628\u0643\u0631 \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-1: \u062e\u0631\u064a\u0637\u0629 \u0627\u0644\u0645\u062e\u0627\u0637\u0631 \u0627\u0644\u0648\u0637\u0646\u064a\u0629 + \u0642\u0627\u0626\u0645\u0629 \u0625\u0646\u0630\u0627\u0631\u0627\u062a."
+      },
+      "EducationRequest": {
+        "properties": {
+          "institution_type": {
+            "type": "string",
+            "title": "Institution Type",
+            "description": "general | vocational | school",
+            "default": "general"
+          },
+          "target_skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Target Skills",
+            "description": "\u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062a \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629 \u0641\u064a \u0627\u0644\u0633\u0648\u0642"
+          },
+          "current_curriculum_skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Current Curriculum Skills",
+            "description": "\u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062a \u0627\u0644\u062a\u064a \u064a\u063a\u0637\u064a\u0647\u0627 \u0627\u0644\u0645\u0646\u0647\u062c"
+          },
+          "for_occupation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "For Occupation"
+          }
+        },
+        "type": "object",
+        "title": "EducationRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u062a\u0639\u0644\u064a\u0645 \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-5: \u062a\u062d\u0644\u064a\u0644 \u0645\u0646\u0627\u0647\u062c + \u0648\u062d\u062f\u0627\u062a \u062a\u062f\u0631\u064a\u0628 \u0642\u0635\u064a\u0631\u0629."
+      },
+      "EquityRequest": {
+        "properties": {
+          "population": {
+            "items": {
+              "$ref": "#/components/schemas/WorkerInput"
+            },
+            "type": "array",
+            "title": "Population",
+            "description": "\u0639\u064a\u0646\u0629 \u0633\u0643\u0627\u0646\u064a\u0629 \u0644\u0644\u062a\u062d\u0644\u064a\u0644"
+          }
+        },
+        "type": "object",
+        "required": [
+          "population"
+        ],
+        "title": "EquityRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u0639\u062f\u0627\u0644\u0629 \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-9."
+      },
+      "EvaluationRequest": {
+        "properties": {
+          "kpi_code": {
+            "type": "string",
+            "title": "Kpi Code",
+            "description": "transition_completion_rate | six_month_placement | wage_change | gender_gap_closure | rural_access"
+          },
+          "measured_value": {
+            "type": "number",
+            "title": "Measured Value"
+          },
+          "target_value": {
+            "type": "number",
+            "title": "Target Value"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "description": "current | previous",
+            "default": "current"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kpi_code",
+          "measured_value",
+          "target_value"
+        ],
+        "title": "EvaluationRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u062a\u0642\u064a\u064a\u0645 \u0648\u0627\u0644\u0645\u0633\u0627\u0621\u0644\u0629 \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-12."
+      },
+      "ExposureRequest": {
+        "properties": {
+          "occupation_code": {
+            "type": "string",
+            "title": "Occupation Code"
+          },
+          "task_breakdown": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Breakdown",
+            "description": "\u0645\u0647\u0627\u0645 \u0645\u062e\u0635\u0635\u0629 {label_ar, label_en, category, time_fraction} \u0644\u062a\u0642\u064a\u064a\u0645 \u0645\u0647\u0646\u0629 \u063a\u064a\u0631 \u0645\u0633\u062c\u0644\u0629"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occupation_code"
+        ],
+        "title": "ExposureRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u062a\u0639\u0631\u0636 \u0627\u0644\u0645\u0647\u0646\u064a \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-2."
+      },
+      "GovernanceApprovalRequest": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          },
+          "agent": {
+            "type": "string",
+            "title": "Agent",
+            "description": "\u0627\u0633\u0645 \u0627\u0644\u0648\u0643\u064a\u0644 \u0637\u0627\u0644\u0628 \u0627\u0644\u0625\u062c\u0631\u0627\u0621"
+          },
+          "action_key": {
+            "type": "string",
+            "title": "Action Key"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "duration_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Duration Days",
+            "default": 0
+          },
+          "budget": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Budget",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "agent",
+          "action_key",
+          "description"
+        ],
+        "title": "GovernanceApprovalRequest",
+        "description": "\u0637\u0644\u0628 \u0627\u062a\u062e\u0627\u0630 \u0625\u062c\u0631\u0627\u0621 \u2014 \u064a\u062f\u062e\u0644 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0642\u0631\u0627\u0631 \u0627\u0644\u0623\u0631\u0628\u0639\u0629 \u0627\u0644\u0645\u0633\u062a\u0648\u064a\u0627\u062a."
+      },
+      "GovernanceRequest": {
+        "properties": {
+          "system_type": {
+            "type": "string",
+            "title": "System Type",
+            "description": "\u0646\u0648\u0639 \u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062e\u0648\u0627\u0631\u0632\u0645\u064a: hiring | worker_management | promotion | other"
+          },
+          "decision_description": {
+            "type": "string",
+            "title": "Decision Description",
+            "description": "\u0648\u0635\u0641 \u0627\u0644\u0642\u0631\u0627\u0631 \u0627\u0644\u0630\u064a \u064a\u062a\u062e\u0630\u0647 \u0627\u0644\u0646\u0638\u0627\u0645"
+          },
+          "affected_groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Affected Groups",
+            "description": "\u0627\u0644\u0641\u0626\u0627\u062a \u0627\u0644\u0645\u062a\u0623\u062b\u0631\u0629: young | women | disabled | rural | low_income"
+          }
+        },
+        "type": "object",
+        "required": [
+          "system_type",
+          "decision_description"
+        ],
+        "title": "GovernanceRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u062d\u0648\u0643\u0645\u0629 \u0648\u0627\u0644\u0627\u0645\u062a\u062b\u0627\u0644 \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-8."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JobCreationRequest": {
+        "properties": {
+          "region": {
+            "type": "string",
+            "title": "Region",
+            "default": ""
+          },
+          "sectors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sectors",
+            "description": "\u0623\u0643\u0648\u0627\u062f \u0627\u0644\u0642\u0637\u0627\u0639\u0627\u062a \u0645\u0646 GROWTH_SECTORS \u0623\u0648 \u0643\u0644 \u0627\u0644\u0642\u0637\u0627\u0639\u0627\u062a"
+          }
+        },
+        "type": "object",
+        "title": "JobCreationRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u062e\u0644\u0642 \u0627\u0644\u0648\u0638\u0627\u0626\u0641 \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-6."
+      },
+      "RedTeamRequest": {
+        "properties": {
+          "test_kind": {
+            "type": "string",
+            "title": "Test Kind",
+            "description": "bias_gender | bias_region | bias_income | unrealistic_recommendation | fairness_across_age"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload",
+            "description": "\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0627\u062e\u062a\u0628\u0627\u0631 \u2014 \u0623\u0639\u0645\u0627\u0631/\u0645\u0646\u0627\u0637\u0642/\u062f\u062e\u0648\u0644 \u0645\u062a\u0637\u0627\u0628\u0642\u0629 \u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062a"
+          }
+        },
+        "type": "object",
+        "required": [
+          "test_kind"
+        ],
+        "title": "RedTeamRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u0641\u0631\u064a\u0642 \u0627\u0644\u0623\u062d\u0645\u0631 \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-13: \u0627\u062e\u062a\u0628\u0627\u0631\u0627\u062a \u0627\u0646\u062d\u064a\u0627\u0632 \u0648\u0625\u062c\u0647\u0627\u062f \u0644\u0644\u0646\u0638\u0627\u0645."
+      },
+      "SimulationRequest": {
+        "properties": {
+          "policy_name": {
+            "type": "string",
+            "title": "Policy Name",
+            "description": "\u0627\u0633\u0645 \u0627\u0644\u0633\u064a\u0627\u0633\u0629 \u0645\u062d\u0644 \u0627\u0644\u0645\u062d\u0627\u0643\u0627\u0629"
+          },
+          "displacement_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Displacement Rate",
+            "description": "\u0645\u0639\u062f\u0644 \u0625\u0632\u0627\u062d\u0629 \u0627\u0644\u0639\u0645\u0627\u0644\u0629 \u0641\u064a \u0627\u0644\u0645\u0647\u0627\u0645 \u0627\u0644\u0622\u0644\u064a\u0629"
+          },
+          "reinstatement_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Reinstatement Rate",
+            "description": "\u0645\u0639\u062f\u0644 \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u062a\u0645\u0643\u064a\u0646 \u0639\u0628\u0631 \u0627\u0644\u0645\u0647\u0627\u0645 \u0627\u0644\u062c\u062f\u064a\u062f\u0629"
+          },
+          "horizon_years": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Horizon Years",
+            "default": 5
+          },
+          "sector_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sector Codes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy_name",
+          "displacement_rate",
+          "reinstatement_rate"
+        ],
+        "title": "SimulationRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u0645\u062d\u0627\u0643\u0627\u0629 \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-10: \u0633\u064a\u0646\u0627\u0631\u064a\u0648\u0647\u0627\u062a Acemoglu\u2013Restrepo (\u0627\u0633\u062a\u0628\u062f\u0627\u0644/\u0627\u0633\u062a\u062d\u062f\u0627\u062b)."
+      },
+      "SkillsGapRequest": {
+        "properties": {
+          "worker": {
+            "$ref": "#/components/schemas/WorkerInput"
+          },
+          "target_occupation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Occupation",
+            "description": "\u0625\u0646 \u0644\u0645 \u064a\u064f\u062d\u062f\u062f: \u062a\u064f\u0633\u062a\u0646\u062a\u062c \u0645\u0646 \u0623\u0641\u0636\u0644 \u0645\u0633\u0627\u0631 \u0627\u0646\u062a\u0642\u0627\u0644"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker"
+        ],
+        "title": "SkillsGapRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0641\u062c\u0648\u0629 \u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062a \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-3."
+      },
+      "SocialProtectionRequest": {
+        "properties": {
+          "worker": {
+            "$ref": "#/components/schemas/WorkerInput"
+          },
+          "transition_horizon_months": {
+            "type": "integer",
+            "maximum": 36.0,
+            "minimum": 1.0,
+            "title": "Transition Horizon Months",
+            "default": 12
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker"
+        ],
+        "title": "SocialProtectionRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u062d\u0645\u0627\u064a\u0629 \u0627\u0644\u0627\u062c\u062a\u0645\u0627\u0639\u064a\u0629 \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-7."
+      },
+      "StandardResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "ok"
+          },
+          "agent": {
+            "type": "string",
+            "title": "Agent"
+          },
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result"
+          },
+          "governance": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Governance",
+            "description": "\u0642\u0631\u0627\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u062d\u0648\u0643\u0645\u0629 \u0625\u0646 \u0648\u064f\u062c\u062f"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent",
+          "result"
+        ],
+        "title": "StandardResponse"
+      },
+      "TransitionRequest": {
+        "properties": {
+          "worker": {
+            "$ref": "#/components/schemas/WorkerInput"
+          },
+          "target_occupation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Occupation"
+          },
+          "max_paths": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Paths",
+            "default": 3
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker"
+        ],
+        "title": "TransitionRequest",
+        "description": "\u0648\u0643\u064a\u0644 \u0627\u0644\u0627\u0646\u062a\u0642\u0627\u0644 \u0627\u0644\u0645\u0647\u0646\u064a \u2014 \u0645\u062e\u0631\u062c\u0647 \u00a78-4: \u062e\u0637\u0629 \u0627\u0646\u062a\u0642\u0627\u0644 \u0641\u0631\u062f\u064a\u0629 \u0643\u0627\u0645\u0644\u0629."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WorkerInput": {
+        "properties": {
+          "worker_id": {
+            "type": "string",
+            "title": "Worker Id",
+            "description": "\u0645\u0639\u0631\u0651\u0641 \u0645\u0633\u062a\u062e\u062f\u0645 \u062f\u0627\u062e\u0644\u064a \u2014 \u0644\u0627 \u0628\u064a\u0627\u0646\u0627\u062a \u0634\u062e\u0635\u064a\u0629 \u062d\u0633\u0627\u0633\u0629"
+          },
+          "current_occupation": {
+            "type": "string",
+            "title": "Current Occupation",
+            "description": "\u0643\u0648\u062f \u0627\u0644\u0645\u0647\u0646\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0645\u0646 \u0623\u0637\u0644\u0633 \u0627\u0644\u0645\u0646\u0638\u0648\u0645\u0629"
+          },
+          "region": {
+            "type": "string",
+            "title": "Region",
+            "description": "\u0627\u0644\u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u062c\u063a\u0631\u0627\u0641\u064a\u0629",
+            "default": ""
+          },
+          "age_band": {
+            "type": "string",
+            "title": "Age Band",
+            "description": "\u0641\u0626\u0629 \u0627\u0644\u0639\u0645\u0631: young | mid | senior",
+            "default": ""
+          },
+          "gender_band": {
+            "type": "string",
+            "title": "Gender Band",
+            "description": "\u0641\u0626\u0629 \u0627\u0644\u062c\u0646\u0633 \u0644\u0623\u063a\u0631\u0627\u0636 \u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u0639\u062f\u0627\u0644\u0629 \u0641\u0642\u0637: f | m | other",
+            "default": ""
+          },
+          "current_skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Current Skills",
+            "description": "\u0623\u0643\u0648\u0627\u062f \u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062a \u0627\u0644\u0645\u062a\u0648\u0641\u0631\u0629"
+          },
+          "income_band": {
+            "type": "string",
+            "title": "Income Band",
+            "description": "\u0641\u0626\u0629 \u0627\u0644\u062f\u062e\u0644: low | mid | high",
+            "default": ""
+          },
+          "disability_band": {
+            "type": "string",
+            "title": "Disability Band",
+            "description": "\u0625\u0639\u0627\u0642\u0629: yes | no | unknown",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker_id",
+          "current_occupation"
+        ],
+        "title": "WorkerInput",
+        "description": "\u0645\u0644\u0641 \u062d\u0627\u0644\u0629 \u0641\u0631\u062f \u2014 \u0627\u0644\u0623\u0633\u0627\u0633 \u0644\u0643\u0644 \u062a\u062d\u0644\u064a\u0644 \u0641\u0631\u062f\u064a."
+      }
+    }
+  }
+}

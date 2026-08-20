@@ -1,156 +1,166 @@
 {
-  "version": 1,
-  "_doc": [
-    "D-205 — every container image this repository can produce, declared once.",
-    "The `images-build` CI job builds each entry and then runs `smoke` inside the",
-    "image. Building is not importing: a dependency missing from requirements.txt",
-    "links fine and fails on the first import, which is the failure this catches.",
-    "`smoke_env` carries only what the module needs AT IMPORT TIME (settings",
-    "validators, mostly) — never a real secret; these are dummies.",
-    "check_image_matrix_parity.py fails if a compose build context or a",
-    "microservices/*/Dockerfile has no entry here."
-  ],
-  "images": [
-    {
-      "name": "monolith",
-      "context": ".",
-      "dockerfile": "Dockerfile.prod",
-      "smoke": "app.main",
-      "smoke_env": {
-        "APP_DATABASE_URL": "sqlite+aiosqlite:///./smoke.db",
-        "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db",
-        "SECRET_KEY": "smoke-import-check-not-a-real-secret-000000",
-        "ENVIRONMENT": "development"
-      }
-    },
-    {
-      "name": "frontend",
-      "context": "./frontend",
-      "dockerfile": "Dockerfile",
-      "smoke": null,
-      "smoke_env": {},
-      "smoke_skip_reason": "Node image: `next build` already runs during the image build, so the build IS the check."
-    },
-    {
-      "name": "api-gateway",
-      "context": "./microservices/api_gateway",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.api_gateway.main",
-      "smoke_env": {
-        "ENVIRONMENT": "development",
-        "SECRET_KEY": "smoke-import-check-not-a-real-secret-000000"
-      }
-    },
-    {
-      "name": "planning-agent",
-      "context": "./microservices/planning_agent",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.planning_agent.main",
-      "smoke_env": {
-        "SERVICE_NAME": "planning-agent"
-      }
-    },
-    {
-      "name": "memory-agent",
-      "context": "./microservices/memory_agent",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.memory_agent.main",
-      "smoke_env": {
-        "SERVICE_NAME": "memory-agent",
-        "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db"
-      }
-    },
-    {
-      "name": "user-service",
-      "context": "./microservices/user_service",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.user_service.main",
-      "smoke_env": {
-        "SERVICE_NAME": "user-service",
-        "SECRET_KEY": "smoke-import-check-not-a-real-secret-000000",
-        "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db",
-        "USER_DATABASE_URL": "sqlite+aiosqlite:///./smoke.db"
-      }
-    },
-    {
-      "name": "observability-service",
-      "context": "./microservices/observability_service",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.observability_service.main",
-      "smoke_env": {
-        "SERVICE_NAME": "observability-service",
-        "SECRET_KEY": "smoke-import-check-not-a-real-secret-000000",
-        "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db"
-      }
-    },
-    {
-      "name": "orchestrator-service",
-      "context": "./microservices/orchestrator_service",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.orchestrator_service.main",
-      "smoke_env": {
-        "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db",
-        "OPENROUTER_API_KEY": "smoke-not-a-real-key",
-        "TAVILY_API_KEY": ""
-      }
-    },
-    {
-      "name": "research-agent",
-      "context": "./microservices/research_agent",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.research_agent.main",
-      "smoke_env": {
-        "OPENROUTER_API_KEY": "smoke-not-a-real-key",
-        "TAVILY_API_KEY": ""
-      }
-    },
-    {
-      "name": "reasoning-agent",
-      "context": "./microservices/reasoning_agent",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.reasoning_agent.main",
-      "smoke_env": {
-        "OPENROUTER_API_KEY": "smoke-not-a-real-key"
-      }
-    },
-    {
-      "name": "auditor-service",
-      "context": "./microservices/auditor_service",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.auditor_service.src.main",
-      "smoke_env": {
-        "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db"
-      }
-    },
-    {
-      "name": "conversation-service",
-      "context": "./microservices/conversation_service",
-      "dockerfile": "Dockerfile",
-      "smoke": "microservices.conversation_service.main",
-      "smoke_env": {}
-    },
-    {
-      "name": "notation-service",
-      "context": ".",
-      "dockerfile": "microservices/notation_service/Dockerfile",
-      "smoke": "microservices.notation_service.main",
-      "smoke_env": {}
-    },
-    {
-      "name": "content-retrieval-skill",
-      "context": ".",
-      "dockerfile": "microservices/content_retrieval_skill/Dockerfile",
-      "smoke": "microservices.content_retrieval_skill.main",
-      "smoke_env": {},
-      "not_in_default_compose": "Runs as a uvicorn process in the Codespaces topology (:8009); never added to docker-compose.yml. Built here so the gap is a declared one."
-    },
-    {
-      "name": "foundations-service",
-      "context": ".",
-      "dockerfile": "microservices/foundations_service/Dockerfile",
-      "smoke": "microservices.foundations_service.main",
-      "smoke_env": {},
-      "not_in_default_compose": "Same as content-retrieval-skill (:8010). Its sibling notation-service IS in compose — that asymmetry is real and recorded, not fixed here."
-    }
-  ]
+ "version": 1,
+ "_doc": [
+  "D-205 — every container image this repository can produce, declared once.",
+  "The `images-build` CI job builds each entry and then runs `smoke` inside the",
+  "image. Building is not importing: a dependency missing from requirements.txt",
+  "links fine and fails on the first import, which is the failure this catches.",
+  "`smoke_env` carries only what the module needs AT IMPORT TIME (settings",
+  "validators, mostly) — never a real secret; these are dummies.",
+  "check_image_matrix_parity.py fails if a compose build context or a",
+  "microservices/*/Dockerfile has no entry here."
+ ],
+ "images": [
+  {
+   "name": "monolith",
+   "context": ".",
+   "dockerfile": "Dockerfile.prod",
+   "smoke": "app.main",
+   "smoke_env": {
+    "APP_DATABASE_URL": "sqlite+aiosqlite:///./smoke.db",
+    "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db",
+    "SECRET_KEY": "smoke-import-check-not-a-real-secret-000000",
+    "ENVIRONMENT": "development"
+   }
+  },
+  {
+   "name": "frontend",
+   "context": "./frontend",
+   "dockerfile": "Dockerfile",
+   "smoke": null,
+   "smoke_env": {},
+   "smoke_skip_reason": "Node image: `next build` already runs during the image build, so the build IS the check."
+  },
+  {
+   "name": "api-gateway",
+   "context": "./microservices/api_gateway",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.api_gateway.main",
+   "smoke_env": {
+    "ENVIRONMENT": "development",
+    "SECRET_KEY": "smoke-import-check-not-a-real-secret-000000"
+   }
+  },
+  {
+   "name": "planning-agent",
+   "context": "./microservices/planning_agent",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.planning_agent.main",
+   "smoke_env": {
+    "SERVICE_NAME": "planning-agent"
+   }
+  },
+  {
+   "name": "memory-agent",
+   "context": "./microservices/memory_agent",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.memory_agent.main",
+   "smoke_env": {
+    "SERVICE_NAME": "memory-agent",
+    "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db"
+   }
+  },
+  {
+   "name": "user-service",
+   "context": "./microservices/user_service",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.user_service.main",
+   "smoke_env": {
+    "SERVICE_NAME": "user-service",
+    "SECRET_KEY": "smoke-import-check-not-a-real-secret-000000",
+    "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db",
+    "USER_DATABASE_URL": "sqlite+aiosqlite:///./smoke.db"
+   }
+  },
+  {
+   "name": "observability-service",
+   "context": "./microservices/observability_service",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.observability_service.main",
+   "smoke_env": {
+    "SERVICE_NAME": "observability-service",
+    "SECRET_KEY": "smoke-import-check-not-a-real-secret-000000",
+    "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db"
+   }
+  },
+  {
+   "name": "orchestrator-service",
+   "context": "./microservices/orchestrator_service",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.orchestrator_service.main",
+   "smoke_env": {
+    "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db",
+    "OPENROUTER_API_KEY": "smoke-not-a-real-key",
+    "TAVILY_API_KEY": ""
+   }
+  },
+  {
+   "name": "research-agent",
+   "context": "./microservices/research_agent",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.research_agent.main",
+   "smoke_env": {
+    "OPENROUTER_API_KEY": "smoke-not-a-real-key",
+    "TAVILY_API_KEY": ""
+   }
+  },
+  {
+   "name": "reasoning-agent",
+   "context": "./microservices/reasoning_agent",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.reasoning_agent.main",
+   "smoke_env": {
+    "OPENROUTER_API_KEY": "smoke-not-a-real-key"
+   }
+  },
+  {
+   "name": "auditor-service",
+   "context": "./microservices/auditor_service",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.auditor_service.src.main",
+   "smoke_env": {
+    "DATABASE_URL": "sqlite+aiosqlite:///./smoke.db"
+   }
+  },
+  {
+   "name": "conversation-service",
+   "context": "./microservices/conversation_service",
+   "dockerfile": "Dockerfile",
+   "smoke": "microservices.conversation_service.main",
+   "smoke_env": {}
+  },
+  {
+   "name": "notation-service",
+   "context": ".",
+   "dockerfile": "microservices/notation_service/Dockerfile",
+   "smoke": "microservices.notation_service.main",
+   "smoke_env": {}
+  },
+  {
+   "name": "content-retrieval-skill",
+   "context": ".",
+   "dockerfile": "microservices/content_retrieval_skill/Dockerfile",
+   "smoke": "microservices.content_retrieval_skill.main",
+   "smoke_env": {},
+   "not_in_default_compose": "Runs as a uvicorn process in the Codespaces topology (:8009); never added to docker-compose.yml. Built here so the gap is a declared one."
+  },
+  {
+   "name": "foundations-service",
+   "context": ".",
+   "dockerfile": "microservices/foundations_service/Dockerfile",
+   "smoke": "microservices.foundations_service.main",
+   "smoke_env": {},
+   "not_in_default_compose": "Same as content-retrieval-skill (:8010). Its sibling notation-service IS in compose — that asymmetry is real and recorded, not fixed here."
+  },
+  {
+   "name": "transition-service",
+   "context": ".",
+   "dockerfile": "microservices/transition_service/Dockerfile",
+   "smoke": "microservices.transition_service.src.main",
+   "smoke_env": {
+    "LLM_MOCK_MODE": "1"
+   },
+   "not_in_default_compose": "Port 8012 — runs beside auditor-service (:8011); added to docker-compose in the same PR."
+  }
+ ]
 }

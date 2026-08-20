@@ -104,6 +104,9 @@
     ],
     "check_ui_component_parity.py": [
       "tests/fitness/test_ui_component_parity_gate.py"
+    ],
+    "check_agentic_design_principles.py": [
+      "tests/fitness/test_check_agentic_design_principles.py"
     ]
   },
   "frozen_debt": {

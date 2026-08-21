@@ -331,7 +331,7 @@ async def _handle_chat_ws(
             route_id,
             headers.get("traceparent", "unknown"),
         )
-        _emit_gateway_identity_log(f"gateway_ws_{route_id.split('_')[-1]}", websocket)
+        _emit_gateway_identity_log(f"gateway_ws_{route_id.rsplit('_', maxsplit=1)[-1]}", websocket)
         session_id = _extract_session_id(websocket)
         logger.info(
             "session_id presence: %s in %s",

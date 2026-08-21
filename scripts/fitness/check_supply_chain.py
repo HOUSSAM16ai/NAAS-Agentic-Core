@@ -213,7 +213,7 @@ def _check_dependabot(policy: dict) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 def _unpinned_name(line: str) -> str | None:
     """اسم الحزمة إن كان السطر متطلَّباً **غير مُثبَّت** — وإلّا `None`."""
-    stripped = line.split("#")[0].strip()
+    stripped = line.split("#", maxsplit=1)[0].strip()
     if not stripped or stripped.startswith("-"):
         return None
     if re.match(r"^[A-Za-z0-9_.\[\]-]+==[^,\s]+$", stripped):

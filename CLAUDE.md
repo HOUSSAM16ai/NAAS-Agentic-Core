@@ -1245,5 +1245,3 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 يضيف خطّ إيرادٍ مؤسسياً فوقهما، والأصول الهندسية (تحقّق · وكالة · بيانات) تُستثمر في خطّين.
 - **الإضافة لا الاستبدال**: D-273 وكلّ ما سبقه يبقى سارياً. تعديل هذا الدستور = ADR + بوابةٌ خضراء.
 ---
-
-- Command Injection Prevention: Shell operations in the orchestrator microservice (`shell_operations.py` and `service.py`) strictly enforce secure execution by accepting `list[str]` and bypassing `shlex.split()`. All git operations must use lists natively.

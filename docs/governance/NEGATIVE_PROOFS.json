@@ -160,6 +160,8 @@
     "check_topic_authority_single_source.py": "بلا أيّ اختبار — لا يُعرَف إن كانت تحجب عند الخرق",
     "check_tracing_gate.py": "مذكورة في اختبارٍ لا يؤكّد فشلاً — تُثبِت أنّها تعمل ولا تُثبِت أنّها تحجب",
     "check_transcript_stage_coverage.py": "مذكورة في اختبارٍ لا يؤكّد فشلاً — تُثبِت أنّها تعمل ولا تُثبِت أنّها تحجب",
-    "check_understanding_evidence.py": "بلا أيّ اختبار — لا يُعرَف إن كانت تحجب عند الخرق"
+    "check_understanding_evidence.py": "بلا أيّ اختبار — لا يُعرَف إن كانت تحجب عند الخرق",
+    "check_deep_tech_constitution.py": "Newly added, lacking negative proof for now.",
+    "check_pocock_gates.py": "Newly added, lacking negative proof for now."
   }
 }

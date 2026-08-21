@@ -27,7 +27,7 @@ async def _make_user(db_session, email: str) -> int:
             "INSERT INTO users (external_id, full_name, email, password_hash, "
             "is_admin, is_active, status) VALUES (:e, :n, :e, 'x', 0, 1, 'active')"
         ),
-        {"e": email, "n": email.split("@")[0]},
+        {"e": email, "n": email.split("@", maxsplit=1)[0]},
     )
     await db_session.commit()
     return int(result.lastrowid)

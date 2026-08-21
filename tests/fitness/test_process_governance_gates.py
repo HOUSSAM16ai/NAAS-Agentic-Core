@@ -270,7 +270,7 @@ def test_issue_rejects_untyped(tmp_path: Path) -> None:
 
 def test_issue_rejects_bug_without_acceptance_criteria(tmp_path: Path) -> None:
     """ISS-145: من لا يكتب شرط النجاح مُسبَقاً يخترعه بعد الإصلاح."""
-    body = GOOD_BUG.split("### Acceptance criteria")[0]
+    body = GOOD_BUG.split("### Acceptance criteria", maxsplit=1)[0]
     code, out = _run_issue(body, "type:bug", tmp_path)
     assert code == 1
     assert "Acceptance criteria" in out
@@ -299,7 +299,7 @@ def test_issue_treats_no_response_as_empty(tmp_path: Path) -> None:
 
 
 def test_issue_rejects_feature_without_acceptance(tmp_path: Path) -> None:
-    body = GOOD_FEATURE.split("### Acceptance criteria")[0]
+    body = GOOD_FEATURE.split("### Acceptance criteria", maxsplit=1)[0]
     code, _ = _run_issue(body, "type:feature", tmp_path)
     assert code == 1
 

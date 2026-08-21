@@ -1,0 +1,53 @@
+{
+  "$schema_version": "1",
+  "decision": "D-279",
+  "purpose_ar": "ربط مسار بناء المنتج بمسار الإنتاج التجاري دون دمجهما في ادعاء واحد أو السماح لأحدهما بتجاوز الآخر.",
+  "engineering_track": {
+    "constitution": "docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md",
+    "source_matrix": "docs/governance/SOURCE_ADOPTION_MATRIX.json",
+    "curriculum_matrix": "docs/research/CURRICULUM_APPLICATION_MATRIX.json",
+    "required_gates": ["check_reference_backbone.py", "check_agent_context.py", "check_source_adoption_matrix.py", "check_code_acceptance.py"],
+    "success_ar": "قدرة إنتاجية بحدود وعقود واختبارات وأمن ورصد ومالك ودليل محلي."
+  },
+  "production_track": {
+    "operating_system": "docs/commercial/FOREIGN_CURRENCY_OPERATING_SYSTEM.md",
+    "offer_catalog": "docs/commercial/OFFER_CATALOG.json",
+    "required_evidence_ar": ["عميل محدد", "مشكلة مدفوعة", "عرض بحدود", "معيار قبول", "مالك تسليم", "دليل قيمة", "مسار تحصيل قانوني", "حالة إثبات"],
+    "success_ar": "إيراد محصل أو عقد/تجديد موثق بالعملة الصعبة ضمن نطاق تقني وتجاري محدد."
+  },
+  "shared_alignment_contract": {
+    "required_fields": ["alignment_id", "capability", "buyer_or_user", "paid_problem_or_social_problem", "offer_id_or_foundation_exception", "standards", "curriculum_domains", "evidence", "engineering_status", "commercial_status", "owner", "next_gate"],
+    "release_rule_ar": "لا يمر إصدار أو تفعيل عرض إلا إذا كانت الأدلة الهندسية والتجارية متسقة، أو وُجد استثناء تأسيسي مصرح به دون ادعاء إيراد.",
+    "no_bypass_ar": "لا يستطيع وكيل رفع حالة أي مسار أو حذف علاقة أو تغيير دليل دون تحديث السجل وحزمة القبول وفحص البوابة."
+  },
+  "alignment_records": [
+    {
+      "alignment_id": "ALIGN-REDTEAM-MULTILINGUAL",
+      "capability": "اختبار أمان نماذج ووكلاء بالعربية والفرنسية",
+      "offer_id": "ai-red-teaming-multilingual",
+      "buyer_or_user": "فرق AI خارج الجزائر التي تنشر أنظمة حساسة",
+      "paid_problem_or_social_problem": "فشل أمني لغوي لا تلتقطه اختبارات اللغة الإنجليزية وحدها.",
+      "standards": ["browser-use", "awesome-claude-skills", "system-design-primer"],
+      "curriculum_domains": ["security_privacy_trust", "ai_ml_data", "software_quality_and_proof"],
+      "evidence": ["nist-ai-rmf-1.0", "nist-agent-standards-initiative", "owasp-agent-security", "harvard-cs-concentration-domains", "harvard-cs50x-foundations"],
+      "engineering_status": "RESEARCH",
+      "commercial_status": "PROPOSED",
+      "owner": "product-security",
+      "next_gate": "مقابلات عميل + منهج اختبار + عينة تقرير + اختبار سلبي"
+    },
+    {
+      "alignment_id": "ALIGN-ONPREM-ENERGY",
+      "capability": "ذكاء اصطناعي محلي لبيانات الطاقة",
+      "offer_id": "on-premise-energy-ai",
+      "buyer_or_user": "شركات الطاقة والهندسة خارج الجزائر",
+      "paid_problem_or_social_problem": "الحاجة إلى AI دون إخراج بيانات تشغيلية حساسة إلى بيئة عامة.",
+      "standards": ["system-design-primer", "system-design-101", "llms-from-scratch"],
+      "curriculum_domains": ["systems_performance", "software_language_runtime", "ai_ml_data", "security_privacy_trust"],
+      "evidence": ["nist-ssdf-1.1", "slsa-1.2", "mit-6824-distributed-systems", "cmu-15619-cloud-computing", "berkeley-cs162"],
+      "engineering_status": "RESEARCH",
+      "commercial_status": "PROPOSED",
+      "owner": "platform-engineering",
+      "next_gate": "متطلبات نشر محلي + نموذج تهديد + اختبار قبول + تكلفة تشغيل"
+    }
+  ]
+}

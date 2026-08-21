@@ -1,0 +1,540 @@
+{
+  "generated_on": "2026-08-21",
+  "method": "recursive scan of repository text files, normalize .git suffix, exclude github.com/settings and github.com/sponsors",
+  "total_unique_repository_urls": 62,
+  "counts_by_category": {
+    "external_standards_registry": 11,
+    "mandatory_reference_backbone": 15,
+    "other_repository_reference_or_dependency": 36
+  },
+  "sources": [
+    {
+      "url": "https://github.com/ByteByteGoHq/system-design-101",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "system-design-101",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/CharlesQ9/Self-Evolving-Agents",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "Introduction to Agents.pdf"
+      ]
+    },
+    {
+      "url": "https://github.com/ComposioHQ/awesome-claude-skills",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "awesome-claude-skills",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/EbookFoundation/free-programming-books",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "free-programming-books",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/Gatjuat-Wicteat-Riek/clean-code-book",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "clean-code-book",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/GoogleCloudPlatform/agent-starter-pack",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "Introduction to Agents.pdf"
+      ]
+    },
+    {
+      "url": "https://github.com/HOUSSAM16ai/NAAS-Agentic-Core",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "CITATION.cff",
+        "README.ar.md",
+        "README.md",
+        "docs/grant-program/STAKEHOLDER_BRIEFS_TEMPLATE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/HOUSSAM16ai/my_ai_project",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".github/VERIFICATION_CHECKLIST.md",
+        "docs/MICROSERVICES_DEPLOYMENT_GUIDE.md",
+        "infra/argocd/applications.yaml",
+        "microservices/README.md"
+      ]
+    },
+    {
+      "url": "https://github.com/Houssam-lab/NAAS-Agentic-Core",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "REPORT-D261.md",
+        "docs/FINAL_REPORT_D256_D257_AR.md"
+      ]
+    },
+    {
+      "url": "https://github.com/Houssam-lab/deepseek-harness",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/adr/ADR-010-deepseek-harness-adoption.md"
+      ]
+    },
+    {
+      "url": "https://github.com/Houssam-lab/openhands",
+      "category": "external_standards_registry",
+      "status_or_id": "openhands-agent-canvas:ACTIVE",
+      "occurrences": [
+        "docs/adr/ADR-011-openhands-delivery-standards.md",
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/PyCQA/bandit",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/TheAlgorithms/Python",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "the-algorithms-python",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/ai-for-solution-labs/my_ai_project",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/contracts/GETTING_STARTED.md",
+        "docs/contracts/QUICK_REFERENCE.md",
+        "docs/guides/BEGINNER_GUIDE.md",
+        "docs/guides/CODESPACES_TEST_GUIDE.md",
+        "microservices/memory_agent/data/identity.json",
+        "microservices/orchestrator_service/src/services/overmind/data/identity.json"
+      ]
+    },
+    {
+      "url": "https://github.com/anthropics/claude-cookbooks",
+      "category": "external_standards_registry",
+      "status_or_id": "claude-cookbooks:ABSENT",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/anthropics/skills",
+      "category": "external_standards_registry",
+      "status_or_id": "anthropic-skills:ACTIVE",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/argoproj/argo-rollouts",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/DEPLOYMENT_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/astral-sh/ruff-pre-commit",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".pre-commit-config.yaml",
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/bakabala27-svg/NAAS-Agentic-Core",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/research/authoritative-foundations.md"
+      ]
+    },
+    {
+      "url": "https://github.com/browser-use/browser-use",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "browser-use",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/cert-manager/cert-manager",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/DEPLOYMENT_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/ansi-regex",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/ansi-styles",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/chalk",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/strip-ansi",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/wrap-ansi",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/cncf/trailmap",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/adr/ADR-002-microservices-architecture.md"
+      ]
+    },
+    {
+      "url": "https://github.com/codecrafters-io/build-your-own-x",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "build-your-own-x",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/cogniforge/api-examples",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/contracts/GETTING_STARTED.md"
+      ]
+    },
+    {
+      "url": "https://github.com/cordiverse/cordis",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/adr/ADR-010-deepseek-harness-adoption.md"
+      ]
+    },
+    {
+      "url": "https://github.com/cursor/cookbook",
+      "category": "external_standards_registry",
+      "status_or_id": "cursor-cookbook:ABSENT",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/cursor/plugins",
+      "category": "external_standards_registry",
+      "status_or_id": "cursor-plugins:ABSENT",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "category": "external_standards_registry",
+      "status_or_id": "deepseek-harness:SEAM",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/donnemartin/system-design-primer",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "system-design-primer",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/fb55/entities",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/freeCodeCamp/freeCodeCamp",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "freecodecamp",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/github/github-mcp-server",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".cursor/mcp.json",
+        ".vscode/mcp-settings.json"
+      ]
+    },
+    {
+      "url": "https://github.com/google-gemini/cookbook",
+      "category": "external_standards_registry",
+      "status_or_id": "gemini-cookbook:ABSENT",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/google/A2UI",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "Introduction to Agents.pdf"
+      ]
+    },
+    {
+      "url": "https://github.com/google/adk-python",
+      "category": "external_standards_registry",
+      "status_or_id": "google-adk-python:SEAM",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/inikulin/parse5",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/jwasham/coding-interview-university",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "coding-interview-university",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/kamranahmedse/developer-roadmap",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "developer-roadmap",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/kserve/kserve",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/DEPLOYMENT_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/mattpocock/skills",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/AGENT_WORKFLOW_CONSTITUTION.md"
+      ]
+    },
+    {
+      "url": "https://github.com/microsoft/api-guidelines",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/contracts/API_STYLE_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/mozilla/diversity",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "CODE_OF_CONDUCT.md"
+      ]
+    },
+    {
+      "url": "https://github.com/openai/openai-agents-python",
+      "category": "external_standards_registry",
+      "status_or_id": "openai-agents-python:ABSENT",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/openai/openai-cookbook",
+      "category": "external_standards_registry",
+      "status_or_id": "openai-cookbook:ABSENT",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/pgvector/pgvector",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "spec.md"
+      ]
+    },
+    {
+      "url": "https://github.com/pre-commit/mirrors-mypy",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".pre-commit-config.yaml",
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/pre-commit/pre-commit-hooks",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".pre-commit-config.yaml",
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/privatenumber/get-tsconfig",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/privatenumber/resolve-pkg-maps",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/prometheus/prometheus",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "Dockerfile"
+      ]
+    },
+    {
+      "url": "https://github.com/psf/black",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/public-apis/public-apis",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "public-apis",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/rasbt/LLMs-from-scratch",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "llms-from-scratch",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/ryanmcdermott/clean-code-javascript",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "clean-code-javascript",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/sindresorhus/awesome",
+      "category": "mandatory_reference_backbone",
+      "status_or_id": "awesome",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/xai-org/grok-build",
+      "category": "external_standards_registry",
+      "status_or_id": "xai-grok-build:ABSENT",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/yaml/pyyaml",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "tests/security/test_yaml_rce.py"
+      ]
+    }
+  ]
+}

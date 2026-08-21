@@ -74,6 +74,18 @@
 | [`governance/CONSTITUTION_REGISTRY.json`](governance/CONSTITUTION_REGISTRY.json) | 🔒 **السجلّ الدستوري** (D-266) — المصدر القانوني الوحيد الذي يربط كل دستور بوثيقة قانونه ووثيقة حالته وفوارضه. تحرسه `check_governance_registry.py`: بوّابةٌ على القرص لا يشغّلها شيء ⇒ CI أحمر |
 | [`specs/`](specs/README.md) | 📐 **المواصفات الحيّة** (D-265 §2 · أُنشئت في D-266) — دورة Spec-First: خطة → تصميم → مهام → مواصفة → تنفيذ → برهان. كان الموطن مُعلَناً في الدستور وغير موجودٍ على القرص |
 | [`governance/REPOSITORY_GOVERNANCE_MODEL.md`](governance/REPOSITORY_GOVERNANCE_MODEL.md) | حوكمة المستودع |
+| [`governance/REFERENCE_BACKBONE.md`](governance/REFERENCE_BACKBONE.md) · [`governance/REFERENCE_BACKBONE.json`](governance/REFERENCE_BACKBONE.json) | 🔒 العمود الفقري المرجعي المثبت؛ يربط خرائط التعلم والخوارزميات وتصميم الأنظمة والحرفية والوكلاء ببوابة `check_reference_backbone` وADR-013 |
+| [`governance/SOURCE_ADOPTION_MATRIX.md`](governance/SOURCE_ADOPTION_MATRIX.md) · [`governance/SOURCE_ADOPTION_MATRIX.json`](governance/SOURCE_ADOPTION_MATRIX.json) | 🔒 مصفوفة كل مستودعات GitHub المكتشفة؛ لكل مصدر حالة وغرض وتطبيق وفارض ومالك، وتحرسها `check_source_adoption_matrix` |
+| [`research/ALL_GITHUB_SOURCES_INVENTORY.md`](research/ALL_GITHUB_SOURCES_INVENTORY.md) · [`research/ALL_GITHUB_SOURCES_INVENTORY.json`](research/ALL_GITHUB_SOURCES_INVENTORY.json) | جرد قابل لإعادة التشغيل لكل الروابط الفريدة؛ لا يسمح بإخفاء مصدر داخل وثيقة أو تبعية |
+| [`research/EVIDENCE_CATALOG.json`](research/EVIDENCE_CATALOG.json) | سجل الأبحاث والمعايير والمقررات الجامعية التي تثبت مبادئ القبول |
+| [`research/UNIVERSITY_CURRICULUM_CATALOG.md`](research/UNIVERSITY_CURRICULUM_CATALOG.md) · [`research/UNIVERSITY_CURRICULUM_CATALOG.json`](research/UNIVERSITY_CURRICULUM_CATALOG.json) | **الكتالوج الكامل المستخرج** من صفحة Harvard CS الرسمية؛ كل مقرر ظاهر، مع تمييز حدود اللقطة وعدم ادعاء التاريخ الكامل |
+| [`research/CURRICULUM_APPLICATION_MATRIX.md`](research/CURRICULUM_APPLICATION_MATRIX.md) · [`research/CURRICULUM_APPLICATION_MATRIX.json`](research/CURRICULUM_APPLICATION_MATRIX.json) | 🔒 بطاقة تطبيق لكل مقرر، ومصفوفة تحميل حسب نوع التغيير؛ لا مقرر مخفي أو غير مصنف |
+| [`adr/ADR-014-full-curriculum-gate.md`](adr/ADR-014-full-curriculum-gate.md) | قرار جعل الكتالوج الكامل مرئياً وإلزامياً في حزمة القبول مع تطبيق انتقائي موثق لا ادعاء قراءة وهمي |
+| [`guides/AGENT_CODE_CHANGE_PROTOCOL.md`](guides/AGENT_CODE_CHANGE_PROTOCOL.md) | البروتوكول التشغيلي الموحد لـClaude Code وCodex وأي وكيل: سياق → مصادر → كل المقررات → التطبيق → البرهان → القيمة |
+| [`architecture/CODE_ACCEPTANCE_CONSTITUTION.md`](architecture/CODE_ACCEPTANCE_CONSTITUTION.md) · [`changes/CURRENT_CODE_ACCEPTANCE_PACKET.json`](changes/CURRENT_CODE_ACCEPTANCE_PACKET.json) | 🔒 لا إضافة كود بلا معايير ومصادر ودليل وتطبيق محلي وإثبات إنتاجي وتتبع تجاري وفحص حذف صفري؛ تحرسها `check_code_acceptance` |
+| [`architecture/DUAL_TRACK_PRODUCT_SYSTEM.md`](architecture/DUAL_TRACK_PRODUCT_SYSTEM.md) · [`commercial/FOREIGN_CURRENCY_OPERATING_SYSTEM.md`](commercial/FOREIGN_CURRENCY_OPERATING_SYSTEM.md) · [`governance/DUAL_TRACK_ALIGNMENT.json`](governance/DUAL_TRACK_ALIGNMENT.json) | مساران متكاملان: هندسة المنتج وإنتاج/تصدير القيمة؛ لا إصدار تقني بلا قابلية إنتاج، ولا عرض تجاري بلا قدرة مثبتة |
+| [`adr/ADR-015-dual-track-product-system.md`](adr/ADR-015-dual-track-product-system.md) | قرار الفصل التشغيلي بين مسار الهندسة ومسار الإنتاج مع بوابة التقاء إلزامية |
+| [`adr/ADR-013-reference-backbone.md`](adr/ADR-013-reference-backbone.md) | قرار جعل المجموعة المرجعية إلزامية، مثبتة، إضافية، وغير تشغيلية بلا قرار جديد |
 | [`diagnostics/CUTOVER_SCOREBOARD.md`](diagnostics/CUTOVER_SCOREBOARD.md) | 🤖 لوحة القطع (مولَّدة آلياً — لا تُحرَّر يدوياً) |
 
 ## 5) مهارات الوكلاء (AI Skills)

@@ -1245,3 +1245,15 @@ exercise_explanation_with_context(2.5) → LangGraph(3.0) → general_chat(4.0)`
 يضيف خطّ إيرادٍ مؤسسياً فوقهما، والأصول الهندسية (تحقّق · وكالة · بيانات) تُستثمر في خطّين.
 - **الإضافة لا الاستبدال**: D-273 وكلّ ما سبقه يبقى سارياً. تعديل هذا الدستور = ADR + بوابةٌ خضراء.
 ---
+
+## 0.26. Reference Backbone Constitution (D-274) — كل مرجعٍ مثبتٌ ومفهومٌ ومربوطٌ بفارض
+> **القانون:** [`docs/architecture/REFERENCE_BACKBONE_CONSTITUTION.md`](docs/architecture/REFERENCE_BACKBONE_CONSTITUTION.md) · **الحالة:** [`.memory/reference_backbone_truth.md`](.memory/reference_backbone_truth.md) · **الفارض:** `check_reference_backbone.py`.
+> **الجملة:** المراجع الـ15 الإلزامية لا تُحذف ولا تُستبدل بصمت؛ لكل مصدر commit ودور واستعارة وحدود ودليل، ولا يتحول إلى تبعية تشغيلية بلا ADR وأمن.
+
+## 0.27. Unified Agent Context Constitution (D-275) — لا وكيل يعمل من ذاكرةٍ خاصة
+> **القانون:** [`docs/architecture/AGENT_CONTEXT_CONSTITUTION.md`](docs/architecture/AGENT_CONTEXT_CONSTITUTION.md) · **الحالة:** [`.memory/agent_context_truth.md`](.memory/agent_context_truth.md) · **الفارض:** `check_agent_context.py`.
+> **الجملة:** كل وكيل يحمّل سجل السلطة، boot sequence، مصفوفة المصادر، الأدلة، الحقيقة التشغيلية، والأثر التجاري قبل أي تغيير؛ الادعاء بلا مصدر أو تجاوز الترتيب = رفض.
+
+## 0.28. Code Acceptance Constitution (D-277) — لا سطر كود بلا حزمة إثبات
+> **القانون:** [`docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md`](docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md) · **الحالة:** [`docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json`](docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json) · **الفارض:** `check_code_acceptance.py`.
+> **الجملة:** كل إضافة تمر بالمعايير والمقررات والأبحاث، تطبيق محلي، أمن، عقود، اختبارات، إنتاج، أثر تجاري، وفحص حذف صفري؛ لا يستطيع الوكيل تعطيل البوابة التي تحكم تغييره.

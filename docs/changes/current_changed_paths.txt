@@ -1,0 +1,4 @@
+M	.github/workflows/ci.yml
+M	AGENTS.md
+M	docs/DOCUMENTATION_INDEX.md
+M	docs/governance/CONSTITUTION_REGISTRY.json

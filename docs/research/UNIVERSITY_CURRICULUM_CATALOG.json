@@ -1,0 +1,739 @@
+{
+  "$schema_version": "1",
+  "decision": "D-278",
+  "catalog_scope_ar": "كل المقررات المميزة في لقطة صفحة Harvard SEAS الرسمية، بما فيها الأساسية والمتقدمة والاختيارية والبحثية الظاهرة في الصفحة؛ لا تُحذف التكرارات الزمنية بل تُجمع كعروض لنفس المقرر.",
+  "coverage_boundary_ar": "هذا كتالوج كامل للصفحة الرسمية التي تم التقاطها في 2026-08-21، وليس ادعاءً بأنه يشمل كل مقرر تاريخي أو كل مادة خارج الصفحة. أي مصدر إضافي يدخل كإضافة مع حالة تحقق.",
+  "sources": [
+    "https://seas.harvard.edu/computer-science/courses",
+    "https://csadvising.seas.harvard.edu/concentration/requirements/",
+    "https://cs50.harvard.edu/x/"
+  ],
+  "extraction_method": "parse saved official-page markdown; deduplicate by course code; retain longest description and all observed term offerings",
+  "course_count": 59,
+  "required_agent_fields": [
+    "course_id",
+    "title",
+    "description",
+    "source",
+    "local_application_status",
+    "agent_requirement_status",
+    "owner",
+    "mapped_change_types",
+    "evidence_paths"
+  ],
+  "courses": [
+    {
+      "course_id": "COMPSCI 20",
+      "title": "Discrete Mathematics for Computer Science",
+      "description": "Adam Hesterberg Monday, Wednesday, Friday 9:45am to 11:00am Widely applicable mathematical tools for computer science, including topics from logic, set theory, combinatorics, number theory, probability theory, and graph theory. Practice in reasoning formally and proving theorems.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 32",
+      "title": "Computational Thinking and Problem Solving",
+      "description": "Michael Smith Monday, Wednesday 1:30pm to 2:45pm An introduction to computational thinking, useful concepts in the field of computer science, and the art of computer programming using Python. Significant emphasis is placed on class meetings and learning to use computers to solve complex, real-world problems. Concepts and techniques are introduced as they are needed to help solve the problems confronting us. Students will learn how to go from an ambiguous problem description to a running solution and will leave the class knowing how to instruct computers to do what they want them to do. Prior experience in computer science or computer programming is not necessary.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 50",
+      "title": "Introduction to Computer Science",
+      "description": "David J. Malan, Kelly Ding Wednesday 6:00pm to 8:45pm This is CS50, Harvard University's introduction to the intellectual enterprises of computer science and the art of programming, for concentrators and non-concentrators alike, with or without prior programming experience. (More than half of CS50 students have never taken CS before!) This course teaches you how to solve problems, both with and without code, with an emphasis on correctness, design, and style. Topics include computational thinking, abstraction, algorithms, data structures, and computer science more generally. Problem sets inspired by the arts, humanities, social sciences, and sciences. More than teach you how to program in one language, this course teaches you how to program fundamentally and how to teach yourself new languages ultimately. The course starts with a traditional but omnipresent language called C that underlies today's newer languages, via which you'll learn not only about functions, variables, conditionals, loops, and more, but also about how computers themselves work underneath the hood, memory and all. The course then transitions to Python, a higher-level language that you'll understand all the more because of C. Toward term's end, the course introduces SQL, via which you can store data in databases, along with HTML, CSS, and JavaScript, via which you can create web and mobile apps alike. Course culminates in a final project. See https://cs50.harvard.edu/college for advice, FAQs, syllabus, and what's new. Email the course's heads at heads@cs50.harvard.edu with questions.",
+      "offerings_seen": [
+        "2026 Fall",
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 51",
+      "title": "Abstraction and Design in Computation",
+      "description": "Stephen Chong Tuesday, Thursday 11:15am to 12:30pm Fundamental concepts in the design of computer programs, emphasizing the crucial role of abstraction. The goal of the course is to give students insight into the difference between programming and programming well. To emphasize the differing approaches to expressing programming solutions, you will learn to program in a variety of paradigms -- including functional, imperative, and object-oriented. Important ideas from software engineering and models of computation will inform these different views of programming.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 61",
+      "title": "Systems Programming and Machine Organization",
+      "description": "Eddie Kohler, Juncheng Yang Tuesday, Thursday 11:15am to 12:30pm Fundamentals of computer systems programming, including data representation, storage, process management, and synchronization. This course provides a solid background in systems programming and an understanding of the interactions between computer software and hardware. Topics include C++ and assembly language programming, operating systems kernels and system calls, memory hierarchy and caching, processes, threads, and synchronization.",
+      "offerings_seen": [
+        "2026 Fall",
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 79",
+      "title": "Design of Useful and Usable Interactive Systems",
+      "description": "Krzysztof Gajos Tuesday, Thursday 9:45am to 11:00am Formerly CS 179, the course covers skills and techniques necessary to design innovative interactive products that are useful, usable and that address important needs of people other than yourself. You will learn how to uncover needs that your customers cannot even articulate. You will also learn a range of design principles, effective creativity-related practices, and techniques for rapidly creating and evaluating product prototypes. You will also have several opportunities to formally communicate your design ideas to a variety of audiences. You will complete two large team-based design projects.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 85",
+      "title": "Introduction to Generative AI via Building Software for the Study of Arts & Sciences",
+      "description": "Christopher Thorpe Tuesday, Thursday 4:30pm to 5:45pm This course will expose students to large language models; programming languages; and generative AI in various areas, including text, images, music, video, and software. We will contextualize these technologies within the broader areas of computation, artificial intelligence and machine learning. Students will gain initial hands-on experience building software with generative AI to build basic projects appropriate for introductory computer science such as games or chatbots and a simple programming language interpreter. Following this, the course will proceed in four modules using generative AI software development tools to analyze real-world data in four areas outside of the realm of computer science, for example, music theory, ancient languages, art history, and astronomy. Guest lectures from faculty with deep knowledge of these fields will inform translating questions from their field into software requirements.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 91R",
+      "title": "Supervised Reading and Research",
+      "description": "Stephen Chong, Adam Hesterberg, Eddie Kohler Supervised individual study of advanced topics in computer science. A student wishing to enroll in Computer Science 91r must be accepted by a faculty member who will supervise the course work. Additional information and a form are available via https://harvardcs.info/forms/#cs-91r-form. The form must be filled out and signed by the student and faculty supervisor. Students writing theses may enroll in this course while conducting thesis research and writing.",
+      "offerings_seen": [
+        "2026 Fall",
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1050",
+      "title": "Privacy and Technology",
+      "description": "Jim Waldo Tuesday, Thursday 12:45pm to 2:00pm What is privacy, and how is it affected by recent developments in technology? This course critically examines popular concepts of privacy and uses a rigorous analysis of technologies to understand the policy and ethical issues at play. Case studies: database anonymity, research ethics, wiretapping, surveillance, and others. Course relies on some technical material, but is open and accessible to all students, especially those with interest in economics, engineering, political science, computer science, sociology, biology, law, government, philosophy.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1066",
+      "title": "Build at the Speed of Thought",
+      "description": "Michael Smith Monday, Wednesday 3:45pm to 5:00pm People use generative AI to build all kinds of artifacts, from travel itineraries to software systems, and these sorts of things require structure, a clarity of purpose, and an understanding of today's AI systems. Students will learn how to partner with AI to build complex tools from software components, for both personal use and sharing with others. This involves learning how to effectively direct an AI, understand what it did (and didn't do), employ software engineering techniques like testing and version control, and evaluate different AI models.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1090A",
+      "title": "Data Science 1: Introduction to Data Science",
+      "description": "Pavlos Protopapas, Kevin A. Rader Monday, Wednesday 10:30am to 11:45am Data Science 1 is the first half of a one-year introduction to data science. The course focuses on the analysis of messy, real-life data to make predictions using statistical and machine learning methods. Material covered integrates the five key facets of an investigation using data: (1) data collection – data wrangling and cleaning to obtain a suitable dataset; (2) data management – accessing data quickly and reliably; (3) exploratory data analysis – generating hypotheses and building intuition; (4) prediction or statistical learning – developing and applying models such as linear and logistic regression, k-nearest neighbors, decision trees, and probabilistic approaches based on Bayes’ rule; and (5) communication – summarizing results through visualization, storytelling, and interpretable summaries. This is the first part of a two-course sequence. The curriculum builds throughout the academic year, and students are strongly encouraged to enroll in both the fall and spring courses within the same academic year.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1090B",
+      "title": "Data Science 2: Advanced Topics in Data Science",
+      "description": "Pavlos Protopapas Monday, Wednesday 9:45am to 11:00am Data Science 2 is the second half of a one-year introduction to data science. Building upon the material in Data Science 1, the course introduces advanced methods for statistical modeling, representation, and prediction. Topics include multiple deep learning architectures such as CNNs, RNNs, transformers, language models, autoencoders, and generative models as well as basic Bayesian methods, and unsupervised learning. Students are strongly encouraged to enroll in both the fall and spring course within the same academic year. Part two of a two-part series.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1200",
+      "title": "Introduction to Algorithms and their Limitations",
+      "description": "Anurag Anshu, Rebecca Nesson Monday, Wednesday 12:45pm to 2:00pm An introductory course in theoretical computer science, aimed at giving students the power of using mathematical abstraction and rigorous proof to understand computation. Thus equipped, students will be able to design and use algorithms that apply to a wide variety of computational problems, with confidence about their correctness and efficiency, as well as recognize when a problem may have no algorithmic solution. At the same time, they will gain an appreciation for the beautiful mathematical theory of computation that is independent of (indeed, predates) the technology on which it is implemented.",
+      "offerings_seen": [
+        "2026 Fall",
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1210",
+      "title": "Introduction to Theoretical Computer Science",
+      "description": "Madhu Sudan Monday, Wednesday 2:15pm to 3:30pm Computation occurs over a variety of substrates including silicon, neurons, DNA, the stock market, bee colonies and many others. In this course we will study the fundamental capabilities and limitations of computation, including the phenomenon of universality and the duality of code and data. Some of the questions we will touch upon include: Are there functions that cannot be computed? Are there true mathematical statements that can't be proven? Are there encryption schemes that can't be broken? Is randomness ever useful for computing? Can we use the quirks of quantum mechanics to speed up computation?",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1240",
+      "title": "Data Structures and Algorithms",
+      "description": "Sitan Chen, Michael Mitzenmacher Monday, Wednesday 2:15pm to 3:30pm Design and analysis of efficient algorithms and data structures. Algorithm design methods, graph algorithms, approximation algorithms, and randomized algorithms are covered.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1251",
+      "title": "Introduction to Graph Theory",
+      "description": "Adam Hesterberg Tuesday, Thursday 3:45pm to 5:00pm Introduces core topics in graph theory: forests, (k-)(edge-)connectivity, (outer)planarity, (induced) subgraphs, graph minors, matchings (in not-necessarily-bipartite graphs), colorings, and (nowhere-zero) flows. Discusses the Four-Color Theorem, that every planar graph's vertices can be colored with four colors, and builds up the graph-theoretic machinery necessary for an understanding of its generalization and successor as a major open problem, Hadwiger's conjecture.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1261",
+      "title": "Privacy, Fairness, and Validity Through the Lens of Theoretical CS",
+      "description": "Cynthia Dwork Monday, Wednesday 12:45pm to 2:00pm Imagine you are a developer at -- or regulating, from your position as CTO of the Federal Trade Commission -- a company that capitalizes on large amounts of personal data for use in a wide range of settings, from analyzing markets to advising judges on parole decisions, to selecting candidates to interview, to testing drugs. How might you think about incorporating societal values, such as privacy, fairness, and statistical validity? What mathematical guarantees are achievable, and what is impossible? How does privacy differ from cryptographic secrecy, and which concept is appropriate for which setting? This class will provide an introduction to the theoretical underpinnings of algorithmic fairness, differentially private data analysis, cryptography, and ensuring statistical validity, emphasizing common underlying themes and conceptual breakthroughs.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1280",
+      "title": "Convex Optimization and Applications in Machine Learning",
+      "description": "Yiling Chen Monday, Wednesday 11:15am to 12:30pm This course focuses on recognizing, formulating, and solving convex optimization problems. We will introduce basic convex analysis, discuss convex optimization theory, introduce algorithms for solving convex optimization problems, and touch on some advanced topics. We will explore all these in the context of machine learning applications, as almost every machine learning problem can be formulated as an optimization problem. The objective is to provide students with the theoretical training to recognize and formulate convex optimization problems and to equip them with the tools and methods to solve the problems of interest.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1410",
+      "title": "Computing Hardware",
+      "description": "Woodward Yang Monday, Wednesday 12:45pm to 2:00pm This course delves into the design principles and practices of high performance digital computing systems that are cost effectively and reliably manufactured with billions of near atomic scale semiconductor components. Key abstractions and foundational concepts are emphasized as the course covers the basic operation of CMOS transistors and logic gates, combinational and sequential logic including Finite State Machines (FSMs), digital memory subsystems, and machine code culminating with the implementation of a MIPS processor. Lab assignments will focus on the practical aspects of digital hardware design by utilizing Field Programmable Gate Arrays (FPGAs), Verliog (Hardware Description Language) and advanced CAD tools for the design, simulation and verification of digital computing hardware.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1411",
+      "title": "Computer Architecture",
+      "description": "David Brooks Friday 9:00am to 11:45am Review of the fundamental structures in modern processor design. Topics include computer organization, memory system design, pipelining, and other techniques to exploit parallelism. Discussion of modern topics including GPU architectures, datacenter architecture, mobile/embedded SoC architectures, and machine learning acceleration as time permits. Emphasis on a quantitative evaluation of design alternatives and an understanding of performance and energy consumption issues.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1440R",
+      "title": "Networks Design Projects",
+      "description": "H. Kung Monday, Wednesday 3:45pm to 5:00pm In this course, students will learn how to utilize tools powered by large language models (LLMs) to address real-world design challenges, including the generation of code and circuits. This field represents the forefront of technology and is rapidly evolving, with new insights and lessons emerging frequently. For example, recent advancements in reasoning models have significantly improved the success rate of producing designs that are not only correct but also efficient. As a result, there is a growing emphasis on the computational efficiency of inference, which enhances deeper reasoning capabilities. Related research includes developing methods for automatically generating testbenches to evaluate and validate designs created by LLMs. A student's work includes the following activities: (1) reviewing articles about various experiments that explore the use of LLM tools in design, (2) creating presentations based on these articles and delivering them in class, and (3) collaborating in teams of 2 or 3 on a design project that utilizes LLM-assisted tools, applying the knowledge gained from the literature.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1450",
+      "title": "Networking at Scale",
+      "description": "Minlan Yu Tuesday, Thursday 11:15am to 12:30pm This course studies computer network topics including Layer 2/Layer 3 topology, routing, transport protocols, traffic engineering, network functions, programmable switches, and software-defined networking. Modern networks have grown to large scale (connecting millions of servers) and high speed (terabits per second) to meet the needs of cloud applications in business and society. Thus, in addition to learning the conventional concepts in networking, we will also discuss how to adapt these concepts to large-scale networks. These discussions will hopefully help deepen our understanding of networking technologies. This course includes lectures and system programming projects. More information can be found at https://github.com/minlan-yu/cs145-site .",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1520",
+      "title": "Programming Languages",
+      "description": "Nada Amin Tuesday, Thursday 11:15am to 12:30pm Comprehensive introduction to the principal features and overall design of both traditional and modern programming languages, including syntax, formal semantics, abstraction mechanisms, modularity, type systems, naming, polymorphism, closures, continuations, and concurrency. Provides the intellectual tools needed to design, evaluate, choose, and use programming languages.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1530",
+      "title": "Compilers",
+      "description": "Stephen Chong Monday, Wednesday 12:45pm to 2:00pm Implementation of efficient interpreters and compilers for programming languages. Associated algorithms and pragmatic issues. Emphasizes practical applications including those outside of programming languages proper. Also shows relationships to programming-language theory and design. Participants build a working compiler including lexical analysis, parsing, type checking, code generation, and register allocation. Exposure to run-time issues and optimization.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1710",
+      "title": "Visualization",
+      "description": "Hanspeter Pfister Monday, Wednesday 2:15pm to 3:30pm An introduction to key design principles and techniques for visualizing data. Covers design practices, data and image models, visual perception, interaction principles, visualization tools, and applications. Introduces programming of web-based interactive visualizations.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1750",
+      "title": "Computer Graphics",
+      "description": "Steven Gortler Monday, Wednesday 11:15am to 12:30pm This course covers the fundamentals of 3D computer graphics using a modern shader-based version of OpenGL. Main topics include: geometric coordinate systems and transformations, keyframe animation and interpolation, camera simulation, triangle rasterization, material simulation, texture mapping, image sampling and color theory. The course also touches on ray tracing, geometric modeling and simulation-based animation.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1810",
+      "title": "Machine Learning",
+      "description": "Finale Doshi-Velez Tuesday, Thursday 9:45am to 11:00am Introduction to machine learning, providing a probabilistic view on artificial intelligence and reasoning under uncertainty. Topics include: supervised learning, ensemble methods and boosting, neural networks, support vector machines, kernel methods, clustering and unsupervised learning, maximum likelihood, graphical models, hidden Markov models, inference methods, and computational learning theory. Students should feel comfortable with multivariate calculus, linear algebra, probability theory, and complexity theory. Students will be required to produce non-trivial programs in Python.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1820",
+      "title": "Planning and Learning Methods in AI",
+      "description": "Stephanie Gil Monday, Wednesday 12:45pm to 2:00pm Artificial Intelligence (AI) is already making a powerful impact on modern technology, and is expected to be even more transformative in the near future. The course introduces the ideas and techniques underlying this exciting field, with the goal of teaching students to identify effective representations and approaches for a wide variety of computational tasks. Topics covered in this course are broadly divided into search and planning, optimization and games, and uncertainty and learning. Special attention is given to ethical considerations in AI and to applications that benefit society. For more information please see the course website.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1840",
+      "title": "Introduction to Reinforcement Learning",
+      "description": "Kiante Brantley Monday, Wednesday 11:15am to 12:30pm Modern AI systems often need the ability to make sequential decisions in an unknown, uncertain, possibly hostile environment, by actively interacting with the environment to collect relevant data. Reinforcement Learning (RL) is a general framework that can capture the interactive learning setting and has been used to design intelligent agents that achieve high-level performance in challenging applications such as Go, computer games, robotic manipulation, health care, and education. This course provides an introduction to reinforcement learning covering a range of problem formulations, algorithms, and theory. The four main themes of the course are (1) Markov decision processes (Bellman equations/optimality, planning, UCB, unknown environments, linear quadratic control, exploration, imitation learning), (2) bandits (epsilon-greedy, UCB, Thompson sampling, contextual bandits, linear bandits, exploration in MDPs), and (3) methods for large-scale systems (policy gradient methods, deep RL, Monte Carlo tree search, Q-learning). There will also be an Embedded Ethics lecture on ethical issues arising in reinforcement learning. The assignments will focus on a mix of algorithmic and statistical principles, along with their programming implementations.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 1960",
+      "title": "Designing K–12 Computer Science Learning Experiences",
+      "description": "Karen Brennan Wednesday 9:00am to 11:45am From computational thinking to workforce arguments, there is considerable interest in and excitement about including computer science education for all K–12 students. Yet, unlike other disciplines with a much longer history in formal schooling, the interest in computer science education is not yet supported by commensurate attention to research and teacher practice. In this course, we will examine the state of K–12 computing education: questioning its value, examining its history, and imagining and contributing to its potential. The course will be organized as both a reading group and a lab, building a community of people who are committed to K–12 CS education. Each week you will read classic and current research, and write accompanying memos to document your evolving understandings of the field. Throughout the course, either individually or with partners, you will develop an independent project that explores the design of K–12 computer science learning experiences. Some examples of possible projects include: designing CS-standalone or cross-curricular learning activities and curriculum, building a programming language for novices, developing an annotated bibliography, critically analyzing policy documents such as curriculum frameworks and standards from around the world, or contributing to current K–12 CS education research initiatives.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2050",
+      "title": "High Performance Computing for Science and Engineering",
+      "description": "Chuck Witt Tuesday, Thursday 2:15pm to 3:30pm As manufacturing processes approach the physical limits of transistor density, efficient code must exploit parallelism to scale with available computing resources. Scientific software developers must therefore adopt a “think parallel” mindset to solve complex problems across academia, industry, and society. This course introduces parallel programming and its relationship to computer architectures, with an emphasis on high performance computing. Students will develop experience with programming models such as OpenMP, MPI, and CUDA, applying these techniques in homework and a term project.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2211",
+      "title": "Information Theory in CS",
+      "description": "Madhu Sudan Monday, Wednesday 11:15am to 12:30pm Information Theory originated in the seminal work of Shannon (1948) that aimed to formalize and quantify information. Since the 1990s tools and concepts from Information Theory have played a central role in theoretical computer science. Notable examples include the Parallel Repetition Theorem of Raz (1994), the development of the Information Complexity to understand Communication Complexity (2001). Today Information Theoretic measures and tools influence many aspects of CS theory including analysis of streaming algorithms, differential privacy and game theory. This course will introduce the basic concepts in information theory and then sample topics of interest to CS theory.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2242",
+      "title": "Probabilistic Analysis and Algorithms",
+      "description": "Michael Mitzenmacher Tuesday, Thursday 9:45am to 11:00am Probabilistic techniques and tools for the design and analysis of algorithms. Designed for all first-year graduate students in all areas.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2243",
+      "title": "Algorithms for Data Science",
+      "description": "Sitan Chen Monday, Wednesday 2:15pm to 3:30pm This is a graduate topics class on theoretical aspects of modern machine learning. Unlike previous offerings of this course, this iteration will focus on recent developments in diffusion generative modeling. The course will explore foundational aspects (Itô processes, discretization analysis, connections to stochastic optimal control and stochastic localization, and the complexity of score estimation) as well as empirical aspects for which the associated theory is still nascent (consistency models, guided generation, the mystery of generalization, and diffusion language models).",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2280",
+      "title": "Computational Learning Theory",
+      "description": "Leslie Valiant Tuesday, Thursday 12:45pm to 2:00pm Possibilities of and limitations to performing learning by a computational process. Computationally feasible generalization and its limits. Topics include computational models of learning, polynomial time learnability, learning from examples and from queries to oracles. Applications to Boolean functions, languages and geometric functions. Darwinian evolution as learning.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2360R",
+      "title": "Topics at the Interface between Computer Science and Economics",
+      "description": "Yiling Chen Tuesday, Thursday 12:45pm to 2:00pm Interplay between computation and economics. Rotating topics in mechanism and market design, strategic aspects of machine learning and AI, information elicitation and forecasting, and other emerging areas. Readings in AI, theoretical CS, multi-agent systems, economic theory, and operations research.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2370",
+      "title": "Economic Analysis as a Frontier of Theoretical Computer Science",
+      "description": "Yannai Gonczarowski Monday, Wednesday 1:30pm to 2:45pm How can we use tools from statistical learning theory to design better auctions? Can we use cryptography to better implement matching mechanisms? And how should we approach formally proving that welfare in Nash equilibria for many games is not \"much worse\" than in the social optimum? This course explores the application of diverse ideas, techniques, and solution aesthetics from theoretical computer science to derive meaningful new insights into classic economic problems. The three main themes are approximation theorems (including bounding the loss in revenue or welfare due to lack of information, to strategic behavior, or to impracticality of the optimal mechanism); various notions of complexity (including computational complexity, communication complexity, and sample complexity); and cryptographic tools (including cryptographic commitments, multiparty computation, and zero-knowledge proofs). Economic applications mostly include analysis of equilibria, pricing, and mechanism design.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2380",
+      "title": "Optimized Democracy",
+      "description": "Ariel Procaccia Monday, Wednesday 11:15am to 12:30pm The course examines the mathematical and algorithmic foundations of democracy, running the gamut from theory to applications. The goal is to provide students with a rigorous perspective on, and a technical toolbox for, the design of better democratic systems. Topics include computational social choice (identifying optimal voting rules), fairness in political redistricting (avoiding gerrymandering) and apportionment (allocating seats on a representative body), sortition (randomly selecting citizens assemblies), liquid democracy (transitively delegating votes), and weighted voting games (analyzing legislative power through cooperative game theory).",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2411",
+      "title": "Advanced Computer Architecture",
+      "description": "David Brooks Friday 9:00am to 11:45am Review of the fundamental structures in modern processor design. Topics include computer organization, memory system design, pipelining, and other techniques to exploit parallelism. Discussion of modern topics including GPU architectures, datacenter architecture, mobile/embedded SoC architectures, and machine learning acceleration as time permits. Emphasis on a quantitative evaluation of design alternatives and an understanding of performance and energy consumption issues.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2420",
+      "title": "Computing at Scale",
+      "description": "H. Kung Monday, Wednesday 3:45pm to 5:00pm This course focuses on efficient AI computations aimed at reducing the cost of AI model training and inference. Students will learn systematic methods for implementing parallel and distributed computations for computer vision and language models such as CNNs and Transformers across multiple computing cores or nodes. They will also learn techniques for co-designing machine learning models, data curation methods, computing algorithms, and system architectures. Techniques to be studied include systolic arrays, low-bitwidth arithmetic, model pruning, quantization, distillation, low-rank fine-tuning, dynamic selection of submodels (e.g., experts) based on input, speculative decoding, synthetic data generation with stable diffusion, data and model security, scheduling for efficient memory access, reasoning with reinforcement learning, and test-time computing for reasoning. As a part of programming assignments, students will utilize large language models to generate code that can leverage AI accelerating techniques learned in this course. Upon successful completion of this course, students will be equipped to address the challenging tasks of designing and utilizing energy-efficient, high-performance AI accelerators.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2430",
+      "title": "Advanced Computer Networks",
+      "description": "Minlan Yu Tuesday, Thursday 11:15am to 12:30pm This is a graduate-level course on computer networks. This course offers an in-depth exploration of a subset of advanced topics in networked systems. We will discuss the latest developments in the entire networking stack, the interactions between networks and high-level applications, and their connections with other system components such as compute and storage. In this year's edition, we will use machine learning as a prime example to understand its unique requirements and challenges in the context of networking. As machine learning applications increasingly rely on larger models and faster accelerators, the demand for enhanced networking capabilities becomes imperative. Throughout this course, we will study cutting edge networking solutions and principles for  co-designing networks with compute and storage, to meet the evolving needs of machine learning applications. The course will include lectures, in-class presentations, paper discussions, and a research project. More information of this course is at  https://github.com/minlan-yu/cs243-site.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2440R",
+      "title": "Networks Design Projects",
+      "description": "H. Kung Monday, Wednesday 3:45pm to 5:00pm The contents and course requirements of CS 244R are similar to those of CS 1440R, with the exception that students enrolled in CS 2440R are expected to do substantial system implementation and conduct rigorous performance analysis for their design projects, and perform graduate-level work to earn the same letter grade. In this course, students will learn how to utilize tools powered by large language models (LLMs) to address real-world design challenges, including the generation of code and circuits. This field represents the forefront of technology and is rapidly evolving, with new insights and lessons emerging frequently. For example, recent advancements in reasoning models have significantly improved the success rate of producing designs that are not only correct but also efficient. As a result, there is a growing emphasis on the computational efficiency of inference, which enhances deeper reasoning capabilities. Related research includes developing methods for automatically generating testbenches to evaluate and validate designs created by LLMs. A student's work includes the following activities: (1) reviewing articles about various experiments that explore the use of LLM tools in design, (2) creating presentations based on these articles and delivering them in class, and (3) collaborating in teams of 2 or 3 on a design project that utilizes LLM-assisted tools, applying the knowledge gained from the literature.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2470R",
+      "title": "Advanced Topics in Computer Architecture",
+      "description": "David Brooks Friday 9:00am to 11:45am Seminar course exploring recent research in computer architecture. Topics vary from year to year and will include subjects such as multi-core architectures, energy-efficient computing, reliable computing, and the interactions of these issues with system software. Students read and present research papers, undertake a research project.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2520R",
+      "title": "Advanced Topics in Programming Languages",
+      "description": "Nada Amin Tuesday, Thursday 11:15am to 12:30pm Seminar course exploring recent research in programming languages. Topics vary from year to year. Students typically read and present research papers, undertake a research project.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2630",
+      "title": "Systems Security",
+      "description": "James Mickens Monday, Wednesday 2:15pm to 3:30pm This course explores practical attacks on modern computer systems, explaining how those attacks can be mitigated using careful system design and the judicious application of cryptography. The course discusses topics like buffer overflows, web security, information flow control, and anonymous communication mechanisms such as Tor. The course includes several small projects which give students hands-on experience with various offensive and defensive techniques; the final, larger project is open-ended and driven by student interests.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2680",
+      "title": "Modern AI Systems: Agents and Systems Optimization",
+      "description": "Juncheng Yang Monday, Wednesday 11:15am to 12:30pm This course introduces modern AI capabilities and explores how they can be used to build practical computer systems for life, work, and research. The course is organized into two modules. The first module examines the capabilities of modern AI systems. Students learn to use AI agents to develop applications and solve real-world problems. The second module focuses on the intersection of AI and computer systems, with particular emphasis on designing AI systems and using AI-driven techniques to optimize algorithms and system performance. The first half of the course primarily consists of lectures and mini-project presentations. The second half centers on student-led discussions of recent research in AI for systems and systems for AI. Through close reading and critical discussion of research papers, students will examine emerging trends and open challenges in the field.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2710",
+      "title": "Topics in Data Visualization",
+      "description": "Hanspeter Pfister Monday, Wednesday 2:15pm to 3:30pm Students will read, analyze, present, and discuss research papers in data visualization. Throughout the semester, we will examine seminal works and recent state-of-the-art research in information visualization, scientific visualization, and visual analytics. Students will collaborate in small groups on a semester-long visualization project and present their findings through written reports and oral presentations in a conference-style format. Through interactive discussions, peer feedback, and formal design critiques, we will analyze both published visualization research and each other's work.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2760",
+      "title": "Design, Technology, and Social Impact",
+      "description": "Krzysztof Gajos Tuesday, Thursday 9:45am to 11:00am The course explores major areas of research and practice at the intersection of design, technology, and social impact. Specifically, we will explore the current state of research and interesting real-world examples related to the design, evaluation, and implementation of interventions comprising of technical, social, and organizational elements. We will also explore leading theories and methods for anticipating broader, indirect societal impacts of such intervention. Course activities will involve discussion of primary literature, some guided instruction, assignments, and a major research project.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2822R",
+      "title": "Topics in Machine Learning: Effective AI Support in Human+AI Settings",
+      "description": "Finale Doshi-Velez Monday, Wednesday 9:45am to 11:00am Agents are developing capabilities at increasing rates, but do those agent capabilities translate into human capabilities, with respect to creating agents that help us do the things we need to do and be who we want to be? In particular, by doing some short-term task e.g. writing a piece of code, current agents often fail us in longer term tasks e.g. making sure that we can also maintain that code and take responsibility for that code to our teams. As another example, a health assistance agent that is optimized to create engaging visualizations of your health data might be satisfying to look at, but what we really want to evaluate is whether it actually helps you improve your health. In this course, we'll survey the literature and create AI systems that are designed to effectively support human tasks via a combination of reinforcement learning, probabilistic methods, and human factors/design elements. After a few initial assignments, the course will be focused on reading papers, discussion, and a semester-long project.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2823R",
+      "title": "Advanced Topics in Modern Machine Learning",
+      "description": "Michael Mitzenmacher, Forrester Cole, Liliya Lavitas, Deqing Sun, Zi Wang, Lily Zhang Friday 9:45am to 12:30pm This course explores active research in machine learning and AI, and topics may include probabilistic machine learning, generative AI models and their evaluation, causality, and applications. Students will gain broad exposure to these areas through recent papers, reflecting instructor interests. The course involves student-led weekly discussions of chosen papers, emphasizing motivation, context, and innovation. An instructor will facilitate group discussions and guide presentations. Students will also complete an in-depth course project on a chosen subject.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2824",
+      "title": "Foundations of Reinforcement Learning",
+      "description": "Kiante Brantley Tuesday, Thursday 9:45am to 11:00am Modern Artificial Intelligence (AI) systems often need the ability to make sequential decisions in an unknown, uncertain, possibly hostile environment, by actively interacting with the environment to collect relevant data. This graduate-level course focuses on the theoretical and algorithmic foundations of Reinforcement Learning (RL). The four main themes of the course are: (1) fundamentals (MDPs, computation, statistics, generalization); (2) provably efficient exploration (and high-dimensional RL); (3) policy optimization (e.g., policy gradient methods); and (4) trending topics (control, offline RL, partial observability, RL for foundation models).",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2831",
+      "title": "Advanced Computer Vision",
+      "description": "Todd Zickler Tuesday, Thursday 12:45pm to 2:00pm Vision as an ill-posed inverse problem: image formation, two-dimensional signal processing; feature analysis; image segmentation; color, texture, and shading; multiple-view geometry; object and scene recognition; and applications.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2860",
+      "title": "Multi-Robot Systems: Control, Communication, and Security",
+      "description": "Stephanie Gil Tuesday, Thursday 12:45pm to 2:00pm The ability to connect devices over long distances, via the internet, changed our world.  The second phase of this revolution, that we are still living in today, came about when these devices became wireless.  Now we are at the cusp of a new phase of this evolution where devices are connected, wireless, and controlled – i.e. the robot revolution. Multi-robot systems are becoming more pervasive; from future autonomous vehicle fleets, to drones, to manufacturing robots.  As a result, the question of how to control, coordinate, and secure these systems has been a growing topic in the robotics literature in recent years.  In this seminar-style course we will do a deep dive into this topic by reviewing classic and recent results in multi-agent planning and control literature.  We will cover a wide gamut of applications from control of groups of flying drones, to decision making in autonomous car networks, to space exploring CubeSats. This class will treat both the theory and the practical applications behind multi-robot systems. Students with mathematical inclinations and exposure to graph theory, probability theory, linear algebra, and algorithms will derive the most benefit from this course.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2880",
+      "title": "AI for Social Impact",
+      "description": "Milind Tambe Monday, Wednesday 2:15pm to 3:30pm Recent years have seen AI successfully applied to societal challenge problems. Indeed, recognizing the potential of AI for tremendous social impact in the future, \"AI for social impact\" is growing as a subdiscipline within AI. In this course, we will discuss successful case studies of  use of AI for public health, environmental sustainability, public safety and public welfare. Simultaneously, we will discuss key foundations of the area of AI for social impact. To that end, among other topics, we will focus on challenges in AI for Social Impact, what makes projects successful, how to investigate project impact in the field and ethical considerations for such projects. A key part of this course will be AI4SI projects with non-profits.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2881R",
+      "title": "Topics in Foundations of ML: AI Alignment and Safety",
+      "description": "Boaz Barak Thursday 3:45pm to 6:30pm This will be a graduate level course on challenges in alignment and safety of artificial intelligence. We will consider both technical aspects as well as questions on societal and other impact on the field. This is a fast-moving area and it will be a fast-moving course. I will expect students to be able to pick up technical knowledge on their own. In a sense, the programming language for this course will be English: students will be allowed and encouraged to use AI tools for all homework and assignments. On the other hand, this means that expectations will be raised: it may well be the case that I would expect you to do assignments in a week that in previous years would have taken a month.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2883R",
+      "title": "Advanced Topics in Computer Vision",
+      "description": "Qianqian Wang Wednesday 3:45pm to 5:45pm Seminar course exploring recent research in computer vision and machine learning. Topics vary from year to year. For Fall 2026, CS 2883r is expected to focus on geometry, representation learning and generative modeling, and the intersection of vision and robotics.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2901",
+      "title": "Seminar on Effective Research Practices and Academic Culture",
+      "description": "Friday 9:45am to 11:45am This is a reading and discussion-based seminar designed for entering Computer Science Ph.D. students. This course prepares students to manage the difficult and often undiscussed challenges of Ph.D. programs through sessions on research skill building (e.g. paper reading, communication), soft skill building (e.g. managing advising relationships, supporting your peers), and academic culture (e.g. mental health in academia, power dynamics in scientific communities), as well as research and professional-oriented discussions. This is a full-year, 4-unit course, meeting once a week in each of the fall and the spring. Students must complete both terms of this course (CS 2901 and CS 2902) within the same academic year to receive credit.",
+      "offerings_seen": [
+        "2026 Fall"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2902",
+      "title": "Seminar on Effective Research Practices and Academic Culture",
+      "description": "Friday 9:45am to 11:45am This is a reading and discussion-based seminar designed for entering Computer Science Ph.D. students. This course prepares students to manage the difficult and often undiscussed challenges of Ph.D. programs through sessions on research skill building (e.g. paper reading, communication), soft skill building (e.g. managing advising relationships, supporting your peers), and academic culture (e.g. mental health in academia, power dynamics in scientific communities), as well as research and professional-oriented discussions. This is a full-year, 4-unit course, meeting once a week in each of the fall and the spring. Students must complete both terms of this course (CS 2901 and CS 2902) within the same academic year to receive credit.",
+      "offerings_seen": [
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    },
+    {
+      "course_id": "COMPSCI 2990R",
+      "title": "Special Topics in Computer Science",
+      "description": "Michael Smith, Kiante Brantley, Yiling Chen, Stephen Chong, Steven Gortler, Cynthia Dwork, Jim Waldo, Boaz Barak, Elena Glassman, Minlan Yu, Nada Amin, Hima Lakkaraju, Juncheng Yang, Sitan Chen, Stratos Idreos, James Mickens, Qianqian Wang, David Parkes, Hanspeter Pfister, Eddie Kohler, Susan Murphy, Stephanie Gil, Sham Kakade, Ariel Procaccia, Finale Doshi-Velez, Anurag Anshu, Michael Mitzenmacher, Stuart Shieber, Krzysztof Gajos, Milind Tambe, Yannai Gonczarowski, Salil Vadhan, Madhu Sudan, Leslie Valiant, David Brooks, Yilun Du, David Alvarez Melis Experimental or theoretical research project on acceptable problems in computer science supervised by a SEAS faculty member, and/or supervised reading on topics not covered by regular courses of instruction. The project or reading must be arranged between the student and individual SEAS faculty supervisor prior to enrolling in the course.",
+      "offerings_seen": [
+        "2026 Fall",
+        "2027 Spring"
+      ],
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "catalog_status": "EXTRACTED_FROM_OFFICIAL_SNAPSHOT",
+      "local_application_status": "UNMAPPED",
+      "agent_requirement_status": "NOT_AUTHORITY_UNTIL_MAPPED"
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "$schema_version": "1",
+  "decision": "D-277",
+  "purpose_ar": "سجل الأدلة المرموقة التي يجب أن يمر بها أي تغيير مؤثر: معايير رسمية، أبحاث، مقررات جامعية، أو مصادر أولية قابلة لإعادة التحقق.",
+  "claim_policy_ar": "لا يكفي ذكر اسم جامعة أو مؤسسة؛ يجب ربط الادعاء بالمصدر والقسم أو الصفحة والدليل المحلي الذي يطبقه.",
+  "evidence": [
+    {
+      "id": "nist-ai-rmf-1.0",
+      "title_en": "NIST AI Risk Management Framework",
+      "kind": "official_standard",
+      "url": "https://www.nist.gov/itl/ai-risk-management-framework",
+      "scope_ar": "حوكمة ومخاطر وثقة الذكاء الاصطناعي عبر دورة الحياة.",
+      "local_application_ar": "سجل المخاطر، التقييم، الأدلة، المراقبة، والحوكمة البشرية.",
+      "required_for": ["agent", "model", "data", "commercial_claim"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "nist-agent-standards-initiative",
+      "title_en": "NIST AI Agent Standards Initiative",
+      "kind": "official_initiative",
+      "url": "https://www.nist.gov/artificial-intelligence/ai-agent-standards-initiative",
+      "scope_ar": "هوية الوكلاء وتفويضهم وبروتوكولاتهم وتقييم أمنهم وقابليتهم للتشغيل البيني.",
+      "local_application_ar": "هوية الوكيل، أقل صلاحية، تفويض حساس، سجل أثر، وتقييمات أمنية.",
+      "required_for": ["agent", "tool", "protocol", "identity"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "nist-ssdf-1.1",
+      "title_en": "NIST Secure Software Development Framework 1.1",
+      "kind": "official_standard",
+      "url": "https://csrc.nist.gov/projects/ssdf",
+      "scope_ar": "الاستعداد، حماية البرمجيات، إنتاج برمجيات آمنة، والاستجابة للثغرات.",
+      "local_application_ar": "حماية سلسلة التوريد، بوابات البناء، اختبار الأمن، وإدارة الثغرات.",
+      "required_for": ["code", "dependency", "release", "security"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "owasp-agent-security",
+      "title_en": "OWASP AI Agent Security Cheat Sheet",
+      "kind": "security_guidance",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html",
+      "scope_ar": "حقن الأوامر، إساءة الأدوات، تصعيد الصلاحيات، تسميم الذاكرة، الاستقلالية الزائدة، وتسرب البيانات.",
+      "local_application_ar": "قوائم أدوات محدودة، تفويض حساس، عزل، ميزانيات، سجلات، واختبارات عدائية.",
+      "required_for": ["agent", "tool", "memory", "browser", "external_action"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "openssf-scorecard",
+      "title_en": "OpenSSF Scorecard",
+      "kind": "automated_security_guidance",
+      "url": "https://scorecard.dev/",
+      "scope_ar": "مخاطر المصدر والبناء والتبعيات والاختبار والصيانة.",
+      "local_application_ar": "مراجعة الكود، الفروع، التبعيات المثبتة، صلاحيات CI، SAST، والتوقيع.",
+      "required_for": ["dependency", "workflow", "release", "repository"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "slsa-1.2",
+      "title_en": "SLSA Specification v1.2",
+      "kind": "supply_chain_specification",
+      "url": "https://slsa.dev/spec/v1.2/",
+      "scope_ar": "أصل المصدر، نزاهة البناء، provenance، والـattestations.",
+      "local_application_ar": "تتبع مصدر المصنوعات، إثبات البناء، والتحقق من الإصدارات.",
+      "required_for": ["build", "release", "artifact", "provenance"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "dora-core",
+      "title_en": "DORA Core Research",
+      "kind": "industry_research",
+      "url": "https://dora.dev/",
+      "scope_ar": "قدرات تحسين تسليم البرمجيات والتشغيل والنتائج التنظيمية.",
+      "local_application_ar": "مؤشرات متوازنة للتسليم والموثوقية والجودة والتعلم والنتيجة التجارية.",
+      "required_for": ["delivery", "operations", "commercial"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "mit-6824-distributed-systems",
+      "title_en": "MIT 6.824 Distributed Systems",
+      "kind": "university_course",
+      "url": "https://pdos.csail.mit.edu/6.824/",
+      "scope_ar": "الأنظمة الموزعة، التكرار، الاتساق، التسامح مع الفشل، والتصميم التجريبي.",
+      "local_application_ar": "عقود الخدمات، التخزين، الأحداث، الاختبارات الحية، وتحليل حالات الفشل.",
+      "required_for": ["distributed_system", "service", "storage", "event"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "stanford-cs231n",
+      "title_en": "Stanford CS231n — Deep Learning for Computer Vision",
+      "kind": "university_course",
+      "url": "https://cs231n.stanford.edu/",
+      "scope_ar": "أسس التعلم العميق والتقييم والتعميم والتشخيص التجريبي.",
+      "local_application_ar": "منهجية تجارب النماذج، فصل البيانات، قياس الأداء، وحدود الادعاء.",
+      "required_for": ["model", "evaluation", "data"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "stanford-cs224n",
+      "title_en": "Stanford CS224N — Natural Language Processing with Deep Learning",
+      "kind": "university_course",
+      "url": "https://web.stanford.edu/class/cs224n/",
+      "scope_ar": "معالجة اللغة، التمثيلات، التقييم، والحدود العلمية للنماذج اللغوية.",
+      "local_application_ar": "اختبارات لغوية عربية/فرنسية، تقييم الانحياز، وحدود التعميم.",
+      "required_for": ["language", "model", "evaluation", "arabic", "french"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "cmu-15619-cloud-computing",
+      "title_en": "CMU 15-619 Cloud Computing",
+      "kind": "university_course",
+      "url": "https://www.cs.cmu.edu/~15719/",
+      "scope_ar": "الحوسبة السحابية، التوسع، النظم الموزعة، والكلفة التشغيلية.",
+      "local_application_ar": "حساب الكلفة، تصميم النشر، المراقبة، العزل، واختبارات التحمل.",
+      "required_for": ["cloud", "scale", "cost", "operations"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "berkeley-cs162",
+      "title_en": "Berkeley CS 162 Operating Systems and Systems Programming",
+      "kind": "university_course",
+      "url": "https://cs162.org/",
+      "scope_ar": "الأنظمة، التزامن، الذاكرة، العمليات، والبرمجة منخفضة المستوى.",
+      "local_application_ar": "فهم حدود التشغيل، العزل، الموارد، والتصحيح العميق.",
+      "required_for": ["runtime", "container", "concurrency", "performance"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "harvard-cs-concentration-domains",
+      "title_en": "Harvard Computer Science Concentration Requirements",
+      "kind": "university_curriculum",
+      "url": "https://csadvising.seas.harvard.edu/concentration/requirements/",
+      "scope_ar": "البرمجة، الاستدلال الرسمي، الرياضيات المتقطعة، الحدود الحسابية، الخوارزميات، الأنظمة، الحوسبة والعالم، الذكاء الاصطناعي، والعلوم المتقدمة.",
+      "local_application_ar": "مصفوفة متطلبات حسب نوع التغيير؛ لا ادعاء بتحميل كل المقررات بلا تحقق.",
+      "required_for": ["all_code", "curriculum", "architecture", "algorithm", "system", "model"],
+      "verified_on": "2026-08-21"
+    },
+    {
+      "id": "harvard-cs50x-foundations",
+      "title_en": "Harvard CS50x — Introduction to Computer Science",
+      "kind": "university_course",
+      "url": "https://cs50.harvard.edu/x/",
+      "scope_ar": "التفكير الحاسوبي، التجريد، الخوارزميات، هياكل البيانات، الصحة، التصميم، الأسلوب، الذاكرة، C، Python، SQL، والويب.",
+      "local_application_ar": "بوابة الأساس لكل تغيير: correctness/design/style مع فحوص الذاكرة والبيانات والواجهات عند اللزوم.",
+      "required_for": ["all_code", "algorithm", "data", "api", "database", "frontend"],
+      "verified_on": "2026-08-21"
+    }
+  ]
+}

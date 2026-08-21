@@ -151,6 +151,27 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/ci_guardrails.py
+          # ADR-013: the mandatory reference backbone is pinned, additive, and
+          # non-runtime. Removing or silently replacing a source is a hard failure.
+          python scripts/fitness/check_reference_backbone.py
+          # D-275/D-276: every agent must see the same authority graph, and every
+          # repository URL must have a visible adoption status and owner.
+          python scripts/fitness/check_agent_context.py
+          python scripts/fitness/check_source_adoption_matrix.py
+          # D-279: engineering evidence and foreign-currency production evidence
+          # must meet before a capability can advance.
+          python scripts/fitness/check_dual_track_alignment.py
+          # D-277: no agent code change passes without standards, evidence,
+          # production, commercial, and zero-deletion acceptance proof.
+          # The packet fingerprint is compared with the PR/push diff, not only
+          # the clean checkout, so a stale packet cannot pass remotely.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CODE_ACCEPTANCE_BASE_SHA="${{ github.event.pull_request.base.sha }}" python scripts/fitness/check_code_acceptance.py
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            CODE_ACCEPTANCE_BASE_SHA="${{ github.event.before }}" python scripts/fitness/check_code_acceptance.py
+          else
+            python scripts/fitness/check_code_acceptance.py
+          fi
           python scripts/fitness/check_no_app_imports_in_microservices.py --strict
           python scripts/fitness/check_route_registry_parity.py
           python scripts/fitness/check_tracing_gate.py
@@ -1170,6 +1191,18 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.yml down -v --remove-orphans
 
+  live-e2e-required:
+    name: "E2E Full Stack — real external services and user journey"
+    uses: ./.github/workflows/live-e2e.yml
+    with:
+      matrix_only: false
+    secrets: inherit
+
+  runtime-truth-required:
+    name: "Runtime truth — required drift check"
+    uses: ./.github/workflows/runtime_truth.yml
+    secrets: inherit
+
   required-ci:
     name: required-ci
     runs-on: ubuntu-latest
@@ -1183,6 +1216,8 @@ jobs:
         frontend-tests,
         skills-structural,
         event-stack-live,
+        live-e2e-required,
+        runtime-truth-required,
         # Both, deliberately. `images-build` is skipped when `images-plan` fails, and
         # skipped counts as success below — so listing only the build job would let a
         # broken matrix pass as green.
@@ -1203,6 +1238,8 @@ jobs:
           echo "frontend-tests=${{ needs.frontend-tests.result }}"
           echo "skills-structural=${{ needs.skills-structural.result }}"
           echo "event-stack-live=${{ needs.event-stack-live.result }}"
+          echo "live-e2e-required=${{ needs.live-e2e-required.result }}"
+          echo "runtime-truth-required=${{ needs.runtime-truth-required.result }}"
           echo "images-plan=${{ needs.images-plan.result }}"
           echo "images-build=${{ needs.images-build.result }}"
 
@@ -1219,6 +1256,8 @@ jobs:
              ! isValid "${{ needs.frontend-tests.result }}" || \
              ! isValid "${{ needs.skills-structural.result }}" || \
              ! isValid "${{ needs.event-stack-live.result }}" || \
+             ! isValid "${{ needs.live-e2e-required.result }}" || \
+             ! isValid "${{ needs.runtime-truth-required.result }}" || \
              ! isValid "${{ needs.images-plan.result }}" || \
              ! isValid "${{ needs.images-build.result }}"; then
             echo "❌ One or more required checks failed"

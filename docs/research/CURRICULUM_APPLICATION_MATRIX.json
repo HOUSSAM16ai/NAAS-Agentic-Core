@@ -1,0 +1,1737 @@
+{
+  "$schema_version": "1",
+  "decision": "D-278",
+  "catalog_source": "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+  "coverage_ar": "كل مقرر مميز في الكتالوج الرسمي له بطاقة تطبيق؛ لا توجد خانة UNMAPPED أو مقرر مخفي. الخريطة الأولية لا تدعي أن كل مبدأ نُفذ في المنتج؛ التنفيذ يثبت في packet المهمة.",
+  "baseline_for_every_code_change": [
+    "harvard-cs50x-foundations",
+    "harvard-cs-concentration-domains",
+    "nist-ssdf-1.1",
+    "owasp-agent-security"
+  ],
+  "required_card_fields": [
+    "course_id",
+    "domain_tags",
+    "principles_ar",
+    "change_types",
+    "status",
+    "authority_rule_ar",
+    "evidence_paths",
+    "owner"
+  ],
+  "course_count": 59,
+  "courses": [
+    {
+      "course_id": "COMPSCI 20",
+      "title": "Discrete Mathematics for Computer Science",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 32",
+      "title": "Computational Thinking and Problem Solving",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 50",
+      "title": "Introduction to Computer Science",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "software_language_runtime",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": true,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 51",
+      "title": "Abstraction and Design in Computation",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "software_language_runtime",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 61",
+      "title": "Systems Programming and Machine Organization",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "systems_performance",
+        "software_language_runtime"
+      ],
+      "principles_ar": [
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 79",
+      "title": "Design of Useful and Usable Interactive Systems",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "systems_performance",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 85",
+      "title": "Introduction to Generative AI via Building Software for the Study of Arts & Sciences",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "software_language_runtime",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 91R",
+      "title": "Supervised Reading and Research",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "research_innovation"
+      ],
+      "principles_ar": [
+        "أي بحث أو ابتكار يحدد الفرضية والمنهج والدليل والحدود وخطة التحويل إلى قدرة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1050",
+      "title": "Privacy and Technology",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1066",
+      "title": "Build at the Speed of Thought",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "systems_performance",
+        "software_language_runtime"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1090A",
+      "title": "Data Science 1: Introduction to Data Science",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "algorithms_formal_reasoning",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1090B",
+      "title": "Data Science 2: Advanced Topics in Data Science",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "systems_performance"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1200",
+      "title": "Introduction to Algorithms and their Limitations",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "software_language_runtime",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1210",
+      "title": "Introduction to Theoretical Computer Science",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1240",
+      "title": "Data Structures and Algorithms",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1251",
+      "title": "Introduction to Graph Theory",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1261",
+      "title": "Privacy, Fairness, and Validity Through the Lens of Theoretical CS",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "algorithms_formal_reasoning",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1280",
+      "title": "Convex Optimization and Applications in Machine Learning",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "algorithms_formal_reasoning"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1410",
+      "title": "Computing Hardware",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "systems_performance",
+        "software_language_runtime",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1411",
+      "title": "Computer Architecture",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "systems_performance",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1440R",
+      "title": "Networks Design Projects",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "systems_performance",
+        "product_interface_human_factors",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1450",
+      "title": "Networking at Scale",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "systems_performance",
+        "software_language_runtime"
+      ],
+      "principles_ar": [
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1520",
+      "title": "Programming Languages",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "systems_performance",
+        "software_language_runtime",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1530",
+      "title": "Compilers",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "software_language_runtime",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1710",
+      "title": "Visualization",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1750",
+      "title": "Computer Graphics",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "systems_performance",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1810",
+      "title": "Machine Learning",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "algorithms_formal_reasoning",
+        "systems_performance"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1820",
+      "title": "Planning and Learning Methods in AI",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "ai_ml_data",
+        "algorithms_formal_reasoning"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1840",
+      "title": "Introduction to Reinforcement Learning",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "ai_ml_data",
+        "algorithms_formal_reasoning",
+        "systems_performance",
+        "product_interface_human_factors",
+        "education_workforce"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة.",
+        "أي قدرة تعليمية تقيس التعلم الحقيقي، انتقال المهارة، وحاجات سوق الشغل دون ادعاء أثر غير مثبت."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 1960",
+      "title": "Designing K–12 Computer Science Learning Experiences",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "software_language_runtime",
+        "product_interface_human_factors",
+        "education_workforce",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة.",
+        "أي قدرة تعليمية تقيس التعلم الحقيقي، انتقال المهارة، وحاجات سوق الشغل دون ادعاء أثر غير مثبت.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2050",
+      "title": "High Performance Computing for Science and Engineering",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "systems_performance",
+        "software_language_runtime"
+      ],
+      "principles_ar": [
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2211",
+      "title": "Information Theory in CS",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "algorithms_formal_reasoning",
+        "systems_performance"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2242",
+      "title": "Probabilistic Analysis and Algorithms",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2243",
+      "title": "Algorithms for Data Science",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "algorithms_formal_reasoning"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2280",
+      "title": "Computational Learning Theory",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2360R",
+      "title": "Topics at the Interface between Computer Science and Economics",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "systems_performance",
+        "product_interface_human_factors",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2370",
+      "title": "Economic Analysis as a Frontier of Theoretical Computer Science",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "algorithms_formal_reasoning",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2380",
+      "title": "Optimized Democracy",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "algorithms_formal_reasoning",
+        "systems_performance",
+        "product_interface_human_factors",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2411",
+      "title": "Advanced Computer Architecture",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "systems_performance",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2420",
+      "title": "Computing at Scale",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "ai_ml_data",
+        "algorithms_formal_reasoning",
+        "systems_performance",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2430",
+      "title": "Advanced Computer Networks",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "systems_performance",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2440R",
+      "title": "Networks Design Projects",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "systems_performance",
+        "product_interface_human_factors",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2470R",
+      "title": "Advanced Topics in Computer Architecture",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "systems_performance",
+        "software_language_runtime"
+      ],
+      "principles_ar": [
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2520R",
+      "title": "Advanced Topics in Programming Languages",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "software_language_runtime"
+      ],
+      "principles_ar": [
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2630",
+      "title": "Systems Security",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "systems_performance",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2680",
+      "title": "Modern AI Systems: Agents and Systems Optimization",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "algorithms_formal_reasoning",
+        "systems_performance",
+        "product_interface_human_factors",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2710",
+      "title": "Topics in Data Visualization",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2760",
+      "title": "Design, Technology, and Social Impact",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "product_interface_human_factors",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2822R",
+      "title": "Topics in Machine Learning: Effective AI Support in Human+AI Settings",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "algorithms_formal_reasoning",
+        "systems_performance",
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2823R",
+      "title": "Advanced Topics in Modern Machine Learning",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "algorithms_formal_reasoning"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2824",
+      "title": "Foundations of Reinforcement Learning",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "algorithms_formal_reasoning",
+        "systems_performance"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2831",
+      "title": "Advanced Computer Vision",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "software_quality_and_proof"
+      ],
+      "principles_ar": [
+        "أي تغيير يثبت الصحة والاختبار والعقد والتشغيل والرجوع الآمن."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2860",
+      "title": "Multi-Robot Systems: Control, Communication, and Security",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust",
+        "algorithms_formal_reasoning",
+        "systems_performance",
+        "socioeconomic_governance"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود.",
+        "أي منطق أو قرار أو فهرسة أو تحسين يثبت الصحة والتعقيد وحدود المسألة.",
+        "أي خدمة أو تخزين أو نشر أو تزامن أو أداء يثبت الحدود والفشل والموارد والمراقبة.",
+        "أي قرار سوقي أو حوكمي يوضح أصحاب المصلحة والحوافز والمخاطر والأثر."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2880",
+      "title": "AI for Social Impact",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "security_privacy_trust"
+      ],
+      "principles_ar": [
+        "أي تغيير يتعامل مع بيانات أو نماذج أو قرارات حساسة يمر عبر الخصوصية والإنصاف والتهديدات والحدود."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2881R",
+      "title": "Topics in Foundations of ML: AI Alignment and Safety",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data",
+        "software_language_runtime"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة.",
+        "أي تغيير لغة أو runtime أو API أو تجريد يثبت العقد والأنواع والتوافق والاختبارات."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2883R",
+      "title": "Advanced Topics in Computer Vision",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "ai_ml_data"
+      ],
+      "principles_ar": [
+        "أي تغيير نموذج أو بيانات أو تقييم يمر عبر فرضية، بيانات، تقييم، حدود تعميم، وكلفة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2901",
+      "title": "Seminar on Effective Research Practices and Academic Culture",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2902",
+      "title": "Seminar on Effective Research Practices and Academic Culture",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "product_interface_human_factors"
+      ],
+      "principles_ar": [
+        "أي واجهة أو تجربة أو تصور يثبت حاجة المستخدم وقابلية الاستخدام والنتيجة لا الزينة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    },
+    {
+      "course_id": "COMPSCI 2990R",
+      "title": "Special Topics in Computer Science",
+      "source": "https://seas.harvard.edu/computer-science/courses",
+      "domain_tags": [
+        "research_innovation"
+      ],
+      "principles_ar": [
+        "أي بحث أو ابتكار يحدد الفرضية والمنهج والدليل والحدود وخطة التحويل إلى قدرة."
+      ],
+      "change_types": [
+        "code",
+        "architecture",
+        "agent",
+        "research",
+        "commercial"
+      ],
+      "required_for_all_code": false,
+      "status": "CATALOGED_PROVISIONAL_LOCAL_MAP",
+      "authority_rule_ar": "لا يُعد هذا المقرر دليلاً مطبقاً حتى يذكره change packet للمهمة، ويحدد موضع التطبيق والاختبار والمالك.",
+      "evidence_paths": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "owner": "curriculum-governance"
+    }
+  ]
+}

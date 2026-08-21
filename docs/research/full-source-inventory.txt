@@ -1,0 +1,98 @@
+--- github repository URLs ---
+https://github.com/ByteByteGoHq/system-design-101
+https://github.com/ComposioHQ/awesome-claude-skills
+https://github.com/EbookFoundation/free-programming-books
+https://github.com/Gatjuat-Wicteat-Riek/clean-code-book
+https://github.com/HOUSSAM16ai/NAAS-Agentic-Core
+https://github.com/HOUSSAM16ai/NAAS-Agentic-Core.git
+https://github.com/HOUSSAM16ai/my_ai_project
+https://github.com/HOUSSAM16ai/my_ai_project.git
+https://github.com/Houssam-lab/NAAS-Agentic-Core
+https://github.com/Houssam-lab/deepseek-harness
+https://github.com/Houssam-lab/openhands
+https://github.com/PyCQA/bandit
+https://github.com/TheAlgorithms/Python
+https://github.com/ai-for-solution-labs/my_ai_project
+https://github.com/ai-for-solution-labs/my_ai_project.git
+https://github.com/anthropics/claude-cookbooks
+https://github.com/anthropics/skills
+https://github.com/argoproj/argo-rollouts
+https://github.com/astral-sh/ruff-pre-commit
+https://github.com/bakabala27-svg/NAAS-Agentic-Core
+https://github.com/browser-use/browser-use
+https://github.com/cert-manager/cert-manager
+https://github.com/chalk/ansi-regex
+https://github.com/chalk/ansi-styles
+https://github.com/chalk/chalk
+https://github.com/chalk/strip-ansi
+https://github.com/chalk/wrap-ansi
+https://github.com/cncf/trailmap
+https://github.com/codecrafters-io/build-your-own-x
+https://github.com/cogniforge/api-examples.git
+https://github.com/cordiverse/cordis
+https://github.com/cursor/cookbook
+https://github.com/cursor/plugins
+https://github.com/deepseek-ai/deepseek-harness
+https://github.com/donnemartin/system-design-primer
+https://github.com/fb55/entities
+https://github.com/freeCodeCamp/freeCodeCamp
+https://github.com/github/github-mcp-server
+https://github.com/google-gemini/cookbook
+https://github.com/google/adk-python
+https://github.com/inikulin/parse5
+https://github.com/jwasham/coding-interview-university
+https://github.com/kamranahmedse/developer-roadmap
+https://github.com/kserve/kserve
+https://github.com/mattpocock/skills
+https://github.com/microsoft/api-guidelines
+https://github.com/mozilla/diversity
+https://github.com/openai/openai-agents-python
+https://github.com/openai/openai-cookbook
+https://github.com/pgvector/pgvector
+https://github.com/pre-commit/mirrors-mypy
+https://github.com/pre-commit/pre-commit-hooks
+https://github.com/privatenumber/get-tsconfig
+https://github.com/privatenumber/resolve-pkg-maps
+https://github.com/prometheus/prometheus
+https://github.com/psf/black
+https://github.com/public-apis/public-apis
+https://github.com/rasbt/LLMs-from-scratch
+https://github.com/ryanmcdermott/clean-code-javascript
+https://github.com/settings/codespaces
+https://github.com/settings/tokens
+https://github.com/sindresorhus/awesome
+https://github.com/sponsors/RubenVerborgh
+https://github.com/sponsors/SuperchupuDev
+https://github.com/sponsors/ai
+https://github.com/sponsors/epoberezkin
+https://github.com/sponsors/feross
+https://github.com/sponsors/inspect-js
+https://github.com/sponsors/isaacs
+https://github.com/sponsors/jonschlinkert
+https://github.com/sponsors/katex
+https://github.com/sponsors/ljharb
+https://github.com/sponsors/nodeca
+https://github.com/sponsors/nzakas
+https://github.com/sponsors/puzrin
+https://github.com/sponsors/sindresorhus
+https://github.com/sponsors/unifiedjs
+https://github.com/sponsors/wooorm
+https://github.com/xai-org/grok-build
+https://github.com/yaml/pyyaml
+--- github URL count ---
+80
+--- external standards registry rows ---
+11
+openhands-agent-canvas ACTIVE https://github.com/Houssam-lab/openhands
+anthropic-skills ACTIVE https://github.com/anthropics/skills
+google-adk-python SEAM https://github.com/google/adk-python
+openai-agents-python ABSENT https://github.com/openai/openai-agents-python
+deepseek-harness SEAM https://github.com/deepseek-ai/deepseek-harness
+xai-grok-build ABSENT https://github.com/xai-org/grok-build
+cursor-plugins ABSENT https://github.com/cursor/plugins
+openai-cookbook ABSENT https://github.com/openai/openai-cookbook
+claude-cookbooks ABSENT https://github.com/anthropics/claude-cookbooks
+gemini-cookbook ABSENT https://github.com/google-gemini/cookbook
+cursor-cookbook ABSENT https://github.com/cursor/cookbook
+--- constitution registry count ---
+19

@@ -20,6 +20,20 @@ This project adopts a fusion of two computer science methodologies. All code and
 
 ---
 
+## Unified Agent Context — Mandatory Boot Contract (D-275)
+
+Before planning, coding, researching, or changing any project asset, every agent MUST load [`docs/governance/AGENT_CONTEXT_REGISTRY.json`](docs/governance/AGENT_CONTEXT_REGISTRY.json) and follow its authority order and boot sequence. The registry connects the product mission, constitutions, runtime truth, reference backbone, commercial offer catalog, architecture, education goals, governance, and evidence rules.
+
+An agent MUST distinguish law from status, proposal from proof, and reference material from implemented capability. It MUST trace each substantive task to a user/customer problem, a project capability, a relevant evidence source, and—when the work is commercial—a declared hard-currency revenue path. It MUST not invent metrics, customer validation, security claims, revenue, or runtime status.
+
+The default change policy is additive: do not delete, rename, replace, or silently supersede existing project assets. If a change is architectural, commercial, security-sensitive, or difficult to reverse, create an ADR and preserve the previous record. Before reporting completion, run the relevant gates, inspect `git diff --check`, and verify that no unintended deletions occurred.
+
+Canonical context law: [`docs/architecture/AGENT_CONTEXT_CONSTITUTION.md`](docs/architecture/AGENT_CONTEXT_CONSTITUTION.md). Current context status: [`.memory/agent_context_truth.md`](.memory/agent_context_truth.md).
+
+Before adding or modifying code, the agent MUST also load [`docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md`](docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md), [`docs/research/EVIDENCE_CATALOG.json`](docs/research/EVIDENCE_CATALOG.json), [`docs/research/UNIVERSITY_CURRICULUM_CATALOG.json`](docs/research/UNIVERSITY_CURRICULUM_CATALOG.json), [`docs/research/CURRICULUM_APPLICATION_MATRIX.json`](docs/research/CURRICULUM_APPLICATION_MATRIX.json), and the current change packet [`docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json`](docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json). The packet must account for every catalogued course, then state which domains apply to the task and why. A code change without standards, academic consideration, evidence, local application, production proof, commercial trace, and an explicit zero-deletion check is not mergeable.
+
+---
+
 ## API-First Microservice Architecture (The Constitution)
 
 The system is mandated to be **100% API First Microservice**.

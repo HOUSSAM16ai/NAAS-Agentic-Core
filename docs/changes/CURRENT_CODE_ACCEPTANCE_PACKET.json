@@ -1,0 +1,405 @@
+{
+  "$schema_version": "1",
+  "packet_id": "CAP-2026-08-21-reference-and-agent-governance",
+  "status": "READY_FOR_GATE",
+  "decision": "D-277",
+  "changed_paths": [
+    ".github/workflows/ci.yml",
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".memory/README.md",
+    ".memory/ci-gates.md",
+    ".memory/decisions.md",
+    "docs/DOCUMENTATION_INDEX.md",
+    "docs/adr/ADR-013-reference-backbone.md",
+    "docs/adr/ADR-014-full-curriculum-gate.md",
+    "docs/guides/AGENT_CODE_CHANGE_PROTOCOL.md",
+    "docs/architecture/DUAL_TRACK_PRODUCT_SYSTEM.md",
+    "docs/commercial/FOREIGN_CURRENCY_OPERATING_SYSTEM.md",
+    "docs/governance/DUAL_TRACK_ALIGNMENT.json",
+    "docs/adr/ADR-015-dual-track-product-system.md",
+    "docs/architecture/AGENT_CONTEXT_CONSTITUTION.md",
+    "docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md",
+    "docs/architecture/REFERENCE_BACKBONE_CONSTITUTION.md",
+    "docs/changes",
+    "docs/commercial",
+    "docs/governance/AGENT_CONTEXT_REGISTRY.json",
+    "docs/governance/CONSTITUTION_REGISTRY.json",
+    "docs/governance/REFERENCE_BACKBONE.json",
+    "docs/governance/REFERENCE_BACKBONE.md",
+    "docs/governance/SOURCE_ADOPTION_MATRIX.json",
+    "docs/governance/SOURCE_ADOPTION_MATRIX.md",
+    "docs/research",
+    ".memory/agent_context_truth.md",
+    ".memory/reference_backbone_truth.md",
+    "scripts/fitness/check_agent_context.py",
+    "scripts/fitness/check_reference_backbone.py",
+    "scripts/fitness/check_source_adoption_matrix.py",
+    "scripts/fitness/check_code_acceptance.py",
+    "scripts/fitness/check_dual_track_alignment.py",
+    "scripts/fitness/check_memory_coherence.py",
+    "scripts/research",
+    "scripts/research/extract_harvard_course_catalog.py",
+    "scripts/research/build_curriculum_application_matrix.py",
+    "scripts/research/enrich_acceptance_packet_curriculum.py"
+  ],
+  "standards": [
+    "developer-roadmap",
+    "coding-interview-university",
+    "the-algorithms-python",
+    "system-design-primer",
+    "system-design-101",
+    "build-your-own-x",
+    "clean-code-javascript",
+    "clean-code-book",
+    "freecodecamp",
+    "awesome",
+    "free-programming-books",
+    "public-apis",
+    "browser-use",
+    "llms-from-scratch",
+    "awesome-claude-skills"
+  ],
+  "evidence": [
+    "nist-ai-rmf-1.0",
+    "nist-agent-standards-initiative",
+    "nist-ssdf-1.1",
+    "owasp-agent-security",
+    "openssf-scorecard",
+    "slsa-1.2",
+    "dora-core",
+    "mit-6824-distributed-systems",
+    "stanford-cs231n",
+    "stanford-cs224n",
+    "cmu-15619-cloud-computing",
+    "berkeley-cs162"
+  ],
+  "local_application": [
+    {
+      "standard": "system-design-primer",
+      "paths": [
+        "docs/architecture",
+        "docs/contracts"
+      ],
+      "gate": "check_source_adoption_matrix.py",
+      "application_ar": "تحويل مقايضات الأنظمة الموزعة إلى قرارات وعقود واختبارات محلية."
+    },
+    {
+      "standard": "coding-interview-university",
+      "paths": [
+        "app/core/foundations",
+        "tests"
+      ],
+      "gate": "existing guardrails and test suites",
+      "application_ar": "ربط الأساس الخوارزمي بصحة المكونات والاختبارات، لا بمجرد القراءة."
+    },
+    {
+      "standard": "browser-use",
+      "paths": [
+        "SECURITY.md",
+        "docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md"
+      ],
+      "gate": "check_agent_context.py and existing security gates",
+      "application_ar": "إبقاء تفاعل المتصفح خلف الهوية والصلاحيات والموافقة والعزل وعدم التفعيل الصامت."
+    },
+    {
+      "standard": "awesome-claude-skills",
+      "paths": [
+        ".claude/skills",
+        "docs/governance/AGENT_SKILLS.json"
+      ],
+      "gate": "check_agent_skills_spec.py",
+      "application_ar": "كل مهارة محلية لها عقد وتقييم وفارض؛ الفهرس الخارجي لا يمنح صلاحية."
+    },
+    {
+      "standard": "developer-roadmap",
+      "paths": [
+        "docs/architecture/CS_KNOWLEDGE_MAP.md",
+        "docs/START_HERE.md"
+      ],
+      "gate": "check_source_adoption_matrix.py",
+      "application_ar": "خارطة تعلم مرتبطة بمتطلبات القدرة، لا تعليم عشوائي منفصل عن المنتج."
+    },
+    {
+      "standard": "public-apis",
+      "paths": [
+        "docs/contracts",
+        "docs/commercial/OFFER_CATALOG.json"
+      ],
+      "gate": "check_source_adoption_matrix.py",
+      "application_ar": "التكامل الخارجي لا يصبح حقيقياً إلا بعقد وخصوصية ومراقبة ومالك."
+    },
+    {
+      "standard": "the-algorithms-python",
+      "paths": [
+        "app/core/foundations",
+        "tests"
+      ],
+      "gate": "existing guardrails and test suites",
+      "application_ar": "التنفيذ المقارن للخوارزميات لا يدخل المنتج بلا اختبار صحة وتعقيد وحدود مدخلات."
+    },
+    {
+      "standard": "system-design-101",
+      "paths": [
+        "docs/architecture",
+        "docs/contracts"
+      ],
+      "gate": "check_source_adoption_matrix.py",
+      "application_ar": "الرسوم والتدفقات تشرح العقود ولا تستبدلها."
+    },
+    {
+      "standard": "build-your-own-x",
+      "paths": [
+        "docs/architecture/EXTENSION_SEAMS.md",
+        "docs/research/authoritative-foundations.md"
+      ],
+      "gate": "check_source_adoption_matrix.py",
+      "application_ar": "التجارب من الصفر معزولة عن الإنتاج وتثبت الفهم قبل أي تبعية."
+    },
+    {
+      "standard": "clean-code-javascript",
+      "paths": [
+        "frontend",
+        ".pre-commit-config.yaml"
+      ],
+      "gate": "existing frontend CI and lint gates",
+      "application_ar": "وضوح الواجهة وصغر المسؤولية مع احترام عقود المنتج."
+    },
+    {
+      "standard": "clean-code-book",
+      "paths": [
+        "docs/quality/standards.md"
+      ],
+      "gate": "review and existing quality gates",
+      "application_ar": "مبادئ القراءة والصيانة مرجع مراجعة لا قانون منفصل."
+    },
+    {
+      "standard": "freecodecamp",
+      "paths": [
+        "docs/guides",
+        "docs/START_HERE.md"
+      ],
+      "gate": "check_source_adoption_matrix.py",
+      "application_ar": "المسار التأسيسي جزء من onboarding ولا يفرض تبعية تشغيلية."
+    },
+    {
+      "standard": "awesome",
+      "paths": [
+        "docs/research/authoritative-foundations.md",
+        "docs/commercial/OFFER_CATALOG.json"
+      ],
+      "gate": "check_source_adoption_matrix.py",
+      "application_ar": "الفهرس يكتشف خيارات فقط؛ كل خيار يحتاج مراجعة أولية مستقلة."
+    },
+    {
+      "standard": "free-programming-books",
+      "paths": [
+        "docs/guides",
+        "docs/research"
+      ],
+      "gate": "check_source_adoption_matrix.py",
+      "application_ar": "مراجع التعلم تدخل المسار مع احترام الترخيص وعدم تحويلها إلى كود."
+    },
+    {
+      "standard": "llms-from-scratch",
+      "paths": [
+        "shared/ai_models/model_chain.py",
+        "docs/architecture/AGENTIC_DESIGN_PRINCIPLES.md"
+      ],
+      "gate": "check_agent_context.py and existing model gates",
+      "application_ar": "فهم النماذج لا يمنحها سلطة تقرير الأرقام أو الحقيقة."
+    }
+  ],
+  "production": {
+    "owner": "architecture-governance",
+    "status": "GOVERNANCE_LAYER_READY_FOR_CI",
+    "interfaces": [
+      "required guardrails job",
+      "agent boot registry",
+      "source adoption matrix",
+      "change packet"
+    ],
+    "failure_behavior_ar": "يفشل القبول عند غياب مصدر أو دليل أو معيار أو مسار محلي أو عند وجود حذف.",
+    "observability_ar": "بوابات CI وسجل packet وملفات truth قابلة للمراجعة.",
+    "security_boundary_ar": "لا توجد تبعية تشغيلية جديدة؛ الوكلاء والمصادر الخارجية ممنوعة من منح صلاحيات ذاتية.",
+    "rollback_ar": "الطبقة إضافية؛ يمكن supersede بقرار جديد مع إبقاء جميع السجلات السابقة.",
+    "runtime_evidence_paths": [
+      ".memory/agent_context_truth.md",
+      ".memory/reference_backbone_truth.md"
+    ]
+  },
+  "commercial_trace": {
+    "offer_ids": [
+      "ai-red-teaming-multilingual",
+      "niche-rlhf-data",
+      "on-premise-energy-ai",
+      "physics-informed-ai",
+      "formal-verification-ai",
+      "eu-ai-act-compliance",
+      "high-rpm-ai-affiliation"
+    ],
+    "customer_problem_ar": "تقليل مخاطر بناء منتج معقد بلا دليل، وربط كل قدرة هندسية بمعيار قابل للتحقق وعرض قابل للبيع.",
+    "value_hypothesis_ar": "المنتج الأكثر قابلية للبيع المؤسسي هو الذي يستطيع إثبات معايير البناء والأمان والموثوقية والتقييم، لا الذي يكتفي بعرض نموذج أولي.",
+    "foreign_currency_path_ar": "طبقة الحوكمة والأدلة تمكّن العروض السبعة؛ لا تسجل هذه الحزمة إيراداً محصلاً ولا تدعي عقداً.",
+    "foundation_exception_ar": "هذه الحزمة بنية تمكينية مشتركة وليست عرضاً مدفوعاً مستقلاً؛ حالة العروض في OFFER_CATALOG تبقى PROPOSED حتى وجود دليل عميل."
+  },
+  "deletions": {
+    "count": 0,
+    "paths": [],
+    "policy_ar": "الحذف غير مسموح في هذه الحزمة."
+  },
+  "verification": {
+    "commands": [
+      "python3 -m json.tool docs/governance/REFERENCE_BACKBONE.json",
+      "python3 -m json.tool docs/governance/AGENT_CONTEXT_REGISTRY.json",
+      "python3 -m json.tool docs/governance/SOURCE_ADOPTION_MATRIX.json",
+      "python3 scripts/fitness/check_reference_backbone.py",
+      "python3 scripts/fitness/check_agent_context.py",
+      "python3 scripts/fitness/check_dual_track_alignment.py",
+      "python3 scripts/fitness/check_code_acceptance.py",
+      "python3 scripts/fitness/check_memory_coherence.py",
+      "python3 scripts/fitness/check_governance_registry.py",
+      "python3 scripts/research/refresh_acceptance_diff_snapshot.py",
+      "git diff --check"
+    ],
+    "result": "PASS",
+    "verified_on": "2026-08-21",
+    "unverified_limits_ar": "لم تُثبت هذه الحزمة إيراداً أو أداء إنتاجياً تجارياً؛ تثبت فقط طبقة الحوكمة وقابلية التتبع."
+  },
+  "curriculum": {
+    "catalog_path": "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+    "application_matrix_path": "docs/research/CURRICULUM_APPLICATION_MATRIX.json",
+    "all_catalog_courses_loaded": true,
+    "catalog_course_count": 59,
+    "considered_course_ids": [
+      "COMPSCI 20",
+      "COMPSCI 32",
+      "COMPSCI 50",
+      "COMPSCI 51",
+      "COMPSCI 61",
+      "COMPSCI 79",
+      "COMPSCI 85",
+      "COMPSCI 91R",
+      "COMPSCI 1050",
+      "COMPSCI 1066",
+      "COMPSCI 1090A",
+      "COMPSCI 1090B",
+      "COMPSCI 1200",
+      "COMPSCI 1210",
+      "COMPSCI 1240",
+      "COMPSCI 1251",
+      "COMPSCI 1261",
+      "COMPSCI 1280",
+      "COMPSCI 1410",
+      "COMPSCI 1411",
+      "COMPSCI 1440R",
+      "COMPSCI 1450",
+      "COMPSCI 1520",
+      "COMPSCI 1530",
+      "COMPSCI 1710",
+      "COMPSCI 1750",
+      "COMPSCI 1810",
+      "COMPSCI 1820",
+      "COMPSCI 1840",
+      "COMPSCI 1960",
+      "COMPSCI 2050",
+      "COMPSCI 2211",
+      "COMPSCI 2242",
+      "COMPSCI 2243",
+      "COMPSCI 2280",
+      "COMPSCI 2360R",
+      "COMPSCI 2370",
+      "COMPSCI 2380",
+      "COMPSCI 2411",
+      "COMPSCI 2420",
+      "COMPSCI 2430",
+      "COMPSCI 2440R",
+      "COMPSCI 2470R",
+      "COMPSCI 2520R",
+      "COMPSCI 2630",
+      "COMPSCI 2680",
+      "COMPSCI 2710",
+      "COMPSCI 2760",
+      "COMPSCI 2822R",
+      "COMPSCI 2823R",
+      "COMPSCI 2824",
+      "COMPSCI 2831",
+      "COMPSCI 2860",
+      "COMPSCI 2880",
+      "COMPSCI 2881R",
+      "COMPSCI 2883R",
+      "COMPSCI 2901",
+      "COMPSCI 2902",
+      "COMPSCI 2990R"
+    ],
+    "baseline_evidence_ids": [
+      "harvard-cs50x-foundations",
+      "harvard-cs-concentration-domains"
+    ],
+    "task_specific_evidence_ids": [
+      "harvard-cs50x-foundations",
+      "harvard-cs-concentration-domains"
+    ],
+    "unapplied_course_policy_ar": "كل المقررات قُرئت على مستوى الكتالوج والمصفوفة؛ ما لا ينطبق مباشرة على حزمة الحوكمة يُسجل كغير منطبق مع سبب، ولا يتحول إلى ادعاء تطبيق أو حذف من الكتالوج.",
+    "applicability_result": "ALL_CATALOG_COURSES_CONSIDERED",
+    "owner": "curriculum-governance"
+  },
+  "git_change_snapshot": {
+    "base_ref": "WORKTREE",
+    "changed_paths_excluding_packet": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/live-e2e.yml",
+      ".github/workflows/runtime_truth.yml",
+      ".memory/README.md",
+      ".memory/agent_context_truth.md",
+      ".memory/ci-gates.md",
+      ".memory/decisions.md",
+      ".memory/reference_backbone_truth.md",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "docs/DOCUMENTATION_INDEX.md",
+      "docs/adr/ADR-013-reference-backbone.md",
+      "docs/adr/ADR-014-full-curriculum-gate.md",
+      "docs/adr/ADR-015-dual-track-product-system.md",
+      "docs/architecture/AGENT_CONTEXT_CONSTITUTION.md",
+      "docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md",
+      "docs/architecture/DUAL_TRACK_PRODUCT_SYSTEM.md",
+      "docs/architecture/REFERENCE_BACKBONE_CONSTITUTION.md",
+      "docs/changes/current_changed_paths.txt",
+      "docs/commercial/FOREIGN_CURRENCY_OPERATING_SYSTEM.md",
+      "docs/commercial/OFFER_CATALOG.json",
+      "docs/governance/AGENT_CONTEXT_REGISTRY.json",
+      "docs/governance/CONSTITUTION_REGISTRY.json",
+      "docs/governance/DUAL_TRACK_ALIGNMENT.json",
+      "docs/governance/REFERENCE_BACKBONE.json",
+      "docs/governance/REFERENCE_BACKBONE.md",
+      "docs/governance/SOURCE_ADOPTION_MATRIX.json",
+      "docs/governance/SOURCE_ADOPTION_MATRIX.md",
+      "docs/guides/AGENT_CODE_CHANGE_PROTOCOL.md",
+      "docs/research/ALL_GITHUB_SOURCES_INVENTORY.json",
+      "docs/research/ALL_GITHUB_SOURCES_INVENTORY.md",
+      "docs/research/CURRICULUM_APPLICATION_MATRIX.json",
+      "docs/research/CURRICULUM_APPLICATION_MATRIX.md",
+      "docs/research/EVIDENCE_CATALOG.json",
+      "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+      "docs/research/UNIVERSITY_CURRICULUM_CATALOG.md",
+      "docs/research/authoritative-foundations.md",
+      "docs/research/full-source-inventory.txt",
+      "scripts/fitness/check_agent_context.py",
+      "scripts/fitness/check_code_acceptance.py",
+      "scripts/fitness/check_dual_track_alignment.py",
+      "scripts/fitness/check_memory_coherence.py",
+      "scripts/fitness/check_reference_backbone.py",
+      "scripts/fitness/check_source_adoption_matrix.py",
+      "scripts/research/build_curriculum_application_matrix.py",
+      "scripts/research/build_source_adoption_matrix.py",
+      "scripts/research/enrich_acceptance_packet_curriculum.py",
+      "scripts/research/extract_harvard_course_catalog.py",
+      "scripts/research/inventory_github_sources.py",
+      "scripts/research/refresh_acceptance_diff_snapshot.py"
+    ],
+    "content_sha256_excluding_packet": "8b127aa1d088989ebf05c7afe17c349b1dc858bfdf06988310c95b2207cc75a0",
+    "refreshed_on": "2026-08-21",
+    "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
+  }
+}

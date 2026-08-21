@@ -1,0 +1,182 @@
+{
+  "$schema_version": "1",
+  "decision": "ADR-013",
+  "law_ar": "هذه المراجع أساس معرفي إلزامي للمشروع، ولا يجوز تجاوزها أو استبدالها بصمت؛ تُضاف ولا تحذف، ولا تتحول إلى تبعيات تشغيلية بلا قرار جديد.",
+  "purpose_ar": "تحويل قائمة المراجع الواردة من المستخدم إلى طبقة أساس قابلة للتدقيق: كل مصدر مثبت على commit محدد، وكل استعارة معلنة، وكل ما لم يُستعر معلن، وكل تغيير يمر عبر ADR وبوابات CI.",
+  "commercial_mandate": {
+    "objective_ar": "تحقيق أرباح مستدامة وجلب إيراد بالعملة الصعبة من عملاء خارج الجزائر هو الهدف التجاري الأعلى للمشروع.",
+    "priority_rule_ar": "لا يُموَّل تعلم أو هندسة أو ميزة على حساب وقت البيع إلا إذا خدم خط إيراد معلناً أو خفّض مخاطرة تسليم أو أثبت فرضية سوقية قابلة للقياس.",
+    "primary_success_metric_ar": "إيراد محصل أو عقد مؤسسي موثق بالدولار أو اليورو، مع هامش واستدامة ومالك واضح.",
+    "decision_gate_ar": "كل مبادرة مستمدة من العمود الفقري تذكر العميل المستهدف، المشكلة المدفوعة، خط الإيراد، دليل الندرة، وسلوكاً قابلاً للقياس قبل التوسع.",
+    "anti_vanity_metrics_ar": ["نجوم GitHub", "عدد الملفات", "عدد الوكلاء", "عدد المستخدمين غير المدفوعين", "مدة الجلسة", "عدد الرسائل"]
+  },
+  "immutability_model": {
+    "reference_set": "exactly_the_declared_ids",
+    "revision_policy": "append_only_or_superseded_by_new_adr",
+    "runtime_dependency_policy": "forbidden_without_new_adr_and_security_review",
+    "copying_policy": "no_vendor_or_bulk_copy; cite and implement principles locally",
+    "deletion_policy": "existing_project_files_are_not_deleted_by_this_backbone_change"
+  },
+  "verification": {
+    "verified_on": "2026-08-21",
+    "method": "GitHub CLI repository metadata plus GitHub API commit lookup; each source is pinned to the first commit returned from its default branch at verification time",
+    "unverified_claims_excluded": true,
+    "stars_are_not_governance_evidence": true
+  },
+  "enforcers": [
+    "scripts/fitness/check_reference_backbone.py",
+    "scripts/fitness/check_external_standards.py"
+  ],
+  "references": [
+    {
+      "id": "developer-roadmap",
+      "repo": "https://github.com/kamranahmedse/developer-roadmap",
+      "commit_sha": "9a38345ec29629224e40131ecfaba7a82abdf979",
+      "snapshot_url": "https://github.com/kamranahmedse/developer-roadmap/tree/9a38345ec29629224e40131ecfaba7a82abdf979",
+      "role_ar": "بوصلة المسار المعرفي وتحديد التخصصات والتبعيات",
+      "adopted_ar": "يُستخدم لتوجيه خارطة التعلم والهندسة، لا كبديل عن قرارات هذا المستودع.",
+      "not_adopted_ar": "لا تُنسخ خرائطه إلى مصدر ثانٍ ولا تُعامل كحقيقة تشغيلية متغيرة.",
+      "runtime_import": false
+    },
+    {
+      "id": "coding-interview-university",
+      "repo": "https://github.com/jwasham/coding-interview-university",
+      "commit_sha": "717298bf219a30d7fb0671285c5f057b1bb74b27",
+      "snapshot_url": "https://github.com/jwasham/coding-interview-university/tree/717298bf219a30d7fb0671285c5f057b1bb74b27",
+      "role_ar": "تأسيس الخوارزميات وهياكل البيانات والتفكير التحليلي",
+      "adopted_ar": "يُستخدم كمسار تأسيس ومراجعة للمفاهيم التي تؤثر في صحة النظام وقابليته للتوسع.",
+      "not_adopted_ar": "لا يُفرض نمط مقابلات أو جدول زمني واحد على كل مساهم.",
+      "runtime_import": false
+    },
+    {
+      "id": "the-algorithms-python",
+      "repo": "https://github.com/TheAlgorithms/Python",
+      "commit_sha": "f5988cc09713315817df6a7e327e258013a94440",
+      "snapshot_url": "https://github.com/TheAlgorithms/Python/tree/f5988cc09713315817df6a7e327e258013a94440",
+      "role_ar": "أمثلة تنفيذية قابلة للفحص للخوارزميات وهياكل البيانات",
+      "adopted_ar": "يُستخدم للمقارنة التعليمية واختبار الفهم، مع مراجعة الترخيص والجودة قبل أي استعارة.",
+      "not_adopted_ar": "لا تُنسخ الخوارزميات إلى المنتج دون حاجة مثبتة واختبارات محلية.",
+      "runtime_import": false
+    },
+    {
+      "id": "system-design-primer",
+      "repo": "https://github.com/donnemartin/system-design-primer",
+      "commit_sha": "ae9bbd7b02d90b9866215de185217d33f39ab733",
+      "snapshot_url": "https://github.com/donnemartin/system-design-primer/tree/ae9bbd7b02d90b9866215de185217d33f39ab733",
+      "role_ar": "مرجع تصميم الأنظمة الموزعة والمقايضات المعمارية",
+      "adopted_ar": "يُستخدم لتقييم التوسع والاتساق والتوافر والكلفة وحدود الفشل.",
+      "not_adopted_ar": "لا يُستبدل به التصميم الخاص بنطاق المنتج أو أدلة التشغيل الحية.",
+      "runtime_import": false
+    },
+    {
+      "id": "system-design-101",
+      "repo": "https://github.com/ByteByteGoHq/system-design-101",
+      "commit_sha": "b28380a4710c5ec9638ec037d4168e288f334cba",
+      "snapshot_url": "https://github.com/ByteByteGoHq/system-design-101/tree/b28380a4710c5ec9638ec037d4168e288f334cba",
+      "role_ar": "مرجع بصري مساعد لتدفقات الأنظمة والبروتوكولات",
+      "adopted_ar": "يُستخدم لتحسين التواصل المعماري وتدقيق الرسوم والتدفقات.",
+      "not_adopted_ar": "الصور التوضيحية ليست عقداً تنفيذياً ولا تغني عن اختبارات العقود.",
+      "runtime_import": false
+    },
+    {
+      "id": "build-your-own-x",
+      "repo": "https://github.com/codecrafters-io/build-your-own-x",
+      "commit_sha": "aa17439b62f384511a5561ce308e9598b94d8989",
+      "snapshot_url": "https://github.com/codecrafters-io/build-your-own-x/tree/aa17439b62f384511a5561ce308e9598b94d8989",
+      "role_ar": "التعلم عبر بناء المكونات من الصفر وفك الصناديق السوداء",
+      "adopted_ar": "يُستخدم لمسارات التجارب المعزولة وفهم البروتوكولات والأنظمة الأساسية.",
+      "not_adopted_ar": "لا تُعاد كتابة مكونات الإنتاج بلا مبرر، ولا تدخل تجارب التعلم في مسار المنتج تلقائياً.",
+      "runtime_import": false
+    },
+    {
+      "id": "clean-code-javascript",
+      "repo": "https://github.com/ryanmcdermott/clean-code-javascript",
+      "commit_sha": "5311f64b03fc0c2450ab17a45ee9818669c8b9b5",
+      "snapshot_url": "https://github.com/ryanmcdermott/clean-code-javascript/tree/5311f64b03fc0c2450ab17a45ee9818669c8b9b5",
+      "role_ar": "مرجع جودة الكود وقابلية القراءة في الواجهة",
+      "adopted_ar": "تُستعار مبادئ الأسماء الواضحة وصغر المسؤولية وتقليل التعقيد ضمن مراجعات الكود.",
+      "not_adopted_ar": "لا تُعامل الأمثلة كقانون مطلق ولا تُطبَّق على حساب عقود المشروع وأمنه.",
+      "runtime_import": false
+    },
+    {
+      "id": "clean-code-book",
+      "repo": "https://github.com/Gatjuat-Wicteat-Riek/clean-code-book",
+      "commit_sha": "4e5ffdaeb166cd2248ddd16d2c5e8d27812cd10c",
+      "snapshot_url": "https://github.com/Gatjuat-Wicteat-Riek/clean-code-book/tree/4e5ffdaeb166cd2248ddd16d2c5e8d27812cd10c",
+      "role_ar": "مرجع قراءة مساند للحرفية البرمجية",
+      "adopted_ar": "يُستخدم كمرجع نقاشي عند مراجعة قابلية الصيانة والوضوح.",
+      "not_adopted_ar": "لا يُعلن معياراً رسمياً مستقلاً عن قوانين المشروع وفوارضه.",
+      "runtime_import": false
+    },
+    {
+      "id": "freecodecamp",
+      "repo": "https://github.com/freeCodeCamp/freeCodeCamp",
+      "commit_sha": "4289125977fa5bc4c90d7e2860bc04062a30abee",
+      "snapshot_url": "https://github.com/freeCodeCamp/freeCodeCamp/tree/4289125977fa5bc4c90d7e2860bc04062a30abee",
+      "role_ar": "مرجع تعليمي واسع لبناء المسارات الأساسية",
+      "adopted_ar": "يُستخدم لسد الفجوات التعليمية العامة وتوجيه المساهمين الجدد.",
+      "not_adopted_ar": "لا تُستورد منصته أو تبعياته إلى المنتج.",
+      "runtime_import": false
+    },
+    {
+      "id": "awesome",
+      "repo": "https://github.com/sindresorhus/awesome",
+      "commit_sha": "d35bcd9c5c83f2652b0d2b5f91a320009c8f29a3",
+      "snapshot_url": "https://github.com/sindresorhus/awesome/tree/d35bcd9c5c83f2652b0d2b5f91a320009c8f29a3",
+      "role_ar": "فهرس اكتشاف المصادر والأدوات",
+      "adopted_ar": "يُستخدم لاكتشاف الخيارات فقط؛ كل خيار يمر بتقييم أمني ومعماري مستقل.",
+      "not_adopted_ar": "الظهور في قائمة لا يُعد موافقة أو اعتماداً.",
+      "runtime_import": false
+    },
+    {
+      "id": "free-programming-books",
+      "repo": "https://github.com/EbookFoundation/free-programming-books",
+      "commit_sha": "5b277d20f623ce5b2889b16fc9dd5e266536f521",
+      "snapshot_url": "https://github.com/EbookFoundation/free-programming-books/tree/5b277d20f623ce5b2889b16fc9dd5e266536f521",
+      "role_ar": "مكتبة تعلم وقراءة متعددة اللغات",
+      "adopted_ar": "يُستخدم لتزويد المسارات التعليمية بمراجع قابلة للوصول.",
+      "not_adopted_ar": "لا تُضمَّن الكتب أو المواد في المنتج دون حقوق وترخيص ومراجعة.",
+      "runtime_import": false
+    },
+    {
+      "id": "public-apis",
+      "repo": "https://github.com/public-apis/public-apis",
+      "commit_sha": "c045a2eb505f0f8b7992bb4af53cc020f25003fd",
+      "snapshot_url": "https://github.com/public-apis/public-apis/tree/c045a2eb505f0f8b7992bb4af53cc020f25003fd",
+      "role_ar": "كتالوج اكتشاف للتكاملات الخارجية",
+      "adopted_ar": "يُستخدم لتوليد أفكار وتجارب تكامل، وكل API يمر بعقد ومخاطر وخصوصية ومراقبة.",
+      "not_adopted_ar": "لا يُستدعى أي API تلقائياً لمجرد وجوده في القائمة.",
+      "runtime_import": false
+    },
+    {
+      "id": "browser-use",
+      "repo": "https://github.com/browser-use/browser-use",
+      "commit_sha": "85ddbfedf609166b2d2c76c3d80506649fee82a9",
+      "snapshot_url": "https://github.com/browser-use/browser-use/tree/85ddbfedf609166b2d2c76c3d80506649fee82a9",
+      "role_ar": "مرجع بحثي لتفاعل الوكلاء مع المتصفح",
+      "adopted_ar": "يُستخدم لدراسة أنماط التفاعل والحدود الأمنية فقط.",
+      "not_adopted_ar": "لا يُوصل بأي حسابات أو أدوات أو بيانات مستخدمين ولا يدخل مسار الإنتاج دون ADR واختبارات عزل.",
+      "runtime_import": false
+    },
+    {
+      "id": "llms-from-scratch",
+      "repo": "https://github.com/rasbt/LLMs-from-scratch",
+      "commit_sha": "ec0bac5e1d854306a8ea6c308da49aae22479bd1",
+      "snapshot_url": "https://github.com/rasbt/LLMs-from-scratch/tree/ec0bac5e1d854306a8ea6c308da49aae22479bd1",
+      "role_ar": "مرجع فهم النماذج اللغوية ومكوّناتها",
+      "adopted_ar": "يُستخدم لرفع الفهم العلمي للنماذج وتقييم حدودها وكلفتها.",
+      "not_adopted_ar": "لا يُستخدم لتقرير الحقيقة أو الأرقام أو تجاوز مسار التحقق الحتمي.",
+      "runtime_import": false
+    },
+    {
+      "id": "awesome-claude-skills",
+      "repo": "https://github.com/ComposioHQ/awesome-claude-skills",
+      "commit_sha": "be2a406907dbc61b73e6827ded415c96139d13a2",
+      "snapshot_url": "https://github.com/ComposioHQ/awesome-claude-skills/tree/be2a406907dbc61b73e6827ded415c96139d13a2",
+      "role_ar": "فهرس مقارن لمهارات الوكلاء",
+      "adopted_ar": "يُستخدم لاستكشاف أنماط المهارات وصياغة مقاعد تقييم داخلية.",
+      "not_adopted_ar": "لا تُثبت أي مهارة أو صلاحية أو أداة في المشروع بمجرد وجودها في الفهرس؛ الاسم الوارد في المرفق دون مالك لم يُعامل كمصدر مستقل.",
+      "runtime_import": false
+    }
+  ]
+}

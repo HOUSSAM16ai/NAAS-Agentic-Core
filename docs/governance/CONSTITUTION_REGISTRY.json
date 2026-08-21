@@ -420,6 +420,51 @@
       "enforcers": [
         "check_deep_tech_constitution.py"
       ]
+    },
+    {
+      "section": "0.26",
+      "id": "D-274",
+      "title_en": "Reference Backbone Constitution",
+      "title_ar": "دستور العمود الفقري المرجعي",
+      "law_docs": [
+        "docs/architecture/REFERENCE_BACKBONE_CONSTITUTION.md"
+      ],
+      "status_docs": [
+        ".memory/reference_backbone_truth.md"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py"
+      ]
+    },
+    {
+      "section": "0.27",
+      "id": "D-275",
+      "title_en": "Unified Agent Context Constitution",
+      "title_ar": "دستور سياق الوكلاء الموحد",
+      "law_docs": [
+        "docs/architecture/AGENT_CONTEXT_CONSTITUTION.md"
+      ],
+      "status_docs": [
+        ".memory/agent_context_truth.md"
+      ],
+      "enforcers": [
+        "check_agent_context.py"
+      ]
+    },
+    {
+      "section": "0.28",
+      "id": "D-277",
+      "title_en": "Code Acceptance Constitution",
+      "title_ar": "دستور قبول الكود متعدد الأدلة",
+      "law_docs": [
+        "docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md"
+      ],
+      "status_docs": [
+        "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json"
+      ],
+      "enforcers": [
+        "check_code_acceptance.py"
+      ]
     }
   ]
 }

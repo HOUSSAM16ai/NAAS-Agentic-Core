@@ -1,0 +1,188 @@
+{
+  "$schema_version": "1",
+  "decision": "D-275",
+  "purpose_ar": "مصدر تشغيل موحد يحدد ما يجب أن يفهمه أي وكيل قبل العمل، وترتيب السلطات، ومواقع الحقيقة، وحدود التعديل، ومسار ربط القدرة بالقيمة والإيراد.",
+  "law_ar": "لا يبدأ وكيل عملاً مؤثراً قبل تحميل هذا السجل واتباع ترتيب السلطة؛ ولا يعلن حقيقة أو حالة أو إيراداً من ذاكرته الخاصة دون دليل في المصدر الحاكم.",
+  "non_destructive_policy_ar": "إضافة فقط: لا حذف أو استبدال أو إعادة تسمية لأي أصل قائم. عند الحاجة إلى تغيير، يُنشأ سجل جديد ويُحفظ الأصل السابق.",
+  "authority_order": [
+    {
+      "rank": 1,
+      "path": "CLAUDE.md",
+      "role_ar": "الدستور التشغيلي والقوانين الدائمة"
+    },
+    {
+      "rank": 2,
+      "path": "AGENTS.md",
+      "role_ar": "تعليمات العمل للوكيل والمساهم"
+    },
+    {
+      "rank": 3,
+      "path": ".memory/runtime_truth.md",
+      "role_ar": "حالة ما هو حي ومثبت فعلاً"
+    },
+    {
+      "rank": 4,
+      "path": ".memory/decisions.md",
+      "role_ar": "سجل القرارات التاريخي والإضافي"
+    },
+    {
+      "rank": 5,
+      "path": "docs/governance/CONSTITUTION_REGISTRY.json",
+      "role_ar": "خريطة الدساتير وفوارضها"
+    },
+    {
+      "rank": 6,
+      "path": "docs/governance/AGENT_CONTEXT_REGISTRY.json",
+      "role_ar": "خريطة سياق الوكيل وترتيب التحميل"
+    },
+    {
+      "rank": 7,
+      "path": "docs/governance/REFERENCE_BACKBONE.json",
+      "role_ar": "المراجع المثبتة وحدود الاستعارة"
+    },
+    {
+      "rank": 8,
+      "path": "docs/governance/SOURCE_ADOPTION_MATRIX.json",
+      "role_ar": "حالة كل مستودع مكتشف، غرضه، تطبيقه، فارضه، ومالك تصنيفه"
+    },
+    {
+      "rank": 9,
+      "path": "docs/commercial/OFFER_CATALOG.json",
+      "role_ar": "العروض التجارية وحالة الإثبات ومسار العملة الصعبة"
+    },
+    {
+      "rank": 10,
+      "path": "docs/research/EVIDENCE_CATALOG.json",
+      "role_ar": "الأبحاث والمعايير والمقررات التي تثبت مبادئ القبول"
+    },
+    {
+      "rank": 11,
+      "path": "docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md",
+      "role_ar": "قوانين قبول كل إضافة كود ودليلها"
+    },
+    {
+      "rank": 12,
+      "path": "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
+      "role_ar": "حزمة إثبات التغيير الحالي"
+    },
+    {
+      "rank": 13,
+      "path": ".memory/reference_backbone_truth.md",
+      "role_ar": "الحالة الحالية للعمود الفقري المرجعي"
+    }
+  ],
+  "boot_sequence": [
+    {
+      "step": 1,
+      "id": "identity",
+      "read": ["README.md", "CLAUDE.md", "AGENTS.md"],
+      "outcome_ar": "فهم هوية CogniForge/ETAALIM.AI وما ليس المشروع"
+    },
+    {
+      "step": 2,
+      "id": "mission",
+      "read": ["docs/DEEP_TECH_CONSTITUTION.md", "docs/VALUE_DOCTRINE.md"],
+      "outcome_ar": "فهم المشكلة التعليمية، الأثر، العتبة التقنية، والهدف التجاري بالعملة الصعبة"
+    },
+    {
+      "step": 3,
+      "id": "laws",
+      "read": ["docs/governance/CONSTITUTION_REGISTRY.json", "docs/architecture/REFERENCE_BACKBONE_CONSTITUTION.md", "docs/adr/ADR-013-reference-backbone.md"],
+      "outcome_ar": "معرفة القوانين والفوارض وما لا يجوز تجاوزه"
+    },
+    {
+      "step": 4,
+      "id": "truth",
+      "read": [".memory/runtime_truth.md", ".memory/reference_backbone_truth.md", ".memory/deep_tech_constitution_truth.md"],
+      "outcome_ar": "تمييز ACTIVE وPROPOSED وDORMANT وعدم تحويل النية إلى حقيقة"
+    },
+    {
+      "step": 5,
+      "id": "architecture",
+      "read": ["docs/DOCUMENTATION_INDEX.md", "docs/architecture/REFERENCE_BACKBONE_CONSTITUTION.md", "docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md"],
+      "outcome_ar": "فهم حدود الخدمات، الوكلاء، العقود، ومسارات التعديل"
+    },
+    {
+      "step": 6,
+      "id": "source_standards",
+      "read": ["docs/governance/SOURCE_ADOPTION_MATRIX.json", "docs/research/ALL_GITHUB_SOURCES_INVENTORY.json", "docs/research/authoritative-foundations.md"],
+      "outcome_ar": "معرفة غرض كل مصدر وحالته وما إذا كان مرجعاً أو تبعية أو مقعداً أو قيد التصنيف"
+    },
+    {
+      "step": 7,
+      "id": "full_curriculum",
+      "read": ["docs/research/UNIVERSITY_CURRICULUM_CATALOG.json", "docs/research/CURRICULUM_APPLICATION_MATRIX.json", "docs/research/EVIDENCE_CATALOG.json"],
+      "outcome_ar": "اعتبار كل مقرر في الكتالوج، ثم تحميل المقررات المرتبطة بنوع التغيير مع تسجيل ما ينطبق وما لا ينطبق وسببه"
+    },
+    {
+      "step": 8,
+      "id": "commercial",
+      "read": ["docs/architecture/DUAL_TRACK_PRODUCT_SYSTEM.md", "docs/commercial/FOREIGN_CURRENCY_OPERATING_SYSTEM.md", "docs/governance/DUAL_TRACK_ALIGNMENT.json", "docs/commercial/OFFER_CATALOG.json", "docs/DEEP_TECH_CONSTITUTION.md"],
+      "outcome_ar": "ربط المهمة بعميل ومشكلة مدفوعة وعرض ودليل ومسار تحصيل بالدولار أو اليورو"
+    },
+    {
+      "step": 9,
+      "id": "task",
+      "read": ["docs/guides/AGENT_CODE_CHANGE_PROTOCOL.md", ".memory/tasks.md", ".memory/issues.md", ".memory/roadmap.md"],
+      "outcome_ar": "تحديد المطلوب الحالي وعدم اختراع مهمة أو أولوية من الذاكرة"
+    }
+  ],
+  "agent_contract": {
+    "before_change_ar": [
+      "حمّل سجل السياق وحدد مصدر الحقيقة لكل ادعاء.",
+      "اكتب فرضية القيمة التجارية والعميل المتأثر قبل ميزة جديدة.",
+      "تحقق من القوانين والفوارض والعقود وحدود الأمن.",
+      "تحقق من الحالة الحية قبل وصف أي قدرة بأنها موجودة.",
+      "اختر أقل تغيير إضافي يحقق الهدف ولا تحذف أي أصل."
+    ],
+    "during_change_ar": [
+      "لا تخترع أرقاماً أو نتائج أو حالة تنفيذ.",
+      "لا تجعل مرجعاً خارجياً تبعية تشغيلية بلا ADR وأمن وم provenance.",
+      "لا توصل نموذجاً أو وكيلاً بأداة حساسة بلا هوية وصلاحيات وموافقة وسجل.",
+      "احفظ الحدود بين القانون والحالة والتقرير والتجربة."
+    ],
+    "after_change_ar": [
+      "سجّل الملفات المضافة والسبب والمرجع والدليل.",
+      "أضف ADR إذا كان القرار معمارياً أو تجارياً يصعب عكسه.",
+      "شغّل الفوارض والاختبارات ذات الصلة ودوّن النتيجة.",
+      "افحص git diff --check وتأكد أن عدد المحذوفات صفر.",
+      "حدّث الفهارس وسجلات الحقيقة دون إعادة كتابة التاريخ."
+    ]
+  },
+  "commercial_trace": {
+    "required_fields_ar": ["العميل", "المشكلة المدفوعة", "العرض", "المرجع/القدرة", "دليل القيمة", "مسار العملة الصعبة", "حالة الإثبات", "المالك"],
+    "canonical_offer_catalog": "docs/commercial/OFFER_CATALOG.json",
+    "canonical_financial_objective": "إيراد محصل أو عقد مؤسسي موثق بالدولار أو اليورو مع هامش ومالك واضح",
+    "forbidden_shortcuts_ar": ["اعتبار التعلم إيراداً", "اعتبار نجوم GitHub دليلاً على الطلب", "اعتبار نموذج أولي عقداً", "اعتبار عدد الوكلاء قيمة", "ادعاء امتثال أو أمان أو أثر دون دليل"]
+  },
+  "required_sources": [
+    "README.md",
+    "CLAUDE.md",
+    "AGENTS.md",
+    ".memory/runtime_truth.md",
+    ".memory/decisions.md",
+    "docs/governance/CONSTITUTION_REGISTRY.json",
+    "docs/architecture/AGENT_CONTEXT_CONSTITUTION.md",
+    ".memory/agent_context_truth.md",
+    "docs/governance/REFERENCE_BACKBONE.json",
+    "docs/governance/SOURCE_ADOPTION_MATRIX.json",
+    "docs/governance/SOURCE_ADOPTION_MATRIX.md",
+    "docs/research/ALL_GITHUB_SOURCES_INVENTORY.json",
+    "docs/research/ALL_GITHUB_SOURCES_INVENTORY.md",
+    "docs/research/EVIDENCE_CATALOG.json",
+    "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
+    "docs/research/CURRICULUM_APPLICATION_MATRIX.json",
+    "docs/adr/ADR-014-full-curriculum-gate.md",
+    "docs/guides/AGENT_CODE_CHANGE_PROTOCOL.md",
+    "docs/architecture/DUAL_TRACK_PRODUCT_SYSTEM.md",
+    "docs/commercial/FOREIGN_CURRENCY_OPERATING_SYSTEM.md",
+    "docs/governance/DUAL_TRACK_ALIGNMENT.json",
+    "docs/adr/ADR-015-dual-track-product-system.md",
+    "docs/commercial/OFFER_CATALOG.json",
+    "docs/architecture/CODE_ACCEPTANCE_CONSTITUTION.md",
+    "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
+    "docs/architecture/REFERENCE_BACKBONE_CONSTITUTION.md",
+    "docs/adr/ADR-013-reference-backbone.md"
+  ],
+  "enforcer": "scripts/fitness/check_agent_context.py"
+}

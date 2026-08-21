@@ -1,0 +1,1244 @@
+{
+  "$schema_version": "1",
+  "decision": "D-276",
+  "purpose_ar": "لا يوجد مستودع أو رابط GitHub في المشروع خارج سجل الفهم؛ كل مصدر إما موصوف ومثبت أو معلن صراحة أنه قيد التصنيف ولا يجوز تجاوزه.",
+  "non_bypassable_rules_ar": [
+    "لا حذف من الجرد أو المصفوفة.",
+    "لا مصدر PENDING_CLASSIFICATION يصبح تبعية أو معياراً تشغيلياً.",
+    "لا مصدر ACTIVE بلا غرض وتطبيق محلي وفارض ودليل.",
+    "لا تغيير حالة دون مراجعة مصدر أولي وقرار مناسب."
+  ],
+  "required_card_fields": [
+    "purpose_ar",
+    "application_ar",
+    "local_evidence_paths",
+    "enforcers",
+    "runtime_allowed",
+    "primary_source_review",
+    "upgrade_condition_ar",
+    "owner"
+  ],
+  "generated_from": "docs/research/ALL_GITHUB_SOURCES_INVENTORY.json",
+  "total_sources": 62,
+  "sources": [
+    {
+      "url": "https://github.com/ByteByteGoHq/system-design-101",
+      "source_id": "system-design-101",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "مرجع بصري مساعد لتدفقات الأنظمة والبروتوكولات",
+      "application_ar": "تدقيق تدفقات البروتوكولات والرسوم المعمارية لتقليل سوء الفهم بين الفرق والوكلاء.",
+      "local_evidence_paths": [
+        "docs/architecture",
+        "docs/contracts"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/CharlesQ9/Self-Evolving-Agents",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "Introduction to Agents.pdf"
+      ]
+    },
+    {
+      "url": "https://github.com/ComposioHQ/awesome-claude-skills",
+      "source_id": "awesome-claude-skills",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "فهرس مقارن لمهارات الوكلاء",
+      "application_ar": "استكشاف أنماط المهارات؛ كل مهارة محلية تحتاج عقداً وقياساً وفارضاً.",
+      "local_evidence_paths": [
+        ".claude/skills",
+        "docs/governance/AGENT_SKILLS.json",
+        "scripts/fitness/check_agent_skills_spec.py"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/EbookFoundation/free-programming-books",
+      "source_id": "free-programming-books",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "مكتبة تعلم وقراءة متعددة اللغات",
+      "application_ar": "مكتبة تعلم متعددة اللغات لتغطية فجوات المسارات دون تضمين المواد تلقائياً.",
+      "local_evidence_paths": [
+        "docs/guides",
+        "docs/research"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/Gatjuat-Wicteat-Riek/clean-code-book",
+      "source_id": "clean-code-book",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "مرجع قراءة مساند للحرفية البرمجية",
+      "application_ar": "مرجع حرفية ومناقشة للصيانة؛ لا يتحول إلى قانون منفصل عن الفوارض المحلية.",
+      "local_evidence_paths": [
+        "docs/quality/standards.md"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/GoogleCloudPlatform/agent-starter-pack",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "Introduction to Agents.pdf"
+      ]
+    },
+    {
+      "url": "https://github.com/HOUSSAM16ai/NAAS-Agentic-Core",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "CITATION.cff",
+        "README.ar.md",
+        "README.md",
+        "docs/grant-program/STAKEHOLDER_BRIEFS_TEMPLATE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/HOUSSAM16ai/my_ai_project",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".github/VERIFICATION_CHECKLIST.md",
+        "docs/MICROSERVICES_DEPLOYMENT_GUIDE.md",
+        "infra/argocd/applications.yaml",
+        "microservices/README.md"
+      ]
+    },
+    {
+      "url": "https://github.com/Houssam-lab/NAAS-Agentic-Core",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "REPORT-D261.md",
+        "docs/FINAL_REPORT_D256_D257_AR.md"
+      ]
+    },
+    {
+      "url": "https://github.com/Houssam-lab/deepseek-harness",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/adr/ADR-010-deepseek-harness-adoption.md"
+      ]
+    },
+    {
+      "url": "https://github.com/Houssam-lab/openhands",
+      "source_id": "openhands-agent-canvas",
+      "status": "EXTERNAL_ACTIVE",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "بوّابة وصف الدفعة بأقسامٍ إلزامية ودليل تنفيذ (L1) · قسم HUMAN: ملك الإنسان · جاهزية البلاغ بوسمٍ تديره الآلة (L2) · Conventional Commits على العنوان (L3) · تبريد التبعيات وتوصيفها الصادق (L6) · منع الحرفيات السحرية بقاعدتَيه البرمجيتين (L5).",
+      "local_evidence_paths": [
+        ".github/scripts",
+        "scripts/fitness/check_supply_chain.py"
+      ],
+      "enforcers": [
+        "validate_pr_description.py",
+        "validate_issue_readiness.py",
+        "check_supply_chain.py",
+        "check_config_credibility.py",
+        "check_no_magic_strings.py",
+        "check_gate_negative_proof.py"
+      ],
+      "runtime_allowed": true,
+      "primary_source_review": true,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "الحالة لا تتغير دون قرار مكتوب ومراجعة المصدر.",
+      "occurrences": [
+        "docs/adr/ADR-011-openhands-delivery-standards.md",
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/PyCQA/bandit",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/TheAlgorithms/Python",
+      "source_id": "the-algorithms-python",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "أمثلة تنفيذية قابلة للفحص للخوارزميات وهياكل البيانات",
+      "application_ar": "مرجع تنفيذ ومقارنة؛ لا تدخل خوارزمية المنتج دون اختبار محلي وملكية واضحة.",
+      "local_evidence_paths": [
+        "app/core/foundations",
+        "tests"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/ai-for-solution-labs/my_ai_project",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/contracts/GETTING_STARTED.md",
+        "docs/contracts/QUICK_REFERENCE.md",
+        "docs/guides/BEGINNER_GUIDE.md",
+        "docs/guides/CODESPACES_TEST_GUIDE.md",
+        "microservices/memory_agent/data/identity.json",
+        "microservices/orchestrator_service/src/services/overmind/data/identity.json"
+      ]
+    },
+    {
+      "url": "https://github.com/anthropics/claude-cookbooks",
+      "source_id": "claude-cookbooks",
+      "status": "EXTERNAL_ABSENT",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "لا شيء: أمثلةٌ لا معيار مستودع.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_external_standards.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "لا ترقية.",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/anthropics/skills",
+      "source_id": "anthropic-skills",
+      "status": "EXTERNAL_ACTIVE",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "مواصفة Agent Skills المفتوحة لكلّ ما تحت .claude/skills (L9) · المسرد الفاصل بين BaseSkill وAgent Skill (L10) · **الساق السادسة**: المهارة تُقاس ولا تُعلَن، بحالةِ تقييمٍ مُصرَّحة لكلٍّ (L11).",
+      "local_evidence_paths": [
+        ".claude/skills",
+        "docs/governance/AGENT_SKILLS.json"
+      ],
+      "enforcers": [
+        "check_agent_skills_spec.py"
+      ],
+      "runtime_allowed": true,
+      "primary_source_review": true,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "الحالة لا تتغير دون قرار مكتوب ومراجعة المصدر.",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/argoproj/argo-rollouts",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/DEPLOYMENT_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/astral-sh/ruff-pre-commit",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".pre-commit-config.yaml",
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/bakabala27-svg/NAAS-Agentic-Core",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/research/authoritative-foundations.md"
+      ]
+    },
+    {
+      "url": "https://github.com/browser-use/browser-use",
+      "source_id": "browser-use",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "مرجع بحثي لتفاعل الوكلاء مع المتصفح",
+      "application_ar": "مرجع بحثي لتفاعل الوكلاء مع المتصفح؛ يبقى خلف الهوية والصلاحيات والموافقة والعزل.",
+      "local_evidence_paths": [
+        "SECURITY.md",
+        "docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/cert-manager/cert-manager",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/DEPLOYMENT_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/ansi-regex",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/ansi-styles",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/chalk",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/strip-ansi",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/chalk/wrap-ansi",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/cncf/trailmap",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/adr/ADR-002-microservices-architecture.md"
+      ]
+    },
+    {
+      "url": "https://github.com/codecrafters-io/build-your-own-x",
+      "source_id": "build-your-own-x",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "التعلم عبر بناء المكونات من الصفر وفك الصناديق السوداء",
+      "application_ar": "تجارب تعليمية معزولة لفهم البروتوكولات والأنظمة الأساسية دون إدخال تجارب غير ناضجة للإنتاج.",
+      "local_evidence_paths": [
+        "docs/research/authoritative-foundations.md",
+        "docs/architecture/EXTENSION_SEAMS.md"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/cogniforge/api-examples",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/contracts/GETTING_STARTED.md"
+      ]
+    },
+    {
+      "url": "https://github.com/cordiverse/cordis",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/adr/ADR-010-deepseek-harness-adoption.md"
+      ]
+    },
+    {
+      "url": "https://github.com/cursor/cookbook",
+      "source_id": "cursor-cookbook",
+      "status": "EXTERNAL_ABSENT",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "لا شيء: أمثلةٌ لا معيار مستودع.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_external_standards.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "لا ترقية.",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/cursor/plugins",
+      "source_id": "cursor-plugins",
+      "status": "EXTERNAL_ABSENT",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "لا شيء بعد.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_external_standards.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "ADR يقرّر أوّلاً مصير `plugin_loader.py` (يُوصَل أم يُحذَف — D-173: القدرة بلا مستهلكٍ حيّ تُحذَف)؛ ثمّ يُنظَر في المواصفة.",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "source_id": "deepseek-harness",
+      "status": "EXTERNAL_SEAM",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "لا شيء بعد. المقعد قائمٌ سلفاً بـADR-010 (D-269) بصفر كود، وفكرةُ «كلّ شيء قابل للتبديل» هي منافذنا السداسية المحروسة بـcheck_abstraction_consumed.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_no_shell_true.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "استكمال M1→M4 في roadmap §6.5.ج (عقد قدرات · مسبار حيّ · ميزانيات وسجلّ agent_audit · حوكمة وحارس تعديلٍ ذاتي).",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/donnemartin/system-design-primer",
+      "source_id": "system-design-primer",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "مرجع تصميم الأنظمة الموزعة والمقايضات المعمارية",
+      "application_ar": "مراجعة التوسع والاتساق والتوافر وحدود الفشل والقرارات المعمارية.",
+      "local_evidence_paths": [
+        "docs/architecture",
+        "docs/contracts"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/fb55/entities",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/freeCodeCamp/freeCodeCamp",
+      "source_id": "freecodecamp",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "مرجع تعليمي واسع لبناء المسارات الأساسية",
+      "application_ar": "مسار تأسيسي ومراجع onboarding للمساهمين والمهارات العامة.",
+      "local_evidence_paths": [
+        "docs/guides",
+        "docs/START_HERE.md"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/github/github-mcp-server",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".cursor/mcp.json",
+        ".vscode/mcp-settings.json"
+      ]
+    },
+    {
+      "url": "https://github.com/google-gemini/cookbook",
+      "source_id": "gemini-cookbook",
+      "status": "EXTERNAL_ABSENT",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "لا شيء: أمثلةٌ لا معيار مستودع.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_external_standards.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "لا ترقية.",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/google/A2UI",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "Introduction to Agents.pdf"
+      ]
+    },
+    {
+      "url": "https://github.com/google/adk-python",
+      "source_id": "google-adk-python",
+      "status": "EXTERNAL_SEAM",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "التأكيد المستقلّ على أنّ التحقّق يكون على **المسار** لا على النصّ الأخير — وهو ما يعلنه D-267 L3 أصلاً. الصيغة المُنمَّطة (EvalCase بمسار أدواتٍ متوقَّع) مقعدٌ لِما تحتاجه tests/transcripts مستقبلاً.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_external_standards.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "يُفتَح حين تحتاج عقود tests/transcripts صيغةً مُنمَّطة لمسار الأدوات المتوقَّع؛ والفتح بـADR يسمّي المُستعار بصفر تبعية.",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/inikulin/parse5",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/jwasham/coding-interview-university",
+      "source_id": "coding-interview-university",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "تأسيس الخوارزميات وهياكل البيانات والتفكير التحليلي",
+      "application_ar": "تقوية الخوارزميات وهياكل البيانات والتفكير التحليلي قبل القرارات ذات الحمل العالي.",
+      "local_evidence_paths": [
+        "app/core/foundations",
+        "tests"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/kamranahmedse/developer-roadmap",
+      "source_id": "developer-roadmap",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "بوصلة المسار المعرفي وتحديد التخصصات والتبعيات",
+      "application_ar": "خارطة مسارات التعلم والتبعيات في onboarding وخريطة علوم الحاسوب.",
+      "local_evidence_paths": [
+        "docs/architecture/CS_KNOWLEDGE_MAP.md",
+        "docs/START_HERE.md"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/kserve/kserve",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/DEPLOYMENT_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/mattpocock/skills",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/AGENT_WORKFLOW_CONSTITUTION.md"
+      ]
+    },
+    {
+      "url": "https://github.com/microsoft/api-guidelines",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/contracts/API_STYLE_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/mozilla/diversity",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "CODE_OF_CONDUCT.md"
+      ]
+    },
+    {
+      "url": "https://github.com/openai/openai-agents-python",
+      "source_id": "openai-agents-python",
+      "status": "EXTERNAL_ABSENT",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "لا شيء جديد: الحواجز (input/output guardrails) عندنا D-113 redaction + output_firewall، والأثر D-189 correlation، والتسليم بين الوكلاء هو المُنسِّق (D-112). تكافؤٌ مُعلَن لا استعارة.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_external_standards.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "يُعاد النظر فقط بقياسٍ يُثبت عجز LangGraph عن حاجةٍ قائمة — وبـADR.",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/openai/openai-cookbook",
+      "source_id": "openai-cookbook",
+      "status": "EXTERNAL_ABSENT",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "لا شيء: مجموعة أمثلةٍ لا معيار مستودع.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_external_standards.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "لا ترقية: الكتب مرجعٌ يُقرأ عند الحاجة، لا معيارٌ يُتبنّى.",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/pgvector/pgvector",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "spec.md"
+      ]
+    },
+    {
+      "url": "https://github.com/pre-commit/mirrors-mypy",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".pre-commit-config.yaml",
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/pre-commit/pre-commit-hooks",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".pre-commit-config.yaml",
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/privatenumber/get-tsconfig",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/privatenumber/resolve-pkg-maps",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "frontend/package-lock.json"
+      ]
+    },
+    {
+      "url": "https://github.com/prometheus/prometheus",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "Dockerfile"
+      ]
+    },
+    {
+      "url": "https://github.com/psf/black",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "tests/fitness/test_delivery_standards_gates.py"
+      ]
+    },
+    {
+      "url": "https://github.com/public-apis/public-apis",
+      "source_id": "public-apis",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "كتالوج اكتشاف للتكاملات الخارجية",
+      "application_ar": "اكتشاف تكاملات محتملة؛ لا API خارجي يُفعّل بلا عقد وخصوصية ومراقبة.",
+      "local_evidence_paths": [
+        "docs/commercial/OFFER_CATALOG.json",
+        "docs/contracts"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/rasbt/LLMs-from-scratch",
+      "source_id": "llms-from-scratch",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "مرجع فهم النماذج اللغوية ومكوّناتها",
+      "application_ar": "فهم بنية النماذج وحدودها وكلفتها؛ لا يقرر الحقيقة أو الأرقام.",
+      "local_evidence_paths": [
+        "shared/ai_models/model_chain.py",
+        "docs/architecture/AGENTIC_DESIGN_PRINCIPLES.md"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/ryanmcdermott/clean-code-javascript",
+      "source_id": "clean-code-javascript",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "مرجع جودة الكود وقابلية القراءة في الواجهة",
+      "application_ar": "مراجعات جودة الواجهة وتقليل التعقيد مع احترام عقود المنتج.",
+      "local_evidence_paths": [
+        "frontend",
+        ".pre-commit-config.yaml"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/sindresorhus/awesome",
+      "source_id": "awesome",
+      "status": "MANDATORY_REFERENCE",
+      "purpose_ar": "فهرس اكتشاف المصادر والأدوات",
+      "application_ar": "اكتشاف خيارات فقط؛ كل خيار يمر بتقييم أمني ومعماري مستقل.",
+      "local_evidence_paths": [
+        "docs/research/authoritative-foundations.md",
+        "docs/commercial/OFFER_CATALOG.json"
+      ],
+      "enforcers": [
+        "check_reference_backbone.py",
+        "check_agent_context.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": true,
+      "owner": "architecture-governance",
+      "upgrade_condition_ar": "لا تغيير في الدور أو التفعيل التشغيلي دون بطاقة جديدة وADR ومراجعة أمنية وأدلة محلية.",
+      "occurrences": [
+        "docs/governance/REFERENCE_BACKBONE.json",
+        "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/xai-org/grok-build",
+      "source_id": "xai-grok-build",
+      "status": "EXTERNAL_ABSENT",
+      "purpose_ar": "المصدر مسجل في سجل المعايير الخارجية؛ ارجع إلى `read_ar` و`adopted_ar` و`rejected_ar` قبل أي استعارة.",
+      "application_ar": "لا شيء.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_external_standards.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "external-standards-governance",
+      "upgrade_condition_ar": "استكمال M1→M4 + ADR يسمّي ما يُستعار بالضبط.",
+      "occurrences": [
+        "docs/governance/EXTERNAL_STANDARDS_REGISTRY.json"
+      ]
+    },
+    {
+      "url": "https://github.com/yaml/pyyaml",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "tests/security/test_yaml_rce.py"
+      ]
+    }
+  ]
+}

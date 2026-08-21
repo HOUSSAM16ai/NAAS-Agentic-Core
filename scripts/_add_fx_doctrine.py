@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Append doctrine-related D-273 entries: registry rows + README index (additive only)."""
 import json
-import re
 import sys
 
 REPO = "/home/ubuntu/NAAS-Agentic-Core"
@@ -10,7 +9,7 @@ REPO = "/home/ubuntu/NAAS-Agentic-Core"
 def registry_row():
     """Add the doctrine companion row to CONSTITUTION_REGISTRY.json constitutions."""
     path = f"{REPO}/docs/governance/CONSTITUTION_REGISTRY.json"
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         registry = json.load(f)
     const = registry["constitutions"]
     if any(r.get("id") == "D-273" for r in const):
@@ -34,7 +33,7 @@ def registry_row():
 def readme_index():
     """Add the truth file to the truth section of .memory/README.md (additive only)."""
     path = f"{REPO}/.memory/README.md"
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         lines = f.readlines()
     marker = "| `fx_doctrine_truth`"
     if any(marker in ln for ln in lines):

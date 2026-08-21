@@ -9,7 +9,7 @@
 | الملف | الدور | السلطة |
 |-------|------|--------|
 | `roadmap.md` | 🧭 الرؤية الثورية وخارطة الطريق (M0→M11) — **المصدر الحيّ الوحيد** | دستوري |
-| `decisions.md` | سجلّ القرارات المعمارية **D-001 → D-272** — كل قرار بسرده وجذره ودليله الحيّ. أحدثها: **D-271** (المهارة تُقاس والتقنية تدخل بقرار · ISS-195) و**D-272** (دستور مبادئ تصميم الأنظمة الوكيلية — قياسٌ محكَم من Google Research/DeepMind/MIT · arXiv:2512.08296). | سجلّ ملزِم |
+| `decisions.md` | سجلّ القرارات المعمارية **D-001 → D-273** — كل قرار بسرده وجذره ودليله الحيّ. أحدثها: **D-272** (دستور مبادئ تصميم الأنظمة الوكيلية — قياسٌ محكَم من Google Research/DeepMind/MIT · arXiv:2512.08296) و**D-273** (دستور التقنية العميقة والعملة الصعبة — سبع خطوط إيرادٍ مصرَّحةٍ حصراً · محرّمات 9 · إضافة لا حذف لكل قانونٍ قائم · قرار المالك 2026-08-21). | سجلّ ملزِم |
 | `issues.md` | سجلّ الكوارث المُشخَّصة والمُصلَحة **ISS-001 → ISS-195** — كلٌّ بجذرها ودليلها الحيّ وشرط إغلاقها. أحدثها: **ISS-194→ISS-195** (العملية بلا حارس · قائمةٌ خارجية تُقرأ إعجاباً لا عقداً). | سجلّ ملزِم |
 | `runtime_truth.md` | جدول الحقيقة التشغيلية (ACTIVE/PARTIAL/DORMANT/ZOMBIE) | **الحقيقة المرجعية** |
 | `context.md` | السياق التشغيلي المُلخَّص (يُحمَّل آلياً عند بدء الجلسات) | مرجع سريع |
@@ -47,6 +47,8 @@
 | `cognitive_execution_truth.md` | **حالة** محرّك التنفيذ المعرفي (D-224/D-225) — ١٣ طبقة + ٤ آفاق سوق. القانون في `docs/architecture/COGNITIVE_EXECUTION_ENGINE.md`، وتحرسها `check_cognitive_execution` (بها **قفل D-187**: نموذجٌ لغوي موصولٌ بمُنفِّذ الصندوق ⇒ CI أحمر) |
 | `secret_capture_truth.md` | **حالة** التقاط الأسرار (D-268) — ٧ وحدات + مصفوفة (سرّ × باب) كما قِيست قبل الإصلاح. القانون في `secret_capture_constitution.md`، وتحرسها `check_secret_capture_parity` |
 | `ambient_identity_truth.md` | **حالة** الطبقة الخامسة (D-269) — ٩ وحدات. القانون في `ambient_identity_constitution.md` + `docs/architecture/AMBIENT_COGNITIVE_IDENTITY.md`، وتحرسها `check_ambient_identity` |
+| `deep_tech_constitution_truth.md` | **حالة** دستور التقنية العميقة والعملة الصعبة (D-273) — ٧ خطوط إيراد (كلّها PROPOSED) · لا ACTIVE بلا دليلٍ حيٍّ (عقد/دفعة). القانون في `docs/DEEP_TECH_CONSTITUTION.md`، وتحرسها `check_deep_tech_constitution` |
+| `fx_doctrine_truth.md` | **حالة** عقيدة العملة الصعبة (D-273) — ٤ مسارات رسمية (تصدير رقمي + مزايا جبائية + قناة دفع بديلة + مضاعفة البنية التحتية) · ٤ محرمات (K1–K4) · ١٠ مراجع §99. القانون في `docs/FOREIGN_CURRENCY_DOCTRINE.md` |
 | `naas_verification_truth.md` | **حالة** طبقة التحقّق (D-267) — ٨ وحدات + ٤ بوّابات قرار. القانون في `naas_verification_constitution.md` + `docs/architecture/NAAS_VERIFICATION_LAYER.md` + `docs/governance/GATE_STATE_MACHINE.md`، وتحرسها `check_naas_verification`. سجلّ الحالة الحيّ للبوّابات: `docs/governance/GATE_LEDGER.json` |
 | `cognitive_twin_truth.md` | **حالة** التوأم الرقمي المعرفي (D-226/D-227) — ٨ محرّكات + ٣ آفاق. القانون في `docs/architecture/COGNITIVE_DIGITAL_TWIN.md`، وتحرسها `check_cognitive_twin` + `check_prerequisite_single_graph` |
 | `code_quality_truth.md` | **حالة** أدوات جودة الكود الثلاث (D-235) — ماذا وجد Qodana وCodeScene وCodeRabbit، وحكمٌ لكل نتيجة حرجة (5 حقيقية · 8 كاذبة)، والحدود المُعلَنة، و**البرهان من سجلّ التشغيل** على أنّ للمِسنَن أسناناً. ⚠️ عدد Qodana **ليس درجة جودة**، و`.coderabbit.yaml` **PARTIAL** حتى تُبلِّغ مراجعةٌ إعداداً غير الافتراضي |

@@ -4,6 +4,33 @@
 > The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.# Architectural Decisions
 
+## D-273 (2026-08-21) — دستور التقنية العميقة والعملة الصعبة: إضافة لا حذف لكل قانونٍ قائم
+
+**طلبُ المالك: «اجعل هذه قوانينَ ودساتيرَ يعمل عليها المشروع ولا يمكن تجاوزها إطلاقًا»**
+— سبع خطوط إيرادٍ مقترحة (AI Red Teaming بالعربية/الفرنسية · Niche RLHF متخصص ·
+On-Premise AI خليجي · PINNs صناعي · Formal Verification لكود الذكاء الاصطناعي ·
+EU AI Act B2B SaaS · High-RPM AI Affiliation غربي) بأحكامٍ دستوريةٍ صارمة:
+
+1. **المصدر قرار المالك لا رأيٌ هندسيٌّ** — كل خطوط الإيراد السبعة مقبولة «إضافةً لا
+   حذفًا»: D-273 لا يلغي D-210→D-223 (دستور القيمة) ولا الدستور المعماري — يضيف خطّ
+   إيرادٍ مؤسسياً فوقهما، والأصول الهندسية (طبقة التحقّق · الوكلاء · البيانات)
+   تُستثمر في خطّين.
+2. **الجملة الدستورية:** «المجّاني الاستهلاكي يحظَر. لا عتبةَ دخولٍ تقنيةً عالية = لا
+   مشروع. والإيرادُ العملةُ الصعبةُ من عميلٍ مؤسّسيٍّ خارج الجزائر — وكل ما عداه
+   استثناءٌ مصرَّحٌ به كتابيًّا». المحرّمات التسعة (§04) مرفوضةٌ في أي PR، وقواعد
+   L1–L12 تحرسها بوابةٌ تنفيذية.
+3. **السرد كلّه خارج العقد:** `docs/DEEP_TECH_CONSTITUTION.md` (القانون الكامل) +
+   `.memory/deep_tech_constitution_truth.md` (الحالة الصادقة: 7 خطوط PROPOSED — لا
+   ACTIVE دون دليلٍ حيٍّ) + الفارض `check_deep_tech_constitution` + صفٌّ في
+   `CONSTITUTION_REGISTRY.json` (قسم 0.25). قسم §0.25 في العقد لُقِّط باثني عشر
+   سطراً موجزاً + إحالات العقود.
+4. **رفع السقف معلَنٌ:** رُفِع `CLAUDE_MD_MAX_LINES` 1225 → 1248 بكتلةِ سببٍ مكتوبةٍ
+   قبل الثابت (نمط D-266→D-272)؛ والمِسنَن يعود «يتقلّص فقط» من 1248 فورًا.
+
+**التنفيذ:** الفارض مسلوكةٌ في `guardrails` بـ`ci.yml`؛ تعديل الدستور = ADR + بوابة خضراء.
+
+---
+
 ## D-272 (2026-08-20) — دستور مبادئ تصميم الأنظمة الوكيلية: رفع السقف 1194 → 1225
 
 **طلبُ المالك: «أضِفها إلى القوانين والدستور ولا تحذف أي شيء»** — نفس صيغة «إضافة لا
@@ -7513,6 +7540,7 @@ sleep 5
 
 # 3) End-to-end WS chat must produce chunks > 0
 # (use the WS test block from this PR's diagnostic scripts)
+
 ```
 
 ---

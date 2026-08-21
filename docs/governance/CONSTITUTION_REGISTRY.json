@@ -31,8 +31,14 @@
     "configs": {
       ".pre-commit-config.yaml": {
         "mirrors": [
-          { "tool": "ruff", "repo": "astral-sh/ruff-pre-commit" },
-          { "tool": "mypy", "repo": "pre-commit/mirrors-mypy" }
+          {
+            "tool": "ruff",
+            "repo": "astral-sh/ruff-pre-commit"
+          },
+          {
+            "tool": "mypy",
+            "repo": "pre-commit/mirrors-mypy"
+          }
         ],
         "forbidden_tools": {
           "black": "مُنسِّقٌ ثانٍ بعرضٍ افتراضي 88 يناقض ruff format عند 100 (7917 سطراً متضارباً).",
@@ -55,35 +61,80 @@
     {
       "section": "0",
       "title_en": "Core System Doctrine: The Cognitive Lab",
-      "decisions": ["D-016", "D-067", "D-074", "D-085", "D-191", "D-192"],
-      "law_docs": ["docs/architecture/ENGINEERING_DOCTRINE.md"],
-      "status_docs": [".memory/runtime_truth.md"],
-      "enforcers": ["check_constitution_reality.py", "check_memory_coherence.py", "check_authority_links.py"]
+      "decisions": [
+        "D-016",
+        "D-067",
+        "D-074",
+        "D-085",
+        "D-191",
+        "D-192"
+      ],
+      "law_docs": [
+        "docs/architecture/ENGINEERING_DOCTRINE.md"
+      ],
+      "status_docs": [
+        ".memory/runtime_truth.md"
+      ],
+      "enforcers": [
+        "check_constitution_reality.py",
+        "check_memory_coherence.py",
+        "check_authority_links.py"
+      ]
     },
     {
       "section": "0.5",
       "title_en": "Skills Philosophy — The Architectural North Star",
-      "decisions": ["D-100", "D-179", "D-181", "D-183", "D-185"],
-      "law_docs": ["docs/API_FIRST_ARCHITECTURE.md"],
-      "status_docs": [".memory/runtime_truth.md"],
-      "enforcers": ["check_skills_doctrine.py", "check_notation_definable.py", "check_notation_parity.py", "check_openapi_parity.py"]
+      "decisions": [
+        "D-100",
+        "D-179",
+        "D-181",
+        "D-183",
+        "D-185"
+      ],
+      "law_docs": [
+        "docs/API_FIRST_ARCHITECTURE.md"
+      ],
+      "status_docs": [
+        ".memory/runtime_truth.md"
+      ],
+      "enforcers": [
+        "check_skills_doctrine.py",
+        "check_notation_definable.py",
+        "check_notation_parity.py",
+        "check_openapi_parity.py"
+      ]
     },
     {
       "section": "0.6",
       "title_en": "The Cognitive Lab Vision & Execution Roadmap",
-      "decisions": ["D-126", "D-157"],
-      "law_docs": [".memory/cognitive_lab_philosophy.md"],
-      "status_docs": [".memory/roadmap.md"],
+      "decisions": [
+        "D-126",
+        "D-157"
+      ],
+      "law_docs": [
+        ".memory/cognitive_lab_philosophy.md"
+      ],
+      "status_docs": [
+        ".memory/roadmap.md"
+      ],
       "enforcers": [],
       "no_enforcer_reason_ar": "رؤيةٌ ومقياسُ نجاح (فجوة الوهم) لا عقدٌ نصّي؛ فوارضها هي دساتير §0.8→§0.18 المشتقّة منها. لا بوّابة نصّية تفحص رؤيةً — وقولُ ذلك أصدق من اختراع فحصٍ شكلي."
     },
     {
       "section": "0.7",
       "title_en": "Agentic Cognitive Runtime Doctrine",
-      "decisions": ["D-146"],
-      "law_docs": ["docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md"],
-      "status_docs": [".memory/agentic_runtime_doctrine.md"],
-      "enforcers": ["check_agentic_orchestration.py"]
+      "decisions": [
+        "D-146"
+      ],
+      "law_docs": [
+        "docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md"
+      ],
+      "status_docs": [
+        ".memory/agentic_runtime_doctrine.md"
+      ],
+      "enforcers": [
+        "check_agentic_orchestration.py"
+      ]
     }
   ],
   "constitutions": [
@@ -92,99 +143,162 @@
       "id": "D-153",
       "title_en": "Pedagogical OS Constitution",
       "title_ar": "دستور نظام التشغيل التربوي",
-      "law_docs": [".memory/pedagogical_os.md"],
+      "law_docs": [
+        ".memory/pedagogical_os.md"
+      ],
       "status_docs": [],
-      "enforcers": ["check_pedagogical_os.py"]
+      "enforcers": [
+        "check_pedagogical_os.py"
+      ]
     },
     {
       "section": "0.9",
       "id": "D-209",
       "title_en": "Agentic Orchestration Constitution",
       "title_ar": "دستور التنسيق الوكيلي",
-      "law_docs": ["docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md"],
-      "status_docs": [".memory/agentic_runtime_doctrine.md"],
-      "enforcers": ["check_agentic_orchestration.py"]
+      "law_docs": [
+        "docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md"
+      ],
+      "status_docs": [
+        ".memory/agentic_runtime_doctrine.md"
+      ],
+      "enforcers": [
+        "check_agentic_orchestration.py"
+      ]
     },
     {
       "section": "0.10",
       "id": "D-210",
       "title_en": "Value & Revenue Constitution",
       "title_ar": "دستور القيمة والإيراد",
-      "law_docs": ["docs/VALUE_DOCTRINE.md", "docs/REVENUE_ENGINE_SPEC.md"],
-      "status_docs": [".memory/revenue_engine_truth.md"],
-      "enforcers": ["check_revenue_doctrine.py"]
+      "law_docs": [
+        "docs/VALUE_DOCTRINE.md",
+        "docs/REVENUE_ENGINE_SPEC.md"
+      ],
+      "status_docs": [
+        ".memory/revenue_engine_truth.md"
+      ],
+      "enforcers": [
+        "check_revenue_doctrine.py"
+      ]
     },
     {
       "section": "0.11",
       "id": "D-224",
       "title_en": "Cognitive Execution Constitution",
       "title_ar": "دستور التنفيذ المعرفي",
-      "law_docs": ["docs/architecture/COGNITIVE_EXECUTION_ENGINE.md"],
-      "status_docs": [".memory/cognitive_execution_truth.md"],
-      "enforcers": ["check_cognitive_execution.py"]
+      "law_docs": [
+        "docs/architecture/COGNITIVE_EXECUTION_ENGINE.md"
+      ],
+      "status_docs": [
+        ".memory/cognitive_execution_truth.md"
+      ],
+      "enforcers": [
+        "check_cognitive_execution.py"
+      ]
     },
     {
       "section": "0.12",
       "id": "D-226",
       "title_en": "Cognitive Digital Twin Constitution",
       "title_ar": "دستور التوأم الرقمي المعرفي",
-      "law_docs": ["docs/architecture/COGNITIVE_DIGITAL_TWIN.md"],
-      "status_docs": [".memory/cognitive_twin_truth.md"],
-      "enforcers": ["check_cognitive_twin.py", "check_prerequisite_single_graph.py"]
+      "law_docs": [
+        "docs/architecture/COGNITIVE_DIGITAL_TWIN.md"
+      ],
+      "status_docs": [
+        ".memory/cognitive_twin_truth.md"
+      ],
+      "enforcers": [
+        "check_cognitive_twin.py",
+        "check_prerequisite_single_graph.py"
+      ]
     },
     {
       "section": "0.13",
       "id": "D-228",
       "title_en": "Harness Engineering Constitution",
       "title_ar": "دستور هندسة الطبقة المحيطة",
-      "law_docs": ["docs/architecture/HARNESS_ENGINEERING_DOCTRINE.md"],
-      "status_docs": [".memory/harness_truth.md"],
-      "enforcers": ["check_research_doctrines.py"]
+      "law_docs": [
+        "docs/architecture/HARNESS_ENGINEERING_DOCTRINE.md"
+      ],
+      "status_docs": [
+        ".memory/harness_truth.md"
+      ],
+      "enforcers": [
+        "check_research_doctrines.py"
+      ]
     },
     {
       "section": "0.14",
       "id": "D-229",
       "title_en": "Memory Architecture Constitution",
       "title_ar": "دستور معمارية الذاكرة",
-      "law_docs": ["docs/architecture/MEMORY_ARCHITECTURE_DOCTRINE.md"],
-      "status_docs": [".memory/memory_architecture_truth.md"],
-      "enforcers": ["check_research_doctrines.py", "check_no_system_text_as_user.py"]
+      "law_docs": [
+        "docs/architecture/MEMORY_ARCHITECTURE_DOCTRINE.md"
+      ],
+      "status_docs": [
+        ".memory/memory_architecture_truth.md"
+      ],
+      "enforcers": [
+        "check_research_doctrines.py",
+        "check_no_system_text_as_user.py"
+      ]
     },
     {
       "section": "0.15",
       "id": "D-263",
       "title_en": "Pedagogy Engine Constitution",
       "title_ar": "دستور المحرك التربوي",
-      "law_docs": [".memory/pedagogy_engine_constitution.md"],
-      "status_docs": [".memory/pedagogy_engine_truth.md"],
-      "enforcers": ["check_pedagogy_engine.py"]
+      "law_docs": [
+        ".memory/pedagogy_engine_constitution.md"
+      ],
+      "status_docs": [
+        ".memory/pedagogy_engine_truth.md"
+      ],
+      "enforcers": [
+        "check_pedagogy_engine.py"
+      ]
     },
     {
       "section": "0.16",
       "id": "D-264",
       "title_en": "Adaptive AI Study Planner Constitution",
       "title_ar": "دستور المخطط الدراسي التكيفي",
-      "law_docs": [".memory/adaptive_study_planner_constitution.md"],
+      "law_docs": [
+        ".memory/adaptive_study_planner_constitution.md"
+      ],
       "status_docs": [],
-      "enforcers": ["check_adaptive_study_planner.py"]
+      "enforcers": [
+        "check_adaptive_study_planner.py"
+      ]
     },
     {
       "section": "0.17",
       "id": "D-265",
       "title_en": "Spec Kit Governance Constitution",
       "title_ar": "دستور حوكمة Spec Kit",
-      "law_docs": [".memory/spec_kit_governance_constitution.md"],
+      "law_docs": [
+        ".memory/spec_kit_governance_constitution.md"
+      ],
       "status_docs": [],
-      "enforcers": ["check_spec_kit_governance.py"]
+      "enforcers": [
+        "check_spec_kit_governance.py"
+      ]
     },
     {
       "section": "0.18",
       "id": "D-266",
       "title_en": "Governance Enforcement Constitution",
       "title_ar": "دستور فرض الحوكمة",
-      "law_docs": [".memory/governance_enforcement_constitution.md"],
-      "status_docs": ["docs/governance/CONSTITUTION_REGISTRY.json"],
-      "enforcers": ["check_governance_registry.py"]
+      "law_docs": [
+        ".memory/governance_enforcement_constitution.md"
+      ],
+      "status_docs": [
+        "docs/governance/CONSTITUTION_REGISTRY.json"
+      ],
+      "enforcers": [
+        "check_governance_registry.py"
+      ]
     },
     {
       "section": "0.19",
@@ -201,16 +315,26 @@
         ".memory/naas_verification_truth.md",
         "docs/governance/GATE_LEDGER.json"
       ],
-      "enforcers": ["check_naas_verification.py"]
+      "enforcers": [
+        "check_naas_verification.py"
+      ]
     },
     {
       "section": "0.20",
       "id": "D-268",
       "title_en": "Secret Capture Constitution",
       "title_ar": "دستور التقاط السرّ",
-      "law_docs": [".memory/secret_capture_constitution.md", "config/secret_catalog.json"],
-      "status_docs": [".memory/secret_capture_truth.md"],
-      "enforcers": ["check_secret_capture_parity.py", "check_no_committed_secrets.py"]
+      "law_docs": [
+        ".memory/secret_capture_constitution.md",
+        "config/secret_catalog.json"
+      ],
+      "status_docs": [
+        ".memory/secret_capture_truth.md"
+      ],
+      "enforcers": [
+        "check_secret_capture_parity.py",
+        "check_no_committed_secrets.py"
+      ]
     },
     {
       "section": "0.21",
@@ -222,16 +346,24 @@
         "docs/architecture/AMBIENT_COGNITIVE_IDENTITY.md",
         "docs/adr/ADR-010-deepseek-harness-adoption.md"
       ],
-      "status_docs": [".memory/ambient_identity_truth.md"],
-      "enforcers": ["check_ambient_identity.py"]
+      "status_docs": [
+        ".memory/ambient_identity_truth.md"
+      ],
+      "enforcers": [
+        "check_ambient_identity.py"
+      ]
     },
     {
       "section": "0.22",
       "id": "D-270",
       "title_en": "Delivery Standards Constitution",
       "title_ar": "دستور معايير التسليم",
-      "law_docs": ["docs/architecture/DELIVERY_STANDARDS.md"],
-      "status_docs": [".memory/delivery_standards_truth.md"],
+      "law_docs": [
+        "docs/architecture/DELIVERY_STANDARDS.md"
+      ],
+      "status_docs": [
+        ".memory/delivery_standards_truth.md"
+      ],
       "enforcers": [
         "check_supply_chain.py",
         "check_config_credibility.py",
@@ -245,18 +377,46 @@
       "id": "D-271",
       "title_en": "Open Agent Standards Constitution",
       "title_ar": "دستور معايير الوكلاء المفتوحة",
-      "law_docs": ["docs/architecture/OPEN_AGENT_STANDARDS.md"],
-      "status_docs": [".memory/agent_standards_truth.md"],
-      "enforcers": ["check_agent_skills_spec.py", "check_external_standards.py"]
+      "law_docs": [
+        "docs/architecture/OPEN_AGENT_STANDARDS.md"
+      ],
+      "status_docs": [
+        ".memory/agent_standards_truth.md"
+      ],
+      "enforcers": [
+        "check_agent_skills_spec.py",
+        "check_external_standards.py"
+      ]
     },
     {
       "section": "0.24",
       "id": "D-272",
       "title_en": "Agentic Design Principles Constitution",
       "title_ar": "دستور مبادئ تصميم الأنظمة الوكيلية",
-      "law_docs": ["docs/architecture/AGENTIC_DESIGN_PRINCIPLES.md"],
-      "status_docs": [".memory/agentic_design_principles_truth.md"],
-      "enforcers": ["check_agentic_design_principles.py"]
+      "law_docs": [
+        "docs/architecture/AGENTIC_DESIGN_PRINCIPLES.md"
+      ],
+      "status_docs": [
+        ".memory/agentic_design_principles_truth.md"
+      ],
+      "enforcers": [
+        "check_agentic_design_principles.py"
+      ]
+    },
+    {
+      "section": "0.25",
+      "id": "D-273",
+      "title_en": "Deep Tech & Hard-Currency Constitution",
+      "title_ar": "دستور التقنية العميقة والعملة الصعبة",
+      "law_docs": [
+        "docs/DEEP_TECH_CONSTITUTION.md"
+      ],
+      "status_docs": [
+        ".memory/deep_tech_constitution_truth.md"
+      ],
+      "enforcers": [
+        "check_deep_tech_constitution.py"
+      ]
     }
   ]
 }

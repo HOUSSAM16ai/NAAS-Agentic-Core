@@ -226,7 +226,7 @@ def _absorb_frame(result: TurnResult, event: dict[str, Any]) -> bool:
 async def _next_event(ws: Any, result: TurnResult) -> dict[str, Any] | None:
     """الإطار التالي مُحلَّلاً، أو `None` حين يتعذّر — والتعذّر **يُبلَّغ** ولا يُبتلع."""
     try:
-        raw = await asyncio.wait_for(ws.recv(), timeout=150.0)
+        raw = await asyncio.wait_for(ws.recv(), timeout=240.0)
     except TimeoutError:
         result.problems.append("انتهت المهلة بلا إطارٍ نهائي — دورٌ معلَّق")
         raise

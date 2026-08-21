@@ -9,7 +9,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-BASE_TIMEOUT = 45.0
+BASE_TIMEOUT = 180.0
 """
 ISS-STREAM-005: رُفع من 30s إلى 45s لاستيعاب طلبات الشرح ذات السياق الكبير.
 النماذج المجانية على OpenRouter تحتاج وقتاً أطول عند context > 4000 حرف.

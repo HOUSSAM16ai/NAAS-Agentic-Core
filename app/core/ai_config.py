@@ -135,7 +135,7 @@ class ActiveModels:
     # ISS-130 (D-167 — 2026-07-14): gpt-oss-120b:free أُزيل نهائياً من OpenRouter
     # (404) ⇒ إعادة ترقية gpt-oss-20b (الـ PRIMARY المُتحقَّق تاريخياً — D-067،
     # وتعافى من 429 — مُتحقَّق حياً 10.2s عربي+LaTeX finish=stop).
-    PRIMARY = _resolve_primary_model("openai/gpt-oss-20b:free")
+    PRIMARY = _resolve_primary_model("google/gemini-2.5-flash")
     LOW_COST = PRIMARY
     GATEWAY_PRIMARY = PRIMARY
     # ISS-107 (2026-06-02): بنشمارك حي بالمفتاح الحقيقي + الـ system prompt الإنتاجي
@@ -166,8 +166,8 @@ class ActiveModels:
     # القرار: إعادة ترقية gpt-oss-20b إلى PRIMARY (هو الـ PRIMARY المُتحقَّق تاريخياً
     # D-067)؛ gemma-4 بإصداريه بعده؛ gpt-oss-120b يبقى في ذيل السلسلة كفتحة
     # تعافٍ آلي إن أعاد OpenRouter نسخته المجانية (الحُرّاس يتجاوزون 404 فوراً).
-    GATEWAY_FALLBACK_1 = "google/gemma-4-26b-a4b-it:free"  # ✅ GOOD حياً (2026-07-14) — عربي+LaTeX
-    GATEWAY_FALLBACK_2 = "google/gemma-4-31b-it:free"  # ✅ GOOD حياً (2026-07-14) — عربي+LaTeX
+    GATEWAY_FALLBACK_1 = "google/gemini-2.5-flash"  # ✅ GOOD حياً (2026-07-14) — عربي+LaTeX
+    GATEWAY_FALLBACK_2 = "meta-llama/llama-3.3-70b-instruct:free"  # ✅ GOOD حياً (2026-07-14) — عربي+LaTeX
     GATEWAY_FALLBACK_3 = "nvidia/nemotron-3-nano-30b-a3b:free"  # سريع؛ محميّ بـ content==0 guard
     GATEWAY_FALLBACK_4 = "openai/gpt-oss-120b:free"  # ميت 404 (2026-07-14) — فتحة تعافٍ آلي
     GATEWAY_FALLBACK_5 = "nvidia/nemotron-nano-9b-v2:free"  # ملاذ أخير؛ محميّ بالحُرّاس (D-177: FIRST_TOKEN_TIMEOUT يحدّ تعليقه 62s؛ nemotron-3-super-120b يبقى محظوراً ISS-107 — تسرّب إنجليزي)

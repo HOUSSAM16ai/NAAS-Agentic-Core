@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Set above the safety-pinned gemma models' legitimate first-token latency
 # (~12-18s live) so a slow-but-working model is never wrongly abandoned, yet
 # well below BASE_TIMEOUT (45s) so a truly dead model fails over quickly.
-FIRST_TOKEN_TIMEOUT = 30.0
+FIRST_TOKEN_TIMEOUT = 60.0
 # Max wall-clock to wait before the bounded SECOND pass over models that returned
 # 429 on the first pass. Kept short so interactive latency stays acceptable even
 # when the provider advertises a longer Retry-After.

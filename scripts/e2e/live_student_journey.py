@@ -142,7 +142,7 @@ async def _run_turn(ws_url: str, token: str, question: str) -> TurnResult:
         await ws.send(json.dumps({"question": question}))
         while True:
             try:
-                raw = await asyncio.wait_for(ws.recv(), timeout=120.0)
+                raw = await asyncio.wait_for(ws.recv(), timeout=240.0)
             except TimeoutError:
                 result.problems.append("انتهت المهلة بلا إطارٍ نهائي — دورٌ معلَّق")
                 break

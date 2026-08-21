@@ -57,6 +57,10 @@ jobs:
       ENVIRONMENT: development
       LLM_MOCK_MODE: "0"
       REQUIRE_ORCHESTRATOR: "0"
+      ORCHESTRATOR_LOCAL_FALLBACK_ENABLED: "1"
+      USER_SERVICE_URL: "http://127.0.0.1:8000"
+      ORCHESTRATOR_SERVICE_URL: "http://127.0.0.1:9999"
+      OPENROUTER_EXTRA_MODELS: "google/gemini-2.5-flash"
       E2E_BACKEND: http://127.0.0.1:8000
     steps:
       - uses: actions/checkout@v5

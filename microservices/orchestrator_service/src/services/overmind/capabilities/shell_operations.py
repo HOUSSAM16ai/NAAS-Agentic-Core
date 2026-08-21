@@ -46,7 +46,7 @@ class ShellOperations:
 
     async def execute_command(
         self,
-        command: str,
+        command: str | list[str],
         cwd: Path | None = None,
         timeout: int = 30,
     ) -> dict[str, object]:
@@ -54,15 +54,18 @@ class ShellOperations:
         تنفيذ أمر Shell.
 
         Args:
-            command: الأمر المراد تنفيذه
+            command: الأمر المراد تنفيذه (سلسلة نصية أو قائمة)
             cwd: المجلد الحالي للتنفيذ
             timeout: المهلة الزمنية بالثواني
 
         Returns:
             dict: نتيجة التنفيذ (stdout, stderr, returncode)
         """
-        # استخراج الأمر الأول
-        command_name = command.split(maxsplit=1)[0] if command.strip() else ""
+        if isinstance(command, str):
+            # استخراج الأمر الأول
+            command_name = command.split(maxsplit=1)[0] if command.strip() else ""
+        else:
+            command_name = command[0] if command else ""
 
         # التحقق من القائمة البيضاء
         if command_name not in self.allowed_commands:
@@ -79,10 +82,10 @@ class ShellOperations:
             # تنفيذ الأمر
             logger.info(f"Executing command: {command}")
 
-            # Use shlex to split arguments and disable shell=True
-            args = shlex.split(command)
+            # Use shlex to split arguments if string, else use list directly
+            args = shlex.split(command) if isinstance(command, str) else command
 
-            # Double check the command after split
+            # Double check the command after split/assignment
             if not args or args[0] not in self.allowed_commands:
                 return {
                     "success": False,

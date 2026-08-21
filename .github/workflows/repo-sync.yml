@@ -6,13 +6,19 @@ name: Sync to other repository
 #   Houssam-lab/NAAS-Agentic-Core  -> pushes to bakabala27-svg/NAAS-Agentic-Core (uses secrets.MIRROR_PAT)
 #   bakabala27-svg/NAAS-Agentic-Core -> pushes to Houssam-lab/NAAS-Agentic-Core (uses secrets.UPSTREAM_PAT)
 #
-# Auth strategy (v5): actions/checkout with the PAT as token is the ONLY
-# method proven to pass GitHub Actions runner identity checks (x-access-token
-# URLs are rejected by the runner). Each repository checks out with its OWN
-# push secret, then the sync step rewrites origin's URL to the peer and
-# re-attaches the same secret via a git credential helper so git sends Basic
-# auth as the real token owner (not the bot). A retry loop on the push avoids
+# Auth strategy (v6): the peer push is authenticated by a git credential helper
+# that sends the peer PAT as Basic auth, so git acts as the real token owner and
+# not as github-actions[bot] (x-access-token URLs alone are rejected by the
+# runner). The checkout token is deliberately independent of that: it only has
+# to read THIS repository, so it falls back through the peer secrets to
+# github.token. v5 hardcoded MIRROR_PAT there and every run in the repository
+# that owns UPSTREAM_PAT died at checkout with "Input required and not supplied:
+# token" — before any sync logic executed. A retry loop on the push absorbs
 # transient "cannot lock ref" conflicts when both sides run simultaneously.
+#
+# When the peer PAT is absent the job does NOT fail: it skips with a named
+# reason in the log and the run summary (D-206 L11 — absence is declared, never
+# silent). Mirroring resumes by itself once the secret is added.
 on:
   push:
     branches: [main]
@@ -23,10 +29,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out current repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.MIRROR_PAT }}
+          # The checkout token is NOT what authenticates the peer push — the sync
+          # step below rewrites origin and re-authenticates through its own
+          # credential helper. Hardcoding MIRROR_PAT here made checkout abort with
+          # "Input required and not supplied: token" in the repository that owns
+          # UPSTREAM_PAT instead, killing the job before the real logic ran. The
+          # fallback keeps checkout working in both repositories and with neither.
+          token: ${{ secrets.MIRROR_PAT || secrets.UPSTREAM_PAT || github.token }}
 
       - name: Replicate main into the peer repository
         env:
@@ -41,9 +53,22 @@ jobs:
             PEER="Houssam-lab/NAAS-Agentic-Core"
             PAT="${UPSTREAM_PAT}"
           fi
+          # Declared absence, not silence (D-206 L11). A peer PAT that was never
+          # configured is a deployment fact, not a defect in this push — failing
+          # every commit for it trains people to ignore the job. So the skip is
+          # loud: it names the missing secret in the log AND in the run summary,
+          # so an unconfigured mirror is visible rather than merely quiet. Sync
+          # resumes on its own the moment the secret exists.
           if [ -z "$PAT" ]; then
-            echo "Error: peer authentication token is missing. Check repository secrets."
-            exit 1
+            NOTICE="peer sync disabled: no PAT configured for ${PEER}"
+            echo "::notice::${NOTICE} — add the peer push secret to enable mirroring."
+            {
+              echo "### ⏭️ ${NOTICE}"
+              echo ""
+              echo "Nothing was pushed to \`${PEER}\`. Add the peer push token to"
+              echo "repository secrets and mirroring resumes on the next commit."
+            } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 0
           fi
           IDENTITY="bakabala27-svg"
           git config user.name "${IDENTITY}"

@@ -38,10 +38,17 @@ import re
 import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import httpx
 import websockets
+
+# جذر المستودع على المسار قبل أي استيرادٍ محلّي. تشغيل `python scripts/e2e/x.py`
+# يضع `scripts/e2e/` في `sys.path[0]` لا جذر المستودع، و`live-e2e.yml` لا يضبط
+# `PYTHONPATH` — فبدون هذا السطر يموت السكربت بـ`ModuleNotFoundError: app` على
+# العدّاء. نفس نمط `honcho_live_probe.py` — مصدرٌ واحد لثلاثتها.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.contracts.streaming import KNOWN_UI_COMPONENTS
 from shared.memory import is_system_authored

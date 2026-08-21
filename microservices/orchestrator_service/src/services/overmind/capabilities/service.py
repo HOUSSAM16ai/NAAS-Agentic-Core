@@ -75,7 +75,7 @@ class OvermindCapabilities:
     # Shell operations (تفويض إلى ShellOperations)
     # =========================================================================
 
-    async def execute_shell(self, command: str, timeout: int = 30) -> dict[str, object]:
+    async def execute_shell(self, command: str | list[str], timeout: int = 30) -> dict[str, object]:
         """تنفيذ أمر Shell."""
         return await self.shell_ops.execute_command(
             command,
@@ -89,14 +89,12 @@ class OvermindCapabilities:
 
     async def git_status(self) -> dict[str, object]:
         """عرض حالة Git."""
-        return await self.execute_shell("git status")
+        return await self.execute_shell(["git", "status"])
 
     async def git_add(self, files: str = ".") -> dict[str, object]:
         """إضافة ملفات إلى Git staging."""
-        return await self.execute_shell(f"git add {files}")
+        return await self.execute_shell(["git", "add", files])
 
     async def git_commit(self, message: str) -> dict[str, object]:
         """إنشاء commit."""
-        # تنظيف الرسالة من علامات الاقتباس الخطيرة
-        safe_message = message.replace('"', '\\"')
-        return await self.execute_shell(f'git commit -m "{safe_message}"')
+        return await self.execute_shell(["git", "commit", "-m", message])

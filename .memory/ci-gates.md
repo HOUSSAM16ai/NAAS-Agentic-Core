@@ -16,8 +16,8 @@
 > them. All seven are wired now and `check_governance_registry.py` makes an
 > eighth impossible. Total gates on disk (derived, verified in CI):
 >
-> <!-- derived:gates_total=89 -->
-> **89** — in `scripts/fitness/` and `tools/ci/`, every one of them executed.
+> <!-- derived:gates_total=90 -->
+> **90** — in `scripts/fitness/` and `tools/ci/`, every one of them executed.
 
 ## Required jobs (must be green)
 
@@ -42,7 +42,7 @@ as the list said ten, in the very file that names `needs:` as the arbiter).
 
 | Workflow | Job | What it enforces |
 |---|---|---|
-| `doc_integrity.yml` | `doc-integrity` | `check_memory_coherence` + `check_constitution_reality` + **`check_authority_links`** + CLAUDE.md anchors + no dated diagnostics outside `docs/archive/` |
+| `doc_integrity.yml` | `doc-integrity` | `check_documentation_contract` + `check_memory_coherence` + `check_constitution_reality` + **`check_authority_links`** + CLAUDE.md anchors + no dated diagnostics outside `docs/archive/` |
 | `runtime_truth.yml` | `runtime-truth-drift-check` | `scripts/runtime_truth.py --check` vs `.runtime/truth_table.lock.json` |
 | `skills-doctrine-gate.yml` | `doctrine-drift` · `doctrine-invariants` | `check_skills_doctrine.py` + `check_pedagogical_os.py` |
 | `skills-architecture-gate.yml` | 7 jobs + `skills-gate-required` | API contracts · metrics inventory · skill isolation · health · dashboards · targets · pipeline |
@@ -77,7 +77,7 @@ Both are proven by a negative test: injecting drift / removing a symbol turns CI
 ## What CI still does NOT catch (tracked as ISS-025, partial mitigation only)
 1. WS frame tracing per-frame (still ISS-005). The `path_observer` covers the per-turn span; per-frame WS spans are out of scope here.
 2. Persistence authority round-trip with the orchestrator awake (cannot run in CI; requires `docker compose up`).
-3. Frontend Next.js build — still not in CI.
+3. Frontend Next.js build — covered by `frontend-tests`; the remaining gap is live browser journey coverage outside the dedicated live-E2E workflow.
 
 ## Updating the gate intentionally
 ```
@@ -178,3 +178,16 @@ Redpanda يُعلن `redpanda:9092` فقط فيتعلّق أيّ عميل على
 Proven by **27 negative cases** plus a pristine baseline
 (`tests/architecture/test_naas_verification_gate.py`) — including the one that
 proves the block is bounded: R&D work stays green while the legal gate is `ABSENT`.
+
+## D-275 / D-277 / ADR-016 — سياق الوكيل وقبول التغيير والتوثيق
+
+| Gate | What it enforces | Why it exists |
+|---|---|---|
+| `check_agent_context.py` | Agent authority order, boot sequence, required sources, and commercial/evidence trace resolve to existing paths. | يمنع الوكيل من العمل بذاكرة خاصة أو مصدر غير مصنّف. |
+| `check_code_acceptance.py` | Current change packet has standards, evidence, local application, production trace, curriculum consideration, zero deletions, and a fresh content fingerprint. | يمنع إعلان قبول تغيير لم تُثبت حزمته أو تغيّر بعد تسجيل بصمته. |
+| `check_documentation_contract.py` | Live-document manifest, local links, executable command truth, stale operational references, CI wiring, and mandatory agent/contributor references. | يمنع رجوع الأوامر القديمة والروابط المكسورة ويجعل التوثيق جزءًا من required-ci. |
+| `check_dual_track_alignment.py` | Engineering capability and production/commercial evidence remain aligned. | يمنع تحويل التصميم أو البحث إلى ادعاء قيمة أو إيراد بلا دليل. |
+| `check_reference_backbone.py` | Pinned reference backbone remains additive, non-runtime, and represented by the declared source files. | يمنع استبدال مصدر مرجعي أو إدخاله إلى runtime بصمت. |
+| `check_source_adoption_matrix.py` | Every discovered source has status, purpose, local application, enforcer, and owner. | يمنع استخدام مصدر خارجي كسلطة غير معلنة أو تبعية غير مراجعة. |
+
+`check_documentation_contract.py` is deliberately executed in both `.github/workflows/doc_integrity.yml` and the `guardrails` job in `.github/workflows/ci.yml`; a documentation-only PR therefore cannot bypass the required path.

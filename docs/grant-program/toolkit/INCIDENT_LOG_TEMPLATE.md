@@ -12,7 +12,7 @@
 
 ## Guidance
 
-*   **Risk Level:** Refer to [SAFEGUARDING.md](../SAFEGUARDING.md) for definitions.
+*   **Risk Level:** Refer to [SAFEGUARDING.md](../../../SAFEGUARDING.md) for definitions.
 *   **Description:** Be objective. Describe *what happened*, not your opinion of why.
 *   **Action Taken:** What did you do immediately? (e.g., "Stopped session", "Called parent").
 *   **Escalated To:** Who else was informed?

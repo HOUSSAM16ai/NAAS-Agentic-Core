@@ -19,7 +19,7 @@ Before you begin, ensure:
 
 ### Step 1: Create Codespace
 
-1. Go to the repository: https://github.com/ai-for-solution-labs/my_ai_project
+1. Go to the repository: https://github.com/Houssam-lab/NAAS-Agentic-Core
 2. Click on **Code** → **Codespaces** → **Create codespace on [branch-name]**
 3. Wait for the Codespace to initialize (2-3 minutes)
 

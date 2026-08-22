@@ -47,6 +47,13 @@ section-order = ["future", "standard-library", "third-party", "first-party", "lo
 # entry. **This list shrinks only** — the same rule as the deselect lists (D-105),
 # `_FROZEN_DEBT` (D-187), and the correlated-HTTP debt (D-189).
 "app/api/routers/admin.py" = ["PLR0912", "PLR0915"]
+# D-277 acceptance/governance gates: these validators intentionally orchestrate
+# several independent evidence checks in one fail-closed entrypoint. Their branch
+# debt is frozen and shrink-only; all other Ruff rules remain active.
+"scripts/fitness/check_agent_context.py" = ["PLR0912"]
+"scripts/fitness/check_code_acceptance.py" = ["PLR0912", "PLR0915"]
+"scripts/fitness/check_dual_track_alignment.py" = ["PLR0912", "PLR0915"]
+"scripts/fitness/check_source_adoption_matrix.py" = ["PLR0912", "PLR0915"]
 # D-173 Stage 3 (2026-08-13): دورة الدور الواحدة المفككة من hotspot `chat_stream_ws`
 # (669 سطراً وتعقيداً 69 — الكارثة الأخطر في المستودع). سلوک الدوال الثلاثة هنا مطابق
 # حرفيًّا للأصل (افتتاح DB + بيداغوجيا + BKT + بثّ وتوجيه + كتلة إغلاق حتمية)؛ أي

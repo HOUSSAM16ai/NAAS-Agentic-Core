@@ -150,8 +150,8 @@ DELIVERY_SUMMARY.md
 
 ### الخطوة 3: النقل
 ```bash
-# انقل إلى docs/reports/
-mv ARCHITECTURE_ANALYSIS.md docs/reports/
+# انقل التقرير التاريخي الفعلي إلى الأرشيف مع إبقاء المصدر الحي دون نسخ
+mv <historical-report>.md docs/archive/reports/
 
 # انقل إلى docs/archive/
 mv OLD_SUMMARY.md docs/archive/
@@ -159,8 +159,8 @@ mv OLD_SUMMARY.md docs/archive/
 
 ### الخطوة 4: التحديث
 ```bash
-# تحقق من الروابط المكسورة
-python3 /tmp/check_links.py
+# تحقق من عقد التوثيق الحي والروابط التي يحرسها
+python3 scripts/fitness/check_documentation_contract.py
 
 # حدث README.md
 # حدث DOCUMENTATION_INDEX.md
@@ -299,10 +299,10 @@ mv CRITICAL_INFO.md docs/archive/
 
 ## 📚 المراجع | References
 
-- [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) - فهرس شامل
-- [PROJECT_HISTORY.md](PROJECT_HISTORY.md) - تاريخ التبسيط
-- [CONTRIBUTING.md](CONTRIBUTING.md) - معايير التوثيق
-- [CHANGELOG.md](CHANGELOG.md) - سجل التغييرات
+- [DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md) - فهرس شامل
+- [PROJECT_HISTORY.md](../archive/reports/PROJECT_HISTORY.md) - تاريخ التبسيط
+- [CONTRIBUTING.md](../../CONTRIBUTING.md) - معايير التوثيق
+- [CHANGELOG.md](../../CHANGELOG.md) - سجل التغييرات
 
 ---
 

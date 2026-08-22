@@ -29,6 +29,9 @@
     "check_config_credibility.py": [
       "tests/fitness/test_delivery_standards_gates.py"
     ],
+    "check_documentation_contract.py": [
+      "tests/fitness/test_documentation_contract_gate.py"
+    ],
     "check_correlated_http.py": [
       "tests/fitness/test_check_correlated_http.py"
     ],
@@ -161,6 +164,11 @@
     "check_tracing_gate.py": "مذكورة في اختبارٍ لا يؤكّد فشلاً — تُثبِت أنّها تعمل ولا تُثبِت أنّها تحجب",
     "check_transcript_stage_coverage.py": "مذكورة في اختبارٍ لا يؤكّد فشلاً — تُثبِت أنّها تعمل ولا تُثبِت أنّها تحجب",
     "check_understanding_evidence.py": "بلا أيّ اختبار — لا يُعرَف إن كانت تحجب عند الخرق",
+    "check_agent_context.py": "بوابة سياق الوكيل جديدة في سجل البراهين؛ تحتاج اختبارًا يكسر مصدرًا أو مسارًا ويثبت خروجًا غير صفري.",
+    "check_code_acceptance.py": "بوابة حزمة القبول جديدة في سجل البراهين؛ تحتاج اختبارًا يقدّم packet غير صالح ويثبت رفضه.",
+    "check_dual_track_alignment.py": "بوابة المواءمة الثنائية بلا اختبار سلبي مخصص؛ لا يُعلن برهان الحجب قبل إضافة fixture مكسور.",
+    "check_reference_backbone.py": "بوابة العمود المرجعي بلا اختبار سلبي مخصص؛ لا يُعلن برهان الحجب قبل إضافة fixture مكسور.",
+    "check_source_adoption_matrix.py": "بوابة مصفوفة تبني المصادر بلا اختبار سلبي مخصص؛ لا يُعلن برهان الحجب قبل إضافة fixture مكسور.",
     "check_deep_tech_constitution.py": "Newly added, lacking negative proof for now.",
     "check_pocock_gates.py": "Newly added, lacking negative proof for now."
   }

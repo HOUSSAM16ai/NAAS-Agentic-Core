@@ -368,14 +368,14 @@ curl -X POST https://api.cogniforge.ai/v1/guardrails/check \
 
 ## 📖 Documentation
 
-- [Architecture Decision Records](docs/adr/)
-- [API Documentation](docs/api/)
-- [Runbooks](docs/runbooks/)
-- [SLO Definitions](docs/slos/)
+- [Architecture Decision Records](adr/)
+- [API Contracts](contracts/README.md)
+- [Deployment Guide](DEPLOYMENT_GUIDE.md)
+- [Documentation Contract](DOCUMENTATION_CONTRACT.md)
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md)
+See [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## 📄 License
 

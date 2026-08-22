@@ -24,7 +24,8 @@
 
 | ملف | الدور |
 |-----|------|
-| [`START_HERE.md`](START_HERE.md) | نقطة البداية للمطورين الجدد |
+| [`START_HERE.md`](START_HERE.md) | نقطة البداية الوحيدة للمطورين الجدد — المسار التشغيلي الحي |
+| [`DOCUMENTATION_CONTRACT.md`](DOCUMENTATION_CONTRACT.md) · [`DOCUMENTATION_MANIFEST.json`](DOCUMENTATION_MANIFEST.json) | عقد التوثيق الحي وبيانه الآلي؛ يحدد الوثائق الحية ويفحص كل Markdown غير مؤرشف؛ الفشل في بوابته يمنع الدمج |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | نظرة معمارية مبسطة (التفصيل الحيّ: CLAUDE.md §3) |
 | [`REPOSITORY_MAP.md`](REPOSITORY_MAP.md) | خريطة المستودع |
 | [`guides/BEGINNER_GUIDE.md`](guides/BEGINNER_GUIDE.md) · [`guides/NEWCOMER_CODEBASE_MAP.md`](guides/NEWCOMER_CODEBASE_MAP.md) | أدلة المبتدئين |
@@ -36,7 +37,7 @@
 |-----|------|
 | [`architecture/MICROSERVICES_CONSTITUTION.md`](architecture/MICROSERVICES_CONSTITUTION.md) | ⚖️ الدستور المعماري (عربي) |
 | [`architecture/PRINCIPLES.md`](architecture/PRINCIPLES.md) | المبادئ المعمارية |
-| [`adr/`](adr/) | سجلّات ADR (القرارات الحيّة في `.memory/decisions.md`) |
+| [`adr/`](adr/) | سجلّات ADR (القرارات الحيّة في `.memory/decisions.md`)، ومنها [`ADR-016-live-documentation-contract.md`](adr/ADR-016-live-documentation-contract.md) لعقد التوثيق |
 | [`architecture/`](architecture/) (runbooks: `MASTER_CUTOVER_RUNBOOK` · `PR1..PR5` · `LEGACY_*`) | كتيّبات هجرة الـ strangler-fig |
 | [`architecture/ENGINEERING_DOCTRINE.md`](architecture/ENGINEERING_DOCTRINE.md) | ⚖️ عقيدة الهندسة — البحر الكامل مربوطاً بفارضٍ آلي؛ كل قانون يُسمّي بوّابته (محروسة: بوّابة غير موجودة ⇒ CI أحمر) |
 | [`architecture/CS_KNOWLEDGE_MAP.md`](architecture/CS_KNOWLEDGE_MAP.md) | 🗺️ خريطة علوم الحاسوب ↔ المشروع — عشرون مجالاً بحالةٍ ودليلٍ ملفّي، تحرسها `check_cs_knowledge_map` (D-207) |
@@ -74,6 +75,7 @@
 | [`governance/CONSTITUTION_REGISTRY.json`](governance/CONSTITUTION_REGISTRY.json) | 🔒 **السجلّ الدستوري** (D-266) — المصدر القانوني الوحيد الذي يربط كل دستور بوثيقة قانونه ووثيقة حالته وفوارضه. تحرسه `check_governance_registry.py`: بوّابةٌ على القرص لا يشغّلها شيء ⇒ CI أحمر |
 | [`specs/`](specs/README.md) | 📐 **المواصفات الحيّة** (D-265 §2 · أُنشئت في D-266) — دورة Spec-First: خطة → تصميم → مهام → مواصفة → تنفيذ → برهان. كان الموطن مُعلَناً في الدستور وغير موجودٍ على القرص |
 | [`governance/REPOSITORY_GOVERNANCE_MODEL.md`](governance/REPOSITORY_GOVERNANCE_MODEL.md) | حوكمة المستودع |
+| [`governance/NO_BYPASS_CONTROL_PLANE.md`](governance/NO_BYPASS_CONTROL_PLANE.md) · [`../.github/branch-protection-policy.json`](../.github/branch-protection-policy.json) | نموذج التحكم ضد تجاوز التوثيق؛ يربط البوابات الداخلية بحماية `main` الحية |
 | [`governance/REFERENCE_BACKBONE.md`](governance/REFERENCE_BACKBONE.md) · [`governance/REFERENCE_BACKBONE.json`](governance/REFERENCE_BACKBONE.json) | 🔒 العمود الفقري المرجعي المثبت؛ يربط خرائط التعلم والخوارزميات وتصميم الأنظمة والحرفية والوكلاء ببوابة `check_reference_backbone` وADR-013 |
 | [`governance/SOURCE_ADOPTION_MATRIX.md`](governance/SOURCE_ADOPTION_MATRIX.md) · [`governance/SOURCE_ADOPTION_MATRIX.json`](governance/SOURCE_ADOPTION_MATRIX.json) | 🔒 مصفوفة كل مستودعات GitHub المكتشفة؛ لكل مصدر حالة وغرض وتطبيق وفارض ومالك، وتحرسها `check_source_adoption_matrix` |
 | [`research/ALL_GITHUB_SOURCES_INVENTORY.md`](research/ALL_GITHUB_SOURCES_INVENTORY.md) · [`research/ALL_GITHUB_SOURCES_INVENTORY.json`](research/ALL_GITHUB_SOURCES_INVENTORY.json) | جرد قابل لإعادة التشغيل لكل الروابط الفريدة؛ لا يسمح بإخفاء مصدر داخل وثيقة أو تبعية |
@@ -104,7 +106,9 @@
 
 ---
 
-## قواعد الإضافة (ملزِمة — تحرسها بوّابة `doc-integrity`)
+## قواعد الإضافة (ملزِمة — تحرسها بوابة `doc-integrity`)
+
+العقد التفصيلي لهذه القواعد هو [`DOCUMENTATION_CONTRACT.md`](DOCUMENTATION_CONTRACT.md)، ونطاق الوثائق الحية القابلة للفحص هو [`DOCUMENTATION_MANIFEST.json`](DOCUMENTATION_MANIFEST.json). أي ملف تشغيلي جديد يحتاج إدخالًا صريحًا في البيان، وإلا يفشل `check_documentation_contract.py`.
 
 1. معلومة تشغيلية قصيرة ⇒ `.memory/*.md` — **لا ملف MD جديد في `docs/`**.
 2. قرار معماري ⇒ `.memory/decisions.md` + قسم CLAUDE.md §6.x.

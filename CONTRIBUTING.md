@@ -15,15 +15,16 @@ pip install -r requirements-test.txt
 
 ## 2) Required local checks before opening a PR
 
+Use the canonical entrypoints from the repository root. Do not replace a failing gate with a warning, `|| true`, a skipped job, or a hand-written claim in the PR description.
+
 ```bash
-ruff check .
-ruff format --check .
-python scripts/ci_guardrails.py
-python scripts/fitness/check_no_app_imports_in_microservices.py --strict
-python scripts/fitness/check_route_registry_parity.py
-python scripts/fitness/check_tracing_gate.py
-pytest -v --cov=app --cov-report=term-missing --tb=short
+git diff --check
+python scripts/fitness/check_documentation_contract.py
+make gates
+make test
 ```
+
+For a documentation-only change, the documentation contract gate is still mandatory. `make guardrails` is a subset and is not a replacement for `make gates`.
 
 ## 3) CI mergeability model
 
@@ -47,6 +48,8 @@ Do not add extra merge-blocking checks without updating:
 - Keep route registries and runtime routes in parity.
 - Keep tracing gate checks passing.
 - Keep docs/runtime/contracts in sync when behavior changes.
+- For live documentation changes, update the single source of truth and `docs/DOCUMENTATION_INDEX.md` in the same PR.
+- Read and comply with `docs/DOCUMENTATION_CONTRACT.md`; its gate must pass without weakening the gate itself.
 
 ## 5) Dependency policy
 
@@ -58,10 +61,15 @@ Do not add extra merge-blocking checks without updating:
 ## 6) PR quality bar
 
 Every PR must include:
+
 - scope + risk statement
 - rollback plan
-- exact validation commands executed
+- exact validation commands executed and their results
 - linked issue or rationale for untracked work
+- the source of truth changed, if documentation or runtime behavior changed
+- explicit disclosure of anything not proven by local or CI checks
+
+Documentation changes must also state whether the file is live, supporting, generated, or archived. Do not duplicate operational facts across multiple live files when a link to the canonical source is sufficient.
 
 Use `.github/PULL_REQUEST_TEMPLATE.md` exactly; do not remove governance sections.
 

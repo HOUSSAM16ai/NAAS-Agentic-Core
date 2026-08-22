@@ -13,7 +13,14 @@ SOURCES = ROOT / "docs/governance/SOURCE_ADOPTION_MATRIX.json"
 CURRICULUM = ROOT / "docs/research/CURRICULUM_APPLICATION_MATRIX.json"
 EVIDENCE = ROOT / "docs/research/EVIDENCE_CATALOG.json"
 FAILURES: list[str] = []
-STATUS_RANK = {"PROPOSED": 0, "DISCOVERY": 1, "OFFER_READY": 2, "PILOT": 3, "PAID_PROOF": 4, "REPEATABLE": 5}
+STATUS_RANK = {
+    "PROPOSED": 0,
+    "DISCOVERY": 1,
+    "OFFER_READY": 2,
+    "PILOT": 3,
+    "PAID_PROOF": 4,
+    "REPEATABLE": 5,
+}
 ENGINEERING_RELEASE_STATES = {"PILOT_READY", "PAID_PROOF", "REPEATABLE"}
 
 
@@ -46,7 +53,13 @@ def main() -> int:
     evidence = load(EVIDENCE, "evidence catalog")
     if any(value is None for value in (alignment, offers, sources, curriculum, evidence)):
         return 1
-    assert alignment is not None and offers is not None and sources is not None and curriculum is not None and evidence is not None
+    assert (
+        alignment is not None
+        and offers is not None
+        and sources is not None
+        and curriculum is not None
+        and evidence is not None
+    )
 
     for section in ("engineering_track", "production_track", "shared_alignment_contract"):
         if not isinstance(alignment.get(section), dict):
@@ -58,14 +71,20 @@ def main() -> int:
 
     offer_rows = offers.get("offers", [])
     offer_ids = {str(row.get("id")) for row in offer_rows if isinstance(row, dict)}
-    source_by_id = {str(row.get("source_id")): row for row in sources.get("sources", []) if isinstance(row, dict)}
+    source_by_id = {
+        str(row.get("source_id")): row
+        for row in sources.get("sources", [])
+        if isinstance(row, dict)
+    }
     curriculum_domains = {
         str(domain)
         for row in curriculum.get("courses", [])
         if isinstance(row, dict)
         for domain in row.get("domain_tags", [])
     }
-    evidence_ids = {str(row.get("id")) for row in evidence.get("evidence", []) if isinstance(row, dict)}
+    evidence_ids = {
+        str(row.get("id")) for row in evidence.get("evidence", []) if isinstance(row, dict)
+    }
     records = alignment.get("alignment_records", [])
     if not isinstance(records, list) or not records:
         fail("alignment_records must be non-empty")
@@ -78,7 +97,14 @@ def main() -> int:
         if not identifier or identifier in seen:
             fail(f"alignment record[{index}] has missing or duplicate alignment_id")
         seen.add(identifier)
-        for field in ("capability", "offer_id", "buyer_or_user", "paid_problem_or_social_problem", "owner", "next_gate"):
+        for field in (
+            "capability",
+            "offer_id",
+            "buyer_or_user",
+            "paid_problem_or_social_problem",
+            "owner",
+            "next_gate",
+        ):
             if not str(row.get(field, "")).strip():
                 fail(f"alignment {identifier or index} missing `{field}`")
         offer_id = str(row.get("offer_id", ""))
@@ -104,17 +130,30 @@ def main() -> int:
                 fail(f"alignment {identifier} references unknown evidence: {evidence_id}")
         engineering_status = str(row.get("engineering_status", ""))
         commercial_status = str(row.get("commercial_status", ""))
-        if engineering_status not in {"RESEARCH", "BUILDING", "PILOT_READY", "PAID_PROOF", "REPEATABLE"}:
+        if engineering_status not in {
+            "RESEARCH",
+            "BUILDING",
+            "PILOT_READY",
+            "PAID_PROOF",
+            "REPEATABLE",
+        }:
             fail(f"alignment {identifier} has invalid engineering status: {engineering_status}")
         if commercial_status not in STATUS_RANK:
             fail(f"alignment {identifier} has invalid commercial status: {commercial_status}")
-        if engineering_status in ENGINEERING_RELEASE_STATES and STATUS_RANK[commercial_status] < STATUS_RANK["PILOT"]:
-            fail(f"alignment {identifier} claims engineering release before commercial pilot readiness")
+        if (
+            engineering_status in ENGINEERING_RELEASE_STATES
+            and STATUS_RANK[commercial_status] < STATUS_RANK["PILOT"]
+        ):
+            fail(
+                f"alignment {identifier} claims engineering release before commercial pilot readiness"
+            )
 
     if FAILURES:
         print(f"\n❌ Dual-track alignment gate failed: {len(FAILURES)} violation(s)")
         return 1
-    passed(f"Dual-track alignment is coherent: {len(records)} capability records connect engineering evidence to production offers without bypass.")
+    passed(
+        f"Dual-track alignment is coherent: {len(records)} capability records connect engineering evidence to production offers without bypass."
+    )
     return 0
 
 

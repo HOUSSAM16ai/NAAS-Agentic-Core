@@ -41,9 +41,17 @@ def main() -> None:
         title = nonempty(lines, index - 1)
         # Locate the next term and faculty lines while staying inside this entry.
         cursor = index + 1
-        while cursor < len(lines) and not TERM_RE.match(lines[cursor].strip()) and not COURSE_RE.match(lines[cursor].strip()):
+        while (
+            cursor < len(lines)
+            and not TERM_RE.match(lines[cursor].strip())
+            and not COURSE_RE.match(lines[cursor].strip())
+        ):
             cursor += 1
-        term = lines[cursor].strip() if cursor < len(lines) and TERM_RE.match(lines[cursor].strip()) else "unknown"
+        term = (
+            lines[cursor].strip()
+            if cursor < len(lines) and TERM_RE.match(lines[cursor].strip())
+            else "unknown"
+        )
         description_start = cursor + 1
         # Descriptions end at COURSE WEBSITE or the next course code.
         description: list[str] = []
@@ -83,7 +91,7 @@ def main() -> None:
         "sources": [
             "https://seas.harvard.edu/computer-science/courses",
             "https://csadvising.seas.harvard.edu/concentration/requirements/",
-            "https://cs50.harvard.edu/x/"
+            "https://cs50.harvard.edu/x/",
         ],
         "extraction_method": "parse saved official-page markdown; deduplicate by course code; retain longest description and all observed term offerings",
         "course_count": len(entries),
@@ -96,11 +104,13 @@ def main() -> None:
             "agent_requirement_status",
             "owner",
             "mapped_change_types",
-            "evidence_paths"
+            "evidence_paths",
         ],
-        "courses": list(entries.values())
+        "courses": list(entries.values()),
     }
-    OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    OUTPUT_JSON.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
     lines_out = [
         "# Harvard Computer Science — Complete Official Listing Snapshot",
@@ -115,9 +125,13 @@ def main() -> None:
     for row in entries.values():
         offerings = ", ".join(str(item) for item in row["offerings_seen"])
         title = str(row["title"]).replace("|", "\\|")
-        lines_out.append(f"| `{row['course_id']}` | {title} | {offerings} | `{row['local_application_status']}` |")
+        lines_out.append(
+            f"| `{row['course_id']}` | {title} | {offerings} | `{row['local_application_status']}` |"
+        )
     OUTPUT_MD.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
-    print(json.dumps({"course_count": len(entries), "output": str(OUTPUT_JSON)}, ensure_ascii=False))
+    print(
+        json.dumps({"course_count": len(entries), "output": str(OUTPUT_JSON)}, ensure_ascii=False)
+    )
 
 
 if __name__ == "__main__":

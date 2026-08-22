@@ -1,6 +1,6 @@
 # دستور مبادئ تصميم الأنظمة الوكيلية (D-272)
 
-> **الحالة:** [`.memory/agentic_design_principles_truth.md`](.memory/agentic_design_principles_truth.md) ·
+> **الحالة:** [`.memory/agentic_design_principles_truth.md`](agentic_design_principles_truth.md) ·
 > **الفارض:** `check_agentic_design_principles.py` ·
 > **المصدر العلمي:** [arXiv:2512.08296](https://arxiv.org/abs/2512.08296) — *"Towards a Science of Scaling Agent Systems"*
 > (Yubin Kim وXin Liu و21 مؤلفًا — Google Research · Google DeepMind · MIT، ديسمبر 2025 → v3 أبريل 2026).

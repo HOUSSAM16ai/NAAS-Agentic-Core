@@ -14,6 +14,11 @@
 
 # Governance & delivery
 /.github/ @HOUSSAM16ai
+/.github/workflows/ @HOUSSAM16ai
+/.github/branch-protection-policy.json @HOUSSAM16ai
+/AGENTS.md @HOUSSAM16ai
+/CLAUDE.md @HOUSSAM16ai
+/Makefile @HOUSSAM16ai
 /docs/ @HOUSSAM16ai
 /infra/ @HOUSSAM16ai
 

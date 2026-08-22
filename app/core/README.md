@@ -319,18 +319,18 @@ async def test_db_connection():
 
 ### Core Documentation
 - [Database Guide](../../docs/db/SESSION_FACTORY.md)
-- [Security Guide](../../docs/security/)
+- [Security Guide](../../docs/audit_and_privacy.md)
 - [AI Gateway Guide](../../docs/gateways/AI_GATEWAY.md)
 
 ### Architecture Documentation
 - [Clean Architecture](../../docs/architecture/)
 - [Dependency Injection](../../docs/core/DEPENDENCY_LAYER.md)
-- [Domain Events](../../docs/architecture/domain_events.md)
+- [Domain Events](../../docs/architecture_map.md)
 
 ### Best Practices
-- [SOLID Principles](../../docs/SOLID_PRINCIPLES.md)
-- [Error Handling](../../docs/ERROR_HANDLING.md)
-- [Testing Guide](../../TESTING_GUIDE.md)
+- [SOLID Principles](../../docs/ARCHITECTURE.md)
+- [Error Handling](../../docs/ARCHITECTURE.md)
+- [Testing Guide](../../docs/guides/TESTING_GUIDE.md)
 
 ---
 
@@ -353,7 +353,7 @@ async def test_db_connection():
 ## 📞 Support | الدعم
 
 للأسئلة والمساعدة:
-- 📖 اقرأ [BEGINNER_GUIDE.md](../../BEGINNER_GUIDE.md)
+- 📖 اقرأ [BEGINNER_GUIDE.md](../../docs/guides/BEGINNER_GUIDE.md)
 - 💬 افتح issue في GitHub
 - 📧 راسل الفريق التقني
 

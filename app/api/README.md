@@ -427,16 +427,16 @@ async def test_create_user_integration(test_db):
 
 ### API Documentation
 - [API-First Architecture](../../docs/API_FIRST_ARCHITECTURE.md)
-- [API Layer Compliance Report](../../docs/reports/API_LAYER_COMPLIANCE_REPORT.md)
+- [API Layer Compliance Report](../../docs/ARCHITECTURE.md)
 - [API Style Guide](../../docs/contracts/API_STYLE_GUIDE.md)
 
 ### Architecture
 - [Clean Architecture](../../docs/architecture/)
-- [Boundaries Architecture](../../docs/BOUNDARIES_ARCHITECTURE_GUIDE.md)
+- [Boundaries Architecture](../../docs/ARCHITECTURE.md)
 
 ### Testing
-- [Testing Guide](../../TESTING_GUIDE.md)
-- [API Testing](../../docs/testing/api_testing.md)
+- [Testing Guide](../../docs/guides/TESTING_GUIDE.md)
+- [API Testing](../../docs/quality/testing.md)
 
 ---
 

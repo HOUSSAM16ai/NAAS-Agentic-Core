@@ -37,6 +37,10 @@ FIRST_TOKEN_TIMEOUT = 30.0
 # 429 on the first pass. Kept short so interactive latency stays acceptable even
 # when the provider advertises a longer Retry-After.
 RATE_LIMIT_BACKOFF_MAX = 5.0
+# A hosted runner can lose DNS briefly while OpenRouter is healthy. Retry only
+# transport/5xx failures; 404, auth, and model-policy failures must still fail over.
+TRANSIENT_PROVIDER_RETRIES = 2
+TRANSIENT_PROVIDER_BACKOFF = 1.0
 
 
 def _parse_retry_after(response: httpx.Response) -> float | None:
@@ -229,6 +233,45 @@ class OpenRouterClient(LLMClient):
         async for chunk in self.safety_net.stream_safety_response():
             yield chunk
 
+    @staticmethod
+    def _is_transient_provider_error(error: Exception) -> bool:
+        """Return whether retrying the same provider is safe and useful."""
+        if isinstance(error, (httpx.ConnectError, httpx.ReadTimeout)):
+            return True
+        if isinstance(error, httpx.HTTPStatusError):
+            return error.response.status_code in {502, 503, 504}
+        return False
+
+    async def _stream_model_with_retries(
+        self,
+        client: httpx.AsyncClient,
+        model_id: str,
+        messages: list[JSONDict],
+        max_tokens: int | None,
+    ) -> AsyncGenerator[JSONDict, None]:
+        """Retry transient transport/provider outages, never permanent model errors."""
+        for attempt in range(TRANSIENT_PROVIDER_RETRIES + 1):
+            try:
+                async for chunk in self._stream_model(client, model_id, messages, max_tokens):
+                    yield chunk
+                return
+            except Exception as error:
+                if (
+                    not self._is_transient_provider_error(error)
+                    or attempt >= TRANSIENT_PROVIDER_RETRIES
+                ):
+                    raise
+                delay = TRANSIENT_PROVIDER_BACKOFF * (attempt + 1)
+                logger.warning(
+                    "transient_provider_error model=%s attempt=%d/%d retry_in=%.1fs error=%s",
+                    model_id,
+                    attempt + 1,
+                    TRANSIENT_PROVIDER_RETRIES,
+                    delay,
+                    error,
+                )
+                await asyncio.sleep(delay)
+
     async def _attempt_model(
         self,
         client: httpx.AsyncClient,
@@ -247,7 +290,7 @@ class OpenRouterClient(LLMClient):
         collected: list[JSONDict] = []
         try:
             logger.info("Attempting model: %s", model_id)
-            async for chunk in self._stream_model(
+            async for chunk in self._stream_model_with_retries(
                 client, model_id, messages, max_tokens=max_tokens
             ):
                 collected.append(chunk)

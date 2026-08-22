@@ -106,13 +106,21 @@ def check_registry(registry: dict) -> None:
         fail("commercial_trace must declare the agent’s minimum commercial fields")
     if commercial_trace.get("canonical_offer_catalog") != "docs/commercial/OFFER_CATALOG.json":
         fail("commercial trace must point to the canonical offer catalog")
-    if not isinstance(commercial_trace.get("forbidden_shortcuts_ar"), list) or not commercial_trace["forbidden_shortcuts_ar"]:
+    if (
+        not isinstance(commercial_trace.get("forbidden_shortcuts_ar"), list)
+        or not commercial_trace["forbidden_shortcuts_ar"]
+    ):
         fail("commercial trace must declare forbidden shortcuts")
 
 
 def check_backbone(backbone: dict) -> set[str]:
     mandate = backbone.get("commercial_mandate", {})
-    for field in ("objective_ar", "priority_rule_ar", "primary_success_metric_ar", "decision_gate_ar"):
+    for field in (
+        "objective_ar",
+        "priority_rule_ar",
+        "primary_success_metric_ar",
+        "decision_gate_ar",
+    ):
         if not str(mandate.get(field, "")).strip():
             fail(f"reference backbone commercial mandate missing `{field}`")
     anti_vanity = mandate.get("anti_vanity_metrics_ar")
@@ -139,7 +147,9 @@ def check_offers(offers: dict, reference_ids: set[str]) -> None:
         fail("offer catalog commercial objective is missing")
     rows = offers.get("offers", [])
     if not isinstance(rows, list) or len(rows) != 7:
-        fail(f"offer catalog must contain exactly the seven declared revenue lines; got {len(rows) if isinstance(rows, list) else 'invalid'}")
+        fail(
+            f"offer catalog must contain exactly the seven declared revenue lines; got {len(rows) if isinstance(rows, list) else 'invalid'}"
+        )
         return
     identifiers: set[str] = set()
     for index, row in enumerate(rows, start=1):
@@ -150,7 +160,14 @@ def check_offers(offers: dict, reference_ids: set[str]) -> None:
         if not identifier or identifier in identifiers:
             fail(f"offer[{index}] has a missing or duplicate id")
         identifiers.add(identifier)
-        for field in ("buyer_ar", "paid_problem_ar", "offer_outcome_ar", "hard_currency_route_ar", "activation_gate_ar", "claims_forbidden_ar"):
+        for field in (
+            "buyer_ar",
+            "paid_problem_ar",
+            "offer_outcome_ar",
+            "hard_currency_route_ar",
+            "activation_gate_ar",
+            "claims_forbidden_ar",
+        ):
             if not str(row.get(field, "")).strip():
                 fail(f"offer {identifier or index} missing `{field}`")
         status = row.get("status")
@@ -185,7 +202,9 @@ def main() -> int:
     if FAILURES:
         print(f"\n❌ Agent context gate failed: {len(FAILURES)} violation(s)")
         return 1
-    passed("Agent boot context is coherent: authority, boot sequence, commercial trace, and seven offers resolve.")
+    passed(
+        "Agent boot context is coherent: authority, boot sequence, commercial trace, and seven offers resolve."
+    )
     return 0
 
 

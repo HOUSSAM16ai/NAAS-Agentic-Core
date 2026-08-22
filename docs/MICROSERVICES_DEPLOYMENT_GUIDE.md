@@ -62,8 +62,8 @@
 ### 1. استنساخ المشروع
 
 ```bash
-git clone https://github.com/HOUSSAM16ai/my_ai_project.git
-cd my_ai_project
+git clone https://github.com/Houssam-lab/NAAS-Agentic-Core.git
+cd NAAS-Agentic-Core
 ```
 
 ### 2. إعداد المتغيرات البيئية
@@ -420,6 +420,6 @@ docker-compose -f docker-compose.microservices.yml stop planning-agent
 ## 🆘 الدعم
 
 للحصول على المساعدة:
-- GitHub Issues: https://github.com/HOUSSAM16ai/my_ai_project/issues
+- GitHub Issues: https://github.com/Houssam-lab/NAAS-Agentic-Core/issues
 - Email: support@cogniforge.ai
 - Documentation: https://docs.cogniforge.ai

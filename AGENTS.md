@@ -24,6 +24,8 @@ This project adopts a fusion of two computer science methodologies. All code and
 
 Before planning, coding, researching, or changing any project asset, every agent MUST load [`docs/governance/AGENT_CONTEXT_REGISTRY.json`](docs/governance/AGENT_CONTEXT_REGISTRY.json) and follow its authority order and boot sequence. The registry connects the product mission, constitutions, runtime truth, reference backbone, commercial offer catalog, architecture, education goals, governance, and evidence rules.
 
+For documentation changes, the additional canonical contract is [`docs/DOCUMENTATION_CONTRACT.md`](docs/DOCUMENTATION_CONTRACT.md), and its machine-readable scope is [`docs/DOCUMENTATION_MANIFEST.json`](docs/DOCUMENTATION_MANIFEST.json). A documentation change is not mergeable if the documentation contract gate fails. Agents must not weaken, skip, or convert that gate to a warning.
+
 An agent MUST distinguish law from status, proposal from proof, and reference material from implemented capability. It MUST trace each substantive task to a user/customer problem, a project capability, a relevant evidence source, and—when the work is commercial—a declared hard-currency revenue path. It MUST not invent metrics, customer validation, security claims, revenue, or runtime status.
 
 The default change policy is additive: do not delete, rename, replace, or silently supersede existing project assets. If a change is architectural, commercial, security-sensitive, or difficult to reverse, create an ADR and preserve the previous record. Before reporting completion, run the relevant gates, inspect `git diff --check`, and verify that no unintended deletions occurred.
@@ -123,16 +125,16 @@ Use `docs/architecture/02_adr_001_dependency_rules.md` as a format reference.
 
 | Task | Command |
 |------|---------|
-| Run all tests | `pytest` |
-| Run with coverage | `pytest --cov=app --cov=microservices` |
-| Lint | `ruff check .` |
-| Format | `ruff format .` |
-| Type-check | `mypy app/ microservices/` |
-| Start full stack | `docker compose up` |
-| Start single service | `docker compose up <service_name>` |
+| Run all fitness gates | `make gates` |
+| Run tests with current coverage floor | `make test` |
+| Lint and format check | `ruff check .` · `ruff format --check .` |
+| Type-check enforced CI scope | `mypy --config-file mypy.ini --follow-imports=silent shared/ app/integration/` |
+| Validate live documentation | `python scripts/fitness/check_documentation_contract.py` |
+| Start full stack | `docker compose -f docker-compose.yml up -d` |
+| Start single service | `docker compose -f docker-compose.yml up <service_name>` |
 | Run migrations | `alembic upgrade head` (run inside the service directory) |
 
-Always run `ruff check .` and `mypy` before committing. `ruff` is enforced in CI. `mypy` is not yet in CI — run it locally; a CI job is planned.
+`make gates` is the authoritative local fitness-gate entrypoint. CI also runs contract, test, frontend, image, event-stack, live-E2E, and runtime-truth jobs; no individual local command is a substitute for a failed required job. Mypy is enforced for the scoped paths shown above, not for every file in the repository.
 
 ---
 
@@ -218,7 +220,7 @@ Use `X-Correlation-ID` on every outbound request for distributed tracing.
 ## Testing
 
 *   **Tests are Specifications:** Write tests that describe *behavior* (what it does), not implementation (how it does it).
-*   **Coverage:** 100% ambition. Every branch must be checked.
+*   **Coverage:** the current enforced floor is 73% for the `app/` scope. Full coverage is a long-term target, not a current result; never document it as implemented without a report.
 *   Use `pytest-asyncio` with `asyncio_mode = "auto"` (configured in `pytest.ini`).
 *   Use `sqlite+aiosqlite:///:memory:` for unit tests; never connect to a real database in unit tests.
 *   Override `get_db` via `app.dependency_overrides` for route-level tests.

@@ -134,6 +134,11 @@ jobs:
       RECOVERY_ADMIN_PASSWORD: dummy-pass-for-ci
     steps:
       - uses: actions/checkout@v5
+        with:
+          # D-277: the acceptance packet compares the PR diff to the base SHA.
+          # A shallow checkout cannot resolve base...HEAD, so fail-closed validation
+          # would crash before checking the packet at all.
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -146,6 +151,14 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
+      - name: Documentation contract (mandatory)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Live documentation is part of the required acceptance surface.
+          # A documentation failure must fail required-ci, not merely annotate a PR.
+          python scripts/fitness/check_documentation_contract.py
+
       - name: Run architectural guardrails
         shell: bash
         run: |
@@ -235,18 +248,33 @@ jobs:
           # in six files, and not one of them knew the indefinite «اول» — so a student
           # asked three times and never got it. An eighth list must be impossible.
           python scripts/fitness/check_exercise_scope_single_source.py
+
+      - name: Run architectural guardrails (part 2)
+        shell: bash
+        run: |
+          set -euo pipefail
           # D-206 (L5): logic that decides the fate of a student's turn must not live
           # in two brains without guarded parity. The monolith and the orchestrator
           # held the same tutoring-step markers by hand, and they had already drifted:
           # only the service recognised the opening probe as a tutoring step, so the
           # monolith could re-emit a probe it had just sent. Values, not bytes.
           python scripts/fitness/check_probability_brain_parity.py
+
+      - name: Run architectural guardrails (part 3)
+        shell: bash
+        run: |
+          set -euo pipefail
           # D-206 (L8): the mediator does not announce itself. Production showed
           # «سنشرح الآن …» followed by an EMPTY assistant row -- an agenda announced
           # and then nothing delivered. Generalises D-117 from one banned phrase to
           # the class. AST over string literals only: the first, text-based version
           # rejected the very comment explaining the ban.
           python scripts/fitness/check_no_self_announcement.py
+
+      - name: Run architectural guardrails (part 4)
+        shell: bash
+        run: |
+          set -euo pipefail
           # D-189 (roadmap §6.5.د D4): outbound HTTP carries a correlation id. The
           # roadmap measured 31 direct httpx.AsyncClient constructions against 21
           # header injections in 9 files — two thirds of cross-service calls crossed
@@ -269,6 +297,11 @@ jobs:
           # convention; this one also bans English fallback strings from reaching an
           # Arabic-speaking student.
           python scripts/fitness/check_error_contract_parity.py
+
+      - name: Run architectural guardrails (part 5)
+        shell: bash
+        run: |
+          set -euo pipefail
           # D-201: the topic registry, the AsyncAPI contract and the compose bootstrap
           # are three views of one truth, and three views drift. A topic in code with
           # no channel is invisible to external consumers; a channel with no topic is a
@@ -283,17 +316,32 @@ jobs:
           # Capability is now declared data with dated live evidence, and eligibility is
           # a checked precondition rather than a remembered convention.
           python scripts/fitness/check_model_registry.py
+
+      - name: Run architectural guardrails (part 6)
+        shell: bash
+        run: |
+          set -euo pipefail
           # D-203: the Socratic redaction policy (D-113) is enforced by TWO brains with
           # two implementations of the same D-114 decision. If one regex drifts, one path
           # redacts the final answer and the other leaks it — and the student has no idea
           # which brain answered. D-013's "edit both copies" rule has already been proven
           # breakable; this is the automated version of it.
           python scripts/fitness/check_redaction_parity.py
+
+      - name: Run architectural guardrails (part 7)
+        shell: bash
+        run: |
+          set -euo pipefail
           # D-199: أوّل بوّابة في هذا المستودع تلمس CSS/JSX. من ٤١ بوّابة لم تكن واحدة
           # تحرس الواجهة، فبلغت `globals.css` ٣٥٨٤ سطراً بـ٣٨ قيمة مسافة و٣٠ حجم خطّ —
           # لا بقرار بل لأنّ لا شيء منع التراكم. تفحص أيضاً تباين WCAG AA حسابياً، فلا
           # ينزلق التباين خلسةً إلى ما دون العتبة.
           python scripts/fitness/check_design_tokens.py
+
+      - name: Run architectural guardrails (part 8)
+        shell: bash
+        run: |
+          set -euo pipefail
           # D-191 (ISS-140 ج/د/د-2): the exercise under discussion has exactly one
           # source, and it is the student's own text first. The canonical retrieval
           # literal was copy-pasted at 7 sites feeding 12 call sites, and
@@ -561,6 +609,10 @@ jobs:
           # no test is worse than a declared absence.
           python scripts/fitness/check_ambient_identity.py
 
+      - name: Run architectural guardrails (part 9)
+        shell: bash
+        run: |
+          set -euo pipefail
           # ── D-270 (معايير التسليم — المصدر: OpenHands) ──────────────────────
           # L6: سلسلة التوريد. القياس 2026-08-19 وجد `dependabot.yml` يخرق ثلاثة
           # معايير معاً: بلا `cooldown` إطلاقاً (نسخةٌ رُفعت قبل ساعة تُدمَج آلياً —
@@ -625,7 +677,6 @@ jobs:
           # reported 34 "violations" under 3.11 that were all PEP-695 parse
           # failures, i.e. unreadable-reported-as-dirty. On 3.12 it is clean.
           python tools/ci/check_import_boundaries.py
-
   # ── D-105 (ISS-113): the test suite runs as TWO parallel jobs ──────────────
   # `tests/conftest.py::pytest_collection_modifyitems` deliberately orders
   # microservices tests last *within one process* (SQLAlchemy table-registry

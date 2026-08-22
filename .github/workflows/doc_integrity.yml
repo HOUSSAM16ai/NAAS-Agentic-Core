@@ -26,6 +26,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The documentation contract is also part of required-ci. Keeping this
+      # explicit workflow makes failures discoverable even when no code is changed.
+      # There is intentionally no continue-on-error: a broken live document blocks.
+      - name: Documentation contract (mandatory)
+        run: python scripts/fitness/check_documentation_contract.py
+
       # D-188: existence is not coherence. This gate catches the drift class that
       # went unnoticed for two months — a stale sovereign index, a decision filed
       # out of order, a constitution growing back into an encyclopedia, and a

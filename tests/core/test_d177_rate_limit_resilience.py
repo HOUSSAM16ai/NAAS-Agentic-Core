@@ -107,7 +107,18 @@ async def test_first_working_model_wins_no_safety(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_hard_failures_not_retried_but_safety_serves(monkeypatch):
+async def test_transient_network_failure_retries_same_model(monkeypatch):
+    """A temporary DNS/connection error retries before failover."""
+    client = _make_client(
+        monkeypatch,
+        {"primary": [httpx.ConnectError("temporary DNS"), "content"]},
+    )
+    result = await _collect(client)
+    assert result == "primary-ok"
+
+
+@pytest.mark.asyncio
+async def test_hard_failures_not_retried(monkeypatch):
     """Non-429 failures are not retried; with nothing left, safety net serves."""
     behaviors = {
         "primary": [ValueError("empty_completion")],

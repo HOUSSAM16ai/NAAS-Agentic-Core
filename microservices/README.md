@@ -2,8 +2,8 @@
 
 ## نظام خدمات مصغرة 100% API-First احترافي
 
-[![API-First](https://img.shields.io/badge/Architecture-API--First-blue)](docs/API_FIRST_PLAN.md)
-[![Microservices](https://img.shields.io/badge/Pattern-Microservices-green)](docs/MICROSERVICES_PLATFORM.md)
+[![API-First](https://img.shields.io/badge/Architecture-API--First-blue)](../docs/API_FIRST_ARCHITECTURE.md)
+[![Microservices](https://img.shields.io/badge/Pattern-Microservices-green)](../docs/MICROSERVICES_PLATFORM.md)
 [![Python](https://img.shields.io/badge/Python-3.12+-yellow)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Latest-teal)](https://fastapi.tiangolo.com)
 
@@ -123,7 +123,7 @@ GET  /gateway/services        - الخدمات المسجلة
 GET  /gateway/{service}/{path} - توجيه الطلبات
 ```
 
-**Contract**: [gateway-api.yaml](docs/contracts/openapi/gateway-api.yaml)
+**Contract**: [gateway-api.yaml](../docs/contracts/openapi/gateway-api.yaml)
 
 ---
 
@@ -145,11 +145,11 @@ GET  /plans                   - عرض جميع الخطط
 GET  /plans/{id}              - تفاصيل خطة
 ```
 
-**Contract**: [planning_agent-openapi.json](docs/contracts/openapi/planning_agent-openapi.json)
+**Contract**: [planning_agent-openapi.json](../docs/contracts/openapi/planning_agent-openapi.json)
 
 **Database**: SQLite (مستقل)
 
-**Service README**: [microservices/planning_agent/README.md](microservices/planning_agent/README.md)
+**Service README**: [microservices/planning_agent/README.md](planning_agent/README.md)
 
 ---
 
@@ -171,11 +171,11 @@ GET  /memories/search         - البحث في الذاكرة
 GET  /memories/{id}           - تفاصيل ذاكرة
 ```
 
-**Contract**: [memory_agent-openapi.json](docs/contracts/openapi/memory_agent-openapi.json)
+**Contract**: [memory_agent-openapi.json](../docs/contracts/openapi/memory_agent-openapi.json)
 
 **Database**: SQLite (مستقل)
 
-**Service README**: [microservices/memory_agent/README.md](microservices/memory_agent/README.md)
+**Service README**: [microservices/memory_agent/README.md](memory_agent/README.md)
 
 ---
 
@@ -198,11 +198,11 @@ GET  /users/{id}              - تفاصيل مستخدم
 PUT  /users/{id}              - تحديث مستخدم
 ```
 
-**Contract**: [user_service-openapi.json](docs/contracts/openapi/user_service-openapi.json)
+**Contract**: [user_service-openapi.json](../docs/contracts/openapi/user_service-openapi.json)
 
 **Database**: SQLite (مستقل)
 
-**Service README**: [microservices/user_service/README.md](microservices/user_service/README.md)
+**Service README**: [microservices/user_service/README.md](user_service/README.md)
 
 ---
 
@@ -224,11 +224,11 @@ POST /orchestrator/tasks      - إنشاء مهمة
 GET  /orchestrator/tasks      - عرض المهام
 ```
 
-**Contract**: [orchestrator_service-openapi.json](docs/contracts/openapi/orchestrator_service-openapi.json)
+**Contract**: [orchestrator_service-openapi.json](../docs/contracts/openapi/orchestrator_service-openapi.json)
 
 **Database**: SQLite (مستقل)
 
-**Service README**: [microservices/orchestrator_service/README.md](microservices/orchestrator_service/README.md)
+**Service README**: [orchestrator_service/](orchestrator_service/)
 
 ---
 
@@ -250,9 +250,9 @@ GET  /metrics                 - المقاييس
 POST /forecast                - التنبؤ
 ```
 
-**Contract**: [observability_service-openapi.json](docs/contracts/openapi/observability_service-openapi.json)
+**Contract**: [observability_service-openapi.json](../docs/contracts/openapi/observability_service-openapi.json)
 
-**Service README**: [microservices/observability_service/README.md](microservices/observability_service/README.md)
+**Service README**: [microservices/observability_service/README.md](observability_service/README.md)
 
 ---
 
@@ -271,8 +271,8 @@ python --version    # 3.12+
 
 ```bash
 # 1. استنساخ المشروع
-git clone https://github.com/HOUSSAM16ai/my_ai_project.git
-cd my_ai_project
+git clone https://github.com/Houssam-lab/NAAS-Agentic-Core.git
+cd NAAS-Agentic-Core
 
 # 2. تثبيت المتطلبات
 make install
@@ -387,15 +387,15 @@ open htmlcov/index.html
 
 ### API Contracts
 
-- [Core API](docs/contracts/openapi/core-api-v1.yaml)
-- [Gateway API](docs/contracts/openapi/gateway-api.yaml)
-- [Event Bus](docs/contracts/asyncapi/event-bus.yaml)
+- [Core API](../docs/contracts/openapi/core-api-v1.yaml)
+- [Gateway API](../docs/contracts/openapi/gateway-api.yaml)
+- [Event Bus](../docs/contracts/asyncapi/event-bus.yaml)
 
 ### Architecture Docs
 
-- [API-First Plan](docs/API_FIRST_PLAN.md)
-- [Microservices Platform](docs/MICROSERVICES_PLATFORM.md)
-- [Deployment Guide](docs/MICROSERVICES_DEPLOYMENT_GUIDE.md)
+- [API-First Architecture](../docs/API_FIRST_ARCHITECTURE.md)ECTURE.md)
+- [Microservices Platform](../docs/MICROSERVICES_PLATFORM.md)
+- [Deployment Guide](../docs/MICROSERVICES_DEPLOYMENT_GUIDE.md)
 
 ### Code Documentation
 
@@ -431,7 +431,7 @@ make test
 
 ## 📄 الترخيص
 
-MIT License - انظر [LICENSE](LICENSE) للتفاصيل.
+MIT License - انظر [LICENSE](../LICENSE) للتفاصيل.
 
 ---
 

@@ -579,8 +579,8 @@ SuperCollectiveIntelligence:
 
 للمزيد من المعلومات أو للمساهمة في المشروع:
 
-- **التوثيق الرئيسي:** [README.md](../../README.md)
-- **دليل المساهمة:** [CONTRIBUTING.md](../../CONTRIBUTING.md)
+- **التوثيق الرئيسي:** [README.md](../README.md)
+- **دليل المساهمة:** [CONTRIBUTING.md](../CONTRIBUTING.md)
 - **GitHub:** [@HOUSSAM16ai](https://github.com/HOUSSAM16ai)
 
 ---

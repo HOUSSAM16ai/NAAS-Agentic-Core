@@ -149,7 +149,8 @@ guardrails:
 # push. `gates` runs the real set, read from ci.yml itself so it cannot drift.
 gates:
 	@echo "$(BLUE)🚦 Running every fitness gate the CI guardrails job runs...$(NC)"
-	python scripts/run_fitness_gates.py
+	@base_sha="$$(git merge-base HEAD origin/main 2>/dev/null || true)"; \
+	CODE_ACCEPTANCE_BASE_SHA="$$base_sha" python scripts/run_fitness_gates.py
 	@echo "$(GREEN)✅ All fitness gates passed!$(NC)"
 
 compose-isolation:

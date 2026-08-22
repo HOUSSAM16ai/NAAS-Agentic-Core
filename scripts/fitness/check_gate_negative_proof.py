@@ -44,7 +44,7 @@ TESTS_ROOT = REPO_ROOT / "tests"
 #: يُثبِت أنّ البوّابة تعمل لا أنّها تحجب.
 NEGATIVE_ASSERTION = re.compile(
     r"==\s*1\b|!=\s*0\b|exit_code\s*==\s*1|_FAILURES|returncode\s*==\s*1"
-    r"|failures\s*==\s*1|failures\s*>=\s*1"
+    r"|failures\s*==\s*1|failures\s*>=\s*1|len\(failures\)\s*>=\s*1"
 )
 
 _FAILURES: list[str] = []

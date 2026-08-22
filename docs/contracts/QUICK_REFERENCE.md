@@ -12,8 +12,8 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/ai-for-solution-labs/my_ai_project.git
-cd my_ai_project
+git clone https://github.com/Houssam-lab/NAAS-Agentic-Core.git
+cd NAAS-Agentic-Core
 
 # Install dependencies
 pip install -r requirements.txt
@@ -378,8 +378,8 @@ spectral lint docs/contracts/openapi/accounts-api.yaml
 
 ### Support Channels
 
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/ai-for-solution-labs/my_ai_project/issues)
-- 💬 **Questions**: [GitHub Discussions](https://github.com/ai-for-solution-labs/my_ai_project/discussions)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/Houssam-lab/NAAS-Agentic-Core/issues)
+- 💬 **Questions**: [GitHub Discussions](https://github.com/Houssam-lab/NAAS-Agentic-Core/discussions)
 - 📧 **Email**: support@cogniforge.com
 
 ### Useful Links

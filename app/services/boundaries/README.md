@@ -314,9 +314,9 @@ pytest tests/test_admin_chat_boundary_service_final.py -v
 ## 📚 References | المراجع
 
 ### الوثائق الداخلية
-- [app/boundaries/README.md](../../boundaries/README.md) - الأنماط المعمارية
-- [SIMPLIFICATION_GUIDE.md](../../../SIMPLIFICATION_GUIDE.md) - دليل التبسيط
-- [API Documentation](../../../docs/api/) - توثيق API
+- [app/boundaries/README.md](../README.md) - الأنماط المعمارية
+- [SIMPLIFICATION_GUIDE.md](../../../docs/guides/SIMPLIFICATION_GUIDE.md) - دليل التبسيط
+- [API Documentation](../../../docs/contracts/README.md) - توثيق API
 
 ### Design Patterns
 - [Facade Pattern](https://refactoring.guru/design-patterns/facade)

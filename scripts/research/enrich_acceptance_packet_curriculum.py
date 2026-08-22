@@ -21,13 +21,21 @@ def main() -> None:
         "catalog_course_count": matrix["course_count"],
         "considered_course_ids": course_ids,
         "baseline_evidence_ids": ["harvard-cs50x-foundations", "harvard-cs-concentration-domains"],
-        "task_specific_evidence_ids": ["harvard-cs50x-foundations", "harvard-cs-concentration-domains"],
+        "task_specific_evidence_ids": [
+            "harvard-cs50x-foundations",
+            "harvard-cs-concentration-domains",
+        ],
         "unapplied_course_policy_ar": "كل المقررات قُرئت على مستوى الكتالوج والمصفوفة؛ ما لا ينطبق مباشرة على حزمة الحوكمة يُسجل كغير منطبق مع سبب، ولا يتحول إلى ادعاء تطبيق أو حذف من الكتالوج.",
         "applicability_result": "ALL_CATALOG_COURSES_CONSIDERED",
-        "owner": "curriculum-governance"
+        "owner": "curriculum-governance",
     }
     PACKET.write_text(json.dumps(packet, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"catalog_course_count": matrix["course_count"], "considered": len(course_ids)}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {"catalog_course_count": matrix["course_count"], "considered": len(course_ids)},
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":

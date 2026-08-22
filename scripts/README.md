@@ -29,9 +29,9 @@ pytest tests/integration/test_chat_e2e.py::TestServiceMethodsAccessibility -v
 
 ## 📖 Full Documentation
 
-- **Complete Guide:** [`PREVENTION_GUIDE.md`](../PREVENTION_GUIDE.md)
-- **System Documentation:** [`STRUCTURE_PROTECTION_SYSTEM.md`](../STRUCTURE_PROTECTION_SYSTEM.md)
-- **Resolution Summary:** [`CATASTROPHE_RESOLUTION_SUMMARY.md`](../CATASTROPHE_RESOLUTION_SUMMARY.md)
+- **Complete Guide:** [`PREVENTION_GUIDE.md`](../docs/guides/PREVENTION_GUIDE.md)
+- **System Documentation:** [`STRUCTURE_PROTECTION_SYSTEM.md`](../docs/architecture/STRUCTURE_PROTECTION_SYSTEM.md)
+- **Architecture Decision:** [`ADR-003`](../docs/ADR-003-PREVENTING-SERVICE-METHOD-CATASTROPHES.md)
 
 ---
 

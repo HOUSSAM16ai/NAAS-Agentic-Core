@@ -52,10 +52,7 @@ def check_active_lines_have_evidence() -> None:
         # ابحث عن كلمة "دليل" أو مسار ملف أو رابط في السطر نفسه أو ما يليه
         window = text[start : text.find("\n", start) + 300]
         if not re.search(r"دليل|/|`", window):
-            fail(
-                "سطرٌ يعلن خطًّا ACTIVE دون دليلٍ في وثيقة الحالة: "
-                + m.group(0).strip()[:120]
-            )
+            fail("سطرٌ يعلن خطًّا ACTIVE دون دليلٍ في وثيقة الحالة: " + m.group(0).strip()[:120])
 
 
 def check_registry_entry() -> None:

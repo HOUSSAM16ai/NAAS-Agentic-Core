@@ -22,7 +22,7 @@ Repository `NAAS-Agentic-Core` · engine **CogniForge** · product **ETAALIM.AI*
 [![Python](https://img.shields.io/badge/Python-3.12-7C5CBF?style=flat-square&labelColor=24211C)](pyproject.toml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-monolith_%2B_service_islands-F4A98A?style=flat-square&labelColor=24211C)](app)
 [![Next.js](https://img.shields.io/badge/Next.js-frontend-A78BE0?style=flat-square&labelColor=24211C)](frontend)
-[![CI](https://img.shields.io/badge/required--ci-10_aggregated_jobs-1F6B46?style=flat-square&labelColor=24211C)](.github/workflows/ci.yml)
+[![CI](https://img.shields.io/badge/required--ci-12_required_jobs-1F6B46?style=flat-square&labelColor=24211C)](.github/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-FFC9B4?style=flat-square&labelColor=24211C)](LICENSE)
 
 **English** · [العربية](README.ar.md)
@@ -345,7 +345,7 @@ Issue and decision history: [`.memory/decisions.md`](.memory/decisions.md) (D-00
 
 ## 13 · The CI contract
 
-Branch protection on `main` should require exactly one check: **`required-ci`**. It aggregates **12 jobs**:
+Branch protection on `main` should require exactly one check: **`required-ci`**. It aggregates **12 required jobs**, defined by the `needs` list in `.github/workflows/ci.yml`:
 
 | Job | Enforces |
 |---|---|
@@ -391,6 +391,7 @@ Two sources decide operational truth. Everything else is supporting reference or
 | 🎼 Doctrine | [`ENGINEERING_DOCTRINE.md`](docs/architecture/ENGINEERING_DOCTRINE.md) · [`CS_KNOWLEDGE_MAP.md`](docs/architecture/CS_KNOWLEDGE_MAP.md) · [`AGENTIC_ORCHESTRATION_DOCTRINE.md`](docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md) · [`COGNITIVE_EXECUTION_ENGINE.md`](docs/architecture/COGNITIVE_EXECUTION_ENGINE.md) · [`COGNITIVE_DIGITAL_TWIN.md`](docs/architecture/COGNITIVE_DIGITAL_TWIN.md) | Law documents; each names its gate |
 | 💰 Value | [`VALUE_DOCTRINE.md`](docs/VALUE_DOCTRINE.md) · [`REVENUE_ENGINE_SPEC.md`](docs/REVENUE_ENGINE_SPEC.md) | Why anyone pays, and exactly what gets written |
 | 🗺️ Index | [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md) · [`docs/START_HERE.md`](docs/START_HERE.md) | Full map · newcomer entry point |
+| 🔒 Contract | [`docs/DOCUMENTATION_CONTRACT.md`](docs/DOCUMENTATION_CONTRACT.md) · [`docs/DOCUMENTATION_MANIFEST.json`](docs/DOCUMENTATION_MANIFEST.json) | Live-documentation policy and machine-checked scope |
 | 🤖 Agents | [`AGENTS.md`](AGENTS.md) | Rules any AI contributor inherits automatically |
 
 On conflict, `CLAUDE.md` and `.memory/runtime_truth.md` win.
@@ -399,7 +400,7 @@ On conflict, `CLAUDE.md` and `.memory/runtime_truth.md` win.
 
 ## 16 · Contributing
 
-Read [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/START_HERE.md`](docs/START_HERE.md) first. The short version:
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/START_HERE.md`](docs/START_HERE.md), and [`docs/DOCUMENTATION_CONTRACT.md`](docs/DOCUMENTATION_CONTRACT.md) first. The short version:
 
 1. **Check the truth table before you edit.** Is the component you are touching ACTIVE, PARTIAL, DORMANT or ZOMBIE? Editing dead code without wiring it into a live path is wasted work.
 2. **New capability ⇒ new Skill.** Inherit `BaseSkill`, expose metrics, ship happy-path and error-path tests, work standalone. Skills never call each other directly — they compose through the orchestrator.

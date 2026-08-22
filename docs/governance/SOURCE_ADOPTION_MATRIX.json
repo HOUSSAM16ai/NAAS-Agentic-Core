@@ -19,7 +19,7 @@
     "owner"
   ],
   "generated_from": "docs/research/ALL_GITHUB_SOURCES_INVENTORY.json",
-  "total_sources": 62,
+  "total_sources": 75,
   "sources": [
     {
       "url": "https://github.com/ByteByteGoHq/system-design-101",
@@ -185,10 +185,7 @@
       "owner": "research-governance",
       "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
       "occurrences": [
-        ".github/VERIFICATION_CHECKLIST.md",
-        "docs/MICROSERVICES_DEPLOYMENT_GUIDE.md",
-        "infra/argocd/applications.yaml",
-        "microservices/README.md"
+        "infra/argocd/applications.yaml"
       ]
     },
     {
@@ -206,8 +203,16 @@
       "owner": "research-governance",
       "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
       "occurrences": [
+        ".github/VERIFICATION_CHECKLIST.md",
+        ".qodana/baseline.sarif.json",
         "REPORT-D261.md",
-        "docs/FINAL_REPORT_D256_D257_AR.md"
+        "docs/FINAL_REPORT_D256_D257_AR.md",
+        "docs/MICROSERVICES_DEPLOYMENT_GUIDE.md",
+        "docs/START_HERE.md",
+        "docs/contracts/GETTING_STARTED.md",
+        "docs/contracts/QUICK_REFERENCE.md",
+        "docs/guides/CODESPACES_TEST_GUIDE.md",
+        "microservices/README.md"
       ]
     },
     {
@@ -274,6 +279,24 @@
       ]
     },
     {
+      "url": "https://github.com/PyCQA/pycodestyle",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
       "url": "https://github.com/TheAlgorithms/Python",
       "source_id": "the-algorithms-python",
       "status": "MANDATORY_REFERENCE",
@@ -311,10 +334,6 @@
       "owner": "research-governance",
       "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
       "occurrences": [
-        "docs/contracts/GETTING_STARTED.md",
-        "docs/contracts/QUICK_REFERENCE.md",
-        "docs/guides/BEGINNER_GUIDE.md",
-        "docs/guides/CODESPACES_TEST_GUIDE.md",
         "microservices/memory_agent/data/identity.json",
         "microservices/orchestrator_service/src/services/overmind/data/identity.json"
       ]
@@ -622,6 +641,60 @@
       ]
     },
     {
+      "url": "https://github.com/css-modules/css-modules",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/css-modules/postcss-modules-values",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/csstools/postcss-nesting",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
       "url": "https://github.com/cursor/cookbook",
       "source_id": "cursor-cookbook",
       "status": "EXTERNAL_ABSENT",
@@ -877,6 +950,24 @@
       ]
     },
     {
+      "url": "https://github.com/koalaman/shellcheck",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
       "url": "https://github.com/kserve/kserve",
       "source_id": "unclassified",
       "status": "PENDING_CLASSIFICATION",
@@ -913,6 +1004,24 @@
       ]
     },
     {
+      "url": "https://github.com/mdn/browser-compat-data",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
       "url": "https://github.com/microsoft/api-guidelines",
       "source_id": "unclassified",
       "status": "PENDING_CLASSIFICATION",
@@ -928,6 +1037,42 @@
       "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
       "occurrences": [
         "docs/contracts/API_STYLE_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/minlan-yu/cs145-site",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json"
+      ]
+    },
+    {
+      "url": "https://github.com/minlan-yu/cs243-site.",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json"
       ]
     },
     {
@@ -1000,6 +1145,78 @@
       "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
       "occurrences": [
         "spec.md"
+      ]
+    },
+    {
+      "url": "https://github.com/postcss/postcss-custom-media",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/postcss/postcss-custom-selectors",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/postcss/postcss-media-minmax",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/postcss/postcss-nested",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
       ]
     },
     {
@@ -1202,6 +1419,24 @@
       "occurrences": [
         "docs/governance/REFERENCE_BACKBONE.json",
         "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/webpack/webpack",
+      "source_id": "unclassified",
+      "status": "PENDING_CLASSIFICATION",
+      "purpose_ar": "لم يُستخرج الغرض بعد من مصدر أولي؛ لا يجوز للوكيل افتراضه من اسم الرابط أو موضعه فقط.",
+      "application_ar": "لا تطبيق أو تبعية جديدة حتى تُنشأ بطاقة فهم وتطبيق وتُراجع الملكية والترخيص والأمن.",
+      "local_evidence_paths": [],
+      "enforcers": [
+        "check_source_adoption_matrix.py"
+      ],
+      "runtime_allowed": false,
+      "primary_source_review": false,
+      "owner": "research-governance",
+      "upgrade_condition_ar": "قراءة المصدر الأولي، تحديد الغرض، استخراج المعيار، تسمية التطبيق المحلي والفارض والمالك، ثم تحديث الحالة بقرار مراجَع.",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
       ]
     },
     {

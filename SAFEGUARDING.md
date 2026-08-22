@@ -16,7 +16,7 @@ No automated system is a substitute for human care.
 
 *   **No Unsupervised Sessions:** Minors must never interact with the system without the presence or immediate availability of a trained adult mentor or supervisor.
 *   **Designated Safeguarding Lead (DSL):** Every deployment or pilot must have a named DSL at the host institution responsible for handling concerns.
-*   **Mentor Training:** All supervisors must complete the [Mentor Onboarding Checklist](../toolkit/START_HERE.md) and be vetted according to local institutional policies.
+*   **Mentor Training:** All supervisors must complete the [Mentor Onboarding Checklist](docs/grant-program/toolkit/START_HERE.md) and be vetted according to local institutional policies.
 
 ## 3. Incident Escalation Matrix
 
@@ -40,7 +40,7 @@ In the event of a safety concern, use the following matrix to determine the imme
 To ensure consistency and safety, the following artifacts must be maintained:
 
 *   **Mentor Onboarding Checklist:** Confirmation that all supervisors understand these protocols.
-*   **Incident Log:** A privacy-preserving record of any issues (see `toolkit/INCIDENT_LOG_TEMPLATE.md`).
+*   **Incident Log:** A privacy-preserving record of any issues (see [`INCIDENT_LOG_TEMPLATE.md`](docs/grant-program/toolkit/INCIDENT_LOG_TEMPLATE.md)).
 *   **Emergency Contact List:** A physical and digital list of local emergency contacts and the DSL's contact info, accessible to all mentors.
 
 ## 6. Emergency & Referral

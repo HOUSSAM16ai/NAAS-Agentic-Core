@@ -196,7 +196,7 @@ We follow [Semantic Versioning](https://semver.org/):
 
 For issues or questions:
 
-1. Check [README.md](.devcontainer/README.md)
+1. Check [README.md](README.md)
 2. Run diagnostics: `bash .devcontainer/diagnostics.sh`
 3. View logs: `tail -f .superhuman_bootstrap.log`
 4. Open GitHub issue with diagnostic report

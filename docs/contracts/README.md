@@ -4,12 +4,12 @@
 >
 > **A superhuman API platform surpassing tech giants in professionalism and reliability**
 
-[![Tests](https://img.shields.io/badge/tests-26%20passed-brightgreen)](tests/test_api_first_platform.py)
-[![API Style](https://img.shields.io/badge/API-Contract--First-blue)](api_contracts/API_STYLE_GUIDE.md)
-[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-green)](api_contracts/openapi/)
-[![AsyncAPI](https://img.shields.io/badge/AsyncAPI-2.6-purple)](api_contracts/asyncapi/)
-[![gRPC](https://img.shields.io/badge/gRPC-Proto3-orange)](api_contracts/grpc/)
-[![GraphQL](https://img.shields.io/badge/GraphQL-Schema-pink)](api_contracts/graphql/)
+[![Tests](https://img.shields.io/badge/tests-26%20passed-brightgreen)](../../tests/test_api_first_platform.py)
+[![API Style](https://img.shields.io/badge/API-Contract--First-blue)](API_STYLE_GUIDE.md)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-green)](openapi/)
+[![AsyncAPI](https://img.shields.io/badge/AsyncAPI-2.6-purple)](asyncapi/)
+[![gRPC](https://img.shields.io/badge/gRPC-Proto3-orange)](grpc/)
+[![GraphQL](https://img.shields.io/badge/GraphQL-Schema-pink)](graphql/)
 
 ---
 
@@ -49,7 +49,7 @@
 ## 📁 هيكل المشروع | Project Structure
 
 ```
-api_contracts/
+
 ├── openapi/               # OpenAPI 3.1 Specifications
 │   └── accounts-api.yaml  # REST API للحسابات (20KB)
 ├── asyncapi/              # AsyncAPI Specifications
@@ -79,16 +79,16 @@ tests/
 
 ```bash
 # عرض OpenAPI specification
-cat api_contracts/openapi/accounts-api.yaml
+cat openapi/accounts-api.yaml
 
 # عرض AsyncAPI specification
-cat api_contracts/asyncapi/events-api.yaml
+cat asyncapi/events-api.yaml
 
 # عرض gRPC proto
-cat api_contracts/grpc/accounts.proto
+cat grpc/accounts.proto
 
 # عرض GraphQL schema
-cat api_contracts/graphql/schema.graphql
+cat graphql/schema.graphql
 ```
 
 ### 2. التحقق من العقود (Validate Contracts)
@@ -98,12 +98,12 @@ cat api_contracts/graphql/schema.graphql
 npm install -g @stoplight/spectral-cli
 
 # التحقق من OpenAPI
-spectral lint api_contracts/openapi/accounts-api.yaml \
-  --ruleset api_contracts/policies/.spectral.yaml
+spectral lint openapi/accounts-api.yaml \
+  --ruleset policies/.spectral.yaml
 
 # التحقق من AsyncAPI
-spectral lint api_contracts/asyncapi/events-api.yaml \
-  --ruleset api_contracts/policies/.spectral.yaml
+spectral lint asyncapi/events-api.yaml \
+  --ruleset policies/.spectral.yaml
 ```
 
 ### 3. تشغيل الاختبارات (Run Tests)
@@ -484,20 +484,20 @@ def test_full_api_lifecycle():
 ## 📚 التوثيق | Documentation
 
 ### دليل الأسلوب
-📖 [API_STYLE_GUIDE.md](api_contracts/API_STYLE_GUIDE.md) - دليل شامل للمعايير والأفضليات
+📖 [API_STYLE_GUIDE.md](API_STYLE_GUIDE.md) - دليل شامل للمعايير والأفضليات
 
 ### خارطة الطريق
-🗺️ [IMPLEMENTATION_ROADMAP.md](api_contracts/IMPLEMENTATION_ROADMAP.md) - خطة 90 يوم للتنفيذ
+🗺️ [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) - خطة 90 يوم للتنفيذ
 
 ### العقود
-- 📄 [OpenAPI Spec](api_contracts/openapi/accounts-api.yaml)
-- 📡 [AsyncAPI Spec](api_contracts/asyncapi/events-api.yaml)
-- 🚀 [gRPC Proto](api_contracts/grpc/accounts.proto)
-- 🎨 [GraphQL Schema](api_contracts/graphql/schema.graphql)
+- 📄 [OpenAPI Spec](openapi/accounts-api.yaml)
+- 📡 [AsyncAPI Spec](asyncapi/events-api.yaml)
+- 🚀 [gRPC Proto](grpc/accounts.proto)
+- 🎨 [GraphQL Schema](graphql/schema.graphql)
 
 ### السياسات
-- ✅ [Spectral Rules](api_contracts/policies/.spectral.yaml)
-- 🚪 [Kong Gateway Config](api_contracts/policies/kong-gateway.yaml)
+- ✅ [Spectral Rules](policies/.spectral.yaml)
+- 🚪 [Kong Gateway Config](policies/kong-gateway.yaml)
 
 ---
 
@@ -582,7 +582,7 @@ MTTR: <30min
 
 ## 📞 الدعم | Support
 
-- **Documentation**: [API Style Guide](api_contracts/API_STYLE_GUIDE.md)
+- **Documentation**: [API Style Guide](API_STYLE_GUIDE.md)
 - **Issues**: GitHub Issues
 - **Tests**: `pytest tests/test_api_first_platform.py -v`
 

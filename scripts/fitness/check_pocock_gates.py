@@ -3,6 +3,7 @@
 be syntactically valid, and carry the canonical frontmatter. Additive-only
 constitution — this gate never removes or alters anything.
 """
+
 import pathlib
 import sys
 

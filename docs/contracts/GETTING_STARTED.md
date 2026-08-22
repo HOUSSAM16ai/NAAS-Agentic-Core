@@ -54,8 +54,8 @@ npm install -g @stoplight/spectral-cli
 ### Step 1: Clone the Repository | استنساخ المستودع
 
 ```bash
-git clone https://github.com/ai-for-solution-labs/my_ai_project.git
-cd my_ai_project
+git clone https://github.com/Houssam-lab/NAAS-Agentic-Core.git
+cd NAAS-Agentic-Core
 ```
 
 ### Step 2: Install Dependencies | تثبيت التبعيات
@@ -462,7 +462,7 @@ X-RateLimit-Reset: 1735826460
 ### Documentation | التوثيق
 - 📖 [API Style Guide](API_STYLE_GUIDE.md)
 - 🗺️ [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)
-- 🧪 [Testing Guide](API_FIRST_TESTING_GUIDE.md)
+- 🧪 [Testing Guide](../quality/testing.md)
 
 ### Help Channels | قنوات المساعدة
 - 🐛 **Bug Reports**: GitHub Issues

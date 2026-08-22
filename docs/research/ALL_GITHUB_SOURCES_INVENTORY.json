@@ -1,11 +1,11 @@
 {
   "generated_on": "2026-08-21",
   "method": "recursive scan of repository text files, normalize .git suffix, exclude github.com/settings and github.com/sponsors",
-  "total_unique_repository_urls": 62,
+  "total_unique_repository_urls": 75,
   "counts_by_category": {
     "external_standards_registry": 11,
     "mandatory_reference_backbone": 15,
-    "other_repository_reference_or_dependency": 36
+    "other_repository_reference_or_dependency": 49
   },
   "sources": [
     {
@@ -76,10 +76,7 @@
       "category": "other_repository_reference_or_dependency",
       "status_or_id": "unclassified",
       "occurrences": [
-        ".github/VERIFICATION_CHECKLIST.md",
-        "docs/MICROSERVICES_DEPLOYMENT_GUIDE.md",
-        "infra/argocd/applications.yaml",
-        "microservices/README.md"
+        "infra/argocd/applications.yaml"
       ]
     },
     {
@@ -87,8 +84,16 @@
       "category": "other_repository_reference_or_dependency",
       "status_or_id": "unclassified",
       "occurrences": [
+        ".github/VERIFICATION_CHECKLIST.md",
+        ".qodana/baseline.sarif.json",
         "REPORT-D261.md",
-        "docs/FINAL_REPORT_D256_D257_AR.md"
+        "docs/FINAL_REPORT_D256_D257_AR.md",
+        "docs/MICROSERVICES_DEPLOYMENT_GUIDE.md",
+        "docs/START_HERE.md",
+        "docs/contracts/GETTING_STARTED.md",
+        "docs/contracts/QUICK_REFERENCE.md",
+        "docs/guides/CODESPACES_TEST_GUIDE.md",
+        "microservices/README.md"
       ]
     },
     {
@@ -117,6 +122,14 @@
       ]
     },
     {
+      "url": "https://github.com/PyCQA/pycodestyle",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
       "url": "https://github.com/TheAlgorithms/Python",
       "category": "mandatory_reference_backbone",
       "status_or_id": "the-algorithms-python",
@@ -130,10 +143,6 @@
       "category": "other_repository_reference_or_dependency",
       "status_or_id": "unclassified",
       "occurrences": [
-        "docs/contracts/GETTING_STARTED.md",
-        "docs/contracts/QUICK_REFERENCE.md",
-        "docs/guides/BEGINNER_GUIDE.md",
-        "docs/guides/CODESPACES_TEST_GUIDE.md",
         "microservices/memory_agent/data/identity.json",
         "microservices/orchestrator_service/src/services/overmind/data/identity.json"
       ]
@@ -270,6 +279,30 @@
       ]
     },
     {
+      "url": "https://github.com/css-modules/css-modules",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/css-modules/postcss-modules-values",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/csstools/postcss-nesting",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
       "url": "https://github.com/cursor/cookbook",
       "category": "external_standards_registry",
       "status_or_id": "cursor-cookbook:ABSENT",
@@ -379,6 +412,14 @@
       ]
     },
     {
+      "url": "https://github.com/koalaman/shellcheck",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
       "url": "https://github.com/kserve/kserve",
       "category": "other_repository_reference_or_dependency",
       "status_or_id": "unclassified",
@@ -395,11 +436,35 @@
       ]
     },
     {
+      "url": "https://github.com/mdn/browser-compat-data",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
       "url": "https://github.com/microsoft/api-guidelines",
       "category": "other_repository_reference_or_dependency",
       "status_or_id": "unclassified",
       "occurrences": [
         "docs/contracts/API_STYLE_GUIDE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/minlan-yu/cs145-site",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json"
+      ]
+    },
+    {
+      "url": "https://github.com/minlan-yu/cs243-site.",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json"
       ]
     },
     {
@@ -432,6 +497,38 @@
       "status_or_id": "unclassified",
       "occurrences": [
         "spec.md"
+      ]
+    },
+    {
+      "url": "https://github.com/postcss/postcss-custom-media",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/postcss/postcss-custom-selectors",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/postcss/postcss-media-minmax",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
+      ]
+    },
+    {
+      "url": "https://github.com/postcss/postcss-nested",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
       ]
     },
     {
@@ -518,6 +615,14 @@
       "occurrences": [
         "docs/governance/REFERENCE_BACKBONE.json",
         "docs/governance/REFERENCE_BACKBONE.md"
+      ]
+    },
+    {
+      "url": "https://github.com/webpack/webpack",
+      "category": "other_repository_reference_or_dependency",
+      "status_or_id": "unclassified",
+      "occurrences": [
+        ".qodana/baseline.sarif.json"
       ]
     },
     {

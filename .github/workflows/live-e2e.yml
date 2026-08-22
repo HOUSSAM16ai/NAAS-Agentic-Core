@@ -78,6 +78,12 @@ jobs:
       HONCHO_API_KEY: ${{ secrets.HONCHO_API_KEY }}
       ENVIRONMENT: development
       LLM_MOCK_MODE: "0"
+      # D-280: gpt-oss-20b:free was removed from the public catalog (404).
+      # Use a currently listed, previously Arabic-validated free model for this
+      # live probe, and append a current free-tier recovery slot. The probe still
+      # fails closed if the model cannot answer the full matrix.
+      OPENROUTER_PRIMARY_MODEL: google/gemma-4-31b-it:free
+      OPENROUTER_EXTRA_MODELS: nvidia/nemotron-3.5-lightning:free
       REQUIRE_ORCHESTRATOR: "0"
       E2E_BACKEND: http://127.0.0.1:8000
     steps:

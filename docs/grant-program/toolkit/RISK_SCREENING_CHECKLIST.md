@@ -18,7 +18,7 @@ Use this checklist to screen any new GenAI tool or update before deploying it wi
 *   [ ] **No Personal Info Request:** The model does not ask for names, addresses, or phone numbers.
 *   [ ] **Anonymization:** User inputs are stripped of PII before storage/logging.
 *   [ ] **Retention:** Data is automatically deleted or aggregated after [X] days (default 30).
-*   [ ] **Compliance:** Review [DATA_POLICY.md](../DATA_POLICY.md).
+*   [ ] **Compliance:** Review [DATA_POLICY.md](../../../DATA_POLICY.md).
 
 ## Section C: Bias & Representation
 

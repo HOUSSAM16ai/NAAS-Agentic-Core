@@ -1,0 +1,230 @@
+{
+  "$schema_version": "1",
+  "purpose": "Machine-readable manifest for current, operational documentation.",
+  "source_of_truth": "docs/DOCUMENTATION_CONTRACT.md",
+  "scan_globs": [
+    "**/*.md",
+    "README.md",
+    "README.ar.md",
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "CLAUDE.md",
+    "SAFEGUARDING.md",
+    "DATA_POLICY.md",
+    "SECURITY.md",
+    "GOVERNANCE.md",
+    "CODE_OF_CONDUCT.md",
+    "docs/**/*.md",
+    "app/**/README.md",
+    "microservices/**/README.md",
+    "scripts/README.md",
+    ".devcontainer/README.md",
+    ".devcontainer/CHANGELOG.md",
+    ".github/VERIFICATION_CHECKLIST.md",
+    ".memory/**/*.md",
+    ".claude/**/*.md",
+    ".github/**/*.md"
+  ],
+  "exclude_globs": [
+    "docs/archive/**",
+    ".pytest_cache/**"
+  ],
+  "documents": [
+    {
+      "path": "README.md",
+      "audience": "all",
+      "role": "project-overview",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "README.ar.md",
+      "audience": "all",
+      "role": "project-overview-arabic",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "docs/START_HERE.md",
+      "audience": "new-contributor",
+      "role": "onboarding",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "docs/guides/NEWCOMER_CODEBASE_MAP.md",
+      "audience": "new-contributor",
+      "role": "codebase-orientation",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/quality/testing.md",
+      "audience": "contributor",
+      "role": "testing",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "audience": "contributor",
+      "role": "contribution",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "AGENTS.md",
+      "audience": "coding-agent",
+      "role": "agent-policy",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "docs/DOCUMENTATION_INDEX.md",
+      "audience": "all",
+      "role": "documentation-navigation",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "docs/DOCUMENTATION_CONTRACT.md",
+      "audience": "all",
+      "role": "documentation-policy",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "docs/DEPLOYMENT_GUIDE.md",
+      "audience": "operator",
+      "role": "deployment",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "docs/MICROSERVICES_DEPLOYMENT_GUIDE.md",
+      "audience": "operator",
+      "role": "microservices-deployment",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "docs/MICROSERVICES_PLATFORM.md",
+      "audience": "architect",
+      "role": "microservices-architecture",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/OVERMIND_ARCHITECTURE.md",
+      "audience": "developer",
+      "role": "agent-architecture",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/architecture/STRUCTURE_PROTECTION_SYSTEM.md",
+      "audience": "contributor",
+      "role": "structure-protection",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/contracts/README.md",
+      "audience": "contributor",
+      "role": "api-contracts",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "docs/contracts/GETTING_STARTED.md",
+      "audience": "new-contributor",
+      "role": "contracts-onboarding",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/contracts/QUICK_REFERENCE.md",
+      "audience": "contributor",
+      "role": "contracts-reference",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/guides/CODESPACES_TEST_GUIDE.md",
+      "audience": "contributor",
+      "role": "codespaces-testing",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/guides/SIMPLIFICATION_GUIDE.md",
+      "audience": "maintainer",
+      "role": "documentation-maintenance",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/grant-program/toolkit/START_HERE.md",
+      "audience": "safety-lead",
+      "role": "safety-onboarding",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "microservices/README.md",
+      "audience": "operator",
+      "role": "microservices-entrypoint",
+      "authority": "primary",
+      "status": "live"
+    },
+    {
+      "path": "scripts/README.md",
+      "audience": "contributor",
+      "role": "validation-entrypoint",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "app/api/README.md",
+      "audience": "developer",
+      "role": "api-layer",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "app/core/README.md",
+      "audience": "developer",
+      "role": "core-layer",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "app/services/README.md",
+      "audience": "developer",
+      "role": "services-layer",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "app/services/boundaries/README.md",
+      "audience": "developer",
+      "role": "boundary-services",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": ".github/VERIFICATION_CHECKLIST.md",
+      "audience": "contributor",
+      "role": "ci-verification",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/governance/NO_BYPASS_CONTROL_PLANE.md",
+      "audience": "maintainer",
+      "role": "no-bypass-control-plane",
+      "authority": "primary",
+      "status": "live"
+    }
+  ]
+}

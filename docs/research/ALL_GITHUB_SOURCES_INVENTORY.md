@@ -2,13 +2,13 @@
 
 > This inventory is generated from the repository’s current text files. It counts unique GitHub repository URLs after normalizing `.git` suffixes and excludes account settings and sponsor links. It does **not** claim that every referenced repository is a runtime dependency or an adopted standard.
 
-**Total unique repository URLs:** 62
+**Total unique repository URLs:** 75
 
 | Category | Count | Meaning |
 |---|---:|---|
 | Mandatory reference backbone | 15 | Pinned sources in `REFERENCE_BACKBONE.json`. |
 | External standards registry | 11 | Sources already recorded in `EXTERNAL_STANDARDS_REGISTRY.json`, with ACTIVE/SEAM/ABSENT status. |
-| Other repository references or dependencies | 36 | Existing links requiring classification; this category must not be silently discarded. |
+| Other repository references or dependencies | 49 | Existing links requiring classification; this category must not be silently discarded. |
 
 ## Sources
 
@@ -21,13 +21,14 @@
 | [https://github.com/Gatjuat-Wicteat-Riek/clean-code-book](https://github.com/Gatjuat-Wicteat-Riek/clean-code-book) | mandatory_reference_backbone | `clean-code-book` | `docs/governance/REFERENCE_BACKBONE.json`, `docs/governance/REFERENCE_BACKBONE.md` |
 | [https://github.com/GoogleCloudPlatform/agent-starter-pack](https://github.com/GoogleCloudPlatform/agent-starter-pack) | other_repository_reference_or_dependency | `unclassified` | `Introduction to Agents.pdf` |
 | [https://github.com/HOUSSAM16ai/NAAS-Agentic-Core](https://github.com/HOUSSAM16ai/NAAS-Agentic-Core) | other_repository_reference_or_dependency | `unclassified` | `CITATION.cff`, `README.ar.md`, `README.md`, `docs/grant-program/STAKEHOLDER_BRIEFS_TEMPLATE.md` |
-| [https://github.com/HOUSSAM16ai/my_ai_project](https://github.com/HOUSSAM16ai/my_ai_project) | other_repository_reference_or_dependency | `unclassified` | `.github/VERIFICATION_CHECKLIST.md`, `docs/MICROSERVICES_DEPLOYMENT_GUIDE.md`, `infra/argocd/applications.yaml`, `microservices/README.md` |
-| [https://github.com/Houssam-lab/NAAS-Agentic-Core](https://github.com/Houssam-lab/NAAS-Agentic-Core) | other_repository_reference_or_dependency | `unclassified` | `REPORT-D261.md`, `docs/FINAL_REPORT_D256_D257_AR.md` |
+| [https://github.com/HOUSSAM16ai/my_ai_project](https://github.com/HOUSSAM16ai/my_ai_project) | other_repository_reference_or_dependency | `unclassified` | `infra/argocd/applications.yaml` |
+| [https://github.com/Houssam-lab/NAAS-Agentic-Core](https://github.com/Houssam-lab/NAAS-Agentic-Core) | other_repository_reference_or_dependency | `unclassified` | `.github/VERIFICATION_CHECKLIST.md`, `.qodana/baseline.sarif.json`, `REPORT-D261.md`, `docs/FINAL_REPORT_D256_D257_AR.md` (+6 more) |
 | [https://github.com/Houssam-lab/deepseek-harness](https://github.com/Houssam-lab/deepseek-harness) | other_repository_reference_or_dependency | `unclassified` | `docs/adr/ADR-010-deepseek-harness-adoption.md` |
 | [https://github.com/Houssam-lab/openhands](https://github.com/Houssam-lab/openhands) | external_standards_registry | `openhands-agent-canvas:ACTIVE` | `docs/adr/ADR-011-openhands-delivery-standards.md`, `docs/governance/EXTERNAL_STANDARDS_REGISTRY.json` |
 | [https://github.com/PyCQA/bandit](https://github.com/PyCQA/bandit) | other_repository_reference_or_dependency | `unclassified` | `tests/fitness/test_delivery_standards_gates.py` |
+| [https://github.com/PyCQA/pycodestyle](https://github.com/PyCQA/pycodestyle) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
 | [https://github.com/TheAlgorithms/Python](https://github.com/TheAlgorithms/Python) | mandatory_reference_backbone | `the-algorithms-python` | `docs/governance/REFERENCE_BACKBONE.json`, `docs/governance/REFERENCE_BACKBONE.md` |
-| [https://github.com/ai-for-solution-labs/my_ai_project](https://github.com/ai-for-solution-labs/my_ai_project) | other_repository_reference_or_dependency | `unclassified` | `docs/contracts/GETTING_STARTED.md`, `docs/contracts/QUICK_REFERENCE.md`, `docs/guides/BEGINNER_GUIDE.md`, `docs/guides/CODESPACES_TEST_GUIDE.md` (+2 more) |
+| [https://github.com/ai-for-solution-labs/my_ai_project](https://github.com/ai-for-solution-labs/my_ai_project) | other_repository_reference_or_dependency | `unclassified` | `microservices/memory_agent/data/identity.json`, `microservices/orchestrator_service/src/services/overmind/data/identity.json` |
 | [https://github.com/anthropics/claude-cookbooks](https://github.com/anthropics/claude-cookbooks) | external_standards_registry | `claude-cookbooks:ABSENT` | `docs/governance/EXTERNAL_STANDARDS_REGISTRY.json` |
 | [https://github.com/anthropics/skills](https://github.com/anthropics/skills) | external_standards_registry | `anthropic-skills:ACTIVE` | `docs/governance/EXTERNAL_STANDARDS_REGISTRY.json` |
 | [https://github.com/argoproj/argo-rollouts](https://github.com/argoproj/argo-rollouts) | other_repository_reference_or_dependency | `unclassified` | `docs/DEPLOYMENT_GUIDE.md` |
@@ -44,6 +45,9 @@
 | [https://github.com/codecrafters-io/build-your-own-x](https://github.com/codecrafters-io/build-your-own-x) | mandatory_reference_backbone | `build-your-own-x` | `docs/governance/REFERENCE_BACKBONE.json`, `docs/governance/REFERENCE_BACKBONE.md` |
 | [https://github.com/cogniforge/api-examples](https://github.com/cogniforge/api-examples) | other_repository_reference_or_dependency | `unclassified` | `docs/contracts/GETTING_STARTED.md` |
 | [https://github.com/cordiverse/cordis](https://github.com/cordiverse/cordis) | other_repository_reference_or_dependency | `unclassified` | `docs/adr/ADR-010-deepseek-harness-adoption.md` |
+| [https://github.com/css-modules/css-modules](https://github.com/css-modules/css-modules) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
+| [https://github.com/css-modules/postcss-modules-values](https://github.com/css-modules/postcss-modules-values) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
+| [https://github.com/csstools/postcss-nesting](https://github.com/csstools/postcss-nesting) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
 | [https://github.com/cursor/cookbook](https://github.com/cursor/cookbook) | external_standards_registry | `cursor-cookbook:ABSENT` | `docs/governance/EXTERNAL_STANDARDS_REGISTRY.json` |
 | [https://github.com/cursor/plugins](https://github.com/cursor/plugins) | external_standards_registry | `cursor-plugins:ABSENT` | `docs/governance/EXTERNAL_STANDARDS_REGISTRY.json` |
 | [https://github.com/deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) | external_standards_registry | `deepseek-harness:SEAM` | `docs/governance/EXTERNAL_STANDARDS_REGISTRY.json` |
@@ -57,13 +61,21 @@
 | [https://github.com/inikulin/parse5](https://github.com/inikulin/parse5) | other_repository_reference_or_dependency | `unclassified` | `frontend/package-lock.json` |
 | [https://github.com/jwasham/coding-interview-university](https://github.com/jwasham/coding-interview-university) | mandatory_reference_backbone | `coding-interview-university` | `docs/governance/REFERENCE_BACKBONE.json`, `docs/governance/REFERENCE_BACKBONE.md` |
 | [https://github.com/kamranahmedse/developer-roadmap](https://github.com/kamranahmedse/developer-roadmap) | mandatory_reference_backbone | `developer-roadmap` | `docs/governance/REFERENCE_BACKBONE.json`, `docs/governance/REFERENCE_BACKBONE.md` |
+| [https://github.com/koalaman/shellcheck](https://github.com/koalaman/shellcheck) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
 | [https://github.com/kserve/kserve](https://github.com/kserve/kserve) | other_repository_reference_or_dependency | `unclassified` | `docs/DEPLOYMENT_GUIDE.md` |
 | [https://github.com/mattpocock/skills](https://github.com/mattpocock/skills) | other_repository_reference_or_dependency | `unclassified` | `docs/AGENT_WORKFLOW_CONSTITUTION.md` |
+| [https://github.com/mdn/browser-compat-data](https://github.com/mdn/browser-compat-data) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
 | [https://github.com/microsoft/api-guidelines](https://github.com/microsoft/api-guidelines) | other_repository_reference_or_dependency | `unclassified` | `docs/contracts/API_STYLE_GUIDE.md` |
+| [https://github.com/minlan-yu/cs145-site](https://github.com/minlan-yu/cs145-site) | other_repository_reference_or_dependency | `unclassified` | `docs/research/UNIVERSITY_CURRICULUM_CATALOG.json` |
+| [https://github.com/minlan-yu/cs243-site.](https://github.com/minlan-yu/cs243-site.) | other_repository_reference_or_dependency | `unclassified` | `docs/research/UNIVERSITY_CURRICULUM_CATALOG.json` |
 | [https://github.com/mozilla/diversity](https://github.com/mozilla/diversity) | other_repository_reference_or_dependency | `unclassified` | `CODE_OF_CONDUCT.md` |
 | [https://github.com/openai/openai-agents-python](https://github.com/openai/openai-agents-python) | external_standards_registry | `openai-agents-python:ABSENT` | `docs/governance/EXTERNAL_STANDARDS_REGISTRY.json` |
 | [https://github.com/openai/openai-cookbook](https://github.com/openai/openai-cookbook) | external_standards_registry | `openai-cookbook:ABSENT` | `docs/governance/EXTERNAL_STANDARDS_REGISTRY.json` |
 | [https://github.com/pgvector/pgvector](https://github.com/pgvector/pgvector) | other_repository_reference_or_dependency | `unclassified` | `spec.md` |
+| [https://github.com/postcss/postcss-custom-media](https://github.com/postcss/postcss-custom-media) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
+| [https://github.com/postcss/postcss-custom-selectors](https://github.com/postcss/postcss-custom-selectors) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
+| [https://github.com/postcss/postcss-media-minmax](https://github.com/postcss/postcss-media-minmax) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
+| [https://github.com/postcss/postcss-nested](https://github.com/postcss/postcss-nested) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
 | [https://github.com/pre-commit/mirrors-mypy](https://github.com/pre-commit/mirrors-mypy) | other_repository_reference_or_dependency | `unclassified` | `.pre-commit-config.yaml`, `tests/fitness/test_delivery_standards_gates.py` |
 | [https://github.com/pre-commit/pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks) | other_repository_reference_or_dependency | `unclassified` | `.pre-commit-config.yaml`, `tests/fitness/test_delivery_standards_gates.py` |
 | [https://github.com/privatenumber/get-tsconfig](https://github.com/privatenumber/get-tsconfig) | other_repository_reference_or_dependency | `unclassified` | `frontend/package-lock.json` |
@@ -74,5 +86,6 @@
 | [https://github.com/rasbt/LLMs-from-scratch](https://github.com/rasbt/LLMs-from-scratch) | mandatory_reference_backbone | `llms-from-scratch` | `docs/governance/REFERENCE_BACKBONE.json`, `docs/governance/REFERENCE_BACKBONE.md` |
 | [https://github.com/ryanmcdermott/clean-code-javascript](https://github.com/ryanmcdermott/clean-code-javascript) | mandatory_reference_backbone | `clean-code-javascript` | `docs/governance/REFERENCE_BACKBONE.json`, `docs/governance/REFERENCE_BACKBONE.md` |
 | [https://github.com/sindresorhus/awesome](https://github.com/sindresorhus/awesome) | mandatory_reference_backbone | `awesome` | `docs/governance/REFERENCE_BACKBONE.json`, `docs/governance/REFERENCE_BACKBONE.md` |
+| [https://github.com/webpack/webpack](https://github.com/webpack/webpack) | other_repository_reference_or_dependency | `unclassified` | `.qodana/baseline.sarif.json` |
 | [https://github.com/xai-org/grok-build](https://github.com/xai-org/grok-build) | external_standards_registry | `xai-grok-build:ABSENT` | `docs/governance/EXTERNAL_STANDARDS_REGISTRY.json` |
 | [https://github.com/yaml/pyyaml](https://github.com/yaml/pyyaml) | other_repository_reference_or_dependency | `unclassified` | `tests/security/test_yaml_rce.py` |

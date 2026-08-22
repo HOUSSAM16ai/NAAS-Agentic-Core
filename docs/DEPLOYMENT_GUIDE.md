@@ -417,10 +417,10 @@ Access: http://localhost:9090/alerts
 
 ## 📚 Additional Resources
 
-- [Platform Documentation](../docs/MICROSERVICES_PLATFORM.md)
-- [Architecture Decision Records](../docs/adr/)
-- [API Documentation](../docs/api/)
-- [Runbooks](../docs/runbooks/)
+- [Platform Documentation](MICROSERVICES_PLATFORM.md)
+- [Architecture Decision Records](adr/)
+- [API Contracts](contracts/README.md)
+- [Deployment Guide](DEPLOYMENT_GUIDE.md)
 
 ---
 

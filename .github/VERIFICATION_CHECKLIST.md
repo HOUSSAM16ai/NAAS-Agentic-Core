@@ -45,26 +45,20 @@ git status
 
 After pushing, monitor GitHub Actions:
 
-1. Visit: https://github.com/HOUSSAM16ai/my_ai_project/actions
+1. Visit: https://github.com/Houssam-lab/NAAS-Agentic-Core/actions
 2. Check latest workflow run
 3. Verify all jobs show ✅ green checkmarks
 
 ## Expected Workflows
 
-- 🚀 CI/CD Pipeline (4 jobs)
-  - quality
-  - test
-  - verify
-  - schema-check
+- 🚀 Required CI (`required-ci`, 12 required jobs)
+  - lint · contracts · guardrails · test-monolith · test-microservices
+  - frontend-tests · skills-structural · event-stack-live
+  - images-plan · images-build · live-e2e-required · runtime-truth-required
 
-- 🧪 Comprehensive Testing (7 jobs)
-  - unit-tests
-  - property-tests
-  - fuzzing-tests
-  - integration-tests
-  - security-tests
-  - mutation-tests
-  - verify
+- 🧪 Additional workflows
+  - `doc-integrity` (including the live documentation contract)
+  - runtime truth, architecture, frontend theme, observability, and deployment validation
 
 - Ω Omega Intelligence Pipeline (1 job)
 - Universal Repository Synchronization Protocol (1 job)

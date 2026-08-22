@@ -1,483 +1,112 @@
-# 🎓 دليل المبتدئين الشامل - CogniForge
-# Complete Beginner's Guide - CogniForge
+# دليل المبتدئ — CogniForge
 
-> **هدف هذا الدليل:** جعل أي شخص - حتى لو لم يكتب سطر برمجة من قبل - يفهم هذا المشروع 100%
-> **Guide Goal:** Make anyone - even with zero programming experience - understand this project 100%
+هذا الدليل يشرح **كيف تدخل المستودع بأمان**، لا كيف تفهم كل سطر فيه. المسار الرسمي المختصر موجود في [`../START_HERE.md`](../START_HERE.md). استخدم هذا الملف بعده عندما تحتاج إلى خريطة أوسع أو مثال تتبع.
 
----
+## 1. الصورة الكبيرة
 
-## 📚 فهرس المحتويات | Table of Contents
+المشروع منصة تعليمية API-first. النواة الرئيسية موجودة في `app/`، والخدمات المصغرة في `microservices/`، والواجهة في `frontend/`، والاختبارات في `tests/`. توجد أيضًا بوابات حوكمة في `scripts/fitness/` وعقود API في `docs/contracts/`.
 
-1. [ما هو CogniForge؟](#what-is-cogniforge)
-2. [المتطلبات الأساسية](#prerequisites)
-3. [البدء السريع](#quick-start)
-4. [فهم هيكل المشروع](#understanding-structure)
-5. [كيف يعمل النظام؟](#how-it-works)
-6. [المفاهيم الأساسية](#basic-concepts)
-7. [أول تعديل لك](#your-first-change)
-8. [الأسئلة الشائعة](#faq)
+| المجلد | وظيفته | نقطة القراءة الأولى |
+|---|---|---|
+| `app/` | تطبيق FastAPI والنواة المشتركة | `app/main.py` ثم `app/kernel.py` |
+| `shared/` | محركات مستقلة مثل المنهاج والجدولة والترميز | المصدر الذي يستورده المسار الفعلي |
+| `microservices/` | خدمات معزولة بعقود ونقاط صحة | `microservices/README.md` والعقد المقابل |
+| `frontend/` | تطبيق الواجهة | `frontend/package.json` وملفات المصدر |
+| `tests/` | اختبارات الوحدة والعقود والتكامل والأمن | مجموعة الاختبار المطابقة للمسار |
+| `scripts/fitness/` | فوارض القوانين المعمارية والتوثيقية | البوابة التي يذكرها المصدر الحاكم |
+| `docs/` | وثائق حية ومراجع وأرشيف | [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) |
+| `.memory/` | الحالة والقرارات والمسائل الحالية | `.memory/runtime_truth.md` |
 
----
+## 2. المتطلبات والتثبيت
 
-## 🌟 ما هو CogniForge؟ | What is CogniForge? {#what-is-cogniforge}
-
-**بالعربية:**
-CogniForge هو منصة تعليمية ذكية مدعومة بالذكاء الاصطناعي. تخيلها كـ "مدرسة افتراضية" حيث يمكن للطلاب التعلم والمعلمين إدارة المحتوى، والنظام يستخدم الذكاء الاصطناعي لتحسين تجربة التعلم.
-
-**In English:**
-CogniForge is an AI-powered educational platform. Think of it as a "virtual school" where students can learn, teachers can manage content, and the system uses AI to enhance the learning experience.
-
-### المكونات الرئيسية | Main Components:
-- 🔐 **نظام تسجيل دخول** | Login System
-- 👥 **إدارة المستخدمين** | User Management  
-- 📚 **المحتوى التعليمي** | Educational Content
-- 🤖 **مساعد ذكي** | AI Assistant (Chatbot)
-- 📊 **لوحة تحكم للإدارة** | Admin Dashboard
-
----
-
-## 💻 المتطلبات الأساسية | Prerequisites {#prerequisites}
-
-### ماذا تحتاج لتشغيل المشروع؟ | What do you need?
-
-#### للمبتدئين تماماً | For Complete Beginners:
-1. **حساب GitHub Codespaces** (مجاني) - كل شيء جاهز في السحابة
-2. **متصفح ويب** فقط!
-
-#### للمطورين | For Developers:
-1. **Python 3.12+** - لغة البرمجة المستخدمة
-2. **Docker** (اختياري) - لتشغيل قاعدة البيانات
-3. **Git** - لإدارة الإصدارات
-4. **محرر نصوص** مثل VS Code
-
----
-
-## 🚀 البدء السريع | Quick Start {#quick-start}
-
-### الطريقة 1: GitHub Codespaces (الأسهل للمبتدئين)
+تحتاج إلى Python 3.12، Git، وبيئة افتراضية. اتبع أوامر التثبيت التالية من جذر المستودع:
 
 ```bash
-# 1. افتح المشروع في GitHub
-# 2. اضغط على زر "Code" > "Create codespace on main"
-# 3. انتظر حتى يتم تحميل البيئة (2-3 دقائق)
-# 4. في Terminal، اكتب:
-./scripts/setup_dev.sh
-
-# 5. بعد اكتمال التثبيت، اكتب:
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# 6. افتح المنفذ (Port) 8000 في المتصفح
-# تهانينا! 🎉 المشروع يعمل الآن
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
+pip install -r requirements-test.txt
 ```
 
-### الطريقة 2: تشغيل محلي (Local)
+لا تستخدم اسم مشروع آخر في أمر `git clone`. استخدم عنوان المستودع الذي تعمل عليه، أو ابدأ من نسخة موجودة بالفعل في جهازك.
+
+## 3. أول تشغيل آمن
+
+قبل تشغيل التطبيق، نفّذ الاختبارات والبوابات:
 
 ```bash
-# 1. استنساخ المشروع
-git clone https://github.com/ai-for-solution-labs/my_ai_project.git
-cd my_ai_project
+make gates
+make test
+```
 
-# 2. تثبيت المتطلبات
-pip install -r requirements.txt
+تحتاج النواة إلى `DATABASE_URL` أو `APP_DATABASE_URL` في بيئة العملية عند التشغيل. ملف `.env` لا يكفي ما لم تُصدّر قيمه. عند استخدام PostgreSQL، استخدم صيغة `postgresql+asyncpg://`:
 
-# 3. نسخ ملف الإعدادات
+```bash
 cp .env.example .env
-
-# 4. تشغيل السيرفر
-python -m uvicorn app.main:app --reload
-
-# 5. افتح المتصفح على: http://localhost:8000
+set -a
+. ./.env
+set +a
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
----
+ثم افحص الصحة:
 
-## 📁 فهم هيكل المشروع | Understanding Project Structure {#understanding-structure}
-
-### الصورة الكبيرة | The Big Picture
-
-```
-my_ai_project/
-│
-├── 📱 app/                    # قلب المشروع - كل الكود هنا
-│   ├── 🚪 api/                # نقاط الدخول (APIs)
-│   ├── ⚙️  core/              # المحركات الأساسية
-│   ├── 👔 services/           # منطق العمل
-│   ├── 📊 models.py           # تعريف البيانات
-│   ├── 🧠 kernel.py           # العقل المدبر
-│   └── 🎯 main.py             # نقطة الانطلاق
-│
-├── 🧪 tests/                  # اختبارات النظام
-├── 📚 docs/                   # الوثائق المتقدمة
-├── 🐳 docker-compose.yml      # إعداد Docker
-└── 📋 requirements.txt        # المكتبات المطلوبة
-```
-
-### شرح مبسط لكل مجلد | Simple Explanation
-
-#### 📱 `app/` - قلب المشروع
-هذا هو المكان الذي يعيش فيه كل الكود.
-
-#### 🚪 `app/api/` - الباب الأمامي
-- **ماذا يفعل؟** يستقبل الطلبات من المتصفح أو التطبيقات
-- **مثال:** عندما تضغط "تسجيل دخول"، الطلب يمر من هنا
-- **الملفات المهمة:**
-  - `routers/admin.py` - صفحات الإدارة
-  - `routers/security.py` - تسجيل الدخول والأمان
-  - `routers/crud.py` - إنشاء وتعديل البيانات
-
-#### ⚙️ `app/core/` - المحركات الأساسية
-- **ماذا يفعل؟** يحتوي على "المحركات" التي تشغل النظام
-- **مثال:** محرك قاعدة البيانات، محرك الأمان
-- **الملفات المهمة:**
-  - `database.py` - الاتصال بقاعدة البيانات
-  - `security.py` - التشفير والأمان
-  - `ai_gateway.py` - الاتصال بالذكاء الاصطناعي
-
-#### 👔 `app/services/` - العمال
-- **ماذا يفعل؟** كل "خدمة" مسؤولة عن وظيفة معينة
-- **مثال:** `user_service.py` يدير المستخدمين
-- **التنظيم:** كل خدمة في مجلد خاص بها
-
-#### 📊 `app/models.py` - تعريف البيانات
-- **ماذا يفعل؟** يحدد "شكل" البيانات في قاعدة البيانات
-- **مثال:** 
-  ```python
-  class User:
-      id: int              # رقم المستخدم
-      email: str           # البريد الإلكتروني
-      password: str        # كلمة المرور (مشفرة)
-      name: str            # الاسم
-  ```
-
-#### 🧠 `app/kernel.py` - العقل المدبر
-- **ماذا يفعل؟** يجمع كل القطع معاً ويبدأ التطبيق
-- **أهميته:** نقطة البداية لفهم كيف يعمل النظام ككل
-
-#### 🎯 `app/main.py` - نقطة الانطلاق
-- **ماذا يفعل؟** أول ملف يتم تشغيله
-- **بساطته:** فقط 23 سطر! يستدعي `kernel.py` ليقوم بالباقي
-
----
-
-## 🔄 كيف يعمل النظام؟ | How Does It Work? {#how-it-works}
-
-### رحلة طلب واحد | Journey of a Single Request
-
-تخيل أنك تريد تسجيل الدخول. إليك ما يحدث خلف الكواليس:
-
-```
-1. 🌐 المتصفح (Browser)
-   ↓ 
-   يرسل: POST /api/security/login
-   البيانات: {email: "user@example.com", password: "12345"}
-   
-2. 🚪 app/main.py
-   ↓
-   يستقبل الطلب ويمرره إلى...
-   
-3. 🧠 app/kernel.py
-   ↓
-   يوجه الطلب للراوتر المناسب...
-   
-4. 🛣️ app/api/routers/security.py
-   ↓
-   يقرأ البيانات ويستدعي...
-   
-5. 👔 app/services/auth_service.py
-   ↓
-   يتحقق من كلمة المرور عبر...
-   
-6. ⚙️ app/core/security.py
-   ↓
-   يقارن كلمة المرور المشفرة
-   
-7. 📊 app/core/database.py
-   ↓
-   يجلب بيانات المستخدم من قاعدة البيانات
-   
-8. ✅ النتيجة ترجع بنفس الطريق
-   ↓
-9. 🌐 المتصفح يستقبل: {success: true, token: "..."}
-```
-
-### الأنماط المستخدمة | Patterns Used
-
-#### 1️⃣ Dependency Injection (حقن الاعتماديات)
-**ببساطة:** بدلاً من أن يصنع كل ملف أدواته الخاصة، يطلبها من النظام.
-
-```python
-# ❌ طريقة قديمة (سيئة)
-def login():
-    db = Database()  # كل مرة تصنع اتصال جديد!
-    user = db.get_user()
-    
-# ✅ طريقة حديثة (جيدة)
-def login(db: Database = Depends(get_db)):  # اطلب اتصال جاهز
-    user = db.get_user()
-```
-
-**الفائدة:** أسرع، أكثر كفاءة، سهل الاختبار.
-
-#### 2️⃣ Async/Await (العمليات غير المتزامنة)
-**ببساطة:** النظام لا ينتظر عملية واحدة تنتهي، بل يخدم مستخدمين آخرين في نفس الوقت.
-
-```python
-# ❌ بطيء (ينتظر كل عملية)
-def get_data():
-    data1 = fetch_from_db()      # ينتظر 2 ثانية
-    data2 = fetch_from_api()     # ينتظر 3 ثواني
-    # المجموع: 5 ثواني
-
-# ✅ سريع (يعمل بالتوازي)
-async def get_data():
-    data1, data2 = await asyncio.gather(
-        fetch_from_db(),    # يبدأ
-        fetch_from_api()    # يبدأ في نفس الوقت
-    )
-    # المجموع: 3 ثواني (أطول عملية فقط)
-```
-
-#### 3️⃣ Repository Pattern (نمط المستودع)
-**ببساطة:** فصل "كيف نخزن البيانات" عن "كيف نستخدمها".
-
-```python
-# الواجهة (Interface) - ماذا نريد
-class UserRepository:
-    def get_user(id): ...
-    def save_user(user): ...
-
-# التطبيق 1 - PostgreSQL
-class PostgreSQLUserRepo(UserRepository):
-    def get_user(id):
-        return db.query(...)
-
-# التطبيق 2 - MongoDB (في المستقبل)
-class MongoDBUserRepo(UserRepository):
-    def get_user(id):
-        return mongo.find(...)
-```
-
-**الفائدة:** يمكنك تغيير قاعدة البيانات بدون تغيير كود التطبيق!
-
----
-
-## 📖 المفاهيم الأساسية | Basic Concepts {#basic-concepts}
-
-### 1. ما هو API؟
-**API = Application Programming Interface**
-
-**بالعربية:** هو "القائمة" التي يوفرها التطبيق للتواصل معه.
-
-**مثال من الحياة:**
-- المطعم = التطبيق
-- القائمة = API
-- الطلب = HTTP Request
-- الطعام = HTTP Response
-
-```python
-# في app/api/routers/crud.py
-@router.get("/users")      # هذا "عنصر في القائمة"
-async def get_users():
-    return {"users": [...]}
-```
-
-### 2. ما هو Database (قاعدة البيانات)؟
-**ببساطة:** مكان تخزين البيانات بشكل منظم.
-
-**تشبيه:**
-- قاعدة البيانات = مكتبة كبيرة
-- الجداول (Tables) = أرفف
-- الصفوف (Rows) = كتب
-- الأعمدة (Columns) = معلومات الكتاب (عنوان، مؤلف، ...)
-
-```sql
--- جدول المستخدمين
-Users Table:
-| id | email              | name       |
-|----|-------------------|------------|
-| 1  | ali@example.com   | علي        |
-| 2  | sara@example.com  | سارة       |
-```
-
-### 3. ما هو Authentication (المصادقة)؟
-**ببساطة:** التأكد من هوية المستخدم.
-
-**الخطوات:**
-1. المستخدم يدخل email + password
-2. النظام يتحقق من صحتهما
-3. إذا صحيح → يعطيه "مفتاح" (Token)
-4. المستخدم يستخدم هذا المفتاح في كل طلب
-
-```python
-# في app/services/auth_service.py
-def login(email, password):
-    user = get_user_by_email(email)
-    if verify_password(password, user.password):
-        return create_token(user)  # إنشاء مفتاح
-    else:
-        raise WrongPasswordError()
-```
-
-### 4. ما هو Middleware؟
-**ببساطة:** "حارس" يفحص كل طلب قبل وصوله للتطبيق.
-
-**مثال:**
-```python
-# في app/kernel.py
-middlewares = [
-    TrustedHostMiddleware,      # ✅ هل المصدر موثوق؟
-    SecurityHeadersMiddleware,  # 🔒 أضف ترويسات أمان
-    RateLimitMiddleware,        # ⏱️ لا تسمح بطلبات كثيرة جداً
-]
-```
-
-**تشبيه:** مثل الأمن في المطار - يفحصون الجميع قبل الدخول.
-
----
-
-## ✏️ أول تعديل لك | Your First Change {#your-first-change}
-
-### المهمة: تغيير رسالة الترحيب
-
-#### الخطوة 1: افتح الملف
 ```bash
-# في Terminal
-code app/api/routers/system/root.py
+curl -s http://localhost:8000/health | python -m json.tool
 ```
 
-#### الخطوة 2: ابحث عن السطر
-```python
-# السطر الحالي (تقريباً سطر 20)
-"message": "Welcome to CogniForge API"
+لا تستخدم أسرارًا حقيقية في Issue أو سجل CI، ولا تستخدم قيمًا وهمية لتجاوز فشل بيئة إنتاجية.
+
+## 4. تتبع طلب أو ميزة
+
+للتعلم، اختر ميزة واحدة صغيرة واتبعها بهذا الترتيب:
+
+1. نقطة الدخول في الراوتر أو `app/main.py`.
+2. تركيب التطبيق في `app/kernel.py`.
+3. الخدمة أو حالة الاستخدام التي تنفذ السلوك.
+4. العقد في `docs/contracts/` إذا كان السلوك يعبر حد خدمة.
+5. الاختبار الذي يثبت السلوك.
+6. بوابة الحوكمة التي تمنع رجوع الخطأ.
+
+يمكنك استعمال الأوامر التالية للمساعدة:
+
+```bash
+python app/tooling/repository_map.py --max-depth 2
+rg -n "create_app|RealityKernel|FastAPI\(" app
+find tests -maxdepth 2 -type d | sort
 ```
 
-#### الخطوة 3: غيّره إلى
-```python
-"message": "مرحباً بك في CogniForge! 🎓"
+وجود ملف أو صنف لا يثبت أنه مستخدم في المسار الحي. راجع `.memory/runtime_truth.md` قبل وصف أي قدرة بأنها `ACTIVE`.
+
+## 5. قواعد لا يجوز تجاوزها
+
+لا تستورد كودًا داخليًا من خدمة مصغرة إلى خدمة أخرى، ولا تضع منطق الأعمال داخل route handler، ولا تغيّر عقدًا دون تحديث العقد والاختبار والتوثيق ذي الصلة. لا تعدّل بوابة القبول لتجعل التغيير يمر، ولا تحذف سجلًا تاريخيًا لإخفاء تعارض.
+
+يجب أن تكون الوثيقة الحية مرتبطة بمصدر حقيقة واحد. اقرأ [`../DOCUMENTATION_CONTRACT.md`](../DOCUMENTATION_CONTRACT.md) قبل إنشاء وثيقة جديدة أو تعديل تعليمات تشغيلية.
+
+## 6. استكشاف الأخطاء
+
+عند الفشل، سجّل الأمر، الدليل الحالي، الرسالة، والنتيجة المتوقعة. أعد إنتاج الفشل قبل إصلاحه، ثم أضف اختبارًا أو بوابة تمنع عودته. إذا كان السبب غير معروف، اذكره صراحةً بدل تحويل التخمين إلى حقيقة.
+
+```bash
+git diff --check
+make gates
+make test
 ```
 
-#### الخطوة 4: احفظ الملف
-اضغط `Ctrl+S` (Windows/Linux) أو `Cmd+S` (Mac)
+إذا كان الفشل متعلقًا بخدمة حية، اتبع دليل الخدمة والعقد والحالة في `.memory/`؛ لا تعتبر نجاح عملية الإقلاع دليلًا على صحة الخدمة.
 
-#### الخطوة 5: جرب التغيير
-1. افتح المتصفح
-2. اذهب إلى: `http://localhost:8000/`
-3. يجب أن ترى الرسالة الجديدة!
+## 7. أول Pull Request
 
-**تهانينا! 🎉** لقد قمت بأول تعديل ناجح!
+اقرأ [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md). يجب أن يشرح PR المشكلة، نطاق التغيير، المخاطر، خطة الرجوع، والأوامر التي نُفذت. عند تغيير أمر أو مسار أو حالة تشغيلية، حدّث مصدر الحقيقة والفهرس في نفس PR.
 
----
+قبل فتح PR:
 
-## 🎯 مشاريع للتدريب | Practice Projects
+```bash
+git diff --check
+make gates
+make test
+```
 
-### مبتدئ (Beginner)
-1. ✅ **تغيير رسالة الترحيب** (أنجزته!)
-2. 📝 أضف حقل "رقم الهاتف" لنموذج المستخدم
-3. 🎨 غيّر ألوان واجهة الإدارة
-
-### متوسط (Intermediate)
-1. 📊 أضف endpoint جديد: `GET /api/stats`
-2. 🔍 أضف ميزة البحث عن المستخدمين
-3. 📧 أضف إرسال بريد إلكتروني عند التسجيل
-
-### متقدم (Advanced)
-1. 🤖 أضف chatbot جديد بنموذج AI مختلف
-2. 📈 أضف نظام تتبع الإحصائيات
-3. 🔐 أضف نظام أذونات متقدم
-
----
-
-## ❓ الأسئلة الشائعة | FAQ {#faq}
-
-### س: ما هي لغة البرمجة المستخدمة؟
-**ج:** Python 3.12+ - لغة سهلة وقوية.
-
-### س: هل أحتاج معرفة سابقة بالبرمجة؟
-**ج:** لا! هذا الدليل مصمم للمبتدئين تماماً. لكن معرفة أساسيات Python ستساعد.
-
-### س: كيف أتعلم Python؟
-**ج:** 
-- 🌐 [CS50 Python](https://cs50.harvard.edu/python/) (مجاني، بالإنجليزية)
-- 📺 يوتيوب: ابحث عن "دورة Python بالعربية"
-- 📚 كتاب "Python Crash Course" مترجم للعربية
-
-### س: ماذا لو حدث خطأ (Error)؟
-**ج:** لا تقلق! الأخطاء طبيعية. اتبع هذه الخطوات:
-1. اقرأ رسالة الخطأ بعناية
-2. ابحث في Google عن الرسالة
-3. اسأل في مجتمع GitHub Discussions
-4. تحقق من ملف `TROUBLESHOOTING.md`
-
-### س: كيف أساهم في المشروع؟
-**ج:** اقرأ ملف `CONTRIBUTING.md` - يشرح كل شيء خطوة بخطوة.
-
-### س: أين أجد المزيد من الوثائق؟
-**ج:** 
-- 📂 `docs/` - وثائق تفصيلية
-- 📖 `ARCHITECTURE_ANALYSIS.md` - تحليل معماري
-- 🔧 `TESTING_GUIDE.md` - دليل الاختبارات
-
-### س: ما هو الفرق بين `app/` و `tests/`؟
-**ج:**
-- `app/` = الكود الفعلي الذي يعمل
-- `tests/` = كود يختبر أن `app/` يعمل بشكل صحيح
-
-### س: لماذا الكود معقد في بعض الأماكن؟
-**ج:** المشروع يستخدم معايير احترافية (SOLID, SICP) لضمان:
-- سهولة الصيانة على المدى الطويل
-- إمكانية إضافة ميزات جديدة بسهولة
-- قابلية التوسع لآلاف المستخدمين
-
----
-
-## 🎓 الخطوات التالية | Next Steps
-
-الآن وقد فهمت الأساسيات، إليك المسار المقترح:
-
-1. ✅ **فهمت البنية الأساسية** ← أنت هنا!
-2. 📖 **اقرأ الكود** - ابدأ من `app/main.py` واتبع المسار
-3. 🧪 **جرب الاختبارات** - شغل `pytest` وانظر ماذا يحدث
-4. ✏️ **اصنع تعديل بسيط** - جرب المشاريع التدريبية أعلاه
-5. 🔍 **استكشف خدمة واحدة** - مثلاً `app/services/user/`
-6. 🏗️ **افهم المعمارية** - اقرأ `docs/architecture/`
-7. 🚀 **ساهم في المشروع** - اقرأ `CONTRIBUTING.md`
-
----
-
-## 📞 الدعم والمساعدة | Support & Help
-
-### أين تطرح أسئلتك؟
-- 💬 **GitHub Discussions** - للنقاشات العامة
-- 🐛 **GitHub Issues** - للإبلاغ عن أخطاء
-- 📧 **Email** - للاستفسارات الخاصة
-
-### مصادر إضافية:
-- 🌐 [FastAPI Docs](https://fastapi.tiangolo.com/) - وثائق الإطار المستخدم
-- 📖 [SQLAlchemy Docs](https://docs.sqlalchemy.org/) - وثائق قاعدة البيانات
-- 🎓 [Python Docs](https://docs.python.org/3/) - وثائق Python
-
----
-
-## 🙏 شكر خاص | Special Thanks
-
-هذا المشروع مبني على معايير:
-- **Harvard CS50** - للتوثيق والوضوح
-- **Berkeley SICP** - للبنية المعمارية
-- **مجتمع Python** - للأدوات الرائعة
-
----
-
-## 📝 الخلاصة | Summary
-
-**تذكر:**
-- 🎯 **البساطة هي القوة** - ابدأ بسيط ثم توسع
-- 🔍 **لا تخف من الكود** - كل سطر له سبب
-- 💪 **الممارسة تصنع الإتقان** - جرب وأخطئ وتعلم
-- 🤝 **اسأل دائماً** - المجتمع هنا للمساعدة
-
-**مرحباً بك في عائلة CogniForge! 🌟**
-
----
-
-*آخر تحديث: 2026-01-01*  
-*الإصدار: 2.0 - دليل المبتدئين الشامل*
+> **مبدأ المبتدئ:** لا تحاول فهم المستودع كله دفعة واحدة. افهم مسارًا واحدًا، أثبته باختبار، واعرف البوابة التي تحميه.

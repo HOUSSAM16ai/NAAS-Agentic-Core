@@ -61,21 +61,31 @@ def main() -> int:
     if matrix is None or inventory is None or backbone is None:
         return 1
 
-    inventory_urls = {str(row.get("url", "")) for row in inventory.get("sources", []) if isinstance(row, dict)}
+    inventory_urls = {
+        str(row.get("url", "")) for row in inventory.get("sources", []) if isinstance(row, dict)
+    }
     rows = matrix.get("sources", [])
     if not isinstance(rows, list) or not rows:
         fail("matrix sources must be a non-empty list")
         return 1
     matrix_urls = {str(row.get("url", "")) for row in rows if isinstance(row, dict)}
     if matrix_urls != inventory_urls:
-        fail(f"matrix/inventory mismatch: matrix-only={sorted(matrix_urls - inventory_urls)}, inventory-only={sorted(inventory_urls - matrix_urls)}")
+        fail(
+            f"matrix/inventory mismatch: matrix-only={sorted(matrix_urls - inventory_urls)}, inventory-only={sorted(inventory_urls - matrix_urls)}"
+        )
     if len(rows) != len(matrix_urls):
         fail("matrix contains duplicate source URLs")
     if matrix.get("total_sources") != len(inventory_urls):
         fail("matrix total_sources does not equal inventory cardinality")
 
-    backbone_urls = {str(row.get("repo", "")).removesuffix(".git") for row in backbone.get("references", []) if isinstance(row, dict)}
-    mandatory_rows = [row for row in rows if isinstance(row, dict) and row.get("status") == "MANDATORY_REFERENCE"]
+    backbone_urls = {
+        str(row.get("repo", "")).removesuffix(".git")
+        for row in backbone.get("references", [])
+        if isinstance(row, dict)
+    }
+    mandatory_rows = [
+        row for row in rows if isinstance(row, dict) and row.get("status") == "MANDATORY_REFERENCE"
+    ]
     if {str(row.get("url", "")) for row in mandatory_rows} != backbone_urls:
         fail("every backbone repository must appear exactly once as MANDATORY_REFERENCE")
 
@@ -113,7 +123,10 @@ def main() -> int:
             )
             if not any(path.exists() for path in candidate_paths):
                 fail(f"{label}: named enforcer does not exist: {enforcer}")
-        if row.get("runtime_allowed") is True and status not in {"MANDATORY_REFERENCE", "EXTERNAL_ACTIVE"}:
+        if row.get("runtime_allowed") is True and status not in {
+            "MANDATORY_REFERENCE",
+            "EXTERNAL_ACTIVE",
+        }:
             fail(f"{label}: runtime_allowed is only possible for governed active statuses")
         if status == "PENDING_CLASSIFICATION":
             if row.get("runtime_allowed") is not False:
@@ -126,7 +139,9 @@ def main() -> int:
     if FAILURES:
         print(f"\n❌ Source adoption matrix gate failed: {len(FAILURES)} violation(s)")
         return 1
-    passed(f"Complete source coverage is enforced: {len(rows)} unique repositories, no invisible source, and pending sources are blocked from runtime authority.")
+    passed(
+        f"Complete source coverage is enforced: {len(rows)} unique repositories, no invisible source, and pending sources are blocked from runtime authority."
+    )
     return 0
 
 

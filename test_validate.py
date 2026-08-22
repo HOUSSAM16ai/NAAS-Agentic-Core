@@ -1,6 +1,4 @@
-from pathlib import Path
-import json
-import re
+import sys
 
 body = """## Summary
 Replaced the synchronous `open()` and `f.read()` calls in `read_file_handler` with their asynchronous equivalents (`aiofiles.open()` and `await f.read()`) using the `aiofiles` library. The `aiofiles` dependency was added according to the project's dependency management system. Also fixed documentation numbers to match programmatic outputs to satisfy D-192/D-209.
@@ -45,7 +43,6 @@ HUMAN:
 I have verified this change locally and have confirmed that the benchmark operates as expected and that the tests pass. The CI is currently green.
 AGENT:"""
 
-import sys
 sys.path.append(".github/scripts")
 import validate_pr_description
 
@@ -55,6 +52,6 @@ validate_pr_description._check_sections(sections, problems)
 validate_pr_description._check_human_note(body, problems)
 validate_pr_description._check_test_evidence(sections, problems)
 
-print("Problems found:")
+sys.stdout.write("Problems found:\n")
 for p in problems:
-    print(p)
+    sys.stdout.write(f"{p}\n")

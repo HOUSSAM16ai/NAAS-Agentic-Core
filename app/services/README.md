@@ -455,13 +455,13 @@ async def get_user(self, user_id: int):
 - [Domain Model](../../docs/architecture/01_domain_model.md)
 
 ### Patterns
-- [Repository Pattern](../../docs/patterns/repository.md)
-- [Service Layer Pattern](../../docs/patterns/service_layer.md)
-- [Facade Pattern](../../docs/patterns/facade.md)
+- [Repository Pattern](../../docs/ARCHITECTURE.md)
+- [Service Layer Pattern](../../docs/ARCHITECTURE.md)
+- [Facade Pattern](../../docs/ARCHITECTURE.md)
 
 ### Testing
-- [Testing Guide](../../TESTING_GUIDE.md)
-- [Service Testing](../../docs/testing/service_testing.md)
+- [Testing Guide](../../docs/guides/TESTING_GUIDE.md)
+- [Service Testing](../../docs/quality/testing.md)
 
 ---
 

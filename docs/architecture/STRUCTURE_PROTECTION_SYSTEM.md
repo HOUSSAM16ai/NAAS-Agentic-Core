@@ -70,8 +70,8 @@ Automated CI/CD checks:
 - Prevents merging problematic code
 
 ### 📖 Documentation
-- **Complete Guide:** [`PREVENTION_GUIDE.md`](PREVENTION_GUIDE.md)
-- **Architecture Decision:** [`docs/ADR-003-PREVENTING-SERVICE-METHOD-CATASTROPHES.md`](docs/ADR-003-PREVENTING-SERVICE-METHOD-CATASTROPHES.md)
+- **Complete Guide:** [`PREVENTION_GUIDE.md`](../guides/PREVENTION_GUIDE.md)
+- **Architecture Decision:** [`docs/ADR-003-PREVENTING-SERVICE-METHOD-CATASTROPHES.md`](../ADR-003-PREVENTING-SERVICE-METHOD-CATASTROPHES.md)
 
 ### 🔒 Guarantees
 1. ✅ **This catastrophe will not happen again**
@@ -146,8 +146,8 @@ ln -s ../../scripts/pre-commit-validation.sh .git/hooks/pre-commit
 - يمنع دمج كود به مشاكل
 
 ### 📖 التوثيق
-- **دليل شامل:** [`PREVENTION_GUIDE.md`](PREVENTION_GUIDE.md)
-- **قرار معماري:** [`docs/ADR-003-PREVENTING-SERVICE-METHOD-CATASTROPHES.md`](docs/ADR-003-PREVENTING-SERVICE-METHOD-CATASTROPHES.md)
+- **دليل شامل:** [`PREVENTION_GUIDE.md`](../guides/PREVENTION_GUIDE.md)
+- **قرار معماري:** [`docs/ADR-003-PREVENTING-SERVICE-METHOD-CATASTROPHES.md`](../ADR-003-PREVENTING-SERVICE-METHOD-CATASTROPHES.md)
 
 ### 🔒 الضمانات
 1. ✅ **لن تتكرر هذه الكارثة مرة أخرى**

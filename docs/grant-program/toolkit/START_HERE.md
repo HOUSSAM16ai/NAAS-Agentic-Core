@@ -15,8 +15,8 @@ Before deploying any tools, ensure you have:
 
 All adult supervisors must complete the following:
 
-*   [ ] **Read:** [SAFEGUARDING.md](../SAFEGUARDING.md) (Mandatory).
-*   [ ] **Read:** [DATA_POLICY.md](../DATA_POLICY.md).
+*   [ ] **Read:** [SAFEGUARDING.md](../../../SAFEGUARDING.md) (Mandatory).
+*   [ ] **Read:** [DATA_POLICY.md](../../../DATA_POLICY.md).
 *   [ ] **Workshop:** Attend the "AI Safety 101" briefing (1 hour).
 *   [ ] **Practice:** Complete 3 mock incident scenarios using the [Incident Log Template](./INCIDENT_LOG_TEMPLATE.md).
 

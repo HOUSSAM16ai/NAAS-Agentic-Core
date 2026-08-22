@@ -20,8 +20,9 @@ linter: qodana-python
 # The `test -x` guard makes an image change fail the scan loudly instead of silently
 # restoring the 2,500 false positives — a wrong number is worse than a red run (§0).
 #
-# ⛔ Do not cut a `--baseline` before this is fixed: it would freeze the false positives
-# into the baseline and then redden every PR that adds a single `X | None` annotation.
+# The committed `.qodana/baseline.sarif.json` is generated only from a successful `main`
+# analysis after the interpreter is attached. It freezes verified existing findings while
+# the workflow uses `--fail-threshold 0` to reject every new finding in a PR.
 bootstrap: |
   test -x /opt/miniconda3/bin/python || {
     echo "QODANA_PYTHON_PATH target /opt/miniconda3/bin/python is missing in this image."

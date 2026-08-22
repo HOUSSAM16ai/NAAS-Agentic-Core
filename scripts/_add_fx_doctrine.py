@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Append doctrine-related D-273 entries: registry rows + README index (additive only)."""
+
 import json
 import sys
 
@@ -15,16 +16,18 @@ def registry_row():
     if any(r.get("id") == "D-273" for r in const):
         print("Registry: D-273 row already present")
     else:
-        const.append({
-            "id": "D-273",
-            "title": "دستور التقنية العميقة — عتبة الدخول والعملة الصعبة وإضافة لا حذف",
-            "doc": "docs/DEEP_TECH_CONSTITUTION.md",
-            "companion": "docs/FOREIGN_CURRENCY_DOCTRINE.md",
-            "enforcer": "scripts/fitness/check_deep_tech_constitution.py",
-            "status": "active",
-            "added": "2026-08-21",
-            "note": "Additive-only strategic constitution mandated by the owner; companion FX doctrine documents Algeria's legal hard-currency channels (system 21-01, instruction 06-2021, finance law 2026).",
-        })
+        const.append(
+            {
+                "id": "D-273",
+                "title": "دستور التقنية العميقة — عتبة الدخول والعملة الصعبة وإضافة لا حذف",
+                "doc": "docs/DEEP_TECH_CONSTITUTION.md",
+                "companion": "docs/FOREIGN_CURRENCY_DOCTRINE.md",
+                "enforcer": "scripts/fitness/check_deep_tech_constitution.py",
+                "status": "active",
+                "added": "2026-08-21",
+                "note": "Additive-only strategic constitution mandated by the owner; companion FX doctrine documents Algeria's legal hard-currency channels (system 21-01, instruction 06-2021, finance law 2026).",
+            }
+        )
         with open(path, "w", encoding="utf-8") as f:
             json.dump(registry, f, ensure_ascii=False, indent=2)
         print("Registry: D-273 row added")
@@ -48,9 +51,7 @@ def readme_index():
     if idx is None:
         print("README index: truth table not found — manual check needed", file=sys.stderr)
         sys.exit(1)
-    new_row = (
-        "| `fx_doctrine_truth.md` | **حالة** عقيدة العملة الصعبة (D-273) — ٤ مسارات رسمية (تصدير رقمي + مزايا جبائية + قناة دفع بديلة + مضاعفة البنية التحتية) · ٤ محرمات (K1–K4) · ١٠ مراجع §99. القانون في `docs/FOREIGN_CURRENCY_DOCTRINE.md` |\n"
-    )
+    new_row = "| `fx_doctrine_truth.md` | **حالة** عقيدة العملة الصعبة (D-273) — ٤ مسارات رسمية (تصدير رقمي + مزايا جبائية + قناة دفع بديلة + مضاعفة البنية التحتية) · ٤ محرمات (K1–K4) · ١٠ مراجع §99. القانون في `docs/FOREIGN_CURRENCY_DOCTRINE.md` |\n"
     lines.insert(idx, new_row)
     with open(path, "w", encoding="utf-8") as f:
         f.writelines(lines)

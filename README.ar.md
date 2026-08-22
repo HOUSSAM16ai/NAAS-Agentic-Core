@@ -22,7 +22,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12-7C5CBF?style=flat-square&labelColor=24211C)](pyproject.toml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-monolith_%2B_islands-F4A98A?style=flat-square&labelColor=24211C)](app)
 [![Next.js](https://img.shields.io/badge/Next.js-frontend-A78BE0?style=flat-square&labelColor=24211C)](frontend)
-[![CI](https://img.shields.io/badge/required--ci-aggregated-1F6B46?style=flat-square&labelColor=24211C)](.github/workflows/ci.yml)
+[![CI](https://img.shields.io/badge/required--ci-12_required_jobs-1F6B46?style=flat-square&labelColor=24211C)](.github/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-FFC9B4?style=flat-square&labelColor=24211C)](LICENSE)
 
 [English](README.md) · **العربية**
@@ -360,7 +360,7 @@ make microservices-health
 
 وتعمل بجانبه وظائف غير مُجمَّعة: `doc-integrity` · `runtime-truth` · `skills-doctrine-gate` · `skills-architecture-gate` · `structure-validation` · `frontend-theme-ci` · `observability-validation`.
 
-التفصيل: [`.memory/ci-gates.md`](.memory/ci-gates.md) · [`.github/BRANCH_PROTECTION_GUIDE.md`](.github/BRANCH_PROTECTION_GUIDE.md) · [`CONTRIBUTING.md`](CONTRIBUTING.md).
+التفصيل: [`.memory/ci-gates.md`](.memory/ci-gates.md) · [`.github/BRANCH_PROTECTION_GUIDE.md`](.github/BRANCH_PROTECTION_GUIDE.md) · [`CONTRIBUTING.md`](CONTRIBUTING.md). وتدخل بوابة [`check_documentation_contract.py`](scripts/fitness/check_documentation_contract.py) ضمن `guardrails` الإلزامي؛ فشل التوثيق لا يتحول إلى تحذير.
 
 ---
 
@@ -390,6 +390,7 @@ make microservices-health
 | 🎼 العقائد | [`ENGINEERING_DOCTRINE.md`](docs/architecture/ENGINEERING_DOCTRINE.md) · [`CS_KNOWLEDGE_MAP.md`](docs/architecture/CS_KNOWLEDGE_MAP.md) · [`AGENTIC_ORCHESTRATION_DOCTRINE.md`](docs/architecture/AGENTIC_ORCHESTRATION_DOCTRINE.md) · [`COGNITIVE_EXECUTION_ENGINE.md`](docs/architecture/COGNITIVE_EXECUTION_ENGINE.md) · [`COGNITIVE_DIGITAL_TWIN.md`](docs/architecture/COGNITIVE_DIGITAL_TWIN.md) | وثائق قانون، كلٌّ تُسمّي بوّابتها |
 | 💰 القيمة | [`VALUE_DOCTRINE.md`](docs/VALUE_DOCTRINE.md) · [`REVENUE_ENGINE_SPEC.md`](docs/REVENUE_ENGINE_SPEC.md) | لماذا يدفع أحد، وماذا يُكتب بالضبط |
 | 🗺️ الفهرس | [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md) · [`docs/START_HERE.md`](docs/START_HERE.md) | الخريطة الكاملة · نقطة بداية القادم الجديد |
+| 🔒 العقد | [`docs/DOCUMENTATION_CONTRACT.md`](docs/DOCUMENTATION_CONTRACT.md) · [`docs/DOCUMENTATION_MANIFEST.json`](docs/DOCUMENTATION_MANIFEST.json) | سياسة التوثيق الحي ونطاق فحصها آليًا |
 | 🤖 الوكلاء | [`AGENTS.md`](AGENTS.md) | القواعد التي يرثها كل مساهمٍ آلي تلقائياً |
 
 عند أيّ تضارب: `CLAUDE.md` و`.memory/runtime_truth.md` يحسمان.
@@ -398,7 +399,7 @@ make microservices-health
 
 ## ١٦ · المساهمة
 
-اقرأ [`CONTRIBUTING.md`](CONTRIBUTING.md) و[`docs/START_HERE.md`](docs/START_HERE.md) أوّلاً. والخلاصة:
+اقرأ [`CONTRIBUTING.md`](CONTRIBUTING.md) و[`docs/START_HERE.md`](docs/START_HERE.md) و[`docs/DOCUMENTATION_CONTRACT.md`](docs/DOCUMENTATION_CONTRACT.md) أوّلاً. والخلاصة:
 
 1. **افحص جدول الحقيقة قبل أن تُعدِّل.** المكوّن الذي تلمسه `ACTIVE` أم `PARTIAL` أم `DORMANT` أم `ZOMBIE`؟ تحرير كودٍ ميت بلا وصله بمسارٍ حيّ عملٌ ضائع.
 2. **قدرةٌ جديدة ⇒ Skill جديدة.** ترث `BaseSkill`، وتكشف مقاييسها، وتشحن اختبار المسار السعيد ومسار الخطأ، وتعمل مستقلّة. والمهارات لا تستدعي بعضها مباشرة — تُركَّب عبر المُنسِّق.

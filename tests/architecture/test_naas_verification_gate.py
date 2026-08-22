@@ -34,6 +34,12 @@ _MATERIALISED: tuple[str, ...] = (
     "docs/architecture/NAAS_VERIFICATION_LAYER.md",
     ".memory/naas_verification_constitution.md",
     ".memory/naas_verification_truth.md",
+    # ⚠️ **إلزامي منذ أن صار للمنتج كود.** الحالات تُنشئ مسارات داخل `naas_verifier/`
+    # (`billing` · `benchmarks` · مسارٌ محجوز)، وما دام المجلّد غير موجود كان يُنشَأ
+    # داخل المرآة وحدها. فلمّا وُجد صار رابطاً رمزياً — و`mkdir` عبر الرابط **تكتب في
+    # المستودع الحقيقي**: تسرّبت `naas_verifier/billing` إلى نسخة CI فأحمرّت اختبارَين
+    # آخرَين لم يُنشئاها. النسخ الحقيقي يُبقي الحالة داخل صندوقها.
+    "naas_verifier",
 )
 
 
@@ -415,10 +421,59 @@ def test_research_work_stays_green_while_legal_gate_is_absent(repo: Path) -> Non
 # ── ⑤ وثيقة الحالة ──────────────────────────────────────────────────────────────
 
 
+#: حالات «غير مبنيّة» كما يعرّفها الفارض (`UNBUILT_STATUSES`).
+_UNBUILT = frozenset({"ABSENT", "PLANNED", "SEAM"})
+
+
+def _truth_rows(repo: Path) -> list[tuple[str, list[str]]]:
+    """(السطر الخام، خلاياه) لصفوف وحدات وثيقة الحالة المرقَّمة."""
+    rows: list[tuple[str, list[str]]] = []
+    for line in (repo / TRUTH_DOC).read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = [cell.strip().strip("`*").strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) >= 6 and cells[0].isdigit():
+            rows.append((line, cells))
+    return rows
+
+
+def _first_unbuilt_reserved_path(repo: Path) -> Path:
+    """مسارٌ محجوز لوحدةٍ ما زالت مُصنَّفة غير مبنيّة — **مُشتَقٌّ لا مُثبَّت يدوياً**.
+
+    النسخة الأولى ثبّتت `naas_verifier/corpus`. ولمّا بُنيت الذخيرة ورُقّيت إلى
+    `ACTIVE` بدليلها، صار المسار موجوداً فانفجر `mkdir` بـ`FileExistsError` — أي أنّ
+    الاختبار توقّف عن قياس أيّ شيء لأن **فرضيّته** تقادمت لا لأن القاعدة انكسرت.
+    والاشتقاق من وثيقة الحالة يمنع تكرار ذلك (D-192: الرقم يُشتَقّ ولا يُكتب).
+    """
+    for _line, cells in _truth_rows(repo):
+        if cells[4] not in _UNBUILT:
+            continue
+        reserved = repo / cells[2].rstrip("/")
+        if not reserved.exists():
+            return reserved
+    raise AssertionError(
+        "no unbuilt unit left in the truth table — this rule can no longer be exercised"
+    )
+
+
+def _first_non_active_row(repo: Path) -> tuple[str, list[str]]:
+    """صفٌّ تنطبق عليه قاعدة «الفجوة الفارغة» — أي **غير** `ACTIVE`.
+
+    الفارض يعفي `ACTIVE` صراحةً (`status != "ACTIVE" and gap in {"", "—"}`)، فتثبيت
+    الصفّ الأوّل جعل الحالة تنهار لحظة ترقيته. نفس علاج التقادم: اشتقاقٌ من الوثيقة.
+    """
+    for line, cells in _truth_rows(repo):
+        if cells[4] != "ACTIVE":
+            return line, cells
+    raise AssertionError("every unit is ACTIVE — the empty-gap rule cannot be exercised")
+
+
 def test_unbuilt_unit_with_code_is_red(repo: Path) -> None:
     """الاتجاه المعاكس: كودٌ حيّ بلا حارسٍ أسوأ من الغياب (D-210)."""
-    (repo / "naas_verifier/corpus").mkdir(parents=True)
-    (repo / "naas_verifier/corpus/classes.py").write_text("CLASSES = []\n", encoding="utf-8")
+    reserved = _first_unbuilt_reserved_path(repo)
+    reserved.mkdir(parents=True)
+    (reserved / "classes.py").write_text("CLASSES = []\n", encoding="utf-8")
     result = _run(repo)
     assert result.returncode == 1
     assert "ولها كودٌ على القرص" in result.stdout
@@ -427,7 +482,7 @@ def test_unbuilt_unit_with_code_is_red(repo: Path) -> None:
 def test_empty_gap_cell_is_red(repo: Path) -> None:
     doc = repo / TRUTH_DOC
     text = doc.read_text(encoding="utf-8")
-    line = next(ln for ln in text.splitlines() if ln.startswith("| 1 |"))
+    line, _cells = _first_non_active_row(repo)
     cells = line.strip().strip("|").split("|")
     cells[5] = "  "  # عمود «الفجوة الصادقة»
     doc.write_text(text.replace(line, "|" + "|".join(cells) + "|"), encoding="utf-8")

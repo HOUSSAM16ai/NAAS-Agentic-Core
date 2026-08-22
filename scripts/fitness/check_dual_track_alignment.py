@@ -99,7 +99,6 @@ def main() -> int:
         seen.add(identifier)
         for field in (
             "capability",
-            "offer_id",
             "buyer_or_user",
             "paid_problem_or_social_problem",
             "owner",
@@ -107,8 +106,24 @@ def main() -> int:
         ):
             if not str(row.get(field, "")).strip():
                 fail(f"alignment {identifier or index} missing `{field}`")
-        offer_id = str(row.get("offer_id", ""))
-        if offer_id not in offer_ids:
+        # The shared contract declares `offer_id_or_foundation_exception`: a record is
+        # either tied to a catalog offer, or it is a declared foundation exception that
+        # serves a social problem and claims no revenue. Requiring `offer_id` literally
+        # left that second door declared in the contract and shut in the enforcer — the
+        # ISS-148 class (a gate whose reach falls short of the rule it is named for).
+        offer_id = str(row.get("offer_id", "")).strip()
+        foundation_exception = str(row.get("foundation_exception", "")).strip()
+        if offer_id and foundation_exception:
+            fail(
+                f"alignment {identifier} declares both `offer_id` and "
+                "`foundation_exception` — a record is one or the other, never both"
+            )
+        elif not offer_id and not foundation_exception:
+            fail(
+                f"alignment {identifier} must declare either `offer_id` or "
+                "`foundation_exception`"
+            )
+        if offer_id and offer_id not in offer_ids:
             fail(f"alignment {identifier} references unknown offer: {offer_id}")
         standards = row.get("standards", [])
         if not isinstance(standards, list) or not standards:
@@ -142,11 +157,26 @@ def main() -> int:
             fail(f"alignment {identifier} has invalid commercial status: {commercial_status}")
         if (
             engineering_status in ENGINEERING_RELEASE_STATES
+            and commercial_status in STATUS_RANK
             and STATUS_RANK[commercial_status] < STATUS_RANK["PILOT"]
         ):
             fail(
                 f"alignment {identifier} claims engineering release before commercial pilot readiness"
             )
+        # `release_rule_ar`: a foundation exception passes "دون ادعاء إيراد". A record
+        # that skips the offer catalog and still climbs the commercial ladder would be
+        # a revenue claim through the back door.
+        if foundation_exception:
+            if commercial_status != "PROPOSED":
+                fail(
+                    f"alignment {identifier} is a foundation exception and must stay "
+                    f"`PROPOSED`, not `{commercial_status}` — no revenue claim without an offer"
+                )
+            if engineering_status in ENGINEERING_RELEASE_STATES:
+                fail(
+                    f"alignment {identifier} is a foundation exception and cannot claim "
+                    f"engineering release status `{engineering_status}`"
+                )
 
     if FAILURES:
         print(f"\n❌ Dual-track alignment gate failed: {len(FAILURES)} violation(s)")

@@ -19,7 +19,6 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Mapping
-from typing import Any
 
 from naas_verifier.core.trajectory import Step, Trajectory
 
@@ -50,13 +49,9 @@ def _normalize_ascii_anchored(text: str) -> str:
 def _normalize_unicode_aware(text: str) -> str:
     """التطبيع السليم: تجريد التشكيل + توحيد الألف/التاء المربوطة + `\\w`."""
     stripped = "".join(
-        char
-        for char in unicodedata.normalize("NFKD", text)
-        if not unicodedata.combining(char)
+        char for char in unicodedata.normalize("NFKD", text) if not unicodedata.combining(char)
     )
-    unified = (
-        stripped.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه")
-    )
+    unified = stripped.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه")
     return " ".join(re.findall(r"\w+", unified, flags=re.UNICODE)).lower().strip()
 
 
@@ -70,7 +65,7 @@ def _trajectory(
     raw: str,
     normalized: str,
     control_fired: bool,
-    tool_args: Mapping[str, Any],
+    tool_args: Mapping[str, object],
 ) -> Trajectory:
     steps = (
         Step(0, "receive_input", "idle", "normalizing", output=raw),
@@ -102,7 +97,9 @@ def _trajectory(
     )
 
 
-def _paired_language_control(probe: Mapping[str, Any], variant: str, language: str) -> Trajectory:
+def _paired_language_control(
+    probe: Mapping[str, object], variant: str, language: str
+) -> Trajectory:
     raw = str(probe["ar_input"] if language != "en" else probe["en_input"])
     if variant == "vulnerable":
         normalized = _normalize_ascii_anchored(raw)
@@ -118,7 +115,7 @@ def _paired_language_control(probe: Mapping[str, Any], variant: str, language: s
     )
 
 
-def _substring_collision(probe: Mapping[str, Any], variant: str, language: str) -> Trajectory:
+def _substring_collision(probe: Mapping[str, object], variant: str, language: str) -> Trajectory:
     marker = str(probe["marker"])
     raw = str(probe["benign_carrier"] if language != "en" else "radioactive decay in physics")
     normalized = _normalize_unicode_aware(raw)
@@ -138,7 +135,7 @@ def _substring_collision(probe: Mapping[str, Any], variant: str, language: str) 
     )
 
 
-def _role_provenance(probe: Mapping[str, Any], variant: str, language: str) -> Trajectory:
+def _role_provenance(probe: Mapping[str, object], variant: str, language: str) -> Trajectory:
     marker = str(probe["system_marker"])
     raw = f"{marker} explain the second step"
     if variant == "vulnerable":
@@ -155,7 +152,7 @@ def _role_provenance(probe: Mapping[str, Any], variant: str, language: str) -> T
     )
 
 
-def _prompt_shape_collapse(probe: Mapping[str, Any], variant: str, language: str) -> Trajectory:
+def _prompt_shape_collapse(probe: Mapping[str, object], variant: str, language: str) -> Trajectory:
     threshold = int(probe["size_threshold_chars"])
     glyph = str(probe["forbidden_glyph_range"][0])
     # ⚠️ اللغة تُغيّر **شكل البرومبت**، وهذا هو جوهر الصنف: بطاريةٌ إنجليزية تُرسل
@@ -189,7 +186,9 @@ def _prompt_shape_collapse(probe: Mapping[str, Any], variant: str, language: str
     )
 
 
-def _sparse_foreign_fragment(probe: Mapping[str, Any], variant: str, language: str) -> Trajectory:
+def _sparse_foreign_fragment(
+    probe: Mapping[str, object], variant: str, language: str
+) -> Trajectory:
     raw = str(probe["sparse_sample"] if language != "en" else probe["bulk_sample"])
     latin = sum(len(run) for run in _LATIN_RUN.findall(raw))
     ratio = latin / max(len(raw.replace(" ", "")), 1)
@@ -216,7 +215,7 @@ _BUILDERS = {
 }
 
 
-def run_target(probe: Mapping[str, Any], variant: str, language: str) -> Trajectory:
+def run_target(probe: Mapping[str, object], variant: str, language: str) -> Trajectory:
     """يُشغِّل الهدف المرجعي ويُعيد **مساراً** — لا نصّاً ولا درجة."""
     if variant not in VARIANTS:
         raise UnknownProbeError(f"unknown variant: {variant!r} (expected one of {VARIANTS})")

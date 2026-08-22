@@ -12,7 +12,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
 
 __all__ = ["Evidence", "EvidenceError", "EvidenceKind"]
 
@@ -44,7 +43,7 @@ class Evidence:
     summary: str
     reproduction: str
     source_reference: str
-    payload: Mapping[str, Any] = field(default_factory=dict)
+    payload: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name in ("evidence_id", "summary", "reproduction", "source_reference"):
@@ -54,7 +53,7 @@ class Evidence:
                     "a claim without a reproduction is an impression, not evidence"
                 )
 
-    def as_dict(self) -> dict[str, Any]:
+    def as_dict(self) -> dict[str, object]:
         return {
             "evidence_id": self.evidence_id,
             "kind": self.kind.value,

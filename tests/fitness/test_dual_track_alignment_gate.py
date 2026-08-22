@@ -85,9 +85,7 @@ def tree(tmp_path: Path):
     )
 
     curriculum = tmp_path / "docs" / "research" / "CURRICULUM_APPLICATION_MATRIX.json"
-    curriculum.write_text(
-        json.dumps({"courses": [{"domain_tags": [DOMAIN]}]}), encoding="utf-8"
-    )
+    curriculum.write_text(json.dumps({"courses": [{"domain_tags": [DOMAIN]}]}), encoding="utf-8")
 
     evidence = tmp_path / "docs" / "research" / "EVIDENCE_CATALOG.json"
     evidence.write_text(json.dumps({"evidence": [{"id": EVIDENCE_ID}]}), encoding="utf-8")

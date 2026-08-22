@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
 
 from naas_verifier.core.constraint import Constraint, ConstraintSet, Dimension, Outcome
 from naas_verifier.core.evidence import Evidence, EvidenceKind
@@ -44,7 +43,7 @@ class Verdict:
     def violated_dimensions(self) -> tuple[Dimension, ...]:
         return tuple(row.dimension for row in self.dimensions if row.outcome is Outcome.VIOLATED)
 
-    def as_dict(self) -> dict[str, Any]:
+    def as_dict(self) -> dict[str, object]:
         return {
             "trajectory_id": self.trajectory_id,
             "outcome": self.outcome.value,

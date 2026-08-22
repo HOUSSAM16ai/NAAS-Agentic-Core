@@ -120,18 +120,14 @@ def test_uncovered_dimension_without_reason_is_rejected():
     """⛔ بُعدٌ متروك بلا سبب — الفراغ يُقرأ نجاحاً (D-206 L11)."""
     with pytest.raises(ConstraintError, match="uncovered dimensions"):
         ConstraintSet(
-            constraints=(
-                Constraint("c", Dimension.FINAL_OUTCOME, "ok", _always(Outcome.HOLDS)),
-            )
+            constraints=(Constraint("c", Dimension.FINAL_OUTCOME, "ok", _always(Outcome.HOLDS)),)
         )
 
 
 def test_uncovered_dimension_with_empty_reason_is_rejected():
     with pytest.raises(ConstraintError, match="empty reason"):
         ConstraintSet(
-            constraints=(
-                Constraint("c", Dimension.FINAL_OUTCOME, "ok", _always(Outcome.HOLDS)),
-            ),
+            constraints=(Constraint("c", Dimension.FINAL_OUTCOME, "ok", _always(Outcome.HOLDS)),),
             uncovered_reason={dim: "" for dim in Dimension if dim is not Dimension.FINAL_OUTCOME},
         )
 

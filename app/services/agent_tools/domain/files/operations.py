@@ -8,6 +8,8 @@ Uses `tool_model` for cleaner definition.
 
 import os
 
+import aiofiles
+
 from app.services.agent_tools.tool_model import Tool, ToolConfig
 from app.services.agent_tools.utils import _safe_path
 
@@ -41,8 +43,8 @@ async def read_file_handler(path: str, max_bytes: int = 20000, **kwargs) -> dict
     if not os.path.exists(abs_path):
         return {"error": "File not found", "path": abs_path}
 
-    with open(abs_path, encoding="utf-8", errors="replace") as f:
-        content = f.read(max_bytes)
+    async with aiofiles.open(abs_path, encoding="utf-8", errors="replace") as f:
+        content = await f.read(max_bytes)
 
     return {"content": content, "path": abs_path, "truncated": len(content) == max_bytes}
 

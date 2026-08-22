@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
 
 __all__ = ["Step", "Trajectory", "TrajectoryError"]
 
@@ -33,7 +32,7 @@ class Step:
     state_before: str
     state_after: str
     tool: str | None = None
-    tool_args: Mapping[str, Any] = field(default_factory=dict)
+    tool_args: Mapping[str, object] = field(default_factory=dict)
     output: str = ""
 
     def __post_init__(self) -> None:
@@ -63,7 +62,7 @@ class Trajectory:
     steps: Sequence[Step]
     final_output: str
     language: str
-    metadata: Mapping[str, Any] = field(default_factory=dict)
+    metadata: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.trajectory_id.strip():

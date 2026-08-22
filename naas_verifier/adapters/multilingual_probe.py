@@ -12,7 +12,6 @@ import itertools
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
 
 from naas_verifier.core.constraint import Constraint, ConstraintSet, Dimension, Outcome
 from naas_verifier.core.evidence import Evidence, EvidenceKind
@@ -29,7 +28,7 @@ class CorpusError(RuntimeError):
     """الذخيرة مفقودة أو مكسورة — ⛔ يُرفَع صراحةً ولا يُسقَط صامتاً."""
 
 
-def load_corpus(path: Path | None = None) -> list[dict[str, Any]]:
+def load_corpus(path: Path | None = None) -> list[dict[str, object]]:
     """يقرأ الذخيرة كبيانات. غيابُ الملفّ **خطأٌ منطوق** لا قائمةٌ فارغة."""
     source = path or CORPUS_PATH
     if not source.is_file():
@@ -84,7 +83,7 @@ def _marker_removed(marker: str):
     return predicate
 
 
-def _intermediate_predicate(entry: Mapping[str, Any]):
+def _intermediate_predicate(entry: Mapping[str, object]):
     """يختار الثابت الوسطي **المُصرَّح** للصنف — لا افتراضَ ضمنيّاً."""
     probe = entry["probe"]
     invariant = str(probe.get("intermediate_invariant", ""))
@@ -115,7 +114,7 @@ def _expected_control_decision(expected_fires: bool):
     return predicate
 
 
-def build_constraints(entry: Mapping[str, Any]) -> ConstraintSet:
+def build_constraints(entry: Mapping[str, object]) -> ConstraintSet:
     """مجموعةٌ تغطّي الأبعاد الخمسة لصنفٍ واحد."""
     class_id = str(entry["class_id"])
     expected = bool(entry["probe"]["expect_control_fires"])
@@ -156,7 +155,7 @@ def build_constraints(entry: Mapping[str, Any]) -> ConstraintSet:
     )
 
 
-def probe_class(entry: Mapping[str, Any], variant: str, language: str) -> Verdict:
+def probe_class(entry: Mapping[str, object], variant: str, language: str) -> Verdict:
     """يُشغِّل صنفاً واحداً على هدفٍ مرجعيّ بلغةٍ واحدة ويُصدر حكماً بدليل."""
     trajectory = run_target(entry["probe"], variant, language)
     evidence = Evidence(
@@ -175,6 +174,6 @@ def probe_class(entry: Mapping[str, Any], variant: str, language: str) -> Verdic
 
 
 def probe_all(
-    classes: Sequence[Mapping[str, Any]], variant: str, language: str
+    classes: Sequence[Mapping[str, object]], variant: str, language: str
 ) -> list[Verdict]:
     return [probe_class(entry, variant, language) for entry in classes]

@@ -76,7 +76,9 @@ def _check_product_tree() -> None:
         for name in sorted(imported):
             for forbidden in FORBIDDEN_EVERYWHERE:
                 if _matches(name, forbidden):
-                    _fail(f"{rel}: imports `{name}` — the product path is separate by design (L1/L2)")
+                    _fail(
+                        f"{rel}: imports `{name}` — the product path is separate by design (L1/L2)"
+                    )
             for forbidden in FORBIDDEN_CAPABILITY:
                 if _matches(name, forbidden):
                     _fail(
@@ -103,9 +105,7 @@ def _check_no_reverse_import() -> None:
             continue
         for path in root.rglob("*.py"):
             scanned += 1
-            if any(
-                _matches(name, "naas_verifier") for name in _imported_modules(path)
-            ):
+            if any(_matches(name, "naas_verifier") for name in _imported_modules(path)):
                 offenders.append(str(path.relative_to(REPO_ROOT)))
     for offender in offenders:
         _fail(

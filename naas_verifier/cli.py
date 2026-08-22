@@ -13,7 +13,6 @@ import argparse
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 from naas_verifier.adapters.multilingual_probe import load_corpus, probe_class
 from naas_verifier.baselines.english_only_suite import BASELINE_ID, detects
@@ -33,17 +32,17 @@ CAVEAT_EN = (
 )
 
 
-def _verifier_detects(entry: Mapping[str, Any], variant: str) -> bool:
+def _verifier_detects(entry: Mapping[str, object], variant: str) -> bool:
     """المُتحقِّق «يكتشف» حين يُصدر حكم انتهاك — لا حين يعجز عن الحكم."""
     return probe_class(entry, variant, PROBE_LANGUAGE).outcome is Outcome.VIOLATED
 
 
-def measure(classes: Sequence[Mapping[str, Any]], runs: int) -> dict[str, Any]:
+def measure(classes: Sequence[Mapping[str, object]], runs: int) -> dict[str, object]:
     """يُشغِّل المعيار `runs` مرّة ويُعيد تقريراً بالأرقام الخام."""
     if runs < 3:
         raise ValueError("GATE_A requires runs >= 3 — a single demonstration is not a measurement")
 
-    per_run: list[dict[str, Any]] = []
+    per_run: list[dict[str, object]] = []
     for index in range(runs):
         verifier_hits = 0
         baseline_hits = 0
@@ -86,8 +85,7 @@ def measure(classes: Sequence[Mapping[str, Any]], runs: int) -> dict[str, Any]:
                 for variant in (*DEFECTIVE_VARIANTS, CLEAN_VARIANT)
             },
             "baseline": {
-                variant: detects(entry, variant)
-                for variant in (*DEFECTIVE_VARIANTS, CLEAN_VARIANT)
+                variant: detects(entry, variant) for variant in (*DEFECTIVE_VARIANTS, CLEAN_VARIANT)
             },
         }
         for entry in classes

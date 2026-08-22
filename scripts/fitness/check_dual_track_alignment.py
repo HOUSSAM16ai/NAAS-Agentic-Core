@@ -119,10 +119,7 @@ def main() -> int:
                 "`foundation_exception` — a record is one or the other, never both"
             )
         elif not offer_id and not foundation_exception:
-            fail(
-                f"alignment {identifier} must declare either `offer_id` or "
-                "`foundation_exception`"
-            )
+            fail(f"alignment {identifier} must declare either `offer_id` or `foundation_exception`")
         if offer_id and offer_id not in offer_ids:
             fail(f"alignment {identifier} references unknown offer: {offer_id}")
         standards = row.get("standards", [])

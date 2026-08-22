@@ -1,4 +1,19 @@
-"""Refresh the non-circular git change snapshot in the current acceptance packet."""
+"""Refresh the non-circular git change snapshot in the current acceptance packet.
+
+⚠️ **Mode matters, and the default cannot satisfy a PR check.** With
+``CODE_ACCEPTANCE_BASE_SHA`` set, the snapshot is taken from ``git diff base...HEAD`` —
+which is exactly what ``ci.yml`` gives ``check_code_acceptance.py`` on a pull request.
+Without it, the snapshot is taken from the **working tree**, so once the work is
+committed the recorded set no longer matches what CI computes and the gate reports a
+stale snapshot.
+
+Running this tool the documented way and still getting a red PR is the trap D-270 L7
+names: a local enforcer that disagrees with CI is worse than none, because it turns
+following the docs into a failure. The default is left unchanged (other flows depend on
+it) but it can no longer be silent — see ``_warn_if_worktree_mode``.
+
+    CODE_ACCEPTANCE_BASE_SHA=origin/main python3 scripts/research/refresh_acceptance_diff_snapshot.py
+"""
 
 from __future__ import annotations
 
@@ -6,6 +21,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -80,6 +96,27 @@ def content_fingerprint(paths: list[str]) -> str:
     return digest.hexdigest()
 
 
+def _warn_if_worktree_mode(base_ref: str) -> None:
+    """Say out loud that a WORKTREE snapshot will not satisfy the PR-mode check.
+
+    Silence here is what makes the trap: the tool succeeds, prints a fingerprint, and
+    the gate then fails in CI with a number the author never saw locally.
+    """
+    if base_ref != "WORKTREE":
+        return
+    print(
+        "⚠️  WORKTREE mode: this snapshot describes the working tree, not "
+        "`base...HEAD`.\n"
+        "    CI runs check_code_acceptance.py with CODE_ACCEPTANCE_BASE_SHA set, so "
+        "this snapshot\n"
+        "    will be reported stale on a pull request once the work is committed.\n"
+        "    For a PR, re-run as:\n"
+        "      CODE_ACCEPTANCE_BASE_SHA=origin/main python3 "
+        "scripts/research/refresh_acceptance_diff_snapshot.py",
+        file=sys.stderr,
+    )
+
+
 def main() -> None:
     packet = json.loads(PACKET.read_text(encoding="utf-8"))
     paths = current_paths()
@@ -92,6 +129,7 @@ def main() -> None:
         "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py",
     }
     PACKET.write_text(json.dumps(packet, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _warn_if_worktree_mode(packet["git_change_snapshot"]["base_ref"])
     print(
         json.dumps(
             {

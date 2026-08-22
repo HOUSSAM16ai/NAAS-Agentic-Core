@@ -1,5 +1,5 @@
 {
-  "branch": "main",
+  "branch": "claude/hajar-complex-reform-plan-vw8rkc",
   "components": [
     {
       "agreed": false,
@@ -350,6 +350,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-21T04:09:05.234950+00:00",
+  "generated_at_utc": "2026-08-22T18:49:10.475332+00:00",
   "schema_version": 1
 }

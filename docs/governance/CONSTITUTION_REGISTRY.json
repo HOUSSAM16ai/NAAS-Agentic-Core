@@ -11,8 +11,7 @@
     "`unenforced_debt` قائمة تتقلّص فقط وتبدأ فارغة: بوّابةٌ على القرص لا يُشغّلها شيء ولا هي مُصرَّحة هنا ⇒ CI أحمر (D-207 الثمن الثاني)."
   ],
   "unenforced_debt": {
-    "check_deep_tech_constitution.py": "Not yet wired in CI but needed locally.",
-    "check_pocock_gates.py": "Not yet wired in CI but needed locally."
+    "check_pocock_gates.py": "غير مسلوكة عمداً: تفشل اليوم على مهارات ووثائق غير موجودة (grill-me · to-spec · triage · improve-architecture · docs/AGENT_WORKFLOW_CONSTITUTION.md · .memory/pocock_skills_truth.md). سلكُها الآن يُحمِّر CI على دَينٍ غير مرتبطٍ بأيّ دفعة. شرط الإغلاق: إنشاء الأصول الستّة ثمّ السلك وحذف هذا الصفّ."
   },
   "process_enforcers": {
     "purpose_ar": "فوارض العملية (D-270 L1/L2/L3): تحتاج حمولة حدثٍ من GitHub فلا تصلح لـrun_fitness_gates، ولا يجوز أن تعيش في موطنٍ لا يعرفه السجلّ — «موطنٌ ثالث بلا إعلانٍ يعني بوّابةً غير مرئية» (D-266). كلٌّ منها يُفحَص بملفّه وبالـworkflow الذي يشغّله فعلاً: نفس الساق الثالثة بمرمى العملية. تحرسه scripts/fitness/check_governance_registry.py.",

@@ -38,6 +38,7 @@
     "scripts/fitness/check_naas_verifier_boundary.py",
     "scripts/research/extract_incident_corpus.py",
     "scripts/research/refresh_acceptance_diff_snapshot.py",
+    "tests/architecture/test_naas_verification_gate.py",
     "tests/fitness/test_dual_track_alignment_gate.py",
     "tests/fitness/test_naas_verifier_boundary_gate.py",
     "tests/naas_verifier/test_core_dimensions.py",
@@ -383,12 +384,13 @@
       "scripts/fitness/check_naas_verifier_boundary.py",
       "scripts/research/extract_incident_corpus.py",
       "scripts/research/refresh_acceptance_diff_snapshot.py",
+      "tests/architecture/test_naas_verification_gate.py",
       "tests/fitness/test_dual_track_alignment_gate.py",
       "tests/fitness/test_naas_verifier_boundary_gate.py",
       "tests/naas_verifier/test_core_dimensions.py",
       "tests/naas_verifier/test_corpus_and_probes.py"
     ],
-    "content_sha256_excluding_packet": "0818ea4ea04e3c3256f866d37477fc3d62b25b0845e311381b507affadf3d67f",
+    "content_sha256_excluding_packet": "b31ddb2c44e9aa0a1f1b8db7b189802e11f289a18b499165b52e6afe20cde388",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

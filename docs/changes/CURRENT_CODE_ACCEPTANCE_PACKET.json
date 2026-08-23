@@ -386,16 +386,18 @@
       "naas_verifier/targets/reference.py",
       "scripts/fitness/check_dual_track_alignment.py",
       "scripts/fitness/check_naas_verifier_boundary.py",
+      "scripts/fitness/check_source_adoption_matrix.py",
       "scripts/research/extract_incident_corpus.py",
       "scripts/research/refresh_acceptance_diff_snapshot.py",
       "tests/architecture/test_naas_verification_gate.py",
       "tests/fitness/test_dual_track_alignment_gate.py",
       "tests/fitness/test_naas_verifier_boundary_gate.py",
+      "tests/fitness/test_source_adoption_ratchet.py",
       "tests/naas_verifier/test_core_dimensions.py",
       "tests/naas_verifier/test_corpus_and_probes.py",
       "tests/naas_verifier/test_env_ar_fr_guard_break.py"
     ],
-    "content_sha256_excluding_packet": "96ec8498c344774bd0c00263fd52d56229bcec89ce1fad4299150d1ff5753497",
+    "content_sha256_excluding_packet": "687a6efa59ad12d6d7e2c798cf3c2f400b659c229f2dd4e188cedfdf7a2f6a85",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

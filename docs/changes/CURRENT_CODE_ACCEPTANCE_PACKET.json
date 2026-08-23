@@ -400,7 +400,7 @@
       "tests/naas_verifier/test_corpus_and_probes.py",
       "tests/naas_verifier/test_env_ar_fr_guard_break.py"
     ],
-    "content_sha256_excluding_packet": "cd6364f46dff6e2ed7b3f0a7395c89e208984cb4a8bb5ca39a74d7c2a6b8a17e",
+    "content_sha256_excluding_packet": "900074c90e289bbf63d408472835ccaec6f65db6154e4bc3f97bfff8d58a5cce",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

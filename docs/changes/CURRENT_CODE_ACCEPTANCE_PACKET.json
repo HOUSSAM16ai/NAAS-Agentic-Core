@@ -357,6 +357,7 @@
       ".memory/decisions.md",
       ".memory/deep_tech_constitution_truth.md",
       ".memory/fx_doctrine_truth.md",
+      ".memory/governance_weight_truth.md",
       ".memory/issues.md",
       ".memory/naas_verification_truth.md",
       ".runtime/truth_table.lock.json",
@@ -366,6 +367,7 @@
       "docs/governance/CONSTITUTION_REGISTRY.json",
       "docs/governance/GATE_LEDGER.json",
       "docs/governance/NEGATIVE_PROOFS.json",
+      "docs/research/GOVERNANCE_WEIGHT_REPORT.json",
       "naas_verifier/__init__.py",
       "naas_verifier/adapters/__init__.py",
       "naas_verifier/adapters/multilingual_probe.py",
@@ -388,6 +390,7 @@
       "scripts/fitness/check_naas_verifier_boundary.py",
       "scripts/fitness/check_source_adoption_matrix.py",
       "scripts/research/extract_incident_corpus.py",
+      "scripts/research/measure_governance_weight.py",
       "scripts/research/refresh_acceptance_diff_snapshot.py",
       "tests/architecture/test_naas_verification_gate.py",
       "tests/fitness/test_dual_track_alignment_gate.py",
@@ -397,7 +400,7 @@
       "tests/naas_verifier/test_corpus_and_probes.py",
       "tests/naas_verifier/test_env_ar_fr_guard_break.py"
     ],
-    "content_sha256_excluding_packet": "687a6efa59ad12d6d7e2c798cf3c2f400b659c229f2dd4e188cedfdf7a2f6a85",
+    "content_sha256_excluding_packet": "cd6364f46dff6e2ed7b3f0a7395c89e208984cb4a8bb5ca39a74d7c2a6b8a17e",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

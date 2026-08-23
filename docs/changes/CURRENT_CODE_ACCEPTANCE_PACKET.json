@@ -378,6 +378,9 @@
       "naas_verifier/core/verdict.py",
       "naas_verifier/corpus/__init__.py",
       "naas_verifier/corpus/ar_fr_exploit_classes.json",
+      "naas_verifier/envs/README.md",
+      "naas_verifier/envs/__init__.py",
+      "naas_verifier/envs/ar_fr_guard_break.py",
       "naas_verifier/targets/__init__.py",
       "naas_verifier/targets/reference.py",
       "scripts/fitness/check_dual_track_alignment.py",
@@ -388,9 +391,10 @@
       "tests/fitness/test_dual_track_alignment_gate.py",
       "tests/fitness/test_naas_verifier_boundary_gate.py",
       "tests/naas_verifier/test_core_dimensions.py",
-      "tests/naas_verifier/test_corpus_and_probes.py"
+      "tests/naas_verifier/test_corpus_and_probes.py",
+      "tests/naas_verifier/test_env_ar_fr_guard_break.py"
     ],
-    "content_sha256_excluding_packet": "b31ddb2c44e9aa0a1f1b8db7b189802e11f289a18b499165b52e6afe20cde388",
+    "content_sha256_excluding_packet": "1b9a11920b2401cdf3eaef6202bc99b036ecabaa140922ffb829813a9f227b75",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

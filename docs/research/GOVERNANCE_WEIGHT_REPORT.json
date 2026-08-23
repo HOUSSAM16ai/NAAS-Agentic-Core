@@ -3,7 +3,7 @@
   "decision": "D-284",
   "purpose_ar": "كلفة كل دستورٍ بالأسطر مقابل استشهاداته الحيّة. ⛔ قلّةُ الاستشهاد ليست حكماً بانعدام القيمة: قانونٌ وقائيّ يعمل بمنعه لا بذكره.",
   "constitutions_measured": 21,
-  "total_cost_lines": 7880,
+  "total_cost_lines": 7883,
   "citation_scopes": {
     "code": [
       "app",
@@ -41,15 +41,15 @@
       "title_ar": "دستور قبول الكود متعدد الأدلة",
       "claude_md_lines": 3,
       "law_doc_lines": 72,
-      "status_doc_lines": 404,
-      "total_cost_lines": 479,
+      "status_doc_lines": 407,
+      "total_cost_lines": 482,
       "citations": {
         "code": 0,
         "gate": 4,
         "test": 0
       },
       "total_citations": 4,
-      "traction_per_kloc": 8.35
+      "traction_per_kloc": 8.3
     },
     {
       "section": "0.11",

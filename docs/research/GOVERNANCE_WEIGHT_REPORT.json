@@ -3,7 +3,7 @@
   "decision": "D-284",
   "purpose_ar": "كلفة كل دستورٍ بالأسطر مقابل استشهاداته الحيّة. ⛔ قلّةُ الاستشهاد ليست حكماً بانعدام القيمة: قانونٌ وقائيّ يعمل بمنعه لا بذكره.",
   "constitutions_measured": 21,
-  "total_cost_lines": 7883,
+  "total_cost_lines": 7892,
   "citation_scopes": {
     "code": [
       "app",
@@ -41,15 +41,15 @@
       "title_ar": "دستور قبول الكود متعدد الأدلة",
       "claude_md_lines": 3,
       "law_doc_lines": 72,
-      "status_doc_lines": 407,
-      "total_cost_lines": 482,
+      "status_doc_lines": 415,
+      "total_cost_lines": 490,
       "citations": {
         "code": 0,
         "gate": 4,
         "test": 0
       },
       "total_citations": 4,
-      "traction_per_kloc": 8.3
+      "traction_per_kloc": 8.16
     },
     {
       "section": "0.11",
@@ -132,22 +132,6 @@
       "traction_per_kloc": 34.78
     },
     {
-      "section": "0.13",
-      "id": "D-228",
-      "title_ar": "دستور هندسة الطبقة المحيطة",
-      "claude_md_lines": 14,
-      "law_doc_lines": 128,
-      "status_doc_lines": 50,
-      "total_cost_lines": 192,
-      "citations": {
-        "code": 0,
-        "gate": 6,
-        "test": 1
-      },
-      "total_citations": 7,
-      "traction_per_kloc": 36.46
-    },
-    {
       "section": "0.16",
       "id": "D-264",
       "title_ar": "دستور المخطط الدراسي التكيفي",
@@ -180,6 +164,22 @@
       "traction_per_kloc": 40.65
     },
     {
+      "section": "0.13",
+      "id": "D-228",
+      "title_ar": "دستور هندسة الطبقة المحيطة",
+      "claude_md_lines": 14,
+      "law_doc_lines": 128,
+      "status_doc_lines": 50,
+      "total_cost_lines": 192,
+      "citations": {
+        "code": 0,
+        "gate": 7,
+        "test": 1
+      },
+      "total_citations": 8,
+      "traction_per_kloc": 41.67
+    },
+    {
       "section": "0.21",
       "id": "D-269",
       "title_ar": "دستور الهوية المعرفية المحيطة",
@@ -201,15 +201,15 @@
       "title_ar": "دستور طبقة التحقّق",
       "claude_md_lines": 20,
       "law_doc_lines": 505,
-      "status_doc_lines": 114,
-      "total_cost_lines": 639,
+      "status_doc_lines": 115,
+      "total_cost_lines": 640,
       "citations": {
         "code": 12,
-        "gate": 11,
-        "test": 5
+        "gate": 12,
+        "test": 6
       },
-      "total_citations": 28,
-      "traction_per_kloc": 43.82
+      "total_citations": 30,
+      "traction_per_kloc": 46.88
     },
     {
       "section": "0.25",

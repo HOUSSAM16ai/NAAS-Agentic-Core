@@ -367,8 +367,14 @@
       "docs/governance/CONSTITUTION_REGISTRY.json",
       "docs/governance/GATE_LEDGER.json",
       "docs/governance/NEGATIVE_PROOFS.json",
+      "docs/governance/evidence/DRAFT_gate_a_technical.json",
+      "docs/governance/evidence/DRAFT_gate_b_exploit_breadth.json",
+      "docs/governance/evidence/README.md",
+      "docs/naas/ONE_PAGER.md",
+      "docs/research/EXTERNAL_GUARD_PROBE.json",
       "docs/research/GOVERNANCE_WEIGHT_REPORT.json",
       "naas_verifier/__init__.py",
+      "naas_verifier/adapters/README.md",
       "naas_verifier/adapters/__init__.py",
       "naas_verifier/adapters/multilingual_probe.py",
       "naas_verifier/baselines/__init__.py",
@@ -391,6 +397,7 @@
       "scripts/fitness/check_source_adoption_matrix.py",
       "scripts/research/extract_incident_corpus.py",
       "scripts/research/measure_governance_weight.py",
+      "scripts/research/probe_external_guard.py",
       "scripts/research/refresh_acceptance_diff_snapshot.py",
       "tests/architecture/test_naas_verification_gate.py",
       "tests/fitness/test_dual_track_alignment_gate.py",
@@ -398,9 +405,10 @@
       "tests/fitness/test_source_adoption_ratchet.py",
       "tests/naas_verifier/test_core_dimensions.py",
       "tests/naas_verifier/test_corpus_and_probes.py",
-      "tests/naas_verifier/test_env_ar_fr_guard_break.py"
+      "tests/naas_verifier/test_env_ar_fr_guard_break.py",
+      "tests/naas_verifier/test_external_guard_probe.py"
     ],
-    "content_sha256_excluding_packet": "900074c90e289bbf63d408472835ccaec6f65db6154e4bc3f97bfff8d58a5cce",
+    "content_sha256_excluding_packet": "d2b44f2c75feb22f70c8b475c7d3d0e6bbbbe0d2d477558d64affda53c6b3056",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

@@ -18,6 +18,20 @@ VALID_STATUSES = {
     "EXTERNAL_ABSENT",
     "PENDING_CLASSIFICATION",
 }
+
+#: مِسنَنة تقلّص-فقط على الدَّين غير المُصنَّف (D-283).
+#:
+#: القياس الذي وُلدت منه: **٤٩ من ٧٥** مصدراً `PENDING_CLASSIFICATION`، وقاعدةُ المصفوفة
+#: غير القابلة للتجاوز تقول «لا مصدر PENDING_CLASSIFICATION يصبح تبعية أو معياراً
+#: تشغيلياً» ⇒ **ثلثا المصادر ممنوعةٌ بنصّها من أن تكون سلطة**. والبوّابة كانت تفحص شكل
+#: كلّ بطاقة وتمنع تشغيل المُعلَّق، ولا شيء فيها يمنع الـ٤٩ من البقاء ٤٩ إلى الأبد ولا
+#: من أن تصير ٦٠ — فالعدد يكبر والنسبة المُصادَقة تصغر، وهو بالضبط «ضجيجٌ مُصنَّف
+#: كمعرفة» الذي يحرّمه دستور القيمة.
+#:
+#: ⛔ **والقيد ثنائي الاتجاه** (نمط D-189): نموٌّ ⇒ أحمر، **وتقلّصٌ بلا تحديث هذا الرقم
+#: في نفس الدفعة ⇒ أحمر أيضاً**. دَينٌ أُغلق بصمتٍ يكذب كالدَّين المكتوم.
+MAX_PENDING_CLASSIFICATION = 49
+
 FAILURES: list[str] = []
 
 
@@ -136,11 +150,32 @@ def main() -> int:
             if row.get("source_id") != "unclassified":
                 fail(f"{label}: pending source must remain explicitly unclassified")
 
+    pending = sum(
+        1 for row in rows if isinstance(row, dict) and row.get("status") == "PENDING_CLASSIFICATION"
+    )
+    if pending > MAX_PENDING_CLASSIFICATION:
+        fail(
+            f"unclassified debt grew: {pending} > {MAX_PENDING_CLASSIFICATION}. A source may "
+            "not enter the matrix unclassified — classify it (primary-source review + the "
+            "eight card fields) in the same change, or it is a reference that cannot be "
+            "used as authority"
+        )
+    elif pending < MAX_PENDING_CLASSIFICATION:
+        fail(
+            f"unclassified debt shrank to {pending} but MAX_PENDING_CLASSIFICATION is still "
+            f"{MAX_PENDING_CLASSIFICATION}. Lower it in this same change — a debt closed in "
+            "silence lies exactly as a debt concealed does (D-189)"
+        )
+
     if FAILURES:
         print(f"\n❌ Source adoption matrix gate failed: {len(FAILURES)} violation(s)")
         return 1
     passed(
         f"Complete source coverage is enforced: {len(rows)} unique repositories, no invisible source, and pending sources are blocked from runtime authority."
+    )
+    passed(
+        f"Unclassified debt is ratcheted: {pending}/{len(rows)} pending, shrink-only "
+        f"(ceiling {MAX_PENDING_CLASSIFICATION}, enforced in both directions)."
     )
     return 0
 

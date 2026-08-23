@@ -105,6 +105,9 @@
     "check_secret_capture_parity.py": [
       "tests/fitness/test_secret_capture_parity.py"
     ],
+    "check_source_adoption_matrix.py": [
+      "tests/fitness/test_source_adoption_ratchet.py"
+    ],
     "check_supply_chain.py": [
       "tests/fitness/test_delivery_standards_gates.py"
     ],
@@ -173,7 +176,6 @@
     "check_agent_context.py": "بوابة سياق الوكيل جديدة في سجل البراهين؛ تحتاج اختبارًا يكسر مصدرًا أو مسارًا ويثبت خروجًا غير صفري.",
     "check_code_acceptance.py": "بوابة حزمة القبول جديدة في سجل البراهين؛ تحتاج اختبارًا يقدّم packet غير صالح ويثبت رفضه.",
     "check_reference_backbone.py": "بوابة العمود المرجعي بلا اختبار سلبي مخصص؛ لا يُعلن برهان الحجب قبل إضافة fixture مكسور.",
-    "check_source_adoption_matrix.py": "بوابة مصفوفة تبني المصادر بلا اختبار سلبي مخصص؛ لا يُعلن برهان الحجب قبل إضافة fixture مكسور.",
     "check_deep_tech_constitution.py": "Newly added, lacking negative proof for now.",
     "check_pocock_gates.py": "Newly added, lacking negative proof for now."
   }

@@ -356,6 +356,7 @@
       ".memory/ci-gates.md",
       ".memory/decisions.md",
       ".memory/deep_tech_constitution_truth.md",
+      ".memory/fx_doctrine_truth.md",
       ".memory/issues.md",
       ".memory/naas_verification_truth.md",
       ".runtime/truth_table.lock.json",
@@ -394,7 +395,7 @@
       "tests/naas_verifier/test_corpus_and_probes.py",
       "tests/naas_verifier/test_env_ar_fr_guard_break.py"
     ],
-    "content_sha256_excluding_packet": "6c055722ef4cf0416e63d7cb5bfcbdd15f99ddd74057a81ee8c65b1cbf624e13",
+    "content_sha256_excluding_packet": "96ec8498c344774bd0c00263fd52d56229bcec89ce1fad4299150d1ff5753497",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

@@ -1,0 +1,36 @@
+{
+  "__status__": "UNSIGNED_DRAFT",
+  "__warning_ar__": "⛔ مسوّدة. لا تحرّك بوّابة. الفارض يقرأ GATE_LEDGER.json وحده. لا تنسخ هذا الملفّ إلى السجلّ قبل ملء الحقول <<< >>> وقراءة docs/governance/evidence/README.md.",
+  "__gate__": "GATE_A_TECHNICAL",
+  "__machine_filled_from_ar__": "python3.12 -m naas_verifier.cli run --runs 3 (المعيار الداخلي) + scripts/research/probe_external_guard.py (الهدف الخارجي)",
+
+  "evidence_id": "NAAS-A-0001",
+  "issuer": "<<< اسم المُصدِر البشري — ⛔ ليس آلة ولا وكيلاً >>>",
+  "qualification": "<<< مؤهّله: مهندس أمن / باحث تعلّم آلي / مراجع مستقلّ >>>",
+  "jurisdiction": "<<< الولاية القضائية، مثال: DZ >>>",
+  "scope": "naas_verifier trajectory verification over the Arabic/French exploit corpus, measured against an English-only final-outcome baseline on reference targets, plus one external open-source guard probe",
+  "decision": "<<< قرار المُصدِر بعبارته >>>",
+  "issued_at": "<<< YYYY-MM-DD >>>",
+  "validity_days": 365,
+  "expires_at": "<<< مُشتَقّ = issued_at + validity_days — ⛔ مخالفتُه تُحمِّر CI (D-192) >>>",
+  "evidence_location": "docs/research/EXTERNAL_GUARD_PROBE.json",
+  "reviewer": "<<< اسم المراجع البشري — ⛔ غير المُصدِر، وليس آلة >>>",
+  "review_status": "pending",
+  "evidence_kind": "reproducible_experiment",
+
+  "baseline_id": "english_only_final_outcome_v1",
+  "dataset_id": "ar_fr_exploit_classes/publishable",
+  "protocol": "Each publishable exploit class is probed in Arabic and in English against the same target. The verifier reads the full trajectory across five dimensions; the baseline reads the final outcome only. Detection is counted per class-language pair. Deterministic: no sampling, no model in the reward path, no network.",
+  "delta_pct": 90.0,
+  "runs": 3,
+  "confidence": "deterministic — three consecutive runs return an identical fingerprint; variance is zero by construction, so no interval is reported rather than a fabricated one",
+  "reproduction_command": "python3.12 -m naas_verifier.cli run --runs 3",
+
+  "__honest_limits_ar__": [
+    "delta_pct=90 يخصّ المعيار **الداخلي** على أهدافٍ مرجعية — لا على نظام طرفٍ ثالث.",
+    "مسبار الهدف الخارجي دليلٌ **مساند** يجيب عن «هل يجد شيئاً لم تكتبه أنت؟»، ولا يُخلَط بالرقم أعلاه.",
+    "⛔ قيدُ اللغة في الهدف الخارجي **موثَّقٌ من صانعه** — ليس اكتشافَ ثغرةٍ مكتومة.",
+    "⛔ ولا يُقال إنّ مُصحِّحاً كان سيفوت الهدف الخارجي: بُعدُه النهائي مُنتهَكٌ أيضاً. القيمة هناك تشخيصية لا كشفية.",
+    "هدفٌ خارجيٌّ واحد ليس مسحاً — ولا يُعمَّم منه حكمٌ على حرّاسٍ آخرين."
+  ]
+}

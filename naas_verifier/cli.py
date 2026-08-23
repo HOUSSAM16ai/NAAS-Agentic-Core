@@ -119,13 +119,36 @@ def measure(classes: Sequence[Mapping[str, object]], runs: int) -> dict[str, obj
     }
 
 
+def _print_env_card() -> int:
+    """بطاقة بيئة `ar-fr-guard-break`. الاستيراد كسولٌ كي يبقى `run` بلا كلفةٍ إضافية."""
+    from naas_verifier.envs.ar_fr_guard_break import env_card
+
+    card = env_card()
+    print(f"env               : {card['env_id']}")
+    print(f"reward weights    : {card['reward_weights']}")
+    for row in card["tasks"]:
+        print(f"\n{row['task_id']:16} class={row['class_id']:20} direction={row['direction']}")
+        print(
+            f"  reference attack : reward={row['reference_attack_reward']} "
+            f"visible={row['reference_trajectory_visible']}"
+        )
+        print(f"  english control  : reward={row['english_control_reward']} (must be 0.0)")
+    print()
+    print(json.dumps(card, ensure_ascii=False))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="شغّل المعيار واطبع التقرير")
     run.add_argument("--runs", type=int, default=3)
     run.add_argument("--json", action="store_true", help="اطبع JSON خاماً")
+    sub.add_parser("env", help="اطبع بطاقة بيئة التعلّم المعزَّز ومكافآتها المرجعية")
     args = parser.parse_args(argv)
+
+    if args.command == "env":
+        return _print_env_card()
 
     classes = load_corpus()
     report = measure(classes, args.runs)

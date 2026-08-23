@@ -1,0 +1,359 @@
+{
+  "$schema_version": "1",
+  "decision": "D-284",
+  "purpose_ar": "كلفة كل دستورٍ بالأسطر مقابل استشهاداته الحيّة. ⛔ قلّةُ الاستشهاد ليست حكماً بانعدام القيمة: قانونٌ وقائيّ يعمل بمنعه لا بذكره.",
+  "constitutions_measured": 21,
+  "total_cost_lines": 7880,
+  "citation_scopes": {
+    "code": [
+      "app",
+      "shared",
+      "microservices",
+      "naas_verifier"
+    ],
+    "gate": [
+      "scripts"
+    ],
+    "test": [
+      "tests"
+    ]
+  },
+  "rows_sorted_by_traction_ascending": [
+    {
+      "section": "0.10",
+      "id": "D-210",
+      "title_ar": "دستور القيمة والإيراد",
+      "claude_md_lines": 31,
+      "law_doc_lines": 1358,
+      "status_doc_lines": 91,
+      "total_cost_lines": 1480,
+      "citations": {
+        "code": 0,
+        "gate": 9,
+        "test": 3
+      },
+      "total_citations": 12,
+      "traction_per_kloc": 8.11
+    },
+    {
+      "section": "0.28",
+      "id": "D-277",
+      "title_ar": "دستور قبول الكود متعدد الأدلة",
+      "claude_md_lines": 3,
+      "law_doc_lines": 72,
+      "status_doc_lines": 404,
+      "total_cost_lines": 479,
+      "citations": {
+        "code": 0,
+        "gate": 4,
+        "test": 0
+      },
+      "total_citations": 4,
+      "traction_per_kloc": 8.35
+    },
+    {
+      "section": "0.11",
+      "id": "D-224",
+      "title_ar": "دستور التنفيذ المعرفي",
+      "claude_md_lines": 21,
+      "law_doc_lines": 227,
+      "status_doc_lines": 62,
+      "total_cost_lines": 310,
+      "citations": {
+        "code": 0,
+        "gate": 6,
+        "test": 1
+      },
+      "total_citations": 7,
+      "traction_per_kloc": 22.58
+    },
+    {
+      "section": "0.24",
+      "id": "D-272",
+      "title_ar": "دستور مبادئ تصميم الأنظمة الوكيلية",
+      "claude_md_lines": 697,
+      "law_doc_lines": 59,
+      "status_doc_lines": 38,
+      "total_cost_lines": 794,
+      "citations": {
+        "code": 0,
+        "gate": 9,
+        "test": 9
+      },
+      "total_citations": 18,
+      "traction_per_kloc": 22.67
+    },
+    {
+      "section": "0.20",
+      "id": "D-268",
+      "title_ar": "دستور التقاط السرّ",
+      "claude_md_lines": 16,
+      "law_doc_lines": 460,
+      "status_doc_lines": 62,
+      "total_cost_lines": 538,
+      "citations": {
+        "code": 4,
+        "gate": 7,
+        "test": 2
+      },
+      "total_citations": 13,
+      "traction_per_kloc": 24.16
+    },
+    {
+      "section": "0.26",
+      "id": "D-274",
+      "title_ar": "دستور العمود الفقري المرجعي",
+      "claude_md_lines": 4,
+      "law_doc_lines": 57,
+      "status_doc_lines": 36,
+      "total_cost_lines": 97,
+      "citations": {
+        "code": 0,
+        "gate": 3,
+        "test": 0
+      },
+      "total_citations": 3,
+      "traction_per_kloc": 30.93
+    },
+    {
+      "section": "0.27",
+      "id": "D-275",
+      "title_ar": "دستور سياق الوكلاء الموحد",
+      "claude_md_lines": 4,
+      "law_doc_lines": 75,
+      "status_doc_lines": 36,
+      "total_cost_lines": 115,
+      "citations": {
+        "code": 0,
+        "gate": 4,
+        "test": 0
+      },
+      "total_citations": 4,
+      "traction_per_kloc": 34.78
+    },
+    {
+      "section": "0.13",
+      "id": "D-228",
+      "title_ar": "دستور هندسة الطبقة المحيطة",
+      "claude_md_lines": 14,
+      "law_doc_lines": 128,
+      "status_doc_lines": 50,
+      "total_cost_lines": 192,
+      "citations": {
+        "code": 0,
+        "gate": 6,
+        "test": 1
+      },
+      "total_citations": 7,
+      "traction_per_kloc": 36.46
+    },
+    {
+      "section": "0.16",
+      "id": "D-264",
+      "title_ar": "دستور المخطط الدراسي التكيفي",
+      "claude_md_lines": 15,
+      "law_doc_lines": 144,
+      "status_doc_lines": 0,
+      "total_cost_lines": 159,
+      "citations": {
+        "code": 0,
+        "gate": 6,
+        "test": 0
+      },
+      "total_citations": 6,
+      "traction_per_kloc": 37.74
+    },
+    {
+      "section": "0.15",
+      "id": "D-263",
+      "title_ar": "دستور المحرك التربوي",
+      "claude_md_lines": 15,
+      "law_doc_lines": 179,
+      "status_doc_lines": 52,
+      "total_cost_lines": 246,
+      "citations": {
+        "code": 0,
+        "gate": 10,
+        "test": 0
+      },
+      "total_citations": 10,
+      "traction_per_kloc": 40.65
+    },
+    {
+      "section": "0.21",
+      "id": "D-269",
+      "title_ar": "دستور الهوية المعرفية المحيطة",
+      "claude_md_lines": 19,
+      "law_doc_lines": 303,
+      "status_doc_lines": 66,
+      "total_cost_lines": 388,
+      "citations": {
+        "code": 8,
+        "gate": 7,
+        "test": 2
+      },
+      "total_citations": 17,
+      "traction_per_kloc": 43.81
+    },
+    {
+      "section": "0.19",
+      "id": "D-267",
+      "title_ar": "دستور طبقة التحقّق",
+      "claude_md_lines": 20,
+      "law_doc_lines": 505,
+      "status_doc_lines": 114,
+      "total_cost_lines": 639,
+      "citations": {
+        "code": 12,
+        "gate": 11,
+        "test": 5
+      },
+      "total_citations": 28,
+      "traction_per_kloc": 43.82
+    },
+    {
+      "section": "0.25",
+      "id": "D-273",
+      "title_ar": "دستور التقنية العميقة والعملة الصعبة",
+      "claude_md_lines": 26,
+      "law_doc_lines": 191,
+      "status_doc_lines": 75,
+      "total_cost_lines": 292,
+      "citations": {
+        "code": 0,
+        "gate": 14,
+        "test": 0
+      },
+      "total_citations": 14,
+      "traction_per_kloc": 47.95
+    },
+    {
+      "section": "0.23",
+      "id": "D-271",
+      "title_ar": "دستور معايير الوكلاء المفتوحة",
+      "claude_md_lines": 29,
+      "law_doc_lines": 87,
+      "status_doc_lines": 38,
+      "total_cost_lines": 154,
+      "citations": {
+        "code": 0,
+        "gate": 8,
+        "test": 1
+      },
+      "total_citations": 9,
+      "traction_per_kloc": 58.44
+    },
+    {
+      "section": "0.17",
+      "id": "D-265",
+      "title_ar": "دستور حوكمة Spec Kit",
+      "claude_md_lines": 14,
+      "law_doc_lines": 142,
+      "status_doc_lines": 0,
+      "total_cost_lines": 156,
+      "citations": {
+        "code": 0,
+        "gate": 11,
+        "test": 0
+      },
+      "total_citations": 11,
+      "traction_per_kloc": 70.51
+    },
+    {
+      "section": "0.18",
+      "id": "D-266",
+      "title_ar": "دستور فرض الحوكمة",
+      "claude_md_lines": 17,
+      "law_doc_lines": 109,
+      "status_doc_lines": 469,
+      "total_cost_lines": 595,
+      "citations": {
+        "code": 17,
+        "gate": 25,
+        "test": 5
+      },
+      "total_citations": 47,
+      "traction_per_kloc": 78.99
+    },
+    {
+      "section": "0.9",
+      "id": "D-209",
+      "title_ar": "دستور التنسيق الوكيلي",
+      "claude_md_lines": 22,
+      "law_doc_lines": 245,
+      "status_doc_lines": 141,
+      "total_cost_lines": 408,
+      "citations": {
+        "code": 1,
+        "gate": 27,
+        "test": 7
+      },
+      "total_citations": 35,
+      "traction_per_kloc": 85.78
+    },
+    {
+      "section": "0.12",
+      "id": "D-226",
+      "title_ar": "دستور التوأم الرقمي المعرفي",
+      "claude_md_lines": 22,
+      "law_doc_lines": 150,
+      "status_doc_lines": 54,
+      "total_cost_lines": 226,
+      "citations": {
+        "code": 3,
+        "gate": 14,
+        "test": 3
+      },
+      "total_citations": 20,
+      "traction_per_kloc": 88.5
+    },
+    {
+      "section": "0.14",
+      "id": "D-229",
+      "title_ar": "دستور معمارية الذاكرة",
+      "claude_md_lines": 14,
+      "law_doc_lines": 130,
+      "status_doc_lines": 56,
+      "total_cost_lines": 200,
+      "citations": {
+        "code": 5,
+        "gate": 14,
+        "test": 2
+      },
+      "total_citations": 21,
+      "traction_per_kloc": 105.0
+    },
+    {
+      "section": "0.22",
+      "id": "D-270",
+      "title_ar": "دستور معايير التسليم",
+      "claude_md_lines": 33,
+      "law_doc_lines": 121,
+      "status_doc_lines": 44,
+      "total_cost_lines": 198,
+      "citations": {
+        "code": 0,
+        "gate": 17,
+        "test": 7
+      },
+      "total_citations": 24,
+      "traction_per_kloc": 121.21
+    },
+    {
+      "section": "0.8",
+      "id": "D-153",
+      "title_ar": "دستور نظام التشغيل التربوي",
+      "claude_md_lines": 24,
+      "law_doc_lines": 190,
+      "status_doc_lines": 0,
+      "total_cost_lines": 214,
+      "citations": {
+        "code": 22,
+        "gate": 7,
+        "test": 4
+      },
+      "total_citations": 33,
+      "traction_per_kloc": 154.21
+    }
+  ]
+}

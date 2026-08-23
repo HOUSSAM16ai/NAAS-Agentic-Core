@@ -1,0 +1,169 @@
+{
+  "$schema_version": "1",
+  "decision": "D-285",
+  "target": {
+    "package": "better_profanity",
+    "why_ar": "حارسُ محتوىً نصّي مفتوح المصدر، يعمل محلّياً، بلا شبكة وبلا نموذج.",
+    "selection_criteria_ar": [
+      "مفتوح المصدر وقابل للقراءة — الآلية تُثبَت من المصدر لا تُخمَّن",
+      "يعمل محلّياً بالكامل — ⛔ لا مسبار على خدمةٍ مستضافة لطرفٍ ثالث",
+      "يقدّم عقداً صريحاً: أضف قاعدة حظر، ثمّ اسأل هل يُطابِق",
+      "قابل للتثبيت في بيئةٍ نظيفة بلا تبعياتٍ ثقيلة"
+    ],
+    "vendor_documents_language_limit": true,
+    "vendor_quote_en": "Not all languages are supported yet, such as *Chinese*."
+  },
+  "target_available": true,
+  "mechanism": {
+    "allowed_character_count": 5864,
+    "unicode_categories_admitted": {
+      "Ll": 2063,
+      "Lu": 1702,
+      "Mn": 1690,
+      "Mc": 392,
+      "Nd": 10,
+      "Po": 4,
+      "Lo": 2,
+      "Sc": 1
+    },
+    "script_representable": {
+      "arabic": {
+        "category": "Lo",
+        "tokenizable": false
+      },
+      "hebrew": {
+        "category": "Lo",
+        "tokenizable": false
+      },
+      "chinese": {
+        "category": "Lo",
+        "tokenizable": false
+      },
+      "japanese_kana": {
+        "category": "Lo",
+        "tokenizable": false
+      },
+      "devanagari": {
+        "category": "Lo",
+        "tokenizable": false
+      },
+      "latin": {
+        "category": "Ll",
+        "tokenizable": true
+      },
+      "greek": {
+        "category": "Ll",
+        "tokenizable": true
+      },
+      "cyrillic": {
+        "category": "Ll",
+        "tokenizable": true
+      }
+    },
+    "mechanism_ar": "قائمة الحروف المسموحة مبنيّة من فئات يونيكود Ll·Lu·Mc·Mn، والفئة Lo (حروف غير ذات حالة: عربية · عبرية · صينية · كانا · ديفاناغاري) مستبعَدةٌ عملياً — فحروفُها تعمل كفواصل كلماتٍ ولا تُشكّل رمزاً قابلاً للمطابقة. فالقاعدة تُقبَل ولا تُفرَض أبداً."
+  },
+  "classes": [
+    {
+      "class_id": "AR-NORM-VOID",
+      "applicability": "applicable",
+      "status": "measured",
+      "observation": {
+        "term": "غبي",
+        "rule_accepted_without_error": true,
+        "term_present_in_wordset": true,
+        "fires_on_bare_term": false,
+        "censor_output": "غبي"
+      },
+      "ascii_control": {
+        "term": "zzqq",
+        "rule_accepted_without_error": true,
+        "term_present_in_wordset": true,
+        "fires_on_bare_term": true,
+        "censor_output": "****"
+      },
+      "control_meaning_ar": "نفس الواجهة بمصطلحٍ ASCII **تُطابِق** — فالعطب ليس في إعدادنا ولا في كيفية استدعائنا، بل في تمثيل الحروف.",
+      "verdict": {
+        "trajectory_id": "external/better_profanity/ar-norm-void",
+        "outcome": "violated",
+        "dimensions": [
+          {
+            "dimension": "observable_outcomes",
+            "outcome": "holds",
+            "violated": [],
+            "inconclusive": [],
+            "uncovered_reason": null
+          },
+          {
+            "dimension": "intermediate_constraints",
+            "outcome": "violated",
+            "violated": [
+              "intermediate/rule-enforceable"
+            ],
+            "inconclusive": [],
+            "uncovered_reason": null
+          },
+          {
+            "dimension": "state_transitions",
+            "outcome": "holds",
+            "violated": [],
+            "inconclusive": [],
+            "uncovered_reason": null
+          },
+          {
+            "dimension": "tool_use",
+            "outcome": "holds",
+            "violated": [],
+            "inconclusive": [],
+            "uncovered_reason": null
+          },
+          {
+            "dimension": "final_outcome",
+            "outcome": "violated",
+            "violated": [
+              "final/term-censored"
+            ],
+            "inconclusive": [],
+            "uncovered_reason": null
+          }
+        ],
+        "evidence": [
+          {
+            "evidence_id": "external/better_profanity/ar-norm-void::constraint-evaluation",
+            "kind": "constraint_evaluation",
+            "summary": "5 constraint(s) over 5 dimension(s); outcome=violated",
+            "reproduction": "python -m naas_verifier.cli run --corpus ar_fr",
+            "source_reference": "docs/architecture/NAAS_VERIFICATION_LAYER.md#2",
+            "payload": {
+              "language": "ar",
+              "steps": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "class_id": "AR-SUBSTR-COLLIDE",
+      "applicability": "not_reachable",
+      "status": "precondition_absent",
+      "reason_ar": "الصنف يقيس **فرطَ المطابقة** حين تلتصق سابقةٌ عربية بالمصطلح. وشرطه أن يكون المصطلح قابلاً للمطابقة أصلاً — وهو غير قابل هنا. ⛔ ولا يُقرأ ذلك سلامةً: الحارس لا يُفرِط لأنه لا يُطابِق شيئاً.",
+      "verdict": null
+    },
+    {
+      "class_id": "LANG-MODE-COLLAPSE",
+      "applicability": "not_applicable",
+      "status": "out_of_target_scope",
+      "reason_ar": "الصنف مشروطٌ بعتبة حجم مُوجِّهٍ وبوجود نموذج لغوي. والهدف قائمةُ حظرٍ ساكنة بلا نموذج وبلا مُوجِّه — فالصنف خارج نطاقه بنيوياً.",
+      "verdict": null
+    }
+  ],
+  "classes_measured": 1,
+  "classes_violated": 1,
+  "honest_limits_ar": [
+    "⛔ قيدُ اللغة **موثَّقٌ من صانع الهدف** — فهذا ليس اكتشافَ ثغرةٍ مكتومة.",
+    "المقيس: الحارس يقبل قاعدةً لا يفرضها ويؤكّد قبولها، بلا خطأٍ ولا تحذير.",
+    "صنفٌ واحدٌ من ثلاثةٍ قابلٍ للقياس على هذا الهدف — والاثنان مُصرَّحان بسببهما.",
+    "هدفٌ خارجيٌّ واحد ليس مسحاً للسوق. ⛔ ولا يُعمَّم منه حكمٌ على حرّاسٍ آخرين.",
+    "⛔ **ولا يُقال إنّ مُصحِّحاً كان سيفوت هذا**: البُعد النهائي مُنتهَكٌ هنا أيضاً، فاختبارٌ بسيط («حظرتُ س ثمّ أرسلتُ س، هل اشتعل؟») يكشفه. القيمة المُضافة على هذا الهدف **تشخيصية لا كشفية**: المُتحقِّق يسمّي القيد المنكسر (قاعدةٌ مقبولة غير قابلة للفرض) بدل «فشل الاختبار»."
+  ],
+  "reproduction_command": "python3.12 scripts/research/probe_external_guard.py --json"
+}

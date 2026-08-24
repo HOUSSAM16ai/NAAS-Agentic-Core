@@ -13,7 +13,16 @@ pydantic-settings>=2.15.0,<3.0.0
 pydantic_core>=2.18.4,<3.0.0
 PyJWT==2.13.0
 passlib==1.7.4
-bcrypt==5.0.0
+# ⛔ NOT 5.0.0 (#2297 proposed it): passlib 1.7.4 pins its bcrypt backend to a
+# `detect_wrap_bug` probe that hashes a >72-byte password. bcrypt 4.x truncated
+# and warned; bcrypt 5.0.0 raises `ValueError: password cannot be longer than 72
+# bytes` — so the backend never finishes loading and EVERY hash and verify call
+# raises. Measured: passlib 1.7.4 + bcrypt 5.0.0 -> ValueError at CryptContext
+# .hash(); + bcrypt 4.3.0 -> hash and verify both succeed. app/security/passwords
+# .py and microservices/user_service list "bcrypt" in their CryptContext schemes,
+# so this is every login, not an edge case. 4.3.0 is the newest 4.x. Moving to
+# bcrypt 5 means leaving passlib (unmaintained since 2020), not bumping a pin.
+bcrypt==4.3.0
 argon2-cffi==23.1.0
 argon2-cffi-bindings==25.1.0
 cryptography>=50.0.0,<51.0.0

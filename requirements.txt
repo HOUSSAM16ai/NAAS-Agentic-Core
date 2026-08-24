@@ -16,9 +16,9 @@ psycopg2-binary==2.9.12
 pydantic>=2.13.4,<3.0.0
 pydantic-settings>=2.15.0,<3.0.0
 PyJWT==2.13.0
-passlib
+passlib==1.7.4
 bcrypt==5.0.0
-argon2-cffi
+argon2-cffi==23.1.0
 argon2-cffi-bindings==25.1.0
 cryptography>=50.0.0
 Authlib==1.7.2
@@ -67,7 +67,7 @@ openpyxl==3.1.5
 pandas==2.3.3
 pillow==12.3.0
 pytesseract==0.3.13
-PyYAML
+pyyaml==6.0.1
 
 # AI & Search Stack
 # Pin huggingface-hub to a stable version compatible with the ecosystem
@@ -105,7 +105,7 @@ psycopg-binary
 aiosqlite==0.22.1
 alembic==1.19.1
 anyio>=4.0.0
-argon2-cffi
+argon2-cffi==23.1.0
 bcrypt==5.0.0
 cryptography>=50.0.0
 fastapi==0.141.1
@@ -116,7 +116,7 @@ langchain-core>=0.3.0
 langchain-openai>=0.2.0
 langgraph>=0.2.39,<2.0.0
 openai
-passlib
+passlib==1.7.4
 pydantic>=2.13.4,<3.0.0
 pydantic-settings>=2.15.0,<3.0.0
 PyJWT==2.13.0
@@ -124,26 +124,26 @@ pytest
 python-dotenv==1.0.1
 python-json-logger==4.2.0
 python-multipart==0.0.32
-PyYAML
+pyyaml==6.0.1
 redis>=5.0.0
 SQLAlchemy==2.0.52
 sqlmodel==0.0.39
 tenacity==8.2.3
 uvicorn==0.52.3
 aiosqlite==0.22.1
-argon2-cffi
+argon2-cffi==23.1.0
 bcrypt==5.0.0
 cryptography>=50.0.0
 fastapi==0.141.1
 httpx==0.27.0
 Jinja2==3.1.6
-passlib
+passlib==1.7.4
 pydantic-settings>=2.15.0,<3.0.0
 PyJWT==2.13.0
 python-dotenv==1.0.1
 python-json-logger==4.2.0
 python-multipart==0.0.32
-PyYAML
+pyyaml==6.0.1
 redis>=5.0.0
 SQLAlchemy==2.0.52
 tenacity==8.2.3

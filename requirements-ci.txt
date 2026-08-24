@@ -54,7 +54,7 @@ prometheus-client>=0.26.0
 python-json-logger
 redis-om
 asgi-lifespan
-argon2-cffi==23.1.0
+argon2_cffi
 docker
 
 # File/content tooling imported in tested code paths

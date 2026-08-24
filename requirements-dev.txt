@@ -2,20 +2,20 @@
 -r requirements-prod.txt
 
 # Code Formatting
-black==26.3.1
-ruff==0.14.9
+black==26.5.1
+ruff==0.16.3
 
 # Type Checking
-mypy==1.8.0
+mypy==2.3.1
 mypy_extensions==1.1.0
-types-passlib==1.7.7.20240106
-types-pyasn1==0.6.0.20250914
-types-requests==2.31.0.20240106
+types-passlib==1.7.7.20260211
+types-pyasn1==0.6.0.20260724
+types-requests==2.33.0.20260712
 
 # Security Scanning
-bandit==1.9.2
-safety>=3.2.4
-safety-schemas>=0.0.8
+bandit==1.9.4
+safety>=3.8.1
+safety-schemas>=0.0.19
 
 # Linting & Analysis
 libcst==1.9.0

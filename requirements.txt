@@ -33,7 +33,7 @@ langchain-core>=0.3.0
 
 aiofiles==24.1.0
 # Supporting Libraries
-click>=8.0.0
+click>=8.4.2
 greenlet>=3.0.0
 h11>=0.14.0
 httpcore>=1.0.0

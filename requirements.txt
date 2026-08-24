@@ -58,7 +58,7 @@ six==1.17.0
 wrapt==1.17.3
 Deprecated==1.2.18
 filelock>=3.13.0
-platformdirs>=4.0.0
+platformdirs>=4.11.3
 typing_extensions>=4.9.0
 # Versions are centralized in constraints.txt for deterministic installs.
 pypdf

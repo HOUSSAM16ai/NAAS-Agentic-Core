@@ -48,7 +48,7 @@ dspy
 json-repair
 opentelemetry-api
 opentelemetry-sdk
-prometheus-client>=0.20.0
+prometheus-client>=0.26.0
 
 # Missing dependencies for CI test environments
 python-json-logger

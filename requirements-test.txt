@@ -18,6 +18,7 @@
 # tests depend on (D-258 governs that file); it is its own change with its own
 # issue, not a dependency bump. python-dotenv follows: its only reason to move
 # was pytest-env 1.7.0's floor.
+# Tracked for removal in #2303 (loop ownership + unregistered hooks).
 pytest==7.4.4
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0

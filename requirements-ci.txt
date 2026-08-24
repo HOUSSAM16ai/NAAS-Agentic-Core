@@ -3,13 +3,36 @@
 # is sufficient for repository validation, guardrails, and the main test job.
 
 # Core application/runtime dependencies used by tests and guardrails
-fastapi==0.141.1
+# ⛔ NOT 0.141.1 (#2290 proposed it): it resolves Starlette to 1.6.0, whose
+# TestClient no longer swallows the cancellation of a server task that is still
+# running when the client leaves a `websocket_connect` block:
+#     starlette/testclient.py:131 in __exit__ -> concurrent.futures._base.CancelledError
+# The cancelled task is real and ours: app/api/routers/customer_chat_support/
+# turn_lifecycle.py:230 spawns the BKT evaluation with `asyncio.create_task` and
+# never awaits or cancels it, so it is still pending when the turn ends. Starlette
+# 1.6 reports that leak instead of hiding it. Fixing it means changing how a
+# student's turn owns its background work — governed by D-074 (BKT must never
+# break a turn) and §6.5 (one terminal frame per turn) — so it is its own change.
+# Measured: with 0.141.1 the WS error-contract test fails on teardown; with
+# 0.109.2 the same file is 5 passed. uvicorn, pydantic, websockets, httptools,
+# watchfiles and python-multipart all keep #2290's bumps.
+fastapi==0.109.2
 uvicorn==0.52.3
 SQLAlchemy==2.0.52
 sqlmodel==0.0.39
 alembic==1.19.1
 asyncpg==0.31.0
-aiosqlite==0.22.1
+# ⛔ NOT 0.22.1 (#2293 proposed it): the test harness keeps one cached engine
+# (tests/conftest_support/registry.py) across a per-test `event_loop`, and under
+# 0.22.1 a connection whose loop has gone away no longer reconnects — it raises
+#     ValueError: no active connection      (aiosqlite/core.py:137)
+#   -> sqlite3.OperationalError: no active connection
+# at fixture setup for whichever test follows a WebSocket test. Measured on this
+# branch: tests/api/test_chat_event_protocol_error_contract_integration.py is
+# 1 failed + 1 error on 0.22.1 and 5 passed on 0.17.0, nothing else changed.
+# Moving to 0.22.1 means giving the harness one engine per loop, which is a
+# change to shared test infrastructure (D-258), not a dependency bump.
+aiosqlite==0.17.0
 psycopg2-binary==2.9.12
 pydantic>=2.13.4,<3.0.0
 pydantic-settings>=2.15.0,<3.0.0

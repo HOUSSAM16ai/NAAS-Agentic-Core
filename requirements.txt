@@ -4,14 +4,37 @@
 # - requirements-test.txt: Testing tools (includes prod)
 
 # Core Production Dependencies
-fastapi==0.141.1
+# ⛔ NOT 0.141.1 (#2290 proposed it): it resolves Starlette to 1.6.0, whose
+# TestClient no longer swallows the cancellation of a server task that is still
+# running when the client leaves a `websocket_connect` block:
+#     starlette/testclient.py:131 in __exit__ -> concurrent.futures._base.CancelledError
+# The cancelled task is real and ours: app/api/routers/customer_chat_support/
+# turn_lifecycle.py:230 spawns the BKT evaluation with `asyncio.create_task` and
+# never awaits or cancels it, so it is still pending when the turn ends. Starlette
+# 1.6 reports that leak instead of hiding it. Fixing it means changing how a
+# student's turn owns its background work — governed by D-074 (BKT must never
+# break a turn) and §6.5 (one terminal frame per turn) — so it is its own change.
+# Measured: with 0.141.1 the WS error-contract test fails on teardown; with
+# 0.109.2 the same file is 5 passed. uvicorn, pydantic, websockets, httptools,
+# watchfiles and python-multipart all keep #2290's bumps.
+fastapi==0.109.2
 uvicorn==0.52.3
 # starlette # Let fastapi manage starlette version
 SQLAlchemy==2.0.52
 sqlmodel==0.0.39
 alembic==1.19.1
 asyncpg==0.31.0
-aiosqlite==0.22.1
+# ⛔ NOT 0.22.1 (#2293 proposed it): the test harness keeps one cached engine
+# (tests/conftest_support/registry.py) across a per-test `event_loop`, and under
+# 0.22.1 a connection whose loop has gone away no longer reconnects — it raises
+#     ValueError: no active connection      (aiosqlite/core.py:137)
+#   -> sqlite3.OperationalError: no active connection
+# at fixture setup for whichever test follows a WebSocket test. Measured on this
+# branch: tests/api/test_chat_event_protocol_error_contract_integration.py is
+# 1 failed + 1 error on 0.22.1 and 5 passed on 0.17.0, nothing else changed.
+# Moving to 0.22.1 means giving the harness one engine per loop, which is a
+# change to shared test infrastructure (D-258), not a dependency bump.
+aiosqlite==0.17.0
 psycopg2-binary==2.9.12
 pydantic>=2.13.4,<3.0.0
 pydantic-settings>=2.15.0,<3.0.0
@@ -111,22 +134,16 @@ langgraph-sdk==0.3.15
 argon2-cffi
 langgraph-checkpoint-postgres
 psycopg-binary
-aiosqlite==0.22.1
+# ⛔ held — see the note on the first `aiosqlite` pin in this file.
+aiosqlite==0.17.0
 alembic==1.19.1
 anyio>=4.0.0
 argon2-cffi==23.1.0
-# ⛔ NOT 5.0.0 (#2297 proposed it): passlib 1.7.4 pins its bcrypt backend to a
-# `detect_wrap_bug` probe that hashes a >72-byte password. bcrypt 4.x truncated
-# and warned; bcrypt 5.0.0 raises `ValueError: password cannot be longer than 72
-# bytes` — so the backend never finishes loading and EVERY hash and verify call
-# raises. Measured: passlib 1.7.4 + bcrypt 5.0.0 -> ValueError at CryptContext
-# .hash(); + bcrypt 4.3.0 -> hash and verify both succeed. app/security/passwords
-# .py and microservices/user_service list "bcrypt" in their CryptContext schemes,
-# so this is every login, not an edge case. 4.3.0 is the newest 4.x. Moving to
-# bcrypt 5 means leaving passlib (unmaintained since 2020), not bumping a pin.
+# ⛔ held — see the note on the first `bcrypt` pin in this file.
 bcrypt==4.3.0
 cryptography>=50.0.0
-fastapi==0.141.1
+# ⛔ held — see the note on the first `fastapi` pin in this file.
+fastapi==0.109.2
 httpx==0.27.0
 Jinja2==3.1.6
 langchain-community>=0.3.0
@@ -148,20 +165,14 @@ SQLAlchemy==2.0.52
 sqlmodel==0.0.39
 tenacity==8.2.3
 uvicorn==0.52.3
-aiosqlite==0.22.1
+# ⛔ held — see the note on the first `aiosqlite` pin in this file.
+aiosqlite==0.17.0
 argon2-cffi==23.1.0
-# ⛔ NOT 5.0.0 (#2297 proposed it): passlib 1.7.4 pins its bcrypt backend to a
-# `detect_wrap_bug` probe that hashes a >72-byte password. bcrypt 4.x truncated
-# and warned; bcrypt 5.0.0 raises `ValueError: password cannot be longer than 72
-# bytes` — so the backend never finishes loading and EVERY hash and verify call
-# raises. Measured: passlib 1.7.4 + bcrypt 5.0.0 -> ValueError at CryptContext
-# .hash(); + bcrypt 4.3.0 -> hash and verify both succeed. app/security/passwords
-# .py and microservices/user_service list "bcrypt" in their CryptContext schemes,
-# so this is every login, not an edge case. 4.3.0 is the newest 4.x. Moving to
-# bcrypt 5 means leaving passlib (unmaintained since 2020), not bumping a pin.
+# ⛔ held — see the note on the first `bcrypt` pin in this file.
 bcrypt==4.3.0
 cryptography>=50.0.0
-fastapi==0.141.1
+# ⛔ held — see the note on the first `fastapi` pin in this file.
+fastapi==0.109.2
 httpx==0.27.0
 Jinja2==3.1.6
 passlib==1.7.4

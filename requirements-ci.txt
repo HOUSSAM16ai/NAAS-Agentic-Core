@@ -5,12 +5,12 @@
 # Core application/runtime dependencies used by tests and guardrails
 fastapi==0.109.2
 uvicorn==0.27.1
-SQLAlchemy==2.0.25
-sqlmodel==0.0.14
-alembic==1.13.1
-asyncpg==0.29.0
-aiosqlite==0.17.0
-psycopg2-binary==2.9.9
+SQLAlchemy==2.0.52
+sqlmodel==0.0.39
+alembic==1.19.1
+asyncpg==0.31.0
+aiosqlite==0.22.1
+psycopg2-binary==2.9.12
 pydantic>=2.11.5,<3.0.0
 pydantic-settings>=2.3.0,<3.0.0
 PyJWT==2.13.0

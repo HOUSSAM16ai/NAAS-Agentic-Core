@@ -18,7 +18,7 @@ safety>=3.2.4
 safety-schemas>=0.0.8
 
 # Linting & Analysis
-libcst==1.8.6
+libcst==1.9.0
 
 # Documentation
 rich==14.2.0

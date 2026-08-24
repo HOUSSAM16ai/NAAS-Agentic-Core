@@ -26,7 +26,7 @@ argon2-cffi-bindings==25.1.0
 cryptography>=50.0.0,<51.0.0
 Authlib==1.7.2
 httpx==0.26.0
-python-dotenv==1.2.2
+python-dotenv==1.0.1
 python-multipart==0.0.32
 Jinja2==3.1.6
 typer==0.20.0

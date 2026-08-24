@@ -1,10 +1,10 @@
 fastapi==0.109.0
 uvicorn==0.27.0
-SQLAlchemy==2.0.46
-sqlmodel==0.0.14
-alembic==1.13.1
-asyncpg==0.29.0
-aiosqlite==0.17.0
+SQLAlchemy==2.0.52
+sqlmodel==0.0.39
+alembic==1.19.1
+asyncpg==0.31.0
+aiosqlite==0.22.1
 # psycopg2-binary==2.9.9 # Skipped
 pydantic>=2.7.4,<3.0.0
 pydantic-settings>=2.3.0,<3.0.0
@@ -24,7 +24,7 @@ typer==0.20.0
 tenacity==8.2.3
 langgraph>=0.2.39
 click==8.3.1
-greenlet==3.3.1
+greenlet==3.5.5
 h11==0.16.0
 httpcore==1.0.9
 httptools==0.7.1

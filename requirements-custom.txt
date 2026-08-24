@@ -22,7 +22,7 @@ python-multipart==0.0.22
 Jinja2==3.1.6
 typer==0.20.0
 tenacity==8.2.3
-langgraph>=0.2.39
+langgraph>=1.2.11
 click==8.3.1
 greenlet==3.3.1
 h11==0.16.0

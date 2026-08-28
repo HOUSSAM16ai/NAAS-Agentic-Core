@@ -5,26 +5,36 @@ from fastapi.testclient import TestClient
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.responses import Response
+from starlette.routing import Route
 
 from app.middleware.remove_blocking_headers import RemoveBlockingHeadersMiddleware
+
+
+async def _homepage(request):
+    """Endpoint that sets every header the middleware is asked to judge.
+
+    Declared once and wired through `routes=[Route(...)]`: Starlette removed the
+    `@app.route` decorator in 1.0 (deprecated since 0.13), and FastAPI 0.141
+    resolves to Starlette 1.6, so the decorator form now raises AttributeError.
+    """
+    return Response(
+        "ok",
+        headers={
+            "Server": "TestServer/1.0",
+            "X-Powered-By": "TestFramework",
+            "X-Frame-Options": "DENY",
+            "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
+        },
+    )
 
 
 def test_dev_frame_middleware_development():
     """Verify that RemoveBlockingHeadersMiddleware removes blocked headers."""
     with mock.patch.dict(os.environ, {"ENVIRONMENT": "development"}, clear=True):
-        app = Starlette(middleware=[Middleware(RemoveBlockingHeadersMiddleware)])
-
-        @app.route("/")
-        async def homepage(request):
-            return Response(
-                "ok",
-                headers={
-                    "Server": "TestServer/1.0",
-                    "X-Powered-By": "TestFramework",
-                    "X-Frame-Options": "DENY",
-                    "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
-                },
-            )
+        app = Starlette(
+            middleware=[Middleware(RemoveBlockingHeadersMiddleware)],
+            routes=[Route("/", _homepage)],
+        )
 
         client = TestClient(app)
         response = client.get("/")
@@ -40,19 +50,10 @@ def test_dev_frame_middleware_development():
 def test_dev_frame_middleware_production():
     """Verify that RemoveBlockingHeadersMiddleware works the same in production."""
     with mock.patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=True):
-        app = Starlette(middleware=[Middleware(RemoveBlockingHeadersMiddleware)])
-
-        @app.route("/")
-        async def homepage(request):
-            return Response(
-                "ok",
-                headers={
-                    "Server": "TestServer/1.0",
-                    "X-Powered-By": "TestFramework",
-                    "X-Frame-Options": "DENY",
-                    "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
-                },
-            )
+        app = Starlette(
+            middleware=[Middleware(RemoveBlockingHeadersMiddleware)],
+            routes=[Route("/", _homepage)],
+        )
 
         client = TestClient(app)
         response = client.get("/")

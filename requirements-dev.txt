@@ -2,23 +2,36 @@
 -r requirements-prod.txt
 
 # Code Formatting
-black==26.3.1
-ruff==0.14.9
+# ⛔ D-270 L7 — `ruff` and `mypy` here MUST equal what `ci.yml` installs
+# (`ci.yml:53` ruff==0.14.0 · `ci.yml:68` mypy==1.8.0) and what
+# `.pre-commit-config.yaml` pins. A local enforcer that disagrees with CI is not
+# weaker protection, it is a trap: whoever follows the documentation turns their
+# own PR red and cannot see why. Dependabot proposed ruff 0.16.3 / mypy 2.3.1
+# here alone (#2296); `ci.yml:46-51` records why that number is not free — ruff
+# 0.16 promoted PLR0917 and flags 69 pre-existing signatures. Raising these
+# means fixing those first and moving all three pins in one commit.
+black==26.5.1
+ruff==0.14.0
 
 # Type Checking
 mypy==1.8.0
 mypy_extensions==1.1.0
-types-passlib==1.7.7.20240106
-types-pyasn1==0.6.0.20250914
-types-requests==2.31.0.20240106
+types-passlib==1.7.7.20260211
+types-pyasn1==0.6.0.20260724
+types-requests==2.33.0.20260712
 
 # Security Scanning
-bandit==1.9.2
-safety>=3.2.4
+bandit==1.9.4
+safety>=3.8.1
+# ⛔ NOT `>=0.0.19`: #2296 raised both halves of this pair independently, and
+# `safety==3.8.1` pins `safety-schemas==0.0.16` exactly — so the two lines
+# Dependabot proposed cannot both hold and `pip install -r requirements-dev.txt`
+# fails outright ("your requirements are unsatisfiable"). safety-schemas is a
+# transitive of safety; the floor stays low and safety itself carries the bump.
 safety-schemas>=0.0.8
 
 # Linting & Analysis
-libcst==1.8.6
+libcst==1.9.0
 
 # Documentation
 rich==14.2.0

@@ -2,6 +2,23 @@
 -r requirements-prod.txt
 
 # Core Testing
+# ⛔ The pytest quartet is held (#2296 proposed pytest 9.1.1 / pytest-asyncio
+# 1.4.0 / pytest-cov 7.1.0 / pytest-env 1.7.0). pytest-asyncio 1.0 stopped
+# honouring a user-defined `event_loop` fixture, and this suite's loop model
+# depends on it: `tests/conftest.py:90` owns `event_loop`, and the autouse
+# `db_lifecycle` fixture drives `_reset_db()` on it via `run_until_complete`.
+# Under 1.4.0 the fixtures keep using that loop while the test body runs on a
+# loop pytest-asyncio creates, so the cached aiosqlite engine is used from a
+# loop it was not created on:
+#     ValueError: no active connection  (aiosqlite/core.py:137)
+#   -> sqlite3.OperationalError: no active connection
+#   raised in tests/conftest_support/lifecycle.py:40, i.e. at fixture setup for
+#   every DB-touching test, and the run deadlocks on the first TestClient one.
+# Realigning loop ownership means rewriting the shared harness that ~4,800
+# tests depend on (D-258 governs that file); it is its own change with its own
+# issue, not a dependency bump. python-dotenv follows: its only reason to move
+# was pytest-env 1.7.0's floor.
+# Tracked for removal in #2303 (loop ownership + unregistered hooks).
 pytest==7.4.4
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
@@ -11,15 +28,15 @@ pluggy==1.6.0
 iniconfig==2.3.0
 
 # Test Coverage
-coverage==7.13.0
+coverage==7.15.4
 junit-xml==1.9
 
 # Test Data Generation
-factory-boy==3.3.0
-Faker==38.2.0
+factory-boy==3.3.3
+Faker==40.36.0
 
 # Property-Based Testing
-hypothesis==6.148.7
+hypothesis==6.165.10
 sortedcontainers==2.4.0
 
 # Timeout protection for long-running and fuzz suites
@@ -37,7 +54,7 @@ attrs==25.4.0
 
 # LlamaIndex (Required for tests using namespace packages)
 llama-index
-llama-index-core>=0.14.13
+llama-index-core>=0.14.23
 llama-index-workflows
 opentelemetry-api
 opentelemetry-sdk

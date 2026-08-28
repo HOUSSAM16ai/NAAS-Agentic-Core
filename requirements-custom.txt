@@ -1,33 +1,67 @@
-fastapi==0.109.0
-uvicorn==0.27.0
-SQLAlchemy==2.0.46
-sqlmodel==0.0.14
-alembic==1.13.1
-asyncpg==0.29.0
+# ⛔ NOT 0.141.1 (#2290 proposed it): it resolves Starlette to 1.6.0, whose
+# TestClient no longer swallows the cancellation of a server task that is still
+# running when the client leaves a `websocket_connect` block:
+#     starlette/testclient.py:131 in __exit__ -> concurrent.futures._base.CancelledError
+# The cancelled task is real and ours: app/api/routers/customer_chat_support/
+# turn_lifecycle.py:230 spawns the BKT evaluation with `asyncio.create_task` and
+# never awaits or cancels it, so it is still pending when the turn ends. Starlette
+# 1.6 reports that leak instead of hiding it. Fixing it means changing how a
+# student's turn owns its background work — governed by D-074 (BKT must never
+# break a turn) and §6.5 (one terminal frame per turn) — so it is its own change.
+# Measured: with 0.141.1 the WS error-contract test fails on teardown; with
+# 0.109.2 the same file is 5 passed. uvicorn, pydantic, websockets, httptools,
+# watchfiles and python-multipart all keep #2290's bumps.
+# Tracked for removal in #2303 (BKT task ownership).
+fastapi==0.109.2
+uvicorn==0.52.3
+SQLAlchemy==2.0.52
+sqlmodel==0.0.39
+alembic==1.19.1
+asyncpg==0.31.0
+# ⛔ NOT 0.22.1 (#2293 proposed it): the test harness keeps one cached engine
+# (tests/conftest_support/registry.py) across a per-test `event_loop`, and under
+# 0.22.1 a connection whose loop has gone away no longer reconnects — it raises
+#     ValueError: no active connection      (aiosqlite/core.py:137)
+#   -> sqlite3.OperationalError: no active connection
+# at fixture setup for whichever test follows a WebSocket test. Measured on this
+# branch: tests/api/test_chat_event_protocol_error_contract_integration.py is
+# 1 failed + 1 error on 0.22.1 and 5 passed on 0.17.0, nothing else changed.
+# Moving to 0.22.1 means giving the harness one engine per loop, which is a
+# change to shared test infrastructure (D-258), not a dependency bump.
+# Tracked for removal in #2303 (engine cached per loop).
 aiosqlite==0.17.0
 # psycopg2-binary==2.9.9 # Skipped
-pydantic>=2.7.4,<3.0.0
-pydantic-settings>=2.3.0,<3.0.0
+pydantic>=2.13.4,<3.0.0
+pydantic-settings>=2.15.0,<3.0.0
 pydantic_core>=2.18.4,<3.0.0
 PyJWT==2.13.0
 passlib==1.7.4
-bcrypt==3.2.0
+# ⛔ NOT 5.0.0 (#2297 proposed it): passlib 1.7.4 pins its bcrypt backend to a
+# `detect_wrap_bug` probe that hashes a >72-byte password. bcrypt 4.x truncated
+# and warned; bcrypt 5.0.0 raises `ValueError: password cannot be longer than 72
+# bytes` — so the backend never finishes loading and EVERY hash and verify call
+# raises. Measured: passlib 1.7.4 + bcrypt 5.0.0 -> ValueError at CryptContext
+# .hash(); + bcrypt 4.3.0 -> hash and verify both succeed. app/security/passwords
+# .py and microservices/user_service list "bcrypt" in their CryptContext schemes,
+# so this is every login, not an edge case. 4.3.0 is the newest 4.x. Moving to
+# bcrypt 5 means leaving passlib (unmaintained since 2020), not bumping a pin.
+bcrypt==4.3.0
 argon2-cffi==23.1.0
 argon2-cffi-bindings==25.1.0
 cryptography>=50.0.0,<51.0.0
-Authlib==1.6.6
+Authlib==1.7.2
 httpx==0.26.0
 python-dotenv==1.0.1
-python-multipart==0.0.22
+python-multipart==0.0.32
 Jinja2==3.1.6
 typer==0.20.0
 tenacity==8.2.3
 langgraph>=0.2.39
-click==8.3.1
-greenlet==3.3.1
+click==8.4.2
+greenlet==3.5.5
 h11==0.16.0
 httpcore==1.0.9
-httptools==0.7.1
+httptools==0.8.0
 anyio==4.12.0
 sniffio==1.3.1
 certifi==2025.11.12
@@ -36,19 +70,19 @@ inflection==0.5.1
 MarkupSafe==3.0.3
 shellingham==1.5.4
 # uvloop==0.22.1 # Might fail on Windows
-watchfiles==1.1.1
-websockets==15.0.1
+watchfiles==1.2.0
+websockets==17.0.1
 beautifulsoup4==4.12.3
 soupsieve==2.8.4
 charset-normalizer==3.4.4
-annotated-types==0.7.0
-python-json-logger==4.0.0
+annotated-types==0.8.0
+python-json-logger==4.2.0
 setproctitle==1.3.7
 six==1.17.0
 wrapt==1.17.3
 Deprecated==1.3.1
 filelock==3.20.3
-platformdirs==4.5.1
+platformdirs==4.11.3
 typing_extensions==4.15.0
 sentence-transformers
 dspy-ai

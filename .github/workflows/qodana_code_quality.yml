@@ -67,7 +67,7 @@ jobs:
       # one source). The diagnostic step at the bottom names the fix when it happens again.
       QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_118820581 }}
     steps:
-      - uses: actions/checkout@v5 # was @v3: D-141 requires node24 actions, zero warnings
+      - uses: actions/checkout@v7 # was @v3: D-141 requires node24 actions, zero warnings
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0 # full history is required for pull-request analysis
@@ -94,7 +94,7 @@ jobs:
 
       - name: 'Qodana Scan'
         if: env.QODANA_TOKEN != ''
-        uses: JetBrains/qodana-action@v2026.1
+        uses: JetBrains/qodana-action@v2026.2
         with:
           # The action defaults to `true` (changed files only). A full scan is what the
           # committed baseline is comparable against, and it costs ~4.5 min.

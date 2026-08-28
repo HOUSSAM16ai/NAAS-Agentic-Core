@@ -4,6 +4,53 @@
 > The chat interface is merely an assistive channel. The true core consists of the Interactive Canvas (Object UI), Cognitive Modeling, Error Memory, Adaptive Generation, and Simulation Engine.
 > See `cognitive_lab_philosophy.md` for the foundational doctrine.# Architectural Decisions
 
+## D-287 (2026-08-28) — الدفعةُ الآلية تسقط في بوّابةٍ لا تستطيع اجتيازها، والأرضيةُ التي لا ترتفع مع الشجرة تُمرِّر عودةً صامتة
+
+**السياق (PR #2305):** دفعة Dependabot واحدة بقيت مفتوحة بعد دمج الاثنتي عشرة (D-286):
+`dependabot/github_actions/actions-938580e8d0` — سبع ترقياتٍ كبرى لإجراءات GitHub عبر
+**١٥** ملفّ workflow (67+/67−، صفر تغيير منطقي): `checkout` v5→**v7** (٣٨ موضعاً) ·
+`setup-python` v6→**v7** (٢١) · `setup-node` v5→**v7** (٣) · `upload-artifact` v6→**v7**
+(٢) · `setup-buildx-action` v3→**v4** · `build-push-action` v6→**v7** ·
+`qodana-action` v2026.1→**v2026.2**. و`download-artifact` بقي عند `v8` — Dependabot لم
+يقترح له شيئاً لأنه الأحدث.
+
+**المقيس — الترقية سليمة، والحجب حوكميّ لا تقني:**
+
+| # | ما قِيس | الدليل |
+|---|---|---|
+| 1 | الدمج نظيف والتغطية كاملة | `git merge-tree` ⇒ صفر تعارض؛ وعدد مواضع كل إصدارٍ قديم على `main` يطابق ما يحذفه الفرع **ملفّاً ملفّاً** (`checkout@v5`: ٣٨ = ٣٨) ⇒ لا موضعَ مختلط |
+| 2 | الإصدارات الجديدة **تعمل** لا «موجودة» | ٥٧ فحصاً على `c077116`، ~٥٠ خضراء — `test-monolith` · `test-microservices` · `frontend-tests` · `contracts` · `lint` · `event-stack-live` · **١٦ صورة Docker** — كلّها عبرت على `checkout@v7`/`setup-python@v7` |
+| 3 | `guardrails` سقطت في **آخر** بوّابة وحدها | `check_code_acceptance.py`: `packet changed-path snapshot is stale: recorded=56, actual=15` — وكلّ ما قبلها ✅ |
+| 4 | `live-e2e-required` سقطت في ١٠ ثوانٍ | `secrets: inherit` وسبعةُ أسرارٍ إلزامية — ودفعاتُ Dependabot **لا تصلها أسرار المستودع** |
+| 5 | `required-ci` مُجمِّعٌ فقط | سجلّه: `guardrails=failure` · `live-e2e-required=failure` · وكلّ الباقي `success` |
+| 6 | التبريد مستوفىً قبل الاقتراح | `dependabot.yml` يطبّق `cooldown.default-days: 7` على منظومة `github-actions`، و`check_supply_chain` أخضر |
+
+**القوانين المستخلَصة:**
+
+- **الدفعةُ الآلية تسقط في بوّابةٍ لا تستطيع اجتيازها — وهذا ليس عطباً فيها.** حزمة القبول
+  (D-277) تُقارَن بفرق الدفعة، و**Dependabot لا يكتب حزمة قبول**؛ فكلّ دفعةٍ آلية تحمرّ
+  هنا حتماً ولا تُصلِح نفسها. السبيل الوحيد هو ما فعله D-286: فرعُ وكيلٍ **يدمج** عمل
+  Dependabot (لا يعيد كتابته) ويحمل عنه ما لا يستطيع كتابته. والدمج لا cherry-pick كي
+  تُنسَب الترقية إلى صاحبها وتُغلَق دفعتُه كـ**Merged**.
+- **الأرضيةُ التي لا ترتفع مع الشجرة تُمرِّر عودةً صامتة.** `MIN_ACTION_MAJOR` كانت مقيسةً
+  يوم D-235 عند `checkout: 5`؛ فلو رُفعت الشجرة إلى `v7` وبقيت هي، لمرّ ارتدادٌ إلى `v5`
+  بلا اعتراض — **فارضٌ أضيق من قاعدته**، صنف ISS-148 بعينه. رُفعت إلى `v7` للأربعة
+  المُرقّاة، **وبتجربةٍ سلبية مُثبَتة**: إعادة موضعٍ واحد إلى `checkout@v5` ⇒
+  `❌ .github/workflows/doc_integrity.yml:23: أقدم من الأرضية v7` (D-270 L4: البوّابة
+  تُثبِت أنها **تحجب**، لا أنها تعمل).
+- **الأحمرُ يُشخَّص ولا يُسكَت.** `live-e2e` تفشل صراحةً عند غياب السرّ عمداً (D-207:
+  الصمت لا يُقرأ نجاحاً)؛ فالإصلاح أن تُشغَّل على فرعٍ غير-بوت ترثه الأسرار — **لا** أن
+  يُضاف لها تخطٍّ عند الغياب.
+- **إعفاء البوتات من `pr-governance` يُفسِّر خضرة زائفة.** الفاحص يُعفي `user.type == 'Bot'`،
+  فبوّابة «الدليل قبل الدمج» كانت **متخطّاة** على #2305 لا مُجتازة. وعلى فرعٍ بشري تعمل،
+  وقسمُ `HUMAN:` يبقى **ملك الإنسان** — يكتبه هو بكلماته، لا الوكيل نيابةً عنه (D-270 L1).
+
+**ما تغيّر:** `.github/workflows/*.yml` (١٥ — من الدمج حرفياً) ·
+`scripts/fitness/check_ci_workflow_hygiene.py` (الأرضية + سبب الرفع في مكانه) ·
+`docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json` · `.memory/README.md`.
+
+---
+
 ## D-286 (2026-08-24) — اثنتا عشرة دفعةً آلية تُدمَج كلّها، وثمانيةُ قراراتِ احتجازٍ بقياسٍ لا برأي
 
 **السياق (ISS-2302):** اثنتا عشرة دفعة Dependabot مفتوحة (#2290 → #2301). كلٌّ منها تحلّ

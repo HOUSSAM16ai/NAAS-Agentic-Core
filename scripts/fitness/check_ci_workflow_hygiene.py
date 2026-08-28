@@ -45,15 +45,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = REPO_ROOT / ".github/workflows"
 COMPOSITE_ACTIONS = REPO_ROOT / ".github/actions"
 
-#: أرضية إصدارات إجراءات GitHub الرسمية — **مقيسة** من الشجرة يوم D-235 لا مُخترَعة.
+#: أرضية إصدارات إجراءات GitHub الرسمية — **مقيسة** من الشجرة لا مُخترَعة.
 #: D-141 يوجب node24 وصفر warning، و``actions/checkout@v3`` كان يطبع
 #: ``##[warning]Node.js 20 is deprecated`` في كل تشغيل Qodana. الأرضية ترتفع بقرارٍ
 #: مكتوب حين تُرقّى الشجرة، ولا تنخفض أبداً.
+#:
+#: رُفعت في **D-287 (2026-08-28)** بعد ترقية الشجرة إلى ``v7`` (PR #2305): أرضيةٌ تبقى
+#: عند ``v5`` بينما الشجرة على ``v7`` تُمرِّر عودةً صامتة — فارضٌ أضيق من قاعدته، وهو
+#: صنف ISS-148 بعينه. و``download-artifact`` يبقى عند ``8`` لأنه أحدث ما صدر.
 MIN_ACTION_MAJOR: dict[str, int] = {
-    "actions/checkout": 5,
-    "actions/setup-python": 6,
-    "actions/setup-node": 5,
-    "actions/upload-artifact": 6,
+    "actions/checkout": 7,
+    "actions/setup-python": 7,
+    "actions/setup-node": 7,
+    "actions/upload-artifact": 7,
     "actions/download-artifact": 8,
 }
 

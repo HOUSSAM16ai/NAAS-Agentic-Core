@@ -187,30 +187,12 @@
   "git_change_snapshot": {
     "base_ref": "origin/main",
     "changed_paths_excluding_packet": [
-      ".github/workflows/ci.yml",
-      ".github/workflows/doc_integrity.yml",
-      ".github/workflows/docker-fullstack-gate.yml",
-      ".github/workflows/frontend-theme-ci.yml",
-      ".github/workflows/issue-readiness.yml",
-      ".github/workflows/knowledge_ingestion.yml",
-      ".github/workflows/live-e2e.yml",
-      ".github/workflows/observability_validation.yml",
-      ".github/workflows/pr-governance.yml",
-      ".github/workflows/qodana_code_quality.yml",
       ".github/workflows/repo-sync.yml",
-      ".github/workflows/runtime_truth.yml",
-      ".github/workflows/skills-architecture-gate.yml",
-      ".github/workflows/skills-doctrine-gate.yml",
-      ".github/workflows/structure-validation.yml",
-      ".memory/README.md",
-      ".memory/decisions.md",
-      ".runtime/truth_table.lock.json",
-      "README.ar.md",
-      "README.md",
-      "docs/DOCUMENTATION_INDEX.md",
-      "scripts/fitness/check_ci_workflow_hygiene.py"
+      ".memory/issues.md",
+      "scripts/ci/repo_sync_classify.py",
+      "scripts/ci/test_repo_sync_classify.py"
     ],
-    "content_sha256_excluding_packet": "3ec5bcdb4d27524da0df8db5c7f86f4d11ab82b83d34816433d7f1a2413d7b32",
+    "content_sha256_excluding_packet": "2c6ee556bd9fbfbf7b10c0bb8528ebb27e4052d3b587fb0609a5e92fc800040e",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

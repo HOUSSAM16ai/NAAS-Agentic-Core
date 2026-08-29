@@ -87,7 +87,7 @@ jobs:
       REQUIRE_ORCHESTRATOR: "0"
       E2E_BACKEND: http://127.0.0.1:8000
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # الصمت لا يُقرأ نجاحاً: سرٌّ ناقص ⇒ فشلٌ صريح يسمّيه، لا تخطٍّ صامت.
       - name: "Refuse to run blind"
@@ -104,7 +104,7 @@ jobs:
           fi
           echo "✅ كل الأسرار المطلوبة حاضرة."
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip

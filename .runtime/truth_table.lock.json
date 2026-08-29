@@ -1,5 +1,5 @@
 {
-  "branch": "claude/depanbot-branches-issues-3xrq3v",
+  "branch": "claude/check-dependabot-branch-xhssli",
   "components": [
     {
       "agreed": false,
@@ -350,6 +350,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-08-24T17:33:56.427557+00:00",
+  "generated_at_utc": "2026-08-28T20:13:03.758011+00:00",
   "schema_version": 1
 }

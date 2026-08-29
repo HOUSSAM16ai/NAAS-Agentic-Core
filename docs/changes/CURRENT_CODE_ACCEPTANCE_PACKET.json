@@ -5,7 +5,10 @@
   "decision": "D-277",
   "changed_paths": [
     ".github/workflows/repo-sync.yml",
+    ".memory/README.md",
     ".memory/issues.md",
+    "README.ar.md",
+    "README.md",
     "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
     "scripts/ci/repo_sync_classify.py",
     "scripts/ci/test_repo_sync_classify.py"
@@ -102,6 +105,7 @@
       "#   بعد (شجرة العمل): push-main=1 · rescue=1 · exit=1",
       "# تجارب سلبية على نفس الشجرة: سباق cannot lock ref ⇒ push-main=5 (محفوظ) · دفعٌ ناجح ⇒ exit=0 · PAT غائب ⇒ تخطٍّ exit=0",
       "CODE_ACCEPTANCE_BASE_SHA=origin/main python3 scripts/research/refresh_acceptance_diff_snapshot.py && CODE_ACCEPTANCE_BASE_SHA=origin/main python3.12 scripts/fitness/check_code_acceptance.py   # ✅",
+      "for g in check_documentation_contract check_memory_coherence check_constitution_reality check_authority_links; do python3.12 scripts/fitness/$g.py; done   # ✅ أربعتها — بوّابات doc_integrity.yml لا يشملها run_fitness_gates.py (يقرأ ci.yml)، فتُشغَّل صراحةً",
       "git ls-remote --heads https://github.com/Houssam-lab/NAAS-Agentic-Core.git   # القياس الحاسم: d9cd0925 مقابل feb81385 — 60 دفعة، 15 منها دمج"
     ],
     "measured_ar": "العطب مقيسٌ لا مُستنتَج: `git ls-remote` على المستودعين أعطى `d9cd0925` مقابل `feb81385`، و`git rev-list --count` أعطى **60** دفعة غائبة منها **15** دفعة دمج، و`merge-base --is-ancestor` أثبت أنّ المرآة متأخّرة تماماً لا متفرّعة. والسبب منقولٌ من سجلّ الوظيفة `99129715678` لا مُخمَّناً. والإصلاح مُثبَتٌ على مستوى **الخطوة** لا المُصنِّف وحده: نُفِّذت الخطوة كاملةً بـ`git` مُقلَّد يُرجع نصّ الرفض الحقيقي، فكانت خمسَ محاولاتٍ بلا إنقاذ قبل الإصلاح، ومحاولةً واحدةً مع دفعٍ إلى `mirror/main` بعده. وثلاث تجاربَ سلبية تحرس ما كان يعمل: السباق العابر ما زال بخمس محاولات، والدفعُ الناجح ما زال يخرج بصفر، ومسارُ الـPAT الغائب لم يُمَسّ. ⛔ **ولا يُدَّعى أنّ المرآة أُصلحت**: `refs/heads/main` عليها ما زال `d9cd0925`، والفتح فعلٌ في إعدادات المستودع النظير خارج صلاحية هذه الجلسة — وشرطُ الإغلاق تطابقُ الـSHA في `ls-remote` لا لونُ الوظيفة (§6.6 · ISS-197)."

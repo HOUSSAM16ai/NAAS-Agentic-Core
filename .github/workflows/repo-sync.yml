@@ -19,6 +19,23 @@ name: Sync to other repository
 # When the peer PAT is absent the job does NOT fail: it skips with a named
 # reason in the log and the run summary (D-206 L11 — absence is declared, never
 # silent). Mirroring resumes by itself once the secret is added.
+#
+# v7 (ISS-197) classifies the push rejection instead of retrying it blindly. The
+# retry loop exists for ONE named reason — the "cannot lock ref" race when both
+# sides sync at once — but it re-ran on every failure, the peer's branch
+# protection included, and no amount of retrying changes a repository setting.
+# That burned ~60s of runner time per push and then reported "failed after 5
+# attempts" with no cause and no drift figure, on every commit since 2026-08-22
+# while the mirror silently fell 60 commits behind. Now a deterministic
+# rejection stops on the first attempt and reports the rule the remote actually
+# named plus the measured drift; transient failures still get all five attempts.
+# The classification lives in scripts/ci/repo_sync_classify.py so it is tested
+# against the real recorded rejection instead of only in production.
+#
+# A blocked push is still a FAILURE, not a skip — unlike the absent PAT above.
+# A missing secret is a deployment fact; a rejected push means the two repos
+# have actually diverged, and hiding that would lose 60 commits quietly (§0 —
+# no silent failure).
 on:
   push:
     branches: [main]
@@ -81,15 +98,91 @@ jobs:
           git config --unset "http.https://github.com/.extraheader" || true
           git config --unset "http.https://github.com/${PEER}/.extraheader" || true
 
-          # Retry the push to tolerate transient lock-ref races between the
-          # two simultaneous sync workflows.
+          # Retry the push to tolerate transient lock-ref races between the two
+          # simultaneous sync workflows — and ONLY those. Every failure is
+          # classified first; a deterministic rejection breaks out immediately,
+          # because sleeping ten seconds does not change a branch protection rule.
+          PUSH_LOG="$(mktemp)"
+          CLASSIFICATION="unknown"
+          RULES=""
           for attempt in 1 2 3 4 5; do
-            if git fetch origin main --quiet && git push origin HEAD:main --force; then
+            if { git fetch origin main --quiet && git push origin HEAD:main --force; } \
+                 >"${PUSH_LOG}" 2>&1; then
               echo "Push to ${PEER} succeeded on attempt ${attempt}."
               exit 0
             fi
-            echo "Attempt ${attempt} failed; sleeping 10s before retry..."
+            cat "${PUSH_LOG}"
+            CLASSIFY_OUT="$(python3 scripts/ci/repo_sync_classify.py "${PUSH_LOG}")"
+            # Split in the shell, not through `head`/`tail`: under `pipefail` a
+            # reader that closes early can SIGPIPE the writer and kill the step.
+            CLASSIFICATION="${CLASSIFY_OUT%%$'\n'*}"
+            if [ "${CLASSIFY_OUT}" = "${CLASSIFICATION}" ]; then
+              RULES=""
+            else
+              RULES="${CLASSIFY_OUT#*$'\n'}"
+            fi
+            if [ "${CLASSIFICATION}" = "protected_branch" ] || \
+               [ "${CLASSIFICATION}" = "auth_denied" ]; then
+              echo "Deterministic rejection (${CLASSIFICATION}) on attempt ${attempt}:" \
+                   "retrying cannot change it. Stopping now."
+              break
+            fi
+            echo "Attempt ${attempt} failed (${CLASSIFICATION}); sleeping 10s before retry..."
             sleep 10
           done
-          echo "Error: push to ${PEER} failed after 5 attempts."
+
+          # Measure the drift rather than asserting it. An unmeasured "sync
+          # failed" gives a reader no way to tell one stale commit from sixty.
+          git fetch origin "+refs/heads/main:refs/remotes/peer/main" --quiet || true
+          LOCAL_SHA="$(git rev-parse --short HEAD)"
+          PEER_SHA="$(git rev-parse --short refs/remotes/peer/main 2>/dev/null || echo unknown)"
+          BEHIND="$(git rev-list --count refs/remotes/peer/main..HEAD 2>/dev/null || echo unknown)"
+          BEHIND_MERGES="$(git rev-list --count --merges refs/remotes/peer/main..HEAD \
+                           2>/dev/null || echo unknown)"
+
+          # Content rescue: main is blocked, but an ordinary branch is not. Push
+          # the head to an unprotected ref so the work actually ARRIVES on the
+          # peer and waits for a single fast-forward, instead of nothing arriving
+          # at all. Strictly less invasive than the force-push to main this job
+          # already performs, and with the same token and the same mandate.
+          RESCUE_REF="mirror/main"
+          RESCUE_STATE="not_attempted"
+          if [ "${CLASSIFICATION}" = "protected_branch" ]; then
+            if git push origin "HEAD:refs/heads/${RESCUE_REF}" --force; then
+              RESCUE_STATE="pushed"
+            else
+              RESCUE_STATE="failed"
+            fi
+          fi
+
+          echo "::error::sync to ${PEER} blocked (${CLASSIFICATION}); mirror is ${BEHIND} commits behind."
+          {
+            echo "### ❌ Mirror sync blocked — \`${CLASSIFICATION}\`"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| This repository \`main\` | \`${LOCAL_SHA}\` |"
+            echo "| \`${PEER}\` \`main\` | \`${PEER_SHA}\` |"
+            echo "| Commits the peer is missing | ${BEHIND} (of which ${BEHIND_MERGES} are merge commits) |"
+            echo "| Head pushed to \`${RESCUE_REF}\` | ${RESCUE_STATE} |"
+            echo ""
+            if [ -n "${RULES}" ]; then
+              echo "Rules the remote named, verbatim:"
+              echo ""
+              printf '%s\n' "${RULES}" | sed 's/^/- /'
+              echo ""
+            fi
+            if [ "${CLASSIFICATION}" = "protected_branch" ]; then
+              echo "\`main\` on the peer requires a linear history, and this repository"
+              echo "merges deliberately (D-287) so Dependabot branches close as Merged."
+              echo "The two rules cannot both hold. To unblock, on \`${PEER}\`:"
+              echo ""
+              echo "1. Settings → Branches → \`main\`: turn off **Require linear history**."
+              echo "2. Allow the sync token's owner to bypass the pull-request requirement."
+              echo ""
+              echo "Sync then heals itself on the next push. Rewriting this repository's"
+              echo "history to be linear instead would break the identity the mirror exists"
+              echo "for, and needs an ADR."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
           exit 1

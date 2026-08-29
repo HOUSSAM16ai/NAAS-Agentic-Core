@@ -1,17 +1,12 @@
 {
   "$schema_version": "1",
-  "packet_id": "CAP-2026-08-29-repo-sync-deterministic-rejection-classification",
+  "packet_id": "CAP-2026-08-29-close-iss-197-mirror-parity-restored",
   "status": "READY_FOR_GATE",
   "decision": "D-277",
   "changed_paths": [
-    ".github/workflows/repo-sync.yml",
     ".memory/README.md",
     ".memory/issues.md",
-    "README.ar.md",
-    "README.md",
-    "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
-    "scripts/ci/repo_sync_classify.py",
-    "scripts/ci/test_repo_sync_classify.py"
+    "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json"
   ],
   "standards": [
     "system-design-primer",
@@ -35,40 +30,39 @@
     {
       "standard": "system-design-primer",
       "paths": [
-        ".github/workflows/repo-sync.yml",
-        "scripts/ci/repo_sync_classify.py"
+        ".memory/issues.md",
+        ".github/workflows/repo-sync.yml"
       ],
-      "gate": "scripts/fitness/check_ci_workflow_hygiene.py",
-      "application_ar": "إعادةُ المحاولة أداةُ صمودٍ أمام الفشل العابر وحده. تطبيقها على رفضٍ دائم (حماية فرعٍ في المستودع النظير) عملٌ مهدور يُخفي الانحراف بدل أن يكشفه: خمس محاولاتٍ لا تغيّر إعداداً، وستّون ثانيةً تُحرَق في كل دفعة. فصار الفشل يُصنَّف قبل أن يُعاد — الحتميّ يتوقّف فوراً ويُبلَّغ عنه بالقاعدة المخروقة وبالانحراف مقيساً، والعابر يحتفظ بمحاولاته. والانحراف يُقاس ولا يُدّعى: قارئٌ يرى «فشلت المزامنة» لا يميّز دفعةً واحدةً متأخّرة من ستّين."
+      "gate": "scripts/fitness/check_memory_coherence.py",
+      "application_ar": "النسخة الاحتياطية تُقاس ولا تُفترَض. أُغلقت الحادثة على **تطابق مُعرّفات** مقيسٍ بـ`ls-remote` على الطرفين، لا على لون وظيفةٍ خضراء — لأنّ الوظيفة تشهد بأنّها نفّذت، والـSHA يشهد بأنّ النسخة وصلت. والفرق بينهما هو بالضبط ما جعل المرآة تتأخّر سبعة أيام دون أن يلاحظ أحد."
     },
     {
       "standard": "clean-code-book",
       "paths": [
-        "scripts/ci/repo_sync_classify.py",
-        "scripts/ci/test_repo_sync_classify.py",
-        ".memory/issues.md"
+        ".memory/issues.md",
+        ".memory/README.md"
       ],
-      "gate": "scripts/ci/test_repo_sync_classify.py",
-      "application_ar": "منطقٌ داخل YAML لا يُختبَر إلّا بدفعةٍ حيّة إلى main. فاستُخرج التصنيف إلى وحدةٍ بمسؤوليةٍ واحدة وقائمةٍ مغلقة من أربعة رموز، وغُذّي بنصّ الرفض الحقيقي المُلتقَط من الوظيفة 99129715678 — لا بنصٍّ مُختلَق يُثبت أنّ الكاشف يعمل على ما تخيّلناه. والأسبقيّة نفسها بندٌ مُختبَر: نصٌّ يحمل الإشارتين معاً يُصنَّف حتميّاً، وإلّا عادت الحلقةُ من الباب الذي أُغلق."
+      "gate": "scripts/fitness/check_constitution_reality.py",
+      "application_ar": "سجلٌّ يُغلَق بسببه ودليله لا بكلمة «تمّ»: الإدخال يحمل ما أُزيل بالضبط (قاعدة Branch protection كلاسيكية، بعد أن أثبت قياسٌ خلوّ Rulesets)، ومخرَج `ls-remote` حرفيّاً، **وسببَ رفض البديل** (دمج `mirror/main` هناك) كي لا يُعاد اقتراحه. والفهرس السيادي يتبع السجلّ في نفس الدفعة، فلا تتقادم الخريطة عن الأرض."
     }
   ],
   "production": {
     "owner": "platform-dependencies",
-    "status": "MIRROR_SYNC_DIAGNOSIS_FIXED_UNBLOCK_PENDING_PEER_SETTINGS",
+    "status": "MIRROR_PARITY_RESTORED_VERIFIED_ON_BOTH_REMOTES",
     "interfaces": [
-      ".github/workflows/repo-sync.yml: خطوة «Replicate main into the peer repository»",
-      "scripts/ci/repo_sync_classify.py: classify · is_deterministic · extract_rules",
-      "عقد سطر الأوامر: السطر الأول رمزُ تصنيف من قائمة مغلقة، وما بعده القواعد كما نطق بها الريموت"
+      ".memory/issues.md: ISS-197 (مُغلقة)",
+      ".memory/README.md: صفّ issues.md في الفهرس السيادي",
+      "لا كود ولا workflow ولا عقد — توثيقٌ بحت"
     ],
-    "failure_behavior_ar": "الرفض الحتميّ يوقف الحلقة عند المحاولة الأولى ويخرج بفشلٍ صريح — فشلاً لا تخطّياً، لأنّ غياب PAT إعلانُ نشرٍ أمّا الرفض فانحرافُ محتوى حقيقي وإخفاؤه يُضيّع ستّين دفعة بصمت (§0 · D-206 L11). والمجهول يبقى قابلاً لإعادة المحاولة فلا يُصنَّف حتميّاً بالتخمين. والمُصنِّف يخرج دائماً بالرمز 0 كي لا يقتل `set -e` الخطوةَ قبل طباعة التشخيص. والقسمة تُجرى في الصدفة لا عبر head/tail: تحت `pipefail` قد يُنهي القارئُ الأنبوبَ مبكّراً فيقتل الكاتبَ بـSIGPIPE وتموت الخطوة.",
-    "observability_ar": "التشخيص يصل موضعين: `::error::` في السجلّ، وجدولٌ في ملخّص التشغيل يحمل رأسَي المستودعين وعددَ الدفعات الغائبة وكم منها دفعةُ دمج، والقواعد المخروقة حرفيّاً، وخطوات الفتح. وقبلَه كان المخرَج «push failed after 5 attempts» بلا سببٍ ولا رقم.",
-    "security_boundary_ar": "لا صلاحية جديدة ولا سرّ جديد: نفس UPSTREAM_PAT ونفس permissions (contents: read). والدفع الإنقاذي إلى فرعٍ عادي غير محميّ **أقلّ** تدخّلاً من الدفع القسريّ على main الذي تفعله الوظيفة أصلاً. والمُصنِّف بلا شبكة وبلا تبعيات — مكتبةٌ قياسية فقط، ولا يُنفَّذ منه شيءٌ من مخرَج الريموت (قراءةٌ ومطابقةُ أنماطٍ لا غير).",
-    "rollback_ar": "إرجاع دفعة واحدة يُعيد الحلقة الخمسية كما كانت؛ لا هجرة بيانات ولا حالة دائمة. وحذفُ `scripts/ci/repo_sync_classify.py` وحده يكسر الخطوة، فالرجوع بإرجاع الدفعة كاملةً لا بحذفٍ جزئي.",
+    "failure_behavior_ar": "لا سلوك تشغيلي في هذه الدفعة. وسلوك المزامنة نفسه لم يُمَسّ: الرفض الحتميّ ما زال يوقف الحلقة عند المحاولة الأولى ويُبلِّغ بالقاعدة والانحراف، والعابر يحتفظ بمحاولاته الخمس. ⛔ ولم تُغيَّر دلالة الفشل إلى تخطٍّ لإخضاء العلامة — العلامة اخضرّت لأنّ المزامنة صارت صحيحة، لا لأنّ فشلها أُخفي.",
+    "observability_ar": "الدليل من مصدرين مستقلّين: `ls-remote` على الريموتين يُرجع 2757ef4 لـrefs/heads/main، وثمانية تشغيلات على نفس الرأس كلّها success (كانت سبعة من ثمانية).",
+    "security_boundary_ar": "لا صلاحية ولا سرّ ولا اعتماد. وإزالة حماية الفرع جرت في مستودعٍ آخر بيد مالكه، وهي خارج صلاحية هذه الجلسة — التي تقرأ المرآة ولا تدفع إليها.",
+    "rollback_ar": "إرجاع دفعة التوثيق يعيد ISS-197 مفتوحة؛ لا أثر تشغيلي. أمّا إعادة قفل المرآة فقرارُ مالكها، وستُعيد ❌ فوراً — والوظيفة ستشخّصها كما فعلت أوّل مرّة.",
     "runtime_evidence_paths": [
+      ".memory/issues.md",
+      ".memory/README.md",
       ".github/workflows/repo-sync.yml",
-      "scripts/ci/repo_sync_classify.py",
-      "scripts/ci/test_repo_sync_classify.py",
-      ".memory/issues.md"
+      "scripts/ci/repo_sync_classify.py"
     ]
   },
   "commercial_trace": {
@@ -81,9 +75,9 @@
       "eu-ai-act-compliance",
       "high-rpm-ai-affiliation"
     ],
-    "customer_problem_ar": "نسخةٌ احتياطية يُظنّ أنّها تعمل وهي متوقّفة منذ أسبوع أسوأ من غيابها: الغياب يُخطَّط له، والتوقّف الصامت يُكتشَف يوم الحاجة. والمشتري المؤسّسي يسأل عن استمرارية النسخ كما يسأل عن الأمان.",
-    "value_hypothesis_ar": "فارضٌ يُبلِّغ بالسبب والمقدار يُصلَح في دقائق؛ وفارضٌ يُحمِّر بلا سبب يُتجاهَل حتى تصير الفجوة ستّين دفعة. القيمة هنا في تحويل ❌ متكرّرة إلى تشخيصٍ ذي خطوةٍ تالية.",
-    "foreign_currency_path_ar": "لا إيراد في هذه الدفعة ولا ادّعاء عقد؛ صيانةُ استمرارية المستودع الذي تقف عليه الخطوط المُصرَّحة في OFFER_CATALOG.",
+    "customer_problem_ar": "نسخةٌ احتياطية يُظنّ أنّها تعمل وهي متوقّفة منذ أسبوع أسوأ من غيابها. والمشتري المؤسّسي يسأل عن استمرارية النسخ كما يسأل عن الأمان.",
+    "value_hypothesis_ar": "استعادةُ التطابق مقيسةً — لا مُعلَنة — هي ما يُبنى عليه ادّعاء استمرارية. وحادثةٌ تُغلَق بمخرَج أمرٍ حقيقي تصلح دليلاً؛ وواحدةٌ تُغلَق بكلمة «تمّ» لا تصلح.",
+    "foreign_currency_path_ar": "لا إيراد في هذه الدفعة ولا ادّعاء عقد؛ استعادةُ استمرارية المستودع الذي تقف عليه الخطوط المُصرَّحة في OFFER_CATALOG.",
     "foundation_exception_ar": "بنية تمكينية مشتركة لا عرضٌ مدفوع مستقلّ؛ حالة العروض تبقى كما هي."
   },
   "deletions": {
@@ -94,21 +88,14 @@
   "verification": {
     "result": "PASS",
     "commands": [
-      "python3 -c \"import yaml;yaml.safe_load(open('.github/workflows/repo-sync.yml',encoding='utf-8'))\"   # ✅ يُحلَّل",
-      "bash -n <(python3 -c \"import yaml;print(yaml.safe_load(open('.github/workflows/repo-sync.yml',encoding='utf-8'))['jobs']['sync']['steps'][1]['run'])\")   # ✅ صياغة bash سليمة",
-      "python3.12 -m unittest scripts.ci.test_repo_sync_classify -v   # ✅ 9/9",
-      "ruff check scripts/ci/repo_sync_classify.py scripts/ci/test_repo_sync_classify.py   # ✅ All checks passed",
-      "ruff format --check scripts/ci/repo_sync_classify.py scripts/ci/test_repo_sync_classify.py   # ✅ 2 files already formatted",
-      "python3.12 scripts/fitness/check_ci_workflow_hygiene.py   # ✅ 16 ملفّاً فوق الأرضية",
-      "# تجربة أحمر-قبل/أخضر-بعد على الخطوة كاملةً بـgit مُقلَّد يُرجع نصّ الرفض الحقيقي من الوظيفة 99129715678:",
-      "#   قبل (origin/main): push-main=5 · rescue=0 · exit=1",
-      "#   بعد (شجرة العمل): push-main=1 · rescue=1 · exit=1",
-      "# تجارب سلبية على نفس الشجرة: سباق cannot lock ref ⇒ push-main=5 (محفوظ) · دفعٌ ناجح ⇒ exit=0 · PAT غائب ⇒ تخطٍّ exit=0",
-      "CODE_ACCEPTANCE_BASE_SHA=origin/main python3 scripts/research/refresh_acceptance_diff_snapshot.py && CODE_ACCEPTANCE_BASE_SHA=origin/main python3.12 scripts/fitness/check_code_acceptance.py   # ✅",
-      "for g in check_documentation_contract check_memory_coherence check_constitution_reality check_authority_links; do python3.12 scripts/fitness/$g.py; done   # ✅ أربعتها — بوّابات doc_integrity.yml لا يشملها run_fitness_gates.py (يقرأ ci.yml)، فتُشغَّل صراحةً",
-      "git ls-remote --heads https://github.com/Houssam-lab/NAAS-Agentic-Core.git   # القياس الحاسم: d9cd0925 مقابل feb81385 — 60 دفعة، 15 منها دمج"
+      "# الدليل الحاسم — تطابق المُعرّفات على الريموتين:",
+      "git ls-remote --heads https://github.com/Houssam-lab/NAAS-Agentic-Core.git   # 2757ef49… refs/heads/main",
+      "git ls-remote --heads origin | grep 'refs/heads/main$'                        # 2757ef49… refs/heads/main",
+      "# فحوص main على نفس الرأس: ٨/٨ success (CI · doc-integrity · runtime-truth · Qodana · observability-validation · Skills ×2 · Sync)",
+      "for g in check_documentation_contract check_memory_coherence check_constitution_reality check_authority_links; do python3.12 scripts/fitness/$g.py; done   # ✅ أربعتها",
+      "CODE_ACCEPTANCE_BASE_SHA=origin/main python3 scripts/research/refresh_acceptance_diff_snapshot.py && CODE_ACCEPTANCE_BASE_SHA=origin/main python3.12 scripts/fitness/check_code_acceptance.py   # ✅"
     ],
-    "measured_ar": "العطب مقيسٌ لا مُستنتَج: `git ls-remote` على المستودعين أعطى `d9cd0925` مقابل `feb81385`، و`git rev-list --count` أعطى **60** دفعة غائبة منها **15** دفعة دمج، و`merge-base --is-ancestor` أثبت أنّ المرآة متأخّرة تماماً لا متفرّعة. والسبب منقولٌ من سجلّ الوظيفة `99129715678` لا مُخمَّناً. والإصلاح مُثبَتٌ على مستوى **الخطوة** لا المُصنِّف وحده: نُفِّذت الخطوة كاملةً بـ`git` مُقلَّد يُرجع نصّ الرفض الحقيقي، فكانت خمسَ محاولاتٍ بلا إنقاذ قبل الإصلاح، ومحاولةً واحدةً مع دفعٍ إلى `mirror/main` بعده. وثلاث تجاربَ سلبية تحرس ما كان يعمل: السباق العابر ما زال بخمس محاولات، والدفعُ الناجح ما زال يخرج بصفر، ومسارُ الـPAT الغائب لم يُمَسّ. ⛔ **ولا يُدَّعى أنّ المرآة أُصلحت**: `refs/heads/main` عليها ما زال `d9cd0925`، والفتح فعلٌ في إعدادات المستودع النظير خارج صلاحية هذه الجلسة — وشرطُ الإغلاق تطابقُ الـSHA في `ls-remote` لا لونُ الوظيفة (§6.6 · ISS-197)."
+    "measured_ar": "الإغلاق مقيسٌ لا مُدّعى. الوظيفة `33267525629` نجحت على المحاولة الثانية بعد أن أزال المالك قاعدة Branch protection، و`ls-remote` على **الريموتين معاً** يُرجع `2757ef495017d3f2bb34bf9b0c623c321b58c060` لـ`refs/heads/main` — وهو نصّ شرط الإغلاق المكتوب في ISS-197 قبل أن يتحقّق، لا معياراً اختُرع بعده (نمط ISS-145 المضاد). ونوع القفل نفسه حُدِّد **قياساً**: صفحة Rulesets أثبتت خلوّها، فتعيّن أنّه Branch protection كلاسيكي — وهو ما طابق رسالة `GH006` حرفيّاً. وبوّابات `doc_integrity.yml` الأربع شُغِّلت **صراحةً** لأنّ `run_fitness_gates.py` يقرأ `ci.yml` ولا يشملها — وهي الثغرة التي حمّرت الدفعة السابقة (#2308) قبل ساعات، فصارت بنداً ثابتاً في أوامر التحقّق."
   },
   "curriculum": {
     "catalog_path": "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",

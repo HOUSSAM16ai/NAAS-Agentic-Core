@@ -178,15 +178,10 @@
   "git_change_snapshot": {
     "base_ref": "origin/main",
     "changed_paths_excluding_packet": [
-      ".github/workflows/repo-sync.yml",
       ".memory/README.md",
-      ".memory/issues.md",
-      "README.ar.md",
-      "README.md",
-      "scripts/ci/repo_sync_classify.py",
-      "scripts/ci/test_repo_sync_classify.py"
+      ".memory/issues.md"
     ],
-    "content_sha256_excluding_packet": "b8c729b19f13f667d72b94b28fbfa93014ca22ad55460522e2e620934aa0bde0",
+    "content_sha256_excluding_packet": "0996b3cf56a3b2b6f4b51cc34cf02141c2eeb2b752101694808bf66caac71674",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

@@ -192,11 +192,14 @@
     "base_ref": "origin/main",
     "changed_paths_excluding_packet": [
       ".github/workflows/repo-sync.yml",
+      ".memory/README.md",
       ".memory/issues.md",
+      "README.ar.md",
+      "README.md",
       "scripts/ci/repo_sync_classify.py",
       "scripts/ci/test_repo_sync_classify.py"
     ],
-    "content_sha256_excluding_packet": "2c6ee556bd9fbfbf7b10c0bb8528ebb27e4052d3b587fb0609a5e92fc800040e",
+    "content_sha256_excluding_packet": "b8c729b19f13f667d72b94b28fbfa93014ca22ad55460522e2e620934aa0bde0",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

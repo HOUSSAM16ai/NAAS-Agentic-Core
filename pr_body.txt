@@ -14,7 +14,7 @@ There was an untested factory function `get_cache()` in `app/caching/factory.py`
 - Added `test_get_cache_singleton_behavior` to verify object identity.
 
 ## Issue Number
-Fixes #2317
+Fixes #142
 
 ## How to Test
 ```bash

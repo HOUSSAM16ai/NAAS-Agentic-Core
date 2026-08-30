@@ -1,0 +1,76 @@
+HUMAN:
+لقد قمت بإضافة اختبارات وحدة للدالة `get_cache` للتحقق من أنها تعمل بشكل صحيح وتعيد الإعداد الافتراضي الصحيح وكذلك عند توفر إعدادات `Redis`. الاختبارات مرت بنجاح.
+
+AGENT:
+
+---
+
+## Why
+There was an untested factory function `get_cache()` in `app/caching/factory.py` that acted as a main wrapper for the `CacheFactory`. Adding tests increases test coverage and ensures regressions don't break default behavior.
+
+## Summary
+- Added `test_get_cache_returns_memory_cache_by_default` to ensure default in-memory fallback.
+- Added `test_get_cache_returns_redis_cache_when_configured` to check the Redis branch and parameter passing.
+- Added `test_get_cache_singleton_behavior` to verify object identity.
+
+## Issue Number
+Fixes #2317
+
+## How to Test
+```bash
+pytest tests/unit/caching/test_cache_factory_namespace.py -v
+```
+
+## Change Type
+- [ ] bug fix
+- [ ] feature
+- [ ] refactor
+- [ ] governance / documentation
+- [ ] security hardening
+- [x] test
+
+## Affected Areas
+- [x] app core
+- [ ] microservices
+- [ ] contracts / guardrails
+- [ ] CI/CD
+- [ ] docs / governance
+
+## Risk & Rollback
+- **Risk level:** low
+- **Rollback plan:** Revert the test additions, no production code changed.
+
+## Validation Evidence
+```bash
+$ python -m pytest tests/unit/caching/test_cache_factory_namespace.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+rootdir: /app
+configfile: pytest.ini
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items
+
+tests/unit/caching/test_cache_factory_namespace.py .......               [100%]
+
+============================== 7 passed in 0.28s ===============================
+```
+- [x] `ruff check .`
+- [x] `ruff format --check .`
+- [x] `pytest tests/unit/caching/test_cache_factory_namespace.py`
+
+## Video/Screenshots
+N/A - backend only.
+
+## Governance Checklist (Required)
+- [x] I updated docs when runtime/CI behavior changed.
+- [x] I did not add duplicate CI truth layers.
+- [x] I confirmed mergeability depends on `required-ci`.
+- [x] I removed or justified any skipped tests.
+- [x] I verified no PII or sensitive secrets were added.
+
+## Safeguarding Impact
+N/A
+
+## Reviewer Guide
+Check `tests/unit/caching/test_cache_factory_namespace.py` for the new `get_cache` test functions.

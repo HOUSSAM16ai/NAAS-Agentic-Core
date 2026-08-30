@@ -4,14 +4,8 @@
   "status": "READY_FOR_GATE",
   "decision": "D-277",
   "changed_paths": [
-    ".github/workflows/repo-sync.yml",
-    ".memory/README.md",
-    ".memory/issues.md",
-    "README.ar.md",
-    "README.md",
-    "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
-    "scripts/ci/repo_sync_parity.py",
-    "scripts/ci/test_repo_sync_parity.py"
+    "app/middleware/security/policy_enforcer.py",
+    "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json"
   ],
   "standards": [
     "system-design-primer"
@@ -164,11 +158,11 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "4c749d7",
+    "base_ref": "ea9d93ea5ee42dab5349b60ba00995c454a7dffd",
     "changed_paths_excluding_packet": [
-      ".memory/issues.md"
+      "app/middleware/security/policy_enforcer.py"
     ],
-    "content_sha256_excluding_packet": "efd7368f9751f6b1c138e830e58a44430d68fb02735f36567b4e6486b25b4b91",
+    "content_sha256_excluding_packet": "4b6278af99dbf12c43ddd3706bfa7d9f71b037f18f40992a2fc14b3c1b0f0e5b",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

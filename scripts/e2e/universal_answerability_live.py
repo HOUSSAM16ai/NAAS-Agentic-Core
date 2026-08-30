@@ -18,10 +18,13 @@
 | إطارٌ نهائي **واحد** — لا صفر ولا اثنان | §6.5 (`_emit_terminal_frames`) |
 | محتوى غير فارغ — لا دورَ صامت | ISS-145 · ISS-154 |
 | صفر خطف موضوع: سؤال فيزياء لا يُجاب بمفردات الاحتمالات | **ISS-159** |
-| صفر نثرٍ لاتيني في ردٍّ عربي | ISS-150 |
 | صفر نصّ نظامٍ بدور الطالب | D-117 · D-229 · ISS-146 |
 | صفر تسريب إجابة التمرين المرجعي | D-113 · ISS-148 |
 | كائنٌ مُولَّد تعرف الواجهة رسمه | ISS-145 (`KNOWN_UI_COMPONENTS`) |
+
+وتُبلَّغ ولا تحجب: كل مخالفةٍ يسمّي نصُّها بلاغاً **مؤجَّلاً بتصريح** في
+`scripts/e2e/deferred_findings.py` — واليوم أحدُها: تسرّبُ نثرٍ لاتيني (ISS-150)، وهو
+🔴 مفتوحٌ بقرارٍ مكتوبٍ بتأجيله. تُطبَع بنصّها في كل تشغيل، ويتغيّر رمز الخروج وحده.
 
 ⛔ **الأسرار من البيئة حصراً** — لا مفتاح ولا كلمة مرور في هذا الملفّ (D-265 L8).
 
@@ -51,6 +54,9 @@ import websockets
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.contracts.streaming import KNOWN_UI_COMPONENTS
+
+#: المصدر الوحيد لما يُبلَّغ ولا يحجب (ISS-199). ⛔ ولا قائمة ثانية هنا (D-186).
+from scripts.e2e.deferred_findings import mark, render_deferred, split_problems
 from shared.memory import is_system_authored
 
 _TERMINAL = {"assistant_final", "error", "assistant_error"}
@@ -280,7 +286,7 @@ def _print_turn(result: TurnResult) -> None:
     )
     print(f"     ↳ {head}…" if head else "     ↳ (بلا نصّ)")
     for problem in result.problems:
-        print(f"     ❌ {problem}")
+        print(f"     {mark(problem)}")
 
 
 def _answered(result: TurnResult) -> bool:
@@ -288,28 +294,37 @@ def _answered(result: TurnResult) -> bool:
     return bool(result.content.strip() or result.components)
 
 
-def _tally(results: list[TurnResult]) -> str:
+def _tally(results: list[TurnResult], blocking: int, deferred: int) -> str:
     """سطر الحصيلة — ثلاث حالاتٍ لا اثنتان: أجاب · فشلٌ منطوق · صمتٌ تام."""
     answered = sum(1 for r in results if _answered(r))
     spoken = sum(1 for r in results if r.spoken_error and not _answered(r))
     silent = sum(1 for r in results if not _answered(r) and not r.spoken_error)
-    failures = sum(len(r.problems) for r in results)
     return (
         f"أدوار: {len(results)} · أجابت: {answered} · "
-        f"فشلٌ منطوق: {spoken} · صمتٌ تام: {silent} · مخالفات: {failures}"
+        f"فشلٌ منطوق: {spoken} · صمتٌ تام: {silent} · "
+        f"مخالفات حاجبة: {blocking} · مؤجَّلة بتصريح: {deferred}"
     )
 
 
 def _verdict(results: list[TurnResult]) -> int:
-    """رمز الخروج هو ما تقرأه CI — والمخالفات تُطبَع بنصّها لا مُلخَّصة."""
-    failures = [(r.probe.question, p) for r in results for p in r.problems]
+    """رمز الخروج هو ما تقرأه CI — والمخالفات تُطبَع بنصّها لا مُلخَّصة.
+
+    الحاجبة تُفشِل، والمؤجَّلة **بتصريح** تُطبَع ولا تُفشِل (ISS-199) — وتُطبَع حتى
+    في التشغيل الأخضر، لأن خُضرةً لا تقول ما رأته تُقرأ «لم يحدث شيء» (D-206 L11).
+    """
+    blocking = [(r.probe.question, p) for r in results for p in split_problems(r.problems)[0]]
+    deferred = [p for r in results for p in split_problems(r.problems)[1]]
     print("\n" + "═" * 70)
-    print(_tally(results))
-    if not failures:
-        print("✅ كل سؤالٍ أُجيب بإطارٍ نهائيٍّ واحد، من مادته، بلا تسريبٍ ولا دورٍ صامت.")
+    print(_tally(results, len(blocking), len(deferred)))
+    if deferred:
+        print("\n⚠️ مؤجَّلة بتصريح — تُبلَّغ ولا تحجب:")
+        for line in render_deferred(deferred):
+            print(line)
+    if not blocking:
+        print("\n✅ كل سؤالٍ أُجيب بإطارٍ نهائيٍّ واحد، من مادته، بلا نصّ نظامٍ ولا دورٍ صامت.")
         return 0
-    print("\n❌ المخالفات:")
-    for question, problem in failures:
+    print("\n❌ المخالفات الحاجبة:")
+    for question, problem in blocking:
         print(f"   • «{question}» — {problem}")
     return 1
 

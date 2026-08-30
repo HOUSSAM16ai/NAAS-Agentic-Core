@@ -44,6 +44,9 @@
     "check_dual_track_alignment.py": [
       "tests/fitness/test_dual_track_alignment_gate.py"
     ],
+    "check_e2e_deferred_findings.py": [
+      "tests/fitness/test_check_e2e_deferred_findings.py"
+    ],
     "check_endpoint_complexity.py": [
       "tests/fitness/test_check_endpoint_complexity.py"
     ],

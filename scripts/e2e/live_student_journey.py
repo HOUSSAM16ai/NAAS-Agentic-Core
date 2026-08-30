@@ -5,9 +5,13 @@
 
   • زمن أوّل إطار (`conversation_init`) وأوّل محتوى وأوّل **كائنٍ تفاعلي**
   • إطارٌ نهائيّ **واحد** لكل دور (§6.5) — لا صفر ولا اثنان
-  • ⛔ صفر تسريبٍ لاتيني في ردٍّ عربي (ISS-150)
   • ⛔ صفر نصّ نظامٍ مخزَّنٍ بدور الطالب (D-229 · ISS-146)
   • ⛔ صفر دورٍ صامت: محتوى فارغ + مكوّنٌ لا يُرسَم (ISS-145)
+
+وتُبلَّغ ولا تحجب: كل مخالفةٍ يسمّي نصُّها بلاغاً **مؤجَّلاً بتصريح** في
+`scripts/e2e/deferred_findings.py` — واليوم أحدُها: تسرّبُ نثرٍ لاتيني (ISS-150)،
+وهو 🔴 مفتوحٌ بقرارٍ مكتوبٍ بتأجيله. تُطبَع بنصّها في كل تشغيل، ويتغيّر رمز الخروج
+وحده. تفصيلُ السبب في رأس ذلك الملفّ (ISS-199).
 
 البروتوكول ثابتٌ بالقانون (§6.6): المفتاح `question` (لا `content`)، والمصادقة عبر
 `subprotocols=['jwt', TOKEN]` — ترويسة `Authorization` تُنتِج `NegotiationError`.
@@ -37,6 +41,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 #: أسماء المكوّنات التي تعرف الواجهة رسمها — المصدر الوحيد هو عقد الخادم.
 from app.contracts.streaming import KNOWN_UI_COMPONENTS
+
+#: المصدر الوحيد لما يُبلَّغ ولا يحجب (ISS-199). ⛔ ولا قائمة ثانية هنا (D-186).
+from scripts.e2e.deferred_findings import mark, render_deferred, split_problems
 from shared.memory import is_system_authored
 from shared.ux import FIRST_OBJECT_PAINT_MS, classify_latency
 
@@ -199,25 +206,37 @@ def _print_turn(turn: TurnResult) -> None:
     print(f"   الدور كاملاً {_seconds(turn.total_s)}  → {classify_latency(turn.total_s).value}")
     print(f"   نصّ: {len(turn.content)} حرفاً · أطر نهائية: {turn.terminal_frames}")
     for problem in turn.problems:
-        print(f"   ❌ {problem}")
+        print(f"   {mark(problem)}")
 
 
 def _print_verdict(results: list[TurnResult]) -> int:
-    """الحكم النهائي على الرحلة — رمز الخروج هو ما تقرأه CI."""
+    """الحكم النهائي على الرحلة — رمز الخروج هو ما تقرأه CI.
+
+    المخالفة **الحاجبة** تُفشِل، والمؤجَّلة **بتصريح** تُطبَع ولا تُفشِل (ISS-199).
+    ⛔ والمؤجَّلة تُذكَر في سطر الحصيلة دائماً — حتى في الرحلة الخضراء: خُضرةٌ لا
+    تقول ما رأته تُقرأ «لم يحدث شيء»، وهو الصمت الذي يُقرأ نجاحاً (D-206 L11).
+    """
     budget_s = FIRST_OBJECT_PAINT_MS / 1000
     with_object = [turn for turn in results if turn.components]
     fast = [t for t in with_object if t.first_object_s is not None and t.first_object_s <= budget_s]
-    failures = [problem for turn in results for problem in turn.problems]
+    blocking, deferred = split_problems(p for turn in results for p in turn.problems)
 
     print("\n" + "═" * 62)
     print(
         f"أدوار: {len(results)} · تحمل كائناً: {len(with_object)} · "
         f"منها تحت ميزانية {FIRST_OBJECT_PAINT_MS}ms: {len(fast)}"
     )
-    if failures:
-        print(f"❌ مخالفات: {len(failures)}")
+    print(f"مخالفات حاجبة: {len(blocking)} · مؤجَّلة بتصريح: {len(deferred)}")
+    if deferred:
+        print("\n⚠️ مؤجَّلة بتصريح — تُبلَّغ ولا تحجب:")
+        for line in render_deferred(deferred):
+            print(line)
+    if blocking:
+        print("\n❌ حاجبة:")
+        for problem in blocking:
+            print(f"   • {problem}")
         return 1
-    print("✅ كل دورٍ أنهى بإطارٍ نهائيٍّ واحد، بلا تسريبٍ لاتيني، وبلا دورٍ صامت.")
+    print("\n✅ كل دورٍ أنهى بإطارٍ نهائيٍّ واحد، بلا نصّ نظام، وبلا دورٍ صامت.")
     return 0
 
 

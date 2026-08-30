@@ -16,8 +16,8 @@
 > them. All seven are wired now and `check_governance_registry.py` makes an
 > eighth impossible. Total gates on disk (derived, verified in CI):
 >
-> <!-- derived:gates_total=91 -->
-> **91** — in `scripts/fitness/` and `tools/ci/`, every one of them executed.
+> <!-- derived:gates_total=92 -->
+> **92** — in `scripts/fitness/` and `tools/ci/`, every one of them executed.
 
 ## Required jobs (must be green)
 
@@ -191,3 +191,9 @@ proves the block is bounded: R&D work stays green while the legal gate is `ABSEN
 | `check_source_adoption_matrix.py` | Every discovered source has status, purpose, local application, enforcer, and owner. | يمنع استخدام مصدر خارجي كسلطة غير معلنة أو تبعية غير مراجعة. |
 
 `check_documentation_contract.py` is deliberately executed in both `.github/workflows/doc_integrity.yml` and the `guardrails` job in `.github/workflows/ci.yml`; a documentation-only PR therefore cannot bypass the required path.
+
+## ISS-199 — التأجيل يُصرَّح، ولا يُعمَّر بعد بلاغه (2026-08-30)
+
+| Gate | What it enforces | Why it exists |
+|---|---|---|
+| `check_e2e_deferred_findings.py` | كل مُعرَّفٍ في `scripts/e2e/deferred_findings.py` له عنوانٌ في `.memory/issues.md` **وحالةٌ مفتوحة مُصرَّحة** (🔴/🟡)؛ وسببُ التأجيل منطوقٌ لا مقتضب؛ و`FROZEN_DEFERRED_COUNT` يطابق السجلّ **في الاتجاهين**؛ ولا سكربت e2e يبني مخالفةً موسومةً ببلاغ دون قراءة السجلّ الواحد؛ وملفٌّ يتعذّر تحليله يُبلَّغ عنه انتهاكاً لا يُبتلَع. | الدفعة `3176fe6` وصلت `live-e2e` بـ`required-ci` ولم تلمس رأس `live-e2e.yml` القائل «**ليس** في `required-ci`» (`diff`ها يبدأ عند `@@ -25`) — فصارت بوّابةٌ **حاجبة** مُوجَّهةً إلى **ISS-150** وهو 🔴 مفتوحٌ بقرارٍ مكتوبٍ بتأجيله. النتيجة: خمسة تشغيلاتٍ حمراء متتالية على `main` في المستودعين، وامتناعُ الأخضر بالبناء لا بالمصادفة. والتأجيل بلا حارس يتحوّل إلى إسكاتٍ دائم — فهذه البوّابة تجعل بلاغاً أُغلق وبقي مؤجَّلاً يُحمِّر CI (D-188)، وقائمةً ثانية للنيّة نفسها مستحيلة (D-186). |

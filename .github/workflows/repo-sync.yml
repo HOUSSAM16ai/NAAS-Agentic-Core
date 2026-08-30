@@ -1,6 +1,18 @@
 name: Sync to other repository
 # Runs on every push to main in BOTH repositories and replicates the pushed
-# content into the OTHER repository, keeping the two repos 100% identical.
+# content into the OTHER repository.
+#
+# SCOPE — `main` only, and that is the whole contract (ISS-198). The trigger is
+# `on: push: branches: [main]` and the push is `HEAD:main`, so no other ref is
+# ever synchronized. This header used to claim the job kept "the two repos 100%
+# identical" — a promise the implementation never made. Every ref outside main
+# was both unsynchronized AND unmeasured, so a reader of a green run had no way
+# to know a surface existed that nobody had looked at. That is ISS-197's failure
+# class at a different scope — parity asserted instead of measured — except it
+# would never have surfaced on its own, because nothing was looking. The final
+# step now measures the refs outside the contract and reports them. It does not
+# fail on them: a transient feature branch on one side is legitimate, and
+# failing every push for it is precisely how a job gets ignored.
 #
 # Direction is determined dynamically by which repository the run belongs to:
 #   Houssam-lab/NAAS-Agentic-Core  -> pushes to bakabala27-svg/NAAS-Agentic-Core (uses secrets.MIRROR_PAT)
@@ -186,3 +198,60 @@ jobs:
             fi
           } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
           exit 1
+
+      # Runs only when the sync step above succeeded — which is exactly when
+      # everyone assumes the two repositories are identical. The blocked path
+      # already prints its own measured drift, so repeating it there would add
+      # noise to a failure that is already explained.
+      - name: Measure parity beyond the synchronized ref
+        env:
+          MIRROR_PAT: ${{ secrets.MIRROR_PAT }}
+          UPSTREAM_PAT: ${{ secrets.UPSTREAM_PAT }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REPOSITORY" = "Houssam-lab/NAAS-Agentic-Core" ]; then
+            PEER="bakabala27-svg/NAAS-Agentic-Core"
+            PAT="${MIRROR_PAT}"
+          else
+            PEER="Houssam-lab/NAAS-Agentic-Core"
+            PAT="${UPSTREAM_PAT}"
+          fi
+          if [ -z "$PAT" ]; then
+            echo "::notice::parity not measured: peer sync is disabled for ${PEER}."
+            exit 0
+          fi
+
+          # Read both sides over the network rather than from the checkout: the
+          # step above rewrites `origin` to the peer and fetches it, so
+          # refs/remotes/origin/* no longer describes THIS repository.
+          LOCAL_REFS="$(mktemp)"
+          PEER_REFS="$(mktemp)"
+          git ls-remote --heads "https://github.com/${GITHUB_REPOSITORY}.git" \
+            >"${LOCAL_REFS}" 2>/dev/null || true
+          git ls-remote --heads "https://github.com/${PEER}.git" \
+            >"${PEER_REFS}" 2>/dev/null || true
+
+          # Unreadable refs mean "not measured", which is said out loud rather
+          # than rendered as an empty report that would read like agreement
+          # (D-206 L11). It is still not a failure: the sync itself succeeded.
+          if [ ! -s "${LOCAL_REFS}" ] || [ ! -s "${PEER_REFS}" ]; then
+            echo "::notice::parity not measured: could not read refs from one side."
+            {
+              echo "### ⏭️ Mirror parity not measured"
+              echo ""
+              echo "\`git ls-remote\` returned nothing for one of the two"
+              echo "repositories, so no comparison was made. This is *unknown*,"
+              echo "not *in sync*. The push itself succeeded."
+            } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 0
+          fi
+
+          PARITY_OUT="$(python3 scripts/ci/repo_sync_parity.py \
+            --local "${LOCAL_REFS}" --peer "${PEER_REFS}" \
+            --local-name "${GITHUB_REPOSITORY}" --peer-name "${PEER}")"
+          # Split in the shell, not through `head`/`tail`: under `pipefail` a
+          # reader that closes early can SIGPIPE the writer and kill the step.
+          PARITY_STATUS="${PARITY_OUT%%$'\n'*}"
+          PARITY_REPORT="${PARITY_OUT#*$'\n'}"
+          echo "parity status: ${PARITY_STATUS}"
+          printf '%s\n' "${PARITY_REPORT}" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"

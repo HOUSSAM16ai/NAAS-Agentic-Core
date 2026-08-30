@@ -115,7 +115,7 @@ async def test_a_failing_publisher_never_raises_into_the_turn(monkeypatch, caplo
             raise RuntimeError("broker down")
 
     monkeypatch.setattr(
-        "app.services.messaging.runtime._build_publisher", lambda: BrokenPublisher()
+        "app.services.messaging.runtime._build_publisher", BrokenPublisher
     )
     reset_event_publisher()
 
@@ -265,7 +265,7 @@ async def test_the_relay_reports_nothing_when_the_driver_is_not_in_memory(monkey
             return None
 
     monkeypatch.setattr(
-        "app.services.messaging.runtime._build_publisher", lambda: RemotePublisher()
+        "app.services.messaging.runtime._build_publisher", RemotePublisher
     )
     reset_event_publisher()
 

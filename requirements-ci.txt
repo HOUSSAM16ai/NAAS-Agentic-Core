@@ -17,8 +17,8 @@
 # 0.109.2 the same file is 5 passed. uvicorn, pydantic, websockets, httptools,
 # watchfiles and python-multipart all keep #2290's bumps.
 # Tracked for removal in #2303 (BKT task ownership).
-fastapi==0.109.2
-uvicorn==0.52.3
+fastapi==0.141.1
+uvicorn==0.52.4
 SQLAlchemy==2.0.52
 sqlmodel==0.0.39
 alembic==1.19.1

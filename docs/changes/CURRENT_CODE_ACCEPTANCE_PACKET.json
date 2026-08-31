@@ -164,9 +164,11 @@
     "base_ref": "main",
     "changed_paths_excluding_packet": [
       ".runtime/truth_table.lock.json",
+      "microservices/conversation_service/main.py",
+      "tests/services/test_messaging_runtime.py",
       "tests/telemetry/test_otel_setup.py"
     ],
-    "content_sha256_excluding_packet": "edf62242b2f64c43884d3454bb866316b53895c06a6ec145fb9ac586946dac47",
+    "content_sha256_excluding_packet": "7300f99681108689f0a192b5bedf2ae1a1b98c6e73199e3c0969c221e188c5ed",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

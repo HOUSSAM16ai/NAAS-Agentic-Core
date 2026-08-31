@@ -161,14 +161,12 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "main",
+    "base_ref": "1860d3c0df10410788c358bbd1fbfe5d5e416c98",
     "changed_paths_excluding_packet": [
-      ".runtime/truth_table.lock.json",
-      "microservices/conversation_service/main.py",
-      "tests/services/test_messaging_runtime.py",
-      "tests/telemetry/test_otel_setup.py"
+      "tests/unit/auth/__init__.py",
+      "tests/unit/auth/test_jwt_handler.py"
     ],
-    "content_sha256_excluding_packet": "7300f99681108689f0a192b5bedf2ae1a1b98c6e73199e3c0969c221e188c5ed",
+    "content_sha256_excluding_packet": "88216f2684ed80e85ea7c41ebd3a075a5915e6704c24874aa87e3e712f51487f",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

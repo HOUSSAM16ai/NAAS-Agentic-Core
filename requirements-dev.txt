@@ -34,7 +34,7 @@ safety-schemas>=0.0.8
 libcst==1.9.0
 
 # Documentation
-rich==14.2.0
+rich==15.0.0
 Pygments==2.19.2
 markdown-it-py==4.0.0
 mdurl==0.1.2

@@ -161,7 +161,7 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "origin/main",
+    "base_ref": "84f3e1888c893537be7d67b3079c68ed5039b414",
     "changed_paths_excluding_packet": [
       "tests/microservices/test_agent_chat_differential.py",
       "tests/regressions/test_iss145_silent_turn.py",
@@ -170,6 +170,6 @@
     ],
     "content_sha256_excluding_packet": "e3df033875e4810bf48acfa6a24060f43f94aadbdfad89d3fb4a22f1de8461c8",
     "refreshed_on": "2026-08-30",
-    "refresh_command": "CODE_ACCEPTANCE_BASE_SHA=origin/main python3 scripts/research/refresh_acceptance_diff_snapshot.py"
+    "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }
 }

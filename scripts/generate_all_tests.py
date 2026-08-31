@@ -170,7 +170,7 @@ class TestIntegration:
 
     def test_placeholder_integration(self):
         \"\"\"Placeholder for integration tests\"\"\"
-        # TODO: Add integration tests
+        # TODO (Won't Fix): Meaningful integration test generation is highly dependent on repository architecture and specific external dependencies. We leave this placeholder for manual implementation instead of generating potentially invalid boilerplate.
         assert True
 '''
 

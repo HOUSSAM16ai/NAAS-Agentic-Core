@@ -1,20 +1,12 @@
 {
   "$schema_version": "1",
-  "packet_id": "CAP-2026-09-01-agent-trust-documentation",
+  "packet_id": "CAP-2026-09-01-auth-package-ci-repair",
   "status": "READY_FOR_GATE",
   "decision": "D-277",
   "changed_paths": [
-    ".memory/naas_verification_truth.md",
-    ".memory/roadmap.md",
-    "README.ar.md",
-    "README.md",
+    "app/auth/__init__.py",
     "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
-    "docs/DOCUMENTATION_INDEX.md",
-    "docs/DOCUMENTATION_MANIFEST.json",
-    "docs/adr/ADR-017-agent-trust-control-plane.md",
-    "docs/architecture/AGENT_TRUST_CONTROL_PLANE.md",
-    "docs/naas/ONE_PAGER.md",
-    "docs/research/EVIDENCE_CATALOG.json"
+    "tests/unit/auth/test_jwt_handler.py"
   ],
   "standards": [
     "system-design-primer"
@@ -41,28 +33,28 @@
     {
       "standard": "system-design-primer",
       "paths": [
-        "docs/architecture/AGENT_TRUST_CONTROL_PLANE.md",
-        "docs/adr/ADR-017-agent-trust-control-plane.md"
+        "app/auth/__init__.py",
+        "tests/unit/auth/test_jwt_handler.py"
       ],
-      "gate": "scripts/fitness/check_documentation_contract.py",
-      "application_ar": "تفصل المعمارية النظام المستهدف إلى هوية وتفويض ووسيط أفعال وقرار سياسة وتنفيذ وتحقق لاحق ودليل واستجابة، وتصرح بحدود الفشل والكمون والتوافر. لا تُعرض أي وحدة مخططة كقدرة تشغيلية."
+      "gate": "ruff format --check app/auth/__init__.py tests/unit/auth/test_jwt_handler.py && python3 -m pytest -q tests/unit/auth/test_jwt_handler.py",
+      "application_ar": "أُصلحت حدود حزمة المصادقة كي لا تستورد وحدات غير موجودة، ونُسق اختبار JWT وفق أداة التنسيق المثبتة في CI."
     }
   ],
   "production": {
-    "owner": "architecture-governance",
-    "status": "DOCUMENTATION_ONLY_PROPOSED_ARCHITECTURE",
+    "owner": "authentication",
+    "status": "CI_REGRESSION_REPAIRED",
     "interfaces": [
-      "docs/architecture/AGENT_TRUST_CONTROL_PLANE.md: المعمارية المستهدفة وبوابات الترقية",
-      ".memory/naas_verification_truth.md: الحقيقة الحالية التي تحسم القدرة المنفذة",
-      "README.md وREADME.ar.md: روابط موجزة تفصل المنتج الحالي عن الرؤية"
+      "app/auth/__init__.py: واجهة تصدير حزمة المصادقة",
+      "tests/unit/auth/test_jwt_handler.py: اختبارات مصنع JWT singleton"
     ],
-    "failure_behavior_ar": "تغيير توثيقي إضافي فقط: لا كود ولا endpoint ولا workflow ولا runtime جديد. أي رابط مكسور أو تناقض موثق يفشل بوابات التوثيق وNAAS صراحةً.",
-    "observability_ar": "لا توجد telemetry تشغيلية جديدة. تُراجع صحة الوثائق عبر بوابات التوثيق، وتبقى أي مراقبة shadow أو inline مصنفة PLANNED حتى دليل مستقل.",
-    "security_boundary_ar": "لا تُضاف صلاحية أو سر أو اتصال خارجي. الوثيقة تمنع توصيل نموذج أو وكيل بأداة حساسة قبل الهوية والتفويض والسياسة والموافقة والدليل والفشل الآمن.",
-    "rollback_ar": "القرار Proposed والتغيير توثيقي إضافي؛ يمكن عكس الروابط والوثائق بتغيير لاحق مسجل دون أثر تشغيل. لا يُحذف سجل القرار أو التاريخ بصمت.",
+    "failure_behavior_ar": "تفشل الاستيرادات سريعاً إذا أشارت الحزمة إلى وحدة غير موجودة؛ لا تُخفى الأخطاء بمسارات fallback.",
+    "observability_ar": "اختبار الاستيراد واختبارات مصنع JWT وبوابة Ruff تكشف الانحراف في CI.",
+    "security_boundary_ar": "لا تغيير في إنشاء الرموز أو التحقق منها أو الأسرار؛ التغيير يزيل exports معطلة فقط ويُنسق الاختبار.",
+    "rollback_ar": "يمكن عكس التغيير، لكنه يعيد فشل جمع الاختبارات وفشل التنسيق المثبتين في CI.",
     "runtime_evidence_paths": [
-      ".memory/naas_verification_truth.md",
-      "naas_verifier/core/verdict.py"
+      "app/auth/__init__.py",
+      "app/auth/jwt_handler.py",
+      "tests/unit/auth/test_jwt_handler.py"
     ]
   },
   "commercial_trace": {
@@ -75,10 +67,10 @@
       "eu-ai-act-compliance",
       "high-rpm-ai-affiliation"
     ],
-    "customer_problem_ar": "فرق تبني وكلاء عربية تنفذ أفعالاً حساسة تحتاج إثبات أن الأداة والصلاحية والسياسة وانتقال الحالة والنتيجة صحيحة، لا تقييم النص النهائي وحده.",
-    "value_hypothesis_ar": "تحقق مستقل قائم على المسار والسياسة ودليل قابل لإعادة التشغيل قد يكشف فشلاً لا تلتقطه QA العامة؛ تبقى الفرضية غير مثبتة حتى تجارب مدفوعة وتجديد.",
-    "foreign_currency_path_ar": "تجربة Agent Action Assurance مؤسسية محدودة ومدفوعة بالدولار أو اليورو، ثم اشتراك متكرر فقط بعد إثبات إعادة الاستخدام والاحتفاظ.",
-    "foundation_exception_ar": "هذه الدفعة توثق المنتج والقرار ولا تدعي عقداً أو إيراداً أو جاهزية runtime؛ عرض ai-red-teaming-multilingual يبقى PROPOSED."
+    "customer_problem_ar": "فشل استيراد حزمة المصادقة يمنع جمع الاختبارات ويخفض موثوقية التسليم.",
+    "value_hypothesis_ar": "حصر exports في الوحدات الموجودة واختبار مصنع JWT يعيدان بوابة CI دون توسيع سطح المصادقة.",
+    "foreign_currency_path_ar": "لا إيراد مباشر؛ هذا إصلاح موثوقية للبنية المشتركة.",
+    "foundation_exception_ar": "إصلاح تمكيني مشترك وليس عرضاً تجارياً مستقلاً؛ حالات العروض لا تتغير."
   },
   "deletions": {
     "count": 0,
@@ -88,15 +80,12 @@
   "verification": {
     "result": "PASS",
     "commands": [
-      "python3 scripts/fitness/check_documentation_contract.py",
-      "python3 scripts/fitness/check_authority_links.py",
-      "python3 scripts/fitness/check_docs_runtime_parity.py",
-      "python3 scripts/fitness/check_naas_verification.py",
-      "python3 scripts/fitness/check_memory_coherence.py",
-      "python3 -m pytest -q tests/fitness/test_documentation_contract_gate.py tests/fitness/test_naas_verifier_boundary_gate.py tests/architecture/test_naas_verification_gate.py",
+      "python3 -m pytest -q tests/unit/auth/test_jwt_handler.py",
+      "ruff check app/auth/__init__.py tests/unit/auth/test_jwt_handler.py",
+      "ruff format --check app/auth/__init__.py tests/unit/auth/test_jwt_handler.py",
       "git diff --check"
     ],
-    "measured_ar": "بوابات التوثيق والسلطة والتكافؤ وNAAS والذاكرة والسياق والمسارين والتقنية العميقة خضراء. الاختبارات المستهدفة 41/41 خضراء. مشغل البوابات الكامل شغّل 76/76 بوابة بنجاح بعد تحديث snapshot لحزمة القبول."
+    "measured_ar": "أصبحت اختبارات JWT الأربعة خضراء، ونجح Ruff lint وformat check على الملفين المعدلين، ونجح فحص whitespace."
   },
   "curriculum": {
     "catalog_path": "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
@@ -177,20 +166,12 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "b9aa0ec3c06f447793d320c4a365025d0ed323c5",
+    "base_ref": "610d9ecbff7814751bcc96b56d102ae87508f69f",
     "changed_paths_excluding_packet": [
-      ".memory/naas_verification_truth.md",
-      ".memory/roadmap.md",
-      "README.ar.md",
-      "README.md",
-      "docs/DOCUMENTATION_INDEX.md",
-      "docs/DOCUMENTATION_MANIFEST.json",
-      "docs/adr/ADR-017-agent-trust-control-plane.md",
-      "docs/architecture/AGENT_TRUST_CONTROL_PLANE.md",
-      "docs/naas/ONE_PAGER.md",
-      "docs/research/EVIDENCE_CATALOG.json"
+      "app/auth/__init__.py",
+      "tests/unit/auth/test_jwt_handler.py"
     ],
-    "content_sha256_excluding_packet": "53a0a8865d38b630359697661238a05cd44451aa6fef9cf732692595c448673a",
+    "content_sha256_excluding_packet": "e5cfa638cbe5f73fe319962ac24daed6fc93990fe29309293dcc83c62b37f6ec",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

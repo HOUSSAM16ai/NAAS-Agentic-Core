@@ -166,11 +166,11 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "2518176682aa2d5d80c952e9409373494baa9723",
+    "base_ref": "486288731ecbe169b60666411f17e765d87ee0be",
     "changed_paths_excluding_packet": [
       "tests/unit/auth/test_jwt_handler.py"
     ],
-    "content_sha256_excluding_packet": "1c6dd6cb14997a880310671209c696695cc153d4373b4c626fc9e0f0efd53b6f",
+    "content_sha256_excluding_packet": "d9247326588ee28abca6e055609d0e5455859695234dec2700d4a9d3b61091ac",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

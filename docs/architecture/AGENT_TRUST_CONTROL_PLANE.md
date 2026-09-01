@@ -5,6 +5,7 @@
 > **Current implementation truth:** [`.memory/naas_verification_truth.md`](../../.memory/naas_verification_truth.md).
 > **Existing verifier law:** [`NAAS_VERIFICATION_LAYER.md`](NAAS_VERIFICATION_LAYER.md).
 > **Decision record:** [`ADR-017-agent-trust-control-plane.md`](../adr/ADR-017-agent-trust-control-plane.md).
+> **Investment and ROI evidence:** [`AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md`](../commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md).
 
 ## 1. Product definition
 
@@ -71,6 +72,8 @@ The likely initial buyer is a CTO, Chief AI Officer, product-security lead, or d
 > Can we demonstrate that this agent used the correct tool, under the correct authority and policy, and produced the required system state before we release or renew it?
 
 The initial offer remains a bounded pre-production assurance engagement. Buyer, price, budget owner, and willingness to renew remain hypotheses until documented customer evidence advances the commercial gates.
+
+The investment case defines the customer ROI equation, financing gates, competitive falsification tests, and the 90-day path from research to paid evidence. It deliberately does not convert research, regulation, funding, or acquisitions into NAAS revenue claims.
 
 ## 5. Target architecture
 

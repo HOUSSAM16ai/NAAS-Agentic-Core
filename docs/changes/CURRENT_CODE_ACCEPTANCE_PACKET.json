@@ -1,12 +1,25 @@
 {
   "$schema_version": "1",
-  "packet_id": "CAP-2026-09-01-auth-package-ci-repair",
+  "packet_id": "CAP-2026-09-01-agent-assurance-investment-evidence",
   "status": "READY_FOR_GATE",
   "decision": "D-277",
   "changed_paths": [
-    "app/auth/__init__.py",
+    ".github/workflows/ci.yml",
+    ".memory/ci-gates.md",
     "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
-    "tests/unit/auth/test_jwt_handler.py"
+    "docs/DOCUMENTATION_INDEX.md",
+    "docs/DOCUMENTATION_MANIFEST.json",
+    "docs/architecture/AGENT_TRUST_CONTROL_PLANE.md",
+    "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md",
+    "docs/commercial/OFFER_CATALOG.json",
+    "docs/governance/CONSTITUTION_REGISTRY.json",
+    "docs/governance/DUAL_TRACK_ALIGNMENT.json",
+    "docs/governance/NEGATIVE_PROOFS.json",
+    "docs/research/EVIDENCE_CATALOG.json",
+    "scripts/fitness/check_agent_assurance_investment_case.py",
+    "shared/agent_assurance_roi.py",
+    "tests/fitness/test_agent_assurance_investment_case_gate.py",
+    "tests/shared/test_agent_assurance_roi.py"
   ],
   "standards": [
     "system-design-primer"
@@ -33,28 +46,31 @@
     {
       "standard": "system-design-primer",
       "paths": [
-        "app/auth/__init__.py",
-        "tests/unit/auth/test_jwt_handler.py"
+        "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md",
+        "shared/agent_assurance_roi.py",
+        "scripts/fitness/check_agent_assurance_investment_case.py"
       ],
-      "gate": "ruff format --check app/auth/__init__.py tests/unit/auth/test_jwt_handler.py && python3 -m pytest -q tests/unit/auth/test_jwt_handler.py",
-      "application_ar": "أُصلحت حدود حزمة المصادقة كي لا تستورد وحدات غير موجودة، ونُسق اختبار JWT وفق أداة التنسيق المثبتة في CI."
+      "gate": "python3 scripts/fitness/check_agent_assurance_investment_case.py && python3 -m pytest -q tests/shared/test_agent_assurance_roi.py tests/fitness/test_agent_assurance_investment_case_gate.py",
+      "application_ar": "تطبيق الأدلة كحالة استثمار قابلة للتفنيد ونموذج ROI حتمي ومدخلات موثقة وبوابة CI تمنع ترقية العرض قبل الدليل المدفوع."
     }
   ],
   "production": {
-    "owner": "authentication",
-    "status": "CI_REGRESSION_REPAIRED",
+    "owner": "naas-product-and-commercial-evidence",
+    "status": "RESEARCH_AND_PROPOSED_OFFER_ONLY",
     "interfaces": [
-      "app/auth/__init__.py: واجهة تصدير حزمة المصادقة",
-      "tests/unit/auth/test_jwt_handler.py: اختبارات مصنع JWT singleton"
+      "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md: أطروحة الاستثمار وبوابات التفنيد",
+      "shared/agent_assurance_roi.py: حساب ROI حتمي قابل لإعادة الإنتاج",
+      "scripts/fitness/check_agent_assurance_investment_case.py: فرض حدود الأدلة والادعاء"
     ],
-    "failure_behavior_ar": "تفشل الاستيرادات سريعاً إذا أشارت الحزمة إلى وحدة غير موجودة؛ لا تُخفى الأخطاء بمسارات fallback.",
-    "observability_ar": "اختبار الاستيراد واختبارات مصنع JWT وبوابة Ruff تكشف الانحراف في CI.",
-    "security_boundary_ar": "لا تغيير في إنشاء الرموز أو التحقق منها أو الأسرار؛ التغيير يزيل exports معطلة فقط ويُنسق الاختبار.",
-    "rollback_ar": "يمكن عكس التغيير، لكنه يعيد فشل جمع الاختبارات وفشل التنسيق المثبتين في CI.",
+    "failure_behavior_ar": "القيم السالبة وغير المنتهية والاحتمالات خارج [0,1] تفشل صراحة؛ الكلفة أو المنفعة الصفرية تعيد نسبة غير معرفة ولا تصطنع عائداً.",
+    "observability_ar": "كل مكوّن منفعة ظاهر في النتيجة، ومدخلات التجربة مرتبطة بهرم دليل، والبوابة تعمل ضمن guardrails في CI.",
+    "security_boundary_ar": "لا أسرار أو اتصال بعميل أو تنفيذ خارجي؛ النموذج حسابي محض والوثيقة تمنع اختبار إنتاج غير مصرح أو ادعاء امتثال.",
+    "rollback_ar": "التغيير إضافي ويمكن عكسه، لكن ذلك يزيل بوابة تمنع فصل سرد الاستثمار عن الدليل والمنتج.",
     "runtime_evidence_paths": [
-      "app/auth/__init__.py",
-      "app/auth/jwt_handler.py",
-      "tests/unit/auth/test_jwt_handler.py"
+      "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md",
+      "shared/agent_assurance_roi.py",
+      "tests/shared/test_agent_assurance_roi.py",
+      "scripts/fitness/check_agent_assurance_investment_case.py"
     ]
   },
   "commercial_trace": {
@@ -67,10 +83,10 @@
       "eu-ai-act-compliance",
       "high-rpm-ai-affiliation"
     ],
-    "customer_problem_ar": "فشل استيراد حزمة المصادقة يمنع جمع الاختبارات ويخفض موثوقية التسليم.",
-    "value_hypothesis_ar": "حصر exports في الوحدات الموجودة واختبار مصنع JWT يعيدان بوابة CI دون توسيع سطح المصادقة.",
-    "foreign_currency_path_ar": "لا إيراد مباشر؛ هذا إصلاح موثوقية للبنية المشتركة.",
-    "foundation_exception_ar": "إصلاح تمكيني مشترك وليس عرضاً تجارياً مستقلاً؛ حالات العروض لا تتغير."
+    "customer_problem_ar": "مالك نشر الوكيل لا يملك دليلاً مستقلاً أن الأداة والتفويض والسياسة وانتقال الحالة صحيحة، ولا طريقة منضبطة لحساب تكلفة الألم أو قيمة تقليله.",
+    "value_hypothesis_ar": "ضمان مسار قابل للإعادة مع مقارنة held-out وحساب ROI من سجلات العميل قد يخفض المراجعة أو الخسارة أو تأخير الإطلاق؛ تبقى الفرضية غير مثبتة حتى تجربة مدفوعة.",
+    "foreign_currency_path_ar": "تجربة ضمان أفعال محدودة ومدفوعة لمنتج وكلاء عربي خارج الجزائر، ثم اشتراك دوري فقط بعد إعادة الاستخدام والتجديد والهامش.",
+    "foundation_exception_ar": "الحزمة تبني بحثاً وأداة قياس وبوابة ادعاء؛ لا عقد ولا دفعة ولا إيراد أو عائد مستثمر مثبت، وحالة العرض تبقى PROPOSED."
   },
   "deletions": {
     "count": 0,
@@ -80,12 +96,15 @@
   "verification": {
     "result": "PASS",
     "commands": [
-      "python3 -m pytest -q tests/unit/auth/test_jwt_handler.py",
-      "ruff check app/auth/__init__.py tests/unit/auth/test_jwt_handler.py",
-      "ruff format --check app/auth/__init__.py tests/unit/auth/test_jwt_handler.py",
+      "python3 scripts/fitness/check_agent_assurance_investment_case.py",
+      "python3 scripts/fitness/check_dual_track_alignment.py",
+      "python3 scripts/fitness/check_documentation_contract.py",
+      "python3 -m pytest -q tests/shared/test_agent_assurance_roi.py tests/fitness/test_agent_assurance_investment_case_gate.py tests/fitness/test_dual_track_alignment_gate.py tests/fitness/test_documentation_contract_gate.py",
+      "ruff check shared/agent_assurance_roi.py scripts/fitness/check_agent_assurance_investment_case.py tests/shared/test_agent_assurance_roi.py tests/fitness/test_agent_assurance_investment_case_gate.py",
+      "ruff format --check shared/agent_assurance_roi.py scripts/fitness/check_agent_assurance_investment_case.py tests/shared/test_agent_assurance_roi.py tests/fitness/test_agent_assurance_investment_case_gate.py",
       "git diff --check"
     ],
-    "measured_ar": "أصبحت اختبارات JWT الأربعة خضراء، ونجح Ruff lint وformat check على الملفين المعدلين، ونجح فحص whitespace."
+    "measured_ar": "نجحت اختبارات ROI والبوابة السلبية والمواءمة وعقد التوثيق (18/18)، ونجحت جميع بوابات fitness المشتقة من CI (77/77)، ونجح Ruff وفحص whitespace."
   },
   "curriculum": {
     "catalog_path": "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
@@ -166,11 +185,25 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "486288731ecbe169b60666411f17e765d87ee0be",
+    "base_ref": "WORKTREE",
     "changed_paths_excluding_packet": [
-      "tests/unit/auth/test_jwt_handler.py"
+      ".github/workflows/ci.yml",
+      ".memory/ci-gates.md",
+      "docs/DOCUMENTATION_INDEX.md",
+      "docs/DOCUMENTATION_MANIFEST.json",
+      "docs/architecture/AGENT_TRUST_CONTROL_PLANE.md",
+      "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md",
+      "docs/commercial/OFFER_CATALOG.json",
+      "docs/governance/CONSTITUTION_REGISTRY.json",
+      "docs/governance/DUAL_TRACK_ALIGNMENT.json",
+      "docs/governance/NEGATIVE_PROOFS.json",
+      "docs/research/EVIDENCE_CATALOG.json",
+      "scripts/fitness/check_agent_assurance_investment_case.py",
+      "shared/agent_assurance_roi.py",
+      "tests/fitness/test_agent_assurance_investment_case_gate.py",
+      "tests/shared/test_agent_assurance_roi.py"
     ],
-    "content_sha256_excluding_packet": "d9247326588ee28abca6e055609d0e5455859695234dec2700d4a9d3b61091ac",
+    "content_sha256_excluding_packet": "e7fe7468455dfb8872b3e0178322dbdea63fab5d0a883990596978ca66ceb7d8",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

@@ -85,6 +85,56 @@
       "verified_on": "2026-09-01"
     },
     {
+      "id": "agentdojo-2024",
+      "title_en": "AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents",
+      "kind": "peer_reviewed_research",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/97091a5177d8dc64b1da8bf3e1f6fb54-Abstract-Datasets_and_Benchmarks_Track.html",
+      "scope_ar": "تقييم وكلاء يستعملون أدوات في بيئات ذات حالة وبيانات غير موثوقة عبر 97 مهمة و629 حالة أمنية.",
+      "local_application_ar": "تبرير اختبار المنفعة والأمن على حالة البيئة والمسار والأدوات معاً، وعدم الاكتفاء بتقييم النص النهائي.",
+      "required_for": ["agent", "tool", "evaluation", "security", "commercial_claim"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "injecagent-acl-2024",
+      "title_en": "InjecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated Large Language Model Agents",
+      "kind": "peer_reviewed_research",
+      "url": "https://aclanthology.org/2024.findings-acl.624/",
+      "scope_ar": "معيار من 1054 حالة و17 أداة مستخدم و62 أداة مهاجم يقيس الضرر المباشر وتسريب البيانات عبر الحقن غير المباشر.",
+      "local_application_ar": "اختبارات خصومية لمسارات الأدوات والمحتوى الخارجي، مع منع تعميم نسبة أي معيار على إنتاج عميل بلا قياس محلي.",
+      "required_for": ["agent", "tool", "evaluation", "security", "commercial_claim"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "metr-task-horizons-2025",
+      "title_en": "Measuring AI Ability to Complete Long Software Tasks",
+      "kind": "empirical_research",
+      "url": "https://metr.org/blog/2025-03-19-measuring-ai-ability-to-complete-long-tasks/",
+      "scope_ar": "قياس أفق مهام الوكلاء وربط الاعتمادية بطول المهام البشرية مع نشر المنهج والبيانات وحدود الاستقراء.",
+      "local_application_ar": "تبرير الحاجة المتزايدة إلى تحقق المسار كلما طال العمل الذاتي، مع إبقاء الاتجاه خارج أي تنبؤ إيراد أو قدرة مضمونة.",
+      "required_for": ["agent", "evaluation", "roadmap", "commercial_claim"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "palo-alto-protect-ai-acquisition-2025",
+      "title_en": "Palo Alto Networks Completes Acquisition of Protect AI",
+      "kind": "primary_commercial_evidence",
+      "url": "https://www.paloaltonetworks.com/company/press/2025/palo-alto-networks-completes-acquisition-of-protect-ai",
+      "scope_ar": "دليل أولي على اهتمام استراتيجي بحماية دورة AI من الفحص والاختبار العدائي إلى حماية وقت التشغيل وأمن الوكلاء.",
+      "local_application_ar": "يُستخدم لإثبات وجود منافسة وطلب استراتيجي فقط؛ لا يُعامل كإيراد NAAS أو حجم سوق أو تقييم مضمون.",
+      "required_for": ["commercial_claim", "competition", "investor_case"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "microsoft-entra-agent-id-2025",
+      "title_en": "Microsoft extends Zero Trust to secure the agentic workforce",
+      "kind": "primary_product_evidence",
+      "url": "https://www.microsoft.com/en-us/security/blog/2025/05/19/microsoft-extends-zero-trust-to-secure-the-agentic-workforce/",
+      "scope_ar": "إطلاق هوية مخصصة للوكلاء وتوسيع ضوابط الهوية والوصول والبيانات والحماية وقت التشغيل إلى الأنظمة الوكيلية.",
+      "local_application_ar": "دليل منافسة على أن الهوية والأمن الوكيليان يدخلان منصات المؤسسات؛ يفرض اختبار عدم الاكتفاء بميزة يمكن لمزود قائم دمجها.",
+      "required_for": ["commercial_claim", "competition", "identity", "agent"],
+      "verified_on": "2026-09-01"
+    },
+    {
       "id": "openssf-scorecard",
       "title_en": "OpenSSF Scorecard",
       "kind": "automated_security_guidance",

@@ -185,7 +185,7 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "WORKTREE",
+    "base_ref": "88049fc53740fc7edb366d3c6ddd56368e4e2ec4",
     "changed_paths_excluding_packet": [
       ".github/workflows/ci.yml",
       ".memory/ci-gates.md",

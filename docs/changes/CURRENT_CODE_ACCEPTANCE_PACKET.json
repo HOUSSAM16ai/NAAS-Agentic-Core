@@ -177,7 +177,7 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "WORKTREE",
+    "base_ref": "b9aa0ec3c06f447793d320c4a365025d0ed323c5",
     "changed_paths_excluding_packet": [
       ".memory/naas_verification_truth.md",
       ".memory/roadmap.md",

@@ -33,6 +33,21 @@ REQUIRED_TEXT_FIELDS = {
     "kill_criterion_ar",
     "unproven_ar",
 }
+REQUIRED_DISCOVERY_FIELDS = {
+    "qualified_buyer_definition_ar",
+    "contact_authorization_ar",
+    "paid_pilot_boundary_ar",
+    "decision_rule_ar",
+}
+REQUIRED_DISCOVERY_RECORD_FIELDS = {
+    "segment",
+    "consequential_workflow",
+    "current_alternative",
+    "pain_or_risk_evidence",
+    "budget_owner",
+    "procurement_path",
+    "outcome",
+}
 FORBIDDEN_PROMISES = ("guaranteed", "مضمون", "سوق بلا منافسة", "امتثال مضمون")
 
 
@@ -101,6 +116,39 @@ def _validate_score(opportunity_id: str, row: dict, previous_score: int) -> tupl
     return failures, calculated
 
 
+def _validate_discovery_protocol(opportunity_id: str, row: dict) -> list[str]:
+    """يتحقق من أن تجربة البيع القريبة تجمع دليلاً قابلاً للقرار لا وعوداً."""
+
+    failures: list[str] = []
+    protocol = row.get("discovery_protocol")
+    if row.get("priority") != "NOW":
+        if protocol is not None:
+            failures.append(
+                f"{opportunity_id}: only NOW opportunities may define discovery_protocol"
+            )
+        return failures
+    if not isinstance(protocol, dict):
+        return [f"{opportunity_id}: NOW opportunity needs discovery_protocol"]
+    for field in sorted(REQUIRED_DISCOVERY_FIELDS):
+        value = protocol.get(field)
+        if not isinstance(value, str) or not value.strip():
+            failures.append(f"{opportunity_id}: discovery_protocol missing {field}")
+    questions = protocol.get("interview_questions_ar")
+    if (
+        not isinstance(questions, list)
+        or len(questions) < 5
+        or not all(isinstance(question, str) and question.strip() for question in questions)
+    ):
+        failures.append(f"{opportunity_id}: discovery_protocol needs at least five questions")
+    record_fields = protocol.get("evidence_record_fields")
+    if (
+        not isinstance(record_fields, list)
+        or set(record_fields) != REQUIRED_DISCOVERY_RECORD_FIELDS
+    ):
+        failures.append(f"{opportunity_id}: discovery_protocol record fields do not match contract")
+    return failures
+
+
 def validate(portfolio: dict, offers: dict, evidence: dict) -> list[str]:
     """يعيد كل خروقات العقد بدلاً من إخفاء الفشل الأول."""
 
@@ -144,6 +192,7 @@ def validate(portfolio: dict, offers: dict, evidence: dict) -> list[str]:
 
         failures.extend(_validate_text(opportunity_id, row))
         failures.extend(_validate_evidence(opportunity_id, row, evidence_ids))
+        failures.extend(_validate_discovery_protocol(opportunity_id, row))
         score_failures, previous_score = _validate_score(opportunity_id, row, previous_score)
         failures.extend(score_failures)
     return failures

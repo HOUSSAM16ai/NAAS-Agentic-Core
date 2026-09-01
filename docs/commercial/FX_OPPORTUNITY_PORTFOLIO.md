@@ -38,6 +38,12 @@ The deterministic score is not a market forecast. It prioritizes learning using 
 4. Review the ranking quarterly and after every paid experiment. Apply each kill criterion without preserving a favored narrative.
 5. Keep long-horizon industrial and formal-verification work as research until a buyer, partner, data boundary, acceptance test, and lawful currency route exist.
 
+### Decision-ready discovery for the two NOW opportunities
+
+The two near-term opportunities now include a machine-checked `discovery_protocol` in the [canonical portfolio](FX_OPPORTUNITY_PORTFOLIO.json). It turns a generic request to “talk to customers” into an evidence boundary: a qualified buyer definition, explicit contact authorization, at least five problem questions, a minimal de-identified evidence record, a bounded paid-pilot boundary, and an explicit continue/kill decision rule.
+
+The protocol is intentionally not a sales claim. A recorded interview is neither qualified demand nor revenue; only the published paid-pilot gate can create the next experiment. The record excludes names, secrets, access tokens, customer data, and unapproved third-party testing. `NOW` means discovery may proceed after authorization; `OPTION` and `WATCH` remain research items and cannot acquire a discovery protocol until promoted by evidence.
+
 ## 5. Near-term research backlog
 
 - Create interview scripts for the top two opportunities that ask about the current review process, incident cost, budget owner, procurement path, and what existing tooling already covers.

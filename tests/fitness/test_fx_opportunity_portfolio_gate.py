@@ -48,3 +48,27 @@ def test_rejects_eighth_unapproved_offer() -> None:
     failures = gate.validate(broken, offers, evidence)
 
     assert any("unknown parent offer" in failure for failure in failures)
+
+
+def test_rejects_now_opportunity_without_decision_ready_discovery_protocol() -> None:
+    portfolio, offers, evidence = _repository_inputs()
+    broken = deepcopy(portfolio)
+    del broken["opportunities"][0]["discovery_protocol"]["decision_rule_ar"]
+
+    failures = gate.validate(broken, offers, evidence)
+
+    assert any("discovery_protocol missing decision_rule_ar" in failure for failure in failures)
+
+
+def test_rejects_discovery_protocol_for_non_now_opportunity() -> None:
+    portfolio, offers, evidence = _repository_inputs()
+    broken = deepcopy(portfolio)
+    broken["opportunities"][2]["discovery_protocol"] = deepcopy(
+        broken["opportunities"][0]["discovery_protocol"]
+    )
+
+    failures = gate.validate(broken, offers, evidence)
+
+    assert any(
+        "only NOW opportunities may define discovery_protocol" in failure for failure in failures
+    )

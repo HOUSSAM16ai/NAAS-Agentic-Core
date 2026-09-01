@@ -225,6 +225,20 @@
       "role": "no-bypass-control-plane",
       "authority": "primary",
       "status": "live"
+    },
+    {
+      "path": "docs/architecture/AGENT_TRUST_CONTROL_PLANE.md",
+      "audience": "architect",
+      "role": "agent-trust-target-architecture",
+      "authority": "supporting",
+      "status": "live"
+    },
+    {
+      "path": "docs/adr/ADR-017-agent-trust-control-plane.md",
+      "audience": "maintainer",
+      "role": "agent-trust-architecture-decision",
+      "authority": "supporting",
+      "status": "live"
     }
   ]
 }

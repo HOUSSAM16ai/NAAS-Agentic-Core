@@ -45,6 +45,46 @@
       "verified_on": "2026-08-21"
     },
     {
+      "id": "eu-ai-act-official-framework",
+      "title_en": "European Commission — AI Act Regulatory Framework",
+      "kind": "official_regulation",
+      "url": "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai",
+      "scope_ar": "الإطار القانوني الأوروبي القائم على المخاطر، بما يشمل إدارة المخاطر والسجلات والإشراف البشري والمتانة والأمن والمراقبة بعد النشر بحسب نطاق التطبيق.",
+      "local_application_ar": "تحويل المتطلبات المنطبقة إلى خرائط أدلة وضوابط قابلة للاختبار دون ادعاء استشارة قانونية أو امتثال تلقائي.",
+      "required_for": ["agent", "governance", "audit", "commercial_claim", "eu_market"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "iso-iec-42001",
+      "title_en": "ISO/IEC 42001:2023 — Artificial Intelligence Management System",
+      "kind": "official_standard",
+      "url": "https://www.iso.org/standard/42001",
+      "scope_ar": "متطلبات إنشاء نظام إدارة ذكاء اصطناعي وتنفيذه وصيانته وتحسينه المستمر.",
+      "local_application_ar": "ربط سياسات الوكلاء وإدارة المخاطر وسجلات الأدلة والمراجعة البشرية والتحسين المستمر بنظام إدارة واضح؛ الاستشهاد لا يعني شهادة.",
+      "required_for": ["agent", "governance", "audit", "management_system"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "oauth-security-bcp-rfc9700",
+      "title_en": "RFC 9700 — Best Current Practice for OAuth 2.0 Security",
+      "kind": "internet_standard",
+      "url": "https://www.rfc-editor.org/rfc/rfc9700.html",
+      "scope_ar": "أفضل الممارسات الأمنية الحالية لتدفقات OAuth والرموز والتفويض المفوض.",
+      "local_application_ar": "مرجع لتفويض الوكلاء برموز قصيرة العمر ومحدودة النطاق؛ ولا يُعامل إثبات الهوية كتفويض دلالي للفعل.",
+      "required_for": ["agent", "identity", "authorization", "tool", "protocol"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "mcp-security-best-practices-2025-06-18",
+      "title_en": "Model Context Protocol — Security Best Practices",
+      "kind": "protocol_security_guidance",
+      "url": "https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices",
+      "scope_ar": "مخاطر التفويض والرموز والموافقة والوكيل الوسيط المرتبكة عند ربط النماذج بالأدوات عبر MCP.",
+      "local_application_ar": "نمذجة تهديد كل مهايئ MCP، ومنع token passthrough، وربط الموافقة بالنطاق الفعلي؛ MCP تكامل محتمل لا حد المنتج كله.",
+      "required_for": ["agent", "tool", "protocol", "identity", "external_action"],
+      "verified_on": "2026-09-01"
+    },
+    {
       "id": "openssf-scorecard",
       "title_en": "OpenSSF Scorecard",
       "kind": "automated_security_guidance",

@@ -246,6 +246,13 @@
       "role": "agent-assurance-investment-case",
       "authority": "supporting",
       "status": "live"
+    },
+    {
+      "path": "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.md",
+      "audience": "commercial-research",
+      "role": "future-foreign-currency-opportunity-portfolio",
+      "authority": "supporting",
+      "status": "live"
     }
   ]
 }

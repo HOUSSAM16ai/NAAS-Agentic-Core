@@ -1,6 +1,6 @@
 {
   "$schema_version": "1",
-  "packet_id": "CAP-2026-09-01-agent-assurance-investment-evidence",
+  "packet_id": "CAP-2026-09-01-fx-opportunity-portfolio",
   "status": "READY_FOR_GATE",
   "decision": "D-277",
   "changed_paths": [
@@ -9,17 +9,13 @@
     "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
     "docs/DOCUMENTATION_INDEX.md",
     "docs/DOCUMENTATION_MANIFEST.json",
-    "docs/architecture/AGENT_TRUST_CONTROL_PLANE.md",
-    "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md",
-    "docs/commercial/OFFER_CATALOG.json",
-    "docs/governance/CONSTITUTION_REGISTRY.json",
-    "docs/governance/DUAL_TRACK_ALIGNMENT.json",
+    "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.json",
+    "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.md",
+    "docs/governance/AGENT_CONTEXT_REGISTRY.json",
     "docs/governance/NEGATIVE_PROOFS.json",
     "docs/research/EVIDENCE_CATALOG.json",
-    "scripts/fitness/check_agent_assurance_investment_case.py",
-    "shared/agent_assurance_roi.py",
-    "tests/fitness/test_agent_assurance_investment_case_gate.py",
-    "tests/shared/test_agent_assurance_roi.py"
+    "scripts/fitness/check_fx_opportunity_portfolio.py",
+    "tests/fitness/test_fx_opportunity_portfolio_gate.py"
   ],
   "standards": [
     "system-design-primer"
@@ -46,31 +42,31 @@
     {
       "standard": "system-design-primer",
       "paths": [
-        "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md",
-        "shared/agent_assurance_roi.py",
-        "scripts/fitness/check_agent_assurance_investment_case.py"
+        "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.json",
+        "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.md",
+        "scripts/fitness/check_fx_opportunity_portfolio.py"
       ],
-      "gate": "python3 scripts/fitness/check_agent_assurance_investment_case.py && python3 -m pytest -q tests/shared/test_agent_assurance_roi.py tests/fitness/test_agent_assurance_investment_case_gate.py",
-      "application_ar": "تطبيق الأدلة كحالة استثمار قابلة للتفنيد ونموذج ROI حتمي ومدخلات موثقة وبوابة CI تمنع ترقية العرض قبل الدليل المدفوع."
+      "gate": "python3 scripts/fitness/check_fx_opportunity_portfolio.py && python3 -m pytest -q tests/fitness/test_fx_opportunity_portfolio_gate.py",
+      "application_ar": "تطبيق البحث كمحفظة بيانات مرتبة حتمياً ومقيدة بخطوط الإيراد المصرح بها، مع دليل ودليل معاكس وتجربة وبوابة نجاح ومعيار قتل لكل فرصة."
     }
   ],
   "production": {
-    "owner": "naas-product-and-commercial-evidence",
-    "status": "RESEARCH_AND_PROPOSED_OFFER_ONLY",
+    "owner": "naas-commercial-research",
+    "status": "RESEARCH_ONLY",
     "interfaces": [
-      "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md: أطروحة الاستثمار وبوابات التفنيد",
-      "shared/agent_assurance_roi.py: حساب ROI حتمي قابل لإعادة الإنتاج",
-      "scripts/fitness/check_agent_assurance_investment_case.py: فرض حدود الأدلة والادعاء"
+      "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.json: المصدر المرتب القابل للتحقق",
+      "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.md: الشرح التنفيذي والحدود",
+      "scripts/fitness/check_fx_opportunity_portfolio.py: فرض النطاق والأدلة والترتيب وعدم ترقية العروض"
     ],
-    "failure_behavior_ar": "القيم السالبة وغير المنتهية والاحتمالات خارج [0,1] تفشل صراحة؛ الكلفة أو المنفعة الصفرية تعيد نسبة غير معرفة ولا تصطنع عائداً.",
-    "observability_ar": "كل مكوّن منفعة ظاهر في النتيجة، ومدخلات التجربة مرتبطة بهرم دليل، والبوابة تعمل ضمن guardrails في CI.",
-    "security_boundary_ar": "لا أسرار أو اتصال بعميل أو تنفيذ خارجي؛ النموذج حسابي محض والوثيقة تمنع اختبار إنتاج غير مصرح أو ادعاء امتثال.",
-    "rollback_ar": "التغيير إضافي ويمكن عكسه، لكن ذلك يزيل بوابة تمنع فصل سرد الاستثمار عن الدليل والمنتج.",
+    "failure_behavior_ar": "تفشل البوابة عند مصدر مجهول أو عرض غير مصرح أو ترقية تجارية أو ترتيب حسابي منجرف أو غياب دليل معاكس وحد تجربة/قتل.",
+    "observability_ar": "كل درجة وأصلها ظاهران في JSON، والبوابة تعمل ضمن guardrails وتملك اختبارات سلبية.",
+    "security_boundary_ar": "لا اتصال بعميل ولا اختبار خارجي أو معالجة بيانات؛ البحث يستخدم مصادر عامة ويمنع الفحص غير المصرّح.",
+    "rollback_ar": "التغيير إضافي ويمكن عكسه، لكن ذلك يزيل سجل الأولويات وبوابة منع تضخم فرضيات الدخل.",
     "runtime_evidence_paths": [
-      "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md",
-      "shared/agent_assurance_roi.py",
-      "tests/shared/test_agent_assurance_roi.py",
-      "scripts/fitness/check_agent_assurance_investment_case.py"
+      "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.json",
+      "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.md",
+      "tests/fitness/test_fx_opportunity_portfolio_gate.py",
+      "scripts/fitness/check_fx_opportunity_portfolio.py"
     ]
   },
   "commercial_trace": {
@@ -83,10 +79,10 @@
       "eu-ai-act-compliance",
       "high-rpm-ai-affiliation"
     ],
-    "customer_problem_ar": "مالك نشر الوكيل لا يملك دليلاً مستقلاً أن الأداة والتفويض والسياسة وانتقال الحالة صحيحة، ولا طريقة منضبطة لحساب تكلفة الألم أو قيمة تقليله.",
-    "value_hypothesis_ar": "ضمان مسار قابل للإعادة مع مقارنة held-out وحساب ROI من سجلات العميل قد يخفض المراجعة أو الخسارة أو تأخير الإطلاق؛ تبقى الفرضية غير مثبتة حتى تجربة مدفوعة.",
-    "foreign_currency_path_ar": "تجربة ضمان أفعال محدودة ومدفوعة لمنتج وكلاء عربي خارج الجزائر، ثم اشتراك دوري فقط بعد إعادة الاستخدام والتجديد والهامش.",
-    "foundation_exception_ar": "الحزمة تبني بحثاً وأداة قياس وبوابة ادعاء؛ لا عقد ولا دفعة ولا إيراد أو عائد مستثمر مثبت، وحالة العرض تبقى PROPOSED."
+    "customer_problem_ar": "فرق تبني أو تنشر AI تحتاج اختبارات أفعال وتفويض وأمن عربي وأدلة حوكمة أو نشر خاص، لكن حجم الألم والميزانية يختلفان ولم يثبتا لـNAAS.",
+    "value_hypothesis_ar": "خدمات تقييم وأمن وأدلة ضيقة قد تولد أول إيراد أسرع من بناء منصات كاملة، ثم تتحول الأجزاء المتكررة فقط إلى منتج.",
+    "foreign_currency_path_ar": "تجارب B2B محددة ومدفوعة بالدولار أو اليورو لعملاء خارج الجزائر، مع منع الاشتراك أو التوسع قبل التجديد والهامش.",
+    "foundation_exception_ar": "الحزمة بحث وترتيب وبوابة ادعاء فقط؛ لا عقد ولا دفعة ولا إيراد مثبت، وتبقى العروض السبعة PROPOSED."
   },
   "deletions": {
     "count": 0,
@@ -97,14 +93,15 @@
     "result": "PASS",
     "commands": [
       "python3 scripts/fitness/check_agent_assurance_investment_case.py",
+      "python3 scripts/fitness/check_fx_opportunity_portfolio.py",
       "python3 scripts/fitness/check_dual_track_alignment.py",
       "python3 scripts/fitness/check_documentation_contract.py",
-      "python3 -m pytest -q tests/shared/test_agent_assurance_roi.py tests/fitness/test_agent_assurance_investment_case_gate.py tests/fitness/test_dual_track_alignment_gate.py tests/fitness/test_documentation_contract_gate.py",
-      "ruff check shared/agent_assurance_roi.py scripts/fitness/check_agent_assurance_investment_case.py tests/shared/test_agent_assurance_roi.py tests/fitness/test_agent_assurance_investment_case_gate.py",
-      "ruff format --check shared/agent_assurance_roi.py scripts/fitness/check_agent_assurance_investment_case.py tests/shared/test_agent_assurance_roi.py tests/fitness/test_agent_assurance_investment_case_gate.py",
+      "python3 -m pytest -q tests/fitness/test_fx_opportunity_portfolio_gate.py tests/fitness/test_agent_assurance_investment_case_gate.py tests/fitness/test_dual_track_alignment_gate.py tests/fitness/test_documentation_contract_gate.py",
+      "ruff check scripts/fitness/check_fx_opportunity_portfolio.py tests/fitness/test_fx_opportunity_portfolio_gate.py",
+      "ruff format --check scripts/fitness/check_fx_opportunity_portfolio.py tests/fitness/test_fx_opportunity_portfolio_gate.py",
       "git diff --check"
     ],
-    "measured_ar": "نجحت اختبارات ROI والبوابة السلبية والمواءمة وعقد التوثيق (18/18)، ونجحت جميع بوابات fitness المشتقة من CI (77/77)، ونجح Ruff وفحص whitespace."
+    "measured_ar": "نجحت اختبارات المحفظة السلبية (4/4)، ونجحت جميع بوابات fitness المشتقة من CI (78/78)، ونجح Ruff وفحص whitespace."
   },
   "curriculum": {
     "catalog_path": "docs/research/UNIVERSITY_CURRICULUM_CATALOG.json",
@@ -185,25 +182,21 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "88049fc53740fc7edb366d3c6ddd56368e4e2ec4",
+    "base_ref": "WORKTREE",
     "changed_paths_excluding_packet": [
       ".github/workflows/ci.yml",
       ".memory/ci-gates.md",
       "docs/DOCUMENTATION_INDEX.md",
       "docs/DOCUMENTATION_MANIFEST.json",
-      "docs/architecture/AGENT_TRUST_CONTROL_PLANE.md",
-      "docs/commercial/AGENT_ACTION_ASSURANCE_INVESTMENT_CASE.md",
-      "docs/commercial/OFFER_CATALOG.json",
-      "docs/governance/CONSTITUTION_REGISTRY.json",
-      "docs/governance/DUAL_TRACK_ALIGNMENT.json",
+      "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.json",
+      "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.md",
+      "docs/governance/AGENT_CONTEXT_REGISTRY.json",
       "docs/governance/NEGATIVE_PROOFS.json",
       "docs/research/EVIDENCE_CATALOG.json",
-      "scripts/fitness/check_agent_assurance_investment_case.py",
-      "shared/agent_assurance_roi.py",
-      "tests/fitness/test_agent_assurance_investment_case_gate.py",
-      "tests/shared/test_agent_assurance_roi.py"
+      "scripts/fitness/check_fx_opportunity_portfolio.py",
+      "tests/fitness/test_fx_opportunity_portfolio_gate.py"
     ],
-    "content_sha256_excluding_packet": "e7fe7468455dfb8872b3e0178322dbdea63fab5d0a883990596978ca66ceb7d8",
+    "content_sha256_excluding_packet": "7bbf7c71a377a3ffe0edd25e4225605f312a622d9af85a65cb7c4b700946b3b3",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

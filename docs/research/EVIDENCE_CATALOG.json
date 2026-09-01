@@ -135,6 +135,76 @@
       "verified_on": "2026-09-01"
     },
     {
+      "id": "nist-ai-tevv-zero-draft-2026",
+      "title_en": "NIST AI Standards Zero Draft — AI Testing, Evaluation, Verification, and Validation",
+      "kind": "official_standards_draft",
+      "url": "https://www.nist.gov/artificial-intelligence/nists-ai-standards-zero-drafts-pilot-project-accelerate-standardization",
+      "scope_ar": "إطار عام قيد التطوير لاختبار وتقييم وتحقق واعتماد أنظمة AI بناء على متطلبات وأهداف وقيود منهجية تحددها المؤسسة.",
+      "local_application_ar": "يدعم حزم TEVV محددة النطاق وقابلة للتدقيق؛ المسودة ليست معياراً نهائياً ولا تثبت طلباً تجارياً.",
+      "required_for": ["evaluation", "verification", "commercial_claim", "governance"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "arasafe-emnlp-2025",
+      "title_en": "AraSafe: Benchmarking Safety in Arabic LLMs",
+      "kind": "peer_reviewed_research",
+      "url": "https://aclanthology.org/2025.findings-emnlp.529/",
+      "scope_ar": "معيار سلامة عربي أصلي واسع النطاق يقيس نماذج لغوية في سياق لغوي وثقافي عربي.",
+      "local_application_ar": "يدعم فرضية الحاجة إلى تقييم عربي أصلي؛ وجود المعيار المفتوح يمثل كذلك بديلاً تنافسياً ولا يثبت استعداداً للدفع.",
+      "required_for": ["arabic", "evaluation", "safety", "data", "commercial_claim"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "aratrust-coling-2025",
+      "title_en": "AraTrust: An Evaluation of Trustworthiness for LLMs in Arabic",
+      "kind": "peer_reviewed_research",
+      "url": "https://aclanthology.org/2025.coling-main.579/",
+      "scope_ar": "معيار شامل لتقييم جوانب الثقة والسلامة في النماذج عند تحفيزها بالعربية.",
+      "local_application_ar": "مرجع لتصميم أبعاد تقييم عربية وعدم ترجمة معيار إنجليزي آلياً؛ لا يثبت تفوق NAAS أو طلب السوق.",
+      "required_for": ["arabic", "evaluation", "trust", "data"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "balsam-arabicnlp-2025",
+      "title_en": "BALSAM: A Platform for Benchmarking Arabic Large Language Models",
+      "kind": "peer_reviewed_research",
+      "url": "https://aclanthology.org/events/arabicnlp-2025/",
+      "scope_ar": "منصة ومجموعة واسعة من مهام تقييم النماذج العربية، وتعد دليلاً على نمو العرض المفتوح لا على فراغ السوق.",
+      "local_application_ar": "دليل معاكس يفرض تمييز أي حزمة مدفوعة بالسياق المهني أو أفعال الوكلاء أو بيانات العميل لا بتقييم عربي عام.",
+      "required_for": ["arabic", "evaluation", "competition", "commercial_claim"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "stanford-helm-arabic",
+      "title_en": "Stanford CRFM HELM Arabic",
+      "kind": "academic_evaluation_platform",
+      "url": "https://crfm.stanford.edu/helm/arabic/latest/",
+      "scope_ar": "تقييم شفاف وقابل للتكرار للنماذج على مهام عربية قائمة في المجتمع البحثي.",
+      "local_application_ar": "مرجع منهجي ودليل منافسة؛ يجب ألا تعيد NAAS بيع تقييم عام متاح دون تخصيص مدفوع أو دليل أفعال.",
+      "required_for": ["arabic", "evaluation", "competition", "commercial_claim"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "eu-ai-act-service-desk-2026",
+      "title_en": "European Commission AI Act Single Information Platform and Service Desk",
+      "kind": "official_public_service",
+      "url": "https://ai-act-service-desk.ec.europa.eu/en",
+      "scope_ar": "خدمة معلومات رسمية تساعد الأطراف على فهم نطاق قانون الذكاء الاصطناعي وتطبيقه.",
+      "local_application_ar": "دليل معاكس لخدمة امتثال عامة؛ يجب أن تبيع NAAS هندسة أدلة تقنية متكاملة لا معلومات قانونية متاحة مجاناً.",
+      "required_for": ["eu_market", "governance", "competition", "commercial_claim"],
+      "verified_on": "2026-09-01"
+    },
+    {
+      "id": "enisa-frontier-ai-2026",
+      "title_en": "ENISA's View on Cybersecurity in the Frontier AI Era",
+      "kind": "official_security_research",
+      "url": "https://www.enisa.europa.eu/publications/enisas-view-on-cybersecurity-in-the-frontier-ai-era",
+      "scope_ar": "احتياجات البحث والممارسة في استخدام AI للأمن وتأمين أنظمة AI المتقدمة ضمن القطاعات والبيئات الحساسة.",
+      "local_application_ar": "يدعم بحث ضمان AI في البيئات الحساسة؛ لا يثبت أن النشر المحلي هو نموذج الشراء أو أن NAAS جاهزة له.",
+      "required_for": ["security", "ai", "critical_infrastructure", "research"],
+      "verified_on": "2026-09-01"
+    },
+    {
       "id": "openssf-scorecard",
       "title_en": "OpenSSF Scorecard",
       "kind": "automated_security_guidance",

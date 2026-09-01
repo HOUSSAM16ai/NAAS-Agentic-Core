@@ -1,3 +1,5 @@
+from collections.abc import Generator
+
 import pytest
 
 import app.auth.jwt_handler as jwt_module
@@ -5,7 +7,7 @@ from app.auth.jwt_handler import JWTHandler, get_jwt_handler
 
 
 @pytest.fixture(autouse=True)
-def reset_global_jwt_handler():
+def reset_global_jwt_handler() -> Generator[None, None, None]:
     """
     Fixture to reset the global JWT handler before and after each test
     to ensure full test isolation.

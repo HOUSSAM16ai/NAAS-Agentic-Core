@@ -70,6 +70,7 @@ class TestClass:
     finally:
         temp_path.unlink()
 
+
 def test_generate_comprehensive_test_safe_instantiation(monkeypatch, tmp_path):
     code = """
 class SafeClass:
@@ -90,6 +91,7 @@ class SafeClass:
     # Mock pathlib.Path.relative_to so it works for the temp directory
     def mock_relative_to(self, other):
         return Path("test_safe_instantiation.py")
+
     monkeypatch.setattr(Path, "relative_to", mock_relative_to)
 
     analysis = analyze_module(test_file)
@@ -98,6 +100,7 @@ class SafeClass:
     assert "obj = SafeClass()" in output
     assert "result = obj.method_no_args()" in output
     assert "# TODO: provide arguments for method_args" in output
+
 
 def test_generate_comprehensive_test_unsafe_instantiation(monkeypatch, tmp_path):
     code = """
@@ -115,6 +118,7 @@ class UnsafeClass:
 
     def mock_relative_to(self, other):
         return Path("test_unsafe_instantiation.py")
+
     monkeypatch.setattr(Path, "relative_to", mock_relative_to)
 
     analysis = analyze_module(test_file)
@@ -122,6 +126,7 @@ class UnsafeClass:
 
     assert "# TODO: Instantiate UnsafeClass with required arguments" in output
     assert "obj = UnsafeClass()" not in output
+
 
 def test_generate_comprehensive_test_async_and_static(monkeypatch, tmp_path):
     code = """
@@ -140,6 +145,7 @@ class AdvancedClass:
 
     def mock_relative_to(self, other):
         return Path("test_async_and_static.py")
+
     monkeypatch.setattr(Path, "relative_to", mock_relative_to)
 
     analysis = analyze_module(test_file)

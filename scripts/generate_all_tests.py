@@ -21,6 +21,7 @@ def _get_type_hint_str(annotation):
     except Exception:
         return None
 
+
 def _get_default_val_str(default_node):
     if default_node is None:
         return None
@@ -29,12 +30,17 @@ def _get_default_val_str(default_node):
     except Exception:
         return None
 
+
 def _count_complexity(node):
     count = 1
     for child in ast.walk(node):
-        if isinstance(child, (ast.If, ast.For, ast.While, ast.Try, ast.With, ast.Match, ast.AsyncFor, ast.AsyncWith)):
+        if isinstance(
+            child,
+            (ast.If, ast.For, ast.While, ast.Try, ast.With, ast.Match, ast.AsyncFor, ast.AsyncWith),
+        ):
             count += 1
     return count
+
 
 def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:  # noqa: PLR0912
     decorators = []
@@ -59,7 +65,7 @@ def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:  # no
 
     args_info = []
 
-    posonly = getattr(item.args, 'posonlyargs', [])
+    posonly = getattr(item.args, "posonlyargs", [])
     num_defaults = len(item.args.defaults)
     non_default_args = len(posonly) + len(item.args.args) - num_defaults
 
@@ -69,12 +75,14 @@ def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:  # no
         if has_default:
             default_val = _get_default_val_str(item.args.defaults[idx - non_default_args])
 
-        args_info.append({
-            "name": a.arg,
-            "type": _get_type_hint_str(a.annotation),
-            "has_default": has_default,
-            "default_val": default_val
-        })
+        args_info.append(
+            {
+                "name": a.arg,
+                "type": _get_type_hint_str(a.annotation),
+                "has_default": has_default,
+                "default_val": default_val,
+            }
+        )
 
     for a in item.args.kwonlyargs:
         idx_kw = item.args.kwonlyargs.index(a)
@@ -83,15 +91,17 @@ def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:  # no
         if item.args.kw_defaults[idx_kw] is not None:
             has_default = True
             default_val = _get_default_val_str(item.args.kw_defaults[idx_kw])
-        args_info.append({
-            "name": a.arg,
-            "type": _get_type_hint_str(a.annotation),
-            "has_default": has_default,
-            "default_val": default_val,
-            "kw_only": True
-        })
+        args_info.append(
+            {
+                "name": a.arg,
+                "type": _get_type_hint_str(a.annotation),
+                "has_default": has_default,
+                "default_val": default_val,
+                "kw_only": True,
+            }
+        )
 
-    posonly_args = getattr(item.args, 'posonlyargs', [])
+    posonly_args = getattr(item.args, "posonlyargs", [])
     num_posonly = len(posonly_args)
     num_args = len(item.args.args)
     total_pos = num_posonly + num_args
@@ -123,7 +133,7 @@ def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:  # no
         "is_generator": any(isinstance(n, (ast.Yield, ast.YieldFrom)) for n in ast.walk(item)),
         "return_type": _get_type_hint_str(item.returns),
         "complexity": _count_complexity(item),
-        "decorators": decorators
+        "decorators": decorators,
     }
 
 
@@ -169,7 +179,9 @@ def analyze_module(filepath: Path) -> dict:
         return {"functions": [], "classes": [], "imports": []}
 
 
-def _generate_test_method_body(method_info: dict, class_name: str, safe_to_instantiate: bool) -> tuple[str, str]:
+def _generate_test_method_body(
+    method_info: dict, class_name: str, safe_to_instantiate: bool
+) -> tuple[str, str]:
     method = method_info["name"]
     method_type = method_info.get("type", "instance")
     requires_args = method_info.get("requires_args", False)
@@ -201,7 +213,6 @@ def _generate_test_method_body(method_info: dict, class_name: str, safe_to_insta
     return decorator, test_body
 
 
-
 def _generate_class_tests(analysis: dict) -> list[str]:
     test_classes = []
     # No limit on classes or methods
@@ -212,7 +223,7 @@ def _generate_class_tests(analysis: dict) -> list[str]:
         methods = sorted(
             cls_info["methods"],
             key=lambda m: (m.get("complexity", 0), len(m.get("args_info", []))),
-            reverse=True
+            reverse=True,
         )
 
         safe_to_instantiate = True
@@ -227,15 +238,17 @@ def _generate_class_tests(analysis: dict) -> list[str]:
                 continue
 
             is_async = method_info.get("is_async", False)
-            decorator, test_body = _generate_test_method_body(method_info, class_name, safe_to_instantiate)
+            decorator, test_body = _generate_test_method_body(
+                method_info, class_name, safe_to_instantiate
+            )
 
             async_str = "async " if is_async else ""
-            method_str = f"\n    {decorator}{async_str}def test_{method}_basic(self):\n        \"\"\"Test {method} with basic inputs\"\"\"\n{test_body}"
+            method_str = f'\n    {decorator}{async_str}def test_{method}_basic(self):\n        """Test {method} with basic inputs"""\n{test_body}'
             test_methods.append(method_str)
 
         if test_methods:
             joined_methods = "".join(test_methods)
-            test_class = f"\nclass Test{class_name}:\n    \"\"\"Comprehensive tests for {class_name}\"\"\"{joined_methods}\n"
+            test_class = f'\nclass Test{class_name}:\n    """Comprehensive tests for {class_name}"""{joined_methods}\n'
             test_classes.append(test_class)
     return test_classes
 
@@ -247,7 +260,7 @@ def _generate_function_tests(analysis: dict, module_name: str) -> list[str]:
     functions = sorted(
         analysis["functions"],
         key=lambda f: (f.get("complexity", 0), len(f.get("args_info", []))),
-        reverse=True
+        reverse=True,
     )
 
     for func_info in functions:
@@ -260,16 +273,17 @@ def _generate_function_tests(analysis: dict, module_name: str) -> list[str]:
 
         async_str = "async " if is_async else ""
         await_str = "await " if is_async else ""
-        func_str = f"\n    {decorator}{async_str}def test_{func_name}_basic(self):\n        \"\"\"Test {func_name} with basic inputs\"\"\"\n        # TODO: Implement test for {func_name}\n        {await_str}{func_name}()\n        assert True\n"
+        func_str = f'\n    {decorator}{async_str}def test_{func_name}_basic(self):\n        """Test {func_name} with basic inputs"""\n        # TODO: Implement test for {func_name}\n        {await_str}{func_name}()\n        assert True\n'
         func_tests.append(func_str)
 
     if func_tests:
         joined_funcs = "".join(func_tests)
         cls_name = module_name.title().replace("_", "")
-        return_str = f"\nclass Test{cls_name}Functions:\n    \"\"\"Test standalone functions\"\"\"{joined_funcs}\n"
+        return_str = (
+            f'\nclass Test{cls_name}Functions:\n    """Test standalone functions"""{joined_funcs}\n'
+        )
         return [return_str]
     return []
-
 
 
 def _generate_edge_case_tests(analysis: dict) -> list[str]:  # noqa: PLR0912, PLR0915
@@ -288,7 +302,7 @@ def _generate_edge_case_tests(analysis: dict) -> list[str]:  # noqa: PLR0912, PL
     all_methods = sorted(
         all_methods,
         key=lambda m: (m.get("complexity", 0), len(m.get("args_info", []))),
-        reverse=True
+        reverse=True,
     )
 
     for method_info in all_methods:
@@ -310,23 +324,26 @@ def _generate_edge_case_tests(analysis: dict) -> list[str]:  # noqa: PLR0912, PL
 
         call_prefix = f"{class_name}." if is_class_method else ""
         if method_info.get("type") == "instance" and class_name:
-            test_body += f"        # Assuming {class_name} can be instantiated easily for edge testing\n"
+            test_body += (
+                f"        # Assuming {class_name} can be instantiated easily for edge testing\n"
+            )
             test_body += f"        instance = {class_name}()\n"
             call_prefix = "instance."
 
         for arg in args_info:
             if arg.get("has_default") and arg.get("default_val") in ("[]", "{}"):
                 edge_tests.append(f"""
-    {async_dec}{async_kw}def test_{method_name}_mutable_default_trap_{arg['name']}(self):
-        \"\"\"Verify mutable default trap is avoided for {arg['name']}\"\"\"
+    {async_dec}{async_kw}def test_{method_name}_mutable_default_trap_{arg["name"]}(self):
+        \"\"\"Verify mutable default trap is avoided for {arg["name"]}\"\"\"
 {test_body}        res1 = {await_kw}{call_prefix}{method_name}()
         res2 = {await_kw}{call_prefix}{method_name}()
         assert res1 == res2 or res1 is not res2
 """)
                 has_generated_test = True
 
-
-        typed_args = [a for a in args_info if a.get("type") in ("int", "str", "float", "bool", "list", "dict")]
+        typed_args = [
+            a for a in args_info if a.get("type") in ("int", "str", "float", "bool", "list", "dict")
+        ]
         if typed_args:
             given_args = []
             call_args = []
@@ -353,22 +370,22 @@ def _generate_edge_case_tests(analysis: dict) -> list[str]:  # noqa: PLR0912, PL
                 else:
                     call_args.append(f"{a['name']}=None")
 
-
             given_str = ", ".join(given_args)
             call_str = ", ".join([c for c in call_args if not c.startswith("self=")])
 
-
-            args_for_def = [a['name'] for a in args_info if a['name'] not in ("self", "cls")]
+            args_for_def = [a["name"] for a in args_info if a["name"] not in ("self", "cls")]
 
             if method_info.get("return_type") not in (None, "None"):
-                ret_assertion = "assert result is not None  # Update assertion to verify specific property"
+                ret_assertion = (
+                    "assert result is not None  # Update assertion to verify specific property"
+                )
             else:
                 ret_assertion = "assert result is None"
 
             edge_tests.append(f"""
     @given({given_str})
     {async_dec.strip()}
-    {async_kw}def test_{method_name}_properties(self, {', '.join(args_for_def)}):
+    {async_kw}def test_{method_name}_properties(self, {", ".join(args_for_def)}):
         \"\"\"Property-based test for {method_name}\"\"\"
 {test_body}        result = {await_kw}{call_prefix}{method_name}({call_str})
         {ret_assertion}
@@ -405,6 +422,7 @@ def _generate_edge_case_tests(analysis: dict) -> list[str]:  # noqa: PLR0912, PL
 
     return edge_tests
 
+
 def generate_comprehensive_test(module_path: Path, analysis: dict) -> str:
     """Generate comprehensive test code for a module"""
     module_name = module_path.stem
@@ -423,7 +441,7 @@ def generate_comprehensive_test(module_path: Path, analysis: dict) -> str:
     test_classes = _generate_class_tests(analysis)
     test_classes.extend(_generate_function_tests(analysis, module_name))
 
-# Build complete test file
+    # Build complete test file
     edge_cases_methods = _generate_edge_case_tests(analysis)
     edge_cases_class = ""
     if edge_cases_methods:
@@ -440,7 +458,10 @@ class TestEdgeCases:
         assert True
 """
 
-    test_classes_str = "\n".join(test_classes) if test_classes else f'''
+    test_classes_str = (
+        "\n".join(test_classes)
+        if test_classes
+        else f"""
 class TestPlaceholder:
     \"\"\"Placeholder test class\"\"\"
 
@@ -448,8 +469,9 @@ class TestPlaceholder:
         \"\"\"Test that module can be imported\"\"\"
         import app.{relative_path}
         assert True
-'''
-    return f'''\"\"\"
+"""
+    )
+    return f"""\"\"\"
 Comprehensive Tests for {module_name}
 {"=" * (25 + len(module_name))}
 
@@ -478,7 +500,7 @@ class TestIntegration:
         \"\"\"Placeholder for integration tests\"\"\"
         # TODO (Won't Fix): Meaningful integration test generation is highly dependent on repository architecture and specific external dependencies. We leave this placeholder for manual implementation instead of generating potentially invalid boilerplate.
         assert True
-'''
+"""
 
 
 def get_uncovered_files() -> list[tuple[Path, float, int]]:

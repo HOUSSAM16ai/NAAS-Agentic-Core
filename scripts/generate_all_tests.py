@@ -13,6 +13,52 @@ import subprocess
 from pathlib import Path
 
 
+def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:
+    decorators = []
+    for d in item.decorator_list:
+        if isinstance(d, ast.Name):
+            decorators.append(d.id)
+        elif isinstance(d, ast.Attribute):
+            decorators.append(d.attr)
+
+    method_type = "instance"
+    if "classmethod" in decorators:
+        method_type = "classmethod"
+    elif "staticmethod" in decorators:
+        method_type = "staticmethod"
+
+    posonly = getattr(item.args, 'posonlyargs', [])
+    num_posonly = len(posonly)
+    num_args = len(item.args.args)
+    total_pos = num_posonly + num_args
+    num_defaults = len(item.args.defaults)
+
+    required_pos = total_pos - num_defaults
+
+    first_arg = None
+    if num_posonly > 0:
+        first_arg = posonly[0].arg
+    elif num_args > 0:
+        first_arg = item.args.args[0].arg
+
+    if first_arg in ("self", "cls"):
+        required_pos = max(0, required_pos - 1)
+
+    num_kwonly = len(item.args.kwonlyargs)
+    num_kwonly_defaults = sum(1 for d in item.args.kw_defaults if d is not None)
+    required_kw = num_kwonly - num_kwonly_defaults
+
+    has_varargs = item.args.vararg is not None or item.args.kwarg is not None
+    requires_args = required_pos > 0 or required_kw > 0
+
+    return {
+        "name": item.name,
+        "type": method_type,
+        "requires_args": requires_args,
+        "has_varargs": has_varargs,
+        "is_async": isinstance(item, ast.AsyncFunctionDef)
+    }
+
 def analyze_module(filepath: Path) -> dict:
     """Analyze a Python module and extract its structure"""
     try:
@@ -25,7 +71,6 @@ def analyze_module(filepath: Path) -> dict:
 
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
-                # Get function info
                 args = [arg.arg for arg in node.args.args]
                 functions.append(
                     {
@@ -35,57 +80,10 @@ def analyze_module(filepath: Path) -> dict:
                     }
                 )
             elif isinstance(node, ast.ClassDef):
-                # Get class info
                 methods = []
                 for item in node.body:
                     if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                        # Extract method decorators to determine type
-                        decorators = []
-                        for d in item.decorator_list:
-                            if isinstance(d, ast.Name):
-                                decorators.append(d.id)
-                            elif isinstance(d, ast.Attribute):
-                                decorators.append(d.attr)
-
-                        method_type = "instance"
-                        if "classmethod" in decorators:
-                            method_type = "classmethod"
-                        elif "staticmethod" in decorators:
-                            method_type = "staticmethod"
-
-                        # Determine if method requires arguments
-                        posonly = getattr(item.args, 'posonlyargs', [])
-                        num_posonly = len(posonly)
-                        num_args = len(item.args.args)
-                        total_pos = num_posonly + num_args
-                        num_defaults = len(item.args.defaults)
-
-                        required_pos = total_pos - num_defaults
-
-                        first_arg = None
-                        if num_posonly > 0:
-                            first_arg = posonly[0].arg
-                        elif num_args > 0:
-                            first_arg = item.args.args[0].arg
-
-                        # Ignore self/cls for argument requirements
-                        if first_arg in ("self", "cls"):
-                            required_pos = max(0, required_pos - 1)
-
-                        num_kwonly = len(item.args.kwonlyargs)
-                        num_kwonly_defaults = sum(1 for d in item.args.kw_defaults if d is not None)
-                        required_kw = num_kwonly - num_kwonly_defaults
-
-                        has_varargs = item.args.vararg is not None or item.args.kwarg is not None
-                        requires_args = required_pos > 0 or required_kw > 0
-
-                        methods.append({
-                            "name": item.name,
-                            "type": method_type,
-                            "requires_args": requires_args,
-                            "has_varargs": has_varargs,
-                            "is_async": isinstance(item, ast.AsyncFunctionDef)
-                        })
+                        methods.append(_analyze_method(item))
                 classes.append({"name": node.name, "methods": methods})
             elif isinstance(node, (ast.Import, ast.ImportFrom)):
                 if isinstance(node, ast.Import):
@@ -100,29 +98,43 @@ def analyze_module(filepath: Path) -> dict:
         return {"functions": [], "classes": [], "imports": []}
 
 
-def generate_comprehensive_test(module_path: Path, analysis: dict) -> str:
-    """Generate comprehensive test code for a module"""
-    module_name = module_path.stem
-    relative_path = str(module_path.relative_to("app")).replace("/", ".").replace(".py", "")
+def _generate_test_method_body(method_info: dict, class_name: str, safe_to_instantiate: bool) -> tuple[str, str]:
+    method = method_info["name"]
+    method_type = method_info.get("type", "instance")
+    requires_args = method_info.get("requires_args", False)
+    has_varargs = method_info.get("has_varargs", False)
+    is_async = method_info.get("is_async", False)
 
-    # Build imports
-    imports_section = []
-    if analysis["classes"]:
-        class_names = [c["name"] for c in analysis["classes"]]
-        imports_section.append(f"from app.{relative_path} import {', '.join(class_names[:5])}")
-    if analysis["functions"]:
-        func_names = [f["name"] for f in analysis["functions"] if not f["name"].startswith("_")][:5]
-        if func_names:
-            imports_section.append(f"from app.{relative_path} import {', '.join(func_names)}")
+    decorator = "@pytest.mark.asyncio\n    " if is_async else ""
+    test_body = f"        # TODO: Implement test for {method}\n"
 
-    # Generate test classes
+    if requires_args or has_varargs or is_async:
+        test_body += f"        # TODO: provide arguments for {method}\n"
+        test_body += "        pass\n"
+    elif method_type == "instance":
+        if safe_to_instantiate:
+            test_body += f"        obj = {class_name}()\n"
+            test_body += f"        result = obj.{method}()\n"
+            test_body += "        # Add assertions here\n"
+            test_body += "        assert True\n"
+        else:
+            test_body += f"        # TODO: Instantiate {class_name} with required arguments\n"
+            test_body += "        pass\n"
+    elif method_type in ("classmethod", "staticmethod"):
+        test_body += f"        result = {class_name}.{method}()\n"
+        test_body += "        # Add assertions here\n"
+        test_body += "        assert True\n"
+    else:
+        test_body += "        pass\n"
+
+    return decorator, test_body
+
+def _generate_class_tests(analysis: dict) -> list[str]:
     test_classes = []
-
     for cls_info in analysis["classes"][:3]:  # Limit to first 3 classes
         class_name = cls_info["name"]
         methods = cls_info["methods"][:5]  # First 5 methods
 
-        # Check if class can be safely instantiated
         safe_to_instantiate = True
         init_method = next((m for m in cls_info["methods"] if m["name"] == "__init__"), None)
         if init_method and (init_method["requires_args"] or init_method["has_varargs"]):
@@ -134,33 +146,8 @@ def generate_comprehensive_test(module_path: Path, analysis: dict) -> str:
             if method.startswith("_") and method != "__init__":
                 continue
 
-            method_type = method_info.get("type", "instance")
-            requires_args = method_info.get("requires_args", False)
-            has_varargs = method_info.get("has_varargs", False)
             is_async = method_info.get("is_async", False)
-
-            decorator = "@pytest.mark.asyncio\n    " if is_async else ""
-
-            test_body = f"        # TODO: Implement test for {method}\n"
-
-            if requires_args or has_varargs or is_async:
-                test_body += f"        # TODO: provide arguments for {method}\n"
-                test_body += "        pass\n"
-            elif method_type == "instance":
-                if safe_to_instantiate:
-                    test_body += f"        obj = {class_name}()\n"
-                    test_body += f"        result = obj.{method}()\n"
-                    test_body += "        # Add assertions here\n"
-                    test_body += "        assert True\n"
-                else:
-                    test_body += f"        # TODO: Instantiate {class_name} with required arguments\n"
-                    test_body += "        pass\n"
-            elif method_type in ("classmethod", "staticmethod"):
-                test_body += f"        result = {class_name}.{method}()\n"
-                test_body += "        # Add assertions here\n"
-                test_body += "        assert True\n"
-            else:
-                test_body += "        pass\n"
+            decorator, test_body = _generate_test_method_body(method_info, class_name, safe_to_instantiate)
 
             test_methods.append(f"""
     {decorator}{"async " if is_async else ""}def test_{method}_basic(self):
@@ -173,8 +160,9 @@ class Test{class_name}:
 {"".join(test_methods)}
 """
         test_classes.append(test_class)
+    return test_classes
 
-    # Generate function tests
+def _generate_function_tests(analysis: dict, module_name: str) -> list[str]:
     func_tests = []
     for func_info in analysis["functions"][:5]:  # First 5 functions
         func_name = func_info["name"]
@@ -193,11 +181,30 @@ class Test{class_name}:
 """)
 
     if func_tests:
-        test_classes.append(f"""
+        return [f"""
 class Test{module_name.title().replace("_", "")}Functions:
     \"\"\"Test standalone functions\"\"\"
 {"".join(func_tests)}
-""")
+"""]
+    return []
+
+def generate_comprehensive_test(module_path: Path, analysis: dict) -> str:
+    """Generate comprehensive test code for a module"""
+    module_name = module_path.stem
+    relative_path = str(module_path.relative_to("app")).replace("/", ".").replace(".py", "")
+
+    # Build imports
+    imports_section = []
+    if analysis["classes"]:
+        class_names = [c["name"] for c in analysis["classes"]]
+        imports_section.append(f"from app.{relative_path} import {', '.join(class_names[:5])}")
+    if analysis["functions"]:
+        func_names = [f["name"] for f in analysis["functions"] if not f["name"].startswith("_")][:5]
+        if func_names:
+            imports_section.append(f"from app.{relative_path} import {', '.join(func_names)}")
+
+    test_classes = _generate_class_tests(analysis)
+    test_classes.extend(_generate_function_tests(analysis, module_name))
 
     # Build complete test file
     return f'''"""

@@ -1,8 +1,8 @@
-import ast
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from scripts.generate_all_tests import analyze_module, generate_comprehensive_test
+
 
 def test_analyze_module():
     code = """

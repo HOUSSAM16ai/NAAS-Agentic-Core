@@ -5,10 +5,7 @@
   "decision": "D-277",
   "changed_paths": [
     "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
-    "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.json",
-    "docs/commercial/FX_OPPORTUNITY_PORTFOLIO.md",
-    "scripts/fitness/check_fx_opportunity_portfolio.py",
-    "tests/fitness/test_fx_opportunity_portfolio_gate.py"
+    "app/services/data_mesh/domain/ports.py"
   ],
   "standards": [
     "system-design-primer"
@@ -158,12 +155,9 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "15d894d9b3c769f8fb66ce1bba4fd148a4bff921",
-    "changed_paths_excluding_packet": [
-      "app/infrastructure/clients/orchestrator/local_fallback.py",
-      "scripts/generate_all_tests.py"
-    ],
-    "content_sha256_excluding_packet": "d39b8fd46ab0032ad77e2af62b220f30aac1697fe216a4f9e775fe9745798430",
+    "base_ref": "bc09fa7f95ef4365755b5305c9036a14f78c3b0c",
+    "changed_paths_excluding_packet": [],
+    "content_sha256_excluding_packet": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

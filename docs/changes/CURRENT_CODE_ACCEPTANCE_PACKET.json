@@ -160,9 +160,10 @@
   "git_change_snapshot": {
     "base_ref": "15d894d9b3c769f8fb66ce1bba4fd148a4bff921",
     "changed_paths_excluding_packet": [
+      "app/infrastructure/clients/orchestrator/local_fallback.py",
       "scripts/generate_all_tests.py"
     ],
-    "content_sha256_excluding_packet": "f64bdfc0387cab4e41324bcb3fcda69456011d6056ff3f6785962618a4e5d1df",
+    "content_sha256_excluding_packet": "d39b8fd46ab0032ad77e2af62b220f30aac1697fe216a4f9e775fe9745798430",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

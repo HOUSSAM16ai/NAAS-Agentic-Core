@@ -451,20 +451,14 @@ class LocalFallbackMixin:
         )
         ai_client = get_ai_client()
 
+        messages: list[dict[str, str]] = [{"role": "system", "content": local_system_prompt}]
         if history_messages:
-            history_text = self._format_history_for_prompt(history_messages)
-            user_message = (
-                f"سياق المحادثة السابقة:\n{history_text}\n\nالسؤال الحالي: {sanitized_question}"
-                if history_text
-                else sanitized_question
-            )
-        else:
-            user_message = sanitized_question
-
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": local_system_prompt},
-            {"role": "user", "content": user_message},
-        ]
+            for msg in history_messages[-20:]:
+                role = str(msg.get("role", "")).strip()
+                content_text = str(msg.get("content", "")).replace("\x00", "").strip()
+                if content_text and role in {"user", "assistant"}:
+                    messages.append({"role": role, "content": content_text})
+        messages.append({"role": "user", "content": sanitized_question})
 
         try:
             async for raw_chunk in ai_client.stream_chat(messages):

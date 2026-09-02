@@ -162,7 +162,7 @@
     "changed_paths_excluding_packet": [
       "scripts/generate_all_tests.py"
     ],
-    "content_sha256_excluding_packet": "751ae8cf2791479056dd94b2b8f38d466c3b83de2a7a58b7719cbf3430db2804",
+    "content_sha256_excluding_packet": "f64bdfc0387cab4e41324bcb3fcda69456011d6056ff3f6785962618a4e5d1df",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

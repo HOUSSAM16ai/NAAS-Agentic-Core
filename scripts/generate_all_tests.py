@@ -39,7 +39,53 @@ def analyze_module(filepath: Path) -> dict:
                 methods = []
                 for item in node.body:
                     if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                        methods.append(item.name)
+                        # Extract method decorators to determine type
+                        decorators = []
+                        for d in item.decorator_list:
+                            if isinstance(d, ast.Name):
+                                decorators.append(d.id)
+                            elif isinstance(d, ast.Attribute):
+                                decorators.append(d.attr)
+
+                        method_type = "instance"
+                        if "classmethod" in decorators:
+                            method_type = "classmethod"
+                        elif "staticmethod" in decorators:
+                            method_type = "staticmethod"
+
+                        # Determine if method requires arguments
+                        posonly = getattr(item.args, 'posonlyargs', [])
+                        num_posonly = len(posonly)
+                        num_args = len(item.args.args)
+                        total_pos = num_posonly + num_args
+                        num_defaults = len(item.args.defaults)
+
+                        required_pos = total_pos - num_defaults
+
+                        first_arg = None
+                        if num_posonly > 0:
+                            first_arg = posonly[0].arg
+                        elif num_args > 0:
+                            first_arg = item.args.args[0].arg
+
+                        # Ignore self/cls for argument requirements
+                        if first_arg in ("self", "cls"):
+                            required_pos = max(0, required_pos - 1)
+
+                        num_kwonly = len(item.args.kwonlyargs)
+                        num_kwonly_defaults = sum(1 for d in item.args.kw_defaults if d is not None)
+                        required_kw = num_kwonly - num_kwonly_defaults
+
+                        has_varargs = item.args.vararg is not None or item.args.kwarg is not None
+                        requires_args = required_pos > 0 or required_kw > 0
+
+                        methods.append({
+                            "name": item.name,
+                            "type": method_type,
+                            "requires_args": requires_args,
+                            "has_varargs": has_varargs,
+                            "is_async": isinstance(item, ast.AsyncFunctionDef)
+                        })
                 classes.append({"name": node.name, "methods": methods})
             elif isinstance(node, (ast.Import, ast.ImportFrom)):
                 if isinstance(node, ast.Import):
@@ -76,19 +122,50 @@ def generate_comprehensive_test(module_path: Path, analysis: dict) -> str:
         class_name = cls_info["name"]
         methods = cls_info["methods"][:5]  # First 5 methods
 
+        # Check if class can be safely instantiated
+        safe_to_instantiate = True
+        init_method = next((m for m in cls_info["methods"] if m["name"] == "__init__"), None)
+        if init_method and (init_method["requires_args"] or init_method["has_varargs"]):
+            safe_to_instantiate = False
+
         test_methods = []
-        for method in methods:
+        for method_info in methods:
+            method = method_info["name"]
             if method.startswith("_") and method != "__init__":
                 continue
 
+            method_type = method_info.get("type", "instance")
+            requires_args = method_info.get("requires_args", False)
+            has_varargs = method_info.get("has_varargs", False)
+            is_async = method_info.get("is_async", False)
+
+            decorator = "@pytest.mark.asyncio\n    " if is_async else ""
+
+            test_body = f"        # TODO: Implement test for {method}\n"
+
+            if requires_args or has_varargs or is_async:
+                test_body += f"        # TODO: provide arguments for {method}\n"
+                test_body += "        pass\n"
+            elif method_type == "instance":
+                if safe_to_instantiate:
+                    test_body += f"        obj = {class_name}()\n"
+                    test_body += f"        result = obj.{method}()\n"
+                    test_body += "        # Add assertions here\n"
+                    test_body += "        assert True\n"
+                else:
+                    test_body += f"        # TODO: Instantiate {class_name} with required arguments\n"
+                    test_body += "        pass\n"
+            elif method_type in ("classmethod", "staticmethod"):
+                test_body += f"        result = {class_name}.{method}()\n"
+                test_body += "        # Add assertions here\n"
+                test_body += "        assert True\n"
+            else:
+                test_body += "        pass\n"
+
             test_methods.append(f"""
-    def test_{method}_basic(self):
+    {decorator}{"async " if is_async else ""}def test_{method}_basic(self):
         \"\"\"Test {method} with basic inputs\"\"\"
-        # TODO: Implement test for {method}
-        obj = {class_name}()
-        # Add assertions here
-        assert True
-""")
+{test_body}""")
 
         test_class = f"""
 class Test{class_name}:

@@ -13,13 +13,12 @@ import subprocess
 from pathlib import Path
 
 
-
 def _get_type_hint_str(annotation):
     if annotation is None:
         return None
     try:
         return ast.unparse(annotation)
-    except:
+    except Exception:
         return None
 
 def _get_default_val_str(default_node):
@@ -27,7 +26,7 @@ def _get_default_val_str(default_node):
         return None
     try:
         return ast.unparse(default_node)
-    except:
+    except Exception:
         return None
 
 def _count_complexity(node):
@@ -37,7 +36,7 @@ def _count_complexity(node):
             count += 1
     return count
 
-def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:
+def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:  # noqa: PLR0912
     decorators = []
     for d in item.decorator_list:
         if isinstance(d, ast.Name):
@@ -64,8 +63,7 @@ def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:
     num_defaults = len(item.args.defaults)
     non_default_args = len(posonly) + len(item.args.args) - num_defaults
 
-    idx = 0
-    for a in posonly + item.args.args:
+    for idx, a in enumerate(posonly + item.args.args):
         has_default = idx >= non_default_args
         default_val = None
         if has_default:
@@ -77,7 +75,6 @@ def _analyze_method(item: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:
             "has_default": has_default,
             "default_val": default_val
         })
-        idx += 1
 
     for a in item.args.kwonlyargs:
         idx_kw = item.args.kwonlyargs.index(a)
@@ -140,7 +137,7 @@ def analyze_module(filepath: Path) -> dict:
         classes = []
         imports = []
 
-        for node in ast.walk(tree):
+        for _node in ast.walk(tree):
             # Only top level functions to avoid capturing nested functions inside classes in the main loop
             pass
 
@@ -275,7 +272,7 @@ def _generate_function_tests(analysis: dict, module_name: str) -> list[str]:
 
 
 
-def _generate_edge_case_tests(analysis: dict) -> list[str]:
+def _generate_edge_case_tests(analysis: dict) -> list[str]:  # noqa: PLR0912, PLR0915
     edge_tests = []
 
     all_methods = []

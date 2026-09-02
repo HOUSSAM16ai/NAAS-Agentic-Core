@@ -1,0 +1,2 @@
+scripts/generate_all_tests.py
+tests/scripts/test_generate_all_tests.py

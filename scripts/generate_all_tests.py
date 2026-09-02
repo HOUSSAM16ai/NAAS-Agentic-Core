@@ -216,7 +216,7 @@ def _generate_test_method_body(
 def _generate_class_tests(analysis: dict) -> list[str]:
     test_classes = []
     # No limit on classes or methods
-    for cls_info in analysis["classes"][:3]:  # Limit to first 3 classes
+    for cls_info in analysis["classes"]:
         class_name = cls_info["name"]
 
         # Sort methods by complexity and parameter count (descending)
@@ -253,39 +253,99 @@ def _generate_class_tests(analysis: dict) -> list[str]:
     return test_classes
 
 
+def _get_happy_path_value(type_hint: str | None) -> str | None:
+    if not type_hint:
+        return None
+
+    type_hint = type_hint.replace("Optional[", "").replace("]", "")
+    if "|" in type_hint:
+        type_hint = type_hint.split("|")[0].strip()
+
+    # Get base type by stripping everything after '['
+    t = type_hint.split("[")[0].strip().lower()
+
+    if t == "int":
+        return "1"
+    elif t == "float":
+        return "1.5"
+    elif t == "str":
+        return '"sample"'
+    elif t == "bool":
+        return "True"
+    elif t == "list":
+        return "[1, 2, 3]"
+    elif t == "dict":
+        return '{"key": "value"}'
+    elif t == "set":
+        return "{1, 2}"
+    elif t == "tuple":
+        return "(1, 2)"
+    return None
+
 def _generate_function_tests(analysis: dict, module_name: str) -> list[str]:
     func_tests = []
-
-    # Sort functions by complexity and parameter count (descending)
     functions = sorted(
         analysis["functions"],
         key=lambda f: (f.get("complexity", 0), len(f.get("args_info", []))),
         reverse=True,
     )
-
     for func_info in functions:
         func_name = func_info["name"]
         if func_name.startswith("_"):
             continue
-
         is_async = func_info.get("is_async", False)
-        decorator = "@pytest.mark.asyncio\n    " if is_async else ""
 
+        decorator = "@pytest.mark.asyncio\n    " if is_async else ""
         async_str = "async " if is_async else ""
         await_str = "await " if is_async else ""
-        func_str = f'\n    {decorator}{async_str}def test_{func_name}_basic(self):\n        """Test {func_name} with basic inputs"""\n        # TODO: Implement test for {func_name}\n        {await_str}{func_name}()\n        assert True\n'
+        args_info = func_info.get("args_info", [])
+        args_for_call = []
+        skip_reason = None
+        for arg in args_info:
+            arg_name = arg["name"]
+            arg_type = arg.get("type")
+            val = _get_happy_path_value(arg_type)
+            if val is None:
+                skip_reason = f"TODO: provide a valid value for parameter '{arg_name}' of type '{arg_type}'"
+                break
+            args_for_call.append(f"{arg_name}={val}")
+        call_args_str = ", ".join(args_for_call)
+
+        test_body = ""
+        if skip_reason:
+            test_body += f"        pytest.skip(\"{skip_reason}\")\n"
+        else:
+            test_body += f"        result = {await_str}{func_name}({call_args_str})\n"
+            ret_type = func_info.get("return_type")
+            if not ret_type:
+                test_body += "        pytest.skip(\"TODO: add assertion for missing return type\")\n"
+            elif ret_type == "None":
+                test_body += "        assert result is None\n"
+            else:
+                base_type = ret_type.replace("Optional[", "").replace("]", "").split("|")[0].split("[")[0].strip().lower()
+                if base_type in ("int", "str", "float", "bool", "list", "dict", "set", "tuple"):
+                    test_body += f"        assert isinstance(result, {base_type})\n"
+                    if base_type in ("list", "dict", "set", "tuple"):
+                        test_body += "        # TODO: tighten assertion with shape or expected values\n"
+                else:
+                    test_body += f"        pytest.skip(\"TODO: tighten assertion for type '{ret_type}'\")\n"
+
+        func_str = (
+            f"\n    {decorator}{async_str}def test_{func_name}_basic(self):\n"
+            f"        \"\"\"Test {func_name} with basic inputs\"\"\"\n"
+            f"{test_body}"
+        )
         func_tests.append(func_str)
 
     if func_tests:
         joined_funcs = "".join(func_tests)
         cls_name = module_name.title().replace("_", "")
         return_str = (
-            f'\nclass Test{cls_name}Functions:\n    """Test standalone functions"""{joined_funcs}\n'
+            f"\nclass Test{cls_name}Functions:\n"
+            f"    \"\"\"Test standalone functions\"\"\"{joined_funcs}\n"
         )
         return [return_str]
     return []
-
-
 def _generate_edge_case_tests(analysis: dict) -> list[str]:  # noqa: PLR0912, PLR0915
     edge_tests = []
 
@@ -432,9 +492,9 @@ def generate_comprehensive_test(module_path: Path, analysis: dict) -> str:
     imports_section = []
     if analysis["classes"]:
         class_names = [c["name"] for c in analysis["classes"]]
-        imports_section.append(f"from app.{relative_path} import {', '.join(class_names[:5])}")
+        imports_section.append(f"from app.{relative_path} import {', '.join(class_names)}")
     if analysis["functions"]:
-        func_names = [f["name"] for f in analysis["functions"] if not f["name"].startswith("_")][:5]
+        func_names = [f["name"] for f in analysis["functions"] if not f["name"].startswith("_")]
         if func_names:
             imports_section.append(f"from app.{relative_path} import {', '.join(func_names)}")
 

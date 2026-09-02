@@ -264,25 +264,19 @@ def _get_happy_path_value(type_hint: str | None) -> str | None:
     # Get base type by stripping everything after '['
     t = type_hint.split("[")[0].strip().lower()
 
-    if t == "int":
-        return "1"
-    elif t == "float":
-        return "1.5"
-    elif t == "str":
-        return '"sample"'
-    elif t == "bool":
-        return "True"
-    elif t == "list":
-        return "[1, 2, 3]"
-    elif t == "dict":
-        return '{"key": "value"}'
-    elif t == "set":
-        return "{1, 2}"
-    elif t == "tuple":
-        return "(1, 2)"
-    return None
+    happy_paths = {
+        "int": "1",
+        "float": "1.5",
+        "str": '"sample"',
+        "bool": "True",
+        "list": "[1, 2, 3]",
+        "dict": '{"key": "value"}',
+        "set": "{1, 2}",
+        "tuple": "(1, 2)",
+    }
+    return happy_paths.get(t)
 
-def _generate_function_tests(analysis: dict, module_name: str) -> list[str]:
+def _generate_function_tests(analysis: dict, module_name: str) -> list[str]:  # noqa: PLR0912
     func_tests = []
     functions = sorted(
         analysis["functions"],

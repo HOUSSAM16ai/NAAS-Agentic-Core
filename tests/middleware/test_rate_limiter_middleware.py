@@ -1,4 +1,3 @@
-
 import pytest
 from starlette.requests import Request
 
@@ -27,6 +26,7 @@ def _build_request(host: str) -> Request:
     }
     return Request(scope)
 
+
 @pytest.fixture(autouse=True)
 def reset_global_state():
     """Reset the global _rate_limiters state before and after each test."""
@@ -35,6 +35,7 @@ def reset_global_state():
     yield
     for limiter in _rate_limiters.values():
         limiter.reset()
+
 
 def test_reset_rate_limiter_existing_key():
     limiter = get_rate_limiter("default")

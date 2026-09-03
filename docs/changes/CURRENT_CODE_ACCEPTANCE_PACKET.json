@@ -159,7 +159,7 @@
     "changed_paths_excluding_packet": [
       "tests/middleware/test_rate_limiter_middleware.py"
     ],
-    "content_sha256_excluding_packet": "e0dad4bf62d8f4102e5c1dc3b1134c4cb822585801e9418b91d9ef5c774a2bce",
+    "content_sha256_excluding_packet": "72bef194ddd6c7587127b64ec332aea6bda356e4ff15ae71765876d151326575",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

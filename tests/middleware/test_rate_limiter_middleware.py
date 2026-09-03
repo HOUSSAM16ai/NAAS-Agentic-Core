@@ -1,12 +1,13 @@
+
 import pytest
-import time
 from starlette.requests import Request
+
 from app.middleware.rate_limiter_middleware import (
     _rate_limiters,
     get_rate_limiter,
     reset_rate_limiter,
-    TokenBucketRateLimiter
 )
+
 
 def _build_request(host: str) -> Request:
     scope = {

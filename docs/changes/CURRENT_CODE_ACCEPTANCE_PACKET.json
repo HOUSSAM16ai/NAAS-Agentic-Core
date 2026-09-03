@@ -155,7 +155,7 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "",
+    "base_ref": "7d1d10e8bab861aaa29239eeee7c7dca53a3dece",
     "changed_paths_excluding_packet": [
       "app/services/system/chaos_engineering.py"
     ],

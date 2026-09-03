@@ -5,7 +5,7 @@
   "decision": "D-277",
   "changed_paths": [
     "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
-    "tests/unit/test_cli.py"
+    "app/services/system/chaos_engineering.py"
   ],
   "standards": [
     "system-design-primer"
@@ -155,11 +155,11 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "WORKTREE",
+    "base_ref": "",
     "changed_paths_excluding_packet": [
-      "tests/middleware/test_rate_limiter_middleware.py"
+      "app/services/system/chaos_engineering.py"
     ],
-    "content_sha256_excluding_packet": "72bef194ddd6c7587127b64ec332aea6bda356e4ff15ae71765876d151326575",
+    "content_sha256_excluding_packet": "dd1d7c89492e17bb501904f63e497816914e8a2b6ecd6e04f02058592338ff93",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

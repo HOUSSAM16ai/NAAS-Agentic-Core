@@ -91,6 +91,9 @@
 | [`architecture/DUAL_TRACK_PRODUCT_SYSTEM.md`](architecture/DUAL_TRACK_PRODUCT_SYSTEM.md) · [`commercial/FOREIGN_CURRENCY_OPERATING_SYSTEM.md`](commercial/FOREIGN_CURRENCY_OPERATING_SYSTEM.md) · [`governance/DUAL_TRACK_ALIGNMENT.json`](governance/DUAL_TRACK_ALIGNMENT.json) | مساران متكاملان: هندسة المنتج وإنتاج/تصدير القيمة؛ لا إصدار تقني بلا قابلية إنتاج، ولا عرض تجاري بلا قدرة مثبتة |
 | [`adr/ADR-015-dual-track-product-system.md`](adr/ADR-015-dual-track-product-system.md) | قرار الفصل التشغيلي بين مسار الهندسة ومسار الإنتاج مع بوابة التقاء إلزامية |
 | [`adr/ADR-013-reference-backbone.md`](adr/ADR-013-reference-backbone.md) | قرار جعل المجموعة المرجعية إلزامية، مثبتة، إضافية، وغير تشغيلية بلا قرار جديد |
+| [`commercial/FX_INTELLIGENCE_2026-09-04.md`](commercial/FX_INTELLIGENCE_2026-09-04.md) | استخبارات العملة الصعبة I (بحث، PROPOSED): تشخيص الخطوط السبعة + السكك الدفعية + لائحة 26-02 + الترتيب A–E؛ 44 مصدرًا مرقمًا |
+| [`commercial/FX_INTELLIGENCE_2026-09-04_V2_SOVEREIGN_STARTUP.md`](commercial/FX_INTELLIGENCE_2026-09-04_V2_SOVEREIGN_STARTUP.md) | استخبارات العملة الصعبة II (بحث، PROPOSED): مجالات شركة سيادية 2026–2028 (ضمان معزول، OT فيزيائي، عمليات نماذج عربية، حوسبة)؛ 33 مصدرًا مرقمًا |
+| [`research/GREAT_FIELDS_HUMANITY_FX_2026-09-04.md`](research/GREAT_FIELDS_HUMANITY_FX_2026-09-04.md) | استخبارات العملة الصعبة III (بحث، PROPOSED): 10 مجالات عظيمة تغيّر البشرية + مبدأ «السكك لا القاطرة» + معمارية العملة 2026→2035؛ 24 مصدرًا مرقمًا (F1–F24) |
 | [`diagnostics/CUTOVER_SCOREBOARD.md`](diagnostics/CUTOVER_SCOREBOARD.md) | 🤖 لوحة القطع (مولَّدة آلياً — لا تُحرَّر يدوياً) |
 
 ## 5) مهارات الوكلاء (AI Skills)

@@ -62,9 +62,10 @@ async def test_event_bus_publish_serializes_with_event_id() -> None:
     capturing = _CapturingRedis()
     bus.redis = capturing  # type: ignore[assignment]
 
-    from microservices.orchestrator_service.src.services.overmind.state import MissionStateManager
-    from microservices.orchestrator_service.src.models.mission import MissionEventType
     from datetime import datetime
+
+    from microservices.orchestrator_service.src.models.mission import MissionEventType
+    from microservices.orchestrator_service.src.services.overmind.state import MissionStateManager
 
     manager = MissionStateManager(session=None, event_bus=bus) # type: ignore
 

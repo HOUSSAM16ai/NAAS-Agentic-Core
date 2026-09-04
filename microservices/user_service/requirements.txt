@@ -94,7 +94,7 @@ flupy==1.2.3
 # on 66a3e50). Dependabot raised it twice: 4b0db53 → 1.84.0, 91509a0 → 1.96.0.
 # 1.50.0 is the version proven green on b1db497. Raising the pair means migrating
 # to the openai 2.x SDK across six services — an ADR, not a dependency bump.
-litellm==1.50.0
+litellm>=1.50.0
 prometheus-client>=0.20.0
 dspy==2.5.7
 llama-index-workflows==2.14.0

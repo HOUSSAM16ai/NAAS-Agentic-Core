@@ -1,0 +1,47 @@
+import re
+
+body = """
+**Context:**
+The `ORDER BY ... LIMIT 1` rewrite was already on the branch (commit 2282d139, on origin/main). This PR adds the composite index that makes it sort-free.
+
+## Summary
+Added a composite index to eliminate a sort.
+
+## Why
+The `entitlement_status` query fetches a single row ordered by `expires_at DESC` and `id DESC`. While the query was previously rewritten to use `ORDER BY ... LIMIT 1`, without an appropriate index, the database still had to sort the matching records per request. The new covering index eliminates this sort completely, enabling an O(1) index seek. The single-column `user_id` index is dropped to prevent unnecessary write overhead.
+
+## How to Test
+Execute tests using pytest.
+```bash
+pytest tests/services/test_entitlement_index.py tests/services/test_voucher_redemption.py
+```
+
+## Validation Evidence
+```bash
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+rootdir: /app
+configfile: pytest.ini
+plugins: anyio-4.12.0, langsmith-0.12.1, asyncio-1.4.0, hypothesis-6.126.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 26 items
+
+tests/services/test_entitlement_index.py .                               [  3%]
+tests/services/test_voucher_redemption.py .........................      [100%]
+
+============================= 26 passed in 17.27s ==============================
+```
+
+## Risk & Rollback
+Low risk. Rollback by reverting migration.
+
+HUMAN:
+I ran the python script to generate the explain plans before and after the composite index, and saw the `USE TEMP B-TREE FOR ORDER BY` disappear. I also manually ran `pytest tests/services/test_entitlement_index.py tests/services/test_voucher_redemption.py` and saw 26 tests pass successfully.
+AGENT:
+
+Fixes #1234
+"""
+
+HUMAN_RE = re.compile(r"(?im)^\s*HUMAN:\s*$")
+start = HUMAN_RE.search(body)
+print(f"Start: {start}")

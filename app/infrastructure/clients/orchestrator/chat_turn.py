@@ -23,7 +23,12 @@ import uuid
 from collections.abc import AsyncGenerator
 
 import httpx
-from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from app.infrastructure.clients.orchestrator.turn_context import TurnContext
 from app.infrastructure.clients.orchestrator.turn_fallback import TurnFallbackMixin
@@ -69,10 +74,14 @@ class ChatTurnMixin(
     # تسلسل الجسم فيفشل كل مرشّحي الـ orchestrator ⇒ ORCHESTRATOR_REQUIRED للأسئلة
     # العامة). `tutor_state` = ذاكرة التدريس الدائمة (D-142) — ملكية المونوليث حصراً؛
     # الـ orchestrator يستهلك `support_level`/`exercise_content` المستخرجَين منفصلَين.
-    _INTERNAL_CONTEXT_KEYS: frozenset[str] = frozenset({"policy_decision", "tutor_state"})
+    _INTERNAL_CONTEXT_KEYS: frozenset[str] = frozenset(
+        {"policy_decision", "tutor_state"}
+    )
 
     @classmethod
-    def _sanitize_wire_context(cls, context: dict[str, object] | None) -> dict[str, object]:
+    def _sanitize_wire_context(
+        cls, context: dict[str, object] | None
+    ) -> dict[str, object]:
         """نسخة الـ context الصالحة للسلك — بلا مفاتيح داخلية غير قابلة للتسلسل."""
         if not isinstance(context, dict):
             return {}
@@ -250,7 +259,8 @@ class ChatTurnMixin(
         try:
             service_token = self._build_service_jwt(
                 user_id,
-                is_admin=isinstance(context, dict) and context.get("chat_scope") == "admin",
+                is_admin=isinstance(context, dict)
+                and context.get("chat_scope") == "admin",
             )
             auth_headers = {
                 "Authorization": f"Bearer {service_token}",
@@ -272,7 +282,9 @@ class ChatTurnMixin(
                 async for attempt in AsyncRetrying(
                     stop=stop_after_attempt(1),
                     wait=wait_exponential(multiplier=1, min=1, max=4),
-                    retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
+                    retry=retry_if_exception_type(
+                        (httpx.ConnectError, httpx.TimeoutException)
+                    ),
                     reraise=True,
                 ):
                     with attempt:
@@ -301,7 +313,12 @@ class ChatTurnMixin(
                         )
 
                         _integrity = StreamIntegrityFilter()
-                    except Exception:  # pragma: no cover - fail-open على مستوى التوصيل
+                    except (
+                        Exception
+                    ) as e:  # pragma: no cover - fail-open على مستوى التوصيل
+                        logger.debug(
+                            f"StreamIntegrityFilter initialization failed (silenced): {e}"
+                        )
                         _integrity = None
                         sanitize_final_text = None  # type: ignore[assignment]
                     async for line in response.aiter_lines():
@@ -311,10 +328,14 @@ class ChatTurnMixin(
                             parsed_line = json.loads(line)
                             normalized = self._normalize_stream_event(parsed_line)
                             _ntype = (
-                                normalized.get("type") if isinstance(normalized, dict) else None
+                                normalized.get("type")
+                                if isinstance(normalized, dict)
+                                else None
                             )
                             if _ntype == "assistant_delta":
-                                _ncontent = (normalized.get("payload") or {}).get("content")
+                                _ncontent = (normalized.get("payload") or {}).get(
+                                    "content"
+                                )
                                 if isinstance(_ncontent, str) and _ncontent:
                                     # عقد empty_stream (D-103 rule 4): يُحسَب من
                                     # المحتوى الخام قبل الفلترة.
@@ -327,12 +348,14 @@ class ChatTurnMixin(
                             elif _ntype == "assistant_final":
                                 _orch_visible = True
                                 if sanitize_final_text is not None:
-                                    _fc = (normalized.get("payload") or {}).get("content")
+                                    _fc = (normalized.get("payload") or {}).get(
+                                        "content"
+                                    )
                                     if isinstance(_fc, str) and _fc:
                                         # D-114: support_level==1 يُعفي كتلة المثال
                                         # المحلول الملفوفة بالفواصل من الحجب.
-                                        normalized["payload"]["content"] = sanitize_final_text(
-                                            _fc, _support_level
+                                        normalized["payload"]["content"] = (
+                                            sanitize_final_text(_fc, _support_level)
                                         )
                             elif _ntype in ("assistant_error", "error", "complete"):
                                 _orch_visible = True
@@ -343,20 +366,28 @@ class ChatTurnMixin(
                                 _orch_visible = True
                                 yield self._normalize_stream_event(recovered)
                             else:
-                                logger.warning(f"Received non-JSON line from agent: {line[:50]}...")
+                                logger.warning(
+                                    f"Received non-JSON line from agent: {line[:50]}..."
+                                )
                                 _orch_visible = True
                                 yield self._normalize_stream_event(line)
                     # ISS-114: إفراغ ذيل المرشّح المحجوز (صفر فقدان bytes).
                     if _integrity is not None:
                         _tail = _integrity.flush()
                         if _tail:
-                            yield {"type": "assistant_delta", "payload": {"content": _tail}}
+                            yield {
+                                "type": "assistant_delta",
+                                "payload": {"content": _tail},
+                            }
                     if _orch_visible:
                         return
                     connection_errors.append(f"{candidate_url} => empty_stream")
                     logger.warning(
                         "chat_routing_empty_stream",
-                        extra={"request_id": request_id, "candidate_url": candidate_url},
+                        extra={
+                            "request_id": request_id,
+                            "candidate_url": candidate_url,
+                        },
                     )
                 finally:
                     await response.aclose()
@@ -369,9 +400,14 @@ class ChatTurnMixin(
                     extra={"request_id": request_id, "candidate_url": candidate_url},
                 )
 
-        diagnostic = " | ".join(connection_errors) if connection_errors else "No endpoint attempted"
+        diagnostic = (
+            " | ".join(connection_errors)
+            if connection_errors
+            else "No endpoint attempted"
+        )
         logger.error(
-            "Failed to chat with agent across all endpoints", extra={"diagnostic": diagnostic}
+            "Failed to chat with agent across all endpoints",
+            extra={"diagnostic": diagnostic},
         )
 
         # ─────────────────────────────────────────────────────────────────────
@@ -436,13 +472,17 @@ class ChatTurnMixin(
                     metrics={"duration_ms": (time.perf_counter() - _t0) * 1000},
                 )
         try:
-            yield self._normalize_stream_event(self._sanitize_error_for_user(request_id=request_id))
+            yield self._normalize_stream_event(
+                self._sanitize_error_for_user(request_id=request_id)
+            )
             yield self._normalize_stream_event(
                 {"type": "assistant_final", "payload": {"content": ""}}
             )
         except Exception as e:
             logger.error(f"Failed to chat with agent: {e}", exc_info=True)
-            yield self._normalize_stream_event(self._sanitize_error_for_user(request_id=request_id))
+            yield self._normalize_stream_event(
+                self._sanitize_error_for_user(request_id=request_id)
+            )
             yield self._normalize_stream_event(
                 {"type": "assistant_final", "payload": {"content": ""}}
             )

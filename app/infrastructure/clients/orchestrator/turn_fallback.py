@@ -18,7 +18,9 @@ logger = logging.getLogger("orchestrator-client")
 class TurnFallbackMixin:
     """سلسلة الـ fallback المحلية المحروسة — منقولة حرفياً من ذيل chat_with_agent."""
 
-    async def _stage_local_fallback(self, ctx: TurnContext) -> AsyncGenerator[dict | str, None]:
+    async def _stage_local_fallback(
+        self, ctx: TurnContext
+    ) -> AsyncGenerator[dict | str, None]:
         """سلسلة الـ fallback المحلية المحروسة (D-047/D-048/ISS-053) — خلف REQUIRE_ORCHESTRATOR=0."""
         question = ctx.question
         history_messages = ctx.history_messages
@@ -44,7 +46,9 @@ class TurnFallbackMixin:
                 parent_context=_root_ctx,
                 tags={"fallback_step": "file_intelligence"},
             )
-        local_file_count_response = await self._build_local_file_count_response(question)
+        local_file_count_response = await self._build_local_file_count_response(
+            question
+        )
         try:
             if _fb_ctx:
                 obs.end_span(
@@ -52,8 +56,8 @@ class TurnFallbackMixin:
                     status="OK" if local_file_count_response else "SKIP",
                     metrics={"duration_ms": (time.perf_counter() - _fb_t0) * 1000},
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Telemetry logging error (silenced): {e}")
         if local_file_count_response:
             if _root_ctx:
                 with contextlib.suppress(Exception):
@@ -66,7 +70,10 @@ class TurnFallbackMixin:
                         },
                     )
             yield self._normalize_stream_event(
-                {"type": "assistant_delta", "payload": {"content": local_file_count_response}}
+                {
+                    "type": "assistant_delta",
+                    "payload": {"content": local_file_count_response},
+                }
             )
             yield self._normalize_stream_event(
                 {"type": "assistant_final", "payload": {"content": ""}}
@@ -89,7 +96,9 @@ class TurnFallbackMixin:
         ret_streamed_any = False
         ret_streamed_chars = 0
         try:
-            async for chunk in self._stream_local_retrieval_response(question, history_messages):
+            async for chunk in self._stream_local_retrieval_response(
+                question, history_messages
+            ):
                 if not chunk:
                     continue
                 ret_streamed_any = True
@@ -110,8 +119,8 @@ class TurnFallbackMixin:
                         "stream_chars": float(ret_streamed_chars),
                     },
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Telemetry logging error (silenced): {e}")
 
         if ret_streamed_any:
             if _root_ctx:
@@ -181,8 +190,8 @@ class TurnFallbackMixin:
                         "stream_chars": float(exp_streamed_chars),
                     },
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Telemetry logging error (silenced): {e}")
 
         if exp_streamed_any:
             if _root_ctx:
@@ -243,8 +252,8 @@ class TurnFallbackMixin:
                         "stream_chars": float(streamed_chars),
                     },
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Telemetry logging error (silenced): {e}")
 
         if streamed_any:
             if _root_ctx:
@@ -266,7 +275,9 @@ class TurnFallbackMixin:
 
         # Ultimate safety net: STREAMING raw LLM call (no graph, no state) — D-047
         is_file_intelligence = self._file_intelligence_decision(question)[0]
-        is_exercise_retrieval = self._exercise_retrieval_decision(question, history_messages)
+        is_exercise_retrieval = self._exercise_retrieval_decision(
+            question, history_messages
+        )
         if not is_file_intelligence and not is_exercise_retrieval:
             _gc_t0 = time.perf_counter()
             _gc_ctx = None
@@ -303,8 +314,8 @@ class TurnFallbackMixin:
                             "stream_chars": float(gc_streamed_chars),
                         },
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Telemetry logging error (silenced): {e}")
 
             if gc_streamed_any:
                 if _root_ctx:

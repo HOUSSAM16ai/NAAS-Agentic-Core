@@ -1,16 +1,60 @@
 import asyncio
+import hashlib
 import logging
 import re
+from typing import Any
 
+import sqlglot
+from sqlglot import exp
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import AppSettings
+from app.core.config import AppSettings, get_settings
 
 logger = logging.getLogger(__name__)
 
 _READ_ONLY_PREFIXES = ("SELECT", "WITH")
 _FORBIDDEN_SQL = re.compile(r";|\\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b")
+
+
+def _is_safe_sqlglot_query(sql: str) -> bool:
+    try:
+        if "--" in sql or "/*" in sql:
+            return False
+
+        parsed = sqlglot.parse(sql, read="postgres", error_level=sqlglot.ErrorLevel.IMMEDIATE)
+        if len(parsed) != 1:
+            return False
+
+        ast = parsed[0]
+        if not isinstance(ast, (exp.Select, exp.Union)):
+            return False
+
+        if ast.args.get("with"):
+            with_ = ast.args.get("with")
+            for cte in with_.expressions:
+                if not isinstance(cte.this, (exp.Select, exp.Union)):
+                    return False
+
+        forbidden_funcs = {
+            "pg_sleep", "pg_read_file", "pg_read_binary_file",
+            "lo_import", "lo_export", "dblink", "set_config",
+            "current_setting", "pg_terminate_backend", "load_extension", "copy"
+        }
+
+        for node in ast.find_all(exp.Expression):
+            if isinstance(node, (exp.Delete, exp.Update, exp.Insert, exp.Drop, exp.Alter, exp.Command)):
+                return False
+            if isinstance(node, exp.Into):
+                return False
+            if isinstance(node, exp.Lock):
+                return False
+            if isinstance(node, (exp.Func, exp.Anonymous)):
+                if node.name.lower() in forbidden_funcs:
+                    return False
+        return True
+    except Exception:
+        return False
 
 
 class DatabaseService:
@@ -21,13 +65,20 @@ class DatabaseService:
         logger: logging.Logger | None = None,
     ):
         self.session = session
-        self.settings = settings
+
+        # Inject settings properly
+        if settings is None:
+            try:
+                self.settings = get_settings()
+            except Exception:
+                # Mock settings for tests or fallback
+                self.settings = None
+        else:
+            self.settings = settings
+
         self.logger = logger or logging.getLogger(__name__)
 
     async def check_health(self) -> dict[str, object]:
-        """
-        Checks database health.
-        """
         try:
             if self.session is None:
                 raise RuntimeError("Database session غير متوفر.")
@@ -73,21 +124,89 @@ class DatabaseService:
     async def delete_record(self, table_name: str, record_id: int) -> dict[str, object]:
         raise NotImplementedError("خدمة حذف السجل غير مفعلة حتى يتم تنفيذها بالكامل.")
 
-    async def execute_query(self, sql: str) -> dict[str, object]:
+    async def execute_query(
+        self,
+        sql: str,
+        params: dict[str, Any] | None = None,
+        require_admin: bool = True,
+        caller_identity: str = "unknown"
+    ) -> dict[str, object]:
+        if require_admin and (not caller_identity or caller_identity == "unknown"):
+            raise ValueError("غير مصرح لك بتنفيذ الاستعلام.")
+
+        params_dict = params or {}
+        sql_hash = hashlib.sha256(sql.encode("utf-8")).hexdigest()[:8]
+        truncated_sql = sql[:100] + ("..." if len(sql) > 100 else "")
+        param_keys = list(params_dict.keys())
+
+        if self.settings:
+            db_readonly_url = getattr(self.settings, "DATABASE_READONLY_URL", None)
+            main_url = getattr(self.settings, "DATABASE_URL", None)
+            if not db_readonly_url or db_readonly_url == main_url:
+                self.logger.warning(
+                    f"AUDIT_LOG: execute_query warning | "
+                    f"DATABASE_READONLY_URL is missing or same as primary DB. Falling back to primary DB connection."
+                )
+
+        self.logger.info(
+            f"AUDIT_LOG: execute_query start | caller='{caller_identity}' "
+            f"sql_hash={sql_hash} sql='{truncated_sql}' keys={param_keys}"
+        )
+
         try:
             if self.session is None:
                 raise RuntimeError("Database session غير متوفر.")
+
             normalized = " ".join(sql.strip().split())
             if not normalized:
                 raise ValueError("الاستعلام فارغ.")
             upper_sql = normalized.upper()
             if not upper_sql.startswith(_READ_ONLY_PREFIXES) or _FORBIDDEN_SQL.search(upper_sql):
+                self.logger.warning(f"AUDIT_LOG: execute_query rejected | sql_hash={sql_hash} reason='regex_blocked'")
                 raise ValueError("يسمح فقط باستعلامات القراءة بدون أوامر متعددة.")
-            result = await self.session.execute(text(sql))
-            rows = [dict(row._mapping) for row in result]
+
+            if not _is_safe_sqlglot_query(sql):
+                self.logger.warning(f"AUDIT_LOG: execute_query rejected | sql_hash={sql_hash} reason='parser_blocked'")
+                raise ValueError("الاستعلام مرفوض من قبل المحلل الأمني (يسمح فقط بالقراءة).")
+
+            start_time = asyncio.get_event_loop().time()
+            engine_name = self.session.bind.dialect.name if self.session.bind else "unknown"
+
+            if engine_name == "sqlite":
+                # For sqlite PRAGMA query_only=1, apply it, then execute query, then reset to 0 in finally block
+                try:
+                    await self.session.execute(text("PRAGMA query_only = 1"))
+                    result = await self.session.execute(text(sql), params_dict)
+                    MAX_ROWS = 1000
+                    rows_proxy = result.fetchmany(MAX_ROWS)
+                    rows = [dict(row._mapping) for row in rows_proxy]
+                finally:
+                    await self.session.execute(text("PRAGMA query_only = 0"))
+            else:
+                async with self.session.begin_nested():
+                    if engine_name in ("postgresql", "asyncpg", "psycopg2"):
+                        await self.session.execute(text("SET LOCAL statement_timeout = '5s'"))
+                        await self.session.execute(text("SET LOCAL TRANSACTION READ ONLY"))
+
+                    result = await self.session.execute(text(sql), params_dict)
+                    MAX_ROWS = 1000
+                    rows_proxy = result.fetchmany(MAX_ROWS)
+                    rows = [dict(row._mapping) for row in rows_proxy]
+
+            end_time = asyncio.get_event_loop().time()
+            duration_ms = (end_time - start_time) * 1000
+
+            self.logger.info(
+                f"AUDIT_LOG: execute_query success | caller='{caller_identity}' "
+                f"sql_hash={sql_hash} rows={len(rows)} duration_ms={duration_ms:.2f}"
+            )
             return {"status": "success", "rows": rows, "row_count": len(rows)}
+
+        except ValueError as ve:
+            return {"status": "error", "message": str(ve)}
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            self.logger.error(f"AUDIT_LOG: execute_query error | sql_hash={sql_hash} error={str(e)}")
+            return {"status": "error", "message": "حدث خطأ أثناء تنفيذ الاستعلام الأمني."}
 
 
 database_service = DatabaseService()

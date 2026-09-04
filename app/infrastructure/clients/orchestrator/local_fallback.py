@@ -39,8 +39,32 @@ from app.services.capabilities.file_intelligence import (
 logger = logging.getLogger("orchestrator-client")
 
 
+def _mark_fallback(path: str) -> None:
+    """Best-effort telemetry hook. Must never break the fallback flow."""
+    try:
+        from app.telemetry.path_observer import mark_fallback_used  # lazy import: avoids import cycles / optional module
+
+        mark_fallback_used(path)
+    except Exception:
+        logger.debug("fallback_telemetry_failed", extra={"path": path}, exc_info=True)
+
+
 class LocalFallbackMixin:
     """Deterministic local fallback chain — file-count / retrieval / explanation / general chat."""
+
+    @staticmethod
+    def _record_fallback(name: str) -> None:
+        """يسجل استخدام مسار بديل (fallback) في أنظمة المراقبة.
+
+        Best-effort telemetry: الاستيراد كسول (lazy) لتجنب دورات الاستيراد (circular imports)،
+        ويبتلع جميع الاستثناءات لكي لا يكسر أي مسار بديل في حال تعطل المراقبة.
+        """
+        try:
+            from app.telemetry.path_observer import mark_fallback_used
+
+            mark_fallback_used(name)
+        except Exception:
+            pass
 
     # M0: `_execute_shell_tool` حُذِف — كان الجسر الوحيد من مسار الدردشة الحيّ إلى
     # `execute_shell`، وقد زال مبرّره حين صار عدّ الملفات بايثون خالصة. قدرة بلا
@@ -353,9 +377,8 @@ class LocalFallbackMixin:
         """
         try:
             from app.services.chat.local_graph import run_local_graph
-            from app.telemetry.path_observer import mark_fallback_used
 
-            mark_fallback_used("local_graph")
+            self._record_fallback("local_graph")
             return await run_local_graph(
                 question=question,
                 conversation_id=conversation_id,
@@ -384,9 +407,8 @@ class LocalFallbackMixin:
         """
         try:
             from app.services.chat.local_graph import run_local_graph_stream
-            from app.telemetry.path_observer import mark_fallback_used
 
-            mark_fallback_used("local_graph_stream")
+            self._record_fallback("local_graph_stream")
             async for chunk in run_local_graph_stream(
                 question=question,
                 conversation_id=conversation_id,

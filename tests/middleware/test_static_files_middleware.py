@@ -1,15 +1,14 @@
-import pytest
-from fastapi import FastAPI, HTTPException
-from fastapi.testclient import TestClient
 from pathlib import Path
-from starlette.requests import Request
-import os
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from app.middleware.static_files_middleware import (
     StaticFilesConfig,
-    setup_static_files_middleware,
-    _should_enable_static_files,
     _is_api_path,
+    _should_enable_static_files,
+    setup_static_files_middleware,
 )
 
 

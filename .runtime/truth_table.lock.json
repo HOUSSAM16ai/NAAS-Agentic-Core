@@ -1,5 +1,5 @@
 {
-  "branch": "jules-8046248990164661351-73d14659",
+  "branch": "fix-useeffect-memory-leak-14470332023576788860-4",
   "components": [
     {
       "agreed": false,
@@ -32,12 +32,11 @@
         "app/telemetry/path_observer.py"
       ],
       "id": "path_observer",
-      "importer_count": 4,
+      "importer_count": 3,
       "importers_sample": [
         "app/api/routers/admin.py",
         "app/api/routers/customer_chat_support/turn_lifecycle.py",
-        "app/infrastructure/clients/orchestrator/local_fallback.py",
-        "tests/unit/infrastructure/clients/orchestrator/test_local_fallback.py"
+        "app/infrastructure/clients/orchestrator/local_fallback.py"
       ],
       "name": "WS chat path observer",
       "notes": "Imported by customer_chat.py + admin.py at WS turn entry.",
@@ -352,6 +351,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-09-04T12:57:30.104161+00:00",
+  "generated_at_utc": "2026-09-04T14:03:26.745885+00:00",
   "schema_version": 1
 }

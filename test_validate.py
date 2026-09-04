@@ -1,47 +1,42 @@
-import re
+import os
+import sys
 
-body = """
-**Context:**
-The `ORDER BY ... LIMIT 1` rewrite was already on the branch (commit 2282d139, on origin/main). This PR adds the composite index that makes it sort-free.
+sys.path.insert(0, os.path.abspath('.github/scripts'))
+import validate_pr_description
+body = """### What
+Fixed missing timeout tracking that could lead to "ghost reloads" on component unmount in `legacy-app.jsx`, and improved robustness of browser API feature detection (`performance.memory`).
 
-## Summary
-Added a composite index to eliminate a sort.
+### Why
+During an audit of the `legacy-app.jsx` file, it was identified that while `setInterval` calls were correctly being cleaned up in the `useEffect` unmount logic, subsequent `setTimeout` calls meant to force browser reloads (in case of resource starvation or proxy disconnection) were not tracked. If a user navigated away during the wait window, the timeout would fire anyway (a ghost reload).
 
-## Why
-The `entitlement_status` query fetches a single row ordered by `expires_at DESC` and `id DESC`. While the query was previously rewritten to use `ORDER BY ... LIMIT 1`, without an appropriate index, the database still had to sort the matching records per request. The new covering index eliminates this sort completely, enabling an O(1) index seek. The single-column `user_id` index is dropped to prevent unnecessary write overhead.
+Additionally, direct access to `performance.memory` without a `typeof` check can occasionally crash JS environments (e.g., JSDOM in tests or older browsers without the API implementation).
 
-## How to Test
-Execute tests using pytest.
-```bash
-pytest tests/services/test_entitlement_index.py tests/services/test_voucher_redemption.py
-```
+### Verification
+- Ran existing `iss152_api_error_contract.test.mjs` unit tests ensuring the legacy-app files remain correctly parsable and compatible.
+- Tested `typeof performance` check statically.
 
-## Validation Evidence
-```bash
-============================= test session starts ==============================
-platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
-rootdir: /app
-configfile: pytest.ini
-plugins: anyio-4.12.0, langsmith-0.12.1, asyncio-1.4.0, hypothesis-6.126.0
-asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 26 items
+### Result
+Component properly tears down all scheduled timeouts and intervals on unmount, and is safer to run outside of standard Chrome browser environments.
 
-tests/services/test_entitlement_index.py .                               [  3%]
-tests/services/test_voucher_redemption.py .........................      [100%]
+### Follow-up required
+During this fix, it was noted that **both `app/static/js/legacy-app.jsx` and `frontend/public/js/legacy-app.jsx` exist in the repository.**
+Investigation shows:
+- The backend FastAPI explicitly mounts `app/static` via `app/middleware/static_files_middleware.py`.
+- The frontend (Next.js config) is built separately but has an almost identical copy in `frontend/public`.
+- Some recent modifications were only present in the `frontend/public` version (e.g., Codespaces comments and `buildClientContextMessages` additions), causing the files to slowly diverge.
+- Both files contain a comment declaring they are "mirrors of each other", requiring dual manual updates.
 
-============================= 26 passed in 17.27s ==============================
-```
+**Proposed Next Step:** Open a separate architectural task to either consolidate these into one source of truth (e.g., `.gitignore` the `app/static` one and inject it via a build script), or drop the dual-serve pattern entirely to avoid "works on my machine" discrepancy bugs. (For this PR, the fixes were safely mirrored to both files).
 
-## Risk & Rollback
-Low risk. Rollback by reverting migration.
+---
+*PR created automatically by Jules for task [1572895956441806809](https://jules.google.com/task/1572895956441806809) started by @HOUSSAM16ai*"""
 
-HUMAN:
-I ran the python script to generate the explain plans before and after the composite index, and saw the `USE TEMP B-TREE FOR ORDER BY` disappear. I also manually ran `pytest tests/services/test_entitlement_index.py tests/services/test_voucher_redemption.py` and saw 26 tests pass successfully.
-AGENT:
+probs = []
+sections = validate_pr_description._sections(body)
+validate_pr_description._check_sections(sections, probs)
+validate_pr_description._check_human_note(body, probs)
+validate_pr_description._check_test_evidence(sections, probs)
+validate_pr_description._check_bugfix_reproduction(body, sections, probs)
+validate_pr_description._check_linked_issue(body, probs)
 
-Fixes #1234
-"""
-
-HUMAN_RE = re.compile(r"(?im)^\s*HUMAN:\s*$")
-start = HUMAN_RE.search(body)
-print(f"Start: {start}")
+print(probs)

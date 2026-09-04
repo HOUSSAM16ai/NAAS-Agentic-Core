@@ -5,12 +5,14 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         // ══════════════════════════════════════════════════════════════════════
         
         // Catch unhandled promise rejections (critical for Codespaces stability)
+        // Intentionally app-lifetime event listeners, never removed.
         window.addEventListener('unhandledrejection', (event) => {
             console.error('Unhandled promise rejection:', event.reason);
             event.preventDefault(); // Prevent browser crash
         });
 
         // Catch general errors
+        // Intentionally app-lifetime event listeners, never removed.
         window.addEventListener('error', (event) => {
             console.error('Global error caught:', event.error);
             event.preventDefault(); // Prevent browser crash
@@ -284,7 +286,7 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
             // This prevents memory leaks that were causing browser crashes in Codespaces
             useEffect(() => {
                 const timers = [];
-                let isMounted = true;
+                const timeouts = [];
                 
                 // Memory monitoring (Codespaces has limited resources)
                 if (typeof performance !== 'undefined' && performance.memory) {
@@ -301,10 +303,10 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         // CRITICAL: Auto-reload if memory exceeds 95% in Codespaces
                         if (IS_CODESPACES && percentUsed > 95) {
                             console.error('🚨 CRITICAL: Memory exhaustion detected! Forcing reload to prevent crash...');
-                            const tId = setTimeout(() => {
-                                if (isMounted) window.location.reload();
+                            const reloadTimeout = setTimeout(() => {
+                                window.location.reload();
                             }, 2000);
-                            timers.push(tId);
+                            timeouts.push(reloadTimeout);
                         }
                     }, 30000); // Check every 30 seconds
                     timers.push(memoryTimer);
@@ -354,10 +356,10 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         // If 3 consecutive failures, show warning
                         if (isMounted && consecutiveFailures >= 3) {
                             console.error('🚨 Server appears to be down. Page will reload in 5 seconds...');
-                            const rId = setTimeout(() => {
-                                if (isMounted) window.location.reload();
+                            const reloadTimeout = setTimeout(() => {
+                                window.location.reload();
                             }, 5000);
-                            timers.push(rId);
+                            timeouts.push(reloadTimeout);
                             clearInterval(healthTimer);
                         }
                     }, 60000); // Check every 60 seconds
@@ -366,12 +368,9 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
 
                 // CLEANUP: Clear all timers when component unmounts
                 return () => {
-                    isMounted = false;
-                    // Safely clear all tracked timers (both timeouts and intervals)
-                    timers.forEach(timer => {
-                        clearTimeout(timer);
-                        clearInterval(timer);
-                    });
+                    timers.forEach(timer => clearInterval(timer));
+                    // Prevent "ghost reloads" if component unmounts during the timeout window
+                    timeouts.forEach(timeout => clearTimeout(timeout));
                 };
             }, []); // Empty dependency array - run once on mount
 
@@ -1260,6 +1259,7 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         console.log('═══════════════════════════════════════════════════════════════════');
         
         // Track initial load time
+        // Intentionally app-lifetime event listeners, never removed.
         window.addEventListener('load', () => {
             const loadTime = performance.now();
             console.log(`⏱️ Total load time: ${loadTime.toFixed(2)}ms`);

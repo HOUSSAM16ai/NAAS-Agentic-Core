@@ -447,3 +447,106 @@ async def test_exercise_retrieval_fallback_concurrency_smoke(
 
     results = await asyncio.gather(*[run_once() for _ in range(8)])
     assert all(result == "تم العثور على تمرين محلي." for result in results)
+
+@pytest.mark.asyncio
+async def test_chat_turn_silenced_exception_logs_warning(monkeypatch, caplog):
+    """
+    Test that an exception during routing metrics recording in `chat_with_agent`
+    is logged as a WARNING without interrupting the chat turn.
+    """
+    from app.infrastructure.clients.orchestrator import chat_turn
+    from app.telemetry.unified_observability import UnifiedObservabilityService
+
+    # 1. Patch the metrics recorder to raise simulated exception
+    original_record_metric = UnifiedObservabilityService.record_metric
+
+    def mocked(self, name, *args, **kwargs):
+        if "routing." in name:
+            raise RuntimeError("simulated metric failure")
+        return original_record_metric(self, name, *args, **kwargs)
+
+    monkeypatch.setattr(UnifiedObservabilityService, "record_metric", mocked)
+
+    # 2. Patch the specific logger in chat_turn
+    class MockLogger:
+        def __init__(self):
+            self.warnings = []
+        def warning(self, msg, *args, **kwargs):
+            self.warnings.append((msg, kwargs))
+        def info(self, *args, **kwargs):
+            pass
+        def exception(self, *args, **kwargs):
+            pass
+        def error(self, *args, **kwargs):
+            pass
+
+    mock_logger = MockLogger()
+    monkeypatch.setattr(chat_turn, "logger", mock_logger)
+
+    # 3. Ensure we fallback so we don't need real microservices up.
+    monkeypatch.setenv("REQUIRE_ORCHESTRATOR", "0")
+
+    client = OrchestratorClient(base_url="http://fake:8006")
+
+    # Bypass all preempts to force hitting HTTP logic (which triggers metrics)
+    async def _empty_stream(*_args, **_kwargs):
+        if False:
+            yield ""
+
+    stages = [
+        "_stage_policy_gate", "_stage_greeting", "_stage_question_only",
+        "_stage_computational", "_stage_escalation_matrix", "_stage_definitional",
+        "_stage_conceptual", "_stage_socratic_interception", "_stage_indexed_retrieval",
+        "_stage_calculated_ui", "_stage_explanation_with_context"
+    ]
+    for stage in stages:
+        if hasattr(OrchestratorClient, stage):
+            monkeypatch.setattr(OrchestratorClient, stage, _empty_stream)
+
+    # Mock HTTP client to trigger fallback immediately
+    import httpx
+    class FakeAsyncClient:
+        def build_request(self, *args, **kwargs):
+            return None
+        async def send(self, *args, **kwargs):
+            raise httpx.ConnectError("Simulated network error")
+        async def aclose(self):
+            pass
+
+    async def get_client_mock():
+        return FakeAsyncClient()
+    monkeypatch.setattr(client, "_get_client", get_client_mock)
+
+    # Disable LLM in fallback to avoid waiting
+    import litellm
+    async def mock_acompletion(*args, **kwargs):
+        class MockChoice:
+            class MockMessage:
+                content = "fallback"
+            message = MockMessage()
+        class MockResp:
+            from typing import ClassVar
+            choices: ClassVar[list] = [MockChoice()]
+        return MockResp()
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion, raising=False)
+
+    events = []
+    async for item in client.chat_with_agent(question="hi", user_id=1):
+        events.append(item)
+
+    # Assert (a) the turn completes normally with the metrics recorder raising
+    assert len(events) > 0, "No events returned, fallback failed to execute."
+
+    # Assert (b) and (c) the specific WARNING was logged with correct format and metadata
+    matched = False
+    for msg, kwargs in mock_logger.warnings:
+        if msg == "chat_contract_routing_metrics_failed":
+            assert kwargs.get("exc_info") is True
+            extra = kwargs.get("extra", {})
+            assert extra.get("metric") == "routing.target.total"
+            assert "target" in extra
+            assert extra.get("error_type") == "RuntimeError"
+            matched = True
+            break
+
+    assert matched, f"The specific WARNING was not logged. Got warnings: {mock_logger.warnings}"

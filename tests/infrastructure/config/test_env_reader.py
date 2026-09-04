@@ -1,7 +1,6 @@
 """
 Tests for environment variable readers in app.infrastructure.config.env_reader.
 """
-
 import pytest
 
 from app.infrastructure.config.env_reader import (

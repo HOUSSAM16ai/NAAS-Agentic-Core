@@ -1,7 +1,8 @@
 import builtins
-import pytest
 from unittest.mock import MagicMock
+
 from app.infrastructure.clients.orchestrator.local_fallback import LocalFallbackMixin
+
 
 class TestLocalFallbackMixin:
     def test_record_fallback_success(self, monkeypatch):

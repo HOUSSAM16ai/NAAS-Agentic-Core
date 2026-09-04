@@ -249,3 +249,57 @@ async def test_relay_processing_staleness_uses_last_attempt_timestamp_when_avail
 
     assert result == {"processed": 0, "published": 0, "failed": 0, "skipped": 1}
     assert bus.published_messages == []
+
+class _FakeRawSession:
+    """محاكاة لجلسة psycopg الخام."""
+    def __init__(self, should_fail=False):
+        self.should_fail = should_fail
+        self.inserts = []
+
+    async def execute(self, stmt, params):
+        stmt_str = str(stmt)
+        if "INSERT INTO mission_events" in stmt_str and self.should_fail:
+            raise RuntimeError("DB Error")
+
+        self.inserts.append(stmt_str)
+
+        class _Result:
+            def fetchone(self):
+                return (99,)
+        return _Result()
+
+@pytest.mark.asyncio
+async def test_log_event_raw_path_publishes_with_event_id() -> None:
+    session = _FakeRawSession()
+    bus = _FakeEventBus(should_fail=False)
+    manager = MissionStateManager(session=session, event_bus=bus) # type: ignore
+
+    await manager.log_event(
+        mission_id=42,
+        event_type=MissionEventType.STATUS_CHANGE,
+        payload={"k": "v"},
+    )
+
+    assert bus.published_messages
+    channel, message = bus.published_messages[0]
+    assert message["event_id"] == "99"
+
+    # check outbox insertion contains __event_id
+    outbox_inserts = [s for s in session.inserts if "INSERT INTO mission_outbox" in s]
+    assert len(outbox_inserts) == 1
+    assert "__event_id" in outbox_inserts[0]
+
+@pytest.mark.asyncio
+async def test_log_event_raw_path_does_not_publish_on_db_error() -> None:
+    session = _FakeRawSession(should_fail=True)
+    bus = _FakeEventBus(should_fail=False)
+    manager = MissionStateManager(session=session, event_bus=bus) # type: ignore
+
+    with pytest.raises(RuntimeError, match="DB Error"):
+        await manager.log_event(
+            mission_id=42,
+            event_type=MissionEventType.STATUS_CHANGE,
+            payload={"k": "v"},
+        )
+
+    assert not bus.published_messages

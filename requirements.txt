@@ -123,7 +123,7 @@ passlib
 argon2-cffi
 vecs==0.4.5
 flupy==1.2.3
-litellm
+litellm<1.50.0
 dspy
 llama-index-workflows
 langchain-openai>=0.2.0

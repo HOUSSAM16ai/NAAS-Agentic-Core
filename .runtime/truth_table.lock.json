@@ -32,11 +32,12 @@
         "app/telemetry/path_observer.py"
       ],
       "id": "path_observer",
-      "importer_count": 3,
+      "importer_count": 4,
       "importers_sample": [
         "app/api/routers/admin.py",
         "app/api/routers/customer_chat_support/turn_lifecycle.py",
-        "app/infrastructure/clients/orchestrator/local_fallback.py"
+        "app/infrastructure/clients/orchestrator/local_fallback.py",
+        "tests/unit/infrastructure/clients/orchestrator/test_local_fallback.py"
       ],
       "name": "WS chat path observer",
       "notes": "Imported by customer_chat.py + admin.py at WS turn entry.",

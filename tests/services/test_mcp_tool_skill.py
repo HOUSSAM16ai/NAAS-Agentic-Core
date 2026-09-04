@@ -1,7 +1,7 @@
-import pytest
-import sys
 import logging
+import sys
 from importlib import reload
+
 
 def test_mcp_tool_skill_telemetry_disabled_prometheus_unavailable(monkeypatch):
     """Smoke test: monkeypatch prometheus_client to raise during import."""
@@ -12,6 +12,7 @@ def test_mcp_tool_skill_telemetry_disabled_prometheus_unavailable(monkeypatch):
 
     mock_logger = MagicMock()
     original_get_logger = logging.getLogger
+
     def mock_get_logger(name=None):
         if name == "cogniforge.skills.mcp_tool":
             return mock_logger
@@ -23,7 +24,7 @@ def test_mcp_tool_skill_telemetry_disabled_prometheus_unavailable(monkeypatch):
 
     try:
         # Force prometheus_client to not be found
-        monkeypatch.setitem(sys.modules, 'prometheus_client', None)
+        monkeypatch.setitem(sys.modules, "prometheus_client", None)
 
         # reset mock before reload in case it was imported before
         mock_logger.reset_mock()

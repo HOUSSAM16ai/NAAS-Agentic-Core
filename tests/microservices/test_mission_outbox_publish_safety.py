@@ -36,7 +36,7 @@ class _FakeSession:
         self.commit_count = 0
 
     def add(self, obj: object) -> None:
-        if isinstance(obj, MissionOutbox) and obj.id is None:
+        if hasattr(obj, "id") and getattr(obj, "id", None) is None:
             obj.id = 1
         self.added.append(obj)
 
@@ -70,6 +70,7 @@ async def test_log_event_marks_outbox_published_on_success() -> None:
     assert isinstance(message, dict)
     json.dumps(message)
     assert message["event_type"] == "status_change"
+    assert message["event_id"] == "1"
 
     outboxes = [obj for obj in session.added if isinstance(obj, MissionOutbox)]
     assert len(outboxes) == 1
@@ -288,7 +289,7 @@ async def test_log_event_raw_path_publishes_with_event_id() -> None:
     )
 
     assert bus.published_messages
-    channel, message = bus.published_messages[0]
+    _channel, message = bus.published_messages[0]
     assert message["event_id"] == "99"
 
     # check outbox insertion contains __event_id

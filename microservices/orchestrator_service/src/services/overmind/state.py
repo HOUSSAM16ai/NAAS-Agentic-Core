@@ -155,7 +155,7 @@ class MissionStateManager:
         reference_time = self._processing_reference_time(outbox)
         return reference_time <= (now - timedelta(seconds=timeout))
 
-    async def relay_outbox_events(  # noqa: PLR0915 (god-function paydown deferred; D-105)
+    async def relay_outbox_events(  # noqa: PLR0915, PLR0912 (god-function paydown deferred; D-105)
         self,
         *,
         batch_size: int = 50,

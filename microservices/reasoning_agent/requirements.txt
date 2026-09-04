@@ -15,7 +15,7 @@ dspy
 # on 66a3e50). Dependabot raised it twice: 4b0db53 → 1.84.0, 91509a0 → 1.96.0.
 # 1.50.0 is the version proven green on b1db497. Raising the pair means migrating
 # to the openai 2.x SDK across six services — an ADR, not a dependency bump.
-litellm==1.50.0
+litellm>=1.50.0
 llama-index-core>=0.10.0
 llama-index-llms-openai>=0.1.0
 tenacity>=8.0.0

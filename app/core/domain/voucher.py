@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, func
+from sqlalchemy import Column, DateTime, Index, func
 from sqlmodel import Field, SQLModel
 
 from app.core.domain.common import utc_now
@@ -58,9 +58,12 @@ class Entitlement(SQLModel, table=True):
     """حقّ وصولٍ ممنوح لمستخدم حتى `expires_at`."""
 
     __tablename__ = "entitlements"
+    __table_args__ = (
+        Index("ix_entitlements_user_id_expires_at_id", "user_id", "expires_at", "id"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", index=True)
+    user_id: int = Field(foreign_key="users.id")
     plan: str = Field(default="standard", max_length=32)
     source: str = Field(default="voucher", max_length=32)
     granted_at: datetime = Field(

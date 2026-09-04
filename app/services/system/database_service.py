@@ -5,9 +5,9 @@ import re
 from typing import Any
 
 import sqlglot
-from sqlglot import exp
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlglot import exp
 
 from app.core.config import AppSettings, get_settings
 
@@ -37,9 +37,17 @@ def _is_safe_sqlglot_query(sql: str) -> bool:
                     return False
 
         forbidden_funcs = {
-            "pg_sleep", "pg_read_file", "pg_read_binary_file",
-            "lo_import", "lo_export", "dblink", "set_config",
-            "current_setting", "pg_terminate_backend", "load_extension", "copy"
+            "pg_sleep",
+            "pg_read_file",
+            "pg_read_binary_file",
+            "lo_import",
+            "lo_export",
+            "dblink",
+            "set_config",
+            "current_setting",
+            "pg_terminate_backend",
+            "load_extension",
+            "copy",
         }
 
         for node in ast.find_all(exp.Expression):
@@ -49,9 +57,8 @@ def _is_safe_sqlglot_query(sql: str) -> bool:
                 return False
             if isinstance(node, exp.Lock):
                 return False
-            if isinstance(node, (exp.Func, exp.Anonymous)):
-                if node.name.lower() in forbidden_funcs:
-                    return False
+            if isinstance(node, (exp.Func, exp.Anonymous)) and node.name.lower() in forbidden_funcs:
+                return False
         return True
     except Exception:
         return False
@@ -66,12 +73,10 @@ class DatabaseService:
     ):
         self.session = session
 
-        # Inject settings properly
         if settings is None:
             try:
                 self.settings = get_settings()
             except Exception:
-                # Mock settings for tests or fallback
                 self.settings = None
         else:
             self.settings = settings
@@ -116,20 +121,14 @@ class DatabaseService:
     async def create_record(self, table_name: str, data: dict[str, object]) -> dict[str, object]:
         raise NotImplementedError("خدمة إنشاء السجل غير مفعلة حتى يتم تنفيذها بالكامل.")
 
-    async def update_record(
-        self, table_name: str, record_id: int, data: dict[str, object]
-    ) -> dict[str, object]:
+    async def update_record(self, table_name: str, record_id: int, data: dict[str, object]) -> dict[str, object]:
         raise NotImplementedError("خدمة تحديث السجل غير مفعلة حتى يتم تنفيذها بالكامل.")
 
     async def delete_record(self, table_name: str, record_id: int) -> dict[str, object]:
         raise NotImplementedError("خدمة حذف السجل غير مفعلة حتى يتم تنفيذها بالكامل.")
 
     async def execute_query(
-        self,
-        sql: str,
-        params: dict[str, Any] | None = None,
-        require_admin: bool = True,
-        caller_identity: str = "unknown"
+        self, sql: str, params: dict[str, Any] | None = None, require_admin: bool = True, caller_identity: str = "unknown"
     ) -> dict[str, object]:
         if require_admin and (not caller_identity or caller_identity == "unknown"):
             raise ValueError("غير مصرح لك بتنفيذ الاستعلام.")
@@ -144,8 +143,8 @@ class DatabaseService:
             main_url = getattr(self.settings, "DATABASE_URL", None)
             if not db_readonly_url or db_readonly_url == main_url:
                 self.logger.warning(
-                    f"AUDIT_LOG: execute_query warning | "
-                    f"DATABASE_READONLY_URL is missing or same as primary DB. Falling back to primary DB connection."
+                    "AUDIT_LOG: execute_query warning | "
+                    "DATABASE_READONLY_URL is missing or same as primary DB. Falling back to primary DB connection."
                 )
 
         self.logger.info(
@@ -173,12 +172,11 @@ class DatabaseService:
             engine_name = self.session.bind.dialect.name if self.session.bind else "unknown"
 
             if engine_name == "sqlite":
-                # For sqlite PRAGMA query_only=1, apply it, then execute query, then reset to 0 in finally block
                 try:
                     await self.session.execute(text("PRAGMA query_only = 1"))
                     result = await self.session.execute(text(sql), params_dict)
-                    MAX_ROWS = 1000
-                    rows_proxy = result.fetchmany(MAX_ROWS)
+                    max_rows = 1000
+                    rows_proxy = result.fetchmany(max_rows)
                     rows = [dict(row._mapping) for row in rows_proxy]
                 finally:
                     await self.session.execute(text("PRAGMA query_only = 0"))
@@ -189,8 +187,8 @@ class DatabaseService:
                         await self.session.execute(text("SET LOCAL TRANSACTION READ ONLY"))
 
                     result = await self.session.execute(text(sql), params_dict)
-                    MAX_ROWS = 1000
-                    rows_proxy = result.fetchmany(MAX_ROWS)
+                    max_rows = 1000
+                    rows_proxy = result.fetchmany(max_rows)
                     rows = [dict(row._mapping) for row in rows_proxy]
 
             end_time = asyncio.get_event_loop().time()

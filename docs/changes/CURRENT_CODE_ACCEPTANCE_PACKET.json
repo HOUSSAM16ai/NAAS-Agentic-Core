@@ -156,14 +156,12 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "origin/main",
+    "base_ref": "HEAD~1",
     "changed_paths_excluding_packet": [
-      ".runtime/truth_table.lock.json",
-      "app/infrastructure/clients/orchestrator/local_fallback.py",
-      "requirements.txt",
-      "tests/unit/infrastructure/clients/orchestrator/test_local_fallback.py"
+      "app/services/skills/mcp_tool_skill.py",
+      "tests/services/test_mcp_tool_skill.py"
     ],
-    "content_sha256_excluding_packet": "aa7a23ee30c469827ca29023c7f488ac19621b28a62dc6c9c3ca2f1269591050",
+    "content_sha256_excluding_packet": "08a0f6ca08e2fdf270794c1c8b696f83ca4ba02e975c18047447abc6793d1e35",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

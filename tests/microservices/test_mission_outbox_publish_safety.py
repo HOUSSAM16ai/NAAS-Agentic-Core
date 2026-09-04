@@ -40,6 +40,13 @@ class _FakeSession:
             obj.id = 1
         self.added.append(obj)
 
+    async def flush(self) -> None:
+        for obj in self.added:
+            if type(obj).__name__ == "MissionOutbox" and getattr(obj, "id", None) is None:
+                obj.id = 1
+            if type(obj).__name__ == "MissionEvent" and getattr(obj, "id", None) is None:
+                obj.id = 1
+
     async def commit(self) -> None:
         self.commit_count += 1
 

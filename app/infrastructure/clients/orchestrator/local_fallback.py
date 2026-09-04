@@ -56,7 +56,9 @@ class LocalFallbackMixin:
         `shell=True` على مسارٍ حيّ. `None` عند الفشل — نفس العقد السابق.
         """
         try:
-            return await asyncio.to_thread(count_project_files, default_project_root(), extension)
+            return await asyncio.to_thread(
+                count_project_files, default_project_root(), extension
+            )
         except OSError:  # قراءة شجرة الملفات قد تفشل (صلاحيات/سباق) — لا نكسر الدور.
             logger.warning("Local file-count walk failed", exc_info=True)
             return None
@@ -99,7 +101,9 @@ class LocalFallbackMixin:
             try:
                 raw_content = load_exercise_content(decision.matched_entry)
                 if raw_content:
-                    return format_exercise_for_display(decision.matched_entry, raw_content)
+                    return format_exercise_for_display(
+                        decision.matched_entry, raw_content
+                    )
             except Exception:
                 logger.warning("indexed_retrieval_failed", exc_info=True)
             # الملف النصّي مفقود → نص قاعدة البيانات (Supabase = single source of truth)
@@ -115,7 +119,9 @@ class LocalFallbackMixin:
 
         # المسار البديل الأخير — wide-net search (legacy)
         try:
-            from app.services.chat.tools.retrieval.service import search_educational_content
+            from app.services.chat.tools.retrieval.service import (
+                search_educational_content,
+            )
 
             result = await search_educational_content(query=question)
             normalized = make_exercise_result(result)
@@ -131,7 +137,9 @@ class LocalFallbackMixin:
         أي تعذّر وصول → يبقى المسار يعتمد على الفهرس النصّي.
         """
         try:
-            from app.services.capabilities.bac_db_retriever import fetch_exercise_raw_text
+            from app.services.capabilities.bac_db_retriever import (
+                fetch_exercise_raw_text,
+            )
             from app.services.capabilities.knowledge_index import entry_canonical_ids
 
             canonical_id = next(iter(entry_canonical_ids(entry)), None)
@@ -152,7 +160,9 @@ class LocalFallbackMixin:
         يتقدّم المسار للبديل (wide-net / المسار العادي).
         """
         try:
-            from app.services.capabilities.bac_db_retriever import search_bac_exercises_db
+            from app.services.capabilities.bac_db_retriever import (
+                search_bac_exercises_db,
+            )
 
             match = await search_bac_exercises_db(question)
             if match is not None and match.raw_text.strip():
@@ -218,11 +228,17 @@ class LocalFallbackMixin:
             from app.telemetry.path_observer import mark_fallback_used
 
             mark_fallback_used("exercise_explanation_stream")
-        except Exception:
-            pass
+        except Exception:  # telemetry must never break the fallback path
+            logger.warning(
+                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
+                "exercise_explanation_stream",
+                exc_info=True,
+            )
 
         try:
-            from app.services.chat.local_graph import run_local_graph_with_exercise_context
+            from app.services.chat.local_graph import (
+                run_local_graph_with_exercise_context,
+            )
 
             async for chunk in run_local_graph_with_exercise_context(
                 question=question,
@@ -253,7 +269,9 @@ class LocalFallbackMixin:
 
         ISS-CONV-C: يقبل history_messages لحل أسئلة المتابعة بالسياق.
         """
-        full_response = await self._build_local_retrieval_response(question, history_messages)
+        full_response = await self._build_local_retrieval_response(
+            question, history_messages
+        )
         if not full_response:
             return
 
@@ -261,8 +279,12 @@ class LocalFallbackMixin:
             from app.telemetry.path_observer import mark_fallback_used
 
             mark_fallback_used("local_retrieval_stream")
-        except Exception:
-            pass
+        except Exception:  # telemetry must never break the fallback path
+            logger.warning(
+                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
+                "local_retrieval_stream",
+                exc_info=True,
+            )
 
         async for chunk in self._stream_markdown_typing(full_response):
             yield chunk
@@ -304,8 +326,12 @@ class LocalFallbackMixin:
             from app.telemetry.path_observer import mark_fallback_used
 
             mark_fallback_used("question_only_stream")
-        except Exception:
-            pass
+        except Exception:  # telemetry must never break the fallback path
+            logger.warning(
+                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
+                "question_only_stream",
+                exc_info=True,
+            )
 
         async for chunk in self._stream_markdown_typing(decision.sliced_content):
             yield chunk
@@ -393,8 +419,12 @@ class LocalFallbackMixin:
             from app.telemetry.path_observer import mark_fallback_used
 
             mark_fallback_used("local_general_chat")
-        except Exception:  # pragma: no cover — observability never blocks chat
-            pass
+        except Exception:  # telemetry must never break the fallback path
+            logger.warning(
+                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
+                "local_general_chat",
+                exc_info=True,
+            )
 
         local_system_prompt = (
             "أنت مساعد ذكي واسع المعرفة. "
@@ -412,7 +442,9 @@ class LocalFallbackMixin:
             else:
                 user_message = sanitized_question
 
-            response_text = await ai_client.send_message(local_system_prompt, user_message)
+            response_text = await ai_client.send_message(
+                local_system_prompt, user_message
+            )
         except Exception:
             logger.warning("local_general_chat_fallback_failed", exc_info=True)
             return None
@@ -441,8 +473,12 @@ class LocalFallbackMixin:
             from app.telemetry.path_observer import mark_fallback_used
 
             mark_fallback_used("local_general_chat_stream")
-        except Exception:
-            pass
+        except Exception:  # telemetry must never break the fallback path
+            logger.warning(
+                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
+                "local_general_chat_stream",
+                exc_info=True,
+            )
 
         local_system_prompt = (
             "أنت مساعد ذكي واسع المعرفة. "
@@ -451,7 +487,9 @@ class LocalFallbackMixin:
         )
         ai_client = get_ai_client()
 
-        messages: list[dict[str, str]] = [{"role": "system", "content": local_system_prompt}]
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": local_system_prompt}
+        ]
         if history_messages:
             for msg in history_messages[-20:]:
                 role = str(msg.get("role", "")).strip()
@@ -463,7 +501,11 @@ class LocalFallbackMixin:
         try:
             async for raw_chunk in ai_client.stream_chat(messages):
                 try:
-                    choices = raw_chunk.get("choices") if isinstance(raw_chunk, dict) else None
+                    choices = (
+                        raw_chunk.get("choices")
+                        if isinstance(raw_chunk, dict)
+                        else None
+                    )
                     if not choices:
                         continue
                     delta = choices[0].get("delta", {}) or {}

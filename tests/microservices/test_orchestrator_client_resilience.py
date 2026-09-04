@@ -41,7 +41,9 @@ def _event_types(events: list[dict]) -> list[str]:
     return [str(event.get("type")) for event in events]
 
 
-async def _collect_events(client: OrchestratorClient, question: str, user_id: int) -> list[dict]:
+async def _collect_events(
+    client: OrchestratorClient, question: str, user_id: int
+) -> list[dict]:
     """يستهلك chat_with_agent ويعيد الأحداث المُطبَّعة (dicts) فقط."""
     events: list[dict] = []
     async for item in client.chat_with_agent(question=question, user_id=user_id):
@@ -138,7 +140,9 @@ class _AlwaysFailClient:
         raise httpx.ConnectError("lookup orchestrator-service:8006 failed")
 
 
-def _wire_failing_http(client: OrchestratorClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def _wire_failing_http(
+    client: OrchestratorClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     async def fake_get_client():
         return _AlwaysFailClient()
 
@@ -173,7 +177,9 @@ async def test_user_facing_error_is_sanitized(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.asyncio
-async def test_local_fallback_still_works_for_file_count(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_local_fallback_still_works_for_file_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """يحافظ على مسار التدهور المحلي الحالي عندما يكون السؤال من نمط عدّ الملفات."""
     monkeypatch.setenv("ORCHESTRATOR_SERVICE_URL", "http://orchestrator-service:8006")
     client = OrchestratorClient(base_url="http://orchestrator-service:8006")
@@ -232,7 +238,10 @@ async def test_local_retrieval_fallback_for_exercise_request(
 
     events = await _collect_events(client, "أعطني تمرين الاحتمالات", user_id=1)
 
-    assert _delta_text(events) == "تم العثور على تمرين الاحتمالات المطلوب من المسار المحلي."
+    assert (
+        _delta_text(events)
+        == "تم العثور على تمرين الاحتمالات المطلوب من المسار المحلي."
+    )
     _assert_final_contract(events)
 
 
@@ -260,16 +269,22 @@ async def test_local_general_chat_fallback_when_specialized_fallbacks_miss(
 
     monkeypatch.setattr(client, "_build_local_file_count_response", no_file_count)
     monkeypatch.setattr(client, "_build_local_retrieval_response", no_retrieval)
-    monkeypatch.setattr(client, "_stream_local_general_chat_response", local_general_chat_stream)
+    monkeypatch.setattr(
+        client, "_stream_local_general_chat_response", local_general_chat_stream
+    )
 
     events = await _collect_events(client, "حدثني عن أهمية تنظيم الوقت", user_id=7)
 
-    assert _delta_text(events) == "مرحبًا! هذه إجابة محلية عامة لضمان استمرارية الدردشة."
+    assert (
+        _delta_text(events) == "مرحبًا! هذه إجابة محلية عامة لضمان استمرارية الدردشة."
+    )
     _assert_final_contract(events)
 
 
 @pytest.mark.asyncio
-async def test_local_fallback_can_be_disabled_with_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_local_fallback_can_be_disabled_with_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """يعطل fallback المحلي عند تفعيل العلم لضمان تحكم تشغيل آمن أثناء الـ canary."""
     monkeypatch.setenv("ORCHESTRATOR_SERVICE_URL", "http://orchestrator-service:8006")
     monkeypatch.setenv("ORCHESTRATOR_LOCAL_FALLBACK_ENABLED", "0")
@@ -359,7 +374,9 @@ async def test_normalize_stream_event_sanitizes_topology_tokens() -> None:
     assert "orchestrator-service" not in str(payload.get("details", "")).lower()
 
 
-def test_multi_target_candidates_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_multi_target_candidates_disabled_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """يفرض مرشح URL وحيد افتراضيًا لمنع split-brain إلا في وضع breakglass.
 
     D-025: الهدف الافتراضي هو StateGraph ⇒ ``/api/chat/messages``
@@ -417,7 +434,9 @@ async def test_file_intelligence_fallback_concurrency_smoke(
         return _delta_text(events)
 
     results = await asyncio.gather(*[run_once() for _ in range(8)])
-    assert all(result == "عدد الملفات بامتداد .pdf في المشروع هو: 3 ملف." for result in results)
+    assert all(
+        result == "عدد الملفات بامتداد .pdf في المشروع هو: 3 ملف." for result in results
+    )
 
 
 @pytest.mark.asyncio
@@ -447,3 +466,50 @@ async def test_exercise_retrieval_fallback_concurrency_smoke(
 
     results = await asyncio.gather(*[run_once() for _ in range(8)])
     assert all(result == "تم العثور على تمرين محلي." for result in results)
+
+
+@pytest.mark.asyncio
+async def test_telemetry_failure_does_not_break_fallback_path(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """يضمن أن فشل تسجيل التليميتري لا يكسر مسار الاسترجاع المحلي ويتم تسجيله كتحذير."""
+    import logging
+    from unittest.mock import patch
+
+    from app.infrastructure.clients.orchestrator.local_fallback import (
+        LocalFallbackMixin,
+    )
+
+    class DummyClient(LocalFallbackMixin):
+        async def _build_local_retrieval_response(
+            self, question, history_messages=None
+        ):
+            return "mocked answer"
+
+        async def _stream_markdown_typing(self, text):
+            yield text
+
+    client = DummyClient()
+
+    def failing_mark_fallback_used(fallback_name: str) -> None:
+        raise RuntimeError(f"Telemetry DB offline: {fallback_name}")
+
+    # We must mock it in `app.telemetry.path_observer`!
+
+    with patch(
+        "app.telemetry.path_observer.mark_fallback_used", failing_mark_fallback_used
+    ):
+        with caplog.at_level(logging.WARNING, logger="orchestrator-client"):
+            # Call it directly!
+            gen = client._stream_local_retrieval_response("test question")
+            chunks = [chunk async for chunk in gen]
+
+    assert "".join(chunks) == "mocked answer"
+
+    warning_logs = [
+        record.message for record in caplog.records if record.levelno >= logging.WARNING
+    ]
+    assert any(
+        "Telemetry hook mark_fallback_used failed" in msg for msg in warning_logs
+    ), "Expected warning log not found"

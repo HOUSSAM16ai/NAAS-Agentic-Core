@@ -220,8 +220,16 @@ class ChatTurnMixin(
                 1.0,
                 labels={"target": routing_policy.endpoint_mode},
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "chat_contract_routing_metrics_failed",
+                extra={
+                    "metric": "routing.target.total",
+                    "target": routing_policy.endpoint_mode,
+                    "error_type": type(exc).__name__,
+                },
+                exc_info=True,
+            )
 
         logger.info(
             "chat_contract_route_start",

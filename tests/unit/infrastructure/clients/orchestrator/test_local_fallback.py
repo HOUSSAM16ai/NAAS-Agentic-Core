@@ -1,10 +1,10 @@
-import pytest
 import logging
-import asyncio
-import builtins
 import sys
 
-from app.infrastructure.clients.orchestrator.local_fallback import _mark_fallback, LocalFallbackMixin
+import pytest
+
+from app.infrastructure.clients.orchestrator.local_fallback import LocalFallbackMixin
+
 
 @pytest.mark.asyncio
 async def test_mark_fallback_silenced_exception_logged(monkeypatch, caplog):
@@ -19,20 +19,21 @@ async def test_mark_fallback_silenced_exception_logged(monkeypatch, caplog):
 
     monkeypatch.setitem(sys.modules, "app.telemetry.path_observer", FakePathObserver())
 
-    with caplog.at_level(logging.DEBUG):
-        _mark_fallback("some_test_stream")
+    with caplog.at_level(logging.WARNING):
+        LocalFallbackMixin._record_fallback("some_test_stream")
 
-    assert "fallback_telemetry_failed" in caplog.text
-    # Ensure it logged at DEBUG level
-    assert any(record.levelname == "DEBUG" and "fallback_telemetry_failed" in record.message for record in caplog.records)
-
-    # ensure that extra kwargs are logged. caplog doesn't strictly check `extra` easily without record inspection, but we can check the record.
-    record = next(r for r in caplog.records if r.message == "fallback_telemetry_failed")
-    assert getattr(record, "path", None) == "some_test_stream"
+    assert "Fallback telemetry failed for some_test_stream" in caplog.text
+    assert any(
+        record.levelname == "WARNING"
+        and "Fallback telemetry failed for some_test_stream" in record.message
+        for record in caplog.records
+    )
 
 
 @pytest.mark.asyncio
-async def test_local_retrieval_stream_preserves_behavior_on_telemetry_failure(monkeypatch, caplog):
+async def test_local_retrieval_stream_preserves_behavior_on_telemetry_failure(
+    monkeypatch, caplog
+):
     class FakePathObserver:
         def mark_fallback_used(self, path):
             raise ValueError("Telemetry broke again!")
@@ -40,7 +41,9 @@ async def test_local_retrieval_stream_preserves_behavior_on_telemetry_failure(mo
     monkeypatch.setitem(sys.modules, "app.telemetry.path_observer", FakePathObserver())
 
     class FakeClient(LocalFallbackMixin):
-        async def _build_local_retrieval_response(self, question, history_messages=None):
+        async def _build_local_retrieval_response(
+            self, question, history_messages=None
+        ):
             return "Test Response"
 
         async def _stream_markdown_typing(self, content):
@@ -48,8 +51,45 @@ async def test_local_retrieval_stream_preserves_behavior_on_telemetry_failure(mo
 
     client = FakeClient()
 
-    with caplog.at_level(logging.DEBUG):
+    with caplog.at_level(logging.WARNING):
         chunks = [chunk async for chunk in client._stream_local_retrieval_response("Q")]
 
     assert chunks == ["Test Response"]
-    assert "fallback_telemetry_failed" in caplog.text
+    assert "Fallback telemetry failed for local_retrieval_stream" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_record_fallback_success(monkeypatch):
+    called_with = None
+
+    class FakePathObserver:
+        def mark_fallback_used(self, path):
+            nonlocal called_with
+            called_with = path
+
+    monkeypatch.setitem(sys.modules, "app.telemetry.path_observer", FakePathObserver())
+
+    LocalFallbackMixin._record_fallback("test_success_stream")
+
+    assert called_with == "test_success_stream"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exception_to_raise", [ImportError("Module not found"), RuntimeError("DB Offline")]
+)
+async def test_record_fallback_failure_logged(monkeypatch, caplog, exception_to_raise):
+    class FakePathObserver:
+        def mark_fallback_used(self, path):
+            raise exception_to_raise
+
+    monkeypatch.setitem(sys.modules, "app.telemetry.path_observer", FakePathObserver())
+
+    with caplog.at_level(logging.WARNING):
+        LocalFallbackMixin._record_fallback("test_fail_stream")
+
+    assert "Fallback telemetry failed for test_fail_stream" in caplog.text
+    assert any(
+        record.levelname == "WARNING" and "Fallback telemetry failed" in record.message
+        for record in caplog.records
+    )

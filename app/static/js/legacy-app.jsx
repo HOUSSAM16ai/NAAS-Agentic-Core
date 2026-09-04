@@ -291,6 +291,7 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                 // Memory monitoring (Codespaces has limited resources)
                 if (typeof performance !== 'undefined' && performance.memory) {
                     const memoryTimer = setInterval(() => {
+                        if (!isMounted) return;
                         const usedMemory = performance.memory.usedJSHeapSize;
                         const totalMemory = performance.memory.jsHeapSizeLimit;
                         const percentUsed = (usedMemory / totalMemory) * 100;
@@ -313,6 +314,7 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
 
                 // Periodic garbage collection hint for memory optimization
                 const gcTimer = setInterval(() => {
+                    if (!isMounted) return;
                     if (window.gc) {
                         window.gc(); // Manual GC if available (Chrome with --expose-gc flag)
                     }
@@ -323,18 +325,19 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                 if (IS_CODESPACES) {
                     let consecutiveFailures = 0;
                     const healthTimer = setInterval(async () => {
+                        if (!isMounted) return;
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 5000);
+                        timers.push(timeoutId);
+
                         try {
-                            // Create manual timeout with AbortController for better browser compatibility
-                            const controller = new AbortController();
-                            const timeoutId = setTimeout(() => controller.abort(), 5000);
-                            
                             const response = await fetch(apiUrl('/health'), { 
                                 method: 'GET',
                                 cache: 'no-cache',
                                 signal: controller.signal
                             });
                             
-                            clearTimeout(timeoutId);
+                            if (!isMounted) return;
                             
                             if (response.ok) {
                                 consecutiveFailures = 0;
@@ -343,12 +346,15 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                                 console.warn(`⚠️ Health check failed (${consecutiveFailures}/3)`);
                             }
                         } catch (error) {
+                            if (!isMounted) return;
                             consecutiveFailures++;
                             console.warn(`⚠️ Health check error (${consecutiveFailures}/3):`, error.message);
+                        } finally {
+                            clearTimeout(timeoutId);
                         }
                         
                         // If 3 consecutive failures, show warning
-                        if (consecutiveFailures >= 3) {
+                        if (isMounted && consecutiveFailures >= 3) {
                             console.error('🚨 Server appears to be down. Page will reload in 5 seconds...');
                             const reloadTimeout = setTimeout(() => {
                                 window.location.reload();

@@ -135,7 +135,7 @@ factory-boy==3.3.3
 Faker==40.36.0
 hypothesis==6.165.10
 sortedcontainers==2.4.0
-attrs==25.4.0
+attrs==26.1.0
 # R0.2 (D-172): pinned range (was unpinned) — reproducible checkpointer stack.
 # ⛔ THESE TWO MOVE TOGETHER OR NOT AT ALL — and both are capped by `langgraph<2.0.0`
 # at line 36. Dependabot has now broken this pair twice in two days:

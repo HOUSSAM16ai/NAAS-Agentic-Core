@@ -5,8 +5,8 @@
   "decision": "D-277",
   "changed_paths": [
     "docs/changes/CURRENT_CODE_ACCEPTANCE_PACKET.json",
-    "app/services/system/chaos_engineering.py",
-    "tests/unit/services/system/test_chaos_engineering.py"
+    "app/services/billing/vouchers.py",
+    "tests/services/test_voucher_redemption.py"
   ],
   "standards": [
     "system-design-primer"

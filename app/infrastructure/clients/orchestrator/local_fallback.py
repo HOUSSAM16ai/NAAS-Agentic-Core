@@ -42,6 +42,20 @@ logger = logging.getLogger("orchestrator-client")
 class LocalFallbackMixin:
     """Deterministic local fallback chain — file-count / retrieval / explanation / general chat."""
 
+    @staticmethod
+    def _record_fallback(name: str) -> None:
+        """يسجل استخدام مسار بديل (fallback) في أنظمة المراقبة.
+
+        Best-effort telemetry: الاستيراد كسول (lazy) لتجنب دورات الاستيراد (circular imports)،
+        ويبتلع جميع الاستثناءات لكي لا يكسر أي مسار بديل في حال تعطل المراقبة.
+        """
+        try:
+            from app.telemetry.path_observer import mark_fallback_used
+
+            mark_fallback_used(name)
+        except Exception:
+            pass
+
     # M0: `_execute_shell_tool` حُذِف — كان الجسر الوحيد من مسار الدردشة الحيّ إلى
     # `execute_shell`، وقد زال مبرّره حين صار عدّ الملفات بايثون خالصة. قدرة بلا
     # مستهلك حيّ تُحذَف لا تُترَك stub (درس Kagent، D-173). الأداة نفسها تبقى في
@@ -214,12 +228,7 @@ class LocalFallbackMixin:
         if not decision.recognized or not socratic_content:
             return
 
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("exercise_explanation_stream")
-        except Exception:
-            pass
+        self._record_fallback("exercise_explanation_stream")
 
         try:
             from app.services.chat.local_graph import run_local_graph_with_exercise_context
@@ -257,12 +266,7 @@ class LocalFallbackMixin:
         if not full_response:
             return
 
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("local_retrieval_stream")
-        except Exception:
-            pass
+        self._record_fallback("local_retrieval_stream")
 
         async for chunk in self._stream_markdown_typing(full_response):
             yield chunk
@@ -300,12 +304,7 @@ class LocalFallbackMixin:
             decision.question_number,
             getattr(decision.matched_entry, "file_path", None),
         )
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("question_only_stream")
-        except Exception:
-            pass
+        self._record_fallback("question_only_stream")
 
         async for chunk in self._stream_markdown_typing(decision.sliced_content):
             yield chunk
@@ -327,9 +326,8 @@ class LocalFallbackMixin:
         """
         try:
             from app.services.chat.local_graph import run_local_graph
-            from app.telemetry.path_observer import mark_fallback_used
 
-            mark_fallback_used("local_graph")
+            self._record_fallback("local_graph")
             return await run_local_graph(
                 question=question,
                 conversation_id=conversation_id,
@@ -358,9 +356,8 @@ class LocalFallbackMixin:
         """
         try:
             from app.services.chat.local_graph import run_local_graph_stream
-            from app.telemetry.path_observer import mark_fallback_used
 
-            mark_fallback_used("local_graph_stream")
+            self._record_fallback("local_graph_stream")
             async for chunk in run_local_graph_stream(
                 question=question,
                 conversation_id=conversation_id,
@@ -389,12 +386,7 @@ class LocalFallbackMixin:
         if not sanitized_question:
             return None
 
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("local_general_chat")
-        except Exception:  # pragma: no cover — observability never blocks chat
-            pass
+        self._record_fallback("local_general_chat")
 
         local_system_prompt = (
             "أنت مساعد ذكي واسع المعرفة. "
@@ -437,12 +429,7 @@ class LocalFallbackMixin:
         if not sanitized_question:
             return
 
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("local_general_chat_stream")
-        except Exception:
-            pass
+        self._record_fallback("local_general_chat_stream")
 
         local_system_prompt = (
             "أنت مساعد ذكي واسع المعرفة. "

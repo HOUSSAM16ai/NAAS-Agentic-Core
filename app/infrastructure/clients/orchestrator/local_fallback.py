@@ -39,6 +39,16 @@ from app.services.capabilities.file_intelligence import (
 logger = logging.getLogger("orchestrator-client")
 
 
+def _mark_fallback(path: str) -> None:
+    """Best-effort telemetry hook. Must never break the fallback flow."""
+    try:
+        from app.telemetry.path_observer import mark_fallback_used  # lazy import: avoids import cycles / optional module
+
+        mark_fallback_used(path)
+    except Exception:
+        logger.debug("fallback_telemetry_failed", extra={"path": path}, exc_info=True)
+
+
 class LocalFallbackMixin:
     """Deterministic local fallback chain — file-count / retrieval / explanation / general chat."""
 
@@ -214,12 +224,7 @@ class LocalFallbackMixin:
         if not decision.recognized or not socratic_content:
             return
 
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("exercise_explanation_stream")
-        except Exception:
-            pass
+        _mark_fallback("exercise_explanation_stream")
 
         try:
             from app.services.chat.local_graph import run_local_graph_with_exercise_context
@@ -257,12 +262,7 @@ class LocalFallbackMixin:
         if not full_response:
             return
 
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("local_retrieval_stream")
-        except Exception:
-            pass
+        _mark_fallback("local_retrieval_stream")
 
         async for chunk in self._stream_markdown_typing(full_response):
             yield chunk
@@ -300,12 +300,7 @@ class LocalFallbackMixin:
             decision.question_number,
             getattr(decision.matched_entry, "file_path", None),
         )
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("question_only_stream")
-        except Exception:
-            pass
+        _mark_fallback("question_only_stream")
 
         async for chunk in self._stream_markdown_typing(decision.sliced_content):
             yield chunk
@@ -389,12 +384,7 @@ class LocalFallbackMixin:
         if not sanitized_question:
             return None
 
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("local_general_chat")
-        except Exception:  # pragma: no cover — observability never blocks chat
-            pass
+        _mark_fallback("local_general_chat")
 
         local_system_prompt = (
             "أنت مساعد ذكي واسع المعرفة. "
@@ -437,12 +427,7 @@ class LocalFallbackMixin:
         if not sanitized_question:
             return
 
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("local_general_chat_stream")
-        except Exception:
-            pass
+        _mark_fallback("local_general_chat_stream")
 
         local_system_prompt = (
             "أنت مساعد ذكي واسع المعرفة. "

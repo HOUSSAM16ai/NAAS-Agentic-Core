@@ -156,12 +156,14 @@
     "owner": "curriculum-governance"
   },
   "git_change_snapshot": {
-    "base_ref": "main",
+    "base_ref": "origin/main",
     "changed_paths_excluding_packet": [
-      "app/services/billing/vouchers.py",
-      "tests/services/test_voucher_redemption.py"
+      ".runtime/truth_table.lock.json",
+      "app/infrastructure/clients/orchestrator/local_fallback.py",
+      "requirements.txt",
+      "tests/unit/infrastructure/clients/orchestrator/test_local_fallback.py"
     ],
-    "content_sha256_excluding_packet": "a4d12a3a244b3c717ac0c6148f3ac446f0be2f86f00e88df0656af4a765e30a5",
+    "content_sha256_excluding_packet": "aa7a23ee30c469827ca29023c7f488ac19621b28a62dc6c9c3ca2f1269591050",
     "refreshed_on": "2026-08-21",
     "refresh_command": "python3 scripts/research/refresh_acceptance_diff_snapshot.py"
   }

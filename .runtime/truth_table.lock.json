@@ -1,5 +1,5 @@
 {
-  "branch": "fix-useeffect-memory-leak-14470332023576788860-2",
+  "branch": "fix-useeffect-memory-leak-14470332023576788860-3",
   "components": [
     {
       "agreed": false,
@@ -351,6 +351,6 @@
       "on_live_chain": true
     }
   ],
-  "generated_at_utc": "2026-09-04T12:45:57.735190+00:00",
+  "generated_at_utc": "2026-09-04T12:53:24.788790+00:00",
   "schema_version": 1
 }

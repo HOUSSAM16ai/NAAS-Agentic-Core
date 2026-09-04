@@ -1,7 +1,8 @@
 HUMAN:
-I reviewed the logs and tested the fallback locally using the fake credentials script. The debug logger triggers precisely.
+I reviewed the logs and tested the fallback locally using the fake credentials script. The debug logger triggers precisely as expected, ensuring we no longer swallow telemetry failures silently.
 
 AGENT:
+I verified the change by asserting against the `DEBUG` logs inside the new `test_retrieval_telemetry_silenced_exception` test.
 
 ---
 

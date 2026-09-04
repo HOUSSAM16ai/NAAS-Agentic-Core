@@ -511,5 +511,5 @@ async def test_telemetry_failure_does_not_break_fallback_path(
         record.message for record in caplog.records if record.levelno >= logging.WARNING
     ]
     assert any(
-        "Telemetry hook mark_fallback_used failed" in msg for msg in warning_logs
+        "Fallback telemetry failed" in msg for msg in warning_logs
     ), "Expected warning log not found"

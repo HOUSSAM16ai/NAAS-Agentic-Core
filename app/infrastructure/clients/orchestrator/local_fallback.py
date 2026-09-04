@@ -39,16 +39,6 @@ from app.services.capabilities.file_intelligence import (
 logger = logging.getLogger("orchestrator-client")
 
 
-def _mark_fallback(path: str) -> None:
-    """Best-effort telemetry hook. Must never break the fallback flow."""
-    try:
-        from app.telemetry.path_observer import mark_fallback_used  # lazy import: avoids import cycles / optional module
-
-        mark_fallback_used(path)
-    except Exception:
-        logger.debug("fallback_telemetry_failed", extra={"path": path}, exc_info=True)
-
-
 class LocalFallbackMixin:
     """Deterministic local fallback chain — file-count / retrieval / explanation / general chat."""
 
@@ -56,15 +46,15 @@ class LocalFallbackMixin:
     def _record_fallback(name: str) -> None:
         """يسجل استخدام مسار بديل (fallback) في أنظمة المراقبة.
 
-        Best-effort telemetry: الاستيراد كسول (lazy) لتجنب دورات الاستيراد (circular imports)،
-        ويبتلع جميع الاستثناءات لكي لا يكسر أي مسار بديل في حال تعطل المراقبة.
+        Best-effort telemetry: الاستيراد كسول (lazy) لتجنب دورات الاستيراد (circular imports).
+        لا يُسقط أي استثناء بل يسجل تحذيراً لضمان عدم ضياع المشكلة دون تكسير مسار الملاذ البديل.
         """
         try:
             from app.telemetry.path_observer import mark_fallback_used
 
             mark_fallback_used(name)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Fallback telemetry failed for %s: %s", name, exc)
 
     # M0: `_execute_shell_tool` حُذِف — كان الجسر الوحيد من مسار الدردشة الحيّ إلى
     # `execute_shell`، وقد زال مبرّره حين صار عدّ الملفات بايثون خالصة. قدرة بلا
@@ -247,17 +237,7 @@ class LocalFallbackMixin:
         socratic_content = (getattr(decision, "display_content", None) or "").strip()
         if not decision.recognized or not socratic_content:
             return
-
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("exercise_explanation_stream")
-        except Exception:  # telemetry must never break the fallback path
-            logger.warning(
-                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
-                "exercise_explanation_stream",
-                exc_info=True,
-            )
+        self._record_fallback("exercise_explanation_stream")
 
         try:
             from app.services.chat.local_graph import (
@@ -298,17 +278,7 @@ class LocalFallbackMixin:
         )
         if not full_response:
             return
-
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("local_retrieval_stream")
-        except Exception:  # telemetry must never break the fallback path
-            logger.warning(
-                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
-                "local_retrieval_stream",
-                exc_info=True,
-            )
+        self._record_fallback("local_retrieval_stream")
 
         async for chunk in self._stream_markdown_typing(full_response):
             yield chunk
@@ -346,16 +316,7 @@ class LocalFallbackMixin:
             decision.question_number,
             getattr(decision.matched_entry, "file_path", None),
         )
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("question_only_stream")
-        except Exception:  # telemetry must never break the fallback path
-            logger.warning(
-                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
-                "question_only_stream",
-                exc_info=True,
-            )
+        self._record_fallback("question_only_stream")
 
         async for chunk in self._stream_markdown_typing(decision.sliced_content):
             yield chunk
@@ -436,17 +397,7 @@ class LocalFallbackMixin:
         sanitized_question = question.replace("\x00", "").strip()
         if not sanitized_question:
             return None
-
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("local_general_chat")
-        except Exception:  # telemetry must never break the fallback path
-            logger.warning(
-                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
-                "local_general_chat",
-                exc_info=True,
-            )
+        self._record_fallback("local_general_chat")
 
         local_system_prompt = (
             "أنت مساعد ذكي واسع المعرفة. "
@@ -490,17 +441,7 @@ class LocalFallbackMixin:
         sanitized_question = question.replace("\x00", "").strip()
         if not sanitized_question:
             return
-
-        try:
-            from app.telemetry.path_observer import mark_fallback_used
-
-            mark_fallback_used("local_general_chat_stream")
-        except Exception:  # telemetry must never break the fallback path
-            logger.warning(
-                "Telemetry hook mark_fallback_used failed for %s; continuing without telemetry",
-                "local_general_chat_stream",
-                exc_info=True,
-            )
+        self._record_fallback("local_general_chat_stream")
 
         local_system_prompt = (
             "أنت مساعد ذكي واسع المعرفة. "

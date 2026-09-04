@@ -696,13 +696,19 @@ class MissionStateManager:
         )
         self.session.add(event)
 
+        # We need the event.id before creating the outbox so we can embed it
+        await self.session.flush()
+
+        outbox_payload = dict(payload)
+        outbox_payload["__event_id"] = str(event.id)
+
         # 2. Add to Outbox (Transactional Guarantee)
         # The prompt mandates Transactional Outbox to solve dual-write.
         # This ensures that even if Redis fails, the intention to publish is recorded.
         outbox = MissionOutbox(
             mission_id=mission_id,
             event_type=str(event_type.value),
-            payload_json=payload,
+            payload_json=outbox_payload,
             status="pending",
             created_at=utc_now(),
         )
@@ -715,20 +721,6 @@ class MissionStateManager:
         # Ideally, a background worker polls 'mission_outbox' where status='pending'.
         # For simplicity and latency, we try direct publish.
         # If this fails, the 'monitor_mission_events' (catch-up) mechanism still works via DB polling.
-        # Extract the generated DB event ID
-        event_id = event.id
-
-        # To ensure the relay/outbox preserves the ID exactly like immediate publish does,
-        # we embed it into the payload_json of the outbox record right after creation.
-        # But we must update the Outbox row *if* we want the DB to store it.
-        # A simpler way is to just let relay reconstruct it or add it to outbox's payload.
-        # The user requested: "ensure the `event_id` is persisted in the outbox payload too, so replayed messages carry the same ID".
-        # Since outbox's payload_json is a JSON string/dict, let's inject it into outbox.payload_json before commit?
-        # No, `event.id` is not available until after commit.
-        # But if we inject it after commit, we would need a second commit.
-        # Wait, if we use `await self.session.flush()`, we get the ID *before* commit!
-
-        # Actually, let's update `log_event` above. Let's do it cleanly:
         message = self._build_event_bus_message(
             mission_id=mission_id,
             event_type=event_type,

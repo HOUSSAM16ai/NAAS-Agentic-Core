@@ -5,12 +5,14 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         // ══════════════════════════════════════════════════════════════════════
         
         // Catch unhandled promise rejections (critical for Codespaces stability)
+        // Intentionally app-lifetime event listeners, never removed.
         window.addEventListener('unhandledrejection', (event) => {
             console.error('Unhandled promise rejection:', event.reason);
             event.preventDefault(); // Prevent browser crash
         });
 
         // Catch general errors
+        // Intentionally app-lifetime event listeners, never removed.
         window.addEventListener('error', (event) => {
             console.error('Global error caught:', event.error);
             event.preventDefault(); // Prevent browser crash
@@ -284,9 +286,10 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
             // This prevents memory leaks that were causing browser crashes in Codespaces
             useEffect(() => {
                 const timers = [];
+                const timeouts = [];
                 
                 // Memory monitoring (Codespaces has limited resources)
-                if (performance.memory) {
+                if (typeof performance !== 'undefined' && performance.memory) {
                     const memoryTimer = setInterval(() => {
                         const usedMemory = performance.memory.usedJSHeapSize;
                         const totalMemory = performance.memory.jsHeapSizeLimit;
@@ -299,9 +302,10 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         // CRITICAL: Auto-reload if memory exceeds 95% in Codespaces
                         if (IS_CODESPACES && percentUsed > 95) {
                             console.error('🚨 CRITICAL: Memory exhaustion detected! Forcing reload to prevent crash...');
-                            setTimeout(() => {
+                            const reloadTimeout = setTimeout(() => {
                                 window.location.reload();
                             }, 2000);
+                            timeouts.push(reloadTimeout);
                         }
                     }, 30000); // Check every 30 seconds
                     timers.push(memoryTimer);
@@ -346,9 +350,10 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                         // If 3 consecutive failures, show warning
                         if (consecutiveFailures >= 3) {
                             console.error('🚨 Server appears to be down. Page will reload in 5 seconds...');
-                            setTimeout(() => {
+                            const reloadTimeout = setTimeout(() => {
                                 window.location.reload();
                             }, 5000);
+                            timeouts.push(reloadTimeout);
                             clearInterval(healthTimer);
                         }
                     }, 60000); // Check every 60 seconds
@@ -358,6 +363,8 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
                 // CLEANUP: Clear all timers when component unmounts
                 return () => {
                     timers.forEach(timer => clearInterval(timer));
+                    // Prevent "ghost reloads" if component unmounts during the timeout window
+                    timeouts.forEach(timeout => clearTimeout(timeout));
                 };
             }, []); // Empty dependency array - run once on mount
 
@@ -1236,7 +1243,7 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         console.log(`   - STREAM_MICRO_DELAY: ${STREAM_MICRO_DELAY}ms`);
         console.log(`   - MAX_STREAM_CHUNK_SIZE: ${MAX_STREAM_CHUNK_SIZE} chars`);
         
-        if (performance.memory) {
+        if (typeof performance !== 'undefined' && performance.memory) {
             const memoryMB = (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(0);
             console.log(`💾 Memory Limit: ${memoryMB} MB`);
         }
@@ -1246,6 +1253,7 @@ const { useState, useEffect, useRef, useCallback, memo } = React;
         console.log('═══════════════════════════════════════════════════════════════════');
         
         // Track initial load time
+        // Intentionally app-lifetime event listeners, never removed.
         window.addEventListener('load', () => {
             const loadTime = performance.now();
             console.log(`⏱️ Total load time: ${loadTime.toFixed(2)}ms`);

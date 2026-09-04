@@ -66,7 +66,11 @@ class VoucherService:
         self.db = db
 
     async def issue(
-        self, *, plan: str = "standard", duration_days: int = 30, valid_for_days: int = 365
+        self,
+        *,
+        plan: str = "standard",
+        duration_days: int = 30,
+        valid_for_days: int = 365,
     ) -> str:
         """يُصدِر قسيمة ويُرجِع رمزها **الصريح مرّة واحدة** — لا يُخزَّن إلّا مُجزَّأً."""
         if duration_days <= 0:
@@ -100,7 +104,9 @@ class VoucherService:
             raise VoucherRedemptionError("unknown voucher code")
         if voucher.status == "void":
             raise VoucherRedemptionError("this voucher has been voided")
-        if voucher.expires_at is not None and _as_utc(voucher.expires_at) < datetime.now(UTC):
+        if voucher.expires_at is not None and _as_utc(
+            voucher.expires_at
+        ) < datetime.now(UTC):
             raise VoucherRedemptionError("this voucher has expired")
 
         existing = await self.db.scalar(
@@ -121,7 +127,9 @@ class VoucherService:
         # التمديد يبدأ من نهاية الحقّ القائم إن كان حيّاً — لا يُهدَر ما دفعه المستخدم.
         current = await self.entitlement_status(user_id)
         starts_from = (
-            current.expires_at if current.active and current.expires_at is not None else now
+            current.expires_at
+            if current.active and current.expires_at is not None
+            else now
         )
         expires_at = starts_from + timedelta(days=voucher.duration_days)
 
@@ -131,7 +139,9 @@ class VoucherService:
         voucher_id = voucher.id
         plan = voucher.plan
 
-        self.db.add(VoucherRedemption(voucher_id=voucher_id, user_id=user_id, redeemed_at=now))
+        self.db.add(
+            VoucherRedemption(voucher_id=voucher_id, user_id=user_id, redeemed_at=now)
+        )
         self.db.add(
             Entitlement(
                 user_id=user_id,
@@ -148,8 +158,12 @@ class VoucherService:
         except IntegrityError:
             # سباقٌ خسرناه: القيد الفريد رفض الاستبدال الثاني. هذا هو الحارس الحقيقي.
             await self.db.rollback()
-            logger.info("voucher_redeem_race voucher_id=%s user_id=%s", voucher_id, user_id)
-            raise VoucherRedemptionError("this voucher has already been redeemed") from None
+            logger.info(
+                "voucher_redeem_race voucher_id=%s user_id=%s", voucher_id, user_id
+            )
+            raise VoucherRedemptionError(
+                "this voucher has already been redeemed"
+            ) from None
 
         logger.info(
             "voucher_redeemed voucher_id=%s user_id=%s plan=%s until=%s",
@@ -172,7 +186,9 @@ class VoucherService:
         now = datetime.now(UTC)
         if row is None or _as_utc(row.expires_at) <= now:
             return EntitlementStatus(active=False, plan=None, expires_at=None)
-        return EntitlementStatus(active=True, plan=row.plan, expires_at=_as_utc(row.expires_at))
+        return EntitlementStatus(
+            active=True, plan=row.plan, expires_at=_as_utc(row.expires_at)
+        )
 
 
 __all__ = [

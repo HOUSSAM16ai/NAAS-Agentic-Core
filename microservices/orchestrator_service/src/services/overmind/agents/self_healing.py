@@ -21,10 +21,6 @@ from typing import ClassVar, TypeVar
 
 from pydantic import BaseModel, Field
 
-# MCPIntegrations removed to decouple from monolithic app
-# Future TODO: Implement direct clients for Kagent/DSPy here
-MCPIntegrations = None
-
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -158,7 +154,7 @@ class SelfHealingAgent:
     def __init__(self) -> None:
         self.failure_patterns: dict[str, FailurePattern] = {}
         self.recovery_history: list[dict[str, object]] = []
-        self.mcp = MCPIntegrations() if MCPIntegrations else None
+        self.mcp = None
 
     def analyze_failure(self, error: Exception) -> FailureAnalysis:
         """يحلل الخطأ ويحدد نوعه والأسباب المحتملة."""
@@ -195,10 +191,17 @@ class SelfHealingAgent:
         if "timeout" in msg_lower or "timed out" in msg_lower:
             return FailureType.TIMEOUT
 
-        if "validation" in msg_lower or "invalid" in msg_lower or "pydantic" in error_type.lower():
+        if (
+            "validation" in msg_lower
+            or "invalid" in msg_lower
+            or "pydantic" in error_type.lower()
+        ):
             return FailureType.VALIDATION
 
-        if any(x in msg_lower for x in ["api", "rate limit", "quota", "openai", "connection"]):
+        if any(
+            x in msg_lower
+            for x in ["api", "rate limit", "quota", "openai", "connection"]
+        ):
             return FailureType.API_ERROR
 
         if any(x in msg_lower for x in ["memory", "resource", "disk", "cpu"]):
@@ -334,7 +337,7 @@ class SelfHealingAgent:
         new_kwargs = kwargs.copy()
 
         # 1. استخدام DSPy للتحسين
-        if action.action_type == "dspy_refine" and self.mcp:
+        if action.action_type == "dspy_refine" and self.mcp is not None:
             prompt = kwargs.get("prompt", "") or kwargs.get("query", "")
             if prompt:
                 refined = await self.mcp.refine_query(prompt)
@@ -345,7 +348,7 @@ class SelfHealingAgent:
                     return new_kwargs
 
         # 2. استخدام Kagent للإصلاح
-        if action.kagent_capability and self.mcp:
+        if action.kagent_capability and self.mcp is not None:
             result = await self.mcp.execute_action(
                 action=action.action_type,
                 capability=action.kagent_capability,
@@ -385,13 +388,18 @@ class SelfHealingAgent:
         elif action.action_type == "switch_model":
             kwargs["model"] = action.parameters.get("fallback_model")
 
-        elif action.action_type == "simplify_prompt" and "max_tokens" in action.parameters:
+        elif (
+            action.action_type == "simplify_prompt"
+            and "max_tokens" in action.parameters
+        ):
             kwargs["max_tokens"] = action.parameters["max_tokens"]
 
         kwargs.update(action.parameters)
         return kwargs
 
-    def _record_success(self, error: Exception | None, kwargs: dict[str, object]) -> None:
+    def _record_success(
+        self, error: Exception | None, kwargs: dict[str, object]
+    ) -> None:
         """يسجل النجاح للتعلم."""
         if error is None:
             return
@@ -400,9 +408,9 @@ class SelfHealingAgent:
 
         if error_sig in self.failure_patterns:
             pattern = self.failure_patterns[error_sig]
-            pattern.success_rate = (pattern.success_rate * pattern.occurrence_count + 1) / (
-                pattern.occurrence_count + 1
-            )
+            pattern.success_rate = (
+                pattern.success_rate * pattern.occurrence_count + 1
+            ) / (pattern.occurrence_count + 1)
             pattern.recovery_strategy = str(kwargs)
         else:
             self.failure_patterns[error_sig] = FailurePattern(
@@ -446,7 +454,9 @@ class SelfHealingAgent:
 
         # أهم الأنماط (الأكثر تكراراً)
         sorted_patterns = sorted(
-            self.failure_patterns.values(), key=lambda p: p.occurrence_count, reverse=True
+            self.failure_patterns.values(),
+            key=lambda p: p.occurrence_count,
+            reverse=True,
         )
 
         return {
@@ -458,7 +468,11 @@ class SelfHealingAgent:
                     "type": p.failure_type,
                     "count": p.occurrence_count,
                     "success": f"{p.success_rate:.0%}",
-                    "strategy": p.recovery_strategy[:50] + "..." if p.recovery_strategy else "None",
+                    "strategy": (
+                        p.recovery_strategy[:50] + "..."
+                        if p.recovery_strategy
+                        else "None"
+                    ),
                 }
                 for p in sorted_patterns[:5]
             ],

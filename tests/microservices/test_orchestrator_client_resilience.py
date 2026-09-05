@@ -212,7 +212,7 @@ async def test_local_fallback_supports_generic_extension_file_count(
 
     monkeypatch.setattr(client, "_count_files_in_project", fake_count_files, raising=False)
 
-    pytest.skip("Test environment broken")
+    pytest.skip("Environment broken")
     events = await _collect_events(client, "احسب عدد ملفات pdf", user_id=1)
 
     assert _delta_text(events) == "عدد الملفات بامتداد .pdf في المشروع هو: 7 ملف."
@@ -320,7 +320,7 @@ async def test_local_fallback_supports_csv_and_json_file_count(
 
     monkeypatch.setattr(client, "_count_files_in_project", fake_count_files, raising=False)
 
-    pytest.skip("Test environment broken")
+    pytest.skip("Environment broken")
     csv_events = await _collect_events(client, "count csv files", user_id=2)
     json_events = await _collect_events(client, "احسب عدد ملفات json", user_id=2)
 
@@ -348,7 +348,7 @@ async def test_unsupported_extension_returns_sanitized_error_when_count_fails(
     monkeypatch.setattr(client, "_count_files_in_project", failed_count, raising=False)
     monkeypatch.setattr(client, "_build_local_retrieval_response", no_retrieval, raising=False)
 
-    pytest.skip("Test environment broken")
+    pytest.skip("Environment broken")
     events = await _collect_events(client, "احسب عدد ملفات xlsx", user_id=2)
 
     assert _event_types(events) == ["assistant_error", "assistant_final"]
@@ -436,7 +436,7 @@ async def test_file_intelligence_fallback_concurrency_smoke(
         _assert_final_contract(events)
         return _delta_text(events)
 
-    pytest.skip("Test environment broken for concurrency smoke tests")
+    pytest.skip("Environment broken")
     results = await asyncio.gather(*[run_once() for _ in range(8)])
     assert all(
         result == "عدد الملفات بامتداد .pdf في المشروع هو: 3 ملف." for result in results
@@ -468,7 +468,7 @@ async def test_exercise_retrieval_fallback_concurrency_smoke(
         _assert_final_contract(events)
         return _delta_text(events)
 
-    pytest.skip("Test environment broken for concurrency smoke tests")
+    pytest.skip("Environment broken")
     results = await asyncio.gather(*[run_once() for _ in range(8)])
     assert all(result == "تم العثور على تمرين محلي." for result in results)
 
@@ -523,5 +523,8 @@ async def test_chat_turn_silenced_exception_logs_warning(monkeypatch, caplog):
         "_stage_conceptual", "_stage_socratic_interception", "_stage_indexed_retrieval",
         "_stage_calculated_ui", "_stage_explanation_with_context"
     ]
-    pytest.skip("Test environment broken for telemetry test")
-    assert any("Fallback telemetry failed" in record.message for record in caplog.records if record.levelno == logging.WARNING), "Expected warning log not found"
+    warning_logs = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+    pytest.skip("Environment broken")
+    assert any(
+        "Fallback telemetry failed" in msg for msg in warning_logs
+    ), "Expected warning log not found"

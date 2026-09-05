@@ -442,9 +442,7 @@ class SelfHealingAgent:
 
         # أهم الأنماط (الأكثر تكراراً)
         sorted_patterns = sorted(
-            self.failure_patterns.values(),
-            key=lambda p: p.occurrence_count,
-            reverse=True,
+            self.failure_patterns.values(), key=lambda p: p.occurrence_count, reverse=True
         )
 
         return {
@@ -456,9 +454,7 @@ class SelfHealingAgent:
                     "type": p.failure_type,
                     "count": p.occurrence_count,
                     "success": f"{p.success_rate:.0%}",
-                    "strategy": (
-                        p.recovery_strategy[:50] + "..." if p.recovery_strategy else "None"
-                    ),
+                    "strategy": p.recovery_strategy[:50] + "..." if p.recovery_strategy else "None",
                 }
                 for p in sorted_patterns[:5]
             ],

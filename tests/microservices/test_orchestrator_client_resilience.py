@@ -151,7 +151,6 @@ def _wire_failing_http(
 
 @pytest.mark.asyncio
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_user_facing_error_is_sanitized(monkeypatch: pytest.MonkeyPatch) -> None:
     """يتأكد من عدم تسريب hostnames أو المنافذ أو سلسلة المحاولات لواجهة المستخدم."""
     monkeypatch.setenv("ORCHESTRATOR_SERVICE_URL", "http://orchestrator-service:8006")
@@ -180,7 +179,6 @@ async def test_user_facing_error_is_sanitized(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_fallback_still_works_for_file_count(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -201,7 +199,6 @@ async def test_local_fallback_still_works_for_file_count(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_fallback_supports_generic_extension_file_count(
     monkeypatch: pytest.MonkeyPatch,
@@ -225,7 +222,6 @@ async def test_local_fallback_supports_generic_extension_file_count(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_retrieval_fallback_for_exercise_request(
     monkeypatch: pytest.MonkeyPatch,
@@ -254,7 +250,6 @@ async def test_local_retrieval_fallback_for_exercise_request(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_general_chat_fallback_when_specialized_fallbacks_miss(
     monkeypatch: pytest.MonkeyPatch,
@@ -293,7 +288,6 @@ async def test_local_general_chat_fallback_when_specialized_fallbacks_miss(
 
 @pytest.mark.asyncio
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_fallback_can_be_disabled_with_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -317,7 +311,6 @@ async def test_local_fallback_can_be_disabled_with_flag(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_fallback_supports_csv_and_json_file_count(
     monkeypatch: pytest.MonkeyPatch,
@@ -343,7 +336,6 @@ async def test_local_fallback_supports_csv_and_json_file_count(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_unsupported_extension_returns_sanitized_error_when_count_fails(
     monkeypatch: pytest.MonkeyPatch,
@@ -430,7 +422,6 @@ def test_multi_target_candidates_enabled_only_in_breakglass(
 
 @pytest.mark.asyncio
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_file_intelligence_fallback_concurrency_smoke(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -458,7 +449,6 @@ async def test_file_intelligence_fallback_concurrency_smoke(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_exercise_retrieval_fallback_concurrency_smoke(
     monkeypatch: pytest.MonkeyPatch,
@@ -488,7 +478,6 @@ async def test_exercise_retrieval_fallback_concurrency_smoke(
     assert all(result == "تم العثور على تمرين محلي." for result in results)
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_chat_turn_silenced_exception_logs_warning(monkeypatch, caplog):
     """

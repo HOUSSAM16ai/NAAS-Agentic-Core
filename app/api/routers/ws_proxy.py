@@ -25,12 +25,13 @@ WebSocket upgrade headers. النتيجة: المتصفح يضرب:
 
 import asyncio
 import contextlib
+import json
 import logging
 import os
 
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,9 @@ _CONV_SERVICE_BASE = os.environ.get(
 _CONNECT_TIMEOUT = float(os.environ.get("WS_PROXY_CONNECT_TIMEOUT", "10"))
 
 # حجم buffer للرسائل (bytes)
-_MAX_MESSAGE_SIZE = int(os.environ.get("WS_PROXY_MAX_MESSAGE_SIZE", str(10 * 1024 * 1024)))
+_MAX_MESSAGE_SIZE = int(
+    os.environ.get("WS_PROXY_MAX_MESSAGE_SIZE", str(10 * 1024 * 1024))
+)
 
 
 def _build_upstream_url(path: str, query_string: str) -> str:
@@ -95,8 +98,12 @@ async def _proxy_websocket(
 
     # Determine auth transport mode for diagnostics (never log token value)
     has_token_qp = "token=" in upstream_url
-    auth_mode = "query_param" if has_token_qp else ("subprotocol" if subprotocols else "none")
-    safe_upstream = upstream_url.split("?", maxsplit=1)[0] + ("?..." if "?" in upstream_url else "")
+    auth_mode = (
+        "query_param" if has_token_qp else ("subprotocol" if subprotocols else "none")
+    )
+    safe_upstream = upstream_url.split("?", maxsplit=1)[0] + (
+        "?..." if "?" in upstream_url else ""
+    )
 
     logger.info(
         "ws_proxy.connecting upstream=%s auth_mode=%s protocols=%s",
@@ -179,6 +186,34 @@ async def _proxy_websocket(
         except Exception:
             pass
 
+    except InvalidStatus as exc:
+        # Get status code from either modern or older websockets versions
+        status = getattr(exc, "status_code", None) or getattr(
+            getattr(exc, "response", None), "status_code", None
+        )
+        logger.error(
+            "ws_proxy.upstream_invalid_status url=%s status=%s error=%s",
+            upstream_url,
+            status,
+            exc,
+        )
+        try:
+            payload = {
+                "type": "error",
+                "payload": {
+                    "details": "conversation-service returned an invalid status code",
+                    "code": (
+                        f"WS_UPSTREAM_{status}"
+                        if status
+                        else "WS_UPSTREAM_INVALID_STATUS"
+                    ),
+                },
+            }
+            await client_ws.send_text(json.dumps(payload))
+            await client_ws.close(code=1011)
+        except Exception:
+            pass
+
     except Exception as exc:
         logger.error("ws_proxy.unexpected_error url=%s error=%s", upstream_url, exc)
         with contextlib.suppress(Exception):
@@ -196,7 +231,9 @@ async def customer_chat_ws_proxy(websocket: WebSocket) -> None:
     D-WS-001: هذا هو نقطة الدخول الوحيدة لـ WebSocket من المتصفح.
     """
     query_string = websocket.scope.get("query_string", b"").decode("utf-8")
-    subprotocols: list[str] = list(websocket.headers.get("sec-websocket-protocol", "").split(", "))
+    subprotocols: list[str] = list(
+        websocket.headers.get("sec-websocket-protocol", "").split(", ")
+    )
     subprotocols = [p.strip() for p in subprotocols if p.strip()]
 
     upstream_url = _build_upstream_url("/chat/ws", query_string)
@@ -219,7 +256,9 @@ async def admin_chat_ws_proxy(websocket: WebSocket) -> None:
     يُمرِّر الاتصال إلى conversation-service:/admin/chat/ws.
     """
     query_string = websocket.scope.get("query_string", b"").decode("utf-8")
-    subprotocols: list[str] = list(websocket.headers.get("sec-websocket-protocol", "").split(", "))
+    subprotocols: list[str] = list(
+        websocket.headers.get("sec-websocket-protocol", "").split(", ")
+    )
     subprotocols = [p.strip() for p in subprotocols if p.strip()]
 
     upstream_url = _build_upstream_url("/admin/chat/ws", query_string)

@@ -3,6 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath('.github/scripts'))
 import validate_pr_description
+
 body = """### What
 Fixed missing timeout tracking that could lead to "ghost reloads" on component unmount in `legacy-app.jsx`, and improved robustness of browser API feature detection (`performance.memory`).
 

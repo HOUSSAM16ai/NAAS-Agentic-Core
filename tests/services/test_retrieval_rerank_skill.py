@@ -1,7 +1,5 @@
 import logging
 
-import pytest
-
 from app.services.skills.retrieval_rerank_skill import _rec
 
 

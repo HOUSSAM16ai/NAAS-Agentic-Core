@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from httpx import Response
@@ -10,7 +9,9 @@ logger = logging.getLogger(__name__)
 def _mark_fallback(path: str) -> None:
     """Best-effort telemetry hook. Must never break the fallback flow."""
     try:
-        from app.telemetry.path_observer import mark_fallback_used  # lazy import: avoids import cycles / optional module
+        from app.telemetry.path_observer import (
+            mark_fallback_used,  # lazy import: avoids import cycles / optional module
+        )
 
         mark_fallback_used(path)
     except Exception as e:

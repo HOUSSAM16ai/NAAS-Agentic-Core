@@ -31,9 +31,7 @@ async def test_mark_fallback_silenced_exception_logged(monkeypatch, caplog):
 
 
 @pytest.mark.asyncio
-async def test_local_retrieval_stream_preserves_behavior_on_telemetry_failure(
-    monkeypatch, caplog
-):
+async def test_local_retrieval_stream_preserves_behavior_on_telemetry_failure(monkeypatch, caplog):
     class FakePathObserver:
         def mark_fallback_used(self, path):
             raise ValueError("Telemetry broke again!")
@@ -41,9 +39,7 @@ async def test_local_retrieval_stream_preserves_behavior_on_telemetry_failure(
     monkeypatch.setitem(sys.modules, "app.telemetry.path_observer", FakePathObserver())
 
     class FakeClient(LocalFallbackMixin):
-        async def _build_local_retrieval_response(
-            self, question, history_messages=None
-        ):
+        async def _build_local_retrieval_response(self, question, history_messages=None):
             return "Test Response"
 
         async def _stream_markdown_typing(self, content):

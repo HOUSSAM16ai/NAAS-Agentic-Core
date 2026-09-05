@@ -21,10 +21,6 @@ from typing import ClassVar, TypeVar
 
 from pydantic import BaseModel, Field
 
-# MCPIntegrations removed to decouple from monolithic app
-# Future TODO: Implement direct clients for Kagent/DSPy here
-MCPIntegrations = None
-
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -158,7 +154,7 @@ class SelfHealingAgent:
     def __init__(self) -> None:
         self.failure_patterns: dict[str, FailurePattern] = {}
         self.recovery_history: list[dict[str, object]] = []
-        self.mcp = MCPIntegrations() if MCPIntegrations else None
+        self.mcp = None
 
     def analyze_failure(self, error: Exception) -> FailureAnalysis:
         """يحلل الخطأ ويحدد نوعه والأسباب المحتملة."""
@@ -334,7 +330,7 @@ class SelfHealingAgent:
         new_kwargs = kwargs.copy()
 
         # 1. استخدام DSPy للتحسين
-        if action.action_type == "dspy_refine" and self.mcp:
+        if action.action_type == "dspy_refine" and self.mcp is not None:
             prompt = kwargs.get("prompt", "") or kwargs.get("query", "")
             if prompt:
                 refined = await self.mcp.refine_query(prompt)
@@ -345,7 +341,7 @@ class SelfHealingAgent:
                     return new_kwargs
 
         # 2. استخدام Kagent للإصلاح
-        if action.kagent_capability and self.mcp:
+        if action.kagent_capability and self.mcp is not None:
             result = await self.mcp.execute_action(
                 action=action.action_type,
                 capability=action.kagent_capability,

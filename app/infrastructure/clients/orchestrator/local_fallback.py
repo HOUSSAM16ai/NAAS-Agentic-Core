@@ -33,7 +33,9 @@ class LocalFallbackMixin:
         try:
             return await func(*args, **kwargs)
         except Exception as e:
-            logger.warning(f"Orchestrator HTTP call failed ({path}): {e}. Attempting local fallback.")
+            logger.warning(
+                f"Orchestrator HTTP call failed ({path}): {e}. Attempting local fallback."
+            )
 
             # Record telemetry asynchronously to avoid blocking the critical path
             _mark_fallback(path)
@@ -53,9 +55,7 @@ class LocalFallbackMixin:
                 )
 
                 # Create synthetic response to maintain contract
-                return Response(
-                    200, json={"content": result["messages"][-1].content}
-                )
+                return Response(200, json={"content": result["messages"][-1].content})
 
             logger.error(f"Fallback not implemented for path: {path}")
             raise e

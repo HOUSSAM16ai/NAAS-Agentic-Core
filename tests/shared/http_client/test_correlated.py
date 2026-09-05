@@ -1,10 +1,12 @@
-import pytest
-import uuid
 import re
-import httpx
+import uuid
 from unittest.mock import Mock
 
+import httpx
+import pytest
+
 from shared.http_client import correlated
+
 
 @pytest.fixture(autouse=True)
 def isolate_provider(monkeypatch):

@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from sqlalchemy import text
+
+import pytest
+
 from app.services.system.database_service import DatabaseService, _is_safe_sqlglot_query
+
 
 class DummyContextManager:
     async def __aenter__(self):

@@ -203,7 +203,7 @@ class DatabaseService:
         except ValueError as ve:
             return {"status": "error", "message": str(ve)}
         except Exception as e:
-            self.logger.error(f"AUDIT_LOG: execute_query error | sql_hash={sql_hash} error={str(e)}")
+            self.logger.error(f"AUDIT_LOG: execute_query error | sql_hash={sql_hash} error={e!s}")
             return {"status": "error", "message": "حدث خطأ أثناء تنفيذ الاستعلام الأمني."}
 
 

@@ -1,9 +1,0 @@
-perf(ums): fix N+1 query in admin users list
-
-This commit fixes an N+1 query issue in the `list_users_admin` route. Previously, `await service.rbac.user_roles(u.id)` was called in a loop for each user returned from the database.
-
-A new method `bulk_user_roles(user_ids)` has been added to `RBACService` to fetch the roles for all the users efficiently in a single query using `IN()`. The route now maps the results back to the user list.
-
-Additionally, a lesson learned regarding UUIDv7 vs UUIDv4 optimizations has been added to `.jules/bolt.md`.
-
-Also fixes test failures introduced due to multiline code updates and strict CI linting constraints (Ruff PLR0911, PLR0912, PLR0915 exceptions in `database_service.py`).

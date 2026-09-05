@@ -77,9 +77,7 @@ class RBACService:
             return
 
         for name in sorted(missing):
-            self.session.add(
-                Permission(name=name, description=PERMISSION_DESCRIPTIONS.get(name))
-            )
+            self.session.add(Permission(name=name, description=PERMISSION_DESCRIPTIONS.get(name)))
         await self.session.commit()
 
     async def _seed_roles(self) -> None:
@@ -103,18 +101,14 @@ class RBACService:
             role = roles_map.get(role_name)
             if not role:
                 continue
-            desired_ids = {
-                perms_map[name].id for name in perm_names if name in perms_map
-            }
+            desired_ids = {perms_map[name].id for name in perm_names if name in perms_map}
             await self._reconcile_role_permissions(role.id, desired_ids)
 
     async def _reconcile_role_permissions(
         self, role_id: int, desired_permission_ids: set[int]
     ) -> None:
         existing_links = await self.session.execute(
-            select(RolePermission.permission_id).where(
-                RolePermission.role_id == role_id
-            )
+            select(RolePermission.permission_id).where(RolePermission.role_id == role_id)
         )
         existing_ids = {row[0] for row in existing_links.all() if row[0] is not None}
         to_remove = existing_ids - desired_permission_ids
@@ -129,9 +123,7 @@ class RBACService:
             )
         for perm_id in sorted(to_add):
             self.session.add(
-                RolePermission(
-                    role_id=role_id, permission_id=perm_id, created_at=utc_now()
-                )
+                RolePermission(role_id=role_id, permission_id=perm_id, created_at=utc_now())
             )
         await self.session.commit()
 
@@ -142,9 +134,7 @@ class RBACService:
             raise ValueError(f"Role {role_name} not found")
 
         link_exists = await self.session.execute(
-            select(UserRole).where(
-                UserRole.user_id == user.id, UserRole.role_id == role.id
-            )
+            select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id)
         )
         if link_exists.scalar_one_or_none():
             return

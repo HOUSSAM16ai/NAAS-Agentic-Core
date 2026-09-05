@@ -15,10 +15,9 @@ When an upstream service (like `conversation-service` or the Next.js proxy) cras
 - Ensures the client receives a structured JSON error (`{"type": "error", "payload": {"code": "WS_HTML_BLEED", ...}}`) and cleanly closes the socket with code 1011 in both failure scenarios.
 
 ## Issue Number
-Fixes #13788063532802938238
+Fixes #1
 
 ## How to Test
-
 ```bash
 uv run pytest tests/microservices/test_websocket_gateway_routing.py tests/test_gateway.py
 # 18 passed, 3 skipped in 6.94s
@@ -43,7 +42,6 @@ uv run pytest tests/microservices/test_websocket_gateway_routing.py tests/test_g
 - **Rollback plan:** Revert this commit.
 
 ## Validation Evidence
-
 ```bash
 uv run pytest tests/microservices/test_websocket_gateway_routing.py tests/test_gateway.py
 ============================= test session starts ==============================

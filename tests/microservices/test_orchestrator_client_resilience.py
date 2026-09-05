@@ -179,7 +179,6 @@ async def test_user_facing_error_is_sanitized(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_fallback_still_works_for_file_count(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -224,7 +223,6 @@ async def test_local_fallback_supports_generic_extension_file_count(
 
 @pytest.mark.asyncio
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_retrieval_fallback_for_exercise_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -252,7 +250,6 @@ async def test_local_retrieval_fallback_for_exercise_request(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_general_chat_fallback_when_specialized_fallbacks_miss(
     monkeypatch: pytest.MonkeyPatch,
@@ -290,7 +287,6 @@ async def test_local_general_chat_fallback_when_specialized_fallbacks_miss(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_local_fallback_can_be_disabled_with_flag(
     monkeypatch: pytest.MonkeyPatch,
@@ -340,7 +336,6 @@ async def test_local_fallback_supports_csv_and_json_file_count(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_unsupported_extension_returns_sanitized_error_when_count_fails(
     monkeypatch: pytest.MonkeyPatch,
@@ -455,7 +450,6 @@ async def test_file_intelligence_fallback_concurrency_smoke(
 
 @pytest.mark.asyncio
 @pytest.mark.skip(reason='Mismatched test from incomplete refactor')
-@pytest.mark.skip(reason='Mismatched test from incomplete refactor')
 async def test_exercise_retrieval_fallback_concurrency_smoke(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -522,19 +516,19 @@ async def test_chat_turn_silenced_exception_logs_warning(monkeypatch, caplog):
     # 3. Ensure we fallback so we don't need real microservices up.
     monkeypatch.setenv("REQUIRE_ORCHESTRATOR", "0")
 
-    _client = OrchestratorClient(base_url="http://fake:8006")
+    client = OrchestratorClient(base_url="http://fake:8006")
 
     # Bypass all preempts to force hitting HTTP logic (which triggers metrics)
     async def _empty_stream(*_args, **_kwargs):
         if False:
             yield ""
 
-    _stages = [
+    stages = [
         "_stage_policy_gate", "_stage_greeting", "_stage_question_only",
         "_stage_computational", "_stage_escalation_matrix", "_stage_definitional",
         "_stage_conceptual", "_stage_socratic_interception", "_stage_indexed_retrieval",
         "_stage_calculated_ui", "_stage_explanation_with_context"
     ]
     assert any(
-        "Fallback telemetry failed" in msg for msg in mock_logger.warnings
+        "Fallback telemetry failed" in msg for msg in warning_logs
     ), "Expected warning log not found"

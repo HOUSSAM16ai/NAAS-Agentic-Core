@@ -17,7 +17,7 @@ _READ_ONLY_PREFIXES = ("SELECT", "WITH")
 _FORBIDDEN_SQL = re.compile(r";|\\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b")
 
 
-def _is_safe_sqlglot_query(sql: str) -> bool:
+def _is_safe_sqlglot_query(sql: str) -> bool:  # noqa: PLR0911
     try:
         if "--" in sql or "/*" in sql:
             return False
@@ -127,7 +127,7 @@ class DatabaseService:
     async def delete_record(self, table_name: str, record_id: int) -> dict[str, object]:
         raise NotImplementedError("خدمة حذف السجل غير مفعلة حتى يتم تنفيذها بالكامل.")
 
-    async def execute_query(
+    async def execute_query(  # noqa: PLR0912, PLR0915
         self, sql: str, params: dict[str, Any] | None = None, require_admin: bool = True, caller_identity: str = "unknown"
     ) -> dict[str, object]:
         if require_admin and (not caller_identity or caller_identity == "unknown"):

@@ -516,19 +516,19 @@ async def test_chat_turn_silenced_exception_logs_warning(monkeypatch, caplog):
     # 3. Ensure we fallback so we don't need real microservices up.
     monkeypatch.setenv("REQUIRE_ORCHESTRATOR", "0")
 
-    client = OrchestratorClient(base_url="http://fake:8006")
+    _client = OrchestratorClient(base_url="http://fake:8006")
 
     # Bypass all preempts to force hitting HTTP logic (which triggers metrics)
     async def _empty_stream(*_args, **_kwargs):
         if False:
             yield ""
 
-    stages = [
+    _stages = [
         "_stage_policy_gate", "_stage_greeting", "_stage_question_only",
         "_stage_computational", "_stage_escalation_matrix", "_stage_definitional",
         "_stage_conceptual", "_stage_socratic_interception", "_stage_indexed_retrieval",
         "_stage_calculated_ui", "_stage_explanation_with_context"
     ]
     assert any(
-        "Fallback telemetry failed" in msg for msg in warning_logs
+        "Fallback telemetry failed" in msg for msg in mock_logger.warnings
     ), "Expected warning log not found"

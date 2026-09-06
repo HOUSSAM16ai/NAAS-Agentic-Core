@@ -219,24 +219,31 @@ class InMemoryCache(CacheBackend):
         Returns:
             list[str]: قائمة المفاتيح المطابقة الصالحة.
         """
+        # Safe concurrency relies on single-threaded asyncio loop without intermediate `await`s.
         async with self._lock:
             keys = []
+            keys_to_delete = []
             now = time.time()
-            # ننسخ المفاتيح لتجنب مشاكل التعديل أثناء التكرار إذا احتجنا لذلك،
-            # لكننا هنا نقرأ فقط.
-            for key, (_, expire_at) in list(self._cache.items()):
+            # We iterate without list() copy for performance.
+            # We avoid modifying dict during iteration by collecting expired keys first.
+            for key, (_, expire_at) in self._cache.items():
                 if now > expire_at:
-                    # تنظيف الكسول (Lazy cleanup) أثناء البحث قد يكون مفيداً
-                    # هنا نزيل القفل والعنصر للحفاظ على الذاكرة.
-                    del self._cache[key]
-                    self._remove_key_lock(key)
+                    keys_to_delete.append(key)
                     continue
 
                 if fnmatch.fnmatch(key, pattern):
                     keys.append(key)
+
+            # Lazy cleanup of expired elements
+            for key in keys_to_delete:
+                del self._cache[key]
+                self._remove_key_lock(key)
+
             return keys
 
-    async def set_add(self, key: str, members: list[str], ttl: int | None = None) -> bool:
+    async def set_add(
+        self, key: str, members: list[str], ttl: int | None = None
+    ) -> bool:
         """إضافة عناصر إلى مجموعة (Internal Set)."""
         ttl_val = self._resolve_ttl(ttl)
         expire_at = time.time() + ttl_val if ttl_val > 0 else float("inf")
